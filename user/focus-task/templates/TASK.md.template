@@ -1,0 +1,153 @@
+<!-- Timestamp format: YYYYMMDD_HHMMSS -->
+# Task: {NAME}
+
+> **AUTONOMY:** Work until DONE. Iterate until all criteria met.
+> **CONTEXT:** Load per phase. KNOWLEDGE.jsonl holds accumulated knowledge.
+
+## Meta
+
+| Field | Value |
+|-------|-------|
+| Created | {TIMESTAMP} |
+| Status | pending |
+| Spec | `.claude/tasks/specs/{TIMESTAMP}_{NAME}_SPEC_v1.md` |
+| Knowledge | `.claude/tasks/{TIMESTAMP}_{NAME}_TASK_KNOWLEDGE.jsonl` |
+
+**Statuses:** `pending` → `in progress` → `handoff` → `finished`
+
+## Completion Criteria
+
+- [ ] {CRITERION_1}
+- [ ] {CRITERION_2}
+- [ ] {CRITERION_3}
+
+## Agents
+
+> Claude (manager) reads this section and calls agents via Task tool.
+> **Priority:** Project Agents > Core Agents
+
+### Project Agents
+<!-- TBD: Filled by /focus-task-adapt from .claude/agents/ -->
+
+| Agent | Purpose | Model |
+|-------|---------|-------|
+| TBD | Run `/focus-task-adapt` to populate | - |
+
+### Core Agents (fallback)
+
+| Agent | Purpose | Model |
+|-------|---------|-------|
+| `developer` | Code implementation, fixes | sonnet |
+| `tester` | Tests, analysis | sonnet |
+| `reviewer` | Quality, security | sonnet |
+| `Plan` | Architecture, planning | sonnet |
+| `Explore` | Codebase search (READ-ONLY) | haiku |
+
+### Plugin Agents
+
+| Agent | Purpose | Model |
+|-------|---------|-------|
+| `ft-coordinator` | Update TASK.md status, validate progress | sonnet |
+| `ft-knowledge-manager` | Compact KNOWLEDGE.jsonl, deduplicate | haiku |
+
+## Phases
+
+### Phase 1: {PHASE_NAME}
+
+| Field | Value |
+|-------|-------|
+| Agent | {AGENT} |
+| Status | pending |
+| Started | - |
+| Completed | - |
+
+**Tasks:**
+- {TASK_1}
+- {TASK_2}
+
+**Exit criteria:** {MEASURABLE_CRITERIA}
+
+**Result:** -
+
+---
+
+### Phase 1V: Verification
+
+<!-- TBD: Add project-specific verification agents -->
+| Agent | Focus |
+|-------|-------|
+| `reviewer` | Code quality, patterns |
+| TBD | Project-specific checks |
+
+**Checklist:**
+- [ ] Phase 1 criteria satisfied
+- [ ] No regressions
+- [ ] Patterns followed
+
+**Status:** pending
+
+---
+
+### Phase 2: {PHASE_NAME}
+
+| Field | Value |
+|-------|-------|
+| Agent | {AGENT} |
+| Status | pending |
+| Started | - |
+| Completed | - |
+
+**Tasks:**
+- {TASK_1}
+
+**Exit criteria:** {MEASURABLE_CRITERIA}
+
+**Result:** -
+
+---
+
+## Final Review
+
+> Run AFTER all phases, BEFORE marking finished. Single message, 3+ Task calls in parallel.
+> TBD: Add project-specific reviewers from .claude/agents/
+
+| Agent | Focus |
+|-------|-------|
+| `reviewer` #1 | Business logic, requirements |
+| `reviewer` #2 | Code quality, DRY, naming |
+| `reviewer` #3 | Patterns, conventions |
+| TBD | Project-specific review |
+
+**After all agents:** Critical issues → `developer` fix → re-review | All pass → DONE
+
+**Status:** pending
+
+---
+
+## Context Index
+
+> Files relevant to this task. Load per phase as needed.
+
+| # | File | Purpose |
+|---|------|---------|
+| 1 | {PATH} | {WHY_RELEVANT} |
+| 2 | {PATH} | {WHY_RELEVANT} |
+
+## Progress Log
+
+| Timestamp | Event |
+|-----------|-------|
+
+---
+
+## Failure Protocol
+
+1. Document error → 2. Analyze → 3. Re-run (max 3) → 4. Escalate/reassign
+
+## Manager Actions
+
+> After EACH phase: call `ft-coordinator` → update status → log → verify → proceed
+
+---
+
+**Status:** PENDING | **Iteration:** 0
