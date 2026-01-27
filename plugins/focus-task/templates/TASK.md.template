@@ -84,10 +84,13 @@ status: pending
 > **Iteration Protocol:**
 > ```
 > WHILE Phase NV has Issues:
->   1. Fix issues in Phase N (same agent)
->   2. Re-run Phase NV (same agents)
->   3. Max 3 iterations → escalate/reassign
+>   1. Fix issues (developer/tester)
+>   2. RE-RUN Phase NV (MANDATORY - same agents verify again!)
+>   3. Pass? → proceed | Fail? → iter++ → repeat 1-2
+>   4. Max 3 iterations → escalate
 > ```
+>
+> **CRITICAL:** NEVER mark phase complete after fix without re-verification!
 >
 > **Examples:** Repository impl → Repository tests → DDL → Pattern analysis → Controller → Integration tests
 
@@ -152,7 +155,19 @@ status: pending
 
 ## Failure Protocol
 
-Document → Analyze → Re-run (max 3) → Escalate
+```
+Phase NV fails 3x → ESCALATE
+```
+
+| # | Action | When |
+|---|--------|------|
+| 1 | **R&D Phase** | Root cause unclear → Add Phase NR: Explore + reviewer → KNOWLEDGE |
+| 2 | **Split Phase** | Scope too large → Break into N.a, N.b, N.c |
+| 3 | **Agent Upgrade** | Complexity → sonnet → opus |
+| 4 | **Reassign** | Wrong agent type → switch agent |
+| 5 | **AskUserQuestion** | LAST RESORT: requires 2+ agents agree + 10+ iterations total |
+
+**Flow:** Escalate → try 1-4 → max 2 escalations per phase → option 5 only with quorum
 
 ## Manager Actions
 

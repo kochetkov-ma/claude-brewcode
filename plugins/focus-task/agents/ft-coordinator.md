@@ -142,6 +142,29 @@ pending → in_progress → completed
                      → handoff (context limit)
 ```
 
+### CRITICAL: Verification Loop
+
+```
+Phase NV fails → fix → RE-RUN Phase NV → pass? → complete
+                                       → fail? → fix → RE-RUN...
+```
+
+**NEVER mark phase complete after fix without re-running verification!**
+
+### Escalation Actions (after 3 failed iterations)
+
+| # | Action | Trigger |
+|---|--------|---------|
+| 1 | R&D Phase | Root cause unclear → insert Phase NR |
+| 2 | Split Phase | Scope too large → N.a, N.b sub-phases |
+| 3 | Agent Upgrade | Complexity → sonnet → opus |
+| 4 | Reassign | Wrong agent type → switch agent |
+| 5 | AskUserQuestion | LAST RESORT (see conditions below) |
+
+**Limits:**
+- Options 1-4: max 2 escalations per phase
+- Option 5: requires **quorum 2+ agents** agree AND **10+ total iterations** on phase
+
 ## Output Format
 
 ```

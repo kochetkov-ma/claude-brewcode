@@ -435,8 +435,11 @@ ls -la ~/.claude/skills/ | grep "focus-task-" || echo "❌ No symlinks found"
 After symlinks, skills available via autocomplete:
 - `/focus-task-adapt` (symlink) = `/focus-task:adapt` (plugin)
 - `/focus-task-create` (symlink) = `/focus-task:create` (plugin)
+- `/focus-task-clean` (symlink) = `/focus-task:clean` (plugin)
+- `/focus-task-doc` (symlink) = `/focus-task:doc` (plugin)
+- `/focus-task-rules` (symlink) = `/focus-task:rules` (plugin)
+- `/focus-task-start` (symlink) = `/focus-task:start` (plugin)
 - `/focus-task-review` (from template) — project-adapted, in `.claude/skills/`
-- etc.
 
 </instructions>
 
@@ -481,6 +484,7 @@ After symlinks, skills available via autocomplete:
 | Symlink | Target |
 |---------|--------|
 | `~/.claude/skills/focus-task-adapt` | `.../{VERSION}/skills/adapt/` |
+| `~/.claude/skills/focus-task-clean` | `.../{VERSION}/skills/clean/` |
 | `~/.claude/skills/focus-task-create` | `.../{VERSION}/skills/create/` |
 | `~/.claude/skills/focus-task-doc` | `.../{VERSION}/skills/doc/` |
 | `~/.claude/skills/focus-task-rules` | `.../{VERSION}/skills/rules/` |

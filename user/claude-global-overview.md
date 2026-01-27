@@ -91,8 +91,8 @@ idea ~/.claude/agents/rules-organizer.md
 | developer | opus | R/W/E/Glob/Grep/Bash/Notebook/Web | ❌ | ❌ | Java/Kotlin + Spring реализация |
 | tester | sonnet | R/W/E/Glob/Grep/Bash | ❌ | ❌ | SDET/QA, анализ тестов |
 | reviewer | opus | R/Glob/Grep/Bash (disallow: W/E) | ✅ | ❌ | Архитектура, код-ревью + Explore |
-| skill-creator | sonnet | R/W/E/Glob/Grep/Skill | ❌ | ✅ | Создание SKILL.md |
-| agent-creator | sonnet | R/W/E/Glob/Grep/Task/Skill/Web | ✅ | ✅ | Создание агентов + Explore |
+| skill-creator | opus | R/W/E/Glob/Grep/Task/Skill | ✅ | ✅ | Создание SKILL.md |
+| agent-creator | opus | R/W/E/Glob/Grep/Task/Skill/Web | ✅ | ✅ | Создание агентов + Explore |
 | prompt-optimizer | sonnet | R/W/E/Glob/Grep/WebFetch | ❌ | ❌ | Оптимизация (через text-optimize) |
 | rules-organizer | sonnet | R/W/E/Glob/Grep/Skill | ❌ | ✅ | Организация .claude/rules/ |
 
@@ -125,11 +125,11 @@ idea ~/.claude/skills/global-doc-update/SKILL.md
 **Симлинки на focus-task плагин (workaround для autocomplete):**
 | Симлинк | Источник |
 |---------|----------|
-| `~/.claude/skills/focus-task-adapt` | `~/.claude/plugins/cache/claude-brewcode/focus-task/{ver}/skills/adapt/` |
-| `~/.claude/skills/focus-task-create` | `.../{ver}/skills/create/` |
-| `~/.claude/skills/focus-task-doc` | `.../{ver}/skills/doc/` |
-| `~/.claude/skills/focus-task-rules` | `.../{ver}/skills/rules/` |
-| `~/.claude/skills/focus-task-start` | `.../{ver}/skills/start/` |
+| `~/.claude/skills/focus-task-adapt` | `~/.claude/plugins/cache/claude-brewcode/focus-task/2.0.11/skills/adapt/` |
+| `~/.claude/skills/focus-task-create` | `.../2.0.11/skills/create/` |
+| `~/.claude/skills/focus-task-doc` | `.../2.0.11/skills/doc/` |
+| `~/.claude/skills/focus-task-rules` | `.../2.0.11/skills/rules/` |
+| `~/.claude/skills/focus-task-start` | `.../2.0.11/skills/start/` |
 
 > **Note:** `focus-task-review` создаётся из шаблона `/focus-task:adapt` в `.claude/skills/` проекта (адаптирован под tech stack).
 
@@ -203,7 +203,7 @@ idea ~/.claude/plugins/known_marketplaces.json
 |--------|--------|-------------|---------------------|
 | context7 | — | claude-plugins-official | resolve-library-id, query-docs |
 | playwright | — | claude-plugins-official | browser_*, snapshot, screenshot |
-| focus-task | 1.0.7 | claude-brewcode | 6 skills, 2 agents, SDK runtime |
+| focus-task | 2.0.11 | claude-brewcode | 6 skills, 2 agents, SDK runtime |
 
 **focus-task skills:**
 | Скилл | Назначение |
@@ -233,7 +233,7 @@ idea ~/.claude/plugins/known_marketplaces.json
 │       └── focus-task/
 │           ├── 1.0.0/          # Все версии сохраняются!
 │           ├── ...
-│           └── 1.0.7/          # ← Актуальная
+│           └── 2.0.11/         # ← Актуальная
 │               ├── .claude-plugin/plugin.json
 │               ├── skills/{adapt,create,doc,review,rules,start}/
 │               ├── agents/{ft-coordinator,ft-knowledge-manager}.md
@@ -260,7 +260,7 @@ claude plugin list
 
 После `/focus-task:adapt` создаются симлинки в `~/.claude/skills/`:
 ```
-focus-task-{skill} → ~/.claude/plugins/cache/claude-brewcode/focus-task/{ver}/skills/{skill}/
+focus-task-{skill} → ~/.claude/plugins/cache/claude-brewcode/focus-task/2.0.11/skills/{skill}/
 ```
 Это позволяет использовать `/focus-task-adapt` вместо `/focus-task:adapt` с autocomplete.
 
@@ -421,6 +421,7 @@ du -sh ~/.claude/*/
 
 | Вер. | Дата | Изменения |
 |------|------|-----------|
+| 2.11 | 2026-01-27 | Обновлена версия focus-task до 2.0.11, исправлены пути симлинков |
 | 2.10 | 2026-01-27 | Добавлен раздел «Расположение плагинов», focus-task v1.0.7, команды управления |
 | 2.9 | 2026-01-27 | focus-task v1.0.5, добавлены симлинки в skills/, обновлена структура |
 | 2.8 | 2026-01-27 | Добавлен плагин focus-task@claude-brewcode (6 skills, 2 agents) |
