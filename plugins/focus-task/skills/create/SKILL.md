@@ -197,14 +197,26 @@ Create Task — "description" or path to requirements
 
    **Exit criteria:** User confirms all remarks addressed
 
-8. **Write Quick Ref** (REQUIRED)
+8. **Update Quick Ref** (REQUIRED)
 
-   Write task path to `.claude/TASK.md` for quick start:
-   ```bash
-   echo ".claude/tasks/{TIMESTAMP}_{NAME}_TASK.md" > .claude/TASK.md
+   Add task link to TOP of `.claude/TASK.md` (preserve history):
+   ```
+   IF .claude/TASK.md exists:
+     1. Read existing content
+     2. Prepend: ".claude/tasks/{TIMESTAMP}_{NAME}_TASK.md\n---\n"
+     3. Append: existing content
+   ELSE:
+     Create with: ".claude/tasks/{TIMESTAMP}_{NAME}_TASK.md"
    ```
 
-   **Format:** Single line with relative path to task file.
+   **Result format:**
+   ```
+   .claude/tasks/{TIMESTAMP}_{NAME}_TASK.md
+   ---
+   .claude/tasks/{PREV_TS}_{PREV_NAME}_TASK.md
+   ---
+   ...older tasks...
+   ```
 
 9. **Validation** (REQUIRED)
 
@@ -218,7 +230,7 @@ Create Task — "description" or path to requirements
    │ [✅|❌] KNOWLEDGE: .claude/tasks/{TS}_{NAME}_KNOWLEDGE.jsonl│
    │ [✅|❌] REPORTS:   .claude/tasks/reports/{TS}_{NAME}/       │
    │ [✅|❌] MANIFEST:  .../MANIFEST.md                          │
-   │ [✅|❌] QUICK REF: .claude/TASK.md → points to task file    │
+   │ [✅|❌] QUICK REF: .claude/TASK.md → task at top            │
    └─────────────────────────────────────────────────────────────┘
    ```
 
@@ -232,10 +244,10 @@ Create Task — "description" or path to requirements
    Fix: Creating missing files...
    ```
 
-   **Auto-fix for missing Quick Ref:**
-   ```bash
-   # If .claude/TASK.md missing or doesn't contain valid task path
-   echo ".claude/tasks/{TIMESTAMP}_{NAME}_TASK.md" > .claude/TASK.md
+   **Auto-fix for Quick Ref:**
+   ```
+   IF .claude/TASK.md missing OR first line != current task path:
+     Prepend current task path + "---" to file (or create if missing)
    ```
 
 > **Template source:** Always from `.claude/tasks/templates/` (project), never from plugin base templates directly.
@@ -249,7 +261,7 @@ Task created:
 - KNOWLEDGE: .claude/tasks/{TIMESTAMP}_{NAME}_KNOWLEDGE.jsonl
 - REPORTS: .claude/tasks/reports/{TIMESTAMP}_{NAME}/
 - MANIFEST: .claude/tasks/reports/{TIMESTAMP}_{NAME}/MANIFEST.md
-- QUICK REF: .claude/TASK.md → .claude/tasks/{TIMESTAMP}_{NAME}_TASK.md
+- QUICK REF: .claude/TASK.md (task added to top, history preserved)
 
 Run: /focus-task-start
      (or with explicit path: /focus-task-start .claude/tasks/{TIMESTAMP}_{NAME}_TASK.md)

@@ -132,7 +132,7 @@ mkdir -p .claude/tasks/templates .claude/tasks/specs .claude/rules
 
 **EXECUTE** using Bash tool — copy from plugin cache:
 ```bash
-PLUGIN_TEMPLATES="$HOME/.claude/plugins/cache/claude-brewcode/focus-task/$(ls -v $HOME/.claude/plugins/cache/claude-brewcode/focus-task | tail -1)/templates"
+PLUGIN_TEMPLATES="$HOME/.claude/plugins/cache/claude-brewcode/focus-task/$(ls $HOME/.claude/plugins/cache/claude-brewcode/focus-task | sort -V | tail -1)/templates"
 
 cp "$PLUGIN_TEMPLATES/SPEC.md.template" .claude/tasks/templates/
 cp "$PLUGIN_TEMPLATES/KNOWLEDGE.jsonl.template" .claude/tasks/templates/
@@ -190,7 +190,7 @@ mkdir -p .claude/skills/focus-task-review
 
 **EXECUTE** using Bash tool — copy review skill template:
 ```bash
-PLUGIN_TEMPLATES="$HOME/.claude/plugins/cache/claude-brewcode/focus-task/$(ls -v $HOME/.claude/plugins/cache/claude-brewcode/focus-task 2>/dev/null | tail -1)/templates"
+PLUGIN_TEMPLATES="$HOME/.claude/plugins/cache/claude-brewcode/focus-task/$(ls $HOME/.claude/plugins/cache/claude-brewcode/focus-task 2>/dev/null | sort -V | tail -1)/templates"
 cp "$PLUGIN_TEMPLATES/skills/review/SKILL.md.template" .claude/skills/focus-task-review/SKILL.md
 ```
 
@@ -285,6 +285,51 @@ grep -q "Tech-Specific\|tech-specific\|Category.*Checks" .claude/skills/focus-ta
 
 ---
 
+## Phase 3.6: Copy Configuration
+
+**Agent:** developer | **Action:** Copy configuration template for runtime settings
+
+**EXECUTE** using Bash tool — copy/update config template:
+```bash
+PLUGIN_TEMPLATES="$HOME/.claude/plugins/cache/claude-brewcode/focus-task/$(ls $HOME/.claude/plugins/cache/claude-brewcode/focus-task 2>/dev/null | sort -V | tail -1)/templates"
+TEMPLATE="$PLUGIN_TEMPLATES/focus-task.config.json.template"
+PROJECT_CFG=".claude/tasks/cfg/focus-task.config.json"
+
+mkdir -p .claude/tasks/cfg
+
+if [ ! -f "$PROJECT_CFG" ]; then
+  cp "$TEMPLATE" "$PROJECT_CFG"
+  echo "✅ Config created: $PROJECT_CFG"
+else
+  # Compare normalized JSON content (sorted keys, consistent formatting)
+  TEMPLATE_HASH=$(jq -S . "$TEMPLATE" 2>/dev/null | shasum -a 256 | cut -d' ' -f1)
+  PROJECT_HASH=$(jq -S . "$PROJECT_CFG" 2>/dev/null | shasum -a 256 | cut -d' ' -f1)
+
+  if [ "$TEMPLATE_HASH" != "$PROJECT_HASH" ]; then
+    cp "$PROJECT_CFG" "$PROJECT_CFG.bak"
+    cp "$TEMPLATE" "$PROJECT_CFG"
+    echo "🔄 Config updated (content differs): $PROJECT_CFG"
+    echo "   Backup: $PROJECT_CFG.bak"
+  else
+    echo "⏭️  Config unchanged: $PROJECT_CFG"
+  fi
+fi
+```
+
+### Configuration Options
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `knowledge.maxEntries` | 100 | Max KNOWLEDGE.jsonl entries after compaction |
+| `knowledge.maxTokens` | 500 | Max tokens in ## K block injected to agents |
+| `knowledge.priorities` | `["❌","✅","ℹ️"]` | Priority order for knowledge entries |
+| `stop.maxAttempts` | 20 | Stop attempts before escape mechanism triggers |
+| `agents.system` | [...] | System agents (don't receive ## K injection) |
+
+> **Hooks-only architecture:** No external runtime. All context management via Claude Code hooks.
+
+---
+
 ## Phase 4: Validation
 
 **Agent:** developer | **Action:** Verify template structure
@@ -296,6 +341,7 @@ test -f .claude/tasks/templates/SPEC.md.template && echo "✅ SPEC template" || 
 test -f .claude/tasks/templates/KNOWLEDGE.jsonl.template && echo "✅ KNOWLEDGE template" || echo "❌ KNOWLEDGE template MISSING"
 test -f .claude/rules/avoid.md && echo "✅ avoid.md rules" || echo "❌ avoid.md MISSING"
 test -f .claude/rules/best-practice.md && echo "✅ best-practice.md rules" || echo "❌ best-practice.md MISSING"
+test -f .claude/tasks/cfg/focus-task.config.json && echo "✅ Config file" || echo "⚠️ Config MISSING (optional)"
 ```
 
 > **STOP if any ❌** — go back to "Copy Templates" step and fix.
@@ -307,6 +353,7 @@ test -f .claude/rules/best-practice.md && echo "✅ best-practice.md rules" || e
 | TASK template | `.claude/tasks/templates/TASK.md.template` |
 | SPEC template | `.claude/tasks/templates/SPEC.md.template` |
 | KNOWLEDGE template | `.claude/tasks/templates/KNOWLEDGE.jsonl.template` |
+| Config file | `.claude/tasks/cfg/focus-task.config.json` |
 | Project agents | [N] from `.claude/agents/` |
 | Reference Examples | [N] canonical files populated |
 | Tech-specific adaptations | Testing framework, DB patterns |
@@ -336,7 +383,7 @@ if [ ! -d "$PLUGIN_BASE" ]; then
 fi
 
 # Get latest version (sorted, last = highest)
-LATEST_VERSION=$(ls -v "$PLUGIN_BASE" | tail -1)
+LATEST_VERSION=$(ls "$PLUGIN_BASE" | sort -V | tail -1)
 PLUGIN_SKILLS="$PLUGIN_BASE/$LATEST_VERSION/skills"
 
 # Validate version directory

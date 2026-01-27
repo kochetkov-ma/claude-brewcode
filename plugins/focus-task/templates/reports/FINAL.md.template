@@ -1,6 +1,6 @@
 # Final Report: {NAME}
 
-> Completed: {TS} | Phases: {PHASE_COUNT} | Iterations: {ITER_COUNT}
+> Completed: {TIMESTAMP} | Phases: {PHASE_COUNT} | Iterations: {ITER_COUNT}
 
 ## Summary
 
@@ -56,8 +56,8 @@
 
 | Path | Type | Description |
 |------|------|-------------|
-| `reports/{TS}_{NAME}/phase_1/iter_1_exec/` | exec | Phase 1 execution |
-| `reports/{TS}_{NAME}/phase_1/iter_1_verify/` | verify | Phase 1 verification |
+| `reports/{TIMESTAMP}_{NAME}/phase_1/iter_1_exec/` | exec | Phase 1 execution |
+| `reports/{TIMESTAMP}_{NAME}/phase_1/iter_1_verify/` | verify | Phase 1 verification |
 
 ## Metrics
 
@@ -70,4 +70,4 @@
 
 ---
 
-**Generated:** {TS} by ft-coordinator
+**Generated:** {TIMESTAMP} by ft-coordinator

@@ -136,7 +136,7 @@
 
 5. **Create KNOWLEDGE**
 
-   - Create empty `.claude/tasks/{TIMESTAMP}_{NAME}_TASK_KNOWLEDGE.jsonl`
+   - Create empty `.claude/tasks/{TIMESTAMP}_{NAME}_KNOWLEDGE.jsonl`
 
 6. **Review Plan** (REQUIRED)
 
@@ -190,7 +190,7 @@
 Task created:
 - TASK: .claude/tasks/{TIMESTAMP}_{NAME}_TASK.md
 - SPEC: .claude/tasks/specs/{TIMESTAMP}_{NAME}_SPEC_v1.md
-- KNOWLEDGE: .claude/tasks/{TIMESTAMP}_{NAME}_TASK_KNOWLEDGE.jsonl
+- KNOWLEDGE: .claude/tasks/{TIMESTAMP}_{NAME}_KNOWLEDGE.jsonl
 
 Run: /focus-task-start .claude/tasks/{TIMESTAMP}_{NAME}_TASK.md
 ```

@@ -1,7 +1,7 @@
 {
   "name": "focus-task",
-  "version": "1.0.8",
-  "description": "Infinite task execution with automatic handoff for Claude Code",
+  "version": "2.0.11",
+  "description": "Infinite task execution via hooks-only architecture for Claude Code",
   "author": {
     "name": "Maximus Kochetkov"
   },

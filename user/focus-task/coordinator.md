@@ -78,7 +78,9 @@
 ├── rules/                               # Правила (после rules)
 │   ├── avoid.md                         # Антипаттерны
 │   └── best-practice.md                 # Лучшие практики
-└── focus-task.config.json               # Настройки (опционально)
+└── tasks/cfg/
+    ├── focus-task.config.json           # Настройки (опционально)
+    └── .focus-task.lock                 # Lock-файл выполнения
 ```
 
 ## KNOWLEDGE.jsonl формат
@@ -150,7 +152,7 @@ reports/{TS}_{NAME}/
 
 ## Конфигурация
 
-`{PROJECT}/.claude/focus-task.config.json` (или `~/.claude/focus-task.config.json`):
+`{PROJECT}/.claude/tasks/cfg/focus-task.config.json` (или `~/.claude/tasks/cfg/focus-task.config.json`):
 
 ```json
 {

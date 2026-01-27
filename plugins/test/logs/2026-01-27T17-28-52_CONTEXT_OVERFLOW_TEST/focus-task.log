@@ -1,0 +1,46 @@
+{"ts":"2026-01-27T17:28:52.807Z","level":"INFO","component":"runtime","event":"task.load","msg":"Task: .claude/tasks/20260127_172411_CONTEXT_OVERFLOW_TEST_TASK.md","data":{"taskPath":".claude/tasks/20260127_172411_CONTEXT_OVERFLOW_TEST_TASK.md","knowledgePath":".claude/tasks/20260127_172411_CONTEXT_OVERFLOW_TEST_KNOWLEDGE.jsonl","config":{"contextThreshold":0.9,"warningThreshold":0.85,"maxTokens":200000,"logLevel":"DEBUG"}}}
+{"ts":"2026-01-27T17:28:52.807Z","level":"DEBUG","component":"handoff","event":"handoff.load","msg":"No handoff entries found","data":{"totalEntries":0}}
+{"ts":"2026-01-27T17:28:52.807Z","level":"INFO","component":"runtime","event":"session.create","msg":"Starting new session","data":{"resuming":false}}
+{"ts":"2026-01-27T17:28:52.807Z","level":"DEBUG","component":"session","event":"session.create","msg":"Session created","data":{"sessionId":"2862ea01-db57-45ab-ba12-982d052bebf4","taskPath":".claude/tasks/20260127_172411_CONTEXT_OVERFLOW_TEST_TASK.md"}}
+{"ts":"2026-01-27T17:28:52.808Z","level":"INFO","component":"session","event":"session.start","msg":"Starting SDK query","data":{"promptLength":126,"cwd":"/Users/maximus/IdeaProjects/claude-brewcode"}}
+{"ts":"2026-01-27T17:28:53.715Z","level":"INFO","component":"sdk","event":"sdk.init","msg":"Session initialized","data":{"sessionId":"cfd7ffc1-58e3-4087-9a03-b6f566ab9461","model":"claude-sonnet-4-5","tools":18,"agents":["Bash","general-purpose","statusline-setup","Explore","Plan","claude-code-guide"],"mcpServers":[]}}
+{"ts":"2026-01-27T17:28:55.801Z","level":"DEBUG","component":"sdk","event":"sdk.assistant","msg":"Assistant response","data":{"contentLength":0,"parentToolUseId":null}}
+{"ts":"2026-01-27T17:28:56.003Z","level":"DEBUG","component":"sdk","event":"sdk.assistant","msg":"Assistant response","data":{"contentLength":44,"parentToolUseId":null}}
+{"ts":"2026-01-27T17:28:56.004Z","level":"DEBUG","component":"context","event":"context.update","msg":"Tokens updated","data":{"added":11,"total":11,"percent":0,"remaining":199989}}
+{"ts":"2026-01-27T17:28:56.456Z","level":"DEBUG","component":"sdk","event":"sdk.assistant","msg":"Assistant response","data":{"contentLength":0,"parentToolUseId":null}}
+{"ts":"2026-01-27T17:29:02.473Z","level":"DEBUG","component":"sdk","event":"sdk.assistant","msg":"Assistant response","data":{"contentLength":0,"parentToolUseId":null}}
+{"ts":"2026-01-27T17:29:02.996Z","level":"DEBUG","component":"sdk","event":"sdk.assistant","msg":"Assistant response","data":{"contentLength":104,"parentToolUseId":null}}
+{"ts":"2026-01-27T17:29:02.996Z","level":"DEBUG","component":"context","event":"context.update","msg":"Tokens updated","data":{"added":26,"total":37,"percent":0,"remaining":199963}}
+{"ts":"2026-01-27T17:29:03.358Z","level":"DEBUG","component":"sdk","event":"sdk.assistant","msg":"Assistant response","data":{"contentLength":0,"parentToolUseId":null}}
+{"ts":"2026-01-27T17:29:08.239Z","level":"DEBUG","component":"sdk","event":"sdk.assistant","msg":"Assistant response","data":{"contentLength":0,"parentToolUseId":null}}
+{"ts":"2026-01-27T17:29:08.830Z","level":"DEBUG","component":"sdk","event":"sdk.assistant","msg":"Assistant response","data":{"contentLength":98,"parentToolUseId":null}}
+{"ts":"2026-01-27T17:29:08.830Z","level":"DEBUG","component":"context","event":"context.update","msg":"Tokens updated","data":{"added":25,"total":62,"percent":0,"remaining":199938}}
+{"ts":"2026-01-27T17:29:09.483Z","level":"DEBUG","component":"sdk","event":"sdk.assistant","msg":"Assistant response","data":{"contentLength":0,"parentToolUseId":null}}
+{"ts":"2026-01-27T17:29:14.894Z","level":"DEBUG","component":"sdk","event":"sdk.assistant","msg":"Assistant response","data":{"contentLength":0,"parentToolUseId":null}}
+{"ts":"2026-01-27T17:29:16.161Z","level":"DEBUG","component":"sdk","event":"sdk.assistant","msg":"Assistant response","data":{"contentLength":0,"parentToolUseId":null}}
+{"ts":"2026-01-27T17:29:22.497Z","level":"DEBUG","component":"sdk","event":"sdk.assistant","msg":"Assistant response","data":{"contentLength":0,"parentToolUseId":null}}
+{"ts":"2026-01-27T17:29:23.680Z","level":"DEBUG","component":"sdk","event":"sdk.assistant","msg":"Assistant response","data":{"contentLength":0,"parentToolUseId":null}}
+{"ts":"2026-01-27T17:29:36.745Z","level":"DEBUG","component":"sdk","event":"sdk.assistant","msg":"Assistant response","data":{"contentLength":0,"parentToolUseId":null}}
+{"ts":"2026-01-27T17:29:37.094Z","level":"DEBUG","component":"sdk","event":"sdk.assistant","msg":"Assistant response","data":{"contentLength":74,"parentToolUseId":null}}
+{"ts":"2026-01-27T17:29:37.094Z","level":"DEBUG","component":"context","event":"context.update","msg":"Tokens updated","data":{"added":19,"total":81,"percent":0,"remaining":199919}}
+{"ts":"2026-01-27T17:29:38.039Z","level":"DEBUG","component":"sdk","event":"sdk.assistant","msg":"Assistant response","data":{"contentLength":0,"parentToolUseId":null}}
+{"ts":"2026-01-27T17:29:45.440Z","level":"DEBUG","component":"sdk","event":"sdk.assistant","msg":"Assistant response","data":{"contentLength":0,"parentToolUseId":null}}
+{"ts":"2026-01-27T17:29:46.348Z","level":"DEBUG","component":"sdk","event":"sdk.assistant","msg":"Assistant response","data":{"contentLength":0,"parentToolUseId":null}}
+{"ts":"2026-01-27T17:29:59.453Z","level":"DEBUG","component":"sdk","event":"sdk.assistant","msg":"Assistant response","data":{"contentLength":0,"parentToolUseId":null}}
+{"ts":"2026-01-27T17:29:59.966Z","level":"DEBUG","component":"sdk","event":"sdk.assistant","msg":"Assistant response","data":{"contentLength":241,"parentToolUseId":null}}
+{"ts":"2026-01-27T17:29:59.966Z","level":"DEBUG","component":"context","event":"context.update","msg":"Tokens updated","data":{"added":61,"total":142,"percent":0,"remaining":199858}}
+{"ts":"2026-01-27T17:30:01.247Z","level":"DEBUG","component":"sdk","event":"sdk.assistant","msg":"Assistant response","data":{"contentLength":0,"parentToolUseId":null}}
+{"ts":"2026-01-27T17:30:01.901Z","level":"DEBUG","component":"sdk","event":"sdk.assistant","msg":"Assistant response","data":{"contentLength":0,"parentToolUseId":null}}
+{"ts":"2026-01-27T17:30:02.844Z","level":"DEBUG","component":"sdk","event":"sdk.assistant","msg":"Assistant response","data":{"contentLength":0,"parentToolUseId":null}}
+{"ts":"2026-01-27T17:30:14.504Z","level":"DEBUG","component":"sdk","event":"sdk.assistant","msg":"Assistant response","data":{"contentLength":0,"parentToolUseId":null}}
+{"ts":"2026-01-27T17:30:15.056Z","level":"DEBUG","component":"sdk","event":"sdk.assistant","msg":"Assistant response","data":{"contentLength":76,"parentToolUseId":null}}
+{"ts":"2026-01-27T17:30:15.056Z","level":"DEBUG","component":"context","event":"context.update","msg":"Tokens updated","data":{"added":19,"total":161,"percent":0,"remaining":199839}}
+{"ts":"2026-01-27T17:30:15.714Z","level":"DEBUG","component":"sdk","event":"sdk.assistant","msg":"Assistant response","data":{"contentLength":0,"parentToolUseId":null}}
+{"ts":"2026-01-27T17:30:21.325Z","level":"DEBUG","component":"sdk","event":"sdk.assistant","msg":"Assistant response","data":{"contentLength":0,"parentToolUseId":null}}
+{"ts":"2026-01-27T17:30:35.704Z","level":"DEBUG","component":"sdk","event":"sdk.assistant","msg":"Assistant response","data":{"contentLength":0,"parentToolUseId":null}}
+{"ts":"2026-01-27T17:30:42.141Z","level":"DEBUG","component":"sdk","event":"sdk.assistant","msg":"Assistant response","data":{"contentLength":0,"parentToolUseId":null}}
+{"ts":"2026-01-27T17:30:50.062Z","level":"DEBUG","component":"sdk","event":"sdk.assistant","msg":"Assistant response","data":{"contentLength":1728,"parentToolUseId":null}}
+{"ts":"2026-01-27T17:30:50.062Z","level":"DEBUG","component":"context","event":"context.update","msg":"Tokens updated","data":{"added":432,"total":593,"percent":0,"remaining":199407}}
+{"ts":"2026-01-27T17:30:50.066Z","level":"INFO","component":"session","event":"session.result","msg":"Session success","data":{"numTurns":13,"durationMs":116355,"totalCostUsd":0.9057875,"inputTokens":137,"outputTokens":4658}}
+{"ts":"2026-01-27T17:30:50.102Z","level":"INFO","component":"session","event":"session.finish","msg":"Session finished normally"}
+{"ts":"2026-01-27T17:30:50.102Z","level":"INFO","component":"runtime","event":"session.end","msg":"Session completed","data":{"contextPercent":0,"contextTokens":593,"maxTokens":200000,"status":"finished"}}

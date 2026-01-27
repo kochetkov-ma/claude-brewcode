@@ -1,4 +1,6 @@
-<!-- Timestamp: YYYYMMDD_HHMMSS -->
+status: pending
+<!-- ↑ Line 1 status: stop hook reads this. MUST match table Status. Values: pending|in progress|handoff|finished -->
+
 # Task: {NAME}
 
 > **AUTONOMY:** Work until DONE. Iterate until all criteria met.
@@ -8,7 +10,7 @@
 
 | Created | {TIMESTAMP} | Status | pending |
 |---------|-------------|--------|---------|
-| Spec | `.claude/tasks/specs/{TIMESTAMP}_{NAME}_SPEC.md` |||
+| Spec | `.claude/tasks/specs/{TIMESTAMP}_{NAME}_SPEC_v1.md` |||
 | Knowledge | `.claude/tasks/{TIMESTAMP}_{NAME}_KNOWLEDGE.jsonl` |||
 
 ## Reports
@@ -19,7 +21,7 @@
 | Manifest | `.claude/tasks/reports/{TIMESTAMP}_{NAME}/MANIFEST.md` |
 | Final | `.claude/tasks/reports/{TIMESTAMP}_{NAME}/FINAL.md` |
 
-> **Report Structure:** `reports/{TS}_{NAME}/phase_{P}/iter_{N}_{type}/`
+> **Report Structure:** `reports/{TIMESTAMP}_{NAME}/phase_{P}/iter_{N}_{type}/`
 > - `{type}`: `exec` (execution) or `verify` (verification)
 > - Each iteration contains: `{AGENT}_output.md`, `summary.md`, optional `{AGENT}_artifacts/`
 
@@ -145,13 +147,6 @@
 **Flow:** All pass → DONE | Issues → fix → re-review
 
 **Status:** pending
-
----
-
-## Progress Log
-
-| Timestamp | Event |
-|-----------|-------|
 
 ---
 

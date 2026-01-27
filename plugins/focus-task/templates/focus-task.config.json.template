@@ -1,0 +1,22 @@
+{
+  "knowledge": {
+    "maxEntries": 100,
+    "maxTokens": 500,
+    "priorities": ["❌", "✅", "ℹ️"],
+    "autoCompactThreshold": 50
+  },
+  "logging": {
+    "level": "info"
+  },
+  "stop": {
+    "maxAttempts": 20
+  },
+  "agents": {
+    "system": [
+      "ft-coordinator", "ft-knowledge-manager",
+      "Explore", "Plan", "Bash", "general-purpose",
+      "claude-code-guide", "skill-creator", "agent-creator",
+      "prompt-optimizer", "rules-organizer", "statusline-setup"
+    ]
+  }
+}

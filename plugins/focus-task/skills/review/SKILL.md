@@ -2,13 +2,13 @@
 name: review
 description: Multi-agent code review with quorum consensus. Triggers: "review code", "parallel review", "quorum review", "/focus-task-review".
 user-invocable: true
-argument-hint: "<prompt-or-file-path> [--quorum N-M]"
+argument-hint: "<prompt-or-file-path> [--quorum G-N-M]"
 allowed-tools: Read, Glob, Grep, Task, Bash, Write
 context: fork
 model: opus
 ---
 
-Code Review — "prompt" or path [--quorum N-M]
+Code Review — "prompt" or path [--quorum G-N-M]
 
 **ROLE:** Code Review Coordinator | **OUTPUT:** Prioritized findings report
 
@@ -18,15 +18,18 @@ Code Review — "prompt" or path [--quorum N-M]
 |-------|--------|
 | Text prompt | Use as review focus description |
 | File path (`.md`, `.txt`) | Read file as review instructions |
-| `--quorum N-M` | N agents per group, M = quorum threshold |
-| Default | `--quorum 3-2` (3 agents, quorum 2) |
+| `--quorum G-N-M` | G groups, N agents per group, M = quorum threshold |
+| `--quorum N-M` | Auto groups (2-5), N agents per group, M = quorum |
+| Default | `--quorum auto-3-2` (auto groups, 3 agents, quorum 2) |
 
 **Parse `$ARGUMENTS`:**
 ```
-1. Extract --quorum if present → N (agents), M (threshold)
+1. Extract --quorum if present:
+   - 3 values (G-N-M) → G groups, N agents, M threshold
+   - 2 values (N-M) → Auto groups, N agents, M threshold
 2. Remaining text → REVIEW_PROMPT or file path
 3. If path exists → Read file → REVIEW_PROMPT
-4. Validate: M <= N, N >= 2, M >= 2
+4. Validate: M <= N, N >= 2, M >= 2, G in [2..5] or "auto"
 ```
 
 ---
@@ -82,15 +85,46 @@ Task(subagent_type="Explore", model="haiku", prompt="
 
 ## Phase 2: Group Formation
 
-**Goal:** Define review groups based on task and codebase
+**Goal:** Define review groups based on task, codebase, and `--quorum` setting
 
-### Default Groups
+### Group Count Rules
 
-| Group | Focus | Default Agent | Triggers |
-|-------|-------|---------------|----------|
-| 1: main-code | Logic, architecture, security | `reviewer` | Always |
-| 2: tests | Coverage, assertions, quality | `tester` | Test files detected |
-| 3: db-layer | Queries, transactions, N+1 | `sql_expert` | DB patterns detected |
+| Mode | G value | Behavior |
+|------|---------|----------|
+| Explicit | `3-3-2` | Exactly 3 groups |
+| Auto | `3-2` or default | 2-5 groups based on detection |
+
+### Available Groups (priority order for auto-selection)
+
+| Priority | Group | Focus | Default Agent | Detection |
+|----------|-------|-------|---------------|-----------|
+| 1 | main-code | Logic, architecture, security | `reviewer` | Always enabled |
+| 2 | tests | Coverage, assertions, quality | `tester` | `**/test/**`, `*Test.*` |
+| 3 | db-layer | Queries, transactions, N+1 | `sql_expert` | `**/repositories/**`, `*.sql` |
+| 4 | security | Auth, injection, OWASP | `reviewer` | `**/auth/**`, `**/security/**` |
+| 5 | config | Infrastructure, secrets | `reviewer` | `docker-*`, `*.yml`, `*.properties` |
+
+### Auto Group Selection (G = "auto")
+
+```
+1. ALWAYS enable: main-code (group 1)
+2. Detect and enable (up to 4 more):
+   - tests: if test files found
+   - db-layer: if repository/SQL patterns found
+   - security: if auth/security modules found
+   - config: if significant config files found
+3. Result: 2-5 groups based on codebase
+```
+
+### Explicit Group Count (G = 2..5)
+
+```
+1. If G specified explicitly (e.g., --quorum 4-3-2):
+   - Select top G groups by detection priority
+   - main-code always included
+   - Fill remaining with detected groups
+   - If fewer detected than G → use main-code duplicates with different focus
+```
 
 ### Agent Selection Priority
 
@@ -103,10 +137,6 @@ Task(subagent_type="Explore", model="haiku", prompt="
    - Code quality → reviewer
    - Test quality → tester
    - Database → sql_expert
-
-3. Group count:
-   - 2 groups: no DB or no tests
-   - 3 groups: both DB and tests detected
 ```
 
 ### Detection Rules
@@ -115,29 +145,40 @@ Task(subagent_type="Explore", model="haiku", prompt="
 |-----------|--------|
 | `**/repositories/**` OR `*.sql` found | Enable db-layer group |
 | `**/test/**` OR `*Test.*` found | Enable tests group |
-| `**/auth/**` OR `**/security/**` found | Add security focus to main-code |
+| `**/auth/**` OR `**/security/**` found | Enable security group |
+| `docker-*` OR `*.yml` > 5 files | Enable config group |
 
 ---
 
 ## Phase 3: Parallel Review
 
-**Goal:** N agents per group review in parallel
+**Goal:** N agents per group review in parallel across G groups
 
 ### Execution Pattern
 
 ```
-ONE message with (N × groups) Task calls:
+ONE message with (G × N) Task calls:
 
-With --quorum 3-2 and 2 groups:
+Example: --quorum 3-3-2 (3 groups, 3 agents, quorum 2)
   Group 1 (main-code): reviewer #1, reviewer #2, reviewer #3
   Group 2 (tests): tester #1, tester #2, tester #3
-  Total: 6 parallel agents
+  Group 3 (db-layer): sql_expert #1, sql_expert #2, sql_expert #3
+  Total: 9 parallel agents
 
-With --quorum 5-2 and 3 groups:
+Example: --quorum 4-2 (auto groups, 4 agents, quorum 2)
+  Detected: 3 groups (main-code, tests, security)
+  Group 1: reviewer × 4
+  Group 2: tester × 4
+  Group 3: reviewer × 4 (security focus)
+  Total: 12 parallel agents
+
+Example: --quorum 5-5-3 (5 groups, 5 agents, quorum 3)
   Group 1: reviewer × 5
   Group 2: tester × 5
   Group 3: sql_expert × 5
-  Total: 15 parallel agents
+  Group 4: reviewer × 5 (security)
+  Group 5: reviewer × 5 (config)
+  Total: 25 parallel agents (max recommended)
 ```
 
 ### Agent Prompt Template
@@ -336,9 +377,9 @@ Naming:
 # Code Review Report
 
 > **Scope:** {REVIEW_PROMPT}
-> **Quorum:** {N}-{M} ({N} agents, {M} threshold)
-> **Groups:** {GROUP_COUNT} ({GROUP_NAMES})
-> **Total agents:** {TOTAL_AGENTS}
+> **Quorum:** {G}-{N}-{M} ({G} groups × {N} agents, threshold {M})
+> **Groups:** {GROUP_NAMES}
+> **Total agents:** {G×N} = {TOTAL_AGENTS}
 > **Generated:** {TIMESTAMP}
 
 ## Summary
@@ -413,7 +454,7 @@ Naming:
 
 ---
 
-*Generated by focus-task-review | Quorum: {N}-{M}*
+*Generated by focus-task-review | Quorum: {G}-{N}-{M}*
 ```
 
 ### Final Response
@@ -438,15 +479,25 @@ Full report: .claude/tasks/reviews/{TIMESTAMP}_{NAME}_report.md
 | No files found for block | Skip block, warn in report |
 | Agent timeout | Retry once, then mark as unavailable |
 | No findings | Report "No issues found" with confidence |
-| Invalid quorum args | Error: "Invalid --quorum. Format: N-M where M ≤ N, N ≥ 2, M ≥ 2" |
+| Invalid quorum args | Error: "Invalid --quorum. Format: G-N-M or N-M where G∈[2..5], M≤N, N≥2, M≥2" |
 | No CLAUDE.md | Use default rules only |
 
 ## Configuration
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `--quorum` | `3-2` | N agents per group, M = threshold |
+| `--quorum` | `auto-3-2` | G groups (2-5 or auto), N agents, M threshold |
 | Report dir | `.claude/tasks/reviews/` | Output directory |
-| Max parallel | 15 | Maximum agents in one message |
+| Max parallel | 25 | Maximum agents in one message (G×N) |
 | Line tolerance | ±5 | Lines overlap for matching |
 | Similarity threshold | 0.6 | Semantic similarity for matching |
+
+### Quorum Format Examples
+
+| Format | Groups | Agents | Quorum | Total Agents |
+|--------|--------|--------|--------|--------------|
+| `3-2` | auto (2-5) | 3 | 2 | 6-15 |
+| `3-3-2` | 3 | 3 | 2 | 9 |
+| `4-2-2` | 4 | 2 | 2 | 8 |
+| `5-5-3` | 5 | 5 | 3 | 25 |
+| `2-4-3` | 2 | 4 | 3 | 8 |

@@ -9,7 +9,7 @@
     {
       "name": "focus-task",
       "description": "Infinite task execution with automatic handoff for Claude Code",
-      "version": "1.0.0",
+      "version": "2.0.11",
       "source": "./focus-task"
     }
   ]

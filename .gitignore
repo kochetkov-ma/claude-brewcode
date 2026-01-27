@@ -1,2 +1,4 @@
 .idea/
-runtime/
+runtime/dist/
+runtime/node_modules/
+package-lock.json
