@@ -1,12 +1,22 @@
 # Focus Task Plugin - Installation Guide
 
+## Quick Install (Recommended)
+
+```bash
+claude plugin marketplace add /path/to/claude-brewcode/plugins
+claude plugin install focus-task@claude-brewcode
+```
+
 ## Quick Reference
 
 | Method | Command |
 |--------|---------|
-| Local dev (session) | `claude --plugin-dir ./plugins/focus-task` |
-| Local marketplace | `claude plugin marketplace add <repo-path>` then `claude plugin install focus-task@marketplace-name` |
-| GitHub marketplace | `claude plugin marketplace add github:user/repo` then `claude plugin install plugin@marketplace` |
+| **Install** | `claude plugin install focus-task@claude-brewcode` |
+| **Uninstall** | `claude plugin uninstall focus-task` |
+| **Update** | `claude plugin update focus-task` |
+| **Session-only** | `claude --plugin-dir ./plugins/focus-task` |
+| Add marketplace | `claude plugin marketplace add <repo-path>` |
+| List plugins | `claude plugin list` |
 
 ---
 

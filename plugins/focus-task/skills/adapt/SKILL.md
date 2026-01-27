@@ -1,5 +1,5 @@
 ---
-name: focus-task-adapt
+name: adapt
 description: Analyzes project structure, tech stack, testing frameworks, and project-specific agents to generate an adapted TASK.md.template in .claude/tasks/templates/. Triggers on phrases like "adapt task template", "create project task template", "generate adapted task template", "customize task template for project".
 user-invocable: true
 argument-hint: [universal-template-path]
@@ -8,7 +8,7 @@ context: fork
 model: opus
 ---
 
-# Focus Task Adapt
+Adapt Templates — analyze project, create TASK.md.template
 
 ## Overview
 
@@ -22,6 +22,7 @@ Analyzes project structure, technology stack, testing patterns, and project-spec
 
 ### Scan Commands
 
+**EXECUTE** using Bash tool — gather project info:
 ```bash
 # Find build files to identify tech stack
 find . -maxdepth 3 -type f \( \
@@ -122,21 +123,24 @@ test -f ./.claude/CLAUDE.md && echo ".claude/CLAUDE.md exists" || echo "No .clau
 
 ### Create Structure
 
+**EXECUTE** using Bash tool:
 ```bash
-mkdir -p .claude/tasks/templates
-mkdir -p .claude/rules
+mkdir -p .claude/tasks/templates .claude/tasks/specs .claude/rules
 ```
 
-### Copy Rules Templates
+### Copy Templates
 
+**EXECUTE** using Bash tool — copy from plugin cache:
 ```bash
-# Get plugin directory (where this skill lives)
-PLUGIN_DIR="$(dirname "$(dirname "$(dirname "$0")")")"
+PLUGIN_TEMPLATES="$HOME/.claude/plugins/cache/claude-brewcode/focus-task/$(ls -v $HOME/.claude/plugins/cache/claude-brewcode/focus-task | tail -1)/templates"
 
-# Copy rules templates
-cp "$PLUGIN_DIR/templates/rules/avoid.md.template" .claude/rules/avoid.md
-cp "$PLUGIN_DIR/templates/rules/best-practice.md.template" .claude/rules/best-practice.md
+cp "$PLUGIN_TEMPLATES/SPEC.md.template" .claude/tasks/templates/
+cp "$PLUGIN_TEMPLATES/KNOWLEDGE.jsonl.template" .claude/tasks/templates/
+cp "$PLUGIN_TEMPLATES/rules/avoid.md.template" .claude/rules/avoid.md
+cp "$PLUGIN_TEMPLATES/rules/best-practice.md.template" .claude/rules/best-practice.md
 ```
+
+> **CRITICAL:** These files MUST exist after this step. Verify with `ls .claude/tasks/templates/`
 
 Adapt frontmatter paths based on detected tech stack:
 
@@ -177,16 +181,20 @@ Adapt frontmatter paths based on detected tech stack:
 
 ### Create Review Skill Directory
 
+**EXECUTE** using Bash tool:
 ```bash
-mkdir -p .claude/skills/review
+mkdir -p .claude/skills/focus-task-review
 ```
 
 ### Copy Template
 
+**EXECUTE** using Bash tool — copy review skill template:
 ```bash
-# Copy review skill template from plugin
-cp "$PLUGIN_DIR/templates/skills/review/SKILL.md.template" .claude/skills/review/SKILL.md
+PLUGIN_TEMPLATES="$HOME/.claude/plugins/cache/claude-brewcode/focus-task/$(ls -v $HOME/.claude/plugins/cache/claude-brewcode/focus-task 2>/dev/null | tail -1)/templates"
+cp "$PLUGIN_TEMPLATES/skills/review/SKILL.md.template" .claude/skills/focus-task-review/SKILL.md
 ```
+
+> **Verify:** `test -f .claude/skills/focus-task-review/SKILL.md && echo "✅" || echo "❌ Copy failed"`
 
 ### Adapt Review Skill
 
@@ -267,11 +275,13 @@ From CLAUDE.md, extract rules relevant to code review:
 
 ### Validation
 
+**EXECUTE** using Bash tool — verify review skill:
 ```bash
-test -f .claude/skills/review/SKILL.md && echo "✅ Review skill created"
-grep -q "## Tech-Specific Checks" .claude/skills/review/SKILL.md && echo "✅ Tech checks"
-grep -q "## Project Rules" .claude/skills/review/SKILL.md && echo "✅ Project rules"
+test -f .claude/skills/focus-task-review/SKILL.md && echo "✅ Review skill created" || echo "❌ Review skill MISSING"
+grep -q "Tech-Specific\|tech-specific\|Category.*Checks" .claude/skills/focus-task-review/SKILL.md && echo "✅ Tech checks" || echo "❌ Tech checks MISSING"
 ```
+
+> **STOP if any ❌** — review skill must be created before continuing.
 
 ---
 
@@ -279,23 +289,107 @@ grep -q "## Project Rules" .claude/skills/review/SKILL.md && echo "✅ Project r
 
 **Agent:** developer | **Action:** Verify template structure
 
+**EXECUTE** using Bash tool — ALL must pass:
 ```bash
-test -f .claude/tasks/templates/TASK.md.template && echo "✅ Template created"
-grep -q "## Agents" .claude/tasks/templates/TASK.md.template && echo "✅ Agents"
-grep -q "## Reference Examples" .claude/tasks/templates/TASK.md.template && echo "✅ Reference Examples"
-grep -q "## Phases" .claude/tasks/templates/TASK.md.template && echo "✅ Phases"
-grep -q "## Final Review" .claude/tasks/templates/TASK.md.template && echo "✅ Final Review"
+test -f .claude/tasks/templates/TASK.md.template && echo "✅ TASK template" || echo "❌ TASK template MISSING"
+test -f .claude/tasks/templates/SPEC.md.template && echo "✅ SPEC template" || echo "❌ SPEC template MISSING"
+test -f .claude/tasks/templates/KNOWLEDGE.jsonl.template && echo "✅ KNOWLEDGE template" || echo "❌ KNOWLEDGE template MISSING"
+test -f .claude/rules/avoid.md && echo "✅ avoid.md rules" || echo "❌ avoid.md MISSING"
+test -f .claude/rules/best-practice.md && echo "✅ best-practice.md rules" || echo "❌ best-practice.md MISSING"
 ```
+
+> **STOP if any ❌** — go back to "Copy Templates" step and fix.
 
 ### Validation Report
 
 | Check | Status |
 |-------|--------|
-| Template exists | `.claude/tasks/templates/TASK.md.template` |
+| TASK template | `.claude/tasks/templates/TASK.md.template` |
+| SPEC template | `.claude/tasks/templates/SPEC.md.template` |
+| KNOWLEDGE template | `.claude/tasks/templates/KNOWLEDGE.jsonl.template` |
 | Project agents | [N] from `.claude/agents/` |
 | Reference Examples | [N] canonical files populated |
 | Tech-specific adaptations | Testing framework, DB patterns |
-| Review skill | `.claude/skills/review/SKILL.md` |
+| Review skill | `.claude/skills/focus-task-review/SKILL.md` |
+| Plugin symlinks | `~/.claude/skills/focus-task-*` |
+
+---
+
+## Phase 5: Enable Autocomplete (Workaround for GitHub Issue #18949)
+
+**Agent:** developer | **Action:** Create symlinks for plugin skills in `~/.claude/skills/`
+
+> **Why:** Plugin skills don't appear in `/` autocomplete. Symlinks to `~/.claude/skills/` fix this.
+
+### Create Symlinks
+
+**EXECUTE** using Bash tool — create symlinks for autocomplete:
+```bash
+# Plugin cache location
+PLUGIN_BASE="$HOME/.claude/plugins/cache/claude-brewcode/focus-task"
+
+# Validate cache exists
+if [ ! -d "$PLUGIN_BASE" ]; then
+  echo "❌ Plugin cache not found: $PLUGIN_BASE"
+  echo "   Run: claude plugin install focus-task@claude-brewcode"
+  exit 1
+fi
+
+# Get latest version (sorted, last = highest)
+LATEST_VERSION=$(ls -v "$PLUGIN_BASE" | tail -1)
+PLUGIN_SKILLS="$PLUGIN_BASE/$LATEST_VERSION/skills"
+
+# Validate version directory
+if [ ! -d "$PLUGIN_SKILLS" ]; then
+  echo "❌ Skills directory not found: $PLUGIN_SKILLS"
+  exit 1
+fi
+
+# Output version info
+echo "📦 Plugin cache: $PLUGIN_BASE"
+echo "📌 Version: $LATEST_VERSION"
+echo "📁 Skills source: $PLUGIN_SKILLS"
+echo ""
+
+# Create symlinks with focus-task- prefix to avoid conflicts
+# Skip 'review' - it's created from template in Phase 3.5 with project adaptations
+for skill_dir in "$PLUGIN_SKILLS"/*/; do
+  skill_name=$(basename "$skill_dir")
+
+  # Skip review - adapted version created in .claude/skills/focus-task-review/
+  if [ "$skill_name" = "review" ]; then
+    echo "⏭️  Skipped: review (created from template in .claude/skills/focus-task-review/)"
+    continue
+  fi
+
+  link_name="focus-task-$skill_name"
+  target="$HOME/.claude/skills/$link_name"
+
+  # Remove existing symlink/dir if present
+  [ -L "$target" ] && rm "$target"
+  [ -d "$target" ] && rm -rf "$target"
+
+  # Create symlink
+  ln -s "$skill_dir" "$target"
+  echo "✅ $target → $skill_dir"
+done
+```
+
+### Validation
+
+**EXECUTE** using Bash tool — verify symlinks:
+```bash
+echo "Installed symlinks:"
+ls -la ~/.claude/skills/ | grep "focus-task-" || echo "❌ No symlinks found"
+```
+
+### Result
+
+After symlinks, skills available via autocomplete:
+- `/focus-task-adapt` (symlink) = `/focus-task:adapt` (plugin)
+- `/focus-task-create` (symlink) = `/focus-task:create` (plugin)
+- `/focus-task-review` (from template) — project-adapted, in `.claude/skills/`
+- etc.
 
 </instructions>
 
@@ -327,14 +421,29 @@ grep -q "## Final Review" .claude/tasks/templates/TASK.md.template && echo "✅ 
 ## Templates
 
 **Task template:** `.claude/tasks/templates/TASK.md.template`
-**Review skill:** `.claude/skills/review/SKILL.md`
+**Review skill:** `.claude/skills/focus-task-review/SKILL.md`
 
-**Task files:** `{TIMESTAMP}_{NAME}_TASK.md`, `_SPEC.md`, `_KNOWLEDGE.jsonl`
+## Symlinks (Autocomplete Workaround)
+
+| Info | Value |
+|------|-------|
+| Plugin cache | `~/.claude/plugins/cache/claude-brewcode/focus-task` |
+| Version | `{VERSION}` |
+| Source | `~/.claude/plugins/cache/claude-brewcode/focus-task/{VERSION}/skills/` |
+
+| Symlink | Target |
+|---------|--------|
+| `~/.claude/skills/focus-task-adapt` | `.../{VERSION}/skills/adapt/` |
+| `~/.claude/skills/focus-task-create` | `.../{VERSION}/skills/create/` |
+| `~/.claude/skills/focus-task-doc` | `.../{VERSION}/skills/doc/` |
+| `~/.claude/skills/focus-task-rules` | `.../{VERSION}/skills/rules/` |
+| `~/.claude/skills/focus-task-start` | `.../{VERSION}/skills/start/` |
+| `.claude/skills/focus-task-review` | from template (project-adapted) |
 
 ## Usage
 
-/focus-task:create "Implement feature X"
-/review "Check null safety"
+/focus-task-create "Implement feature X"
+/focus-task-review "Check null safety"
 ```
 
 ---
@@ -349,7 +458,7 @@ grep -q "## Final Review" .claude/tasks/templates/TASK.md.template && echo "✅ 
 
 ## Re-run Support
 
-> `/focus-task:adapt` can be run anytime to sync templates with project changes.
+> `/focus-task-adapt` can be run anytime to sync templates with project changes.
 
 **Triggers for re-run:**
 - New agent added to `.claude/agents/`
@@ -372,7 +481,7 @@ grep -q "## Final Review" .claude/tasks/templates/TASK.md.template && echo "✅ 
 - `## Reference Examples` — sync canonical files
 - `### Phase NV: Verification` — update TBD with project agents
 - `## Final Review` — update TBD with project agents
-- `.claude/skills/review/SKILL.md` — sync tech checks, project rules
+- `.claude/skills/focus-task-review/SKILL.md` — sync tech checks, project rules
 
 ## Error Handling
 

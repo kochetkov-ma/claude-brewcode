@@ -1,5 +1,5 @@
 ---
-name: focus-task-rules
+name: rules
 description: Updates .claude/rules/avoid.md and best-practice.md from KNOWLEDGE.jsonl or session context. Triggers: "update rules", "sync knowledge to rules", "extract rules from knowledge".
 user-invocable: true
 argument-hint: "[path-to-KNOWLEDGE.jsonl]"
@@ -8,7 +8,7 @@ context: fork
 model: sonnet
 ---
 
-# Focus Task Rules
+Update Rules — extract from [KNOWLEDGE.jsonl]
 
 ## Overview
 
@@ -27,9 +27,9 @@ Extracts anti-patterns and best practices from accumulated knowledge, optimizes 
 
 ### File Mode
 
+**EXECUTE** using Bash tool — read knowledge file:
 ```bash
-# Read KNOWLEDGE.jsonl
-cat "$ARGUMENTS" | head -100
+test -f "$ARGUMENTS" && cat "$ARGUMENTS" | head -100 || echo "❌ File not found: $ARGUMENTS"
 ```
 
 Parse entries:
@@ -47,16 +47,18 @@ Scan conversation for:
 
 ## Step 2: Read Existing Rules
 
+**EXECUTE** using Bash tool — check existing rules:
 ```bash
-# Check if rules exist
-test -f .claude/rules/avoid.md && cat .claude/rules/avoid.md
-test -f .claude/rules/best-practice.md && cat .claude/rules/best-practice.md
+test -f .claude/rules/avoid.md && echo "✅ avoid.md exists" || echo "⚠️ avoid.md missing"
+test -f .claude/rules/best-practice.md && echo "✅ best-practice.md exists" || echo "⚠️ best-practice.md missing"
 ```
 
-If missing, create from templates:
+If missing, **EXECUTE** using Bash tool — create from templates:
 ```bash
 mkdir -p .claude/rules
-# Copy templates with path adaptation
+PLUGIN_TEMPLATES="$HOME/.claude/plugins/cache/claude-brewcode/focus-task/$(ls -v $HOME/.claude/plugins/cache/claude-brewcode/focus-task 2>/dev/null | tail -1)/templates"
+test -f .claude/rules/avoid.md || cp "$PLUGIN_TEMPLATES/rules/avoid.md.template" .claude/rules/avoid.md
+test -f .claude/rules/best-practice.md || cp "$PLUGIN_TEMPLATES/rules/best-practice.md.template" .claude/rules/best-practice.md
 ```
 
 ## Step 3: Optimize Rules
@@ -96,11 +98,13 @@ For each rule file:
 
 Preserve frontmatter, write optimized tables.
 
+**EXECUTE** using Bash tool — validate structure:
 ```bash
-# Validate structure
-grep -q "^| #" .claude/rules/avoid.md && echo "avoid.md valid"
-grep -q "^| #" .claude/rules/best-practice.md && echo "best-practice.md valid"
+grep -q "^| #" .claude/rules/avoid.md && echo "✅ avoid.md valid" || echo "❌ avoid.md invalid structure"
+grep -q "^| #" .claude/rules/best-practice.md && echo "✅ best-practice.md valid" || echo "❌ best-practice.md invalid structure"
 ```
+
+> **STOP if any ❌** — fix table structure before continuing.
 
 </instructions>
 

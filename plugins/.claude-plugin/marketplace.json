@@ -1,0 +1,16 @@
+{
+  "name": "claude-brewcode",
+  "description": "Local plugin marketplace for Claude Code development",
+  "owner": {
+    "name": "Maximus Kochetkov",
+    "url": "https://github.com/user/claude-brewcode"
+  },
+  "plugins": [
+    {
+      "name": "focus-task",
+      "description": "Infinite task execution with automatic handoff for Claude Code",
+      "version": "1.0.0",
+      "source": "./focus-task"
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 ---
-name: review
-description: Project-adapted code review with quorum consensus. Triggers: "review code", "code review", "/review".
+name: focus-task-review
+description: Project-adapted code review with quorum consensus. Triggers: "review code", "code review", "/focus-task-review".
 user-invocable: true
 argument-hint: "<prompt-or-file-path> [--quorum N-M]"
 allowed-tools: Read, Glob, Grep, Task, Bash, Write

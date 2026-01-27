@@ -19,27 +19,47 @@
 │
 ├── commands/                         # Слэш-команды (пусто, используй скиллы)
 │
-├── skills/                           # Скиллы (папки с SKILL.md)
-│   ├── text-optimize/
+├── skills/                           # Скиллы (2 локальных + 5 симлинков)
+│   ├── text-optimize/                # Локальный скилл
 │   │   ├── SKILL.md                  # Оптимизация для LLM
 │   │   └── references/
-│   └── global-doc-update/
-│       ├── SKILL.md                  # Синхронизация глобальных доков (user-only)
-│       └── references/
+│   ├── global-doc-update/            # Локальный скилл
+│   │   └── SKILL.md                  # Синхронизация ~/.claude (user-only)
+│   │
+│   ├── focus-task-adapt -> ...       # Симлинки на плагин focus-task
+│   ├── focus-task-create -> ...      # (workaround для autocomplete)
+│   ├── focus-task-doc -> ...
+│   ├── focus-task-rules -> ...
+│   └── focus-task-start -> ...
 │
 ├── templates/                        # Шаблоны (пусто)
 │
-├── plugins/                          # MCP плагины
+├── plugins/                          # MCP плагины (~929MB)
 │   ├── installed_plugins.json        # Реестр установленных (JSON)
 │   ├── known_marketplaces.json       # Список маркетплейсов (JSON)
 │   ├── install-counts-cache.json     # Кэш счётчиков (JSON)
 │   ├── cache/                        # Скачанные плагины
-│   │   └── claude-plugins-official/
-│   │       ├── context7/
-│   │       ├── playwright/
-│   │       └── ralph-wiggum/
+│   │   ├── claude-plugins-official/  # Официальный маркетплейс
+│   │   │   ├── context7/             # Документация библиотек
+│   │   │   ├── playwright/           # Браузерная автоматизация
+│   │   │   └── ralph-wiggum/         # (тестовый)
+│   │   │
+│   │   └── claude-brewcode/          # Локальный маркетплейс
+│   │       └── focus-task/           # Плагин infinite task execution
+│   │           ├── 1.0.0/            # Все версии сохраняются
+│   │           ├── ...
+│   │           └── 1.0.7/            # Актуальная версия
+│   │               ├── .claude-plugin/
+│   │               │   └── plugin.json
+│   │               ├── skills/       # 6 скиллов (adapt, create, doc, review, rules, start)
+│   │               ├── agents/       # ft-coordinator, ft-knowledge-manager
+│   │               ├── templates/    # TASK.md, SPEC.md, KNOWLEDGE templates
+│   │               └── runtime/      # SDK runtime (TypeScript)
+│   │
 │   └── marketplaces/                 # Источники плагинов
-│       └── claude-plugins-official/
+│       ├── claude-plugins-official/
+│       │   └── plugins/
+│       └── claude-brewcode/          # Локальный путь к репо
 │           └── plugins/
 │
 ├── projects/                         # Данные по проектам (~2.7GB)
@@ -106,17 +126,32 @@
 
 | Директория | Размер | Комментарий |
 |------------|--------|-------------|
-| projects/ | 2.1GB | Основной объём — транскрипты сессий |
-| debug/ | 37MB | Логи, можно чистить вручную |
+| projects/ | 1.9GB | Основной объём — транскрипты сессий |
+| debug/ | 65MB | Логи, можно чистить вручную |
 | shell-snapshots/ | 33MB | Для возобновления сессий |
 | file-history/ | 3.4MB | История редактирования |
 | todos/ | 2.9MB | JSON с задачами |
-| plugins/ | 1.8MB | Установленные плагины |
+| plugins/ | 929MB | Установленные плагины (кэш всех версий) |
 | reports/ | 1.2MB | Сгенерированные отчёты |
 | paste-cache/ | 184KB | Кэш вставок |
 | agents/ | 48KB | Определения агентов |
 | cache/ | 32KB | Общий кэш |
-| skills/ | 32KB | Скиллы |
+| skills/ | 36KB | 2 локальных + 5 симлинков на плагин |
 | plans/ | 12KB | Файлы планирования |
 | templates/ | 0KB | Шаблоны (пусто) |
 | commands/ | 0KB | Слэш-команды (пусто) |
+
+---
+
+## Симлинки skills/ → plugins/
+
+```bash
+# Симлинки для autocomplete (workaround GitHub #18949)
+focus-task-adapt  → ~/.claude/plugins/cache/claude-brewcode/focus-task/1.0.7/skills/adapt/
+focus-task-create → .../skills/create/
+focus-task-doc    → .../skills/doc/
+focus-task-rules  → .../skills/rules/
+focus-task-start  → .../skills/start/
+```
+
+> **Note:** `focus-task-review` создаётся из шаблона в проекте (`.claude/skills/focus-task-review/`) через `/focus-task:adapt`

@@ -1,5 +1,5 @@
 ---
-name: focus-task-create
+name: create
 description: Creates focused task with SPEC and KNOWLEDGE files through parallel agent research. Triggers: "create task", "new focus task", "focus-task create".
 user-invocable: true
 argument-hint: "Task description or path to requirements file"
@@ -7,6 +7,8 @@ allowed-tools: Read, Write, Glob, Grep, Bash, Task, AskUserQuestion
 context: fork
 model: opus
 ---
+
+Create Task — "description" or path to requirements
 
 ## TOKEN-EFFICIENT FORMATTING
 
@@ -28,7 +30,7 @@ model: opus
 
 ---
 
-## /focus-task-create Instructions
+## /focus-task:create Instructions
 
 **ROLE:** Task Creator | **OUTPUT:** task file + SPEC + KNOWLEDGE
 
@@ -52,12 +54,12 @@ model: opus
    ┌─────────────────────────────────────────────────────────────┐
    │ ❌ Adapted templates not found!                             │
    │                                                             │
-   │ Required files:                                             │
-   │ - .claude/tasks/templates/TASK.md.template                  │
-   │ - .claude/tasks/templates/SPEC.md.template                  │
+   │ Found:                                                      │
+   │ [✅|❌] .claude/tasks/templates/TASK.md.template            │
+   │ [✅|❌] .claude/tasks/templates/SPEC.md.template            │
    │                                                             │
    │ Run template adaptation first:                              │
-   │ /focus-task:adapt                                           │
+   │ /focus-task-adapt                                           │
    └─────────────────────────────────────────────────────────────┘
    ```
 
@@ -195,6 +197,47 @@ model: opus
 
    **Exit criteria:** User confirms all remarks addressed
 
+8. **Write Quick Ref** (REQUIRED)
+
+   Write task path to `.claude/TASK.md` for quick start:
+   ```bash
+   echo ".claude/tasks/{TIMESTAMP}_{NAME}_TASK.md" > .claude/TASK.md
+   ```
+
+   **Format:** Single line with relative path to task file.
+
+9. **Validation** (REQUIRED)
+
+   Verify all artifacts exist:
+   ```
+   ┌─────────────────────────────────────────────────────────────┐
+   │ Validation Checklist                                        │
+   ├─────────────────────────────────────────────────────────────┤
+   │ [✅|❌] TASK:      .claude/tasks/{TS}_{NAME}_TASK.md        │
+   │ [✅|❌] SPEC:      .claude/tasks/specs/{TS}_{NAME}_SPEC_vN  │
+   │ [✅|❌] KNOWLEDGE: .claude/tasks/{TS}_{NAME}_KNOWLEDGE.jsonl│
+   │ [✅|❌] REPORTS:   .claude/tasks/reports/{TS}_{NAME}/       │
+   │ [✅|❌] MANIFEST:  .../MANIFEST.md                          │
+   │ [✅|❌] QUICK REF: .claude/TASK.md → points to task file    │
+   └─────────────────────────────────────────────────────────────┘
+   ```
+
+   **If validation fails:**
+   ```
+   ⚠️  Missing artifacts detected!
+
+   Missing:
+   - {list of missing files}
+
+   Fix: Creating missing files...
+   ```
+
+   **Auto-fix for missing Quick Ref:**
+   ```bash
+   # If .claude/TASK.md missing or doesn't contain valid task path
+   echo ".claude/tasks/{TIMESTAMP}_{NAME}_TASK.md" > .claude/TASK.md
+   ```
+
 > **Template source:** Always from `.claude/tasks/templates/` (project), never from plugin base templates directly.
 
 ### Output
@@ -206,7 +249,9 @@ Task created:
 - KNOWLEDGE: .claude/tasks/{TIMESTAMP}_{NAME}_KNOWLEDGE.jsonl
 - REPORTS: .claude/tasks/reports/{TIMESTAMP}_{NAME}/
 - MANIFEST: .claude/tasks/reports/{TIMESTAMP}_{NAME}/MANIFEST.md
+- QUICK REF: .claude/TASK.md → .claude/tasks/{TIMESTAMP}_{NAME}_TASK.md
 
-Run: /focus-task-start .claude/tasks/{TIMESTAMP}_{NAME}_TASK.md
+Run: /focus-task-start
+     (or with explicit path: /focus-task-start .claude/tasks/{TIMESTAMP}_{NAME}_TASK.md)
 ```
 

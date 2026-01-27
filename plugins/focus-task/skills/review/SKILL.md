@@ -1,5 +1,5 @@
 ---
-name: focus-task-review
+name: review
 description: Multi-agent code review with quorum consensus. Triggers: "review code", "parallel review", "quorum review", "/focus-task-review".
 user-invocable: true
 argument-hint: "<prompt-or-file-path> [--quorum N-M]"
@@ -8,7 +8,7 @@ context: fork
 model: opus
 ---
 
-# focus-task-review
+Code Review — "prompt" or path [--quorum N-M]
 
 **ROLE:** Code Review Coordinator | **OUTPUT:** Prioritized findings report
 

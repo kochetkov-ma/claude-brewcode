@@ -1,5 +1,5 @@
 ---
-name: focus-task-doc
+name: doc
 description: Creates or updates project documentation through parallel codebase analysis. Triggers: "create docs", "update documentation", "sync docs", "document project", "/focus-task-doc".
 user-invocable: true
 argument-hint: "[create <file>|update <path>|analyze <src> update <target>|sync]"
@@ -7,6 +7,8 @@ allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Task, Skill
 context: fork
 model: opus
 ---
+
+Documentation — create|update|sync [path]
 
 ## TOKEN-EFFICIENT FORMATTING
 
@@ -21,7 +23,7 @@ model: opus
 
 ---
 
-## /focus-task-doc Instructions
+## /focus-task:doc Instructions
 
 **ROLE:** Documentation Generator | **OUTPUT:** Project documentation with parallel analysis
 
