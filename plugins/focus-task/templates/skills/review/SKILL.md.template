@@ -1,0 +1,221 @@
+---
+name: review
+description: Project-adapted code review with quorum consensus. Triggers: "review code", "code review", "/review".
+user-invocable: true
+argument-hint: "<prompt-or-file-path> [--quorum N-M]"
+allowed-tools: Read, Glob, Grep, Task, Bash, Write
+context: fork
+model: opus
+---
+
+# Code Review
+
+**ROLE:** Code Review Coordinator | **OUTPUT:** Prioritized findings report
+
+## Input Handling
+
+| Input | Action |
+|-------|--------|
+| Text prompt | Use as review focus description |
+| File path (`.md`, `.txt`) | Read file as review instructions |
+| `--quorum N-M` | N agents per group, M = quorum threshold |
+| Default | `--quorum 3-2` (3 agents, quorum 2) |
+
+---
+
+## Project Agents
+
+> Adapted from `.claude/agents/` — use these for specialized reviews
+
+{PROJECT_AGENTS_TABLE}
+
+<!--
+Example:
+| Agent | Expertise | Use For |
+|-------|-----------|---------|
+| db_expert | PostgreSQL, JOOQ | Database layer review |
+| api_reviewer | REST, validation | Controller review |
+-->
+
+## Core Agents (Fallback)
+
+| Agent | Expertise |
+|-------|-----------|
+| `reviewer` | Code quality, patterns, architecture |
+| `tester` | Test coverage, assertions, mocking |
+| `sql_expert` | SQL queries, transactions, N+1 |
+
+---
+
+## Tech-Specific Checks
+
+> Adapted based on detected tech stack
+
+{TECH_SPECIFIC_CHECKS}
+
+<!--
+Examples by tech stack:
+
+### Java/Spring
+| Category | Checks |
+|----------|--------|
+| DI | Constructor injection, no field injection, @RequiredArgsConstructor |
+| Transactions | @Transactional scope, rollback rules, isolation levels |
+| Null-safety | Optional usage, @NonNull/@Nullable, null checks |
+| N+1 | Eager vs lazy loading, batch fetching, entity graphs |
+| Security | @PreAuthorize, input validation, SQL injection |
+
+### Node.js/TypeScript
+| Category | Checks |
+|----------|--------|
+| Async | Promise handling, unhandled rejections, async/await |
+| Types | Strict null checks, type guards, generics |
+| Validation | Input sanitization, schema validation (Zod/Joi) |
+| Security | XSS prevention, CSRF tokens, helmet.js |
+
+### Python
+| Category | Checks |
+|----------|--------|
+| Type hints | Function signatures, return types, generics |
+| Exceptions | Specific exception types, context managers |
+| Async | asyncio patterns, event loop handling |
+| Security | SQL parameterization, input validation |
+
+### Go
+| Category | Checks |
+|----------|--------|
+| Error handling | Error wrapping, sentinel errors, error types |
+| Concurrency | Goroutine leaks, channel patterns, sync primitives |
+| Memory | Slice capacity, pointer semantics, defer usage |
+| Security | SQL injection, input validation |
+-->
+
+---
+
+## Project Rules
+
+> Extracted from CLAUDE.md patterns
+
+{PROJECT_RULES}
+
+<!--
+Examples:
+- AssertJ: Use .as() on EVERY assertion
+- Lombok: @RequiredArgsConstructor for DI
+- Logging: @Slf4j, never System.out
+- Imports: No FQN in code
+-->
+
+---
+
+## Review Groups
+
+| Group | Focus | Agent | Files |
+|-------|-------|-------|-------|
+| main-code | Logic, architecture, security | {MAIN_AGENT} | `src/main/**` |
+| tests | Coverage, assertions, quality | {TEST_AGENT} | `src/test/**` |
+| db-layer | Queries, transactions | {DB_AGENT} | `**/repositories/**` |
+
+{CUSTOM_GROUPS}
+
+<!--
+Add project-specific groups:
+| security | Auth, validation | security_reviewer | **/auth/** |
+-->
+
+---
+
+## Execution
+
+### Phase 1: Codebase Study (Parallel Explore)
+
+```
+ONE message with 5-10 Explore agents scanning:
+{CODEBASE_BLOCKS}
+```
+
+### Phase 2: Group Formation
+
+Based on detected files:
+- DB detected → enable db-layer group
+- Tests detected → enable tests group
+- Auth files → add security focus
+
+### Phase 3: Parallel Review
+
+```
+N agents per group × {GROUP_COUNT} groups = total agents
+
+Each agent reviews with:
+- Tech-specific checks (above)
+- Project rules (above)
+- Focus: {REVIEW_PROMPT}
+```
+
+### Phase 4: Quorum Collection
+
+```
+FOR each finding:
+  IF unique_agents >= M: → CONFIRMED
+  ELIF severity IN [blocker, critical]: → EXCEPTION (P3)
+  ELSE: → DISCARDED
+```
+
+### Phase 5: DoubleCheck
+
+Single reviewer verifies ALL confirmed findings:
+- Exists in code?
+- Description accurate?
+- Fix actionable?
+- Severity appropriate?
+
+### Phase 6: Report
+
+Output: `.claude/tasks/reviews/{TIMESTAMP}_{NAME}_report.md`
+
+Priority order:
+1. Quorum + DoubleCheck confirmed
+2. Quorum only (not DoubleCheck confirmed)
+3. Blocker/Critical without quorum (exceptions)
+
+---
+
+## Output Format
+
+```
+Review complete. Found {TOTAL} issues.
+
+Priority breakdown:
+- P1 (Confirmed): {N} issues
+- P2 (Quorum only): {N} issues
+- P3 (Exceptions): {N} issues
+
+Full report: .claude/tasks/reviews/{TIMESTAMP}_{NAME}_report.md
+```
+
+---
+
+## Configuration
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `--quorum` | `3-2` | N agents per group, M = threshold |
+| Report dir | `.claude/tasks/reviews/` | Output directory |
+
+---
+
+<!--
+ADAPTATION METADATA
+
+Template: focus-task-review
+Adapted: {ADAPTATION_TIMESTAMP}
+Tech stack: {DETECTED_TECH}
+Project agents: {AGENT_COUNT}
+
+Readopt triggers:
+- New agent in .claude/agents/
+- CLAUDE.md patterns updated
+- Tech stack changes
+
+Run: /focus-task:adapt to refresh
+-->

@@ -14,9 +14,14 @@
 **Naming conventions:**
 - Files: `{TIMESTAMP}_{NAME}_[TYPE].[ext]`
 - Format: YYYYMMDD_HHMMSS (ISO-like, sortable)
-- Types: `_TASK.md`, `_SPEC_vX.md`, `_TASK_KNOWLEDGE.jsonl`
+- Types: `_TASK.md`, `_SPEC_vX.md`, `_KNOWLEDGE.jsonl`
+- Reports: `{AGENT}_output.md`, `{AGENT}_review.md`, `summary.md`
 - Agents: lowercase with underscore/dash → `developer`, `sql_expert`
-- Dirs: `.claude/tasks/`, `.claude/tasks/specs/`, `.claude/tasks/templates/`
+- Dirs: `.claude/tasks/`, `.claude/tasks/specs/`, `.claude/tasks/templates/`, `.claude/tasks/reports/`
+- Report dirs: `reports/{TS}_{NAME}/phase_{P}/iter_{N}_{type}/`
+  - `{type}`: `exec` (execution) or `verify` (verification)
+  - `{P}`: phase number (1, 2, 3...)
+  - `{N}`: iteration number within phase (1, 2, 3...)
 
 ---
 
@@ -98,6 +103,30 @@
    - Fill `.claude/tasks/specs/{TIMESTAMP}_{NAME}_SPEC_v1.md`
    - Include Research Summary table
 
+3.2. **Review SPEC** (REQUIRED)
+
+   ```
+   ┌─────────────────────────────────────────────────────────────┐
+   │  Task(agent="reviewer", prompt="Review SPEC...")            │
+   │                                                             │
+   │  Prompt template:                                           │
+   │  "Review SPEC at {SPEC_PATH}                                │
+   │   Check: completeness, consistency, feasibility, risks      │
+   │   Output: list of remarks with severity (critical/major/    │
+   │   minor), specific fixes"                                   │
+   └─────────────────────────────────────────────────────────────┘
+   ```
+
+   **Iteration loop:**
+   ```
+   WHILE remarks.critical > 0 OR remarks.major > 0:
+     1. Fix all critical/major remarks
+     2. Update SPEC version → _SPEC_v{N+1}.md
+     3. Re-run reviewer
+   ```
+
+   **Exit criteria:** No critical/major remarks remaining
+
 4. **Generate task file**
 
    - Read `.claude/tasks/templates/TASK.md.template` (project)
@@ -108,6 +137,50 @@
 5. **Create KNOWLEDGE**
 
    - Create empty `.claude/tasks/{TIMESTAMP}_{NAME}_TASK_KNOWLEDGE.jsonl`
+
+6. **Review Plan** (REQUIRED)
+
+   ```
+   ┌─────────────────────────────────────────────────────────────┐
+   │  ONE message with 3 Task calls in PARALLEL:                 │
+   │                                                             │
+   │  Task(agent="Plan", prompt="Review plan against SPEC #1")   │
+   │  Task(agent="Plan", prompt="Review plan against SPEC #2")   │
+   │  Task(agent="Plan", prompt="Review plan against SPEC #3")   │
+   └─────────────────────────────────────────────────────────────┘
+   ```
+
+   **Agent prompt template:**
+   ```
+   Review TASK at {TASK_PATH} against SPEC at {SPEC_PATH}
+   Check:
+   - Phases cover all SPEC requirements
+   - Agent assignments match expertise
+   - Dependencies are correct
+   - Verification criteria are measurable
+   - Risk mitigations are adequate
+   Output: list of remarks with rationale
+   ```
+
+   **Quorum rule (2/3):**
+   ```
+   FOR each unique remark:
+     count = agents_reporting_this_remark
+     IF count >= 2:
+       → Add to confirmed_remarks list
+     ELSE:
+       → Discard (no consensus)
+   ```
+
+   **Confirmation & Fix:**
+   ```
+   1. Present confirmed_remarks to user
+   2. User approves/rejects each remark
+   3. Fix all approved remarks in TASK.md
+   4. (Optional) Re-run 3-agent review if major changes
+   ```
+
+   **Exit criteria:** User confirms all remarks addressed
 
 > **Template source:** Always from `.claude/tasks/templates/` (project), never from plugin base templates directly.
 
@@ -135,7 +208,7 @@ Run: /focus-task-start .claude/tasks/{TIMESTAMP}_{NAME}_TASK.md
 | Input | Action |
 |-------|--------|
 | `$ARGUMENTS` has path | Use as task file path |
-| `$ARGUMENTS` empty | ERROR: path required |
+| `$ARGUMENTS` empty | Read path from `.claude/TASK.md` |
 
 ### Workflow
 

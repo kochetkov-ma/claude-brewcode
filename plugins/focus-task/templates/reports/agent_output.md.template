@@ -1,0 +1,65 @@
+# Agent Report: {AGENT}
+
+| Field | Value |
+|-------|-------|
+| Agent | {AGENT} |
+| Phase | {P} |
+| Iteration | {N} |
+| Type | execution |
+| Started | {TS_START} |
+| Completed | {TS_END} |
+| Status | {STATUS} |
+
+## Task
+
+{TASK_DESCRIPTION}
+
+## Context Files
+
+| ID | File | Purpose |
+|----|------|---------|
+| C1 | {PATH} | {WHY} |
+
+## Reference Files
+
+| ID | File | Purpose |
+|----|------|---------|
+| R1 | {PATH} | {WHY} |
+
+## Result
+
+{EXECUTION_RESULT_SUMMARY}
+
+## Files Created/Modified
+
+| File | Action | Lines Changed |
+|------|--------|---------------|
+| {PATH} | created | +{N} |
+| {PATH} | modified | +{N}/-{N} |
+
+## Key Decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| {DECISION_1} | {WHY} |
+| {DECISION_2} | {WHY} |
+
+## Knowledge Added
+
+| Type | Text | Category |
+|------|------|----------|
+| {AVOID/BEST/INFO} | {TEXT} | {CAT} |
+
+## Artifacts
+
+| File | Description |
+|------|-------------|
+| `{NAME}` | {WHAT_IT_IS} |
+
+## Notes
+
+{ADDITIONAL_NOTES}
+
+---
+
+**Generated:** {TS} by ft-coordinator

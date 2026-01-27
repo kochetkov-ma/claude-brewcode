@@ -3,7 +3,7 @@
 ```
 ~/.claude/
 │
-├── CLAUDE.md                         # Глобальные инструкции + TASK.md workflow (Markdown)
+├── CLAUDE.md                         # Глобальные инструкции (Markdown)
 ├── settings.json                     # Глобальные настройки Claude Code (JSON)
 ├── history.jsonl                     # История команд (JSON Lines, ~2MB)
 ├── stats-cache.json                  # Статистика использования (JSON)
@@ -27,12 +27,7 @@
 │       ├── SKILL.md                  # Синхронизация глобальных доков (user-only)
 │       └── references/
 │
-├── templates/                        # Шаблоны для проектов (Markdown)
-│   ├── README.md
-│   ├── CLAUDE.md.template
-│   ├── TASK.md.template
-│   ├── best-practices.md.template
-│   └── feature-spec.md.template
+├── templates/                        # Шаблоны (пусто)
 │
 ├── plugins/                          # MCP плагины
 │   ├── installed_plugins.json        # Реестр установленных (JSON)
@@ -74,8 +69,9 @@
 │   ├── auth-testing/                 # Папка с отчётами
 │   └── smoke_similarity_test_report.md
 │
-├── plans/                            # Файлы режима планирования
-│   └── squishy-orbiting-kahan.md     # План с уникальным именем
+├── plans/                            # Файлы режима планирования (~12KB)
+│   ├── elegant-purring-hammock.md    # План с уникальным именем
+│   └── squishy-orbiting-kahan.md
 │
 ├── paste-cache/                      # Кэш буфера обмена (~204KB)
 │   └── {hash}.txt                    # Вставленный контент (текст)
@@ -102,23 +98,25 @@
 | `.sh` | Shell скрипт | shell-snapshots/*.sh |
 | `.txt` | Текст | debug/*.txt, paste-cache/*.txt |
 | `.lock` | Пустой файл-блокировка | ide/*.lock |
-| `.template` | Markdown шаблон | templates/*.template |
+| `.template` | Markdown шаблон | (не используется) |
 
 ---
 
-## Размеры директорий (типичные)
+## Размеры директорий (актуально 2026-01-27)
 
 | Директория | Размер | Комментарий |
 |------------|--------|-------------|
-| projects/ | 2.7GB | Основной объём — транскрипты сессий |
+| projects/ | 2.1GB | Основной объём — транскрипты сессий |
+| debug/ | 37MB | Логи, можно чистить вручную |
 | shell-snapshots/ | 33MB | Для возобновления сессий |
-| debug/ | 29MB | Логи, можно чистить вручную |
+| file-history/ | 3.4MB | История редактирования |
 | todos/ | 2.9MB | JSON с задачами |
-| file-history/ | 2.7MB | История редактирования |
-| reports/ | 1.2MB | Сгенерированные отчёты |
-| paste-cache/ | 204KB | Кэш вставок |
 | plugins/ | 1.8MB | Установленные плагины |
-| agents/ | 44KB | Определения агентов |
-| templates/ | 24KB | Шаблоны |
-| skills/ | 16KB | Скиллы |
+| reports/ | 1.2MB | Сгенерированные отчёты |
+| paste-cache/ | 184KB | Кэш вставок |
+| agents/ | 48KB | Определения агентов |
+| cache/ | 32KB | Общий кэш |
+| skills/ | 32KB | Скиллы |
+| plans/ | 12KB | Файлы планирования |
+| templates/ | 0KB | Шаблоны (пусто) |
 | commands/ | 0KB | Слэш-команды (пусто) |

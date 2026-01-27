@@ -1,0 +1,12 @@
+{
+  "name": "focus-task",
+  "version": "1.0.0",
+  "description": "Infinite task execution with automatic handoff for Claude Code",
+  "author": {
+    "name": "Maximus Kochetkov"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/user/claude-brewcode.git",
+  "keywords": ["task", "automation", "agents", "handoff", "infinite-context"],
+  "skills": "./skills/"
+}

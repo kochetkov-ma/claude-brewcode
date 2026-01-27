@@ -1,0 +1,36 @@
+# Task Report Manifest: {NAME}
+
+> Created: {TS} | Status: {STATUS}
+
+## Links
+
+| Resource | Path |
+|----------|------|
+| TASK | `.claude/tasks/{TS}_{NAME}_TASK.md` |
+| SPEC | `.claude/tasks/specs/{TS}_{NAME}_SPEC_v1.md` |
+| KNOWLEDGE | `.claude/tasks/{TS}_{NAME}_KNOWLEDGE.jsonl` |
+
+## Statistics
+
+| Metric | Value |
+|--------|-------|
+| Total Phases | - |
+| Total Iterations | - |
+| Total Agents | - |
+| Handoffs | 0 |
+
+## Phase Index
+
+| Phase | Iter | Type | Status | Agents | Report |
+|-------|------|------|--------|--------|--------|
+<!-- Populated by ft-coordinator after each phase -->
+
+## Handoff Log
+
+| # | Timestamp | From Phase | Context % | Reason |
+|---|-----------|------------|-----------|--------|
+<!-- Populated by ft-coordinator on handoff -->
+
+---
+
+**Last Updated:** {TS}

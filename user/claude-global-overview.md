@@ -55,10 +55,7 @@
 │       ├── SKILL.md
 │       └── references/
 │
-└── templates/                   # Шаблоны проектов
-    ├── CLAUDE.md.template
-    ├── TASK.md.template
-    └── ...
+└── templates/                   # Шаблоны (пусто)
 ```
 
 ### 1.1 Инструкции
@@ -69,7 +66,7 @@ idea ~/.claude/CLAUDE.md
 
 | Файл | Назначение |
 |------|------------|
-| `CLAUDE.md` | Глобальные правила + TASK.md workflow |
+| `CLAUDE.md` | Глобальные правила разработки |
 
 ### 1.2 Агенты
 
@@ -127,18 +124,10 @@ Skill(skill="text-optimize", args="path/to/file.md")
 ### 1.5 Шаблоны
 
 ```shell
-idea ~/.claude/templates/CLAUDE.md.template
-idea ~/.claude/templates/TASK.md.template
-idea ~/.claude/templates/best-practices.md.template
-idea ~/.claude/templates/feature-spec.md.template
+idea ~/.claude/templates/
 ```
 
-| Шаблон | Назначение |
-|--------|------------|
-| CLAUDE.md.template | Структура памяти проекта |
-| TASK.md.template | Воркфлоу Manager/Agent |
-| best-practices.md.template | База знаний |
-| feature-spec.md.template | Спецификации фич |
+*Директория пуста. Шаблоны не определены.*
 
 ---
 
@@ -196,8 +185,6 @@ idea ~/.claude/plugins/known_marketplaces.json
 |--------|--------|-------------|
 | context7 | ✅ | resolve-library-id, query-docs |
 | playwright | ✅ | browser_navigate, browser_click, browser_snapshot |
-| ralph-wiggum | ✅ | /help, /ralph-loop, /cancel-ralph |
-| feature-dev | ❌ | — |
 
 ### 2.4 MCP конфигурация
 
@@ -219,7 +206,7 @@ idea ~/.claude.json
 
 ```
 ~/.claude/
-├── projects/                    # Данные проектов (~2.7GB)
+├── projects/                    # Данные проектов (~2.1GB)
 │   └── -Users-maximus-IdeaProjects-*/
 │       ├── CLAUDE.md            # Память проекта (опционально)
 │       ├── mcpSettings.json     # MCP конфиг
@@ -239,10 +226,10 @@ idea ~/.claude.json
 ├── session-env/                 # Env переменные сессий
 │   └── {uuid}/
 │
-├── file-history/                # История файлов (~2.7MB)
+├── file-history/                # История файлов (~3.4MB)
 │   └── {uuid}/
 │
-├── debug/                       # Логи (~29MB, ручная очистка)
+├── debug/                       # Логи (~37MB, ручная очистка)
 │   └── {uuid}.txt
 │
 ├── reports/                     # Отчёты (~1.2MB)
@@ -251,7 +238,7 @@ idea ~/.claude.json
 ├── plans/                       # Файлы режима планирования
 │   └── {name}.md
 │
-└── paste-cache/                 # Кэш вставок (~204KB)
+└── paste-cache/                 # Кэш вставок (~184KB)
     └── {hash}.txt
 ```
 
@@ -356,6 +343,10 @@ du -sh ~/.claude/*/
 
 | Вер. | Дата | Изменения |
 |------|------|-----------|
+| 2.7 | 2026-01-27 | Очищена директория templates/ |
+| 2.6 | 2026-01-27 | Удалён шаблон best-practices.md.template |
+| 2.5 | 2026-01-27 | Обновлены размеры директорий, удалены неустановленные плагины из таблицы |
+| 2.4 | 2026-01-26 | Удалены шаблоны CLAUDE.md.template, TASK.md.template, feature-spec.md.template |
 | 2.3 | 2026-01-26 | Добавлен скилл global-doc-update (синхронизация глобальных доков) |
 | 2.2 | 2026-01-26 | Удалён FRAMEWORK-REMINDER.md, добавлен Skill tool агентам |
 | 2.1 | 2026-01-26 | Удалена команда file-optimize (используй скилл text-optimize) |

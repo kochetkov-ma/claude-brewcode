@@ -1,0 +1,41 @@
+{
+  "name": "claude-plugin-focus-task",
+  "version": "1.0.0",
+  "description": "Infinite task execution with automatic handoff for Claude Code",
+  "keywords": [
+    "claude-code",
+    "claude-plugin",
+    "task-management",
+    "agents",
+    "automation",
+    "handoff"
+  ],
+  "author": {
+    "name": "Maximus Kochetkov"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/user/claude-brewcode.git",
+    "directory": "plugins/focus-task"
+  },
+  "files": [
+    ".claude-plugin/",
+    "skills/",
+    "agents/",
+    "hooks/",
+    "templates/",
+    "runtime/dist/",
+    "runtime/package.json",
+    "README.md",
+    "INSTALL.md"
+  ],
+  "scripts": {
+    "build": "cd runtime && npm install && npm run build",
+    "prepublishOnly": "npm run build"
+  },
+  "claude-plugin": {
+    "name": "focus-task",
+    "version": "1.0.0"
+  }
+}

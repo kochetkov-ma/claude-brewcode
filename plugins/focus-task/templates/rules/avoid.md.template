@@ -1,0 +1,12 @@
+---
+paths:
+  - "**/*"
+description: Anti-patterns - mistakes to avoid
+---
+
+# Avoid
+
+> Auto-synced from KNOWLEDGE by `/focus-task-rules`
+
+| # | Avoid | Instead | Why |
+|---|-------|---------|-----|

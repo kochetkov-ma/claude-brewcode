@@ -1,0 +1,168 @@
+<!-- Timestamp: YYYYMMDD_HHMMSS -->
+# Task: {NAME}
+
+> **AUTONOMY:** Work until DONE. Iterate until all criteria met.
+> **CONTEXT:** Load per phase via ID. KNOWLEDGE.jsonl holds accumulated knowledge.
+
+## Meta
+
+| Created | {TIMESTAMP} | Status | pending |
+|---------|-------------|--------|---------|
+| Spec | `.claude/tasks/specs/{TIMESTAMP}_{NAME}_SPEC.md` |||
+| Knowledge | `.claude/tasks/{TIMESTAMP}_{NAME}_KNOWLEDGE.jsonl` |||
+
+## Reports
+
+| Field | Path |
+|-------|------|
+| Report Dir | `.claude/tasks/reports/{TIMESTAMP}_{NAME}/` |
+| Manifest | `.claude/tasks/reports/{TIMESTAMP}_{NAME}/MANIFEST.md` |
+| Final | `.claude/tasks/reports/{TIMESTAMP}_{NAME}/FINAL.md` |
+
+> **Report Structure:** `reports/{TS}_{NAME}/phase_{P}/iter_{N}_{type}/`
+> - `{type}`: `exec` (execution) or `verify` (verification)
+> - Each iteration contains: `{AGENT}_output.md`, `summary.md`, optional `{AGENT}_artifacts/`
+
+**Statuses:** `pending` → `in progress` → `handoff` → `finished`
+
+## Completion Criteria
+
+- [ ] {CRITERION_1}
+- [ ] {CRITERION_2}
+
+## Agents
+
+> **Priority:** Project Agents > Core Agents. Run `/focus-task:adapt` to populate.
+
+### Project Agents
+<!-- TBD: Populated by /focus-task:adapt from .claude/agents/ -->
+
+| Agent | Purpose | Model |
+|-------|---------|-------|
+| TBD | TBD | TBD |
+
+### Core Agents
+
+| Agent | Purpose | Model |
+|-------|---------|-------|
+| `developer` | Code implementation | sonnet |
+| `tester` | Tests, analysis | sonnet |
+| `reviewer` | Quality, security, patterns | sonnet |
+| `Explore` | Codebase search (READ-ONLY) | haiku |
+| `ft-coordinator` | Update TASK.md, validate | sonnet |
+
+## Reference Examples
+
+> Эталонные файлы. Agents MUST read and follow patterns.
+
+| ID | Type | File |
+|----|------|------|
+| R1 | {TYPE} | {PATH} |
+| R2 | {TYPE} | {PATH} |
+
+## Context Index
+
+> Task-specific files. Reference by ID in phase Context field.
+
+| ID | File | Purpose |
+|----|------|---------|
+| C1 | {PATH} | {WHY} |
+| C2 | {PATH} | {WHY} |
+
+---
+
+## Phases
+
+> **Rules:**
+> - Manager decides phase count and sequence based on task complexity
+> - Each phase = Execution → Verification (V)
+> - Pass `Context` + `Refs` IDs to agents (they read files themselves)
+> - V-phase: 2+ agents parallel, one checks quality, one checks project patterns
+>
+> **Iteration Protocol:**
+> ```
+> WHILE Phase NV has Issues:
+>   1. Fix issues in Phase N (same agent)
+>   2. Re-run Phase NV (same agents)
+>   3. Max 3 iterations → escalate/reassign
+> ```
+>
+> **Examples:** Repository impl → Repository tests → DDL → Pattern analysis → Controller → Integration tests
+
+---
+
+### Phase 1: {DESCRIPTION}
+
+| Agent | {AGENT} | Status | pending | Context | C1 | Refs | R1 |
+|-------|---------|--------|---------|---------|----|----- |----|
+
+**Tasks:** {TASK_LIST}
+
+**Exit:** {CRITERIA} | **Result:** -
+
+---
+
+### Phase 1V: Verification
+
+> Manager picks 2+ agents based on phase type. For tests: use `tester` instead of `developer`.
+
+| Agent | Focus | Context | Refs |
+|-------|-------|---------|------|
+| `reviewer` | Logic, edge cases, security | C1 | - |
+| `developer` | Project patterns compliance | C1 | R1 |
+| `tester` | Test strictness: assertions, test data, expected values | C1 | R1 |
+| TBD | Project-specific checks (from Project Agents) | C1 | R1 |
+
+<!--
+  Code phase: reviewer + developer + [project agent]
+  Test phase: reviewer + tester + [project agent]
+  Pick most relevant for phase type
+-->
+
+**Check:** [ ] Criteria met [ ] No regressions [ ] Patterns followed
+
+**Status:** pending | **Issues:** -
+
+---
+
+<!-- Add Phase 2, 2V, 3, 3V... as needed -->
+
+---
+
+## Final Review
+
+> **Parallel:** 3+ agents. Manager picks from Core + Project Agents based on task type.
+
+| Agent | Focus | Against |
+|-------|-------|---------|
+| `reviewer` | Requirements, logic | Completion Criteria |
+| `developer` | Code quality, SOLID | Reference Examples |
+| `tester` | Test quality, strictness | Reference Examples |
+| TBD | Project-specific (db_expert, etc.) | Reference Examples |
+
+<!-- TBD: /focus-task:adapt adds project-specific agents here -->
+
+**Flow:** All pass → DONE | Issues → fix → re-review
+
+**Status:** pending
+
+---
+
+## Progress Log
+
+| Timestamp | Event |
+|-----------|-------|
+
+---
+
+## Failure Protocol
+
+Document → Analyze → Re-run (max 3) → Escalate
+
+## Manager Actions
+
+After EACH phase: `ft-coordinator` → update status → log → verify → proceed
+
+---
+
+**Status:** PENDING | **Iteration:** 0

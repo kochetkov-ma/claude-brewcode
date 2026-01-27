@@ -459,6 +459,122 @@ focus-task-plugin/
 | SPEC Creation | [`SPEC-creation.md`](templates/SPEC-creation.md) | Инструкции по созданию SPEC через параллельный анализ |
 | KNOWLEDGE | [`KNOWLEDGE.jsonl.template`](templates/KNOWLEDGE.jsonl.template) | Формат знаний: ts/cat/t/txt/src |
 | Instructions | [`instructions-template.md`](templates/instructions-template.md) | Инструкции для скиллов create/start/adapt |
+| **Reports** | `reports/` | Шаблоны отчётов (см. ниже) |
+
+#### 5.1 Шаблоны отчётов (Reports)
+
+**Расположение:** `templates/reports/`
+
+| Шаблон | Файл | Назначение |
+|--------|------|------------|
+| MANIFEST | `MANIFEST.md.template` | Индекс фаз/итераций, handoff log |
+| FINAL | `FINAL.md.template` | Финальный отчёт задачи |
+| Summary | `summary.md.template` | Сводка фазы/итерации |
+| Agent Output | `agent_output.md.template` | Отчёт агента-исполнителя |
+| Agent Review | `agent_review.md.template` | Отчёт агента-верификатора |
+
+---
+
+### 5.2 Система отчётов (Reports)
+
+#### Структура директорий
+
+```
+.claude/tasks/reports/{TS}_{NAME}/
+├── MANIFEST.md                    # Индекс всех фаз/итераций
+├── FINAL.md                       # Финальный отчёт (при завершении)
+└── phase_{P}/                     # Группировка по фазам
+    ├── iter_{N}_exec/             # Execution итерация
+    │   ├── {AGENT}_output.md      # Отчёт агента
+    │   ├── {AGENT}_artifacts/     # Артефакты (логи, SQL, etc.)
+    │   └── summary.md             # Сводка итерации
+    └── iter_{N}_verify/           # Verification итерация
+        ├── {AGENT}_review.md      # Review отчёт
+        ├── issues.jsonl           # Структурированные issues
+        └── summary.md             # Сводка верификации
+```
+
+#### Жизненный цикл отчётов
+
+```
+/focus-task:create
+    │
+    ▼
+Создать reports/{TS}_{NAME}/ + MANIFEST.md
+    │
+    ▼
+/focus-task:start
+    │
+    ▼
+┌─────────────────────────────────────────────────┐
+│  ДЛЯ КАЖДОЙ ФАЗЫ:                               │
+│                                                 │
+│  1. Создать phase_{P}/iter_{N}_exec/            │
+│  2. Запустить агентов                           │
+│  3. ft-coordinator:                             │
+│     - Записать {AGENT}_output.md                │
+│     - Записать summary.md                       │
+│     - Обновить MANIFEST.md                      │
+│                                                 │
+│  4. Создать phase_{P}/iter_{N}_verify/          │
+│  5. Запустить верификацию                       │
+│  6. ft-coordinator:                             │
+│     - Записать {AGENT}_review.md                │
+│     - Записать issues.jsonl                     │
+│     - Записать summary.md                       │
+│     - Обновить MANIFEST.md                      │
+│                                                 │
+│  7. Если issues → iter_{N+1}_exec/ (итерация)   │
+└─────────────────────────────────────────────────┘
+    │
+    ▼
+Задача завершена
+    │
+    ▼
+ft-coordinator → FINAL.md
+
+```
+
+#### ft-coordinator: Управление отчётами
+
+**После каждого SubAgent:**
+1. Создать директорию итерации если не существует
+2. Записать `{AGENT}_output.md` или `{AGENT}_review.md`
+3. Сохранить артефакты в `{AGENT}_artifacts/` если есть
+
+**После завершения фазы:**
+1. Записать `summary.md` с агрегированными результатами
+2. Обновить MANIFEST.md (добавить строку в Phase Index)
+3. **ПРОВЕРИТЬ** что все отчёты существуют:
+   - Если нет → сгенерировать из контекста/KNOWLEDGE
+   - Фаза НЕ завершена пока отчёты не верифицированы
+
+**Перед handoff:**
+1. Финализировать текущую итерацию
+2. Добавить запись в Handoff Log в MANIFEST.md
+
+**При завершении задачи:**
+1. Сгенерировать FINAL.md
+2. Обновить MANIFEST.md (финальный статус)
+
+#### Верификация отчётов
+
+```
+Фаза N завершена
+    │
+    ▼
+Coordinator проверяет: отчёты существуют?
+    │
+    ├─ ДА → Обновить MANIFEST, перейти к N+1
+    │
+    └─ НЕТ → Сгенерировать из:
+            - Вывод SubAgent (если захвачен)
+            - Записи KNOWLEDGE.jsonl за фазу
+            - Progress Log в TASK.md
+            │
+            ▼
+         Отчёты сгенерированы → Перейти к N+1
+```
 
 ---
 
@@ -1098,8 +1214,26 @@ npm install && npm run build
 
 ### Настройки плагина
 
-**Файл:** .claude/focus-task.config.json (в проекте)
+**Приоритет конфигов (от высшего к низшему):**
 
+| Уровень | Путь | Назначение |
+|---------|------|------------|
+| 1. Проект | `{PROJECT_ROOT}/.claude/focus-task.config.json` | Переопределения для проекта |
+| 2. Глобальный | `~/.claude/focus-task.config.json` | Дефолты пользователя (fallback) |
+| 3. Встроенный | Hardcoded в плагине | Базовые значения |
+
+> **Мерж конфигов:** Проектный конфиг перекрывает глобальный по полям (shallow merge).
+> Если поле не указано в проекте → берётся из глобального → если нет там → встроенный дефолт.
+
+**Пример проектного конфига** (`{PROJECT_ROOT}/.claude/focus-task.config.json`):
+```json
+{
+  "handoffThresholdPercent": 80,
+  "categories": ["docker", "db", "api", "test", "jooq"]
+}
+```
+
+**Пример глобального конфига** (`~/.claude/focus-task.config.json`):
 ```json
 {
   "knowledgeMaxPercent": 10,
@@ -1134,19 +1268,38 @@ npm install && npm run build
 
 ## Структура файлов в проекте
 
+> **ВАЖНО:** Все файлы создаются **внутри проекта**, где запускается плагин (текущая рабочая директория Claude Code).
+> Путь `.claude/` означает `{PROJECT_ROOT}/.claude/`, а НЕ `~/.claude/` (глобальная конфигурация пользователя).
+
 После использования плагина в проекте появятся:
 
 ```
-.claude/
-├── TASK.md                      # Pointer/lock (только для создания)
-├── focus-task.config.json       # Конфигурация плагина
-├── tasks/
-│   ├── 26012026_143000_auth_TASK.md   # Actual task file
-│   ├── 26012026_143000_auth_TASK_KNOWLEDGE.jsonl
-│   └── specs/
-│       └── 26012026_143000_auth_SPEC_v1.md
-└── specs/                       # Постоянные спеки для человека
-    └── auth-system.md           # Создаётся в POST-фазе
+{PROJECT_ROOT}/
+└── .claude/
+    ├── TASK.md                      # Pointer/lock (только для создания)
+    ├── focus-task.config.json       # Конфигурация плагина
+    ├── tasks/
+    │   ├── templates/               # Адаптированные шаблоны
+    │   │   ├── TASK.md.template
+    │   │   └── SPEC.md.template
+    │   ├── specs/
+    │   │   └── 26012026_143000_auth_SPEC_v1.md
+    │   ├── reports/                 # Отчёты по задачам
+    │   │   └── 26012026_143000_auth/
+    │   │       ├── MANIFEST.md      # Индекс фаз/итераций
+    │   │       ├── FINAL.md         # Финальный отчёт (при завершении)
+    │   │       └── phase_1/
+    │   │           ├── iter_1_exec/
+    │   │           │   ├── developer_output.md
+    │   │           │   └── summary.md
+    │   │           └── iter_1_verify/
+    │   │               ├── reviewer_review.md
+    │   │               ├── issues.jsonl
+    │   │               └── summary.md
+    │   ├── 26012026_143000_auth_TASK.md
+    │   └── 26012026_143000_auth_KNOWLEDGE.jsonl
+    └── specs/                       # Постоянные спеки для человека
+        └── auth-system.md           # Создаётся в POST-фазе
 ```
 
 ---
@@ -1177,6 +1330,9 @@ User вызывает /focus-task-create "Implement auth"
          │
          ▼
     Создание KNOWLEDGE.jsonl (пустой)
+         │
+         ▼
+    Создание reports/{TS}_{NAME}/ + MANIFEST.md
          │
          ▼
     [Опц.] Обновление pointer (путь к task file)
@@ -1220,6 +1376,9 @@ User вызывает /focus-task-start [task-path]
 │  Coordinator агент                    │
 │  - Обновляет статус фазы              │
 │  - Проверяет KNOWLEDGE на дубли       │
+│  - Записывает {AGENT}_output.md       │
+│  - Записывает summary.md              │
+│  - Обновляет MANIFEST.md              │
 │       │                               │
 │       ▼                               │
 │  Контекст > 85%? ──────────┐          │
@@ -1228,6 +1387,7 @@ User вызывает /focus-task-start [task-path]
 │       │              Handoff          │
 │       │              - Статус→handoff │
 │       │              - Упаковка знаний│
+│       │              - Handoff Log    │
 │       │              - Завершение     │
 │       │                    │          │
 │       ▼                    │          │
@@ -1250,10 +1410,13 @@ User вызывает /focus-task-start [task-path]
    - Обновление rules/
         │
         ▼
+   ft-coordinator генерирует FINAL.md
+        │
+        ▼
    Статус → "finished"
         │
         ▼
-   ГОТОВО
+   ГОТОВО (FINAL.md + MANIFEST.md доступны)
 ```
 
 ### Автоматический Handoff (SDK Runtime)
