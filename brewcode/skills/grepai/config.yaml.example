@@ -1,0 +1,96 @@
+# grepai config example
+# Copy to .grepai/config.yaml and adapt to your project
+
+version: 1
+
+embedder:
+  provider: ollama
+  model: bge-m3              # Best multilingual model, 1.2GB
+  endpoint: http://localhost:11434
+  dimensions: 1024           # bge-m3 native dimension
+  # CRITICAL: Ollama does NOT support parallel embeddings!
+  # See: https://github.com/ollama/ollama/issues/12591
+  # Always keep parallelism: 1 for Ollama provider
+  parallelism: 1
+
+store:
+  backend: gob               # Fast local storage
+
+chunking:
+  size: 512                  # Chars per chunk (smaller = more precise)
+  overlap: 50                # Overlap between chunks
+
+watch:
+  debounce_ms: 500           # Wait before re-indexing on file change
+
+search:
+  boost:
+    enabled: true
+    # Penalties: reduce score for test/mock/generated files
+    penalties:
+      - pattern: /tests/
+        factor: 0.5
+      - pattern: /test/
+        factor: 0.5
+      - pattern: _test.
+        factor: 0.5
+      - pattern: .test.
+        factor: 0.5
+      - pattern: .spec.
+        factor: 0.5
+      - pattern: /mocks/
+        factor: 0.4
+      - pattern: /fixtures/
+        factor: 0.4
+      - pattern: /generated/
+        factor: 0.4
+      - pattern: .gen.
+        factor: 0.4
+      - pattern: .md
+        factor: 0.6
+      - pattern: /docs/
+        factor: 0.6
+    # Bonuses: boost score for main source directories
+    bonuses:
+      - pattern: /src/
+        factor: 1.1
+      - pattern: /lib/
+        factor: 1.1
+      - pattern: /app/
+        factor: 1.1
+  hybrid:
+    enabled: false           # Hybrid search (semantic + keyword)
+    k: 60
+
+trace:
+  mode: fast                 # Call graph tracing mode
+  enabled_languages:         # Languages for trace analysis
+    - .go
+    - .js
+    - .ts
+    - .tsx
+    - .py
+    - .java
+    - .rs
+  exclude_patterns:          # Exclude test files from trace
+    - '*_test.go'
+    - '*.spec.ts'
+    - '*.test.ts'
+    - __tests__/*
+
+update:
+  check_on_startup: false    # Don't check for grepai updates
+
+# Directories to ignore (never index)
+ignore:
+  - .git
+  - .grepai
+  - node_modules
+  - vendor
+  - dist
+  - build
+  - target
+  - __pycache__
+  - .venv
+  - .idea
+  - .vscode

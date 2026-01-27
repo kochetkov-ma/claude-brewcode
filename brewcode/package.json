@@ -1,0 +1,41 @@
+{
+  "name": "claude-plugin-brewcode",
+  "version": "2.7.1",
+  "description": "Infinite task execution with automatic handoff for Claude Code",
+  "keywords": [
+    "claude-code",
+    "claude-plugin",
+    "task-management",
+    "agents",
+    "automation",
+    "handoff"
+  ],
+  "author": {
+    "name": "Maksim Kochetkov"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/user/claude-brewcode.git",
+    "directory": "brewcode"
+  },
+  "files": [
+    ".claude-plugin/",
+    "skills/",
+    "agents/",
+    "hooks/",
+    "templates/",
+    "runtime/dist/",
+    "runtime/package.json",
+    "README.md",
+    "INSTALL.md"
+  ],
+  "scripts": {
+    "build": "cd runtime && npm install && npm run build",
+    "prepublishOnly": "npm run build"
+  },
+  "claude-plugin": {
+    "name": "brewcode",
+    "version": "2.7.1"
+  }
+}

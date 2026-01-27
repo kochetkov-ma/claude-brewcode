@@ -1,0 +1,15 @@
+# Auto-Sync INDEX
+# Format: {"p":"path","t":"type","u":"YYYY-MM-DD","pr":"default"}
+#
+# Fields:
+#   p  - Relative path from project/global root
+#   t  - Type: skill, agent, rule, config, doc
+#   u  - Last sync date (YYYY-MM-DD)
+#   pr - Protocol: default, override
+#
+# Types (detected from path):
+#   skill  - */skills/** or skills/**
+#   agent  - */agents/** or agents/**
+#   rule   - */rules/** or rules/**
+#   config - **/CLAUDE.md
+#   doc    - Any other .md

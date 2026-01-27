@@ -1,0 +1,6 @@
+---
+paths:
+  - ".claude/tasks/**/*_task/PLAN.md"
+---
+
+⛔ BREWCODE: After EACH agent → WRITE report → CALL bc-coordinator

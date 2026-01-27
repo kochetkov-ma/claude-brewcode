@@ -1,0 +1,46 @@
+# Phase {P}: {DESCRIPTION}
+
+| Field | Value |
+|-------|-------|
+| Started | {TS_START} |
+| Completed | {TS_END} |
+| Iteration | {N} |
+| Type | {exec/verify} |
+| Status | {STATUS} |
+
+## Agents
+
+| Agent | Task | Output | Status |
+|-------|------|--------|--------|
+| {AGENT_1} | {TASK} | `{AGENT}_output.md` | {STATUS} |
+| {AGENT_2} | {TASK} | `{AGENT}_output.md` | {STATUS} |
+
+## Result
+
+{PHASE_RESULT_SUMMARY}
+
+## Key Outcomes
+
+- {OUTCOME_1}
+- {OUTCOME_2}
+
+## Artifacts
+
+| File | Type | Description |
+|------|------|-------------|
+| `{AGENT}_output.md` | report | Agent execution report |
+| `{AGENT}_artifacts/` | dir | Agent artifacts (logs, sql, etc.) |
+
+## Issues (V-phase only)
+
+| ID | Severity | Agent | Description | Status |
+|----|----------|-------|-------------|--------|
+| I1 | {critical/major/minor} | {AGENT} | {DESCRIPTION} | {open/fixed} |
+
+## Next Steps
+
+{NEXT_PHASE_OR_COMPLETION}
+
+---
+
+**Generated:** {TS} by bc-coordinator
