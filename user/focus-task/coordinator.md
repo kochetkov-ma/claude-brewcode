@@ -8,7 +8,7 @@
 
 | Скилл | Что делает | Когда использовать |
 |-------|------------|-------------------|
-| `/focus-task:adapt` | Анализирует проект, создаёт адаптированные шаблоны в `.claude/tasks/templates/` | Один раз при настройке проекта |
+| `/focus-task:setup` | Анализирует проект, создаёт адаптированные шаблоны в `.claude/tasks/templates/` | Один раз при настройке проекта |
 | `/focus-task:create <desc>` | Создаёт TASK.md, SPEC.md, KNOWLEDGE.jsonl через параллельный research агентами | Для новой задачи |
 | `/focus-task:start [path]` | Запускает выполнение через SDK Runtime с автоматическим handoff | Для запуска задачи |
 | `/focus-task:review [prompt]` | Code review несколькими агентами с кворумом (3 агента, 2/3 консенсус) | После завершения задачи |
@@ -25,7 +25,7 @@
 ## Workflow (как работает)
 
 ```
-1. adapt     → создаёт шаблоны для проекта (TASK.md.template, SPEC.md.template)
+1. setup     → создаёт шаблоны для проекта (TASK.md.template, SPEC.md.template)
       ↓
 2. create    → создаёт задачу:
                - Параллельный research (5-10 агентов)
@@ -64,7 +64,7 @@
 │   ├── {TS}_{NAME}_KNOWLEDGE.jsonl      # Накопленные знания
 │   ├── specs/
 │   │   └── {TS}_{NAME}_SPEC_vN.md       # Спецификации (версионируются)
-│   ├── templates/                       # Адаптированные шаблоны (после adapt)
+│   ├── templates/                       # Адаптированные шаблоны (после setup)
 │   │   ├── TASK.md.template
 │   │   └── SPEC.md.template
 │   ├── reports/                         # Отчёты выполнения
@@ -235,8 +235,8 @@ claude --plugin-dir ./plugins/focus-task
 # Проверка скиллов
 /help
 
-# Адаптация шаблонов
-/focus-task:adapt
+# Настройка focus-task
+/focus-task:setup
 
 # Создание задачи
 /focus-task:create "Implement feature X"

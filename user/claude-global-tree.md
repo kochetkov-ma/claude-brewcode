@@ -19,42 +19,43 @@
 │
 ├── commands/                         # Слэш-команды (пусто, используй скиллы)
 │
-├── skills/                           # Скиллы (2 локальных + 5 симлинков)
+├── skills/                           # Скиллы (3 локальных + 6 симлинков)
 │   ├── text-optimize/                # Локальный скилл
 │   │   ├── SKILL.md                  # Оптимизация для LLM
 │   │   └── references/
 │   ├── global-doc-update/            # Локальный скилл
 │   │   └── SKILL.md                  # Синхронизация ~/.claude (user-only)
+│   ├── text-human/                   # Локальный скилл (NEW)
+│   │   └── SKILL.md                  # Humanize code, remove AI artifacts
 │   │
-│   ├── focus-task-adapt -> ...       # Симлинки на плагин focus-task
-│   ├── focus-task-create -> ...      # (workaround для autocomplete)
+│   ├── focus-task-setup -> ...       # Симлинки на плагин focus-task
+│   ├── focus-task-teardown -> ...       # (workaround для autocomplete)
+│   ├── focus-task-create -> ...
 │   ├── focus-task-doc -> ...
 │   ├── focus-task-rules -> ...
 │   └── focus-task-start -> ...
 │
 ├── templates/                        # Шаблоны (пусто)
 │
-├── plugins/                          # MCP плагины (~929MB)
+├── plugins/                          # MCP плагины (~8.3MB)
 │   ├── installed_plugins.json        # Реестр установленных (JSON)
 │   ├── known_marketplaces.json       # Список маркетплейсов (JSON)
 │   ├── install-counts-cache.json     # Кэш счётчиков (JSON)
 │   ├── cache/                        # Скачанные плагины
 │   │   ├── claude-plugins-official/  # Официальный маркетплейс
 │   │   │   ├── context7/             # Документация библиотек
-│   │   │   ├── playwright/           # Браузерная автоматизация
-│   │   │   └── ralph-wiggum/         # (тестовый)
+│   │   │   └── playwright/           # Браузерная автоматизация
 │   │   │
 │   │   └── claude-brewcode/          # Локальный маркетплейс
 │   │       └── focus-task/           # Плагин infinite task execution
-│   │           ├── 1.0.0/            # Все версии сохраняются
+│   │           ├── 2.0.8/            # Все версии сохраняются
 │   │           ├── ...
-│   │           └── 1.0.7/            # Актуальная версия
+│   │           └── 2.0.18/           # Актуальная версия
 │   │               ├── .claude-plugin/
 │   │               │   └── plugin.json
-│   │               ├── skills/       # 6 скиллов (adapt, create, doc, review, rules, start)
+│   │               ├── skills/       # 7 скиллов (setup, teardown, create, doc, review, rules, start)
 │   │               ├── agents/       # ft-coordinator, ft-knowledge-manager
-│   │               ├── templates/    # TASK.md, SPEC.md, KNOWLEDGE templates
-│   │               └── runtime/      # SDK runtime (TypeScript)
+│   │               └── templates/    # TASK.md, SPEC.md, KNOWLEDGE templates
 │   │
 │   └── marketplaces/                 # Источники плагинов
 │       ├── claude-plugins-official/
@@ -122,22 +123,22 @@
 
 ---
 
-## Размеры директорий (актуально 2026-01-27)
+## Размеры директорий (актуально 2026-01-28)
 
 | Директория | Размер | Комментарий |
 |------------|--------|-------------|
-| projects/ | 1.9GB | Основной объём — транскрипты сессий |
-| debug/ | 65MB | Логи, можно чистить вручную |
+| projects/ | 2.0GB | Основной объём — транскрипты сессий |
+| debug/ | 103MB | Логи, можно чистить вручную |
 | shell-snapshots/ | 33MB | Для возобновления сессий |
-| file-history/ | 3.4MB | История редактирования |
-| todos/ | 2.9MB | JSON с задачами |
-| plugins/ | 929MB | Установленные плагины (кэш всех версий) |
+| plugins/ | 8.3MB | Установленные плагины (кэш версий) |
+| file-history/ | 7.7MB | История редактирования |
+| todos/ | 3.2MB | JSON с задачами |
 | reports/ | 1.2MB | Сгенерированные отчёты |
-| paste-cache/ | 184KB | Кэш вставок |
-| agents/ | 48KB | Определения агентов |
+| paste-cache/ | 260KB | Кэш вставок |
+| plans/ | 140KB | Файлы планирования |
+| agents/ | 52KB | Определения агентов |
+| skills/ | 44KB | 3 локальных + 6 симлинков на плагин |
 | cache/ | 32KB | Общий кэш |
-| skills/ | 36KB | 2 локальных + 5 симлинков на плагин |
-| plans/ | 12KB | Файлы планирования |
 | templates/ | 0KB | Шаблоны (пусто) |
 | commands/ | 0KB | Слэш-команды (пусто) |
 
@@ -147,11 +148,12 @@
 
 ```bash
 # Симлинки для autocomplete (workaround GitHub #18949)
-focus-task-adapt  → ~/.claude/plugins/cache/claude-brewcode/focus-task/1.0.7/skills/adapt/
+focus-task-setup  → ~/.claude/plugins/cache/claude-brewcode/focus-task/2.0.18/skills/setup/
+focus-task-teardown  → .../skills/teardown/
 focus-task-create → .../skills/create/
 focus-task-doc    → .../skills/doc/
 focus-task-rules  → .../skills/rules/
 focus-task-start  → .../skills/start/
 ```
 
-> **Note:** `focus-task-review` создаётся из шаблона в проекте (`.claude/skills/focus-task-review/`) через `/focus-task:adapt`
+> **Note:** `focus-task-review` создаётся в проекте (`.claude/skills/focus-task-review/`) через `/focus-task:setup`

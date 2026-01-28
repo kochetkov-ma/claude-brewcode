@@ -34,10 +34,10 @@ status: pending
 
 ## Agents
 
-> **Priority:** Project Agents > Core Agents. Run `/focus-task:adapt` to populate.
+> **Priority:** Project Agents > Core Agents. Run `/focus-task:setup` to populate.
 
 ### Project Agents
-<!-- TBD: Populated by /focus-task:adapt from .claude/agents/ -->
+<!-- TBD: Populated by /focus-task:setup from .claude/agents/ -->
 
 | Agent | Purpose | Model |
 |-------|---------|-------|
@@ -145,7 +145,7 @@ status: pending
 | `tester` | Test quality, strictness | Reference Examples |
 | TBD | Project-specific (db_expert, etc.) | Reference Examples |
 
-<!-- TBD: /focus-task:adapt adds project-specific agents here -->
+<!-- TBD: /focus-task:setup adds project-specific agents here -->
 
 **Flow:** All pass → DONE | Issues → fix → re-review
 

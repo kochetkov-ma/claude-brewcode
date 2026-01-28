@@ -1,17 +1,17 @@
 ---
-name: clean
-description: Remove all focus-task files created by /focus-task:adapt. Cleans templates, configs, rules, skills, and symlinks.
+name: teardown
+description: Remove all focus-task files created by /focus-task:setup. Cleans templates, configs, rules, skills, and symlinks.
 user-invocable: true
 argument-hint: [--dry-run]
 allowed-tools: Bash, Read
 model: haiku
 ---
 
-Clean Focus-Task — remove all project files created by adapt
+Teardown Focus-Task — remove all project files created by setup
 
 ## Overview
 
-Removes all files and directories created by `/focus-task:adapt`:
+Removes all files and directories created by `/focus-task:setup`:
 - `.claude/tasks/templates/`
 - `.claude/tasks/cfg/focus-task.config.json`
 - `.claude/skills/focus-task-review/`
@@ -22,16 +22,16 @@ Removes all files and directories created by `/focus-task:adapt`:
 ## Usage
 
 ```
-/focus-task:clean           # Full cleanup
-/focus-task:clean --dry-run # Show what would be deleted
+/focus-task:teardown           # Full cleanup
+/focus-task:teardown --dry-run # Show what would be deleted
 ```
 
 ## Execution
 
-**EXECUTE** using Bash tool — run cleanup script:
+**EXECUTE** using Bash tool — run teardown script:
 ```bash
-SCRIPT_DIR="$HOME/.claude/plugins/cache/claude-brewcode/focus-task/$(ls $HOME/.claude/plugins/cache/claude-brewcode/focus-task 2>/dev/null | sort -V | tail -1)/skills/clean"
-bash "$SCRIPT_DIR/clean.sh" $ARGUMENTS
+SCRIPT_DIR="$HOME/.claude/plugins/cache/claude-brewcode/focus-task/$(ls $HOME/.claude/plugins/cache/claude-brewcode/focus-task 2>/dev/null | sort -V | tail -1)/skills/teardown"
+bash "$SCRIPT_DIR/teardown.sh" $ARGUMENTS
 ```
 
 ## What Gets Removed
@@ -54,12 +54,12 @@ PROJECT/
     └── rules/                   ← ⏭️ KEEP
 
 ~/.claude/skills/
-├── focus-task-adapt    → ...  ← 🗑️ symlink
+├── focus-task-setup    → ...  ← 🗑️ symlink
 ├── focus-task-create   → ...  ← 🗑️ symlink
 ├── focus-task-doc      → ...  ← 🗑️ symlink
 ├── focus-task-rules    → ...  ← 🗑️ symlink
 ├── focus-task-start    → ...  ← 🗑️ symlink
-└── focus-task-clean    → ...  ← 🗑️ symlink
+└── focus-task-teardown → ...  ← 🗑️ symlink
 ```
 
 ## Safety
@@ -74,7 +74,7 @@ PROJECT/
 ## Output
 
 ```
-Focus-Task Cleanup
+Focus-Task Teardown
 
 Removed:
   ✅ .claude/tasks/templates/
@@ -82,7 +82,7 @@ Removed:
   ✅ .claude/rules/avoid.md
   ✅ .claude/rules/best-practice.md
   ✅ .claude/skills/focus-task-review/
-  ✅ ~/.claude/skills/focus-task-adapt (symlink)
+  ✅ ~/.claude/skills/focus-task-setup (symlink)
   ✅ ~/.claude/skills/focus-task-create (symlink)
   ...
 

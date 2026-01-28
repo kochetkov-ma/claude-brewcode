@@ -14,7 +14,7 @@ claude --plugin-dir plugins/focus-task
 
 | Skill | Description |
 |-------|-------------|
-| `/focus-task:adapt` | Analyzes project structure, creates adapted templates in `.claude/tasks/templates/` |
+| `/focus-task:setup` | Analyzes project structure, creates adapted templates in `.claude/tasks/templates/` |
 | `/focus-task:create <desc>` | Creates TASK.md, SPEC.md, KNOWLEDGE.jsonl through parallel agent research |
 | `/focus-task:start [path]` | Executes task with SDK runtime, handles automatic handoff at 90% context |
 | `/focus-task:review [prompt]` | Multi-agent code review with quorum consensus (default: 3 agents, 2/3 quorum) |
@@ -29,7 +29,7 @@ claude --plugin-dir plugins/focus-task
 plugins/focus-task/
 ├── .claude-plugin/plugin.json
 ├── skills/                    # 6 skills
-│   ├── focus-task-adapt/
+│   ├── focus-task-setup/
 │   ├── focus-task-create/
 │   ├── focus-task-doc/
 │   ├── focus-task-review/
@@ -59,7 +59,7 @@ plugins/focus-task/
     │   ├── {TS}_{NAME}_KNOWLEDGE.jsonl  # Accumulated knowledge
     │   ├── specs/
     │   │   └── {TS}_{NAME}_SPEC_vN.md   # Task specifications
-    │   ├── templates/                   # Created by /focus-task:adapt
+    │   ├── templates/                   # Created by /focus-task:setup
     │   │   ├── TASK.md.template
     │   │   └── SPEC.md.template
     │   ├── reports/                     # Execution reports
@@ -80,7 +80,7 @@ plugins/focus-task/
 
 1. **Adapt templates** (once per project):
    ```
-   /focus-task:adapt
+   /focus-task:setup
    ```
 
 2. **Create task**:

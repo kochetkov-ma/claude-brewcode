@@ -59,7 +59,7 @@ Create Task — "description" or path to requirements
    │ [✅|❌] .claude/tasks/templates/SPEC.md.template            │
    │                                                             │
    │ Run template adaptation first:                              │
-   │ /focus-task-adapt                                           │
+   │ /focus-task-setup                                           │
    └─────────────────────────────────────────────────────────────┘
    ```
 

@@ -1,14 +1,14 @@
 #!/bin/bash
-# Focus-Task Cleanup Script
-# Removes all files created by /focus-task:adapt
+# Focus-Task Teardown Script
+# Removes all files created by /focus-task:setup
 
 set -e
 
 DRY_RUN=false
 [[ "$1" == "--dry-run" ]] && DRY_RUN=true
 
-echo "Focus-Task Cleanup"
-echo "=================="
+echo "Focus-Task Teardown"
+echo "==================="
 $DRY_RUN && echo "[DRY-RUN MODE]"
 echo ""
 

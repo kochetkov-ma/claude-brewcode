@@ -139,7 +139,7 @@ grep -q "^| #" .claude/rules/best-practice.md && echo "✅ best-practice.md vali
 
 ## Path-Specific Rules
 
-When adapting for project (via `/focus-task-adapt`), update frontmatter:
+When adapting for project (via `/focus-task-setup`), update frontmatter:
 
 ```yaml
 paths:

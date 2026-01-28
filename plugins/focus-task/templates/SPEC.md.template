@@ -80,7 +80,7 @@
 | {AREA} | {AGENT} | {SUMMARY} |
 
 <!--
-Research Areas (TBD by /focus-task-adapt):
+Research Areas (TBD by /focus-task-setup):
 - Controllers/API → developer | sql_expert
 - Services/Domain → developer | Plan
 - Data/Repository → sql_expert | developer

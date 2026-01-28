@@ -54,7 +54,7 @@
    │ - .claude/tasks/templates/SPEC.md.template                  │
    │                                                             │
    │ Run template adaptation first:                              │
-   │ /focus-task:adapt                                           │
+   │ /focus-task:setup                                           │
    └─────────────────────────────────────────────────────────────┘
    ```
 
@@ -257,7 +257,7 @@ When context limit reached:
 
 ---
 
-## /focus-task-adapt Instructions
+## /focus-task-setup Instructions
 
 **ROLE:** Template Adapter | **OUTPUT:** TASK.md.template + SPEC.md.template
 

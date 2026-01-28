@@ -1,6 +1,6 @@
 ---
-name: adapt
-description: Analyzes project structure, tech stack, testing frameworks, and project-specific agents to generate an adapted TASK.md.template in .claude/tasks/templates/. Triggers on phrases like "adapt task template", "create project task template", "generate adapted task template", "customize task template for project".
+name: setup
+description: Analyzes project structure, tech stack, testing frameworks, and project-specific agents to generate an adapted TASK.md.template in .claude/tasks/templates/. Triggers on phrases like "setup focus-task", "focus-task setup", "initialize focus-task", "configure focus-task".
 user-invocable: true
 argument-hint: [universal-template-path]
 allowed-tools: Read, Write, Glob, Grep, Bash, Task
@@ -8,7 +8,7 @@ context: fork
 model: opus
 ---
 
-Adapt Templates — analyze project, create TASK.md.template
+Setup Focus-Task — analyze project, create TASK.md.template
 
 ## Overview
 
@@ -128,19 +128,33 @@ test -f ./.claude/CLAUDE.md && echo ".claude/CLAUDE.md exists" || echo "No .clau
 mkdir -p .claude/tasks/templates .claude/tasks/specs .claude/rules
 ```
 
-### Copy Templates
+### Copy/Update Templates
 
-**EXECUTE** using Bash tool — copy from plugin cache:
+**EXECUTE** using Bash tool — sync templates from plugin (always overwrites if changed):
 ```bash
 PLUGIN_TEMPLATES="$HOME/.claude/plugins/cache/claude-brewcode/focus-task/$(ls $HOME/.claude/plugins/cache/claude-brewcode/focus-task | sort -V | tail -1)/templates"
 
-cp "$PLUGIN_TEMPLATES/SPEC.md.template" .claude/tasks/templates/
-cp "$PLUGIN_TEMPLATES/KNOWLEDGE.jsonl.template" .claude/tasks/templates/
-cp "$PLUGIN_TEMPLATES/rules/avoid.md.template" .claude/rules/avoid.md
-cp "$PLUGIN_TEMPLATES/rules/best-practice.md.template" .claude/rules/best-practice.md
+sync_template() {
+  local src="$1" dst="$2"
+  if [ ! -f "$dst" ]; then
+    cp "$src" "$dst" && echo "✅ Created: $dst"
+  elif ! diff -q "$src" "$dst" >/dev/null 2>&1; then
+    cp "$src" "$dst" && echo "🔄 Updated: $dst"
+  else
+    echo "⏭️  Unchanged: $dst"
+  fi
+}
+
+sync_template "$PLUGIN_TEMPLATES/TASK.md.template" ".claude/tasks/templates/TASK.md.template"
+sync_template "$PLUGIN_TEMPLATES/SPEC.md.template" ".claude/tasks/templates/SPEC.md.template"
+sync_template "$PLUGIN_TEMPLATES/KNOWLEDGE.jsonl.template" ".claude/tasks/templates/KNOWLEDGE.jsonl.template"
+
+# Rules: create only if missing (never overwrite user rules)
+[ ! -f ".claude/rules/avoid.md" ] && cp "$PLUGIN_TEMPLATES/rules/avoid.md.template" .claude/rules/avoid.md && echo "✅ Created: .claude/rules/avoid.md"
+[ ! -f ".claude/rules/best-practice.md" ] && cp "$PLUGIN_TEMPLATES/rules/best-practice.md.template" .claude/rules/best-practice.md && echo "✅ Created: .claude/rules/best-practice.md"
 ```
 
-> **CRITICAL:** These files MUST exist after this step. Verify with `ls .claude/tasks/templates/`
+> **Note:** Templates synced from plugin. Rules created once (never overwritten). Review skill adapted by AI.
 
 Adapt frontmatter paths based on detected tech stack:
 
@@ -433,9 +447,9 @@ ls -la ~/.claude/skills/ | grep "focus-task-" || echo "❌ No symlinks found"
 ### Result
 
 After symlinks, skills available via autocomplete:
-- `/focus-task-adapt` (symlink) = `/focus-task:adapt` (plugin)
+- `/focus-task-setup` (symlink) = `/focus-task:setup` (plugin)
 - `/focus-task-create` (symlink) = `/focus-task:create` (plugin)
-- `/focus-task-clean` (symlink) = `/focus-task:clean` (plugin)
+- `/focus-task-teardown` (symlink) = `/focus-task:teardown` (plugin)
 - `/focus-task-doc` (symlink) = `/focus-task:doc` (plugin)
 - `/focus-task-rules` (symlink) = `/focus-task:rules` (plugin)
 - `/focus-task-start` (symlink) = `/focus-task:start` (plugin)
@@ -483,8 +497,8 @@ After symlinks, skills available via autocomplete:
 
 | Symlink | Target |
 |---------|--------|
-| `~/.claude/skills/focus-task-adapt` | `.../{VERSION}/skills/adapt/` |
-| `~/.claude/skills/focus-task-clean` | `.../{VERSION}/skills/clean/` |
+| `~/.claude/skills/focus-task-setup` | `.../{VERSION}/skills/setup/` |
+| `~/.claude/skills/focus-task-teardown` | `.../{VERSION}/skills/teardown/` |
 | `~/.claude/skills/focus-task-create` | `.../{VERSION}/skills/create/` |
 | `~/.claude/skills/focus-task-doc` | `.../{VERSION}/skills/doc/` |
 | `~/.claude/skills/focus-task-rules` | `.../{VERSION}/skills/rules/` |
@@ -509,7 +523,7 @@ After symlinks, skills available via autocomplete:
 
 ## Re-run Support
 
-> `/focus-task-adapt` can be run anytime to sync templates with project changes.
+> `/focus-task-setup` can be run anytime to sync templates with project changes.
 
 **Triggers for re-run:**
 - New agent added to `.claude/agents/`
