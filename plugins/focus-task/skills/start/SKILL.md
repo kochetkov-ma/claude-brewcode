@@ -98,19 +98,25 @@ Or:  /focus-task-start .claude/tasks/{TS}_{NAME}_TASK.md
    ```
    FOR each phase:
      1. Read phase requirements from TASK.md
-     2. Create report dirs: reports/{TS}_{NAME}/phase_{P}/iter_{N}_{type}/
-     3. Load relevant context files
-     4. Call agent via Task tool (developer/tester/reviewer)
-        - Hook automatically injects ## K knowledge
-     5. Agent executes, adds to KNOWLEDGE
-     6. Hook reminds to call ft-coordinator
-     7. Call ft-coordinator with:
-        - taskPath, phase, iteration, type
-        - agentResults (captured outputs)
-        - reportDir path
-     8. Coordinator writes reports, updates MANIFEST
-     9. Run verification phase - same pattern
-     10. Continue or iterate based on results
+     2. Load relevant context files (by ID from Context Index)
+     3. Call agent via Task tool (developer/tester/reviewer)
+        - PreToolUse hook auto-injects ## K knowledge into prompt
+
+        ⛔ MANDATORY POST-AGENT (both steps, in order):
+
+     4. WRITE REPORT — Save agent output + your supplements to:
+        mkdir -p reports/{TS}_{NAME}/phase_{P}/iter_{N}_{type}/
+        Write: reports/{TS}_{NAME}/phase_{P}/iter_{N}_{type}/{AGENT}_output.md
+        Include: agent's raw output + your observations. Do NOT alter agent's findings.
+
+     5. CALL COORDINATOR — Pass report path:
+        subagent_type: "focus-task:ft-coordinator"
+        prompt: "Phase {P}, iter {N}, type {exec|verify}. Task: {PATH}.
+                 Report: {REPORT_PATH}. Read report, extract knowledge, update status, update MANIFEST."
+        Coordinator will: read report → extract knowledge → update TASK.md + MANIFEST
+
+     6. Run verification phase — repeat steps 3-5 for each V-agent
+     7. Continue or iterate based on verification results
    ```
 
 5. **Context Management**
@@ -165,15 +171,27 @@ When context limit reached (auto-compact):
 
 ## Coordinator Integration
 
-After each agent completes, call ft-coordinator:
+⛔ After EVERY work agent completes, you MUST execute 2 steps IN ORDER:
 
+**Step 1 — WRITE REPORT** (you write directly):
 ```
-Use Task tool with:
-  subagent_type: "focus-task:ft-coordinator"
-  prompt: "Update phase N status, write agent output to reports, update MANIFEST"
+Create dir:  mkdir -p .claude/tasks/reports/{TS}_{NAME}/phase_{P}/iter_{N}_{type}/
+Write file:  .claude/tasks/reports/{TS}_{NAME}/phase_{P}/iter_{N}_{type}/{AGENT}_output.md
+Content: agent's actual output + your supplements/observations/aggregation.
+Do NOT alter or summarize agent's findings — supplement them.
 ```
 
-The PostToolUse hook will remind you if you forget.
+**Step 2 — CALL COORDINATOR** (via Task tool):
+```
+subagent_type: "focus-task:ft-coordinator"
+prompt: "Phase {P}, iteration {N}, type {exec|verify}. Task: {TASK_PATH}.
+         Report written at: {REPORT_PATH}.
+         Read report from disk, extract knowledge to KNOWLEDGE.jsonl,
+         update phase status in TASK.md, write summary.md, update MANIFEST.md."
+```
+
+Coordinator reads the report file and handles: knowledge extraction, status, summary, MANIFEST.
+The PostToolUse hook also reminds you — execute immediately, do NOT skip.
 
 ## Stop Behavior
 

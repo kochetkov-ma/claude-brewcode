@@ -54,19 +54,25 @@ async function main() {
       return;
     }
 
-    // Return system message reminding to call coordinator
+    // Return system message with mandatory 2-step post-agent protocol
     const agentName = String(subagentType || '').toUpperCase();
     output({
-      systemMessage: `<ft-validation>
-[${agentName} COMPLETED]
-NEXT: Call ft-coordinator agent to:
-1. Update phase status in TASK.md
-2. Write agent output to reports/
-3. Update MANIFEST.md
-4. Add entries to KNOWLEDGE.jsonl
+      systemMessage: `<ft-mandatory>
+⛔ [${agentName} COMPLETED — 2 MANDATORY STEPS BEFORE ANY OTHER ACTION]
 
-Use Task tool with subagent_type: "focus-task:ft-coordinator"
-</ft-validation>`
+STEP 1 — WRITE REPORT (you do this directly):
+Save ${agentName}'s output + your observations to report file:
+  mkdir -p reports/.../phase_P/iter_N_type/
+  Write: reports/.../phase_P/iter_N_type/${agentName.toLowerCase()}_output.md
+Content: agent's actual output + your supplements/aggregation. Do NOT alter agent's findings.
+
+STEP 2 — CALL COORDINATOR (reads report, extracts knowledge, updates status):
+  subagent_type: "focus-task:ft-coordinator"
+  prompt: "Phase {P}, iter {N}, type {exec|verify}. Task: {PATH}.
+           Report written: {REPORT_PATH}. Read report, extract knowledge, update status + MANIFEST."
+
+⛔ DO NOT call next agent or proceed to next phase until BOTH steps complete.
+</ft-mandatory>`
     });
   } catch (error) {
     // On error, pass through without modification

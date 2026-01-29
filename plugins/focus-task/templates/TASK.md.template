@@ -27,6 +27,31 @@ status: pending
 
 **Statuses:** `pending` → `in progress` → `handoff` → `finished`
 
+## KNOWLEDGE Protocol
+
+> Coordinator extracts knowledge from agent reports (Manager writes reports first).
+
+**Schema (one JSON per line):**
+```jsonl
+{"ts":"2026-01-28T14:00:00","cat":"db","t":"❌","txt":"Do not use SELECT * in production queries","src":"developer"}
+```
+
+| Field | Values |
+|-------|--------|
+| `ts` | ISO8601 timestamp |
+| `cat` | `docker` `db` `api` `test` `config` `security` `performance` `arch` `code` |
+| `t` | `❌` avoid/pitfall, `✅` best practice, `ℹ️` info/fact |
+| `txt` | One specific, actionable sentence — unique discovery |
+| `src` | Agent name (lowercase) |
+
+**GOOD entries (granular, unique discoveries):**
+- `{"t":"❌","txt":"DBRider @DataSet does not support JSONB columns — use @Sql instead","src":"tester"}`
+- `{"t":"✅","txt":"Use @Sql annotation for test data with JSONB columns","src":"developer"}`
+
+**BAD entries (NEVER write these):**
+- `{"type":"✅","phase":1,"content":"Phase 1 complete: 18 loads consolidated"}` — wrong schema + phase summary
+- `{"t":"ℹ️","txt":"Task completed successfully","src":"manager"}` — trivial, not a discovery
+
 ## Completion Criteria
 
 - [ ] {CRITERION_1}
@@ -91,6 +116,12 @@ status: pending
 > ```
 >
 > **CRITICAL:** NEVER mark phase complete after fix without re-verification!
+>
+> **MANDATORY POST-AGENT** (after EVERY work agent completes):
+> ⛔ Complete BOTH steps IN ORDER before calling next agent:
+> 1. WRITE REPORT: Save agent output (+ your supplements/aggregation) → `reports/.../phase_P/iter_N_type/{AGENT}_output.md`
+> 2. CALL COORDINATOR: `ft-coordinator` reads report → extracts knowledge → updates status + MANIFEST
+> DO NOT proceed to next agent or phase until BOTH steps complete.
 >
 > **Examples:** Repository impl → Repository tests → DDL → Pattern analysis → Controller → Integration tests
 
@@ -171,7 +202,7 @@ Phase NV fails 3x → ESCALATE
 
 ## Manager Actions
 
-After EACH phase: `ft-coordinator` → update status → log → verify → proceed
+⛔ After EACH agent: WRITE REPORT → CALL COORDINATOR. See Phases rules.
 
 ---
 

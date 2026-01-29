@@ -223,9 +223,10 @@ Run: /focus-task-start .claude/tasks/{TIMESTAMP}_{NAME}_TASK.md
      1. Read phase requirements
      2. Load relevant context files
      3. Call agent via Task tool
-     4. Agent executes, adds to KNOWLEDGE
-     5. Call ft-coordinator → update status
-     6. Run verification phase (NV)
+        ⛔ MANDATORY POST-AGENT (both steps, in order):
+     4. WRITE REPORT: agent output + supplements → reports/.../AGENT_output.md
+     5. CALL ft-coordinator: reads report → extracts knowledge → updates status + MANIFEST
+     6. Run verification phase (NV) — repeat 3-5 for V-agents
      7. Continue or iterate
    ```
 
