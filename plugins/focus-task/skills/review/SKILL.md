@@ -2,13 +2,13 @@
 name: review
 description: Multi-agent code review with quorum consensus. Triggers: "review code", "parallel review", "quorum review", "/focus-task-review".
 user-invocable: true
-argument-hint: "<prompt-or-file-path> [--quorum G-N-M]"
+argument-hint: "<prompt-or-file-path> [-q|--quorum [G-]N-M]"
 allowed-tools: Read, Glob, Grep, Task, Bash, Write
 context: fork
 model: opus
 ---
 
-Code Review — "prompt" or path [--quorum G-N-M]
+Code Review — "prompt" or path [-q|--quorum [G-]N-M]
 
 **ROLE:** Code Review Coordinator | **OUTPUT:** Prioritized findings report
 
@@ -18,13 +18,13 @@ Code Review — "prompt" or path [--quorum G-N-M]
 |-------|--------|
 | Text prompt | Use as review focus description |
 | File path (`.md`, `.txt`) | Read file as review instructions |
-| `--quorum G-N-M` | G groups, N agents per group, M = quorum threshold |
-| `--quorum N-M` | Auto groups (2-5), N agents per group, M = quorum |
-| Default | `--quorum auto-3-2` (auto groups, 3 agents, quorum 2) |
+| `-q G-N-M` / `--quorum G-N-M` | G groups, N agents per group, M = quorum threshold |
+| `-q N-M` / `--quorum N-M` | Auto groups (2-5), N agents per group, M = quorum |
+| Default | `-q 3-2` (auto groups, 3 agents, quorum 2) |
 
 **Parse `$ARGUMENTS`:**
 ```
-1. Extract --quorum if present:
+1. Extract -q/--quorum if present:
    - 3 values (G-N-M) → G groups, N agents, M threshold
    - 2 values (N-M) → Auto groups, N agents, M threshold
 2. Remaining text → REVIEW_PROMPT or file path
@@ -85,7 +85,7 @@ Task(subagent_type="Explore", model="haiku", prompt="
 
 ## Phase 2: Group Formation
 
-**Goal:** Define review groups based on task, codebase, and `--quorum` setting
+**Goal:** Define review groups based on task, codebase, and `-q/--quorum` setting
 
 ### Group Count Rules
 
@@ -100,7 +100,7 @@ Task(subagent_type="Explore", model="haiku", prompt="
 |----------|-------|-------|---------------|-----------|
 | 1 | main-code | Logic, architecture, security | `reviewer` | Always enabled |
 | 2 | tests | Coverage, assertions, quality | `tester` | `**/test/**`, `*Test.*` |
-| 3 | db-layer | Queries, transactions, N+1 | `sql_expert` | `**/repositories/**`, `*.sql` |
+| 3 | db-layer | Queries, transactions, N+1 | `reviewer` (DB-focused) | `**/repositories/**`, `*.sql` |
 | 4 | security | Auth, injection, OWASP | `reviewer` | `**/auth/**`, `**/security/**` |
 | 5 | config | Infrastructure, secrets | `reviewer` | `docker-*`, `*.yml`, `*.properties` |
 
@@ -119,7 +119,7 @@ Task(subagent_type="Explore", model="haiku", prompt="
 ### Explicit Group Count (G = 2..5)
 
 ```
-1. If G specified explicitly (e.g., --quorum 4-3-2):
+1. If G specified explicitly (e.g., -q 4-3-2):
    - Select top G groups by detection priority
    - main-code always included
    - Fill remaining with detected groups
@@ -136,7 +136,7 @@ Task(subagent_type="Explore", model="haiku", prompt="
 2. Fallback to core agents:
    - Code quality → reviewer
    - Test quality → tester
-   - Database → sql_expert
+   - Database → reviewer (with DB-focused prompt, see references/agent-prompt.md)
 ```
 
 ### Detection Rules
@@ -159,23 +159,23 @@ Task(subagent_type="Explore", model="haiku", prompt="
 ```
 ONE message with (G × N) Task calls:
 
-Example: --quorum 3-3-2 (3 groups, 3 agents, quorum 2)
+Example: -q 3-3-2 (3 groups, 3 agents, quorum 2)
   Group 1 (main-code): reviewer #1, reviewer #2, reviewer #3
   Group 2 (tests): tester #1, tester #2, tester #3
-  Group 3 (db-layer): sql_expert #1, sql_expert #2, sql_expert #3
+  Group 3 (db-layer): reviewer #1, reviewer #2, reviewer #3 (DB-focused prompt)
   Total: 9 parallel agents
 
-Example: --quorum 4-2 (auto groups, 4 agents, quorum 2)
+Example: -q 4-2 (auto groups, 4 agents, quorum 2)
   Detected: 3 groups (main-code, tests, security)
   Group 1: reviewer × 4
   Group 2: tester × 4
   Group 3: reviewer × 4 (security focus)
   Total: 12 parallel agents
 
-Example: --quorum 5-5-3 (5 groups, 5 agents, quorum 3)
+Example: -q 5-5-3 (5 groups, 5 agents, quorum 3)
   Group 1: reviewer × 5
   Group 2: tester × 5
-  Group 3: sql_expert × 5
+  Group 3: reviewer × 5 (DB-focused prompt)
   Group 4: reviewer × 5 (security)
   Group 5: reviewer × 5 (config)
   Total: 25 parallel agents (max recommended)
@@ -183,56 +183,7 @@ Example: --quorum 5-5-3 (5 groups, 5 agents, quorum 3)
 
 ### Agent Prompt Template
 
-```markdown
-Task(subagent_type="{AGENT_TYPE}", model="opus", prompt="
-  ## Code Review Task
-
-  **Group:** {GROUP_NAME}
-  **Focus:** {REVIEW_PROMPT}
-  **Instance:** {INSTANCE_NUMBER} of {TOTAL_INSTANCES}
-
-  **Files to review:**
-  {FILE_LIST}
-
-  **Project rules (from CLAUDE.md):**
-  {RELEVANT_RULES}
-
-  **Output format (JSON array):**
-  ```json
-  [{
-    \"file\": \"path/to/file.java\",
-    \"lineStart\": 42,
-    \"lineEnd\": 45,
-    \"category\": \"null-safety|security|performance|logic|style|test-quality\",
-    \"severity\": \"blocker|critical|major|minor\",
-    \"title\": \"Short summary (max 80 chars)\",
-    \"description\": \"Detailed explanation of the issue\",
-    \"suggestion\": \"Recommended fix or approach\",
-    \"confidence\": 0.85
-  }]
-  ```
-
-  **Categories:**
-  - null-safety: Potential NPE, missing null checks
-  - security: Auth bypass, injection, secrets, OWASP top 10
-  - performance: N+1 queries, memory leaks, inefficient algorithms
-  - logic: Business logic errors, race conditions, edge cases
-  - style: Code style violations, naming, patterns
-  - test-quality: Missing tests, weak assertions, flaky tests
-
-  **Severity guide:**
-  - blocker: Production outage, security breach, data loss
-  - critical: Significant bug, performance degradation
-  - major: Important issue, maintainability concern
-  - minor: Style, minor improvement
-
-  **Rules:**
-  - Report ONLY issues, not positives
-  - Include confidence score (0.0-1.0)
-  - Provide actionable suggestions
-  - Reference specific lines
-")
-```
+See `references/agent-prompt.md` for full template with categories, severity guide, and DB-focused variant.
 
 ---
 
@@ -373,102 +324,9 @@ Naming:
 
 ### Report Template
 
-```markdown
-# Code Review Report
+See `references/report-template.md` for full report format including summary, priority sections, statistics, and final response format.
 
-> **Scope:** {REVIEW_PROMPT}
-> **Quorum:** {G}-{N}-{M} ({G} groups × {N} agents, threshold {M})
-> **Groups:** {GROUP_NAMES}
-> **Total agents:** {G×N} = {TOTAL_AGENTS}
-> **Generated:** {TIMESTAMP}
-
-## Summary
-
-| Severity | P1 (Confirmed) | P2 (Quorum) | P3 (Exception) | Total |
-|----------|----------------|-------------|----------------|-------|
-| Blocker | {N} | {N} | {N} | {N} |
-| Critical | {N} | {N} | {N} | {N} |
-| Major | {N} | {N} | {N} | {N} |
-| Minor | {N} | {N} | {N} | {N} |
-| **Total** | **{N}** | **{N}** | **{N}** | **{N}** |
-
----
-
-## Priority 1: Confirmed (Quorum + DoubleCheck)
-
-| # | Severity | File:Line | Category | Issue | Suggestion | Consensus |
-|---|----------|-----------|----------|-------|------------|-----------|
-| 1 | Critical | `path:42-45` | security | Short description | Fix approach | 3/3 agents |
-
-### P1-1: {Title}
-
-**File:** `{path}:{lineStart}-{lineEnd}`
-**Severity:** {severity} | **Category:** {category}
-**Consensus:** {agent_count}/{total} agents | **Confidence:** {avg_confidence}
-
-**Description:**
-{detailed_description}
-
-**Suggestion:**
-{suggestion}
-
-**Reported by:** {agent_list}
-
----
-
-## Priority 2: Quorum Only (NOT DoubleCheck confirmed)
-
-| # | Severity | File:Line | Category | Issue | Suggestion | Consensus |
-|---|----------|-----------|----------|-------|------------|-----------|
-| ... | ... | ... | ... | ... | ... | ... |
-
----
-
-## Priority 3: Critical Without Quorum (Exceptions)
-
-> These blocker/critical findings did not reach quorum but warrant attention.
-
-| # | Severity | File:Line | Category | Issue | Agent |
-|---|----------|-----------|----------|-------|-------|
-| ... | ... | ... | ... | ... | ... |
-
----
-
-## Statistics
-
-| Metric | Value |
-|--------|-------|
-| Files reviewed | {COUNT} |
-| Total findings (pre-quorum) | {COUNT} |
-| Quorum passed | {COUNT} ({PERCENT}%) |
-| DoubleCheck confirmed | {COUNT} ({PERCENT}%) |
-| Discarded (no consensus) | {COUNT} |
-
-## Agent Performance
-
-| Agent | Findings | Confirmed | Rate |
-|-------|----------|-----------|------|
-| reviewer #1 | {N} | {N} | {PERCENT}% |
-| reviewer #2 | {N} | {N} | {PERCENT}% |
-| ... | ... | ... | ... |
-
----
-
-*Generated by focus-task-review | Quorum: {G}-{N}-{M}*
-```
-
-### Final Response
-
-```
-Review complete. Found {TOTAL} issues ({BLOCKERS} blocker, {CRITICAL} critical, {MAJOR} major).
-
-Priority breakdown:
-- P1 (Confirmed): {COUNT} issues
-- P2 (Quorum only): {COUNT} issues
-- P3 (Exceptions): {COUNT} issues
-
-Full report: .claude/tasks/reviews/{TIMESTAMP}_{NAME}_report.md
-```
+Output: `.claude/tasks/reviews/{TIMESTAMP}_{NAME}_report.md`
 
 ---
 
@@ -479,14 +337,14 @@ Full report: .claude/tasks/reviews/{TIMESTAMP}_{NAME}_report.md
 | No files found for block | Skip block, warn in report |
 | Agent timeout | Retry once, then mark as unavailable |
 | No findings | Report "No issues found" with confidence |
-| Invalid quorum args | Error: "Invalid --quorum. Format: G-N-M or N-M where G∈[2..5], M≤N, N≥2, M≥2" |
+| Invalid quorum args | Error: "Invalid -q/--quorum. Format: G-N-M or N-M where G∈[2..5], M≤N, N≥2, M≥2" |
 | No CLAUDE.md | Use default rules only |
 
 ## Configuration
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `--quorum` | `auto-3-2` | G groups (2-5 or auto), N agents, M threshold |
+| `-q` / `--quorum` | `3-2` | `N-M` (agents-threshold) or `G-N-M` (groups-agents-threshold) |
 | Report dir | `.claude/tasks/reviews/` | Output directory |
 | Max parallel | 25 | Maximum agents in one message (G×N) |
 | Line tolerance | ±5 | Lines overlap for matching |
@@ -501,3 +359,40 @@ Full report: .claude/tasks/reviews/{TIMESTAMP}_{NAME}_report.md
 | `4-2-2` | 4 | 2 | 2 | 8 |
 | `5-5-3` | 5 | 5 | 3 | 25 |
 | `2-4-3` | 2 | 4 | 3 | 8 |
+
+---
+
+## Output Format
+
+```markdown
+# Code Review Complete
+
+## Detection
+
+| Field | Value |
+|-------|-------|
+| Arguments | `{received args}` |
+| Prompt | `{review focus or file path}` |
+| Quorum | `{G-N-M parsed values}` |
+
+## Configuration
+
+| Setting | Value |
+|---------|-------|
+| Groups | `{G}` |
+| Agents per group | `{N}` |
+| Quorum threshold | `{M}` |
+| Total agents | `{G × N}` |
+
+## Results
+
+| Priority | Count | Description |
+|----------|-------|-------------|
+| 1 | N | Quorum + DoubleCheck confirmed |
+| 2 | N | Quorum only |
+| 3 | N | Blocker/Critical exceptions |
+
+## Report
+
+Path: `.claude/tasks/reviews/{TIMESTAMP}_{NAME}_report.md`
+```

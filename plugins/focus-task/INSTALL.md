@@ -1,48 +1,48 @@
-# Focus Task Plugin - Installation Guide
+# Focus Task Plugin - Руководство по установке
 
-## Quick Install (Recommended)
+## Быстрая установка
 
 ```bash
 claude plugin marketplace add /path/to/claude-brewcode/plugins
 claude plugin install focus-task@claude-brewcode
 ```
 
-## Quick Reference
+## Краткая справка
 
-| Method | Command |
-|--------|---------|
-| **Install** | `claude plugin install focus-task@claude-brewcode` |
-| **Uninstall** | `claude plugin uninstall focus-task` |
-| **Update** | `claude plugin update focus-task` |
-| **Session-only** | `claude --plugin-dir ./plugins/focus-task` |
-| Add marketplace | `claude plugin marketplace add <repo-path>` |
-| List plugins | `claude plugin list` |
+| Действие | Команда |
+|----------|---------|
+| **Установить** | `claude plugin install focus-task@claude-brewcode` |
+| **Удалить** | `claude plugin uninstall focus-task` |
+| **Обновить** | `claude plugin update focus-task` |
+| **Только сессия** | `claude --plugin-dir ./plugins/focus-task` |
+| Добавить маркетплейс | `claude plugin marketplace add <repo-path>` |
+| Список плагинов | `claude plugin list` |
 
 ---
 
-## 1. Local Development (No Install)
+## 1. Локальная разработка (без установки)
 
-Run plugin directly from source without installation.
+Запуск плагина напрямую из исходников.
 
 ```bash
-# From project root
+# Из корня проекта
 claude --plugin-dir ./plugins/focus-task
 
-# Or with absolute path
+# Абсолютный путь
 claude --plugin-dir /path/to/claude-brewcode/plugins/focus-task
 
-# Multiple plugins
+# Несколько плагинов
 claude --plugin-dir ./plugins/focus-task --plugin-dir ./plugins/other
 ```
 
-**Pros:** Instant changes, no rebuild needed for skills/agents
-**Cons:** Must specify path every time
+**Плюсы:** изменения применяются мгновенно, не нужна пересборка для skills/agents
+**Минусы:** путь нужно указывать каждый раз
 
 ---
 
-## 2. Build Runtime
+## 2. Сборка Runtime
 
-Required before any installation method.
+Обязательный шаг перед любой установкой.
 
 ```bash
 cd plugins/focus-task/runtime
@@ -50,34 +50,34 @@ npm install
 npm run build
 ```
 
-**Verify build:**
+**Проверка:**
 ```bash
 ls dist/
-# Should show: index.js, config.js, context-monitor.js, etc.
+# Должны быть: index.js, config.js, context-monitor.js, etc.
 ```
 
 ---
 
-## 3. Local Marketplace Installation (Recommended)
+## 3. Установка через локальный маркетплейс
 
-Claude Code requires plugins to be installed from a marketplace. Create a local marketplace for development.
+Claude Code требует установки плагинов через маркетплейс. Создайте локальный маркетплейс для разработки.
 
-### 3.1 Create Marketplace Manifest
+### 3.1 Манифест маркетплейса
 
-In your repository root, create `.claude-plugin/marketplace.json`:
+В корне репозитория создайте `.claude-plugin/marketplace.json`:
 
 ```json
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "my-local-plugins",
-  "description": "Local development plugins",
+  "description": "Локальные плагины для разработки",
   "owner": {
     "name": "Your Name"
   },
   "plugins": [
     {
       "name": "focus-task",
-      "description": "Infinite task execution with automatic handoff",
+      "description": "Бесконечное выполнение задач с автоматической передачей",
       "author": { "name": "Your Name" },
       "source": "./plugins/focus-task",
       "category": "productivity"
@@ -86,248 +86,62 @@ In your repository root, create `.claude-plugin/marketplace.json`:
 }
 ```
 
-### 3.2 Add Marketplace
+### 3.2 Добавление маркетплейса
 
 ```bash
-# Add local marketplace (absolute path)
+# Добавить локальный маркетплейс (абсолютный путь)
 claude plugin marketplace add /path/to/your/repo
 
-# Verify
+# Проверить
 claude plugin marketplace list
 ```
 
-### 3.3 Install Plugin
+### 3.3 Установка плагина
 
 ```bash
-# Install from your marketplace
+# Установить из маркетплейса
 claude plugin install focus-task@my-local-plugins
 
-# Verify
+# Проверить
 claude plugin list
 ```
 
-### 3.4 Update After Changes
+### 3.4 Обновление после изменений
 
 ```bash
-# Update marketplace index
+# Обновить индекс маркетплейса
 claude plugin marketplace update my-local-plugins
 
-# Update plugin
+# Обновить плагин
 claude plugin update focus-task@my-local-plugins
 ```
 
-### 3.5 Uninstall
+### 3.5 Удаление
 
 ```bash
 claude plugin uninstall focus-task@my-local-plugins
 
-# Remove marketplace
+# Удалить маркетплейс
 claude plugin marketplace remove my-local-plugins
 ```
 
 ---
 
-## 4. NPM Publishing
+## 4. Встраивание в проект
 
-Publish to NPM registry for public distribution.
+Плагин внутри конкретного проекта.
 
-### 4.1 Prepare package.json
-
-```bash
-cd plugins/focus-task
-```
-
-Create/update `package.json`:
-```json
-{
-  "name": "claude-plugin-focus-task",
-  "version": "1.0.0",
-  "description": "Infinite task execution with automatic handoff for Claude Code",
-  "keywords": ["claude-code", "claude-plugin", "task-management", "agents"],
-  "author": "Maximus Kochetkov",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/user/claude-brewcode.git",
-    "directory": "plugins/focus-task"
-  },
-  "files": [
-    ".claude-plugin/",
-    "skills/",
-    "agents/",
-    "hooks/",
-    "templates/",
-    "runtime/dist/",
-    "runtime/package.json",
-    "README.md"
-  ],
-  "claude-plugin": {
-    "name": "focus-task",
-    "version": "1.0.0"
-  }
-}
-```
-
-### 4.2 Publish
-
-```bash
-# Login to NPM
-npm login
-
-# Publish (public)
-npm publish --access public
-
-# Publish beta
-npm publish --tag beta --access public
-```
-
-### 4.3 Install from NPM
-
-```bash
-claude plugins install claude-plugin-focus-task
-
-# Specific version
-claude plugins install claude-plugin-focus-task@1.0.0
-
-# Beta
-claude plugins install claude-plugin-focus-task@beta
-```
-
----
-
-## 5. GitHub Publishing
-
-Publish directly from GitHub repository.
-
-### 5.1 Repository Structure
-
-```
-github.com/user/claude-brewcode/
-├── .claude-plugin/
-│   └── marketplace.json    # Registry manifest
-└── plugins/
-    └── focus-task/
-        └── .claude-plugin/
-            └── plugin.json  # Plugin manifest
-```
-
-### 5.2 marketplace.json (repo root)
-
-```json
-{
-  "name": "brewcode",
-  "owner": { "name": "Maximus Kochetkov" },
-  "plugins": [
-    {
-      "name": "focus-task",
-      "source": "./plugins/focus-task",
-      "description": "Infinite task execution with automatic handoff"
-    }
-  ]
-}
-```
-
-### 5.3 Install from GitHub
-
-```bash
-# Install from default branch
-claude plugins install github:user/claude-brewcode/plugins/focus-task
-
-# Install from specific branch
-claude plugins install github:user/claude-brewcode/plugins/focus-task#main
-
-# Install from tag/release
-claude plugins install github:user/claude-brewcode/plugins/focus-task#v1.0.0
-```
-
----
-
-## 6. Official Anthropic Marketplace
-
-Submit plugin to official Claude Code marketplace.
-
-### 6.1 Requirements
-
-| Requirement | Details |
-|-------------|---------|
-| Documentation | README.md with usage examples |
-| License | MIT, Apache-2.0, or similar |
-| Security | No malicious code, sandboxed operations |
-| Quality | Tested, working skills/agents |
-| Manifest | Valid plugin.json with all fields |
-
-### 6.2 plugin.json (complete)
-
-```json
-{
-  "name": "focus-task",
-  "version": "1.0.0",
-  "description": "Infinite task execution with automatic handoff",
-  "author": {
-    "name": "Maximus Kochetkov",
-    "email": "email@example.com",
-    "url": "https://github.com/user"
-  },
-  "repository": "https://github.com/user/claude-brewcode.git",
-  "license": "MIT",
-  "keywords": ["task", "automation", "agents", "handoff"],
-  "skills": "./skills/",
-  "hooks": "./hooks/hooks.json"
-}
-```
-
-**Note:** `repository` must be a string (not an object). Component paths (`skills`, `agents`, `hooks`) must start with `./`.
-
-### 6.3 Submission Process
-
-1. **Fork official registry** (when available):
-   ```bash
-   git clone https://github.com/anthropics/claude-code-plugins
-   ```
-
-2. **Add plugin entry** to registry:
-   ```json
-   {
-     "name": "focus-task",
-     "source": "github:user/claude-brewcode/plugins/focus-task",
-     "version": "1.0.0",
-     "verified": false
-   }
-   ```
-
-3. **Submit PR** with:
-   - Plugin entry in registry
-   - Link to source repository
-   - Description of functionality
-
-4. **Review process**:
-   - Automated security scan
-   - Manual code review
-   - Functionality testing
-
-5. **After approval**:
-   ```bash
-   # Users can install via
-   claude plugins install focus-task
-   ```
-
----
-
-## 7. Project-Local Plugin
-
-Include plugin within a specific project.
-
-### 7.1 Structure
+### 4.1 Структура
 
 ```
 my-project/
 ├── .claude/
 │   └── plugins/
-│       └── focus-task/    # Plugin here
+│       └── focus-task/    # Плагин здесь
 └── src/
 ```
 
-### 7.2 settings.json
+### 4.2 settings.json
 
 ```json
 {
@@ -337,114 +151,34 @@ my-project/
 }
 ```
 
-### 7.3 Auto-load on project open
+### 4.3 Автозагрузка
 
-Plugin loads automatically when opening project with Claude Code.
-
----
-
-## 8. SDK Integration
-
-Use plugin programmatically via Claude Agent SDK.
-
-```typescript
-import { query } from '@anthropic-ai/claude-agent-sdk';
-
-const response = query({
-  prompt: "Create a task for implementing auth",
-  options: {
-    plugins: [
-      { type: 'local', path: './plugins/focus-task' }
-    ]
-  }
-});
-```
+Плагин загружается автоматически при открытии проекта в Claude Code.
 
 ---
 
-## 9. Docker/CI Environment
+## Устранение проблем
 
-### 9.1 Dockerfile
+| Проблема | Решение |
+|----------|---------|
+| Плагин не найден | Проверьте путь и наличие `.claude-plugin/plugin.json` |
+| Skills не отображаются | Выполните `/help`, проверьте `user-invocable: true` |
+| Ошибка runtime | Пересоберите: `cd runtime && npm run build` |
+| Отказ в доступе | Проверьте права: `chmod -R 755 plugins/` |
+| SDK не найден | Выполните `npm install` в директории runtime |
+| Invalid input | Выполните `claude plugin validate <path>` |
 
-```dockerfile
-FROM node:20-slim
-
-# Install Claude Code
-RUN npm install -g @anthropic-ai/claude-code
-
-# Copy plugin
-COPY plugins/focus-task /app/plugins/focus-task
-
-# Build runtime
-WORKDIR /app/plugins/focus-task/runtime
-RUN npm install && npm run build
-
-# Set plugin path
-ENV CLAUDE_PLUGIN_PATH=/app/plugins/focus-task
-
-WORKDIR /workspace
-ENTRYPOINT ["claude", "--plugin-dir", "/app/plugins/focus-task"]
-```
-
-### 9.2 GitHub Actions
-
-```yaml
-- name: Setup Claude Code with Plugin
-  run: |
-    npm install -g @anthropic-ai/claude-code
-    cd plugins/focus-task/runtime && npm install && npm run build
-
-- name: Run with Plugin
-  run: claude --plugin-dir ./plugins/focus-task -p "Analyze codebase"
-```
-
----
-
-## Troubleshooting
-
-| Issue | Solution |
-|-------|----------|
-| Plugin not found | Check path, ensure `.claude-plugin/plugin.json` exists |
-| Skills not showing | Run `/help`, check skill `user-invocable: true` |
-| Runtime error | Rebuild: `cd runtime && npm run build` |
-| Permission denied | Check file permissions, run `chmod -R 755 plugins/` |
-| SDK not found | Run `npm install` in runtime directory |
-| Invalid input errors | Run `claude plugin validate <path>` to check manifest |
-
-**Validate plugin before install:**
+**Валидация перед установкой:**
 ```bash
 claude plugin validate ./plugins/focus-task
 ```
 
-**Debug mode:**
+**Режим отладки:**
 ```bash
 CLAUDE_DEBUG=1 claude --plugin-dir ./plugins/focus-task
 ```
 
-**Common plugin.json errors:**
-- `repository: Invalid input` → must be string, not object
-- `agents: Invalid input` → agents field not supported in plugins (use skills instead)
-- `Unrecognized key` → remove unsupported fields like `claude-code`
-
----
-
-## Version Compatibility
-
-| Claude Code | Plugin | Notes |
-|-------------|--------|-------|
-| 1.0.x | 1.0.x | Full support |
-| 0.x | - | Not supported |
-
----
-
-## File Checklist
-
-Before distribution, verify:
-
-- [ ] `.claude-plugin/plugin.json` - valid JSON
-- [ ] `README.md` - usage documentation
-- [ ] `skills/*/SKILL.md` - all skills have frontmatter
-- [ ] `agents/*/agent.md` - all agents have frontmatter
-- [ ] `runtime/dist/` - built TypeScript
-- [ ] `hooks/hooks.json` - valid JSON (if using hooks)
-- [ ] `templates/` - all templates present
+**Частые ошибки plugin.json:**
+- `repository: Invalid input` — должна быть строка, не объект
+- `agents: Invalid input` — поле agents не поддерживается (используйте skills)
+- `Unrecognized key` — удалите неподдерживаемые поля

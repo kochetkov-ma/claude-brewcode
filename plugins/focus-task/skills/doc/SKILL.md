@@ -39,7 +39,7 @@ Documentation — create|update|sync [path]
 
 ### Input Parsing
 
-**Semantic parsing** - понимание по смыслу, не по ключевым словам.
+**Semantic parsing** - understand by meaning, not by keywords.
 
 ```
 $ARGUMENTS parsing (by intent):
@@ -54,15 +54,15 @@ $ARGUMENTS parsing (by intent):
 
 **ANALYZE mode detection:**
 
-Любая формулировка с двумя путями (источник → цель):
+Any formulation with two paths (source → target):
 
-| Пример | Source | Target |
-|--------|--------|--------|
+| Example | Source | Target |
+|---------|--------|--------|
 | `analyze src/api update docs/` | src/api | docs/ |
 | `look at services and update .claude/` | services | .claude/ |
-| `посмотри контроллеры, обнови доки` | **/controller*/** | docs/ |
+| `check controllers, update docs` | **/controller*/** | docs/ |
 | `scan the database layer, write API docs` | **/repo**/**, **/entity/** | docs/API.md |
-| `изучи src/auth напиши в docs/auth/` | src/auth | docs/auth/ |
+| `study src/auth write to docs/auth/` | src/auth | docs/auth/ |
 | `check config files, update CLAUDE.md` | *.yml, *.yaml, docker-* | CLAUDE.md |
 
 **Path resolution:**
@@ -72,10 +72,10 @@ $ARGUMENTS parsing (by intent):
 | Exact path (`src/api/`) | Use as-is |
 | Directory name (`services`) | Glob: `**/services/**` |
 | Concept (`database layer`) | Glob: `**/repo*/**`, `**/entity/**`, `*.sql` |
-| Concept (`контроллеры`) | Glob: `**/controller*/**`, `**/api/**` |
+| Concept (`controllers`) | Glob: `**/controller*/**`, `**/api/**` |
 | File type (`config files`) | Glob: `*.yml`, `*.yaml`, `docker-*` |
 
-> **Note:** При неоднозначности - уточнить у пользователя через AskUserQuestion.
+> **Note:** If ambiguous - ask user via AskUserQuestion.
 
 ---
 
@@ -97,14 +97,19 @@ Scan project and divide into 5-10 logical blocks:
 | Documentation | `*.md`, `docs/**` | Explore |
 
 **Tech stack detection:**
+
+**EXECUTE** using Bash tool — detect project markers:
+```bash
+ls pom.xml build.gradle* package.json requirements.txt pyproject.toml Cargo.toml go.mod 2>/dev/null && echo "✅ done" || echo "❌ FAILED"
 ```
-Glob for markers → adjust patterns:
+> **STOP if ❌** — ask user for tech stack.
+
+Adjust patterns based on markers:
 - pom.xml / build.gradle → Java/Kotlin patterns
 - package.json → Node/TS patterns
 - requirements.txt / pyproject.toml → Python patterns
 - Cargo.toml → Rust patterns
 - go.mod → Go patterns
-```
 
 ### Phase 2: Parallel Study
 
@@ -112,11 +117,11 @@ Glob for markers → adjust patterns:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  Task(agent="Explore", model="haiku", prompt=block_1)       │
-│  Task(agent="Explore", model="haiku", prompt=block_2)       │
-│  Task(agent="Explore", model="haiku", prompt=block_3)       │
+│  Task(subagent_type="Explore", model="haiku", prompt=block_1)│
+│  Task(subagent_type="Explore", model="haiku", prompt=block_2)│
+│  Task(subagent_type="Explore", model="haiku", prompt=block_3)│
 │  ...                                                         │
-│  Task(agent="Explore", model="haiku", prompt=block_N)       │
+│  Task(subagent_type="Explore", model="haiku", prompt=block_N)│
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -145,10 +150,12 @@ Output: structured findings (NO large code blocks - use file:line refs)
 ### Phase 3: Documentation Discovery
 
 **3.1 Find existing docs:**
+
+**EXECUTE** using Glob tool — find markdown files:
+```bash
+find . -name "*.md" -type f | grep -vE 'node_modules|vendor|\.git|dist|build' && echo "✅ done" || echo "❌ FAILED"
 ```
-Glob: **/*.md
-Filter: exclude node_modules, vendor, .git, dist, build
-```
+> **STOP if ❌** — verify project contains markdown files.
 
 **3.2 Identify missing docs:**
 
@@ -177,9 +184,9 @@ Filter: exclude node_modules, vendor, .git, dist, build
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  Task(agent="developer", prompt=doc_1)                      │
-│  Task(agent="developer", prompt=doc_2)                      │
-│  Task(agent="developer", prompt=doc_3)                      │
+│  Task(subagent_type="developer", prompt=doc_1)              │
+│  Task(subagent_type="developer", prompt=doc_2)              │
+│  Task(subagent_type="developer", prompt=doc_3)              │
 │  ...                                                         │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -327,7 +334,7 @@ Input: update docs/
 
 ```
 Input: analyze src/api update docs/api/
-       посмотри src/services обнови .claude/
+       look at src/services update .claude/
 
 1. Parse source path (what to analyze)
 2. Parse target path (where to write docs)
@@ -346,7 +353,7 @@ Example flows:
 - "look at services/ and update .claude/"
   → Scan services/, update CLAUDE.md with services info
 
-- "посмотри src/controllers обнови docs/endpoints/"
+- "check src/controllers update docs/endpoints/"
   → Scan controllers, create endpoint docs in docs/endpoints/
 ```
 
@@ -379,8 +386,19 @@ Input: (no args)
 
 ## Output
 
-```
-Documentation complete:
+```markdown
+# Documentation Complete
+
+## Detection
+
+| Field | Value |
+|-------|-------|
+| Arguments | `{received args or empty}` |
+| Mode | `{CREATE/UPDATE/ANALYZE/SYNC/ALL}` |
+| Source | `{source path if ANALYZE mode}` |
+| Target | `{target path}` |
+
+## Result
 
 Created:
 - {list of new files}

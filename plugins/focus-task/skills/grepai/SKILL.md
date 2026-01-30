@@ -2,7 +2,7 @@
 name: grepai
 description: Semantic code search setup and management. Auto-detects mode based on project state. Triggers - "grepai", "semantic search", "setup grepai", "grepai status".
 user-invocable: true
-argument-hint: "[setup|status|start|stop]"
+argument-hint: "[setup|status|start|stop|reindex|optimize]"
 allowed-tools: Read, Write, Edit, Bash, Task, Glob
 context: fork
 model: sonnet
@@ -12,38 +12,59 @@ model: sonnet
 
 Semantic code search setup and management for grepai.
 
+**Scripts location:** `$FT_PLUGIN/skills/grepai/scripts/`
+
 <instructions>
 
-## Mode Detection
+## Prerequisites
 
-**Step 1: Check for exact keyword match (case-insensitive)**
+> **WORKAROUND:** `$CLAUDE_PLUGIN_ROOT` is only set in hooks, NOT in skills.
+> Claude Code doesn't inject plugin env vars when executing bash from SKILL.md.
+> We resolve the plugin path dynamically using the cache directory structure.
 
-| Keyword | Mode | Jump to |
-|---------|------|---------|
-| `stop`, `halt`, `kill` | stop | → **Mode: stop** |
-| `start`, `watch`, `run` | start | → **Mode: start** |
-| `status`, `doctor`, `check`, `health` | status | → **Mode: status** |
-| `setup`, `install`, `configure`, `init` | setup | → **Mode: setup** |
+**EXECUTE FIRST** — set plugin root variable for this session:
+```bash
+# Resolve plugin root from cache (latest version)
+FT_PLUGIN=$(ls -vd "$HOME/.claude/plugins/cache/claude-brewcode/focus-task"/*/ 2>/dev/null | tail -1)
+test -n "$FT_PLUGIN" && echo "✅ FT_PLUGIN=$FT_PLUGIN" || echo "❌ Plugin not found in cache"
+```
 
-**Step 2: If no keyword match, check for empty arguments**
-
-| Condition | Mode |
-|-----------|------|
-| No arguments + `.grepai/` exists | start |
-| No arguments + no `.grepai/` | setup |
-
-**Step 3: If still no match → Mode: prompt** (interpret user intent)
+> **STOP if ❌** — plugin not installed. Run: `claude plugin add claude-brewcode/focus-task`
 
 ---
 
-**EXECUTE MODE:** Based on arguments, jump to the correct section:
+## Mode Detection
 
-- `/grepai stop` → execute **Mode: stop** section ONLY
-- `/grepai start` → execute **Mode: start** section ONLY
-- `/grepai status` → execute **Mode: status** section ONLY
-- `/grepai setup` → execute **Mode: setup** section ONLY
+### Step 1: Detect Mode (MANDATORY FIRST STEP)
 
-**DO NOT** execute other modes. Each mode is self-contained.
+**Skill arguments received:** `$ARGUMENTS`
+
+**EXECUTE** using Bash tool — pass the arguments value above to the script:
+```bash
+bash "$FT_PLUGIN/skills/grepai/scripts/detect-mode.sh" "ARGS_HERE"
+```
+**IMPORTANT:** Replace `ARGS_HERE` with the actual value from "Skill arguments received" above. If empty, pass empty string `""`.
+
+Output format:
+```
+ARGS: [arguments received]
+MODE: [detected mode]
+```
+
+**Use the MODE value and GOTO that section below.**
+
+### Mode Reference
+
+| Keyword in args | MODE |
+|-----------------|------|
+| optimize, update, улучши, обнови | optimize |
+| stop, halt, kill | stop |
+| start, watch | start |
+| status, doctor, check, health | status |
+| setup, install, configure, init | setup |
+| reindex, rebuild, refresh | reindex |
+| (empty) + .grepai/ exists | start |
+| (empty) + no .grepai/ | setup |
 
 ---
 
@@ -55,163 +76,55 @@ Full grepai installation and project setup.
 
 **EXECUTE** using Bash tool:
 ```bash
-echo "=== Infrastructure Check ==="
-
-# grepai CLI
-if which grepai >/dev/null 2>&1; then
-  echo "✅ grepai: $(grepai --version 2>/dev/null || echo 'installed')"
-else
-  echo "❌ grepai: NOT FOUND"
-  echo "   Install: brew install yoanbernabeu/tap/grepai"
-fi
-
-# Ollama
-if curl -s localhost:11434/api/tags >/dev/null 2>&1; then
-  echo "✅ ollama: running"
-else
-  echo "❌ ollama: not running"
-  echo "   Install: brew install ollama && brew services start ollama"
-fi
-
-# bge-m3 model
-if ollama list 2>/dev/null | grep -q bge-m3; then
-  echo "✅ bge-m3: installed"
-else
-  echo "❌ bge-m3: not installed"
-  echo "   Install: ollama pull bge-m3"
-fi
+bash "$FT_PLUGIN/skills/grepai/scripts/infra-check.sh" && echo "✅ infra-check" || echo "❌ infra-check FAILED"
 ```
 
-> **STOP if any ❌** — install missing components before continuing.
+> **STOP if ❌** — install missing components before continuing.
 
 ### Phase 2: MCP Configuration
 
 **EXECUTE** using Bash tool:
 ```bash
-echo "=== MCP Check ==="
-
-if grep -q '"grepai"' ~/.claude.json 2>/dev/null; then
-  echo "✅ MCP grepai: already configured"
-else
-  echo "⚠️ MCP grepai: not configured"
-  echo "   Adding via claude CLI..."
-fi
+bash "$FT_PLUGIN/skills/grepai/scripts/mcp-check.sh" && echo "✅ mcp-check" || echo "❌ mcp-check FAILED"
 ```
 
-If MCP not configured, **EXECUTE**:
-```bash
-claude mcp add --scope user grepai -- grepai mcp-serve
-echo "✅ MCP grepai: added"
-```
+> **STOP if ❌** — fix MCP configuration before continuing.
 
 ### Phase 3: Generate Config
 
-**Spawn `ft-grepai-configurator` agent** for deep project analysis and config generation:
+**SPAWN** the `ft-grepai-configurator` agent using Task tool:
 
-```
-Task(subagent_type="focus-task:ft-grepai-configurator", prompt="Configure grepai for this project. Analyze all build files, test patterns, source structure. Generate optimal .grepai/config.yaml.")
-```
+| Parameter | Value |
+|-----------|-------|
+| `subagent_type` | `focus-task:ft-grepai-configurator` |
+| `prompt` | `Configure grepai for this project. Analyze all build files, test patterns, source structure. Generate optimal .grepai/config.yaml.` |
+| `model` | `opus` |
 
-The agent will:
-1. Run 5 parallel Explore subagents for comprehensive project analysis
-2. Detect languages, test patterns, generated code, source structure
-3. Fetch latest grepai docs if needed
-4. Generate `.grepai/config.yaml` with project-specific settings
-5. Verify with `grepai init` and test search
-
-> Wait for agent to complete before proceeding to Phase 4.
+> **WAIT** for agent to complete before proceeding.
 
 ### Phase 4: Initialize Index
 
 **EXECUTE** using Bash tool:
 ```bash
-echo "=== Initialize Index ==="
-
-# Init if no index exists
-if [ ! -f .grepai/index.gob ]; then
-  grepai init && echo "✅ grepai init: complete" || echo "❌ grepai init: FAILED"
-else
-  echo "⏭️ index.gob already exists"
-fi
-
-# Create logs directory
-mkdir -p .grepai/logs
-
-# Start watch in background
-grepai watch --background --log-dir .grepai/logs 2>/dev/null
-echo "✅ grepai watch: started in background"
+bash "$FT_PLUGIN/skills/grepai/scripts/init-index.sh" && echo "✅ init-index" || echo "❌ init-index FAILED"
 ```
+
+> **STOP if ❌** — check grepai logs for indexing errors.
 
 ### Phase 5: Create Rule
 
 **EXECUTE** using Bash tool:
 ```bash
-echo "=== Create Rule ==="
-
-RULE_FILE=".claude/rules/grepai-first.md"
-mkdir -p .claude/rules
-
-if [ -f "$RULE_FILE" ]; then
-  echo "⏭️ Rule already exists: $RULE_FILE"
-else
-  PLUGIN_TEMPLATES="$HOME/.claude/plugins/cache/claude-brewcode/focus-task/$(ls $HOME/.claude/plugins/cache/claude-brewcode/focus-task 2>/dev/null | sort -V | tail -1)/templates"
-
-  if [ -f "$PLUGIN_TEMPLATES/rules/grepai-first.md.template" ]; then
-    cp "$PLUGIN_TEMPLATES/rules/grepai-first.md.template" "$RULE_FILE"
-    echo "✅ Rule created: $RULE_FILE"
-  else
-    echo "⚠️ Template not found, creating default rule"
-    cat > "$RULE_FILE" << 'RULE'
----
-globs: ["**/*"]
-alwaysApply: true
----
-
-# grepai-first
-
-Use grepai as PRIMARY search tool for semantic code search.
-
-| Task | Tool |
-|------|------|
-| Search by intent | grepai_search |
-| Exact text match | Grep |
-| File path patterns | Glob |
-
-**Decision:** "Need exact text/pattern?" → YES: Grep/Glob, NO: grepai
-RULE
-    echo "✅ Rule created (default): $RULE_FILE"
-  fi
-fi
+bash "$FT_PLUGIN/skills/grepai/scripts/create-rule.sh" && echo "✅ create-rule" || echo "❌ create-rule FAILED"
 ```
+
+> **STOP if ❌** — manually create rule in `.claude/rules/`.
 
 ### Phase 6: Verification
 
 **EXECUTE** using Bash tool:
 ```bash
-echo "=== Final Verification ==="
-
-# Infrastructure
-which grepai >/dev/null && echo "✅ grepai CLI" || echo "❌ grepai CLI"
-curl -s localhost:11434/api/tags >/dev/null && echo "✅ ollama running" || echo "❌ ollama stopped"
-ollama list 2>/dev/null | grep -q bge-m3 && echo "✅ bge-m3 model" || echo "❌ bge-m3 missing"
-grep -q '"grepai"' ~/.claude.json 2>/dev/null && echo "✅ MCP configured" || echo "❌ MCP missing"
-
-# Project config
-test -d .grepai && echo "✅ .grepai/ directory" || echo "❌ .grepai/ missing"
-test -f .grepai/config.yaml && echo "✅ config.yaml" || echo "❌ config.yaml missing"
-test -f .grepai/index.gob && echo "✅ index.gob ($(du -h .grepai/index.gob | cut -f1))" || echo "⚠️ index.gob (indexing...)"
-test -f .claude/rules/grepai-first.md && echo "✅ grepai-first.md rule" || echo "❌ rule missing"
-
-# Plugin hook (auto-starts watch on session start)
-PLUGIN_HOOKS="$HOME/.claude/plugins/cache/claude-brewcode/focus-task/$(ls $HOME/.claude/plugins/cache/claude-brewcode/focus-task 2>/dev/null | sort -V | tail -1)/hooks"
-test -f "$PLUGIN_HOOKS/grepai-session.mjs" && echo "✅ hook: built-in (plugin)" || echo "❌ hook: missing in plugin"
-
-# Watch status
-pgrep -f "grepai watch" >/dev/null && echo "✅ watch running" || echo "⚠️ watch not running"
-
-echo ""
-echo "=== Setup Complete ==="
-echo "Hook auto-starts grepai watch on every session start."
+bash "$FT_PLUGIN/skills/grepai/scripts/verify.sh" && echo "✅ verify" || echo "❌ verify FAILED"
 ```
 
 ---
@@ -222,43 +135,7 @@ Read-only diagnostics.
 
 **EXECUTE** using Bash tool:
 ```bash
-echo "=== grepai Status ==="
-echo ""
-
-echo "--- Infrastructure ---"
-which grepai >/dev/null && echo "✅ grepai: $(grepai --version 2>/dev/null || echo 'installed')" || echo "❌ grepai: NOT FOUND"
-curl -s localhost:11434/api/tags >/dev/null && echo "✅ ollama: running" || echo "❌ ollama: stopped"
-ollama list 2>/dev/null | grep -q bge-m3 && echo "✅ bge-m3: installed" || echo "❌ bge-m3: missing"
-
-echo ""
-echo "--- Project ---"
-test -d .grepai && echo "✅ .grepai/: exists" || echo "❌ .grepai/: missing"
-test -f .grepai/config.yaml && echo "✅ config.yaml: exists" || echo "❌ config.yaml: missing"
-test -f .grepai/index.gob && echo "✅ index.gob: $(du -h .grepai/index.gob 2>/dev/null | cut -f1)" || echo "⚠️ index.gob: missing"
-
-echo ""
-echo "--- Watch ---"
-if pgrep -f "grepai watch" >/dev/null; then
-  echo "✅ watch: running (PID: $(pgrep -f 'grepai watch'))"
-else
-  echo "⚠️ watch: not running"
-fi
-
-echo ""
-echo "--- Integration ---"
-grep -q '"grepai"' ~/.claude.json 2>/dev/null && echo "✅ MCP: configured" || echo "❌ MCP: not configured"
-test -f .claude/rules/grepai-first.md && echo "✅ rule: grepai-first.md" || echo "⚠️ rule: missing"
-
-echo ""
-echo "--- Hook ---"
-PLUGIN_HOOKS="$HOME/.claude/plugins/cache/claude-brewcode/focus-task/$(ls $HOME/.claude/plugins/cache/claude-brewcode/focus-task 2>/dev/null | sort -V | tail -1)/hooks"
-test -f "$PLUGIN_HOOKS/grepai-session.mjs" && echo "✅ hook: built-in (plugin)" || echo "⚠️ hook: missing in plugin"
-
-echo ""
-echo "--- MCP Tools ---"
-if grep -q '"grepai"' ~/.claude.json 2>/dev/null; then
-  echo "Available: grepai_search, grepai_trace_callers, grepai_trace_callees, grepai_trace_graph, grepai_index_status"
-fi
+bash "$FT_PLUGIN/skills/grepai/scripts/status.sh" && echo "✅ status" || echo "❌ status FAILED"
 ```
 
 ---
@@ -269,35 +146,7 @@ Start grepai watch in background.
 
 **EXECUTE** using Bash tool:
 ```bash
-echo "=== Starting grepai watch ==="
-
-# Check prerequisites
-if [ ! -d .grepai ]; then
-  echo "❌ .grepai/ not found. Run setup first: /focus-task:grepai setup"
-  exit 1
-fi
-
-# Check if already running
-if pgrep -f "grepai watch" >/dev/null; then
-  echo "⚠️ watch already running (PID: $(pgrep -f 'grepai watch'))"
-  exit 0
-fi
-
-# Create logs directory
-mkdir -p .grepai/logs
-
-# Start watch
-grepai watch --background --log-dir .grepai/logs 2>/dev/null
-
-# Verify
-sleep 1
-if pgrep -f "grepai watch" >/dev/null; then
-  echo "✅ watch started (PID: $(pgrep -f 'grepai watch'))"
-  echo "   Logs: .grepai/logs/"
-else
-  echo "❌ watch failed to start"
-  echo "   Check: grepai watch (foreground) for errors"
-fi
+bash "$FT_PLUGIN/skills/grepai/scripts/start.sh" && echo "✅ start" || echo "❌ start FAILED"
 ```
 
 ---
@@ -308,38 +157,69 @@ Stop grepai watch.
 
 **EXECUTE** using Bash tool:
 ```bash
-echo "=== Stopping grepai watch ==="
+bash "$FT_PLUGIN/skills/grepai/scripts/stop.sh" && echo "✅ stop" || echo "❌ stop FAILED"
+```
 
-# Try graceful stop first
-grepai watch --stop 2>/dev/null
+---
 
-# Force kill if still running
-if pgrep -f "grepai watch" >/dev/null; then
-  pkill -f "grepai watch"
-  sleep 1
-fi
+## Mode: reindex
 
-# Verify
-if pgrep -f "grepai watch" >/dev/null; then
-  echo "❌ watch still running (PID: $(pgrep -f 'grepai watch'))"
-  echo "   Try: kill -9 $(pgrep -f 'grepai watch')"
-else
-  echo "✅ watch stopped"
-fi
+Full index rebuild: stop watch, clean artifacts, rebuild, restart.
+
+**EXECUTE** using Bash tool:
+```bash
+bash "$FT_PLUGIN/skills/grepai/scripts/reindex.sh" && echo "✅ reindex" || echo "❌ reindex FAILED"
+```
+
+---
+
+## Mode: optimize
+
+Re-analyze project and regenerate config with backup.
+
+### Step 1: Backup current config
+
+**EXECUTE** using Bash tool:
+```bash
+bash "$FT_PLUGIN/skills/grepai/scripts/optimize.sh" && echo "✅ optimize-backup" || echo "❌ optimize-backup FAILED"
+```
+
+> **STOP if ❌** — check if .grepai/config.yaml exists.
+
+### Step 2: Regenerate config
+
+**SPAWN** the `ft-grepai-configurator` agent using Task tool:
+
+| Parameter | Value |
+|-----------|-------|
+| `subagent_type` | `focus-task:ft-grepai-configurator` |
+| `prompt` | `Re-analyze project and regenerate .grepai/config.yaml. Compare with existing config, optimize boost patterns, update trace languages.` |
+| `model` | `opus` |
+
+> **WAIT** for agent to complete.
+
+### Step 3: Reindex with new config
+
+**EXECUTE** using Bash tool:
+```bash
+bash "$FT_PLUGIN/skills/grepai/scripts/reindex.sh" && echo "✅ reindex" || echo "❌ reindex FAILED"
 ```
 
 ---
 
 ## Mode: prompt
 
-Interpret user intent from `$ARGUMENTS`.
+User provided arguments but no recognized keyword. Ask what they want:
 
-**Decision tree:**
-- Contains "install", "configure", "set up" → setup mode
-- Contains "check", "diagnose", "health" → status mode
-- Contains "run", "enable", "activate" → start mode
-- Contains "stop", "disable", "kill", "terminate" → stop mode
-- Otherwise → ask user what they want
+```
+Which grepai operation do you want?
+- setup   - Install and configure grepai
+- status  - Check system health
+- start   - Start file watcher
+- stop    - Stop file watcher
+- reindex - Rebuild search index
+- optimize - Re-analyze project and regenerate config
+```
 
 </instructions>
 
@@ -349,6 +229,13 @@ Interpret user intent from `$ARGUMENTS`.
 
 ```markdown
 # grepai [MODE]
+
+## Detection
+
+| Field | Value |
+|-------|-------|
+| Arguments | `$ARGUMENTS` |
+| Mode | `[detected mode]` |
 
 ## Status
 

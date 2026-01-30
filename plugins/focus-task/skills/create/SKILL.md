@@ -45,23 +45,13 @@ Create Task — "description" or path to requirements
 
 0. **Check Adapted Templates** (REQUIRED FIRST)
 
+   **EXECUTE** using Bash tool:
+   ```bash
+   test -f .claude/tasks/templates/TASK.md.template && echo "TASK.md.template" || echo "TASK.md.template MISSING"
+   test -f .claude/tasks/templates/SPEC.md.template && echo "SPEC.md.template" || echo "SPEC.md.template MISSING"
    ```
-   Check files exist:
-   - .claude/tasks/templates/TASK.md.template
-   - .claude/tasks/templates/SPEC.md.template
 
-   If NOT found → STOP with error:
-   ┌─────────────────────────────────────────────────────────────┐
-   │ ❌ Adapted templates not found!                             │
-   │                                                             │
-   │ Found:                                                      │
-   │ [✅|❌] .claude/tasks/templates/TASK.md.template            │
-   │ [✅|❌] .claude/tasks/templates/SPEC.md.template            │
-   │                                                             │
-   │ Run template adaptation first:                              │
-   │ /focus-task-setup                                           │
-   └─────────────────────────────────────────────────────────────┘
-   ```
+   > **STOP if any MISSING** — Run `/focus-task:setup` first.
 
 1. **Partition Research Areas** (5-10 areas)
 
@@ -80,16 +70,14 @@ Create Task — "description" or path to requirements
 2. **Parallel Research** (ONE message, 5-10 agents)
 
    ```
-   ┌─────────────────────────────────────────────────────────────┐
-   │  ONE message with 5-10 Task calls in PARALLEL               │
-   │                                                             │
-   │  Task(agent="Plan", prompt="Analyze architecture...")       │
-   │  Task(agent="developer", prompt="Analyze services...")      │
-   │  Task(agent="sql_expert", prompt="Analyze DB layer...")     │
-   │  Task(agent="tester", prompt="Analyze test patterns...")    │
-   │  Task(agent="reviewer", prompt="Analyze quality...")        │
-   │  Task(agent="Explore", prompt="Find library docs...")       │
-   └─────────────────────────────────────────────────────────────┘
+   ONE message with 5-10 Task calls in PARALLEL
+
+   Task(subagent_type="Plan", prompt="Analyze architecture...")
+   Task(subagent_type="developer", prompt="Analyze services...")
+   Task(subagent_type="sql_expert", prompt="Analyze DB layer...")
+   Task(subagent_type="tester", prompt="Analyze test patterns...")
+   Task(subagent_type="reviewer", prompt="Analyze quality...")
+   Task(subagent_type="Explore", prompt="Find library docs...")
    ```
 
    **Agent prompt template:**
@@ -108,18 +96,16 @@ Create Task — "description" or path to requirements
    - Fill `.claude/tasks/specs/{TIMESTAMP}_{NAME}_SPEC_v1.md`
    - Include Research Summary table
 
-3.2. **Review SPEC** (REQUIRED)
+4. **Review SPEC** (REQUIRED)
 
    ```
-   ┌─────────────────────────────────────────────────────────────┐
-   │  Task(agent="reviewer", prompt="Review SPEC...")            │
-   │                                                             │
-   │  Prompt template:                                           │
-   │  "Review SPEC at {SPEC_PATH}                                │
-   │   Check: completeness, consistency, feasibility, risks      │
-   │   Output: list of remarks with severity (critical/major/    │
-   │   minor), specific fixes"                                   │
-   └─────────────────────────────────────────────────────────────┘
+   Task(subagent_type="reviewer", prompt="Review SPEC...")
+
+   Prompt template:
+   "Review SPEC at {SPEC_PATH}
+    Check: completeness, consistency, feasibility, risks
+    Output: list of remarks with severity (critical/major/
+    minor), specific fixes"
    ```
 
    **Iteration loop:**
@@ -132,18 +118,18 @@ Create Task — "description" or path to requirements
 
    **Exit criteria:** No critical/major remarks remaining
 
-4. **Generate task file**
+5. **Generate task file**
 
    - Read `.claude/tasks/templates/TASK.md.template` (project)
    - Create `.claude/tasks/{TIMESTAMP}_{NAME}_TASK.md`
    - Fill: phases, agents, context files, criteria
    - Phases based on dependencies from SPEC
 
-5. **Create KNOWLEDGE**
+6. **Create KNOWLEDGE**
 
    - Create empty `.claude/tasks/{TIMESTAMP}_{NAME}_KNOWLEDGE.jsonl`
 
-6. **Init Reports Directory**
+7. **Init Reports Directory**
 
    - Create `.claude/tasks/reports/{TIMESTAMP}_{NAME}/`
    - Create initial `MANIFEST.md` from template:
@@ -153,16 +139,14 @@ Create Task — "description" or path to requirements
      Write: .claude/tasks/reports/{TIMESTAMP}_{NAME}/MANIFEST.md
      ```
 
-7. **Review Plan** (REQUIRED)
+8. **Review Plan** (REQUIRED)
 
    ```
-   ┌─────────────────────────────────────────────────────────────┐
-   │  ONE message with 3 Task calls in PARALLEL:                 │
-   │                                                             │
-   │  Task(agent="Plan", prompt="Review plan against SPEC #1")   │
-   │  Task(agent="Plan", prompt="Review plan against SPEC #2")   │
-   │  Task(agent="Plan", prompt="Review plan against SPEC #3")   │
-   └─────────────────────────────────────────────────────────────┘
+   ONE message with 3 Task calls in PARALLEL:
+
+   Task(subagent_type="Plan", prompt="Review plan against SPEC #1")
+   Task(subagent_type="Plan", prompt="Review plan against SPEC #2")
+   Task(subagent_type="Plan", prompt="Review plan against SPEC #3")
    ```
 
    **Agent prompt template:**
@@ -197,7 +181,7 @@ Create Task — "description" or path to requirements
 
    **Exit criteria:** User confirms all remarks addressed
 
-8. **Update Quick Ref** (REQUIRED)
+9. **Update Quick Ref** (REQUIRED)
 
    Add task link to TOP of `.claude/TASK.md` (preserve history):
    ```
@@ -218,31 +202,20 @@ Create Task — "description" or path to requirements
    ...older tasks...
    ```
 
-9. **Validation** (REQUIRED)
+10. **Validation** (REQUIRED)
 
-   Verify all artifacts exist:
-   ```
-   ┌─────────────────────────────────────────────────────────────┐
-   │ Validation Checklist                                        │
-   ├─────────────────────────────────────────────────────────────┤
-   │ [✅|❌] TASK:      .claude/tasks/{TS}_{NAME}_TASK.md        │
-   │ [✅|❌] SPEC:      .claude/tasks/specs/{TS}_{NAME}_SPEC_vN  │
-   │ [✅|❌] KNOWLEDGE: .claude/tasks/{TS}_{NAME}_KNOWLEDGE.jsonl│
-   │ [✅|❌] REPORTS:   .claude/tasks/reports/{TS}_{NAME}/       │
-   │ [✅|❌] MANIFEST:  .../MANIFEST.md                          │
-   │ [✅|❌] QUICK REF: .claude/TASK.md → task at top            │
-   └─────────────────────────────────────────────────────────────┘
+   **EXECUTE** using Bash tool:
+   ```bash
+   TS_NAME="${TS}_${NAME}"
+   test -f ".claude/tasks/${TS_NAME}_TASK.md" && echo "TASK" || echo "TASK MISSING"
+   ls .claude/tasks/specs/${TS_NAME}_SPEC_v*.md 2>/dev/null | head -1 | grep -q . && echo "SPEC" || echo "SPEC MISSING"
+   test -f ".claude/tasks/${TS_NAME}_KNOWLEDGE.jsonl" && echo "KNOWLEDGE" || echo "KNOWLEDGE MISSING"
+   test -d ".claude/tasks/reports/${TS_NAME}/" && echo "REPORTS" || echo "REPORTS MISSING"
+   test -f ".claude/tasks/reports/${TS_NAME}/MANIFEST.md" && echo "MANIFEST" || echo "MANIFEST MISSING"
+   head -1 .claude/TASK.md 2>/dev/null | grep -q "${TS_NAME}" && echo "QUICK_REF" || echo "QUICK_REF MISSING"
    ```
 
-   **If validation fails:**
-   ```
-   ⚠️  Missing artifacts detected!
-
-   Missing:
-   - {list of missing files}
-
-   Fix: Creating missing files...
-   ```
+   > **STOP if any MISSING** — Create missing artifacts before proceeding.
 
    **Auto-fix for Quick Ref:**
    ```
@@ -254,8 +227,17 @@ Create Task — "description" or path to requirements
 
 ### Output
 
-```
-Task created:
+```markdown
+# Task Created
+
+## Detection
+
+| Field | Value |
+|-------|-------|
+| Arguments | `{received args}` |
+| Input Type | `{text description or file path}` |
+
+## Files Created
 - TASK: .claude/tasks/{TIMESTAMP}_{NAME}_TASK.md
 - SPEC: .claude/tasks/specs/{TIMESTAMP}_{NAME}_SPEC_v1.md
 - KNOWLEDGE: .claude/tasks/{TIMESTAMP}_{NAME}_KNOWLEDGE.jsonl
@@ -263,7 +245,6 @@ Task created:
 - MANIFEST: .claude/tasks/reports/{TIMESTAMP}_{NAME}/MANIFEST.md
 - QUICK REF: .claude/TASK.md (task added to top, history preserved)
 
-Run: /focus-task-start
-     (or with explicit path: /focus-task-start .claude/tasks/{TIMESTAMP}_{NAME}_TASK.md)
+Run: /focus-task:start
+     (or with explicit path: /focus-task:start .claude/tasks/{TIMESTAMP}_{NAME}_TASK.md)
 ```
-

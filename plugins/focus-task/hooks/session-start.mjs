@@ -54,8 +54,10 @@ async function main() {
       }
     }
 
+    const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT || 'unknown';
+
     output({
-      systemMessage: `session: ${session_id?.slice(0, 8) || 'unknown'} started`
+      systemMessage: `session: ${session_id || 'unknown'} | focus-task: ${pluginRoot}`
     });
   } catch (error) {
     log('error', '[session-start]', `Error: ${error.message}`, cwd, session_id);

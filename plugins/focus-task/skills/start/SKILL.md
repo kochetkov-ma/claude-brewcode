@@ -3,7 +3,7 @@ name: start
 description: Starts task execution with hooks-based infinite context through automatic handoff. Triggers: "start task", "run focus task", "execute task".
 user-invocable: true
 argument-hint: "[task-path] defaults to ref in .claude/TASK.md (single-line path)"
-allowed-tools: Read, Write, Edit, Bash, Task, Glob, Grep
+allowed-tools: Read, Write, Edit, Bash, Task, Glob, Grep, Skill
 context: fork
 model: opus
 ---
@@ -18,7 +18,7 @@ Focus-task uses Claude Code hooks for infinite context:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ /focus-task-start → This skill loads TASK.md, Claude executes   │
+│ /focus-task:start → This skill loads TASK.md, Claude executes   │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │  You spawn sub-agents (developer, reviewer, tester)             │
@@ -85,8 +85,8 @@ No external runtime. Native Claude Code integration via hooks.
 ```
 ❌ No task path provided!
 
-Run: /focus-task-create "description"
-Or:  /focus-task-start .claude/tasks/{TS}_{NAME}_TASK.md
+Run: /focus-task:create "description"
+Or:  /focus-task:start .claude/tasks/{TS}_{NAME}_TASK.md
 ```
 
 3. **Load Task Context**
@@ -104,10 +104,10 @@ Or:  /focus-task-start .claude/tasks/{TS}_{NAME}_TASK.md
 
         ⛔ MANDATORY POST-AGENT (both steps, in order):
 
-     4. WRITE REPORT — Save agent output + your supplements to:
-        mkdir -p reports/{TS}_{NAME}/phase_{P}/iter_{N}_{type}/
-        Write: reports/{TS}_{NAME}/phase_{P}/iter_{N}_{type}/{AGENT}_output.md
-        Include: agent's raw output + your observations. Do NOT alter agent's findings.
+     4. WRITE REPORT — Save agent output + your supplements:
+        - Bash: mkdir -p .claude/tasks/reports/{TS}_{NAME}/phase_{P}/iter_{N}_{type}/ && echo "OK" || echo "FAILED"
+        - Write: .claude/tasks/reports/{TS}_{NAME}/phase_{P}/iter_{N}_{type}/{AGENT}_output.md
+        - Include: agent's raw output + your observations. Do NOT alter agent's findings.
 
      5. CALL COORDINATOR — Pass report path:
         subagent_type: "focus-task:ft-coordinator"
@@ -139,9 +139,9 @@ Or:  /focus-task-start .claude/tasks/{TS}_{NAME}_TASK.md
 7. **Complete**
    - All criteria checked → status `finished`
    - Report completion
-   - **EXTRACT RULES** (REQUIRED):
+   - **EXTRACT RULES** (REQUIRED) — invoke via Skill tool:
      ```
-     /focus-task-rules .claude/tasks/{TIMESTAMP}_{NAME}_KNOWLEDGE.jsonl
+     Skill(skill="focus-task:rules", args=".claude/tasks/{TIMESTAMP}_{NAME}_KNOWLEDGE.jsonl")
      ```
      This persists task knowledge to project rules:
      - ❌ entries → .claude/rules/avoid.md
@@ -174,12 +174,18 @@ When context limit reached (auto-compact):
 ⛔ After EVERY work agent completes, you MUST execute 2 steps IN ORDER:
 
 **Step 1 — WRITE REPORT** (you write directly):
+
+**EXECUTE** using Bash tool:
+```bash
+mkdir -p .claude/tasks/reports/{TS}_{NAME}/phase_{P}/iter_{N}_{type}/ && echo "OK dir created" || echo "FAILED mkdir"
 ```
-Create dir:  mkdir -p .claude/tasks/reports/{TS}_{NAME}/phase_{P}/iter_{N}_{type}/
-Write file:  .claude/tasks/reports/{TS}_{NAME}/phase_{P}/iter_{N}_{type}/{AGENT}_output.md
-Content: agent's actual output + your supplements/observations/aggregation.
-Do NOT alter or summarize agent's findings — supplement them.
-```
+
+> **STOP if FAILED** — check path and permissions.
+
+Then use Write tool for:
+- Path: `.claude/tasks/reports/{TS}_{NAME}/phase_{P}/iter_{N}_{type}/{AGENT}_output.md`
+- Content: agent's actual output + your supplements/observations/aggregation
+- Do NOT alter or summarize agent's findings — supplement them
 
 **Step 2 — CALL COORDINATOR** (via Task tool):
 ```
@@ -198,3 +204,29 @@ The PostToolUse hook also reminds you — execute immediately, do NOT skip.
 - Task not finished → Stop blocked with continuation prompt
 - Task finished → Stop allowed, state cleaned up
 - Escape mechanism: 20 stop attempts allows forced exit
+
+## Output Format
+
+```markdown
+# Task Execution Started
+
+## Detection
+
+| Field | Value |
+|-------|-------|
+| Arguments | `{received args or empty}` |
+| Task Path | `{resolved path}` |
+| Source | `{from args or from .claude/TASK.md}` |
+
+## Status
+
+| Field | Value |
+|-------|-------|
+| Task | `{task name}` |
+| Phase | `{current phase}` |
+| Status | `{pending/in progress/finished}` |
+
+## Next Steps
+
+- [current phase actions]
+```

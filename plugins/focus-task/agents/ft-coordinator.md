@@ -114,7 +114,7 @@ You receive:
 ## Workflow
 
 1. **Read** task file
-2. **Validate** phase exists and was `in_progress`
+2. **Validate** phase exists and was `in progress`
 3. **Update** phase status table:
    - Status → `completed` or `failed`
    - Completed → current timestamp
@@ -138,7 +138,7 @@ You receive:
 ## Status Transitions
 
 ```
-pending → in_progress → completed
+pending → in progress → completed
                      → failed → (retry or escalate)
                      → handoff (context limit)
 ```
@@ -182,7 +182,7 @@ Coordinator update complete:
   - Summary: {path}
   - MANIFEST: updated
   - Missing: {count} (ERROR if any missing)
-- KNOWLEDGE: {count} entries extracted from reports
+- Extracted: {count} knowledge entries from reports
 - Next: {recommendation}
 ```
 
@@ -278,6 +278,8 @@ Coordinator checks: reports exist on disk?
 ### Report Templates
 
 Use templates from `{PLUGIN_ROOT}/templates/reports/`:
+> **Note:** `$CLAUDE_PLUGIN_ROOT` only works in hooks. For agents/skills, resolve path:
+> `FT_PLUGIN=$(ls -vd "$HOME/.claude/plugins/cache/claude-brewcode/focus-task"/*/ | tail -1)`
 - `MANIFEST.md.template`
 - `FINAL.md.template`
 - `summary.md.template`

@@ -2,7 +2,7 @@
 name: focus-task-review
 description: Project-adapted code review with quorum consensus. Triggers: "review code", "code review", "/focus-task-review".
 user-invocable: true
-argument-hint: "<prompt-or-file-path> [--quorum N-M]"
+argument-hint: "<prompt-or-file-path> [-q|--quorum [G-]N-M]"
 allowed-tools: Read, Glob, Grep, Task, Bash, Write
 context: fork
 model: opus
@@ -18,8 +18,9 @@ model: opus
 |-------|--------|
 | Text prompt | Use as review focus description |
 | File path (`.md`, `.txt`) | Read file as review instructions |
-| `--quorum N-M` | N agents per group, M = quorum threshold |
-| Default | `--quorum 3-2` (3 agents, quorum 2) |
+| `-q N-M` / `--quorum N-M` | N agents per group, M = quorum threshold |
+| `-q G-N-M` / `--quorum G-N-M` | G groups, N agents per group, M = quorum |
+| Default | `-q 3-2` (3 agents, quorum 2) |
 
 ---
 
@@ -199,7 +200,7 @@ Full report: .claude/tasks/reviews/{TIMESTAMP}_{NAME}_report.md
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `--quorum` | `3-2` | N agents per group, M = threshold |
+| `-q` / `--quorum` | `3-2` | `N-M` (agents-threshold) or `G-N-M` (groups-agents-threshold) |
 | Report dir | `.claude/tasks/reviews/` | Output directory |
 
 ---

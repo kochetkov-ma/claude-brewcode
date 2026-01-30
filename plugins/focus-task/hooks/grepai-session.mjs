@@ -46,6 +46,7 @@ async function checkGrepai(cwd, session_id = null) {
   }
 
   const status = [];
+  let indexStatus = null;
   let shouldAutoStart = false;
 
   // Check ollama
@@ -55,14 +56,30 @@ async function checkGrepai(cwd, session_id = null) {
     status.push('ollama: stopped');
   }
 
-  // Check index
+  // Check index with size-based file estimation
   const hasIndex = existsSync(indexPath);
   if (hasIndex) {
     try {
       const stats = statSync(indexPath);
-      const sizeMB = (stats.size / (1024 * 1024)).toFixed(1);
-      log('debug', '[grepai]', `index: ${sizeMB}MB`, cwd, session_id);
+      const sizeKB = Math.round(stats.size / 1024);
+
+      // Estimate: ~7-15KB per file depending on chunking
+      // <20KB likely means <10 files (nearly empty index)
+      // 20-100KB = small project
+      // >100KB = normal project
+      if (stats.size < 20000) {
+        indexStatus = `⚠️ ${sizeKB}KB`;
+        log('warn', '[grepai]', `index: small (${sizeKB}KB, likely <10 files) - run reindex`, cwd, session_id);
+      } else if (stats.size < 100000) {
+        indexStatus = `${sizeKB}KB`;
+        log('debug', '[grepai]', `index: ${sizeKB}KB`, cwd, session_id);
+      } else {
+        const sizeMB = (stats.size / (1024 * 1024)).toFixed(1);
+        indexStatus = `${sizeMB}MB`;
+        log('debug', '[grepai]', `index: ${sizeMB}MB`, cwd, session_id);
+      }
     } catch {
+      indexStatus = 'ok';
       log('debug', '[grepai]', 'index: exists', cwd, session_id);
     }
   } else {
@@ -104,10 +121,15 @@ async function checkGrepai(cwd, session_id = null) {
     status.push('watch: stopped');
   }
 
-  // Build status message
-  const statusMessage = status.length === 0
-    ? 'ready'
-    : status.join(', ');
+  // Build status message: "grepai: ready | index: 150KB" or "grepai: ollama: stopped | index: ⚠️ 14KB"
+  let statusMessage;
+  if (status.length === 0) {
+    statusMessage = indexStatus ? `ready | index: ${indexStatus}` : 'ready';
+  } else {
+    statusMessage = indexStatus
+      ? `${status.join(', ')} | index: ${indexStatus}`
+      : status.join(', ');
+  }
 
   log('info', '[grepai]', `Status: ${statusMessage}`, cwd, session_id);
 

@@ -1,6 +1,6 @@
 ---
 name: teardown
-description: Remove all focus-task files created by /focus-task:setup. Cleans templates, configs, rules, skills, and symlinks.
+description: Remove all focus-task files created by /focus-task:setup. Cleans templates, configs, skills, and symlinks.
 user-invocable: true
 argument-hint: [--dry-run]
 allowed-tools: Bash, Read
@@ -13,7 +13,10 @@ Teardown Focus-Task — remove all project files created by setup
 
 Removes all files and directories created by `/focus-task:setup`:
 - `.claude/tasks/templates/`
-- `.claude/tasks/cfg/focus-task.config.json`
+- `.claude/tasks/cfg/`
+- `.claude/tasks/logs/`
+- `.claude/plans/`
+- `.grepai/`
 - `.claude/skills/focus-task-review/`
 - `~/.claude/skills/focus-task-*` (symlinks)
 
@@ -28,30 +31,34 @@ Removes all files and directories created by `/focus-task:setup`:
 
 ## Execution
 
+**Skill arguments received:** `$ARGUMENTS`
+
 **EXECUTE** using Bash tool — run teardown script:
 ```bash
 SCRIPT_DIR="$HOME/.claude/plugins/cache/claude-brewcode/focus-task/$(ls $HOME/.claude/plugins/cache/claude-brewcode/focus-task 2>/dev/null | sort -V | tail -1)/skills/teardown"
-bash "$SCRIPT_DIR/teardown.sh" $ARGUMENTS
+bash "$SCRIPT_DIR/teardown.sh" ARGS_HERE && echo "✅ done" || echo "❌ FAILED"
 ```
+**IMPORTANT:** Replace `ARGS_HERE` with the actual value from "Skill arguments received" above. If empty, omit the argument.
+
+> **STOP if ❌** — check script path exists and teardown.sh has execute permissions.
 
 ## What Gets Removed
 
 ```
 PROJECT/
-└── .claude/
-    ├── tasks/
-    │   ├── templates/           ← 🗑️ DELETE (entire dir)
-    │   │   ├── TASK.md.template
-    │   │   ├── SPEC.md.template
-    │   │   └── KNOWLEDGE.jsonl.template
-    │   ├── cfg/
-    │   │   └── focus-task.config.json  ← 🗑️ DELETE
-    │   ├── reports/             ← ⏭️ KEEP
-    │   ├── specs/               ← ⏭️ KEEP
-    │   └── *_TASK.md            ← ⏭️ KEEP
-    ├── skills/
-    │   └── focus-task-review/   ← 🗑️ DELETE (entire dir)
-    └── rules/                   ← ⏭️ KEEP
+├── .grepai/                     ← 🗑️ DELETE (entire dir)
+├── .claude/
+│   ├── tasks/
+│   │   ├── templates/           ← 🗑️ DELETE (entire dir)
+│   │   ├── cfg/                 ← 🗑️ DELETE (entire dir)
+│   │   ├── logs/                ← 🗑️ DELETE (entire dir)
+│   │   ├── reports/             ← ⏭️ KEEP
+│   │   ├── specs/               ← ⏭️ KEEP
+│   │   └── *_TASK.md            ← ⏭️ KEEP
+│   ├── plans/                   ← 🗑️ DELETE (entire dir)
+│   ├── skills/
+│   │   └── focus-task-review/   ← 🗑️ DELETE (entire dir)
+│   └── rules/                   ← ⏭️ KEEP
 
 ~/.claude/skills/
 ├── focus-task-setup    → ...  ← 🗑️ symlink
@@ -73,18 +80,26 @@ PROJECT/
 
 ## Output
 
-```
-Focus-Task Teardown
+```markdown
+# Focus-Task Teardown
+
+## Detection
+
+| Field | Value |
+|-------|-------|
+| Arguments | `{received args or empty}` |
+| Mode | `{full or dry-run}` |
+
+## Result
 
 Removed:
   ✅ .claude/tasks/templates/
-  ✅ .claude/tasks/cfg/focus-task.config.json
-  ✅ .claude/rules/avoid.md
-  ✅ .claude/rules/best-practice.md
+  ✅ .claude/tasks/cfg/
+  ✅ .claude/tasks/logs/
+  ✅ .claude/plans/
+  ✅ .grepai/
   ✅ .claude/skills/focus-task-review/
-  ✅ ~/.claude/skills/focus-task-setup (symlink)
-  ✅ ~/.claude/skills/focus-task-create (symlink)
-  ...
+  ✅ ~/.claude/skills/focus-task-* (symlinks)
 
 Preserved:
   ⏭️  .claude/tasks/*_TASK.md (active tasks)

@@ -4,7 +4,6 @@ description: Updates .claude/rules/avoid.md and best-practice.md from KNOWLEDGE.
 user-invocable: true
 argument-hint: "[path-to-KNOWLEDGE.jsonl]"
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash
-context: fork
 model: sonnet
 ---
 
@@ -16,21 +15,43 @@ Extracts anti-patterns and best practices from accumulated knowledge, optimizes 
 
 <instructions>
 
+## Prerequisites
+
+> **WORKAROUND:** `$CLAUDE_PLUGIN_ROOT` is only set in hooks, NOT in skills.
+> Claude Code doesn't inject plugin env vars when executing bash from SKILL.md.
+> We resolve the plugin path dynamically using the cache directory structure.
+
+**EXECUTE FIRST** — set plugin root variable for this session:
+```bash
+# Resolve plugin root from cache (latest version)
+FT_PLUGIN=$(ls -vd "$HOME/.claude/plugins/cache/claude-brewcode/focus-task"/*/ 2>/dev/null | tail -1)
+test -n "$FT_PLUGIN" && echo "✅ FT_PLUGIN=$FT_PLUGIN" || echo "❌ Plugin not found in cache"
+```
+
+> **STOP if ❌** — plugin not installed. Run: `claude plugin add claude-brewcode/focus-task`
+
+---
+
 ## Mode Detection
 
 | Mode | Condition | Source |
 |------|-----------|--------|
 | **File** | `$ARGUMENTS` contains path | Parse KNOWLEDGE.jsonl |
-| **Session** | `$ARGUMENTS` empty | Analyze session context |
+| **Session** | `$ARGUMENTS` empty | Analyze session context (max 5 rules) |
 
 ## Step 1: Extract Knowledge
 
 ### File Mode
 
+**Skill arguments received:** `$ARGUMENTS`
+
 **EXECUTE** using Bash tool — read knowledge file:
 ```bash
-test -f "$ARGUMENTS" && cat "$ARGUMENTS" | head -100 || echo "❌ File not found: $ARGUMENTS"
+bash "$FT_PLUGIN/skills/rules/scripts/rules.sh" read "ARGS_HERE" && echo "✅ Read knowledge" || echo "❌ Failed to read knowledge"
 ```
+**IMPORTANT:** Replace `ARGS_HERE` with the actual value from "Skill arguments received" above.
+
+> **STOP if ❌** — verify path exists and is readable.
 
 Parse entries:
 - `t:"❌"` → anti-pattern (avoid)
@@ -39,7 +60,7 @@ Parse entries:
 
 ### Session Mode
 
-Scan conversation for:
+Scan conversation for (limit to **5 most impactful rules**):
 - Errors encountered and fixes applied
 - Patterns that worked well
 - Warnings or gotchas discovered
@@ -49,17 +70,15 @@ Scan conversation for:
 
 **EXECUTE** using Bash tool — check existing rules:
 ```bash
-test -f .claude/rules/avoid.md && echo "✅ avoid.md exists" || echo "⚠️ avoid.md missing"
-test -f .claude/rules/best-practice.md && echo "✅ best-practice.md exists" || echo "⚠️ best-practice.md missing"
+bash "$FT_PLUGIN/skills/rules/scripts/rules.sh" check && echo "✅ Check complete" || echo "❌ Check failed"
 ```
 
 If missing, **EXECUTE** using Bash tool — create from templates:
 ```bash
-mkdir -p .claude/rules
-PLUGIN_TEMPLATES="$HOME/.claude/plugins/cache/claude-brewcode/focus-task/$(ls -v $HOME/.claude/plugins/cache/claude-brewcode/focus-task 2>/dev/null | tail -1)/templates"
-test -f .claude/rules/avoid.md || cp "$PLUGIN_TEMPLATES/rules/avoid.md.template" .claude/rules/avoid.md
-test -f .claude/rules/best-practice.md || cp "$PLUGIN_TEMPLATES/rules/best-practice.md.template" .claude/rules/best-practice.md
+bash "$FT_PLUGIN/skills/rules/scripts/rules.sh" create && echo "✅ Created rules" || echo "❌ Failed to create rules"
 ```
+
+> **STOP if ❌** — verify plugin installation and template paths.
 
 ## Step 3: Optimize Rules
 
@@ -100,11 +119,10 @@ Preserve frontmatter, write optimized tables.
 
 **EXECUTE** using Bash tool — validate structure:
 ```bash
-grep -q "^| #" .claude/rules/avoid.md && echo "✅ avoid.md valid" || echo "❌ avoid.md invalid structure"
-grep -q "^| #" .claude/rules/best-practice.md && echo "✅ best-practice.md valid" || echo "❌ best-practice.md invalid structure"
+bash "$FT_PLUGIN/skills/rules/scripts/rules.sh" validate && echo "✅ Validation passed" || echo "❌ Validation failed"
 ```
 
-> **STOP if any ❌** — fix table structure before continuing.
+> **STOP if ❌** — fix table structure before continuing.
 
 </instructions>
 
@@ -112,6 +130,13 @@ grep -q "^| #" .claude/rules/best-practice.md && echo "✅ best-practice.md vali
 
 ```markdown
 # Rules Updated
+
+## Detection
+
+| Field | Value |
+|-------|-------|
+| Arguments | `{received args or empty}` |
+| Mode | `{file or session}` |
 
 ## Changes
 
@@ -137,16 +162,43 @@ grep -q "^| #" .claude/rules/best-practice.md && echo "✅ best-practice.md vali
 - Files: `.claude/rules/avoid.md`, `.claude/rules/best-practice.md`
 ```
 
-## Path-Specific Rules
+## Rules Frontmatter Reference
 
-When adapting for project (via `/focus-task-setup`), update frontmatter:
+> **Source:** [code.claude.com/docs/en/memory](https://code.claude.com/docs/en/memory.md#path-specific-rules)
+
+### Official Fields
+
+| Field | Required | Purpose |
+|-------|----------|---------|
+| `paths` | No | Array of quoted glob patterns |
+
+**Invalid fields:** `globs`, `alwaysApply`, `description` — NOT supported.
+
+### Loading Behavior
+
+| Frontmatter | Behavior |
+|-------------|----------|
+| **No `paths`** | Loads unconditionally (always) |
+| **With `paths`** | ⚠️ Bug #16299: loads anyway at session start |
+
+### Syntax Example
 
 ```yaml
+---
 paths:
   - "src/**/*.java"
   - "src/**/*.kt"
   - "!**/test/**"
+---
 ```
+
+| Rule | ❌ Bad | ✅ Good |
+|------|--------|---------|
+| Quote patterns | `**/*.kt` | `"**/*.kt"` |
+| Array format | `paths: "**/*.ts"` | `paths: ["**/*.ts"]` |
+
+> **⚠️ Bug #16299:** Lazy loading not working — all rules load at start.
+> **Source:** [github.com/anthropics/claude-code/issues/16299](https://github.com/anthropics/claude-code/issues/16299)
 
 ## Error Handling
 

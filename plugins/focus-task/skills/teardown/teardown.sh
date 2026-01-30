@@ -36,8 +36,17 @@ echo "Project files:"
 # Templates directory
 remove_item ".claude/tasks/templates" "dir"
 
-# Config file
-remove_item ".claude/tasks/cfg/focus-task.config.json" "file"
+# Config directory (includes focus-task.config.json)
+remove_item ".claude/tasks/cfg" "dir"
+
+# Logs directory
+remove_item ".claude/tasks/logs" "dir"
+
+# Plans directory
+remove_item ".claude/plans" "dir"
+
+# grepai index directory
+remove_item ".grepai" "dir"
 
 # Project review skill
 remove_item ".claude/skills/focus-task-review" "dir"

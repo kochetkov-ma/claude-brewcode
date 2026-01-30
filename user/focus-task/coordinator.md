@@ -197,7 +197,7 @@ node dist/index.js --task=.claude/tasks/{TS}_{NAME}_TASK.md
 5. **DoubleCheck** — верификация подтверждённых findings
 6. **Final Report** — отчёт в `.claude/tasks/reviews/`
 
-**Quorum:** `--quorum 3-2` (3 агента, порог 2)
+**Quorum:** `-q 3-2` или `--quorum 3-2` (3 агента, порог 2)
 
 **Приоритеты findings:**
 | Priority | Критерий | Confidence |
