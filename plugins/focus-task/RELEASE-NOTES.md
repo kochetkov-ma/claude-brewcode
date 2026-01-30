@@ -28,6 +28,27 @@
 
 ---
 
+## v2.0.44 (2026-01-30)
+
+### Added
+
+- **ft-grepai-configurator** — added "Supported File Extensions" section
+  - Full list of 50+ extensions from [`indexer/scanner.go`](https://github.com/yoanbernabeu/grepai/blob/main/indexer/scanner.go)
+  - Explicit `.mjs`/`.cjs`/`.mts`/`.cts` NOT supported warning
+  - Auto-excluded files list (minified, bundles, binaries, >1MB)
+
+### Changed
+
+- **ft-grepai-configurator** — updated `.mjs` constraint with source link to scanner.go
+
+### Updated Files
+
+| File | Change |
+|------|--------|
+| `agents/ft-grepai-configurator.md` | Added extensions table, source links |
+
+---
+
 ## v2.0.43 (2026-01-30)
 
 ### Added

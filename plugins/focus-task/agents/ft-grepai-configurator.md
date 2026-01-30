@@ -19,7 +19,7 @@ permissionMode: acceptEdits
 | Windows embedding bug | grepai#87 | v0.24.0 affected |
 | Model dimensions | Must match | bge-m3:1024, nomic-embed-text-v2-moe:768, mxbai-embed-large:1024 |
 | **`last_index_time` reset** | **CRITICAL** | **ALWAYS remove** `watch.last_index_time` when changing config — files with ModTime < last_index_time are SKIPPED! |
-| `.mjs` not supported | scanner.go | grepai ignores `.mjs` files — only `.js` is in SupportedExtensions |
+| `.mjs` not supported | [scanner.go](https://github.com/yoanbernabeu/grepai/blob/main/indexer/scanner.go) | grepai ignores `.mjs`/`.cjs`/`.mts`/`.cts` — only `.js` in SupportedExtensions |
 
 ## Embedder Models
 
@@ -169,6 +169,51 @@ grepai search "main entry point" --json --compact 2>&1 | head -30
 test -f .grepai/index.gob && echo "✅ index.gob: $(du -h .grepai/index.gob | cut -f1)" || echo "❌ index missing"
 (grep -q '"grepai"' ~/.claude.json 2>/dev/null || grep -q '"grepai"' .mcp.json 2>/dev/null) && echo "✅ MCP configured" || echo "⚠️ MCP optional"
 ```
+
+---
+
+## Supported File Extensions
+
+> **Source:** [`indexer/scanner.go` — `SupportedExtensions`](https://github.com/yoanbernabeu/grepai/blob/main/indexer/scanner.go)
+
+| Category | Extensions |
+|----------|------------|
+| **Go** | `.go` |
+| **JavaScript** | `.js`, `.jsx` |
+| **TypeScript** | `.ts`, `.tsx` |
+| **Python** | `.py` |
+| **Ruby** | `.rb` |
+| **Java** | `.java` |
+| **C/C++** | `.c`, `.h`, `.cpp`, `.hpp`, `.cc`, `.cxx` |
+| **C#** | `.cs` |
+| **PHP** | `.php` |
+| **Rust** | `.rs` |
+| **Swift** | `.swift` |
+| **Kotlin** | `.kt`, `.kts` |
+| **Scala** | `.scala` |
+| **Lua** | `.lua` |
+| **R** | `.r`, `.R` |
+| **Dart** | `.dart` |
+| **Elixir** | `.ex`, `.exs` |
+| **Erlang** | `.erl` |
+| **Clojure** | `.clj`, `.cljs` |
+| **Haskell** | `.hs` |
+| **ML/F#** | `.ml`, `.fs`, `.fsx` |
+| **Elm** | `.elm` |
+| **Nim** | `.nim` |
+| **Zig** | `.zig` |
+| **Pascal** | `.pas`, `.dpr` |
+| **Web** | `.vue`, `.svelte`, `.html`, `.css`, `.scss`, `.less` |
+| **Config** | `.yaml`, `.yml`, `.json`, `.xml`, `.toml`, `.ini`, `.env` |
+| **Shell** | `.sh`, `.bash`, `.zsh` |
+| **SQL** | `.sql` |
+| **Docs** | `.md`, `.txt` |
+| **Infra** | `.tf`, `.hcl` |
+| **Proto** | `.proto` |
+
+**❌ NOT supported:** `.mjs`, `.cjs`, `.mts`, `.cts` (ES/CommonJS modules)
+
+**Auto-excluded:** `.min.js`, `.min.css`, `.bundle.js`, `.bundle.css`, binaries, files >1MB, non-UTF-8
 
 ---
 
