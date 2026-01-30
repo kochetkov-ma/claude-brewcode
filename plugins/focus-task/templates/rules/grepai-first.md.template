@@ -1,0 +1,35 @@
+---
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# grepai-first
+
+> **DEFAULT:** `grepai_search` FIRST for any code search.
+
+| Task | Tool | Scope |
+|------|------|-------|
+| **⭐ Search by intent/meaning** | **grepai_search** | `[project only]` |
+| Exact text/regex | Grep | `[project*]` |
+| File path patterns | Glob | `[project*]` |
+| External/web | WebSearch | `[internet]` |
+
+`[project*]` = cwd by default, accepts `path` param for other locations
+
+**Decision:** exact text/regex? → Grep/Glob · otherwise → grepai
+
+## MCP Tools
+
+| Tool | Use |
+|------|-----|
+| `grepai_search` | Semantic: `"auth flow"`, `"error handling"` |
+| `grepai_trace_callers` | Functions calling symbol |
+| `grepai_trace_callees` | Functions called by symbol |
+| `grepai_trace_graph` | Full call graph around symbol |
+| `grepai_index_status` | Index health/stats |
+
+## Query Tips
+
+- English queries (better semantic matching)
+- Intent over syntax: `"handles login"` not `"func Login"`
+- Specific: `"JWT validation"` not `"token"`

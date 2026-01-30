@@ -2,6 +2,18 @@
 /**
  * PreCompact hook
  * Validates state, compacts knowledge, writes handoff entry before auto-compact
+ *
+ * ============================================================================
+ * IMPORTANT: SESSION_ID DOES NOT CHANGE AFTER COMPACT!
+ * ============================================================================
+ * Claude Code's auto-compact summarizes context within THE SAME session.
+ * The session_id remains identical before and after compact.
+ *
+ * Therefore:
+ * - Lock file keeps session_id bound (no release needed)
+ * - checkLock() will match after compact resumes
+ * - Status 'handoff' is for Claude to re-read TASK.md, not for new session
+ * ============================================================================
  */
 import { existsSync } from 'fs';
 import { join } from 'path';
@@ -16,6 +28,7 @@ import {
   getState,
   saveState,
   loadConfig,
+  checkLock,
   log
 } from './lib/utils.mjs';
 import {
@@ -24,20 +37,32 @@ import {
 } from './lib/knowledge.mjs';
 
 async function main() {
-  try {
-    const input = await readStdin();
-    const { cwd } = input;
+  let cwd = null;
+  let session_id = null;
 
-    // Check if focus-task is active
-    const taskPath = getActiveTaskPath(cwd);
+  try {
+    cwd = process.cwd();
+    const input = await readStdin();
+    session_id = input.session_id;
+    cwd = input.cwd || cwd;
+
+    // Check if focus-task is active AND owned by this session
+    const lock = checkLock(cwd, session_id);
+    if (!lock) {
+      // No valid lock for this session - allow compact without handoff logic
+      output({ continue: true });
+      return;
+    }
+
+    // Get task path from lock (session-validated)
+    const taskPath = lock.task_path ? join(cwd, lock.task_path) : getActiveTaskPath(cwd);
     if (!taskPath) {
-      // Not a focus-task session, allow compact
       output({ continue: true });
       return;
     }
 
     // Parse task to get current state
-    const task = parseTask(taskPath);
+    const task = parseTask(taskPath, cwd);
 
     // If task is finished, allow compact without validation
     if (task.status === 'finished') {
@@ -63,7 +88,7 @@ async function main() {
 
     // If validation issues, warn but continue (don't block compact)
     if (validationIssues.length > 0) {
-      log('warn', '[pre-compact]', `Validation warnings:\n${validationIssues.join('\n')}`, cwd);
+      log('warn', '[pre-compact]', `Validation warnings: ${validationIssues.join('; ')}`, cwd, session_id);
       // Still continue - better to compact than crash
     }
 
@@ -71,9 +96,9 @@ async function main() {
     const knowledgePath = getKnowledgePath(taskPath);
     const config = loadConfig(cwd);
     if (existsSync(knowledgePath)) {
-      const compacted = localCompact(knowledgePath, config.knowledge.maxEntries);
+      const compacted = localCompact(knowledgePath, config.knowledge.maxEntries, cwd);
       if (compacted) {
-        log('info', '[pre-compact]', 'Knowledge compacted successfully', cwd);
+        log('info', '[pre-compact]', 'Knowledge compacted successfully', cwd, session_id);
       }
     }
 
@@ -89,11 +114,15 @@ async function main() {
     state.lastPhase = task.currentPhase;
     saveState(cwd, state);
 
+    log('info', '[pre-compact]', `Handoff to phase ${task.currentPhase}`, cwd, session_id);
+
     // Return continue to allow compact
     // Also return a message to help Claude resume
     output({
       continue: true,
-      systemMessage: `<ft-handoff>
+      systemMessage: `focus-task: handoff to phase ${task.currentPhase}
+
+<ft-handoff>
 [CONTEXT COMPACT - HANDOFF]
 Task: ${taskPath}
 Phase: ${task.currentPhase}/${task.totalPhases}
@@ -107,7 +136,7 @@ State preserved in:
 </ft-handoff>`
     });
   } catch (error) {
-    console.error(`[pre-compact] Error: ${error.message}`);
+    log('error', '[pre-compact]', `Error: ${error.message}`, cwd, session_id);
     // On error, still allow compact (don't crash session)
     output({ continue: true });
   }

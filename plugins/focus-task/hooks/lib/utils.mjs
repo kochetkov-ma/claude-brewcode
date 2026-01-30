@@ -80,12 +80,14 @@ export function getReportsDir(taskPath, cwd) {
  * @param {string} taskPath - Path to TASK.md file
  * @returns {Object|null} Parsed task with status and phases, or null on error
  */
-export function parseTask(taskPath) {
+export function parseTask(taskPath, cwd = null) {
   let content;
   try {
     content = readFileSync(taskPath, 'utf8');
   } catch (e) {
-    console.error(`[parseTask] Failed to read ${taskPath}: ${e.message}`);
+    // Derive cwd from taskPath if not provided (taskPath is like /path/to/project/.claude/tasks/...)
+    const derivedCwd = cwd || taskPath.replace(/\/\.claude\/tasks\/.*$/, '');
+    log('error', '[parseTask]', `Failed to read ${taskPath}: ${e.message}`, derivedCwd);
     return null;
   }
 
@@ -188,7 +190,8 @@ export function updateTaskStatus(taskPath, newStatus) {
     renameSync(tmpPath, taskPath);
     return true;
   } catch (e) {
-    console.error(`[updateTaskStatus] Failed: ${e.message}`);
+    const cwd = taskPath.replace(/\/\.claude\/tasks\/.*$/, '');
+    log('error', '[updateTaskStatus]', `Failed: ${e.message}`, cwd);
     return false;
   }
 }
@@ -239,7 +242,7 @@ export function loadConfig(cwd) {
     try {
       userConfig = JSON.parse(readFileSync(configPath, 'utf8'));
     } catch (e) {
-      console.error(`[config] Failed to parse ${configPath}: ${e.message}`);
+      log('error', '[config]', `Failed to parse ${configPath}: ${e.message}`, cwd);
     }
   }
 
@@ -272,24 +275,24 @@ export function isSystemAgent(agentType, cwd = null) {
 // ============================================================================
 
 const LOCK_FILE = 'tasks/cfg/.focus-task.lock';
+const LOCK_STALE_HOURS = 24;
 
 /**
- * Create lock file (called by coordinator during initialize)
- * @param {string} cwd - Current working directory
- * @param {string} taskPath - Path to TASK.md
- * @returns {boolean} True if created successfully
+ * Check if lock is stale (older than threshold)
+ * @param {Object} lock - Lock data with started_at or bound_at
+ * @returns {boolean} True if lock is stale
  */
-export function createLock(cwd, taskPath) {
-  const lockPath = join(cwd, '.claude', LOCK_FILE);
+export function isLockStale(lock) {
+  if (!lock) return false;
+
+  const timestamp = lock.bound_at || lock.started_at;
+  if (!timestamp) return false;
+
   try {
-    const lock = {
-      task_path: taskPath,
-      started_at: new Date().toISOString()
-    };
-    writeFileSync(lockPath, JSON.stringify(lock, null, 2));
-    return true;
-  } catch (e) {
-    console.error(`[lock] Failed to create: ${e.message}`);
+    const age = Date.now() - new Date(timestamp).getTime();
+    const maxAge = LOCK_STALE_HOURS * 60 * 60 * 1000;
+    return age > maxAge;
+  } catch {
     return false;
   }
 }
@@ -313,11 +316,11 @@ export function bindLockSession(cwd, sessionId) {
       lock.session_id = sessionId;
       lock.bound_at = new Date().toISOString();
       writeFileSync(lockPath, JSON.stringify(lock, null, 2));
-      console.error(`[lock] Session bound: ${sessionId}`);
+      log('info', '[lock]', `Session bound: ${sessionId.slice(0, 8)}`, cwd, sessionId);
     }
     return true;
   } catch (e) {
-    console.error(`[lock] Failed to bind session: ${e.message}`);
+    log('error', '[lock]', `Failed to bind session: ${e.message}`, cwd, sessionId);
     return false;
   }
 }
@@ -331,7 +334,7 @@ export function bindLockSession(cwd, sessionId) {
 export function checkLock(cwd, sessionId) {
   const lockPath = join(cwd, '.claude', LOCK_FILE);
   if (!existsSync(lockPath)) {
-    log('debug', '[lock]', 'No lock file exists', cwd);
+    log('debug', '[lock]', 'No lock file exists', cwd, sessionId);
     return null;
   }
 
@@ -340,20 +343,22 @@ export function checkLock(cwd, sessionId) {
 
     // Lock must have session_id bound
     if (!lock.session_id) {
-      log('debug', '[lock]', 'Lock has no session_id', cwd);
+      log('debug', '[lock]', 'Lock has no session_id', cwd, sessionId);
       return null;
     }
 
     // Session must match
     if (lock.session_id !== sessionId) {
-      log('debug', '[lock]', `Session mismatch: lock=${lock.session_id}, current=${sessionId}`, cwd);
+      const lockId = typeof lock.session_id === 'string' ? lock.session_id.slice(0, 8) : 'invalid';
+      const currentId = typeof sessionId === 'string' ? sessionId.slice(0, 8) : 'null';
+      log('debug', '[lock]', `Session mismatch: lock=${lockId}, current=${currentId}`, cwd, sessionId);
       return null;
     }
 
-    log('debug', '[lock]', `Session matched: ${sessionId}`, cwd);
+    log('debug', '[lock]', `Session matched: ${sessionId?.slice(0, 8) || 'unknown'}`, cwd, sessionId);
     return lock;
   } catch (e) {
-    console.error(`[lock] Failed to check: ${e.message}`);
+    log('error', '[lock]', `Failed to check: ${e.message}`, cwd, sessionId);
     return null;
   }
 }
@@ -370,7 +375,7 @@ export function getLock(cwd) {
   try {
     return JSON.parse(readFileSync(lockPath, 'utf8'));
   } catch (e) {
-    console.error(`[lock] Failed to read: ${e.message}`);
+    log('error', '[lock]', `Failed to read: ${e.message}`, cwd);
     return null;
   }
 }
@@ -385,9 +390,9 @@ export function deleteLock(cwd) {
   if (existsSync(lockPath)) {
     try {
       unlinkSync(lockPath);
-      console.error('[lock] Deleted lock file');
+      log('debug', '[lock]', 'Deleted lock file', cwd);
     } catch (e) {
-      console.error(`[lock] Failed to delete: ${e.message}`);
+      log('error', '[lock]', `Failed to delete: ${e.message}`, cwd);
     }
   }
 }
@@ -436,16 +441,21 @@ export function shouldLog(level, cwd) {
  * @param {string} prefix - Log prefix (e.g., '[hook]')
  * @param {string} message - Log message
  * @param {string} cwd - Current working directory
+ * @param {string|null} sessionId - Optional session ID for correlation
  */
-export function log(level, prefix, message, cwd) {
-  if (!shouldLog(level, cwd)) return;
+export function log(level, prefix, message, cwd, sessionId = null) {
+  // Always write to stderr first (even if cwd is null)
+  console.error(`${prefix} ${message}`);
+
+  // Skip file logging if cwd is null or level check fails
+  if (!cwd || !shouldLog(level, cwd)) return;
 
   const timestamp = new Date().toISOString();
   const levelTag = level.toUpperCase().padEnd(5);
-  const line = `${timestamp} ${levelTag} ${prefix} ${message}`;
-
-  // Write to stderr
-  console.error(`${prefix} ${message}`);
+  const sessionTag = (typeof sessionId === 'string' && sessionId)
+    ? `[${sessionId.slice(0, 8)}] `
+    : '';
+  const line = `${timestamp} ${levelTag} ${sessionTag}${prefix} ${message}`;
 
   // Write to file
   try {
@@ -457,5 +467,46 @@ export function log(level, prefix, message, cwd) {
     appendFileSync(logPath, line + '\n');
   } catch {
     // Ignore file write errors - don't break hooks
+  }
+}
+
+// ============================================================================
+// PERSISTENT STATE
+// ============================================================================
+
+const STATE_FILE = '.claude/tasks/cfg/focus-task.state.json';
+
+/**
+ * Get persistent state
+ * @param {string} cwd - Current working directory
+ * @returns {object} State object
+ */
+export function getState(cwd) {
+  try {
+    const statePath = join(cwd, STATE_FILE);
+    if (existsSync(statePath)) {
+      return JSON.parse(readFileSync(statePath, 'utf8'));
+    }
+  } catch {
+    // Ignore read errors
+  }
+  return {};
+}
+
+/**
+ * Save persistent state
+ * @param {string} cwd - Current working directory
+ * @param {object} state - State to save
+ */
+export function saveState(cwd, state) {
+  try {
+    const statePath = join(cwd, STATE_FILE);
+    const stateDir = dirname(statePath);
+    if (!existsSync(stateDir)) {
+      mkdirSync(stateDir, { recursive: true });
+    }
+    writeFileSync(statePath, JSON.stringify(state, null, 2));
+  } catch {
+    // Ignore write errors
   }
 }

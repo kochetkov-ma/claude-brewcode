@@ -19,14 +19,16 @@
 │
 ├── commands/                         # Слэш-команды (пусто, используй скиллы)
 │
-├── skills/                           # Скиллы (3 локальных + 6 симлинков)
+├── skills/                           # Скиллы (4 локальных + 6 симлинков)
 │   ├── text-optimize/                # Локальный скилл
 │   │   ├── SKILL.md                  # Оптимизация для LLM
 │   │   └── references/
 │   ├── global-doc-update/            # Локальный скилл
 │   │   └── SKILL.md                  # Синхронизация ~/.claude (user-only)
-│   ├── text-human/                   # Локальный скилл (NEW)
+│   ├── text-human/                   # Локальный скилл
 │   │   └── SKILL.md                  # Humanize code, remove AI artifacts
+│   ├── secrets-scan/                 # Локальный скилл (NEW)
+│   │   └── SKILL.md                  # 10 parallel haiku agents security scan
 │   │
 │   ├── focus-task-setup -> ...       # Симлинки на плагин focus-task
 │   ├── focus-task-teardown -> ...       # (workaround для autocomplete)
@@ -50,7 +52,7 @@
 │   │       └── focus-task/           # Плагин infinite task execution
 │   │           ├── 2.0.8/            # Все версии сохраняются
 │   │           ├── ...
-│   │           └── 2.0.18/           # Актуальная версия
+│   │           └── 2.0.21/           # Актуальная версия
 │   │               ├── .claude-plugin/
 │   │               │   └── plugin.json
 │   │               ├── skills/       # 7 скиллов (setup, teardown, create, doc, review, rules, start)
@@ -123,23 +125,26 @@
 
 ---
 
-## Размеры директорий (актуально 2026-01-28)
+## Размеры директорий (актуально 2026-01-29)
 
 | Директория | Размер | Комментарий |
 |------------|--------|-------------|
-| projects/ | 2.0GB | Основной объём — транскрипты сессий |
-| debug/ | 103MB | Логи, можно чистить вручную |
+| projects/ | 735MB | Основной объём — транскрипты сессий |
+| debug/ | 141MB | Логи, можно чистить вручную |
 | shell-snapshots/ | 33MB | Для возобновления сессий |
-| plugins/ | 8.3MB | Установленные плагины (кэш версий) |
-| file-history/ | 7.7MB | История редактирования |
-| todos/ | 3.2MB | JSON с задачами |
+| plugins/ | 9.0MB | Установленные плагины (кэш версий) |
+| file-history/ | 9.4MB | История редактирования |
+| todos/ | 3.3MB | JSON с задачами |
 | reports/ | 1.2MB | Сгенерированные отчёты |
-| paste-cache/ | 260KB | Кэш вставок |
-| plans/ | 140KB | Файлы планирования |
+| plans/ | 356KB | Файлы планирования |
+| paste-cache/ | 264KB | Кэш вставок |
+| skills/ | 56KB | 4 локальных + 6 симлинков на плагин |
 | agents/ | 52KB | Определения агентов |
-| skills/ | 44KB | 3 локальных + 6 симлинков на плагин |
 | cache/ | 32KB | Общий кэш |
-| templates/ | 0KB | Шаблоны (пусто) |
+| ide/ | 12KB | Интеграция с IDE |
+| rules/ | 8KB | Глобальные правила |
+| templates/ | 4KB | Шаблоны (README.md) |
+| tasks/ | 4KB | Задачи |
 | commands/ | 0KB | Слэш-команды (пусто) |
 
 ---
@@ -148,7 +153,7 @@
 
 ```bash
 # Симлинки для autocomplete (workaround GitHub #18949)
-focus-task-setup  → ~/.claude/plugins/cache/claude-brewcode/focus-task/2.0.18/skills/setup/
+focus-task-setup  → ~/.claude/plugins/cache/claude-brewcode/focus-task/2.0.20/skills/setup/
 focus-task-teardown  → .../skills/teardown/
 focus-task-create → .../skills/create/
 focus-task-doc    → .../skills/doc/

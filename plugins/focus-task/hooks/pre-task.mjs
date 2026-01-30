@@ -16,9 +16,15 @@ import {
 import { readKnowledge, compressKnowledge } from './lib/knowledge.mjs';
 
 async function main() {
+  let cwd = null;
+  let session_id = null;
+
   try {
+    cwd = process.cwd();
     const input = await readStdin();
-    const { tool_input, cwd, session_id } = input;
+    session_id = input.session_id;
+    cwd = input.cwd || cwd;
+    const tool_input = input.tool_input;
 
     // Only process Task tool calls
     if (!tool_input) {
@@ -68,6 +74,8 @@ async function main() {
       return;
     }
 
+    log('info', '[pre-task]', `Injecting knowledge for ${subagentType} (${entries.length} entries)`, cwd, session_id);
+
     // Inject knowledge into prompt
     const originalPrompt = tool_input.prompt || '';
     const updatedPrompt = `${knowledge}\n\n${originalPrompt}`;
@@ -76,11 +84,12 @@ async function main() {
       updatedInput: {
         ...tool_input,
         prompt: updatedPrompt
-      }
+      },
+      systemMessage: `focus-task: knowledge injected (${entries.length} entries)`
     });
   } catch (error) {
     // On error, pass through without modification
-    console.error(`[pre-task] Error: ${error.message}`);
+    log('error', '[pre-task]', `Error: ${error.message}`, cwd, session_id);
     output({});
   }
 }

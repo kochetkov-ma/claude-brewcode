@@ -2,6 +2,16 @@
  * Knowledge compression and management for focus-task hooks
  */
 import { readFileSync, existsSync, writeFileSync, appendFileSync, renameSync } from 'fs';
+import { log } from './utils.mjs';
+
+/**
+ * Derive cwd from knowledge path
+ * @param {string} knowledgePath - Path like /path/.claude/tasks/*_KNOWLEDGE.jsonl
+ * @returns {string} Project root directory
+ */
+function deriveCwd(knowledgePath) {
+  return knowledgePath.replace(/\/\.claude\/tasks\/.*$/, '');
+}
 
 /**
  * Read KNOWLEDGE.jsonl entries
@@ -12,26 +22,40 @@ export function readKnowledge(knowledgePath) {
   if (!existsSync(knowledgePath)) return [];
 
   const content = readFileSync(knowledgePath, 'utf8');
-  return content
+  const cwd = deriveCwd(knowledgePath);
+  let invalidCount = 0;
+
+  const entries = content
     .split('\n')
     .filter(line => line.trim())
-    .map(line => {
+    .map((line, idx) => {
       try {
         return JSON.parse(line);
-      } catch {
+      } catch (e) {
+        invalidCount++;
+        if (invalidCount <= 3) {
+          log('warn', '[knowledge]', `Invalid JSON at line ${idx + 1}: ${line.slice(0, 50)}...`, cwd);
+        }
         return null;
       }
     })
     .filter(entry => entry !== null);
+
+  if (invalidCount > 3) {
+    log('warn', '[knowledge]', `${invalidCount} total invalid lines in KNOWLEDGE.jsonl`, cwd);
+  }
+
+  return entries;
 }
 
 /**
  * Append entry to KNOWLEDGE.jsonl
  * @param {string} knowledgePath - Path to KNOWLEDGE.jsonl
  * @param {Object} entry - Entry to append
+ * @param {string|null} cwd - Optional working directory for logging
  * @returns {boolean} True if successful
  */
-export function appendKnowledge(knowledgePath, entry) {
+export function appendKnowledge(knowledgePath, entry, cwd = null) {
   try {
     const line = JSON.stringify({
       ts: new Date().toISOString(),
@@ -40,7 +64,8 @@ export function appendKnowledge(knowledgePath, entry) {
     appendFileSync(knowledgePath, line);
     return true;
   } catch (e) {
-    console.error(`[appendKnowledge] Failed: ${e.message}`);
+    const logCwd = cwd || deriveCwd(knowledgePath);
+    log('error', '[knowledge]', `appendKnowledge failed: ${e.message}`, logCwd);
     return false;
   }
 }
@@ -118,9 +143,10 @@ export function compressKnowledge(entries, maxTokens = 500) {
  * Perform local knowledge compaction (dedup + truncate) with atomic write
  * @param {string} knowledgePath - Path to KNOWLEDGE.jsonl
  * @param {number} maxEntries - Maximum entries to keep (from config)
+ * @param {string|null} cwd - Optional working directory for logging
  * @returns {boolean} True if compaction was performed
  */
-export function localCompact(knowledgePath, maxEntries = 100) {
+export function localCompact(knowledgePath, maxEntries = 100, cwd = null) {
   if (!existsSync(knowledgePath)) return false;
 
   const entries = readKnowledge(knowledgePath);
@@ -160,7 +186,8 @@ export function localCompact(knowledgePath, maxEntries = 100) {
     renameSync(tmpPath, knowledgePath);
     return true;
   } catch (e) {
-    console.error(`[localCompact] Write failed: ${e.message}`);
+    const logCwd = cwd || deriveCwd(knowledgePath);
+    log('error', '[knowledge]', `localCompact write failed: ${e.message}`, logCwd);
     return false;
   }
 }

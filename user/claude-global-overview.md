@@ -47,16 +47,18 @@
 │
 ├── commands/                    # Слэш-команды (пусто)
 │
-├── skills/                      # Скиллы (3 локальных + 6 симлинков)
+├── skills/                      # Скиллы (4 локальных + 6 симлинков)
 │   ├── text-optimize/           # Локальный
 │   │   ├── SKILL.md
 │   │   └── references/
 │   ├── global-doc-update/       # Локальный
 │   │   └── SKILL.md
-│   ├── text-human/              # Локальный (NEW)
+│   ├── text-human/              # Локальный
+│   │   └── SKILL.md
+│   ├── secrets-scan/            # Локальный (NEW) - 10 parallel agents
 │   │   └── SKILL.md
 │   ├── focus-task-setup -> ...  # Симлинки на плагин
-│   ├── focus-task-teardown -> ...  # (NEW)
+│   ├── focus-task-teardown -> ...
 │   ├── focus-task-create -> ...
 │   ├── focus-task-doc -> ...
 │   ├── focus-task-rules -> ...
@@ -118,6 +120,7 @@ idea ~/.claude/commands/
 idea ~/.claude/skills/text-optimize/SKILL.md
 idea ~/.claude/skills/global-doc-update/SKILL.md
 idea ~/.claude/skills/text-human/SKILL.md
+idea ~/.claude/skills/secrets-scan/SKILL.md
 ```
 
 **Локальные скиллы:**
@@ -126,16 +129,17 @@ idea ~/.claude/skills/text-human/SKILL.md
 | text-optimize | "optimize prompt", "optimize file", "reduce tokens", "compress for Claude" |
 | global-doc-update | `/global-doc-update` (синхронизация ~/.claude, user-only) |
 | text-human | "humanize code", "remove ai comments", "simplify docs", "clean documentation" |
+| secrets-scan | "scan for secrets", "find credentials", "security scan" (10 parallel haiku agents) |
 
 **Симлинки на focus-task плагин (workaround для autocomplete):**
 | Симлинк | Источник |
 |---------|----------|
-| `~/.claude/skills/focus-task-setup` | `~/.claude/plugins/cache/claude-brewcode/focus-task/2.0.18/skills/setup/` |
-| `~/.claude/skills/focus-task-teardown` | `.../2.0.18/skills/teardown/` |
-| `~/.claude/skills/focus-task-create` | `.../2.0.18/skills/create/` |
-| `~/.claude/skills/focus-task-doc` | `.../2.0.18/skills/doc/` |
-| `~/.claude/skills/focus-task-rules` | `.../2.0.18/skills/rules/` |
-| `~/.claude/skills/focus-task-start` | `.../2.0.18/skills/start/` |
+| `~/.claude/skills/focus-task-setup` | `~/.claude/plugins/cache/claude-brewcode/focus-task/2.0.20/skills/setup/` |
+| `~/.claude/skills/focus-task-teardown` | `.../2.0.20/skills/teardown/` |
+| `~/.claude/skills/focus-task-create` | `.../2.0.20/skills/create/` |
+| `~/.claude/skills/focus-task-doc` | `.../2.0.20/skills/doc/` |
+| `~/.claude/skills/focus-task-rules` | `.../2.0.20/skills/rules/` |
+| `~/.claude/skills/focus-task-start` | `.../2.0.20/skills/start/` |
 
 > **Note:** `focus-task-review` создаётся `/focus-task:setup` в `.claude/skills/` проекта (адаптируется AI).
 
@@ -209,7 +213,7 @@ idea ~/.claude/plugins/known_marketplaces.json
 |--------|--------|-------------|---------------------|
 | context7 | — | claude-plugins-official | resolve-library-id, query-docs |
 | playwright | 4fee769 | claude-plugins-official | browser_*, snapshot, screenshot |
-| focus-task | 2.0.18 | claude-brewcode | 7 skills, 2 agents |
+| focus-task | 2.0.21 | claude-brewcode | 7 skills, 2 agents |
 
 **focus-task skills:**
 | Скилл | Назначение |
@@ -240,7 +244,7 @@ idea ~/.claude/plugins/known_marketplaces.json
 │       └── focus-task/
 │           ├── 2.0.8/          # Все версии сохраняются
 │           ├── ...
-│           └── 2.0.18/         # ← Актуальная
+│           └── 2.0.21/         # ← Актуальная
 │               ├── .claude-plugin/plugin.json
 │               ├── skills/{setup,teardown,create,doc,review,rules,start}/
 │               ├── agents/{ft-coordinator,ft-knowledge-manager}.md
@@ -266,7 +270,7 @@ claude plugin list
 
 После `/focus-task:setup` создаются симлинки в `~/.claude/skills/`:
 ```
-focus-task-{skill} → ~/.claude/plugins/cache/claude-brewcode/focus-task/2.0.18/skills/{skill}/
+focus-task-{skill} → ~/.claude/plugins/cache/claude-brewcode/focus-task/2.0.20/skills/{skill}/
 ```
 Это позволяет использовать `/focus-task-setup` вместо `/focus-task:setup` с autocomplete.
 
@@ -427,6 +431,7 @@ du -sh ~/.claude/*/
 
 | Вер. | Дата | Изменения |
 |------|------|-----------|
+| 2.13 | 2026-01-29 | focus-task 2.0.21, новый скилл secrets-scan (10 parallel haiku agents), обновлены размеры директорий |
 | 2.12 | 2026-01-28 | focus-task 2.0.18, симлинки обновлены, Task tool в developer/tester |
 | 2.11 | 2026-01-27 | Обновлена версия focus-task до 2.0.11, исправлены пути симлинков |
 | 2.10 | 2026-01-27 | Добавлен раздел «Расположение плагинов», focus-task v1.0.7, команды управления |

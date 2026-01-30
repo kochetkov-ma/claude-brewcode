@@ -35,22 +35,30 @@ function linkLatestPlan(cwd) {
 }
 
 async function main() {
-  try {
-    const input = await readStdin();
-    const { session_id, source, cwd } = input;
+  let cwd = null;
+  let session_id = null;
 
-    log('info', '[session]', `Started: ${session_id} (${source})`, cwd);
+  try {
+    cwd = process.cwd();
+    const input = await readStdin();
+    session_id = input.session_id;
+    cwd = input.cwd || cwd;
+    const source = input.source;
+
+    log('info', '[session]', `Started: ${session_id?.slice(0, 8) || 'unknown'} (${source})`, cwd, session_id);
 
     if (source === 'clear' && cwd) {
       const linked = linkLatestPlan(cwd);
       if (linked) {
-        log('info', '[plan]', `Linked: .claude/plans/LATEST.md -> ${linked}`, cwd);
+        log('info', '[plan]', `Linked: .claude/plans/LATEST.md -> ${linked}`, cwd, session_id);
       }
     }
 
-    output({});
+    output({
+      systemMessage: `session: ${session_id?.slice(0, 8) || 'unknown'} started`
+    });
   } catch (error) {
-    console.error(`[session-start] Error: ${error.message}`);
+    log('error', '[session-start]', `Error: ${error.message}`, cwd, session_id);
     output({});
   }
 }

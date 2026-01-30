@@ -1,0 +1,175 @@
+#!/usr/bin/env node
+/**
+ * grepai SessionStart Hook
+ *
+ * Auto-starts grepai watch when entering a project with .grepai/ configured.
+ * Provides status information via systemMessage.
+ *
+ * NEVER blocks session start - all errors are informational only.
+ *
+ * Logs: .claude/tasks/logs/grepai.log
+ */
+
+import { execSync, spawn } from 'child_process';
+import { existsSync, appendFileSync, mkdirSync, statSync } from 'fs';
+import { join, dirname } from 'path';
+
+const LOG_FILE = '.claude/tasks/logs/grepai.log';
+const LOG_LEVELS = { error: 0, warn: 1, info: 2, debug: 3 };
+const CURRENT_LOG_LEVEL = LOG_LEVELS.debug;
+
+function log(level, message, cwd) {
+  if (LOG_LEVELS[level] > CURRENT_LOG_LEVEL) return;
+
+  const timestamp = new Date().toISOString();
+  const line = `${timestamp} ${level.toUpperCase().padEnd(5)} [grepai] ${message}`;
+  console.error(`[grepai] ${message}`);
+
+  if (!cwd) return;
+  try {
+    const logPath = join(cwd, LOG_FILE);
+    mkdirSync(dirname(logPath), { recursive: true });
+    appendFileSync(logPath, line + '\n');
+  } catch {
+    // Ignore log write errors
+  }
+}
+
+// Read hook input from stdin
+let input = '';
+process.stdin.setEncoding('utf8');
+
+process.stdin.on('data', (chunk) => {
+  input += chunk;
+});
+
+process.stdin.on('end', async () => {
+  let cwd = process.cwd();
+
+  try {
+    const hookInput = JSON.parse(input);
+    cwd = hookInput.cwd || cwd;
+
+    log('info', 'SessionStart hook triggered', cwd);
+    log('debug', `cwd: ${cwd}`, cwd);
+
+    const result = await checkGrepai(cwd);
+
+    log('debug', 'Hook completed', cwd);
+    console.log(JSON.stringify(result));
+  } catch (err) {
+    log('error', `Hook error: ${err.message}`, cwd);
+    console.log(JSON.stringify({}));
+  }
+});
+
+async function checkGrepai(cwd) {
+  const grepaiDir = join(cwd, '.grepai');
+  const indexPath = join(grepaiDir, 'index.gob');
+  const logsDir = join(grepaiDir, 'logs');
+
+  // No .grepai directory - suggest setup
+  if (!existsSync(grepaiDir)) {
+    log('info', 'grepai not configured - skipping', cwd);
+    return {
+      systemMessage: 'grepai not configured. Run `/focus-task:grepai` to setup semantic search.'
+    };
+  }
+
+  const status = [];
+  let shouldAutoStart = false;
+
+  // Check ollama
+  const ollamaRunning = checkOllama();
+  log('debug', `ollama: ${ollamaRunning ? 'running' : 'stopped'}`, cwd);
+  if (!ollamaRunning) {
+    status.push('ollama: stopped');
+  }
+
+  // Check index
+  const hasIndex = existsSync(indexPath);
+  if (hasIndex) {
+    try {
+      const stats = statSync(indexPath);
+      const sizeMB = (stats.size / (1024 * 1024)).toFixed(1);
+      log('debug', `index: exists (${sizeMB}MB)`, cwd);
+    } catch {
+      log('debug', 'index: exists', cwd);
+    }
+  } else {
+    log('debug', 'index: missing', cwd);
+    status.push('index: missing (run `grepai init`)');
+  }
+
+  // Check watch process
+  const watchRunning = checkWatchRunning();
+  log('debug', `watch: ${watchRunning ? 'running' : 'stopped'}`, cwd);
+
+  if (!watchRunning && hasIndex && ollamaRunning) {
+    shouldAutoStart = true;
+  }
+
+  // Auto-start watch if conditions met
+  if (shouldAutoStart) {
+    try {
+      log('info', 'Auto-starting grepai watch', cwd);
+
+      // Ensure logs directory exists
+      if (!existsSync(logsDir)) {
+        mkdirSync(logsDir, { recursive: true });
+      }
+
+      // Start watch in background (detached)
+      const child = spawn('grepai', ['watch', '--background', '--log-dir', logsDir], {
+        cwd: cwd,
+        detached: true,
+        stdio: 'ignore'
+      });
+      child.unref();
+
+      log('info', 'Watch started successfully', cwd);
+      status.push('watch: auto-started');
+    } catch (err) {
+      log('warn', `Watch auto-start failed: ${err.message}`, cwd);
+      status.push('watch: auto-start failed');
+    }
+  } else if (!watchRunning) {
+    status.push('watch: stopped');
+  }
+
+  // Build status message
+  const statusMessage = status.length === 0
+    ? 'ready (index + watch active)'
+    : status.join(', ');
+
+  log('info', `Status: ${statusMessage}`, cwd);
+
+  return {
+    systemMessage: `grepai: ${statusMessage}`
+  };
+}
+
+function checkOllama() {
+  try {
+    execSync('curl -s localhost:11434/api/tags', {
+      timeout: 2000,
+      stdio: 'ignore'
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function checkWatchRunning() {
+  try {
+    const result = execSync('pgrep -f "grepai watch"', {
+      encoding: 'utf8',
+      timeout: 1000,
+      stdio: ['ignore', 'pipe', 'ignore']
+    });
+    return result.trim().length > 0;
+  } catch {
+    return false;
+  }
+}
