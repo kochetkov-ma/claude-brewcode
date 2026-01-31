@@ -13,7 +13,9 @@ echo "ARGS: [$ARGS]"
 MODE=""
 
 # Check keywords (order matters - first match wins)
-if [[ "$ARGS_LOWER" =~ (optimize|update|улучши|обнови) ]]; then
+if [[ "$ARGS_LOWER" =~ (upgrade|brew|обновить|апгрейд) ]]; then
+    MODE="upgrade"
+elif [[ "$ARGS_LOWER" =~ (optimize|update|улучши|обнови) ]]; then
     MODE="optimize"
 elif [[ "$ARGS_LOWER" =~ (stop|halt|kill) ]]; then
     MODE="stop"

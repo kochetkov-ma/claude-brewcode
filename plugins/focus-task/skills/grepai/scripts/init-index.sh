@@ -22,3 +22,5 @@ mkdir -p .grepai/logs
 # Start watch in background
 grepai watch --background --log-dir .grepai/logs 2>/dev/null
 echo "✅ grepai watch: started in background"
+
+exit 0

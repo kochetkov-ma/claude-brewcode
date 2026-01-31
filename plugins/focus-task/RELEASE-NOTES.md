@@ -28,6 +28,62 @@
 
 ---
 
+## v2.0.46 (2026-01-31)
+
+### Fixed
+
+- **status.sh** — version detection for grepai CLI
+  - Fixed: `grepai version` (subcommand) instead of `--version` (flag)
+  - Fixed: macOS compatibility (removed `timeout` command)
+  - Now shows: `✅ grepai: v0.25.0 (brew: v0.24.1)`
+
+---
+
+## v2.0.45 (2026-01-31)
+
+### Added
+
+- **grepai skill** — `upgrade` mode for CLI updates via Homebrew
+  - `scripts/upgrade.sh` — version check + brew upgrade
+  - Keywords: upgrade, brew, обновить, апгрейд
+- **status.sh** — version comparison (current vs latest)
+  - Shows `⚠️ v0.23.0 (v0.24.0 available)` when outdated
+
+### Changed
+
+- **ft-grepai-configurator** — optimized for LLM (-32% tokens)
+  - Fixed MCP paths (`~/.claude.json` instead of `~/.claude/mcp.json`)
+  - Added `compact` param to `grepai_trace_graph`
+  - Added MCP Integration phase (Phase 4)
+- **grepai-first.md.template** — improved clarity
+  - Fixed `--compact` syntax (was `compact:true`)
+  - Added WebSearch row to decision table
+  - Removed unverified "3-7 words" guideline
+- **grepai-session.mjs** — Windows compatibility
+  - Added platform check for `pgrep` (macOS/Linux only)
+  - Documented limitation in header comment
+- **SKILL.md** — removed unused `Glob` from allowed-tools
+
+### Fixed
+
+- **init-index.sh** — added explicit `exit 0`
+- **detect-mode.sh** — added `(unrecognized text) → prompt` to Mode Reference
+
+### Updated Files
+
+| File | Change |
+|------|--------|
+| `agents/ft-grepai-configurator.md` | MCP paths, trace params, -32% tokens |
+| `templates/rules/grepai-first.md.template` | --compact, WebSearch, clarity |
+| `skills/grepai/SKILL.md` | upgrade mode, allowed-tools |
+| `skills/grepai/scripts/upgrade.sh` | NEW — brew upgrade |
+| `skills/grepai/scripts/status.sh` | version comparison |
+| `skills/grepai/scripts/detect-mode.sh` | upgrade keywords |
+| `skills/grepai/scripts/init-index.sh` | exit 0 |
+| `hooks/grepai-session.mjs` | Windows check |
+
+---
+
 ## v2.0.44 (2026-01-30)
 
 ### Added

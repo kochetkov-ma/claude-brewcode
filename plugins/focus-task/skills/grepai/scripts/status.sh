@@ -5,7 +5,24 @@ echo "=== grepai Status ==="
 echo ""
 
 echo "--- Infrastructure ---"
-which grepai >/dev/null && echo "✅ grepai: $(grepai --version 2>/dev/null || echo 'installed')" || echo "❌ grepai: NOT FOUND"
+if command -v grepai &>/dev/null; then
+  CURRENT=$(grepai version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+  LATEST=$(brew info yoanbernabeu/tap/grepai 2>/dev/null | grep -oE 'stable [0-9]+\.[0-9]+\.[0-9]+' | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+  if [ -n "$CURRENT" ] && [ -n "$LATEST" ]; then
+    # Compare versions (newer installed = ok, older = update available)
+    if [ "$(printf '%s\n' "$LATEST" "$CURRENT" | sort -V | tail -1)" = "$LATEST" ] && [ "$CURRENT" != "$LATEST" ]; then
+      echo "⚠️ grepai: v$CURRENT → v$LATEST available — run: /grepai upgrade"
+    else
+      echo "✅ grepai: v$CURRENT (brew: v$LATEST)"
+    fi
+  elif [ -n "$CURRENT" ]; then
+    echo "✅ grepai: v$CURRENT"
+  else
+    echo "✅ grepai: installed"
+  fi
+else
+  echo "❌ grepai: NOT FOUND"
+fi
 curl -s localhost:11434/api/tags >/dev/null && echo "✅ ollama: running" || echo "❌ ollama: stopped"
 ollama list 2>/dev/null | grep -q bge-m3 && echo "✅ bge-m3: installed" || echo "❌ bge-m3: missing"
 

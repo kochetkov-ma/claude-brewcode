@@ -1,35 +1,28 @@
 ---
 name: grepai
-description: Semantic code search setup and management. Auto-detects mode based on project state. Triggers - "grepai", "semantic search", "setup grepai", "grepai status".
+description: Semantic search setup. Triggers - "grepai", "semantic search", "setup grepai".
 user-invocable: true
-argument-hint: "[setup|status|start|stop|reindex|optimize]"
-allowed-tools: Read, Write, Edit, Bash, Task, Glob
+argument-hint: "[setup|status|start|stop|reindex|optimize|upgrade]"
+allowed-tools: Read, Write, Edit, Bash, Task
 context: fork
 model: sonnet
 ---
 
 # grepai Skill
 
-Semantic code search setup and management for grepai.
-
-**Scripts location:** `$FT_PLUGIN/skills/grepai/scripts/`
+> **Environment:** Ollama + bge-m3 | GOB storage | Java/Kotlin/JS/TS
 
 <instructions>
 
 ## Prerequisites
 
-> **WORKAROUND:** `$CLAUDE_PLUGIN_ROOT` is only set in hooks, NOT in skills.
-> Claude Code doesn't inject plugin env vars when executing bash from SKILL.md.
-> We resolve the plugin path dynamically using the cache directory structure.
-
-**EXECUTE FIRST** — set plugin root variable for this session:
+**EXECUTE FIRST** — resolve plugin path:
 ```bash
-# Resolve plugin root from cache (latest version)
 FT_PLUGIN=$(ls -vd "$HOME/.claude/plugins/cache/claude-brewcode/focus-task"/*/ 2>/dev/null | tail -1)
 test -n "$FT_PLUGIN" && echo "✅ FT_PLUGIN=$FT_PLUGIN" || echo "❌ Plugin not found in cache"
 ```
 
-> **STOP if ❌** — plugin not installed. Run: `claude plugin add claude-brewcode/focus-task`
+> **STOP if ❌** — run: `claude plugin add claude-brewcode/focus-task`
 
 ---
 
@@ -57,6 +50,7 @@ MODE: [detected mode]
 
 | Keyword in args | MODE |
 |-----------------|------|
+| upgrade, brew, обновить, апгрейд | upgrade |
 | optimize, update, улучши, обнови | optimize |
 | stop, halt, kill | stop |
 | start, watch | start |
@@ -65,6 +59,7 @@ MODE: [detected mode]
 | reindex, rebuild, refresh | reindex |
 | (empty) + .grepai/ exists | start |
 | (empty) + no .grepai/ | setup |
+| (unrecognized text) | prompt |
 
 ---
 
@@ -131,8 +126,6 @@ bash "$FT_PLUGIN/skills/grepai/scripts/verify.sh" && echo "✅ verify" || echo "
 
 ## Mode: status
 
-Read-only diagnostics.
-
 **EXECUTE** using Bash tool:
 ```bash
 bash "$FT_PLUGIN/skills/grepai/scripts/status.sh" && echo "✅ status" || echo "❌ status FAILED"
@@ -141,8 +134,6 @@ bash "$FT_PLUGIN/skills/grepai/scripts/status.sh" && echo "✅ status" || echo "
 ---
 
 ## Mode: start
-
-Start grepai watch in background.
 
 **EXECUTE** using Bash tool:
 ```bash
@@ -153,8 +144,6 @@ bash "$FT_PLUGIN/skills/grepai/scripts/start.sh" && echo "✅ start" || echo "�
 
 ## Mode: stop
 
-Stop grepai watch.
-
 **EXECUTE** using Bash tool:
 ```bash
 bash "$FT_PLUGIN/skills/grepai/scripts/stop.sh" && echo "✅ stop" || echo "❌ stop FAILED"
@@ -164,7 +153,7 @@ bash "$FT_PLUGIN/skills/grepai/scripts/stop.sh" && echo "✅ stop" || echo "❌ 
 
 ## Mode: reindex
 
-Full index rebuild: stop watch, clean artifacts, rebuild, restart.
+Full index rebuild: stop watch → clean → rebuild → restart.
 
 **EXECUTE** using Bash tool:
 ```bash
@@ -207,18 +196,29 @@ bash "$FT_PLUGIN/skills/grepai/scripts/reindex.sh" && echo "✅ reindex" || echo
 
 ---
 
+## Mode: upgrade
+
+Update grepai CLI via Homebrew.
+
+**EXECUTE** using Bash tool:
+```bash
+bash "$FT_PLUGIN/skills/grepai/scripts/upgrade.sh" && echo "✅ upgrade" || echo "❌ upgrade FAILED"
+```
+
+---
+
 ## Mode: prompt
 
-User provided arguments but no recognized keyword. Ask what they want:
-
+Ask user:
 ```
-Which grepai operation do you want?
-- setup   - Install and configure grepai
-- status  - Check system health
-- start   - Start file watcher
-- stop    - Stop file watcher
-- reindex - Rebuild search index
-- optimize - Re-analyze project and regenerate config
+Which grepai operation?
+- setup   - Install and configure
+- status  - Check health
+- start   - Start watcher
+- stop    - Stop watcher
+- reindex - Rebuild index
+- optimize - Regenerate config
+- upgrade - Update CLI via brew
 ```
 
 </instructions>
@@ -243,7 +243,7 @@ Which grepai operation do you want?
 |-----------|--------|
 | grepai CLI | [✅/❌] |
 | ollama | [✅/❌] |
-| bge-m3 | [✅/❌] |
+| bge-m3 model | [✅/❌] |
 | MCP | [✅/❌] |
 | .grepai/ | [✅/❌] |
 | index | [size/indexing] |

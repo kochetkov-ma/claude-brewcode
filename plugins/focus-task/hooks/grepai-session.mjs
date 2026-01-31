@@ -6,6 +6,8 @@
  * Provides status information via systemMessage.
  *
  * NEVER blocks session start - all errors are informational only.
+ *
+ * Platform: macOS/Linux only. Windows lacks pgrep - auto-start disabled.
  */
 import { readStdin, output, log } from './lib/utils.mjs';
 import { execSync, spawn } from 'child_process';
@@ -63,10 +65,10 @@ async function checkGrepai(cwd, session_id = null) {
       const stats = statSync(indexPath);
       const sizeKB = Math.round(stats.size / 1024);
 
-      // Estimate: ~7-15KB per file depending on chunking
-      // <20KB likely means <10 files (nearly empty index)
-      // 20-100KB = small project
-      // >100KB = normal project
+      // Estimate: ~10KB per file on average
+      // <20KB = likely <2 files (nearly empty, warn)
+      // 20-100KB = small project (display KB)
+      // >100KB = normal project (display MB)
       if (stats.size < 20000) {
         indexStatus = `⚠️ ${sizeKB}KB`;
         log('warn', '[grepai]', `index: small (${sizeKB}KB, likely <10 files) - run reindex`, cwd, session_id);
@@ -151,6 +153,8 @@ function checkOllama() {
 }
 
 function checkWatchRunning() {
+  // pgrep unavailable on Windows - skip check (degrades gracefully)
+  if (process.platform === 'win32') return false;
   try {
     const result = execSync('pgrep -f "grepai watch"', {
       encoding: 'utf8',

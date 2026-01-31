@@ -1,35 +1,38 @@
 ---
-globs: ["**/*"]
-alwaysApply: true
+paths:
+  - "**/*"
+description: grepai-first - semantic search FIRST for code exploration
 ---
 
-# grepai-first
+> **FIRST** grepai for code search. Grep/Glob only for exact text or external paths.
 
-> **DEFAULT:** `grepai_search` FIRST for any code search.
+## Decision
 
 | Task | Tool | Scope |
 |------|------|-------|
-| **⭐ Search by intent/meaning** | **grepai_search** | `[project only]` |
-| Exact text/regex | Grep | `[project*]` |
-| File path patterns | Glob | `[project*]` |
-| External/web | WebSearch | `[internet]` |
+| Intent/meaning | `grepai_search` | indexed project |
+| Exact text/regex | `Grep` | project + external via `path` |
+| File path patterns | `Glob` | project + external via `path` |
+| Web/external docs | `WebSearch` | internet |
 
-`[project*]` = cwd by default, accepts `path` param for other locations
+**Rule:** exact match needed? → Grep/Glob · otherwise → **grepai FIRST**
 
-**Decision:** exact text/regex? → Grep/Glob · otherwise → grepai
-
-## MCP Tools
+## MCP Tools (`--compact` saves ~80% tokens)
 
 | Tool | Use |
 |------|-----|
-| `grepai_search` | Semantic: `"auth flow"`, `"error handling"` |
-| `grepai_trace_callers` | Functions calling symbol |
-| `grepai_trace_callees` | Functions called by symbol |
-| `grepai_trace_graph` | Full call graph around symbol |
-| `grepai_index_status` | Index health/stats |
+| `grepai_search` | `query`, `limit?`, `compact?` — semantic search |
+| `grepai_trace_callers` | `symbol`, `compact?` — who calls it |
+| `grepai_trace_callees` | `symbol`, `compact?` — what it calls |
+| `grepai_trace_graph` | `symbol`, `depth?`, `compact?` — call graph |
+| `grepai_index_status` | `verbose?` — check indexed files/languages |
 
-## Query Tips
+## Queries
 
-- English queries (better semantic matching)
-- Intent over syntax: `"handles login"` not `"func Login"`
-- Specific: `"JWT validation"` not `"token"`
+English · Intent over syntax · Specific over vague
+`"handles user login"` ✓ · `"func Login"` ✗
+
+## Scope Limits
+
+grepai searches **indexed project files only**:
+- Files not matching `ignore:` patterns in config

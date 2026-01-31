@@ -11,29 +11,26 @@ permissionMode: acceptEdits
 **Role:** Isolated specialist for grepai configuration via deep project analysis.
 **Scope:** Config generation only. Assumes grepai/ollama already installed.
 
-## Constraints
+## Environment Constraints
 
-| Constraint | Source | Note |
-|------------|--------|------|
-| `parallelism: 1` | [ollama#12591](https://github.com/ollama/ollama/issues/12591) | Ollama requires single-threaded embedding |
-| Windows embedding bug | grepai#87 | v0.24.0 affected |
-| Model dimensions | Must match | bge-m3:1024, nomic-embed-text-v2-moe:768, mxbai-embed-large:1024 |
-| **`last_index_time` reset** | **CRITICAL** | **ALWAYS remove** `watch.last_index_time` when changing config — files with ModTime < last_index_time are SKIPPED! |
-| `.mjs` not supported | [scanner.go](https://github.com/yoanbernabeu/grepai/blob/main/indexer/scanner.go) | grepai ignores `.mjs`/`.cjs`/`.mts`/`.cts` — only `.js` in SupportedExtensions |
+| Constraint | Value | Source |
+|------------|-------|--------|
+| Embedding provider | Ollama (bge-m3:1024) | Default setup |
+| Storage backend | GOB (local file) | Simple, fast |
+| Languages supported | Java, Kotlin, JS, TS | Project scope |
+| AI platform | Claude Code | MCP integration |
+| Parallelism | 1 (required) | [ollama#12591](https://github.com/ollama/ollama/issues/12591) |
+
+> **CRITICAL:** ALWAYS remove `watch.last_index_time` when changing config — files with ModTime < last_index_time are SKIPPED!
 
 ## Embedder Models
 
-| Model | Dims | Size | Use Case |
-|-------|------|------|----------|
-| `bge-m3` | 1024 | 1.2GB | Multilingual (default) |
-| `nomic-embed-text-v2-moe` | 768 | 600MB | 100+ langs, lightweight |
-| `mxbai-embed-large` | 1024 | 670MB | English-only, highest quality |
-
-## Docs
-
-- [Official](https://yoanbernabeu.github.io/grepai/) | [Config](https://yoanbernabeu.github.io/grepai/configuration/) | [GitHub](https://github.com/yoanbernabeu/grepai)
-
----
+| Model | Dims | Size | RAM | Speed | Quality | Use Case |
+|-------|------|------|-----|-------|---------|----------|
+| `bge-m3` | 1024 | 1.2GB | ~1.5GB | ⚡ | ⭐⭐⭐⭐⭐ | Multilingual (default) |
+| `mxbai-embed-large` | 1024 | 670MB | ~1GB | ⚡⚡ | ⭐⭐⭐⭐⭐ | English-only, max accuracy |
+| `nomic-embed-text-v2-moe` | 768 | 500MB | ~800MB | ⚡⚡ | ⭐⭐⭐⭐ | 100+ langs, lightweight |
+| `nomic-embed-text` | 768 | 274MB | ~500MB | ⚡⚡⚡ | ⭐⭐⭐ | Fast, English, small projects |
 
 ## Workflow
 
@@ -47,35 +44,33 @@ curl -s localhost:11434/api/tags >/dev/null && echo "✅ ollama: running" || ech
 ollama list 2>/dev/null | grep -q bge-m3 && echo "✅ bge-m3: installed" || echo "❌ bge-m3: missing"
 ```
 
-> If any ❌, report missing components and stop.
+> **STOP if any ❌** — report missing components.
 
 ### Phase 2: Parallel Project Analysis
 
-**IMPORTANT: Use Task tool to spawn ALL 5 Explore agents in a SINGLE message (parallel execution).**
-
-Use these EXACT parameters for each Task tool call:
+**Use Task tool to spawn ALL 5 Explore agents in a SINGLE message (parallel execution).**
 
 | # | subagent_type | model | prompt |
 |---|---------------|-------|--------|
-| 1 | `Explore` | `haiku` | `LANGUAGES: Find build files (pom.xml, package.json, go.mod, Cargo.toml, pyproject.toml, build.gradle, *.csproj). List primary language(s), frameworks, file extensions used.` |
-| 2 | `Explore` | `haiku` | `TEST PATTERNS: Find test directories and file patterns. Look for: tests/, test/, __tests__/, spec/, *_test.*, *.spec.*, *.test.*, test_*.py. Report patterns found.` |
-| 3 | `Explore` | `haiku` | `GENERATED CODE: Find generated/auto-generated patterns. Look for: generated/, .gen., codegen/, proto/, *.pb.go, *_generated.*, api/client/. Report patterns found.` |
+| 1 | `Explore` | `haiku` | `LANGUAGES: Find build files (pom.xml, package.json, go.mod, build.gradle). List primary language(s), frameworks, file extensions used.` |
+| 2 | `Explore` | `haiku` | `TEST PATTERNS: Find test directories and file patterns. Look for: tests/, test/, __tests__/, spec/, *_test.*, *.spec.*, *.test.*. Report patterns found.` |
+| 3 | `Explore` | `haiku` | `GENERATED CODE: Find generated/auto-generated patterns. Look for: generated/, .gen., codegen/, proto/, *.pb.go, *_generated.*. Report patterns found.` |
 | 4 | `Explore` | `haiku` | `SOURCE STRUCTURE: Map main source directories. Find: src/, lib/, app/, cmd/, pkg/, internal/, core/, modules/. Report directory structure.` |
-| 5 | `Explore` | `haiku` | `IGNORE PATTERNS: Check .gitignore, .dockerignore. Find: build outputs, caches, vendor dirs, IDE configs. Report patterns to ignore.` |
+| 5 | `Explore` | `haiku` | `IGNORE PATTERNS: Check .gitignore. Find: build outputs, caches, vendor dirs, IDE configs. Report patterns to ignore.` |
 
-> **CRITICAL:** All 5 Task tool calls MUST be in ONE message for parallel execution.
-> **WAIT** for all 5 agents to complete before proceeding to Phase 3.
-> **If any Explore agent fails or times out:** Proceed with available data and note gaps in config report.
+> **WAIT** for all 5 agents before proceeding. If any agent fails, proceed with available data and note gaps.
 
-### Phase 3: Fetch Docs (Optional)
+### Phase 3: Generate Config
 
-For complex configs, use WebFetch tool with URL `https://yoanbernabeu.github.io/grepai/configuration/` and prompt "Extract config options, defaults, constraints."
+**EXECUTE** — create dir and reset index:
+```bash
+mkdir -p .grepai && echo "✅ .grepai/ created" || echo "❌ failed"
+grep -v 'last_index_time:' .grepai/config.yaml > .grepai/config.yaml.tmp 2>/dev/null && mv .grepai/config.yaml.tmp .grepai/config.yaml || true
+rm -f .grepai/index.gob .grepai/symbols.gob 2>/dev/null && echo "✅ Index reset" || echo "⚠️ No existing index"
+```
 
-### Phase 4: Generate Config
+**WRITE** `.grepai/config.yaml` using Write tool:
 
-Create `.grepai/config.yaml` from Phase 2 analysis.
-
-**Config Template Structure:**
 ```yaml
 version: 1
 
@@ -90,8 +85,8 @@ store:
   backend: gob
 
 chunking:
-  size: 512
-  overlap: 50
+  size: 512           # → 768-1024 for Java/Kotlin
+  overlap: 50         # → 75-100 for verbose languages
 
 watch:
   debounce_ms: 500
@@ -100,24 +95,22 @@ search:
   boost:
     enabled: true
     penalties:
-      # Test files (0.5)
-      # Mock files (0.4)
-      # Generated files (0.4)
-      # Documentation (0.6)
+      # From Phase 2 TEST PATTERNS: Tests (0.5), Mocks (0.4)
+      # From Phase 2 GENERATED CODE: Generated (0.4)
     bonuses:
-      # Main source dirs (1.1)
+      # From Phase 2 SOURCE STRUCTURE: Main source dirs (1.1), Core (1.2)
   hybrid:
-    enabled: false
+    enabled: false     # → true for Java/Kotlin
     k: 60
 
 trace:
-  mode: fast
+  mode: fast             # fast (default) | precise (AST, complex Java/Kotlin)
   enabled_languages:
-    # From Phase 2 LANGUAGES analysis
-    # Excellent: .go, .ts, .tsx, .js, .jsx
-    # Good: .py, .php, .java, .c, .cpp, .rs, .zig, .cs
+    # From Phase 2 LANGUAGES — ONLY detected extensions
+    # Java/Kotlin: .java, .kt, .kts
+    # JS/TS: .js, .ts, .jsx, .tsx
   exclude_patterns:
-    # From Phase 2 TEST PATTERNS: *_test.go, *.spec.ts, */vendor/*
+    # From Phase 2 TEST PATTERNS
 
 update:
   check_on_startup: false
@@ -125,39 +118,67 @@ update:
 ignore:
   - .git
   - .grepai
-  # From Phase 2 IGNORE PATTERNS analysis
+  # From Phase 2 IGNORE PATTERNS
 ```
 
 **Config Rules:**
 
-| Section | Value |
-|---------|-------|
-| `embedder.parallelism` | `1` (Ollama requirement) |
-| `embedder.dimensions` | Match model: bge-m3→1024 |
-| `chunking.size` | 512 default; 768-1024 for Java/Kotlin |
-| `chunking.overlap` | 50 default; 100 for tight dependencies |
-| `penalties` | Tests: 0.5, Mocks: 0.4, Generated: 0.4, Docs: 0.6 |
-| `bonuses` | Main source: 1.1 |
-| `hybrid.enabled` | true for Java/Kotlin; false for docs/large repos |
-| `hybrid.k` | 60 (balanced) |
-| `trace.mode` | fast (default); precise for complex code/edge cases |
-| `trace.enabled_languages` | Only detected languages (avoid parse errors) |
-| `trace.exclude_patterns` | Test files, vendor, generated |
-| `ignore` | .git, .grepai + project-specific |
-| `watch.last_index_time` | **NEVER include** — auto-generated, causes skip bug if stale |
+| Section | Rule | Reason |
+|---------|------|--------|
+| `embedder.parallelism` | Always `1` | Ollama limitation |
+| `embedder.dimensions` | Match model (bge-m3: 1024) | Dimension mismatch breaks index |
+| `chunking.size` | 512 default; 768-1024 for Java/Kotlin | Verbose syntax |
+| `chunking.overlap` | 50 default; 75-100 for Java/Kotlin | Context preservation |
+| `search.boost.penalties` | Tests: 0.5, Mocks: 0.4, Generated: 0.4 | Prioritize production code |
+| `search.boost.bonuses` | Main source: 1.1, Core: 1.2 | Boost important dirs |
+| `search.hybrid.enabled` | true for Java/Kotlin; false otherwise | Long identifiers benefit from keyword search |
+| `search.hybrid.k` | 60 (balanced) | RRF smoothing parameter |
+| `trace.mode` | fast default; precise for complex code | Regex vs AST parsing |
+| `trace.enabled_languages` | Only detected extensions | Avoid parse errors |
+| `watch.debounce_ms` | 500 (balanced); 100 (responsive); 1000 (less) | File change grouping |
+| `watch.last_index_time` | **NEVER include** | Auto-generated, causes skip bug |
 
-**EXECUTE** — create dir and reset index timestamp:
+> **NOTE:** DO NOT ignore build scripts (build.gradle, pom.xml) — index them!
+
+### Phase 4: MCP Integration (Claude Code)
+
+**EXECUTE** — configure Claude Code MCP:
 ```bash
-mkdir -p .grepai && echo "✅ .grepai/ created" || echo "❌ failed"
-# CRITICAL: Remove last_index_time to force full reindex after config change
-sed -i '' '/last_index_time:/d' .grepai/config.yaml 2>/dev/null || true
-rm -f .grepai/index.gob .grepai/symbols.gob 2>/dev/null
-echo "✅ Index timestamp reset (will force full reindex)"
+# Check project-local first, then global
+if [ -f .mcp.json ]; then
+  echo "✅ MCP (project): .mcp.json" && jq '.mcpServers.grepai' .mcp.json 2>/dev/null || echo "⚠️ grepai not configured"
+elif [ -f ~/.claude.json ]; then
+  echo "✅ MCP (global): ~/.claude.json" && jq '.mcpServers.grepai' ~/.claude.json 2>/dev/null || echo "⚠️ grepai not configured"
+else
+  echo "⚠️ No MCP config found — use: claude mcp add grepai -- grepai mcp-serve"
+fi
 ```
 
-**WRITE** `.grepai/config.yaml` using Write tool.
+**MCP Configuration:**
 
-> **IMPORTANT:** Never include `last_index_time` in generated config — grepai adds it automatically. If present with future timestamp, files appear "already indexed" and get skipped!
+Add to `.mcp.json` (project) or `~/.claude.json` (global):
+```json
+{
+  "mcpServers": {
+    "grepai": {
+      "command": "grepai",
+      "args": ["mcp-serve"],
+      "cwd": "/path/to/project"
+    }
+  }
+}
+```
+
+| Parameter | Purpose |
+|-----------|---------|
+| `command` | Path to grepai binary |
+| `args` | MCP server subcommand |
+| `cwd` | Project directory (optional but recommended) |
+
+**Quick setup:**
+```bash
+claude mcp add grepai -- grepai mcp-serve
+```
 
 ### Phase 5: Verify
 
@@ -165,59 +186,36 @@ echo "✅ Index timestamp reset (will force full reindex)"
 ```bash
 echo "=== Initialize & Verify ==="
 grepai init 2>&1 && echo "✅ init" || echo "❌ init failed"
-grepai search "main entry point" --json --compact 2>&1 | head -30
+grepai search "main entry point" --json --compact 2>&1 | head -30 && echo "✅ search works" || echo "❌ search failed"
 test -f .grepai/index.gob && echo "✅ index.gob: $(du -h .grepai/index.gob | cut -f1)" || echo "❌ index missing"
-(grep -q '"grepai"' ~/.claude.json 2>/dev/null || grep -q '"grepai"' .mcp.json 2>/dev/null) && echo "✅ MCP configured" || echo "⚠️ MCP optional"
+grep -q '"grepai"' ~/.claude.json 2>/dev/null && echo "✅ MCP configured" || echo "⚠️ MCP not configured (optional)"
 ```
 
 ---
 
-## Supported File Extensions
+## Configuration Reference
 
-> **Source:** [`indexer/scanner.go` — `SupportedExtensions`](https://github.com/yoanbernabeu/grepai/blob/main/indexer/scanner.go)
+### Supported File Extensions
 
 | Category | Extensions |
 |----------|------------|
+| **Java/Kotlin** | `.java`, `.kt`, `.kts`, `.scala` |
+| **JavaScript/TypeScript** | `.js`, `.jsx`, `.ts`, `.tsx` |
 | **Go** | `.go` |
-| **JavaScript** | `.js`, `.jsx` |
-| **TypeScript** | `.ts`, `.tsx` |
 | **Python** | `.py` |
-| **Ruby** | `.rb` |
-| **Java** | `.java` |
 | **C/C++** | `.c`, `.h`, `.cpp`, `.hpp`, `.cc`, `.cxx` |
 | **C#** | `.cs` |
-| **PHP** | `.php` |
 | **Rust** | `.rs` |
-| **Swift** | `.swift` |
-| **Kotlin** | `.kt`, `.kts` |
-| **Scala** | `.scala` |
-| **Lua** | `.lua` |
-| **R** | `.r`, `.R` |
-| **Dart** | `.dart` |
-| **Elixir** | `.ex`, `.exs` |
-| **Erlang** | `.erl` |
-| **Clojure** | `.clj`, `.cljs` |
-| **Haskell** | `.hs` |
-| **ML/F#** | `.ml`, `.fs`, `.fsx` |
-| **Elm** | `.elm` |
-| **Nim** | `.nim` |
-| **Zig** | `.zig` |
-| **Pascal** | `.pas`, `.dpr` |
-| **Web** | `.vue`, `.svelte`, `.html`, `.css`, `.scss`, `.less` |
-| **Config** | `.yaml`, `.yml`, `.json`, `.xml`, `.toml`, `.ini`, `.env` |
+| **Web** | `.vue`, `.svelte`, `.html`, `.css`, `.scss` |
+| **Config** | `.yaml`, `.yml`, `.json`, `.xml`, `.toml` |
 | **Shell** | `.sh`, `.bash`, `.zsh` |
-| **SQL** | `.sql` |
 | **Docs** | `.md`, `.txt` |
-| **Infra** | `.tf`, `.hcl` |
-| **Proto** | `.proto` |
 
-**❌ NOT supported:** `.mjs`, `.cjs`, `.mts`, `.cts` (ES/CommonJS modules)
+**❌ NOT indexed:** `.mjs`, `.cjs`, `.mts`, `.cts` — grepai skips these files
 
-**Auto-excluded:** `.min.js`, `.min.css`, `.bundle.js`, `.bundle.css`, binaries, files >1MB, non-UTF-8
+**Auto-excluded:** `.min.js`, `.min.css`, `.bundle.js`, binaries, files >1MB, non-UTF-8
 
----
-
-## Language Detection Reference
+### Language Detection
 
 | Build File | Language | Extensions |
 |------------|----------|------------|
@@ -225,107 +223,174 @@ test -f .grepai/index.gob && echo "✅ index.gob: $(du -h .grepai/index.gob | cu
 | `package.json` | JavaScript/TypeScript | .js, .ts, .jsx, .tsx |
 | `go.mod` | Go | .go |
 | `Cargo.toml` | Rust | .rs |
-| `pyproject.toml`, `setup.py` | Python | .py |
-| `*.csproj` | C# | .cs |
-| `CMakeLists.txt` | C/C++ | .c, .cpp, .h, .hpp |
-| `Gemfile` | Ruby | .rb |
-| `mix.exs` | Elixir | .ex, .exs |
-| `composer.json` | PHP | .php |
+| `pyproject.toml` | Python | .py |
 
-## Default Ignore
+### Ignore Patterns by Project Type
 
-`.git` `.grepai` `node_modules` `vendor` `dist` `build` `target` `__pycache__` `.venv` `.idea` `.vscode` `.gradle` `.mvn` `coverage` `.next` `.nuxt`
+**Java/Kotlin:**
+```yaml
+ignore:
+  - .git
+  - .grepai
+  - target
+  - build/classes
+  - build/generated
+  - "*.class"
+  - "*.jar"
+```
 
-## Chunking Settings
+**JavaScript/TypeScript:**
+```yaml
+ignore:
+  - .git
+  - .grepai
+  - node_modules
+  - dist
+  - "*.min.js"
+  - "*.map"
+  - package-lock.json
+```
 
-Controls how code is split for embedding.
+**Default ignored:** `.git` `.grepai` `node_modules` `vendor` `dist` `build` `target` `__pycache__` `.venv` `.idea` `.vscode` `coverage` `.next`
 
-| Parameter | Default | Range | Description |
-|-----------|---------|-------|-------------|
-| `size` | 512 | 256-1024 | Chunk size in tokens |
-| `overlap` | 50 | 0-100+ | Overlap between chunks |
+### Chunking Settings
 
-**Recommendations:**
+| Language | size | overlap | Why |
+|----------|------|---------|-----|
+| **Java, Kotlin, C#** | **768-1024** | **75-100** | Long classes, verbose syntax |
+| JavaScript/TS | 512 | 50 | Balanced |
+| Python, Ruby | 512 | 50 | Balanced |
+| Go, Rust, Zig | 256-384 | 30-40 | Short functions, explicit syntax |
+| C/C++ | 512-768 | 50-75 | Headers + implementations |
 
-| Project Type | size | overlap | Why |
-|--------------|------|---------|-----|
-| Short functions (Go, scripts) | 256 | 30 | Granular search |
-| **General (default)** | **512** | **50** | Balance context/precision |
-| Long classes (Java/Kotlin) | 768-1024 | 100 | More context per chunk |
+**By codebase style:**
+- Microservices (small functions): 384 / 40
+- Monolith (large classes): 768 / 100
+- Mixed/Unknown: 512 / 50
 
-## Hybrid Search Settings
+### Hybrid Search
 
 Combines semantic (vector) + keyword (text) search via RRF (Reciprocal Rank Fusion).
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `enabled` | false | Enable hybrid search |
-| `k` | 60 | RRF smoothing: `score = Σ 1/(k + rank)` |
+| `k` | 60 | RRF smoothing: lower = more weight to top-ranked |
 
 **k Parameter:**
+- `30` = More weight to top-ranked in each list
+- `60` = Balanced (default)
+- `100` = More weight to docs found by both methods
 
-| Value | Effect |
-|-------|--------|
-| 30 | More weight to top-ranked in each list |
-| **60** | Balanced (default) |
-| 100 | More weight to docs found by both methods |
-
-**When to Enable:**
+**When to enable:**
 
 | Enable (true) | Disable (false) |
 |---------------|-----------------|
-| Java/Kotlin projects (long identifiers) | Pure semantic search needed |
-| Mixed queries ("handleAuth function") | Large codebase (100k+ chunks) |
+| Java/Kotlin projects (long identifiers) | Pure semantic search |
+| Mixed queries ("handleAuth function") | Large codebase (100k+ chunks, memory-intensive) |
 | Exact function/class name search | Documentation-heavy projects |
-| Vector search misses keyword matches | Performance-critical |
 
-**Performance Note:** Hybrid loads all chunks into memory for text matching. Disable for very large monorepos.
-
-## Trace Settings
+### Trace Settings
 
 Call graph analysis for `grepai trace callers/callees/graph`.
 
-| Parameter | Default | Description |
+| Parameter | Options | Description |
 |-----------|---------|-------------|
-| `mode` | fast | Extraction mode |
-| `enabled_languages` | [] | File extensions to index |
-| `exclude_patterns` | [] | Glob patterns to skip |
+| `mode` | `fast` (default) \| `precise` | Regex vs Tree-sitter AST |
+| `enabled_languages` | `.java`, `.kt`, `.ts`, `.js`, etc. | File extensions to index |
+| `exclude_patterns` | `*_test.go`, `*.spec.ts`, etc. | Glob patterns to skip |
 
-**Modes:**
+**Mode selection:**
 
-| Mode | Method | Speed | Accuracy | Requirements |
-|------|--------|-------|----------|--------------|
-| **`fast`** | Regex patterns | Fast | Good | None (default) |
-| `precise` | Tree-sitter AST | Slow | Excellent | `treesitter` build tag, CGO |
+| Mode | Method | Speed | Accuracy | Use When |
+|------|--------|-------|----------|----------|
+| `fast` | Regex patterns | Fast | Good | Large codebases, standard patterns |
+| `precise` | Tree-sitter AST | Slow | Excellent | Complex code, edge cases, accuracy-critical |
 
-**Supported Languages:**
+**Supported languages:**
+- Excellent: `.go`, `.ts`, `.tsx`, `.js`, `.jsx`
+- Good: `.py`, `.php`, `.java`, `.c`, `.h`, `.cpp`, `.rs`, `.zig`, `.cs`
 
-| Quality | Extensions |
-|---------|------------|
-| Excellent | `.go`, `.ts`, `.tsx`, `.js`, `.jsx` |
-| Good | `.py`, `.php`, `.java`, `.c`, `.h`, `.cpp`, `.hpp`, `.rs`, `.zig`, `.cs` |
+> **IMPORTANT:** Only include extensions that exist in project. Non-existent extensions cause parse errors.
 
-**Mode Selection:**
+### Watch Daemon
 
-| Choose | When |
-|--------|------|
-| `fast` | Large codebases, standard patterns, quick analysis |
-| `precise` | Complex code, edge cases, accuracy-critical |
+| Parameter | Value | Behavior |
+|-----------|-------|----------|
+| `debounce_ms: 100` | More responsive | More frequent reindexing |
+| `debounce_ms: 500` | Balanced (default) | Groups rapid file changes |
+| `debounce_ms: 1000` | Less responsive | Fewer reindexing operations |
 
-**Example exclude_patterns:**
-```yaml
-exclude_patterns:
-  - "*_test.go"
-  - "*.spec.ts"
-  - "*/vendor/*"
+---
+
+## Troubleshooting
+
+**Quick diagnostics:**
+
+**EXECUTE** — full system check:
+```bash
+echo "=== GrepAI Diagnostics ==="
+grepai version && echo "✅ version" || echo "❌ not installed"
+grepai status 2>&1 && echo "✅ status" || echo "❌ status failed"
+cat .grepai/config.yaml 2>/dev/null | head -10 && echo "✅ config" || echo "❌ no config"
+ls -lh .grepai/*.gob 2>/dev/null && echo "✅ index files" || echo "❌ no index"
+curl -s localhost:11434/api/tags >/dev/null && echo "✅ ollama" || echo "❌ ollama down"
 ```
 
-**IMPORTANT:** Only include extensions that exist in the project. Non-existent extensions cause parse errors.
+### Common Issues
 
-**Sources:**
-- [grepai Configuration](https://yoanbernabeu.github.io/grepai/configuration/)
-- [grepai Hybrid Search](https://yoanbernabeu.github.io/grepai/hybrid-search/)
-- [grepai Trace](https://yoanbernabeu.github.io/grepai/trace/)
+| Issue | Solution |
+|-------|----------|
+| "Index not found" | `grepai init && grepai watch` |
+| "Cannot connect to Ollama" | `ollama serve` — start Ollama |
+| "Model not found" | `ollama pull bge-m3` |
+| Search returns nothing | Check `grepai status`, verify files not in ignore |
+| Index outdated | `rm .grepai/index.gob && grepai watch` |
+| Slow indexing | Add ignore patterns, use smaller model |
+| Trace missing symbols | Check `enabled_languages` includes file extension |
+| MCP tools not available | Restart Claude Code after config changes |
+| Changes not detected | Reduce `debounce_ms`, check inotify limits (Linux) |
+| Out of memory | Use smaller model, reduce parallelism |
+
+**Force full reindex:**
+
+**EXECUTE** — reset index:
+```bash
+rm -f .grepai/index.gob .grepai/symbols.gob
+grep -v 'last_index_time:' .grepai/config.yaml > .grepai/config.yaml.tmp 2>/dev/null && mv .grepai/config.yaml.tmp .grepai/config.yaml || true
+grepai watch && echo "✅ reindexing" || echo "❌ failed"
+```
+
+**Indexing time estimates:**
+
+| Codebase | Files | Ollama (bge-m3) |
+|----------|-------|-----------------|
+| Small | ~100 | ~30s |
+| Medium | ~1,000 | ~5min |
+| Large | ~10,000 | ~30min |
+
+> **Tip:** Use `nomic-embed-text` (smaller model) for faster initial indexing.
+
+---
+
+## MCP Tools (Claude Code)
+
+When grepai is configured as MCP server, these tools become available:
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `grepai_search` | Semantic code search | `query`, `limit`, `compact` |
+| `grepai_trace_callers` | Find function callers | `symbol`, `compact` |
+| `grepai_trace_callees` | Find function callees | `symbol`, `compact` |
+| `grepai_trace_graph` | Build call graph | `symbol`, `depth`, `compact` |
+| `grepai_index_status` | Check index health | `verbose` |
+
+**Compact mode** (`--json --compact`) reduces tokens by ~80%:
+```json
+{"q":"auth","r":[{"s":0.92,"f":"src/auth.go","l":"15-45"}],"t":1}
+```
+
+Keys: `q`=query, `r`=results, `s`=score, `f`=file, `l`=lines, `t`=total
 
 ---
 
@@ -334,62 +399,50 @@ exclude_patterns:
 ```markdown
 # grepai Configuration Report
 
-## Project Analysis
+## Infrastructure
+| Component | Status |
+|-----------|--------|
+| grepai | ✅ v0.24.0 |
+| Ollama | ✅ Running |
+| bge-m3 | ✅ Installed |
 
+## Project Analysis
 | Category | Detected |
 |----------|----------|
-| Primary Language | {lang} |
-| Frameworks | {frameworks} |
-| Test Patterns | {patterns} |
-| Generated Patterns | {patterns} |
-| Source Dirs | {dirs} |
+| Primary Language | Java/Kotlin |
+| Test Patterns | `Test.java`, `Test.kt`, `/test/` |
+| Generated Patterns | `/build/generated/` |
+| Source Dirs | `src/main/`, `core/`, `domain/` |
 
 ## Config Created
-
 **Path:** `.grepai/config.yaml`
 
 | Setting | Value |
 |---------|-------|
-| Model | bge-m3 |
-| Dimensions | 1024 |
+| Model | bge-m3 (1024 dims) |
 | Parallelism | 1 |
-| Trace Languages | {list} |
-| Penalties | {count} patterns |
-| Bonuses | {count} patterns |
-| Ignored | {count} patterns |
+| Chunking | 768 / 75 |
+| Hybrid Search | enabled (k=60) |
+| Trace Mode | fast |
+| Trace Languages | .java, .kt, .kts |
 
 ## Verification
-
 | Check | Status |
 |-------|--------|
-| grepai init | [✅/❌] |
-| index.gob created | [✅/❌] ({size}) |
-| Test search | [✅/❌] |
-| MCP integration | [✅/⚠️] |
-
-## Warnings
-
-- {any issues or recommendations}
+| grepai init | ✅ |
+| index.gob | ✅ 12.5 MB |
+| Test search | ✅ 5 results |
+| MCP integration | ✅ ~/.claude.json |
 
 ## Next Steps
-
-- {if any action needed}
+- Run `grepai watch --background` to start daemon
+- Restart Claude Code to activate MCP tools
+- Use semantic search: `grepai search "query"` or via Claude
 ```
 
 ---
 
-## Rules
-
-| Do | Why |
-|----|-----|
-| Set `parallelism: 1` for Ollama | Ollama limitation |
-| Use `trace.mode: fast` for large repos | Speed over precision |
-| Use `trace.mode: precise` for complex Java/Kotlin | AST accuracy |
-| Include only detected languages in `trace.enabled_languages` | Avoid parse errors |
-| Wait for all Explore agents before config | Complete analysis |
-| Verify with test search | Confirm index works |
-| Report exact error messages | Debugging |
-| Stop if infrastructure missing | Prerequisites |
-| Analyze project first, then generate | Project-specific config |
-| **Reset index on config change** | Files with ModTime < last_index_time are SKIPPED |
-| Never include `last_index_time` in config | Auto-generated field, causes stale index bug |
+**Sources:**
+- [grepai Configuration](https://yoanbernabeu.github.io/grepai/configuration/)
+- [grepai Hybrid Search](https://yoanbernabeu.github.io/grepai/hybrid-search/)
+- [grepai Trace](https://yoanbernabeu.github.io/grepai/trace/)
