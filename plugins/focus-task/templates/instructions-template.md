@@ -25,7 +25,7 @@
 
 ---
 
-## /focus-task-create Instructions
+## /focus-task:create Instructions
 
 **ROLE:** Task Creator | **OUTPUT:** task file + SPEC + KNOWLEDGE
 
@@ -192,14 +192,14 @@ Task created:
 - SPEC: .claude/tasks/specs/{TIMESTAMP}_{NAME}_SPEC_v1.md
 - KNOWLEDGE: .claude/tasks/{TIMESTAMP}_{NAME}_KNOWLEDGE.jsonl
 
-Run: /focus-task-start .claude/tasks/{TIMESTAMP}_{NAME}_TASK.md
+Run: /focus-task:start .claude/tasks/{TIMESTAMP}_{NAME}_TASK.md
 ```
 
 > **See:** `SPEC-creation.md` for detailed parallel research instructions.
 
 ---
 
-## /focus-task-start Instructions
+## /focus-task:start Instructions
 
 **ROLE:** Task Executor | **INPUT:** path to task file
 
@@ -258,7 +258,7 @@ When context limit reached:
 
 ---
 
-## /focus-task-setup Instructions
+## /focus-task:setup Instructions
 
 **ROLE:** Template Adapter | **OUTPUT:** TASK.md.template + SPEC.md.template
 

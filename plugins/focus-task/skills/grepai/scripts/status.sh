@@ -36,6 +36,14 @@ echo ""
 echo "--- Watch ---"
 if pgrep -f "grepai watch" >/dev/null; then
   echo "✅ watch: running (PID: $(pgrep -f 'grepai watch'))"
+  # Check if actively indexing (recent log activity)
+  if [ -f .grepai/logs/grepai-watch.log ]; then
+    LAST_LOG=$(tail -1 .grepai/logs/grepai-watch.log 2>/dev/null | head -c 100)
+    if echo "$LAST_LOG" | grep -qiE "index|embed|chunk"; then
+      echo "   ⏳ indexing in progress..."
+      echo "   last: $(echo "$LAST_LOG" | cut -c1-60)..."
+    fi
+  fi
 else
   echo "⚠️ watch: not running"
 fi

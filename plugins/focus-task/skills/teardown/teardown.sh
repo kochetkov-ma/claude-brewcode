@@ -52,16 +52,6 @@ remove_item ".grepai" "dir"
 remove_item ".claude/skills/focus-task-review" "dir"
 
 echo ""
-echo "Global symlinks:"
-
-# Remove all focus-task-* symlinks from ~/.claude/skills/
-for link in ~/.claude/skills/focus-task-*; do
-    if [ -L "$link" ]; then
-        remove_item "$link" "symlink"
-    fi
-done
-
-echo ""
 echo "Preserved (not deleted):"
 echo "  ⏭️  .claude/tasks/*_TASK.md (active tasks)"
 echo "  ⏭️  .claude/tasks/*_KNOWLEDGE.jsonl"

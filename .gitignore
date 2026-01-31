@@ -2,4 +2,3 @@
 runtime/dist/
 runtime/node_modules/
 package-lock.json
-plugins/test/tmp

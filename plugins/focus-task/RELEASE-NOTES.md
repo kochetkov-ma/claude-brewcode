@@ -28,6 +28,76 @@
 
 ---
 
+## v2.0.49 (2026-01-31)
+
+### Added
+
+- **grepai gitignore docs** — documented gitignore behavior and limitations
+  - `ft-grepai-configurator.md`: new "## gitignore Behavior" section
+  - Explains 3 layers: global gitignore → local → config.yaml `ignore:`
+  - Workarounds table, diagnostic commands
+  - Updated Phase 2 agent #5 to check global gitignore
+
+- **grepai indexing time estimates** — scripts now show file count and ETA
+  - `init-index.sh`: counts files, shows ETA, background indexing notice
+  - `reindex.sh`: same improvements
+  - `status.sh`: shows "indexing in progress" from log activity
+  - `SKILL.md`: warnings after Phase 4 and reindex mode
+  - `ft-grepai-configurator.md`: indexing time table in Phase 5
+
+### Changed
+
+- **grepai-first.md** — added Limitations section (gitignore behavior)
+- **CLAUDE.md** — added "### Limitations (gitignore)" in grepai section
+
+### Updated Files
+
+| File | Change |
+|------|--------|
+| `agents/ft-grepai-configurator.md` | gitignore docs, indexing time table |
+| `skills/grepai/SKILL.md` | async indexing warnings |
+| `skills/grepai/scripts/init-index.sh` | file count, ETA, progress commands |
+| `skills/grepai/scripts/reindex.sh` | file count, ETA, progress commands |
+| `skills/grepai/scripts/status.sh` | indexing progress detection |
+| `.claude/rules/grepai-first.md` | gitignore limitations |
+| `CLAUDE.md` | gitignore limitations |
+
+---
+
+## v2.0.47 (2026-01-31)
+
+### Removed
+
+- **Symlinks** — removed all symlink-related functionality
+  - Claude Code fixed plugin skill display ([#18949](https://github.com/anthropics/claude-code/issues/18949))
+  - Removed Phase 5 (Enable Autocomplete) from `/focus-task:setup`
+  - Removed `link` mode from setup skill
+  - Removed symlink creation from `setup.sh`
+  - Removed symlink removal from `/focus-task:teardown`
+
+### Changed
+
+- **Skill triggers** — updated to colon syntax
+  - `/focus-task-*` → `/focus-task:*` (plugin namespace)
+  - `focus-task-review` directory remains for project-local skill
+
+### Updated Files
+
+| File | Change |
+|------|--------|
+| `skills/setup/SKILL.md` | Removed Phase 5, link mode, symlink output |
+| `skills/setup/scripts/setup.sh` | Removed `symlinks` mode and functions |
+| `skills/teardown/SKILL.md` | Removed symlink mentions |
+| `skills/teardown/teardown.sh` | Removed symlink removal loop |
+| `skills/review/SKILL.md` | Updated trigger to `:review` |
+| `skills/doc/SKILL.md` | Updated trigger to `:doc` |
+| `agents/ft-coordinator.md` | Updated skill references |
+| `templates/instructions-template.md` | Updated all skill references |
+| `README.md` | Removed symlink references, updated examples |
+| `CLAUDE.md` | Updated `/focus-task:setup` description |
+
+---
+
 ## v2.0.46 (2026-01-31)
 
 ### Fixed

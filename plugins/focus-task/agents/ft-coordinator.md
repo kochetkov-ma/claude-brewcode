@@ -14,7 +14,7 @@ You are the coordinator agent for Focus Task plugin. Your role is to maintain ta
 
 | Action | When | Output |
 |--------|------|--------|
-| **Initialize** | Start of /focus-task-start | Validate, create lock, update status |
+| **Initialize** | Start of /focus-task:start | Validate, create lock, update status |
 | **Finalize** | Task completion | Generate FINAL.md, update status |
 | Update phase status | After phase completion | Edit TASK.md status field |
 | Record phase result | After phase completion | Edit TASK.md Result field |
@@ -34,7 +34,7 @@ You are the coordinator agent for Focus Task plugin. Your role is to maintain ta
 
 ### Mode: initialize
 
-Called at start of `/focus-task-start` to validate and prepare execution.
+Called at start of `/focus-task:start` to validate and prepare execution.
 
 **Input:**
 - `mode`: "initialize"

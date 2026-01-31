@@ -10,7 +10,6 @@
 #   review     - Copy review skill template (Phase 3.5)
 #   config     - Copy config file (Phase 3.6)
 #   validate   - Validation checks (Phase 4)
-#   symlinks   - Create symlinks for autocomplete (Phase 5)
 #   all        - Run all phases
 
 set -e
@@ -187,46 +186,6 @@ validate_setup() {
   exit $ERRORS
 }
 
-# Phase 5: Create symlinks for autocomplete
-create_symlinks() {
-  echo "=== Phase 5: Symlinks ==="
-  validate_plugin
-
-  echo "📦 Plugin root: $PLUGIN_ROOT"
-  echo "📁 Skills source: $PLUGIN_SKILLS"
-  echo ""
-
-  mkdir -p "$HOME/.claude/skills"
-
-  for skill_dir in "$PLUGIN_SKILLS"/*/; do
-    skill_name=$(basename "$skill_dir")
-
-    # Skip review - adapted version created in .claude/skills/focus-task-review/
-    if [ "$skill_name" = "review" ]; then
-      echo "⏭️  Skipped: review (created from template in .claude/skills/focus-task-review/)"
-      continue
-    fi
-
-    link_name="focus-task-$skill_name"
-    target="$HOME/.claude/skills/$link_name"
-
-    # Remove existing symlink/dir if present
-    [ -L "$target" ] && rm "$target"
-    [ -d "$target" ] && rm -rf "$target"
-
-    # Create symlink
-    ln -s "$skill_dir" "$target"
-    echo "✅ $target → $skill_dir"
-  done
-}
-
-# Verify symlinks
-verify_symlinks() {
-  echo ""
-  echo "Installed symlinks:"
-  ls -la ~/.claude/skills/ | grep "focus-task-" || echo "❌ No symlinks found"
-}
-
 # Main dispatch
 case "$MODE" in
   scan)
@@ -247,10 +206,6 @@ case "$MODE" in
   validate)
     validate_setup
     ;;
-  symlinks)
-    create_symlinks
-    verify_symlinks
-    ;;
   all)
     scan_project
     echo ""
@@ -263,9 +218,6 @@ case "$MODE" in
     copy_config
     echo ""
     validate_setup
-    echo ""
-    create_symlinks
-    verify_symlinks
     ;;
   *)
     echo "Usage: setup.sh <mode>"
@@ -277,7 +229,6 @@ case "$MODE" in
     echo "  review     - Copy review skill template"
     echo "  config     - Copy config file"
     echo "  validate   - Validation checks"
-    echo "  symlinks   - Create symlinks for autocomplete"
     echo "  all        - Run all phases"
     exit 1
     ;;

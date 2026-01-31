@@ -23,6 +23,62 @@ permissionMode: acceptEdits
 
 > **CRITICAL:** ALWAYS remove `watch.last_index_time` when changing config — files with ModTime < last_index_time are SKIPPED!
 
+## gitignore Behavior
+
+> **IMPORTANT:** grepai respects `.gitignore` (local + global) — files in gitignore are NOT indexed!
+
+### How it Works
+
+| Layer | Source | Effect |
+|-------|--------|--------|
+| 1. Global gitignore | `~/.gitignore_global` or `~/.config/git/ignore` | Applied first, project-wide |
+| 2. Local .gitignore | `.gitignore` in project root | Adds to global |
+| 3. config.yaml `ignore:` | `.grepai/config.yaml` | **ADDS** to gitignore, doesn't override |
+
+### Key Limitations
+
+| ❌ Cannot Do | Why |
+|--------------|-----|
+| Index gitignored files | grepai reads gitignore before scanning |
+| Use `!pattern` negation in config | Config `ignore:` only adds exclusions |
+| Override gitignore via config | No `include:` or `force-include:` option |
+| Use symlinks to bypass | Symlinks to gitignored paths are also skipped |
+
+### Workarounds
+
+| Scenario | Solution |
+|----------|----------|
+| Need to index `.private/legacy/` | Remove from `~/.gitignore_global`, add to project `.gitignore` exceptions |
+| Temporary indexing | `git update-index --no-assume-unchanged <file>`, index, then revert |
+| Private files only for search | Create separate project/workspace without gitignore restrictions |
+
+### external_gitignore Option
+
+grepai supports referencing additional gitignore files:
+
+```yaml
+external_gitignore: ~/.config/git/ignore
+```
+
+> **Note:** This ADDS restrictions, doesn't remove them. Use to include team-shared ignore patterns.
+
+### Diagnostic Commands
+
+**Check if file is gitignored:**
+```bash
+git check-ignore -v path/to/file
+```
+
+**Check global gitignore location:**
+```bash
+git config --global core.excludesfile
+```
+
+**List effective gitignore rules:**
+```bash
+git status --ignored --porcelain | grep '^!!'
+```
+
 ## Embedder Models
 
 | Model | Dims | Size | RAM | Speed | Quality | Use Case |
@@ -56,7 +112,7 @@ ollama list 2>/dev/null | grep -q bge-m3 && echo "✅ bge-m3: installed" || echo
 | 2 | `Explore` | `haiku` | `TEST PATTERNS: Find test directories and file patterns. Look for: tests/, test/, __tests__/, spec/, *_test.*, *.spec.*, *.test.*. Report patterns found.` |
 | 3 | `Explore` | `haiku` | `GENERATED CODE: Find generated/auto-generated patterns. Look for: generated/, .gen., codegen/, proto/, *.pb.go, *_generated.*. Report patterns found.` |
 | 4 | `Explore` | `haiku` | `SOURCE STRUCTURE: Map main source directories. Find: src/, lib/, app/, cmd/, pkg/, internal/, core/, modules/. Report directory structure.` |
-| 5 | `Explore` | `haiku` | `IGNORE PATTERNS: Check .gitignore. Find: build outputs, caches, vendor dirs, IDE configs. Report patterns to ignore.` |
+| 5 | `Explore` | `haiku` | `IGNORE PATTERNS: Check .gitignore AND global gitignore (~/.gitignore_global via 'git config --global core.excludesfile'). Find: build outputs, caches, vendor dirs, IDE configs. Report patterns that will prevent indexing. WARN if important dirs (e.g. .private/, legacy/) are in global gitignore.` |
 
 > **WAIT** for all 5 agents before proceeding. If any agent fails, proceed with available data and note gaps.
 
@@ -190,6 +246,16 @@ grepai search "main entry point" --json --compact 2>&1 | head -30 && echo "✅ s
 test -f .grepai/index.gob && echo "✅ index.gob: $(du -h .grepai/index.gob | cut -f1)" || echo "❌ index missing"
 grep -q '"grepai"' ~/.claude.json 2>/dev/null && echo "✅ MCP configured" || echo "⚠️ MCP not configured (optional)"
 ```
+
+> ⏳ **INDEXING TIME:** `grepai init` triggers background indexing. For large projects:
+> | Files | Time |
+> |-------|------|
+> | <500 | 1-3 min |
+> | 1-5k | 5-15 min |
+> | 5-10k | 15-30 min |
+> | 10k+ | 30+ min |
+>
+> Tell user: "Indexing runs in background. Check: `grepai status` or `tail -f ~/Library/Logs/grepai/grepai-watch.log`"
 
 ---
 
@@ -345,6 +411,8 @@ curl -s localhost:11434/api/tags >/dev/null && echo "✅ ollama" || echo "❌ ol
 | "Cannot connect to Ollama" | `ollama serve` — start Ollama |
 | "Model not found" | `ollama pull bge-m3` |
 | Search returns nothing | Check `grepai status`, verify files not in ignore |
+| File not indexed (gitignore) | `git check-ignore -v <file>` — check if gitignored (local or global) |
+| Need to index gitignored file | Remove from gitignore (no workaround via config) |
 | Index outdated | `rm .grepai/index.gob && grepai watch` |
 | Slow indexing | Add ignore patterns, use smaller model |
 | Trace missing symbols | Check `enabled_languages` includes file extension |

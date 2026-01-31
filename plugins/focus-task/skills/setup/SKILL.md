@@ -2,7 +2,7 @@
 name: setup
 description: Analyzes project structure, tech stack, testing frameworks, and project-specific agents to generate an adapted TASK.md.template in .claude/tasks/templates/. Triggers on phrases like "setup focus-task", "focus-task setup", "initialize focus-task", "configure focus-task".
 user-invocable: true
-argument-hint: "[link] | [universal-template-path]"
+argument-hint: "[universal-template-path]"
 allowed-tools: Read, Write, Glob, Grep, Bash
 context: fork
 model: opus
@@ -30,33 +30,6 @@ test -n "$FT_PLUGIN" && echo "✅ FT_PLUGIN=$FT_PLUGIN" || echo "❌ Plugin not 
 ```
 
 > **STOP if ❌** — plugin not installed. Run: `claude plugin add claude-brewcode/focus-task`
-
----
-
-## Mode Detection
-
-**Skill arguments received:** `$ARGUMENTS`
-
-| Mode | Condition | Action |
-|------|-----------|--------|
-| **link** | `$ARGUMENTS` = "link" | Update symlinks only → skip to Phase 5 |
-| **full** | Otherwise | Full setup (all phases) |
-
-### Link Mode (Quick)
-
-If `$ARGUMENTS` = "link", **EXECUTE** and **STOP**:
-```bash
-bash "$FT_PLUGIN/skills/setup/scripts/setup.sh" symlinks && echo "✅ Symlinks updated" || echo "❌ Symlinks FAILED"
-```
-
-Output for link mode:
-```markdown
-# Symlinks Updated
-
-Refreshed `~/.claude/skills/focus-task-*` symlinks to current plugin version.
-```
-
-> **END for link mode** — do not continue to Phase 1.
 
 ---
 
@@ -346,56 +319,12 @@ bash "$FT_PLUGIN/skills/setup/scripts/setup.sh" validate && echo "✅ validate" 
 | Reference Examples | [N] canonical files populated |
 | Tech-specific adaptations | Testing framework, DB patterns |
 | Review skill | `.claude/skills/focus-task-review/SKILL.md` |
-| Plugin symlinks | `~/.claude/skills/focus-task-*` |
-
----
-
-## Phase 5: Enable Autocomplete (Workaround for GitHub Issue #18949)
-
-**Agent:** developer | **Action:** Create symlinks for plugin skills in `~/.claude/skills/`
-
-> **Why:** Plugin skills don't appear in `/` autocomplete. Symlinks to `~/.claude/skills/` fix this.
-
-### Create Symlinks
-
-**EXECUTE** using Bash tool — create symlinks for autocomplete:
-```bash
-bash "$FT_PLUGIN/skills/setup/scripts/setup.sh" symlinks && echo "✅ symlinks" || echo "❌ symlinks FAILED"
-```
-
-> **STOP if ❌** — verify ~/.claude/skills directory exists.
-
-### Result
-
-After symlinks, skills available via autocomplete:
-- `/focus-task-setup` (symlink) = `/focus-task:setup` (plugin)
-- `/focus-task-create` (symlink) = `/focus-task:create` (plugin)
-- `/focus-task-teardown` (symlink) = `/focus-task:teardown` (plugin)
-- `/focus-task-doc` (symlink) = `/focus-task:doc` (plugin)
-- `/focus-task-rules` (symlink) = `/focus-task:rules` (plugin)
-- `/focus-task-start` (symlink) = `/focus-task:start` (plugin)
-- `/focus-task-review` (from template) — project-adapted, in `.claude/skills/`
 
 </instructions>
 
 ---
 
 ## Output Format
-
-### Link Mode Output
-
-```markdown
-# Symlinks Updated
-
-| Field | Value |
-|-------|-------|
-| Mode | link |
-| Plugin | `~/.claude/plugins/cache/claude-brewcode/focus-task/{VERSION}` |
-
-Refreshed `~/.claude/skills/focus-task-*` symlinks.
-```
-
-### Full Setup Output
 
 ```markdown
 # Template Adaptation Complete
@@ -432,28 +361,10 @@ Refreshed `~/.claude/skills/focus-task-*` symlinks.
 **Task template:** `.claude/tasks/templates/TASK.md.template`
 **Review skill:** `.claude/skills/focus-task-review/SKILL.md`
 
-## Symlinks (Autocomplete Workaround)
-
-| Info | Value |
-|------|-------|
-| Plugin cache | `~/.claude/plugins/cache/claude-brewcode/focus-task` |
-| Version | `{VERSION}` |
-| Source | `~/.claude/plugins/cache/claude-brewcode/focus-task/{VERSION}/skills/` |
-
-| Symlink | Target |
-|---------|--------|
-| `~/.claude/skills/focus-task-setup` | `.../{VERSION}/skills/setup/` |
-| `~/.claude/skills/focus-task-teardown` | `.../{VERSION}/skills/teardown/` |
-| `~/.claude/skills/focus-task-create` | `.../{VERSION}/skills/create/` |
-| `~/.claude/skills/focus-task-doc` | `.../{VERSION}/skills/doc/` |
-| `~/.claude/skills/focus-task-rules` | `.../{VERSION}/skills/rules/` |
-| `~/.claude/skills/focus-task-start` | `.../{VERSION}/skills/start/` |
-| `.claude/skills/focus-task-review` | from template (project-adapted) |
-
 ## Usage
 
-/focus-task-create "Implement feature X"
-/focus-task-review "Check null safety"
+/focus-task:create "Implement feature X"
+/focus-task:review "Check null safety"
 ```
 
 ---
@@ -468,12 +379,9 @@ Refreshed `~/.claude/skills/focus-task-*` symlinks.
 
 ## Re-run Support
 
-> `/focus-task-setup` can be run anytime to sync templates with project changes.
-
-**Quick mode:** `/focus-task-setup link` — only refresh symlinks after plugin update.
+> `/focus-task:setup` can be run anytime to sync templates with project changes.
 
 **Triggers for re-run:**
-- Plugin updated → use `link` mode
 - New agent added to `.claude/agents/`
 - CLAUDE.md updated with new patterns
 - New reference files identified

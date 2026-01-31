@@ -40,7 +40,7 @@ async function main() {
     }
 
     // If no lock, fall back to old behavior (check TASK.md reference)
-    // This handles cases where task was created but not started via /focus-task-start
+    // This handles cases where task was created but not started via /focus-task:start
     if (!lock) {
       const taskPath = getActiveTaskPath(cwd);
       if (!taskPath) {
@@ -100,7 +100,7 @@ async function main() {
 
       // Remind about rules extraction if knowledge exists
       if (existsSync(knowledgePath)) {
-        log('info', '[stop]', `Task finished. Consider: /focus-task-rules ${knowledgePath}`, cwd, session_id);
+        log('info', '[stop]', `Task finished. Consider: /focus-task:rules ${knowledgePath}`, cwd, session_id);
       }
 
       // CRITICAL: Delete lock file when task is finished

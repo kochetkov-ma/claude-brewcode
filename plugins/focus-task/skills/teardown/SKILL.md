@@ -1,6 +1,6 @@
 ---
 name: teardown
-description: Remove all focus-task files created by /focus-task:setup. Cleans templates, configs, skills, and symlinks.
+description: Remove all focus-task files created by /focus-task:setup. Cleans templates, configs, and skills.
 user-invocable: true
 argument-hint: [--dry-run]
 allowed-tools: Bash, Read
@@ -18,7 +18,6 @@ Removes all files and directories created by `/focus-task:setup`:
 - `.claude/plans/`
 - `.grepai/`
 - `.claude/skills/focus-task-review/`
-- `~/.claude/skills/focus-task-*` (symlinks)
 
 <instructions>
 
@@ -59,14 +58,6 @@ PROJECT/
 │   ├── skills/
 │   │   └── focus-task-review/   ← 🗑️ DELETE (entire dir)
 │   └── rules/                   ← ⏭️ KEEP
-
-~/.claude/skills/
-├── focus-task-setup    → ...  ← 🗑️ symlink
-├── focus-task-create   → ...  ← 🗑️ symlink
-├── focus-task-doc      → ...  ← 🗑️ symlink
-├── focus-task-rules    → ...  ← 🗑️ symlink
-├── focus-task-start    → ...  ← 🗑️ symlink
-└── focus-task-teardown → ...  ← 🗑️ symlink
 ```
 
 ## Safety
@@ -99,7 +90,6 @@ Removed:
   ✅ .claude/plans/
   ✅ .grepai/
   ✅ .claude/skills/focus-task-review/
-  ✅ ~/.claude/skills/focus-task-* (symlinks)
 
 Preserved:
   ⏭️  .claude/tasks/*_TASK.md (active tasks)

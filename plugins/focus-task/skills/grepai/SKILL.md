@@ -106,6 +106,9 @@ bash "$FT_PLUGIN/skills/grepai/scripts/init-index.sh" && echo "✅ init-index" |
 
 > **STOP if ❌** — check grepai logs for indexing errors.
 
+> ⏳ **INDEXING IS ASYNC!** The script outputs file count and ETA. Large projects (5k+ files) take 10-30+ min.
+> Tell user: "Indexing started in background. Check progress: `grepai status` or `tail -f .grepai/logs/grepai-watch.log`"
+
 ### Phase 5: Create Rule
 
 **EXECUTE** using Bash tool:
@@ -159,6 +162,8 @@ Full index rebuild: stop watch → clean → rebuild → restart.
 ```bash
 bash "$FT_PLUGIN/skills/grepai/scripts/reindex.sh" && echo "✅ reindex" || echo "❌ reindex FAILED"
 ```
+
+> ⏳ **REINDEXING IS ASYNC!** Script outputs file count and ETA. Tell user to check progress with `grepai status`.
 
 ---
 
