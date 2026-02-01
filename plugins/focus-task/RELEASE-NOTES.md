@@ -32,6 +32,30 @@
 
 ---
 
+## v2.0.72 (2026-02-01)
+
+### Changed
+
+- **Skill namespacing** — унифицированы имена скиллов с namespace `focus-task:`
+  - `review` → `focus-task:review`
+  - `rules` → `focus-task:rules`
+  - `start` → `focus-task:start`
+- **Skill descriptions** — форматирование
+  - Убраны двоеточия после "Triggers" во всех скиллах
+  - Упрощены argument-hint для `doc` и `rules`
+
+### Updated Files
+
+| File | Change |
+|------|--------|
+| `skills/review/SKILL.md` | name: `focus-task:review` |
+| `skills/rules/SKILL.md` | name: `focus-task:rules`, argument-hint |
+| `skills/start/SKILL.md` | name: `focus-task:start` |
+| `skills/create/SKILL.md` | triggers formatting |
+| `skills/doc/SKILL.md` | triggers formatting, argument-hint |
+
+---
+
 ## v2.0.71 (2026-02-01)
 
 ### Fixed
