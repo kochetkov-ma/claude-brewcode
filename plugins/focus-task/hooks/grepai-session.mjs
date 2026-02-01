@@ -135,8 +135,11 @@ async function checkGrepai(cwd, session_id = null) {
 
   log('info', '[grepai]', `Status: ${statusMessage}`, cwd, session_id);
 
+  // Add usage reminder when grepai is ready
+  const reminder = status.length === 0 ? ' — USE grepai_search FIRST for code exploration' : '';
+
   return {
-    systemMessage: `grepai: ${statusMessage}`
+    systemMessage: `grepai: ${statusMessage}${reminder}`
   };
 }
 

@@ -28,6 +28,29 @@
 
 ---
 
+## v2.0.58 (2026-02-01)
+
+### Changed
+
+- **grepai reminder везде** — единое императивное сообщение
+  - `grepai: USE grepai_search FIRST for code exploration`
+- **grepai-session.mjs** — reminder при старте сессии (когда grepai ready)
+- **pre-task.mjs** — reminder для ВСЕХ агентов (Explore, developer, и т.д.)
+- **grepai-reminder.mjs** — усилено: `⚠️ consider` → `USE FIRST`
+- **create-rule.sh** — добавляет секцию Code Search в проектный CLAUDE.md
+
+---
+
+## v2.0.57 (2026-02-01)
+
+### Changed
+
+- **grepai-reminder.mjs** — systemMessage вместо console.log
+  - Claude теперь видит напоминание в контексте
+  - Сообщение: `⚠️ grepai MCP available — consider FIRST!`
+
+---
+
 ## v2.0.56 (2026-02-01)
 
 ### Changed

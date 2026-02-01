@@ -1,10 +1,28 @@
 #!/bin/bash
-# grepai Create Rule File
+# grepai Create Rule + CLAUDE.md entry
 
 echo "=== Create Rule ==="
 
 RULE_FILE=".claude/rules/grepai-first.md"
+CLAUDE_MD="CLAUDE.md"
+GREPAI_MARKER="grepai_search"
+
 mkdir -p .claude/rules
+
+# Add grepai entry to CLAUDE.md if not present
+if [ -f "$CLAUDE_MD" ]; then
+  if ! grep -q "$GREPAI_MARKER" "$CLAUDE_MD" 2>/dev/null; then
+    echo "" >> "$CLAUDE_MD"
+    echo "## Code Search" >> "$CLAUDE_MD"
+    echo "" >> "$CLAUDE_MD"
+    echo "> **CRITICAL:** Use \`grepai_search\` FIRST for code exploration." >> "$CLAUDE_MD"
+    echo "✅ CLAUDE.md updated with grepai entry"
+  else
+    echo "⏭️ CLAUDE.md already has grepai entry"
+  fi
+else
+  echo "⚠️ CLAUDE.md not found (optional)"
+fi
 
 if [ -f "$RULE_FILE" ]; then
   echo "⏭️ Rule already exists: $RULE_FILE"

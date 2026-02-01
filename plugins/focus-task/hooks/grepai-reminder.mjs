@@ -7,15 +7,18 @@
 
 import { existsSync } from 'fs';
 import { join } from 'path';
-import { log } from './lib/utils.mjs';
+import { output, log } from './lib/utils.mjs';
 
 const cwd = process.cwd();
 const grepaiDir = join(cwd, '.grepai');
 
 if (existsSync(grepaiDir)) {
   log('debug', '[grepai]', 'Reminder triggered: grepai configured, Glob/Grep called', cwd);
-  console.log('⚠️ grepai is configured in this project. Consider using grepai MCP tool for semantic/intent-based queries. Use Glob/Grep only for exact text matching or file patterns.');
+  output({
+    systemMessage: 'grepai: USE grepai_search FIRST for code exploration'
+  });
+} else {
+  output({});
 }
 
-// Always exit 0 - don't block, just remind
 process.exit(0);
