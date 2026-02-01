@@ -32,6 +32,23 @@
 
 ---
 
+## v2.0.73 (2026-02-01)
+
+### Changed
+
+- **Skill namespacing** — добавлены оставшиеся скиллы
+  - `create` → `focus-task:create`
+  - `doc` → `focus-task:doc`
+
+### Updated Files
+
+| File | Change |
+|------|--------|
+| `skills/create/SKILL.md` | name: `focus-task:create` |
+| `skills/doc/SKILL.md` | name: `focus-task:doc` |
+
+---
+
 ## v2.0.72 (2026-02-01)
 
 ### Changed
