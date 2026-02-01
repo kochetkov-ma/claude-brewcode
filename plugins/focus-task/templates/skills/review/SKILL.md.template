@@ -1,6 +1,6 @@
 ---
-name: focus-task-review
-description: Project-adapted code review with quorum consensus. Triggers: "review code", "code review", "/focus-task-review".
+name: focus-task:review
+description: Project-adapted code review with quorum consensus. Triggers "review code", "code review", "/focus-task:review".
 user-invocable: true
 argument-hint: "<prompt-or-file-path> [-q|--quorum [G-]N-M]"
 allowed-tools: Read, Glob, Grep, Task, Bash, Write
@@ -208,7 +208,7 @@ Full report: .claude/tasks/reviews/{TIMESTAMP}_{NAME}_report.md
 <!--
 ADAPTATION METADATA
 
-Template: focus-task-review
+Template: focus-task:review
 Adapted: {ADAPTATION_TIMESTAMP}
 Tech stack: {DETECTED_TECH}
 Project agents: {AGENT_COUNT}

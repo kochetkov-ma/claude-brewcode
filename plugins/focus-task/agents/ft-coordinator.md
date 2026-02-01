@@ -1,6 +1,6 @@
 ---
 name: ft-coordinator
-description: "Focus Task coordinator - updates task file status, validates phase progress, checks KNOWLEDGE for duplicates. Trigger: after each phase completion, before handoff."
+description: "Focus Task coordinator - updates task file status, validates phase progress, checks KNOWLEDGE for duplicates. Triggers - after each phase completion, before handoff."
 tools: Read, Write, Edit, Bash, Task
 model: haiku
 permissionMode: acceptEdits
@@ -320,3 +320,22 @@ status: finished          ← Line 1 (stop hook reads THIS)
 2. Edit table: `| Status | {new_status} |`
 
 **Failure to update line 1 → stop hook blocks exit!**
+
+---
+
+## ⛔ NEXT ACTION
+
+**Your output MUST end with explicit next action:**
+
+```
+---
+## ⛔ NEXT ACTION
+{explicit action based on current state}
+```
+
+Examples:
+- "Run Phase 2V verification (reviewer + tester parallel)"
+- "Fix issues from Phase 1V, then RE-RUN Phase 1V"
+- "Proceed to Phase 3 execution"
+- "Run Final Review (3+ agents parallel)"
+- "Task COMPLETE — call ft-coordinator mode:finalize"

@@ -6,6 +6,15 @@ status: pending
 > **AUTONOMY:** Work until DONE. Iterate until all criteria met.
 > **CONTEXT:** Load per phase via ID. KNOWLEDGE.jsonl holds accumulated knowledge.
 
+## ⛔ PROTOCOL
+
+| Step | After EACH agent |
+|------|------------------|
+| 1 | WRITE → `reports/.../phase_P/iter_N_type/{AGENT}_output.md` |
+| 2 | CALL → `ft-coordinator` (reads report, extracts knowledge) |
+
+> Next agent BLOCKED until both complete.
+
 ## Meta
 
 | Created | {TIMESTAMP} | Status | pending |
@@ -98,6 +107,8 @@ status: pending
 
 ---
 
+> ⛔ After each agent: WRITE report → CALL ft-coordinator
+
 ## Phases
 
 > **Rules:**
@@ -116,12 +127,6 @@ status: pending
 > ```
 >
 > **CRITICAL:** NEVER mark phase complete after fix without re-verification!
->
-> **MANDATORY POST-AGENT** (after EVERY work agent completes):
-> ⛔ Complete BOTH steps IN ORDER before calling next agent:
-> 1. WRITE REPORT: Save agent output (+ your supplements/aggregation) → `reports/.../phase_P/iter_N_type/{AGENT}_output.md`
-> 2. CALL COORDINATOR: `ft-coordinator` reads report → extracts knowledge → updates status + MANIFEST
-> DO NOT proceed to next agent or phase until BOTH steps complete.
 >
 > **Examples:** Repository impl → Repository tests → DDL → Pattern analysis → Controller → Integration tests
 
@@ -165,6 +170,12 @@ status: pending
 
 ---
 
+## ⛔ Reminder
+
+After EVERY agent: 1) WRITE report 2) CALL ft-coordinator. Then proceed.
+
+---
+
 ## Final Review
 
 > **Parallel:** 3+ agents. Manager picks from Core + Project Agents based on task type.
@@ -202,7 +213,7 @@ Phase NV fails 3x → ESCALATE
 
 ## Manager Actions
 
-⛔ After EACH agent: WRITE REPORT → CALL COORDINATOR. See Phases rules.
+⛔ After EACH agent: WRITE report → CALL ft-coordinator.
 
 ---
 

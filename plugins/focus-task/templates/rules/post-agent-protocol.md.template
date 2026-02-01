@@ -1,0 +1,6 @@
+---
+paths:
+  - ".claude/tasks/**/*_TASK.md"
+---
+
+⛔ FOCUS-TASK: After EACH agent → WRITE report → CALL ft-coordinator

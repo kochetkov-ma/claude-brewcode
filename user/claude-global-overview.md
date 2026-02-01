@@ -206,7 +206,7 @@ idea ~/.claude/plugins/known_marketplaces.json
 |--------|--------|-------------|---------------------|
 | context7 | — | claude-plugins-official | resolve-library-id, query-docs |
 | playwright | 4fee769 | claude-plugins-official | browser_*, snapshot, screenshot |
-| focus-task | 2.0.70 | claude-brewcode | 9 skills, 3 agents |
+| focus-task | 2.0.73 | claude-brewcode | 9 skills, 3 agents |
 
 **focus-task skills:**
 | Скилл | Назначение |
@@ -239,10 +239,10 @@ idea ~/.claude/plugins/known_marketplaces.json
 │       └── focus-task/
 │           ├── 2.0.8/          # Все версии сохраняются
 │           ├── ...
-│           └── 2.0.21/         # ← Актуальная
+│           └── 2.0.73/         # Актуальная
 │               ├── .claude-plugin/plugin.json
-│               ├── skills/{setup,teardown,create,doc,review,rules,start}/
-│               ├── agents/{ft-coordinator,ft-knowledge-manager}.md
+│               ├── skills/{setup,teardown,create,start,review,rules,doc,grepai,install}/
+│               ├── agents/{ft-coordinator,ft-knowledge-manager,ft-grepai-configurator}.md
 │               └── templates/
 │
 └── marketplaces/               # Источники плагинов
@@ -420,6 +420,7 @@ du -sh ~/.claude/*/
 
 | Вер. | Дата | Изменения |
 |------|------|-----------|
+| 2.17 | 2026-02-01 | focus-task 2.0.73, обновлена структура плагина (9 skills, 3 agents, 7 hooks) |
 | 2.16 | 2026-02-01 | focus-task 2.0.70, новый скилл mcp-config (5 local skills total) |
 | 2.15 | 2026-02-01 | focus-task 2.0.69 (9 skills, 3 agents), bash-expert agent, убраны симлинки (fix #18949) |
 | 2.14 | 2026-02-01 | Claude Code 2.1.29 (новые: 2.1.25, 2.1.27, 2.1.29), focus-task 2.0.62 |

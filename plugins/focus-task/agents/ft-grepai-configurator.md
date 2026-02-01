@@ -1,6 +1,6 @@
 ---
 name: ft-grepai-configurator
-description: "grepai config specialist - project analysis, config.yaml generation, verification. Triggers: 'configure grepai', 'grepai config', 'analyze for grepai', 'setup grepai index'. Isolated subagent."
+description: "grepai config specialist - project analysis, config.yaml generation, verification. Triggers 'configure grepai', 'grepai config', 'analyze for grepai', 'setup grepai index'. Isolated subagent."
 tools: Read, Write, Edit, Bash, Task, WebFetch, Glob, Grep
 model: opus
 permissionMode: acceptEdits

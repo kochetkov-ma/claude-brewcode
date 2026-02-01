@@ -74,25 +74,10 @@ Then re-run your agent. The 2-step protocol will be enforced after coordinator c
       return;
     }
 
-    // Return system message with mandatory 2-step post-agent protocol
+    // Return system message with mandatory 2-step post-agent protocol (shortened for attention)
     const agentName = String(subagentType || '').toUpperCase();
     output({
-      systemMessage: `<ft-mandatory>
-⛔ [${agentName} COMPLETED — 2 MANDATORY STEPS BEFORE ANY OTHER ACTION]
-
-STEP 1 — WRITE REPORT (you do this directly):
-Save ${agentName}'s output + your observations to report file:
-  mkdir -p reports/.../phase_P/iter_N_type/
-  Write: reports/.../phase_P/iter_N_type/${agentName.toLowerCase()}_output.md
-Content: agent's actual output + your supplements/aggregation. Do NOT alter agent's findings.
-
-STEP 2 — CALL COORDINATOR (reads report, extracts knowledge, updates status):
-  subagent_type: "focus-task:ft-coordinator"
-  prompt: "Phase {P}, iter {N}, type {exec|verify}. Task: {PATH}.
-           Report written: {REPORT_PATH}. Read report, extract knowledge, update status + MANIFEST."
-
-⛔ DO NOT call next agent or proceed to next phase until BOTH steps complete.
-</ft-mandatory>`
+      systemMessage: `⛔ ${agentName} DONE → 1. WRITE report 2. CALL ft-coordinator NOW`
     });
   } catch (error) {
     // On error, pass through without modification

@@ -1,6 +1,6 @@
 ---
 name: ft-knowledge-manager
-description: "Focus Task knowledge manager - compacts KNOWLEDGE.jsonl, deduplicates entries, prioritizes by type. Trigger: before handoff, when duplicates reported by coordinator."
+description: "Focus Task knowledge manager - compacts KNOWLEDGE.jsonl, deduplicates entries, prioritizes by type. Triggers - before handoff, when duplicates reported by coordinator."
 tools: Read, Write
 model: haiku
 permissionMode: acceptEdits

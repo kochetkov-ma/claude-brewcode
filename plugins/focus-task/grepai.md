@@ -137,7 +137,7 @@ grepai: USE grepai_search FIRST for code exploration
 |---|-------|-----------|-------|-------|----------|
 | 1 | SessionStart | grepai-session.mjs:146 | SessionStart | Session context | MUST |
 | 2 | PreToolUse:Task | pre-task.mjs:20,56 | PreToolUse | ALL agents | MUST (prepend) |
-| 3 | PreToolUse:Glob/Grep | grepai-reminder.mjs:20 | PreToolUse | Glob/Grep calls | MUST |
+| 3 | PreToolUse:Glob/Grep | grepai-reminder.mjs:24 | PreToolUse | Glob/Grep calls (1s) | MUST |
 | 4 | Rule file | grepai-first.md.template:7 | Always | All files (**/*) | CRITICAL |
 | 5 | CLAUDE.md | create-rule.sh:18 | Persistent | Project config | CRITICAL |
 | 6 | Root CLAUDE.md | CLAUDE.md:101 | Always | Global | CRITICAL |
@@ -295,10 +295,11 @@ hookSpecificOutput: {
 #### Injection #3: grepai-reminder.mjs (PreToolUse:Glob|Grep)
 
 ```javascript
-// hooks/grepai-reminder.mjs:15-22
+// hooks/grepai-reminder.mjs:24-31
 if (existsSync(grepaiDir)) {
   output({
     hookSpecificOutput: {
+      hookEventName: 'PreToolUse',
       additionalContext: 'grepai: USE grepai_search FIRST for code exploration'
     }
   });

@@ -32,6 +32,45 @@
 
 ---
 
+## v2.1.1 (2026-02-01)
+
+### Fixed
+
+- **Agent triggers YAML** — заменено `Trigger:` на `Triggers -` в description агентов
+  - ft-coordinator.md, ft-knowledge-manager.md
+  - Двоеточие в значении ломало YAML парсинг
+
+---
+
+## v2.1.0 (2026-02-01)
+
+### Changed
+
+- **Documentation sync** — масштабное обновление документации
+  - README.md: PostToolUse hook, NEXT ACTION protocol, hook matrix (7 hooks)
+  - CLAUDE.md: hook documentation, skill namespacing table
+  - grepai.md: line refs, timeout info
+  - user/coordinator.md: полная переработка с NEXT ACTION
+
+- **Template namespacing** — skill names в шаблонах
+  - `templates/skills/review/SKILL.md.template`: `focus-task:review`
+  - `templates/review-report.md.template`: `focus-task:review`
+
+- **Protocol terminology** — унифицировано `WRITE report → CALL ft-coordinator`
+
+### Updated Files
+
+| File | Change |
+|------|--------|
+| `README.md` | PostToolUse, NEXT ACTION, hook matrix |
+| `grepai.md` | line refs `:24`, timeout `(1s)` |
+| `templates/skills/review/SKILL.md.template` | `name: focus-task:review` |
+| `templates/review-report.md.template` | `focus-task:review` footer |
+| `skills/review/references/report-template.md` | `focus-task:review` |
+| `CLAUDE.md` (root) | 7 hooks documentation |
+
+---
+
 ## v2.0.73 (2026-02-01)
 
 ### Changed

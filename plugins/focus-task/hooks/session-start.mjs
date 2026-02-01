@@ -1,12 +1,34 @@
 #!/usr/bin/env node
 /**
  * SessionStart hook - logs session ID, symlinks latest plan on clear
+ *
+ * LATEST PLAN SYMLINK LOGIC:
+ * ─────────────────────────
+ * When user exits Plan Mode, Claude offers "Clear session and start work".
+ * If user chooses Clear → SessionStart fires with source='clear'.
+ *
+ * Flow:
+ * 1. EnterPlanMode → Claude writes plan to ~/.claude/plans/<name>.md
+ * 2. ExitPlanMode → Claude offers "Clear session?" option
+ * 3. User clicks Clear → SessionStart(source='clear')
+ * 4. This hook creates .claude/plans/LATEST.md → ~/.claude/plans/<newest>.md
+ *
+ * Conditions:
+ * - Only on source='clear' (not on init/resume)
+ * - Only if plan modified < 60 seconds ago (fresh plan)
+ * - Symlink points to global plan file for easy access from project
+ *
+ * Cleanup: /focus-task:teardown removes .claude/plans/ directory
  */
 import { readStdin, output, log } from './lib/utils.mjs';
 import { readdirSync, statSync, mkdirSync, symlinkSync, unlinkSync, existsSync } from 'fs';
 import { join, resolve } from 'path';
 import { homedir } from 'os';
 
+/**
+ * Creates symlink .claude/plans/LATEST.md → ~/.claude/plans/<newest>.md
+ * Only if newest plan is < 60 seconds old (fresh from Plan Mode)
+ */
 function linkLatestPlan(cwd) {
   const globalPlansDir = join(homedir(), '.claude', 'plans');
   const projectPlansDir = join(cwd, '.claude', 'plans');

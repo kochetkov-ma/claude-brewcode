@@ -78,6 +78,10 @@ async function main() {
           }
         }
       }
+
+      // PRE-agent priming: set expectation BEFORE agent runs
+      const PROTOCOL_REMINDER = `⛔ When agent completes: WRITE report → CALL ft-coordinator`;
+      updatedPrompt = `${updatedPrompt}\n\n${PROTOCOL_REMINDER}`;
     }
 
     // Output result - updatedInput MUST be inside hookSpecificOutput per Claude Code docs

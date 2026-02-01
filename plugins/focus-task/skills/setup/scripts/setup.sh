@@ -112,6 +112,11 @@ sync_templates() {
     sync_template "$PLUGIN_TEMPLATES/rules/grepai-first.md.template" ".claude/rules/grepai-first.md"
   fi
 
+  # post-agent-protocol: always sync (plugin-managed rule)
+  if [ -f "$PLUGIN_TEMPLATES/rules/post-agent-protocol.md.template" ]; then
+    sync_template "$PLUGIN_TEMPLATES/rules/post-agent-protocol.md.template" ".claude/rules/post-agent-protocol.md"
+  fi
+
   # Rules: create only if missing (never overwrite user rules)
   if [ ! -f ".claude/rules/avoid.md" ]; then
     cp "$PLUGIN_TEMPLATES/rules/avoid.md.template" .claude/rules/avoid.md

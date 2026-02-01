@@ -1,252 +1,261 @@
-# Focus Task Plugin — Обзор
+# ft-coordinator — Focus Task Coordinator
 
-## Что это?
+**See also:** [README](../../plugins/focus-task/README.md) | [ft-knowledge-manager](../../plugins/focus-task/agents/ft-knowledge-manager.md) | [/focus-task:start](../../plugins/focus-task/skills/start/SKILL.md)
 
-Плагин для Claude Code с бесконечным выполнением задач через автоматический handoff между сессиями. Позволяет выполнять сложные многофазные задачи, превышающие лимит контекста одной сессии.
+Координатор Focus Task плагина. Управляет статусами задачи, валидирует прогресс, ведет отчеты и извлекает знания.
 
-## Скиллы (6 штук)
+## Responsibilities
 
-| Скилл | Что делает | Когда использовать |
-|-------|------------|-------------------|
-| `/focus-task:setup` | Анализирует проект, создаёт адаптированные шаблоны в `.claude/tasks/templates/` | Один раз при настройке проекта |
-| `/focus-task:create <desc>` | Создаёт TASK.md, SPEC.md, KNOWLEDGE.jsonl через параллельный research агентами | Для новой задачи |
-| `/focus-task:start [path]` | Запускает выполнение через SDK Runtime с автоматическим handoff | Для запуска задачи |
-| `/focus-task:review [prompt]` | Code review несколькими агентами с кворумом (3 агента, 2/3 консенсус) | После завершения задачи |
-| `/focus-task:rules [path]` | Извлекает правила из KNOWLEDGE.jsonl в `avoid.md` и `best-practice.md` | После накопления знаний |
-| `/focus-task:doc [mode]` | Создаёт/обновляет документацию через параллельный анализ кодовой базы | Для синхронизации доков |
+| Action | When | Output |
+|--------|------|--------|
+| **Initialize** | Start of /focus-task:start | Validate, create lock, update status |
+| **Finalize** | Task completion | Generate FINAL.md, update status |
+| Update phase status | After phase completion | Edit TASK.md status field |
+| Record phase result | After phase completion | Edit TASK.md Result field |
+| Log progress | After any change | Append to Progress Log |
+| Check KNOWLEDGE | After phase adds entries | Report duplicates |
+| **Auto-compact** | After KNOWLEDGE check | If threshold reached -> spawn ft-knowledge-manager |
+| Prepare handoff | Before context limit | Set status to `handoff`, save all state |
+| **Create report dirs** | Before phase starts | Create `phase_{P}/iter_{N}_{type}/` |
+| **Read agent report** | After Manager writes it | Read `{AGENT}_output.md` from disk |
+| **Extract knowledge** | After reading report | Extract 3-10 entries -> KNOWLEDGE.jsonl |
+| **Write phase summary** | After phase completion | Write `summary.md` from agent reports |
+| **Update MANIFEST** | After each phase | Add phase entry to MANIFEST.md |
+| **Verify reports** | Before phase transition | Check all expected reports exist |
+| **Generate FINAL** | On task completion | Write FINAL.md with consolidated results |
 
-## Агенты
+## Modes
 
-| Агент | Роль | Модель |
-|-------|------|--------|
-| `ft-coordinator` | Обновляет статусы в TASK.md, пишет отчёты, управляет MANIFEST.md | haiku |
-| `ft-knowledge-manager` | Упаковывает KNOWLEDGE.jsonl, дедуплицирует, приоритизирует по типу | haiku |
+### Mode: initialize
 
-## Workflow (как работает)
+Called at start of `/focus-task:start` to validate and prepare execution.
 
+**Input:**
+- `mode`: "initialize"
+- `taskPath`: Path to task file
+
+**Actions:**
+1. Validate task file exists
+2. Validate task structure (## Phases, ## Agents)
+3. Validate status is `pending` or `in progress`
+4. Write `.claude/tasks/cfg/.focus-task.lock`:
+   ```json
+   {"task_path": "{taskPath}", "started_at": "{ISO timestamp}"}
+   ```
+5. Update task status -> `in progress` in BOTH locations:
+   - Line 1: `status: in progress`
+   - Metadata table: `| Status | in progress |`
+6. Validate/update `.claude/TASK.md` reference
+
+**Output:**
 ```
-1. setup     → создаёт шаблоны для проекта (TASK.md.template, SPEC.md.template)
-      ↓
-2. create    → создаёт задачу:
-               - Параллельный research (5-10 агентов)
-               - SPEC_v1.md + review + итерации
-               - TASK.md + review с кворумом
-               - Пустой KNOWLEDGE.jsonl
-               - Директория reports/ с MANIFEST.md
-      ↓
-3. start     → запускает выполнение:
-               - SDK Runtime управляет сессиями
-               - Claude читает TASK.md, вызывает агентов
-               - После каждой фазы → ft-coordinator
-               - При 85% контекста → подготовка к handoff
-               - При 90% контекста → handoff в новую сессию
-      ↓
-4. review    → (опционально) code review с кворумом:
-               - 3+ агента параллельно
-               - Консенсус 2/3 для подтверждения findings
-               - DoubleCheck верификация
-      ↓
-5. rules     → (опционально) извлечение правил:
-               - Парсит KNOWLEDGE.jsonl
-               - Обновляет .claude/rules/avoid.md
-               - Обновляет .claude/rules/best-practice.md
-```
-
-## Файлы в проекте
-
-После использования плагина в проекте создаётся:
-
-```
-{PROJECT}/.claude/
-├── TASK.md                              # Указатель на активную задачу
-├── tasks/
-│   ├── {TS}_{NAME}_TASK.md              # Файл задачи
-│   ├── {TS}_{NAME}_KNOWLEDGE.jsonl      # Накопленные знания
-│   ├── specs/
-│   │   └── {TS}_{NAME}_SPEC_vN.md       # Спецификации (версионируются)
-│   ├── templates/                       # Адаптированные шаблоны (после setup)
-│   │   ├── TASK.md.template
-│   │   └── SPEC.md.template
-│   ├── reports/                         # Отчёты выполнения
-│   │   └── {TS}_{NAME}/
-│   │       ├── MANIFEST.md              # Индекс фаз/итераций
-│   │       ├── FINAL.md                 # Финальный отчёт
-│   │       └── phase_N/
-│   │           ├── iter_M_exec/         # Выполнение
-│   │           └── iter_M_verify/       # Верификация
-│   └── reviews/                         # Отчёты code review
-├── rules/                               # Правила (после rules)
-│   ├── avoid.md                         # Антипаттерны
-│   └── best-practice.md                 # Лучшие практики
-└── tasks/cfg/
-    ├── focus-task.config.json           # Настройки (опционально)
-    └── .focus-task.lock                 # Lock-файл выполнения
+Initialization complete:
+- Task: {taskPath}
+- Status: {previous_status} -> in progress
+- Lock: created
+- Reference: .claude/TASK.md updated
 ```
 
-## KNOWLEDGE.jsonl формат
+### Mode: finalize
 
-```jsonl
-{"ts":"2026-01-26T14:00:00","cat":"db","t":"❌","txt":"Do not use SELECT *","src":"sql_expert"}
-{"ts":"2026-01-26T14:05:00","cat":"api","t":"✅","txt":"Use @Valid for DTOs","src":"developer"}
-{"ts":"2026-01-26T14:10:00","cat":"arch","t":"ℹ️","txt":"Auth in SecurityConfig.java","src":"developer"}
-```
+Called when task completes.
 
-| Поле | Описание |
-|------|----------|
-| `ts` | Timestamp (ISO 8601) |
-| `cat` | Категория: `db`, `api`, `test`, `config`, `security`, `arch`, `code` |
-| `t` | Тип: `❌` avoid, `✅` best practice, `ℹ️` info |
-| `txt` | Текст записи |
-| `src` | Агент-источник |
+**Input:**
+- `mode`: "finalize"
+- `taskPath`: Path to task file
 
-**Приоритет:** `❌` avoid > `✅` best > `ℹ️` info
+**Actions:**
+1. Generate FINAL.md from templates
+2. Update status in BOTH locations (CRITICAL for stop hook):
+   - Line 1: `status: finished`
+   - Metadata table: `| Status | finished |`
+3. Log completion in MANIFEST.md
 
-## Handoff протокол
+> **WARNING:** Stop hook reads line 1 only. If line 1 is not `status: finished`, exit will be BLOCKED.
 
-Когда контекст достигает порога:
+## WRITE report -> CALL ft-coordinator Protocol
 
-| Порог | Действие |
-|-------|----------|
-| 85% | Подготовка: консолидация состояния, финализация текущей итерации |
-| 90% | Выполнение handoff: сохранение → создание новой сессии |
-
-**Процесс handoff:**
-
-1. `ft-coordinator` сохраняет состояние в TASK.md, финализирует отчёты
-2. Coordinator добавляет запись в MANIFEST.md Handoff Log
-3. `ft-knowledge-manager` упаковывает KNOWLEDGE.jsonl
-4. SDK Runtime создаёт новую Claude сессию
-5. Новая сессия читает TASK.md + KNOWLEDGE.jsonl + MANIFEST.md
-6. Выполнение продолжается с прерванной фазы
-
-**Что сохраняется:**
-- Текущая фаза и шаг
-- Все знания в KNOWLEDGE.jsonl
-- TASK.md с обновлённым статусом
-- Все отчёты в `reports/{TS}_{NAME}/`
-- MANIFEST.md с логом handoff
-
-## Система отчётов
+**CRITICAL:** Manager writes reports FIRST, then calls coordinator.
 
 ```
-reports/{TS}_{NAME}/
-├── MANIFEST.md                    # Индекс всех фаз
-├── FINAL.md                       # Финальный отчёт (при завершении)
-└── phase_{P}/
-    ├── iter_{N}_exec/             # Итерация выполнения
-    │   ├── {AGENT}_output.md      # Результат агента
-    │   ├── {AGENT}_artifacts/     # Артефакты (опционально)
-    │   └── summary.md             # Сводка фазы
-    └── iter_{N}_verify/           # Итерация верификации
-        ├── {AGENT}_review.md      # Отчёт ревью
-        ├── issues.jsonl           # Структурированные проблемы
-        └── summary.md             # Сводка верификации
+SubAgent completes work
+        |
+        v
+Manager WRITES {AGENT}_output.md to disk
+        |
+        v
+Manager CALLS ft-coordinator
+        |
+        v
+Coordinator READS report from disk
+        |
+        v
+Coordinator EXTRACTS knowledge -> KNOWLEDGE.jsonl
+        |
+        v
+Coordinator UPDATES MANIFEST.md
 ```
 
-**Роль ft-coordinator:**
-- Создаёт директории перед каждой фазой
-- Пишет отчёты агентов после завершения
-- Обновляет MANIFEST.md после каждой фазы
-- Генерирует FINAL.md при завершении задачи
-- Проверяет наличие всех отчётов перед переходом
-
-## Конфигурация
-
-`{PROJECT}/.claude/tasks/cfg/focus-task.config.json` (или `~/.claude/tasks/cfg/focus-task.config.json`):
-
-```json
-{
-  "contextThreshold": 0.9,
-  "warningThreshold": 0.85,
-  "maxTokens": 200000,
-  "knowledgeLimit": 50
-}
+**If report missing on disk:**
+```
+MISSING: {path} — Manager must write before calling coordinator.
 ```
 
-| Параметр | Default | Описание |
-|----------|---------|----------|
-| `contextThreshold` | 0.9 | Порог для handoff (90%) |
-| `warningThreshold` | 0.85 | Порог для предупреждения (85%) |
-| `maxTokens` | 200000 | Максимум токенов контекста |
-| `knowledgeLimit` | 50 | Максимум записей в KNOWLEDGE |
+## Report Verification Flow
 
-## SDK Runtime
-
-TypeScript runtime в `plugins/focus-task/runtime/`:
-
-| Файл | Назначение |
-|------|------------|
-| `index.ts` | Entry point, парсит `--task=`, оркестрирует сессии |
-| `session-manager.ts` | Создаёт сессии, мониторит контекст, yield output |
-| `context-monitor.ts` | Отслеживает использование контекста, триггерит handoff |
-| `handoff-executor.ts` | Сохраняет/восстанавливает состояние через KNOWLEDGE.jsonl |
-
-**Запуск:**
-```bash
-cd plugins/focus-task/runtime && npm install && npm run build
-node dist/index.js --task=.claude/tasks/{TS}_{NAME}_TASK.md
+```
+Phase N completes
+    |
+    v
+Coordinator checks: reports exist on disk?
+    |
+    +-- YES -> Extract knowledge, update MANIFEST, proceed to N+1
+    |
+    +-- NO -> Return ERROR listing missing files:
+            "MISSING REPORTS:
+             - {path1}
+             - {path2}
+            Manager must write reports BEFORE calling coordinator."
+            |
+            v
+         Manager fixes -> Re-calls coordinator
 ```
 
-## Code Review (/focus-task:review)
+## Status Transitions
 
-**Фазы:**
-1. **Codebase Study** — 5-10 Explore агентов параллельно
-2. **Group Formation** — формирование групп (main-code, tests, db-layer)
-3. **Parallel Review** — N агентов × M групп параллельно
-4. **Quorum Collection** — фильтрация по консенсусу (≥2/3)
-5. **DoubleCheck** — верификация подтверждённых findings
-6. **Final Report** — отчёт в `.claude/tasks/reviews/`
+```
+pending -> in progress -> completed
+                       -> failed -> (retry or escalate)
+                       -> handoff (context limit)
+```
 
-**Quorum:** `-q 3-2` или `--quorum 3-2` (3 агента, порог 2)
+### Verification Loop
 
-**Приоритеты findings:**
-| Priority | Критерий | Confidence |
-|----------|----------|------------|
-| P1 | Quorum + DoubleCheck | Highest |
-| P2 | Quorum only | Medium |
-| P3 | Blocker/Critical без quorum | Exception |
+```
+Phase NV fails -> fix -> RE-RUN Phase NV -> pass? -> complete
+                                         -> fail? -> fix -> RE-RUN...
+```
 
-## Rules Extraction (/focus-task:rules)
+**NEVER mark phase complete after fix without re-running verification!**
 
-Парсит KNOWLEDGE.jsonl и обновляет:
-- `.claude/rules/avoid.md` — таблица антипаттернов
-- `.claude/rules/best-practice.md` — таблица лучших практик
+## Escalation Actions (after 3 failed iterations)
 
-**Формат таблиц:**
+| # | Action | Trigger |
+|---|--------|---------|
+| 1 | R&D Phase | Root cause unclear -> insert Phase NR |
+| 2 | Split Phase | Scope too large -> N.a, N.b sub-phases |
+| 3 | Agent Upgrade | Complexity -> sonnet -> opus |
+| 4 | Reassign | Wrong agent type -> switch agent |
+| 5 | AskUserQuestion | LAST RESORT |
+
+**Limits:**
+- Options 1-4: max 2 escalations per phase
+- Option 5: requires **quorum 2+ agents** AND **10+ total iterations** on phase
+
+## Auto-compact Workflow
+
+After each phase:
+1. Read `autoCompactThreshold` from config (default: 50)
+2. Read `Last Compact At` from MANIFEST.md (default: 0)
+3. If `currentCount >= lastCompactAt + threshold`:
+   - Spawn `ft-knowledge-manager` via Task tool
+   - After completion, update MANIFEST.md: `Last Compact At` -> new entry count
+   - Report: "Auto-compacted: {before} -> {after} entries"
+4. If threshold not reached -> "No compaction needed"
+
+## Report Directory Structure
+
+```
+.claude/tasks/reports/{TS}_{NAME}/
++-- MANIFEST.md                    # Index of all phases/iterations
++-- FINAL.md                       # Final report (on completion)
++-- phase_{P}/
+    +-- iter_{N}_exec/             # Execution iteration
+    |   +-- {AGENT}_output.md      # Agent execution report
+    |   +-- {AGENT}_artifacts/     # Optional artifacts
+    |   +-- summary.md             # Phase summary
+    +-- iter_{N}_verify/           # Verification iteration
+        +-- {AGENT}_review.md      # Review report
+        +-- issues.jsonl           # Structured issues
+        +-- summary.md             # Verification summary
+```
+
+## Knowledge Extraction
+
+After reading agent reports from disk:
+- Extract 3-10 genuinely important, unique discoveries
+- Schema: `{"ts":"ISO","cat":"...","t":"...|...|...","txt":"...","src":"agent_name"}`
+- Categories: `docker` `db` `api` `test` `config` `security` `performance` `arch` `code`
+- Types: gotcha/pitfall -> `X` | working pattern -> `V` | architecture fact -> `i`
+- SKIP trivial/obvious facts. Only genuinely useful knowledge.
+- NEVER write phase summaries as knowledge entries
+
+## Output Format
+
+```
+Coordinator update complete:
+- Phase: {N} ({type})
+- Iteration: {N}
+- Status: {new_status}
+- Progress Log: entry added
+- KNOWLEDGE: {count} entries, {duplicates} duplicates
+  - Last compact: {lastCompactAt} | Threshold: {threshold}
+  - {compacted ? "Auto-compacted: {before} -> {after}" : "No compaction needed"}
+- Reports:
+  - Agent reports: {count} verified on disk
+  - Summary: {path}
+  - MANIFEST: updated
+  - Missing: {count} (ERROR if any missing)
+- Extracted: {count} knowledge entries from reports
+- Next: {recommendation}
+```
+
+## Rules
+
+- NEVER implement code — only update status/logs/reports/knowledge
+- NEVER hallucinate or fabricate report file content
+- NEVER create `{AGENT}_output.md` — Manager writes these BEFORE calling you
+- ALWAYS read agent reports from DISK before processing
+- ALWAYS extract knowledge from actual report content, not from imagination
+- ALWAYS verify report files exist on disk before updating MANIFEST
+- ALWAYS preserve existing content when editing
+- If report files missing on disk -> return error listing them
+
+## Task Status Format
+
+TASK.md has **two status locations** that MUST stay in sync:
 
 ```markdown
-| # | Avoid | Instead | Why |
-|---|-------|---------|-----|
-| 1 | `System.out.println()` | `@Slf4j` + `log.info()` | Structured logging |
+status: finished          <- Line 1 (stop hook reads THIS)
+
+# TASK: ...
+
+| Field | Value |
+|-------|-------|
+| Status | finished |    <- Table row (coordinator updates THIS)
 ```
 
-```markdown
-| # | Practice | Context | Source |
-|---|----------|---------|--------|
-| 1 | `allSatisfy()` over `forEach` | Collection assertions | AssertJ |
+**On any status change:**
+1. Edit line 1: `status: {new_status}`
+2. Edit table: `| Status | {new_status} |`
+
+**Failure to update line 1 -> stop hook blocks exit!**
+
+---
+
+## NEXT ACTION
+
+**Coordinator output MUST end with explicit next action:**
+
+```
+---
+## NEXT ACTION
+{explicit action based on current state}
 ```
 
-## Полезные команды
-
-```bash
-# Установка плагина
-claude --plugin-dir ./plugins/focus-task
-
-# Проверка скиллов
-/help
-
-# Настройка focus-task
-/focus-task:setup
-
-# Создание задачи
-/focus-task:create "Implement feature X"
-
-# Запуск задачи
-/focus-task:start .claude/tasks/20260127_150000_feature_x_TASK.md
-
-# Code review
-/focus-task:review "Check security and null safety"
-
-# Извлечение правил
-/focus-task:rules .claude/tasks/20260127_150000_feature_x_KNOWLEDGE.jsonl
-```
+Examples:
+- "Run Phase 2V verification (reviewer + tester parallel)"
+- "Fix issues from Phase 1V, then RE-RUN Phase 1V"
+- "Proceed to Phase 3 execution"
+- "Run Final Review (3+ agents parallel)"
+- "Task COMPLETE — call ft-coordinator mode:finalize"
