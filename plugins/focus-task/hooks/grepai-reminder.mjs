@@ -14,7 +14,7 @@ const grepaiDir = join(cwd, '.grepai');
 
 if (existsSync(grepaiDir)) {
   log('debug', '[grepai]', 'Reminder triggered: grepai configured, Glob/Grep called', cwd);
-  console.log('⚠️ grepai is configured in this project. Consider using grepai_search MCP tool for semantic/intent-based queries. Use Glob/Grep only for exact text matching or file patterns.');
+  console.log('⚠️ grepai is configured in this project. Consider using grepai MCP tool for semantic/intent-based queries. Use Glob/Grep only for exact text matching or file patterns.');
 }
 
 // Always exit 0 - don't block, just remind
