@@ -46,11 +46,12 @@
 │   ├── skill-creator.md
 │   ├── agent-creator.md
 │   ├── prompt-optimizer.md
-│   └── rules-organizer.md
+│   ├── rules-organizer.md
+│   └── bash-expert.md
 │
 ├── commands/                    # Слэш-команды (пусто)
 │
-├── skills/                      # Скиллы (4 локальных + 6 симлинков)
+├── skills/                      # Скиллы (4 локальных)
 │   ├── text-optimize/           # Локальный
 │   │   ├── SKILL.md
 │   │   └── references/
@@ -58,14 +59,8 @@
 │   │   └── SKILL.md
 │   ├── text-human/              # Локальный
 │   │   └── SKILL.md
-│   ├── secrets-scan/            # Локальный (NEW) - 10 parallel agents
-│   │   └── SKILL.md
-│   ├── focus-task-setup -> ...  # Симлинки на плагин
-│   ├── focus-task-teardown -> ...
-│   ├── focus-task-create -> ...
-│   ├── focus-task-doc -> ...
-│   ├── focus-task-rules -> ...
-│   └── focus-task-start -> ...
+│   └── secrets-scan/            # Локальный - 10 parallel agents
+│       └── SKILL.md
 │
 └── templates/                   # Шаблоны (пусто)
 ```
@@ -103,6 +98,7 @@ idea ~/.claude/agents/rules-organizer.md
 | agent-creator | opus | R/W/E/Glob/Grep/Task/Skill/Web | ✅ | ✅ | Создание агентов + Explore |
 | prompt-optimizer | sonnet | R/W/E/Glob/Grep/WebFetch | ❌ | ❌ | Оптимизация (через text-optimize) |
 | rules-organizer | sonnet | R/W/E/Glob/Grep/Skill | ❌ | ✅ | Организация .claude/rules/ |
+| bash-expert | opus | R/W/E/Glob/Grep/Bash/Task/WebFetch | ✅ | ❌ | Shell scripts, brew, plugin scripts |
 
 **Использование:**
 ```
@@ -134,17 +130,7 @@ idea ~/.claude/skills/secrets-scan/SKILL.md
 | text-human | "humanize code", "remove ai comments", "simplify docs", "clean documentation" |
 | secrets-scan | "scan for secrets", "find credentials", "security scan" (10 parallel haiku agents) |
 
-**Симлинки на focus-task плагин (workaround для autocomplete):**
-| Симлинк | Источник |
-|---------|----------|
-| `~/.claude/skills/focus-task-setup` | `~/.claude/plugins/cache/claude-brewcode/focus-task/2.0.20/skills/setup/` |
-| `~/.claude/skills/focus-task-teardown` | `.../2.0.20/skills/teardown/` |
-| `~/.claude/skills/focus-task-create` | `.../2.0.20/skills/create/` |
-| `~/.claude/skills/focus-task-doc` | `.../2.0.20/skills/doc/` |
-| `~/.claude/skills/focus-task-rules` | `.../2.0.20/skills/rules/` |
-| `~/.claude/skills/focus-task-start` | `.../2.0.20/skills/start/` |
-
-> **Note:** `focus-task-review` создаётся `/focus-task:setup` в `.claude/skills/` проекта (адаптируется AI).
+> **Note:** Симлинки больше не нужны — bug #18949 исправлен в Claude Code. Plugin skills отображаются напрямую.
 
 **Использование:**
 ```
@@ -216,20 +202,22 @@ idea ~/.claude/plugins/known_marketplaces.json
 |--------|--------|-------------|---------------------|
 | context7 | — | claude-plugins-official | resolve-library-id, query-docs |
 | playwright | 4fee769 | claude-plugins-official | browser_*, snapshot, screenshot |
-| focus-task | 2.0.62 | claude-brewcode | 8 skills, 3 agents |
+| focus-task | 2.0.69 | claude-brewcode | 9 skills, 3 agents |
 
 **focus-task skills:**
 | Скилл | Назначение |
 |-------|------------|
-| `/focus-task:setup` | Настройка focus-task в проекте, создание симлинков |
+| `/focus-task:setup` | Настройка focus-task в проекте |
 | `/focus-task:teardown` | Удаление файлов созданных `/focus-task:setup` |
 | `/focus-task:create` | Создание TASK.md + SPEC + KNOWLEDGE через parallel research |
-| `/focus-task:doc` | Генерация документации через parallel codebase analysis |
+| `/focus-task:start` | Запуск задачи через hooks-only architecture |
 | `/focus-task:review` | Multi-agent code review с quorum consensus |
 | `/focus-task:rules` | Извлечение правил из KNOWLEDGE.jsonl |
-| `/focus-task:start` | Запуск задачи через hooks-only architecture |
+| `/focus-task:doc` | Генерация документации через parallel codebase analysis |
+| `/focus-task:grepai` | Настройка семантического поиска (grepai) |
+| `/focus-task:install` | Установка зависимостей (brew, jq, grepai) |
 
-**focus-task agents:** `ft-coordinator` (haiku), `ft-knowledge-manager` (haiku)
+**focus-task agents:** `ft-coordinator` (haiku), `ft-knowledge-manager` (haiku), `ft-grepai-configurator` (opus)
 
 #### Расположение плагинов в файловой системе
 
@@ -269,13 +257,7 @@ claude plugin update focus-task@claude-brewcode
 claude plugin list
 ```
 
-**Симлинки для autocomplete (workaround GitHub #18949):**
-
-После `/focus-task:setup` создаются симлинки в `~/.claude/skills/`:
-```
-focus-task-{skill} → ~/.claude/plugins/cache/claude-brewcode/focus-task/2.0.20/skills/{skill}/
-```
-Это позволяет использовать `/focus-task-setup` вместо `/focus-task:setup` с autocomplete.
+> **Note:** Симлинки для autocomplete больше не требуются — bug #18949 исправлен.
 
 ### 2.4 MCP конфигурация
 
@@ -434,6 +416,7 @@ du -sh ~/.claude/*/
 
 | Вер. | Дата | Изменения |
 |------|------|-----------|
+| 2.15 | 2026-02-01 | focus-task 2.0.69 (9 skills, 3 agents), bash-expert agent, убраны симлинки (fix #18949) |
 | 2.14 | 2026-02-01 | Claude Code 2.1.29 (новые: 2.1.25, 2.1.27, 2.1.29), focus-task 2.0.62 |
 | 2.13 | 2026-01-29 | focus-task 2.0.21, новый скилл secrets-scan (10 parallel haiku agents), обновлены размеры директорий |
 | 2.12 | 2026-01-28 | focus-task 2.0.18, симлинки обновлены, Task tool в developer/tester |

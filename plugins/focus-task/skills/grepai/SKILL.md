@@ -1,5 +1,5 @@
 ---
-name: grepai
+name: focus-task:grepai
 description: Semantic search setup. Triggers - "grepai", "semantic search", "setup grepai".
 user-invocable: true
 argument-hint: "[setup|status|start|stop|reindex|optimize|upgrade]"

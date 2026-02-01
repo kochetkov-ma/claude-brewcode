@@ -14,6 +14,7 @@
   - [Task Lifecycle](#2-task-lifecycle-жизненный-цикл-задачи)
   - [Code Quality](#3-code-quality-качество-кода)
   - [Utilities](#4-utilities-утилиты)
+  - [Installation](#5-installation-установка-компонентов)
 - [Агенты](#агенты)
 - [Система хуков](#система-хуков)
 - [Архитектура бесконечного контекста](#архитектура-бесконечного-контекста)
@@ -27,9 +28,9 @@
 
 | Компонент | Кол-во | Назначение |
 |-----------|--------|------------|
-| **Скиллы** | 8 | Команды для работы с задачами |
+| **Скиллы** | 9 | Команды для работы с задачами |
 | **Агенты** | 3 | ft-coordinator, ft-knowledge-manager, ft-grepai-configurator |
-| **Хуки** | 5 | SessionStart, PreToolUse, PostToolUse, PreCompact, Stop |
+| **Хуки** | 7 | SessionStart (2), PreToolUse (2), PostToolUse, PreCompact, Stop |
 | **Шаблоны** | 5 | TASK.md, SPEC.md, KNOWLEDGE.jsonl, отчеты |
 
 ---
@@ -318,6 +319,41 @@ STEP 2: Вызвать ft-coordinator для извлечения знаний �
 
 ---
 
+### 5. Installation (Установка компонентов)
+
+Интерактивный установщик зависимостей плагина.
+
+#### `/focus-task:install`
+
+Проверяет и устанавливает все необходимые компоненты.
+
+```bash
+/focus-task:install                           # Интерактивный режим
+```
+
+**Компоненты:**
+
+| Компонент | Тип | Назначение |
+|-----------|-----|------------|
+| brew | required | Менеджер пакетов |
+| coreutils+timeout | required | Таймауты для скриптов |
+| jq | required | Парсинг JSON в хуках |
+| ollama | optional | Локальный сервер эмбеддингов |
+| bge-m3 | optional | Мультиязычная модель (~1.2GB) |
+| grepai | optional | CLI семантического поиска |
+
+**Workflow (6 фаз):**
+1. **State Check** — состояние всех компонентов
+2. **Updates Check** — доступные обновления (brew update)
+3. **Timeout Check** — проверка symlink для timeout
+4. **Required** — установка обязательных (brew, coreutils, jq)
+5. **Semantic Search** — опциональная установка grepai
+6. **Summary** — финальный отчёт
+
+**Модель:** sonnet
+
+---
+
 ## Агенты
 
 | Агент | Модель | Назначение | Триггер |
@@ -582,3 +618,24 @@ STEP 2: Call ft-coordinator to extract knowledge and update status
 ## Установка
 
 См. [INSTALL.md](INSTALL.md)
+
+---
+
+## Related Documentation
+
+| Document | Description |
+|----------|-------------|
+| [INSTALL.md](INSTALL.md) | Installation and setup guide |
+| [grepai.md](grepai.md) | Semantic search integration |
+| [RELEASE-NOTES.md](RELEASE-NOTES.md) | Changelog and version history |
+| **Agents** | |
+| [ft-coordinator](agents/ft-coordinator.md) | Task orchestration and status management |
+| [ft-knowledge-manager](agents/ft-knowledge-manager.md) | KNOWLEDGE.jsonl maintenance |
+| [ft-grepai-configurator](agents/ft-grepai-configurator.md) | grepai config generation |
+| **Skills** | |
+| [setup](skills/setup/SKILL.md) | Project initialization |
+| [create](skills/create/SKILL.md) | Task creation |
+| [start](skills/start/SKILL.md) | Task execution |
+| [review](skills/review/SKILL.md) | Multi-agent code review |
+| [grepai](skills/grepai/SKILL.md) | Semantic search setup |
+| [install](skills/install/SKILL.md) | Prerequisites installation |

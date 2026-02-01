@@ -1,5 +1,9 @@
 # Release Notes
 
+**See also:** [README.md](README.md) | [INSTALL.md](INSTALL.md) | [grepai.md](grepai.md)
+
+---
+
 ## Format
 
 ```
@@ -25,6 +29,17 @@
 | **PATCH** | Bug fixes, documentation |
 | **Order** | Newest first |
 | **Sources** | Link to issues/docs when relevant |
+
+---
+
+## v2.0.68 (2026-02-01)
+
+### Fixed
+
+- **skills/install/SKILL.md** — Output Rules для корректного отображения
+  - Добавлена секция Output Rules: показывать ПОЛНЫЙ вывод, сохранять таблицы
+  - Каждая фаза теперь имеет `→ Show:` и `→ Explain:` подсказки
+  - Phase 5 пропускается если grepai уже установлен
 
 ---
 

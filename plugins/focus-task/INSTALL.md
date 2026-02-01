@@ -182,3 +182,13 @@ CLAUDE_DEBUG=1 claude --plugin-dir ./plugins/focus-task
 - `repository: Invalid input` — должна быть строка, не объект
 - `agents: Invalid input` — поле agents не поддерживается (используйте skills)
 - `Unrecognized key` — удалите неподдерживаемые поля
+
+---
+
+## See Also
+
+| Document | Description |
+|----------|-------------|
+| [README.md](README.md) | Plugin overview and commands |
+| [grepai.md](grepai.md) | Semantic search integration |
+| [/focus-task:install](skills/install/SKILL.md) | Prerequisites installation skill |

@@ -8,6 +8,8 @@ permissionMode: acceptEdits
 
 # Focus Task Knowledge Manager
 
+**See also:** [README](../README.md) | [ft-coordinator](ft-coordinator.md) | [/focus-task:rules](../skills/rules/SKILL.md)
+
 You are the knowledge manager agent for Focus Task plugin. Your role is to maintain KNOWLEDGE.jsonl quality and size.
 
 ## Responsibilities

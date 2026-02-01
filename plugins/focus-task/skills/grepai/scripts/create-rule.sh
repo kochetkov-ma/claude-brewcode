@@ -10,19 +10,22 @@ GREPAI_MARKER="grepai_search"
 
 mkdir -p .claude/rules
 
-# Add grepai entry to CLAUDE.md if not present
-if [ -f "$CLAUDE_MD" ]; then
-  if ! grep -q "$GREPAI_MARKER" "$CLAUDE_MD" 2>/dev/null; then
-    echo "" >> "$CLAUDE_MD"
-    echo "## Code Search" >> "$CLAUDE_MD"
-    echo "" >> "$CLAUDE_MD"
-    echo "> **CRITICAL:** Use \`grepai_search\` FIRST for code exploration." >> "$CLAUDE_MD"
-    echo "✅ CLAUDE.md updated with grepai entry"
-  else
-    echo "⏭️ CLAUDE.md already has grepai entry"
-  fi
+# Add grepai entry to CLAUDE.md (create if not exists)
+if [ ! -f "$CLAUDE_MD" ]; then
+  echo "# CLAUDE.md" > "$CLAUDE_MD"
+  echo "" >> "$CLAUDE_MD"
+  echo "## Code Search" >> "$CLAUDE_MD"
+  echo "" >> "$CLAUDE_MD"
+  echo "> **CRITICAL:** Use \`grepai_search\` FIRST for code exploration." >> "$CLAUDE_MD"
+  echo "✅ CLAUDE.md created with grepai entry"
+elif ! grep -q "$GREPAI_MARKER" "$CLAUDE_MD" 2>/dev/null; then
+  echo "" >> "$CLAUDE_MD"
+  echo "## Code Search" >> "$CLAUDE_MD"
+  echo "" >> "$CLAUDE_MD"
+  echo "> **CRITICAL:** Use \`grepai_search\` FIRST for code exploration." >> "$CLAUDE_MD"
+  echo "✅ CLAUDE.md updated with grepai entry"
 else
-  echo "⚠️ CLAUDE.md not found (optional)"
+  echo "⏭️ CLAUDE.md already has grepai entry"
 fi
 
 # Self-location: derive plugin root from script path

@@ -8,6 +8,8 @@ permissionMode: acceptEdits
 
 # Focus Task Coordinator
 
+**See also:** [README](../README.md) | [ft-knowledge-manager](ft-knowledge-manager.md) | [/focus-task:start](../skills/start/SKILL.md)
+
 You are the coordinator agent for Focus Task plugin. Your role is to maintain task file integrity, validate progress, and manage reports.
 
 ## Responsibilities

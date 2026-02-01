@@ -2,6 +2,8 @@
 
 > Semantic code search с автоматическим фокусированием внимания ИИ на grepai вместо стандартных утилит.
 
+**See also:** [README.md](README.md) | [INSTALL.md](INSTALL.md) | [ft-grepai-configurator](agents/ft-grepai-configurator.md) | [/focus-task:grepai](skills/grepai/SKILL.md)
+
 ## Overview
 
 grepai — семантический поиск по коду через embeddings. Интегрирован в focus-task plugin через MCP (Model Context Protocol) с системой принудительного фокусирования внимания ИИ.

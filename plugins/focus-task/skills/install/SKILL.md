@@ -1,5 +1,5 @@
 ---
-name: install
+name: focus-task:install
 description: Installs focus-task prerequisites (brew, coreutils, jq, grepai). Triggers - "install focus-task", "install dependencies", "setup prerequisites", "установить зависимости".
 user-invocable: true
 argument-hint: ""
@@ -13,6 +13,27 @@ model: sonnet
 Interactive installer for focus-task prerequisites.
 
 <instructions>
+
+## Output Rules
+
+> **CRITICAL:** After EACH bash command, you MUST:
+> 1. Show **COMPLETE** script output in a code block — **preserve markdown tables!**
+> 2. Add a brief **interpretation** of the result (1-2 sentences)
+> 3. **NEVER** summarize, truncate, or skip any output
+
+**Example format:**
+```
+## Phase N: Name
+
+**Output:**
+\`\`\`
+[FULL script output here - preserve formatting!]
+\`\`\`
+
+**Result:** [1-2 sentence interpretation]
+```
+
+---
 
 ## Prerequisites
 
@@ -43,31 +64,34 @@ test -n "$FT_PLUGIN" && echo "✅ FT_PLUGIN=$FT_PLUGIN" || echo "❌ Plugin not 
 
 ### Phase 1: State Check
 
-**EXECUTE**:
-```bash
-bash "$FT_PLUGIN/skills/install/scripts/install.sh" state
-```
+**EXECUTE**: `bash "$FT_PLUGIN/skills/install/scripts/install.sh" state`
+
+→ **Show:** Full table with all components, statuses, versions, sources.
+
+---
 
 ### Phase 2: Updates Check
 
-**EXECUTE**:
-```bash
-bash "$FT_PLUGIN/skills/install/scripts/install.sh" check-updates
-```
+**EXECUTE**: `bash "$FT_PLUGIN/skills/install/scripts/install.sh" check-updates`
+
+→ **Show:** BREW_CACHE status, UPDATES_AVAILABLE, NOTES.
+→ **Explain:** Did brew cache update succeed? Any updates available?
 
 **If UPDATES_AVAILABLE=true** → **ASK** (AskUserQuestion):
 - Header: "Updates"
-- Question: "Updates available: [UPDATES]. Update now?"
+- Question: "Updates available: [list from output]. Update now?"
 - Options: "Yes, update all" | "Skip"
 
 **If Yes** → **EXECUTE**: `bash "$FT_PLUGIN/skills/install/scripts/install.sh" update-all`
 
+---
+
 ### Phase 3: Timeout Check
 
-**EXECUTE**:
-```bash
-bash "$FT_PLUGIN/skills/install/scripts/install.sh" check-timeout
-```
+**EXECUTE**: `bash "$FT_PLUGIN/skills/install/scripts/install.sh" check-timeout`
+
+→ **Show:** TIMEOUT_EXISTS, VERSION, SYMLINK path.
+→ **Explain:** Is timeout available? Where does symlink point?
 
 **If TIMEOUT_EXISTS=false** → **ASK**:
 - Header: "Timeout Symlink"
@@ -76,32 +100,39 @@ bash "$FT_PLUGIN/skills/install/scripts/install.sh" check-timeout
 
 > **If cancel** → STOP: "Installation cancelled. timeout command required."
 
+---
+
 ### Phase 4: Required Components
 
-**EXECUTE**:
-```bash
-bash "$FT_PLUGIN/skills/install/scripts/install.sh" required
-```
+**EXECUTE**: `bash "$FT_PLUGIN/skills/install/scripts/install.sh" required`
+
+→ **Show:** Full installation output.
 
 **If timeout still missing** → **EXECUTE**: `bash "$FT_PLUGIN/skills/install/scripts/install.sh" timeout`
 
 > **STOP if any required failed.**
 
+---
+
 ### Phase 5: Semantic Search (Optional)
 
-**ASK**:
+**Skip if grepai already installed** (check Phase 1 state).
+
+**If not installed** → **ASK**:
 - Header: "grepai"
 - Question: "Install semantic search? Enables AI-powered code search."
 - Options: "Yes, install (~1.5GB)" | "Skip"
 
 **If Yes** → **EXECUTE**: `bash "$FT_PLUGIN/skills/install/scripts/install.sh" grepai`
 
+---
+
 ### Phase 6: Summary
 
-**EXECUTE**:
-```bash
-bash "$FT_PLUGIN/skills/install/scripts/install.sh" summary
-```
+**EXECUTE**: `bash "$FT_PLUGIN/skills/install/scripts/install.sh" summary`
+
+→ **Show:** Full summary table with Installed vs Latest versions.
+→ **Show:** Actions Performed section.
 
 </instructions>
 

@@ -1,9 +1,10 @@
 ---
-name: teardown
+name: focus-task:teardown
 description: Remove all focus-task files created by /focus-task:setup. Cleans templates, configs, and skills.
 user-invocable: true
-argument-hint: [--dry-run]
+argument-hint: "[--dry-run]"
 allowed-tools: Bash, Read
+context: fork
 model: haiku
 ---
 

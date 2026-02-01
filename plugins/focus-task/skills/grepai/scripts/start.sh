@@ -32,3 +32,21 @@ else
   echo "   Check: grepai watch (foreground) for errors"
   exit 1
 fi
+
+# Ensure CLAUDE.md has grepai entry
+CLAUDE_MD="CLAUDE.md"
+GREPAI_MARKER="grepai_search"
+if [ ! -f "$CLAUDE_MD" ]; then
+  echo "# CLAUDE.md" > "$CLAUDE_MD"
+  echo "" >> "$CLAUDE_MD"
+  echo "## Code Search" >> "$CLAUDE_MD"
+  echo "" >> "$CLAUDE_MD"
+  echo "> **CRITICAL:** Use \`grepai_search\` FIRST for code exploration." >> "$CLAUDE_MD"
+  echo "✅ CLAUDE.md created with grepai entry"
+elif ! grep -q "$GREPAI_MARKER" "$CLAUDE_MD" 2>/dev/null; then
+  echo "" >> "$CLAUDE_MD"
+  echo "## Code Search" >> "$CLAUDE_MD"
+  echo "" >> "$CLAUDE_MD"
+  echo "> **CRITICAL:** Use \`grepai_search\` FIRST for code exploration." >> "$CLAUDE_MD"
+  echo "✅ CLAUDE.md updated with grepai entry"
+fi

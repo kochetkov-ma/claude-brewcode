@@ -1,5 +1,5 @@
 ---
-name: setup
+name: focus-task:setup
 description: Analyzes project structure, tech stack, testing frameworks, and project-specific agents to generate an adapted TASK.md.template in .claude/tasks/templates/. Triggers on phrases like "setup focus-task", "focus-task setup", "initialize focus-task", "configure focus-task".
 user-invocable: true
 argument-hint: "[universal-template-path]"
