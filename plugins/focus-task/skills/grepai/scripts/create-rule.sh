@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 # grepai Create Rule + CLAUDE.md entry
 
 echo "=== Create Rule ==="
@@ -24,11 +25,6 @@ else
   echo "⚠️ CLAUDE.md not found (optional)"
 fi
 
-if [ -f "$RULE_FILE" ]; then
-  echo "⏭️ Rule already exists: $RULE_FILE"
-  exit 0
-fi
-
 # Self-location: derive plugin root from script path
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # Path: scripts/create-rule.sh -> skills/grepai/scripts -> skills/grepai -> skills -> PLUGIN_ROOT
@@ -37,13 +33,14 @@ PLUGIN_TEMPLATES="$PLUGIN_ROOT/templates"
 
 if [ -f "$PLUGIN_TEMPLATES/rules/grepai-first.md.template" ]; then
   cp "$PLUGIN_TEMPLATES/rules/grepai-first.md.template" "$RULE_FILE"
-  echo "✅ Rule created: $RULE_FILE"
+  echo "✅ Rule updated: $RULE_FILE"
 else
   echo "⚠️ Template not found, creating default rule"
   cat > "$RULE_FILE" << 'RULE'
 ---
-globs: ["**/*"]
-alwaysApply: true
+paths:
+  - "**/*"
+description: grepai-first - semantic search FIRST for code exploration
 ---
 
 # grepai-first
@@ -58,5 +55,5 @@ Use grepai as PRIMARY search tool for semantic code search.
 
 **Decision:** "Need exact text/pattern?" → YES: Grep/Glob, NO: grepai
 RULE
-  echo "✅ Rule created (default): $RULE_FILE"
+  echo "✅ Rule updated (default): $RULE_FILE"
 fi

@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 # grepai Infrastructure Check
 
 echo "=== Infrastructure Check ==="
@@ -7,7 +8,7 @@ ERRORS=0
 
 # grepai CLI
 if which grepai >/dev/null 2>&1; then
-  echo "✅ grepai: $(grepai --version 2>/dev/null || echo 'installed')"
+  echo "✅ grepai: $(grepai version 2>/dev/null || echo 'installed')"
 else
   echo "❌ grepai: NOT FOUND"
   echo "   Install: brew install yoanbernabeu/tap/grepai"

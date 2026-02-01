@@ -14,12 +14,47 @@
 | **Skills Hot Reload** | 2.1.0 | ⭐⭐⭐⭐ Форкнутый контекст, пользовательские агенты |
 | **MCP auto:N** | 2.1.10 | ⭐⭐⭐ Автоматический порог включения инструментов |
 | **PR Review Status** | 2.1.20 | ⭐⭐⭐ Индикатор статуса PR в footer |
+| **--from-pr Resume** | 2.1.27 | ⭐⭐⭐ Resume сессий по PR номеру/URL |
 
 ---
 
 ## Январь 2026
 
-### 2.1.23 (29 января 2026) — Текущая версия
+### 2.1.29 (31 января 2026) — Текущая версия
+
+**Исправления:**
+- Startup performance при resume сессий с `saved_hook_context`
+
+---
+
+### 2.1.27 (30 января 2026)
+
+**Новое:**
+- `--from-pr` флаг — resume сессий по GitHub PR номеру/URL
+- Сессии автоматически линкуются к PR при `gh pr create`
+- Tool call failures и denials в debug logs
+
+**Исправления:**
+- Context management validation для gateway users (CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1)
+- `/context` команда не показывала цветной output
+- Status bar дублировал background task indicator при показе PR status
+- Permissions теперь уважают content-level `ask` над tool-level `allow`
+- **Windows:** Bash execution с `.bashrc`, console windows flashing
+- **VS Code:** OAuth token expiration → 401 errors
+
+**VS Code:**
+- Claude in Chrome integration enabled
+
+---
+
+### 2.1.25 (29 января 2026)
+
+**Исправления:**
+- Beta header validation для gateway users на Bedrock и Vertex
+
+---
+
+### 2.1.23 (29 января 2026)
 
 **Новое:**
 - `spinnerVerbs` — кастомизация глаголов в spinner анимации

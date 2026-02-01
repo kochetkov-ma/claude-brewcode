@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 # grepai Full Reindex: stop, clean, rebuild (sync), start background
 
 echo "=== Reindex: Stop Watch ==="

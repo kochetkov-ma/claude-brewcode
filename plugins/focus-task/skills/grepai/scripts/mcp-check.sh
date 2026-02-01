@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 # grepai MCP Configuration Check
 
 echo "=== MCP Check ==="
@@ -27,6 +28,7 @@ SETTINGS_FILE="$HOME/.claude/settings.json"
 
 # Create settings.json if not exists
 if [ ! -f "$SETTINGS_FILE" ]; then
+  mkdir -p "$(dirname "$SETTINGS_FILE")"
   echo '{}' > "$SETTINGS_FILE"
   echo "   Created $SETTINGS_FILE"
 fi
@@ -42,20 +44,24 @@ else
   if command -v jq &>/dev/null; then
     # jq approach
     TMP_FILE=$(mktemp)
+    trap 'rm -f "$TMP_FILE"' EXIT
     jq '.allowedTools = ((.allowedTools // []) + ["mcp__grepai__*"] | unique)' "$SETTINGS_FILE" > "$TMP_FILE" && mv "$TMP_FILE" "$SETTINGS_FILE"
+    jq . "$SETTINGS_FILE" >/dev/null 2>&1 || { echo "❌ Invalid JSON"; exit 1; }
   elif command -v python3 &>/dev/null; then
     # python approach
-    python3 -c "
-import json
-with open('$SETTINGS_FILE', 'r') as f:
+    SETTINGS_FILE="$SETTINGS_FILE" python3 -c "
+import json, os
+settings_file = os.environ['SETTINGS_FILE']
+with open(settings_file, 'r') as f:
     data = json.load(f)
 allowed = data.get('allowedTools', [])
 if 'mcp__grepai__*' not in allowed:
     allowed.append('mcp__grepai__*')
 data['allowedTools'] = allowed
-with open('$SETTINGS_FILE', 'w') as f:
+with open(settings_file, 'w') as f:
     json.dump(data, f, indent=2)
 "
+    jq . "$SETTINGS_FILE" >/dev/null 2>&1 || { echo "❌ Invalid JSON"; exit 1; }
   else
     echo "❌ Neither jq nor python3 available"
     echo "   Manually add to $SETTINGS_FILE:"

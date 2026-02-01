@@ -97,6 +97,13 @@ async function checkGrepai(cwd, session_id = null) {
     shouldAutoStart = true;
   }
 
+  // Check MCP server
+  const mcpRunning = checkMcpServer();
+  log('debug', '[grepai]', `mcp-serve: ${mcpRunning ? 'running' : 'stopped'}`, cwd, session_id);
+  if (!mcpRunning) {
+    status.push('mcp-serve: stopped');
+  }
+
   // Auto-start watch if conditions met
   if (shouldAutoStart) {
     try {
@@ -135,12 +142,19 @@ async function checkGrepai(cwd, session_id = null) {
 
   log('info', '[grepai]', `Status: ${statusMessage}`, cwd, session_id);
 
-  // Add usage reminder when grepai is ready
-  const reminder = status.length === 0 ? ' — USE grepai_search FIRST for code exploration' : '';
-
-  return {
-    systemMessage: `grepai: ${statusMessage}${reminder}`
+  // Add usage reminder when grepai is ready (goes to Claude's context)
+  const result = {
+    systemMessage: `grepai: ${statusMessage}`
   };
+
+  if (status.length === 0) {
+    result.hookSpecificOutput = {
+      hookEventName: 'SessionStart',
+      additionalContext: 'grepai: USE grepai_search FIRST for code exploration'
+    };
+  }
+
+  return result;
 }
 
 function checkOllama() {
@@ -160,6 +174,21 @@ function checkWatchRunning() {
   if (process.platform === 'win32') return false;
   try {
     const result = execSync('pgrep -f "grepai watch"', {
+      encoding: 'utf8',
+      timeout: 1000,
+      stdio: ['ignore', 'pipe', 'ignore']
+    });
+    return result.trim().length > 0;
+  } catch {
+    return false;
+  }
+}
+
+function checkMcpServer() {
+  // pgrep unavailable on Windows - skip check (degrades gracefully)
+  if (process.platform === 'win32') return false;
+  try {
+    const result = execSync('pgrep -f "grepai mcp-serve"', {
       encoding: 'utf8',
       timeout: 1000,
       stdio: ['ignore', 'pipe', 'ignore']

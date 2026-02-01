@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 # Detect grepai mode from arguments
 # Usage: detect-mode.sh "$ARGUMENTS"
 # Output: ARGS and MODE for debugging
@@ -13,7 +14,7 @@ echo "ARGS: [$ARGS]"
 MODE=""
 
 # Check keywords (order matters - first match wins)
-if [[ "$ARGS_LOWER" =~ (upgrade|brew|обновить|апгрейд) ]]; then
+if [[ "$ARGS_LOWER" =~ (upgrade|апгрейд) ]]; then
     MODE="upgrade"
 elif [[ "$ARGS_LOWER" =~ (optimize|update|улучши|обнови) ]]; then
     MODE="optimize"
@@ -23,7 +24,7 @@ elif [[ "$ARGS_LOWER" =~ (start|watch) ]]; then
     MODE="start"
 elif [[ "$ARGS_LOWER" =~ (status|doctor|check|health) ]]; then
     MODE="status"
-elif [[ "$ARGS_LOWER" =~ (setup|install|configure|init) ]]; then
+elif [[ "$ARGS_LOWER" =~ (setup|configure|init) ]]; then
     MODE="setup"
 elif [[ "$ARGS_LOWER" =~ (reindex|rebuild|refresh) ]]; then
     MODE="reindex"

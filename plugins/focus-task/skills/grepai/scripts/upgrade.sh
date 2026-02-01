@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 # grepai CLI Upgrade via Homebrew
 
 echo "=== grepai Upgrade ==="
@@ -10,7 +11,7 @@ if ! command -v brew &>/dev/null; then
 fi
 
 # Get current version
-CURRENT=$(grepai --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+CURRENT=$(grepai version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
 if [ -z "$CURRENT" ]; then
   echo "⚠️ grepai not installed, installing..."
   brew install yoanbernabeu/tap/grepai && echo "✅ Installed" || { echo "❌ Install failed"; exit 1; }
@@ -19,8 +20,13 @@ fi
 
 echo "Current: v$CURRENT"
 
-# Get latest from brew (with timeout)
-LATEST=$(timeout 10 brew info yoanbernabeu/tap/grepai 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+# Get latest from brew
+TIMEOUT_CMD=$(command -v timeout || echo "")
+if [ -n "$TIMEOUT_CMD" ]; then
+  LATEST=$($TIMEOUT_CMD 10 brew info yoanbernabeu/tap/grepai 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+else
+  LATEST=$(brew info yoanbernabeu/tap/grepai 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+fi
 if [ -z "$LATEST" ]; then
   echo "⚠️ Cannot fetch latest version (network issue?)"
   echo "Manual check: brew info yoanbernabeu/tap/grepai"
@@ -39,7 +45,7 @@ fi
 echo "Upgrading..."
 brew upgrade yoanbernabeu/tap/grepai 2>&1
 if [ $? -eq 0 ]; then
-  NEW=$(grepai --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+  NEW=$(grepai version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
   echo "✅ Upgraded: v$CURRENT → v$NEW"
 else
   echo "❌ Upgrade failed"

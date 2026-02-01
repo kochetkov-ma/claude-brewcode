@@ -95,7 +95,7 @@ git status --ignored --porcelain | grep '^!!'
 **EXECUTE** using Bash tool:
 ```bash
 echo "=== Infrastructure Check ==="
-which grepai >/dev/null && echo "✅ grepai: $(grepai --version 2>/dev/null || echo 'installed')" || echo "❌ grepai: NOT FOUND"
+which grepai >/dev/null && echo "✅ grepai: $(grepai version 2>/dev/null || echo 'installed')" || echo "❌ grepai: NOT FOUND"
 curl -s localhost:11434/api/tags >/dev/null && echo "✅ ollama: running" || echo "❌ ollama: stopped"
 ollama list 2>/dev/null | grep -q bge-m3 && echo "✅ bge-m3: installed" || echo "❌ bge-m3: missing"
 ```

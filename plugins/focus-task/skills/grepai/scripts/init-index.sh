@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 # grepai Initialize Index
 
 echo "=== Initialize Index ==="

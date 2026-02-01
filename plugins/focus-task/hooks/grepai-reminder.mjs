@@ -7,18 +7,35 @@
 
 import { existsSync } from 'fs';
 import { join } from 'path';
-import { output, log } from './lib/utils.mjs';
+import { readStdin, output, log } from './lib/utils.mjs';
 
-const cwd = process.cwd();
-const grepaiDir = join(cwd, '.grepai');
+async function main() {
+  let cwd = null;
+  let session_id = null;
 
-if (existsSync(grepaiDir)) {
-  log('debug', '[grepai]', 'Reminder triggered: grepai configured, Glob/Grep called', cwd);
-  output({
-    systemMessage: 'grepai: USE grepai_search FIRST for code exploration'
-  });
-} else {
-  output({});
+  try {
+    cwd = process.cwd();
+    const input = await readStdin();
+    session_id = input.session_id;
+    cwd = input.cwd || cwd;
+
+    const grepaiDir = join(cwd, '.grepai');
+
+    if (existsSync(grepaiDir)) {
+      log('debug', '[grepai]', 'Reminder triggered: grepai configured, Glob/Grep called', cwd, session_id);
+      output({
+        hookSpecificOutput: {
+          hookEventName: 'PreToolUse',
+          additionalContext: 'grepai: USE grepai_search FIRST for code exploration'
+        }
+      });
+    } else {
+      output({});
+    }
+  } catch (err) {
+    log('error', '[grepai-reminder]', `Error: ${err.message}`, cwd, session_id);
+    output({});
+  }
 }
 
-process.exit(0);
+main();

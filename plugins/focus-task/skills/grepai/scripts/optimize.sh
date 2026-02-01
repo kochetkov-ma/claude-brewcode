@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 # grepai Config Optimization (backup + reindex)
 
 echo "=== Config Optimization ==="

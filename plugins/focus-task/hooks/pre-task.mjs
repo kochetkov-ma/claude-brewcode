@@ -38,53 +38,60 @@ async function main() {
 
     const subagentType = tool_input.subagent_type;
 
-    // Skip system agents (including coordinator)
-    if (!subagentType || isSystemAgent(subagentType, cwd)) {
+    // Skip if no subagent type
+    if (!subagentType) {
       output({});
       return;
     }
 
-    // Check grepai availability (for ALL agents)
+    // Check grepai availability (for ALL agents including system agents)
     const grepaiDir = join(cwd, '.grepai');
     const hasGrepai = existsSync(grepaiDir);
-
-    // Check lock with session match (for focus-task knowledge injection)
-    const lock = checkLock(cwd, session_id);
 
     let updatedPrompt = tool_input.prompt || '';
     const messages = [];
 
-    // 1. Inject grepai reminder for ALL agents
+    // 1. Inject grepai reminder for ALL agents (including Explore, Plan, etc.)
     if (hasGrepai) {
-      messages.push(GREPAI_REMINDER);
+      updatedPrompt = `${GREPAI_REMINDER}\n\n${updatedPrompt}`;
+      messages.push('grepai: injected');
       log('debug', '[pre-task]', `grepai reminder for ${subagentType}`, cwd, session_id);
     }
 
-    // 2. Inject knowledge for focus-task agents (when lock exists)
-    if (lock && lock.task_path) {
-      const knowledgePath = getKnowledgePath(lock.task_path);
-      const entries = readKnowledge(knowledgePath);
+    // 2. Inject knowledge for NON-system agents only (skip coordinator, Explore, etc.)
+    const isSystem = isSystemAgent(subagentType, cwd);
+    if (!isSystem) {
+      // Check lock with session match (for focus-task knowledge injection)
+      const lock = checkLock(cwd, session_id);
+      if (lock && lock.task_path) {
+        const knowledgePath = getKnowledgePath(lock.task_path);
+        const entries = readKnowledge(knowledgePath);
 
-      if (entries.length) {
-        const config = loadConfig(cwd);
-        const knowledge = compressKnowledge(entries, config.knowledge.maxTokens);
+        if (entries.length) {
+          const config = loadConfig(cwd);
+          const knowledge = compressKnowledge(entries, config.knowledge.maxTokens);
 
-        if (knowledge) {
-          updatedPrompt = `${knowledge}\n\n${updatedPrompt}`;
-          messages.push(`focus-task: knowledge injected (${entries.length} entries)`);
-          log('info', '[pre-task]', `Injecting knowledge for ${subagentType} (${entries.length} entries)`, cwd, session_id);
+          if (knowledge) {
+            updatedPrompt = `${knowledge}\n\n${updatedPrompt}`;
+            messages.push(`knowledge: ${entries.length} entries`);
+            log('info', '[pre-task]', `Injecting knowledge for ${subagentType} (${entries.length} entries)`, cwd, session_id);
+          }
         }
       }
     }
 
-    // Output result
-    if (messages.length || updatedPrompt !== tool_input.prompt) {
+    // Output result - updatedInput MUST be inside hookSpecificOutput per Claude Code docs
+    // Note: systemMessage removed - logs go to focus-task.log only, not UI
+    if (updatedPrompt !== tool_input.prompt) {
       output({
-        updatedInput: {
-          ...tool_input,
-          prompt: updatedPrompt
-        },
-        systemMessage: messages.join(' | ')
+        hookSpecificOutput: {
+          hookEventName: 'PreToolUse',
+          permissionDecision: 'allow',
+          updatedInput: {
+            ...tool_input,
+            prompt: updatedPrompt
+          }
+        }
       });
     } else {
       output({});

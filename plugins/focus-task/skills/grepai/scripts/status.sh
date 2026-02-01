@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 # grepai Status Check
 
 echo "=== grepai Status ==="

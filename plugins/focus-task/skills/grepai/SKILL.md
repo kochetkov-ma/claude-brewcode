@@ -30,13 +30,12 @@ test -n "$FT_PLUGIN" && echo "✅ FT_PLUGIN=$FT_PLUGIN" || echo "❌ Plugin not 
 
 ### Step 1: Detect Mode (MANDATORY FIRST STEP)
 
-**Skill arguments received:** `$ARGUMENTS`
-
-**EXECUTE** using Bash tool — pass the arguments value above to the script:
+**EXECUTE** using Bash tool — detect mode from skill arguments:
 ```bash
-bash "$FT_PLUGIN/skills/grepai/scripts/detect-mode.sh" "ARGS_HERE"
+bash "$FT_PLUGIN/skills/grepai/scripts/detect-mode.sh" "$ARGUMENTS"
 ```
-**IMPORTANT:** Replace `ARGS_HERE` with the actual value from "Skill arguments received" above. If empty, pass empty string `""`.
+
+Use `$ARGUMENTS` directly - it contains the skill invocation arguments.
 
 Output format:
 ```
@@ -50,16 +49,18 @@ MODE: [detected mode]
 
 | Keyword in args | MODE |
 |-----------------|------|
-| upgrade, brew, обновить, апгрейд | upgrade |
+| upgrade, апгрейд | upgrade |
 | optimize, update, улучши, обнови | optimize |
 | stop, halt, kill | stop |
 | start, watch | start |
 | status, doctor, check, health | status |
-| setup, install, configure, init | setup |
+| setup, configure, init | setup |
 | reindex, rebuild, refresh | reindex |
 | (empty) + .grepai/ exists | start |
 | (empty) + no .grepai/ | setup |
 | (unrecognized text) | prompt |
+
+> **Prerequisites:** Run `/install` first to install brew, ollama, grepai, etc.
 
 ---
 
@@ -224,13 +225,15 @@ bash "$FT_PLUGIN/skills/grepai/scripts/upgrade.sh" && echo "✅ upgrade" || echo
 Ask user:
 ```
 Which grepai operation?
-- setup   - Install and configure
-- status  - Check health
-- start   - Start watcher
-- stop    - Stop watcher
-- reindex - Rebuild index
+- setup    - Configure project (.grepai/config.yaml)
+- status   - Check health
+- start    - Start watcher
+- stop     - Stop watcher
+- reindex  - Rebuild index
 - optimize - Regenerate config
-- upgrade - Update CLI via brew
+- upgrade  - Update grepai CLI
+
+Prerequisites missing? Run /install first.
 ```
 
 </instructions>

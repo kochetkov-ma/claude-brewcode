@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 # grepai Start Watch
 
 echo "=== Starting grepai watch ==="

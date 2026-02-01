@@ -28,6 +28,133 @@
 
 ---
 
+## v2.0.65 (2026-02-01)
+
+### Added
+
+- **skills/install** — новый интерактивный установщик плагина
+  - Единый скрипт `install.sh` с параметрами (state, required, grepai, etc.)
+  - AskUserQuestion для опциональных компонентов (ollama, grepai)
+  - Обязательный timeout symlink с подтверждением
+  - Helper functions: `ollama_running()`, `wait_for_ollama()`, `get_grepai_versions()`
+
+### Fixed
+
+- **grepai/upgrade.sh** — `grepai --version` → `grepai version`
+- **grepai/infra-check.sh** — `grepai --version` → `grepai version`
+- **ft-grepai-configurator.md** — `grepai --version` → `grepai version`
+- **install.sh** — security & reliability fixes:
+  - curl с `--connect-timeout 2 --max-time 5`
+  - `NONINTERACTIVE=1` для Homebrew
+  - Retry loop для ollama start (10 attempts)
+  - Guard для `ollama list` (проверка `command -v ollama`)
+  - Symlink safety check (не перезаписывать обычные файлы)
+  - Version fallback `${VER:-unknown}`
+
+### Changed
+
+- **grepai skill** — убран режим `install`, теперь отдельный скилл `/install`
+- **detect-mode.sh** — убран режим `install` из grepai
+
+---
+
+## v2.0.64 (2026-02-01)
+
+### Fixed
+
+- **grepai-reminder.mjs** — добавлен async/stdin pattern
+  - Теперь читает `input.cwd` из stdin вместо `process.cwd()`
+  - Добавлен try/catch с `output({})` при ошибках
+  - Консистентность с другими hooks (grepai-session, pre-task)
+
+- **grepai-session.mjs** — добавлена проверка MCP server
+  - Новая функция `checkMcpServer()` проверяет `grepai mcp-serve`
+  - `additionalContext` инжектится только если MCP server доступен
+  - Предотвращает бесполезные grepai_search вызовы
+
+- **mcp-check.sh** — 4 security/reliability fixes
+  - `mkdir -p` перед созданием settings.json
+  - `trap 'rm -f "$TMP_FILE"' EXIT` для очистки temp файлов
+  - Path injection fix: путь через `os.environ['SETTINGS_FILE']`
+  - JSON validation после каждой записи
+
+- **create-rule.sh** — fallback frontmatter fix
+  - `globs:` → `paths:` (Claude Code format)
+  - Убран `alwaysApply:` (Cursor-only field)
+
+- **grepai.md** — документация frontmatter fix
+  - 3 места: `globs:` → `paths:`, `alwaysApply:` → removed
+
+- **SKILL.md** — упрощена инструкция ARGS
+  - Убран confusing `ARGS_HERE` placeholder
+  - Прямое использование `$ARGUMENTS`
+
+### Changed
+
+- **Все 12 grepai scripts** — добавлен `set -euo pipefail`
+  - detect-mode.sh, infra-check.sh, init-index.sh, start.sh, stop.sh
+  - reindex.sh, optimize.sh, upgrade.sh, status.sh, verify.sh
+  - create-rule.sh, mcp-check.sh
+
+---
+
+## v2.0.63 (2026-02-01)
+
+### Changed
+
+- **pre-task.mjs** — убран `systemMessage` из UI
+  - Инжекция grepai reminder и knowledge в prompt агентов работает как прежде
+  - Логирование в `focus-task.log` сохранено
+  - В UI больше не показывается "focus-task: grepai: injected"
+
+---
+
+## v2.0.62 (2026-02-01)
+
+### Changed
+
+- **create-rule.sh** — grepai rule теперь всегда перезаписывается из шаблона
+  - Убрана проверка на существование файла
+  - При каждом `/focus-task:grepai setup` правило обновляется до актуальной версии
+
+---
+
+## v2.0.61 (2026-02-01)
+
+### Fixed
+
+- **pre-task.mjs** — grepai reminder теперь инжектится для ВСЕХ агентов
+  - Ранее Explore, Plan, Bash и др. были в списке system agents → пропускались
+  - Теперь: grepai reminder → ALL agents, knowledge injection → only non-system
+  - Исправлен синтаксис (незакрытый if блок)
+
+---
+
+## v2.0.60 (2026-02-01)
+
+### Fixed
+
+- **pre-task.mjs** — критическое исправление структуры JSON
+  - `updatedInput` перемещён внутрь `hookSpecificOutput` (по документации)
+  - Добавлен `permissionDecision: 'allow'` для применения изменений
+  - Без этого фикса инжекция в prompt агентов НЕ работала
+
+---
+
+## v2.0.59 (2026-02-01)
+
+### Fixed
+
+- **Хуки используют правильные поля** — исправлено по документации Claude Code
+  - `systemMessage` → показывается пользователю
+  - `additionalContext` → идёт в контекст Claude
+  - Для агентов: reminder инжектится в `updatedInput.prompt`
+- **grepai-session.mjs** — `hookSpecificOutput.additionalContext` для SessionStart
+- **grepai-reminder.mjs** — `hookSpecificOutput.additionalContext` для PreToolUse Glob/Grep
+- **pre-task.mjs** — reminder в prompt агента (не в additionalContext родителя)
+
+---
+
 ## v2.0.58 (2026-02-01)
 
 ### Changed

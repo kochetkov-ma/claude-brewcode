@@ -1,6 +1,9 @@
 # Обзор конфигурации Claude Code
 
 **Полное дерево:** [claude-global-tree.md](./claude-global-tree.md)
+**Task Manager:** [CLAUDE-CODE-TASK-MANAGER-GUIDE.md](./CLAUDE-CODE-TASK-MANAGER-GUIDE.md)
+**Релизы:** [CLAUDE-CODE-RELEASES-2025-2026.md](./CLAUDE-CODE-RELEASES-2025-2026.md)
+**Context Injection:** [CONTEXT-INJECTION-GUIDE.md](./CONTEXT-INJECTION-GUIDE.md)
 
 ---
 
@@ -213,7 +216,7 @@ idea ~/.claude/plugins/known_marketplaces.json
 |--------|--------|-------------|---------------------|
 | context7 | — | claude-plugins-official | resolve-library-id, query-docs |
 | playwright | 4fee769 | claude-plugins-official | browser_*, snapshot, screenshot |
-| focus-task | 2.0.21 | claude-brewcode | 7 skills, 2 agents |
+| focus-task | 2.0.62 | claude-brewcode | 8 skills, 3 agents |
 
 **focus-task skills:**
 | Скилл | Назначение |
@@ -431,6 +434,7 @@ du -sh ~/.claude/*/
 
 | Вер. | Дата | Изменения |
 |------|------|-----------|
+| 2.14 | 2026-02-01 | Claude Code 2.1.29 (новые: 2.1.25, 2.1.27, 2.1.29), focus-task 2.0.62 |
 | 2.13 | 2026-01-29 | focus-task 2.0.21, новый скилл secrets-scan (10 parallel haiku agents), обновлены размеры директорий |
 | 2.12 | 2026-01-28 | focus-task 2.0.18, симлинки обновлены, Task tool в developer/tester |
 | 2.11 | 2026-01-27 | Обновлена версия focus-task до 2.0.11, исправлены пути симлинков |

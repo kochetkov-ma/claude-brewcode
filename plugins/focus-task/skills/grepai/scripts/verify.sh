@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 # grepai Final Verification
 
 echo "=== Final Verification ==="
