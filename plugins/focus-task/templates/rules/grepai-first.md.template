@@ -4,35 +4,26 @@ paths:
 description: grepai-first - semantic search FIRST for code exploration
 ---
 
-> **FIRST** grepai for code search. Grep/Glob only for exact text or external paths.
+> **FIRST** `grepai` mcp for code exploration. Params → MCP descriptions.
 
-## Decision
+## Examples
 
-| Task | Tool | Scope |
-|------|------|-------|
-| Intent/meaning | `grepai_search` | indexed project |
-| Exact text/regex | `Grep` | project + external via `path` |
-| File path patterns | `Glob` | project + external via `path` |
-| Web/external docs | `WebSearch` | internet |
+**search** `query:"user auth"` → `{s:0.89, f:"auth/Login.java", l:"15-45", content:"..."}`
+**search+compact** `query:"error handling", limit:10, compact:true` → `{s:0.82, f:"ErrorHandler.java", l:"23-55"}` (no content)
+**callers** `symbol:"validateToken"` → `[{f:"AuthFilter.java", l:42, fn:"doFilter"}]`
+**callees** `symbol:"processOrder"` → `[{f:"PaymentService.java", l:88, fn:"charge"}]`
+**graph** `symbol:"main", depth:2` → `{n:"main", c:[{n:"init", c:[{n:"loadConfig"}]}]}`
 
-**Rule:** exact match needed? → Grep/Glob · otherwise → **grepai FIRST**
+## When
 
-## MCP Tools (`--compact` saves ~80% tokens)
+| Need | Tool | Params |
+|------|------|--------|
+| Explore (≤5 results) | search | `limit:5` → read content directly |
+| Explore (>5 results) | search | `limit:10, compact:true` → then Read top files |
+| Who calls X? | trace_callers | `symbol:"X"` |
+| What X calls? | trace_callees | `symbol:"X"` |
+| Full dependency tree | trace_graph | `symbol:"X", depth:2` |
 
-| Tool | Use |
-|------|-----|
-| `grepai_search` | `query`, `limit?`, `compact?` — semantic search |
-| `grepai_trace_callers` | `symbol`, `compact?` — who calls it |
-| `grepai_trace_callees` | `symbol`, `compact?` — what it calls |
-| `grepai_trace_graph` | `symbol`, `depth?`, `compact?` — call graph |
-| `grepai_index_status` | `verbose?` — check indexed files/languages |
+## Query Tips
 
-## Queries
-
-English · Intent over syntax · Specific over vague
-`"handles user login"` ✓ · `"func Login"` ✗
-
-## Scope Limits
-
-grepai searches **indexed project files only**:
-- Files not matching `ignore:` patterns in config
+English · 3-7 words · intent not syntax · ✅`"validate credentials"` ❌`"validateUser"`

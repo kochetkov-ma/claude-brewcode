@@ -51,6 +51,7 @@ fi
 echo ""
 echo "--- Integration ---"
 grep -q '"grepai"' ~/.claude.json 2>/dev/null && echo "✅ MCP: configured" || echo "❌ MCP: not configured"
+grep -q 'mcp__grepai__' ~/.claude/settings.json 2>/dev/null && echo "✅ Permissions: auto-allowed" || echo "⚠️ Permissions: will prompt (run /grepai setup)"
 test -f .claude/rules/grepai-first.md && echo "✅ rule: grepai-first.md" || echo "⚠️ rule: missing"
 
 echo ""

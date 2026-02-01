@@ -107,6 +107,11 @@ sync_templates() {
   sync_template "$PLUGIN_TEMPLATES/SPEC.md.template" ".claude/tasks/templates/SPEC.md.template"
   sync_template "$PLUGIN_TEMPLATES/KNOWLEDGE.jsonl.template" ".claude/tasks/templates/KNOWLEDGE.jsonl.template"
 
+  # grepai-first: always sync (plugin-managed rule)
+  if [ -f "$PLUGIN_TEMPLATES/rules/grepai-first.md.template" ]; then
+    sync_template "$PLUGIN_TEMPLATES/rules/grepai-first.md.template" ".claude/rules/grepai-first.md"
+  fi
+
   # Rules: create only if missing (never overwrite user rules)
   if [ ! -f ".claude/rules/avoid.md" ]; then
     cp "$PLUGIN_TEMPLATES/rules/avoid.md.template" .claude/rules/avoid.md

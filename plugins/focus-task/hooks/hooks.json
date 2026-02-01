@@ -26,6 +26,16 @@
             "timeout": 5000
           }
         ]
+      },
+      {
+        "matcher": "Glob|Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/grepai-reminder.mjs\"",
+            "timeout": 1000
+          }
+        ]
       }
     ],
     "PostToolUse": [

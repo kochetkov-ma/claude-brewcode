@@ -28,6 +28,145 @@
 
 ---
 
+## v2.0.56 (2026-02-01)
+
+### Changed
+
+- **mcp-check.sh** — автоматическая настройка `allowedTools` для grepai
+  - Добавляет `mcp__grepai__*` в `~/.claude/settings.json`
+  - Убирает промпты `[destructive]` для read-only инструментов
+- **grepai-first.md.template** — сокращён и улучшен
+  - Убрано дублирование с MCP descriptions
+  - Добавлены инлайн примеры вызов→ответ
+  - Отсылка к MCP: "Params → MCP descriptions"
+- **status.sh, verify.sh** — показывают статус Permissions
+
+### Updated Files
+
+| File | Change |
+|------|--------|
+| `skills/grepai/scripts/mcp-check.sh` | allowedTools auto-config |
+| `skills/grepai/scripts/status.sh` | Permissions status |
+| `skills/grepai/scripts/verify.sh` | Permissions check |
+| `skills/grepai/SKILL.md` | Phase 2 docs |
+| `templates/rules/grepai-first.md.template` | inline examples, no MCP duplication |
+
+---
+
+## v2.0.55 (2026-01-31)
+
+### Changed
+
+- **setup.sh** — `grepai-first.md` теперь синхронизируется при каждом setup
+  - Использует `sync_template` (обновляет если изменился)
+  - Больше не нужно удалять вручную для обновления
+
+### Updated Files
+
+| File | Change |
+|------|--------|
+| `skills/setup/scripts/setup.sh` | sync grepai-first.md on setup |
+
+---
+
+## v2.0.54 (2026-01-31)
+
+### Changed
+
+- **grepai-first.md.template** — полная переработка
+  - Таблица tools с параметрами `limit?`, `compact?`
+  - `<examples>` с JSON ответами для search/callers/graph
+  - Таблица `limit + compact` → response → workflow
+  - Убрано очевидное (Grep/Glob — Claude знает)
+
+### Updated Files
+
+| File | Change |
+|------|--------|
+| `templates/rules/grepai-first.md.template` | search types, compact mode, examples |
+
+---
+
+## v2.0.53 (2026-01-31)
+
+### Added
+
+- **grepai-reminder hook** — PreToolUse hook for Glob/Grep tools
+  - Reminds Claude to prefer `grepai_search` when `.grepai/` exists
+  - Debug logging via `log()` utility
+  - Non-blocking (exit 0), soft reminder only
+
+### Updated Files
+
+| File | Change |
+|------|--------|
+| `hooks/grepai-reminder.mjs` | New hook script |
+| `hooks/hooks.json` | Added PreToolUse matcher for `Glob\|Grep` |
+
+---
+
+## v2.0.52 (2026-01-31)
+
+### Fixed
+
+- **grepai indexing uses `grepai watch`** — `grepai init` does NOT build index, only creates config
+  - `reindex.sh`: complete rewrite — uses `grepai watch`, polls for "Initial scan complete"
+  - `init-index.sh`: rewritten — uses `grepai watch`, skips if index exists
+  - Added .grepai directory validation to init-index.sh
+  - Dynamic timeouts based on file count (2 min to 60 min)
+
+### Changed
+
+- **Log paths** — all scripts now use `.grepai/logs/grepai-watch.log`
+- **Documentation** — updated SKILL.md and ft-grepai-configurator.md with correct `grepai watch` references
+
+### Updated Files
+
+| File | Change |
+|------|--------|
+| `skills/grepai/scripts/reindex.sh` | Complete rewrite for `grepai watch` |
+| `skills/grepai/scripts/init-index.sh` | Rewritten with validation |
+| `skills/grepai/SKILL.md` | Updated log paths, watch references |
+| `agents/ft-grepai-configurator.md` | Updated Phase 5, troubleshooting |
+
+---
+
+## v2.0.51 (2026-01-31)
+
+### Fixed
+
+- **reindex.sh index.gob wait** — wait up to 30s for index.gob after watch starts
+  - Fixes race condition where "index.gob missing" shown before watch creates it
+  - Shows progress: "⏳ Waiting for index.gob (watch is building)..."
+
+---
+
+## v2.0.50 (2026-01-31)
+
+### Fixed
+
+- **grepai indexing now synchronous** — scripts wait for `grepai init` to complete before starting watch
+  - `init-index.sh`: runs init synchronously with `tee` to log, then starts watch
+  - `reindex.sh`: same fix — waits for init, logs to `.grepai/logs/grepai-init.log`
+  - `SKILL.md`: updated warnings to reflect synchronous behavior
+  - `ft-grepai-configurator.md`: updated Phase 5 indexing notes
+
+### Changed
+
+- **Log output** — init progress now goes to `.grepai/logs/grepai-init.log` with timestamps
+- **Duration tracking** — scripts show actual indexing time on completion
+
+### Updated Files
+
+| File | Change |
+|------|--------|
+| `skills/grepai/scripts/init-index.sh` | Synchronous init with logging |
+| `skills/grepai/scripts/reindex.sh` | Synchronous init with logging |
+| `skills/grepai/SKILL.md` | Updated async→sync warnings |
+| `agents/ft-grepai-configurator.md` | Updated Phase 5 notes |
+
+---
+
 ## v2.0.49 (2026-01-31)
 
 ### Added

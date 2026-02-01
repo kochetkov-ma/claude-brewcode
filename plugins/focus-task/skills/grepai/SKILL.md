@@ -76,12 +76,18 @@ bash "$FT_PLUGIN/skills/grepai/scripts/infra-check.sh" && echo "✅ infra-check"
 
 > **STOP if ❌** — install missing components before continuing.
 
-### Phase 2: MCP Configuration
+### Phase 2: MCP Configuration & Permissions
 
 **EXECUTE** using Bash tool:
 ```bash
 bash "$FT_PLUGIN/skills/grepai/scripts/mcp-check.sh" && echo "✅ mcp-check" || echo "❌ mcp-check FAILED"
 ```
+
+This script configures:
+1. **MCP Server** — adds `grepai` to `~/.claude.json` (user scope)
+2. **Permissions** — adds `mcp__grepai__*` to `~/.claude/settings.json` allowedTools
+
+> **Why permissions?** All grepai tools are read-only, but Claude Code marks MCP tools as `[destructive]` by default. This setting prevents permission prompts.
 
 > **STOP if ❌** — fix MCP configuration before continuing.
 
@@ -104,10 +110,10 @@ bash "$FT_PLUGIN/skills/grepai/scripts/mcp-check.sh" && echo "✅ mcp-check" || 
 bash "$FT_PLUGIN/skills/grepai/scripts/init-index.sh" && echo "✅ init-index" || echo "❌ init-index FAILED"
 ```
 
-> **STOP if ❌** — check grepai logs for indexing errors.
+> **STOP if ❌** — check `.grepai/logs/grepai-watch.log` for errors.
 
-> ⏳ **INDEXING IS ASYNC!** The script outputs file count and ETA. Large projects (5k+ files) take 10-30+ min.
-> Tell user: "Indexing started in background. Check progress: `grepai status` or `tail -f .grepai/logs/grepai-watch.log`"
+> ⏳ **INDEXING IS SYNCHRONOUS.** Script waits for `grepai watch` initial scan to complete.
+> Large projects (5k+ files) take 10-30+ min. Log: `.grepai/logs/grepai-watch.log` | Monitor: `tail -f .grepai/logs/grepai-watch.log`
 
 ### Phase 5: Create Rule
 
@@ -163,7 +169,8 @@ Full index rebuild: stop watch → clean → rebuild → restart.
 bash "$FT_PLUGIN/skills/grepai/scripts/reindex.sh" && echo "✅ reindex" || echo "❌ reindex FAILED"
 ```
 
-> ⏳ **REINDEXING IS ASYNC!** Script outputs file count and ETA. Tell user to check progress with `grepai status`.
+> ⏳ **REINDEXING IS SYNCHRONOUS.** Script waits for `grepai watch` to complete initial scan.
+> Log: `.grepai/logs/grepai-watch.log` | Monitor: `tail -f .grepai/logs/grepai-watch.log`
 
 ---
 
@@ -250,6 +257,7 @@ Which grepai operation?
 | ollama | [✅/❌] |
 | bge-m3 model | [✅/❌] |
 | MCP | [✅/❌] |
+| Permissions | [✅/❌] allowedTools |
 | .grepai/ | [✅/❌] |
 | index | [size/indexing] |
 | watch | [running/stopped] |

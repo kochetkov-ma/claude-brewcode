@@ -8,6 +8,7 @@ which grepai >/dev/null && echo "✅ grepai CLI" || echo "❌ grepai CLI"
 curl -s localhost:11434/api/tags >/dev/null && echo "✅ ollama running" || echo "❌ ollama stopped"
 ollama list 2>/dev/null | grep -q bge-m3 && echo "✅ bge-m3 model" || echo "❌ bge-m3 missing"
 grep -q '"grepai"' ~/.claude.json 2>/dev/null && echo "✅ MCP configured" || echo "❌ MCP missing"
+grep -q 'mcp__grepai__' ~/.claude/settings.json 2>/dev/null && echo "✅ Permissions: auto-allowed" || echo "⚠️ Permissions: will prompt"
 
 # Project config
 test -d .grepai && echo "✅ .grepai/ directory" || echo "❌ .grepai/ missing"

@@ -240,14 +240,14 @@ claude mcp add grepai -- grepai mcp-serve
 
 **EXECUTE** using Bash tool:
 ```bash
-echo "=== Initialize & Verify ==="
-grepai init 2>&1 && echo "✅ init" || echo "❌ init failed"
-grepai search "main entry point" --json --compact 2>&1 | head -30 && echo "✅ search works" || echo "❌ search failed"
-test -f .grepai/index.gob && echo "✅ index.gob: $(du -h .grepai/index.gob | cut -f1)" || echo "❌ index missing"
+echo "=== Verify Config ==="
+test -f .grepai/config.yaml && echo "✅ config exists" || echo "❌ config missing"
+grepai search "main entry point" --json --compact 2>&1 | head -30 && echo "✅ search works" || echo "⚠️ search needs index (run grepai watch)"
+test -f .grepai/index.gob && echo "✅ index.gob: $(du -h .grepai/index.gob | cut -f1)" || echo "⚠️ index missing (grepai watch will build)"
 grep -q '"grepai"' ~/.claude.json 2>/dev/null && echo "✅ MCP configured" || echo "⚠️ MCP not configured (optional)"
 ```
 
-> ⏳ **INDEXING TIME:** `grepai init` triggers background indexing. For large projects:
+> ⏳ **INDEXING TIME:** `grepai watch` builds index on first run. For large projects:
 > | Files | Time |
 > |-------|------|
 > | <500 | 1-3 min |
@@ -255,7 +255,7 @@ grep -q '"grepai"' ~/.claude.json 2>/dev/null && echo "✅ MCP configured" || ec
 > | 5-10k | 15-30 min |
 > | 10k+ | 30+ min |
 >
-> Tell user: "Indexing runs in background. Check: `grepai status` or `tail -f ~/Library/Logs/grepai/grepai-watch.log`"
+> Log file: `.grepai/logs/grepai-watch.log` — monitor with `tail -f`
 
 ---
 
@@ -407,7 +407,7 @@ curl -s localhost:11434/api/tags >/dev/null && echo "✅ ollama" || echo "❌ ol
 
 | Issue | Solution |
 |-------|----------|
-| "Index not found" | `grepai init && grepai watch` |
+| "Index not found" | `grepai watch` (builds index on start) |
 | "Cannot connect to Ollama" | `ollama serve` — start Ollama |
 | "Model not found" | `ollama pull bge-m3` |
 | Search returns nothing | Check `grepai status`, verify files not in ignore |
@@ -497,7 +497,7 @@ Keys: `q`=query, `r`=results, `s`=score, `f`=file, `l`=lines, `t`=total
 ## Verification
 | Check | Status |
 |-------|--------|
-| grepai init | ✅ |
+| config.yaml | ✅ |
 | index.gob | ✅ 12.5 MB |
 | Test search | ✅ 5 results |
 | MCP integration | ✅ ~/.claude.json |
