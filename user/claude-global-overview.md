@@ -51,13 +51,15 @@
 │
 ├── commands/                    # Слэш-команды (пусто)
 │
-├── skills/                      # Скиллы (4 локальных)
+├── skills/                      # Скиллы (5 локальных)
 │   ├── text-optimize/           # Локальный
 │   │   ├── SKILL.md
 │   │   └── references/
 │   ├── global-doc-update/       # Локальный
 │   │   └── SKILL.md
 │   ├── text-human/              # Локальный
+│   │   └── SKILL.md
+│   ├── mcp-config/              # Локальный - MCP servers management
 │   │   └── SKILL.md
 │   └── secrets-scan/            # Локальный - 10 parallel agents
 │       └── SKILL.md
@@ -119,6 +121,7 @@ idea ~/.claude/commands/
 idea ~/.claude/skills/text-optimize/SKILL.md
 idea ~/.claude/skills/global-doc-update/SKILL.md
 idea ~/.claude/skills/text-human/SKILL.md
+idea ~/.claude/skills/mcp-config/SKILL.md
 idea ~/.claude/skills/secrets-scan/SKILL.md
 ```
 
@@ -128,6 +131,7 @@ idea ~/.claude/skills/secrets-scan/SKILL.md
 | text-optimize | "optimize prompt", "optimize file", "reduce tokens", "compress for Claude" |
 | global-doc-update | `/global-doc-update` (синхронизация ~/.claude, user-only) |
 | text-human | "humanize code", "remove ai comments", "simplify docs", "clean documentation" |
+| mcp-config | "mcp status", "mcp config", "disable mcp", "enable mcp", "show mcp", "list mcp" |
 | secrets-scan | "scan for secrets", "find credentials", "security scan" (10 parallel haiku agents) |
 
 > **Note:** Симлинки больше не нужны — bug #18949 исправлен в Claude Code. Plugin skills отображаются напрямую.
@@ -202,7 +206,7 @@ idea ~/.claude/plugins/known_marketplaces.json
 |--------|--------|-------------|---------------------|
 | context7 | — | claude-plugins-official | resolve-library-id, query-docs |
 | playwright | 4fee769 | claude-plugins-official | browser_*, snapshot, screenshot |
-| focus-task | 2.0.69 | claude-brewcode | 9 skills, 3 agents |
+| focus-task | 2.0.70 | claude-brewcode | 9 skills, 3 agents |
 
 **focus-task skills:**
 | Скилл | Назначение |
@@ -416,6 +420,7 @@ du -sh ~/.claude/*/
 
 | Вер. | Дата | Изменения |
 |------|------|-----------|
+| 2.16 | 2026-02-01 | focus-task 2.0.70, новый скилл mcp-config (5 local skills total) |
 | 2.15 | 2026-02-01 | focus-task 2.0.69 (9 skills, 3 agents), bash-expert agent, убраны симлинки (fix #18949) |
 | 2.14 | 2026-02-01 | Claude Code 2.1.29 (новые: 2.1.25, 2.1.27, 2.1.29), focus-task 2.0.62 |
 | 2.13 | 2026-01-29 | focus-task 2.0.21, новый скилл secrets-scan (10 parallel haiku agents), обновлены размеры директорий |

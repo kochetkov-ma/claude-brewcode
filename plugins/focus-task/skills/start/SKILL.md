@@ -1,6 +1,6 @@
 ---
-name: start
-description: Starts task execution with hooks-based infinite context through automatic handoff. Triggers: "start task", "run focus task", "execute task".
+name: focus-task:start
+description: Starts task execution with hooks-based infinite context through automatic handoff. Triggers "start task", "run focus task", "execute task".
 user-invocable: true
 argument-hint: "[task-path] defaults to ref in .claude/TASK.md (single-line path)"
 allowed-tools: Read, Write, Edit, Bash, Task, Glob, Grep, Skill

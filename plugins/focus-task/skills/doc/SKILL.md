@@ -1,8 +1,8 @@
 ---
 name: doc
-description: Creates or updates project documentation through parallel codebase analysis. Triggers: "create docs", "update documentation", "sync docs", "document project", "/focus-task:doc".
+description: Creates or updates project documentation. Modes - create, update, analyze, sync, all. Triggers - "create docs", "update docs", "/focus-task:doc".
 user-invocable: true
-argument-hint: "[create <file>|update <path>|analyze <src> update <target>|sync]"
+argument-hint: "[create|update|analyze|sync] <path>"
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Task, Skill
 context: fork
 model: opus

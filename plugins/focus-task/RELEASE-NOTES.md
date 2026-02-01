@@ -32,6 +32,24 @@
 
 ---
 
+## v2.0.71 (2026-02-01)
+
+### Fixed
+
+- **Skill argument hints** — улучшены подсказки по аргументам
+  - `doc`: description теперь явно перечисляет режимы `Modes - create, update, analyze, sync, all`
+  - `doc`: argument-hint упрощён до `[create|update|analyze|sync] <path>`
+  - `rules`: argument-hint теперь указывает на session mode `[<path>] (empty = session mode)`
+
+### Updated Files
+
+| File | Change |
+|------|--------|
+| `skills/doc/SKILL.md` | description + argument-hint |
+| `skills/rules/SKILL.md` | argument-hint |
+
+---
+
 ## v2.0.68 (2026-02-01)
 
 ### Fixed

@@ -1,6 +1,6 @@
 ---
-name: review
-description: Multi-agent code review with quorum consensus. Triggers: "review code", "parallel review", "quorum review", "/focus-task:review".
+name: focus-task:review
+description: Multi-agent code review with quorum consensus. Triggers "review code", "parallel review", "quorum review", "/focus-task:review".
 user-invocable: true
 argument-hint: "<prompt-or-file-path> [-q|--quorum [G-]N-M]"
 allowed-tools: Read, Glob, Grep, Task, Bash, Write

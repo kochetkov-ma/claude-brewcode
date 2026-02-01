@@ -20,7 +20,7 @@
 │
 ├── commands/                         # Слэш-команды (пусто, используй скиллы)
 │
-├── skills/                           # Скиллы (4 локальных)
+├── skills/                           # Скиллы (5 локальных)
 │   ├── text-optimize/                # Локальный скилл
 │   │   ├── SKILL.md                  # Оптимизация для LLM
 │   │   └── references/
@@ -28,6 +28,8 @@
 │   │   └── SKILL.md                  # Синхронизация ~/.claude (user-only)
 │   ├── text-human/                   # Локальный скилл
 │   │   └── SKILL.md                  # Humanize code, remove AI artifacts
+│   ├── mcp-config/                   # Локальный скилл
+│   │   └── SKILL.md                  # MCP servers management
 │   └── secrets-scan/                 # Локальный скилл
 │       └── SKILL.md                  # 10 parallel haiku agents security scan
 │
@@ -46,7 +48,7 @@
 │   │       └── focus-task/           # Плагин infinite task execution
 │   │           ├── 2.0.8/            # Все версии сохраняются
 │   │           ├── ...
-│   │           └── 2.0.69/           # Актуальная версия
+│   │           └── 2.0.70/           # Актуальная версия
 │   │               ├── .claude-plugin/
 │   │               │   └── plugin.json
 │   │               ├── skills/       # 9 скиллов (setup, teardown, create, start, review, rules, doc, grepai, install)
@@ -124,16 +126,16 @@
 | Директория | Размер | Комментарий |
 |------------|--------|-------------|
 | projects/ | 1.8GB | Основной объём — транскрипты сессий |
-| debug/ | 178MB | Логи, можно чистить вручную |
+| debug/ | 188MB | Логи, можно чистить вручную |
 | shell-snapshots/ | 33MB | Для возобновления сессий |
-| file-history/ | 15MB | История редактирования |
+| file-history/ | 16MB | История редактирования |
 | plugins/ | 6.0MB | Установленные плагины (кэш версий) |
 | todos/ | 3.8MB | JSON с задачами |
 | reports/ | 1.2MB | Сгенерированные отчёты |
-| paste-cache/ | 512KB | Кэш вставок |
+| paste-cache/ | 608KB | Кэш вставок |
 | plans/ | 420KB | Файлы планирования |
 | agents/ | 68KB | Определения агентов (8 файлов) |
-| skills/ | 56KB | 4 локальных скилла |
+| skills/ | 80KB | 5 локальных скиллов |
 | cache/ | 32KB | Общий кэш |
 | tasks/ | 24KB | Задачи |
 | rules/ | 8KB | Глобальные правила |

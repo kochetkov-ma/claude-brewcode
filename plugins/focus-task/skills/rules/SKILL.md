@@ -1,8 +1,8 @@
 ---
-name: rules
-description: Updates .claude/rules/avoid.md and best-practice.md from KNOWLEDGE.jsonl or session context. Triggers: "update rules", "sync knowledge to rules", "extract rules from knowledge".
+name: focus-task:rules
+description: Updates .claude/rules/avoid.md and best-practice.md from KNOWLEDGE.jsonl or session context. Triggers - "update rules", "sync knowledge to rules", "extract rules".
 user-invocable: true
-argument-hint: "[path-to-KNOWLEDGE.jsonl]"
+argument-hint: "[<path-to-KNOWLEDGE.jsonl>] (empty = session mode)"
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash
 model: sonnet
 ---

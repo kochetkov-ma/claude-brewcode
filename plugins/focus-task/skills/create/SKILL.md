@@ -1,6 +1,6 @@
 ---
 name: create
-description: Creates focused task with SPEC and KNOWLEDGE files through parallel agent research. Triggers: "create task", "new focus task", "focus-task create".
+description: Creates focused task with SPEC and KNOWLEDGE files through parallel agent research. Triggers "create task", "new focus task", "focus-task create".
 user-invocable: true
 argument-hint: "Task description or path to requirements file"
 allowed-tools: Read, Write, Glob, Grep, Bash, Task, AskUserQuestion
