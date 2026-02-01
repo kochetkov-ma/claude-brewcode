@@ -32,6 +32,17 @@ wait_for_ollama() {
     return 1
 }
 
+# Helper: log action
+ACTIONS_FILE="${ACTIONS_FILE:-/tmp/ft-install-actions.txt}"
+log_action() {
+    echo "- $1" >> "$ACTIONS_FILE"
+}
+
+# Helper: clear actions at start
+clear_actions() {
+    rm -f "$ACTIONS_FILE"
+}
+
 # Helper: get grepai versions
 get_grepai_versions() {
     GREPAI_CURRENT=""
@@ -48,66 +59,84 @@ get_grepai_versions() {
 case "$CMD" in
 
   state)
+    clear_actions
     echo "=== focus-task Prerequisites ==="
     echo ""
-    echo "| Component | Status | Version | Type |"
-    echo "|-----------|--------|---------|------|"
+    echo "| Component | Status | Version | Source | Type |"
+    echo "|-----------|--------|---------|--------|------|"
 
-    # Required
+    # Required: brew
     if command -v brew &>/dev/null; then
         VER=$(brew --version 2>&1 | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
         VER="${VER:-unknown}"
-        echo "| brew | ✅ | $VER | required |"
+        echo "| brew | ✅ | $VER | - | required |"
     else
-        echo "| brew | ❌ missing | - | required |"
+        echo "| brew | ❌ missing | - | - | required |"
     fi
 
+    # Required: timeout (coreutils)
     if command -v timeout &>/dev/null; then
         VER=$(timeout --version 2>&1 | head -1 | grep -oE '[0-9]+\.[0-9]+' | head -1)
         VER="${VER:-unknown}"
-        echo "| timeout | ✅ | $VER | required |"
+        TIMEOUT_PATH=$(which timeout)
+        if [ -L "$TIMEOUT_PATH" ]; then
+            echo "| timeout | ✅ | $VER | symlink | required |"
+        elif brew list coreutils &>/dev/null 2>&1; then
+            echo "| timeout | ✅ | $VER | brew | required |"
+        else
+            echo "| timeout | ✅ | $VER | system | required |"
+        fi
     else
-        echo "| timeout | ❌ missing | - | required |"
+        echo "| timeout | ❌ missing | - | - | required |"
     fi
 
+    # Required: jq
     if command -v jq &>/dev/null; then
         VER=$(jq --version 2>&1)
         VER="${VER:-unknown}"
-        echo "| jq | ✅ | $VER | required |"
+        if brew list jq &>/dev/null 2>&1; then
+            echo "| jq | ✅ | $VER | brew | required |"
+        else
+            echo "| jq | ✅ | $VER | system | required |"
+        fi
     else
-        echo "| jq | ❌ missing | - | required |"
+        echo "| jq | ❌ missing | - | - | required |"
     fi
 
-    # Optional (grepai)
+    # Optional: ollama
     if command -v ollama &>/dev/null; then
         VER=$(ollama --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
         VER="${VER:-unknown}"
+        SRC=$(brew list ollama &>/dev/null 2>&1 && echo "brew" || echo "system")
         if ollama_running; then
-            echo "| ollama | ✅ running | $VER | optional |"
+            echo "| ollama | ✅ running | $VER | $SRC | optional |"
         else
-            echo "| ollama | ⚠️ stopped | $VER | optional |"
+            echo "| ollama | ⚠️ stopped | $VER | $SRC | optional |"
         fi
     else
-        echo "| ollama | - | not installed | optional |"
+        echo "| ollama | - | not installed | - | optional |"
     fi
 
+    # Optional: bge-m3
     if command -v ollama &>/dev/null && ollama_running && ollama list 2>/dev/null | grep -q bge-m3; then
-        echo "| bge-m3 | ✅ | installed | optional |"
+        echo "| bge-m3 | ✅ | installed | ollama | optional |"
     elif command -v ollama &>/dev/null && ! ollama_running; then
-        echo "| bge-m3 | ? | ollama stopped | optional |"
+        echo "| bge-m3 | ? | ollama stopped | - | optional |"
     else
-        echo "| bge-m3 | - | not installed | optional |"
+        echo "| bge-m3 | - | not installed | - | optional |"
     fi
 
+    # Optional: grepai
     get_grepai_versions
     if [ -n "$GREPAI_CURRENT" ]; then
+        SRC=$(brew list yoanbernabeu/tap/grepai &>/dev/null 2>&1 && echo "brew" || echo "system")
         if [ -n "$GREPAI_LATEST" ] && [ "$GREPAI_CURRENT" != "$GREPAI_LATEST" ]; then
-            echo "| grepai | ⚠️ outdated | $GREPAI_CURRENT → $GREPAI_LATEST | optional |"
+            echo "| grepai | ⚠️ outdated | $GREPAI_CURRENT → $GREPAI_LATEST | $SRC | optional |"
         else
-            echo "| grepai | ✅ | $GREPAI_CURRENT | optional |"
+            echo "| grepai | ✅ | $GREPAI_CURRENT | $SRC | optional |"
         fi
     else
-        echo "| grepai | - | not installed | optional |"
+        echo "| grepai | - | not installed | - | optional |"
     fi
     ;;
 
@@ -118,10 +147,37 @@ case "$CMD" in
         exit 0
     fi
 
-    UPDATES=""
-    OUTDATED=$(brew outdated --quiet 2>/dev/null | grep -E "^(coreutils|jq)$" || true)
-    [ -n "$OUTDATED" ] && UPDATES="$OUTDATED"
+    # Update brew cache first
+    echo "BREW_CACHE=updating"
+    brew update --quiet 2>/dev/null && echo "BREW_CACHE=updated" || echo "BREW_CACHE=failed"
 
+    UPDATES=""
+    NOTES=""
+
+    # Check coreutils (timeout) - only if brew-managed
+    if brew list coreutils &>/dev/null; then
+        COREUTILS_CURRENT=$(timeout --version 2>&1 | head -1 | grep -oE '[0-9]+\.[0-9]+' | head -1)
+        COREUTILS_LATEST=$(brew info coreutils 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1)
+        if [ -n "$COREUTILS_CURRENT" ] && [ -n "$COREUTILS_LATEST" ] && [ "$COREUTILS_CURRENT" != "$COREUTILS_LATEST" ]; then
+            UPDATES="${UPDATES:+$UPDATES }coreutils($COREUTILS_CURRENT→$COREUTILS_LATEST)"
+        fi
+    fi
+
+    # Check jq - only if brew-managed
+    if brew list jq &>/dev/null; then
+        JQ_CURRENT=$(jq --version 2>&1 | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1)
+        JQ_LATEST=$(brew info jq 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1)
+        if [ -n "$JQ_CURRENT" ] && [ -n "$JQ_LATEST" ] && [ "$JQ_CURRENT" != "$JQ_LATEST" ]; then
+            UPDATES="${UPDATES:+$UPDATES }jq($JQ_CURRENT→$JQ_LATEST)"
+        fi
+    elif command -v jq &>/dev/null; then
+        # jq exists but not brew-managed - note it
+        JQ_PATH=$(which jq)
+        JQ_CURRENT=$(jq --version 2>&1 | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1)
+        NOTES="${NOTES:+$NOTES; }jq($JQ_CURRENT) at $JQ_PATH (not brew-managed)"
+    fi
+
+    # Check grepai
     get_grepai_versions
     if [ -n "$GREPAI_CURRENT" ] && [ -n "$GREPAI_LATEST" ] && [ "$GREPAI_CURRENT" != "$GREPAI_LATEST" ]; then
         UPDATES="${UPDATES:+$UPDATES }grepai($GREPAI_CURRENT→$GREPAI_LATEST)"
@@ -137,15 +193,29 @@ case "$CMD" in
     else
         echo "UPDATES_AVAILABLE=false"
     fi
+    [ -n "$NOTES" ] && echo "NOTES=$NOTES"
     ;;
 
   check-timeout)
     if command -v timeout &>/dev/null; then
         echo "TIMEOUT_EXISTS=true"
         echo "VERSION=$(timeout --version 2>&1 | head -1)"
+        TIMEOUT_PATH=$(which timeout)
+        if [ -L "$TIMEOUT_PATH" ]; then
+            SYMLINK_TARGET=$(readlink "$TIMEOUT_PATH")
+            echo "SYMLINK=$TIMEOUT_PATH → $SYMLINK_TARGET"
+        else
+            echo "PATH=$TIMEOUT_PATH"
+        fi
     else
         echo "TIMEOUT_EXISTS=false"
-        command -v gtimeout &>/dev/null && echo "GTIMEOUT_EXISTS=true" || echo "GTIMEOUT_EXISTS=false"
+        if command -v gtimeout &>/dev/null; then
+            echo "GTIMEOUT_EXISTS=true"
+            echo "GTIMEOUT_PATH=$(which gtimeout)"
+            echo "HINT=Create symlink: ln -sf \$(brew --prefix)/opt/coreutils/libexec/gnubin/timeout \$(brew --prefix)/bin/timeout"
+        else
+            echo "GTIMEOUT_EXISTS=false"
+        fi
     fi
     ;;
 
@@ -159,8 +229,11 @@ case "$CMD" in
 
     # Update coreutils
     if brew list coreutils &>/dev/null; then
-        if brew upgrade coreutils 2>&1; then
+        OLD_VER=$(timeout --version 2>&1 | head -1 | grep -oE '[0-9]+\.[0-9]+' | head -1)
+        if brew upgrade coreutils 2>&1 | grep -q "Upgrading"; then
+            NEW_VER=$(timeout --version 2>&1 | head -1 | grep -oE '[0-9]+\.[0-9]+' | head -1)
             echo "✅ coreutils: updated"
+            log_action "Updated coreutils: $OLD_VER → $NEW_VER"
         else
             echo "⏭️ coreutils: already latest"
         fi
@@ -168,8 +241,11 @@ case "$CMD" in
 
     # Update jq
     if brew list jq &>/dev/null; then
-        if brew upgrade jq 2>&1; then
+        OLD_VER=$(jq --version 2>&1 | grep -oE '[0-9]+\.[0-9]+' | head -1)
+        if brew upgrade jq 2>&1 | grep -q "Upgrading"; then
+            NEW_VER=$(jq --version 2>&1 | grep -oE '[0-9]+\.[0-9]+' | head -1)
             echo "✅ jq: updated"
+            log_action "Updated jq: $OLD_VER → $NEW_VER"
         else
             echo "⏭️ jq: already latest"
         fi
@@ -181,6 +257,7 @@ case "$CMD" in
         echo "Updating grepai: $GREPAI_CURRENT → $GREPAI_LATEST"
         if brew upgrade yoanbernabeu/tap/grepai; then
             echo "✅ grepai: updated"
+            log_action "Updated grepai: $GREPAI_CURRENT → $GREPAI_LATEST"
         else
             echo "⚠️ grepai: update failed"
         fi
@@ -201,7 +278,7 @@ case "$CMD" in
         echo "Installing Homebrew..."
         NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
         eval "$(/opt/homebrew/bin/brew shellenv)" 2>/dev/null || eval "$(/usr/local/bin/brew shellenv)" 2>/dev/null || true
-        command -v brew &>/dev/null && echo "✅ brew: installed" || { echo "❌ brew: FAILED"; exit 1; }
+        command -v brew &>/dev/null && { echo "✅ brew: installed"; log_action "Installed Homebrew"; } || { echo "❌ brew: FAILED"; exit 1; }
     else
         echo "✅ brew: $(brew --version | head -1)"
     fi
@@ -213,6 +290,7 @@ case "$CMD" in
         echo "Installing coreutils..."
         brew install coreutils
         echo "✅ coreutils: installed"
+        log_action "Installed coreutils"
     else
         echo "✅ coreutils: already installed"
     fi
@@ -223,7 +301,7 @@ case "$CMD" in
     if ! command -v jq &>/dev/null; then
         echo "Installing jq..."
         brew install jq
-        command -v jq &>/dev/null && echo "✅ jq: installed" || { echo "❌ jq: FAILED"; exit 1; }
+        command -v jq &>/dev/null && { echo "✅ jq: installed"; log_action "Installed jq"; } || { echo "❌ jq: FAILED"; exit 1; }
     else
         echo "✅ jq: $(jq --version)"
     fi
@@ -241,6 +319,7 @@ case "$CMD" in
     if ! brew list coreutils &>/dev/null; then
         echo "Installing coreutils..."
         brew install coreutils
+        log_action "Installed coreutils"
     fi
     BREW_BIN=$(brew --prefix)/bin
     GTIMEOUT_PATH="$(brew --prefix)/opt/coreutils/libexec/gnubin/timeout"
@@ -254,6 +333,7 @@ case "$CMD" in
     if [ -f "$GTIMEOUT_PATH" ]; then
         ln -sf "$GTIMEOUT_PATH" "$BREW_BIN/timeout"
         echo "✅ timeout: symlink created"
+        log_action "Created timeout symlink → gtimeout"
     else
         echo "❌ timeout: gtimeout not found at $GTIMEOUT_PATH"
         exit 1
@@ -269,7 +349,7 @@ case "$CMD" in
     if ! command -v ollama &>/dev/null; then
         echo "Installing ollama..."
         brew install ollama
-        command -v ollama &>/dev/null && echo "✅ ollama: installed" || { echo "❌ ollama: FAILED"; exit 1; }
+        command -v ollama &>/dev/null && { echo "✅ ollama: installed"; log_action "Installed ollama"; } || { echo "❌ ollama: FAILED"; exit 1; }
     else
         echo "✅ ollama: $(ollama --version 2>&1 | head -1)"
     fi
@@ -281,6 +361,7 @@ case "$CMD" in
         disown 2>/dev/null || true
         if wait_for_ollama; then
             echo "✅ ollama: running"
+            log_action "Started ollama service"
         else
             echo "⚠️ ollama: failed to start, run manually: ollama serve"
         fi
@@ -296,6 +377,7 @@ case "$CMD" in
             echo "Pulling bge-m3 model (~1.2GB)..."
             ollama pull bge-m3
             echo "✅ bge-m3: installed"
+            log_action "Pulled bge-m3 embedding model"
         else
             echo "✅ bge-m3: already installed"
         fi
@@ -310,11 +392,12 @@ case "$CMD" in
     if [ -z "$GREPAI_CURRENT" ]; then
         echo "Installing grepai..."
         brew install yoanbernabeu/tap/grepai
-        command -v grepai &>/dev/null && echo "✅ grepai: installed" || { echo "❌ grepai: FAILED"; exit 1; }
+        command -v grepai &>/dev/null && { echo "✅ grepai: installed"; log_action "Installed grepai CLI"; } || { echo "❌ grepai: FAILED"; exit 1; }
     elif [ -n "$GREPAI_LATEST" ] && [ "$GREPAI_CURRENT" != "$GREPAI_LATEST" ]; then
         echo "Updating grepai: $GREPAI_CURRENT → $GREPAI_LATEST"
         if brew upgrade yoanbernabeu/tap/grepai; then
             echo "✅ grepai: updated"
+            log_action "Updated grepai: $GREPAI_CURRENT → $GREPAI_LATEST"
         else
             echo "⚠️ grepai: update failed"
         fi
@@ -327,57 +410,94 @@ case "$CMD" in
     ;;
 
   summary)
-    echo ""
-    echo "=== Installation Complete ==="
-    echo ""
-    echo "| Component | Status | Version |"
-    echo "|-----------|--------|---------|"
+    # Optional: read actions from env or file
+    ACTIONS_FILE="${ACTIONS_FILE:-/tmp/ft-install-actions.txt}"
 
+    echo ""
+    echo "=== Installation Summary ==="
+    echo ""
+    echo "| Component | Status | Installed | Latest | Source |"
+    echo "|-----------|--------|-----------|--------|--------|"
+
+    # brew
     if command -v brew &>/dev/null; then
-        VER=$(brew --version | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
-        echo "| brew | ✅ | ${VER:-unknown} |"
+        VER=$(brew --version 2>&1 | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+        echo "| brew | ✅ | ${VER:-?} | - | - |"
     else
-        echo "| brew | ❌ | - |"
+        echo "| brew | ❌ | - | - | - |"
     fi
 
+    # timeout (coreutils)
     if command -v timeout &>/dev/null; then
-        VER=$(timeout --version 2>&1 | head -1 | grep -oE '[0-9]+\.[0-9]+')
-        echo "| timeout | ✅ | ${VER:-unknown} |"
-    else
-        echo "| timeout | ❌ | - |"
-    fi
-
-    if command -v jq &>/dev/null; then
-        echo "| jq | ✅ | $(jq --version) |"
-    else
-        echo "| jq | ❌ | - |"
-    fi
-
-    if command -v ollama &>/dev/null; then
-        VER=$(ollama --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
-        echo "| ollama | ✅ | ${VER:-unknown} |"
-        if ollama_running; then
-            echo "| ollama svc | ✅ | running |"
+        VER=$(timeout --version 2>&1 | head -1 | grep -oE '[0-9]+\.[0-9]+' | head -1)
+        LATEST=$(brew info coreutils 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1)
+        TIMEOUT_PATH=$(which timeout)
+        if [ -L "$TIMEOUT_PATH" ]; then
+            SRC="symlink"
+        elif brew list coreutils &>/dev/null 2>&1; then
+            SRC="brew"
         else
-            echo "| ollama svc | ⚠️ | stopped |"
+            SRC="system"
+        fi
+        echo "| timeout | ✅ | ${VER:-?} | ${LATEST:-?} | $SRC |"
+    else
+        echo "| timeout | ❌ | - | - | - |"
+    fi
+
+    # jq
+    if command -v jq &>/dev/null; then
+        VER=$(jq --version 2>&1 | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1)
+        LATEST=$(brew info jq 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1)
+        if brew list jq &>/dev/null 2>&1; then
+            SRC="brew"
+        else
+            SRC="system"
+        fi
+        echo "| jq | ✅ | ${VER:-?} | ${LATEST:-?} | $SRC |"
+    else
+        echo "| jq | ❌ | - | - | - |"
+    fi
+
+    # ollama
+    if command -v ollama &>/dev/null; then
+        VER=$(ollama --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+        LATEST=$(brew info ollama 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+        SRC=$(brew list ollama &>/dev/null 2>&1 && echo "brew" || echo "system")
+        if ollama_running; then
+            echo "| ollama | ✅ running | ${VER:-?} | ${LATEST:-?} | $SRC |"
+        else
+            echo "| ollama | ⚠️ stopped | ${VER:-?} | ${LATEST:-?} | $SRC |"
         fi
     else
-        echo "| ollama | - | skipped |"
+        echo "| ollama | ⏭️ skipped | - | - | - |"
     fi
 
+    # bge-m3
     if command -v ollama &>/dev/null && ollama_running && ollama list 2>/dev/null | grep -q bge-m3; then
-        echo "| bge-m3 | ✅ | installed |"
-    elif command -v ollama &>/dev/null; then
-        echo "| bge-m3 | - | skipped |"
+        echo "| bge-m3 | ✅ | installed | - | ollama |"
+    elif command -v ollama &>/dev/null && ! ollama_running; then
+        echo "| bge-m3 | ? | unknown | - | - |"
     else
-        echo "| bge-m3 | - | skipped |"
+        echo "| bge-m3 | ⏭️ skipped | - | - | - |"
     fi
 
-    if command -v grepai &>/dev/null; then
-        VER=$(grepai version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
-        echo "| grepai | ✅ | ${VER:-unknown} |"
+    # grepai
+    get_grepai_versions
+    if [ -n "$GREPAI_CURRENT" ]; then
+        SRC=$(brew list yoanbernabeu/tap/grepai &>/dev/null 2>&1 && echo "brew" || echo "system")
+        echo "| grepai | ✅ | $GREPAI_CURRENT | ${GREPAI_LATEST:-?} | $SRC |"
     else
-        echo "| grepai | - | skipped |"
+        echo "| grepai | ⏭️ skipped | - | - | - |"
+    fi
+
+    # Actions performed
+    echo ""
+    echo "## Actions Performed"
+    if [ -f "$ACTIONS_FILE" ]; then
+        cat "$ACTIONS_FILE"
+        rm -f "$ACTIONS_FILE"
+    else
+        echo "- No actions recorded (all components were already installed)"
     fi
     ;;
 

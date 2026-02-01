@@ -1,6 +1,6 @@
 ---
 name: install
-description: Interactive installer for focus-task plugin. Triggers - "install", "установить", "setup dependencies".
+description: Installs focus-task prerequisites (brew, coreutils, jq, grepai). Triggers - "install focus-task", "install dependencies", "setup prerequisites", "установить зависимости".
 user-invocable: true
 argument-hint: ""
 allowed-tools: Read, Bash, AskUserQuestion
@@ -10,7 +10,7 @@ model: sonnet
 
 # focus-task Install
 
-> Interactive installer for focus-task plugin prerequisites.
+Interactive installer for focus-task prerequisites.
 
 <instructions>
 
@@ -26,200 +26,106 @@ test -n "$FT_PLUGIN" && echo "✅ FT_PLUGIN=$FT_PLUGIN" || echo "❌ Plugin not 
 
 ---
 
-## Overview
+## Components
 
-**Required** (installed automatically):
-- **Homebrew** — package manager
-- **timeout** — command timeout (coreutils) + symlink
-- **jq** — JSON processor for hooks
-
-**Optional** (ask user):
-- **ollama** — local embedding server
-- **bge-m3** — multilingual embedding model
-- **grepai** — semantic code search CLI
+| Component | Type | Purpose |
+|-----------|------|---------|
+| brew | required | Package manager |
+| coreutils+timeout | required | Command timeout for scripts |
+| jq | required | JSON processor for hooks |
+| ollama | optional | Local embedding server |
+| bge-m3 | optional | Multilingual embedding model (~1.2GB) |
+| grepai | optional | Semantic code search CLI |
 
 ---
 
-## Phase 1: Check Current State
+## Workflow
 
-**EXECUTE** using Bash tool:
+### Phase 1: State Check
+
+**EXECUTE**:
 ```bash
 bash "$FT_PLUGIN/skills/install/scripts/install.sh" state
 ```
 
----
+### Phase 2: Updates Check
 
-## Phase 2: Ask About Updates
-
-**EXECUTE** — check for updates:
+**EXECUTE**:
 ```bash
 bash "$FT_PLUGIN/skills/install/scripts/install.sh" check-updates
 ```
 
-**If UPDATES_AVAILABLE=true**, **ASK user** using AskUserQuestion:
+**If UPDATES_AVAILABLE=true** → **ASK** (AskUserQuestion):
+- Header: "Updates"
+- Question: "Updates available: [UPDATES]. Update now?"
+- Options: "Yes, update all" | "Skip"
 
-```json
-{
-  "questions": [{
-    "question": "Updates available: [UPDATES from output]. Update now?",
-    "header": "Updates",
-    "multiSelect": false,
-    "options": [
-      {"label": "Yes, update all", "description": "Update all outdated components automatically"},
-      {"label": "Skip", "description": "Keep current versions, continue installation"}
-    ]
-  }]
-}
-```
+**If Yes** → **EXECUTE**: `bash "$FT_PLUGIN/skills/install/scripts/install.sh" update-all`
 
-**If user chooses Yes**, **EXECUTE**:
-```bash
-bash "$FT_PLUGIN/skills/install/scripts/install.sh" update-all
-```
+### Phase 3: Timeout Check
 
----
-
-## Phase 3: Ask About Timeout Symlink
-
-**EXECUTE** — check timeout:
+**EXECUTE**:
 ```bash
 bash "$FT_PLUGIN/skills/install/scripts/install.sh" check-timeout
 ```
 
-**If TIMEOUT_EXISTS=false**, **ASK user** using AskUserQuestion:
+**If TIMEOUT_EXISTS=false** → **ASK**:
+- Header: "Timeout Symlink"
+- Question: "Create 'timeout' symlink? REQUIRED for focus-task."
+- Options: "Yes, create" | "No, cancel"
 
-```json
-{
-  "questions": [{
-    "question": "Create 'timeout' symlink? REQUIRED for focus-task scripts.",
-    "header": "Alias",
-    "multiSelect": false,
-    "options": [
-      {"label": "Yes, create symlink", "description": "Create symlink: timeout → gtimeout in /opt/homebrew/bin"},
-      {"label": "No, cancel installation", "description": "Cancel - focus-task requires timeout command"}
-    ]
-  }]
-}
-```
+> **If cancel** → STOP: "Installation cancelled. timeout command required."
 
-> **If user chooses "No, cancel"** — STOP with message:
-> "Installation cancelled. The 'timeout' command is required for focus-task."
+### Phase 4: Required Components
 
----
-
-## Phase 4: Install Required Components
-
-**EXECUTE** using Bash tool:
+**EXECUTE**:
 ```bash
 bash "$FT_PLUGIN/skills/install/scripts/install.sh" required
 ```
 
-**If timeout still missing**, **EXECUTE**:
-```bash
-bash "$FT_PLUGIN/skills/install/scripts/install.sh" timeout
-```
+**If timeout still missing** → **EXECUTE**: `bash "$FT_PLUGIN/skills/install/scripts/install.sh" timeout`
 
-> **STOP if any required component failed.**
+> **STOP if any required failed.**
 
----
+### Phase 5: Semantic Search (Optional)
 
-## Phase 5: Semantic Search (Optional)
+**ASK**:
+- Header: "grepai"
+- Question: "Install semantic search? Enables AI-powered code search."
+- Options: "Yes, install (~1.5GB)" | "Skip"
 
-**ASK user** using AskUserQuestion:
+**If Yes** → **EXECUTE**: `bash "$FT_PLUGIN/skills/install/scripts/install.sh" grepai`
 
-```json
-{
-  "questions": [{
-    "question": "Install semantic search tools? Enables /grepai for AI-powered code search.",
-    "header": "grepai",
-    "multiSelect": false,
-    "options": [
-      {"label": "Yes, install (Recommended)", "description": "Install Ollama + bge-m3 model (~1.5GB) + grepai CLI"},
-      {"label": "Skip", "description": "Skip - /grepai will not be available"}
-    ]
-  }]
-}
-```
+### Phase 6: Summary
 
-**If user chooses Skip**, go to Phase 6 (Summary).
-
-**If user chooses Yes**, **EXECUTE**:
-```bash
-bash "$FT_PLUGIN/skills/install/scripts/install.sh" grepai
-```
-
----
-
-## Phase 6: Summary & Next Steps
-
-**EXECUTE** using Bash tool:
+**EXECUTE**:
 ```bash
 bash "$FT_PLUGIN/skills/install/scripts/install.sh" summary
-```
-
-**Output next steps:**
-
-```markdown
-## Next Steps
-
-### Task Management
-| Command | Purpose |
-|---------|---------|
-| `/focus-task:setup` | Initialize focus-task for this project |
-| `/focus-task:create <desc>` | Create a new task |
-| `/focus-task:start` | Start executing tasks |
-
-### Semantic Search (if installed)
-| Command | Purpose |
-|---------|---------|
-| `/grepai setup` | Configure grepai for this project |
-| `/grepai status` | Check health |
-| `grepai search "query"` | CLI semantic search |
 ```
 
 </instructions>
 
 ---
 
-## Script Reference
-
-**Script:** `$FT_PLUGIN/skills/install/scripts/install.sh <command>`
+## Script Commands
 
 | Command | Purpose |
 |---------|---------|
-| `state` | Check current state of all components |
-| `check-updates` | Check for available updates |
-| `check-timeout` | Check if timeout exists |
-| `update-all` | Update all outdated components |
-| `required` | Install required (brew, coreutils, jq) |
-| `timeout` | Create timeout symlink only |
-| `grepai` | Install semantic search |
-| `summary` | Show final summary |
+| state | Current state of all components |
+| check-updates | Available updates |
+| check-timeout | timeout command exists? |
+| update-all | Update outdated components |
+| required | Install brew, coreutils, jq |
+| timeout | Create timeout symlink |
+| grepai | Install ollama, bge-m3, grepai |
+| summary | Final summary |
 
 ---
 
-## Output Format
-
-```markdown
-# focus-task Installation
-
-## Initial State
-| Component | Status | Version | Type |
-|-----------|--------|---------|------|
-| ... | ... | ... | ... |
-
-## Actions
-- Updates: [applied/skipped]
-- Timeout symlink: [created/existed]
-- Required: [installed/already installed]
-- grepai: [installed/skipped]
-
-## Final State
-| Component | Status | Version |
-|-----------|--------|---------|
-| ... | ... | ... |
-
 ## Next Steps
-1. `/focus-task:setup` — Initialize project
-2. `/grepai setup` — Configure semantic search (if installed)
-```
+
+| Command | Purpose |
+|---------|---------|
+| `/focus-task:setup` | Initialize for project |
+| `/focus-task:create <desc>` | Create task |
+| `/grepai setup` | Configure semantic search |

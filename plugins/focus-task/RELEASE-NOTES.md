@@ -28,6 +28,33 @@
 
 ---
 
+## v2.0.67 (2026-02-01)
+
+### Fixed
+
+- **Plugin installation** — version bump to apply pending changes from v2.0.66
+
+---
+
+## v2.0.66 (2026-02-01)
+
+### Changed
+
+- **skills/install/SKILL.md** — оптимизация токенов (-42%)
+  - Добавлены triggers: "install focus-task", "setup prerequisites", "установить зависимости"
+  - Заменён многословный JSON на компактные таблицы
+- **skills/install/scripts/install.sh** — улучшенный summary
+  - Новый формат: `| Component | Status | Installed | Latest |`
+  - Показывает установленную И последнюю доступную версию
+  - Логирование выполненных действий (Actions Performed)
+  - Helper functions: `log_action()`, `clear_actions()`
+
+### Removed
+
+- **skills/install/scripts/** — удалены 8 дублирующих скриптов (всё в install.sh)
+
+---
+
 ## v2.0.65 (2026-02-01)
 
 ### Added
