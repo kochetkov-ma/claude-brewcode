@@ -1,5 +1,5 @@
 ---
-name: doc
+name: focus-task:doc
 description: Creates or updates project documentation. Modes - create, update, analyze, sync, all. Triggers - "create docs", "update docs", "/focus-task:doc".
 user-invocable: true
 argument-hint: "[create|update|analyze|sync] <path>"
