@@ -155,20 +155,80 @@ Each agent reviews with:
 
 ### Phase 4: Quorum Collection
 
+```python
+confirmed = []
+exceptions = []
+discarded = []
+
+for finding in all_findings:
+    cluster = find_similar_findings(finding, all_findings)
+    unique_agents = count_unique_agents(cluster)
+
+    if unique_agents >= M:  # Quorum threshold
+        merged = merge_cluster(cluster)
+        confirmed.append(merged)
+    elif finding.severity in ['blocker', 'critical']:
+        exceptions.append(finding)  # Priority 3
+    else:
+        discarded.append(finding)
 ```
-FOR each finding:
-  IF unique_agents >= M: → CONFIRMED
-  ELIF severity IN [blocker, critical]: → EXCEPTION (P3)
-  ELSE: → DISCARDED
-```
+
+**Matching rules:**
+
+| Criterion | Tolerance | Weight |
+|-----------|-----------|--------|
+| Same file | Exact | Required |
+| Line range | ±5 lines | Required |
+| Category | Same or equivalent | Required |
+| Description | Semantic similarity ≥ 0.6 | Optional |
+
+**Merge rules:**
+
+| Field | Strategy |
+|-------|----------|
+| description | Longest/most detailed |
+| severity | Highest in cluster |
+| suggestion | First non-null |
+| confidence | Average of cluster |
+| lineStart/End | Min/Max of cluster |
+| agents | List all contributing |
 
 ### Phase 5: DoubleCheck
 
-Single reviewer verifies ALL confirmed findings:
-- Exists in code?
-- Description accurate?
-- Fix actionable?
-- Severity appropriate?
+Single `reviewer` (Opus) verifies ALL confirmed findings:
+
+```markdown
+Task(subagent_type="reviewer", model="opus", prompt="
+  ## DoubleCheck Verification
+
+  For EACH finding below:
+  1. **Verify existence:** Does the issue actually exist in code?
+  2. **Verify accuracy:** Is the description correct?
+  3. **Verify actionability:** Is there a clear fix path?
+  4. **Verify severity:** Is the severity appropriate?
+
+  **Findings to verify:**
+  {CONFIRMED_FINDINGS_JSON}
+
+  **Output format (JSON array):**
+  [{
+    \"findingId\": \"1\",
+    \"verdict\": \"CONFIRM|REJECT\",
+    \"reason\": \"Explanation if REJECT\",
+    \"severityAdjustment\": \"null|blocker|critical|major|minor\"
+  }]
+
+  **Verdict rules:**
+  - CONFIRM: Issue exists, description accurate, actionable
+  - REJECT: False positive, already fixed, or not actionable
+")
+```
+
+| Verdict | Action |
+|---------|--------|
+| CONFIRM | Priority 1 (highest confidence) |
+| REJECT | Remove from report |
+| Severity adjusted | Update severity in report |
 
 ### Phase 6: Report
 
@@ -202,6 +262,28 @@ Full report: .claude/tasks/reviews/{TIMESTAMP}_{NAME}_report.md
 |---------|---------|-------------|
 | `-q` / `--quorum` | `3-2` | `N-M` (agents-threshold) or `G-N-M` (groups-agents-threshold) |
 | Report dir | `.claude/tasks/reviews/` | Output directory |
+| Max parallel | 25 | Maximum agents in one message (G×N) |
+| Line tolerance | ±5 | Lines overlap for matching |
+| Similarity | 0.6 | Semantic similarity for matching |
+
+---
+
+## Error Handling
+
+| Condition | Action |
+|-----------|--------|
+| No files found for block | Skip block, warn in report |
+| Agent timeout | Retry once, then mark unavailable |
+| No findings | Report "No issues found" with confidence |
+| Invalid quorum args | Error: "Invalid -q/--quorum. Format: G-N-M or N-M" |
+| No CLAUDE.md | Use default rules only |
+
+---
+
+## References
+
+- `references/agent-prompt.md` — Agent prompt templates (standard + DB-layer)
+- `references/report-template.md` — Report format and naming conventions
 
 ---
 

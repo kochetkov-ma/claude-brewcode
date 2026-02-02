@@ -690,6 +690,6 @@ Fires after every Task tool call. Enforces the 2-step protocol and manages sessi
 | [setup](skills/setup/SKILL.md) | Project initialization |
 | [create](skills/create/SKILL.md) | Task creation |
 | [start](skills/start/SKILL.md) | Task execution |
-| [review](skills/review/SKILL.md) | Multi-agent code review |
+| [review](templates/skills/review/SKILL.md.template) | Multi-agent code review (template) |
 | [grepai](skills/grepai/SKILL.md) | Semantic search setup |
 | [install](skills/install/SKILL.md) | Prerequisites installation |

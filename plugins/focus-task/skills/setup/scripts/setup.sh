@@ -148,6 +148,13 @@ copy_review_skill() {
     exit 1
   fi
 
+  # Copy references
+  if [ -d "$PLUGIN_TEMPLATES/skills/review/references" ]; then
+    mkdir -p .claude/skills/focus-task-review/references
+    cp "$PLUGIN_TEMPLATES/skills/review/references/"*.md .claude/skills/focus-task-review/references/
+    echo "✅ Copied: references/ (agent-prompt.md, report-template.md)"
+  fi
+
   # Verify
   test -f .claude/skills/focus-task-review/SKILL.md && echo "✅ Review skill created" || echo "❌ Review skill MISSING"
 }

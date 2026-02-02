@@ -32,6 +32,20 @@
 
 ---
 
+## v2.1.2 (2026-02-02)
+
+### Changed
+
+- **Review skill consolidation** — удалён дубликат, оставлен только шаблон
+  - Удалён: `skills/review/` (статическая версия)
+  - Оставлен: `templates/skills/review/SKILL.md.template` (генерируемый)
+  - Добавлен: `templates/skills/review/references/` (agent-prompt.md, report-template.md)
+  - Обновлён: SKILL.md.template (+quorum algorithm, matching/merge rules, DoubleCheck prompt, error handling)
+  - Обновлён: setup.sh (копирует references/)
+  - Обновлён: README.md (ссылка на template)
+
+---
+
 ## v2.1.1 (2026-02-01)
 
 ### Fixed
