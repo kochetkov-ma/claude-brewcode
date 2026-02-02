@@ -231,6 +231,15 @@ Task completed:
    - Types: gotcha/pitfall → `❌` | working pattern → `✅` | architecture fact → `ℹ️`
    - SKIP trivial/obvious facts. Only genuinely useful knowledge.
    - NEVER write phase summaries as knowledge entries
+   - **IMPORTANT:** Only extract genuinely reusable knowledge:
+     - ❌ Avoid patterns that apply to ANY similar code
+     - ✅ Best practices that work across the codebase
+     - ℹ️ Architecture facts useful for future phases
+   - **NEVER extract:**
+     - Progress notes ("Phase 1 complete", "Working on...")
+     - Vague statements ("Code looks good", "Task done")
+     - Task-specific context ("In this iteration we...")
+   - Hook validates entries; rejected entries are logged but not appended
 
 ### After Phase Completion
 

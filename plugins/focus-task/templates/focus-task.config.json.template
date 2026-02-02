@@ -3,7 +3,16 @@
     "maxEntries": 100,
     "maxTokens": 500,
     "priorities": ["❌", "✅", "ℹ️"],
-    "autoCompactThreshold": 50
+    "autoCompactThreshold": 50,
+    "validation": {
+      "enabled": true,
+      "blocklist": true,
+      "densityCheck": true
+    },
+    "retention": {
+      "global": 50,
+      "task": 20
+    }
   },
   "logging": {
     "level": "info"
@@ -18,5 +27,8 @@
       "claude-code-guide", "skill-creator", "agent-creator",
       "prompt-optimizer", "rules-organizer", "statusline-setup"
     ]
+  },
+  "constraints": {
+    "enabled": true
   }
 }

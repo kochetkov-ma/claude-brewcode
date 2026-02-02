@@ -58,6 +58,8 @@ Parse entries:
 - `t:"✅"` → best practice
 - `t:"ℹ️"` → info, determine category by content
 
+**Scope filter:** Only extract entries with `scope: "global"` (or no scope field for backward compatibility). Task-scoped entries are context-specific and should not become permanent rules.
+
 ### Session Mode
 
 Scan conversation for (limit to **5 most impactful rules**):

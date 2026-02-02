@@ -201,7 +201,17 @@ const DEFAULT_CONFIG = {
   knowledge: {
     maxEntries: 100,
     maxTokens: 500,
-    priorities: ['❌', '✅', 'ℹ️']
+    priorities: ['❌', '✅', 'ℹ️'],
+    autoCompactThreshold: 50,
+    validation: {
+      enabled: true,
+      blocklist: true,
+      densityCheck: true
+    },
+    retention: {
+      global: 50,
+      task: 20
+    }
   },
   logging: {
     level: 'info'
@@ -216,6 +226,9 @@ const DEFAULT_CONFIG = {
       'claude-code-guide', 'skill-creator', 'agent-creator',
       'prompt-optimizer', 'rules-organizer', 'statusline-setup'
     ]
+  },
+  constraints: {
+    enabled: true
   }
 };
 
@@ -251,7 +264,8 @@ export function loadConfig(cwd) {
     knowledge: { ...DEFAULT_CONFIG.knowledge, ...userConfig.knowledge },
     logging: { ...DEFAULT_CONFIG.logging, ...userConfig.logging },
     stop: { ...DEFAULT_CONFIG.stop, ...userConfig.stop },
-    agents: { ...DEFAULT_CONFIG.agents, ...userConfig.agents }
+    agents: { ...DEFAULT_CONFIG.agents, ...userConfig.agents },
+    constraints: { ...DEFAULT_CONFIG.constraints, ...userConfig.constraints }
   };
   cachedConfigCwd = cwd;
 

@@ -105,6 +105,36 @@ status: pending
 | C1 | {PATH} | {WHY} |
 | C2 | {PATH} | {WHY} |
 
+## Role Constraints
+
+> AUTO-INJECTED by hook. Short, actionable constraints for agents.
+
+<!-- ALL -->
+<!-- Global constraints for all agents go here -->
+<!-- Example: - Do NOT modify `SecurityConfig.java` - out of scope -->
+<!-- /ALL -->
+
+<!-- DEV -->
+<!-- Developer-specific constraints -->
+<!-- Example: - Use JOOQ DSLContext only, NO raw SQL -->
+<!-- Example: - Constructor injection: `@RequiredArgsConstructor` + final -->
+<!-- Example: - See `.claude/rules/dev-rules.md` -->
+<!-- /DEV -->
+
+<!-- TEST -->
+<!-- Tester-specific constraints -->
+<!-- Example: - Use `@DataSet` for test data, NOT `@Sql` -->
+<!-- Example: - `.as()` on EVERY assertion -->
+<!-- Example: - See `.claude/rules/test-rules.md` -->
+<!-- /TEST -->
+
+<!-- REVIEW -->
+<!-- Reviewer-specific constraints -->
+<!-- Example: - Flag missing null checks as BLOCKER -->
+<!-- Example: - Check for N+1 queries in loops -->
+<!-- Example: - See `.claude/rules/review-rules.md` -->
+<!-- /REVIEW -->
+
 ---
 
 > ⛔ After each agent: WRITE report → CALL ft-coordinator

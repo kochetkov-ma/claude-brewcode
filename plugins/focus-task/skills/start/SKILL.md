@@ -4,7 +4,7 @@ description: Starts task execution with hooks-based infinite context through aut
 user-invocable: true
 argument-hint: "[task-path] defaults to ref in .claude/TASK.md (single-line path)"
 allowed-tools: Read, Write, Edit, Bash, Task, Glob, Grep, Skill
-context: fork
+context: session
 model: opus
 ---
 

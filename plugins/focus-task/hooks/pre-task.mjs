@@ -14,10 +14,55 @@ import {
   log
 } from './lib/utils.mjs';
 import { readKnowledge, compressKnowledge } from './lib/knowledge.mjs';
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 
 const GREPAI_REMINDER = 'grepai: USE grepai_search FIRST for code exploration';
+
+/**
+ * Parse section content from string using tag boundaries
+ * Pure function - easily testable without file I/O
+ * @param {string} content - File content
+ * @param {string} tag - Tag name (ALL, DEV, TEST, REVIEW)
+ * @returns {string} Section content or empty string
+ */
+function parseSectionFromContent(content, tag) {
+  if (!content || !tag) return '';
+
+  const startTag = `<!-- ${tag} -->`;
+  const endTag = `<!-- /${tag} -->`;
+
+  const startIdx = content.indexOf(startTag);
+  if (startIdx === -1) return '';
+
+  const endIdx = content.indexOf(endTag, startIdx);
+  if (endIdx === -1) return '';
+
+  const section = content.substring(startIdx + startTag.length, endIdx);
+
+  return section
+    .split('\n')
+    .filter(line => !line.includes('<!--'))
+    .join('\n')
+    .trim();
+}
+
+/**
+ * Extract section content from TASK.md file
+ * I/O wrapper around parseSectionFromContent
+ * @param {string} taskPath - Path to TASK.md
+ * @param {string} tag - Tag name (ALL, DEV, TEST, REVIEW)
+ * @returns {string} Section content or empty string
+ */
+function extractSection(taskPath, tag) {
+  try {
+    if (!existsSync(taskPath)) return '';
+    const content = readFileSync(taskPath, 'utf8');
+    return parseSectionFromContent(content, tag);
+  } catch {
+    return '';
+  }
+}
 
 async function main() {
   let cwd = null;
@@ -82,6 +127,37 @@ async function main() {
       // PRE-agent priming: set expectation BEFORE agent runs
       const PROTOCOL_REMINDER = `⛔ When agent completes: WRITE report → CALL ft-coordinator`;
       updatedPrompt = `${updatedPrompt}\n\n${PROTOCOL_REMINDER}`;
+
+      // 3. Inject role-specific constraints for implementation agents
+      if (lock && lock.task_path) {
+        // Detect role from agent name
+        const name = (subagentType || '').toLowerCase();
+        let role = null;
+        if (name.includes('test') || name.includes('tester')) {
+          role = 'TEST';
+        } else if (name.includes('review') || name.includes('check') || name.includes('reviewer')) {
+          role = 'REVIEW';
+        } else if (name.includes('dev') || name.includes('expert') || name === 'developer') {
+          role = 'DEV';
+        }
+
+        if (role) {
+          const taskPath = join(cwd, lock.task_path);
+          const allConstraints = extractSection(taskPath, 'ALL');
+          const roleConstraints = extractSection(taskPath, role);
+
+          if (allConstraints || roleConstraints) {
+            const constraintLines = [allConstraints, roleConstraints]
+              .filter(c => c)
+              .join('\n');
+
+            const constraintInjection = `## ⚠️ Task Constraints\n${constraintLines}`;
+            updatedPrompt = `${constraintInjection}\n\n${updatedPrompt}`;
+            messages.push(`constraints: ${role}`);
+            log('debug', '[pre-task]', `Injecting ${role} constraints for ${subagentType}`, cwd, session_id);
+          }
+        }
+      }
     }
 
     // Output result - updatedInput MUST be inside hookSpecificOutput per Claude Code docs

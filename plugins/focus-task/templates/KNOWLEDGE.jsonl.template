@@ -3,7 +3,7 @@
 ## Record Structure
 
 ```jsonl
-{"ts":"ISO8601","cat":"category","t":"type","txt":"knowledge text","src":"agent-name"}
+{"ts":"ISO8601","cat":"category","t":"type","txt":"knowledge text","src":"agent-name","scope":"global"}
 ```
 
 ## Fields
@@ -15,6 +15,7 @@
 | `t` | string | Type: `❌` (avoid), `✅` (best practice), `ℹ️` (info) |
 | `txt` | string | Knowledge text - what was learned |
 | `src` | string | Source agent name (e.g., "developer", "tester") |
+| `scope` | string | Scope: `global` (cross-task) or `task` (task-specific) |
 
 ## Types Priority
 
@@ -37,10 +38,10 @@
 ## Examples
 
 ```jsonl
-{"ts":"2026-01-26T14:00:00","cat":"db","t":"❌","txt":"Do not use SELECT * in production queries","src":"sql_expert"}
-{"ts":"2026-01-26T14:05:00","cat":"api","t":"✅","txt":"Use @Valid annotation for request DTOs","src":"developer"}
-{"ts":"2026-01-26T14:10:00","cat":"test","t":"ℹ️","txt":"DBRider resets sequences after each test","src":"tester"}
-{"ts":"2026-01-26T15:00:00","cat":"docker","t":"❌","txt":"mem_limit only, not deploy.resources in non-Swarm","src":"developer"}
+{"ts":"2026-01-26T14:00:00","cat":"db","t":"❌","txt":"Do not use SELECT * in production queries","src":"sql_expert","scope":"global"}
+{"ts":"2026-01-26T14:05:00","cat":"api","t":"✅","txt":"Use @Valid annotation for request DTOs","src":"developer","scope":"global"}
+{"ts":"2026-01-26T14:10:00","cat":"test","t":"ℹ️","txt":"DBRider resets sequences after each test","src":"tester","scope":"task"}
+{"ts":"2026-01-26T15:00:00","cat":"docker","t":"❌","txt":"mem_limit only, not deploy.resources in non-Swarm","src":"developer","scope":"global"}
 ```
 
 ## Compaction Rules

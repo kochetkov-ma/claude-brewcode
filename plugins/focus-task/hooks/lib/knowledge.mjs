@@ -4,6 +4,15 @@
 import { readFileSync, existsSync, writeFileSync, appendFileSync, renameSync } from 'fs';
 import { log } from './utils.mjs';
 
+const BLOCKLIST_PATTERNS = [
+  /^(Working|Starting|Completed|Finished|Beginning)/i,
+  /^(Let me|I will|I am|I'll)/i,
+  /^(Looks? good|LGTM|Done|Fixed)/i,
+  /^Phase \d+/i,
+  /^Task (completed|done|finished)/i,
+  /^(Now|Next|Then) (I|we|let)/i
+];
+
 /**
  * Derive cwd from knowledge path
  * @param {string} knowledgePath - Path like /path/.claude/tasks/*_KNOWLEDGE.jsonl
@@ -68,6 +77,87 @@ export function appendKnowledge(knowledgePath, entry, cwd = null) {
     log('error', '[knowledge]', `appendKnowledge failed: ${e.message}`, logCwd);
     return false;
   }
+}
+
+/**
+ * Validate knowledge entry before appending
+ * @param {Object} entry - Knowledge entry to validate
+ * @returns {{valid: boolean, reason?: string}}
+ */
+export function validateEntry(entry) {
+  if (!entry || !entry.txt) {
+    return { valid: false, reason: 'missing txt field' };
+  }
+
+  const txt = entry.txt.trim();
+
+  if (txt.length < 15) {
+    return { valid: false, reason: 'too short (<15 chars)' };
+  }
+
+  for (const pattern of BLOCKLIST_PATTERNS) {
+    if (pattern.test(txt)) {
+      return { valid: false, reason: 'matches blocklist pattern' };
+    }
+  }
+
+  const hasTechnical = /[`@\.\(\)\[\]\/\\]|class|function|method|file|config|error|exception|api|db|sql|test/i.test(txt);
+  const isAvoid = entry.t === '❌';
+
+  if (isAvoid) {
+    return { valid: true };
+  }
+
+  if (!hasTechnical && txt.length < 40) {
+    return { valid: false, reason: 'lacks technical substance' };
+  }
+
+  return { valid: true };
+}
+
+/**
+ * Classify scope of knowledge entry
+ * @param {Object} entry - Knowledge entry
+ * @returns {'global' | 'task'}
+ */
+export function classifyScope(entry) {
+  if (entry.t === '❌') return 'global';
+
+  if (entry.cat === 'handoff') return 'task';
+
+  if (/phase \d+/i.test(entry.txt || '')) return 'task';
+
+  if (entry.t === '✅') return 'global';
+
+  const taskMarkers = /current task|this phase|iteration|specific to|only for/i;
+  if (taskMarkers.test(entry.txt || '')) return 'task';
+
+  const globalCats = ['arch', 'config', 'security', 'performance', 'api', 'db'];
+  if (globalCats.includes(entry.cat)) return 'global';
+
+  return 'task';
+}
+
+/**
+ * Append knowledge entry with validation and scope classification
+ * @param {string} knowledgePath - Path to KNOWLEDGE.jsonl
+ * @param {Object} entry - Entry to append
+ * @param {string|null} cwd - Optional working directory for logging
+ * @returns {{appended: boolean, reason?: string, scope?: string}}
+ */
+export function appendKnowledgeValidated(knowledgePath, entry, cwd = null) {
+  const validation = validateEntry(entry);
+  if (!validation.valid) {
+    const logCwd = cwd || deriveCwd(knowledgePath);
+    log('debug', '[knowledge]', `Entry rejected: ${validation.reason} - "${(entry.txt || '').slice(0, 30)}..."`, logCwd);
+    return { appended: false, reason: validation.reason };
+  }
+
+  const scope = classifyScope(entry);
+  const enriched = { ...entry, scope };
+  const appended = appendKnowledge(knowledgePath, enriched, cwd);
+
+  return { appended, scope };
 }
 
 /**
@@ -169,7 +259,23 @@ export function localCompact(knowledgePath, maxEntries = 100, cwd = null) {
 
   // Sort by priority (❌ first) then by timestamp
   const priorityOrder = { '❌': 0, '✅': 1, 'ℹ️': 2 };
-  const compacted = Array.from(seen.values())
+  let compacted = Array.from(seen.values())
+    .sort((a, b) => {
+      const pA = priorityOrder[a.t] ?? 3;
+      const pB = priorityOrder[b.t] ?? 3;
+      if (pA !== pB) return pA - pB;
+      return new Date(b.ts) - new Date(a.ts);
+    });
+
+  // Apply scope-aware retention: global:50, task:20
+  const globalEntries = compacted.filter(e => e.scope === 'global' || !e.scope);
+  const taskEntries = compacted.filter(e => e.scope === 'task');
+
+  const retainedGlobal = globalEntries.slice(0, 50);
+  const retainedTask = taskEntries.slice(0, 20);
+
+  // Merge back, maintaining priority order
+  compacted = [...retainedGlobal, ...retainedTask]
     .sort((a, b) => {
       const pA = priorityOrder[a.t] ?? 3;
       const pB = priorityOrder[b.t] ?? 3;

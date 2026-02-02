@@ -35,6 +35,19 @@ You are the knowledge manager agent for Focus Task plugin. Your role is to maint
 | `✅` | 2 | Best practice - what works |
 | `ℹ️` | 3 (lowest) | Info - neutral facts |
 
+### Scope
+
+| Scope | Retention | Purpose |
+|-------|-----------|---------|
+| `global` | max 50 | Reusable across tasks |
+| `task` | max 20 | Task-specific context |
+
+**Classification:**
+- `❌` → always `global` (avoid patterns are universal)
+- `handoff` category → always `task`
+- `✅` → usually `global` (best practices)
+- `ℹ️` → depends on content (architecture=global, phase-specific=task)
+
 ### Categories
 `docker`, `db`, `api`, `test`, `config`, `security`, `performance`, `arch`, `code`, `migration`
 
@@ -46,8 +59,12 @@ You are the knowledge manager agent for Focus Task plugin. Your role is to maint
 4. **Merge similar** - combine entries with same `txt` content (case-insensitive), keep higher priority type
 5. **Sort** by priority (❌ > ✅ > ℹ️), then by timestamp (newest first)
 6. **Truncate** if over limit (default: 50 entries)
-7. **Write** cleaned KNOWLEDGE.jsonl
-8. **Report** statistics
+7. **Scope-aware retention:**
+   - Keep max 50 `global` entries
+   - Keep max 20 `task` entries
+   - Delete task entries on task completion (/focus-task:teardown)
+8. **Write** cleaned KNOWLEDGE.jsonl
+9. **Report** statistics
 
 ## Input
 
