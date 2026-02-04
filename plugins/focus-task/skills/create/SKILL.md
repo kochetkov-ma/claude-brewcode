@@ -38,6 +38,7 @@ Create Task — "description" or path to requirements
 
 | Input | Action |
 |-------|--------|
+| `$ARGUMENTS` empty | Read `.claude/TASK.md` → first line = path → read that file as requirements |
 | `$ARGUMENTS` has text | Use as task description |
 | `$ARGUMENTS` has path | Read file as task description |
 

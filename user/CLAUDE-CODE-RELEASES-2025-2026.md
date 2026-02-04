@@ -15,12 +15,69 @@
 | **MCP auto:N** | 2.1.10 | ⭐⭐⭐ Автоматический порог включения инструментов |
 | **PR Review Status** | 2.1.20 | ⭐⭐⭐ Индикатор статуса PR в footer |
 | **--from-pr Resume** | 2.1.27 | ⭐⭐⭐ Resume сессий по PR номеру/URL |
+| **PDF Pages Parameter** | 2.1.30 | ⭐⭐⭐ Чтение конкретных страниц PDF |
+| **/debug Command** | 2.1.30 | ⭐⭐ Claude troubleshoots текущую сессию |
+
+---
+
+## Февраль 2026
+
+### 2.1.31 (4 февраля 2026) — Текущая версия
+
+**Новое:**
+- Hint при выходе из сессии — как продолжить разговор позже
+- Full-width (zenkaku) space input из японской IME в checkbox selection
+
+**Исправления:**
+- PDF too large errors больше не блокируют сессию навсегда
+- Bash команды некорректно сообщали "Read-only file system" при sandbox mode
+- Crash при входе в plan mode, если project config в `~/.claude.json` отсутствовал
+- `temperatureOverride` игнорировался в streaming API path (всегда использовался default 1)
+- LSP shutdown/exit совместимость с strict language servers (reject null params)
+
+**Улучшения:**
+- System prompts чётче направляют модель к использованию Read, Edit, Glob, Grep вместо bash (cat, sed, grep, find)
+- PDF и request size error messages показывают актуальные лимиты (100 pages, 20MB)
+- Уменьшен layout jitter в терминале при появлении/исчезновении spinner
+- Убран misleading Anthropic API pricing из model selector для Bedrock/Vertex/Foundry users
+
+---
+
+### 2.1.30 (3 февраля 2026)
+
+**Новое:**
+- `pages` параметр в Read tool для PDF — чтение конкретных страниц (напр. `pages: "1-5"`)
+- Большие PDF (>10 pages) возвращают lightweight reference при `@` mention вместо inline в контекст
+- Pre-configured OAuth client credentials для MCP серверов без Dynamic Client Registration (Slack)
+- `/debug` команда — Claude помогает troubleshoot текущую сессию
+- Дополнительные `git log` и `git show` флаги в read-only mode (--topo-order, --cherry-pick, --format, --raw)
+- Token count, tool uses, duration metrics в результатах Task tool
+- Reduced motion mode в config
+
+**Исправления:**
+- Phantom "(no content)" text blocks в API history — меньше token waste
+- Prompt cache не инвалидировался при изменении tool descriptions/input schemas
+- 400 errors после `/login` когда conversation содержал thinking blocks
+- Hang при resume сессий с corrupted transcript (parentUuid cycles)
+- Rate limit message показывал неверный "/upgrade" для Max 20x users
+- Permission dialogs не крали focus при активном вводе
+- Subagents не могли использовать SDK-provided MCP tools
+- Regression: Windows users с `.bashrc` не могли запускать bash commands
+
+**Улучшения:**
+- Memory usage для `--resume` сокращён на 68% (stat-based loading)
+- `TaskStop` показывает описание остановленной команды вместо "Task stopped"
+- `/model` выполняется немедленно вместо queue
+
+**VS Code:**
+- Multiline input support в "Other" text input (Shift+Enter для новых строк)
+- Фикс duplicate sessions в session list
 
 ---
 
 ## Январь 2026
 
-### 2.1.29 (31 января 2026) — Текущая версия
+### 2.1.29 (31 января 2026)
 
 **Исправления:**
 - Startup performance при resume сессий с `saved_hook_context`

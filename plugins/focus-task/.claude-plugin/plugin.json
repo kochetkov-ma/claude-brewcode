@@ -1,6 +1,6 @@
 {
   "name": "focus-task",
-  "version": "2.1.2",
+  "version": "2.2.0",
   "description": "Infinite task execution via hooks-only architecture for Claude Code",
   "author": {
     "name": "Maksim Kochetkov"
