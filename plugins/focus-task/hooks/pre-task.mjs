@@ -137,7 +137,7 @@ async function main() {
           role = 'TEST';
         } else if (name.includes('review') || name.includes('check') || name.includes('reviewer')) {
           role = 'REVIEW';
-        } else if (name.includes('dev') || name.includes('expert') || name === 'developer') {
+        } else if (name.includes('dev') || name.includes('architect') || name.includes('expert') || name === 'developer') {
           role = 'DEV';
         }
 

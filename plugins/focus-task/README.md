@@ -2,7 +2,7 @@
 
 **Бесконечный контекст для Claude Code**
 
-Выполняет сложные задачи, превышающие лимит одной сессии, через автоматическую передачу состояния между компактами контекста.
+Выполняет задачи, превышающие лимит одной сессии, через автоматическую передачу состояния между компактами контекста.
 
 ---
 
@@ -10,11 +10,6 @@
 
 - [Компоненты плагина](#компоненты-плагина)
 - [Категории команд](#категории-команд)
-  - [Setup & Teardown](#1-setup--teardown-настройка)
-  - [Task Lifecycle](#2-task-lifecycle-жизненный-цикл-задачи)
-  - [Code Quality](#3-code-quality-качество-кода)
-  - [Utilities](#4-utilities-утилиты)
-  - [Installation](#5-installation-установка-компонентов)
 - [Агенты](#агенты)
 - [Система хуков](#система-хуков)
 - [Архитектура бесконечного контекста](#архитектура-бесконечного-контекста)
@@ -29,7 +24,7 @@
 | Компонент | Кол-во | Назначение |
 |-----------|--------|------------|
 | **Скиллы** | 9 | Команды для работы с задачами |
-| **Агенты** | 3 | ft-coordinator, ft-knowledge-manager, ft-grepai-configurator |
+| **Агенты** | 4 | ft-coordinator, ft-knowledge-manager, ft-grepai-configurator, ft-auto-sync-processor |
 | **Хуки** | 7 файлов / 5 событий | SessionStart (2), PreToolUse (2), PostToolUse (1), PreCompact (1), Stop (1) |
 | **Шаблоны** | 5 | TASK.md, SPEC.md, KNOWLEDGE.jsonl, отчеты |
 
@@ -39,26 +34,21 @@
 
 ### 1. Setup & Teardown (Настройка)
 
-Инициализация и удаление конфигурации плагина в проекте.
-
 #### `/focus-task:setup`
 
-Анализирует проект и создает адаптированные шаблоны под технологический стек.
+Анализирует проект и создает адаптированные шаблоны.
 
 ```bash
 /focus-task:setup                           # Стандартный запуск
 ```
 
-**Что делает:**
-- Анализирует структуру проекта (языки, фреймворки, тесты, БД)
-- Детектирует проектные агенты из `.claude/agents/`
-- Генерирует адаптированные шаблоны с паттернами проекта
-- Адаптирует review-скилл под технологии проекта
-
-**Результат:**
-- `.claude/tasks/templates/` — адаптированные шаблоны
-- `.claude/tasks/cfg/focus-task.config.json` — конфигурация
-- `.claude/skills/focus-task-review/` — адаптированный ревью
+| Действие | Результат |
+|----------|-----------|
+| Анализ структуры | Языки, фреймворки, тесты, БД |
+| Детекция агентов | `.claude/agents/` |
+| Генерация шаблонов | `.claude/tasks/templates/` |
+| Адаптация ревью | `.claude/skills/focus-task-review/` |
+| Конфигурация | `.claude/tasks/cfg/focus-task.config.json` |
 
 **Модель:** opus
 
@@ -66,22 +56,18 @@
 
 #### `/focus-task:teardown`
 
-Удаляет все файлы, созданные `/focus-task:setup`. Сохраняет задачи и отчеты.
+Удаляет файлы, созданные setup. Сохраняет задачи и отчеты.
 
 ```bash
 /focus-task:teardown                        # Полная очистка
-/focus-task:teardown --dry-run              # Предпросмотр без удаления
+/focus-task:teardown --dry-run              # Предпросмотр
 ```
 
-**Что удаляется:**
-- `.claude/tasks/templates/`
-- `.claude/tasks/cfg/focus-task.config.json`
-- `.claude/skills/focus-task-review/`
-
-**Что сохраняется:**
-- Файлы задач (`*_TASK.md`, `*_KNOWLEDGE.jsonl`)
-- Отчеты (`reports/`)
-- Правила (`.claude/rules/`)
+| Удаляется | Сохраняется |
+|-----------|-------------|
+| `.claude/tasks/templates/` | `*_TASK.md`, `*_KNOWLEDGE.jsonl` |
+| `.claude/tasks/cfg/focus-task.config.json` | `reports/` |
+| `.claude/skills/focus-task-review/` | `.claude/rules/` |
 
 **Модель:** haiku
 
@@ -89,28 +75,29 @@
 
 ### 2. Task Lifecycle (Жизненный цикл задачи)
 
-Создание и выполнение задач с бесконечным контекстом.
-
 #### `/focus-task:create`
 
-Создает задачу с параллельным исследованием кодовой базы 5-10 агентами.
+Создает задачу с параллельным исследованием кодовой базы (5-10 агентов).
 
 ```bash
 /focus-task:create "Реализовать авторизацию с JWT"    # Текстовое описание
 /focus-task:create requirements.md                     # Из файла
 ```
 
-**Workflow (10 шагов):**
-1. Проверка адаптированных шаблонов
-2. Разбиение исследования на 5-10 областей
-3. Параллельное исследование агентами (в ОДНОМ сообщении)
-4. Консолидация находок в SPEC
-5. Ревью SPEC с итерационным циклом
-6. Генерация TASK.md с фазами из SPEC
-7. Создание KNOWLEDGE.jsonl (пустой)
-8. Инициализация директории отчетов
-9. Ревью плана кворумом 3 агентов (2/3 консенсус)
-10. Валидация и обновление quick reference
+**Workflow:**
+
+| Шаг | Действие |
+|-----|----------|
+| 1 | Проверка адаптированных шаблонов |
+| 2 | Разбиение исследования на 5-10 областей |
+| 3 | Параллельное исследование агентами (в ОДНОМ сообщении) |
+| 4 | Консолидация находок в SPEC |
+| 5 | Ревью SPEC с итерационным циклом |
+| 6 | Генерация TASK.md с фазами из SPEC |
+| 7 | Создание KNOWLEDGE.jsonl (пустой) |
+| 8 | Инициализация директории отчетов |
+| 9 | Ревью плана кворумом 3 агентов (2/3 консенсус) |
+| 10 | Валидация и обновление quick reference |
 
 **Результат:**
 - `.claude/tasks/{TS}_{NAME}_TASK.md`
@@ -132,20 +119,30 @@
 /focus-task:start .claude/tasks/20260130_150000_auth_TASK.md
 ```
 
-**Механизм бесконечного контекста:**
-- PreToolUse: инъекция знаний в промпт каждого агента
-- PostToolUse: напоминание о протоколе координатора
-- PreCompact: сохранение состояния при 90% контекста
-- Stop: блокировка выхода до завершения задачи
+<hooks_mechanism>
 
-**Цикл выполнения:**
-1. Резолв пути задачи
-2. Инициализация через ft-coordinator
-3. Загрузка контекста (TASK.md, KNOWLEDGE.jsonl)
-4. Выполнение фаз (агент → отчет → координатор)
-5. Мониторинг контекста (компакт при 90%)
-6. Финальное ревью (3+ агента)
-7. Завершение (извлечение правил, статус finished)
+| Хук | Действие |
+|-----|----------|
+| PreToolUse | Инъекция знаний в промпт каждого агента |
+| PostToolUse | Напоминание о протоколе координатора |
+| PreCompact | Сохранение состояния при 90% контекста |
+| Stop | Блокировка выхода до завершения задачи |
+
+</hooks_mechanism>
+
+<execution_cycle>
+
+| Шаг | Действие |
+|-----|----------|
+| 1 | Резолв пути задачи |
+| 2 | Инициализация через ft-coordinator |
+| 3 | Загрузка контекста (TASK.md, KNOWLEDGE.jsonl) |
+| 4 | Выполнение фаз (агент → отчет → координатор) |
+| 5 | Мониторинг контекста (компакт при 90%) |
+| 6 | Финальное ревью (3+ агента) |
+| 7 | Завершение (извлечение правил, статус finished) |
+
+</execution_cycle>
 
 **Обязательный 2-step протокол после каждого агента:**
 ```
@@ -153,15 +150,13 @@
 2. CALL ft-coordinator → extract knowledge, update status, output NEXT ACTION
 ```
 
-**NEXT ACTION протокол:** Coordinator ОБЯЗАН завершать вывод секцией `## ⛔ NEXT ACTION` с явным указанием следующего шага (какую фазу запустить, что исправить, или завершить задачу).
+**NEXT ACTION протокол:** Coordinator ОБЯЗАН завершать вывод секцией `## ⛔ NEXT ACTION` с явным указанием следующего шага.
 
 **Модель:** opus
 
 ---
 
 ### 3. Code Quality (Качество кода)
-
-Код-ревью и извлечение правил.
 
 #### `/focus-task:review`
 
@@ -175,12 +170,13 @@
 /focus-task:review path/to/review.md --quorum 5-3      # Инструкции из файла
 ```
 
-**Формат quorum:** `-q G-N-M` или `-q N-M` (полный: `--quorum`)
+**Формат quorum:** `-q G-N-M` или `-q N-M`
 - `G` — количество групп (2-5, авто-выбор)
 - `N` — агентов в группе
 - `M` — порог консенсуса
 
-**5 групп детекции:**
+<review_groups>
+
 | Группа | Фокус | Агент |
 |--------|-------|-------|
 | main-code | Логика, архитектура, безопасность | reviewer |
@@ -189,13 +185,18 @@
 | security | Auth, инъекции, OWASP | reviewer |
 | config | Инфра, секреты | reviewer |
 
+</review_groups>
+
 **Workflow:**
-1. **Study** — 5-10 Explore агентов картируют риски
-2. **Formation** — формирование 2-5 групп
-3. **Parallel Review** — G×N агентов параллельно
-4. **Quorum** — фильтрация по консенсусу M/N
-5. **DoubleCheck** — 1 ревьюер верифицирует находки
-6. **Report** — приоритизированный отчет
+
+| Шаг | Действие |
+|-----|----------|
+| 1. Study | 5-10 Explore агентов картируют риски |
+| 2. Formation | Формирование 2-5 групп |
+| 3. Parallel Review | G×N агентов параллельно |
+| 4. Quorum | Фильтрация по консенсусу M/N |
+| 5. DoubleCheck | 1 ревьюер верифицирует находки |
+| 6. Report | Приоритизированный отчет |
 
 **Приоритеты находок:**
 - **Priority 1:** Quorum + DoubleCheck (высшая уверенность)
@@ -217,10 +218,15 @@
 /focus-task:rules .claude/tasks/20260130_auth_KNOWLEDGE.jsonl
 ```
 
-**Категоризация:**
-- `❌` → `avoid.md` (антипаттерны)
-- `✅` → `best-practice.md` (лучшие практики)
-- `ℹ️` → по содержимому
+<rules_categorization>
+
+| Тип | Файл | Формат таблицы |
+|-----|------|----------------|
+| `❌` | `avoid.md` | `\| # \| Avoid \| Instead \| Why \|` |
+| `✅` | `best-practice.md` | `\| # \| Practice \| Context \| Source \|` |
+| `ℹ️` | По содержимому | - |
+
+</rules_categorization>
 
 **Оптимизация:**
 - Дедупликация по семантической схожести
@@ -228,54 +234,44 @@
 - Приоритизация по импакту
 - Лимит 20 строк на файл
 
-**Формат таблиц:**
-
-`avoid.md`:
-```markdown
-| # | Avoid | Instead | Why |
-```
-
-`best-practice.md`:
-```markdown
-| # | Practice | Context | Source |
-```
-
 **Модель:** sonnet
 
 ---
 
 ### 4. Utilities (Утилиты)
 
-Вспомогательные инструменты.
+#### `/focus-task:auto-sync`
 
-#### `/focus-task:doc`
-
-Генерирует и обновляет документацию через параллельный анализ кодовой базы.
+Universal documentation system - updates, syncs all Claude Code documents.
 
 ```bash
-/focus-task:doc                                        # Обновить ВСЕ документы
-/focus-task:doc sync                                   # Синхронизировать .claude/**
-/focus-task:doc create README.md                       # Создать новый файл
-/focus-task:doc update docs/                           # Обновить директорию
-/focus-task:doc analyze src/api update docs/API.md    # Анализ src/api -> docs/API.md
+/focus-task:auto-sync                                  # Авто-определение и sync
+/focus-task:auto-sync status                           # Статус всех документов
+/focus-task:auto-sync init path/to/file.md             # Добавить файл в auto-sync
+/focus-task:auto-sync init path/to/file.md "prompt"    # С кастомным протоколом
+/focus-task:auto-sync sync                             # Синхронизировать все документы
+/focus-task:auto-sync global                           # Обновить ~/.claude/ документы
+/focus-task:auto-sync project                          # Обновить .claude/ документы
+/focus-task:auto-sync path <path>                      # Обновить конкретный путь
 ```
 
 | Режим | Описание |
 |-------|----------|
-| (пусто) / ALL | Обновить все .md файлы проекта |
-| `sync` | Синхронизировать .claude/ (CLAUDE.md, agents, skills) |
-| `create <path>` | Создать новый документ |
-| `update <path>` | Обновить существующий |
-| `analyze <src> update <target>` | Анализ исходников → документы |
+| `status` | Диагностический отчёт о состоянии INDEX |
+| `init <path> [prompt]` | Добавить auto-sync тег + кастомный протокол к файлу |
+| (пусто) / `sync` | Авто-определение и синхронизация всех документов |
+| `global` | Обновить глобальные документы (~/.claude/) |
+| `project` | Обновить проектные документы (.claude/) |
+| `path <path>` | Обновить конкретный путь |
 
-**Workflow:**
-1. **Segmentation** — разбиение на 5-10 блоков (services, controllers, config, etc.)
-2. **Parallel Study** — Explore агенты анализируют каждый блок
-3. **Discovery** — поиск существующей документации, идентификация пробелов
-4. **Generation** — developer агенты создают/обновляют документы
-5. **Optimization** — `/text-optimize` для .claude/**/*.md и CLAUDE.md
+**Features:**
+- LLM-optimized JSONL INDEX for tracking documents
+- Auto-detects document types (skill, agent, doc, rule)
+- Parallel processing with `ft-auto-sync-processor` agent
+- Custom protocols via `<auto-sync-protocol>` block
+- Stale detection (7 days threshold)
 
-**Результат:** `.claude/tasks/reports/doc_report_{TS}.md`
+**Результат:** INDEX.jsonl updated, documents synced
 
 **Модель:** opus
 
@@ -310,12 +306,15 @@
 - Модель bge-m3 установлена
 
 **Setup workflow:**
-1. Проверка инфраструктуры
-2. Настройка MCP
-3. Генерация конфига (ft-grepai-configurator)
-4. Инициализация индекса
-5. Создание правила `.claude/rules/grepai-first.md`
-6. Верификация
+
+| Шаг | Действие |
+|-----|----------|
+| 1 | Проверка инфраструктуры |
+| 2 | Настройка MCP |
+| 3 | Генерация конфига (ft-grepai-configurator) |
+| 4 | Инициализация индекса |
+| 5 | Создание правила `.claude/rules/grepai-first.md` |
+| 6 | Верификация |
 
 **Модель:** sonnet
 
@@ -323,17 +322,15 @@
 
 ### 5. Installation (Установка компонентов)
 
-Интерактивный установщик зависимостей плагина.
-
 #### `/focus-task:install`
 
-Проверяет и устанавливает все необходимые компоненты.
+Проверяет и устанавливает необходимые компоненты.
 
 ```bash
 /focus-task:install                           # Интерактивный режим
 ```
 
-**Компоненты:**
+<components>
 
 | Компонент | Тип | Назначение |
 |-----------|-----|------------|
@@ -344,13 +341,18 @@
 | bge-m3 | optional | Мультиязычная модель (~1.2GB) |
 | grepai | optional | CLI семантического поиска |
 
-**Workflow (6 фаз):**
-1. **State Check** — состояние всех компонентов
-2. **Updates Check** — доступные обновления (brew update)
-3. **Timeout Check** — проверка symlink для timeout
-4. **Required** — установка обязательных (brew, coreutils, jq)
-5. **Semantic Search** — опциональная установка grepai
-6. **Summary** — финальный отчёт
+</components>
+
+**Workflow:**
+
+| Фаза | Действие |
+|------|----------|
+| 1. State Check | Состояние всех компонентов |
+| 2. Updates Check | Доступные обновления (brew update) |
+| 3. Timeout Check | Проверка symlink для timeout |
+| 4. Required | Установка обязательных (brew, coreutils, jq) |
+| 5. Semantic Search | Опциональная установка grepai |
+| 6. Summary | Финальный отчёт |
 
 **Модель:** sonnet
 
@@ -368,11 +370,13 @@
 
 Центральный оркестратор задачи:
 
-- **Initialize:** Валидация структуры, создание lock-файла, статус → `in progress`
-- **Phase Update:** Обновление статуса фазы, проверка отчетов на диске
-- **Knowledge Extract:** Извлечение 3-10 записей из отчета агента
-- **MANIFEST Update:** Запись о завершении фазы/итерации
-- **Finalize:** Генерация FINAL.md, статус → `finished`
+| Функция | Действие |
+|---------|----------|
+| **Initialize** | Валидация структуры, создание lock-файла, статус → `in progress` |
+| **Phase Update** | Обновление статуса фазы, проверка отчетов на диске |
+| **Knowledge Extract** | Извлечение 3-10 записей из отчета агента |
+| **MANIFEST Update** | Запись о завершении фазы/итерации |
+| **Finalize** | Генерация FINAL.md, статус → `finished` |
 
 **NEXT ACTION протокол (обязательный):**
 
@@ -398,23 +402,28 @@
 
 Поддержание качества KNOWLEDGE.jsonl:
 
-- **Deduplicate:** Удаление записей с идентичным `txt`
-- **Merge:** Объединение case-insensitive дубликатов
-- **Prioritize:** Сортировка по типу: `❌` > `✅` > `ℹ️`
-- **Truncate:** Удаление старых/низкоприоритетных при переполнении (default: 50)
+| Операция | Действие |
+|----------|----------|
+| **Deduplicate** | Удаление записей с идентичным `txt` |
+| **Merge** | Объединение case-insensitive дубликатов |
+| **Prioritize** | Сортировка по типу: `❌` > `✅` > `ℹ️` |
+| **Truncate** | Удаление старых/низкоприоритетных при переполнении (default: 50) |
 
 ### ft-grepai-configurator
 
 Генерация оптимальной конфигурации grepai:
 
-- **5 параллельных Explore агентов:**
-  1. LANGUAGES — языки, фреймворки, расширения
-  2. TEST PATTERNS — тестовые директории
-  3. GENERATED CODE — автогенерация
-  4. SOURCE STRUCTURE — структура исходников
-  5. IGNORE PATTERNS — .gitignore, build outputs
+**5 параллельных Explore агентов:**
 
-- **Генерирует:** `.grepai/config.yaml` с embedder, chunking, trace, ignore
+| Agent # | Фокус |
+|---------|-------|
+| 1 | LANGUAGES — языки, фреймворки, расширения |
+| 2 | TEST PATTERNS — тестовые директории |
+| 3 | GENERATED CODE — автогенерация |
+| 4 | SOURCE STRUCTURE — структура исходников |
+| 5 | IGNORE PATTERNS — .gitignore, build outputs |
+
+**Генерирует:** `.grepai/config.yaml` с embedder, chunking, trace, ignore
 
 ---
 
@@ -458,10 +467,12 @@ grepai-session.mjs → Авто-старт grepai watch если .grepai/ сущ
 
 ### PreToolUse (pre-task.mjs)
 
-1. Проверка lock-файла (задача активна?)
-2. Загрузка KNOWLEDGE.jsonl
-3. Компрессия до `## K` формата (≤500 токенов)
-4. Инъекция в промпт суб-агента
+| Шаг | Действие |
+|-----|----------|
+| 1 | Проверка lock-файла (задача активна?) |
+| 2 | Загрузка KNOWLEDGE.jsonl |
+| 3 | Компрессия до `## K` формата (≤500 токенов) |
+| 4 | Инъекция в промпт суб-агента |
 
 ### PostToolUse (post-task.mjs)
 
@@ -477,7 +488,7 @@ Fires after every Task tool call. Enforces the 2-step protocol and manages sessi
 | System agent (tester, reviewer) | Pass through (no reminder) |
 | No lock / other session | Pass through |
 
-**После ft-coordinator:** Привязка session_id к lock-файлу. Это позволяет stop-хуку определить, что текущая сессия владеет задачей.
+**После ft-coordinator:** Привязка session_id к lock-файлу. Позволяет stop-хуку определить, что текущая сессия владеет задачей.
 
 **После обычного агента:** Короткое напоминание обязательного протокола:
 ```
@@ -492,13 +503,15 @@ Fires after every Task tool call. Enforces the 2-step protocol and manages sessi
 
 При достижении 90% контекста:
 
-1. Валидация состояния (reports/, MANIFEST.md)
-2. Компактификация KNOWLEDGE.jsonl
-3. Запись handoff entry
-4. Статус → `handoff`
-5. Сохранение state в `.focus-task.state.json`
+| Шаг | Действие |
+|-----|----------|
+| 1 | Валидация состояния (reports/, MANIFEST.md) |
+| 2 | Компактификация KNOWLEDGE.jsonl |
+| 3 | Запись handoff entry |
+| 4 | Статус → `handoff` |
+| 5 | Сохранение state в `.focus-task.state.json` |
 
-**Важно:** Session ID НЕ меняется после компакта. Та же сессия продолжается со сжатым контекстом.
+> **Note:** Session ID НЕ меняется после компакта. Та же сессия продолжается со сжатым контекстом.
 
 ### Stop (stop.mjs)
 
@@ -565,7 +578,7 @@ Fires after every Task tool call. Enforces the 2-step protocol and manages sessi
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**Что сохраняется между компактами:**
+**Сохраняется между компактами:**
 - Текущая фаза и шаг (в TASK.md)
 - Все накопленные знания (KNOWLEDGE.jsonl)
 - Файл задачи с обновленным статусом
@@ -692,4 +705,7 @@ Fires after every Task tool call. Enforces the 2-step protocol and manages sessi
 | [start](skills/start/SKILL.md) | Task execution |
 | [review](templates/skills/review/SKILL.md.template) | Multi-agent code review (template) |
 | [grepai](skills/grepai/SKILL.md) | Semantic search setup |
+| [auto-sync](skills/auto-sync/SKILL.md) | Universal document sync |
 | [install](skills/install/SKILL.md) | Prerequisites installation |
+| **Agents (cont.)** | |
+| [ft-auto-sync-processor](agents/ft-auto-sync-processor.md) | Document processing for auto-sync |

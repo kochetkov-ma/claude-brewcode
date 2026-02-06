@@ -1,0 +1,31 @@
+# Auto-Sync INDEX - DO NOT EDIT MANUALLY
+# Format: {"p":"path","t":"type","m":mtime,"h":"hash","pr":"protocol","v":"version","u":"updated","s":"status"}
+#
+# Fields:
+#   p  - Relative path from project root
+#   t  - Type: skill, agent, doc, rule
+#   m  - File mtime as Unix epoch (seconds)
+#   h  - Content hash (SHA256[:8])
+#   pr - Protocol name (default, custom-name)
+#   v  - Document version from frontmatter
+#   u  - Last sync timestamp (ISO8601)
+#   s  - Status: ok, stale, error
+#
+# Types:
+#   skill - Has name: focus-task:* or name: <project>:* in frontmatter
+#   agent - Has tools: AND model: in frontmatter
+#   rule  - Path contains /rules/
+#   doc   - Default (any markdown with auto-sync tag)
+#
+# Status:
+#   ok    - Synced within threshold
+#   stale - Older than threshold (default: 7 days)
+#   error - Sync failed, needs attention
+#
+# Stale threshold: 7 days (configurable in focus-task.config.json)
+#
+# Example entries (delete before use):
+{"p":"skills/example/SKILL.md","t":"skill","m":1706745600,"h":"a1b2c3d4","pr":"default","v":"1.0.0","u":"2026-02-05T14:00:00Z","s":"ok"}
+{"p":"agents/example-agent.md","t":"agent","m":1706745600,"h":"b2c3d4e5","pr":"default","v":"1.0.0","u":"2026-02-05T14:00:00Z","s":"ok"}
+{"p":".claude/rules/api-guidelines.md","t":"rule","m":1706745600,"h":"c3d4e5f6","pr":"default","v":"1.0.0","u":"2026-02-05T14:00:00Z","s":"stale"}
+{"p":"docs/architecture.md","t":"doc","m":1706745600,"h":"d4e5f607","pr":"default","v":"2.1.0","u":"2026-01-15T10:30:00Z","s":"ok"}
