@@ -1,6 +1,6 @@
 # Claude Code Task Manager: Полный Гайд
 
-> **Версия:** Claude Code 2.1.21+
+> **Версия:** Claude Code 2.1.37
 > **Дата:** Февраль 2026
 > **Язык:** Русский
 
@@ -573,6 +573,8 @@ TaskCreate({
 | `tester` | Все | Тестирование |
 | `reviewer` | Read-only | Code review |
 
+**Начиная с 2.1.33+:** Агенты поддерживают `memory` frontmatter для persistent memory. Доступные scope: `user`, `project`, `local`. Это позволяет агентам сохранять контекст между сессиями.
+
 ---
 
 ## 9. Работа с неуспешными задачами
@@ -665,6 +667,15 @@ TaskUpdate({ taskId: "3", addBlockedBy: ["4"] })  // #3 теперь ждёт #4
 
 Субагент сам читает файл при выполнении. **Lazy loading отсутствует** — загрузка происходит в момент обращения.
 
+### Новые возможности агентов (2.1.33+)
+
+| Возможность | Описание |
+|-------------|----------|
+| `memory` frontmatter | Persistent memory с scope: `user`, `project`, `local` |
+| `Task(agent_type)` restriction | Ограничение спавна субагентов в frontmatter |
+| `TeammateIdle` hook | Событие для координации agent teams |
+| `TaskCompleted` hook | Событие при завершении задачи |
+
 ### ID задач
 
 - **Автоинкремент:** 1, 2, 3, ...
@@ -683,6 +694,8 @@ TaskUpdate({ taskId: "3", addBlockedBy: ["4"] })  // #3 теперь ждёт #4
 | `PostToolUse` | После вызова инструмента | Логирование, cleanup |
 | `PreCompact` | Перед компактизацией | Сохранение состояния |
 | `Stop` | При завершении ответа | Проверка, блокировка выхода |
+| `TeammateIdle` | Teammate agent idle (agent teams) | Координация мультиагентов |
+| `TaskCompleted` | Задача завершена (agent teams) | Координация мультиагентов |
 
 ### Пример конфигурации для задач
 
@@ -893,7 +906,7 @@ TaskList()
 Скопируйте и выполните в Claude Code:
 
 ```
-Обнови документ user/CLAUDE-CODE-TASK-MANAGER-GUIDE.md свежей информацией.
+Обнови документ user/features/CLAUDE-CODE-TASK-MANAGER-GUIDE.md свежей информацией.
 Запусти параллельно 5 агентов для поиска:
 
 1. Официальная документация Anthropic по Task Manager
@@ -982,3 +995,4 @@ Task({
 | Дата | Версия CC | Изменения |
 |------|-----------|-----------|
 | 2026-02-01 | 2.1.21+ | Первоначальная версия документа |
+| 2026-02-08 | 2.1.37 | Обновлена версия, добавлены хуки TeammateIdle/TaskCompleted, memory frontmatter |

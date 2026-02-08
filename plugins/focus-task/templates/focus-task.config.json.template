@@ -25,10 +25,19 @@
       "ft-coordinator", "ft-knowledge-manager",
       "Explore", "Plan", "Bash", "general-purpose",
       "claude-code-guide", "skill-creator", "agent-creator",
-      "prompt-optimizer", "rules-organizer", "statusline-setup"
+      "text-optimizer", "rules-organizer", "statusline-setup"
     ]
   },
   "constraints": {
     "enabled": true
+  },
+  "autoSync": {
+    "intervalDays": 7,
+    "retention": {
+      "maxEntries": 200,
+      "removeOrphansAfterDays": 30
+    },
+    "optimize": false,
+    "parallelAgents": 5
   }
 }

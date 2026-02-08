@@ -4,7 +4,7 @@ description: Creates focused task with SPEC and KNOWLEDGE files through parallel
 user-invocable: true
 argument-hint: "Task description or path to requirements file"
 allowed-tools: Read, Write, Glob, Grep, Bash, Task, AskUserQuestion
-context: fork
+context: session
 model: opus
 ---
 

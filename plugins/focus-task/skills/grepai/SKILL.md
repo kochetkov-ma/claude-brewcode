@@ -4,7 +4,7 @@ description: Semantic search setup. Triggers - "grepai", "semantic search", "set
 user-invocable: true
 argument-hint: "[setup|status|start|stop|reindex|optimize|upgrade]"
 allowed-tools: Read, Write, Edit, Bash, Task
-context: fork
+context: session
 model: sonnet
 ---
 

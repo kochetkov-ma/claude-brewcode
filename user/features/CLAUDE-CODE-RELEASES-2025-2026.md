@@ -1,4 +1,4 @@
-# Claude Code Release Notes (Декабрь 2025 — Январь 2026)
+# Claude Code Release Notes (Декабрь 2025 — Февраль 2026)
 
 > Полный changelog с пояснениями по ключевым фичам
 
@@ -17,12 +17,90 @@
 | **--from-pr Resume** | 2.1.27 | ⭐⭐⭐ Resume сессий по PR номеру/URL |
 | **PDF Pages Parameter** | 2.1.30 | ⭐⭐⭐ Чтение конкретных страниц PDF |
 | **/debug Command** | 2.1.30 | ⭐⭐ Claude troubleshoots текущую сессию |
+| **Opus 4.6** | 2.1.32 | Claude Opus 4.6 model |
+| **Agent Teams** | 2.1.32 | Multi-agent collaboration (research preview) |
+| **Auto-Memories** | 2.1.32 | Claude automatically records and recalls memories |
+| **Fast Mode Opus 4.6** | 2.1.36 | Fast mode for Opus 4.6 model |
 
 ---
 
 ## Февраль 2026
 
-### 2.1.31 (4 февраля 2026) — Текущая версия
+### 2.1.37 (7 февраля 2026) — Текущая версия
+
+**Исправления:**
+- `/fast` не был доступен сразу после включения `/extra-usage`
+
+---
+
+### 2.1.36 (7 февраля 2026)
+
+**Новое:**
+- Fast mode теперь доступен для Opus 4.6
+
+---
+
+### 2.1.34 (6 февраля 2026)
+
+**Исправления:**
+- Crash при изменении настроек agent teams между рендерами
+- Команды, исключённые из sandbox через `sandbox.excludedCommands` или `dangerouslyDisableSandbox`, могли обходить Bash ask permission при включённом `autoAllowBashIfSandboxed`
+
+---
+
+### 2.1.33 (6 февраля 2026)
+
+**Новое:**
+- Хуки `TeammateIdle` и `TaskCompleted` для multi-agent workflows
+- Ограничение спавна субагентов через `Task(agent_type)` синтаксис в frontmatter агентов
+- Поле `memory` в frontmatter агентов — persistent memory с scope: `user`, `project`, `local`
+- Имя плагина в описании скиллов и меню `/skills`
+
+**Исправления:**
+- Agent teammate sessions в tmux — отправка и получение сообщений
+- Warnings об agent teams на неподдерживаемых планах
+- Новое сообщение во время extended thinking прерывало фазу размышления
+- API error при abort mid-stream (whitespace text + thinking block bypass normalization)
+- API proxy 404 на streaming endpoints больше не триггерит non-streaming fallback
+- Proxy settings из `settings.json` env vars не применялись к WebFetch (Node.js build)
+- `/resume` session picker показывал raw XML вместо чистых заголовков
+
+**Улучшения:**
+- Улучшенные error messages для API connection failures (показывает причину: ECONNREFUSED, SSL errors)
+- Ошибки от невалидных managed settings теперь видны
+
+**VS Code:**
+- Remote sessions для OAuth users (browse/resume с claude.ai)
+- Git branch и message count в session picker, поиск по branch name
+- Фикс scroll-to-bottom при загрузке и переключении сессий
+
+---
+
+### 2.1.32 (5 февраля 2026)
+
+**Новое:**
+- Claude Opus 4.6!
+- Agent Teams — research preview для multi-agent collaboration (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`)
+- Claude автоматически записывает и вспоминает memories
+- "Summarize from here" в message selector — частичная суммаризация разговора
+- Skills из `.claude/skills/` в additional directories (`--add-dir`) загружаются автоматически
+
+**Исправления:**
+- `@` file completion показывал неправильные пути из поддиректории
+- `--resume` переиспользует `--agent` из предыдущего разговора
+- Bash tool больше не выбрасывает "Bad substitution" для heredocs с JS template literals `${index + 1}`
+- Thai/Lao spacing vowels rendering в input field
+
+**Улучшения:**
+- Skill character budget масштабируется с context window (2% от контекста)
+
+**VS Code:**
+- Фикс слэш-команд при нажатии Enter с предшествующим текстом
+- Спиннер при загрузке списка прошлых разговоров
+
+---
+
+### 2.1.31 (4 февраля 2026)
 
 **Новое:**
 - Hint при выходе из сессии — как продолжить разговор позже
@@ -379,6 +457,30 @@ claude plugin install gopls-lsp
 **Что это:** Индикатор статуса PR прямо в footer.
 
 **Зачем:** Не нужно переключаться в GitHub — видно approved/changes requested/pending/draft сразу в терминале.
+
+### 6. Opus 4.6 (2.1.32)
+
+**Что это:** Новая модель Claude Opus 4.6 — улучшенная версия Opus.
+
+**Зачем:** Обновлённая модель с улучшенными возможностями для coding tasks.
+
+### 7. Agent Teams (2.1.32)
+
+**Что это:** Research preview для мультиагентной коллаборации.
+
+**Зачем:** Позволяет нескольким агентам работать совместно над задачей. Требует `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`. Token-intensive feature.
+
+### 8. Auto-Memories (2.1.32)
+
+**Что это:** Claude автоматически записывает и вспоминает контекст между сессиями. Хранилище: `~/.claude/projects/<project>/memory/MEMORY.md` (первые 200 строк загружаются при старте).
+
+**Зачем:** Не нужно вручную настраивать CLAUDE.md для часто используемой информации — Claude запоминает паттерны работы.
+
+**Включение:** `CLAUDE_CODE_DISABLE_AUTO_MEMORY=0` (double-negative: DISABLE=0 → включена).
+
+**Блокировка:** Auto-memory использует фоновые вызовы модели. При `DISABLE_NON_ESSENTIAL_MODEL_CALLS=1` или `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` — авто-запись **не срабатывает**, директория `memory/` не создаётся. Ручная память через `/memory` и CLAUDE.md работает независимо.
+
+**Управление:** `/memory` (UI-селектор), "remember that..." (прямая фраза в чате).
 
 ---
 

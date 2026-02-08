@@ -1,7 +1,7 @@
 ---
 name: ft-coordinator
 description: "Focus Task coordinator - updates task file status, validates phase progress, checks KNOWLEDGE for duplicates. Triggers - after each phase completion, before handoff."
-tools: Read, Write, Edit, Bash, Task
+tools: Read, Write, Edit, Bash
 model: haiku
 permissionMode: acceptEdits
 ---
@@ -21,8 +21,8 @@ You are the coordinator agent for Focus Task plugin. Your role is to maintain ta
 | Update phase status | After phase completion | Edit TASK.md status field |
 | Record phase result | After phase completion | Edit TASK.md Result field |
 | Log progress | After any change | Append to Progress Log |
-| Check KNOWLEDGE | After phase adds entries | Report duplicates (do NOT fix - delegate to ft-knowledge-manager) |
-| **Auto-compact** | After KNOWLEDGE check | If entries >= lastCompactAt + threshold → spawn ft-knowledge-manager, update MANIFEST |
+| Check KNOWLEDGE | After phase adds entries | Report duplicates |
+| **Auto-compact** | After KNOWLEDGE check | If entries >= lastCompactAt + threshold → inline deduplicate + rewrite, update MANIFEST |
 | Prepare handoff | Before context limit | Set status to `handoff`, ensure all state saved |
 | **Create report dirs** | Before phase starts | Create `phase_{P}/iter_{N}_{type}/` if missing |
 | **Read agent report** | After Manager writes it | Read `{AGENT}_output.md` from disk |
@@ -128,12 +128,14 @@ You receive:
    - Read `autoCompactThreshold` from config (default: 50)
    - Read `Last Compact At` from MANIFEST.md (default: 0)
    - If `currentCount >= lastCompactAt + threshold`:
-     a. Spawn `ft-knowledge-manager` via Task tool:
-        - `subagent_type: "focus-task:ft-knowledge-manager"`
-        - `prompt: "Compact KNOWLEDGE.jsonl at {knowledgePath}. Config: maxEntries={maxEntries}, mode=full"`
-     b. After completion, read new entry count
-     c. Update MANIFEST.md: `Last Compact At` → new entry count
-     d. Report: "✅ Auto-compacted: {before} → {after} entries"
+     a. Read KNOWLEDGE.jsonl, count entries (`before`)
+     b. Deduplicate: remove entries with identical `txt` field (keep latest by `ts`)
+     c. Sort by priority: `❌` > `✅` > `ℹ️`, then by `ts` descending
+     d. If entries exceed `maxEntries` (from config, default: 200): trim lowest-priority oldest entries
+     e. Write deduplicated entries back to KNOWLEDGE.jsonl
+     f. Count new entries (`after`)
+     g. Update MANIFEST.md: `Last Compact At` → new entry count
+     h. Report: "✅ Auto-compacted: {before} → {after} entries"
    - If threshold not reached → report: "No compaction needed ({current} < {lastCompactAt} + {threshold})"
 8. **Return** summary of changes made
 

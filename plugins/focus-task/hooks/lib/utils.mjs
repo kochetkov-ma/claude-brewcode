@@ -224,11 +224,20 @@ const DEFAULT_CONFIG = {
       'ft-coordinator', 'ft-knowledge-manager',
       'Explore', 'Plan', 'Bash', 'general-purpose',
       'claude-code-guide', 'skill-creator', 'agent-creator',
-      'prompt-optimizer', 'rules-organizer', 'statusline-setup'
+      'text-optimizer', 'rules-organizer', 'statusline-setup'
     ]
   },
   constraints: {
     enabled: true
+  },
+  autoSync: {
+    intervalDays: 7,
+    retention: {
+      maxEntries: 200,
+      removeOrphansAfterDays: 30
+    },
+    optimize: false,
+    parallelAgents: 5
   }
 };
 
@@ -265,8 +274,24 @@ export function loadConfig(cwd) {
     logging: { ...DEFAULT_CONFIG.logging, ...userConfig.logging },
     stop: { ...DEFAULT_CONFIG.stop, ...userConfig.stop },
     agents: { ...DEFAULT_CONFIG.agents, ...userConfig.agents },
-    constraints: { ...DEFAULT_CONFIG.constraints, ...userConfig.constraints }
+    constraints: { ...DEFAULT_CONFIG.constraints, ...userConfig.constraints },
+    autoSync: {
+      ...DEFAULT_CONFIG.autoSync,
+      ...userConfig.autoSync,
+      retention: { ...DEFAULT_CONFIG.autoSync.retention, ...(userConfig.autoSync?.retention || {}) }
+    }
   };
+  // Validate critical numeric fields — clamp to defaults if invalid
+  const as = cachedConfig.autoSync;
+  if (!Number.isInteger(as.intervalDays) || as.intervalDays < 1) {
+    log('warn', '[config]', `Invalid intervalDays=${as.intervalDays}, using default ${DEFAULT_CONFIG.autoSync.intervalDays}`, cwd);
+    as.intervalDays = DEFAULT_CONFIG.autoSync.intervalDays;
+  }
+  if (!Number.isInteger(as.parallelAgents) || as.parallelAgents < 1) {
+    log('warn', '[config]', `Invalid parallelAgents=${as.parallelAgents}, using default ${DEFAULT_CONFIG.autoSync.parallelAgents}`, cwd);
+    as.parallelAgents = DEFAULT_CONFIG.autoSync.parallelAgents;
+  }
+
   cachedConfigCwd = cwd;
 
   return cachedConfig;

@@ -32,6 +32,85 @@
 
 ---
 
+## [2.5.0] - 2026-02-08
+
+### Changed
+
+- **Auto-sync INDEX v2** — simplified from 8 fields to 4 (`p`, `t`, `u`, `pr`)
+  - Removed: `m` (mtime), `h` (hash), `v` (version), `s` (status)
+  - Dates: ISO8601 → `YYYY-MM-DD`
+  - Protocol values: `default`/`custom` → `default`/`override`
+  - New type: `config` (for `CLAUDE.md` files)
+- **Auto-sync instructions system** — type-specific sync instructions
+  - New: `instructions/sync-{skill,agent,doc,rule,config}.md` — per-type verification checklists and research directions
+  - Processor loads instructions dynamically instead of hardcoded logic
+  - `<auto-sync-protocol>` → `<auto-sync-override>` with 3 fields: `sources`, `focus`, `preserve`
+- **Auto-sync SKILL.md rewrite** — simplified phases, added `-o`/`--optimize` flag
+  - `context: fork` → `context: session` (access to conversation context)
+  - Added `Skill` to allowed-tools
+  - INIT mode simplified (no custom protocol prompt generation)
+- **ft-auto-sync-processor rewrite** — 364 → 135 lines (-63%)
+  - Removed `Task` tool dependency — direct Glob/Grep/Read/WebFetch calls
+  - Loads per-type instruction files for verification checklist
+  - Model: opus → sonnet
+- **ft-coordinator: inline compaction** — removed `Task` tool from agent tools
+  - Auto-compact now inline: read → dedupe → sort → trim → write
+  - No longer spawns ft-knowledge-manager for compaction
+- **ft-grepai-configurator: direct tool calls** — removed `Task` tool dependency
+  - Phase 2: Explore agents → direct Glob/Grep/Read calls
+- **Skills context: `fork` → `session`** — auto-sync, create, grepai skills now run in session context
+- **detect-mode.sh: FLAGS support** — 3-field output `MODE|ARG|FLAGS`, `-o`/`--optimize` flag
+- **index-ops.sh simplified** — removed `query`, `hash`, `mtime` commands; added `threshold_date` helper; macOS/Linux date compatibility
+- **Review skill: Critic mode** — new `-c`/`--critic` flag for Devil's Advocate phase
+  - Phase 5.5 Critic + Phase 5.75 DoubleCheck Critic
+  - P0 priority for verified critic findings
+  - Auto-enable via keywords: `критик`, `с критиком`, `critic`
+  - Visual ASCII workflow diagrams in README
+
+### Added
+
+- `skills/auto-sync/instructions/` — 5 type-specific instruction files
+- `autoSync` config section — `intervalDays`, `retention`, `optimize`, `parallelAgents`
+- Validation for `autoSync` numeric fields in `utils.mjs`
+
+### Fixed
+
+- **Agent name typo** — `prompt-optimizer` → `text-optimizer` in config and hooks
+- **Removed stale PROTOCOL_REMINDER** — pre-agent priming string removed from `pre-task.mjs`
+
+### Removed
+
+- `skills/auto-sync/references/doc-types.md` (replaced by instructions/)
+- `skills/auto-sync/references/protocol-default.md` (replaced by instructions/)
+- `user/CLAUDE-CODE-RELEASES-2025-2026.md`
+- `user/CLAUDE-CODE-TASK-MANAGER-GUIDE.md`
+- `user/CONTEXT-INJECTION-GUIDE.md`
+
+### Updated Files
+
+| File | Change |
+|------|--------|
+| `skills/auto-sync/SKILL.md` | Rewrite: simplified phases, `-o` flag, `context: session` |
+| `skills/auto-sync/README.md` | Updated to match new INDEX format and override block |
+| `skills/auto-sync/scripts/detect-mode.sh` | 3-field output with FLAGS |
+| `skills/auto-sync/scripts/discover.sh` | Updated type detection |
+| `skills/auto-sync/scripts/index-ops.sh` | Simplified commands, date compat |
+| `agents/ft-auto-sync-processor.md` | Rewrite: direct tools, instruction loading |
+| `agents/ft-coordinator.md` | Inline compaction, removed Task tool |
+| `agents/ft-grepai-configurator.md` | Direct tool calls, removed Task tool |
+| `hooks/lib/utils.mjs` | `autoSync` config, agent name fix |
+| `hooks/pre-task.mjs` | Removed PROTOCOL_REMINDER |
+| `skills/create/SKILL.md` | `context: fork` → `session` |
+| `skills/grepai/SKILL.md` | `context: fork` → `session` |
+| `templates/auto-sync/INDEX.jsonl.template` | 4-field format |
+| `templates/focus-task.config.json.template` | `autoSync` section |
+| `templates/skills/review/SKILL.md.template` | Critic phase, argument-hint |
+| `templates/skills/review/references/agent-prompt.md` | Critic prompt |
+| `templates/skills/review/references/report-template.md` | P0 priority section |
+| `README.md` | Critic mode docs, workflow diagrams |
+
+---
+
 ## [2.4.1] - 2026-02-06
 
 ### Fixed

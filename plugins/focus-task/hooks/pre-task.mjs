@@ -124,10 +124,6 @@ async function main() {
         }
       }
 
-      // PRE-agent priming: set expectation BEFORE agent runs
-      const PROTOCOL_REMINDER = `⛔ When agent completes: WRITE report → CALL ft-coordinator`;
-      updatedPrompt = `${updatedPrompt}\n\n${PROTOCOL_REMINDER}`;
-
       // 3. Inject role-specific constraints for implementation agents
       if (lock && lock.task_path) {
         // Detect role from agent name

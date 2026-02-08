@@ -1,7 +1,7 @@
 ---
 name: ft-grepai-configurator
 description: "grepai config specialist - project analysis, config.yaml generation, verification. Triggers 'configure grepai', 'grepai config', 'analyze for grepai', 'setup grepai index'. Isolated subagent."
-tools: Read, Write, Edit, Bash, Task, WebFetch, Glob, Grep
+tools: Read, Write, Edit, Bash, WebFetch, Glob, Grep
 model: opus
 permissionMode: acceptEdits
 ---
@@ -74,19 +74,20 @@ ollama list 2>/dev/null | grep -q bge-m3 && echo "✅ bge-m3: installed" || echo
 
 > **STOP if any ❌** — report missing components.
 
-### Phase 2: Parallel Project Analysis
+### Phase 2: Project Analysis (Direct Tool Calls)
 
-Spawn ALL 5 Explore agents in SINGLE message (parallel):
+Run ALL analyses using available tools (Glob, Grep, Read):
 
-| # | type | model | prompt |
-|---|------|-------|--------|
-| 1 | `Explore` | `haiku` | `LANGUAGES: Find build files (pom.xml, build.gradle, package.json). List language(s), frameworks (Spring, React, Node), extensions. Check embedded SQL: JdbcTemplate, NamedParameterJdbcTemplate, @Query, String sql = "SELECT...", text blocks (""" SELECT...). Report: HAS_EMBEDDED_SQL = true/false.` |
-| 2 | `Explore` | `haiku` | `TEST PATTERNS: Find test dirs/patterns: tests/, test/, __tests__/, spec/, *_test.*, *.spec.*, *.test.*` |
-| 3 | `Explore` | `haiku` | `GENERATED CODE: Find patterns: generated/, .gen., codegen/, *_generated.*, openapi/, swagger/` |
-| 4 | `Explore` | `haiku` | `SOURCE STRUCTURE: Map dirs: src/, lib/, app/, core/, modules/, components/, services/, domain/` |
-| 5 | `Explore` | `haiku` | `IGNORE PATTERNS: Check .gitignore + global (~/.gitignore_global). Find: build outputs, caches, vendor, IDE. WARN if important dirs in global gitignore.` |
+| # | Analysis | Tool | Pattern/Target |
+|---|----------|------|----------------|
+| 1 | **LANGUAGES** | `Glob` | `**/pom.xml`, `**/build.gradle*`, `**/package.json`, `**/tsconfig.json` |
+| 1b | **Embedded SQL** | `Grep` | Pattern: `JdbcTemplate\|NamedParameterJdbcTemplate\|@Query\|String sql\|"""\s*SELECT` → `HAS_EMBEDDED_SQL = true/false` |
+| 2 | **TEST PATTERNS** | `Glob` | `**/test/`, `**/tests/`, `**/__tests__/`, `**/*.test.*`, `**/*.spec.*`, `**/*Test.java` |
+| 3 | **GENERATED CODE** | `Glob` | `**/generated/`, `**/.gen.*`, `**/codegen/`, `**/openapi/`, `**/swagger/` |
+| 4 | **SOURCE STRUCTURE** | `Glob` | `**/src/`, `**/lib/`, `**/app/`, `**/core/`, `**/modules/`, `**/components/`, `**/services/`, `**/domain/` |
+| 5 | **IGNORE PATTERNS** | `Read` | `.gitignore` + `~/.gitignore_global` (via `git config --global core.excludesfile`) |
 
-> WAIT for all 5 before proceeding. On failure, proceed with available data.
+Run Glob/Grep/Read calls in parallel where possible. Aggregate results into a single analysis structure for Phase 3.
 
 ### Phase 3: Generate Config
 

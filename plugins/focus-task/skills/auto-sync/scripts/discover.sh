@@ -1,22 +1,44 @@
 #!/bin/sh
 # Discovers files with auto-sync enabled
 # Usage: discover.sh [search_path] [output_format]
-#   search_path   - Directory to search (default: current directory)
-#   output_format - paths (default) | json
+#   search_path   - Directory to search (default: .)
+#   output_format - paths (default) | json | typed
 
 set -e
 
 SEARCH_PATH="${1:-.}"
 OUTPUT_FORMAT="${2:-paths}"
+MAX_FILES="${MAX_FILES:-50}"
 
-# Find files with auto-sync: enabled (YAML frontmatter) or auto-sync:enabled (HTML comment)
+# Find files with auto-sync: enabled (YAML frontmatter only)
 find_autosync_files() {
-  # Search for both patterns using grep
-  # Pattern 1: YAML frontmatter - auto-sync: enabled
-  # Pattern 2: HTML comment - <!-- auto-sync:enabled -->
-  grep -rl -E '(^auto-sync:\s*enabled|<!--\s*auto-sync:enabled)' "$SEARCH_PATH" \
-    --include="*.md" \
-    2>/dev/null | sort -u || true
+  _all=$(find "$SEARCH_PATH" -name "*.md" -exec grep -lE '^auto-sync:[[:space:]]*enabled' {} + \
+    2>/dev/null | sort -u || true)
+  _count=$(echo "$_all" | grep -c . || true)
+  if [ "$_count" -gt "$MAX_FILES" ]; then
+    echo "WARN: found $_count files, capped to $MAX_FILES (set MAX_FILES to override)" >&2
+    echo "$_all" | head -n "$MAX_FILES"
+  else
+    echo "$_all"
+  fi
+}
+
+# Detect type from file path
+detect_type() {
+  _path="$1"
+  _base=$(basename "$_path")
+
+  if [ "$_base" = "CLAUDE.md" ]; then
+    echo "config"
+  elif echo "$_path" | grep -qE '(^|/)skills/'; then
+    echo "skill"
+  elif echo "$_path" | grep -qE '(^|/)agents/'; then
+    echo "agent"
+  elif echo "$_path" | grep -qE '(^|/)rules/'; then
+    echo "rule"
+  else
+    echo "doc"
+  fi
 }
 
 # Output as paths (one per line)
@@ -36,6 +58,18 @@ output_json() {
   echo "]"
 }
 
+# Output as typed (TYPE|PATH per line)
+output_typed() {
+  FILES=$(find_autosync_files)
+  if [ -z "$FILES" ]; then
+    return
+  fi
+  echo "$FILES" | while IFS= read -r file; do
+    _type=$(detect_type "$file")
+    echo "${_type}|${file}"
+  done
+}
+
 # Main
 case "$OUTPUT_FORMAT" in
   paths)
@@ -44,10 +78,13 @@ case "$OUTPUT_FORMAT" in
   json)
     output_json
     ;;
+  typed)
+    output_typed
+    ;;
   *)
     echo "Usage: discover.sh [search_path] [output_format]" >&2
     echo "  search_path   - Directory to search (default: .)" >&2
-    echo "  output_format - paths (default) | json" >&2
+    echo "  output_format - paths (default) | json | typed" >&2
     exit 1
     ;;
 esac

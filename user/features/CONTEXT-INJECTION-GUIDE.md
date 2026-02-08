@@ -1,6 +1,6 @@
 # Полное руководство по инжекции контекста в Claude Code
 
-> **Версия:** 1.0 | **Дата:** 2026-02-01 | **Claude Code:** v2.1.x+
+> **Версия:** 1.1 | **Дата:** 2026-02-08 | **Claude Code:** v2.1.37
 
 ---
 
@@ -38,6 +38,7 @@
 7. [MCP](#7-mcp)
 8. [Hooks](#8-hooks)
 9. [SubAgents](#9-subagents)
+9.5. [Auto-Memory](#95-auto-memory)
 10. [Порядок загрузки](#10-порядок-загрузки)
 11. [Диаграммы](#11-диаграммы)
 
@@ -45,11 +46,11 @@
 
 ## 1. Общая архитектура контекста
 
-### Бюджет токенов (Opus 4.5 — 200K)
+### Бюджет токенов (Opus 4.6 — 200K)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ Opus 4.5 Context Window: 200,000 токенов                    │
+│ Opus 4.6 Context Window: 200,000 токенов                    │
 ├─────────────────────────────────────────────────────────────┤
 │ System prompt (base)      │  ~3,100  │   1.5%              │
 │ Built-in tools            │ ~12,400  │   6.2%              │
@@ -69,6 +70,7 @@
 | **Dynamic** | `<system-reminder>` в user messages | Runtime |
 | **Lazy** | По требованию | При обращении |
 | **Conditional** | При match условия | При работе с файлами |
+| **Auto** | System prompt (первые 200 строк MEMORY.md) | При старте сессии |
 
 ---
 
@@ -97,7 +99,7 @@
 │ - Git status snapshot                                       │
 ├─────────────────────────────────────────────────────────────┤
 │ MODEL INFO                                                  │
-│ "You are powered by Opus 4.5 (claude-opus-4-5-20251101)"    │
+│ "You are powered by Opus 4.6 (claude-opus-4-6)"             │
 │ "Knowledge cutoff: May 2025"                                │
 ├─────────────────────────────────────────────────────────────┤
 │ TOOL DESCRIPTIONS (24+ tools)                               │
@@ -485,6 +487,8 @@ Managed:  /Library/Application Support/ClaudeCode/managed-mcp.json
 | **Notification** | Уведомление | Нет |
 | **SubagentStart** | Создание субагента | Нет |
 | **SubagentStop** | Завершение субагента | Да |
+| **TeammateIdle** | Teammate agent idle | Нет |
+| **TaskCompleted** | Задача завершена | Нет |
 | **Stop** | Claude завершает ответ | Да |
 | **PreCompact** | Перед compaction | Нет |
 | **SessionEnd** | Завершение сессии | Нет |
@@ -637,6 +641,53 @@ Parent Agent                    SubAgent
 
 ---
 
+## 9.5. Auto-Memory
+
+### Что это (2.1.32+)
+
+Claude автоматически записывает и вспоминает заметки между сессиями. В отличие от CLAUDE.md (инструкции от пользователя), auto-memory — это заметки Claude для себя.
+
+### Расположение
+
+```
+~/.claude/projects/<project>/memory/
+├── MEMORY.md          # Индекс (загружается при старте)
+├── debugging.md       # Topic-файл (on demand)
+├── api-conventions.md # Topic-файл (on demand)
+└── ...
+```
+
+Привязка к **git repo root** — все поддиректории одного репо делят одну memory. Worktrees получают отдельную.
+
+### Формат инжекции
+
+Первые **200 строк** `MEMORY.md` загружаются в system prompt при старте каждой сессии. Topic-файлы **НЕ загружаются** автоматически — Claude читает их on demand через Read tool.
+
+### Характеристики
+
+| Аспект | Поведение |
+|--------|-----------|
+| **Шапка** | Нет — прямая загрузка в system prompt |
+| **Теги** | Нет |
+| **Lazy Loading** | **Частично**: MEMORY.md при старте, topic-файлы on demand |
+| **Лимит** | 200 строк MEMORY.md |
+| **Кто пишет** | Claude (автоматически во время работы) |
+| **Управление** | `/memory`, "remember that...", env var |
+| **Включение** | `CLAUDE_CODE_DISABLE_AUTO_MEMORY=0` |
+| **Блокировка** | `DISABLE_NON_ESSENTIAL_MODEL_CALLS=1` или `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` блокируют фоновые вызовы — auto-memory **не записывает** |
+| **Статус** | Gradual rollout — может не работать даже при `DISABLE=0` |
+
+> **Важно:** Auto-memory требует фоновых вызовов модели для извлечения заметок. При включённых флагах блокировки non-essential трафика директория `memory/` не создаётся и запись не происходит. Ручная память (`/memory`, CLAUDE.md) работает независимо от этих флагов.
+
+### Что запоминает
+
+- Паттерны проекта: команды сборки, тестовые конвенции, код-стиль
+- Отладочные инсайты: решения проблем, частые ошибки
+- Архитектурные заметки: ключевые файлы, связи модулей
+- Предпочтения пользователя: стиль коммуникации, workflow
+
+---
+
 ## 10. Порядок загрузки
 
 ### Timeline при старте сессии
@@ -673,6 +724,11 @@ Parent Agent                    SubAgent
    │ • additionalContext → <system-reminder>                   │
    └───────────────────────────────────────────────────────────┘
 
+6.5 ┌─ AUTO-MEMORY ──────────────────────────────────────────────┐
+   │ • MEMORY.md (первые 200 строк) → system prompt             │
+   │ • Topic-файлы: on demand через Read tool                    │
+   └───────────────────────────────────────────────────────────┘
+
 7. ┌─ CLAUDE.md + RULES ───────────────────────────────────────┐
    │ • ~/.claude/CLAUDE.md (глобальный)                        │
    │ • ~/.claude/rules/*.md (глобальные)                       │
@@ -691,6 +747,8 @@ Parent Agent                    SubAgent
 | Вложенные CLAUDE.md | При работе с файлами в поддиректории |
 | MCP tools (с Tool Search) | При поиске по keyword |
 | Bundled skill resources | При обращении к scripts/templates |
+| Auto-memory (MEMORY.md) | При старте сессии (200 строк) |
+| Auto-memory (topic files) | On demand через Read tool |
 
 ---
 
@@ -858,6 +916,8 @@ USER: /explain-code src/auth.ts
 | Agents (descriptions) | При старте | — | — | Нет |
 | MCP tools | При старте | — | — | С Tool Search |
 | Hooks output | При событии | `SessionStart:hook...` | `<system-reminder>` | — |
+| Auto-memory (MEMORY.md) | При старте | — | — | Частично |
+| Auto-memory (topics) | On demand | — | — | Да |
 | SubAgent контекст | При Task | — | — | — |
 
 ---

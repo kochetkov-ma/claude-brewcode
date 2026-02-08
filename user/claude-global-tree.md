@@ -14,7 +14,7 @@
 │   ├── reviewer.md
 │   ├── skill-creator.md
 │   ├── agent-creator.md
-│   ├── prompt-optimizer.md
+│   ├── text-optimizer.md
 │   ├── rules-organizer.md
 │   └── bash-expert.md                # Shell scripts, brew, plugin scripts
 │
@@ -48,11 +48,11 @@
 │   │       └── focus-task/           # Плагин infinite task execution
 │   │           ├── 2.0.8/            # Все версии сохраняются
 │   │           ├── ...
-│   │           └── 2.2.0/            # Актуальная версия
+│   │           └── 2.4.1/            # Актуальная версия
 │   │               ├── .claude-plugin/
 │   │               │   └── plugin.json
-│   │               ├── skills/       # 9 скиллов (setup, teardown, create, start, review, rules, doc, grepai, install)
-│   │               ├── agents/       # ft-coordinator, ft-knowledge-manager, ft-grepai-configurator
+│   │               ├── skills/       # 9 скиллов (setup, teardown, create, start, review, rules, auto-sync, grepai, install)
+│   │               ├── agents/       # ft-coordinator, ft-knowledge-manager, ft-grepai-configurator, ft-auto-sync-processor
 │   │               └── templates/    # TASK.md, SPEC.md, KNOWLEDGE templates
 │   │
 │   └── marketplaces/                 # Источники плагинов
@@ -61,10 +61,13 @@
 │       └── claude-brewcode/          # Локальный путь к репо
 │           └── plugins/
 │
-├── projects/                         # Данные по проектам (~2.7GB)
+├── projects/                         # Данные по проектам (~1.8GB)
 │   └── -Users-maximus-IdeaProjects-*/
 │       ├── CLAUDE.md                 # Память проекта (Markdown, опционально)
 │       ├── mcpSettings.json          # MCP конфиг проекта (JSON)
+│       ├── memory/                   # Auto-memory (2.1.32+, per-project)
+│       │   ├── MEMORY.md             # Индекс — первые 200 строк в system prompt
+│       │   └── {topic}.md            # Topic-файлы (debugging.md, patterns.md...)
 │       ├── {uuid}.jsonl              # Транскрипт сессии (JSON Lines, до 70MB)
 │       └── {uuid}/                   # Папка сессии
 │           └── subagents/            # Данные под-агентов
@@ -92,8 +95,22 @@
 │   ├── elegant-purring-hammock.md    # План с уникальным именем
 │   └── squishy-orbiting-kahan.md
 │
-├── paste-cache/                      # Кэш буфера обмена (~204KB)
+├── paste-cache/                      # Кэш буфера обмена (~284KB)
 │   └── {hash}.txt                    # Вставленный контент (текст)
+│
+├── rules/                            # Глобальные правила (Markdown)
+│   ├── avoid.md                      # Анти-паттерны (из KNOWLEDGE.jsonl)
+│   └── best-practices.md             # Лучшие практики
+│
+├── user/                             # Документация пользователя (~356KB)
+│   ├── claude-global-overview.md     # Обзор конфигурации
+│   ├── claude-global-tree.md         # Полное дерево ~/.claude
+│   └── features/                     # Гайды по фичам Claude Code
+│       ├── CLAUDE-CODE-RELEASES-2025-2026.md
+│       ├── CONTEXT-INJECTION-GUIDE.md
+│       ├── CLAUDE-CODE-TASK-MANAGER-GUIDE.md
+│       ├── CLAUDE-CODE-AGENT-TEAMS-GUIDE.md
+│       └── AUTO-MEMORIES-GUIDE.md
 │
 ├── cache/                            # Общий кэш
 │   └── changelog.md                  # Changelog Claude Code
@@ -121,26 +138,27 @@
 
 ---
 
-## Размеры директорий (актуально 2026-02-04)
+## Размеры директорий (актуально 2026-02-09)
 
 | Директория | Размер | Комментарий |
 |------------|--------|-------------|
 | projects/ | 1.9GB | Основной объём — транскрипты сессий |
-| debug/ | 145MB | Логи, можно чистить вручную |
+| debug/ | 108MB | Логи, можно чистить вручную |
 | shell-snapshots/ | 33MB | Для возобновления сессий |
-| file-history/ | 11MB | История редактирования |
-| plugins/ | 6.0MB | Установленные плагины (кэш версий) |
-| todos/ | 3.9MB | JSON с задачами |
+| file-history/ | 8.2MB | История редактирования |
+| plugins/ | 6.1MB | Установленные плагины (кэш версий) |
+| todos/ | 4.0MB | JSON с задачами |
 | reports/ | 1.2MB | Сгенерированные отчёты |
-| paste-cache/ | 536KB | Кэш вставок |
-| plans/ | 232KB | Файлы планирования |
-| agents/ | 68KB | Определения агентов (8 файлов) |
+| user/ | 356KB | Документация + features/ гайды |
+| paste-cache/ | 284KB | Кэш вставок |
+| plans/ | 192KB | Файлы планирования |
 | skills/ | 84KB | 5 локальных скиллов |
-| tasks/ | 52KB | Задачи |
+| agents/ | 76KB | Определения агентов (8 файлов) |
+| tasks/ | 72KB | Задачи |
 | cache/ | 32KB | Общий кэш |
-| ide/ | 12KB | Интеграция с IDE |
 | rules/ | 8KB | Глобальные правила |
 | templates/ | 4KB | Шаблоны |
+| ide/ | 4KB | Интеграция с IDE |
 | chrome/ | 4KB | Браузерная автоматизация |
 | commands/ | 0KB | Слэш-команды (пусто) |
 

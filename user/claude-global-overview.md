@@ -1,9 +1,11 @@
 # Обзор конфигурации Claude Code
 
 **Полное дерево:** [claude-global-tree.md](./claude-global-tree.md)
-**Task Manager:** [CLAUDE-CODE-TASK-MANAGER-GUIDE.md](./CLAUDE-CODE-TASK-MANAGER-GUIDE.md)
-**Релизы:** [CLAUDE-CODE-RELEASES-2025-2026.md](./CLAUDE-CODE-RELEASES-2025-2026.md)
-**Context Injection:** [CONTEXT-INJECTION-GUIDE.md](./CONTEXT-INJECTION-GUIDE.md)
+**Task Manager:** [CLAUDE-CODE-TASK-MANAGER-GUIDE.md](./features/CLAUDE-CODE-TASK-MANAGER-GUIDE.md)
+**Релизы:** [CLAUDE-CODE-RELEASES-2025-2026.md](./features/CLAUDE-CODE-RELEASES-2025-2026.md)
+**Context Injection:** [CONTEXT-INJECTION-GUIDE.md](./features/CONTEXT-INJECTION-GUIDE.md)
+**Agent Teams:** [CLAUDE-CODE-AGENT-TEAMS-GUIDE.md](./features/CLAUDE-CODE-AGENT-TEAMS-GUIDE.md)
+**Auto-Memories:** [AUTO-MEMORIES-GUIDE.md](./features/AUTO-MEMORIES-GUIDE.md)
 
 ---
 
@@ -45,7 +47,7 @@
 │   ├── reviewer.md
 │   ├── skill-creator.md
 │   ├── agent-creator.md
-│   ├── prompt-optimizer.md
+│   ├── text-optimizer.md
 │   ├── rules-organizer.md
 │   └── bash-expert.md
 │
@@ -85,7 +87,7 @@ idea ~/.claude/agents/tester.md
 idea ~/.claude/agents/reviewer.md
 idea ~/.claude/agents/skill-creator.md
 idea ~/.claude/agents/agent-creator.md
-idea ~/.claude/agents/prompt-optimizer.md
+idea ~/.claude/agents/text-optimizer.md
 idea ~/.claude/agents/rules-organizer.md
 ```
 
@@ -98,7 +100,7 @@ idea ~/.claude/agents/rules-organizer.md
 | reviewer | opus | R/Glob/Grep/Bash (disallow: W/E) | ✅ | ❌ | Архитектура, код-ревью + Explore |
 | skill-creator | opus | R/W/E/Glob/Grep/Task/Skill | ✅ | ✅ | Создание SKILL.md |
 | agent-creator | opus | R/W/E/Glob/Grep/Task/Skill/Web | ✅ | ✅ | Создание агентов + Explore |
-| prompt-optimizer | sonnet | R/W/E/Glob/Grep/WebFetch | ❌ | ❌ | Оптимизация (через text-optimize) |
+| text-optimizer | sonnet | R/W/E/Glob/Grep/WebFetch | ❌ | ❌ | Оптимизация (через text-optimize) |
 | rules-organizer | sonnet | R/W/E/Glob/Grep/Skill | ❌ | ✅ | Организация .claude/rules/ |
 | bash-expert | opus | R/W/E/Glob/Grep/Bash/Task/WebFetch | ✅ | ❌ | Shell scripts, brew, plugin scripts |
 
@@ -128,7 +130,7 @@ idea ~/.claude/skills/secrets-scan/SKILL.md
 **Локальные скиллы:**
 | Скилл | Триггеры |
 |-------|----------|
-| text-optimize | "optimize prompt", "optimize file", "reduce tokens", "compress for Claude" |
+| text-optimize | "optimize prompt", "reduce tokens". Modes: `-l` (light), default (medium), `-d` (deep) |
 | global-doc-update | `/global-doc-update` (синхронизация ~/.claude, user-only) |
 | text-human | "humanize code", "remove ai comments", "simplify docs", "clean documentation" |
 | mcp-config | "mcp status", "mcp config", "disable mcp", "enable mcp", "show mcp", "list mcp" |
@@ -186,6 +188,7 @@ idea ~/.claude/settings.json
 | MAX_THINKING_TOKENS | 63999 |
 | BASH_DEFAULT_TIMEOUT_MS | 300000 (5 мин) |
 | BASH_MAX_TIMEOUT_MS | 1800000 (30 мин) |
+| CLAUDE_CODE_DISABLE_AUTO_MEMORY | 0 (включена) |
 | defaultMode | bypassPermissions |
 
 ### 2.2 Права доступа
@@ -206,7 +209,7 @@ idea ~/.claude/plugins/known_marketplaces.json
 |--------|--------|-------------|---------------------|
 | context7 | — | claude-plugins-official | resolve-library-id, query-docs |
 | playwright | 4fee769 | claude-plugins-official | browser_*, snapshot, screenshot |
-| focus-task | 2.2.0 | claude-brewcode | 9 skills, 3 agents |
+| focus-task | 2.4.1 | claude-brewcode | 9 skills, 4 agents |
 
 **focus-task skills:**
 | Скилл | Назначение |
@@ -217,11 +220,11 @@ idea ~/.claude/plugins/known_marketplaces.json
 | `/focus-task:start` | Запуск задачи через hooks-only architecture |
 | `/focus-task:review` | Multi-agent code review с quorum consensus |
 | `/focus-task:rules` | Извлечение правил из KNOWLEDGE.jsonl |
-| `/focus-task:doc` | Генерация документации через parallel codebase analysis |
+| `/focus-task:auto-sync` | Universal doc sync (status, init, global, project, file, folder) |
 | `/focus-task:grepai` | Настройка семантического поиска (grepai) |
 | `/focus-task:install` | Установка зависимостей (brew, jq, grepai) |
 
-**focus-task agents:** `ft-coordinator` (haiku), `ft-knowledge-manager` (haiku), `ft-grepai-configurator` (opus)
+**focus-task agents:** `ft-coordinator` (haiku), `ft-knowledge-manager` (haiku), `ft-grepai-configurator` (opus), `ft-auto-sync-processor` (sonnet)
 
 #### Расположение плагинов в файловой системе
 
@@ -239,10 +242,10 @@ idea ~/.claude/plugins/known_marketplaces.json
 │       └── focus-task/
 │           ├── 2.0.8/          # Все версии сохраняются
 │           ├── ...
-│           └── 2.2.0/          # Актуальная
+│           └── 2.4.1/          # Актуальная
 │               ├── .claude-plugin/plugin.json
-│               ├── skills/{setup,teardown,create,start,review,rules,doc,grepai,install}/
-│               ├── agents/{ft-coordinator,ft-knowledge-manager,ft-grepai-configurator}.md
+│               ├── skills/{setup,teardown,create,start,review,rules,auto-sync,grepai,install}/
+│               ├── agents/{ft-coordinator,ft-knowledge-manager,ft-grepai-configurator,ft-auto-sync-processor}.md
 │               └── templates/
 │
 └── marketplaces/               # Источники плагинов
@@ -283,10 +286,13 @@ idea ~/.claude.json
 
 ```
 ~/.claude/
-├── projects/                    # Данные проектов (~2.1GB)
+├── projects/                    # Данные проектов (~1.9GB)
 │   └── -Users-maximus-IdeaProjects-*/
 │       ├── CLAUDE.md            # Память проекта (опционально)
 │       ├── mcpSettings.json     # MCP конфиг
+│       ├── memory/              # Auto-memory (2.1.32+)
+│       │   ├── MEMORY.md        # Индекс (первые 200 строк загружаются)
+│       │   └── {topic}.md       # Topic-файлы (on demand)
 │       ├── {uuid}.jsonl         # Транскрипт сессии (до 70MB)
 │       └── {uuid}/
 │           └── subagents/
@@ -331,6 +337,7 @@ idea ~/.claude/stats-cache.json
 | Транскрипт сессии | {uuid}.jsonl | до 70MB |
 | Папка subagents | {uuid}/subagents/ | данные под-агентов |
 | Память проекта | CLAUDE.md | опционально |
+| Auto-memory | memory/MEMORY.md + topic files | 200 строк в контекст |
 
 ### 3.2 Автоочистка (cleanupPeriodDays: 7)
 
@@ -355,6 +362,30 @@ idea ~/.claude/stats-cache.json
 ```json
 {"dailyActivity": [{"date": "2025-12-05", "messageCount": 376, "sessionCount": 3}]}
 ```
+
+### 3.4 Auto-Memory (2.1.32+)
+
+Claude автоматически записывает заметки во время работы и подгружает их в следующих сессиях.
+
+```
+~/.claude/projects/<project>/memory/
+├── MEMORY.md          # Индекс (первые 200 строк в system prompt)
+├── debugging.md       # Заметки по отладке (on demand)
+├── api-conventions.md # Решения по API (on demand)
+└── ...                # Topic-файлы создаются Claude
+```
+
+| Аспект | Значение |
+|--------|----------|
+| Привязка | Per-project (по git repo root) |
+| Загрузка | MEMORY.md: первые 200 строк при старте |
+| Topic-файлы | On demand — Claude читает когда нужно |
+| Управление | `/memory`, "remember that..." |
+| Включение | `CLAUDE_CODE_DISABLE_AUTO_MEMORY=0` |
+| Выключение | `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` |
+| Блокировка | `DISABLE_NON_ESSENTIAL_MODEL_CALLS=1` / `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` — блокируют запись |
+| Worktrees | Отдельная memory для каждого worktree |
+| Статус | Gradual rollout — может не работать даже при DISABLE=0 |
 
 ---
 
@@ -420,6 +451,9 @@ du -sh ~/.claude/*/
 
 | Вер. | Дата | Изменения |
 |------|------|-----------|
+| 2.21 | 2026-02-09 | text-optimize 3 modes (-l/-d), prompt-optimizer→text-optimizer, LLM Text Rules в 4 агентах, user/features/ в tree |
+| 2.20 | 2026-02-08 | Добавлена Auto-Memory в структуру, settings, context injection |
+| 2.19 | 2026-02-08 | Claude Code 2.1.37, focus-task 2.4.1, Opus 4.6, Agent Teams preview, auto-memories, fast mode |
 | 2.18 | 2026-02-04 | Claude Code 2.1.31, focus-task 2.2.0, новые фичи: PDF pages, /debug command |
 | 2.17 | 2026-02-01 | focus-task 2.0.73, обновлена структура плагина (9 skills, 3 agents, 7 hooks) |
 | 2.16 | 2026-02-01 | focus-task 2.0.70, новый скилл mcp-config (5 local skills total) |

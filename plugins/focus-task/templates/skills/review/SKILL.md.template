@@ -2,7 +2,7 @@
 name: focus-task:review
 description: Project-adapted code review with quorum consensus. Triggers "review code", "code review", "/focus-task:review".
 user-invocable: true
-argument-hint: "<prompt-or-file-path> [-q|--quorum [G-]N-M]"
+argument-hint: "<prompt-or-file-path> [-q|--quorum [G-]N-M] [-c|--critic]"
 allowed-tools: Read, Glob, Grep, Task, Bash, Write
 context: fork
 model: opus
@@ -16,17 +16,19 @@ model: opus
 
 | Input | Action |
 |-------|--------|
-| Text prompt | Use as review focus description |
-| File path (`.md`, `.txt`) | Read file as review instructions |
-| `-q N-M` / `--quorum N-M` | N agents per group, M = quorum threshold |
-| `-q G-N-M` / `--quorum G-N-M` | G groups, N agents per group, M = quorum |
-| Default | `-q 3-2` (3 agents, quorum 2) |
+| Text prompt | Review focus description |
+| File path (`.md`, `.txt`) | Read as review instructions |
+| `-q N-M` / `--quorum N-M` | N agents per group, M quorum threshold |
+| `-q G-N-M` / `--quorum G-N-M` | G groups, N agents/group, M quorum |
+| `-c` / `--critic` | Enable Critic phase (after DoubleCheck) |
+| Text contains `критик`, `с критиком`, `critic` | Auto-enable Critic |
+| Default | `-q 3-2` (3 agents, quorum 2), no critic |
 
 ---
 
 ## Project Agents
 
-> Adapted from `.claude/agents/` — use these for specialized reviews
+> Adapted from `.claude/agents/` — specialized reviews
 
 {PROJECT_AGENTS_TABLE}
 
@@ -137,20 +139,17 @@ ONE message with 5-10 Explore agents scanning:
 
 ### Phase 2: Group Formation
 
-Based on detected files:
-- DB detected → enable db-layer group
-- Tests detected → enable tests group
-- Auth files → add security focus
+Detected files → enabled groups:
+- DB detected → db-layer group
+- Tests detected → tests group
+- Auth files → security focus
 
 ### Phase 3: Parallel Review
 
 ```
 N agents per group × {GROUP_COUNT} groups = total agents
 
-Each agent reviews with:
-- Tech-specific checks (above)
-- Project rules (above)
-- Focus: {REVIEW_PROMPT}
+Each agent reviews with tech checks, project rules, focus: {REVIEW_PROMPT}
 ```
 
 ### Phase 4: Quorum Collection
@@ -202,10 +201,10 @@ Task(subagent_type="reviewer", model="opus", prompt="
   ## DoubleCheck Verification
 
   For EACH finding below:
-  1. **Verify existence:** Does the issue actually exist in code?
-  2. **Verify accuracy:** Is the description correct?
-  3. **Verify actionability:** Is there a clear fix path?
-  4. **Verify severity:** Is the severity appropriate?
+  1. **Verify existence:** Issue exists in code?
+  2. **Verify accuracy:** Description correct?
+  3. **Verify actionability:** Clear fix path?
+  4. **Verify severity:** Severity appropriate?
 
   **Findings to verify:**
   {CONFIRMED_FINDINGS_JSON}
@@ -230,11 +229,146 @@ Task(subagent_type="reviewer", model="opus", prompt="
 | REJECT | Remove from report |
 | Severity adjusted | Update severity in report |
 
+### Phase 5.5: Critic (Optional — Devil's Advocate)
+
+> Enabled by `-c`/`--critic` flag or keywords `критик`/`с критиком`/`critic` in prompt.
+
+Single `reviewer` (Opus) challenges entire review. Input: all findings (confirmed, rejected, discarded) + source code.
+
+**Task:** Find missed issues, challenge DoubleCheck verdicts, identify blind spots.
+
+```markdown
+Task(subagent_type="reviewer", model="opus", prompt="
+  ## Critic Review (Devil's Advocate)
+
+  Find what ALL reviewers MISSED.
+
+  **Confirmed findings (DoubleCheck passed):**
+  {CONFIRMED_FINDINGS_JSON}
+
+  **Rejected findings (DoubleCheck rejected):**
+  {REJECTED_FINDINGS_JSON}
+
+  **Discarded findings (no quorum):**
+  {DISCARDED_FINDINGS_JSON}
+
+  **Files under review:**
+  {FILE_LIST}
+
+  **Output format (JSON):**
+  {
+    \"missedFindings\": [{
+      \"file\": \"path/to/file.java\",
+      \"lineStart\": 42,
+      \"lineEnd\": 45,
+      \"category\": \"null-safety|security|performance|logic|style|test-quality\",
+      \"severity\": \"blocker|critical|major|minor\",
+      \"title\": \"Short summary\",
+      \"description\": \"Why ALL reviewers missed this\",
+      \"suggestion\": \"Fix approach\",
+      \"confidence\": 0.85
+    }],
+    \"challenges\": [{
+      \"findingId\": \"P1-3\",
+      \"type\": \"WRONG_CONFIRM|WRONG_REJECT|SEVERITY_WRONG\",
+      \"reason\": \"Why the verdict is wrong\",
+      \"suggestedSeverity\": \"blocker|critical|major|minor|null\"
+    }],
+    \"blindSpots\": [\"category with 0 findings that warrants attention\"]
+  }
+
+  **Rules:**
+  - Focus on what was MISSED, not what was found
+  - Challenge at least 1 confirmed finding (stress-test)
+  - Report blind spots even if no missed issues found
+  - Confidence reflects how certain you are the issue was missed
+")
+```
+
+**Critic output → Phase 5.75 input** (all findings require verification)
+
+### Phase 5.75: DoubleCheck Critic
+
+Single `reviewer` (Opus) verifies ALL Critic output — same role as Phase 5 DoubleCheck.
+
+```markdown
+Task(subagent_type="reviewer", model="opus", prompt="
+  ## DoubleCheck: Critic Verification
+
+  Verify ALL findings from the Critic (Devil's Advocate).
+  Apply the SAME standards as Phase 5 DoubleCheck.
+
+  **Critic missed findings:**
+  {CRITIC_MISSED_FINDINGS_JSON}
+
+  **Critic challenges:**
+  {CRITIC_CHALLENGES_JSON}
+
+  **Critic blind spots:**
+  {CRITIC_BLIND_SPOTS}
+
+  **Source code files:**
+  {FILE_LIST}
+
+  **For EACH missed finding:**
+  1. Does the issue actually exist in code?
+  2. Is the description accurate?
+  3. Is there a clear fix path?
+  4. Is the severity appropriate?
+
+  **For EACH challenge:**
+  1. Is the challenge valid? Re-read the original finding and code.
+  2. Was the original DoubleCheck verdict correct or wrong?
+
+  **For EACH blind spot:**
+  1. Is the category relevant to the reviewed code?
+  2. Are there actual issues in that category?
+
+  **Output format (JSON):**
+  {
+    \"missedFindings\": [{
+      \"findingId\": \"CF-1\",
+      \"verdict\": \"CONFIRM|REJECT\",
+      \"reason\": \"Explanation\",
+      \"severityAdjustment\": \"null|blocker|critical|major|minor\"
+    }],
+    \"challenges\": [{
+      \"challengeId\": \"CC-1\",
+      \"verdict\": \"CONFIRM|REJECT\",
+      \"reason\": \"Explanation\"
+    }],
+    \"blindSpots\": [{
+      \"spotId\": \"BS-1\",
+      \"verdict\": \"CONFIRM|REJECT\",
+      \"reason\": \"Explanation\"
+    }]
+  }
+
+  **Verdict rules:**
+  - CONFIRM: Issue exists / challenge valid / blind spot real
+  - REJECT: False positive, already covered, or not actionable
+")
+```
+
+**Result processing:**
+
+| Verdict | Source | Action |
+|---------|--------|--------|
+| CONFIRM `missedFinding` | Critic | → Priority 0 (verified) |
+| REJECT `missedFinding` | Critic | Discard |
+| CONFIRM `challenge[WRONG_REJECT]` | Critic | Restore finding → P0 |
+| CONFIRM `challenge[WRONG_CONFIRM]` | Critic | Add note to existing finding |
+| CONFIRM `challenge[SEVERITY_WRONG]` | Critic | Adjust severity |
+| REJECT `challenge` | Critic | Keep original verdict |
+| CONFIRM `blindSpot` | Critic | → Report Statistics |
+| REJECT `blindSpot` | Critic | Discard |
+
 ### Phase 6: Report
 
 Output: `.claude/tasks/reviews/{TIMESTAMP}_{NAME}_report.md`
 
 Priority order:
+0. Critic findings — verified by DoubleCheck (when critic enabled)
 1. Quorum + DoubleCheck confirmed
 2. Quorum only (not DoubleCheck confirmed)
 3. Blocker/Critical without quorum (exceptions)
@@ -243,13 +377,30 @@ Priority order:
 
 ## Output Format
 
+**Without critic:**
 ```
-Review complete. Found {TOTAL} issues.
+Review complete. Found {TOTAL} issues ({BLOCKERS} blocker, {CRITICAL} critical, {MAJOR} major).
 
 Priority breakdown:
 - P1 (Confirmed): {N} issues
 - P2 (Quorum only): {N} issues
 - P3 (Exceptions): {N} issues
+
+Full report: .claude/tasks/reviews/{TIMESTAMP}_{NAME}_report.md
+```
+
+**With critic (`-c`):**
+```
+Review complete. Found {TOTAL} issues including {P0_COUNT} critic ({BLOCKERS} blocker, {CRITICAL} critical, {MAJOR} major).
+
+Priority breakdown:
+- P0 (Critic): {N} issues — verified by DoubleCheck
+- P1 (Confirmed): {N} issues
+- P2 (Quorum only): {N} issues
+- P3 (Exceptions): {N} issues
+
+Critic challenges: {COUNT} verdicts challenged ({ACCEPTED} accepted)
+Blind spots: {N} categories flagged
 
 Full report: .claude/tasks/reviews/{TIMESTAMP}_{NAME}_report.md
 ```
@@ -265,6 +416,7 @@ Full report: .claude/tasks/reviews/{TIMESTAMP}_{NAME}_report.md
 | Max parallel | 25 | Maximum agents in one message (G×N) |
 | Line tolerance | ±5 | Lines overlap for matching |
 | Similarity | 0.6 | Semantic similarity for matching |
+| `-c` / `--critic` | Off | Enable Critic (Phase 5.5) + DoubleCheck Critic (Phase 5.75) |
 
 ---
 
@@ -277,12 +429,16 @@ Full report: .claude/tasks/reviews/{TIMESTAMP}_{NAME}_report.md
 | No findings | Report "No issues found" with confidence |
 | Invalid quorum args | Error: "Invalid -q/--quorum. Format: G-N-M or N-M" |
 | No CLAUDE.md | Use default rules only |
+| Critic finds 0 issues | Report confidence boost: "Critic found no missed issues" |
+| DoubleCheck rejects >50% of Critic findings | Warning in report: "Most critic findings unconfirmed" |
+| Critic challenges >50% of P1 | Warning: "High challenge rate — consider re-review" |
+| `-c` with `-q 1-1` | Warning: "Critic most valuable with quorum >= 2" |
 
 ---
 
 ## References
 
-- `references/agent-prompt.md` — Agent prompt templates (standard + DB-layer)
+- `references/agent-prompt.md` — Agent prompt templates (standard + DB-layer + Critic)
 - `references/report-template.md` — Report format and naming conventions
 
 ---
