@@ -29,8 +29,11 @@ claude --plugin-dir ./plugins/focus-task
 # Initialize for your project
 /focus-task:setup
 
-# Create a task
-/focus-task:create "Implement user authentication with JWT"
+# Create spec (research + user dialog)
+/focus-task:spec "Implement user authentication with JWT"
+
+# Generate execution plan from spec
+/focus-task:plan
 
 # Execute with infinite context
 /focus-task:start
@@ -42,11 +45,12 @@ claude --plugin-dir ./plugins/focus-task
 |-------|---------|
 | `/focus-task:install` | Install prerequisites (brew, jq, grepai) |
 | `/focus-task:setup` | Analyze project, create adapted templates |
-| `/focus-task:create` | Create task with parallel codebase research |
+| `/focus-task:spec` | Create SPEC through research + user interaction |
+| `/focus-task:plan` | Create PLAN from SPEC or Plan Mode file |
 | `/focus-task:start` | Execute task with infinite context handoff |
 | `/focus-task:review` | Multi-agent code review with quorum |
 | `/focus-task:rules` | Extract rules from KNOWLEDGE to .claude/rules/ |
-| `/focus-task:doc` | Generate/update project documentation |
+| `/focus-task:auto-sync` | Universal document sync |
 | `/focus-task:grepai` | Setup semantic code search |
 | `/focus-task:teardown` | Remove plugin files (keeps tasks) |
 

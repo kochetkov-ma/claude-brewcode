@@ -47,7 +47,7 @@ export function getActiveTaskPath(cwd) {
 
   const content = readFileSync(refPath, 'utf8').trim();
   // Check if content is a valid task path reference
-  if (!content.match(/\.claude\/tasks\/.*_TASK\.md$/)) return null;
+  if (!content.match(/\.claude\/tasks\/.*_task\/PLAN\.md$/)) return null;
 
   const taskPath = join(cwd, content);
   if (!existsSync(taskPath)) return null;
@@ -57,22 +57,21 @@ export function getActiveTaskPath(cwd) {
 
 /**
  * Get KNOWLEDGE.jsonl path for a task
- * @param {string} taskPath - Path to TASK.md file
+ * @param {string} taskPath - Path to PLAN.md file
  * @returns {string} Path to KNOWLEDGE.jsonl
  */
 export function getKnowledgePath(taskPath) {
-  return taskPath.replace(/_TASK\.md$/, '_KNOWLEDGE.jsonl');
+  return join(dirname(taskPath), 'KNOWLEDGE.jsonl');
 }
 
 /**
- * Get reports directory for a task
- * @param {string} taskPath - Path to TASK.md file
- * @param {string} cwd - Current working directory
- * @returns {string} Path to reports directory
+ * Get artifacts directory for a task
+ * @param {string} taskPath - Path to PLAN.md file
+ * @param {string} cwd - Current working directory (kept for backward compat)
+ * @returns {string} Path to artifacts directory
  */
 export function getReportsDir(taskPath, cwd) {
-  const taskName = taskPath.match(/([^/]+)_TASK\.md$/)?.[1] || 'task';
-  return join(cwd, '.claude', 'tasks', 'reports', taskName);
+  return join(dirname(taskPath), 'artifacts');
 }
 
 /**
@@ -309,11 +308,71 @@ export function isSystemAgent(agentType, cwd = null) {
 }
 
 // ============================================================================
+// TASK DIRECTORY HELPERS
+// ============================================================================
+
+/**
+ * Get task directory from task path (PLAN.md)
+ * @param {string} taskPath - Absolute path to PLAN.md
+ * @returns {string} Path to task directory
+ */
+export function getTaskDir(taskPath) {
+  return dirname(taskPath);
+}
+
+/**
+ * Get lock file path for a task
+ * @param {string} taskPath - Absolute path to PLAN.md
+ * @returns {string} Path to .lock file
+ */
+export function getLockPath(taskPath) {
+  return join(getTaskDir(taskPath), '.lock');
+}
+
+/**
+ * Get sessions directory
+ * @param {string} cwd - Current working directory
+ * @returns {string} Path to sessions directory
+ */
+export function getSessionsDir(cwd) {
+  return join(cwd, '.claude', 'tasks', 'sessions');
+}
+
+/**
+ * Write session info file mapping session to task dir
+ * @param {string} cwd - Current working directory
+ * @param {string} sessionId - Session ID
+ * @param {string} taskDir - Relative path to task directory from cwd
+ */
+export function writeSessionInfo(cwd, sessionId, taskDir) {
+  const sessionsDir = getSessionsDir(cwd);
+  if (!existsSync(sessionsDir)) {
+    mkdirSync(sessionsDir, { recursive: true });
+  }
+  writeFileSync(join(sessionsDir, `${sessionId}.info`), taskDir);
+}
+
+/**
+ * Get task directory from session mapping
+ * @param {string} cwd - Current working directory
+ * @param {string} sessionId - Session ID
+ * @returns {string|null} Task directory relative path or null
+ */
+export function getTaskDirFromSession(cwd, sessionId) {
+  const infoPath = join(getSessionsDir(cwd), `${sessionId}.info`);
+  if (!existsSync(infoPath)) return null;
+  try {
+    return readFileSync(infoPath, 'utf8').trim();
+  } catch {
+    return null;
+  }
+}
+
+// ============================================================================
 // LOCK FILE MANAGEMENT
 // Session binding for focus-task execution
 // ============================================================================
 
-const LOCK_FILE = 'tasks/cfg/.focus-task.lock';
 const LOCK_STALE_HOURS = 24;
 
 /**
@@ -343,8 +402,15 @@ export function isLockStale(lock) {
  * @param {string} sessionId - Current session ID
  * @returns {boolean} True if bound successfully
  */
-export function bindLockSession(cwd, sessionId) {
-  const lockPath = join(cwd, '.claude', LOCK_FILE);
+export function bindLockSession(cwd, sessionId, taskPath = null) {
+  let lockPath;
+  if (taskPath) {
+    lockPath = getLockPath(taskPath);
+  } else {
+    const activePath = getActiveTaskPath(cwd);
+    if (!activePath) return false;
+    lockPath = getLockPath(activePath);
+  }
   if (!existsSync(lockPath)) return false;
 
   try {
@@ -371,7 +437,12 @@ export function bindLockSession(cwd, sessionId) {
  * @returns {Object|null} Lock data if valid, null otherwise
  */
 export function checkLock(cwd, sessionId) {
-  const lockPath = join(cwd, '.claude', LOCK_FILE);
+  const activePath = getActiveTaskPath(cwd);
+  if (!activePath) {
+    log('debug', '[lock]', 'No active task found', cwd, sessionId);
+    return null;
+  }
+  const lockPath = getLockPath(activePath);
   if (!existsSync(lockPath)) {
     log('debug', '[lock]', 'No lock file exists', cwd, sessionId);
     return null;
@@ -408,7 +479,9 @@ export function checkLock(cwd, sessionId) {
  * @returns {Object|null} Lock data or null
  */
 export function getLock(cwd) {
-  const lockPath = join(cwd, '.claude', LOCK_FILE);
+  const activePath = getActiveTaskPath(cwd);
+  if (!activePath) return null;
+  const lockPath = getLockPath(activePath);
   if (!existsSync(lockPath)) return null;
 
   try {
@@ -425,7 +498,9 @@ export function getLock(cwd) {
  * @param {string} cwd - Current working directory
  */
 export function deleteLock(cwd) {
-  const lockPath = join(cwd, '.claude', LOCK_FILE);
+  const activePath = getActiveTaskPath(cwd);
+  if (!activePath) return;
+  const lockPath = getLockPath(activePath);
   if (existsSync(lockPath)) {
     try {
       unlinkSync(lockPath);

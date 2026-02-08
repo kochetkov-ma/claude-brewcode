@@ -15,7 +15,7 @@
  * - Status 'handoff' is for Claude to re-read TASK.md, not for new session
  * ============================================================================
  */
-import { existsSync } from 'fs';
+import { existsSync, readdirSync } from 'fs';
 import { join } from 'path';
 import {
   readStdin,
@@ -73,15 +73,20 @@ async function main() {
     // VALIDATE STATE
     const validationIssues = [];
 
-    // 1. Check reports directory exists for current phase
-    const reportsDir = getReportsDir(taskPath, cwd);
-    const phaseDir = join(reportsDir, `phase_${task.currentPhase}`);
-    if (!existsSync(phaseDir)) {
-      validationIssues.push(`Reports directory missing for phase ${task.currentPhase}`);
+    // 1. Check artifacts directory exists for current phase
+    const artifactsDir = getReportsDir(taskPath, cwd);
+    const phasePattern = `${task.currentPhase}-`;
+    let hasPhaseDir = false;
+    if (existsSync(artifactsDir)) {
+      const entries = readdirSync(artifactsDir);
+      hasPhaseDir = entries.some(e => e.startsWith(phasePattern));
+    }
+    if (!hasPhaseDir) {
+      validationIssues.push(`Artifacts directory missing for phase ${task.currentPhase}`);
     }
 
     // 2. Check MANIFEST.md exists
-    const manifestPath = join(reportsDir, 'MANIFEST.md');
+    const manifestPath = join(artifactsDir, 'MANIFEST.md');
     if (!existsSync(manifestPath)) {
       validationIssues.push('MANIFEST.md not found in reports directory');
     }
@@ -130,9 +135,9 @@ Status: handoff
 
 AFTER COMPACT: Re-read TASK.md and continue from phase ${task.currentPhase}.
 State preserved in:
-- TASK.md: status, phases
+- PLAN.md: status, phases
 - KNOWLEDGE.jsonl: accumulated knowledge
-- reports/: agent outputs
+- artifacts/: agent outputs
 </ft-handoff>`
     });
   } catch (error) {

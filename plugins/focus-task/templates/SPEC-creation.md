@@ -86,20 +86,20 @@ DO NOT include large code blocks - reference file:line instead.
 
 | Section | Source |
 |---------|--------|
-| Problem Statement | Original task prompt |
-| Requirements | Agent findings + task prompt |
-| Scope | Agent findings (what's affected vs not) |
-| Proposed Solution | Plan agent + consolidated findings |
-| Phases | Based on dependencies found |
+| Goal | Original task prompt (1-2 sentences) |
+| Original Requirements | Full task prompt, preserved verbatim |
+| User Q&A | From AskUserQuestion interactions |
+| Analysis > Architecture | Plan agent + consolidated findings |
+| Analysis > Data & State | Developer + sql_expert findings |
+| Analysis > Impact | All agents' change impact per area |
 | Context Files | All files mentioned by agents |
-| Technical Analysis | Developer + sql_expert findings |
 | Risks | All agents' risk findings |
 | Decisions | Based on alternatives found |
-| Research Summary | Summary per agent |
+| Research | Summary per agent |
 
 ## Step 5: Output
 
-Create SPEC file: `.claude/tasks/specs/{TIMESTAMP}_{NAME}_SPEC_v1.md`
+Create SPEC file: `.claude/tasks/{TIMESTAMP}_{NAME}_task/SPEC.md`
 
 **Important:**
 - NO large code blocks in SPEC — use `file:line` references

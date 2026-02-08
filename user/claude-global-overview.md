@@ -216,7 +216,8 @@ idea ~/.claude/plugins/known_marketplaces.json
 |-------|------------|
 | `/focus-task:setup` | Настройка focus-task в проекте |
 | `/focus-task:teardown` | Удаление файлов созданных `/focus-task:setup` |
-| `/focus-task:create` | Создание TASK.md + SPEC + KNOWLEDGE через parallel research |
+| `/focus-task:spec` | Создание SPEC через исследование + диалог с пользователем |
+| `/focus-task:plan` | Генерация PLAN из SPEC или Plan Mode файла |
 | `/focus-task:start` | Запуск задачи через hooks-only architecture |
 | `/focus-task:review` | Multi-agent code review с quorum consensus |
 | `/focus-task:rules` | Извлечение правил из KNOWLEDGE.jsonl |

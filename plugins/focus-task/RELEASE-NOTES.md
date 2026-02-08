@@ -32,6 +32,64 @@
 
 ---
 
+## [2.6.0] - 2026-02-08
+
+### Added
+
+- **2-stage creation flow** — `spec` → `plan` (replaces monolithic `create`)
+  - `/focus-task:spec` — Creates SPEC through research + AskUserQuestion interaction
+  - `/focus-task:plan` — Creates PLAN from SPEC or Plan Mode file with user approval
+  - `/focus-task:create` — **Removed** (use `spec` + `plan` separately)
+- **User interaction during creation** — AskUserQuestion for clarifying scope, validating decisions
+- **Task directory structure** — All task files grouped in `{TS}_{NAME}_task/` directory
+- **Session mapping** — `sessions/{session_id}.info` for O(1) task lookup
+- **Per-task lock** — `.lock` inside task directory (was global `cfg/.focus-task.lock`)
+
+### Breaking Changes
+
+- Task files moved from flat `.claude/tasks/` to `.claude/tasks/{TS}_{NAME}_task/`
+- `TASK.md` renamed to `PLAN.md`
+- SPEC moved from `specs/` to task directory
+- `KNOWLEDGE.jsonl` moved to task directory
+- Reports directory renamed to `artifacts/` inside task directory
+- Phase directory naming: `phase_{P}/iter_{N}_{type}/` → `{P}-{N}{T}/`
+- `TASK.md.template` renamed to `PLAN.md.template`
+
+### Updated Files
+
+| File | Change |
+|------|--------|
+| `skills/spec/SKILL.md` | NEW — spec creation skill (7-step workflow) |
+| `skills/plan/SKILL.md` | NEW — plan creation skill (dual input: SPEC/Plan Mode) |
+| `skills/create/` | **Removed** (replaced by spec + plan) |
+| `templates/PLAN.md.template` | NEW — renamed from TASK.md.template |
+| `templates/SPEC.md.template` | Rewrite: analytical format (91 → 42 lines) |
+| `templates/SPEC-creation.md` | Updated paths and section names |
+| `hooks/lib/utils.mjs` | Major refactor: 5 new functions, per-task lock |
+| `hooks/pre-compact.mjs` | Compact phase dirs, artifacts/ |
+| `hooks/stop.mjs` | Per-task lock path |
+| `hooks/session-start.mjs` | Session mapping |
+| `hooks/pre-task.mjs` | Absolute path fix for knowledge |
+| `agents/ft-coordinator.md` | Artifacts paths, PLAN.md refs |
+| `agents/ft-auto-sync-processor.md` | Artifacts path |
+| `templates/reports/MANIFEST.md.template` | Relative paths |
+| `templates/reports/FINAL.md.template` | Artifacts index |
+| `templates/instructions-template.md` | Full path migration |
+| `templates/rules/post-agent-protocol.md.template` | Path glob fix |
+| `skills/start/SKILL.md` | PLAN.md, artifacts paths |
+| `skills/setup/SKILL.md` | PLAN.md.template refs |
+| `skills/setup/scripts/setup.sh` | PLAN.md.template sync |
+| `skills/teardown/SKILL.md` | Task dir structure |
+| `skills/teardown/teardown.sh` | Task dir references |
+| `README.md` | Full path migration (20+ refs) |
+
+### Migration
+
+Existing tasks are not automatically migrated. New tasks use the new structure.
+Run `/focus-task:setup` to update adapted templates.
+
+---
+
 ## [2.5.0] - 2026-02-08
 
 ### Changed

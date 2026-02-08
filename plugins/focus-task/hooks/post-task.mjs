@@ -12,7 +12,6 @@ import {
   bindLockSession,
   getLock,
   checkLock,
-  loadConfig,
   log
 } from './lib/utils.mjs';
 

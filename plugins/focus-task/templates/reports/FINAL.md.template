@@ -56,8 +56,8 @@
 
 | Path | Type | Description |
 |------|------|-------------|
-| `reports/{TIMESTAMP}_{NAME}/phase_1/iter_1_exec/` | exec | Phase 1 execution |
-| `reports/{TIMESTAMP}_{NAME}/phase_1/iter_1_verify/` | verify | Phase 1 verification |
+| `artifacts/1-1e/` | exec | Phase 1 execution |
+| `artifacts/1-1v/` | verify | Phase 1 verification |
 
 ## Metrics
 

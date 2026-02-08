@@ -109,7 +109,7 @@ async function main() {
       // Check lock with session match (for focus-task knowledge injection)
       const lock = checkLock(cwd, session_id);
       if (lock && lock.task_path) {
-        const knowledgePath = getKnowledgePath(lock.task_path);
+        const knowledgePath = getKnowledgePath(join(cwd, lock.task_path));
         const entries = readKnowledge(knowledgePath);
 
         if (entries.length) {

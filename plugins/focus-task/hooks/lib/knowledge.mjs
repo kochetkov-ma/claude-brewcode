@@ -15,7 +15,7 @@ const BLOCKLIST_PATTERNS = [
 
 /**
  * Derive cwd from knowledge path
- * @param {string} knowledgePath - Path like /path/.claude/tasks/*_KNOWLEDGE.jsonl
+ * @param {string} knowledgePath - Path like /path/.claude/tasks/*_task/KNOWLEDGE.jsonl
  * @returns {string} Project root directory
  */
 function deriveCwd(knowledgePath) {

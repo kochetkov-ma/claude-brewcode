@@ -1,6 +1,6 @@
 ---
 name: focus-task:setup
-description: Analyzes project structure, tech stack, testing frameworks, and project-specific agents to generate an adapted TASK.md.template in .claude/tasks/templates/. Triggers on phrases like "setup focus-task", "focus-task setup", "initialize focus-task", "configure focus-task".
+description: Analyzes project structure, tech stack, testing frameworks, and project-specific agents to generate an adapted PLAN.md.template in .claude/tasks/templates/. Triggers on phrases like "setup focus-task", "focus-task setup", "initialize focus-task", "configure focus-task".
 user-invocable: true
 argument-hint: "[universal-template-path]"
 allowed-tools: Read, Write, Glob, Grep, Bash
@@ -8,11 +8,11 @@ context: fork
 model: opus
 ---
 
-Setup Focus-Task — analyze project, create TASK.md.template
+Setup Focus-Task — analyze project, create PLAN.md.template
 
 ## Overview
 
-Analyzes project structure, technology stack, testing patterns, and project-specific agents to create customized `TASK.md.template` in `.claude/tasks/templates/`. Adapted template includes project agents, frameworks, database tech, and coding patterns from `CLAUDE.md`.
+Analyzes project structure, technology stack, testing patterns, and project-specific agents to create customized `PLAN.md.template` in `.claude/tasks/templates/`. Adapted template includes project agents, frameworks, database tech, and coding patterns from `CLAUDE.md`.
 
 <instructions>
 
@@ -114,7 +114,7 @@ bash "$FT_PLUGIN/skills/setup/scripts/setup.sh" scan && echo "✅ scan" || echo 
 
 ## Phase 3: Template Generation
 
-**Agent:** developer | **Action:** Generate adapted template at `.claude/tasks/templates/TASK.md.template`
+**Agent:** developer | **Action:** Generate adapted template at `.claude/tasks/templates/PLAN.md.template`
 
 ### Create Structure
 
@@ -311,7 +311,7 @@ bash "$FT_PLUGIN/skills/setup/scripts/setup.sh" validate && echo "✅ validate" 
 
 | Check | Status |
 |-------|--------|
-| TASK template | `.claude/tasks/templates/TASK.md.template` |
+| PLAN template | `.claude/tasks/templates/PLAN.md.template` |
 | SPEC template | `.claude/tasks/templates/SPEC.md.template` |
 | KNOWLEDGE template | `.claude/tasks/templates/KNOWLEDGE.jsonl.template` |
 | Config file | `.claude/tasks/cfg/focus-task.config.json` |
@@ -358,12 +358,12 @@ bash "$FT_PLUGIN/skills/setup/scripts/setup.sh" validate && echo "✅ validate" 
 
 ## Templates
 
-**Task template:** `.claude/tasks/templates/TASK.md.template`
+**Plan template:** `.claude/tasks/templates/PLAN.md.template`
 **Review skill:** `.claude/skills/focus-task-review/SKILL.md`
 
 ## Usage
 
-/focus-task:create "Implement feature X"
+/focus-task:spec "Implement feature X"
 /focus-task:review "Check null safety"
 ```
 
@@ -373,7 +373,7 @@ bash "$FT_PLUGIN/skills/setup/scripts/setup.sh" validate && echo "✅ validate" 
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| Universal template | `$ARGUMENTS` or `~/.claude/templates/TASK.md.template` | Source template for adaptation |
+| Universal template | `$ARGUMENTS` or `~/.claude/templates/PLAN.md.template` | Source template for adaptation |
 | Fallback mode | Minimal adaptation | Use core agents only if no project patterns detected |
 | Update mode | Incremental | Re-run to refresh when project evolves |
 

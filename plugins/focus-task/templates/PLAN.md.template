@@ -1,7 +1,7 @@
 status: pending
 <!-- ↑ Line 1 status: stop hook reads this. MUST match table Status. Values: pending|in progress|handoff|finished -->
 
-# Task: {NAME}
+# Plan: {NAME}
 
 > **AUTONOMY:** Work until DONE. Iterate until all criteria met.
 > **CONTEXT:** Load per phase via ID. KNOWLEDGE.jsonl holds accumulated knowledge.
@@ -10,7 +10,7 @@ status: pending
 
 | Step | After EACH agent |
 |------|------------------|
-| 1 | WRITE → `reports/.../phase_P/iter_N_type/{AGENT}_output.md` |
+| 1 | WRITE → `artifacts/{P}-{N}{T}/{AGENT}_output.md` |
 | 2 | CALL → `ft-coordinator` (reads report, extracts knowledge) |
 
 > Next agent BLOCKED until both complete.
@@ -19,19 +19,19 @@ status: pending
 
 | Created | {TIMESTAMP} | Status | pending |
 |---------|-------------|--------|---------|
-| Spec | `.claude/tasks/specs/{TIMESTAMP}_{NAME}_SPEC_v1.md` |||
-| Knowledge | `.claude/tasks/{TIMESTAMP}_{NAME}_KNOWLEDGE.jsonl` |||
+| Spec | `SPEC.md` |||
+| Knowledge | `KNOWLEDGE.jsonl` |||
 
 ## Reports
 
 | Field | Path |
 |-------|------|
-| Report Dir | `.claude/tasks/reports/{TIMESTAMP}_{NAME}/` |
-| Manifest | `.claude/tasks/reports/{TIMESTAMP}_{NAME}/MANIFEST.md` |
-| Final | `.claude/tasks/reports/{TIMESTAMP}_{NAME}/FINAL.md` |
+| Artifacts Dir | `artifacts/` |
+| Manifest | `artifacts/MANIFEST.md` |
+| Final | `artifacts/FINAL.md` |
 
-> **Report Structure:** `reports/{TIMESTAMP}_{NAME}/phase_{P}/iter_{N}_{type}/`
-> - `{type}`: `exec` (execution) or `verify` (verification)
+> **Report Structure:** `artifacts/{P}-{N}{T}/`
+> - `{P}`: phase number, `{N}`: iteration number, `{T}`: `e` (exec) or `v` (verify)
 > - Each iteration contains: `{AGENT}_output.md`, `summary.md`, optional `{AGENT}_artifacts/`
 
 **Statuses:** `pending` → `in progress` → `handoff` → `finished`
@@ -85,7 +85,7 @@ status: pending
 | `tester` | Tests, analysis | sonnet |
 | `reviewer` | Quality, security, patterns | sonnet |
 | `Explore` | Codebase search (READ-ONLY) | haiku |
-| `ft-coordinator` | Update TASK.md, validate | sonnet |
+| `ft-coordinator` | Update PLAN.md, validate | sonnet |
 
 ## Reference Examples
 
@@ -202,7 +202,7 @@ status: pending
 
 ## ⛔ Reminder
 
-After EVERY agent: 1) WRITE report 2) CALL ft-coordinator. Then proceed.
+After EVERY agent: 1) WRITE report to `artifacts/{P}-{N}{T}/` 2) CALL ft-coordinator. Then proceed.
 
 ---
 

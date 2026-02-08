@@ -158,5 +158,6 @@ test -n "$FT_PLUGIN" && echo "✅ FT_PLUGIN=$FT_PLUGIN" || echo "❌ Plugin not 
 | Command | Purpose |
 |---------|---------|
 | `/focus-task:setup` | Initialize for project |
-| `/focus-task:create <desc>` | Create task |
+| `/focus-task:spec <desc>` | Create SPEC |
+| `/focus-task:plan` | Create PLAN |
 | `/grepai setup` | Configure semantic search |

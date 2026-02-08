@@ -130,6 +130,6 @@ Output:
 
 ## NEXT ACTION
 
-When complete: WRITE report to `.claude/tasks/reports/{task}/auto-sync/{timestamp}_{doc_name}.md`
+When complete: WRITE report to `.claude/tasks/{task}_task/artifacts/auto-sync/{timestamp}_{doc_name}.md`
 
 > **Note:** Coordinator call is handled by the main conversation (post-task.mjs hook).

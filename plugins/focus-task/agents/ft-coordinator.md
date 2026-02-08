@@ -18,13 +18,13 @@ You are the coordinator agent for Focus Task plugin. Your role is to maintain ta
 |--------|------|--------|
 | **Initialize** | Start of /focus-task:start | Validate, create lock, update status |
 | **Finalize** | Task completion | Generate FINAL.md, update status |
-| Update phase status | After phase completion | Edit TASK.md status field |
-| Record phase result | After phase completion | Edit TASK.md Result field |
+| Update phase status | After phase completion | Edit PLAN.md status field |
+| Record phase result | After phase completion | Edit PLAN.md Result field |
 | Log progress | After any change | Append to Progress Log |
 | Check KNOWLEDGE | After phase adds entries | Report duplicates |
 | **Auto-compact** | After KNOWLEDGE check | If entries >= lastCompactAt + threshold → inline deduplicate + rewrite, update MANIFEST |
 | Prepare handoff | Before context limit | Set status to `handoff`, ensure all state saved |
-| **Create report dirs** | Before phase starts | Create `phase_{P}/iter_{N}_{type}/` if missing |
+| **Create report dirs** | Before phase starts | Create `{P}-{N}{T}/` if missing |
 | **Read agent report** | After Manager writes it | Read `{AGENT}_output.md` from disk |
 | **Extract knowledge** | After reading report | Extract 3-10 entries → KNOWLEDGE.jsonl |
 | **Write phase summary** | After phase completion | Write `summary.md` from agent reports |
@@ -46,7 +46,7 @@ Called at start of `/focus-task:start` to validate and prepare execution.
 1. Validate task file exists
 2. Validate task has valid structure (## Phases, ## Agents)
 3. Validate status is `pending` or `in progress` (allow restart of interrupted task)
-4. Write `.claude/tasks/cfg/.focus-task.lock` file (always overwrites existing - enables recovery from crashed sessions):
+4. Write `.claude/tasks/{TS}_{NAME}_task/.lock` file (always overwrites existing - enables recovery from crashed sessions):
    ```json
    {
      "task_path": "{taskPath}",
@@ -104,14 +104,14 @@ Task finalized:
 ## Input
 
 You receive:
-- `taskPath`: Path to `{TIMESTAMP}_{NAME}_TASK.md`
+- `taskPath`: Path to `{TS}_{NAME}_task/PLAN.md`
 - `phase`: Current phase number/name
 - `iteration`: Current iteration number (starts at 1)
 - `type`: `exec` (execution) or `verify` (verification)
 - `status`: `completed` | `failed` | `handoff`
 - `result`: Summary of phase outcome (optional)
 - `agentResults`: Array of agent outputs from this iteration (optional)
-- `reportDir`: Path to `reports/{TS}_{NAME}/` (derived from taskPath)
+- `reportDir`: Path to `artifacts/` (within task dir)
 
 ## Workflow
 
@@ -205,23 +205,18 @@ Task completed:
 ### Directory Structure
 
 ```
-.claude/tasks/reports/{TS}_{NAME}/
+{TS}_{NAME}_task/artifacts/
 ├── MANIFEST.md                    # Index of all phases/iterations
 ├── FINAL.md                       # Final report (on completion)
-└── phase_{P}/
-    ├── iter_{N}_exec/             # Execution iteration
-    │   ├── {AGENT}_output.md      # Agent execution report
-    │   ├── {AGENT}_artifacts/     # Optional artifacts (logs, SQL)
-    │   └── summary.md             # Phase summary
-    └── iter_{N}_verify/           # Verification iteration
-        ├── {AGENT}_review.md      # Review report
-        ├── issues.jsonl           # Structured issues
-        └── summary.md             # Verification summary
+└── {P}-{N}{T}/                    # e.g., 1-1e/ (phase 1, iter 1, exec)
+    ├── {AGENT}_output.md          # Agent execution/review report
+    ├── {AGENT}_artifacts/         # Optional artifacts (logs, SQL)
+    └── summary.md                 # Phase summary
 ```
 
 ### After Each SubAgent Completes
 
-1. Ensure `reports/{task}/phase_{P}/iter_{N}_{type}/` exists (create with mkdir -p if missing)
+1. Ensure `artifacts/{P}-{N}{T}/` exists (create with mkdir -p if missing)
 2. **VERIFY** `{AGENT}_output.md` (exec) or `{AGENT}_review.md` (verify) **EXISTS on disk**
    - Manager writes this file BEFORE calling coordinator
    - If MISSING → return error: "MISSING: {path} — Manager must write before calling coordinator"
@@ -314,7 +309,7 @@ Use templates from `{PLUGIN_ROOT}/templates/reports/`:
 
 ## Critical: Task Status Format
 
-TASK.md has **two status locations** that MUST stay in sync:
+PLAN.md has **two status locations** that MUST stay in sync:
 
 ```markdown
 status: finished          ← Line 1 (stop hook reads THIS)

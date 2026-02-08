@@ -20,7 +20,7 @@
  *
  * Cleanup: /focus-task:teardown removes .claude/plans/ directory
  */
-import { readStdin, output, log } from './lib/utils.mjs';
+import { readStdin, output, log, getActiveTaskPath, getTaskDir, writeSessionInfo } from './lib/utils.mjs';
 import { readdirSync, statSync, mkdirSync, symlinkSync, unlinkSync, existsSync } from 'fs';
 import { join, resolve } from 'path';
 import { homedir } from 'os';
@@ -68,6 +68,18 @@ async function main() {
     const source = input.source;
 
     log('info', '[session]', `Started: ${session_id?.slice(0, 8) || 'unknown'} (${source})`, cwd, session_id);
+
+    // Create/update session mapping
+    if (session_id && cwd) {
+      const taskPath = getActiveTaskPath(cwd);
+      if (taskPath) {
+        const taskDir = getTaskDir(taskPath);
+        // Store relative path from cwd
+        const relativeTaskDir = taskDir.replace(cwd + '/', '');
+        writeSessionInfo(cwd, session_id, relativeTaskDir);
+        log('info', '[session]', `Session mapped: ${session_id.slice(0, 8)} → ${relativeTaskDir}`, cwd, session_id);
+      }
+    }
 
     if (source === 'clear' && cwd) {
       const linked = linkLatestPlan(cwd);

@@ -53,10 +53,9 @@ remove_item ".claude/skills/focus-task-review" "dir"
 
 echo ""
 echo "Preserved (not deleted):"
-echo "  ⏭️  .claude/tasks/*_TASK.md (active tasks)"
-echo "  ⏭️  .claude/tasks/*_KNOWLEDGE.jsonl"
-echo "  ⏭️  .claude/tasks/reports/"
-echo "  ⏭️  .claude/tasks/specs/"
+echo "  ⏭️  .claude/tasks/*_task/ (task directories)"
+echo "  ⏭️  .claude/tasks/*_task/KNOWLEDGE.jsonl (knowledge files)"
+echo "  ⏭️  .claude/tasks/*_task/artifacts/ (artifacts)"
 echo "  ⏭️  .claude/rules/ (user rules)"
 
 echo ""

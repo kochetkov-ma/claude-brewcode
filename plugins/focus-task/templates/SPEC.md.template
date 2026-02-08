@@ -1,90 +1,41 @@
-# Specification: {NAME}
+# {NAME}
+> v1 | {TIMESTAMP}
 
-> Version: v{VERSION} | Created: {TIMESTAMP}
-> Agents: TBD <!-- Fill with project agents from .claude/agents/ -->
+## Goal
+{1-2 sentence goal}
 
-## Problem Statement
+## Original Requirements
+> Polished user input. ALL details, diagrams, edge cases preserved verbatim.
+{FULL_REQUIREMENTS}
 
-{CLEAR_DESCRIPTION_OF_WHAT_NEEDS_TO_BE_SOLVED}
+## User Q&A
+| # | Question | Answer |
+|---|----------|--------|
+<!-- Recorded from AskUserQuestion interactions during /focus-task:spec -->
 
-## Requirements
+## Analysis
+### Architecture
+{patterns, dependencies, integration points, diagrams}
 
-### Functional
+### Data & State
+{schema changes, entities, state management}
 
-| ID | Requirement | Priority |
-|----|-------------|----------|
-| FR-1 | {REQUIREMENT} | High/Medium/Low |
-| FR-2 | {REQUIREMENT} | High/Medium/Low |
-
-### Non-Functional
-
-| ID | Requirement | Priority |
-|----|-------------|----------|
-| NFR-1 | {REQUIREMENT} | High/Medium/Low |
-
-## Scope
-
-| In Scope | Out of Scope |
-|----------|--------------|
-| {ITEM} | {ITEM} |
-
-## Proposed Solution
-
-{HIGH_LEVEL_APPROACH}
-
-## Acceptance Criteria
-
-- [ ] AC-1: {CRITERION}
-- [ ] AC-2: {CRITERION}
-- [ ] AC-3: {CRITERION}
+### Impact
+| Area | Files | Change |
+|------|-------|--------|
 
 ## Context Files
-
-| File | Purpose | Phase |
+| File | Purpose | Notes |
 |------|---------|-------|
-| {PATH} | {WHY_NEEDED} | 1,2 |
 
-## Technical Analysis
-
-### Architecture
-
-{PATTERNS_DEPENDENCIES_INTEGRATION_POINTS}
-
-### Data Model
-
-{SCHEMA_CHANGES_ENTITIES_RELATIONSHIPS}
-
-### Implementation Notes
-
-{TECHNICAL_DETAILS_WARNINGS_GOTCHAS}
-
-## Risks & Mitigations
-
-| Risk | Impact | Probability | Mitigation |
-|------|--------|-------------|------------|
-| {RISK} | H/M/L | H/M/L | {MITIGATION} |
+## Risks
+| Risk | Impact | Mitigation |
+|------|--------|------------|
 
 ## Decisions
+| Decision | Rationale |
+|----------|-----------|
 
-| Decision | Options Considered | Rationale |
-|----------|-------------------|-----------|
-| {DECISION} | {OPTIONS} | {WHY_CHOSEN} |
-
-## Research Summary
-
-> Consolidated findings from parallel agent analysis
-> Agents: TBD <!-- Use project agents from .claude/agents/, fallback to core agents -->
-
+## Research
 | Area | Agent | Key Findings |
 |------|-------|--------------|
-| {AREA} | {AGENT} | {SUMMARY} |
-
-<!--
-Research Areas (TBD by /focus-task:setup):
-- Controllers/API → developer | sql_expert
-- Services/Domain → developer | Plan
-- Data/Repository → sql_expert | developer
-- Tests → tester
-- Config → developer
-- Docs → Explore
--->

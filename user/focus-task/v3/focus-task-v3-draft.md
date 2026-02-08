@@ -120,7 +120,7 @@ symlinkSync(tasksDir, linkPath);
 ### Инициализация
 
 ```
-/focus-task:create "Implement auth"
+/focus-task:spec "Implement auth"  →  /focus-task:plan
     │
     ▼
 ┌─────────────────────────────────────────────────┐

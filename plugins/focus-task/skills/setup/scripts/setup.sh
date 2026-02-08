@@ -103,7 +103,7 @@ sync_templates() {
     fi
   }
 
-  sync_template "$PLUGIN_TEMPLATES/TASK.md.template" ".claude/tasks/templates/TASK.md.template"
+  sync_template "$PLUGIN_TEMPLATES/PLAN.md.template" ".claude/tasks/templates/PLAN.md.template"
   sync_template "$PLUGIN_TEMPLATES/SPEC.md.template" ".claude/tasks/templates/SPEC.md.template"
   sync_template "$PLUGIN_TEMPLATES/KNOWLEDGE.jsonl.template" ".claude/tasks/templates/KNOWLEDGE.jsonl.template"
 
@@ -193,7 +193,7 @@ validate_setup() {
   echo "=== Phase 4: Validation ==="
   ERRORS=0
 
-  test -f .claude/tasks/templates/TASK.md.template && echo "✅ TASK template" || { echo "❌ TASK template MISSING"; ERRORS=$((ERRORS+1)); }
+  test -f .claude/tasks/templates/PLAN.md.template && echo "✅ PLAN template" || { echo "❌ PLAN template MISSING"; ERRORS=$((ERRORS+1)); }
   test -f .claude/tasks/templates/SPEC.md.template && echo "✅ SPEC template" || { echo "❌ SPEC template MISSING"; ERRORS=$((ERRORS+1)); }
   test -f .claude/tasks/templates/KNOWLEDGE.jsonl.template && echo "✅ KNOWLEDGE template" || { echo "❌ KNOWLEDGE template MISSING"; ERRORS=$((ERRORS+1)); }
   test -f .claude/rules/avoid.md && echo "✅ avoid.md rules" || { echo "❌ avoid.md MISSING"; ERRORS=$((ERRORS+1)); }

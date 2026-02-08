@@ -134,10 +134,10 @@ const taskPath = readFileSync(`sessions/${sessionId}.info`, 'utf8').trim();
 
 ## Flow: Инициализация
 
-Создание всех артефактов задачи и hydration фаз в Task Manager. Выполняется один раз при `/focus-task:create`.
+Создание всех артефактов задачи и hydration фаз в Task Manager. Выполняется через `/focus-task:spec` + `/focus-task:plan`.
 
 ```
-/focus-task:create "Implement auth"
+/focus-task:spec "Implement auth"  →  /focus-task:plan
          │
          ▼
 ┌─────────────────────────────────────────────────────────────┐
@@ -360,6 +360,28 @@ session/ → ~/.claude/tasks/xyz789/
 
 ---
 
+## v2.6 Implementation Status
+
+> Items from v3 design implemented in v2.6 (without Task Manager / symlinks):
+
+| Feature | v3 Design | v2.6 Status |
+|---------|-----------|-------------|
+| `{TS}_{NAME}_task/` directory | Yes | Implemented |
+| `PLAN.md` inside task dir | Static (never changes) | Implemented (dynamic, same as old TASK.md) |
+| `SPEC.md` inside task dir | Yes | Implemented |
+| `KNOWLEDGE.jsonl` inside task dir | Yes | Implemented |
+| `artifacts/` | Yes | Implemented (replaces `reports/`) |
+| `backup/` | Yes | Implemented |
+| `sessions/` mapping | Yes | Implemented (`{session_id}.info`) |
+| `.lock` per-task | Yes | Implemented (was `cfg/.focus-task.lock`) |
+| `session/` symlink to `~/.claude/tasks/` | Yes | Not implemented (v3 only) |
+| Task Manager integration | Yes | Not implemented (v3 only) |
+| Static PLAN.md | Yes | Not implemented (PLAN.md is dynamic in v2.6) |
+| 3-stage flow (spec -> plan -> start) | N/A | New in v2.6 |
+| User interaction (AskUserQuestion) | N/A | New in v2.6 |
+
+---
+
 ## Протокол обновления
 
 | Версия | Дата | Изменения |
@@ -368,3 +390,4 @@ session/ → ~/.claude/tasks/xyz789/
 | 0.2.0 | 2026-02-03 | Рефакторинг структуры: директория задачи, добавлен SPEC.md |
 | 0.3.0 | 2026-02-03 | Session mapping: `sessions/{session_id}.info` с полным путём |
 | 0.4.0 | 2026-02-03 | Пояснения для файловой структуры |
+| 0.5.0 | 2026-02-08 | v2.6 implementation status: task dirs, artifacts, sessions, 3-stage flow |

@@ -126,7 +126,7 @@ Task file: ${taskPath}
 ACTION: Continue execution. Re-read TASK.md and proceed with phase ${task.currentPhase}.
 
 [ESCAPE IF STUCK]
-Emergency exit: rm .claude/tasks/cfg/.focus-task.lock
+Emergency exit: rm .claude/tasks/*_task/.lock
 Then stop will be allowed.`
     });
   } catch (error) {

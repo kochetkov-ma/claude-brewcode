@@ -23,10 +23,10 @@
 
 | Компонент | Кол-во | Назначение |
 |-----------|--------|------------|
-| **Скиллы** | 9 | Команды для работы с задачами |
+| **Скиллы** | 10 | Команды для работы с задачами |
 | **Агенты** | 4 | ft-coordinator, ft-knowledge-manager, ft-grepai-configurator, ft-auto-sync-processor |
 | **Хуки** | 7 файлов / 5 событий | SessionStart (2), PreToolUse (2), PostToolUse (1), PreCompact (1), Stop (1) |
-| **Шаблоны** | 5 | TASK.md, SPEC.md, KNOWLEDGE.jsonl, отчеты |
+| **Шаблоны** | 5 | PLAN.md, SPEC.md, SPEC-creation.md, KNOWLEDGE.jsonl, отчеты |
 
 ---
 
@@ -65,9 +65,9 @@
 
 | Удаляется | Сохраняется |
 |-----------|-------------|
-| `.claude/tasks/templates/` | `*_TASK.md`, `*_KNOWLEDGE.jsonl` |
-| `.claude/tasks/cfg/focus-task.config.json` | `reports/` |
-| `.claude/skills/focus-task-review/` | `.claude/rules/` |
+| `.claude/tasks/templates/` | `*_task/` директории (PLAN, SPEC, KNOWLEDGE, artifacts) |
+| `.claude/tasks/cfg/focus-task.config.json` | `.claude/rules/` |
+| `.claude/skills/focus-task-review/` | |
 
 **Модель:** haiku
 
@@ -75,35 +75,70 @@
 
 ### 2. Task Lifecycle (Жизненный цикл задачи)
 
-#### `/focus-task:create`
+#### `/focus-task:spec`
 
-Создает задачу с параллельным исследованием кодовой базы (5-10 агентов).
+Создает спецификацию через исследование кодовой базы и диалог с пользователем.
 
 ```bash
-/focus-task:create "Реализовать авторизацию с JWT"    # Текстовое описание
-/focus-task:create requirements.md                     # Из файла
+/focus-task:spec "Реализовать авторизацию с JWT"    # Текстовое описание
+/focus-task:spec requirements.md                     # Из файла
 ```
 
 **Workflow:**
 
-| Шаг | Действие |
-|-----|----------|
-| 1 | Проверка адаптированных шаблонов |
-| 2 | Разбиение исследования на 5-10 областей |
-| 3 | Параллельное исследование агентами (в ОДНОМ сообщении) |
-| 4 | Консолидация находок в SPEC |
-| 5 | Ревью SPEC с итерационным циклом |
-| 6 | Генерация TASK.md с фазами из SPEC |
-| 7 | Создание KNOWLEDGE.jsonl (пустой) |
-| 8 | Инициализация директории отчетов |
-| 9 | Ревью плана кворумом 3 агентов (2/3 консенсус) |
-| 10 | Валидация и обновление quick reference |
+| Шаг | Действие | Диалог |
+|-----|----------|--------|
+| 0 | Проверка адаптированных шаблонов | — |
+| 1 | Анализ входных данных, определение скоупа | — |
+| 2 | Уточняющие вопросы через AskUserQuestion | ✅ скоуп, приоритеты, ограничения |
+| 3 | Разбиение исследования на 5-10 областей + параллельные агенты | — |
+| 4 | Консолидация находок в SPEC | — |
+| 5 | Презентация ключевых находок через AskUserQuestion | ✅ валидация решений, полнота |
+| 6 | Ревью SPEC (reviewer) + итерационный цикл | — |
+
+**Результат:** `.claude/tasks/{TS}_{NAME}_task/SPEC.md`
+
+**Модель:** opus
+
+---
+
+#### `/focus-task:plan`
+
+Генерирует план выполнения (PLAN.md) из SPEC или файла Plan Mode.
+
+```bash
+/focus-task:plan .claude/tasks/{TS}_{NAME}_task/     # Из директории задачи
+/focus-task:plan .claude/plans/LATEST.md              # Из Plan Mode
+/focus-task:plan                                       # Из .claude/TASK.md (quick ref)
+```
+
+**Входные данные:**
+
+| Вход | Действие |
+|------|----------|
+| Путь к `{TS}_{NAME}_task/` | Читает SPEC.md из директории |
+| Путь к SPEC.md | Определяет директорию задачи из родителя |
+| `.claude/plans/LATEST.md` | Plan Mode: парсит план, создает директорию, пропускает SPEC |
+| Пустой | Берет путь из `.claude/TASK.md` |
+
+**Workflow (из SPEC):**
+
+| Шаг | Действие | Диалог |
+|-----|----------|--------|
+| 0 | Валидация шаблонов + SPEC | — |
+| 1 | Чтение SPEC, извлечение требований и анализа | — |
+| 2 | Сканирование проекта для примеров (1-2 на фазу) | — |
+| 3 | Генерация гранулярных фаз (5-12) | — |
+| 4 | Презентация фаз через AskUserQuestion | ✅ одобрение/корректировка |
+| 5 | Генерация PLAN.md + KNOWLEDGE.jsonl + artifacts/ + backup/ | — |
+| 6 | Кворумное ревью (3 агента, правило 2/3) + верификация | — |
+| 7 | Презентация результатов ревью | ✅ одобрение/отклонение |
 
 **Результат:**
-- `.claude/tasks/{TS}_{NAME}_TASK.md`
-- `.claude/tasks/specs/{TS}_{NAME}_SPEC_v1.md`
-- `.claude/tasks/{TS}_{NAME}_KNOWLEDGE.jsonl`
-- `.claude/tasks/reports/{TS}_{NAME}/MANIFEST.md`
+- `.claude/tasks/{TS}_{NAME}_task/PLAN.md`
+- `.claude/tasks/{TS}_{NAME}_task/KNOWLEDGE.jsonl`
+- `.claude/tasks/{TS}_{NAME}_task/artifacts/MANIFEST.md`
+- `.claude/tasks/{TS}_{NAME}_task/backup/`
 - `.claude/TASK.md` — ссылка на активную задачу
 
 **Модель:** opus
@@ -116,7 +151,7 @@
 
 ```bash
 /focus-task:start                                      # Путь из .claude/TASK.md
-/focus-task:start .claude/tasks/20260130_150000_auth_TASK.md
+/focus-task:start .claude/tasks/20260130_150000_auth_task/PLAN.md
 ```
 
 <hooks_mechanism>
@@ -136,7 +171,7 @@
 |-----|----------|
 | 1 | Резолв пути задачи |
 | 2 | Инициализация через ft-coordinator |
-| 3 | Загрузка контекста (TASK.md, KNOWLEDGE.jsonl) |
+| 3 | Загрузка контекста (PLAN.md, KNOWLEDGE.jsonl) |
 | 4 | Выполнение фаз (агент → отчет → координатор) |
 | 5 | Мониторинг контекста (компакт при 90%) |
 | 6 | Финальное ревью (3+ агента) |
@@ -146,7 +181,7 @@
 
 **Обязательный 2-step протокол после каждого агента:**
 ```
-1. WRITE report → reports/{TS}_{NAME}/phase_N/iter_M_{type}/{AGENT}_output.md
+1. WRITE report → {TS}_{NAME}_task/artifacts/{P}-{N}{T}/{AGENT}_output.md
 2. CALL ft-coordinator → extract knowledge, update status, output NEXT ACTION
 ```
 
@@ -583,7 +618,7 @@ Fires after every Task tool call. Enforces the 2-step protocol and manages sessi
 ```
 
 **Обязательный 2-step протокол:**
-1. **WRITE report** → `reports/{TS}_{NAME}/phase_N/iter_M/{AGENT}_output.md`
+1. **WRITE report** → `{TS}_{NAME}_task/artifacts/{P}-{N}{T}/{AGENT}_output.md`
 2. **CALL ft-coordinator** → extract knowledge, update status, output NEXT ACTION
 
 ### PreCompact (pre-compact.mjs)
@@ -592,7 +627,7 @@ Fires after every Task tool call. Enforces the 2-step protocol and manages sessi
 
 | Шаг | Действие |
 |-----|----------|
-| 1 | Валидация состояния (reports/, MANIFEST.md) |
+| 1 | Валидация состояния (artifacts/, MANIFEST.md) |
 | 2 | Компактификация KNOWLEDGE.jsonl |
 | 3 | Запись handoff entry |
 | 4 | Статус → `handoff` |
@@ -666,11 +701,11 @@ Fires after every Task tool call. Enforces the 2-step protocol and manages sessi
 ```
 
 **Сохраняется между компактами:**
-- Текущая фаза и шаг (в TASK.md)
+- Текущая фаза и шаг (в PLAN.md)
 - Все накопленные знания (KNOWLEDGE.jsonl)
 - Файл задачи с обновленным статусом
 - Результаты верификации
-- Все отчеты в `reports/{TS}_{NAME}/`
+- Все отчеты в `{TS}_{NAME}_task/artifacts/`
 - MANIFEST.md с логом handoff
 
 ---
@@ -684,33 +719,32 @@ Fires after every Task tool call. Enforces the 2-step protocol and manages sessi
 └── .claude/
     ├── TASK.md                          # Ссылка на активную задачу
     ├── tasks/
-    │   ├── {TS}_{NAME}_TASK.md          # Файл задачи
-    │   ├── {TS}_{NAME}_KNOWLEDGE.jsonl  # Накопленные знания
-    │   ├── specs/                       # Спецификации
-    │   │   └── {TS}_{NAME}_SPEC_v1.md
+    │   ├── cfg/                         # Конфигурация
+    │   │   └── focus-task.config.json
     │   ├── templates/                   # Адаптированные шаблоны
-    │   │   ├── TASK.md.template
+    │   │   ├── PLAN.md.template
     │   │   ├── SPEC.md.template
-    │   │   └── KNOWLEDGE.jsonl.template
+    │   │   ├── SPEC-creation.md
+    │   │   ├── KNOWLEDGE.jsonl.template
+    │   │   └── ...
+    │   ├── sessions/                    # Информация о сессиях
+    │   │   └── {session_id}.info
+    │   ├── logs/                        # Логи хуков
+    │   │   └── focus-task.log
     │   ├── reviews/                     # Отчеты ревью
     │   │   └── {TS}_{NAME}_report.md
-    │   ├── reports/                     # Отчеты выполнения
-    │   │   └── {TS}_{NAME}/
-    │   │       ├── MANIFEST.md          # Индекс всех фаз
-    │   │       ├── FINAL.md             # Финальный отчет
-    │   │       └── phase_N/             # Отчеты по фазам
-    │   │           ├── iter_M_exec/
-    │   │           │   ├── {AGENT}_output.md
-    │   │           │   └── summary.md
-    │   │           └── iter_M_verify/
-    │   │               ├── {AGENT}_review.md
-    │   │               └── issues.jsonl
-    │   ├── cfg/                         # Конфигурация
-    │   │   ├── focus-task.config.json
-    │   │   ├── .focus-task.lock         # Lock активной задачи
-    │   │   └── focus-task.state.json    # State для handoff
-    │   └── logs/
-    │       └── focus-task.log           # Лог хуков
+    │   └── {TS}_{NAME}_task/            # Директория задачи
+    │       ├── PLAN.md                  # План выполнения (бывш. TASK.md)
+    │       ├── SPEC.md                  # Спецификация
+    │       ├── KNOWLEDGE.jsonl          # Накопленные знания
+    │       ├── .lock                    # Lock активной задачи
+    │       ├── backup/                  # Бэкапы
+    │       └── artifacts/               # Отчеты выполнения
+    │           ├── MANIFEST.md          # Индекс всех фаз
+    │           ├── FINAL.md             # Финальный отчет
+    │           └── {P}-{N}{T}/          # Фаза-Итерация-Тип (e.g., 1-1e/, 1-1v/)
+    │               ├── {AGENT}_output.md
+    │               └── summary.md
     ├── skills/
     │   └── focus-task-review/           # Адаптированный ревью
     └── rules/                           # Извлеченные правила
@@ -752,19 +786,22 @@ Fires after every Task tool call. Enforces the 2-step protocol and manages sessi
 2. /focus-task:grepai setup   # (Опционально) Настройка семантического поиска
          │
          ▼
-3. /focus-task:create "..."   # Создание задачи с исследованием
+3. /focus-task:spec "..."     # Исследование + создание SPEC (диалог с пользователем)
          │
          ▼
-4. /focus-task:start          # Выполнение (бесконечный контекст)
+4. /focus-task:plan           # Генерация плана из SPEC (фазы, агенты, критерии)
          │
          ▼
-5. /focus-task:review         # (Опционально) Код-ревью с кворумом
+5. /focus-task:start          # Выполнение (бесконечный контекст)
          │
          ▼
-6. /focus-task:rules          # (Авто) Извлечение правил из знаний
+6. /focus-task:review         # (Опционально) Код-ревью с кворумом
          │
          ▼
-7. /focus-task:teardown       # (Опционально) Очистка конфигурации
+7. /focus-task:rules          # (Авто) Извлечение правил из знаний
+         │
+         ▼
+8. /focus-task:teardown       # (Опционально) Очистка конфигурации
 ```
 
 ---
@@ -788,7 +825,8 @@ Fires after every Task tool call. Enforces the 2-step protocol and manages sessi
 | [ft-grepai-configurator](agents/ft-grepai-configurator.md) | grepai config generation |
 | **Skills** | |
 | [setup](skills/setup/SKILL.md) | Project initialization |
-| [create](skills/create/SKILL.md) | Task creation |
+| [spec](skills/spec/SKILL.md) | Research + SPEC creation |
+| [plan](skills/plan/SKILL.md) | Execution plan from SPEC |
 | [start](skills/start/SKILL.md) | Task execution |
 | [review](templates/skills/review/SKILL.md.template) | Multi-agent code review (template) |
 | [grepai](skills/grepai/SKILL.md) | Semantic search setup |

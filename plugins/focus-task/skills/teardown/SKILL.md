@@ -52,9 +52,8 @@ PROJECT/
 │   │   ├── templates/           ← 🗑️ DELETE (entire dir)
 │   │   ├── cfg/                 ← 🗑️ DELETE (entire dir)
 │   │   ├── logs/                ← 🗑️ DELETE (entire dir)
-│   │   ├── reports/             ← ⏭️ KEEP
-│   │   ├── specs/               ← ⏭️ KEEP
-│   │   └── *_TASK.md            ← ⏭️ KEEP
+│   │   ├── reports/             ← ⏭️ KEEP (legacy)
+│   │   └── *_task/              ← ⏭️ KEEP (task directories)
 │   ├── plans/                   ← 🗑️ DELETE (entire dir)
 │   ├── skills/
 │   │   └── focus-task-review/   ← 🗑️ DELETE (entire dir)
@@ -64,9 +63,9 @@ PROJECT/
 ## Safety
 
 - **--dry-run**: Shows files without deleting
-- **No task files**: Does NOT delete active tasks (`.claude/tasks/*_TASK.md`)
-- **No KNOWLEDGE**: Does NOT delete task knowledge files (`*_KNOWLEDGE.jsonl`)
-- **No reports**: Does NOT delete `.claude/tasks/reports/`
+- **No task dirs**: Does NOT delete task directories (`.claude/tasks/*_task/`)
+- **No KNOWLEDGE**: Does NOT delete task knowledge files (within task dirs)
+- **No artifacts**: Does NOT delete task artifacts (within task dirs)
 
 </instructions>
 
@@ -93,8 +92,6 @@ Removed:
   ✅ .claude/skills/focus-task-review/
 
 Preserved:
-  ⏭️  .claude/tasks/*_TASK.md (active tasks)
-  ⏭️  .claude/tasks/*_KNOWLEDGE.jsonl
-  ⏭️  .claude/tasks/reports/
+  ⏭️  .claude/tasks/*_task/ (task directories)
   ⏭️  .claude/rules/ (user rules)
 ```
