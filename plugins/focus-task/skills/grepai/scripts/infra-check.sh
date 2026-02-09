@@ -7,7 +7,7 @@ echo "=== Infrastructure Check ==="
 ERRORS=0
 
 # grepai CLI
-if which grepai >/dev/null 2>&1; then
+if command -v grepai >/dev/null 2>&1; then
   echo "✅ grepai: $(grepai version 2>/dev/null || echo 'installed')"
 else
   echo "❌ grepai: NOT FOUND"
@@ -16,7 +16,7 @@ else
 fi
 
 # Ollama
-if curl -s localhost:11434/api/tags >/dev/null 2>&1; then
+if curl -s --connect-timeout 3 --max-time 5 localhost:11434/api/tags >/dev/null 2>&1; then
   echo "✅ ollama: running"
 else
   echo "❌ ollama: not running"

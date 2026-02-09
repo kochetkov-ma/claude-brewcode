@@ -20,7 +20,6 @@ import { join } from 'path';
 import {
   readStdin,
   output,
-  getActiveTaskPath,
   getKnowledgePath,
   getReportsDir,
   parseTask,
@@ -55,14 +54,19 @@ async function main() {
     }
 
     // Get task path from lock (session-validated)
-    const taskPath = lock.task_path ? join(cwd, lock.task_path) : getActiveTaskPath(cwd);
-    if (!taskPath) {
+    if (!lock.task_path) {
       output({ continue: true });
       return;
     }
+    const taskPath = join(cwd, lock.task_path);
 
     // Parse task to get current state
     const task = parseTask(taskPath, cwd);
+    if (!task) {
+      log('warn', '[pre-compact]', 'Failed to parse task file', cwd, session_id);
+      output({ continue: true });
+      return;
+    }
 
     // If task is finished, allow compact without validation
     if (task.status === 'finished') {
@@ -74,7 +78,7 @@ async function main() {
     const validationIssues = [];
 
     // 1. Check artifacts directory exists for current phase
-    const artifactsDir = getReportsDir(taskPath, cwd);
+    const artifactsDir = getReportsDir(taskPath);
     const phasePattern = `${task.currentPhase}-`;
     let hasPhaseDir = false;
     if (existsSync(artifactsDir)) {
@@ -83,12 +87,6 @@ async function main() {
     }
     if (!hasPhaseDir) {
       validationIssues.push(`Artifacts directory missing for phase ${task.currentPhase}`);
-    }
-
-    // 2. Check MANIFEST.md exists
-    const manifestPath = join(artifactsDir, 'MANIFEST.md');
-    if (!existsSync(manifestPath)) {
-      validationIssues.push('MANIFEST.md not found in reports directory');
     }
 
     // If validation issues, warn but continue (don't block compact)
@@ -117,6 +115,7 @@ async function main() {
     const state = getState(cwd);
     state.lastHandoff = new Date().toISOString();
     state.lastPhase = task.currentPhase;
+    state.lastCompactAt = new Date().toISOString();
     saveState(cwd, state);
 
     log('info', '[pre-compact]', `Handoff to phase ${task.currentPhase}`, cwd, session_id);

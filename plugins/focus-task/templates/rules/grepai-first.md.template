@@ -1,7 +1,6 @@
 ---
 paths:
   - "**/*"
-description: grepai-first - semantic search FIRST for code exploration
 ---
 
 > **FIRST** `grepai` mcp for code exploration. Params → MCP descriptions.

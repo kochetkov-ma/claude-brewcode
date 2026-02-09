@@ -24,7 +24,7 @@ echo "✅ Backup: $BACKUP_DIR/config_$TIMESTAMP.yaml"
 
 # Remove stale last_index_time to prepare for fresh config
 if grep -q "last_index_time:" .grepai/config.yaml 2>/dev/null; then
-  sed -i '' '/last_index_time:/d' .grepai/config.yaml
+  grep -v 'last_index_time:' .grepai/config.yaml > .grepai/config.yaml.tmp && mv .grepai/config.yaml.tmp .grepai/config.yaml
   echo "✅ Removed stale last_index_time"
 fi
 

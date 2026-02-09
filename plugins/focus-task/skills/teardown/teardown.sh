@@ -2,10 +2,10 @@
 # Focus-Task Teardown Script
 # Removes all files created by /focus-task:setup
 
-set -e
+set -euo pipefail
 
 DRY_RUN=false
-[[ "$1" == "--dry-run" ]] && DRY_RUN=true
+[[ "${1:-}" == "--dry-run" ]] && DRY_RUN=true
 
 echo "Focus-Task Teardown"
 echo "==================="
@@ -50,6 +50,9 @@ remove_item ".grepai" "dir"
 
 # Project review skill
 remove_item ".claude/skills/focus-task-review" "dir"
+
+# Sessions
+remove_item ".claude/tasks/sessions" "dir"
 
 echo ""
 echo "Preserved (not deleted):"

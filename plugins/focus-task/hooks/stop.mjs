@@ -15,8 +15,11 @@ import {
   deleteLock,
   getLock,
   isLockStale,
+  validateTaskPath,
   log
 } from './lib/utils.mjs';
+
+const TERMINAL_STATUSES = new Set(['finished', 'cancelled', 'failed', 'error']);
 
 async function main() {
   let cwd = null;
@@ -28,13 +31,19 @@ async function main() {
     session_id = input.session_id;
     cwd = input.cwd || cwd;
 
+    // Re-entrancy guard: prevent recursive stop hook invocation
+    if (input.stop_hook_active) {
+      output({});
+      return;
+    }
+
     // Check if there's a lock file (focus-task was started in some session)
     const lock = getLock(cwd);
 
     // Check for stale lock (older than 24h) - auto-cleanup
     if (lock && isLockStale(lock)) {
       log('warn', '[stop]', `Stale lock detected (>24h old) - removing`, cwd, session_id);
-      deleteLock(cwd);
+      deleteLock(cwd, join(cwd, lock.task_path));
       output({});
       return;
     }
@@ -60,24 +69,30 @@ async function main() {
     if (!lock.session_id) {
       // Unbound lock (no session claimed it) - treat as stale, allow stop
       log('warn', '[stop]', 'Lock has no session_id - treating as stale', cwd, session_id);
-      deleteLock(cwd);
+      deleteLock(cwd, join(cwd, lock.task_path));
       output({});
       return;
     }
 
     if (lock.session_id !== session_id) {
       // Different session owns this task - allow stop
-      log('debug', '[stop]', `Lock owned by different session: ${lock.session_id.slice(0, 8)}`, cwd, session_id);
+      log('debug', '[stop]', `Lock owned by different session: ${typeof lock.session_id === 'string' ? lock.session_id.slice(0, 8) : 'unknown'}`, cwd, session_id);
       output({});
       return;
     }
 
     // Get task path from lock
     const taskPath = lock.task_path;
+    if (taskPath && !validateTaskPath(taskPath)) {
+      log('warn', '[stop]', `Invalid task_path in lock: ${taskPath}`, cwd, session_id);
+      deleteLock(cwd, join(cwd, lock.task_path));
+      output({});
+      return;
+    }
     if (!taskPath || !existsSync(join(cwd, taskPath))) {
       // Invalid lock - delete and allow stop
       log('warn', '[stop]', 'Invalid lock - task file not found', cwd, session_id);
-      deleteLock(cwd);
+      deleteLock(cwd, join(cwd, lock.task_path));
       output({});
       return;
     }
@@ -89,13 +104,13 @@ async function main() {
     if (!task) {
       // Can't parse task - allow stop with lock cleanup
       log('error', '[stop]', 'Failed to parse task file', cwd, session_id);
-      deleteLock(cwd);
+      deleteLock(cwd, fullTaskPath);
       output({});
       return;
     }
 
     // If task is finished, allow stop
-    if (task.status === 'finished') {
+    if (TERMINAL_STATUSES.has(task.status)) {
       const knowledgePath = getKnowledgePath(fullTaskPath);
 
       // Remind about rules extraction if knowledge exists
@@ -104,7 +119,7 @@ async function main() {
       }
 
       // CRITICAL: Delete lock file when task is finished
-      deleteLock(cwd);
+      deleteLock(cwd, fullTaskPath);
       output({});
       return;
     }
@@ -123,7 +138,7 @@ Phase: ${task.currentPhase}/${task.totalPhases}
 
 Task file: ${taskPath}
 
-ACTION: Continue execution. Re-read TASK.md and proceed with phase ${task.currentPhase}.
+ACTION: Continue execution. Re-read PLAN.md and proceed with phase ${task.currentPhase}.
 
 [ESCAPE IF STUCK]
 Emergency exit: rm .claude/tasks/*_task/.lock
@@ -131,6 +146,7 @@ Then stop will be allowed.`
     });
   } catch (error) {
     log('error', '[stop]', `Error: ${error.message}`, cwd, session_id);
+    try { deleteLock(cwd); } catch (_) {}
     // On error, allow stop (don't trap user)
     output({});
   }

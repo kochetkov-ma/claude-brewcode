@@ -1,32 +1,36 @@
 # {NAME}
-> v1 | {TIMESTAMP}
+> {TIMESTAMP}
 
 ## Goal
-{1-2 sentence goal}
+{GOAL}
+
+## Scope
+
+| In | Out |
+|----|-----|
+| {IN_SCOPE} | {OUT_OF_SCOPE} |
 
 ## Original Requirements
-> Polished user input. ALL details, diagrams, edge cases preserved verbatim.
 {FULL_REQUIREMENTS}
 
 ## User Q&A
 | # | Question | Answer |
 |---|----------|--------|
-<!-- Recorded from AskUserQuestion interactions during /focus-task:spec -->
 
 ## Analysis
 ### Architecture
-{patterns, dependencies, integration points, diagrams}
+{ARCHITECTURE_ANALYSIS}
 
 ### Data & State
-{schema changes, entities, state management}
+{DATA_STATE_ANALYSIS}
 
 ### Impact
 | Area | Files | Change |
 |------|-------|--------|
 
 ## Context Files
-| File | Purpose | Notes |
-|------|---------|-------|
+| ID | File | Purpose |
+|----|------|---------|
 
 ## Risks
 | Risk | Impact | Mitigation |

@@ -10,6 +10,8 @@ model: opus
 
 Create Plan — [task-dir or SPEC path or plan file]
 
+<instructions>
+
 ## TOKEN-EFFICIENT FORMATTING
 
 **Rules for Opus 4.5 context optimization:**
@@ -83,7 +85,6 @@ Create Plan — [task-dir or SPEC path or plan file]
    - Create empty `KNOWLEDGE.jsonl` in task dir
    - Create `artifacts/` directory
    - Create `backup/` directory
-   - Create initial `MANIFEST.md` in `artifacts/` from template
 
 6. **Quorum Plan Review** (3 agents)
 
@@ -185,9 +186,10 @@ head -1 .claude/TASK.md 2>/dev/null | grep -q "${TS_NAME}" && echo "QUICK_REF" |
 - PLAN: .claude/tasks/{TS}_{NAME}_task/PLAN.md
 - KNOWLEDGE: .claude/tasks/{TS}_{NAME}_task/KNOWLEDGE.jsonl
 - ARTIFACTS: .claude/tasks/{TS}_{NAME}_task/artifacts/
-- MANIFEST: .claude/tasks/{TS}_{NAME}_task/artifacts/MANIFEST.md
 - BACKUP: .claude/tasks/{TS}_{NAME}_task/backup/
 - QUICK REF: .claude/TASK.md (task added to top, history preserved)
 
 Run: /focus-task:start .claude/tasks/{TS}_{NAME}_task/PLAN.md
 ```
+
+</instructions>

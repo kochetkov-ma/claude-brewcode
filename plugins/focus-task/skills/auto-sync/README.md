@@ -134,7 +134,7 @@ In `focus-task.config.json`:
 ```json
 "autoSync": {
   "intervalDays": 7,
-  "retention": { "maxEntries": 200, "removeOrphansAfterDays": 30 },
+  "retention": { "maxEntries": 200 },
   "optimize": false,
   "parallelAgents": 5
 }

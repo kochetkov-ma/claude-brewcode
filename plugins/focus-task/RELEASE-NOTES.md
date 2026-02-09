@@ -32,6 +32,80 @@
 
 ---
 
+## [2.7.0] - 2026-02-09
+
+### Added
+
+- **docs/ directory** — 4 comprehensive documentation files extracted from README.md
+  - `commands.md`, `file-tree.md`, `flow.md`, `hooks.md` (~166KB total)
+- **llm-text-rules.md** — shared LLM text rules for auto-sync instructions (DRY)
+- **HOOKS-REFERENCE.md** — Claude Code hooks reference (`user/features/`)
+- **Security hardening** — path traversal protection, atomic lock/state writes, bind race detection
+  - `validateTaskPath()`, `createLock()` with tmp+rename pattern
+  - Lock schema validation with auto-cleanup of corrupted locks
+- **Config recursion guard** — prevents infinite loop in `loadConfig()` via `_loadingConfig` flag
+- **Deep merge for nested config** — `knowledge.validation`, `agents.system` properly merged
+- **Grepai reminder throttling** — max once per 60s via `.grepai/.reminder-ts`
+- **PID-file-based process detection** — `watch.pid`/`mcp-serve.pid` before pgrep fallback
+- **Expanded status model** — `cancelled`, `error` statuses in ft-coordinator; `handoff` at init
+- **Handoff-after-compact context** — session-start injects re-read instruction on compact source
+- **Teardown confirmation** — `AskUserQuestion` prompt for non-dry-run teardown
+- **`<instructions>` tags** — added to spec, plan, start SKILL.md for proper skill boundaries
+
+### Changed
+
+- **README.md rewritten** — 836 → 101 lines; detailed docs moved to `docs/`
+- **KNOWLEDGE.jsonl schema simplified** — removed `cat` (category) and `scope` fields
+- **MANIFEST.md eliminated** — all references removed from coordinator, templates, hooks
+- **Scope-aware retention removed** — flat `maxEntries=100` replaces global:50/task:20 split
+- **Compact threshold** — 50% → 80% of maxEntries
+- **Hook output routing** — multiple hooks switched to `hookSpecificOutput.additionalContext`
+- **SessionStart hooks split** — session-start.mjs and grepai-session.mjs run independently
+- **Phase detection improved** — h2/h3 support, excludes verification phases, checkbox counting
+- **Constraint injection expanded** — ALL constraints for every non-system agent; expanded role regex
+- **Shell script hardening** — `set -euo pipefail`, `command -v` replacing `which`, curl timeouts
+- **ft-coordinator** — simplified status updates, removed MANIFEST, `cat` field removed
+- **ft-knowledge-manager** — removed scope/categories, dedup key 100 chars, maxEntries 100
+- **Config simplified** — removed `autoCompactThreshold`, `retention`, `stop.maxAttempts`
+- **PLAN.md.template** — simplified metadata, added `r` (R&D) iteration type, removed MANIFEST
+- **SPEC.md.template** — added Scope section, simplified headers
+- **Rule templates** — removed `description:` from YAML frontmatter
+- **package.json** — version synced to 2.7.0, author name corrected
+- **install.sh** — `|| true` for version extractions, `mktemp` for temp files
+
+### Fixed
+
+- **Config recursion infinite loop** — `log → shouldLog → getLogLevel → loadConfig → log`
+- **Config cache never populated** — `cachedConfigCwd` placed after unreachable validation
+- **Shallow config merge** — nested keys (`knowledge.validation`, `agents.system`) lost
+- **Lock bind race condition** — atomic tmp+rename with ownership verification
+- **State file corruption** — `saveState()` now uses atomic writes
+- **Path traversal in TASK.md** — rejects `..`, anchors regex
+- **stop.mjs crash** — `typeof` guard on `session_id`, error handler cleans lock
+- **stop.mjs references TASK.md** — corrected to PLAN.md
+- **pre-compact null task** — added null check for `parseTask()` return
+- **install.sh pipeline failures** — `|| true` prevents silent exits under `set -euo pipefail`
+- **grepai index error swallowed** — now reports "error" and logs warning
+
+### Removed
+
+- **`templates/hooks/grepai-session.mjs.template`** — built-in hook replaces template
+- **`templates/reports/MANIFEST.md.template`** — MANIFEST concept removed
+- **`templates/review-report.md.template`** — review reporting simplified
+- **6 exported functions** — `extractStatus`, `findCurrentPhase`, `writeSessionInfo`, `getTaskDirFromSession`, `classifyScope`, `appendKnowledgeValidated`
+- **`cat`/`scope` fields** from KNOWLEDGE.jsonl schema
+- **Config keys** — `autoCompactThreshold`, `retention`, `stop.maxAttempts`, `removeOrphansAfterDays`
+- **`.claude/tasks/specs/` directory** creation in setup.sh
+
+### Breaking Changes
+
+- KNOWLEDGE.jsonl: `cat` and `scope` fields no longer written (existing entries tolerated)
+- MANIFEST.md no longer created/maintained
+- 6 functions removed from public API (validateEntry, classifyScope, etc.)
+- `getReportsDir()` signature: `cwd` parameter removed
+
+---
+
 ## [2.6.0] - 2026-02-08
 
 ### Added
@@ -72,7 +146,7 @@
 | `hooks/pre-task.mjs` | Absolute path fix for knowledge |
 | `agents/ft-coordinator.md` | Artifacts paths, PLAN.md refs |
 | `agents/ft-auto-sync-processor.md` | Artifacts path |
-| `templates/reports/MANIFEST.md.template` | Relative paths |
+| `templates/reports/MANIFEST.md.template` | **Removed** |
 | `templates/reports/FINAL.md.template` | Artifacts index |
 | `templates/instructions-template.md` | Full path migration |
 | `templates/rules/post-agent-protocol.md.template` | Path glob fix |
@@ -264,7 +338,7 @@ If you were using `/focus-task:doc`, use `/focus-task:auto-sync` instead:
 - **Knowledge validation** — filter useless entries
   - Blocklist: "Working on...", "Let me...", "Looks good", "Phase N", etc.
   - Min 15 chars, technical density check
-  - `validateEntry()`, `classifyScope()`, `appendKnowledgeValidated()`
+  - `validateEntry()`, `appendKnowledge()` (with validation)
 
 - **Scope-aware retention** — separate global/task storage
   - Auto-classification: ❌→global, handoff→task, arch/config/api→global
@@ -286,7 +360,7 @@ If you were using `/focus-task:doc`, use `/focus-task:auto-sync` instead:
 | File | Change |
 |------|--------|
 | `hooks/pre-task.mjs` | Role detection, constraint injection |
-| `hooks/lib/knowledge.mjs` | validateEntry, classifyScope, scope-aware compact |
+| `hooks/lib/knowledge.mjs` | validateEntry, appendKnowledge, localCompact |
 | `templates/TASK.md.template` | Role Constraints section |
 | `templates/focus-task.config.json.template` | validation, retention, constraints |
 | `agents/ft-coordinator.md` | Updated for constraints |

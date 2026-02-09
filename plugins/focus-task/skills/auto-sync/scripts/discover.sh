@@ -12,7 +12,11 @@ MAX_FILES="${MAX_FILES:-50}"
 
 # Find files with auto-sync: enabled (YAML frontmatter only)
 find_autosync_files() {
-  _all=$(find "$SEARCH_PATH" -name "*.md" -exec grep -lE '^auto-sync:[[:space:]]*enabled' {} + \
+  _all=$(find "$SEARCH_PATH" -name "*.md" \
+    -not -path '*/.git/*' \
+    -not -path '*/node_modules/*' \
+    -not -path '*/.claude/tasks/*' \
+    -exec grep -lE '^auto-sync:[[:space:]]*enabled' {} + \
     2>/dev/null | sort -u || true)
   _count=$(echo "$_all" | grep -c . || true)
   if [ "$_count" -gt "$MAX_FILES" ]; then

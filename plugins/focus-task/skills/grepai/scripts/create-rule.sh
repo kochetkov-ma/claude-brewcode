@@ -10,6 +10,7 @@ GREPAI_MARKER="grepai_search"
 
 mkdir -p .claude/rules
 
+# TODO: Extract shared CLAUDE.md logic to common function (duplicated in start.sh)
 # Add grepai entry to CLAUDE.md (create if not exists)
 if [ ! -f "$CLAUDE_MD" ]; then
   echo "# CLAUDE.md" > "$CLAUDE_MD"

@@ -12,8 +12,7 @@ if grep -q '"grepai"' ~/.claude.json 2>/dev/null; then
 else
   echo "⚠️ MCP grepai: not configured"
   echo "   Adding via claude CLI..."
-  claude mcp add --scope user grepai -- grepai mcp-serve
-  if [ $? -eq 0 ]; then
+  if claude mcp add --scope user grepai -- grepai mcp-serve; then
     echo "✅ MCP grepai: added"
   else
     echo "❌ MCP grepai: failed to add"
@@ -61,7 +60,7 @@ data['allowedTools'] = allowed
 with open(settings_file, 'w') as f:
     json.dump(data, f, indent=2)
 "
-    jq . "$SETTINGS_FILE" >/dev/null 2>&1 || { echo "❌ Invalid JSON"; exit 1; }
+    python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$SETTINGS_FILE" 2>/dev/null || { echo "❌ Invalid JSON in $SETTINGS_FILE"; exit 1; }
   else
     echo "❌ Neither jq nor python3 available"
     echo "   Manually add to $SETTINGS_FILE:"

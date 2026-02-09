@@ -96,6 +96,7 @@ cmd_update() {
   esac
   require_jq
   tmp_file=$(mktemp)
+  trap 'rm -f "$tmp_file"' EXIT
   found=false
   while IFS= read -r line; do
     case "$line" in
@@ -132,6 +133,7 @@ cmd_remove() {
   fi
   require_jq
   tmp_file=$(mktemp)
+  trap 'rm -f "$tmp_file"' EXIT
   found=false
   while IFS= read -r line; do
     case "$line" in

@@ -33,6 +33,7 @@ else
   exit 1
 fi
 
+# TODO: Extract shared CLAUDE.md logic to common function (duplicated in create-rule.sh)
 # Ensure CLAUDE.md has grepai entry
 CLAUDE_MD="CLAUDE.md"
 GREPAI_MARKER="grepai_search"

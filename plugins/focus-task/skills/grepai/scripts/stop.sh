@@ -5,11 +5,11 @@ set -euo pipefail
 echo "=== Stopping grepai watch ==="
 
 # Try graceful stop first
-grepai watch --stop 2>/dev/null
+grepai watch --stop 2>/dev/null || true
 
 # Force kill if still running
 if pgrep -f "grepai watch" >/dev/null; then
-  pkill -f "grepai watch"
+  pkill -f "grepai watch" || true
   sleep 1
 fi
 

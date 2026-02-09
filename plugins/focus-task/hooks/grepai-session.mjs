@@ -11,7 +11,7 @@
  */
 import { readStdin, output, log } from './lib/utils.mjs';
 import { execSync, spawn } from 'child_process';
-import { existsSync, mkdirSync, statSync } from 'fs';
+import { existsSync, mkdirSync, statSync, readFileSync } from 'fs';
 import { join } from 'path';
 
 async function main() {
@@ -80,9 +80,9 @@ async function checkGrepai(cwd, session_id = null) {
         indexStatus = `${sizeMB}MB`;
         log('debug', '[grepai]', `index: ${sizeMB}MB`, cwd, session_id);
       }
-    } catch {
-      indexStatus = 'ok';
-      log('debug', '[grepai]', 'index: exists', cwd, session_id);
+    } catch (err) {
+      indexStatus = 'error';
+      log('warn', '[grepai]', `index stat failed: ${err.message}`, cwd, session_id);
     }
   } else {
     log('debug', '[grepai]', 'index: missing', cwd, session_id);
@@ -90,15 +90,15 @@ async function checkGrepai(cwd, session_id = null) {
   }
 
   // Check watch process
-  const watchRunning = checkWatchRunning();
+  const watchRunning = checkWatchRunning(cwd);
   log('debug', '[grepai]', `watch: ${watchRunning ? 'running' : 'stopped'}`, cwd, session_id);
 
-  if (!watchRunning && hasIndex && ollamaRunning) {
+  if (!watchRunning && hasIndex && ollamaRunning && process.platform !== 'win32') {
     shouldAutoStart = true;
   }
 
   // Check MCP server
-  const mcpRunning = checkMcpServer();
+  const mcpRunning = checkMcpServer(cwd);
   log('debug', '[grepai]', `mcp-serve: ${mcpRunning ? 'running' : 'stopped'}`, cwd, session_id);
   if (!mcpRunning) {
     status.push('mcp-serve: stopped');
@@ -118,10 +118,13 @@ async function checkGrepai(cwd, session_id = null) {
         detached: true,
         stdio: 'ignore'
       });
+      child.on('error', (err) => {
+        log('warn', '[grepai]', `Watch spawn error: ${err.message}`, cwd, session_id);
+      });
       child.unref();
 
-      log('info', '[grepai]', 'Watch started', cwd, session_id);
-      status.push('watch: auto-started');
+      log('info', '[grepai]', 'Watch spawn initiated', cwd, session_id);
+      status.push('watch: starting');
     } catch (err) {
       log('warn', '[grepai]', `Watch auto-start failed: ${err.message}`, cwd, session_id);
       status.push('watch: start failed');
@@ -142,25 +145,20 @@ async function checkGrepai(cwd, session_id = null) {
 
   log('info', '[grepai]', `Status: ${statusMessage}`, cwd, session_id);
 
-  // Add usage reminder when grepai is ready (goes to Claude's context)
-  const result = {
-    systemMessage: `grepai: ${statusMessage}`
-  };
-
-  if (status.length === 0) {
-    result.hookSpecificOutput = {
-      hookEventName: 'SessionStart',
-      additionalContext: 'grepai: USE grepai_search FIRST for code exploration'
-    };
+  // Add usage reminder when grepai is ready (delivered via systemMessage
+  // to avoid additionalContext conflict with session-start.mjs)
+  let msg = `grepai: ${statusMessage}`;
+  if (hasIndex && ollamaRunning) {
+    msg += '\ngrepai: USE grepai_search FIRST for code exploration';
   }
 
-  return result;
+  return { systemMessage: msg };
 }
 
 function checkOllama() {
   try {
-    execSync('curl -s localhost:11434/api/tags', {
-      timeout: 2000,
+    execSync('curl -s --max-time 1 localhost:11434/api/tags', {
+      timeout: 1500,
       stdio: 'ignore'
     });
     return true;
@@ -169,9 +167,22 @@ function checkOllama() {
   }
 }
 
-function checkWatchRunning() {
-  // pgrep unavailable on Windows - skip check (degrades gracefully)
+function checkWatchRunning(cwd) {
   if (process.platform === 'win32') return false;
+  // Check for grepai PID file first (project-specific)
+  const pidFile = join(cwd, '.grepai', 'watch.pid');
+  if (existsSync(pidFile)) {
+    try {
+      const pid = readFileSync(pidFile, 'utf8').trim();
+      if (pid && /^\d+$/.test(pid)) {
+        process.kill(parseInt(pid), 0);
+        return true;
+      }
+    } catch {
+      // Process not running, PID file is stale
+    }
+  }
+  // Fallback: system-wide check (may match other projects)
   try {
     const result = execSync('pgrep -f "grepai watch"', {
       encoding: 'utf8',
@@ -184,9 +195,18 @@ function checkWatchRunning() {
   }
 }
 
-function checkMcpServer() {
-  // pgrep unavailable on Windows - skip check (degrades gracefully)
+function checkMcpServer(cwd) {
   if (process.platform === 'win32') return false;
+  const pidFile = join(cwd, '.grepai', 'mcp-serve.pid');
+  if (existsSync(pidFile)) {
+    try {
+      const pid = readFileSync(pidFile, 'utf8').trim();
+      if (pid && /^\d+$/.test(pid)) {
+        process.kill(parseInt(pid), 0);
+        return true;
+      }
+    } catch {}
+  }
   try {
     const result = execSync('pgrep -f "grepai mcp-serve"', {
       encoding: 'utf8',

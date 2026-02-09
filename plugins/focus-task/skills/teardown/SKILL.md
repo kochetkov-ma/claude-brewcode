@@ -3,7 +3,7 @@ name: focus-task:teardown
 description: Remove all focus-task files created by /focus-task:setup. Cleans templates, configs, and skills.
 user-invocable: true
 argument-hint: "[--dry-run]"
-allowed-tools: Bash, Read
+allowed-tools: Bash, Read, AskUserQuestion
 context: fork
 model: haiku
 ---
@@ -32,6 +32,9 @@ Removes all files and directories created by `/focus-task:setup`:
 ## Execution
 
 **Skill arguments received:** `$ARGUMENTS`
+
+**If NOT `--dry-run`:** Use AskUserQuestion to confirm before executing:
+> "This will delete focus-task project files (templates, configs, logs, plans). Task directories are preserved. Proceed?"
 
 **EXECUTE** using Bash tool — run teardown script:
 ```bash

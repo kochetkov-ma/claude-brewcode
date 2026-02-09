@@ -1,7 +1,6 @@
 ---
 paths:
   - "**/*"
-description: Anti-patterns - mistakes to avoid
 ---
 
 # Avoid

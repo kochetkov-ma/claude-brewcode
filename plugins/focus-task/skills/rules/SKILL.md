@@ -4,6 +4,7 @@ description: Updates .claude/rules/avoid.md and best-practice.md from KNOWLEDGE.
 user-invocable: true
 argument-hint: "[<path-to-KNOWLEDGE.jsonl>] (empty = session mode)"
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash
+context: session
 model: sonnet
 ---
 
@@ -56,9 +57,7 @@ bash "$FT_PLUGIN/skills/rules/scripts/rules.sh" read "ARGS_HERE" && echo "✅ Re
 Parse entries:
 - `t:"❌"` → anti-pattern (avoid)
 - `t:"✅"` → best practice
-- `t:"ℹ️"` → info, determine category by content
-
-**Scope filter:** Only extract entries with `scope: "global"` (or no scope field for backward compatibility). Task-scoped entries are context-specific and should not become permanent rules.
+- `t:"ℹ️"` → info
 
 ### Session Mode
 

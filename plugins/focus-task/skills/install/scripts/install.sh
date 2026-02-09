@@ -33,7 +33,10 @@ wait_for_ollama() {
 }
 
 # Helper: log action
-ACTIONS_FILE="${ACTIONS_FILE:-/tmp/ft-install-actions.txt}"
+if [ -z "${ACTIONS_FILE:-}" ]; then
+  ACTIONS_FILE=$(mktemp /tmp/ft-install-actions.XXXXXX)
+  trap 'rm -f "$ACTIONS_FILE"' EXIT
+fi
 log_action() {
     echo "- $1" >> "$ACTIONS_FILE"
 }
@@ -48,11 +51,11 @@ get_grepai_versions() {
     GREPAI_CURRENT=""
     GREPAI_LATEST=""
     if command -v grepai &>/dev/null; then
-        GREPAI_CURRENT=$(grepai version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+        GREPAI_CURRENT=$(grepai version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
         GREPAI_CURRENT="${GREPAI_CURRENT:-unknown}"
     fi
     if command -v brew &>/dev/null; then
-        GREPAI_LATEST=$(brew info yoanbernabeu/tap/grepai 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+        GREPAI_LATEST=$(brew info yoanbernabeu/tap/grepai 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
     fi
 }
 
@@ -67,7 +70,7 @@ case "$CMD" in
 
     # Required: brew
     if command -v brew &>/dev/null; then
-        VER=$(brew --version 2>&1 | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+        VER=$(brew --version 2>&1 | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
         VER="${VER:-unknown}"
         echo "| brew | ✅ | $VER | - | required |"
     else
@@ -76,9 +79,9 @@ case "$CMD" in
 
     # Required: timeout (coreutils)
     if command -v timeout &>/dev/null; then
-        VER=$(timeout --version 2>&1 | head -1 | grep -oE '[0-9]+\.[0-9]+' | head -1)
+        VER=$(timeout --version 2>&1 | head -1 | grep -oE '[0-9]+\.[0-9]+' | head -1 || true)
         VER="${VER:-unknown}"
-        TIMEOUT_PATH=$(which timeout)
+        TIMEOUT_PATH=$(command -v timeout)
         if [ -L "$TIMEOUT_PATH" ]; then
             echo "| timeout | ✅ | $VER | symlink | required |"
         elif brew list coreutils &>/dev/null 2>&1; then
@@ -105,7 +108,7 @@ case "$CMD" in
 
     # Optional: ollama
     if command -v ollama &>/dev/null; then
-        VER=$(ollama --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+        VER=$(ollama --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
         VER="${VER:-unknown}"
         SRC=$(brew list ollama &>/dev/null 2>&1 && echo "brew" || echo "system")
         if ollama_running; then
@@ -156,8 +159,8 @@ case "$CMD" in
 
     # Check coreutils (timeout) - only if brew-managed
     if brew list coreutils &>/dev/null; then
-        COREUTILS_CURRENT=$(timeout --version 2>&1 | head -1 | grep -oE '[0-9]+\.[0-9]+' | head -1)
-        COREUTILS_LATEST=$(brew info coreutils 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1)
+        COREUTILS_CURRENT=$(timeout --version 2>&1 | head -1 | grep -oE '[0-9]+\.[0-9]+' | head -1 || true)
+        COREUTILS_LATEST=$(brew info coreutils 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1 || true)
         if [ -n "$COREUTILS_CURRENT" ] && [ -n "$COREUTILS_LATEST" ] && [ "$COREUTILS_CURRENT" != "$COREUTILS_LATEST" ]; then
             UPDATES="${UPDATES:+$UPDATES }coreutils($COREUTILS_CURRENT→$COREUTILS_LATEST)"
         fi
@@ -165,15 +168,15 @@ case "$CMD" in
 
     # Check jq - only if brew-managed
     if brew list jq &>/dev/null; then
-        JQ_CURRENT=$(jq --version 2>&1 | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1)
-        JQ_LATEST=$(brew info jq 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1)
+        JQ_CURRENT=$(jq --version 2>&1 | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1 || true)
+        JQ_LATEST=$(brew info jq 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1 || true)
         if [ -n "$JQ_CURRENT" ] && [ -n "$JQ_LATEST" ] && [ "$JQ_CURRENT" != "$JQ_LATEST" ]; then
             UPDATES="${UPDATES:+$UPDATES }jq($JQ_CURRENT→$JQ_LATEST)"
         fi
     elif command -v jq &>/dev/null; then
         # jq exists but not brew-managed - note it
-        JQ_PATH=$(which jq)
-        JQ_CURRENT=$(jq --version 2>&1 | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1)
+        JQ_PATH=$(command -v jq)
+        JQ_CURRENT=$(jq --version 2>&1 | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1 || true)
         NOTES="${NOTES:+$NOTES; }jq($JQ_CURRENT) at $JQ_PATH (not brew-managed)"
     fi
 
@@ -200,7 +203,7 @@ case "$CMD" in
     if command -v timeout &>/dev/null; then
         echo "TIMEOUT_EXISTS=true"
         echo "VERSION=$(timeout --version 2>&1 | head -1)"
-        TIMEOUT_PATH=$(which timeout)
+        TIMEOUT_PATH=$(command -v timeout)
         if [ -L "$TIMEOUT_PATH" ]; then
             SYMLINK_TARGET=$(readlink "$TIMEOUT_PATH")
             echo "SYMLINK=$TIMEOUT_PATH → $SYMLINK_TARGET"
@@ -211,7 +214,7 @@ case "$CMD" in
         echo "TIMEOUT_EXISTS=false"
         if command -v gtimeout &>/dev/null; then
             echo "GTIMEOUT_EXISTS=true"
-            echo "GTIMEOUT_PATH=$(which gtimeout)"
+            echo "GTIMEOUT_PATH=$(command -v gtimeout)"
             echo "HINT=Create symlink: ln -sf \$(brew --prefix)/opt/coreutils/libexec/gnubin/timeout \$(brew --prefix)/bin/timeout"
         else
             echo "GTIMEOUT_EXISTS=false"
@@ -229,9 +232,9 @@ case "$CMD" in
 
     # Update coreutils
     if brew list coreutils &>/dev/null; then
-        OLD_VER=$(timeout --version 2>&1 | head -1 | grep -oE '[0-9]+\.[0-9]+' | head -1)
+        OLD_VER=$(timeout --version 2>&1 | head -1 | grep -oE '[0-9]+\.[0-9]+' | head -1 || true)
         if brew upgrade coreutils 2>&1 | grep -q "Upgrading"; then
-            NEW_VER=$(timeout --version 2>&1 | head -1 | grep -oE '[0-9]+\.[0-9]+' | head -1)
+            NEW_VER=$(timeout --version 2>&1 | head -1 | grep -oE '[0-9]+\.[0-9]+' | head -1 || true)
             echo "✅ coreutils: updated"
             log_action "Updated coreutils: $OLD_VER → $NEW_VER"
         else
@@ -241,9 +244,9 @@ case "$CMD" in
 
     # Update jq
     if brew list jq &>/dev/null; then
-        OLD_VER=$(jq --version 2>&1 | grep -oE '[0-9]+\.[0-9]+' | head -1)
+        OLD_VER=$(jq --version 2>&1 | grep -oE '[0-9]+\.[0-9]+' | head -1 || true)
         if brew upgrade jq 2>&1 | grep -q "Upgrading"; then
-            NEW_VER=$(jq --version 2>&1 | grep -oE '[0-9]+\.[0-9]+' | head -1)
+            NEW_VER=$(jq --version 2>&1 | grep -oE '[0-9]+\.[0-9]+' | head -1 || true)
             echo "✅ jq: updated"
             log_action "Updated jq: $OLD_VER → $NEW_VER"
         else
@@ -411,7 +414,10 @@ case "$CMD" in
 
   summary)
     # Optional: read actions from env or file
-    ACTIONS_FILE="${ACTIONS_FILE:-/tmp/ft-install-actions.txt}"
+    if [ -z "${ACTIONS_FILE:-}" ]; then
+      ACTIONS_FILE=$(mktemp /tmp/ft-install-actions.XXXXXX)
+      trap 'rm -f "$ACTIONS_FILE"' EXIT
+    fi
 
     echo ""
     echo "=== Installation Summary ==="
@@ -421,7 +427,7 @@ case "$CMD" in
 
     # brew
     if command -v brew &>/dev/null; then
-        VER=$(brew --version 2>&1 | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+        VER=$(brew --version 2>&1 | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
         echo "| brew | ✅ | ${VER:-?} | - | - |"
     else
         echo "| brew | ❌ | - | - | - |"
@@ -429,9 +435,9 @@ case "$CMD" in
 
     # timeout (coreutils)
     if command -v timeout &>/dev/null; then
-        VER=$(timeout --version 2>&1 | head -1 | grep -oE '[0-9]+\.[0-9]+' | head -1)
-        LATEST=$(brew info coreutils 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1)
-        TIMEOUT_PATH=$(which timeout)
+        VER=$(timeout --version 2>&1 | head -1 | grep -oE '[0-9]+\.[0-9]+' | head -1 || true)
+        LATEST=$(brew info coreutils 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1 || true)
+        TIMEOUT_PATH=$(command -v timeout)
         if [ -L "$TIMEOUT_PATH" ]; then
             SRC="symlink"
         elif brew list coreutils &>/dev/null 2>&1; then
@@ -446,8 +452,8 @@ case "$CMD" in
 
     # jq
     if command -v jq &>/dev/null; then
-        VER=$(jq --version 2>&1 | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1)
-        LATEST=$(brew info jq 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1)
+        VER=$(jq --version 2>&1 | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1 || true)
+        LATEST=$(brew info jq 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1 || true)
         if brew list jq &>/dev/null 2>&1; then
             SRC="brew"
         else
@@ -460,8 +466,8 @@ case "$CMD" in
 
     # ollama
     if command -v ollama &>/dev/null; then
-        VER=$(ollama --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-        LATEST=$(brew info ollama 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+        VER=$(ollama --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
+        LATEST=$(brew info ollama 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
         SRC=$(brew list ollama &>/dev/null 2>&1 && echo "brew" || echo "system")
         if ollama_running; then
             echo "| ollama | ✅ running | ${VER:-?} | ${LATEST:-?} | $SRC |"

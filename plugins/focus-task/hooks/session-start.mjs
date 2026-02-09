@@ -20,10 +20,12 @@
  *
  * Cleanup: /focus-task:teardown removes .claude/plans/ directory
  */
-import { readStdin, output, log, getActiveTaskPath, getTaskDir, writeSessionInfo } from './lib/utils.mjs';
+import { readStdin, output, log, getActiveTaskPath } from './lib/utils.mjs';
 import { readdirSync, statSync, mkdirSync, symlinkSync, unlinkSync, existsSync } from 'fs';
-import { join, resolve } from 'path';
+import { join } from 'path';
 import { homedir } from 'os';
+
+const PLAN_FRESHNESS_MS = 60_000;
 
 /**
  * Creates symlink .claude/plans/LATEST.md → ~/.claude/plans/<newest>.md
@@ -38,7 +40,13 @@ function linkLatestPlan(cwd) {
 
   const plans = readdirSync(globalPlansDir)
     .filter(f => f.endsWith('.md'))
-    .map(f => ({ name: f, path: join(globalPlansDir, f), mtime: statSync(join(globalPlansDir, f)).mtime }))
+    .map(f => {
+      try {
+        const p = join(globalPlansDir, f);
+        return { name: f, path: p, mtime: statSync(p).mtime };
+      } catch { return null; }
+    })
+    .filter(Boolean)
     .sort((a, b) => b.mtime - a.mtime);
 
   if (plans.length === 0) return null;
@@ -46,11 +54,11 @@ function linkLatestPlan(cwd) {
   const latest = plans[0];
   const ageMs = Date.now() - latest.mtime.getTime();
 
-  if (ageMs > 60000) return null;
+  if (ageMs > PLAN_FRESHNESS_MS) return null;
 
   mkdirSync(projectPlansDir, { recursive: true });
 
-  if (existsSync(latestLink)) unlinkSync(latestLink);
+  try { unlinkSync(latestLink); } catch {}
   symlinkSync(latest.path, latestLink);
 
   return latest.name;
@@ -67,31 +75,30 @@ async function main() {
     cwd = input.cwd || cwd;
     const source = input.source;
 
-    log('info', '[session]', `Started: ${session_id?.slice(0, 8) || 'unknown'} (${source})`, cwd, session_id);
-
-    // Create/update session mapping
-    if (session_id && cwd) {
-      const taskPath = getActiveTaskPath(cwd);
-      if (taskPath) {
-        const taskDir = getTaskDir(taskPath);
-        // Store relative path from cwd
-        const relativeTaskDir = taskDir.replace(cwd + '/', '');
-        writeSessionInfo(cwd, session_id, relativeTaskDir);
-        log('info', '[session]', `Session mapped: ${session_id.slice(0, 8)} → ${relativeTaskDir}`, cwd, session_id);
-      }
-    }
+    log('info', '[session-start]', `Started: ${session_id?.slice(0, 8) || 'unknown'} (${source})`, cwd, session_id);
 
     if (source === 'clear' && cwd) {
-      const linked = linkLatestPlan(cwd);
-      if (linked) {
-        log('info', '[plan]', `Linked: .claude/plans/LATEST.md -> ${linked}`, cwd, session_id);
+      try {
+        const linked = linkLatestPlan(cwd);
+        if (linked) {
+          log('info', '[session-start]', `Linked: .claude/plans/LATEST.md -> ${linked}`, cwd, session_id);
+        }
+      } catch (e) {
+        log('warn', '[session-start]', `Plan linking failed: ${e.message}`, cwd, session_id);
       }
     }
 
-    const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT || 'unknown';
+    let context = `focus-task: active | session: ${session_id?.slice(0, 8) || 'unknown'}`;
+
+    if (source === 'compact' && cwd && getActiveTaskPath(cwd)) {
+      context += '\n\n[HANDOFF after compact] Re-read PLAN.md and KNOWLEDGE.jsonl, then continue current phase.';
+    }
 
     output({
-      systemMessage: `session: ${session_id || 'unknown'} | focus-task: ${pluginRoot}`
+      hookSpecificOutput: {
+        hookEventName: 'SessionStart',
+        additionalContext: context
+      }
     });
   } catch (error) {
     log('error', '[session-start]', `Error: ${error.message}`, cwd, session_id);

@@ -77,14 +77,14 @@ echo "--- ollama ---"
 if command -v ollama &>/dev/null; then
     echo "✅ ollama: $(ollama --version 2>&1 | head -1)"
     # Check if running
-    if curl -s localhost:11434/api/tags &>/dev/null; then
+    if curl -s --connect-timeout 3 --max-time 5 localhost:11434/api/tags &>/dev/null; then
         echo "✅ ollama: running"
     else
         echo "⚠️ ollama: installed but not running"
         echo "   Starting ollama service..."
         brew services start ollama &>/dev/null || ollama serve &>/dev/null &
         sleep 2
-        if curl -s localhost:11434/api/tags &>/dev/null; then
+        if curl -s --connect-timeout 3 --max-time 5 localhost:11434/api/tags &>/dev/null; then
             echo "✅ ollama: started"
         else
             echo "⚠️ ollama: start manually with 'ollama serve'"
@@ -107,7 +107,7 @@ fi
 # 5. bge-m3 model (for ollama)
 echo ""
 echo "--- bge-m3 model ---"
-if command -v ollama &>/dev/null && curl -s localhost:11434/api/tags &>/dev/null; then
+if command -v ollama &>/dev/null && curl -s --connect-timeout 3 --max-time 5 localhost:11434/api/tags &>/dev/null; then
     if ollama list 2>/dev/null | grep -q bge-m3; then
         echo "✅ bge-m3: installed"
     else
@@ -173,7 +173,7 @@ else
 fi
 
 # ollama running check
-if curl -s localhost:11434/api/tags &>/dev/null; then
+if curl -s --connect-timeout 3 --max-time 5 localhost:11434/api/tags &>/dev/null; then
     echo "| ollama running | ✅ |"
 else
     echo "| ollama running | ❌ |"

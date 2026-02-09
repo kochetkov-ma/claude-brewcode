@@ -9,10 +9,10 @@
 #   create       - Create missing rules from templates
 #   validate     - Validate table structure
 
-set -e
+set -euo pipefail
 
 MODE="${1:-check}"
-ARG="$2"
+ARG="${2:-}"
 
 # Self-location: derive plugin root from script path
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -41,7 +41,7 @@ read_knowledge() {
     exit 1
   fi
   if [ -f "$path" ]; then
-    cat "$path" | head -100
+    head -100 "$path"
   else
     echo "X File not found: $path"
     exit 1

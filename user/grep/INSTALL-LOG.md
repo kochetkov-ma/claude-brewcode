@@ -10,7 +10,6 @@
 | Ollama | 0.15.2 | `brew install ollama && brew services start ollama` |
 | bge-m3 | 1.2 GB, dim=1024 | `ollama pull bge-m3` |
 | MCP | ~/.claude.json | `claude mcp add --scope user grepai -- grepai mcp-serve` |
-| deep-explore | .claude/agents/ | `grepai agent-setup --with-subagent` |
 
 ## grepai команды
 

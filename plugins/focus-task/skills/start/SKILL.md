@@ -10,6 +10,8 @@ model: opus
 
 Execute Task — [task-file-path]
 
+<instructions>
+
 **ROLE:** Task Executor | **INPUT:** path to task file
 
 ## How It Works
@@ -96,4 +98,6 @@ Hooks enable infinite context. At auto-compact:
 3. Re-read PLAN.md + KNOWLEDGE.jsonl
 4. Continue from current phase
 
-State preserved: phase status, KNOWLEDGE, artifacts, MANIFEST.
+State preserved: phase status, KNOWLEDGE, artifacts.
+
+</instructions>

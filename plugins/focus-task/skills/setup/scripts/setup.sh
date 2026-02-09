@@ -12,7 +12,7 @@
 #   validate   - Validation checks (Phase 4)
 #   all        - Run all phases
 
-set -e
+set -euo pipefail
 
 MODE="${1:-all}"
 
@@ -81,9 +81,8 @@ scan_project() {
 # Phase 3: Create directory structure
 create_structure() {
   echo "=== Phase 3: Create Structure ==="
-  mkdir -p .claude/tasks/templates .claude/tasks/specs .claude/rules
+  mkdir -p .claude/tasks/templates .claude/rules
   echo "✅ Created .claude/tasks/templates/"
-  echo "✅ Created .claude/tasks/specs/"
   echo "✅ Created .claude/rules/"
 }
 
@@ -174,8 +173,8 @@ copy_config() {
     echo "✅ Config created: $PROJECT_CFG"
   else
     # Compare normalized JSON content
-    TEMPLATE_HASH=$(jq -S . "$TEMPLATE" 2>/dev/null | shasum -a 256 | cut -d' ' -f1)
-    PROJECT_HASH=$(jq -S . "$PROJECT_CFG" 2>/dev/null | shasum -a 256 | cut -d' ' -f1)
+    TEMPLATE_HASH=$(jq -S . "$TEMPLATE" 2>/dev/null | shasum -a 256 | cut -d' ' -f1 || true)
+    PROJECT_HASH=$(jq -S . "$PROJECT_CFG" 2>/dev/null | shasum -a 256 | cut -d' ' -f1 || true)
 
     if [ "$TEMPLATE_HASH" != "$PROJECT_HASH" ]; then
       cp "$PROJECT_CFG" "$PROJECT_CFG.bak"

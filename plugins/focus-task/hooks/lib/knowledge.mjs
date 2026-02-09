@@ -14,6 +14,22 @@ const BLOCKLIST_PATTERNS = [
 ];
 
 /**
+ * Validate a knowledge entry before appending
+ * @param {Object} entry - Entry to validate
+ * @returns {{valid: boolean, reason?: string}} Validation result
+ */
+function validateEntry(entry) {
+  if (!entry || typeof entry !== 'object') return { valid: false, reason: 'not an object' };
+  if (!entry.txt || typeof entry.txt !== 'string') return { valid: false, reason: 'missing txt' };
+  if (!entry.t) return { valid: false, reason: 'missing type' };
+  if (!entry.src || typeof entry.src !== 'string') return { valid: false, reason: 'missing src' };
+  for (const pattern of BLOCKLIST_PATTERNS) {
+    if (pattern.test(entry.txt)) return { valid: false, reason: `blocklist: ${entry.txt.slice(0, 30)}` };
+  }
+  return { valid: true };
+}
+
+/**
  * Derive cwd from knowledge path
  * @param {string} knowledgePath - Path like /path/.claude/tasks/*_task/KNOWLEDGE.jsonl
  * @returns {string} Project root directory
@@ -30,25 +46,37 @@ function deriveCwd(knowledgePath) {
 export function readKnowledge(knowledgePath) {
   if (!existsSync(knowledgePath)) return [];
 
-  const content = readFileSync(knowledgePath, 'utf8');
+  let content;
+  try {
+    content = readFileSync(knowledgePath, 'utf8');
+  } catch (e) {
+    const cwd = deriveCwd(knowledgePath);
+    log('warn', '[knowledge]', `Failed to read ${knowledgePath}: ${e.message}`, cwd);
+    return [];
+  }
   const cwd = deriveCwd(knowledgePath);
   let invalidCount = 0;
 
   const entries = content
     .split('\n')
-    .filter(line => line.trim())
-    .map((line, idx) => {
+    .map((line, idx) => ({ line, fileLineNum: idx + 1 }))
+    .filter(({ line }) => line.trim())
+    .map(({ line, fileLineNum }) => {
       try {
         return JSON.parse(line);
       } catch (e) {
         invalidCount++;
         if (invalidCount <= 3) {
-          log('warn', '[knowledge]', `Invalid JSON at line ${idx + 1}: ${line.slice(0, 50)}...`, cwd);
+          log('warn', '[knowledge]', `Invalid JSON at line ${fileLineNum}: ${line.slice(0, 50)}...`, cwd);
         }
         return null;
       }
     })
-    .filter(entry => entry !== null);
+    .filter(entry => entry !== null)
+    .map(entry => {
+      if (entry && !entry.t) entry.t = 'ℹ️';
+      return entry;
+    });
 
   if (invalidCount > 3) {
     log('warn', '[knowledge]', `${invalidCount} total invalid lines in KNOWLEDGE.jsonl`, cwd);
@@ -66,9 +94,14 @@ export function readKnowledge(knowledgePath) {
  */
 export function appendKnowledge(knowledgePath, entry, cwd = null) {
   try {
+    const validation = validateEntry(entry);
+    if (!validation.valid) {
+      log('debug', '[knowledge]', `Skipped invalid entry: ${validation.reason}`, cwd || deriveCwd(knowledgePath));
+      return false;
+    }
     const line = JSON.stringify({
-      ts: new Date().toISOString(),
-      ...entry
+      ...entry,
+      ts: entry.ts || new Date().toISOString()
     }) + '\n';
     appendFileSync(knowledgePath, line);
     return true;
@@ -77,87 +110,6 @@ export function appendKnowledge(knowledgePath, entry, cwd = null) {
     log('error', '[knowledge]', `appendKnowledge failed: ${e.message}`, logCwd);
     return false;
   }
-}
-
-/**
- * Validate knowledge entry before appending
- * @param {Object} entry - Knowledge entry to validate
- * @returns {{valid: boolean, reason?: string}}
- */
-export function validateEntry(entry) {
-  if (!entry || !entry.txt) {
-    return { valid: false, reason: 'missing txt field' };
-  }
-
-  const txt = entry.txt.trim();
-
-  if (txt.length < 15) {
-    return { valid: false, reason: 'too short (<15 chars)' };
-  }
-
-  for (const pattern of BLOCKLIST_PATTERNS) {
-    if (pattern.test(txt)) {
-      return { valid: false, reason: 'matches blocklist pattern' };
-    }
-  }
-
-  const hasTechnical = /[`@\.\(\)\[\]\/\\]|class|function|method|file|config|error|exception|api|db|sql|test/i.test(txt);
-  const isAvoid = entry.t === '❌';
-
-  if (isAvoid) {
-    return { valid: true };
-  }
-
-  if (!hasTechnical && txt.length < 40) {
-    return { valid: false, reason: 'lacks technical substance' };
-  }
-
-  return { valid: true };
-}
-
-/**
- * Classify scope of knowledge entry
- * @param {Object} entry - Knowledge entry
- * @returns {'global' | 'task'}
- */
-export function classifyScope(entry) {
-  if (entry.t === '❌') return 'global';
-
-  if (entry.cat === 'handoff') return 'task';
-
-  if (/phase \d+/i.test(entry.txt || '')) return 'task';
-
-  if (entry.t === '✅') return 'global';
-
-  const taskMarkers = /current task|this phase|iteration|specific to|only for/i;
-  if (taskMarkers.test(entry.txt || '')) return 'task';
-
-  const globalCats = ['arch', 'config', 'security', 'performance', 'api', 'db'];
-  if (globalCats.includes(entry.cat)) return 'global';
-
-  return 'task';
-}
-
-/**
- * Append knowledge entry with validation and scope classification
- * @param {string} knowledgePath - Path to KNOWLEDGE.jsonl
- * @param {Object} entry - Entry to append
- * @param {string|null} cwd - Optional working directory for logging
- * @returns {{appended: boolean, reason?: string, scope?: string}}
- */
-export function appendKnowledgeValidated(knowledgePath, entry, cwd = null) {
-  const validation = validateEntry(entry);
-  if (!validation.valid) {
-    const logCwd = cwd || deriveCwd(knowledgePath);
-    log('debug', '[knowledge]', `Entry rejected: ${validation.reason} - "${(entry.txt || '').slice(0, 30)}..."`, logCwd);
-    return { appended: false, reason: validation.reason };
-  }
-
-  const scope = classifyScope(entry);
-  const enriched = { ...entry, scope };
-  const appended = appendKnowledge(knowledgePath, enriched, cwd);
-
-  return { appended, scope };
 }
 
 /**
@@ -179,7 +131,7 @@ export function compressKnowledge(entries, maxTokens = 500) {
   const dedupe = (arr) => {
     const seen = new Set();
     return arr.filter(e => {
-      const key = e.txt?.substring(0, 50) || '';
+      const key = e.txt?.substring(0, 100) || '';
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
@@ -196,10 +148,11 @@ export function compressKnowledge(entries, maxTokens = 500) {
     return txt.length > 50 ? txt.substring(0, 47) + '...' : txt;
   };
 
-  // Format entries by category
+  // Format entries by type
   const formatCategory = (entries, prefix) => {
     if (!entries.length) return '';
     const items = entries.map(e => truncate(e.txt)).filter(t => t);
+    if (!items.length) return '';
     return `${prefix} ${items.join('|')}`;
   };
 
@@ -240,19 +193,21 @@ export function localCompact(knowledgePath, maxEntries = 100, cwd = null) {
   if (!existsSync(knowledgePath)) return false;
 
   const entries = readKnowledge(knowledgePath);
-  const threshold = Math.floor(maxEntries / 2);
-  if (entries.length < threshold) return false; // Only compact if > 50% of max
+  const threshold = Math.floor(maxEntries * 0.8);
+  if (entries.length < threshold) return false; // Only compact if > 80% of max
 
   // Deduplicate by txt field, keeping most recent
   const seen = new Map();
   for (const entry of entries) {
-    const key = `${entry.cat || ''}:${String(entry.txt || '').substring(0, 100)}`;
+    const key = String(entry.txt || '').substring(0, 100);
     const existing = seen.get(key);
     const entryDate = new Date(entry.ts);
+    if (isNaN(entryDate.getTime())) {
+      entry.ts = new Date(0).toISOString();
+    }
+    const validDate = new Date(entry.ts);
     const existingDate = existing ? new Date(existing.ts) : null;
-    // Skip invalid dates
-    if (isNaN(entryDate.getTime())) continue;
-    if (!existing || !existingDate || isNaN(existingDate.getTime()) || entryDate > existingDate) {
+    if (!existing || !existingDate || isNaN(existingDate.getTime()) || validDate > existingDate) {
       seen.set(key, entry);
     }
   }
@@ -267,22 +222,8 @@ export function localCompact(knowledgePath, maxEntries = 100, cwd = null) {
       return new Date(b.ts) - new Date(a.ts);
     });
 
-  // Apply scope-aware retention: global:50, task:20
-  const globalEntries = compacted.filter(e => e.scope === 'global' || !e.scope);
-  const taskEntries = compacted.filter(e => e.scope === 'task');
-
-  const retainedGlobal = globalEntries.slice(0, 50);
-  const retainedTask = taskEntries.slice(0, 20);
-
-  // Merge back, maintaining priority order
-  compacted = [...retainedGlobal, ...retainedTask]
-    .sort((a, b) => {
-      const pA = priorityOrder[a.t] ?? 3;
-      const pB = priorityOrder[b.t] ?? 3;
-      if (pA !== pB) return pA - pB;
-      return new Date(b.ts) - new Date(a.ts);
-    })
-    .slice(0, maxEntries);
+  // Slice to maxEntries (already sorted by priority + recency)
+  compacted = compacted.slice(0, maxEntries);
 
   // Atomic write: write to temp file, then rename
   try {
@@ -306,8 +247,7 @@ export function localCompact(knowledgePath, maxEntries = 100, cwd = null) {
  */
 export function writeHandoffEntry(knowledgePath, phase, reason = 'context compact') {
   appendKnowledge(knowledgePath, {
-    cat: 'handoff',
-    t: 'ℹ️',
+    t: '✅',
     txt: `Handoff at phase ${phase}: ${reason}`,
     src: 'pre-compact-hook'
   });

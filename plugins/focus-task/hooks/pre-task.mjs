@@ -42,26 +42,9 @@ function parseSectionFromContent(content, tag) {
 
   return section
     .split('\n')
-    .filter(line => !line.includes('<!--'))
+    .filter(line => !/^\s*<!--.*-->\s*$/.test(line))
     .join('\n')
     .trim();
-}
-
-/**
- * Extract section content from TASK.md file
- * I/O wrapper around parseSectionFromContent
- * @param {string} taskPath - Path to TASK.md
- * @param {string} tag - Tag name (ALL, DEV, TEST, REVIEW)
- * @returns {string} Section content or empty string
- */
-function extractSection(taskPath, tag) {
-  try {
-    if (!existsSync(taskPath)) return '';
-    const content = readFileSync(taskPath, 'utf8');
-    return parseSectionFromContent(content, tag);
-  } catch {
-    return '';
-  }
 }
 
 async function main() {
@@ -94,63 +77,72 @@ async function main() {
     const hasGrepai = existsSync(grepaiDir);
 
     let updatedPrompt = tool_input.prompt || '';
-    const messages = [];
+    let modified = false;
 
     // 1. Inject grepai reminder for ALL agents (including Explore, Plan, etc.)
     if (hasGrepai) {
       updatedPrompt = `${GREPAI_REMINDER}\n\n${updatedPrompt}`;
-      messages.push('grepai: injected');
+      modified = true;
       log('debug', '[pre-task]', `grepai reminder for ${subagentType}`, cwd, session_id);
     }
 
     // 2. Inject knowledge for NON-system agents only (skip coordinator, Explore, etc.)
     const isSystem = isSystemAgent(subagentType, cwd);
     if (!isSystem) {
-      // Check lock with session match (for focus-task knowledge injection)
+      const config = loadConfig(cwd);
       const lock = checkLock(cwd, session_id);
+
       if (lock && lock.task_path) {
         const knowledgePath = getKnowledgePath(join(cwd, lock.task_path));
         const entries = readKnowledge(knowledgePath);
 
         if (entries.length) {
-          const config = loadConfig(cwd);
           const knowledge = compressKnowledge(entries, config.knowledge.maxTokens);
 
           if (knowledge) {
             updatedPrompt = `${knowledge}\n\n${updatedPrompt}`;
-            messages.push(`knowledge: ${entries.length} entries`);
+            modified = true;
             log('info', '[pre-task]', `Injecting knowledge for ${subagentType} (${entries.length} entries)`, cwd, session_id);
           }
         }
       }
 
-      // 3. Inject role-specific constraints for implementation agents
-      if (lock && lock.task_path) {
-        // Detect role from agent name
-        const name = (subagentType || '').toLowerCase();
-        let role = null;
-        if (name.includes('test') || name.includes('tester')) {
-          role = 'TEST';
-        } else if (name.includes('review') || name.includes('check') || name.includes('reviewer')) {
-          role = 'REVIEW';
-        } else if (name.includes('dev') || name.includes('architect') || name.includes('expert') || name === 'developer') {
-          role = 'DEV';
-        }
+      // 3. Inject constraints for non-system agents
+      if (config.constraints?.enabled !== false && lock && lock.task_path) {
+        const taskPath = join(cwd, lock.task_path);
+        let taskContent = null;
+        try {
+          if (existsSync(taskPath)) {
+            taskContent = readFileSync(taskPath, 'utf8');
+          }
+        } catch {}
 
-        if (role) {
-          const taskPath = join(cwd, lock.task_path);
-          const allConstraints = extractSection(taskPath, 'ALL');
-          const roleConstraints = extractSection(taskPath, role);
+        if (taskContent) {
+          // ALL constraints apply to every non-system agent
+          const allConstraints = parseSectionFromContent(taskContent, 'ALL');
+
+          // Detect role for role-specific constraints
+          const name = subagentType.toLowerCase();
+          let role = null;
+          if (/\b(?:test(?:er)?|qa|sdet)\b/.test(name)) {
+            role = 'TEST';
+          } else if (/\b(?:review(?:er)?|check(?:er)?|audit(?:or)?)\b/.test(name)) {
+            role = 'REVIEW';
+          } else if (/\b(?:dev(?:eloper)?|implement(?:er)?|cod(?:er|ing)|engineer|architect|build(?:er)?|fix(?:er)?)\b/.test(name)) {
+            role = 'DEV';
+          }
+
+          const roleConstraints = role ? parseSectionFromContent(taskContent, role) : '';
 
           if (allConstraints || roleConstraints) {
             const constraintLines = [allConstraints, roleConstraints]
               .filter(c => c)
               .join('\n');
 
-            const constraintInjection = `## ⚠️ Task Constraints\n${constraintLines}`;
+            const constraintInjection = `## Task Constraints\n${constraintLines}`;
             updatedPrompt = `${constraintInjection}\n\n${updatedPrompt}`;
-            messages.push(`constraints: ${role}`);
-            log('debug', '[pre-task]', `Injecting ${role} constraints for ${subagentType}`, cwd, session_id);
+            modified = true;
+            log('debug', '[pre-task]', `Injecting ${role || 'ALL'} constraints for ${subagentType}`, cwd, session_id);
           }
         }
       }
@@ -158,7 +150,7 @@ async function main() {
 
     // Output result - updatedInput MUST be inside hookSpecificOutput per Claude Code docs
     // Note: systemMessage removed - logs go to focus-task.log only, not UI
-    if (updatedPrompt !== tool_input.prompt) {
+    if (modified) {
       output({
         hookSpecificOutput: {
           hookEventName: 'PreToolUse',

@@ -95,7 +95,7 @@ Apply **bottom-up** (descending line numbers):
 5. Respect `preserve:` sections
 
 **Rules:**
-- Edit tool only (never Write)
+- Edit tool only for document updates (Write only for new report files)
 - Bottom-up preserves line numbers
 - Preserve structure, headers, EXECUTE blocks
 - Facts only — no opinion/tone changes

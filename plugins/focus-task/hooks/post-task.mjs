@@ -11,7 +11,6 @@ import {
   isCoordinator,
   bindLockSession,
   getLock,
-  checkLock,
   log
 } from './lib/utils.mjs';
 
@@ -25,6 +24,7 @@ async function main() {
     session_id = input.session_id;
     cwd = input.cwd || cwd;
     const tool_input = input.tool_input;
+    const tool_result = input.tool_result;
 
     // Only process Task tool calls
     if (!tool_input) {
@@ -41,7 +41,10 @@ async function main() {
         bindLockSession(cwd, session_id);
         log('info', '[post-task]', `Bound session ${session_id?.slice(0, 8) || 'unknown'} to lock`, cwd, session_id);
         output({
-          systemMessage: `focus-task: session ${session_id?.slice(0, 8) || 'unknown'} bound to lock`
+          hookSpecificOutput: {
+            hookEventName: 'PostToolUse',
+            additionalContext: `focus-task: session ${session_id?.slice(0, 8) || 'unknown'} bound to lock`
+          }
         });
         return;
       }
@@ -55,28 +58,39 @@ async function main() {
       return;
     }
 
-    // Check lock with session match
-    const lock = checkLock(cwd, session_id);
+    // Check lock - single read
+    const lock = getLock(cwd);
     if (!lock) {
-      // Check if lock exists but session not bound (coordinator hasn't run yet)
-      const rawLock = getLock(cwd);
-      if (rawLock && !rawLock.session_id) {
-        output({
-          systemMessage: `⚠️ focus-task: Task lock exists but session not bound.
-REQUIRED: Call ft-coordinator FIRST to initialize and bind this session.
-Then re-run your agent. The 2-step protocol will be enforced after coordinator completes.`
-        });
-        return;
-      }
-      // No valid lock = focus-task not running in this session
+      // No valid lock = focus-task not running
       output({});
       return;
     }
 
-    // Return system message with mandatory 2-step post-agent protocol (shortened for attention)
+    if (!lock.session_id) {
+      output({
+        hookSpecificOutput: {
+          hookEventName: 'PostToolUse',
+          additionalContext: `focus-task: Task lock exists but session not bound. REQUIRED: Call ft-coordinator FIRST to initialize and bind this session. Then re-run your agent.`
+        }
+      });
+      return;
+    }
+
+    if (lock.session_id !== session_id) {
+      // Different session owns this task
+      output({});
+      return;
+    }
+
+    // Return 2-step post-agent protocol
     const agentName = String(subagentType || '').toUpperCase();
+    const failed = tool_result?.is_error === true;
+    const status = failed ? 'FAILED' : 'DONE';
     output({
-      systemMessage: `⛔ ${agentName} DONE → 1. WRITE report 2. CALL ft-coordinator NOW`
+      hookSpecificOutput: {
+        hookEventName: 'PostToolUse',
+        additionalContext: `${agentName} ${status} -> 1. WRITE report 2. CALL ft-coordinator NOW`
+      }
     });
   } catch (error) {
     // On error, pass through without modification

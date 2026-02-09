@@ -6,6 +6,7 @@
 **Context Injection:** [CONTEXT-INJECTION-GUIDE.md](./features/CONTEXT-INJECTION-GUIDE.md)
 **Agent Teams:** [CLAUDE-CODE-AGENT-TEAMS-GUIDE.md](./features/CLAUDE-CODE-AGENT-TEAMS-GUIDE.md)
 **Auto-Memories:** [AUTO-MEMORIES-GUIDE.md](./features/AUTO-MEMORIES-GUIDE.md)
+**Hooks:** [HOOKS-REFERENCE.md](./features/HOOKS-REFERENCE.md)
 
 ---
 
@@ -49,7 +50,8 @@
 │   ├── agent-creator.md
 │   ├── text-optimizer.md
 │   ├── rules-organizer.md
-│   └── bash-expert.md
+│   ├── bash-expert.md
+│   └── hook-creator.md
 │
 ├── commands/                    # Слэш-команды (пусто)
 │
@@ -89,6 +91,8 @@ idea ~/.claude/agents/skill-creator.md
 idea ~/.claude/agents/agent-creator.md
 idea ~/.claude/agents/text-optimizer.md
 idea ~/.claude/agents/rules-organizer.md
+idea ~/.claude/agents/bash-expert.md
+idea ~/.claude/agents/hook-creator.md
 ```
 
 Файлы с YAML frontmatter: `name`, `model`, `tools`, `description`.
@@ -103,6 +107,7 @@ idea ~/.claude/agents/rules-organizer.md
 | text-optimizer | sonnet | R/W/E/Glob/Grep/WebFetch | ❌ | ❌ | Оптимизация (через text-optimize) |
 | rules-organizer | sonnet | R/W/E/Glob/Grep/Skill | ❌ | ✅ | Организация .claude/rules/ |
 | bash-expert | opus | R/W/E/Glob/Grep/Bash/Task/WebFetch | ✅ | ❌ | Shell scripts, brew, plugin scripts |
+| hook-creator | opus | R/W/E/Glob/Grep/Bash/WebFetch/WebSearch | ❌ | ❌ | Claude Code hooks (bash/JS/mjs) |
 
 **Использование:**
 ```
@@ -209,7 +214,7 @@ idea ~/.claude/plugins/known_marketplaces.json
 |--------|--------|-------------|---------------------|
 | context7 | — | claude-plugins-official | resolve-library-id, query-docs |
 | playwright | 4fee769 | claude-plugins-official | browser_*, snapshot, screenshot |
-| focus-task | 2.4.1 | claude-brewcode | 9 skills, 4 agents |
+| focus-task | 2.6.0 | claude-brewcode | 10 skills, 4 agents |
 
 **focus-task skills:**
 | Скилл | Назначение |
@@ -234,7 +239,7 @@ idea ~/.claude/plugins/known_marketplaces.json
 ├── installed_plugins.json      # Реестр: [{name, version, marketplace}]
 ├── known_marketplaces.json     # Маркетплейсы: [{name, path}]
 │
-├── cache/                      # Скачанные плагины (~8.3MB)
+├── cache/                      # Скачанные плагины (~6.7MB)
 │   ├── claude-plugins-official/
 │   │   ├── context7/
 │   │   └── playwright/
@@ -243,9 +248,9 @@ idea ~/.claude/plugins/known_marketplaces.json
 │       └── focus-task/
 │           ├── 2.0.8/          # Все версии сохраняются
 │           ├── ...
-│           └── 2.4.1/          # Актуальная
+│           └── 2.6.0/          # Актуальная
 │               ├── .claude-plugin/plugin.json
-│               ├── skills/{setup,teardown,create,start,review,rules,auto-sync,grepai,install}/
+│               ├── skills/{setup,teardown,spec,plan,start,review,rules,auto-sync,grepai,install}/
 │               ├── agents/{ft-coordinator,ft-knowledge-manager,ft-grepai-configurator,ft-auto-sync-processor}.md
 │               └── templates/
 │
@@ -301,7 +306,7 @@ idea ~/.claude.json
 ├── history.jsonl                # История команд (~2MB)
 ├── stats-cache.json             # Статистика использования
 │
-├── todos/                       # Задачи по сессиям (~2.9MB)
+├── todos/                       # Задачи по сессиям (~4.1MB)
 │   └── {uuid}-agent-{uuid}.json
 │
 ├── shell-snapshots/             # Снимки shell (~33MB)
@@ -310,10 +315,10 @@ idea ~/.claude.json
 ├── session-env/                 # Env переменные сессий
 │   └── {uuid}/
 │
-├── file-history/                # История файлов (~3.4MB)
+├── file-history/                # История файлов (~6.6MB)
 │   └── {uuid}/
 │
-├── debug/                       # Логи (~37MB, ручная очистка)
+├── debug/                       # Логи (~99MB, ручная очистка)
 │   └── {uuid}.txt
 │
 ├── reports/                     # Отчёты (~1.2MB)
@@ -452,6 +457,7 @@ du -sh ~/.claude/*/
 
 | Вер. | Дата | Изменения |
 |------|------|-----------|
+| 2.22 | 2026-02-09 | focus-task 2.6.0, hook-creator agent (9 agents), обновлены размеры, SKILL.md phases для всех features |
 | 2.21 | 2026-02-09 | text-optimize 3 modes (-l/-d), prompt-optimizer→text-optimizer, LLM Text Rules в 4 агентах, user/features/ в tree |
 | 2.20 | 2026-02-08 | Добавлена Auto-Memory в структуру, settings, context injection |
 | 2.19 | 2026-02-08 | Claude Code 2.1.37, focus-task 2.4.1, Opus 4.6, Agent Teams preview, auto-memories, fast mode |

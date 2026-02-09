@@ -43,11 +43,14 @@ export function output(response) {
  */
 export function getActiveTaskPath(cwd) {
   const refPath = join(cwd, '.claude', 'TASK.md');
-  if (!existsSync(refPath)) return null;
+  if (!existsSync(refPath)) {
+    log('debug', '[task]', 'TASK.md not found', cwd);
+    return null;
+  }
 
-  const content = readFileSync(refPath, 'utf8').trim();
-  // Check if content is a valid task path reference
-  if (!content.match(/\.claude\/tasks\/.*_task\/PLAN\.md$/)) return null;
+  const content = readFileSync(refPath, 'utf8').trim().split('\n')[0].trim();
+  if (content.includes('..')) return null;
+  if (!content.match(/^\.claude\/tasks\/.*_task\/PLAN\.md$/)) return null;
 
   const taskPath = join(cwd, content);
   if (!existsSync(taskPath)) return null;
@@ -67,10 +70,9 @@ export function getKnowledgePath(taskPath) {
 /**
  * Get artifacts directory for a task
  * @param {string} taskPath - Path to PLAN.md file
- * @param {string} cwd - Current working directory (kept for backward compat)
  * @returns {string} Path to artifacts directory
  */
-export function getReportsDir(taskPath, cwd) {
+export function getReportsDir(taskPath) {
   return join(dirname(taskPath), 'artifacts');
 }
 
@@ -95,15 +97,23 @@ export function parseTask(taskPath, cwd = null) {
   const status = statusMatch?.[1]?.trim() || 'pending';
 
   // Find current phase
-  const phaseMatches = [...content.matchAll(/^##\s*Phase\s+(\d+)[^\n]*\n(?:[\s\S]*?(?=^##\s*Phase|\Z))/gm)];
+  const phaseHeaders = [...content.matchAll(/^#{2,3}\s*Phase\s+(\d+)(?!V)[^\n]*/gm)];
   let currentPhase = 1;
 
-  for (const match of phaseMatches) {
+  for (const match of phaseHeaders) {
     const phaseNum = parseInt(match[1]);
-    if (isNaN(phaseNum)) continue; // Skip invalid phase numbers
-    const phaseContent = match[0];
-    // Check if phase is completed (has [x] or status: completed)
-    if (phaseContent.includes('[x]') || phaseContent.includes('status: completed')) {
+    if (isNaN(phaseNum)) continue;
+    const phaseStart = match.index;
+    const currentLineEnd = content.indexOf('\n', phaseStart);
+    const remainingContent = currentLineEnd >= 0 ? content.slice(currentLineEnd + 1) : '';
+    const nextMatch = remainingContent.match(/^#{2,3}\s*Phase\s+\d+(?!V)/m);
+    const phaseEnd = nextMatch ? currentLineEnd + 1 + nextMatch.index : content.length;
+    const phaseContent = content.slice(phaseStart, phaseEnd);
+
+    const checked = (phaseContent.match(/\[x\]/gi) || []).length;
+    const unchecked = (phaseContent.match(/\[ \]/g) || []).length;
+    const hasStatusComplete = /\*?\*?[Ss]tatus\*?\*?:\s*completed/i.test(phaseContent);
+    if ((checked > 0 && unchecked === 0) || hasStatusComplete) {
       currentPhase = phaseNum + 1;
     } else {
       currentPhase = phaseNum;
@@ -111,7 +121,7 @@ export function parseTask(taskPath, cwd = null) {
     }
   }
 
-  const totalPhases = phaseMatches.length || 1;
+  const totalPhases = phaseHeaders.length || 1;
 
   return {
     status,
@@ -119,44 +129,6 @@ export function parseTask(taskPath, cwd = null) {
     totalPhases,
     content
   };
-}
-
-/**
- * Extract task status from TASK.md content
- * @param {string} content - TASK.md content
- * @returns {string} Status value
- */
-export function extractStatus(content) {
-  const statusMatch = content.match(/^status:\s*(.+)$/m);
-  return statusMatch?.[1]?.trim() || 'pending';
-}
-
-/**
- * Find current phase number from TASK.md
- * @param {string} content - TASK.md content
- * @returns {number} Current phase number
- */
-export function findCurrentPhase(content) {
-  const phaseMatches = [...content.matchAll(/^##\s*Phase\s+(\d+)/gm)];
-  let currentPhase = 1;
-
-  for (const match of phaseMatches) {
-    const phaseNum = parseInt(match[1]);
-    // Find the section for this phase
-    const phaseStart = match.index;
-    const nextPhaseMatch = content.slice(phaseStart + 1).match(/^##\s*Phase\s+\d+/m);
-    const phaseEnd = nextPhaseMatch ? phaseStart + 1 + nextPhaseMatch.index : content.length;
-    const phaseContent = content.slice(phaseStart, phaseEnd);
-
-    if (phaseContent.includes('[x]') || phaseContent.includes('status: completed')) {
-      currentPhase = phaseNum + 1;
-    } else {
-      currentPhase = phaseNum;
-      break;
-    }
-  }
-
-  return currentPhase;
 }
 
 /**
@@ -201,26 +173,19 @@ const DEFAULT_CONFIG = {
     maxEntries: 100,
     maxTokens: 500,
     priorities: ['❌', '✅', 'ℹ️'],
-    autoCompactThreshold: 50,
     validation: {
       enabled: true,
-      blocklist: true,
-      densityCheck: true
-    },
-    retention: {
-      global: 50,
-      task: 20
+      blocklist: true
     }
   },
   logging: {
     level: 'info'
   },
-  stop: {
-    maxAttempts: 20
-  },
   agents: {
     system: [
       'ft-coordinator', 'ft-knowledge-manager',
+      'focus-task:ft-coordinator', 'focus-task:ft-knowledge-manager',
+      'ft-auto-sync-processor', 'focus-task:ft-auto-sync-processor',
       'Explore', 'Plan', 'Bash', 'general-purpose',
       'claude-code-guide', 'skill-creator', 'agent-creator',
       'text-optimizer', 'rules-organizer', 'statusline-setup'
@@ -232,8 +197,7 @@ const DEFAULT_CONFIG = {
   autoSync: {
     intervalDays: 7,
     retention: {
-      maxEntries: 200,
-      removeOrphansAfterDays: 30
+      maxEntries: 200
     },
     optimize: false,
     parallelAgents: 5
@@ -243,6 +207,7 @@ const DEFAULT_CONFIG = {
 /** Cached config */
 let cachedConfig = null;
 let cachedConfigCwd = null;
+let _loadingConfig = false;
 
 /**
  * Load configuration from .claude/tasks/cfg/focus-task.config.json
@@ -256,6 +221,10 @@ export function loadConfig(cwd) {
     return cachedConfig;
   }
 
+  // Guard against recursion: log -> shouldLog -> getLogLevel -> loadConfig -> log
+  if (_loadingConfig) return DEFAULT_CONFIG;
+  _loadingConfig = true;
+
   const configPath = join(cwd, '.claude', 'tasks', 'cfg', 'focus-task.config.json');
   let userConfig = {};
 
@@ -263,16 +232,24 @@ export function loadConfig(cwd) {
     try {
       userConfig = JSON.parse(readFileSync(configPath, 'utf8'));
     } catch (e) {
-      log('error', '[config]', `Failed to parse ${configPath}: ${e.message}`, cwd);
+      console.error(`[config] Failed to parse ${configPath}: ${e.message}`);
     }
   }
 
   // Deep merge with defaults
   cachedConfig = {
-    knowledge: { ...DEFAULT_CONFIG.knowledge, ...userConfig.knowledge },
+    knowledge: {
+      ...DEFAULT_CONFIG.knowledge,
+      ...userConfig.knowledge,
+      validation: { ...DEFAULT_CONFIG.knowledge.validation, ...(userConfig.knowledge?.validation || {}) },
+    },
     logging: { ...DEFAULT_CONFIG.logging, ...userConfig.logging },
-    stop: { ...DEFAULT_CONFIG.stop, ...userConfig.stop },
-    agents: { ...DEFAULT_CONFIG.agents, ...userConfig.agents },
+    agents: {
+      system: [...new Set([
+        ...DEFAULT_CONFIG.agents.system,
+        ...(userConfig.agents?.system || [])
+      ])]
+    },
     constraints: { ...DEFAULT_CONFIG.constraints, ...userConfig.constraints },
     autoSync: {
       ...DEFAULT_CONFIG.autoSync,
@@ -280,6 +257,7 @@ export function loadConfig(cwd) {
       retention: { ...DEFAULT_CONFIG.autoSync.retention, ...(userConfig.autoSync?.retention || {}) }
     }
   };
+  cachedConfigCwd = cwd;
   // Validate critical numeric fields — clamp to defaults if invalid
   const as = cachedConfig.autoSync;
   if (!Number.isInteger(as.intervalDays) || as.intervalDays < 1) {
@@ -290,9 +268,17 @@ export function loadConfig(cwd) {
     log('warn', '[config]', `Invalid parallelAgents=${as.parallelAgents}, using default ${DEFAULT_CONFIG.autoSync.parallelAgents}`, cwd);
     as.parallelAgents = DEFAULT_CONFIG.autoSync.parallelAgents;
   }
+  const k = cachedConfig.knowledge;
+  if (!Number.isInteger(k.maxEntries) || k.maxEntries < 1) {
+    log('warn', '[config]', `Invalid maxEntries=${k.maxEntries}, using default ${DEFAULT_CONFIG.knowledge.maxEntries}`, cwd);
+    k.maxEntries = DEFAULT_CONFIG.knowledge.maxEntries;
+  }
+  if (!Number.isInteger(k.maxTokens) || k.maxTokens < 1) {
+    log('warn', '[config]', `Invalid maxTokens=${k.maxTokens}, using default ${DEFAULT_CONFIG.knowledge.maxTokens}`, cwd);
+    k.maxTokens = DEFAULT_CONFIG.knowledge.maxTokens;
+  }
 
-  cachedConfigCwd = cwd;
-
+  _loadingConfig = false;
   return cachedConfig;
 }
 
@@ -321,6 +307,17 @@ export function getTaskDir(taskPath) {
 }
 
 /**
+ * Validate that task_path is safe and matches expected pattern
+ * @param {string} taskPath - Relative task path from lock file
+ * @returns {boolean} True if valid
+ */
+export function validateTaskPath(taskPath) {
+  if (!taskPath || typeof taskPath !== 'string') return false;
+  if (taskPath.includes('..')) return false;
+  return /^\.claude\/tasks\/.*_task\/PLAN\.md$/.test(taskPath);
+}
+
+/**
  * Get lock file path for a task
  * @param {string} taskPath - Absolute path to PLAN.md
  * @returns {string} Path to .lock file
@@ -338,35 +335,6 @@ export function getSessionsDir(cwd) {
   return join(cwd, '.claude', 'tasks', 'sessions');
 }
 
-/**
- * Write session info file mapping session to task dir
- * @param {string} cwd - Current working directory
- * @param {string} sessionId - Session ID
- * @param {string} taskDir - Relative path to task directory from cwd
- */
-export function writeSessionInfo(cwd, sessionId, taskDir) {
-  const sessionsDir = getSessionsDir(cwd);
-  if (!existsSync(sessionsDir)) {
-    mkdirSync(sessionsDir, { recursive: true });
-  }
-  writeFileSync(join(sessionsDir, `${sessionId}.info`), taskDir);
-}
-
-/**
- * Get task directory from session mapping
- * @param {string} cwd - Current working directory
- * @param {string} sessionId - Session ID
- * @returns {string|null} Task directory relative path or null
- */
-export function getTaskDirFromSession(cwd, sessionId) {
-  const infoPath = join(getSessionsDir(cwd), `${sessionId}.info`);
-  if (!existsSync(infoPath)) return null;
-  try {
-    return readFileSync(infoPath, 'utf8').trim();
-  } catch {
-    return null;
-  }
-}
 
 // ============================================================================
 // LOCK FILE MANAGEMENT
@@ -386,13 +354,10 @@ export function isLockStale(lock) {
   const timestamp = lock.bound_at || lock.started_at;
   if (!timestamp) return false;
 
-  try {
-    const age = Date.now() - new Date(timestamp).getTime();
-    const maxAge = LOCK_STALE_HOURS * 60 * 60 * 1000;
-    return age > maxAge;
-  } catch {
-    return false;
-  }
+  const age = Date.now() - new Date(timestamp).getTime();
+  if (isNaN(age)) return true; // Treat unparseable timestamps as stale
+  const maxAge = LOCK_STALE_HOURS * 60 * 60 * 1000;
+  return age > maxAge;
 }
 
 /**
@@ -403,6 +368,10 @@ export function isLockStale(lock) {
  * @returns {boolean} True if bound successfully
  */
 export function bindLockSession(cwd, sessionId, taskPath = null) {
+  if (!sessionId || typeof sessionId !== 'string') {
+    log('warn', '[lock]', 'Cannot bind: invalid sessionId', cwd);
+    return false;
+  }
   let lockPath;
   if (taskPath) {
     lockPath = getLockPath(taskPath);
@@ -416,11 +385,27 @@ export function bindLockSession(cwd, sessionId, taskPath = null) {
   try {
     const lock = JSON.parse(readFileSync(lockPath, 'utf8'));
 
+    // Validate lock schema
+    if (!lock.task_path || typeof lock.task_path !== 'string' ||
+        !lock.started_at || typeof lock.started_at !== 'string') {
+      log('error', '[lock]', `Corrupted lock (missing task_path or started_at) — deleting`, cwd, sessionId);
+      try { unlinkSync(lockPath); } catch {}
+      return false;
+    }
+
     // Only bind if not already bound
     if (!lock.session_id) {
       lock.session_id = sessionId;
       lock.bound_at = new Date().toISOString();
-      writeFileSync(lockPath, JSON.stringify(lock, null, 2));
+      const tmpPath = lockPath + '.tmp';
+      writeFileSync(tmpPath, JSON.stringify(lock, null, 2));
+      renameSync(tmpPath, lockPath);
+      // Verify we won the race
+      const verifyLock = getLock(cwd);
+      if (!verifyLock || verifyLock.session_id !== sessionId) {
+        log('warn', '[lock]', 'Lost bind race, another session bound first', cwd, sessionId);
+        return false;
+      }
       log('info', '[lock]', `Session bound: ${sessionId.slice(0, 8)}`, cwd, sessionId);
     }
     return true;
@@ -437,40 +422,25 @@ export function bindLockSession(cwd, sessionId, taskPath = null) {
  * @returns {Object|null} Lock data if valid, null otherwise
  */
 export function checkLock(cwd, sessionId) {
-  const activePath = getActiveTaskPath(cwd);
-  if (!activePath) {
-    log('debug', '[lock]', 'No active task found', cwd, sessionId);
+  const lock = getLock(cwd);
+  if (!lock) return null;
+
+  // Lock must have session_id bound
+  if (!lock.session_id) {
+    log('debug', '[lock]', 'Lock has no session_id', cwd, sessionId);
     return null;
   }
-  const lockPath = getLockPath(activePath);
-  if (!existsSync(lockPath)) {
-    log('debug', '[lock]', 'No lock file exists', cwd, sessionId);
+
+  // Session must match
+  if (lock.session_id !== sessionId) {
+    const lockId = typeof lock.session_id === 'string' ? lock.session_id.slice(0, 8) : 'invalid';
+    const currentId = typeof sessionId === 'string' ? sessionId.slice(0, 8) : 'null';
+    log('debug', '[lock]', `Session mismatch: lock=${lockId}, current=${currentId}`, cwd, sessionId);
     return null;
   }
 
-  try {
-    const lock = JSON.parse(readFileSync(lockPath, 'utf8'));
-
-    // Lock must have session_id bound
-    if (!lock.session_id) {
-      log('debug', '[lock]', 'Lock has no session_id', cwd, sessionId);
-      return null;
-    }
-
-    // Session must match
-    if (lock.session_id !== sessionId) {
-      const lockId = typeof lock.session_id === 'string' ? lock.session_id.slice(0, 8) : 'invalid';
-      const currentId = typeof sessionId === 'string' ? sessionId.slice(0, 8) : 'null';
-      log('debug', '[lock]', `Session mismatch: lock=${lockId}, current=${currentId}`, cwd, sessionId);
-      return null;
-    }
-
-    log('debug', '[lock]', `Session matched: ${sessionId?.slice(0, 8) || 'unknown'}`, cwd, sessionId);
-    return lock;
-  } catch (e) {
-    log('error', '[lock]', `Failed to check: ${e.message}`, cwd, sessionId);
-    return null;
-  }
+  log('debug', '[lock]', `Session matched: ${sessionId?.slice(0, 8) || 'unknown'}`, cwd, sessionId);
+  return lock;
 }
 
 /**
@@ -485,9 +455,22 @@ export function getLock(cwd) {
   if (!existsSync(lockPath)) return null;
 
   try {
-    return JSON.parse(readFileSync(lockPath, 'utf8'));
+    const lock = JSON.parse(readFileSync(lockPath, 'utf8'));
+    if (!lock.task_path || typeof lock.task_path !== 'string' ||
+        !lock.started_at || typeof lock.started_at !== 'string') {
+      log('error', '[lock]', `Corrupted lock (missing task_path or started_at) — deleting`, cwd);
+      try { unlinkSync(lockPath); } catch {}
+      return null;
+    }
+    if (!validateTaskPath(lock.task_path)) {
+      log('error', '[lock]', `Corrupted lock (invalid task_path: ${lock.task_path}) — deleting`, cwd);
+      try { unlinkSync(lockPath); } catch {}
+      return null;
+    }
+    return lock;
   } catch (e) {
     log('error', '[lock]', `Failed to read: ${e.message}`, cwd);
+    try { unlinkSync(lockPath); } catch {}
     return null;
   }
 }
@@ -496,9 +479,10 @@ export function getLock(cwd) {
  * Delete lock file on task completion
  * CRITICAL: Must be called when task finishes
  * @param {string} cwd - Current working directory
+ * @param {string|null} taskPath - Known absolute task path (avoids re-reading TASK.md)
  */
-export function deleteLock(cwd) {
-  const activePath = getActiveTaskPath(cwd);
+export function deleteLock(cwd, taskPath = null) {
+  const activePath = taskPath || getActiveTaskPath(cwd);
   if (!activePath) return;
   const lockPath = getLockPath(activePath);
   if (existsSync(lockPath)) {
@@ -509,6 +493,24 @@ export function deleteLock(cwd) {
       log('error', '[lock]', `Failed to delete: ${e.message}`, cwd);
     }
   }
+}
+
+/**
+ * Create lock file atomically using tmp+rename pattern
+ * @param {string} cwd - Current working directory
+ * @param {string} taskPath - Relative task path (e.g., .claude/tasks/*_task/PLAN.md)
+ * @returns {Object} Lock data
+ */
+export function createLock(cwd, taskPath) {
+  const lockPath = join(cwd, '.claude', 'tasks', '.lock');
+  const lock = {
+    task_path: taskPath,
+    created_at: new Date().toISOString()
+  };
+  const tmpPath = lockPath + '.tmp';
+  writeFileSync(tmpPath, JSON.stringify(lock, null, 2));
+  renameSync(tmpPath, lockPath);
+  return lock;
 }
 
 /**
@@ -558,11 +560,12 @@ export function shouldLog(level, cwd) {
  * @param {string|null} sessionId - Optional session ID for correlation
  */
 export function log(level, prefix, message, cwd, sessionId = null) {
-  // Always write to stderr first (even if cwd is null)
+  if (!cwd) {
+    if (level === 'error') console.error(`${prefix} ${message}`);
+    return;
+  }
+  if (!shouldLog(level, cwd)) return;
   console.error(`${prefix} ${message}`);
-
-  // Skip file logging if cwd is null or level check fails
-  if (!cwd || !shouldLog(level, cwd)) return;
 
   const timestamp = new Date().toISOString();
   const levelTag = level.toUpperCase().padEnd(5);
@@ -601,8 +604,8 @@ export function getState(cwd) {
     if (existsSync(statePath)) {
       return JSON.parse(readFileSync(statePath, 'utf8'));
     }
-  } catch {
-    // Ignore read errors
+  } catch (e) {
+    log('warn', '[state]', `Failed to read state: ${e.message}`, cwd);
   }
   return {};
 }
@@ -619,8 +622,10 @@ export function saveState(cwd, state) {
     if (!existsSync(stateDir)) {
       mkdirSync(stateDir, { recursive: true });
     }
-    writeFileSync(statePath, JSON.stringify(state, null, 2));
-  } catch {
-    // Ignore write errors
+    const tmpPath = statePath + '.tmp';
+    writeFileSync(tmpPath, JSON.stringify(state, null, 2));
+    renameSync(tmpPath, statePath);
+  } catch (e) {
+    log('warn', '[state]', `Failed to save state: ${e.message}`, cwd);
   }
 }

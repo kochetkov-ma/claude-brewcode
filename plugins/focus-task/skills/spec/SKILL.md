@@ -10,6 +10,8 @@ model: opus
 
 Create Spec — "description" or path to requirements
 
+<instructions>
+
 ## TOKEN-EFFICIENT FORMATTING
 
 **Rules for Opus 4.5 context optimization:**
@@ -162,3 +164,5 @@ Create Spec — "description" or path to requirements
 ## Next Step
 Run: /focus-task:plan .claude/tasks/{TIMESTAMP}_{NAME}_task/
 ```
+
+</instructions>

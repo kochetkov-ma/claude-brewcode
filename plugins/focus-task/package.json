@@ -1,6 +1,6 @@
 {
   "name": "claude-plugin-focus-task",
-  "version": "1.0.0",
+  "version": "2.7.0",
   "description": "Infinite task execution with automatic handoff for Claude Code",
   "keywords": [
     "claude-code",
@@ -11,7 +11,7 @@
     "handoff"
   ],
   "author": {
-    "name": "Maximus Kochetkov"
+    "name": "Maksim Kochetkov"
   },
   "license": "MIT",
   "repository": {
@@ -36,6 +36,6 @@
   },
   "claude-plugin": {
     "name": "focus-task",
-    "version": "1.0.0"
+    "version": "2.7.0"
   }
 }

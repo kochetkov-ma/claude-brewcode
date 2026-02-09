@@ -90,7 +90,7 @@ echo "✅ Watch started (PID: $(pgrep -f 'grepai watch'))"
 ELAPSED=0
 echo "⏳ Waiting for indexing to complete..."
 
-while [ $ELAPSED -lt $TIMEOUT ]; do
+while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
   # Check completion marker in log
   if grep -q "Initial scan complete" "$WATCH_LOG" 2>/dev/null; then
     echo ""
@@ -107,10 +107,10 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
   fi
 
   # Progress every 5s with file sizes
-  if [ $((ELAPSED % 5)) -eq 0 ] && [ $ELAPSED -gt 0 ]; then
+  if [ $((ELAPSED % 5)) -eq 0 ] && [ "$ELAPSED" -gt 0 ]; then
     IDX_SIZE=$(du -h .grepai/index.gob 2>/dev/null | cut -f1 || echo "0")
     SYM_SIZE=$(du -h .grepai/symbols.gob 2>/dev/null | cut -f1 || echo "0")
-    LAST_LINE=$(grep -E "Indexing|Processing" "$WATCH_LOG" 2>/dev/null | tail -1 | head -c 80)
+    LAST_LINE=$(grep -E "Indexing|Processing" "$WATCH_LOG" 2>/dev/null | tail -1 | head -c 80 || true)
     echo "⏳ ${ELAPSED}s | index: ${IDX_SIZE} | symbols: ${SYM_SIZE}"
     [ -n "$LAST_LINE" ] && echo "   $LAST_LINE"
   fi
@@ -119,15 +119,15 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
   ELAPSED=$((ELAPSED + 1))
 done
 
-if [ $ELAPSED -ge $TIMEOUT ]; then
+if [ "$ELAPSED" -ge "$TIMEOUT" ]; then
   echo ""
   echo "❌ Timeout after ${TIMEOUT}s"
-  grepai watch --stop 2>/dev/null
+  grepai watch --stop 2>/dev/null || true
   exit 1
 fi
 
 # Extract stats from log
-STATS=$(grep "Initial scan complete" "$WATCH_LOG" | tail -1)
+STATS=$(grep "Initial scan complete" "$WATCH_LOG" | tail -1 || true)
 echo "   $STATS"
 
 echo ""

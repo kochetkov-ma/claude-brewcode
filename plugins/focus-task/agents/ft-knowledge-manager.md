@@ -17,7 +17,7 @@ You are the knowledge manager agent for Focus Task plugin. Your role is to maint
 | Action | When | Output |
 |--------|------|--------|
 | Deduplicate | Duplicates reported | Remove exact duplicates |
-| Merge similar | Before handoff | Combine case-insensitive duplicates |
+| Merge similar | Before handoff | Combine entries matching on first 100 characters of `txt` field |
 | Prioritize | When over limit | Keep ❌ > ✅ > ℹ️ |
 | Truncate | When over limit | Remove lowest priority, oldest first |
 | Validate | Any operation | Ensure valid JSONL format |
@@ -25,7 +25,7 @@ You are the knowledge manager agent for Focus Task plugin. Your role is to maint
 ## KNOWLEDGE.jsonl Format
 
 ```jsonl
-{"ts":"ISO8601","cat":"category","t":"type","txt":"text","src":"agent"}
+{"ts":"ISO8601","t":"type","txt":"text","src":"agent"}
 ```
 
 ### Types (Priority Order)
@@ -35,21 +35,6 @@ You are the knowledge manager agent for Focus Task plugin. Your role is to maint
 | `✅` | 2 | Best practice - what works |
 | `ℹ️` | 3 (lowest) | Info - neutral facts |
 
-### Scope
-
-| Scope | Retention | Purpose |
-|-------|-----------|---------|
-| `global` | max 50 | Reusable across tasks |
-| `task` | max 20 | Task-specific context |
-
-**Classification:**
-- `❌` → always `global` (avoid patterns are universal)
-- `handoff` category → always `task`
-- `✅` → usually `global` (best practices)
-- `ℹ️` → depends on content (architecture=global, phase-specific=task)
-
-### Categories
-`docker`, `db`, `api`, `test`, `config`, `security`, `performance`, `arch`, `code`, `migration`
 
 ## Workflow
 
@@ -58,13 +43,9 @@ You are the knowledge manager agent for Focus Task plugin. Your role is to maint
 3. **Deduplicate** - remove entries with identical `txt`
 4. **Merge similar** - combine entries with same `txt` content (case-insensitive), keep higher priority type
 5. **Sort** by priority (❌ > ✅ > ℹ️), then by timestamp (newest first)
-6. **Truncate** if over limit (default: 50 entries)
-7. **Scope-aware retention:**
-   - Keep max 50 `global` entries
-   - Keep max 20 `task` entries
-   - Delete task entries on task completion (/focus-task:teardown)
-8. **Write** cleaned KNOWLEDGE.jsonl
-9. **Report** statistics
+6. **Truncate** if over limit (maxEntries=100)
+7. **Write** cleaned KNOWLEDGE.jsonl
+8. **Report** statistics
 
 ## Input
 
@@ -73,7 +54,7 @@ Received via Task tool prompt:
 | Param | Required | Default | Description |
 |-------|----------|---------|-------------|
 | `knowledgePath` | YES | - | Absolute path to KNOWLEDGE.jsonl |
-| `maxEntries` | no | 50 | Maximum entries to keep |
+| `maxEntries` | no | 100 | Maximum entries to keep |
 | `mode` | no | `full` | `dedupe` (remove exact only) or `full` (dedupe + merge + truncate) |
 
 ## Output Format
