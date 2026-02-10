@@ -186,6 +186,7 @@ const DEFAULT_CONFIG = {
       'ft-coordinator', 'ft-knowledge-manager',
       'focus-task:ft-coordinator', 'focus-task:ft-knowledge-manager',
       'ft-auto-sync-processor', 'focus-task:ft-auto-sync-processor',
+      'ft-grepai-configurator', 'focus-task:ft-grepai-configurator',
       'Explore', 'Plan', 'Bash', 'general-purpose',
       'claude-code-guide', 'skill-creator', 'agent-creator',
       'text-optimizer', 'statusline-setup'
@@ -502,10 +503,13 @@ export function deleteLock(cwd, taskPath = null) {
  * @returns {Object} Lock data
  */
 export function createLock(cwd, taskPath) {
-  const lockPath = join(cwd, '.claude', 'tasks', '.lock');
+  // Lock file is per-task: {task_dir}/.lock (not global .claude/tasks/.lock)
+  const absoluteTaskPath = join(cwd, taskPath);
+  const lockPath = getLockPath(absoluteTaskPath);
   const lock = {
     task_path: taskPath,
-    created_at: new Date().toISOString()
+    // Must be started_at (not created_at) - getLock() validates this field
+    started_at: new Date().toISOString()
   };
   const tmpPath = lockPath + '.tmp';
   writeFileSync(tmpPath, JSON.stringify(lock, null, 2));

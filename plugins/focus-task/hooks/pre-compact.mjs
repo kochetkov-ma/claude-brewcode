@@ -54,7 +54,9 @@ async function main() {
     }
 
     // Get task path from lock (session-validated)
+    // Warn but continue: lock exists but task_path missing indicates corrupt state
     if (!lock.task_path) {
+      log('warn', '[pre-compact]', 'Lock missing task_path', cwd, session_id);
       output({ continue: true });
       return;
     }

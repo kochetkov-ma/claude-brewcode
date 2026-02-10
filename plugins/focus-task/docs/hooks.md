@@ -169,7 +169,7 @@ focus-task: active | session: {session_id_short}
 | watch не запущен + index есть + ollama запущен + не Windows | Авто-запускает `grepai watch --background` |
 | watch не запущен + условия не выполнены | Добавляет `watch: stopped` |
 | mcp-serve не запущен | Добавляет `mcp-serve: stopped` |
-| Все компоненты работают | Возвращает `grepai: ready \| index: {size}` + `hookSpecificOutput` с напоминанием |
+| Все компоненты работают (hasIndex && ollamaRunning && mcpRunning) | Возвращает `grepai: ready \| index: {size}` + `hookSpecificOutput` с напоминанием |
 
 **Проверки компонентов:**
 
@@ -291,7 +291,7 @@ Matcher: `Task` -- только для вызовов Task tool.
    |------------------------|------|------------------|
    | `test`, `tester`, `qa`, `sdet` | TEST | `<!-- TEST -->...<!-- /TEST -->` |
    | `review`, `reviewer`, `checker`, `auditor` | REVIEW | `<!-- REVIEW -->...<!-- /REVIEW -->` |
-   | `dev`, `developer`, `implementer`, `coder`, `coding`, `engineer`, `architect`, `builder`, `fixer` | DEV | `<!-- DEV -->...<!-- /DEV -->` |
+   | `dev`, `developer`, `implementer`, `coder`, `coding`, `engineer`, `architect`, `build`, `builder`, `fix`, `fixer` | DEV | `<!-- DEV -->...<!-- /DEV -->` |
 
    Дополнительно извлекается секция `<!-- ALL -->...<!-- /ALL -->` для всех ролей.
    Формат инъекции:
@@ -558,16 +558,16 @@ Claude (главный агент/менеджер) -- инструкции по
 
 2. **Компактификация KNOWLEDGE.jsonl:**
    - Вызывает `localCompact()` если файл существует
-   - `localCompact()` срабатывает если записей > 50% от `maxEntries` (по умолчанию > 50)
+   - `localCompact()` срабатывает если записей > 80% от `maxEntries` (по умолчанию > 80)
    - Дедупликация по полю `txt` (первые 100 символов)
    - Сортировка по приоритету (❌ > ✅ > ℹ️), затем по timestamp
    - Обрезка до `maxEntries` (по умолчанию 100)
    - Атомарная запись через tmp-файл + rename
 
 3. **Запись handoff-записи:**
-   - Добавляет в KNOWLEDGE.jsonl:
+   - Добавляет в KNOWLEDGE.jsonl (тип ✅ для приоритета при компактификации):
      ```json
-     {"t":"ℹ️","txt":"Handoff at phase {N}: context auto-compact","src":"pre-compact-hook","ts":"..."}
+     {"t":"✅","txt":"Handoff at phase {N}: context auto-compact","src":"pre-compact-hook","ts":"..."}
      ```
 
 4. **Обновление статуса задачи:**
@@ -660,7 +660,7 @@ focus-task: compact handoff, phase 3/5
 | Lock с текущим session_id + невалидный task_path | Удаляет lock, разрешает stop | удаляется |
 | Lock с текущим session_id + файл задачи не найден | Удаляет lock, разрешает stop | удаляется |
 | Lock с текущим session_id + не удаётся парсить задачу | Удаляет lock, разрешает stop | удаляется |
-| Lock с текущим session_id + status `finished` | Удаляет lock, разрешает stop, напоминает о rules | удаляется |
+| Lock с текущим session_id + status терминальный (`finished`, `cancelled`, `failed`, `error`) | Удаляет lock, разрешает stop, напоминает о rules | удаляется |
 | Lock с текущим session_id + задача не завершена | **БЛОКИРУЕТ STOP** | сохраняется |
 | Ошибка в хуке | Разрешает stop (не блокирует пользователя) | не трогает |
 

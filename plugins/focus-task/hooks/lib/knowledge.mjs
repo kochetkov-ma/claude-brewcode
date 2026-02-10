@@ -22,7 +22,8 @@ function validateEntry(entry) {
   if (!entry || typeof entry !== 'object') return { valid: false, reason: 'not an object' };
   if (!entry.txt || typeof entry.txt !== 'string') return { valid: false, reason: 'missing txt' };
   if (!entry.t) return { valid: false, reason: 'missing type' };
-  if (!entry.src || typeof entry.src !== 'string') return { valid: false, reason: 'missing src' };
+  // src is optional; if provided, must be a string
+  if (entry.src !== undefined && typeof entry.src !== 'string') return { valid: false, reason: 'invalid src type' };
   for (const pattern of BLOCKLIST_PATTERNS) {
     if (pattern.test(entry.txt)) return { valid: false, reason: `blocklist: ${entry.txt.slice(0, 30)}` };
   }

@@ -147,8 +147,8 @@ async function checkGrepai(cwd, session_id = null) {
 
   const result = { systemMessage: `grepai: ${statusMessage}` };
 
-  // Reminder for Claude (additionalContext), NOT for user (systemMessage)
-  if (hasIndex && ollamaRunning) {
+  // Reminder for Claude: only when grepai_search is actually usable (index + ollama + mcp)
+  if (hasIndex && ollamaRunning && mcpRunning) {
     result.hookSpecificOutput = {
       hookEventName: 'SessionStart',
       additionalContext: 'grepai: USE grepai_search FIRST for code exploration'
