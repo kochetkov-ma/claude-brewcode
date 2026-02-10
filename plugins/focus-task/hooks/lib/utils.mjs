@@ -188,7 +188,7 @@ const DEFAULT_CONFIG = {
       'ft-auto-sync-processor', 'focus-task:ft-auto-sync-processor',
       'Explore', 'Plan', 'Bash', 'general-purpose',
       'claude-code-guide', 'skill-creator', 'agent-creator',
-      'text-optimizer', 'rules-organizer', 'statusline-setup'
+      'text-optimizer', 'statusline-setup'
     ]
   },
   constraints: {

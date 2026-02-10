@@ -121,23 +121,11 @@ async function main() {
     log('info', '[pre-compact]', `Handoff to phase ${task.currentPhase}`, cwd, session_id);
 
     // Return continue to allow compact
-    // Also return a message to help Claude resume
+    // systemMessage = short status for user
+    // session-start.mjs (source='compact') handles Claude re-read instruction via additionalContext
     output({
       continue: true,
-      systemMessage: `focus-task: handoff to phase ${task.currentPhase}
-
-<ft-handoff>
-[CONTEXT COMPACT - HANDOFF]
-Task: ${taskPath}
-Phase: ${task.currentPhase}/${task.totalPhases}
-Status: handoff
-
-AFTER COMPACT: Re-read TASK.md and continue from phase ${task.currentPhase}.
-State preserved in:
-- PLAN.md: status, phases
-- KNOWLEDGE.jsonl: accumulated knowledge
-- artifacts/: agent outputs
-</ft-handoff>`
+      systemMessage: `focus-task: compact handoff, phase ${task.currentPhase}/${task.totalPhases}`
     });
   } catch (error) {
     log('error', '[pre-compact]', `Error: ${error.message}`, cwd, session_id);

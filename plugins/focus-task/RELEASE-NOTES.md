@@ -32,6 +32,106 @@
 
 ---
 
+## [2.9.0] - 2026-02-10
+
+### Added
+
+- **ft-rules-organizer agent** — plugin agent for rules organization
+  - Moved from global `~/.claude/agents/rules-organizer.md` to plugin `agents/ft-rules-organizer.md`
+  - Added `Bash` tool, `permissionMode: acceptEdits`
+  - Aligned table formats with rules skill: `| # | Avoid | Instead | Why |`, `| # | Practice | Context | Source |`
+  - Numbered entries, max 20 rows, semantic deduplication, specialized `{prefix}-*.md` files
+
+### Changed
+
+- **Rules skill → delegator** — skill delegates all work to `ft-rules-organizer` agent
+  - Removed `context: session` (inline, can spawn agents via Task)
+  - `allowed-tools`: `Read, Write, Edit, Glob, Grep, Bash` → `Read, Bash, Task`
+  - Skill handles: mode detection, knowledge preparation, agent spawn
+  - Agent handles: extraction, optimization, file creation, validation
+- **Removed `rules-organizer` from global agents** — no longer in system agents list
+  - Updated `hooks/lib/utils.mjs`, `templates/focus-task.config.json.template`, `docs/hooks.md`
+
+### Updated Files
+
+| File | Change |
+|------|--------|
+| `agents/ft-rules-organizer.md` | NEW — moved from global, `ft-` prefix, Bash tool |
+| `skills/rules/SKILL.md` | Rewrite: thin delegator to ft-rules-organizer |
+| `hooks/lib/utils.mjs` | Removed `rules-organizer` from system agents |
+| `templates/focus-task.config.json.template` | Removed `rules-organizer` from agents |
+| `docs/hooks.md` | Removed `rules-organizer` from default agents |
+
+---
+
+## [2.8.0] - 2026-02-10
+
+### Added
+
+- **Rules skill enhanced** — 4 modes for flexible rule management
+  - `session` — Extract from conversation context (default)
+  - `file` — Extract from KNOWLEDGE.jsonl file
+  - `prompt` — Targeted update with instruction (`/focus-task:rules <path> <prompt>`)
+  - `list` — Show all existing rule files
+- **Specialized rule files** — prefix-based rules for domain separation
+  - Pattern: `{prefix}-avoid.md`, `{prefix}-best-practice.md`
+  - Examples: `test-avoid.md`, `sql-best-practice.md`, `security-avoid.md`
+  - Auto-created when prompt mode detects target domain
+
+### Changed
+
+- **rules.sh** — added `list_rules()` and `create_specialized()` functions
+- **SKILL.md** — updated `argument_hint: "[mode] [path] [prompt]"`, new mode detection table
+
+### Updated Files
+
+| File | Change |
+|------|--------|
+| `skills/rules/SKILL.md` | 4 modes, specialized files docs, prompt mode logic |
+| `skills/rules/scripts/rules.sh` | `list_rules()`, `create_specialized()`, updated validation |
+
+---
+
+## [2.7.2] - 2026-02-09
+
+### Fixed
+
+- **Hook message routing** — fixed `systemMessage` vs `additionalContext` across 4 hooks
+  - `session-start.mjs`: added `systemMessage` with plugin path + session ID for user console
+  - `grepai-session.mjs`: moved "USE grepai_search FIRST" from `systemMessage` to `additionalContext`
+  - `pre-compact.mjs`: replaced `<ft-handoff>` XML block with short status in `systemMessage`
+  - `stop.mjs`: split block `reason` (user) from `additionalContext` (Claude instructions)
+- **docs/hooks.md** — 16 discrepancies fixed via multi-agent verification
+  - Removed undocumented session mapping feature (4 references)
+  - Fixed post-task timeout: 30s → 5s (matched hooks.json)
+  - Fixed all post-task prompts: `systemMessage` → `additionalContext`
+  - Added PID-file detection for watch/mcp-serve (v2.7.0 feature)
+  - Added grepai-reminder 60s throttle documentation
+  - Updated role detection patterns (added qa, sdet, auditor, engineer, builder, fixer)
+  - Removed `cat` field from KNOWLEDGE.jsonl format (removed in v2.7.0)
+  - Fixed TASK.md → PLAN.md in stop block message and lifecycle diagram
+
+### Updated Files
+
+| File | Change |
+|------|--------|
+| `hooks/session-start.mjs` | Added `systemMessage` with plugin path |
+| `hooks/grepai-session.mjs` | Reminder → `additionalContext` |
+| `hooks/pre-compact.mjs` | Short status instead of XML block |
+| `hooks/stop.mjs` | Split reason/additionalContext |
+| `docs/hooks.md` | 16 fixes across all sections |
+
+---
+
+## [2.7.1] - 2026-02-09
+
+### Fixed
+
+- **Review skill `context: fork` → `session`** — review template had `context: fork` which prevents Task tool usage; review is built entirely on parallel agent spawning via Task tool, so `fork` made it non-functional
+  - File: `templates/skills/review/SKILL.md.template`
+
+---
+
 ## [2.7.0] - 2026-02-09
 
 ### Added

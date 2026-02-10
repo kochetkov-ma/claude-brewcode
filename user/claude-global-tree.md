@@ -15,7 +15,6 @@
 │   ├── skill-creator.md
 │   ├── agent-creator.md
 │   ├── text-optimizer.md
-│   ├── rules-organizer.md
 │   ├── bash-expert.md                # Shell scripts, brew, plugin scripts
 │   └── hook-creator.md               # Claude Code hooks (bash/JS/mjs)
 │
@@ -49,7 +48,7 @@
 │   │       └── focus-task/           # Плагин infinite task execution
 │   │           ├── 2.0.8/            # Все версии сохраняются
 │   │           ├── ...
-│   │           └── 2.6.0/            # Актуальная версия
+│   │           └── 2.8.0/            # Актуальная версия
 │   │               ├── .claude-plugin/
 │   │               │   └── plugin.json
 │   │               ├── skills/       # 10 скиллов (setup, teardown, spec, plan, start, review, rules, auto-sync, grepai, install)
@@ -62,7 +61,7 @@
 │       └── claude-brewcode/          # Локальный путь к репо
 │           └── plugins/
 │
-├── projects/                         # Данные по проектам (~1.8GB)
+├── projects/                         # Данные по проектам (~2.0GB)
 │   └── -Users-maximus-IdeaProjects-*/
 │       ├── CLAUDE.md                 # Память проекта (Markdown, опционально)
 │       ├── mcpSettings.json          # MCP конфиг проекта (JSON)
@@ -82,10 +81,10 @@
 ├── session-env/                      # Переменные окружения сессий
 │   └── {uuid}/                       # Пустые папки для env
 │
-├── file-history/                     # История редактирования (~2.7MB)
+├── file-history/                     # История редактирования (~9.1MB)
 │   └── {uuid}/                       # Папки с историей файлов
 │
-├── debug/                            # Отладочные логи (~29MB)
+├── debug/                            # Отладочные логи (~84MB)
 │   └── {uuid}.txt                    # Текстовые логи сессий
 │
 ├── reports/                          # Сгенерированные отчёты (~1.2MB)
@@ -140,27 +139,27 @@
 
 ---
 
-## Размеры директорий (актуально 2026-02-09)
+## Размеры директорий (актуально 2026-02-10)
 
 | Директория | Размер | Комментарий |
 |------------|--------|-------------|
-| projects/ | 1.9GB | Основной объём — транскрипты сессий |
-| debug/ | 99MB | Логи, можно чистить вручную |
+| projects/ | 2.0GB | Основной объём — транскрипты сессий |
+| debug/ | 84MB | Логи, можно чистить вручную |
 | shell-snapshots/ | 33MB | Для возобновления сессий |
-| plugins/ | 6.7MB | Установленные плагины (кэш версий) |
-| file-history/ | 6.6MB | История редактирования |
-| todos/ | 4.1MB | JSON с задачами |
+| file-history/ | 9.1MB | История редактирования |
+| plugins/ | 6.2MB | Установленные плагины (кэш версий) |
+| todos/ | 4.2MB | JSON с задачами |
 | reports/ | 1.2MB | Сгенерированные отчёты |
-| user/ | 356KB | Документация + features/ гайды |
-| plans/ | 232KB | Файлы планирования |
-| paste-cache/ | 208KB | Кэш вставок |
-| agents/ | 96KB | Определения агентов (9 файлов) |
-| tasks/ | 88KB | Задачи |
-| skills/ | 80KB | 5 локальных скиллов |
+| user/ | 396KB | Документация + features/ гайды |
+| plans/ | 252KB | Файлы планирования |
+| paste-cache/ | 164KB | Кэш вставок |
+| tasks/ | 112KB | Задачи |
+| skills/ | 92KB | 5 локальных скиллов |
+| agents/ | 84KB | Определения агентов (8 файлов) |
 | cache/ | 32KB | Общий кэш |
+| ide/ | 16KB | Интеграция с IDE |
 | rules/ | 8KB | Глобальные правила |
 | templates/ | 4KB | Шаблоны |
-| ide/ | 4KB | Интеграция с IDE |
 | chrome/ | 4KB | Браузерная автоматизация |
 | commands/ | 0KB | Слэш-команды (пусто) |
 

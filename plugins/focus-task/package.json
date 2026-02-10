@@ -1,6 +1,6 @@
 {
   "name": "claude-plugin-focus-task",
-  "version": "2.7.0",
+  "version": "2.7.1",
   "description": "Infinite task execution with automatic handoff for Claude Code",
   "keywords": [
     "claude-code",
@@ -36,6 +36,6 @@
   },
   "claude-plugin": {
     "name": "focus-task",
-    "version": "2.7.0"
+    "version": "2.7.1"
   }
 }

@@ -88,13 +88,17 @@ async function main() {
       }
     }
 
-    let context = `focus-task: active | session: ${session_id?.slice(0, 8) || 'unknown'}`;
+    const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT || 'unknown';
+    const sessionShort = session_id?.slice(0, 8) || 'unknown';
+
+    let context = `focus-task: active | session: ${sessionShort}`;
 
     if (source === 'compact' && cwd && getActiveTaskPath(cwd)) {
       context += '\n\n[HANDOFF after compact] Re-read PLAN.md and KNOWLEDGE.jsonl, then continue current phase.';
     }
 
     output({
+      systemMessage: `focus-task: ${pluginRoot} | session: ${sessionShort}`,
       hookSpecificOutput: {
         hookEventName: 'SessionStart',
         additionalContext: context

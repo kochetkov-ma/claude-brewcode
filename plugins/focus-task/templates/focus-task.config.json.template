@@ -17,7 +17,7 @@
       "ft-coordinator", "ft-knowledge-manager", "ft-auto-sync-processor",
       "Explore", "Plan", "Bash", "general-purpose",
       "claude-code-guide", "skill-creator", "agent-creator",
-      "text-optimizer", "rules-organizer", "statusline-setup"
+      "text-optimizer", "statusline-setup"
     ]
   },
   "constraints": {

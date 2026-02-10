@@ -14,10 +14,11 @@
 
 1. [Конфигурация через Markdown](#раздел-1-конфигурация-через-markdown)
    - [Инструкции](#11-инструкции)
-   - [Агенты](#12-агенты)
-   - [Команды](#13-команды)
-   - [Скиллы](#14-скиллы)
-   - [Шаблоны](#15-шаблоны)
+   - [Rules](#12-rules-глобальные-правила)
+   - [Агенты](#13-агенты)
+   - [Команды](#14-команды)
+   - [Скиллы](#15-скиллы)
+   - [Шаблоны](#16-шаблоны)
 2. [Настройки JSON и MCP](#раздел-2-настройки-json-и-mcp)
    - [Основные настройки](#21-основные-настройки-settingsjson)
    - [Права доступа](#22-права-доступа)
@@ -42,6 +43,10 @@
 ~/.claude/
 ├── CLAUDE.md                    # Глобальные инструкции
 │
+├── rules/                       # Глобальные правила
+│   ├── avoid.md                 # Anti-patterns для всех проектов
+│   └── best-practices.md        # Best practices для всех проектов
+│
 ├── agents/                      # Кастомные агенты
 │   ├── developer.md
 │   ├── tester.md
@@ -49,7 +54,6 @@
 │   ├── skill-creator.md
 │   ├── agent-creator.md
 │   ├── text-optimizer.md
-│   ├── rules-organizer.md
 │   ├── bash-expert.md
 │   └── hook-creator.md
 │
@@ -81,7 +85,22 @@ idea ~/.claude/CLAUDE.md
 |------|------------|
 | `CLAUDE.md` | Глобальные правила разработки |
 
-### 1.2 Агенты
+### 1.2 Rules (Глобальные правила)
+
+```shell
+idea ~/.claude/rules/avoid.md
+idea ~/.claude/rules/best-practices.md
+```
+
+| Файл | Назначение | Формат |
+|------|------------|--------|
+| `avoid.md` | Anti-patterns для всех проектов | `# \| Avoid \| Instead \| Why` |
+| `best-practices.md` | Best practices для всех проектов | `# \| Practice \| Context \| Source` |
+
+> **Scope:** `~/.claude/rules/` — глобальные (все проекты), `.claude/rules/` — проектные (только текущий проект).
+> **Приоритет:** Проектные rules переопределяют глобальные при конфликте.
+
+### 1.3 Агенты
 
 ```shell
 idea ~/.claude/agents/developer.md
@@ -90,7 +109,6 @@ idea ~/.claude/agents/reviewer.md
 idea ~/.claude/agents/skill-creator.md
 idea ~/.claude/agents/agent-creator.md
 idea ~/.claude/agents/text-optimizer.md
-idea ~/.claude/agents/rules-organizer.md
 idea ~/.claude/agents/bash-expert.md
 idea ~/.claude/agents/hook-creator.md
 ```
@@ -105,7 +123,6 @@ idea ~/.claude/agents/hook-creator.md
 | skill-creator | opus | R/W/E/Glob/Grep/Task/Skill | ✅ | ✅ | Создание SKILL.md |
 | agent-creator | opus | R/W/E/Glob/Grep/Task/Skill/Web | ✅ | ✅ | Создание агентов + Explore |
 | text-optimizer | sonnet | R/W/E/Glob/Grep/WebFetch | ❌ | ❌ | Оптимизация (через text-optimize) |
-| rules-organizer | sonnet | R/W/E/Glob/Grep/Skill | ❌ | ✅ | Организация .claude/rules/ |
 | bash-expert | opus | R/W/E/Glob/Grep/Bash/Task/WebFetch | ✅ | ❌ | Shell scripts, brew, plugin scripts |
 | hook-creator | opus | R/W/E/Glob/Grep/Bash/WebFetch/WebSearch | ❌ | ❌ | Claude Code hooks (bash/JS/mjs) |
 
@@ -114,7 +131,7 @@ idea ~/.claude/agents/hook-creator.md
 Task(subagent_type="developer", prompt="Реализовать X")
 ```
 
-### 1.3 Команды
+### 1.4 Команды
 
 ```shell
 idea ~/.claude/commands/
@@ -122,7 +139,7 @@ idea ~/.claude/commands/
 
 *Пользовательские команды не определены. Используй скиллы или плагины.*
 
-### 1.4 Скиллы
+### 1.5 Скиллы
 
 ```shell
 idea ~/.claude/skills/text-optimize/SKILL.md
@@ -149,7 +166,7 @@ Skill(skill="text-optimize", args="path/to/file.md")
 /focus-task-setup    # или /focus-task:setup (через плагин)
 ```
 
-### 1.5 Шаблоны
+### 1.6 Шаблоны
 
 ```shell
 idea ~/.claude/templates/
@@ -214,7 +231,7 @@ idea ~/.claude/plugins/known_marketplaces.json
 |--------|--------|-------------|---------------------|
 | context7 | — | claude-plugins-official | resolve-library-id, query-docs |
 | playwright | 4fee769 | claude-plugins-official | browser_*, snapshot, screenshot |
-| focus-task | 2.6.0 | claude-brewcode | 10 skills, 4 agents |
+| focus-task | 2.8.0 | claude-brewcode | 10 skills, 4 agents |
 
 **focus-task skills:**
 | Скилл | Назначение |
@@ -248,7 +265,7 @@ idea ~/.claude/plugins/known_marketplaces.json
 │       └── focus-task/
 │           ├── 2.0.8/          # Все версии сохраняются
 │           ├── ...
-│           └── 2.6.0/          # Актуальная
+│           └── 2.8.0/          # Актуальная
 │               ├── .claude-plugin/plugin.json
 │               ├── skills/{setup,teardown,spec,plan,start,review,rules,auto-sync,grepai,install}/
 │               ├── agents/{ft-coordinator,ft-knowledge-manager,ft-grepai-configurator,ft-auto-sync-processor}.md
@@ -292,7 +309,7 @@ idea ~/.claude.json
 
 ```
 ~/.claude/
-├── projects/                    # Данные проектов (~1.9GB)
+├── projects/                    # Данные проектов (~2.0GB)
 │   └── -Users-maximus-IdeaProjects-*/
 │       ├── CLAUDE.md            # Память проекта (опционально)
 │       ├── mcpSettings.json     # MCP конфиг
@@ -315,10 +332,10 @@ idea ~/.claude.json
 ├── session-env/                 # Env переменные сессий
 │   └── {uuid}/
 │
-├── file-history/                # История файлов (~6.6MB)
+├── file-history/                # История файлов (~9.1MB)
 │   └── {uuid}/
 │
-├── debug/                       # Логи (~99MB, ручная очистка)
+├── debug/                       # Логи (~84MB, ручная очистка)
 │   └── {uuid}.txt
 │
 ├── reports/                     # Отчёты (~1.2MB)
@@ -457,7 +474,9 @@ du -sh ~/.claude/*/
 
 | Вер. | Дата | Изменения |
 |------|------|-----------|
-| 2.22 | 2026-02-09 | focus-task 2.6.0, hook-creator agent (9 agents), обновлены размеры, SKILL.md phases для всех features |
+| 2.24 | 2026-02-10 | focus-task 2.8.0, обновлены размеры (projects 2.0GB, debug 84MB, file-history 9.1MB) |
+| 2.23 | 2026-02-10 | Добавлена секция 1.2 Rules (глобальные правила ~/.claude/rules/) |
+| 2.22 | 2026-02-09 | focus-task 2.6.0, hook-creator agent (8 agents), обновлены размеры, SKILL.md phases для всех features |
 | 2.21 | 2026-02-09 | text-optimize 3 modes (-l/-d), prompt-optimizer→text-optimizer, LLM Text Rules в 4 агентах, user/features/ в tree |
 | 2.20 | 2026-02-08 | Добавлена Auto-Memory в структуру, settings, context injection |
 | 2.19 | 2026-02-08 | Claude Code 2.1.37, focus-task 2.4.1, Opus 4.6, Agent Teams preview, auto-memories, fast mode |

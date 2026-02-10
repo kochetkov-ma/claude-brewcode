@@ -127,22 +127,17 @@ async function main() {
     log('warn', '[stop]', `Stop blocked - task incomplete (phase ${task.currentPhase}/${task.totalPhases})`, cwd, session_id);
 
     // Block stop - task not complete
+    // reason is shown to BOTH user and Claude
+    // User sees: status + escape hatch
+    // Claude sees: instruction to continue
     output({
       decision: 'block',
-      reason: `focus-task: stop blocked - task incomplete
-
-[TASK NOT COMPLETE]
-
-Current status: ${task.status}
-Phase: ${task.currentPhase}/${task.totalPhases}
-
-Task file: ${taskPath}
-
-ACTION: Continue execution. Re-read PLAN.md and proceed with phase ${task.currentPhase}.
-
-[ESCAPE IF STUCK]
-Emergency exit: rm .claude/tasks/*_task/.lock
-Then stop will be allowed.`
+      reason: `focus-task: task incomplete (${task.status}, phase ${task.currentPhase}/${task.totalPhases})
+Emergency exit: rm .claude/tasks/*_task/.lock`,
+      hookSpecificOutput: {
+        hookEventName: 'Stop',
+        additionalContext: `focus-task: stop blocked. Continue execution. Re-read PLAN.md and proceed with phase ${task.currentPhase}. Task: ${taskPath}`
+      }
     });
   } catch (error) {
     log('error', '[stop]', `Error: ${error.message}`, cwd, session_id);

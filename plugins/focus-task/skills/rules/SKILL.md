@@ -1,211 +1,91 @@
 ---
 name: focus-task:rules
-description: Updates .claude/rules/avoid.md and best-practice.md from KNOWLEDGE.jsonl or session context. Triggers - "update rules", "sync knowledge to rules", "extract rules".
+description: Updates PROJECT .claude/rules/ (avoid.md, best-practice.md) from KNOWLEDGE.jsonl or session context. Supports specialized rule files ({prefix}-avoid.md). NEVER touches ~/.claude/rules/. Triggers - "update rules", "sync knowledge to rules", "extract rules".
 user-invocable: true
-argument-hint: "[<path-to-KNOWLEDGE.jsonl>] (empty = session mode)"
-allowed-tools: Read, Write, Edit, Glob, Grep, Bash
-context: session
+argument-hint: "[mode] [path] [prompt]"
+allowed-tools: Read, Bash, Task
 model: sonnet
 ---
 
-Update Rules — extract from [KNOWLEDGE.jsonl]
+Update Rules — delegates to `ft-rules-organizer` agent
 
 ## Overview
 
-Extracts anti-patterns and best practices from accumulated knowledge, optimizes `.claude/rules/avoid.md` and `.claude/rules/best-practice.md`.
+> ⚠️ **TARGET: PROJECT rules only!** Updates `{CWD}/.claude/rules/` — NEVER `~/.claude/rules/`
 
 <instructions>
 
 ## Prerequisites
 
-> **WORKAROUND:** `$CLAUDE_PLUGIN_ROOT` is only set in hooks, NOT in skills.
-> Claude Code doesn't inject plugin env vars when executing bash from SKILL.md.
-> We resolve the plugin path dynamically using the cache directory structure.
-
-**EXECUTE FIRST** — set plugin root variable for this session:
+**EXECUTE FIRST:**
 ```bash
-# Resolve plugin root from cache (latest version)
 FT_PLUGIN=$(ls -vd "$HOME/.claude/plugins/cache/claude-brewcode/focus-task"/*/ 2>/dev/null | tail -1)
-test -n "$FT_PLUGIN" && echo "✅ FT_PLUGIN=$FT_PLUGIN" || echo "❌ Plugin not found in cache"
+test -n "$FT_PLUGIN" && echo "✅ FT_PLUGIN=$FT_PLUGIN" || echo "❌ Plugin not found"
 ```
 
-> **STOP if ❌** — plugin not installed. Run: `claude plugin add claude-brewcode/focus-task`
-
----
+> **STOP if ❌** — run: `claude plugin add claude-brewcode/focus-task`
 
 ## Mode Detection
 
-| Mode | Condition | Source |
-|------|-----------|--------|
-| **File** | `$ARGUMENTS` contains path | Parse KNOWLEDGE.jsonl |
-| **Session** | `$ARGUMENTS` empty | Analyze session context (max 5 rules) |
+**Arguments:** `$ARGUMENTS`
 
-## Step 1: Extract Knowledge
+```
+"list"            → list mode
+"<path> <text>"   → prompt mode
+"<path-to-file>"  → file mode
+(empty)           → session mode
+```
 
-### File Mode
+## List Mode
 
-**Skill arguments received:** `$ARGUMENTS`
-
-**EXECUTE** using Bash tool — read knowledge file:
+**EXECUTE** and **STOP:**
 ```bash
-bash "$FT_PLUGIN/skills/rules/scripts/rules.sh" read "ARGS_HERE" && echo "✅ Read knowledge" || echo "❌ Failed to read knowledge"
-```
-**IMPORTANT:** Replace `ARGS_HERE` with the actual value from "Skill arguments received" above.
-
-> **STOP if ❌** — verify path exists and is readable.
-
-Parse entries:
-- `t:"❌"` → anti-pattern (avoid)
-- `t:"✅"` → best practice
-- `t:"ℹ️"` → info
-
-### Session Mode
-
-Scan conversation for (limit to **5 most impactful rules**):
-- Errors encountered and fixes applied
-- Patterns that worked well
-- Warnings or gotchas discovered
-- Code review findings
-
-## Step 2: Read Existing Rules
-
-**EXECUTE** using Bash tool — check existing rules:
-```bash
-bash "$FT_PLUGIN/skills/rules/scripts/rules.sh" check && echo "✅ Check complete" || echo "❌ Check failed"
+bash "$FT_PLUGIN/skills/rules/scripts/rules.sh" list
 ```
 
-If missing, **EXECUTE** using Bash tool — create from templates:
-```bash
-bash "$FT_PLUGIN/skills/rules/scripts/rules.sh" create && echo "✅ Created rules" || echo "❌ Failed to create rules"
+## File / Prompt / Session Mode → Delegate
+
+### Step 1: Prepare Knowledge
+
+| Mode | Action |
+|------|--------|
+| **file** | Note path to KNOWLEDGE.jsonl from arguments |
+| **prompt** | Note `<path>` (first arg) and `<prompt>` (rest) |
+| **session** | Extract **5 most impactful** findings from conversation: errors, fixes, patterns, gotchas. Format each as `❌ avoid` or `✅ practice` |
+
+### Step 2: Spawn ft-rules-organizer Agent
+
+Spawn via Task tool (`subagent_type: ft-rules-organizer`). Include in prompt:
+
+```
+Update PROJECT .claude/rules/ — NEVER ~/.claude/rules/
+
+Plugin templates: {FT_PLUGIN}/templates/rules/
+Validation script: bash "{FT_PLUGIN}/skills/rules/scripts/rules.sh" validate
+Create missing: bash "{FT_PLUGIN}/skills/rules/scripts/rules.sh" create
+
+Target files: avoid.md, best-practice.md, {prefix}-avoid.md, {prefix}-best-practice.md
+
+MODE: {detected mode}
+{for file mode: KNOWLEDGE file path — read it, parse t:"❌" → avoid, t:"✅" → practice, t:"ℹ️" → info}
+{for prompt mode: source file path + prompt text}
+{for session mode: extracted findings list}
 ```
 
-> **STOP if ❌** — verify plugin installation and template paths.
+### Fallback
 
-## Step 3: Optimize Rules
-
-> **Format priority:** `code` > prose (~30% savings). Short inline code beats explanation of same length.
-> Example: `List.of()` instead of "use immutable list factory method"
-> Source: `~/.claude/skills/text-optimize/SKILL.md:69`
-
-For each rule file:
-
-1. **Add new entries** from extracted knowledge
-2. **Deduplicate** by semantic similarity (not exact match)
-3. **Merge** related entries into single row
-4. **Prioritize** by impact: critical > important > nice-to-have
-5. **Keep tables compact** - max 20 rows per file
-6. **Number entries** sequentially
-
-### Avoid Table Format
-
-```markdown
-| # | Avoid | Instead | Why |
-|---|-------|---------|-----|
-| 1 | `System.out.println()` | `@Slf4j` + `log.info()` | Structured logging |
-| 2 | `if (cond) { assert... }` | `assertThat(cond)` first | Unconditional assertions |
-```
-
-### Best Practice Table Format
-
-```markdown
-| # | Practice | Context | Source |
-|---|----------|---------|--------|
-| 1 | `allSatisfy()` over `forEach` | Collection assertions | AssertJ |
-| 2 | Constructor injection | Spring DI | CLAUDE.md |
-```
-
-## Step 4: Write Optimized Files
-
-Preserve frontmatter, write optimized tables.
-
-**EXECUTE** using Bash tool — validate structure:
-```bash
-bash "$FT_PLUGIN/skills/rules/scripts/rules.sh" validate && echo "✅ Validation passed" || echo "❌ Validation failed"
-```
-
-> **STOP if ❌** — fix table structure before continuing.
+If agent unavailable → report error: `ft-rules-organizer agent not available — ensure focus-task plugin is installed`
 
 </instructions>
 
-## Output Format
+## Output
 
-```markdown
-# Rules Updated
-
-## Detection
-
-| Field | Value |
-|-------|-------|
-| Arguments | `{received args or empty}` |
-| Mode | `{file or session}` |
-
-## Changes
-
-| File | Added | Merged | Total |
-|------|-------|--------|-------|
-| avoid.md | N | N | N |
-| best-practice.md | N | N | N |
-
-## New Entries
-
-### Avoid
-| # | Pattern | Why |
-|---|---------|-----|
-
-### Best Practices
-| # | Practice | Context |
-|---|----------|---------|
-
-## Optimization Applied
-
-- Removed N duplicates
-- Merged N related entries
-- Files: `.claude/rules/avoid.md`, `.claude/rules/best-practice.md`
-```
-
-## Rules Frontmatter Reference
-
-> **Source:** [code.claude.com/docs/en/memory](https://code.claude.com/docs/en/memory.md#path-specific-rules)
-
-### Official Fields
-
-| Field | Required | Purpose |
-|-------|----------|---------|
-| `paths` | No | Array of quoted glob patterns |
-
-**Invalid fields:** `globs`, `alwaysApply`, `description` — NOT supported.
-
-### Loading Behavior
-
-| Frontmatter | Behavior |
-|-------------|----------|
-| **No `paths`** | Loads unconditionally (always) |
-| **With `paths`** | ⚠️ Bug #16299: loads anyway at session start |
-
-### Syntax Example
-
-```yaml
----
-paths:
-  - "src/**/*.java"
-  - "src/**/*.kt"
-  - "!**/test/**"
----
-```
-
-| Rule | ❌ Bad | ✅ Good |
-|------|--------|---------|
-| Quote patterns | `**/*.kt` | `"**/*.kt"` |
-| Array format | `paths: "**/*.ts"` | `paths: ["**/*.ts"]` |
-
-> **⚠️ Bug #16299:** Lazy loading not working — all rules load at start.
-> **Source:** [github.com/anthropics/claude-code/issues/16299](https://github.com/anthropics/claude-code/issues/16299)
+Agent returns its own report. Forward to user as-is.
 
 ## Error Handling
 
 | Condition | Action |
 |-----------|--------|
-| No KNOWLEDGE.jsonl | Use session mode |
-| Empty knowledge | Report "No new rules extracted" |
-| No `.claude/rules/` | Create directory and files |
-| Malformed entries | Skip with warning |
+| Agent unavailable | Report error, suggest installing agent |
+| No knowledge found | Report "No new rules extracted" |
+| Plugin not found | STOP with install instructions |

@@ -145,14 +145,17 @@ async function checkGrepai(cwd, session_id = null) {
 
   log('info', '[grepai]', `Status: ${statusMessage}`, cwd, session_id);
 
-  // Add usage reminder when grepai is ready (delivered via systemMessage
-  // to avoid additionalContext conflict with session-start.mjs)
-  let msg = `grepai: ${statusMessage}`;
+  const result = { systemMessage: `grepai: ${statusMessage}` };
+
+  // Reminder for Claude (additionalContext), NOT for user (systemMessage)
   if (hasIndex && ollamaRunning) {
-    msg += '\ngrepai: USE grepai_search FIRST for code exploration';
+    result.hookSpecificOutput = {
+      hookEventName: 'SessionStart',
+      additionalContext: 'grepai: USE grepai_search FIRST for code exploration'
+    };
   }
 
-  return { systemMessage: msg };
+  return result;
 }
 
 function checkOllama() {
