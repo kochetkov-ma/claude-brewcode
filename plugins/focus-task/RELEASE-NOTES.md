@@ -32,6 +32,55 @@
 
 ---
 
+## [2.9.5] - 2026-02-11
+
+### Fixed
+
+- **setup SKILL.md Phase 5** — explicit instructions to use script output verbatim
+  - Added CRITICAL warning: DO NOT add agents manually
+  - Step 1: clarified output is ready-to-insert content
+  - Step 4: must read `/tmp/agents-section.md` and use EXACT content
+  - Prevents LLM from ignoring script output and adding internal agents
+
+---
+
+## [2.9.4] - 2026-02-11
+
+### Changed
+
+- **setup.sh `agents` mode** — excludes internal plugin agents from listing
+  - Internal agents (ft-coordinator, ft-grepai-configurator, ft-knowledge-manager) not shown
+  - These agents are only called by the plugin itself, not by users
+
+### Updated Files
+
+- `skills/setup/scripts/setup.sh` — INTERNAL_AGENTS filter added
+
+---
+
+## [2.9.2] - 2026-02-11
+
+### Added
+
+- **setup.sh `agents` mode** — collects agents for CLAUDE.md update
+  - Outputs LLM-optimized table with 3 columns: Name, Scope, Purpose
+  - Collects: system agents (hardcoded), global (~/.claude/agents/), plugin (PLUGIN_ROOT/agents/)
+  - Purpose truncated to 5 words for token efficiency
+- **SKILL.md Phase 5** — Update Global CLAUDE.md Agents
+  - Collects agents via `setup.sh agents`
+  - LLM analyzes existing CLAUDE.md to find agent sections
+  - User confirmation before replacement
+  - Edit-based replacement preserves non-agent content
+
+### Updated Files
+
+| File | Change |
+|------|--------|
+| `skills/setup/scripts/setup.sh` | Added `collect_agents()` function, `agents` mode |
+| `skills/setup/SKILL.md` | Added Phase 5 with 4 steps |
+
+---
+
 ## [2.9.1] - 2026-02-10
 
 ### Fixed

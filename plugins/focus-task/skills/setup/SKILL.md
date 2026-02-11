@@ -3,7 +3,7 @@ name: focus-task:setup
 description: Analyzes project structure, tech stack, testing frameworks, and project-specific agents to generate an adapted PLAN.md.template in .claude/tasks/templates/. Triggers on phrases like "setup focus-task", "focus-task setup", "initialize focus-task", "configure focus-task".
 user-invocable: true
 argument-hint: "[universal-template-path]"
-allowed-tools: Read, Write, Glob, Grep, Bash
+allowed-tools: Read, Write, Glob, Grep, Bash, AskUserQuestion
 context: fork
 model: opus
 ---
@@ -319,6 +319,58 @@ bash "$FT_PLUGIN/skills/setup/scripts/setup.sh" validate && echo "✅ validate" 
 | Reference Examples | [N] canonical files populated |
 | Tech-specific adaptations | Testing framework, DB patterns |
 | Review skill | `.claude/skills/focus-task-review/SKILL.md` |
+
+---
+
+## Phase 5: Update Global CLAUDE.md Agents
+
+**Agent:** developer | **Action:** Update agents section in global CLAUDE.md
+
+### Step 1: Collect Agents
+
+**EXECUTE** using Bash tool:
+```bash
+bash "$FT_PLUGIN/skills/setup/scripts/setup.sh" agents > /tmp/agents-section.md && cat /tmp/agents-section.md
+```
+
+> **Output = Ready-to-insert content.** Script collects system + global + plugin agents.
+> Internal agents (ft-coordinator, ft-grepai-configurator, ft-knowledge-manager) are automatically excluded.
+
+### Step 2: Analyze Existing CLAUDE.md
+
+**READ** `~/.claude/CLAUDE.md` using Read tool.
+
+**LLM Analysis** — find ALL agent-related sections:
+- `## Agents`, `## Agent Selection`, `### Core Agents`, `### Global Utility Agents`
+- Any tables with columns like `Agent | Model | Purpose`
+- Any lists of agent names (developer, tester, reviewer, etc.)
+
+**Identify boundaries:**
+- Start line number of agent section(s)
+- End line number (before next unrelated ## heading)
+
+### Step 3: Ask User
+
+**ASK USER** with AskUserQuestion:
+- Question: "Found agent sections in ~/.claude/CLAUDE.md. Replace with optimized LLM-friendly format?"
+- Options:
+  - "Yes — replace all agent sections"
+  - "No — keep current format"
+
+### Step 4: If YES — Replace
+
+> **CRITICAL:** Use EXACTLY the content from `/tmp/agents-section.md`.
+> DO NOT add agents manually — the script already filters internal agents.
+> Internal agents (ft-coordinator, ft-grepai-configurator, ft-knowledge-manager) are excluded by design.
+
+Using Edit tool:
+1. **Read** `/tmp/agents-section.md` to get the exact replacement content
+2. Find the `## Agents — DELEGATE!` section in `~/.claude/CLAUDE.md`
+3. Replace that section with the EXACT content from `/tmp/agents-section.md`
+4. Preserve `### Global Skills` subsection if it exists (append after agents table)
+5. Preserve all non-agent content
+
+**Key:** LLM determines section boundaries, not grep. Content comes from script output.
 
 </instructions>
 

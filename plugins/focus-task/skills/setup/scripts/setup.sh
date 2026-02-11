@@ -187,6 +187,53 @@ copy_config() {
   fi
 }
 
+# Phase 5: Collect agents for CLAUDE.md
+collect_agents() {
+  echo "=== Phase 5: Collect Agents ==="
+  echo ""
+
+  # Header
+  cat << 'EOF'
+## Agents — DELEGATE!
+
+> **MANAGER:** Delegate via Task tool. Never implement directly.
+
+| Name | Scope | Purpose |
+|------|-------|---------|
+| Explore | system | Find files, search code |
+| Plan | system | Design implementation |
+| general-purpose | system | Multi-step research |
+EOF
+
+  # Global agents from ~/.claude/agents/
+  if [ -d "$HOME/.claude/agents" ]; then
+    for f in "$HOME/.claude/agents"/*.md; do
+      [ -f "$f" ] || continue
+      name=$(grep "^name:" "$f" 2>/dev/null | head -1 | sed 's/^name: *//' | tr -d '"' | xargs)
+      desc=$(grep "^description:" "$f" 2>/dev/null | head -1 | sed 's/^description: *//' | tr -d '"')
+      # Truncate to 5 words max
+      purpose=$(echo "$desc" | awk '{for(i=1;i<=5&&i<=NF;i++) printf "%s ", $i}' | xargs)
+      [ -n "$name" ] && echo "| $name | global | $purpose |"
+    done
+  fi
+
+  # Plugin agents from PLUGIN_ROOT/agents/ (excluding internal agents)
+  # Internal agents (ft-coordinator, ft-grepai-configurator, ft-knowledge-manager) are not listed
+  # because they are only called by the plugin itself, not by users
+  INTERNAL_AGENTS="ft-coordinator ft-grepai-configurator ft-knowledge-manager"
+  if [ -d "$PLUGIN_ROOT/agents" ]; then
+    for f in "$PLUGIN_ROOT/agents"/*.md; do
+      [ -f "$f" ] || continue
+      name=$(grep "^name:" "$f" 2>/dev/null | head -1 | sed 's/^name: *//' | tr -d '"' | xargs)
+      # Skip internal agents
+      echo "$INTERNAL_AGENTS" | grep -qw "$name" && continue
+      desc=$(grep "^description:" "$f" 2>/dev/null | head -1 | sed 's/^description: *//' | tr -d '"')
+      purpose=$(echo "$desc" | awk '{for(i=1;i<=5&&i<=NF;i++) printf "%s ", $i}' | xargs)
+      [ -n "$name" ] && echo "| $name | plugin | $purpose |"
+    done
+  fi
+}
+
 # Phase 4: Validation
 validate_setup() {
   echo "=== Phase 4: Validation ==="
@@ -222,6 +269,9 @@ case "$MODE" in
   validate)
     validate_setup
     ;;
+  agents)
+    collect_agents
+    ;;
   all)
     scan_project
     echo ""
@@ -245,6 +295,7 @@ case "$MODE" in
     echo "  review     - Copy review skill template"
     echo "  config     - Copy config file"
     echo "  validate   - Validation checks"
+    echo "  agents     - Collect agents for CLAUDE.md"
     echo "  all        - Run all phases"
     exit 1
     ;;
