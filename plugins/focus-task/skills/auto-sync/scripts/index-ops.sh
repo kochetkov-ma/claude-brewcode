@@ -10,7 +10,8 @@
 #
 # Commands:
 #   read <index_path>                         - Read and validate INDEX
-#   add <index_path> <json_entry>             - Add entry (checks duplicate by p)
+#   add <index_path> <json_entry>             - Add entry from JSON
+#   add <index_path> <path> <type> [protocol] - Add entry from positional args (date=today)
 #   update <index_path> <path> <field> <val>  - Update entry field by path
 #   remove <index_path> <path>                - Remove entry by path
 #   stale <index_path> [days]                 - Find stale entries (default: 7)
@@ -58,17 +59,43 @@ cmd_read() {
 
 cmd_add() {
   index_path="${1:-}"
-  entry="${2:-}"
-  if [ -z "$index_path" ] || [ -z "$entry" ]; then
+  arg2="${2:-}"
+  arg3="${3:-}"
+  arg4="${4:-default}"
+  if [ -z "$index_path" ] || [ -z "$arg2" ]; then
     echo "X Missing arguments" >&2
     echo "Usage: index-ops.sh add <index_path> <json_entry>" >&2
+    echo "       index-ops.sh add <index_path> <path> <type> [protocol]" >&2
     exit 1
   fi
   require_jq
-  if ! echo "$entry" | jq -e '.' >/dev/null 2>&1; then
-    echo "X Invalid JSON entry" >&2
-    exit 1
-  fi
+  # Detect format: JSON (starts with {) or positional args
+  case "$arg2" in
+    \{*)
+      # JSON format
+      entry="$arg2"
+      if ! echo "$entry" | jq -e '.' >/dev/null 2>&1; then
+        echo "X Invalid JSON entry" >&2
+        exit 1
+      fi
+      ;;
+    *)
+      # Positional format: <path> <type> [protocol]
+      if [ -z "$arg3" ]; then
+        echo "X Missing type argument" >&2
+        echo "Usage: index-ops.sh add <index_path> <path> <type> [protocol]" >&2
+        exit 1
+      fi
+      # Get today's date (macOS or GNU)
+      if date -v+0d +%Y-%m-%d >/dev/null 2>&1; then
+        today=$(date +%Y-%m-%d)
+      else
+        today=$(date +%Y-%m-%d)
+      fi
+      entry=$(jq -nc --arg p "$arg2" --arg t "$arg3" --arg u "$today" --arg pr "$arg4" \
+        '{p:$p, t:$t, u:$u, pr:$pr}')
+      ;;
+  esac
   path=$(echo "$entry" | jq -r '.p')
   if [ -f "$index_path" ] && grep -v "^#" "$index_path" 2>/dev/null | jq -r '.p' 2>/dev/null | grep -qxF "$path"; then
     echo "X Entry already exists: $path" >&2
@@ -198,10 +225,16 @@ cmd_help() {
   echo ""
   echo "Commands:"
   echo "  read <index_path>                         - Read and validate INDEX"
-  echo "  add <index_path> <json_entry>             - Add entry (checks duplicate by p)"
+  echo "  add <index_path> <json_entry>             - Add entry from JSON"
+  echo "  add <index_path> <path> <type> [protocol] - Add entry (date=today, protocol=default)"
   echo "  update <index_path> <path> <field> <val>  - Update entry field by path"
   echo "  remove <index_path> <path>                - Remove entry by path"
   echo "  stale <index_path> [days]                 - Find stale entries (default: 7)"
+  echo ""
+  echo "Examples:"
+  echo "  index-ops.sh add idx.jsonl '{\"p\":\"file.md\",\"t\":\"doc\",\"u\":\"2026-02-11\",\"pr\":\"default\"}'"
+  echo "  index-ops.sh add idx.jsonl file.md doc"
+  echo "  index-ops.sh add idx.jsonl file.md skill override"
 }
 
 case "$CMD" in

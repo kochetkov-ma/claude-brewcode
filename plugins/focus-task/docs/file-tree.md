@@ -1,11 +1,12 @@
 ---
 auto-sync: enabled
+auto-sync-date: 2026-02-11
 description: Полное дерево файлов focus-task плагина с описаниями
 ---
 
 # Focus Task Plugin - Дерево файлов
 
-> Версия: 2.6.0 | Файлов: 68 | Директорий: 28
+> Версия: 2.11.0 | Файлов: 80 | Директорий: 32
 
 ---
 
@@ -15,7 +16,7 @@ description: Полное дерево файлов focus-task плагина с
 plugins/focus-task/                            # Корневая директория плагина
 │
 ├── .claude-plugin/                            # Конфигурация плагина Claude Code
-│   └── plugin.json                            # Манифест (имя, версия 2.6.0, описание, ссылка на skills/)
+│   └── plugin.json                            # Манифест (имя, версия 2.11.0, описание, ссылка на skills/)
 │
 ├── hooks/                                     # Хуки - Node.js скрипты событий Claude Code
 │   ├── hooks.json                             # Привязка хуков к 5 событиям (SessionStart, PreToolUse, PostToolUse, PreCompact, Stop)
@@ -34,9 +35,19 @@ plugins/focus-task/                            # Корневая директо
 │   ├── ft-coordinator.md                      # Координатор задачи (haiku): статус фаз, извлечение knowledge, NEXT ACTION протокол, inline compaction
 │   ├── ft-knowledge-manager.md                # Менеджер знаний (haiku): дедупликация, сортировка, обрезка KNOWLEDGE.jsonl
 │   ├── ft-grepai-configurator.md              # Конфигуратор grepai (opus): анализ проекта, генерация config.yaml через 5 параллельных исследований
-│   └── ft-auto-sync-processor.md              # Процессор auto-sync (sonnet): обработка одного документа - анализ, исследование, обновление
+│   ├── ft-auto-sync-processor.md              # Процессор auto-sync (sonnet): обработка одного документа - анализ, исследование, обновление
+│   ├── ft-rules-organizer.md                  # Организатор правил (sonnet): создание/оптимизация .claude/rules/*.md файлов
+│   ├── agent-creator.md                       # Создатель агентов (opus): Agent Architect Process, System Prompt Patterns
+│   ├── skill-creator.md                       # Создатель скиллов (opus): Official Six-Step Creation Process, word budget 1500-2000
+│   ├── bash-expert.md                         # Bash-эксперт (opus): профессиональные sh/bash скрипты
+│   ├── hook-creator.md                        # Создатель хуков (opus): 10 Hook Patterns, Advanced Techniques, Multi-Stage
+│   ├── text-optimizer.md                      # Оптимизатор текста (sonnet): сжатие промптов для LLM эффективности
+│   ├── architect.md                           # Системный архитектор (opus): design, planning, architecture decisions
+│   ├── developer.md                           # Разработчик (opus): implements features, fixes bugs, writes code
+│   ├── reviewer.md                            # Ревьюер (opus): code review, quality, security, performance
+│   └── tester.md                              # Тестировщик (sonnet): SDET/QA - runs tests, analyzes failures
 │
-├── skills/                                    # Скиллы - команды плагина (10 штук)
+├── skills/                                    # Скиллы - команды плагина (13 штук)
 │   │
 │   ├── setup/                                 # /focus-task:setup - Инициализация плагина в проекте
 │   │   ├── SKILL.md                           # Инструкции: анализ проекта, генерация адаптированных шаблонов (opus, fork)
@@ -94,9 +105,20 @@ plugins/focus-task/                            # Корневая директо
 │   │   └── scripts/
 │   │       └── install.sh                     # Bash: state/check-updates/required/timeout/grepai/summary - единый установщик
 │   │
-│   └── teardown/                              # /focus-task:teardown - Очистка файлов плагина
-│       ├── SKILL.md                           # Инструкции: удаление templates/, cfg/, skills/focus-task-review/; сохранение задач (haiku, fork)
-│       └── teardown.sh                        # Bash: удаление с поддержкой --dry-run
+│   ├── teardown/                              # /focus-task:teardown - Очистка файлов плагина
+│   │   └── SKILL.md                           # Инструкции: удаление templates/, cfg/, skills/focus-task-review/; сохранение задач (haiku, fork)
+│   │
+│   ├── secrets-scan/                          # /focus-task:secrets-scan - Сканирование на утечку секретов
+│   │   └── SKILL.md                           # Инструкции: detect-secrets, TruffleHog, Gitleaks (sonnet, fork)
+│   │
+│   ├── mcp-config/                            # /focus-task:mcp-config - Управление MCP серверами
+│   │   └── SKILL.md                           # Инструкции: status, disable, enable MCP серверов (sonnet, fork)
+│   │
+│   ├── text-human/                            # /focus-task:text-human - Humanize код и документацию
+│   │   └── SKILL.md                           # Инструкции: упрощение AI-генерированного кода (sonnet, fork)
+│   │
+│   └── text-optimize/                         # /focus-task:text-optimize - Оптимизация текста для LLM
+│       └── SKILL.md                           # Инструкции: сжатие промптов, ~30% экономия токенов (sonnet, fork)
 │
 ├── templates/                                 # Шаблоны для генерации файлов в целевом проекте
 │   ├── PLAN.md.template                       # Шаблон плана: status, Protocol, Meta, Phases, Agents, Reference Examples, Constraints
@@ -134,7 +156,7 @@ plugins/focus-task/                            # Корневая директо
 ├── INSTALL.md                                 # Руководство по установке: plugin-dir, маркетплейс, встраивание, устранение проблем
 ├── RELEASE-NOTES.md                           # История версий: SemVer, v2.0.41 - v2.6.0, Breaking Changes, миграция
 ├── grepai.md                                  # Интеграция grepai: экосистема, архитектура внимания, MCP, ограничения gitignore
-└── package.json                               # npm-манифест: claude-plugin-focus-task@2.6.0, скрипты build/publish
+└── package.json                               # npm-манифест: claude-plugin-focus-task@2.7.1, скрипты build/publish
 ```
 
 ---
@@ -206,13 +228,13 @@ plugins/focus-task/                            # Корневая директо
 |-----------|--------|----------|
 | Конфигурация плагина | 2 | plugin.json, hooks.json |
 | Хуки (Node.js) | 9 | 7 скриптов + 2 библиотеки |
-| Агенты | 4 | ft-coordinator, ft-knowledge-manager, ft-grepai-configurator, ft-auto-sync-processor |
-| Скиллы (SKILL.md) | 9 | setup, spec, plan, start, rules, auto-sync, grepai, install, teardown |
-| Bash-скрипты | 20 | setup(1), rules(1), auto-sync(3), grepai(13), install(1), teardown(1) |
-| Шаблоны | 15 | PLAN, SPEC, KNOWLEDGE, config, INDEX, reports(4), rules(4), review(3) |
-| Документация | 6 | README, INSTALL, RELEASE-NOTES, grepai.md, auto-sync/README, file-tree.md |
+| Агенты | 14 | ft-coordinator, ft-knowledge-manager, ft-grepai-configurator, ft-auto-sync-processor, ft-rules-organizer, agent-creator, skill-creator, bash-expert, hook-creator, text-optimizer, architect, developer, reviewer, tester |
+| Скиллы (SKILL.md) | 13 | setup, spec, plan, start, rules, auto-sync, grepai, install, teardown, secrets-scan, mcp-config, text-human, text-optimize |
+| Bash-скрипты | 19 | setup(1), rules(1), auto-sync(3), grepai(13), install(1) |
+| Шаблоны | 14 | PLAN, SPEC, KNOWLEDGE, config, INDEX, reports(4), rules(4), review(3) |
+| Документация | 8 | README, INSTALL, RELEASE-NOTES, grepai.md, auto-sync/README, file-tree.md, commands.md, flow.md, hooks.md |
 | npm | 1 | package.json |
-| **Итого** | **66** | |
+| **Итого** | **80** | |
 
 ---
 

@@ -32,6 +32,70 @@
 
 ---
 
+## [2.12.0] - 2026-02-11
+
+### Fixed
+
+- **Skill frontmatter** — removed invalid `context: session` from 5 skills
+  - auto-sync, grepai, spec, plan, start — now use inline mode (required for Task tool)
+
+- **EXECUTE markers** — added missing markers to bash blocks
+  - auto-sync: 3 blocks in sync phase (Setup INDEX, discover.sh, index-ops.sh)
+  - secrets-scan: Phase 1 setup block
+
+- **STOP conditions** — added after critical bash blocks
+  - secrets-scan: `> **STOP if ERROR** — must run in git repository`
+
+- **text-optimize** — fixed `subagent_type: "focus-task:text-optimizer"` → `"text-optimizer"`
+
+### Added
+
+- **spec/references/SPEC-creation.md** — parallel research instructions and consolidation rules (125 lines)
+- **scripts/teardown.sh** — restored plugin-level cleanup script
+
+### Changed
+
+- **spec/SKILL.md** — references updated to `references/SPEC-creation.md`
+- **teardown** — script moved from skill directory to `plugins/focus-task/scripts/`
+
+### Structure Improvements
+
+| Skill | Before | After |
+|-------|--------|-------|
+| spec | 78% | 90% |
+| auto-sync | 85% | 100% |
+| secrets-scan | 71% | 97% |
+| teardown | 60% | 90% |
+
+---
+
+## [2.10.0] - 2026-02-11
+
+### Added
+
+- **Agent documentation enriched** — 3 agents updated with official plugin-dev content
+
+| Agent | New Sections | Examples |
+|-------|--------------|----------|
+| `agent-creator.md` | Agent Architect Process (6 steps), System Prompt Patterns (4 archetypes), Color Semantics, Triggering Examples Guide | code-reviewer, test-generator, doc-generator, security-analyzer |
+| `skill-creator.md` | Official Six-Step Creation Process, Word Budget (1,500–2,000), Scripts Design guidance | commit, pr-review, codebase-qa, deploy |
+| `hook-creator.md` | 10 Hook Patterns (Official), Advanced Techniques (Multi-Stage, State Sharing, Caching), Hook Type Selection, Lifecycle Note | Security Gate, Test Enforcement, Context Injection, Tool Logger |
+
+### Changed
+
+- **skill-creator.md** — Creation Process section rewritten to Official Six-Step format
+  - Step 2: Plan Reusable Contents (scripts, reference docs, assets)
+  - Step 5: Validate and Test with detailed checklist
+  - Word budget: 1,500–2,000 words target
+
+### Sources
+
+- `claude-plugins-official/plugins/plugin-dev/skills/agent-development/`
+- `claude-plugins-official/plugins/plugin-dev/skills/skill-development/`
+- `claude-plugins-official/plugins/plugin-dev/skills/hook-development/`
+
+---
+
 ## [2.9.5] - 2026-02-11
 
 ### Fixed

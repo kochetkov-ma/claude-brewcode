@@ -1,11 +1,13 @@
 ---
 auto-sync: enabled
+auto-sync-date: 2026-02-11
+auto-sync-type: doc
 description: Детальное описание всех команд focus-task плагина
 ---
 
 # Команды focus-task плагина
 
-> **Версия:** 2.6.0 | **Автор:** Maksim Kochetkov | **Лицензия:** MIT
+> **Версия:** 2.11.0 | **Автор:** Maksim Kochetkov | **Лицензия:** MIT
 
 ## Краткая справка
 
@@ -21,6 +23,10 @@ description: Детальное описание всех команд focus-tas
 | 8 | `/focus-task:auto-sync` | Синхронизация документации | session | opus | setup |
 | 9 | `/focus-task:grepai` | Семантический поиск по коду | session | sonnet | install |
 | 10 | `/focus-task:teardown` | Удаление файлов плагина | fork | haiku | setup |
+| 11 | `/focus-task:secrets-scan` | Поиск секретов и учетных данных | fork | sonnet | -- |
+| 12 | `/focus-task:mcp-config` | Управление MCP серверами | session | sonnet | -- |
+| 13 | `/focus-task:text-optimize` | Оптимизация текста для LLM | fork | sonnet | -- |
+| 14 | `/focus-task:text-human` | Упрощение и гуманизация текста | fork | sonnet | -- |
 
 ## Рекомендуемый порядок выполнения
 
@@ -40,6 +46,7 @@ install --> setup --> spec --> plan --> start --> review --> rules
 | `ft-knowledge-manager` | haiku | Компактификация KNOWLEDGE.jsonl, дедупликация, приоритизация |
 | `ft-grepai-configurator` | opus | Генерация `.grepai/config.yaml` через глубокий анализ проекта |
 | `ft-auto-sync-processor` | sonnet | Обработка одного документа при auto-sync: анализ, исследование, обновление |
+| `ft-rules-organizer` | sonnet | Создание и оптимизация `.claude/rules/*.md` файлов |
 
 ---
 

@@ -4,7 +4,6 @@ description: Creates specification through research and user interaction. Trigge
 user-invocable: true
 argument-hint: "Task description or path to requirements file"
 allowed-tools: Read, Write, Glob, Grep, Bash, Task, AskUserQuestion
-context: session
 model: opus
 ---
 
@@ -84,7 +83,7 @@ Create Spec — "description" or path to requirements
    | Docs | *.md, docs/ | Explore |
    ```
 
-   > See `SPEC-creation.md` for detailed parallel research instructions.
+   > See `references/SPEC-creation.md` for detailed parallel research instructions.
 
 4. **Parallel Research** (ONE message, 5-10 agents)
 
@@ -112,7 +111,7 @@ Create Spec — "description" or path to requirements
    - Create task directory: `.claude/tasks/{TIMESTAMP}_{NAME}_task/`
    - Read `.claude/tasks/templates/SPEC.md.template` (project-adapted)
    - Merge agent findings (deduplicate)
-   - Fill SPEC sections per Consolidation Rules in `SPEC-creation.md`
+   - Fill SPEC sections per Consolidation Rules in `references/SPEC-creation.md`
    - Write `.claude/tasks/{TIMESTAMP}_{NAME}_task/SPEC.md`
    - Include Research table with per-agent findings
 

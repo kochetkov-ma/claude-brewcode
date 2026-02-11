@@ -1,5 +1,6 @@
 ---
 auto-sync: enabled
+auto-sync-date: 2026-02-11
 description: Детальное описание всех хуков focus-task плагина
 ---
 
@@ -35,7 +36,7 @@ Stop ──► stop.mjs                   (блокировка/разрешен
 
 ### Общие утилиты
 
-Все хуки используют `lib/utils.mjs` и `lib/knowledge.mjs`:
+Все хуки используют `hooks/lib/utils.mjs` и `hooks/lib/knowledge.mjs`:
 
 - **utils.mjs** -- ввод/вывод (`readStdin`, `output`), работа с задачами (`getActiveTaskPath`, `parseTask`, `updateTaskStatus`), lock-файлы (`getLock`, `checkLock`, `bindLockSession`, `deleteLock`, `isLockStale`), конфигурация (`loadConfig`), логирование (`log`), состояние (`getState`, `saveState`)
 - **knowledge.mjs** -- чтение/запись KNOWLEDGE.jsonl (`readKnowledge`, `appendKnowledge`), сжатие для инъекции (`compressKnowledge`), локальная компактификация (`localCompact`), запись handoff (`writeHandoffEntry`)
@@ -739,9 +740,9 @@ Task finished. Consider: /focus-task:rules {knowledgePath}
 
 ---
 
-## Библиотеки (lib/)
+## Библиотеки (hooks/lib/)
 
-### lib/utils.mjs
+### hooks/lib/utils.mjs
 
 Общие утилиты для всех хуков.
 
@@ -794,7 +795,7 @@ text-optimizer, statusline-setup
 
 Уровни логирования: `error` (0) < `warn` (1) < `info` (2) < `debug` (3) < `trace` (4).
 
-### lib/knowledge.mjs
+### hooks/lib/knowledge.mjs
 
 Управление KNOWLEDGE.jsonl.
 

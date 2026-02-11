@@ -38,7 +38,7 @@ Removes all files and directories created by `/focus-task:setup`:
 
 **EXECUTE** using Bash tool — run teardown script:
 ```bash
-SCRIPT_DIR="$HOME/.claude/plugins/cache/claude-brewcode/focus-task/$(ls $HOME/.claude/plugins/cache/claude-brewcode/focus-task 2>/dev/null | sort -V | tail -1)/skills/teardown"
+SCRIPT_DIR="$HOME/.claude/plugins/cache/claude-brewcode/focus-task/$(ls $HOME/.claude/plugins/cache/claude-brewcode/focus-task 2>/dev/null | sort -V | tail -1)/scripts"
 bash "$SCRIPT_DIR/teardown.sh" ARGS_HERE && echo "✅ done" || echo "❌ FAILED"
 ```
 **IMPORTANT:** Replace `ARGS_HERE` with the actual value from "Skill arguments received" above. If empty, omit the argument.

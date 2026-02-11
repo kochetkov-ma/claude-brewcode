@@ -2,10 +2,12 @@
 name: focus-task:auto-sync
 description: Universal documentation system - updates, syncs all Claude Code documents (skills, agents, markdown). Replaces /focus-task:doc. Modes - status, init, global, project (default), file, folder. Triggers "auto-sync", "sync docs", "update docs", "auto-sync status".
 user-invocable: true
-argument-hint: "[status] | [init <path>] | [global] | [path] | [-o]"
+argument-hint: "[status] | [init <path>] | [global] | [path]"
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Task, WebFetch, Skill
-context: session
 model: opus
+auto-sync: enabled
+auto-sync-date: 2026-02-11
+auto-sync-type: skill
 ---
 
 # Auto-Sync
@@ -39,7 +41,6 @@ Parse output: `MODE|ARG|FLAGS`. If exit code non-zero → report error, EXIT.
 | FILE | file path | Single file |
 | FOLDER | folder path | All .md in folder |
 
-**FLAGS:** `optimize` in FLAGS → set `OPTIMIZE=true` for Phase 3.
 
 ## INDEX Format
 
@@ -121,6 +122,7 @@ preserve: ## User Notes, ## Custom Config
 
 ### Phase 1: Setup INDEX
 
+**EXECUTE** using Bash tool:
 ```bash
 SCOPE="project"  # or "global"
 INDEX_DIR=".claude/auto-sync"
@@ -134,11 +136,10 @@ echo "INDEX=$INDEX_FILE"
 Read `autoSync` from project config (`.claude/tasks/cfg/focus-task.config.json`):
 - `INTERVAL_DAYS` = `autoSync.intervalDays` (default: 7)
 - `PARALLEL_AGENTS` = `autoSync.parallelAgents` (default: 5)
-- `OPTIMIZE` = `autoSync.optimize` (default: false) — FLAGS `optimize` overrides to true
 
 ### Phase 2: Discover + Queue
 
-1. Find tagged files:
+1. Find tagged files — **EXECUTE** using Bash tool:
 ```bash
 bash "$FT_PLUGIN/skills/auto-sync/scripts/discover.sh" "$SCOPE_PATH" typed
 ```
@@ -150,7 +151,7 @@ Output: `TYPE|PATH` per line (types: `skill`, `agent`, `rule`, `config`, `doc`).
    - Check `<auto-sync-override>` → set `pr`
    - Add to INDEX (`index-ops.sh add`)
 
-3. Find stale entries (from config `autoSync.intervalDays`, default: 7):
+3. Find stale entries — **EXECUTE** using Bash tool:
 ```bash
 bash "$FT_PLUGIN/skills/auto-sync/scripts/index-ops.sh" stale "$INDEX_FILE" "$INTERVAL_DAYS"
 ```
@@ -174,9 +175,7 @@ Batches: max `PARALLEL_AGENTS` parallel.
    - `status: "unchanged"` → update INDEX `u` to today
    - `status: "error"` → log error
 
-3. **If OPTIMIZE=true:** For each updated file → `Skill("text-optimize", "{path}")`
-
-4. Output report:
+3. Output report:
 
 ```markdown
 ## Auto-Sync Complete
@@ -187,7 +186,6 @@ Batches: max `PARALLEL_AGENTS` parallel.
 | Queued (stale/new) | {N} |
 | Updated | {N} |
 | Unchanged | {N} |
-| Optimized | {N} |
 | Errors | {N} |
 
 ### Updated

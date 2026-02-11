@@ -4,7 +4,6 @@ description: Creates execution plan (PLAN.md) from SPEC or Plan Mode file. Trigg
 user-invocable: true
 argument-hint: "Path to task dir, SPEC, or .claude/plans/LATEST.md"
 allowed-tools: Read, Write, Glob, Grep, Bash, Task, AskUserQuestion
-context: session
 model: opus
 ---
 

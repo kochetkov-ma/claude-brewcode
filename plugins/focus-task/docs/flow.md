@@ -1,5 +1,6 @@
 ---
 auto-sync: enabled
+auto-sync-date: 2026-02-11
 description: Диаграммы потоков выполнения focus-task плагина
 ---
 

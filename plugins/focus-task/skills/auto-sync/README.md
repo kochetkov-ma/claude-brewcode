@@ -25,7 +25,7 @@ Tracks and updates Claude Code documents by comparing against codebase.
 
 ```
 /focus-task:auto-sync [args]
-│  context: session → runs in main conversation (has Task + Skill)
+│  No explicit context → runs in main conversation (has Task + Skill)
 │
 ├─ 1. Resolve $FT_PLUGIN path (Bash)
 ├─ 2. detect-mode.sh → MODE|ARG|FLAGS
@@ -94,7 +94,7 @@ Tracks and updates Claude Code documents by comparing against codebase.
 ```yaml
 ---
 auto-sync: enabled
-auto-sync-date: 2026-02-05
+auto-sync-date: 2026-02-11
 auto-sync-type: skill
 ---
 ```

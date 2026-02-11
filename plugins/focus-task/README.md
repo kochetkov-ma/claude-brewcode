@@ -1,7 +1,18 @@
 ---
 auto-sync: enabled
+auto-sync-date: 2026-02-11
 description: README focus-task плагина — пользовательская документация
 ---
+
+<auto-sync-override>
+sources: plugins/focus-task/skills/*/SKILL.md, plugins/focus-task/.claude-plugin/plugin.json
+focus: Команды (таблица должна содержать ВСЕ скиллы из skills/), версия (из plugin.json)
+preserve: ## Установка, ## Быстрый старт
+checks:
+  - Сравнить список команд с `ls skills/` — все должны быть в таблице
+  - Версия в ## Версия должна совпадать с plugin.json
+  - Ссылки на docs/*.md должны существовать
+</auto-sync-override>
 
 # Focus Task
 
@@ -42,12 +53,17 @@ claude --plugin-dir ./plugins/focus-task
 | `/focus-task:spec <описание>` | Исследование кодовой базы, диалог с пользователем, создание SPEC.md |
 | `/focus-task:plan [путь]` | Генерация плана выполнения из SPEC или Plan Mode с кворумным ревью |
 | `/focus-task:start [путь]` | Запуск задачи с бесконечным контекстом через автоматические хэндоффы |
-| `/focus-task:review [-q N-M] [-c]` | Мультиагентное код-ревью с кворумом и опциональным критиком |
 | `/focus-task:rules [путь]` | Извлечение правил из накопленных знаний в `.claude/rules/` |
-| `/focus-task:auto-sync [режим]` | Синхронизация документации проекта (status, init, sync, global, project, path) |
-| `/focus-task:grepai [режим]` | Настройка семантического поиска по коду (setup, status, start, stop, reindex) |
+| `/focus-task:auto-sync [режим]` | Синхронизация документации (status, init, global, project, path) |
+| `/focus-task:grepai [режим]` | Семантический поиск по коду (setup, status, start, stop, reindex) |
+| `/focus-task:text-optimize [путь]` | Оптимизация текста для LLM (-l light, -d deep) |
+| `/focus-task:text-human [путь]` | Humanize: удаление AI-артефактов, упрощение документации |
+| `/focus-task:mcp-config` | Управление MCP серверами (status, enable, disable) |
+| `/focus-task:secrets-scan` | Сканирование на секреты (10 параллельных агентов) |
 | `/focus-task:teardown` | Очистка конфигурации плагина (задачи сохраняются) |
 | `/focus-task:install` | Проверка и установка необходимых компонентов |
+
+> **Note:** `/focus-task:review` — локальный скилл, создаётся в проекте при `/focus-task:setup`.
 
 Детальное описание каждой команды: `docs/commands.md`
 
@@ -66,8 +82,6 @@ claude --plugin-dir ./plugins/focus-task
 | `knowledge` | Лимиты записей, валидация, retention (global/task) |
 | `constraints` | Ролевые ограничения для агентов (DEV, TEST, REVIEW) |
 | `autoSync` | Интервал синхронизации, параллельность |
-
-Полное описание полей: `docs/config.md`
 
 ## Структура задачи
 
@@ -90,12 +104,11 @@ claude --plugin-dir ./plugins/focus-task
 | `docs/hooks.md` | Хуки и их поведение |
 | `docs/flow.md` | Диаграммы потоков выполнения (spec, plan, start) |
 | `docs/file-tree.md` | Полная структура файлов плагина и проекта |
-| `docs/config.md` | Все поля конфигурации |
 | [INSTALL.md](INSTALL.md) | Руководство по установке |
 | [RELEASE-NOTES.md](RELEASE-NOTES.md) | История изменений |
 
 ## Версия
 
-**2.6.0** -- 2-stage creation flow (spec + plan), per-task directories, session mapping.
+**2.11.0** -- agent documentation enrichment, auto-sync improvements, hooks optimization.
 
 Автор: Maksim Kochetkov | Лицензия: MIT
