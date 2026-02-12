@@ -1,124 +1,132 @@
-# SPEC Creation Reference
+# SPEC Creation Instructions
 
-## Parallel Research Instructions
+## Overview
 
-### Agent Selection
+Создание спецификации через параллельный анализ 5-10 логических областей проекта.
 
-| Area Type | Agent | Focus |
-|-----------|-------|-------|
-| Architecture | Plan | Patterns, layers, dependencies |
-| Business logic | developer | Services, controllers, flows |
-| Data layer | developer | Repos, entities, migrations |
-| Testing | tester | Coverage, frameworks, patterns |
-| Quality | reviewer | Code quality, security, performance |
-| Documentation | Explore | Existing docs, READMEs, comments |
-| External deps | Explore | Libraries, APIs, integrations |
+## Step 1: Partition Research Areas
 
-### Research Prompt Template
+Разделить исследуемый материал на 5-10 логических частей:
+
+| Category | Examples |
+|----------|----------|
+| **Codebase** | src/services/, src/repositories/, src/controllers/ |
+| **Config** | application.yml, docker-compose.yml, .env |
+| **Tests** | src/test/, fixtures/, test data |
+| **DB** | migrations/, schema, SQL queries |
+| **Docs** | README, CLAUDE.md, API docs |
+| **External** | Library docs (Context7), API specs |
+| **Network** | External services, integrations |
+
+**Target:** 5-10 areas based on project size and task complexity.
+
+## Step 2: Assign Agents to Areas
+
+Выбор агента для каждой области на основе доступных в проекте:
+
+| Area Type | Preferred Agent | Fallback |
+|-----------|-----------------|----------|
+| Code/Architecture | `Plan`, `developer` | `Explore` |
+| Database/SQL | `sql_expert` | `developer` |
+| Tests | `tester` | `developer` |
+| Quality/Security | `reviewer` | `Plan` |
+| External Docs | `Explore` | - |
+| Config/Infra | `developer` | `Plan` |
+
+**Rule:** Use project-specific agents from `.claude/agents/` when available.
+
+## Step 3: Parallel Agent Execution
 
 ```
-Task(subagent_type="{AGENT}", model="sonnet", prompt="
-AREA: {AREA_NAME}
-TASK: {TASK_DESCRIPTION}
-FILES: {GLOB_PATTERN}
-
-Analyze this area. Output:
-
-## Findings
-- Key patterns discovered
-- Reusable components identified
-- Integration points
-
-## Assets (table)
-| File | Purpose | Reuse Potential |
-|------|---------|-----------------|
-
-## Risks
-- Technical risks
-- Integration risks
-- Knowledge gaps
-
-## Recommendations
-- Approach suggestions
-- Files to study further
-- Questions for user
-
-NO large code blocks. Use file:line references.
-")
+┌─────────────────────────────────────────────────────────────┐
+│  ONE message with 5-10 Task tool calls in PARALLEL          │
+│                                                             │
+│  Task(agent="Plan", prompt="Analyze architecture in {area}")│
+│  Task(agent="sql_expert", prompt="Analyze DB layer...")     │
+│  Task(agent="developer", prompt="Analyze services...")      │
+│  Task(agent="tester", prompt="Analyze test patterns...")    │
+│  Task(agent="reviewer", prompt="Analyze quality...")        │
+│  ...                                                        │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### Parallel Execution Rules
+### Agent Prompt Template
 
-1. **ONE message** with 5-10 Task calls
-2. Each agent targets specific area (no overlap)
-3. All agents use `model="sonnet"` for speed
-4. Collect all responses before consolidation
+```
+Analyze {AREA_NAME} for task: "{TASK_DESCRIPTION}"
 
-### Area Partitioning
+Focus:
+- Existing patterns and conventions
+- Reusable components/code
+- Potential impact areas
+- Risks and constraints
+- Best practices observed
 
-| Project Type | Suggested Areas |
-|--------------|-----------------|
-| Backend API | controllers, services, repositories, config, tests |
-| Frontend | components, pages, hooks, state, styles, tests |
-| Full-stack | api, frontend, shared, database, infra, tests |
-| Library | core, utils, types, examples, tests |
-| CLI tool | commands, utils, config, tests |
+Context files: {LIST_OF_FILES_IN_AREA}
 
----
+Output format:
+1. Key findings (bullet points)
+2. Reusable assets (table: path | purpose)
+3. Risks/constraints (bullet points)
+4. Recommendations (bullet points)
 
-## Consolidation Rules
-
-### Merging Agent Findings
-
-1. **Deduplicate** - Same finding from multiple agents → keep one with most detail
-2. **Categorize** - Group by SPEC section (Overview, Requirements, Architecture, etc.)
-3. **Prioritize** - Risks and blockers first, nice-to-haves last
-4. **Resolve conflicts** - If agents disagree, note both perspectives
-
-### SPEC Section Mapping
-
-| Agent Output | SPEC Section |
-|--------------|--------------|
-| Architecture patterns | ## Architecture |
-| Business logic flows | ## Requirements |
-| Data models | ## Data Model |
-| Test patterns | ## Testing Strategy |
-| Quality concerns | ## Risks |
-| Integration points | ## Dependencies |
-| Recommendations | ## Implementation Notes |
-
-### Research Table Format
-
-Include in SPEC after consolidation:
-
-```markdown
-## Research Summary
-
-| Area | Agent | Key Findings | Files Analyzed |
-|------|-------|--------------|----------------|
-| Controllers | developer | REST patterns, validation | src/controllers/*.java |
-| Services | developer | Transaction handling | src/services/*.java |
-| Tests | tester | JUnit 5, MockMvc | src/test/**/*.java |
+DO NOT include large code blocks - reference file:line instead.
 ```
 
-### Quality Checklist
+## Step 4: Consolidate Results
 
-Before finalizing SPEC:
+После завершения всех агентов:
 
-- [ ] All areas covered by at least one agent
-- [ ] No contradicting information unresolved
-- [ ] Risks have proposed mitigations
-- [ ] Requirements are measurable/verifiable
-- [ ] Dependencies explicitly listed
-- [ ] file:line references are valid
+1. **Merge findings** — объединить key findings
+2. **Deduplicate** — убрать повторяющуюся информацию
+3. **Prioritize** — ранжировать по важности для задачи
+4. **Structure** — заполнить секции SPEC.md.template
 
----
+### Consolidation Rules
 
-## Error Handling
+| Section | Source |
+|---------|--------|
+| Goal | Original task prompt (1-2 sentences) |
+| Original Requirements | Full task prompt, preserved verbatim |
+| User Q&A | From AskUserQuestion interactions |
+| Analysis > Architecture | Plan agent + consolidated findings |
+| Analysis > Data & State | Developer + sql_expert findings |
+| Analysis > Impact | All agents' change impact per area |
+| Context Files | All files mentioned by agents |
+| Risks | All agents' risk findings |
+| Decisions | Based on alternatives found |
+| Research | Summary per agent |
 
-| Error | Recovery |
-|-------|----------|
-| Agent timeout | Retry with smaller scope |
-| Empty findings | Check glob pattern, try Explore agent |
-| Conflicting info | Note both, ask user in Step 6 |
-| Missing area | Add another Task call for that area |
+## Step 5: Output
+
+Create SPEC file: `.claude/tasks/{TIMESTAMP}_{NAME}_task/SPEC.md`
+
+**Important:**
+- NO large code blocks in SPEC — use `file:line` references
+- Code snippets from research are for understanding, NOT for spec
+- SPEC is a plan document, not a code dump
+
+## Example Partition
+
+For a Spring Boot project with auth feature:
+
+| # | Area | Agent | Focus |
+|---|------|-------|-------|
+| 1 | Controllers | developer | Existing endpoints, patterns |
+| 2 | Services | developer | Business logic, dependencies |
+| 3 | Repositories | sql_expert | Data access, queries |
+| 4 | Security config | reviewer | Auth patterns, vulnerabilities |
+| 5 | Tests | tester | Test patterns, coverage |
+| 6 | Migrations | sql_expert | Schema, constraints |
+| 7 | External docs | Explore | Library usage (Spring Security) |
+
+## Timing
+
+| Step | Action |
+|------|--------|
+| Partition | 1 analysis pass |
+| Parallel agents | 1 message, N agents |
+| Consolidate | 1 synthesis pass |
+| Output | Write SPEC file |
+
+**Total:** 3 turns for complete SPEC generation.

@@ -79,6 +79,14 @@ async function main() {
     let updatedPrompt = tool_input.prompt || '';
     let modified = false;
 
+    // 0. Inject FT_PLUGIN_ROOT for ALL agents (first injection)
+    const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT || '';
+    if (pluginRoot) {
+      updatedPrompt = `FT_PLUGIN_ROOT=${pluginRoot}\n\n${updatedPrompt}`;
+      modified = true;
+      log('debug', '[pre-task]', `Injected FT_PLUGIN_ROOT for ${subagentType}`, cwd, session_id);
+    }
+
     // 1. Inject grepai reminder for ALL agents (including Explore, Plan, etc.)
     if (hasGrepai) {
       updatedPrompt = `${GREPAI_REMINDER}\n\n${updatedPrompt}`;

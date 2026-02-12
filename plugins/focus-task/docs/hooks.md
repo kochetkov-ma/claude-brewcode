@@ -34,6 +34,33 @@ PreCompact ──► pre-compact.mjs      (компакт знаний, handoff)
 Stop ──► stop.mjs                   (блокировка/разрешение остановки)
 ```
 
+## Переменная FT_PLUGIN_ROOT
+
+Путь к корню focus-task плагина.
+
+### Механизм инжекции
+
+| Событие | Хук | Куда |
+|---------|-----|------|
+| SessionStart | session-start.mjs | `additionalContext` → main conversation |
+| PreToolUse:Task | pre-task.mjs | `updatedInput.prompt` → субагенты |
+
+### Формат
+
+```
+FT_PLUGIN_ROOT=/Users/.../.claude/plugins/cache/claude-brewcode/focus-task/2.12.0
+```
+
+### Использование
+
+| Контекст | Как использовать |
+|----------|------------------|
+| Скиллы (main conversation) | `$FT_PLUGIN_ROOT` доступен в additionalContext |
+| Субагенты | `$FT_PLUGIN_ROOT` инжектируется в prompt |
+| Hooks | `process.env.CLAUDE_PLUGIN_ROOT` |
+
+---
+
 ### Общие утилиты
 
 Все хуки используют `hooks/lib/utils.mjs` и `hooks/lib/knowledge.mjs`:

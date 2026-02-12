@@ -32,6 +32,84 @@
 
 ---
 
+## [2.12.3] - 2026-02-12
+
+### Changed
+
+- **Skill path normalization** — all skills now use relative paths
+  - Removed unreliable `$FT_PLUGIN` variable (bash isolation issues)
+  - Removed non-existent `$CLAUDE_PLUGIN_ROOT` references
+  - Removed cache path hacks (`ls -vd ~/.claude/plugins/cache/...`)
+  - Skills reference own resources via relative paths: `scripts/`, `references/`
+
+- **Agent path normalization** — agents use injected `$FT_PLUGIN_ROOT`
+  - Removed `{PLUGIN_ROOT}` placeholders from agent docs
+  - Agents receive `FT_PLUGIN_ROOT` via pre-task.mjs injection
+  - Fixed ft-coordinator.md and bash-expert.md
+
+- **File reorganization** — templates moved to skill directories
+  - `scripts/teardown.sh` → `skills/teardown/scripts/teardown.sh`
+  - `templates/SPEC-creation.md` → `skills/spec/references/SPEC-creation.md`
+  - `templates/*.template` (4 files) → `skills/setup/templates/`
+  - `setup.sh` updated to use new `SETUP_TEMPLATES` path
+
+### Updated Files
+
+| File | Change |
+|------|--------|
+| `skills/teardown/SKILL.md` | Relative `scripts/teardown.sh` |
+| `skills/text-optimize/SKILL.md` | `$FT_PLUGIN_ROOT` + context instruction |
+| `skills/standards-review/SKILL.md` | Relative `references/` paths |
+| `skills/grepai/SKILL.md` | Relative paths (13 scripts) + agent context |
+| `skills/setup/SKILL.md` | Relative paths (7 scripts) + agent context |
+| `skills/spec/SKILL.md` | Agent context instructions |
+| `skills/plan/SKILL.md` | Agent context instructions |
+| `skills/auto-sync/SKILL.md` | Relative paths + agent context |
+| `skills/rules/SKILL.md` | Relative paths + agent context |
+| `skills/text-human/SKILL.md` | Agent context instructions |
+| `skills/install/SKILL.md` | Relative paths (8 scripts) |
+| `skills/setup/scripts/setup.sh` | `SETUP_TEMPLATES` variable |
+| `agents/ft-coordinator.md` | `$FT_PLUGIN_ROOT` for templates |
+| `agents/bash-expert.md` | `$FT_PLUGIN_ROOT` instructions |
+
+---
+
+## [2.12.2] - 2026-02-12
+
+### Added
+
+- **skill-creator agent** — "Resource Path Resolution" section
+  - Documents that skills receive base directory at execution
+  - Relative paths to resources (references/, scripts/, assets/) resolve automatically
+
+### Updated Files
+
+| File | Change |
+|------|--------|
+| `agents/skill-creator.md` | Added Resource Path Resolution section |
+
+---
+
+## [2.12.1] - 2026-02-12
+
+### Added
+
+- **FT_PLUGIN_ROOT injection** — plugin root path available to skills and agents
+  - `session-start.mjs`: injects `FT_PLUGIN_ROOT` into `additionalContext` for main conversation
+  - `pre-task.mjs`: injects `FT_PLUGIN_ROOT` as first injection for ALL subagents
+  - Enables skills to reference plugin files: `$FT_PLUGIN_ROOT/skills/text-optimize/references/...`
+
+### Updated Files
+
+| File | Change |
+|------|--------|
+| `hooks/session-start.mjs` | `FT_PLUGIN_ROOT` in additionalContext |
+| `hooks/pre-task.mjs` | `FT_PLUGIN_ROOT` injection for all agents |
+| `docs/hooks.md` | "Переменная FT_PLUGIN_ROOT" section |
+| `CLAUDE.md` | "Plugin Variables" section |
+
+---
+
 ## [2.12.0] - 2026-02-11
 
 ### Fixed

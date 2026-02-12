@@ -11,8 +11,6 @@ Execute Task — [task-file-path]
 
 <instructions>
 
-**ROLE:** Task Executor | **INPUT:** path to task file
-
 ## How It Works
 
 ```
@@ -26,13 +24,6 @@ PreCompact        → Validate + compact KNOWLEDGE → handoff
    ↓
 Re-read PLAN.md   → Continue from current phase
 ```
-
-## Input Handling
-
-| Input | Action |
-|-------|--------|
-| `$ARGUMENTS` has path | Use as task file path |
-| `$ARGUMENTS` empty | Read path from `.claude/TASK.md` |
 
 ## Execution Steps
 
@@ -60,8 +51,6 @@ Coordinator validates, creates lock, updates status → `in progress`.
 
 ### 4. Execute Phases
 
-**Full protocol in PLAN.md.** Summary:
-
 ```
 FOR each phase:
   1. Read phase requirements
@@ -75,28 +64,9 @@ FOR each phase:
   6. Iterate or proceed based on results
 ```
 
-### 5. Final Review
-
-```
-ONE message with 3+ parallel Task calls:
-- reviewer #1: business logic
-- reviewer #2: code quality
-- reviewer #3: patterns
-```
-
-### 6. Complete
+### 5. Complete
 
 - Status → `finished`
 - **Extract rules** (REQUIRED): `Skill(skill="focus-task:rules", args="{KNOWLEDGE_PATH}")`
-
-## Handoff
-
-Hooks enable infinite context. At auto-compact:
-1. PreCompact validates state, compacts KNOWLEDGE
-2. Auto-compact occurs (same session, compressed)
-3. Re-read PLAN.md + KNOWLEDGE.jsonl
-4. Continue from current phase
-
-State preserved: phase status, KNOWLEDGE, artifacts.
 
 </instructions>

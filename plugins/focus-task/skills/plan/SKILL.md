@@ -2,7 +2,7 @@
 name: focus-task:plan
 description: Creates execution plan (PLAN.md) from SPEC or Plan Mode file. Triggers "create plan", "plan task", "focus-task plan".
 user-invocable: true
-argument-hint: "Path to task dir, SPEC, or .claude/plans/LATEST.md"
+argument-hint: "[task-dir|SPEC.md|plan-file] — defaults to .claude/TASK.md ref"
 allowed-tools: Read, Write, Glob, Grep, Bash, Task, AskUserQuestion
 model: opus
 ---
@@ -10,19 +10,6 @@ model: opus
 Create Plan — [task-dir or SPEC path or plan file]
 
 <instructions>
-
-## TOKEN-EFFICIENT FORMATTING
-
-**Rules for Opus 4.5 context optimization:**
-- Tables over prose (3x denser)
-- `|` separators, no verbose descriptions
-- One-line rules with `→` for implications
-- Lists: `-` not `1.` (saves chars)
-- No redundant headers/whitespace
-- Code: inline `backticks` over blocks when <3 lines
-- Abbreviate: REQ, impl, cfg, env, arg, ret, err
-
----
 
 ## /focus-task:plan Instructions
 
@@ -97,6 +84,8 @@ Create Plan — [task-dir or SPEC path or plan file]
 
    **Agent prompt:**
    ```
+   > **Context:** FT_PLUGIN_ROOT is available in your context (injected by pre-task.mjs hook).
+
    Review PLAN at {PLAN_PATH} against SPEC at {SPEC_PATH}
    Check: phases cover all requirements, agent assignments match expertise,
    dependencies correct, verification criteria measurable, risks mitigated
@@ -108,10 +97,11 @@ Create Plan — [task-dir or SPEC path or plan file]
 7. **Verification Agent**
 
    ```
-   Task(subagent_type="reviewer", prompt="Verify PLAN covers ALL SPEC requirements...")
-   ```
+   Task(subagent_type="reviewer", prompt="
+   > **Context:** FT_PLUGIN_ROOT is available in your context (injected by pre-task.mjs hook).
 
-   Cross-check every requirement/analysis item in SPEC has corresponding phase in PLAN.
+   Verify PLAN covers ALL SPEC requirements...")
+   ```
 
 8. **Present Review Results** (AskUserQuestion)
 

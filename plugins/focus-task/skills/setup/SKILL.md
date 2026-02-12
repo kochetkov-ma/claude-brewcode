@@ -8,72 +8,29 @@ context: fork
 model: opus
 ---
 
-Setup Focus-Task — analyze project, create PLAN.md.template
-
-## Overview
-
-Analyzes project structure, technology stack, testing patterns, and project-specific agents to create customized `PLAN.md.template` in `.claude/tasks/templates/`. Adapted template includes project agents, frameworks, database tech, and coding patterns from `CLAUDE.md`.
 
 <instructions>
-
-## Prerequisites
-
-> **WORKAROUND:** `$CLAUDE_PLUGIN_ROOT` is only set in hooks, NOT in skills.
-> Claude Code doesn't inject plugin env vars when executing bash from SKILL.md.
-> We resolve the plugin path dynamically using the cache directory structure.
-
-**EXECUTE FIRST** — set plugin root variable for this session:
-```bash
-# Resolve plugin root from cache (latest version)
-FT_PLUGIN=$(ls -vd "$HOME/.claude/plugins/cache/claude-brewcode/focus-task"/*/ 2>/dev/null | tail -1)
-test -n "$FT_PLUGIN" && echo "✅ FT_PLUGIN=$FT_PLUGIN" || echo "❌ Plugin not found in cache"
-```
-
-> **STOP if ❌** — plugin not installed. Run: `claude plugin add claude-brewcode/focus-task`
-
----
 
 ## Phase 1: Project Structure Analysis
 
 **Agent:** Explore | **Action:** Scan project and gather intelligence
 
+> **Context:** FT_PLUGIN_ROOT is available in your context (injected by pre-task.mjs hook).
+
 ### Scan Commands
 
 **EXECUTE** using Bash tool — gather project info:
 ```bash
-bash "$FT_PLUGIN/skills/setup/scripts/setup.sh" scan && echo "✅ scan" || echo "❌ scan FAILED"
+bash "scripts/setup.sh" scan && echo "✅ scan" || echo "❌ scan FAILED"
 ```
 
 > **STOP if ❌** — check script exists and plugin is installed.
-
-### Detection Indicators
-
-| Technology | Indicators |
-|------------|-----------|
-| Java/Spring | pom.xml, build.gradle, src/main/java, @SpringBootApplication |
-| Node.js | package.json, node_modules, express, nest |
-| Python | requirements.txt, Pipfile, pytest, unittest |
-| Go | go.mod, *_test.go |
-| Rust | Cargo.toml |
-| Testing | JUnit, TestNG, pytest, Jest, Mocha, Go testing, DBRider |
-| Database | PostgreSQL, MySQL, MongoDB, Redis, ClickHouse, JOOQ |
 
 ---
 
 ## Phase 2: Intelligence Analysis
 
 **Agent:** Plan | **Action:** Consolidate findings and create adaptation strategy
-
-### Analysis Dimensions
-
-| Dimension | Extract |
-|-----------|---------|
-| Tech Stack | Primary language, framework, build system |
-| Testing | Test runner, assertion library, mocking framework |
-| Database | SQL/NoSQL type, ORM/query builder |
-| Project Agents | List from `.claude/agents/` with purposes and models |
-| Coding Patterns | Key rules from CLAUDE.md (DI, code style, libraries) |
-| Project Type | Web API, CLI tool, library, microservice, monolith |
 
 ### Create Adaptation Plan
 
@@ -120,7 +77,7 @@ bash "$FT_PLUGIN/skills/setup/scripts/setup.sh" scan && echo "✅ scan" || echo 
 
 **EXECUTE** using Bash tool:
 ```bash
-bash "$FT_PLUGIN/skills/setup/scripts/setup.sh" structure && echo "✅ structure" || echo "❌ structure FAILED"
+bash "scripts/setup.sh" structure && echo "✅ structure" || echo "❌ structure FAILED"
 ```
 
 > **STOP if ❌** — verify .claude/tasks directory is writable.
@@ -129,21 +86,12 @@ bash "$FT_PLUGIN/skills/setup/scripts/setup.sh" structure && echo "✅ structure
 
 **EXECUTE** using Bash tool — sync templates from plugin (always overwrites if changed):
 ```bash
-bash "$FT_PLUGIN/skills/setup/scripts/setup.sh" sync && echo "✅ sync" || echo "❌ sync FAILED"
+bash "scripts/setup.sh" sync && echo "✅ sync" || echo "❌ sync FAILED"
 ```
 
 > **STOP if ❌** — verify plugin templates exist.
 
 > **Note:** Templates synced from plugin. Rules created once (never overwritten). Review skill adapted by AI.
-
-Adapt frontmatter paths based on detected tech stack:
-
-| Tech | Paths |
-|------|-------|
-| Java/Kotlin | `src/**/*.java`, `src/**/*.kt`, `!**/test/**` |
-| TypeScript | `src/**/*.ts`, `src/**/*.tsx`, `!**/*.test.*` |
-| Python | `**/*.py`, `!**/test_*`, `!**/*_test.py` |
-| Go | `**/*.go`, `!**/*_test.go` |
 
 ### Template Modifications
 
@@ -177,7 +125,7 @@ Adapt frontmatter paths based on detected tech stack:
 
 **EXECUTE** using Bash tool — create directory and copy review skill template:
 ```bash
-bash "$FT_PLUGIN/skills/setup/scripts/setup.sh" review && echo "✅ review" || echo "❌ review FAILED"
+bash "scripts/setup.sh" review && echo "✅ review" || echo "❌ review FAILED"
 ```
 
 > **STOP if ❌** — verify review template exists in plugin.
@@ -244,21 +192,6 @@ Replace placeholders based on Phase 2 analysis:
 | Interfaces | Small interfaces, composition |
 ```
 
-### Project Rules Extraction
-
-From CLAUDE.md, extract rules relevant to code review:
-
-```
-1. Read CLAUDE.md
-2. Find patterns for:
-   - Assertions (AssertJ .as(), etc.)
-   - DI patterns (constructor injection)
-   - Logging (@Slf4j, no System.out)
-   - Code style (Stream API, functional)
-   - Testing (BDD comments, @DisplayName)
-3. Format as bullet list for {PROJECT_RULES}
-```
-
 ### Validation
 
 **EXECUTE** using Bash tool — verify review skill:
@@ -277,7 +210,7 @@ grep -q "Tech-Specific\|tech-specific\|Category.*Checks" .claude/skills/focus-ta
 
 **EXECUTE** using Bash tool — copy/update config template:
 ```bash
-bash "$FT_PLUGIN/skills/setup/scripts/setup.sh" config && echo "✅ config" || echo "❌ config FAILED"
+bash "scripts/setup.sh" config && echo "✅ config" || echo "❌ config FAILED"
 ```
 
 > **STOP if ❌** — verify .claude/tasks/cfg directory exists.
@@ -302,7 +235,7 @@ bash "$FT_PLUGIN/skills/setup/scripts/setup.sh" config && echo "✅ config" || e
 
 **EXECUTE** using Bash tool — ALL must pass:
 ```bash
-bash "$FT_PLUGIN/skills/setup/scripts/setup.sh" validate && echo "✅ validate" || echo "❌ validate FAILED"
+bash "scripts/setup.sh" validate && echo "✅ validate" || echo "❌ validate FAILED"
 ```
 
 > **STOP if any ❌** — go back to "Copy Templates" step and fix.
@@ -330,7 +263,7 @@ bash "$FT_PLUGIN/skills/setup/scripts/setup.sh" validate && echo "✅ validate" 
 
 **EXECUTE** using Bash tool:
 ```bash
-bash "$FT_PLUGIN/skills/setup/scripts/setup.sh" agents > /tmp/agents-section.md && cat /tmp/agents-section.md
+bash "scripts/setup.sh" agents > /tmp/agents-section.md && cat /tmp/agents-section.md
 ```
 
 > **Output = Ready-to-insert content.** Script collects system + global + plugin agents.
@@ -421,54 +354,3 @@ Using Edit tool:
 
 ---
 
-## Configuration
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| Universal template | `$ARGUMENTS` or `~/.claude/templates/PLAN.md.template` | Source template for adaptation |
-| Fallback mode | Minimal adaptation | Use core agents only if no project patterns detected |
-| Update mode | Incremental | Re-run to refresh when project evolves |
-
-## Re-run Support
-
-> `/focus-task:setup` can be run anytime to sync templates with project changes.
-
-**Triggers for re-run:**
-- New agent added to `.claude/agents/`
-- CLAUDE.md updated with new patterns
-- New reference files identified
-- Test framework changed
-
-**Sync behavior:**
-```
-1. Re-scan .claude/agents/ → update Project Agents table
-2. Re-scan Reference Examples → update R1..RN
-3. Re-read CLAUDE.md → update patterns in V-phase focus
-4. Preserve existing Context Index (C1..CN)
-5. Update all TBD placeholders with detected agents
-6. Re-adapt review skill with new agents/rules
-```
-
-**Affected sections:**
-- `## Agents > Project Agents` — sync from .claude/agents/
-- `## Reference Examples` — sync canonical files
-- `### Phase NV: Verification` — update TBD with project agents
-- `## Final Review` — update TBD with project agents
-- `.claude/skills/focus-task-review/SKILL.md` — sync tech checks, project rules
-
-## Error Handling
-
-| Condition | Action |
-|-----------|--------|
-| No build files found | Create generic template with core agents only, warn user |
-| No `.claude/agents/` | Skip project agents section, use core agents only |
-| No CLAUDE.md | Skip constraints adaptation, use universal constraints |
-| Empty test directories | Create generic testing verification checklist |
-
-## Best Practices
-
-- Keep template under 300 lines for maintainability
-- Reference full documentation in comments, not inline
-- Use clear section markers for easy parsing
-- Include adaptation metadata in comments at top
-- Preserve universal template structure for consistency

@@ -8,26 +8,7 @@ context: fork
 model: haiku
 ---
 
-Teardown Focus-Task — remove all project files created by setup
-
-## Overview
-
-Removes all files and directories created by `/focus-task:setup`:
-- `.claude/tasks/templates/`
-- `.claude/tasks/cfg/`
-- `.claude/tasks/logs/`
-- `.claude/plans/`
-- `.grepai/`
-- `.claude/skills/focus-task-review/`
-
 <instructions>
-
-## Usage
-
-```
-/focus-task:teardown           # Full cleanup
-/focus-task:teardown --dry-run # Show what would be deleted
-```
 
 ## Execution
 
@@ -38,37 +19,22 @@ Removes all files and directories created by `/focus-task:setup`:
 
 **EXECUTE** using Bash tool — run teardown script:
 ```bash
-SCRIPT_DIR="$HOME/.claude/plugins/cache/claude-brewcode/focus-task/$(ls $HOME/.claude/plugins/cache/claude-brewcode/focus-task 2>/dev/null | sort -V | tail -1)/scripts"
-bash "$SCRIPT_DIR/teardown.sh" ARGS_HERE && echo "✅ done" || echo "❌ FAILED"
+bash scripts/teardown.sh ARGS_HERE && echo "✅ done" || echo "❌ FAILED"
 ```
 **IMPORTANT:** Replace `ARGS_HERE` with the actual value from "Skill arguments received" above. If empty, omit the argument.
 
 > **STOP if ❌** — check script path exists and teardown.sh has execute permissions.
 
-## What Gets Removed
+## Options
 
-```
-PROJECT/
-├── .grepai/                     ← 🗑️ DELETE (entire dir)
-├── .claude/
-│   ├── tasks/
-│   │   ├── templates/           ← 🗑️ DELETE (entire dir)
-│   │   ├── cfg/                 ← 🗑️ DELETE (entire dir)
-│   │   ├── logs/                ← 🗑️ DELETE (entire dir)
-│   │   ├── reports/             ← ⏭️ KEEP (legacy)
-│   │   └── *_task/              ← ⏭️ KEEP (task directories)
-│   ├── plans/                   ← 🗑️ DELETE (entire dir)
-│   ├── skills/
-│   │   └── focus-task-review/   ← 🗑️ DELETE (entire dir)
-│   └── rules/                   ← ⏭️ KEEP
-```
+| Option | Behavior |
+|--------|----------|
+| `--dry-run` | List files to delete without removing them |
+| (none) | Full removal after user confirmation |
 
-## Safety
+## Preserved
 
-- **--dry-run**: Shows files without deleting
-- **No task dirs**: Does NOT delete task directories (`.claude/tasks/*_task/`)
-- **No KNOWLEDGE**: Does NOT delete task knowledge files (within task dirs)
-- **No artifacts**: Does NOT delete task artifacts (within task dirs)
+Task directories (`.claude/tasks/*_task/`) and user rules (`.claude/rules/`) are always preserved.
 
 </instructions>
 

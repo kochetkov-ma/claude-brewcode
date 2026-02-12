@@ -1,6 +1,7 @@
 ---
 name: text-optimize
 description: "Optimizes text/files for LLM consumption (Claude 4.x/Opus 4.5). Modes: -l (light), default (medium), -d (deep). Triggers: prompt optimization, file optimization, token reduction, context compression."
+argument-hint: "[-l|-d] [file|folder|path1,path2] — -l light, -d deep, no flag = medium"
 user-invocable: true
 allowed-tools: [Read, Write, Edit, Grep, Glob, Task]
 ---
@@ -21,20 +22,17 @@ Parse `$ARGUMENTS`: `-l`/`--light` | `-d`/`--deep` | no flag → medium (default
 | Medium | _(default)_ | Balanced restructuring — all standard transformations |
 | Deep | `-d`, `--deep` | Max density — rephrase, merge, compress aggressively |
 
-### Light — safe, zero risk
 
-Allowed: remove filler, calm tone, positive framing, imperative form, fix refs/links.
-Forbidden: format conversion (prose→table), restructure lists, abbreviations, merge sections.
+## Usage Examples
 
-### Medium — balanced (default)
-
-All light + prose→tables, bullets→comma-separated, code blocks→inline, abbreviations (tables only), merge duplicates, XML tags.
-
-### Deep — max compression, review diff after
-
-All medium + rephrase long phrases→short/single word, abbreviations everywhere, merge related sections, remove redundant examples, multi-line→single line.
-
-> **Usage:** `text-optimize file.md` (medium) | `text-optimize -l file.md` (light) | `text-optimize -d file.md` (deep)
+| Command | Description |
+|---------|-------------|
+| `/focus-task:text-optimize` | Optimize ALL: `CLAUDE.md`, `.claude/agents/*.md`, `.claude/skills/**/SKILL.md` |
+| `/focus-task:text-optimize file.md` | Single file (medium mode) |
+| `/focus-task:text-optimize -l file.md` | Light mode — text cleanup only, structure untouched |
+| `/focus-task:text-optimize -d file.md` | Deep mode — max compression, review diff after |
+| `/focus-task:text-optimize path1.md, path2.md` | Multiple files — parallel processing |
+| `/focus-task:text-optimize -d agents/` | Directory — all `.md` files with specified mode |
 
 ## Core Principles (Anthropic Official)
 
@@ -62,8 +60,6 @@ All medium + rephrase long phrases→short/single word, abbreviations everywhere
 ❌ "Do not use markdown"          → ✅ "Write in flowing prose paragraphs"
 ```
 
-> **Word "think":** Opus 4.5 is sensitive to "think" and variants. When extended thinking is disabled, may trigger unexpected behavior. Replace with "consider", "evaluate", "believe".
-
 ### Prefer These Patterns
 
 | Pattern | Why |
@@ -75,16 +71,6 @@ All medium + rephrase long phrases→short/single word, abbreviations everywhere
 | Tell what TO DO | More effective than telling what NOT to do |
 | Match prompt style to output | Less markdown in prompt = less markdown in output |
 
-### Opus 4.5 Overengineering Prevention
-
-Opus 4.5 tends to overengineer. Add explicit constraints:
-
-```
-Avoid over-engineering. Only make changes directly requested or clearly necessary.
-Don't add features, refactor code, or make "improvements" beyond what was asked.
-Don't create helpers or abstractions for one-time operations.
-The right amount of complexity is the minimum needed for the current task.
-```
 
 ## Optimization Dimensions
 
@@ -130,7 +116,6 @@ The right amount of complexity is the minimum needed for the current task.
 | Keywords → **bold** | Emphasis (max 2-3/section) |
 | XML tags for sections | Clear boundary parsing |
 | Hierarchy via headers | Structured retrieval (max 3-4 levels) |
-| Progressive disclosure | Let agent discover context incrementally |
 
 ## Transformation Rules
 
@@ -220,10 +205,10 @@ Task(subagent_type: "Explore", prompt: "Analyze {file}: structure, dependencies,
 
 **Phase 2: Optimization** — Parallel text-optimizer agents
 
-> **REQUIRED:** Each agent MUST first read `$CLAUDE_PLUGIN_ROOT/skills/text-optimize/references/rules-review.md` for validation rules.
+> **Context:** FT_PLUGIN_ROOT is available in your context (injected by pre-task.mjs hook). Use it to access plugin resources.
 
 ```
-Task(subagent_type: "text-optimizer", prompt: "FIRST: Read $CLAUDE_PLUGIN_ROOT/skills/text-optimize/references/rules-review.md. THEN optimize {file} using {mode} mode. Apply transformations, verify refs, output report with metrics.")
+Task(subagent_type: "text-optimizer", prompt: "FIRST: Read $FT_PLUGIN_ROOT/skills/text-optimize/references/rules-review.md for validation rules. THEN optimize {file} using {mode} mode. Apply transformations, verify refs, output report with metrics.")
 ```
 
 > **Spawn parallel:** For multiple files, spawn ALL agents in ONE message for speed.
@@ -288,9 +273,3 @@ Task(subagent_type: "text-optimizer", prompt: "FIRST: Read $CLAUDE_PLUGIN_ROOT/s
 | "Don't do X" framing | Less effective than "Do Y" |
 | Overengineer prompts | Opus 4.5 follows literally |
 
-## Sources
-
-- [Claude 4 Best Practices](https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/claude-4-best-practices)
-- [Context Engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)
-- [Claude Code Best Practices](https://www.anthropic.com/engineering/claude-code-best-practices)
-- [Migrating to Claude 4.5](https://docs.anthropic.com/en/docs/about-claude/models/migrating-to-claude-4)

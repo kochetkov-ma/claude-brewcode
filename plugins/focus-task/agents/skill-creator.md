@@ -317,6 +317,18 @@ Use imperative form:
 | scripts/ | Python, JS, Bash (pre-installed packages only) |
 | assets/ | Templates, images (not loaded into context) |
 
+# Resource Path Resolution
+
+Skills receive base directory at execution. Use relative paths to reference resources (references/, scripts/, assets/):
+
+```markdown
+# Example in SKILL.md:
+Read `references/api-spec.md` for API details.
+Read `scripts/validate.sh` before execution.
+```
+
+Claude resolves relative paths → `{skill_base_dir}/path` automatically.
+
 # Executable Bash
 
 Bash blocks are examples unless marked for execution.

@@ -143,47 +143,6 @@ Remove server name from the appropriate disabled array.
 4. Show diff of what changed
 5. Output: "Restart Claude Code session to apply changes."
 
-## Mode: help
-
-```markdown
-## MCP Config Skill
-
-**Usage:** /mcp-config [mode] [arguments]
-
-### Modes
-
-| Mode | Usage | Description |
-|------|-------|-------------|
-| status | `/mcp-config` or `/mcp-config status` | Show all MCP servers across scopes |
-| prompt | `/mcp-config disable playwright` | Free-form configuration request |
-| help | `/mcp-config help` | Show this help |
-
-### Examples
-
-```
-/mcp-config                           # Show status
-/mcp-config disable playwright        # Disable for this project
-/mcp-config enable grepai             # Enable for this project
-/mcp-config add context7 to project   # Add to .mcp.json
-/mcp-config disable plugin:serena:serena  # Disable plugin MCP
-```
-
-### Config File Locations
-
-| Scope | File | Purpose |
-|-------|------|---------|
-| Global | ~/.claude.json | Global servers + per-project overrides |
-| Project | ./.mcp.json | Project-specific servers |
-| Plugin | ~/.claude/plugins/.../plugin.json | Plugin-provided servers |
-
-### Key Concepts
-
-- **Tool Search:** At >10% context, MCP tools defer loading (lazy)
-- **Plugin MCP format:** `plugin:{plugin-name}:{server-name}`
-- **Changes require:** Session restart to take effect
-- **Duplicates:** MCP descriptions in CLAUDE.md are redundant
-```
-
 ## Config File Reference
 
 ### ~/.claude.json Structure
@@ -235,12 +194,3 @@ Remove server name from the appropriate disabled array.
 }
 ```
 
-## Key Points
-
-| Point | Details |
-|-------|---------|
-| Session restart | Required after any config change |
-| Tool Search | Activates at >10% context, defers MCP tool loading |
-| Plugin MCP format | `plugin:{plugin-name}:{server-name}` |
-| CLAUDE.md duplicates | Waste tokens - MCP descriptions auto-load |
-| Lazy loading | MCP servers start on first tool use |

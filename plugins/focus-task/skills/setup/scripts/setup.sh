@@ -22,6 +22,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_ROOT="$(dirname "$(dirname "$(dirname "$SCRIPT_DIR")")")"
 PLUGIN_TEMPLATES="$PLUGIN_ROOT/templates"
 PLUGIN_SKILLS="$PLUGIN_ROOT/skills"
+SETUP_TEMPLATES="$PLUGIN_ROOT/skills/setup/templates"
 
 # Validate plugin structure
 validate_plugin() {
@@ -29,8 +30,8 @@ validate_plugin() {
     echo "❌ Plugin root not found: $PLUGIN_ROOT"
     exit 1
   fi
-  if [ ! -d "$PLUGIN_TEMPLATES" ]; then
-    echo "❌ Templates not found: $PLUGIN_TEMPLATES"
+  if [ ! -d "$SETUP_TEMPLATES" ]; then
+    echo "❌ Setup templates not found: $SETUP_TEMPLATES"
     exit 1
   fi
 }
@@ -102,9 +103,9 @@ sync_templates() {
     fi
   }
 
-  sync_template "$PLUGIN_TEMPLATES/PLAN.md.template" ".claude/tasks/templates/PLAN.md.template"
-  sync_template "$PLUGIN_TEMPLATES/SPEC.md.template" ".claude/tasks/templates/SPEC.md.template"
-  sync_template "$PLUGIN_TEMPLATES/KNOWLEDGE.jsonl.template" ".claude/tasks/templates/KNOWLEDGE.jsonl.template"
+  sync_template "$SETUP_TEMPLATES/PLAN.md.template" ".claude/tasks/templates/PLAN.md.template"
+  sync_template "$SETUP_TEMPLATES/SPEC.md.template" ".claude/tasks/templates/SPEC.md.template"
+  sync_template "$SETUP_TEMPLATES/KNOWLEDGE.jsonl.template" ".claude/tasks/templates/KNOWLEDGE.jsonl.template"
 
   # grepai-first: always sync (plugin-managed rule)
   if [ -f "$PLUGIN_TEMPLATES/rules/grepai-first.md.template" ]; then
@@ -163,7 +164,7 @@ copy_config() {
   echo "=== Phase 3.6: Config ==="
   validate_plugin
 
-  TEMPLATE="$PLUGIN_TEMPLATES/focus-task.config.json.template"
+  TEMPLATE="$SETUP_TEMPLATES/focus-task.config.json.template"
   PROJECT_CFG=".claude/tasks/cfg/focus-task.config.json"
 
   mkdir -p .claude/tasks/cfg

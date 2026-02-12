@@ -130,7 +130,7 @@ echo "| brew | ✅ |"
 | `$CLAUDE_PLUGIN_ROOT` | Hooks only |
 | `$PLUGIN_ROOT/skills/X/scripts/` | All contexts |
 
-> In Skills/Agents: `FT_PLUGIN=$(ls -vd "$HOME/.claude/plugins/cache/claude-brewcode/focus-task"/*/ 2>/dev/null | tail -1)`
+> In Skills/Agents: Use `$FT_PLUGIN_ROOT` (injected by pre-task.mjs hook)
 
 ## 6. Homebrew
 
@@ -246,7 +246,7 @@ Validate: `cmd && echo "✅" || echo "❌ FAILED"`
 
 Stop on error: `> **STOP if ❌** — fix before continuing.`
 
-Plugin root: `FT_PLUGIN=$(ls -vd "$HOME/.claude/plugins/cache/claude-brewcode/focus-task"/*/ 2>/dev/null | tail -1)`
+Plugin root: `$FT_PLUGIN_ROOT` (injected by pre-task.mjs hook)
 
 ## 11. Checklist
 

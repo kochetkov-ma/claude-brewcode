@@ -12,23 +12,17 @@ Remove AI artifacts, simplify documentation. Orchestrates parallel sub-agents fo
 
 ## Language References
 
-> **CRITICAL:** Load the appropriate reference based on project context BEFORE processing!
-
 | Language | Reference | Load When |
 |----------|-----------|-----------|
 | Java/Kotlin | `@reference/java.md` | `*.java`, `*.kt`, `*.groovy`, Spring, Maven/Gradle |
 | TypeScript/JS/React | `@reference/typescript.md` | `*.ts`, `*.tsx`, `*.js`, `*.jsx`, Node.js, React |
 | Python | `@reference/python.md` | `*.py`, Django, FastAPI, Flask |
 
-**How to detect:** Check file extensions in scope, `package.json`/`pom.xml`/`pyproject.toml`, framework markers.
-
-**Multi-language projects:** Load ALL relevant references.
+Multi-language projects: Load ALL relevant references.
 
 ---
 
 ## Argument
-
-> Request commit hash or path if missing.
 
 **First token** = scope (required):
 
@@ -128,12 +122,14 @@ Data files block: YAML, JSON, CSV with comments → haiku for unicode fixes
 Launch all Task calls in single message for true parallelism.
 
 ```
-Task(subagent_type="developer", model="haiku", prompt="[CUSTOM_INSTRUCTIONS_IF_ANY]\nBlock 1: [files] [rules] Return JSON")
-Task(subagent_type="developer", model="sonnet", prompt="[CUSTOM_INSTRUCTIONS_IF_ANY]\nBlock 2: [files] [rules] Return JSON")
+Task(subagent_type="developer", model="haiku", prompt="> **Context:** FT_PLUGIN_ROOT is available in your context (injected by pre-task.mjs hook).\n\n[CUSTOM_INSTRUCTIONS_IF_ANY]\nBlock 1: [files] [rules] Return JSON")
+Task(subagent_type="developer", model="sonnet", prompt="> **Context:** FT_PLUGIN_ROOT is available in your context (injected by pre-task.mjs hook).\n\n[CUSTOM_INSTRUCTIONS_IF_ANY]\nBlock 2: [files] [rules] Return JSON")
 ```
 
-If custom prompt was provided, prepend to EVERY sub-agent prompt:
+If custom prompt was provided, prepend to EVERY sub-agent prompt (after the Context line):
 ```
+> **Context:** FT_PLUGIN_ROOT is available in your context (injected by pre-task.mjs hook).
+
 CUSTOM INSTRUCTIONS (highest priority, override defaults):
 <user's custom prompt text>
 ---
@@ -173,8 +169,6 @@ Keep project-specific ticket patterns (INTELDEV-XXXXX, JIRA-XXXXX, GH-XXX). Remo
 
 ## Documentation Cleanup (General Principles)
 
-> **Language-specific rules:** See loaded reference file.
-
 | Remove | Keep |
 |--------|------|
 | Private/internal function docs | Public API documentation |
@@ -183,12 +177,7 @@ Keep project-specific ticket patterns (INTELDEV-XXXXX, JIRA-XXXXX, GH-XXX). Remo
 | Trivial parameter docs (restates name) | `@throws`/`Raises` with conditions |
 | Trivial return docs (restates function) | External API contracts |
 
-### Key Principle
-
-**NEVER convert block docs to inline comments.** Two rules:
-
-1. **Doc is unnecessary** → DELETE entirely, no replacement
-2. **Doc has useful description but trivial params** → strip params, keep description
+**Key Rule:** Never convert block docs to inline comments. Delete unnecessary docs entirely; for useful descriptions with trivial params, strip params and keep description.
 
 ## Comments (Universal)
 
@@ -282,17 +271,15 @@ Custom prompt overrides or extends default rules. Use for:
 
 ## Best Practices
 
-| Do | Why |
-|----|-----|
-| Load language reference first | Language-specific rules |
-| Process all commit files | Include yaml/data files |
-| Check yaml for unicode | Comments may have arrows |
-| Preserve valuable comments | Some add context |
-| Skip binaries | Avoid corruption |
-| Honor style reference | User requested |
-| Keep public API docs | Usability |
-| Group by complexity | Efficient model use |
-| Launch agents in parallel | Performance |
+- Load language reference first
+- Process all commit files (include yaml/data files)
+- Check yaml for unicode (comments may have arrows)
+- Preserve valuable comments (they add context)
+- Skip binaries (avoid corruption)
+- Honor style reference if provided
+- Keep public API docs
+- Group files by complexity
+- Launch agents in parallel
 
 ## Error Handling
 

@@ -2,33 +2,14 @@
 name: focus-task:spec
 description: Creates specification through research and user interaction. Triggers "create spec", "spec task", "focus-task spec".
 user-invocable: true
-argument-hint: "Task description or path to requirements file"
+argument-hint: "<description> | <path-to-requirements> — task description or file"
 allowed-tools: Read, Write, Glob, Grep, Bash, Task, AskUserQuestion
 model: opus
 ---
 
-Create Spec — "description" or path to requirements
-
 <instructions>
 
-## TOKEN-EFFICIENT FORMATTING
-
-**Rules for Opus 4.5 context optimization:**
-- Tables over prose (3x denser)
-- `|` separators, no verbose descriptions
-- One-line rules with `→` for implications
-- Lists: `-` not `1.` (saves chars)
-- No redundant headers/whitespace
-- Code: inline `backticks` over blocks when <3 lines
-- Abbreviate: REQ, impl, cfg, env, arg, ret, err
-
----
-
-## /focus-task:spec Instructions
-
-**ROLE:** Spec Creator | **OUTPUT:** SPEC.md in task directory
-
-### Input Handling
+## Input Handling
 
 | Input | Action |
 |-------|--------|
@@ -99,6 +80,8 @@ Create Spec — "description" or path to requirements
 
    **Agent prompt template:**
    ```
+   > **Context:** FT_PLUGIN_ROOT is available in your context (injected by pre-task.mjs hook).
+
    Analyze {AREA} for task: "{TASK_DESCRIPTION}"
    Focus: patterns, reusable code, risks, constraints
    Context files: {FILES_IN_AREA}
@@ -128,9 +111,11 @@ Create Spec — "description" or path to requirements
 7. **Review SPEC** (reviewer agent + fix loop)
 
    ```
-   Task(subagent_type="reviewer", prompt="Review SPEC at {SPEC_PATH}
-    Check: completeness, consistency, feasibility, risks
-    Output: list of remarks with severity (critical/major/minor), specific fixes")
+   Task(subagent_type="reviewer", prompt="> **Context:** FT_PLUGIN_ROOT is available in your context (injected by pre-task.mjs hook).
+
+   Review SPEC at {SPEC_PATH}
+   Check: completeness, consistency, feasibility, risks
+   Output: list of remarks with severity (critical/major/minor), specific fixes")
    ```
 
    **Iteration loop:**

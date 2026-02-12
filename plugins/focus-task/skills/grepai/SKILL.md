@@ -13,25 +13,13 @@ model: sonnet
 
 <instructions>
 
-## Prerequisites
-
-**EXECUTE FIRST** — resolve plugin path:
-```bash
-FT_PLUGIN=$(ls -vd "$HOME/.claude/plugins/cache/claude-brewcode/focus-task"/*/ 2>/dev/null | tail -1)
-test -n "$FT_PLUGIN" && echo "✅ FT_PLUGIN=$FT_PLUGIN" || echo "❌ Plugin not found in cache"
-```
-
-> **STOP if ❌** — run: `claude plugin add claude-brewcode/focus-task`
-
----
-
 ## Mode Detection
 
 ### Step 1: Detect Mode (MANDATORY FIRST STEP)
 
 **EXECUTE** using Bash tool — detect mode from skill arguments:
 ```bash
-bash "$FT_PLUGIN/skills/grepai/scripts/detect-mode.sh" "$ARGUMENTS"
+bash scripts/detect-mode.sh "$ARGUMENTS"
 ```
 
 Use `$ARGUMENTS` directly - it contains the skill invocation arguments.
@@ -71,7 +59,7 @@ Full grepai installation and project setup.
 
 **EXECUTE** using Bash tool:
 ```bash
-bash "$FT_PLUGIN/skills/grepai/scripts/infra-check.sh" && echo "✅ infra-check" || echo "❌ infra-check FAILED"
+bash scripts/infra-check.sh && echo "✅ infra-check" || echo "❌ infra-check FAILED"
 ```
 
 > **STOP if ❌** — install missing components before continuing.
@@ -80,14 +68,10 @@ bash "$FT_PLUGIN/skills/grepai/scripts/infra-check.sh" && echo "✅ infra-check"
 
 **EXECUTE** using Bash tool:
 ```bash
-bash "$FT_PLUGIN/skills/grepai/scripts/mcp-check.sh" && echo "✅ mcp-check" || echo "❌ mcp-check FAILED"
+bash scripts/mcp-check.sh && echo "✅ mcp-check" || echo "❌ mcp-check FAILED"
 ```
 
-This script configures:
-1. **MCP Server** — adds `grepai` to `~/.claude.json` (user scope)
-2. **Permissions** — adds `mcp__grepai__*` to `~/.claude/settings.json` allowedTools
-
-> **Why permissions?** All grepai tools are read-only, but Claude Code marks MCP tools as `[destructive]` by default. This setting prevents permission prompts.
+This script configures MCP server and allowedTools permissions.
 
 > **STOP if ❌** — fix MCP configuration before continuing.
 
@@ -101,25 +85,26 @@ This script configures:
 | `prompt` | `Configure grepai for this project. Analyze all build files, test patterns, source structure. Generate optimal .grepai/config.yaml.` |
 | `model` | `opus` |
 
+> **Context:** `FT_PLUGIN_ROOT` is available in agent context (injected by pre-task.mjs hook).
+
 > **WAIT** for agent to complete before proceeding.
 
 ### Phase 4: Initialize Index
 
 **EXECUTE** using Bash tool:
 ```bash
-bash "$FT_PLUGIN/skills/grepai/scripts/init-index.sh" && echo "✅ init-index" || echo "❌ init-index FAILED"
+bash scripts/init-index.sh && echo "✅ init-index" || echo "❌ init-index FAILED"
 ```
 
 > **STOP if ❌** — check `.grepai/logs/grepai-watch.log` for errors.
 
-> ⏳ **INDEXING IS SYNCHRONOUS.** Script waits for `grepai watch` initial scan to complete.
-> Large projects (5k+ files) take 10-30+ min. Log: `.grepai/logs/grepai-watch.log` | Monitor: `tail -f .grepai/logs/grepai-watch.log`
+> ⏳ **Synchronous — Large projects (5k+ files) take 10-30+ min.** Monitor: `tail -f .grepai/logs/grepai-watch.log`
 
 ### Phase 5: Create Rule
 
 **EXECUTE** using Bash tool:
 ```bash
-bash "$FT_PLUGIN/skills/grepai/scripts/create-rule.sh" && echo "✅ create-rule" || echo "❌ create-rule FAILED"
+bash scripts/create-rule.sh && echo "✅ create-rule" || echo "❌ create-rule FAILED"
 ```
 
 > **STOP if ❌** — manually create rule in `.claude/rules/`.
@@ -128,7 +113,7 @@ bash "$FT_PLUGIN/skills/grepai/scripts/create-rule.sh" && echo "✅ create-rule"
 
 **EXECUTE** using Bash tool:
 ```bash
-bash "$FT_PLUGIN/skills/grepai/scripts/verify.sh" && echo "✅ verify" || echo "❌ verify FAILED"
+bash scripts/verify.sh && echo "✅ verify" || echo "❌ verify FAILED"
 ```
 
 ---
@@ -137,7 +122,7 @@ bash "$FT_PLUGIN/skills/grepai/scripts/verify.sh" && echo "✅ verify" || echo "
 
 **EXECUTE** using Bash tool:
 ```bash
-bash "$FT_PLUGIN/skills/grepai/scripts/status.sh" && echo "✅ status" || echo "❌ status FAILED"
+bash scripts/status.sh && echo "✅ status" || echo "❌ status FAILED"
 ```
 
 ---
@@ -146,7 +131,7 @@ bash "$FT_PLUGIN/skills/grepai/scripts/status.sh" && echo "✅ status" || echo "
 
 **EXECUTE** using Bash tool:
 ```bash
-bash "$FT_PLUGIN/skills/grepai/scripts/start.sh" && echo "✅ start" || echo "❌ start FAILED"
+bash scripts/start.sh && echo "✅ start" || echo "❌ start FAILED"
 ```
 
 ---
@@ -155,7 +140,7 @@ bash "$FT_PLUGIN/skills/grepai/scripts/start.sh" && echo "✅ start" || echo "�
 
 **EXECUTE** using Bash tool:
 ```bash
-bash "$FT_PLUGIN/skills/grepai/scripts/stop.sh" && echo "✅ stop" || echo "❌ stop FAILED"
+bash scripts/stop.sh && echo "✅ stop" || echo "❌ stop FAILED"
 ```
 
 ---
@@ -166,11 +151,10 @@ Full index rebuild: stop watch → clean → rebuild → restart.
 
 **EXECUTE** using Bash tool:
 ```bash
-bash "$FT_PLUGIN/skills/grepai/scripts/reindex.sh" && echo "✅ reindex" || echo "❌ reindex FAILED"
+bash scripts/reindex.sh && echo "✅ reindex" || echo "❌ reindex FAILED"
 ```
 
-> ⏳ **REINDEXING IS SYNCHRONOUS.** Script waits for `grepai watch` to complete initial scan.
-> Log: `.grepai/logs/grepai-watch.log` | Monitor: `tail -f .grepai/logs/grepai-watch.log`
+> ⏳ **Synchronous — Monitor: `tail -f .grepai/logs/grepai-watch.log`**
 
 ---
 
@@ -182,7 +166,7 @@ Re-analyze project and regenerate config with backup.
 
 **EXECUTE** using Bash tool:
 ```bash
-bash "$FT_PLUGIN/skills/grepai/scripts/optimize.sh" && echo "✅ optimize-backup" || echo "❌ optimize-backup FAILED"
+bash scripts/optimize.sh && echo "✅ optimize-backup" || echo "❌ optimize-backup FAILED"
 ```
 
 > **STOP if ❌** — check if .grepai/config.yaml exists.
@@ -197,13 +181,15 @@ bash "$FT_PLUGIN/skills/grepai/scripts/optimize.sh" && echo "✅ optimize-backup
 | `prompt` | `Re-analyze project and regenerate .grepai/config.yaml. Compare with existing config, optimize boost patterns, update trace languages.` |
 | `model` | `opus` |
 
+> **Context:** `FT_PLUGIN_ROOT` is available in agent context (injected by pre-task.mjs hook).
+
 > **WAIT** for agent to complete.
 
 ### Step 3: Reindex with new config
 
 **EXECUTE** using Bash tool:
 ```bash
-bash "$FT_PLUGIN/skills/grepai/scripts/reindex.sh" && echo "✅ reindex" || echo "❌ reindex FAILED"
+bash scripts/reindex.sh && echo "✅ reindex" || echo "❌ reindex FAILED"
 ```
 
 ---
@@ -214,26 +200,14 @@ Update grepai CLI via Homebrew.
 
 **EXECUTE** using Bash tool:
 ```bash
-bash "$FT_PLUGIN/skills/grepai/scripts/upgrade.sh" && echo "✅ upgrade" || echo "❌ upgrade FAILED"
+bash scripts/upgrade.sh && echo "✅ upgrade" || echo "❌ upgrade FAILED"
 ```
 
 ---
 
 ## Mode: prompt
 
-Ask user:
-```
-Which grepai operation?
-- setup    - Configure project (.grepai/config.yaml)
-- status   - Check health
-- start    - Start watcher
-- stop     - Stop watcher
-- reindex  - Rebuild index
-- optimize - Regenerate config
-- upgrade  - Update grepai CLI
-
-Prerequisites missing? Run /install first.
-```
+Ask user which operation (see Mode Reference table).
 
 </instructions>
 

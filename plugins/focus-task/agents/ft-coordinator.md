@@ -273,9 +273,7 @@ Coordinator checks: reports exist on disk?
 
 ### Report Templates
 
-Use templates from `{PLUGIN_ROOT}/templates/reports/`:
-> **Note:** `$CLAUDE_PLUGIN_ROOT` only works in hooks. For agents/skills, resolve path:
-> `FT_PLUGIN=$(ls -vd "$HOME/.claude/plugins/cache/claude-brewcode/focus-task"/*/ | tail -1)`
+Use templates from `$FT_PLUGIN_ROOT/templates/reports/`:
 - `FINAL.md.template`
 - `summary.md.template`
 - `agent_output.md.template`

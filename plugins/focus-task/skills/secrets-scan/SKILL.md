@@ -3,13 +3,11 @@ name: secrets-scan
 description: Scans ALL git-tracked files for secrets using 10 parallel haiku agents. Uses git ls-files, splits into 10 chunks, generates detailed report with full file inventory. Triggers - "scan for secrets", "find credentials", "security scan".
 user-invocable: true
 allowed-tools: [Read, Task, Write, Bash, AskUserQuestion]
-argument-hint: [--fix]
+argument-hint: "[--fix] — no args = scan only, --fix = interactive remediation"
 model: sonnet
 ---
 
 # Secrets Scan
-
-Scans all git-tracked files via 10 parallel haiku agents, generates full inventory report.
 
 <phase name="1-setup">
 
@@ -27,8 +25,6 @@ cat "$DIR/files.txt"
 ```
 
 > **STOP if ERROR** — must run in git repository.
-
-Store `DIR`, `REPO`, `TS`, file list.
 
 </phase>
 
@@ -141,8 +137,6 @@ Write `{DIR}/report.md`:
 {SKIP}
 </report-template>
 
-Truncate content at 50 chars.
-
 </phase>
 
 <phase name="5-summary">
@@ -178,15 +172,3 @@ Trigger: `--fix` arg OR CRITICAL/HIGH findings exist → AskUserQuestion
 | Skip | Done |
 
 </phase>
-
-<errors>
-
-## Error Handling
-
-| Error | Action |
-|-------|--------|
-| No files | Report "0 files" |
-| Invalid JSON | Use empty for that agent |
-| Read error | Add to skipped |
-
-</errors>

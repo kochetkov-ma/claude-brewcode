@@ -88,10 +88,12 @@ async function main() {
       }
     }
 
-    const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT || 'unknown';
+    const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT || '';
     const sessionShort = session_id?.slice(0, 8) || 'unknown';
 
-    let context = `focus-task: active | session: ${sessionShort}`;
+    let context = pluginRoot
+      ? `FT_PLUGIN_ROOT=${pluginRoot}\nfocus-task: active | session: ${sessionShort}`
+      : `focus-task: active | session: ${sessionShort}`;
 
     if (source === 'compact' && cwd && getActiveTaskPath(cwd)) {
       context += '\n\n[HANDOFF after compact] Re-read PLAN.md and KNOWLEDGE.jsonl, then continue current phase.';
