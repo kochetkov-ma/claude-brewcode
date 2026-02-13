@@ -1,15 +1,17 @@
 ---
 name: focus-task:rules
-description: Updates PROJECT .claude/rules/ (avoid.md, best-practice.md) from KNOWLEDGE.jsonl or session context. Supports specialized rule files ({prefix}-avoid.md). NEVER touches ~/.claude/rules/. Triggers - "update rules", "sync knowledge to rules", "extract rules".
+description: |
+  Syncs KNOWLEDGE.jsonl or session learnings to project rules.
+  Use when: updating rules, syncing knowledge, extracting session learnings, organizing anti-patterns, creating best practices.
+  Trigger keywords: rules, knowledge sync, avoid patterns, best practices, session rules, extract rules.
+  Triggers - "update rules", "sync to rules", "extract rules from session", "/rules".
 user-invocable: true
-argument-hint: "[list] | [<path>] | [<path> <prompt>] — list rules, sync file, or prompt mode"
+argument-hint: "[list] | [<path>] | [<path> <prompt>]"
 allowed-tools: Read, Bash, Task
 model: sonnet
 ---
 
-## Overview
-
-> ⚠️ **TARGET: PROJECT rules only!** Updates `{CWD}/.claude/rules/` — NEVER `~/.claude/rules/`
+> **TARGET:** Project `.claude/rules/` only. NEVER `~/.claude/rules/`
 
 <instructions>
 
@@ -17,12 +19,12 @@ model: sonnet
 
 **Arguments:** `$ARGUMENTS`
 
-```
-"list"            → list mode
-"<path> <text>"   → prompt mode
-"<path-to-file>"  → file mode
-(empty)           → session mode
-```
+| Input | Mode |
+|-------|------|
+| `list` | List mode |
+| `<path> <text>` | Prompt mode |
+| `<path-to-file>` | File mode |
+| (empty) | Session mode |
 
 ## List Mode
 
@@ -31,49 +33,49 @@ model: sonnet
 bash scripts/rules.sh list
 ```
 
-## File / Prompt / Session Mode → Delegate
+## File / Prompt / Session Mode
 
-### Spawn ft-rules-organizer Agent
+Spawn `ft-rules-organizer` agent via Task tool.
 
-Spawn via Task tool (`subagent_type: ft-rules-organizer`). Based on mode, prepare knowledge:
+### Prepare Knowledge by Mode
 
 | Mode | Preparation |
-|------|--------|
-| **file** | Read KNOWLEDGE.jsonl from arguments; parse `t:"❌"` → avoid, `t:"✅"` → practice |
-| **prompt** | Extract `<path>` (first arg) and `<prompt>` (rest) from arguments |
-| **session** | Extract **5 most impactful** findings from conversation: errors, fixes, patterns, gotchas. Format as `❌ avoid` or `✅ practice` |
+|------|-------------|
+| **file** | Read KNOWLEDGE.jsonl; parse `t:"❌"` → avoid, `t:"✅"` → practice |
+| **prompt** | Extract `<path>` (first arg), `<prompt>` (rest) |
+| **session** | Extract **5 most impactful** findings: errors, fixes, patterns. Format as `❌` or `✅` |
 
-Include in agent prompt:
-
-> **Context:** FT_PLUGIN_ROOT is available in your context (injected by pre-task.mjs hook).
+### Agent Prompt Template
 
 ```
 Update PROJECT .claude/rules/ — NEVER ~/.claude/rules/
 
 Plugin templates: $FT_PLUGIN_ROOT/templates/rules/
-Validation script: bash "$FT_PLUGIN_ROOT/skills/rules/scripts/rules.sh" validate
+Validation: bash "$FT_PLUGIN_ROOT/skills/rules/scripts/rules.sh" validate
 Create missing: bash "$FT_PLUGIN_ROOT/skills/rules/scripts/rules.sh" create
 
-Target files: avoid.md, best-practice.md, {prefix}-avoid.md, {prefix}-best-practice.md
+Targets: avoid.md, best-practice.md, {prefix}-avoid.md, {prefix}-best-practice.md
 
 MODE: {detected mode}
-KNOWLEDGE/PROMPT/FINDINGS: {prepared from above table}
+KNOWLEDGE: {prepared from table above}
 ```
+
+> `FT_PLUGIN_ROOT` injected by pre-task.mjs hook.
 
 ### Fallback
 
-If agent unavailable → report error: `ft-rules-organizer agent not available — ensure focus-task plugin is installed`
+Agent unavailable → error: `ft-rules-organizer not available — install focus-task plugin`
 
 </instructions>
 
 ## Output
 
-Agent returns its own report. Forward to user as-is.
+Forward agent report to user as-is.
 
 ## Error Handling
 
 | Condition | Action |
 |-----------|--------|
-| Agent unavailable | Report error, suggest installing agent |
-| No knowledge found | Report "No new rules extracted" |
-| Plugin not found | STOP with install instructions |
+| Agent unavailable | Error + install instructions |
+| No knowledge found | "No new rules extracted" |
+| Plugin not found | STOP + install instructions |

@@ -1,6 +1,7 @@
 ---
 name: focus-task:plan
-description: Creates execution plan (PLAN.md) from SPEC or Plan Mode file. Triggers "create plan", "plan task", "focus-task plan".
+description: Creates execution plan (PLAN.md) from SPEC or Plan Mode file. Invoke via /focus-task:plan only.
+disable-model-invocation: true
 user-invocable: true
 argument-hint: "[task-dir|SPEC.md|plan-file] — defaults to .claude/TASK.md ref"
 allowed-tools: Read, Write, Glob, Grep, Bash, Task, AskUserQuestion

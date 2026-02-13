@@ -32,6 +32,77 @@
 
 ---
 
+## [2.14.0] - 2026-02-13
+
+### Added
+
+- **text-optimize rules** — 4 new rules from multi-agent research (8 parallel agents)
+  - S.7: Consistent Terminology — one term per concept, no synonyms. Source: agent-skills best-practices (official)
+  - S.8: One-Level Reference Depth — no ref chaining A→B→C. Source: agent-skills best-practices (official)
+  - P.5: Instruction Order (Anchoring) — critical constraints first. Source: ACM FAT 2025 (peer-reviewed)
+  - P.6: Default Over Options — recommend one default, exceptions only. Source: agent-skills best-practices (official)
+  - 2 new anti-patterns: overloading single prompts, over-focusing on wording
+  - Total rules: 27 → 31 (27 verified, 4 conditional)
+
+### Changed
+
+- **text-optimizer agent** — Step 0 validation rewritten
+  - Removed Bash `test -f` (agent doesn't have Bash tool)
+  - Now uses Read tool + header verification (`## C - Claude Behavior`, `## Summary`)
+  - Explicit stop condition if read fails or headers missing
+- **text-optimizer agent** — Step 2 rule ranges updated (S.1-S.8, P.1-P.6)
+- **text-optimize SKILL.md** — Rule ID Quick Reference, ID-to-Rule Mapping, Mode-to-Rules updated for new rules
+
+### Files
+
+- `skills/text-optimize/references/rules-review.md` — +4 rules, +2 anti-patterns, +1 source
+- `skills/text-optimize/SKILL.md` — updated tables and mappings
+- `agents/text-optimizer.md` — Step 0 rewrite, Step 2 range update
+
+---
+
+## [2.13.2] - 2026-02-13
+
+### Fixed
+
+- **skill-creator agent** — path resolution rules clarified
+  - Added `⚠️ CRITICAL: USE RELATIVE PATHS!` warning
+  - Direct calls (Read, Bash in SKILL.md) → relative paths (`scripts/foo.sh`)
+  - Exception: passing path to agent via Task tool → use `$FT_PLUGIN_ROOT`
+  - Table with ❌ NEVER / ✅ ALWAYS examples
+
+- **skillsup skill** — fixed absolute paths bug
+  - Changed `$FT_PLUGIN_ROOT/skills/skillsup/scripts/...` → `scripts/...`
+  - 3 bash commands now use relative paths
+
+### Files
+
+- `agents/skill-creator.md` — Resource Path Resolution section rewritten
+- `skills/skillsup/SKILL.md` — relative paths for bash commands
+
+---
+
+## [2.13.1] - 2026-02-13
+
+### Changed
+
+- **skill-creator agent** — invocation type awareness
+  - Added `AskUserQuestion` tool for clarifying who invokes skill
+  - User-only skills (`disable-model-invocation: true`) get simple one-liner description
+  - LLM-invocable skills require full trigger optimization
+  - Decision table: user-only vs LLM-only vs both
+
+- **skillsup skill** — simplified description
+  - One-liner description (user-invocable only, no triggers needed)
+  - Added `AskUserQuestion` to allowed-tools
+
+### Files
+
+- `agents/skill-creator.md` — invocation type section, description optimization split
+- `skills/skillsup/SKILL.md` — simplified frontmatter
+
+---
+
 ## [2.13.0] - 2026-02-13
 
 ### Added

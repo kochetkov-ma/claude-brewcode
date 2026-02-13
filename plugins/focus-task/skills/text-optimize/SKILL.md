@@ -1,20 +1,24 @@
 ---
 name: text-optimize
-description: "Optimizes text/files for LLM consumption (Claude 4.x/Opus 4.5). Modes: -l (light), default (medium), -d (deep). Triggers: prompt optimization, file optimization, token reduction, context compression."
+description: |
+  Optimizes text and files for LLM token efficiency.
+  Use when: optimizing prompts, reducing tokens, compressing context, improving CLAUDE.md, cleaning agents/skills, shrinking docs, refactoring for density.
+  Trigger keywords: optimize, compress, reduce tokens, shrink, cleanup, dense, condense, refactor, slim, tighten, efficient.
 argument-hint: "[-l|-d] [file|folder|path1,path2] — -l light, -d deep, no flag = medium"
 user-invocable: true
 allowed-tools: [Read, Write, Edit, Grep, Glob, Task]
 ---
 
-# Text & File Optimizer for Claude 4.x / Opus 4.5
+# Text & File Optimizer
 
-> **FIRST:** Read `references/rules-review.md` for rule evidence and validation details.
+## Step 0: Load Rules
 
-Optimize any text/file for maximum LLM effectiveness.
+> **REQUIRED:** Read `references/rules-review.md` before ANY optimization.
+> If file not found -> ERROR + STOP. Do not proceed without rules reference.
 
 ## Modes
 
-Parse `$ARGUMENTS`: `-l`/`--light` | `-d`/`--deep` | no flag → medium (default).
+Parse `$ARGUMENTS`: `-l`/`--light` | `-d`/`--deep` | no flag -> medium (default).
 
 | Mode | Flag | Scope |
 |------|------|-------|
@@ -22,6 +26,44 @@ Parse `$ARGUMENTS`: `-l`/`--light` | `-d`/`--deep` | no flag → medium (default
 | Medium | _(default)_ | Balanced restructuring — all standard transformations |
 | Deep | `-d`, `--deep` | Max density — rephrase, merge, compress aggressively |
 
+## Rule ID Quick Reference
+
+| Category | Rule IDs | Scope |
+|----------|----------|-------|
+| Claude behavior | C.1-C.6 | Literal following, avoid "think", positive framing, match style, descriptive instructions, overengineering |
+| Token efficiency | T.1-T.8 | Tables, bullets, one-liners, inline code, abbreviations, filler, comma lists, arrows |
+| Structure | S.1-S.8 | XML tags, imperative, single source, context/motivation, blockquotes, progressive disclosure, consistent terminology, ref depth |
+| Reference integrity | R.1-R.3 | Verify file paths, check URLs, linearize circular refs |
+| Perception | P.1-P.6 | Examples near rules, hierarchy, bold keywords, standard symbols, instruction order, default over options |
+
+### ID-to-Rule Mapping
+
+| ID | Rule | ID | Rule |
+|----|------|----|------|
+| C.1 | Literal instruction following | C.2 | Avoid "think" word |
+| C.3 | Positive framing (do Y not don't X) | C.4 | Match prompt style to output |
+| C.5 | Descriptive over emphatic instructions | C.6 | Overengineering prevention |
+| T.1 | Tables over prose (multi-column) | T.2 | Bullets over numbered (~5-10%) |
+| T.3 | One-liners for rules | T.4 | Inline code over blocks |
+| T.5 | Standard abbreviations (tables only) | T.6 | Remove filler words |
+| T.7 | Comma-separated inline lists | T.8 | Arrows for flow notation |
+| S.1 | XML tags for sections | S.2 | Imperative form |
+| S.3 | Single source of truth | S.4 | Add context/motivation |
+| S.5 | Blockquotes for critical | S.6 | Progressive disclosure |
+| R.1 | Verify file paths | R.2 | Check URLs |
+| R.3 | Linearize circular refs | P.1 | Examples near rules |
+| P.2 | Hierarchy via headers (max 3-4) | P.3 | Bold for keywords (max 2-3/100 lines) |
+| P.4 | Standard symbols (→ + / ✅❌⚠️) | | |
+| S.7 | Consistent terminology | S.8 | One-level reference depth |
+| P.5 | Instruction order (anchoring) | P.6 | Default over options |
+
+## Mode-to-Rules Mapping
+
+| Mode | Applies | Notes |
+|------|---------|-------|
+| Light | C.1-C.6, T.6, R.1-R.3, P.1-P.4 | Text cleanup only — no restructuring |
+| Medium | All rules (C + T + S + R + P) | Balanced transformations |
+| Deep | All rules + aggressive rephrasing | Merge sections, max compression |
 
 ## Usage Examples
 
@@ -33,157 +75,6 @@ Parse `$ARGUMENTS`: `-l`/`--light` | `-d`/`--deep` | no flag → medium (default
 | `/focus-task:text-optimize -d file.md` | Deep mode — max compression, review diff after |
 | `/focus-task:text-optimize path1.md, path2.md` | Multiple files — parallel processing |
 | `/focus-task:text-optimize -d agents/` | Directory — all `.md` files with specified mode |
-
-## Core Principles (Anthropic Official)
-
-| Principle | Source | Impact |
-|-----------|--------|--------|
-| Smallest high-signal tokens | Context Engineering | Core philosophy |
-| Explicit > implicit | Claude 4.5 training | Precise following |
-| XML tags for structure | Claude 4.x docs | Better parsing |
-| Tables 3x denser than prose | Anthropic research | -30-50% tokens |
-| Dial back aggressive language | Opus 4.5 migration | Reduce overtriggering |
-| Tell what TO DO, not what NOT to do | Claude 4 Best Practices | Better steering |
-
-## Claude 4.5 / Opus 4.5 Specific
-
-> Claude 4.x takes instructions literally. Earlier versions inferred intent; 4.x does what asked.
-
-### Avoid These Patterns
-
-```
-❌ "CRITICAL: You MUST use..."    → ✅ "Use this tool when..."
-❌ "think about..."               → ✅ "consider/evaluate/believe..."
-❌ "You should do X"              → ✅ "Do X" (imperative)
-❌ "Please note that..."          → ✅ Direct statement
-❌ "It's important to..."         → ✅ > **Note:** ...
-❌ "Do not use markdown"          → ✅ "Write in flowing prose paragraphs"
-```
-
-### Prefer These Patterns
-
-| Pattern | Why |
-|---------|-----|
-| Add context/motivation | Claude generalizes from explanation |
-| Explicit feature requests | 4.x won't "go above and beyond" by default |
-| XML tags for sections | `<rules>`, `<examples>`, `<constraints>` |
-| Examples near rules | Better pattern recognition |
-| Tell what TO DO | More effective than telling what NOT to do |
-| Match prompt style to output | Less markdown in prompt = less markdown in output |
-
-
-## Optimization Dimensions
-
-### 1. Token Efficiency (structural)
-
-> **`code` > prose:** Inline code beats text explanation of same length. Example: `List.of()` vs "use immutable list factory method" — code wins.
-
-| Transformation | Savings | When |
-|----------------|---------|------|
-| Prose → Tables | ~66% (3x denser) | Multi-column data |
-| Numbered → Bullets | ~10% | Order irrelevant |
-| Verbose → One-liner | ~40% | Simple rules |
-| Bullet list → Comma-separated | ~50% | `a, b, c` inline when saving space |
-| Code block → Inline | ~30% | <3 lines |
-| Text → Inline `code` | ~30% | Short identifiers |
-| Full → Abbreviation | ~20% | Tables only |
-
-### 2. Logic & Clarity (semantic)
-
-| Check | Fix |
-|-------|-----|
-| Contradictions | Resolve or flag |
-| Ambiguity | Make explicit |
-| Redundancy | Merge (single source of truth) |
-| Missing context | Add motivation/why |
-| Implicit assumptions | State explicitly |
-| "Don't do X" | Reframe as "Do Y instead" |
-
-### 3. Reference Integrity
-
-| Issue | Action |
-|-------|--------|
-| Broken file refs | Verify paths exist |
-| Dead URLs | Check or remove |
-| Circular refs | Linearize |
-| Orphan refs | Connect or remove |
-
-### 4. LLM Perception (attention)
-
-| Optimization | Effect |
-|--------------|--------|
-| Critical → blockquotes | Higher attention weight |
-| Keywords → **bold** | Emphasis (max 2-3/section) |
-| XML tags for sections | Clear boundary parsing |
-| Hierarchy via headers | Structured retrieval (max 3-4 levels) |
-
-## Transformation Rules
-
-### Format (verified effective)
-
-```
-❌ Prose paragraphs           → ✅ Tables (multi-column only)
-❌ Single-column tables       → ✅ Bullet lists
-❌ `1. 2. 3.` numbered        → ✅ `- - -` bullets (if order irrelevant)
-❌ 5-line code block          → ✅ Inline `code` if <3 lines
-❌ Bullet per item            → ✅ Comma-separated `a, b, c` inline
-❌ Repetition across sections → ✅ Single source of truth
-❌ Decorative emojis          → ✅ Status only: ✅❌⚠️
-❌ "Don't do X"               → ✅ "Do Y" (positive framing)
-```
-
-### Structure (XML for Claude 4.x)
-
-```xml
-<section_name>
-Content with clear boundaries
-</section_name>
-
-<rules>
-- Rule 1
-- Rule 2
-</rules>
-
-<examples>
-Example content
-</examples>
-```
-
-### Agentic XML Patterns (Official)
-
-For proactive tool usage:
-```xml
-<default_to_action>
-By default, implement changes rather than only suggesting them.
-If user's intent is unclear, infer the most useful action and proceed.
-</default_to_action>
-```
-
-For parallel execution:
-```xml
-<use_parallel_tool_calls>
-If you intend to call multiple tools and there are no dependencies,
-make all independent calls in parallel. Maximize parallel tool calls
-where possible. Never use placeholders or guess missing parameters.
-</use_parallel_tool_calls>
-```
-
-Against hallucinations:
-```xml
-<investigate_before_answering>
-Never speculate about code you have not opened. If user references
-a specific file, you MUST read it before answering. Give grounded,
-hallucination-free answers.
-</investigate_before_answering>
-```
-
-### Abbreviations (tables/technical only)
-
-| Full | Abbrev | Full | Abbrev |
-|------|--------|------|--------|
-| Required | REQ | Optional | OPT |
-| Implementation | impl | Configuration | cfg |
-| Arguments | args | Returns | ret |
 
 ## File Processing
 
@@ -218,26 +109,25 @@ Task(subagent_type: "text-optimizer", prompt: "FIRST: Read $FT_PLUGIN_ROOT/skill
 ### Before
 - [ ] Read entire text
 - [ ] Identify type (prompt, docs, agent, skill)
-- [ ] Note critical info
-- [ ] Check references/links
+- [ ] Note critical info and cross-references
 
-### During
-- [ ] Respect mode constraints (light: text only | medium: restructure | deep: compress)
-- [ ] No information loss (all modes)
-- [ ] Tables for multi-column only (medium+)
-- [ ] One-liners for rules (medium+)
-- [ ] XML tags for major sections (medium+)
-- [ ] Remove filler words (all modes)
-- [ ] Merge duplicates (medium+)
-- [ ] Calm aggressive language (all modes)
-- [ ] Positive framing (all modes)
-- [ ] Rephrase → shorter forms (deep only)
-- [ ] Match prompt style to desired output style
+### During — Apply by Mode
+
+| Check | Light | Med | Deep |
+|-------|-------|-----|------|
+| C.1-C.6 (Claude behavior) | Yes | Yes | Yes |
+| T.6 (filler removal) | Yes | Yes | Yes |
+| T.1-T.5, T.7-T.8 (token compression) | - | Yes | Yes |
+| S.1-S.8 (structure/clarity) | - | Yes | Yes |
+| R.1-R.3 (reference integrity) | Yes | Yes | Yes |
+| P.1-P.4 (LLM perception) | Yes | Yes | Yes |
+| Aggressive rephrasing | - | - | Yes |
+| No information loss | Yes | Yes | Yes |
 
 ### After
 - [ ] All facts preserved
 - [ ] Logic consistent
-- [ ] References valid
+- [ ] References valid (R.1-R.3)
 - [ ] Tokens reduced
 
 ## Output Format
@@ -250,26 +140,28 @@ Task(subagent_type: "text-optimizer", prompt: "FIRST: Read $FT_PLUGIN_ROOT/skill
 | Lines  | X      | Y     | -Z%    |
 | Tokens | ~X     | ~Y    | -Z%    |
 
-### Transformations Applied
-- [List]
+### Rules Applied
+- [Rule IDs]: [Description of changes]
 
 ### Issues Found & Fixed
 - [Issue]: [Resolution]
 
 ### Cross-Reference Verification
-- [x] All file refs valid
-- [x] All agent/skill refs valid
+- [x] All file refs valid (R.1)
+- [x] All URLs checked (R.2)
+- [x] No circular refs (R.3)
 ```
 
 ## Anti-Patterns
 
-| Don't | Why |
+| Avoid | Why |
 |-------|-----|
-| Remove all examples | Hurts generalization |
-| Over-abbreviate | Reduces readability |
+| Remove all examples | Hurts generalization (P.1) |
+| Over-abbreviate | Reduces readability (T.5 caveat) |
 | Generic compression | Domain terms matter |
-| Over-aggressive language | Opus 4.5 overtriggers |
-| Flatten hierarchy | Loses structure |
-| "Don't do X" framing | Less effective than "Do Y" |
-| Overengineer prompts | Opus 4.5 follows literally |
-
+| Over-aggressive language | Opus 4.5 overtriggers (C.5) |
+| Flatten hierarchy | Loses structure (P.2) |
+| "Don't do X" framing | Less effective than "Do Y" (C.3) |
+| Overengineer prompts | Opus 4.5 follows literally (C.6) |
+| Overload single prompts | Divided attention, hallucinations (S.3) |
+| Over-focus on wording | Structure > word choice (T.1) |

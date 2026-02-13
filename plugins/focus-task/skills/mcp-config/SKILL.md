@@ -1,7 +1,7 @@
 ---
 name: mcp-config
-description: Manages MCP server configurations across global, project, and plugin scopes. Shows status, enables/disables servers per-project, detects duplicates in CLAUDE.md. Triggers - "mcp status", "mcp config", "disable mcp", "enable mcp", "mcp servers", "show mcp", "list mcp".
-user-invocable: true
+description: Manages MCP server configurations across global, project, and plugin scopes. Shows status, enables/disables servers per-project, detects duplicates in CLAUDE.md. Invoke via /focus-task:mcp-config only.
+disable-model-invocation: true
 argument-hint: "[status|update|help] or [free-form request like 'disable playwright']"
 allowed-tools: [Read, Write, Edit, Glob, Grep]
 model: sonnet

@@ -1,6 +1,6 @@
 ---
 name: focus-task:auto-sync
-description: Universal documentation system - updates, syncs all Claude Code documents (skills, agents, markdown). Replaces /focus-task:doc. Modes - status, init, global, project (default), file, folder. Triggers "auto-sync", "sync docs", "update docs", "auto-sync status".
+description: Universal documentation sync for skills, agents, markdown. Modes - status, init, global, project, file, folder. Invoke via /focus-task:auto-sync only.
 user-invocable: true
 argument-hint: "[status] | [init <path>] | [global] | [path]"
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Task, WebFetch, Skill

@@ -1,6 +1,10 @@
 ---
 name: text-human
-description: Humanizes code and documentation by removing AI-generated artifacts, simplifying excessive docs, and cleaning comments. Uses parallel agent processing for large codebases with automatic model selection (haiku for simple files, sonnet for complex). Triggered by "humanize code", "remove ai comments", "simplify docs", "clean documentation", "make human-readable". Requires argument - commit hash or file/folder path.
+description: |
+  Removes AI artifacts, cleans comments, simplifies documentation in code.
+  Use when: humanizing code, removing AI comments, cleaning docs, fixing unicode, simplifying documentation, making code human-readable.
+  Trigger keywords: humanize, human, ai artifacts, ai comments, clean comments, simplify docs, unicode fix, remove generated, make readable.
+  Triggers - "humanize this code", "remove AI comments", "clean up documentation", "fix unicode in files", "make this human-readable".
 argument-hint: <commit-hash|path> [custom instructions]
 user-invocable: true
 allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Task]
@@ -8,7 +12,7 @@ allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Task]
 
 # Text Humanizer
 
-Remove AI artifacts, simplify documentation. Orchestrates parallel sub-agents for large codebases.
+Detect and remove AI-generated artifacts from code and documentation. Process commits, files, or folders with parallel sub-agents.
 
 ## Language References
 

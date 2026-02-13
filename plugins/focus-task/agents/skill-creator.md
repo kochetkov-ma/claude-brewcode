@@ -433,15 +433,34 @@ Use imperative form:
 
 # Resource Path Resolution
 
-Skills receive base directory at execution. Use relative paths to reference resources (references/, scripts/, assets/):
+> ⚠️ **CRITICAL: USE RELATIVE PATHS!**
+> Skills receive `Base directory for this skill:` at execution.
+> Claude resolves `scripts/foo.sh` → `{skill_base_dir}/scripts/foo.sh` automatically.
+
+## Direct Calls (Read, Bash in SKILL.md)
+
+| ❌ NEVER | ✅ ALWAYS |
+|----------|----------|
+| `$FT_PLUGIN_ROOT/skills/my-skill/scripts/foo.sh` | `scripts/foo.sh` |
+| `$CLAUDE_PLUGIN_ROOT/skills/my-skill/references/doc.md` | `references/doc.md` |
+| `/absolute/path/to/skill/assets/template.md` | `assets/template.md` |
 
 ```markdown
 # Example in SKILL.md:
 Read `references/api-spec.md` for API details.
-Read `scripts/validate.sh` before execution.
+bash "scripts/validate.sh"   ← Claude resolves to {skill_base_dir}/scripts/validate.sh
 ```
 
-Claude resolves relative paths → `{skill_base_dir}/path` automatically.
+## Exception: Passing Path to Agent via Task Tool
+
+When spawning agent from skill and passing resource path in prompt — USE `$FT_PLUGIN_ROOT`:
+
+```markdown
+# In SKILL.md — spawning agent with path to skill's resource:
+Task(subagent_type="developer", prompt="Read $FT_PLUGIN_ROOT/skills/my-skill/references/rules.md then...")
+```
+
+**Why:** Agent receives `$FT_PLUGIN_ROOT` via pre-task.mjs hook injection. Agent does NOT have access to skill_base_dir — only to `$FT_PLUGIN_ROOT`.
 
 # Executable Bash
 
@@ -451,7 +470,7 @@ Bash blocks are examples unless marked for execution.
 ```markdown
 **EXECUTE** using Bash tool:
 ` ```bash
-command1 && echo "✅ step1" || echo "❌ FAILED"
+bash "scripts/my-script.sh" && echo "✅ done" || echo "❌ FAILED"
 ` ```
 
 > **STOP if ❌** — [recovery instructions].
@@ -461,7 +480,7 @@ command1 && echo "✅ step1" || echo "❌ FAILED"
 |------|--------|---------|
 | Label | ` ```bash` | `**EXECUTE**:` ` ```bash` |
 | Validate | `command` | `command && echo "✅" \|\| echo "❌"` |
-| Paths | `$(dirname "$0")` | `$CLAUDE_PLUGIN_ROOT` |
+| Paths | `$FT_PLUGIN_ROOT/skills/x/scripts/y.sh` | `scripts/y.sh` (relative!) |
 
 # Location Priority
 

@@ -31,18 +31,25 @@ skills: text-optimize
 
 # Text Optimizer Agent
 
-Optimize text for LLM effectiveness. Self-contained — all rules inline.
+Lean execution engine: load rules from reference, analyze target, apply optimizations, report metrics.
 
-## Claude 4.x / Opus 4.5 Critical Rules
+## Step 0: Load Rules (REQUIRED)
 
-| Rule | Evidence | Fix |
-|------|----------|-----|
-| Literal following | 4.x does exactly what asked, no inference | Be explicit |
-| Avoid "think" | Opus 4.5 sensitive to "think" variants | Use "consider", "evaluate", "believe" |
-| Dial back aggressive | "CRITICAL: You MUST..." overtriggers | "Use this tool when..." |
-| Positive framing | "Don't X" less effective than "Do Y" | Reframe negatives |
-| Match prompt style | Formatting in prompt → formatting in output | Less markdown = less markdown |
-| Overengineering | Opus 4.5 creates extra files/abstractions | Add explicit constraints |
+Read `$FT_PLUGIN_ROOT/skills/text-optimize/references/rules-review.md` using Read tool.
+
+**Verify:** File contains `## C - Claude Behavior` header and `## Summary` section.
+
+> **STOP if read fails or headers missing** — Cannot optimize without rules reference. Report error: `❌ rules-review.md not loaded. Check $FT_PLUGIN_ROOT value.` Do not proceed to Step 1.
+
+## Content Type Priorities
+
+| Content Type | Primary Rules | Focus |
+|--------------|---------------|-------|
+| System prompt | C.1-C.6, T.1-T.6 | Behavior clarity + token efficiency |
+| CLAUDE.md | S.1-S.6, T.1-T.8 | Structure + density |
+| Agent definition | C.5, S.2, P.1 | Triggering + clarity |
+| Skill SKILL.md | S.6, P.1-P.4, R.1-R.3 | Progressive disclosure + refs |
+| Documentation | T.1-T.8, S.1-S.5 | Token reduction + clarity |
 
 ## Capabilities
 
@@ -55,30 +62,13 @@ Optimize text for LLM effectiveness. Self-contained — all rules inline.
 
 ## Workflow
 
-### 1. Analysis
-Read target → Identify type → Measure baseline → Note critical info
+### Step 1: Analyze
+Read target -> identify content type from table above -> measure baseline (lines, tokens) -> note critical info to preserve.
 
-| Content Type | Focus |
-|--------------|-------|
-| System prompt | Role, constraints, examples |
-| CLAUDE.md | Rules, patterns, references |
-| Agent definition | Frontmatter, triggers |
-| Documentation | Structure, navigation |
+### Step 2: Optimize
+Apply rules from `rules-review.md` matching the content type. Work in order: C.1-C.6 (Claude behavior) -> T.1-T.8 (token efficiency) -> S.1-S.8 (structure) -> R.1-R.3 (references) -> P.1-P.6 (perception). Also check "Rules NOT Recommended" to avoid over-optimization.
 
-### 2. Optimization
-Apply `text-optimize` transformations in order:
-
-| Order | Transformation |
-|-------|----------------|
-| 1 | Remove filler words |
-| 2 | Merge duplicates |
-| 3 | Prose → Tables (multi-column) |
-| 4 | XML tags for sections |
-| 5 | Verify references |
-| 6 | Check logic consistency |
-| 7 | Calm aggressive language — Claude 4.x+ interprets literally |
-
-### 3. Verification
+### Step 3: Verify
 
 | Check | Fail Condition |
 |-------|----------------|
@@ -88,36 +78,6 @@ Apply `text-optimize` transformations in order:
 | Readability | Hierarchy destroyed |
 | Token Count | No reduction achieved |
 
-### 4. Report
+### Step 4: Report
 
-Output: `## Optimization Report: [filename]` with metrics table (Lines/Tokens before/after/change), transformations list, issues fixed, verification checklist (info preserved, logic consistent, refs valid).
-
-## Token Methodology
-
-| Technique | Savings | Application |
-|-----------|---------|-------------|
-| Tables over prose | ~66% | Multi-column data only |
-| Bullets over numbered | ~10% | When order irrelevant |
-| Inline `code` | ~20% | `path` vs "the path"; blocks only if >3 lines |
-| Arrows for flow | ~40% | `A → B → C` vs prose |
-| Remove filler | ~15% | Cut "please", "important", "note that", "basically" |
-| Merge duplicates | ~25% | Single source of truth |
-| Comma-separated | ~30% | `a, b, c` inline vs bullet per item |
-| Positive framing | — | "Do Y" not "Don't X"; calms Claude 4.x |
-| Imperative form | ~10% | "Do X" not "You should do X" |
-| Abbreviations | ~20% | Tables only: REQ, impl, cfg, args, ret |
-| Status emojis only | — | ✅❌⚠️ allowed, decorative forbidden |
-
-## Anti-Patterns
-
-| Avoid | Risk |
-|-------|------|
-| Remove all examples | Hurts generalization |
-| Over-abbreviate | Reduces readability |
-| Aggressive language | Claude 4.x+ overtriggers on literal interpretation |
-| Flatten hierarchy | Loses structure |
-
-## Sources
-
-- [Claude 4 Best Practices](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-4-best-practices)
-- [Context Engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)
+Output: `## Optimization Report: [filename]` with metrics table (Lines/Tokens before/after/change), transformations applied, issues fixed, verification checklist (info preserved, logic consistent, refs valid).

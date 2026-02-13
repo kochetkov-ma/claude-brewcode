@@ -1,7 +1,7 @@
 ---
 name: focus-task:teardown
-description: Remove all focus-task files created by /focus-task:setup. Cleans templates, configs, and skills.
-user-invocable: true
+description: Removes focus-task project files (templates, configs, logs). Invoke via /focus-task:teardown only.
+disable-model-invocation: true
 argument-hint: "[--dry-run]"
 allowed-tools: Bash, Read, AskUserQuestion
 context: fork

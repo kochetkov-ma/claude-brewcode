@@ -1,7 +1,7 @@
 ---
 name: focus-task:start
-description: Starts task execution with hooks-based infinite context through automatic handoff. Triggers "start task", "run focus task", "execute task".
-user-invocable: true
+description: Executes task with hooks-based infinite context and automatic handoff. Invoke via /focus-task:start only.
+disable-model-invocation: true
 argument-hint: "[task-path] defaults to ref in .claude/TASK.md (single-line path)"
 allowed-tools: Read, Write, Edit, Bash, Task, Glob, Grep, Skill
 model: opus

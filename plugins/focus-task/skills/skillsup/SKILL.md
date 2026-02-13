@@ -1,6 +1,7 @@
 ---
 name: focus-task:skillsup
-description: Skill management - list, improve, create skills with forced-eval hook.
+description: Skill management - list, improve, create skills with forced-eval hook. Invoke via /focus-task:skillsup only.
+disable-model-invocation: true
 user-invocable: true
 argument-hint: "[list|setup|up|create] [target] | <skill-path>"
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Task, WebSearch, WebFetch, AskUserQuestion]
@@ -48,10 +49,10 @@ List all skills (global, project, plugin).
 
 **EXECUTE** using Bash tool:
 ```bash
-bash "$FT_PLUGIN_ROOT/skills/skillsup/scripts/list-skills.sh" && echo "✅ list" || echo "❌ list FAILED"
+bash "scripts/list-skills.sh" && echo "✅ list" || echo "❌ list FAILED"
 ```
 
-> **STOP if ❌** — verify `FT_PLUGIN_ROOT` is set and scripts exist.
+> **STOP if ❌** — verify skill base directory is resolved and scripts exist.
 
 ---
 
@@ -63,7 +64,7 @@ Install forced-eval hook + show skill list.
 
 **EXECUTE** using Bash tool:
 ```bash
-bash "$FT_PLUGIN_ROOT/skills/skillsup/scripts/install-hook.sh" && echo "✅ hook installed" || echo "❌ hook FAILED"
+bash "scripts/install-hook.sh" && echo "✅ hook installed" || echo "❌ hook FAILED"
 ```
 
 > **STOP if ❌** — check `.claude/settings.json` permissions and jq installation.
@@ -72,7 +73,7 @@ bash "$FT_PLUGIN_ROOT/skills/skillsup/scripts/install-hook.sh" && echo "✅ hook
 
 **EXECUTE** using Bash tool:
 ```bash
-bash "$FT_PLUGIN_ROOT/skills/skillsup/scripts/list-skills.sh" && echo "✅ list" || echo "❌ list FAILED"
+bash "scripts/list-skills.sh" && echo "✅ list" || echo "❌ list FAILED"
 ```
 
 ### Hook Details

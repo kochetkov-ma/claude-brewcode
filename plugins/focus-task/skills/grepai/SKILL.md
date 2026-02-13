@@ -1,7 +1,7 @@
 ---
 name: focus-task:grepai
-description: Semantic search setup. Triggers - "grepai", "semantic search", "setup grepai".
-user-invocable: true
+description: Manages grepai semantic search (setup, status, start, stop, reindex, optimize, upgrade). Invoke via /focus-task:grepai only.
+disable-model-invocation: true
 argument-hint: "[setup|status|start|stop|reindex|optimize|upgrade]"
 allowed-tools: Read, Write, Edit, Bash, Task
 model: sonnet

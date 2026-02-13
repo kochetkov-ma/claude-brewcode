@@ -1,7 +1,7 @@
 ---
 name: focus-task:setup
-description: Analyzes project structure, tech stack, testing frameworks, and project-specific agents to generate an adapted PLAN.md.template in .claude/tasks/templates/. Triggers on phrases like "setup focus-task", "focus-task setup", "initialize focus-task", "configure focus-task".
-user-invocable: true
+description: Analyzes project structure and tech stack to generate adapted PLAN.md.template in .claude/tasks/templates/. Invoke via /focus-task:setup only.
+disable-model-invocation: true
 argument-hint: "[universal-template-path]"
 allowed-tools: Read, Write, Glob, Grep, Bash, AskUserQuestion
 context: fork
