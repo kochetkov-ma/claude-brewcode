@@ -1,3 +1,9 @@
+---
+auto-sync: enabled
+auto-sync-date: 2026-02-12
+auto-sync-type: doc
+---
+
 # Text & File Optimizer
 
 Optimize any text, file, or folder for maximum clarity and efficiency when working with Claude 4.x / Opus 4.5. Reduces tokens by restructuring prose to tables, removing filler, and applying best practices for LLM consumption.

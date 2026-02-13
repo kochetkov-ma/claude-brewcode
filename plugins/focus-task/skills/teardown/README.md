@@ -1,3 +1,9 @@
+---
+auto-sync: enabled
+auto-sync-date: 2026-02-12
+auto-sync-type: doc
+---
+
 # Teardown Skill
 
 ## What It Does
@@ -16,6 +22,7 @@ Cleans up all focus-task project files created by `/focus-task:setup`. Removes t
 - `.claude/tasks/templates/` — setup templates
 - `.claude/tasks/cfg/` — config files
 - `.claude/tasks/logs/` — session logs
+- `.claude/tasks/sessions/` — session metadata
 - `.claude/plans/` — plan files
 - `.grepai/` — semantic search index
 - `.claude/skills/focus-task-review/` — review skill

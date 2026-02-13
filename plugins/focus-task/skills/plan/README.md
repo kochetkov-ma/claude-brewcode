@@ -1,34 +1,42 @@
+---
+auto-sync: enabled
+auto-sync-date: 2026-02-12
+auto-sync-type: doc
+---
+
 # Plan Skill
 
 Create an execution plan (PLAN.md) from your task specification.
 
 ## What It Does
 
-Converts a SPEC.md into a detailed PLAN.md with phases, agent assignments, and verification criteria. Supports planning from existing SPEC files or Plan Mode files.
+Converts a SPEC.md into a detailed PLAN.md with phases, agent assignments, and verification criteria. Supports two input modes:
+- **SPEC Mode** — Creates plan from existing SPEC.md
+- **Plan Mode** — Creates plan from `.claude/plans/LATEST.md` or plan file (skips SPEC step)
 
 ## How to Use
 
 ```bash
-/focus-task:plan [task-dir]
-/focus-task:plan [SPEC.md]
-/focus-task:plan [plan-file]
-/focus-task:plan              # Defaults to .claude/TASK.md reference
+/focus-task:plan [task-dir|SPEC.md|plan-file]
 ```
 
 ## Arguments
 
 | Argument | Type | Optional | Description |
 |----------|------|----------|-------------|
-| `path` | string | Yes | Task directory, SPEC.md, or plan file path |
+| `task-dir\|SPEC.md\|plan-file` | string | Yes | Task directory, SPEC.md, or plan file path — defaults to .claude/TASK.md ref |
 
-## Example
+## Examples
 
 ```bash
 # Create plan from SPEC
-/focus-task:plan .claude/tasks/20260212_new_feature_task/SPEC.md
+/focus-task:plan .claude/tasks/20260212-140000_new_feature_task/SPEC.md
 
 # Or from task directory
-/focus-task:plan .claude/tasks/20260212_new_feature_task
+/focus-task:plan .claude/tasks/20260212-140000_new_feature_task
+
+# Or from Plan Mode file
+/focus-task:plan .claude/plans/LATEST.md
 
 # Or use latest from quick ref
 /focus-task:plan
@@ -41,5 +49,8 @@ Creates in task directory:
 - **KNOWLEDGE.jsonl** — Pattern and architecture knowledge base
 - **artifacts/** — Directory for execution outputs
 - **backup/** — Directory for file backups
+- **Quick reference** — Updates `.claude/TASK.md` with task path (preserves history)
 
-Next step: `/focus-task:start` to execute the plan.
+The plan undergoes quorum review (3 agents, 2/3 consensus) before finalization.
+
+Next step: `/focus-task:start .claude/tasks/{TS}_{NAME}_task/PLAN.md` to execute the plan.

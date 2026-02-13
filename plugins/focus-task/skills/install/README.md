@@ -1,3 +1,9 @@
+---
+auto-sync: enabled
+auto-sync-date: 2026-02-12
+auto-sync-type: doc
+---
+
 # Install Skill
 
 Installs focus-task prerequisites interactively. Required before using focus-task tasks.
@@ -49,4 +55,4 @@ Phase 6: Summary
 
 After installation:
 - `/focus-task:setup` — Initialize for your project
-- `/grepai setup` — Configure semantic search (if installed)
+- `/focus-task:grepai setup` — Configure semantic search (if installed)

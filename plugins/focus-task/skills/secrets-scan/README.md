@@ -1,3 +1,9 @@
+---
+auto-sync: enabled
+auto-sync-date: 2026-02-12
+auto-sync-type: doc
+---
+
 # Secrets Scan
 
 Scans all git-tracked files for secrets (passwords, API keys, tokens, private keys, DB credentials) using 10 parallel agents. Generates detailed report with findings by severity and full file inventory.

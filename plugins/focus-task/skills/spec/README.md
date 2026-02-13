@@ -1,3 +1,9 @@
+---
+auto-sync: enabled
+auto-sync-date: 2026-02-12
+auto-sync-type: doc
+---
+
 # /focus-task:spec
 
 Create a detailed specification for your task through research and Q&A.

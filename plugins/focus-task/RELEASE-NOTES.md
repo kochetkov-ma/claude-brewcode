@@ -32,6 +32,50 @@
 
 ---
 
+## [2.13.0] - 2026-02-13
+
+### Added
+
+- **skillsup skill** — skill management with 84% activation rate
+  - `list` mode: scan global/project/plugin skills as markdown table
+  - `setup` mode: install forced-eval hook (UserPromptSubmit) + settings.json
+  - `up` mode: improve skills via skill-creator agent (parallel for folders)
+  - `create` mode: research (Explore + WebSearch) then create skill
+  - Shorthand: `/skillsup <path>` defaults to `up` mode
+  - Based on Scott Spence forced-eval technique
+
+### Files
+
+- `skills/skillsup/SKILL.md` — main skill with 4 modes
+- `skills/skillsup/README.md` — documentation
+- `skills/skillsup/scripts/list-skills.sh` — scans 3 locations
+- `skills/skillsup/scripts/install-hook.sh` — installs hook + updates settings
+- `skills/skillsup/references/forced-eval-hook.mjs` — UserPromptSubmit hook
+
+---
+
+## [2.12.4] - 2026-02-13
+
+### Changed
+
+- **skill-creator agent** — major update for activation reliability
+  - Added "Activation Reality" section: 20-50% baseline rate, GitHub issues
+  - Added "Criticality Strategy": Critical → slash command (100%), Important → optimized (50-72%)
+  - Added "Description Optimization": trigger keywords pattern, "Use when:" template
+  - Added "Activation Checklist" in validation step
+  - Added "Troubleshooting Activation" section with debug steps
+  - Updated all examples with optimized descriptions
+  - Verified all GitHub issues are OPEN: #10768, #13919, #15136, #9716
+  - Removed closed/duplicate issues: #12679, #4182, #17283
+
+### Sources
+
+- [#10768 - Intent Matching Broken](https://github.com/anthropics/claude-code/issues/10768)
+- [#13919 - Context loss](https://github.com/anthropics/claude-code/issues/13919)
+- [#15136 - Fails to invoke](https://github.com/anthropics/claude-code/issues/15136)
+
+---
+
 ## [2.12.3] - 2026-02-12
 
 ### Changed

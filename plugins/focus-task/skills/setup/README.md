@@ -1,3 +1,9 @@
+---
+auto-sync: enabled
+auto-sync-date: 2026-02-12
+auto-sync-type: doc
+---
+
 # Setup Skill
 
 ## What It Does
@@ -24,7 +30,6 @@ Optionally provide a path to a universal template to adapt:
 | `.claude/tasks/templates/SPEC.md.template` | Spec template for focus-task |
 | `.claude/tasks/templates/KNOWLEDGE.jsonl.template` | Knowledge base template |
 | `.claude/tasks/cfg/focus-task.config.json` | Runtime configuration |
-| `.claude/skills/focus-task-review/SKILL.md` | Project-specific review skill |
 
 ## Example
 

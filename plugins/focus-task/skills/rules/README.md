@@ -1,3 +1,9 @@
+---
+auto-sync: enabled
+auto-sync-date: 2026-02-12
+auto-sync-type: doc
+---
+
 # Rules Skill
 
 Extract and organize project guidelines from knowledge, files, or conversation.

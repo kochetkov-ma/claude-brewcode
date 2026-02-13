@@ -1,3 +1,9 @@
+---
+auto-sync: enabled
+auto-sync-date: 2026-02-12
+auto-sync-type: doc
+---
+
 # Text Humanizer
 
 Remove AI artifacts and simplify documentation from your code.
@@ -9,23 +15,23 @@ Cleans up code and documentation by removing AI-generated comments, simplifying 
 ## How to Use
 
 ```bash
-/text-human <commit-hash|path> [custom instructions]
+/focus-task:text-human <commit-hash|path> [custom instructions]
 ```
 
 ## Examples
 
 ```bash
 # Process a specific commit
-/text-human 3be67487
+/focus-task:text-human 3be67487
 
 # Process a single file
-/text-human src/main/java/MyService.java
+/focus-task:text-human src/main/java/MyService.java
 
 # Process a folder
-/text-human src/main/java/services/
+/focus-task:text-human src/main/java/services/
 
 # With custom instructions
-/text-human src/ only remove AI artifacts, don't touch docs
+/focus-task:text-human src/ only remove AI artifacts, don't touch docs
 ```
 
 ## What Gets Removed

@@ -1,3 +1,9 @@
+---
+auto-sync: enabled
+auto-sync-date: 2026-02-12
+auto-sync-type: doc
+---
+
 # focus-task:start
 
 Execute a task with infinite context through automatic handoff.
@@ -31,19 +37,22 @@ Run task referenced in TASK.md:
 
 ## What Happens
 
-1. Loads PLAN.md and executes each phase with the appropriate agent
-2. Each agent generates output → saved to artifacts
-3. Knowledge from execution is compacted and preserved
-4. At context limit, automatically hands off to new session
-5. Resumes from where it left off with full context
+1. Coordinator validates task and creates execution lock
+2. Loads PLAN.md and executes each phase with the appropriate agent (developer/tester/reviewer)
+3. After each agent: WRITE report to artifacts → CALL coordinator to extract knowledge
+4. Knowledge from execution is compacted and preserved in KNOWLEDGE.jsonl
+5. At context limit, PreCompact hook triggers automatic handoff to new session
+6. Resumes from where it left off with full context
+7. On completion, extracts rules via `/focus-task:rules`
 
 ## Key Features
 
 - **Infinite Execution** — Runs until completion even at context limits
 - **Multi-Agent** — Uses developer, tester, and reviewer agents
-- **Auto-Handoff** — No manual intervention for context switches
+- **Auto-Handoff** — PreCompact hook triggers automatic session handoff
+- **2-Step Protocol** — WRITE report → CALL coordinator after each agent
 - **Artifact Tracking** — All outputs saved to task directory
-- **Knowledge Preservation** — Learns from each phase
+- **Knowledge Preservation** — Learns from each phase via KNOWLEDGE.jsonl
 
 ## Next Steps
 

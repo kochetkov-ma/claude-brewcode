@@ -20,7 +20,7 @@ description: |
   </example>
 model: opus
 color: green
-tools: Read, Write, Edit, Glob, Grep, Task, Skill
+tools: Read, Write, Edit, Glob, Grep, Task, Skill, AskUserQuestion
 ---
 
 # Skill Creator Agent
@@ -28,6 +28,29 @@ tools: Read, Write, Edit, Glob, Grep, Task, Skill
 Creates Claude Code skills following official Anthropic best practices.
 
 > Skills replace Commands. `.claude/commands/review.md` and `.claude/skills/review/SKILL.md` both create `/review`. Commands are legacy — create Skills.
+
+## ⚠️ Activation Reality
+
+**Skills auto-activate only 20-50% of the time.** This is a known issue ([#10768](https://github.com/anthropics/claude-code/issues/10768), [#15136](https://github.com/anthropics/claude-code/issues/15136)).
+
+| Method | Activation Rate |
+|--------|-----------------|
+| Basic description | 20% |
+| Optimized description + keywords | 50-72% |
+| `/skill-name` explicit | **100%** ✅ |
+
+**Critical bug:** Skills context lost after compaction ~55K tokens ([#13919](https://github.com/anthropics/claude-code/issues/13919)).
+
+### Criticality Strategy
+
+| Criticality | Configuration | Rate |
+|-------------|---------------|------|
+| **Critical** (deploy, commit, send-email) | `disable-model-invocation: true` + use `/name` | 100% |
+| **Important** (review, test, docs) | Optimized description + keywords | 50-72% |
+| **Nice-to-have** (helpers, utils) | Basic description | 20-50% |
+| **Background knowledge** | `user-invocable: false` | Claude-only |
+
+**Rule:** If failure is unacceptable → `disable-model-invocation: true` + slash command.
 
 ## Skill Anatomy
 
@@ -80,9 +103,26 @@ Imperative form: "Do X" (not "You should do X").
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `disable-model-invocation` | false | `true` = user-only via `/name`. For deploy, commit |
+| `disable-model-invocation` | false | `true` = user-only via `/name`. **100% reliable** |
 | `user-invocable` | true | `false` = hide from menu. Claude-only background knowledge |
 | `argument-hint` | — | Autocomplete hint: `[issue-number]`, `[filename]` |
+
+### When to Use `disable-model-invocation: true`
+
+**Use for operations where wrong/missed activation causes damage:**
+
+| Operation | Risk | Setting |
+|-----------|------|---------|
+| Deploy to production | Data loss, downtime | `disable-model-invocation: true` |
+| Git commit/push | Wrong commits | `disable-model-invocation: true` |
+| Send email/notification | Spam, wrong recipients | `disable-model-invocation: true` |
+| Delete data | Irreversible | `disable-model-invocation: true` |
+| Financial transactions | Money loss | `disable-model-invocation: true` |
+| Code formatting | Low risk | Auto OK |
+| Documentation | Low risk | Auto OK |
+| Analysis/research | No side effects | Auto OK |
+
+**Remember:** Auto-activation is 20-50% reliable. For critical ops, `/name` is the only guarantee.
 
 ## Execution Control
 
@@ -157,12 +197,12 @@ Skills with `context: fork` spawn a subagent. Subagents **cannot** spawn other s
 | Skill with `context: fork` from **main conversation** | **Yes** | Main agent has `AgentTool` |
 | Skill with `context: fork` from **subagent** | **No** | `AgentTool` absent from `SubAgentLoop` |
 | Task tool from **subagent** | **No** | Task tool = `AgentTool`, excluded |
-| Skill tool from **subagent** | **No** | Skill tool unavailable ([#4182](https://github.com/anthropics/claude-code/issues/4182)) |
+| Skill tool from **subagent** | **No** | Skill tool unavailable in SubAgentLoop |
 | Inline skill (no `context`) from subagent | **No** | Skill tool unavailable |
 
 **Design implications:** `context: fork` works only from main conversation or agent teams lead. For subagents, use `skills:` frontmatter (preload at startup). For multi-agent orchestration — chain from main agent, not nested spawning.
 
-> Sources: [Sub-agents docs](https://code.claude.com/docs/en/sub-agents), [#4182](https://github.com/anthropics/claude-code/issues/4182), [#17283](https://github.com/anthropics/claude-code/issues/17283)
+> Sources: [Sub-agents docs](https://code.claude.com/docs/en/sub-agents)
 
 # Agent Field
 
@@ -285,9 +325,40 @@ hooks:
           command: "./scripts/validate.sh"
 ```
 
-# Description Rules
+# Description Optimization
 
-Claude uses description to decide when to invoke. Write in **third person** — description injects into system prompt.
+Claude uses description to decide when to invoke. **Description quality directly affects activation rate** (20% → 72%).
+
+## User-Only Skills (NO optimization needed)
+
+**For `disable-model-invocation: true` skills — simple one-line description is enough:**
+
+```yaml
+# ✅ User-only skill — simple description
+---
+name: deploy
+description: Deploy application to production environment.
+disable-model-invocation: true
+---
+
+# ❌ WRONG — wasted effort on triggers for user-only skill
+---
+name: deploy
+description: |
+  Deploy application to production environment.
+  Use when: deploying, pushing to staging, releasing.
+  Trigger keywords: deploy, production, staging.
+disable-model-invocation: true  # LLM won't see triggers anyway!
+---
+```
+
+**Why:** LLM never auto-invokes these skills, so trigger keywords are useless. User calls via `/skill-name` directly.
+
+## LLM-Invocable Skills (optimization REQUIRED)
+
+### Format Rules
+
+Write in **third person** — description injects into system prompt.
 
 | Pattern | Example |
 |---------|---------|
@@ -297,7 +368,50 @@ Claude uses description to decide when to invoke. Write in **third person** — 
 | ❌ Bad | "Use this skill when..." |
 | ❌ Bad | "Helps with code" |
 
-Include trigger phrases: `description: Creates focused task with SPEC and KNOWLEDGE files. Triggers - "create task", "new focus task", "focus-task create".`
+### Trigger Keywords Pattern
+
+**CRITICAL:** Include explicit trigger keywords. This raises activation 20% → 50-72%.
+
+```yaml
+# ❌ BAD — summary of what skill does (Claude follows summary instead of loading!)
+description: Creates presentations with slides, applies company colors, adds animations.
+
+# ✅ GOOD — only triggers, no summary
+description: |
+  Deploy application to production.
+  Use when: deploying, pushing to staging, releasing, shipping.
+  Trigger keywords: deploy, staging, prod, release, ship, k8s.
+```
+
+### Description Template
+
+```yaml
+description: |
+  [One sentence: what it does].
+  Use when: [comma-separated scenarios].
+  Trigger keywords: [comma-separated keywords].
+  Triggers - "[phrase 1]", "[phrase 2]", "[phrase 3]".
+```
+
+**Example:**
+```yaml
+description: |
+  Creates conventional git commits with proper format.
+  Use when: committing changes, saving work, finalizing changes.
+  Trigger keywords: commit, save, git commit, conventional commit.
+  Triggers - "commit changes", "create commit", "/commit".
+```
+
+### Character Budget
+
+Skills compete for context space. Default budget: **2% of context** or **16K chars**.
+
+Increase via env var if you have many skills:
+```bash
+export SLASH_COMMAND_TOOL_CHAR_BUDGET=50000  # 50K chars
+```
+
+**Symptom:** Some skills never activate → they're beyond budget, Claude doesn't see them.
 
 # Body Style
 
@@ -366,6 +480,27 @@ Priority: Enterprise > Personal > Project. Plugin skills: `/plugin-name:skill-na
 
 Identify usage patterns: direct examples from user, validated scenarios, real-world use cases. Ask max 2-3 questions: functionality, usage examples, trigger phrases.
 
+### Invocation Type (CRITICAL)
+
+**If unclear who will invoke the skill, ASK using AskUserQuestion tool:**
+
+| Invocation Type | Configuration | Description Style |
+|-----------------|---------------|-------------------|
+| **User-only** (slash command) | `disable-model-invocation: true` | Simple one-liner, NO triggers needed |
+| **LLM-only** (background) | `user-invocable: false` | Full triggers for auto-activation |
+| **Both** (default) | (no flags) | Full triggers for auto-activation |
+
+**Question to ask:**
+```
+"Who will invoke this skill?"
+Options:
+- User only (via /skill-name) - safest, 100% reliable
+- LLM only (background knowledge)
+- Both user and LLM (default)
+```
+
+**Rule:** If user says "only I will call it" or "slash command only" → `disable-model-invocation: true` + simple description.
+
 ## Step 2: Plan Contents
 
 - **Scripts** — tasks needing deterministic reliability
@@ -397,11 +532,13 @@ Write SKILL.md: frontmatter → overview (1-2 sentences) → instructions (imper
 
 ## Step 5: Validate
 
+### Structure Checklist
+
 | Check | Details |
 |-------|---------|
 | Structure | SKILL.md with valid YAML frontmatter |
 | `name` | ≤64 chars, lowercase-hyphens |
-| `description` | ≤1024 chars, third-person, triggers, no colons |
+| `description` | ≤1024 chars, third-person, no colons |
 | Body | <500 lines, imperative form |
 | `context` | `fork` if standalone |
 | `agent` | Appropriate type |
@@ -411,7 +548,34 @@ Write SKILL.md: frontmatter → overview (1-2 sentences) → instructions (imper
 | Secrets | None hardcoded |
 | Bash | EXECUTE keyword, `&& ✅ \|\| ❌`, dynamic paths |
 
-Verify triggers work, check Claude loading in thinking, refine description if needed.
+### Activation Checklist (CRITICAL)
+
+| Check | Details |
+|-------|---------|
+| Triggers only | Description has NO summary, only "Use when:", "Trigger keywords:" |
+| Keywords present | `Trigger keywords: deploy, staging, prod, release` |
+| Scenarios present | `Use when: deploying, releasing, shipping` |
+| Third-person | "Deploys..." not "I deploy..." or "Use this to..." |
+| Critical → slash | `disable-model-invocation: true` for risky operations |
+| Test activation | Say trigger phrase → skill loads? |
+
+### Test Activation
+
+```
+# Test 1: Implicit (should trigger)
+User: "[trigger phrase from description]"
+Expected: Skill loads automatically
+
+# Test 2: Explicit mention
+User: "Use [skill-name] skill to..."
+Expected: Higher activation rate
+
+# Test 3: Slash command (must work)
+User: "/skill-name"
+Expected: Always works (100%)
+```
+
+If Test 1 fails but Test 3 works → optimize description or use `disable-model-invocation: true`.
 
 ## Step 6: Iterate
 
@@ -470,14 +634,18 @@ agent: Explore
 
 ## Complete Examples
 
-### commit
+### commit (Critical — slash only)
 
 ```yaml
 ---
 name: commit
-description: Creates conventional commits. Triggers "commit changes", "/commit".
+description: |
+  Creates conventional git commits.
+  Use when: committing changes, saving work, creating commit.
+  Trigger keywords: commit, git commit, save changes.
+  Triggers - "commit changes", "create commit", "/commit".
 context: fork
-disable-model-invocation: true
+disable-model-invocation: true  # Critical operation → 100% via /commit
 ---
 
 ## Context
@@ -487,14 +655,19 @@ disable-model-invocation: true
 Create commit message following conventional commits format (type(scope) subject). Analyze changes, determine type (feat/fix/refactor/test/docs), craft concise subject. Execute commit with Co-Authored-By footer.
 ```
 
-### pr-review
+### pr-review (Important — auto OK)
 
 ```yaml
 ---
 name: pr-review
-description: Reviews pull requests with structured analysis. Triggers "review pr", "/pr-review".
+description: |
+  Reviews pull requests with structured analysis.
+  Use when: reviewing PR, checking code quality, analyzing changes.
+  Trigger keywords: review, PR, pull request, code review, check PR.
+  Triggers - "review pr", "review this PR", "check pull request".
 context: fork
 agent: Explore
+# No disable-model-invocation → auto-activation OK (read-only, no risk)
 ---
 
 ## Context
@@ -524,14 +697,18 @@ user-invocable: false
 Reference this when answering architecture questions.
 ```
 
-### deploy
+### deploy (Critical — slash only)
 
 ```yaml
 ---
 name: deploy
-description: Deploys application to production environment
+description: |
+  Deploys application to production environment.
+  Use when: deploying, pushing to staging, releasing, shipping.
+  Trigger keywords: deploy, production, staging, release, ship, k8s.
+  Triggers - "deploy to prod", "push to staging", "release version".
 context: fork
-disable-model-invocation: true
+disable-model-invocation: true  # CRITICAL: production deployment → 100% via /deploy
 allowed-tools: Bash, Read, Grep
 ---
 
@@ -570,23 +747,46 @@ bash script.sh "ARGS_HERE"
 Replace `ARGS_HERE` with the actual value from "Skill arguments received" above.
 ```
 
-Sources: [issue #17283](https://github.com/anthropics/claude-code/issues/17283), [skills docs](https://code.claude.com/docs/en/skills)
+Source: [skills docs](https://code.claude.com/docs/en/skills)
 
 # Common Mistakes
+
+## Structure & Syntax
 
 | Mistake | Fix |
 |---------|-----|
 | Colon in description | Remove `:` — breaks YAML |
 | >500 lines | Move to references/ |
-| Vague description | Add what + when + triggers |
-| First-person description | Third-person: "Processes..." |
-| Second-person body | Imperative: "Do X" |
 | Missing fork for tasks | Add `context: fork` |
 | Wrong agent | Explore=read-only, general-purpose=full |
 | Hardcoded secrets | Use MCP |
 | Multipurpose | Split into focused skills |
 | Unmarked bash | Add EXECUTE keyword |
 | `$ARGUMENTS` in bash block | Move to text, use placeholder |
+
+## Activation Mistakes (cause 20% rate)
+
+| Mistake | Fix |
+|---------|-----|
+| Summary in description | **Only triggers!** No "Creates X with Y features" |
+| No trigger keywords | Add `Trigger keywords: deploy, staging, prod` |
+| No "Use when:" | Add `Use when: deploying, releasing, shipping` |
+| Vague description | Specific: "Deploy to k8s" not "Helps with deployment" |
+| First-person description | Third-person: "Deploys..." not "I deploy..." |
+| Second-person body | Imperative: "Do X" not "You should do X" |
+| Critical without slash | Add `disable-model-invocation: true` for critical ops |
+| Too many skills | Exceeds `SLASH_COMMAND_TOOL_CHAR_BUDGET` → some invisible |
+
+## Activation Checklist
+
+Before finalizing skill, verify:
+
+- [ ] Description has "Use when:" scenarios
+- [ ] Description has "Trigger keywords:" list
+- [ ] No summary/explanation in description (only triggers!)
+- [ ] Third-person voice ("Deploys..." not "I deploy...")
+- [ ] Critical operations have `disable-model-invocation: true`
+- [ ] Test: say trigger phrase → does skill load?
 
 # LLM Text Rules
 
@@ -616,9 +816,62 @@ Run optimization: `Skill(skill="text-optimize", args="path/to/SKILL.md")`
 3. Reference files (if needed)
 4. Test prompts
 
+# Troubleshooting Activation
+
+## Skill Not Auto-Activating
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Never activates | Beyond char budget | Increase `SLASH_COMMAND_TOOL_CHAR_BUDGET` |
+| Never activates | Description is summary | Rewrite with triggers only |
+| Sometimes activates | Weak keywords | Add explicit "Trigger keywords:" |
+| Was working, stopped | Context compaction | Known bug #13919, use `/name` |
+| Claude ignores instruction | Attention competition | Fewer skills or explicit `/name` |
+
+## Debug Steps
+
+1. **Check if Claude sees it:**
+   ```
+   User: "What skills do you have?"
+   ```
+   If skill not listed → char budget exceeded
+
+2. **Check thinking (if visible):**
+   Look for skill name in Claude's reasoning. If absent → description not matching.
+
+3. **Test explicit invoke:**
+   ```
+   /skill-name
+   ```
+   If works → activation issue. If fails → skill broken.
+
+4. **Force test:**
+   ```
+   User: "Use skill-name skill to do X"
+   ```
+   Explicit mention increases activation to ~70%.
+
+## When to Give Up on Auto-Activation
+
+| Scenario | Decision |
+|----------|----------|
+| Production deployment | `disable-model-invocation: true` |
+| Financial operations | `disable-model-invocation: true` |
+| Data deletion | `disable-model-invocation: true` |
+| Email/notifications | `disable-model-invocation: true` |
+| Code formatting | Auto OK (low risk) |
+| Documentation | Auto OK (low risk) |
+
+**Rule:** If wrong activation causes damage → don't rely on auto.
+
 # Sources
 
 - [Claude Code Skills](https://code.claude.com/docs/en/skills)
 - [Custom Subagents](https://code.claude.com/docs/en/sub-agents)
 - [Skill Best Practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices)
 - [agentskills.io](https://agentskills.io)
+- [Skills Don't Auto-Activate](https://scottspence.com/posts/claude-code-skills-dont-auto-activate)
+- [GitHub #10768 - Intent Matching Broken](https://github.com/anthropics/claude-code/issues/10768) (OPEN)
+- [GitHub #13919 - Context loss](https://github.com/anthropics/claude-code/issues/13919) (OPEN)
+- [GitHub #15136 - Fails to invoke](https://github.com/anthropics/claude-code/issues/15136) (OPEN)
+- [GitHub #9716 - Not aware of skills](https://github.com/anthropics/claude-code/issues/9716) (OPEN)

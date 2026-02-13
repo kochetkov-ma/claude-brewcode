@@ -1,3 +1,9 @@
+---
+auto-sync: enabled
+auto-sync-date: 2026-02-12
+auto-sync-type: doc
+---
+
 # Auto-Sync
 
 Automatically update and synchronize Claude Code documentation (skills, agents, rules, markdown) across your project or globally.
@@ -47,3 +53,15 @@ focus: Authentication, error handling
 preserve: ## Custom Config, ## Notes
 </auto-sync-override>
 ```
+
+## Flags
+
+| Flag | Description |
+|------|-------------|
+| `-o`, `--optimize` | Enable text optimization during sync |
+
+## Migrating from /focus-task:doc
+
+This skill replaces the deprecated `/focus-task:doc` skill:
+- `/focus-task:doc update` → `/focus-task:auto-sync`
+- `/focus-task:doc sync` → `/focus-task:auto-sync`
