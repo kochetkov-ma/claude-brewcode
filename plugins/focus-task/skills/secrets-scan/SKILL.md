@@ -1,6 +1,6 @@
 ---
-name: secrets-scan
-description: Scans ALL git-tracked files for secrets using 10 parallel haiku agents. Uses git ls-files, splits into 10 chunks, generates detailed report with full file inventory. Triggers - "scan for secrets", "find credentials", "security scan".
+name: focus-task:secrets-scan
+description: Scans all git-tracked files for leaked secrets and credentials. Use when - scanning for secrets, security audit, finding leaked credentials. Trigger keywords - secrets scan, find credentials, security scan, leaked keys, security audit.
 user-invocable: true
 allowed-tools: [Read, Task, Write, Bash, AskUserQuestion]
 argument-hint: "[--fix] — no args = scan only, --fix = interactive remediation"

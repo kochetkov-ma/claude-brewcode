@@ -32,6 +32,54 @@
 
 ---
 
+## [2.14.3] - 2026-02-13
+
+### Changed
+
+- **auto-sync skill** — excluded managed directories from auto-scan
+  - `rules/`, `agents/`, `skills/` no longer scanned in PROJECT/GLOBAL modes
+  - Explicit path required: `/focus-task:auto-sync .claude/rules`
+  - Prevents unintended mass updates to structured content
+
+### Files
+
+- `skills/auto-sync/SKILL.md` — added managed directories documentation
+- `skills/auto-sync/scripts/discover.sh` — added exclusion logic
+
+---
+
+## [2.14.2] - 2026-02-13
+
+### Changed
+
+- **text-optimize skill** — description converted to one-line format
+  - Matches agent description style: `"Optimizes text/docs for LLM efficiency. Triggers: ..."`
+  - Removed multi-line `|` YAML block, replaced with single quoted string
+
+### Files
+
+- `skills/text-optimize/SKILL.md` — description field
+
+---
+
+## [2.14.1] - 2026-02-13
+
+### Changed
+
+- **skill-creator agent** — description rules tightened
+  - ONE line only (no multiline `|` in YAML)
+  - 150-300 chars limit (was 1024)
+  - Template: `[What it does]. Use when - [scenarios]. Trigger keywords - [keywords].`
+  - `Triggers -` section dropped (saves ~80 chars)
+  - All examples updated to single-line format
+  - Validation checklists updated
+
+### Files
+
+- `agents/skill-creator.md` — 10 edits across description rules, template, examples, validation
+
+---
+
 ## [2.14.0] - 2026-02-13
 
 ### Added

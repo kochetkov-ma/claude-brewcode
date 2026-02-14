@@ -1,6 +1,6 @@
 ---
 name: focus-task:teardown
-description: Removes focus-task project files (templates, configs, logs). Invoke via /focus-task:teardown only.
+description: Removes focus-task project files (templates, configs, logs).
 disable-model-invocation: true
 argument-hint: "[--dry-run]"
 allowed-tools: Bash, Read, AskUserQuestion

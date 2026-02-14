@@ -1,10 +1,6 @@
 ---
-name: text-human
-description: |
-  Removes AI artifacts, cleans comments, simplifies documentation in code.
-  Use when: humanizing code, removing AI comments, cleaning docs, fixing unicode, simplifying documentation, making code human-readable.
-  Trigger keywords: humanize, human, ai artifacts, ai comments, clean comments, simplify docs, unicode fix, remove generated, make readable.
-  Triggers - "humanize this code", "remove AI comments", "clean up documentation", "fix unicode in files", "make this human-readable".
+name: focus-task:text-human
+description: Removes AI artifacts, cleans comments, simplifies documentation in code. Use when - humanizing code, removing AI comments, cleaning docs, fixing unicode, making code human-readable. Trigger keywords - humanize, human, ai artifacts, ai comments, clean comments, simplify docs, unicode fix, remove generated, make readable.
 argument-hint: <commit-hash|path> [custom instructions]
 user-invocable: true
 allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Task]

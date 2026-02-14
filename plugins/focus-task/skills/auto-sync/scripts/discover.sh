@@ -10,12 +10,33 @@ SEARCH_PATH="${1:-.}"
 OUTPUT_FORMAT="${2:-paths}"
 MAX_FILES="${MAX_FILES:-50}"
 
+# Explicit path detection: if path contains rules/, agents/, skills/ - user explicitly requested it
+is_explicit_managed_path() {
+  case "$SEARCH_PATH" in
+    */rules|*/rules/*|*/agents|*/agents/*|*/skills|*/skills/*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Build exclusion args for managed directories (only when auto-scanning)
+build_exclusions() {
+  if is_explicit_managed_path; then
+    echo ""  # No exclusions for explicit paths
+  else
+    # Exclude rules/, agents/, skills/ from auto-scan (only by explicit request)
+    echo "-not -path */rules/* -not -path */agents/* -not -path */skills/*"
+  fi
+}
+
 # Find files with auto-sync: enabled (YAML frontmatter only)
 find_autosync_files() {
+  _exclusions=$(build_exclusions)
+  # shellcheck disable=SC2086
   _all=$(find "$SEARCH_PATH" -name "*.md" \
     -not -path '*/.git/*' \
     -not -path '*/node_modules/*' \
     -not -path '*/.claude/tasks/*' \
+    $_exclusions \
     -exec grep -lE '^auto-sync:[[:space:]]*enabled' {} + \
     2>/dev/null | sort -u || true)
   _count=$(echo "$_all" | grep -c . || true)

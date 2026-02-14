@@ -1,9 +1,6 @@
 ---
-name: text-optimize
-description: |
-  Optimizes text and files for LLM token efficiency.
-  Use when: optimizing prompts, reducing tokens, compressing context, improving CLAUDE.md, cleaning agents/skills, shrinking docs, refactoring for density.
-  Trigger keywords: optimize, compress, reduce tokens, shrink, cleanup, dense, condense, refactor, slim, tighten, efficient.
+name: focus-task:text-optimize
+description: Optimizes text and docs for LLM token efficiency. Use when - optimizing prompts, reducing tokens, compressing text, condensing verbose content. Trigger keywords - optimize, reduce tokens, compress, condense, slim, tighten, too verbose, shrink.
 argument-hint: "[-l|-d] [file|folder|path1,path2] — -l light, -d deep, no flag = medium"
 user-invocable: true
 allowed-tools: [Read, Write, Edit, Grep, Glob, Task]

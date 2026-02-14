@@ -1,10 +1,6 @@
 ---
 name: focus-task:rules
-description: |
-  Syncs KNOWLEDGE.jsonl or session learnings to project rules.
-  Use when: updating rules, syncing knowledge, extracting session learnings, organizing anti-patterns, creating best practices.
-  Trigger keywords: rules, knowledge sync, avoid patterns, best practices, session rules, extract rules.
-  Triggers - "update rules", "sync to rules", "extract rules from session", "/rules".
+description: Syncs KNOWLEDGE.jsonl or session learnings to project rules. Use when - updating rules, syncing knowledge, extracting learnings, organizing anti-patterns. Trigger keywords - rules, knowledge sync, avoid patterns, best practices, session rules, extract rules.
 user-invocable: true
 argument-hint: "[list] | [<path>] | [<path> <prompt>]"
 allowed-tools: Read, Bash, Task

@@ -76,7 +76,7 @@ skill-name/
 ```yaml
 ---
 name: my-skill                    # max 64 chars, lowercase-hyphens
-description: Apply X guidelines   # max 1024 chars, what + when
+description: Apply X guidelines   # 150-300 chars, ONE line, no colons
 ---
 
 # Skill Name
@@ -95,7 +95,7 @@ Imperative form: "Do X" (not "You should do X").
 | Field | Limits | Description |
 |-------|--------|-------------|
 | `name` | 64 chars | lowercase/numbers/hyphens. Uses directory name if omitted |
-| `description` | 1024 chars, no colons | What + when. Claude uses for auto-invocation |
+| `description` | 150-300 chars, ONE line, no colons | What + when. Claude uses for auto-invocation |
 
 > ⚠️ Avoid `:` in description — breaks YAML frontmatter parsing. Use ` - ` or rewrite.
 
@@ -373,33 +373,32 @@ Write in **third person** — description injects into system prompt.
 **CRITICAL:** Include explicit trigger keywords. This raises activation 20% → 50-72%.
 
 ```yaml
-# ❌ BAD — summary of what skill does (Claude follows summary instead of loading!)
-description: Creates presentations with slides, applies company colors, adds animations.
-
-# ✅ GOOD — only triggers, no summary
+# ❌ BAD — multiline, too long (>300 chars)
 description: |
-  Deploy application to production.
-  Use when: deploying, pushing to staging, releasing, shipping.
-  Trigger keywords: deploy, staging, prod, release, ship, k8s.
+  Creates presentations with slides, applies company colors, adds animations.
+  Use when: creating presentations, building slides, formatting decks.
+  Trigger keywords: presentation, slides, deck, pptx.
+  Triggers - "create presentation", "make slides".
+
+# ✅ GOOD — single line, 150-300 chars, triggers only
+description: Creates conventional git commits with proper format. Use when - committing, saving work. Trigger keywords - commit, git commit, save changes.
 ```
 
 ### Description Template
 
 ```yaml
-description: |
-  [One sentence: what it does].
-  Use when: [comma-separated scenarios].
-  Trigger keywords: [comma-separated keywords].
-  Triggers - "[phrase 1]", "[phrase 2]", "[phrase 3]".
+description: [One sentence - what it does]. Use when - [scenarios]. Trigger keywords - [keywords].
 ```
+
+**Rules:**
+- ONE line, no `|` multiline
+- 150-300 chars total
+- Drop `Triggers -` phrases section (saves ~80 chars)
+- Use ` - ` separator instead of `:`
 
 **Example:**
 ```yaml
-description: |
-  Creates conventional git commits with proper format.
-  Use when: committing changes, saving work, finalizing changes.
-  Trigger keywords: commit, save, git commit, conventional commit.
-  Triggers - "commit changes", "create commit", "/commit".
+description: Creates conventional git commits with proper format. Use when - committing changes, saving work, finalizing. Trigger keywords - commit, git commit, conventional commit.
 ```
 
 ### Character Budget
@@ -557,7 +556,7 @@ Write SKILL.md: frontmatter → overview (1-2 sentences) → instructions (imper
 |-------|---------|
 | Structure | SKILL.md with valid YAML frontmatter |
 | `name` | ≤64 chars, lowercase-hyphens |
-| `description` | ≤1024 chars, third-person, no colons |
+| `description` | 150-300 chars, ONE line, third-person, no colons |
 | Body | <500 lines, imperative form |
 | `context` | `fork` if standalone |
 | `agent` | Appropriate type |
@@ -571,9 +570,10 @@ Write SKILL.md: frontmatter → overview (1-2 sentences) → instructions (imper
 
 | Check | Details |
 |-------|---------|
-| Triggers only | Description has NO summary, only "Use when:", "Trigger keywords:" |
-| Keywords present | `Trigger keywords: deploy, staging, prod, release` |
-| Scenarios present | `Use when: deploying, releasing, shipping` |
+| Triggers only | Description has NO summary, only "Use when -", "Trigger keywords -" |
+| Keywords present | `Trigger keywords - deploy, staging, prod, release` |
+| Scenarios present | `Use when - deploying, releasing, shipping` |
+| One line | No multiline `|`, single YAML line, 150-300 chars |
 | Third-person | "Deploys..." not "I deploy..." or "Use this to..." |
 | Critical → slash | `disable-model-invocation: true` for risky operations |
 | Test activation | Say trigger phrase → skill loads? |
@@ -658,11 +658,7 @@ agent: Explore
 ```yaml
 ---
 name: commit
-description: |
-  Creates conventional git commits.
-  Use when: committing changes, saving work, creating commit.
-  Trigger keywords: commit, git commit, save changes.
-  Triggers - "commit changes", "create commit", "/commit".
+description: Creates conventional git commits with proper format. Use when - committing, saving work. Trigger keywords - commit, save, git commit.
 context: fork
 disable-model-invocation: true  # Critical operation → 100% via /commit
 ---
@@ -679,11 +675,7 @@ Create commit message following conventional commits format (type(scope) subject
 ```yaml
 ---
 name: pr-review
-description: |
-  Reviews pull requests with structured analysis.
-  Use when: reviewing PR, checking code quality, analyzing changes.
-  Trigger keywords: review, PR, pull request, code review, check PR.
-  Triggers - "review pr", "review this PR", "check pull request".
+description: Reviews pull requests with structured analysis. Use when - reviewing PR, checking code quality. Trigger keywords - review, PR, pull request, code review.
 context: fork
 agent: Explore
 # No disable-model-invocation → auto-activation OK (read-only, no risk)
@@ -721,11 +713,7 @@ Reference this when answering architecture questions.
 ```yaml
 ---
 name: deploy
-description: |
-  Deploys application to production environment.
-  Use when: deploying, pushing to staging, releasing, shipping.
-  Trigger keywords: deploy, production, staging, release, ship, k8s.
-  Triggers - "deploy to prod", "push to staging", "release version".
+description: Deploys application to production environment. Use when - deploying, releasing, shipping. Trigger keywords - deploy, staging, prod, release, ship.
 context: fork
 disable-model-invocation: true  # CRITICAL: production deployment → 100% via /deploy
 allowed-tools: Bash, Read, Grep
@@ -800,10 +788,11 @@ Source: [skills docs](https://code.claude.com/docs/en/skills)
 
 Before finalizing skill, verify:
 
-- [ ] Description has "Use when:" scenarios
-- [ ] Description has "Trigger keywords:" list
+- [ ] Description has "Use when -" scenarios
+- [ ] Description has "Trigger keywords -" list
 - [ ] No summary/explanation in description (only triggers!)
 - [ ] Third-person voice ("Deploys..." not "I deploy...")
+- [ ] Single line (no multiline `|`), 150-300 chars
 - [ ] Critical operations have `disable-model-invocation: true`
 - [ ] Test: say trigger phrase → does skill load?
 

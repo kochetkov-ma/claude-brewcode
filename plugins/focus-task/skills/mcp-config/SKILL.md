@@ -1,6 +1,6 @@
 ---
-name: mcp-config
-description: Manages MCP server configurations across global, project, and plugin scopes. Shows status, enables/disables servers per-project, detects duplicates in CLAUDE.md. Invoke via /focus-task:mcp-config only.
+name: focus-task:mcp-config
+description: Manages MCP server configurations across global, project, and plugin scopes. Shows status, enables/disables servers per-project, detects duplicates in CLAUDE.md.
 disable-model-invocation: true
 argument-hint: "[status|update|help] or [free-form request like 'disable playwright']"
 allowed-tools: [Read, Write, Edit, Glob, Grep]

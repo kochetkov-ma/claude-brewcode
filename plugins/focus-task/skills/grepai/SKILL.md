@@ -1,6 +1,6 @@
 ---
 name: focus-task:grepai
-description: Manages grepai semantic search (setup, status, start, stop, reindex, optimize, upgrade). Invoke via /focus-task:grepai only.
+description: Manages grepai semantic search (setup, status, start, stop, reindex, optimize, upgrade).
 disable-model-invocation: true
 argument-hint: "[setup|status|start|stop|reindex|optimize|upgrade]"
 allowed-tools: Read, Write, Edit, Bash, Task

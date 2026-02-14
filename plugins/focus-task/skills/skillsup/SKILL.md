@@ -1,6 +1,6 @@
 ---
 name: focus-task:skillsup
-description: Skill management - list, improve, create skills with forced-eval hook. Invoke via /focus-task:skillsup only.
+description: Skill management - list, improve, create skills with activation optimization.
 disable-model-invocation: true
 user-invocable: true
 argument-hint: "[list|setup|up|create] [target] | <skill-path>"

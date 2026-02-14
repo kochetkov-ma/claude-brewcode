@@ -1,6 +1,7 @@
 ---
 name: focus-task:install
-description: Installs focus-task prerequisites (brew, coreutils, jq, grepai). Invoke via /focus-task:install only.
+description: Installs focus-task prerequisites (brew, coreutils, jq, grepai).
+disable-model-invocation: true
 user-invocable: true
 argument-hint: "(no args) — interactive installer for brew, coreutils, jq, grepai"
 allowed-tools: Read, Bash, AskUserQuestion

@@ -1,6 +1,7 @@
 ---
 name: focus-task:auto-sync
-description: Universal documentation sync for skills, agents, markdown. Modes - status, init, global, project, file, folder. Invoke via /focus-task:auto-sync only.
+description: Universal documentation sync for skills, agents, markdown. Modes - status, init, global, project, file, folder.
+disable-model-invocation: true
 user-invocable: true
 argument-hint: "[status] | [init <path>] | [global] | [path]"
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Task, WebFetch, Skill
@@ -28,10 +29,15 @@ Parse output: `MODE|ARG|FLAGS`. If exit code non-zero → report error, EXIT.
 |------|---------|-------|
 | STATUS | `status` | Report INDEX state → EXIT |
 | INIT | `init <path>` | Tag file + add to INDEX → EXIT |
-| GLOBAL | `global` | `~/.claude/**` |
-| PROJECT | empty | `.claude/**` |
+| GLOBAL | `global` | `~/.claude/**` (excludes managed dirs) |
+| PROJECT | empty | `.claude/**` (excludes managed dirs) |
 | FILE | file path | Single file |
 | FOLDER | folder path | All .md in folder |
+
+**Managed directories** (excluded from auto-scan, explicit path required):
+- `rules/` — sync via `/focus-task:auto-sync .claude/rules`
+- `agents/` — sync via `/focus-task:auto-sync .claude/agents`
+- `skills/` — sync via `/focus-task:auto-sync .claude/skills`
 
 
 ## INDEX Format

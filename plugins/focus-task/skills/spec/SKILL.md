@@ -1,6 +1,6 @@
 ---
 name: focus-task:spec
-description: Creates task specification through research and user interaction. Invoke via /focus-task:spec only.
+description: Creates task specification through research and user interaction.
 disable-model-invocation: true
 argument-hint: "<description> | <path-to-requirements> — task description or file"
 allowed-tools: Read, Write, Glob, Grep, Bash, Task, AskUserQuestion
