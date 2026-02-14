@@ -21,7 +21,7 @@ Enables Claude Code to execute complex tasks that exceed single session context 
 claude plugin add claude-brewcode/focus-task
 
 # Or run from source
-claude --plugin-dir ./plugins/focus-task
+claude --plugin-dir ./focus-task
 
 # Install prerequisites
 /focus-task:install
@@ -83,15 +83,15 @@ Session Start
 
 ## Documentation
 
-- [Plugin README (Russian)](plugins/focus-task/README.md) — Comprehensive documentation
-- [Installation Guide](plugins/focus-task/INSTALL.md) — Setup instructions
-- [Release Notes](plugins/focus-task/RELEASE-NOTES.md) — Version history
+- [Plugin README (Russian)](focus-task/README.md) — Comprehensive documentation
+- [Installation Guide](focus-task/INSTALL.md) — Setup instructions
+- [Release Notes](focus-task/RELEASE-NOTES.md) — Version history
 
 ## Development
 
 ```bash
 # Run with debug output
-CLAUDE_DEBUG=1 claude --plugin-dir ./plugins/focus-task
+CLAUDE_DEBUG=1 claude --plugin-dir ./focus-task
 
 # Update plugin in marketplace
 bash .claude/scripts/update-plugin.sh
@@ -100,8 +100,8 @@ bash .claude/scripts/update-plugin.sh
 ### Version Sync
 
 When bumping version, update BOTH:
-- `plugins/focus-task/.claude-plugin/plugin.json` (source of truth)
-- `plugins/.claude-plugin/marketplace.json` (must match)
+- `focus-task/.claude-plugin/plugin.json` (source of truth)
+- `.claude-plugin/marketplace.json` (must match)
 
 ## License
 

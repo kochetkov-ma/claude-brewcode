@@ -4,5 +4,4 @@ runtime/node_modules/
 package-lock.json
 
 # User-specific files (not tracked)
-user/claude-global-overview.md
-user/claude-global-tree.md
+user/
