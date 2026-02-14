@@ -1,0 +1,77 @@
+# Review Report: {AGENT}
+
+| Field | Value |
+|-------|-------|
+| Agent | {AGENT} |
+| Phase | {P}V |
+| Iteration | {N} |
+| Type | verification |
+| Started | {TS_START} |
+| Completed | {TS_END} |
+| Status | {STATUS} |
+
+## Review Scope
+
+| Focus Area | Description |
+|------------|-------------|
+| {AREA_1} | {DESCRIPTION} |
+| {AREA_2} | {DESCRIPTION} |
+
+## Files Reviewed
+
+| File | Lines | Notes |
+|------|-------|-------|
+| {PATH} | {N} | {NOTES} |
+
+## Against References
+
+| ID | Reference | Pattern Followed |
+|----|-----------|------------------|
+| R1 | {PATH} | {YES/PARTIAL/NO} |
+
+## Issues Found
+
+| ID | Severity | File:Line | Description | Recommendation |
+|----|----------|-----------|-------------|----------------|
+| I1 | critical | {PATH}:{LINE} | {DESCRIPTION} | {FIX} |
+| I2 | major | {PATH}:{LINE} | {DESCRIPTION} | {FIX} |
+| I3 | minor | {PATH}:{LINE} | {DESCRIPTION} | {FIX} |
+
+## Issues Summary
+
+| Severity | Count |
+|----------|-------|
+| Critical | {N} |
+| Major | {N} |
+| Minor | {N} |
+| **Total** | **{N}** |
+
+## Checklist
+
+| Check | Status |
+|-------|--------|
+| Requirements met | {PASS/FAIL} |
+| No regressions | {PASS/FAIL} |
+| Patterns followed | {PASS/FAIL} |
+| Tests pass | {PASS/FAIL/NA} |
+| Security review | {PASS/FAIL/NA} |
+
+## Verdict
+
+| Result | Recommendation |
+|--------|----------------|
+| {PASS/FAIL/CONDITIONAL} | {PROCEED/FIX_AND_RERUN/ESCALATE} |
+
+## Knowledge Added
+
+| Type | Text | Category |
+|------|------|----------|
+| {AVOID/BEST/INFO} | {TEXT} | {CAT} |
+
+## Notes
+
+{ADDITIONAL_NOTES}
+
+---
+
+**Generated:** {TS} by bc-coordinator

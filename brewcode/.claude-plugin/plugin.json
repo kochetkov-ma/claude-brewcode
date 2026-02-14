@@ -1,0 +1,12 @@
+{
+  "name": "brewcode",
+  "version": "2.14.3",
+  "description": "Infinite task execution via hooks-only architecture for Claude Code",
+  "author": {
+    "name": "Maksim Kochetkov"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/user/claude-brewcode.git",
+  "keywords": ["task", "automation", "agents", "handoff", "infinite-context"],
+  "skills": "./skills/"
+}

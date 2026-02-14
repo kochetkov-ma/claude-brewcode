@@ -1,0 +1,194 @@
+# Focus Task Plugin - Руководство по установке
+
+## Быстрая установка
+
+```bash
+claude plugin marketplace add /path/to/claude-brewcode/plugins
+claude plugin install brewcode@claude-brewcode
+```
+
+## Краткая справка
+
+| Действие | Команда |
+|----------|---------|
+| **Установить** | `claude plugin install brewcode@claude-brewcode` |
+| **Удалить** | `claude plugin uninstall brewcode` |
+| **Обновить** | `claude plugin update brewcode` |
+| **Только сессия** | `claude --plugin-dir ./brewcode` |
+| Добавить маркетплейс | `claude plugin marketplace add <repo-path>` |
+| Список плагинов | `claude plugin list` |
+
+---
+
+## 1. Локальная разработка (без установки)
+
+Запуск плагина напрямую из исходников.
+
+```bash
+# Из корня проекта
+claude --plugin-dir ./brewcode
+
+# Абсолютный путь
+claude --plugin-dir /path/to/claude-brewcode/brewcode
+
+# Несколько плагинов
+claude --plugin-dir ./brewcode --plugin-dir ./plugins/other
+```
+
+**Плюсы:** изменения применяются мгновенно, не нужна пересборка для skills/agents
+**Минусы:** путь нужно указывать каждый раз
+
+---
+
+## 2. Сборка Runtime
+
+Обязательный шаг перед любой установкой.
+
+```bash
+cd brewcode/runtime
+npm install
+npm run build
+```
+
+**Проверка:**
+```bash
+ls dist/
+# Должны быть: index.js, config.js, context-monitor.js, etc.
+```
+
+---
+
+## 3. Установка через локальный маркетплейс
+
+Claude Code требует установки плагинов через маркетплейс. Создайте локальный маркетплейс для разработки.
+
+### 3.1 Манифест маркетплейса
+
+В корне репозитория создайте `.claude-plugin/marketplace.json`:
+
+```json
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "my-local-plugins",
+  "description": "Локальные плагины для разработки",
+  "owner": {
+    "name": "Your Name"
+  },
+  "plugins": [
+    {
+      "name": "brewcode",
+      "description": "Бесконечное выполнение задач с автоматической передачей",
+      "author": { "name": "Your Name" },
+      "source": "./brewcode",
+      "category": "productivity"
+    }
+  ]
+}
+```
+
+### 3.2 Добавление маркетплейса
+
+```bash
+# Добавить локальный маркетплейс (абсолютный путь)
+claude plugin marketplace add /path/to/your/repo
+
+# Проверить
+claude plugin marketplace list
+```
+
+### 3.3 Установка плагина
+
+```bash
+# Установить из маркетплейса
+claude plugin install brewcode@my-local-plugins
+
+# Проверить
+claude plugin list
+```
+
+### 3.4 Обновление после изменений
+
+```bash
+# Обновить индекс маркетплейса
+claude plugin marketplace update my-local-plugins
+
+# Обновить плагин
+claude plugin update brewcode@my-local-plugins
+```
+
+### 3.5 Удаление
+
+```bash
+claude plugin uninstall brewcode@my-local-plugins
+
+# Удалить маркетплейс
+claude plugin marketplace remove my-local-plugins
+```
+
+---
+
+## 4. Встраивание в проект
+
+Плагин внутри конкретного проекта.
+
+### 4.1 Структура
+
+```
+my-project/
+├── .claude/
+│   └── plugins/
+│       └── brewcode/    # Плагин здесь
+└── src/
+```
+
+### 4.2 settings.json
+
+```json
+{
+  "plugins": [
+    { "type": "local", "path": "brewcode" }
+  ]
+}
+```
+
+### 4.3 Автозагрузка
+
+Плагин загружается автоматически при открытии проекта в Claude Code.
+
+---
+
+## Устранение проблем
+
+| Проблема | Решение |
+|----------|---------|
+| Плагин не найден | Проверьте путь и наличие `.claude-plugin/plugin.json` |
+| Skills не отображаются | Выполните `/help`, проверьте `user-invocable: true` |
+| Ошибка runtime | Пересоберите: `cd runtime && npm run build` |
+| Отказ в доступе | Проверьте права: `chmod -R 755 plugins/` |
+| SDK не найден | Выполните `npm install` в директории runtime |
+| Invalid input | Выполните `claude plugin validate <path>` |
+
+**Валидация перед установкой:**
+```bash
+claude plugin validate ./brewcode
+```
+
+**Режим отладки:**
+```bash
+CLAUDE_DEBUG=1 claude --plugin-dir ./brewcode
+```
+
+**Частые ошибки plugin.json:**
+- `repository: Invalid input` — должна быть строка, не объект
+- `agents: Invalid input` — поле agents не поддерживается (используйте skills)
+- `Unrecognized key` — удалите неподдерживаемые поля
+
+---
+
+## See Also
+
+| Document | Description |
+|----------|-------------|
+| [README.md](README.md) | Plugin overview and commands |
+| [grepai.md](grepai.md) | Semantic search integration |
+| [/brewcode:install](skills/install/SKILL.md) | Prerequisites installation skill |

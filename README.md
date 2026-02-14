@@ -1,8 +1,8 @@
 # claude-brewcode
 
-Workspace for Claude Code plugins. Main deliverable: **focus-task** plugin for infinite task execution.
+Workspace for Claude Code plugins. Main deliverable: **brewcode** plugin for infinite task execution.
 
-## Focus-Task Plugin
+## Brewcode Plugin
 
 Enables Claude Code to execute complex tasks that exceed single session context limits through automatic state handoff between context compactions.
 
@@ -18,41 +18,41 @@ Enables Claude Code to execute complex tasks that exceed single session context 
 
 ```bash
 # Install plugin
-claude plugin add claude-brewcode/focus-task
+claude plugin add claude-brewcode/brewcode
 
 # Or run from source
-claude --plugin-dir ./focus-task
+claude --plugin-dir ./brewcode
 
 # Install prerequisites
-/focus-task:install
+/brewcode:install
 
 # Initialize for your project
-/focus-task:setup
+/brewcode:setup
 
 # Create spec (research + user dialog)
-/focus-task:spec "Implement user authentication with JWT"
+/brewcode:spec "Implement user authentication with JWT"
 
 # Generate execution plan from spec
-/focus-task:plan
+/brewcode:plan
 
 # Execute with infinite context
-/focus-task:start
+/brewcode:start
 ```
 
 ### Skills
 
 | Skill | Purpose |
 |-------|---------|
-| `/focus-task:install` | Install prerequisites (brew, jq, grepai) |
-| `/focus-task:setup` | Analyze project, create adapted templates |
-| `/focus-task:spec` | Create SPEC through research + user interaction |
-| `/focus-task:plan` | Create PLAN from SPEC or Plan Mode file |
-| `/focus-task:start` | Execute task with infinite context handoff |
-| `/focus-task:review` | Multi-agent code review with quorum |
-| `/focus-task:rules` | Extract rules from KNOWLEDGE to .claude/rules/ |
-| `/focus-task:auto-sync` | Universal document sync |
-| `/focus-task:grepai` | Setup semantic code search |
-| `/focus-task:teardown` | Remove plugin files (keeps tasks) |
+| `/brewcode:install` | Install prerequisites (brew, jq, grepai) |
+| `/brewcode:setup` | Analyze project, create adapted templates |
+| `/brewcode:spec` | Create SPEC through research + user interaction |
+| `/brewcode:plan` | Create PLAN from SPEC or Plan Mode file |
+| `/brewcode:start` | Execute task with infinite context handoff |
+| `/brewcode:review` | Multi-agent code review with quorum |
+| `/brewcode:rules` | Extract rules from KNOWLEDGE to .claude/rules/ |
+| `/brewcode:auto-sync` | Universal document sync |
+| `/brewcode:grepai` | Setup semantic code search |
+| `/brewcode:teardown` | Remove plugin files (keeps tasks) |
 
 ### Architecture
 
@@ -64,7 +64,7 @@ Session Start
 │  Execution Loop                      │
 │  PreToolUse → Agent → PostToolUse   │
 │       ↓                              │
-│  ft-coordinator (update state)       │
+│  bc-coordinator (update state)       │
 └─────────────────────────────────────┘
      │
      ▼ (context ~90%)
@@ -83,15 +83,15 @@ Session Start
 
 ## Documentation
 
-- [Plugin README (Russian)](focus-task/README.md) — Comprehensive documentation
-- [Installation Guide](focus-task/INSTALL.md) — Setup instructions
-- [Release Notes](focus-task/RELEASE-NOTES.md) — Version history
+- [Plugin README (Russian)](brewcode/README.md) — Comprehensive documentation
+- [Installation Guide](brewcode/INSTALL.md) — Setup instructions
+- [Release Notes](brewcode/RELEASE-NOTES.md) — Version history
 
 ## Development
 
 ```bash
 # Run with debug output
-CLAUDE_DEBUG=1 claude --plugin-dir ./focus-task
+CLAUDE_DEBUG=1 claude --plugin-dir ./brewcode
 
 # Update plugin in marketplace
 bash .claude/scripts/update-plugin.sh
@@ -100,7 +100,7 @@ bash .claude/scripts/update-plugin.sh
 ### Version Sync
 
 When bumping version, update BOTH:
-- `focus-task/.claude-plugin/plugin.json` (source of truth)
+- `brewcode/.claude-plugin/plugin.json` (source of truth)
 - `.claude-plugin/marketplace.json` (must match)
 
 ## License

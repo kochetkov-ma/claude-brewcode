@@ -7,10 +7,10 @@
   },
   "plugins": [
     {
-      "name": "focus-task",
+      "name": "brewcode",
       "description": "Infinite task execution with automatic handoff for Claude Code",
       "version": "2.14.3",
-      "source": "./focus-task"
+      "source": "./brewcode"
     }
   ]
 }

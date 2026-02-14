@@ -1,0 +1,34 @@
+{
+  "knowledge": {
+    "maxEntries": 100,
+    "maxTokens": 500,
+    "priorities": ["❌", "✅", "ℹ️"],
+    "validation": {
+      "enabled": true,
+      "blocklist": true,
+      "densityCheck": true
+    }
+  },
+  "logging": {
+    "level": "info"
+  },
+  "agents": {
+    "system": [
+      "bc-coordinator", "bc-knowledge-manager", "bc-auto-sync-processor",
+      "Explore", "Plan", "Bash", "general-purpose",
+      "claude-code-guide", "skill-creator", "agent-creator",
+      "text-optimizer", "statusline-setup"
+    ]
+  },
+  "constraints": {
+    "enabled": true
+  },
+  "autoSync": {
+    "intervalDays": 7,
+    "retention": {
+      "maxEntries": 200
+    },
+    "optimize": false,
+    "parallelAgents": 5
+  }
+}
