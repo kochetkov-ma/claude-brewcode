@@ -2,7 +2,7 @@
 
 **Full-featured development platform for Claude Code** - infinite focus tasks with automatic context handoff, prompt optimization, skill/agent creation, quorum code reviews, project rules management, and knowledge persistence.
 
-16 slash commands. 14 specialized agents. 7 lifecycle hooks.
+`16` skills. `14` specialized agents. `7` lifecycle hooks.
 
 ---
 
@@ -273,7 +273,7 @@ After task creation:
 |----------|-------------|
 | [Plugin README](brewcode/README.md) | Detailed plugin documentation |
 | [Installation Guide](brewcode/INSTALL.md) | All installation methods |
-| [Commands Reference](brewcode/docs/commands.md) | Detailed command descriptions with examples |
+| [Commands Reference](brewcode/docs/commands.md) | Detailed skills descriptions with examples |
 | [Flow Diagrams](brewcode/docs/flow.md) | Execution flow diagrams (spec, plan, start) |
 | [Hooks Reference](brewcode/docs/hooks.md) | Hook behavior and configuration |
 | [File Structure](brewcode/docs/file-tree.md) | Complete file tree of plugin and project |
