@@ -1,0 +1,81 @@
+# Creates a GitHub Release when a version tag (v*.*.*) is pushed to main.
+# Extracts the matching changelog section from brewcode/RELEASE-NOTES.md
+# and appends installation instructions to the release body.
+
+name: Release
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract changelog for tag version
+        id: changelog
+        run: |
+          # Strip "v" prefix from tag to get version number (e.g. v2.15.4 -> 2.15.4)
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+          RELEASE_NOTES="brewcode/RELEASE-NOTES.md"
+
+          if [ ! -f "$RELEASE_NOTES" ]; then
+            echo "::error::${RELEASE_NOTES} not found"
+            exit 1
+          fi
+
+          # Extract the section for this version.
+          # Match: ## [VERSION] ... until the next ## [ or --- separator line.
+          # Uses awk: start printing when we see ## [VERSION], stop at next ## [ or ---
+          BODY=$(awk -v ver="$VERSION" '
+            BEGIN { found=0 }
+            # Match the header line for our version: ## [2.15.4] - ...
+            $0 ~ "^## \\[" ver "\\]" {
+              found=1
+              # Print the header line itself
+              print
+              next
+            }
+            # If we are inside the target section, stop at next version header or --- separator
+            found && /^## \[/ { exit }
+            found && /^---[[:space:]]*$/ { exit }
+            # Print lines belonging to the target section
+            found { print }
+          ' "$RELEASE_NOTES")
+
+          if [ -z "$BODY" ]; then
+            echo "::error::No changelog section found for version ${VERSION} in ${RELEASE_NOTES}"
+            exit 1
+          fi
+
+          # Write changelog to temp file
+          echo "$BODY" > /tmp/release-body.md
+
+          # Append install instructions
+          printf '\n---\n\n## Quick Install\n\n```bash\n# 1. Add marketplace (one-time)\nclaude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode\n\n# 2. Install plugin\nclaude plugin install brewcode@claude-brewcode\n```\n' >> /tmp/release-body.md
+
+          echo "Release body written to /tmp/release-body.md"
+          echo "--- Preview (first 20 lines) ---"
+          head -20 /tmp/release-body.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.changelog.outputs.tag }}
+          name: ${{ steps.changelog.outputs.tag }}
+          body_path: /tmp/release-body.md
+          draft: false
+          prerelease: false
