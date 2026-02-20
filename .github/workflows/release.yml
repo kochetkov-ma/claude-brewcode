@@ -47,21 +47,19 @@ jobs:
           fi
 
           # Extract the section for this version.
-          # Match: ## [VERSION] ... until the next ## [ or --- separator line.
-          # Uses awk: start printing when we see ## [VERSION], stop at next ## [ or ---
+          # Match: ## [VERSION] or ## vVERSION or ## VERSION
+          # Stop at the next version header or --- separator line.
           BODY=$(awk -v ver="$VERSION" '
             BEGIN { found=0 }
-            # Match the header line for our version: ## [2.15.4] - ...
-            $0 ~ "^## \\[" ver "\\]" {
+            # Match header: ## [2.15.4], ## v2.15.4, or ## 2.15.4
+            $0 ~ "^## (\\[" ver "\\]|v?" ver ")([^0-9.]|$)" {
               found=1
-              # Print the header line itself
               print
               next
             }
-            # If we are inside the target section, stop at next version header or --- separator
-            found && /^## \[/ { exit }
+            # Stop at next version header (any of the three formats) or --- separator
+            found && $0 ~ "^## (\\[|v?[0-9])" { exit }
             found && /^---[[:space:]]*$/ { exit }
-            # Print lines belonging to the target section
             found { print }
           ' "$RELEASE_NOTES")
 
