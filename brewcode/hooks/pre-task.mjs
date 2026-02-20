@@ -42,7 +42,7 @@ function parseSectionFromContent(content, tag) {
 
   return section
     .split('\n')
-    .filter(line => !/^\s*<!--.*-->\s*$/.test(line))
+    .filter(line => !/^\s*<!--.*-->\s*$/s.test(line))
     .join('\n')
     .trim();
 }

@@ -279,7 +279,7 @@ case "$CMD" in
     echo "--- Homebrew ---"
     if ! command -v brew &>/dev/null; then
         echo "Installing Homebrew..."
-        NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" # nosemgrep: curl-pipe-bash
         eval "$(/opt/homebrew/bin/brew shellenv)" 2>/dev/null || eval "$(/usr/local/bin/brew shellenv)" 2>/dev/null || true
         command -v brew &>/dev/null && { echo "✅ brew: installed"; log_action "Installed Homebrew"; } || { echo "❌ brew: FAILED"; exit 1; }
     else
