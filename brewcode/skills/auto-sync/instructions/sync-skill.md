@@ -30,4 +30,4 @@
 - Keep frontmatter order
 - Update examples to match files
 - Do NOT change tone or structure
-- Respect `preserve:` override — if document has `<auto-sync-override>` with `preserve:` field, never modify those sections
+- Respect `preserve:` — if frontmatter has `auto-sync-override:` with `preserve:` field, never modify those sections

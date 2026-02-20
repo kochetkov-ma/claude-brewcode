@@ -30,4 +30,4 @@
 - Keep output format stable (consumers depend on it)
 - Verify frontmatter `permissionMode`
 - Do NOT change responsibilities scope
-- Respect `preserve:` override — if document has `<auto-sync-override>` with `preserve:` field, never modify those sections
+- Respect `preserve:` — if frontmatter has `auto-sync-override:` with `preserve:` field, never modify those sections

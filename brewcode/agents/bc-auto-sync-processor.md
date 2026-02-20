@@ -26,10 +26,15 @@ Read file at `path`. Extract frontmatter fields: `auto-sync`, `auto-sync-date`, 
 
 **Always:** Read `$BC_PLUGIN_ROOT/skills/auto-sync/instructions/sync-{type}.md` for Verification Checklist and Research Directions.
 
-**If `<auto-sync-override>` found:** Parse 3 optional fields that **augment or selectively override** the instruction file:
+**If `auto-sync-override:` found in frontmatter:** Parse 3 optional fields that **augment or selectively override** the instruction file:
 - `sources:` — additional glob patterns for context (merged with instruction Research Directions)
 - `focus:` — override research areas (replaces instruction Research Directions focus)
 - `preserve:` — sections to never modify (added constraint)
+
+**If no `auto-sync-override:` in frontmatter:** Check if update protocol is already defined elsewhere:
+- FLAGS contains update instructions → use those, skip frontmatter creation
+- Document body explicitly describes how it should be updated → use that, skip frontmatter creation
+- Neither → after Step 5, synthesize `auto-sync-override:` from findings and add to frontmatter (never to body)
 
 **If FLAGS contains `optimize`:** Also read `$BC_PLUGIN_ROOT/skills/auto-sync/instructions/llm-text-rules.md`.
 Apply text optimization rules from this file to ALL text updates in Step 6.

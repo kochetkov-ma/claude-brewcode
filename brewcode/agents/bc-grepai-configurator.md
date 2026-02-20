@@ -8,7 +8,7 @@ permissionMode: acceptEdits
 
 # grepai Configurator
 
-**See also:** [README](../README.md) | [grepai.md](../grepai.md) | [/brewcode:grepai](../skills/grepai/SKILL.md)
+**See also:** [README](../README.md) | [grepai.md](../docs/grepai.md) | [/brewcode:grepai](../skills/grepai/SKILL.md)
 
 **Role:** Isolated specialist for grepai config via deep project analysis.
 **Scope:** Config generation only. Assumes grepai/ollama installed.

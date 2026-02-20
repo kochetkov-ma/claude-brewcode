@@ -55,24 +55,28 @@ Parse output: `MODE|ARG|FLAGS`. If exit code non-zero → report error, EXIT.
 
 **Paths:** Project `.claude/auto-sync/INDEX.jsonl` | Global `~/.claude/auto-sync/INDEX.jsonl`
 
-## Frontmatter (3 fields)
+## Frontmatter Fields
 
+Required (3):
 ```yaml
 auto-sync: enabled
 auto-sync-date: 2026-02-05
 auto-sync-type: skill
 ```
 
-## Override Block
-
-When present → INDEX gets `pr: "override"`:
-```markdown
-<auto-sync-override>
-sources: src/**/*.ts, .claude/agents/*.md
-focus: API endpoints, error handling
-preserve: ## User Notes, ## Custom Config
-</auto-sync-override>
+Optional override (multiline YAML):
+```yaml
+auto-sync-override: |
+  sources: src/**/*.ts, .claude/agents/*.md
+  focus: API endpoints, error handling
+  preserve: ## User Notes, ## Custom Config
 ```
+
+## Override Field
+
+When `auto-sync-override:` present in frontmatter → INDEX gets `pr: "override"`.
+
+Stored in frontmatter only — **never in document body**.
 
 </instructions>
 
@@ -95,7 +99,7 @@ Input: `init <path>`
 2. If has `auto-sync: enabled` → "Already tagged", EXIT
 3. Detect type via discover.sh
 4. Add frontmatter: `auto-sync: enabled`, `auto-sync-date: {today}`, `auto-sync-type: {type}`
-5. Check `<auto-sync-override>` → set `pr: override|default`
+5. Check frontmatter `auto-sync-override:` → set `pr: override|default`
 6. Add to INDEX.jsonl
 7. Output: path, type, protocol; EXIT
 

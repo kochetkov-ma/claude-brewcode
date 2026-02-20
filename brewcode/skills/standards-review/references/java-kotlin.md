@@ -1,6 +1,6 @@
 # Java/Kotlin Standards Reference
 
-Rules validated against industry best practices and common enterprise patterns.
+Standards for Java/Kotlin enterprise projects.
 
 ## File Patterns
 

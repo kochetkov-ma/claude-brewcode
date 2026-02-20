@@ -28,4 +28,4 @@
 - Do NOT add rules (KNOWLEDGE manager's job)
 - Do NOT remove rules (mark outdated instead)
 - Keep numbering sequential
-- Respect `preserve:` override — if document has `<auto-sync-override>` with `preserve:` field, never modify those sections
+- Respect `preserve:` — if frontmatter has `auto-sync-override:` with `preserve:` field, never modify those sections

@@ -30,4 +30,4 @@
 - Do NOT remove content — mark stale inline if needed
 - Update directory trees to match structure
 - Keep tone consistent
-- Respect `preserve:` override — if document has `<auto-sync-override>` with `preserve:` field, never modify those sections
+- Respect `preserve:` — if frontmatter has `auto-sync-override:` with `preserve:` field, never modify those sections
