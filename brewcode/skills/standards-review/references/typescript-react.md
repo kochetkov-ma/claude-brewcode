@@ -1,6 +1,6 @@
 # TypeScript/React Standards Reference
 
-Rules validated against React best practices and modern TypeScript patterns.
+Standards for TypeScript/React projects.
 
 ## File Patterns
 

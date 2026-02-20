@@ -41,9 +41,11 @@ After installation, run `/brewcode:install` inside Claude Code to check and inst
 2. **Spec** - spawns 5-10 parallel research agents, asks clarifying questions, produces a structured specification
    ```bash
    /brewcode:spec "Implement JWT authorization"
-   /brewcode:spec -n "Implement JWT authorization"   # --noask: no questions to user
+   /brewcode:spec ./docs/requirements/auth.md         # file path for large descriptions
+   /brewcode:spec -n "Implement JWT authorization"    # --noask: no questions to user
    ```
-   Output: `SPEC.md` with requirements, constraints, risks, and codebase analysis
+   Output: `SPEC.md` with requirements, constraints, risks, and codebase analysis.
+   For complex tasks, write requirements to a file and pass the path — the plugin reads it as input.
 
 3. **Plan** - converts SPEC into a phased execution plan with verification criteria
    ```bash

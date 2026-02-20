@@ -1,6 +1,6 @@
 # Python Standards Reference
 
-Rules validated against PEP standards and modern Python best practices.
+Standards for modern Python projects.
 
 ## File Patterns
 

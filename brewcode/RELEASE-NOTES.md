@@ -1,6 +1,6 @@
 # Release Notes
 
-**See also:** [README.md](README.md) | [INSTALL.md](INSTALL.md) | [grepai.md](grepai.md)
+**See also:** [README.md](README.md) | [INSTALL.md](INSTALL.md) | [grepai.md](docs/grepai.md)
 
 ---
 
@@ -29,6 +29,16 @@
 | **PATCH** | Bug fixes, documentation |
 | **Order** | Newest first |
 | **Sources** | Link to issues/docs when relevant |
+
+---
+
+## v2.15.5 (2026-02-20)
+
+### Changed
+
+- **auto-sync** — `<auto-sync-override>` body block replaced with frontmatter field `auto-sync-override:` (multiline YAML)
+- **bc-auto-sync-processor** — reads override from frontmatter; optionally synthesizes and writes `auto-sync-override:` to frontmatter when not defined by prompt or file body
+- **sync-doc/agent/skill/rule** — `preserve:` references updated to frontmatter field
 
 ---
 

@@ -12,7 +12,7 @@
     {
       "name": "brewcode",
       "description": "Brewcode - full-featured development platform for Claude Code: infinite focus tasks, prompt optimization, skill/agent creation, quorum reviews, rules management",
-      "version": "2.15.4",
+      "version": "2.15.5",
       "category": "productivity",
       "keywords": ["brewcode", "task", "automation", "agents", "handoff", "infinite-context", "prompt-optimization", "developer-tools"],
       "tags": ["brewcode", "task-management", "workflow", "multi-agent", "knowledge-persistence", "code-review", "rules-management"],

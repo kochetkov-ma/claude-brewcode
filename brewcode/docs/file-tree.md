@@ -150,12 +150,12 @@ brewcode/                                    # Plugin root directory
 │               └── report-template.md         # Review report template: P0-P3 priorities, quorum, statistics
 │
 ├── docs/                                      # Plugin documentation
-│   └── file-tree.md                           # This file - complete tree with descriptions
+│   ├── file-tree.md                           # This file - complete tree with descriptions
+│   └── grepai.md                              # grepai integration: ecosystem, attention architecture, MCP, gitignore limitations
 │
 ├── README.md                                  # Main documentation: components, commands, agents, hooks, architecture, Flow diagrams
 ├── INSTALL.md                                 # Installation guide: plugin-dir, marketplace, embedding, troubleshooting
 ├── RELEASE-NOTES.md                           # Version history: SemVer, v2.0.41 - v2.6.0, Breaking Changes, migration
-├── grepai.md                                  # grepai integration: ecosystem, attention architecture, MCP, gitignore limitations
 └── package.json                               # npm manifest: claude-plugin-brewcode@2.7.1, build/publish scripts
 ```
 
