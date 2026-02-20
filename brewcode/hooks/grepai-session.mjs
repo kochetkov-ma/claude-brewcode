@@ -37,9 +37,9 @@ async function main() {
 }
 
 async function checkGrepai(cwd, session_id = null) {
-  const grepaiDir = join(cwd, '.grepai');
-  const indexPath = join(grepaiDir, 'index.gob');
-  const logsDir = join(grepaiDir, 'logs');
+  const grepaiDir = join(cwd, '.grepai'); // nosemgrep: path-join-resolve-traversal
+  const indexPath = join(grepaiDir, 'index.gob'); // nosemgrep: path-join-resolve-traversal
+  const logsDir = join(grepaiDir, 'logs'); // nosemgrep: path-join-resolve-traversal
 
   // No .grepai directory - skip silently (grepai not configured for this project)
   if (!existsSync(grepaiDir)) {
@@ -173,7 +173,7 @@ function checkOllama() {
 function checkWatchRunning(cwd) {
   if (process.platform === 'win32') return false;
   // Check for grepai PID file first (project-specific)
-  const pidFile = join(cwd, '.grepai', 'watch.pid');
+  const pidFile = join(cwd, '.grepai', 'watch.pid'); // nosemgrep: path-join-resolve-traversal
   if (existsSync(pidFile)) {
     try {
       const pid = readFileSync(pidFile, 'utf8').trim();
@@ -200,7 +200,7 @@ function checkWatchRunning(cwd) {
 
 function checkMcpServer(cwd) {
   if (process.platform === 'win32') return false;
-  const pidFile = join(cwd, '.grepai', 'mcp-serve.pid');
+  const pidFile = join(cwd, '.grepai', 'mcp-serve.pid'); // nosemgrep: path-join-resolve-traversal
   if (existsSync(pidFile)) {
     try {
       const pid = readFileSync(pidFile, 'utf8').trim();

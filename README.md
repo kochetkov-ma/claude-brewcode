@@ -1,8 +1,21 @@
 # Brewcode
 
+[![macOS](https://img.shields.io/badge/macOS-support-000000?logo=apple&logoColor=white)](https://www.apple.com/macos/)
+[![Claude](https://img.shields.io/badge/Claude-Anthropic-orange?logo=anthropic&logoColor=white)](https://claude.ai)
+[![Claude Code](https://img.shields.io/badge/Claude_Code-Plugin-blueviolet?logo=anthropic&logoColor=white)](https://code.claude.com)
+
+[![Release](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/release.yml/badge.svg)](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/release.yml)
+[![Latest Release](https://img.shields.io/github/v/release/kochetkov-ma/claude-brewcode?label=latest&color=blue)](https://github.com/kochetkov-ma/claude-brewcode/releases/latest)
+
 **Full-featured development platform for Claude Code** - infinite focus tasks with automatic context handoff, prompt optimization, skill/agent creation, quorum code reviews, project rules management, and knowledge persistence.
 
 `16` skills. `14` specialized agents. `7` lifecycle hooks.
+
+> 🔒 **Code is scanned on every commit.** No personal data is collected or transmitted
+>
+> [![Gitleaks](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/gitleaks.yml/badge.svg)](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/gitleaks.yml?query=branch%3Amain)
+> [![CodeQL](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/codeql.yml/badge.svg)](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/codeql.yml?query=branch%3Amain)
+> [![Semgrep](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/semgrep.yml/badge.svg)](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/semgrep.yml?query=branch%3Amain)
 
 ---
 
@@ -63,6 +76,8 @@ After installation, run `/brewcode:install` inside Claude Code to check and inst
 After `/brewcode:setup` runs once, each task follows the cycle: `spec` -> `plan` -> `start`.
 
 ---
+
+> ⚠️ **macOS only.** Windows and Linux support is planned for future releases.
 
 ## Examples
 

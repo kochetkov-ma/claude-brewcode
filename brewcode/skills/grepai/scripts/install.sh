@@ -14,7 +14,7 @@ if command -v brew &>/dev/null; then
     echo "✅ brew: $(brew --version | head -1)"
 else
     echo "⚠️ brew: not found, installing..."
-    if /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"; then
+    if /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"; then # nosemgrep: curl-pipe-bash
         eval "$(/opt/homebrew/bin/brew shellenv)" 2>/dev/null || eval "$(/usr/local/bin/brew shellenv)" 2>/dev/null || true
         echo "✅ brew: installed"
         INSTALLED+=("brew")

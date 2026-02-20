@@ -1,0 +1,50 @@
+name: Semgrep
+
+on:
+  push:
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 6 * * 1'
+
+jobs:
+  sast:
+    name: SAST
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: semgrep/semgrep-action@v1
+        with:
+          config: p/javascript p/secrets
+          generateSarif: "1"
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+      - uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: semgrep.sarif
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: semgrep-sarif
+          path: semgrep.sarif
+      - name: Summary
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          [ "$STATUS" = "success" ] && ICON="✅" || ICON="❌"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          {
+            echo "## ${ICON} Semgrep — SAST"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Status | **${STATUS}** |"
+            echo "| Rules | \`p/javascript\`, \`p/secrets\` |"
+            echo "| Commit | \`${{ github.sha }}\` |"
+            echo "| Branch | \`${{ github.ref_name }}\` |"
+            echo ""
+            echo "📄 [Download SARIF report](${RUN_URL}#artifacts)"
+          } >> "$GITHUB_STEP_SUMMARY"
