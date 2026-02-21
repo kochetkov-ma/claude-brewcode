@@ -4,7 +4,7 @@ auto-sync-date: 2026-02-13
 auto-sync-type: doc
 ---
 
-# skillsup Skill
+# skills Skill
 
 Skill management with 84% activation rate via forced-eval hook.
 
@@ -14,7 +14,7 @@ Claude Code skills auto-activate only 20-50% of the time ([#10768](https://githu
 
 ## Solution
 
-The `skillsup` skill provides:
+The `skills` skill provides:
 1. **forced-eval hook** — raises activation to 84% by prepending skill-check reminder to user prompts
 2. **skill improvement** — applies best practices via skill-creator agent
 3. **skill creation** — research-driven skill generation
@@ -22,14 +22,14 @@ The `skillsup` skill provides:
 ## Usage
 
 ```bash
-/brewcode:skillsup                    # List all skills
-/brewcode:skillsup list               # Same as above
-/brewcode:skillsup setup              # Install forced-eval hook + list
-/brewcode:skillsup up commit          # Improve "commit" skill
-/brewcode:skillsup commit             # Shorthand: improve "commit" skill
-/brewcode:skillsup brewcode/skills/setup  # Shorthand: improve by path
-/brewcode:skillsup ~/.claude/skills/  # Improve all global skills (folder)
-/brewcode:skillsup create "semantic search"  # Create new skill
+/brewcode:skills                    # List all skills
+/brewcode:skills list               # Same as above
+/brewcode:skills setup              # Install forced-eval hook + list
+/brewcode:skills up commit          # Improve "commit" skill
+/brewcode:skills commit             # Shorthand: improve "commit" skill
+/brewcode:skills brewcode/skills/setup  # Shorthand: improve by path
+/brewcode:skills ~/.claude/skills/  # Improve all global skills (folder)
+/brewcode:skills create "semantic search"  # Create new skill
 ```
 
 ## Modes

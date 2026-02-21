@@ -430,6 +430,66 @@ Use imperative form:
 | scripts/ | Python, JS, Bash (pre-installed packages only) |
 | assets/ | Templates, images (not loaded into context) |
 
+# Reference Splitting Strategy
+
+## When to Split
+
+| Criteria | Threshold |
+|----------|-----------|
+| Independent modes | 2+ modes with different knowledge |
+| Per-mode instructions | >50 lines per mode |
+| Total reference content | >300 lines combined |
+| Shared vs. specific ratio | <30% shared content |
+
+If ALL criteria met → split into `references/{mode}.md` files.
+
+## Loading Patterns
+
+| Pattern | When | Example |
+|---------|------|---------|
+| Conditional (lazy) | Multi-mode, >50 lines/mode | `standards-review`: detect stack → Read `references/{stack}.md` |
+| Unconditional single | Single reference, <200 lines | `text-optimize`: always Read `references/rules-review.md` |
+| Unconditional multi | Fixed set, always needed | `mcp-config`: Read both `references/schema.md` + `references/examples.md` |
+
+## 3-Step Pattern
+
+```
+1. DETECT mode from $ARGUMENTS or project analysis
+2. READ matching reference: `references/{mode}.md`
+3. VALIDATE: "If file not found → ERROR: Missing reference for {mode}. STOP."
+```
+
+## Template
+
+```markdown
+## Mode Detection
+
+Analyze project to determine mode:
+- Java/Kotlin → `jvm`
+- TypeScript/JavaScript → `ts`
+- Python → `python`
+
+## Load References
+
+**EXECUTE** using Read tool:
+Read file: `references/{detected_mode}.md`
+
+> If file not found → **ERROR:** Missing reference for `{detected_mode}`. **STOP.**
+
+## Apply Mode-Specific Instructions
+
+Follow the loaded reference document.
+```
+
+## Anti-Patterns
+
+| Anti-Pattern | Fix |
+|--------------|-----|
+| Load ALL references regardless of mode | Detect mode → load only matching reference |
+| Inline all mode-specific content in SKILL.md | Split to `references/{mode}.md` when >50 lines |
+| No validation after Read | Add "If not found → ERROR + STOP" guard |
+| Generic reference names | Use mode name: `references/jvm.md`, not `references/ref1.md` |
+
 # Resource Path Resolution
 
 > ⚠️ **CRITICAL: USE RELATIVE PATHS!**
@@ -522,7 +582,7 @@ Options:
 ## Step 2: Plan Contents
 
 - **Scripts** — tasks needing deterministic reliability
-- **Reference docs** — schemas, API specs, policies
+- **Reference docs** — schemas, API specs, policies (see [Reference Splitting Strategy](#reference-splitting-strategy) for multi-mode skills)
 - **Assets** — templates, icons
 
 ## Step 3: Create Structure
@@ -770,6 +830,7 @@ Source: [skills docs](https://code.claude.com/docs/en/skills)
 | Multipurpose | Split into focused skills |
 | Unmarked bash | Add EXECUTE keyword |
 | `$ARGUMENTS` in bash block | Move to text, use placeholder |
+| All references loaded unconditionally in multi-mode skill | Detect mode → load matching `references/{mode}.md` only |
 
 ## Activation Mistakes (cause 20% rate)
 

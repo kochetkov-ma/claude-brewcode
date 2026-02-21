@@ -190,6 +190,19 @@ skills: api-conventions, error-handling
 
 > List skills explicitly per agent -- no inheritance from parent.
 
+### Reference-Aware Skills
+
+When an agent spawns from a skill that uses `references/`, the agent does NOT have `skill_base_dir`.
+
+| Content Size | Approach | Example |
+|-------------|----------|---------|
+| <50 lines | Inline into agent prompt | Pass reference content directly via Task prompt |
+| >50 lines | Use `$BC_PLUGIN_ROOT` path | `Read $BC_PLUGIN_ROOT/skills/skill-name/references/mode.md` |
+
+`$BC_PLUGIN_ROOT` is injected by `pre-task.mjs` and available in all subagents.
+
+> If the skill detects mode BEFORE spawning agent, pass only the relevant reference — not all of them.
+
 ---
 
 ## Execution Modes

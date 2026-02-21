@@ -37,8 +37,8 @@ brewcode/                                    # Plugin root directory
 │   ├── bc-grepai-configurator.md              # grepai configurator (opus): project analysis, config.yaml generation via 5 parallel investigations
 │   ├── bc-auto-sync-processor.md              # Auto-sync processor (sonnet): single document processing - analysis, investigation, update
 │   ├── bc-rules-organizer.md                  # Rules organizer (sonnet): creates/optimizes .claude/rules/*.md files
-│   ├── agent-creator.md                       # Agent creator (opus): Agent Architect Process, System Prompt Patterns
-│   ├── skill-creator.md                       # Skill creator (opus): Official Six-Step Creation Process, word budget 1500-2000
+│   ├── agent-creator.md                       # Agent creator (opus): Agent Architect Process, System Prompt Patterns, Reference-Aware Skills
+│   ├── skill-creator.md                       # Skill creator (opus): Official Six-Step Creation Process, word budget 1500-2000, Reference Splitting Strategy
 │   ├── bash-expert.md                         # Bash expert (opus): professional sh/bash scripts
 │   ├── hook-creator.md                        # Hook creator (opus): 10 Hook Patterns, Advanced Techniques, Multi-Stage
 │   ├── text-optimizer.md                      # Text optimizer (sonnet): prompt compression for LLM efficiency
