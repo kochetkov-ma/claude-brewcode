@@ -32,6 +32,28 @@
 
 ---
 
+## v2.15.6 (2026-02-21)
+
+### Changed
+
+- **agent-creator agent** — added "Reference-Aware Skills" section
+  - Guidance for agents spawned from skills with `references/` directories
+  - Size-based approach: <50 lines inline into prompt, >50 lines use `$BC_PLUGIN_ROOT` path
+- **skill-creator agent** — added "Reference Splitting Strategy" section
+  - When to split references into per-mode files (criteria & thresholds)
+  - Loading patterns: conditional (lazy), unconditional single, unconditional multi
+  - 3-step pattern template (detect → read → validate)
+  - New anti-pattern: "All references loaded unconditionally in multi-mode skill"
+
+### Updated Files
+
+| File | Change |
+|------|--------|
+| `agents/agent-creator.md` | Reference-Aware Skills section |
+| `agents/skill-creator.md` | Reference Splitting Strategy section, loading patterns, anti-pattern |
+
+---
+
 ## v2.15.5 (2026-02-20)
 
 ### Changed
@@ -39,6 +61,7 @@
 - **auto-sync** — `<auto-sync-override>` body block replaced with frontmatter field `auto-sync-override:` (multiline YAML)
 - **bc-auto-sync-processor** — reads override from frontmatter; optionally synthesizes and writes `auto-sync-override:` to frontmatter when not defined by prompt or file body
 - **sync-doc/agent/skill/rule** — `preserve:` references updated to frontmatter field
+- **skills skill** — renamed from `skillsup` to `skills` for naming consistency
 
 ---
 

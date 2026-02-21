@@ -236,7 +236,7 @@ Once configured, `grepai_search` is automatically injected into all agent prompt
 | `/brewcode:text-human` | Remove AI artifacts, clean comments, simplify docs |
 | `/brewcode:standards-review` | Review code for project standards compliance |
 | `/brewcode:secrets-scan` | Scan for leaked secrets and credentials |
-| `/brewcode:skillsup` | List, create, and upgrade skills with forced evaluation |
+| `/brewcode:skills` | List, create, and upgrade skills with forced evaluation |
 | `/brewcode:mcp-config` | Manage MCP server configurations |
 | `/brewcode:teardown` | Remove plugin configuration (keeps task data) |
 

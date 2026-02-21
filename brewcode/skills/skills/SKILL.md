@@ -1,5 +1,5 @@
 ---
-name: brewcode:skillsup
+name: brewcode:skills
 description: Skill management - list, improve, create skills with activation optimization.
 disable-model-invocation: true
 user-invocable: true
@@ -8,7 +8,7 @@ allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Task, WebSearch, WebFetch, 
 model: opus
 ---
 
-# skillsup Skill
+# skills Skill
 
 > **Skill Management:** List, improve, create skills with activation optimization.
 
@@ -29,15 +29,15 @@ Extract mode and target from `$ARGUMENTS`:
 **Smart Detection:** If first argument is NOT a mode keyword (`list`, `up`, `create`), treat entire input as target for `up` mode.
 
 **Examples:**
-- `/skillsup` → `list`
-- `/skillsup list` → `list`
-- `/skillsup up commit` → `up`, target=`commit`
-- `/skillsup up ~/.claude/skills/` → `up`, target=folder (all skills)
-- `/skillsup create "semantic code search"` → `create`, target=prompt
-- `/skillsup create ./spec.md` → `create`, target=spec file
-- `/skillsup commit` → `up`, target=`commit` **(shorthand)**
-- `/skillsup brewcode/skills/setup` → `up`, target=path **(shorthand)**
-- `/skillsup ~/.claude/skills/` → `up`, target=folder **(shorthand)**
+- `/brewcode:skills` → `list`
+- `/brewcode:skills list` → `list`
+- `/brewcode:skills up commit` → `up`, target=`commit`
+- `/brewcode:skills up ~/.claude/skills/` → `up`, target=folder (all skills)
+- `/brewcode:skills create "semantic code search"` → `create`, target=prompt
+- `/brewcode:skills create ./spec.md` → `create`, target=spec file
+- `/brewcode:skills commit` → `up`, target=`commit` **(shorthand)**
+- `/brewcode:skills brewcode/skills/setup` → `up`, target=path **(shorthand)**
+- `/brewcode:skills ~/.claude/skills/` → `up`, target=folder **(shorthand)**
 
 ---
 
@@ -77,8 +77,8 @@ fi
 TARGET="$(echo "$TARGET" | xargs)"  # trim
 
 if [[ -z "$TARGET" ]]; then
-  echo "❌ No target specified. Usage: /skillsup up <name|path|folder>"
-  echo "Shorthand: /skillsup <name|path|folder>"
+  echo "❌ No target specified. Usage: /brewcode:skills up <name|path|folder>"
+  echo "Shorthand: /brewcode:skills <name|path|folder>"
   exit 1
 fi
 
@@ -229,7 +229,7 @@ Task tool:
 ## Output Format
 
 ```markdown
-# skillsup [{MODE}]
+# skills [{MODE}]
 
 ## Detection
 
