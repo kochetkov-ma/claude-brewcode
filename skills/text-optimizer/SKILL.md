@@ -9,6 +9,23 @@ metadata:
 allowed-tools: Read Write Edit Grep Glob
 ---
 
+## Text Optimizer
+
+Reduces token count in prompts, docs, and agent instructions by **20–40%** without losing meaning.
+Applies **41 research-backed rules** across 6 categories: Claude behavior, token efficiency, structure, reference integrity, perception, LLM comprehension.
+
+**Benefits:** cheaper API calls · faster model responses · clearer LLM instructions · fewer hallucinations
+
+**Examples:**
+```bash
+/text-optimize prompt.md          # single file, medium mode (default)
+/text-optimize -d agents/         # deep mode — all .md files in directory
+```
+
+> _Skill text is written for LLM consumption and optimized for token efficiency._
+
+---
+
 # Text & File Optimizer
 
 ## Step 0: Load Rules
