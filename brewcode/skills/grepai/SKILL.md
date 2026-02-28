@@ -3,7 +3,7 @@ name: brewcode:grepai
 description: Manages grepai semantic search (setup, status, start, stop, reindex, optimize, upgrade).
 disable-model-invocation: true
 argument-hint: "[setup|status|start|stop|reindex|optimize|upgrade]"
-allowed-tools: Read, Write, Edit, Bash, Task
+allowed-tools: Read, Write, Edit, Bash, Task, AskUserQuestion
 model: sonnet
 ---
 
@@ -207,7 +207,23 @@ bash scripts/upgrade.sh && echo "✅ upgrade" || echo "❌ upgrade FAILED"
 
 ## Mode: prompt
 
-Ask user which operation (see Mode Reference table).
+Use AskUserQuestion to ask which operation to run:
+
+```
+header: "grepai"
+question: "Which grepai operation do you want to run?"
+options:
+  - label: "setup"
+    description: "Initialize and configure semantic search for this project"
+  - label: "status"
+    description: "Check health, index stats, doctor"
+  - label: "start / watch"
+    description: "Start watch mode (auto-index on file changes)"
+  - label: "optimize"
+    description: "Update and rebuild the search index"
+```
+
+For stop, reindex, upgrade — user types via Other. After answer, GOTO that mode section.
 
 </instructions>
 

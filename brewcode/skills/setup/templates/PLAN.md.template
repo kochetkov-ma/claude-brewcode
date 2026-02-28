@@ -1,218 +1,128 @@
 status: pending
+current_phase: 0
+total_phases: {N}
 
 # Plan: {NAME}
 
-> **AUTONOMY:** Work until DONE. Iterate until all criteria met.
-> **CONTEXT:** Load per phase via ID. KNOWLEDGE.jsonl holds accumulated knowledge.
-
-## ⛔ PROTOCOL
-
-| Step | After EACH agent |
-|------|------------------|
-| 1 | WRITE → `artifacts/{P}-{N}{T}/{AGENT}_output.md` |
-| 2 | CALL → `bc-coordinator` (reads report, extracts knowledge) |
-
-> Next agent BLOCKED until both complete.
+> Work ONLY through Task API (TaskCreate/TaskUpdate/TaskList). NEVER read phases/ files.
+> After compact: TaskList() -> Read PLAN.md -> continue.
 
 ## Meta
-
 | Field | Value |
 |-------|-------|
 | Created | {TIMESTAMP} |
-| Spec | `SPEC.md` |
-| Knowledge | `KNOWLEDGE.jsonl` |
-
-## Reports
-
-| Field | Path |
-|-------|------|
-| Artifacts Dir | `artifacts/` |
-| Final | `artifacts/FINAL.md` |
-
-> **Report Structure:** `artifacts/{P}-{N}{T}/`
-> - `{P}`: phase number, `{N}`: iteration number, `{T}`: `e` (exec), `v` (verify), `r` (R&D)
-> - Each iteration contains: `{AGENT}_output.md`, `summary.md`, optional `{AGENT}_artifacts/`
-
-**Statuses:** `pending` → `in progress` → `failed` | `handoff` → `finished` | `cancelled` | `error`
+| Spec | SPEC.md |
+| Knowledge | KNOWLEDGE.jsonl |
+| Task Dir | {TASK_DIR} |
+| Phases | phases/ |
 
 ## KNOWLEDGE Protocol
-
-> bc-coordinator extracts entries from agent reports to KNOWLEDGE.jsonl.
-
-| Field | Values |
-|-------|--------|
-| `ts` | ISO8601 timestamp |
-| `t` | `❌` avoid/pitfall, `✅` best practice, `ℹ️` info/fact |
-| `txt` | One specific, actionable sentence — unique discovery |
-| `src` | Agent name (lowercase) |
-
-> Priority: ❌ > ✅ > ℹ️. Only unique, reusable discoveries. No phase summaries.
+> Format: `{"ts":"ISO","t":"❌|✅|ℹ️","txt":"...","src":"agent"}`
+> Priority: ❌ > ✅ > ℹ️. Only unique, reusable discoveries.
 
 ## Completion Criteria
-
 - [ ] {CRITERION_1}
 - [ ] {CRITERION_2}
 
 ## Agents
-
-> **Priority:** Project Agents > Core Agents. Run `/brewcode:setup` to populate.
-
 ### Project Agents
-
 | Agent | Purpose | Model |
 |-------|---------|-------|
+
 ### Core Agents
+| Agent | Purpose |
+|-------|---------|
+| developer | Implementation, fixes |
+| tester | Tests, verification |
+| reviewer | Code review, architecture |
+| Explore | Code search, research |
+| bc-coordinator | Knowledge extraction, report verification |
 
-| Agent | Purpose | Model |
-|-------|---------|-------|
-| `developer` | Code implementation | sonnet |
-| `tester` | Tests, analysis | sonnet |
-| `reviewer` | Quality, security, patterns | sonnet |
-| `Explore` | Codebase search (READ-ONLY) | haiku |
-| `bc-coordinator` | Update PLAN.md, validate | sonnet |
-
-## Reference Examples
-
-> Reference files. Agents MUST read and follow patterns.
-
-| ID | Type | File |
-|----|------|------|
-| R1 | {TYPE} | {PATH} |
-| R2 | {TYPE} | {PATH} |
-
-## Context Index
-
-> Task-specific files. Reference by ID in phase Context field.
-
-| ID | File | Purpose |
-|----|------|---------|
-| C1 | {PATH} | {WHY} |
-| C2 | {PATH} | {WHY} |
+## Technology Choices
+| Choice | Decision | Rationale | Alternatives |
+|--------|----------|-----------|--------------|
 
 ## Role Constraints
-
-> AUTO-INJECTED by hook. Short, actionable constraints for agents.
-
 <!-- ALL -->
-<!-- Global constraints for all agents go here -->
-<!-- Example: - Do NOT modify `SecurityConfig.java` - out of scope -->
 <!-- /ALL -->
-
 <!-- DEV -->
-<!-- Developer-specific constraints -->
-<!-- Example: - Use JOOQ DSLContext only, NO raw SQL -->
-<!-- Example: - Constructor injection: `@RequiredArgsConstructor` + final -->
-<!-- Example: - See `.claude/rules/dev-rules.md` -->
 <!-- /DEV -->
-
 <!-- TEST -->
-<!-- Tester-specific constraints -->
-<!-- Example: - Use `@DataSet` for test data, NOT `@Sql` -->
-<!-- Example: - `.as()` on EVERY assertion -->
-<!-- Example: - See `.claude/rules/test-rules.md` -->
 <!-- /TEST -->
-
 <!-- REVIEW -->
-<!-- Reviewer-specific constraints -->
-<!-- Example: - Flag missing null checks as BLOCKER -->
-<!-- Example: - Check for N+1 queries in loops -->
-<!-- Example: - See `.claude/rules/review-rules.md` -->
 <!-- /REVIEW -->
 
----
+## Phase Registry
+> Manager: TaskCreate for each row. Description = summary + "Full instructions: phases/{file}"
+> Parallel group: tasks in same group can run simultaneously.
 
-> ⛔ After each agent: WRITE report → CALL bc-coordinator
+| # | Phase File | Agent | Subject | Summary | Artifact Dir | Blocked By | Parallel |
+|---|------------|-------|---------|---------|--------------|------------|----------|
+| 1 | phases/1-{name}.md | {AGENT} | {SUBJECT} | {SUMMARY} | 1-1e | - | A |
+| 1V | phases/1V-verify-{name}.md | {VERIFY_AGENT} | Verify {name} | Verify phase 1 output | 1-1v | 1 | - |
 
-## Phases
+## Execution Protocol
+> After EACH agent: WRITE report -> CALL bc-coordinator (ALWAYS)
+> Task API (TaskCreate/TaskUpdate/TaskList) is source of truth. Phase Status table is observability only.
 
-> **Rules:**
-> - Manager decides phase count and sequence based on task complexity
-> - Each phase = Execution → Verification (V)
-> - Pass `Context` + `Refs` IDs to agents (they read files themselves)
-> - V-phase: 2+ agents parallel, one checks quality, one checks project patterns
->
-> **Iteration Protocol:**
-> ```
-> WHILE Phase NV has Issues:
->   1. Fix issues (developer/tester)
->   2. RE-RUN Phase NV (MANDATORY - same agents verify again!)
->   3. Pass? → proceed | Fail? → iter++ → repeat 1-2
->   4. Max 3 iterations → escalate
-> ```
->
-> **CRITICAL:** NEVER mark phase complete after fix without re-verification!
->
-> **Examples:** Repository impl → Repository tests → DDL → Pattern analysis → Controller → Integration tests
+### Task Creation
+FOR each row in Phase Registry:
+  TaskCreate(subject="Phase {#}: {Subject}", description="Phase {#}: {Summary}\n\nFull instructions: phases/{Phase File}\nTask dir: {TASK_DIR}\nArtifacts: artifacts/{Artifact Dir from Phase Registry}/\nKNOWLEDGE: KNOWLEDGE.jsonl", activeForm="{Present continuous of Subject}")
+THEN set dependencies per Blocked By column.
 
----
+### Execution Loop
+1. TaskList() -> find tasks: status=pending, blockedBy=[]
+2. Same Parallel group -> spawn in ONE message
+3. Per task: TaskUpdate(in_progress) -> Task(agent) -> WRITE report to artifacts/{Artifact Dir from Phase Registry}/ -> CALL bc-coordinator -> TaskUpdate(completed)
+4. Repeat while pending tasks remain
+5. All completed -> bc-coordinator mode:finalize
 
-### Phase 1: {DESCRIPTION}
+### Coordinator Protocol
+| Phase | Coordinator Does | Does NOT Do (Task API) |
+|-------|-----------------|----------------------|
+| Execution (N) | Knowledge extraction, report verification | Status update |
+| Verification (NV) | Knowledge extraction, report verification, phase validation | Status update |
+| Final Review (FR) | FINAL.md generation, knowledge extraction | Status update |
+| Finalize | status -> {finished\|failed} (line 1 PLAN.md), FINAL.md generation | - |
 
-**Agent:** `{AGENT}` | **Status:** pending | **Context:** C1 | **Refs:** R1
+### Failure Protocol
+When NV finds issues:
+1. Write phases/{N}F{I}-fix-{name}.md with issues from verification report
+2. TaskCreate(subject="Fix phase {N} issues (iter {I})")
+3. TaskCreate(subject="Re-verify phase {N} (iter {I+1})", blockedBy=[fix task])
+4. Max 3 iterations -> Escalation
 
-**Tasks:** {TASK_LIST}
+### Escalation
+| After | Action |
+|-------|--------|
+| 1 fail | R&D task: explore root cause |
+| 2 fails | Split phase into sub-phases |
+| 3 fails | Upgrade model (sonnet->opus), reassign, AskUserQuestion |
 
-**Exit:** {CRITERIA} | **Result:** -
+### Failure Cascade & Deadlock Recovery
+When escalation exhausted (task permanently failed):
+1. TaskUpdate(failedTaskId, status="failed")
+2. Persist to KNOWLEDGE.jsonl: {"ts":"...","t":"❌","txt":"Phase {N} permanently failed: {reason}","src":"manager"}
+3. Cascade failure to ALL transitive dependents: TaskList() -> TaskUpdate(T.id, status="failed") for each blocked task
+4. Independent tasks (no dependency on failed task) continue normally
+5. Deadlock check: pending+unblocked=0 AND in_progress=0 AND blocked>0 -> abort all blocked, Finalize(status="failed")
+6. bc-coordinator mode:finalize with status="failed" generates failure summary in FINAL.md
 
----
+## Handoff
+After compact:
+1. TaskList() - current task state
+2. Read PLAN.md - protocol and Phase Registry
+3. DO NOT read phases/ - they are for agents
+4. Continue with current in_progress or next pending task
+5. WRITE report -> CALL coordinator after EVERY agent (ALWAYS)
 
-### Phase 1V: Verification
+## Reports
+| Field | Path |
+|-------|------|
+| Artifacts | artifacts/ |
+| Final | artifacts/FINAL.md |
+| Report | artifacts/{P}-{N}{T}/{AGENT}_output.md |
 
-> Manager picks 2+ agents based on phase type. For tests: use `tester` instead of `developer`.
-
-| Agent | Focus | Context | Refs |
-|-------|-------|---------|------|
-| `reviewer` | Logic, edge cases, security | C1 | - |
-| `developer` | Project patterns compliance | C1 | R1 |
-| `tester` | Test strictness: assertions, test data, expected values | C1 | R1 |
-| TBD | Project-specific checks (from Project Agents) | C1 | R1 |
-
-**Check:** [ ] Criteria met [ ] No regressions [ ] Patterns followed
-
-**Status:** pending | **Issues:** -
-
----
-
-## ⛔ Reminder
-
-After EVERY agent: 1) WRITE report to `artifacts/{P}-{N}{T}/` 2) CALL bc-coordinator. Then proceed.
-
----
-
-## Final Review
-
-> **Parallel:** 3+ agents. Manager picks from Core + Project Agents based on task type.
-
-| Agent | Focus | Against |
-|-------|-------|---------|
-| `reviewer` | Requirements, logic | Completion Criteria |
-| `developer` | Code quality, SOLID | Reference Examples |
-| `tester` | Test quality, strictness | Reference Examples |
-| TBD | Project-specific (db_expert, etc.) | Reference Examples |
-
-**Flow:** All pass → DONE | Issues → fix → re-review
-
-**Status:** pending
-
----
-
-## Failure Protocol
-
-```
-Phase NV fails 3x → ESCALATE
-```
-
-| # | Action | When |
-|---|--------|------|
-| 1 | **R&D Phase** | Root cause unclear → Add Phase NR: Explore + reviewer → KNOWLEDGE |
-| 2 | **Split Phase** | Scope too large → Break into N.a, N.b, N.c |
-| 3 | **Agent Upgrade** | Complexity → sonnet → opus |
-| 4 | **Reassign** | Wrong agent type → switch agent |
-| 5 | **AskUserQuestion** | LAST RESORT: requires 2+ agents agree + 9+ iterations total |
-
-**Flow:** Escalate → try 1-4 → max 2 escalations per phase → option 5 only with quorum
-
-## Manager Actions
-
-⛔ After EACH agent: WRITE report → CALL bc-coordinator.
-
+## Phase Status
+| # | Status | Started | Completed | Iterations |
+|---|--------|---------|-----------|------------|

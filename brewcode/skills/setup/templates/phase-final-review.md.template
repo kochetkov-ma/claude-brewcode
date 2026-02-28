@@ -1,0 +1,49 @@
+# Phase FR: Final Review
+
+## Agents
+
+{FR_AGENTS}
+
+> Each agent reviews independently. Results merged by manager.
+
+## Scope
+
+Final verification of ALL completed phases against Completion Criteria.
+
+## Completion Criteria
+
+{COMPLETION_CRITERIA}
+
+## Review Checklist
+
+{REVIEW_CHECKLIST}
+
+## Files Changed
+
+{FILES_CHANGED}
+
+## FINAL.md Generation
+
+After all agents PASS:
+- bc-coordinator generates `artifacts/FINAL.md`
+- Summary of all phases, key decisions, knowledge entries
+
+## Verdict
+
+> Each agent: PASS or FAIL with justification.
+> Manager: majority rule (2/3+).
+
+### If FAIL -- Issues Format
+
+| # | Severity | File | Line | Issue | Suggested Fix |
+|---|----------|------|------|-------|---------------|
+
+## Artifacts
+
+- Report: `artifacts/{ARTIFACT_DIR}/{AGENT}_output.md` (one per agent)
+
+## Exit Criteria
+
+- All Completion Criteria verified
+- No critical or high severity issues
+- FINAL.md generated (if PASS)

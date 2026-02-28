@@ -3,7 +3,7 @@ name: brewcode:text-human
 description: Removes AI artifacts, cleans comments, simplifies documentation in code. Use when - humanizing code, removing AI comments, cleaning docs, fixing unicode, making code human-readable. Trigger keywords - humanize, human, ai artifacts, ai comments, clean comments, simplify docs, unicode fix, remove generated, make readable.
 argument-hint: <commit-hash|path> [custom instructions]
 user-invocable: true
-allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Task]
+allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Task, AskUserQuestion]
 ---
 
 # Text Humanizer
@@ -28,11 +28,11 @@ Multi-language projects: Load ALL relevant references.
 
 | Input | Action |
 |-------|--------|
-| None | Ask for commit hash or path |
+| None | Use AskUserQuestion: "What to humanize?" Options: "Commit hash (git diff)" / "File path" / "Folder path" |
 | Commit hash (7+ hex) | Process all text files from commit |
 | File path | Process single file |
 | Folder path | Process all files in folder |
-| "entire project" | Ask for specific scope |
+| "entire project" | Use AskUserQuestion: "Too broad — specify scope." Options: "Specific folder" / "File pattern (e.g. src/**/*.java)" |
 
 **Everything after first token** = custom prompt (optional). Free-form text, no quotes needed. Overrides or extends default humanization rules for this run. Passed to every sub-agent prompt.
 

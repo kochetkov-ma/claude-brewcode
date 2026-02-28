@@ -1,5 +1,5 @@
 ---
-name: brewcode:auto-sync
+name: brewdoc:auto-sync
 description: Universal documentation sync for skills, agents, markdown. Modes - status, init, global, project, file, folder.
 disable-model-invocation: true
 user-invocable: true
@@ -35,9 +35,9 @@ Parse output: `MODE|ARG|FLAGS`. If exit code non-zero → report error, EXIT.
 | FOLDER | folder path | All .md in folder |
 
 **Managed directories** (excluded from auto-scan, explicit path required):
-- `rules/` — sync via `/brewcode:auto-sync .claude/rules`
-- `agents/` — sync via `/brewcode:auto-sync .claude/agents`
-- `skills/` — sync via `/brewcode:auto-sync .claude/skills`
+- `rules/` — sync via `/brewdoc:auto-sync .claude/rules`
+- `agents/` — sync via `/brewdoc:auto-sync .claude/agents`
+- `skills/` — sync via `/brewdoc:auto-sync .claude/skills`
 
 
 ## INDEX Format
@@ -120,7 +120,7 @@ mkdir -p "$INDEX_DIR" && INDEX_FILE="$INDEX_DIR/INDEX.jsonl" && touch "$INDEX_FI
 echo "INDEX=$INDEX_FILE"
 ```
 
-### Phase 2: Discover + Queue (load config: `INTERVAL_DAYS`, `PARALLEL_AGENTS` from `.claude/tasks/cfg/brewcode.config.json`)
+### Phase 2: Discover + Queue (load config: `INTERVAL_DAYS`, `PARALLEL_AGENTS` from `.claude/tasks/cfg/brewdoc.config.json`)
 
 1. Find tagged files — **EXECUTE** using Bash tool:
 ```bash
@@ -145,12 +145,12 @@ bash "scripts/index-ops.sh" stale "$INDEX_FILE" "$INTERVAL_DAYS"
 
 ### Phase 3: Process + Report
 
-1. Launch `bc-auto-sync-processor` agents (max `PARALLEL_AGENTS` batches, model="sonnet"):
+1. Launch `bd-auto-sync-processor` agents (max `PARALLEL_AGENTS` batches, model="sonnet"):
    ```
-   Task(subagent_type="brewcode:bc-auto-sync-processor",
+   Task(subagent_type="brewdoc:bd-auto-sync-processor",
         prompt="PATH: {path} | TYPE: {type} | FLAGS: {flags}")
    ```
-   > **Context:** BC_PLUGIN_ROOT is available in your context (injected by pre-task.mjs hook).
+   > **Context:** BD_PLUGIN_ROOT is available in your context (injected by pre-task.mjs hook).
 
 2. For each result:
    - If status = `updated` or `unchanged` → update INDEX `u` to today (`index-ops.sh update`)
@@ -188,4 +188,4 @@ bash "scripts/index-ops.sh" stale "$INDEX_FILE" "$INTERVAL_DAYS"
 | File not found | Skip, add to errors |
 | Agent timeout | Retry once |
 | No tagged files | Report "0 found" |
-| `/brewcode:doc` called | "Use /brewcode:auto-sync" |
+| `/brewdoc:doc` called | "Use /brewdoc:auto-sync" |

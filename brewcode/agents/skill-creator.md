@@ -449,7 +449,6 @@ If ALL criteria met → split into `references/{mode}.md` files.
 |---------|------|---------|
 | Conditional (lazy) | Multi-mode, >50 lines/mode | `standards-review`: detect stack → Read `references/{stack}.md` |
 | Unconditional single | Single reference, <200 lines | `text-optimize`: always Read `references/rules-review.md` |
-| Unconditional multi | Fixed set, always needed | `mcp-config`: Read both `references/schema.md` + `references/examples.md` |
 
 ## 3-Step Pattern
 
@@ -556,7 +555,7 @@ Priority: Enterprise > Personal > Project. Plugin skills: `/plugin-name:skill-na
 
 ## Step 1: Understand
 
-Identify usage patterns: direct examples from user, validated scenarios, real-world use cases. Ask max 2-3 questions: functionality, usage examples, trigger phrases.
+Identify usage patterns: direct examples from user, validated scenarios, real-world use cases. If invoked directly from main conversation (foreground) — use AskUserQuestion for max 2-3 clarifying questions: functionality, usage examples, trigger phrases. If invocation type was provided in prompt — skip questions.
 
 ### Invocation Type (CRITICAL)
 

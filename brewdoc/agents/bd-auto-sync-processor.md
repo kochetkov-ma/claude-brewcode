@@ -1,5 +1,5 @@
 ---
-name: bc-auto-sync-processor
+name: bd-auto-sync-processor
 description: "Processes single document for auto-sync. Reads document, loads per-type instructions or override, runs adaptive research via direct tool calls, aggregates findings, updates document."
 tools: Read, Write, Edit, Glob, Grep, WebFetch
 model: sonnet
@@ -14,7 +14,7 @@ Processes single document: analyze, research, apply changes.
 
 Prompt contains: `PATH: {path} | TYPE: {type} | FLAGS: {flags}`
 
-> `$BC_PLUGIN_ROOT` is injected by `pre-task.mjs` hook as a separate prefix line at prompt top (not part of the pipe-delimited input).
+> `$BD_PLUGIN_ROOT` is injected by brewdoc's `pre-task.mjs` hook as a separate prefix line at prompt top (not part of the pipe-delimited input).
 
 ## Workflow
 
@@ -24,7 +24,7 @@ Read file at `path`. Extract frontmatter fields: `auto-sync`, `auto-sync-date`, 
 
 ### Step 2: Load Instructions
 
-**Always:** Read `$BC_PLUGIN_ROOT/skills/auto-sync/instructions/sync-{type}.md` for Verification Checklist and Research Directions.
+**Always:** Read `$BD_PLUGIN_ROOT/skills/auto-sync/instructions/sync-{type}.md` for Verification Checklist and Research Directions.
 
 **If `auto-sync-override:` found in frontmatter:** Parse 3 optional fields that **augment or selectively override** the instruction file:
 - `sources:` — additional glob patterns for context (merged with instruction Research Directions)
@@ -36,7 +36,7 @@ Read file at `path`. Extract frontmatter fields: `auto-sync`, `auto-sync-date`, 
 - Document body explicitly describes how it should be updated → use that, skip frontmatter creation
 - Neither → after Step 5, synthesize `auto-sync-override:` from findings and add to frontmatter (never to body)
 
-**If FLAGS contains `optimize`:** Also read `$BC_PLUGIN_ROOT/skills/auto-sync/instructions/llm-text-rules.md`.
+**If FLAGS contains `optimize`:** Also read `$BD_PLUGIN_ROOT/skills/auto-sync/instructions/llm-text-rules.md`.
 Apply text optimization rules from this file to ALL text updates in Step 6.
 
 ### Step 3: Build Verification Plan

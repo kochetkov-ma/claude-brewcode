@@ -16,6 +16,7 @@ description: Flow diagrams for brewcode plugin execution
 | d | Lock file lifecycle | Creation, binding, checks, deletion |
 | e | Handoff during compaction | Context preservation during auto-compact |
 | f | Task lifecycle | State machine |
+| g | KNOWLEDGE pipeline | Knowledge extraction, rules, pruning |
 
 ---
 
@@ -45,11 +46,30 @@ description: Flow diagrams for brewcode plugin execution
            ▼
   ┌──────────────────┐     ┌──────────────────────────────────┐
   │ 2. Clarifying    │────▶│ AskUserQuestion                  │
-  │    questions     │◀────│ 1-4 questions: scope, priorities,│
-  │ (1-4 questions)  │     │ constraints, edge cases          │
+  │    questions     │◀────│ 3-5 questions in 3 categories:   │
+  │ (3-5 questions)  │     │ Scope, Constraints, Edge cases   │
   └────────┬─────────┘     └──────────────────────────────────┘
            │
            │ Answers received
+           ▼
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │ 2.5 Feature Splitting Check                                         │
+  │                                                                      │
+  │  >3 independent areas OR >12 phases estimated?                      │
+  │  ┌──────┴──────┐                                                    │
+  │  │ YES         │ NO                                                 │
+  │  ▼             ▼                                                     │
+  │  AskUser:     Continue                                               │
+  │  "Split into   with full                                             │
+  │   X tasks?"    scope                                                 │
+  │  ┌─────┴──────┐                                                     │
+  │  │ yes  │ no  │                                                     │
+  │  ▼      ▼     │                                                     │
+  │  SPEC    Continue                                                    │
+  │  1st     full scope                                                  │
+  │  only                                                                │
+  └──────────────────────────────────┬───────────────────────────────────┘
+           │
            ▼
   ┌──────────────────┐
   │ 3. Divide into   │
@@ -58,12 +78,14 @@ description: Flow diagrams for brewcode plugin execution
   │ (5-10 areas)     │
   └────────┬─────────┘
            │
+           │ Standard research areas:
+           │ Controllers, Services, DB/Repos, Tests, Config, Docs
            ▼
   ┌──────────────────────────────────────────────────────────────────────┐
   │ 4. Parallel research (ONE call, 5-10 agents)                        │
   │                                                                      │
   │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐  │
-  │  │developer │ │developer │ │sql_expert│ │ tester   │ │ Explore  │  │
+  │  │developer │ │developer │ │developer │ │ tester   │ │ Explore  │  │
   │  │Controller│ │ Services │ │ DB/Repos │ │  Tests   │ │   Docs   │  │
   │  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘  │
   │       │            │            │            │            │          │
@@ -72,6 +94,8 @@ description: Flow diagrams for brewcode plugin execution
   │  │              Agent results (patterns, risks,                 │    │
   │  │              reusable code, constraints)                     │    │
   │  └──────────────────────────────────────────────────────────────┘    │
+  │                                                                      │
+  │  + developer for Config (*.yml, docker-*) as needed                 │
   └──────────────────────────────────┬───────────────────────────────────┘
                                      │
                                      ▼
@@ -92,7 +116,7 @@ description: Flow diagrams for brewcode plugin execution
                                      │ Feedback incorporated
                                      ▼
   ┌──────────────────────────────────────────────────────────────────────┐
-  │ 7. SPEC review (iteration loop)                                     │
+  │ 7. SPEC review (iteration loop, MAX 3 iterations)                   │
   │                                                                      │
   │  ┌──────────┐                                                        │
   │  │ reviewer │──▶ Findings (critical/major/minor)                     │
@@ -108,6 +132,12 @@ description: Flow diagrams for brewcode plugin execution
   │              └──▶ Re-review ───────┐                                 │
   │                                    │                                │
   │              ◀─────────────────────┘                                │
+  │                                                                      │
+  │  After 3 iterations with remaining remarks:                         │
+  │  ┌──────────────────────────────────────────────────────────┐       │
+  │  │ Escalate to user via AskUserQuestion                     │       │
+  │  │ Present remaining critical/major remarks for decision    │       │
+  │  └──────────────────────────────────────────────────────────┘       │
   └──────────────────────────────────────────────────────────────────────┘
                                      │
                                      ▼
@@ -143,7 +173,7 @@ description: Flow diagrams for brewcode plugin execution
            ▼                   ▼                    ▼
   ┌──────────────────┐ ┌────────────────┐ ┌──────────────────┐
   │ SPEC flow        │ │ PlanMode flow  │ │ Read reference   │
-  │ (steps 1-8)      │ │ (steps 1-5)    │ │ to latest task   │
+  │ (steps 1-8)      │ │ (steps 1-6)    │ │ to latest task   │
   └────────┬─────────┘ └───────┬────────┘ └────────┬─────────┘
            │                   │                    │
            └───────────┬───────┘────────────────────┘
@@ -195,34 +225,61 @@ description: Flow diagrams for brewcode plugin execution
   │ 5. Generate      │
   │    artifacts     │
   │ PLAN.md          │
-  │ KNOWLEDGE.jsonl  │
+  │ KNOWLEDGE.jsonl  │  (0-byte empty file via touch)
   │ artifacts/       │
   │ backup/          │
   └────────┬─────────┘
            │
            ▼
   ┌──────────────────────────────────────────────────────────────────────┐
-  │ 6. Quorum plan review (3 parallel agents)                           │
+  │ 5.5 Technology Choices                                              │
   │                                                                      │
-  │  ┌──────────┐  ┌──────────┐  ┌──────────┐                          │
-  │  │  Plan #1 │  │  Plan #2 │  │  Plan #3 │                          │
-  │  └────┬─────┘  └────┬─────┘  └────┬─────┘                          │
-  │       │            │            │                                    │
-  │       └──────┬─────┘────────────┘                                   │
-  │              ▼                                                       │
-  │   Quorum rule: only findings                                        │
-  │   confirmed by 2+ agents                                            │
+  │  For each non-trivial choice (library, pattern, approach):          │
+  │  ┌──────────────────────────────────────────────────────────┐       │
+  │  │ Document in PLAN.md under Technology Choices section:    │       │
+  │  │  - Rationale for chosen approach                         │       │
+  │  │  - Alternatives considered and rejected                  │       │
+  │  │  - Examples: ORM, auth library, caching, test framework  │       │
+  │  └──────────────────────────────────────────────────────────┘       │
   └──────────────────────────────────┬───────────────────────────────────┘
                                      │
                                      ▼
-  ┌──────────────────┐
-  │ 7. Verification  │
-  │ reviewer: each   │
-  │ SPEC requirement │
-  │ covered by phase │
-  └────────┬─────────┘
-           │
-           ▼
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │ 6. Quorum plan review (3 agents, MIXED expertise)                   │
+  │                                                                      │
+  │  ┌──────────┐  ┌──────────────┐  ┌────────────────┐                │
+  │  │  Plan    │  │  brewcode:   │  │   brewcode:    │                │
+  │  │ (cover-  │  │  architect   │  │   reviewer     │                │
+  │  │  age)    │  │ (arch+deps)  │  │ (quality+risk) │                │
+  │  └────┬─────┘  └──────┬───────┘  └───────┬────────┘                │
+  │       │               │                  │                          │
+  │       └───────┬───────┘──────────────────┘                          │
+  │               ▼                                                      │
+  │   Quorum rule: 2/3 majority                                         │
+  │   Only findings confirmed by 2+ agents accepted                     │
+  └──────────────────────────────────┬───────────────────────────────────┘
+                                     │
+                                     ▼
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │ 7. Traceability Check (brewcode:reviewer)                           │
+  │                                                                      │
+  │  Checks:                                                             │
+  │  ┌──────────────────────────────────────────────────────────┐       │
+  │  │ - Each item from SPEC > Scope > In has at least one phase│       │
+  │  │ - Each requirement from Original Requirements addressed  │       │
+  │  │ - Output: traceability matrix (requirement -> phase)     │       │
+  │  └──────────────────────────────────────────────────────────┘       │
+  │                                                                      │
+  │  Gaps found?                                                         │
+  │  ┌──────┴──────┐                                                    │
+  │  │ YES         │ NO                                                 │
+  │  ▼             ▼                                                     │
+  │  Add missing   Proceed                                               │
+  │  phases to     to step 8                                             │
+  │  PLAN.md                                                             │
+  └──────────────────────────────────┬───────────────────────────────────┘
+                                     │
+                                     ▼
   ┌──────────────────┐     ┌──────────────────────────────────┐
   │ 8. Present       │────▶│ AskUserQuestion                  │
   │    review        │◀────│ Findings + verification          │
@@ -260,6 +317,28 @@ description: Flow diagrams for brewcode plugin execution
   │                                          │
   │ Next: /brewcode:start {task_path}       │
   └──────────────────────────────────────────┘
+
+  ╔═══════════════════════════════════════════════════════════╗
+  ║                PLAN MODE FLOW                             ║
+  ╚═══════════════════════════════════════════════════════════╝
+
+  Steps 1-5: same as SPEC flow (read plan, create dir, split
+  into phases, present to user, generate artifacts)
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │ 6. Lightweight Plan Review (2 agents, 2/2 consensus)                │
+  │                                                                      │
+  │  ┌──────────────┐  ┌────────────────┐                               │
+  │  │  brewcode:   │  │   brewcode:    │                               │
+  │  │  architect   │  │   reviewer     │                               │
+  │  │ (arch+deps)  │  │ (quality+crit) │                               │
+  │  └──────┬───────┘  └───────┬────────┘                               │
+  │         │                  │                                         │
+  │         └────────┬─────────┘                                         │
+  │                  ▼                                                    │
+  │   Rule: BOTH agents must confirm a remark (2/2 consensus)           │
+  │   Fix confirmed remarks in PLAN.md before proceeding                │
+  └──────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -368,6 +447,18 @@ description: Flow diagrams for brewcode plugin execution
   ║  │     │           │                                           │    ║
   ║  │     │           └──────────────────▶ (return to verification) │    ║
   ║  │     │                                                       │    ║
+  ║  │     │   Escalation exhausted?                               │    ║
+  ║  │     │      │                                                │    ║
+  ║  │     │      ▼                                                │    ║
+  ║  │     │   ┌────────────────────┐                              │    ║
+  ║  │     │   │ Failure Cascade:   │                              │    ║
+  ║  │     │   │ 1. Mark failed     │                              │    ║
+  ║  │     │   │ 2. Cascade to deps │                              │    ║
+  ║  │     │   │ 3. Deadlock check  │                              │    ║
+  ║  │     │   └────────┬───────────┘                              │    ║
+  ║  │     │            ▼                                          │    ║
+  ║  │     │   Finalize(status="failed")                           │    ║
+  ║  │     │                                                       │    ║
   ║  └─────┼───────────────────────────────────────────────────────┘    ║
   ║        │                                                            ║
   ║        ▼                                                            ║
@@ -391,6 +482,7 @@ description: Flow diagrams for brewcode plugin execution
   ┌──────────────────┐     ┌──────────────────────────────────┐
   │ 6. Completion    │────▶│ bc-coordinator (mode: finalize)  │
   │                  │◀────│ FINAL.md, status -> "finished"   │
+  │                  │     │       OR status -> "failed"      │
   └────────┬─────────┘     └──────────────────────────────────┘
            │
            ▼
@@ -427,9 +519,9 @@ description: Flow diagrams for brewcode plugin execution
                                                      5. Status -> "handoff"
                                                      6. systemMessage with context
 
-  stop.mjs               Stop                        Task not finished?
+  stop.mjs               Stop                        Task not in terminal state?
                          (on exit attempt)              -> BLOCK exit
-                                                     Task finished?
+                                                     Terminal (finished/failed/...)?
                                                        -> Delete .lock
                                                      Stale lock (>24h)?
                                                        -> Auto-cleanup
@@ -684,17 +776,28 @@ description: Flow diagrams for brewcode plugin execution
      │    │                   │  │                   │                  │
      │    │     failed        │  │     handoff       │  Auto-compact   │
      │    │                   │  │                   │  (PreCompact)   │
-     │    └──┬────────────────┘  └─────────┬─────────┘                 │
-     │       │                             │                            │
-     │       │  Retry /                    │  Resume                    │
-     │       │  escalation                 │  after compact             │
-     │       │                             │  (same session)            │
-     │       └─────────────────────────────┘────────────────────────────┘
-     │
-     │  Task restart
-     │  (status "in progress"
-     │   also allowed
-     │   during initialization)
+     │    └──┬────────┬───────┘  └─────────┬─────────┘                 │
+     │       │        │                    │                            │
+     │       │        │  Retry /           │  Resume                    │
+     │       │        │  escalation        │  after compact             │
+     │       │        │                    │  (same session)            │
+     │       │        └────────────────────┘────────────────────────────┘
+     │       │
+     │       │  Escalation exhausted
+     │       │  (TERMINAL)
+     │       │
+     │       │        ┌───────────────────┐
+     │       └───────▶│                   │
+     │                │  failed (terminal)│  Finalize(status="failed")
+     │                │                   │  FINAL.md created
+     │                └─────────┬─────────┘
+     │                          │
+     │  Task restart            │  stop.mjs
+     │  (status "in progress"   ▼
+     │   also allowed        ┌───────────────────┐
+     │   during init)        │  Delete .lock     │
+     │                       │  Allow exit       │
+     │                       └───────────────────┘
      │
      │
      │          All phases completed
@@ -735,6 +838,8 @@ description: Flow diagrams for brewcode plugin execution
   │ handoff      │ in progress  │ Resume after compact                   │
   ├──────────────┼──────────────┼────────────────────────────────────────┤
   │ failed       │ in progress  │ Restart / escalation                   │
+  ├──────────────┼──────────────┼────────────────────────────────────────┤
+  │ in progress  │ failed       │ Escalation exhausted (TERMINAL)        │
   └──────────────┴──────────────┴────────────────────────────────────────┘
 
 
@@ -751,13 +856,32 @@ description: Flow diagrams for brewcode plugin execution
   ├──────────────┼──────────────────────────────────────────────────────┤
   │ handoff      │ BLOCK exit, suggest continue                        │
   ├──────────────┼──────────────────────────────────────────────────────┤
-  │ failed       │ BLOCK exit, suggest fix                             │
+  │ failed       │ Terminal: Allow, delete .lock (escalation exhausted)│
   ├──────────────┼──────────────────────────────────────────────────────┤
-  │ finished     │ Allow, delete .lock                                 │
+  │ finished     │ Terminal: Allow, delete .lock                       │
   └──────────────┴──────────────────────────────────────────────────────┘
 
   Emergency exit: rm .claude/tasks/*_task/.lock
 ```
+
+---
+
+## g) KNOWLEDGE Pipeline
+
+```
+bc-coordinator            KNOWLEDGE.jsonl          .claude/rules/
+(after each phase)   →   [❌ avoid]           →    avoid.md
+                         [✅ best practice]   →    best-practice.md
+                         [ℹ️  info facts]     →    (kept after prune)
+      ↑                        ↑
+pre-task.mjs              bc-knowledge-manager
+injects ## K block         (dedupe / compact)
+into every agent
+```
+
+**At task COMPLETE (`/start` Step 5):**
+1. `Skill(brewcode:rules)` → bc-rules-organizer → writes `.claude/rules/*.md`
+2. `Task(bc-knowledge-manager, prune-rules)` → removes ❌/✅, keeps ℹ️
 
 ---
 

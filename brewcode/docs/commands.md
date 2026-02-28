@@ -7,7 +7,7 @@ description: Detailed description of all brewcode plugin commands
 
 # Brewcode Plugin Commands
 
-> **Version:** 2.15.1 | **Author:** Maksim Kochetkov | **License:** MIT
+> **Version:** 3.1.0 | **Author:** Maksim Kochetkov | **License:** MIT
 
 ## Quick Reference
 
@@ -20,20 +20,21 @@ description: Detailed description of all brewcode plugin commands
 | 5 | `/brewcode:start` | Start task execution | session | opus | plan |
 | 6 | `/brewcode:review` | Code review with quorum | fork | opus | setup (generates skill) |
 | 7 | `/brewcode:rules` | Extract rules from knowledge | session | sonnet | start (KNOWLEDGE.jsonl) |
-| 8 | `/brewcode:auto-sync` | Documentation synchronization | session | opus | setup |
-| 9 | `/brewcode:grepai` | Semantic code search | session | sonnet | install |
-| 10 | `/brewcode:teardown` | Remove plugin files | fork | haiku | setup |
-| 11 | `/brewcode:secrets-scan` | Search for secrets and credentials | fork | sonnet | -- |
-| 12 | `/brewcode:mcp-config` | Manage MCP servers | session | sonnet | -- |
-| 13 | `/brewcode:text-optimize` | Optimize text for LLM | fork | sonnet | -- |
-| 14 | `/brewcode:text-human` | Simplify and humanize text | fork | sonnet | -- |
+| 8 | `/brewcode:grepai` | Semantic code search | session | sonnet | install |
+| 9 | `/brewcode:teardown` | Remove plugin files | fork | haiku | setup |
+| 10 | `/brewcode:secrets-scan` | Search for secrets and credentials | fork | sonnet | -- |
+| 11 | `/brewcode:text-optimize` | Optimize text for LLM | fork | sonnet | -- |
+| 12 | `/brewcode:text-human` | Simplify and humanize text | fork | sonnet | -- |
+| 13 | `/brewcode:skills` | Skill management and activation | session | sonnet | -- |
+| 14 | `/brewcode:standards-review` | Standards compliance review | fork | opus | setup |
+| 15 | `/brewcode:agents` | Interactive agent creation and improvement | session | opus | -- |
 
 ## Recommended Execution Order
 
 ```
 install --> setup --> spec --> plan --> start --> review --> rules
                                                    |
-                                          auto-sync / grepai / teardown
+                                            grepai / teardown
 ```
 
 ---
@@ -45,7 +46,6 @@ install --> setup --> spec --> plan --> start --> review --> rules
 | `bc-coordinator` | haiku | Task coordination: phase statuses, validation, report management |
 | `bc-knowledge-manager` | haiku | KNOWLEDGE.jsonl compaction, deduplication, prioritization |
 | `bc-grepai-configurator` | opus | Generate `.grepai/config.yaml` through deep project analysis |
-| `bc-auto-sync-processor` | sonnet | Process single document during auto-sync: analyze, research, update |
 | `bc-rules-organizer` | sonnet | Create and optimize `.claude/rules/*.md` files |
 
 ---
@@ -217,7 +217,6 @@ Does not use custom scripts. Validation through direct Bash commands.
 | `tester` | 1 | Test patterns analysis |
 | `reviewer` | 1-2 | Quality analysis + final SPEC review |
 | `Explore` | 1-2 | Documentation and library search |
-| `sql_expert` | 0-1 | DB/repository analysis (if applicable) |
 
 Total 5-10 agents launched **in parallel in single message** for research.
 
@@ -225,12 +224,13 @@ Total 5-10 agents launched **in parallel in single message** for research.
 
 1. **Check Templates** -- verify `SPEC.md.template` exists
 2. **Read & Analyze Input** -- parse arguments, determine scope
-3. **Clarifying Questions** -- 1-4 questions to user via `AskUserQuestion`
-4. **Partition Research Areas** -- split into 5-10 areas for parallel research
-5. **Parallel Research** -- launch 5-10 agents in single message
-6. **Consolidate into SPEC** -- merge findings, create SPEC.md
-7. **Present Key Findings** -- validation with user via `AskUserQuestion`
-8. **Review SPEC** -- iterative review with `reviewer` agent until all critical/major issues resolved
+3. **Clarifying Questions** -- 3-5 questions to user via `AskUserQuestion` in 3 mandatory categories: Scope, Constraints, Edge cases. No NFR/AC questions.
+4. **Feature Splitting Check** -- if >3 independent areas OR >12 phases estimated, suggest splitting into separate tasks
+5. **Partition Research Areas** -- split into 5-10 areas for parallel research
+6. **Parallel Research** -- launch 5-10 agents in single message
+7. **Consolidate into SPEC** -- merge findings, create SPEC.md
+8. **Present Key Findings** -- validation with user via `AskUserQuestion`
+9. **Review SPEC** -- iterative review with `reviewer` agent; MAX 3 iterations, then escalate remaining remarks to user
 
 ### Input Handling
 
@@ -271,11 +271,19 @@ Total 5-10 agents launched **in parallel in single message** for research.
 
 | File/Directory | Purpose |
 |----------------|---------|
-| `.claude/tasks/{TS}_{NAME}_task/PLAN.md` | Execution plan |
+| `.claude/tasks/{TS}_{NAME}_task/PLAN.md` | Slim execution plan with Phase Registry table |
+| `.claude/tasks/{TS}_{NAME}_task/phases/` | Directory with individual phase instruction files (v3) |
+| `.claude/tasks/{TS}_{NAME}_task/phases/{N}-{name}.md` | Execution phase file (e.g., `1-research.md`) |
+| `.claude/tasks/{TS}_{NAME}_task/phases/{N}V-verify-{name}.md` | Verification phase file (e.g., `1V-verify-research.md`) |
+| `.claude/tasks/{TS}_{NAME}_task/phases/FR-final-review.md` | Final review phase file |
 | `.claude/tasks/{TS}_{NAME}_task/KNOWLEDGE.jsonl` | Empty knowledge base |
 | `.claude/tasks/{TS}_{NAME}_task/artifacts/` | Directory for agent reports |
 | `.claude/tasks/{TS}_{NAME}_task/backup/` | Directory for backups |
 | `.claude/TASK.md` | Quick reference (path to latest task added at beginning) |
+
+### v3 Phase Files
+
+In v3, phase details are moved out of PLAN.md into individual files under `phases/`. PLAN.md contains only a slim Phase Registry table with phase name, status, agent, and parallel group. The manager never reads `phases/` files directly -- only agents receive the phase file path via Task API.
 
 ### Bash Scripts
 
@@ -285,29 +293,34 @@ Does not use custom scripts. Validation through direct Bash commands.
 
 | Agent | Count | Purpose |
 |-------|-------|---------|
-| `Plan` | 3 | Quorum plan review (2/3 rule) |
-| `reviewer` | 1 | Verification of all SPEC requirements coverage |
+| `Plan` | 1 | Quorum plan review (coverage check) |
+| `brewcode:architect` | 1 | Quorum plan review (architecture, tech choices, dependencies) |
+| `brewcode:reviewer` | 1-2 | Quorum plan review (quality, risks) + traceability verification |
+
+Quorum review: 3 mixed agents (`Plan` + `brewcode:architect` + `brewcode:reviewer`), 2/3 majority rule.
 
 ### Workflow (from SPEC)
 
-1. **Check Templates** -- verify `PLAN.md.template`
+1. **Check Templates** -- verify `PLAN.md.template` and phase templates
 2. **Read SPEC** -- extract goals, requirements, risks
 3. **Scan Project** -- find Reference Examples (R1, R2...)
 4. **Generate Phase Breakdown** -- 5-12 phases with dependencies and agents
 5. **Present Phases** -- user approval via `AskUserQuestion`
-6. **Generate Artifacts** -- PLAN.md, KNOWLEDGE.jsonl, artifacts/, backup/
-7. **Quorum Plan Review** -- 3 `Plan` agents in parallel, 2/3 issues accepted
-8. **Verification Agent** -- cross-check SPEC vs PLAN
-9. **Present Review Results** -- user approval
+6. **Generate Artifacts** -- slim PLAN.md (Phase Registry table), `phases/` directory with individual phase files, KNOWLEDGE.jsonl (0-byte via `touch`), artifacts/, backup/
+7. **Technology Choices** -- document non-trivial decisions (library, pattern, approach) with rationale + rejected alternatives in PLAN.md
+8. **Quorum Plan Review** -- 3 mixed agents (`Plan` + `brewcode:architect` + `brewcode:reviewer`) in parallel, 2/3 majority accepted
+9. **Traceability Check** -- `brewcode:reviewer` verifies Scope > In + Original Requirements coverage; gaps found result in added phases before Step 10
+10. **Present Review Results** -- user approval
 
 ### Workflow (from Plan Mode)
 
-1. **Check Templates** -- verify `PLAN.md.template`
+1. **Check Templates** -- verify `PLAN.md.template` and phase templates
 2. **Read Plan File** -- parse `.claude/plans/LATEST.md`
 3. **Create Task Dir + Scan** -- create directory, scan project
 4. **Split into Granular Phases** -- each plan item = 1-3 phases + verification
 5. **Present Phases** -- user approval
-6. **Generate Artifacts** -- PLAN.md, KNOWLEDGE.jsonl, artifacts/, backup/
+6. **Generate Artifacts** -- slim PLAN.md (Phase Registry table), `phases/` directory with individual phase files, KNOWLEDGE.jsonl (0-byte via `touch`), artifacts/, backup/
+7. **Lightweight Review** -- 2 agents (`brewcode:architect` + `brewcode:reviewer`) in parallel, 2/2 consensus required
 
 ### Input Handling
 
@@ -330,14 +343,14 @@ Does not use custom scripts. Validation through direct Bash commands.
 
 ## 5. `/brewcode:start`
 
-**Purpose:** Starts task execution by PLAN.md phases with infinite context through automatic handoff. Plugin hooks provide knowledge injection into agents, compaction when approaching context limit and automatic continuation.
+**Purpose:** Starts task execution by PLAN.md phases with infinite context through automatic handoff. In v3, uses Task API (TaskCreate/TaskUpdate/TaskList) for phase management instead of reading phases inline. Plugin hooks provide knowledge injection into agents, compaction when approaching context limit and automatic continuation.
 
 | Parameter | Value |
 |-----------|-------|
 | **Arguments** | `[task-path]` (path to PLAN.md; default from `.claude/TASK.md`) |
 | **Context** | `session` |
 | **Model** | `opus` |
-| **Dependencies** | `/brewcode:plan` (PLAN.md must exist) |
+| **Dependencies** | `/brewcode:plan` (PLAN.md + `phases/` directory must exist) |
 | **Allowed tools** | `Read`, `Write`, `Edit`, `Bash`, `Task`, `Glob`, `Grep`, `Skill` |
 
 ### Created Files
@@ -350,6 +363,7 @@ Does not use custom scripts. Validation through direct Bash commands.
 | `.claude/tasks/{TS}_{NAME}_task/artifacts/MANIFEST.md` | Artifacts manifest |
 | `.claude/tasks/{TS}_{NAME}_task/artifacts/FINAL.md` | Final report |
 | `.claude/tasks/{TS}_{NAME}_task/sessions/{session_id}.info` | Session information |
+| `.claude/tasks/{TS}_{NAME}_task/phases/{N}F-fix-{name}.md` | Fix phase files (dynamic, created on verification failure) |
 
 ### Bash Scripts
 
@@ -359,33 +373,47 @@ Does not use custom scripts. Execution through plugin hooks.
 
 | Agent | Purpose |
 |-------|---------|
-| `bc-coordinator` | Initialization, status updates, knowledge extraction, validation |
+| `bc-coordinator` | Knowledge extraction + report verification only (lighter in v3) |
 | `developer` | Phase implementation (main work) |
 | `tester` | Testing, verification |
 | `reviewer` | Final review (3+ in parallel) |
-| Project agents | Assigned according to PLAN.md |
+| Project agents | Assigned according to PLAN.md Phase Registry |
+
+### v3 Task API Architecture
+
+In v3, the manager (start skill) uses Task API to manage phase execution:
+
+| API | Purpose |
+|-----|---------|
+| `TaskCreate` | Spawn agent with phase file path -- agent reads its own `phases/{N}-{name}.md` |
+| `TaskUpdate` | Update phase status in PLAN.md Phase Registry |
+| `TaskList` | Check running/completed tasks for parallel group management |
+
+The manager **never reads** `phases/` files directly. Only the spawned agents read their assigned phase file. This keeps the manager context slim and enables parallel execution of phases in the same Parallel group.
 
 ### Hooks Enabling Operation
 
 | Hook | Event | Purpose |
 |------|-------|---------|
-| `session-start.mjs` | SessionStart | Session initialization |
-| `pre-task.mjs` | PreToolUse:Task | Knowledge `## K` injection + protocol |
-| `post-task.mjs` | PostToolUse:Task | Reminder: WRITE report -> CALL coordinator |
-| `pre-compact.mjs` | PreCompact | KNOWLEDGE compaction, write handoff |
+| `session-start.mjs` | SessionStart | Session initialization, Task API reminder on active v3 task |
+| `pre-task.mjs` | PreToolUse:Task | Knowledge `## K` injection + v3 phase file reminder |
+| `post-task.mjs` | PostToolUse:Task | Task API instructions for manager |
+| `pre-compact.mjs` | PreCompact | KNOWLEDGE compaction, v3-aware handoff |
 | `stop.mjs` | Stop | Block if incomplete, clean lock |
 
 ### Workflow
 
 1. **Resolve Task Path** -- from arguments or `.claude/TASK.md`
 2. **Initialize via Coordinator** -- validation, create lock, status `in progress`
-3. **Load Context** -- read PLAN.md and KNOWLEDGE.jsonl
-4. **Execute Phases** -- for each phase:
-   - Call agent (developer/tester/reviewer)
-   - **WRITE report** to `artifacts/{P}-{N}{T}/{AGENT}_output.md`
+3. **Load Context** -- read PLAN.md Phase Registry and KNOWLEDGE.jsonl (manager does NOT read `phases/` files)
+4. **Execute Phases via Task API** -- for each phase:
+   - `TaskCreate` -- spawn agent with path to `phases/{N}-{name}.md` (agent reads its own phase file)
+   - Agent executes, **WRITES report** to `artifacts/{P}-{N}{T}/{AGENT}_output.md`
    - **CALL bc-coordinator** -- read report, extract knowledge
-   - Run verification phase (same 2-step protocol)
-5. **Final Review** -- 3+ `reviewer` agents in parallel
+   - `TaskCreate` -- spawn verification agent with `phases/{N}V-verify-{name}.md`
+   - On verification failure: generate `phases/{N}F-fix-{name}.md` fix file, spawn fix agent
+   - Tasks in same Parallel group spawn simultaneously via multiple `TaskCreate` calls
+5. **Final Review** -- 3+ `reviewer` agents in parallel via `TaskCreate`
 6. **Complete** -- status `finished`, call `/brewcode:rules`
 
 ### Handoff Mechanism (infinite context)
@@ -406,6 +434,17 @@ State is preserved: phase statuses in PLAN.md, knowledge in KNOWLEDGE.jsonl, art
 1. WRITE report --> artifacts/{P}-{N}{T}/{AGENT}_output.md
 2. CALL bc-coordinator --> reads report from disk, extracts knowledge
 ```
+
+### KNOWLEDGE → Rules (automatic)
+
+Triggered at **Step 5 Complete** (after final review, before status `finished`).
+
+| Step | Action | Agent | Result |
+|------|--------|-------|--------|
+| 1 | `Skill(brewcode:rules)` | bc-rules-organizer | Reads KNOWLEDGE.jsonl, writes ❌ entries to `.claude/rules/avoid.md`, ✅ entries to `.claude/rules/best-practice.md` |
+| 2 | `Task(bc-knowledge-manager, prune-rules)` | bc-knowledge-manager | Removes ❌ and ✅ entries from KNOWLEDGE.jsonl (already persisted in rules) |
+
+After prune, only ℹ️ context facts remain in KNOWLEDGE.jsonl -- architecture decisions, project-specific facts, environment details.
 
 ### Usage Example
 
@@ -539,9 +578,9 @@ Does not use subagents.
 
 | Record Type | Target File |
 |-------------|-------------|
-| `t: "ANTI"` | `avoid.md` (anti-pattern) |
-| `t: "BEST"` | `best-practice.md` (best practice) |
-| `t: "INFO"` | Only `scope: "global"` |
+| `t: "❌"` | `avoid.md` (anti-pattern) |
+| `t: "✅"` | `best-practice.md` (best practice) |
+| `t: "ℹ️"` | Only `scope: "global"` |
 
 ### Rules Optimization
 
@@ -560,91 +599,11 @@ Does not use subagents.
 
 ---
 
-## 8. `/brewcode:auto-sync`
-
-**Purpose:** Universal documentation synchronization system. Discovers, tracks and updates all Claude Code markdown documents (skills, agents, rules, configs) through parallel processor agents.
-
-| Parameter | Value |
-|-----------|-------|
-| **Arguments** | `[status]`, `[init <path>]`, `[global]`, `[path]`, `[-o]` |
-| **Context** | `session` |
-| **Model** | `opus` |
-| **Dependencies** | `/brewcode:setup` (configuration) |
-| **Allowed tools** | `Read`, `Write`, `Edit`, `Glob`, `Grep`, `Bash`, `Task`, `WebFetch`, `Skill` |
-
-### Created Files
-
-| File/Directory | Purpose |
-|----------------|---------|
-| `.claude/auto-sync/INDEX.jsonl` | Project documents index |
-| `~/.claude/auto-sync/INDEX.jsonl` | Global documents index |
-
-### Bash Scripts
-
-| Script | Purpose |
-|--------|---------|
-| `detect-mode.sh` | Determine mode from arguments |
-| `discover.sh typed` | Find files with `auto-sync: enabled` |
-| `discover.sh detect_type` | Determine file type |
-| `index-ops.sh add` | Add to INDEX |
-| `index-ops.sh stale` | Find stale entries |
-| `index-ops.sh update` | Update entry in INDEX |
-
-### Agents
-
-| Agent | Model | Purpose |
-|-------|-------|---------|
-| `bc-auto-sync-processor` | sonnet | Process single document: analyze, research, update |
-
-Maximum `parallelAgents` (default 5) agents in parallel.
-
-### Operating Modes
-
-| Mode | Trigger | Action |
-|------|---------|--------|
-| **STATUS** | `status` | Report INDEX state (exit) |
-| **INIT** | `init <path>` | Add file to INDEX + frontmatter tag (exit) |
-| **GLOBAL** | `global` | Sync `~/.claude/**` |
-| **PROJECT** | empty | Sync `.claude/**` |
-| **FILE** | file path | Sync single file |
-| **FOLDER** | folder path | Sync all .md files in folder |
-
-### Document Frontmatter
-
-```yaml
-auto-sync: enabled
-auto-sync-date: 2026-02-05
-auto-sync-type: skill
-```
-
-### Override Block
-
-Documents with `<auto-sync-override>` receive `override` protocol -- custom sources and update rules.
-
-### Configuration
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `autoSync.intervalDays` | 7 | Staleness interval (days) |
-| `autoSync.parallelAgents` | 5 | Parallel agents |
-| `autoSync.optimize` | false | Optimize text after update |
-
-Flag `-o` forces optimization.
-
-### Usage Example
-
-```
-/brewcode:auto-sync status
-/brewcode:auto-sync init .claude/agents/my-agent.md
-/brewcode:auto-sync global
-/brewcode:auto-sync
-/brewcode:auto-sync -o
-/brewcode:auto-sync .claude/skills/my-skill/
-```
+> **Moved:** `/brewcode:auto-sync` and `bd-auto-sync-processor` agent are now in the dedicated `brewdoc` plugin. Install `brewdoc` and use `/brewdoc:auto-sync`.
 
 ---
 
-## 9. `/brewcode:grepai`
+## 8. `/brewcode:grepai`
 
 **Purpose:** Setup and management of semantic code search based on grepai (Ollama + bge-m3). Supports setup, status, start, stop, reindex, optimize and upgrade.
 
@@ -720,7 +679,7 @@ Flag `-o` forces optimization.
 
 ---
 
-## 10. `/brewcode:teardown`
+## 9. `/brewcode:teardown`
 
 **Purpose:** Removes all files and directories created by `/brewcode:setup` command. Preserves task directories and user rules.
 
@@ -769,6 +728,52 @@ Does not use subagents.
 
 ---
 
+## 15. `/brewcode:agents`
+
+**Purpose:** Interactive orchestrator for creating and improving Claude Code agents. Collects requirements via AskUserQuestion, delegates to `agent-creator` agent, then applies `text-optimize`. Optionally updates CLAUDE.md agents table.
+
+| Parameter | Value |
+|-----------|-------|
+| **Arguments** | `create <description>` \| `up <name\|path>` \| `<name\|path>` (shorthand) |
+| **Context** | `session` |
+| **Model** | `opus` |
+| **Dependencies** | None |
+| **Allowed tools** | `Read`, `Write`, `Edit`, `Glob`, `Grep`, `Bash`, `Task`, `AskUserQuestion`, `Skill` |
+
+### Modes
+
+| Mode | Trigger | Description |
+|------|---------|-------------|
+| `help` | No arguments | Print usage |
+| `create` | `create <desc>` | Create new agent interactively |
+| `up` | `up <name\|path>` or `<name\|path>` | Improve existing agent |
+
+### Create Mode Flow
+
+1. **AskUserQuestion** (3 questions in one call): placement (project/global/plugin), model (sonnet/opus/haiku/inherit), CLAUDE.md update
+2. **Spawn `agent-creator`** -- parallel codebase analysis, clarifying questions, writes agent file
+3. **Apply `text-optimize`** -- token efficiency pass on new agent
+4. **Update CLAUDE.md** (if approved) -- add/update row in agents table
+
+### Improve Mode Flow
+
+1. **Resolve path/name** -- search `.claude/agents/`, `~/.claude/agents/`, `brewcode/agents/`
+2. **AskUserQuestion** (2 questions): improvement focus (triggers/quality/both/full), CLAUDE.md update
+3. **Spawn `agent-creator`** -- analyze and improve existing agent file
+4. **Apply `text-optimize`**
+5. **Update CLAUDE.md** (if approved)
+
+### Usage Example
+
+```
+/brewcode:agents create backend validator
+/brewcode:agents up reviewer
+/brewcode:agents .claude/agents/reviewer.md
+/brewcode:agents
+```
+
+---
+
 ## Hooks Architecture
 
 All commands operate within hooks-only architecture -- no external runtime. Claude Code hooks provide context management.
@@ -786,15 +791,14 @@ All commands operate within hooks-only architecture -- no external runtime. Clau
 ## KNOWLEDGE.jsonl Format
 
 ```jsonl
-{"ts":"2026-01-26T14:00:00","cat":"db","t":"ANTI","txt":"Avoid SELECT *","src":"sql_expert"}
+{"ts":"2026-01-26T14:00:00","t":"❌","txt":"Avoid SELECT *","src":"sql_expert"}
 ```
 
 | Field | Description |
 |-------|-------------|
 | `ts` | Timestamp |
-| `cat` | Category (db, security, testing, etc.) |
-| `t` | Type: `ANTI` (anti-pattern), `BEST` (practice), `INFO` (fact) |
+| `t` | Type: `❌` (anti-pattern), `✅` (practice), `ℹ️` (fact) |
 | `txt` | Entry text |
 | `src` | Source (agent) |
 
-Priority during compaction: `ANTI` > `BEST` > `INFO`
+Priority during compaction: `❌` > `✅` > `ℹ️`

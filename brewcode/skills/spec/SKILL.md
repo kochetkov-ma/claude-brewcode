@@ -54,13 +54,26 @@ Strip flag from `$ARGUMENTS`. Remaining text = description or path.
 
    **If `--noask`:** Skip. Record in SPEC User Q&A: "Skipped (--noask mode)". Infer scope from description and codebase analysis.
 
-   **Otherwise:** Use AskUserQuestion tool to ask 1-4 questions about:
-   - Scope boundaries (what's in/out)
-   - Priority trade-offs (performance vs simplicity, etc.)
-   - Constraints (backward compatibility, specific libraries, etc.)
-   - Edge cases or ambiguous requirements
+   **Otherwise:** Use AskUserQuestion tool to ask 3-5 questions, grouped in batches of up to 4 per AskUserQuestion call. Focus on:
+
+   | # | Category | Example Questions |
+   |---|----------|-------------------|
+   | 1 | Scope | What's in/out? Which modules affected? |
+   | 2 | Constraints | Required libraries? Backward compatibility? API contracts? |
+   | 3 | Edge cases / ambiguities | Concurrent access? Empty/null inputs? Error recovery? |
 
    Record all Q&A for the User Q&A section of SPEC.
+
+**2.5. Feature Splitting Check**
+
+After gathering requirements, evaluate scope:
+
+```
+IF requirements cover >3 independent areas OR estimated complexity >12 plan phases:
+  → AskUserQuestion: "I suggest splitting into X tasks: [A], [B], [C]. Agree?"
+  → If yes: create SPEC only for first task, record others in Notes section
+  → If no: continue with full scope
+```
 
 3. **Partition Research Areas** (5-10 areas)
 
@@ -137,9 +150,10 @@ Strip flag from `$ARGUMENTS`. Remaining text = description or path.
    WHILE remarks.critical > 0 OR remarks.major > 0:
      1. Fix all critical/major remarks in SPEC.md
      2. Re-run reviewer
+   MAX 3 iterations. After 3 rounds, present remaining remarks to user via AskUserQuestion.
    ```
 
-   **Exit criteria:** No critical/major remarks remaining
+   **Exit criteria:** No critical/major remarks remaining OR 3 iterations exhausted
 
 > **Template source:** Always from `.claude/tasks/templates/` (project), never from plugin base templates directly.
 

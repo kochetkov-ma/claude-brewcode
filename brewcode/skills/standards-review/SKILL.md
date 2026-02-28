@@ -2,7 +2,7 @@
 name: brewcode:standards-review
 description: Reviews code for project standards compliance and finds duplicates. Use when - reviewing code quality, checking standards, finding duplicates, analyzing compliance. Trigger keywords - standards review, check standards, find duplicates, code review, compliance check, reusable code.
 argument-hint: "[commit|branch|folder] [-p <prompt>]"
-allowed-tools: Read, Glob, Grep, Task, Bash, Write, mcp__grepai__search
+allowed-tools: Read, Glob, Grep, Task, Bash, Write, mcp__grepai__search, AskUserQuestion, Skill
 model: opus
 ---
 
@@ -16,6 +16,21 @@ model: opus
 | 2 | CLAUDE.md | Project standards, conventions, patterns |
 | 3 | rules/*.md | Strict rules with numbers — check ALL `[avoid#N]`, `[bp#N]` |
 | 4 | references/{stack}.md | Stack-specific guidelines from this skill |
+
+---
+
+## Phase 0: User Confirmation
+
+**BEFORE any analysis**, ask the user using AskUserQuestion tool:
+
+> "Run `/simplify` at the end for an additional review pass (efficiency, concurrency, hot-paths)? This will increase execution time."
+
+| Option | Value |
+|--------|-------|
+| A | "Yes - run /simplify after report" |
+| B | "No - standards review only" |
+
+**Remember the answer.** If "Yes" - execute Phase 7 after Phase 6. If "No" - stop after Phase 6.
 
 ---
 
@@ -258,6 +273,20 @@ mkdir -p "${REPORT_DIR}"
 **Reuse:** REUSE (import), EXTEND (modify existing), CONSIDER (evaluate), KEEP_NEW (justified)
 **Rating:** good (exemplary), warning (suboptimal), bad (violation)
 ```
+
+## Phase 7: Simplify Pass (conditional)
+
+**Execute ONLY if user answered "Yes" in Phase 0.**
+
+After Phase 6 report is written, invoke:
+
+```
+Skill(skill="simplify", args="{INPUT_VALUE}")
+```
+
+Where `{INPUT_VALUE}` is the same scope used in this review (commit, branch, or folder from Phase 2).
+
+> If user answered "No" in Phase 0 - skip this phase entirely.
 
 ## Error Handling
 

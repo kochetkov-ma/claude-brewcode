@@ -81,7 +81,7 @@ async function main() {
       return;
     }
 
-    // Get task path from lock
+    // Defense-in-depth: getLock() already validates task_path, this is a backup check
     const taskPath = lock.task_path;
     if (taskPath && !validateTaskPath(taskPath)) {
       log('warn', '[stop]', `Invalid task_path in lock: ${taskPath}`, cwd, session_id);
@@ -141,8 +141,7 @@ Emergency exit: rm .claude/tasks/*_task/.lock`,
     });
   } catch (error) {
     log('error', '[stop]', `Error: ${error.message}`, cwd, session_id);
-    try { deleteLock(cwd); } catch (_) {}
-    // On error, allow stop (don't trap user)
+    // On error, allow stop but preserve lock for recovery (user can rm .lock manually)
     output({});
   }
 }
