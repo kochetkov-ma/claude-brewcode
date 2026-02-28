@@ -43,7 +43,8 @@ Run task referenced in TASK.md:
 4. Knowledge from execution is compacted and preserved in KNOWLEDGE.jsonl
 5. At context limit, PreCompact hook triggers automatic handoff to new session
 6. Resumes from where it left off with full context
-7. On completion, extracts rules via `/brewcode:rules`
+7. **Rules actualization**: KNOWLEDGE.jsonl -> `.claude/rules/*.md` (entries with priority markers)
+8. **KNOWLEDGE cleanup**: removes actualized entries, keeps context facts
 
 ## Key Features
 

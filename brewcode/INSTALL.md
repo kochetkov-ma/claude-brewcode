@@ -1,4 +1,4 @@
-# Focus Task Plugin - Installation Guide
+# Brewcode Plugin - Installation Guide
 
 ## Quick Installation
 

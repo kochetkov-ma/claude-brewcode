@@ -41,11 +41,11 @@
 ┌─────────────────────────────────────────────────────────────┐
 │  ONE message with 5-10 Task tool calls in PARALLEL          │
 │                                                             │
-│  Task(agent="Plan", prompt="Analyze architecture in {area}")│
-│  Task(agent="developer", prompt="Analyze DB layer...")      │
-│  Task(agent="developer", prompt="Analyze services...")      │
-│  Task(agent="tester", prompt="Analyze test patterns...")    │
-│  Task(agent="reviewer", prompt="Analyze quality...")        │
+│  Task(subagent_type="Plan", prompt="Analyze architecture in {area}")│
+│  Task(subagent_type="developer", prompt="Analyze DB layer...")      │
+│  Task(subagent_type="developer", prompt="Analyze services...")      │
+│  Task(subagent_type="tester", prompt="Analyze test patterns...")    │
+│  Task(subagent_type="reviewer", prompt="Analyze quality...")        │
 │  ...                                                        │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -87,6 +87,7 @@ DO NOT include large code blocks - reference file:line instead.
 | Section | Source |
 |---------|--------|
 | Goal | Original task prompt (1-2 sentences) |
+| Scope | User Q&A (in/out boundaries) + original task description |
 | Original Requirements | Full task prompt, preserved verbatim |
 | User Q&A | From AskUserQuestion interactions |
 | Analysis > Architecture | Plan agent + consolidated findings |
@@ -129,4 +130,4 @@ For a Spring Boot project with auth feature:
 | Consolidate | 1 synthesis pass |
 | Output | Write SPEC file |
 
-**Total:** 3 turns for complete SPEC generation.
+**Total:** 5-8 turns depending on review iterations and user interactions.

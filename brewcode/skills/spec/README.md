@@ -39,15 +39,18 @@ Non-interactive mode (no questions):
 | `<path>` | Path to requirements file |
 | (empty) | Reads from `.claude/TASK.md` |
 
-## Typical Workflow
+## Workflow
 
 1. **Invoke** with your task description
-2. **Answer** clarifying questions (scope, constraints, trade-offs)
-3. **Review** research findings and risk assessment
-4. **Confirm** completeness with feedback
-5. **Get** SPEC.md in `.claude/tasks/{TIMESTAMP}_{NAME}_task/`
+2. **Clarifying Questions** -- 3-5 questions in 3 categories: Scope (in/out, modules), Constraints (libraries, compatibility, API contracts), Edge cases (concurrency, nulls, error recovery)
+3. **Feature Splitting Check** -- if requirements cover >3 independent areas or >12 estimated phases, the skill suggests splitting into smaller tasks
+4. **Parallel Research** -- 5-10 agents explore codebase in parallel (controllers, services, tests, config, docs, etc.)
+5. **Consolidation** -- merges agent findings into SPEC.md, deduplicates, fills all sections from project-adapted template
+6. **User Validation** -- presents key architectural decisions, risks, and assumptions for confirmation
+7. **Quality Gate** -- reviewer agent checks completeness, consistency, and feasibility; fixes critical/major remarks in a loop (max 3 iterations)
+8. **Output** -- `SPEC.md` in `.claude/tasks/{TIMESTAMP}_{NAME}_task/`
 
-> **Tip:** Use `-n` flag to skip interactive questions for CI/automated pipelines.
+> **Tip:** Use `-n` flag to skip interactive questions (steps 2, 3, 6) for CI/automated pipelines.
 
 ## Next Steps
 
@@ -58,5 +61,5 @@ After spec is created, run:
 
 ## Requirements
 
-- Must run `/brewcode:setup` first (creates templates)
+- Must run `/brewcode:setup` first (creates adapted templates)
 - Project must have `.claude/` directory

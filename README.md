@@ -1,4 +1,4 @@
-# Brewcode
+# claude-brewcode
 
 [![macOS](https://img.shields.io/badge/macOS-support-000000?logo=apple&logoColor=white)](https://www.apple.com/macos/)
 [![Claude](https://img.shields.io/badge/Claude-Anthropic-orange?logo=anthropic&logoColor=white)](https://claude.ai)
@@ -6,6 +6,19 @@
 
 [![Release](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/release.yml/badge.svg)](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/release.yml)
 [![Latest Release](https://img.shields.io/github/v/release/kochetkov-ma/claude-brewcode?label=latest&color=blue)](https://github.com/kochetkov-ma/claude-brewcode/releases/latest)
+
+**Claude Code plugin suite** - two plugins for development and documentation workflows.
+
+## Plugin Suite
+
+| Plugin | Version | Purpose | Install |
+|--------|---------|---------|---------|
+| brewcode | 3.1.0 | Infinite task execution, prompt optimization, skill/agent creation, quorum reviews | `claude plugin install brewcode@claude-brewcode` |
+| brewdoc | 3.1.0 | Documentation tools: auto-sync, my-claude docs, memory optimization | `claude plugin install brewdoc@claude-brewcode` |
+
+---
+
+## Brewcode
 
 **Full-featured development platform for Claude Code** - infinite focus tasks with automatic context handoff, prompt optimization, skill/agent creation, quorum code reviews, project rules management, and knowledge persistence.
 
@@ -28,16 +41,22 @@
    ```bash
    claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
    ```
-2. **Install plugin** - copies the plugin to local cache
+2. **Install plugins** - copies both plugins to local cache
    ```bash
    claude plugin install brewcode@claude-brewcode
+   claude plugin install brewdoc@claude-brewcode
    ```
-3. **Restart Claude Code** - the plugin loads automatically on every session
+3. **Restart Claude Code** - plugins load automatically on every session
 
 **Option B** - run from local directory (for development or one-time use):
 
 ```bash
+# Both plugins
+claude --plugin-dir ./brewcode --plugin-dir ./brewdoc
+
+# Single plugin
 claude --plugin-dir ./brewcode
+claude --plugin-dir ./brewdoc
 ```
 
 After installation, run `/brewcode:install` inside Claude Code to check and install prerequisites (brew, jq, coreutils) and optionally semantic search (ollama, grepai).
@@ -46,35 +65,26 @@ After installation, run `/brewcode:install` inside Claude Code to check and inst
 
 ## Quick Start
 
-1. **Setup** - analyzes your project structure and generates adapted templates, config, and review skill
-   ```bash
-   /brewcode:setup
-   ```
-   Output: `.claude/tasks/cfg/` with config, templates tailored to your tech stack
+### brewcode — task execution
 
-2. **Spec** - spawns 5-10 parallel research agents, asks clarifying questions, produces a structured specification
-   ```bash
-   /brewcode:spec "Implement JWT authorization"
-   /brewcode:spec ./docs/requirements/auth.md         # file path for large descriptions
-   /brewcode:spec -n "Implement JWT authorization"    # --noask: no questions to user
-   ```
-   Output: `SPEC.md` with requirements, constraints, risks, and codebase analysis.
-   For complex tasks, write requirements to a file and pass the path — the plugin reads it as input.
+```bash
+/brewcode:setup                              # 1. Adapt templates for your project (one-time)
+/brewcode:spec "Implement JWT authorization"  # 2. Research + specification
+/brewcode:plan                                # 3. Generate phased plan
+/brewcode:start                               # 4. Execute with infinite context
+```
 
-3. **Plan** - converts SPEC into a phased execution plan with verification criteria
-   ```bash
-   /brewcode:plan
-   /brewcode:plan -n                                  # --noask: no questions to user
-   ```
-   Output: `PLAN.md` with phases, iterations, and checkboxes for each deliverable
+After `/brewcode:setup`, each task follows the cycle: `spec` -> `plan` -> `start`.
 
-4. **Start** - executes the plan phase by phase with automatic context handoff
-   ```bash
-   /brewcode:start
-   ```
-   Output: working code, tests, artifacts. Survives unlimited context compactions.
+### brewdoc — documentation tools
 
-After `/brewcode:setup` runs once, each task follows the cycle: `spec` -> `plan` -> `start`.
+```bash
+/brewdoc:auto-sync                    # Sync all project docs with codebase
+/brewdoc:auto-sync init ./docs/api.md # Add file to auto-sync tracking
+/brewdoc:my-claude                    # Generate Claude Code installation docs
+/brewdoc:memory                       # Optimize memory files interactively
+/brewdoc:md-to-pdf ./docs/report.md   # Convert markdown to PDF
+```
 
 ---
 
@@ -142,14 +152,6 @@ Each reviewer works independently. Results are merged via quorum algorithm (2/3 
 
 Once configured, `grepai_search` is automatically injected into all agent prompts for AI-powered code exploration.
 
-### 6. Documentation sync
-
-```bash
-/brewcode:auto-sync                    # Sync all project docs
-/brewcode:auto-sync init ./docs/api.md # Add file to auto-sync tracking
-/brewcode:auto-sync status             # Show stale/fresh document status
-```
-
 ### Security audit
 
 ```bash
@@ -187,6 +189,13 @@ Once configured, `grepai_search` is automatically injected into all agent prompt
   └───────────────────────────────────────────────────────────────┘
 ```
 
+### Knowledge lifecycle
+
+1. Agents accumulate knowledge entries during execution (KNOWLEDGE.jsonl)
+2. PreCompact hook compacts and deduplicates before context handoff
+3. Pre-task hook injects knowledge into every agent prompt
+4. Knowledge accumulates across phases, converted to permanent rules at task end
+
 ### Hook lifecycle
 
 | Hook | Event | Purpose |
@@ -195,9 +204,9 @@ Once configured, `grepai_search` is automatically injected into all agent prompt
 | `grepai-session` | SessionStart | Auto-start grepai watch process |
 | `pre-task` | PreToolUse:Task | Inject grepai + KNOWLEDGE into agent prompts |
 | `grepai-reminder` | PreToolUse:Glob/Grep | Remind to prefer semantic search |
-| `post-task` | PostToolUse:Task | Bind session, enforce 2-step protocol |
+| `post-task` | PostToolUse:Task | Bind session, enforce 2-step protocol (success/failure branching) |
 | `pre-compact` | PreCompact | Compact KNOWLEDGE, write handoff entry |
-| `stop` | Stop | Block if task incomplete, clean lock |
+| `stop` | Stop | Block if not terminal (finished/failed/cancelled/error), clean lock |
 
 ---
 
@@ -220,7 +229,7 @@ Once configured, `grepai_search` is automatically injected into all agent prompt
 
 ---
 
-## Skills (16)
+## Brewcode Skills (15)
 
 | Skill | Purpose |
 |-------|---------|
@@ -231,15 +240,23 @@ Once configured, `grepai_search` is automatically injected into all agent prompt
 | `/brewcode:start` | Execute task with infinite context handoff |
 | `/brewcode:review` | Multi-agent code review with quorum (created by setup) |
 | `/brewcode:rules` | Extract rules from KNOWLEDGE to `.claude/rules/` |
-| `/brewcode:auto-sync` | Universal document sync (status, init, global, project, path) |
 | `/brewcode:grepai` | Semantic code search (setup, status, start, stop, reindex) |
 | `/brewcode:text-optimize` | Optimize text/prompts for LLM token efficiency |
 | `/brewcode:text-human` | Remove AI artifacts, clean comments, simplify docs |
 | `/brewcode:standards-review` | Review code for project standards compliance |
 | `/brewcode:secrets-scan` | Scan for leaked secrets and credentials |
 | `/brewcode:skills` | List, create, and upgrade skills with forced evaluation |
-| `/brewcode:mcp-config` | Manage MCP server configurations |
+| `/brewcode:agents` | Interactive agent creation and improvement |
 | `/brewcode:teardown` | Remove plugin configuration (keeps task data) |
+
+## Brewdoc Skills (4)
+
+| Skill | Purpose |
+|-------|---------|
+| `/brewdoc:auto-sync` | Universal document sync with codebase |
+| `/brewdoc:my-claude` | Generate Claude Code installation docs |
+| `/brewdoc:memory` | Optimize memory files interactively |
+| `/brewdoc:md-to-pdf` | Convert markdown to professional PDF |
 
 ## Agents (14)
 
@@ -264,7 +281,7 @@ Once configured, `grepai_search` is automatically injected into all agent prompt
 | `bc-coordinator` | haiku | Task coordination, artifact management |
 | `bc-knowledge-manager` | haiku | KNOWLEDGE.jsonl compaction and deduplication |
 | `bc-grepai-configurator` | opus | Generate grepai config.yaml |
-| `bc-auto-sync-processor` | sonnet | Process documents for auto-sync |
+| `bd-auto-sync-processor` | sonnet | Process documents for auto-sync |
 | `bc-rules-organizer` | sonnet | Create and optimize `.claude/rules/` files |
 
 ---
@@ -289,13 +306,14 @@ After task creation:
 
 | Document | Description |
 |----------|-------------|
-| [Plugin README](brewcode/README.md) | Detailed plugin documentation |
+| [Brewcode README](brewcode/README.md) | Detailed brewcode plugin documentation |
+| [Brewdoc README](brewdoc/README.md) | Brewdoc plugin documentation |
 | [Installation Guide](brewcode/INSTALL.md) | All installation methods |
 | [Commands Reference](brewcode/docs/commands.md) | Detailed skills descriptions with examples |
 | [Flow Diagrams](brewcode/docs/flow.md) | Execution flow diagrams (spec, plan, start) |
 | [Hooks Reference](brewcode/docs/hooks.md) | Hook behavior and configuration |
 | [File Structure](brewcode/docs/file-tree.md) | Complete file tree of plugin and project |
-| [Release Notes](brewcode/RELEASE-NOTES.md) | Version history |
+| [Release Notes](RELEASE-NOTES.md) | Version history |
 
 ---
 
@@ -311,9 +329,11 @@ bash .claude/scripts/update-plugin.sh
 
 ### Version Sync
 
-When bumping version, update BOTH files:
-- `brewcode/.claude-plugin/plugin.json` (source of truth)
-- `.claude-plugin/marketplace.json` (must match)
+When bumping version, update ALL 4 files with SAME version:
+- `brewcode/.claude-plugin/plugin.json`
+- `brewdoc/.claude-plugin/plugin.json`
+- `.claude-plugin/marketplace.json` (all 3 version fields)
+- `brewcode/package.json` (both version fields)
 
 ---
 

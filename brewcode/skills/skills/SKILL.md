@@ -164,7 +164,27 @@ Research topic, then create skill via skill-creator.
 | Path to `.md` file | Read as spec |
 | Text prompt | Use as research query |
 
-### Step 2: Parallel Research
+### Step 2: Clarify Invocation Type
+
+Use AskUserQuestion before spawning any agents:
+
+```
+header: "Invocation"
+question: "Who will invoke this skill?"
+options:
+  - label: "User only (slash command)"
+    description: "Only via /skill-name — sets disable-model-invocation: true, simple description"
+  - label: "LLM auto-detect"
+    description: "Claude picks it up from context — full trigger keyword optimization"
+  - label: "Both (default)"
+    description: "User slash command + LLM auto-detection"
+```
+
+Save answer as `INVOCATION_TYPE` for use in Step 4.
+
+---
+
+### Step 3: Parallel Research
 
 Spawn **two agents in parallel** (single message):
 
@@ -196,7 +216,7 @@ Task tool:
     Output: Summary of external knowledge for skill creation.
 ```
 
-### Step 3: Create Skill
+### Step 4: Create Skill
 
 After research completes, spawn skill-creator:
 
@@ -207,6 +227,7 @@ Task tool:
     Create new skill based on research.
 
     Topic: {TOPIC}
+    Invocation type: {INVOCATION_TYPE}
 
     ## Codebase Research
     {EXPLORE_RESULTS}

@@ -1,0 +1,44 @@
+# Phase {PHASE_NUM}: {PHASE_NAME}
+
+## Role
+
+`{AGENT}` -- {AGENT_ROLE}
+
+## Objective
+
+{OBJECTIVE}
+
+## Context Files
+
+| # | File | Why |
+|---|------|-----|
+{CONTEXT_FILES}
+
+## References
+
+| # | Type | File | Description |
+|---|------|------|-------------|
+{REFERENCES}
+
+## Tasks
+
+{TASK_LIST}
+
+## Constraints
+
+{CONSTRAINTS}
+
+## Exit Criteria
+
+{EXIT_CRITERIA}
+
+## Artifacts
+
+- Report: `artifacts/{ARTIFACT_DIR}/{AGENT}_output.md`
+- Additional: {ADDITIONAL_ARTIFACTS}
+
+## Knowledge Guidelines
+
+- Extract 3-10 entries per phase
+- Priority: `❌` (errors/anti-patterns) > `✅` (confirmed patterns) > `ℹ️` (context)
+- Format: `{"ts":"...","t":"❌|✅|ℹ️","txt":"...","src":"{AGENT}"}`

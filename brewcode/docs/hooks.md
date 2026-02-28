@@ -495,11 +495,18 @@ On bc-coordinator completion, if lock exists but `session_id` not bound:
 2. `session_id` and `bound_at` written to lock file
 3. Returns `additionalContext` about binding
 
-**2-step protocol:**
+**Post-agent protocol:**
 
 After worker agent completion (not system), if lock with matching session:
+
+On success:
 ```
 AGENT_NAME DONE -> 1. WRITE report 2. CALL bc-coordinator NOW
+```
+
+On failure (is_error=true):
+```
+AGENT_NAME FAILED -> 1. Retry once with same agent 2. If retry fails: TaskUpdate(taskId, status="failed"), apply Escalation 3. Do NOT write report, do NOT call bc-coordinator
 ```
 
 ### Files
@@ -538,9 +545,16 @@ brewcode: session a1b2c3d4 bound to lock
 brewcode: Task lock exists but session not bound. REQUIRED: Call bc-coordinator FIRST to initialize and bind this session. Then re-run your agent.
 ```
 
-**2-step protocol (after worker agent):**
+**Post-agent protocol (after worker agent):**
+
+On success:
 ```
-{AGENT_NAME} {DONE|FAILED} -> 1. WRITE report 2. CALL bc-coordinator NOW
+{AGENT_NAME} DONE -> 1. WRITE report 2. CALL bc-coordinator NOW
+```
+
+On failure (is_error=true):
+```
+{AGENT_NAME} FAILED -> 1. Retry once with same agent 2. If retry fails: TaskUpdate(taskId, status="failed"), apply Escalation 3. Do NOT write report, do NOT call bc-coordinator
 ```
 
 ### For Whom
@@ -573,7 +587,7 @@ No matcher -- triggers on every PreCompact.
 | `task_path` invalid | `continue: true` + warning |
 | Task not found | `continue: true` |
 | Cannot parse task | `continue: true` + warning |
-| Task status `finished` | `continue: true`, no processing |
+| Task in terminal status (`finished`, `failed`, `cancelled`, `error`) | `continue: true`, no processing |
 | Task active | Validation + compaction + handoff + status update |
 
 **Session_id DOES NOT CHANGE after compact.** Auto-compact Claude Code works within one session. Lock file preserves binding.
@@ -636,7 +650,7 @@ On issues:
 ### Log File
 
 ```
-2026-02-09T12:00:00.000Z WARN  [a1b2c3d4] [pre-compact] Validation warnings: ...
+2026-02-09T12:00:00.000Z DEBUG [a1b2c3d4] [pre-compact] Validation warnings (agent may still be executing): ...
 2026-02-09T12:00:00.000Z INFO  [a1b2c3d4] [pre-compact] Knowledge compacted successfully
 2026-02-09T12:00:00.000Z INFO  [a1b2c3d4] [pre-compact] Handoff to phase 3
 ```
@@ -690,7 +704,9 @@ No matcher -- triggers on every Stop.
 | Lock with current session_id + cannot parse task | Deletes lock, allows stop | deleted |
 | Lock with current session_id + terminal status (`finished`, `cancelled`, `failed`, `error`) | Deletes lock, allows stop, reminds about rules | deleted |
 | Lock with current session_id + task incomplete | **BLOCKS STOP** | preserved |
-| Error in hook | Allows stop (doesn't block user) | not touched |
+| Error in hook | Allows stop, preserves lock for recovery | preserved |
+
+**Defense-in-depth:** `validateTaskPath` at line 86 is a backup check -- `getLock()` already validates `task_path`, but stop.mjs re-validates as a safety net to prevent lock corruption from blocking exit.
 
 **Stop blocking:**
 
@@ -798,8 +814,8 @@ Common utilities for all hooks.
 
 **System agents (default):**
 ```
-bc-coordinator, bc-knowledge-manager, bc-auto-sync-processor,
-brewcode:bc-coordinator, brewcode:bc-knowledge-manager, brewcode:bc-auto-sync-processor,
+bc-coordinator, bc-knowledge-manager, bd-auto-sync-processor,
+brewcode:bc-coordinator, brewcode:bc-knowledge-manager, brewcode:bd-auto-sync-processor,
 Explore, Plan, Bash, general-purpose,
 claude-code-guide, skill-creator, agent-creator,
 text-optimizer, statusline-setup
@@ -888,7 +904,7 @@ Claude compacts context, re-reads PLAN.md
 ... continues from current phase ...
     |
     v
-Task completed (status: finished)
+Task completed (status: finished or failed)
     |
     v
 Stop --------> stop.mjs (deletes .lock, allows stop)
@@ -903,4 +919,17 @@ stop.mjs ---> decision: 'block'
     |
     v
 Claude continues work
+```
+
+```
+Failure path (deadlock or cascade):
+    |
+    v
+bc-coordinator (mode: finalize, status: "failed")
+    |
+    v
+PLAN.md line 1 -> "status: failed"
+    |
+    v
+stop.mjs -> "failed" in TERMINAL_STATUSES -> deletes .lock, allows stop
 ```

@@ -1,0 +1,15 @@
+{
+  "name": "brewdoc",
+  "version": "3.1.0",
+  "description": "Brewdoc - Claude Code documentation tools: auto-sync for skills/agents/rules, my-claude installation docs, memory optimization",
+  "author": {
+    "name": "Maksim Kochetkov",
+    "email": "apmatypa88@gmail.com",
+    "url": "https://github.com/kochetkov-ma"
+  },
+  "homepage": "https://github.com/kochetkov-ma/claude-brewcode",
+  "repository": "https://github.com/kochetkov-ma/claude-brewcode.git",
+  "license": "MIT",
+  "keywords": ["brewdoc", "documentation", "auto-sync", "memory", "claude-code"],
+  "skills": "./skills/"
+}

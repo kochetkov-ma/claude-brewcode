@@ -4,6 +4,8 @@
  * - Detects bc-coordinator and binds session to lock file
  * - Reminds to call bc-coordinator after work agents complete
  */
+import fs from 'fs';
+import path from 'path';
 import {
   readStdin,
   output,
@@ -82,14 +84,27 @@ async function main() {
       return;
     }
 
-    // Return 2-step post-agent protocol
+    // Return post-agent protocol (branched on success/failure, extended for v3 Task API)
     const agentName = String(subagentType || '').toUpperCase();
     const failed = tool_result?.is_error === true;
-    const status = failed ? 'FAILED' : 'DONE';
+    const taskDir = lock.task_path ? path.dirname(path.join(cwd, lock.task_path)) : '';
+    const isV3 = taskDir && fs.existsSync(path.join(taskDir, 'phases'));
+
+    let message;
+    if (failed) {
+      const failBase = `${agentName} FAILED -> 1. Retry once with same agent 2. If retry fails: TaskUpdate(taskId, status="failed"), apply Escalation 3. Do NOT write report, do NOT call bc-coordinator`;
+      const failV3Suffix = `\n4. Persist failure to KNOWLEDGE.jsonl\n5. Check for blocked dependents -> cascade failure\n⛔ DO NOT read phases/ files — they are for agents only.`;
+      message = isV3 ? failBase + failV3Suffix : failBase;
+    } else {
+      const successBase = `${agentName} DONE -> 1. WRITE report 2. CALL bc-coordinator NOW`;
+      const successV3Suffix = `\n3. TaskUpdate(taskId, status="completed")\n4. TaskList() -> find next ready task\n⛔ DO NOT read phases/ files — they are for agents only.`;
+      message = isV3 ? successBase + successV3Suffix : successBase;
+    }
+
     output({
       hookSpecificOutput: {
         hookEventName: 'PostToolUse',
-        additionalContext: `${agentName} ${status} -> 1. WRITE report 2. CALL bc-coordinator NOW`
+        additionalContext: message
       }
     });
   } catch (error) {

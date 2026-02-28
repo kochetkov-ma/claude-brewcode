@@ -11,10 +11,10 @@ Automatically update and synchronize Claude Code documentation (skills, agents, 
 ## Quick Start
 
 ```sh
-/brewcode:auto-sync              # Sync project documentation
-/brewcode:auto-sync status       # Show what's tracked and what's stale
-/brewcode:auto-sync init <path>  # Tag a file for auto-sync
-/brewcode:auto-sync global       # Sync ~/.claude/ documentation
+/brewdoc:auto-sync              # Sync project documentation
+/brewdoc:auto-sync status       # Show what's tracked and what's stale
+/brewdoc:auto-sync init <path>  # Tag a file for auto-sync
+/brewdoc:auto-sync global       # Sync ~/.claude/ documentation
 ```
 
 ## What It Does
@@ -28,18 +28,18 @@ Automatically update and synchronize Claude Code documentation (skills, agents, 
 
 **Check status of all tracked documents:**
 ```sh
-/brewcode:auto-sync status
+/brewdoc:auto-sync status
 ```
 
 **Initialize a new file (adds frontmatter + INDEX entry):**
 ```sh
-/brewcode:auto-sync init plugins/my-plugin/SKILL.md
+/brewdoc:auto-sync init plugins/my-plugin/SKILL.md
 ```
 
 **Sync specific file or folder:**
 ```sh
-/brewcode:auto-sync path/to/file.md
-/brewcode:auto-sync path/to/folder
+/brewdoc:auto-sync path/to/file.md
+/brewdoc:auto-sync path/to/folder
 ```
 
 ## Optional: Custom Sync Behavior
@@ -60,8 +60,8 @@ preserve: ## Custom Config, ## Notes
 |------|-------------|
 | `-o`, `--optimize` | Enable text optimization during sync |
 
-## Migrating from /brewcode:doc
+## Migrating from /brewdoc:doc
 
-This skill replaces the deprecated `/brewcode:doc` skill:
-- `/brewcode:doc update` → `/brewcode:auto-sync`
-- `/brewcode:doc sync` → `/brewcode:auto-sync`
+This skill replaces the deprecated `/brewdoc:doc` skill:
+- `/brewdoc:doc update` → `/brewdoc:auto-sync`
+- `/brewdoc:doc sync` → `/brewdoc:auto-sync`

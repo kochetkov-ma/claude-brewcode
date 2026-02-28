@@ -20,7 +20,7 @@ description: |
   </example>
 model: opus
 color: cyan
-tools: Read, Write, Edit, Glob, Grep, Task, Skill, WebFetch, WebSearch
+tools: Read, Write, Edit, Glob, Grep, Task, Skill, WebFetch, WebSearch, AskUserQuestion
 ---
 
 # Agent Creator

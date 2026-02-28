@@ -3,6 +3,7 @@
  * PreToolUse hook for Task tool
  * - Injects grepai reminder for ALL agents (when .grepai/ exists)
  * - Injects ## K knowledge into sub-agent prompts (brewcode only)
+ * - Injects v3 task context (phase reminder + paths) when phases/ exists
  */
 import {
   readStdin,
@@ -15,7 +16,7 @@ import {
 } from './lib/utils.mjs';
 import { readKnowledge, compressKnowledge } from './lib/knowledge.mjs';
 import { existsSync, readFileSync } from 'fs';
-import { join } from 'path';
+import { join, dirname } from 'path';
 
 const GREPAI_REMINDER = 'grepai: USE grepai_search FIRST for code exploration';
 
@@ -115,7 +116,28 @@ async function main() {
         }
       }
 
-      // 3. Inject constraints for non-system agents
+      // 3. Inject v3 task context (phase reminder + paths) for non-system agents
+      if (lock && lock.task_path) {
+        const taskDir = dirname(join(cwd, lock.task_path));
+        const phasesDir = join(taskDir, 'phases');
+
+        if (existsSync(phasesDir)) {
+          const artifactsDir = join(taskDir, 'artifacts');
+          const taskContext = [
+            '## Task Context',
+            `Task dir: ${taskDir}`,
+            `Artifacts: ${artifactsDir}`,
+            '',
+            '> ⛔ READ the phases/ file referenced in your task description FIRST before doing any work.'
+          ].join('\n');
+
+          updatedPrompt = `${taskContext}\n\n${updatedPrompt}`;
+          modified = true;
+          log('debug', '[pre-task]', `Injecting v3 task context for ${subagentType}`, cwd, session_id);
+        }
+      }
+
+      // 4. Inject constraints for non-system agents
       if (config.constraints?.enabled !== false && lock && lock.task_path) {
         const taskPath = join(cwd, lock.task_path);
         let taskContent = null;

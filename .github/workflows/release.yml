@@ -1,5 +1,5 @@
 # Creates a GitHub Release when a version tag (v*.*.*) is pushed to main.
-# Extracts the matching changelog section from brewcode/RELEASE-NOTES.md
+# Extracts the matching changelog section from RELEASE-NOTES.md
 # and appends installation instructions to the release body.
 
 name: Release
@@ -39,7 +39,7 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
 
-          RELEASE_NOTES="brewcode/RELEASE-NOTES.md"
+          RELEASE_NOTES="RELEASE-NOTES.md"
 
           if [ ! -f "$RELEASE_NOTES" ]; then
             echo "::error::${RELEASE_NOTES} not found"
@@ -72,7 +72,7 @@ jobs:
           echo "$BODY" > /tmp/release-body.md
 
           # Append install instructions
-          printf '\n---\n\n## Quick Install\n\n```bash\n# 1. Add marketplace (one-time)\nclaude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode\n\n# 2. Install plugin\nclaude plugin install brewcode@claude-brewcode\n```\n' >> /tmp/release-body.md
+          printf '\n---\n\n## Quick Install\n\n```bash\n# 1. Add marketplace (one-time)\nclaude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode\n\n# 2. Install plugins\nclaude plugin install brewcode@claude-brewcode\nclaude plugin install brewdoc@claude-brewcode\n```\n' >> /tmp/release-body.md
 
           echo "Release body written to /tmp/release-body.md"
           echo "--- Preview (first 20 lines) ---"

@@ -1,6 +1,6 @@
 {
   "name": "claude-plugin-brewcode",
-  "version": "2.7.1",
+  "version": "3.1.0",
   "description": "Infinite task execution with automatic handoff for Claude Code",
   "keywords": [
     "claude-code",
@@ -36,6 +36,6 @@
   },
   "claude-plugin": {
     "name": "brewcode",
-    "version": "2.7.1"
+    "version": "3.1.0"
   }
 }

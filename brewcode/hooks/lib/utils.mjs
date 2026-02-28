@@ -92,6 +92,48 @@ export function parseTask(taskPath, cwd = null) {
     return null;
   }
 
+  // v3 detection: phases/ directory alongside PLAN.md + v3 header format
+  const taskDir = dirname(taskPath);
+  const phasesDir = join(taskDir, 'phases');
+  const hasPhases = existsSync(phasesDir);
+
+  if (hasPhases) {
+    const lines = content.split('\n');
+    if (lines[0]?.startsWith('status:') && lines[1]?.startsWith('current_phase:')) {
+      return parseTaskV3(content);
+    }
+    const derivedCwd = cwd || taskPath.replace(/\/\.claude\/tasks\/.*$/, '');
+    log('warn', '[parseTask]', 'phases/ dir exists but PLAN.md lacks v3 header, falling back to v2', derivedCwd);
+  }
+
+  return parseTaskV2(content);
+}
+
+/**
+ * Parse v3 PLAN.md with structured header (status, current_phase, total_phases).
+ * Uses multiline regex for robustness against line order variations.
+ * @param {string} content - PLAN.md file content
+ * @returns {Object} Parsed task with status, currentPhase, totalPhases, content
+ */
+function parseTaskV3(content) {
+  const statusMatch = content.match(/^status:\s*(.+)/m);
+  const status = statusMatch?.[1]?.trim() || 'pending';
+
+  const currentPhaseMatch = content.match(/^current_phase:\s*(\d+)/m);
+  const currentPhase = currentPhaseMatch ? parseInt(currentPhaseMatch[1]) : 0;
+
+  const totalPhasesMatch = content.match(/^total_phases:\s*(\d+)/m);
+  const totalPhases = totalPhasesMatch ? parseInt(totalPhasesMatch[1]) : 0;
+
+  return { status, currentPhase, totalPhases, content };
+}
+
+/**
+ * Parse v2 PLAN.md with phase headers and checkbox counting
+ * @param {string} content - PLAN.md file content
+ * @returns {Object} Parsed task with status, currentPhase, totalPhases, content
+ */
+function parseTaskV2(content) {
   // Extract status
   const statusMatch = content.match(/^status:\s*(.+)$/m);
   const status = statusMatch?.[1]?.trim() || 'pending';
@@ -123,12 +165,7 @@ export function parseTask(taskPath, cwd = null) {
 
   const totalPhases = phaseHeaders.length || 1;
 
-  return {
-    status,
-    currentPhase,
-    totalPhases,
-    content
-  };
+  return { status, currentPhase, totalPhases, content };
 }
 
 /**
@@ -185,7 +222,7 @@ const DEFAULT_CONFIG = {
     system: [
       'bc-coordinator', 'bc-knowledge-manager',
       'brewcode:bc-coordinator', 'brewcode:bc-knowledge-manager',
-      'bc-auto-sync-processor', 'brewcode:bc-auto-sync-processor',
+      'bd-auto-sync-processor', 'brewcode:bd-auto-sync-processor',
       'bc-grepai-configurator', 'brewcode:bc-grepai-configurator',
       'Explore', 'Plan', 'Bash', 'general-purpose',
       'claude-code-guide', 'skill-creator', 'agent-creator',

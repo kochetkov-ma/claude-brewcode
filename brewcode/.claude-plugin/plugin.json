@@ -1,6 +1,6 @@
 {
   "name": "brewcode",
-  "version": "2.15.6",
+  "version": "3.1.0",
   "description": "Brewcode - full-featured development platform for Claude Code: infinite focus tasks, prompt optimization, skill/agent creation, quorum reviews, rules management",
   "author": {
     "name": "Maksim Kochetkov",
@@ -11,6 +11,5 @@
   "repository": "https://github.com/kochetkov-ma/claude-brewcode.git",
   "license": "MIT",
   "keywords": ["brewcode", "task", "automation", "agents", "handoff", "infinite-context", "prompt-optimization", "developer-tools"],
-  "skills": "./skills/",
-  "hooks": "./hooks/hooks.json"
+  "skills": "./skills/"
 }

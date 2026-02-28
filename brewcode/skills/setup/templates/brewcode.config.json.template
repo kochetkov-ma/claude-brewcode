@@ -14,7 +14,7 @@
   },
   "agents": {
     "system": [
-      "bc-coordinator", "bc-knowledge-manager", "bc-auto-sync-processor",
+      "bc-coordinator", "bc-knowledge-manager", "bd-auto-sync-processor",
       "Explore", "Plan", "Bash", "general-purpose",
       "claude-code-guide", "skill-creator", "agent-creator",
       "text-optimizer", "statusline-setup"
