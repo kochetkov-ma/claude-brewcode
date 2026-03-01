@@ -1,6 +1,7 @@
 ---
 name: memory-optimize
 description: "Optimizes Claude Code memory files in 4 interactive steps: removes duplicates, migrates rules to CLAUDE.md/rules files, compresses remaining entries, validates with cleanup. Typical reduction: 30-50% on token count."
+tags: [auto-memory, claude-code-memory, claude-code-auto-memory]
 license: MIT
 metadata:
   author: "kochetkov-ma"
@@ -13,8 +14,11 @@ model: opus
 
 ## Memory Optimizer
 
-Cleans up Claude Code memory files in **4 interactive steps**: removes duplicates, migrates rules to CLAUDE.md/rules files, compresses remaining entries, and validates the result.
-Typical reduction: **30-50%** on token count in memory files.
+Optimizes Claude Code **auto-memory** files in **4 interactive steps**: removes duplicates, migrates rules to proper config files, compresses remaining entries, validates the result.
+Typical reduction: **30–50%** token count in memory files.
+
+Auto-memory stores context across sessions in `~/.claude/projects/**/memory/MEMORY.md`.
+Enable: `CLAUDE_CODE_DISABLE_AUTO_MEMORY=0` · Disable: `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`
 
 **Benefits:** faster context loading · no duplicate rules · cleaner instructions · lower API cost
 
