@@ -9,6 +9,8 @@ metadata:
 allowed-tools: Read Write Edit Grep Glob
 ---
 
+> Plugin: [kochetkov-ma/claude-brewcode](https://github.com/kochetkov-ma/claude-brewcode)
+
 ## Text Optimizer
 
 Reduces token count in prompts, docs, and agent instructions by **20–40%** without losing meaning.
