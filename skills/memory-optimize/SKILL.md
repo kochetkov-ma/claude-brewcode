@@ -12,6 +12,8 @@ allowed-tools: Read Write Edit Glob Grep Bash Task AskUserQuestion
 model: opus
 ---
 
+> Plugin: [kochetkov-ma/claude-brewcode](https://github.com/kochetkov-ma/claude-brewcode)
+
 ## Memory Optimizer
 
 Optimizes Claude Code **auto-memory** files in **4 interactive steps**: removes duplicates, migrates rules to proper config files, compresses remaining entries, validates the result.
