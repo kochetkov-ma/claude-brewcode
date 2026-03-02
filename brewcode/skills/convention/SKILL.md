@@ -1,0 +1,333 @@
+---
+name: brewcode:convention
+description: Analyzes project to extract etalon classes, patterns, and architecture by layer. Generates convention documents in .claude/convention/ and organizes rules.
+disable-model-invocation: true
+argument-hint: "[full|conventions|rules|paths <p1,p2>]"
+allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion, Skill
+model: opus
+---
+
+<instructions>
+
+## Mode Detection
+
+**Arguments:** `$ARGUMENTS`
+
+| Mode | Invocation | Phases | Prerequisites |
+|------|-----------|--------|---------------|
+| `full` (default) | `/brewcode:convention` | P0-P8 | None |
+| `conventions` | `/brewcode:convention conventions` | P0-P7 | None |
+| `rules` | `/brewcode:convention rules` | P0, P7, P7.5, P8 | `.claude/convention/` exists |
+| `paths` | `/brewcode:convention paths src/a,src/b` | P0-P7 scoped | None |
+
+---
+
+## P0: Mode + Stack Detection
+
+Parse `$ARGUMENTS` for mode keyword. Default = `full`. For `paths` mode: split comma-separated paths after keyword.
+
+### Step 0.1: Detect Stack
+
+**EXECUTE** using Bash tool:
+```bash
+bash scripts/convention.sh detect-stack && echo "---DETECT-OK---" || echo "---DETECT-FAILED---"
+```
+
+Output: JSON `{"stacks":[...],"primary":"...","build_file":"...","modules":[...]}`.
+
+| Primary Stack | Active Layers |
+|---------------|-------------|
+| java, kotlin | L1-L14, T1-T6 (all) |
+| typescript | L1-L6, L8, L10-L11, L13-L14, T1-T3, T5-T6 |
+| python | L1-L2, L4-L6, L8, L10, L13-L14, T1-T3, T5-T6 |
+| rust | L1-L2, L4-L6, L8, L10-L11, T5 |
+| go | L1-L2, L4-L6, L8, L10, T5 |
+| Multi-stack | Union of all detected |
+| other/unknown | All main layers (L1-L14), all test layers (T1-T6) | Generic analysis -- agent determines relevance per layer |
+
+### Step 0.2: Scan Project
+
+**EXECUTE** using Bash tool:
+```bash
+bash scripts/convention.sh scan && echo "---SCAN-OK---" || echo "---SCAN-FAILED---"
+```
+
+Output: JSON with `source_dirs`, `file_counts`, `modules`, `total_files`.
+
+> If `total_files` > 1000: Warn user, suggest `paths` mode.
+
+### Step 0.3: Setup Convention Directory
+
+**EXECUTE** using Bash tool:
+```bash
+bash scripts/convention.sh setup && echo "---SETUP-OK---" || echo "---SETUP-FAILED---"
+```
+
+> **STOP if FAILED** -- cannot proceed without output directory.
+
+### Step 0.4: Validate (rules mode only)
+
+**EXECUTE** using Bash tool:
+```bash
+bash scripts/convention.sh validate && echo "---VALID---" || echo "---INVALID---"
+```
+
+> If `rules` mode + `INVALID` -- Exit: "Run `/brewcode:convention conventions` first."
+
+---
+
+## P1: Load Layer Definitions
+
+Read `references/analysis-layers.md`. Filter layers by detected stack from P0. For `paths` mode: further filter by specified paths -- match layer file patterns against provided paths. Build `ACTIVE_LAYERS` for P2.
+
+---
+
+## P2: Parallel Layer Analysis (10 agents, ONE message)
+
+Spawn ALL agents in a SINGLE message. Skip agents for inactive layers (filtered in P1).
+
+| # | Agent | Layers | Focus |
+|---|-------|--------|-------|
+| 1 | architect | L1-L3 | Build config, dependency management, code generation |
+| 2 | architect | L4 | @UtilityClass, static helpers, shared converters |
+| 3 | architect | L5+L14 | REST endpoints, security, config, caching |
+| 4 | architect | L6+L9 | DI patterns, @Transactional, domain services |
+| 5 | architect | L7 | Feign clients, external API integrations |
+| 6 | architect | L8 | JOOQ DSL, raw SQL, mappers, query patterns |
+| 7 | architect | L10+L11 | Records, @Value @Builder, naming conventions |
+| 8 | architect | L12+L13 | DDL scripts, config files, templates |
+| 9 | tester | T1-T4 | Test data, base classes, helpers, ExpectedData |
+| 10 | tester | T5-T6 | BDD style, assertion patterns, @ParameterizedTest |
+
+**Per-agent prompt template:**
+
+```
+Analyze {LAYERS} in the project.
+Stack: {DETECTED_STACK}
+
+Layer definitions:
+{LAYER_CRITERIA_FROM_ANALYSIS_LAYERS_MD}
+
+Use grepai_search FIRST for file discovery, then Glob/Grep for verification.
+For paths mode, scope analysis to: {SCOPED_PATHS}
+
+Output format:
+
+## Etalon Candidates
+| Class | Path | Why Etalon | Score (1-10) |
+
+## Naming Conventions
+| Pattern | Example | Frequency |
+
+## Directory Rules
+| Rule | Path Pattern |
+
+## Patterns (code snippets, max 3, 5-15 lines each)
+### Pattern Name
+` ```code```
+Why: explanation
+
+## Anti-Patterns
+| Class | Problem | Fix |
+```
+
+---
+
+## P3: Etalon Selection (1 architect agent)
+
+After all P2 agents complete, spawn 1 architect agent with combined results.
+
+**Prompt:**
+```
+Receive analysis from 10 layer-analysis agents. Select 1-2 etalons per layer based on:
+- Highest score from candidates
+- Most complete pattern coverage
+- Best naming convention adherence
+- Fewest anti-patterns
+
+If same class appears as etalon for multiple layers, assign to most relevant layer.
+
+Input: {ALL_10_AGENT_OUTPUTS}
+
+Output:
+## Final Etalon Summary
+| Layer | Etalon Class | Path | Score | Role |
+
+## Conflict Resolutions
+| Class | Claimed By | Assigned To | Reason |
+
+## Coverage Gaps
+| Layer | Issue | Recommendation |
+```
+
+---
+
+## P4: Document Generation (3 developer agents, PARALLEL)
+
+Read `references/conventions-guide.md` for templates. Spawn 3 developer agents in ONE message.
+
+| # | Document | Target |
+|---|----------|--------|
+| 1 | `.claude/convention/reference-patterns.md` | ~300 lines -- main code layers (L4-L11, L14): etalons, patterns, anti-patterns, quick reference |
+| 2 | `.claude/convention/testing-conventions.md` | ~150 lines -- test layers (T1-T6): test etalons, patterns, assertion conventions |
+| 3 | `.claude/convention/project-architecture.md` | ~200 lines -- build layers (L1-L3, L12-L13): build, deps, codegen, migrations, structure |
+
+**Per-agent prompt:**
+```
+Generate {DOCUMENT_NAME} following the template from conventions-guide.
+Target structure: {TEMPLATE_FROM_CONVENTIONS_GUIDE}
+Etalon selection: {P3_ETALON_SUMMARY}
+Layer analyses: {RELEVANT_P2_OUTPUTS}
+Stack: {DETECTED_STACK}
+Write to: .claude/convention/{filename}.md
+Structure: organized by layer -- each with Etalon Classes table, Patterns (5-15 lines each, max 3/layer), Anti-Patterns table, Quick Reference table at end.
+Target: ~{LINE_COUNT} lines.
+```
+
+---
+
+## P5: Text Optimization (3 text-optimizer agents, PARALLEL)
+
+Spawn 3 text-optimizer agents in ONE message (medium mode):
+
+```
+Task(subagent_type="text-optimizer", prompt="FIRST: Read $BC_PLUGIN_ROOT/skills/text-optimize/references/rules-review.md. THEN optimize .claude/convention/reference-patterns.md using medium mode. Output report with metrics.")
+Task(subagent_type="text-optimizer", prompt="FIRST: Read $BC_PLUGIN_ROOT/skills/text-optimize/references/rules-review.md. THEN optimize .claude/convention/testing-conventions.md using medium mode. Output report with metrics.")
+Task(subagent_type="text-optimizer", prompt="FIRST: Read $BC_PLUGIN_ROOT/skills/text-optimize/references/rules-review.md. THEN optimize .claude/convention/project-architecture.md using medium mode. Output report with metrics.")
+```
+
+---
+
+## P6: User Review
+
+Present summary:
+
+```markdown
+## Convention Documents Generated
+
+| Document | Lines | Key Etalons (top 5) |
+|----------|-------|---------------------|
+| reference-patterns.md | {N} | {class1}, {class2}, ... |
+| testing-conventions.md | {N} | {class1}, {class2}, ... |
+| project-architecture.md | {N} | {file1}, {file2}, ... |
+```
+
+AskUserQuestion options:
+- **A:** Approve all -- continue to rules extraction
+- **B:** Revise -- provide feedback (max 2 iterations, re-run P5 after edits)
+- **C:** Skip to rules -- jump to P7
+
+---
+
+## P7: Rules Organization
+
+Read `references/rules-guide.md` for interactive flow.
+
+### Step 7.1: Extract Rule Candidates
+
+| Source Section | Rule Type |
+|---------------|-----------|
+| Anti-Patterns tables | avoid |
+| Patterns sections | best-practice |
+| Naming Conventions | best-practice |
+| Constraints | avoid |
+
+### Step 7.2: Duplicate Detection
+
+Read existing `.claude/rules/*.md` files.
+
+| Similarity | Action |
+|------------|--------|
+| >70% | Skip (already covered) |
+| 40-70% | Merge into existing entry |
+| <40% | New rule candidate |
+
+### Step 7.3: Interactive Batching
+
+Present 5-7 rules per batch via AskUserQuestion:
+
+```markdown
+## Rules Batch {N}/{TOTAL}
+
+| # | Type | Rule | Target File |
+|---|------|------|-------------|
+| 1 | avoid | ... | {prefix}-avoid.md |
+| 2 | bp | ... | {prefix}-best-practice.md |
+
+Options: Accept all | Select by number | Skip batch | Stop
+```
+
+### Step 7.4: Spawn bc-rules-organizer
+
+Spawn bc-rules-organizer per `references/rules-guide.md` Section 4. Pass `{ACCEPTED_RULES_JSON}` from interactive batching.
+
+---
+
+## P7.5: Update Project CLAUDE.md
+
+AskUserQuestion: "Update project CLAUDE.md with etalon summary table + convention references?"
+- **A:** Yes -- add etalon table + lazy-load refs
+- **B:** No -- skip
+
+If yes:
+1. Read project `CLAUDE.md`
+2. Find or create `## Reference Patterns & Etalon Classes` section
+3. Add/update:
+
+```markdown
+## Reference Patterns & Etalon Classes
+> **Full doc**: `.claude/convention/reference-patterns.md` (lazy-load when writing new code)
+
+| When writing... | Copy from (etalon) |
+|-----------------|---------------------|
+| {role} | `{ClassName}` -- {key traits} |
+
+### DTO Evolution (prefer top)
+1. **{preferred}** -- PREFER for new code
+2. **{established}** -- OK for complex entities
+3. **{legacy}** -- AVOID
+```
+
+4. Use Edit tool -- preserve all existing CLAUDE.md content.
+
+---
+
+## P8: Output Summary
+
+```markdown
+## Convention Analysis Complete
+
+| Document | Path | Lines | Key Etalons |
+|----------|------|-------|-------------|
+| reference-patterns.md | `.claude/convention/reference-patterns.md` | {N} | {list} |
+| testing-conventions.md | `.claude/convention/testing-conventions.md` | {N} | {list} |
+| project-architecture.md | `.claude/convention/project-architecture.md` | {N} | {list} |
+
+| When writing... | Copy from... |
+|-----------------|-------------|
+| {condensed top etalons} | {class} |
+
+| Metric | Value |
+|--------|-------|
+| Rules extracted | {X} |
+| Rules applied | {Y} |
+| Duplicates skipped | {Z} |
+
+Next Steps: Review `.claude/convention/` | `/brewcode:convention rules` to re-extract later | `/brewcode:convention paths src/new-module` for new modules
+```
+
+---
+
+## Error Handling
+
+| Condition | Action |
+|-----------|--------|
+| No source files found | Exit: "No source files found for {STACK}" |
+| `rules` mode without `.claude/convention/` | Exit: "Run `/brewcode:convention conventions` first" |
+| >1000 source files | Warn user, suggest `paths` mode |
+| Unknown stack | Continue with generic analysis (no stack-specific layers) |
+| Agent timeout | Log warning, continue with available results |
+| grepai unavailable | Fall back to Glob + Grep for file discovery |
+| Convention doc generation fails | Retry once, then present partial results |
+
+</instructions>

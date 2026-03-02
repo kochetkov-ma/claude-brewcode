@@ -6,16 +6,33 @@
   },
   "metadata": {
     "description": "Claude Code plugin suite: brewcode for infinite task execution and brewdoc for documentation tools",
-    "version": "3.1.0"
+    "version": "3.2.0"
   },
   "plugins": [
     {
       "name": "brewcode",
       "description": "Brewcode - full-featured development platform for Claude Code: infinite focus tasks, prompt optimization, skill/agent creation, quorum reviews, rules management",
-      "version": "3.1.0",
+      "version": "3.2.0",
       "category": "productivity",
-      "keywords": ["brewcode", "task", "automation", "agents", "handoff", "infinite-context", "prompt-optimization", "developer-tools"],
-      "tags": ["brewcode", "task-management", "workflow", "multi-agent", "knowledge-persistence", "code-review", "rules-management"],
+      "keywords": [
+        "brewcode",
+        "task",
+        "automation",
+        "agents",
+        "handoff",
+        "infinite-context",
+        "prompt-optimization",
+        "developer-tools"
+      ],
+      "tags": [
+        "brewcode",
+        "task-management",
+        "workflow",
+        "multi-agent",
+        "knowledge-persistence",
+        "code-review",
+        "rules-management"
+      ],
       "author": {
         "name": "Maksim Kochetkov",
         "email": "apmatypa88@gmail.com"
@@ -29,10 +46,21 @@
     {
       "name": "brewdoc",
       "description": "Brewdoc - Claude Code documentation tools: auto-sync for skills/agents/rules, my-claude installation docs, memory optimization, md-to-pdf conversion",
-      "version": "3.1.0",
+      "version": "3.2.0",
       "category": "productivity",
-      "keywords": ["brewdoc", "documentation", "auto-sync", "memory", "claude-code"],
-      "tags": ["documentation", "auto-sync", "memory-management", "my-claude"],
+      "keywords": [
+        "brewdoc",
+        "documentation",
+        "auto-sync",
+        "memory",
+        "claude-code"
+      ],
+      "tags": [
+        "documentation",
+        "auto-sync",
+        "memory-management",
+        "my-claude"
+      ],
       "author": {
         "name": "Maksim Kochetkov",
         "email": "apmatypa88@gmail.com"
