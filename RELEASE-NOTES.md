@@ -2,6 +2,27 @@
 
 ---
 
+## v3.2.0 (2026-03-02)
+
+### brewcode
+#### Added
+- **brewcode:convention skill** -- Deep project analyzer that extracts etalon classes, patterns, and architecture by layer
+  - 4 modes: `full`, `conventions`, `rules`, `paths <p1,p2>`
+  - 20-layer analysis framework (14 main + 6 test) with multi-stack support
+  - 10 parallel agents for layer analysis → etalon selection → 3 convention docs generation
+  - Interactive rules extraction with batched AskUserQuestion flow
+  - CLAUDE.md update with etalon quick-reference table
+  - POSIX-compliant `convention.sh` script for stack detection, scanning, validation
+- **bump-version.sh** -- Single command to bump version across all 4 JSON files: `bash .claude/scripts/bump-version.sh 3.2.0`
+
+#### Changed
+- Updated CLAUDE.md: Version Sync section now uses `bump-version.sh`, Update flow includes CLI commands
+
+#### Fixed
+- `convention.sh`: dotnet monorepo module detection (`.sln`/`.csproj` in `has_build_file()`)
+
+---
+
 ## v3.1.0 (2026-02-28)
 
 ### brewcode
