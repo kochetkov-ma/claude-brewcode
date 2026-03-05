@@ -2,6 +2,9 @@ name: Gitleaks
 
 on:
   push:
+    branches: [ main ]
+    tags-ignore:
+      - "v*.*.*"
   pull_request:
     branches: [main]
   schedule:

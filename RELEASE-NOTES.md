@@ -2,6 +2,16 @@
 
 ---
 
+## v3.4.1 (2026-03-05)
+
+Patch release. Main changes in [v3.4.0](https://github.com/kochetkov-ma/claude-brewcode/releases/tag/v3.4.0).
+
+### brewcode
+#### Fixed
+- **CI workflows** -- codeql, semgrep, gitleaks now run only on branch push/PR, not on version tags
+
+---
+
 ## v3.4.0 (2026-03-05)
 
 ### brewcode
