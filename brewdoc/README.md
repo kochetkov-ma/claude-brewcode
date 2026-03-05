@@ -18,8 +18,15 @@ Documentation tools plugin for Claude Code. Three concerns:
 ## Installation
 
 ```bash
-# From marketplace
+# Add marketplace (one-time)
+claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
+
+# Install
 claude plugin install brewdoc@claude-brewcode
+
+# Already installed? Update
+claude plugin marketplace update claude-brewcode
+claude plugin update brewdoc@claude-brewcode
 
 # Dev mode (no install)
 claude --plugin-dir ./brewdoc

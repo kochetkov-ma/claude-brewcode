@@ -13,8 +13,8 @@
 
 | Plugin | Version | Purpose | Install |
 |--------|---------|---------|---------|
-| brewcode | 3.1.0 | Infinite task execution, prompt optimization, skill/agent creation, quorum reviews | `claude plugin install brewcode@claude-brewcode` |
-| brewdoc | 3.1.0 | Documentation tools: auto-sync, my-claude docs, memory optimization | `claude plugin install brewdoc@claude-brewcode` |
+| brewcode | 3.3.1 | Infinite task execution, prompt optimization, skill/agent creation, quorum reviews | `claude plugin install brewcode@claude-brewcode` |
+| brewdoc | 3.3.1 | Documentation tools: auto-sync, my-claude docs, memory optimization | `claude plugin install brewdoc@claude-brewcode` |
 
 ---
 
@@ -47,6 +47,13 @@
    claude plugin install brewdoc@claude-brewcode
    ```
 3. **Restart Claude Code** - plugins load automatically on every session
+
+**Already installed?** Update to the latest version:
+```bash
+claude plugin marketplace update claude-brewcode
+claude plugin update brewcode@claude-brewcode
+claude plugin update brewdoc@claude-brewcode
+```
 
 **Option B** - run from local directory (for development or one-time use):
 
