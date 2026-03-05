@@ -9,18 +9,18 @@ description: Detailed description of brewdoc plugin hooks
 
 ## Why Hooks?
 
-Claude Code plugins can define skills (slash commands) and agents. But skills and agents need to know WHERE the plugin is installed -- the absolute filesystem path changes with each version update and differs across machines. Hooks solve this by automatically injecting `BD_PLUGIN_ROOT` (the plugin's absolute path) into every conversation and every subagent call. Without hooks, skills would need to hard-code paths that break on updates.
+Claude Code plugins can define skills (slash commands) and agents. But agents spawned via the Task tool need to know WHERE the plugin is installed -- the absolute filesystem path changes with each version update and differs across machines. The pre-task hook solves this by automatically injecting `BD_PLUGIN_ROOT` into every subagent prompt. Without this hook, agents would need to hard-code paths that break on updates.
 
-brewdoc has exactly **2 hooks** -- the minimum needed for path injection:
+brewdoc has exactly **1 hook**:
 
-1. **session-start.mjs** -- injects `BD_PLUGIN_ROOT` into the main conversation at session start
-2. **pre-task.mjs** -- injects `BD_PLUGIN_ROOT` into subagent prompts when skills spawn agents
+1. **pre-task.mjs** -- injects `BD_PLUGIN_ROOT` into subagent prompts when skills spawn agents via the Task tool
+
+Skills running in the main conversation do NOT receive `BD_PLUGIN_ROOT`. They use relative paths or `${CLAUDE_SKILL_DIR}` to reference their own files.
 
 ## Summary Table
 
 | Hook | Event | Matcher | Timeout | Purpose |
 |------|-------|---------|---------|---------|
-| `session-start.mjs` | SessionStart | -- | 2s | Inject `BD_PLUGIN_ROOT` into main conversation context |
 | `pre-task.mjs` | PreToolUse | `Task` | 3s | Prepend `BD_PLUGIN_ROOT` to subagent prompts |
 
 ## Architecture Overview
@@ -28,17 +28,10 @@ brewdoc has exactly **2 hooks** -- the minimum needed for path injection:
 ```
 Claude Code Session
        |
-       |  SessionStart
-       v
-+----------------------------------------------+
-|          session-start.mjs                    |
-|                                               |
-|  BD_PLUGIN_ROOT=/path/to/brewdoc/X.Y.Z       |
-|                                               |
-|  --> additionalContext (main conversation)    |
-+----------------------------------------------+
-       |
        |  User runs /brewdoc:auto-sync or /brewdoc:memory etc.
+       |  Skill runs in main conversation
+       |  (uses relative paths or ${CLAUDE_SKILL_DIR} for own files)
+       |
        |  Skill spawns agents via Task tool
        |
        |  PreToolUse:Task
@@ -73,20 +66,10 @@ Claude Code Session
 ```
 CLAUDE_PLUGIN_ROOT (env var set by Claude Code)
          |
-         | session-start.mjs reads it
+         | pre-task.mjs reads it on every Task tool call
          v
-additionalContext in SessionStart output:
-"BD_PLUGIN_ROOT=/Users/.../.claude/plugins/cache/claude-brewcode/brewdoc/X.Y.Z"
-         |
-         | injected into main conversation context
-         v
-Skills can use $BD_PLUGIN_ROOT in their instructions
-         |
-         | When skill spawns agents via Task tool:
-         | pre-task.mjs intercepts PreToolUse:Task
-         v
-Agent prompt gets prepended:
-"BD_PLUGIN_ROOT=/Users/.../.claude/plugins/cache/.../brewdoc/X.Y.Z
+updatedInput.prompt in PreToolUse output:
+"BD_PLUGIN_ROOT=/Users/.../.claude/plugins/cache/claude-brewcode/brewdoc/X.Y.Z
 
 [original agent prompt]"
          |
@@ -98,7 +81,6 @@ Agent uses $BD_PLUGIN_ROOT to load reference files
 
 | Event | Hook | Channel | Target |
 |-------|------|---------|--------|
-| SessionStart | `session-start.mjs` | `additionalContext` | Main conversation |
 | PreToolUse:Task | `pre-task.mjs` | `updatedInput.prompt` (prefix) | Subagent prompt |
 
 ### Format
@@ -111,8 +93,8 @@ BD_PLUGIN_ROOT=/Users/maximus/.claude/plugins/cache/claude-brewcode/brewdoc/X.Y.
 
 | Context | How to Use |
 |---------|------------|
-| Skills (main conversation) | `$BD_PLUGIN_ROOT` available in additionalContext |
-| Subagents | `$BD_PLUGIN_ROOT` prepended to prompt |
+| Subagents (Task tool) | `$BD_PLUGIN_ROOT` prepended to prompt by pre-task.mjs |
+| Skills (main conversation) | Use relative paths or `${CLAUDE_SKILL_DIR}` -- BD_PLUGIN_ROOT is NOT available |
 | Hooks | `process.env.CLAUDE_PLUGIN_ROOT` (raw env var) |
 
 ---
@@ -142,75 +124,11 @@ All hooks use shared utilities from `hooks/lib/utils.mjs`:
 - `output(response)` -- serializes and writes JSON to stdout
 - `log(level, prefix, message, cwd, sessionId)` -- writes to stderr
 
-**Error handling:** Both hooks catch all exceptions and call `output({})` on failure -- silent pass-through, never blocks the session.
+**Error handling:** The hook catches all exceptions and calls `output({})` on failure -- silent pass-through, never blocks the session.
 
 ---
 
-## 1. session-start.mjs
-
-### Configuration
-
-| Field | Value |
-|-------|-------|
-| Event | `SessionStart` |
-| Matcher | none (all sessions) |
-| Timeout | 2000 ms |
-| Output channel | `additionalContext` |
-
-### Input
-
-```json
-{
-  "session_id": "abc123def456...",
-  "cwd": "/path/to/project",
-  "source": "init"
-}
-```
-
-### Behavior
-
-| Condition | Result |
-|-----------|--------|
-| `CLAUDE_PLUGIN_ROOT` set | Injects `BD_PLUGIN_ROOT=...` + `brewdoc: active \| session: {short_id}` |
-| `CLAUDE_PLUGIN_ROOT` not set | Injects `brewdoc: active \| session: {short_id}` (no path) |
-| Any error | Silent pass-through (`output({})`) |
-
-### Logic
-
-```
-input = readStdin()
-pluginRoot = process.env.CLAUDE_PLUGIN_ROOT || ''
-sessionShort = session_id[0..8] || 'unknown'
-
-if pluginRoot:
-  context = "BD_PLUGIN_ROOT={pluginRoot}\nbrewdoc: active | session: {sessionShort}"
-else:
-  context = "brewdoc: active | session: {sessionShort}"
-
-output:
-  systemMessage = "brewdoc: {pluginRoot} | session: {sessionShort}"
-  hookSpecificOutput.hookEventName = "SessionStart"
-  hookSpecificOutput.additionalContext = context
-```
-
-### Output
-
-```json
-{
-  "systemMessage": "brewdoc: /path/to/plugin | session: abc123de",
-  "hookSpecificOutput": {
-    "hookEventName": "SessionStart",
-    "additionalContext": "BD_PLUGIN_ROOT=/path/to/plugin\nbrewdoc: active | session: abc123de"
-  }
-}
-```
-
-- `systemMessage` -- shown to user in console
-- `additionalContext` -- injected into Claude's context (invisible to user)
-
----
-
-## 2. pre-task.mjs
+## pre-task.mjs
 
 ### Configuration
 
@@ -291,13 +209,11 @@ The original `tool_input` is spread into `updatedInput` -- all fields are preser
 +---------------------------------------------------------------+
 |                    Claude Code Session                          |
 |                                                                 |
-|  SessionStart --> session-start.mjs --> BD_PLUGIN_ROOT in ctx  |
-|                                                                 |
 |  User: /brewdoc:memory                                          |
 |    |                                                            |
 |    v                                                            |
 |  Skill runs in main conversation                                |
-|  (has BD_PLUGIN_ROOT from additionalContext)                    |
+|  (uses relative paths or ${CLAUDE_SKILL_DIR} for own files)     |
 |    |                                                            |
 |    |  Task(subagent_type="brewdoc:reviewer", prompt="...")       |
 |    |                                                            |
@@ -316,15 +232,15 @@ The original `tool_input` is spread into `updatedInput` -- all fields are preser
 
 Key points:
 
-- `session-start.mjs` fires once per session -- covers the main conversation
 - `pre-task.mjs` fires on every `Task` tool call -- covers every subagent
-- Together they ensure `BD_PLUGIN_ROOT` is available everywhere
+- Skills in the main conversation do NOT have `BD_PLUGIN_ROOT` -- they use `${CLAUDE_SKILL_DIR}` or relative paths
+- `BD_PLUGIN_ROOT` is only available inside subagent prompts
 
 ---
 
 ## Library: hooks/lib/utils.mjs
 
-Shared utilities used by both hooks.
+Shared utilities used by the hook.
 
 | Function | Signature | Description |
 |----------|-----------|-------------|
@@ -336,18 +252,19 @@ Shared utilities used by both hooks.
 
 ## Comparison with brewcode Hooks
 
-brewdoc is intentionally minimal. This table explains why brewdoc needs only 2 of brewcode's 7 hooks:
+brewdoc is intentionally minimal. This table explains why brewdoc needs only 1 of brewcode's 7 hooks:
 
-| Feature | brewcode (7 hooks) | brewdoc (2 hooks) |
+| Feature | brewcode (7 hooks) | brewdoc (1 hook) |
 |---------|-------------------|-------------------|
-| Plugin root injection | BC_PLUGIN_ROOT | BD_PLUGIN_ROOT |
+| Plugin root injection (subagents) | pre-task.mjs (BC_PLUGIN_ROOT) | pre-task.mjs (BD_PLUGIN_ROOT) |
+| Plugin root injection (main conversation) | session-start.mjs | not needed (skills use relative paths) |
 | KNOWLEDGE injection | pre-task.mjs injects into subagent prompts | not needed |
 | Task lifecycle (lock, compact, stop) | pre-compact.mjs, stop.mjs, post-task.mjs | not needed |
 | grepai integration | grepai-session.mjs, grepai-reminder.mjs | not needed |
 | Plan symlinks | session-start.mjs (LATEST.md) | not needed |
 | Session binding | post-task.mjs (lock file) | not needed |
 
-brewdoc is a documentation tool -- it does not manage long-running multi-phase tasks. It only needs to know where it is installed so skills and agents can locate their instruction and reference files.
+brewdoc is a documentation tool -- it does not manage long-running multi-phase tasks. It only needs to know where it is installed so agents can locate their instruction and reference files.
 
 ---
 
@@ -358,17 +275,6 @@ The complete hook registration file:
 ```json
 {
   "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/session-start.mjs\"",
-            "timeout": 2000
-          }
-        ]
-      }
-    ],
     "PreToolUse": [
       {
         "matcher": "Task",
@@ -387,4 +293,3 @@ The complete hook registration file:
 
 - `${CLAUDE_PLUGIN_ROOT}` is expanded by Claude Code at runtime to the plugin's installed path
 - `matcher: "Task"` restricts `pre-task.mjs` to fire only on Task tool calls (subagent spawns)
-- SessionStart has no matcher -- fires on every session start (init, resume, clear)

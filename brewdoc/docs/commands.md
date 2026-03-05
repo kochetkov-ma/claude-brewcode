@@ -204,7 +204,7 @@ If an existing entry for the same mode exists, the skill offers to update (versi
 ### Workflow
 
 **INTERNAL mode:**
-1. Load reference file from `$BD_PLUGIN_ROOT/skills/my-claude/references/internal-mode.md`
+1. Load reference file from `references/internal-mode.md`
 2. Spawn 3 parallel `Explore` agents: (1) global `~/.claude` config, (2) project `.claude` config, (3) memory files
 3. Aggregate findings into structured document
 4. Write to `~/.claude/brewdoc/YYYYMMDD_my-claude-internal.md`
@@ -213,7 +213,7 @@ If an existing entry for the same mode exists, the skill offers to update (versi
 7. Add INDEX entry
 
 **EXTERNAL mode (default):**
-1. Load reference file from `$BD_PLUGIN_ROOT/skills/my-claude/references/external-mode.md`
+1. Load reference file from `references/external-mode.md`
 2. Analyze local hook files for event model patterns
 3. WebSearch for recent Claude Code releases and CHANGELOG
 4. Spawn `general-purpose` agents for: official docs, GitHub releases, community forums
@@ -417,4 +417,4 @@ The command takes no arguments. All interaction happens through `AskUserQuestion
 
 | Variable | Injected By | Available In | Value |
 |----------|-------------|--------------|-------|
-| `BD_PLUGIN_ROOT` | pre-task.mjs | Skills, Agents | Absolute path to brewdoc plugin root |
+| `BD_PLUGIN_ROOT` | pre-task.mjs | Agents (subagents via Task tool only) | Absolute path to brewdoc plugin root |

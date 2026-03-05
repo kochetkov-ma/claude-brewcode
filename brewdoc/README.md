@@ -147,8 +147,7 @@ Memory files location: `~/.claude/projects/.../memory/*.md`
 
 | Variable | Set by | Available in |
 |----------|--------|--------------|
-| `BD_PLUGIN_ROOT` | `session-start.mjs` (SessionStart) | Main conversation, skills |
-| `BD_PLUGIN_ROOT` | `pre-task.mjs` (PreToolUse:Task) | All subagents (prefix line in prompt) |
+| `BD_PLUGIN_ROOT` | `pre-task.mjs` (PreToolUse:Task) | Agents (subagents via Task tool) |
 
 ## Output Locations
 
@@ -165,7 +164,7 @@ brewdoc/
   .claude-plugin/plugin.json       # Manifest (v3.1.0)
   hooks/
     hooks.json                     # Hook registration
-    session-start.mjs              # Sets BD_PLUGIN_ROOT
+    session-start.mjs              # (unused, not registered in hooks.json)
     pre-task.mjs                   # Injects BD_PLUGIN_ROOT into subagent prompts
     lib/utils.mjs                  # Shared hook utilities
   skills/

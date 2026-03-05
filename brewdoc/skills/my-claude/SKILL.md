@@ -23,11 +23,9 @@ Detect mode from `$ARGUMENTS`:
 | starts with `r ` or `research ` | RESEARCH | query = rest of args |
 
 After detection, load the appropriate reference file:
-- INTERNAL: `$BD_PLUGIN_ROOT/skills/my-claude/references/internal-mode.md`
-- EXTERNAL: `$BD_PLUGIN_ROOT/skills/my-claude/references/external-mode.md`
-- RESEARCH: `$BD_PLUGIN_ROOT/skills/my-claude/references/research-mode.md`
-
-> **BD_PLUGIN_ROOT** is injected by brewdoc's pre-task.mjs hook and available in your context.
+- INTERNAL: `references/internal-mode.md`
+- EXTERNAL: `references/external-mode.md`
+- RESEARCH: `references/research-mode.md`
 
 ## Output Directory
 

@@ -35,15 +35,11 @@ Extract `--engine <name>` from anywhere in arguments if present. Remove it befor
 
 ## Step 1: Dependency Check
 
-Resolve script paths using `$BD_PLUGIN_ROOT`:
-- `$BD_PLUGIN_ROOT/skills/md-to-pdf/scripts/check_deps.sh`
-- `$BD_PLUGIN_ROOT/skills/md-to-pdf/scripts/md_to_pdf.py`
-
 Determine the target engine (from `--engine` flag, saved config, or default `reportlab`).
 
 **EXECUTE** using Bash tool:
 ```bash
-bash "$BD_PLUGIN_ROOT/skills/md-to-pdf/scripts/check_deps.sh" check ENGINE_NAME 2>&1; echo "EXIT_CODE=$?"
+bash "${CLAUDE_SKILL_DIR}/scripts/check_deps.sh" check ENGINE_NAME 2>&1; echo "EXIT_CODE=$?"
 ```
 Replace `ENGINE_NAME` with the target engine.
 
@@ -67,7 +63,7 @@ Options:
 
 If user chooses install, **EXECUTE** using Bash tool:
 ```bash
-bash "$BD_PLUGIN_ROOT/skills/md-to-pdf/scripts/check_deps.sh" install ENGINE_NAME 2>&1 && echo "---INSTALL_OK---" || echo "---INSTALL_FAILED---"
+bash "${CLAUDE_SKILL_DIR}/scripts/check_deps.sh" install ENGINE_NAME 2>&1 && echo "---INSTALL_OK---" || echo "---INSTALL_FAILED---"
 ```
 
 > **STOP if INSTALL_FAILED** -- report error and exit.
@@ -125,7 +121,7 @@ EXIT after printing.
 
 **EXECUTE** using Bash tool:
 ```bash
-python3 "$BD_PLUGIN_ROOT/skills/md-to-pdf/scripts/md_to_pdf.py" "INPUT_PATH" "OUTPUT_PATH" --engine ENGINE --quiet 2>&1 && echo "---CONVERT_OK---" || echo "---CONVERT_FAILED---"
+python3 "${CLAUDE_SKILL_DIR}/scripts/md_to_pdf.py" "INPUT_PATH" "OUTPUT_PATH" --engine ENGINE --quiet 2>&1 && echo "---CONVERT_OK---" || echo "---CONVERT_FAILED---"
 ```
 Replace `INPUT_PATH`, `OUTPUT_PATH`, `ENGINE` with actual values. Add `--config CONFIG_PATH` if a style config JSON exists. Add `--pygments-theme THEME` for weasyprint if configured.
 
@@ -170,7 +166,7 @@ Report saved settings table and EXIT.
 
 ### TEST Mode
 
-1. Use bundled test file: `$BD_PLUGIN_ROOT/skills/md-to-pdf/test/test-all-elements.md`
+1. Use bundled test file at `${CLAUDE_SKILL_DIR}/test/test-all-elements.md` as INPUT_PATH.
 2. Determine output path: `/tmp/md-to-pdf-test-ENGINE.pdf`
 3. Run converter (same command as CONVERT mode, using test file as input, `/tmp/` output).
 4. Proceed to Step 4.
