@@ -22,6 +22,7 @@
  */
 import { readStdin, output, log, getActiveTaskPath, getLock } from './lib/utils.mjs';
 import { readFileSync, readdirSync, statSync, mkdirSync, symlinkSync, unlinkSync, existsSync } from 'fs';
+import { execFileSync } from 'child_process';
 import { join, dirname } from 'path';
 import { homedir } from 'os';
 
@@ -64,46 +65,55 @@ function linkLatestPlan(cwd) {
   return latest.name;
 }
 
-/**
- * Checks GitHub for newer plugin version. Returns null on any error/timeout.
- */
+function isNewer(remoteVer, localVer) {
+  const l = localVer.split('.').map(Number);
+  const r = remoteVer.split('.').map(Number);
+  for (let i = 0; i < Math.max(l.length, r.length); i++) {
+    if ((r[i] || 0) > (l[i] || 0)) return true;
+    if ((r[i] || 0) < (l[i] || 0)) return false;
+  }
+  return false;
+}
+
+async function fetchJson(url, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timer);
+    return res.ok ? await res.json() : null;
+  } catch {
+    clearTimeout(timer);
+    return null;
+  }
+}
+
 async function checkLatestVersion(pluginRoot) {
   try {
-    const pluginJson = JSON.parse(readFileSync(join(pluginRoot, '.claude-plugin', 'plugin.json'), 'utf8'));
-    const local = pluginJson.version;
+    const local = JSON.parse(readFileSync(join(pluginRoot, '.claude-plugin', 'plugin.json'), 'utf8')).version;
     if (!local) return null;
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 1000);
+    const data = await fetchJson('https://api.github.com/repos/kochetkov-ma/claude-brewcode/releases/latest', 1000);
+    if (!data) return null;
 
-    try {
-      const res = await fetch('https://api.github.com/repos/kochetkov-ma/claude-brewcode/releases/latest', {
-        signal: controller.signal
-      });
-      clearTimeout(timer);
+    const remote = (data.tag_name || '').replace(/^v/, '');
+    if (!remote) return null;
 
-      if (!res.ok) return null;
+    return { updateAvailable: isNewer(remote, local), local, remote };
+  } catch {
+    return null;
+  }
+}
 
-      const data = await res.json();
-      const remote = (data.tag_name || '').replace(/^v/, '');
-      if (!remote) return null;
+async function checkClaudeCodeVersion() {
+  try {
+    const local = (execFileSync('claude', ['-v'], { timeout: 500, encoding: 'utf8' }).match(/(\d+\.\d+\.\d+)/) || [])[1];
+    if (!local) return null;
 
-      const localParts = local.split('.').map(Number);
-      const remoteParts = remote.split('.').map(Number);
-      let updateAvailable = false;
+    const data = await fetchJson('https://registry.npmjs.org/@anthropic-ai/claude-code/latest', 1000);
+    if (!data?.version) return null;
 
-      for (let i = 0; i < Math.max(localParts.length, remoteParts.length); i++) {
-        const l = localParts[i] || 0;
-        const r = remoteParts[i] || 0;
-        if (r > l) { updateAvailable = true; break; }
-        if (r < l) break;
-      }
-
-      return { updateAvailable, local, remote };
-    } catch {
-      clearTimeout(timer);
-      return null;
-    }
+    return { updateAvailable: isNewer(data.version, local), local, remote: data.version };
   } catch {
     return null;
   }
@@ -140,17 +150,24 @@ async function main() {
       ? `BC_PLUGIN_ROOT=${pluginRoot}\nbrewcode: active | session: ${sessionShort}`
       : `brewcode: active | session: ${sessionShort}`;
 
-    if (pluginRoot) {
-      try {
-        const versionResult = await checkLatestVersion(pluginRoot);
-        if (versionResult === null) {
-          context += `\nhttps://github.com/kochetkov-ma/claude-brewcode/releases/latest — ensure using brewcode latest version and \`claude update\``;
-        } else if (versionResult.updateAvailable) {
-          context += `\nbrewcode update available: ${versionResult.local} → ${versionResult.remote}. Update: https://github.com/kochetkov-ma/claude-brewcode/releases/latest — follow instructions + run \`claude update\``;
-        }
-      } catch {
-        context += `\nhttps://github.com/kochetkov-ma/claude-brewcode/releases/latest — ensure using brewcode latest version and \`claude update\``;
+    const versionLines = [];
+    try {
+      const [brewcodeResult, claudeResult] = await Promise.all([
+        pluginRoot ? checkLatestVersion(pluginRoot).catch(() => null) : Promise.resolve(null),
+        checkClaudeCodeVersion().catch(() => null)
+      ]);
+
+      if (brewcodeResult === null && pluginRoot) {
+        versionLines.push(`check brewcode updates: https://github.com/kochetkov-ma/claude-brewcode/releases/latest`);
+      } else if (brewcodeResult?.updateAvailable) {
+        versionLines.push(`UPDATE brewcode ${brewcodeResult.local} → ${brewcodeResult.remote}: https://github.com/kochetkov-ma/claude-brewcode/releases/latest`);
       }
+
+      if (claudeResult?.updateAvailable) {
+        versionLines.push(`UPDATE claude ${claudeResult.local} → ${claudeResult.remote}: claude update`);
+      }
+    } catch {
+      if (pluginRoot) versionLines.push(`check brewcode updates: https://github.com/kochetkov-ma/claude-brewcode/releases/latest`);
     }
 
     if (cwd) {
@@ -178,7 +195,7 @@ async function main() {
     }
 
     output({
-      systemMessage: `brewcode: ${pluginRoot} | session: ${sessionShort}`,
+      systemMessage: `brewcode: ${pluginRoot} | session: ${sessionShort}${versionLines.length ? '\n' + versionLines.join('\n') : ''}`,
       hookSpecificOutput: {
         hookEventName: 'SessionStart',
         additionalContext: context

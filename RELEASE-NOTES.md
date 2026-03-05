@@ -2,6 +2,21 @@
 
 ---
 
+## v3.4.2 (2026-03-05)
+
+Main changes in [v3.4.0](https://github.com/kochetkov-ma/claude-brewcode/releases/tag/v3.4.0).
+
+### brewcode
+#### Added
+- **Claude Code version check** -- session-start hook also checks npm registry for newer Claude Code CLI version
+- **Version notifications in UI** -- update messages now shown in `systemMessage` (visible to user), not just `additionalContext`
+
+#### Changed
+- **Version checks run in parallel** -- brewcode + Claude Code checks via `Promise.all` for minimal latency
+- **Regex version parsing** -- `claude -v` output parsed with `\d+\.\d+\.\d+` regex instead of split
+
+---
+
 ## v3.4.1 (2026-03-05)
 
 Patch release. Main changes in [v3.4.0](https://github.com/kochetkov-ma/claude-brewcode/releases/tag/v3.4.0).
