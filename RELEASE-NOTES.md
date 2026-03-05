@@ -2,6 +2,23 @@
 
 ---
 
+## v3.4.0 (2026-03-05)
+
+### brewcode
+#### Added
+- **Version check on session start** -- `session-start.mjs` checks GitHub latest release; shows update notification if newer version available, fallback link on timeout/error
+
+#### Changed
+- **Skills migrated to `${CLAUDE_SKILL_DIR}`** -- convention, grepai, install, rules, teardown skills now use `${CLAUDE_SKILL_DIR}/scripts/...` instead of relative `scripts/...` paths
+- **skill-creator agent** -- documented `${CLAUDE_SKILL_DIR}` variable, updated resource path resolution section, added common mistakes
+- **bash-expert agent** -- updated plugin path guidance to distinguish `${CLAUDE_SKILL_DIR}` (skills) vs `$BC_PLUGIN_ROOT` (agents)
+- **hooks.md** -- updated path resolution table with `${CLAUDE_SKILL_DIR}` context
+
+#### Fixed
+- **pre-task.mjs** -- grepai detection now checks `index.gob` existence, not just `.grepai/` directory
+
+---
+
 ## v3.3.2 (2026-03-05)
 
 ### brewcode
