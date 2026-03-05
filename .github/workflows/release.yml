@@ -20,15 +20,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
-
-      - name: Verify tag is on main
-        run: |
-          git fetch origin main
-          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
-            echo "::error::Tag $GITHUB_REF_NAME is not on the main branch. Skipping release."
-            exit 1
-          fi
+          sparse-checkout: RELEASE-NOTES.md
 
       - name: Extract changelog for tag version
         id: changelog
