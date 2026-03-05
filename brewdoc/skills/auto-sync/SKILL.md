@@ -19,9 +19,8 @@ auto-sync-type: skill
 
 **EXECUTE** using Bash tool (args: `$ARGUMENTS`):
 ```bash
-bash "scripts/detect-mode.sh" $ARGUMENTS
+bash "${CLAUDE_SKILL_DIR}/scripts/detect-mode.sh" $ARGUMENTS
 ```
-> Script path is relative to skill directory.
 
 Parse output: `MODE|ARG|FLAGS`. If exit code non-zero → report error, EXIT.
 
@@ -124,9 +123,8 @@ echo "INDEX=$INDEX_FILE"
 
 1. Find tagged files — **EXECUTE** using Bash tool:
 ```bash
-bash "scripts/discover.sh" "$SCOPE_PATH" typed
+bash "${CLAUDE_SKILL_DIR}/scripts/discover.sh" "$SCOPE_PATH" typed
 ```
-> Script path is relative to skill directory.
 Output: `TYPE|PATH` per line (types: `skill`, `agent`, `rule`, `config`, `doc`). Capped at `MAX_FILES` (default 50).
 
 2. For each file not in INDEX → auto-add:
@@ -137,9 +135,8 @@ Output: `TYPE|PATH` per line (types: `skill`, `agent`, `rule`, `config`, `doc`).
 
 3. Find stale entries — **EXECUTE** using Bash tool:
 ```bash
-bash "scripts/index-ops.sh" stale "$INDEX_FILE" "$INTERVAL_DAYS"
+bash "${CLAUDE_SKILL_DIR}/scripts/index-ops.sh" stale "$INDEX_FILE" "$INTERVAL_DAYS"
 ```
-> Script path is relative to skill directory.
 
 4. Queue: new + stale files
 
@@ -150,7 +147,7 @@ bash "scripts/index-ops.sh" stale "$INDEX_FILE" "$INTERVAL_DAYS"
    Task(subagent_type="brewdoc:bd-auto-sync-processor",
         prompt="PATH: {path} | TYPE: {type} | FLAGS: {flags}")
    ```
-   > **Context:** BD_PLUGIN_ROOT is available in your context (injected by pre-task.mjs hook).
+   > **Context:** BD_PLUGIN_ROOT is injected into agent prompt by pre-task.mjs hook.
 
 2. For each result:
    - If status = `updated` or `unchanged` → update INDEX `u` to today (`index-ops.sh update`)

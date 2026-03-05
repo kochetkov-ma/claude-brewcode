@@ -2,6 +2,18 @@
 
 ---
 
+## v3.3.0 (2026-03-05)
+
+### brewdoc
+#### Changed
+- **session-start hook removed** -- brewdoc no longer injects `BD_PLUGIN_ROOT` at session start
+- **pre-task hook retained** -- `BD_PLUGIN_ROOT` still injected into subagent prompts for `bd-auto-sync-processor`
+- **Skills use relative paths** -- `my-claude` uses plain relative paths; `md-to-pdf` and `auto-sync` bash commands use `${CLAUDE_SKILL_DIR}`
+- Updated `docs/hooks.md`: rewritten to reflect 1 hook (was 2)
+- Updated `README.md`, `docs/commands.md`: removed stale `BD_PLUGIN_ROOT` references
+
+---
+
 ## v3.2.0 (2026-03-02)
 
 ### brewcode

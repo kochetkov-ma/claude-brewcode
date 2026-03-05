@@ -40,7 +40,7 @@ permissionMode: acceptEdits
 | # | Practice | Context | Source |
 |---|----------|---------|--------|
 | 1 | `allSatisfy()` over `forEach` | Collection assertions | AssertJ |
-| 2 | Constructor injection | Spring DI | CLAUDE.md |
+| 2 | Constructor injection | Spring DI | convention |
 ```
 
 ### Table Constraints
@@ -49,7 +49,8 @@ permissionMode: acceptEdits
 |------|---------|
 | Numbered entries | Sequential `1, 2, 3...` in `#` column |
 | Max rows | 20 per file — split into specialized files if exceeded |
-| Deduplication | By **semantic similarity** (not exact match), merge related entries |
+| Deduplication | Semantic similarity + 3-Check Protocol before adding any entry |
+| CLAUDE.md rule | Never add a rule already in project CLAUDE.md; "CLAUDE.md" forbidden as Source |
 | Priority | critical > important > nice-to-have |
 
 ## Frontmatter Reference
@@ -129,7 +130,19 @@ Group rules by logical scope. Classify each rule as anti-pattern (avoid) or best
 
 Apply transformations: tables over prose, abbreviations (REQ, impl, cfg, env), remove filler, lazy links `> Details: [file.md](../docs/file.md)`.
 
-Deduplication: semantic similarity (not exact match). Merge related entries into single row. Max 20 rows per file.
+Deduplication: apply 3-Check Dedup Protocol (below). Max 20 rows per file.
+
+### 3-Check Dedup Protocol
+
+| Check | Scope | Action |
+|-------|-------|--------|
+| 1. Within-file | Same target file | >70% skip; 40-70% merge |
+| 2. Cross-file antonym | Paired file (avoid ↔ best-practice) | Same concept as opposite → keep avoid entry only, delete best-practice |
+| 3. CLAUDE.md duplicate | Project CLAUDE.md | Already documented → skip entirely |
+
+**Antonym rule:** "don't do X" in avoid + "do not-X" in best-practice = one rule twice. Keep avoid entry, ensure "Instead" column captures the positive.
+
+**CLAUDE.md rule:** If concept exists in CLAUDE.md → skip. Source column value "CLAUDE.md" is forbidden.
 
 ### Phase 4: File Creation
 
@@ -260,7 +273,7 @@ Two naming conventions — use both as appropriate:
 
 ## Quality Checklist
 
-**Before extraction:** read source completely, identify rule categories, map to path patterns, check existing rules (avoid duplicates).
+**Before extraction:** read source completely, identify rule categories, map to path patterns, check existing rules via 3-Check Protocol (within-file + cross-file antonym + CLAUDE.md).
 
 **During creation:** `paths:` frontmatter on all files, quoted glob patterns, tables for multi-column data, `❌ -> ✅` for anti-patterns, lazy links for detailed docs, text-optimize applied.
 
@@ -288,6 +301,7 @@ Two naming conventions — use both as appropriate:
 | 7 | `| Bad | Good |` tables | `| # | Avoid | Instead | Why |` | Standard format |
 | 8 | Unnumbered table entries | Sequential `1, 2, 3...` | Referenceability |
 | 9 | >20 rows per file | Split into `{prefix}-avoid.md` | Readability, token budget |
+| 10 | "CLAUDE.md" as Source value | Skip — already in CLAUDE.md | Duplication |
 
 ## LLM Text Rules
 

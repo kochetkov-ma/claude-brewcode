@@ -54,6 +54,10 @@ Targets: avoid.md, best-practice.md, {prefix}-avoid.md, {prefix}-best-practice.m
 
 MODE: {detected mode}
 KNOWLEDGE: {prepared from table above}
+DEDUP: 3-Check Protocol:
+  1. Within-file similarity (>70% skip, 40-70% merge)
+  2. Cross-file antonym (avoid↔best-practice — keep avoid only)
+  3. CLAUDE.md duplicate (skip if in CLAUDE.md; "CLAUDE.md" forbidden as Source)
 ```
 
 > `BC_PLUGIN_ROOT` injected by pre-task.mjs hook.
