@@ -5,27 +5,6 @@
 ## v3.3.2 (2026-03-05)
 
 ### brewcode
-#### Fixed
-- **release.yml** -- `git branch --contains` unreliable on detached HEAD; replaced with `git merge-base --is-ancestor`
-- **gitleaks.yml** -- SARIF upload/artifact steps now skip when `results.sarif` not produced (fixes failure on tag pushes)
-
----
-
-## v3.3.1 (2026-03-05)
-
-### brewdoc
-#### Changed
-- **session-start hook removed** -- brewdoc no longer injects `BD_PLUGIN_ROOT` at session start
-- **pre-task hook retained** -- `BD_PLUGIN_ROOT` still injected into subagent prompts for `bd-auto-sync-processor`
-- **Skills use relative paths** -- `my-claude` uses plain relative paths; `md-to-pdf` and `auto-sync` bash commands use `${CLAUDE_SKILL_DIR}`
-- Updated `docs/hooks.md`: rewritten to reflect 1 hook (was 2)
-- Updated `README.md`, `docs/commands.md`: removed stale `BD_PLUGIN_ROOT` references
-
----
-
-## v3.2.0 (2026-03-02)
-
-### brewcode
 #### Added
 - **brewcode:convention skill** -- Deep project analyzer that extracts etalon classes, patterns, and architecture by layer
   - 4 modes: `full`, `conventions`, `rules`, `paths <p1,p2>`
@@ -34,30 +13,29 @@
   - Interactive rules extraction with batched AskUserQuestion flow
   - CLAUDE.md update with etalon quick-reference table
   - POSIX-compliant `convention.sh` script for stack detection, scanning, validation
-- **bump-version.sh** -- Single command to bump version across all 4 JSON files: `bash .claude/scripts/bump-version.sh 3.2.0`
-
-#### Changed
-- Updated CLAUDE.md: Version Sync section now uses `bump-version.sh`, Update flow includes CLI commands
-
-#### Fixed
-- `convention.sh`: dotnet monorepo module detection (`.sln`/`.csproj` in `has_build_file()`)
-
----
-
-## v3.1.0 (2026-02-28)
-
-### brewcode
-#### Added
-
 - **brewcode:agents skill** -- Interactive agent creation and improvement orchestrator
   - Create mode: 3-question interactive setup (scope, model, CLAUDE.md update)
   - Improve mode: improve existing agent by name or path
   - Delegates to `agent-creator` agent for quality agent generation
   - Applies `text-optimize` after creation/improvement
   - Optional CLAUDE.md agents table update
+- **bump-version.sh** -- Single command to bump version across all 4 JSON files
+
+#### Changed
+- Updated CLAUDE.md: Version Sync section now uses `bump-version.sh`, Update flow includes CLI commands
+
+#### Fixed
+- **release.yml** -- `git branch --contains` unreliable on detached HEAD; replaced with `git merge-base --is-ancestor`
+- **gitleaks.yml** -- SARIF upload/artifact steps now skip when `results.sarif` not produced
+- `convention.sh`: dotnet monorepo module detection (`.sln`/`.csproj` in `has_build_file()`)
 
 ### brewdoc
 #### Changed
+- **session-start hook removed** -- brewdoc no longer injects `BD_PLUGIN_ROOT` at session start
+- **pre-task hook retained** -- `BD_PLUGIN_ROOT` still injected into subagent prompts for `bd-auto-sync-processor`
+- **Skills use relative paths** -- `my-claude` uses plain relative paths; `md-to-pdf` and `auto-sync` bash commands use `${CLAUDE_SKILL_DIR}`
+- Updated `docs/hooks.md`: rewritten to reflect 1 hook (was 2)
+- Updated `README.md`, `docs/commands.md`: removed stale `BD_PLUGIN_ROOT` references
 - Version unified with brewcode suite (was 1.1.1)
 
 #### Fixed
