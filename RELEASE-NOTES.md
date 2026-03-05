@@ -2,6 +2,15 @@
 
 ---
 
+## v3.3.2 (2026-03-05)
+
+### brewcode
+#### Fixed
+- **release.yml** -- `git branch --contains` unreliable on detached HEAD; replaced with `git merge-base --is-ancestor`
+- **gitleaks.yml** -- SARIF upload/artifact steps now skip when `results.sarif` not produced (fixes failure on tag pushes)
+
+---
+
 ## v3.3.1 (2026-03-05)
 
 ### brewdoc
