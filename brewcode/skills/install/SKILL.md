@@ -32,26 +32,26 @@ Interactive installer for brewcode prerequisites.
 
 ### Phase 1: State Check
 
-**EXECUTE**: `bash scripts/install.sh state`
+**EXECUTE**: `bash "${CLAUDE_SKILL_DIR}/scripts/install.sh" state`
 
 ---
 
 ### Phase 2: Updates Check
 
-**EXECUTE**: `bash scripts/install.sh check-updates`
+**EXECUTE**: `bash "${CLAUDE_SKILL_DIR}/scripts/install.sh" check-updates`
 
 **If UPDATES_AVAILABLE=true** → **ASK** (AskUserQuestion):
 - Header: "Updates"
 - Question: "Updates available: [list from output]. Update now?"
 - Options: "Yes, update all" | "Skip"
 
-**If Yes** → **EXECUTE**: `bash scripts/install.sh update-all`
+**If Yes** → **EXECUTE**: `bash "${CLAUDE_SKILL_DIR}/scripts/install.sh" update-all`
 
 ---
 
 ### Phase 3: Timeout Check
 
-**EXECUTE**: `bash scripts/install.sh check-timeout`
+**EXECUTE**: `bash "${CLAUDE_SKILL_DIR}/scripts/install.sh" check-timeout`
 
 **If TIMEOUT_EXISTS=false** → **ASK**:
 - Header: "Timeout Symlink"
@@ -64,9 +64,9 @@ Interactive installer for brewcode prerequisites.
 
 ### Phase 4: Required Components
 
-**EXECUTE**: `bash scripts/install.sh required`
+**EXECUTE**: `bash "${CLAUDE_SKILL_DIR}/scripts/install.sh" required`
 
-**If timeout still missing** → **EXECUTE**: `bash scripts/install.sh timeout`
+**If timeout still missing** → **EXECUTE**: `bash "${CLAUDE_SKILL_DIR}/scripts/install.sh" timeout`
 
 > **STOP if any required failed.**
 
@@ -79,12 +79,12 @@ Interactive installer for brewcode prerequisites.
 - Question: "Install semantic search? Enables AI-powered code search."
 - Options: "Yes, install (~1.5GB)" | "Skip"
 
-**If Yes** → **EXECUTE**: `bash scripts/install.sh grepai`
+**If Yes** → **EXECUTE**: `bash "${CLAUDE_SKILL_DIR}/scripts/install.sh" grepai`
 
 ---
 
 ### Phase 6: Summary
 
-**EXECUTE**: `bash scripts/install.sh summary`
+**EXECUTE**: `bash "${CLAUDE_SKILL_DIR}/scripts/install.sh" summary`
 
 </instructions>

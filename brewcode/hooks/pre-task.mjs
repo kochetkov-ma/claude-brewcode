@@ -75,7 +75,7 @@ async function main() {
 
     // Check grepai availability (for ALL agents including system agents)
     const grepaiDir = join(cwd, '.grepai');
-    const hasGrepai = existsSync(grepaiDir);
+    const hasGrepai = existsSync(grepaiDir) && existsSync(join(grepaiDir, 'index.gob'));
 
     let updatedPrompt = tool_input.prompt || '';
     let modified = false;

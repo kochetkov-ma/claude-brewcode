@@ -130,7 +130,7 @@ echo "| brew | ✅ |"
 | `$CLAUDE_PLUGIN_ROOT` | Hooks only |
 | `$PLUGIN_ROOT/skills/X/scripts/` | All contexts |
 
-> In Skills/Agents: Use `$BC_PLUGIN_ROOT` (injected by pre-task.mjs hook)
+> In Skills: `${CLAUDE_SKILL_DIR}` for own files (string substitution in SKILL.md). In Agents (subagents): `$BC_PLUGIN_ROOT` (injected by pre-task.mjs)
 
 ## 6. Homebrew
 
@@ -246,7 +246,7 @@ Validate: `cmd && echo "✅" || echo "❌ FAILED"`
 
 Stop on error: `> **STOP if ❌** — fix before continuing.`
 
-Plugin root: `$BC_PLUGIN_ROOT` (injected by pre-task.mjs hook)
+Skill files: `${CLAUDE_SKILL_DIR}` (own dir) | Cross-skill/agent: `$BC_PLUGIN_ROOT` (pre-task.mjs)
 
 ## 11. Checklist
 

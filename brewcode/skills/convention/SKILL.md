@@ -30,7 +30,7 @@ Parse `$ARGUMENTS` for mode keyword. Default = `full`. For `paths` mode: split c
 
 **EXECUTE** using Bash tool:
 ```bash
-bash scripts/convention.sh detect-stack && echo "---DETECT-OK---" || echo "---DETECT-FAILED---"
+bash "${CLAUDE_SKILL_DIR}/scripts/convention.sh" detect-stack && echo "---DETECT-OK---" || echo "---DETECT-FAILED---"
 ```
 
 Output: JSON `{"stacks":[...],"primary":"...","build_file":"...","modules":[...]}`.
@@ -49,7 +49,7 @@ Output: JSON `{"stacks":[...],"primary":"...","build_file":"...","modules":[...]
 
 **EXECUTE** using Bash tool:
 ```bash
-bash scripts/convention.sh scan && echo "---SCAN-OK---" || echo "---SCAN-FAILED---"
+bash "${CLAUDE_SKILL_DIR}/scripts/convention.sh" scan && echo "---SCAN-OK---" || echo "---SCAN-FAILED---"
 ```
 
 Output: JSON with `source_dirs`, `file_counts`, `modules`, `total_files`.
@@ -60,7 +60,7 @@ Output: JSON with `source_dirs`, `file_counts`, `modules`, `total_files`.
 
 **EXECUTE** using Bash tool:
 ```bash
-bash scripts/convention.sh setup && echo "---SETUP-OK---" || echo "---SETUP-FAILED---"
+bash "${CLAUDE_SKILL_DIR}/scripts/convention.sh" setup && echo "---SETUP-OK---" || echo "---SETUP-FAILED---"
 ```
 
 > **STOP if FAILED** -- cannot proceed without output directory.
@@ -69,7 +69,7 @@ bash scripts/convention.sh setup && echo "---SETUP-OK---" || echo "---SETUP-FAIL
 
 **EXECUTE** using Bash tool:
 ```bash
-bash scripts/convention.sh validate && echo "---VALID---" || echo "---INVALID---"
+bash "${CLAUDE_SKILL_DIR}/scripts/convention.sh" validate && echo "---VALID---" || echo "---INVALID---"
 ```
 
 > If `rules` mode + `INVALID` -- Exit: "Run `/brewcode:convention conventions` first."
