@@ -21,7 +21,7 @@
  * Cleanup: /brewcode:teardown removes .claude/plans/ directory
  */
 import { readStdin, output, log, getActiveTaskPath, getLock } from './lib/utils.mjs';
-import { readdirSync, statSync, mkdirSync, symlinkSync, unlinkSync, existsSync } from 'fs';
+import { readFileSync, readdirSync, statSync, mkdirSync, symlinkSync, unlinkSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { homedir } from 'os';
 
@@ -64,6 +64,51 @@ function linkLatestPlan(cwd) {
   return latest.name;
 }
 
+/**
+ * Checks GitHub for newer plugin version. Returns null on any error/timeout.
+ */
+async function checkLatestVersion(pluginRoot) {
+  try {
+    const pluginJson = JSON.parse(readFileSync(join(pluginRoot, '.claude-plugin', 'plugin.json'), 'utf8'));
+    const local = pluginJson.version;
+    if (!local) return null;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 1000);
+
+    try {
+      const res = await fetch('https://api.github.com/repos/kochetkov-ma/claude-brewcode/releases/latest', {
+        signal: controller.signal
+      });
+      clearTimeout(timer);
+
+      if (!res.ok) return null;
+
+      const data = await res.json();
+      const remote = (data.tag_name || '').replace(/^v/, '');
+      if (!remote) return null;
+
+      const localParts = local.split('.').map(Number);
+      const remoteParts = remote.split('.').map(Number);
+      let updateAvailable = false;
+
+      for (let i = 0; i < Math.max(localParts.length, remoteParts.length); i++) {
+        const l = localParts[i] || 0;
+        const r = remoteParts[i] || 0;
+        if (r > l) { updateAvailable = true; break; }
+        if (r < l) break;
+      }
+
+      return { updateAvailable, local, remote };
+    } catch {
+      clearTimeout(timer);
+      return null;
+    }
+  } catch {
+    return null;
+  }
+}
+
 async function main() {
   let cwd = null;
   let session_id = null;
@@ -94,6 +139,19 @@ async function main() {
     let context = pluginRoot
       ? `BC_PLUGIN_ROOT=${pluginRoot}\nbrewcode: active | session: ${sessionShort}`
       : `brewcode: active | session: ${sessionShort}`;
+
+    if (pluginRoot) {
+      try {
+        const versionResult = await checkLatestVersion(pluginRoot);
+        if (versionResult === null) {
+          context += `\nhttps://github.com/kochetkov-ma/claude-brewcode/releases/latest — ensure using brewcode latest version and \`claude update\``;
+        } else if (versionResult.updateAvailable) {
+          context += `\nbrewcode update available: ${versionResult.local} → ${versionResult.remote}. Update: https://github.com/kochetkov-ma/claude-brewcode/releases/latest — follow instructions + run \`claude update\``;
+        }
+      } catch {
+        context += `\nhttps://github.com/kochetkov-ma/claude-brewcode/releases/latest — ensure using brewcode latest version and \`claude update\``;
+      }
+    }
 
     if (cwd) {
       const lock = getLock(cwd);

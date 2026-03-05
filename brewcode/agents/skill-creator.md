@@ -267,11 +267,14 @@ Summarize this PR...
 
 # String Substitutions
 
-| Variable | Description |
-|----------|-------------|
-| `$ARGUMENTS` | All arguments |
-| `$0`, `$1`, `$2` | By position |
-| `${CLAUDE_SESSION_ID}` | Session ID |
+| Variable | Description | Since |
+|----------|-------------|-------|
+| `$ARGUMENTS` | All arguments passed when invoking the skill | — |
+| `$0`, `$1`, `$2` | Specific argument by 0-based index | — |
+| `${CLAUDE_SESSION_ID}` | Current session ID | — |
+| `${CLAUDE_SKILL_DIR}` | Absolute path to directory containing the skill's SKILL.md | v2.1.69 |
+
+> `${CLAUDE_SKILL_DIR}` — string substitution (NOT env var). Replaced in SKILL.md before sending to model. Plugin skills → skill subdirectory, not plugin root. NOT available in hooks/agents — use `$CLAUDE_PLUGIN_ROOT` there.
 
 # Invocation Matrix
 
@@ -491,34 +494,26 @@ Follow the loaded reference document.
 
 # Resource Path Resolution
 
-> ⚠️ **CRITICAL: USE RELATIVE PATHS!**
-> Skills receive `Base directory for this skill:` at execution.
-> Claude resolves `scripts/foo.sh` → `{skill_base_dir}/scripts/foo.sh` automatically.
+Use `${CLAUDE_SKILL_DIR}` (v2.1.69+) for bash commands, relative paths for Read instructions.
 
-## Direct Calls (Read, Bash in SKILL.md)
+```yaml
+# Bash — use ${CLAUDE_SKILL_DIR} (CWD is project root, not skill dir)
+bash "${CLAUDE_SKILL_DIR}/scripts/validate.sh" $ARGUMENTS
+
+# Read — relative paths work (Claude auto-resolves from skill base dir)
+Read `references/api-spec.md` for API details.
+```
 
 | ❌ NEVER | ✅ ALWAYS |
 |----------|----------|
-| `$BC_PLUGIN_ROOT/skills/my-skill/scripts/foo.sh` | `scripts/foo.sh` |
-| `$CLAUDE_PLUGIN_ROOT/skills/my-skill/references/doc.md` | `references/doc.md` |
-| `/absolute/path/to/skill/assets/template.md` | `assets/template.md` |
+| `$BC_PLUGIN_ROOT/skills/my-skill/scripts/foo.sh` | `${CLAUDE_SKILL_DIR}/scripts/foo.sh` |
+| `/absolute/hardcoded/path/to/assets/template.md` | `${CLAUDE_SKILL_DIR}/assets/template.md` |
+
+**Exception — passing path to agent via Task:** use `$BC_PLUGIN_ROOT` (agent has no `${CLAUDE_SKILL_DIR}`):
 
 ```markdown
-# Example in SKILL.md:
-Read `references/api-spec.md` for API details.
-bash "scripts/validate.sh"   ← Claude resolves to {skill_base_dir}/scripts/validate.sh
-```
-
-## Exception: Passing Path to Agent via Task Tool
-
-When spawning agent from skill and passing resource path in prompt — USE `$BC_PLUGIN_ROOT`:
-
-```markdown
-# In SKILL.md — spawning agent with path to skill's resource:
 Task(subagent_type="developer", prompt="Read $BC_PLUGIN_ROOT/skills/my-skill/references/rules.md then...")
 ```
-
-**Why:** Agent receives `$BC_PLUGIN_ROOT` via pre-task.mjs hook injection. Agent does NOT have access to skill_base_dir — only to `$BC_PLUGIN_ROOT`.
 
 # Executable Bash
 
@@ -830,6 +825,9 @@ Source: [skills docs](https://code.claude.com/docs/en/skills)
 | Unmarked bash | Add EXECUTE keyword |
 | `$ARGUMENTS` in bash block | Move to text, use placeholder |
 | All references loaded unconditionally in multi-mode skill | Detect mode → load matching `references/{mode}.md` only |
+| Using `$BC_PLUGIN_ROOT` for own scripts in SKILL.md | Use `${CLAUDE_SKILL_DIR}` — it's the skill's own directory |
+| Treating `${CLAUDE_SKILL_DIR}` as env var | It's string substitution in SKILL.md only, not available in hooks/agents |
+| `skill.md` (lowercase) | Must be `SKILL.md` (uppercase) — lowercase silently ignored ([#17417](https://github.com/anthropics/claude-code/issues/17417)) |
 
 ## Activation Mistakes (cause 20% rate)
 
@@ -934,12 +932,14 @@ Run optimization: `Skill(skill="text-optimize", args="path/to/SKILL.md")`
 
 # Sources
 
-- [Claude Code Skills](https://code.claude.com/docs/en/skills)
+- [Claude Code Skills](https://code.claude.com/docs/en/skills) — official docs, string substitutions table
 - [Custom Subagents](https://code.claude.com/docs/en/sub-agents)
 - [Skill Best Practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices)
 - [agentskills.io](https://agentskills.io)
 - [Skills Don't Auto-Activate](https://scottspence.com/posts/claude-code-skills-dont-auto-activate)
 - [GitHub #10768 - Intent Matching Broken](https://github.com/anthropics/claude-code/issues/10768) (OPEN)
+- [GitHub #12541 - Feature request for $SKILL_DIR](https://github.com/anthropics/claude-code/issues/12541) — led to `${CLAUDE_SKILL_DIR}`
 - [GitHub #13919 - Context loss](https://github.com/anthropics/claude-code/issues/13919) (OPEN)
 - [GitHub #15136 - Fails to invoke](https://github.com/anthropics/claude-code/issues/15136) (OPEN)
+- [GitHub #17417 - SKILL.md case-sensitivity](https://github.com/anthropics/claude-code/issues/17417) — lowercase silently ignored
 - [GitHub #9716 - Not aware of skills](https://github.com/anthropics/claude-code/issues/9716) (OPEN)

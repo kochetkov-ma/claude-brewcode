@@ -19,7 +19,7 @@ model: sonnet
 
 **EXECUTE** using Bash tool — detect mode from skill arguments:
 ```bash
-bash scripts/detect-mode.sh "$ARGUMENTS"
+bash "${CLAUDE_SKILL_DIR}/scripts/detect-mode.sh" "$ARGUMENTS"
 ```
 
 Use `$ARGUMENTS` directly - it contains the skill invocation arguments.
@@ -59,7 +59,7 @@ Full grepai installation and project setup.
 
 **EXECUTE** using Bash tool:
 ```bash
-bash scripts/infra-check.sh && echo "✅ infra-check" || echo "❌ infra-check FAILED"
+bash "${CLAUDE_SKILL_DIR}/scripts/infra-check.sh" && echo "✅ infra-check" || echo "❌ infra-check FAILED"
 ```
 
 > **STOP if ❌** — install missing components before continuing.
@@ -68,7 +68,7 @@ bash scripts/infra-check.sh && echo "✅ infra-check" || echo "❌ infra-check F
 
 **EXECUTE** using Bash tool:
 ```bash
-bash scripts/mcp-check.sh && echo "✅ mcp-check" || echo "❌ mcp-check FAILED"
+bash "${CLAUDE_SKILL_DIR}/scripts/mcp-check.sh" && echo "✅ mcp-check" || echo "❌ mcp-check FAILED"
 ```
 
 This script configures MCP server and allowedTools permissions.
@@ -93,7 +93,7 @@ This script configures MCP server and allowedTools permissions.
 
 **EXECUTE** using Bash tool:
 ```bash
-bash scripts/init-index.sh && echo "✅ init-index" || echo "❌ init-index FAILED"
+bash "${CLAUDE_SKILL_DIR}/scripts/init-index.sh" && echo "✅ init-index" || echo "❌ init-index FAILED"
 ```
 
 > **STOP if ❌** — check `.grepai/logs/grepai-watch.log` for errors.
@@ -104,7 +104,7 @@ bash scripts/init-index.sh && echo "✅ init-index" || echo "❌ init-index FAIL
 
 **EXECUTE** using Bash tool:
 ```bash
-bash scripts/create-rule.sh && echo "✅ create-rule" || echo "❌ create-rule FAILED"
+bash "${CLAUDE_SKILL_DIR}/scripts/create-rule.sh" && echo "✅ create-rule" || echo "❌ create-rule FAILED"
 ```
 
 > **STOP if ❌** — manually create rule in `.claude/rules/`.
@@ -113,7 +113,7 @@ bash scripts/create-rule.sh && echo "✅ create-rule" || echo "❌ create-rule F
 
 **EXECUTE** using Bash tool:
 ```bash
-bash scripts/verify.sh && echo "✅ verify" || echo "❌ verify FAILED"
+bash "${CLAUDE_SKILL_DIR}/scripts/verify.sh" && echo "✅ verify" || echo "❌ verify FAILED"
 ```
 
 ---
@@ -122,7 +122,7 @@ bash scripts/verify.sh && echo "✅ verify" || echo "❌ verify FAILED"
 
 **EXECUTE** using Bash tool:
 ```bash
-bash scripts/status.sh && echo "✅ status" || echo "❌ status FAILED"
+bash "${CLAUDE_SKILL_DIR}/scripts/status.sh" && echo "✅ status" || echo "❌ status FAILED"
 ```
 
 ---
@@ -131,7 +131,7 @@ bash scripts/status.sh && echo "✅ status" || echo "❌ status FAILED"
 
 **EXECUTE** using Bash tool:
 ```bash
-bash scripts/start.sh && echo "✅ start" || echo "❌ start FAILED"
+bash "${CLAUDE_SKILL_DIR}/scripts/start.sh" && echo "✅ start" || echo "❌ start FAILED"
 ```
 
 ---
@@ -140,7 +140,7 @@ bash scripts/start.sh && echo "✅ start" || echo "❌ start FAILED"
 
 **EXECUTE** using Bash tool:
 ```bash
-bash scripts/stop.sh && echo "✅ stop" || echo "❌ stop FAILED"
+bash "${CLAUDE_SKILL_DIR}/scripts/stop.sh" && echo "✅ stop" || echo "❌ stop FAILED"
 ```
 
 ---
@@ -151,7 +151,7 @@ Full index rebuild: stop watch → clean → rebuild → restart.
 
 **EXECUTE** using Bash tool:
 ```bash
-bash scripts/reindex.sh && echo "✅ reindex" || echo "❌ reindex FAILED"
+bash "${CLAUDE_SKILL_DIR}/scripts/reindex.sh" && echo "✅ reindex" || echo "❌ reindex FAILED"
 ```
 
 > ⏳ **Synchronous — Monitor: `tail -f .grepai/logs/grepai-watch.log`**
@@ -166,7 +166,7 @@ Re-analyze project and regenerate config with backup.
 
 **EXECUTE** using Bash tool:
 ```bash
-bash scripts/optimize.sh && echo "✅ optimize-backup" || echo "❌ optimize-backup FAILED"
+bash "${CLAUDE_SKILL_DIR}/scripts/optimize.sh" && echo "✅ optimize-backup" || echo "❌ optimize-backup FAILED"
 ```
 
 > **STOP if ❌** — check if .grepai/config.yaml exists.
@@ -189,7 +189,7 @@ bash scripts/optimize.sh && echo "✅ optimize-backup" || echo "❌ optimize-bac
 
 **EXECUTE** using Bash tool:
 ```bash
-bash scripts/reindex.sh && echo "✅ reindex" || echo "❌ reindex FAILED"
+bash "${CLAUDE_SKILL_DIR}/scripts/reindex.sh" && echo "✅ reindex" || echo "❌ reindex FAILED"
 ```
 
 ---
@@ -200,7 +200,7 @@ Update grepai CLI via Homebrew.
 
 **EXECUTE** using Bash tool:
 ```bash
-bash scripts/upgrade.sh && echo "✅ upgrade" || echo "❌ upgrade FAILED"
+bash "${CLAUDE_SKILL_DIR}/scripts/upgrade.sh" && echo "✅ upgrade" || echo "❌ upgrade FAILED"
 ```
 
 ---

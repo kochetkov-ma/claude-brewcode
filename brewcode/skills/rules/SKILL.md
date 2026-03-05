@@ -26,7 +26,7 @@ model: sonnet
 
 **EXECUTE** and **STOP:**
 ```bash
-bash scripts/rules.sh list
+bash "${CLAUDE_SKILL_DIR}/scripts/rules.sh" list
 ```
 
 ## File / Prompt / Session Mode

@@ -55,8 +55,9 @@ BC_PLUGIN_ROOT=/Users/.../.claude/plugins/cache/claude-brewcode/brewcode/2.15.1
 
 | Context | How to Use |
 |---------|------------|
-| Skills (main conversation) | `$BC_PLUGIN_ROOT` available in additionalContext |
-| Subagents | `$BC_PLUGIN_ROOT` injected into prompt |
+| Skills (own files) | `${CLAUDE_SKILL_DIR}` — string substitution in SKILL.md (DEFAULT) |
+| Skills (cross-skill refs) | `$BC_PLUGIN_ROOT` via additionalContext (RARE) |
+| Subagents (Task) | `$BC_PLUGIN_ROOT` injected into prompt by pre-task.mjs |
 | Hooks | `process.env.CLAUDE_PLUGIN_ROOT` |
 
 ---

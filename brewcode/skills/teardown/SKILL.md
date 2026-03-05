@@ -19,7 +19,7 @@ model: haiku
 
 **EXECUTE** using Bash tool — run teardown script:
 ```bash
-bash scripts/teardown.sh ARGS_HERE && echo "✅ done" || echo "❌ FAILED"
+bash "${CLAUDE_SKILL_DIR}/scripts/teardown.sh" ARGS_HERE && echo "✅ done" || echo "❌ FAILED"
 ```
 **IMPORTANT:** Replace `ARGS_HERE` with the actual value from "Skill arguments received" above. If empty, omit the argument.
 
