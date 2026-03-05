@@ -28,6 +28,20 @@ A plugin for Claude Code that executes tasks of any size through automatic state
 claude --plugin-dir ./brewcode
 ```
 
+### From marketplace
+
+```bash
+claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
+claude plugin install brewcode@claude-brewcode
+```
+
+### Already installed? Update
+
+```bash
+claude plugin marketplace update claude-brewcode
+claude plugin update brewcode@claude-brewcode
+```
+
 ### Installing dependencies
 
 ```bash
@@ -133,6 +147,6 @@ After task creation, the following appears in the project:
 
 ## Version
 
-**3.1.0** -- `brewcode:agents` skill for interactive agent creation and improvement.
+**3.3.1** -- latest release.
 
 Author: Maksim Kochetkov | License: MIT
