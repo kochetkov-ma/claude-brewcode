@@ -25,7 +25,7 @@ jobs:
       - name: Verify tag is on main
         run: |
           git fetch origin main
-          if ! git branch --contains "$GITHUB_SHA" | grep -qE '(^|\s)main$'; then
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
             echo "::error::Tag $GITHUB_REF_NAME is not on the main branch. Skipping release."
             exit 1
           fi
@@ -72,7 +72,7 @@ jobs:
           echo "$BODY" > /tmp/release-body.md
 
           # Append install instructions
-          printf '\n---\n\n## Quick Install\n\n```bash\n# 1. Add marketplace (one-time)\nclaude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode\n\n# 2. Install plugins\nclaude plugin install brewcode@claude-brewcode\nclaude plugin install brewdoc@claude-brewcode\n```\n' >> /tmp/release-body.md
+          printf '\n---\n\n## Quick Install\n\n```bash\n# 1. Add marketplace (one-time)\nclaude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode\n\n# 2. Install plugins\nclaude plugin install brewcode@claude-brewcode\nclaude plugin install brewdoc@claude-brewcode\n```\n\n## Already installed? Update\n\n```bash\nclaude plugin marketplace update claude-brewcode\nclaude plugin update brewcode@claude-brewcode\nclaude plugin update brewdoc@claude-brewcode\n```\n' >> /tmp/release-body.md
 
           echo "Release body written to /tmp/release-body.md"
           echo "--- Preview (first 20 lines) ---"
