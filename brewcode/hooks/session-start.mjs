@@ -88,33 +88,75 @@ async function fetchJson(url, timeoutMs) {
   }
 }
 
-async function checkLatestVersion(pluginRoot) {
-  try {
-    const local = JSON.parse(readFileSync(join(pluginRoot, '.claude-plugin', 'plugin.json'), 'utf8')).version;
-    if (!local) return null;
+function parseVersionFromPath(pluginRoot) {
+  const match = pluginRoot.match(/\/(\d+\.\d+\.\d+)\/?$/);
+  return match ? match[1] : null;
+}
 
-    const data = await fetchJson('https://api.github.com/repos/kochetkov-ma/claude-brewcode/releases/latest', 1000);
-    if (!data) return null;
+async function checkLatestVersion(pluginRoot, cwd, sessionId) {
+  try {
+    const local = parseVersionFromPath(pluginRoot);
+    if (!local) {
+      log('debug', '[session-start]', `Cannot parse version from path: ${pluginRoot}`, cwd, sessionId);
+      return null;
+    }
+    log('debug', '[session-start]', `Local version from path: ${local}`, cwd, sessionId);
+
+    const url = 'https://api.github.com/repos/kochetkov-ma/claude-brewcode/releases/latest';
+    log('debug', '[session-start]', `Fetching remote version from ${url}`, cwd, sessionId);
+
+    const data = await fetchJson(url, 1000);
+    if (!data) {
+      log('debug', '[session-start]', `Remote version fetch failed or empty response`, cwd, sessionId);
+      return { updateAvailable: false, local, remote: null, remoteFailed: true };
+    }
 
     const remote = (data.tag_name || '').replace(/^v/, '');
-    if (!remote) return null;
+    if (!remote) {
+      log('debug', '[session-start]', `Remote tag_name missing or empty: ${JSON.stringify(data.tag_name)}`, cwd, sessionId);
+      return { updateAvailable: false, local, remote: null, remoteFailed: true };
+    }
 
-    return { updateAvailable: isNewer(remote, local), local, remote };
-  } catch {
+    const result = { updateAvailable: isNewer(remote, local), local, remote };
+    log('debug', '[session-start]', `Version check: local=${local}, remote=${remote}, updateAvailable=${result.updateAvailable}`, cwd, sessionId);
+    return result;
+  } catch (e) {
+    log('debug', '[session-start]', `checkLatestVersion error: ${e.message}`, cwd, sessionId);
     return null;
   }
 }
 
-async function checkClaudeCodeVersion() {
+async function checkClaudeCodeVersion(cwd, sessionId) {
   try {
-    const local = (execFileSync('claude', ['-v'], { timeout: 500, encoding: 'utf8' }).match(/(\d+\.\d+\.\d+)/) || [])[1];
-    if (!local) return null;
+    let rawOutput;
+    try {
+      rawOutput = execFileSync('claude', ['-v'], { timeout: 500, encoding: 'utf8' });
+    } catch (e) {
+      log('debug', '[session-start]', `claude -v failed: ${e.message}`, cwd, sessionId);
+      return null;
+    }
 
-    const data = await fetchJson('https://registry.npmjs.org/@anthropic-ai/claude-code/latest', 1000);
-    if (!data?.version) return null;
+    const local = (rawOutput.match(/(\d+\.\d+\.\d+)/) || [])[1];
+    if (!local) {
+      log('debug', '[session-start]', `Cannot parse claude version from: ${rawOutput.trim()}`, cwd, sessionId);
+      return null;
+    }
+    log('debug', '[session-start]', `Claude Code local version: ${local}`, cwd, sessionId);
 
-    return { updateAvailable: isNewer(data.version, local), local, remote: data.version };
-  } catch {
+    const url = 'https://registry.npmjs.org/@anthropic-ai/claude-code/latest';
+    log('debug', '[session-start]', `Fetching Claude Code remote version from npm`, cwd, sessionId);
+
+    const data = await fetchJson(url, 1000);
+    if (!data?.version) {
+      log('debug', '[session-start]', `npm fetch failed or no version in response`, cwd, sessionId);
+      return null;
+    }
+
+    const result = { updateAvailable: isNewer(data.version, local), local, remote: data.version };
+    log('debug', '[session-start]', `Claude Code version check: local=${local}, remote=${data.version}, updateAvailable=${result.updateAvailable}`, cwd, sessionId);
+    return result;
+  } catch (e) {
+    log('debug', '[session-start]', `checkClaudeCodeVersion error: ${e.message}`, cwd, sessionId);
     return null;
   }
 }
@@ -153,12 +195,14 @@ async function main() {
     const versionLines = [];
     try {
       const [brewcodeResult, claudeResult] = await Promise.all([
-        pluginRoot ? checkLatestVersion(pluginRoot).catch(() => null) : Promise.resolve(null),
-        checkClaudeCodeVersion().catch(() => null)
+        pluginRoot ? checkLatestVersion(pluginRoot, cwd, session_id).catch(() => null) : Promise.resolve(null),
+        checkClaudeCodeVersion(cwd, session_id).catch(() => null)
       ]);
 
       if (brewcodeResult === null && pluginRoot) {
         versionLines.push(`check brewcode updates: https://github.com/kochetkov-ma/claude-brewcode/releases/latest`);
+      } else if (brewcodeResult?.remoteFailed) {
+        versionLines.push(`brewcode ${brewcodeResult.local} (remote check failed): https://github.com/kochetkov-ma/claude-brewcode/releases/latest`);
       } else if (brewcodeResult?.updateAvailable) {
         versionLines.push(`UPDATE brewcode ${brewcodeResult.local} → ${brewcodeResult.remote}: https://github.com/kochetkov-ma/claude-brewcode/releases/latest`);
       }
