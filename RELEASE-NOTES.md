@@ -2,6 +2,14 @@
 
 ---
 
+## v3.4.4 (2026-03-06)
+
+### brewcode
+#### Fixed
+- **Silent remote version check failure** -- no message shown when GitHub API check times out (previously showed "(remote check failed)")
+
+---
+
 ## v3.4.2 (2026-03-05)
 
 Main changes in [v3.4.0](https://github.com/kochetkov-ma/claude-brewcode/releases/tag/v3.4.0).
