@@ -201,8 +201,6 @@ async function main() {
 
       if (brewcodeResult === null && pluginRoot) {
         versionLines.push(`check brewcode updates: https://github.com/kochetkov-ma/claude-brewcode/releases/latest`);
-      } else if (brewcodeResult?.remoteFailed) {
-        versionLines.push(`brewcode ${brewcodeResult.local} (remote check failed): https://github.com/kochetkov-ma/claude-brewcode/releases/latest`);
       } else if (brewcodeResult?.updateAvailable) {
         versionLines.push(`UPDATE brewcode ${brewcodeResult.local} → ${brewcodeResult.remote}: https://github.com/kochetkov-ma/claude-brewcode/releases/latest`);
       }
