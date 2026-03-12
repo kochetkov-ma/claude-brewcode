@@ -2,6 +2,14 @@
 
 ---
 
+## v3.4.5 (2026-03-12)
+
+### brewcode
+#### Changed
+- **skill-creator agent** — added Skill Design Patterns section: Progressive Disclosure, Reference Splitting, Agents-as-References, Dynamic Context, Context Fork, Executable Bash, Skill Chaining, Background Knowledge, Pushy Description, Preloaded Skills
+
+---
+
 ## v3.4.4 (2026-03-06)
 
 ### brewcode
