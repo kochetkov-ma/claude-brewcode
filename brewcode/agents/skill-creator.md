@@ -60,8 +60,58 @@ skill-name/
 ├── references/      # OPT: detailed docs (load on demand)
 ├── examples/        # OPT: working code examples
 ├── scripts/         # OPT: executable utilities
-└── assets/          # OPT: templates, images
+├── assets/          # OPT: templates, images
+└── agents/          # OPT: prompts for subagents (convention, NOT auto-discovered)
 ```
+
+# Skill Design Patterns
+
+| Pattern | When to Use | Effect |
+|---------|-------------|--------|
+| **Progressive Disclosure** | Always — every skill | 3 loading levels: L1 name+desc (~100 words, always in context), L2 SKILL.md body (<500 lines, on trigger), L3 references/scripts/agents (on demand, unlimited). Heavy content stays unloaded until needed |
+| **Reference Splitting** | Multi-mode skill: 2+ modes, >50 lines/mode, >300 lines total | Detect mode → Read `references/{mode}.md`. Loads only the matching reference. Guard: "If not found → ERROR + STOP" |
+| **Agents-as-References** | Skill-coordinator with multi-step workflow and multiple specialized roles | Subagent prompts as `.md` files in `agents/` inside skill dir. Coordinator does NOT read them — passes file path to subagent, subagent does Read itself. **0 tokens** in coordinator context. Pattern from official Anthropic skill-creator. `agents/` is NOT a native feature — it's a convention |
+| **Dynamic Context** | Need live data before launch (git diff, PR info, env) | `` !`command` `` executes BEFORE sending to Claude. Output replaces placeholder in SKILL.md |
+| **Context Fork** | Standalone task, no conversation history needed, <4 phases | `context: fork` → isolated subagent. SKILL.md = task prompt. CLAUDE.md loaded, history — no. Warning: >5 phases — memory loss |
+| **Executable Bash** | Bash blocks must execute, not be examples | **EXECUTE** keyword + `&& echo "✅" \|\| echo "❌"` + `> STOP if ❌`. Without keyword bash blocks are treated as examples |
+| **Skill Chaining** | Skill invokes another skill | `Skill` in `allowed-tools`. `Skill(skill="name", args="...")`. Works only in main conversation |
+| **Background Knowledge** | Claude needs context, but user doesn't need a slash command | `user-invocable: false`. Description stays in context, Claude decides when to apply |
+| **Pushy Description** | LLM-invocable skills | Description includes scenarios and keywords: "Use when - X. Trigger keywords - Y." Raises activation 20% → 50-72% |
+| **Preloaded Skills** | Subagent must follow conventions/patterns | `skills: [name]` in agent frontmatter. Full skill content injected at startup. Inverse pattern to `context: fork` |
+
+## Agents-as-References Detail
+
+Pattern from official Anthropic skill-creator plugin. **NOT** a native Claude Code feature — `agents/` inside a skill dir is not auto-discovered.
+
+```
+my-skill/
+├── SKILL.md              # Coordinator
+├── agents/               # Subagent prompts (convention, NOT native)
+│   ├── researcher.md
+│   └── writer.md
+├── references/
+└── scripts/
+```
+
+**How it works:**
+
+```
+SKILL.md (coordinator):
+  → "Spawn subagent with instructions:"
+  → "Read agents/researcher.md at: ${CLAUDE_SKILL_DIR}/agents/researcher.md"
+  → Agent(general-purpose, prompt="Read agents/researcher.md ... Execute: ...")
+```
+
+Coordinator passes **file path**, not content. Subagent reads the `.md` itself and follows it as instructions.
+
+| Native agents `.claude/agents/` | "Agents" in skill `agents/` |
+|---|---|
+| Auto-discovered, visible in `/agents` | Only via Read by path |
+| Own model, tools, hooks, memory | Inherits from subagent |
+| YAML frontmatter + Markdown | Plain Markdown (prompt) |
+| Public API | Implementation detail of skill |
+
+**When to use:** skill-coordinator with 2+ roles, need context isolation between roles, prompts are implementation details (not public API).
 
 ## Progressive Disclosure
 
@@ -69,7 +119,7 @@ skill-name/
 |-------|---------|--------|
 | 1 | name + description (always loaded) | ~100 words |
 | 2 | SKILL.md body (on trigger) | <500 lines |
-| 3 | references/, scripts/ (on demand) | Unlimited |
+| 3 | references/, scripts/, agents/ (on demand) | Unlimited |
 
 ## SKILL.md Format
 
@@ -842,18 +892,6 @@ Source: [skills docs](https://code.claude.com/docs/en/skills)
 | Critical without slash | Add `disable-model-invocation: true` for critical ops |
 | Too many skills | Exceeds `SLASH_COMMAND_TOOL_CHAR_BUDGET` → some invisible |
 
-## Activation Checklist
-
-Before finalizing skill, verify:
-
-- [ ] Description has "Use when -" scenarios
-- [ ] Description has "Trigger keywords -" list
-- [ ] No summary/explanation in description (only triggers!)
-- [ ] Third-person voice ("Deploys..." not "I deploy...")
-- [ ] Single line (no multiline `|`), 150-300 chars
-- [ ] Critical operations have `disable-model-invocation: true`
-- [ ] Test: say trigger phrase → does skill load?
-
 # LLM Text Rules
 
 | Rule | Details |
@@ -916,19 +954,6 @@ Run optimization: `Skill(skill="text-optimize", args="path/to/SKILL.md")`
    User: "Use skill-name skill to do X"
    ```
    Explicit mention increases activation to ~70%.
-
-## When to Give Up on Auto-Activation
-
-| Scenario | Decision |
-|----------|----------|
-| Production deployment | `disable-model-invocation: true` |
-| Financial operations | `disable-model-invocation: true` |
-| Data deletion | `disable-model-invocation: true` |
-| Email/notifications | `disable-model-invocation: true` |
-| Code formatting | Auto OK (low risk) |
-| Documentation | Auto OK (low risk) |
-
-**Rule:** If wrong activation causes damage → don't rely on auto.
 
 # Sources
 
