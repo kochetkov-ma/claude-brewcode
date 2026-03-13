@@ -15,13 +15,27 @@ Optimizes Claude Code memory files through 4 interactive steps.
 
 ## Phase 0: Load Context
 
-1. Glob all memory files: `~/.claude/projects/**/memory/*.md`
+0. **Determine memory directory (`$MEMORY_DIR`):**
+   ```bash
+   CUSTOM_DIR=$(cat .claude/settings.json 2>/dev/null | jq -r '.autoMemoryDirectory // empty')
+   if [ -n "$CUSTOM_DIR" ]; then
+     MEMORY_DIR="$(git rev-parse --show-toplevel)/$CUSTOM_DIR"
+   else
+     MEMORY_DIR=~/.claude/projects/<hash>/memory
+   fi
+   ```
+   Read `.claude/settings.json` (if exists) → extract `autoMemoryDirectory`.
+   If set → resolve as `<git-root>/<autoMemoryDirectory>`.
+   If not set → use legacy `~/.claude/projects/<hash>/memory/` glob pattern.
+
+1. Glob all memory files: `$MEMORY_DIR/*.md` (or `~/.claude/projects/**/memory/*.md` for legacy)
 2. Read `~/.claude/CLAUDE.md` and project `CLAUDE.md` (if exists)
 3. Glob `.claude/rules/*.md` — read all project rules
 4. Read `~/.claude/rules/*.md` — read all global rules
 
 Build context map:
 ```
+memory_dir: $MEMORY_DIR
 memory_files: [paths]
 claude_md_sections: [sections]
 rules_files: [paths with content]
@@ -107,7 +121,7 @@ Compression techniques:
    - No contradictions between memory and CLAUDE.md
    - Memory files are well-formed markdown
 2. Clean broken references (Edit tool)
-3. Check for orphaned memory files (files in `~/.claude/projects/**/memory/` with no MEMORY.md reference)
+3. Check for orphaned memory files (files in `$MEMORY_DIR` with no MEMORY.md reference)
 4. Report orphaned files and ask to delete
 
 **Final Report:**
@@ -129,5 +143,5 @@ Compression techniques:
 - Step 4: Fixed X broken references, removed X orphaned files
 
 ### Final Memory Structure
-{directory listing of ~/.claude/projects/.../memory/}
+{directory listing of $MEMORY_DIR}
 ```
