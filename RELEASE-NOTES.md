@@ -2,6 +2,17 @@
 
 ---
 
+## v3.4.6 (2026-03-13)
+
+### brewdoc
+#### Changed
+- **memory skill** — support for `autoMemoryDirectory` from `.claude/settings.json` instead of hardcoded legacy path
+
+### Other
+- `.gitignore` — added `.claude/memory/`
+
+---
+
 ## v3.4.5 (2026-03-12)
 
 ### brewcode

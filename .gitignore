@@ -5,3 +5,4 @@ package-lock.json
 
 # User-specific files (not tracked)
 user/
+.claude/memory/
