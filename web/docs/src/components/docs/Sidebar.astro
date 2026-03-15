@@ -1,0 +1,56 @@
+---
+import { navigation } from '../../utils/navigation';
+
+interface Props {
+  currentSlug?: string;
+}
+
+const { currentSlug = '' } = Astro.props;
+---
+
+<nav id="sidebar-nav" class="overflow-y-auto" aria-label="Documentation navigation">
+  <ul class="menu menu-sm gap-1">
+    {navigation.map((section) => (
+      <li>
+        <h3 class="menu-title text-base-content/50 font-headline text-xs uppercase tracking-wider mt-4 first:mt-0">
+          {section.title}
+        </h3>
+        <ul>
+          {section.items.map((item) => (
+            <li>
+              <a
+                href={`/${item.slug}/`}
+                class:list={[
+                  'rounded-lg',
+                  currentSlug === item.slug
+                    ? 'active bg-primary/10 text-primary font-medium'
+                    : 'text-base-content/70 hover:text-base-content hover:bg-base-300',
+                ]}
+                aria-current={currentSlug === item.slug ? 'page' : undefined}
+              >
+                {item.title}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </li>
+    ))}
+  </ul>
+</nav>
+
+<script>
+  document.addEventListener('astro:page-load', () => {
+    const nav = document.getElementById('sidebar-nav');
+    if (!nav) return;
+
+    const saved = sessionStorage.getItem('sidebar-scroll');
+    if (saved) nav.scrollTop = parseInt(saved, 10);
+
+    if (!nav.dataset.initialized) {
+      nav.dataset.initialized = 'true';
+      nav.addEventListener('scroll', () => {
+        sessionStorage.setItem('sidebar-scroll', String(nav.scrollTop));
+      });
+    }
+  });
+</script>

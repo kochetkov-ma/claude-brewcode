@@ -1,0 +1,44 @@
+---
+import Logo from './Logo.astro';
+import Search from '../docs/Search.astro';
+import GitHubBadge from './GitHubBadge.astro';
+---
+
+<header class="bg-base-200/80 backdrop-blur-md sticky top-0 z-30 border-b border-base-300" role="banner">
+  <div class="navbar max-w-[90rem] mx-auto px-4 lg:px-8">
+    <div class="flex-1 max-w-5xl flex items-center min-w-0">
+      <div class="flex-none lg:hidden">
+        <label for="docs-drawer" class="btn btn-square btn-ghost" aria-label="Open menu">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-6 h-6 stroke-current">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+          </svg>
+        </label>
+      </div>
+      <div class="flex-1">
+        <Logo />
+      </div>
+    </div>
+
+    <div class="flex-none xl:w-56 xl:pl-8 flex items-center justify-end gap-2">
+    <!-- Search button (mobile: icon only) -->
+    <button id="search-btn-mobile" class="btn btn-ghost btn-sm btn-square sm:hidden" aria-label="Search">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="w-5 h-5 stroke-current">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+      </svg>
+    </button>
+
+    <!-- Search button (desktop: with text and shortcut) -->
+    <button id="search-btn" class="btn btn-ghost btn-sm gap-2 hidden sm:flex" aria-label="Search documentation">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="w-4 h-4 stroke-current">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+      </svg>
+      <span class="text-xs">Search</span>
+      <kbd class="kbd kbd-sm">&#8984;K</kbd>
+    </button>
+
+    <Search />
+
+    <GitHubBadge />
+  </div>
+  </div>
+</header>

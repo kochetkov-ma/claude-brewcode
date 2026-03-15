@@ -1,0 +1,11 @@
+:80 {
+    redir / /getting-started/ permanent
+
+    root * /srv
+    encode zstd gzip
+    file_server
+    handle_errors {
+        rewrite * /404.html
+        file_server
+    }
+}

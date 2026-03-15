@@ -1,0 +1,136 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-base-100 text-base-content;
+  }
+}
+
+:root {
+  --pagefind-ui-primary: oklch(var(--p));
+  --pagefind-ui-text: oklch(var(--bc));
+  --pagefind-ui-background: oklch(var(--b2));
+  --pagefind-ui-border: oklch(var(--b3));
+  --pagefind-ui-tag: oklch(var(--b3));
+  --pagefind-ui-font: Inter, system-ui, sans-serif;
+  --pagefind-ui-border-width: 1px;
+  --pagefind-ui-border-radius: 8px;
+  --pagefind-ui-scale: 1;
+}
+
+@media (max-width: 639px) {
+  :root {
+    --pagefind-ui-scale: 0.9;
+  }
+}
+
+.prose {
+  line-height: 1.85;
+  --tw-prose-body: #D6D3D1;
+  --tw-prose-headings: #D6D3D1;
+  --tw-prose-links: #EBBB40;
+  --tw-prose-bold: #D6D3D1;
+  --tw-prose-code: #EBBB40;
+  --tw-prose-pre-bg: #1b1b1f;
+  --tw-prose-pre-code: #D6D3D1;
+  --tw-prose-counters: #D6D3D1;
+  --tw-prose-bullets: #649c67;
+  --tw-prose-hr: #3D3826;
+  --tw-prose-th-borders: #4a4535;
+  --tw-prose-td-borders: #3D3826;
+}
+
+.prose a {
+  @apply no-underline hover:underline;
+}
+
+.prose code:not(pre code) {
+  @apply bg-base-300 px-1.5 py-0.5 rounded text-xs font-mono font-normal;
+}
+
+.prose code:not(pre code)::before,
+.prose code:not(pre code)::after {
+  content: none;
+}
+
+.prose pre {
+  @apply overflow-x-auto;
+  font-size: 0.8125rem;
+}
+
+.prose table {
+  @apply w-full overflow-x-auto;
+  display: table;
+}
+
+.prose img {
+  @apply rounded-lg;
+  height: auto;
+}
+
+.prose h1 {
+  color: #FAE96F;
+}
+
+.prose hr {
+  @apply my-10;
+}
+
+[data-tab-panel] h3 {
+  color: #E7E5E4;
+  @apply border-l-4 border-[#D4A85C]/60 pl-3 pt-2 mt-8 first:mt-0;
+}
+
+.prose th {
+  @apply text-left font-semibold;
+  color: #D4A85C;
+}
+
+.prose td,
+.prose th {
+  @apply px-3 py-2;
+}
+
+.prose ol {
+  @apply list-decimal pl-6;
+}
+
+.prose ul:not(.not-prose ul) {
+  @apply list-disc pl-6;
+}
+
+.alert {
+  @apply border-l-4;
+}
+
+.alert-info {
+  background-color: rgba(235, 187, 64, 0.15) !important;
+  border-left-color: #FAE96F;
+  color: #D6D3D1 !important;
+}
+
+.alert-success {
+  background-color: rgba(100, 156, 103, 0.28) !important;
+  border-left-color: #649c67;
+  color: #D6D3D1 !important;
+}
+
+.alert-warning {
+  background-color: rgba(223, 141, 3, 0.28) !important;
+  border-left-color: #DF8D03;
+  color: #D6D3D1 !important;
+}
+
+.alert-error {
+  background-color: rgba(207, 102, 121, 0.28) !important;
+  border-left-color: #cf6679;
+  color: #D6D3D1 !important;
+}
+
+.alert code {
+  background-color: rgba(255, 255, 255, 0.15) !important;
+  color: inherit !important;
+  @apply px-1.5 py-0.5 rounded text-xs font-mono;
+}

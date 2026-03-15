@@ -2,7 +2,17 @@
 runtime/dist/
 runtime/node_modules/
 package-lock.json
+!web/docs/package-lock.json
 
 # User-specific files (not tracked)
 user/
 .claude/memory/
+
+# Astro docs site
+web/docs/node_modules/
+web/docs/dist/
+web/docs/.astro/
+
+# Environment secrets
+.env
+!**/.env.example

@@ -17,7 +17,7 @@ jobs:
     permissions:
       security-events: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: semgrep/semgrep-action@v1
         with:
           config: p/javascript p/secrets

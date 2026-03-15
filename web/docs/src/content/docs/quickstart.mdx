@@ -1,0 +1,107 @@
+---
+title: "Quick Start"
+description: "Your first 15 minutes with Brewcode: setup, spec, plan, start"
+order: 3
+---
+
+import { Card, CardGrid, Callout, Steps, Badge } from '../../components/mdx';
+
+# Quick Start
+
+In 15 minutes you will go through the full Brewcode cycle: from project analysis to launching an infinite task.
+By the end you will have a specification, a plan, and a running task with automatic context handoff.
+
+<Callout type="note" title="Before you begin">
+  Make sure Claude Code and the brewcode plugin are installed.
+  If not, follow the instructions in <a href="/installation/">Installation</a>.
+</Callout>
+
+## Full workflow
+
+<Steps>
+  <li class="step step-primary">
+    <div>
+      <strong>Project setup</strong> <Badge variant="primary" text="/brewcode:setup" />
+      <p>Open Claude Code in your project root and run:</p>
+      <pre><code>/brewcode:setup</code></pre>
+      <p><strong>What happens:</strong> the skill analyzes your project structure, tech stack,
+      test frameworks, and existing agents. It generates tailored templates based on the analysis.</p>
+      <p><strong>Result:</strong></p>
+      <ul>
+        <li><code>.claude/tasks/templates/PLAN.md.template</code> -- plan template</li>
+        <li><code>.claude/tasks/templates/SPEC.md.template</code> -- specification template</li>
+        <li><code>.claude/tasks/cfg/brewcode.config.json</code> -- configuration</li>
+        <li><code>.claude/skills/brewcode-review/</code> -- tailored code review skill</li>
+      </ul>
+      <p>This step runs once per project.</p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>Creating a specification</strong> <Badge variant="primary" text="/brewcode:spec" />
+      <p>Describe the task in plain text or point to a requirements file:</p>
+      <pre><code>/brewcode:spec "Implement JWT authorization with role-based access"</code></pre>
+      <p>Or from a file:</p>
+      <pre><code>/brewcode:spec ./docs/requirements/auth.md</code></pre>
+      <p><strong>What happens:</strong> the plugin launches 5-10 research agents in parallel.
+      The agents analyze the codebase, find related code, dependencies, and patterns.
+      Then it asks clarifying questions (use the <code>-n</code> flag for autonomous mode without questions).</p>
+      <p><strong>Result:</strong> a <code>SPEC.md</code> file -- a structured specification with project context.</p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>Generating a plan</strong> <Badge variant="primary" text="/brewcode:plan" />
+      <pre><code>/brewcode:plan</code></pre>
+      <p><strong>What happens:</strong> a phased execution plan is generated from SPEC.md.
+      Each phase contains specific steps, expected artifacts, and completion criteria.</p>
+      <p><strong>Result:</strong> a <code>PLAN.md</code> file -- a plan with phases, ready for execution.</p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>Running the task</strong> <Badge variant="primary" text="/brewcode:start" />
+      <pre><code>/brewcode:start</code></pre>
+      <p><strong>What happens:</strong> Brewcode begins executing the plan phase by phase.
+      Agents work on the task, recording knowledge in KNOWLEDGE.jsonl.
+      When context reaches ~90%, the PreCompact hook fires:
+      knowledge is compressed, handoff state is written, and the session continues automatically.</p>
+      <p><strong>Result:</strong> the task runs to completion regardless of how many compaction cycles occur.
+      All artifacts are saved in `.claude/tasks/<ts>_<name>_task/artifacts/`.</p>
+    </div>
+  </li>
+</Steps>
+
+## What's next
+
+<Callout type="tip" title="After the task completes">
+  The task is done. Here is what you can do with the results:
+
+  **Code review** -- run a quorum review of the changes:
+  ```bash
+  /brewcode:standards-review
+  ```
+
+  **Extract rules** -- convert accumulated knowledge into project rules:
+  ```bash
+  /brewcode:rules
+  ```
+
+  **Prompt optimization** -- reduce tokens in prompts and agents:
+  ```bash
+  /brewcode:text-optimize
+  ```
+</Callout>
+
+## All skills
+
+<CardGrid>
+  <Card title="brewcode" icon="&#x1F3ED;" href="/brewcode/overview/">
+    15 skills for development: infinite tasks, review, semantic search,
+    skill and agent creation, prompt optimization, secrets scanning.
+  </Card>
+  <Card title="brewdoc" icon="&#x1F4D7;" href="/brewdoc/overview/">
+    4 skills for documentation: automatic sync with the codebase,
+    doc generation, memory optimization, PDF conversion.
+  </Card>
+</CardGrid>

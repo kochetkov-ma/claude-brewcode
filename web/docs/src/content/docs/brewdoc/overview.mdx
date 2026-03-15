@@ -1,0 +1,143 @@
+---
+title: "Brewdoc Overview"
+description: "Documentation plugin for Claude Code: auto-sync, memory, md-to-pdf, my-claude"
+order: 20
+---
+
+import { Card, CardGrid, Callout, Tabs, TabItem, Steps, Badge } from '../../../components/mdx';
+
+# Brewdoc Overview
+
+Brewdoc is a documentation toolkit plugin (a set of utilities for working with documents) for Claude Code.
+It keeps documentation in sync with the codebase, optimizes content for LLM consumption,
+and exports documents to ready-made formats.
+
+## Installation
+
+```bash
+claude plugin install brewdoc@claude-brewcode
+```
+
+Brewdoc ships as part of the `claude-brewcode` marketplace. If the marketplace has not been added yet:
+
+```bash
+claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
+claude plugin install brewdoc@claude-brewcode
+```
+
+## Skills (recipes)
+
+Brewdoc contains 4 skills, each handling a separate documentation task.
+
+<CardGrid>
+  <Card title="Auto-Sync" icon="sync" href="/brewdoc/auto-sync/">
+    Synchronize documentation (labels) with code.
+    Detects outdated files through INDEX, launches parallel agents for updates.
+    Supports project, global, file, and folder modes.
+  </Card>
+  <Card title="My-Claude" icon="clipboard">
+    Generate documentation about your Claude Code installation.
+    Three modes: internal (local configuration), external (hooks and context architecture),
+    research (search across forums, GitHub, marketplaces).
+  </Card>
+  <Card title="Memory" icon="brain" href="/brewdoc/memory/">
+    Interactive optimization of memory files (CLAUDE.md and MEMORY.md).
+    4 steps: remove duplicates, migrate to rules, compress, validate.
+  </Card>
+  <Card title="md-to-pdf" icon="file" href="/brewdoc/md-to-pdf/">
+    Convert Markdown to professional PDF.
+    Two engines: reportlab (lightweight) and weasyprint (full CSS support).
+    Style customization, test mode, LLM preprocessing.
+  </Card>
+</CardGrid>
+
+## Commands
+
+| Command | Purpose | Model | Arguments |
+|---------|---------|-------|-----------|
+| `/brewdoc:auto-sync` | Synchronize documentation with code | opus | `[status] \| [init <path>] \| [global] \| [path]` |
+| `/brewdoc:my-claude` | Generate documentation about Claude Code installation | opus | `[ext [context]] \| [r <query>]` |
+| `/brewdoc:memory` | Optimize memory files in 4 steps | opus | -- |
+| `/brewdoc:md-to-pdf` | Convert Markdown to PDF | sonnet | `<file.md> [--engine name] ["prompt"] \| styles \| test` |
+
+## My-Claude (details)
+
+The `/brewdoc:my-claude` skill does not have a dedicated page, so it is described here.
+It generates documentation about your Claude Code installation in `~/.claude/brewdoc/`.
+
+<Tabs>
+  <TabItem label="Internal">
+    **Default mode** (no arguments).
+
+    Analyzes local configuration:
+    - `~/.claude/CLAUDE.md` -- global instructions
+    - `~/.claude/rules/*.md` -- global rules
+    - `~/.claude/agents/*.md` -- global agents
+    - Project `CLAUDE.md` and `.claude/rules/*.md`
+    - Memory files `MEMORY.md`
+
+    Launches 3 parallel `Explore` agents for data collection and a `reviewer` for fact-checking.
+
+    ```bash
+    /brewdoc:my-claude
+    ```
+  </TabItem>
+  <TabItem label="External">
+    **`ext` mode** -- documents the hooks and context architecture of Claude Code.
+
+    Analyzes local hook files, looks for updates in official releases,
+    gathers information from code.claude.com and GitHub.
+
+    The `context` sub-mode focuses on the context injection schema (additionalContext, updatedInput).
+
+    ```bash
+    /brewdoc:my-claude ext
+    /brewdoc:my-claude ext context
+    ```
+  </TabItem>
+  <TabItem label="Research">
+    **`r` mode** -- research a specific question across multiple sources.
+
+    Splits the query into 2-5 source groups (documentation, GitHub, Reddit, forums),
+    launches parallel `general-purpose` agents, aggregates results with citation tracking.
+
+    ```bash
+    /brewdoc:my-claude r "plugin hooks PreToolUse additionalContext"
+    ```
+  </TabItem>
+</Tabs>
+
+## Architecture
+
+Brewdoc has a minimal architecture compared to Brewcode:
+
+```
+brewdoc/
+├── .claude-plugin/
+│   └── plugin.json              # Plugin manifest
+├── hooks/
+│   ├── hooks.json               # 1 hook (Pre-Task)
+│   ├── pre-task.mjs             # BD_PLUGIN_ROOT injection
+│   └── lib/utils.mjs            # I/O utilities
+├── skills/
+│   ├── auto-sync/               # Documentation sync
+│   ├── my-claude/               # Installation documentation
+│   ├── memory/                  # Memory optimization
+│   └── md-to-pdf/               # PDF conversion
+└── agents/
+    └── bd-auto-sync-processor   # File processing agent
+```
+
+The single hook `pre-task.mjs` injects the `BD_PLUGIN_ROOT` variable into subagent prompts
+so they can locate the plugin's instruction files. Skills in the main conversation use
+`${CLAUDE_SKILL_DIR}` to access their own files.
+
+<Callout type="note" title="Brewdoc vs Brewcode">
+  **Brewdoc** is a set of documentation utilities: sync, memory optimization, PDF export.
+  Each skill is self-contained and independent of the others.
+
+  **Brewcode** is a task execution engine with infinite context, 8 lifecycle hooks,
+  KNOWLEDGE.jsonl, and a session handoff mechanism.
+
+  Both plugins install from the same `claude-brewcode` marketplace but operate independently.
+</Callout>

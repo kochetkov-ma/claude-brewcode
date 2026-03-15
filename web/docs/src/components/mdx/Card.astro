@@ -1,0 +1,28 @@
+---
+interface Props {
+  title: string;
+  icon?: string;
+  href?: string;
+}
+
+const { title, icon, href } = Astro.props;
+const Tag = href ? 'a' : 'div';
+---
+
+<Tag
+  href={href}
+  class:list={[
+    'not-prose card bg-base-200 border border-base-300 p-5',
+    href && 'hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 transition-all cursor-pointer',
+  ]}
+>
+  <div class="flex items-start gap-3">
+    {icon && <span class="text-2xl shrink-0">{icon}</span>}
+    <div>
+      <h3 class="font-headline font-semibold text-base-content mb-1">{title}</h3>
+      <div class="text-sm text-base-content/70">
+        <slot />
+      </div>
+    </div>
+  </div>
+</Tag>

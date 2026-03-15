@@ -1,0 +1,8 @@
+services:
+  docs:
+    image: ghcr.io/kochetkov-ma/claude-brewcode-docs:${DOCS_TAG:-latest}
+    ports:
+      - "8080:80"
+    volumes:
+      - ./docs/deploy/docs.Caddyfile:/etc/caddy/Caddyfile:ro
+    restart: "no"

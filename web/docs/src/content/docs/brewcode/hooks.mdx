@@ -1,0 +1,284 @@
+---
+title: "Hooks"
+description: "All 8 Brewcode hooks: events, channels, logic"
+order: 13
+---
+
+import { Card, CardGrid, Callout, Tabs, TabItem, Steps, Badge } from '../../../components/mdx';
+
+# Hooks
+
+Hooks (processes) are Node.js scripts attached to Claude Code lifecycle events.
+They manage context, inject knowledge into agents, block exit when a task is still active,
+and ensure progress transfer between sessions. Brewcode registers 8 hooks in `hooks.json`.
+
+## Summary table
+
+| # | Hook | Event | Matcher | Channel | Timeout | Purpose |
+|---|------|-------|---------|---------|---------|---------|
+| 1 | forced-eval | UserPromptSubmit | -- | updatedInput | 1s | Skill activation (84%) |
+| 2 | session-start | SessionStart | -- | additionalContext | 3s | Session initialization, LATEST.md |
+| 3 | grepai-session | SessionStart | -- | systemMessage | 5s | Auto-start grepai watch |
+| 4 | pre-task | PreToolUse | Task | additionalContext, updatedInput | 5s | Knowledge injection into agents |
+| 5 | grepai-reminder | PreToolUse | Glob\|Grep | additionalContext | 1s | grepai_search reminder |
+| 6 | post-task | PostToolUse | Task | additionalContext | 5s | Session binding, 2-step protocol |
+| 7 | pre-compact | PreCompact | -- | -- | 60s | Compaction, handoff |
+| 8 | stop | Stop | -- | decision | 5s | Exit blocking, lock cleanup |
+
+## Execution flow
+
+```
+UserPromptSubmit
+  └── forced-eval.mjs          [SKILL?] Check available skills
+
+SessionStart
+  ├── session-start.mjs        Session ID, LATEST.md symlink, handoff
+  └── grepai-session.mjs       Auto-start grepai watch
+
+PreToolUse:Task
+  └── pre-task.mjs             grepai + KNOWLEDGE + phase context -> agent prompt
+
+PreToolUse:Glob|Grep
+  └── grepai-reminder.mjs     "USE grepai_search FIRST"
+
+PostToolUse:Task
+  └── post-task.mjs            Session bind, coordinator reminder
+
+PreCompact
+  └── pre-compact.mjs         Compact KNOWLEDGE, write handoff, status update
+
+Stop
+  └── stop.mjs                 Block if active task, cleanup lock
+```
+
+## I/O protocol
+
+All hooks follow a unified protocol:
+
+1. Read JSON from stdin (via `readStdin()`)
+2. Receive fields: `session_id`, `cwd`, `source` (SessionStart), `tool_input` (PreToolUse/PostToolUse)
+3. Output JSON to stdout (via `output()`)
+4. Write logs to stderr and to the file `.claude/tasks/logs/brewcode.log`
+
+**Shared utilities:**
+- `hooks/lib/utils.mjs` -- I/O, lock files, configuration, logging, task parsing
+- `hooks/lib/knowledge.mjs` -- KNOWLEDGE.jsonl read/write, compaction, handoff
+
+---
+
+## Detailed description
+
+### 1. forced-eval.mjs
+
+<Badge variant="primary" text="UserPromptSubmit" /> <Badge variant="secondary" text="updatedInput" />
+
+Boosts skill activation from ~20-50% to ~84%. Intercepts every user prompt
+and adds a reminder to check available skills.
+
+| Parameter | Value |
+|-----------|-------|
+| Event | UserPromptSubmit |
+| Channel | updatedInput (prompt) |
+| Timeout | 1000 ms |
+
+**What it does:**
+- Receives the user prompt
+- Adds a prefix: `[SKILL?] Check available skills. If one matches this request, use Skill tool before responding.`
+- Returns the modified prompt via `updatedInput`
+
+**When it fires:** On every user input, except events with an incorrect `hook_event_name`.
+
+---
+
+### 2. session-start.mjs
+
+<Badge variant="primary" text="SessionStart" /> <Badge variant="secondary" text="additionalContext" />
+
+Initializes the session, logs the session ID, and manages Plan Mode symlinks.
+
+| Parameter | Value |
+|-----------|-------|
+| Event | SessionStart |
+| Channel | additionalContext |
+| Timeout | 3000 ms |
+
+**Logic by session source:**
+
+| Source | Behavior |
+|--------|----------|
+| `init` | Log session_id |
+| `resume` | Log session_id |
+| `clear` | Create symlink LATEST.md -> newest plan |
+| `compact` + active task | Handoff instructions in additionalContext |
+
+**LATEST.md symlink:**
+1. Checks `~/.claude/plans/` for `.md` files
+2. Picks the newest one (by mtime)
+3. If the file is less than 60 seconds old -- creates `.claude/plans/LATEST.md` -> `~/.claude/plans/<newest>.md`
+4. Used by the `/brewcode:plan` skill for Plan Mode
+
+---
+
+### 3. grepai-session.mjs
+
+<Badge variant="primary" text="SessionStart" /> <Badge variant="secondary" text="systemMessage" />
+
+Automatically starts grepai watch when entering a project with a configured `.grepai/`.
+
+| Parameter | Value |
+|-----------|-------|
+| Event | SessionStart |
+| Channel | systemMessage |
+| Timeout | 5000 ms |
+
+**Logic:**
+- If `.grepai/` does not exist -- skips silently
+- If `.grepai/` exists -- checks ollama, index, watch process, MCP
+- If watch is not running -- starts it automatically
+- Reports status via `systemMessage`
+
+<Callout type="note" title="Safety">
+  This hook never blocks session start. All errors are handled as informational.
+  Platform: macOS/Linux only (Windows not supported due to missing pgrep).
+</Callout>
+
+---
+
+### 4. pre-task.mjs
+
+<Badge variant="primary" text="PreToolUse:Task" /> <Badge variant="secondary" text="additionalContext + updatedInput" />
+
+Injects context into the subagent prompt before every Task tool call.
+
+| Parameter | Value |
+|-----------|-------|
+| Event | PreToolUse |
+| Matcher | Task |
+| Channel | additionalContext, updatedInput |
+| Timeout | 5000 ms |
+
+**What it injects:**
+
+| Component | Condition | Channel |
+|-----------|-----------|---------|
+| grepai reminder | `.grepai/` exists | additionalContext |
+| ## K (knowledge) | brewcode lock active, not a system agent | updatedInput.prompt |
+| v3 phase context | `phases/` exists | updatedInput.prompt |
+| BC_PLUGIN_ROOT | Always | updatedInput.prompt |
+
+**Knowledge compression:** KNOWLEDGE.jsonl is compressed to `maxTokens` (default 500 tokens)
+via `compressKnowledge()` -- priority ❌ > ✅ > ℹ️.
+
+**System agents** (Explore, Plan, general-purpose) do not receive the `## K` injection.
+
+---
+
+### 5. grepai-reminder.mjs
+
+<Badge variant="primary" text="PreToolUse:Glob|Grep" /> <Badge variant="secondary" text="additionalContext" />
+
+Reminds to use `grepai_search` instead of direct Glob/Grep.
+
+| Parameter | Value |
+|-----------|-------|
+| Event | PreToolUse |
+| Matcher | Glob\|Grep |
+| Channel | additionalContext |
+| Timeout | 1000 ms |
+
+**Throttling:** The reminder is shown at most once per 60 seconds (via timestamp file `.grepai/.reminder-ts`).
+
+**Condition:** Only fires if `.grepai/` and `.grepai/index.gob` exist.
+
+---
+
+### 6. post-task.mjs
+
+<Badge variant="primary" text="PostToolUse:Task" /> <Badge variant="secondary" text="additionalContext" />
+
+Handles the Task tool result: binds the session and reminds about the 2-step protocol.
+
+| Parameter | Value |
+|-----------|-------|
+| Event | PostToolUse |
+| Matcher | Task |
+| Channel | additionalContext |
+| Timeout | 5000 ms |
+
+**Logic:**
+- If bc-coordinator finished -- binds session_id to the lock file
+- If a worker agent finished (developer, tester, etc.) -- reminds: "WRITE report -> CALL bc-coordinator"
+- System agents -- skipped
+
+---
+
+### 7. pre-compact.mjs
+
+<Badge variant="primary" text="PreCompact" /> <Badge variant="secondary" text="knowledge management" />
+
+Fires before Claude Code's automatic context compaction.
+Saves progress and prepares data for continuation after compact.
+
+| Parameter | Value |
+|-----------|-------|
+| Event | PreCompact |
+| Channel | -- |
+| Timeout | 60000 ms (1 minute) |
+
+**Actions:**
+1. Lock file check (brewcode active + belongs to this session)
+2. KNOWLEDGE.jsonl compaction (deduplication, trimming)
+3. Handoff entry written to KNOWLEDGE.jsonl
+4. Task status updated -> `handoff`
+
+<Callout type="warning" title="Session ID does not change">
+  Claude Code auto-compact compresses context <strong>within the same session</strong>.
+  The session_id stays identical before and after compact. The lock file is not released.
+  Status <code>handoff</code> means "re-read TASK.md", not "new session".
+</Callout>
+
+---
+
+### 8. stop.mjs
+
+<Badge variant="primary" text="Stop" /> <Badge variant="secondary" text="decision" />
+
+Controls session exit: blocks when a task is active, cleans up the lock when finished.
+
+| Parameter | Value |
+|-----------|-------|
+| Event | Stop |
+| Channel | decision |
+| Timeout | 5000 ms |
+
+**Terminal statuses:** `finished`, `cancelled`, `failed`, `error`.
+
+**Logic:**
+
+| State | Action |
+|-------|--------|
+| No lock file | Allow exit |
+| Lock older than 24 hours | Delete lock, allow exit |
+| Task in terminal status | Delete lock, allow exit |
+| Task is active | **Block exit** |
+
+<Callout type="caution" title="Exit blocking">
+  If a task is active (status not in the terminal set), the hook <strong>blocks exit</strong>
+  from Claude Code. To finish a task, use <code>/brewcode:start</code> for finalization
+  or set the task status to <code>finished</code>/<code>failed</code>/<code>cancelled</code>.
+</Callout>
+
+**Recursion protection:** If `input.stop_hook_active === true`, the hook is skipped
+to prevent an infinite loop.
+
+## Configuration
+
+Hooks read settings from `.claude/tasks/cfg/brewcode.config.json`:
+
+| Parameter | Default value | Description |
+|-----------|---------------|-------------|
+| `knowledge.maxEntries` | 100 | Maximum entries in KNOWLEDGE.jsonl |
+| `knowledge.maxTokens` | 500 | Maximum tokens in the ## K block for agents |
+| `logging.level` | `info` | Logging level (error/warn/info/debug/trace) |
+| `agents.system` | (list) | System agents excluded from knowledge injection |
+| `autoSync.intervalDays` | 7 | Auto-sync interval |

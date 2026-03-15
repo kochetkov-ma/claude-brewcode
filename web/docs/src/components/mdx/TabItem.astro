@@ -1,0 +1,21 @@
+---
+interface Props {
+  label: string;
+}
+
+const { label } = Astro.props;
+---
+
+<div data-tab-item class="tab-item">
+  <div class="tabs tabs-lifted">
+    <label class="tab tab-lifted">
+      <input type="radio" class="hidden" />
+      <span class="tab-content px-4 py-2 font-medium text-sm cursor-pointer border-b-2 border-transparent [input:checked~&]:border-primary [input:checked~&]:text-primary text-base-content/60 hover:text-base-content">
+        {label}
+      </span>
+    </label>
+  </div>
+  <div data-tab-panel class="prose max-w-none border border-base-300 border-t-0 rounded-b-lg p-6 bg-[#1b1b1f]">
+    <slot />
+  </div>
+</div>
