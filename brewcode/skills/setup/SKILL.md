@@ -1,7 +1,6 @@
 ---
 name: brewcode:setup
 description: Analyzes project structure and tech stack to generate adapted PLAN.md.template in .claude/tasks/templates/.
-disable-model-invocation: true
 argument-hint: "[universal-template-path]"
 allowed-tools: Read, Write, Glob, Grep, Bash, AskUserQuestion
 context: fork

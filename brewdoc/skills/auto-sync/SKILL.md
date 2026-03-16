@@ -1,7 +1,6 @@
 ---
 name: brewdoc:auto-sync
 description: Universal documentation sync for skills, agents, markdown. Modes - status, init, global, project, file, folder.
-disable-model-invocation: true
 user-invocable: true
 argument-hint: "[status] | [init <path>] | [global] | [path]"
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Task, WebFetch, Skill

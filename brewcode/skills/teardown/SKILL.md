@@ -1,7 +1,6 @@
 ---
 name: brewcode:teardown
 description: Removes brewcode project files (templates, configs, logs).
-disable-model-invocation: true
 argument-hint: "[--dry-run]"
 allowed-tools: Bash, Read, AskUserQuestion
 context: fork

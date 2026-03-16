@@ -1,7 +1,6 @@
 ---
 name: brewcode:spec
 description: Creates task specification through research and user interaction.
-disable-model-invocation: true
 argument-hint: "[-n] <description> | <path-to-requirements> — -n/--noask: no questions to user"
 allowed-tools: Read, Write, Glob, Grep, Bash, Task, AskUserQuestion
 model: opus

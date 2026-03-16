@@ -1,7 +1,6 @@
 ---
 name: brewcode:skills
 description: Skill management - list, improve, create skills with activation optimization.
-disable-model-invocation: true
 user-invocable: true
 argument-hint: "[list|up|create] [target] | <skill-path>"
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Task, WebSearch, WebFetch, AskUserQuestion]

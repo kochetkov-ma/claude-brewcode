@@ -1,7 +1,6 @@
 ---
 name: brewcode:plan
 description: Creates execution plan (PLAN.md) from SPEC or Plan Mode file.
-disable-model-invocation: true
 user-invocable: true
 argument-hint: "[-n] [task-dir|SPEC.md|plan-file] — -n/--noask: no questions to user"
 allowed-tools: Read, Write, Glob, Grep, Bash, Task, AskUserQuestion

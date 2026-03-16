@@ -1,7 +1,6 @@
 ---
 name: brewcode:grepai
 description: Manages grepai semantic search (setup, status, start, stop, reindex, optimize, upgrade).
-disable-model-invocation: true
 argument-hint: "[setup|status|start|stop|reindex|optimize|upgrade]"
 allowed-tools: Read, Write, Edit, Bash, Task, AskUserQuestion
 model: sonnet

@@ -1,7 +1,6 @@
 ---
 name: brewcode:agents
 description: Interactive agent creation and improvement orchestrator. Create or improve Claude Code agents.
-disable-model-invocation: true
 user-invocable: true
 argument-hint: "[create <description>|up <name|path>] | <name|path>"
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion, Skill]

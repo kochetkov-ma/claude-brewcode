@@ -1,7 +1,6 @@
 ---
 name: brewcode:install
 description: Installs brewcode prerequisites (brew, coreutils, jq, grepai).
-disable-model-invocation: true
 user-invocable: true
 argument-hint: "(no args) — interactive installer for brew, coreutils, jq, grepai"
 allowed-tools: Read, Bash, AskUserQuestion

@@ -1,7 +1,6 @@
 ---
 name: brewcode:start
 description: Executes task with infinite context and automatic handoff.
-disable-model-invocation: true
 argument-hint: "[task-path] defaults to ref in .claude/TASK.md (first line = active path)"
 allowed-tools: Read, Write, Edit, Bash, Task, Glob, Grep, Skill, AskUserQuestion
 model: opus
