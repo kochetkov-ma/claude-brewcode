@@ -6,8 +6,11 @@
 
 [![Release](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/release.yml/badge.svg)](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/release.yml)
 [![Latest Release](https://img.shields.io/github/v/release/kochetkov-ma/claude-brewcode?label=latest&color=blue)](https://github.com/kochetkov-ma/claude-brewcode/releases/latest)
+[![Documentation](https://img.shields.io/badge/Docs-doc--claude.brewcode.app-4A90D9?logo=bookstack&logoColor=white)](https://doc-claude.brewcode.app/getting-started/)
 
 **Claude Code plugin suite** - two plugins for development and documentation workflows.
+
+[**Documentation**](https://doc-claude.brewcode.app/getting-started/) &mdash; getting started guide, skills reference, and architecture overview.
 
 ## Plugin Suite
 

@@ -1,0 +1,58 @@
+<dialog id="search-dialog" class="modal" aria-label="Search documentation">
+  <div class="modal-box bg-base-200 w-11/12 max-w-2xl">
+    <div id="pagefind-search"></div>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button>close</button>
+  </form>
+</dialog>
+
+<script>
+  document.addEventListener('astro:page-load', () => {
+    const dialog = document.getElementById('search-dialog') as HTMLDialogElement | null;
+    if (!dialog) return;
+
+    const container = document.getElementById('pagefind-search');
+    if (!container) return;
+
+    if (!container.dataset.initialized) {
+      container.dataset.initialized = 'true';
+      import('@pagefind/default-ui').then(({ PagefindUI }) => {
+        new PagefindUI({
+          element: '#pagefind-search',
+          showSubResults: true,
+          showImages: false,
+          autofocus: true,
+        });
+      });
+
+      // Cmd+K / Ctrl+K keyboard shortcut
+      document.addEventListener('keydown', (e: KeyboardEvent) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+          e.preventDefault();
+          if (dialog.open) {
+            dialog.close();
+          } else {
+            dialog.showModal();
+          }
+        }
+      });
+
+      // Desktop search button
+      const searchBtn = document.getElementById('search-btn');
+      if (searchBtn) {
+        searchBtn.addEventListener('click', () => {
+          dialog.showModal();
+        });
+      }
+
+      // Mobile search button
+      const searchBtnMobile = document.getElementById('search-btn-mobile');
+      if (searchBtnMobile) {
+        searchBtnMobile.addEventListener('click', () => {
+          dialog.showModal();
+        });
+      }
+    }
+  });
+</script>

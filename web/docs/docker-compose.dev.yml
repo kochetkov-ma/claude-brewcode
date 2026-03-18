@@ -1,0 +1,11 @@
+services:
+  docs:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: brewcode-docs:dev
+    ports:
+      - "8080:80"
+    volumes:
+      - ./Caddyfile.dev:/etc/caddy/Caddyfile:ro
+    restart: "no"

@@ -1,0 +1,42 @@
+---
+import { GITHUB_URL, GITHUB_REPO } from '../../utils/github';
+---
+
+<a
+  href={GITHUB_URL}
+  target="_blank"
+  rel="noopener noreferrer"
+  class="hidden sm:inline-flex items-center gap-1.5 text-xs bg-base-300 hover:bg-base-100 transition-colors rounded-full px-3 py-1"
+  id="github-badge"
+>
+  <span id="gh-stars" class="hidden inline-flex items-center gap-1">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-3.5 h-3.5 text-brand-300">
+      <path fill-rule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.006 5.404.434c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.434 2.082-5.005Z" clip-rule="evenodd" />
+    </svg>
+    <span id="gh-stars-count" class="font-semibold"></span>
+    <span class="text-base-content/50">&middot;</span>
+  </span>
+  <span id="gh-version" class="text-base-content/60"></span>
+</a>
+
+<script define:vars={{ repo: GITHUB_REPO }}>
+  fetch(`https://api.github.com/repos/${repo}`)
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      if (!data) return;
+      if (data.stargazers_count > 0) {
+        document.getElementById('gh-stars-count').textContent = data.stargazers_count + '+';
+        document.getElementById('gh-stars').classList.remove('hidden');
+      }
+    })
+    .catch(() => {});
+
+  fetch(`https://api.github.com/repos/${repo}/releases/latest`)
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      if (data?.tag_name) {
+        document.getElementById('gh-version').textContent = data.tag_name;
+      }
+    })
+    .catch(() => {});
+</script>

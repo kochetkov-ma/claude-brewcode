@@ -1,0 +1,15 @@
+---
+interface Props {
+  variant?: 'primary' | 'secondary' | 'accent';
+  text: string;
+}
+
+const { variant = 'primary', text } = Astro.props;
+---
+
+<span class:list={[
+  'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
+  variant === 'primary' && 'bg-brand-200/20 text-brand-200 border border-brand-200/30',
+  variant === 'secondary' && 'bg-secondary/20 text-secondary border border-secondary/30',
+  variant === 'accent' && 'bg-accent/20 text-accent border border-accent/30',
+]}>{text}</span>

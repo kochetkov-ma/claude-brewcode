@@ -1,0 +1,52 @@
+---
+const groupId = `tabs-${Math.random().toString(36).slice(2, 8)}`;
+---
+
+<div class="not-prose my-6" data-tabs-group={groupId}>
+  <slot />
+</div>
+
+<script>
+  document.addEventListener('astro:page-load', () => {
+    document.querySelectorAll<HTMLElement>('[data-tabs-group]').forEach((container) => {
+      if (container.dataset.initialized) return;
+      container.dataset.initialized = 'true';
+      const groupId = container.getAttribute('data-tabs-group');
+      const radios = container.querySelectorAll<HTMLInputElement>(`input[name="${groupId}"]`);
+      const items = container.querySelectorAll('[data-tab-item]');
+
+      if (radios.length === 0) {
+        let index = 0;
+        items.forEach((item) => {
+          const radio = item.querySelector('input[type="radio"]');
+          const panel = item.querySelector('[data-tab-panel]');
+          if (radio) {
+            (radio as HTMLInputElement).name = groupId!;
+            (radio as HTMLInputElement).id = `${groupId}-${index}`;
+            if (index === 0) (radio as HTMLInputElement).checked = true;
+          }
+          if (panel) {
+            (panel as HTMLElement).setAttribute('data-tab-index', String(index));
+          }
+          index++;
+        });
+      }
+
+      function updatePanels() {
+        items.forEach((item) => {
+          const radio = item.querySelector('input[type="radio"]') as HTMLInputElement;
+          const panel = item.querySelector('[data-tab-panel]') as HTMLElement;
+          if (panel) {
+            panel.style.display = radio?.checked ? '' : 'none';
+          }
+        });
+      }
+
+      updatePanels();
+      items.forEach((item) => {
+        const radio = item.querySelector('input[type="radio"]');
+        if (radio) radio.addEventListener('change', updatePanels);
+      });
+    });
+  });
+</script>

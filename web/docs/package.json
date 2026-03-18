@@ -1,0 +1,26 @@
+{
+  "name": "brewcode-docs",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev --port 4322",
+    "build": "astro build",
+    "preview": "astro preview --port 4322",
+    "check": "astro check"
+  },
+  "dependencies": {
+    "@astrojs/mdx": "^4.0.0",
+    "@astrojs/sitemap": "^3.2.0",
+    "@astrojs/tailwind": "^6.0.0",
+    "@shikijs/transformers": "^3.0.0",
+    "@tailwindcss/typography": "^0.5.15",
+    "astro": "^5.1.0",
+    "astro-pagefind": "^1.8.5",
+    "daisyui": "^4.0.0",
+    "tailwindcss": "^3.4.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.7",
+    "typescript": "^5.9.3"
+  }
+}

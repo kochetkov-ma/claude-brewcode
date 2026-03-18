@@ -323,7 +323,15 @@ done
 | ... | ... | ... |
 | phases/FR-final-review.md | Final Review | reviewer+tester+architect |
 
-Run: /brewcode:start .claude/tasks/{TS}_{NAME}_task/PLAN.md
+## Next Step
+
+> Copy the command below first, then clear context and paste it.
+
+1. Clear context: type `/clear` and press Enter
+2. Run (paste copied command):
+\`\`\`
+/brewcode:start .claude/tasks/{TS}_{NAME}_task/PLAN.md
+\`\`\`
 ```
 
 </instructions>

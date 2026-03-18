@@ -1,0 +1,58 @@
+---
+title: "Introduction"
+description: "What is Brewcode and why you need it"
+order: 1
+---
+
+import { Card, CardGrid, Callout } from '../../components/mdx';
+
+# Introduction
+
+**Brewcode** is a plugin suite for Claude Code that makes sessions infinite.
+A regular Claude Code session loses context during compaction. Brewcode automatically saves knowledge,
+passes state between compaction cycles, and continues work without restarting.
+
+Two plugins. 19 skills. 14 agents. 9 lifecycle hooks.
+
+## Features
+
+<CardGrid>
+  <Card title="Infinite sessions" icon="&#x267E;">
+    Automatic context handoff at ~90% capacity. The same session continues working
+    without manual restart. KNOWLEDGE.jsonl survives any number of compaction cycles.
+  </Card>
+  <Card title="Quorum code review" icon="&#x1F50D;">
+    3 to 5 parallel reviewers work independently. Results are merged
+    using a quorum algorithm (2/3 agreement). Deduplication and ranking by severity.
+  </Card>
+  <Card title="Knowledge accumulation" icon="&#x1F9E0;">
+    Agents record patterns, errors, and architectural facts in KNOWLEDGE.jsonl.
+    Knowledge is injected into every agent prompt and converted into project rules.
+  </Card>
+  <Card title="Skills and agents" icon="&#x2699;">
+    19 skills and 14 specialized agents. Built-in tools for creating your own skills,
+    agents, and hooks. Prompt optimization.
+  </Card>
+</CardGrid>
+
+## Why Brewcode
+
+<Callout type="tip" title="The core problem">
+  Claude Code loses context during compaction. Multi-session tasks require manual
+  restart and re-explanation. Brewcode solves this: the PreCompact hook saves knowledge,
+  writes the handoff state, and the session continues automatically.
+  One cycle: `spec` -- `plan` -- `start` -- and the task runs to completion.
+</Callout>
+
+## What's included
+
+| Plugin | Purpose | Skills |
+|--------|---------|--------|
+| **brewcode** | Infinite tasks, codebase exploration, review, prompt optimization, skill/agent creation | 15 |
+| **brewdoc** | Documentation tools: sync, generation, memory optimization, PDF conversion | 4 |
+
+Both plugins are installed with a single command from GitHub and load automatically with every Claude Code session.
+
+## Next step
+
+Head to [Installation](/installation/) to set up Brewcode in 2 minutes.

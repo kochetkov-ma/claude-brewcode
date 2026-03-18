@@ -1,0 +1,56 @@
+---
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description = 'Documentation for brewcode and brewdoc Claude Code plugins' } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en" data-theme="brewcode">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <meta name="generator" content={Astro.generator} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="canonical" href={new URL(Astro.url.pathname, Astro.site).toString()} />
+    <link rel="sitemap" href="/sitemap-index.xml" />
+    <meta name="theme-color" content="#141414" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={new URL('/og/docs.png', Astro.site).toString()} />
+    <meta property="og:url" content={new URL(Astro.url.pathname, Astro.site).toString()} />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:site_name" content="Brewcode Docs" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={new URL('/og/docs.png', Astro.site).toString()} />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&family=Work+Sans:wght@600;700&display=swap"
+      onload="this.onload=null;this.rel='stylesheet'"
+    />
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&family=Work+Sans:wght@600;700&display=swap"
+        rel="stylesheet"
+      />
+    </noscript>
+    <title>{title} | Brewcode Docs</title>
+  </head>
+  <body>
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:p-3 focus:bg-primary focus:text-primary-content focus:rounded-lg focus:font-semibold">
+      Skip to content
+    </a>
+    <slot />
+  </body>
+</html>

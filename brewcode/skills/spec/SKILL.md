@@ -175,7 +175,14 @@ IF requirements cover >3 independent areas OR estimated complexity >12 plan phas
 - Task Dir: .claude/tasks/{TIMESTAMP}_{NAME}_task/
 
 ## Next Step
-Run: /brewcode:plan .claude/tasks/{TIMESTAMP}_{NAME}_task/
+
+> Copy the command below first, then clear context and paste it.
+
+1. Clear context: type `/clear` and press Enter
+2. Run (paste copied command):
+\`\`\`
+/brewcode:plan .claude/tasks/{TIMESTAMP}_{NAME}_task/
+\`\`\`
 ```
 
 </instructions>
