@@ -1,0 +1,126 @@
+---
+title: "Installation"
+description: "How to install the brewcode and brewdoc plugins"
+order: 2
+---
+
+import { Callout, Steps, Tabs, TabItem } from '../../components/mdx';
+
+# Installation
+
+## Requirements
+
+| Component | Version | Purpose |
+|-----------|---------|---------|
+| Claude Code CLI | latest | Plugin runtime |
+| Node.js | 20+ | Hook runtime |
+| macOS | 13+ | Supported OS |
+
+<Callout type="warning" title="macOS">
+  Brewcode supports macOS only. Linux and Windows support is planned for future releases.
+</Callout>
+
+## Installation methods
+
+<Tabs>
+  <TabItem label="Marketplace (recommended)">
+    Permanent installation through the Claude Code plugin system. Plugins load automatically with every session.
+
+    **1. Add the marketplace** -- registers the plugin source:
+
+    ```bash
+    claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
+    ```
+
+    **2. Install the plugins** -- copies both plugins to the local cache:
+
+    ```bash
+    claude plugin install brewcode@claude-brewcode
+    claude plugin install brewdoc@claude-brewcode
+    ```
+
+    **3. Restart Claude Code** -- the plugins will load automatically.
+  </TabItem>
+  <TabItem label="Local directory">
+    Run from a cloned repository. Suitable for development or one-off use.
+
+    **1. Clone the repository:**
+
+    ```bash
+    git clone https://github.com/kochetkov-ma/claude-brewcode.git
+    cd claude-brewcode
+    ```
+
+    **2. Launch with the `--plugin-dir` flag:**
+
+    ```bash
+    claude --plugin-dir ./brewcode --plugin-dir ./brewdoc
+    ```
+
+    For a single plugin:
+
+    ```bash
+    claude --plugin-dir ./brewcode
+    ```
+  </TabItem>
+</Tabs>
+
+## Verifying the installation
+
+<Steps>
+  <li class="step step-primary">
+    <div>
+      <strong>Install the plugins</strong>
+      <p>Run the commands from the section above. Restart Claude Code after installation.</p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>Check the plugin list</strong>
+      <p>In your terminal, run:</p>
+      <pre><code>claude plugin list</code></pre>
+      <p>You should see <code>brewcode</code> and <code>brewdoc</code> in the list.</p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>Install dependencies</strong>
+      <p>Inside a Claude Code session, run:</p>
+      <pre><code>/brewcode:install</code></pre>
+      <p>This skill checks for and installs brew, jq, and coreutils. Optionally installs ollama and grepai for semantic search.</p>
+    </div>
+  </li>
+</Steps>
+
+## Updating
+
+Already have Brewcode installed? Update to the latest version:
+
+```bash
+claude plugin marketplace update claude-brewcode
+claude plugin update brewcode@claude-brewcode
+claude plugin update brewdoc@claude-brewcode
+```
+
+Restart Claude Code after updating.
+
+## Troubleshooting
+
+<Callout type="warning" title="Common issues">
+  **Plugins don't appear in `claude plugin list`**
+  -- Make sure the marketplace is added: `claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode`.
+  Reinstall and restart Claude Code.
+
+  **`/brewcode:*` commands are not recognized**
+  -- Restart Claude Code after installation. Plugins only load at session start.
+
+  **`/brewcode:install` reports missing `timeout`**
+  -- The skill creates a symlink automatically. If the issue persists: `brew install coreutils`.
+
+  **`CLAUDECODE` environment variable interferes with launch**
+  -- Run `unset CLAUDECODE` before running `claude` in scripts (applies to v0.2.47+).
+</Callout>
+
+## Next step
+
+Plugins are installed. Head to [Quick Start](/quickstart/) to run your first task in 15 minutes.

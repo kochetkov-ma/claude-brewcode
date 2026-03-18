@@ -1,0 +1,51 @@
+---
+import BaseLayout from './BaseLayout.astro';
+import Header from '../components/global/Header.astro';
+import Footer from '../components/global/Footer.astro';
+import Sidebar from '../components/docs/Sidebar.astro';
+import TableOfContents from '../components/docs/TableOfContents.astro';
+
+interface Props {
+  title: string;
+  description?: string;
+  headings?: { depth: number; slug: string; text: string }[];
+  currentSlug?: string;
+}
+
+const { title, description, headings = [], currentSlug = '' } = Astro.props;
+---
+
+<BaseLayout title={title} description={description}>
+  <div class="drawer lg:drawer-open">
+    <input id="docs-drawer" type="checkbox" class="drawer-toggle" />
+
+    <!-- Main content area (Header + content + footer) -->
+    <div class="drawer-content flex flex-col min-h-screen">
+      <Header />
+
+      <main id="main-content" class="flex-1 flex justify-center" role="main">
+        <div class="flex w-full max-w-[90rem] px-4 lg:px-8">
+          <!-- Article content -->
+          <article class="prose flex-1 max-w-5xl py-8 min-w-0" data-pagefind-body>
+            <slot />
+          </article>
+
+          <!-- TOC (right side, visible xl+) -->
+          <aside class="hidden xl:block w-56 shrink-0 pl-8" aria-label="Table of contents">
+            <TableOfContents headings={headings} />
+          </aside>
+        </div>
+      </main>
+
+      <Footer />
+    </div>
+
+    <!-- Sidebar drawer -->
+    <div class="drawer-side z-40">
+      <label for="docs-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
+      <div class="w-72 min-h-full bg-base-200 p-4 pt-20 lg:pt-4">
+        <Sidebar currentSlug={currentSlug} />
+      </div>
+    </div>
+  </div>
+</BaseLayout>

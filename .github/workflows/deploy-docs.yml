@@ -1,0 +1,194 @@
+name: Deploy Docs
+
+on:
+  workflow_run:
+    workflows: ["Docs"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Docker image tag to deploy"
+        required: true
+        default: "latest"
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
+env:
+  HEALTH_URL: https://doc-claude.brewcode.app/getting-started/
+
+permissions:
+  contents: read
+  deployments: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Compute image tag
+        id: tag
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "value=${{ inputs.image_tag }}" >> "$GITHUB_OUTPUT"
+          else
+            REF="${{ github.event.workflow_run.head_branch || github.ref_name }}"
+            if [[ "$REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+              echo "value=${REF#v}" >> "$GITHUB_OUTPUT"
+            else
+              BRANCH_SAFE=$(echo "$REF" | sed 's/[^a-zA-Z0-9._-]/-/g')
+              DESC=$(git describe --tags --long --match "v*.*.*" 2>/dev/null || echo "0.0.0-0-g$(git rev-parse --short HEAD)")
+              BASE_VERSION=$(echo "$DESC" | sed 's/^v//' | sed 's/-.*//')
+              COMMITS_AFTER=$(echo "$DESC" | sed 's/.*-\([0-9]*\)-g.*/\1/')
+              echo "value=${BASE_VERSION}-${BRANCH_SAFE}-${COMMITS_AFTER}" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+      - name: Create deployment
+        id: deployment
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const deployment = await github.rest.repos.createDeployment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: context.sha,
+              environment: 'docs',
+              auto_merge: false,
+              required_contexts: [],
+              description: `Deploy docs v${{ steps.tag.outputs.value }}`,
+            });
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: deployment.data.id,
+              state: 'in_progress',
+              log_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
+            return deployment.data.id;
+
+      - name: Copy docs.Caddyfile to VPS
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "web/docs/deploy/docs.Caddyfile"
+          target: /tmp/brewcode-sync
+          strip_components: 3
+
+      - name: Deploy docs service
+        uses: appleboy/ssh-action@v1
+        env:
+          TAG: ${{ steps.tag.outputs.value }}
+          DEPLOY_PATH: ${{ secrets.VPS_DEPLOY_PATH }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          envs: TAG,DEPLOY_PATH
+          script: |
+            set -euo pipefail
+
+            cp /tmp/brewcode-sync/docs.Caddyfile "$DEPLOY_PATH/"
+            rm -rf /tmp/brewcode-sync
+
+            cd "$DEPLOY_PATH"
+
+            [ -f .env ] && cp .env .env.bak || touch .env.bak
+
+            if grep -q "^DOCS_TAG=" .env 2>/dev/null; then
+              sed -i "s/^DOCS_TAG=.*/DOCS_TAG=${TAG}/" .env
+            else
+              echo "DOCS_TAG=${TAG}" >> .env
+            fi
+
+            for attempt in $(seq 1 10); do
+              if docker compose pull docs 2>&1; then
+                break
+              fi
+              if [ "$attempt" -eq 10 ]; then
+                echo "Failed to pull image after 10 attempts"
+                exit 1
+              fi
+              echo "Image not available yet, retrying in 15s... (attempt $attempt/10)"
+              sleep 15
+            done
+
+            docker compose up -d --no-deps --force-recreate docs
+
+            for i in $(seq 1 10); do
+              if curl -sf -o /dev/null "https://doc-claude.brewcode.app/getting-started/"; then
+                echo "Health check passed (attempt $i)"
+                exit 0
+              fi
+              echo "Waiting for docs... (attempt $i/10)"
+              sleep 5
+            done
+
+            echo "Health check failed, rolling back..."
+            cp .env.bak .env
+            docker compose pull docs
+            docker compose up -d --no-deps --force-recreate docs
+            exit 1
+
+      - name: Verify from runner
+        run: |
+          for i in $(seq 1 5); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$HEALTH_URL" || true)
+            if [[ "$STATUS" == "200" ]]; then
+              echo "External health check passed (HTTP $STATUS)"
+              exit 0
+            fi
+            echo "Waiting... (attempt $i/5, HTTP $STATUS)"
+            sleep 5
+          done
+          echo "::warning::External health check did not return 200"
+
+      - name: Update deployment (success)
+        if: success()
+        uses: actions/github-script@v8
+        with:
+          script: |
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: ${{ steps.deployment.outputs.result }},
+              state: 'success',
+              environment_url: 'https://doc-claude.brewcode.app',
+              log_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
+
+      - name: Update deployment (failure)
+        if: failure()
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const id = ${{ steps.deployment.outputs.result || 0 }};
+            if (!id) return;
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: id,
+              state: 'failure',
+              log_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "### Deploy Docs" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Tag:** \`${{ steps.tag.outputs.value }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Health:** $HEALTH_URL" >> "$GITHUB_STEP_SUMMARY"

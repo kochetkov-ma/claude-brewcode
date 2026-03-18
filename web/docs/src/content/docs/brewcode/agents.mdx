@@ -1,0 +1,301 @@
+---
+title: "Agents"
+description: "All 13 Brewcode agents: models, triggers, tools"
+order: 12
+---
+
+import { Card, CardGrid, Callout, Tabs, TabItem, Steps, Badge } from '../../../components/mdx';
+
+# Agents
+
+Agents (brewers) are specialized roles defined in markdown files with frontmatter metadata.
+Each agent has its own model, toolset, and system prompt. Brewcode includes 13 agents,
+from developer to task coordinator.
+
+## Summary table
+
+| # | Agent | Model | Write tools | Purpose |
+|---|-------|-------|-------------|---------|
+| 1 | developer | opus | Read, Write, Edit, Bash | Feature implementation, bug fixes |
+| 2 | tester | sonnet | Read, Write, Edit, Bash | Test execution, failure analysis |
+| 3 | reviewer | opus | Read (read-only) | Code review, architecture, security |
+| 4 | architect | opus | Read (read-only) | Architecture analysis, patterns |
+| 5 | skill-creator | opus | Read, Write, Edit | Skill creation and improvement |
+| 6 | agent-creator | opus | Read, Write, Edit | Agent creation and improvement |
+| 7 | hook-creator | opus | Read, Write, Edit, Bash | Hook creation and debugging |
+| 8 | text-optimizer | sonnet | Read, Write, Edit | Text optimization for LLMs |
+| 9 | bash-expert | opus | Read, Write, Edit, Bash | Bash/sh script creation |
+| 10 | bc-coordinator | haiku | Read, Write, Edit, Bash | Phase and knowledge coordination |
+| 11 | bc-knowledge-manager | haiku | Read, Write | KNOWLEDGE.jsonl compaction |
+| 12 | bc-grepai-configurator | opus | Read, Write, Edit, Bash | grepai config.yaml generation |
+| 13 | bc-rules-organizer | sonnet | Read, Write, Edit, Bash | .claude/rules/ organization |
+
+<Tabs>
+  <TabItem label="Implementation">
+
+  ### developer
+
+  <Badge variant="primary" text="opus" />
+
+  Full-stack developer: implements features, writes code, fixes bugs.
+
+  | Parameter | Value |
+  |-----------|-------|
+  | Tools | Read, Write, Edit, Glob, Grep, Bash, Task, NotebookEdit, WebFetch, WebSearch |
+  | Write access | Full |
+  | Triggers | Implement features, fix bugs, write code |
+
+  **Before starting work:**
+  1. Reads rules: `.claude/rules/*-best-practice.md`, `.claude/rules/*-avoid.md`
+  2. Checks `CLAUDE.md` for stack, patterns, commands
+  3. Detects stack from build files
+
+  **Verification:** Build (no tests) -> Lint/Format -> Unit tests -> report.
+
+  ---
+
+  ### tester
+
+  <Badge variant="secondary" text="sonnet" />
+
+  SDET/QA -- runs tests, analyzes results, debugs flaky tests.
+
+  | Parameter | Value |
+  |-----------|-------|
+  | Tools | Read, Write, Edit, Glob, Grep, Bash, Task |
+  | Responsibilities | Test execution, failure analysis, flaky debugging, run configuration |
+  | Out of scope | Fixing production code (-> developer), major test rewrites |
+
+  Supports: Jest, pytest, JUnit 5, Go testing, and other frameworks.
+  Automatically detects the test stack from configuration files.
+
+  ---
+
+  ### architect
+
+  <Badge variant="primary" text="opus" />
+
+  System architect -- analysis, patterns, trade-offs, scaling.
+
+  | Parameter | Value |
+  |-----------|-------|
+  | Tools | Read, Glob, Grep, Bash, WebFetch, WebSearch |
+  | Access | **Read-only** (Write and Edit are prohibited) |
+  | Triggers | Review architecture, design service, performance limits, scaling strategy |
+
+  **Expertise:** Layered, Clean/Hexagonal, Microservices, Event-Driven, CQRS.
+
+  Searches for existing solutions via `grepai_search` before analysis.
+
+  </TabItem>
+  <TabItem label="Review">
+
+  ### reviewer
+
+  <Badge variant="primary" text="opus" />
+
+  Architect-reviewer -- architecture, quality, security, performance.
+
+  | Parameter | Value |
+  |-----------|-------|
+  | Tools | Read, Glob, Grep, Bash, Task |
+  | Access | **Read-only** (Write and Edit prohibited via disallowedTools) |
+  | Delegation | Code -> developer, Tests -> tester |
+
+  **Principle:** Reuse over reinvention -- apply existing patterns,
+  reject duplicated functionality. New abstractions require justification.
+
+  **Review areas:**
+  - **Architecture:** Layered, Clean/Hexagonal, Microservices, Event-Driven, CQRS
+  - **Quality:** Correctness, Performance, Security, Maintainability, Testability, Scalability
+
+  Always searches for analogues via `grepai_search` before review.
+
+  </TabItem>
+  <TabItem label="Creation">
+
+  ### skill-creator
+
+  <Badge variant="primary" text="opus" />
+
+  Creates and improves Claude Code skills following official Anthropic best practices.
+
+  | Parameter | Value |
+  |-----------|-------|
+  | Tools | Read, Write, Edit, Glob, Grep, Task, Skill, AskUserQuestion |
+  | Triggers | "Create a skill", "improve skill", invocation issues |
+
+  **Creation process:** 6-Step Creation Process with a 1500-2000 word budget,
+  Reference Splitting Strategy, description optimization for 84% activation rate.
+
+  ---
+
+  ### agent-creator
+
+  <Badge variant="primary" text="opus" />
+
+  Creates and improves Claude Code agents following Anthropic best practices.
+
+  | Parameter | Value |
+  |-----------|-------|
+  | Tools | Read, Write, Edit, Glob, Grep, Task, Skill, WebFetch, WebSearch, AskUserQuestion |
+  | Triggers | "Create agent", "improve agent", agent triggering issues |
+
+  **Process:** Agent Architect Process -- parallel codebase analysis,
+  System Prompt Patterns, Reference-Aware Skills.
+
+  ---
+
+  ### hook-creator
+
+  <Badge variant="primary" text="opus" />
+
+  Creates and debugs Claude Code hooks (bash/JS lifecycle event handlers).
+
+  | Parameter | Value |
+  |-----------|-------|
+  | Tools | Read, Write, Edit, Glob, Grep, Bash, WebFetch, WebSearch |
+  | Triggers | "Create PreToolUse hook", "hook doesn't work", hook debugging |
+
+  **Expertise:** 10 Hook Patterns, Advanced Techniques, Multi-Stage hooks.
+  Works with the hooks.json JSON schema and message routing.
+
+  </TabItem>
+  <TabItem label="Optimization">
+
+  ### text-optimizer
+
+  <Badge variant="secondary" text="sonnet" />
+
+  Optimizes text and documentation for efficient LLM token consumption.
+
+  | Parameter | Value |
+  |-----------|-------|
+  | Tools | Read, Write, Edit, Glob, Grep, WebFetch |
+  | Skills | text-optimize |
+  | Triggers | "Optimize prompt", "reduce tokens", "compress text", "too verbose" |
+
+  Applies 30+ optimization rules across 5 categories: Claude behavior, Token efficiency,
+  Structure, Reference integrity, Perception.
+
+  ---
+
+  ### bash-expert
+
+  <Badge variant="primary" text="opus" />
+
+  Creates production-quality bash/sh scripts for macOS/Linux.
+
+  | Parameter | Value |
+  |-----------|-------|
+  | Tools | Read, Write, Edit, Glob, Grep, Bash, WebFetch |
+  | Triggers | "Create script", "bash script", "shell script", "install script" |
+
+  **Patterns:** strict mode (`set -euo pipefail`), error handling, argument parsing,
+  output formatting. Expert in Claude Code plugin scripts.
+
+  </TabItem>
+  <TabItem label="Coordination">
+
+  ### bc-coordinator
+
+  <Badge variant="secondary" text="haiku" />
+
+  Internal task coordinator -- a lightweight agent for phase management.
+
+  | Parameter | Value |
+  |-----------|-------|
+  | Tools | Read, Write, Edit, Bash |
+  | Mode | acceptEdits |
+
+  **Responsibilities:**
+  - Task initialization (lock, status)
+  - Phase Status table updates in PLAN.md
+  - Reading agent reports from disk
+  - Knowledge extraction -> KNOWLEDGE.jsonl (3-10 entries per phase)
+  - Auto-compaction when approaching the limit
+  - FINAL.md generation upon completion
+
+  <Callout type="note" title="2-step protocol">
+    After each agent, the manager first WRITES the report to artifacts/,
+    then CALLS bc-coordinator for knowledge extraction. This order is mandatory.
+  </Callout>
+
+  ---
+
+  ### bc-knowledge-manager
+
+  <Badge variant="secondary" text="haiku" />
+
+  Knowledge manager -- maintains quality and size of KNOWLEDGE.jsonl.
+
+  | Parameter | Value |
+  |-----------|-------|
+  | Tools | Read, Write |
+  | Mode | acceptEdits |
+
+  **Operations:**
+
+  | Action | When |
+  |--------|------|
+  | Deduplication | Coordinator reports duplicates |
+  | Merging similar entries | Before handoff |
+  | Prioritization | When limit is exceeded |
+  | Trimming | When limit is exceeded |
+  | Validation | Any operation |
+
+  **Priority:** ❌ (avoid) > ✅ (best practice) > ℹ️ (info).
+
+  ---
+
+  ### bc-grepai-configurator
+
+  <Badge variant="primary" text="opus" />
+
+  grepai configuration specialist through deep project analysis.
+
+  | Parameter | Value |
+  |-----------|-------|
+  | Tools | Read, Write, Edit, Bash, WebFetch, Glob, Grep |
+  | Mode | acceptEdits |
+
+  **Environment:** Ollama (bge-m3:1024), GOB storage, Java/Kotlin/JS/TS.
+  Analyzes project structure and generates an optimal `.grepai/config.yaml`.
+
+  ---
+
+  ### bc-rules-organizer
+
+  <Badge variant="secondary" text="sonnet" />
+
+  Rules organizer -- creates and optimizes `.claude/rules/*.md`.
+
+  | Parameter | Value |
+  |-----------|-------|
+  | Tools | Read, Write, Edit, Glob, Grep, Bash, Skill |
+  | Skills | text-optimize |
+  | Mode | acceptEdits |
+  | Triggers | "Organize rules", "path-specific rules", "extract rules" |
+
+  **Capabilities:**
+  - Path-specific rules via `paths:` frontmatter
+  - Rule extraction from CLAUDE.md, documentation, code
+  - Lazy documentation -- references instead of inline content
+  - LLM optimization via text-optimize
+
+  </TabItem>
+</Tabs>
+
+## Models and cost
+
+| Model | Agents | When to use |
+|-------|--------|-------------|
+| **opus** | developer, reviewer, architect, skill-creator, agent-creator, hook-creator, bash-expert, bc-grepai-configurator | Complex tasks, deep analysis, code generation |
+| **sonnet** | tester, text-optimizer, bc-rules-organizer | Balanced tasks, review, optimization |
+| **haiku** | bc-coordinator, bc-knowledge-manager | Lightweight operations: statuses, knowledge extraction, compaction |
+
+<Callout type="tip" title="Automatic selection">
+  Agents are selected automatically based on the Phase Registry in PLAN.md.
+  The <code>/brewcode:start</code> skill reads agent assignments from the phase table
+  and launches the corresponding agents via Task API.
+</Callout>

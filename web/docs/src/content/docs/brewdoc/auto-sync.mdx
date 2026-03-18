@@ -1,0 +1,157 @@
+---
+title: "Auto-Sync"
+description: "Synchronize documentation with the codebase -- detection, update, report"
+order: 21
+---
+
+import { Callout, Tabs, TabItem, Steps, Badge } from '../../../components/mdx';
+
+# Auto-Sync
+
+Auto-Sync is a documentation synchronization skill (label control) for keeping docs in sync with code.
+It detects outdated markdown files through INDEX, delegates updates to parallel agents,
+and produces a change report.
+
+## How it works
+
+Auto-Sync tracks documents through an **INDEX** -- a JSONL file containing a record
+for each synchronized file: path, type, last sync date, and protocol.
+
+Documents are marked for tracking via **frontmatter tags** in the file header.
+The skill periodically checks which files are stale and updates their content
+based on the current state of the code.
+
+```bash
+/brewdoc:auto-sync
+```
+
+## Modes
+
+| Mode | Invocation | Scope |
+|------|-----------|-------|
+| STATUS | `/brewdoc:auto-sync status` | INDEX status report |
+| INIT | `/brewdoc:auto-sync init <path>` | Mark a file for tracking |
+| PROJECT | `/brewdoc:auto-sync` | All `.md` in `.claude/**` |
+| GLOBAL | `/brewdoc:auto-sync global` | All `.md` in `~/.claude/**` |
+| FILE | `/brewdoc:auto-sync path/to/file.md` | Single file |
+| FOLDER | `/brewdoc:auto-sync path/to/folder` | All `.md` in the folder |
+
+## Sync workflow
+
+<Steps>
+  <li class="step step-primary">
+    <div>
+      <strong>Discovery</strong> <Badge variant="primary" text="Phase 1" />
+      <p>
+        The <code>discover.sh</code> script finds all markdown files in the scope
+        and determines their type: skill, agent, rule, config, or doc.
+        Files without frontmatter tags are added automatically.
+      </p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>Queue</strong> <Badge variant="primary" text="Phase 2" />
+      <p>
+        The <code>index-ops.sh stale</code> script identifies stale entries based on the configured interval
+        (<code>INTERVAL_DAYS</code> from config). New and stale files enter the processing queue.
+      </p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>Processing</strong> <Badge variant="primary" text="Phase 3" />
+      <p>
+        For each file in the queue, a <code>bd-auto-sync-processor</code> agent (sonnet model) is launched.
+        Agents run in parallel (up to <code>PARALLEL_AGENTS</code> concurrently).
+        Each agent analyzes the code, compares it with the current document content, and applies changes.
+      </p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>Report</strong> <Badge variant="primary" text="Phase 4" />
+      <p>
+        Updated files receive a new date in the INDEX. Failed files remain stale for a retry.
+        A summary report is generated: discovered, queued, updated, unchanged, errors.
+      </p>
+    </div>
+  </li>
+</Steps>
+
+## INDEX format
+
+INDEX is stored in JSONL format. Project: `.claude/auto-sync/INDEX.jsonl`. Global: `~/.claude/auto-sync/INDEX.jsonl`.
+
+```jsonl
+{"p":"skills/auth/SKILL.md","t":"skill","u":"2026-02-05","pr":"default"}
+```
+
+| Field | Description |
+|-------|-------------|
+| `p` | Relative path from the scope root |
+| `t` | Type: `skill` / `agent` / `rule` / `config` / `doc` |
+| `u` | Last sync date (YYYY-MM-DD) |
+| `pr` | Protocol: `default` or `override` |
+
+## Frontmatter tags
+
+To include a file in synchronization, add 3 required fields to the frontmatter:
+
+```yaml
+---
+auto-sync: enabled
+auto-sync-date: 2026-02-05
+auto-sync-type: skill
+---
+```
+
+### Override protocol
+
+For fine-tuning synchronization of a specific file, use the optional `auto-sync-override` block:
+
+```yaml
+---
+auto-sync: enabled
+auto-sync-date: 2026-02-05
+auto-sync-type: doc
+auto-sync-override: |
+  sources: src/**/*.ts, .claude/agents/*.md
+  focus: API endpoints, error handling
+  preserve: ## User Notes, ## Custom Config
+---
+```
+
+| Parameter | Purpose |
+|-----------|---------|
+| `sources` | Glob patterns for code files to analyze |
+| `focus` | What to pay attention to during analysis |
+| `preserve` | Document sections to leave untouched during updates |
+
+When `auto-sync-override` is present, the INDEX entry gets `pr: "override"`.
+
+## Managed directories
+
+By default, `rules/`, `agents/`, and `skills/` are excluded from automatic scanning.
+To sync them, specify the path explicitly:
+
+```bash
+/brewdoc:auto-sync .claude/rules
+/brewdoc:auto-sync .claude/agents
+/brewdoc:auto-sync .claude/skills
+```
+
+<Callout type="tip" title="Tips">
+  - Start with `/brewdoc:auto-sync status` to see the current INDEX state and find untracked files.
+  - Use `/brewdoc:auto-sync init <path>` to add individual files -- the skill will automatically determine the type and add frontmatter.
+  - For documents with non-standard structure, use `auto-sync-override` with the `preserve` parameter to protect custom sections from being overwritten.
+</Callout>
+
+## Error handling
+
+| Error | Action |
+|-------|--------|
+| INDEX corrupted | Rebuild via discover |
+| File not found | Skip, add to errors |
+| Agent timeout | One retry attempt |
+| No marked files | Report "0 found" |

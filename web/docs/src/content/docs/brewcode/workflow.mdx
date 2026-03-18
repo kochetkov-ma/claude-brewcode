@@ -1,0 +1,372 @@
+---
+title: "Workflow"
+description: "Detailed walkthrough of the full Brewcode cycle: spec, plan, start, handoff, knowledge"
+order: 14
+---
+
+import { Card, CardGrid, Callout, Tabs, TabItem, Steps, Badge } from '../../../components/mdx';
+
+# Workflow
+
+This section is a deep dive into Brewcode mechanics. Unlike the [Quick Start](/quickstart/),
+here every stage is covered: from specification creation to automatic context handoff
+between sessions and artifact structure.
+
+## High-level overview
+
+```
+/brewcode:spec              /brewcode:plan              /brewcode:start
+      |                           |                           |
+  Research                   Phase generation            Execution loop
+  (5-10 agents)              + quorum review             + handoff
+      |                           |                           |
+      v                           v                           v
+   SPEC.md                     PLAN.md                   artifacts/
+                              phases/                   KNOWLEDGE.jsonl
+                           KNOWLEDGE.jsonl                FINAL.md
+```
+
+## Phase 1: Specification (/brewcode:spec)
+
+The `spec` skill creates a structured task specification through parallel codebase research
+and user dialog.
+
+<Steps>
+  <li class="step step-primary">
+    <div>
+      <strong>Template check</strong>
+      <p>The skill checks for <code>SPEC.md.template</code> in <code>.claude/tasks/templates/</code>.
+      If the template is missing, you need to run <code>/brewcode:setup</code> first.</p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>Input parsing</strong>
+      <p>Determines the input type: text description, path to a requirements file, or reference
+      from <code>.claude/TASK.md</code>. Supports the <code>-n</code> (--noask) flag for autonomous mode.</p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>Clarifying questions</strong>
+      <p>3-5 questions via AskUserQuestion across categories: Scope (what's in/out),
+      Constraints (libraries, compatibility), Edge cases (concurrency, null inputs).
+      Skipped in <code>-n</code> mode.</p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>Split check</strong>
+      <p>If requirements cover more than 3 independent areas or are estimated at 12+ phases --
+      a split is suggested. If accepted, only the first part gets a SPEC.</p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>Parallel research</strong>
+      <p>5-10 agents are launched <strong>in a single message</strong> (in parallel).
+      Each agent analyzes its area: Controllers, Services, DB/Repos, Tests, Config, Docs.</p>
+      <pre><code class="language-text">Task(subagent_type="developer", prompt="Analyze services...")<br/>Task(subagent_type="tester", prompt="Analyze test patterns...")<br/>Task(subagent_type="reviewer", prompt="Analyze quality...")<br/>Task(subagent_type="Explore", prompt="Find library docs...")</code></pre>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>Consolidation into SPEC.md</strong>
+      <p>Agent results are merged with deduplication. A task directory
+      <code>.claude/tasks/&#123;TS&#125;_&#123;NAME&#125;_task/</code> and SPEC.md file are created from the template.</p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>Specification review</strong>
+      <p>Reviewer checks: completeness, consistency, feasibility, risks.
+      Fix loop: continues while critical/major issues exist (max 3 iterations).</p>
+    </div>
+  </li>
+</Steps>
+
+## Phase 2: Planning (/brewcode:plan)
+
+The `plan` skill transforms a specification into a detailed plan with phases, dependencies, and completion criteria.
+
+### Input sources
+
+| Input | Action |
+|-------|--------|
+| Path to `{TS}_{NAME}_task/` | Reads SPEC.md from the directory |
+| Path to `SPEC.md` | Derives task dir from parent folder |
+| `.claude/plans/LATEST.md` | Plan Mode: parses the plan, creates task dir, skips SPEC |
+| Empty | Checks `.claude/TASK.md` for the latest task |
+
+### Phase generation
+
+Each task is split into 5-12 phases. For every execution phase, a verification phase is created,
+and a Final Review is added at the end.
+
+```
+phases/
+├── 1-create-entity.md          # Execution: developer
+├── 1V-verify-entity.md         # Verification: reviewer
+├── 2-implement-service.md      # Execution: developer
+├── 2V-verify-service.md        # Verification: tester
+├── 3-add-api-endpoint.md       # Execution: developer
+├── 3V-verify-endpoint.md       # Verification: reviewer
+└── FR-final-review.md          # Final Review: reviewer+tester+architect
+```
+
+### Phase Registry in PLAN.md
+
+PLAN.md uses a "slim" v3 format -- only the Phase Registry table and metadata.
+Phase details are in separate `phases/*.md` files.
+
+### Plan quorum review
+
+3 agents review the plan in parallel. The 2/3 rule: an issue is accepted only if confirmed
+by 2+ agents.
+
+| Agent | Review focus |
+|-------|-------------|
+| Plan | Phase Registry, completeness, phase quality |
+| architect | Architectural decisions, dependencies, technologies |
+| reviewer | Completion criteria, granularity, risks |
+
+After the quorum -- requirements tracing: every SPEC item must have a phase in the plan.
+
+## Phase 3: Execution (/brewcode:start)
+
+The `start` skill is the heart of Brewcode. It executes tasks with infinite context via Task API,
+the 2-step protocol, and automatic handoff during compaction.
+
+### Initialization
+
+```
+/brewcode:start -> Load PLAN.md -> Parse Phase Registry
+   |
+   v
+TaskCreate for each phase -> TaskUpdate dependencies
+   |
+   v
+Execution Loop: TaskList() -> pending+unblocked -> spawn agents
+```
+
+1. **Resolve path** -- from arguments or `.claude/TASK.md`
+2. **Initialize** -- bc-coordinator creates the lock, sets status to `in progress`
+3. **Load context** -- reads PLAN.md and KNOWLEDGE.jsonl (NOT phases/ -- those are for agents)
+4. **Create tasks** -- TaskCreate for each Phase Registry row
+5. **Set dependencies** -- TaskUpdate with addBlockedBy
+
+### Execution loop
+
+```
+LOOP while pending tasks remain:
+  1. TaskList() -> find pending + unblocked
+  2. Same group -> launch in PARALLEL (one message)
+  3. For each:
+     a. TaskUpdate(status="in_progress")
+     b. Task(agent) -> execution
+     c. WRITE report -> artifacts/{P}-{N}{T}/{AGENT}_output.md
+     d. CALL bc-coordinator (knowledge extraction)
+     e. TaskUpdate(status="completed")
+  4. On verification failure -> fix loop (max 3 iterations)
+  5. Deadlock check
+```
+
+### 2-step protocol
+
+After every agent, two steps must be performed:
+
+<Steps>
+  <li class="step step-primary">
+    <div>
+      <strong>WRITE report</strong>
+      <p>The manager writes the agent report to <code>artifacts/&#123;P&#125;-&#123;N&#125;&#123;T&#125;/&#123;AGENT&#125;_output.md</code></p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>CALL bc-coordinator</strong>
+      <p>The coordinator reads the report from disk, extracts 3-10 knowledge entries into KNOWLEDGE.jsonl,
+      and updates the Phase Status table.</p>
+    </div>
+  </li>
+</Steps>
+
+### Failure escalation
+
+| After | Action |
+|-------|--------|
+| 1st failure | R&D task: root cause investigation |
+| 2nd failure | Split the phase into sub-phases |
+| 3rd failure | Model switch, reassignment, AskUserQuestion |
+
+When escalation is exhausted -- cascading failure: dependent tasks are marked failed,
+independent ones continue execution.
+
+## Handoff mechanism (context transfer)
+
+Handoff is Brewcode's key mechanism that provides "infinite context". When Claude Code
+approaches the context window limit, automatic compaction kicks in.
+
+### What happens during compaction
+
+<Steps>
+  <li class="step step-primary">
+    <div>
+      <strong>PreCompact hook fires</strong>
+      <p>The <code>pre-compact.mjs</code> hook detects the approaching limit.</p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>KNOWLEDGE.jsonl compaction</strong>
+      <p>Deduplication, stale entry removal, trimming to maxEntries.</p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>Handoff entry written</strong>
+      <p>A special entry in KNOWLEDGE.jsonl captures the current state: which phase was executing,
+      what was done, what remains.</p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>Status update</strong>
+      <p>Task status is set to <code>handoff</code>.</p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>Claude Code compresses context</strong>
+      <p>Auto-compact summarizes the context. Session ID <strong>does not change</strong>.</p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>Continuation after compact</strong>
+      <p>The <code>/brewcode:start</code> skill calls <code>TaskList()</code>,
+      reads PLAN.md, and continues from the current phase. The lock file remains valid.</p>
+    </div>
+  </li>
+</Steps>
+
+<Callout type="tip" title="Compaction buffer">
+  The 33K token (16.5%) buffer is hardcoded: 20K (output cap) + 13K (safety).
+  The <code>CLAUDE_AUTOCOMPACT_PCT_OVERRIDE</code> variable can only shift the trigger threshold
+  earlier (values below 93%), but cannot increase the buffer.
+</Callout>
+
+## KNOWLEDGE.jsonl
+
+KNOWLEDGE.jsonl is the knowledge accumulation file that is transferred between sessions
+and injected into agent prompts.
+
+### Entry format
+
+```json
+{"ts":"2026-01-26T14:00:00","t":"❌","txt":"Avoid SELECT * in JOOQ queries","src":"reviewer"}
+{"ts":"2026-01-26T14:05:00","t":"✅","txt":"Use .fetchInto(Record.class) for type-safe queries","src":"developer"}
+{"ts":"2026-01-26T14:10:00","t":"ℹ️","txt":"Project uses PostgreSQL 15 with JOOQ 3.19","src":"architect"}
+```
+
+### Entry types
+
+| Type | Priority | Purpose |
+|------|----------|---------|
+| ❌ | Highest | Anti-patterns, mistakes, things to avoid |
+| ✅ | Medium | Best practices, proven approaches |
+| ℹ️ | Lowest | Facts, architectural decisions, context |
+
+### Knowledge lifecycle
+
+```
+Agent completes work
+      |
+      v
+bc-coordinator reads report -> extracts 3-10 entries
+      |
+      v
+KNOWLEDGE.jsonl accumulates entries
+      |
+      v
+pre-compact hook: deduplicate + trim to maxEntries
+      |
+      v
+pre-task hook: compress to maxTokens -> inject as ## K block
+      |
+      v
+/brewcode:rules -> sync to .claude/rules/ (avoid.md, best-practice.md)
+      |
+      v
+bc-knowledge-manager: prune-rules (remove synced entries)
+```
+
+<Callout type="note" title="What is NOT recorded in KNOWLEDGE">
+  Only genuinely useful, reusable findings go into knowledge.
+  Phase notes, progress updates, obvious facts are not recorded.
+  Only anti-patterns (❌), best practices (✅), and architectural facts (ℹ️).
+</Callout>
+
+### Injection into agents
+
+The `pre-task.mjs` hook compresses KNOWLEDGE.jsonl to `maxTokens` (default 500)
+and adds a `## K` block to the agent prompt:
+
+```
+## K
+❌ Avoid SELECT * in JOOQ queries
+✅ Use .fetchInto(Record.class)
+ℹ️ PostgreSQL 15 + JOOQ 3.19
+```
+
+System agents (Explore, Plan, general-purpose) do not receive the `## K` block.
+
+## Artifact structure
+
+```
+.claude/tasks/{TS}_{NAME}_task/
+├── PLAN.md                          # Phase Registry + metadata
+├── SPEC.md                          # Task specification
+├── KNOWLEDGE.jsonl                  # Accumulated knowledge
+├── phases/                          # Phase files (for agents)
+│   ├── 1-create-entity.md
+│   ├── 1V-verify-entity.md
+│   ├── 1F1-fix-entity.md           # Fix phase (created dynamically)
+│   └── FR-final-review.md
+├── artifacts/                       # Agent reports
+│   ├── FINAL.md                     # Final report
+│   ├── 1-1e/                        # Phase 1, Execution, iter 1
+│   │   └── developer_output.md
+│   ├── 1-1v/                        # Phase 1, Verification, iter 1
+│   │   └── reviewer_output.md
+│   └── FR-1e/                       # Final Review
+│       └── reviewer_output.md
+├── backup/                          # Backups
+└── .lock                            # Session lock file
+```
+
+### Artifact naming
+
+| Pattern | Meaning |
+|---------|---------|
+| `{P}-{N}{T}` | Phase - Iteration + Type |
+| `1-1e` | Phase 1, iteration 1, execution |
+| `1-1v` | Phase 1, iteration 1, verification |
+| `1-2e` | Phase 1, iteration 2, execution (after fix) |
+| `FR-1e` | Final Review, iteration 1, execution |
+
+## Finalization
+
+After all phases are complete:
+
+1. **bc-coordinator** generates `FINAL.md` with consolidated results
+2. Task status -> `finished`
+3. `/brewcode:rules` extracts knowledge into `.claude/rules/`
+4. `bc-knowledge-manager` removes synced entries from KNOWLEDGE.jsonl
+5. Lock file is deleted on the next Stop
+
+<Callout type="tip" title="After completion">
+  Use <code>/brewcode:convention</code> to extract reference classes and patterns
+  from the written code. Results go into <code>.claude/convention/</code>
+  and help future tasks follow established conventions.
+</Callout>
