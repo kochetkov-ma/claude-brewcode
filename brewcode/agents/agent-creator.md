@@ -34,6 +34,8 @@ Creates Claude Code agents following Anthropic best practices.
 name: agent-name                    # REQ: lowercase letters/hyphens
 description: "Short description"    # REQ: trigger terms, when to delegate
 model: sonnet                       # OPT: sonnet|opus|haiku|inherit (default: inherit)
+effort: high                        # OPT: low|medium|high|auto (v2.1.78+, plugin agents only)
+maxTurns: 20                        # OPT: max turns before stopping (v2.1.78+, plugin agents only)
 tools: Read, Glob, Grep             # OPT: comma-separated (omit = inherit all)
 disallowedTools: Write, Edit        # OPT: deny specific tools
 permissionMode: default             # OPT: see Permission Modes table
@@ -67,6 +69,8 @@ Detailed instructions for the agent...
 | Field | Values | Default | Description |
 |-------|--------|---------|-------------|
 | `model` | `sonnet`, `opus`, `haiku`, `inherit` | `inherit` | Model selection |
+| `effort` | `low`, `medium`, `high`, `auto` | `inherit` | Override effort level (v2.1.78+, plugin agents only) |
+| `maxTurns` | integer | unlimited | Max conversation turns before stopping (v2.1.78+, plugin agents only) |
 | `tools` | comma-separated | All inherited | Allowed tools |
 | `disallowedTools` | comma-separated | None | Denied tools (removed from inherited) |
 | `permissionMode` | see below | `default` | Permission handling |

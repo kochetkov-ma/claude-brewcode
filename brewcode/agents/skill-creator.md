@@ -180,6 +180,7 @@ Imperative form: "Do X" (not "You should do X").
 |-------|--------|-------------|
 | `allowed-tools` | Read, Grep, Glob, Bash(git:*), Skill | Restrict available tools |
 | `model` | opus, sonnet, haiku | Override model |
+| `effort` | low, medium, high, auto | Override effort level for this skill invocation (v2.1.80+) |
 | `context` | fork | Run in isolated subagent |
 | `agent` | Explore, Plan, general-purpose, custom | Subagent type (with `context: fork`) |
 | `hooks` | object | Hooks scoped to skill lifecycle |
