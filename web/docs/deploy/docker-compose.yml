@@ -1,0 +1,17 @@
+services:
+  docs:
+    image: ghcr.io/kochetkov-ma/claude-brewcode-docs:${DOCS_TAG:-latest}
+    container_name: brewcode-docs
+    restart: unless-stopped
+    expose:
+      - "80"
+    volumes:
+      - ./docs.Caddyfile:/etc/caddy/Caddyfile:ro
+    networks:
+      - vps-proxy
+    mem_limit: 256m
+    cpus: 0.5
+
+networks:
+  vps-proxy:
+    external: true

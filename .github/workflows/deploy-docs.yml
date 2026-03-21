@@ -12,7 +12,7 @@ on:
         default: "latest"
 
 concurrency:
-  group: deploy-vps
+  group: deploy-docs
   cancel-in-progress: false
 
 env:
@@ -26,7 +26,6 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     if: >
-      github.event_name == 'push' ||
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
 
@@ -78,33 +77,37 @@ jobs:
             });
             return deployment.data.id;
 
-      - name: Copy docs.Caddyfile to VPS
+      - name: Copy deploy files to VPS
         uses: appleboy/scp-action@v1
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          source: "web/docs/deploy/docs.Caddyfile"
-          target: /tmp/brewcode-sync
+          source: "web/docs/deploy/docker-compose.yml,web/docs/deploy/docs.Caddyfile,web/docs/deploy/brewcode-docs.caddy"
+          target: /tmp/brewcode-docs-sync
           strip_components: 3
 
       - name: Deploy docs service
         uses: appleboy/ssh-action@v1
         env:
           TAG: ${{ steps.tag.outputs.value }}
-          DEPLOY_PATH: ${{ secrets.VPS_DEPLOY_PATH }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          envs: TAG,DEPLOY_PATH
+          envs: TAG
           script: |
             set -euo pipefail
 
-            cp /tmp/brewcode-sync/docs.Caddyfile "$DEPLOY_PATH/"
-            rm -rf /tmp/brewcode-sync
+            DOCS_PATH=/opt/brewcode-docs
+            CADDY_SITES=/opt/caddy/sites
 
-            cd "$DEPLOY_PATH"
+            cp /tmp/brewcode-docs-sync/docker-compose.yml "$DOCS_PATH/"
+            cp /tmp/brewcode-docs-sync/docs.Caddyfile "$DOCS_PATH/"
+            cp /tmp/brewcode-docs-sync/brewcode-docs.caddy "$CADDY_SITES/"
+            rm -rf /tmp/brewcode-docs-sync
+
+            cd "$DOCS_PATH"
 
             [ -f .env ] && cp .env .env.bak || touch .env.bak
 
@@ -127,6 +130,8 @@ jobs:
             done
 
             docker compose up -d --no-deps --force-recreate docs
+
+            docker exec caddy caddy reload --config /etc/caddy/Caddyfile
 
             for i in $(seq 1 10); do
               if curl -sf -o /dev/null "https://doc-claude.brewcode.app/getting-started/"; then
