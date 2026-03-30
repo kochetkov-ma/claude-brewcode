@@ -2,6 +2,14 @@
 
 ---
 
+## v3.4.8 (2026-03-30)
+
+### brewcode
+#### Added
+- **permission-guard hook** -- PermissionRequest hook auto-allows Edit/Write for `.claude/` subdirectories (tasks, reports, rules, skills, scripts, agents, hooks, private, convention, settings). Workaround for `.claude` directory write protection in newer Claude Code versions
+
+---
+
 ## v3.4.6 (2026-03-13)
 
 ### brewdoc
