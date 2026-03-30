@@ -11,6 +11,12 @@ if [ -z "$FILE_PATH" ]; then
   exit 0
 fi
 
+# Skip global ~/.claude/ — only auto-allow project .claude/
+if [[ "$FILE_PATH" == "$HOME/.claude/"* ]]; then
+  echo '{}'
+  exit 0
+fi
+
 case "$FILE_PATH" in
   */.claude/tasks/*|*/.claude/tasks)
     echo "$ALLOW" ;;
