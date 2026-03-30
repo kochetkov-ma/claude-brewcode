@@ -6,7 +6,8 @@
 
 ### brewcode
 #### Added
-- **permission-guard hook** -- PermissionRequest hook auto-allows Edit/Write for `.claude/` subdirectories (tasks, reports, rules, skills, scripts, agents, hooks, private, convention, settings). Workaround for `.claude` directory write protection in newer Claude Code versions
+- **permission-guard hook** -- PermissionRequest hook auto-allows Edit/Write for project `.claude/` subdirectories (tasks, reports, rules, skills, scripts, agents, hooks, private, convention, plans, settings, TASK.md, CLAUDE.md). Global `~/.claude/` excluded
+- **forced-eval hook** -- added `[DELEGATE]` manager reminder to UserPromptSubmit alongside existing skill check
 
 ---
 

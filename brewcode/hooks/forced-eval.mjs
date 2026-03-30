@@ -37,7 +37,8 @@ function output(response) {
 
 // --- Skill evaluation reminder ---
 
-const SKILL_CHECK_REMINDER = `[SKILL?] Check available skills. If one matches this request, use Skill tool before responding.`;
+const SKILL_CHECK_REMINDER = `[SKILL?] Check available skills. If one matches, use Skill tool before responding.
+[DELEGATE] You are a MANAGER. Delegate implementation to sub-agents via Task tool. Never implement directly.`;
 
 // --- Main ---
 
