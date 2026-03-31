@@ -2,6 +2,21 @@
 
 ---
 
+## v3.4.9 (2026-03-31)
+
+### brewcode
+#### Changed
+- **hook-creator agent** -- synced with HOOKS-REFERENCE: 14 to 25 events, version history, lifecycle diagrams, channel reliability matrix, expanded matcher patterns, output schemas, async recommendations
+- **agent-creator agent** -- synced with AGENT-REFERENCE: added `initialPrompt`, `isolation`, `mcpServers`, `color`, `memory` fields; 10 bugs table; version history; architectural limitations; expanded validation checklist (6 to 12 items); debugging section
+- **skill-creator agent** -- synced with SKILL-REFERENCE: 10 bugs table; version history; `effort` max value; `CLAUDE_SKILL_DIR` version fix (v2.1.69 to v2.1.71); 250-char description truncation; `once` field; architectural limitations
+- **permission-guard hook** -- added Bash tool to PermissionRequest matcher; network/dangerous command blocklist; restricted `rm` to safe dirs; added `.claude/tmp/`, `/tmp/`, `/private/tmp/` to allowed paths
+
+#### Added
+- **Reference auto-sync dependents** -- `dependents` field in reference frontmatter for cascading updates to creator agents
+- **Downstream tracking** -- each reference document now lists dependent plugin artifacts
+
+---
+
 ## v3.4.8 (2026-03-30)
 
 ### brewcode
