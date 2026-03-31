@@ -27,11 +27,16 @@ tools: Read, Write, Edit, Glob, Grep, Task, Skill, AskUserQuestion
 
 Creates Claude Code skills following official Anthropic best practices.
 
+## Communication Style
+
+Adapt to user's technical level. Non-technical users: explain "frontmatter", "YAML", "assertion".
+Experienced developers: skip explanations, move faster. Watch for context cues.
+
 > Skills replace Commands. `.claude/commands/review.md` and `.claude/skills/review/SKILL.md` both create `/review`. Commands are legacy — create Skills.
 
 ## ⚠️ Activation Reality
 
-**Skills auto-activate only 20-50% of the time.** This is a known issue ([#10768](https://github.com/anthropics/claude-code/issues/10768), [#15136](https://github.com/anthropics/claude-code/issues/15136)).
+**Skills auto-activate only 20-50% of the time.** Known issue ([#10768](https://github.com/anthropics/claude-code/issues/10768), [#15136](https://github.com/anthropics/claude-code/issues/15136) — both closed NOT PLANNED).
 
 | Method | Activation Rate |
 |--------|-----------------|
@@ -145,7 +150,7 @@ Imperative form: "Do X" (not "You should do X").
 | Field | Limits | Description |
 |-------|--------|-------------|
 | `name` | 64 chars | lowercase/numbers/hyphens. Uses directory name if omitted |
-| `description` | 150-300 chars, ONE line, no colons | What + when. Claude uses for auto-invocation |
+| `description` | 150-250 chars optimal (truncated at 250 since v2.1.84), ALWAYS single line, no colons | What + when. Claude uses for auto-invocation. Front-load keywords |
 
 > ⚠️ Avoid `:` in description — breaks YAML frontmatter parsing. Use ` - ` or rewrite.
 
@@ -180,10 +185,11 @@ Imperative form: "Do X" (not "You should do X").
 |-------|--------|-------------|
 | `allowed-tools` | Read, Grep, Glob, Bash(git:*), Skill | Restrict available tools |
 | `model` | opus, sonnet, haiku | Override model |
-| `effort` | low, medium, high, auto | Override effort level for this skill invocation (v2.1.80+) |
+| `effort` | low, medium, high, max, auto | Override effort level for this skill invocation (v2.1.80+) |
 | `context` | fork | Run in isolated subagent |
 | `agent` | Explore, Plan, general-purpose, custom | Subagent type (with `context: fork`) |
 | `hooks` | object | Hooks scoped to skill lifecycle |
+| `once` | true/false | Hook fires once per session (default: false) |
 
 # Context Modes
 
@@ -323,17 +329,20 @@ Summarize this PR...
 | `$ARGUMENTS` | All arguments passed when invoking the skill | — |
 | `$0`, `$1`, `$2` | Specific argument by 0-based index | — |
 | `${CLAUDE_SESSION_ID}` | Current session ID | — |
-| `${CLAUDE_SKILL_DIR}` | Absolute path to directory containing the skill's SKILL.md | v2.1.69 |
+| `${CLAUDE_SKILL_DIR}` | Absolute path to directory containing the skill's SKILL.md | v2.1.71 |
 
 > `${CLAUDE_SKILL_DIR}` — string substitution (NOT env var). Replaced in SKILL.md before sending to model. Plugin skills → skill subdirectory, not plugin root. NOT available in hooks/agents — use `$CLAUDE_PLUGIN_ROOT` there.
 
+> `$ARGUMENTS` inside ` ```bash ``` ` blocks is a **shell variable** (empty/undefined), NOT Claude Code substitution. Claude Code replaces `$ARGUMENTS` only in markdown text. Fix: put `$ARGUMENTS` in text, use placeholder in bash block.
+
 # Invocation Matrix
 
-| Configuration | User | Claude | In Context |
-|---------------|------|--------|------------|
-| (default) | Yes | Yes | Description always, full on invoke |
-| `disable-model-invocation: true` | Yes | No | Not loaded |
-| `user-invocable: false` | No | Yes | Description always |
+| Configuration | User | Claude | In Context | Budget |
+|---------------|------|--------|------------|--------|
+| (default) | Yes | Yes | Description always, full on invoke | description in budget |
+| `disable-model-invocation: true` | Yes | No | Not loaded | 0 — not loaded |
+| `user-invocable: false` | No | Yes | Description always | description in budget |
+| Both `true` + `false` | No | No | Inaccessible (useless config) | 0 |
 
 # Skill Tool
 
@@ -377,6 +386,17 @@ hooks:
       hooks:
         - type: command
           command: "./scripts/validate.sh"
+```
+
+Supported events: `PreToolUse` (blockable), `PostToolUse` (non-blockable), `Stop` (blockable).
+
+**`once: true`** — skill fires once per session. Use for initialization tasks:
+```yaml
+---
+name: session-init
+once: true
+description: Initializes project environment on first use
+---
 ```
 
 # Description Optimization
@@ -434,7 +454,7 @@ description: |
   Trigger keywords: presentation, slides, deck, pptx.
   Triggers - "create presentation", "make slides".
 
-# ✅ GOOD — single line, 150-300 chars, triggers only
+# ✅ GOOD — single line, 150-300 chars, what + triggers
 description: Creates conventional git commits with proper format. Use when - committing, saving work. Trigger keywords - commit, git commit, save changes.
 ```
 
@@ -446,7 +466,7 @@ description: [One sentence - what it does]. Use when - [scenarios]. Trigger keyw
 
 **Rules:**
 - ONE line, no `|` multiline
-- 150-300 chars total
+- 150-250 chars optimal (truncated at 250 since v2.1.84). ALWAYS single line — no multiline YAML `|`
 - Drop `Triggers -` phrases section (saves ~80 chars)
 - Use ` - ` separator instead of `:`
 
@@ -466,6 +486,22 @@ export SLASH_COMMAND_TOOL_CHAR_BUDGET=50000  # 50K chars
 
 **Symptom:** Some skills never activate → they're beyond budget, Claude doesn't see them.
 
+### Trigger Eval Queries (optional but recommended)
+
+Generate 10 realistic eval queries to test description effectiveness:
+
+| Type | Count | Description |
+|---|---|---|
+| Should trigger | 5 | Queries where skill SHOULD activate. Different phrasings, casual/formal mix |
+| Should NOT trigger | 5 | Near-misses — share keywords but need different tool. NOT obviously irrelevant |
+
+Key: should-not-trigger queries must be TRICKY, not obvious. "Write fibonacci" as negative for PDF skill is useless.
+
+Present to user via AskUserQuestion: "Here are 10 test queries for your skill's description. Look right?"
+
+Then mentally evaluate: "Given this description, would Claude trigger for each query?"
+If too many misses → iterate description 2-3 times.
+
 # Body Style
 
 Use imperative form:
@@ -474,6 +510,18 @@ Use imperative form:
 |---------|--------|
 | Configure authentication before making requests. | You should configure authentication. |
 | Validate input data using the provided schema. | You need to validate input data. |
+
+## Writing Approach
+
+Explain WHY behind instructions, not just WHAT. LLMs respond better to reasoning than rigid rules.
+
+| Rigid | Theory of mind |
+|---|---|
+| ALWAYS validate input before processing | Validate input first — unvalidated data causes silent corruption in downstream steps |
+| NEVER use print() for logging | Use the project logger instead of print() — print output disappears in production and pollutes test output |
+
+If writing ALWAYS/NEVER in all caps — reframe as consequence explanation.
+Help the model understand context so it can generalize beyond specific examples.
 
 # Content Organization
 
@@ -545,7 +593,7 @@ Follow the loaded reference document.
 
 # Resource Path Resolution
 
-Use `${CLAUDE_SKILL_DIR}` (v2.1.69+) for bash commands, relative paths for Read instructions.
+Use `${CLAUDE_SKILL_DIR}` (v2.1.71+) for bash commands, relative paths for Read instructions.
 
 ```yaml
 # Bash — use ${CLAUDE_SKILL_DIR} (CWD is project root, not skill dir)
@@ -601,6 +649,17 @@ Priority: Enterprise > Personal > Project. Plugin skills: `/plugin-name:skill-na
 
 ## Step 1: Understand
 
+### Check Conversation History
+
+If the current conversation already contains a workflow the user wants to capture
+(e.g., "turn this into a skill"), extract from history first:
+- Tools used and their sequence
+- Steps taken and corrections made
+- Input/output formats observed
+- Edge cases encountered
+
+Confirm extracted workflow with user before proceeding.
+
 Identify usage patterns: direct examples from user, validated scenarios, real-world use cases. If invoked directly from main conversation (foreground) — use AskUserQuestion for max 2-3 clarifying questions: functionality, usage examples, trigger phrases. If invocation type was provided in prompt — skip questions.
 
 ### Invocation Type (CRITICAL)
@@ -655,13 +714,18 @@ Write SKILL.md: frontmatter → overview (1-2 sentences) → instructions (imper
 
 ## Step 5: Validate
 
+**EXECUTE** validate-skill.sh:
+```bash
+bash "$BC_PLUGIN_ROOT/skills/skills/scripts/validate-skill.sh" path/to/skill && echo "✅" || echo "❌"
+```
+
 ### Structure Checklist
 
 | Check | Details |
 |-------|---------|
 | Structure | SKILL.md with valid YAML frontmatter |
 | `name` | ≤64 chars, lowercase-hyphens |
-| `description` | 150-300 chars, ONE line, third-person, no colons |
+| `description` | 150-250 chars optimal (truncated at 250 since v2.1.84), single line, third-person, no colons |
 | Body | <500 lines, imperative form |
 | `context` | `fork` if standalone |
 | `agent` | Appropriate type |
@@ -675,10 +739,10 @@ Write SKILL.md: frontmatter → overview (1-2 sentences) → instructions (imper
 
 | Check | Details |
 |-------|---------|
-| Triggers only | Description has NO summary, only "Use when -", "Trigger keywords -" |
+| What + When + Keywords | Description includes what skill does + scenarios + trigger keywords |
 | Keywords present | `Trigger keywords - deploy, staging, prod, release` |
 | Scenarios present | `Use when - deploying, releasing, shipping` |
-| One line | No multiline `|`, single YAML line, 150-300 chars |
+| One line | No multiline `|`, single YAML line, 150-250 chars (truncated at 250 since v2.1.84) |
 | Third-person | "Deploys..." not "I deploy..." or "Use this to..." |
 | Critical → slash | `disable-model-invocation: true` for risky operations |
 | Test activation | Say trigger phrase → skill loads? |
@@ -701,9 +765,48 @@ Expected: Always works (100%)
 
 If Test 1 fails but Test 3 works → optimize description or use `disable-model-invocation: true`.
 
+## Step 5.5: Quick Eval
+
+After validation, test the skill with realistic prompts.
+
+### Generate Test Prompts
+
+Create 3-5 realistic test prompts — things a real user would actually say.
+Include detail: file paths, personal context, casual speech, abbreviations.
+
+| Too abstract | Realistic |
+|---|---|
+| "Format this data" | "ok I have this csv in ~/Downloads/sales_q4.csv and need to add a profit margin column" |
+| "Create a chart" | "can you make a bar chart from the monthly revenue data in report.xlsx" |
+
+### Run Test Prompts
+
+For each prompt, spawn a subagent with the skill and evaluate output:
+- Did the skill trigger? (for LLM-invocable skills)
+- Did the output match expectations?
+- Were there unnecessary steps or wasted work?
+
+### Evaluate Results Inline
+
+After runs complete, analyze:
+1. Which prompts triggered the skill, which didn't
+2. Output quality — does it match what user would expect
+3. Common patterns — did all runs write similar scripts? → bundle in scripts/
+4. Wasted effort — did the skill cause unnecessary work? → trim instructions
+
+If issues found → fix and re-run. If all good → proceed to Step 6.
+
 ## Step 6: Iterate
 
 Refine based on real-world usage feedback. Check Claude's thinking to verify triggering.
+
+### Detect Repeated Work
+
+After running test cases, read transcripts. If all runs independently wrote similar helper scripts
+or took the same multi-step approach — that's a signal to bundle it:
+1. Write the common script once in `scripts/`
+2. Reference from SKILL.md
+3. Saves every future invocation from reinventing the wheel
 
 # Common Patterns
 
@@ -879,12 +982,15 @@ Source: [skills docs](https://code.claude.com/docs/en/skills)
 | Using `$BC_PLUGIN_ROOT` for own scripts in SKILL.md | Use `${CLAUDE_SKILL_DIR}` — it's the skill's own directory |
 | Treating `${CLAUDE_SKILL_DIR}` as env var | It's string substitution in SKILL.md only, not available in hooks/agents |
 | `skill.md` (lowercase) | Must be `SKILL.md` (uppercase) — lowercase silently ignored ([#17417](https://github.com/anthropics/claude-code/issues/17417)) |
+| `context: fork` with 5+ phases | Memory loss, forgets task — use inline + external state |
+| Reserved skill names ("code", "debug", "bug-fix") | Skill won't load — avoid reserved words |
+| Description >250 chars | Truncated since v2.1.84 — front-load keywords |
 
 ## Activation Mistakes (cause 20% rate)
 
 | Mistake | Fix |
 |---------|-----|
-| Summary in description | **Only triggers!** No "Creates X with Y features" |
+| Summary WITHOUT triggers | Include BOTH what skill does AND trigger keywords |
 | No trigger keywords | Add `Trigger keywords: deploy, staging, prod` |
 | No "Use when:" | Add `Use when: deploying, releasing, shipping` |
 | Vague description | Specific: "Deploy to k8s" not "Helps with deployment" |
@@ -892,6 +998,7 @@ Source: [skills docs](https://code.claude.com/docs/en/skills)
 | Second-person body | Imperative: "Do X" not "You should do X" |
 | Critical without slash | Add `disable-model-invocation: true` for critical ops |
 | Too many skills | Exceeds `SLASH_COMMAND_TOOL_CHAR_BUDGET` → some invisible |
+| Plugin skills: `disable-model-invocation` ignored | Plugin skills always in context ([#22345](https://github.com/anthropics/claude-code/issues/22345)) — copy to `.claude/skills/` if parity needed |
 
 # LLM Text Rules
 
@@ -956,6 +1063,50 @@ Run optimization: `Skill(skill="text-optimize", args="path/to/SKILL.md")`
    ```
    Explicit mention increases activation to ~70%.
 
+# Known Bugs
+
+| # | Bug | Impact | Status | Workaround |
+|---|-----|--------|--------|------------|
+| [#13919](https://github.com/anthropics/claude-code/issues/13919) | Skill context lost after compaction ~55K tokens | Instructions forgotten in long sessions | Open | Re-invoke `/name` or external state |
+| [#39686](https://github.com/anthropics/claude-code/issues/39686) | claude.ai skills silently injected (~6000 tokens) | 37% of skill budget consumed; no opt-out | Open | No workaround |
+| [#22345](https://github.com/anthropics/claude-code/issues/22345) | Plugin skills ignore `disable-model-invocation` | Plugin skills always in context (~4400 tokens) | Open | No workaround |
+| [#17688](https://github.com/anthropics/claude-code/issues/17688) | Skill-scoped hooks don't fire in plugins | Hooks from SKILL.md frontmatter not working for plugin skills | Open | Use plugin hooks.json |
+| [#35641](https://github.com/anthropics/claude-code/issues/35641) | `/reload-plugins` doesn't load skills from new plugins | Skills emitter not called on reload | Open | Restart session |
+| [#33080](https://github.com/anthropics/claude-code/issues/33080) | Built-in skills silently conflict with custom | Built-in takes priority; no notification | Open | Namespace prefix (e.g., `my-`) |
+| [#36031](https://github.com/anthropics/claude-code/issues/36031) | User-level skills visible in autocomplete but not invoked in Desktop | SKILL.md not loaded; CLI works | Open | Use CLI |
+| [#17417](https://github.com/anthropics/claude-code/issues/17417) | `skill.md` (lowercase) silently ignored | Skill not discovered | Open | Use `SKILL.md` (uppercase) |
+| [#10768](https://github.com/anthropics/claude-code/issues/10768) | Auto-activation unreliable (20-50%) | Skill not invoked on relevant request | Closed (NOT PLANNED) | Optimize description (50-72%) or `/name` (100%) |
+| [#15136](https://github.com/anthropics/claude-code/issues/15136) | Claude fails to invoke skill despite instructions | Skill skipped; 6+ duplicates | Closed (NOT PLANNED) | `/name` for 100% |
+
+## Architectural Limitations
+
+| Limitation | Details | Workaround |
+|------------|---------|------------|
+| Subagents cannot spawn subagents | `AgentTool` excluded from `SubAgentLoop` | Chain from main conversation |
+| `context: fork` degrades at 5+ phases | Task structure memory loss | Inline + hooks/external state |
+| Description budget | 2% of context or 16K chars | `SLASH_COMMAND_TOOL_CHAR_BUDGET` env var |
+| `${CLAUDE_SKILL_DIR}` only in SKILL.md | Not available in hooks/agents | `$CLAUDE_PLUGIN_ROOT` in hooks/agents |
+| Compaction erases skill context | CLAUDE.md re-read, skills are not | Re-invoke `/name`, external state |
+| Description <=250 chars | Truncated since v2.1.84 | Front-load keywords |
+| Plugin skills lack parity | `disable-model-invocation` and skill-scoped hooks don't work | Copy skill to `.claude/skills/` |
+| Reserved names | Skills named "code", "debug", "bug-fix" don't load | Avoid reserved words |
+
+## Version History (Skill Features)
+
+| Version | Date | Changes |
+|---------|------|---------|
+| v2.1.85 | 2026-03-26 | `if` field for hooks; fix: skill hooks fired twice |
+| v2.1.84 | 2026-03-26 | Descriptions <=250 chars; alphabetical `/skills` sort |
+| v2.1.80 | 2026-03-19 | `effort` frontmatter for skills (`low`/`medium`/`high`/`max`) |
+| v2.1.76 | 2026-03-14 | `/effort` slash command |
+| v2.1.74 | 2026-03-12 | Fix: `ask` rules bypassed via `allowed-tools` |
+| v2.1.73 | 2026-03-11 | Fix: deadlock on mass skill file changes |
+| v2.1.72 | 2026-03-10 | Fix: built-in slash commands hidden; skill hooks dropped |
+| v2.1.71 | 2026-03-07 | `${CLAUDE_SKILL_DIR}` variable; `/claude-api` skill |
+| v2.1.69 | 2026-03-05 | Security: nested discovery skips gitignored dirs; fix: `:` in description |
+| v2.1.47 | 2026-02-18 | Fix: crash on numeric `name`/`description`; fix: `argument-hint` YAML sequence |
+| v2.1.45 | 2026-02-17 | Plugin skills available immediately after install (no restart) |
+
 # Sources
 
 - [Claude Code Skills](https://code.claude.com/docs/en/skills) — official docs, string substitutions table
@@ -963,9 +1114,5 @@ Run optimization: `Skill(skill="text-optimize", args="path/to/SKILL.md")`
 - [Skill Best Practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices)
 - [agentskills.io](https://agentskills.io)
 - [Skills Don't Auto-Activate](https://scottspence.com/posts/claude-code-skills-dont-auto-activate)
-- [GitHub #10768 - Intent Matching Broken](https://github.com/anthropics/claude-code/issues/10768) (OPEN)
 - [GitHub #12541 - Feature request for $SKILL_DIR](https://github.com/anthropics/claude-code/issues/12541) — led to `${CLAUDE_SKILL_DIR}`
-- [GitHub #13919 - Context loss](https://github.com/anthropics/claude-code/issues/13919) (OPEN)
-- [GitHub #15136 - Fails to invoke](https://github.com/anthropics/claude-code/issues/15136) (OPEN)
-- [GitHub #17417 - SKILL.md case-sensitivity](https://github.com/anthropics/claude-code/issues/17417) — lowercase silently ignored
 - [GitHub #9716 - Not aware of skills](https://github.com/anthropics/claude-code/issues/9716) (OPEN)

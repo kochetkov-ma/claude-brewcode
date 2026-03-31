@@ -157,6 +157,11 @@ Task tool:
 
 Research topic, then create skill via skill-creator.
 
+### Step 0: Check Conversation History
+
+Before research — check if current conversation already contains workflow to capture.
+If yes: extract tools, steps, corrections, I/O formats. Skip research, go directly to Step 4 with extracted context.
+
 ### Step 1: Determine Input Type
 
 | Input | Action |
@@ -242,6 +247,19 @@ Task tool:
     - Include README.md
   model: opus
 ```
+
+### Step 5: Post-Create Eval (optional)
+
+Ask user via AskUserQuestion:
+```
+header: "Quick Eval"
+question: "Run 3 test prompts to verify the skill works?"
+options:
+  - label: "Yes — test it"
+  - label: "No — I'll test manually"
+```
+
+If yes: spawn skill-creator agent with eval prompt targeting the new skill.
 
 </instructions>
 

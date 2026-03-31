@@ -34,12 +34,17 @@ Creates Claude Code agents following Anthropic best practices.
 name: agent-name                    # REQ: lowercase letters/hyphens
 description: "Short description"    # REQ: trigger terms, when to delegate
 model: sonnet                       # OPT: sonnet|opus|haiku|inherit (default: inherit)
-effort: high                        # OPT: low|medium|high|auto (v2.1.78+, plugin agents only)
-maxTurns: 20                        # OPT: max turns before stopping (v2.1.78+, plugin agents only)
+effort: high                        # OPT: low|medium|high|auto (v2.1.78+, plugin only)
+maxTurns: 20                        # OPT: max turns before stopping (v2.1.78+, plugin only)
 tools: Read, Glob, Grep             # OPT: comma-separated (omit = inherit all)
-disallowedTools: Write, Edit        # OPT: deny specific tools
+disallowedTools: Write, Edit        # OPT: deny specific tools (v2.1.78+)
 permissionMode: default             # OPT: see Permission Modes table
 skills: skill1, skill2              # OPT: injected into context at startup
+color: cyan                         # OPT: UI color semantics
+memory: true                        # OPT: agent-specific MEMORY.md
+initialPrompt: "Analyze this code"  # OPT: first prompt on start (v2.1.69+)
+isolation: worktree                 # OPT: isolated git worktree (v2.1.50+)
+mcpServers: [server1, server2]      # OPT: restrict MCP servers
 hooks:                              # OPT: lifecycle hooks
   PreToolUse:
     - matcher: "Bash"
@@ -66,16 +71,21 @@ Detailed instructions for the agent...
 
 ### Optional Fields
 
-| Field | Values | Default | Description |
-|-------|--------|---------|-------------|
-| `model` | `sonnet`, `opus`, `haiku`, `inherit` | `inherit` | Model selection |
-| `effort` | `low`, `medium`, `high`, `auto` | `inherit` | Override effort level (v2.1.78+, plugin agents only) |
-| `maxTurns` | integer | unlimited | Max conversation turns before stopping (v2.1.78+, plugin agents only) |
-| `tools` | comma-separated | All inherited | Allowed tools |
-| `disallowedTools` | comma-separated | None | Denied tools (removed from inherited) |
-| `permissionMode` | see below | `default` | Permission handling |
-| `skills` | comma-separated | None | Injected into context |
-| `hooks` | YAML structure | None | Lifecycle hooks |
+| Field | Values | Default | Version | Description |
+|-------|--------|---------|---------|-------------|
+| `model` | `sonnet`, `opus`, `haiku`, `inherit` | `inherit` | -- | Model selection |
+| `effort` | `low`, `medium`, `high`, `auto` | `inherit` | 2.1.78 | Override effort level (plugin agents only) |
+| `maxTurns` | integer | unlimited | 2.1.78 | Max turns before stopping (plugin agents only) |
+| `tools` | comma-separated | All inherited | -- | Allowed tools |
+| `disallowedTools` | comma-separated | None | 2.1.78 | Denied tools (removed from inherited) |
+| `permissionMode` | see below | `default` | -- | Permission handling |
+| `skills` | comma-separated | None | -- | Injected into context at startup |
+| `hooks` | YAML structure | None | -- | Lifecycle hooks |
+| `color` | `cyan`, `green`, `yellow`, `red`, `magenta` | None | -- | UI color (see Color Semantics) |
+| `memory` | `true`/`false` | `false` | -- | Agent-specific MEMORY.md; auto-adds Read/Write/Edit |
+| `initialPrompt` | string | None | 2.1.69 | Text of first prompt sent to agent on start |
+| `isolation` | `worktree` | None | 2.1.50 | Run agent in isolated git worktree |
+| `mcpServers` | array of names | All inherited | -- | Restrict which MCP servers agent can access |
 
 ### Permission Modes
 
@@ -101,13 +111,21 @@ Detailed instructions for the agent...
 
 ### Hook Events
 
-| Event | Matcher | When |
-|-------|---------|------|
-| `PreToolUse` | Tool name | Before tool execution |
-| `PostToolUse` | Tool name | After tool execution |
-| `Stop` | (none) | When agent finishes |
+| Event | Matcher | When | Level |
+|-------|---------|------|-------|
+| `PreToolUse` | Tool name | Before tool execution | Agent frontmatter |
+| `PostToolUse` | Tool name | After tool execution | Agent frontmatter |
+| `Stop` | (none) | When agent finishes | Agent frontmatter |
+| `SubagentStart` | (none) | Before subagent starts | settings.json only |
+| `SubagentStop` | (none) | Before subagent stops (blockable) | settings.json only |
+| `PreToolUse:Task` | (none) | Before Task tool call | settings.json only |
+| `PostToolUse:Task` | (none) | After Task tool completes | settings.json only |
+| `TaskCreated` | (none) | When task created (Teams, v2.1.84) | settings.json only |
+| `TeammateIdle` | (none) | Teammate finished task (Teams) | settings.json only |
+| `TaskCompleted` | (none) | Task completed by teammate (Teams) | settings.json only |
 
-> Settings-level hooks: `SubagentStart`, `SubagentStop` (configure in `settings.json`)
+> Agent frontmatter hooks: `PreToolUse`, `PostToolUse`, `Stop` only.
+> Settings-level hooks affect ALL subagents -- configure in `settings.json` or `plugin/hooks/hooks.json`.
 
 ---
 
@@ -156,7 +174,9 @@ claude --agents '{
 | **File-based communication** | Агенты пишут результаты в файлы, следующий агент читает |
 | **Agent Teams** (v2.1.33+) | Lead координирует teammates (но teammates тоже не спавнят sub-teammates) |
 
-> Источники: [Sub-agents docs](https://code.claude.com/docs/en/sub-agents), [#4182](https://github.com/anthropics/claude-code/issues/4182), [#17283](https://github.com/anthropics/claude-code/issues/17283)
+**Agent Teams** -- lead coordinates teammates via Task API tools: `TaskCreate`, `TaskUpdate`, `TaskList`, `TaskGet`, `TaskOutput`, `TaskStop`. Hook events: `TeammateIdle`, `TaskCompleted`, `TaskCreated` (v2.1.84). One level deep only.
+
+> Sources: [Sub-agents docs](https://code.claude.com/docs/en/sub-agents), [#4182](https://github.com/anthropics/claude-code/issues/4182), [#17283](https://github.com/anthropics/claude-code/issues/17283)
 
 ---
 
@@ -171,16 +191,16 @@ What a subagent receives at runtime (important for system prompt design):
 | Git status | **Yes** | Basic project state |
 | Permissions | **Yes** | Override via `permissionMode` |
 | Tools / MCP servers | **Yes** | Configurable via `tools`/`disallowedTools`/`mcpServers` |
-| Skills from `skills:` field | **Yes** | Full content injected at startup |
+| Skills from `skills:` field | **Yes** | Full content injected at startup (not runtime) |
 | Agent memory (`memory:` field) | **Yes** | First 200 lines of MEMORY.md; auto-adds Read/Write/Edit |
 | Full Claude Code system prompt | **No** | Replaced with short ~294-token agent prompt |
 | Parent conversation history | **No** | Clean slate each invocation |
-| Parent's invoked skills | **No** | Must list explicitly in `skills:` |
+| Parent's invoked skills | **No** | Must list explicitly in `skills:` field |
 | Parent's auto memory (`memory/MEMORY.md`) | **No** | Only agent-specific memory |
 
 > **Design implication:** Don't duplicate CLAUDE.md rules in agent body -- they're already injected. Focus system prompt on agent-specific role, patterns, and checklists.
 
-> **Known bugs:** [#13627](https://github.com/anthropics/claude-code/issues/13627) -- agent body sometimes not injected via Task tool. [#8395](https://github.com/anthropics/claude-code/issues/8395) -- subagents may ignore user-level CLAUDE.md rules. Workaround: `SubagentStart` hook with `additionalContext`.
+> **Known bugs:** See [Known Bugs](#known-bugs) section below for full list and workarounds.
 
 ---
 
@@ -529,12 +549,90 @@ tools: Read, Glob, Grep, Bash
 
 ## Validation Checklist
 
-- [ ] `name`: lowercase-hyphens only
-- [ ] `description`: trigger terms, when to delegate
-- [ ] `tools`: minimal required set
-- [ ] System prompt: tables over prose
-- [ ] Project-specific knowledge included
+- [ ] `name`: lowercase-hyphens only (`[a-z0-9-]+`)
+- [ ] `description`: trigger terms + min 3 `<example>` blocks for complex agents
+- [ ] `tools`: minimal required set (principle of least privilege)
+- [ ] `disallowedTools`: no conflict with `tools` if both specified
+- [ ] `model`: matches task complexity (opus=complex, sonnet=standard, haiku=light)
+- [ ] System prompt: tables over prose, code over text
+- [ ] Project-specific knowledge included (stack, conventions, commands)
+- [ ] Checklist (DoD) present at end of system prompt
+- [ ] READ-ONLY agents have no Write/Edit tools
+- [ ] No CLAUDE.md rules duplicated in agent body (already injected)
+- [ ] Unique name in scope (no conflict with existing agents)
 - [ ] Optimized with `text-optimize` skill
+
+---
+
+## Known Bugs
+
+| Bug | Impact | Status | Workaround |
+|-----|--------|--------|------------|
+| [#29423](https://github.com/anthropics/claude-code/issues/29423) | Task subagents don't load CLAUDE.md and rules | Active | Pass rules in `Task(prompt=...)` |
+| [#29110](https://github.com/anthropics/claude-code/issues/29110) | `bypassPermissions` breaks Write/Edit; worktree loses data | Active | Avoid `bypassPermissions` + `isolation: worktree` combo |
+| [#19040](https://github.com/anthropics/claude-code/issues/19040) | Session files grow to multi-GB from subagent progress entries | Active | Monitor session file size |
+| [#31392](https://github.com/anthropics/claude-code/issues/31392) | Global agents `~/.claude/agents/` not discovered | Active (v2.1.70+) | Use project-level or plugin-level agents |
+| [#27736](https://github.com/anthropics/claude-code/issues/27736) | `skills:` in plugin agent frontmatter not rendered in Task tool | Active | Pre-inject skill content via `Task(prompt=...)` |
+| [#25834](https://github.com/anthropics/claude-code/issues/25834) | Plugin agent `skills:` doesn't inject content | Active | Inline skill content or use `$BC_PLUGIN_ROOT` path |
+| [#13627](https://github.com/anthropics/claude-code/issues/13627) | Agent body not injected via Task tool | Closed (NOT PLANNED) | `SubagentStart` hook with `additionalContext` |
+| [#8395](https://github.com/anthropics/claude-code/issues/8395) | Subagents ignore user-level CLAUDE.md | Closed (NOT PLANNED) | `SubagentStart` hook with `additionalContext` |
+| [#4182](https://github.com/anthropics/claude-code/issues/4182) | Skill tool unavailable in subagent | By design | Use `skills:` in frontmatter for pre-injection |
+| [#17283](https://github.com/anthropics/claude-code/issues/17283) | Subagents cannot spawn subagents | By design | Chaining from main conversation |
+
+---
+
+## Architectural Limitations
+
+| Limitation | Description | Workaround |
+|------------|-------------|------------|
+| No nested subagents | `SubAgentLoop` excludes `AgentTool` | Chaining, preloaded skills, file-based communication |
+| No runtime skill injection | Skills injected only at startup | List all needed skills in frontmatter upfront |
+| No parent history access | Clean context per invocation | Pass context via `Task(prompt=...)` |
+| Short system prompt | ~294-token agent prompt replaces full Claude Code prompt | Compensate with detailed agent body |
+| `effort`/`maxTurns` plugin-only | Don't work for project/user agents | Use plugin-level agents |
+| Plugin agents: no hooks/mcpServers/permissionMode | Security restriction | Copy to `.claude/agents/` for full feature access |
+| auto mode overrides permissionMode | Frontmatter `permissionMode` ignored in auto mode | Don't use auto mode with custom agents |
+
+---
+
+## Version History (Agent Features)
+
+| Version | Date | Changes |
+|---------|------|---------|
+| v2.1.85 | 2026-03-26 | `TaskCreated` hook, WorktreeCreate `type: http` |
+| v2.1.78 | 2026-03-17 | `effort`, `maxTurns`, `disallowedTools` for plugin agents |
+| v2.1.74 | 2026-03-12 | Fix: full model IDs in frontmatter; `--agents` flag visibility |
+| v2.1.73 | 2026-03-11 | Fix: subagent model aliases on Bedrock/Vertex |
+| v2.1.72 | 2026-03-10 | Restored `model` on Agent tool; deprecated `TaskOutput` |
+| v2.1.70 | 2026-03-06 | Fix: background subagents invisible after compaction; `agent_id`/`agent_type` in hooks |
+| v2.1.69 | 2026-03-05 | Agent name in terminal; `initialPrompt` frontmatter; `InstructionsLoaded` hook |
+| v2.1.63 | ~2026-02-28 | **Task tool renamed to Agent tool.** `Task(...)` works as alias |
+| v2.1.50 | 2026-02-20 | `isolation: worktree`; `WorktreeCreate`/`WorktreeRemove` hooks |
+| v2.1.49 | 2026-02-19 | `--worktree` flag; `Ctrl+F` to kill background agents |
+
+---
+
+## Debugging
+
+| Tool | Usage |
+|------|-------|
+| `CLAUDE_DEBUG=1` | Env var: full debug output, shows agent prompts |
+| `Ctrl+O` | Verbose mode in UI: shows agent calls and stdout |
+| `/agents` | Lists all registered agents with priorities |
+| Manual `Task()` | `Task(subagent_type="name", prompt="test")` -- direct invocation for testing |
+
+### Common Problems
+
+| Problem | Cause | Solution |
+|---------|-------|----------|
+| Agent doesn't trigger automatically | Vague description, no trigger words | Add specific trigger terms, `<example>` blocks |
+| Agent triggers on irrelevant requests | Too broad description | Narrow description, add `<commentary>` conditions |
+| Agent doesn't see CLAUDE.md rules | Bug [#8395] or [#29423] | `SubagentStart` hook with `additionalContext` |
+| System prompt not injected | Bug [#13627] | Retry; pass instructions via `Task(prompt=...)` |
+| Agent can't call skills | By design [#4182] | Use `skills:` in frontmatter for pre-injection |
+| Agent can't spawn subagent | By design -- `SubAgentLoop` without `AgentTool` | Chaining from main conversation |
+| `agents/` directory in plugin.json | Causes validation error | Remove from manifest -- auto-discovered by default |
+| `effort`/`maxTurns` not working | Only available for plugin agents | Move agent to plugin scope |
 
 ---
 
