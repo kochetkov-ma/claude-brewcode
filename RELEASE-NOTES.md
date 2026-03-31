@@ -2,6 +2,14 @@
 
 ---
 
+## v3.4.12 (2026-03-31)
+
+### docs
+#### Fixed
+- Steps alignment on brewpage/publish page — removed Badge tags and div wrappers
+
+---
+
 ## v3.4.11 (2026-03-31)
 
 ### brewdoc
