@@ -2,6 +2,26 @@
 
 ---
 
+## v3.4.10 (2026-03-31)
+
+### brewcode
+#### Added
+- **15 individual skill pages** -- full content from SKILL.md sources (setup, spec, plan, start, convention, rules, grepai, install, teardown, text-optimize, text-human, standards-review, skills, agents, secrets-scan)
+- **13 individual agent pages** -- full system prompt content (developer, tester, reviewer, architect, skill-creator, agent-creator, hook-creator, text-optimizer, bash-expert, bc-coordinator, bc-knowledge-manager, bc-grepai-configurator, bc-rules-organizer)
+- **permission-guard hook** documented in hooks page (9th hook)
+
+### brewdoc
+#### Added
+- **my-claude dedicated page** -- moved from inline section in overview to standalone page
+
+### docs
+#### Changed
+- **Collapsible sidebar** -- Skills (15) and Agents (13) groups with `<details>/<summary>`, auto-expand on current page
+- **Index pages** -- skills.mdx and agents.mdx converted from Tabs to CardGrid links
+- **Site expanded** from 12 to 41 content pages (29 new)
+
+---
+
 ## v3.4.9 (2026-03-31)
 
 ### brewcode
