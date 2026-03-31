@@ -74,7 +74,7 @@ export const navigation: NavSection[] = [
       { title: 'My-Claude', slug: 'brewdoc/my-claude' },
       { title: 'Memory', slug: 'brewdoc/memory' },
       { title: 'md-to-pdf', slug: 'brewdoc/md-to-pdf' },
-      { title: 'Brewpage', slug: 'brewdoc/brewpage' },
+      { title: 'Publish', slug: 'brewdoc/publish' },
     ],
   },
 ];

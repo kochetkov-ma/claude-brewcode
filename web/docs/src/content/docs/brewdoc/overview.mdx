@@ -49,7 +49,7 @@ Brewdoc contains 5 skills, each handling a separate documentation task.
     Two engines: reportlab (lightweight) and weasyprint (full CSS support).
     Style customization, test mode, LLM preprocessing.
   </Card>
-  <Card title="Brewpage" icon="link" href="/brewdoc/brewpage/">
+  <Card title="Publish" icon="link" href="/brewdoc/publish/">
     Publish text, markdown, JSON, or files to brewpage.app.
     Interactive namespace and password selection. Owner token saved locally for later delete.
   </Card>
@@ -63,7 +63,7 @@ Brewdoc contains 5 skills, each handling a separate documentation task.
 | `/brewdoc:my-claude` | Generate documentation about Claude Code installation | opus | `[ext [context]] \| [r <query>]` |
 | `/brewdoc:memory` | Optimize memory files in 4 steps | opus | -- |
 | `/brewdoc:md-to-pdf` | Convert Markdown to PDF | sonnet | `<file.md> [--engine name] ["prompt"] \| styles \| test` |
-| `/brewdoc:brewpage` | Publish to brewpage.app — returns public URL | haiku | `<text\|file\|json> [--ttl N]` |
+| `/brewdoc:publish` | Publish to brewpage.app — returns public URL | haiku | `<text\|file\|json> [--ttl N]` |
 
 <Callout type="tip" title="My-Claude">
   The <code>/brewdoc:my-claude</code> skill now has a <a href="/brewdoc/my-claude/">dedicated page</a> with full documentation.
@@ -86,7 +86,7 @@ brewdoc/
 │   ├── my-claude/               # Installation documentation
 │   ├── memory/                  # Memory optimization
 │   ├── md-to-pdf/               # PDF conversion
-│   └── brewpage/                # brewpage.app publishing
+│   └── publish/                 # brewpage.app publishing
 └── agents/
     └── bd-auto-sync-processor   # File processing agent
 ```
