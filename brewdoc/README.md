@@ -14,6 +14,7 @@ Documentation tools plugin for Claude Code. Three concerns:
 | **auto-sync** | `/brewdoc:auto-sync` | Keep `.md` docs (skills, agents, rules) in sync with actual codebase |
 | **my-claude** | `/brewdoc:my-claude` | Generate documentation about your Claude Code installation, hooks, or any Claude topic |
 | **memory** | `/brewdoc:memory` | Optimize memory files: deduplicate, migrate to rules/CLAUDE.md, compress, validate |
+| **brewpage** | `/brewdoc:brewpage` | Publish text, markdown, JSON, or files to brewpage.app — returns public URL |
 
 ## Installation
 
@@ -61,6 +62,15 @@ claude --plugin-dir ./brewcode --plugin-dir ./brewdoc
 /brewdoc:memory                    # Run 4-step interactive memory optimization
 ```
 
+### brewpage
+
+```bash
+/brewdoc:brewpage "Hello world"            # Publish markdown text → returns URL
+/brewdoc:brewpage /path/to/file.pdf        # Publish file → returns URL
+/brewdoc:brewpage '{"key": "value"}'       # Publish JSON document → returns URL
+/brewdoc:brewpage "Hello world" --ttl 30   # Custom TTL (days)
+```
+
 ## Commands
 
 | Command | Arguments | Description |
@@ -68,6 +78,7 @@ claude --plugin-dir ./brewcode --plugin-dir ./brewdoc
 | `/brewdoc:auto-sync` | `status` / `init <path>` / `global` / `<path>` | Universal doc sync |
 | `/brewdoc:my-claude` | `ext [context]` / `r <query>` / _(none)_ | Generate Claude Code docs |
 | `/brewdoc:memory` | _(none)_ | Interactive memory optimizer |
+| `/brewdoc:brewpage` | `<text\|file_path\|json> [--ttl N]` | Publish to brewpage.app — returns public URL |
 
 ## auto-sync Modes
 
@@ -163,6 +174,7 @@ Memory files location: `~/.claude/projects/.../memory/*.md`
 | `auto-sync` | Updates files in-place; INDEX at `.claude/auto-sync/INDEX.jsonl` or `~/.claude/auto-sync/INDEX.jsonl` |
 | `my-claude` | `~/.claude/brewdoc/YYYYMMDD_my-claude-{mode}.md` + `INDEX.jsonl` |
 | `memory` | Modifies `~/.claude/projects/.../memory/*.md` in-place |
+| `brewpage` | `.claude/brewpage-history.md` (owner tokens for update/delete) |
 
 ## Architecture
 
