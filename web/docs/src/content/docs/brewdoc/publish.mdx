@@ -4,7 +4,7 @@ description: "Publish text, markdown, JSON, or files to brewpage.app — returns
 order: 25
 ---
 
-import { Callout, Tabs, TabItem, Steps, Badge } from '../../../components/mdx';
+import { Callout, Tabs, TabItem, Steps } from '../../../components/mdx';
 
 # Brewpage
 
@@ -17,85 +17,46 @@ and returns a public URL instantly. No sign-up, no configuration — just conten
 </Callout>
 
 ```bash
-/brewdoc:brewpage "Hello, world!"
-/brewdoc:brewpage report.md
-/brewdoc:brewpage '{"status": "ok", "count": 42}'
-/brewdoc:brewpage screenshot.png --ttl 1
+/brewdoc:publish "Hello, world!"
+/brewdoc:publish report.md
+/brewdoc:publish '{"status": "ok", "count": 42}'
+/brewdoc:publish screenshot.png --ttl 1
 ```
 
 ## How it works
 
 <Steps>
   <li class="step step-primary">
-    <div>
-      <strong>Receive content</strong> <Badge variant="primary" text="Step 1" />
-      <p>
-        The skill receives user input: inline text, a file path, or a JSON literal.
-      </p>
-    </div>
+    <strong>Receive content</strong>
+    <p>The skill receives user input: inline text, a file path, or a JSON literal.</p>
   </li>
   <li class="step step-primary">
-    <div>
-      <strong>Detect content type</strong> <Badge variant="primary" text="Step 2" />
-      <p>
-        Content is classified as HTML (text/markdown), JSON (object or array), or File (local path).
-        The type determines which API endpoint will be used.
-      </p>
-    </div>
+    <strong>Detect content type</strong>
+    <p>Content is classified as HTML (text/markdown), JSON (object or array), or File (local path). The type determines which API endpoint will be used.</p>
   </li>
   <li class="step step-primary">
-    <div>
-      <strong>Ask namespace</strong> <Badge variant="primary" text="Step 3" />
-      <p>
-        An interactive prompt asks for a namespace — a short slug that becomes part of the URL
-        (e.g. <code>brewpage.app/my-ns/abc123</code>).
-      </p>
-    </div>
+    <strong>Ask namespace</strong>
+    <p>An interactive prompt asks for a namespace — a short slug that becomes part of the URL (e.g. <code>brewpage.app/my-ns/abc123</code>).</p>
   </li>
   <li class="step step-primary">
-    <div>
-      <strong>Ask password</strong> <Badge variant="primary" text="Step 4" />
-      <p>
-        Optionally set a password. Visitors will need to enter it before viewing the page.
-        Leave empty for public access.
-      </p>
-    </div>
+    <strong>Ask password</strong>
+    <p>Optionally set a password. Visitors will need to enter it before viewing the page. Leave empty for public access.</p>
   </li>
   <li class="step step-primary">
-    <div>
-      <strong>Render content</strong> <Badge variant="primary" text="Step 5" />
-      <p>
-        For text/markdown, the content is converted to HTML. JSON is formatted for display.
-        Files are prepared for upload as-is.
-      </p>
-    </div>
+    <strong>Render content</strong>
+    <p>For text/markdown, the content is converted to HTML. JSON is formatted for display. Files are prepared for upload as-is.</p>
   </li>
   <li class="step step-primary">
-    <div>
-      <strong>Call API</strong> <Badge variant="primary" text="Step 6" />
-      <p>
-        The skill sends a request to the appropriate brewpage.app endpoint:
-        <code>POST /api/html</code>, <code>POST /api/json</code>, or <code>POST /api/files</code>.
-      </p>
-    </div>
+    <strong>Call API</strong>
+    <p>The skill sends a request to the appropriate brewpage.app endpoint: <code>POST /api/html</code>, <code>POST /api/json</code>, or <code>POST /api/files</code>.</p>
   </li>
   <li class="step step-primary">
-    <div>
-      <strong>Return URL</strong> <Badge variant="primary" text="Step 7" />
-      <p>
-        The API responds with a public URL. The skill displays it and copies it to the clipboard
-        when possible.
-      </p>
-    </div>
+    <strong>Return URL</strong>
+    <p>The API responds with a public URL. The skill displays it immediately.</p>
   </li>
   <li class="step step-primary">
-    <div>
-      <strong>Save owner token</strong> <Badge variant="primary" text="Step 8" />
-      <p>
-        The owner token, namespace, page ID, and URL are appended to
-        <code>.claude/brewpage-history.md</code> for future reference and deletion.
-      </p>
-    </div>
+    <strong>Save owner token</strong>
+    <p>The owner token, namespace, page ID, and URL are appended to <code>.claude/brewpage-history.md</code> for future reference and deletion.</p>
   </li>
 </Steps>
 
@@ -140,5 +101,5 @@ curl -X DELETE "https://brewpage.app/api/{ns}/{id}" -H "X-Owner-Token: {token}"
 
 <Callout type="tip" title="TTL">
   Default time-to-live is 5 days. Override with <code>--ttl N</code> where N is the number of days.
-  Example: <code>/brewdoc:brewpage report.md --ttl 30</code> keeps the page for 30 days.
+  Example: <code>/brewdoc:publish report.md --ttl 30</code> keeps the page for 30 days.
 </Callout>
