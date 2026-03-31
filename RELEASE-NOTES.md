@@ -2,6 +2,26 @@
 
 ---
 
+## v3.4.11 (2026-03-31)
+
+### brewdoc
+#### Added
+- **brewpage skill** — publish text, markdown, JSON, or files to brewpage.app; interactive namespace + password selection; owner token saved to `.claude/brewpage-history.md`; model: haiku
+
+### skills (marketplace)
+#### Added
+- **brewpage skill** — standalone marketplace skill with advertising footer; same functionality as brewdoc:brewpage
+
+### docs
+#### Added
+- **brewdoc/brewpage** docs page — full documentation with Steps, content-type table, namespace/password sections, owner token & history
+- **brewpage.app** link and Callout on the brewpage docs page
+
+#### Changed
+- brewdoc overview updated: 5 skills, brewpage card, command row
+
+---
+
 ## v3.4.10 (2026-03-31)
 
 ### brewcode
