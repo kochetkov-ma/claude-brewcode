@@ -16,8 +16,8 @@
 
 | Plugin | Version | Purpose | Install |
 |--------|---------|---------|---------|
-| brewcode | 3.3.1 | Infinite task execution, prompt optimization, skill/agent creation, quorum reviews | `claude plugin install brewcode@claude-brewcode` |
-| brewdoc | 3.3.1 | Documentation tools: auto-sync, my-claude docs, memory optimization | `claude plugin install brewdoc@claude-brewcode` |
+| brewcode | 3.4.11 | Infinite task execution, prompt optimization, skill/agent creation, quorum reviews | `claude plugin install brewcode@claude-brewcode` |
+| brewdoc | 3.4.11 | Documentation tools: auto-sync, my-claude docs, memory optimization, brewpage publishing | `claude plugin install brewdoc@claude-brewcode` |
 
 ---
 
@@ -94,6 +94,7 @@ After `/brewcode:setup`, each task follows the cycle: `spec` -> `plan` -> `start
 /brewdoc:my-claude                    # Generate Claude Code installation docs
 /brewdoc:memory                       # Optimize memory files interactively
 /brewdoc:md-to-pdf ./docs/report.md   # Convert markdown to PDF
+/brewdoc:brewpage "Hello world"        # Publish text/file/JSON to brewpage.app → public URL
 ```
 
 ---
