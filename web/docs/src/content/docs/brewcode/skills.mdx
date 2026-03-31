@@ -4,7 +4,7 @@ description: "All 15 Brewcode skills: commands, parameters, examples"
 order: 11
 ---
 
-import { Card, CardGrid, Callout, Tabs, TabItem, Steps, Badge } from '../../../components/mdx';
+import { Card, CardGrid, Callout } from '../../../components/mdx';
 
 # Skills
 
@@ -32,406 +32,53 @@ the full task lifecycle -- from project analysis to secrets scanning.
 | 14 | agents | `/brewcode:agents` | opus | Agent creation and improvement |
 | 15 | secrets-scan | `/brewcode:secrets-scan` | sonnet | Secrets and key scanning |
 
-<Tabs>
-  <TabItem label="Core cycle">
-
-  ### setup -- Project setup
-
-  <Badge variant="primary" text="opus" /> <Badge variant="secondary" text="fork" />
-
-  Analyzes the project structure, technology stack, test frameworks, and project agents.
-  Generates adapted templates in `.claude/tasks/templates/`.
-
-  | Parameter | Value |
-  |-----------|-------|
-  | Arguments | `[universal-template-path]` (optional) |
-  | Tools | Read, Write, Glob, Grep, Bash, AskUserQuestion |
-  | Context | fork |
-
-  **Phases:**
-  1. Project scanning (setup.sh scan)
-  2. Stack and pattern analysis
-  3. Template generation (PLAN, SPEC, KNOWLEDGE, config)
-  4. Adapted code review skill creation
-  5. All artifact validation
-  6. CLAUDE.md update (agent table)
-
-  ```bash
-  /brewcode:setup
-  ```
-
-  ---
-
-  ### spec -- Specification creation
-
-  <Badge variant="primary" text="opus" /> <Badge variant="secondary" text="session" />
-
-  Creates a structured specification through parallel codebase research
-  and user dialog.
-
-  | Parameter | Value |
-  |-----------|-------|
-  | Arguments | `[-n] <description> \| <path-to-requirements>` |
-  | Tools | Read, Write, Glob, Grep, Bash, Task, AskUserQuestion |
-  | Flag `-n` | No user questions (autonomous mode) |
-
-  **Process:**
-  1. Read and analyze input data
-  2. 3-5 clarifying questions (skipped with `-n`)
-  3. Check whether the task needs splitting
-  4. Parallel research (5-10 agents simultaneously)
-  5. Consolidation into SPEC.md
-  6. Specification review (reviewer + fix loop)
-
-  ```bash
-  /brewcode:spec "Implement JWT authorization with role-based model"
-  /brewcode:spec -n ./docs/requirements/auth.md
-  ```
-
-  ---
-
-  ### plan -- Plan creation
-
-  <Badge variant="primary" text="opus" /> <Badge variant="secondary" text="session" />
-
-  Creates an execution plan (PLAN.md) with phases, dependencies, and completion criteria
-  from a specification or Plan Mode file.
-
-  | Parameter | Value |
-  |-----------|-------|
-  | Arguments | `[-n] [task-dir\|SPEC.md\|plan-file]` |
-  | Tools | Read, Write, Glob, Grep, Bash, Task, AskUserQuestion |
-  | Flag `-n` | Autonomous mode |
-
-  **Artifacts:**
-  - `PLAN.md` -- Phase Registry (phase table)
-  - `phases/*.md` -- individual phase files
-  - `KNOWLEDGE.jsonl` -- empty file for knowledge accumulation
-  - `artifacts/` and `backup/` -- directories
-
-  **Process:**
-  1. Determine source (SPEC or Plan Mode)
-  2. Generate 5-12 phases with verification phases
-  3. Quorum review (3 agents, 2/3 rule)
-  4. Requirements tracing (SPEC -> phases)
-  5. Quick ref update (`.claude/TASK.md`)
-
-  ```bash
-  /brewcode:plan .claude/tasks/20260301_143052_auth_task/
-  /brewcode:plan -n
-  ```
-
-  ---
-
-  ### start -- Task execution
-
-  <Badge variant="primary" text="opus" /> <Badge variant="secondary" text="session" />
-
-  Launches task execution with infinite context, automatic handoff
-  between sessions, and failure escalation.
-
-  | Parameter | Value |
-  |-----------|-------|
-  | Arguments | `[task-path]`, defaults to `.claude/TASK.md` |
-  | Tools | Read, Write, Edit, Bash, Task, Glob, Grep, Skill, AskUserQuestion |
-
-  **Mechanism:**
-  1. Initialization via bc-coordinator (lock, status)
-  2. Task creation from Phase Registry (TaskCreate)
-  3. Dependency setup (TaskUpdate)
-  4. Execution loop: pending -> in_progress -> completed
-  5. 2-step protocol: WRITE report -> CALL coordinator
-  6. Finalization via coordinator
-  7. Rule extraction (/brewcode:rules)
-
-  <Callout type="note" title="Failure escalation">
-    After the 1st failure -- R&D task. After the 2nd -- split the phase into sub-phases.
-    After the 3rd -- model switch, reassignment, user question.
-  </Callout>
-
-  ```bash
-  /brewcode:start
-  /brewcode:start .claude/tasks/20260301_143052_auth_task/PLAN.md
-  ```
-
-  </TabItem>
-  <TabItem label="Quality">
-
-  ### standards-review -- Standards review
-
-  <Badge variant="primary" text="opus" /> <Badge variant="secondary" text="session" />
-
-  Checks code for compliance with project standards and finds duplicates.
-  Supports Java/Kotlin, TypeScript/React, Python.
-
-  | Parameter | Value |
-  |-----------|-------|
-  | Arguments | `[commit\|branch\|folder] [-p <prompt>]` |
-  | Tools | Read, Glob, Grep, Task, Bash, Write, grepai_search, AskUserQuestion, Skill |
-
-  **Check priority:** Existing code (reuse) -> CLAUDE.md -> rules/*.md -> stack reference.
-
-  **Phases:**
-  1. Technology stack detection
-  2. File list retrieval (commit/branch/folder)
-  3. Context loading (rules, standards)
-  4. Expert analysis (parallel haiku agents by file groups)
-  5. Validation (sonnet reviewer)
-  6. Report generation in `.claude/reports/`
-  7. Optional simplify pass
-
-  ```bash
-  /brewcode:standards-review
-  /brewcode:standards-review abc123
-  /brewcode:standards-review src/main/java/services/
-  ```
-
-  ---
-
-  ### convention -- Convention analysis
-
-  <Badge variant="primary" text="opus" /> <Badge variant="secondary" text="session" />
-
-  Analyzes the project to extract reference classes, patterns, and architecture by layer.
-  Generates convention documents in `.claude/convention/`.
-
-  | Parameter | Value |
-  |-----------|-------|
-  | Arguments | `[full\|conventions\|rules\|paths <p1,p2>]` |
-  | Tools | Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion, Skill |
-
-  **Modes:**
-
-  | Mode | Phases | Purpose |
-  |------|--------|---------|
-  | `full` (default) | P0-P8 | Full analysis + rules |
-  | `conventions` | P0-P7 | Convention documents only |
-  | `rules` | P0, P7-P8 | Rule extraction only |
-  | `paths <p1,p2>` | P0-P7 (scoped) | Analysis of specified paths |
-
-  **Output:** 3 documents -- `reference-patterns.md`, `testing-conventions.md`, `project-architecture.md`.
-
-  ```bash
-  /brewcode:convention
-  /brewcode:convention rules
-  /brewcode:convention paths src/main/java/services,src/main/java/api
-  ```
-
-  ---
-
-  ### rules -- Rule extraction
-
-  <Badge variant="secondary" text="sonnet" /> <Badge variant="secondary" text="session" />
-
-  Syncs KNOWLEDGE.jsonl or session knowledge into `.claude/rules/` rule files.
-
-  | Parameter | Value |
-  |-----------|-------|
-  | Arguments | `[list] \| [<path>] \| [<path> <prompt>]` |
-  | Tools | Read, Bash, Task |
-
-  **Modes:**
-
-  | Input | Mode |
-  |-------|------|
-  | `list` | Show current rules |
-  | `<path>` | Extract from KNOWLEDGE.jsonl file |
-  | `<path> <text>` | Custom prompt |
-  | (empty) | Extract from current session |
-
-  **Deduplication:** 3 checks -- intra-file similarity (>70% skip), cross-file antonyms, duplicates with CLAUDE.md.
-
-  ```bash
-  /brewcode:rules list
-  /brewcode:rules .claude/tasks/20260301_auth_task/KNOWLEDGE.jsonl
-  ```
-
-  ---
-
-  ### secrets-scan -- Secrets scanning
-
-  <Badge variant="secondary" text="sonnet" /> <Badge variant="secondary" text="session" />
-
-  Scans all git-tracked files for leaked secrets, keys, and credentials.
-
-  | Parameter | Value |
-  |-----------|-------|
-  | Arguments | `[--fix]` |
-  | Tools | Read, Task, Write, Bash, AskUserQuestion |
-
-  **Process:**
-  1. File list retrieval (git ls-files)
-  2. Parallel scanning by 10 agents
-  3. Result merging and deduplication
-  4. Report generation with severity levels (CRITICAL/HIGH/MEDIUM/LOW)
-  5. Optional interactive fixing (`--fix`)
-
-  **Search patterns:** passwords, API keys, tokens, AWS credentials, DB URLs, private keys.
-
-  ```bash
-  /brewcode:secrets-scan
-  /brewcode:secrets-scan --fix
-  ```
-
-  </TabItem>
-  <TabItem label="Utilities">
-
-  ### grepai -- Semantic search
-
-  <Badge variant="secondary" text="sonnet" /> <Badge variant="secondary" text="session" />
-
-  Manages grepai -- AI-powered code search via Ollama + bge-m3.
-
-  | Parameter | Value |
-  |-----------|-------|
-  | Arguments | `[setup\|status\|start\|stop\|reindex\|optimize\|upgrade]` |
-  | Tools | Read, Write, Edit, Bash, Task, AskUserQuestion |
-
-  **Modes:**
-
-  | Mode | Purpose |
-  |------|---------|
-  | setup | Full grepai installation and configuration |
-  | status | Health check: CLI, ollama, bge-m3, MCP, index |
-  | start | Start watch mode (auto-indexing) |
-  | stop | Stop the watch process |
-  | reindex | Full reindexing |
-  | optimize | Re-analyze project + new config.yaml |
-  | upgrade | Update grepai via brew |
-
-  ```bash
-  /brewcode:grepai setup
-  /brewcode:grepai status
-  /brewcode:grepai reindex
-  ```
-
-  ---
-
-  ### install -- Dependency installation
-
-  <Badge variant="secondary" text="sonnet" /> <Badge variant="secondary" text="fork" />
-
-  Interactive dependency installer for Brewcode.
-
-  | Component | Type | Purpose |
-  |-----------|------|---------|
-  | brew | required | Package manager |
-  | coreutils + timeout | required | Timeouts for scripts |
-  | jq | required | JSON processor for hooks |
-  | ollama | optional | Local embeddings server |
-  | bge-m3 | optional | Embeddings model (~1.2GB) |
-  | grepai | optional | Semantic search CLI |
-
-  ```bash
-  /brewcode:install
-  ```
-
-  ---
-
-  ### teardown -- File removal
-
-  <Badge variant="secondary" text="haiku" /> <Badge variant="secondary" text="fork" />
-
-  Removes plugin files from the project: templates, configuration, logs, plans, grepai.
-  Task directories and user rules are preserved.
-
-  | Parameter | Value |
-  |-----------|-------|
-  | Arguments | `[--dry-run]` |
-  | `--dry-run` | Only show files without deleting |
-
-  ```bash
-  /brewcode:teardown
-  /brewcode:teardown --dry-run
-  ```
-
-  ---
-
-  ### text-optimize -- Text optimization
-
-  <Badge variant="secondary" text="sonnet" /> <Badge variant="secondary" text="session" />
-
-  Optimizes text and documentation for efficient LLM token consumption.
-
-  | Parameter | Value |
-  |-----------|-------|
-  | Arguments | `[-l\|-d] [file\|folder\|path1,path2]` |
-  | `-l` | Light -- text cleanup only |
-  | (default) | Medium -- balanced restructuring |
-  | `-d` | Deep -- maximum compression |
-
-  **Rule categories:** Claude behavior (C.1-C.6), Token efficiency (T.1-T.8), Structure (S.1-S.8), Reference integrity (R.1-R.3), Perception (P.1-P.6).
-
-  ```bash
-  /brewcode:text-optimize CLAUDE.md
-  /brewcode:text-optimize -d agents/
-  /brewcode:text-optimize -l file1.md,file2.md
-  ```
-
-  ---
-
-  ### text-human -- Code humanization
-
-  <Badge variant="secondary" text="sonnet" /> <Badge variant="secondary" text="session" />
-
-  Detects and removes AI artifacts from code and documentation: comments like
-  "Added by AI", unicode symbols, excessive documentation.
-
-  | Parameter | Value |
-  |-----------|-------|
-  | Arguments | `<commit-hash\|path> [custom instructions]` |
-  | Tools | Read, Write, Edit, Grep, Glob, Bash, Task, AskUserQuestion |
-
-  **Language support:** Java/Kotlin, TypeScript/JS/React, Python (separate reference files).
-
-  ```bash
-  /brewcode:text-human 3be67487
-  /brewcode:text-human src/main/java/services/
-  /brewcode:text-human 3be67487 don't touch docs on public records
-  ```
-
-  ---
-
-  ### skills -- Skill management
-
-  <Badge variant="primary" text="opus" /> <Badge variant="secondary" text="session" />
-
-  Create, improve, and list skills with activation optimization.
-
-  | Mode | Purpose |
-  |------|---------|
-  | `list` (default) | Show all skills (global, project, plugin) |
-  | `up <target>` | Improve a skill via skill-creator |
-  | `create <prompt>` | Create a new skill with research |
-
-  ```bash
-  /brewcode:skills
-  /brewcode:skills up commit
-  /brewcode:skills create "semantic code search"
-  ```
-
-  ---
-
-  ### agents -- Agent management
-
-  <Badge variant="primary" text="opus" /> <Badge variant="secondary" text="session" />
-
-  Interactive creation and improvement of Claude Code agents.
-
-  | Mode | Purpose |
-  |------|---------|
-  | `help` (default) | Show help |
-  | `create <description>` | Create a new agent |
-  | `up <name\|path>` | Improve an existing agent |
-
-  ```bash
-  /brewcode:agents create backend validator
-  /brewcode:agents up reviewer
-  /brewcode:agents .claude/agents/reviewer.md
-  ```
-
-  </TabItem>
-</Tabs>
+<CardGrid>
+  <Card title="setup" icon="wrench" href="/brewcode/skills/setup/">
+    Project analysis, template generation
+  </Card>
+  <Card title="spec" icon="document" href="/brewcode/skills/spec/">
+    Specification creation through research
+  </Card>
+  <Card title="plan" icon="list" href="/brewcode/skills/plan/">
+    Plan creation from SPEC or Plan Mode
+  </Card>
+  <Card title="start" icon="play" href="/brewcode/skills/start/">
+    Task execution with infinite context
+  </Card>
+  <Card title="convention" icon="book" href="/brewcode/skills/convention/">
+    Convention analysis and reference classes
+  </Card>
+  <Card title="rules" icon="shield" href="/brewcode/skills/rules/">
+    Knowledge-to-rules synchronization
+  </Card>
+  <Card title="grepai" icon="search" href="/brewcode/skills/grepai/">
+    Semantic search management
+  </Card>
+  <Card title="install" icon="download" href="/brewcode/skills/install/">
+    Dependency installation
+  </Card>
+  <Card title="teardown" icon="trash" href="/brewcode/skills/teardown/">
+    Plugin file removal
+  </Card>
+  <Card title="text-optimize" icon="sparkle" href="/brewcode/skills/text-optimize/">
+    Text optimization for LLMs
+  </Card>
+  <Card title="text-human" icon="user" href="/brewcode/skills/text-human/">
+    AI artifact removal from code
+  </Card>
+  <Card title="standards-review" icon="check" href="/brewcode/skills/standards-review/">
+    Standards compliance review
+  </Card>
+  <Card title="skills" icon="puzzle" href="/brewcode/skills/skills/">
+    Skill management
+  </Card>
+  <Card title="agents" icon="people" href="/brewcode/skills/agents/">
+    Agent creation and improvement
+  </Card>
+  <Card title="secrets-scan" icon="lock" href="/brewcode/skills/secrets-scan/">
+    Secrets and key scanning
+  </Card>
+</CardGrid>
 
 ## Skill dependencies
 

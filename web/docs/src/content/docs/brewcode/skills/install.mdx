@@ -1,0 +1,94 @@
+---
+title: "Install"
+description: "Installs brewcode prerequisites (brew, coreutils, jq, grepai)."
+order: 1108
+---
+import { Badge, Callout } from '../../../../components/mdx';
+
+# Install
+
+<Badge variant="primary" text="sonnet" /> <Badge variant="secondary" text="fork" />
+
+## Quick reference
+
+| Field | Value |
+|-------|-------|
+| Command | `/brewcode:install` |
+| Arguments | (no args) -- interactive installer for brew, coreutils, jq, grepai |
+| Model | sonnet |
+| Context | fork |
+| Tools | Read, Bash, AskUserQuestion |
+
+## Components
+
+| Component | Type | Purpose |
+|-----------|------|---------|
+| brew | required | Package manager |
+| coreutils+timeout | required | Command timeout for scripts |
+| jq | required | JSON processor for hooks |
+| ollama | optional | Local embedding server |
+| bge-m3 | optional | Multilingual embedding model (~1.2GB) |
+| grepai | optional | Semantic code search CLI |
+
+---
+
+## Workflow
+
+### Phase 1: State Check
+
+**EXECUTE**: `bash "${CLAUDE_SKILL_DIR}/scripts/install.sh" state`
+
+---
+
+### Phase 2: Updates Check
+
+**EXECUTE**: `bash "${CLAUDE_SKILL_DIR}/scripts/install.sh" check-updates`
+
+**If UPDATES_AVAILABLE=true** -- **ASK** (AskUserQuestion):
+- Header: "Updates"
+- Question: "Updates available: [list from output]. Update now?"
+- Options: "Yes, update all" | "Skip"
+
+**If Yes** -- **EXECUTE**: `bash "${CLAUDE_SKILL_DIR}/scripts/install.sh" update-all`
+
+---
+
+### Phase 3: Timeout Check
+
+**EXECUTE**: `bash "${CLAUDE_SKILL_DIR}/scripts/install.sh" check-timeout`
+
+**If TIMEOUT_EXISTS=false** -- **ASK**:
+- Header: "Timeout Symlink"
+- Question: "Create 'timeout' symlink? REQUIRED for brewcode."
+- Options: "Yes, create" | "No, cancel"
+
+<Callout type="warning" title="Required">
+  If cancelled -- STOP: "Installation cancelled. timeout command required."
+</Callout>
+
+---
+
+### Phase 4: Required Components
+
+**EXECUTE**: `bash "${CLAUDE_SKILL_DIR}/scripts/install.sh" required`
+
+**If timeout still missing** -- **EXECUTE**: `bash "${CLAUDE_SKILL_DIR}/scripts/install.sh" timeout`
+
+> **STOP if any required failed.**
+
+---
+
+### Phase 5: Semantic Search (Optional)
+
+**If not installed** -- **ASK**:
+- Header: "grepai"
+- Question: "Install semantic search? Enables AI-powered code search."
+- Options: "Yes, install (~1.5GB)" | "Skip"
+
+**If Yes** -- **EXECUTE**: `bash "${CLAUDE_SKILL_DIR}/scripts/install.sh" grepai`
+
+---
+
+### Phase 6: Summary
+
+**EXECUTE**: `bash "${CLAUDE_SKILL_DIR}/scripts/install.sh" summary`
