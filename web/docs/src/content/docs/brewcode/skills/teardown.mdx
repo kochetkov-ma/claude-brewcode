@@ -1,0 +1,46 @@
+---
+title: "Teardown"
+description: "Removes brewcode project files (templates, configs, logs)."
+order: 1109
+---
+import { Badge, Callout } from '../../../../components/mdx';
+
+# Teardown
+
+<Badge variant="primary" text="haiku" /> <Badge variant="secondary" text="fork" />
+
+## Quick reference
+
+| Field | Value |
+|-------|-------|
+| Command | `/brewcode:teardown` |
+| Arguments | `[--dry-run]` |
+| Model | haiku |
+| Context | fork |
+| Tools | Bash, Read, AskUserQuestion |
+
+## Execution
+
+**Skill arguments received:** `$ARGUMENTS`
+
+**If NOT `--dry-run`:** Use AskUserQuestion to confirm before executing:
+> "This will delete brewcode project files (templates, configs, logs, plans). Task directories are preserved. Proceed?"
+
+**EXECUTE** using Bash tool -- run teardown script:
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/teardown.sh" ARGS_HERE && echo "✅ done" || echo "❌ FAILED"
+```
+**IMPORTANT:** Replace `ARGS_HERE` with the actual value from "Skill arguments received" above. If empty, omit the argument.
+
+> **STOP if failed** -- check script path exists and teardown.sh has execute permissions.
+
+## Options
+
+| Option | Behavior |
+|--------|----------|
+| `--dry-run` | List files to delete without removing them |
+| (none) | Full removal after user confirmation |
+
+## Preserved
+
+Task directories (`.claude/tasks/*_task/`) and user rules (`.claude/rules/`) are always preserved.

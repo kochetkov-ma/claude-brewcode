@@ -1,16 +1,16 @@
 ---
 title: "Hooks"
-description: "All 8 Brewcode hooks: events, channels, logic"
+description: "All 9 Brewcode hooks: events, channels, logic"
 order: 13
 ---
 
-import { Card, CardGrid, Callout, Tabs, TabItem, Steps, Badge } from '../../../components/mdx';
+import { Callout, Badge } from '../../../components/mdx';
 
 # Hooks
 
 Hooks (processes) are Node.js scripts attached to Claude Code lifecycle events.
 They manage context, inject knowledge into agents, block exit when a task is still active,
-and ensure progress transfer between sessions. Brewcode registers 8 hooks in `hooks.json`.
+and ensure progress transfer between sessions. Brewcode registers 9 hooks in `hooks.json`.
 
 ## Summary table
 
@@ -24,6 +24,7 @@ and ensure progress transfer between sessions. Brewcode registers 8 hooks in `ho
 | 6 | post-task | PostToolUse | Task | additionalContext | 5s | Session binding, 2-step protocol |
 | 7 | pre-compact | PreCompact | -- | -- | 60s | Compaction, handoff |
 | 8 | stop | Stop | -- | decision | 5s | Exit blocking, lock cleanup |
+| 9 | permission-guard | PermissionRequest | Edit\|Write\|MultiEdit\|Bash | hookSpecificOutput | 1s | Auto-allow safe .claude/ writes |
 
 ## Execution flow
 
@@ -40,6 +41,9 @@ PreToolUse:Task
 
 PreToolUse:Glob|Grep
   └── grepai-reminder.mjs     "USE grepai_search FIRST"
+
+PermissionRequest:Edit|Write|MultiEdit|Bash
+  └── permission-guard.sh      Auto-allow safe .claude/ and /tmp paths
 
 PostToolUse:Task
   └── post-task.mjs            Session bind, coordinator reminder
@@ -270,6 +274,63 @@ Controls session exit: blocks when a task is active, cleans up the lock when fin
 
 **Recursion protection:** If `input.stop_hook_active === true`, the hook is skipped
 to prevent an infinite loop.
+
+---
+
+### 9. permission-guard.sh
+
+<Badge variant="primary" text="PermissionRequest" /> <Badge variant="secondary" text="hookSpecificOutput" />
+
+Auto-allows write operations to safe `.claude/` subdirectories and temp paths,
+eliminating manual permission prompts during task execution. Written in bash for minimal overhead.
+
+| Parameter | Value |
+|-----------|-------|
+| Event | PermissionRequest |
+| Matcher | Edit\|Write\|MultiEdit\|Bash |
+| Channel | hookSpecificOutput (decision: allow) |
+| Timeout | 1000 ms |
+
+**Allowed paths for Edit/Write/MultiEdit:**
+
+| Path pattern | Example |
+|--------------|---------|
+| `.claude/tasks/*` | `.claude/tasks/20260301_auth_task/PLAN.md` |
+| `.claude/tmp/*` | `.claude/tmp/scratch.md` |
+| `.claude/reports/*` | `.claude/reports/review.md` |
+| `.claude/rules/*` | `.claude/rules/best-practice.md` |
+| `.claude/skills/*` | `.claude/skills/custom/SKILL.md` |
+| `.claude/scripts/*` | `.claude/scripts/build.sh` |
+| `.claude/agents/*` | `.claude/agents/reviewer.md` |
+| `.claude/hooks/*` | `.claude/hooks/hooks.json` |
+| `.claude/private/*` | `.claude/private/notes.md` |
+| `.claude/convention/*` | `.claude/convention/patterns.md` |
+| `.claude/plans/*` | `.claude/plans/LATEST.md` |
+| `.claude/settings.json` | Project settings |
+| `.claude/TASK.md`, `.claude/CLAUDE.md` | Quick-ref files |
+| `/tmp/*`, `/private/tmp/*` | System temp directories |
+
+**Bash tool handling:**
+
+The hook applies additional safety checks for Bash commands:
+- **Network commands blocked:** `curl`, `wget`, `ssh`, `scp`, `rsync`, `nc`, `ftp`, `sftp`
+- **Dangerous redirections blocked:** writes to `/dev/`, `/etc/`, `eval`, `exec`, `source`
+- **`rm` restricted:** only allowed within `.claude/tasks/`, `.claude/tmp/`, and `/tmp/`
+- **Path extraction:** all `.claude/` and temp path tokens are verified against the allow-list
+
+<Callout type="caution" title="Global config excluded">
+  The hook explicitly skips the global <code>{"~"}/.claude/</code> directory.
+  Only project-level <code>.claude/</code> paths receive auto-allow.
+  Writes to <code>{"~"}/.claude/CLAUDE.md</code> or <code>{"~"}/.claude/rules/</code> still require manual permission.
+</Callout>
+
+**Decision logic:**
+
+| State | Action |
+|-------|--------|
+| Path in allowed list | `allow` -- bypass permission prompt |
+| Path outside allowed list | `{}` -- fall through to default prompt |
+| No file_path (non-matching tool) | `{}` -- fall through |
 
 ## Configuration
 

@@ -16,22 +16,63 @@ const { currentSlug = '' } = Astro.props;
           {section.title}
         </h3>
         <ul>
-          {section.items.map((item) => (
-            <li>
-              <a
-                href={`/${item.slug}/`}
-                class:list={[
-                  'rounded-lg',
-                  currentSlug === item.slug
-                    ? 'active bg-primary/10 text-primary font-medium'
-                    : 'text-base-content/70 hover:text-base-content hover:bg-base-300',
-                ]}
-                aria-current={currentSlug === item.slug ? 'page' : undefined}
-              >
-                {item.title}
-              </a>
-            </li>
-          ))}
+          {section.items.map((item) =>
+            item.children && item.children.length > 0 ? (
+              <li>
+                <details open={currentSlug.startsWith(item.slug)}>
+                  <summary
+                    class:list={[
+                      'rounded-lg',
+                      currentSlug === item.slug
+                        ? 'active bg-primary/10 text-primary font-medium'
+                        : 'text-base-content/70 hover:text-base-content hover:bg-base-300',
+                    ]}
+                  >
+                    <a
+                      href={`/${item.slug}/`}
+                      class="no-underline text-inherit"
+                      aria-current={currentSlug === item.slug ? 'page' : undefined}
+                    >
+                      {item.title}
+                    </a>
+                  </summary>
+                  <ul>
+                    {item.children.map((child) => (
+                      <li>
+                        <a
+                          href={`/${child.slug}/`}
+                          class:list={[
+                            'rounded-lg',
+                            currentSlug === child.slug
+                              ? 'active bg-primary/10 text-primary font-medium'
+                              : 'text-base-content/70 hover:text-base-content hover:bg-base-300',
+                          ]}
+                          aria-current={currentSlug === child.slug ? 'page' : undefined}
+                        >
+                          {child.title}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              </li>
+            ) : (
+              <li>
+                <a
+                  href={`/${item.slug}/`}
+                  class:list={[
+                    'rounded-lg',
+                    currentSlug === item.slug
+                      ? 'active bg-primary/10 text-primary font-medium'
+                      : 'text-base-content/70 hover:text-base-content hover:bg-base-300',
+                  ]}
+                  aria-current={currentSlug === item.slug ? 'page' : undefined}
+                >
+                  {item.title}
+                </a>
+              </li>
+            ),
+          )}
         </ul>
       </li>
     ))}
