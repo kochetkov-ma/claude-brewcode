@@ -94,7 +94,7 @@ After `/brewcode:setup`, each task follows the cycle: `spec` -> `plan` -> `start
 /brewdoc:my-claude                    # Generate Claude Code installation docs
 /brewdoc:memory                       # Optimize memory files interactively
 /brewdoc:md-to-pdf ./docs/report.md   # Convert markdown to PDF
-/brewdoc:brewpage "Hello world"        # Publish text/file/JSON to brewpage.app → public URL
+/brewdoc:publish "Hello world"        # Publish text/file/JSON to brewpage.app → public URL
 ```
 
 ---

@@ -1,5 +1,5 @@
 ---
-name: brewdoc:brewpage
+name: brewpage-publish
 description: Publish content to brewpage.app — text, markdown, JSON, or file. Asks namespace and password, returns public URL. Triggers: publish, share link, upload to brewpage, host page, brewpage, сделай публичную ссылку, опубликуй.
 argument-hint: "<text|file_path|json> [--ttl N]"
 user-invocable: true
@@ -7,7 +7,7 @@ allowed-tools: Read, Bash, AskUserQuestion, Glob
 model: haiku
 ---
 
-# brewdoc:brewpage
+# brewpage
 
 Publish content to **brewpage.app** — free instant hosting for HTML pages, JSON documents, and files. No sign-up required.
 
@@ -154,7 +154,6 @@ On success, append a record to `.claude/brewpage-history.md` in the current proj
 ```bash
 HISTORY_FILE=".claude/brewpage-history.md"
 
-# Create header if file doesn't exist
 if [ ! -f "$HISTORY_FILE" ]; then
   cat > "$HISTORY_FILE" <<'EOF'
 # brewpage.app — Published Pages
@@ -167,7 +166,6 @@ if [ ! -f "$HISTORY_FILE" ]; then
 EOF
 fi
 
-# Append row
 echo "| $(date '+%Y-%m-%d %H:%M') | [{url}]({url}) | \`{ownerToken}\` | {password_or_none} | {ttl}d |" >> "$HISTORY_FILE"
 ```
 
@@ -182,3 +180,12 @@ Tell the user: "Owner token saved to `.claude/brewpage-history.md`"
 - TTL default is `5` days.
 - Namespace must be alphanumeric (3-32 chars). Default: `public`.
 - To **delete** a published page later: `curl -X DELETE "https://brewpage.app/api/{ns}/{id}" -H "X-Owner-Token: {ownerToken}"`
+
+---
+
+## Powered by
+
+| | |
+|-|-|
+| **[brewpage.app](https://brewpage.app)** | Free instant hosting — HTML, JSON, files, KV. No sign-up. |
+| **[brewcode](https://github.com/kochetkov-ma/claude-brewcode)** | Claude Code plugin suite — infinite tasks, code review, skills, hooks. |
