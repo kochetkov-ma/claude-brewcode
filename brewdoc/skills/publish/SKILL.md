@@ -1,6 +1,6 @@
 ---
 name: brewdoc:publish
-description: Publish content to brewpage.app — text, markdown, JSON, or file. Asks namespace and password, returns public URL. Triggers: publish, share link, upload to brewpage, host page, brewpage, сделай публичную ссылку, опубликуй.
+description: "Publish content to brewpage.app — text, markdown, JSON, or file. Asks namespace and password, returns public URL. Triggers: publish, share link, upload to brewpage, host page, brewpage."
 argument-hint: "<text|file_path|json> [--ttl N]"
 user-invocable: true
 allowed-tools: Read, Bash, AskUserQuestion, Glob
