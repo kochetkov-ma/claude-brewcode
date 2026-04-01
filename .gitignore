@@ -16,3 +16,4 @@ web/docs/.astro/
 # Environment secrets
 .env
 !**/.env.example
+logs/
