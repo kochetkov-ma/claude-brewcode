@@ -130,8 +130,8 @@ Coordinator passes **file path**, not content. Subagent reads the `.md` itself a
 
 ```yaml
 ---
-name: my-skill                    # max 64 chars, lowercase-hyphens
-description: Apply X guidelines   # 150-300 chars, ONE line, no colons
+name: my-skill                               # max 64 chars, lowercase-hyphens
+description: "Apply X guidelines for Y"     # ALWAYS quoted — prevents YAML parse failure
 ---
 
 # Skill Name
@@ -150,9 +150,10 @@ Imperative form: "Do X" (not "You should do X").
 | Field | Limits | Description |
 |-------|--------|-------------|
 | `name` | 64 chars | lowercase/numbers/hyphens. Uses directory name if omitted |
-| `description` | 150-250 chars optimal (truncated at 250 since v2.1.84), ALWAYS single line, no colons | What + when. Claude uses for auto-invocation. Front-load keywords |
+| `description` | 150-250 chars optimal (truncated at 250 since v2.1.84), ALWAYS single line, ALWAYS in double quotes | What + when. Claude uses for auto-invocation. Front-load keywords |
 
-> ⚠️ Avoid `:` in description — breaks YAML frontmatter parsing. Use ` - ` or rewrite.
+> ❌ NEVER write `description:` without quotes — em dashes (`—`), colons (`:`), and special chars break YAML parsing silently. The skill will exist on disk but skills.sh and other tools will fail to parse it.
+> ✅ ALWAYS: `description: "Your description text here"`
 
 ## Invocation Control
 
