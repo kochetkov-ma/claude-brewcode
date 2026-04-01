@@ -1,5 +1,77 @@
 <div class="not-prose my-6">
-  <ul class="steps steps-vertical">
+  <ol class="steps-timeline flex flex-col gap-0">
     <slot />
-  </ul>
+  </ol>
 </div>
+
+<style>
+  .steps-timeline {
+    counter-reset: step-counter;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .steps-timeline :global(li) {
+    counter-increment: step-counter;
+    display: grid;
+    grid-template-columns: 2.5rem 1fr;
+    gap: 0 0.75rem;
+    padding-bottom: 1.5rem;
+    position: relative;
+  }
+
+  .steps-timeline :global(li)::before {
+    content: counter(step-counter);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 9999px;
+    background-color: oklch(var(--p));
+    color: oklch(var(--pc));
+    font-weight: 700;
+    font-size: 0.875rem;
+    grid-column: 1;
+    grid-row: 1;
+    position: relative;
+    z-index: 1;
+    flex-shrink: 0;
+  }
+
+  .steps-timeline :global(li)::after {
+    content: '';
+    position: absolute;
+    left: 1.125rem;
+    top: 2.5rem;
+    bottom: 0;
+    width: 0.25rem;
+    border-radius: 0.125rem;
+    background-color: oklch(var(--p) / 0.3);
+  }
+
+  .steps-timeline :global(li:last-child)::after {
+    display: none;
+  }
+
+  .steps-timeline :global(li:last-child) {
+    padding-bottom: 0;
+  }
+
+  .steps-timeline :global(li > strong) {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+    font-size: 1.05rem;
+    color: oklch(var(--bc));
+  }
+
+  .steps-timeline :global(li > p) {
+    grid-column: 2;
+    margin: 0.25rem 0 0 0;
+    color: oklch(var(--bc) / 0.75);
+    font-size: 0.925rem;
+    line-height: 1.6;
+  }
+</style>
