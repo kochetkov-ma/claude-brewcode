@@ -47,7 +47,7 @@ Output: `MODE:`, `TEAM_NAME:`, `PROMPT:` (optional). Store all three.
    | Check team dir | `.claude/teams/{TEAM_NAME}/` -- exists? |
    | Check existing agents | `.claude/agents/` -- list all |
    | If team.md exists | Read, show current roster |
-   | If tracking/issues/insights exist | Show entry counts |
+   | If trace.jsonl exists | Show entry counts via `trace-ops.sh read` |
 
 3. If team exists -- verify:
 
@@ -171,11 +171,9 @@ Store as `DEFAULT_MODEL` (default: opus).
    mkdir -p ".claude/teams/TEAM_NAME_HERE" && echo "OK" || echo "FAILED"
    ```
 
-2. Write 4 files from templates in `${CLAUDE_SKILL_DIR}/references/framework-files.md`:
+2. Write files from templates in `${CLAUDE_SKILL_DIR}/references/framework-files.md`:
    - `team.md` -- fill with real agent data
-   - `tracking.md` -- empty table
-   - `issues.md` -- empty table
-   - `insights.md` -- empty table
+   - `touch trace.jsonl` -- empty file for trace data
 
 3. Verify:
 
@@ -195,9 +193,14 @@ Store as `DEFAULT_MODEL` (default: opus).
 No modifications. Read + report only.
 
 **Step 1:** Read `.claude/teams/{TEAM_NAME}/team.md`
-**Step 2:** Read `tracking.md` -- compute per-agent stats (took/refused/completed/failed counts)
-**Step 3:** Read `issues.md` -- count by severity
-**Step 4:** Read `insights.md` -- count by category
+**Step 2:** Read trace data:
+
+**EXECUTE** using Bash tool:
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/trace-ops.sh" read ".claude/teams/{TEAM_NAME}" && echo "OK" || echo "FAILED"
+```
+
+Parse JSONL output: group by `src` (agent) and `k` (kind). Compute per-agent stats from `k=track` entries (took/refused/completed/failed counts), count issues by severity from `k=issue`, count insights by category from `k=insight`.
 
 **Output format:**
 
@@ -242,13 +245,19 @@ No AskUserQuestion -- purely informational.
 
 ### U1: Load & Parse
 
-Read all 4 framework files from `.claude/teams/{TEAM_NAME}/`. Error if team not found -> **STOP**.
+Read `team.md` + trace data since cursor:
+
+**EXECUTE** using Bash tool:
+```bash
+CURSOR=$(bash "${CLAUDE_SKILL_DIR}/scripts/trace-ops.sh" cursor ".claude/teams/{TEAM_NAME}")
+bash "${CLAUDE_SKILL_DIR}/scripts/trace-ops.sh" read ".claude/teams/{TEAM_NAME}" --since "$CURSOR" && echo "OK" || echo "FAILED"
+```
+
+If cursor is empty (first update or post-cleanup), all entries are returned. Error if team not found -> **STOP**. If cursor exists and <10 post-cursor entries, expand: read last 30 days instead.
 
 ### U2: Analyze Performance
 
-From tracking.md: tasks took/refused/completed/failed per agent. Compute success rate.
-From issues.md: group by agent and severity.
-From insights.md: extract actionable patterns.
+From post-cursor trace entries: filter `k=track` for task stats, `k=issue` for problems, `k=insight` for patterns. Compute success rate per agent.
 
 | Status | Criteria | Action |
 |--------|----------|--------|
@@ -300,21 +309,26 @@ If "Show detailed" -- output full stats, then re-ask.
 
 Update `team.md` with current state and `Last update` date.
 
+**Set cursor** after applying changes:
+
+**EXECUTE** using Bash tool:
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/trace-ops.sh" cursor ".claude/teams/{TEAM_NAME}" set "$(date -u +%Y-%m-%dT%H:%M:%SZ)" && echo "✅" || echo "❌ FAILED"
+```
+
 ---
 
 ## Mode: CLEANUP
 
 Read `${CLAUDE_SKILL_DIR}/references/cleanup-flow.md` and execute step by step:
 
-1. Overview scan -> show file sizes and entry counts
-2. AskUserQuestion: what to clean (all / tracking / issues+insights / agents / step-by-step)
-3. Tracking cleanup (if selected) -- AskUserQuestion with archive options
-4. Issues cleanup (if selected) -- AskUserQuestion
-5. Insights cleanup (if selected) -- AskUserQuestion
-6. Agents review (if selected) -- AskUserQuestion per agent if needed
-7. Summary report
+1. Overview scan -> show trace.jsonl entry counts by kind
+2. AskUserQuestion: what to clean (all / trace data / agents / step-by-step)
+3. Trace cleanup (if selected) -- AskUserQuestion with archive options
+4. Agents review (if selected) -- AskUserQuestion per agent if needed
+5. Summary report
 
-Archive files go to `.claude/teams/{TEAM_NAME}/` alongside originals. Append-only with date headers.
+Archive: entries appended to `.claude/teams/{TEAM_NAME}/trace-archive.jsonl`. Cursor reset after cleanup.
 
 ---
 
@@ -346,13 +360,13 @@ Team: {TEAM_NAME} | Agents: {N} | Status: active
 |-------|--------|---------|
 | ... | ... | ... |
 
-Protocol: agents self-select tasks, track in `.claude/teams/{TEAM_NAME}/tracking.md`.
+Protocol: agents self-select tasks, trace in `.claude/teams/{TEAM_NAME}/trace.jsonl`.
 Manage: `/brewcode:teams [status|update|cleanup]`
 ```
 
 ### Step E2: Final Status
 
-After all changes -- ALWAYS run STATUS mode logic: read 4 files, compute stats, output Team Status table (see Mode: STATUS output format).
+After all changes -- ALWAYS run STATUS mode logic: read team.md + trace.jsonl, compute stats, output Team Status table (see Mode: STATUS output format).
 
 ---
 
@@ -386,6 +400,6 @@ After all changes -- ALWAYS run STATUS mode logic: read 4 files, compute stats, 
 | Team already exists (CREATE) | Show roster, AskUserQuestion: "Team exists. Update instead?" |
 | verify-team.sh FAIL | Show missing items, attempt fix, re-verify |
 | No agents created (C3 failure) | Retry failed agents once, then report |
-| 0 tracking entries (UPDATE) | Classify all agents as Inactive |
+| 0 trace entries (UPDATE) | Classify all agents as Inactive |
 
 </instructions>

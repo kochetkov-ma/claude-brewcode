@@ -2,7 +2,7 @@
 
 Templates for `.claude/teams/{TEAM_NAME}/` directory. All placeholders (`{TEAM_NAME}`, `{DATE}`, `{N}`, `{CWD}`) replaced at creation time. DATE format: `YYYY-MM-DD`.
 
-All files are **append-only** -- agents add rows via Edit tool, never overwrite.
+team.md uses Edit tool. trace.jsonl is **append-only** via Bash (`trace-ops.sh add`).
 
 ---
 
@@ -28,39 +28,19 @@ Status values: `active`, `inactive`, `updating`, `removed`
 
 ---
 
-## 2. tracking.md
+## 2. trace.jsonl
 
-```markdown
-# Tracking: {TEAM_NAME}
+Empty file at creation. Agents append via `trace-ops.sh add`.
 
-| Date | Agent | Task | Status | Comment |
-|------|-------|------|--------|---------|
-```
+Format: JSONL — one JSON object per line:
 
-Status values: `took`, `refused`, `completed`, `failed`
-
----
-
-## 3. issues.md
-
-```markdown
-# Issues: {TEAM_NAME}
-
-| Date | Agent | Description | Severity |
-|------|-------|-------------|----------|
-```
-
-Severity values: `low`, `medium`, `high`, `critical`
-
----
-
-## 4. insights.md
-
-```markdown
-# Insights: {TEAM_NAME}
-
-| Date | Agent | Insight | Category |
-|------|-------|---------|----------|
-```
-
-Category values: `pattern`, `architecture`, `performance`, `security`, `convention`, `debt`
+| Field | Required | Description |
+|-------|----------|-------------|
+| `ts` | auto | ISO8601 UTC timestamp |
+| `sid` | yes | Session ID, 8 chars |
+| `src` | yes | Agent name |
+| `k` | yes | `track` / `issue` / `insight` |
+| `s` | track | `took` / `refused` / `completed` / `failed` |
+| `sev` | issue | `low` / `medium` / `high` / `critical` |
+| `cat` | insight | `pattern` / `architecture` / `performance` / `security` / `convention` / `debt` |
+| `txt` | yes | Text, max 100 chars (auto-truncated by trace-ops.sh) |

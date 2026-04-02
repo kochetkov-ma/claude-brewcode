@@ -2,84 +2,75 @@
 
 ## Overview
 
-Interactive cleanup of team framework files. Every destructive action requires user confirmation via AskUserQuestion.
+Interactive cleanup of team trace data and agents. Every destructive action requires user confirmation via AskUserQuestion.
 
 ## Order of Operations
 
 1. Overview scan — show sizes
-2. Tracking cleanup (if selected)
-3. Issues cleanup (if selected)
-4. Insights cleanup (if selected)
-5. Agents review (if selected)
-6. Summary report
+2. Trace cleanup (if selected)
+3. Agents review (if selected)
+4. Summary report
 
 ## Step 1: Overview Scan
 
-Read all 4 files, calculate entry counts and approximate sizes.
+Read `trace.jsonl` via `trace-ops.sh read`, calculate entry counts by kind.
 
 ```
 AskUserQuestion:
   question: |
     Cleanup for team {TEAM_NAME}:
     
-    | File | Entries | Size |
-    | tracking.md | {N} entries | {KB} |
-    | issues.md | {N} entries | {KB} |
-    | insights.md | {N} entries | {KB} |
+    | Data | Entries | Size |
+    | trace.jsonl (track) | {N} entries | — |
+    | trace.jsonl (issue) | {N} entries | — |
+    | trace.jsonl (insight) | {N} entries | — |
+    | Total | {N} entries | {KB} |
     | Agents | {N} agents | — |
     
     What to clean?
   options:
     - "All — full cleanup"
-    - "Tracking only"
-    - "Issues + Insights only"
-    - "Agents review"
+    - "Trace data only"
+    - "Agents review only"
     - "Let me choose step by step"
 ```
 
-## Step 2: Tracking Cleanup
+## Step 2: Trace Cleanup
 
 ```
 AskUserQuestion:
   question: |
-    tracking.md: {N} entries
+    trace.jsonl: {N} entries
     Oldest: {date}, Newest: {date}
+    By kind: track={N}, issue={N}, insight={N}
     
     Options:
   options:
-    - "Archive all → tracking-archive.md, start fresh"
+    - "Archive all → trace-archive.jsonl, start fresh"
     - "Keep last 30 days, archive rest"
     - "Keep last 50 entries, archive rest"
+    - "Keep only issues + insights, archive track entries"
     - "Skip"
 ```
 
 **Archive logic:**
 
-- Read current tracking.md
+- Read current `trace.jsonl`
 - Split into keep/archive based on selection
-- Append archived entries to `tracking-archive.md` (create if not exists) with date header
-- Rewrite tracking.md with header + kept entries
-- Archive files are append-only; add date separator: `## Archived: {DATE}`
+- Append archived entries to `trace-archive.jsonl` (create if not exists)
+- Rewrite `trace.jsonl` with kept entries only
+- Reset `trace.cursor` via `trace-ops.sh cursor <dir> set ""`
 
-## Step 3: Issues Cleanup
+**EXECUTE** using Bash tool:
+```bash
+# Example: archive all, start fresh
+cat ".claude/teams/{TEAM}/trace.jsonl" >> ".claude/teams/{TEAM}/trace-archive.jsonl" && \
+printf '' > ".claude/teams/{TEAM}/trace.jsonl" && \
+bash "$BC_PLUGIN_ROOT/skills/teams/scripts/trace-ops.sh" cursor ".claude/teams/{TEAM}" set "" && \
+echo "✅ Archived" || echo "❌ FAILED"
+```
 
-Same pattern as tracking. Options:
-
-- "Archive all resolved -> issues-archive.md"
-- "Keep last 30 days"
-- "Keep only high/critical"
-- "Skip"
-
-## Step 4: Insights Cleanup
-
-Options:
-
-- "Archive all -> insights-archive.md, start fresh"
-- "Keep last 30 days"
-- "Keep actionable only (architecture, security, performance)"
-- "Skip"
-
-## Step 5: Agents Review
+## Step 3: Agents Review
 
 Show inactive/problematic agents:
 
@@ -97,7 +88,7 @@ AskUserQuestion:
     - "Keep all"
 ```
 
-If "per agent" -- loop AskUserQuestion for each:
+If "per agent" — loop AskUserQuestion for each:
 
 ```
 AskUserQuestion:
@@ -109,9 +100,9 @@ On delete:
 
 1. Remove `.claude/agents/{name}.md`
 2. Update team.md: set status to `removed`
-3. Record in tracking.md: `| date | system | removed {name} | completed | cleanup |`
+3. Record via trace-ops.sh: `bash "$BC_PLUGIN_ROOT/skills/teams/scripts/trace-ops.sh" add ".claude/teams/{TEAM}" "$SID" "system" "track" "completed" "removed {name}: cleanup"`
 
-## Step 6: Summary
+## Step 4: Summary
 
 Output report:
 
@@ -120,22 +111,15 @@ Output report:
 
 | Action | Details |
 |--------|---------|
-| Tracking | Archived {N} entries |
-| Issues | Archived {N} entries |
-| Insights | Archived {N} entries |
+| Trace entries archived | {N} |
+| Trace entries kept | {N} |
 | Agents removed | {list or "none"} |
-| Archive files | {list of created archives} |
+| Archive file | trace-archive.jsonl |
+| Cursor | reset |
 ```
 
 ## Archive File Format
 
-Archive files live in `.claude/teams/{TEAM_NAME}/` alongside originals.
+Archive files live in `.claude/teams/{TEAM_NAME}/` alongside `trace.jsonl`.
 
-```markdown
-## Archived: YYYY-MM-DD
-
-| ... original table headers ... |
-| ... archived rows ... |
-```
-
-Multiple archives append with new date headers -- never overwrite.
+`trace-archive.jsonl` — same JSONL format as `trace.jsonl`. Entries appended on each cleanup. Multiple cleanups accumulate in the same archive file.

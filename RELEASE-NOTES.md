@@ -2,6 +2,17 @@
 
 ---
 
+## v3.4.15 (2026-04-02)
+
+### brewcode
+#### Changed
+- **Teams: session-scoped trace system** — replaced 3 Markdown files (`tracking.md`, `issues.md`, `insights.md`) with single `trace.jsonl`; write via `trace-ops.sh add` (Bash append, ~96% token savings vs Edit); cursor-based incremental reads for `update` mode
+- **`trace-ops.sh`** — new POSIX sh utility: `add` (JSONL append), `read` (jq/grep filter), `cursor` (incremental bookmark), `migrate` (Markdown-to-JSONL conversion with `.bak` backup)
+- **SID injection in `pre-task.mjs`** — session ID (8 chars) auto-injected into all agent prompts when `.claude/teams/` exists
+- **`verify-team.sh`** — checks `trace.jsonl` instead of 3 MD files; detects legacy files and suggests migration
+
+---
+
 ## v3.4.14 (2026-04-02)
 
 ### brewcode

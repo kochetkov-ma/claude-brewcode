@@ -72,14 +72,12 @@ After `/brewcode:teams create my-team`:
   teams/
     my-team/
       team.md             # Roster: agent list, domains, missions, status
-      tracking.md         # Task log: who took/refused/completed/failed what
-      issues.md           # Problems encountered, grouped by severity
-      insights.md         # Reusable patterns and lessons learned
+      trace.jsonl         # Unified log: tasks, issues, insights (append-only JSONL)
 ```
 
 ## How Agents Work
 
-Created agents follow the **Task Acceptance Protocol** -- they self-select tasks based on domain fit, track acceptance/refusal in `tracking.md`, and log issues and insights as they work.
+Created agents follow the **Task Acceptance Protocol** -- they self-select tasks based on domain fit, record acceptance/refusal in `trace.jsonl` via `trace-ops.sh`, and log issues and insights as they work.
 
 | Health | Criteria |
 |--------|----------|
@@ -107,7 +105,7 @@ The `update` mode uses this data to tune agent instructions, replace underperfor
 [C3] Agent Creation ----- agent-creator x N (batches of 3-4)
     |
     v
-[C4] Framework Setup ---- 4 tracking files + verification
+[C4] Framework Setup ---- team.md + trace.jsonl + verification
     |
     v
 [E1] CLAUDE.md Update --- optional, user-confirmed
@@ -124,9 +122,9 @@ Each agent follows a 3-step self-selection before accepting a task:
 | 2 | Duplicate | Already done? | Refuse, link result |
 | 3 | Best fit | Colleague better suited? | Refuse, redirect |
 
-**Accept flow:** All 3 checks pass -> accept task -> execute -> log to tracking.md -> complete/fail
+**Accept flow:** All 3 checks pass -> accept task -> execute -> log to trace.jsonl -> complete/fail
 
-**Refuse flow:** Any check fails -> log refusal reason to tracking.md -> suggest alternative agent
+**Refuse flow:** Any check fails -> log refusal reason to trace.jsonl -> suggest alternative agent
 
 ## Dynamic Agent Resolution
 

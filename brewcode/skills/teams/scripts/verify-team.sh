@@ -24,9 +24,16 @@ check() {
 
 check "teams dir" "$TEAM_DIR"
 check "team.md" "$TEAM_DIR/team.md"
-check "tracking.md" "$TEAM_DIR/tracking.md"
-check "issues.md" "$TEAM_DIR/issues.md"
-check "insights.md" "$TEAM_DIR/insights.md"
+check "trace.jsonl" "$TEAM_DIR/trace.jsonl"
+
+if [ ! -f "$TEAM_DIR/trace.jsonl" ]; then
+  for old_file in tracking.md issues.md insights.md; do
+    if [ -f "$TEAM_DIR/$old_file" ]; then
+      echo "MIGRATE: old $old_file found without trace.jsonl. Run: trace-ops.sh migrate $TEAM_DIR"
+      break
+    fi
+  done
+fi
 
 if [ -f "$TEAM_DIR/team.md" ]; then
   in_agents=0

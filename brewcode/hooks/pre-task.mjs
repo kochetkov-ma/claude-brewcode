@@ -97,6 +97,15 @@ async function main() {
       log('debug', '[pre-task]', `Injected mode "${activeMode.name}" for ${subagentType}`, cwd, session_id);
     }
 
+    // 0.7 Inject SID for all agents when teams exist (any agent may participate in teams)
+    const teamsDir = join(cwd, '.claude', 'teams');
+    if (existsSync(teamsDir) && typeof session_id === 'string' && session_id.length >= 8) {
+      const sid = session_id.slice(0, 8);
+      updatedPrompt = `SID=${sid}\n\n${updatedPrompt}`;
+      modified = true;
+      log('debug', '[pre-task]', `Injected SID=${sid} for ${subagentType}`, cwd, session_id);
+    }
+
     // 1. Inject grepai reminder for ALL agents (including Explore, Plan, etc.)
     if (hasGrepai) {
       updatedPrompt = `${GREPAI_REMINDER}\n\n${updatedPrompt}`;
