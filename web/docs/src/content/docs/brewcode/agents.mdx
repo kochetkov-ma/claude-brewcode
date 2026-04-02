@@ -1,6 +1,6 @@
 ---
 title: "Agents"
-description: "All 13 Brewcode agents: models, triggers, tools"
+description: "All 12 Brewcode agents: models, triggers, tools"
 order: 12
 ---
 
@@ -9,7 +9,7 @@ import { Card, CardGrid, Callout } from '../../../components/mdx';
 # Agents
 
 Agents (brewers) are specialized roles defined in markdown files with frontmatter metadata.
-Each agent has its own model, toolset, and system prompt. Brewcode includes 13 agents,
+Each agent has its own model, toolset, and system prompt. Brewcode includes 12 agents,
 from developer to task coordinator.
 
 ## Summary table
@@ -23,12 +23,11 @@ from developer to task coordinator.
 | 5 | skill-creator | opus | Read, Write, Edit | Skill creation and improvement |
 | 6 | agent-creator | opus | Read, Write, Edit | Agent creation and improvement |
 | 7 | hook-creator | opus | Read, Write, Edit, Bash | Hook creation and debugging |
-| 8 | text-optimizer | sonnet | Read, Write, Edit | Text optimization for LLMs |
-| 9 | bash-expert | opus | Read, Write, Edit, Bash | Bash/sh script creation |
-| 10 | bc-coordinator | haiku | Read, Write, Edit, Bash | Phase and knowledge coordination |
-| 11 | bc-knowledge-manager | haiku | Read, Write | KNOWLEDGE.jsonl compaction |
-| 12 | bc-grepai-configurator | opus | Read, Write, Edit, Bash | grepai config.yaml generation |
-| 13 | bc-rules-organizer | sonnet | Read, Write, Edit, Bash | .claude/rules/ organization |
+| 8 | bash-expert | opus | Read, Write, Edit, Bash | Bash/sh script creation |
+| 9 | bc-coordinator | haiku | Read, Write, Edit, Bash | Phase and knowledge coordination |
+| 10 | bc-knowledge-manager | haiku | Read, Write | KNOWLEDGE.jsonl compaction |
+| 11 | bc-grepai-configurator | opus | Read, Write, Edit, Bash | grepai config.yaml generation |
+| 12 | bc-rules-organizer | sonnet | Read, Write, Edit, Bash | .claude/rules/ organization |
 
 <CardGrid>
   <Card title="developer" icon="code" href="/brewcode/agents/developer/">
@@ -51,9 +50,6 @@ from developer to task coordinator.
   </Card>
   <Card title="hook-creator" icon="link" href="/brewcode/agents/hook-creator/">
     Hook creation and debugging
-  </Card>
-  <Card title="text-optimizer" icon="sparkle" href="/brewcode/agents/text-optimizer/">
-    Text optimization for LLMs
   </Card>
   <Card title="bash-expert" icon="terminal" href="/brewcode/agents/bash-expert/">
     Bash/sh script creation

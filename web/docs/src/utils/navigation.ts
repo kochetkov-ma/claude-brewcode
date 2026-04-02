@@ -30,17 +30,15 @@ export const navigation: NavSection[] = [
           { title: 'spec', slug: 'brewcode/skills/spec' },
           { title: 'plan', slug: 'brewcode/skills/plan' },
           { title: 'start', slug: 'brewcode/skills/start' },
+          { title: 'teams', slug: 'brewcode/skills/teams' },
           { title: 'convention', slug: 'brewcode/skills/convention' },
           { title: 'rules', slug: 'brewcode/skills/rules' },
           { title: 'grepai', slug: 'brewcode/skills/grepai' },
           { title: 'install', slug: 'brewcode/skills/install' },
           { title: 'teardown', slug: 'brewcode/skills/teardown' },
-          { title: 'text-optimize', slug: 'brewcode/skills/text-optimize' },
-          { title: 'text-human', slug: 'brewcode/skills/text-human' },
           { title: 'standards-review', slug: 'brewcode/skills/standards-review' },
           { title: 'skills', slug: 'brewcode/skills/skills' },
           { title: 'agents', slug: 'brewcode/skills/agents' },
-          { title: 'secrets-scan', slug: 'brewcode/skills/secrets-scan' },
         ],
       },
       {
@@ -54,7 +52,6 @@ export const navigation: NavSection[] = [
           { title: 'skill-creator', slug: 'brewcode/agents/skill-creator' },
           { title: 'agent-creator', slug: 'brewcode/agents/agent-creator' },
           { title: 'hook-creator', slug: 'brewcode/agents/hook-creator' },
-          { title: 'text-optimizer', slug: 'brewcode/agents/text-optimizer' },
           { title: 'bash-expert', slug: 'brewcode/agents/bash-expert' },
           { title: 'bc-coordinator', slug: 'brewcode/agents/bc-coordinator' },
           { title: 'bc-knowledge-manager', slug: 'brewcode/agents/bc-knowledge-manager' },
@@ -64,6 +61,28 @@ export const navigation: NavSection[] = [
       },
       { title: 'Hooks', slug: 'brewcode/hooks' },
       { title: 'Workflow', slug: 'brewcode/workflow' },
+    ],
+  },
+  {
+    title: 'Brewtools',
+    items: [
+      { title: 'Overview', slug: 'brewtools/overview' },
+      {
+        title: 'Skills',
+        slug: 'brewtools/skills',
+        children: [
+          { title: 'text-optimize', slug: 'brewtools/skills/text-optimize' },
+          { title: 'text-human', slug: 'brewtools/skills/text-human' },
+          { title: 'secrets-scan', slug: 'brewtools/skills/secrets-scan' },
+        ],
+      },
+      {
+        title: 'Agents',
+        slug: 'brewtools/agents',
+        children: [
+          { title: 'text-optimizer', slug: 'brewtools/agents/text-optimizer' },
+        ],
+      },
     ],
   },
   {

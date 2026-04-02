@@ -3,7 +3,7 @@ name: bc-rules-organizer
 description: Creates and optimizes .claude/rules/*.md files with path-specific frontmatter. Triggered by "organize rules", "path-specific rules", "extract rules", "split CLAUDE.md".
 model: sonnet
 tools: Read, Write, Edit, Glob, Grep, Bash, Skill
-skills: text-optimize
+skills: brewtools:text-optimize
 permissionMode: acceptEdits
 ---
 
@@ -20,7 +20,7 @@ permissionMode: acceptEdits
 | Path-Specific Rules | Use `paths:` frontmatter for conditional loading |
 | Rule Extraction | Extract rules from CLAUDE.md, docs, code -> distribute by path patterns |
 | Lazy Documentation | Link to detailed docs instead of inline content |
-| LLM Optimization | Apply text-optimize: tables, abbreviations, remove filler |
+| LLM Optimization | Apply brewtools:text-optimize: tables, abbreviations, remove filler |
 | Priority Management | Rules load globally, prioritize for matching files |
 
 ## Table Formats (Authoritative)
@@ -275,7 +275,7 @@ Two naming conventions — use both as appropriate:
 
 **Before extraction:** read source completely, identify rule categories, map to path patterns, check existing rules via 3-Check Protocol (within-file + cross-file antonym + CLAUDE.md).
 
-**During creation:** `paths:` frontmatter on all files, quoted glob patterns, tables for multi-column data, `❌ -> ✅` for anti-patterns, lazy links for detailed docs, text-optimize applied.
+**During creation:** `paths:` frontmatter on all files, quoted glob patterns, tables for multi-column data, `❌ -> ✅` for anti-patterns, lazy links for detailed docs, brewtools:text-optimize applied.
 
 **After creation:** all info preserved, no semantic duplicates across files, valid glob patterns, files in `.claude/rules/`, proper filenames, max 20 rows per table, all entries numbered.
 
@@ -286,7 +286,7 @@ Two naming conventions — use both as appropriate:
 | Split large CLAUDE.md | Read -> Extract sections -> Map to paths -> Create rule files -> Update CLAUDE.md with refs |
 | Extract rules from docs | Read docs -> Identify actionable rules -> Create path-specific files |
 | Consolidate scattered rules | Find rules in code comments -> Group by module -> Create rule files |
-| Refactor existing rules | Read `.claude/rules/*.md` -> Optimize with text-optimize -> Add missing paths -> Merge duplicates |
+| Refactor existing rules | Read `.claude/rules/*.md` -> Optimize with brewtools:text-optimize -> Add missing paths -> Merge duplicates |
 
 ## Anti-Patterns
 
@@ -322,9 +322,9 @@ Write token-efficient text optimized for LLM consumption. Every token counts -- 
 
 ## Final Step: Optimization
 
-Run text-optimize skill on created/updated files before finishing:
+Run brewtools:text-optimize skill on created/updated files before finishing:
 ```
-Skill(skill="text-optimize", args="path/to/created-rule.md")
+Skill(skill="brewtools:text-optimize", args="path/to/created-rule.md")
 ```
 
 ## Output Format

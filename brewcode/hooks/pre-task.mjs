@@ -12,7 +12,8 @@ import {
   checkLock,
   isSystemAgent,
   loadConfig,
-  log
+  log,
+  getActiveMode
 } from './lib/utils.mjs';
 import { readKnowledge, compressKnowledge } from './lib/knowledge.mjs';
 import { existsSync, readFileSync } from 'fs';
@@ -86,6 +87,14 @@ async function main() {
       updatedPrompt = `BC_PLUGIN_ROOT=${pluginRoot}\n\n${updatedPrompt}`;
       modified = true;
       log('debug', '[pre-task]', `Injected BC_PLUGIN_ROOT for ${subagentType}`, cwd, session_id);
+    }
+
+    // 0.5 Inject mode instructions for ALL agents
+    const activeMode = getActiveMode(cwd);
+    if (activeMode) {
+      updatedPrompt = `[MODE: ${activeMode.name}] ${activeMode.instructions}\n\n${updatedPrompt}`;
+      modified = true;
+      log('debug', '[pre-task]', `Injected mode "${activeMode.name}" for ${subagentType}`, cwd, session_id);
     }
 
     // 1. Inject grepai reminder for ALL agents (including Explore, Plan, etc.)

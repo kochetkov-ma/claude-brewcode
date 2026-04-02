@@ -1,0 +1,103 @@
+---
+title: "Text Human"
+description: "Removes AI artifacts, cleans comments, simplifies documentation in code. Process commits, files, or folders."
+order: 3102
+---
+import { Badge, Callout } from '../../../../components/mdx';
+
+# Text Human
+
+<Badge variant="primary" text="sonnet" /> <Badge variant="secondary" text="session" />
+
+## Quick reference
+
+| Field | Value |
+|-------|-------|
+| Command | `/brewtools:text-human` |
+| Arguments | `<commit-hash\|path> [custom instructions]` |
+| Model | sonnet |
+| Context | session |
+| Tools | Read, Write, Edit, Grep, Glob, Bash, Task, AskUserQuestion |
+
+Detect and remove AI-generated artifacts from code and documentation.
+Process commits, files, or folders with parallel sub-agents.
+
+## Modes
+
+| Mode | How to trigger | What it does |
+|------|---------------|--------------|
+| Commit | `text-human 3be67487` | Processes all text files changed in the given commit via `git diff` |
+| Single file | `text-human src/main/java/MyService.java` | Processes one file directly (no sub-agent delegation) |
+| Folder | `text-human src/main/java/services/` | Finds all source/config/doc files, splits into parallel blocks |
+| Custom prompt | `text-human <scope> <instructions>` | Everything after the first token becomes custom instructions |
+| Interactive | `text-human` (no args) | Asks what to humanize: commit hash, file path, or folder path |
+
+## Usage examples
+
+```bash
+# Clean up all files from a recent AI-assisted commit
+/brewtools:text-human 3be67487
+
+# Humanize a single service class after AI pair-programming
+/brewtools:text-human src/main/java/com/example/OrderService.java
+
+# Process an entire package
+/brewtools:text-human src/main/java/services/
+
+# Commit cleanup but preserve public API docs
+/brewtools:text-human 3be67487 don't touch docs on public records
+
+# Only fix unicode and AI markers, leave everything else
+/brewtools:text-human src/ only remove AI artifacts and fix unicode
+```
+
+## What it changes
+
+| Category | Removed / Fixed | Example |
+|----------|----------------|---------|
+| AI comment markers | `// Added by AI`, `// Claude suggestion`, `// AI-generated` | Deleted entirely |
+| Fake issue numbers | `BUG-001`, `FIX-123`, `ISSUE-42` | Deleted (real project tickets kept) |
+| Unicode long dashes | U+2014 | Replaced with `--` |
+| Unicode arrows | Fancy arrows | Replaced with `->`, `<-`, `=>` |
+| Unicode bullets/quotes | Curly quotes, bullet chars | Replaced with ASCII equivalents |
+| Trivial docs | Javadoc/docstring restating method name | Deleted |
+| Obvious comments | `// Initialize the list`, `// Loop through items` | Deleted |
+| Formatting noise | 3+ blank lines, trailing whitespace, mixed tabs | Normalized |
+
+## What it keeps
+
+| Preserved | Why |
+|-----------|-----|
+| "Why" comments (`// Retry 3x due to flaky external API`) | Explain non-obvious behavior |
+| Public API documentation | External contracts matter |
+| Real issue references (`JIRA-456`, `GH-123`) | Project-specific tickets |
+| Structural comments in SQL/YAML | Section organization |
+| Complex algorithm explanations | Not trivially obvious |
+
+## Language references
+
+| Language | Reference | Load when |
+|----------|-----------|-----------|
+| Java/Kotlin | `reference/java.md` | `*.java`, `*.kt`, `*.groovy`, Spring, Maven/Gradle |
+| TypeScript/JS/React | `reference/typescript.md` | `*.ts`, `*.tsx`, `*.js`, `*.jsx`, Node.js, React |
+| Python | `reference/python.md` | `*.py`, Django, FastAPI, Flask |
+
+## Output
+
+Produces a **Humanization Report** at the end:
+
+| Metric | Description |
+|--------|-------------|
+| Total files | Number of files scanned |
+| Blocks | How many parallel blocks were used |
+| Haiku / Sonnet split | Simple files (config, data) vs complex files (logic, tests) |
+| Comments removed | Count per file |
+| Docs simplified | Count per file |
+| Unicode fixed | Count per file |
+
+Files are edited in place. Use git to revert if needed.
+
+<Callout type="tip" title="Tips">
+  Start with a commit hash after an AI-assisted session -- it picks up all changed files
+  including YAML and config. Use custom instructions to narrow scope if needed.
+</Callout>

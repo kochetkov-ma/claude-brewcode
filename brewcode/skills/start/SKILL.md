@@ -90,6 +90,12 @@ LOOP while pending tasks remain:
   c. Per task:
      i.   TaskUpdate(taskId, status="in_progress")
      ii.  Task(subagent_type="{Agent from Phase Registry}", prompt from description)
+          -- If Phase Registry agent not found as plugin: check `.claude/agents/` for project/team agent
+     -- If agent REFUSED (Task Acceptance Protocol — returned refusal with colleague suggestion):
+        a. Re-delegate to suggested colleague agent (max 2 retries)
+        b. If no suitable colleague or retries exhausted: fall back to plugin agent
+        c. Log refusal to KNOWLEDGE.jsonl:
+           {"ts":"...","t":"ℹ️","txt":"Phase {N}: {agent} refused, re-delegated to {new_agent}","src":"manager"}
      -- If agent FAILED (is_error=true):
         a. TaskUpdate(taskId, status="in_progress") -- keep in progress for retry
         b. Persist failure to KNOWLEDGE.jsonl:

@@ -75,12 +75,25 @@ IF requirements cover >3 independent areas OR estimated complexity >12 plan phas
   → If no: continue with full scope
 ```
 
+### Dynamic Agent Resolution
+
+Before spawning agents, check for project team agents:
+
+1. If `.claude/teams/` exists — read `team.md` for agent roster with domains
+2. If `.claude/agents/` has project agents — list available
+3. Match agent domain to current task area
+4. Priority: **team agent > project agent > plugin agent > system agent**
+5. If agent refuses (Task Acceptance Protocol) — re-delegate to suggested colleague (max 2 retries)
+
+> Always fall back to plugin agents when no project agents match the task domain.
+
 3. **Partition Research Areas** (5-10 areas)
 
    Analyze project and split into logical parts for parallel research:
    ```
    | Area | Pattern | Agent |
    |------|---------|-------|
+   | Domain-specific | matching pattern | matching team agent |
    | Controllers | **/controllers/ | developer |
    | Services | **/services/ | developer |
    | DB/Repos | **/repositories/ | developer |

@@ -670,3 +670,30 @@ export function saveState(cwd, state) {
     log('warn', '[state]', `Failed to save state: ${e.message}`, cwd);
   }
 }
+
+/**
+ * Get active mode and its instructions
+ * @param {string} cwd - Current working directory
+ * @returns {{ name: string, instructions: string } | null}
+ */
+export function getActiveMode(cwd) {
+  const state = getState(cwd);
+  if (!state.mode) return null;
+
+  const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT || '';
+  if (!pluginRoot) return null;
+
+  const modePath = join(pluginRoot, 'modes', `${state.mode}.md`);
+  try {
+    if (!existsSync(modePath)) {
+      log('warn', '[mode]', `Mode "${state.mode}" active but file not found: ${modePath}`, cwd);
+      return null;
+    }
+    const instructions = readFileSync(modePath, 'utf8').trim();
+    if (!instructions) return null;
+    return { name: state.mode, instructions };
+  } catch (e) {
+    log('warn', '[mode]', `Failed to read mode "${state.mode}": ${e.message}`, cwd);
+    return null;
+  }
+}

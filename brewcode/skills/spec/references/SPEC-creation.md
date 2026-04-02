@@ -26,6 +26,7 @@
 
 | Area Type | Preferred Agent | Fallback |
 |-----------|-----------------|----------|
+| Project Domain | matching team agent | `developer` |
 | Code/Architecture | `Plan`, `developer` | `Explore` |
 | Database/SQL | `developer` | `Explore` |
 | Tests | `tester` | `developer` |
@@ -33,7 +34,7 @@
 | External Docs | `Explore` | - |
 | Config/Infra | `developer` | `Plan` |
 
-**Rule:** Use project-specific agents from `.claude/agents/` when available.
+**Rule:** If team exists in `.claude/teams/`, prefer team agents for matching domains. Otherwise use project-specific agents from `.claude/agents/` when available.
 
 ## Step 3: Parallel Agent Execution
 

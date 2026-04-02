@@ -83,6 +83,7 @@ skill-name/
 | **Background Knowledge** | Claude needs context, but user doesn't need a slash command | `user-invocable: false`. Description stays in context, Claude decides when to apply |
 | **Pushy Description** | LLM-invocable skills | Description includes scenarios and keywords: "Use when - X. Trigger keywords - Y." Raises activation 20% → 50-72% |
 | **Preloaded Skills** | Subagent must follow conventions/patterns | `skills: [name]` in agent frontmatter. Full skill content injected at startup. Inverse pattern to `context: fork` |
+| **Mode Switcher** | Skill toggles persistent session behavior (on/off) | Single skill with argument (`on [mode]`, `off`, `status`). Bash block writes `mode` to `brewcode.state.json` via `jq` + atomic `mv`. Hooks read state and inject mode instructions on every event via `additionalContext`/`updatedInput`. Mode instructions in `modes/{name}.md`. Survives auto-compact |
 
 ## Agents-as-References Detail
 
@@ -117,6 +118,63 @@ Coordinator passes **file path**, not content. Subagent reads the `.md` itself a
 | Public API | Implementation detail of skill |
 
 **When to use:** skill-coordinator with 2+ roles, need context isolation between roles, prompts are implementation details (not public API).
+
+## Mode Switcher Detail
+
+A skill that toggles a persistent behavioral "mode" for the entire session. The skill writes state to disk, and hooks inject mode-specific instructions on every event.
+
+**Architecture:**
+
+```
+mode-skill/
+├── SKILL.md              # Argument parsing: on/off/status
+├── references/
+│   └── modes.md          # Available modes documentation
+└── scripts/
+    └── mode.sh           # State read/write helper
+```
+
+**How it works:**
+
+1. Skill receives argument: `on manager`, `off`, `status`
+2. `on`: Bash block writes `{"mode": "manager"}` to `.claude/tasks/cfg/brewcode.state.json`
+3. `off`: Bash block deletes `mode` from state file
+4. `status`: Bash block reads and displays current mode
+5. Hooks (`forced-eval.mjs`, `session-start.mjs`, `pre-task.mjs`) read state on every event
+6. If mode active: hooks load instructions from `$BC_PLUGIN_ROOT/modes/{mode}.md` and inject them
+
+**Skill bash block (on):**
+
+```bash
+STATE=".claude/tasks/cfg/brewcode.state.json"
+mkdir -p "$(dirname "$STATE")"
+MODE_NAME="$1"
+if [ -f "$STATE" ]; then
+  jq --arg m "$MODE_NAME" --arg t "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" '.mode = $m | .modeActivatedAt = $t' "$STATE" > "$STATE.tmp" && mv "$STATE.tmp" "$STATE"
+else
+  echo "{\"mode\":\"$MODE_NAME\",\"modeActivatedAt\":\"$(date -u +%Y-%m-%dT%H:%M:%S.000Z)\"}" > "$STATE"
+fi
+echo "Mode '$MODE_NAME' activated"
+```
+
+**Skill bash block (off):**
+
+```bash
+STATE=".claude/tasks/cfg/brewcode.state.json"
+if [ -f "$STATE" ]; then
+  jq 'del(.mode, .modeActivatedAt)' "$STATE" > "$STATE.tmp" && mv "$STATE.tmp" "$STATE"
+  echo "Mode deactivated"
+else
+  echo "No active mode"
+fi
+```
+
+**Key principles:**
+- `disable-model-invocation: true` — mode toggle is always deliberate
+- Single skill with argument parsing (not two separate skills)
+- Mode instructions live in plugin `modes/` directory (version-controlled, not user-editable)
+- Hooks inject instructions automatically — skill only manages state
+- When no mode active, hooks inject nothing (`forced-eval.mjs` retains its independent `[DELEGATE]` reminder, unrelated to Mode Switcher)
 
 ## Progressive Disclosure
 
@@ -551,7 +609,7 @@ If ALL criteria met → split into `references/{mode}.md` files.
 | Pattern | When | Example |
 |---------|------|---------|
 | Conditional (lazy) | Multi-mode, >50 lines/mode | `standards-review`: detect stack → Read `references/{stack}.md` |
-| Unconditional single | Single reference, <200 lines | `text-optimize`: always Read `references/rules-review.md` |
+| Unconditional single | Single reference, <200 lines | `brewtools:text-optimize`: always Read `references/rules-review.md` |
 
 ## 3-Step Pattern
 
@@ -662,6 +720,8 @@ If the current conversation already contains a workflow the user wants to captur
 Confirm extracted workflow with user before proceeding.
 
 Identify usage patterns: direct examples from user, validated scenarios, real-world use cases. If invoked directly from main conversation (foreground) — use AskUserQuestion for max 2-3 clarifying questions: functionality, usage examples, trigger phrases. If invocation type was provided in prompt — skip questions.
+
+> **Mode Switcher pattern hint:** If the user's request mentions "mode", "toggle", "switch", "persistent behavior", "from now on", or "always do X" — consider the **Mode Switcher** pattern. This pattern uses a single skill to write state to disk, with hooks injecting mode-specific instructions on every event. See [Mode Switcher Detail](#mode-switcher-detail).
 
 ### Invocation Type (CRITICAL)
 
@@ -1020,7 +1080,7 @@ Source: [skills docs](https://code.claude.com/docs/en/skills)
 
 # Final Step
 
-Run optimization: `Skill(skill="text-optimize", args="path/to/SKILL.md")`
+Run optimization: `Skill(skill="brewtools:text-optimize", args="path/to/SKILL.md")`
 
 # Output Format
 

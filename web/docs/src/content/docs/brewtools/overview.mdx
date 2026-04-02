@@ -1,0 +1,91 @@
+---
+title: "Brewtools Overview"
+description: "Universal text utilities plugin for Claude Code: token optimization, AI artifact removal, secrets scanning"
+order: 30
+---
+
+import { Card, CardGrid, Callout } from '../../../components/mdx';
+
+# Brewtools Overview
+
+Brewtools is a lightweight plugin providing universal text utilities: token-efficient optimization,
+AI-artifact removal, and secrets scanning. Each skill is self-contained and requires no prior setup.
+
+## Installation
+
+```bash
+claude plugin install brewtools@claude-brewcode
+```
+
+Brewtools ships as part of the `claude-brewcode` marketplace. If the marketplace has not been added yet:
+
+```bash
+claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
+claude plugin install brewtools@claude-brewcode
+```
+
+## Skills (recipes)
+
+<CardGrid>
+  <Card title="text-optimize" icon="sparkle" href="/brewtools/skills/text-optimize/">
+    LLM token efficiency optimization with 30+ validated rules.
+    Three modes: light, medium, deep. Parallel file processing.
+  </Card>
+  <Card title="text-human" icon="user" href="/brewtools/skills/text-human/">
+    Remove AI artifacts from code and docs: comments, fake issue numbers,
+    unicode characters, trivial documentation. Commit, file, or folder scope.
+  </Card>
+  <Card title="secrets-scan" icon="lock" href="/brewtools/skills/secrets-scan/">
+    Security audit for leaked credentials in git-tracked files.
+    10 parallel agents, severity classification, interactive remediation.
+  </Card>
+</CardGrid>
+
+## Commands
+
+| Command | Purpose | Model | Arguments |
+|---------|---------|-------|-----------|
+| `/brewtools:text-optimize` | Optimize text for LLM token efficiency | sonnet | `[-l\|-d] [file\|folder\|path1,path2]` |
+| `/brewtools:text-human` | Remove AI artifacts from code and docs | sonnet | `<commit-hash\|path> [custom instructions]` |
+| `/brewtools:secrets-scan` | Scan for leaked secrets and credentials | sonnet | `[--fix]` |
+
+## Agent
+
+| Agent | Model | Purpose |
+|-------|-------|---------|
+| [text-optimizer](/brewtools/agents/text-optimizer/) | sonnet | Lean execution engine for text optimization with rule-based validation |
+
+## Plugin variable
+
+`BT_PLUGIN_ROOT` -- injected by the SessionStart hook into every session context.
+Skills in the main conversation use `${CLAUDE_SKILL_DIR}` to access their own files;
+subagents use `$BT_PLUGIN_ROOT` to locate plugin resources.
+
+## Architecture
+
+```
+brewtools/
+├── .claude-plugin/
+│   └── plugin.json              # Plugin manifest
+├── hooks/
+│   ├── hooks.json               # Hook registry
+│   ├── session-start.mjs        # BT_PLUGIN_ROOT injection
+│   ├── pre-task.mjs             # BT_PLUGIN_ROOT into subagents
+│   └── lib/utils.mjs            # I/O utilities
+├── skills/
+│   ├── text-optimize/           # Token optimization
+│   ├── text-human/              # AI artifact removal
+│   └── secrets-scan/            # Secrets scanning
+└── agents/
+    └── text-optimizer.md        # Text optimization agent
+```
+
+<Callout type="note" title="Brewtools vs Brewcode">
+  **Brewtools** provides standalone text utilities: optimization, humanization, security scanning.
+  Each skill works independently with no lifecycle dependencies.
+
+  **Brewcode** is a task execution engine with infinite context, lifecycle hooks,
+  KNOWLEDGE.jsonl, and session handoff.
+
+  Both plugins install from the same `claude-brewcode` marketplace but operate independently.
+</Callout>

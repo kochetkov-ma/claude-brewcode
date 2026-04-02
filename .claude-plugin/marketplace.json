@@ -6,13 +6,13 @@
   },
   "metadata": {
     "description": "Claude Code plugin suite: brewcode for infinite task execution and brewdoc for documentation tools",
-    "version": "3.4.13"
+    "version": "3.4.14"
   },
   "plugins": [
     {
       "name": "brewcode",
       "description": "Brewcode - full-featured development platform for Claude Code: infinite focus tasks, prompt optimization, skill/agent creation, quorum reviews, rules management",
-      "version": "3.4.13",
+      "version": "3.4.14",
       "category": "productivity",
       "keywords": [
         "brewcode",
@@ -46,7 +46,7 @@
     {
       "name": "brewdoc",
       "description": "Brewdoc - Claude Code documentation tools: auto-sync for skills/agents/rules, my-claude installation docs, memory optimization, md-to-pdf conversion",
-      "version": "3.4.13",
+      "version": "3.4.14",
       "category": "productivity",
       "keywords": [
         "brewdoc",
@@ -69,6 +69,34 @@
       "homepage": "https://github.com/kochetkov-ma/claude-brewcode",
       "repository": "https://github.com/kochetkov-ma/claude-brewcode.git",
       "source": "./brewdoc",
+      "strict": true
+    },
+    {
+      "name": "brewtools",
+      "description": "Brewtools - universal utilities for Claude Code: text optimization, humanization, secrets scanning",
+      "version": "3.4.14",
+      "category": "productivity",
+      "keywords": [
+        "brewtools",
+        "text-optimization",
+        "secrets-scan",
+        "humanize",
+        "developer-tools"
+      ],
+      "tags": [
+        "text-optimization",
+        "secrets-scan",
+        "humanize",
+        "utilities"
+      ],
+      "author": {
+        "name": "Maksim Kochetkov",
+        "email": "apmatypa88@gmail.com"
+      },
+      "license": "MIT",
+      "homepage": "https://github.com/kochetkov-ma/claude-brewcode",
+      "repository": "https://github.com/kochetkov-ma/claude-brewcode.git",
+      "source": "./brewtools",
       "strict": true
     }
   ]

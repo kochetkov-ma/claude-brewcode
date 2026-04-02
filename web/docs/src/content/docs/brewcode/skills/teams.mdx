@@ -1,0 +1,145 @@
+---
+title: "Teams"
+description: "Dynamic agent teams with tracking framework and self-selection protocol."
+order: 1105
+---
+import { Card, CardGrid, Callout, Steps, Badge, Tabs, TabItem } from '../../../../components/mdx';
+
+# Teams
+
+<Badge variant="primary" text="opus" /> <Badge variant="accent" text="killer feature" />
+
+## Quick reference
+
+| Field | Value |
+|-------|-------|
+| Command | `/brewcode:teams` |
+| Arguments | `create <name> [prompt]`, `status <name>`, `update <name>`, `cleanup <name>` |
+| Model | opus |
+| Tools | Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion |
+
+## Modes
+
+<Tabs>
+  <TabItem label="Create">
+    | Step | Action |
+    |------|--------|
+    | 1 | Analyze project with 3-5 Explore agents |
+    | 2 | Propose 3 team variants (Minimal/Balanced/Maximum) |
+    | 3 | User selects variant and default model |
+    | 4 | Create agents in batches of 3-4 via agent-creator |
+    | 5 | Set up tracking framework in `.claude/teams/` |
+  </TabItem>
+  <TabItem label="Status">
+    | Step | Action |
+    |------|--------|
+    | 1 | Read tracking.md for task log |
+    | 2 | Calculate per-agent success rates |
+    | 3 | Classify health: green/yellow/red |
+    | 4 | Report issues and insights |
+  </TabItem>
+  <TabItem label="Update">
+    | Step | Action |
+    |------|--------|
+    | 1 | Analyze performance data |
+    | 2 | Identify underperformers |
+    | 3 | Tune instructions or replace agents |
+    | 4 | Update team.md roster |
+  </TabItem>
+  <TabItem label="Cleanup">
+    | Step | Action |
+    |------|--------|
+    | 1 | Archive old tracking data |
+    | 2 | Remove inactive agents |
+    | 3 | Compact issues and insights |
+  </TabItem>
+</Tabs>
+
+## CREATE Flow
+
+<Steps>
+  <li class="step step-primary">
+    <div>
+      <strong>Project Analysis</strong> <Badge variant="secondary" text="C1" />
+      <p>3-5 Explore agents scan code structure, tech stack, CI/CD, domain boundaries in parallel.</p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>Team Proposal</strong> <Badge variant="secondary" text="C2" />
+      <p>3 variants: Minimal (5) / Balanced (10-12) / Maximum (15-20). User confirms via AskUserQuestion.</p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>Model Selection</strong> <Badge variant="secondary" text="C2.5" />
+      <p>Choose default model: Opus (recommended) / Sonnet / Haiku / Mixed per-agent.</p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>Agent Creation</strong> <Badge variant="secondary" text="C3" />
+      <p>agent-creator x N in batches of 3-4 parallel. Each agent gets unified template + text-optimize.</p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>Framework Setup</strong> <Badge variant="secondary" text="C4" />
+      <p>4 tracking files in .claude/teams/ + verify-team.sh validation.</p>
+    </div>
+  </li>
+</Steps>
+
+## Task Acceptance Protocol
+
+<CardGrid>
+  <Card title="Domain Check" icon="shield">
+    Agent evaluates: "Is this my domain?" If not, refuses and suggests a better-suited colleague from the team roster.
+  </Card>
+  <Card title="Duplicate Check" icon="search">
+    Agent checks: "Has this already been done?" If yes, refuses and links to the existing result in tracking.md.
+  </Card>
+  <Card title="Best Candidate" icon="people">
+    Agent considers: "Is a colleague better suited?" If yes, refuses and redirects to the recommended agent.
+  </Card>
+</CardGrid>
+
+## Framework Files
+
+<CardGrid>
+  <Card title="team.md" icon="list">
+    Agent roster: names, domains, missions, health status. Source of truth for the team composition.
+  </Card>
+  <Card title="tracking.md" icon="chart">
+    Task log: who accepted/refused/completed/failed each task. Performance data for update mode.
+  </Card>
+  <Card title="issues.md" icon="warning">
+    Problems encountered during execution, grouped by severity. Input for agent tuning.
+  </Card>
+  <Card title="insights.md" icon="sparkle">
+    Reusable patterns and lessons learned. Extracted to project rules via `/brewcode:rules`.
+  </Card>
+</CardGrid>
+
+## Agent Health
+
+| Health | Criteria | Action |
+|--------|----------|--------|
+| Green | >70% success rate, active in recent tasks | No action needed |
+| Yellow | 30-70% success rate or many refusals | Review instructions, consider tuning |
+| Red | &lt;30% success rate or inactive | Replace or remove via update mode |
+
+<Callout type="note" title="Integration with Core Skills">
+  Team agents are automatically preferred by <code>/brewcode:spec</code>, <code>/brewcode:plan</code>, <code>/brewcode:start</code>
+  when matching domains are found. Priority: team agent &rarr; project agent &rarr; plugin agent.
+  Agents can refuse tasks and suggest a better-suited colleague.
+</Callout>
+
+## Related Skills
+
+| Skill | Relationship |
+|-------|-------------|
+| [`/brewcode:setup`](/brewcode/skills/setup/) | Run first to analyze project structure |
+| [`/brewcode:spec`](/brewcode/skills/spec/) | Create task specifications for agents to execute |
+| [`/brewcode:plan`](/brewcode/skills/plan/) | Build execution plans from specs |
+| [`/brewcode:start`](/brewcode/skills/start/) | Execute plans using the created team |

@@ -1,5 +1,5 @@
 ---
-name: brewcode:text-optimize
+name: brewtools:text-optimize
 description: Optimizes text and docs for LLM token efficiency. Use when - optimizing prompts, reducing tokens, compressing text, condensing verbose content. Trigger keywords - optimize, reduce tokens, compress, condense, slim, tighten, too verbose, shrink.
 argument-hint: "[-l|-d] [file|folder|path1,path2] — -l light, -d deep, no flag = medium"
 user-invocable: true
@@ -66,12 +66,12 @@ Parse `$ARGUMENTS`: `-l`/`--light` | `-d`/`--deep` | no flag -> medium (default)
 
 | Command | Description |
 |---------|-------------|
-| `/brewcode:text-optimize` | Optimize ALL: `CLAUDE.md`, `.claude/agents/*.md`, `.claude/skills/**/SKILL.md` |
-| `/brewcode:text-optimize file.md` | Single file (medium mode) |
-| `/brewcode:text-optimize -l file.md` | Light mode — text cleanup only, structure untouched |
-| `/brewcode:text-optimize -d file.md` | Deep mode — max compression, review diff after |
-| `/brewcode:text-optimize path1.md, path2.md` | Multiple files — parallel processing |
-| `/brewcode:text-optimize -d agents/` | Directory — all `.md` files with specified mode |
+| `/brewtools:text-optimize` | Optimize ALL: `CLAUDE.md`, `.claude/agents/*.md`, `.claude/skills/**/SKILL.md` |
+| `/brewtools:text-optimize file.md` | Single file (medium mode) |
+| `/brewtools:text-optimize -l file.md` | Light mode — text cleanup only, structure untouched |
+| `/brewtools:text-optimize -d file.md` | Deep mode — max compression, review diff after |
+| `/brewtools:text-optimize path1.md, path2.md` | Multiple files — parallel processing |
+| `/brewtools:text-optimize -d agents/` | Directory — all `.md` files with specified mode |
 
 ## File Processing
 
@@ -93,10 +93,10 @@ Task(subagent_type: "Explore", prompt: "Analyze {file}: structure, dependencies,
 
 **Phase 2: Optimization** — Parallel text-optimizer agents
 
-> **Context:** BC_PLUGIN_ROOT is available in your context (injected by pre-task.mjs hook). Use it to access plugin resources.
+> **Context:** BT_PLUGIN_ROOT is available in your context (injected by pre-task.mjs hook). Use it to access plugin resources.
 
 ```
-Task(subagent_type: "text-optimizer", prompt: "FIRST: Read $BC_PLUGIN_ROOT/skills/text-optimize/references/rules-review.md for validation rules. THEN optimize {file} using {mode} mode. Apply transformations, verify refs, output report with metrics.")
+Task(subagent_type: "text-optimizer", prompt: "FIRST: Read $BT_PLUGIN_ROOT/skills/text-optimize/references/rules-review.md for validation rules. THEN optimize {file} using {mode} mode. Apply transformations, verify refs, output report with metrics.")
 ```
 
 > **Spawn parallel:** For multiple files, spawn ALL agents in ONE message for speed.

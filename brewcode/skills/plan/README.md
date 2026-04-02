@@ -1,87 +1,94 @@
 ---
 auto-sync: enabled
-auto-sync-date: 2026-02-12
+auto-sync-date: 2026-04-01
 auto-sync-type: doc
 ---
 
-# Plan Skill
+# Plan
 
-Create an execution plan (PLAN.md) from your task specification.
+Creates an execution plan (PLAN.md) with phase files, agent assignments, and verification criteria from a SPEC or Plan Mode file.
 
-## What It Does
-
-Converts a SPEC.md into a detailed PLAN.md with phases, agent assignments, and verification criteria. Supports two input modes:
-- **SPEC Mode** — Creates plan from existing SPEC.md
-- **Plan Mode** — Creates plan from `.claude/plans/LATEST.md` or plan file (skips SPEC step)
-
-## How to Use
+## Quick Start
 
 ```bash
-/brewcode:plan [task-dir|SPEC.md|plan-file]
+# Uses the latest task from .claude/TASK.md automatically
+/brewcode:plan
 ```
 
-## Arguments
+## Modes
 
-| Argument | Type | Optional | Description |
-|----------|------|----------|-------------|
-| `-n`, `--noask` | flag | Yes | Skip all user questions, auto-approve defaults |
-| `task-dir\|SPEC.md\|plan-file` | string | Yes | Task directory, SPEC.md, or plan file path — defaults to .claude/TASK.md ref |
+| Mode | How to trigger | What it does |
+|------|---------------|--------------|
+| SPEC (default) | `/brewcode:plan path/to/SPEC.md` or task dir | Reads SPEC.md, scans project for reference examples, generates 5-12 phases with verification, runs quorum review (3 agents), traceability check |
+| Plan Mode | `/brewcode:plan .claude/plans/LATEST.md` | Parses an external plan file, creates task dir, splits items into granular phases, runs lightweight review (2 agents) |
+| Auto-detect | `/brewcode:plan` (no args) | Reads `.claude/TASK.md` quick ref to find the latest task directory and its SPEC.md |
+| Non-interactive | Add `-n` or `--noask` flag | Skips all user questions, auto-approves phase split and review remarks |
 
 ## Examples
 
+### Good Usage
+
 ```bash
-# Create plan from SPEC
-/brewcode:plan .claude/tasks/20260212-140000_new_feature_task/SPEC.md
+# From a SPEC file -- most common path after /brewcode:spec
+/brewcode:plan .claude/tasks/20260401-093000_auth_service_task/SPEC.md
 
-# Or from task directory
-/brewcode:plan .claude/tasks/20260212-140000_new_feature_task
+# From a task directory -- SPEC.md resolved automatically
+/brewcode:plan .claude/tasks/20260401-093000_auth_service_task
 
-# Or from Plan Mode file
+# From a Plan Mode file -- skips SPEC, useful for plans written outside brewcode
 /brewcode:plan .claude/plans/LATEST.md
 
-# Or use latest from quick ref
-/brewcode:plan
+# Non-interactive -- no questions asked, auto-approve everything
+/brewcode:plan -n .claude/tasks/20260401-093000_auth_service_task/SPEC.md
 
-# Non-interactive mode (no questions)
-/brewcode:plan -n .claude/tasks/20260212-140000_new_feature_task/SPEC.md
+# No arguments -- picks latest task from .claude/TASK.md
+/brewcode:plan
 ```
 
-## Workflow (SPEC Mode)
+### Common Mistakes
 
-1. **Read SPEC** -- extracts goal, requirements, analysis, context files, risks, decisions
-2. **Scan Project** -- finds 1-2 canonical reference files per phase type (controller, service, test, etc.)
-3. **Phase Breakdown** -- splits into 5-12 phases with dependencies, agent assignments, and verification criteria
-4. **User Approval** -- presents proposed phases for approval or adjustments
-5. **Generate Artifacts** -- writes PLAN.md from project-adapted template
-6. **Technology Choices** -- documents non-trivial tech decisions (library, pattern, approach) with rationale and rejected alternatives
-7. **Quorum Review** -- 3 mixed agents (Plan + architect + reviewer) review in parallel; only remarks confirmed by 2/3 majority are accepted
-8. **Traceability Check** -- verifies every Scope item and requirement from SPEC has at least one phase; adds missing phases if gaps found
-9. **Present Results** -- shows confirmed remarks and traceability results for user approval
+```bash
+# Wrong: running plan without setup -- templates will be missing
+/brewcode:plan .claude/tasks/20260401_task/SPEC.md
+# Fix: run /brewcode:setup first to generate project-adapted templates
 
-## Workflow (Plan Mode)
+# Wrong: pointing to PLAN.md instead of SPEC.md or task dir
+/brewcode:plan .claude/tasks/20260401_task/PLAN.md
+# Fix: pass the task directory or SPEC.md, not an existing PLAN.md
 
-For plans created outside brewcode (e.g., `.claude/plans/LATEST.md`):
-
-1. **Parse Plan File** -- extracts structure, goals, steps
-2. **Create Task Dir + Scan** -- generates task directory and finds reference files
-3. **Split into Granular Phases** -- each plan item may become 1-3 phases with verification
-4. **User Approval** -- same as SPEC mode
-5. **Generate Artifacts** -- PLAN.md, KNOWLEDGE.jsonl, artifacts/, backup/ (no SPEC.md in this flow)
-6. **Lightweight Review** -- 2 agents (architect + reviewer) review in parallel; 2/2 consensus required
+# Wrong: expecting plan to create the SPEC
+/brewcode:plan "add user authentication"
+# Fix: run /brewcode:spec "add user authentication" first, then /brewcode:plan
+```
 
 ## Output
 
-Creates in task directory:
+The skill creates this structure inside the task directory:
 
-| File | Description |
-|------|-------------|
-| `PLAN.md` | Phases with agent assignments, dependencies, and success criteria |
-| `KNOWLEDGE.jsonl` | Empty (0-byte) knowledge base, populated during execution |
-| `artifacts/` | Directory for execution outputs |
-| `backup/` | Directory for file backups |
+```
+.claude/tasks/{TS}_{NAME}_task/
+├── PLAN.md                         # Slim plan with Phase Registry table
+├── phases/                         # Individual phase files
+│   ├── 1-create-entity.md          # Execution phase
+│   ├── 1V-verify-create-entity.md  # Verification phase
+│   ├── 2-add-service.md
+│   ├── 2V-verify-add-service.md
+│   ├── ...
+│   └── FR-final-review.md          # Final review (reviewer+tester+architect)
+├── KNOWLEDGE.jsonl                 # Empty, populated during /brewcode:start
+├── artifacts/                      # Execution outputs
+└── backup/                         # File backups
+```
 
-Also updates `.claude/TASK.md` quick reference (prepends task path, preserves history).
+**PLAN.md** contains a Phase Registry linking to each `phases/*.md` file, plus completion criteria, agent table, technology choices, and role constraints.
 
-> **Tip:** Use `-n` flag to skip interactive questions for CI/automated pipelines.
+Each **phase file** includes: objective, context files, reference examples, task list, constraints, exit criteria, and artifact directory.
 
-Next step: `/brewcode:start .claude/tasks/{TS}_{NAME}_task/PLAN.md` to execute the plan.
+The skill also updates `.claude/TASK.md` -- prepends the new task path to the top while preserving history.
+
+## Tips
+
+- Run `/brewcode:setup` before your first plan -- it generates project-adapted templates that produce better phase files than the plugin defaults.
+- Use `-n` flag for CI pipelines or when you trust the defaults and want zero interaction.
+- After the plan is created, the skill prints a ready-to-paste command: `/brewcode:start .claude/tasks/{TS}_{NAME}_task/PLAN.md`. Clear context with `/clear` first, then paste it.
+- SPEC mode runs a 3-agent quorum review (Plan + architect + reviewer) with 2/3 majority rule. Plan Mode uses a lighter 2-agent review with 2/2 consensus. Both catch gaps before execution begins.

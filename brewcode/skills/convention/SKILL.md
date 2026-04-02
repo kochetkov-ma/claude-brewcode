@@ -84,6 +84,17 @@ Read `references/analysis-layers.md`. Filter layers by detected stack from P0. F
 
 ## P2: Parallel Layer Analysis (10 agents, ONE message)
 
+### Dynamic Agent Resolution
+
+Before spawning agents, check for project team agents:
+
+1. If `.claude/teams/` exists — read `team.md` for agent roster with domains
+2. If team has architecture/testing domain agents — prefer over plugin architect/tester
+3. Priority: **team agent > project agent > plugin agent > system agent**
+4. If agent refuses (Task Acceptance Protocol) — re-delegate to suggested colleague (max 2 retries)
+
+> Always fall back to plugin agents when no project agents match the task domain.
+
 Spawn ALL agents in a SINGLE message. Skip agents for inactive layers (filtered in P1).
 
 | # | Agent | Layers | Focus |
@@ -186,15 +197,25 @@ Target: ~{LINE_COUNT} lines.
 
 ---
 
-## P5: Text Optimization (3 text-optimizer agents, PARALLEL)
+## P5: Text Optimization
+
+IF `text-optimizer` agent is available (brewtools installed):
 
 Spawn 3 text-optimizer agents in ONE message (medium mode):
 
 ```
-Task(subagent_type="text-optimizer", prompt="FIRST: Read $BC_PLUGIN_ROOT/skills/text-optimize/references/rules-review.md. THEN optimize .claude/convention/reference-patterns.md using medium mode. Output report with metrics.")
-Task(subagent_type="text-optimizer", prompt="FIRST: Read $BC_PLUGIN_ROOT/skills/text-optimize/references/rules-review.md. THEN optimize .claude/convention/testing-conventions.md using medium mode. Output report with metrics.")
-Task(subagent_type="text-optimizer", prompt="FIRST: Read $BC_PLUGIN_ROOT/skills/text-optimize/references/rules-review.md. THEN optimize .claude/convention/project-architecture.md using medium mode. Output report with metrics.")
+Task(subagent_type="text-optimizer", prompt="FIRST: Read $BT_PLUGIN_ROOT/skills/text-optimize/references/rules-review.md. THEN optimize .claude/convention/reference-patterns.md using medium mode. Output report with metrics.")
+Task(subagent_type="text-optimizer", prompt="FIRST: Read $BT_PLUGIN_ROOT/skills/text-optimize/references/rules-review.md. THEN optimize .claude/convention/testing-conventions.md using medium mode. Output report with metrics.")
+Task(subagent_type="text-optimizer", prompt="FIRST: Read $BT_PLUGIN_ROOT/skills/text-optimize/references/rules-review.md. THEN optimize .claude/convention/project-architecture.md using medium mode. Output report with metrics.")
 ```
+
+ELSE (brewtools not installed -- fallback):
+
+Read `${CLAUDE_SKILL_DIR}/../convention/references/text-optimize-fallback.md` for compact rules.
+Apply rules manually to all 3 generated documents:
+- `.claude/convention/reference-patterns.md`
+- `.claude/convention/testing-conventions.md`
+- `.claude/convention/project-architecture.md`
 
 ---
 

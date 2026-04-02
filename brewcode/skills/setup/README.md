@@ -1,70 +1,94 @@
 ---
 auto-sync: enabled
-auto-sync-date: 2026-02-12
+auto-sync-date: 2026-04-01
 auto-sync-type: doc
 ---
 
-# Setup Skill
+# Setup
 
-## What It Does
+Analyzes your project's tech stack, testing framework, database layer, and existing agents to generate tailored templates and a review skill under `.claude/tasks/`. Run this once before using any other brewcode skill (`spec`, `plan`, `start`, `review`).
 
-Analyzes your project structure, tech stack, testing framework, and existing agents to generate a customized `PLAN.md.template` in `.claude/tasks/templates/`. This template is used by the brewcode plugin to execute multi-phase tasks tailored to your specific project.
-
-## How to Invoke
-
-```
-/brewcode:setup
-```
-
-Optionally provide a path to a universal template to adapt:
-
-```
-/brewcode:setup ~/.claude/templates/PLAN.md.template
-```
-
-## What It Creates
-
-| File | Purpose |
-|------|---------|
-| `.claude/tasks/templates/PLAN.md.template` | Customized task plan template |
-| `.claude/tasks/templates/SPEC.md.template` | Spec template for brewcode |
-| `.claude/tasks/templates/KNOWLEDGE.jsonl.template` | Knowledge base template |
-| `.claude/tasks/cfg/brewcode.config.json` | Runtime configuration |
-
-## Example
-
-Run setup in a Java/Spring Boot project:
+## Quick Start
 
 ```bash
 /brewcode:setup
 ```
 
-The skill detects:
-- Language: Java
-- Framework: Spring Boot
-- Testing: JUnit 5, AssertJ
-- Database: PostgreSQL with JPA
-- Project agents: db-expert, security-reviewer
+## Modes
 
-It generates templates with:
-- Spring Boot-specific verification phases
-- JPA/Hibernate best practices
-- AssertJ assertion patterns
-- Your project's custom agents
+| Mode | How to trigger | What it does |
+|------|---------------|--------------|
+| Full auto-detect | `/brewcode:setup` | Scans the project, detects stack, generates all templates and review skill |
+| Custom template | `/brewcode:setup path/to/PLAN.md.template` | Uses the provided template as a base and adapts it to the project |
 
-## After Setup
+Both modes run the same five phases: scan, analyze, generate templates, create review skill, and update the global `~/.claude/CLAUDE.md` agents section (with confirmation).
 
-Use brewcode to create and execute multi-phase tasks:
+## Examples
 
-```
-/brewcode:spec "Implement user authentication"
-/brewcode:plan
-/brewcode:start
+### Good Usage
+
+```bash
+# First-time setup in a new project -- run before anything else
+/brewcode:setup
 ```
 
-## Re-run
+```bash
+# After adding new agents to .claude/agents/ -- re-run to pick them up
+/brewcode:setup
+```
 
-Re-run setup anytime your project structure changes:
-- New agents added
-- Test framework updated
-- Database or ORM changed
+```bash
+# Use a shared team template as the starting point
+/brewcode:setup ~/.claude/templates/PLAN.md.template
+```
+
+```bash
+# After switching from JPA to jOOQ -- re-run so templates reflect the new stack
+/brewcode:setup
+```
+
+### Common Mistakes
+
+```bash
+# WRONG: Running /brewcode:spec before setup
+# Setup has not run yet, so there are no templates to base the spec on.
+/brewcode:spec "Add payment endpoint"
+
+# FIX: Run setup first, then spec.
+/brewcode:setup
+/brewcode:spec "Add payment endpoint"
+```
+
+```bash
+# WRONG: Editing .claude/tasks/templates/PLAN.md.template by hand
+# The next /brewcode:setup will overwrite your manual changes.
+
+# FIX: Put customizations in the source template and pass it as an argument.
+/brewcode:setup ~/my-custom-template.md
+```
+
+```bash
+# WRONG: Running setup from a different directory than the project root
+# The scan script looks at the current working directory for build files and agents.
+
+# FIX: Open Claude Code at the project root, then run setup.
+```
+
+## Output
+
+| File | Location | Purpose |
+|------|----------|---------|
+| PLAN template | `.claude/tasks/templates/PLAN.md.template` | Multi-phase task plan adapted to your stack |
+| SPEC template | `.claude/tasks/templates/SPEC.md.template` | Specification template for `brewcode:spec` |
+| KNOWLEDGE template | `.claude/tasks/templates/KNOWLEDGE.jsonl.template` | Knowledge base seed for task sessions |
+| Config | `.claude/tasks/cfg/brewcode.config.json` | Runtime settings (knowledge limits, agent lists) |
+| Review skill | `.claude/skills/brewcode-review/SKILL.md` | Tech-specific code review checklist |
+
+The review skill is generated with checks matched to the detected stack (e.g., Spring DI rules for Java, async patterns for Node.js, error wrapping for Go).
+
+## Tips
+
+- Run setup again whenever you change your tech stack, add project agents, or update your test framework. Templates are overwritten; rules are preserved.
+- The skill asks for confirmation before modifying `~/.claude/CLAUDE.md`. You can safely decline and still get all project-level templates.
+- After setup completes, the typical workflow is `spec` -> `plan` -> `start`. Each of those skills depends on the templates setup creates.
+- Check `.claude/tasks/cfg/brewcode.config.json` to tune knowledge compaction limits and agent injection settings after the initial run.

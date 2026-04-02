@@ -1,0 +1,37 @@
+---
+title: "Skills"
+description: "All 3 Brewtools skills: commands, parameters, examples"
+order: 31
+---
+
+import { Card, CardGrid, Callout } from '../../../components/mdx';
+
+# Skills
+
+Skills (recipes) are slash commands that define *what* to do. Brewtools includes 3 skills
+focused on text processing and security scanning -- each works independently with no prior setup required.
+
+## Summary table
+
+| # | Skill | Command | Model | Purpose |
+|---|-------|---------|-------|---------|
+| 1 | text-optimize | `/brewtools:text-optimize` | sonnet | Text optimization for LLMs |
+| 2 | text-human | `/brewtools:text-human` | sonnet | AI artifact removal from code |
+| 3 | secrets-scan | `/brewtools:secrets-scan` | sonnet | Secrets and key scanning |
+
+<CardGrid>
+  <Card title="text-optimize" icon="sparkle" href="/brewtools/skills/text-optimize/">
+    Text optimization for LLMs
+  </Card>
+  <Card title="text-human" icon="user" href="/brewtools/skills/text-human/">
+    AI artifact removal from code
+  </Card>
+  <Card title="secrets-scan" icon="lock" href="/brewtools/skills/secrets-scan/">
+    Secrets and key scanning
+  </Card>
+</CardGrid>
+
+<Callout type="tip" title="Standalone">
+  All three skills can be used independently -- they require no prior setup
+  and no dependency on Brewcode or Brewdoc plugins.
+</Callout>

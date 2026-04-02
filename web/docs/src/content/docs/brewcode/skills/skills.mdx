@@ -270,6 +270,19 @@ If yes: spawn skill-creator agent with eval prompt targeting the new skill.
 
 ---
 
+## Mode Switcher
+
+The `create` mode supports generating **Mode Switcher** skills — skills that toggle persistent
+session-level behavioral modes via `brewcode.state.json`. Hooks inject mode instructions
+on every event (`forced-eval.mjs`, `session-start.mjs`, `pre-task.mjs`).
+
+When the create prompt contains keywords like "mode", "toggle", "switch", or "persistent",
+Step 2.5 auto-detects the intent and asks whether to use the Mode Switcher pattern.
+
+The generated skill supports three arguments: `on [mode-name]`, `off`, and `status`.
+
+---
+
 ## Output format
 
 ```markdown

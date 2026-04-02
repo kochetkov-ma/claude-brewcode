@@ -19,11 +19,11 @@ what to brew, agents (brewers) do the work, and hooks (processes) manage the lif
     Automatic knowledge transfer between sessions via KNOWLEDGE.jsonl and the handoff mechanism.
     Tasks continue after compaction without losing progress.
   </Card>
-  <Card title="15 skills (recipes)" icon="terminal">
+  <Card title="13 skills (recipes)" icon="terminal">
     Full cycle: from project analysis (/brewcode:setup) to task execution (/brewcode:start)
     and code review (/brewcode:standards-review).
   </Card>
-  <Card title="13 agents (brewers)" icon="users">
+  <Card title="12+ agents (brewers)" icon="users">
     Specialized agents: developer, tester, reviewer, architect, skill-creator,
     agent-creator, and coordinators.
   </Card>
@@ -36,8 +36,12 @@ what to brew, agents (brewers) do the work, and hooks (processes) manage the lif
     Auto-start, reminders, configurator.
   </Card>
   <Card title="Code quality" icon="shield">
-    Standards-review, convention analysis, secrets-scan, text-optimize.
+    Standards-review, convention analysis.
     Rules are automatically synced to .claude/rules/.
+  </Card>
+  <Card title="Dynamic teams" icon="group">
+    Create project-specific agent teams (5-20) with self-selection,
+    performance tracking, and automatic tuning.
   </Card>
 </CardGrid>
 
@@ -54,7 +58,7 @@ all context is managed through built-in Claude Code events.
   │   ┌──────────────┐          ┌──────────────────┐         │
   │   │ setup, spec  │          │ developer, tester │         │
   │   │ plan, start  │ ──────>  │ reviewer, architect│         │
-  │   │ convention,. │          │ coordinator, ...  │         │
+  │   │ convention,. │          │ + dynamic teams   │         │
   │   └──────────────┘          └──────────────────┘         │
   │          │                          │                     │
   │          v                          v                     │
@@ -102,7 +106,7 @@ brewcode/
 │   └── lib/
 │       ├── utils.mjs                  # I/O, lock files, configuration
 │       └── knowledge.mjs             # KNOWLEDGE.jsonl operations
-├── agents/                            # 13 agents
+├── agents/                            # 12 agents
 │   ├── developer.md                   # Feature implementation (opus)
 │   ├── tester.md                      # Testing (sonnet)
 │   ├── reviewer.md                    # Code review (opus)
@@ -116,7 +120,7 @@ brewcode/
 │   ├── bc-knowledge-manager.md        # Knowledge manager (haiku)
 │   ├── bc-grepai-configurator.md      # grepai configurator (opus)
 │   └── bc-rules-organizer.md          # Rules organizer (sonnet)
-├── skills/                            # 15 skills
+├── skills/                            # 13 skills
 │   ├── setup/                         # Project analysis, templates
 │   ├── spec/                          # Specification creation
 │   ├── plan/                          # Plan creation
@@ -126,12 +130,10 @@ brewcode/
 │   ├── grepai/                        # Semantic search
 │   ├── install/                       # Dependency installation
 │   ├── teardown/                      # Cleanup
-│   ├── text-optimize/                 # Text optimization
-│   ├── text-human/                    # Code humanization
 │   ├── standards-review/              # Standards review
 │   ├── skills/                        # Skill management
 │   ├── agents/                        # Agent management
-│   └── secrets-scan/                  # Secrets scanning
+│   └── teams/                         # Dynamic agent teams
 └── templates/                         # Rule templates
 ```
 
@@ -173,17 +175,18 @@ After running `/brewcode:setup` and `/brewcode:start`, the following appears in 
 
 <Tabs>
   <TabItem label="Skills">
-    15 skills (recipes) cover the full task lifecycle.
+    13 skills (recipes) cover the full task lifecycle.
     See the [Skills](/brewcode/skills/) section for details.
 
     | Group | Skills | Purpose |
     |-------|--------|---------|
     | Core cycle | setup, spec, plan, start | Task creation and execution |
-    | Quality | standards-review, convention, rules, secrets-scan | Code analysis and review |
-    | Utilities | grepai, install, teardown, text-optimize, text-human, skills, agents | Tools and configuration |
+    | Quality | standards-review, convention, rules | Code analysis and review |
+    | Dynamic | teams | Agent team creation and management |
+    | Utilities | grepai, install, teardown, skills, agents | Tools and configuration |
   </TabItem>
   <TabItem label="Agents">
-    13 agents (brewers) with different models and specializations.
+    12+ agents (brewers) with different models and specializations.
     See the [Agents](/brewcode/agents/) section for details.
 
     | Role | Agents | Model |
@@ -193,6 +196,8 @@ After running `/brewcode:setup` and `/brewcode:start`, the following appears in 
     | Creation | skill-creator, agent-creator, hook-creator | opus |
     | Optimization | text-optimizer, bash-expert | sonnet/opus |
     | Coordination | bc-coordinator, bc-knowledge-manager, bc-grepai-configurator, bc-rules-organizer | haiku/sonnet/opus |
+
+    + dynamic project agents created by `/brewcode:teams`
   </TabItem>
   <TabItem label="Hooks">
     8 hooks (processes) manage the lifecycle through Claude Code events.
@@ -242,9 +247,15 @@ After running `/brewcode:setup` and `/brewcode:start`, the following appears in 
       <p>Launch the task with infinite context and automatic handoff.</p>
     </div>
   </li>
+  <li class="step step-secondary">
+    <div>
+      <strong>Team Creation (optional)</strong> <Badge variant="secondary" text="/brewcode:teams" />
+      <p>Create a project-specific agent team with tracking framework. Agents auto-integrate with spec/plan/start.</p>
+    </div>
+  </li>
 </Steps>
 
 <Callout type="tip" title="Next steps">
-  Check out [Skills](/brewcode/skills/) for a detailed description of all 15 skills,
+  Check out [Skills](/brewcode/skills/) for a detailed description of all 13 skills,
   or go to [Workflow](/brewcode/workflow/) for a deep dive into the full task execution cycle.
 </Callout>

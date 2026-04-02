@@ -75,6 +75,18 @@ Strip flag from `$ARGUMENTS`. Remaining text = path.
    - Find 1-2 canonical files per expected phase type (controller, service, test, etc.)
    - These become Reference Examples (R1, R2...) in PLAN.md
 
+### Dynamic Agent Resolution
+
+Before assigning agents to phases, check for project team agents:
+
+1. If `.claude/teams/` exists — read `team.md` for agent roster with domains
+2. If `.claude/agents/` has project agents — list available
+3. Match agent domain to phase task area
+4. Priority: **team agent > project agent > plugin agent > system agent**
+5. If agent refuses (Task Acceptance Protocol) — re-delegate to suggested colleague (max 2 retries)
+
+> Always fall back to plugin agents when no project agents match the task domain.
+
 3. **Generate Phase Breakdown** (5-12 phases)
 
    Based on SPEC analysis and project structure:
@@ -165,6 +177,7 @@ Strip flag from `$ARGUMENTS`. Remaining text = path.
    - Each row references the corresponding `phases/{file}.md`
    - Completion Criteria from SPEC.md decisions/goals
    - Agents table from project analysis
+   - If `.claude/teams/` exists: populate `### Project Agents` table from team.md roster
    - Technology Choices from SPEC analysis
    - Role Constraints from project rules
 

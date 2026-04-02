@@ -1,67 +1,141 @@
 ---
 auto-sync: enabled
-auto-sync-date: 2026-02-12
+auto-sync-date: 2026-04-01
 auto-sync-type: doc
 ---
 
 # Auto-Sync
 
-Automatically update and synchronize Claude Code documentation (skills, agents, rules, markdown) across your project or globally.
+Keeps Claude Code documentation (skills, agents, rules, configs, markdown) in sync with your codebase. Discovers files tagged with `auto-sync: enabled` frontmatter, detects stale content, and updates it automatically.
 
 ## Quick Start
 
 ```sh
-/brewdoc:auto-sync              # Sync project documentation
-/brewdoc:auto-sync status       # Show what's tracked and what's stale
-/brewdoc:auto-sync init <path>  # Tag a file for auto-sync
-/brewdoc:auto-sync global       # Sync ~/.claude/ documentation
+/brewdoc:auto-sync                  # sync all project docs (.claude/**)
+/brewdoc:auto-sync status           # see what is tracked vs stale
+/brewdoc:auto-sync init path/to.md  # tag a file and add it to the index
+/brewdoc:auto-sync global           # sync global docs (~/.claude/**)
 ```
 
-## What It Does
+## Modes
 
-- **Tracks** documentation files with `auto-sync: enabled` frontmatter
-- **Detects** stale content based on sync interval (default: 7 days)
-- **Updates** skills, agents, rules by researching code and verifying paths/URLs
-- **Reports** changes with detailed summaries
+| Mode | Trigger | What it does |
+|------|---------|--------------|
+| STATUS | `status` | Reads INDEX, compares against discovered files, reports tracked/stale/non-indexed. No changes. |
+| INIT | `init <path>` | Adds `auto-sync` frontmatter to the file and registers it in INDEX. |
+| PROJECT | no args | Discovers all tagged `.md` files under `.claude/**`, syncs stale ones. |
+| GLOBAL | `global` | Same as PROJECT but scoped to `~/.claude/**`. |
+| FILE | `path/to/file.md` | Syncs a single file regardless of its stale status. |
+| FOLDER | `path/to/folder` | Syncs all `.md` files inside the given folder. |
 
-## How to Use
+Managed directories (`rules/`, `agents/`, `skills/`) are excluded from automatic PROJECT/GLOBAL scans. Target them explicitly when needed (see examples below).
 
-**Check status of all tracked documents:**
+## Examples
+
+### Good Usage
+
+**Check what needs attention:**
 ```sh
 /brewdoc:auto-sync status
 ```
 
-**Initialize a new file (adds frontmatter + INDEX entry):**
+**Tag a new file for tracking:**
 ```sh
-/brewdoc:auto-sync init plugins/my-plugin/SKILL.md
+/brewdoc:auto-sync init .claude/agents/my-agent.md
 ```
 
-**Sync specific file or folder:**
+**Sync the entire project (default 7-day staleness window):**
 ```sh
-/brewdoc:auto-sync path/to/file.md
-/brewdoc:auto-sync path/to/folder
+/brewdoc:auto-sync
 ```
 
-## Optional: Custom Sync Behavior
-
-Add override block to any document to customize what gets synced:
-
-```markdown
-<auto-sync-override>
-sources: src/**/*.ts, plugins/**/*.md
-focus: Authentication, error handling
-preserve: ## Custom Config, ## Notes
-</auto-sync-override>
+**Sync a managed directory explicitly:**
+```sh
+/brewdoc:auto-sync .claude/rules
 ```
 
-## Flags
+**Sync global docs with text optimization enabled:**
+```sh
+/brewdoc:auto-sync global -o
+```
 
-| Flag | Description |
-|------|-------------|
-| `-o`, `--optimize` | Enable text optimization during sync |
+### Common Mistakes
 
-## Migrating from /brewdoc:doc
+**Expecting managed dirs to be included in a bare sync** -- `rules/`, `agents/`, `skills/` are excluded from auto-scan. Pass the path explicitly:
+```sh
+# wrong -- will skip .claude/rules/
+/brewdoc:auto-sync
 
-This skill replaces the deprecated `/brewdoc:doc` skill:
-- `/brewdoc:doc update` → `/brewdoc:auto-sync`
-- `/brewdoc:doc sync` → `/brewdoc:auto-sync`
+# correct
+/brewdoc:auto-sync .claude/rules
+```
+
+**Running init without a path:**
+```sh
+# wrong -- exits with error
+/brewdoc:auto-sync init
+
+# correct
+/brewdoc:auto-sync init docs/guide.md
+```
+
+**Forgetting frontmatter on manually created files** -- files without the `auto-sync: enabled` tag will not be discovered. Use `init` to add it, or add the three required fields by hand.
+
+## How File Discovery Works
+
+A file is discovered when it contains this YAML frontmatter block:
+
+```yaml
+auto-sync: enabled
+auto-sync-date: 2026-04-01
+auto-sync-type: skill
+```
+
+The type is inferred from the file path:
+
+| Path contains | Detected type |
+|---------------|---------------|
+| `skills/` | `skill` |
+| `agents/` | `agent` |
+| `rules/` | `rule` |
+| filename is `CLAUDE.md` | `config` |
+| anything else | `doc` |
+
+Discovery is capped at 50 files per scan (override with `MAX_FILES` env var).
+
+## Output
+
+**INDEX location:**
+
+| Scope | Path |
+|-------|------|
+| Project | `.claude/auto-sync/INDEX.jsonl` |
+| Global | `~/.claude/auto-sync/INDEX.jsonl` |
+
+Each line in INDEX is a JSON object:
+
+```jsonl
+{"p":"skills/auth/SKILL.md","t":"skill","u":"2026-04-01","pr":"default"}
+```
+
+| Field | Meaning |
+|-------|---------|
+| `p` | Relative path to the file |
+| `t` | Type: `skill`, `agent`, `rule`, `config`, `doc` |
+| `u` | Last sync date (YYYY-MM-DD) |
+| `pr` | Protocol: `default` or `override` |
+
+After a sync run, the skill prints a summary table with counts for discovered, queued, updated, unchanged, and errored files.
+
+## Tips
+
+- Run `status` first to understand what is tracked before launching a full sync.
+- Use the `-o` / `--optimize` flag to enable text optimization during sync -- useful for reducing token usage in large skill files.
+- Add an `auto-sync-override` block in frontmatter to control which source files and sections the sync agent examines:
+  ```yaml
+  auto-sync-override: |
+    sources: src/**/*.ts, .claude/agents/*.md
+    focus: API endpoints, error handling
+    preserve: ## User Notes, ## Custom Config
+  ```
+- Files that error during sync are not marked as updated in INDEX, so they remain stale and will be retried on the next run.

@@ -1,91 +1,142 @@
 ---
 auto-sync: enabled
-auto-sync-date: 2026-02-13
+auto-sync-date: 2026-04-01
 auto-sync-type: doc
 ---
 
-# skills Skill
+# Skills
 
-Skill management with 84% activation rate via forced-eval hook.
+Manage Claude Code skills -- list installed skills, improve existing ones via the skill-creator agent, or create new skills from a prompt or spec file with research-driven generation.
 
-## Problem
-
-Claude Code skills auto-activate only 20-50% of the time ([#10768](https://github.com/anthropics/claude-code/issues/10768), [#15136](https://github.com/anthropics/claude-code/issues/15136)). This makes skills unreliable for important workflows.
-
-## Solution
-
-The `skills` skill provides:
-1. **forced-eval hook** — raises activation to 84% by prepending skill-check reminder to user prompts
-2. **skill improvement** — applies best practices via skill-creator agent
-3. **skill creation** — research-driven skill generation
-
-## Usage
+## Quick Start
 
 ```bash
-/brewcode:skills                    # List all skills
-/brewcode:skills list               # Same as above
-/brewcode:skills setup              # Install forced-eval hook + list
-/brewcode:skills up commit          # Improve "commit" skill
-/brewcode:skills commit             # Shorthand: improve "commit" skill
-/brewcode:skills brewcode/skills/setup  # Shorthand: improve by path
-/brewcode:skills ~/.claude/skills/  # Improve all global skills (folder)
-/brewcode:skills create "semantic search"  # Create new skill
+/brewcode:skills
 ```
+
+Lists all available skills across global, project, and plugin locations.
 
 ## Modes
 
-| Mode | Arguments | Description |
-|------|-----------|-------------|
-| `list` | none | List all skills (global/project/plugin) |
-| `setup` | none | Install forced-eval hook + show list |
-| `up` | `<name\|path\|folder>` | Improve skill(s) via skill-creator |
-| `create` | `<prompt\|spec-path>` | Research + create new skill |
-| *(shorthand)* | `<path\|name>` | Same as `up` — auto-detect if not a mode keyword |
+| Mode | How to trigger | What it does |
+|------|---------------|--------------|
+| `list` | `/brewcode:skills` or `/brewcode:skills list` | Lists all skills grouped by location (global, project, plugin) |
+| `up` | `/brewcode:skills up <name\|path\|folder>` | Improves one or more skills using the skill-creator agent |
+| `up` (shorthand) | `/brewcode:skills <name\|path\|folder>` | Same as `up` -- auto-detected when the argument is not a mode keyword |
+| `create` | `/brewcode:skills create <prompt>` | Researches the topic (codebase + web), then creates a new skill |
+| `create` (from spec) | `/brewcode:skills create ./spec.md` | Reads the spec file and creates a skill based on its contents |
 
-## Activation Rate Comparison
+## Examples
 
-| Method | Activation Rate |
-|--------|-----------------|
-| Basic description | 20% |
-| Optimized description + keywords | 50-72% |
-| `/skill-name` explicit | 100% |
-| **forced-eval hook** | **84%** |
+### Good Usage
 
-## Forced-Eval Hook
+```bash
+# List everything installed
+/brewcode:skills list
 
-The `setup` mode installs a `UserPromptSubmit` hook (via `.claude/settings.json`) that prepends skill awareness to every user prompt:
+# Improve a skill by name (searches global and project locations)
+/brewcode:skills up commit
+
+# Shorthand -- same as above, "up" is implied
+/brewcode:skills commit
+
+# Improve a skill by explicit path
+/brewcode:skills up ~/.claude/skills/commit/SKILL.md
+
+# Shorthand with path
+/brewcode:skills brewcode/skills/setup
+
+# Improve all skills in a folder (parallel agents)
+/brewcode:skills ~/.claude/skills/
+
+# Create a brand new skill from a prompt
+/brewcode:skills create "semantic code search"
+
+# Create a skill from a spec file
+/brewcode:skills create ./my-skill-spec.md
+```
+
+### Common Mistakes
+
+| Mistake | Why it fails | Correct |
+|---------|-------------|---------|
+| `/brewcode:skills up` (no target) | `up` mode requires a skill name, path, or folder | `/brewcode:skills up commit` |
+| `/brewcode:skills create` (no prompt) | `create` mode requires a prompt or spec file path | `/brewcode:skills create "my new skill"` |
+| `/brewcode:skills up list` | Interprets `list` as a skill name to improve, not the list mode | `/brewcode:skills list` |
+
+## Output
+
+Depends on mode:
+
+- **list** -- a summary table of all skills grouped by location (global `~/.claude/skills/`, project `.claude/skills/`, plugins).
+- **up** -- the skill-creator agent rewrites the target SKILL.md with optimized description, trigger keywords, imperative voice, and best practices. For folders, multiple agents run in parallel.
+- **create** -- a new skill directory containing `SKILL.md` and `README.md`, placed in `.claude/skills/` (project) or `~/.claude/skills/` (global). Before creation you are asked whether the skill should be user-invocable, LLM auto-detected, or both.
+
+## Mode Switcher
+
+The `create` mode can generate **Mode Switcher** skills — special skills that toggle persistent behavioral modes for the entire Claude Code session.
+
+### What is a Mode Switcher?
+
+A mode switcher is a skill that changes how Claude behaves for the rest of the session. For example, "manager mode" makes Claude delegate all tasks via agents, "researcher mode" makes Claude prioritize depth and source verification.
+
+### How it works
 
 ```
-[SKILL CHECK] Before responding, check if any skill matches this request:
-- Use /skills to list available skills
-- If a skill matches, use it with /skill-name or Skill tool
-- If no skill matches, proceed normally
+/brewcode:skills create "toggle research mode"
+                    ↓
+         Step 2.5 detects "mode/toggle" keywords
+                    ↓
+         Asks: "Create as a Mode Switcher skill?"
+                    ↓  Yes
+         skill-creator uses Mode Switcher pattern
+                    ↓
+    Creates skill with on/off/status arguments
+                    ↓
+    Skill writes state → hooks inject instructions
 ```
 
-This forces Claude to consider skills before responding, dramatically improving auto-activation.
+### Flow
 
-**Skips:** Slash commands (`/`), confirmations (yes/no/ok), single characters/numbers.
+```
+Skill writes {"mode":"research"} → brewcode.state.json
+                    ↓
+  forced-eval.mjs   → injects [MODE: research] into every user prompt
+  session-start.mjs → injects mode into session context (survives compact)
+  pre-task.mjs      → injects mode into every sub-agent prompt
+```
 
-## Prerequisites
+### Example
 
-- `BC_PLUGIN_ROOT` environment variable (set by brewcode plugin)
-- `jq` command-line tool (for hook installation)
-- skill-creator agent (bundled with brewcode)
+```bash
+# Create a mode switcher skill
+/brewcode:skills create "toggle deep research mode that prioritizes source verification"
 
-## Best Practices Applied
+# The created skill will support:
+/my-mode on research    # activate mode
+/my-mode off            # deactivate
+/my-mode status         # show current mode
+```
 
-The `up` mode applies these optimizations:
+### Creating a mode manually
 
-| Aspect | Before | After |
-|--------|--------|-------|
-| Description | Summary of features | Triggers only |
-| Keywords | None | `Trigger keywords: x, y, z` |
-| Scenarios | None | `Use when: doing X, doing Y` |
-| Voice | "I can help with..." | "Does X. Triggers - ..." |
-| Body | "You should do X" | "Do X" (imperative) |
+1. Create mode instructions file: `brewcode/modes/{name}.md` (plain text)
+2. Activate:
+   ```bash
+   STATE=".claude/tasks/cfg/brewcode.state.json"
+   mkdir -p "$(dirname "$STATE")"
+   jq --arg m "research" '.mode = $m' "$STATE" > "$STATE.tmp" && mv "$STATE.tmp" "$STATE"
+   ```
+3. Deactivate:
+   ```bash
+   jq 'del(.mode)' "$STATE" > "$STATE.tmp" && mv "$STATE.tmp" "$STATE"
+   ```
 
-## Reference
+Hooks pick up the change automatically — no code modifications needed.
 
-- [Skills Don't Auto-Activate](https://scottspence.com/posts/claude-code-skills-dont-auto-activate) — Scott Spence
-- [GitHub #10768](https://github.com/anthropics/claude-code/issues/10768) — Intent matching broken
-- [GitHub #15136](https://github.com/anthropics/claude-code/issues/15136) — Fails to invoke
+## Tips
+
+- Use the shorthand form (`/brewcode:skills commit`) for quick improvements -- no need to type `up` explicitly.
+- Point at a folder (`/brewcode:skills ~/.claude/skills/`) to batch-improve every skill inside it. Each skill gets its own parallel agent.
+- The `create` mode checks conversation history first. If the current conversation already contains a workflow worth capturing, it extracts context directly and skips web research.
+- After creating a skill, you are offered an optional eval step that runs three test prompts to verify the skill activates correctly.

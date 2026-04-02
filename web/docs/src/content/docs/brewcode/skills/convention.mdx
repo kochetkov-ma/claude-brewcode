@@ -203,9 +203,9 @@ Target: ~{LINE_COUNT} lines.
 Spawn 3 text-optimizer agents in ONE message (medium mode):
 
 ```
-Task(subagent_type="text-optimizer", prompt="FIRST: Read $BC_PLUGIN_ROOT/skills/text-optimize/references/rules-review.md. THEN optimize .claude/convention/reference-patterns.md using medium mode. Output report with metrics.")
-Task(subagent_type="text-optimizer", prompt="FIRST: Read $BC_PLUGIN_ROOT/skills/text-optimize/references/rules-review.md. THEN optimize .claude/convention/testing-conventions.md using medium mode. Output report with metrics.")
-Task(subagent_type="text-optimizer", prompt="FIRST: Read $BC_PLUGIN_ROOT/skills/text-optimize/references/rules-review.md. THEN optimize .claude/convention/project-architecture.md using medium mode. Output report with metrics.")
+Task(subagent_type="text-optimizer", prompt="FIRST: Read $BT_PLUGIN_ROOT/skills/text-optimize/references/rules-review.md. THEN optimize .claude/convention/reference-patterns.md using medium mode. Output report with metrics.")
+Task(subagent_type="text-optimizer", prompt="FIRST: Read $BT_PLUGIN_ROOT/skills/text-optimize/references/rules-review.md. THEN optimize .claude/convention/testing-conventions.md using medium mode. Output report with metrics.")
+Task(subagent_type="text-optimizer", prompt="FIRST: Read $BT_PLUGIN_ROOT/skills/text-optimize/references/rules-review.md. THEN optimize .claude/convention/project-architecture.md using medium mode. Output report with metrics.")
 ```
 
 ---

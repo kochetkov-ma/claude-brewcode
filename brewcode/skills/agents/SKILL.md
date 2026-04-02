@@ -135,8 +135,10 @@ Capture result as `AGENT_PATH`.
 ### Step 3: Apply text-optimize
 
 ```
-Skill(skill="text-optimize", args="{AGENT_PATH}")
+Skill(skill="brewtools:text-optimize", args="{AGENT_PATH}")
 ```
+
+> **Note:** requires brewtools plugin. If unavailable -- skip or apply text-optimize-fallback manually.
 
 ### Step 4: Update CLAUDE.md (if user approved)
 
@@ -259,8 +261,10 @@ Task tool:
 ### Step 4: Apply text-optimize
 
 ```
-Skill(skill="text-optimize", args="{AGENT_PATH}")
+Skill(skill="brewtools:text-optimize", args="{AGENT_PATH}")
 ```
+
+> **Note:** requires brewtools plugin. If unavailable -- skip or apply text-optimize-fallback manually.
 
 ### Step 5: Update CLAUDE.md (if approved)
 

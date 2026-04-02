@@ -20,7 +20,7 @@
  *
  * Cleanup: /brewcode:teardown removes .claude/plans/ directory
  */
-import { readStdin, output, log, getActiveTaskPath, getLock } from './lib/utils.mjs';
+import { readStdin, output, log, getActiveTaskPath, getLock, getActiveMode } from './lib/utils.mjs';
 import { readFileSync, readdirSync, statSync, mkdirSync, symlinkSync, unlinkSync, existsSync } from 'fs';
 import { execFileSync } from 'child_process';
 import { join, dirname } from 'path';
@@ -192,6 +192,12 @@ async function main() {
       ? `BC_PLUGIN_ROOT=${pluginRoot}\nbrewcode: active | session: ${sessionShort}`
       : `brewcode: active | session: ${sessionShort}`;
 
+    // Inject active mode
+    const activeMode = getActiveMode(cwd);
+    if (activeMode) {
+      context += `\n[MODE: ${activeMode.name}] ${activeMode.instructions}`;
+    }
+
     const versionLines = [];
     try {
       const [brewcodeResult, claudeResult] = await Promise.all([
@@ -236,8 +242,9 @@ async function main() {
       }
     }
 
+    const modeTag = activeMode ? ` | mode: ${activeMode.name}` : '';
     output({
-      systemMessage: `brewcode: ${pluginRoot} | session: ${sessionShort}${versionLines.length ? '\n' + versionLines.join('\n') : ''}`,
+      systemMessage: `brewcode: ${pluginRoot} | session: ${sessionShort}${modeTag}${versionLines.length ? '\n' + versionLines.join('\n') : ''}`,
       hookSpecificOutput: {
         hookEventName: 'SessionStart',
         additionalContext: context

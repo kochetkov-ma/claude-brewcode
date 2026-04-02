@@ -330,7 +330,7 @@ Write token-efficient text optimized for LLM consumption. Every token counts -- 
 3. **Synthesize** -- Extract patterns, rules, conventions from analysis
 4. **Write** -- Frontmatter + system prompt with tables
 5. **Validate** -- Check name, description, tools, structure
-6. **Optimize** -- Run `Skill(skill="text-optimize", args="path/to/agent.md")`
+6. **Optimize** -- Run `Skill(skill="brewtools:text-optimize", args="path/to/agent.md")`
 
 ---
 
@@ -560,7 +560,7 @@ tools: Read, Glob, Grep, Bash
 - [ ] READ-ONLY agents have no Write/Edit tools
 - [ ] No CLAUDE.md rules duplicated in agent body (already injected)
 - [ ] Unique name in scope (no conflict with existing agents)
-- [ ] Optimized with `text-optimize` skill
+- [ ] Optimized with `brewtools:text-optimize` skill
 
 ---
 

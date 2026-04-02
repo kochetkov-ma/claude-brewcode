@@ -21,6 +21,9 @@
  * }
  */
 
+import { existsSync, readFileSync } from 'fs';
+import { join } from 'path';
+
 // --- stdin/stdout helpers ---
 
 async function readStdin() {
@@ -37,8 +40,35 @@ function output(response) {
 
 // --- Skill evaluation reminder ---
 
-const SKILL_CHECK_REMINDER = `[SKILL?] Check available skills. If one matches, use Skill tool before responding.
-[DELEGATE] You are a MANAGER. Delegate implementation to sub-agents via Task tool. Never implement directly.`;
+const SKILL_CHECK = '[SKILL?] Check available skills. If one matches, use Skill tool before responding.';
+const DEFAULT_MODE = '[DELEGATE] You are a MANAGER. Delegate implementation to sub-agents via Task tool. Never implement directly.';
+
+// NOTE: Mirrors getActiveMode() from lib/utils.mjs — kept inline to avoid import dependency.
+// If STATE_FILE path changes in utils.mjs, update the path here too.
+function getModeReminder(cwd) {
+  if (!cwd) return `${SKILL_CHECK}\n${DEFAULT_MODE}`;
+
+  try {
+    const statePath = join(cwd, '.claude', 'tasks', 'cfg', 'brewcode.state.json');
+    if (!existsSync(statePath)) return `${SKILL_CHECK}\n${DEFAULT_MODE}`;
+
+    const state = JSON.parse(readFileSync(statePath, 'utf8'));
+    if (!state.mode) return `${SKILL_CHECK}\n${DEFAULT_MODE}`;
+
+    const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT || '';
+    if (!pluginRoot) return `${SKILL_CHECK}\n${DEFAULT_MODE}`;
+
+    const modePath = join(pluginRoot, 'modes', `${state.mode}.md`);
+    if (!existsSync(modePath)) return `${SKILL_CHECK}\n${DEFAULT_MODE}`;
+
+    const instructions = readFileSync(modePath, 'utf8').trim();
+    if (!instructions) return `${SKILL_CHECK}\n${DEFAULT_MODE}`;
+
+    return `${SKILL_CHECK}\n[MODE: ${state.mode}] ${instructions}`;
+  } catch {
+    return `${SKILL_CHECK}\n${DEFAULT_MODE}`;
+  }
+}
 
 // --- Main ---
 
@@ -80,7 +110,7 @@ async function main() {
     }
 
     // Prepend skill-check reminder to prompt
-    const modifiedPrompt = `${SKILL_CHECK_REMINDER}\n\n---\n\n${prompt}`;
+    const modifiedPrompt = `${getModeReminder(cwd)}\n\n---\n\n${prompt}`;
 
     output({
       updatedInput: {

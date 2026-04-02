@@ -1,6 +1,6 @@
 ---
 title: "Skills"
-description: "All 15 Brewcode skills: commands, parameters, examples"
+description: "All 13 Brewcode skills: commands, parameters, examples"
 order: 11
 ---
 
@@ -9,8 +9,8 @@ import { Card, CardGrid, Callout } from '../../../components/mdx';
 # Skills
 
 Skills (recipes) are slash commands that define *what* to do. Each skill is described in a `SKILL.md` file
-with frontmatter metadata and instructions for agents. Brewcode includes 15 skills covering
-the full task lifecycle -- from project analysis to secrets scanning.
+with frontmatter metadata and instructions for agents. Brewcode includes 13 skills covering
+the full task lifecycle -- from project analysis to standards review.
 
 ## Summary table
 
@@ -20,17 +20,15 @@ the full task lifecycle -- from project analysis to secrets scanning.
 | 2 | spec | `/brewcode:spec` | opus | Specification creation through research |
 | 3 | plan | `/brewcode:plan` | opus | Plan creation from SPEC or Plan Mode |
 | 4 | start | `/brewcode:start` | opus | Task execution with infinite context |
-| 5 | convention | `/brewcode:convention` | opus | Convention analysis and reference classes |
-| 6 | rules | `/brewcode:rules` | sonnet | Knowledge-to-rules synchronization |
-| 7 | grepai | `/brewcode:grepai` | sonnet | Semantic search management |
-| 8 | install | `/brewcode:install` | sonnet | Dependency installation |
-| 9 | teardown | `/brewcode:teardown` | haiku | Plugin file removal |
-| 10 | text-optimize | `/brewcode:text-optimize` | sonnet | Text optimization for LLMs |
-| 11 | text-human | `/brewcode:text-human` | sonnet | AI artifact removal from code |
-| 12 | standards-review | `/brewcode:standards-review` | opus | Standards compliance review |
-| 13 | skills | `/brewcode:skills` | opus | Skill management |
-| 14 | agents | `/brewcode:agents` | opus | Agent creation and improvement |
-| 15 | secrets-scan | `/brewcode:secrets-scan` | sonnet | Secrets and key scanning |
+| 5 | teams | `/brewcode:teams` | opus | Dynamic agent teams with tracking |
+| 6 | convention | `/brewcode:convention` | opus | Convention analysis and reference classes |
+| 7 | rules | `/brewcode:rules` | sonnet | Knowledge-to-rules synchronization |
+| 8 | grepai | `/brewcode:grepai` | sonnet | Semantic search management |
+| 9 | install | `/brewcode:install` | sonnet | Dependency installation |
+| 10 | teardown | `/brewcode:teardown` | haiku | Plugin file removal |
+| 11 | standards-review | `/brewcode:standards-review` | opus | Standards compliance review |
+| 12 | skills | `/brewcode:skills` | opus | Skill management |
+| 13 | agents | `/brewcode:agents` | opus | Agent creation and improvement |
 
 <CardGrid>
   <Card title="setup" icon="wrench" href="/brewcode/skills/setup/">
@@ -44,6 +42,9 @@ the full task lifecycle -- from project analysis to secrets scanning.
   </Card>
   <Card title="start" icon="play" href="/brewcode/skills/start/">
     Task execution with infinite context
+  </Card>
+  <Card title="teams" icon="group" href="/brewcode/skills/teams/">
+    Dynamic agent teams with self-selection and tracking
   </Card>
   <Card title="convention" icon="book" href="/brewcode/skills/convention/">
     Convention analysis and reference classes
@@ -60,12 +61,6 @@ the full task lifecycle -- from project analysis to secrets scanning.
   <Card title="teardown" icon="trash" href="/brewcode/skills/teardown/">
     Plugin file removal
   </Card>
-  <Card title="text-optimize" icon="sparkle" href="/brewcode/skills/text-optimize/">
-    Text optimization for LLMs
-  </Card>
-  <Card title="text-human" icon="user" href="/brewcode/skills/text-human/">
-    AI artifact removal from code
-  </Card>
   <Card title="standards-review" icon="check" href="/brewcode/skills/standards-review/">
     Standards compliance review
   </Card>
@@ -75,23 +70,38 @@ the full task lifecycle -- from project analysis to secrets scanning.
   <Card title="agents" icon="people" href="/brewcode/skills/agents/">
     Agent creation and improvement
   </Card>
-  <Card title="secrets-scan" icon="lock" href="/brewcode/skills/secrets-scan/">
-    Secrets and key scanning
-  </Card>
 </CardGrid>
 
 ## Skill dependencies
 
 ```
 install --> setup --> spec --> plan --> start --> rules
-                       |                          |
-                       +-- convention             +-- teardown
-                       |
-                       +-- grepai
+                       |                 |        |
+                       +-- convention    |        +-- teardown
+                       |                 |
+                       +-- grepai        +-- teams
 ```
 
+<Callout type="note" title="Dynamic Teams — New">
+  <code>/brewcode:teams</code> creates 5-20 project-specific agents with self-selection protocol,
+  performance tracking, and automatic tuning. Run after <code>/brewcode:setup</code> to build
+  a team adapted to your project's domains and architecture.
+</Callout>
+
 <Callout type="tip" title="Tip">
-  Skills <code>text-optimize</code>, <code>text-human</code>, <code>standards-review</code>,
-  <code>secrets-scan</code>, <code>skills</code>, and <code>agents</code> can be used
+  Skills <code>standards-review</code>, <code>skills</code>, and <code>agents</code> can be used
   independently of the core cycle -- they require no prior setup.
+</Callout>
+
+<Callout type="note" title="Moved to Brewtools">
+  Skills <code>text-optimize</code>, <code>text-human</code>, and <code>secrets-scan</code> have been
+  moved to the <a href="/brewtools/overview/">Brewtools</a> plugin as standalone text utilities.
+</Callout>
+
+<Callout type="note" title="Mode Switcher">
+  The <code>/brewcode:skills create</code> command can generate <strong>Mode Switcher</strong> skills —
+  a special skill type that toggles persistent behavioral modes for the entire session.
+  Mode instructions are injected into every prompt via hooks and survive auto-compaction.
+  Keywords like "mode", "toggle", or "persistent" in the create prompt trigger
+  the Mode Switcher workflow automatically.
 </Callout>

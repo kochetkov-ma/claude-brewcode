@@ -8,7 +8,7 @@
 [![Latest Release](https://img.shields.io/github/v/release/kochetkov-ma/claude-brewcode?label=latest&color=blue)](https://github.com/kochetkov-ma/claude-brewcode/releases/latest)
 [![Documentation](https://img.shields.io/badge/Docs-doc--claude.brewcode.app-4A90D9?logo=bookstack&logoColor=white)](https://doc-claude.brewcode.app/getting-started/)
 
-**Claude Code plugin suite** - two plugins for development and documentation workflows.
+**Claude Code plugin suite** - three plugins for development, documentation, and text utility workflows.
 
 [**Documentation**](https://doc-claude.brewcode.app/getting-started/) &mdash; getting started guide, skills reference, and architecture overview.
 
@@ -18,6 +18,7 @@
 |--------|---------|---------|---------|
 | brewcode | 3.4.11 | Infinite task execution, prompt optimization, skill/agent creation, quorum reviews | `claude plugin install brewcode@claude-brewcode` |
 | brewdoc | 3.4.11 | Documentation tools: auto-sync, my-claude docs, memory optimization, brewpage publishing | `claude plugin install brewdoc@claude-brewcode` |
+| brewtools | 3.4.11 | Universal text utilities: token optimization, humanization, secrets scanning | `claude plugin install brewtools@claude-brewcode` |
 
 ---
 
@@ -25,7 +26,7 @@
 
 **Full-featured development platform for Claude Code** - infinite focus tasks with automatic context handoff, prompt optimization, skill/agent creation, quorum code reviews, project rules management, and knowledge persistence.
 
-`16` skills. `14` specialized agents. `7` lifecycle hooks.
+`13` skills. `14` specialized agents. `7` lifecycle hooks.
 
 > 🔒 **Code is scanned on every commit.** No personal data is collected or transmitted
 >
@@ -48,6 +49,7 @@
    ```bash
    claude plugin install brewcode@claude-brewcode
    claude plugin install brewdoc@claude-brewcode
+   claude plugin install brewtools@claude-brewcode
    ```
 3. **Restart Claude Code** - plugins load automatically on every session
 
@@ -56,6 +58,7 @@
 claude plugin marketplace update claude-brewcode
 claude plugin update brewcode@claude-brewcode
 claude plugin update brewdoc@claude-brewcode
+claude plugin update brewtools@claude-brewcode
 ```
 
 **Option B** - run from local directory (for development or one-time use):
@@ -139,11 +142,11 @@ Each reviewer works independently. Results are merged via quorum algorithm (2/3 
 ### 3. Prompt and text optimization
 
 ```bash
-/brewcode:text-optimize ./prompts/system.md          # Single file, medium mode
-/brewcode:text-optimize ./prompts/system.md -d        # Deep mode with rule-based analysis
-/brewcode:text-optimize .claude/agents/               # Directory - optimizes all .md files inside
-/brewcode:text-optimize                               # No args - optimizes ALL: CLAUDE.md, agents, skills
-/brewcode:text-human ./src/utils/helper.ts            # Remove AI artifacts from code
+/brewtools:text-optimize ./prompts/system.md          # Single file, medium mode
+/brewtools:text-optimize ./prompts/system.md -d        # Deep mode with rule-based analysis
+/brewtools:text-optimize .claude/agents/               # Directory - optimizes all .md files inside
+/brewtools:text-optimize                               # No args - optimizes ALL: CLAUDE.md, agents, skills
+/brewtools:text-human ./src/utils/helper.ts            # Remove AI artifacts from code
 ```
 
 ### 4. Project rules management
@@ -163,10 +166,26 @@ Each reviewer works independently. Results are merged via quorum algorithm (2/3 
 
 Once configured, `grepai_search` is automatically injected into all agent prompts for AI-powered code exploration.
 
+### 6. Mode Switcher skills
+
+```bash
+# Create a skill that toggles a session-level behavioral mode
+/brewcode:skills create "toggle research mode"
+```
+
+The `/brewcode:skills create` command auto-detects mode-switching intent (keywords: "mode", "toggle", "persistent", "from now on") and generates a **Mode Switcher** skill — a special skill type with `on`/`off`/`status` arguments that persists across auto-compactions via hook injection.
+
+```
+Skill writes mode → state file → hooks inject on every event
+                                  ├── forced-eval.mjs  (every prompt)
+                                  ├── session-start.mjs (session + compact)
+                                  └── pre-task.mjs     (every sub-agent)
+```
+
 ### Security audit
 
 ```bash
-/brewcode:secrets-scan    # Scan all git-tracked files for leaked credentials
+/brewtools:secrets-scan    # Scan all git-tracked files for leaked credentials
 ```
 
 ---
@@ -240,7 +259,7 @@ Once configured, `grepai_search` is automatically injected into all agent prompt
 
 ---
 
-## Brewcode Skills (15)
+## Brewcode Skills (12)
 
 | Skill | Purpose |
 |-------|---------|
@@ -252,13 +271,20 @@ Once configured, `grepai_search` is automatically injected into all agent prompt
 | `/brewcode:review` | Multi-agent code review with quorum (created by setup) |
 | `/brewcode:rules` | Extract rules from KNOWLEDGE to `.claude/rules/` |
 | `/brewcode:grepai` | Semantic code search (setup, status, start, stop, reindex) |
-| `/brewcode:text-optimize` | Optimize text/prompts for LLM token efficiency |
-| `/brewcode:text-human` | Remove AI artifacts, clean comments, simplify docs |
 | `/brewcode:standards-review` | Review code for project standards compliance |
-| `/brewcode:secrets-scan` | Scan for leaked secrets and credentials |
 | `/brewcode:skills` | List, create, and upgrade skills with forced evaluation |
 | `/brewcode:agents` | Interactive agent creation and improvement |
 | `/brewcode:teardown` | Remove plugin configuration (keeps task data) |
+
+## Brewtools Skills (3)
+
+| Skill | Purpose |
+|-------|---------|
+| `/brewtools:text-optimize` | LLM token efficiency optimization |
+| `/brewtools:text-human` | Remove AI artifacts, humanize code |
+| `/brewtools:secrets-scan` | Scan git-tracked files for leaked secrets |
+
+Install: `claude plugin install brewtools@claude-brewcode`
 
 ## Brewdoc Skills (4)
 
@@ -269,7 +295,7 @@ Once configured, `grepai_search` is automatically injected into all agent prompt
 | `/brewdoc:memory` | Optimize memory files interactively |
 | `/brewdoc:md-to-pdf` | Convert markdown to professional PDF |
 
-## Agents (14)
+## Agents (14 total)
 
 ### User-facing agents
 
@@ -283,6 +309,11 @@ Once configured, `grepai_search` is automatically injected into all agent prompt
 | `agent-creator` | opus | Create and improve Claude Code agents |
 | `hook-creator` | opus | Create and debug Claude Code hooks |
 | `bash-expert` | opus | Create professional shell scripts |
+
+### brewtools agents
+
+| Agent | Model | Purpose |
+|-------|-------|---------|
 | `text-optimizer` | sonnet | Optimize text and docs for LLM efficiency |
 
 ### Internal agents
@@ -340,10 +371,11 @@ bash .claude/scripts/update-plugin.sh
 
 ### Version Sync
 
-When bumping version, update ALL 4 files with SAME version:
+When bumping version, update ALL 5 files with SAME version:
 - `brewcode/.claude-plugin/plugin.json`
 - `brewdoc/.claude-plugin/plugin.json`
-- `.claude-plugin/marketplace.json` (all 3 version fields)
+- `brewtools/.claude-plugin/plugin.json`
+- `.claude-plugin/marketplace.json` (all version fields)
 - `brewcode/package.json` (both version fields)
 
 ---

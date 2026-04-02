@@ -30,7 +30,7 @@ auto-sync-type: agent
 
 Creates production-quality Claude Code hooks (bash and JS/mjs) with correct message routing, JSON schemas, and fail-safe design.
 
-> **Reference version:** 2.1.85+ | 25 hook events | 4 hook types (command, http, prompt, agent)
+> **Reference version:** 2.1.89+ | 26 hook events | 4 hook types (command, http, prompt, agent)
 
 ### Session Lifecycle
 
@@ -108,7 +108,7 @@ Goes to **user UI only** -- Claude does NOT see it. Exception: async hooks deliv
 
 | Event type | Claude sees? | Notes |
 |------------|:---:|-------|
-| Blocking (PreToolUse, PermissionRequest, UserPromptSubmit, Stop, SubagentStop, TeammateIdle, TaskCompleted, TaskCreated, ConfigChange, WorktreeCreate, Elicitation, ElicitationResult) | YES | Delivered as error context |
+| Blocking (PreToolUse, PermissionRequest, PermissionDenied, UserPromptSubmit, Stop, SubagentStop, TeammateIdle, TaskCompleted, TaskCreated, ConfigChange, WorktreeCreate, Elicitation, ElicitationResult) | YES | Delivered as error context |
 | Non-blocking (SessionStart, PostToolUse, PostToolUseFailure, PreCompact, PostCompact, Notification, SessionEnd, SubagentStart, InstructionsLoaded, StopFailure, CwdChanged, FileChanged, WorktreeRemove) | NO | User UI only |
 
 ### decision + reason
@@ -119,8 +119,9 @@ Goes to **user UI only** -- Claude does NOT see it. Exception: async hooks deliv
 | SubagentStop | YES | `decision:"block"` + `reason` -> subagent continues, sees reason |
 | PostToolUse | YES (via additionalContext) | No decision field; reason delivered as feedback |
 | UserPromptSubmit | NO (UI only) | `decision:"block"` -> prompt rejected, Claude does NOT see reason |
-| PreToolUse | YES | `permissionDecisionReason` delivered when deny |
+| PreToolUse | YES | `permissionDecisionReason` delivered when deny; `"defer"` pauses headless session, resume with `-p --resume` (v2.1.89+) |
 | PermissionRequest | N/A | `decision.behavior`: allow/deny/ask. `decision.message` on deny |
+| PermissionDenied | YES (via stderr) | Fires after auto mode classifier denial; return `{retry: true}` → model retries (v2.1.89+) |
 
 ### updatedInput (PreToolUse only)
 
@@ -174,6 +175,7 @@ Silently modifies tool parameters. Claude unaware of change. Most reliable injec
 | 23 | CwdChanged | No | No | -- | 2.1.83 |
 | 24 | FileChanged | No | filename (basename) | `file_path` | 2.1.83 |
 | 25 | TaskCreated | Yes | No | `task_id`, `task_subject`, `task_description`, `teammate_name`, `team_name` | 2.1.84 |
+| 26 | PermissionDenied | Yes | No | `tool_name`, `tool_input`, `denial_reason` | 2.1.89 |
 
 ### Common stdin fields (ALL events)
 
@@ -532,6 +534,19 @@ Format: `ToolName(pattern)` -- same syntax as permission rules.
 | `decline` | Decline the elicitation |
 | `cancel` | Cancel the elicitation |
 
+### PermissionDenied -- Retry control (v2.1.89+)
+
+```json
+{ "retry": true }
+```
+
+| Field | Effect |
+|-------|--------|
+| `retry: true` | Model retries the denied tool call |
+| `retry: false` / omit | Denial stands |
+
+> Fires after **auto mode classifier** denies a tool. Not the same as `PermissionRequest` (user-facing). Use for headless/CI flows to programmatically override a denial.
+
 ### WorktreeCreate -- Return path (v2.1.84+, http hooks)
 
 ```json
@@ -852,6 +867,7 @@ if (input.stop_hook_active) {
 | TeammateIdle / TaskCompleted / TaskCreated | No matcher | Always fires |
 | WorktreeCreate / WorktreeRemove | No matcher | Always fires |
 | CwdChanged | No matcher | Always fires |
+| PermissionDenied | No matcher | Always fires |
 
 > Omit `matcher` -> hook fires for ALL instances of that event.
 
@@ -969,6 +985,7 @@ Returns `additionalContext` with project state.
 | 8 | Code Quality Checks | PostToolUse | Run linters/formatters on file edits |
 | 9 | Temporarily Active | Any | Use flag files to enable/disable hooks |
 | 10 | Configuration-Driven | Any | Read JSON settings for validation behavior |
+| 11 | Mode-Aware Injection | SessionStart, UserPromptSubmit, PreToolUse:Task | Read active mode from state file, inject mode instructions into every event |
 
 ## 14. Advanced Techniques
 
@@ -995,6 +1012,55 @@ Store validation outcomes (5-min cache) to avoid redundant processing.
 ### Cross-Event Workflows
 
 SessionStart -> count tests | PostToolUse -> increment | Stop -> verify count > 0
+
+### Mode-Aware Injection
+
+Hook reads active mode from `brewcode.state.json` and injects mode-specific instructions into every tool call or session event. Use when a skill needs to toggle persistent session behavior that survives auto-compact.
+
+**Implementation:**
+
+```javascript
+// In any PreToolUse or SessionStart hook:
+import { getActiveMode } from './lib/utils.mjs';
+
+// ... inside main():
+const activeMode = getActiveMode(cwd);
+if (activeMode) {
+  // For PreToolUse hooks (inject into agent prompt):
+  updatedPrompt = `[MODE: ${activeMode.name}] ${activeMode.instructions}\n\n${updatedPrompt}`;
+  
+  // For SessionStart hooks (inject into conversation context):
+  context += `\n[MODE: ${activeMode.name}] ${activeMode.instructions}`;
+}
+```
+
+**How `getActiveMode(cwd)` works:**
+
+| Step | Details |
+|------|---------|
+| Read state | `.claude/tasks/cfg/brewcode.state.json` -> `mode` field |
+| Load instructions | `$CLAUDE_PLUGIN_ROOT/modes/{mode}.md` (plain markdown) |
+| Return | `{ name, instructions }` or `null` |
+| Fail-safe | Returns `null` on any error (missing file, parse error, no plugin root) |
+
+**Injection channels by hook event:**
+
+| Hook | Event | Channel | Scope |
+|------|-------|---------|-------|
+| `forced-eval.mjs` | UserPromptSubmit | `updatedInput.prompt` | Every user message |
+| `session-start.mjs` | SessionStart | `additionalContext` | Session start + compact resume |
+| `pre-task.mjs` | PreToolUse:Task | `updatedInput.prompt` | Every subagent spawn |
+
+**State schema in `brewcode.state.json`:**
+
+```json
+{
+  "mode": "manager",
+  "modeActivatedAt": "2026-04-01T12:00:00.000Z"
+}
+```
+
+Single mode only (no multi-mode). `null`/absent `mode` field = no active mode.
 
 ## 15. Hook Type Selection
 
@@ -1194,6 +1260,10 @@ VERIFICATION:
 | 2.1.85 | Conditional `if` field for tool event hooks | New feature |
 | 2.1.85 | PreToolUse can answer `AskUserQuestion` via `updatedInput` | Enhancement |
 | 2.1.86 | Fix: plugin scripts "Permission denied" on macOS/Linux | Bug fix |
+| 2.1.89 | `PermissionDenied` | New event |
+| 2.1.89 | PreToolUse `"defer"` decision — headless pause/resume | New feature |
+| 2.1.89 | Hook output >50K chars saved to disk (path+preview in context) | Enhancement |
+| 2.1.89 | Fix: PreToolUse/PostToolUse `file_path` is now absolute (Write/Edit/Read) | Bug fix |
 
 ## Sources
 

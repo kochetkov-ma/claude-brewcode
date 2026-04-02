@@ -1,0 +1,21 @@
+{
+  "name": "brewtools",
+  "version": "3.4.14",
+  "description": "Brewtools - universal utilities for Claude Code: text optimization, humanization, secrets scanning",
+  "author": {
+    "name": "Maksim Kochetkov",
+    "email": "apmatypa88@gmail.com",
+    "url": "https://github.com/kochetkov-ma"
+  },
+  "homepage": "https://github.com/kochetkov-ma/claude-brewcode",
+  "repository": "https://github.com/kochetkov-ma/claude-brewcode.git",
+  "license": "MIT",
+  "keywords": [
+    "brewtools",
+    "text-optimization",
+    "secrets-scan",
+    "developer-tools"
+  ],
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks.json"
+}

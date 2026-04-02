@@ -113,6 +113,17 @@ Before reviewing code: identify new utilities/helpers/patterns/abstractions → 
 | 50-69% | CONSIDER | Evaluate effort vs benefit |
 | <50% | KEEP_NEW | Justified new code |
 
+### Dynamic Agent Resolution
+
+Before spawning expert agents, check for project team agents:
+
+1. If `.claude/teams/` exists — read `team.md` for agent roster with domains
+2. If team has code-quality/standards domain agents — prefer over generic reviewer/Explore
+3. Priority: **team agent > project agent > plugin agent > system agent**
+4. If agent refuses (Task Acceptance Protocol) — re-delegate to suggested colleague (max 2 retries)
+
+> Always fall back to plugin agents when no project agents match the task domain.
+
 ## Phase 4: Expert Analysis
 
 ### Step 4.1: Group Files by Type

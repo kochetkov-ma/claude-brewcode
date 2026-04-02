@@ -75,10 +75,19 @@ claude --plugin-dir ./brewcode --plugin-dir ./brewdoc
 
 | Command | Arguments | Description |
 |---------|-----------|-------------|
-| `/brewdoc:auto-sync` | `status` / `init <path>` / `global` / `<path>` | Universal doc sync |
-| `/brewdoc:my-claude` | `ext [context]` / `r <query>` / _(none)_ | Generate Claude Code docs |
-| `/brewdoc:memory` | _(none)_ | Interactive memory optimizer |
-| `/brewdoc:publish` | `<text\|file_path\|json> [--ttl N]` | Publish to brewpage.app — returns public URL |
+| [`/brewdoc:auto-sync`](skills/auto-sync/README.md) | `status` / `init <path>` / `global` / `<path>` | Universal doc sync |
+| [`/brewdoc:my-claude`](skills/my-claude/README.md) | `ext [context]` / `r <query>` / _(none)_ | Generate Claude Code docs |
+| [`/brewdoc:memory`](skills/memory/README.md) | _(none)_ | Interactive memory optimizer |
+| [`/brewdoc:publish`](skills/publish/README.md) | `<text\|file_path\|json> [--ttl N]` | Publish to brewpage.app — returns public URL |
+| [`/brewdoc:md-to-pdf`](skills/md-to-pdf/README.md) | `<file.md> [--engine name] ["prompt"]` \| `styles` \| `test` | Convert Markdown to PDF (reportlab or weasyprint engine) |
+
+## Agents
+
+Internal agents used by brewdoc skills:
+
+| Agent | Purpose | Triggered by |
+|-------|---------|--------------|
+| [bd-auto-sync-processor](agents/bd-auto-sync-processor.md) | Processes single document for auto-sync: reads document, loads per-type instructions, runs adaptive research, aggregates findings, updates document | `/brewdoc:auto-sync` |
 
 ## auto-sync Modes
 

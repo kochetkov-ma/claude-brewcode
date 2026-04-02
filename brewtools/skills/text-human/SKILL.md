@@ -1,5 +1,5 @@
 ---
-name: brewcode:text-human
+name: brewtools:text-human
 description: Removes AI artifacts, cleans comments, simplifies documentation in code. Use when - humanizing code, removing AI comments, cleaning docs, fixing unicode, making code human-readable. Trigger keywords - humanize, human, ai artifacts, ai comments, clean comments, simplify docs, unicode fix, remove generated, make readable.
 argument-hint: <commit-hash|path> [custom instructions]
 user-invocable: true
@@ -122,13 +122,13 @@ Data files block: YAML, JSON, CSV with comments → haiku for unicode fixes
 Launch all Task calls in single message for true parallelism.
 
 ```
-Task(subagent_type="developer", model="haiku", prompt="> **Context:** BC_PLUGIN_ROOT is available in your context (injected by pre-task.mjs hook).\n\n[CUSTOM_INSTRUCTIONS_IF_ANY]\nBlock 1: [files] [rules] Return JSON")
-Task(subagent_type="developer", model="sonnet", prompt="> **Context:** BC_PLUGIN_ROOT is available in your context (injected by pre-task.mjs hook).\n\n[CUSTOM_INSTRUCTIONS_IF_ANY]\nBlock 2: [files] [rules] Return JSON")
+Task(subagent_type="developer", model="haiku", prompt="> **Context:** BT_PLUGIN_ROOT is available in your context (injected by pre-task.mjs hook).\n\n[CUSTOM_INSTRUCTIONS_IF_ANY]\nBlock 1: [files] [rules] Return JSON")
+Task(subagent_type="developer", model="sonnet", prompt="> **Context:** BT_PLUGIN_ROOT is available in your context (injected by pre-task.mjs hook).\n\n[CUSTOM_INSTRUCTIONS_IF_ANY]\nBlock 2: [files] [rules] Return JSON")
 ```
 
 If custom prompt was provided, prepend to EVERY sub-agent prompt (after the Context line):
 ```
-> **Context:** BC_PLUGIN_ROOT is available in your context (injected by pre-task.mjs hook).
+> **Context:** BT_PLUGIN_ROOT is available in your context (injected by pre-task.mjs hook).
 
 CUSTOM INSTRUCTIONS (highest priority, override defaults):
 <user's custom prompt text>

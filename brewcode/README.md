@@ -79,26 +79,53 @@ After `/brewcode:setup`, templates are adapted once. Then for each task -- the c
 
 | Command | Description |
 |---------|-------------|
-| `/brewcode:setup` | Project analysis, generation of adapted templates and configuration |
-| `/brewcode:spec <description>` | Codebase research, user dialogue, SPEC.md creation |
-| `/brewcode:plan [path]` | Execution plan generation from SPEC or Plan Mode with quorum review |
-| `/brewcode:start [path]` | Task launch with infinite context through automatic handoffs |
-| `/brewcode:rules [path]` | Rule extraction from accumulated knowledge to `.claude/rules/` |
-| `/brewcode:grepai [mode]` | Semantic code search (setup, status, start, stop, reindex) |
-| `/brewcode:text-optimize [path]` | Text optimization for LLM (-l light, -d deep) |
-| `/brewcode:text-human [path]` | Humanize: remove AI artifacts, simplify documentation |
-| `/brewcode:secrets-scan` | Secrets scanning (10 parallel agents) |
-| `/brewcode:agents` | Interactive agent creation and improvement |
-| `/brewcode:skills` | Skill management and activation |
-| `/brewcode:standards-review` | Standards compliance review |
-| `/brewcode:teardown` | Plugin configuration cleanup (tasks are preserved) |
-| `/brewcode:install` | Check and install required components |
+| [`/brewcode:setup`](skills/setup/README.md) | Project analysis, generation of adapted templates and configuration |
+| [`/brewcode:spec`](skills/spec/README.md) | Codebase research, user dialogue, SPEC.md creation |
+| [`/brewcode:plan`](skills/plan/README.md) | Execution plan generation from SPEC or Plan Mode with quorum review |
+| [`/brewcode:start`](skills/start/README.md) | Task launch with infinite context through automatic handoffs |
+| [`/brewcode:teams`](skills/teams/README.md) | Dynamic agent team creation, management, and tracking |
+| [`/brewcode:rules`](skills/rules/README.md) | Rule extraction from accumulated knowledge to `.claude/rules/` |
+| [`/brewcode:grepai`](skills/grepai/README.md) | Semantic code search (setup, status, start, stop, reindex) |
+| ~~`/brewcode:text-optimize`~~ | **moved to brewtools** |
+| ~~`/brewcode:text-human`~~ | **moved to brewtools** |
+| ~~`/brewcode:secrets-scan`~~ | **moved to brewtools** |
+| [`/brewcode:agents`](skills/agents/README.md) | Interactive agent creation and improvement |
+| [`/brewcode:skills`](skills/skills/README.md) | Skill management and activation |
+| [`/brewcode:standards-review`](skills/standards-review/README.md) | Standards compliance review |
+| [`/brewcode:convention`](skills/convention/README.md) | Extract etalon classes, patterns, architecture into convention docs and rules |
+| [`/brewcode:teardown`](skills/teardown/README.md) | Plugin configuration cleanup (tasks are preserved) |
+| [`/brewcode:install`](skills/install/README.md) | Check and install required components |
 
 > **Note:** `/brewcode:review` -- local skill, created in the project during `/brewcode:setup`.
 >
-> **Moved:** `/brewcode:auto-sync` is now in the dedicated [`brewdoc`](https://github.com/kochetkov-ma/claude-brewcode) plugin. Install `brewdoc` and use `/brewdoc:auto-sync`.
+> **Moved to brewtools:** `text-optimize`, `text-human`, `secrets-scan` skills and `text-optimizer` agent are now in the [`brewtools`](https://github.com/kochetkov-ma/claude-brewcode) plugin. Install `brewtools` and use `/brewtools:text-optimize`, `/brewtools:text-human`, `/brewtools:secrets-scan`.
+>
+> **Moved to brewdoc:** `/brewcode:auto-sync` is now in the dedicated [`brewdoc`](https://github.com/kochetkov-ma/claude-brewcode) plugin. Install `brewdoc` and use `/brewdoc:auto-sync`.
 
 Detailed description of each command: `docs/commands.md`
+
+## Agents
+
+Specialized agents spawned by brewcode skills during task execution:
+
+> **Dynamic teams:** Use `/brewcode:teams create` to generate 5-20 project-specific agents
+> with self-selection protocol and performance tracking in `.claude/agents/`.
+
+| Agent | Purpose | Best for |
+|-------|---------|----------|
+| [developer](agents/developer.md) | Full-stack development -- implements features, writes code, fixes bugs | Implementation, bug fixes, refactoring, unit tests |
+| [reviewer](agents/reviewer.md) | System architect and code reviewer -- architecture, quality, security, performance | Code review, architecture analysis, SOLID enforcement |
+| [tester](agents/tester.md) | SDET/QA -- runs tests, analyzes results, debugs flaky tests | Test execution, failure analysis, test infrastructure |
+| [architect](agents/architect.md) | Architecture analysis -- design, patterns, trade-offs, scaling strategies | Architecture review, module decomposition, pattern evaluation |
+| ~~text-optimizer~~ | **moved to brewtools** | Prompt compression, CLAUDE.md optimization, verbose docs |
+| [bash-expert](agents/bash-expert.md) | Creates production-quality bash/sh scripts for macOS and Linux | Shell scripts, install scripts, plugin automation |
+| [skill-creator](agents/skill-creator.md) | Creates and improves Claude Code skills (SKILL.md files) | New skill creation, skill invocation debugging |
+| [agent-creator](agents/agent-creator.md) | Creates and improves Claude Code agents | New agent creation, agent triggering improvements |
+| [hook-creator](agents/hook-creator.md) | Creates and debugs Claude Code hooks (lifecycle event handlers) | Hook creation, hook debugging, schema validation |
+| [bc-coordinator](agents/bc-coordinator.md) | Task coordinator -- knowledge extraction, report verification, FINAL.md | Phase tracking, knowledge management, task finalization |
+| [bc-knowledge-manager](agents/bc-knowledge-manager.md) | KNOWLEDGE.jsonl compaction -- deduplication, prioritization, truncation | Knowledge cleanup before handoff, duplicate removal |
+| [bc-grepai-configurator](agents/bc-grepai-configurator.md) | grepai config specialist -- project analysis, config.yaml generation | Semantic search setup, grepai configuration |
+| [bc-rules-organizer](agents/bc-rules-organizer.md) | Creates and optimizes `.claude/rules/*.md` with path-specific frontmatter | Rule extraction, CLAUDE.md splitting, rule organization |
 
 ## Configuration
 

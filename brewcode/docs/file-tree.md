@@ -40,7 +40,7 @@ brewcode/                                    # Plugin root directory
 │   ├── skill-creator.md                       # Skill creator (opus): Official Six-Step Creation Process, word budget 1500-2000, Reference Splitting Strategy
 │   ├── bash-expert.md                         # Bash expert (opus): professional sh/bash scripts
 │   ├── hook-creator.md                        # Hook creator (opus): 10 Hook Patterns, Advanced Techniques, Multi-Stage
-│   ├── text-optimizer.md                      # Text optimizer (sonnet): prompt compression for LLM efficiency
+│   ├── text-optimizer.md                      # [moved to brewtools] Text optimizer (sonnet): prompt compression for LLM efficiency
 │   ├── architect.md                           # System architect (opus): design, planning, architecture decisions
 │   ├── developer.md                           # Developer (opus): implements features, fixes bugs, writes code
 │   ├── reviewer.md                            # Reviewer (opus): code review, quality, security, performance
@@ -102,17 +102,17 @@ brewcode/                                    # Plugin root directory
 │   ├── teardown/                              # /brewcode:teardown - Plugin files cleanup
 │   │   └── SKILL.md                           # Instructions: removes templates/, cfg/, skills/brewcode-review/; preserves tasks (haiku, fork)
 │   │
-│   ├── secrets-scan/                          # /brewcode:secrets-scan - Secrets leak scanning
-│   │   └── SKILL.md                           # Instructions: detect-secrets, TruffleHog, Gitleaks (sonnet, fork)
+│   ├── secrets-scan/                          # [moved to brewtools] /brewcode:secrets-scan
+│   │   └── SKILL.md                           #
 │   │
-│   ├── text-human/                            # /brewcode:text-human - Humanize code and documentation
-│   │   └── SKILL.md                           # Instructions: simplify AI-generated code (sonnet, fork)
+│   ├── text-human/                            # [moved to brewtools] /brewcode:text-human
+│   │   └── SKILL.md                           #
 │   │
-│   ├── text-optimize/                         # /brewcode:text-optimize - Text optimization for LLM
-│   │   └── SKILL.md                           # Instructions: prompt compression, ~30% token savings (sonnet, fork)
+│   ├── text-optimize/                         # [moved to brewtools] /brewcode:text-optimize
+│   │   └── SKILL.md                           #
 │   │
 │   └── agents/                                # /brewcode:agents - Interactive agent creation and improvement
-│       └── SKILL.md                           # Instructions: create/improve agents, delegates to agent-creator, text-optimize pass (opus, session)
+│       └── SKILL.md                           # Instructions: create/improve agents, delegates to agent-creator, brewtools:text-optimize pass (opus, session)
 │
 ├── templates/                                 # Templates for generating files in target project
 │   │
@@ -223,8 +223,8 @@ Files created by the plugin in the user's project:
 |----------|-------|-------------|
 | Plugin configuration | 2 | plugin.json, hooks.json |
 | Hooks (Node.js) | 9 | 7 scripts + 2 libraries |
-| Agents | 13 | bc-coordinator, bc-knowledge-manager, bc-grepai-configurator, bc-rules-organizer, agent-creator, skill-creator, bash-expert, hook-creator, text-optimizer, architect, developer, reviewer, tester |
-| Skills (SKILL.md) | 14 | setup, spec, plan, start, rules, grepai, install, teardown, secrets-scan, text-human, text-optimize, review, standards-review, agents |
+| Agents | 12 | bc-coordinator, bc-knowledge-manager, bc-grepai-configurator, bc-rules-organizer, agent-creator, skill-creator, bash-expert, hook-creator, architect, developer, reviewer, tester |
+| Skills (SKILL.md) | 11 | setup, spec, plan, start, rules, grepai, install, teardown, review, standards-review, agents |
 | Bash scripts | 16 | setup(1), rules(1), grepai(13), install(1) |
 | Templates | 17 | PLAN, SPEC, KNOWLEDGE, config, phase(4), reports(4), rules(3), review(3) |
 | Documentation | 7 | README, INSTALL, RELEASE-NOTES, grepai.md, file-tree.md, commands.md, flow.md, hooks.md |

@@ -187,6 +187,28 @@ options:
 
 Save answer as `INVOCATION_TYPE` for use in Step 4.
 
+### Step 2.5: Mode Switcher Detection
+
+Check if the create prompt contains mode-switching keywords. If detected, ask the user.
+
+**Keywords:** "mode", "toggle", "switch", "persistent", "from now on", "always do", "session behavior"
+
+If keywords detected, use AskUserQuestion:
+
+```
+header: "Mode Switcher"
+question: "Your request looks like a session-level mode toggle. Create as a Mode Switcher skill?"
+options:
+  - label: "Yes — Mode Switcher"
+    description: "Single skill with on/off/status. Hooks inject instructions automatically."
+  - label: "No — Regular skill"
+    description: "Standard skill without session persistence"
+```
+
+If "Yes": set `IS_MODE_SWITCHER=true`. In Step 4, tell skill-creator to use the **Mode Switcher** pattern.
+
+If "No": continue normally.
+
 ---
 
 ### Step 3: Parallel Research
@@ -247,6 +269,31 @@ Task tool:
     - Include README.md
   model: opus
 ```
+
+**If `IS_MODE_SWITCHER=true`:** Add to the skill-creator prompt:
+
+```
+    Use the Mode Switcher design pattern:
+    - Single skill with argument parsing: on [mode-name], off, status
+    - Bash block writes mode to .claude/tasks/cfg/brewcode.state.json
+    - disable-model-invocation: true
+    - Mode instructions in references/ directory
+    - Hooks inject instructions automatically (no hook changes needed)
+```
+
+**After skill creation (optional):** Ask if hooks need a new mode file:
+
+```
+header: "Mode File"
+question: "Create a mode instructions file in brewcode/modes/?"
+options:
+  - label: "Yes — create mode file"
+    description: "Add {mode-name}.md to brewcode/modes/ for hook injection"
+  - label: "No — skill-only"
+    description: "Skill manages its own instructions without hook integration"
+```
+
+If yes: spawn hook-creator agent to create the mode file.
 
 ### Step 5: Post-Create Eval (optional)
 

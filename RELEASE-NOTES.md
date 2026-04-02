@@ -2,6 +2,44 @@
 
 ---
 
+## v3.4.14 (2026-04-02)
+
+### brewcode
+#### Added
+- **`/brewcode:teams`** — new skill: creates and manages dynamic teams of domain-specific agents; modes: `create`, `update`, `status`, `cleanup`; generates agent roster with tracking framework in `.claude/teams/`
+- **Mode Switcher** — skills can toggle persistent session-level behavioral modes via `brewcode.state.json`; hooks inject mode instructions on every event (`forced-eval.mjs`, `session-start.mjs`, `pre-task.mjs`)
+- **`getActiveMode()` utility** in `hooks/lib/utils.mjs` — reads active mode and loads instructions from `modes/{name}.md`
+- **`brewcode/modes/` directory** — mode instruction files; ships with `manager.md` default
+- **Mode Switcher design pattern** added to `skill-creator` agent and `hook-creator` agent
+- **Step 2.5** in `/brewcode:skills create` — auto-detects mode-switching intent and suggests Mode Switcher pattern
+- **Dynamic Agent Resolution** in `/brewcode:plan` — checks `.claude/teams/` roster before plugin agents; priority: team > project > plugin > system
+
+#### Changed
+- `hook-creator` agent: updated to Claude Code v2.1.89+ — added `PermissionDenied` event (26 events total), `defer` support in PreToolUse, `retry` response for PermissionDenied
+
+### brewtools
+#### Added
+- **NEW plugin** — universal text utilities extracted from brewcode
+- Skills: `text-optimize`, `text-human`, `secrets-scan`
+- Agent: `text-optimizer`
+- `BT_PLUGIN_ROOT` injected by SessionStart hook
+- Install: `claude plugin install brewtools@claude-brewcode`
+
+### brewcode (removed)
+- `text-optimize`, `text-human`, `secrets-scan` skills — moved to brewtools
+- `text-optimizer` agent — moved to brewtools
+- Fallback added to `convention/SKILL.md` P5 when brewtools not installed
+
+---
+
+## v3.4.13 (2026-04-01)
+
+### docs
+#### Fixed
+- Steps timeline layout on publish docs page
+
+---
+
 ## v3.4.12 (2026-03-31)
 
 ### docs

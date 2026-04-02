@@ -22,9 +22,9 @@ description: Detailed description of all brewcode plugin commands
 | 7 | `/brewcode:rules` | Extract rules from knowledge | session | sonnet | start (KNOWLEDGE.jsonl) |
 | 8 | `/brewcode:grepai` | Semantic code search | session | sonnet | install |
 | 9 | `/brewcode:teardown` | Remove plugin files | fork | haiku | setup |
-| 10 | `/brewcode:secrets-scan` | Search for secrets and credentials | fork | sonnet | -- |
-| 11 | `/brewcode:text-optimize` | Optimize text for LLM | fork | sonnet | -- |
-| 12 | `/brewcode:text-human` | Simplify and humanize text | fork | sonnet | -- |
+| ~~10~~ | ~~`/brewcode:secrets-scan`~~ | **moved to brewtools** | -- | -- | -- |
+| ~~11~~ | ~~`/brewcode:text-optimize`~~ | **moved to brewtools** | -- | -- | -- |
+| ~~12~~ | ~~`/brewcode:text-human`~~ | **moved to brewtools** | -- | -- | -- |
 | 13 | `/brewcode:skills` | Skill management and activation | session | sonnet | -- |
 | 14 | `/brewcode:standards-review` | Standards compliance review | fork | opus | setup |
 | 15 | `/brewcode:agents` | Interactive agent creation and improvement | session | opus | -- |
@@ -730,7 +730,7 @@ Does not use subagents.
 
 ## 15. `/brewcode:agents`
 
-**Purpose:** Interactive orchestrator for creating and improving Claude Code agents. Collects requirements via AskUserQuestion, delegates to `agent-creator` agent, then applies `text-optimize`. Optionally updates CLAUDE.md agents table.
+**Purpose:** Interactive orchestrator for creating and improving Claude Code agents. Collects requirements via AskUserQuestion, delegates to `agent-creator` agent, then applies `brewtools:text-optimize` (if installed). Optionally updates CLAUDE.md agents table.
 
 | Parameter | Value |
 |-----------|-------|
@@ -752,7 +752,7 @@ Does not use subagents.
 
 1. **AskUserQuestion** (3 questions in one call): placement (project/global/plugin), model (sonnet/opus/haiku/inherit), CLAUDE.md update
 2. **Spawn `agent-creator`** -- parallel codebase analysis, clarifying questions, writes agent file
-3. **Apply `text-optimize`** -- token efficiency pass on new agent
+3. **Apply `brewtools:text-optimize`** -- token efficiency pass on new agent (requires brewtools plugin)
 4. **Update CLAUDE.md** (if approved) -- add/update row in agents table
 
 ### Improve Mode Flow
@@ -760,7 +760,7 @@ Does not use subagents.
 1. **Resolve path/name** -- search `.claude/agents/`, `~/.claude/agents/`, `brewcode/agents/`
 2. **AskUserQuestion** (2 questions): improvement focus (triggers/quality/both/full), CLAUDE.md update
 3. **Spawn `agent-creator`** -- analyze and improve existing agent file
-4. **Apply `text-optimize`**
+4. **Apply `brewtools:text-optimize`** (requires brewtools plugin)
 5. **Update CLAUDE.md** (if approved)
 
 ### Usage Example
