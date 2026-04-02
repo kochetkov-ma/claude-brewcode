@@ -17,3 +17,6 @@ web/docs/.astro/
 .env
 !**/.env.example
 logs/
+
+# Data exports (may contain sensitive info)
+data/
