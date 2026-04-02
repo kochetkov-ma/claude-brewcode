@@ -1,6 +1,6 @@
 ---
 title: "Teams"
-description: "Dynamic agent teams with tracking framework and self-selection protocol."
+description: "Dynamic agent teams with session-scoped trace system and self-selection protocol."
 order: 1105
 ---
 import { Card, CardGrid, Callout, Steps, Badge, Tabs, TabItem } from '../../../../components/mdx';
@@ -28,15 +28,15 @@ import { Card, CardGrid, Callout, Steps, Badge, Tabs, TabItem } from '../../../.
     | 2 | Propose 3 team variants (Minimal/Balanced/Maximum) |
     | 3 | User selects variant and default model |
     | 4 | Create agents in batches of 3-4 via agent-creator |
-    | 5 | Set up tracking framework in `.claude/teams/` |
+    | 5 | Set up `team.md` + `trace.jsonl` in `.claude/teams/` |
   </TabItem>
   <TabItem label="Status">
     | Step | Action |
     |------|--------|
-    | 1 | Read tracking.md for task log |
+    | 1 | Read `trace.jsonl` via `trace-ops.sh read` |
     | 2 | Calculate per-agent success rates |
     | 3 | Classify health: green/yellow/red |
-    | 4 | Report issues and insights |
+    | 4 | Report issues and insights from trace data |
   </TabItem>
   <TabItem label="Update">
     | Step | Action |
@@ -49,9 +49,9 @@ import { Card, CardGrid, Callout, Steps, Badge, Tabs, TabItem } from '../../../.
   <TabItem label="Cleanup">
     | Step | Action |
     |------|--------|
-    | 1 | Archive old tracking data |
+    | 1 | Archive old trace data to `trace-archive.jsonl` |
     | 2 | Remove inactive agents |
-    | 3 | Compact issues and insights |
+    | 3 | Reset trace cursor |
   </TabItem>
 </Tabs>
 
@@ -85,7 +85,7 @@ import { Card, CardGrid, Callout, Steps, Badge, Tabs, TabItem } from '../../../.
   <li class="step step-primary">
     <div>
       <strong>Framework Setup</strong> <Badge variant="secondary" text="C4" />
-      <p>4 tracking files in .claude/teams/ + verify-team.sh validation.</p>
+      <p>team.md + trace.jsonl in .claude/teams/ + verify-team.sh validation.</p>
     </div>
   </li>
 </Steps>
@@ -97,7 +97,7 @@ import { Card, CardGrid, Callout, Steps, Badge, Tabs, TabItem } from '../../../.
     Agent evaluates: "Is this my domain?" If not, refuses and suggests a better-suited colleague from the team roster.
   </Card>
   <Card title="Duplicate Check" icon="search">
-    Agent checks: "Has this already been done?" If yes, refuses and links to the existing result in tracking.md.
+    Agent checks: "Has this already been done?" If yes, refuses and links to the existing result in trace.jsonl.
   </Card>
   <Card title="Best Candidate" icon="people">
     Agent considers: "Is a colleague better suited?" If yes, refuses and redirects to the recommended agent.
@@ -110,14 +110,8 @@ import { Card, CardGrid, Callout, Steps, Badge, Tabs, TabItem } from '../../../.
   <Card title="team.md" icon="list">
     Agent roster: names, domains, missions, health status. Source of truth for the team composition.
   </Card>
-  <Card title="tracking.md" icon="chart">
-    Task log: who accepted/refused/completed/failed each task. Performance data for update mode.
-  </Card>
-  <Card title="issues.md" icon="warning">
-    Problems encountered during execution, grouped by severity. Input for agent tuning.
-  </Card>
-  <Card title="insights.md" icon="sparkle">
-    Reusable patterns and lessons learned. Extracted to project rules via `/brewcode:rules`.
+  <Card title="trace.jsonl" icon="chart">
+    Unified JSONL log: tasks (took/refused/completed/failed), issues (by severity), insights (by category). Agents write via `trace-ops.sh add` (Bash append, ~96% token savings). Session-scoped via SID.
   </Card>
 </CardGrid>
 
