@@ -88,40 +88,43 @@ async function fetchJson(url, timeoutMs) {
   }
 }
 
-function parseVersionFromPath(pluginRoot) {
+function parseVersion(pluginRoot) {
   const match = pluginRoot.match(/\/(\d+\.\d+\.\d+)\/?$/);
-  return match ? match[1] : null;
+  if (match) return match[1];
+  try {
+    const pj = JSON.parse(readFileSync(join(pluginRoot, '.claude-plugin', 'plugin.json'), 'utf8'));
+    if (pj.version) return pj.version;
+  } catch {}
+  return null;
 }
 
 async function checkLatestVersion(pluginRoot, cwd, sessionId) {
   try {
-    const local = parseVersionFromPath(pluginRoot);
+    const local = parseVersion(pluginRoot);
     if (!local) {
-      log('debug', '[session-start]', `Cannot parse version from path: ${pluginRoot}`, cwd, sessionId);
+      log('debug', '[version]', `Cannot parse version from path: ${pluginRoot}`, cwd, sessionId);
       return null;
     }
-    log('debug', '[session-start]', `Local version from path: ${local}`, cwd, sessionId);
+    log('debug', '[version]', `Local brewcode: ${local}`, cwd, sessionId);
 
     const url = 'https://api.github.com/repos/kochetkov-ma/claude-brewcode/releases/latest';
-    log('debug', '[session-start]', `Fetching remote version from ${url}`, cwd, sessionId);
-
     const data = await fetchJson(url, 1000);
     if (!data) {
-      log('debug', '[session-start]', `Remote version fetch failed or empty response`, cwd, sessionId);
+      log('debug', '[version]', `GitHub API fetch failed (timeout or error)`, cwd, sessionId);
       return { updateAvailable: false, local, remote: null, remoteFailed: true };
     }
 
     const remote = (data.tag_name || '').replace(/^v/, '');
     if (!remote) {
-      log('debug', '[session-start]', `Remote tag_name missing or empty: ${JSON.stringify(data.tag_name)}`, cwd, sessionId);
+      log('debug', '[version]', `GitHub tag_name missing: ${JSON.stringify(data.tag_name)}`, cwd, sessionId);
       return { updateAvailable: false, local, remote: null, remoteFailed: true };
     }
 
     const result = { updateAvailable: isNewer(remote, local), local, remote };
-    log('debug', '[session-start]', `Version check: local=${local}, remote=${remote}, updateAvailable=${result.updateAvailable}`, cwd, sessionId);
+    log('debug', '[version]', `brewcode: local=${local}, remote=${remote}, update=${result.updateAvailable}`, cwd, sessionId);
     return result;
   } catch (e) {
-    log('debug', '[session-start]', `checkLatestVersion error: ${e.message}`, cwd, sessionId);
+    log('debug', '[version]', `checkLatestVersion error: ${e.message}`, cwd, sessionId);
     return null;
   }
 }
@@ -132,31 +135,29 @@ async function checkClaudeCodeVersion(cwd, sessionId) {
     try {
       rawOutput = execFileSync('claude', ['-v'], { timeout: 500, encoding: 'utf8' });
     } catch (e) {
-      log('debug', '[session-start]', `claude -v failed: ${e.message}`, cwd, sessionId);
+      log('debug', '[version]', `claude -v failed: ${e.message}`, cwd, sessionId);
       return null;
     }
 
     const local = (rawOutput.match(/(\d+\.\d+\.\d+)/) || [])[1];
     if (!local) {
-      log('debug', '[session-start]', `Cannot parse claude version from: ${rawOutput.trim()}`, cwd, sessionId);
+      log('debug', '[version]', `Cannot parse claude version from: ${rawOutput.trim()}`, cwd, sessionId);
       return null;
     }
-    log('debug', '[session-start]', `Claude Code local version: ${local}`, cwd, sessionId);
+    log('debug', '[version]', `Claude Code local: ${local}`, cwd, sessionId);
 
     const url = 'https://registry.npmjs.org/@anthropic-ai/claude-code/latest';
-    log('debug', '[session-start]', `Fetching Claude Code remote version from npm`, cwd, sessionId);
-
     const data = await fetchJson(url, 1000);
     if (!data?.version) {
-      log('debug', '[session-start]', `npm fetch failed or no version in response`, cwd, sessionId);
+      log('debug', '[version]', `npm fetch failed or no version in response`, cwd, sessionId);
       return null;
     }
 
     const result = { updateAvailable: isNewer(data.version, local), local, remote: data.version };
-    log('debug', '[session-start]', `Claude Code version check: local=${local}, remote=${data.version}, updateAvailable=${result.updateAvailable}`, cwd, sessionId);
+    log('debug', '[version]', `Claude Code: local=${local}, remote=${data.version}, update=${result.updateAvailable}`, cwd, sessionId);
     return result;
   } catch (e) {
-    log('debug', '[session-start]', `checkClaudeCodeVersion error: ${e.message}`, cwd, sessionId);
+    log('debug', '[version]', `checkClaudeCodeVersion error: ${e.message}`, cwd, sessionId);
     return null;
   }
 }

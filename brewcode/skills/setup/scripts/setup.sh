@@ -173,17 +173,20 @@ copy_config() {
     cp "$TEMPLATE" "$PROJECT_CFG"
     echo "✅ Config created: $PROJECT_CFG"
   else
-    # Compare normalized JSON content
-    TEMPLATE_HASH=$(jq -S . "$TEMPLATE" 2>/dev/null | shasum -a 256 | cut -d' ' -f1 || true)
-    PROJECT_HASH=$(jq -S . "$PROJECT_CFG" 2>/dev/null | shasum -a 256 | cut -d' ' -f1 || true)
-
-    if [ "$TEMPLATE_HASH" != "$PROJECT_HASH" ]; then
-      cp "$PROJECT_CFG" "$PROJECT_CFG.bak"
-      cp "$TEMPLATE" "$PROJECT_CFG"
-      echo "🔄 Config updated: $PROJECT_CFG"
-      echo "   Backup: $PROJECT_CFG.bak"
+    MERGED=$(jq -s '.[0] * .[1]' "$TEMPLATE" "$PROJECT_CFG" 2>/dev/null)
+    if [ -n "$MERGED" ]; then
+      MERGED_HASH=$(echo "$MERGED" | jq -S . | shasum -a 256 | cut -d' ' -f1)
+      PROJECT_HASH=$(jq -S . "$PROJECT_CFG" 2>/dev/null | shasum -a 256 | cut -d' ' -f1 || true)
+      if [ "$MERGED_HASH" != "$PROJECT_HASH" ]; then
+        cp "$PROJECT_CFG" "$PROJECT_CFG.bak"
+        echo "$MERGED" | jq -S . > "$PROJECT_CFG"
+        echo "🔄 Config merged (new keys added, user values preserved): $PROJECT_CFG"
+        echo "   Backup: $PROJECT_CFG.bak"
+      else
+        echo "⏭️  Config unchanged: $PROJECT_CFG"
+      fi
     else
-      echo "⏭️  Config unchanged: $PROJECT_CFG"
+      echo "⚠️  Config merge failed (jq error), keeping existing: $PROJECT_CFG"
     fi
   fi
 }
