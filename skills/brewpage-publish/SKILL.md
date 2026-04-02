@@ -86,92 +86,127 @@ Resolution:
 - `2` → use generated random password
 - `3` or custom text → use as-is
 
-### Step 6: Build and Execute API Call
+### Step 6: Publish and Save Token (secure)
+
+> **SECURITY:** The ownerToken MUST never appear in conversation output. The bash block below handles curl, token parsing, and history saving atomically. The LLM only sees the URL.
 
 **HTML/Markdown text** — **EXECUTE** using Bash tool:
 ```bash
+HISTORY_FILE=".claude/brewpage-history.md"
+if [ ! -f "$HISTORY_FILE" ]; then
+  mkdir -p "$(dirname "$HISTORY_FILE")"
+  cat > "$HISTORY_FILE" <<'HEADER'
+# brewpage.app — Published Pages
+
+> Owner tokens allow update/delete. Keep this file private.
+> Delete: `curl -s -X DELETE "https://brewpage.app/api/{ns}/{id}" -H "X-Owner-Token: TOKEN"`
+
+| Date | URL | Owner Token | TTL |
+|------|-----|-------------|-----|
+HEADER
+fi
+
 CONTENT=$(cat <<'BREWPAGE_EOF'
 {content}
 BREWPAGE_EOF
 )
 PAYLOAD=$(jq -n --arg c "$CONTENT" '{content: $c, format: "markdown"}')
-curl -s -X POST "https://brewpage.app/api/html?ns={ns}&ttl={days}" \
+RESPONSE=$(curl -s -X POST "https://brewpage.app/api/html?ns={ns}&ttl={days}" \
   -H "Content-Type: application/json" \
-  [-H "X-Password: {pass}"] \
-  -d "$PAYLOAD"
+  {password_header} \
+  -d "$PAYLOAD")
+
+URL=$(echo "$RESPONSE" | jq -r '.url // empty')
+TOKEN=$(echo "$RESPONSE" | jq -r '.ownerToken // empty')
+
+if [ -n "$URL" ]; then
+  [ -n "$TOKEN" ] && echo "| $(date '+%Y-%m-%d %H:%M') | [$URL]($URL) | \`$TOKEN\` | {ttl}d |" >> "$HISTORY_FILE"
+  echo "✅ $URL"
+else
+  echo "❌ FAILED: $RESPONSE"
+fi
 ```
 
 **JSON** — **EXECUTE** using Bash tool:
 ```bash
-curl -s -X POST "https://brewpage.app/api/json?ns={ns}&ttl={days}" \
+HISTORY_FILE=".claude/brewpage-history.md"
+if [ ! -f "$HISTORY_FILE" ]; then
+  mkdir -p "$(dirname "$HISTORY_FILE")"
+  cat > "$HISTORY_FILE" <<'HEADER'
+# brewpage.app — Published Pages
+
+> Owner tokens allow update/delete. Keep this file private.
+> Delete: `curl -s -X DELETE "https://brewpage.app/api/{ns}/{id}" -H "X-Owner-Token: TOKEN"`
+
+| Date | URL | Owner Token | TTL |
+|------|-----|-------------|-----|
+HEADER
+fi
+
+RESPONSE=$(curl -s -X POST "https://brewpage.app/api/json?ns={ns}&ttl={days}" \
   -H "Content-Type: application/json" \
-  [-H "X-Password: {pass}"] \
-  -d '{original_json}'
+  {password_header} \
+  -d '{original_json}')
+
+URL=$(echo "$RESPONSE" | jq -r '.url // empty')
+TOKEN=$(echo "$RESPONSE" | jq -r '.ownerToken // empty')
+
+if [ -n "$URL" ]; then
+  [ -n "$TOKEN" ] && echo "| $(date '+%Y-%m-%d %H:%M') | [$URL]($URL) | \`$TOKEN\` | {ttl}d |" >> "$HISTORY_FILE"
+  echo "✅ $URL"
+else
+  echo "❌ FAILED: $RESPONSE"
+fi
 ```
 
 **File** — **EXECUTE** using Bash tool:
 ```bash
-curl -s -X POST "https://brewpage.app/api/files?ns={ns}&ttl={days}" \
-  [-H "X-Password: {pass}"] \
-  -F "file=@/absolute/path/to/file"
-```
-
-Add `-H "X-Password: {pass}"` only when password was set.
-
-### Step 7: Parse Response and Output
-
-Expected response:
-```json
-{
-  "id": "abc123xyz",
-  "ns": "public",
-  "url": "https://brewpage.app/public/abc123xyz",
-  "ownerToken": "...",
-  "ownerLink": "..."
-}
-```
-
-Parse: `echo "$RESPONSE" | jq -r '.url, .ownerToken'`
-
-**Success output:**
-```
-✅ Published!
-🔗 https://brewpage.app/{ns}/{id}
-🔑 Owner token: {ownerToken}  ← saved to .claude/brewpage-history.md
-```
-
-**Error output:**
-```
-❌ Publish failed.
-Response: {raw_response}
-```
-
-### Step 8: Save Owner Token to Local History
-
-On success, append a record to `.claude/brewpage-history.md` in the current project directory (create if missing):
-
-**EXECUTE** using Bash tool:
-```bash
 HISTORY_FILE=".claude/brewpage-history.md"
-
 if [ ! -f "$HISTORY_FILE" ]; then
-  cat > "$HISTORY_FILE" <<'EOF'
+  mkdir -p "$(dirname "$HISTORY_FILE")"
+  cat > "$HISTORY_FILE" <<'HEADER'
 # brewpage.app — Published Pages
 
-> Owner tokens are saved here for update/delete operations.
-> Delete a page: `curl -s -X DELETE "https://brewpage.app/api/{ns}/{id}" -H "X-Owner-Token: {ownerToken}"`
+> Owner tokens allow update/delete. Keep this file private.
+> Delete: `curl -s -X DELETE "https://brewpage.app/api/{ns}/{id}" -H "X-Owner-Token: TOKEN"`
 
-| Date | URL | Owner Token | Password | TTL |
-|------|-----|-------------|----------|-----|
-EOF
+| Date | URL | Owner Token | TTL |
+|------|-----|-------------|-----|
+HEADER
 fi
 
-echo "| $(date '+%Y-%m-%d %H:%M') | [{url}]({url}) | \`{ownerToken}\` | {password_or_none} | {ttl}d |" >> "$HISTORY_FILE"
+RESPONSE=$(curl -s -X POST "https://brewpage.app/api/files?ns={ns}&ttl={days}" \
+  {password_header} \
+  -F "file=@/absolute/path/to/file")
+
+URL=$(echo "$RESPONSE" | jq -r '.url // empty')
+TOKEN=$(echo "$RESPONSE" | jq -r '.ownerToken // empty')
+
+if [ -n "$URL" ]; then
+  [ -n "$TOKEN" ] && echo "| $(date '+%Y-%m-%d %H:%M') | [$URL]($URL) | \`$TOKEN\` | {ttl}d |" >> "$HISTORY_FILE"
+  echo "✅ $URL"
+else
+  echo "❌ FAILED: $RESPONSE"
+fi
 ```
 
-If project has no `.claude/` directory, save to `~/.claude/brewpage-history.md` instead.
+Replace `{password_header}` with `-H "X-Password: {pass}"` only when password was set; otherwise remove it entirely.
 
-Tell the user: "Owner token saved to `.claude/brewpage-history.md`"
+### Step 7: Output Result
+
+**Success** (bash printed `✅ {url}`):
+```
+✅ Published!
+🔗 {url from bash output}
+📁 Owner token saved to .claude/brewpage-history.md
+```
+
+**NEVER print ownerToken in conversation.** The token is only in the history file.
+
+**Error** (bash printed `❌ FAILED: ...`):
+```
+❌ Publish failed.
+```
 
 ## Notes
 
@@ -179,7 +214,7 @@ Tell the user: "Owner token saved to `.claude/brewpage-history.md`"
 - Use `jq -n --arg c "$CONTENT" '{content: $c, format: "markdown"}'` to safely encode text content.
 - TTL default is `5` days.
 - Namespace must be alphanumeric (3-32 chars). Default: `public`.
-- To **delete** a published page later: `curl -X DELETE "https://brewpage.app/api/{ns}/{id}" -H "X-Owner-Token: {ownerToken}"`
+- To **delete** a published page, find the owner token in `.claude/brewpage-history.md` and use the delete command shown in that file's header.
 
 ---
 

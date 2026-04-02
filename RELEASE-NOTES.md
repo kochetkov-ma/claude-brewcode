@@ -2,6 +2,14 @@
 
 ---
 
+## v3.4.17 (2026-04-02)
+
+### brewpage-publish
+#### Fixed
+- **Security: W007 Insecure Credential Handling** — ownerToken no longer appears in conversation output; curl + jq parsing + history save now execute atomically inside a single bash block; LLM only sees the published URL; password column removed from history table
+
+---
+
 ## v3.4.16 (2026-04-02)
 
 ### brewcode
