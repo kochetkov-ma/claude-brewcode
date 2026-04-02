@@ -1,6 +1,6 @@
 ---
 title: "Skills"
-description: "All 13 Brewcode skills: commands, parameters, examples"
+description: "All 12 Brewcode skills: commands, parameters, examples"
 order: 11
 ---
 
@@ -9,14 +9,14 @@ import { Card, CardGrid, Callout } from '../../../components/mdx';
 # Skills
 
 Skills (recipes) are slash commands that define *what* to do. Each skill is described in a `SKILL.md` file
-with frontmatter metadata and instructions for agents. Brewcode includes 13 skills covering
+with frontmatter metadata and instructions for agents. Brewcode includes 12 skills covering
 the full task lifecycle -- from project analysis to standards review.
 
 ## Summary table
 
 | # | Skill | Command | Model | Purpose |
 |---|-------|---------|-------|---------|
-| 1 | setup | `/brewcode:setup` | opus | Project analysis, template generation |
+| 1 | setup | `/brewcode:setup` | opus | Project analysis, prerequisites, template generation |
 | 2 | spec | `/brewcode:spec` | opus | Specification creation through research |
 | 3 | plan | `/brewcode:plan` | opus | Plan creation from SPEC or Plan Mode |
 | 4 | start | `/brewcode:start` | opus | Task execution with infinite context |
@@ -24,11 +24,10 @@ the full task lifecycle -- from project analysis to standards review.
 | 6 | convention | `/brewcode:convention` | opus | Convention analysis and reference classes |
 | 7 | rules | `/brewcode:rules` | sonnet | Knowledge-to-rules synchronization |
 | 8 | grepai | `/brewcode:grepai` | sonnet | Semantic search management |
-| 9 | install | `/brewcode:install` | sonnet | Dependency installation |
-| 10 | teardown | `/brewcode:teardown` | haiku | Plugin file removal |
-| 11 | standards-review | `/brewcode:standards-review` | opus | Standards compliance review |
-| 12 | skills | `/brewcode:skills` | opus | Skill management |
-| 13 | agents | `/brewcode:agents` | opus | Agent creation and improvement |
+| 9 | teardown | `/brewcode:teardown` | haiku | Plugin file removal |
+| 10 | standards-review | `/brewcode:standards-review` | opus | Standards compliance review |
+| 11 | skills | `/brewcode:skills` | opus | Skill management |
+| 12 | agents | `/brewcode:agents` | opus | Agent creation and improvement |
 
 <CardGrid>
   <Card title="setup" icon="wrench" href="/brewcode/skills/setup/">
@@ -55,9 +54,6 @@ the full task lifecycle -- from project analysis to standards review.
   <Card title="grepai" icon="search" href="/brewcode/skills/grepai/">
     Semantic search management
   </Card>
-  <Card title="install" icon="download" href="/brewcode/skills/install/">
-    Dependency installation
-  </Card>
   <Card title="teardown" icon="trash" href="/brewcode/skills/teardown/">
     Plugin file removal
   </Card>
@@ -75,11 +71,13 @@ the full task lifecycle -- from project analysis to standards review.
 ## Skill dependencies
 
 ```
-install --> setup --> spec --> plan --> start --> rules
-                       |                 |        |
-                       +-- convention    |        +-- teardown
-                       |                 |
-                       +-- grepai        +-- teams
+setup --> spec --> plan --> start --> rules
+  |        |                 |        |
+  |        +-- convention    |        +-- teardown
+  |        |                 |
+  |        +-- grepai        +-- teams
+  |
+  +-- (Phase 0: prerequisites)
 ```
 
 <Callout type="note" title="Dynamic Teams — New">

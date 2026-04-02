@@ -13,15 +13,14 @@ description: Detailed description of all brewcode plugin commands
 
 | # | Command | Purpose | Context | Model | Dependencies |
 |---|---------|---------|---------|-------|--------------|
-| 1 | `/brewcode:install` | Install dependencies | fork | sonnet | -- |
-| 2 | `/brewcode:setup` | Analyze project, generate templates | fork | opus | install |
-| 3 | `/brewcode:spec` | Create task specification | session | opus | setup |
-| 4 | `/brewcode:plan` | Create execution plan | session | opus | spec or Plan Mode |
-| 5 | `/brewcode:start` | Start task execution | session | opus | plan |
-| 6 | `/brewcode:review` | Code review with quorum | fork | opus | setup (generates skill) |
-| 7 | `/brewcode:rules` | Extract rules from knowledge | session | sonnet | start (KNOWLEDGE.jsonl) |
-| 8 | `/brewcode:grepai` | Semantic code search | session | sonnet | install |
-| 9 | `/brewcode:teardown` | Remove plugin files | fork | haiku | setup |
+| 1 | `/brewcode:setup` | Analyze project, generate templates, install prerequisites | fork | opus | -- |
+| 2 | `/brewcode:spec` | Create task specification | session | opus | setup |
+| 3 | `/brewcode:plan` | Create execution plan | session | opus | spec or Plan Mode |
+| 4 | `/brewcode:start` | Start task execution | session | opus | plan |
+| 5 | `/brewcode:review` | Code review with quorum | fork | opus | setup (generates skill) |
+| 6 | `/brewcode:rules` | Extract rules from knowledge | session | sonnet | start (KNOWLEDGE.jsonl) |
+| 7 | `/brewcode:grepai` | Semantic code search | session | sonnet | setup |
+| 8 | `/brewcode:teardown` | Remove plugin files | fork | haiku | setup |
 | ~~10~~ | ~~`/brewcode:secrets-scan`~~ | **moved to brewtools** | -- | -- | -- |
 | ~~11~~ | ~~`/brewcode:text-optimize`~~ | **moved to brewtools** | -- | -- | -- |
 | ~~12~~ | ~~`/brewcode:text-human`~~ | **moved to brewtools** | -- | -- | -- |
@@ -32,9 +31,9 @@ description: Detailed description of all brewcode plugin commands
 ## Recommended Execution Order
 
 ```
-install --> setup --> spec --> plan --> start --> review --> rules
-                                                   |
-                                            grepai / teardown
+setup --> spec --> plan --> start --> review --> rules
+                                       |
+                                grepai / teardown
 ```
 
 ---
@@ -50,68 +49,7 @@ install --> setup --> spec --> plan --> start --> review --> rules
 
 ---
 
-## 1. `/brewcode:install`
-
-**Purpose:** Interactive installer for all dependencies required for brewcode plugin operation. Checks and installs brew, coreutils, jq, as well as optional ollama, bge-m3 and grepai.
-
-| Parameter | Value |
-|-----------|-------|
-| **Arguments** | None |
-| **Context** | `fork` |
-| **Model** | `sonnet` |
-| **Dependencies** | None (first command in chain) |
-| **Allowed tools** | `Read`, `Bash`, `AskUserQuestion` |
-
-### Created Files
-
-Command does not create files directly -- it installs system packages and utilities.
-
-### Components
-
-| Component | Type | Purpose |
-|-----------|------|---------|
-| `brew` | required | Package manager |
-| `coreutils` + `timeout` | required | Timeouts for scripts |
-| `jq` | required | JSON processor for hooks |
-| `ollama` | optional | Local embeddings server |
-| `bge-m3` | optional | Multilingual embeddings model (~1.2GB) |
-| `grepai` | optional | CLI for semantic code search |
-
-### Bash Scripts
-
-| Script Command | Purpose |
-|----------------|---------|
-| `install.sh state` | Current state of all components |
-| `install.sh check-updates` | Check for available updates |
-| `install.sh check-timeout` | Check for `timeout` command presence |
-| `install.sh update-all` | Update outdated components |
-| `install.sh required` | Install brew, coreutils, jq |
-| `install.sh timeout` | Create symlink for timeout |
-| `install.sh grepai` | Install ollama, bge-m3, grepai |
-| `install.sh summary` | Final summary |
-
-### Agents
-
-Does not use subagents.
-
-### Workflow
-
-1. **Phase 1: State Check** -- check state of all components
-2. **Phase 2: Updates Check** -- check for updates, prompt user
-3. **Phase 3: Timeout Check** -- check/create `timeout` symlink
-4. **Phase 4: Required** -- install required components
-5. **Phase 5: Semantic Search** -- optional grepai installation (prompt user)
-6. **Phase 6: Summary** -- final summary table
-
-### Usage Example
-
-```
-/brewcode:install
-```
-
----
-
-## 2. `/brewcode:setup`
+## 1. `/brewcode:setup`
 
 **Purpose:** Analyzes project structure, technology stack, test frameworks and project agents. Generates adapted templates `PLAN.md.template`, `SPEC.md.template`, configurations and code review skill in `.claude/tasks/templates/`.
 
@@ -120,7 +58,7 @@ Does not use subagents.
 | **Arguments** | `[universal-template-path]` (optional -- path to custom template) |
 | **Context** | `fork` |
 | **Model** | `opus` |
-| **Dependencies** | `/brewcode:install` (recommended) |
+| **Dependencies** | None (first command in chain) |
 | **Allowed tools** | `Read`, `Write`, `Glob`, `Grep`, `Bash` |
 
 ### Created Files
@@ -185,7 +123,7 @@ Command can be re-run to sync templates when:
 
 ---
 
-## 3. `/brewcode:spec`
+## 2. `/brewcode:spec`
 
 **Purpose:** Creates detailed task specification (SPEC.md) through parallel codebase research and interactive clarification with user. Includes quorum specification review.
 
@@ -255,7 +193,7 @@ Total 5-10 agents launched **in parallel in single message** for research.
 
 ---
 
-## 4. `/brewcode:plan`
+## 3. `/brewcode:plan`
 
 **Purpose:** Creates execution plan (PLAN.md) from specification (SPEC.md) or Plan Mode file. Includes phase breakdown, agent assignment, quorum plan review and requirements coverage verification.
 
@@ -341,7 +279,7 @@ Quorum review: 3 mixed agents (`Plan` + `brewcode:architect` + `brewcode:reviewe
 
 ---
 
-## 5. `/brewcode:start`
+## 4. `/brewcode:start`
 
 **Purpose:** Starts task execution by PLAN.md phases with infinite context through automatic handoff. In v3, uses Task API (TaskCreate/TaskUpdate/TaskList) for phase management instead of reading phases inline. Plugin hooks provide knowledge injection into agents, compaction when approaching context limit and automatic continuation.
 
@@ -455,7 +393,7 @@ After prune, only ℹ️ context facts remain in KNOWLEDGE.jsonl -- architecture
 
 ---
 
-## 6. `/brewcode:review`
+## 5. `/brewcode:review`
 
 **Purpose:** Code review with quorum consensus. Multiple agents review code in parallel, findings confirmed by quorum, then verified by DoubleCheck agent. Optional Critic phase (devil's advocate).
 
@@ -535,7 +473,7 @@ Does not use custom scripts.
 
 ---
 
-## 7. `/brewcode:rules`
+## 6. `/brewcode:rules`
 
 **Purpose:** Extracts anti-patterns and best practices from accumulated knowledge (KNOWLEDGE.jsonl) or session context and updates `.claude/rules/avoid.md` and `.claude/rules/best-practice.md` files.
 
@@ -603,7 +541,7 @@ Does not use subagents.
 
 ---
 
-## 8. `/brewcode:grepai`
+## 7. `/brewcode:grepai`
 
 **Purpose:** Setup and management of semantic code search based on grepai (Ollama + bge-m3). Supports setup, status, start, stop, reindex, optimize and upgrade.
 
@@ -612,7 +550,7 @@ Does not use subagents.
 | **Arguments** | `[setup\|status\|start\|stop\|reindex\|optimize\|upgrade]` |
 | **Context** | `session` |
 | **Model** | `sonnet` |
-| **Dependencies** | `/brewcode:install` (brew, ollama, grepai installed) |
+| **Dependencies** | `/brewcode:setup` (brew, jq installed via Phase 0) |
 | **Allowed tools** | `Read`, `Write`, `Edit`, `Bash`, `Task` |
 
 ### Created Files (setup mode)
@@ -679,7 +617,7 @@ Does not use subagents.
 
 ---
 
-## 9. `/brewcode:teardown`
+## 8. `/brewcode:teardown`
 
 **Purpose:** Removes all files and directories created by `/brewcode:setup` command. Preserves task directories and user rules.
 
@@ -728,7 +666,7 @@ Does not use subagents.
 
 ---
 
-## 15. `/brewcode:agents`
+## 9. `/brewcode:agents`
 
 **Purpose:** Interactive orchestrator for creating and improving Claude Code agents. Collects requirements via AskUserQuestion, delegates to `agent-creator` agent, then applies `brewtools:text-optimize` (if installed). Optionally updates CLAUDE.md agents table.
 

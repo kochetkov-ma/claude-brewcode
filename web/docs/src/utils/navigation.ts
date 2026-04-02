@@ -34,7 +34,6 @@ export const navigation: NavSection[] = [
           { title: 'convention', slug: 'brewcode/skills/convention' },
           { title: 'rules', slug: 'brewcode/skills/rules' },
           { title: 'grepai', slug: 'brewcode/skills/grepai' },
-          { title: 'install', slug: 'brewcode/skills/install' },
           { title: 'teardown', slug: 'brewcode/skills/teardown' },
           { title: 'standards-review', slug: 'brewcode/skills/standards-review' },
           { title: 'skills', slug: 'brewcode/skills/skills' },

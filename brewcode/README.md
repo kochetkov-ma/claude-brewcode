@@ -42,14 +42,6 @@ claude plugin marketplace update claude-brewcode
 claude plugin update brewcode@claude-brewcode
 ```
 
-### Installing dependencies
-
-```bash
-/brewcode:install
-```
-
-Installs required components (brew, jq, coreutils) and optionally -- semantic search (ollama, grepai).
-
 ## Quick Start
 
 ```bash
@@ -94,7 +86,6 @@ After `/brewcode:setup`, templates are adapted once. Then for each task -- the c
 | [`/brewcode:standards-review`](skills/standards-review/README.md) | Standards compliance review |
 | [`/brewcode:convention`](skills/convention/README.md) | Extract etalon classes, patterns, architecture into convention docs and rules |
 | [`/brewcode:teardown`](skills/teardown/README.md) | Plugin configuration cleanup (tasks are preserved) |
-| [`/brewcode:install`](skills/install/README.md) | Check and install required components |
 
 > **Note:** `/brewcode:review` -- local skill, created in the project during `/brewcode:setup`.
 >

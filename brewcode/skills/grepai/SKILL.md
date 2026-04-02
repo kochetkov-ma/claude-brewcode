@@ -47,7 +47,7 @@ MODE: [detected mode]
 | (empty) + no .grepai/ | setup |
 | (unrecognized text) | prompt |
 
-> **Prerequisites:** Run `/install` first to install brew, ollama, grepai, etc.
+> **Prerequisites:** Run `/brewcode:setup` first to install brew, ollama, grepai, etc.
 
 ---
 

@@ -72,7 +72,7 @@ claude --plugin-dir ./brewcode
 claude --plugin-dir ./brewdoc
 ```
 
-After installation, run `/brewcode:install` inside Claude Code to check and install prerequisites (brew, jq, coreutils) and optionally semantic search (ollama, grepai).
+After installation, run `/brewcode:setup` inside Claude Code to check prerequisites (brew, jq, coreutils), optionally set up semantic search (ollama, grepai), and adapt templates for your project.
 
 ---
 
@@ -263,8 +263,7 @@ Skill writes mode → state file → hooks inject on every event
 
 | Skill | Purpose |
 |-------|---------|
-| `/brewcode:install` | Install prerequisites (brew, jq, grepai) |
-| `/brewcode:setup` | Analyze project, generate adapted templates and config |
+| `/brewcode:setup` | Analyze project, check prerequisites, generate adapted templates and config |
 | `/brewcode:spec` | Research codebase + user dialog -> SPEC.md |
 | `/brewcode:plan` | Generate phased PLAN.md from SPEC or Plan Mode |
 | `/brewcode:start` | Execute task with infinite context handoff |
@@ -273,7 +272,9 @@ Skill writes mode → state file → hooks inject on every event
 | `/brewcode:grepai` | Semantic code search (setup, status, start, stop, reindex) |
 | `/brewcode:standards-review` | Review code for project standards compliance |
 | `/brewcode:skills` | List, create, and upgrade skills with forced evaluation |
+| `/brewcode:convention` | Extract etalon classes, patterns, architecture into convention docs + rules |
 | `/brewcode:agents` | Interactive agent creation and improvement |
+| `/brewcode:teams` | Create and manage dynamic teams of domain-specific agents |
 | `/brewcode:teardown` | Remove plugin configuration (keeps task data) |
 
 ## Brewtools Skills (3)

@@ -19,6 +19,37 @@ import { Badge, Callout } from '../../../../components/mdx';
 | Context | fork |
 | Tools | Read, Write, Glob, Grep, Bash, AskUserQuestion |
 
+## Phase 0: Prerequisites Check
+
+**Agent:** developer | **Action:** Verify and install required dependencies
+
+> Previously handled by the separate `/brewcode:install` skill, now integrated into setup.
+
+### Components
+
+| Component | Type | Purpose |
+|-----------|------|---------|
+| brew | required | Package manager |
+| coreutils+timeout | required | Command timeout for scripts |
+| jq | required | JSON processor for hooks |
+| ollama | optional | Local embedding server |
+| bge-m3 | optional | Multilingual embedding model (~1.2GB) |
+| grepai | optional | Semantic code search CLI |
+
+### Workflow
+
+1. **State Check** -- detects installed/missing components
+2. **Evaluate** -- if all required present, skip to Phase 1
+3. **Timeout Check + Required Install** -- creates symlink, installs brew/coreutils/jq if missing
+4. **Semantic Search (optional)** -- offers to install ollama + grepai
+5. **Summary** -- prints final status
+
+<Callout type="tip" title="Automatic">
+  Phase 0 runs automatically before project analysis. If all prerequisites are already installed, it completes instantly.
+</Callout>
+
+---
+
 ## Phase 1: Project Structure Analysis
 
 **Agent:** Explore | **Action:** Scan project and gather intelligence

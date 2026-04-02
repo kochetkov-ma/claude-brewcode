@@ -46,12 +46,13 @@ brewcode/                                    # Plugin root directory
 │   ├── reviewer.md                            # Reviewer (opus): code review, quality, security, performance
 │   └── tester.md                              # Tester (sonnet): SDET/QA - runs tests, analyzes failures
 │
-├── skills/                                    # Skills - plugin commands (14 total)
+├── skills/                                    # Skills - plugin commands (12 total)
 │   │
 │   ├── setup/                                 # /brewcode:setup - Plugin initialization in project
 │   │   ├── SKILL.md                           # Instructions: project analysis, adapted template generation (opus, fork)
 │   │   ├── scripts/
-│   │   │   └── setup.sh                       # Bash: scan/structure/sync/review/config/validate/all - creates directories, copies templates
+│   │   │   ├── setup.sh                       # Bash: scan/structure/sync/review/config/validate/all - creates directories, copies templates
+│   │   │   └── install.sh                     # Bash: state/check-updates/check-timeout/required/grepai/summary - prerequisites installer
 │   │   └── templates/                         # Templates for generating files in target project
 │   │       ├── PLAN.md.template               # Plan template: slim Phase Registry table + 3-line header (v3: phase details in phases/)
 │   │       ├── SPEC.md.template               # Specification template: Goal, Scope, Requirements, Analysis, Context Files, Risks, Decisions
@@ -93,11 +94,6 @@ brewcode/                                    # Plugin root directory
 │   │       ├── status.sh                      # Diagnostics: CLI, ollama, bge-m3, MCP, index, versions
 │   │       ├── verify.sh                      # Verification: full functionality check
 │   │       └── create-rule.sh                 # Creates grepai-first.md rule in .claude/rules/
-│   │
-│   ├── install/                               # /brewcode:install - Dependencies installation
-│   │   ├── SKILL.md                           # Instructions: interactive installation of brew, coreutils, jq, ollama, grepai (sonnet, fork)
-│   │   └── scripts/
-│   │       └── install.sh                     # Bash: state/check-updates/required/timeout/grepai/summary - unified installer
 │   │
 │   ├── teardown/                              # /brewcode:teardown - Plugin files cleanup
 │   │   └── SKILL.md                           # Instructions: removes templates/, cfg/, skills/brewcode-review/; preserves tasks (haiku, fork)
@@ -224,12 +220,12 @@ Files created by the plugin in the user's project:
 | Plugin configuration | 2 | plugin.json, hooks.json |
 | Hooks (Node.js) | 9 | 7 scripts + 2 libraries |
 | Agents | 12 | bc-coordinator, bc-knowledge-manager, bc-grepai-configurator, bc-rules-organizer, agent-creator, skill-creator, bash-expert, hook-creator, architect, developer, reviewer, tester |
-| Skills (SKILL.md) | 11 | setup, spec, plan, start, rules, grepai, install, teardown, review, standards-review, agents |
-| Bash scripts | 16 | setup(1), rules(1), grepai(13), install(1) |
+| Skills (SKILL.md) | 12 | setup, spec, plan, start, rules, convention, grepai, teardown, standards-review, skills, agents, teams |
+| Bash scripts | 16 | setup(2), rules(1), grepai(13) |
 | Templates | 17 | PLAN, SPEC, KNOWLEDGE, config, phase(4), reports(4), rules(3), review(3) |
 | Documentation | 7 | README, INSTALL, RELEASE-NOTES, grepai.md, file-tree.md, commands.md, flow.md, hooks.md |
 | npm | 1 | package.json |
-| **Total** | **78** | |
+| **Total** | **76** | |
 
 ---
 

@@ -2,6 +2,17 @@
 
 ---
 
+## v3.4.16 (2026-04-02)
+
+### brewcode
+#### Changed
+- **Merged `/brewcode:install` into `/brewcode:setup`** — prerequisites check (brew, coreutils, jq, grepai) now runs automatically as Phase 0 before project analysis; if all required tools are present, Phase 0 is skipped silently; interactive prompts via AskUserQuestion for missing components and optional grepai install
+
+#### Removed
+- **`/brewcode:install` skill** — deleted; all functionality absorbed by `/brewcode:setup` Phase 0
+
+---
+
 ## v3.4.15 (2026-04-02)
 
 ### brewcode

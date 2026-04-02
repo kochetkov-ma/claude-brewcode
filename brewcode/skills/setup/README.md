@@ -6,13 +6,27 @@ auto-sync-type: doc
 
 # Setup
 
-Analyzes your project's tech stack, testing framework, database layer, and existing agents to generate tailored templates and a review skill under `.claude/tasks/`. Run this once before using any other brewcode skill (`spec`, `plan`, `start`, `review`).
+Checks prerequisites, then analyzes your project's tech stack, testing framework, database layer, and existing agents to generate tailored templates and a review skill under `.claude/tasks/`. Run this once before using any other brewcode skill (`spec`, `plan`, `start`, `review`). Setup handles all required tooling (brew, coreutils, jq) and optionally sets up grepai for semantic code search.
 
 ## Quick Start
 
 ```bash
 /brewcode:setup
 ```
+
+## Prerequisites
+
+Phase 0 automatically checks and installs the following before project analysis begins:
+
+| Component | Required | Purpose |
+|-----------|----------|---------|
+| brew | Yes | Homebrew package manager |
+| coreutils+timeout | Yes | GNU timeout for brewcode scripts |
+| jq | Yes | JSON processor for hooks |
+| ollama + bge-m3 | No | Local embedding model for grepai |
+| grepai | No | Semantic code search CLI |
+
+Required components are installed automatically. Optional components are offered interactively. If all prerequisites are already present, Phase 0 is skipped entirely.
 
 ## Modes
 
@@ -21,7 +35,7 @@ Analyzes your project's tech stack, testing framework, database layer, and exist
 | Full auto-detect | `/brewcode:setup` | Scans the project, detects stack, generates all templates and review skill |
 | Custom template | `/brewcode:setup path/to/PLAN.md.template` | Uses the provided template as a base and adapts it to the project |
 
-Both modes run the same five phases: scan, analyze, generate templates, create review skill, and update the global `~/.claude/CLAUDE.md` agents section (with confirmation).
+Both modes run the same phases: **check prerequisites**, scan, analyze, generate templates, create review skill, and update the global `~/.claude/CLAUDE.md` agents section (with confirmation).
 
 ## Examples
 
@@ -30,6 +44,13 @@ Both modes run the same five phases: scan, analyze, generate templates, create r
 ```bash
 # First-time setup in a new project -- run before anything else
 /brewcode:setup
+```
+
+```bash
+# Setup auto-checks prerequisites -- skips if already installed
+/brewcode:setup
+# Phase 0: All prerequisites present, skipping installation.
+# Phase 1: Scanning project...
 ```
 
 ```bash
@@ -92,3 +113,4 @@ The review skill is generated with checks matched to the detected stack (e.g., S
 - The skill asks for confirmation before modifying `~/.claude/CLAUDE.md`. You can safely decline and still get all project-level templates.
 - After setup completes, the typical workflow is `spec` -> `plan` -> `start`. Each of those skills depends on the templates setup creates.
 - Check `.claude/tasks/cfg/brewcode.config.json` to tune knowledge compaction limits and agent injection settings after the initial run.
+- Setup handles prerequisites automatically. No need to install anything manually before running it.

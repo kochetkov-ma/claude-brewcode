@@ -61,7 +61,7 @@ First-time setup takes 5-30+ minutes depending on project size. It checks infras
 # Running setup again when grepai is already configured -- use reindex or optimize instead
 /brewcode:grepai setup    <-- overwrites existing config
 
-# Forgetting prerequisites -- run /install before setup
+# Forgetting prerequisites -- run /brewcode:setup before grepai setup
 /brewcode:grepai setup    <-- fails on missing Ollama or bge-m3
 ```
 
@@ -81,6 +81,6 @@ MCP server is configured with `grepai_search` and related tools (`trace_callers`
 ## Tips
 
 - **Monitor long indexing runs** with `tail -f .grepai/logs/grepai-watch.log` -- large projects (5k+ files) can take 10-30+ minutes.
-- **Run `/brewcode:install` first** if you do not have Homebrew, Ollama, or the grepai CLI installed.
+- **Run `/brewcode:setup` first** if you do not have Homebrew, Ollama, or the grepai CLI installed.
 - **Use `optimize` after structural changes** (new modules, renamed packages, changed build config) to regenerate the config with fresh project analysis.
 - **Check `status` when search results seem off** -- it validates every component from CLI to index integrity.

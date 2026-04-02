@@ -1,6 +1,6 @@
 ---
 name: brewcode:setup
-description: Analyzes project structure and tech stack to generate adapted PLAN.md.template in .claude/tasks/templates/.
+description: "Checks prerequisites and analyzes project structure to generate adapted templates in .claude/tasks/templates/."
 disable-model-invocation: true
 argument-hint: "[universal-template-path]"
 allowed-tools: Read, Write, Glob, Grep, Bash, AskUserQuestion
@@ -10,6 +10,67 @@ model: opus
 
 
 <instructions>
+
+## Phase 0: Prerequisites Check
+
+**Agent:** developer | **Action:** Verify and install required tools
+
+> **Context:** This phase auto-checks prerequisites. If all required components are present, it skips to Phase 1 silently.
+
+### Step 1: State Check
+
+**EXECUTE** using Bash tool:
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/install.sh" state && echo "✅ state" || echo "❌ state FAILED"
+```
+
+> **STOP if ❌** — verify install.sh exists in scripts/.
+
+### Step 2: Evaluate Results
+
+Parse the state output table. Check required components: **brew**, **timeout**, **jq**.
+
+- **If ALL required show ✅** → Skip to Phase 1 (log: "All prerequisites present, skipping installation.")
+- **If ANY required show ❌ missing** → Continue to Step 3
+
+### Step 3: Install Required Components
+
+**EXECUTE** using Bash tool:
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/install.sh" check-timeout && echo "✅ timeout-check" || echo "❌ timeout-check FAILED"
+```
+
+**If TIMEOUT_EXISTS=false** → **ASK** (AskUserQuestion):
+- Question: "The `timeout` command is missing. Create symlink to `gtimeout`? This is REQUIRED for brewcode."
+- Options: "Yes, create" | "Cancel setup"
+
+> **If cancel** → STOP: "Setup cancelled. timeout command is required for brewcode."
+
+**EXECUTE** using Bash tool:
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/install.sh" required && echo "✅ required" || echo "❌ required FAILED"
+```
+
+> **STOP if ❌** — required components must be installed before continuing.
+
+**If timeout still missing** → **EXECUTE**: `bash "${CLAUDE_SKILL_DIR}/scripts/install.sh" timeout`
+
+### Step 4: Semantic Search (Optional)
+
+**If grepai not installed** → **ASK** (AskUserQuestion):
+- Question: "Install semantic search (grepai)? Enables AI-powered code search (~1.5GB)."
+- Options: "Yes, install grepai" | "Skip"
+
+**If Yes** → **EXECUTE**: `bash "${CLAUDE_SKILL_DIR}/scripts/install.sh" grepai`
+
+### Step 5: Summary
+
+**EXECUTE** using Bash tool:
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/install.sh" summary && echo "✅ summary" || echo "❌ summary FAILED"
+```
+
+---
 
 ## Phase 1: Project Structure Analysis
 

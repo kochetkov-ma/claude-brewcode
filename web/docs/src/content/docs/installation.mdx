@@ -84,10 +84,10 @@ import { Card, CardGrid, Callout, Steps, Tabs, TabItem } from '../../components/
   </li>
   <li class="step step-primary">
     <div>
-      <strong>Install dependencies</strong>
+      <strong>Run project setup</strong>
       <p>Inside a Claude Code session, run:</p>
-      <pre><code>/brewcode:install</code></pre>
-      <p>This skill checks for and installs brew, jq, and coreutils. Optionally installs ollama and grepai for semantic search.</p>
+      <pre><code>/brewcode:setup</code></pre>
+      <p>Setup automatically checks and installs prerequisites (brew, jq, coreutils) as Phase 0 before analyzing your project. Optionally installs ollama and grepai for semantic search.</p>
     </div>
   </li>
 </Steps>
@@ -114,8 +114,8 @@ Restart Claude Code after updating.
   **`/brewcode:*` commands are not recognized**
   -- Restart Claude Code after installation. Plugins only load at session start.
 
-  **`/brewcode:install` reports missing `timeout`**
-  -- The skill creates a symlink automatically. If the issue persists: `brew install coreutils`.
+  **`/brewcode:setup` reports missing `timeout`**
+  -- The setup skill creates a symlink automatically during Phase 0. If the issue persists: `brew install coreutils`.
 
   **`CLAUDECODE` environment variable interferes with launch**
   -- Run `unset CLAUDECODE` before running `claude` in scripts (applies to v0.2.47+).
@@ -128,6 +128,6 @@ Restart Claude Code after updating.
     Run your first infinite task in 15 minutes: setup, spec, plan, start.
   </Card>
   <Card title="Brewcode Overview" icon="&#x1F3ED;" href="/brewcode/overview/">
-    Architecture, concepts, all 16 skills, 13+ agents, and 8 hooks.
+    Architecture, concepts, all 15 skills, 13+ agents, and 8 hooks.
   </Card>
 </CardGrid>
