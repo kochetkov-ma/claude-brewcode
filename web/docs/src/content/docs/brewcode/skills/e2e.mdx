@@ -1,0 +1,191 @@
+---
+title: "E2E Testing"
+description: "End-to-end testing orchestration: setup, scenarios, autotests, quorum review"
+order: 1113
+---
+import { Card, CardGrid, Callout, Steps, Badge, Tabs, TabItem } from '../../../../components/mdx';
+
+# E2E Testing
+
+<Badge variant="primary" text="opus" /> <Badge variant="accent" text="new" />
+
+## Quick reference
+
+| Field | Value |
+|-------|-------|
+| Command | `/brewcode:e2e` |
+| Arguments | `setup`, `create [prompt]`, `update [prompt]`, `review [prompt]`, `rules [prompt]`, `status` |
+| Model | opus |
+| Tools | Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion, Skill, WebSearch, WebFetch |
+
+## Quick Start
+
+<Steps>
+1. `/brewcode:e2e setup` -- analyze project, create 5 E2E agents, generate rules
+2. `/brewcode:e2e create "checkout flow"` -- BDD scenarios + autotests
+3. `/brewcode:e2e review` -- quorum review (3 reviewers, 2/3 consensus)
+</Steps>
+
+## Modes
+
+<Tabs>
+  <TabItem label="setup">
+    Analyze project and create E2E infrastructure.
+
+    | Step | Action |
+    |------|--------|
+    | S0 | Check prerequisites (framework, dirs, deps) |
+    | S1 | Check existing setup, ask if reconfigure |
+    | S2 | 3-5 Explore agents analyze project |
+    | S3 | User confirms agent roster |
+    | S4 | Create 5 agents in 2 batches via agent-creator |
+    | S5 | Generate rules (architect + WebSearch + reviewer) |
+    | S6 | Save config to `.claude/e2e/config.json` |
+    | S7 | Final summary |
+  </TabItem>
+  <TabItem label="create">
+    Create BDD scenarios and E2E autotests.
+
+    | Step | Action |
+    |------|--------|
+    | C0 | Prerequisite check (agents exist?) |
+    | C1 | Define scope (from prompt or ask user) |
+    | C2 | 3-5 Explore agents analyze target area |
+    | C3 | scenario-analyst creates BDD scenarios |
+    | C4 | Review cycle: reviewer + cross-check (max 3) |
+    | C5 | User approves scenarios |
+    | C6 | automation-tester writes tests |
+    | C7 | Review cycle for tests (max 3) |
+    | C8 | Smoke validation (compile check) |
+    | C9 | Final summary with traceability |
+  </TabItem>
+  <TabItem label="update">
+    Update existing scenarios and tests.
+
+    | Step | Action |
+    |------|--------|
+    | U0 | Prerequisite check |
+    | U1 | Define what to update |
+    | U2 | Find existing artifacts |
+    | U3 | Apply updates via appropriate agent |
+    | U4 | Review cycle (max 3) |
+    | U5 | Summary with diff |
+  </TabItem>
+  <TabItem label="review">
+    Multi-agent quorum review.
+
+    | Step | Action |
+    |------|--------|
+    | R0 | Prerequisite check |
+    | R1 | Define review scope |
+    | R2 | Scan artifacts |
+    | R3 | Split scope into parts |
+    | R4 | 3x reviewer per part (quorum 2/3) |
+    | R5 | Cross-agent re-check of confirmed findings |
+    | R6 | Results report with fix proposals |
+  </TabItem>
+  <TabItem label="rules">
+    Create or update E2E testing rules.
+
+    | Step | Action |
+    |------|--------|
+    | L0 | Prerequisite check |
+    | L1 | Load current rules, check freshness |
+    | L2 | WebSearch + architect analysis |
+    | L3 | Update rules, reviewer validates |
+    | L4 | User approves diff |
+    | L5 | Optional export to `.claude/rules/` |
+  </TabItem>
+  <TabItem label="status">
+    Read-only infrastructure status.
+
+    | Check | Details |
+    |-------|---------|
+    | Agents | Count and list of `e2e-*` agents |
+    | Rules | Base + project rule counts |
+    | Config | Stack, framework, paths |
+    | Artifacts | Scenario and test counts by status |
+    | Freshness | Last update dates |
+  </TabItem>
+</Tabs>
+
+## Agents
+
+<CardGrid>
+  <Card title="e2e-architect" icon="wrench">
+    <Badge variant="primary" text="opus" /> Analyzes project, defines E2E patterns, creates rules and conventions
+  </Card>
+  <Card title="e2e-scenario-analyst" icon="document">
+    <Badge variant="primary" text="opus" /> Creates detailed BDD scenarios from system analysis
+  </Card>
+  <Card title="e2e-automation-tester" icon="list">
+    <Badge variant="primary" text="opus" /> Writes E2E autotests from approved scenarios
+  </Card>
+  <Card title="e2e-manual-tester" icon="play">
+    <Badge variant="secondary" text="sonnet" /> Verifies system via UI/API, finds bugs
+  </Card>
+  <Card title="e2e-reviewer" icon="check">
+    <Badge variant="primary" text="opus" /> <Badge variant="warning" text="READ-ONLY" /> Reviews quality, rule compliance, coverage
+  </Card>
+</CardGrid>
+
+## Architecture
+
+Layered E2E test architecture (all layers are stack-agnostic):
+
+| Layer | Purpose | Example |
+|-------|---------|---------|
+| Test Classes | Domain-specific tests, parameterized | `CheckoutE2ETest extends BasePaymentE2E` |
+| Steps | Business-language reusable steps | `givenUserIsAuthorized("admin")` |
+| Verification | Strict assertion steps | `thenOrderStatusIs(COMPLETED)` |
+| Data | Test data generation via API | `createTestUser(role: "buyer")` |
+| Support | Technical integration utilities | `KafkaSupport`, `DatabaseSupport` |
+| Config | Environment settings | Credentials, endpoints, timeouts |
+
+## Three-Step Review Cycle
+
+<Steps>
+1. **Execute** -- agent performs work (scenario or test creation)
+2. **Validate** -- different agent reviews against rules (MAX_CYCLES=3)
+3. **Re-check** -- cross-domain verification of findings before fixing
+</Steps>
+
+<Callout type="tip">
+  Review cycles are capped at 3 iterations. If issues remain, the user decides whether to continue or accept.
+</Callout>
+
+## Quorum Review
+
+The review mode uses 3 parallel reviewers per scope part:
+
+| Agreement | Classification |
+|-----------|---------------|
+| 2-3 reviewers flag same issue | Confirmed finding |
+| Only 1 reviewer flags | Unconfirmed (noted, not auto-fixed) |
+| All 3 agree clean | Clean |
+
+## Examples
+
+<Tabs>
+  <TabItem label="Java/JUnit5">
+    ```
+    /brewcode:e2e setup
+    /brewcode:e2e create "user registration with email verification"
+    /brewcode:e2e review "focus on assertion quality"
+    ```
+  </TabItem>
+  <TabItem label="Python/pytest">
+    ```
+    /brewcode:e2e setup
+    /brewcode:e2e create "checkout flow with Stripe payments"
+    /brewcode:e2e rules "add async messaging patterns"
+    ```
+  </TabItem>
+  <TabItem label="JS/Playwright">
+    ```
+    /brewcode:e2e setup
+    /brewcode:e2e create "login and dashboard navigation"
+    /brewcode:e2e update "add negative scenarios to auth"
+    ```
+  </TabItem>
+</Tabs>

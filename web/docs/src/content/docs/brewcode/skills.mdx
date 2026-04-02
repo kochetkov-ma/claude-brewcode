@@ -1,6 +1,6 @@
 ---
 title: "Skills"
-description: "All 12 Brewcode skills: commands, parameters, examples"
+description: "All 13 Brewcode skills: commands, parameters, examples"
 order: 11
 ---
 
@@ -9,8 +9,8 @@ import { Card, CardGrid, Callout } from '../../../components/mdx';
 # Skills
 
 Skills (recipes) are slash commands that define *what* to do. Each skill is described in a `SKILL.md` file
-with frontmatter metadata and instructions for agents. Brewcode includes 12 skills covering
-the full task lifecycle -- from project analysis to standards review.
+with frontmatter metadata and instructions for agents. Brewcode includes 13 skills covering
+the full task lifecycle -- from project analysis to standards review and E2E testing.
 
 ## Summary table
 
@@ -28,6 +28,7 @@ the full task lifecycle -- from project analysis to standards review.
 | 10 | standards-review | `/brewcode:standards-review` | opus | Standards compliance review |
 | 11 | skills | `/brewcode:skills` | opus | Skill management |
 | 12 | agents | `/brewcode:agents` | opus | Agent creation and improvement |
+| 13 | e2e | `/brewcode:e2e` | opus | E2E testing orchestration |
 
 <CardGrid>
   <Card title="setup" icon="wrench" href="/brewcode/skills/setup/">
@@ -65,6 +66,9 @@ the full task lifecycle -- from project analysis to standards review.
   </Card>
   <Card title="agents" icon="people" href="/brewcode/skills/agents/">
     Agent creation and improvement
+  </Card>
+  <Card title="e2e" icon="check" href="/brewcode/skills/e2e/">
+    E2E testing: scenarios, autotests, quorum review
   </Card>
 </CardGrid>
 

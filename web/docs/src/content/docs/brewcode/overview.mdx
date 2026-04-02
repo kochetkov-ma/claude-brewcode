@@ -19,7 +19,7 @@ what to brew, agents (brewers) do the work, and hooks (processes) manage the lif
     Automatic knowledge transfer between sessions via KNOWLEDGE.jsonl and the handoff mechanism.
     Tasks continue after compaction without losing progress.
   </Card>
-  <Card title="12 skills (recipes)" icon="terminal">
+  <Card title="13 skills (recipes)" icon="terminal">
     Full cycle: from project analysis (/brewcode:setup) to task execution (/brewcode:start)
     and code review (/brewcode:standards-review).
   </Card>
@@ -120,7 +120,7 @@ brewcode/
 │   ├── bc-knowledge-manager.md        # Knowledge manager (haiku)
 │   ├── bc-grepai-configurator.md      # grepai configurator (opus)
 │   └── bc-rules-organizer.md          # Rules organizer (sonnet)
-├── skills/                            # 12 skills
+├── skills/                            # 13 skills
 │   ├── setup/                         # Project analysis, templates
 │   ├── spec/                          # Specification creation
 │   ├── plan/                          # Plan creation
@@ -132,7 +132,8 @@ brewcode/
 │   ├── standards-review/              # Standards review
 │   ├── skills/                        # Skill management
 │   ├── agents/                        # Agent management
-│   └── teams/                         # Dynamic agent teams
+│   ├── teams/                         # Dynamic agent teams
+│   └── e2e/                           # E2E testing orchestration
 └── templates/                         # Rule templates
 ```
 
@@ -174,7 +175,7 @@ After running `/brewcode:setup` and `/brewcode:start`, the following appears in 
 
 <Tabs>
   <TabItem label="Skills">
-    12 skills (recipes) cover the full task lifecycle.
+    13 skills (recipes) cover the full task lifecycle.
     See the [Skills](/brewcode/skills/) section for details.
 
     | Group | Skills | Purpose |
@@ -182,6 +183,7 @@ After running `/brewcode:setup` and `/brewcode:start`, the following appears in 
     | Core cycle | setup, spec, plan, start | Task creation and execution |
     | Quality | standards-review, convention, rules | Code analysis and review |
     | Dynamic | teams | Agent team creation and management |
+    | Testing | e2e | E2E testing orchestration with BDD scenarios |
     | Utilities | grepai, teardown, skills, agents | Tools and configuration |
   </TabItem>
   <TabItem label="Agents">
@@ -249,6 +251,6 @@ After running `/brewcode:setup` and `/brewcode:start`, the following appears in 
 </Steps>
 
 <Callout type="tip" title="Next steps">
-  Check out [Skills](/brewcode/skills/) for a detailed description of all 12 skills,
+  Check out [Skills](/brewcode/skills/) for a detailed description of all 13 skills,
   or go to [Workflow](/brewcode/workflow/) for a deep dive into the full task execution cycle.
 </Callout>

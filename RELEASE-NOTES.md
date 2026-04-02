@@ -2,6 +2,21 @@
 
 ---
 
+## v3.4.19 (2026-04-02)
+
+### brewcode
+#### Added
+- **`/brewcode:e2e` skill** — full-cycle E2E testing orchestration: 6 modes (setup, create, update, review, rules, status), 5 runtime agents created via agent-creator, BDD scenarios with YAML frontmatter, layered test architecture (stack-agnostic), quorum review (3 reviewers, 2/3 consensus), MAX_CYCLES=3 review loops
+- **E2E references** — `e2e-rules.md` (24 rules, 6 categories), `e2e-architecture.md` (layered diagram + 4-stack mapping), `agent-template.md` (Rules Loading + Self-Check protocols), 6 mode flow files
+- **`detect-mode.sh`** — POSIX sh argument parser for e2e skill (6 keywords, smart default: status if agents exist, setup otherwise)
+
+### docs
+#### Updated
+- New `/brewcode/skills/e2e` docs page with modes, agents, architecture, quorum review
+- Updated skills.mdx (13 skills), overview.mdx (13 skills, e2e in directory tree + Components), navigation.ts
+
+---
+
 ## v3.4.17 (2026-04-02)
 
 ### brewpage-publish
