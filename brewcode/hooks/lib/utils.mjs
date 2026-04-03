@@ -1,7 +1,7 @@
 /**
  * Shared utilities for brewcode hooks
  */
-import { readFileSync, existsSync, writeFileSync, mkdirSync, unlinkSync, renameSync, appendFileSync } from 'fs';
+import { readFileSync, existsSync, writeFileSync, mkdirSync, unlinkSync, renameSync, appendFileSync, statSync, rmSync } from 'fs';
 import { dirname, join } from 'path';
 
 /**
@@ -493,6 +493,12 @@ export function getLock(cwd) {
   if (!existsSync(lockPath)) return null;
 
   try {
+    const stat = statSync(lockPath);
+    if (!stat.isFile()) {
+      log('warn', '[lock]', `Lock is a directory, removing: ${lockPath}`, cwd);
+      try { rmSync(lockPath, { recursive: true }); } catch {}
+      return null;
+    }
     const lock = JSON.parse(readFileSync(lockPath, 'utf8'));
     if (!lock.task_path || typeof lock.task_path !== 'string' ||
         !lock.started_at || typeof lock.started_at !== 'string') {
@@ -672,28 +678,69 @@ export function saveState(cwd, state) {
 }
 
 /**
- * Get active mode and its instructions
+ * Get active mode and its instructions (3-scope resolution)
  * @param {string} cwd - Current working directory
- * @returns {{ name: string, instructions: string } | null}
+ * @param {string|null} sessionId - Session ID for session-scope resolution
+ * @returns {{ name: string, instructions: string, scope: string } | null}
  */
-export function getActiveMode(cwd) {
-  const state = getState(cwd);
-  if (!state.mode) return null;
+export function getActiveMode(cwd, sessionId = null) {
+  let modeName = null;
+  let scope = null;
 
-  const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT || '';
-  if (!pluginRoot) return null;
+  // 1. Try CLAUDE_PLUGIN_DATA/modes.json with 3-scope resolution
+  const pluginData = process.env.CLAUDE_PLUGIN_DATA || '';
+  if (pluginData) {
+    const modesPath = join(pluginData, 'modes.json');
+    try {
+      if (existsSync(modesPath)) {
+        const modes = JSON.parse(readFileSync(modesPath, 'utf8'));
 
-  const modePath = join(pluginRoot, 'modes', `${state.mode}.md`);
-  try {
-    if (!existsSync(modePath)) {
-      log('warn', '[mode]', `Mode "${state.mode}" active but file not found: ${modePath}`, cwd);
-      return null;
+        if (sessionId && modes.sessions?.[sessionId]?.mode) {
+          modeName = modes.sessions[sessionId].mode;
+          scope = 'session';
+        } else if (cwd && modes.projects?.[cwd]?.mode) {
+          modeName = modes.projects[cwd].mode;
+          scope = 'project';
+        } else if (modes.global?.mode) {
+          modeName = modes.global.mode;
+          scope = 'global';
+        }
+      }
+    } catch (e) {
+      log('warn', '[mode]', `Failed to read modes.json: ${e.message}`, cwd);
     }
-    const instructions = readFileSync(modePath, 'utf8').trim();
-    if (!instructions) return null;
-    return { name: state.mode, instructions };
-  } catch (e) {
-    log('warn', '[mode]', `Failed to read mode "${state.mode}": ${e.message}`, cwd);
-    return null;
   }
+
+  // 2. Fallback to old state file
+  if (!modeName) {
+    const state = getState(cwd);
+    if (state.mode) {
+      modeName = state.mode;
+      scope = 'legacy';
+    }
+  }
+
+  if (!modeName) return null;
+
+  // 3. Load instructions: user modes (PLUGIN_DATA) then built-in (PLUGIN_ROOT)
+  const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT || '';
+  const candidates = [];
+  if (pluginData) candidates.push(join(pluginData, 'modes', `${modeName}.md`));
+  if (pluginRoot) candidates.push(join(pluginRoot, 'modes', `${modeName}.md`));
+
+  for (const modePath of candidates) {
+    try {
+      if (existsSync(modePath)) {
+        const instructions = readFileSync(modePath, 'utf8').trim();
+        if (instructions) {
+          return { name: modeName, instructions, scope };
+        }
+      }
+    } catch (e) {
+      log('warn', '[mode]', `Failed to read mode "${modeName}" from ${modePath}: ${e.message}`, cwd);
+    }
+  }
+
+  log('warn', '[mode]', `Mode "${modeName}" active (${scope}) but no instructions file found`, cwd);
+  return null;
 }

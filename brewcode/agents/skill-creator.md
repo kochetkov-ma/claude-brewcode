@@ -1,22 +1,16 @@
 ---
 name: skill-creator
 description: |
-  Use this agent when creating, improving, or analyzing Claude Code skills (SKILL.md files). Examples:
+  Creates, improves, and analyzes Claude Code skills (SKILL.md files). Triggers: "create skill", "new skill", "skill doesn't invoke", "improve skill", "fix skill trigger".
 
   <example>
-  Context: User needs new skill for workflow
   user: "Create a skill for database migrations"
-  assistant: "I'll design the skill structure."
   <commentary>Explicit skill creation request triggers this agent</commentary>
-  assistant: "I'll use the skill-creator agent to create a skill with proper frontmatter, progressive disclosure, and trigger phrases."
   </example>
 
   <example>
-  Context: Skill doesn't invoke properly
   user: "Claude isn't picking up my skill automatically"
-  assistant: "I'll review the description field."
   <commentary>Skill invocation issues trigger this agent</commentary>
-  assistant: "I'll use the skill-creator agent to review the description and improve trigger phrases."
   </example>
 model: opus
 color: green
@@ -81,9 +75,9 @@ skill-name/
 | **Executable Bash** | Bash blocks must execute, not be examples | **EXECUTE** keyword + `&& echo "✅" \|\| echo "❌"` + `> STOP if ❌`. Without keyword bash blocks are treated as examples |
 | **Skill Chaining** | Skill invokes another skill | `Skill` in `allowed-tools`. `Skill(skill="name", args="...")`. Works only in main conversation |
 | **Background Knowledge** | Claude needs context, but user doesn't need a slash command | `user-invocable: false`. Description stays in context, Claude decides when to apply |
-| **Pushy Description** | LLM-invocable skills | Description includes scenarios and keywords: "Use when - X. Trigger keywords - Y." Raises activation 20% → 50-72% |
+| **Pushy Description** | LLM-invocable skills | Action verb sentence + `Triggers: "phrase1", "phrase2"`. Raises activation 20% → 50-72% |
 | **Preloaded Skills** | Subagent must follow conventions/patterns | `skills: [name]` in agent frontmatter. Full skill content injected at startup. Inverse pattern to `context: fork` |
-| **Mode Switcher** | Skill toggles persistent session behavior (on/off) | Single skill with argument (`on [mode]`, `off`, `status`). Bash block writes `mode` to `brewcode.state.json` via `jq` + atomic `mv`. Hooks read state and inject mode instructions on every event via `additionalContext`/`updatedInput`. Mode instructions in `modes/{name}.md`. Survives auto-compact |
+| **Mode Switcher** | Skill toggles persistent session behavior (on/off) with 3 scopes | Single skill with argument (`on [mode]`, `off`, `status`) + scope flag (`--global`, `--session`, default=project). Bash block writes state to `$BC_PLUGIN_DATA/modes.json` via `jq` + atomic `mv`. Resolution: session > project > global. Hooks read state via `getActiveMode()` and inject mode instructions on every event. Mode instructions in `modes/{name}.md`. Survives auto-compact |
 
 ## Agents-as-References Detail
 
@@ -121,60 +115,71 @@ Coordinator passes **file path**, not content. Subagent reads the `.md` itself a
 
 ## Mode Switcher Detail
 
-A skill that toggles a persistent behavioral "mode" for the entire session. The skill writes state to disk, and hooks inject mode-specific instructions on every event.
+A skill that toggles a persistent behavioral "mode" with 3 scopes: global, project, session. State stored in `$BC_PLUGIN_DATA/modes.json`. Hooks inject mode-specific instructions on every event.
 
 **Architecture:**
 
 ```
 mode-skill/
-├── SKILL.md              # Argument parsing: on/off/status
+├── SKILL.md              # Argument parsing: on/off/status + scope flag
 ├── references/
-│   └── modes.md          # Available modes documentation
+│   └── modes.md          # Available modes + scope docs
 └── scripts/
     └── mode.sh           # State read/write helper
 ```
 
 **How it works:**
 
-1. Skill receives argument: `on manager`, `off`, `status`
-2. `on`: Bash block writes `{"mode": "manager"}` to `.claude/tasks/cfg/brewcode.state.json`
-3. `off`: Bash block deletes `mode` from state file
-4. `status`: Bash block reads and displays current mode
-5. Hooks (`forced-eval.mjs`, `session-start.mjs`, `pre-task.mjs`) read state on every event
-6. If mode active: hooks load instructions from `$BC_PLUGIN_ROOT/modes/{mode}.md` and inject them
+1. Skill receives argument: `on validator`, `on validator --global`, `on validator --session`, `off`, `status`
+2. Default scope = project
+3. State stored in `$BC_PLUGIN_DATA/modes.json` (NOT in `.claude/tasks/cfg/`)
+4. `BC_PLUGIN_DATA` is injected as text variable by hooks (`session-start.mjs`, `pre-task.mjs`)
 
-**Skill bash block (on):**
+**State structure:**
 
-```bash
-STATE=".claude/tasks/cfg/brewcode.state.json"
-mkdir -p "$(dirname "$STATE")"
-MODE_NAME="$1"
-if [ -f "$STATE" ]; then
-  jq --arg m "$MODE_NAME" --arg t "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" '.mode = $m | .modeActivatedAt = $t' "$STATE" > "$STATE.tmp" && mv "$STATE.tmp" "$STATE"
-else
-  echo "{\"mode\":\"$MODE_NAME\",\"modeActivatedAt\":\"$(date -u +%Y-%m-%dT%H:%M:%S.000Z)\"}" > "$STATE"
-fi
-echo "Mode '$MODE_NAME' activated"
+```json
+{
+  "global": { "mode": "validator", "activatedAt": "..." },
+  "projects": {
+    "/path/to/project": { "mode": "manager", "activatedAt": "..." }
+  },
+  "sessions": {
+    "abc12345": { "mode": "debug", "activatedAt": "..." }
+  }
+}
 ```
 
-**Skill bash block (off):**
+**Resolution priority:** session > project > global
+
+**Skill bash block (on — project scope, default):**
 
 ```bash
-STATE=".claude/tasks/cfg/brewcode.state.json"
-if [ -f "$STATE" ]; then
-  jq 'del(.mode, .modeActivatedAt)' "$STATE" > "$STATE.tmp" && mv "$STATE.tmp" "$STATE"
-  echo "Mode deactivated"
-else
-  echo "No active mode"
-fi
+STATE="$BC_PLUGIN_DATA/modes.json"
+[ ! -f "$STATE" ] && echo '{}' > "$STATE"
+jq --arg m "$MODE" --arg p "$PWD" --arg t "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" \
+  '.projects[$p] = {mode: $m, activatedAt: $t}' "$STATE" > "$STATE.tmp" && mv "$STATE.tmp" "$STATE"
+```
+
+**Skill bash block (on — global):**
+
+```bash
+jq --arg m "$MODE" --arg t "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" \
+  '.global = {mode: $m, activatedAt: $t}' "$STATE" > "$STATE.tmp" && mv "$STATE.tmp" "$STATE"
+```
+
+**Skill bash block (on — session):**
+
+```bash
+jq --arg m "$MODE" --arg s "$SESSION_ID" --arg t "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" \
+  '.sessions[$s] = {mode: $m, activatedAt: $t}' "$STATE" > "$STATE.tmp" && mv "$STATE.tmp" "$STATE"
 ```
 
 **Key principles:**
+- `BC_PLUGIN_DATA` variable MUST be validated before use — skill must check it's non-empty
 - `disable-model-invocation: true` — mode toggle is always deliberate
-- Single skill with argument parsing (not two separate skills)
-- Mode instructions live in plugin `modes/` directory (version-controlled, not user-editable)
-- Hooks inject instructions automatically — skill only manages state
-- When no mode active, hooks inject nothing (`forced-eval.mjs` retains its independent `[DELEGATE]` reminder, unrelated to Mode Switcher)
+- Mode instructions live in plugin `modes/` directory OR `$BC_PLUGIN_DATA/modes/` for user-created
+- Hooks inject instructions automatically via `getActiveMode()` which reads from `PLUGIN_DATA`
+- Old state in `.claude/tasks/cfg/brewcode.state.json` still supported as fallback for backward compat
 
 ## Progressive Disclosure
 
@@ -501,37 +506,37 @@ Write in **third person** — description injects into system prompt.
 | ❌ Bad | "Use this skill when..." |
 | ❌ Bad | "Helps with code" |
 
-### Trigger Keywords Pattern
+### Triggers Pattern
 
-**CRITICAL:** Include explicit trigger keywords. This raises activation 20% → 50-72%.
+**CRITICAL:** Include explicit `Triggers:` line. This raises activation 20% → 50-72%.
 
 ```yaml
-# ❌ BAD — multiline, too long (>300 chars)
+# ❌ BAD — multiline, split triggers
 description: |
   Creates presentations with slides, applies company colors, adds animations.
   Use when: creating presentations, building slides, formatting decks.
   Trigger keywords: presentation, slides, deck, pptx.
-  Triggers - "create presentation", "make slides".
 
-# ✅ GOOD — single line, 150-300 chars, what + triggers
-description: Creates conventional git commits with proper format. Use when - committing, saving work. Trigger keywords - commit, git commit, save changes.
+# ✅ GOOD — single line, action verb + Triggers
+description: "Creates presentations with company branding and animations. Triggers: create presentation, make slides, build deck."
 ```
 
 ### Description Template
 
 ```yaml
-description: [One sentence - what it does]. Use when - [scenarios]. Trigger keywords - [keywords].
+description: "[Action verb sentence]. Triggers: [exact user phrases]."
 ```
 
 **Rules:**
-- ONE line, no `|` multiline
-- 150-250 chars optimal (truncated at 250 since v2.1.84). ALWAYS single line — no multiline YAML `|`
-- Drop `Triggers -` phrases section (saves ~80 chars)
-- Use ` - ` separator instead of `:`
+- Start with action verb, not "Use this skill when"
+- ONE line, no `|` multiline — ~250 char limit (truncated since v2.1.84)
+- Front-load keywords
+- `Triggers:` with exact user phrases
+- "proactively" has NO effect
 
 **Example:**
 ```yaml
-description: Creates conventional git commits with proper format. Use when - committing changes, saving work, finalizing. Trigger keywords - commit, git commit, conventional commit.
+description: "Creates conventional git commits with proper format. Triggers: commit, git commit, save changes, conventional commit."
 ```
 
 ### Character Budget
@@ -800,10 +805,9 @@ bash "$BC_PLUGIN_ROOT/skills/skills/scripts/validate-skill.sh" path/to/skill && 
 
 | Check | Details |
 |-------|---------|
-| What + When + Keywords | Description includes what skill does + scenarios + trigger keywords |
-| Keywords present | `Trigger keywords - deploy, staging, prod, release` |
-| Scenarios present | `Use when - deploying, releasing, shipping` |
-| One line | No multiline `|`, single YAML line, 150-250 chars (truncated at 250 since v2.1.84) |
+| Action verb + Triggers | Description starts with action verb + includes `Triggers:` line |
+| Triggers present | `Triggers: deploy, release, ship to prod` |
+| ~250 char limit | No multiline `|`, single YAML line (truncated at 250 since v2.1.84) |
 | Third-person | "Deploys..." not "I deploy..." or "Use this to..." |
 | Critical → slash | `disable-model-invocation: true` for risky operations |
 | Test activation | Say trigger phrase → skill loads? |
@@ -927,7 +931,7 @@ agent: Explore
 ```yaml
 ---
 name: commit
-description: Creates conventional git commits with proper format. Use when - committing, saving work. Trigger keywords - commit, save, git commit.
+description: "Creates conventional git commits with proper format. Triggers: commit, git commit, save changes."
 context: fork
 disable-model-invocation: true  # Critical operation → 100% via /commit
 ---
@@ -944,7 +948,7 @@ Create commit message following conventional commits format (type(scope) subject
 ```yaml
 ---
 name: pr-review
-description: Reviews pull requests with structured analysis. Use when - reviewing PR, checking code quality. Trigger keywords - review, PR, pull request, code review.
+description: "Reviews pull requests with structured analysis. Triggers: review PR, code review, check pull request."
 context: fork
 agent: Explore
 # No disable-model-invocation → auto-activation OK (read-only, no risk)
@@ -982,7 +986,7 @@ Reference this when answering architecture questions.
 ```yaml
 ---
 name: deploy
-description: Deploys application to production environment. Use when - deploying, releasing, shipping. Trigger keywords - deploy, staging, prod, release, ship.
+description: "Deploys application to production environment. Triggers: deploy, release, ship to prod, push to staging."
 context: fork
 disable-model-invocation: true  # CRITICAL: production deployment → 100% via /deploy
 allowed-tools: Bash, Read, Grep
@@ -1051,9 +1055,9 @@ Source: [skills docs](https://code.claude.com/docs/en/skills)
 
 | Mistake | Fix |
 |---------|-----|
-| Summary WITHOUT triggers | Include BOTH what skill does AND trigger keywords |
-| No trigger keywords | Add `Trigger keywords: deploy, staging, prod` |
-| No "Use when:" | Add `Use when: deploying, releasing, shipping` |
+| Summary WITHOUT triggers | Include BOTH action verb sentence AND `Triggers:` line |
+| No `Triggers:` line | Add `Triggers: deploy, release, ship to prod` |
+| Starts with "Use this skill when" | Start with action verb: "Deploys..." not "Use this skill when deploying" |
 | Vague description | Specific: "Deploy to k8s" not "Helps with deployment" |
 | First-person description | Third-person: "Deploys..." not "I deploy..." |
 | Second-person body | Imperative: "Do X" not "You should do X" |

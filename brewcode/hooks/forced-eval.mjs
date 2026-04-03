@@ -44,7 +44,8 @@ const SKILL_CHECK = '[SKILL?] Check available skills. If one matches, use Skill 
 const DEFAULT_MODE = '[DELEGATE] You are a MANAGER. Delegate implementation to sub-agents via Task tool. Never implement directly.';
 
 // NOTE: Mirrors getActiveMode() from lib/utils.mjs — kept inline to avoid import dependency.
-// If STATE_FILE path changes in utils.mjs, update the path here too.
+// utils.mjs version supports 3-scope resolution (CLAUDE_PLUGIN_DATA/modes.json: session > project > global).
+// This inline version only uses legacy state file fallback. Keep in sync if STATE_FILE path changes.
 function getModeReminder(cwd) {
   if (!cwd) return `${SKILL_CHECK}\n${DEFAULT_MODE}`;
 

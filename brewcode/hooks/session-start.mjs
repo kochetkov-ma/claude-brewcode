@@ -187,14 +187,19 @@ async function main() {
     }
 
     const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT || '';
+    const pluginData = process.env.CLAUDE_PLUGIN_DATA || '';
     const sessionShort = session_id?.slice(0, 8) || 'unknown';
 
     let context = pluginRoot
       ? `BC_PLUGIN_ROOT=${pluginRoot}\nbrewcode: active | session: ${sessionShort}`
       : `brewcode: active | session: ${sessionShort}`;
 
+    if (pluginData) {
+      context = `BC_PLUGIN_DATA=${pluginData}\n${context}`;
+    }
+
     // Inject active mode
-    const activeMode = getActiveMode(cwd);
+    const activeMode = getActiveMode(cwd, session_id);
     if (activeMode) {
       context += `\n[MODE: ${activeMode.name}] ${activeMode.instructions}`;
     }

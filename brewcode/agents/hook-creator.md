@@ -1,22 +1,16 @@
 ---
 name: hook-creator
 description: |
-  Use this agent when creating, debugging, or analyzing Claude Code hooks (bash/JS lifecycle event handlers). Examples:
+  Creates, debugs, and analyzes Claude Code hooks (bash/JS lifecycle event handlers). Triggers: "create hook", "PreToolUse hook", "Stop hook", "hook doesn't work", "debug hook".
 
   <example>
-  Context: User needs validation before tool execution
   user: "Create a PreToolUse hook to validate Bash commands"
-  assistant: "I'll design the hook with proper schema."
   <commentary>Explicit hook creation request triggers this agent</commentary>
-  assistant: "I'll use the hook-creator agent to create a hook with proper JSON schema, fail-safe design, and message routing."
   </example>
 
   <example>
-  Context: Hook doesn't work as expected
   user: "My Stop hook blocks even when task is complete"
-  assistant: "I'll debug the hook logic."
   <commentary>Hook debugging triggers this agent</commentary>
-  assistant: "I'll use the hook-creator agent to debug the stop_hook_active check and output schema."
   </example>
 model: opus
 color: yellow
@@ -344,12 +338,27 @@ Format: `ToolName(pattern)` -- same syntax as permission rules.
 |----------|-------------|-----------|
 | `$CLAUDE_PROJECT_DIR` | Project root | All hooks |
 | `$CLAUDE_PLUGIN_ROOT` | Plugin installation dir | Plugin hooks |
-| `$CLAUDE_PLUGIN_DATA` | Persistent plugin data dir (survives updates, v2.1.78+) | Plugin hooks |
+| `$CLAUDE_PLUGIN_DATA` | Persistent plugin data dir (survives updates, v2.1.78+). brewcode: stores `modes.json` (mode switcher state). Hooks inject as `BC_PLUGIN_DATA` text var for skills/agents | Plugin hooks |
 | `$CLAUDE_CODE_REMOTE` | `"true"` in remote env | All hooks |
 | `$CLAUDE_ENV_FILE` | Path for persistent env vars | SessionStart, CwdChanged, FileChanged |
 | `$CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS` | SessionEnd hooks timeout in ms (default 1500ms, v2.1.78+) | SessionEnd hooks |
 | `$CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` | `1` = scrub Anthropic/cloud credentials from subprocess env (v2.1.83+) | All hooks |
 | `$CLAUDE_PLUGIN_OPTION_<KEY>` | Plugin `userConfig` values (v2.1.78+) | Plugin hooks |
+
+### Plugin Persistent State (`CLAUDE_PLUGIN_DATA`)
+
+brewcode hooks inject `BC_PLUGIN_DATA` as text variable (same pattern as `BC_PLUGIN_ROOT`).
+
+| Aspect | Details |
+|--------|---------|
+| Env var | `process.env.CLAUDE_PLUGIN_DATA` (hooks only) |
+| Text var | `BC_PLUGIN_DATA=<path>` (injected by session-start.mjs + pre-task.mjs) |
+| Main file | `$CLAUDE_PLUGIN_DATA/modes.json` — mode switcher state |
+| Scopes | global, project (by cwd), session (by session_id) |
+| Read in hooks | `const pluginData = process.env.CLAUDE_PLUGIN_DATA` |
+| Read in skills/agents | Use `$BC_PLUGIN_DATA` from injected context |
+
+**Resolution:** session > project > global. Old `.claude/tasks/cfg/brewcode.state.json` kept as fallback.
 
 ## 6. Output Schemas
 
@@ -1024,7 +1033,7 @@ Hook reads active mode from `brewcode.state.json` and injects mode-specific inst
 import { getActiveMode } from './lib/utils.mjs';
 
 // ... inside main():
-const activeMode = getActiveMode(cwd);
+const activeMode = getActiveMode(cwd, session_id);
 if (activeMode) {
   // For PreToolUse hooks (inject into agent prompt):
   updatedPrompt = `[MODE: ${activeMode.name}] ${activeMode.instructions}\n\n${updatedPrompt}`;
@@ -1034,13 +1043,14 @@ if (activeMode) {
 }
 ```
 
-**How `getActiveMode(cwd)` works:**
+**How `getActiveMode(cwd, session_id)` works:**
 
 | Step | Details |
 |------|---------|
-| Read state | `.claude/tasks/cfg/brewcode.state.json` -> `mode` field |
-| Load instructions | `$CLAUDE_PLUGIN_ROOT/modes/{mode}.md` (plain markdown) |
-| Return | `{ name, instructions }` or `null` |
+| Read state | `$CLAUDE_PLUGIN_DATA/modes.json` -> 3-scope resolution (session > project > global) |
+| Fallback | `.claude/tasks/cfg/brewcode.state.json` -> `mode` field (legacy) |
+| Load instructions | `$CLAUDE_PLUGIN_DATA/modes/{mode}.md` (user, first) then `$CLAUDE_PLUGIN_ROOT/modes/{mode}.md` (built-in, fallback) |
+| Return | `{ name, instructions, scope }` or `null` (`scope`: `session\|project\|global\|legacy`) |
 | Fail-safe | Returns `null` on any error (missing file, parse error, no plugin root) |
 
 **Injection channels by hook event:**
@@ -1051,16 +1061,19 @@ if (activeMode) {
 | `session-start.mjs` | SessionStart | `additionalContext` | Session start + compact resume |
 | `pre-task.mjs` | PreToolUse:Task | `updatedInput.prompt` | Every subagent spawn |
 
-**State schema in `brewcode.state.json`:**
+**State schema in `$CLAUDE_PLUGIN_DATA/modes.json` (3-scope resolution):**
 
 ```json
 {
-  "mode": "manager",
-  "modeActivatedAt": "2026-04-01T12:00:00.000Z"
+  "session": { "mode": "manager", "modeActivatedAt": "2026-04-01T12:00:00.000Z" },
+  "project": {},
+  "global": {}
 }
 ```
 
-Single mode only (no multi-mode). `null`/absent `mode` field = no active mode.
+Resolution order: `session` > `project` > `global`. Single mode only (no multi-mode). `null`/absent `mode` field = no active mode.
+
+> **Legacy fallback:** `.claude/tasks/cfg/brewcode.state.json` (flat `mode` field) is still read if `modes.json` is missing.
 
 ## 15. Hook Type Selection
 

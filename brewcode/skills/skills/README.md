@@ -99,7 +99,7 @@ A mode switcher is a skill that changes how Claude behaves for the rest of the s
 ### Flow
 
 ```
-Skill writes {"mode":"research"} → brewcode.state.json
+Skill writes {"mode":"research"} → $CLAUDE_PLUGIN_DATA/modes.json
                     ↓
   forced-eval.mjs   → injects [MODE: research] into every user prompt
   session-start.mjs → injects mode into session context (survives compact)
@@ -123,14 +123,18 @@ Skill writes {"mode":"research"} → brewcode.state.json
 1. Create mode instructions file: `brewcode/modes/{name}.md` (plain text)
 2. Activate:
    ```bash
-   STATE=".claude/tasks/cfg/brewcode.state.json"
-   mkdir -p "$(dirname "$STATE")"
-   jq --arg m "research" '.mode = $m' "$STATE" > "$STATE.tmp" && mv "$STATE.tmp" "$STATE"
+   MODES="$BC_PLUGIN_DATA/modes.json"
+   [ ! -f "$MODES" ] && echo '{}' > "$MODES"
+   jq --arg m "research" --arg p "$PWD" --arg t "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" \
+     '.projects[$p] = {mode: $m, activatedAt: $t}' "$MODES" > "$MODES.tmp" && mv "$MODES.tmp" "$MODES"
    ```
 3. Deactivate:
    ```bash
-   jq 'del(.mode)' "$STATE" > "$STATE.tmp" && mv "$STATE.tmp" "$STATE"
+   MODES="$BC_PLUGIN_DATA/modes.json"
+   jq --arg p "$PWD" 'del(.projects[$p])' "$MODES" > "$MODES.tmp" && mv "$MODES.tmp" "$MODES"
    ```
+
+> **Legacy fallback:** `.claude/tasks/cfg/brewcode.state.json` (flat `mode` field) is still supported but deprecated.
 
 Hooks pick up the change automatically — no code modifications needed.
 

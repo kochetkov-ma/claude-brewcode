@@ -205,9 +205,34 @@ options:
     description: "Standard skill without session persistence"
 ```
 
-If "Yes": set `IS_MODE_SWITCHER=true`. In Step 4, tell skill-creator to use the **Mode Switcher** pattern.
+If "Yes": set `IS_MODE_SWITCHER=true`.
 
-If "No": continue normally.
+**Then ask about scope** (AskUserQuestion):
+
+```
+header: "Mode Switcher Scope"
+question: "Which scope should this mode operate in?"
+options:
+  - label: "Project (default)"
+    description: "Active for this project across all sessions. Stored per project path."
+  - label: "Global"
+    description: "Active for ALL projects. One mode for everything."
+  - label: "Session"
+    description: "Active only in current session. Auto-resets when session ends."
+```
+
+Save answer as `MODE_SCOPE` (project|global|session).
+
+**Then validate BC_PLUGIN_DATA:**
+
+**EXECUTE** using Bash tool:
+```bash
+if [ -n "$BC_PLUGIN_DATA" ]; then echo "✅ BC_PLUGIN_DATA=$BC_PLUGIN_DATA"; else echo "❌ BC_PLUGIN_DATA not set — hooks may not be injecting it"; fi
+```
+
+> **STOP if ❌** — BC_PLUGIN_DATA is required for Mode Switcher. Check that brewcode hooks (session-start.mjs, pre-task.mjs) inject it.
+
+If "No" to Mode Switcher: continue normally.
 
 ---
 
@@ -275,10 +300,21 @@ Task tool:
 ```
     Use the Mode Switcher design pattern:
     - Single skill with argument parsing: on [mode-name], off, status
-    - Bash block writes mode to .claude/tasks/cfg/brewcode.state.json
+    - State stored in $BC_PLUGIN_DATA/modes.json (NOT in .claude/tasks/cfg/)
+    - Scope: {MODE_SCOPE} (project|global|session)
     - disable-model-invocation: true
     - Mode instructions in references/ directory
     - Hooks inject instructions automatically (no hook changes needed)
+    
+    State structure in modes.json:
+    - global scope: .global = {mode, activatedAt}
+    - project scope: .projects["$PWD"] = {mode, activatedAt}
+    - session scope: .sessions["$SESSION_ID"] = {mode, activatedAt}
+    
+    Bash block MUST validate BC_PLUGIN_DATA before use:
+    if [ -z "$BC_PLUGIN_DATA" ]; then echo "❌ BC_PLUGIN_DATA not available"; exit 1; fi
+    
+    Resolution priority: session > project > global
 ```
 
 **After skill creation (optional):** Ask if hooks need a new mode file:

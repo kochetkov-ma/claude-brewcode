@@ -1,22 +1,16 @@
 ---
 name: agent-creator
 description: |
-  Use this agent when creating, improving, or analyzing Claude Code agents. Examples:
+  Creates, improves, and analyzes Claude Code agents. Triggers: "create agent", "new agent", "agent doesn't trigger", "improve agent", "fix agent description".
 
   <example>
-  Context: User needs specialized agent for their project
   user: "Create an agent for code review"
-  assistant: "I'll analyze your project structure first."
-  <commentary>Explicit request to create agent triggers this agent</commentary>
-  assistant: "I'll use the agent-creator agent to design a code review agent with appropriate tools and system prompt."
+  <commentary>Explicit agent creation request triggers this agent</commentary>
   </example>
 
   <example>
-  Context: Existing agent needs improvement
   user: "My reviewer agent doesn't trigger reliably"
-  assistant: "I'll review the description field."
-  <commentary>Agent improvement requests trigger this agent</commentary>
-  assistant: "I'll use the agent-creator agent to analyze and improve the description with proper triggering examples."
+  <commentary>Agent improvement/debugging triggers this agent</commentary>
   </example>
 model: opus
 color: cyan
@@ -243,13 +237,57 @@ When an agent spawns from a skill that uses `references/`, the agent does NOT ha
 
 ## Description Patterns
 
-| Pattern | Example |
-|---------|---------|
-| Action + triggers | `Expert reviewer. Use after code changes. Reviews quality, security.` |
-| Role + capabilities | `Frontend impl: React, MUI, hooks. For UI features, fixes.` |
-| Read-only explicit | `Architecture analyst: patterns, docs. READ-ONLY.` |
+**Format:** Action verb phrase → `Triggers:` keyword list → optional 1-2 inline examples.
 
-Use specific triggers and capabilities. Avoid vague (`"Helps with code"`) or wordy (`"Use this agent when..."`) descriptions.
+Descriptions over ~250 chars may be truncated — front-load keywords.
+
+| Agent clarity | Format | Examples |
+|---------------|--------|----------|
+| Clear domain (developer, tester) | Single-line: action + triggers | 0 |
+| Some overlap with other agents | Single-line + detailed `Triggers:` list | 0-1 |
+| Ambiguous (creator agents) | Multi-line + 2-3 `<example>` with `<commentary>` | 2-3 |
+
+### Single-line (clear domain)
+
+```yaml
+description: "Implements features, writes code, fixes bugs. Triggers: implement, fix bug, add feature, write code"
+```
+
+### Single-line + triggers (some overlap)
+
+```yaml
+description: "Creates professional sh/bash scripts for Mac/Linux. Triggers: create script, bash script, shell script, install script, setup script"
+```
+
+### With examples (ambiguous agents)
+
+```yaml
+description: |
+  Creates Claude Code agents. Triggers: create agent, new agent, improve agent, agent description.
+
+  <example>
+  user: "Create an agent for code review"
+  <commentary>Explicit agent creation request triggers this agent</commentary>
+  </example>
+
+  <example>
+  user: "My reviewer agent doesn't trigger reliably"
+  <commentary>Agent improvement request triggers this agent</commentary>
+  </example>
+```
+
+### Rules
+
+| # | Rule | Why |
+|---|------|-----|
+| 1 | Lead with action verb, not "Use this agent when" | Denser signal per token, matches user intent |
+| 2 | Add `Triggers:` with exact user phrases | Semantic match on natural language |
+| 3 | Dash-separated capabilities beat prose | `"SDET/QA - runs tests, debugs flaky"` > sentence |
+| 4 | `<commentary>` explains WHY this triggers | Helps Claude distinguish between similar agents |
+| 5 | Max 2-3 `<example>` blocks | More = token waste, diminishing returns |
+| 6 | Vary phrasing across examples | Claude generalizes rather than matching one phrase |
+| 7 | No "proactively" or "MUST" language | No special weight — just write clear descriptions |
+| 8 | Quote description if contains YAML special chars | Prevents parse failures |
 
 ---
 
@@ -345,7 +383,7 @@ Six-step framework for designing high-quality agents:
 | 3. Architect Instructions | System prompt | Behavioral boundaries, methodologies, edge case handling |
 | 4. Optimize Performance | Quality | Decision frameworks, quality controls, escalation strategies |
 | 5. Create Identifier | Name | Concise name: lowercase letters, numbers, hyphens (2-4 words) |
-| 6. Craft Examples | Triggering | 2-4 scenarios showing different phrasings and contexts |
+| 6. Craft Examples | Triggering | 0-3 examples with `<commentary>` — only for ambiguous agents |
 
 ---
 
@@ -384,28 +422,29 @@ Four agent archetypes with distinct workflows:
 
 ## Triggering Examples Guide
 
-### Four Triggering Types
+Examples help Claude disambiguate — use ONLY when agent overlaps with others.
 
-| Type | Description | Example trigger |
-|------|-------------|-----------------|
-| **Explicit** | User directly asks | "Review my code" |
-| **Proactive** | After relevant work | (agent completes code) → auto-review |
-| **Implicit** | User implies need | "I just finished the auth module" |
-| **Tool-based** | Based on prior activity | After multiple Write calls → suggest review |
+### When to add examples
 
-### Example Quantity
+| Condition | Examples needed |
+|-----------|----------------|
+| Agent has unique, clear domain | 0 — single-line description suffices |
+| Agent overlaps with 1-2 others | 1 example showing the distinguishing trigger |
+| Agent is highly ambiguous | 2-3 examples covering explicit + implicit triggers |
 
-- **Minimum:** 3-4 examples covering explicit, implicit, proactive
-- **Maximum:** 6 examples (prevents description bloat)
+### Example format (minimal)
 
-### Common Pitfalls
+```yaml
+<example>
+user: "exact phrase user would say"
+<commentary>Why THIS agent, not another</commentary>
+</example>
+```
 
-| Pitfall | Impact |
-|---------|--------|
-| Missing context | Unpredictable triggering |
-| No commentary | Unclear trigger logic |
-| Showing agent output | Should show triggering, not result |
-| Overly similar examples | Doesn't demonstrate variety |
+- No `Context:` line needed — keep minimal
+- No `assistant:` response needed — Claude doesn't need to see what it would say
+- `<commentary>` is required — it's the selection signal
+- Vary phrasing: don't repeat same pattern twice
 
 ---
 
@@ -550,7 +589,7 @@ tools: Read, Glob, Grep, Bash
 ## Validation Checklist
 
 - [ ] `name`: lowercase-hyphens only (`[a-z0-9-]+`)
-- [ ] `description`: trigger terms + min 3 `<example>` blocks for complex agents
+- [ ] `description`: action verb + `Triggers:` keywords; max 2 `<example>` blocks for ambiguous agents only
 - [ ] `tools`: minimal required set (principle of least privilege)
 - [ ] `disallowedTools`: no conflict with `tools` if both specified
 - [ ] `model`: matches task complexity (opus=complex, sonnet=standard, haiku=light)

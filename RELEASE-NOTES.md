@@ -2,6 +2,16 @@
 
 ---
 
+## v3.4.20 (2026-04-02)
+
+### brewdoc
+#### Added
+- **`/brewdoc:guide` skill** — interactive teaching skill for the brewcode plugin suite: 9 topics across 3 domains (Getting Started, Core Workflow, Mastery), haiku-powered, progress tracking with JSON persistence, multilingual (EN/RU/PT), environment validation, section-by-section delivery with AskUserQuestion navigation
+- **Guide scripts** — `validate.sh` (docs site, GitHub releases, installed versions, auto-update status), `progress.sh` (CRUD for guide progress JSON at `~/.claude/brewdoc/`)
+- **11 reference files** — welcome banner + menu, ASCII architecture diagrams, 9 topic files covering all 22+ skills, 14+ agents, 9 hooks, killer flow pipeline, dynamic teams, customization, project integration, and power features
+
+---
+
 ## v3.4.19 (2026-04-02)
 
 ### brewcode

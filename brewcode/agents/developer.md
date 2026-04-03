@@ -1,6 +1,12 @@
 ---
 name: developer
-description: Implements features, writes code, fixes bugs - full-stack development
+description: |
+  Implements features, writes code, fixes bugs, refactors - full-stack development. Triggers: "implement", "write code", "fix bug", "add feature", "refactor", "build".
+
+  <example>
+  user: "Add pagination to the user list API"
+  <commentary>Feature implementation triggers developer, not reviewer or tester</commentary>
+  </example>
 model: opus
 tools: Read, Write, Edit, Glob, Grep, Bash, Task, NotebookEdit, WebFetch, WebSearch
 auto-sync: true

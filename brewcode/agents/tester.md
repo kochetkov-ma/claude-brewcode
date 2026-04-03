@@ -1,6 +1,17 @@
 ---
 name: tester
-description: SDET/QA - runs tests, analyzes results, debugs flaky tests, reports issues to developer
+description: |
+  Runs tests, analyzes failures, debugs flaky tests - SDET/QA specialist. Triggers: "run tests", "tests failing", "flaky test", "debug test", "test coverage".
+
+  <example>
+  user: "Run the tests, several are failing after my refactor"
+  <commentary>Test execution and failure analysis triggers tester, not developer</commentary>
+  </example>
+
+  <example>
+  user: "This test passes sometimes and fails other times"
+  <commentary>Flaky test debugging triggers tester</commentary>
+  </example>
 model: sonnet
 tools: Read, Write, Edit, Glob, Grep, Bash, Task
 ---

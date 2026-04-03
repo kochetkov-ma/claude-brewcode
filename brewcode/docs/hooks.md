@@ -632,7 +632,8 @@ No matcher -- triggers on every PreCompact.
 | `{task_dir}/KNOWLEDGE.jsonl` | read + write | Compaction + handoff entry |
 | `{task_dir}/artifacts/` | read (readdir) | Validate phase artifacts presence |
 | `.claude/tasks/cfg/brewcode.config.json` | read | Configuration (maxEntries, maxTokens) |
-| `.claude/tasks/cfg/brewcode.state.json` | read + write | Update state |
+| `$CLAUDE_PLUGIN_DATA/modes.json` | read + write | Update state (3-scope: session > project > global) |
+| `.claude/tasks/cfg/brewcode.state.json` | read | Legacy fallback (flat `mode` field) |
 | `.claude/tasks/logs/brewcode.log` | append | Log file |
 
 ### Console (stderr)

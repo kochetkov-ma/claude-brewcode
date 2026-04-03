@@ -89,8 +89,15 @@ async function main() {
       log('debug', '[pre-task]', `Injected BC_PLUGIN_ROOT for ${subagentType}`, cwd, session_id);
     }
 
+    const pluginData = process.env.CLAUDE_PLUGIN_DATA || '';
+    if (pluginData) {
+      updatedPrompt = `BC_PLUGIN_DATA=${pluginData}\n\n${updatedPrompt}`;
+      modified = true;
+      log('debug', '[pre-task]', `Injected BC_PLUGIN_DATA for ${subagentType}`, cwd, session_id);
+    }
+
     // 0.5 Inject mode instructions for ALL agents
-    const activeMode = getActiveMode(cwd);
+    const activeMode = getActiveMode(cwd, session_id);
     if (activeMode) {
       updatedPrompt = `[MODE: ${activeMode.name}] ${activeMode.instructions}\n\n${updatedPrompt}`;
       modified = true;
