@@ -74,13 +74,48 @@ Convert designs to working multi-framework code using GLM-5V-Turbo. Accepts imag
 ## Pipeline Flow
 
 <Steps>
-1. **Parse input** — detect type (image/text/HTML/URL), framework, profile, provider from arguments
-2. **API key setup** — check `.env`, validate against provider API, save on success
-3. **Build payload** — base64-encode image + load system prompt (profile) + framework context → JSON
-4. **Send to GLM** — `glm-5v-turbo` via Z.ai or OpenRouter, retry on transient failures, 10min timeout
-5. **Extract files** — parse `===FILE:===` markers from response, create directory structure
-6. **Build & verify** — `npm run build` (React), `flutter build web` (Flutter), or serve static HTML
-7. **Review cycle** — optional: screenshot result → compare with original → score → fix → iterate
+  <li>
+    <div>
+      <strong>Parse input</strong>
+      <p>Detect type (image/text/HTML/URL), framework, profile, provider from arguments</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>API key setup</strong>
+      <p>Check <code>.env</code>, validate against provider API, save on success</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Build payload</strong>
+      <p>Base64-encode image + load system prompt (profile) + framework context into JSON</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Send to GLM</strong>
+      <p><code>glm-5v-turbo</code> via Z.ai or OpenRouter, retry on transient failures, 10min timeout</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Extract files</strong>
+      <p>Parse <code>===FILE:===</code> markers from response, create directory structure</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Build and verify</strong>
+      <p><code>npm run build</code> (React), <code>flutter build web</code> (Flutter), or serve static HTML</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Review cycle</strong>
+      <p>Optional: screenshot result, compare with original, score, fix, iterate</p>
+    </div>
+  </li>
 </Steps>
 
 ## Benchmark Results

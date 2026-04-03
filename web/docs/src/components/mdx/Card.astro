@@ -5,7 +5,44 @@ interface Props {
   href?: string;
 }
 
-const { title, icon, href } = Astro.props;
+const iconMap: Record<string, string> = {
+  book: '\u{1F4D6}',
+  brain: '\u{1F9E0}',
+  building: '\u{1F3DB}',
+  chart: '\u{1F4CA}',
+  check: '\u{2705}',
+  clipboard: '\u{1F4CB}',
+  code: '\u{1F4BB}',
+  document: '\u{1F4C4}',
+  external: '\u{1F517}',
+  eye: '\u{1F441}',
+  file: '\u{1F4C2}',
+  flask: '\u{1F9EA}',
+  'forward-slash': '\u{26A1}',
+  group: '\u{1F465}',
+  infinity: '\u{267E}\uFE0F',
+  link: '\u{1F517}',
+  list: '\u{1F4DD}',
+  lock: '\u{1F512}',
+  pencil: '\u{270F}\uFE0F',
+  people: '\u{1F46B}',
+  play: '\u{25B6}\uFE0F',
+  puzzle: '\u{1F9E9}',
+  search: '\u{1F50D}',
+  settings: '\u{2699}\uFE0F',
+  shield: '\u{1F6E1}\uFE0F',
+  sparkle: '\u{2728}',
+  star: '\u{2B50}',
+  sync: '\u{1F504}',
+  terminal: '\u{1F4DF}',
+  trash: '\u{1F5D1}\uFE0F',
+  user: '\u{1F464}',
+  users: '\u{1F465}',
+  wrench: '\u{1F527}',
+};
+
+const { title, icon: rawIcon, href } = Astro.props;
+const icon = rawIcon && iconMap[rawIcon] ? iconMap[rawIcon] : rawIcon;
 const Tag = href ? 'a' : 'div';
 ---
 
