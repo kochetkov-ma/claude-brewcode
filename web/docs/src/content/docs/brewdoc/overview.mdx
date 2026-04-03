@@ -27,7 +27,7 @@ claude plugin install brewdoc@claude-brewcode
 
 ## Skills (recipes)
 
-Brewdoc contains 5 skills, each handling a separate documentation task.
+Brewdoc contains 6 skills, each handling a separate documentation task.
 
 <CardGrid>
   <Card title="Auto-Sync" icon="sync" href="/brewdoc/auto-sync/">
@@ -53,6 +53,10 @@ Brewdoc contains 5 skills, each handling a separate documentation task.
     Publish text, markdown, JSON, or files to brewpage.app.
     Interactive namespace and password selection. Owner token saved locally for later delete.
   </Card>
+  <Card title="Guide" icon="book" href="/brewdoc/guide/">
+    Interactive tutorial for the full plugin suite.
+    9 topics across 3 domains, progress tracking, multilingual support.
+  </Card>
 </CardGrid>
 
 ## Commands
@@ -64,6 +68,7 @@ Brewdoc contains 5 skills, each handling a separate documentation task.
 | `/brewdoc:memory` | Optimize memory files in 4 steps | opus | -- |
 | `/brewdoc:md-to-pdf` | Convert Markdown to PDF | sonnet | `<file.md> [--engine name] ["prompt"] \| styles \| test` |
 | `/brewdoc:publish` | Publish to brewpage.app — returns public URL | haiku | `<text\|file\|json> [--ttl N]` |
+| `/brewdoc:guide` | Interactive tutorial for the plugin suite | haiku | `[topic]` |
 
 <Callout type="tip" title="My-Claude">
   The <code>/brewdoc:my-claude</code> skill now has a <a href="/brewdoc/my-claude/">dedicated page</a> with full documentation.
@@ -86,7 +91,8 @@ brewdoc/
 │   ├── my-claude/               # Installation documentation
 │   ├── memory/                  # Memory optimization
 │   ├── md-to-pdf/               # PDF conversion
-│   └── publish/                 # brewpage.app publishing
+│   ├── publish/                 # brewpage.app publishing
+│   └── guide/                   # Interactive tutorial
 └── agents/
     └── bd-auto-sync-processor   # File processing agent
 ```

@@ -94,6 +94,7 @@ export const navigation: NavSection[] = [
       { title: 'Memory', slug: 'brewdoc/memory' },
       { title: 'md-to-pdf', slug: 'brewdoc/md-to-pdf' },
       { title: 'Publish', slug: 'brewdoc/publish' },
+      { title: 'Guide', slug: 'brewdoc/guide' },
     ],
   },
 ];

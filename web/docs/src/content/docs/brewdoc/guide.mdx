@@ -1,0 +1,139 @@
+---
+title: "Guide"
+description: "Interactive tutorial for the brewcode plugin suite — 9 topics, 3 domains, progress tracking"
+order: 26
+---
+
+import { Callout, Steps, Badge } from '../../../components/mdx';
+
+# Guide
+
+Guide is an interactive teaching skill that walks you through every feature of the
+brewcode/brewdoc/brewtools plugin suite. It tracks your progress, supports multiple
+languages, and adapts to your level.
+
+```bash
+/brewdoc:guide
+/brewdoc:guide overview
+/brewdoc:guide killer-flow
+```
+
+<Callout type="tip" title="Haiku-powered">
+  Guide runs on the haiku model for fast, lightweight responses.
+  It is read-only and never modifies your project files.
+</Callout>
+
+## 9 Topics, 3 Domains
+
+The guide covers the entire plugin suite across three progressive domains:
+
+### Domain A: Getting Started
+
+<Steps>
+  <li>
+    <strong>Three Plugins Overview</strong> <Badge variant="primary" text="overview" />
+    <p>What is brewcode/brewdoc/brewtools, the philosophy behind the suite, and what makes it unique.</p>
+  </li>
+  <li>
+    <strong>Installation &amp; Updates</strong> <Badge variant="primary" text="installation" />
+    <p>Marketplace setup, installing all 3 plugins, verifying versions, enabling auto-update.</p>
+  </li>
+</Steps>
+
+### Domain B: Core Workflow
+
+<Steps>
+  <li>
+    <strong>Spec, Plan, Start</strong> <Badge variant="primary" text="killer-flow" />
+    <p>The infinite task pipeline: SPEC defines what, PLAN defines how, START does the work with automatic handoff.</p>
+  </li>
+  <li>
+    <strong>Dynamic Teams</strong> <Badge variant="primary" text="teams" />
+    <p>Create 5-20 domain-specific agents tailored to your project. Self-evolving with trace tracking.</p>
+  </li>
+  <li>
+    <strong>Skills Catalog</strong> <Badge variant="primary" text="skills-catalog" />
+    <p>All 22+ skills across the three plugins with trigger examples and recommended order.</p>
+  </li>
+</Steps>
+
+### Domain C: Mastery
+
+<Steps>
+  <li>
+    <strong>Agents Catalog</strong> <Badge variant="primary" text="agents-catalog" />
+    <p>All 14+ agents with roles, model selection, and when to use each one.</p>
+  </li>
+  <li>
+    <strong>Build Your Own</strong> <Badge variant="primary" text="customization" />
+    <p>Create custom skills, agents, and hooks using skill-creator, agent-creator, and hook-creator.</p>
+  </li>
+  <li>
+    <strong>Project Configuration</strong> <Badge variant="primary" text="integration" />
+    <p>CLAUDE.md, rules, memory, teams directory, and the full `.claude/` structure.</p>
+  </li>
+  <li>
+    <strong>Power Features</strong> <Badge variant="primary" text="advanced" />
+    <p>Grepai semantic search, convention extraction, quorum code review, secrets scanning.</p>
+  </li>
+</Steps>
+
+## How It Works
+
+The guide follows a 5-phase flow:
+
+| Phase | What happens |
+|-------|-------------|
+| 0 | **Validate environment** — checks docs site, GitHub release, installed plugin versions |
+| 1 | **Language &amp; progress** — select language (EN/RU/PT), load progress from previous sessions |
+| 2 | **Menu or direct topic** — show interactive menu or jump to a topic by name |
+| 3 | **Deliver topic** — present 3-4 sections with pauses for questions, examples, and deep dives |
+| 4 | **Update progress** — mark topic complete, recommend next topic |
+
+Between sections, you can choose:
+- **Continue** to the next section
+- **Show me an example** with project context
+- **Go deeper** for more detail
+- **Skip** or **Back to menu**
+
+## Progress Tracking
+
+Progress is saved to `~/.claude/brewdoc/guide-progress.json` and persists across sessions.
+
+```json
+{
+  "lang": "en",
+  "completed": ["overview", "installation"],
+  "last_topic": "killer-flow",
+  "last_ts": "2026-04-02T10:00:00Z",
+  "shown_count": { "overview": 2, "installation": 1 }
+}
+```
+
+Returning users see their completion status and a recommendation for the next topic.
+
+Two helper scripts manage the guide:
+
+| Script | Purpose |
+|--------|---------|
+| `validate.sh` | Check docs site, GitHub release, installed versions, auto-update status |
+| `progress.sh` | CRUD for progress JSON: `read`, `complete`, `lang`, `reset`, `status` |
+
+## Environment Health Check
+
+On every launch, the guide checks your environment and shows a health table:
+
+```
+Component     Status      Details
+Docs Site     UP          200
+Latest        v3.4.20     GitHub
+brewcode      3.4.20      current
+brewdoc       3.4.20      current
+brewtools     3.4.20      current
+Auto-update   ON
+```
+
+<Callout type="note" title="Direct topic access">
+  Jump straight to any topic: <code>/brewdoc:guide killer-flow</code>.
+  Partial matching works too: <code>/brewdoc:guide agent</code> resolves to the agents catalog.
+</Callout>
