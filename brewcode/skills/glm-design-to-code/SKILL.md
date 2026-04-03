@@ -326,29 +326,84 @@ Output: "API key validation failed twice. Please verify your key at https://z.ai
 `export ZAI_API_KEY=your-key-here`
 Then re-run: `/brewcode:glm-design-to-code {original args}`" **STOP.**
 
-### Step 5: Confirm Save Location
+### Step 5: Choose Where to Save Key
 
 **ASK** using AskUserQuestion:
 ```
-API key validated and saved to .claude/.env (project-local). Also save system-wide?
+API key validated. Where should it be saved permanently?
+
+- .claude/.env — project-local, gitignored, sourced by skill automatically
+- ~/.zshrc — system-wide, available in all terminals and projects
+- .claude/local.md — Claude Code local config (not committed, read by Claude)
+- Custom path — you specify the file
 ```
 Options:
-- "Keep in .claude/.env only (recommended)"
-- "Also add to ~/.zshrc (all projects)"
+- "Save to .claude/.env (project-local, recommended)"
+- "Save to ~/.zshrc (system-wide)"
+- "Save to .claude/local.md (Claude Code local config)"
+- "Custom path"
 
-**On ".claude/.env only":** Done, continue to Phase 1.
-**On "Also ~/.zshrc":**
+**On ".claude/.env":** Already saved there in Step 3. Done, continue to Phase 1.
+
+**On "~/.zshrc":**
 
 **EXECUTE** using Bash tool:
 ```bash
-PROVIDER="PROVIDER_HERE"
 . .claude/.env
+PROVIDER="PROVIDER_HERE"
 if [ "$PROVIDER" = "zai" ]; then
   echo "export ZAI_API_KEY=\"$ZAI_API_KEY\"" >> ~/.zshrc
 else
   echo "export OPENROUTER_API_KEY=\"$OPENROUTER_API_KEY\"" >> ~/.zshrc
 fi
-echo "Added to ~/.zshrc"
+echo "Saved to ~/.zshrc (will be available in new terminal sessions)"
+```
+
+**On ".claude/local.md":**
+
+Append the key as an environment instruction to `.claude/local.md` (Claude Code reads this file but it's not committed):
+
+**EXECUTE** using Bash tool:
+```bash
+. .claude/.env
+PROVIDER="PROVIDER_HERE"
+if [ "$PROVIDER" = "zai" ]; then
+  VAR="ZAI_API_KEY"
+  VAL="$ZAI_API_KEY"
+else
+  VAR="OPENROUTER_API_KEY"
+  VAL="$OPENROUTER_API_KEY"
+fi
+mkdir -p .claude
+if [ -f .claude/local.md ]; then
+  grep -q "$VAR" .claude/local.md && echo "Already in local.md" || printf '\n## Environment\n\nSet `%s` to `%s` before running glm-design-to-code.\n' "$VAR" "$VAL" >> .claude/local.md
+else
+  printf '# Local Config\n\n## Environment\n\nSet `%s` to `%s` before running glm-design-to-code.\n' "$VAR" "$VAL" > .claude/local.md
+fi
+echo "Saved to .claude/local.md"
+```
+
+**On "Custom path":**
+
+**ASK** using AskUserQuestion:
+```
+Enter the file path where the API key should be saved (e.g., ~/.config/glm/env):
+```
+
+**On answer:**
+
+**EXECUTE** using Bash tool:
+```bash
+. .claude/.env
+CUSTOM_PATH="USER_PATH_HERE"
+PROVIDER="PROVIDER_HERE"
+mkdir -p "$(dirname "$CUSTOM_PATH")"
+if [ "$PROVIDER" = "zai" ]; then
+  echo "export ZAI_API_KEY=\"$ZAI_API_KEY\"" >> "$CUSTOM_PATH"
+else
+  echo "export OPENROUTER_API_KEY=\"$OPENROUTER_API_KEY\"" >> "$CUSTOM_PATH"
+fi
+echo "Saved to $CUSTOM_PATH"
 ```
 
 ---
