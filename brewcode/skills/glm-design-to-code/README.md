@@ -111,7 +111,7 @@ CREATE mode converts your input to working, buildable code. You choose the frame
 | `--profile` | max | max, optimal, efficient | Quality vs speed tradeoff |
 | `--provider` | zai | zai, openrouter | Which API to use |
 | `--output` | `./d2c-output` | Any directory path | Where to save generated files |
-| `--model` | (auto) | glm-5v-turbo, glm-4.6v | Override model selection |
+| `--model` | (auto) | glm-5v-turbo, glm-4.6v, glm-4.6v-flash | Override model (auto-prefixed `z-ai/` for OpenRouter) |
 
 ### Mode-Specific Arguments
 

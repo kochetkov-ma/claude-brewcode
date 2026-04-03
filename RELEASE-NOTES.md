@@ -2,6 +2,18 @@
 
 ---
 
+## v3.4.24 (2026-04-03)
+
+### brewcode
+#### Changed
+- **glm-design-to-code:** Removed `disable-model-invocation` — skill now auto-triggers on natural phrases ("convert screenshot to code", "turn design into React")
+- **glm-design-to-code:** Optimized description for LLM auto-invocation (3 natural examples, explicit "external GLM API" signal)
+- **glm-design-to-code:** Mandatory resolved configuration output before every API call (all modes: CREATE, REVIEW, FIX)
+- **glm-design-to-code:** Parameter priority: prompt flags > inline text > `.env` > defaults; raw text scanning for inline keys and model names
+- **glm-design-to-code:** `--model` auto-prefix `z-ai/` for OpenRouter, auto-strip for Z.ai
+
+---
+
 ## v3.4.23 (2026-04-03)
 
 ### brewcode

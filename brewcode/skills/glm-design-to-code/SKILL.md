@@ -1,39 +1,23 @@
 ---
 name: brewcode:glm-design-to-code
 description: |
-  GLM vision model-powered design-to-code generator. Three modes: CREATE, REVIEW, FIX. Accepts ANY input: screenshots, text descriptions, HTML files, URLs.
-  Triggers: "glm design to code", "design to code", "screenshot to code", "mockup to code", "d2c", "generate frontend"
+  Use for generates frontend code from design screenshots, mockups, text descriptions, HTML files, or URLs using external GLM vision API (not Claude). Three modes: CREATE, REVIEW, FIX. Supports HTML, React, Flutter output.
+  Triggers: "convert screenshot to code", "design to code", "mockup to code", "generate frontend from image", "turn design into React", "screenshot to HTML", "d2c"
 
   <example>
-  user: "/brewcode:glm-design-to-code screenshot.png"
-  <commentary>CREATE mode with image input</commentary>
+  user: "Convert this screenshot to React components"
+  <commentary>CREATE mode — user has a design image and wants framework code</commentary>
   </example>
 
   <example>
-  user: "/brewcode:glm-design-to-code 'Dark landing page with hero section and pricing table'"
-  <commentary>CREATE mode with text description</commentary>
+  user: "Turn my mockup into a working landing page"
+  <commentary>CREATE mode — natural request for design-to-code generation</commentary>
   </example>
 
   <example>
-  user: "/brewcode:glm-design-to-code https://example.com/page"
-  <commentary>CREATE mode with URL — takes Playwright screenshot first</commentary>
+  user: "Review how well the generated code matches the original design"
+  <commentary>REVIEW mode — user wants visual comparison of design vs result</commentary>
   </example>
-
-  <example>
-  user: "/brewcode:glm-design-to-code existing-page.html --framework react"
-  <commentary>CREATE mode with HTML file — converts to React components</commentary>
-  </example>
-
-  <example>
-  user: "/brewcode:glm-design-to-code --review original.png result.png"
-  <commentary>REVIEW mode - compare original design with generated code screenshot</commentary>
-  </example>
-
-  <example>
-  user: "/brewcode:glm-design-to-code --fix 'sidebar too narrow, wrong green color'"
-  <commentary>FIX mode - apply review feedback to improve generated code</commentary>
-  </example>
-disable-model-invocation: true
 user-invocable: true
 argument-hint: "[input] [--framework html|react|flutter|custom] [--profile max|optimal|efficient] [--provider zai|openrouter] [--model MODEL_ID] [--output dir] [--review original.png result.png] [--fix 'feedback'] [--fix --review-file review.json]"
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, AskUserQuestion]
@@ -56,6 +40,14 @@ Converts design inputs (screenshots, text descriptions, HTML files, URLs) to wor
 | REVIEW | Phase 0 → 0.5 → 1 → 5 |
 | FIX | Phase 0 → 0.5 → 1 → 6 |
 
+> **PARAMETER PRIORITY:** User prompt arguments ALWAYS override defaults and environment.
+> 1. Explicit flags in `$ARGUMENTS` (`--model`, `--profile`, `--provider`, `--framework`) → highest priority
+> 2. API keys from `$ARGUMENTS` prompt text (if user pasted a key inline) → override `.env`
+> 3. Environment variables (`.env`, shell env) → fallback
+> 4. Defaults from `parse-args.sh` → lowest priority
+>
+> **MANDATORY OUTPUT:** Before ANY API call, output the full resolved configuration table (see Step 2.5 in Phase 2). This applies to ALL modes (CREATE, REVIEW, FIX). The user must always see what was resolved from their input.
+
 ---
 
 ## Phase 0: Parse Arguments and Gather Config
@@ -68,6 +60,11 @@ bash "${CLAUDE_SKILL_DIR}/scripts/parse-args.sh" "$ARGUMENTS" && echo "OK" || ec
 ```
 
 Output: key=value pairs. Store all values.
+
+> **Also scan `$ARGUMENTS` raw text** for any inline values not captured by flags:
+> - API key pasted in prompt text → extract and use (overrides `.env`)
+> - Model name mentioned in free text (e.g., "use glm-4.6v") → treat as `--model`
+> - Profile/provider mentioned in text → treat as flags
 
 | Key | Default | Options |
 |-----|---------|---------|
@@ -452,10 +449,37 @@ For custom framework: **ASK** user to describe their stack. Write to `/tmp/d2c-c
 
 ### Step 2: Resolve Model ID
 
-| Provider | Model ID |
-|----------|----------|
+**If MODEL was set via `--model`:** Use it directly, but ensure OpenRouter prefix:
+- If PROVIDER=openrouter and MODEL does not start with `z-ai/` → prepend `z-ai/` (e.g., `glm-4.6v` → `z-ai/glm-4.6v`)
+- If PROVIDER=zai and MODEL starts with `z-ai/` → strip the prefix (e.g., `z-ai/glm-5v-turbo` → `glm-5v-turbo`)
+
+**If MODEL is empty (no `--model` flag):** Use defaults:
+
+| Provider | Default Model ID |
+|----------|-----------------|
 | zai | `glm-5v-turbo` |
 | openrouter | `z-ai/glm-5v-turbo` |
+
+### Step 2.5: Display Resolved Configuration
+
+> **MANDATORY** — output before ANY API call in ALL modes. Shows user exactly what was resolved from their prompt, flags, env, and defaults. Mark overridden values with source.
+
+```markdown
+## Resolved Configuration
+
+| Setting | Value | Source |
+|---------|-------|--------|
+| Mode | `{MODE}` | {auto-detected / --review / --fix} |
+| Input | `{IMAGE}` ({INPUT_TYPE}) | {argument / prompt text} |
+| Framework | `{FRAMEWORK}` | {--framework / default: html} |
+| Profile | `{PROFILE}` (max_tokens={MAX_TOKENS}) | {--profile / default: max} |
+| Provider | `{PROVIDER}` | {--provider / default: zai} |
+| Model | `{MODEL}` | {--model / default for provider} |
+| API Key | `{VAR_NAME}=***{last 4 chars}` | {prompt / .env / shell env} |
+| Output | `{OUTPUT}` | {--output / default: ./d2c-output} |
+
+**Expected result:** {description based on mode — e.g., "HTML/CSS files in ./d2c-output" or "Review score with differences" or "Targeted fixes to existing code"}
+```
 
 ### Step 3: Build Request Payload
 
@@ -586,6 +610,17 @@ bash "${CLAUDE_SKILL_DIR}/scripts/glm-verify.sh" --kill && echo "SERVER STOPPED"
 
 Send both original design and generated screenshot to GLM for automated comparison.
 
+> **ALWAYS** output before sending:
+> ```
+> ## Review Configuration
+> | Setting | Value |
+> |---------|-------|
+> | Original | `{IMAGE}` |
+> | Result | `{RESULT_IMAGE or /tmp/d2c-result-screenshot.png}` |
+> | Provider | `{PROVIDER}` |
+> | Model | `{MODEL}` |
+> ```
+
 ### Step 1: Build Review Request
 
 The review requires sending TWO images. Build a custom payload:
@@ -668,6 +703,17 @@ Parse score from `score: N/10` line in the review output.
 ## Phase 6: Fix Mode (if MODE=FIX)
 
 > Skip Phases 2-5. Go directly here if MODE=FIX.
+
+> **ALWAYS** output before fixing:
+> ```
+> ## Fix Configuration
+> | Setting | Value |
+> |---------|-------|
+> | Mode | FIX |
+> | Feedback source | {--fix "text" / --review-file path / previous review} |
+> | Target directory | `{OUTPUT}` |
+> | Expected result | Targeted edits to existing code files |
+> ```
 
 ### Step 1: Gather Fix Context
 
