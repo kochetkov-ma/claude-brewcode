@@ -361,27 +361,21 @@ echo "Saved to ~/.zshrc (will be available in new terminal sessions)"
 
 **On ".claude/local.md":**
 
-Append the key as an environment instruction to `.claude/local.md` (Claude Code reads this file but it's not committed):
+`.claude/local.md` is a standard Claude Code file — local instructions read by Claude at session start, not committed to git. Add an instruction for Claude to source the key:
 
 **EXECUTE** using Bash tool:
 ```bash
-. .claude/.env
-PROVIDER="PROVIDER_HERE"
-if [ "$PROVIDER" = "zai" ]; then
-  VAR="ZAI_API_KEY"
-  VAL="$ZAI_API_KEY"
-else
-  VAR="OPENROUTER_API_KEY"
-  VAL="$OPENROUTER_API_KEY"
-fi
 mkdir -p .claude
+INSTRUCTION='Before running `/brewcode:glm-design-to-code`, always source API keys: `[ -f .claude/.env ] && . .claude/.env`'
 if [ -f .claude/local.md ]; then
-  grep -q "$VAR" .claude/local.md && echo "Already in local.md" || printf '\n## Environment\n\nSet `%s` to `%s` before running glm-design-to-code.\n' "$VAR" "$VAL" >> .claude/local.md
+  grep -q "glm-design-to-code" .claude/local.md && echo "Already in local.md" || printf '\n## GLM Design-to-Code\n\n%s\n' "$INSTRUCTION" >> .claude/local.md
 else
-  printf '# Local Config\n\n## Environment\n\nSet `%s` to `%s` before running glm-design-to-code.\n' "$VAR" "$VAL" > .claude/local.md
+  printf '# Local Config\n\n## GLM Design-to-Code\n\n%s\n' "$INSTRUCTION" > .claude/local.md
 fi
-echo "Saved to .claude/local.md"
+echo "Added sourcing instruction to .claude/local.md"
 ```
+
+> Note: The actual key stays in `.claude/.env` (saved in Step 3). `local.md` just tells Claude to source it.
 
 **On "Custom path":**
 
