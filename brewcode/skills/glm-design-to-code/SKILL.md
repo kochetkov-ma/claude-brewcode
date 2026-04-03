@@ -222,7 +222,7 @@ On answer: update OUTPUT.
 
 **EXECUTE** using Bash tool:
 ```bash
-[ -f .claude/.env ] && . .claude/.env
+[ -f .env ] && . .env
 PROVIDER="PROVIDER_HERE"
 if [ "$PROVIDER" = "zai" ]; then
   [ -n "$ZAI_API_KEY" ] && echo "KEY_SET" || echo "KEY_MISSING"
@@ -258,7 +258,6 @@ Save the key IMMEDIATELY so it persists across Bash calls:
 
 **EXECUTE** using Bash tool:
 ```bash
-mkdir -p .claude
 PROVIDER="PROVIDER_HERE"
 KEY="KEY_VALUE_HERE"
 if [ "$PROVIDER" = "zai" ]; then
@@ -266,9 +265,9 @@ if [ "$PROVIDER" = "zai" ]; then
 else
   VAR="OPENROUTER_API_KEY"
 fi
-echo "export $VAR=\"$KEY\"" > .claude/.env
-grep -q '.claude/.env' .gitignore 2>/dev/null || echo '.claude/.env' >> .gitignore
-echo "KEY_SAVED to .claude/.env ($VAR)"
+echo "export $VAR=\"$KEY\"" > .env
+grep -q '^\.env$' .gitignore 2>/dev/null || echo '.env' >> .gitignore
+echo "KEY_SAVED to .env ($VAR)"
 ```
 
 > Key is saved FIRST so all subsequent Bash calls can source it.
@@ -277,7 +276,7 @@ echo "KEY_SAVED to .claude/.env ($VAR)"
 
 **EXECUTE** using Bash tool:
 ```bash
-. .claude/.env
+. .env
 PROVIDER="PROVIDER_HERE"
 if [ "$PROVIDER" = "zai" ]; then
   URL="https://api.z.ai/api/paas/v4/chat/completions"
@@ -332,73 +331,53 @@ Then re-run: `/brewcode:glm-design-to-code {original args}`" **STOP.**
 ```
 API key validated. Where should it be saved permanently?
 
-- .claude/.env — project-local, gitignored, sourced by skill automatically
+- CLAUDE.local.md — Claude Code local config (not committed, Claude reads at startup)
 - ~/.zshrc — system-wide, available in all terminals and projects
-- .claude/local.md — Claude Code local config (not committed, read by Claude)
-- Custom path — you specify the file
+- .env — project-local dotenv file (gitignored, sourced by skill)
 ```
 Options:
-- "Save to .claude/.env (project-local, recommended)"
+- "Save to CLAUDE.local.md (Claude Code standard, recommended)"
 - "Save to ~/.zshrc (system-wide)"
-- "Save to .claude/local.md (Claude Code local config)"
-- "Custom path"
+- "Keep in .env only (already saved)"
 
-**On ".claude/.env":** Already saved there in Step 3. Done, continue to Phase 1.
+**On "CLAUDE.local.md":**
+
+`CLAUDE.local.md` is a standard Claude Code file in the project root — local instructions read by Claude at session start, not committed to git.
+
+**EXECUTE** using Bash tool:
+```bash
+. .env
+PROVIDER="PROVIDER_HERE"
+if [ "$PROVIDER" = "zai" ]; then
+  VAR="ZAI_API_KEY"
+  VAL="$ZAI_API_KEY"
+else
+  VAR="OPENROUTER_API_KEY"
+  VAL="$OPENROUTER_API_KEY"
+fi
+if [ -f CLAUDE.local.md ]; then
+  grep -q "$VAR" CLAUDE.local.md && echo "Already in CLAUDE.local.md" || printf '\n## GLM API Key\n\nBefore running glm-design-to-code, set env var:\n`export %s=%s`\n' "$VAR" "$VAL" >> CLAUDE.local.md
+else
+  printf '# Local Config\n\n## GLM API Key\n\nBefore running glm-design-to-code, set env var:\n`export %s=%s`\n' "$VAR" "$VAL" > CLAUDE.local.md
+fi
+echo "Saved to CLAUDE.local.md"
+```
 
 **On "~/.zshrc":**
 
 **EXECUTE** using Bash tool:
 ```bash
-. .claude/.env
+. .env
 PROVIDER="PROVIDER_HERE"
 if [ "$PROVIDER" = "zai" ]; then
   echo "export ZAI_API_KEY=\"$ZAI_API_KEY\"" >> ~/.zshrc
 else
   echo "export OPENROUTER_API_KEY=\"$OPENROUTER_API_KEY\"" >> ~/.zshrc
 fi
-echo "Saved to ~/.zshrc (will be available in new terminal sessions)"
+echo "Saved to ~/.zshrc (available in new terminal sessions)"
 ```
 
-**On ".claude/local.md":**
-
-`.claude/local.md` is a standard Claude Code file — local instructions read by Claude at session start, not committed to git. Add an instruction for Claude to source the key:
-
-**EXECUTE** using Bash tool:
-```bash
-mkdir -p .claude
-INSTRUCTION='Before running `/brewcode:glm-design-to-code`, always source API keys: `[ -f .claude/.env ] && . .claude/.env`'
-if [ -f .claude/local.md ]; then
-  grep -q "glm-design-to-code" .claude/local.md && echo "Already in local.md" || printf '\n## GLM Design-to-Code\n\n%s\n' "$INSTRUCTION" >> .claude/local.md
-else
-  printf '# Local Config\n\n## GLM Design-to-Code\n\n%s\n' "$INSTRUCTION" > .claude/local.md
-fi
-echo "Added sourcing instruction to .claude/local.md"
-```
-
-> Note: The actual key stays in `.claude/.env` (saved in Step 3). `local.md` just tells Claude to source it.
-
-**On "Custom path":**
-
-**ASK** using AskUserQuestion:
-```
-Enter the file path where the API key should be saved (e.g., ~/.config/glm/env):
-```
-
-**On answer:**
-
-**EXECUTE** using Bash tool:
-```bash
-. .claude/.env
-CUSTOM_PATH="USER_PATH_HERE"
-PROVIDER="PROVIDER_HERE"
-mkdir -p "$(dirname "$CUSTOM_PATH")"
-if [ "$PROVIDER" = "zai" ]; then
-  echo "export ZAI_API_KEY=\"$ZAI_API_KEY\"" >> "$CUSTOM_PATH"
-else
-  echo "export OPENROUTER_API_KEY=\"$OPENROUTER_API_KEY\"" >> "$CUSTOM_PATH"
-fi
-echo "Saved to $CUSTOM_PATH"
-```
+**On ".env only":** Already saved in Step 3. Done, continue to Phase 1.
 
 ---
 
@@ -408,7 +387,7 @@ echo "Saved to $CUSTOM_PATH"
 
 **EXECUTE** using Bash tool:
 ```bash
-[ -f .claude/.env ] && . .claude/.env
+[ -f .env ] && . .env
 PROVIDER="PROVIDER_HERE"
 echo "=== Tools ==="
 command -v jq && echo "jq OK" || echo "jq MISSING"
@@ -507,7 +486,7 @@ bash "$SD/glm-build-text-request.sh" "$INPUT" "$PROMPT" "$CONTEXT" "$MODEL" MAX_
 
 **EXECUTE** using Bash tool:
 ```bash
-[ -f .claude/.env ] && . .claude/.env
+[ -f .env ] && . .env
 SD="${CLAUDE_SKILL_DIR}/scripts"
 bash "$SD/glm-request.sh" /tmp/d2c-payload.json /tmp/d2c-response.json PROVIDER_HERE && echo "API OK" || echo "API FAILED"
 ```
@@ -664,7 +643,7 @@ jq -n \
 ### Step 2: Send Review
 
 ```bash
-[ -f .claude/.env ] && . .claude/.env
+[ -f .env ] && . .env
 SD="${CLAUDE_SKILL_DIR}/scripts"
 bash "$SD/glm-request.sh" /tmp/d2c-review-payload.json /tmp/d2c-review-response.json PROVIDER_HERE && echo "REVIEW OK" || echo "REVIEW FAILED"
 ```
