@@ -75,6 +75,10 @@ if printf '%s\n' "$CONTENT" | grep -q '===FILE:'; then
     lines++
   }
   END {
+    if (writing && current_file != "") {
+      close(current_file)
+      print "WARNING: Truncated file (no ===END_FILE===): " fname > "/dev/stderr"
+    }
     print "Extracted " file_count " file(s)" > "/dev/stderr"
   }
   ' "$TMPFILE"
