@@ -161,9 +161,9 @@ After CREATE completes, the following is created in `--output` directory (defaul
 - **Registration:** z.ai (Google/email signup, no phone required)
 - **Free tier:** ~20M tokens (~3 months of usage)
 - **Pricing:** $1.20/1M input, $4.00/1M output, $0.24/1M cached input
-- **Model:** `glm-5v-turbo` (128K context, 131K max output)
+- **Model:** `glm-5v-turbo` (202K context)
 - **Benchmark:** Design2Code 94.8 (highest quality)
-- **Typical cost per request:** $0.03–0.08 depending on profile
+- **Typical cost per request:** $0.01–0.08 depending on profile
 
 Set `ZAI_API_KEY` environment variable:
 ```bash

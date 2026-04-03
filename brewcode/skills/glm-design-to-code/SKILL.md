@@ -176,6 +176,8 @@ Options: "Accept defaults" | "Change framework" | "Change profile" | "Change pro
 
 **On "Accept defaults":** Continue to Phase 0.5.
 
+> **LOOP:** After any single change below, re-present the confirmation dialog with updated values so the user can change more settings or accept. Exit loop on "Accept defaults".
+
 **On "Change framework":**
 
 **ASK** using AskUserQuestion:
@@ -192,7 +194,7 @@ On answer: update FRAMEWORK. If "Custom" -> **ASK** for stack description, write
 ```
 Select quality profile:
 ```
-Options: "Maximum -- pixel-perfect, all details ($0.03-0.05)" | "Optimal -- good quality, balanced ($0.02-0.03)" | "Efficient -- fast, basic layout ($0.01-0.02)"
+Options: "Maximum -- pixel-perfect, all details ($0.05-0.08)" | "Optimal -- good quality, balanced ($0.03-0.05)" | "Efficient -- fast, basic layout ($0.01-0.03)"
 
 On answer: update PROFILE and MAX_TOKENS accordingly.
 
@@ -233,7 +235,7 @@ fi
 
 > **If KEY_SET** — skip to Phase 1.
 
-### Step 2: Ask for API Key (if KEY_MISSING)
+### Step 2: Ask Provider Choice (if KEY_MISSING)
 
 **ASK** using AskUserQuestion:
 ```
@@ -243,60 +245,46 @@ API key required. Which provider do you have a key for?
 - OpenRouter: Get key at https://openrouter.ai -- unified API, many models
 ```
 Options:
-- "Z.ai API key"
-- "OpenRouter API key"
+- "Z.ai (direct API)"
+- "OpenRouter (unified API)"
 
-User will respond with their choice AND the key value.
+**On answer:** Update PROVIDER based on choice (zai or openrouter).
 
-**On answer:** Extract the provider choice and key value. Store both:
-- Provider choice -> update PROVIDER
-- Key value -> proceed to Step 3
+### Step 2.5: Ask for Key Value
 
-### Step 3: Save Key to File (BEFORE validation)
+**ASK** using AskUserQuestion:
+```
+Paste your {PROVIDER_NAME} API key:
+```
+Options: (free text input)
 
-Save the key IMMEDIATELY so it persists across Bash calls:
+**On answer:** Store the key value. Proceed to Step 3.
+
+### Step 3: Validate Key (BEFORE saving)
+
+Validate the key first to avoid persisting invalid credentials:
 
 **EXECUTE** using Bash tool:
 ```bash
 PROVIDER="PROVIDER_HERE"
 KEY="KEY_VALUE_HERE"
 if [ "$PROVIDER" = "zai" ]; then
-  VAR="ZAI_API_KEY"
-else
-  VAR="OPENROUTER_API_KEY"
-fi
-echo "export $VAR=\"$KEY\"" > .env
-grep -q '^\.env$' .gitignore 2>/dev/null || echo '.env' >> .gitignore
-echo "KEY_SAVED to .env ($VAR)"
-```
-
-> Key is saved FIRST so all subsequent Bash calls can source it.
-
-### Step 4: Validate Key
-
-**EXECUTE** using Bash tool:
-```bash
-. .env
-PROVIDER="PROVIDER_HERE"
-if [ "$PROVIDER" = "zai" ]; then
   URL="https://api.z.ai/api/paas/v4/chat/completions"
   MODEL="glm-4.6v-flash"
-  AUTH="$ZAI_API_KEY"
 else
   URL="https://openrouter.ai/api/v1/chat/completions"
-  MODEL="z-ai/glm-4.5-air:free"
-  AUTH="$OPENROUTER_API_KEY"
+  MODEL="z-ai/glm-4.6v-flash"
 fi
 HTTP=$(curl -s -w "%{http_code}" -o /tmp/d2c-key-test.json \
   --max-time 10 \
   -X POST "$URL" \
-  -H "Authorization: Bearer $AUTH" \
+  -H "Authorization: Bearer $KEY" \
   -H "Content-Type: application/json" \
   -d "{\"model\":\"$MODEL\",\"messages\":[{\"role\":\"user\",\"content\":\"test\"}],\"max_tokens\":5}")
 [ "$HTTP" -ge 200 ] && [ "$HTTP" -lt 300 ] && echo "KEY_VALID" || echo "KEY_INVALID (HTTP $HTTP)"
 ```
 
-> **If KEY_VALID:** Continue to Phase 1.
+> **If KEY_VALID:** Save key (Step 4) then continue.
 
 > **If KEY_INVALID (attempt 1 of 2):**
 
@@ -314,7 +302,7 @@ Options:
 - "Switch to other provider"
 - "Cancel -- I'll set the env var manually"
 
-**On "Re-enter key":** Go back to Step 3 with new key.
+**On "Re-enter key":** Go back to Step 2.5 with new key.
 **On "Switch provider":** Toggle PROVIDER (zai<->openrouter), go to Step 2.
 **On "Cancel":**
 Output: "Set `ZAI_API_KEY` or `OPENROUTER_API_KEY` in your shell, then re-run the skill." **STOP.**
@@ -325,7 +313,25 @@ Output: "API key validation failed twice. Please verify your key at https://z.ai
 `export ZAI_API_KEY=your-key-here`
 Then re-run: `/brewcode:glm-design-to-code {original args}`" **STOP.**
 
-### Step 5: Choose Where to Save Key
+### Step 4: Save Key to .env
+
+Save the validated key so it persists across Bash calls:
+
+**EXECUTE** using Bash tool:
+```bash
+PROVIDER="PROVIDER_HERE"
+KEY="KEY_VALUE_HERE"
+if [ "$PROVIDER" = "zai" ]; then
+  VAR="ZAI_API_KEY"
+else
+  VAR="OPENROUTER_API_KEY"
+fi
+echo "export $VAR=\"$KEY\"" > .env
+grep -q '^\.env$' .gitignore 2>/dev/null || echo '.env' >> .gitignore
+echo "KEY_SAVED to .env ($VAR)"
+```
+
+### Step 5: Choose Where to Save Key Permanently
 
 **ASK** using AskUserQuestion:
 ```
@@ -589,7 +595,7 @@ The review requires sending TWO images. Build a custom payload:
 SD="${CLAUDE_SKILL_DIR}/scripts"
 REVIEW_PROMPT="${CLAUDE_SKILL_DIR}/references/review.md"
 ORIGINAL="IMAGE_PATH_HERE"
-RESULT="/tmp/d2c-result-screenshot.png"
+RESULT="${RESULT_IMAGE:-/tmp/d2c-result-screenshot.png}"
 MODEL="MODEL_ID_HERE"
 
 [ -f "$ORIGINAL" ] && [ -f "$RESULT" ] && [ -f "$REVIEW_PROMPT" ] && echo "REVIEW INPUTS OK" || echo "REVIEW INPUTS MISSING"
@@ -600,7 +606,7 @@ Build review payload manually (two images in user message):
 ```bash
 REVIEW_PROMPT="${CLAUDE_SKILL_DIR}/references/review.md"
 ORIGINAL="IMAGE_PATH_HERE"
-RESULT="/tmp/d2c-result-screenshot.png"
+RESULT="${RESULT_IMAGE:-/tmp/d2c-result-screenshot.png}"
 MODEL="MODEL_ID_HERE"
 
 SYSTEM=$(cat "$REVIEW_PROMPT")
@@ -754,7 +760,7 @@ Follow Phase 4 steps to serve, screenshot, and compare.
 ## Technical Notes
 
 - **Model:** `glm-5v-turbo` (Z.ai) / `z-ai/glm-5v-turbo` (OpenRouter)
-- **Context window:** 128K tokens
+- **Context window:** 202K tokens
 - **Thinking mode:** NOT supported on glm-5v-turbo -- never send thinking parameters
 - **System message split:** Prompt (profile) goes to system role, context + image go to user role
 - **API params:** `temperature: 0.2`, `top_p: 0.85`, `max_tokens: MAX_TOKENS` (profile-dependent: 32768/16384/8192)

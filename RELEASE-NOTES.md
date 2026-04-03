@@ -2,6 +2,34 @@
 
 ---
 
+## v3.4.23 (2026-04-03)
+
+### brewcode
+#### Fixed
+- **glm-design-to-code:** Context window corrected to 202K (was 128K) across SKILL.md, README, docs
+- **glm-design-to-code:** Replaced phantom model `glm-4.5-air:free` with `glm-4.6v-flash` in key validation
+- **glm-design-to-code:** Standardized pricing across all documentation ($0.01-0.08 range by profile)
+- **glm-design-to-code:** API key flow now validates before saving to `.env` (prevents invalid key persistence)
+- **glm-design-to-code:** Split API key provider choice and key entry into separate AskUserQuestion steps
+- **glm-design-to-code:** Settings dialog now loops for multiple changes before confirming
+- **glm-design-to-code:** REVIEW mode uses parsed `RESULT_IMAGE` instead of hardcoded path
+- **Scripts:** All 6 scripts now have +x execute permissions
+- **Scripts:** `glm-request.sh` curl timeout increased to 600s for large payloads
+- **Scripts:** `glm-request.sh` adds `HTTP-Referer` and `X-Title` headers for OpenRouter requests
+- **Scripts:** `glm-extract.sh` allows spaces in output directory paths
+- **Scripts:** `glm-extract.sh` awk `system()` call now quotes directory paths
+- **Scripts:** `glm-verify.sh` background timer PID tracked and cleaned up on `--kill`
+
+### docs
+#### Enhanced
+- **glm-design-to-code.mdx:** Added Design2Code Benchmark Comparison section (GLM-5V-Turbo 94.8 vs Claude Opus 4.6 77.3)
+- **glm-design-to-code.mdx:** Added Our Research Results section with per-framework Tabs (HTML 9.5, React 8.0, Flutter 9.0)
+- **glm-design-to-code.mdx:** Added External Resources CardGrid (Z.ai docs, OpenRouter, BenchLM, The Decoder)
+- **glm-design-to-code.mdx:** Expanded Pipeline Flow Steps to 7 detailed steps
+- **glm-design-to-code.mdx:** Updated GLM Models table context window to 202K
+
+---
+
 ## v3.4.22 (2026-04-03)
 
 ### brewcode

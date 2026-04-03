@@ -37,13 +37,25 @@ echo "Model: $(jq -r '.model' "$PAYLOAD")" >&2
 echo "Max tokens: $(jq -r '.max_tokens' "$PAYLOAD")" >&2
 
 # Send request with retry
-HTTP_CODE=$(curl -s -w "%{http_code}" -o "$OUTPUT" \
-  --retry 3 --retry-delay 5 --retry-max-time 60 \
-  --max-time 300 \
-  -X POST "$API_URL" \
-  -H "Authorization: Bearer $API_KEY" \
-  -H "Content-Type: application/json" \
-  -d @"$PAYLOAD")
+if [ "$PROVIDER" = "openrouter" ]; then
+  HTTP_CODE=$(curl -s -w "%{http_code}" -o "$OUTPUT" \
+    --retry 3 --retry-delay 5 --retry-max-time 60 \
+    --max-time 600 \
+    -X POST "$API_URL" \
+    -H "Authorization: Bearer $API_KEY" \
+    -H "Content-Type: application/json" \
+    -H "HTTP-Referer: https://brewcode.pt" \
+    -H "X-Title: brewcode-glm" \
+    -d @"$PAYLOAD")
+else
+  HTTP_CODE=$(curl -s -w "%{http_code}" -o "$OUTPUT" \
+    --retry 3 --retry-delay 5 --retry-max-time 60 \
+    --max-time 600 \
+    -X POST "$API_URL" \
+    -H "Authorization: Bearer $API_KEY" \
+    -H "Content-Type: application/json" \
+    -d @"$PAYLOAD")
+fi
 
 echo "HTTP: $HTTP_CODE" >&2
 

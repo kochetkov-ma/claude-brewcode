@@ -74,13 +74,13 @@ Convert designs to working multi-framework code using GLM-5V-Turbo. Accepts imag
 ## Pipeline Flow
 
 <Steps>
-1. **Parse input** -- detect input type (image/text/HTML/URL), framework, quality profile
-2. **API key setup** -- Z.ai or OpenRouter, validated and saved
-3. **Build payload** -- base64 image + system prompt + context
-4. **Send to GLM** -- glm-5v-turbo with retry and fallback
-5. **Extract files** -- parse `===FILE:===` markers, create project
-6. **Build** -- framework-specific (Vite for React, flutter build for Flutter)
-7. **Verify** -- Playwright screenshot + automated review
+1. **Parse input** — detect type (image/text/HTML/URL), framework, profile, provider from arguments
+2. **API key setup** — check `.env`, validate against provider API, save on success
+3. **Build payload** — base64-encode image + load system prompt (profile) + framework context → JSON
+4. **Send to GLM** — `glm-5v-turbo` via Z.ai or OpenRouter, retry on transient failures, 10min timeout
+5. **Extract files** — parse `===FILE:===` markers from response, create directory structure
+6. **Build & verify** — `npm run build` (React), `flutter build web` (Flutter), or serve static HTML
+7. **Review cycle** — optional: screenshot result → compare with original → score → fix → iterate
 </Steps>
 
 ## Benchmark Results
@@ -97,11 +97,55 @@ Our research tested GLM-5V-Turbo across three frameworks with the same design mo
   Average cost per design-to-code conversion: **~$0.03**. Using the free `glm-4.6v-flash` model for development iterations costs nothing.
 </Callout>
 
+## Design2Code Benchmark Comparison
+
+<CardGrid>
+  <Card title="GLM-5V-Turbo" icon="star">
+    <Badge variant="accent" text="94.8" /> Design2Code benchmark score. CogViT architecture, optimized for design-to-code conversion.
+  </Card>
+  <Card title="Claude Opus 4.6" icon="pencil">
+    <Badge variant="primary" text="77.3" /> Design2Code benchmark score. General-purpose multimodal model.
+  </Card>
+</CardGrid>
+
+<Callout type="warning">
+  Design2Code scores are self-reported by Z.ai. No independent verification has been published as of April 2026. Treat as directional, not definitive.
+</Callout>
+
+## Our Research Results
+
+<Tabs>
+  <TabItem label="HTML/CSS">
+    **Score: 9.5/10** — 3 files generated, no build step needed.
+
+    - Cost: ~$0.032 per conversion
+    - Pixel-perfect colors, spacing, and typography
+    - CSS custom properties for theming
+    - Responsive layout out of the box
+  </TabItem>
+  <TabItem label="React 18">
+    **Score: 8.0/10** — 19 files generated, Vite build in 218ms.
+
+    - Cost: ~$0.035 per conversion
+    - Component decomposition into Header, Sidebar, Content
+    - CSS Modules for scoped styling
+    - Minor issues: some hardcoded values, missing hover states
+  </TabItem>
+  <TabItem label="Flutter Web">
+    **Score: 9.0/10** — 10 files generated, flutter build web.
+
+    - Cost: ~$0.032 per conversion
+    - Clean widget hierarchy with theme constants
+    - Auto-fix needed: `Color(xFF...)` → `Color(0xFF...)`
+    - Native-feel scrolling and layout
+  </TabItem>
+</Tabs>
+
 ## GLM Models
 
 | Model | Vision | Price (in/out per 1M) | Context | Best For |
 |-------|--------|----------------------|---------|----------|
-| glm-5v-turbo | Image+Video | $1.20 / $4.00 | 128K | Production quality |
+| glm-5v-turbo | Image+Video | $1.20 / $4.00 | 202K | Production quality |
 | glm-4.6v-flash | Image | FREE | 131K | Development and testing |
 | glm-4.6v | Image+Video | $0.30 / $0.90 | 131K | Budget production |
 
@@ -242,6 +286,31 @@ Our research tested GLM-5V-Turbo across three frameworks with the same design mo
 | `--review` | -- | Enter REVIEW mode (accepts 2 images) |
 | `--fix` | -- | Enter FIX mode (accepts feedback text) |
 | `--review-file` | -- | Path to review JSON for FIX mode |
+
+## External Resources
+
+<CardGrid>
+  <Card title="Z.ai Documentation" icon="document">
+    Official GLM-5V-Turbo API guide with vision request examples and model capabilities.
+
+    [docs.z.ai/guides/vlm/glm-5v-turbo](https://docs.z.ai/guides/vlm/glm-5v-turbo)
+  </Card>
+  <Card title="OpenRouter Model Page" icon="external">
+    Model routing, pricing, and availability for GLM-5V-Turbo on OpenRouter.
+
+    [openrouter.ai/z-ai/glm-5v-turbo](https://openrouter.ai/z-ai/glm-5v-turbo)
+  </Card>
+  <Card title="BenchLM Comparison" icon="search">
+    Side-by-side benchmark comparison of Claude Opus 4.6 vs GLM-5V-Turbo.
+
+    [benchlm.ai/compare/claude-opus-4-6-vs-glm-5-turbo](https://benchlm.ai/compare/claude-opus-4-6-vs-glm-5-turbo)
+  </Card>
+  <Card title="The Decoder Article" icon="star">
+    Coverage of GLM-5V-Turbo's design-to-code capabilities and benchmark results.
+
+    [the-decoder.com](https://the-decoder.com/zhipu-ais-glm-5v-turbo-turns-design-mockups-directly-into-executable-front-end-code/)
+  </Card>
+</CardGrid>
 
 ## Research Methodology
 

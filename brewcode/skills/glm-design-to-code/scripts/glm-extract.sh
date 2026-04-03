@@ -11,9 +11,9 @@ OUTPUT_DIR="${2:?Usage: glm-extract.sh <response.json> <output_dir>}"
 
 [ -f "$RESPONSE" ] || { echo "ERROR: Response not found: $RESPONSE" >&2; exit 1; }
 
-# Validate OUTPUT_DIR has no shell metacharacters
+# Validate OUTPUT_DIR has no dangerous shell metacharacters
 case "$OUTPUT_DIR" in
-  *[\'\"\`\$\;\|\&\(\)\{\}\[\]\#\!\~\\\ ]*)
+  *[\'\"\`\$\;\|\&\(\)\{\}\[\]\#\!\~\\]*)
     echo "ERROR: OUTPUT_DIR contains unsafe characters: $OUTPUT_DIR" >&2
     exit 1
     ;;
@@ -65,6 +65,7 @@ if printf '%s\n' "$CONTENT" | grep -q '===FILE:'; then
     if (lines == 0) {
       dir = current_file
       sub(/\/[^\/]*$/, "", dir)
+      gsub(/'\''/,"'\''\\'\'''\''", dir)
       cmd = "mkdir -p '\''" dir "'\''"
       system(cmd)
       close(cmd)

@@ -6,8 +6,13 @@
 set -e
 
 PID_FILE="/tmp/d2c-server.pid"
+TIMER_PID_FILE="/tmp/d2c-timer.pid"
 
 if [ "${1:-}" = "--kill" ]; then
+  if [ -f "$TIMER_PID_FILE" ]; then
+    kill "$(cat "$TIMER_PID_FILE")" 2>/dev/null
+    rm -f "$TIMER_PID_FILE"
+  fi
   if [ -f "$PID_FILE" ]; then
     PID=$(cat "$PID_FILE")
     kill "$PID" 2>/dev/null && echo "Server $PID stopped" >&2 || echo "Server $PID not running" >&2
@@ -56,6 +61,8 @@ echo "http://localhost:$PORT/"
 
 echo "$SERVER_PID" > "$PID_FILE"
 
-(sleep 60 && kill "$SERVER_PID" 2>/dev/null && rm -f "$PID_FILE") &
+(sleep 60 && kill "$SERVER_PID" 2>/dev/null && rm -f "$PID_FILE" && rm -f "$TIMER_PID_FILE") &
+TIMER_PID=$!
+echo "$TIMER_PID" > "$TIMER_PID_FILE"
 
 echo "Server PID: $SERVER_PID (kill with: $0 --kill)" >&2
