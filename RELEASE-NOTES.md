@@ -2,6 +2,16 @@
 
 ---
 
+## v3.4.21 (2026-04-03)
+
+### docs
+#### Added
+- **`/brewdoc:guide` docs page** — guide.mdx with 9 topics, 3 domains, progress tracking, environment health check
+- Updated brewdoc overview.mdx: 6 skills, guide card + command row + directory tree entry
+- Updated navigation.ts: guide link in Brewdoc section
+
+---
+
 ## v3.4.20 (2026-04-02)
 
 ### brewdoc
