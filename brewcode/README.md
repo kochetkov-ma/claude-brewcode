@@ -85,6 +85,7 @@ After `/brewcode:setup`, templates are adapted once. Then for each task -- the c
 | [`/brewcode:skills`](skills/skills/README.md) | Skill management and activation |
 | [`/brewcode:standards-review`](skills/standards-review/README.md) | Standards compliance review |
 | [`/brewcode:convention`](skills/convention/README.md) | Extract etalon classes, patterns, architecture into convention docs and rules |
+| [`/brewcode:glm-design-to-code`](skills/glm-design-to-code/README.md) | GLM vision design-to-code: screenshot → multi-framework code, review, fix |
 | [`/brewcode:teardown`](skills/teardown/README.md) | Plugin configuration cleanup (tasks are preserved) |
 
 > **Note:** `/brewcode:review` -- local skill, created in the project during `/brewcode:setup`.
@@ -165,6 +166,6 @@ After task creation, the following appears in the project:
 
 ## Version
 
-**3.3.1** -- latest release.
+**3.4.22** -- latest release.
 
 Author: Maksim Kochetkov | License: MIT

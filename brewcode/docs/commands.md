@@ -7,7 +7,7 @@ description: Detailed description of all brewcode plugin commands
 
 # Brewcode Plugin Commands
 
-> **Version:** 3.1.0 | **Author:** Maksim Kochetkov | **License:** MIT
+> **Version:** 3.4.22 | **Author:** Maksim Kochetkov | **License:** MIT
 
 ## Quick Reference
 
@@ -27,6 +27,10 @@ description: Detailed description of all brewcode plugin commands
 | 13 | `/brewcode:skills` | Skill management and activation | session | sonnet | -- |
 | 14 | `/brewcode:standards-review` | Standards compliance review | fork | opus | setup |
 | 15 | `/brewcode:agents` | Interactive agent creation and improvement | session | opus | -- |
+| 16 | `/brewcode:convention` | Extract project conventions, patterns, architecture into rules + docs | session | opus | -- |
+| 17 | `/brewcode:teams` | Create and manage specialized agent teams | session | opus | -- |
+| 18 | `/brewcode:e2e` | E2E testing orchestration: BDD scenarios, autotests, review | session | opus | setup (e2e agents) |
+| 19 | `/brewcode:glm-design-to-code` | GLM vision design-to-code generator | session | opus | -- |
 
 ## Recommended Execution Order
 
@@ -708,6 +712,243 @@ Does not use subagents.
 /brewcode:agents up reviewer
 /brewcode:agents .claude/agents/reviewer.md
 /brewcode:agents
+```
+
+---
+
+## 10. `/brewcode:convention`
+
+**Purpose:** Analyzes project to extract etalon classes, patterns, and architecture by layer. Generates convention documents in `.claude/convention/` and organizes rules in `.claude/rules/`.
+
+| Parameter | Value |
+|-----------|-------|
+| **Arguments** | `[full\|conventions\|rules\|paths <p1,p2>]` |
+| **Context** | `session` |
+| **Model** | `opus` |
+| **Dependencies** | None |
+| **Allowed tools** | `Read`, `Write`, `Edit`, `Glob`, `Grep`, `Bash`, `Task`, `AskUserQuestion`, `Skill` |
+
+### Modes
+
+| Mode | Invocation | Description |
+|------|-----------|-------------|
+| `full` (default) | `/brewcode:convention` | Full analysis: detect stack, analyze layers, select etalons, generate docs, extract rules |
+| `conventions` | `/brewcode:convention conventions` | Generate convention docs only (skip rules) |
+| `rules` | `/brewcode:convention rules` | Extract rules from existing `.claude/convention/` docs |
+| `paths` | `/brewcode:convention paths src/a,src/b` | Scoped analysis on specified paths |
+
+### Generated Documents
+
+| Document | Content |
+|----------|---------|
+| `.claude/convention/reference-patterns.md` | Main code layers: etalons, patterns, anti-patterns (~300 lines) |
+| `.claude/convention/testing-conventions.md` | Test layers: test etalons, assertion conventions (~150 lines) |
+| `.claude/convention/project-architecture.md` | Build, deps, codegen, migrations (~200 lines) |
+
+### Workflow
+
+1. **P0: Stack Detection** -- detect languages, frameworks, modules via scripts
+2. **P1: Load Layers** -- filter analysis layers by detected stack
+3. **P2: Parallel Analysis** -- 10 agents (architect + tester) analyze layers in ONE message
+4. **P3: Etalon Selection** -- 1 architect selects 1-2 etalons per layer
+5. **P4: Document Generation** -- 3 developer agents write convention docs in parallel
+6. **P5: Text Optimization** -- text-optimizer (if brewtools installed) or fallback
+7. **P6: User Review** -- approve, revise (max 2 iterations), or skip to rules
+8. **P7: Rules Organization** -- extract rules, deduplicate, interactive batching, bc-rules-organizer
+9. **P8: Summary** -- output etalon table + metrics
+
+### Usage Example
+
+```
+/brewcode:convention
+/brewcode:convention rules
+/brewcode:convention paths src/main,src/test
+```
+
+---
+
+## 11. `/brewcode:teams`
+
+**Purpose:** Creates and manages dynamic teams of domain-specific agents with tracking framework. Analyzes project, proposes team (5-20 agents), creates with self-selection protocol and performance tracking.
+
+| Parameter | Value |
+|-----------|-------|
+| **Arguments** | `[create [name] [prompt]\|update [name]\|status [name]\|cleanup [name]]` |
+| **Context** | `session` |
+| **Model** | `opus` |
+| **Dependencies** | None |
+| **Allowed tools** | `Read`, `Write`, `Edit`, `Glob`, `Grep`, `Bash`, `Task`, `AskUserQuestion`, `Skill` |
+
+### Modes
+
+| Mode | Description |
+|------|-------------|
+| `create` | Analyze project, propose 3 variants (5/10-12/15-20 agents), create with agent-creator |
+| `update` | Self-reflection: analyze trace data, tune/replace underperformers |
+| `status` | Read-only health report: per-agent stats, success rates, recommendations |
+| `cleanup` | Archive trace data, remove inactive agents |
+
+### Created Files
+
+| File | Purpose |
+|------|---------|
+| `.claude/teams/{name}/team.md` | Team roster with agent domains and missions |
+| `.claude/teams/{name}/trace.jsonl` | Session-scoped tracking data |
+| `.claude/agents/{agent}.md` | Individual agent files (via agent-creator) |
+
+### Usage Example
+
+```
+/brewcode:teams create backend
+/brewcode:teams status backend
+/brewcode:teams update backend
+/brewcode:teams cleanup backend
+```
+
+---
+
+## 12. `/brewcode:e2e`
+
+**Purpose:** Full-cycle E2E testing orchestration: setup testing agents, create BDD scenarios, write autotests, quorum review. Stack-agnostic with layered test architecture.
+
+| Parameter | Value |
+|-----------|-------|
+| **Arguments** | `[setup\|create\|update\|review\|rules\|status] [prompt]` |
+| **Context** | `session` |
+| **Model** | `opus` |
+| **Dependencies** | `/brewcode:setup` (for non-setup modes: e2e agents must exist) |
+| **Allowed tools** | `Read`, `Write`, `Edit`, `Glob`, `Grep`, `Bash`, `Task`, `AskUserQuestion`, `Skill`, `WebSearch`, `WebFetch` |
+
+### Modes
+
+| Mode | Description |
+|------|-------------|
+| `setup` | Create 5 runtime e2e agents via agent-creator, configure test infrastructure |
+| `create` | Generate BDD scenarios with YAML frontmatter, write autotests |
+| `update` | Update existing scenarios and tests based on changes |
+| `review` | Quorum review (3 reviewers, 2/3 consensus), MAX_CYCLES=3 |
+| `rules` | Extract e2e-specific rules from accumulated knowledge |
+| `status` | Report on e2e infrastructure, agents, and test coverage |
+
+### Review Cycle
+
+MAX_CYCLES=3: execute -> reviewer validates -> different agent re-checks -> fix confirmed -> repeat.
+
+### Usage Example
+
+```
+/brewcode:e2e setup
+/brewcode:e2e create "Login flow with OAuth"
+/brewcode:e2e review
+/brewcode:e2e status
+```
+
+---
+
+## 13. `/brewcode:glm-design-to-code`
+
+**Purpose:** Converts designs to working frontend code using GLM-5V-Turbo vision model. Accepts 4 input types: image, text description, HTML file, or URL. Three modes: CREATE (generate code), REVIEW (evaluate quality), FIX (iterate based on feedback). Supports HTML/CSS, React 18, Flutter, or custom frameworks. Powered by Z.ai GLM-5V-Turbo (94.8 Design2Code benchmark) or OpenRouter routing.
+
+| Parameter | Value |
+|-----------|-------|
+| **Arguments** | `[input] [--framework html\|react\|flutter\|custom] [--profile max\|optimal\|efficient] [--provider zai\|openrouter] [--model MODEL_ID] [--output dir] [--review original.png result.png] [--fix 'feedback'] [--fix --review-file review.json]` |
+| **Context** | `session` |
+| **Model** | `opus` |
+| **Dependencies** | None (API key for Z.ai or OpenRouter required) |
+| **Allowed tools** | `Read`, `Write`, `Edit`, `Glob`, `Grep`, `Bash`, `AskUserQuestion` |
+
+### Input Types
+
+| Type | Example | Description |
+|------|---------|-------------|
+| Image | `screenshot.png` | PNG/JPG/WebP/GIF screenshot or design mockup |
+| Text | `"Dark landing page with hero"` | Natural language description of the desired UI |
+| HTML | `existing-page.html` | Convert or improve existing HTML code |
+| URL | `https://example.com` | Takes a Playwright screenshot first, then converts |
+
+Input type is auto-detected from the argument.
+
+### Modes
+
+| Mode | Trigger | Description |
+|------|---------|-------------|
+| **CREATE** | `screenshot.png` / `"text"` / `page.html` / `https://...` | Generates code from any supported input (main workflow) |
+| **REVIEW** | `--review original.png result.png` | Compares generated code screenshot against original design, scores quality (10-point scale) |
+| **FIX** | `--fix 'feedback text'` | Uses review feedback to improve code iteratively (fix -> re-screenshot -> re-review cycle) |
+
+### Flags
+
+| Flag | Default | Options | Purpose |
+|------|---------|---------|---------|
+| `--framework` | html | html, react, flutter, custom | Output code format |
+| `--profile` | max | max, optimal, efficient | Quality vs speed tradeoff |
+| `--provider` | zai | zai, openrouter | Which API to use |
+| `--model` | (auto) | glm-5v-turbo, glm-4.6v | Override model selection |
+| `--output` | `./d2c-output` | Any directory path | Where to save generated files |
+| `--review` | -- | `original.png result.png` | Enter REVIEW mode with two images |
+| `--fix` | -- | `'feedback text'` | Enter FIX mode with feedback |
+| `--review-file` | -- | Path to review JSON | Use saved review as fix input |
+
+### Profiles
+
+| Profile | max_tokens | Quality | Speed | Best for |
+|---------|-----------|---------|-------|----------|
+| **max** | 32,768 | Pixel-perfect, all details | 30-60s | Complex UIs, high-fidelity design systems |
+| **optimal** | 16,384 | Good quality, most details | 15-30s | Production code, balanced approach |
+| **efficient** | 8,192 | Acceptable, basic structure | 5-15s | Quick prototypes, MVP code |
+
+### Framework Output
+
+| Framework | Generated Files |
+|-----------|----------------|
+| **html** | `index.html`, `styles.css`, `script.js` (optional) |
+| **react** | `package.json`, `src/App.jsx`, `src/components/`, `src/styles/` (Vite project) |
+| **flutter** | `pubspec.yaml`, `lib/main.dart`, `lib/screens/`, `lib/widgets/` |
+| **custom** | User-guided output structure |
+
+### Providers
+
+| Provider | Model ID | Free Tier | Pricing |
+|----------|----------|-----------|---------|
+| **Z.ai** (recommended) | `glm-5v-turbo` | ~20M tokens | $1.20/1M in, $4.00/1M out |
+| **OpenRouter** | `z-ai/glm-5v-turbo` | No | Same as Z.ai |
+
+API key: set `ZAI_API_KEY` (Z.ai) or `OPENROUTER_API_KEY` (OpenRouter) environment variable.
+
+### Workflow (CREATE)
+
+1. **Phase 0: Parse Arguments** -- detect mode, validate image, confirm settings
+2. **Phase 0.5: API Key Setup** -- check/request API key (first-time only)
+3. **Phase 1: Validate Prerequisites** -- check tools (jq, curl, base64), API key, scripts
+4. **Phase 2: Build and Send Request** -- select prompt profile, build payload, call GLM API
+5. **Phase 3: Extract and Build** -- extract files from response, run framework build
+6. **Phase 4: Verify** -- serve locally, take Playwright screenshot
+7. **Phase 5: Review** -- compare original vs generated (if --review flag)
+
+### Agents
+
+Does not use subagents. Work is performed within skill session context using GLM vision API.
+
+### Usage Example
+
+```
+# Image input
+/brewcode:glm-design-to-code mockup.png
+/brewcode:glm-design-to-code design.png --framework react --profile optimal
+
+# Text description input
+/brewcode:glm-design-to-code "Dark landing page with hero section and pricing cards"
+
+# HTML file input
+/brewcode:glm-design-to-code legacy-page.html --framework react
+
+# URL input (auto-screenshots via Playwright)
+/brewcode:glm-design-to-code https://example.com/landing
+
+# Review and fix
+/brewcode:glm-design-to-code --review original.png generated.png
+/brewcode:glm-design-to-code --fix "button should be blue not red, spacing too loose"
+/brewcode:glm-design-to-code design.png --framework flutter --profile max --provider zai
 ```
 
 ---

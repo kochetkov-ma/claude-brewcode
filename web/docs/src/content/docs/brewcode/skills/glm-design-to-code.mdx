@@ -1,0 +1,254 @@
+---
+title: "GLM Design to Code"
+description: "Vision model-powered design-to-code generator — screenshots to production code"
+order: 1114
+---
+import { Card, CardGrid, Callout, Steps, Badge, Tabs, TabItem } from '../../../../components/mdx';
+
+# GLM Design to Code
+
+<Badge variant="accent" text="new" /> <Badge variant="primary" text="opus" />
+
+Vision model-powered design-to-code generator.
+Convert designs to working multi-framework code using GLM-5V-Turbo. Accepts images, text descriptions, HTML files, or URLs.
+
+<CardGrid>
+  <Card title="CREATE" icon="pencil">
+    Any input to working multi-file code. HTML/CSS, React 18, Flutter Web.
+  </Card>
+  <Card title="REVIEW" icon="search">
+    Compare original design with generated result. Score 1-10 with actionable feedback.
+  </Card>
+  <Card title="FIX" icon="wrench">
+    Apply review feedback to improve generated code automatically.
+  </Card>
+</CardGrid>
+
+## Input Types
+
+<CardGrid>
+  <Card title="Image" icon="star">
+    PNG, JPG, WebP, or GIF screenshot. The most common input -- export from Figma, Sketch, or take a screenshot.
+  </Card>
+  <Card title="Text Description" icon="pencil">
+    Natural language description of the desired UI. Example: "Dark landing page with hero section and pricing cards".
+  </Card>
+  <Card title="HTML" icon="document">
+    Existing HTML file to convert or improve. Useful for migrating legacy pages to React or Flutter.
+  </Card>
+  <Card title="URL" icon="external">
+    Public URL -- Playwright takes a screenshot automatically, then converts. Great for cloning existing pages.
+  </Card>
+</CardGrid>
+
+<Callout type="info">
+  Input type is **auto-detected** from the argument: file extension for images/HTML, URL pattern for URLs, quoted text for descriptions.
+</Callout>
+
+## Quick reference
+
+| Field | Value |
+|-------|-------|
+| Command | `/brewcode:glm-design-to-code` |
+| Arguments | `<input> [--framework html\|react\|flutter\|custom] [--profile max\|optimal\|efficient]` |
+| Input types | Image, text description, HTML file, URL (auto-detected) |
+| Model | opus |
+| Vision model | GLM-5V-Turbo (Z.ai / OpenRouter) |
+
+## Quick Start
+
+```bash
+# From an image
+/brewcode:glm-design-to-code screenshot.png
+
+# From a text description
+/brewcode:glm-design-to-code "Dark landing page with hero section and pricing cards"
+
+# From an existing HTML file
+/brewcode:glm-design-to-code existing-page.html --framework react
+
+# From a URL (auto-screenshots via Playwright)
+/brewcode:glm-design-to-code https://example.com/landing
+```
+
+## Pipeline Flow
+
+<Steps>
+1. **Parse input** -- detect input type (image/text/HTML/URL), framework, quality profile
+2. **API key setup** -- Z.ai or OpenRouter, validated and saved
+3. **Build payload** -- base64 image + system prompt + context
+4. **Send to GLM** -- glm-5v-turbo with retry and fallback
+5. **Extract files** -- parse `===FILE:===` markers, create project
+6. **Build** -- framework-specific (Vite for React, flutter build for Flutter)
+7. **Verify** -- Playwright screenshot + automated review
+</Steps>
+
+## Benchmark Results
+
+Our research tested GLM-5V-Turbo across three frameworks with the same design mockup:
+
+| Framework | Score | Files | Build | Cost |
+|-----------|-------|-------|-------|------|
+| **HTML/CSS** | **9.5/10** | 3 | N/A | ~$0.032 |
+| **React 18** | **8.0/10** | 19 | Vite 218ms | ~$0.035 |
+| **Flutter Web** | **9.0/10** (Claude) | 10 | flutter build web | ~$0.032 |
+
+<Callout type="tip">
+  Average cost per design-to-code conversion: **~$0.03**. Using the free `glm-4.6v-flash` model for development iterations costs nothing.
+</Callout>
+
+## GLM Models
+
+| Model | Vision | Price (in/out per 1M) | Context | Best For |
+|-------|--------|----------------------|---------|----------|
+| glm-5v-turbo | Image+Video | $1.20 / $4.00 | 128K | Production quality |
+| glm-4.6v-flash | Image | FREE | 131K | Development and testing |
+| glm-4.6v | Image+Video | $0.30 / $0.90 | 131K | Budget production |
+
+<Callout type="info">
+  GLM-5V-Turbo uses CogViT architecture with 94.8 Design2Code benchmark score. Available via Z.ai direct API or OpenRouter.
+</Callout>
+
+## Frameworks
+
+<Tabs>
+  <TabItem label="HTML/CSS">
+    **Best score: 9.5/10** -- Pure static output. No build step needed.
+
+    - Semantic HTML5 with `index.html` entry point
+    - CSS in separate files with custom properties
+    - JS for interactive elements
+    - Perfect for landing pages, dashboards, documentation
+  </TabItem>
+  <TabItem label="React 18">
+    **Score: 8.0/10** -- Component-based architecture with CSS Modules.
+
+    - JSX components in separate files
+    - CSS Modules (`.module.css`) for styling
+    - Vite build (218ms average)
+    - App.jsx root component
+  </TabItem>
+  <TabItem label="Flutter Web">
+    **Score: 9/10** -- Dart widgets with theme system.
+
+    - StatelessWidget components
+    - Theme constants in `lib/theme.dart`
+    - `flutter build web` compilation
+    - Auto-fix: `Color(xFF...)` to `Color(0xFF...)`
+  </TabItem>
+</Tabs>
+
+## Quality Profiles
+
+<CardGrid>
+  <Card title="Maximum" icon="star">
+    Pixel-perfect reproduction. Exact colors, spacing, typography. 13 quality requirements. ~32K output tokens.
+  </Card>
+  <Card title="Optimal" icon="check">
+    Good quality, balanced cost. Correct colors, proportions, layout. 8 requirements. ~16K tokens.
+  </Card>
+  <Card title="Efficient" icon="forward-slash">
+    Fast generation. Basic layout and colors. 4 requirements. ~8K tokens.
+  </Card>
+</CardGrid>
+
+## Providers
+
+<Tabs>
+  <TabItem label="Z.ai (Direct)">
+    **Recommended.** Direct API access with system message caching (80% discount on repeated prompts).
+
+    - Endpoint: `https://api.z.ai/api/paas/v4/chat/completions`
+    - Auth: `ZAI_API_KEY` environment variable
+    - All GLM models available including free tier
+  </TabItem>
+  <TabItem label="OpenRouter">
+    **Alternative.** Unified API with fallback routing.
+
+    - Endpoint: `https://openrouter.ai/api/v1/chat/completions`
+    - Auth: `OPENROUTER_API_KEY` environment variable
+    - Model IDs prefixed with `z-ai/` (e.g., `z-ai/glm-5v-turbo`)
+  </TabItem>
+</Tabs>
+
+## Usage Examples
+
+<Tabs>
+  <TabItem label="Image">
+    ```bash
+    # Basic -- HTML/CSS output from screenshot
+    /brewcode:glm-design-to-code screenshot.png
+
+    # React with optimal quality
+    /brewcode:glm-design-to-code mockup.png --framework react --profile optimal
+
+    # Flutter via OpenRouter
+    /brewcode:glm-design-to-code design.png --framework flutter --provider openrouter
+    ```
+  </TabItem>
+  <TabItem label="Text">
+    ```bash
+    # Generate from a description
+    /brewcode:glm-design-to-code "Minimalist dashboard with sidebar and dark theme"
+
+    # React component from description
+    /brewcode:glm-design-to-code "Pricing page with 3 tiers" --framework react
+    ```
+  </TabItem>
+  <TabItem label="HTML">
+    ```bash
+    # Convert legacy HTML to React
+    /brewcode:glm-design-to-code old-page.html --framework react
+
+    # Improve existing HTML with max quality
+    /brewcode:glm-design-to-code landing.html --profile max
+    ```
+  </TabItem>
+  <TabItem label="URL">
+    ```bash
+    # Clone a live page (Playwright auto-screenshot)
+    /brewcode:glm-design-to-code https://example.com/landing
+
+    # Clone as Flutter
+    /brewcode:glm-design-to-code https://stripe.com/pricing --framework flutter
+    ```
+  </TabItem>
+  <TabItem label="REVIEW">
+    ```bash
+    # Compare original design with generated result
+    /brewcode:glm-design-to-code --review original.png result-screenshot.png
+    ```
+  </TabItem>
+  <TabItem label="FIX">
+    ```bash
+    # Fix specific issues
+    /brewcode:glm-design-to-code --fix "sidebar too narrow, wrong green color"
+
+    # Fix from review file
+    /brewcode:glm-design-to-code --fix --review-file review.json
+    ```
+  </TabItem>
+</Tabs>
+
+## Options
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--framework` | `html` | Target: `html`, `react`, `flutter`, `custom` |
+| `--profile` | `max` | Quality: `max`, `optimal`, `efficient` |
+| `--provider` | `zai` | API: `zai`, `openrouter` |
+| `--model` | auto | Override model ID |
+| `--output` | `./d2c-output` | Output directory |
+| `--review` | -- | Enter REVIEW mode (accepts 2 images) |
+| `--fix` | -- | Enter FIX mode (accepts feedback text) |
+| `--review-file` | -- | Path to review JSON for FIX mode |
+
+## Research Methodology
+
+Our benchmarks used a controlled methodology:
+
+- **Same mockup** across all frameworks (dark-theme documentation page)
+- **Frozen prompts** -- identical prompts per quality profile
+- **Fixed API params** -- temperature 0.2, top_p 0.85, max_tokens 32768
+- **Dual evaluation** -- Claude Opus + GLM-4.6v-flash scoring independently
+- **Playwright verification** -- automated screenshots at 1280x800 viewport

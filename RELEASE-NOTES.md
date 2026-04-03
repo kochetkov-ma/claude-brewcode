@@ -2,6 +2,21 @@
 
 ---
 
+## v3.4.22 (2026-04-03)
+
+### brewcode
+#### Added
+- **New skill:** `glm-design-to-code` — GLM vision model-powered design-to-code generator
+  - Three modes: CREATE (any input to code: screenshots, text descriptions, HTML, URLs), REVIEW (compare original vs result), FIX (apply feedback)
+  - Supports HTML/CSS, React 18, Flutter Web, custom frameworks
+  - Three quality profiles: maximum (pixel-perfect), optimal (balanced), efficient (fast)
+  - Dual provider support: Z.ai (direct) and OpenRouter
+  - Full pipeline: argument parsing, API key setup, payload build, API request, file extraction, build, verification
+  - Scripts: parse-args.sh, glm-build-request.sh, glm-build-text-request.sh, glm-request.sh, glm-extract.sh, glm-verify.sh
+- **Updated agents:** `glm-zai-specialist`, `glm-openrouter-specialist` — migrated script paths to plugin directory
+
+---
+
 ## v3.4.21 (2026-04-03)
 
 ### docs
