@@ -104,7 +104,21 @@ Based on `INPUT_TYPE` from parse-args.sh:
 IMAGE="IMAGE_PATH_HERE"
 [ -f "$IMAGE" ] && file --mime-type "$IMAGE" | grep -qE ': image/' && echo "VALID_IMAGE" || echo "INVALID"
 ```
-> **If INVALID:** AskUserQuestion for correct path.
+> **If INVALID:**
+
+**ASK** using AskUserQuestion:
+```
+The file "{IMAGE}" is not a valid image. Please provide a valid input:
+```
+Options:
+- "Enter path to screenshot file (PNG/JPG/WebP)"
+- "Enter a URL to screenshot"
+- "Enter a text description instead"
+
+**On answer:**
+- File path -> re-validate as image, update IMAGE and INPUT_TYPE=image
+- URL -> update IMAGE, set INPUT_TYPE=url, go to URL processing above
+- Text description -> update IMAGE with text, set INPUT_TYPE=text
 
 #### If INPUT_TYPE=url
 Take a Playwright screenshot of the URL first:
@@ -114,7 +128,22 @@ URL="URL_HERE"
 npx playwright screenshot --full-page "$URL" /tmp/d2c-url-screenshot.png 2>&1 && echo "SCREENSHOT_OK" || echo "SCREENSHOT_FAILED"
 ```
 > **If SCREENSHOT_OK:** Set IMAGE=/tmp/d2c-url-screenshot.png and continue as image input.
-> **If SCREENSHOT_FAILED:** Try using Playwright MCP browser_navigate + browser_take_screenshot. If still fails, AskUserQuestion for alternative input.
+> **If SCREENSHOT_FAILED:** Try using Playwright MCP `browser_navigate` + `browser_take_screenshot`.
+> If Playwright MCP also fails:
+
+**ASK** using AskUserQuestion:
+```
+Could not take screenshot of "{URL}". The URL may be unreachable or Playwright is not available. Choose alternative:
+```
+Options:
+- "I'll provide a screenshot file instead"
+- "Convert from text description"
+- "Skip -- I'll paste the HTML source"
+
+**On answer:**
+- Screenshot file -> ask for path, set INPUT_TYPE=image
+- Text description -> ask for description, set INPUT_TYPE=text
+- HTML source -> ask for file path, set INPUT_TYPE=html
 
 #### If INPUT_TYPE=html
 **EXECUTE** using Bash tool:
@@ -134,7 +163,7 @@ If IMAGE was the only argument (no flags), **ASK** using AskUserQuestion:
 ```
 Design-to-Code Configuration:
 
-Screenshot: {IMAGE}
+Input: {IMAGE} ({INPUT_TYPE})
 Framework: html (HTML/CSS), react (React 18 + CSS Modules), flutter (Flutter Web), custom
 Profile: max (pixel-perfect), optimal (balanced), efficient (fast)
 Provider: zai (Z.ai direct), openrouter (OpenRouter proxy)
@@ -143,9 +172,47 @@ Output: ./d2c-output
 Accept defaults or specify changes?
 ```
 
-Options: "Accept defaults" | "Change settings"
+Options: "Accept defaults" | "Change framework" | "Change profile" | "Change provider" | "Change output dir"
 
-If "Change settings" -- ask follow-up for each setting.
+**On "Accept defaults":** Continue to Phase 0.5.
+
+**On "Change framework":**
+
+**ASK** using AskUserQuestion:
+```
+Select target framework:
+```
+Options: "HTML/CSS (static, no build)" | "React 18 + CSS Modules (Vite build)" | "Flutter Web (flutter build)" | "Custom (describe your stack)"
+
+On answer: update FRAMEWORK. If "Custom" -> **ASK** for stack description, write to `/tmp/d2c-custom-context.md`.
+
+**On "Change profile":**
+
+**ASK** using AskUserQuestion:
+```
+Select quality profile:
+```
+Options: "Maximum -- pixel-perfect, all details ($0.03-0.05)" | "Optimal -- good quality, balanced ($0.02-0.03)" | "Efficient -- fast, basic layout ($0.01-0.02)"
+
+On answer: update PROFILE and MAX_TOKENS accordingly.
+
+**On "Change provider":**
+
+**ASK** using AskUserQuestion:
+```
+Select API provider:
+```
+Options: "Z.ai (direct, system message caching, free tier)" | "OpenRouter (unified API, model routing)"
+
+On answer: update PROVIDER.
+
+**On "Change output dir":**
+
+**ASK** using AskUserQuestion:
+```
+Enter output directory path:
+```
+On answer: update OUTPUT.
 
 ---
 
@@ -170,61 +237,119 @@ fi
 
 **ASK** using AskUserQuestion:
 ```
-API key required for {PROVIDER}. Choose:
+API key required. Which provider do you have a key for?
+
+- Z.ai: Get key at https://z.ai -- direct GLM access, free tier available
+- OpenRouter: Get key at https://openrouter.ai -- unified API, many models
 ```
 Options:
-- "Z.ai API key (for GLM models)"
-- "OpenRouter API key (any model)"
+- "Z.ai API key"
+- "OpenRouter API key"
 
-Store the key value provided by user.
+User will respond with their choice AND the key value.
 
-### Step 3: Validate Key
+**On answer:** Extract the provider choice and key value. Store both:
+- Provider choice -> update PROVIDER
+- Key value -> proceed to Step 3
+
+### Step 3: Save Key to File (BEFORE validation)
+
+Save the key IMMEDIATELY so it persists across Bash calls:
 
 **EXECUTE** using Bash tool:
 ```bash
-# First set the env var (replace USER_KEY_HERE with actual key from user)
-export ZAI_API_KEY="USER_KEY_HERE"
+mkdir -p .claude
+PROVIDER="PROVIDER_HERE"
+KEY="KEY_VALUE_HERE"
+if [ "$PROVIDER" = "zai" ]; then
+  VAR="ZAI_API_KEY"
+else
+  VAR="OPENROUTER_API_KEY"
+fi
+echo "export $VAR=\"$KEY\"" > .claude/.env
+grep -q '.claude/.env' .gitignore 2>/dev/null || echo '.claude/.env' >> .gitignore
+echo "KEY_SAVED to .claude/.env ($VAR)"
+```
 
-# Then validate (key referenced via env var, not inline)
+> Key is saved FIRST so all subsequent Bash calls can source it.
+
+### Step 4: Validate Key
+
+**EXECUTE** using Bash tool:
+```bash
+. .claude/.env
 PROVIDER="PROVIDER_HERE"
 if [ "$PROVIDER" = "zai" ]; then
   URL="https://api.z.ai/api/paas/v4/chat/completions"
   MODEL="glm-4.6v-flash"
+  AUTH="$ZAI_API_KEY"
 else
   URL="https://openrouter.ai/api/v1/chat/completions"
   MODEL="z-ai/glm-4.5-air:free"
+  AUTH="$OPENROUTER_API_KEY"
 fi
 HTTP=$(curl -s -w "%{http_code}" -o /tmp/d2c-key-test.json \
   --max-time 10 \
   -X POST "$URL" \
-  -H "Authorization: Bearer ${ZAI_API_KEY:-$OPENROUTER_API_KEY}" \
+  -H "Authorization: Bearer $AUTH" \
   -H "Content-Type: application/json" \
   -d "{\"model\":\"$MODEL\",\"messages\":[{\"role\":\"user\",\"content\":\"test\"}],\"max_tokens\":5}")
 [ "$HTTP" -ge 200 ] && [ "$HTTP" -lt 300 ] && echo "KEY_VALID" || echo "KEY_INVALID (HTTP $HTTP)"
 ```
 
-> **If KEY_INVALID:** AskUserQuestion to re-enter key. Max 2 retries.
+> **If KEY_VALID:** Continue to Phase 1.
 
-### Step 4: Save Key (AskUserQuestion)
+> **If KEY_INVALID (attempt 1 of 2):**
 
 **ASK** using AskUserQuestion:
 ```
-API key validated. Where to save?
+API key validation failed (HTTP {CODE}). Common causes:
+- Key is expired or revoked
+- Wrong provider selected (Z.ai key used with OpenRouter or vice versa)
+- Key has no credits/quota
+
+Please re-enter your API key or switch provider:
 ```
 Options:
-- "Save to .claude/.env (project-local, recommended)"
-- "Save to ~/.zshrc (system-wide)"
-- "Don't save (session only)"
+- "Re-enter key for same provider"
+- "Switch to other provider"
+- "Cancel -- I'll set the env var manually"
 
-For .claude/.env: append `export {VAR}={KEY}` to `.claude/.env`, then verify it is gitignored:
+**On "Re-enter key":** Go back to Step 3 with new key.
+**On "Switch provider":** Toggle PROVIDER (zai<->openrouter), go to Step 2.
+**On "Cancel":**
+Output: "Set `ZAI_API_KEY` or `OPENROUTER_API_KEY` in your shell, then re-run the skill." **STOP.**
+
+> **If KEY_INVALID (attempt 2 of 2):**
+
+Output: "API key validation failed twice. Please verify your key at https://z.ai or https://openrouter.ai and set the environment variable manually:
+`export ZAI_API_KEY=your-key-here`
+Then re-run: `/brewcode:glm-design-to-code {original args}`" **STOP.**
+
+### Step 5: Confirm Save Location
+
+**ASK** using AskUserQuestion:
+```
+API key validated and saved to .claude/.env (project-local). Also save system-wide?
+```
+Options:
+- "Keep in .claude/.env only (recommended)"
+- "Also add to ~/.zshrc (all projects)"
+
+**On ".claude/.env only":** Done, continue to Phase 1.
+**On "Also ~/.zshrc":**
 
 **EXECUTE** using Bash tool:
 ```bash
-grep -q '.claude/.env' .gitignore 2>/dev/null || echo '.claude/.env' >> .gitignore
+PROVIDER="PROVIDER_HERE"
+. .claude/.env
+if [ "$PROVIDER" = "zai" ]; then
+  echo "export ZAI_API_KEY=\"$ZAI_API_KEY\"" >> ~/.zshrc
+else
+  echo "export OPENROUTER_API_KEY=\"$OPENROUTER_API_KEY\"" >> ~/.zshrc
+fi
+echo "Added to ~/.zshrc"
 ```
-
-For ~/.zshrc: append `export {VAR}={KEY}` to `~/.zshrc`
-For session only: use `export {VAR}={KEY}` in Bash for current session.
 
 ---
 
@@ -234,6 +359,7 @@ For session only: use `export {VAR}={KEY}` in Bash for current session.
 
 **EXECUTE** using Bash tool:
 ```bash
+[ -f .claude/.env ] && . .claude/.env
 PROVIDER="PROVIDER_HERE"
 echo "=== Tools ==="
 command -v jq && echo "jq OK" || echo "jq MISSING"
@@ -332,6 +458,7 @@ bash "$SD/glm-build-text-request.sh" "$INPUT" "$PROMPT" "$CONTEXT" "$MODEL" MAX_
 
 **EXECUTE** using Bash tool:
 ```bash
+[ -f .claude/.env ] && . .claude/.env
 SD="${CLAUDE_SKILL_DIR}/scripts"
 bash "$SD/glm-request.sh" /tmp/d2c-payload.json /tmp/d2c-response.json PROVIDER_HERE && echo "API OK" || echo "API FAILED"
 ```
@@ -488,6 +615,7 @@ jq -n \
 ### Step 2: Send Review
 
 ```bash
+[ -f .claude/.env ] && . .claude/.env
 SD="${CLAUDE_SKILL_DIR}/scripts"
 bash "$SD/glm-request.sh" /tmp/d2c-review-payload.json /tmp/d2c-review-response.json PROVIDER_HERE && echo "REVIEW OK" || echo "REVIEW FAILED"
 ```
@@ -520,7 +648,24 @@ Read fix feedback from:
 [ -f "/tmp/d2c-review-response.json" ] && echo "PREV_REVIEW EXISTS" || echo "NO_PREV_REVIEW"
 ```
 
-If no feedback source found: **ASK** using AskUserQuestion what to fix.
+If no feedback source found:
+
+**ASK** using AskUserQuestion:
+```
+No review feedback found. What needs to be fixed in the generated code?
+
+Describe specific issues, for example:
+- "Sidebar is 240px, should be 280px"
+- "Header background is #2d2d2d, should be #1a1a2e"
+- "Missing syntax highlighting in code blocks"
+- "Footer section is completely missing"
+```
+Options:
+- "Describe issues" (free text)
+- "Run automated review first" (switches to REVIEW mode -> Phase 5)
+
+**On "Describe issues":** User provides free text feedback -> store as FIX_TEXT, continue to Step 2.
+**On "Run automated review first":** Execute Phase 5 (Review), then return to Phase 6 with review feedback.
 
 ### Step 2: Read Existing Code
 
