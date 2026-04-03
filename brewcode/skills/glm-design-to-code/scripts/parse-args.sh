@@ -17,6 +17,7 @@ MODE="create"
 FIX_TEXT=""
 REVIEW_FILE=""
 MODEL=""
+MAX_TOKENS=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -114,6 +115,13 @@ case "$PROFILE" in
   *) echo "ERROR: Invalid profile: $PROFILE (use: max, optimal, efficient)" >&2; exit 1 ;;
 esac
 
+# Map profile to max_tokens
+case "$PROFILE" in
+  max) MAX_TOKENS=32768 ;;
+  optimal) MAX_TOKENS=16384 ;;
+  efficient) MAX_TOKENS=8192 ;;
+esac
+
 # Validate provider
 case "$PROVIDER" in
   zai|openrouter) ;;
@@ -132,6 +140,7 @@ echo "RESULT_IMAGE=$RESULT_IMAGE"
 echo "REVIEW_FILE=$REVIEW_FILE"
 echo "MODEL=$MODEL"
 echo "INPUT_TYPE=$INPUT_TYPE"
+echo "MAX_TOKENS=$MAX_TOKENS"
 
 if [ -z "$IMAGE" ]; then
   echo "IMAGE_MISSING=true"

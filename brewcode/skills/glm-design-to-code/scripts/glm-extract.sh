@@ -83,18 +83,84 @@ if printf '%s\n' "$CONTENT" | grep -q '===FILE:'; then
   }
   ' "$TMPFILE"
 else
-  echo "No ===FILE: markers found. Trying markdown code block extraction..." >&2
+  echo "No ===FILE: markers found. Trying code block extraction..." >&2
 
-  CLEAN=$(printf '%s\n' "$CONTENT" | sed -n '/^```html/,/^```$/p' | sed '1d;$d')
+  # Extract all fenced code blocks with language tags
+  BLOCK_NUM=0
+  printf '%s\n' "$CONTENT" | awk -v outdir="$OUTPUT_DIR" '
+  BEGIN {
+    # Language to default filename mapping
+    map["html"] = "index.html"
+    map["htm"] = "index.html"
+    map["css"] = "styles.css"
+    map["js"] = "script.js"
+    map["javascript"] = "script.js"
+    map["jsx"] = "App.jsx"
+    map["tsx"] = "App.tsx"
+    map["ts"] = "main.ts"
+    map["typescript"] = "main.ts"
+    map["dart"] = "main.dart"
+    map["yaml"] = "pubspec.yaml"
+    map["yml"] = "pubspec.yaml"
+    map["json"] = "package.json"
+    map[""] = "index.html"
+  }
+  /^```[a-zA-Z]/ {
+    lang = $0
+    sub(/^```/, "", lang)
+    sub(/[^a-zA-Z0-9].*/, "", lang)
+    lang = tolower(lang)
+    in_block = 1
+    content = ""
+    next
+  }
+  /^```$/ && in_block {
+    in_block = 0
+    if (content != "") {
+      # Determine filename
+      base = map[lang]
+      if (base == "") base = "file." lang
 
-  if [ -z "$CLEAN" ]; then
-    CLEAN="$CONTENT"
-    echo "WARNING: No structured format detected. Saving raw content as index.html" >&2
+      # Handle duplicates
+      if (seen[base]++) {
+        ext_pos = index(base, ".")
+        if (ext_pos > 0) {
+          name_part = substr(base, 1, ext_pos - 1)
+          ext_part = substr(base, ext_pos)
+          base = name_part seen[base] ext_part
+        } else {
+          base = base seen[base]
+        }
+      }
+
+      fname = outdir "/" base
+      printf "%s", content > fname
+      close(fname)
+      lines_count = split(content, arr, "\n") - 1
+      print "  " base " (" lines_count " lines)" > "/dev/stderr"
+      file_count++
+    }
+    next
+  }
+  in_block {
+    content = content $0 "\n"
+  }
+  END {
+    if (file_count > 0) {
+      print "Extracted " file_count " file(s) from code blocks" > "/dev/stderr"
+    }
+  }
+  '
+
+  # Check if any files were extracted
+  EXTRACTED=$(find "$OUTPUT_DIR" -type f 2>/dev/null | wc -l | tr -d ' ')
+
+  if [ "$EXTRACTED" -eq 0 ]; then
+    echo "WARNING: No code blocks found. Saving raw content as index.html" >&2
+    printf '%s\n' "$CONTENT" > "$OUTPUT_DIR/index.html"
+    echo "  index.html ($(printf '%s\n' "$CONTENT" | wc -l | tr -d ' ') lines)" >&2
+    echo "Extracted 1 file(s) (raw fallback)" >&2
   fi
-
-  printf '%s\n' "$CLEAN" > "$OUTPUT_DIR/index.html"
-  echo "Extracted 1 file(s)" >&2
-  echo "  index.html ($(printf '%s\n' "$CLEAN" | wc -l | tr -d ' ') lines)" >&2
 fi
 
 echo "" >&2

@@ -5,6 +5,19 @@
 
 set -e
 
+PID_FILE="/tmp/d2c-server.pid"
+
+if [ "${1:-}" = "--kill" ]; then
+  if [ -f "$PID_FILE" ]; then
+    PID=$(cat "$PID_FILE")
+    kill "$PID" 2>/dev/null && echo "Server $PID stopped" >&2 || echo "Server $PID not running" >&2
+    rm -f "$PID_FILE"
+  else
+    echo "No PID file found" >&2
+  fi
+  exit 0
+fi
+
 HTML_DIR="${1:?Usage: glm-verify.sh <html_dir> [port]}"
 PORT="${2:-8900}"
 
@@ -41,4 +54,8 @@ fi
 
 echo "http://localhost:$PORT/"
 
-echo "Server PID: $SERVER_PID (kill with: kill $SERVER_PID)" >&2
+echo "$SERVER_PID" > "$PID_FILE"
+
+(sleep 60 && kill "$SERVER_PID" 2>/dev/null && rm -f "$PID_FILE") &
+
+echo "Server PID: $SERVER_PID (kill with: $0 --kill)" >&2

@@ -82,6 +82,7 @@ Output: key=value pairs. Store all values.
 | `FIX_TEXT` | (empty) | Text from --fix "..." |
 | `REVIEW_FILE` | (empty) | Path from --review-file |
 | `MODEL` | (empty) | Model override from --model |
+| `MAX_TOKENS` | 32768 | 32768 (max), 16384 (optimal), 8192 (efficient) |
 
 > **STOP if FAILED** -- check parse-args.sh.
 
@@ -306,7 +307,7 @@ CONTEXT="CONTEXT_PATH_OR_EMPTY"
 IMAGE="IMAGE_PATH_HERE"
 MODEL="MODEL_ID_HERE"
 
-bash "$SD/glm-build-request.sh" "$IMAGE" "$PROMPT" "$CONTEXT" "$MODEL" 32768 0.2 0.85 > /tmp/d2c-payload.json && echo "PAYLOAD OK ($(wc -c < /tmp/d2c-payload.json | tr -d ' ') bytes)" || echo "PAYLOAD FAILED"
+bash "$SD/glm-build-request.sh" "$IMAGE" "$PROMPT" "$CONTEXT" "$MODEL" MAX_TOKENS_HERE 0.2 0.85 > /tmp/d2c-payload.json && echo "PAYLOAD OK ($(wc -c < /tmp/d2c-payload.json | tr -d ' ') bytes)" || echo "PAYLOAD FAILED"
 ```
 
 Replace all placeholders with actual values.
@@ -319,7 +320,7 @@ CONTEXT="CONTEXT_PATH_OR_EMPTY"
 INPUT="INPUT_VALUE_HERE"
 MODEL="MODEL_ID_HERE"
 
-bash "$SD/glm-build-text-request.sh" "$INPUT" "$PROMPT" "$CONTEXT" "$MODEL" 32768 0.2 0.85 > /tmp/d2c-payload.json && echo "PAYLOAD OK ($(wc -c < /tmp/d2c-payload.json | tr -d ' ') bytes)" || echo "PAYLOAD FAILED"
+bash "$SD/glm-build-text-request.sh" "$INPUT" "$PROMPT" "$CONTEXT" "$MODEL" MAX_TOKENS_HERE 0.2 0.85 > /tmp/d2c-payload.json && echo "PAYLOAD OK ($(wc -c < /tmp/d2c-payload.json | tr -d ' ') bytes)" || echo "PAYLOAD FAILED"
 ```
 
 > For text input, INPUT is the description string. For HTML input, INPUT is the file path.
@@ -415,7 +416,7 @@ npx playwright screenshot --full-page http://localhost:8900/ /tmp/d2c-result-scr
 ### Step 2: Cleanup Server
 
 ```bash
-kill $(lsof -ti :8900) 2>/dev/null; echo "SERVER STOPPED"
+bash "${CLAUDE_SKILL_DIR}/scripts/glm-verify.sh" --kill && echo "SERVER STOPPED"
 ```
 
 ---
@@ -583,7 +584,7 @@ Follow Phase 4 steps to serve, screenshot, and compare.
 - **Context window:** 128K tokens
 - **Thinking mode:** NOT supported on glm-5v-turbo -- never send thinking parameters
 - **System message split:** Prompt (profile) goes to system role, context + image go to user role
-- **API params:** `temperature: 0.2`, `top_p: 0.85`, `max_tokens: 32768`
+- **API params:** `temperature: 0.2`, `top_p: 0.85`, `max_tokens: MAX_TOKENS` (profile-dependent: 32768/16384/8192)
 - **File markers:** `===FILE: path===` ... `===END_FILE===`
 
 ---
