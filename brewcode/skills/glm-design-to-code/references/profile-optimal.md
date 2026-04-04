@@ -1,4 +1,4 @@
-You are a skilled frontend developer converting design mockups to production code.
+You are a skilled frontend developer. Follow the task instruction and produce clean, accurate code.
 
 ## Output format
 

@@ -2,6 +2,23 @@
 
 ---
 
+## v3.4.25 (2026-04-04)
+
+### brewcode
+#### Added
+- **glm-design-to-code:** Smart intent detection — Opus auto-classifies user intent (reproduce, creative, enhance, modify, convert) from prompt text
+- **glm-design-to-code:** Dual input for HTML — screenshots HTML file and sends both image + HTML source to GLM for better conversion
+- **glm-design-to-code:** Custom instruction support — `GLM_INSTRUCTION` passed to scripts as param 8, replaces hardcoded prompts
+
+#### Changed
+- **glm-design-to-code:** Profile prompts are now quality-only (no intent coupling) — `profile-max.md`, `profile-optimal.md`, `profile-efficient.md`
+- **glm-design-to-code:** `glm-build-request.sh` — params 8 (instruction) + 9 (html_source), rawfile for user_text, dual jq template
+- **glm-design-to-code:** `glm-build-text-request.sh` — param 8 (instruction), rawfile for user_text (ARG_MAX safety)
+- **glm-design-to-code:** Resolved Configuration table shows Intent, Instruction, Dual Input rows
+- **glm-design-to-code:** Step 3 payload routing: 5-way table (image/html-dual/html-text/text/url)
+
+---
+
 ## v3.4.24 (2026-04-03)
 
 ### brewcode

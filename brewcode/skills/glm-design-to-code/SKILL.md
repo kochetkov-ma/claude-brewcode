@@ -91,6 +91,35 @@ Output: key=value pairs. Store all values.
 | `--review` flag present | REVIEW |
 | Otherwise | CREATE |
 
+### Step 1.7: Classify Intent (MODE=create only)
+
+> Skip this step for REVIEW and FIX modes.
+
+Analyze the user's prompt text (`$ARGUMENTS`) and the input type to classify intent. **Opus classifies automatically -- no AskUserQuestion needed** (exception: INPUT_TYPE=html with ambiguous signal -- ask).
+
+| Intent | Signals | Default GLM instruction |
+|--------|---------|------------------------|
+| `reproduce` | Polished mockup, "exact", "copy", "pixel-perfect", no modification language | "Reproduce this design as working code. Match every visual detail exactly." |
+| `creative` | "sketch", "wireframe", "rough", "make it look professional", "polish" | "This is a rough sketch. Create a polished, professional UI based on this layout. Use modern design, clean typography, harmonious colors." |
+| `enhance` | "add a", "include", "put a ... on", existing design + additions | "This is an existing design. Enhance it: {user request}. Keep all existing content intact." |
+| `modify` | "change", "update", "make darker", color/font/layout changes | "Modify this design: {user changes}. Keep everything else unchanged." |
+| `convert` | "to React", "to Flutter", "convert", INPUT_TYPE=html + different framework | "Convert this {source} to {FRAMEWORK}. Preserve visual appearance." |
+
+**Default:** `reproduce` (matches current behavior when no specific signals detected).
+
+Store as variables for later use:
+- `INTENT` -- one of: reproduce, creative, enhance, modify, convert
+- `GLM_INSTRUCTION` -- the instruction text (from table above, with placeholders filled from user prompt)
+
+> **Exception:** If INPUT_TYPE=html and no clear intent signal in prompt -- **ASK** using AskUserQuestion:
+> ```
+> HTML input detected. What would you like to do?
+> ```
+> Options:
+> - "Convert to {FRAMEWORK} (preserve appearance)"
+> - "Reproduce as clean HTML/CSS from scratch"
+> - "Use as reference -- create improved version"
+
 ### Step 2: Process Input by Type
 
 Based on `INPUT_TYPE` from parse-args.sh:
@@ -148,7 +177,34 @@ Options:
 HTML_FILE="HTML_PATH_HERE"
 [ -f "$HTML_FILE" ] && echo "HTML_VALID ($(wc -l < "$HTML_FILE" | tr -d ' ') lines)" || echo "HTML_MISSING"
 ```
-> **If HTML_VALID:** Will use glm-build-text-request.sh in Phase 2 instead of glm-build-request.sh.
+> **If HTML_VALID:** Attempt to screenshot the HTML for dual input (image + HTML source):
+
+**EXECUTE** using Bash tool:
+```bash
+HTML_FILE="HTML_PATH_HERE"
+npx playwright screenshot --full-page "file://$(cd "$(dirname "$HTML_FILE")" && pwd)/$(basename "$HTML_FILE")" /tmp/d2c-html-screenshot.png 2>&1 && echo "SCREENSHOT_OK" || echo "SCREENSHOT_FAILED"
+```
+
+> **If SCREENSHOT_OK:** Set `HTML_SCREENSHOT=/tmp/d2c-html-screenshot.png`, `DUAL_INPUT=true`. Will use `glm-build-request.sh` with both screenshot and HTML source.
+
+> **If SCREENSHOT_FAILED:** Try fallback:
+```bash
+command -v wkhtmltoimage >/dev/null 2>&1 && wkhtmltoimage --quality 90 --width 1440 "$HTML_FILE" /tmp/d2c-html-screenshot.png 2>&1 && echo "SCREENSHOT_OK" || echo "SCREENSHOT_FAILED"
+```
+
+> **If still FAILED:** Try Playwright MCP `browser_navigate` to `file://` URL + `browser_take_screenshot`.
+
+> **If all fail:**
+
+**ASK** using AskUserQuestion:
+```
+Could not screenshot the HTML file. Choose how to proceed:
+```
+Options:
+- "I'll provide a screenshot file" (ask for path, set DUAL_INPUT=true)
+- "Continue without screenshot (text-only)" (set DUAL_INPUT=false)
+
+> When `DUAL_INPUT=false`: Will use `glm-build-text-request.sh` (text-only with HTML content).
 
 #### If INPUT_TYPE=text
 The description text is in the IMAGE field. No validation needed -- will use glm-build-text-request.sh in Phase 2.
@@ -475,6 +531,9 @@ For custom framework: **ASK** user to describe their stack. Write to `/tmp/d2c-c
 | Profile | `{PROFILE}` (max_tokens={MAX_TOKENS}) | {--profile / default: max} |
 | Provider | `{PROVIDER}` | {--provider / default: zai} |
 | Model | `{MODEL}` | {--model / default for provider} |
+| Intent | `{INTENT}` | {auto-detected from prompt / default: reproduce} |
+| Instruction | `{first 80 chars of GLM_INSTRUCTION}...` | {formulated from intent + user prompt} |
+| Dual Input | `{yes/no}` | {HTML screenshotted / image only / text only} |
 | API Key | `{VAR_NAME}=***{last 4 chars}` | {prompt / .env / shell env} |
 | Output | `{OUTPUT}` | {--output / default: ./d2c-output} |
 
@@ -483,6 +542,18 @@ For custom framework: **ASK** user to describe their stack. Write to `/tmp/d2c-c
 
 ### Step 3: Build Request Payload
 
+Route to the correct script based on input type, dual input flag, and intent:
+
+| INPUT_TYPE | DUAL_INPUT | Script | Extra args |
+|------------|-----------|--------|------------|
+| image | N/A | `glm-build-request.sh` | `"$GLM_INSTRUCTION"` |
+| html | true | `glm-build-request.sh` | `"$GLM_INSTRUCTION" "$HTML_FILE"` |
+| html | false | `glm-build-text-request.sh` | `"$GLM_INSTRUCTION"` |
+| text | N/A | `glm-build-text-request.sh` | `"$GLM_INSTRUCTION"` |
+| url | N/A | `glm-build-request.sh` | `"$GLM_INSTRUCTION"` |
+
+**For INPUT_TYPE=image or url (or html with DUAL_INPUT=true):**
+
 **EXECUTE** using Bash tool:
 ```bash
 SD="${CLAUDE_SKILL_DIR}/scripts"
@@ -490,21 +561,26 @@ PROMPT="${CLAUDE_SKILL_DIR}/references/profile-PROFILE_HERE.md"
 CONTEXT="CONTEXT_PATH_OR_EMPTY"
 IMAGE="IMAGE_PATH_HERE"
 MODEL="MODEL_ID_HERE"
+GLM_INSTRUCTION="INSTRUCTION_HERE"
+HTML_SOURCE="HTML_FILE_OR_EMPTY"
 
-bash "$SD/glm-build-request.sh" "$IMAGE" "$PROMPT" "$CONTEXT" "$MODEL" MAX_TOKENS_HERE 0.2 0.85 > /tmp/d2c-payload.json && echo "PAYLOAD OK ($(wc -c < /tmp/d2c-payload.json | tr -d ' ') bytes)" || echo "PAYLOAD FAILED"
+bash "$SD/glm-build-request.sh" "$IMAGE" "$PROMPT" "$CONTEXT" "$MODEL" MAX_TOKENS_HERE 0.2 0.85 "$GLM_INSTRUCTION" "$HTML_SOURCE" > /tmp/d2c-payload.json && echo "PAYLOAD OK ($(wc -c < /tmp/d2c-payload.json | tr -d ' ') bytes)" || echo "PAYLOAD FAILED"
 ```
 
-Replace all placeholders with actual values.
+Replace all placeholders with actual values. For non-dual HTML or non-HTML input, leave HTML_SOURCE empty ("").
 
-**For INPUT_TYPE=html or INPUT_TYPE=text:**
+**For INPUT_TYPE=html (DUAL_INPUT=false) or INPUT_TYPE=text:**
+
+**EXECUTE** using Bash tool:
 ```bash
 SD="${CLAUDE_SKILL_DIR}/scripts"
 PROMPT="${CLAUDE_SKILL_DIR}/references/profile-PROFILE_HERE.md"
 CONTEXT="CONTEXT_PATH_OR_EMPTY"
 INPUT="INPUT_VALUE_HERE"
 MODEL="MODEL_ID_HERE"
+GLM_INSTRUCTION="INSTRUCTION_HERE"
 
-bash "$SD/glm-build-text-request.sh" "$INPUT" "$PROMPT" "$CONTEXT" "$MODEL" MAX_TOKENS_HERE 0.2 0.85 > /tmp/d2c-payload.json && echo "PAYLOAD OK ($(wc -c < /tmp/d2c-payload.json | tr -d ' ') bytes)" || echo "PAYLOAD FAILED"
+bash "$SD/glm-build-text-request.sh" "$INPUT" "$PROMPT" "$CONTEXT" "$MODEL" MAX_TOKENS_HERE 0.2 0.85 "$GLM_INSTRUCTION" > /tmp/d2c-payload.json && echo "PAYLOAD OK ($(wc -c < /tmp/d2c-payload.json | tr -d ' ') bytes)" || echo "PAYLOAD FAILED"
 ```
 
 > For text input, INPUT is the description string. For HTML input, INPUT is the file path.

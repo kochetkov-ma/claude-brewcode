@@ -1,6 +1,6 @@
 #!/bin/sh
 # glm-build-text-request.sh — Build JSON request payload for GLM text API (no image)
-# Usage: glm-build-text-request.sh <user_text_or_file> <prompt_file> [context_file] [model] [max_tokens] [temperature] [top_p]
+# Usage: glm-build-text-request.sh <user_text_or_file> <prompt_file> [context_file] [model] [max_tokens] [temperature] [top_p] [instruction]
 # Output: JSON payload to stdout
 # Requires: jq
 
@@ -13,21 +13,34 @@ MODEL="${4:-glm-5v-turbo}"
 MAX_TOKENS="${5:-32768}"
 TEMPERATURE="${6:-0.2}"
 TOP_P="${7:-0.85}"
+CUSTOM_INSTRUCTION="${8:-}"
 
 command -v jq >/dev/null 2>&1 || { echo "ERROR: jq is required" >&2; exit 1; }
 [ -f "$PROMPT_FILE" ] || { echo "ERROR: Prompt not found: $PROMPT_FILE" >&2; exit 1; }
 
 SYSTEM_TEXT=$(cat "$PROMPT_FILE")
 
-# If USER_INPUT is a file path, read its content
-if [ -f "$USER_INPUT" ]; then
-  USER_TEXT="Convert this code to working frontend code files:
+# If CUSTOM_INSTRUCTION is set, use it as prefix; otherwise use defaults
+if [ -n "$CUSTOM_INSTRUCTION" ]; then
+  if [ -f "$USER_INPUT" ]; then
+    USER_TEXT="${CUSTOM_INSTRUCTION}
 
 $(cat "$USER_INPUT")"
-else
-  USER_TEXT="Create working frontend code files based on this description:
+  else
+    USER_TEXT="${CUSTOM_INSTRUCTION}
 
 $USER_INPUT"
+  fi
+else
+  if [ -f "$USER_INPUT" ]; then
+    USER_TEXT="Convert this code to working frontend code files:
+
+$(cat "$USER_INPUT")"
+  else
+    USER_TEXT="Create working frontend code files based on this description:
+
+$USER_INPUT"
+  fi
 fi
 
 if [ -n "$CONTEXT_FILE" ] && [ -f "$CONTEXT_FILE" ]; then
@@ -37,10 +50,15 @@ if [ -n "$CONTEXT_FILE" ] && [ -f "$CONTEXT_FILE" ]; then
 ${CONTEXT_TEXT}"
 fi
 
+# Write user text to temp file (ARG_MAX safety for large HTML files)
+TMPUSER=$(mktemp)
+trap "rm -f '$TMPUSER'" EXIT
+printf '%s' "$USER_TEXT" > "$TMPUSER"
+
 jq -n \
   --arg model "$MODEL" \
   --arg system "$SYSTEM_TEXT" \
-  --arg user_text "$USER_TEXT" \
+  --rawfile user_text "$TMPUSER" \
   --argjson max_tokens "$MAX_TOKENS" \
   --argjson temperature "$TEMPERATURE" \
   --argjson top_p "$TOP_P" \
@@ -50,13 +68,7 @@ jq -n \
     top_p: $top_p,
     max_tokens: $max_tokens,
     messages: [
-      {
-        role: "system",
-        content: $system
-      },
-      {
-        role: "user",
-        content: $user_text
-      }
+      { role: "system", content: $system },
+      { role: "user", content: ($user_text | rtrimstr("\n")) }
     ]
   }'

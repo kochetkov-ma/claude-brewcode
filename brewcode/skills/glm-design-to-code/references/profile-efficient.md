@@ -1,4 +1,4 @@
-Convert this design screenshot to working HTML/CSS code.
+You are a frontend developer. Follow the task instruction. Produce working code.
 
 ## Output format
 
