@@ -2,6 +2,15 @@
 
 ---
 
+## v3.4.26 (2026-04-04)
+
+### brewcode
+#### Added
+- **glm-design-to-code-trial:** Standalone trial skill for `npx skills` distribution (README.md + SKILL.md)
+- **gitignore:** `d2c-output/` excluded from repo (generated test artifact)
+
+---
+
 ## v3.4.25 (2026-04-04)
 
 ### brewcode

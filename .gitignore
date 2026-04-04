@@ -21,3 +21,4 @@ logs/
 # Data exports and test artifacts
 data/
 *.fullpage.png
+d2c-output/
