@@ -36,7 +36,7 @@ Converts design inputs (screenshots, text descriptions, HTML files, URLs) to wor
 
 | Mode | Flow |
 |------|------|
-| CREATE | Phase 0 → 0.5 → 1 → 2 → 3 → 4 → 5 (if --review) |
+| CREATE | Phase 0 → 0.5 → 1 → 2 → 3 (with auto-fix) → 4 (mandatory verify) → 5 (if --review) |
 | REVIEW | Phase 0 → 0.5 → 1 → 5 |
 | FIX | Phase 0 → 0.5 → 1 → 6 |
 
@@ -609,17 +609,35 @@ FINISH=$(jq -r '.choices[0].finish_reason' /tmp/d2c-response.json)
 
 ## Phase 3: Extract and Build
 
-### Step 1: Extract Files
+### Step 1: Extract and Validate Files
 
 **EXECUTE** using Bash tool:
 ```bash
 SD="${CLAUDE_SKILL_DIR}/scripts"
 OUTPUT="OUTPUT_DIR_HERE"
 mkdir -p "$OUTPUT"
-bash "$SD/glm-extract.sh" /tmp/d2c-response.json "$OUTPUT" && echo "EXTRACT OK" || echo "EXTRACT FAILED"
+bash "$SD/glm-extract.sh" /tmp/d2c-response.json "$OUTPUT"
+EXIT_CODE=$?
+echo "EXIT_CODE=$EXIT_CODE"
+[ $EXIT_CODE -eq 0 ] && echo "EXTRACT OK" || [ $EXIT_CODE -eq 1 ] && echo "EXTRACT PARTIAL" || echo "EXTRACT FAILED"
 ```
 
-> **STOP if FAILED** -- check response content.
+**Handle exit codes:**
+- `0` (OK) → continue to Step 2
+- `1` (partial) → Claude Code reads `/tmp/d2c-response.json` raw content using Read tool and manually extracts missing files using Write tool. Look for code blocks, `===FILE:` markers, or inline code that the script missed
+- `2` (fail) → Claude Code reads `/tmp/d2c-response.json` and extracts ALL files manually
+
+**Validate key files exist** (framework-dependent):
+
+| Framework | Required file(s) |
+|-----------|------------------|
+| React | `src/main.jsx` or `src/App.jsx` + `package.json` |
+| Flutter | `lib/main.dart` + `pubspec.yaml` |
+| HTML | `index.html` |
+
+If required files are missing → read `/tmp/d2c-response.json` with Read tool, find the code, write files with Write tool.
+
+> **STOP only if response.json contains no usable code at all.**
 
 ### Step 2: List Extracted Files
 
@@ -634,30 +652,63 @@ echo "=== Total ==="
 find "$OUTPUT" -type f | wc -l | tr -d ' '
 ```
 
-### Step 3: Build (framework-specific)
+### Step 3: Build and Auto-Fix
 
-**React:**
-```bash
-OUTPUT="OUTPUT_DIR_HERE"
-cd "$OUTPUT" && npm install 2>&1 | tail -5 && npx vite build 2>&1 | tail -10 && echo "BUILD OK" || echo "BUILD FAILED"
+#### Step 3a: Build
+
+Claude Code determines the framework from extracted files and builds the project:
+- Analyze file structure (package.json → Node/React, pubspec.yaml → Flutter, index.html without bundler deps → static HTML)
+- Install dependencies if needed
+- Run the appropriate build tool
+- Create any missing config files required for build
+
+> Do NOT hardcode specific build commands — Claude Code knows how to build any stack. Analyze the actual project files and choose the right approach.
+
+Build log → `/tmp/d2c-build-log.txt`. If build succeeds → go to Phase 4. If build fails → Step 3b.
+
+**HTML framework:** No build step needed — skip directly to Phase 4.
+
+#### Step 3b: Auto-Fix (max 3 attempts)
+
+> **Claude Code fixes build errors directly — NO external API calls, NO GLM requests.**
+
+Claude Code reads the build output, diagnoses compilation/build errors, and applies MINIMAL fixes.
+
+**RULES:**
+- ONLY fix compilation/build errors
+- Do NOT change design, colors, layout, fonts, spacing
+- Do NOT refactor or rename anything
+- Do NOT add functionality
+- Each fix = smallest possible change
+
+**Typical patterns** (hints, NOT exhaustive — Claude Code diagnoses from actual errors):
+- Missing import/dependency → add it
+- Syntax error → fix syntax
+- Unresolved reference → create stub or fix name
+- Incompatible API → replace with compatible equivalent
+- Missing config/entry file → create minimal version
+
+After applying fixes: increment ATTEMPT counter. If ATTEMPT ≤ 3 → go back to Step 3a. If ATTEMPT > 3 → STOP, report full error log to user.
+
+#### Step 3c: Report Build Result
+
+```markdown
+## Build Result
+
+| Metric | Value |
+|--------|-------|
+| Build attempts | {N} |
+| Fixes applied | {list of fixes} |
+| Final status | OK / FAILED |
 ```
 
-**Flutter:**
-```bash
-OUTPUT="OUTPUT_DIR_HERE"
-cd "$OUTPUT" && flutter pub get 2>&1 | tail -5 && flutter build web 2>&1 | tail -10 && echo "BUILD OK" || echo "BUILD FAILED"
-```
-
-**HTML:** No build step needed.
-
-> **If BUILD FAILED:** Read error output. Common fixes:
-> - React: missing dependencies in package.json, JSX syntax errors
-> - Flutter: missing pubspec.yaml deps, Dart syntax errors
-> Apply fixes using Edit tool, then retry build (max 3 attempts).
+> **If FAILED after 3 attempts:** Include full last build error log so user can diagnose manually.
 
 ---
 
-## Phase 4: Verify (Optional)
+## Phase 4: Verify (Mandatory for CREATE mode)
+
+> **Required** for CREATE mode. Skip only if Playwright is completely unavailable.
 
 ### Step 1: Serve and Screenshot
 
@@ -668,13 +719,42 @@ OUTPUT="OUTPUT_DIR_HERE"
 bash "$SD/glm-verify.sh" "$OUTPUT" 8900
 ```
 
-This outputs a URL. Take a screenshot using Playwright:
+This outputs a URL. Take a screenshot with framework-appropriate timeout:
 
+| Framework | Timeout | Reason |
+|-----------|---------|--------|
+| HTML | (none) | Static content, loads instantly |
+| React | `--wait-for-timeout=3000` | Vite dev server + React hydration |
+| Flutter | `--wait-for-timeout=8000` | Flutter web engine initialization |
+
+**EXECUTE** using Bash tool:
 ```bash
-npx playwright screenshot --full-page http://localhost:8900/ /tmp/d2c-result-screenshot.png && echo "SCREENSHOT OK" || echo "SCREENSHOT FAILED"
+FRAMEWORK="FRAMEWORK_HERE"
+TIMEOUT_FLAG=""
+[ "$FRAMEWORK" = "react" ] && TIMEOUT_FLAG="--wait-for-timeout=3000"
+[ "$FRAMEWORK" = "flutter" ] && TIMEOUT_FLAG="--wait-for-timeout=8000"
+npx playwright screenshot --full-page $TIMEOUT_FLAG http://localhost:8900/ /tmp/d2c-result-screenshot.png 2>&1 && echo "SCREENSHOT OK" || echo "SCREENSHOT FAILED"
 ```
 
-### Step 2: Cleanup Server
+> **If SCREENSHOT FAILED:** Double the timeout and retry once:
+```bash
+FRAMEWORK="FRAMEWORK_HERE"
+TIMEOUT_FLAG=""
+[ "$FRAMEWORK" = "react" ] && TIMEOUT_FLAG="--wait-for-timeout=6000"
+[ "$FRAMEWORK" = "flutter" ] && TIMEOUT_FLAG="--wait-for-timeout=16000"
+[ "$FRAMEWORK" = "html" ] && TIMEOUT_FLAG="--wait-for-timeout=3000"
+npx playwright screenshot --full-page $TIMEOUT_FLAG http://localhost:8900/ /tmp/d2c-result-screenshot.png 2>&1 && echo "SCREENSHOT OK" || echo "SCREENSHOT FAILED"
+```
+> If still failed → skip screenshot, report URL for manual check.
+
+### Step 2: Validate Screenshot Content
+
+Read the screenshot using Read tool and verify it is not a blank/white page.
+
+**If blank page detected:**
+Report to user: "Build succeeded but page renders blank — possible runtime error. Check browser console at http://localhost:8900/"
+
+### Step 3: Cleanup Server
 
 ```bash
 bash "${CLAUDE_SKILL_DIR}/scripts/glm-verify.sh" --kill && echo "SERVER STOPPED"
@@ -874,7 +954,7 @@ Follow Phase 4 steps to serve, screenshot, and compare.
 | API key missing | "Set `ZAI_API_KEY` or `OPENROUTER_API_KEY` env var." STOP |
 | API returns error | Show error, suggest retry or switch provider |
 | Response truncated | Warn user, suggest `efficient` profile for smaller output |
-| Build fails | Read errors, attempt fix (max 3), report remaining issues |
+| Build fails | Auto-fix loop: Claude Code reads build errors, applies minimal compilation-only fixes (imports, syntax, references, config), retries build (max 3 attempts). Reports all fixes applied. If 3 attempts fail → show full error log to user |
 | Playwright not available | Skip screenshot, report URL for manual check |
 
 ---
