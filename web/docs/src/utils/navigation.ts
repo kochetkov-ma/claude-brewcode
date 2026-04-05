@@ -40,6 +40,7 @@ export const navigation: NavSection[] = [
           { title: 'agents', slug: 'brewcode/skills/agents' },
           { title: 'e2e', slug: 'brewcode/skills/e2e' },
           { title: 'glm-design-to-code', slug: 'brewcode/skills/glm-design-to-code' },
+          { title: 'debate', slug: 'brewcode/skills/debate' },
         ],
       },
       {

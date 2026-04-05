@@ -259,7 +259,7 @@ Skill writes mode → state file → hooks inject on every event
 
 ---
 
-## Brewcode Skills (12)
+## Brewcode Skills (14)
 
 | Skill | Purpose |
 |-------|---------|
@@ -275,6 +275,7 @@ Skill writes mode → state file → hooks inject on every event
 | `/brewcode:convention` | Extract etalon classes, patterns, architecture into convention docs + rules |
 | `/brewcode:agents` | Interactive agent creation and improvement |
 | `/brewcode:teams` | Create and manage dynamic teams of domain-specific agents |
+| `/brewcode:debate` | Evidence-based multi-agent debate: Discovery phase researches codebase + web before every debate. Challenge, Strategy, Critic modes |
 | `/brewcode:teardown` | Remove plugin configuration (keeps task data) |
 
 ## Brewtools Skills (3)

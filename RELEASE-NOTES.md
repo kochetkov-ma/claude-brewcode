@@ -2,6 +2,14 @@
 
 ---
 
+## v3.4.28 (2026-04-05)
+
+### brewcode
+#### Added
+- **debate:** New `/brewcode:debate` skill — evidence-based multi-agent debate orchestration with Discovery phase (parallel codebase + web research before every debate), 3 modes (Challenge, Strategy, Critic), dynamic agent generation (2-5 agents), mandatory source citations for all arguments, sequential debates with JSONL logging, secretary summaries, and judge decisions
+
+---
+
 ## v3.4.26 (2026-04-04)
 
 ### brewcode
