@@ -4,6 +4,8 @@
 
 ## v3.4.28 (2026-04-05)
 
+> Docs: [debate](https://doc-claude.brewcode.app/brewcode/skills/debate/)
+
 ### brewcode
 #### Added
 - **debate:** New `/brewcode:debate` skill — evidence-based multi-agent debate orchestration with Discovery phase (parallel codebase + web research before every debate), 3 modes (Challenge, Strategy, Critic), dynamic agent generation (2-5 agents), mandatory source citations for all arguments, sequential debates with JSONL logging, secretary summaries, and judge decisions
@@ -11,6 +13,8 @@
 ---
 
 ## v3.4.26 (2026-04-04)
+
+> Docs: [glm-design-to-code](https://doc-claude.brewcode.app/brewcode/skills/glm-design-to-code/)
 
 ### brewcode
 #### Added
@@ -20,6 +24,8 @@
 ---
 
 ## v3.4.25 (2026-04-04)
+
+> Docs: [glm-design-to-code](https://doc-claude.brewcode.app/brewcode/skills/glm-design-to-code/)
 
 ### brewcode
 #### Added
@@ -38,6 +44,8 @@
 
 ## v3.4.24 (2026-04-03)
 
+> Docs: [glm-design-to-code](https://doc-claude.brewcode.app/brewcode/skills/glm-design-to-code/)
+
 ### brewcode
 #### Changed
 - **glm-design-to-code:** Removed `disable-model-invocation` — skill now auto-triggers on natural phrases ("convert screenshot to code", "turn design into React")
@@ -49,6 +57,8 @@
 ---
 
 ## v3.4.23 (2026-04-03)
+
+> Docs: [glm-design-to-code](https://doc-claude.brewcode.app/brewcode/skills/glm-design-to-code/)
 
 ### brewcode
 #### Fixed
