@@ -99,4 +99,10 @@ export const navigation: NavSection[] = [
       { title: 'Guide', slug: 'brewdoc/guide' },
     ],
   },
+  {
+    title: 'Legal',
+    items: [
+      { title: 'License', slug: 'license' },
+    ],
+  },
 ];
