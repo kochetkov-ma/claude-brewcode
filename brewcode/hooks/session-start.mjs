@@ -20,11 +20,13 @@
  *
  * Cleanup: /brewcode:teardown removes .claude/plans/ directory
  */
-import { readStdin, output, log, getActiveTaskPath, getLock, getActiveMode } from './lib/utils.mjs';
+import { readStdin, output, log, getActiveTaskPath, getLock, getActiveMode, getState, saveState } from './lib/utils.mjs';
 import { readFileSync, readdirSync, statSync, mkdirSync, symlinkSync, unlinkSync, existsSync } from 'fs';
 import { execFileSync } from 'child_process';
 import { join, dirname } from 'path';
 import { homedir } from 'os';
+
+const VERSION_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 const PLAN_FRESHNESS_MS = 60_000;
 
@@ -107,10 +109,26 @@ async function checkLatestVersion(pluginRoot, cwd, sessionId) {
     }
     log('debug', '[version]', `Local brewcode: ${local}`, cwd, sessionId);
 
+    // Check 24h TTL cache
+    const state = getState(cwd);
+    const cache = state._versionCache?.brewcode;
+    if (cache?.remote && cache?.checkedAt) {
+      const age = Date.now() - new Date(cache.checkedAt).getTime();
+      if (age < VERSION_CACHE_TTL_MS) {
+        log('debug', '[version]', `Using cached brewcode remote=${cache.remote} (age=${Math.round(age / 60000)}m)`, cwd, sessionId);
+        return { updateAvailable: isNewer(cache.remote, local), local, remote: cache.remote };
+      }
+    }
+
     const url = 'https://api.github.com/repos/kochetkov-ma/claude-brewcode/releases/latest';
     const data = await fetchJson(url, 1000);
     if (!data) {
       log('debug', '[version]', `GitHub API fetch failed (timeout or error)`, cwd, sessionId);
+      // Fallback to stale cache if available
+      if (cache?.remote) {
+        log('debug', '[version]', `Falling back to stale cache: remote=${cache.remote}`, cwd, sessionId);
+        return { updateAvailable: isNewer(cache.remote, local), local, remote: cache.remote };
+      }
       return { updateAvailable: false, local, remote: null, remoteFailed: true };
     }
 
@@ -119,6 +137,12 @@ async function checkLatestVersion(pluginRoot, cwd, sessionId) {
       log('debug', '[version]', `GitHub tag_name missing: ${JSON.stringify(data.tag_name)}`, cwd, sessionId);
       return { updateAvailable: false, local, remote: null, remoteFailed: true };
     }
+
+    // Update cache
+    const updatedState = getState(cwd);
+    updatedState._versionCache = updatedState._versionCache || {};
+    updatedState._versionCache.brewcode = { remote, checkedAt: new Date().toISOString() };
+    saveState(cwd, updatedState);
 
     const result = { updateAvailable: isNewer(remote, local), local, remote };
     log('debug', '[version]', `brewcode: local=${local}, remote=${remote}, update=${result.updateAvailable}`, cwd, sessionId);
@@ -146,12 +170,34 @@ async function checkClaudeCodeVersion(cwd, sessionId) {
     }
     log('debug', '[version]', `Claude Code local: ${local}`, cwd, sessionId);
 
+    // Check 24h TTL cache
+    const state = getState(cwd);
+    const cache = state._versionCache?.claudeCode;
+    if (cache?.remote && cache?.checkedAt) {
+      const age = Date.now() - new Date(cache.checkedAt).getTime();
+      if (age < VERSION_CACHE_TTL_MS) {
+        log('debug', '[version]', `Using cached claude-code remote=${cache.remote} (age=${Math.round(age / 60000)}m)`, cwd, sessionId);
+        return { updateAvailable: isNewer(cache.remote, local), local, remote: cache.remote };
+      }
+    }
+
     const url = 'https://registry.npmjs.org/@anthropic-ai/claude-code/latest';
     const data = await fetchJson(url, 1000);
     if (!data?.version) {
       log('debug', '[version]', `npm fetch failed or no version in response`, cwd, sessionId);
+      // Fallback to stale cache if available
+      if (cache?.remote) {
+        log('debug', '[version]', `Falling back to stale cache: remote=${cache.remote}`, cwd, sessionId);
+        return { updateAvailable: isNewer(cache.remote, local), local, remote: cache.remote };
+      }
       return null;
     }
+
+    // Update cache
+    const updatedState = getState(cwd);
+    updatedState._versionCache = updatedState._versionCache || {};
+    updatedState._versionCache.claudeCode = { remote: data.version, checkedAt: new Date().toISOString() };
+    saveState(cwd, updatedState);
 
     const result = { updateAvailable: isNewer(data.version, local), local, remote: data.version };
     log('debug', '[version]', `Claude Code: local=${local}, remote=${data.version}, update=${result.updateAvailable}`, cwd, sessionId);

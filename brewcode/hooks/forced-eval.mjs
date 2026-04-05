@@ -21,54 +21,19 @@
  * }
  */
 
-import { existsSync, readFileSync } from 'fs';
-import { join } from 'path';
-
-// --- stdin/stdout helpers ---
-
-async function readStdin() {
-  const chunks = [];
-  for await (const chunk of process.stdin) {
-    chunks.push(chunk);
-  }
-  return JSON.parse(Buffer.concat(chunks).toString('utf8'));
-}
-
-function output(response) {
-  console.log(JSON.stringify(response));
-}
+import { readStdin, output, getActiveMode } from './lib/utils.mjs';
 
 // --- Skill evaluation reminder ---
 
 const SKILL_CHECK = '[SKILL?] Check available skills. If one matches, use Skill tool before responding.';
 const DEFAULT_MODE = '[DELEGATE] You are a MANAGER. Delegate implementation to sub-agents via Task tool. Never implement directly.';
 
-// NOTE: Mirrors getActiveMode() from lib/utils.mjs — kept inline to avoid import dependency.
-// utils.mjs version supports 3-scope resolution (CLAUDE_PLUGIN_DATA/modes.json: session > project > global).
-// This inline version only uses legacy state file fallback. Keep in sync if STATE_FILE path changes.
-function getModeReminder(cwd) {
-  if (!cwd) return `${SKILL_CHECK}\n${DEFAULT_MODE}`;
-
-  try {
-    const statePath = join(cwd, '.claude', 'tasks', 'cfg', 'brewcode.state.json');
-    if (!existsSync(statePath)) return `${SKILL_CHECK}\n${DEFAULT_MODE}`;
-
-    const state = JSON.parse(readFileSync(statePath, 'utf8'));
-    if (!state.mode) return `${SKILL_CHECK}\n${DEFAULT_MODE}`;
-
-    const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT || '';
-    if (!pluginRoot) return `${SKILL_CHECK}\n${DEFAULT_MODE}`;
-
-    const modePath = join(pluginRoot, 'modes', `${state.mode}.md`);
-    if (!existsSync(modePath)) return `${SKILL_CHECK}\n${DEFAULT_MODE}`;
-
-    const instructions = readFileSync(modePath, 'utf8').trim();
-    if (!instructions) return `${SKILL_CHECK}\n${DEFAULT_MODE}`;
-
-    return `${SKILL_CHECK}\n[MODE: ${state.mode}] ${instructions}`;
-  } catch {
-    return `${SKILL_CHECK}\n${DEFAULT_MODE}`;
+function getModeReminder(cwd, sessionId) {
+  const activeMode = getActiveMode(cwd, sessionId);
+  if (activeMode) {
+    return `${SKILL_CHECK}\n[MODE: ${activeMode.name}] ${activeMode.instructions}`;
   }
+  return `${SKILL_CHECK}\n${DEFAULT_MODE}`;
 }
 
 // --- Main ---
@@ -111,7 +76,7 @@ async function main() {
     }
 
     // Prepend skill-check reminder to prompt
-    const modifiedPrompt = `${getModeReminder(cwd)}\n\n---\n\n${prompt}`;
+    const modifiedPrompt = `${getModeReminder(cwd, session_id)}\n\n---\n\n${prompt}`;
 
     output({
       updatedInput: {

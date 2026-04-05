@@ -1,6 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
+command -v jq >/dev/null 2>&1 || { echo '{"decision":"block","reason":"jq is required for permission checks but not installed"}'; exit 0; }
+
 INPUT=$(cat)
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty')
 FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
