@@ -12,11 +12,6 @@ import { Card, CardGrid, Callout, Steps, Badge, Tabs, TabItem } from '../../../.
 Multi-agent debate orchestrator.
 Spawn 2-5 dynamic agents with unique characters, run structured debates, and produce judge-verified decisions. Three modes for different goals: select the best option, synthesize strategy, or find all weaknesses.
 
-<Callout type="tip">
-  **Research-First Debates -- Evidence, Not Opinions.**
-  Every debate begins with a **Discovery phase**: 2-3 agents research your codebase and the web in parallel *before* any argument starts. A Codebase Explorer searches for relevant code, patterns, and dependencies. Web Researchers find current best practices, official docs, and community discussions. All findings land in `discovery.md` with full sources (file paths, URLs). Every debate argument **must cite evidence** -- unsourced claims are challenged by the judge. This makes decisions grounded in real project code and current industry knowledge, not hallucinated reasoning.
-</Callout>
-
 <CardGrid>
   <Card title="CHALLENGE" icon="pencil">
     Generate or receive variants, debate to select the best one. Defenders argue FOR, critics attack. Outcome: selected variant with justification.
@@ -60,6 +55,26 @@ Spawn 2-5 dynamic agents with unique characters, run structured debates, and pro
 # Auto-detect mode from keywords
 /brewcode:debate "Which database should we pick for time-series data"
 ```
+
+## Discovery Phase
+
+**Every debate begins with evidence, not opinions.** Before any argument starts, 2-3 research agents run in parallel to build a shared evidence base. This makes decisions grounded in real project code and current industry knowledge, not hallucinated reasoning.
+
+<CardGrid>
+  <Card title="Codebase Explorer" icon="search">
+    Searches your project for relevant code, patterns, dependencies, and existing conventions. Finds what already exists before debating what should exist.
+  </Card>
+  <Card title="Web Researcher" icon="external">
+    Searches the internet for current best practices, official documentation, benchmarks, and community discussions. Brings external context into the debate.
+  </Card>
+  <Card title="Evidence Aggregation" icon="document">
+    Combines all findings into `discovery.md` with full sources -- file paths, URLs, code snippets. Every debate agent receives this as context.
+  </Card>
+</CardGrid>
+
+<Callout type="caution">
+  **Evidence mandate:** Every debate argument MUST reference findings from Discovery. Unsourced claims are challenged by the judge and do not count toward consensus.
+</Callout>
 
 ## Workflow
 
@@ -126,42 +141,37 @@ Spawn 2-5 dynamic agents with unique characters, run structured debates, and pro
   <TabItem label="Challenge">
     **Goal:** Select the best variant from multiple options.
 
-    **Agent Roles:**
-    - **Defenders** argue FOR their assigned variant(s)
-    - **Critics** attack all variants, probing weaknesses
+    **Agent Roles:** Defenders argue FOR their assigned variant(s); Critics attack all variants, probing weaknesses. Split: 2 agents = 1/1, 3 = 1/2, 4 = 2/2, 5 = 2/3.
 
-    **Role split by agent count:**
-
-    | Agents | Defenders | Critics |
-    |--------|-----------|---------|
-    | 2 | 1 | 1 |
-    | 3 | 1 | 2 |
-    | 4 | 2 | 2 |
-    | 5 | 2 | 3 |
-
-    **Flow:** Discovery agents research codebase and web first. Defenders present variants with evidence-backed arguments. Critics challenge each one citing counter-evidence. Multiple rounds until judge detects consensus or max rounds reached.
+    **Flow:**
+    1. After Discovery, defenders present variants with evidence-backed arguments
+    2. Critics challenge each variant citing counter-evidence
+    3. Multiple rounds until judge detects consensus or max rounds reached
 
     **Best for:** Technology choices, architecture decisions, comparing approaches, "A vs B" questions.
   </TabItem>
   <TabItem label="Strategy">
     **Goal:** Synthesize the strongest approach from independent proposals.
 
-    **Agent Roles:** All agents are **Strategists** with different archetypes.
+    **Agent Roles:** All agents are Strategists with different archetypes -- no defenders or critics.
 
-    **Four-phase flow:**
-    1. **Discovery** -- research agents gather evidence from codebase and web (parallel)
-    2. **Independent proposals** -- each agent formulates their approach using Discovery evidence, without seeing others (parallel thinking)
-    3. **Judge picks opening order** -- most divergent proposals go first to maximize productive tension
-    4. **Debate to converge** -- agents discuss, challenge, and synthesize, citing sources. Goal is convergence, not winner selection
+    **Flow:**
+    1. After Discovery, each agent formulates their approach independently (parallel thinking)
+    2. Judge picks opening order -- most divergent proposals go first
+    3. Agents discuss, challenge, and synthesize, citing sources
+    4. Goal is convergence, not winner selection
 
     **Best for:** Migration plans, system design, strategic decisions, "how should we approach X" questions.
   </TabItem>
   <TabItem label="Critic">
     **Goal:** Find every weakness, risk, and flaw in a given solution.
 
-    **Agent Roles:** All agents are **Critics** with different perspectives (operational, security, UX, financial, architectural).
+    **Agent Roles:** All agents are Critics with different perspectives (operational, security, UX, financial, architectural). No defender -- the target IS the document/plan/code.
 
-    **Flow:** Discovery agents research the codebase and web for relevant context first. No defender -- the document/plan/code IS the target. Each critic analyzes from their unique angle, citing evidence. Rounds build on previous findings. Judge consolidates into prioritized issue list with severity ratings.
+    **Flow:**
+    1. After Discovery, each critic analyzes from their unique angle, citing evidence
+    2. Rounds build on previous findings
+    3. Judge consolidates into prioritized issue list with severity ratings
 
     **Best for:** Code review, architecture review, plan validation, risk assessment, security audit.
   </TabItem>
@@ -187,19 +197,19 @@ Spawn 2-5 dynamic agents with unique characters, run structured debates, and pro
   <Card title="Operator" icon="wrench">
     Reliability-focused, operations-minded. "Who maintains this at 3 AM?" Argues from operational reality and incident response.
   </Card>
-  <Card title="Advocate" icon="heart">
+  <Card title="Advocate" icon="&#x2764;&#xFE0F;">
     User-centric, empathetic. "What does the end user experience?" Argues from UX, adoption, accessibility, learning curve.
   </Card>
-  <Card title="Economist" icon="document">
+  <Card title="Economist" icon="&#x1F4B0;">
     Cost-conscious, ROI-focused. "What's the total cost of ownership?" Argues with numbers, trade-off matrices, opportunity cost.
   </Card>
-  <Card title="Historian" icon="information">
+  <Card title="Historian" icon="&#x1F4DA;">
     Precedent-aware, pattern-matching. "We tried this in 2019 and it failed because..." Argues from past failures and case studies.
   </Card>
-  <Card title="Provocateur" icon="warning">
+  <Card title="Provocateur" icon="&#x1F525;">
     Contrarian, challenges consensus. "What if we're solving the wrong problem?" Reframes the debate, asks uncomfortable questions.
   </Card>
-  <Card title="Diplomat" icon="forward-slash">
+  <Card title="Diplomat" icon="&#x1F91D;">
     Consensus-seeking, synthesizing. "I hear both sides -- what if we combine..." Finds common ground, proposes compromises.
   </Card>
 </CardGrid>
@@ -244,6 +254,8 @@ Each debate turn is a single line in `debate-log.jsonl`:
 **Entry types:** `argument`, `counter`, `proposal`, `agree`, `question`, `redirect`
 
 ### Artifacts
+
+Each debate produces four files:
 
 | File | Content |
 |------|---------|
@@ -311,13 +323,6 @@ Each debate turn is a single line in `debate-log.jsonl`:
   - The judge (main session) can intervene mid-debate to redirect if agents go off-topic
 </Callout>
 
-## Key Design Decisions
-
-| Decision | Rationale |
-|----------|-----------|
-| Agent tool for debaters | Dynamic prompts with unique characters, no pre-defined agent files needed |
-| Sequential execution | Each agent sees previous entries for coherent argumentation |
-| JSONL shared state | Minimal tokens, scriptable, easy to parse and filter |
-| Bash scripts for I/O | Prevents malformed JSON, schema enforcement |
-| Judge = main session | No extra agent overhead, maintains full context |
-| Mode-specific flows | Progressive disclosure, token efficiency -- only load relevant flow |
+<Callout type="note">
+  **Design decisions:** Agent tool for dynamic prompts (no pre-defined files), sequential execution (each agent sees previous entries), JSONL shared state (minimal tokens, scriptable), Bash scripts for I/O (schema enforcement), judge as main session (full context, no overhead), mode-specific flows (token efficiency).
+</Callout>
