@@ -4,7 +4,7 @@ description: "Publish content to brewpage.app — text, markdown, JSON, or file.
 argument-hint: "<text|file_path|json> [--ttl N]"
 user-invocable: true
 allowed-tools: Read, Bash, AskUserQuestion, Glob
-model: sonnet
+model: haiku
 ---
 
 # brewdoc:publish

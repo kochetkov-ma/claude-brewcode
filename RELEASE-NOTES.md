@@ -8,10 +8,8 @@
 
 ### brewdoc
 #### Changed
-- **publish:** Merged `brewdoc:brewpage` into `brewdoc:publish` — atomic token handling, ownerToken never in conversation output
-- **publish:** Model upgraded haiku → sonnet
+- **publish:** Atomic token handling — ownerToken never in conversation output, saved directly to history file
 - **publish:** Namespace auto-suggestion generates meaningful slugs from content context (e.g. `api-docs`, `pricing`)
-- **publish:** Removed duplicate `brewdoc:brewpage` local skill
 
 ---
 
