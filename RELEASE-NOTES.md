@@ -2,13 +2,16 @@
 
 ---
 
-## v3.4.38 (2026-04-06)
+## v3.4.39 (2026-04-06)
 
 > Docs: [publish](https://doc-claude.brewcode.app/brewdoc/publish/)
 
 ### brewdoc
 #### Changed
-- **publish:** Namespace auto-suggestion now generates meaningful slugs from content context (e.g. `api-docs`, `pricing`) instead of truncated filenames
+- **publish:** Merged `brewdoc:brewpage` into `brewdoc:publish` — atomic token handling, ownerToken never in conversation output
+- **publish:** Model upgraded haiku → sonnet
+- **publish:** Namespace auto-suggestion generates meaningful slugs from content context (e.g. `api-docs`, `pricing`)
+- **publish:** Removed duplicate `brewdoc:brewpage` local skill
 
 ---
 
