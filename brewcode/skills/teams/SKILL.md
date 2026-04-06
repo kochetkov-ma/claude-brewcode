@@ -74,7 +74,7 @@ Output: `MODE:`, `TEAM_NAME:`, `PROMPT:` (optional). Store all three.
 
 ---
 
-## Mode: CREATE (4 phases)
+## Mode: CREATE (9 phases)
 
 ### C1: Project Analysis
 
@@ -185,6 +185,99 @@ Store as `DEFAULT_MODEL` (default: opus).
    > **STOP if FAIL** -- fix missing files before continuing.
 
 4. AskUserQuestion: final report + suggest running `/brewcode:teams status {TEAM_NAME}`
+
+### C5: Quorum Review
+
+Spawn 3 reviewer agents in ONE message via Task tool. Reviewers are domain experts matching the team's scope.
+
+| # | Agent | Focus |
+|---|-------|-------|
+| 1 | brewcode:reviewer | Instruction quality: clarity, imperative form, completeness, word budget |
+| 2 | brewcode:reviewer | Domain accuracy: correct scope, tool selection, model fit, description triggers |
+| 3 | brewcode:reviewer | Architecture: consistency across agents, no domain overlaps, proper Task Acceptance Protocol |
+
+Each reviewer reads ALL created agent files in `.claude/agents/` and outputs structured findings:
+
+```
+FILE: .claude/agents/{name}.md
+SEVERITY: critical/important/minor
+ISSUE: description
+FIX: suggested fix
+```
+
+### C6: Consensus Filter
+
+Compare findings from all 3 reviewers. Apply quorum threshold: **2/3 agreement** = confirmed.
+
+| Match criteria | Rule |
+|----------------|------|
+| Same file | Exact match |
+| Same area | +/- 5 lines or same section |
+| Same category | instruction/domain/architecture/trigger |
+
+| Outcome | Action |
+|---------|--------|
+| 2/3+ confirm | Mark as **confirmed**, keep severity from highest reporter |
+| 1/3 only | Log as **unconfirmed**, skip |
+| Minor severity (all reporters) | Log but **skip fix** |
+
+Output: confirmed findings list with severity (critical > important > minor).
+
+### C7: Verification
+
+Spawn 1 verification agent via Task tool:
+
+```
+Task(subagent_type="brewcode:reviewer", prompt="
+  Verify these findings against actual agent files. For each:
+  1. Read the agent file
+  2. Check if the issue actually exists
+  3. Mark: VERIFIED or FALSE_POSITIVE
+  {confirmed_findings}
+")
+```
+
+Filter out false positives. Final list = verified critical + important issues.
+
+### C8: Fix
+
+For each verified critical/important issue -- spawn agent-creator to fix:
+
+```
+Task(subagent_type="brewcode:agent-creator", prompt="
+  Fix this issue in {agent_file}:
+  ISSUE: {description}
+  FIX: {suggested_fix}
+  SEVERITY: {severity}
+  Read the file, apply the fix, validate.
+")
+```
+
+Batch fixes: up to 3 parallel per message. Minor issues are **skipped**.
+
+### C9: Re-verify
+
+Spawn verification agent to check all fixes:
+
+```
+Task(subagent_type="brewcode:reviewer", prompt="
+  Re-verify these fixes. For each:
+  1. Read the fixed agent file
+  2. Check the original issue is resolved
+  3. Check no regression introduced
+  Mark: FIXED or REGRESSION
+  {fixes_applied}
+")
+```
+
+| Outcome | Action |
+|---------|--------|
+| All FIXED | Pipeline complete, proceed to Epilogue |
+| REGRESSION found | Return to C8 for that file (max 2 cycles) |
+| Still failing after 2 cycles | Log as unresolved, proceed to Epilogue |
+
+> To skip the review pipeline: add `--skip-review` to create arguments.
+> To run review on existing team: `/brewcode:teams update {TEAM_NAME} --review`
 
 ---
 
