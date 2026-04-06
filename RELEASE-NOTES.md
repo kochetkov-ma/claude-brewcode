@@ -2,6 +2,16 @@
 
 ---
 
+## v3.4.36 (2026-04-06)
+
+### brewcode
+#### Fixed
+- **hooks:** `hooks.json` matcher `"Task"` changed to `"Task|Agent"` — pre-task.mjs and post-task.mjs now fire on Agent tool calls (renamed from Task in Claude Code ~v2.1.63)
+- **teams:** Agent template `agent-template.md` — trace-ops.sh calls made optional (1 attempt max, skip silently on failure). Agents no longer hang when `BC_PLUGIN_ROOT` is unavailable as shell env var
+- **teams:** `BC_PLUGIN_ROOT` usage clarified as prompt-injected plain text, not shell env var — agents instructed to read value from prompt context and substitute literally
+
+---
+
 ## v3.4.35 (2026-04-06)
 
 > Docs: [teams](https://doc-claude.brewcode.app/brewcode/skills/teams/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [guide](https://doc-claude.brewcode.app/brewdoc/guide/)

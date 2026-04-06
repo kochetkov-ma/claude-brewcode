@@ -6,13 +6,13 @@
   },
   "metadata": {
     "description": "Claude Code plugin suite: brewcode for infinite task execution and brewdoc for documentation tools",
-    "version": "3.4.35"
+    "version": "3.4.36"
   },
   "plugins": [
     {
       "name": "brewcode",
       "description": "Brewcode - full-featured development platform for Claude Code: infinite focus tasks, prompt optimization, skill/agent creation, quorum reviews, rules management",
-      "version": "3.4.35",
+      "version": "3.4.36",
       "category": "productivity",
       "keywords": [
         "brewcode",
@@ -46,7 +46,7 @@
     {
       "name": "brewdoc",
       "description": "Brewdoc - Claude Code documentation tools: auto-sync for skills/agents/rules, my-claude installation docs, memory optimization, md-to-pdf conversion",
-      "version": "3.4.35",
+      "version": "3.4.36",
       "category": "productivity",
       "keywords": [
         "brewdoc",
@@ -74,7 +74,7 @@
     {
       "name": "brewtools",
       "description": "Brewtools - universal utilities for Claude Code: text optimization, humanization, secrets scanning",
-      "version": "3.4.35",
+      "version": "3.4.36",
       "category": "productivity",
       "keywords": [
         "brewtools",
