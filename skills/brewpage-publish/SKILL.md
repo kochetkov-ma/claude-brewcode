@@ -53,7 +53,12 @@ Options:
 Reply with a number or your custom namespace (alphanumeric, 3-32 chars).
 ```
 
-Auto-suggest: for files — first 8 chars of filename (lowercase alphanumeric); for text — first meaningful words (lowercase alphanumeric, up to 8 chars).
+Auto-suggest: generate a **meaningful short slug** (3-16 chars, lowercase alphanumeric + hyphens) from content context:
+- File → topic/purpose of the file (e.g. `api-docs`, `login-page`, `report-q2`)
+- Text/HTML → main subject or title (e.g. `pricing`, `team-intro`, `changelog`)
+- JSON → data type or schema name (e.g. `user-config`, `metrics`)
+- Fallback → project name or directory name if content is ambiguous
+Never use random strings or truncated filenames — the slug should be human-readable and describe what's being published.
 
 Resolution:
 - `1`, `4`, or empty → `public`

@@ -2,6 +2,16 @@
 
 ---
 
+## v3.4.38 (2026-04-06)
+
+> Docs: [publish](https://doc-claude.brewcode.app/brewdoc/publish/)
+
+### brewdoc
+#### Changed
+- **publish:** Namespace auto-suggestion now generates meaningful slugs from content context (e.g. `api-docs`, `pricing`) instead of truncated filenames
+
+---
+
 ## v3.4.37 (2026-04-06)
 
 > Docs: [teams](https://doc-claude.brewcode.app/brewcode/skills/teams/) | [hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | [agents](https://doc-claude.brewcode.app/brewcode/agents/) | [auto-sync](https://doc-claude.brewcode.app/brewdoc/auto-sync/)
