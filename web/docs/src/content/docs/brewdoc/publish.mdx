@@ -27,36 +27,52 @@ and returns a public URL instantly. No sign-up, no configuration — just conten
 
 <Steps>
   <li>
-    <strong>Receive content</strong>
-    <p>The skill receives user input: inline text, a file path, or a JSON literal.</p>
+    <div>
+      <strong>Receive content</strong>
+      <p>The skill receives user input: inline text, a file path, or a JSON literal.</p>
+    </div>
   </li>
   <li>
-    <strong>Detect content type</strong>
-    <p>Content is classified as HTML (text/markdown), JSON (object or array), or File (local path). The type determines which API endpoint will be used.</p>
+    <div>
+      <strong>Detect content type</strong>
+      <p>Content is classified as HTML (text/markdown), JSON (object or array), or File (local path). The type determines which API endpoint will be used.</p>
+    </div>
   </li>
   <li>
-    <strong>Ask namespace</strong>
-    <p>An interactive prompt asks for a namespace — a short slug that becomes part of the URL (e.g. <code>brewpage.app/my-ns/abc123</code>).</p>
+    <div>
+      <strong>Ask namespace</strong>
+      <p>An interactive prompt asks for a namespace — a short slug that becomes part of the URL (e.g. <code>brewpage.app/my-ns/abc123</code>).</p>
+    </div>
   </li>
   <li>
-    <strong>Ask password</strong>
-    <p>Optionally set a password. Visitors will need to enter it before viewing the page. Leave empty for public access.</p>
+    <div>
+      <strong>Ask password</strong>
+      <p>Optionally set a password. Visitors will need to enter it before viewing the page. Leave empty for public access.</p>
+    </div>
   </li>
   <li>
-    <strong>Render content</strong>
-    <p>For text/markdown, the content is converted to HTML. JSON is formatted for display. Files are prepared for upload as-is.</p>
+    <div>
+      <strong>Render content</strong>
+      <p>For text/markdown, the content is converted to HTML. JSON is formatted for display. Files are prepared for upload as-is.</p>
+    </div>
   </li>
   <li>
-    <strong>Call API</strong>
-    <p>The skill sends a request to the appropriate brewpage.app endpoint: <code>POST /api/html</code>, <code>POST /api/json</code>, or <code>POST /api/files</code>.</p>
+    <div>
+      <strong>Call API</strong>
+      <p>The skill sends a request to the appropriate brewpage.app endpoint: <code>POST /api/html</code>, <code>POST /api/json</code>, or <code>POST /api/files</code>.</p>
+    </div>
   </li>
   <li>
-    <strong>Return URL</strong>
-    <p>The API responds with a public URL. The skill displays it immediately.</p>
+    <div>
+      <strong>Return URL</strong>
+      <p>The API responds with a public URL. The skill displays it immediately.</p>
+    </div>
   </li>
   <li>
-    <strong>Save owner token</strong>
-    <p>The owner token, namespace, page ID, and URL are appended to <code>.claude/brewpage-history.md</code> for future reference and deletion.</p>
+    <div>
+      <strong>Save owner token</strong>
+      <p>The owner token, namespace, page ID, and URL are appended to <code>.claude/brewpage-history.md</code> for future reference and deletion.</p>
+    </div>
   </li>
 </Steps>
 
