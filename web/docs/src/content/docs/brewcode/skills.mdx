@@ -4,7 +4,7 @@ description: "All 13 Brewcode skills: commands, parameters, examples"
 order: 11
 ---
 
-import { Card, CardGrid, Callout } from '../../../components/mdx';
+import { Card, CardGrid, Callout, Steps, Badge } from '../../../components/mdx';
 
 # Skills
 
@@ -72,6 +72,54 @@ the full task lifecycle -- from project analysis to standards review and E2E tes
   </Card>
 </CardGrid>
 
+## Lifecycle
+
+The recommended skill execution order for a full task cycle:
+
+<Steps>
+  <li>
+    <div>
+      <strong>Setup</strong>
+      <p>Analyze project, generate templates, check prerequisites. <a href="/brewcode/skills/setup/">setup</a></p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Spec</strong>
+      <p>Create specification through research and user interaction. <a href="/brewcode/skills/spec/">spec</a></p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Plan</strong>
+      <p>Create execution plan from SPEC with phases and dependencies. <a href="/brewcode/skills/plan/">plan</a></p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Start</strong>
+      <p>Execute task with infinite context -- automatic session handoff at context limits. <a href="/brewcode/skills/start/">start</a></p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Rules</strong>
+      <p>Sync learned knowledge to project rules for future sessions. <a href="/brewcode/skills/rules/">rules</a></p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Teardown</strong>
+      <p>Clean up plugin files when task is complete. <a href="/brewcode/skills/teardown/">teardown</a></p>
+    </div>
+  </li>
+</Steps>
+
+<Callout type="tip" title="Skill Management">
+  Use <a href="/brewcode/skills/skills/">/brewcode:skills</a> to list, create, or improve skills.
+  The <a href="/brewcode/agents/skill-creator/">Skill Creator</a> agent handles the creation process.
+</Callout>
+
 ## Skill dependencies
 
 ```
@@ -90,10 +138,24 @@ setup --> spec --> plan --> start --> rules
   a team adapted to your project's domains and architecture.
 </Callout>
 
-<Callout type="tip" title="Tip">
-  Skills <code>standards-review</code>, <code>skills</code>, and <code>agents</code> can be used
-  independently of the core cycle -- they require no prior setup.
-</Callout>
+## Independent Skills
+
+These skills work standalone -- no prior setup required:
+
+<CardGrid>
+  <Card title="standards-review" icon="check" href="/brewcode/skills/standards-review/">
+    Standards compliance review
+  </Card>
+  <Card title="skills" icon="puzzle" href="/brewcode/skills/skills/">
+    Skill management: list, create, improve
+  </Card>
+  <Card title="agents" icon="people" href="/brewcode/skills/agents/">
+    Agent creation and improvement
+  </Card>
+  <Card title="e2e" icon="check" href="/brewcode/skills/e2e/">
+    E2E testing orchestration
+  </Card>
+</CardGrid>
 
 <Callout type="note" title="Moved to Brewtools">
   Skills <code>text-optimize</code>, <code>text-human</code>, and <code>secrets-scan</code> have been
