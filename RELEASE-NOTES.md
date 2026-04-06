@@ -2,6 +2,21 @@
 
 ---
 
+## v3.4.42 (2026-04-06)
+
+> Docs: [publish](https://doc-claude.brewcode.app/brewdoc/publish/)
+
+### brewdoc
+#### Added
+- **publish:** Multi-file site upload support — directories and ZIP archives via `/api/sites` endpoint
+- **publish:** `--entry <filename>` argument for custom entry point override
+- **publish:** SITE content type with auto-detection (directory → ZIP + upload, `.zip` → direct upload)
+- **publish:** Entry file auto-detection: `--entry` flag > `index.html` > first `.html` alphabetically
+- **publish:** Site pre-publish stats showing file count, total size, and detected entry file
+- **publish:** History table extended with Type column (`html`, `json`, `file`, `site (N files)`)
+
+---
+
 ## v3.4.41 (2026-04-06)
 
 > Docs: [publish](https://doc-claude.brewcode.app/brewdoc/publish/)

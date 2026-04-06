@@ -1,7 +1,7 @@
 ---
 name: brewdoc:publish
-description: "Publish content to brewpage.app — text, markdown, JSON, or file. Asks namespace and password, returns public URL. Triggers: publish, share link, upload to brewpage, host page, brewpage, сделай публичную ссылку, опубликуй."
-argument-hint: "<text|file_path|json> [--ttl N]"
+description: "Publish content to brewpage.app — text, markdown, JSON, file, or multi-file site. Asks namespace and password, returns public URL. Triggers: publish, share link, upload to brewpage, host page, brewpage, publish site, upload site, upload directory, deploy site, сделай публичную ссылку, опубликуй."
+argument-hint: "<text|file_path|directory_path|zip_path> [--ttl N] [--entry filename]"
 user-invocable: true
 allowed-tools: Read, Bash, AskUserQuestion, Glob
 model: haiku
@@ -9,7 +9,7 @@ model: haiku
 
 # brewdoc:publish
 
-Publish content to **brewpage.app** — free instant hosting for HTML pages, JSON documents, and files. No sign-up required.
+Publish content to **brewpage.app** — free instant hosting for HTML pages, JSON documents, files, and multi-file sites. No sign-up required.
 
 ## Workflow
 
@@ -17,23 +17,38 @@ Publish content to **brewpage.app** — free instant hosting for HTML pages, JSO
 
 Extract from `$ARGUMENTS`:
 - `--ttl N` → TTL in days (default: `5`)
+- `--entry <filename>` → entry file for SITE uploads (default: auto-detect)
 - Remaining text → `content_arg`
 
 ### Step 2: Detect Content Type
 
 | Input | Type | API |
 |-------|------|-----|
-| `content_arg` is a path AND file exists (`test -f`) | FILE | `POST /api/files` (multipart) |
+| `content_arg` is a directory (`test -d`) | SITE | `POST /api/sites` (ZIP created from dir) |
+| `content_arg` ends with `.zip` AND file exists (`test -f`) | SITE | `POST /api/sites` (archive upload) |
+| `content_arg` is a file path AND file exists (`test -f`) | FILE | `POST /api/files` (multipart) |
 | `content_arg` starts with `{` or `[` | JSON | `POST /api/json` |
 | Anything else | HTML | `POST /api/html` (format=markdown) |
 
+SITE must be checked FIRST (before FILE) since directories and .zip files would also match `test -f`.
+
+For SITE (directory): count HTML files, total size, detect entry file.
+For SITE (ZIP): file size, entry override.
 For FILE: get file size and MIME type via Bash (`file --mime-type -b`).
 For TEXT/JSON: count characters.
 
 ### Step 3: Show Pre-Publish Stats
 
+For HTML/JSON/FILE:
 ```
 Content:  <type description> · <size> · <api endpoint>
+TTL:      <N> days
+```
+
+For SITE: detect entry file using priority: 1) `--entry` flag, 2) `index.html` exists, 3) first `.html` file alphabetically.
+```
+Content:  site · <N> files · <total_size> · POST /api/sites
+Entry:    <entry_file>
 TTL:      <N> days
 ```
 
@@ -106,8 +121,8 @@ if [ ! -f "$HISTORY_FILE" ]; then
 > Owner tokens allow update/delete. Keep this file private.
 > Delete: `curl -s -X DELETE "https://brewpage.app/api/{ns}/{id}" -H "X-Owner-Token: TOKEN"`
 
-| Date | URL | Owner Token | TTL |
-|------|-----|-------------|-----|
+| Date | URL | Owner Token | TTL | Type |
+|------|-----|-------------|-----|------|
 HEADER
 fi
 
@@ -125,7 +140,7 @@ URL=$(echo "$RESPONSE" | jq -r '.url // empty')
 TOKEN=$(echo "$RESPONSE" | jq -r '.ownerToken // empty')
 
 if [ -n "$URL" ]; then
-  [ -n "$TOKEN" ] && echo "| $(date '+%Y-%m-%d %H:%M') | [$URL]($URL) | \`$TOKEN\` | {ttl}d |" >> "$HISTORY_FILE"
+  [ -n "$TOKEN" ] && echo "| $(date '+%Y-%m-%d %H:%M') | [$URL]($URL) | \`$TOKEN\` | {ttl}d | html |" >> "$HISTORY_FILE"
   echo "OK $URL"
 else
   echo "FAILED: $RESPONSE"
@@ -143,8 +158,8 @@ if [ ! -f "$HISTORY_FILE" ]; then
 > Owner tokens allow update/delete. Keep this file private.
 > Delete: `curl -s -X DELETE "https://brewpage.app/api/{ns}/{id}" -H "X-Owner-Token: TOKEN"`
 
-| Date | URL | Owner Token | TTL |
-|------|-----|-------------|-----|
+| Date | URL | Owner Token | TTL | Type |
+|------|-----|-------------|-----|------|
 HEADER
 fi
 
@@ -157,7 +172,7 @@ URL=$(echo "$RESPONSE" | jq -r '.url // empty')
 TOKEN=$(echo "$RESPONSE" | jq -r '.ownerToken // empty')
 
 if [ -n "$URL" ]; then
-  [ -n "$TOKEN" ] && echo "| $(date '+%Y-%m-%d %H:%M') | [$URL]($URL) | \`$TOKEN\` | {ttl}d |" >> "$HISTORY_FILE"
+  [ -n "$TOKEN" ] && echo "| $(date '+%Y-%m-%d %H:%M') | [$URL]($URL) | \`$TOKEN\` | {ttl}d | json |" >> "$HISTORY_FILE"
   echo "OK $URL"
 else
   echo "FAILED: $RESPONSE"
@@ -175,8 +190,8 @@ if [ ! -f "$HISTORY_FILE" ]; then
 > Owner tokens allow update/delete. Keep this file private.
 > Delete: `curl -s -X DELETE "https://brewpage.app/api/{ns}/{id}" -H "X-Owner-Token: TOKEN"`
 
-| Date | URL | Owner Token | TTL |
-|------|-----|-------------|-----|
+| Date | URL | Owner Token | TTL | Type |
+|------|-----|-------------|-----|------|
 HEADER
 fi
 
@@ -188,8 +203,77 @@ URL=$(echo "$RESPONSE" | jq -r '.url // empty')
 TOKEN=$(echo "$RESPONSE" | jq -r '.ownerToken // empty')
 
 if [ -n "$URL" ]; then
-  [ -n "$TOKEN" ] && echo "| $(date '+%Y-%m-%d %H:%M') | [$URL]($URL) | \`$TOKEN\` | {ttl}d |" >> "$HISTORY_FILE"
+  [ -n "$TOKEN" ] && echo "| $(date '+%Y-%m-%d %H:%M') | [$URL]($URL) | \`$TOKEN\` | {ttl}d | file |" >> "$HISTORY_FILE"
   echo "OK $URL"
+else
+  echo "FAILED: $RESPONSE"
+fi
+```
+
+**Site (directory)** — **EXECUTE** using Bash tool:
+```bash
+HISTORY_FILE=".claude/brewpage-history.md"
+if [ ! -f "$HISTORY_FILE" ]; then
+  mkdir -p "$(dirname "$HISTORY_FILE")"
+  cat > "$HISTORY_FILE" <<'HEADER'
+# brewpage.app — Published Pages
+
+> Owner tokens allow update/delete. Keep this file private.
+> Delete: `curl -s -X DELETE "https://brewpage.app/api/sites/{ns}/{id}" -H "X-Owner-Token: TOKEN"`
+
+| Date | URL | Owner Token | TTL | Type |
+|------|-----|-------------|-----|------|
+HEADER
+fi
+
+TMPZIP=$(mktemp /tmp/brewpage-site-XXXXXX.zip)
+(cd "{directory_path}" && zip -r "$TMPZIP" .)
+RESPONSE=$(curl -s -X POST "https://brewpage.app/api/sites?ns={ns}&ttl={days}&entry={entry}" \
+  -H "User-Agent: ClaudeCode/1.0" \
+  {password_header} \
+  -F "archive=@$TMPZIP")
+rm -f "$TMPZIP"
+
+URL=$(echo "$RESPONSE" | jq -r '.link // empty')
+TOKEN=$(echo "$RESPONSE" | jq -r '.ownerToken // empty')
+FCOUNT=$(echo "$RESPONSE" | jq -r '.fileCount // "?"')
+
+if [ -n "$URL" ]; then
+  [ -n "$TOKEN" ] && echo "| $(date '+%Y-%m-%d %H:%M') | [$URL]($URL) | \`$TOKEN\` | {ttl}d | site ($FCOUNT files) |" >> "$HISTORY_FILE"
+  echo "OK $URL | Files: $FCOUNT"
+else
+  echo "FAILED: $RESPONSE"
+fi
+```
+
+**Site (ZIP file)** — **EXECUTE** using Bash tool:
+```bash
+HISTORY_FILE=".claude/brewpage-history.md"
+if [ ! -f "$HISTORY_FILE" ]; then
+  mkdir -p "$(dirname "$HISTORY_FILE")"
+  cat > "$HISTORY_FILE" <<'HEADER'
+# brewpage.app — Published Pages
+
+> Owner tokens allow update/delete. Keep this file private.
+> Delete: `curl -s -X DELETE "https://brewpage.app/api/sites/{ns}/{id}" -H "X-Owner-Token: TOKEN"`
+
+| Date | URL | Owner Token | TTL | Type |
+|------|-----|-------------|-----|------|
+HEADER
+fi
+
+RESPONSE=$(curl -s -X POST "https://brewpage.app/api/sites?ns={ns}&ttl={days}&entry={entry}" \
+  -H "User-Agent: ClaudeCode/1.0" \
+  {password_header} \
+  -F "archive=@{zip_file_path}")
+
+URL=$(echo "$RESPONSE" | jq -r '.link // empty')
+TOKEN=$(echo "$RESPONSE" | jq -r '.ownerToken // empty')
+FCOUNT=$(echo "$RESPONSE" | jq -r '.fileCount // "?"')
+
+if [ -n "$URL" ]; then
+  [ -n "$TOKEN" ] && echo "| $(date '+%Y-%m-%d %H:%M') | [$URL]($URL) | \`$TOKEN\` | {ttl}d | site ($FCOUNT files) |" >> "$HISTORY_FILE"
+  echo "OK $URL | Files: $FCOUNT"
 else
   echo "FAILED: $RESPONSE"
 fi
@@ -202,6 +286,13 @@ Replace `{password_header}` with `-H "X-Password: {pass}"` only when password wa
 **Success** (bash printed `OK {url}`):
 ```
 Published: {url from bash output}
+Owner token saved to .claude/brewpage-history.md
+```
+
+**Success for SITE** (bash printed `OK {url} | Files: {count}`):
+```
+Published site: {url from bash output}
+Entry: {entry_file} | Files: {count}
 Owner token saved to .claude/brewpage-history.md
 ```
 
@@ -219,3 +310,6 @@ Publish failed.
 - TTL default is `5` days.
 - Namespace must be alphanumeric (3-32 chars). Default: `public`.
 - To **delete** a published page, find the owner token in `.claude/brewpage-history.md` and use the delete command shown in that file's header.
+- Site uploads use `/api/sites` endpoint (supports ZIP archives and multi-file form uploads).
+- Entry file detection: `--entry` override > `index.html` > first `.html` alphabetically.
+- `User-Agent: ClaudeCode/1.0` header is included for site uploads.

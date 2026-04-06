@@ -6,7 +6,7 @@ auto-sync-type: doc
 
 # Publish (Brewpage)
 
-Publish text, markdown, JSON, or files to [brewpage.app](https://brewpage.app) and get a shareable public URL instantly. No sign-up required. Content is auto-deleted after the TTL expires (default 5 days).
+Publish text, markdown, JSON, files, or multi-file sites to [brewpage.app](https://brewpage.app) and get a shareable public URL instantly. No sign-up required. Content is auto-deleted after the TTL expires (default 5 days).
 
 ## Quick Start
 
@@ -23,8 +23,10 @@ The skill will ask for a namespace (URL slug) and optional password, then return
 | Text / Markdown | `"# Hello World"` | `/api/html` | Rendered as HTML via `format=markdown` |
 | JSON | `'{"key": "value"}'` | `/api/json` | Must start with `{` or `[` |
 | File | `report.pdf` | `/api/files` | Any local file (multipart upload) |
+| Site / Directory | `docs/mockups/v1/` | `/api/sites` | Creates ZIP, uploads all files, preserves relative links |
+| ZIP Archive | `site.zip` | `/api/sites` | Direct archive upload |
 
-All content types support `--ttl N` to set expiration in days.
+All content types support `--ttl N` to set expiration in days. Site uploads also support `--entry <filename>` to specify the entry point.
 
 ## Examples
 
@@ -45,6 +47,15 @@ All content types support `--ttl N` to set expiration in days.
 
 # Publish with a 30-day TTL for longer retention
 /brewdoc:publish architecture.html --ttl 30
+
+# Publish a directory as a multi-file site
+/brewdoc:publish docs/mockups/v1/
+
+# Publish a directory with custom entry point
+/brewdoc:publish docs/mockups/v1/ --entry hub.html
+
+# Publish a ZIP archive as a site
+/brewdoc:publish site-bundle.zip --entry index.html
 ```
 
 ### Common Mistakes
