@@ -108,9 +108,36 @@ The `update` mode uses this data to tune agent instructions, replace underperfor
 [C4] Framework Setup ---- team.md + trace.jsonl + verification
     |
     v
+[C5] Quorum Review ------ 3 domain expert reviewers in parallel
+    |
+    v
+[C6] Consensus Filter --- 2/3 quorum, skip minor issues
+    |
+    v
+[C7] Verification ------- cross-check confirmed findings vs actual files
+    |
+    v
+[C8] Fix ---------------- agent-creator fixes critical + important
+    |
+    v
+[C9] Re-verify ---------- check fixes, retry if regression (max 2 cycles)
+    |
+    v
 [E1] CLAUDE.md Update --- optional, user-confirmed
 [E2] Final Status ------- always runs STATUS
 ```
+
+## Review and Fix Pipeline (C5-C9)
+
+After agent creation, a quality pipeline validates the team:
+
+1. **Quorum Review (C5)** — 3 independent reviewer agents (domain experts matching the team) analyze every created agent in parallel: instruction quality, domain accuracy, tool selection, triggers, model fit
+2. **Consensus Filter (C6)** — issues confirmed by 2/3 reviewers pass quorum. Minor (cosmetic) issues are logged but skipped. Only critical and important proceed
+3. **Verification (C7)** — verification agent cross-checks each finding against actual agent files. False positives filtered. Severity: critical (broken) / important (degraded) / minor (cosmetic)
+4. **Fix (C8)** — agent-creator fixes critical and important issues. Minor skipped
+5. **Re-verify (C9)** — verification agent re-checks every fix. Regression goes back to Fix (max 2 cycles)
+
+> Skip with `--skip-review`. Run separately: `/brewcode:teams update <name> --review`
 
 ## Task Acceptance Protocol
 
