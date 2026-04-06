@@ -349,6 +349,8 @@ Coordinator checks: reports exist on disk?
 
 ### Report Templates
 
+> `BC_PLUGIN_ROOT` is injected as plain text at prompt top by pre-task.mjs hook. Read value from there and substitute literally. If missing — **stop with error:** `BC_PLUGIN_ROOT not in prompt context, cannot load report templates.`
+
 Use templates from `$BC_PLUGIN_ROOT/templates/reports/`:
 - `FINAL.md.template`
 - `summary.md.template`

@@ -24,6 +24,8 @@ Read file at `path`. Extract frontmatter fields: `auto-sync`, `auto-sync-date`, 
 
 ### Step 2: Load Instructions
 
+> `BD_PLUGIN_ROOT` is injected as plain text at prompt top by pre-task.mjs hook. Read value from there and substitute literally. If missing — **stop with error:** `BD_PLUGIN_ROOT not in prompt context, cannot load sync instructions.`
+
 **Always:** Read `$BD_PLUGIN_ROOT/skills/auto-sync/instructions/sync-{type}.md` for Verification Checklist and Research Directions.
 
 **If `auto-sync-override:` found in frontmatter:** Parse 3 optional fields that **augment or selectively override** the instruction file:

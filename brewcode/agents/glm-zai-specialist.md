@@ -94,6 +94,8 @@ tools: Read, Write, Edit, Bash, Glob, Grep
 
 ## Pipeline Scripts
 
+> `BC_PLUGIN_ROOT` is injected as plain text at prompt top by pre-task.mjs hook. Read value from there and substitute literally. If missing — **stop with error:** `BC_PLUGIN_ROOT not in prompt context, cannot access GLM scripts.`
+
 Scripts at `$BC_PLUGIN_ROOT/skills/glm-design-to-code/scripts/`:
 
 | Script | Purpose | Usage |

@@ -2,7 +2,28 @@
 
 ---
 
+## v3.4.37 (2026-04-06)
+
+> Docs: [teams](https://doc-claude.brewcode.app/brewcode/skills/teams/) | [hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | [agents](https://doc-claude.brewcode.app/brewcode/agents/) | [auto-sync](https://doc-claude.brewcode.app/brewdoc/auto-sync/)
+
+### brewcode
+#### Fixed
+- **agents:** Added `*_PLUGIN_ROOT` guard to `glm-zai-specialist`, `glm-openrouter-specialist`, `bc-coordinator` — stop with clear error if plugin root missing from prompt context
+- **docs:** CLAUDE.md Architecture table — matcher updated to `PreToolUse:Task|Agent`
+
+#### Changed
+- **rules:** `best-practice.md` — added release docs links requirement (#8), autonomous release flow (#9), plugin root guard pattern (#10)
+- **release process:** CLAUDE.md Version Sync — autonomous commit/push/deploy, mandatory `> Docs:` links in RELEASE-NOTES.md
+
+### brewdoc
+#### Fixed
+- **agents:** Added `BD_PLUGIN_ROOT` guard to `bd-auto-sync-processor` — stop with clear error if plugin root missing
+
+---
+
 ## v3.4.36 (2026-04-06)
+
+> Docs: [teams](https://doc-claude.brewcode.app/brewcode/skills/teams/) | [hooks](https://doc-claude.brewcode.app/brewcode/hooks/)
 
 ### brewcode
 #### Fixed

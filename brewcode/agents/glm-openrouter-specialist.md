@@ -150,6 +150,8 @@ Extract with: `$BC_PLUGIN_ROOT/skills/glm-design-to-code/scripts/glm-extract.sh 
 
 ## Available Scripts
 
+> `BC_PLUGIN_ROOT` is injected as plain text at prompt top by pre-task.mjs hook. Read value from there and substitute literally. If missing — **stop with error:** `BC_PLUGIN_ROOT not in prompt context, cannot access GLM scripts.`
+
 | Script | Path | Purpose |
 |--------|------|---------|
 | `glm-build-request.sh` | `$BC_PLUGIN_ROOT/skills/glm-design-to-code/scripts/` | Build JSON payload (image + prompt) |
