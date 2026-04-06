@@ -90,6 +90,48 @@ import { Card, CardGrid, Callout, Steps, Badge, Tabs, TabItem } from '../../../.
   </li>
 </Steps>
 
+## Review and Fix Pipeline
+
+After agents are created, a quality pipeline validates and hardens the team:
+
+<Steps>
+  <li>
+    <div>
+      <strong>Quorum Review</strong> <Badge variant="secondary" text="C5" />
+      <p>3 independent reviewer agents (domain experts matching the team's scope) analyze every created agent in parallel. Each reviewer checks: instruction quality, domain accuracy, tool selection, description triggers, model fit.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Consensus Filter</strong> <Badge variant="secondary" text="C6" />
+      <p>Issues confirmed by 2/3 reviewers pass the quorum threshold. Minor issues (style, cosmetic) are logged but skipped. Only critical and important findings proceed.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Verification</strong> <Badge variant="secondary" text="C7" />
+      <p>An additional verification agent cross-checks each confirmed finding against the actual agent file. False positives are filtered out. Verified issues get a severity tag: critical (broken), important (degraded), minor (cosmetic).</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Fix</strong> <Badge variant="secondary" text="C8" />
+      <p>agent-creator fixes all critical and important verified issues. Minor issues are skipped. Each fix is applied to the agent file directly.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Re-verify</strong> <Badge variant="secondary" text="C9" />
+      <p>Verification agent re-checks every fix. If a fix introduced a regression, it goes back to the Fix step (max 2 cycles). Only after clean re-verification does the pipeline complete.</p>
+    </div>
+  </li>
+</Steps>
+
+<Callout type="tip" title="Pipeline Control">
+  The review pipeline runs automatically after agent creation. To skip it, use <code>--skip-review</code>.
+  To run it separately on an existing team: <code>/brewcode:teams update &lt;name&gt; --review</code>.
+</Callout>
+
 ## Task Acceptance Protocol
 
 <CardGrid>
