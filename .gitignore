@@ -20,5 +20,7 @@ logs/
 
 # Data exports and test artifacts
 data/
-*.fullpage.png
+*.png
+!web/docs/public/og/*.png
 d2c-output/
+.playwright-mcp/
