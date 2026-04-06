@@ -3,7 +3,7 @@ title: "Skills"
 description: "Skill management - list, improve, create skills with activation optimization."
 order: 1113
 ---
-import { Badge } from '../../../../components/mdx';
+import { Badge, Callout } from '../../../../components/mdx';
 
 # Skills
 
@@ -20,6 +20,10 @@ import { Badge } from '../../../../components/mdx';
 | Tools | Read, Write, Edit, Glob, Grep, Bash, Task, WebSearch, WebFetch, AskUserQuestion |
 
 > **Skill Management:** List, improve, create skills with activation optimization.
+
+<Callout type="note" title="Related">
+  This skill orchestrates the <a href="/brewcode/agents/skill-creator/">Skill Creator</a> agent. The skill handles discovery, user interaction, review, and E2E testing. The agent handles creation, validation, unit tests, and README generation.
+</Callout>
 
 ## Phase 1: Parse arguments
 
@@ -54,18 +58,18 @@ List all skills (global, project, plugin).
 
 **EXECUTE** using Bash tool:
 ```bash
-bash "scripts/list-skills.sh" && echo "list ok" || echo "list FAILED"
+bash "${CLAUDE_SKILL_DIR}/scripts/list-skills.sh" && echo "list ok" || echo "list FAILED"
 ```
 
 > **STOP if FAILED** -- verify skill base directory is resolved and scripts exist.
 
 ---
 
-## Mode: up
+## Mode: create / up (Unified Flow)
 
-Improve skill(s) via skill-creator agent.
+Both `create` and `up` follow Phases 0--6. Differences noted per phase.
 
-### Step 1: Resolve target
+### Prerequisite (up only): Resolve Target
 
 | Target type | Resolution |
 |-------------|------------|
@@ -73,211 +77,180 @@ Improve skill(s) via skill-creator agent.
 | Path (`~/.claude/skills/commit/SKILL.md`) | Use directly |
 | Folder (`~/.claude/skills/`) | Find all `*/SKILL.md` in folder |
 
-**EXECUTE** using Bash tool -- resolve target:
+**EXECUTE** using Bash tool:
 ```bash
 TARGET="$ARGUMENTS"
-# Remove "up " prefix if present (explicit mode), else use as-is (shorthand)
 if [[ "$TARGET" == up\ * ]] || [[ "$TARGET" == "up" ]]; then
-  TARGET="${TARGET#up }"
-  TARGET="${TARGET#up}"
+  TARGET="${TARGET#up }"; TARGET="${TARGET#up}"
 fi
-TARGET="$(echo "$TARGET" | xargs)"  # trim
-
+TARGET="$(echo "$TARGET" | xargs)"
 if [[ -z "$TARGET" ]]; then
-  echo "No target specified. Usage: /brewcode:skills up <name|path|folder>"
-  echo "Shorthand: /brewcode:skills <name|path|folder>"
-  exit 1
+  echo "No target. Usage: /brewcode:skills up <name|path|folder>"; exit 1
 fi
-
-# Check if it's a path
 if [[ -d "$TARGET" ]]; then
-  echo "TYPE: folder"
-  echo "PATH: $TARGET"
+  echo "TYPE: folder"; echo "PATH: $TARGET"
   find "$TARGET" -name "SKILL.md" -type f 2>/dev/null | head -20
 elif [[ -f "$TARGET" ]]; then
-  echo "TYPE: file"
-  echo "PATH: $TARGET"
+  echo "TYPE: file"; echo "PATH: $TARGET"
 elif [[ -f "$TARGET/SKILL.md" ]]; then
-  echo "TYPE: skill-dir"
-  echo "PATH: $TARGET/SKILL.md"
+  echo "TYPE: skill-dir"; echo "PATH: $TARGET/SKILL.md"
 else
-  # Search by name
-  echo "TYPE: name"
-  echo "NAME: $TARGET"
-  # Search locations
+  echo "TYPE: name"; echo "NAME: $TARGET"
   for loc in ~/.claude/skills .claude/skills; do
-    if [[ -f "$loc/$TARGET/SKILL.md" ]]; then
-      echo "FOUND: $loc/$TARGET/SKILL.md"
-    fi
+    [[ -f "$loc/$TARGET/SKILL.md" ]] && echo "FOUND: $loc/$TARGET/SKILL.md"
   done
 fi
 ```
 
-### Step 2: Spawn skill-creator agent(s)
+> **STOP if target cannot be resolved** -- must resolve to at least one SKILL.md.
 
-**Single skill:** Spawn one agent.
+### Phase 0: Discovery
 
-```
-Task tool:
-  subagent_type: "brewcode:skill-creator"
-  prompt: |
-    Improve this skill's activation rate and quality.
+Spawn 2--3 Explore agents in parallel (single message).
 
-    Skill path: {SKILL_PATH}
+**create mode** -- spawn in ONE message:
+1. `Explore` -- skill patterns in `$BC_PLUGIN_ROOT/skills/` and `~/.claude/skills/` (structure, naming, frontmatter, references, scripts)
+2. `Explore` -- target project structure for the topic (code, APIs, configs, tooling)
+3. (Optional) `general-purpose` -- web research for the topic using WebSearch/WebFetch
 
-    Tasks:
-    1. Read current SKILL.md
-    2. Analyze description for trigger keywords
-    3. Check body for imperative form, clear instructions
-    4. Apply skill-creator best practices
-    5. Update SKILL.md with improvements
+**up mode** -- spawn in ONE message:
+1. `Explore` -- analyze skill at target path (SKILL.md, references/, scripts/, tests/, README.md), report quality and gaps
+2. `Explore` -- compare target against patterns in `$BC_PLUGIN_ROOT/skills/`, output improvement recommendations
 
-    Focus on:
-    - Description has "Use when:", "Trigger keywords:", "Triggers -"
-    - No summary in description (only triggers!)
-    - Third-person voice
-    - Imperative form in body
-    - <500 lines
-  model: opus
-```
+### Phase 1: User Interaction
 
-**Multiple skills (folder):** Spawn agents **in parallel** (single message).
+Seven steps using AskUserQuestion:
 
-```
-# For each SKILL.md found, spawn in ONE Task call block:
-Task tool:
-  subagent_type: "brewcode:skill-creator"
-  prompt: "Improve skill: {SKILL_PATH_1}..."
+**Step 1: Check Conversation History** (create only)
+Check if current conversation already contains workflow to capture. If yes: extract tools, steps, corrections, I/O formats for Phase 2.
 
-Task tool:
-  subagent_type: "brewcode:skill-creator"
-  prompt: "Improve skill: {SKILL_PATH_2}..."
-
-# etc.
-```
-
-> **CRITICAL:** Spawn ALL agents in a single message for parallel execution.
-
----
-
-## Mode: create
-
-Research topic, then create skill via skill-creator.
-
-### Step 0: Check conversation history
-
-Before research -- check if current conversation already contains workflow to capture.
-If yes: extract tools, steps, corrections, I/O formats. Skip research, go directly to Step 4 with extracted context.
-
-### Step 1: Determine input type
+**Step 2: Determine Input Type** (create only)
 
 | Input | Action |
 |-------|--------|
 | Path to `.md` file | Read as spec |
 | Text prompt | Use as research query |
 
-### Step 2: Clarify invocation type
-
-Use AskUserQuestion before spawning any agents:
+**Step 3: Invocation Type**
 
 ```
 header: "Invocation"
 question: "Who will invoke this skill?"
 options:
   - label: "User only (slash command)"
-    description: "Only via /skill-name -- sets disable-model-invocation: true, simple description"
+    description: "disable-model-invocation: true, simple description"
   - label: "LLM auto-detect"
-    description: "Claude picks it up from context -- full trigger keyword optimization"
+    description: "Full trigger keyword optimization"
   - label: "Both (default)"
     description: "User slash command + LLM auto-detection"
 ```
 
-Save answer as `INVOCATION_TYPE` for use in Step 4.
+Save as `INVOCATION_TYPE`.
 
----
+**Step 4: Mode Switcher Detection** (create only)
 
-### Step 3: Parallel research
+Keywords: "mode", "toggle", "switch", "persistent", "from now on", "always do", "session behavior". If detected -- AskUserQuestion: "Create as Mode Switcher skill?" (Yes/No). If Yes: set `IS_MODE_SWITCHER=true`, ask scope (Project/Global/Session), save as `MODE_SCOPE`.
 
-Spawn **two agents in parallel** (single message):
-
-```
-Task tool:
-  subagent_type: "Explore"
-  prompt: |
-    Research codebase for: {TOPIC}
-
-    Find:
-    - Related existing skills
-    - Patterns and conventions
-    - Similar implementations
-    - Relevant file structures
-
-    Output: Summary of findings for skill creation.
-
-Task tool:
-  subagent_type: "general-purpose"
-  prompt: |
-    Web research for: {TOPIC}
-
-    Search for:
-    - Best practices for this type of skill
-    - Similar tools/implementations
-    - Common patterns and conventions
-
-    Use WebSearch and WebFetch tools.
-    Output: Summary of external knowledge for skill creation.
-```
-
-### Step 4: Create skill
-
-After research completes, spawn skill-creator:
+**Step 5: Testing Depth**
 
 ```
-Task tool:
-  subagent_type: "brewcode:skill-creator"
-  prompt: |
-    Create new skill based on research.
-
-    Topic: {TOPIC}
-    Invocation type: {INVOCATION_TYPE}
-
-    ## Codebase Research
-    {EXPLORE_RESULTS}
-
-    ## Web Research
-    {WEB_RESULTS}
-
-    ## Requirements
-    - Location: .claude/skills/{skill-name}/ (project) or ~/.claude/skills/{skill-name}/ (global)
-    - Follow skill-creator best practices
-    - Optimized description for 84% activation
-    - Include README.md
-  model: opus
-```
-
-### Step 5: Post-create eval (optional)
-
-Ask user via AskUserQuestion:
-```
-header: "Quick Eval"
-question: "Run 3 test prompts to verify the skill works?"
+header: "Testing Depth"
+question: "How thoroughly should the skill be tested?"
 options:
-  - label: "Yes -- test it"
-  - label: "No -- I'll test manually"
+  - label: "Quick (default)" -- validate-skill.sh + 3-5 test prompts
+  - label: "Standard" -- + unit tests + simple review (1 reviewer + verification)
+  - label: "Deep" -- + quorum review (3 reviewers, threshold 2) + E2E tests
 ```
 
-If yes: spawn skill-creator agent with eval prompt targeting the new skill.
+Save as `TESTING_DEPTH`.
+
+**Step 6: Review Type** (only if Standard or Deep)
+
+```
+header: "Review Type"
+question: "What review approach?"
+options:
+  - label: "Simple (default for Standard)" -- 1 reviewer + 1 verification agent
+  - label: "Quorum (default for Deep)" -- 3 reviewers parallel, threshold 2/3, DoubleCheck
+```
+
+Save as `REVIEW_TYPE`.
+
+**Step 7: Plan Confirmation**
+
+Output plan summary: Action (Create/Improve), skill path/name, files to create/modify, references used, testing approach, review type.
+
+```
+header: "Plan Confirmation"
+question: "Proceed with this plan?"
+options: [Proceed, Adjust ("Let me change something"), Cancel]
+```
+
+If Adjust -- ask what to change, update, re-confirm. If Cancel -- stop.
+
+### Phase 2: Create/Improve
+
+Spawn `brewcode:skill-creator` agent with discovery results and user choices.
+
+The agent runs Steps 1--5.8: Understand, Plan, Structure, Configure, Validate, Unit Tests, README.
+
+> See [Skill Creator agent](/brewcode/agents/skill-creator/) for the full creation process.
+
+**Mode Switcher additions** (if `IS_MODE_SWITCHER=true`):
+- Single skill with argument parsing: `on [mode-name]`, `off`, `status`
+- State in `$BC_PLUGIN_DATA/modes.json` -- structure: `.global`, `.projects["$PWD"]`, `.sessions["$SESSION_ID"]`
+- Scope: `MODE_SCOPE`, resolution priority: session &gt; project &gt; global
+- `disable-model-invocation: true`, mode instructions in `references/`
+
+**Folder target (multiple skills):** Spawn parallel agents in ONE message, one per SKILL.md found.
+
+### Phase 3: Validate (automatic)
+
+Skill-creator Steps 5--5.8 run automatically (validate, unit tests, README). No orchestrator action needed.
+
+### Phase 4: Review
+
+**Skip if `TESTING_DEPTH` is Quick.**
+
+Read review prompt from `references/review-prompt.md`.
+
+**Simple Review (`REVIEW_TYPE` = Simple):**
+
+1. Spawn `brewcode:reviewer` (opus) -- review skill quality at target path
+2. If findings: spawn `brewcode:reviewer` (sonnet) -- verify findings against actual code
+3. Confirmed findings: spawn `brewcode:skill-creator` (opus) -- fix verified issues
+
+**Quorum Review (`REVIEW_TYPE` = Quorum):**
+
+1. Three `brewcode:reviewer` agents in parallel (ONE message) -- review skill quality
+2. Quorum threshold: same file + +-5 lines + same category = 2/3 agree
+3. Spawn `brewcode:reviewer` (opus) -- DoubleCheck: verify quorum findings against code
+4. Confirmed findings: spawn `brewcode:skill-creator` (opus) -- fix verified issues
+
+> After Phase 4 completes, compile all confirmed findings (source, severity, issue, fix applied, verified status) into a structured list for Phase 6.
+
+### Phase 5: E2E Testing (optional)
+
+**Only if `TESTING_DEPTH` is Deep.** Otherwise skip.
+
+1. Create test scenarios in `{SKILL_DIR}/tests/` -- 1 per mode (happy path) + 1 edge case per mode
+2. Execute each scenario in a temp project via `claude -p`
+3. Iteration: scenario failure = fix (max 2 retries), small skill issues = fix + re-run, major issues = back to Phase 2
+
+### Phase 6: Summary
+
+Generates structured report: action performed, skill path, invocation type, testing depth, review type, completed phases checklist, problems found/fixed (Phase 4), test results (Phase 3 + 5), suggestions, skipped phases with reasons.
 
 ---
 
 ## Mode Switcher
 
-The `create` mode supports generating **Mode Switcher** skills — skills that toggle persistent
+The `create` mode supports generating **Mode Switcher** skills -- skills that toggle persistent
 session-level behavioral modes via `brewcode.state.json`. Hooks inject mode instructions
 on every event (`forced-eval.mjs`, `session-start.mjs`, `pre-task.mjs`).
 
 When the create prompt contains keywords like "mode", "toggle", "switch", or "persistent",
-Step 2.5 auto-detects the intent and asks whether to use the Mode Switcher pattern.
+Phase 1 Step 4 auto-detects the intent and asks whether to use the Mode Switcher pattern.
 
 The generated skill supports three arguments: `on [mode-name]`, `off`, and `status`.
 
@@ -285,20 +258,18 @@ The generated skill supports three arguments: `on [mode-name]`, `off`, and `stat
 
 ## Output format
 
+> For `list` mode only. For `create`/`up` modes, Phase 6 summary replaces this section.
+
 ```markdown
-# skills [{MODE}]
+# skills [list]
 
 ## Detection
 
 | Field | Value |
 |-------|-------|
 | Arguments | `$ARGUMENTS` |
-| Mode | `[detected mode]` |
-| Target | `[target or none]` |
-
-## Results
-
-[Mode-specific output]
+| Mode | `list` |
+| Target | `none` |
 
 ## Skills Summary
 
@@ -310,5 +281,5 @@ The generated skill supports three arguments: `on [mode-name]`, `off`, and `stat
 
 ## Next Steps
 
-- [recommendations based on mode]
+- [recommendations based on results]
 ```

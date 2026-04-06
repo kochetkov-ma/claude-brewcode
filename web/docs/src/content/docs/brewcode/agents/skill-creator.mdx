@@ -14,10 +14,14 @@ import { Badge, Callout, Tabs, TabItem } from '../../../../components/mdx';
 | Field | Value |
 |-------|-------|
 | Model | opus |
-| Tools | Read, Write, Edit, Glob, Grep, Task, Skill, AskUserQuestion |
+| Tools | Read, Write, Edit, Glob, Grep, Bash, Task, Skill, AskUserQuestion |
 | Triggers | "Create a skill", "improve skill", SKILL.md, invocation issues |
 
 Creates Claude Code skills following official Anthropic best practices.
+
+<Callout type="note" title="Related">
+  This agent is orchestrated by the <a href="/brewcode/skills/skills/">Skills</a> skill (`/brewcode:skills`). The skill handles discovery (Phase 0), user interaction (Phase 1), review (Phase 4), E2E testing (Phase 5), and summary (Phase 6). This agent handles creation and validation (Phases 2-3).
+</Callout>
 
 ## Communication Style
 
@@ -57,6 +61,7 @@ skill-name/
   references/      # OPT: detailed docs (load on demand)
   examples/        # OPT: working code examples
   scripts/         # OPT: executable utilities
+  tests/           # OPT: unit tests for scripts (auto-generated)
   assets/          # OPT: templates, images
   agents/          # OPT: prompts for subagents (convention, NOT auto-discovered)
 ```
@@ -448,6 +453,8 @@ skill-name/
 
   Identify usage patterns: direct examples from user, validated scenarios, real-world use cases. If invoked directly from main conversation (foreground) -- use AskUserQuestion for max 2-3 clarifying questions: functionality, usage examples, trigger phrases.
 
+  > **Pre-filled values:** If invocation type or other parameters were provided by the orchestrator, skip the corresponding AskUserQuestion.
+
   ### Invocation Type (CRITICAL)
 
   **If unclear who will invoke the skill, ASK using AskUserQuestion tool:**
@@ -514,6 +521,35 @@ skill-name/
   | One line | No multiline `|`, single YAML line, 150-250 chars |
   | Third-person | "Deploys..." not "I deploy..." or "Use this to..." |
   | Critical -> slash | `disable-model-invocation: true` for risky operations |
+
+  ## Step 5.7: Unit Tests
+
+  Generate unit tests for scripts in `scripts/` directory. Skip if no scripts exist.
+
+  1. Detect scripts: `ls "$SKILL_DIR/scripts/"*.sh *.mjs *.py`
+  2. Create `tests/` directory
+  3. Generate `tests/test-{script-name}.sh` for each script:
+     - `set -euo pipefail`, `check()` helper function
+     - Tests: script exists, is executable, runs without error
+     - Script-specific tests based on purpose
+     - PASS/FAIL counters with exit code
+  4. Run all tests, fix failures (max 2 cycles)
+
+  > In bash blocks, set `SKILL_DIR` to the actual skill directory path from Step 3.
+
+  ## Step 5.8: README Generation
+
+  Generate `README.md` using the template from `$BC_PLUGIN_ROOT/skills/skills/references/readme-template.md`.
+
+  | Placeholder | Source |
+  |-------------|--------|
+  | `{SKILL_NAME}` | frontmatter `name` |
+  | `{ONE_LINE_DESCRIPTION}` | frontmatter `description` (first sentence) |
+  | `{ARGUMENT_HINT}` | frontmatter `argument-hint` |
+  | `{TODAY}` | current date ISO format |
+
+  Remove inapplicable sections (single-mode skill: no Modes table, no scripts: no scripts in Files).
+  Keep README under 100 lines.
 
   ## Step 6: Iterate
 

@@ -323,18 +323,22 @@ fi
 **EXECUTE** using Bash tool (replace `OUTPUT_DIR_VALUE` with `./d2c-output` or user-specified directory):
 ```bash
 set -e
-OUTPUT_DIR="${1:-./d2c-output}"
+OUTPUT_DIR="OUTPUT_DIR_VALUE"
 
 CONTENT=$(jq -r '.choices[0].message.content // empty' /tmp/d2c-trial-response.json)
 
 if [ -z "$CONTENT" ]; then
   echo "No content in response"
-  exit 1
+  exit 2
 fi
 
 mkdir -p "$OUTPUT_DIR"
+EXIT_CODE=0
 
 if printf '%s\n' "$CONTENT" | grep -q '===FILE:'; then
+  EXPECTED=$(printf '%s\n' "$CONTENT" | grep -c '===FILE:' || true)
+  echo "Expected files from markers: $EXPECTED" >&2
+
   TMPFILE=$(mktemp)
   trap "rm -f '$TMPFILE'" EXIT
   jq -r '.choices[0].message.content' /tmp/d2c-trial-response.json > "$TMPFILE"
@@ -348,8 +352,13 @@ if printf '%s\n' "$CONTENT" | grep -q '===FILE:'; then
     gsub(/[^a-zA-Z0-9._\/\-]/, "", fname)
     gsub(/^\/+/, "", fname)
     if (fname ~ /\.\./) { next }
-    if (fname == "") { next }
+    if (fname == "") {
+      skipped++
+      print "WARNING: Skipped file with empty name after sanitization" > "/dev/stderr"
+      next
+    }
     current_file = outdir "/" fname
+    current_fname = fname
     writing = 1
     next
   }
@@ -357,7 +366,7 @@ if printf '%s\n' "$CONTENT" | grep -q '===FILE:'; then
     if (writing && current_file != "") {
       close(current_file)
       file_count++
-      print "  " fname " (" lines " lines)" > "/dev/stderr"
+      print "  " current_fname " (" lines " lines)" > "/dev/stderr"
       lines = 0
     }
     writing = 0
@@ -380,11 +389,53 @@ if printf '%s\n' "$CONTENT" | grep -q '===FILE:'; then
   END {
     if (writing && current_file != "") {
       close(current_file)
-      print "WARNING: Truncated file (no ===END_FILE===): " fname > "/dev/stderr"
+      file_count++
+      print "WARNING: Truncated file (no ===END_FILE===): " current_fname > "/dev/stderr"
     }
     print "Extracted " file_count+0 " file(s)" > "/dev/stderr"
+    if (skipped > 0) {
+      print "Skipped " skipped " file(s) with invalid names" > "/dev/stderr"
+    }
   }
   ' "$TMPFILE"
+
+  rm -f "$TMPFILE"
+  trap - EXIT
+
+  # Post-extraction validation
+  ACTUAL=$(find "$OUTPUT_DIR" -type f 2>/dev/null | wc -l | tr -d ' ')
+
+  echo "" >&2
+  echo "--- Extraction Validation ---" >&2
+  echo "Expected: $EXPECTED file(s)" >&2
+  echo "Extracted: $ACTUAL file(s)" >&2
+
+  if [ "$ACTUAL" -eq 0 ]; then
+    echo "ERROR: Total extraction failure" >&2
+    EXIT_CODE=2
+  elif [ "$ACTUAL" -lt "$EXPECTED" ]; then
+    echo "WARNING: Partial extraction — $ACTUAL of $EXPECTED files" >&2
+    EXIT_CODE=1
+  fi
+
+  # Check for empty files
+  EMPTY_COUNT=0
+  for file in $(find "$OUTPUT_DIR" -type f 2>/dev/null); do
+    if [ ! -s "$file" ]; then
+      EMPTY_COUNT=$((EMPTY_COUNT + 1))
+      echo "  EMPTY: $(echo "$file" | sed "s|^$OUTPUT_DIR/||")" >&2
+    fi
+  done
+  if [ "$EMPTY_COUNT" -gt 0 ]; then
+    echo "WARNING: $EMPTY_COUNT empty file(s) detected" >&2
+    [ "$EXIT_CODE" -eq 0 ] && EXIT_CODE=1
+  fi
+
+  # Verify index.html exists (HTML output)
+  if [ ! -f "$OUTPUT_DIR/index.html" ]; then
+    echo "WARNING: index.html not found in extracted files" >&2
+    [ "$EXIT_CODE" -eq 0 ] && EXIT_CODE=1
+  fi
 else
   echo "No ===FILE: markers found. Trying code block extraction..." >&2
 
@@ -451,7 +502,18 @@ fi
 echo ""
 echo "Output directory: $OUTPUT_DIR"
 ls -la "$OUTPUT_DIR"
+
+if [ "$EXIT_CODE" -eq 1 ]; then
+  echo "WARNING: Partial extraction — review files above" >&2
+elif [ "$EXIT_CODE" -eq 2 ]; then
+  echo "ERROR: Extraction failed" >&2
+fi
+exit $EXIT_CODE
 ```
+
+> **If exit code 1 (partial extraction):** Re-read response content manually. Check if `===FILE:` markers are present but malformed. Attempt targeted extraction of missing files by reading the response and using Write tool directly.
+
+> **If exit code 2 (total failure):** Show error to user. The API response may be malformed or empty. Check `/tmp/d2c-trial-response.json` content.
 
 ## Step 6: Report + Promo Footer
 

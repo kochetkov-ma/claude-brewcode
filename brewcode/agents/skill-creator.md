@@ -14,7 +14,7 @@ description: |
   </example>
 model: opus
 color: green
-tools: Read, Write, Edit, Glob, Grep, Task, Skill, AskUserQuestion
+tools: Read, Write, Edit, Glob, Grep, Bash, Task, Skill, AskUserQuestion
 ---
 
 # Skill Creator Agent
@@ -726,6 +726,8 @@ Confirm extracted workflow with user before proceeding.
 
 Identify usage patterns: direct examples from user, validated scenarios, real-world use cases. If invoked directly from main conversation (foreground) — use AskUserQuestion for max 2-3 clarifying questions: functionality, usage examples, trigger phrases. If invocation type was provided in prompt — skip questions.
 
+> **Pre-filled values:** If invocation type, testing depth, or other parameters were provided in the spawn prompt by the orchestrator, skip the corresponding AskUserQuestion. Only ask for values not already specified.
+
 > **Mode Switcher pattern hint:** If the user's request mentions "mode", "toggle", "switch", "persistent behavior", "from now on", or "always do X" — consider the **Mode Switcher** pattern. This pattern uses a single skill to write state to disk, with hooks injecting mode-specific instructions on every event. See [Mode Switcher Detail](#mode-switcher-detail).
 
 ### Invocation Type (CRITICAL)
@@ -860,6 +862,83 @@ After runs complete, analyze:
 4. Wasted effort — did the skill cause unnecessary work? → trim instructions
 
 If issues found → fix and re-run. If all good → proceed to Step 6.
+
+## Step 5.7: Unit Tests
+
+Generate unit tests for scripts in `scripts/` directory. Skip if no scripts exist.
+
+> In bash blocks below, replace `SKILL_DIR` value with the actual skill directory path from Step 3.
+
+**EXECUTE** detect scripts:
+```bash
+ls "${SKILL_DIR}/scripts/"*.{sh,mjs,py} 2>/dev/null | head -20
+```
+
+If scripts found:
+
+1. Create `tests/` directory: `mkdir -p "${SKILL_DIR}/tests"`
+2. For each script, generate `tests/test-{script-name}.sh`:
+
+**Test file structure:**
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+PASS=0; FAIL=0; TOTAL=0
+
+check() {
+  local name="$1"; shift
+  TOTAL=$((TOTAL + 1))
+  if "$@" >/dev/null 2>&1; then
+    PASS=$((PASS + 1)); echo "  PASS: $name"
+  else
+    FAIL=$((FAIL + 1)); echo "  FAIL: $name"
+  fi
+}
+
+echo "Testing: {SCRIPT_NAME}"
+
+# Test 1: Script exists and is executable
+check "script exists" test -f "$SCRIPT_DIR/scripts/{SCRIPT_NAME}"
+check "script executable" test -x "$SCRIPT_DIR/scripts/{SCRIPT_NAME}"
+
+# Test 2: Help/usage (if applicable)
+check "runs without error" bash "$SCRIPT_DIR/scripts/{SCRIPT_NAME}" --help
+
+# Test 3-5: Script-specific tests
+# {GENERATE BASED ON SCRIPT PURPOSE}
+
+echo ""
+echo "Results: $PASS/$TOTAL passed, $FAIL failed"
+[ "$FAIL" -eq 0 ] && exit 0 || exit 1
+```
+
+3. **EXECUTE** run all tests, fix failures (max 2 cycles):
+```bash
+for t in "${SKILL_DIR}/tests"/test-*.sh; do
+  echo "--- $(basename "$t") ---"
+  bash "$t" && echo "✅" || echo "❌"
+done
+```
+
+> **STOP if after 2 fix cycles** — document failures, proceed to next step.
+
+## Step 5.8: README Generation
+
+Generate `README.md` in the skill directory using the template.
+
+1. Read template: `$BC_PLUGIN_ROOT/skills/skills/references/readme-template.md`
+2. Fill placeholders from skill metadata:
+   - `{SKILL_NAME}` — from frontmatter `name`
+   - `{ONE_LINE_DESCRIPTION}` — from frontmatter `description` (first sentence)
+   - `{ARGUMENT_HINT}` — from frontmatter `argument-hint` or empty
+   - `{TODAY}` — current date ISO format
+   - Modes, arguments, examples — from SKILL.md body analysis
+3. Remove inapplicable sections (single-mode → remove Modes table, no scripts → remove scripts from Files)
+4. Write `README.md` to skill directory
+
+> Keep README under 100 lines. Use actual examples from the skill, not generic placeholders.
 
 ## Step 6: Iterate
 

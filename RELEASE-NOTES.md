@@ -2,6 +2,21 @@
 
 ---
 
+## v3.4.29 (2026-04-06)
+
+> Docs: [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/)
+
+### brewcode
+#### Changed
+- **skills:** Unified create/up flow with 7-phase pipeline (Discovery → User Interaction → Create/Improve → Validate → Review → E2E Testing → Summary). Added testing depth selection (Quick/Standard/Deep), review orchestration (Simple/Quorum with DoubleCheck verification), E2E testing via `claude -p`, and structured summary reports
+- **skill-creator:** Added Step 5.7 (unit test generation for scripts/), Step 5.8 (README generation from template), pre-filled values support, Bash tool in agent toolset
+- **permission-guard:** Added `.claude/teams/` and `.claude/memory/` to auto-allowed directories
+
+#### Added
+- **skills/references:** 4 new templates — `review-prompt.md` (quality review checklist), `e2e-template.md` (E2E test scenarios), `readme-template.md` (skill README with auto-sync), `summary-template.md` (Phase 6 report)
+
+---
+
 ## v3.4.28 (2026-04-05)
 
 > Docs: [debate](https://doc-claude.brewcode.app/brewcode/skills/debate/)

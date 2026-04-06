@@ -29,6 +29,8 @@ is_allowed_path() {
     .claude/private/*|.claude/private|*/.claude/private/*|*/.claude/private) return 0 ;;
     .claude/convention/*|.claude/convention|*/.claude/convention/*|*/.claude/convention) return 0 ;;
     .claude/plans/*|.claude/plans|*/.claude/plans/*|*/.claude/plans) return 0 ;;
+    .claude/teams/*|.claude/teams|*/.claude/teams/*|*/.claude/teams) return 0 ;;
+    .claude/memory/*|.claude/memory|*/.claude/memory/*|*/.claude/memory) return 0 ;;
     .claude/settings.json|.claude/settings.local.json|*/.claude/settings.json|*/.claude/settings.local.json) return 0 ;;
     .claude/TASK.md|.claude/CLAUDE.md|*/.claude/TASK.md|*/.claude/CLAUDE.md) return 0 ;;
     *) return 1 ;;
@@ -122,6 +124,10 @@ case "$FILE_PATH" in
   */.claude/convention/*|*/.claude/convention)
     echo "$ALLOW" ;;
   */.claude/plans/*|*/.claude/plans)
+    echo "$ALLOW" ;;
+  */.claude/teams/*|*/.claude/teams)
+    echo "$ALLOW" ;;
+  */.claude/memory/*|*/.claude/memory)
     echo "$ALLOW" ;;
   */.claude/settings.json|*/.claude/settings.local.json)
     echo "$ALLOW" ;;
