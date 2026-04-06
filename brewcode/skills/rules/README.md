@@ -87,3 +87,7 @@ New entries go through a 3-check protocol before being added:
 - Use prompt mode with a code review doc or retrospective notes to bulk-import rules from external sources.
 - After importing, run `/brewcode:rules list` to verify entry counts and spot unbalanced files.
 - Domain-specific rule files (e.g., `test-avoid.md`) keep rules organized and reduce noise for unrelated tasks.
+
+## Documentation
+
+Full docs: [rules](https://doc-claude.brewcode.app/brewcode/skills/rules/)

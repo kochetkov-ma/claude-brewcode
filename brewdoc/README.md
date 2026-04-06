@@ -1,28 +1,23 @@
----
-auto-sync: enabled
-auto-sync-date: 2026-02-28
-auto-sync-type: doc
-description: README for brewdoc plugin — user documentation
----
-
 # Brewdoc
 
-Documentation tools plugin for Claude Code. Three concerns:
+> Documentation toolkit plugin for Claude Code -- sync, generation, memory optimization, PDF conversion, publishing.
 
-| Concern | Skill | What it does |
-|---------|-------|--------------|
-| **auto-sync** | `/brewdoc:auto-sync` | Keep `.md` docs (skills, agents, rules) in sync with actual codebase |
-| **my-claude** | `/brewdoc:my-claude` | Generate documentation about your Claude Code installation, hooks, or any Claude topic |
-| **memory** | `/brewdoc:memory` | Optimize memory files: deduplicate, migrate to rules/CLAUDE.md, compress, validate |
-| **brewpage** | `/brewdoc:publish` | Publish text, markdown, JSON, or files to brewpage.app — returns public URL |
+| Field | Value |
+|-------|-------|
+| Version | 3.4.29 |
+| Skills | 6 |
+| Agents | 1 |
+| Hooks | 1 |
+
+## Overview
+
+Brewdoc keeps documentation in sync with the codebase, optimizes content for LLM consumption, and exports documents to ready-made formats. Each skill is self-contained and independent of the others.
 
 ## Installation
 
 ```bash
-# Add marketplace (one-time)
+# Marketplace (recommended)
 claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
-
-# Install
 claude plugin install brewdoc@claude-brewcode
 
 # Already installed? Update
@@ -31,186 +26,71 @@ claude plugin update brewdoc@claude-brewcode
 
 # Dev mode (no install)
 claude --plugin-dir ./brewdoc
-
-# Both plugins together
-claude --plugin-dir ./brewcode --plugin-dir ./brewdoc
 ```
 
 ## Quick Start
 
-### auto-sync
-
 ```bash
-/brewdoc:auto-sync status          # See what's indexed and what's stale
-/brewdoc:auto-sync init .claude/rules/testing.md   # Tag a file for auto-sync
-/brewdoc:auto-sync                 # Sync all tagged files in project
-/brewdoc:auto-sync global          # Sync ~/.claude/ global docs
+/brewdoc:auto-sync                    # Sync all project docs with codebase
+/brewdoc:auto-sync status             # See what's indexed and what's stale
+/brewdoc:auto-sync init ./docs/api.md # Add file to auto-sync tracking
+/brewdoc:my-claude                    # Document your local Claude setup
+/brewdoc:my-claude ext                # Document Claude Code architecture
+/brewdoc:my-claude r "how do hooks work"  # Research any Claude topic
+/brewdoc:memory                       # Optimize memory files interactively
+/brewdoc:md-to-pdf README.md          # Convert markdown to PDF
+/brewdoc:publish "Hello world"        # Publish to brewpage.app -- returns URL
+/brewdoc:guide                        # Interactive tutorial for the suite
 ```
 
-### my-claude
+## Skills
 
-```bash
-/brewdoc:my-claude                 # Document your local Claude setup (internal mode)
-/brewdoc:my-claude ext             # Document Claude Code architecture (external mode)
-/brewdoc:my-claude ext context     # Document context injection schema specifically
-/brewdoc:my-claude r "how do hooks work"   # Research any Claude topic (research mode)
-```
+| Skill | Purpose | Model | Arguments |
+|-------|---------|-------|-----------|
+| [`/brewdoc:auto-sync`](skills/auto-sync/README.md) | Synchronize documentation with code | opus | `[status] \| [init <path>] \| [global] \| [path]` |
+| [`/brewdoc:my-claude`](skills/my-claude/README.md) | Generate documentation about Claude Code installation | opus | `[ext [context]] \| [r <query>]` |
+| [`/brewdoc:memory`](skills/memory/README.md) | Optimize memory files in 4 steps | opus | -- |
+| [`/brewdoc:md-to-pdf`](skills/md-to-pdf/README.md) | Convert Markdown to PDF | sonnet | `<file.md> [--engine name] ["prompt"] \| styles \| test` |
+| [`/brewdoc:publish`](skills/publish/README.md) | Publish to brewpage.app -- returns public URL | haiku | `<text\|file\|json> [--ttl N]` |
+| [`/brewdoc:guide`](skills/guide/README.md) | Interactive tutorial for the plugin suite | haiku | `[topic]` |
 
-### memory
+## Agent
 
-```bash
-/brewdoc:memory                    # Run 4-step interactive memory optimization
-```
-
-### brewpage
-
-```bash
-/brewdoc:publish "Hello world"            # Publish markdown text → returns URL
-/brewdoc:publish /path/to/file.pdf        # Publish file → returns URL
-/brewdoc:publish '{"key": "value"}'       # Publish JSON document → returns URL
-/brewdoc:publish "Hello world" --ttl 30   # Custom TTL (days)
-```
-
-## Commands
-
-| Command | Arguments | Description |
-|---------|-----------|-------------|
-| [`/brewdoc:auto-sync`](skills/auto-sync/README.md) | `status` / `init <path>` / `global` / `<path>` | Universal doc sync |
-| [`/brewdoc:my-claude`](skills/my-claude/README.md) | `ext [context]` / `r <query>` / _(none)_ | Generate Claude Code docs |
-| [`/brewdoc:memory`](skills/memory/README.md) | _(none)_ | Interactive memory optimizer |
-| [`/brewdoc:publish`](skills/publish/README.md) | `<text\|file_path\|json> [--ttl N]` | Publish to brewpage.app — returns public URL |
-| [`/brewdoc:md-to-pdf`](skills/md-to-pdf/README.md) | `<file.md> [--engine name] ["prompt"]` \| `styles` \| `test` | Convert Markdown to PDF (reportlab or weasyprint engine) |
-
-## Agents
-
-Internal agents used by brewdoc skills:
-
-| Agent | Purpose | Triggered by |
-|-------|---------|--------------|
-| [bd-auto-sync-processor](agents/bd-auto-sync-processor.md) | Processes single document for auto-sync: reads document, loads per-type instructions, runs adaptive research, aggregates findings, updates document | `/brewdoc:auto-sync` |
-
-## auto-sync Modes
-
-```
-+-----------------------------------------------------------+
-|                   /brewdoc:auto-sync                       |
-+------------+------------+-------------+-------------------+
-|   status   |  init path |   global    |  (no args)        |
-|            |            |             |  file/folder      |
-| Report     | Tag one    | Sync        | Sync project      |
-| what's     | file for   | ~/.claude/  | .claude/          |
-| indexed    | auto-sync  | all docs    | all docs          |
-+------------+------------+-------------+-------------------+
-```
-
-Files are discovered by YAML frontmatter (`auto-sync: enabled`) or by directory convention. The INDEX tracks sync state per file:
-
-```
-.claude/auto-sync/INDEX.jsonl          # project-level index
-~/.claude/auto-sync/INDEX.jsonl        # global-level index
-```
-
-Each sync reads the source file, compares against codebase state, and updates in-place using type-specific instructions (`sync-rule.md`, `sync-skill.md`, `sync-agent.md`, `sync-doc.md`, `sync-config.md`).
-
-## my-claude Modes
-
-```
-/brewdoc:my-claude [args]
-       |
-       +-- (empty) ----> INTERNAL: snapshot of your Claude setup
-       |                          ~/.claude/ config, rules, agents, skills
-       |                          Project CLAUDE.md + rules
-       |                          Memory files
-       |
-       +-- ext --------> EXTERNAL: Claude Code architecture docs
-       |                          Hook event model
-       |                          Context injection patterns
-       |                          Recent CHANGELOG
-       |
-       +-- ext context -> EXTERNAL/context-schema: deep dive into
-       |                          additionalContext, updatedInput schemas
-       |
-       +-- r <query> --> RESEARCH: web research on any Claude topic
-                                   Official docs + GitHub + community
-                                   Citations + reliability scores
-```
-
-Output is written to `~/.claude/brewdoc/` with an index:
-
-```
-~/.claude/brewdoc/
-  YYYYMMDD_my-claude-internal.md
-  YYYYMMDD_my-claude-external.md
-  YYYYMMDD_my-claude-research.md
-  INDEX.jsonl
-```
-
-## memory Workflow
-
-```
-/brewdoc:memory
-       |
-       v
-  Step 1: Analysis ----> Find entries that duplicate CLAUDE.md/rules
-          (interactive) ----> AskUserQuestion: delete X duplicates?
-       |
-       v
-  Step 2: Migration ---> Move entries to rules/ or CLAUDE.md
-          (interactive) ----> AskUserQuestion: migrate X entries?
-       |
-       v
-  Step 3: Compression -> Compress remaining (prose->table, verbose->concise)
-          (interactive) ----> AskUserQuestion: save ~Y% tokens?
-       |
-       v
-  Step 4: Validation --> reviewer agent checks consistency
-          (automatic)   ----> Clean broken refs, orphaned files
-                        ----> Final before/after report
-```
-
-Memory files location: `~/.claude/projects/.../memory/*.md`
-
-## Plugin Variables
-
-| Variable | Set by | Available in |
-|----------|--------|--------------|
-| `BD_PLUGIN_ROOT` | `pre-task.mjs` (PreToolUse:Task) | Agents (subagents via Task tool) |
-
-## Output Locations
-
-| Skill | Output location |
-|-------|----------------|
-| `auto-sync` | Updates files in-place; INDEX at `.claude/auto-sync/INDEX.jsonl` or `~/.claude/auto-sync/INDEX.jsonl` |
-| `my-claude` | `~/.claude/brewdoc/YYYYMMDD_my-claude-{mode}.md` + `INDEX.jsonl` |
-| `memory` | Modifies `~/.claude/projects/.../memory/*.md` in-place |
-| `brewpage` | `.claude/brewpage-history.md` (owner tokens for update/delete) |
+| Agent | Model | Purpose |
+|-------|-------|---------|
+| [bd-auto-sync-processor](agents/bd-auto-sync-processor.md) | sonnet | Process documents for auto-sync |
 
 ## Architecture
 
 ```
 brewdoc/
-  .claude-plugin/plugin.json       # Manifest (v3.1.0)
-  hooks/
-    hooks.json                     # Hook registration
-    session-start.mjs              # (unused, not registered in hooks.json)
-    pre-task.mjs                   # Injects BD_PLUGIN_ROOT into subagent prompts
-    lib/utils.mjs                  # Shared hook utilities
-  skills/
-    auto-sync/                     # SKILL.md + instructions/ + scripts/
-    my-claude/                     # SKILL.md + references/
-    memory/                        # SKILL.md + references/
-  agents/
-    bd-auto-sync-processor.md      # Processes single file for auto-sync
++-- .claude-plugin/plugin.json        # Plugin manifest
++-- hooks/
+|   +-- hooks.json                    # 1 hook (Pre-Task)
+|   +-- pre-task.mjs                  # BD_PLUGIN_ROOT injection
+|   +-- lib/utils.mjs                 # I/O utilities
++-- skills/
+|   +-- auto-sync/                    # Documentation sync
+|   +-- my-claude/                    # Installation documentation
+|   +-- memory/                       # Memory optimization
+|   +-- md-to-pdf/                    # PDF conversion
+|   +-- publish/                      # brewpage.app publishing
+|   +-- guide/                        # Interactive tutorial
++-- agents/
+    +-- bd-auto-sync-processor.md     # File processing agent
 ```
 
-## Links
+> **Brewdoc vs Brewcode:** Brewdoc is a set of documentation utilities. Each skill is self-contained. Brewcode is a task execution engine with infinite context, 9 lifecycle hooks, and session handoff. Both install from the same `claude-brewcode` marketplace but operate independently.
 
-- [RELEASE-NOTES.md](../RELEASE-NOTES.md) -- changelog
-- [brewcode plugin](../brewcode/README.md) -- companion plugin for task execution
-- [GitHub](https://github.com/kochetkov-ma/claude-brewcode)
+## Documentation
 
-## Version
+Full docs: [doc-claude.brewcode.app/brewdoc/overview](https://doc-claude.brewcode.app/brewdoc/overview/)
 
-**3.1.0** -- version unified with brewcode suite. auto-sync, my-claude, memory, md-to-pdf skills.
+| Resource | Link |
+|----------|------|
+| Auto-Sync | [Auto-Sync](https://doc-claude.brewcode.app/brewdoc/auto-sync/) |
+| My-Claude | [My-Claude](https://doc-claude.brewcode.app/brewdoc/my-claude/) |
+| Memory | [Memory](https://doc-claude.brewcode.app/brewdoc/memory/) |
+| Release Notes | [RELEASE-NOTES.md](../RELEASE-NOTES.md) |
 
 Author: Maksim Kochetkov | License: MIT

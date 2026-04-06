@@ -110,3 +110,7 @@ Agent files are written to the directory matching the chosen scope:
 - The **"inherit" model** option omits the `model:` field entirely, so the agent uses whatever model the calling session runs on.
 - After creation, review the generated triggers in the agent's `description` frontmatter -- good triggers are the main driver of automatic agent selection.
 - Run `/brewcode:agents up` periodically on high-use agents to incorporate new project context and best practices.
+
+## Documentation
+
+Full docs: [agents](https://doc-claude.brewcode.app/brewcode/skills/agents/)

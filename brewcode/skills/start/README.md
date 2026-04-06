@@ -93,3 +93,7 @@ All artifacts live under the task directory: `.claude/tasks/{TS}_{NAME}_task/`.
 - **Let it run.** The handoff mechanism handles context limits automatically. There is no need to monitor or intervene unless the skill asks a question via `AskUserQuestion`.
 - **Check KNOWLEDGE.jsonl after completion.** It contains lessons learned during execution -- anti-patterns to avoid, patterns that worked, and architectural facts about your codebase.
 - **Use explicit paths when juggling multiple tasks.** If you switch between tasks frequently, pass the PLAN.md path directly instead of relying on `.claude/TASK.md`.
+
+## Documentation
+
+Full docs: [start](https://doc-claude.brewcode.app/brewcode/skills/start/)

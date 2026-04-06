@@ -108,3 +108,7 @@ Severity levels: **error** (must fix), **warning** (should fix), **info** (consi
 - If the skill detects more than 50 files, narrow the scope to a specific folder or commit to get more focused results.
 - Answer "Yes" to the simplify prompt when reviewing performance-sensitive code -- the extra pass analyzes efficiency, concurrency, and hot-path optimizations.
 - Make sure `grepai` is configured for your project (`/brewcode:grepai`) to get accurate duplicate detection results.
+
+## Documentation
+
+Full docs: [standards-review](https://doc-claude.brewcode.app/brewcode/skills/standards-review/)

@@ -148,3 +148,7 @@ When other skills (spec, plan, start, convention, standards-review) spawn agents
 | `/brewcode:plan` | Build execution plans from specs |
 | `/brewcode:start` | Execute plans using the created team |
 | `/brewcode:rules` | Extract team insights into project rules |
+
+## Documentation
+
+Full docs: [teams](https://doc-claude.brewcode.app/brewcode/skills/teams/)

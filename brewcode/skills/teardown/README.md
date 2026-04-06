@@ -63,3 +63,7 @@ You will be prompted to confirm before anything is deleted.
 - Teardown is safe to run multiple times -- it skips files that do not exist.
 - Your task history, artifacts, and KNOWLEDGE files survive teardown. Think of it as resetting the scaffolding, not the work.
 - After teardown, you need `/brewcode:setup` before using most other brewcode skills again.
+
+## Documentation
+
+Full docs: [teardown](https://doc-claude.brewcode.app/brewcode/skills/teardown/)

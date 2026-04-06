@@ -92,3 +92,7 @@ The skill also updates `.claude/TASK.md` -- prepends the new task path to the to
 - Use `-n` flag for CI pipelines or when you trust the defaults and want zero interaction.
 - After the plan is created, the skill prints a ready-to-paste command: `/brewcode:start .claude/tasks/{TS}_{NAME}_task/PLAN.md`. Clear context with `/clear` first, then paste it.
 - SPEC mode runs a 3-agent quorum review (Plan + architect + reviewer) with 2/3 majority rule. Plan Mode uses a lighter 2-agent review with 2/2 consensus. Both catch gaps before execution begins.
+
+## Documentation
+
+Full docs: [plan](https://doc-claude.brewcode.app/brewcode/skills/plan/)

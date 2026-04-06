@@ -139,3 +139,7 @@ After a sync run, the skill prints a summary table with counts for discovered, q
     preserve: ## User Notes, ## Custom Config
   ```
 - Files that error during sync are not marked as updated in INDEX, so they remain stale and will be retried on the next run.
+
+## Documentation
+
+Full docs: [auto-sync](https://doc-claude.brewcode.app/brewdoc/auto-sync/)

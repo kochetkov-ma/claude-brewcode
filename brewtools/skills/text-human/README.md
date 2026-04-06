@@ -107,3 +107,7 @@ Files are edited in place. No backup files are created -- use git to revert if n
 - **Use custom instructions** to narrow scope: `only remove AI artifacts and fix unicode` skips the doc cleanup entirely if you want to keep verbose docs.
 - **Language references are loaded automatically** based on file extensions -- Java/Kotlin, TypeScript/JS, and Python each have dedicated cleanup rules.
 - **Single files skip sub-agent delegation** and process directly, so small scopes are fast even without parallelism.
+
+## Documentation
+
+Full docs: [text-human](https://doc-claude.brewcode.app/brewtools/skills/text-human/)

@@ -105,3 +105,7 @@ Files modified: memory files in `$MEMORY_DIR`, and optionally `.claude/rules/*.m
 - **Say "review each" on your first run** to understand what the skill considers duplicate or migratable. After that, "delete all" / "migrate all" is safe.
 - **Check the migration targets** after Step 2 -- the skill creates or appends to rules files, so verify the new rules fit your project structure.
 - **Memory directory auto-detection** reads `.claude/settings.json` for a custom `autoMemoryDirectory`. If unset, it falls back to the legacy `~/.claude/projects/<hash>/memory/` path.
+
+## Documentation
+
+Full docs: [memory](https://doc-claude.brewcode.app/brewdoc/memory/)

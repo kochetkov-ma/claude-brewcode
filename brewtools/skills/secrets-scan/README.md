@@ -111,3 +111,7 @@ A console summary is also displayed at the end of the scan with the key metrics 
 - **Expect false positives.** Pattern-based detection will flag test fixtures, example configs, and documentation snippets. Use `--fix` to mark them as false positives and move on.
 - **Combine with .gitignore.** After identifying sensitive files, add them to `.gitignore` immediately. The `--fix` mode offers this as a one-click option.
 - **Check the LOW findings too.** Placeholder values like `changeme` sometimes slip into production configs unchanged. A quick review of LOW findings can prevent configuration errors.
+
+## Documentation
+
+Full docs: [secrets-scan](https://doc-claude.brewcode.app/brewtools/skills/secrets-scan/)

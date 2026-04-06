@@ -144,3 +144,7 @@ Hooks pick up the change automatically — no code modifications needed.
 - Point at a folder (`/brewcode:skills ~/.claude/skills/`) to batch-improve every skill inside it. Each skill gets its own parallel agent.
 - The `create` mode checks conversation history first. If the current conversation already contains a workflow worth capturing, it extracts context directly and skips web research.
 - After creating a skill, you are offered an optional eval step that runs three test prompts to verify the skill activates correctly.
+
+## Documentation
+
+Full docs: [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/)

@@ -93,3 +93,7 @@ Files are modified in-place. The report is printed to the conversation.
 - **Review deep mode diffs carefully** -- aggressive rephrasing can alter meaning in domain-specific content.
 - **Run without arguments** to optimize all standard locations at once: `CLAUDE.md`, `.claude/agents/*.md`, `.claude/skills/**/SKILL.md`.
 - **Parallel processing** kicks in automatically when you pass multiple files or a directory -- no extra flags needed.
+
+## Documentation
+
+Full docs: [text-optimize](https://doc-claude.brewcode.app/brewtools/skills/text-optimize/)

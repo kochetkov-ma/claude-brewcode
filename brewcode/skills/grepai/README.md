@@ -84,3 +84,7 @@ MCP server is configured with `grepai_search` and related tools (`trace_callers`
 - **Run `/brewcode:setup` first** if you do not have Homebrew, Ollama, or the grepai CLI installed.
 - **Use `optimize` after structural changes** (new modules, renamed packages, changed build config) to regenerate the config with fresh project analysis.
 - **Check `status` when search results seem off** -- it validates every component from CLI to index integrity.
+
+## Documentation
+
+Full docs: [grepai](https://doc-claude.brewcode.app/brewcode/skills/grepai/)

@@ -1,171 +1,143 @@
----
-auto-sync: enabled
-auto-sync-date: 2026-02-11
-description: README for brewcode plugin — user documentation
----
-
-<auto-sync-override>
-sources: brewcode/skills/*/SKILL.md, brewcode/.claude-plugin/plugin.json
-focus: Commands (table must contain ALL skills from skills/), version (from plugin.json)
-preserve: ## Installation, ## Quick Start
-checks:
-  - Compare command list with `ls skills/` — all must be in the table
-  - Version in ## Version must match plugin.json
-  - Links to docs/*.md must exist
-</auto-sync-override>
-
 # Brewcode
 
-A plugin for Claude Code that executes tasks of any size through automatic state handoff between context compactions. Creates a specification, a phased plan, launches execution with multi-agent verification, and accumulates knowledge throughout the entire task.
+> Infinite task execution plugin for Claude Code -- automatic context handoff, multi-agent workflows, knowledge persistence.
 
-**v3 Architecture:** Task API-driven execution. Phase details live in individual `phases/` files -- the manager stays slim, agents read only their assigned phase. Parallel execution via Task API groups. Lighter coordinator focused on knowledge extraction and report verification.
+| Field | Value |
+|-------|-------|
+| Version | 3.4.29 |
+| Skills | 15 |
+| Agents | 12+ |
+| Hooks | 8 |
+| Model | opus |
+
+## Overview
+
+Brewcode turns single Claude Code sessions into an infinite task pipeline. When context reaches ~90%, the PreCompact hook saves knowledge, writes handoff state, and the session continues automatically. One cycle: `spec` -- `plan` -- `start` -- and the task runs to completion regardless of how many compaction cycles occur.
+
+14 skills cover the full lifecycle: project analysis, specification creation through parallel research agents, phased plan generation with quorum review, execution with automatic handoff, code review, convention analysis, and project rules management. 12+ specialized agents handle implementation, testing, review, architecture, and coordination.
 
 ## Installation
 
-### From plugin directory
-
 ```bash
-claude --plugin-dir ./brewcode
-```
-
-### From marketplace
-
-```bash
+# Marketplace (recommended)
 claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
 claude plugin install brewcode@claude-brewcode
-```
 
-### Already installed? Update
-
-```bash
+# Already installed? Update
 claude plugin marketplace update claude-brewcode
 claude plugin update brewcode@claude-brewcode
+
+# Dev mode (no install)
+claude --plugin-dir ./brewcode
 ```
 
 ## Quick Start
 
 ```bash
-/brewcode:setup                              # 1. Adapt templates for the project
+/brewcode:setup                              # 1. Adapt templates for the project (one-time)
 /brewcode:spec "Implement JWT authorization"  # 2. Research + specification
 /brewcode:plan                                # 3. Generate phased plan
 /brewcode:start                               # 4. Execute with infinite context
 ```
 
-After `/brewcode:setup`, templates are adapted once. Then for each task -- the cycle `spec` - `plan` - `start`.
+After `/brewcode:setup`, each task follows the cycle: `spec` -> `plan` -> `start`.
 
-### v3 Flow
+## Skills
 
-```
-/brewcode:plan  --> Slim PLAN.md (Phase Registry table)
-                --> phases/ directory with individual phase files
-                    (1-research.md, 1V-verify-research.md, 2-implement.md, ...)
-
-/brewcode:start --> Manager reads PLAN.md Phase Registry only
-                --> TaskCreate spawns agent with phase file path
-                --> Agent reads phases/{N}-{name}.md
-                --> Parallel group phases spawn simultaneously
-                --> Coordinator: knowledge extraction + report verification
-```
-
-## Commands
-
-| Command | Description |
-|---------|-------------|
-| [`/brewcode:setup`](skills/setup/README.md) | Project analysis, generation of adapted templates and configuration |
-| [`/brewcode:spec`](skills/spec/README.md) | Codebase research, user dialogue, SPEC.md creation |
-| [`/brewcode:plan`](skills/plan/README.md) | Execution plan generation from SPEC or Plan Mode with quorum review |
-| [`/brewcode:start`](skills/start/README.md) | Task launch with infinite context through automatic handoffs |
-| [`/brewcode:teams`](skills/teams/README.md) | Dynamic agent team creation, management, and tracking |
-| [`/brewcode:rules`](skills/rules/README.md) | Rule extraction from accumulated knowledge to `.claude/rules/` |
-| [`/brewcode:grepai`](skills/grepai/README.md) | Semantic code search (setup, status, start, stop, reindex) |
-| ~~`/brewcode:text-optimize`~~ | **moved to brewtools** |
-| ~~`/brewcode:text-human`~~ | **moved to brewtools** |
-| ~~`/brewcode:secrets-scan`~~ | **moved to brewtools** |
-| [`/brewcode:agents`](skills/agents/README.md) | Interactive agent creation and improvement |
-| [`/brewcode:skills`](skills/skills/README.md) | Skill management and activation |
-| [`/brewcode:standards-review`](skills/standards-review/README.md) | Standards compliance review |
+| Skill | Purpose |
+|-------|---------|
+| [`/brewcode:setup`](skills/setup/README.md) | Analyze project, check prerequisites, generate adapted templates and config |
+| [`/brewcode:spec`](skills/spec/README.md) | Research codebase + user dialog -> SPEC.md |
+| [`/brewcode:plan`](skills/plan/README.md) | Generate phased PLAN.md from SPEC or Plan Mode with quorum review |
+| [`/brewcode:start`](skills/start/README.md) | Execute task with infinite context through automatic handoffs |
+| [`/brewcode:teams`](skills/teams/README.md) | Dynamic agent team creation, management, and performance tracking |
+| [`/brewcode:standards-review`](skills/standards-review/README.md) | Review code for project standards compliance |
 | [`/brewcode:convention`](skills/convention/README.md) | Extract etalon classes, patterns, architecture into convention docs and rules |
-| [`/brewcode:glm-design-to-code`](skills/glm-design-to-code/README.md) | GLM vision design-to-code: screenshot → multi-framework code, review, fix |
+| [`/brewcode:rules`](skills/rules/README.md) | Extract rules from accumulated knowledge to `.claude/rules/` |
+| [`/brewcode:grepai`](skills/grepai/README.md) | Semantic code search (setup, status, start, stop, reindex) |
+| [`/brewcode:skills`](skills/skills/README.md) | Skill management: list, create, upgrade with activation optimization |
+| [`/brewcode:agents`](skills/agents/README.md) | Interactive agent creation and improvement |
+| [`/brewcode:e2e`](skills/e2e/README.md) | E2E testing orchestration with BDD scenarios and quorum review |
+| [`/brewcode:glm-design-to-code`](skills/glm-design-to-code/README.md) | Vision model design-to-code: screenshot/text/HTML/URL to multi-framework code |
+| [`/brewcode:debate`](skills/debate/README.md) | Evidence-based multi-agent debate: Challenge, Strategy, Critic modes |
 | [`/brewcode:teardown`](skills/teardown/README.md) | Plugin configuration cleanup (tasks are preserved) |
 
-> **Note:** `/brewcode:review` -- local skill, created in the project during `/brewcode:setup`.
->
-> **Moved to brewtools:** `text-optimize`, `text-human`, `secrets-scan` skills and `text-optimizer` agent are now in the [`brewtools`](https://github.com/kochetkov-ma/claude-brewcode) plugin. Install `brewtools` and use `/brewtools:text-optimize`, `/brewtools:text-human`, `/brewtools:secrets-scan`.
->
-> **Moved to brewdoc:** `/brewcode:auto-sync` is now in the dedicated [`brewdoc`](https://github.com/kochetkov-ma/claude-brewcode) plugin. Install `brewdoc` and use `/brewdoc:auto-sync`.
-
-Detailed description of each command: `docs/commands.md`
+> **Note:** `/brewcode:review` is a local skill created in the project during `/brewcode:setup`.
 
 ## Agents
 
-Specialized agents spawned by brewcode skills during task execution:
+| Agent | Model | Purpose |
+|-------|-------|---------|
+| [developer](agents/developer.md) | opus | Implement features, write code, fix bugs |
+| [tester](agents/tester.md) | sonnet | Run tests, analyze failures, debug flaky tests |
+| [reviewer](agents/reviewer.md) | opus | Code review, architecture, security, performance |
+| [architect](agents/architect.md) | opus | Architecture analysis, patterns, trade-offs, scaling |
+| [skill-creator](agents/skill-creator.md) | opus | Create and improve Claude Code skills |
+| [agent-creator](agents/agent-creator.md) | opus | Create and improve Claude Code agents |
+| [hook-creator](agents/hook-creator.md) | opus | Create and debug Claude Code hooks |
+| [bash-expert](agents/bash-expert.md) | opus | Create professional shell scripts |
+| [bc-coordinator](agents/bc-coordinator.md) | haiku | Task coordination, artifact management |
+| [bc-knowledge-manager](agents/bc-knowledge-manager.md) | haiku | KNOWLEDGE.jsonl compaction and deduplication |
+| [bc-grepai-configurator](agents/bc-grepai-configurator.md) | opus | Generate grepai config.yaml |
+| [bc-rules-organizer](agents/bc-rules-organizer.md) | sonnet | Create and optimize `.claude/rules/` files |
 
-> **Dynamic teams:** Use `/brewcode:teams create` to generate 5-20 project-specific agents
-> with self-selection protocol and performance tracking in `.claude/agents/`.
+> **Dynamic teams:** Use `/brewcode:teams create` to generate 5-20 project-specific agents with self-selection protocol and performance tracking.
 
-| Agent | Purpose | Best for |
-|-------|---------|----------|
-| [developer](agents/developer.md) | Full-stack development -- implements features, writes code, fixes bugs | Implementation, bug fixes, refactoring, unit tests |
-| [reviewer](agents/reviewer.md) | System architect and code reviewer -- architecture, quality, security, performance | Code review, architecture analysis, SOLID enforcement |
-| [tester](agents/tester.md) | SDET/QA -- runs tests, analyzes results, debugs flaky tests | Test execution, failure analysis, test infrastructure |
-| [architect](agents/architect.md) | Architecture analysis -- design, patterns, trade-offs, scaling strategies | Architecture review, module decomposition, pattern evaluation |
-| ~~text-optimizer~~ | **moved to brewtools** | Prompt compression, CLAUDE.md optimization, verbose docs |
-| [bash-expert](agents/bash-expert.md) | Creates production-quality bash/sh scripts for macOS and Linux | Shell scripts, install scripts, plugin automation |
-| [skill-creator](agents/skill-creator.md) | Creates and improves Claude Code skills (SKILL.md files) | New skill creation, skill invocation debugging |
-| [agent-creator](agents/agent-creator.md) | Creates and improves Claude Code agents | New agent creation, agent triggering improvements |
-| [hook-creator](agents/hook-creator.md) | Creates and debugs Claude Code hooks (lifecycle event handlers) | Hook creation, hook debugging, schema validation |
-| [bc-coordinator](agents/bc-coordinator.md) | Task coordinator -- knowledge extraction, report verification, FINAL.md | Phase tracking, knowledge management, task finalization |
-| [bc-knowledge-manager](agents/bc-knowledge-manager.md) | KNOWLEDGE.jsonl compaction -- deduplication, prioritization, truncation | Knowledge cleanup before handoff, duplicate removal |
-| [bc-grepai-configurator](agents/bc-grepai-configurator.md) | grepai config specialist -- project analysis, config.yaml generation | Semantic search setup, grepai configuration |
-| [bc-rules-organizer](agents/bc-rules-organizer.md) | Creates and optimizes `.claude/rules/*.md` with path-specific frontmatter | Rule extraction, CLAUDE.md splitting, rule organization |
-
-## Configuration
-
-Configuration file is created during `/brewcode:setup`:
+## Architecture
 
 ```
-.claude/tasks/cfg/brewcode.config.json
+brewcode/
++-- .claude-plugin/plugin.json          # Plugin manifest
++-- hooks/                              # 8 lifecycle hooks
+|   +-- session-start.mjs              # Session initialization
+|   +-- grepai-session.mjs             # Auto-start grepai watch
+|   +-- pre-task.mjs                   # Knowledge injection into agents
+|   +-- grepai-reminder.mjs            # grepai reminder
+|   +-- post-task.mjs                  # Session binding, 2-step protocol
+|   +-- pre-compact.mjs               # Knowledge compaction, handoff
+|   +-- stop.mjs                       # Exit blocking
+|   +-- forced-eval.mjs                # Skill activation
++-- agents/                            # 12 agents
++-- skills/                            # 15 skills
++-- templates/                         # Rule templates
 ```
 
-Main sections:
+## Hook Lifecycle
 
-| Section | Purpose |
-|---------|---------|
-| `knowledge` | Entry limits, validation, retention (global/task) |
-| `constraints` | Role constraints for agents (DEV, TEST, REVIEW) |
-| `autoSync` | Synchronization interval, parallelism |
+| Hook | Event | Purpose |
+|------|-------|---------|
+| session-start | SessionStart | Initialize session, inject plugin path |
+| grepai-session | SessionStart | Auto-start grepai watch process |
+| pre-task | PreToolUse:Task | Inject grepai + KNOWLEDGE into agent prompts |
+| grepai-reminder | PreToolUse:Glob/Grep | Remind to prefer semantic search |
+| post-task | PostToolUse:Task | Bind session, enforce 2-step protocol |
+| pre-compact | PreCompact | Compact KNOWLEDGE, write handoff entry |
+| stop | Stop | Block if not terminal, clean lock |
+| forced-eval | UserPromptSubmit | Skill activation |
 
 ## Task Structure
 
-After task creation, the following appears in the project:
-
 ```
 .claude/tasks/{TS}_{NAME}_task/
-  SPEC.md             # Specification
-  PLAN.md             # Slim plan: 3-line header + Phase Registry table
-  KNOWLEDGE.jsonl     # Accumulated knowledge
-  phases/             # Individual phase files for agents (v3)
-    1-research.md
-    1V-verify-research.md
-    2-implement.md
-    FR-final-review.md
+  SPEC.md             # Specification (research results)
+  PLAN.md             # Phased execution plan
+  KNOWLEDGE.jsonl     # Accumulated knowledge (survives compactions)
+  phases/             # Individual phase files for agents
   artifacts/          # Execution reports by phases
   backup/             # Backups
+  .lock               # Session lock file
 ```
 
 ## Documentation
 
-| Document | Description |
-|----------|-------------|
-| `docs/commands.md` | Detailed description of all commands with examples |
-| `docs/hooks.md` | Hooks and their behavior |
-| `docs/flow.md` | Execution flow diagrams (spec, plan, start) |
-| `docs/file-tree.md` | Complete file structure of plugin and project |
-| [INSTALL.md](INSTALL.md) | Installation guide |
-| [RELEASE-NOTES.md](../RELEASE-NOTES.md) | Change history |
+Full docs: [doc-claude.brewcode.app/brewcode/overview](https://doc-claude.brewcode.app/brewcode/overview/)
 
-## Version
-
-**3.4.22** -- latest release.
+| Resource | Link |
+|----------|------|
+| Skills reference | [Skills](https://doc-claude.brewcode.app/brewcode/skills/) |
+| Agents reference | [Agents](https://doc-claude.brewcode.app/brewcode/agents/) |
+| Hooks reference | [Hooks](https://doc-claude.brewcode.app/brewcode/hooks/) |
+| Workflow | [Workflow](https://doc-claude.brewcode.app/brewcode/workflow/) |
+| Release Notes | [RELEASE-NOTES.md](../RELEASE-NOTES.md) |
 
 Author: Maksim Kochetkov | License: MIT

@@ -109,3 +109,7 @@ After conversion, a result report is printed:
 - **Style customization:** Run `/brewdoc:md-to-pdf styles` to configure page size (A4, Letter, Legal), color scheme, code theme, and footer format. Settings are saved to `.claude/md-to-pdf.config.json` and reused automatically.
 - **Preprocessing use cases:** The `"prompt"` argument is useful for preparing documents before PDF generation -- strip draft sections, translate headings, flatten structure, or redact sensitive content without modifying the original file.
 - **Test before sharing:** Run `/brewdoc:md-to-pdf test` after installing a new engine or changing styles to confirm everything renders correctly.
+
+## Documentation
+
+Full docs: [md-to-pdf](https://doc-claude.brewcode.app/brewdoc/md-to-pdf/)

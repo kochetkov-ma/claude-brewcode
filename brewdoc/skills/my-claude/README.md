@@ -82,3 +82,7 @@ Every run appends an entry to `~/.claude/brewdoc/INDEX.jsonl` for tracking. If a
 - **Research mode is for documentation, not implementation.** It generates a cited research report. For code tasks, use brewcode skills instead.
 - **External context-schema mode is useful for hook development.** Before writing a new hook, run `ext context` to get a fresh reference on which channels (additionalContext, updatedInput, decision) work for which events.
 - **Check INDEX.jsonl to find previous runs.** Each entry includes timestamp, mode, path, and version, so you can track what was documented and when.
+
+## Documentation
+
+Full docs: [my-claude](https://doc-claude.brewcode.app/brewdoc/my-claude/)

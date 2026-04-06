@@ -199,3 +199,7 @@ export OPENROUTER_API_KEY="your-openrouter-key"
 - **For high-fidelity designs:** Use `--profile max` for pixel-perfect output.
 - **For quick prototypes:** Use `--profile efficient` to save time and cost.
 - **Cache prompts:** Z.ai's cached input ($0.24/1M) is 5x cheaper than regular input. Repeated prompts automatically cache.
+
+## Documentation
+
+Full docs: [glm-design-to-code](https://doc-claude.brewcode.app/brewcode/skills/glm-design-to-code/)

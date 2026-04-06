@@ -89,3 +89,7 @@ SPEC.md contains:
 - Use `-n` when you already have a well-defined requirements document and do not need interactive clarification.
 - If the skill detects that your request spans more than 3 independent areas or 12+ plan phases, it will suggest splitting into smaller tasks. Accept the split to keep specs focused.
 - After the spec is ready, clear context with `/clear` and then run `/brewcode:plan .claude/tasks/{TIMESTAMP}_{NAME}_task/` to generate the execution plan.
+
+## Documentation
+
+Full docs: [spec](https://doc-claude.brewcode.app/brewcode/skills/spec/)

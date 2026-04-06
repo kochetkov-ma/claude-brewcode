@@ -114,3 +114,7 @@ The review skill is generated with checks matched to the detected stack (e.g., S
 - After setup completes, the typical workflow is `spec` -> `plan` -> `start`. Each of those skills depends on the templates setup creates.
 - Check `.claude/tasks/cfg/brewcode.config.json` to tune knowledge compaction limits and agent injection settings after the initial run.
 - Setup handles prerequisites automatically. No need to install anything manually before running it.
+
+## Documentation
+
+Full docs: [setup](https://doc-claude.brewcode.app/brewcode/skills/setup/)

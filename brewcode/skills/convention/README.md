@@ -107,3 +107,7 @@ Rules extraction uses a 3-Check Deduplication Protocol:
 - **Large projects (>1000 files):** The skill warns automatically. Use `paths` mode to scope analysis to specific modules for faster, more focused results.
 - **Iterative workflow:** Start with `conventions` mode to review docs first. Once satisfied, run `rules` mode separately. This gives you full control over what gets promoted to rules.
 - **Supported stacks:** Java, Kotlin, TypeScript, Python, Rust, Go, and multi-stack projects. Unknown stacks get generic analysis across all layers.
+
+## Documentation
+
+Full docs: [convention](https://doc-claude.brewcode.app/brewcode/skills/convention/)

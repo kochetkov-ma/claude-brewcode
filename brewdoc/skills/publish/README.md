@@ -87,3 +87,7 @@ Find your owner tokens in `.claude/brewpage-history.md`.
 - **Namespace controls the URL** -- choosing `public` places the page in the gallery. Pick a custom namespace (3-32 alphanumeric chars) for a cleaner URL or to avoid gallery listing.
 - **Password protection** -- when you set a password, the page is hidden from the gallery and requires the password to view.
 - **Each publish creates a new page** -- there is no "update" operation. Publish again and share the new URL. Delete the old page using the saved owner token if needed.
+
+## Documentation
+
+Full docs: [publish](https://doc-claude.brewcode.app/brewdoc/publish/)
