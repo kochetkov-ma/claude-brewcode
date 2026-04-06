@@ -2,6 +2,16 @@
 
 ---
 
+## v3.4.41 (2026-04-06)
+
+> Docs: [publish](https://doc-claude.brewcode.app/brewdoc/publish/)
+
+### brewdoc
+#### Changed
+- **publish:** Reverted model from sonnet back to haiku for publish skill
+
+---
+
 ## v3.4.39 (2026-04-06)
 
 > Docs: [publish](https://doc-claude.brewcode.app/brewdoc/publish/)
