@@ -2,6 +2,32 @@
 
 ---
 
+## v3.4.35 (2026-04-06)
+
+> Docs: [teams](https://doc-claude.brewcode.app/brewcode/skills/teams/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [guide](https://doc-claude.brewcode.app/brewdoc/guide/)
+
+### brewcode
+#### Changed
+- **teams:** Added Review and Fix Pipeline (C5-C9) after agent creation — 3 parallel quorum reviewers, 2/3 consensus filter, verification, fix critical/important issues, re-verify with max 2 retry cycles. Flags: `--skip-review`, `--review`
+
+### docs
+#### Changed
+- **skills overview:** Added Lifecycle timeline, Skill Management cross-refs, Independent Skills cards
+- **skills skill:** Removed large bash scripts, added Cards for modes, Steps for 7-phase workflow, Tabs for details
+- **skill-creator:** Added CardGrid for Skill Anatomy and Design Patterns, Steps for creation process, See Also cross-refs
+- **guide:** Fixed Steps div wrappers, added domain CardGrid, Steps for How It Works flow
+- **publish:** Fixed Steps div wrappers
+- **Card component:** Extended iconMap with heart, money, library, fire, handshake, rocket, package
+- **all pages:** Replaced raw emoji hex codes with named icons across getting-started, quickstart, installation, debate
+
+#### Added
+- **README sync:** All 28 README files synced with docs site (root, 3 plugins, 21 skills)
+
+### chore
+- `.gitignore`: ignore `*.png` and `.playwright-mcp/`, untracked stale screenshots
+
+---
+
 ## v3.4.29 (2026-04-06)
 
 > Docs: [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/)
