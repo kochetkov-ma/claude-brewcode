@@ -188,32 +188,34 @@ GPT-5 Image is the most expensive option. Skill MUST:
 
 ---
 
-## Z.ai CogView-4 (service: `zai`)
+## Z.ai GLM-image (service: `zai`)
 
 | Field | Value |
 |-------|-------|
-| Model | `cogview-4-250304` |
-| Endpoint | `https://open.bigmodel.cn/api/paas/v4/images/generations` |
+| Model | `glm-image` |
+| Endpoint | `https://api.z.ai/api/paas/v4/images/generations` |
 | Auth | Header: `Authorization: Bearer $ZAI_API_KEY` |
 | Env var | `ZAI_API_KEY` |
 | Limits | 1 image per request |
 | Cost | ~$0.015/image |
 | Edit support | No |
-| Strengths | Chinese text rendering, fast, cheap |
+| Strengths | Flagship Z.ai model, high quality, Chinese text rendering |
 
 ### Generate Payload
 
 ```json
 {
-  "model": "cogview-4-250304",
+  "model": "glm-image",
   "prompt": "ENHANCED_PROMPT",
-  "size": "1024x1024"
+  "size": "1280x1280"
 }
 ```
 
 ### Size Options
 
-`1024x1024`, `768x1344`, `864x1152`, `1344x768`, `1152x864`, `1440x720`, `720x1440`
+Recommended: `1280x1280`, `1568x1056`, `1056x1568`, `1472x1088`, `1088x1472`, `1728x960`, `960x1728`
+
+Custom: width and height 512–2048px, each a multiple of 32.
 
 ### Response Format
 

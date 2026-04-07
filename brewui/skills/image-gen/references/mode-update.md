@@ -70,20 +70,20 @@ Store for final report:
 
 ---
 
-## Provider 2: Z.ai (Zhipu AI) CogView
+## Provider 2: Z.ai (Zhipu AI) GLM-image
 
-Current model: `cogview-4-250304`
+Current model: `glm-image`
 
 ### Step 1: Check API Documentation
 
-Use WebSearch (CogView models are not always in the general model list):
+Use WebSearch:
 ```
-"Zhipu AI CogView API latest model site:docs.z.ai OR site:open.bigmodel.cn"
+"Z.ai GLM-image API latest model site:docs.z.ai"
 ```
 
 Direct URLs:
 - `https://docs.z.ai/guides/models`
-- `https://open.bigmodel.cn/dev/api/image/cogview-4`
+- `https://docs.z.ai/guides/image/glm-image`
 - `https://docs.z.ai/guides/overview/pricing`
 
 ### Step 2: Test Model Availability
@@ -95,10 +95,10 @@ if [ -z "$ZAI_API_KEY" ]; then
   echo "SKIP_NO_KEY"
 else
   curl -s -o /tmp/zai-test-response.json -w "%{http_code}" \
-    "https://open.bigmodel.cn/api/paas/v4/images/generations" \
+    "https://api.z.ai/api/paas/v4/images/generations" \
     -H "Authorization: Bearer $ZAI_API_KEY" \
     -H "Content-Type: application/json" \
-    -d '{"model":"cogview-4-250304","prompt":"test solid blue square","size":"1024x1024"}' \
+    -d '{"model":"glm-image","prompt":"test solid blue square","size":"1280x1280"}' \
     > /tmp/zai-test-status.txt 2>&1
   HTTP_CODE=$(cat /tmp/zai-test-status.txt)
   echo "HTTP status: $HTTP_CODE"
@@ -117,10 +117,10 @@ fi
 
 Use WebSearch:
 ```
-"CogView-4 OR CogView-5 API model {current_year}"
+"Z.ai GLM-image API model {current_year}"
 ```
 
-Known progression: cogview-3 -> cogview-4 (current, 250304). Check for: cogview-4 date updates (e.g. 250601), cogview-5, new size options, new endpoints.
+Known progression: cogview-3 -> cogview-4 -> glm-image (current, flagship). Check for: new model versions, new size options, new endpoints.
 
 ### Step 4: Check Pricing
 
@@ -328,7 +328,7 @@ After completing all provider checks, output the comparison report.
 | Provider | Current Model | Latest Available | Pricing Change | Status |
 |----------|--------------|-----------------|----------------|--------|
 | openrouter | gemini-2.5-flash-image | {latest} | {yes/no/unknown} | {OK/CHANGED/DEPRECATED/ERROR} |
-| zai | cogview-4-250304 | {latest} | {yes/no/unknown} | {OK/CHANGED/DEPRECATED/ERROR} |
+| zai | glm-image | {latest} | {yes/no/unknown} | {OK/CHANGED/DEPRECATED/ERROR} |
 | gemini | imagen-4.0-generate-001 | {latest} | {yes/no/unknown} | {OK/CHANGED/DEPRECATED/ERROR} |
 | openrouter-gpt5 | gpt-5-image | {latest} | {yes/no/unknown} | {OK/CHANGED/DEPRECATED/ERROR} |
 | openai | dall-e-3 | {latest} | {yes/no/unknown} | {OK/CHANGED/DEPRECATED/ERROR} |

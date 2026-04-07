@@ -2,6 +2,19 @@
 
 ---
 
+## v3.4.45 (2026-04-07)
+
+> Docs: [image-gen](https://doc-claude.brewcode.app/brewui/skills/image-gen/)
+
+### brewui
+#### Changed
+- **image-gen:** Z.ai provider upgraded from CogView-4 to GLM-image (flagship model, top-tier quality, same $0.015/image)
+- **image-gen:** Z.ai endpoint migrated from `open.bigmodel.cn` to `api.z.ai`
+- **image-gen:** Default Z.ai size updated to 1280x1280 with custom size support (512-2048px, multiples of 32)
+- **image-gen:** Docs page updated with GLM-image promotional badge and Z.ai docs link
+
+---
+
 ## v3.4.44 (2026-04-07)
 
 > Docs: [ssh skill](https://doc-claude.brewcode.app/brewcode/skills/ssh/) | [ssh-admin agent](https://doc-claude.brewcode.app/brewcode/agents/ssh-admin/) | [image-gen](https://doc-claude.brewcode.app/brewui/skills/image-gen/)

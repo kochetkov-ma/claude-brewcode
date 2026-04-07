@@ -59,8 +59,8 @@ case "$SERVICE" in
 
   zai)
     API_KEY="${ZAI_API_KEY:?ERROR: ZAI_API_KEY not set}"
-    API_URL="https://open.bigmodel.cn/api/paas/v4/images/generations"
-    echo "Sending to Z.ai CogView-4 ($API_URL)..." >&2
+    API_URL="https://api.z.ai/api/paas/v4/images/generations"
+    echo "Sending to Z.ai GLM-image ($API_URL)..." >&2
     HTTP_CODE=$(curl -s -w "%{http_code}" -o "$OUTPUT" \
       --retry 3 --retry-delay 5 --retry-max-time 60 \
       --max-time 120 \

@@ -1,7 +1,7 @@
 ---
 name: brewui:image-gen
 description: |
-  Generates AI images via multiple providers (OpenRouter Gemini/GPT-5, Z.ai CogView-4, Google Imagen 4, OpenAI DALL-E 3) with anti-AI-slop controls.
+  Generates AI images via multiple providers (OpenRouter Gemini/GPT-5, Z.ai GLM-image, Google Imagen 4, OpenAI DALL-E 3) with anti-AI-slop controls.
   Modes: generate (default), edit, config, update.
   Triggers: "generate image", "create image", "make image", "AI image", "image-gen", "og image", "blog image", "illustration"
 
@@ -29,7 +29,7 @@ model: haiku
 
 # Image Gen
 
-Generates AI images via Gemini Imagen 4, OpenRouter (Gemini 2.5 Flash Image / GPT-5-image), or OpenAI DALL-E 3. Applies anti-AI-slop prompt prefixes per style. Four modes: generate, edit, config, update.
+Generates AI images via Gemini Imagen 4, OpenRouter (Gemini 2.5 Flash Image / GPT-5-image), Z.ai GLM-image, or OpenAI DALL-E 3. Applies anti-AI-slop prompt prefixes per style. Four modes: generate, edit, config, update.
 
 **Arguments:** `$ARGUMENTS`
 
@@ -169,14 +169,14 @@ Which image generation service?
 | Service | Model | Speed | Quality | Cost |
 |---------|-------|-------|---------|------|
 | openrouter | Gemini 2.5 Flash Image | Fast | High | ~$0.001/image |
-| zai | CogView-4 | Fast | Good | ~$0.015/image |
+| zai | GLM-image | Fast | **Very High** | ~$0.015/image |
 | gemini | Imagen 4 | Fast | Very High | Paid plan required |
 | openrouter-gpt5 | GPT-5 Image | Medium | **Highest** | ~$0.01/image |
 | openai | DALL-E 3 | Medium | High | $0.04-0.12/image |
 ```
 Options:
 - "openrouter (Gemini 2.5 Flash -- cheapest, default)"
-- "zai (CogView-4 -- fast, good for Chinese text)"
+- "zai (GLM-image -- flagship Z.ai, high quality)"
 - "gemini (Imagen 4 -- high quality, paid plan)"
 - "openrouter-gpt5 (GPT-5 Image -- highest quality, ~$0.01/img)"
 - "openai (DALL-E 3 -- reliable, most expensive)"
@@ -392,7 +392,7 @@ Options: "Generate more (same settings)", "Different prompt", "Edit one of these
 ### Step 1: Select Service
 
 **ASK** using AskUserQuestion: "Which service to configure?"
-Options: "openrouter (Gemini 2.5 Flash)", "zai (CogView-4)", "gemini (Imagen 4)", "openrouter-gpt5 (GPT-5 Image)", "openai (DALL-E 3)", "All services"
+Options: "openrouter (Gemini 2.5 Flash)", "zai (GLM-image)", "gemini (Imagen 4)", "openrouter-gpt5 (GPT-5 Image)", "openai (DALL-E 3)", "All services"
 
 ### Step 2: Get API Key
 

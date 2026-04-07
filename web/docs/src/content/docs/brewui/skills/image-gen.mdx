@@ -12,6 +12,18 @@ import { Card, CardGrid, Callout, Steps, Badge, Tabs, TabItem } from '../../../.
 AI image generation via multiple providers with anti-AI-slop prompt engineering.
 Four modes, five providers, three art styles. Fast path for 99% of cases -- just type a prompt.
 
+<div style="display: flex; align-items: center; gap: 1.5rem; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); border-radius: 1rem; padding: 1.5rem; margin: 1.5rem 0; border: 1px solid #e2b340;">
+  <img src="/glm-image-badge.png" alt="GLM-image" style="width: 120px; height: 120px; flex-shrink: 0;" />
+  <div>
+    <strong style="color: #e2b340; font-size: 1.2rem;">GLM-image — flagship Z.ai model</strong>
+    <p style="color: #ccc; margin: 0.5rem 0 0 0;">
+      Top-tier image quality at just <strong style="color: #4ade80;">$0.015/image</strong>.
+      The best quality-to-price ratio among all providers.
+      <a href="https://docs.z.ai/guides/image/glm-image" style="color: #60a5fa;">Z.ai GLM-image docs</a>
+    </p>
+  </div>
+</div>
+
 <CardGrid>
   <Card title="GENERATE" icon="sparkle">
     Text-to-image generation. Default mode. Anti-slop prefix applied automatically based on style. Supports batch generation up to 10 images.
@@ -34,7 +46,7 @@ Four modes, five providers, three art styles. Fast path for 99% of cases -- just
 | Command | `/brewui:image-gen` |
 | Arguments | `[prompt] [--edit image.png 'instructions'] [--config] [--update] [--service] [--style] [--count N] [--output dir] [--size WxH]` |
 | Modes | generate (default), edit, config, update |
-| Providers | 5 (Gemini Imagen 4, OpenRouter Gemini 2.5 Flash, OpenRouter GPT-5, Z.ai CogView-4, OpenAI DALL-E 3) |
+| Providers | 5 (Gemini Imagen 4, OpenRouter Gemini 2.5 Flash, OpenRouter GPT-5, Z.ai GLM-image, OpenAI DALL-E 3) |
 | Styles | photo, illustration, art |
 | Model | haiku |
 | Output | Images + sidecar JSON metadata |
@@ -70,8 +82,8 @@ Four modes, five providers, three art styles. Fast path for 99% of cases -- just
   <Card title="OpenRouter GPT-5 Image" icon="brain">
     Highest quality. ~$0.01/image. Via OpenRouter API. Medium speed. No edit support.
   </Card>
-  <Card title="Z.ai CogView-4" icon="eye">
-    Fast, good quality (~$0.015/image). Good for Chinese text rendering. Via Z.ai API.
+  <Card title="Z.ai GLM-image" icon="eye">
+    Flagship Z.ai model. Top-tier quality at ~$0.015/image. Best quality-to-price ratio. Via <a href="https://docs.z.ai/guides/image/glm-image">Z.ai API</a>.
   </Card>
   <Card title="OpenAI DALL-E 3" icon="building">
     Reliable, most expensive ($0.04-0.12/image). 1 image per request. Edit via DALL-E 2 fallback.

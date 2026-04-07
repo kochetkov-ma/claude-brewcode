@@ -26,7 +26,7 @@ case "$SERVICE" in
   gemini)          MODEL_NAME="imagen-4.0-generate-001" ;;
   openrouter)      MODEL_NAME="gemini-2.5-flash-image" ;;
   openrouter-gpt5) MODEL_NAME="gpt-5-image" ;;
-  zai)             MODEL_NAME="cogview-4-250304" ;;
+  zai)             MODEL_NAME="glm-image" ;;
   openai)          MODEL_NAME="dall-e-3" ;;
   *)               MODEL_NAME="unknown" ;;
 esac

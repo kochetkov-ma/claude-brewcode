@@ -22,5 +22,6 @@ logs/
 data/
 *.png
 !web/docs/public/og/*.png
+!web/docs/public/glm-image-badge.png
 d2c-output/
 .playwright-mcp/

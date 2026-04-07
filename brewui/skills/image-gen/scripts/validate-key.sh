@@ -51,7 +51,7 @@ case "$SERVICE" in
   zai)
     [ -n "${ZAI_API_KEY:-}" ] || fail "ZAI_API_KEY is not set"
     RESPONSE=$(curl -s -w "\n%{http_code}" \
-      "https://open.bigmodel.cn/api/paas/v4/models" \
+      "https://api.z.ai/api/paas/v4/models" \
       -H "Authorization: Bearer $ZAI_API_KEY" \
       --max-time 10) || fail "Connection failed to Z.ai API"
     HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
