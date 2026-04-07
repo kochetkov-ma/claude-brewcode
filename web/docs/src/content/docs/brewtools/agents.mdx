@@ -1,0 +1,32 @@
+---
+title: "Agents"
+description: "All Brewtools agents: models, triggers, tools"
+order: 32
+---
+
+import { Card, CardGrid } from '../../../components/mdx';
+
+# Agents
+
+Agents are specialized roles defined in markdown files with frontmatter metadata.
+Each agent has its own model, toolset, and system prompt. Brewtools includes 3 agents.
+
+## Summary table
+
+| # | Agent | Model | Purpose |
+|---|-------|-------|---------|
+| 1 | text-optimizer | sonnet | Text optimization with rule-based validation |
+| 2 | ssh-admin | opus | SSH server administration |
+| 3 | deploy-admin | opus | GitHub Actions, CI/CD, releases |
+
+<CardGrid>
+  <Card title="text-optimizer" icon="sparkle" href="/brewtools/agents/text-optimizer/">
+    Text optimization with rule-based validation
+  </Card>
+  <Card title="ssh-admin" icon="terminal" href="/brewtools/agents/ssh-admin/">
+    SSH server administration
+  </Card>
+  <Card title="deploy-admin" icon="sync" href="/brewtools/agents/deploy-admin/">
+    GitHub Actions, CI/CD, releases
+  </Card>
+</CardGrid>

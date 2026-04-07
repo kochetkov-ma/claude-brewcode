@@ -39,10 +39,10 @@ export const navigation: NavSection[] = [
           { title: 'skills', slug: 'brewcode/skills/skills' },
           { title: 'agents', slug: 'brewcode/skills/agents' },
           { title: 'e2e', slug: 'brewcode/skills/e2e' },
-          { title: 'glm-design-to-code', slug: 'brewcode/skills/glm-design-to-code' },
+          { title: 'glm-design-to-code (Moved)', slug: 'brewcode/skills/glm-design-to-code' },
           { title: 'debate', slug: 'brewcode/skills/debate' },
-          { title: 'ssh', slug: 'brewcode/skills/ssh' },
-          { title: 'deploy', slug: 'brewcode/skills/deploy' },
+          { title: 'ssh (Moved)', slug: 'brewcode/skills/ssh' },
+          { title: 'deploy (Moved)', slug: 'brewcode/skills/deploy' },
         ],
       },
       {
@@ -61,8 +61,8 @@ export const navigation: NavSection[] = [
           { title: 'bc-knowledge-manager', slug: 'brewcode/agents/bc-knowledge-manager' },
           { title: 'bc-grepai-configurator', slug: 'brewcode/agents/bc-grepai-configurator' },
           { title: 'bc-rules-organizer', slug: 'brewcode/agents/bc-rules-organizer' },
-          { title: 'ssh-admin', slug: 'brewcode/agents/ssh-admin' },
-          { title: 'deploy-admin', slug: 'brewcode/agents/deploy-admin' },
+          { title: 'ssh-admin (Moved)', slug: 'brewcode/agents/ssh-admin' },
+          { title: 'deploy-admin (Moved)', slug: 'brewcode/agents/deploy-admin' },
         ],
       },
       { title: 'Hooks', slug: 'brewcode/hooks' },
@@ -80,6 +80,8 @@ export const navigation: NavSection[] = [
           { title: 'text-optimize', slug: 'brewtools/skills/text-optimize' },
           { title: 'text-human', slug: 'brewtools/skills/text-human' },
           { title: 'secrets-scan', slug: 'brewtools/skills/secrets-scan' },
+          { title: 'ssh', slug: 'brewtools/skills/ssh' },
+          { title: 'deploy', slug: 'brewtools/skills/deploy' },
         ],
       },
       {
@@ -87,6 +89,8 @@ export const navigation: NavSection[] = [
         slug: 'brewtools/agents',
         children: [
           { title: 'text-optimizer', slug: 'brewtools/agents/text-optimizer' },
+          { title: 'ssh-admin', slug: 'brewtools/agents/ssh-admin' },
+          { title: 'deploy-admin', slug: 'brewtools/agents/deploy-admin' },
         ],
       },
     ],
@@ -100,6 +104,15 @@ export const navigation: NavSection[] = [
         slug: 'brewui/skills',
         children: [
           { title: 'image-gen', slug: 'brewui/skills/image-gen' },
+          { title: 'glm-design-to-code', slug: 'brewui/skills/glm-design-to-code' },
+        ],
+      },
+      {
+        title: 'Agents',
+        slug: 'brewui/agents',
+        children: [
+          { title: 'glm-openrouter-specialist', slug: 'brewui/agents/glm-openrouter-specialist' },
+          { title: 'glm-zai-specialist', slug: 'brewui/agents/glm-zai-specialist' },
         ],
       },
     ],

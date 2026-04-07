@@ -94,9 +94,9 @@ tools: Read, Write, Edit, Bash, Glob, Grep
 
 ## Pipeline Scripts
 
-> `BC_PLUGIN_ROOT` is injected as plain text at prompt top by pre-task.mjs hook. Read value from there and substitute literally. If missing — **stop with error:** `BC_PLUGIN_ROOT not in prompt context, cannot access GLM scripts.`
+> `BU_PLUGIN_ROOT` is injected as plain text at prompt top by pre-task.mjs hook. Read value from there and substitute literally. If missing — **stop with error:** `BU_PLUGIN_ROOT not in prompt context, cannot access GLM scripts.`
 
-Scripts at `$BC_PLUGIN_ROOT/skills/glm-design-to-code/scripts/`:
+Scripts at `$BU_PLUGIN_ROOT/skills/glm-design-to-code/scripts/`:
 
 | Script | Purpose | Usage |
 |--------|---------|-------|
@@ -109,13 +109,13 @@ Scripts at `$BC_PLUGIN_ROOT/skills/glm-design-to-code/scripts/`:
 
 ```bash
 # 1. Build payload
-sh $BC_PLUGIN_ROOT/skills/glm-design-to-code/scripts/glm-build-request.sh screenshot.png $BC_PLUGIN_ROOT/skills/glm-design-to-code/references/profile-max.md $BC_PLUGIN_ROOT/skills/glm-design-to-code/references/context-react.md glm-4.6v-flash 16384 > payload.json
+sh $BU_PLUGIN_ROOT/skills/glm-design-to-code/scripts/glm-build-request.sh screenshot.png $BU_PLUGIN_ROOT/skills/glm-design-to-code/references/profile-max.md $BU_PLUGIN_ROOT/skills/glm-design-to-code/references/context-react.md glm-4.6v-flash 16384 > payload.json
 
 # 2. Send request
-sh $BC_PLUGIN_ROOT/skills/glm-design-to-code/scripts/glm-request.sh payload.json response.json zai
+sh $BU_PLUGIN_ROOT/skills/glm-design-to-code/scripts/glm-request.sh payload.json response.json zai
 
 # 3. Extract files
-sh $BC_PLUGIN_ROOT/skills/glm-design-to-code/scripts/glm-extract.sh response.json ./output/
+sh $BU_PLUGIN_ROOT/skills/glm-design-to-code/scripts/glm-extract.sh response.json ./output/
 ```
 
 ## Multi-File Output Format
@@ -160,20 +160,20 @@ echo "=== Z.ai API Check ==="
 [ -n "${OPENROUTER_API_KEY:-}" ] && echo "OPENROUTER_API_KEY: set" || echo "OPENROUTER_API_KEY: NOT SET"
 command -v jq >/dev/null && echo "jq: $(jq --version)" || echo "jq: NOT FOUND"
 command -v base64 >/dev/null && echo "base64: available" || echo "base64: NOT FOUND"
-ls -la $BC_PLUGIN_ROOT/skills/glm-design-to-code/scripts/*.sh 2>/dev/null && echo "Scripts: found" || echo "Scripts: NOT FOUND"
+ls -la $BU_PLUGIN_ROOT/skills/glm-design-to-code/scripts/*.sh 2>/dev/null && echo "Scripts: found" || echo "Scripts: NOT FOUND"
 ```
 
 ## Prompt Templates
 
 | Template | Path | Purpose |
 |----------|------|---------|
-| profile-max | `$BC_PLUGIN_ROOT/skills/glm-design-to-code/references/profile-max.md` | Pixel-perfect generation (max quality) |
-| profile-optimal | `$BC_PLUGIN_ROOT/skills/glm-design-to-code/references/profile-optimal.md` | Balanced generation |
-| profile-efficient | `$BC_PLUGIN_ROOT/skills/glm-design-to-code/references/profile-efficient.md` | Fast generation (fewer tokens) |
-| review | `$BC_PLUGIN_ROOT/skills/glm-design-to-code/references/review.md` | Compare screenshot vs original |
-| context-react | `$BC_PLUGIN_ROOT/skills/glm-design-to-code/references/context-react.md` | React project context |
-| context-flutter | `$BC_PLUGIN_ROOT/skills/glm-design-to-code/references/context-flutter.md` | Flutter project context |
-| context-template | `$BC_PLUGIN_ROOT/skills/glm-design-to-code/references/context-template.md` | Custom project context template |
+| profile-max | `$BU_PLUGIN_ROOT/skills/glm-design-to-code/references/profile-max.md` | Pixel-perfect generation (max quality) |
+| profile-optimal | `$BU_PLUGIN_ROOT/skills/glm-design-to-code/references/profile-optimal.md` | Balanced generation |
+| profile-efficient | `$BU_PLUGIN_ROOT/skills/glm-design-to-code/references/profile-efficient.md` | Fast generation (fewer tokens) |
+| review | `$BU_PLUGIN_ROOT/skills/glm-design-to-code/references/review.md` | Compare screenshot vs original |
+| context-react | `$BU_PLUGIN_ROOT/skills/glm-design-to-code/references/context-react.md` | React project context |
+| context-flutter | `$BU_PLUGIN_ROOT/skills/glm-design-to-code/references/context-flutter.md` | Flutter project context |
+| context-template | `$BU_PLUGIN_ROOT/skills/glm-design-to-code/references/context-template.md` | Custom project context template |
 
 ## Workflow
 

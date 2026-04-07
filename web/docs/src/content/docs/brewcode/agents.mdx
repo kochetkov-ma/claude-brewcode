@@ -1,6 +1,6 @@
 ---
 title: "Agents"
-description: "All 14 Brewcode agents: models, triggers, tools"
+description: "All 12 Brewcode agents: models, triggers, tools"
 order: 12
 ---
 
@@ -9,8 +9,8 @@ import { Card, CardGrid, Callout } from '../../../components/mdx';
 # Agents
 
 Agents (brewers) are specialized roles defined in markdown files with frontmatter metadata.
-Each agent has its own model, toolset, and system prompt. Brewcode includes 14 agents,
-from developer to deployment and task coordination.
+Each agent has its own model, toolset, and system prompt. Brewcode includes 12 agents,
+from developer to task coordination.
 
 ## Summary table
 
@@ -28,8 +28,6 @@ from developer to deployment and task coordination.
 | 10 | bc-knowledge-manager | haiku | Read, Write | KNOWLEDGE.jsonl compaction |
 | 11 | bc-grepai-configurator | opus | Read, Write, Edit, Bash | grepai config.yaml generation |
 | 12 | bc-rules-organizer | sonnet | Read, Write, Edit, Bash | .claude/rules/ organization |
-| 13 | ssh-admin | opus | Read, Write, Edit, Bash | SSH server administration |
-| 14 | deploy-admin | opus | Read, Write, Edit, Bash | GitHub Actions, CI/CD, releases |
 
 <CardGrid>
   <Card title="developer" icon="code" href="/brewcode/agents/developer/">
@@ -68,19 +66,13 @@ from developer to deployment and task coordination.
   <Card title="bc-rules-organizer" icon="shield" href="/brewcode/agents/bc-rules-organizer/">
     .claude/rules/ organization
   </Card>
-  <Card title="ssh-admin" icon="terminal" href="/brewcode/agents/ssh-admin/">
-    SSH server administration
-  </Card>
-  <Card title="deploy-admin" icon="sync" href="/brewcode/agents/deploy-admin/">
-    GitHub Actions, CI/CD, releases
-  </Card>
 </CardGrid>
 
 ## Models and cost
 
 | Model | Agents | When to use |
 |-------|--------|-------------|
-| **opus** | developer, reviewer, architect, skill-creator, agent-creator, hook-creator, bash-expert, bc-grepai-configurator, ssh-admin, deploy-admin | Complex tasks, deep analysis, code generation |
+| **opus** | developer, reviewer, architect, skill-creator, agent-creator, hook-creator, bash-expert, bc-grepai-configurator | Complex tasks, deep analysis, code generation |
 | **sonnet** | tester, text-optimizer, bc-rules-organizer | Balanced tasks, review, optimization |
 | **haiku** | bc-coordinator, bc-knowledge-manager | Lightweight operations: statuses, knowledge extraction, compaction |
 
@@ -88,4 +80,9 @@ from developer to deployment and task coordination.
   Agents are selected automatically based on the Phase Registry in PLAN.md.
   The <code>/brewcode:start</code> skill reads agent assignments from the phase table
   and launches the corresponding agents via Task API.
+</Callout>
+
+<Callout type="note" title="Moved Agents">
+  Agents <code>ssh-admin</code> and <code>deploy-admin</code> have been moved to
+  <a href="/brewtools/overview/">Brewtools</a>.
 </Callout>

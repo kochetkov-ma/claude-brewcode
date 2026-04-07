@@ -1,0 +1,358 @@
+---
+title: "GLM Design to Code"
+description: "Vision model-powered design-to-code generator — screenshots to production code"
+order: 3514
+---
+import { Card, CardGrid, Callout, Steps, Badge, Tabs, TabItem } from '../../../../components/mdx';
+
+# GLM Design to Code
+
+<Badge variant="accent" text="new" /> <Badge variant="primary" text="opus" />
+
+Vision model-powered design-to-code generator.
+Convert designs to working multi-framework code using GLM-5V-Turbo. Accepts images, text descriptions, HTML files, or URLs.
+
+<CardGrid>
+  <Card title="CREATE" icon="pencil">
+    Any input to working multi-file code. HTML/CSS, React 18, Flutter Web.
+  </Card>
+  <Card title="REVIEW" icon="search">
+    Compare original design with generated result. Score 1-10 with actionable feedback.
+  </Card>
+  <Card title="FIX" icon="wrench">
+    Apply review feedback to improve generated code automatically.
+  </Card>
+</CardGrid>
+
+## Input Types
+
+<CardGrid>
+  <Card title="Image" icon="star">
+    PNG, JPG, WebP, or GIF screenshot. The most common input -- export from Figma, Sketch, or take a screenshot.
+  </Card>
+  <Card title="Text Description" icon="pencil">
+    Natural language description of the desired UI. Example: "Dark landing page with hero section and pricing cards".
+  </Card>
+  <Card title="HTML" icon="document">
+    Existing HTML file to convert or improve. Useful for migrating legacy pages to React or Flutter.
+  </Card>
+  <Card title="URL" icon="external">
+    Public URL -- Playwright takes a screenshot automatically, then converts. Great for cloning existing pages.
+  </Card>
+</CardGrid>
+
+<Callout type="note">
+  Input type is **auto-detected** from the argument: file extension for images/HTML, URL pattern for URLs, quoted text for descriptions.
+</Callout>
+
+## Quick reference
+
+| Field | Value |
+|-------|-------|
+| Command | `/brewui:glm-design-to-code` |
+| Arguments | `<input> [--framework html\|react\|flutter\|custom] [--profile max\|optimal\|efficient]` |
+| Input types | Image, text description, HTML file, URL (auto-detected) |
+| Model | opus |
+| Vision model | GLM-5V-Turbo (Z.ai / OpenRouter) |
+
+## Quick Start
+
+```bash
+# From an image
+/brewui:glm-design-to-code screenshot.png
+
+# From a text description
+/brewui:glm-design-to-code "Dark landing page with hero section and pricing cards"
+
+# From an existing HTML file
+/brewui:glm-design-to-code existing-page.html --framework react
+
+# From a URL (auto-screenshots via Playwright)
+/brewui:glm-design-to-code https://example.com/landing
+```
+
+## Pipeline Flow
+
+<Steps>
+  <li>
+    <div>
+      <strong>Parse input</strong>
+      <p>Detect type (image/text/HTML/URL), framework, profile, provider from arguments</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>API key setup</strong>
+      <p>Check <code>.env</code>, validate against provider API, save on success</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Build payload</strong>
+      <p>Base64-encode image + load system prompt (profile) + framework context into JSON</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Send to GLM</strong>
+      <p><code>glm-5v-turbo</code> via Z.ai or OpenRouter, retry on transient failures, 10min timeout</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Extract files</strong>
+      <p>Parse <code>===FILE:===</code> markers from response, create directory structure</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Build and verify</strong>
+      <p><code>npm run build</code> (React), <code>flutter build web</code> (Flutter), or serve static HTML</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Review cycle</strong>
+      <p>Optional: screenshot result, compare with original, score, fix, iterate</p>
+    </div>
+  </li>
+</Steps>
+
+## Benchmark Results
+
+Our research tested GLM-5V-Turbo across three frameworks with the same design mockup:
+
+| Framework | Score | Files | Build | Cost |
+|-----------|-------|-------|-------|------|
+| **HTML/CSS** | **9.5/10** | 3 | N/A | ~$0.032 |
+| **React 18** | **8.0/10** | 19 | Vite 218ms | ~$0.035 |
+| **Flutter Web** | **9.0/10** (Claude) | 10 | flutter build web | ~$0.032 |
+
+<Callout type="tip">
+  Average cost per design-to-code conversion: **~$0.03**. Using the free `glm-4.6v-flash` model for development iterations costs nothing.
+</Callout>
+
+## Design2Code Benchmark Comparison
+
+<CardGrid>
+  <Card title="GLM-5V-Turbo" icon="star">
+    <Badge variant="accent" text="94.8" /> Design2Code benchmark score. CogViT architecture, optimized for design-to-code conversion.
+  </Card>
+  <Card title="Claude Opus 4.6" icon="pencil">
+    <Badge variant="primary" text="77.3" /> Design2Code benchmark score. General-purpose multimodal model.
+  </Card>
+</CardGrid>
+
+<Callout type="warning">
+  Design2Code scores are self-reported by Z.ai. No independent verification has been published as of April 2026. Treat as directional, not definitive.
+</Callout>
+
+## Our Research Results
+
+<Tabs>
+  <TabItem label="HTML/CSS">
+    **Score: 9.5/10** — 3 files generated, no build step needed.
+
+    - Cost: ~$0.032 per conversion
+    - Pixel-perfect colors, spacing, and typography
+    - CSS custom properties for theming
+    - Responsive layout out of the box
+  </TabItem>
+  <TabItem label="React 18">
+    **Score: 8.0/10** — 19 files generated, Vite build in 218ms.
+
+    - Cost: ~$0.035 per conversion
+    - Component decomposition into Header, Sidebar, Content
+    - CSS Modules for scoped styling
+    - Minor issues: some hardcoded values, missing hover states
+  </TabItem>
+  <TabItem label="Flutter Web">
+    **Score: 9.0/10** — 10 files generated, flutter build web.
+
+    - Cost: ~$0.032 per conversion
+    - Clean widget hierarchy with theme constants
+    - Auto-fix needed: `Color(xFF...)` → `Color(0xFF...)`
+    - Native-feel scrolling and layout
+  </TabItem>
+</Tabs>
+
+## GLM Models
+
+| Model | Vision | Price (in/out per 1M) | Context | Best For |
+|-------|--------|----------------------|---------|----------|
+| glm-5v-turbo | Image+Video | $1.20 / $4.00 | 202K | Production quality |
+| glm-4.6v-flash | Image | FREE | 131K | Development and testing |
+| glm-4.6v | Image+Video | $0.30 / $0.90 | 131K | Budget production |
+
+<Callout type="note">
+  GLM-5V-Turbo uses CogViT architecture with 94.8 Design2Code benchmark score. Available via Z.ai direct API or OpenRouter.
+</Callout>
+
+## Frameworks
+
+<Tabs>
+  <TabItem label="HTML/CSS">
+    **Best score: 9.5/10** -- Pure static output. No build step needed.
+
+    - Semantic HTML5 with `index.html` entry point
+    - CSS in separate files with custom properties
+    - JS for interactive elements
+    - Perfect for landing pages, dashboards, documentation
+  </TabItem>
+  <TabItem label="React 18">
+    **Score: 8.0/10** -- Component-based architecture with CSS Modules.
+
+    - JSX components in separate files
+    - CSS Modules (`.module.css`) for styling
+    - Vite build (218ms average)
+    - App.jsx root component
+  </TabItem>
+  <TabItem label="Flutter Web">
+    **Score: 9/10** -- Dart widgets with theme system.
+
+    - StatelessWidget components
+    - Theme constants in `lib/theme.dart`
+    - `flutter build web` compilation
+    - Auto-fix: `Color(xFF...)` to `Color(0xFF...)`
+  </TabItem>
+</Tabs>
+
+## Quality Profiles
+
+<CardGrid>
+  <Card title="Maximum" icon="star">
+    Pixel-perfect reproduction. Exact colors, spacing, typography. 13 quality requirements. ~32K output tokens.
+  </Card>
+  <Card title="Optimal" icon="check">
+    Good quality, balanced cost. Correct colors, proportions, layout. 8 requirements. ~16K tokens.
+  </Card>
+  <Card title="Efficient" icon="forward-slash">
+    Fast generation. Basic layout and colors. 4 requirements. ~8K tokens.
+  </Card>
+</CardGrid>
+
+## Providers
+
+<Tabs>
+  <TabItem label="Z.ai (Direct)">
+    **Recommended.** Direct API access with system message caching (80% discount on repeated prompts).
+
+    - Endpoint: `https://api.z.ai/api/paas/v4/chat/completions`
+    - Auth: `ZAI_API_KEY` environment variable
+    - All GLM models available including free tier
+  </TabItem>
+  <TabItem label="OpenRouter">
+    **Alternative.** Unified API with fallback routing.
+
+    - Endpoint: `https://openrouter.ai/api/v1/chat/completions`
+    - Auth: `OPENROUTER_API_KEY` environment variable
+    - Model IDs prefixed with `z-ai/` (e.g., `z-ai/glm-5v-turbo`)
+  </TabItem>
+</Tabs>
+
+## Usage Examples
+
+<Tabs>
+  <TabItem label="Image">
+    ```bash
+    # Basic -- HTML/CSS output from screenshot
+    /brewui:glm-design-to-code screenshot.png
+
+    # React with optimal quality
+    /brewui:glm-design-to-code mockup.png --framework react --profile optimal
+
+    # Flutter via OpenRouter
+    /brewui:glm-design-to-code design.png --framework flutter --provider openrouter
+    ```
+  </TabItem>
+  <TabItem label="Text">
+    ```bash
+    # Generate from a description
+    /brewui:glm-design-to-code "Minimalist dashboard with sidebar and dark theme"
+
+    # React component from description
+    /brewui:glm-design-to-code "Pricing page with 3 tiers" --framework react
+    ```
+  </TabItem>
+  <TabItem label="HTML">
+    ```bash
+    # Convert legacy HTML to React
+    /brewui:glm-design-to-code old-page.html --framework react
+
+    # Improve existing HTML with max quality
+    /brewui:glm-design-to-code landing.html --profile max
+    ```
+  </TabItem>
+  <TabItem label="URL">
+    ```bash
+    # Clone a live page (Playwright auto-screenshot)
+    /brewui:glm-design-to-code https://example.com/landing
+
+    # Clone as Flutter
+    /brewui:glm-design-to-code https://stripe.com/pricing --framework flutter
+    ```
+  </TabItem>
+  <TabItem label="REVIEW">
+    ```bash
+    # Compare original design with generated result
+    /brewui:glm-design-to-code --review original.png result-screenshot.png
+    ```
+  </TabItem>
+  <TabItem label="FIX">
+    ```bash
+    # Fix specific issues
+    /brewui:glm-design-to-code --fix "sidebar too narrow, wrong green color"
+
+    # Fix from review file
+    /brewui:glm-design-to-code --fix --review-file review.json
+    ```
+  </TabItem>
+</Tabs>
+
+## Options
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--framework` | `html` | Target: `html`, `react`, `flutter`, `custom` |
+| `--profile` | `max` | Quality: `max`, `optimal`, `efficient` |
+| `--provider` | `zai` | API: `zai`, `openrouter` |
+| `--model` | auto | Override model ID |
+| `--output` | `./d2c-output` | Output directory |
+| `--review` | -- | Enter REVIEW mode (accepts 2 images) |
+| `--fix` | -- | Enter FIX mode (accepts feedback text) |
+| `--review-file` | -- | Path to review JSON for FIX mode |
+
+## External Resources
+
+<CardGrid>
+  <Card title="Z.ai Documentation" icon="document">
+    Official GLM-5V-Turbo API guide with vision request examples and model capabilities.
+
+    [docs.z.ai/guides/vlm/glm-5v-turbo](https://docs.z.ai/guides/vlm/glm-5v-turbo)
+  </Card>
+  <Card title="OpenRouter Model Page" icon="external">
+    Model routing, pricing, and availability for GLM-5V-Turbo on OpenRouter.
+
+    [openrouter.ai/z-ai/glm-5v-turbo](https://openrouter.ai/z-ai/glm-5v-turbo)
+  </Card>
+  <Card title="BenchLM Comparison" icon="search">
+    Side-by-side benchmark comparison of Claude Opus 4.6 vs GLM-5V-Turbo.
+
+    [benchlm.ai/compare/claude-opus-4-6-vs-glm-5-turbo](https://benchlm.ai/compare/claude-opus-4-6-vs-glm-5-turbo)
+  </Card>
+  <Card title="The Decoder Article" icon="star">
+    Coverage of GLM-5V-Turbo's design-to-code capabilities and benchmark results.
+
+    [the-decoder.com](https://the-decoder.com/zhipu-ais-glm-5v-turbo-turns-design-mockups-directly-into-executable-front-end-code/)
+  </Card>
+</CardGrid>
+
+## Research Methodology
+
+Our benchmarks used a controlled methodology:
+
+- **Same mockup** across all frameworks (dark-theme documentation page)
+- **Frozen prompts** -- identical prompts per quality profile
+- **Fixed API params** -- temperature 0.2, top_p 0.85, max_tokens 32768
+- **Dual evaluation** -- Claude Opus + GLM-4.6v-flash scoring independently
+- **Playwright verification** -- automated screenshots at 1280x800 viewport

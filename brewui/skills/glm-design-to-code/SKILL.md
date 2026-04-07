@@ -1,5 +1,5 @@
 ---
-name: brewcode:glm-design-to-code
+name: brewui:glm-design-to-code
 description: |
   Use for generates frontend code from design screenshots, mockups, text descriptions, HTML files, or URLs using external GLM vision API (not Claude). Three modes: CREATE, REVIEW, FIX. Supports HTML, React, Flutter output.
   Triggers: "convert screenshot to code", "design to code", "mockup to code", "generate frontend from image", "turn design into React", "screenshot to HTML", "d2c"
@@ -364,7 +364,7 @@ Output: "Set `ZAI_API_KEY` or `OPENROUTER_API_KEY` in your shell, then re-run th
 
 Output: "API key validation failed twice. Please verify your key at https://z.ai or https://openrouter.ai and set the environment variable manually:
 `export ZAI_API_KEY=your-key-here`
-Then re-run: `/brewcode:glm-design-to-code {original args}`" **STOP.**
+Then re-run: `/brewui:glm-design-to-code {original args}`" **STOP.**
 
 ### Step 4: Save Key to .env
 

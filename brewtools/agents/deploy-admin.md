@@ -15,12 +15,12 @@ permissionMode: default
 
 ## Plugin Root Guard
 
-`$BC_PLUGIN_ROOT` is **prompt text injected by hooks**, not a shell env var.
+`$BT_PLUGIN_ROOT` is **prompt text injected by hooks**, not a shell env var.
 
 **On every task start:**
 
-1. Check `$BC_PLUGIN_ROOT` is present in your context
-2. If missing: **STOP** — report error: "BC_PLUGIN_ROOT not injected. Run with brewcode plugin enabled."
+1. Check `$BT_PLUGIN_ROOT` is present in your context
+2. If missing: **STOP** — report error: "BT_PLUGIN_ROOT not injected. Run with brewtools plugin enabled."
 3. If present: use as prefix for plugin resource paths
 
 ## Safety Rules
@@ -181,7 +181,7 @@ docker push ghcr.io/OWNER/IMAGE:TAG
 docker push ghcr.io/OWNER/IMAGE:latest
 ```
 
-> For full Docker registry auth reference: `Read $BC_PLUGIN_ROOT/skills/ssh/references/docker-auth-flow.md`
+> For full Docker registry auth reference: `Read $BT_PLUGIN_ROOT/skills/ssh/references/docker-auth-flow.md`
 
 ## SSH Integration
 
@@ -194,7 +194,7 @@ For VPS deployments and health checks, read `CLAUDE.local.md` in project root fo
 | GHCR login on server | `echo "$TOKEN" \| ssh USER@HOST 'docker login ghcr.io -u USERNAME --password-stdin'` |
 | Verify deployment | `ssh USER@HOST 'docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"'` |
 
-> For detailed Docker auth flow on servers: `Read $BC_PLUGIN_ROOT/skills/ssh/references/docker-auth-flow.md`
+> For detailed Docker auth flow on servers: `Read $BT_PLUGIN_ROOT/skills/ssh/references/docker-auth-flow.md`
 
 ## Emergency Stop
 

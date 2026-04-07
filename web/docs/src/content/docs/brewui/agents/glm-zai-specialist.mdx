@@ -1,0 +1,33 @@
+---
+title: "glm-zai-specialist"
+description: "Z.ai GLM API expert -- vision requests, model selection, rate limits, response parsing"
+order: 3602
+---
+import { Badge, Callout } from '../../../../components/mdx';
+
+# glm-zai-specialist
+
+<Badge variant="primary" text="opus" />
+
+## Quick reference
+
+| Field | Value |
+|-------|-------|
+| Model | opus |
+| Tools | Read, Write, Edit, Bash, Glob, Grep |
+| Triggers | "zai api", "glm request", "z.ai", "send to glm", "glm vision", "glm model" |
+
+**Role:** Z.ai GLM API expert for vision requests, model selection, rate limits, and response parsing in the design-to-code pipeline.
+
+## Knowledge Domains
+
+| Domain | Scope |
+|--------|-------|
+| Z.ai API | Chat completions, vision endpoints, authentication |
+| GLM Models | glm-5v-turbo, glm-4.6v, glm-4.6v-flash selection |
+| Vision pipeline | Image encoding, system prompts, response parsing |
+| Rate limiting | 429 handling, backoff strategies, quota management |
+
+<Callout type="tip" title="Auto-delegated">
+  This agent is automatically delegated by the `/brewui:glm-design-to-code` skill when Z.ai is selected as the provider (default).
+</Callout>

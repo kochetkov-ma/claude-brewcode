@@ -1,6 +1,6 @@
 ---
 title: "Skills"
-description: "All 17 Brewcode skills: commands, parameters, examples"
+description: "All 14 Brewcode skills: commands, parameters, examples"
 order: 11
 ---
 
@@ -9,8 +9,8 @@ import { Card, CardGrid, Callout, Steps, Badge } from '../../../components/mdx';
 # Skills
 
 Skills (recipes) are slash commands that define *what* to do. Each skill is described in a `SKILL.md` file
-with frontmatter metadata and instructions for agents. Brewcode includes 17 skills covering
-the full task lifecycle -- from project analysis to deployment and E2E testing.
+with frontmatter metadata and instructions for agents. Brewcode includes 14 skills covering
+the full task lifecycle -- from project analysis to E2E testing and evidence-based debate.
 
 ## Summary table
 
@@ -29,10 +29,7 @@ the full task lifecycle -- from project analysis to deployment and E2E testing.
 | 11 | skills | `/brewcode:skills` | opus | Skill management |
 | 12 | agents | `/brewcode:agents` | opus | Agent creation and improvement |
 | 13 | e2e | `/brewcode:e2e` | opus | E2E testing orchestration |
-| 14 | glm-design-to-code | `/brewcode:glm-design-to-code` | opus | GLM vision design-to-code |
-| 15 | debate | `/brewcode:debate` | opus | Evidence-based multi-agent debate |
-| 16 | ssh | `/brewcode:ssh` | opus | SSH server management |
-| 17 | deploy | `/brewcode:deploy` | opus | GitHub Actions deployment, CI/CD |
+| 14 | debate | `/brewcode:debate` | opus | Evidence-based multi-agent debate |
 
 <CardGrid>
   <Card title="setup" icon="wrench" href="/brewcode/skills/setup/">
@@ -74,17 +71,8 @@ the full task lifecycle -- from project analysis to deployment and E2E testing.
   <Card title="e2e" icon="check" href="/brewcode/skills/e2e/">
     E2E testing: scenarios, autotests, quorum review
   </Card>
-  <Card title="glm-design-to-code" icon="star" href="/brewcode/skills/glm-design-to-code/">
-    GLM vision design-to-code conversion
-  </Card>
   <Card title="debate" icon="people" href="/brewcode/skills/debate/">
     Evidence-based multi-agent debate
-  </Card>
-  <Card title="ssh" icon="terminal" href="/brewcode/skills/ssh/">
-    SSH server management with safety gates
-  </Card>
-  <Card title="deploy" icon="sync" href="/brewcode/skills/deploy/">
-    GitHub Actions deployment, CI/CD with safety gates
   </Card>
 </CardGrid>
 
@@ -176,6 +164,11 @@ These skills work standalone -- no prior setup required:
 <Callout type="note" title="Moved to Brewtools">
   Skills <code>text-optimize</code>, <code>text-human</code>, and <code>secrets-scan</code> have been
   moved to the <a href="/brewtools/overview/">Brewtools</a> plugin as standalone text utilities.
+</Callout>
+
+<Callout type="note" title="Moved Skills">
+  Skills <code>ssh</code> and <code>deploy</code> have been moved to <a href="/brewtools/skills/">Brewtools</a>.
+  Skill <code>glm-design-to-code</code> has been moved to <a href="/brewui/skills/">Brewui</a>.
 </Callout>
 
 <Callout type="note" title="Mode Switcher">

@@ -1,0 +1,92 @@
+---
+title: "deploy-admin"
+description: "GitHub Actions and deployment agent -- workflows, releases, GHCR, CI/CD, semver"
+order: 3213
+---
+import { Badge, Callout } from '../../../../components/mdx';
+
+# deploy-admin
+
+<Badge variant="accent" text="new" /> <Badge variant="primary" text="opus" />
+
+## Quick reference
+
+| Field | Value |
+|-------|-------|
+| Model | opus |
+| Tools | Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion, WebFetch, WebSearch |
+| Triggers | "deploy", "github actions", "workflow", "release", "ci cd" |
+
+**Role:** GitHub Actions and deployment administrator -- workflows, releases, CI/CD
+
+## Safety Classification
+
+| Category | Level | Examples |
+|----------|-------|---------|
+| READ | safe | `gh run list`, `gh workflow list`, `gh release view`, `gh secret list` |
+| CREATE | moderate | Create workflow YAML, `gh release create --draft` |
+| MODIFY | elevated | Edit workflow, `gh secret set`, `git commit/tag` |
+| SERVICE | elevated | `gh workflow run`, `gh run rerun`, `git push` |
+| DELETE | dangerous | `gh release delete`, `gh run cancel`, remove workflow |
+| PRIVILEGE | dangerous | `gh secret delete`, branch protection, `gh workflow disable` |
+
+<Callout type="caution" title="Destructive operations">
+  DELETE and PRIVILEGE operations require explicit user confirmation before execution.
+</Callout>
+
+## Knowledge Domains
+
+| Domain | Scope |
+|--------|-------|
+| GitHub Actions | Workflows, triggers, jobs, steps, matrix, caching, artifacts |
+| Releases | Semver, changelogs, tags, GitHub Releases, RELEASE-NOTES.md |
+| Docker/GHCR | Build, push, multi-platform, registry auth, image tagging |
+| CI/CD | Run monitoring, failure analysis, re-runs, workflow dispatch |
+| Secrets | Secret management (names only), environment variables |
+| VPS deploy | SCP, SSH deploy, health checks, rollback (via SSH integration) |
+| Security | CodeQL, Gitleaks, SARIF, dependency scanning |
+
+## Dynamic Context
+
+The agent reads `CLAUDE.local.md` in the project root for GitHub config and workflow inventory. This file is populated by the `/brewtools:deploy` skill.
+
+<Callout type="tip" title="Workflow inventory">
+  Run `/brewtools:deploy setup` first to configure GitHub integration. The skill writes `CLAUDE.local.md` with your GitHub config and workflow inventory, which deploy-admin reads automatically.
+</Callout>
+
+## Usage Examples
+
+### Release a new version
+
+> "Release v3.5.0 with changelog from recent commits"
+
+Runs bump-version.sh, generates changelog, updates RELEASE-NOTES.md, commits, tags, pushes, and verifies CI.
+
+### Create a workflow
+
+> "Create a Docker build workflow that pushes to ghcr.io on tags"
+
+Generates workflow YAML from templates, writes to `.github/workflows/`, and updates workflow inventory.
+
+### Monitor CI
+
+> "Check why the last docs workflow failed"
+
+Fetches run logs, identifies failure point, and suggests fixes.
+
+### Deploy to VPS
+
+> "Trigger deploy-docs workflow and verify health on vps-main"
+
+Dispatches workflow, monitors run progress, then SSH health checks the target server.
+
+## Output
+
+```
+=== DEPLOY-ADMIN REPORT ===
+Repository: [owner/repo]
+Task: [description]
+ACTIONS: [what was done]
+VERIFICATION: [post-action checks]
+STATUS: Success / Partial / Failed
+```

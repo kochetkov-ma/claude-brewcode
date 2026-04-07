@@ -33,6 +33,10 @@ claude plugin install brewui@claude-brewcode
     OpenRouter GPT-5, Z.ai CogView-4, OpenAI DALL-E 3. Anti-slop prompt engineering.
     Four modes: generate, edit, config, update.
   </Card>
+  <Card title="glm-design-to-code" icon="star" href="/brewui/skills/glm-design-to-code/">
+    GLM vision design-to-code conversion: image, text description, HTML, or URL input
+    transformed into multi-framework code via OpenRouter and Z.ai providers.
+  </Card>
 </CardGrid>
 
 ## Commands
@@ -40,6 +44,14 @@ claude plugin install brewui@claude-brewcode
 | Command | Purpose | Model | Arguments |
 |---------|---------|-------|-----------|
 | `/brewui:image-gen` | AI image generation | haiku | `[prompt] [--edit] [--config] [--update] [--service] [--style]` |
+| `/brewui:glm-design-to-code` | Vision design-to-code conversion | opus | `[image\|text\|html\|url]` |
+
+## Agents
+
+| Agent | Model | Purpose |
+|-------|-------|---------|
+| [glm-openrouter-specialist](/brewui/agents/glm-openrouter-specialist/) | opus | OpenRouter provider specialist for GLM design-to-code |
+| [glm-zai-specialist](/brewui/agents/glm-zai-specialist/) | opus | Z.ai provider specialist for GLM design-to-code |
 
 ## Plugin variable
 
@@ -56,13 +68,20 @@ brewui/
 ├── hooks/
 │   ├── hooks.json               # Hook registry
 │   ├── session-start.mjs        # BU_PLUGIN_ROOT injection
+│   ├── pre-task.mjs             # BU_PLUGIN_ROOT into subagents
 │   └── lib/utils.mjs            # I/O utilities
-└── skills/
-    └── image-gen/               # AI image generation
-        ├── SKILL.md
-        ├── references/          # Provider specs, anti-slop, modes
-        ├── scripts/             # API request, parsing, saving
-        └── tests/               # Integration tests
+├── skills/
+│   ├── image-gen/               # AI image generation
+│   │   ├── SKILL.md
+│   │   ├── references/          # Provider specs, anti-slop, modes
+│   │   ├── scripts/             # API request, parsing, saving
+│   │   └── tests/               # Integration tests
+│   └── glm-design-to-code/     # Vision design-to-code conversion
+│       ├── SKILL.md
+│       └── references/          # Provider specs, input types
+└── agents/
+    ├── glm-openrouter-specialist.md  # OpenRouter provider agent
+    └── glm-zai-specialist.md         # Z.ai provider agent
 ```
 
 <Callout type="note" title="Brewui vs Brewcode">

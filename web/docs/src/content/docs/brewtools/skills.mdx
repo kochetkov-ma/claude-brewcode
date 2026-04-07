@@ -1,6 +1,6 @@
 ---
 title: "Skills"
-description: "All 3 Brewtools skills: commands, parameters, examples"
+description: "All 5 Brewtools skills: commands, parameters, examples"
 order: 31
 ---
 
@@ -8,8 +8,8 @@ import { Card, CardGrid, Callout } from '../../../components/mdx';
 
 # Skills
 
-Skills (recipes) are slash commands that define *what* to do. Brewtools includes 3 skills
-focused on text processing and security scanning -- each works independently with no prior setup required.
+Skills (recipes) are slash commands that define *what* to do. Brewtools includes 5 skills
+focused on text processing, security scanning, SSH management, and deployment -- each works independently with no prior setup required.
 
 ## Summary table
 
@@ -18,6 +18,8 @@ focused on text processing and security scanning -- each works independently wit
 | 1 | text-optimize | `/brewtools:text-optimize` | sonnet | Text optimization for LLMs |
 | 2 | text-human | `/brewtools:text-human` | sonnet | AI artifact removal from code |
 | 3 | secrets-scan | `/brewtools:secrets-scan` | sonnet | Secrets and key scanning |
+| 4 | ssh | `/brewtools:ssh` | opus | SSH server management |
+| 5 | deploy | `/brewtools:deploy` | opus | GitHub Actions deployment, CI/CD |
 
 <CardGrid>
   <Card title="text-optimize" icon="sparkle" href="/brewtools/skills/text-optimize/">
@@ -29,9 +31,15 @@ focused on text processing and security scanning -- each works independently wit
   <Card title="secrets-scan" icon="lock" href="/brewtools/skills/secrets-scan/">
     Secrets and key scanning
   </Card>
+  <Card title="ssh" icon="terminal" href="/brewtools/skills/ssh/">
+    SSH server management with safety gates
+  </Card>
+  <Card title="deploy" icon="sync" href="/brewtools/skills/deploy/">
+    GitHub Actions deployment, CI/CD with safety gates
+  </Card>
 </CardGrid>
 
 <Callout type="tip" title="Standalone">
-  All three skills can be used independently -- they require no prior setup
+  All five skills can be used independently -- they require no prior setup
   and no dependency on Brewcode or Brewdoc plugins.
 </Callout>

@@ -21,7 +21,7 @@ init_file() {
 | Name | Host | User | Port | Key | Default |
 |------|------|------|------|-----|---------|
 
-> Connect via: `/brewcode:ssh connect to <name>` or `/brewcode:ssh <task description>`
+> Connect via: `/brewtools:ssh connect to <name>` or `/brewtools:ssh <task description>`
 HEREDOC
     fi
 }

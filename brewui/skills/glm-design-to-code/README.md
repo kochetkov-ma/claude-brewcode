@@ -23,16 +23,16 @@ Input type is **auto-detected** from the argument: file extension for images/HTM
 
 ```bash
 # From an image (most common)
-/brewcode:glm-design-to-code screenshot.png
+/brewui:glm-design-to-code screenshot.png
 
 # From a text description
-/brewcode:glm-design-to-code "Dark landing page with hero section and pricing cards"
+/brewui:glm-design-to-code "Dark landing page with hero section and pricing cards"
 
 # From an existing HTML file
-/brewcode:glm-design-to-code existing-page.html
+/brewui:glm-design-to-code existing-page.html
 
 # From a URL (auto-screenshots via Playwright)
-/brewcode:glm-design-to-code https://example.com/landing
+/brewui:glm-design-to-code https://example.com/landing
 ```
 
 CREATE mode converts your input to working, buildable code. You choose the framework (HTML, React, Flutter) and quality profile (max = pixel-perfect, optimal = balanced, efficient = fast).
@@ -45,7 +45,7 @@ CREATE mode converts your input to working, buildable code. You choose the frame
 | **REVIEW** | `--review original.png result.png` | Compares generated code (screenshot) against original design, scores quality (10-point scale), identifies gaps |
 | **FIX** | `--fix 'sidebar too narrow, wrong color'` | Uses review feedback to improve code iteratively (fix → re-screenshot → re-review cycle) |
 
-**Auto-detect:** Running `/brewcode:glm-design-to-code` alone will ask you to choose a mode.
+**Auto-detect:** Running `/brewui:glm-design-to-code` alone will ask you to choose a mode.
 
 ## Examples
 
@@ -53,50 +53,50 @@ CREATE mode converts your input to working, buildable code. You choose the frame
 
 ```bash
 # Image input -- convert a Figma screenshot to HTML
-/brewcode:glm-design-to-code mockup.png
+/brewui:glm-design-to-code mockup.png
 
 # Text input -- describe the UI you want
-/brewcode:glm-design-to-code "Minimalist dashboard with sidebar navigation and dark theme"
+/brewui:glm-design-to-code "Minimalist dashboard with sidebar navigation and dark theme"
 
 # HTML input -- improve existing code
-/brewcode:glm-design-to-code legacy-page.html --framework react
+/brewui:glm-design-to-code legacy-page.html --framework react
 
 # URL input -- clone a live page
-/brewcode:glm-design-to-code https://stripe.com/pricing --framework html
+/brewui:glm-design-to-code https://stripe.com/pricing --framework html
 
 # Generate React component with optimal quality (balanced speed/quality)
-/brewcode:glm-design-to-code design.png --framework react --profile optimal
+/brewui:glm-design-to-code design.png --framework react --profile optimal
 
 # Review the generated code for pixel-perfectness
-/brewcode:glm-design-to-code --review original.png generated.png
+/brewui:glm-design-to-code --review original.png generated.png
 
 # Fix issues found in review
-/brewcode:glm-design-to-code --fix "button should be blue not red, spacing too loose"
+/brewui:glm-design-to-code --fix "button should be blue not red, spacing too loose"
 
 # Use Flutter and Z.ai with max quality
-/brewcode:glm-design-to-code design.png --framework flutter --profile max --provider zai
+/brewui:glm-design-to-code design.png --framework flutter --profile max --provider zai
 
 # Full CREATE → REVIEW → FIX cycle
-/brewcode:glm-design-to-code design.png
+/brewui:glm-design-to-code design.png
 # ... generates code, optionally takes screenshot
-/brewcode:glm-design-to-code --review original.png result.png
+/brewui:glm-design-to-code --review original.png result.png
 # ... review shows issues, you get feedback
-/brewcode:glm-design-to-code --fix "fix the issues mentioned"
+/brewui:glm-design-to-code --fix "fix the issues mentioned"
 ```
 
 ### Common Mistakes
 
 ```bash
 # WRONG: Providing a Figma URL (requires authentication, use exported PNG)
-/brewcode:glm-design-to-code https://figma.com/design/abc...
+/brewui:glm-design-to-code https://figma.com/design/abc...
 # FIX: Export the design as PNG first, or use a public URL
 
 # WRONG: Using --fix without prior REVIEW
-/brewcode:glm-design-to-code --fix "looks wrong"
+/brewui:glm-design-to-code --fix "looks wrong"
 # FIX: Run REVIEW mode first to get actionable feedback
 
 # WRONG: Specifying a framework the model doesn't know well
-/brewcode:glm-design-to-code design.png --framework svelte
+/brewui:glm-design-to-code design.png --framework svelte
 # FIX: Use html, react, flutter, or custom. For other frameworks, use --framework custom
 ```
 

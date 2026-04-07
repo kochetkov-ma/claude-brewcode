@@ -1,5 +1,5 @@
 ---
-name: brewcode:deploy
+name: brewtools:deploy
 description: "GitHub Actions deployment — workflows, releases, GHCR, CI/CD with safety gates."
 argument-hint: "<prompt describing what to do>"
 allowed-tools: Read, Write, Edit, Bash, Task, AskUserQuestion, Glob, Grep

@@ -146,22 +146,22 @@ body { ... }
 ===END_FILE===
 ```
 
-Extract with: `$BC_PLUGIN_ROOT/skills/glm-design-to-code/scripts/glm-extract.sh <response.json> <output_dir>`
+Extract with: `$BU_PLUGIN_ROOT/skills/glm-design-to-code/scripts/glm-extract.sh <response.json> <output_dir>`
 
 ## Available Scripts
 
-> `BC_PLUGIN_ROOT` is injected as plain text at prompt top by pre-task.mjs hook. Read value from there and substitute literally. If missing — **stop with error:** `BC_PLUGIN_ROOT not in prompt context, cannot access GLM scripts.`
+> `BU_PLUGIN_ROOT` is injected as plain text at prompt top by pre-task.mjs hook. Read value from there and substitute literally. If missing — **stop with error:** `BU_PLUGIN_ROOT not in prompt context, cannot access GLM scripts.`
 
 | Script | Path | Purpose |
 |--------|------|---------|
-| `glm-build-request.sh` | `$BC_PLUGIN_ROOT/skills/glm-design-to-code/scripts/` | Build JSON payload (image + prompt) |
-| `glm-request.sh` | `$BC_PLUGIN_ROOT/skills/glm-design-to-code/scripts/` | Send request (provider flag: `openrouter`) |
-| `glm-extract.sh` | `$BC_PLUGIN_ROOT/skills/glm-design-to-code/scripts/` | Extract ===FILE:=== from response |
+| `glm-build-request.sh` | `$BU_PLUGIN_ROOT/skills/glm-design-to-code/scripts/` | Build JSON payload (image + prompt) |
+| `glm-request.sh` | `$BU_PLUGIN_ROOT/skills/glm-design-to-code/scripts/` | Send request (provider flag: `openrouter`) |
+| `glm-extract.sh` | `$BU_PLUGIN_ROOT/skills/glm-design-to-code/scripts/` | Extract ===FILE:=== from response |
 
 ### Usage Flow
 
 ```bash
-SCRIPTS="$BC_PLUGIN_ROOT/skills/glm-design-to-code/scripts"
+SCRIPTS="$BU_PLUGIN_ROOT/skills/glm-design-to-code/scripts"
 
 # 1. Build payload
 sh "$SCRIPTS/glm-build-request.sh" screenshot.png prompt.md "" "z-ai/glm-4.6v" 16384 > payload.json

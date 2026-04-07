@@ -2,6 +2,35 @@
 
 ---
 
+## v3.4.47 (2026-04-07)
+
+> Docs: [brewtools ssh](https://doc-claude.brewcode.app/brewtools/skills/ssh/) | [brewtools deploy](https://doc-claude.brewcode.app/brewtools/skills/deploy/) | [brewui glm-design-to-code](https://doc-claude.brewcode.app/brewui/skills/glm-design-to-code/) | [brewtools ssh-admin](https://doc-claude.brewcode.app/brewtools/agents/ssh-admin/) | [brewtools deploy-admin](https://doc-claude.brewcode.app/brewtools/agents/deploy-admin/) | [brewui glm-openrouter-specialist](https://doc-claude.brewcode.app/brewui/agents/glm-openrouter-specialist/) | [brewui glm-zai-specialist](https://doc-claude.brewcode.app/brewui/agents/glm-zai-specialist/)
+
+### brewcode
+#### Changed
+- **skills:** moved `glm-design-to-code` to brewui plugin (visual/creative tools)
+- **skills:** moved `ssh` and `deploy` to brewtools plugin (universal utilities)
+- **agents:** moved `glm-openrouter-specialist` and `glm-zai-specialist` to brewui
+- **agents:** moved `ssh-admin` and `deploy-admin` to brewtools
+- **docs:** old brewcode pages replaced with redirect stubs pointing to new locations
+
+### brewtools
+#### Added
+- **skills:** `ssh` -- SSH server management (moved from brewcode)
+- **skills:** `deploy` -- GitHub Actions deployment (moved from brewcode)
+- **agents:** `ssh-admin` -- SSH server administrator (moved from brewcode)
+- **agents:** `deploy-admin` -- GitHub Actions administrator (moved from brewcode)
+- **hooks:** `pre-task.mjs` -- injects `BT_PLUGIN_ROOT` into subagent prompts
+
+### brewui
+#### Added
+- **skills:** `glm-design-to-code` -- GLM vision design-to-code (moved from brewcode)
+- **agents:** `glm-openrouter-specialist` -- OpenRouter API routing (moved from brewcode)
+- **agents:** `glm-zai-specialist` -- Z.ai GLM API expert (moved from brewcode)
+- **hooks:** `pre-task.mjs` -- injects `BU_PLUGIN_ROOT` into subagent prompts
+
+---
+
 ## v3.4.46 (2026-04-07)
 
 > Docs: [deploy skill](https://doc-claude.brewcode.app/brewcode/skills/deploy/) | [deploy-admin agent](https://doc-claude.brewcode.app/brewcode/agents/deploy-admin/)

@@ -1,6 +1,6 @@
 ---
 title: "Brewtools Overview"
-description: "Universal text utilities plugin for Claude Code: token optimization, AI artifact removal, secrets scanning"
+description: "Universal utilities plugin for Claude Code: token optimization, AI artifact removal, secrets scanning, SSH management, deployment"
 order: 30
 ---
 
@@ -8,8 +8,9 @@ import { Card, CardGrid, Callout } from '../../../components/mdx';
 
 # Brewtools Overview
 
-Brewtools is a lightweight plugin providing universal text utilities: token-efficient optimization,
-AI-artifact removal, and secrets scanning. Each skill is self-contained and requires no prior setup.
+Brewtools is a lightweight plugin providing universal utilities: token-efficient optimization,
+AI-artifact removal, secrets scanning, SSH server management, and GitHub Actions deployment.
+Each skill is self-contained and requires no prior setup.
 
 ## Installation
 
@@ -39,6 +40,14 @@ claude plugin install brewtools@claude-brewcode
     Security audit for leaked credentials in git-tracked files.
     10 parallel agents, severity classification, interactive remediation.
   </Card>
+  <Card title="ssh" icon="terminal" href="/brewtools/skills/ssh/">
+    SSH server management -- connect, configure, deploy, administer remote Linux servers
+    with safety gates and confirmation prompts.
+  </Card>
+  <Card title="deploy" icon="sync" href="/brewtools/skills/deploy/">
+    GitHub Actions deployment -- workflows, releases, GHCR, CI/CD pipelines
+    with safety gates and rollback support.
+  </Card>
 </CardGrid>
 
 ## Commands
@@ -48,12 +57,16 @@ claude plugin install brewtools@claude-brewcode
 | `/brewtools:text-optimize` | Optimize text for LLM token efficiency | sonnet | `[-l\|-d] [file\|folder\|path1,path2]` |
 | `/brewtools:text-human` | Remove AI artifacts from code and docs | sonnet | `<commit-hash\|path> [custom instructions]` |
 | `/brewtools:secrets-scan` | Scan for leaked secrets and credentials | sonnet | `[--fix]` |
+| `/brewtools:ssh` | SSH server management | opus | `[connect\|configure\|deploy\|admin]` |
+| `/brewtools:deploy` | GitHub Actions deployment, CI/CD | opus | `[workflow\|release\|ghcr]` |
 
 ## Agent
 
 | Agent | Model | Purpose |
 |-------|-------|---------|
 | [text-optimizer](/brewtools/agents/text-optimizer/) | sonnet | Lean execution engine for text optimization with rule-based validation |
+| [ssh-admin](/brewtools/agents/ssh-admin/) | opus | SSH server administration, configuration, deployment |
+| [deploy-admin](/brewtools/agents/deploy-admin/) | opus | GitHub Actions, CI/CD, releases, GHCR management |
 
 ## Plugin variable
 
@@ -75,9 +88,13 @@ brewtools/
 ├── skills/
 │   ├── text-optimize/           # Token optimization
 │   ├── text-human/              # AI artifact removal
-│   └── secrets-scan/            # Secrets scanning
+│   ├── secrets-scan/            # Secrets scanning
+│   ├── ssh/                     # SSH server management
+│   └── deploy/                  # GitHub Actions deployment
 └── agents/
-    └── text-optimizer.md        # Text optimization agent
+    ├── text-optimizer.md        # Text optimization agent
+    ├── ssh-admin.md             # SSH server administration
+    └── deploy-admin.md          # GitHub Actions, CI/CD agent
 ```
 
 <Callout type="note" title="Brewtools vs Brewcode">

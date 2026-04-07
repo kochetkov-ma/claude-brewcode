@@ -1,0 +1,92 @@
+---
+title: "ssh-admin"
+description: "Linux server administrator -- SSH, Docker, firewalls, systemd, reverse proxy, security hardening"
+order: 3212
+---
+import { Badge, Callout } from '../../../../components/mdx';
+
+# ssh-admin
+
+<Badge variant="accent" text="new" /> <Badge variant="primary" text="opus" />
+
+## Quick reference
+
+| Field | Value |
+|-------|-------|
+| Model | opus |
+| Tools | Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion, WebFetch, WebSearch |
+| Triggers | "ssh admin", "server management", "deploy to server", "docker on server" |
+
+**Role:** Linux server administrator -- remote management via SSH
+
+## Safety Classification
+
+| Category | Level | Examples |
+|----------|-------|---------|
+| READ | safe | Check disk, memory, CPU, logs, service status |
+| CREATE | moderate | Create directories, config files, Docker containers |
+| MODIFY | elevated | Edit configs, restart services, update firewall rules |
+| SERVICE | elevated | Start/stop/restart systemd units, Docker containers |
+| DELETE | dangerous | Remove containers, prune images, delete files |
+| PRIVILEGE | dangerous | User management, sudoers, SSH key operations |
+
+<Callout type="caution" title="Destructive operations">
+  DELETE and PRIVILEGE operations require explicit user confirmation before execution.
+</Callout>
+
+## Knowledge Domains
+
+| Domain | Scope |
+|--------|-------|
+| Linux admin | systemd, journalctl, users, permissions, cron, disk/memory/CPU |
+| Docker / Compose | Containers, images, volumes, networks, compose up/down/logs |
+| Networking | UFW/iptables, ports, DNS, curl diagnostics, ss/netstat |
+| Reverse proxy | Caddy, Nginx -- virtual hosts, TLS, upstream config |
+| Disk management | df, du, mount, LVM, cleanup strategies |
+| Backups | tar, rsync, cron-based snapshots, Docker volume backup |
+| Security | SSH hardening, fail2ban, unattended-upgrades, audit logs |
+
+## Dynamic Context
+
+The agent reads `CLAUDE.local.md` in the project root for server inventory. This file is populated by the `/brewtools:ssh` skill and contains host aliases, IP addresses, SSH users, and connection details.
+
+<Callout type="tip" title="Server inventory">
+  Run `/brewtools:ssh` first to configure server connections. The skill writes `CLAUDE.local.md` with your server inventory, which ssh-admin reads automatically.
+</Callout>
+
+## Usage Examples
+
+### Check server health
+
+> "Check health on prod-server -- disk, memory, running containers"
+
+The agent connects via SSH, runs diagnostic commands, and reports a summary table.
+
+### Deploy new Docker container
+
+> "Deploy a Redis container on staging-server, port 6379, with a persistent volume"
+
+Creates the compose file, transfers it, and starts the service.
+
+### Configure firewall rules
+
+> "Open port 443 and block all other inbound traffic on web-server"
+
+Reviews current UFW/iptables rules, applies changes, and verifies the result.
+
+### Set up Caddy reverse proxy
+
+> "Set up Caddy on proxy-server to route app.example.com to localhost:3000 with auto-TLS"
+
+Writes the Caddyfile, deploys it, restarts Caddy, and verifies the route.
+
+## Output
+
+```
+=== SSH-ADMIN REPORT ===
+Server: [host]
+Task: [description]
+ACTIONS: [what was done]
+VERIFICATION: [post-action checks]
+STATUS: Success / Partial / Failed
+```

@@ -1,0 +1,33 @@
+---
+title: "Skills"
+description: "All 2 Brewui skills: commands, parameters, examples"
+order: 36
+---
+
+import { Card, CardGrid, Callout } from '../../../components/mdx';
+
+# Skills
+
+Skills (recipes) are slash commands that define *what* to do. Brewui includes 2 skills
+focused on visual and creative tools -- each works independently with no prior setup beyond an API key.
+
+## Summary table
+
+| # | Skill | Command | Model | Purpose |
+|---|-------|---------|-------|---------|
+| 1 | image-gen | `/brewui:image-gen` | haiku | AI image generation via 5 providers |
+| 2 | glm-design-to-code | `/brewui:glm-design-to-code` | opus | GLM vision design-to-code conversion |
+
+<CardGrid>
+  <Card title="image-gen" icon="sparkle" href="/brewui/skills/image-gen/">
+    AI image generation via 5 providers with anti-slop controls
+  </Card>
+  <Card title="glm-design-to-code" icon="star" href="/brewui/skills/glm-design-to-code/">
+    GLM vision design-to-code: image, text, HTML, or URL input
+  </Card>
+</CardGrid>
+
+<Callout type="tip" title="Standalone">
+  Both skills can be used independently -- they require no prior setup
+  and no dependency on Brewcode or Brewdoc plugins. An API key for the chosen provider is required.
+</Callout>
