@@ -2,6 +2,24 @@
 
 ---
 
+## v3.4.46 (2026-04-07)
+
+> Docs: [deploy skill](https://doc-claude.brewcode.app/brewcode/skills/deploy/) | [deploy-admin agent](https://doc-claude.brewcode.app/brewcode/agents/deploy-admin/)
+
+### brewcode
+#### Added
+- **deploy skill:** GitHub Actions deployment -- workflows, releases, GHCR, CI/CD with safety gates
+- **deploy skill:** 6 modes: setup, create, release, deploy, monitor, update-agent
+- **deploy skill:** 4 scripts: detect-mode, gh-env-check, workflow-discover, deploy-local-ops (CLAUDE.local.md CRUD)
+- **deploy skill:** Safety classification: READ/CREATE (free), MODIFY/SERVICE (confirm), DELETE/PRIVILEGE (always confirm)
+- **deploy skill:** 4 workflow templates: Build+Push GHCR, Deploy VPS, Release, Security Scan
+- **deploy skill:** CLAUDE.local.md GitHub Config + Workflows sections (coexists with SSH sections)
+- **deploy skill:** Dynamic deploy-admin agent generation from template with live workflow data
+- **deploy skill:** SSH skill integration for VPS deploy targets and health checks
+- **deploy-admin agent:** GitHub Actions and deployment agent with live workflow inventory, release flow, Docker/GHCR patterns
+
+---
+
 ## v3.4.45 (2026-04-07)
 
 > Docs: [image-gen](https://doc-claude.brewcode.app/brewui/skills/image-gen/)

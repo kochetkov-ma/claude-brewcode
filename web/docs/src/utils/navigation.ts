@@ -42,6 +42,7 @@ export const navigation: NavSection[] = [
           { title: 'glm-design-to-code', slug: 'brewcode/skills/glm-design-to-code' },
           { title: 'debate', slug: 'brewcode/skills/debate' },
           { title: 'ssh', slug: 'brewcode/skills/ssh' },
+          { title: 'deploy', slug: 'brewcode/skills/deploy' },
         ],
       },
       {
@@ -61,6 +62,7 @@ export const navigation: NavSection[] = [
           { title: 'bc-grepai-configurator', slug: 'brewcode/agents/bc-grepai-configurator' },
           { title: 'bc-rules-organizer', slug: 'brewcode/agents/bc-rules-organizer' },
           { title: 'ssh-admin', slug: 'brewcode/agents/ssh-admin' },
+          { title: 'deploy-admin', slug: 'brewcode/agents/deploy-admin' },
         ],
       },
       { title: 'Hooks', slug: 'brewcode/hooks' },

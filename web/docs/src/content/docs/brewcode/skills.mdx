@@ -1,6 +1,6 @@
 ---
 title: "Skills"
-description: "All 13 Brewcode skills: commands, parameters, examples"
+description: "All 17 Brewcode skills: commands, parameters, examples"
 order: 11
 ---
 
@@ -9,8 +9,8 @@ import { Card, CardGrid, Callout, Steps, Badge } from '../../../components/mdx';
 # Skills
 
 Skills (recipes) are slash commands that define *what* to do. Each skill is described in a `SKILL.md` file
-with frontmatter metadata and instructions for agents. Brewcode includes 13 skills covering
-the full task lifecycle -- from project analysis to standards review and E2E testing.
+with frontmatter metadata and instructions for agents. Brewcode includes 17 skills covering
+the full task lifecycle -- from project analysis to deployment and E2E testing.
 
 ## Summary table
 
@@ -29,6 +29,10 @@ the full task lifecycle -- from project analysis to standards review and E2E tes
 | 11 | skills | `/brewcode:skills` | opus | Skill management |
 | 12 | agents | `/brewcode:agents` | opus | Agent creation and improvement |
 | 13 | e2e | `/brewcode:e2e` | opus | E2E testing orchestration |
+| 14 | glm-design-to-code | `/brewcode:glm-design-to-code` | opus | GLM vision design-to-code |
+| 15 | debate | `/brewcode:debate` | opus | Evidence-based multi-agent debate |
+| 16 | ssh | `/brewcode:ssh` | opus | SSH server management |
+| 17 | deploy | `/brewcode:deploy` | opus | GitHub Actions deployment, CI/CD |
 
 <CardGrid>
   <Card title="setup" icon="wrench" href="/brewcode/skills/setup/">
@@ -69,6 +73,18 @@ the full task lifecycle -- from project analysis to standards review and E2E tes
   </Card>
   <Card title="e2e" icon="check" href="/brewcode/skills/e2e/">
     E2E testing: scenarios, autotests, quorum review
+  </Card>
+  <Card title="glm-design-to-code" icon="star" href="/brewcode/skills/glm-design-to-code/">
+    GLM vision design-to-code conversion
+  </Card>
+  <Card title="debate" icon="people" href="/brewcode/skills/debate/">
+    Evidence-based multi-agent debate
+  </Card>
+  <Card title="ssh" icon="terminal" href="/brewcode/skills/ssh/">
+    SSH server management with safety gates
+  </Card>
+  <Card title="deploy" icon="sync" href="/brewcode/skills/deploy/">
+    GitHub Actions deployment, CI/CD with safety gates
   </Card>
 </CardGrid>
 
