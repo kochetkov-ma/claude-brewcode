@@ -2,6 +2,28 @@
 
 ---
 
+## v3.4.44 (2026-04-07)
+
+> Docs: [ssh skill](https://doc-claude.brewcode.app/brewcode/skills/ssh/) | [ssh-admin agent](https://doc-claude.brewcode.app/brewcode/agents/ssh-admin/) | [image-gen](https://doc-claude.brewcode.app/brewui/skills/image-gen/)
+
+### brewcode
+#### Added
+- **ssh skill:** Remote server management -- connect, configure, deploy, administer Linux servers with safety gates
+- **ssh skill:** 5 modes: setup, connect, configure, execute, update-agent
+- **ssh skill:** 4 scripts: detect-mode, ssh-env-check, server-discover, claude-local-ops (CLAUDE.local.md CRUD)
+- **ssh skill:** Safety classification: READ/CREATE (free), MODIFY/SERVICE (confirm), DELETE/PRIVILEGE (always confirm)
+- **ssh skill:** Server auto-discovery: OS, kernel, Docker, containers, disks, services, ports
+- **ssh skill:** CLAUDE.local.md persistent config (gitignored) with server inventory
+- **ssh skill:** Dynamic ssh-admin agent generation from template with live server data
+- **ssh skill:** Robustness: fail-fast, loop protection (max retries), timeouts, manual fallback strategy
+- **ssh-admin agent:** Linux server administrator -- SSH, Docker, Compose, systemd, Caddy/Nginx, security hardening
+
+### brewui
+#### Changed
+- **image-gen:** Added Brewpage publish tip for remote/headless image viewing
+
+---
+
 ## v3.4.43 (2026-04-07)
 
 > Docs: [brewui overview](https://doc-claude.brewcode.app/brewui/overview/) | [image-gen](https://doc-claude.brewcode.app/brewui/skills/image-gen/)

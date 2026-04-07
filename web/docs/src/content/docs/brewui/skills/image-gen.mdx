@@ -227,6 +227,22 @@ Style-aware prompt engineering that prevents common AI image artifacts. Applied 
   Switch to Gemini Imagen 4 or GPT-5 for final high-quality output.
 </Callout>
 
+<Callout type="tip" title="Remote viewing with Brewpage">
+  Working from a remote terminal or mobile? Can't open the generated image locally?
+  Combine with `/brewdoc:publish` to get a shareable URL instantly:
+
+  ```bash
+  # Generate an image
+  /brewui:image-gen "hero image for blog post about AI coding"
+
+  # Publish to get a viewable URL
+  /brewdoc:publish .claude/reports/images/hero-image-for-blog-001.png
+  # → https://brewpage.app/your-namespace/hero-image-for-blog-001
+  ```
+
+  This works great from SSH sessions, Telegram bots, or any headless environment where you can't open files directly.
+</Callout>
+
 <Callout type="note" title="API key priority">
   Keys are resolved in order: explicit in prompt > `.env` file > shell environment variable > interactive config.
   For team projects, use `.env` (add to `.gitignore`). For personal use, `~/.zshrc` works well.
