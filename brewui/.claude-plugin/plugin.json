@@ -1,7 +1,7 @@
 {
-  "name": "brewtools",
+  "name": "brewui",
   "version": "3.4.43",
-  "description": "Brewtools - universal utilities for Claude Code: text optimization, humanization, secrets scanning",
+  "description": "Brewui - UI/visual/creative tools for Claude Code: AI image generation, design-to-code conversion",
   "author": {
     "name": "Maksim Kochetkov",
     "email": "apmatypa88@gmail.com",
@@ -11,10 +11,10 @@
   "repository": "https://github.com/kochetkov-ma/claude-brewcode.git",
   "license": "MIT",
   "keywords": [
-    "brewtools",
-    "text-optimization",
-    "secrets-scan",
-    "developer-tools"
+    "brewui",
+    "image-generation",
+    "visual-tools",
+    "design-to-code"
   ],
   "skills": "./skills/"
 }

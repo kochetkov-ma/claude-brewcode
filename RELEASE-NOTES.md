@@ -2,6 +2,19 @@
 
 ---
 
+## v3.4.43 (2026-04-07)
+
+> Docs: [brewui overview](https://doc-claude.brewcode.app/brewui/overview/) | [image-gen](https://doc-claude.brewcode.app/brewui/skills/image-gen/)
+
+### brewui (NEW PLUGIN)
+#### Added
+- **brewui plugin:** New plugin for UI/visual/creative tools
+- **image-gen:** AI image generation via 5 providers (Gemini Imagen 4, OpenRouter Gemini 2.5 Flash, OpenRouter GPT-5, Z.ai CogView-4, OpenAI DALL-E 3)
+- **anti-slop:** Style-aware prompt engineering (photo, illustration, art)
+- **multi-mode:** generate, edit, config, update
+
+---
+
 ## v3.4.42 (2026-04-06)
 
 > Docs: [publish](https://doc-claude.brewcode.app/brewdoc/publish/)

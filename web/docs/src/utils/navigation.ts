@@ -88,6 +88,19 @@ export const navigation: NavSection[] = [
     ],
   },
   {
+    title: 'Brewui',
+    items: [
+      { title: 'Overview', slug: 'brewui/overview' },
+      {
+        title: 'Skills',
+        slug: 'brewui/skills',
+        children: [
+          { title: 'image-gen', slug: 'brewui/skills/image-gen' },
+        ],
+      },
+    ],
+  },
+  {
     title: 'Brewdoc',
     items: [
       { title: 'Overview', slug: 'brewdoc/overview' },

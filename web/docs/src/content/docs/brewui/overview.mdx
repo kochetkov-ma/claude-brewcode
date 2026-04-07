@@ -1,0 +1,76 @@
+---
+title: "Brewui Overview"
+description: "UI/visual/creative tools plugin for Claude Code: AI image generation, design-to-code conversion"
+order: 35
+---
+
+import { Card, CardGrid, Callout } from '../../../components/mdx';
+
+# Brewui Overview
+
+Brewui is a plugin for UI/visual/creative tools: AI image generation via multiple providers
+with anti-AI-slop controls, and future design-to-code conversion. Each skill is self-contained
+and requires no prior setup beyond an API key.
+
+## Installation
+
+```bash
+claude plugin install brewui@claude-brewcode
+```
+
+Brewui ships as part of the `claude-brewcode` marketplace. If the marketplace has not been added yet:
+
+```bash
+claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
+claude plugin install brewui@claude-brewcode
+```
+
+## Skills (recipes)
+
+<CardGrid>
+  <Card title="image-gen" icon="sparkle" href="/brewui/skills/image-gen/">
+    AI image generation via 5 providers: Gemini Imagen 4, OpenRouter Gemini 2.5 Flash,
+    OpenRouter GPT-5, Z.ai CogView-4, OpenAI DALL-E 3. Anti-slop prompt engineering.
+    Four modes: generate, edit, config, update.
+  </Card>
+</CardGrid>
+
+## Commands
+
+| Command | Purpose | Model | Arguments |
+|---------|---------|-------|-----------|
+| `/brewui:image-gen` | AI image generation | haiku | `[prompt] [--edit] [--config] [--update] [--service] [--style]` |
+
+## Plugin variable
+
+`BU_PLUGIN_ROOT` -- injected by the SessionStart hook into every session context.
+Skills in the main conversation use `${CLAUDE_SKILL_DIR}` to access their own files;
+subagents use `$BU_PLUGIN_ROOT` to locate plugin resources.
+
+## Architecture
+
+```
+brewui/
+├── .claude-plugin/
+│   └── plugin.json              # Plugin manifest
+├── hooks/
+│   ├── hooks.json               # Hook registry
+│   ├── session-start.mjs        # BU_PLUGIN_ROOT injection
+│   └── lib/utils.mjs            # I/O utilities
+└── skills/
+    └── image-gen/               # AI image generation
+        ├── SKILL.md
+        ├── references/          # Provider specs, anti-slop, modes
+        ├── scripts/             # API request, parsing, saving
+        └── tests/               # Integration tests
+```
+
+<Callout type="note" title="Brewui vs Brewcode">
+  **Brewui** provides standalone visual/creative tools: image generation, design-to-code.
+  Each skill works independently with no lifecycle dependencies.
+
+  **Brewcode** is a task execution engine with infinite context, lifecycle hooks,
+  KNOWLEDGE.jsonl, and session handoff.
+
+  Both plugins install from the same `claude-brewcode` marketplace but operate independently.
+</Callout>
