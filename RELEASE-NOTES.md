@@ -2,6 +2,16 @@
 
 ---
 
+## v3.4.48 (2026-04-07)
+
+> Docs: [brewcode](https://doc-claude.brewcode.app/plugin/brewcode/)
+
+### brewui
+#### Changed
+- **docs:** added copyright notice © 2026 to docs site footer
+
+---
+
 ## v3.4.47 (2026-04-07)
 
 > Docs: [brewtools ssh](https://doc-claude.brewcode.app/brewtools/skills/ssh/) | [brewtools deploy](https://doc-claude.brewcode.app/brewtools/skills/deploy/) | [brewui glm-design-to-code](https://doc-claude.brewcode.app/brewui/skills/glm-design-to-code/) | [brewtools ssh-admin](https://doc-claude.brewcode.app/brewtools/agents/ssh-admin/) | [brewtools deploy-admin](https://doc-claude.brewcode.app/brewtools/agents/deploy-admin/) | [brewui glm-openrouter-specialist](https://doc-claude.brewcode.app/brewui/agents/glm-openrouter-specialist/) | [brewui glm-zai-specialist](https://doc-claude.brewcode.app/brewui/agents/glm-zai-specialist/)
