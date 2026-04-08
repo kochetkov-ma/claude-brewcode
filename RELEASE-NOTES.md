@@ -2,6 +2,16 @@
 
 ---
 
+## v3.4.49 (2026-04-08)
+
+> Docs: [brewui image-gen](https://doc-claude.brewcode.app/brewui/skills/image-gen/)
+
+### brewui
+#### Changed
+- **image-gen:** unified anti-slop strategy — merged forbidden patterns, story-first methodology, and style constraints into a single `anti-slop.md` reference
+
+---
+
 ## v3.4.48 (2026-04-07)
 
 > Docs: [brewcode](https://doc-claude.brewcode.app/plugin/brewcode/)
