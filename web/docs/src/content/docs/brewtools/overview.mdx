@@ -48,6 +48,10 @@ claude plugin install brewtools@claude-brewcode
     GitHub Actions deployment -- workflows, releases, GHCR, CI/CD pipelines
     with safety gates and rollback support.
   </Card>
+  <Card title="debate" icon="people" href="/brewtools/skills/debate/">
+    Multi-agent debate orchestrator -- 3 modes (Challenge, Strategy, Critic),
+    dynamic agents, Discovery phase, structured judge-verified decisions.
+  </Card>
 </CardGrid>
 
 ## Commands
@@ -59,6 +63,7 @@ claude plugin install brewtools@claude-brewcode
 | `/brewtools:secrets-scan` | Scan for leaked secrets and credentials | sonnet | `[--fix]` |
 | `/brewtools:ssh` | SSH server management | opus | `[connect\|configure\|deploy\|admin]` |
 | `/brewtools:deploy` | GitHub Actions deployment, CI/CD | opus | `[workflow\|release\|ghcr]` |
+| `/brewtools:debate` | Evidence-based multi-agent debate | opus | `[topic] [-m challenge\|strategy\|critic] [-n 2-5] [-r max-rounds]` |
 
 ## Agent
 
@@ -90,7 +95,8 @@ brewtools/
 │   ├── text-human/              # AI artifact removal
 │   ├── secrets-scan/            # Secrets scanning
 │   ├── ssh/                     # SSH server management
-│   └── deploy/                  # GitHub Actions deployment
+│   ├── deploy/                  # GitHub Actions deployment
+│   └── debate/                  # Evidence-based multi-agent debate
 └── agents/
     ├── text-optimizer.md        # Text optimization agent
     ├── ssh-admin.md             # SSH server administration
@@ -106,3 +112,15 @@ brewtools/
 
   Both plugins install from the same `claude-brewcode` marketplace but operate independently.
 </Callout>
+
+<CardGrid>
+  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
+    Download, changelog, and installation instructions.
+  </Card>
+  <Card title="Installation Guide" icon="book" href="/installation/">
+    Full setup, update, and troubleshooting instructions.
+  </Card>
+  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/">
+    Source code, README, and configuration files.
+  </Card>
+</CardGrid>

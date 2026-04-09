@@ -3,7 +3,7 @@
 ## Setup
 
 ```
-/brewcode:debate "Review our authentication system: JWT tokens with 24h expiry, stored in localStorage, refresh via /api/refresh endpoint, no rate limiting" -m critic -n 3
+/brewtools:debate "Review our authentication system: JWT tokens with 24h expiry, stored in localStorage, refresh via /api/refresh endpoint, no rate limiting" -m critic -n 3
 ```
 
 ## Expected Behavior

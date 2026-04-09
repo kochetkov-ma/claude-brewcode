@@ -3,7 +3,7 @@ title: "Spec"
 description: "Creates task specification through research and user interaction."
 order: 1102
 ---
-import { Badge, Callout } from '../../../../components/mdx';
+import { Card, CardGrid, Badge } from '../../../../components/mdx';
 
 # Spec
 
@@ -192,3 +192,12 @@ MAX 3 iterations. After 3 rounds, present remaining remarks to user via AskUserQ
 
 /brewcode:plan .claude/tasks/{TIMESTAMP}_{NAME}_task/
 ```
+
+<CardGrid>
+  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
+    Download, changelog, and installation instructions.
+  </Card>
+  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/spec">
+    Source code, README, and configuration files.
+  </Card>
+</CardGrid>

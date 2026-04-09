@@ -3,7 +3,7 @@ title: "Convention"
 description: "Analyzes project to extract etalon classes, patterns, and architecture by layer. Generates convention documents in .claude/convention/ and organizes rules."
 order: 1105
 ---
-import { Badge, Callout } from '../../../../components/mdx';
+import { Card, CardGrid, Badge } from '../../../../components/mdx';
 
 # Convention
 
@@ -341,3 +341,12 @@ Next Steps: Review `.claude/convention/` | `/brewcode:convention rules` to re-ex
 | Agent timeout | Log warning, continue with available results |
 | grepai unavailable | Fall back to Glob + Grep for file discovery |
 | Convention doc generation fails | Retry once, then present partial results |
+
+<CardGrid>
+  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
+    Download, changelog, and installation instructions.
+  </Card>
+  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/convention">
+    Source code, README, and configuration files.
+  </Card>
+</CardGrid>

@@ -3,7 +3,7 @@
 ## Setup
 
 ```
-/brewcode:debate REST API vs GraphQL for a new public-facing product catalog API -m challenge -n 2
+/brewtools:debate REST API vs GraphQL for a new public-facing product catalog API -m challenge -n 2
 ```
 
 ## Expected Behavior

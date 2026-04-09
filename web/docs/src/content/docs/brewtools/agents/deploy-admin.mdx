@@ -3,7 +3,7 @@ title: "deploy-admin"
 description: "GitHub Actions and deployment agent -- workflows, releases, GHCR, CI/CD, semver"
 order: 3213
 ---
-import { Badge, Callout } from '../../../../components/mdx';
+import { Badge, Callout, Card, CardGrid } from '../../../../components/mdx';
 
 # deploy-admin
 
@@ -90,3 +90,12 @@ ACTIONS: [what was done]
 VERIFICATION: [post-action checks]
 STATUS: Success / Partial / Failed
 ```
+
+<CardGrid>
+  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
+    Download, changelog, and installation instructions.
+  </Card>
+  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/agents/deploy-admin.md">
+    Source code, README, and configuration files.
+  </Card>
+</CardGrid>

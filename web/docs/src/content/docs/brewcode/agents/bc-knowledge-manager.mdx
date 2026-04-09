@@ -3,7 +3,7 @@ title: "bc-knowledge-manager"
 description: "Brewcode knowledge manager - compacts KNOWLEDGE.jsonl, deduplicates entries, prioritizes by type. Triggers - before handoff, when duplicates reported by coordinator."
 order: 1211
 ---
-import { Badge } from '../../../../components/mdx';
+import { Badge, Card, CardGrid } from '../../../../components/mdx';
 
 # bc-knowledge-manager
 
@@ -114,3 +114,12 @@ When knowledge is extracted to `.claude/rules/` via `/brewcode:rules`:
 **Loading:** Rules without `paths` load always. Rules with `paths` should load lazily but Bug #16299 causes all to load at start.
 
 > **Source:** [code.claude.com/docs/en/memory](https://code.claude.com/docs/en/memory.md#path-specific-rules)
+
+<CardGrid>
+  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
+    Download, changelog, and installation instructions.
+  </Card>
+  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/agents/bc-knowledge-manager.md">
+    Source code, README, and configuration files.
+  </Card>
+</CardGrid>

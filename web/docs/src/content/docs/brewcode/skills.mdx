@@ -1,16 +1,16 @@
 ---
 title: "Skills"
-description: "All 14 Brewcode skills: commands, parameters, examples"
+description: "All 13 Brewcode skills: commands, parameters, examples"
 order: 11
 ---
 
-import { Card, CardGrid, Callout, Steps, Badge } from '../../../components/mdx';
+import { Card, CardGrid, Callout, Steps } from '../../../components/mdx';
 
 # Skills
 
 Skills (recipes) are slash commands that define *what* to do. Each skill is described in a `SKILL.md` file
-with frontmatter metadata and instructions for agents. Brewcode includes 14 skills covering
-the full task lifecycle -- from project analysis to E2E testing and evidence-based debate.
+with frontmatter metadata and instructions for agents. Brewcode includes 13 skills covering
+the full task lifecycle -- from project analysis to E2E testing.
 
 ## Summary table
 
@@ -29,7 +29,6 @@ the full task lifecycle -- from project analysis to E2E testing and evidence-bas
 | 11 | skills | `/brewcode:skills` | opus | Skill management |
 | 12 | agents | `/brewcode:agents` | opus | Agent creation and improvement |
 | 13 | e2e | `/brewcode:e2e` | opus | E2E testing orchestration |
-| 14 | debate | `/brewcode:debate` | opus | Evidence-based multi-agent debate |
 
 <CardGrid>
   <Card title="setup" icon="wrench" href="/brewcode/skills/setup/">
@@ -70,9 +69,6 @@ the full task lifecycle -- from project analysis to E2E testing and evidence-bas
   </Card>
   <Card title="e2e" icon="check" href="/brewcode/skills/e2e/">
     E2E testing: scenarios, autotests, quorum review
-  </Card>
-  <Card title="debate" icon="people" href="/brewcode/skills/debate/">
-    Evidence-based multi-agent debate
   </Card>
 </CardGrid>
 
@@ -162,12 +158,9 @@ These skills work standalone -- no prior setup required:
 </CardGrid>
 
 <Callout type="note" title="Moved to Brewtools">
-  Skills <code>text-optimize</code>, <code>text-human</code>, and <code>secrets-scan</code> have been
-  moved to the <a href="/brewtools/overview/">Brewtools</a> plugin as standalone text utilities.
-</Callout>
-
-<Callout type="note" title="Moved Skills">
-  Skills <code>ssh</code> and <code>deploy</code> have been moved to <a href="/brewtools/skills/">Brewtools</a>.
+  Skills <code>text-optimize</code>, <code>text-human</code>, <code>secrets-scan</code>,
+  <code>ssh</code>, <code>deploy</code>, and <code>debate</code> have been
+  moved to the <a href="/brewtools/skills/">Brewtools</a> plugin.
   Skill <code>glm-design-to-code</code> has been moved to <a href="/brewui/skills/">Brewui</a>.
 </Callout>
 
@@ -178,3 +171,12 @@ These skills work standalone -- no prior setup required:
   Keywords like "mode", "toggle", or "persistent" in the create prompt trigger
   the Mode Switcher workflow automatically.
 </Callout>
+
+<CardGrid>
+  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
+    Download, changelog, and installation instructions.
+  </Card>
+  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills">
+    Source code, README, and configuration files.
+  </Card>
+</CardGrid>

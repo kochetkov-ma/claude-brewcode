@@ -3,7 +3,7 @@
 ## Setup
 
 ```
-/brewcode:debate "How should we migrate our legacy Java monolith to a modern stack? Budget: 500K, timeline: 12 months, team: 8 developers" -m strategy -n 4
+/brewtools:debate "How should we migrate our legacy Java monolith to a modern stack? Budget: 500K, timeline: 12 months, team: 8 developers" -m strategy -n 4
 ```
 
 ## Expected Behavior

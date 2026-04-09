@@ -12,7 +12,7 @@ import { Card, CardGrid, Callout } from '../../components/mdx';
 A regular Claude Code session loses context during compaction. Brewcode automatically saves knowledge,
 passes state between compaction cycles, and continues work without restarting.
 
-Two plugins. 18 skills. 14 agents. 9 lifecycle hooks.
+Four plugins. 27 skills. 17 agents. 8 lifecycle hooks.
 
 ## Features
 
@@ -30,7 +30,7 @@ Two plugins. 18 skills. 14 agents. 9 lifecycle hooks.
     Knowledge is injected into every agent prompt and converted into project rules.
   </Card>
   <Card title="Skills and agents" icon="settings" href="/brewcode/skills/">
-    18 skills and 14 specialized agents. Built-in tools for creating your own skills,
+    27 skills and 17 specialized agents. Built-in tools for creating your own skills,
     agents, and hooks. Prompt optimization.
   </Card>
 </CardGrid>
@@ -46,12 +46,14 @@ Two plugins. 18 skills. 14 agents. 9 lifecycle hooks.
 
 ## What's included
 
-| Plugin | Purpose | Skills |
-|--------|---------|--------|
-| **brewcode** | Infinite tasks, codebase exploration, review, prompt optimization, skill/agent creation | 15 |
-| **brewdoc** | Documentation tools: sync, generation, memory optimization, PDF conversion | 4 |
+| Plugin | Purpose | Skills | Agents | Hooks |
+|--------|---------|--------|--------|-------|
+| **brewcode** | Infinite tasks, codebase exploration, review, prompt optimization, skill/agent creation | 13 | 12 | 8 |
+| **brewtools** | Text utilities: prompt optimization, AI artifact removal, secrets scanning, SSH, deploy | 6 | 3 | -- |
+| **brewui** | UI/visual/creative tools: AI image generation, design-to-code | 2 | 2 | -- |
+| **brewdoc** | Documentation tools: sync, generation, memory optimization, PDF conversion | 6 | -- | -- |
 
-Both plugins are installed with a single command from GitHub and load automatically with every Claude Code session.
+All four plugins are installed with a single command from GitHub and load automatically with every Claude Code session.
 
 ## Next step
 
@@ -61,5 +63,14 @@ Both plugins are installed with a single command from GitHub and load automatica
   </Card>
   <Card title="Quick Start" icon="play" href="/quickstart/">
     Run your first infinite task in 15 minutes: setup, spec, plan, start.
+  </Card>
+</CardGrid>
+
+<CardGrid>
+  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
+    Download, changelog, and installation instructions.
+  </Card>
+  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode">
+    Source code, README, and configuration files.
   </Card>
 </CardGrid>

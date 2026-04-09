@@ -1,5 +1,5 @@
 ---
-name: brewcode:debate
+name: brewtools:debate
 description: "Orchestrates multi-agent debates with 3 modes: Challenge (select best variant), Strategy (deep analysis with independent proposals), Critic (find all weaknesses). Triggers: debate, challenge, compare options, strategy analysis, critique, find weaknesses."
 disable-model-invocation: true
 user-invocable: true

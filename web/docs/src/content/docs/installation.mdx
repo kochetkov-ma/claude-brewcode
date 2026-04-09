@@ -1,6 +1,6 @@
 ---
 title: "Installation"
-description: "How to install the brewcode and brewdoc plugins"
+description: "How to install the brewcode, brewdoc, brewtools, and brewui plugins"
 order: 2
 ---
 
@@ -37,6 +37,8 @@ import { Card, CardGrid, Callout, Steps, Tabs, TabItem } from '../../components/
     ```bash
     claude plugin install brewcode@claude-brewcode
     claude plugin install brewdoc@claude-brewcode
+    claude plugin install brewtools@claude-brewcode
+    claude plugin install brewui@claude-brewcode
     ```
 
     **3. Restart Claude Code** -- the plugins will load automatically.
@@ -54,13 +56,15 @@ import { Card, CardGrid, Callout, Steps, Tabs, TabItem } from '../../components/
     **2. Launch with the `--plugin-dir` flag:**
 
     ```bash
-    claude --plugin-dir ./brewcode --plugin-dir ./brewdoc
+    claude --plugin-dir ./brewcode --plugin-dir ./brewdoc --plugin-dir ./brewtools --plugin-dir ./brewui
     ```
 
     For a single plugin:
 
     ```bash
     claude --plugin-dir ./brewcode
+    claude --plugin-dir ./brewtools
+    claude --plugin-dir ./brewui
     ```
   </TabItem>
 </Tabs>
@@ -79,7 +83,7 @@ import { Card, CardGrid, Callout, Steps, Tabs, TabItem } from '../../components/
       <strong>Check the plugin list</strong>
       <p>In your terminal, run:</p>
       <pre><code>claude plugin list</code></pre>
-      <p>You should see <code>brewcode</code> and <code>brewdoc</code> in the list.</p>
+      <p>You should see <code>brewcode</code>, <code>brewdoc</code>, <code>brewtools</code>, and <code>brewui</code> in the list.</p>
     </div>
   </li>
   <li class="step step-primary">
@@ -100,6 +104,8 @@ Already have Brewcode installed? Update to the latest version:
 claude plugin marketplace update claude-brewcode
 claude plugin update brewcode@claude-brewcode
 claude plugin update brewdoc@claude-brewcode
+claude plugin update brewtools@claude-brewcode
+claude plugin update brewui@claude-brewcode
 ```
 
 Restart Claude Code after updating.
@@ -128,6 +134,15 @@ Restart Claude Code after updating.
     Run your first infinite task in 15 minutes: setup, spec, plan, start.
   </Card>
   <Card title="Brewcode Overview" icon="building" href="/brewcode/overview/">
-    Architecture, concepts, all 15 skills, 13+ agents, and 8 hooks.
+    Architecture, concepts, all 27 skills, 17 agents, and 8 hooks.
+  </Card>
+</CardGrid>
+
+<CardGrid>
+  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
+    Download, changelog, and installation instructions.
+  </Card>
+  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode">
+    Source code, README, and configuration files.
   </Card>
 </CardGrid>

@@ -3,7 +3,7 @@
 ## Setup
 
 ```
-/brewcode:debate "Monolith vs Microservices vs Modular Monolith for a mid-size fintech startup" -m challenge -n 5 -r 4
+/brewtools:debate "Monolith vs Microservices vs Modular Monolith for a mid-size fintech startup" -m challenge -n 5 -r 4
 ```
 
 ## Expected Behavior

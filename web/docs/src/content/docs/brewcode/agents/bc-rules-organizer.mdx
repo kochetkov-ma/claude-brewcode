@@ -3,7 +3,7 @@ title: "bc-rules-organizer"
 description: "Creates and optimizes .claude/rules/*.md files with path-specific frontmatter. Triggered by 'organize rules', 'path-specific rules', 'extract rules', 'split CLAUDE.md'."
 order: 1213
 ---
-import { Badge } from '../../../../components/mdx';
+import { Badge, Card, CardGrid } from '../../../../components/mdx';
 
 # bc-rules-organizer
 
@@ -373,3 +373,12 @@ Skill(skill="text-optimize", args="path/to/created-rule.md")
 | Bug #16299 | [Lazy loading broken](https://github.com/anthropics/claude-code/issues/16299) |
 | Bug #13905 | [YAML syntax fixed](https://github.com/anthropics/claude-code/issues/13905) |
 | Community Guide | [paddo.dev/blog/claude-rules-path-specific-native](https://paddo.dev/blog/claude-rules-path-specific-native/) |
+
+<CardGrid>
+  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
+    Download, changelog, and installation instructions.
+  </Card>
+  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/agents/bc-rules-organizer.md">
+    Source code, README, and configuration files.
+  </Card>
+</CardGrid>

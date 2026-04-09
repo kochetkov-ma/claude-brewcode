@@ -19,7 +19,7 @@ what to brew, agents (brewers) do the work, and hooks (processes) manage the lif
     Automatic knowledge transfer between sessions via KNOWLEDGE.jsonl and the handoff mechanism.
     Tasks continue after compaction without losing progress.
   </Card>
-  <Card title="14 skills (recipes)" icon="terminal">
+  <Card title="13 skills (recipes)" icon="terminal">
     Full cycle: from project analysis (/brewcode:setup) to task execution (/brewcode:start)
     and code review (/brewcode:standards-review).
   </Card>
@@ -114,13 +114,12 @@ brewcode/
 │   ├── skill-creator.md               # Skill creation (opus)
 │   ├── agent-creator.md               # Agent creation (opus)
 │   ├── hook-creator.md                # Hook creation (opus)
-│   ├── text-optimizer.md              # Text optimization (sonnet)
 │   ├── bash-expert.md                 # Bash scripts (opus)
 │   ├── bc-coordinator.md              # Task coordinator (haiku)
 │   ├── bc-knowledge-manager.md        # Knowledge manager (haiku)
 │   ├── bc-grepai-configurator.md      # grepai configurator (opus)
 │   └── bc-rules-organizer.md          # Rules organizer (sonnet)
-├── skills/                            # 14 skills
+├── skills/                            # 13 skills
 │   ├── setup/                         # Project analysis, templates
 │   ├── spec/                          # Specification creation
 │   ├── plan/                          # Plan creation
@@ -133,8 +132,7 @@ brewcode/
 │   ├── skills/                        # Skill management
 │   ├── agents/                        # Agent management
 │   ├── teams/                         # Dynamic agent teams
-│   ├── e2e/                           # E2E testing orchestration
-│   └── debate/                        # Evidence-based multi-agent debate
+│   └── e2e/                           # E2E testing orchestration
 └── templates/                         # Rule templates
 ```
 
@@ -176,8 +174,8 @@ After running `/brewcode:setup` and `/brewcode:start`, the following appears in 
 
 <Tabs>
   <TabItem label="Skills">
-    14 skills (recipes) cover the full task lifecycle.
-    See the [Skills](/brewcode/skills/) section for details.
+    13 skills (recipes) cover the full task lifecycle.
+    See [Skills](/brewcode/skills/) for details.
 
     | Group | Skills | Purpose |
     |-------|--------|---------|
@@ -196,7 +194,7 @@ After running `/brewcode:setup` and `/brewcode:start`, the following appears in 
     | Implementation | developer, tester, architect | opus/sonnet |
     | Review | reviewer | opus |
     | Creation | skill-creator, agent-creator, hook-creator | opus |
-    | Optimization | text-optimizer, bash-expert | sonnet/opus |
+    | Optimization | bash-expert | opus |
     | Coordination | bc-coordinator, bc-knowledge-manager, bc-grepai-configurator, bc-rules-organizer | haiku/sonnet/opus |
 
     + dynamic project agents created by `/brewcode:teams`
@@ -252,6 +250,18 @@ After running `/brewcode:setup` and `/brewcode:start`, the following appears in 
 </Steps>
 
 <Callout type="tip" title="Next steps">
-  Check out [Skills](/brewcode/skills/) for detailed descriptions of all 14 skills,
+  Check [Skills](/brewcode/skills/) for detailed descriptions of all 13 skills,
   or go to [Workflow](/brewcode/workflow/) for a deep dive into the full task execution cycle.
 </Callout>
+
+<CardGrid>
+  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
+    Download, changelog, and installation instructions.
+  </Card>
+  <Card title="Installation Guide" icon="book" href="/installation/">
+    Full setup, update, and troubleshooting instructions.
+  </Card>
+  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/">
+    Source code, README, and configuration files.
+  </Card>
+</CardGrid>

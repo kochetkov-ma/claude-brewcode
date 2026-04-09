@@ -4,7 +4,7 @@ description: "All 9 Brewcode hooks: events, channels, logic"
 order: 13
 ---
 
-import { Callout, Badge } from '../../../components/mdx';
+import { Card, CardGrid, Callout, Badge } from '../../../components/mdx';
 
 # Hooks
 
@@ -343,3 +343,12 @@ Hooks read settings from `.claude/tasks/cfg/brewcode.config.json`:
 | `logging.level` | `info` | Logging level (error/warn/info/debug/trace) |
 | `agents.system` | (list) | System agents excluded from knowledge injection |
 | `autoSync.intervalDays` | 7 | Auto-sync interval |
+
+<CardGrid>
+  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
+    Download, changelog, and installation instructions.
+  </Card>
+  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/hooks">
+    Source code, README, and configuration files.
+  </Card>
+</CardGrid>

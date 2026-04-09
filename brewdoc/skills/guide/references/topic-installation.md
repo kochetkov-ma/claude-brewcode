@@ -30,10 +30,11 @@ Three commands to install everything:
 # Step 1: Add the marketplace
 claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
 
-# Step 2: Install all 3 plugins
+# Step 2: Install all 4 plugins
 claude plugin install brewcode@claude-brewcode
 claude plugin install brewdoc@claude-brewcode
 claude plugin install brewtools@claude-brewcode
+claude plugin install brewui@claude-brewcode
 ```
 
 After installation, restart Claude Code. Close and reopen your terminal or IDE.
@@ -72,11 +73,12 @@ claude plugin marketplace update claude-brewcode
 claude plugin update brewcode@claude-brewcode
 claude plugin update brewdoc@claude-brewcode
 claude plugin update brewtools@claude-brewcode
+claude plugin update brewui@claude-brewcode
 ```
 
 After updating, restart Claude Code.
 
-If you see version mismatches across plugins, update all three to fix it.
+If you see version mismatches across plugins, update all four to fix it.
 
 ## Section 5: Dev Mode (for contributors)
 
@@ -87,6 +89,7 @@ If you are working on the plugin source code itself, run from source without ins
 claude --plugin-dir ./brewcode
 claude --plugin-dir ./brewdoc
 claude --plugin-dir ./brewtools
+claude --plugin-dir ./brewui
 ```
 
 This loads the plugin directly from the local directory. Changes take effect immediately without reinstalling.

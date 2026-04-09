@@ -2,6 +2,34 @@
 
 ---
 
+## v3.4.50 (2026-04-09)
+
+> Docs: [debate](https://doc-claude.brewcode.app/brewtools/skills/debate/) | [brewtools](https://doc-claude.brewcode.app/brewtools/overview/) | [brewcode skills](https://doc-claude.brewcode.app/brewcode/skills/)
+
+### brewcode
+#### Changed
+- **skills:** moved debate to brewtools plugin (13 skills remaining)
+- **docs:** removed all "moved" stub pages (10 files deleted)
+
+### brewtools
+#### Added
+- **skills:** debate — multi-agent evidence-based debate orchestrator (moved from brewcode, now 6 skills)
+
+### docs
+#### Added
+- **all pages:** GitHub link cards on all 60 doc pages (Latest Release + View on GitHub)
+- **overview pages:** installation guide quick-reference cards
+#### Changed
+- **navigation:** cleaned up all "(Moved)" entries
+- **all pages:** updated plugin counts to 4 plugins, 27 skills, 17 agents
+- **guide:** updated to cover all 4 plugins including brewui
+#### Fixed
+- **license:** corrected author name to Maksim Kochetkov
+- **debate:** fixed /brewtools:review → /brewcode:review references
+- **imports:** removed all unused MDX component imports
+
+---
+
 ## v3.4.49 (2026-04-08)
 
 > Docs: [brewui image-gen](https://doc-claude.brewcode.app/brewui/skills/image-gen/)

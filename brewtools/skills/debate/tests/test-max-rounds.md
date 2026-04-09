@@ -3,7 +3,7 @@
 ## Setup
 
 ```
-/brewcode:debate "Tabs vs Spaces for code indentation" -m challenge -n 2 -r 2
+/brewtools:debate "Tabs vs Spaces for code indentation" -m challenge -n 2 -r 2
 ```
 
 ## Expected Behavior

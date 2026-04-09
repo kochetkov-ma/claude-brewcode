@@ -99,6 +99,15 @@ These ratios reflect token savings from applying T and S category rules. L categ
 | System prompts | 30-40% |
 | README files | 35-45% |
 
+## Compression References
+
+| Mode | Reference | Target |
+|------|-----------|--------|
+| Standard | `references/standard-compression.md` | 30-50% compression, human-readable. Filler removal, paragraph→bullets, prose→tables |
+| Deep | `references/deep-compression.md` | 2-3x compression, LLM-only. DICT header, symbol substitutions, abbreviation dictionary |
+
+Standard/deep modes apply ALL rules above (C + T + S + R + P) plus their respective compression reference.
+
 ## Sources
 
 - [Claude 4 Best Practices](https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/claude-4-best-practices)

@@ -1,7 +1,7 @@
 ---
 title: "Debate"
 description: "Multi-agent debate orchestrator -- 3 modes, dynamic agents, structured decisions"
-order: 1115
+order: 3118
 ---
 import { Card, CardGrid, Callout, Steps, Badge, Tabs, TabItem } from '../../../../components/mdx';
 
@@ -28,7 +28,7 @@ Spawn 2-5 dynamic agents with unique characters, run structured debates, and pro
 
 | Field | Value |
 |-------|-------|
-| Command | `/brewcode:debate` |
+| Command | `/brewtools:debate` |
 | Arguments | `[topic] [-m challenge\|strategy\|critic] [-n 2-5] [-r max-rounds] [--review]` |
 | Modes | Challenge (default), Strategy, Critic |
 | Agents | 2-5 dynamic agents + secretary + judge (main session) |
@@ -41,19 +41,19 @@ Spawn 2-5 dynamic agents with unique characters, run structured debates, and pro
 
 ```bash
 # Challenge mode -- compare options (default)
-/brewcode:debate "React vs Vue vs Svelte for our new dashboard"
+/brewtools:debate "React vs Vue vs Svelte for our new dashboard"
 
 # Strategy mode -- deep analysis
-/brewcode:debate "Migration plan from monolith to microservices" -m strategy
+/brewtools:debate "Migration plan from monolith to microservices" -m strategy
 
 # Critic mode -- find all weaknesses
-/brewcode:debate "Review our authentication flow" -m critic
+/brewtools:debate "Review our authentication flow" -m critic
 
 # Custom agent count and max rounds
-/brewcode:debate "Kubernetes vs ECS" -n 4 -r 8
+/brewtools:debate "Kubernetes vs ECS" -n 4 -r 8
 
 # Auto-detect mode from keywords
-/brewcode:debate "Which database should we pick for time-series data"
+/brewtools:debate "Which database should we pick for time-series data"
 ```
 
 ## Discovery Phase
@@ -270,7 +270,7 @@ Each debate produces four files:
   <TabItem label="Tech Choice">
     ```bash
     # Compare frontend frameworks for a new project
-    /brewcode:debate "React vs Vue vs Svelte for our dashboard" -n 3
+    /brewtools:debate "React vs Vue vs Svelte for our dashboard" -n 3
 
     # 3 agents: 1 defender (Pragmatist), 2 critics (Skeptic, Visionary)
     # Output: selected framework with full justification
@@ -279,7 +279,7 @@ Each debate produces four files:
   <TabItem label="Architecture">
     ```bash
     # Strategy for migration
-    /brewcode:debate "How to migrate from REST to GraphQL" -m strategy -n 4
+    /brewtools:debate "How to migrate from REST to GraphQL" -m strategy -n 4
 
     # 4 strategists: Architect, Operator, Economist, Pragmatist
     # Each proposes independently, then debate to converge
@@ -288,7 +288,7 @@ Each debate produces four files:
   <TabItem label="Code Review">
     ```bash
     # Critic mode on authentication flow
-    /brewcode:debate "Critique our JWT auth implementation in auth/" -m critic -n 5
+    /brewtools:debate "Critique our JWT auth implementation in auth/" -m critic -n 5
 
     # 5 critics: Skeptic (edge cases), Operator (ops risks),
     # Architect (design flaws), Advocate (UX), Economist (cost)
@@ -297,7 +297,7 @@ Each debate produces four files:
   <TabItem label="Design Decision">
     ```bash
     # Database selection with extended rounds
-    /brewcode:debate "PostgreSQL vs DynamoDB for our event store" -n 4 -r 8
+    /brewtools:debate "PostgreSQL vs DynamoDB for our event store" -n 4 -r 8
 
     # 4 agents, up to 8 rounds for thorough analysis
     # Auto-detects challenge mode from "vs" keyword
@@ -306,7 +306,7 @@ Each debate produces four files:
   <TabItem label="Risk Assessment">
     ```bash
     # Find weaknesses in a deployment plan
-    /brewcode:debate "Review our Kubernetes migration plan" -m critic --review
+    /brewtools:debate "Review our Kubernetes migration plan" -m critic --review
 
     # All-critic team reviews the plan
     # --review flag triggers /brewcode:review on output
@@ -326,3 +326,12 @@ Each debate produces four files:
 <Callout type="note">
   **Design decisions:** Agent tool for dynamic prompts (no pre-defined files), sequential execution (each agent sees previous entries), JSONL shared state (minimal tokens, scriptable), Bash scripts for I/O (schema enforcement), judge as main session (full context, no overhead), mode-specific flows (token efficiency).
 </Callout>
+
+<CardGrid>
+  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
+    Download, changelog, and installation instructions.
+  </Card>
+  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/debate">
+    Source code, README, and configuration files.
+  </Card>
+</CardGrid>

@@ -4,7 +4,7 @@ description: "Convert Markdown to PDF: two engines, style customization, LLM pre
 order: 23
 ---
 
-import { Callout, Tabs, TabItem, Steps, Badge } from '../../../components/mdx';
+import { Callout, Tabs, TabItem, Steps, Badge, Card, CardGrid } from '../../../components/mdx';
 
 # md-to-pdf
 
@@ -167,3 +167,12 @@ After conversion, a report is generated:
 | Size | File size |
 | Engine | reportlab or weasyprint |
 | Preprocessing | LLM processing description or none |
+
+<CardGrid>
+  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
+    Download, changelog, and installation instructions.
+  </Card>
+  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewdoc/skills/md-to-pdf">
+    Source code, README, and configuration files.
+  </Card>
+</CardGrid>

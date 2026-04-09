@@ -6,28 +6,31 @@ Deliver section by section. Pause after each section with AskUserQuestion.
 
 ## Section 1: What is Brewcode?
 
-Brewcode is a plugin suite for Claude Code. It ships as 3 plugins in a single marketplace package.
+Brewcode is a plugin suite for Claude Code. It ships as 4 plugins in a single marketplace package.
 
 Key ideas:
 - Few powerful workflows that handle real-world complexity
 - Extend yourself: create your own skills, agents, and hooks
 - Not a framework. A set of tools that work together without locking you in.
 
-One marketplace, three plugins, one version number. Install what you need.
+One marketplace, four plugins, one version number. Install what you need.
 
-## Section 2: The Three Plugins
+## Section 2: The Four Plugins
 
 | Plugin | Purpose | Key Skills |
 |--------|---------|------------|
 | brewcode | Infinite task execution, agent teams, project automation | setup, spec, plan, start, teams, review, convention, e2e |
 | brewdoc | Documentation tools: sync, generate, optimize, publish | auto-sync, my-claude, memory, md-to-pdf, guide, publish |
-| brewtools | Universal utilities: text optimization, security scanning | text-optimize, text-human, secrets-scan |
+| brewtools | Universal utilities: text optimization, security scanning | text-optimize, text-human, secrets-scan, ssh, deploy |
+| brewui | UI/visual/creative tools | image-gen, glm-design-to-code |
 
 **brewcode** is the core. It runs tasks that survive context limits through automatic handoff. It manages agents, hooks, and knowledge persistence.
 
 **brewdoc** handles documentation. Auto-sync keeps docs updated. My-claude generates Claude Code setup docs for any project. Memory optimizes memory files. Publish shares content via brewpage.app.
 
-**brewtools** provides standalone utilities. Text-optimize reduces token usage in prompts. Secrets-scan catches leaked credentials. These work in any project.
+**brewtools** provides standalone utilities. Text-optimize reduces token usage in prompts. Secrets-scan catches leaked credentials. SSH and deploy handle server management and CI/CD workflows. These work in any project.
+
+**brewui** handles UI and visual tasks. Image-gen creates AI images via multiple providers. GLM-design-to-code converts designs into multi-framework code.
 
 ## Section 3: How They Work Together
 
@@ -36,8 +39,9 @@ The plugins complement each other:
 - **brewcode** handles the heavy lifting: task execution, planning, code review, convention extraction
 - **brewdoc** keeps documentation in sync with your codebase as it evolves
 - **brewtools** provides utility skills you can call from anywhere
+- **brewui** generates images and converts designs to code
 
-All three share the same version number. They update together from the same marketplace. No version mismatches.
+All four share the same version number. They update together from the same marketplace. No version mismatches.
 
 Example workflow:
 1. `/brewcode:setup` initializes a project

@@ -22,7 +22,7 @@ User request -> Manager analyzes -> Selects best agent -> Task tool spawns agent
 
 Agents cannot spawn other agents. Only the main conversation (manager level) can use the Task tool.
 
-## Section 2: Plugin Agents (14)
+## Section 2: Plugin Agents (17)
 
 These agents ship with the brewcode plugin suite. Available immediately after installation.
 
@@ -42,6 +42,10 @@ These agents ship with the brewcode plugin suite. Available immediately after in
 | bc-rules-organizer | brewcode | sonnet | .claude/rules/*.md organization |
 | bd-auto-sync-processor | brewdoc | sonnet | Single document sync processing |
 | text-optimizer | brewtools | sonnet | Text/docs token optimization |
+| ssh-admin | brewtools | opus | SSH server management |
+| deploy-admin | brewtools | opus | GitHub Actions deployment |
+| glm-openrouter-specialist | brewui | opus | OpenRouter API routing |
+| glm-zai-specialist | brewui | opus | Z.ai GLM API vision |
 
 Agents prefixed with `bc-` are internal to brewcode workflows (coordinator, knowledge, grepai). The rest are user-facing.
 

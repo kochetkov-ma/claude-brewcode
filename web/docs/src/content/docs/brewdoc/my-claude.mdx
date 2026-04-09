@@ -4,7 +4,7 @@ description: "Generates documentation about Claude Code installations - internal
 order: 24
 ---
 
-import { Badge, Callout, Tabs, TabItem } from '../../../components/mdx';
+import { Badge, Card, CardGrid } from '../../../components/mdx';
 
 # My-Claude
 
@@ -142,3 +142,12 @@ If an existing entry for the same mode exists: use AskUserQuestion -- header: "I
 
 ## Review Verdict
 ```
+
+<CardGrid>
+  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
+    Download, changelog, and installation instructions.
+  </Card>
+  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewdoc/skills/my-claude">
+    Source code, README, and configuration files.
+  </Card>
+</CardGrid>

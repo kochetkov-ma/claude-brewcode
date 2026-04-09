@@ -3,7 +3,7 @@ title: "Standards Review"
 description: "Reviews code for project standards compliance and finds duplicates. Use when - reviewing code quality, checking standards, finding duplicates, analyzing compliance."
 order: 1112
 ---
-import { Badge } from '../../../../components/mdx';
+import { Card, CardGrid, Badge } from '../../../../components/mdx';
 
 # Standards Review
 
@@ -308,3 +308,12 @@ Where `{INPUT_VALUE}` is the same scope used in this review (commit, branch, or 
 | Unknown stack | Continue with project rules only |
 | No rules found | Continue with stack reference only |
 | All compliant | Report: "All code compliant with standards" |
+
+<CardGrid>
+  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
+    Download, changelog, and installation instructions.
+  </Card>
+  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/standards-review">
+    Source code, README, and configuration files.
+  </Card>
+</CardGrid>

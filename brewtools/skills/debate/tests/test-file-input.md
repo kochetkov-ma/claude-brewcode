@@ -26,7 +26,7 @@ EOF
 ```
 
 ```
-/brewcode:debate /tmp/debate-topic.md -m critic -n 4
+/brewtools:debate /tmp/debate-topic.md -m critic -n 4
 ```
 
 ## Expected Behavior

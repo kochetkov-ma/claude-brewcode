@@ -1,6 +1,6 @@
 ---
 title: "Skills"
-description: "All 5 Brewtools skills: commands, parameters, examples"
+description: "All 6 Brewtools skills: commands, parameters, examples"
 order: 31
 ---
 
@@ -8,8 +8,8 @@ import { Card, CardGrid, Callout } from '../../../components/mdx';
 
 # Skills
 
-Skills (recipes) are slash commands that define *what* to do. Brewtools includes 5 skills
-focused on text processing, security scanning, SSH management, and deployment -- each works independently with no prior setup required.
+Skills (recipes) are slash commands that define *what* to do. Brewtools includes 6 skills
+focused on text processing, security scanning, SSH management, deployment, and evidence-based debate -- each works independently with no prior setup required.
 
 ## Summary table
 
@@ -20,6 +20,7 @@ focused on text processing, security scanning, SSH management, and deployment --
 | 3 | secrets-scan | `/brewtools:secrets-scan` | sonnet | Secrets and key scanning |
 | 4 | ssh | `/brewtools:ssh` | opus | SSH server management |
 | 5 | deploy | `/brewtools:deploy` | opus | GitHub Actions deployment, CI/CD |
+| 6 | debate | `/brewtools:debate` | opus | Evidence-based multi-agent debate |
 
 <CardGrid>
   <Card title="text-optimize" icon="sparkle" href="/brewtools/skills/text-optimize/">
@@ -37,9 +38,21 @@ focused on text processing, security scanning, SSH management, and deployment --
   <Card title="deploy" icon="sync" href="/brewtools/skills/deploy/">
     GitHub Actions deployment, CI/CD with safety gates
   </Card>
+  <Card title="debate" icon="people" href="/brewtools/skills/debate/">
+    Evidence-based multi-agent debate
+  </Card>
 </CardGrid>
 
 <Callout type="tip" title="Standalone">
-  All five skills can be used independently -- they require no prior setup
+  All six skills can be used independently -- they require no prior setup
   and no dependency on Brewcode or Brewdoc plugins.
 </Callout>
+
+<CardGrid>
+  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
+    Download, changelog, and installation instructions.
+  </Card>
+  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills">
+    Source code, README, and configuration files.
+  </Card>
+</CardGrid>

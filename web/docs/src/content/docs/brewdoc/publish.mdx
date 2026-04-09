@@ -4,7 +4,7 @@ description: "Publish text, markdown, JSON, or files to brewpage.app — returns
 order: 25
 ---
 
-import { Callout, Tabs, TabItem, Steps } from '../../../components/mdx';
+import { Callout, Steps, Card, CardGrid } from '../../../components/mdx';
 
 # Brewpage
 
@@ -119,3 +119,12 @@ curl -X DELETE "https://brewpage.app/api/{ns}/{id}" -H "X-Owner-Token: {token}"
   Default time-to-live is 5 days. Override with <code>--ttl N</code> where N is the number of days.
   Example: <code>/brewdoc:publish report.md --ttl 30</code> keeps the page for 30 days.
 </Callout>
+
+<CardGrid>
+  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
+    Download, changelog, and installation instructions.
+  </Card>
+  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewdoc/skills/publish">
+    Source code, README, and configuration files.
+  </Card>
+</CardGrid>

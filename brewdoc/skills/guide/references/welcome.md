@@ -23,8 +23,8 @@ Present this menu to the user:
 | 2 | Installation & Updates | Getting Started | {status} |
 | 3 | Spec, Plan, Start | Core Workflow | {status} |
 | 4 | Dynamic Teams | Core Workflow | {status} |
-| 5 | Skills Catalog (22+) | Core Workflow | {status} |
-| 6 | Agents Catalog (14+) | Mastery | {status} |
+| 5 | Skills Catalog (27) | Core Workflow | {status} |
+| 6 | Agents Catalog (17) | Mastery | {status} |
 | 7 | Build Your Own | Mastery | {status} |
 | 8 | Project Configuration | Mastery | {status} |
 | 9 | Power Features | Mastery | {status} |

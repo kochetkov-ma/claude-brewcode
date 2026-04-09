@@ -3,7 +3,7 @@ title: "bc-coordinator"
 description: "Brewcode coordinator - extracts knowledge from reports, verifies reports on disk, manages Phase Status table in PLAN.md, generates FINAL.md."
 order: 1210
 ---
-import { Badge, Callout } from '../../../../components/mdx';
+import { Badge, Callout, Card, CardGrid } from '../../../../components/mdx';
 
 # bc-coordinator
 
@@ -415,3 +415,12 @@ Examples:
 - "Proceed to Phase 3 execution"
 - "Run Final Review (3+ agents parallel)"
 - "Task COMPLETE -- call bc-coordinator mode:finalize"
+
+<CardGrid>
+  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
+    Download, changelog, and installation instructions.
+  </Card>
+  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/agents/bc-coordinator.md">
+    Source code, README, and configuration files.
+  </Card>
+</CardGrid>

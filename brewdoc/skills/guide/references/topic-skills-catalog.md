@@ -39,17 +39,29 @@ Documentation tools. Sync, generate, optimize, export, publish.
 | `/brewdoc:guide` | Interactive teaching for the plugin suite (this guide) |
 | `/brewdoc:publish` | Publish content to brewpage.app — text, markdown, or files |
 
-## Section 3: Brewtools Skills (3)
+## Section 3: Brewtools Skills (6)
 
-Universal text utilities. Work in any project, no setup needed.
+Universal utilities. Work in any project, no setup needed.
 
 | Skill | Purpose |
 |-------|---------|
 | `/brewtools:text-optimize` | Optimize text for LLM token efficiency (~30% savings) |
 | `/brewtools:text-human` | Remove AI artifacts, humanize code and docs |
 | `/brewtools:secrets-scan` | Scan for leaked secrets, credentials, API keys |
+| `/brewtools:ssh` | SSH server management — connect, configure, deploy, administer remote servers |
+| `/brewtools:deploy` | GitHub Actions deployment — workflows, releases, GHCR, CI/CD with safety gates |
+| `/brewtools:debate` | Evidence-based multi-agent debate with Discovery phase and 3 modes |
 
 These are standalone — no project configuration required. Run them anywhere.
+
+## Section 3b: Brewui Skills (2)
+
+UI/visual/creative tools. AI image generation and design-to-code conversion.
+
+| Skill | Purpose |
+|-------|---------|
+| `/brewui:image-gen` | AI image generation via 5 providers with anti-slop controls |
+| `/brewui:glm-design-to-code` | GLM vision design-to-code: image/text/HTML/URL to multi-framework code |
 
 ## Section 4: Common Patterns
 

@@ -9,7 +9,7 @@ model: haiku
 
 # Brewcode Guide
 
-Interactive teaching skill for the brewcode/brewdoc/brewtools plugin suite.
+Interactive teaching skill for the brewcode/brewdoc/brewtools/brewui plugin suite.
 
 > **Read-only** — never modifies user project files. Only writes progress JSON.
 

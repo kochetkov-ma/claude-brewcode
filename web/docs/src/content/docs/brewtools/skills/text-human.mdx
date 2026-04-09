@@ -3,7 +3,7 @@ title: "Text Human"
 description: "Removes AI artifacts, cleans comments, simplifies documentation in code. Process commits, files, or folders."
 order: 3102
 ---
-import { Badge, Callout } from '../../../../components/mdx';
+import { Badge, Callout, Card, CardGrid } from '../../../../components/mdx';
 
 # Text Human
 
@@ -101,3 +101,12 @@ Files are edited in place. Use git to revert if needed.
   Start with a commit hash after an AI-assisted session -- it picks up all changed files
   including YAML and config. Use custom instructions to narrow scope if needed.
 </Callout>
+
+<CardGrid>
+  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
+    Download, changelog, and installation instructions.
+  </Card>
+  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/text-human">
+    Source code, README, and configuration files.
+  </Card>
+</CardGrid>

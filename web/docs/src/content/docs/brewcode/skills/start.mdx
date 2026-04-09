@@ -3,7 +3,7 @@ title: "Start"
 description: "Executes task with infinite context and automatic handoff."
 order: 1104
 ---
-import { Badge, Callout } from '../../../../components/mdx';
+import { Card, CardGrid, Badge, Callout } from '../../../../components/mdx';
 
 # Start
 
@@ -188,3 +188,12 @@ Task(subagent_type="brewcode:bc-knowledge-manager",
 3. DO NOT read phases/ -- they are for agents
 4. Continue with current `in_progress` or next `pending` task
 5. WRITE report -- CALL coordinator after EVERY agent (ALWAYS)
+
+<CardGrid>
+  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
+    Download, changelog, and installation instructions.
+  </Card>
+  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/start">
+    Source code, README, and configuration files.
+  </Card>
+</CardGrid>

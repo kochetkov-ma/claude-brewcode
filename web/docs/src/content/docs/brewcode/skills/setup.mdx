@@ -3,7 +3,7 @@ title: "Setup"
 description: "Analyzes project structure and tech stack to generate adapted PLAN.md.template in .claude/tasks/templates/."
 order: 1101
 ---
-import { Badge, Callout } from '../../../../components/mdx';
+import { Card, CardGrid, Badge, Callout } from '../../../../components/mdx';
 
 # Setup
 
@@ -384,3 +384,12 @@ Using Edit tool:
 /brewcode:spec "Implement feature X"
 /brewcode:review "Check null safety"
 ```
+
+<CardGrid>
+  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
+    Download, changelog, and installation instructions.
+  </Card>
+  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/setup">
+    Source code, README, and configuration files.
+  </Card>
+</CardGrid>

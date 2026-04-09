@@ -4,7 +4,7 @@ description: "Synchronize documentation with the codebase -- detection, update, 
 order: 21
 ---
 
-import { Callout, Tabs, TabItem, Steps, Badge } from '../../../components/mdx';
+import { Callout, Steps, Badge, Card, CardGrid } from '../../../components/mdx';
 
 # Auto-Sync
 
@@ -155,3 +155,12 @@ To sync them, specify the path explicitly:
 | File not found | Skip, add to errors |
 | Agent timeout | One retry attempt |
 | No marked files | Report "0 found" |
+
+<CardGrid>
+  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
+    Download, changelog, and installation instructions.
+  </Card>
+  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewdoc/skills/auto-sync">
+    Source code, README, and configuration files.
+  </Card>
+</CardGrid>

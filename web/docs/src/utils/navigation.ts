@@ -39,10 +39,6 @@ export const navigation: NavSection[] = [
           { title: 'skills', slug: 'brewcode/skills/skills' },
           { title: 'agents', slug: 'brewcode/skills/agents' },
           { title: 'e2e', slug: 'brewcode/skills/e2e' },
-          { title: 'glm-design-to-code (Moved)', slug: 'brewcode/skills/glm-design-to-code' },
-          { title: 'debate', slug: 'brewcode/skills/debate' },
-          { title: 'ssh (Moved)', slug: 'brewcode/skills/ssh' },
-          { title: 'deploy (Moved)', slug: 'brewcode/skills/deploy' },
         ],
       },
       {
@@ -61,8 +57,6 @@ export const navigation: NavSection[] = [
           { title: 'bc-knowledge-manager', slug: 'brewcode/agents/bc-knowledge-manager' },
           { title: 'bc-grepai-configurator', slug: 'brewcode/agents/bc-grepai-configurator' },
           { title: 'bc-rules-organizer', slug: 'brewcode/agents/bc-rules-organizer' },
-          { title: 'ssh-admin (Moved)', slug: 'brewcode/agents/ssh-admin' },
-          { title: 'deploy-admin (Moved)', slug: 'brewcode/agents/deploy-admin' },
         ],
       },
       { title: 'Hooks', slug: 'brewcode/hooks' },
@@ -82,6 +76,7 @@ export const navigation: NavSection[] = [
           { title: 'secrets-scan', slug: 'brewtools/skills/secrets-scan' },
           { title: 'ssh', slug: 'brewtools/skills/ssh' },
           { title: 'deploy', slug: 'brewtools/skills/deploy' },
+          { title: 'debate', slug: 'brewtools/skills/debate' },
         ],
       },
       {

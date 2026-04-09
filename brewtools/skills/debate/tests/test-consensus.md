@@ -3,7 +3,7 @@
 ## Setup
 
 ```
-/brewcode:debate "Should we use TypeScript or JavaScript for our new Node.js backend service? Team is experienced with both." -m challenge -n 3 -r 6
+/brewtools:debate "Should we use TypeScript or JavaScript for our new Node.js backend service? Team is experienced with both." -m challenge -n 3 -r 6
 ```
 
 ## Expected Behavior

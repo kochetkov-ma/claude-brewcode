@@ -3,7 +3,7 @@ title: "Teardown"
 description: "Removes brewcode project files (templates, configs, logs)."
 order: 1109
 ---
-import { Badge, Callout } from '../../../../components/mdx';
+import { Card, CardGrid, Badge } from '../../../../components/mdx';
 
 # Teardown
 
@@ -44,3 +44,12 @@ bash "${CLAUDE_SKILL_DIR}/scripts/teardown.sh" ARGS_HERE && echo "✅ done" || e
 ## Preserved
 
 Task directories (`.claude/tasks/*_task/`) and user rules (`.claude/rules/`) are always preserved.
+
+<CardGrid>
+  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
+    Download, changelog, and installation instructions.
+  </Card>
+  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/teardown">
+    Source code, README, and configuration files.
+  </Card>
+</CardGrid>

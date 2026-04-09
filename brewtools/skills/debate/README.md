@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Command | `/brewcode:debate` |
+| Command | `/brewtools:debate` |
 | Model | opus |
 | Arguments | `[topic] [-m challenge\|strategy\|critic] [-n 2-5] [-r max-rounds] [--review]` |
 
@@ -18,16 +18,16 @@ Three modes: **Challenge** (select the best option), **Strategy** (synthesize ap
 
 ```bash
 # Challenge mode -- compare options (default)
-/brewcode:debate "React vs Vue vs Svelte for our dashboard"
+/brewtools:debate "React vs Vue vs Svelte for our dashboard"
 
 # Strategy mode -- deep analysis
-/brewcode:debate "Migration plan from monolith to microservices" -m strategy
+/brewtools:debate "Migration plan from monolith to microservices" -m strategy
 
 # Critic mode -- find all weaknesses
-/brewcode:debate "Review our authentication flow" -m critic
+/brewtools:debate "Review our authentication flow" -m critic
 
 # Custom agent count and rounds
-/brewcode:debate "Kubernetes vs ECS" -n 4 -r 8
+/brewtools:debate "Kubernetes vs ECS" -n 4 -r 8
 ```
 
 ## Modes

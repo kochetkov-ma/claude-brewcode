@@ -3,7 +3,7 @@ title: "Text Optimizer"
 description: "Optimizes text/docs for LLM efficiency. Triggers: optimize prompt, reduce tokens, compress text, too verbose."
 order: 3201
 ---
-import { Badge } from '../../../../components/mdx';
+import { Badge, Card, CardGrid } from '../../../../components/mdx';
 
 # Text Optimizer
 
@@ -70,3 +70,12 @@ Apply rules from `rules-review.md` matching the content type. Work in order: C.1
 ### Step 4: Report
 
 Output: `## Optimization Report: [filename]` with metrics table (Lines/Tokens before/after/change), transformations applied, issues fixed, verification checklist (info preserved, logic consistent, refs valid).
+
+<CardGrid>
+  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
+    Download, changelog, and installation instructions.
+  </Card>
+  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/agents/text-optimizer.md">
+    Source code, README, and configuration files.
+  </Card>
+</CardGrid>

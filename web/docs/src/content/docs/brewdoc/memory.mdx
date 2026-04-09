@@ -4,7 +4,7 @@ description: "Interactive optimization of CLAUDE.md and MEMORY.md memory files i
 order: 22
 ---
 
-import { Callout, Tabs, TabItem, Steps, Badge } from '../../../components/mdx';
+import { Callout, Tabs, TabItem, Steps, Badge, Card, CardGrid } from '../../../components/mdx';
 
 # Memory
 
@@ -146,3 +146,12 @@ After all 4 steps are complete, a report is generated:
   Each step requires user confirmation. You can skip any step,
   review changes one by one, or apply them all at once. The skill does not delete data without approval.
 </Callout>
+
+<CardGrid>
+  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
+    Download, changelog, and installation instructions.
+  </Card>
+  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewdoc/skills/memory">
+    Source code, README, and configuration files.
+  </Card>
+</CardGrid>
