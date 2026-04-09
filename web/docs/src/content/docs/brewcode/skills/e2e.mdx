@@ -21,9 +21,24 @@ import { Card, CardGrid, Callout, Steps, Badge, Tabs, TabItem } from '../../../.
 ## Quick Start
 
 <Steps>
-1. `/brewcode:e2e setup` -- analyze project, create 5 E2E agents, generate rules
-2. `/brewcode:e2e create "checkout flow"` -- BDD scenarios + autotests
-3. `/brewcode:e2e review` -- quorum review (3 reviewers, 2/3 consensus)
+  <li>
+    <div>
+      <strong><code>/brewcode:e2e setup</code></strong>
+      <p>analyze project, create 5 E2E agents, generate rules</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong><code>/brewcode:e2e create "checkout flow"</code></strong>
+      <p>BDD scenarios + autotests</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong><code>/brewcode:e2e review</code></strong>
+      <p>quorum review (3 reviewers, 2/3 consensus)</p>
+    </div>
+  </li>
 </Steps>
 
 ## Modes
@@ -145,9 +160,24 @@ Layered E2E test architecture (all layers are stack-agnostic):
 ## Three-Step Review Cycle
 
 <Steps>
-1. **Execute** -- agent performs work (scenario or test creation)
-2. **Validate** -- different agent reviews against rules (MAX_CYCLES=3)
-3. **Re-check** -- cross-domain verification of findings before fixing
+  <li>
+    <div>
+      <strong>Execute</strong>
+      <p>agent performs work (scenario or test creation)</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Validate</strong>
+      <p>different agent reviews against rules (MAX_CYCLES=3)</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Re-check</strong>
+      <p>cross-domain verification of findings before fixing</p>
+    </div>
+  </li>
 </Steps>
 
 <Callout type="tip">
