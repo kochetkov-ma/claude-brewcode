@@ -2,6 +2,16 @@
 
 ---
 
+## v3.4.51 (2026-04-09)
+
+> Docs: [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/)
+
+### docs
+#### Fixed
+- **e2e page:** timeline (Steps) broken — replaced markdown numbered lists with explicit JSX `<li>` elements
+
+---
+
 ## v3.4.50 (2026-04-09)
 
 > Docs: [debate](https://doc-claude.brewcode.app/brewtools/skills/debate/) | [brewtools](https://doc-claude.brewcode.app/brewtools/overview/) | [brewcode skills](https://doc-claude.brewcode.app/brewcode/skills/)
