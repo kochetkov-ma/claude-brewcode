@@ -53,8 +53,10 @@ const filtered = headings.filter((h) => h.depth === 2 || h.depth === 3);
       { rootMargin: '0px 0px -66% 0px' }
     );
 
-    document.querySelectorAll('article h2[id], article h3[id]').forEach((heading) => {
-      tocObserver!.observe(heading);
-    });
+    document
+      .querySelectorAll('article h2[id], article h3[id], article details.spoiler[id]')
+      .forEach((heading) => {
+        tocObserver!.observe(heading);
+      });
   });
 </script>

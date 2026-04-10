@@ -1,13 +1,14 @@
 ---
 interface Props {
   title: string;
+  id?: string;
   open?: boolean;
 }
 
-const { title, open = false } = Astro.props;
+const { title, id, open = false } = Astro.props;
 ---
 
-<details class="spoiler not-prose my-3" open={open}>
+<details class="spoiler not-prose my-3" id={id} open={open}>
   <summary class="spoiler-summary">
     <span class="spoiler-icon" aria-hidden="true">▶</span>
     <span class="spoiler-title">{title}</span>
@@ -16,6 +17,37 @@ const { title, open = false } = Astro.props;
     <slot />
   </div>
 </details>
+
+<script>
+  function openSpoilerForHash() {
+    const hash = window.location.hash.slice(1);
+    if (!hash) return;
+    const target = document.getElementById(hash);
+    if (target instanceof HTMLDetailsElement && target.classList.contains('spoiler')) {
+      if (!target.open) target.open = true;
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  function initSpoilerHashHandling() {
+    if ((document as any).__spoilerHashInit) return;
+    (document as any).__spoilerHashInit = true;
+    openSpoilerForHash();
+    window.addEventListener('hashchange', openSpoilerForHash);
+    document.addEventListener('click', (e) => {
+      const link = (e.target as HTMLElement)?.closest('a[href^="#"]') as HTMLAnchorElement | null;
+      if (!link) return;
+      setTimeout(openSpoilerForHash, 0);
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initSpoilerHashHandling);
+  } else {
+    initSpoilerHashHandling();
+  }
+  document.addEventListener('astro:page-load', initSpoilerHashHandling);
+</script>
 
 <style>
   .spoiler {

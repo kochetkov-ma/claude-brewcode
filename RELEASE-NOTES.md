@@ -2,6 +2,21 @@
 
 ---
 
+## v3.4.56 (2026-04-10)
+
+> Docs: [FAQ](https://doc-claude.brewcode.app/faq/)
+
+### docs
+#### Fixed
+- **FAQ:** restored right-side Table of Contents for spoiler-only layout. New `tocItems` frontmatter field on docs schema lets pages declare TOC entries explicitly when content uses components instead of markdown headings; merged into `[...id].astro` heading list. FAQ now lists 8 questions in TOC, each anchor opens the matching `<Spoiler>` automatically.
+
+#### Changed
+- **Spoiler component:** accepts `id` prop, rendered on the `<details>` element. Auto-open script simplified — hash directly targets the spoiler element, scrolls into view smoothly, works via `DOMContentLoaded` fallback (project does not enable Astro ViewTransitions).
+- **TableOfContents:** IntersectionObserver now also watches `details.spoiler[id]` so the active TOC item highlights as users scroll past spoilers.
+- **FAQ:** removed `## Question` markdown headings — questions live solely in `<Spoiler title="...">`. Cleaner layout, no duplicated text above each spoiler.
+
+---
+
 ## v3.4.55 (2026-04-10)
 
 > Docs: [FAQ](https://doc-claude.brewcode.app/faq/) | [installation](https://doc-claude.brewcode.app/installation/) | [brewcode overview](https://doc-claude.brewcode.app/brewcode/overview/) | [brewcode skills](https://doc-claude.brewcode.app/brewcode/skills/) | [brewdoc overview](https://doc-claude.brewcode.app/brewdoc/overview/) | [brewtools overview](https://doc-claude.brewcode.app/brewtools/overview/) | [brewui overview](https://doc-claude.brewcode.app/brewui/overview/)

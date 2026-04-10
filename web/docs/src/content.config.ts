@@ -7,6 +7,15 @@ const docs = defineCollection({
     title: z.string(),
     description: z.string(),
     order: z.number().optional(),
+    tocItems: z
+      .array(
+        z.object({
+          slug: z.string(),
+          text: z.string(),
+          depth: z.number().optional(),
+        })
+      )
+      .optional(),
   }),
 });
 
