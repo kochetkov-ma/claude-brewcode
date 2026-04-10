@@ -4,11 +4,13 @@ description: "Frequently asked questions about installing, updating, and using t
 order: 4
 ---
 
-import { Callout, Steps, InstallPrompt } from '../../components/mdx';
+import { Callout, Steps, InstallPrompt, Spoiler } from '../../components/mdx';
 
 # FAQ
 
-## How do I update brewcode plugins?
+Click any question to expand the answer.
+
+<Spoiler title="How do I update brewcode plugins?">
 
 Run the following commands in order:
 
@@ -25,13 +27,17 @@ If `/reload-plugins` is unavailable, type `exit` and run `claude` again.
 
 **Shortcut:** use the `/brewtools:plugin-update` skill -- it runs the full update chain automatically and prompts you to reload.
 
-## Claude refuses to run the update commands -- what do I do?
+</Spoiler>
+
+<Spoiler title="Claude refuses to run the update commands -- what do I do?">
 
 Paste the following prompt directly into the chat. The coercive phrasing is intentional -- it prevents Claude from summarizing or skipping steps.
 
 <InstallPrompt plugin="all" mode="update" />
 
-## Which plugins are in the suite?
+</Spoiler>
+
+<Spoiler title="Which plugins are in the suite?">
 
 | Plugin | Purpose | Install command |
 |--------|---------|----------------|
@@ -42,7 +48,9 @@ Paste the following prompt directly into the chat. The coercive phrasing is inte
 
 All four plugins install from the same `claude-brewcode` marketplace on GitHub.
 
-## Do I need to restart after updating?
+</Spoiler>
+
+<Spoiler title="Do I need to restart after updating?">
 
 Yes. Plugin changes only take effect after a reload.
 
@@ -61,11 +69,15 @@ Yes. Plugin changes only take effect after a reload.
   </li>
 </Steps>
 
-## How do I install missing plugins?
+</Spoiler>
+
+<Spoiler title="How do I install missing plugins?">
 
 <InstallPrompt plugin="all" mode="install" />
 
-## Where are plugins cached?
+</Spoiler>
+
+<Spoiler title="Where are plugins cached?">
 
 Plugins are stored locally after installation:
 
@@ -86,10 +98,14 @@ The marketplace metadata lives at:
 ~/.claude/plugins/marketplaces/
 ```
 
-## How do I check my installed version?
+</Spoiler>
+
+<Spoiler title="How do I check my installed version?">
 
 Run `/brewtools:plugin-update` inside a Claude Code session. It reports the installed and latest available version for each plugin and prompts you to update if a newer version exists.
 
 <Callout type="note" title="Note">
   The <code>claude plugin list</code> CLI command does not exist. Version checking must be done through the <code>/brewtools:plugin-update</code> skill or by inspecting the cache directory above.
 </Callout>
+
+</Spoiler>

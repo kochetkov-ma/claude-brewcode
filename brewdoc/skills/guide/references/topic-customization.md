@@ -99,6 +99,40 @@ Hooks are configured in `hooks.json`:
 
 Response channels: `additionalContext` (inject text), `updatedInput` (modify tool input), `decision` (block/allow).
 
+### Hooks shipped with brewcode suite
+
+**brewcode (7):**
+
+| Hook | Event | Purpose |
+|------|-------|---------|
+| `session-start.mjs` | SessionStart | Session initialization |
+| `grepai-session.mjs` | SessionStart | Auto-starts grepai watch |
+| `pre-task.mjs` | PreToolUse:Task\|Agent | Injects grepai + KNOWLEDGE into prompts |
+| `grepai-reminder.mjs` | PreToolUse:Glob\|Grep | Reminds to use grepai first |
+| `post-task.mjs` | PostToolUse:Task | Binds session, enforces 2-step protocol (success/failure branching) |
+| `pre-compact.mjs` | PreCompact | Compacts KNOWLEDGE, writes handoff (respects terminal statuses) |
+| `stop.mjs` | Stop | Blocks if not terminal (finished/failed/cancelled/error), cleans lock |
+
+**brewtools (2):**
+
+| Hook | Event | Purpose |
+|------|-------|---------|
+| `session-start.mjs` | SessionStart | Sets `BT_PLUGIN_ROOT`, session bootstrap |
+| `pre-task.mjs` | PreToolUse:Task\|Agent | Injects `BT_PLUGIN_ROOT` into subagent prompts |
+
+**brewui (2):**
+
+| Hook | Event | Purpose |
+|------|-------|---------|
+| `session-start.mjs` | SessionStart | Sets `BU_PLUGIN_ROOT`, session bootstrap |
+| `pre-task.mjs` | PreToolUse:Task\|Agent | Injects `BU_PLUGIN_ROOT` into subagent prompts |
+
+**brewdoc (1):**
+
+| Hook | Event | Purpose |
+|------|-------|---------|
+| `pre-task.mjs` | PreToolUse:Task\|Agent | Injects `BD_PLUGIN_ROOT` into subagent prompts |
+
 ## Section 4: Dynamic Teams
 
 Teams are collections of project-specific agents generated from your codebase.

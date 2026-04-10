@@ -2,6 +2,25 @@
 
 ---
 
+## v3.4.54 (2026-04-10)
+
+> Docs: [guide](https://doc-claude.brewcode.app/brewdoc/guide/) | [FAQ](https://doc-claude.brewcode.app/faq/)
+
+### brewdoc
+#### Changed
+- **guide:** refresh reference topics to current suite state — 4 plugins, 28 skills, 18 agents. Added `/brewtools:plugin-update` row to skills catalog, hooks subsection listing all 12 shipped hooks in `topic-customization.md`, renamed "Three Plugins Overview" → "Four Plugins Overview" across SKILL.md, welcome menu, overview/installation/agents-catalog/skills-catalog topic files. Fixed stale counts: Brewtools Skills (6 → 7), Plugin Agents (17 → 18), Skills Catalog menu (27 → 28).
+- **guide README:** updated descriptions to include brewui, corrected skill/agent counts.
+
+### docs
+#### Added
+- **Spoiler component:** collapsible `<details>`-based spoiler with animated chevron, hover state, and accessible focus outline — usable in any MDX page.
+- **FAQ page:** all 7 questions wrapped in collapsed spoilers so users can scan titles and expand only what they need. Added intro hint "Click any question to expand the answer."
+
+#### Changed
+- **brewdoc/guide page:** synced with skill changes — "Four Plugins Overview", all 4 plugins, all 28 skills, all 18 agents.
+
+---
+
 ## v3.4.53 (2026-04-10)
 
 > Docs: [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) | [brewtools overview](https://doc-claude.brewcode.app/brewtools/overview/)

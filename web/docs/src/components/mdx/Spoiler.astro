@@ -1,0 +1,88 @@
+---
+interface Props {
+  title: string;
+  open?: boolean;
+}
+
+const { title, open = false } = Astro.props;
+---
+
+<details class="spoiler not-prose my-3" open={open}>
+  <summary class="spoiler-summary">
+    <span class="spoiler-icon" aria-hidden="true">▶</span>
+    <span class="spoiler-title">{title}</span>
+  </summary>
+  <div class="spoiler-content prose">
+    <slot />
+  </div>
+</details>
+
+<style>
+  .spoiler {
+    border: 1px solid #3D3826;
+    border-radius: 0.5rem;
+    background-color: rgba(235, 187, 64, 0.04);
+    overflow: hidden;
+  }
+
+  .spoiler[open] {
+    background-color: rgba(235, 187, 64, 0.07);
+  }
+
+  .spoiler-summary {
+    cursor: pointer;
+    padding: 0.85rem 1.1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    list-style: none;
+    user-select: none;
+    font-weight: 600;
+    color: #EBBB40;
+    transition: background-color 0.15s ease;
+  }
+
+  .spoiler-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .spoiler-summary:hover {
+    background-color: rgba(235, 187, 64, 0.1);
+  }
+
+  .spoiler-summary:focus-visible {
+    outline: 2px solid #EBBB40;
+    outline-offset: -2px;
+  }
+
+  .spoiler-icon {
+    display: inline-block;
+    transition: transform 0.2s ease;
+    font-size: 0.75rem;
+    color: #EBBB40;
+    flex-shrink: 0;
+  }
+
+  .spoiler[open] .spoiler-icon {
+    transform: rotate(90deg);
+  }
+
+  .spoiler-title {
+    flex: 1;
+    color: #D6D3D1;
+  }
+
+  .spoiler-content {
+    padding: 0.5rem 1.1rem 1.1rem 1.1rem;
+    border-top: 1px solid #3D3826;
+    margin-top: 0;
+  }
+
+  .spoiler-content > :first-child {
+    margin-top: 0.75rem;
+  }
+
+  .spoiler-content > :last-child {
+    margin-bottom: 0;
+  }
+</style>

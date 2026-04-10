@@ -7,3 +7,4 @@ export { default as Steps } from './Steps.astro';
 export { default as Badge } from './Badge.astro';
 export { default as InstallPrompt } from './InstallPrompt.astro';
 export { default as UpdateNotice } from './UpdateNotice.astro';
+export { default as Spoiler } from './Spoiler.astro';

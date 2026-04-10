@@ -19,12 +19,12 @@ Present this menu to the user:
 
 | # | Topic | Domain | Status |
 |---|-------|--------|--------|
-| 1 | Three Plugins Overview | Getting Started | {status} |
+| 1 | Four Plugins Overview | Getting Started | {status} |
 | 2 | Installation & Updates | Getting Started | {status} |
 | 3 | Spec, Plan, Start | Core Workflow | {status} |
 | 4 | Dynamic Teams | Core Workflow | {status} |
-| 5 | Skills Catalog (27) | Core Workflow | {status} |
-| 6 | Agents Catalog (17) | Mastery | {status} |
+| 5 | Skills Catalog (28) | Core Workflow | {status} |
+| 6 | Agents Catalog (18) | Mastery | {status} |
 | 7 | Build Your Own | Mastery | {status} |
 | 8 | Project Configuration | Mastery | {status} |
 | 9 | Power Features | Mastery | {status} |
@@ -33,7 +33,7 @@ Replace {status} with the completion marker: use a checkmark if completed, use a
 
 ## Quick Start
 
-If user is brand new, recommend: "Start with topic 1 (Three Plugins Overview)"
+If user is brand new, recommend: "Start with topic 1 (Four Plugins Overview)"
 If user has completed Getting Started, recommend Core Workflow topics.
 If user has completed Core Workflow, recommend Mastery topics.
 

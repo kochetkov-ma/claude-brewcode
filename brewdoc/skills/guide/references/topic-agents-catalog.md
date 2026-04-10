@@ -22,7 +22,7 @@ User request -> Manager analyzes -> Selects best agent -> Task tool spawns agent
 
 Agents cannot spawn other agents. Only the main conversation (manager level) can use the Task tool.
 
-## Section 2: Plugin Agents (17)
+## Section 2: Plugin Agents (18)
 
 These agents ship with the brewcode plugin suite. Available immediately after installation.
 

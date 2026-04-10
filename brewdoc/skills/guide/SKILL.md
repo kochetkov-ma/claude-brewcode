@@ -17,7 +17,7 @@ Interactive teaching skill for the brewcode/brewdoc/brewtools/brewui plugin suit
 
 | ID | Topic | Reference File |
 |----|-------|----------------|
-| `overview` | Three Plugins Overview | `topic-overview.md` |
+| `overview` | Four Plugins Overview | `topic-overview.md` |
 | `installation` | Installation & Updates | `topic-installation.md` |
 | `killer-flow` | Spec → Plan → Start | `topic-killer-flow.md` |
 | `teams` | Dynamic Teams | `topic-teams.md` |
@@ -159,7 +159,7 @@ Last session: {$PROGRESS.last_topic} on {$PROGRESS.last_ts}.
    question: "Recommended next: {topic_name}. Choose a topic or follow the recommendation:"
    options:
      - "Follow recommendation"
-     - "1 — Three Plugins Overview"
+     - "1 — Four Plugins Overview"
      - "2 — Installation & Updates"
      - "3 — Spec → Plan → Start"
      - "4 — Dynamic Teams"

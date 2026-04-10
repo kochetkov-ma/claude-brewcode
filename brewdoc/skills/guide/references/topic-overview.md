@@ -1,4 +1,4 @@
-# Topic: Three Plugins Overview
+# Topic: Four Plugins Overview
 
 Domain: Getting Started
 
@@ -21,7 +21,7 @@ One marketplace, four plugins, one version number. Install what you need.
 |--------|---------|------------|
 | brewcode | Infinite task execution, agent teams, project automation | setup, spec, plan, start, teams, review, convention, e2e |
 | brewdoc | Documentation tools: sync, generate, optimize, publish | auto-sync, my-claude, memory, md-to-pdf, guide, publish |
-| brewtools | Universal utilities: text optimization, security scanning | text-optimize, text-human, secrets-scan, ssh, deploy |
+| brewtools | Universal utilities: text optimization, security scanning | text-optimize, text-human, secrets-scan, ssh, deploy, debate, plugin-update |
 | brewui | UI/visual/creative tools | image-gen, glm-design-to-code |
 
 **brewcode** is the core. It runs tasks that survive context limits through automatic handoff. It manages agents, hooks, and knowledge persistence.

@@ -50,7 +50,7 @@ Confirm everything is installed:
 claude plugin list
 ```
 
-You should see all three plugins listed with matching version numbers.
+You should see all four plugins listed with matching version numbers.
 
 Quick smoke test:
 

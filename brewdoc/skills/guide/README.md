@@ -1,6 +1,6 @@
 # Guide
 
-> Interactive tutorial for the brewcode/brewdoc/brewtools plugin suite -- 9 topics, 3 domains, progress tracking.
+> Interactive tutorial for the brewcode/brewdoc/brewtools/brewui plugin suite -- 9 topics, 3 domains, progress tracking.
 
 | Field | Value |
 |-------|-------|
@@ -18,19 +18,19 @@ Guide walks you through every feature of the plugin suite across three progressi
 /brewdoc:guide                  # Interactive menu
 /brewdoc:guide overview         # Jump to a specific topic
 /brewdoc:guide killer-flow      # Spec/Plan/Start pipeline
-/brewdoc:guide agents-catalog   # All 14+ agents
+/brewdoc:guide agents-catalog   # All 18 agents
 ```
 
 ## Topics
 
 | Domain | Topic | Description |
 |--------|-------|-------------|
-| A: Getting Started | overview | Three plugins philosophy and what makes the suite unique |
+| A: Getting Started | overview | Four plugins philosophy and what makes the suite unique |
 | A: Getting Started | installation | Marketplace setup, installing plugins, verifying versions |
 | B: Core Workflow | killer-flow | The infinite task pipeline: spec, plan, start |
 | B: Core Workflow | teams | Dynamic agent teams with self-selection and tracking |
-| B: Core Workflow | skills-catalog | All 22+ skills with trigger examples |
-| C: Mastery | agents-catalog | All 14+ agents with roles and model selection |
+| B: Core Workflow | skills-catalog | All 28 skills with trigger examples |
+| C: Mastery | agents-catalog | All 18 agents with roles and model selection |
 | C: Mastery | customization | Create custom skills, agents, and hooks |
 | C: Mastery | integration | CLAUDE.md, rules, memory, teams directory |
 | C: Mastery | advanced | Grepai, convention, quorum review, secrets scanning |
