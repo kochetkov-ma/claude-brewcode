@@ -1,7 +1,6 @@
 ---
 name: brewcode:e2e
-description: "E2E testing orchestration: setup agents, create BDD scenarios, write autotests, review with quorum. Triggers: e2e, end-to-end, scenarios, autotest, BDD."
-disable-model-invocation: true
+description: "Orchestrates end-to-end testing workflow — sets up specialized agents, creates BDD scenarios, writes Playwright autotests, and runs quorum reviews. Modes: setup, create, update, review, rules, status. Triggers: e2e tests, end-to-end, BDD scenarios, write autotest, playwright e2e, create scenario, review e2e, e2e setup."
 user-invocable: true
 argument-hint: "[setup|create|update|review|rules|status] [prompt]"
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion, Skill, WebSearch, WebFetch]

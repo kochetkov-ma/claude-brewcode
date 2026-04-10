@@ -5,3 +5,5 @@ export { default as Tabs } from './Tabs.astro';
 export { default as TabItem } from './TabItem.astro';
 export { default as Steps } from './Steps.astro';
 export { default as Badge } from './Badge.astro';
+export { default as InstallPrompt } from './InstallPrompt.astro';
+export { default as UpdateNotice } from './UpdateNotice.astro';

@@ -4,9 +4,11 @@ description: "How to install the brewcode, brewdoc, brewtools, and brewui plugin
 order: 2
 ---
 
-import { Card, CardGrid, Callout, Steps, Tabs, TabItem } from '../../components/mdx';
+import { Card, CardGrid, Callout, Steps, Tabs, TabItem, InstallPrompt } from '../../components/mdx';
 
 # Installation
+
+<InstallPrompt plugin="all" mode="install" />
 
 ## Requirements
 
@@ -43,8 +45,8 @@ import { Card, CardGrid, Callout, Steps, Tabs, TabItem } from '../../components/
 
     **3. Restart Claude Code** -- the plugins will load automatically.
   </TabItem>
-  <TabItem label="Local directory">
-    Run from a cloned repository. Suitable for development or one-off use.
+  <TabItem label="Local directory (developers only)">
+    Run from a cloned repository. Suitable for plugin development or one-off use.
 
     **1. Clone the repository:**
 
@@ -53,13 +55,13 @@ import { Card, CardGrid, Callout, Steps, Tabs, TabItem } from '../../components/
     cd claude-brewcode
     ```
 
-    **2. Launch with the `--plugin-dir` flag:**
+    **2. Launch with the `--plugin-dir` flag** (developers only):
 
     ```bash
     claude --plugin-dir ./brewcode --plugin-dir ./brewdoc --plugin-dir ./brewtools --plugin-dir ./brewui
     ```
 
-    For a single plugin:
+    For a single plugin (developers only):
 
     ```bash
     claude --plugin-dir ./brewcode
@@ -100,6 +102,13 @@ import { Card, CardGrid, Callout, Steps, Tabs, TabItem } from '../../components/
 
 Already have Brewcode installed? Update to the latest version:
 
+<Callout type="tip" title="Easy path: plugin-update skill">
+  Run <code>/brewtools:plugin-update</code> inside a Claude Code session. It checks versions,
+  runs the full update chain, and prompts you to reload -- no manual commands needed.
+</Callout>
+
+Or run the update commands manually:
+
 ```bash
 claude plugin marketplace update claude-brewcode
 claude plugin update brewcode@claude-brewcode
@@ -108,7 +117,11 @@ claude plugin update brewtools@claude-brewcode
 claude plugin update brewui@claude-brewcode
 ```
 
-Restart Claude Code after updating.
+<Callout type="note" title="After updating: reload required">
+  Run <code>/reload-plugins</code> inside your session (preferred), or type <code>exit</code> and run <code>claude</code> again (fallback). Updates are not active until a reload.
+</Callout>
+
+<InstallPrompt plugin="all" mode="update" />
 
 ## Troubleshooting
 

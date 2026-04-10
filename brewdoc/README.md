@@ -9,6 +9,37 @@
 | Agents | 1 |
 | Hooks | 1 |
 
+## Install
+
+Paste this into a Claude Code session:
+
+```
+Execute these commands in this session, one by one, show full output for each, do not skip any:
+
+1. claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
+2. claude plugin install brewdoc@claude-brewcode
+
+After install, run `/reload-plugins` (or `exit` + `claude`).
+```
+
+<details>
+<summary>Or install the whole suite</summary>
+
+```
+Execute these commands in this Claude Code session, one by one, show full output for each, do not skip any, do not summarize:
+
+1. claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
+2. claude plugin install brewcode@claude-brewcode
+3. claude plugin install brewdoc@claude-brewcode
+4. claude plugin install brewtools@claude-brewcode
+5. claude plugin install brewui@claude-brewcode
+
+After all commands succeed, run `/reload-plugins`. If `/reload-plugins` is unavailable, tell me to type `exit` and run `claude` again. Run the commands now.
+```
+</details>
+
+Update anytime with `/brewtools:plugin-update`.
+
 ## Overview
 
 Brewdoc keeps documentation in sync with the codebase, optimizes content for LLM consumption, and exports documents to ready-made formats. Each skill is self-contained and independent of the others.

@@ -36,8 +36,58 @@ Interactive teaching skill for the brewcode/brewdoc/brewtools/brewui plugin suit
 bash "${CLAUDE_SKILL_DIR}/scripts/validate.sh" 2>/dev/null || echo "VALIDATE_SKIP"
 ```
 
-If output is `VALIDATE_SKIP` — skip silently, continue to Phase 1.
+If output is `VALIDATE_SKIP` — skip silently, continue to Phase 0.5.
 Otherwise — show the health table to the user as-is.
+
+---
+
+## Phase 0.5: Plugin freshness check
+
+Before teaching anything, make sure the user's plugin suite is current.
+
+### 0.5a: Check plugin status
+
+Invoke the `brewtools:plugin-update` skill with the `check` argument. This runs in non-interactive status mode — no prompts, no side effects, just a report of installed vs available versions for `brewcode`, `brewdoc`, `brewtools`, `brewui`.
+
+Use the `Skill` tool if available:
+```
+Skill(skill="brewtools:plugin-update", args="check")
+```
+
+Otherwise instruct the main conversation to run `/brewtools:plugin-update check` and capture the result.
+
+### 0.5b: Evaluate result
+
+Parse the check output. A plugin is **stale** if:
+- it is missing (not installed), or
+- its installed version is older than the marketplace version.
+
+If all four plugins are current → skip to Phase 1 silently.
+
+### 0.5c: Offer update
+
+If any plugin is stale or missing:
+
+`AskUserQuestion`:
+```
+question: "Some brewcode plugins are outdated or missing. Update now before continuing the guide?"
+options:
+  - "Update now"
+  - "Show me later"
+  - "Skip"
+```
+
+Handle the response:
+
+- **Update now** → invoke the skill again with the `update` argument:
+  ```
+  Skill(skill="brewtools:plugin-update", args="update")
+  ```
+  When it finishes, continue to Phase 1. Note that a Claude Code restart or `/reload-plugins` may be required before the new versions take effect.
+
+- **Show me later** → remember this (set an internal flag `remind_update = true`). Continue to Phase 1. At the end of the guide (Phase 4, final completion message), remind the user that plugins are still out of date and show the `/brewtools:plugin-update` command.
+
+- **Skip** → continue to Phase 1 without reminder.
 
 ---
 

@@ -95,3 +95,36 @@ claude --plugin-dir ./brewui
 This loads the plugin directly from the local directory. Changes take effect immediately without reinstalling.
 
 Dev mode is for plugin developers only. Regular users should install from the marketplace.
+
+> Never use `--plugin-dir` for production — that is a developer-only flag.
+
+## Section 6: Keeping plugins up to date
+
+The easiest way to keep the whole brewcode suite current is one command:
+
+```bash
+/brewtools:plugin-update
+```
+
+This checks the marketplace, compares installed versions, and updates everything in one pass. Use `check` for a status-only report, `update` for non-interactive update of all plugins, or `all` to do both.
+
+### Manual fallback
+
+If you prefer to run the raw CLI commands yourself:
+
+```bash
+claude plugin marketplace update claude-brewcode
+claude plugin update brewcode@claude-brewcode
+claude plugin update brewdoc@claude-brewcode
+claude plugin update brewtools@claude-brewcode
+claude plugin update brewui@claude-brewcode
+```
+
+### After updating
+
+Reload plugins so the new versions become active:
+
+- Preferred: `/reload-plugins`
+- Fallback: `exit` the session, then run `claude` again
+
+If you see version mismatches across the four plugins after an update, re-run the update command — all four must share the same version.

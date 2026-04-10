@@ -1,7 +1,6 @@
 ---
 name: brewtools:debate
-description: "Orchestrates multi-agent debates with 3 modes: Challenge (select best variant), Strategy (deep analysis with independent proposals), Critic (find all weaknesses). Triggers: debate, challenge, compare options, strategy analysis, critique, find weaknesses."
-disable-model-invocation: true
+description: "Runs evidence-based multi-agent debates with mandatory Discovery phase (codebase + web research). Three modes: Challenge picks best variant from options, Strategy produces independent proposals via deep analysis, Critic finds all weaknesses. Triggers: debate, challenge this, compare options, strategy analysis, critique, find weaknesses, second opinion, pros and cons, evaluate alternatives."
 user-invocable: true
 argument-hint: "[topic] [-m challenge|strategy|critic] [-n 2-5] [-r max-rounds] [--review]"
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion, Skill

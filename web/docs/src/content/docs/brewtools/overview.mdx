@@ -4,7 +4,7 @@ description: "Universal utilities plugin for Claude Code: token optimization, AI
 order: 30
 ---
 
-import { Card, CardGrid, Callout } from '../../../components/mdx';
+import { Card, CardGrid, Callout, InstallPrompt } from '../../../components/mdx';
 
 # Brewtools Overview
 
@@ -14,16 +14,11 @@ Each skill is self-contained and requires no prior setup.
 
 ## Installation
 
-```bash
-claude plugin install brewtools@claude-brewcode
-```
+<InstallPrompt plugin="brewtools" mode="install" />
 
-Brewtools ships as part of the `claude-brewcode` marketplace. If the marketplace has not been added yet:
+Install the entire suite:
 
-```bash
-claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
-claude plugin install brewtools@claude-brewcode
-```
+<InstallPrompt plugin="all" mode="install" />
 
 ## Skills (recipes)
 

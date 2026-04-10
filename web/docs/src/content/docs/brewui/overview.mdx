@@ -4,7 +4,7 @@ description: "UI/visual/creative tools plugin for Claude Code: AI image generati
 order: 35
 ---
 
-import { Card, CardGrid, Callout } from '../../../components/mdx';
+import { Card, CardGrid, Callout, InstallPrompt } from '../../../components/mdx';
 
 # Brewui Overview
 
@@ -14,16 +14,11 @@ and requires no prior setup beyond an API key.
 
 ## Installation
 
-```bash
-claude plugin install brewui@claude-brewcode
-```
+<InstallPrompt plugin="brewui" mode="install" />
 
-Brewui ships as part of the `claude-brewcode` marketplace. If the marketplace has not been added yet:
+Install the entire suite:
 
-```bash
-claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
-claude plugin install brewui@claude-brewcode
-```
+<InstallPrompt plugin="all" mode="install" />
 
 ## Skills (recipes)
 

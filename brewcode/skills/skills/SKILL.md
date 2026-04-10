@@ -1,7 +1,6 @@
 ---
 name: brewcode:skills
-description: Skill management - list, improve, create skills with activation optimization.
-disable-model-invocation: true
+description: "Orchestrates Claude Code skill management — lists skills, improves existing skills, or creates new ones with activation optimization and triggers. Triggers: create skill, new skill, improve skill, fix skill activation, skill doesn't trigger, list skills, skill management, optimize skill."
 user-invocable: true
 argument-hint: "[list|up|create] [target] | <skill-path>"
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Task, WebSearch, WebFetch, AskUserQuestion]

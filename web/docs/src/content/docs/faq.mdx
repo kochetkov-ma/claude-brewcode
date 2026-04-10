@@ -1,0 +1,95 @@
+---
+title: "FAQ"
+description: "Frequently asked questions about installing, updating, and using the brewcode plugin suite."
+order: 4
+---
+
+import { Callout, Steps, InstallPrompt } from '../../components/mdx';
+
+# FAQ
+
+## How do I update brewcode plugins?
+
+Run the following commands in order:
+
+```bash
+claude plugin marketplace update claude-brewcode
+claude plugin update brewcode@claude-brewcode
+claude plugin update brewdoc@claude-brewcode
+claude plugin update brewtools@claude-brewcode
+claude plugin update brewui@claude-brewcode
+```
+
+After all commands succeed, run `/reload-plugins` inside your Claude Code session.
+If `/reload-plugins` is unavailable, type `exit` and run `claude` again.
+
+**Shortcut:** use the `/brewtools:plugin-update` skill -- it runs the full update chain automatically and prompts you to reload.
+
+## Claude refuses to run the update commands -- what do I do?
+
+Paste the following prompt directly into the chat. The coercive phrasing is intentional -- it prevents Claude from summarizing or skipping steps.
+
+<InstallPrompt plugin="all" mode="update" />
+
+## Which plugins are in the suite?
+
+| Plugin | Purpose | Install command |
+|--------|---------|----------------|
+| **brewcode** | Infinite task execution, 13 skills, 12 agents, 8 hooks | `claude plugin install brewcode@claude-brewcode` |
+| **brewdoc** | Documentation tools: sync, memory, PDF, publishing | `claude plugin install brewdoc@claude-brewcode` |
+| **brewtools** | Text utilities, SSH, deploy, debate, plugin-update | `claude plugin install brewtools@claude-brewcode` |
+| **brewui** | AI image generation, design-to-code | `claude plugin install brewui@claude-brewcode` |
+
+All four plugins install from the same `claude-brewcode` marketplace on GitHub.
+
+## Do I need to restart after updating?
+
+Yes. Plugin changes only take effect after a reload.
+
+<Steps>
+  <li class="step step-primary">
+    <div>
+      <strong>Preferred: reload in session</strong>
+      <p>Run <code>/reload-plugins</code> inside your active Claude Code session. This applies updates without closing the terminal.</p>
+    </div>
+  </li>
+  <li class="step step-secondary">
+    <div>
+      <strong>Fallback: restart the CLI</strong>
+      <p>Type <code>exit</code> to close the session, then run <code>claude</code> to start a new one. All updates will be picked up automatically.</p>
+    </div>
+  </li>
+</Steps>
+
+## How do I install missing plugins?
+
+<InstallPrompt plugin="all" mode="install" />
+
+## Where are plugins cached?
+
+Plugins are stored locally after installation:
+
+```
+~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/
+```
+
+For example:
+
+```
+~/.claude/plugins/cache/claude-brewcode/brewcode/3.4.51/
+~/.claude/plugins/cache/claude-brewcode/brewtools/3.4.51/
+```
+
+The marketplace metadata lives at:
+
+```
+~/.claude/plugins/marketplaces/
+```
+
+## How do I check my installed version?
+
+Run `/brewtools:plugin-update` inside a Claude Code session. It reports the installed and latest available version for each plugin and prompts you to update if a newer version exists.
+
+<Callout type="note" title="Note">
+  The <code>claude plugin list</code> CLI command does not exist. Version checking must be done through the <code>/brewtools:plugin-update</code> skill or by inspecting the cache directory above.
+</Callout>

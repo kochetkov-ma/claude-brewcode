@@ -16,6 +16,7 @@ export const navigation: NavSection[] = [
       { title: 'Introduction', slug: 'getting-started' },
       { title: 'Installation', slug: 'installation' },
       { title: 'Quick Start', slug: 'quickstart' },
+      { title: 'FAQ', slug: 'faq' },
     ],
   },
   {
@@ -77,6 +78,7 @@ export const navigation: NavSection[] = [
           { title: 'ssh', slug: 'brewtools/skills/ssh' },
           { title: 'deploy', slug: 'brewtools/skills/deploy' },
           { title: 'debate', slug: 'brewtools/skills/debate' },
+          { title: 'plugin-update', slug: 'brewtools/skills/plugin-update' },
         ],
       },
       {

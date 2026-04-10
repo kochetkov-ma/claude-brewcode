@@ -4,7 +4,7 @@ description: "Documentation plugin for Claude Code: auto-sync, memory, md-to-pdf
 order: 20
 ---
 
-import { Card, CardGrid, Callout } from '../../../components/mdx';
+import { Card, CardGrid, Callout, InstallPrompt } from '../../../components/mdx';
 
 # Brewdoc Overview
 
@@ -14,16 +14,11 @@ and exports documents to ready-made formats.
 
 ## Installation
 
-```bash
-claude plugin install brewdoc@claude-brewcode
-```
+<InstallPrompt plugin="brewdoc" mode="install" />
 
-Brewdoc ships as part of the `claude-brewcode` marketplace. If the marketplace has not been added yet:
+Install the entire suite:
 
-```bash
-claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
-claude plugin install brewdoc@claude-brewcode
-```
+<InstallPrompt plugin="all" mode="install" />
 
 ## Skills (recipes)
 

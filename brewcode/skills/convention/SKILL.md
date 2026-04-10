@@ -1,7 +1,6 @@
 ---
 name: brewcode:convention
-description: Analyzes project to extract etalon classes, patterns, and architecture by layer. Generates convention documents in .claude/convention/ and organizes rules.
-disable-model-invocation: true
+description: "Analyzes project to extract etalon classes, reference patterns, and architecture by layer. Generates convention documents in .claude/convention/ and organizes project rules into a code style guide. Triggers: extract conventions, find etalon classes, analyze project patterns, code style guide, architecture conventions, convention docs, reference implementation, coding standards."
 argument-hint: "[full|conventions|rules|paths <p1,p2>]"
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion, Skill
 model: opus

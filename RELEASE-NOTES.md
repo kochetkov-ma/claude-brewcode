@@ -2,6 +2,53 @@
 
 ---
 
+## v3.4.52 (2026-04-10)
+
+> Docs: [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) | [FAQ](https://doc-claude.brewcode.app/faq/) | [installation](https://doc-claude.brewcode.app/installation/) | [guide](https://doc-claude.brewcode.app/brewdoc/skills/guide/)
+
+### brewtools
+#### Added
+- **plugin-update:** new skill — checks installed plugins, installs missing brewcode plugins, updates outdated ones, reports versions. Interactive (default) or args `check|update|all`. Uses filesystem discovery (not `claude plugin list`, which does not exist).
+
+### brewdoc
+#### Changed
+- **guide:** Phase 0.5 plugin freshness check — offers to update outdated/missing brewcode plugins before starting the guide.
+
+### docs
+#### Added
+- **FAQ:** new page answering top install/update questions with copy-paste prompts
+- **Header:** FAQ button between Search and GitHub badge
+- **InstallPrompt component:** shared MDX component rendering coercive install/update prompts on every plugin overview and installation page
+- **UpdateNotice component:** footer callout on every skill page pointing to `/brewtools:plugin-update`
+
+#### Changed
+- **installation:** promote Updating section, add Callouts, tag `--plugin-dir` as developers-only
+
+### README
+#### Added
+- **Install in 30 seconds:** copyable install/update prompts at top of root README and each per-plugin README
+- Fix missing `brewui` row and update skill counts
+
+### 🔄 How to update brewcode plugins
+
+Paste this prompt into a Claude Code session (it forces Claude to run the full command chain):
+
+~~~
+Execute these commands in this session, one by one, show full output for each, do not skip any:
+
+1. claude plugin marketplace update claude-brewcode
+2. claude plugin update brewcode@claude-brewcode
+3. claude plugin update brewdoc@claude-brewcode
+4. claude plugin update brewtools@claude-brewcode
+5. claude plugin update brewui@claude-brewcode
+
+After all 5 commands succeed, run `/reload-plugins` (or type `exit` then `claude` to restart). Do not summarize — run the commands now.
+~~~
+
+Or, if brewtools is already installed, just run `/brewtools:plugin-update`.
+
+---
+
 ## v3.4.51 (2026-04-09)
 
 > Docs: [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/)

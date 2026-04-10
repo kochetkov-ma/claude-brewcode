@@ -4,9 +4,15 @@ description: "Architecture, concepts, and structure of the Brewcode plugin"
 order: 10
 ---
 
-import { Card, CardGrid, Callout, Tabs, TabItem, Steps, Badge } from '../../../components/mdx';
+import { Card, CardGrid, Callout, Tabs, TabItem, Steps, Badge, InstallPrompt } from '../../../components/mdx';
 
 # Brewcode Overview
+
+<InstallPrompt plugin="brewcode" mode="install" />
+
+Install the entire suite:
+
+<InstallPrompt plugin="all" mode="install" />
 
 Brewcode is a plugin for Claude Code that turns single sessions into an **infinite task pipeline**
 with automatic context handoff between sessions. The name is a nod to brewing: skills (recipes) define

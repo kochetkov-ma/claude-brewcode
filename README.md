@@ -8,9 +8,9 @@
 [![Latest Release](https://img.shields.io/github/v/release/kochetkov-ma/claude-brewcode?label=latest&color=blue)](https://github.com/kochetkov-ma/claude-brewcode/releases/latest)
 [![Documentation](https://img.shields.io/badge/Docs-doc--claude.brewcode.app-4A90D9?logo=bookstack&logoColor=white)](https://doc-claude.brewcode.app/getting-started/)
 
-**Claude Code plugin suite** -- three plugins for development, documentation, and text utility workflows.
+**Claude Code plugin suite** -- four plugins for development, documentation, text utility, and visual workflows.
 
-A regular Claude Code session loses context during compaction. Brewcode automatically saves knowledge, passes state between compaction cycles, and continues work without restarting. Three plugins. 22+ skills. 14 agents. 9 lifecycle hooks.
+A regular Claude Code session loses context during compaction. Brewcode automatically saves knowledge, passes state between compaction cycles, and continues work without restarting. Four plugins. 28+ skills. 14 agents. 9 lifecycle hooks.
 
 [**Full Documentation**](https://doc-claude.brewcode.app/getting-started/)
 
@@ -20,13 +20,46 @@ A regular Claude Code session loses context during compaction. Brewcode automati
 > [![CodeQL](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/codeql.yml/badge.svg)](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/codeql.yml?query=branch%3Amain)
 > [![Semgrep](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/semgrep.yml/badge.svg)](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/semgrep.yml?query=branch%3Amain)
 
+## 🚀 Install in 30 seconds
+
+Paste this prompt into any Claude Code session -- Claude will run the full install for you:
+
+```
+Execute these commands in this Claude Code session, one by one, show full output for each, do not skip any, do not summarize:
+
+1. claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
+2. claude plugin install brewcode@claude-brewcode
+3. claude plugin install brewdoc@claude-brewcode
+4. claude plugin install brewtools@claude-brewcode
+5. claude plugin install brewui@claude-brewcode
+
+After all commands succeed, run `/reload-plugins`. If `/reload-plugins` is unavailable, tell me to type `exit` and run `claude` again. Run the commands now.
+```
+
+Already installed? Update with this prompt:
+
+```
+Execute these commands in this Claude Code session, one by one, show full output for each, do not skip any, do not summarize:
+
+1. claude plugin marketplace update claude-brewcode
+2. claude plugin update brewcode@claude-brewcode
+3. claude plugin update brewdoc@claude-brewcode
+4. claude plugin update brewtools@claude-brewcode
+5. claude plugin update brewui@claude-brewcode
+
+After all commands succeed, run `/reload-plugins`. If `/reload-plugins` is unavailable, tell me to type `exit` and run `claude` again. Run the commands now.
+```
+
+> After install/update, run `/reload-plugins` (or `exit` + `claude` to restart). For manual install steps see [Installation](#installation) below.
+
 ## Plugin Suite
 
 | Plugin | Purpose | Skills | Install |
 |--------|---------|--------|---------|
-| [brewcode](brewcode/README.md) | Infinite task execution, quorum reviews, skill/agent creation, semantic search | 15 | `claude plugin install brewcode@claude-brewcode` |
+| [brewcode](brewcode/README.md) | Infinite task execution, quorum reviews, skill/agent creation, semantic search | 13 | `claude plugin install brewcode@claude-brewcode` |
 | [brewdoc](brewdoc/README.md) | Documentation tools: auto-sync, memory optimization, PDF conversion, publishing | 6 | `claude plugin install brewdoc@claude-brewcode` |
-| [brewtools](brewtools/README.md) | Universal text utilities: token optimization, humanization, secrets scanning | 3 | `claude plugin install brewtools@claude-brewcode` |
+| [brewtools](brewtools/README.md) | Universal text utilities: token optimization, humanization, secrets scanning, plugin updates | 7 | `claude plugin install brewtools@claude-brewcode` |
+| [brewui](brewui/README.md) | UI/visual tools: AI image generation, design-to-code conversion | 2 | `claude plugin install brewui@claude-brewcode` |
 
 ## Installation
 
@@ -46,23 +79,31 @@ claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
 claude plugin install brewcode@claude-brewcode
 claude plugin install brewdoc@claude-brewcode
 claude plugin install brewtools@claude-brewcode
+claude plugin install brewui@claude-brewcode
 ```
 
-3. **Restart Claude Code** -- plugins load automatically on every session.
+3. **Reload plugins** -- run `/reload-plugins` in Claude Code, or `exit` + `claude` to restart.
 
 ### Already installed? Update
+
+Use `/brewtools:plugin-update` inside Claude Code for the easiest path -- it runs all update commands and reloads automatically.
+
+Or run manually:
 
 ```bash
 claude plugin marketplace update claude-brewcode
 claude plugin update brewcode@claude-brewcode
 claude plugin update brewdoc@claude-brewcode
 claude plugin update brewtools@claude-brewcode
+claude plugin update brewui@claude-brewcode
 ```
+
+After updating, run `/reload-plugins` (preferred) or `exit` + `claude` to restart.
 
 ### Local directory (for development)
 
 ```bash
-claude --plugin-dir ./brewcode --plugin-dir ./brewdoc --plugin-dir ./brewtools
+claude --plugin-dir ./brewcode --plugin-dir ./brewdoc --plugin-dir ./brewtools --plugin-dir ./brewui
 ```
 
 ### Requirements
@@ -105,6 +146,15 @@ After `/brewcode:setup`, each task follows the cycle: `spec` -> `plan` -> `start
 /brewtools:text-optimize CLAUDE.md         # Token-efficient optimization (30+ rules)
 /brewtools:text-human 3be67487             # Remove AI artifacts from a commit
 /brewtools:secrets-scan                    # Scan for leaked credentials
+/brewtools:plugin-update                   # Install or update the plugin suite
+```
+
+### brewui -- visual tools
+
+```bash
+/brewui:image-gen "a cozy coffee shop at sunset"          # Generate image (default)
+/brewui:image-gen --edit photo.png "add warm lighting"    # Edit existing image
+/brewui:image-gen --config                                 # Configure API keys
 ```
 
 ## How It Works
@@ -138,7 +188,7 @@ After `/brewcode:setup`, each task follows the cycle: `spec` -> `plan` -> `start
 
 ## Skills Reference
 
-### Brewcode (15 skills)
+### Brewcode (13 skills)
 
 | Skill | Purpose |
 |-------|---------|
@@ -169,15 +219,26 @@ After `/brewcode:setup`, each task follows the cycle: `spec` -> `plan` -> `start
 | `/brewdoc:publish` | Publish to brewpage.app -- returns public URL |
 | `/brewdoc:guide` | Interactive tutorial for the plugin suite |
 
-### Brewtools (3 skills)
+### Brewtools (7 skills)
 
 | Skill | Purpose |
 |-------|---------|
 | `/brewtools:text-optimize` | LLM token efficiency optimization (30+ rules) |
 | `/brewtools:text-human` | Remove AI artifacts, humanize code |
 | `/brewtools:secrets-scan` | Scan git-tracked files for leaked secrets |
+| `/brewtools:ssh` | SSH server management -- connect, configure, deploy |
+| `/brewtools:deploy` | GitHub Actions deployment -- workflows, releases, GHCR, CI/CD |
+| `/brewtools:debate` | Evidence-based multi-agent debate (Challenge, Strategy, Critic modes) |
+| `/brewtools:plugin-update` | Install and update the full plugin suite |
 
-## Agents (14 total)
+### Brewui (2 skills)
+
+| Skill | Purpose |
+|-------|---------|
+| `/brewui:image-gen` | AI image generation via 5 providers with anti-slop controls |
+| `/brewui:glm-design-to-code` | GLM vision design-to-code: image/text/HTML/URL to multi-framework code |
+
+## Agents (16 total)
 
 | Agent | Model | Purpose |
 |-------|-------|---------|
@@ -205,6 +266,7 @@ After `/brewcode:setup`, each task follows the cycle: `spec` -> `plan` -> `start
 | Brewcode overview | [Brewcode](https://doc-claude.brewcode.app/brewcode/overview/) |
 | Brewdoc overview | [Brewdoc](https://doc-claude.brewcode.app/brewdoc/overview/) |
 | Brewtools overview | [Brewtools](https://doc-claude.brewcode.app/brewtools/overview/) |
+| Brewui overview | [Brewui](https://doc-claude.brewcode.app/brewui/overview/) |
 | Release Notes | [RELEASE-NOTES.md](RELEASE-NOTES.md) |
 
 ## Development

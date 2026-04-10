@@ -1,7 +1,6 @@
 ---
 name: brewcode:teams
-description: "Creates and manages dynamic teams of domain-specific agents. Analyzes project, proposes team (5-20 agents), creates with tracking framework. Modes: create, update, status, cleanup. Use when - creating project team, managing agents, team update, team status. Trigger keywords - teams, create team, update team, team status, cleanup team."
-disable-model-invocation: true
+description: "Creates and manages dynamic teams of domain-specific agents (5-20 agents) for a project. Analyzes codebase, proposes team, scaffolds with tracking framework. Modes: create, update, status, cleanup. Triggers: create team, agent team, domain agents, team of agents for project, update team, team status, cleanup team."
 user-invocable: true
 argument-hint: "[create [name] [prompt]|update [name]|status [name]|cleanup [name]]"
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion, Skill]

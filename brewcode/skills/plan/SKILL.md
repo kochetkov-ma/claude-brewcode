@@ -1,7 +1,6 @@
 ---
 name: brewcode:plan
-description: Creates execution plan (PLAN.md) from SPEC or Plan Mode file.
-disable-model-invocation: true
+description: "Creates brewcode execution PLAN.md from a SPEC file or Plan Mode file with phases, tasks, agents, and dependencies. Part of brewcode workflow (spec -> plan -> start). Triggers: create PLAN.md, brewcode plan, generate execution plan from spec, build plan from SPEC.md, task plan from requirements, brewcode:plan."
 user-invocable: true
 argument-hint: "[-n] [task-dir|SPEC.md|plan-file] — -n/--noask: no questions to user"
 allowed-tools: Read, Write, Glob, Grep, Bash, Task, AskUserQuestion
