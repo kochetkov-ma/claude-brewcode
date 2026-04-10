@@ -1,12 +1,12 @@
 # Brewtools
 
-> Universal text utilities plugin for Claude Code -- token optimization, AI artifact removal, secrets scanning.
+> Universal text utilities plugin for Claude Code -- token optimization, AI artifact removal, secrets scanning, SSH management, GitHub Actions deployment, evidence-based debate, and plugin updates.
 
 | Field | Value |
 |-------|-------|
-| Version | 3.4.29 |
-| Skills | 3 |
-| Agents | 1 |
+| Version | 3.4.51 |
+| Skills | 7 |
+| Agents | 3 |
 
 ## Install
 
@@ -41,7 +41,7 @@ Update anytime with `/brewtools:plugin-update`.
 
 ## Overview
 
-Brewtools provides standalone text utilities: token-efficient optimization with 30+ validated rules, AI-artifact removal from code and docs, and security scanning for leaked credentials. Each skill is self-contained and requires no prior setup.
+Brewtools provides standalone utilities: token-efficient optimization with 30+ validated rules, AI-artifact removal from code and docs, security scanning for leaked credentials, SSH server management, GitHub Actions deployment with safety gates, evidence-based multi-agent debate, and plugin check/install/update. Each skill is self-contained and requires no prior setup.
 
 ## Installation
 
@@ -68,6 +68,8 @@ claude --plugin-dir ./brewtools
 /brewtools:text-human src/main/java/services/   # Process an entire folder
 /brewtools:secrets-scan                         # Scan for leaked credentials
 /brewtools:secrets-scan --fix                   # Scan and fix interactively
+/brewtools:plugin-update                        # Interactive check + update
+/brewtools:plugin-update check                  # Status table only
 ```
 
 ## Skills
@@ -77,12 +79,18 @@ claude --plugin-dir ./brewtools
 | [`/brewtools:text-optimize`](skills/text-optimize/README.md) | Optimize text for LLM token efficiency | sonnet | `[-l\|-d] [file\|folder\|path1,path2]` |
 | [`/brewtools:text-human`](skills/text-human/README.md) | Remove AI artifacts from code and docs | sonnet | `<commit-hash\|path> [custom instructions]` |
 | [`/brewtools:secrets-scan`](skills/secrets-scan/README.md) | Scan for leaked secrets and credentials | sonnet | `[--fix]` |
+| [`/brewtools:ssh`](skills/ssh/SKILL.md) | SSH server management and configuration | opus | `[connect\|deploy\|configure\|...]` |
+| [`/brewtools:deploy`](skills/deploy/SKILL.md) | GitHub Actions deployment with safety gates | opus | `[release\|workflow\|...]` |
+| [`/brewtools:debate`](skills/debate/README.md) | Evidence-based multi-agent debate | sonnet | `[challenge\|strategy\|critic]` |
+| [`/brewtools:plugin-update`](skills/plugin-update/README.md) | Check/install/update brewcode plugins | sonnet | `[check\|update\|all]` |
 
-## Agent
+## Agents
 
 | Agent | Model | Purpose |
 |-------|-------|---------|
 | [text-optimizer](agents/text-optimizer.md) | sonnet | Lean execution engine for text optimization with rule-based validation |
+| [ssh-admin](agents/ssh-admin.md) | opus | Linux server administration -- SSH, Docker, firewalls, VPN, systemd, Caddy/Nginx |
+| [deploy-admin](agents/deploy-admin.md) | opus | GitHub Actions, releases, GHCR, CI/CD, semver, deployment tracking |
 
 ## Architecture
 
@@ -98,8 +106,14 @@ brewtools/
 |   +-- text-optimize/                # Token optimization
 |   +-- text-human/                   # AI artifact removal
 |   +-- secrets-scan/                 # Secrets scanning
+|   +-- ssh/                          # SSH server management
+|   +-- deploy/                       # GitHub Actions deployment
+|   +-- debate/                       # Evidence-based multi-agent debate
+|   +-- plugin-update/                # Plugin check / install / update
 +-- agents/
     +-- text-optimizer.md             # Text optimization agent
+    +-- ssh-admin.md                  # SSH and server administration
+    +-- deploy-admin.md               # Deployment and CI/CD
 ```
 
 > **Brewtools vs Brewcode:** Brewtools provides standalone text utilities with no lifecycle dependencies. Brewcode is a task execution engine with infinite context and session handoff. Both install from the same `claude-brewcode` marketplace but operate independently.
@@ -113,6 +127,10 @@ Full docs: [doc-claude.brewcode.app/brewtools/overview](https://doc-claude.brewc
 | Text Optimize | [text-optimize](https://doc-claude.brewcode.app/brewtools/skills/text-optimize/) |
 | Text Human | [text-human](https://doc-claude.brewcode.app/brewtools/skills/text-human/) |
 | Secrets Scan | [secrets-scan](https://doc-claude.brewcode.app/brewtools/skills/secrets-scan/) |
+| SSH | [ssh](https://doc-claude.brewcode.app/brewtools/skills/ssh/) |
+| Deploy | [deploy](https://doc-claude.brewcode.app/brewtools/skills/deploy/) |
+| Debate | [debate](https://doc-claude.brewcode.app/brewtools/skills/debate/) |
+| Plugin Update | [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) |
 | Release Notes | [RELEASE-NOTES.md](../RELEASE-NOTES.md) |
 
 Author: Maksim Kochetkov | License: MIT

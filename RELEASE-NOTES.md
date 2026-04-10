@@ -2,6 +2,24 @@
 
 ---
 
+## v3.4.53 (2026-04-10)
+
+> Docs: [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) | [brewtools overview](https://doc-claude.brewcode.app/brewtools/overview/)
+
+### brewtools
+#### Added
+- **plugin-update:** skill-level `README.md` with Quick Start, Modes, Examples, Discovery Method, Tips.
+
+#### Changed
+- **README.md:** refresh skills table (3 → 7 entries), agents table (1 → 3), architecture tree, quick start, docs links, header tagline, stats.
+
+### docs
+#### Changed
+- **brewtools/skills/plugin-update:** expanded page — accurate 6-phase Steps flow, full `Quick reference`, status-table example, Troubleshooting table, embedded `InstallPrompt` update prompt, explicit reload Callout, warning about non-existent `claude plugin list` CLI.
+- **brewtools/overview:** add plugin-update card to skills grid, Commands table row, architecture tree entry.
+
+---
+
 ## v3.4.52 (2026-04-10)
 
 > Docs: [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) | [FAQ](https://doc-claude.brewcode.app/faq/) | [installation](https://doc-claude.brewcode.app/installation/) | [guide](https://doc-claude.brewcode.app/brewdoc/skills/guide/)
