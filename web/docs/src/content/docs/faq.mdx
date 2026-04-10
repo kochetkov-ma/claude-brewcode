@@ -12,20 +12,26 @@ Click any question to expand the answer.
 
 <Spoiler title="How do I update brewcode plugins?">
 
-Run the following commands in order:
+<Callout type="tip" title="Recommended: use the skill">
+  Run the [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/) skill inside any Claude Code session. It runs the full update chain automatically, reports versions, and prompts you to reload.
+</Callout>
 
-```bash
-claude plugin marketplace update claude-brewcode
-claude plugin update brewcode@claude-brewcode
-claude plugin update brewdoc@claude-brewcode
-claude plugin update brewtools@claude-brewcode
-claude plugin update brewui@claude-brewcode
-```
+If the skill is unavailable (very old install, plugin not yet installed, or Claude refuses to invoke it), paste the prompt below directly into the chat — Claude Code will execute every command for you:
+
+<InstallPrompt plugin="all" mode="update" />
 
 After all commands succeed, run `/reload-plugins` inside your Claude Code session.
 If `/reload-plugins` is unavailable, type `exit` and run `claude` again.
 
-**Shortcut:** use the `/brewtools:plugin-update` skill -- it runs the full update chain automatically and prompts you to reload.
+</Spoiler>
+
+<Spoiler title="My install is too old — the skill isn't available. What do I do?">
+
+If `/brewtools:plugin-update` is missing (very old install or partial install), use the **Claude Code prompt** below. It tells Claude to run the marketplace update + every plugin update for you, no skill required:
+
+<InstallPrompt plugin="all" mode="update" />
+
+After Claude finishes, the [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/) skill will be available for all future updates.
 
 </Spoiler>
 
@@ -34,6 +40,10 @@ If `/reload-plugins` is unavailable, type `exit` and run `claude` again.
 Paste the following prompt directly into the chat. The coercive phrasing is intentional -- it prevents Claude from summarizing or skipping steps.
 
 <InstallPrompt plugin="all" mode="update" />
+
+<Callout type="note" title="Easier alternative">
+  Once any plugin update has succeeded, switch to the [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/) skill — it handles refusal scenarios internally.
+</Callout>
 
 </Spoiler>
 
@@ -73,7 +83,13 @@ Yes. Plugin changes only take effect after a reload.
 
 <Spoiler title="How do I install missing plugins?">
 
+Paste the prompt below into any Claude Code session — Claude will add the marketplace and install all four plugins for you:
+
 <InstallPrompt plugin="all" mode="install" />
+
+<Callout type="tip" title="After install">
+  Once installed, manage updates with the [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/) skill.
+</Callout>
 
 </Spoiler>
 
@@ -102,10 +118,10 @@ The marketplace metadata lives at:
 
 <Spoiler title="How do I check my installed version?">
 
-Run `/brewtools:plugin-update` inside a Claude Code session. It reports the installed and latest available version for each plugin and prompts you to update if a newer version exists.
+Run [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/) inside a Claude Code session. It reports the installed and latest available version for each plugin and prompts you to update if a newer version exists.
 
 <Callout type="note" title="Note">
-  The <code>claude plugin list</code> CLI command does not exist. Version checking must be done through the <code>/brewtools:plugin-update</code> skill or by inspecting the cache directory above.
+  The <code>claude plugin list</code> CLI command does not exist. Version checking must be done through the <a href="/brewtools/skills/plugin-update/"><code>/brewtools:plugin-update</code></a> skill or by inspecting the cache directory above.
 </Callout>
 
 </Spoiler>

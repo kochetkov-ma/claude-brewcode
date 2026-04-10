@@ -92,7 +92,7 @@ import { Card, CardGrid, Callout, Steps, Tabs, TabItem, InstallPrompt } from '..
     <div>
       <strong>Run project setup</strong>
       <p>Inside a Claude Code session, run:</p>
-      <pre><code>/brewcode:setup</code></pre>
+      <pre><a href="/brewcode/skills/setup/"><code>/brewcode:setup</code></a></pre>
       <p>Setup automatically checks and installs prerequisites (brew, jq, coreutils) as Phase 0 before analyzing your project. Optionally installs ollama and grepai for semantic search.</p>
     </div>
   </li>
@@ -103,7 +103,7 @@ import { Card, CardGrid, Callout, Steps, Tabs, TabItem, InstallPrompt } from '..
 Already have Brewcode installed? Update to the latest version:
 
 <Callout type="tip" title="Easy path: plugin-update skill">
-  Run <code>/brewtools:plugin-update</code> inside a Claude Code session. It checks versions,
+  Run <a href="/brewtools/skills/plugin-update/"><code>/brewtools:plugin-update</code></a> inside a Claude Code session. It checks versions,
   runs the full update chain, and prompts you to reload -- no manual commands needed.
 </Callout>
 
@@ -133,7 +133,7 @@ claude plugin update brewui@claude-brewcode
   **`/brewcode:*` commands are not recognized**
   -- Restart Claude Code after installation. Plugins only load at session start.
 
-  **`/brewcode:setup` reports missing `timeout`**
+  **<a href="/brewcode/skills/setup/">`/brewcode:setup`</a> reports missing `timeout`**
   -- The setup skill creates a symlink automatically during Phase 0. If the issue persists: `brew install coreutils`.
 
   **`CLAUDECODE` environment variable interferes with launch**

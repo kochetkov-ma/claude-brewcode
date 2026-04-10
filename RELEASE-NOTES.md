@@ -2,6 +2,23 @@
 
 ---
 
+## v3.4.55 (2026-04-10)
+
+> Docs: [FAQ](https://doc-claude.brewcode.app/faq/) | [installation](https://doc-claude.brewcode.app/installation/) | [brewcode overview](https://doc-claude.brewcode.app/brewcode/overview/) | [brewcode skills](https://doc-claude.brewcode.app/brewcode/skills/) | [brewdoc overview](https://doc-claude.brewcode.app/brewdoc/overview/) | [brewtools overview](https://doc-claude.brewcode.app/brewtools/overview/) | [brewui overview](https://doc-claude.brewcode.app/brewui/overview/)
+
+### docs
+#### Added
+- **FAQ:** new spoiler "My install is too old — the skill isn't available" with bootstrap prompt for very old installs. First question now leads with the skill (Callout) and falls back to the prompt block. Every skill mention is an active link to its doc page.
+
+#### Changed
+- **FAQ:** "Shortcut" prose lines extracted into green `<Callout type="tip">` blocks pointing to `/brewtools:plugin-update`. Install/update prompts now have explanatory intro and post-install Callout pointing to the skill.
+- **installation:** `/brewcode:setup` and `/brewtools:plugin-update` mentions converted to active links to their skill pages.
+- **brewcode/overview:** Card and Tab content links `/brewcode:setup`, `/brewcode:start`, `/brewcode:standards-review`, `/brewcode:teams` to skill pages.
+- **brewcode/skills:** summary table — both the `Skill` and `Command` columns are now links to the per-skill page.
+- **brewdoc/overview, brewtools/overview, brewui/overview:** Commands tables — every skill cell is an active link.
+
+---
+
 ## v3.4.54 (2026-04-10)
 
 > Docs: [guide](https://doc-claude.brewcode.app/brewdoc/guide/) | [FAQ](https://doc-claude.brewcode.app/faq/)
