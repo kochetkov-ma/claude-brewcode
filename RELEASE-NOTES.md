@@ -2,6 +2,17 @@
 
 ---
 
+## v3.4.58 (2026-04-11)
+
+> Docs: [doc site](https://doc-claude.brewcode.app/)
+
+### docs
+#### Fixed
+- **Search styling:** Pagefind UI was rendering raw/unstyled (browser-default input outline, bare "Clear" button, no result separators) because `@pagefind/default-ui/css/ui.css` was never imported. Added explicit `import '@pagefind/default-ui/css/ui.css'` in `Search.astro` script so Vite bundles the stylesheet; DaisyUI token overrides in `<style is:global>` still apply on top.
+- **Header logo wrap on mobile:** DaisyUI `.btn` defaults to `flex-wrap: wrap`, so "Brewcode Docs" text wrapped under the logo image on narrow viewports, pushing the whole header onto two rows. Added `flex-nowrap whitespace-nowrap min-w-0` + `shrink-0` on logo img + `truncate` on label; also `min-w-0` on the flex-1 Logo wrapper in `Header.astro` so child can shrink.
+
+---
+
 ## v3.4.57 (2026-04-11)
 
 > Docs: [doc site](https://doc-claude.brewcode.app/)
