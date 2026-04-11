@@ -27,6 +27,11 @@ const { title, description, headings = [], currentSlug = '' } = Astro.props;
         <div class="flex w-full max-w-[90rem] px-4 lg:px-8">
           <!-- Article content -->
           <article class="prose flex-1 max-w-5xl py-8 min-w-0" data-pagefind-body>
+            {/* Title boost: Pagefind BM25 weights this element 10x, so
+                a query that matches the page title (e.g. "start", "plan")
+                ranks the actual /brewcode:start skill page above every
+                page that just mentions "start" in prose. */}
+            <span class="sr-only" data-pagefind-weight="10" data-pagefind-meta="title">{title}</span>
             <slot />
           </article>
 

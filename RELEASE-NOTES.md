@@ -2,6 +2,16 @@
 
 ---
 
+## v3.4.62 (2026-04-11)
+
+> Docs: [Introduction](https://doc-claude.brewcode.app/getting-started/)
+
+### docs
+#### Changed
+- **Search ranking — titles boosted 10×:** Pagefind previously ranked pages by raw BM25 across body content, so typing `"start"` surfaced every page that mentioned "start" in prose before the actual `/brewcode:start` skill page. Added an `sr-only` element inside `<article data-pagefind-body>` in `DocsLayout.astro` with `data-pagefind-weight="10"` and `data-pagefind-meta="title"` holding the page title. Result: page whose title matches the query ranks above body-only hits. Verified test cases: `start`, `plan`, `debate`, `image` all surface their respective skill/agent pages first.
+
+---
+
 ## v3.4.61 (2026-04-11)
 
 > Docs: [Introduction](https://doc-claude.brewcode.app/getting-started/) | [Quickstart](https://doc-claude.brewcode.app/quickstart/)
