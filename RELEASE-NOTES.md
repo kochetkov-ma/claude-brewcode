@@ -2,6 +2,17 @@
 
 ---
 
+## v3.4.71 (2026-04-11)
+
+> Docs: [getting-started](https://doc-claude.brewcode.app/) | [installation](https://doc-claude.brewcode.app/installation/)
+
+### docs
+#### Fixed
+- **Card broken layout:** `Card.astro` rendered as `<a>` when `href` is set, causing nested `<a>` tags when slot content contained markdown links. Browser closed outer anchor early — card icon/title separated from description and content leaked outside the card. Fixed with stretched-link overlay pattern: card is now always a `div`; an `absolute inset-0 z-0` anchor covers the full card surface; slot content gets `relative z-[1]` so inner links intercept clicks correctly.
+- **getting-started, installation:** restored inline links (`setup`, `spec`, `plan`, `start`) inside Quick Start card — they were the trigger for the layout bug but are correct content; fix is in the component, not the content.
+
+---
+
 ## v3.4.70 (2026-04-11)
 
 > Docs: [brewdoc:my-claude](https://doc-claude.brewcode.app/brewdoc/skills/my-claude/) | [brewdoc:guide](https://doc-claude.brewcode.app/brewdoc/skills/guide/) | [brewdoc:auto-sync](https://doc-claude.brewcode.app/brewdoc/skills/auto-sync/)

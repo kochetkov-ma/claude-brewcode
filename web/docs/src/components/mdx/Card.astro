@@ -98,23 +98,26 @@ if (!rawIcon) {
   for (const ch of rawIcon) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
   icon = iconMap[iconKeys[hash % iconKeys.length]];
 }
-const Tag = href ? 'a' : 'div';
 ---
 
-<Tag
-  href={href}
+<div
   class:list={[
-    'not-prose card bg-base-200 border border-base-300 p-5',
+    'not-prose card bg-base-200 border border-base-300 p-5 relative',
     href && 'hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 transition-all cursor-pointer',
   ]}
 >
-  <div class="flex items-start gap-3">
+  {href && (
+    <a href={href} class="absolute inset-0 z-0 rounded-[inherit]" tabindex="-1" aria-hidden="true"></a>
+  )}
+  <div class:list={['flex items-start gap-3', href && 'relative z-[1]']}>
     {icon && <span class="text-2xl shrink-0">{icon}</span>}
     <div>
-      <h3 class="font-headline font-semibold text-base-content mb-1">{title}</h3>
+      <h3 class="font-headline font-semibold text-base-content mb-1">
+        {href ? <a href={href}>{title}</a> : title}
+      </h3>
       <div class="text-sm text-base-content/70">
         <slot />
       </div>
     </div>
   </div>
-</Tag>
+</div>
