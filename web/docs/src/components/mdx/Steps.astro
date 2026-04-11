@@ -5,6 +5,11 @@
 </div>
 
 <style>
+  /* Scoped to DIRECT children only so nested <ul><li> inside a step's body
+     do not get counter-increment, a circle marker, or the grid layout.
+     Previously `.steps-timeline :global(li)` matched ANY descendant <li>,
+     which broke nested lists (file lists, bullet lists) by renumbering them
+     as continuation steps. See .claude/rules/astro-avoid.md. */
   .steps-timeline {
     counter-reset: step-counter;
     list-style: none;
@@ -12,16 +17,17 @@
     margin: 0;
   }
 
-  .steps-timeline :global(li) {
+  :global(.steps-timeline > li) {
     counter-increment: step-counter;
     display: grid;
     grid-template-columns: 2.5rem 1fr;
     gap: 0 0.75rem;
     padding-bottom: 1.5rem;
     position: relative;
+    list-style: none;
   }
 
-  .steps-timeline :global(li)::before {
+  :global(.steps-timeline > li)::before {
     content: counter(step-counter);
     display: flex;
     align-items: center;
@@ -40,7 +46,7 @@
     flex-shrink: 0;
   }
 
-  .steps-timeline :global(li)::after {
+  :global(.steps-timeline > li)::after {
     content: '';
     position: absolute;
     left: 1.125rem;
@@ -51,15 +57,18 @@
     background-color: oklch(var(--p) / 0.3);
   }
 
-  .steps-timeline :global(li:last-child)::after {
+  :global(.steps-timeline > li:last-child)::after {
     display: none;
   }
 
-  .steps-timeline :global(li:last-child) {
+  :global(.steps-timeline > li:last-child) {
     padding-bottom: 0;
   }
 
-  .steps-timeline :global(li > strong) {
+  /* Only style the immediate title/paragraph of a step; nested children
+     keep their normal prose styles. */
+  :global(.steps-timeline > li > div > strong:first-child),
+  :global(.steps-timeline > li > strong:first-child) {
     grid-column: 2;
     grid-row: 1;
     align-self: center;
@@ -67,11 +76,29 @@
     color: oklch(var(--bc));
   }
 
-  .steps-timeline :global(li > p) {
+  :global(.steps-timeline > li > div),
+  :global(.steps-timeline > li > p) {
     grid-column: 2;
-    margin: 0.25rem 0 0 0;
-    color: oklch(var(--bc) / 0.75);
+    color: oklch(var(--bc) / 0.9);
     font-size: 0.925rem;
     line-height: 1.6;
+  }
+
+  /* Restore default list markers for nested lists inside a step body. */
+  :global(.steps-timeline > li ul) {
+    list-style: disc;
+    padding-left: 1.25rem;
+    margin: 0.5rem 0;
+  }
+  :global(.steps-timeline > li ol) {
+    list-style: decimal;
+    padding-left: 1.25rem;
+    margin: 0.5rem 0;
+  }
+  :global(.steps-timeline > li ul li),
+  :global(.steps-timeline > li ol li) {
+    display: list-item;
+    padding: 0;
+    margin: 0.15rem 0;
   }
 </style>

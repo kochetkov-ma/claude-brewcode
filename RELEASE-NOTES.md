@@ -2,6 +2,24 @@
 
 ---
 
+## v3.4.64 (2026-04-11)
+
+> Docs: [Quickstart](https://doc-claude.brewcode.app/quickstart/) | [Brewdoc Skills](https://doc-claude.brewcode.app/brewdoc/skills/)
+
+### docs
+#### Fixed
+- **Steps component — nested list numbering corruption.** `Steps.astro` used `.steps-timeline :global(li)` which matched **every** descendant `<li>`, so any `<ul>`/`<ol>` inside a step body (e.g. the "Result: file list" in Quickstart Step 1) was treated as a continuation step — complete with circle counter, timeline bar, and broken grid layout. Rewrote the selector to direct-child only (`:global(.steps-timeline > li)`), explicitly restored `list-style: disc/decimal` + `display: list-item` for nested `ul`/`ol`/`li`, and added counter-reset so only top-level steps increment. Quickstart timeline now renders cleanly: "1 Project setup" with a bulleted file list inside, no fake steps 2–5.
+- **Steps grid layout** — title and body paragraph selectors tightened to direct children so nested prose keeps normal prose styling.
+
+#### Changed
+- **Brewdoc sidebar structure aligned with other plugins.** Brewdoc skill pages previously lived flat under `/brewdoc/<skill>/` (auto-sync, my-claude, memory, md-to-pdf, publish, guide), while brewcode/brewtools/brewui use `/<plugin>/skills/<skill>/` with a dedicated **Skills** sidebar group. Moved all 6 brewdoc skill pages into `content/docs/brewdoc/skills/`, added `brewdoc/skills.mdx` index page, updated `navigation.ts` to use a `Skills` children group, fixed 15+ internal links in `brewdoc/overview.mdx` and cross-page cards. All 65 pages build clean.
+
+### rules
+#### Added
+- `.claude/rules/astro-avoid.md` — four new rules (#8–#10) covering Steps component nesting semantics, the direct-child selector fix history, and the plugin-skills directory convention. Agents editing MDX will pick them up via the `web/**/*.mdx` path glob.
+
+---
+
 ## v3.4.63 (2026-04-11)
 
 > Docs: [Introduction](https://doc-claude.brewcode.app/getting-started/)

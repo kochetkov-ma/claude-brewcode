@@ -25,30 +25,30 @@ Install the entire suite:
 Brewdoc contains 6 skills, each handling a separate documentation task.
 
 <CardGrid>
-  <Card title="Auto-Sync" icon="sync" href="/brewdoc/auto-sync/">
+  <Card title="Auto-Sync" icon="sync" href="/brewdoc/skills/auto-sync/">
     Synchronize documentation (labels) with code.
     Detects outdated files through INDEX, launches parallel agents for updates.
     Supports project, global, file, and folder modes.
   </Card>
-  <Card title="My-Claude" icon="clipboard" href="/brewdoc/my-claude/">
+  <Card title="My-Claude" icon="clipboard" href="/brewdoc/skills/my-claude/">
     Generate documentation about your Claude Code installation.
     Three modes: internal (local configuration), external (hooks and context architecture),
     research (search across forums, GitHub, marketplaces).
   </Card>
-  <Card title="Memory" icon="brain" href="/brewdoc/memory/">
+  <Card title="Memory" icon="brain" href="/brewdoc/skills/memory/">
     Interactive optimization of memory files (CLAUDE.md and MEMORY.md).
     4 steps: remove duplicates, migrate to rules, compress, validate.
   </Card>
-  <Card title="md-to-pdf" icon="file" href="/brewdoc/md-to-pdf/">
+  <Card title="md-to-pdf" icon="file" href="/brewdoc/skills/md-to-pdf/">
     Convert Markdown to professional PDF.
     Two engines: reportlab (lightweight) and weasyprint (full CSS support).
     Style customization, test mode, LLM preprocessing.
   </Card>
-  <Card title="Publish" icon="link" href="/brewdoc/publish/">
+  <Card title="Publish" icon="link" href="/brewdoc/skills/publish/">
     Publish text, markdown, JSON, or files to brewpage.app.
     Interactive namespace and password selection. Owner token saved locally for later delete.
   </Card>
-  <Card title="Guide" icon="book" href="/brewdoc/guide/">
+  <Card title="Guide" icon="book" href="/brewdoc/skills/guide/">
     Interactive tutorial for the full plugin suite.
     9 topics across 3 domains, progress tracking, multilingual support.
   </Card>
@@ -58,15 +58,15 @@ Brewdoc contains 6 skills, each handling a separate documentation task.
 
 | Command | Purpose | Model | Arguments |
 |---------|---------|-------|-----------|
-| [`/brewdoc:auto-sync`](/brewdoc/auto-sync/) | Synchronize documentation with code | opus | `[status] \| [init <path>] \| [global] \| [path]` |
-| [`/brewdoc:my-claude`](/brewdoc/my-claude/) | Generate documentation about Claude Code installation | opus | `[ext [context]] \| [r <query>]` |
-| [`/brewdoc:memory`](/brewdoc/memory/) | Optimize memory files in 4 steps | opus | -- |
-| [`/brewdoc:md-to-pdf`](/brewdoc/md-to-pdf/) | Convert Markdown to PDF | sonnet | `<file.md> [--engine name] ["prompt"] \| styles \| test` |
-| [`/brewdoc:publish`](/brewdoc/publish/) | Publish to brewpage.app — returns public URL | haiku | `<text\|file\|json> [--ttl N]` |
-| [`/brewdoc:guide`](/brewdoc/guide/) | Interactive tutorial for the plugin suite | haiku | `[topic]` |
+| [`/brewdoc:auto-sync`](/brewdoc/skills/auto-sync/) | Synchronize documentation with code | opus | `[status] \| [init <path>] \| [global] \| [path]` |
+| [`/brewdoc:my-claude`](/brewdoc/skills/my-claude/) | Generate documentation about Claude Code installation | opus | `[ext [context]] \| [r <query>]` |
+| [`/brewdoc:memory`](/brewdoc/skills/memory/) | Optimize memory files in 4 steps | opus | -- |
+| [`/brewdoc:md-to-pdf`](/brewdoc/skills/md-to-pdf/) | Convert Markdown to PDF | sonnet | `<file.md> [--engine name] ["prompt"] \| styles \| test` |
+| [`/brewdoc:publish`](/brewdoc/skills/publish/) | Publish to brewpage.app — returns public URL | haiku | `<text\|file\|json> [--ttl N]` |
+| [`/brewdoc:guide`](/brewdoc/skills/guide/) | Interactive tutorial for the plugin suite | haiku | `[topic]` |
 
 <Callout type="tip" title="My-Claude">
-  The <code>/brewdoc:my-claude</code> skill now has a <a href="/brewdoc/my-claude/">dedicated page</a> with full documentation.
+  The <code>/brewdoc:my-claude</code> skill now has a <a href="/brewdoc/skills/my-claude/">dedicated page</a> with full documentation.
 </Callout>
 
 ## Architecture

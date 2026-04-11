@@ -118,12 +118,18 @@ export const navigation: NavSection[] = [
     title: 'Brewdoc',
     items: [
       { title: 'Overview', slug: 'brewdoc/overview' },
-      { title: 'Auto-Sync', slug: 'brewdoc/auto-sync' },
-      { title: 'My-Claude', slug: 'brewdoc/my-claude' },
-      { title: 'Memory', slug: 'brewdoc/memory' },
-      { title: 'md-to-pdf', slug: 'brewdoc/md-to-pdf' },
-      { title: 'Publish', slug: 'brewdoc/publish' },
-      { title: 'Guide', slug: 'brewdoc/guide' },
+      {
+        title: 'Skills',
+        slug: 'brewdoc/skills',
+        children: [
+          { title: 'auto-sync', slug: 'brewdoc/skills/auto-sync' },
+          { title: 'my-claude', slug: 'brewdoc/skills/my-claude' },
+          { title: 'memory', slug: 'brewdoc/skills/memory' },
+          { title: 'md-to-pdf', slug: 'brewdoc/skills/md-to-pdf' },
+          { title: 'publish', slug: 'brewdoc/skills/publish' },
+          { title: 'guide', slug: 'brewdoc/skills/guide' },
+        ],
+      },
     ],
   },
   {

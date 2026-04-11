@@ -1,0 +1,56 @@
+---
+title: "Skills"
+description: "All 6 Brewdoc skills: commands, parameters, examples"
+order: 41
+---
+
+import { Card, CardGrid, Callout } from '../../../components/mdx';
+
+# Skills
+
+Skills (recipes) are slash commands that define *what* to do. Brewdoc includes 6 skills focused on documentation sync, memory optimization, Markdown → PDF conversion, content publishing, and an interactive suite guide -- each works independently with no prior setup required.
+
+## Summary table
+
+| # | Skill | Command | Model | Purpose |
+|---|-------|---------|-------|---------|
+| 1 | auto-sync | `/brewdoc:auto-sync` | opus | Synchronize documentation with code |
+| 2 | my-claude | `/brewdoc:my-claude` | opus | Generate documentation about Claude Code installation |
+| 3 | memory | `/brewdoc:memory` | opus | Optimize memory files in 4 interactive steps |
+| 4 | md-to-pdf | `/brewdoc:md-to-pdf` | sonnet | Convert Markdown to PDF (reportlab / weasyprint) |
+| 5 | publish | `/brewdoc:publish` | haiku | Publish to brewpage.app — returns public URL |
+| 6 | guide | `/brewdoc:guide` | haiku | Interactive tutorial for the plugin suite |
+
+<CardGrid>
+  <Card title="auto-sync" icon="sync" href="/brewdoc/skills/auto-sync/">
+    Synchronize documentation with code
+  </Card>
+  <Card title="my-claude" icon="clipboard" href="/brewdoc/skills/my-claude/">
+    Generate Claude Code installation docs
+  </Card>
+  <Card title="memory" icon="brain" href="/brewdoc/skills/memory/">
+    Interactive memory optimization (4 steps)
+  </Card>
+  <Card title="md-to-pdf" icon="file" href="/brewdoc/skills/md-to-pdf/">
+    Markdown → PDF conversion
+  </Card>
+  <Card title="publish" icon="link" href="/brewdoc/skills/publish/">
+    Publish content to brewpage.app
+  </Card>
+  <Card title="guide" icon="book" href="/brewdoc/skills/guide/">
+    Interactive tutorial for brewcode suite
+  </Card>
+</CardGrid>
+
+<Callout type="tip" title="Standalone">
+  All six skills can be used independently -- they require no dependency on the other plugins in the suite.
+</Callout>
+
+<CardGrid>
+  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
+    Download, changelog, and installation instructions.
+  </Card>
+  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewdoc/skills">
+    Source code, README, and configuration files.
+  </Card>
+</CardGrid>
