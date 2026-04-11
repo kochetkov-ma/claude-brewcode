@@ -2,6 +2,14 @@
 
 ---
 
+## v3.4.63 (2026-04-11)
+
+> Docs: [Introduction](https://doc-claude.brewcode.app/getting-started/)
+
+### docs
+#### Changed
+- **Search ranking — title boost amplified to ~100×:** v3.4.62 added `data-pagefind-weight="10"` on a single sr-only title element, but Pagefind's max weight (10) + one heading match still lost to pages with many body mentions of the same word. Verified on live site: `"start"` put the actual `/brewcode:start` skill page at rank 7, behind Agent Creator, Hook Creator, Guide, etc. Fix: duplicate the page title 10× inside the weighted sr-only element (`{Array(10).fill(title).join(' ')}`), yielding an effective ~100× BM25 boost. Title-matching pages should now consistently rank first.
+
 ## v3.4.62 (2026-04-11)
 
 > Docs: [Introduction](https://doc-claude.brewcode.app/getting-started/)
