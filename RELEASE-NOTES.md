@@ -2,6 +2,16 @@
 
 ---
 
+## v3.4.60 (2026-04-11)
+
+> Docs: [doc site](https://doc-claude.brewcode.app/)
+
+### docs
+#### Changed
+- **Search highlights:** Pagefind default `<mark>` background was saturated browser-yellow, visually harsh against the dark theme. Overridden in `<style is:global>` to `oklch(var(--p) / 0.22)` — soft DaisyUI primary tint, inherit text color, 2px padding + radius. Stays on-brand and legible without shouting.
+
+---
+
 ## v3.4.59 (2026-04-11)
 
 > Docs: [Introduction](https://doc-claude.brewcode.app/getting-started/)
