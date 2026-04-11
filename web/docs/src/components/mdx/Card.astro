@@ -46,10 +46,58 @@ const iconMap: Record<string, string> = {
   handshake: '\u{1F91D}',
   rocket: '\u{1F680}',
   package: '\u{1F4E6}',
+  image: '\u{1F5BC}\uFE0F',
+  plus: '\u{2795}',
+  warning: '\u{26A0}\uFE0F',
+  bell: '\u{1F514}',
+  bolt: '\u{26A1}',
+  bug: '\u{1F41B}',
+  calendar: '\u{1F4C5}',
+  clock: '\u{23F0}',
+  cloud: '\u{2601}\uFE0F',
+  database: '\u{1F4BE}',
+  gear: '\u{2699}\uFE0F',
+  globe: '\u{1F310}',
+  graph: '\u{1F4C8}',
+  hammer: '\u{1F528}',
+  key: '\u{1F511}',
+  label: '\u{1F3F7}\uFE0F',
+  magic: '\u{2728}',
+  megaphone: '\u{1F4E2}',
+  note: '\u{1F4DD}',
+  phone: '\u{1F4DE}',
+  pin: '\u{1F4CC}',
+  refresh: '\u{1F504}',
+  robot: '\u{1F916}',
+  scroll: '\u{1F4DC}',
+  shieldCheck: '\u{1F6E1}\uFE0F',
+  ship: '\u{1F6A2}',
+  target: '\u{1F3AF}',
+  test: '\u{1F9EA}',
+  tool: '\u{1F6E0}\uFE0F',
+  trophy: '\u{1F3C6}',
+  zap: '\u{26A1}',
 };
 
 const { title, icon: rawIcon, href } = Astro.props;
-const icon = rawIcon && iconMap[rawIcon] ? iconMap[rawIcon] : rawIcon;
+// Unknown icons fall back to a random whitelist icon + console.warn, so pages
+// never leak raw icon names as text. Add proper names to iconMap when you see
+// the warning in build logs or the browser console.
+// See .claude/rules/astro-avoid.md (icon whitelist).
+const iconKeys = Object.keys(iconMap);
+let icon: string;
+if (!rawIcon) {
+  icon = '';
+} else if (iconMap[rawIcon]) {
+  icon = iconMap[rawIcon];
+} else {
+  console.warn(`[Card] Unknown icon "${rawIcon}" on card "${title}" — add it to iconMap in Card.astro. Rendering fallback icon.`);
+  // Deterministic fallback: hash the unknown name so the same bad name always
+  // gets the same fallback icon (less jarring than pure random across rebuilds).
+  let hash = 0;
+  for (const ch of rawIcon) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  icon = iconMap[iconKeys[hash % iconKeys.length]];
+}
 const Tag = href ? 'a' : 'div';
 ---
 

@@ -2,6 +2,23 @@
 
 ---
 
+## v3.4.61 (2026-04-11)
+
+> Docs: [Introduction](https://doc-claude.brewcode.app/getting-started/) | [Quickstart](https://doc-claude.brewcode.app/quickstart/)
+
+### docs
+#### Fixed
+- **Card icons:** `<Card icon="image">`, `<Card icon="plus">`, and `<Card icon="warning">` rendered the literal words "image", "plus", "warning" in the UI (visible on the Introduction page for `brewui`), because `Card.astro`'s `iconMap` was a strict whitelist that fell through to `rawIcon` on miss. Root cause + remediation:
+  - Extended `iconMap` to 65 entries — added `image 🖼️`, `plus ➕`, `warning ⚠️`, plus 30 more common icons (bell, bolt, bug, calendar, clock, cloud, database, gear, globe, graph, hammer, key, label, magic, megaphone, note, phone, pin, refresh, robot, scroll, shieldCheck, ship, target, test, tool, trophy, zap, …) so future pages have breathing room.
+  - Unknown icon names now render a **deterministic fallback** (hash → stable pick from the map) **and** log `console.warn` in build + browser, instead of leaking raw text into prose. A missing icon is visible and noisy without breaking the page.
+  - Verified by independent re-scan: 38/38 icon names used across content are now present in `iconMap` — zero missing.
+
+### rules
+#### Added
+- `.claude/rules/astro-avoid.md#5,#6,#7` — new path-scoped rules (now covering `web/**/*.mdx`) that explicitly forbid unlisted `Card` icons and raw exotic emoji in MDX, and require adding to `iconMap` before use. Agents touching Astro/MDX pages will pick this up automatically via the glob.
+
+---
+
 ## v3.4.60 (2026-04-11)
 
 > Docs: [doc site](https://doc-claude.brewcode.app/)
