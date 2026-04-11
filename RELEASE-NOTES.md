@@ -2,6 +2,14 @@
 
 ---
 
+## v3.4.66 (2026-04-11)
+
+### docs
+#### Changed
+- **Search ranking — body downweighted to 0.2.** v3.4.65 boosted titles via weight 10 + 30× duplication, but BM25 TF-saturation capped the score so pages with dozens of body mentions of common words ("start", "spec") still out-ranked the actual skill pages. Added a `data-pagefind-weight="0.2"` wrapper around the whole article slot (via `display: contents` div so prose layout is unchanged). Net effect: title boost is ~50× stronger than body prose, which lets `/brewcode/skills/start/`, `/brewcode/skills/spec/` etc. beat pages that mention those words many times.
+
+---
+
 ## v3.4.65 (2026-04-11)
 
 ### docs

@@ -28,22 +28,25 @@ const { title, description, headings = [], currentSlug = '' } = Astro.props;
           <!-- Article content -->
           <article class="prose flex-1 max-w-5xl py-8 min-w-0" data-pagefind-body>
             {/*
-              Title boost for Pagefind BM25 ranking.
-              - `data-pagefind-weight="10"` is the max weight Pagefind accepts.
-              - BM25 TF saturates quickly, so we also duplicate the title
-                30× to push term frequency high enough to beat pages that
-                mention the word many times in body prose.
+              Pagefind ranking tuning:
+              - Title gets weight 10 (max) AND is duplicated 30× — this
+                pushes BM25 term-frequency well past the saturation knee.
+              - Body content is wrapped in a weight 0.2 scope, so prose
+                mentions of common words ("start", "plan", "spec") count
+                for 1/5 of their natural weight. This makes the title
+                boost dominate by ~50× effective ratio.
               - We deliberately do NOT set `data-pagefind-meta="title"` —
-                that would overwrite the page's real title (taken from <h1>)
-                with our duplicated string in search result meta. Letting
-                Pagefind fall back to the h1 keeps result labels clean.
-              - `sr-only` hides the element visually but leaves text in the
-                DOM so Pagefind can index it.
+                that would overwrite the page title Pagefind derives from
+                <h1> with our duplicated string.
+              - `sr-only` hides the title boost visually; `display: contents`
+                on the body wrapper keeps layout / prose styles unchanged.
             */}
             <span class="sr-only" aria-hidden="true">
               <span data-pagefind-weight="10">{Array(30).fill(title).join(' ')}</span>
             </span>
-            <slot />
+            <div data-pagefind-weight="0.2" style="display: contents">
+              <slot />
+            </div>
           </article>
 
           <!-- TOC (right side, visible xl+) -->
