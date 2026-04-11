@@ -7,52 +7,74 @@
   </form>
 </dialog>
 
+<style is:global>
+  #pagefind-search {
+    --pagefind-ui-primary: oklch(var(--p));
+    --pagefind-ui-text: oklch(var(--bc));
+    --pagefind-ui-background: oklch(var(--b2));
+    --pagefind-ui-border: oklch(var(--b3));
+    --pagefind-ui-font: inherit;
+  }
+  @media (max-width: 640px) {
+    #pagefind-search { --pagefind-ui-scale: 0.9; }
+  }
+</style>
+
 <script>
-  document.addEventListener('astro:page-load', () => {
-    const dialog = document.getElementById('search-dialog') as HTMLDialogElement | null;
-    if (!dialog) return;
-
-    const container = document.getElementById('pagefind-search');
-    if (!container) return;
-
-    if (!container.dataset.initialized) {
+  (() => {
+    const init = () => {
+      const dialog = document.getElementById('search-dialog') as HTMLDialogElement | null;
+      const container = document.getElementById('pagefind-search');
+      if (!dialog || !container) return;
+      if (container.dataset.initialized) return;
       container.dataset.initialized = 'true';
-      import('@pagefind/default-ui').then(({ PagefindUI }) => {
-        new PagefindUI({
-          element: '#pagefind-search',
-          showSubResults: true,
-          showImages: false,
-          autofocus: true,
-        });
-      });
 
-      // Cmd+K / Ctrl+K keyboard shortcut
+      const normalizeQuery = (s: string) =>
+        s
+          .toLowerCase()
+          .normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^\p{L}\p{N}\s]+/gu, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+      let pagefindLoaded = false;
+      const loadPagefind = () => {
+        if (pagefindLoaded) return;
+        pagefindLoaded = true;
+        import('@pagefind/default-ui').then(({ PagefindUI }) => {
+          new PagefindUI({
+            element: '#pagefind-search',
+            showSubResults: true,
+            showImages: false,
+            autofocus: true,
+            resetStyles: false,
+            processTerm: (term: string) => normalizeQuery(term),
+          });
+        });
+      };
+
+      const openSearch = () => {
+        loadPagefind();
+        if (!dialog.open) dialog.showModal();
+      };
+
+      document.getElementById('search-btn')?.addEventListener('click', openSearch);
+      document.getElementById('search-btn-mobile')?.addEventListener('click', openSearch);
+
       document.addEventListener('keydown', (e: KeyboardEvent) => {
-        if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
           e.preventDefault();
-          if (dialog.open) {
-            dialog.close();
-          } else {
-            dialog.showModal();
-          }
+          if (dialog.open) dialog.close();
+          else openSearch();
         }
+        if (e.key === 'Escape' && dialog.open) dialog.close();
       });
+    };
 
-      // Desktop search button
-      const searchBtn = document.getElementById('search-btn');
-      if (searchBtn) {
-        searchBtn.addEventListener('click', () => {
-          dialog.showModal();
-        });
-      }
-
-      // Mobile search button
-      const searchBtnMobile = document.getElementById('search-btn-mobile');
-      if (searchBtnMobile) {
-        searchBtnMobile.addEventListener('click', () => {
-          dialog.showModal();
-        });
-      }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init, { once: true });
+    } else {
+      init();
     }
-  });
+  })();
 </script>

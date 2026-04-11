@@ -2,6 +2,18 @@
 
 ---
 
+## v3.4.57 (2026-04-11)
+
+> Docs: [doc site](https://doc-claude.brewcode.app/)
+
+### docs
+#### Fixed
+- **Search:** docs search was completely non-functional — `Search.astro` listened only to `astro:page-load`, but the project does not enable Astro ViewTransitions, so neither PagefindUI nor button/shortcut handlers ever initialized. Rewrote client init to use `DOMContentLoaded`/immediate branch, split button listeners from the lazy `@pagefind/default-ui` import so clicks work before Pagefind loads, and added a `processTerm` query normalizer (lowercase, strip diacritics, strip punctuation, collapse whitespace) so `"GLM-design, to code!"` matches `"glm design to code"`. Cmd/Ctrl+K toggle and Escape close restored.
+- **Search CSS:** switched Pagefind CSS variables to DaisyUI `oklch(var(--p/--bc/--b2/--b3))` tokens and added `--pagefind-ui-scale: 0.9` below 640px for mobile modal sizing.
+- **GitHubBadge mobile:** star badge was hidden entirely on `<640px` (`hidden sm:inline-flex`). Added a compact mobile variant (`inline-flex sm:hidden`) with the GitHub Octocat icon + star count, tappable to the repo. A single `fetch` now updates both desktop and mobile counters.
+
+---
+
 ## v3.4.56 (2026-04-10)
 
 > Docs: [FAQ](https://doc-claude.brewcode.app/faq/)
