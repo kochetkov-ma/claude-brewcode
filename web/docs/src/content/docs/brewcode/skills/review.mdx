@@ -1,0 +1,201 @@
+---
+title: "review (dynamic)"
+description: "Project-adapted multi-agent code review with quorum consensus — generated per-project by /brewcode:setup"
+order: 18
+---
+
+import { Callout, Card, CardGrid, Badge, Steps, Tabs, TabItem } from '../../../../components/mdx';
+
+# review <Badge variant="warning" text="dynamic" />
+
+> **This skill is different.** `/brewcode:review` is **not shipped** with the brewcode plugin. It is **generated into every target project** by [/brewcode:setup](/brewcode/skills/setup/) — tailored to the project's tech stack, detected agents, coding conventions, and etalon classes. Every project ends up with its own `/brewcode:review`, adapted to what that codebase actually looks like.
+
+<Callout type="tip" title="Not to be confused with /brewcode:standards-review">
+  [`/brewcode:standards-review`](/brewcode/skills/standards-review/) is a **static plugin skill** for prescriptive style / rules / convention compliance.
+
+  `/brewcode:review` is a **dynamic per-project skill** for deliberative multi-agent code review with quorum consensus, tech-specific checks, and optional Critic / devil's-advocate phases.
+
+  Think of it as: *standards-review checks if the code follows the rules, review checks if the code is actually good*.
+</Callout>
+
+## What it does
+
+A single invocation runs a full multi-phase pipeline:
+
+1. **Codebase study** — parallel Explore agents scan the repo topology, tests, and DB layer.
+2. **Group formation** — enables `main-code`, `tests`, `db-layer` (and any project-specific groups like `security`) based on detected files.
+3. **Parallel review** — `N` agents per group run simultaneously; each one runs the project's adapted checks and rules.
+4. **Quorum collection** — findings are clustered by file, line range (±5), and category; only clusters with ≥`M` unique agents are confirmed.
+5. **DoubleCheck** — one Opus [reviewer](/brewcode/agents/reviewer/) re-verifies every confirmed finding (exists? accurate? actionable? right severity?).
+6. **Critic (optional)** — devil's-advocate Opus agent challenges the whole review, looking for issues every reviewer missed.
+7. **Report** — prioritized findings (P0 Critic → P1 DoubleCheck-confirmed → P2 quorum only → P3 exceptions).
+
+## Invocation
+
+```bash
+/brewcode:review "<prompt-or-file-path>" [-q|--quorum [G-]N-M] [-c|--critic]
+```
+
+### Parameters
+
+| Argument | Meaning | Example |
+|----------|---------|---------|
+| *prompt* | Plain-text review focus | `/brewcode:review "auth module PR 123"` |
+| *file path* | Read file as review instructions | `/brewcode:review ./review-focus.md` |
+| `-q N-M` | `N` agents per group, `M` quorum threshold | `-q 5-3` → 5 agents, needs 3 confirming |
+| `-q G-N-M` | `G` groups, `N` agents/group, `M` quorum | `-q 3-4-2` → 3 groups × 4 agents, quorum 2 |
+| `-c` / `--critic` | Enable Critic phase 5.5 after DoubleCheck | `-c` |
+| Default | `-q 3-2` (3 agents per group, quorum 2), no critic | — |
+
+The skill also auto-enables Critic when the prompt contains the words `critic`, `критик`, or `с критиком`.
+
+## How generation works
+
+<Steps>
+  <li class="step step-primary">
+    <div>
+      <strong>You run <a href="/brewcode/skills/setup/"><code>/brewcode:setup</code></a></strong>
+      <p>During setup, Phase 3.5 dispatches <code>bash scripts/setup.sh review</code>. The script creates <code>.claude/skills/brewcode-review/</code> in your project and copies <code>brewcode/templates/skills/review/SKILL.md.template</code> into <code>.claude/skills/brewcode-review/SKILL.md</code>.</p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>Parallel analysis agents run in the setup skill</strong>
+      <p>Research agents spawned by <a href="/brewcode/skills/setup/"><code>/brewcode:setup</code></a> scan your codebase in parallel and collect: tech stack (Java/Spring, Node/TS, Python, Go, Kotlin, etc.), test framework (JUnit, Jest, pytest, go test, …), available project agents from <code>.claude/agents/</code>, linting/formatting rules from <code>CLAUDE.md</code>, and characteristic patterns from etalon classes.</p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>Placeholders in the template get replaced</strong>
+      <p>The template has 8 placeholders filled in from the analysis:</p>
+      <ul>
+        <li><code>&#123;PROJECT_AGENTS_TABLE&#125;</code> — your project's agents (e.g. <code>db_expert</code>, <code>api_reviewer</code>)</li>
+        <li><code>&#123;TECH_SPECIFIC_CHECKS&#125;</code> — tech-stack-tailored check categories</li>
+        <li><code>&#123;PROJECT_RULES&#125;</code> — AssertJ/Lombok/logging/import rules extracted from <code>CLAUDE.md</code></li>
+        <li><code>&#123;MAIN_AGENT&#125;</code>, <code>&#123;TEST_AGENT&#125;</code>, <code>&#123;DB_AGENT&#125;</code> — group-specific agent picks</li>
+        <li><code>&#123;CUSTOM_GROUPS&#125;</code> — e.g. <code>security</code>, <code>infra</code>, <code>ui</code></li>
+        <li><code>&#123;CODEBASE_BLOCKS&#125;</code> — which subtrees Phase 1 Explore should scan</li>
+        <li><code>&#123;REVIEW_PROMPT&#125;</code> — the default review framing</li>
+      </ul>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>Result: <code>.claude/skills/brewcode-review/</code> in your project</strong>
+      <p>You now have a <strong>project-local skill</strong>:</p>
+      <ul>
+        <li><code>.claude/skills/brewcode-review/SKILL.md</code> — the instantiated skill, ~460 lines, ready to run</li>
+        <li><code>.claude/skills/brewcode-review/references/agent-prompt.md</code> — standard / DB-layer / Critic agent prompt variants</li>
+        <li><code>.claude/skills/brewcode-review/references/report-template.md</code> — report format + severity ladder</li>
+      </ul>
+      <p>From now on <code>/brewcode:review</code> is a real slash command in that project — not a plugin skill, a project skill.</p>
+    </div>
+  </li>
+</Steps>
+
+## Quorum semantics
+
+Findings are de-duplicated before being counted toward a quorum. Two findings from different agents are treated as **the same finding** when all of:
+
+| Criterion | Tolerance |
+|-----------|-----------|
+| File path | Exact |
+| Line range | ±5 lines |
+| Category | Same or equivalent |
+| Description similarity | ≥0.6 semantic |
+
+Only **unique-agent** counts matter: five findings from one reviewer still count as one vote, not five. If `unique_agents ≥ M` the cluster is **confirmed**; if not but `severity ∈ {blocker, critical}` it becomes a **P3 exception** (surfaced but below quorum); otherwise discarded.
+
+Merge rules within a confirmed cluster: longest description, highest severity, first non-null suggestion, averaged confidence, min/max line range, full list of contributing agents.
+
+## The Critic phase
+
+When `-c` / `--critic` is set (or the prompt mentions *critic* / *критик*), an extra pair of phases runs after DoubleCheck:
+
+- **Phase 5.5 — Critic.** A single Opus [reviewer](/brewcode/agents/reviewer/) is given every confirmed, rejected, **and** discarded finding plus the raw source, and tasked with finding what everyone missed. Its output category is `missedFindings`.
+- **Phase 5.75 — DoubleCheck Critic.** A second Opus agent verifies the Critic's own findings using the same CONFIRM/REJECT verdict JSON.
+
+Anything that survives both stages gets top priority (P0) in the final report.
+
+## Tech-specific checks
+
+The template ships with example check blocks for the major stacks:
+
+<Tabs>
+  <TabItem label="Java / Spring">
+    | Category | Checks |
+    |----------|--------|
+    | DI | Constructor injection, no field injection, `@RequiredArgsConstructor` |
+    | Transactions | `@Transactional` scope, rollback rules, isolation levels |
+    | Null-safety | `Optional` usage, `@NonNull`/`@Nullable`, null checks |
+    | N+1 | Eager vs lazy loading, batch fetching, entity graphs |
+    | Security | `@PreAuthorize`, input validation, SQL injection |
+  </TabItem>
+  <TabItem label="Node / TypeScript">
+    | Category | Checks |
+    |----------|--------|
+    | Async | Promise handling, unhandled rejections, async/await |
+    | Types | Strict null checks, type guards, generics |
+    | Validation | Input sanitization, Zod/Joi schema validation |
+    | Security | XSS, CSRF, helmet.js |
+  </TabItem>
+  <TabItem label="Python">
+    | Category | Checks |
+    |----------|--------|
+    | Type hints | Function signatures, return types, generics |
+    | Exceptions | Specific types, context managers |
+    | Async | asyncio patterns, event loop handling |
+    | Security | SQL parameterization, input validation |
+  </TabItem>
+  <TabItem label="Go">
+    | Category | Checks |
+    |----------|--------|
+    | Error handling | Wrapping, sentinel errors, error types |
+    | Concurrency | Goroutine leaks, channel patterns, sync primitives |
+    | Memory | Slice capacity, pointer semantics, `defer` usage |
+    | Security | SQL injection, input validation |
+  </TabItem>
+</Tabs>
+
+When [/brewcode:setup](/brewcode/skills/setup/) detects your stack, only the relevant block is written into `SKILL.md`. Multi-stack projects get multiple blocks.
+
+## Related
+
+<CardGrid>
+  <Card title="/brewcode:setup" icon="wrench" href="/brewcode/skills/setup/">
+    Generates this skill into your project. Rerun setup after major stack changes so <code>review</code> stays aligned.
+  </Card>
+  <Card title="/brewcode:standards-review" icon="check" href="/brewcode/skills/standards-review/">
+    Static plugin skill for rule/style/convention enforcement. Complementary — run both for full coverage.
+  </Card>
+  <Card title="reviewer agent" icon="eye" href="/brewcode/agents/reviewer/">
+    The Opus agent that powers DoubleCheck and Critic phases.
+  </Card>
+  <Card title="/brewtools:debate" icon="people" href="/brewtools/skills/debate/">
+    Evidence-based multi-agent debate. Accepts a <code>--review</code> flag that triggers <code>/brewcode:review</code> on the final output when this skill is present in the project.
+  </Card>
+</CardGrid>
+
+## Files in a target project
+
+```
+<project>/
+└── .claude/
+    └── skills/
+        └── brewcode-review/
+            ├── SKILL.md                      # instantiated skill (~460 lines)
+            └── references/
+                ├── agent-prompt.md           # standard/DB/Critic agent prompts
+                └── report-template.md        # report layout + severity ladder
+```
+
+The skill is committable — you can check it into version control so your whole team shares the same project-adapted review standard.
+
+<CardGrid>
+  <Card title="View template source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/templates/skills/review/SKILL.md.template">
+    The 461-line template that gets instantiated per-project.
+  </Card>
+  <Card title="View setup skill" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/setup/SKILL.md">
+    Phase 3.5 is where this skill is generated. Lines 181–262.
+  </Card>
+</CardGrid>

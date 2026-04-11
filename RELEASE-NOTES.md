@@ -2,6 +2,18 @@
 
 ---
 
+## v3.4.68 (2026-04-11)
+
+> Docs: [review (dynamic)](https://doc-claude.brewcode.app/brewcode/skills/review/) | [setup](https://doc-claude.brewcode.app/brewcode/skills/setup/) | [debate](https://doc-claude.brewcode.app/brewtools/skills/debate/)
+
+### docs
+#### Added
+- **New page: `/brewcode/skills/review/` — the dynamic per-project review skill.** Until now this skill was mentioned but undocumented on the site (because it's generated into each target project by `/brewcode:setup`, not shipped with the plugin). New page covers: overview and clean distinction vs `/brewcode:standards-review`; full 7-phase pipeline (codebase study → group formation → parallel review → quorum collection → DoubleCheck → optional Critic + DoubleCheck-Critic → report); parameter reference (`-q N-M`, `-q G-N-M`, `-c/--critic`, default `-q 3-2`); quorum semantics (±5 line tolerance, ≥0.6 semantic similarity, merge rules); generation flow (Phase 3.5 of setup, 8 template placeholders, output in `.claude/skills/brewcode-review/`); tech-specific check tabs for Java/Spring, Node/TS, Python, Go; cross-links to setup, standards-review, reviewer agent, and brewtools/debate `--review` flag.
+- **Navigation:** `review (dynamic)` added to the Brewcode → Skills sidebar as a 14th entry under standards-review.
+- **Cross-links added:** quickstart.mdx (Project setup Result list → `/brewcode/skills/review/`), brewcode/skills/setup.mdx (Phase 4 Templates table + Verification table row), brewcode/skills.mdx (summary table adds a ★ "review (dynamic)" row + card + description paragraph), brewtools/skills/debate.mdx (Phase 8 bullet and `--review` flag table entry now link to the new page).
+
+---
+
 ## v3.4.67 (2026-04-11)
 
 > Docs: [doc site](https://doc-claude.brewcode.app/)
