@@ -44,7 +44,7 @@ If `/reload-plugins` is unavailable, type `exit` and run `claude` again.
 
 <Spoiler id="install-too-old" title="My install is too old — the skill isn't available">
 
-If `/brewtools:plugin-update` is missing (very old install or partial install), use the **Claude Code prompt** below. It tells Claude to run the marketplace update + every plugin update for you, no skill required:
+If [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/) is missing (very old install or partial install), use the **Claude Code prompt** below. It tells Claude to run the marketplace update + every plugin update for you, no skill required:
 
 <InstallPrompt plugin="all" mode="update" />
 
@@ -70,7 +70,7 @@ Paste the following prompt directly into the chat. The coercive phrasing is inte
 |--------|---------|----------------|
 | **brewcode** | Infinite task execution, 13 skills, 12 agents, 8 hooks | `claude plugin install brewcode@claude-brewcode` |
 | **brewdoc** | Documentation tools: sync, memory, PDF, publishing | `claude plugin install brewdoc@claude-brewcode` |
-| **brewtools** | Text utilities, SSH, deploy, debate, plugin-update | `claude plugin install brewtools@claude-brewcode` |
+| **brewtools** | Text utilities, [SSH](/brewtools/skills/ssh/), [deploy](/brewtools/skills/deploy/), [debate](/brewtools/skills/debate/), [plugin-update](/brewtools/skills/plugin-update/) | `claude plugin install brewtools@claude-brewcode` |
 | **brewui** | AI image generation, design-to-code | `claude plugin install brewui@claude-brewcode` |
 
 All four plugins install from the same `claude-brewcode` marketplace on GitHub.

@@ -72,18 +72,18 @@ from developer to task coordination.
 
 | Model | Agents | When to use |
 |-------|--------|-------------|
-| **opus** | developer, reviewer, architect, skill-creator, agent-creator, hook-creator, bash-expert, bc-grepai-configurator | Complex tasks, deep analysis, code generation |
-| **sonnet** | tester, bc-rules-organizer | Balanced tasks, review, optimization |
-| **haiku** | bc-coordinator, bc-knowledge-manager | Lightweight operations: statuses, knowledge extraction, compaction |
+| **opus** | [developer](/brewcode/agents/developer/), [reviewer](/brewcode/agents/reviewer/), [architect](/brewcode/agents/architect/), [skill-creator](/brewcode/agents/skill-creator/), [agent-creator](/brewcode/agents/agent-creator/), [hook-creator](/brewcode/agents/hook-creator/), [bash-expert](/brewcode/agents/bash-expert/), [bc-grepai-configurator](/brewcode/agents/bc-grepai-configurator/) | Complex tasks, deep analysis, code generation |
+| **sonnet** | [tester](/brewcode/agents/tester/), [bc-rules-organizer](/brewcode/agents/bc-rules-organizer/) | Balanced tasks, review, optimization |
+| **haiku** | [bc-coordinator](/brewcode/agents/bc-coordinator/), [bc-knowledge-manager](/brewcode/agents/bc-knowledge-manager/) | Lightweight operations: statuses, knowledge extraction, compaction |
 
 <Callout type="tip" title="Automatic selection">
   Agents are selected automatically based on the Phase Registry in PLAN.md.
-  The <code>/brewcode:start</code> skill reads agent assignments from the phase table
+  The [/brewcode:start](/brewcode/skills/start/) skill reads agent assignments from the phase table
   and launches the corresponding agents via Task API.
 </Callout>
 
 <Callout type="note" title="Moved Agents">
-  Agents <code>text-optimizer</code>, <code>ssh-admin</code>, and <code>deploy-admin</code> have been moved to
+  Agents [text-optimizer](/brewtools/agents/text-optimizer/), [ssh-admin](/brewtools/agents/ssh-admin/), and [deploy-admin](/brewtools/agents/deploy-admin/) have been moved to
   <a href="/brewtools/agents/">Brewtools</a>.
 </Callout>
 

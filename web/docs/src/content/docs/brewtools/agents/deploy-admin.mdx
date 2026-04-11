@@ -48,7 +48,7 @@ import { Badge, Callout, Card, CardGrid } from '../../../../components/mdx';
 
 ## Dynamic Context
 
-The agent reads `CLAUDE.local.md` in the project root for GitHub config and workflow inventory. This file is populated by the `/brewtools:deploy` skill.
+The agent reads `CLAUDE.local.md` in the project root for GitHub config and workflow inventory. This file is populated by the [`/brewtools:deploy`](/brewtools/skills/deploy/) skill.
 
 <Callout type="tip" title="Workflow inventory">
   Run `/brewtools:deploy setup` first to configure GitHub integration. The skill writes `CLAUDE.local.md` with your GitHub config and workflow inventory, which deploy-admin reads automatically.

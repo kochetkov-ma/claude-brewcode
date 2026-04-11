@@ -72,7 +72,7 @@ If an existing entry for the same mode exists: use AskUserQuestion -- header: "I
 1. Spawn 3 parallel `Explore` agents, one per source group: (1) global `~/.claude` config, (2) project `.claude` config, (3) memory files
 2. Aggregate findings into structured document
 3. Write to `~/.claude/brewdoc/YYYYMMDD_my-claude-internal.md`
-4. Spawn independent `reviewer` agent to validate facts (file paths exist, content accurate)
+4. Spawn independent [reviewer](/brewcode/agents/reviewer/) agent to validate facts (file paths exist, content accurate)
 5. Apply reviewer fixes if any
 6. Add INDEX entry
 
@@ -123,7 +123,7 @@ If an existing entry for the same mode exists: use AskUserQuestion -- header: "I
 1. Analyze query -- divide into 2-5 source groups (official docs, GitHub, Reddit, forums, marketplaces)
 2. Spawn `general-purpose` agents per source group in parallel
 3. Aggregate with citation tracking (source URL per fact)
-4. Spawn independent `reviewer` agent to validate facts and source reliability
+4. Spawn independent [reviewer](/brewcode/agents/reviewer/) agent to validate facts and source reliability
 5. Output: `~/.claude/brewdoc/YYYYMMDD_research-{slug}.md`
 
 **Output structure:**

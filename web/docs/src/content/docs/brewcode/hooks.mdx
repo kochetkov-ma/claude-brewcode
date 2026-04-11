@@ -210,8 +210,8 @@ Handles the Task tool result: binds the session and reminds about the 2-step pro
 | Timeout | 5000 ms |
 
 **Logic:**
-- If bc-coordinator finished -- binds session_id to the lock file
-- If a worker agent finished (developer, tester, etc.) -- reminds: "WRITE report -> CALL bc-coordinator"
+- If [bc-coordinator](/brewcode/agents/bc-coordinator/) finished -- binds session_id to the lock file
+- If a worker agent finished ([developer](/brewcode/agents/developer/), [tester](/brewcode/agents/tester/), etc.) -- reminds: "WRITE report -> CALL bc-coordinator"
 - System agents -- skipped
 
 ---
@@ -268,7 +268,7 @@ Controls session exit: blocks when a task is active, cleans up the lock when fin
 
 <Callout type="caution" title="Exit blocking">
   If a task is active (status not in the terminal set), the hook <strong>blocks exit</strong>
-  from Claude Code. To finish a task, use <code>/brewcode:start</code> for finalization
+  from Claude Code. To finish a task, use [/brewcode:start](/brewcode/skills/start/) for finalization
   or set the task status to <code>finished</code>/<code>failed</code>/<code>cancelled</code>.
 </Callout>
 

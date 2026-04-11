@@ -28,7 +28,7 @@ between sessions and artifact structure.
 
 ## Phase 1: Specification (/brewcode:spec)
 
-The `spec` skill creates a structured task specification through parallel codebase research
+The [spec](/brewcode/skills/spec/) skill creates a structured task specification through parallel codebase research
 and user dialog.
 
 <Steps>
@@ -87,7 +87,7 @@ and user dialog.
 
 ## Phase 2: Planning (/brewcode:plan)
 
-The `plan` skill transforms a specification into a detailed plan with phases, dependencies, and completion criteria.
+The [plan](/brewcode/skills/plan/) skill transforms a specification into a detailed plan with phases, dependencies, and completion criteria.
 
 ### Input sources
 
@@ -127,14 +127,14 @@ by 2+ agents.
 | Agent | Review focus |
 |-------|-------------|
 | Plan | Phase Registry, completeness, phase quality |
-| architect | Architectural decisions, dependencies, technologies |
-| reviewer | Completion criteria, granularity, risks |
+| [architect](/brewcode/agents/architect/) | Architectural decisions, dependencies, technologies |
+| [reviewer](/brewcode/agents/reviewer/) | Completion criteria, granularity, risks |
 
 After the quorum -- requirements tracing: every SPEC item must have a phase in the plan.
 
 ## Phase 3: Execution (/brewcode:start)
 
-The `start` skill is the heart of Brewcode. It executes tasks with infinite context via Task API,
+The [start](/brewcode/skills/start/) skill is the heart of Brewcode. It executes tasks with infinite context via Task API,
 the 2-step protocol, and automatic handoff during compaction.
 
 ### Initialization
@@ -150,7 +150,7 @@ Execution Loop: TaskList() -> pending+unblocked -> spawn agents
 ```
 
 1. **Resolve path** -- from arguments or `.claude/TASK.md`
-2. **Initialize** -- bc-coordinator creates the lock, sets status to `in progress`
+2. **Initialize** -- [bc-coordinator](/brewcode/agents/bc-coordinator/) creates the lock, sets status to `in progress`
 3. **Load context** -- reads PLAN.md and KNOWLEDGE.jsonl (NOT phases/ -- those are for agents)
 4. **Create tasks** -- TaskCreate for each Phase Registry row
 5. **Set dependencies** -- TaskUpdate with addBlockedBy
@@ -359,14 +359,14 @@ System agents (Explore, Plan, general-purpose) do not receive the `## K` block.
 
 After all phases are complete:
 
-1. **bc-coordinator** generates `FINAL.md` with consolidated results
+1. **[bc-coordinator](/brewcode/agents/bc-coordinator/)** generates `FINAL.md` with consolidated results
 2. Task status -> `finished`
-3. `/brewcode:rules` extracts knowledge into `.claude/rules/`
-4. `bc-knowledge-manager` removes synced entries from KNOWLEDGE.jsonl
+3. [`/brewcode:rules`](/brewcode/skills/rules/) extracts knowledge into `.claude/rules/`
+4. [`bc-knowledge-manager`](/brewcode/agents/bc-knowledge-manager/) removes synced entries from KNOWLEDGE.jsonl
 5. Lock file is deleted on the next Stop
 
 <Callout type="tip" title="After completion">
-  Use <code>/brewcode:convention</code> to extract reference classes and patterns
+  Use [/brewcode:convention](/brewcode/skills/convention/) to extract reference classes and patterns
   from the written code. Results go into <code>.claude/convention/</code>
   and help future tasks follow established conventions.
 </Callout>

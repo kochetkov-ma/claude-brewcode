@@ -2,6 +2,20 @@
 
 ---
 
+## v3.4.67 (2026-04-11)
+
+> Docs: [doc site](https://doc-claude.brewcode.app/)
+
+### docs
+#### Added
+- **Cross-entity linking across the whole site.** Ran five parallel agents over the MDX content to convert plain-text skill/agent mentions into active Markdown links, including cross-plugin references (e.g. brewdoc `my-claude` → brewcode `reviewer` agent, brewtools `deploy` → `deploy-admin` agent + `ssh` skill, brewui `glm-design-to-code` reviews → agents). Roughly **80 new links across 37 MDX files**, covering every plugin's overview/skills/agents pages plus Getting Started / Installation / Quickstart / FAQ. Rules: first occurrence per H2 section, never inside code fences, never self-linking. Link style is plain Markdown — Tailwind prose handles hover underline, no custom classes or colors.
+- **Broken-link sweep:** full dist HTML scanned — 0 broken internal links out of 63 unique URLs.
+
+#### Fixed
+- **`/brewcode:review` vs `/brewcode:standards-review` disambiguation.** `/brewcode:review` is a **per-project dynamic skill** created by `/brewcode:setup`, not a static page. One sub-agent incorrectly linked it to a non-existent `/brewcode/skills/review/` URL. Reverted all `/brewcode:review` mentions to plain inline code (no link) in `brewtools/skills/debate.mdx` and `brewcode/skills/setup.mdx`.
+
+---
+
 ## v3.4.66 (2026-04-11)
 
 ### docs

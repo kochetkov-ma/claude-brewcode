@@ -31,7 +31,7 @@ Manage workflows, releases, GHCR, and CI/CD through a conversational interface w
 | Command | `/brewtools:deploy` |
 | Arguments | `<task description>` or `setup/create/release/deploy/monitor/update-agent` |
 | Modes | setup, create, release, deploy, monitor, update-agent |
-| Agent | deploy-admin (auto-delegated for complex ops) |
+| Agent | [deploy-admin](/brewtools/agents/deploy-admin/) (auto-delegated for complex ops) |
 | Config storage | `CLAUDE.local.md` (gitignored) |
 | Model | opus |
 
@@ -142,7 +142,7 @@ The skill includes 4 battle-tested workflow templates extracted from real produc
     Multi-platform Docker build with GitHub Container Registry. Supports tag-based and branch-based triggers.
   </Card>
   <Card title="Deploy to VPS" icon="sync">
-    SCP + SSH deployment with health checks and rollback. Integrates with SSH skill server inventory.
+    SCP + SSH deployment with health checks and rollback. Integrates with [ssh](/brewtools/skills/ssh/) skill server inventory.
   </Card>
   <Card title="Release" icon="document">
     Extract changelog from RELEASE-NOTES.md, create GitHub Release with assets and notes.
@@ -196,7 +196,7 @@ The skill includes 4 battle-tested workflow templates extracted from real produc
     - Post-deploy health checks run via SSH
     - GHCR login on servers uses docker-auth-flow reference
 
-    Run `/brewtools:ssh setup` first to configure server connections if you need VPS deployments.
+    Run [`/brewtools:ssh`](/brewtools/skills/ssh/) setup first to configure server connections if you need VPS deployments.
   </TabItem>
 </Tabs>
 
@@ -270,7 +270,7 @@ The skill includes 4 battle-tested workflow templates extracted from real produc
 | Insufficient token scopes | Re-authenticate with `! gh auth login -s repo,workflow,write:packages` |
 | Workflow not triggering | Check trigger config in workflow YAML, verify branch/tag pattern |
 | Release CI failed | Run `/brewtools:deploy monitor` to view failed run logs |
-| VPS deploy failed | Check SSH connectivity with `/brewtools:ssh connect to server-name` |
+| VPS deploy failed | Check SSH connectivity with [`/brewtools:ssh`](/brewtools/skills/ssh/) `connect to server-name` |
 
 <CardGrid>
   <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">

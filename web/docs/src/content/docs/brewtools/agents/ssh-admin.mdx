@@ -48,7 +48,7 @@ import { Badge, Callout, Card, CardGrid } from '../../../../components/mdx';
 
 ## Dynamic Context
 
-The agent reads `CLAUDE.local.md` in the project root for server inventory. This file is populated by the `/brewtools:ssh` skill and contains host aliases, IP addresses, SSH users, and connection details.
+The agent reads `CLAUDE.local.md` in the project root for server inventory. This file is populated by the [`/brewtools:ssh`](/brewtools/skills/ssh/) skill and contains host aliases, IP addresses, SSH users, and connection details.
 
 <Callout type="tip" title="Server inventory">
   Run `/brewtools:ssh` first to configure server connections. The skill writes `CLAUDE.local.md` with your server inventory, which ssh-admin reads automatically.

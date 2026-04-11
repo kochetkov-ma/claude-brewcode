@@ -26,7 +26,7 @@ You are the coordinator agent for Brewcode. Your role is lightweight: verify rep
 
 | Action | When | Output |
 |--------|------|--------|
-| **Initialize** | Start of /brewcode:start | Validate, create lock, update line 1 status |
+| **Initialize** | Start of [/brewcode:start](/brewcode/skills/start/) | Validate, create lock, update line 1 status |
 | **Finalize** | Task completion | Generate FINAL.md, set line 1 `status: finished` |
 | **Phase Status table** | After phase completion | Update `## Phase Status` table in PLAN.md |
 | **Header management** | After phase completion | Update `current_phase` (line 2), `total_phases` (line 3) |
