@@ -37,19 +37,23 @@ Use `/brewdoc:my-claude` when you need:
 - **Web research** — current releases, forum discussions, GitHub issues (beyond static docs)
 - **EXTERNAL mode** — architecture synthesis from official Anthropic docs
 - **RESEARCH mode** — custom query-driven multi-source investigation
-- **Persistent INDEX** — tracked in `~/.claude/brewdoc/INDEX.jsonl` with citation links
+- **Persistent INDEX** — tracked in `.claude/brewdoc/INDEX.jsonl` with citation links
 
 ## Output Directory
 
-All generated docs go to `~/.claude/brewdoc/` (global, not project-specific).
-Create if not exists: `mkdir -p ~/.claude/brewdoc`
+All generated docs go to `.claude/brewdoc/my-claude/` (project-relative — required because `~/.claude/*` is blocked by Claude Code's protected-path policy in headless sessions, even under `bypassPermissions`).
+Create if not exists: `mkdir -p .claude/brewdoc/my-claude`
+
+**Optional interactive fallback:** `${BD_PLUGIN_DATA}/my-claude/` may be used when running interactively — it is NOT usable in headless `claude -p` sessions due to the protected-path restriction. Prefer the project-relative path everywhere.
 
 ## INDEX Tracking
 
-Append entry to `~/.claude/brewdoc/INDEX.jsonl`:
+Append entry to `.claude/brewdoc/INDEX.jsonl`:
 ```jsonl
-{"ts":"2026-02-28T10:00:00","mode":"internal","path":"~/.claude/brewdoc/20260228_my-claude-internal.md","title":"Internal Claude Setup Overview","version":"1.0"}
+{"ts":"2026-02-28T10:00:00","mode":"internal","path":".claude/brewdoc/my-claude/20260228_my-claude-internal.md","title":"Internal Claude Setup Overview","version":"1.0"}
 ```
+
+**Legacy read-only merge** — if `~/.claude/brewdoc/INDEX.jsonl` exists AND the new project INDEX is empty, read the legacy file once, merge its entries into `.claude/brewdoc/INDEX.jsonl`, and print: `ℹ️ Migrated {N} entries from legacy ~/.claude/brewdoc/INDEX.jsonl (read-only; legacy file untouched)`. NEVER write back to the legacy path.
 
 If an existing entry for the same mode exists: use AskUserQuestion — header: "INDEX", question: "Entry for this mode already exists (v{VERSION}). Update it?", options: "Yes, update (bump version)" / "No, create new entry".
 
@@ -69,7 +73,7 @@ If an existing entry for the same mode exists: use AskUserQuestion — header: "
 **Process:**
 1. Spawn 3 parallel `Explore` agents, one per source group: (1) global ~/.claude config, (2) project .claude config, (3) memory files
 2. Aggregate findings into structured document
-3. Write to `~/.claude/brewdoc/YYYYMMDD_my-claude-internal.md`
+3. Write to `.claude/brewdoc/my-claude/YYYYMMDD_my-claude-internal.md`
 4. Spawn independent `reviewer` agent to validate facts (file paths exist, content accurate)
 5. Apply reviewer fixes if any
 6. Add INDEX entry
@@ -104,11 +108,11 @@ If an existing entry for the same mode exists: use AskUserQuestion — header: "
 1. Analyze local hook files for event model patterns
 2. WebSearch for recent Claude Code releases and CHANGELOG
 3. Spawn `general-purpose` agents for: official docs (code.claude.com), GitHub releases, community forums
-4. Generate `~/.claude/brewdoc/YYYYMMDD_my-claude-external.md`
+4. Generate `.claude/brewdoc/my-claude/YYYYMMDD_my-claude-external.md`
 
 **Sub-mode context-schema:**
 1. Focus specifically on context injection schema (additionalContext, updatedInput, etc.)
-2. Output: `~/.claude/brewdoc/external/YYYYMMDD_context-schema.md`
+2. Output: `.claude/brewdoc/my-claude/external/YYYYMMDD_context-schema.md`
 
 ## RESEARCH Mode
 
@@ -121,7 +125,7 @@ If an existing entry for the same mode exists: use AskUserQuestion — header: "
 2. Spawn `general-purpose` agents per source group in parallel
 3. Aggregate with citation tracking (source URL per fact)
 4. Spawn independent `reviewer` agent to validate facts and source reliability
-5. Output: `~/.claude/brewdoc/YYYYMMDD_research-{slug}.md`
+5. Output: `.claude/brewdoc/my-claude/YYYYMMDD_research-{slug}.md`
 
 **Output structure:**
 ```markdown

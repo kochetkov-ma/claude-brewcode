@@ -110,7 +110,7 @@ Discovery is capped at 50 files per scan (override with `MAX_FILES` env var).
 | Scope | Path |
 |-------|------|
 | Project | `.claude/auto-sync/INDEX.jsonl` |
-| Global | `~/.claude/auto-sync/INDEX.jsonl` |
+| Global | `${BD_PLUGIN_DATA}/auto-sync/INDEX.jsonl` |
 
 Each line in INDEX is a JSON object:
 

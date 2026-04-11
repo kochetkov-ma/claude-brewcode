@@ -34,7 +34,19 @@ require_jq() {
 die() { echo "Error: $*" >&2; exit 1; }
 
 get_progress_path() {
-  echo "${HOME}/.claude/brewdoc/guide-progress.json"
+  # Primary: project-relative .claude/brewdoc/ (works under Claude Code's
+  # protected-path policy, which blocks writes to ~/.claude/* even under
+  # bypassPermissions). Fall back to BD_PLUGIN_DATA only if the project
+  # directory is not writable (interactive sessions only).
+  _project_root="${CLAUDE_PROJECT_DIR:-.}"
+  _primary_dir="${_project_root}/.claude/brewdoc"
+  if mkdir -p "$_primary_dir" 2>/dev/null && [ -w "$_primary_dir" ]; then
+    echo "${_primary_dir}/guide-progress.json"
+    return 0
+  fi
+  _fallback_dir="${BD_PLUGIN_DATA:-$HOME/.claude/brewdoc}"
+  mkdir -p "$_fallback_dir" 2>/dev/null || true
+  echo "${_fallback_dir}/guide-progress.json"
 }
 
 get_iso_ts() {

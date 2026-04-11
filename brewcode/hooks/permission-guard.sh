@@ -25,6 +25,8 @@ is_allowed_path() {
     .claude/skills/*|.claude/skills|*/.claude/skills/*|*/.claude/skills) return 0 ;;
     .claude/scripts/*|.claude/scripts|*/.claude/scripts/*|*/.claude/scripts) return 0 ;;
     .claude/agents/*|.claude/agents|*/.claude/agents/*|*/.claude/agents) return 0 ;;
+    .claude/auto-sync/*|.claude/auto-sync|*/.claude/auto-sync/*|*/.claude/auto-sync) return 0 ;;
+    .claude/brewdoc/*|.claude/brewdoc|*/.claude/brewdoc/*|*/.claude/brewdoc) return 0 ;;
     .claude/hooks/*|.claude/hooks|*/.claude/hooks/*|*/.claude/hooks) return 0 ;;
     .claude/private/*|.claude/private|*/.claude/private/*|*/.claude/private) return 0 ;;
     .claude/convention/*|.claude/convention|*/.claude/convention/*|*/.claude/convention) return 0 ;;
@@ -116,6 +118,10 @@ case "$FILE_PATH" in
   */.claude/scripts/*|*/.claude/scripts)
     echo "$ALLOW" ;;
   */.claude/agents/*|*/.claude/agents)
+    echo "$ALLOW" ;;
+  */.claude/auto-sync/*|*/.claude/auto-sync)
+    echo "$ALLOW" ;;
+  */.claude/brewdoc/*|*/.claude/brewdoc)
     echo "$ALLOW" ;;
   */.claude/hooks/*|*/.claude/hooks)
     echo "$ALLOW" ;;

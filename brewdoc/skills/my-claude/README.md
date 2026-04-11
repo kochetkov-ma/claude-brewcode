@@ -65,16 +65,18 @@ Generates documentation about your Claude Code installation and environment. Sup
 
 ## Output Location
 
-All generated files are saved to `~/.claude/brewdoc/` (global, not project-specific).
+All generated files are saved to `.claude/brewdoc/my-claude/` inside your current project. This is required because Claude Code's protected-path policy blocks writes to `~/.claude/*` in headless sessions (including `bypassPermissions` mode). `${BD_PLUGIN_DATA}/my-claude/` is an optional fallback for interactive sessions only.
 
 | Mode | Output path |
 |------|-------------|
-| Internal | `~/.claude/brewdoc/YYYYMMDD_my-claude-internal.md` |
-| External (default) | `~/.claude/brewdoc/YYYYMMDD_my-claude-external.md` |
-| External (context-schema) | `~/.claude/brewdoc/external/YYYYMMDD_context-schema.md` |
-| Research | `~/.claude/brewdoc/YYYYMMDD_research-{slug}.md` |
+| Internal | `.claude/brewdoc/my-claude/YYYYMMDD_my-claude-internal.md` |
+| External (default) | `.claude/brewdoc/my-claude/YYYYMMDD_my-claude-external.md` |
+| External (context-schema) | `.claude/brewdoc/my-claude/external/YYYYMMDD_context-schema.md` |
+| Research | `.claude/brewdoc/my-claude/YYYYMMDD_research-{slug}.md` |
 
-Every run appends an entry to `~/.claude/brewdoc/INDEX.jsonl` for tracking. If an entry for the same mode already exists, you will be asked whether to update it or create a new one.
+Every run appends an entry to `.claude/brewdoc/INDEX.jsonl` for tracking. If an entry for the same mode already exists, you will be asked whether to update it or create a new one.
+
+If a legacy `~/.claude/brewdoc/INDEX.jsonl` exists from an older install, its entries are merged into the project INDEX once (read-only) and the skill prints a one-line migration notice. The legacy file is never written to.
 
 ## Tips
 

@@ -22,7 +22,9 @@ async function main() {
       return;
     }
 
-    const updatedPrompt = `BD_PLUGIN_ROOT=${pluginRoot}\n\n${tool_input.prompt || ''}`;
+    const pluginData = process.env.CLAUDE_PLUGIN_DATA || '';
+    const dataLine = pluginData ? `BD_PLUGIN_DATA=${pluginData}\n` : '';
+    const updatedPrompt = `BD_PLUGIN_ROOT=${pluginRoot}\n${dataLine}\n${tool_input.prompt || ''}`;
 
     output({
       hookSpecificOutput: {

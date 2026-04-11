@@ -51,7 +51,7 @@ Parse output: `MODE|ARG|FLAGS`. If exit code non-zero → report error, EXIT.
 | `u` | Last sync date (YYYY-MM-DD) |
 | `pr` | Protocol: `default`/`override` |
 
-**Paths:** Project `.claude/auto-sync/INDEX.jsonl` | Global `~/.claude/auto-sync/INDEX.jsonl`
+**Paths:** Project `.claude/auto-sync/INDEX.jsonl` (primary) | Global `${BD_PLUGIN_DATA}/auto-sync/INDEX.jsonl` (plugin data dir — used for GLOBAL mode because `~/.claude/*` is blocked by protected-path policy)
 
 ## Frontmatter Fields
 
@@ -112,8 +112,14 @@ Input: `init <path>`
 **EXECUTE** using Bash tool:
 ```bash
 SCOPE="project"  # or "global"
+# Primary: project-relative .claude/auto-sync/ (required — ~/.claude/* is
+# blocked by Claude Code's protected-path policy in headless sessions).
 INDEX_DIR=".claude/auto-sync"
-[ "$SCOPE" = "global" ] && INDEX_DIR="$HOME/.claude/auto-sync"
+if [ "$SCOPE" = "global" ]; then
+  # GLOBAL mode scans ~/.claude/** (read-only) but writes its INDEX to
+  # the plugin data dir, NOT to ~/.claude/auto-sync (blocked path).
+  INDEX_DIR="${BD_PLUGIN_DATA:-$HOME/.claude/brewdoc}/auto-sync"
+fi
 mkdir -p "$INDEX_DIR" && INDEX_FILE="$INDEX_DIR/INDEX.jsonl" && touch "$INDEX_FILE"
 echo "INDEX=$INDEX_FILE"
 ```

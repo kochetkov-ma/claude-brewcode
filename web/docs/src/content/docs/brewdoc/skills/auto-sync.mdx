@@ -81,7 +81,7 @@ based on the current state of the code.
 
 ## INDEX format
 
-INDEX is stored in JSONL format. Project: `.claude/auto-sync/INDEX.jsonl`. Global: `~/.claude/auto-sync/INDEX.jsonl`.
+INDEX is stored in JSONL format. Project: `.claude/auto-sync/INDEX.jsonl`. Global: `${BD_PLUGIN_DATA}/auto-sync/INDEX.jsonl` (plugin data dir — `~/.claude/*` is blocked by protected-path policy).
 
 ```jsonl
 {"p":"skills/auth/SKILL.md","t":"skill","u":"2026-02-05","pr":"default"}

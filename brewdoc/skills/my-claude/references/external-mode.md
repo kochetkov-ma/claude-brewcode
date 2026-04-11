@@ -42,4 +42,4 @@ Focus on:
 - `systemMessage` — display in UI
 - `permissionDecision` — allow/block/ask
 
-Output to: `~/.claude/brewdoc/external/YYYYMMDD_context-schema.md`
+Output to: `.claude/brewdoc/my-claude/external/YYYYMMDD_context-schema.md`

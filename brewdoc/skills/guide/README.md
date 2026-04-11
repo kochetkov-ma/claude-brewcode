@@ -37,7 +37,7 @@ Guide walks you through every feature of the plugin suite across three progressi
 
 ## Progress Tracking
 
-Progress is saved to `~/.claude/brewdoc/guide-progress.json` and persists across sessions. Returning users see completion status and a recommendation for the next topic. Partial matching works for topic names.
+Progress is saved to `.claude/brewdoc/guide-progress.json` (project-relative) and persists across sessions. If the project directory is not writable, the script falls back to `${BD_PLUGIN_DATA}/guide-progress.json` for interactive sessions. Returning users see completion status and a recommendation for the next topic. Partial matching works for topic names.
 
 ## Documentation
 

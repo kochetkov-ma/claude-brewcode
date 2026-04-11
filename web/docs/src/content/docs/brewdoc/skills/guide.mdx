@@ -153,7 +153,7 @@ Between sections, you can choose:
 
 ## Progress Tracking
 
-Progress is saved to `~/.claude/brewdoc/guide-progress.json` and persists across sessions.
+Progress is saved to `.claude/brewdoc/guide-progress.json` (project-relative) and persists across sessions. If the project directory is not writable, the script falls back to `${BD_PLUGIN_DATA}/guide-progress.json` for interactive sessions.
 
 ```json
 {

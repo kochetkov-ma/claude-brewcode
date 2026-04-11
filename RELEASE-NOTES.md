@@ -2,6 +2,26 @@
 
 ---
 
+## v3.4.70 (2026-04-11)
+
+> Docs: [brewdoc:my-claude](https://doc-claude.brewcode.app/brewdoc/skills/my-claude/) | [brewdoc:guide](https://doc-claude.brewcode.app/brewdoc/skills/guide/) | [brewdoc:auto-sync](https://doc-claude.brewcode.app/brewdoc/skills/auto-sync/)
+
+### brewdoc
+#### Fixed
+- **hook parity:** `brewdoc/hooks/pre-task.mjs` now injects `BD_PLUGIN_DATA=${CLAUDE_PLUGIN_DATA}` into subagent prompts, matching the pattern already used by brewcode/brewtools/brewui hooks. Previously brewdoc only exposed `BD_PLUGIN_ROOT`, breaking parity.
+- **skill outputs migrated to project-relative paths:** `/brewdoc:my-claude`, `/brewdoc:guide`, and `/brewdoc:auto-sync` now write to `.claude/brewdoc/` and `.claude/auto-sync/` inside the target project instead of `~/.claude/brewdoc/` / `~/.claude/auto-sync/`. Reason: Claude Code's protected-path policy blocks Write to `~/.claude/*` in every permission mode, including `bypassPermissions`. The hook-based permission layer runs AFTER the protected-path check, so no whitelist can override it. Verified empirically in headless `claude -p`.
+- **legacy read-only fallback:** my-claude documents a one-shot merge from `~/.claude/brewdoc/INDEX.jsonl` into the new project INDEX when the new location is empty. Legacy file is never written.
+- **guide progress path:** `brewdoc/skills/guide/scripts/progress.sh` now prefers `${CLAUDE_PROJECT_DIR:-.}/.claude/brewdoc/guide-progress.json` and falls back to `${BD_PLUGIN_DATA:-$HOME/.claude/brewdoc}/guide-progress.json` only when the project dir is not writable.
+
+### brewcode
+#### Changed
+- **permission-guard.sh whitelist:** project-local `.claude/brewdoc/` and `.claude/auto-sync/` added to both the `is_allowed_path()` helper (Bash tool) and the Edit/Write/MultiEdit case statement, mirroring the existing pattern for `.claude/tasks/`, `.claude/reports/`, etc.
+
+### Known limitation
+- `$CLAUDE_PLUGIN_DATA` (persistent plugin-state directory, `~/.claude/plugins/data/<plugin-id>/`) is **not usable as a Write target in headless `claude -p`** due to the harness protected-path policy. PermissionRequest hooks cannot override — the check happens earlier in the pipeline. Until Anthropic relaxes this for `~/.claude/plugins/data/`, all skill outputs must target project-relative paths. Workaround documented per-skill; feedback filed upstream.
+
+---
+
 ## v3.4.69 (2026-04-11)
 
 > Docs: [brewdoc:my-claude](https://doc-claude.brewcode.app/brewdoc/skills/my-claude/)
