@@ -27,14 +27,21 @@ const { title, description, headings = [], currentSlug = '' } = Astro.props;
         <div class="flex w-full max-w-[90rem] px-4 lg:px-8">
           <!-- Article content -->
           <article class="prose flex-1 max-w-5xl py-8 min-w-0" data-pagefind-body>
-            {/* Title boost: Pagefind's weight attribute caps at 10, and a
-                single heading match loses to many body mentions. We duplicate
-                the title 10× inside an sr-only element weighted at 10 so the
-                effective BM25 boost is ~100×. This makes the page whose title
-                matches the query (e.g. "start" → /brewcode:start) rank above
-                pages that just mention the word in prose. */}
-            <span class="sr-only" data-pagefind-weight="10" data-pagefind-meta="title">
-              {Array(10).fill(title).join(' ')}
+            {/*
+              Title boost for Pagefind BM25 ranking.
+              - `data-pagefind-weight="10"` is the max weight Pagefind accepts.
+              - BM25 TF saturates quickly, so we also duplicate the title
+                30× to push term frequency high enough to beat pages that
+                mention the word many times in body prose.
+              - We deliberately do NOT set `data-pagefind-meta="title"` —
+                that would overwrite the page's real title (taken from <h1>)
+                with our duplicated string in search result meta. Letting
+                Pagefind fall back to the h1 keeps result labels clean.
+              - `sr-only` hides the element visually but leaves text in the
+                DOM so Pagefind can index it.
+            */}
+            <span class="sr-only" aria-hidden="true">
+              <span data-pagefind-weight="10">{Array(30).fill(title).join(' ')}</span>
             </span>
             <slot />
           </article>

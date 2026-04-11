@@ -2,6 +2,14 @@
 
 ---
 
+## v3.4.65 (2026-04-11)
+
+### docs
+#### Fixed
+- **Search result labels corrupted by title-boost span.** v3.4.63's title boost used `data-pagefind-meta="title"` on the duplicated span, which told Pagefind "this element IS the page title" — so result labels showed as `"Agent Creator Agent Creator Agent Creator …"` 10×. Removed the `meta` attribute; Pagefind now falls back to the `<h1>` heading for the real title. Bumped title duplicates from 10× to 30× to further push BM25 term-frequency on title-matching queries.
+
+---
+
 ## v3.4.64 (2026-04-11)
 
 > Docs: [Quickstart](https://doc-claude.brewcode.app/quickstart/) | [Brewdoc Skills](https://doc-claude.brewcode.app/brewdoc/skills/)
