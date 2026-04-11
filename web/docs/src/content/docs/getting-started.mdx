@@ -4,19 +4,34 @@ description: "What is Brewcode and why you need it"
 order: 1
 ---
 
-import { Card, CardGrid, Callout, InstallPrompt } from '../../components/mdx';
+import { Card, CardGrid, Callout, InstallPrompt, Spoiler } from '../../components/mdx';
 
 # Introduction
 
-<InstallPrompt plugin="all" mode="install" />
+**Brewcode** is a plugin suite for Claude Code that turns regular sessions into **infinite workflows**. A normal Claude Code session loses context on compaction — Brewcode keeps going. It saves knowledge, passes state across compaction cycles, and continues the task without a manual restart.
 
-**Brewcode** is a plugin suite for Claude Code that makes sessions infinite.
-A regular Claude Code session loses context during compaction. Brewcode automatically saves knowledge,
-passes state between compaction cycles, and continues work without restarting.
+<Callout type="tip" title="One cycle — full task">
+  `spec` → `plan` → `start` — and the work runs to completion across however many compaction cycles it takes. You don't babysit it.
+</Callout>
 
-Four plugins. 27 skills. 17 agents. 8 lifecycle hooks.
+## Four plugins, one suite
 
-## Features
+<CardGrid>
+  <Card title="brewcode" icon="infinity" href="/brewcode/overview/">
+    The core: infinite tasks, codebase exploration, quorum review, skill/agent/hook creation, prompt optimization. 13 skills · 12 agents · 8 hooks.
+  </Card>
+  <Card title="brewtools" icon="settings" href="/brewtools/overview/">
+    Universal utilities: prompt optimization, AI artifact removal, secrets scanning, SSH, deploy, evidence-based debates. 7 skills · 3 agents.
+  </Card>
+  <Card title="brewui" icon="image" href="/brewui/overview/">
+    UI / visual / creative: AI image generation with anti-slop controls, GLM design-to-code (image / HTML / URL → framework code). 2 skills · 2 agents.
+  </Card>
+  <Card title="brewdoc" icon="file" href="/brewdoc/overview/">
+    Documentation tools: auto-sync from official sources, memory optimization, Markdown → PDF, interactive guide. 6 skills · 1 agent.
+  </Card>
+</CardGrid>
+
+## What makes it different
 
 <CardGrid>
   <Card title="Infinite sessions" icon="infinity" href="/brewcode/overview/">
@@ -24,38 +39,37 @@ Four plugins. 27 skills. 17 agents. 8 lifecycle hooks.
     without manual restart. KNOWLEDGE.jsonl survives any number of compaction cycles.
   </Card>
   <Card title="Quorum code review" icon="search" href="/brewcode/skills/standards-review/">
-    3 to 5 parallel reviewers work independently. Results are merged
-    using a quorum algorithm (2/3 agreement). Deduplication and ranking by severity.
+    3 to 5 parallel reviewers work independently. Results are merged via a
+    quorum algorithm (2/3 agreement). Deduplication and ranking by severity.
   </Card>
   <Card title="Knowledge accumulation" icon="brain" href="/brewcode/workflow/">
     Agents record patterns, errors, and architectural facts in KNOWLEDGE.jsonl.
     Knowledge is injected into every agent prompt and converted into project rules.
   </Card>
   <Card title="Skills and agents" icon="settings" href="/brewcode/skills/">
-    27 skills and 17 specialized agents. Built-in tools for creating your own skills,
-    agents, and hooks. Prompt optimization.
+    28 skills and 18 specialized agents across 4 plugins. Built-in tools for
+    creating your own skills, agents, and hooks. Prompt optimization included.
   </Card>
 </CardGrid>
-
-## Why Brewcode
-
-<Callout type="tip" title="The core problem">
-  Claude Code loses context during compaction. Multi-session tasks require manual
-  restart and re-explanation. Brewcode solves this: the PreCompact hook saves knowledge,
-  writes the handoff state, and the session continues automatically.
-  One cycle: `spec` -- `plan` -- `start` -- and the task runs to completion.
-</Callout>
 
 ## What's included
 
 | Plugin | Purpose | Skills | Agents | Hooks |
 |--------|---------|--------|--------|-------|
 | **brewcode** | Infinite tasks, codebase exploration, review, prompt optimization, skill/agent creation | 13 | 12 | 8 |
-| **brewtools** | Text utilities: prompt optimization, AI artifact removal, secrets scanning, SSH, deploy | 6 | 3 | -- |
-| **brewui** | UI/visual/creative tools: AI image generation, design-to-code | 2 | 2 | -- |
-| **brewdoc** | Documentation tools: sync, generation, memory optimization, PDF conversion | 6 | -- | -- |
+| **brewtools** | Text utilities: prompt optimization, AI artifact removal, secrets scanning, SSH, deploy | 7 | 3 | — |
+| **brewui** | UI / visual / creative: AI image generation, design-to-code | 2 | 2 | — |
+| **brewdoc** | Documentation tools: sync, generation, memory optimization, PDF conversion | 6 | 1 | — |
 
-All four plugins are installed with a single command from GitHub and load automatically with every Claude Code session.
+All four plugins install with a single marketplace and load automatically with every Claude Code session.
+
+## Install
+
+<Spoiler title="📦 How to install Brewcode — click to expand install instructions">
+  <InstallPrompt plugin="all" mode="install" />
+
+  Full instructions: [Installation](/installation/) · Upgrading: [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/).
+</Spoiler>
 
 ## Next step
 

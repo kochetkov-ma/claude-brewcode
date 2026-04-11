@@ -2,6 +2,16 @@
 
 ---
 
+## v3.4.59 (2026-04-11)
+
+> Docs: [Introduction](https://doc-claude.brewcode.app/getting-started/)
+
+### docs
+#### Changed
+- **Introduction page:** restructured to lead with the pitch, not the install command. Install prompt moved into a prominent `<Spoiler title="📦 How to install Brewcode — click to expand install instructions">` block below the feature cards and plugin matrix, so first-time readers see "what is this" before "how to set it up". Added a "Four plugins, one suite" card grid as the headline section; refreshed counts to 28 skills / 18 agents.
+
+---
+
 ## v3.4.58 (2026-04-11)
 
 > Docs: [doc site](https://doc-claude.brewcode.app/)
