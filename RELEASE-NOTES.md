@@ -2,6 +2,21 @@
 
 ---
 
+## v3.4.69 (2026-04-11)
+
+> Docs: [brewdoc:my-claude](https://doc-claude.brewcode.app/brewdoc/skills/my-claude/)
+
+### brewdoc
+#### Changed
+- **my-claude:** repositioned as extended alternative to built-in `/team-onboarding` (new in Claude Code 2.1.101). Added "vs /team-onboarding" section, updated description to emphasize web research, EXTERNAL/RESEARCH modes, and citation tracking.
+
+### Compatibility
+- **Claude Code 2.1.101:** verified — subagent MCP tool inheritance fix benefits `bc-coordinator` and other Task-spawned agents (none of our agents currently reference MCP tools directly, so no silent regressions). `context: fork` skills (`brewcode:setup`, `brewcode:teardown`) confirmed — neither declares an `agent:` field, so the 2.1.101 frontmatter fix is a no-op for us. Settings resilience to unknown hook events benefits users running older vs newer Claude Code versions.
+- **Claude Code 2.1.98:** Bash permission hardening verified compatible — all skills use plain compound patterns (`cmd && echo "✅" || echo "❌"`), no env-var prefix bypasses, no `/dev/tcp/` redirects, no backslash-escaped flags.
+- **Monitor tool (2.1.98):** evaluated as simplification opportunity for `brewcode:start` polling loop. Deferred — current flow uses single-pass `bc-coordinator` delegation, not polling, so Monitor doesn't cleanly replace existing logic.
+
+---
+
 ## v3.4.68 (2026-04-11)
 
 > Docs: [review (dynamic)](https://doc-claude.brewcode.app/brewcode/skills/review/) | [setup](https://doc-claude.brewcode.app/brewcode/skills/setup/) | [debate](https://doc-claude.brewcode.app/brewtools/skills/debate/)

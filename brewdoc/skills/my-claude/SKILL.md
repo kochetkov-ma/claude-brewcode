@@ -1,6 +1,6 @@
 ---
 name: brewdoc:my-claude
-description: Generates documentation about Claude Code installations - internal overview of local setup, external docs on hooks/context/agents, or web research from forums/GitHub/marketplaces
+description: Extended documentation skill for Claude Code installations. Complements built-in /team-onboarding with multi-mode research — internal setup analysis, external architecture docs, and web research from forums/GitHub/marketplaces.
 argument-hint: "[ext [context]] | [r <query>] — no args = internal installation docs"
 user-invocable: true
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Task, WebFetch, WebSearch, Skill, AskUserQuestion
@@ -26,6 +26,18 @@ After detection, load the appropriate reference file:
 - INTERNAL: `references/internal-mode.md`
 - EXTERNAL: `references/external-mode.md`
 - RESEARCH: `references/research-mode.md`
+
+## vs built-in `/team-onboarding`
+
+Claude Code 2.1.101 shipped `/team-onboarding` — a built-in slash that generates a teammate ramp-up guide from local usage. It's simpler and sufficient for basic onboarding.
+
+Use `/team-onboarding` when you need: quick teammate handoff doc from your local config.
+
+Use `/brewdoc:my-claude` when you need:
+- **Web research** — current releases, forum discussions, GitHub issues (beyond static docs)
+- **EXTERNAL mode** — architecture synthesis from official Anthropic docs
+- **RESEARCH mode** — custom query-driven multi-source investigation
+- **Persistent INDEX** — tracked in `~/.claude/brewdoc/INDEX.jsonl` with citation links
 
 ## Output Directory
 
