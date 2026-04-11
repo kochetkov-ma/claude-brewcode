@@ -3,6 +3,7 @@ import tailwind from '@astrojs/tailwind';
 import mdx from '@astrojs/mdx';
 import sitemap from '@astrojs/sitemap';
 import pagefind from 'astro-pagefind';
+import rehypeExternalLinks from 'rehype-external-links';
 import {
   transformerNotationDiff,
   transformerNotationHighlight,
@@ -18,5 +19,15 @@ export default defineConfig({
       wrap: true,
       transformers: [transformerNotationDiff(), transformerNotationHighlight()],
     },
+    rehypePlugins: [
+      [
+        rehypeExternalLinks,
+        {
+          target: '_blank',
+          rel: ['noopener', 'noreferrer'],
+          test: (node) => /^https?:\/\//.test(node.properties?.href ?? ''),
+        },
+      ],
+    ],
   },
 });

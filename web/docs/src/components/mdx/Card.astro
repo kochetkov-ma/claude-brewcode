@@ -80,6 +80,8 @@ const iconMap: Record<string, string> = {
 };
 
 const { title, icon: rawIcon, href } = Astro.props;
+const isExternal = href ? /^https?:\/\//.test(href) : false;
+const targetProps = isExternal ? { target: '_blank', rel: 'noopener noreferrer' } : {};
 // Unknown icons fall back to a random whitelist icon + console.warn, so pages
 // never leak raw icon names as text. Add proper names to iconMap when you see
 // the warning in build logs or the browser console.
@@ -107,13 +109,13 @@ if (!rawIcon) {
   ]}
 >
   {href && (
-    <a href={href} class="absolute inset-0 z-0 rounded-[inherit]" tabindex="-1" aria-hidden="true"></a>
+    <a href={href} {...targetProps} class="absolute inset-0 z-0 rounded-[inherit]" tabindex="-1" aria-hidden="true"></a>
   )}
   <div class:list={['flex items-start gap-3', href && 'relative z-[1]']}>
     {icon && <span class="text-2xl shrink-0">{icon}</span>}
     <div>
       <h3 class="font-headline font-semibold text-base-content mb-1">
-        {href ? <a href={href}>{title}</a> : title}
+        {href ? <a href={href} {...targetProps}>{title}</a> : title}
       </h3>
       <div class="text-sm text-base-content/70">
         <slot />

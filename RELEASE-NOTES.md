@@ -2,6 +2,17 @@
 
 ---
 
+## v3.4.72 (2026-04-11)
+
+> Docs: [getting-started](https://doc-claude.brewcode.app/) | [installation](https://doc-claude.brewcode.app/installation/) | [quickstart](https://doc-claude.brewcode.app/quickstart/)
+
+### docs
+#### Fixed
+- **external link targeting:** Added `rehype-external-links` plugin to `astro.config.mjs` — all markdown/MDX links with absolute `http(s)://` URLs now automatically get `target="_blank" rel="noopener noreferrer"`. Internal relative links (`/path/`) open in the same tab.
+- **Card.astro link targeting:** Overlay (`absolute inset-0`) and title `<a>` now detect external hrefs via `/^https?:\/\//` and apply `target="_blank" rel="noopener noreferrer"` only when the href points to a different domain. Internal hrefs open in the same tab.
+
+---
+
 ## v3.4.71 (2026-04-11)
 
 > Docs: [getting-started](https://doc-claude.brewcode.app/) | [installation](https://doc-claude.brewcode.app/installation/)
