@@ -2,6 +2,14 @@
 
 ---
 
+## v3.4.82 (2026-04-12)
+
+### brewtools
+#### Fixed
+- **provider-switch:** fixed all provider dashboard links — Z.ai: z.ai/subscribe, Qwen: bailian.console.alibabacloud.com, MiniMax: platform.minimax.io. All English, all verified in browser with Login/Sign Up buttons.
+
+---
+
 ## v3.4.81 (2026-04-12)
 
 ### docs
