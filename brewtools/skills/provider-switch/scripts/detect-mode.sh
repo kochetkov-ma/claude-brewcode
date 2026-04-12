@@ -27,6 +27,8 @@ elif [[ "$ARGS_LOWER" =~ (minimax|mini) ]]; then
   MODE="provider-minimax"
 elif [[ "$ARGS_LOWER" =~ (openrouter|router|open-router) ]]; then
   MODE="provider-openrouter"
+elif [[ "$ARGS_LOWER" =~ (update|refresh|обнови|sync) ]]; then
+  MODE="update"
 else
   MODE="status"
 fi

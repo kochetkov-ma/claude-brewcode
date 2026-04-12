@@ -1,3 +1,13 @@
+---
+auto-sync: enabled
+auto-sync-date: 2026-04-12
+auto-sync-type: doc
+auto-sync-override: |
+  sources: https://docs.z.ai/guides/overview/pricing, https://open.bigmodel.cn/dev/api
+  focus: model IDs, pricing per 1M tokens, context window, endpoint URL
+  preserve: ## Alias, ## Dashboard
+---
+
 # Z.ai / ZhipuAI (GLM)
 
 ## Connection

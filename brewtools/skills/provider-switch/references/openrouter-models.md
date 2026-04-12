@@ -1,3 +1,13 @@
+---
+auto-sync: enabled
+auto-sync-date: 2026-04-12
+auto-sync-type: doc
+auto-sync-override: |
+  sources: https://openrouter.ai/api/v1/models
+  focus: top coding models, free models, pricing changes, new releases
+  preserve: ## Selection Flow, ## Context Window Note
+---
+
 # OpenRouter — Model Selection
 
 ## How It Works

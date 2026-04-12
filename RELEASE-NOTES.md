@@ -2,6 +2,14 @@
 
 ---
 
+## v3.4.75 (2026-04-12)
+
+### brewtools
+#### Added
+- **provider-switch:** hidden `update` mode for maintainer — spawns per-provider research agents, fetches latest models/pricing from official sources, diffs against current references, applies updates. Auto-sync frontmatter on all 5 provider reference files. Update protocol reference with per-provider sources and live test templates.
+
+---
+
 ## v3.4.74 (2026-04-12)
 
 > Docs: [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/)

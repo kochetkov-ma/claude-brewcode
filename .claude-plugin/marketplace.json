@@ -6,13 +6,13 @@
   },
   "metadata": {
     "description": "Claude Code plugin suite: brewcode for infinite task execution, brewdoc for documentation tools, brewtools for text utilities, brewui for UI/visual/creative tools",
-    "version": "3.4.74"
+    "version": "3.4.75"
   },
   "plugins": [
     {
       "name": "brewcode",
       "description": "Brewcode - full-featured development platform for Claude Code: infinite focus tasks, prompt optimization, skill/agent creation, quorum reviews, rules management",
-      "version": "3.4.74",
+      "version": "3.4.75",
       "category": "productivity",
       "keywords": [
         "brewcode",
@@ -46,7 +46,7 @@
     {
       "name": "brewdoc",
       "description": "Brewdoc - Claude Code documentation tools: auto-sync for skills/agents/rules, my-claude installation docs, memory optimization, md-to-pdf conversion",
-      "version": "3.4.74",
+      "version": "3.4.75",
       "category": "productivity",
       "keywords": [
         "brewdoc",
@@ -74,7 +74,7 @@
     {
       "name": "brewtools",
       "description": "Brewtools - universal utilities for Claude Code: text optimization, humanization, secrets scanning",
-      "version": "3.4.74",
+      "version": "3.4.75",
       "category": "productivity",
       "keywords": [
         "brewtools",
@@ -102,7 +102,7 @@
     {
       "name": "brewui",
       "description": "Brewui - UI/visual/creative tools for Claude Code: AI image generation, design-to-code conversion",
-      "version": "3.4.74",
+      "version": "3.4.75",
       "category": "productivity",
       "keywords": [
         "brewui",

@@ -1,3 +1,13 @@
+---
+auto-sync: enabled
+auto-sync-date: 2026-04-12
+auto-sync-type: doc
+auto-sync-override: |
+  sources: https://www.alibabacloud.com/help/en/model-studio/claude-code, https://help.aliyun.com/zh/model-studio/getting-started/models
+  focus: model IDs, pricing, context window, [1m] suffix applicability
+  preserve: ## Alias, ## Dashboard, ## Auth Note
+---
+
 # Qwen / Alibaba DashScope
 
 ## Connection

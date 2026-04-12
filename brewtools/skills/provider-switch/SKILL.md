@@ -282,6 +282,87 @@ Read `references/common.md` for help content and explain:
 
 ---
 
+## Phase 7: Update (hidden, maintainer-only)
+
+> **Not user-facing.** Triggered by MODE=update. Not shown in help or output format. Not documented externally.
+
+**If MODE != update** — skip entirely.
+
+### Step 1: Load Protocol
+
+Read `references/update-protocol.md` for per-provider sources and update flow.
+
+### Step 2: Spawn Provider Research Agents
+
+Spawn 4 Explore agents **in ONE message** via Task:
+
+| Agent | Provider | Sources |
+|-------|----------|---------|
+| 1 | Z.ai/GLM | docs.z.ai, open.bigmodel.cn — models, pricing |
+| 2 | Qwen/DashScope | alibabacloud.com/help, qwenlm.github.io — models, pricing |
+| 3 | MiniMax | platform.minimax.io — models, pricing |
+| 4 | OpenRouter | openrouter.ai/api/v1/models — top coding/free models |
+
+Each agent: WebFetch/WebSearch sources from protocol, extract current model list + pricing + any endpoint changes.
+
+### Step 3: Aggregate & Diff
+
+For each provider, compare fetched data vs current reference file content:
+- Model IDs changed?
+- Pricing changed?
+- New models added?
+- Endpoint URL changed?
+- Context windows changed?
+
+### Step 4: Present Changes
+
+Show diff table to maintainer:
+
+```
+## Update Results
+
+| Provider | Field | Current | Fetched | Action |
+|----------|-------|---------|---------|--------|
+| Z.ai | opus model | glm-5.1 | glm-6.0 | UPDATE |
+| Qwen | pricing | ~$0.50 | $0.40 | UPDATE |
+| MiniMax | (no changes) | — | — | SKIP |
+```
+
+### Step 5: Apply Updates
+
+For each confirmed change, use Edit tool to update the corresponding reference file. Follow the field-to-line mapping in `references/update-protocol.md`.
+
+Also update:
+- Alias bodies in reference files if model IDs changed
+- `openrouter-models.md` if recommended models changed
+- `common.md` if env var patterns changed (rare)
+
+### Step 6: Live Test (optional)
+
+If API keys are available in environment, run endpoint health check per provider:
+
+**EXECUTE** using Bash tool:
+```bash
+curl -s -o /dev/null -w "%{http_code}" -X POST "https://api.z.ai/api/anthropic/v1/messages" -H "x-api-key: ${ZAI_API_KEY:-missing}" -H "content-type: application/json" -H "anthropic-version: 2023-06-01" -d '{"model":"glm-5.1","max_tokens":5,"messages":[{"role":"user","content":"ping"}]}' && echo " OK" || echo " FAILED"
+```
+
+### Step 7: Report
+
+```
+## Provider Update Complete
+
+| Provider | Changes | Status |
+|----------|---------|--------|
+| Z.ai/GLM | models updated | applied |
+| Qwen | no changes | current |
+| MiniMax | pricing updated | applied |
+| OpenRouter | 3 new free models | applied |
+
+Files modified: [list]
+```
+
+---
+
 ## Output Format
 
 Final output after every mode:

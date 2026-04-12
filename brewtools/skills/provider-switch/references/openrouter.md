@@ -1,3 +1,13 @@
+---
+auto-sync: enabled
+auto-sync-date: 2026-04-12
+auto-sync-type: doc
+auto-sync-override: |
+  sources: https://openrouter.ai/api/v1/models
+  focus: endpoint URL, auth requirements, default model recommendations
+  preserve: ## Alias Template, ## Dashboard, ## Auth Note
+---
+
 # OpenRouter (Aggregator)
 
 ## Connection
