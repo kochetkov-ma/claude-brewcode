@@ -2,6 +2,16 @@
 
 ---
 
+## v3.4.80 (2026-04-12)
+
+> Docs: [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/)
+
+### brewtools
+#### Changed
+- **provider-switch docs:** complete page redesign — marketing-first structure. Problem/solution hero, weekly timeline visualization, cost comparison cards, prominent alias showcase, 3-step setup, provider cards with sign-up links. Technical details collapsed in Spoiler. Mobile-optimized, 102 lines vs 163 before.
+
+---
+
 ## v3.4.79 (2026-04-12)
 
 > Docs: [brewtools overview](https://doc-claude.brewcode.app/brewtools/overview/) | [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/)
