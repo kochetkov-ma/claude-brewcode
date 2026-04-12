@@ -2,6 +2,16 @@
 
 ---
 
+## v3.4.77 (2026-04-12)
+
+> Docs: [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/)
+
+### brewtools
+#### Changed
+- **docs:** provider-switch — single top model for all roles, updated OpenRouter model list (removed stale free models, added validated custom ID flow), corrected provider tables in README and MDX.
+
+---
+
 ## v3.4.76 (2026-04-12)
 
 ### brewtools

@@ -43,20 +43,22 @@ claude        # back on Anthropic Max
 - Interactive language selection (English / Russian) at session start
 - Reads current `~/.zshrc` state before any write — shows what is already configured
 - Auto-starts setup when no provider is configured yet
-- OpenRouter model picker with three presets (Coding, Budget/Free, Premium) plus custom
+- OpenRouter: pick one model for all roles, with validated custom ID input
 - `claude-max` alias always created alongside provider aliases — one command to revert
 - All writes go into a clearly marked section in `~/.zshrc`; backup created before first write
 - Error reporting with `SCRIPT_ERROR / PHASE / ACTION / SUGGESTION` block on any failure
 
 ## Providers
 
-| Provider | Alias | Models (opus / sonnet / haiku) | Auth var | Notes |
-|----------|-------|-------------------------------|----------|-------|
-| Anthropic Max | `claude-max` | claude-opus-4-6 / sonnet-4-6 / haiku-4-5 | OAuth | Default; restored by `claude-max` |
-| Z.ai / GLM | `claude-glm` | glm-5.1 / glm-4.7 / glm-4.5-air | `ANTHROPIC_API_KEY` | Native API-key protocol |
-| Qwen / DashScope | `claude-qwen` | qwen3.6-plus[1m] / qwen3-coder-plus / qwen3-coder-next | `ANTHROPIC_AUTH_TOKEN` | 1M context via `[1m]` suffix |
-| MiniMax | `claude-minimax` | minimax-m2.7 / minimax-m2.7 / minimax-m2.7 | `ANTHROPIC_AUTH_TOKEN` | Cheapest option |
-| OpenRouter | `claude-openrouter` | user-selected (200+ models) | `ANTHROPIC_AUTH_TOKEN` | Requires `ANTHROPIC_API_KEY=""` |
+| Provider | Alias | Model (all roles) | Auth var | Notes |
+|----------|-------|-------------------|----------|-------|
+| Anthropic Max | `claude-max` | claude-opus-4-6 | OAuth | Default; restored by `claude-max` |
+| Z.ai / GLM | `claude-glm` | glm-5.1 | `ANTHROPIC_API_KEY` | #1 SWE-bench Pro, $1.40/$4.40 per 1M |
+| Qwen / DashScope | `claude-qwen` | qwen3.6-plus[1m] | `ANTHROPIC_AUTH_TOKEN` | 1M context, ~$0.50/$2.00 per 1M |
+| MiniMax | `claude-minimax` | minimax-m2.7 | `ANTHROPIC_AUTH_TOKEN` | Cheapest: $0.30/$1.20 per 1M |
+| OpenRouter | `claude-openrouter` | user-selected | `ANTHROPIC_AUTH_TOKEN` | Default: qwen/qwen3.6-plus[1m]. Custom IDs validated via API |
+
+Each provider uses its **single top model** for all three Claude Code roles (opus, sonnet, haiku).
 
 ## Usage Modes
 

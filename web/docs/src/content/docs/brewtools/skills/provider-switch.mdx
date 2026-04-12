@@ -85,11 +85,11 @@ Switch Claude Code between alternative API providers. Run one alias, start Claud
 
     **Auth:** `ANTHROPIC_AUTH_TOKEN` (MiniMax API key)
 
-    | Role | Model | Context | Input $/1M | Output $/1M |
-    |------|-------|---------|-----------|------------|
-    | all roles | `minimax-m2.7` | 200K | $0.30 | $1.20 |
+    | Model | Context | Input $/1M | Output $/1M |
+    |-------|---------|-----------|------------|
+    | `minimax-m2.7` | 200K | $0.30 | $1.20 |
 
-    Single model for all three roles. Cheapest option overall.
+    Cheapest option overall.
 
     **Alias:** `claude-minimax`
   </TabItem>
@@ -98,13 +98,16 @@ Switch Claude Code between alternative API providers. Run one alias, start Claud
 
     **Auth:** `ANTHROPIC_AUTH_TOKEN` + `ANTHROPIC_API_KEY=""` (empty string required to prevent OAuth fallback)
 
-    | Category | Default Model | Notes |
-    |----------|--------------|-------|
-    | Coding | `qwen/qwen3.6-plus[1m]` | 1M context, strong coding |
-    | Budget | `qwen/qwen3.6-plus-preview:free` | Free, rate-limited |
-    | Premium | `z-ai/glm-5.1` | #1 SWE-bench Pro |
+    **Default:** `qwen/qwen3.6-plus[1m]` (1M context, strong coding)
 
-    Models are selected interactively during setup. 200+ models available via `provider/model-name` format.
+    | Option | Model | Notes |
+    |--------|-------|-------|
+    | Recommended | `qwen/qwen3.6-plus[1m]` | 1M context, ~$0.33/$1.95 per 1M |
+    | Premium | `z-ai/glm-5.1` | #1 SWE-bench Pro, 200K |
+    | Free | `qwen/qwen3-coder:free` | 262K, rate-limited |
+    | Custom | any model ID | Validated against OpenRouter API |
+
+    One model for all roles. 200+ models available. Custom IDs are checked against the live model list — typos get fuzzy suggestions.
 
     **Alias:** `claude-openrouter`
   </TabItem>
@@ -151,7 +154,7 @@ Switch Claude Code between alternative API providers. Run one alias, start Claud
   **How to switch.** Run the alias (`claude-glm`), then start `claude`. To return to your Anthropic subscription: run `claude-max` then `claude`. Each alias sets environment variables for one provider — they are fully isolated and do not affect each other.
 </Callout>
 
-Each alias exports the correct `ANTHROPIC_BASE_URL`, `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN`, and optionally a default model. Sourcing a new alias overwrites the previous export.
+Each provider uses its **single top model** for all three Claude Code roles (opus, sonnet, haiku). The alias sets `ANTHROPIC_BASE_URL`, auth variable, and the same model ID for `OPUS_MODEL`, `SONNET_MODEL`, and `HAIKU_MODEL`.
 
 ```bash
 # Switch to GLM
