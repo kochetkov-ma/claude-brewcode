@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 3.4.73 |
+| Version | 3.4.78 |
 | Skills | 8 |
 | Agents | 3 |
 

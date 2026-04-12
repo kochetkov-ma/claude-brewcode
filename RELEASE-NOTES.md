@@ -2,6 +2,16 @@
 
 ---
 
+## v3.4.79 (2026-04-12)
+
+> Docs: [brewtools overview](https://doc-claude.brewcode.app/brewtools/overview/) | [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/)
+
+### brewtools
+#### Fixed
+- **docs audit:** added missing provider-switch to CLAUDE.md skills table, overview.mdx (card + command + architecture tree), fixed stale README version (3.4.73 → 3.4.78). All 5 doc levels now consistent: 8 skills, 3 agents across filesystem, README, navigation.ts, MDX, guide catalog.
+
+---
+
 ## v3.4.78 (2026-04-12)
 
 > Docs: [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/)

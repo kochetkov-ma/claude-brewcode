@@ -51,6 +51,10 @@ Install the entire suite:
     Check, install, and update the full brewcode plugin suite in one command.
     Version status table, install missing plugins, reload prompt.
   </Card>
+  <Card title="provider-switch" icon="sync" href="/brewtools/skills/provider-switch/">
+    Configure alternative API providers — Z.ai/GLM, Qwen, MiniMax, OpenRouter.
+    Shell aliases in ~/.zshrc, one-command switching, validated model selection.
+  </Card>
 </CardGrid>
 
 ## Commands
@@ -64,6 +68,7 @@ Install the entire suite:
 | [`/brewtools:deploy`](/brewtools/skills/deploy/) | GitHub Actions deployment, CI/CD | opus | `[workflow\|release\|ghcr]` |
 | [`/brewtools:debate`](/brewtools/skills/debate/) | Evidence-based multi-agent debate | opus | `[topic] [-m challenge\|strategy\|critic] [-n 2-5] [-r max-rounds]` |
 | [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/) | Check and update the full brewcode plugin suite | sonnet | `[check\|update\|all]` |
+| [`/brewtools:provider-switch`](/brewtools/skills/provider-switch/) | Configure alternative API providers | opus | `[status\|setup\|help\|<provider>]` |
 
 ## Agent
 
@@ -97,7 +102,8 @@ brewtools/
 │   ├── ssh/                     # SSH server management
 │   ├── deploy/                  # GitHub Actions deployment
 │   ├── debate/                  # Evidence-based multi-agent debate
-│   └── plugin-update/           # Check, install, and update plugin suite
+│   ├── plugin-update/           # Check, install, and update plugin suite
+│   └── provider-switch/          # Alternative API provider management
 └── agents/
     ├── text-optimizer.md        # Text optimization agent
     ├── ssh-admin.md             # SSH server administration
