@@ -2,6 +2,16 @@
 
 ---
 
+## v3.4.74 (2026-04-12)
+
+> Docs: [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/)
+
+### brewtools
+#### Added
+- **docs:** full documentation for `/brewtools:provider-switch` — skill README, Astro MDX page, navigation.ts entry, plugin README row, guide catalog row. Quorum-reviewed (3 agents, 11 findings, 4 confirmed + fixed).
+
+---
+
 ## v3.4.73 (2026-04-12)
 
 > Docs: [brewtools:provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/)

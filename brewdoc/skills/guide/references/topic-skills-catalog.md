@@ -39,7 +39,7 @@ Documentation tools. Sync, generate, optimize, export, publish.
 | `/brewdoc:guide` | Interactive teaching for the plugin suite (this guide) |
 | `/brewdoc:publish` | Publish content to brewpage.app — text, markdown, or files |
 
-## Section 3: Brewtools Skills (7)
+## Section 3: Brewtools Skills (8)
 
 Universal utilities. Work in any project, no setup needed.
 
@@ -52,6 +52,7 @@ Universal utilities. Work in any project, no setup needed.
 | `/brewtools:deploy` | GitHub Actions deployment — workflows, releases, GHCR, CI/CD with safety gates |
 | `/brewtools:debate` | Evidence-based multi-agent debate with Discovery phase and 3 modes |
 | `/brewtools:plugin-update` | Check, install, or update brewcode suite plugins from the marketplace |
+| `/brewtools:provider-switch` | Configure alternative API providers — Z.ai/GLM, Qwen, MiniMax, OpenRouter |
 
 These are standalone — no project configuration required. Run them anywhere.
 

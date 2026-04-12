@@ -4,8 +4,8 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 3.4.51 |
-| Skills | 7 |
+| Version | 3.4.73 |
+| Skills | 8 |
 | Agents | 3 |
 
 ## Install
@@ -83,6 +83,7 @@ claude --plugin-dir ./brewtools
 | [`/brewtools:deploy`](skills/deploy/SKILL.md) | GitHub Actions deployment with safety gates | opus | `[release\|workflow\|...]` |
 | [`/brewtools:debate`](skills/debate/README.md) | Evidence-based multi-agent debate | sonnet | `[challenge\|strategy\|critic]` |
 | [`/brewtools:plugin-update`](skills/plugin-update/README.md) | Check/install/update brewcode plugins | sonnet | `[check\|update\|all]` |
+| [`/brewtools:provider-switch`](skills/provider-switch/README.md) | Configure alternative API providers (Z.ai/GLM, Qwen, MiniMax, OpenRouter) | opus | `[status\|setup\|help\|<provider>]` |
 
 ## Agents
 
@@ -110,6 +111,7 @@ brewtools/
 |   +-- deploy/                       # GitHub Actions deployment
 |   +-- debate/                       # Evidence-based multi-agent debate
 |   +-- plugin-update/                # Plugin check / install / update
+|   +-- provider-switch/               # Alternative API provider management
 +-- agents/
     +-- text-optimizer.md             # Text optimization agent
     +-- ssh-admin.md                  # SSH and server administration
@@ -131,6 +133,7 @@ Full docs: [doc-claude.brewcode.app/brewtools/overview](https://doc-claude.brewc
 | Deploy | [deploy](https://doc-claude.brewcode.app/brewtools/skills/deploy/) |
 | Debate | [debate](https://doc-claude.brewcode.app/brewtools/skills/debate/) |
 | Plugin Update | [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) |
+| Provider Switch | [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/) |
 | Release Notes | [RELEASE-NOTES.md](../RELEASE-NOTES.md) |
 
 Author: Maksim Kochetkov | License: MIT

@@ -1,0 +1,220 @@
+---
+title: "Provider Switch"
+description: "Configure Claude Code alternative API providers — Z.ai/GLM, Qwen, MiniMax, OpenRouter"
+order: 3119
+---
+import { Card, CardGrid, Callout, Steps, Badge, Tabs, TabItem, UpdateNotice } from '../../../../components/mdx';
+
+# Provider Switch
+
+<Badge variant="accent" text="new" /> <Badge variant="primary" text="opus" />
+
+Switch Claude Code between alternative API providers. Run one alias, start Claude — connected. Run `claude-max` — back on your subscription.
+
+<CardGrid>
+  <Card title="Z.ai / GLM" icon="star">
+    #1 SWE-bench Pro, pay-per-token. Best raw coding performance per dollar.
+  </Card>
+  <Card title="Qwen" icon="document">
+    1M context window, free preview available. Ideal for large-codebase exploration.
+  </Card>
+  <Card title="MiniMax" icon="money">
+    Cheapest per token. Solid for high-volume summarization and text tasks.
+  </Card>
+  <Card title="OpenRouter" icon="sync">
+    200+ models, any provider. Route to GPT-4o, Gemini, Llama, or any hosted model.
+  </Card>
+</CardGrid>
+
+## Quick Reference
+
+| Field | Value |
+|-------|-------|
+| Command | `/brewtools:provider-switch` |
+| Arguments | `[provider]` or `setup / help` |
+| Modes | status, setup, help, glm, qwen, minimax, openrouter |
+| Model | opus |
+
+## Quick Start
+
+```bash
+# Check current provider status
+/brewtools:provider-switch
+
+# Set up all providers interactively
+/brewtools:provider-switch setup
+
+# Configure just GLM
+/brewtools:provider-switch glm
+
+# Get help on switching
+/brewtools:provider-switch help
+```
+
+## Providers
+
+<Tabs>
+  <TabItem label="Z.ai / GLM">
+    **Endpoint:** `https://api.z.ai/api/anthropic`
+
+    **Auth:** `ANTHROPIC_API_KEY` (Z.ai uses native `x-api-key` header, not bearer token)
+
+    | Role | Model | Context | Input $/1M | Output $/1M |
+    |------|-------|---------|-----------|------------|
+    | opus | `glm-5.1` | 200K | $1.40 | $4.40 |
+    | sonnet | `glm-4.7` | 200K | $0.60 | $2.20 |
+    | haiku | `glm-4.5-air` | 200K | $0.14 | $1.10 |
+
+    Free models for testing: `glm-4.7-flash`, `glm-4.5-flash`
+
+    **Alias:** `claude-glm`
+  </TabItem>
+  <TabItem label="Qwen">
+    **Endpoint:** `https://dashscope-intl.aliyuncs.com/apps/anthropic`
+
+    **Auth:** `ANTHROPIC_AUTH_TOKEN` (DashScope API key)
+
+    | Role | Model | Context | Input $/1M | Output $/1M |
+    |------|-------|---------|-----------|------------|
+    | opus | `qwen3.6-plus[1m]` | 1M | ~$0.50 | ~$2.00 |
+    | sonnet | `qwen3-coder-plus` | 256K | $0.12 | $0.75 |
+    | haiku | `qwen3-coder-next` | 262K | cheap | cheap |
+
+    Note: `[1m]` suffix forces Claude Code to use 1M context window instead of defaulting to 200K.
+
+    **Alias:** `claude-qwen`
+  </TabItem>
+  <TabItem label="MiniMax">
+    **Endpoint:** `https://api.minimax.io/anthropic`
+
+    **Auth:** `ANTHROPIC_AUTH_TOKEN` (MiniMax API key)
+
+    | Role | Model | Context | Input $/1M | Output $/1M |
+    |------|-------|---------|-----------|------------|
+    | all roles | `minimax-m2.7` | 200K | $0.30 | $1.20 |
+
+    Single model for all three roles. Cheapest option overall.
+
+    **Alias:** `claude-minimax`
+  </TabItem>
+  <TabItem label="OpenRouter">
+    **Endpoint:** `https://openrouter.ai/api` (no `/v1` suffix)
+
+    **Auth:** `ANTHROPIC_AUTH_TOKEN` + `ANTHROPIC_API_KEY=""` (empty string required to prevent OAuth fallback)
+
+    | Category | Default Model | Notes |
+    |----------|--------------|-------|
+    | Coding | `qwen/qwen3.6-plus[1m]` | 1M context, strong coding |
+    | Budget | `qwen/qwen3.6-plus-preview:free` | Free, rate-limited |
+    | Premium | `z-ai/glm-5.1` | #1 SWE-bench Pro |
+
+    Models are selected interactively during setup. 200+ models available via `provider/model-name` format.
+
+    **Alias:** `claude-openrouter`
+  </TabItem>
+</Tabs>
+
+## Workflow
+
+<Steps>
+  <li>
+    <div>
+      <strong>Language</strong>
+      <p>Choose session language: English or Russian.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Status check</strong>
+      <p>Scans <code>~/.zshrc</code> for existing aliases and API keys. Shows a provider table with configured / unconfigured status for each.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Provider selection</strong>
+      <p>Pick which providers to configure. Skipped automatically when using a provider-specific argument like <code>glm</code> or <code>qwen</code>.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Configuration</strong>
+      <p>Enter API keys for each selected provider (skipped if already present). For OpenRouter, select target model interactively. Aliases are written to <code>~/.zshrc</code>.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Verification</strong>
+      <p>Re-checks status, confirms aliases were written, and prints activation instructions with exact commands to run.</p>
+    </div>
+  </li>
+</Steps>
+
+## Switching Providers
+
+<Callout type="tip">
+  **How to switch.** Run the alias (`claude-glm`), then start `claude`. To return to your Anthropic subscription: run `claude-max` then `claude`. Each alias sets environment variables for one provider — they are fully isolated and do not affect each other.
+</Callout>
+
+Each alias exports the correct `ANTHROPIC_BASE_URL`, `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN`, and optionally a default model. Sourcing a new alias overwrites the previous export.
+
+```bash
+# Switch to GLM
+claude-glm && claude
+
+# Switch back to Anthropic subscription
+claude-max && claude
+```
+
+## Technical Details
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| _(none)_ | Show current status table |
+| `setup` | Interactive setup for all providers |
+| `help` | Print switching cheat sheet |
+| `glm` | Configure Z.ai/GLM only |
+| `qwen` | Configure Qwen only |
+| `minimax` | Configure MiniMax only |
+| `openrouter` | Configure OpenRouter only |
+
+### Modes
+
+| Mode | Trigger | Behavior |
+|------|---------|----------|
+| `status` | No argument | Read `~/.zshrc`, display provider table |
+| `setup` | `setup` | Full interactive setup, all providers |
+| `help` | `help` | Print alias cheat sheet |
+| Provider mode | `glm` / `qwen` / `minimax` / `openrouter` | Single-provider setup flow |
+
+### Context window 1M hack
+
+Claude Code defaults to 200K context for non-Anthropic providers. Adding `[1m]` to the model name (e.g., `qwen3.6-plus[1m]`) forces 1M context detection. The skill applies this suffix automatically for models that support it — ensuring Claude Code does not autocompact prematurely.
+
+### Auth differences
+
+| Provider | Variable | Notes |
+|----------|----------|-------|
+| Z.ai / GLM | `ANTHROPIC_API_KEY` | Z.ai mirrors Anthropic key format |
+| Qwen | `ANTHROPIC_AUTH_TOKEN` | DashScope token format |
+| MiniMax | `ANTHROPIC_AUTH_TOKEN` | Bearer token |
+| OpenRouter | `ANTHROPIC_AUTH_TOKEN` | `sk-or-...` prefix |
+
+<Callout type="note">
+  The skill never stores keys in project files. All secrets go into shell aliases in `~/.zshrc`, which is gitignored by definition.
+</Callout>
+
+<CardGrid>
+  <Card title="Plugin overview" icon="document" href="/brewtools/overview/">
+    Brewtools plugin overview and all skills.
+  </Card>
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/provider-switch">
+    Source code and references.
+  </Card>
+  <Card title="Related: SSH" icon="rocket" href="/brewtools/skills/ssh/">
+    Server management with similar phased workflow.
+  </Card>
+</CardGrid>
+
+<UpdateNotice />

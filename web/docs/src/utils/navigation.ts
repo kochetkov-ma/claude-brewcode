@@ -80,6 +80,7 @@ export const navigation: NavSection[] = [
           { title: 'deploy', slug: 'brewtools/skills/deploy' },
           { title: 'debate', slug: 'brewtools/skills/debate' },
           { title: 'plugin-update', slug: 'brewtools/skills/plugin-update' },
+          { title: 'provider-switch', slug: 'brewtools/skills/provider-switch' },
         ],
       },
       {
