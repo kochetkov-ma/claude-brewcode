@@ -2,6 +2,18 @@
 
 ---
 
+## v3.5.2 (2026-04-12)
+
+> Docs: [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/)
+
+### brewtools
+#### Added
+- **provider-switch:** prompt caching documentation — new Spoiler section on docs page with provider support table, MiniMax verified cache pricing, cost comparison
+- **provider-switch:** MiniMax card badge `Prompt Cache` — verified Anthropic-style prompt caching with documented pricing, response fields, TTL
+- **provider-switch:** MiniMax reference file — added "Prompt Caching (Verified)" section: cache read $0.06/M (80% savings), write $0.375/M, TTL 5 min, min 512 tokens
+
+---
+
 ## v3.5.1 (2026-04-12)
 
 > Docs: [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/)

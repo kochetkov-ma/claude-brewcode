@@ -107,7 +107,7 @@ Each alias sets env vars and launches Claude Code automatically. To return to yo
     **qwen3.6-plus** — ~$0.50 / $2.00 per 1M tokens. 1M context window. Best for large codebases.
   </Card>
   <Card title="MiniMax" icon="money" href="https://platform.minimax.io">
-    **minimax-m2.7** — $0.30 / $1.20 per 1M tokens. 200K context. Cheapest option.
+    <Badge variant="accent" text="Prompt Cache" /> **minimax-m2.7** — $0.30 / $1.20 per 1M tokens. 200K context. Cheapest option with verified prompt caching.
   </Card>
   <Card title="OpenRouter" icon="sync" href="https://openrouter.ai">
     200+ models. Route to GLM, Qwen, Gemini, Llama. One config, any provider. Custom model IDs validated via API.
@@ -146,6 +146,42 @@ Claude Code defaults to 200K for non-Anthropic providers. The `[1m]` suffix on m
 | `verify` | Test all configured tokens against endpoints |
 | `model-check` | Identify which model is actually responding (run inside provider session) |
 | `help` | Switching cheat sheet |
+
+</Spoiler>
+
+<Spoiler title="Prompt caching">
+
+Claude Code automatically sends `cache_control` markers to reduce input token costs. Only **input** tokens can be cached — output tokens are always billed at full rate, regardless of provider.
+
+### Provider support
+
+| Provider | Prompt Cache | Status | Details |
+|----------|:---:|---|---|
+| **MiniMax** | Yes | **Verified** | Fully documented — pricing, response fields, TTL. Recommended |
+| **Qwen** | Claimed | Unverified | Field accepted per compatibility matrix. No cache pricing or response fields documented |
+| **Z.ai / GLM** | Auto (backend) | Unverified | Native auto-cache may reduce costs on backend. Not visible to Claude Code |
+| **OpenRouter** | Model-dependent | — | Anthropic models: yes. Non-Anthropic (Qwen, GLM): no |
+
+### MiniMax cache pricing (minimax-m2.7)
+
+| Token type | Price / 1M | vs Standard input |
+|------------|--:|---|
+| Standard input | $0.30 | — |
+| Cache write (first request) | $0.375 | +25% |
+| Cache read (subsequent) | **$0.06** | **-80%** |
+
+Cache TTL: 5 minutes, auto-refreshed on each hit. Minimum: 512 input tokens.
+
+### What this means in practice
+
+A typical Claude Code request (~250K input tokens) with 90% cache hit rate:
+
+| Provider | Cost per request | Without cache |
+|----------|--:|--:|
+| **MiniMax** (cached) | **~$0.02** | $0.08 |
+| **Anthropic Opus 4.6** (cached) | ~$0.24 | $1.25 |
+| **Qwen** (no confirmed cache) | $0.10-0.13 | $0.10-0.13 |
+| **Z.ai** (no visible cache) | $0.35 | $0.35 |
 
 </Spoiler>
 
