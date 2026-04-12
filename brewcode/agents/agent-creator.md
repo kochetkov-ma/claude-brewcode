@@ -132,6 +132,8 @@ Detailed instructions for the agent...
 | 3 | `~/.claude/agents/` | User (all projects) | Manual or `/agents` |
 | 4 (lowest) | `plugin/agents/` | Where plugin enabled | Installed with plugin |
 
+> ⚠️ **Protected-path (v3.4.70):** Agent Write targets → `.claude/<subdir>/` (project-relative, whitelisted in `permission-guard.sh`). `~/.claude/*` blocked ALL modes; check BEFORE hooks → `$HOME/.claude/*` whitelist = dead. Exceptions: `commands|agents|skills|worktrees`. See memory `protected_path_write_block.md`.
+
 ### CLI JSON Format (session-only)
 
 ```bash

@@ -360,6 +360,8 @@ brewcode hooks inject `BC_PLUGIN_DATA` as text variable (same pattern as `BC_PLU
 
 **Resolution:** session > project > global. Old `.claude/tasks/cfg/brewcode.state.json` kept as fallback.
 
+> ⚠️ **Protected-path (v3.4.70):** Write/Edit to `~/.claude/*` (incl. `$CLAUDE_PLUGIN_DATA`) blocked in ALL modes (`bypassPermissions`, headless). Check runs BEFORE hooks — whitelists dead. Exceptions: `commands|agents|skills|worktrees`. **Never design skills with `$CLAUDE_PLUGIN_DATA` as Write target** → silent fail. Primary: project-relative `.claude/<subdir>/` + whitelist. `$CLAUDE_PLUGIN_DATA` = read-only / interactive-only / Bash-only (Bash redirect currently bypasses the check, but brittle).
+
 ## 6. Output Schemas
 
 ### PreToolUse -- Allow with context

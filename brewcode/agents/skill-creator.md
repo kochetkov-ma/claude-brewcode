@@ -117,6 +117,8 @@ Coordinator passes **file path**, not content. Subagent reads the `.md` itself a
 
 A skill that toggles a persistent behavioral "mode" with 3 scopes: global, project, session. State stored in `$BC_PLUGIN_DATA/modes.json`. Hooks inject mode-specific instructions on every event.
 
+> ⚠️ **Protected-path caveat (v3.4.70):** `$BC_PLUGIN_DATA` = `~/.claude/plugins/data/<id>/` — blocked for Write/Edit in ALL modes (headless too). Mode-switcher works only via Bash `jq`+`mv` (bypasses Write check). **Never use `$BC_PLUGIN_DATA` as Write-tool target.** New stateful skills → `.claude/<skill>/` + whitelist in `permission-guard.sh`. `$BC_PLUGIN_DATA` = Bash-only OR interactive-only.
+
 **Architecture:**
 
 ```
@@ -708,6 +710,8 @@ bash "scripts/my-script.sh" && echo "✅ done" || echo "❌ FAILED"
 | Plugin | `<plugin>/skills/` | Yes |
 
 Priority: Enterprise > Personal > Project. Plugin skills: `/plugin-name:skill-name`.
+
+> ⚠️ **Output path (v3.4.70):** Skill outputs → `.claude/<subdir>/` (project-relative). **Never Write to `~/.claude/*`** (protected-path blocks ALL modes). Exceptions: `commands|agents|skills|worktrees`. New subdir → add to `permission-guard.sh` whitelist (both Bash helper + Edit/Write case).
 
 # Creation Process
 

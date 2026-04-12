@@ -2,6 +2,20 @@
 
 ---
 
+## v3.4.73 (2026-04-12)
+
+> Docs: [brewtools:provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/)
+
+### brewtools
+#### Added
+- **provider-switch skill:** new skill `/brewtools:provider-switch` — configure Claude Code alternative API providers (Z.ai/GLM, Qwen/DashScope, MiniMax, OpenRouter). Interactive setup via AskUserQuestion: language selection (EN/RU/PT), provider selection, API key input, model selection for OpenRouter. Creates isolated shell aliases in ~/.zshrc with backup. Modes: status, setup, help, provider-specific. 6 reference files + 3 scripts.
+
+### brewcode
+#### Changed
+- **agents:** added protected-path v3.4.70 warnings to agent-creator, hook-creator, skill-creator agents — document Write restrictions for `~/.claude/*` paths.
+
+---
+
 ## v3.4.72 (2026-04-11)
 
 > Docs: [getting-started](https://doc-claude.brewcode.app/) | [installation](https://doc-claude.brewcode.app/installation/) | [quickstart](https://doc-claude.brewcode.app/quickstart/)
