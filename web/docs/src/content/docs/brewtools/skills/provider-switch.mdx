@@ -1,218 +1,157 @@
 ---
 title: "Provider Switch"
-description: "Configure Claude Code alternative API providers — Z.ai/GLM, Qwen, MiniMax, OpenRouter"
+description: "Switch to alternative AI providers when Anthropic rate limits hit — keep coding for ~$10/month"
 order: 3119
 ---
-import { Card, CardGrid, Callout, Steps, Badge, Tabs, TabItem, UpdateNotice } from '../../../../components/mdx';
+import { Card, CardGrid, Callout, Steps, Badge, Spoiler, UpdateNotice } from '../../../../components/mdx';
 
-# Provider Switch
+# Rate limits hit. Keep coding.
 
-<Badge variant="accent" text="new" /> <Badge variant="primary" text="opus" />
+<Callout type="caution">
+**Anthropic Max costs $100-200/month.** Hard rate limits still run out mid-workday. Thursday evening, Friday morning — locked out. Paid premium, zero output.
+</Callout>
 
-Switch Claude Code to alternative API providers. Run `claudeglm` — env vars set, Claude starts. Open new terminal — back on subscription.
+<Callout type="tip">
+**One command fixes it.** Run `claudeglm` — Claude Code switches to GLM-5.1, the #1 model on SWE-bench Pro. Cost: ~$10/month backup budget. New terminal = back on Anthropic.
+</Callout>
 
-<CardGrid>
-  <Card title="Z.ai / GLM" icon="star">
-    #1 SWE-bench Pro, pay-per-token. Best raw coding performance per dollar.
-  </Card>
-  <Card title="Qwen" icon="document">
-    1M context window, free preview available. Ideal for large-codebase exploration.
-  </Card>
-  <Card title="MiniMax" icon="money">
-    Cheapest per token. Solid for high-volume summarization and text tasks.
-  </Card>
-  <Card title="OpenRouter" icon="sync">
-    200+ models, any provider. Route to GPT-4o, Gemini, Llama, or any hosted model.
-  </Card>
-</CardGrid>
-
-## Quick Reference
-
-| Field | Value |
-|-------|-------|
-| Command | `/brewtools:provider-switch` |
-| Arguments | `[provider]` or `setup / help` |
-| Modes | status, setup, help, glm, qwen, minimax, openrouter |
-| Model | opus |
-
-## Quick Start
-
-```bash
-# Check current provider status
-/brewtools:provider-switch
-
-# Set up all providers interactively
-/brewtools:provider-switch setup
-
-# Configure just GLM
-/brewtools:provider-switch glm
-
-# Get help on switching
-/brewtools:provider-switch help
-```
-
-## Providers
-
-<Tabs>
-  <TabItem label="Z.ai / GLM">
-    **Endpoint:** `https://api.z.ai/api/anthropic`
-
-    **Auth:** `ANTHROPIC_API_KEY` (Z.ai uses native `x-api-key` header, not bearer token)
-
-    | Model | Context | Input $/1M | Output $/1M | SWE-bench Pro |
-    |-------|---------|-----------|------------|--------------|
-    | `glm-5.1` | 200K | $1.40 | $4.40 | 58.4% (#1) |
-
-    Same model for all Claude Code roles.
-
-    **Alias:** `claudeglm`
-  </TabItem>
-  <TabItem label="Qwen">
-    **Endpoint:** `https://dashscope-intl.aliyuncs.com/apps/anthropic`
-
-    **Auth:** `ANTHROPIC_AUTH_TOKEN` (DashScope API key)
-
-    | Model | Context | Input $/1M | Output $/1M | SWE-bench Pro |
-    |-------|---------|-----------|------------|--------------|
-    | `qwen3.6-plus[1m]` | 1M | ~$0.50 | ~$2.00 | 56.6% |
-
-    Same model for all Claude Code roles. `[1m]` suffix forces 1M context window.
-
-    **Alias:** `claudeqwen`
-  </TabItem>
-  <TabItem label="MiniMax">
-    **Endpoint:** `https://api.minimax.io/anthropic`
-
-    **Auth:** `ANTHROPIC_AUTH_TOKEN` (MiniMax API key)
-
-    | Model | Context | Input $/1M | Output $/1M |
-    |-------|---------|-----------|------------|
-    | `minimax-m2.7` | 200K | $0.30 | $1.20 |
-
-    Cheapest option overall.
-
-    **Alias:** `claudeminimax`
-  </TabItem>
-  <TabItem label="OpenRouter">
-    **Endpoint:** `https://openrouter.ai/api` (no `/v1` suffix)
-
-    **Auth:** `ANTHROPIC_AUTH_TOKEN` + `ANTHROPIC_API_KEY=""` (empty string required to prevent OAuth fallback)
-
-    **Default:** `qwen/qwen3.6-plus[1m]` (1M context, strong coding)
-
-    | Option | Model | Notes |
-    |--------|-------|-------|
-    | Recommended | `qwen/qwen3.6-plus[1m]` | 1M context, ~$0.33/$1.95 per 1M |
-    | Premium | `z-ai/glm-5.1` | #1 SWE-bench Pro, 200K |
-    | Free | `qwen/qwen3-coder:free` | 262K, rate-limited |
-    | Custom | any model ID | Validated against OpenRouter API |
-
-    One model for all roles. 200+ models available. Custom IDs are checked against the live model list — typos get fuzzy suggestions.
-
-    **Alias:** `claudeor`
-  </TabItem>
-</Tabs>
-
-## Workflow
+## Your week on Anthropic Max
 
 <Steps>
   <li>
     <div>
-      <strong>Language</strong>
-      <p>Choose session language: English or Russian.</p>
+      <strong>Monday</strong>
+      <p>Fresh cycle. Claude Code at full speed. Everything works.</p>
     </div>
   </li>
   <li>
     <div>
-      <strong>Status check</strong>
-      <p>Scans <code>~/.zshrc</code> for existing aliases and API keys. Shows a provider table with configured / unconfigured status for each.</p>
+      <strong>Wednesday</strong>
+      <p>Heavy refactor. Deep in code. Limits at 60%.</p>
     </div>
   </li>
   <li>
     <div>
-      <strong>Provider selection</strong>
-      <p>Pick which providers to configure. Skipped automatically when using a provider-specific argument like <code>glm</code> or <code>qwen</code>.</p>
+      <strong>Thursday evening</strong>
+      <p>Rate limit hit. Claude Code stops responding. Stuck.</p>
     </div>
   </li>
   <li>
     <div>
-      <strong>Configuration</strong>
-      <p>Enter API keys for each selected provider (skipped if already present). For OpenRouter, select target model interactively. Aliases are written to <code>~/.zshrc</code>.</p>
+      <strong>Friday without backup</strong>
+      <p>Full workday lost. Waiting for next cycle. $200 paid, no output.</p>
     </div>
   </li>
   <li>
     <div>
-      <strong>Verification</strong>
-      <p>Re-checks status, confirms aliases were written, and prints activation instructions with exact commands to run.</p>
+      <strong>Friday with provider-switch</strong>
+      <p><code>claudeglm</code> — back to coding in 3 seconds. Same quality. $0.04 per session.</p>
     </div>
   </li>
 </Steps>
 
-## Switching Providers
-
-<Callout type="tip">
-  Run `claudeglm` — one command sets env vars and launches Claude. To return to Anthropic subscription: open a new terminal.
-</Callout>
-
-Each alias sets env vars and launches `claude` in one command. Env vars only persist in the current shell session — open a new terminal to return to Anthropic.
-
-```bash
-# Switch to GLM (sets env vars + launches Claude)
-claudeglm
-
-# Return to Anthropic: just open a new terminal
-claude
-```
-
-## Technical Details
-
-### Arguments
-
-| Argument | Description |
-|----------|-------------|
-| _(none)_ | Show current status table |
-| `setup` | Interactive setup for all providers |
-| `help` | Print switching cheat sheet |
-| `glm` | Configure Z.ai/GLM only |
-| `qwen` | Configure Qwen only |
-| `minimax` | Configure MiniMax only |
-| `openrouter` | Configure OpenRouter only |
-
-### Modes
-
-| Mode | Trigger | Behavior |
-|------|---------|----------|
-| `status` | No argument | Read `~/.zshrc`, display provider table |
-| `setup` | `setup` | Full interactive setup, all providers |
-| `help` | `help` | Print alias cheat sheet |
-| Provider mode | `glm` / `qwen` / `minimax` / `openrouter` | Single-provider setup flow |
-
-### Context window 1M hack
-
-Claude Code defaults to 200K context for non-Anthropic providers. Adding `[1m]` to the model name (e.g., `qwen3.6-plus[1m]`) forces 1M context detection. The skill applies this suffix automatically for models that support it — ensuring Claude Code does not autocompact prematurely.
-
-### Auth differences
-
-| Provider | Variable | Notes |
-|----------|----------|-------|
-| Z.ai / GLM | `ANTHROPIC_API_KEY` | Z.ai mirrors Anthropic key format |
-| Qwen | `ANTHROPIC_AUTH_TOKEN` | DashScope token format |
-| MiniMax | `ANTHROPIC_AUTH_TOKEN` | Bearer token |
-| OpenRouter | `ANTHROPIC_AUTH_TOKEN` | `sk-or-...` prefix |
-
-<Callout type="note">
-  The skill never stores keys in project files. All secrets go into shell aliases in `~/.zshrc`, which is gitignored by definition.
-</Callout>
+## The math
 
 <CardGrid>
-  <Card title="Plugin overview" icon="document" href="/brewtools/overview/">
-    Brewtools plugin overview and all skills.
+  <Card title="Without backup" icon="warning">
+    $100-200/month subscription. Limits hit Thursday. Friday = zero productivity.
+  </Card>
+  <Card title="With provider-switch" icon="check">
+    Same subscription + ~$10/month on backup. Limits hit Thursday. Friday = full workday. Zero downtime.
+  </Card>
+</CardGrid>
+
+## One command. That's it.
+
+```bash
+claudeglm       # GLM-5.1 — #1 SWE-bench Pro, 200K ctx
+claudeqwen      # Qwen 3.6 Plus — 1M context window
+claudeminimax    # MiniMax M2.7 — cheapest per token
+claudeor         # OpenRouter — 200+ models, pick any
+```
+
+<Callout type="tip">
+Each alias sets env vars and launches Claude Code automatically. To return to your Anthropic subscription — open a new terminal.
+</Callout>
+
+## Setup in 2 minutes
+
+<Steps>
+  <li>
+    <div>
+      <strong>Get an API key</strong>
+      <p>Sign up at your chosen provider (links below). Top up $5-10. Takes 30 seconds.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Run the skill</strong>
+      <p><code>/brewtools:provider-switch setup</code> — paste your key when asked. Alias is written to <code>~/.zshrc</code> automatically.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Done</strong>
+      <p>Next time limits hit: type <code>claudeglm</code>. Back to coding.</p>
+    </div>
+  </li>
+</Steps>
+
+## Providers
+
+<CardGrid>
+  <Card title="Z.ai / GLM" icon="star" href="https://open.bigmodel.cn">
+    <Badge variant="accent" text="#1 SWE-bench" /> **glm-5.1** — $1.40 / $4.40 per 1M tokens. 200K context. Best coding performance per dollar.
+  </Card>
+  <Card title="Qwen" icon="document" href="https://dashscope-intl.aliyuncs.com">
+    **qwen3.6-plus** — ~$0.50 / $2.00 per 1M tokens. 1M context window. Best for large codebases.
+  </Card>
+  <Card title="MiniMax" icon="money" href="https://platform.minimax.io">
+    **minimax-m2.7** — $0.30 / $1.20 per 1M tokens. 200K context. Cheapest option.
+  </Card>
+  <Card title="OpenRouter" icon="sync" href="https://openrouter.ai">
+    200+ models. Route to GLM, Qwen, Gemini, Llama. One config, any provider. Custom model IDs validated via API.
+  </Card>
+</CardGrid>
+
+<Spoiler title="Technical details">
+
+### How it works
+
+Each alias sets 4-6 environment variables (`ANTHROPIC_BASE_URL`, auth key, model overrides) and runs `claude`. Claude Code reads these on startup and connects to the alternative provider instead of Anthropic.
+
+Env vars only persist in the current shell session. Opening a new terminal resets everything — Claude Code uses your Anthropic subscription again.
+
+### Auth by provider
+
+| Provider | Auth variable | Notes |
+|----------|--------------|-------|
+| Z.ai / GLM | `ANTHROPIC_API_KEY` | Native `x-api-key` header |
+| Qwen | `ANTHROPIC_AUTH_TOKEN` | DashScope bearer token |
+| MiniMax | `ANTHROPIC_AUTH_TOKEN` | Bearer token |
+| OpenRouter | `ANTHROPIC_AUTH_TOKEN` + `ANTHROPIC_API_KEY=""` | Empty API key prevents OAuth fallback |
+
+### Context window
+
+Claude Code defaults to 200K for non-Anthropic providers. The `[1m]` suffix on model names (e.g., `qwen3.6-plus[1m]`) forces 1M context. Applied automatically by the skill.
+
+### Skill arguments
+
+| Argument | What it does |
+|----------|-------------|
+| _(none)_ | Show status table |
+| `setup` | Interactive setup |
+| `glm` / `qwen` / `minimax` / `openrouter` | Single-provider setup |
+| `help` | Switching cheat sheet |
+
+</Spoiler>
+
+<CardGrid>
+  <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">
+    All brewtools skills in one place.
   </Card>
   <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/provider-switch">
-    Source code and references.
-  </Card>
-  <Card title="Related: SSH" icon="rocket" href="/brewtools/skills/ssh/">
-    Server management with similar phased workflow.
+    Source code and provider references.
   </Card>
 </CardGrid>
 
