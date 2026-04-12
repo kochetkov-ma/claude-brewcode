@@ -2,6 +2,17 @@
 
 ---
 
+## v3.4.78 (2026-04-12)
+
+> Docs: [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/)
+
+### brewtools
+#### Changed
+- **provider-switch:** removed claude-max alias (unnecessary — open new terminal instead), no-dash alias names (claudeglm, claudeqwen, claudeminimax, claudeor), aliases launch claude automatically (one command), alias name customizable via AskUserQuestion during setup.
+- **docs:** updated README and MDX to reflect all alias changes across all doc levels.
+
+---
+
 ## v3.4.77 (2026-04-12)
 
 > Docs: [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/)

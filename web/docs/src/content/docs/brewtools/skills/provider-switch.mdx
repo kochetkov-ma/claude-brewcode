@@ -9,7 +9,7 @@ import { Card, CardGrid, Callout, Steps, Badge, Tabs, TabItem, UpdateNotice } fr
 
 <Badge variant="accent" text="new" /> <Badge variant="primary" text="opus" />
 
-Switch Claude Code between alternative API providers. Run one alias, start Claude — connected. Run `claude-max` — back on your subscription.
+Switch Claude Code to alternative API providers. Run `claudeglm` — env vars set, Claude starts. Open new terminal — back on subscription.
 
 <CardGrid>
   <Card title="Z.ai / GLM" icon="star">
@@ -65,7 +65,7 @@ Switch Claude Code between alternative API providers. Run one alias, start Claud
 
     Same model for all Claude Code roles.
 
-    **Alias:** `claude-glm`
+    **Alias:** `claudeglm`
   </TabItem>
   <TabItem label="Qwen">
     **Endpoint:** `https://dashscope-intl.aliyuncs.com/apps/anthropic`
@@ -78,7 +78,7 @@ Switch Claude Code between alternative API providers. Run one alias, start Claud
 
     Same model for all Claude Code roles. `[1m]` suffix forces 1M context window.
 
-    **Alias:** `claude-qwen`
+    **Alias:** `claudeqwen`
   </TabItem>
   <TabItem label="MiniMax">
     **Endpoint:** `https://api.minimax.io/anthropic`
@@ -91,7 +91,7 @@ Switch Claude Code between alternative API providers. Run one alias, start Claud
 
     Cheapest option overall.
 
-    **Alias:** `claude-minimax`
+    **Alias:** `claudeminimax`
   </TabItem>
   <TabItem label="OpenRouter">
     **Endpoint:** `https://openrouter.ai/api` (no `/v1` suffix)
@@ -109,7 +109,7 @@ Switch Claude Code between alternative API providers. Run one alias, start Claud
 
     One model for all roles. 200+ models available. Custom IDs are checked against the live model list — typos get fuzzy suggestions.
 
-    **Alias:** `claude-openrouter`
+    **Alias:** `claudeor`
   </TabItem>
 </Tabs>
 
@@ -151,17 +151,17 @@ Switch Claude Code between alternative API providers. Run one alias, start Claud
 ## Switching Providers
 
 <Callout type="tip">
-  **How to switch.** Run the alias (`claude-glm`), then start `claude`. To return to your Anthropic subscription: run `claude-max` then `claude`. Each alias sets environment variables for one provider — they are fully isolated and do not affect each other.
+  Run `claudeglm` — one command sets env vars and launches Claude. To return to Anthropic subscription: open a new terminal.
 </Callout>
 
-Each provider uses its **single top model** for all three Claude Code roles (opus, sonnet, haiku). The alias sets `ANTHROPIC_BASE_URL`, auth variable, and the same model ID for `OPUS_MODEL`, `SONNET_MODEL`, and `HAIKU_MODEL`.
+Each alias sets env vars and launches `claude` in one command. Env vars only persist in the current shell session — open a new terminal to return to Anthropic.
 
 ```bash
-# Switch to GLM
-claude-glm && claude
+# Switch to GLM (sets env vars + launches Claude)
+claudeglm
 
-# Switch back to Anthropic subscription
-claude-max && claude
+# Return to Anthropic: just open a new terminal
+claude
 ```
 
 ## Technical Details

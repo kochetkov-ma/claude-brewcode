@@ -24,19 +24,7 @@ Switch Claude Code from Anthropic Max to a pay-per-token API provider — Z.ai/G
 /brewtools:provider-switch help
 ```
 
-After setup, switching is two commands in any terminal:
-
-```bash
-claude-glm    # sets env vars for GLM
-claude        # Claude Code now connects to Z.ai
-```
-
-To return to subscription:
-
-```bash
-claude-max    # unsets all provider vars
-claude        # back on Anthropic Max
-```
+After setup, run `claudeglm` — it sets env vars and starts Claude in one command. To return to Anthropic, open a new terminal.
 
 ## Features
 
@@ -44,7 +32,6 @@ claude        # back on Anthropic Max
 - Reads current `~/.zshrc` state before any write — shows what is already configured
 - Auto-starts setup when no provider is configured yet
 - OpenRouter: pick one model for all roles, with validated custom ID input
-- `claude-max` alias always created alongside provider aliases — one command to revert
 - All writes go into a clearly marked section in `~/.zshrc`; backup created before first write
 - Error reporting with `SCRIPT_ERROR / PHASE / ACTION / SUGGESTION` block on any failure
 
@@ -52,13 +39,10 @@ claude        # back on Anthropic Max
 
 | Provider | Alias | Model (all roles) | Auth var | Notes |
 |----------|-------|-------------------|----------|-------|
-| Anthropic Max | `claude-max` | claude-opus-4-6 | OAuth | Default; restored by `claude-max` |
-| Z.ai / GLM | `claude-glm` | glm-5.1 | `ANTHROPIC_API_KEY` | #1 SWE-bench Pro, $1.40/$4.40 per 1M |
-| Qwen / DashScope | `claude-qwen` | qwen3.6-plus[1m] | `ANTHROPIC_AUTH_TOKEN` | 1M context, ~$0.50/$2.00 per 1M |
-| MiniMax | `claude-minimax` | minimax-m2.7 | `ANTHROPIC_AUTH_TOKEN` | Cheapest: $0.30/$1.20 per 1M |
-| OpenRouter | `claude-openrouter` | user-selected | `ANTHROPIC_AUTH_TOKEN` | Default: qwen/qwen3.6-plus[1m]. Custom IDs validated via API |
-
-Each provider uses its **single top model** for all three Claude Code roles (opus, sonnet, haiku).
+| Z.ai / GLM | `claudeglm` | glm-5.1 | `ANTHROPIC_API_KEY` | #1 SWE-bench Pro, $1.40/$4.40 per 1M |
+| Qwen / DashScope | `claudeqwen` | qwen3.6-plus[1m] | `ANTHROPIC_AUTH_TOKEN` | 1M context, ~$0.50/$2.00 per 1M |
+| MiniMax | `claudeminimax` | minimax-m2.7 | `ANTHROPIC_AUTH_TOKEN` | Cheapest: $0.30/$1.20 per 1M |
+| OpenRouter | `claudeor` | user-selected | `ANTHROPIC_AUTH_TOKEN` | Default: qwen/qwen3.6-plus[1m]. Custom IDs validated via API |
 
 ## Usage Modes
 
@@ -74,7 +58,7 @@ Each provider uses its **single top model** for all three Claude Code roles (opu
 
 ## How Switching Works
 
-Each provider alias sets six environment variables before `claude` starts:
+Each alias sets six environment variables and launches `claude` — one command, no separate steps. Env vars only persist in the current shell session. To return to Anthropic, open a new terminal and run `claude` normally.
 
 | Variable | Purpose |
 |----------|---------|
@@ -84,8 +68,6 @@ Each provider alias sets six environment variables before `claude` starts:
 | `ANTHROPIC_DEFAULT_OPUS_MODEL` | Model ID for opus-class tasks |
 | `ANTHROPIC_DEFAULT_SONNET_MODEL` | Model ID for sonnet-class tasks |
 | `ANTHROPIC_DEFAULT_HAIKU_MODEL` | Model ID for haiku-class tasks |
-
-Claude Code reads these on startup. The alias sets the vars and launches `claude` in one command — no separate step needed. To return to the default Anthropic OAuth flow, open a new terminal (env vars only persist in the current shell session).
 
 ## Files
 
