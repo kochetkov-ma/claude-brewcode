@@ -2,6 +2,14 @@
 
 ---
 
+## v3.4.81 (2026-04-12)
+
+### docs
+#### Fixed
+- **Spoiler component:** tables inside collapsed Spoiler now have horizontal scroll on mobile (`overflow-x: auto`). Prevents wide tables from breaking page layout.
+
+---
+
 ## v3.4.80 (2026-04-12)
 
 > Docs: [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/)
