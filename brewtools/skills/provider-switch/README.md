@@ -22,6 +22,12 @@ Switch Claude Code from Anthropic Max to a pay-per-token API provider — Z.ai/G
 
 # See how switching works
 /brewtools:provider-switch help
+
+# Verify all tokens work
+/brewtools:provider-switch verify
+
+# Identify which model is responding (run inside claudeglm session)
+/brewtools:provider-switch model-check
 ```
 
 After setup, run `claudeglm` — it sets env vars and starts Claude in one command. To return to Anthropic, open a new terminal.
@@ -37,12 +43,12 @@ After setup, run `claudeglm` — it sets env vars and starts Claude in one comma
 
 ## Providers
 
-| Provider | Alias | Model (all roles) | Auth var | Notes |
-|----------|-------|-------------------|----------|-------|
-| Z.ai / GLM | `claudeglm` | glm-5.1 | `ANTHROPIC_API_KEY` | #1 SWE-bench Pro, $1.40/$4.40 per 1M |
-| Qwen / DashScope | `claudeqwen` | qwen3.6-plus[1m] | `ANTHROPIC_AUTH_TOKEN` | 1M context, ~$0.50/$2.00 per 1M |
-| MiniMax | `claudeminimax` | minimax-m2.7 | `ANTHROPIC_AUTH_TOKEN` | Cheapest: $0.30/$1.20 per 1M |
-| OpenRouter | `claudeor` | user-selected | `ANTHROPIC_AUTH_TOKEN` | Default: qwen/qwen3.6-plus[1m]. Custom IDs validated via API |
+| Provider | Alias | Model (all roles) | Auth pattern | Notes |
+|----------|-------|-------------------|-------------|-------|
+| Z.ai / GLM | `claudeglm` | glm-5.1 | `ANTHROPIC_AUTH_TOKEN` + `API_KEY=""` | #1 SWE-bench Pro, $1.40/$4.40 per 1M |
+| Qwen / DashScope | `claudeqwen` | qwen3.6-plus[1m] | `ANTHROPIC_AUTH_TOKEN` + `API_KEY=""` | 1M context, ~$0.50/$2.00 per 1M. **Singapore region keys only** |
+| MiniMax | `claudeminimax` | minimax-m2.7 | `ANTHROPIC_AUTH_TOKEN` + `API_KEY=""` | Cheapest: $0.30/$1.20 per 1M |
+| OpenRouter | `claudeor` | user-selected | `ANTHROPIC_AUTH_TOKEN` + `API_KEY=""` | Default: qwen/qwen3.6-plus[1m]. Custom IDs validated via API |
 
 ## Usage Modes
 
@@ -55,6 +61,8 @@ After setup, run `claudeglm` — it sets env vars and starts Claude in one comma
 | `minimax` / `mini` | provider-minimax | Configure MiniMax only |
 | `openrouter` / `router` | provider-openrouter | Configure OpenRouter + model selection |
 | `help` / `how` | help | Explains how aliases work, env vars, and dashboards |
+| `verify` / `test` | verify | Tests all configured tokens by sending a minimal API request to each endpoint |
+| `model-check` / `identify` | model-check | Asks 5 diagnostic questions to identify the model (run inside a provider session) |
 
 ## How Switching Works
 
@@ -63,11 +71,22 @@ Each alias sets six environment variables and launches `claude` — one command,
 | Variable | Purpose |
 |----------|---------|
 | `ANTHROPIC_BASE_URL` | Points to the provider's API endpoint |
-| `ANTHROPIC_API_KEY` | API key (Z.ai) or `""` (OpenRouter) |
-| `ANTHROPIC_AUTH_TOKEN` | Bearer token (Qwen, MiniMax, OpenRouter) |
+| `ANTHROPIC_API_KEY` | Set to `""` (empty string) for all providers — blocks OAuth fallback |
+| `ANTHROPIC_AUTH_TOKEN` | Bearer token with provider API key (all providers) |
 | `ANTHROPIC_DEFAULT_OPUS_MODEL` | Model ID for opus-class tasks |
 | `ANTHROPIC_DEFAULT_SONNET_MODEL` | Model ID for sonnet-class tasks |
 | `ANTHROPIC_DEFAULT_HAIKU_MODEL` | Model ID for haiku-class tasks |
+
+## Qwen: Singapore Region Required
+
+The Anthropic-compatible endpoint (`dashscope-intl.aliyuncs.com`) works ONLY with API keys created in the **Singapore** region.
+
+1. Open [Model Studio → Singapore → API Key](https://modelstudio.console.alibabacloud.com/ap-southeast-1?tab=dashboard#/api-key)
+2. Verify region is **Singapore (ap-southeast-1)** in top-right corner
+3. Click **Create API Key** → select Owner Account → OK
+4. Copy the key immediately (shown only once)
+
+Valid key format: `sk-...` (~36 chars). If you see `sk-ws-` or a 200+ char key — wrong region (likely Frankfurt).
 
 ## Files
 
@@ -77,7 +96,8 @@ brewtools/skills/provider-switch/
 ├── scripts/
 │   ├── detect-mode.sh               # Parses $ARGUMENTS → MODE
 │   ├── check-status.sh              # Reads ~/.zshrc, outputs key=value status
-│   └── write-alias.sh               # init / set-key / set-alias subcommands
+│   ├── write-alias.sh               # init / set-key / set-alias subcommands
+│   └── verify-providers.sh              # Tests provider tokens (curl health check)
 └── references/
     ├── common.md                    # Env var reference, ~/.zshrc structure
     ├── zai-glm.md                   # Z.ai alias body and dashboard URL
@@ -92,7 +112,7 @@ brewtools/skills/provider-switch/
 | Provider | Dashboard |
 |----------|-----------|
 | Z.ai / GLM | https://z.ai/subscribe |
-| Qwen / DashScope | https://bailian.console.alibabacloud.com |
+| Qwen / DashScope | https://modelstudio.console.alibabacloud.com/ap-southeast-1?tab=dashboard#/api-key |
 | MiniMax | https://platform.minimax.io |
 | OpenRouter | https://openrouter.ai |
 

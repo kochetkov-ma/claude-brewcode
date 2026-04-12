@@ -19,7 +19,7 @@ auto-sync-override: |
 | Pay model | Pay-per-token |
 
 ## Auth Note
-Uses `ANTHROPIC_AUTH_TOKEN`. Must unset `ANTHROPIC_API_KEY`.
+Uses `ANTHROPIC_AUTH_TOKEN`. Must set `ANTHROPIC_API_KEY=""` (empty string, NOT unset) to prevent OAuth fallback.
 
 ## Models
 | Role | Model ID | Context | Input $/1M | Output $/1M |
@@ -32,7 +32,7 @@ Note: MiniMax currently has only one model (M2.7), used for all three roles.
 
 ## Alias
 ```bash
-alias claudeminimax='export ANTHROPIC_BASE_URL=https://api.minimax.io/anthropic; export ANTHROPIC_AUTH_TOKEN=$MINIMAX_API_KEY; unset ANTHROPIC_API_KEY; export ANTHROPIC_DEFAULT_OPUS_MODEL=minimax-m2.7; export ANTHROPIC_DEFAULT_SONNET_MODEL=minimax-m2.7; export ANTHROPIC_DEFAULT_HAIKU_MODEL=minimax-m2.7; claude'
+alias claudeminimax='export ANTHROPIC_BASE_URL=https://api.minimax.io/anthropic; export ANTHROPIC_AUTH_TOKEN=$MINIMAX_API_KEY; export ANTHROPIC_API_KEY=""; export ANTHROPIC_DEFAULT_OPUS_MODEL=minimax-m2.7; export ANTHROPIC_DEFAULT_SONNET_MODEL=minimax-m2.7; export ANTHROPIC_DEFAULT_HAIKU_MODEL=minimax-m2.7; claude'
 ```
 
 ## Dashboard

@@ -14,12 +14,12 @@ auto-sync-override: |
 | Field | Value |
 |-------|-------|
 | Endpoint | `https://api.z.ai/api/anthropic` |
-| Auth env var | `ANTHROPIC_API_KEY` (NOT AUTH_TOKEN) |
+| Auth env var | `ANTHROPIC_AUTH_TOKEN` |
 | Key source env | `ZAI_API_KEY` |
 | Pay model | Pay-per-token, no subscription needed |
 
 ## Auth Note
-Z.ai uses `x-api-key` header. Claude Code sends this when `ANTHROPIC_API_KEY` is set. Do NOT use `ANTHROPIC_AUTH_TOKEN`.
+Z.ai supports both `x-api-key` and Bearer token auth. Uses `ANTHROPIC_AUTH_TOKEN` (unified with other providers). Must set `ANTHROPIC_API_KEY=""` to prevent OAuth fallback.
 
 ## Model
 | Field | Value |
@@ -34,7 +34,7 @@ Same model for all three Claude Code roles (opus/sonnet/haiku).
 
 ## Alias
 ```bash
-alias claudeglm='export ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic; export ANTHROPIC_API_KEY=$ZAI_API_KEY; unset ANTHROPIC_AUTH_TOKEN; export ANTHROPIC_DEFAULT_OPUS_MODEL=glm-5.1; export ANTHROPIC_DEFAULT_SONNET_MODEL=glm-5.1; export ANTHROPIC_DEFAULT_HAIKU_MODEL=glm-5.1; claude'
+alias claudeglm='export ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic; export ANTHROPIC_AUTH_TOKEN=$ZAI_API_KEY; export ANTHROPIC_API_KEY=""; export ANTHROPIC_DEFAULT_OPUS_MODEL=glm-5.1; export ANTHROPIC_DEFAULT_SONNET_MODEL=glm-5.1; export ANTHROPIC_DEFAULT_HAIKU_MODEL=glm-5.1; claude'
 ```
 
 ## Dashboard

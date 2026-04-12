@@ -2,6 +2,20 @@
 
 ---
 
+## v3.5.0 (2026-04-12)
+
+> Docs: [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/)
+
+### brewtools
+#### Changed
+- **provider-switch:** unified alias template — all providers now use `ANTHROPIC_AUTH_TOKEN` + `ANTHROPIC_API_KEY=""` (Bearer token + OAuth block). Z.ai switched from x-api-key to Bearer (verified both work)
+- **provider-switch:** new `verify` mode — tests all configured tokens against endpoints with HTTP status report
+- **provider-switch:** new `model-check` mode — 5 diagnostic questions to identify which model is responding (runs inside provider session)
+- **provider-switch:** Qwen Singapore region requirement — callout, step-by-step key generation, format validation (`sk-ws-` = wrong region)
+- **provider-switch:** updated docs — MDX page, skill README, plugin README with new modes and Qwen instructions
+
+---
+
 ## v3.4.82 (2026-04-12)
 
 ### brewtools

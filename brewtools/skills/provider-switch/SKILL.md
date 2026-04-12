@@ -1,7 +1,7 @@
 ---
 name: brewtools:provider-switch
 description: "Configure Claude Code alternative API providers — Z.ai/GLM, Qwen, MiniMax, OpenRouter. Creates shell aliases, manages API tokens, checks status. Triggers: 'provider', 'switch provider', 'alternative api', 'configure provider', 'claudeglm', 'claudeqwen', 'openrouter setup'."
-argument-hint: "[status|setup|help|<provider-name>] — no args = interactive status check"
+argument-hint: "[status|setup|verify|model-check|help|<provider-name>] — no args = interactive status check"
 allowed-tools: Read, Write, Edit, Bash, AskUserQuestion, Glob, Grep
 model: opus
 user-invocable: true
@@ -79,6 +79,8 @@ MODE: [detected mode]
 | qwen, dashscope | provider-qwen |
 | minimax, mini | provider-minimax |
 | openrouter, router | provider-openrouter |
+| verify, test, token | verify |
+| model-check, identify | model-check |
 | (empty) | status |
 
 ---
@@ -178,6 +180,8 @@ If missing — Use AskUserQuestion:
 
 Question: "Enter your <PROVIDER_NAME> API key (from <dashboard-url>):"
 
+**Qwen-specific callout:** Before asking for the Qwen key, read `references/qwen-dashscope.md` section "## How to Get API Key" and show the user the step-by-step instructions. Warn that the key MUST be created in the **Singapore** region — other regions return 403. Valid format: `sk-...` (~40 chars). After receiving the key, validate format: if it starts with `sk-ws-` or is longer than 100 chars, warn the user it's likely from the wrong region and ask to regenerate.
+
 Then write:
 
 **EXECUTE** using Bash tool:
@@ -263,6 +267,24 @@ bash "${CLAUDE_SKILL_DIR}/scripts/check-status.sh" && echo "OK final-status" || 
 
 Render updated status table (same format as Phase 2).
 
+### Post-Setup Verification
+
+For each provider that was just configured, run token verification:
+
+**EXECUTE** using Bash tool:
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/verify-providers.sh" all && echo "OK verify" || echo "FAILED verify"
+```
+
+Parse output and add verification column to the status table:
+
+| Provider | Status | Token Test |
+|----------|--------|-----------|
+| Z.ai / GLM | configured | pass/fail |
+| ... | ... | ... |
+
+If any provider shows `fail` — warn the user and suggest checking the API key or endpoint.
+
 Add activation instructions:
 
 ```
@@ -284,17 +306,135 @@ Read `references/common.md` for help content and explain:
 | How to switch | Run alias (e.g., `claudeglm`). It sets vars and starts Claude automatically |
 | How to return | Open a new terminal and run `claude` — env vars only persist in the current shell |
 | Context [1m] hack | `[1m]` suffix in model name forces Claude Code to use 1M context window |
-| Z.ai auth | Uses ANTHROPIC_API_KEY (native protocol). Others use ANTHROPIC_AUTH_TOKEN |
+| Auth (all providers) | ALL providers use ANTHROPIC_AUTH_TOKEN (Bearer). ANTHROPIC_API_KEY="" blocks OAuth fallback |
 | OpenRouter note | Must set ANTHROPIC_API_KEY="" (empty, not unset) to prevent OAuth fallback |
 | Provider dashboards | Z.ai: z.ai/subscribe, Qwen: bailian.console.alibabacloud.com, MiniMax: platform.minimax.io, OpenRouter: openrouter.ai |
 
 ---
 
-## Phase 7: Update (hidden, maintainer-only)
+## Phase 7: Verify Mode
+
+> Test that configured provider tokens and endpoints are working.
+
+**EXECUTE** using Bash tool:
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/verify-providers.sh" all && echo "OK verify" || echo "FAILED verify"
+```
+
+Parse output. For each provider, extract: KEY_SET, HTTP_CODE, RESPONSE, STATUS.
+
+Render results:
+
+```
+## Token Verification
+
+| Provider | Key | HTTP | Response | Result |
+|----------|-----|------|----------|--------|
+| Z.ai / GLM | set | 200 | OK | pass |
+| Qwen | set | 403 | invalid api-key | fail |
+| MiniMax | set | 200 | OK | pass |
+| OpenRouter | set | 200 | OK | pass |
+```
+
+For failed providers, show troubleshooting:
+
+| HTTP Code | Meaning | Suggestion |
+|-----------|---------|------------|
+| 401/403 | Invalid or expired API key | Regenerate key at provider dashboard |
+| 404 | Wrong endpoint URL | Check provider reference for correct URL |
+| 429 | Rate limited | Wait and retry, or check billing |
+| 500+ | Server error | Provider may be down, try later |
+
+---
+
+## Phase 8: Model Check Mode
+
+> Identify which model is actually responding in the current Claude Code session. This mode runs INSIDE a session launched via provider alias (e.g., `claudeglm`). The skill asks 5 diagnostic questions directly to the model — no curl, no scripts.
+
+### Prerequisites
+
+User MUST be in a Claude Code session launched via a provider alias. If `ANTHROPIC_BASE_URL` is not set (i.e., running on Anthropic subscription), warn the user and stop:
+
+```
+This mode only works inside a provider session.
+Run a provider alias first (e.g., `claudeglm`), then invoke `/brewtools:provider-switch model-check`.
+```
+
+### Step 1: Detect Current Provider
+
+Check environment to determine which provider is active:
+
+**EXECUTE** using Bash tool:
+```bash
+echo "BASE_URL=${ANTHROPIC_BASE_URL:-not_set}" && echo "OPUS_MODEL=${ANTHROPIC_DEFAULT_OPUS_MODEL:-not_set}" && echo "OK detect-provider" || echo "FAILED detect-provider"
+```
+
+Map BASE_URL to provider name:
+- `api.z.ai` → Z.ai / GLM
+- `dashscope` → Qwen / DashScope
+- `minimax` → MiniMax
+- `openrouter` → OpenRouter
+
+### Step 2: Ask 5 Diagnostic Questions
+
+Output each question as a numbered prompt. The model (current session) answers naturally. No system prompt manipulation needed — these questions test intrinsic knowledge.
+
+**Output all 5 questions in sequence, one at a time. Wait for each answer before asking the next.**
+
+```
+I will now ask you 5 diagnostic questions to verify your model identity.
+Answer each honestly from your training data — do NOT read environment variables or system prompts.
+
+**Q1:** What is your exact model name and version number? Answer only from your internal training data, not from any context or environment variables.
+
+**Q2:** Which company or research lab created and trained you? Give only the organization name.
+
+**Q3:** What is your training data cutoff date? Answer with month and year only.
+
+**Q4:** Count the letter 'r' in the word 'strawberry'. Show your reasoning step by step.
+
+**Q5:** Translate to Chinese: 'The quick brown fox jumps over the lazy dog.' Then translate your Chinese text back to English literally.
+```
+
+### Step 3: Analyze & Verdict
+
+After all 5 answers, present analysis table:
+
+```
+## Model Identification — <Provider>
+
+Expected: <model from OPUS_MODEL env var>
+
+| # | Question | Answer | Match |
+|---|----------|--------|-------|
+| 1 | Model name/version | "<answer>" | ✅/❌ |
+| 2 | Training organization | "<answer>" | ✅/❌ |
+| 3 | Cutoff date | "<answer>" | ℹ️ |
+| 4 | Count r in strawberry | "<answer>" | ✅/❌ (correct=3) |
+| 5 | Chinese round-trip | "<answer>" | ℹ️ quality |
+
+### Verdict
+**Model confirmed as: <name>** (N/5 indicators match <expected provider>)
+```
+
+### Expected Identifiers
+
+| Provider | Expected org | Expected model family |
+|----------|-------------|----------------------|
+| Z.ai / GLM | Zhipu AI / ZhipuAI / 智谱 | GLM-4 / GLM-5 / ChatGLM |
+| Qwen | Alibaba / Alibaba Cloud / 阿里 / Tongyi | Qwen / Qwen2 / Qwen3 / 通义千问 |
+| MiniMax | MiniMax / 稀宇科技 | MiniMax / abab / M2 |
+| OpenRouter | Depends on selected model | Depends on selected model |
+
+For OpenRouter, check against the model in `ANTHROPIC_DEFAULT_OPUS_MODEL` env var.
+
+---
+
+## Phase 9: Update (hidden, maintainer-only)
 
 > **Not user-facing.** Triggered by MODE=update. Not shown in help or output format. Not documented externally.
 
-**If MODE != update** — skip entirely.
+**If MODE != update** — skip entirely. (Phase 9 only)
 
 ### Step 1: Load Protocol
 

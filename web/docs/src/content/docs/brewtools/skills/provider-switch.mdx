@@ -103,7 +103,7 @@ Each alias sets env vars and launches Claude Code automatically. To return to yo
   <Card title="Z.ai / GLM" icon="star" href="https://z.ai/subscribe">
     <Badge variant="accent" text="#1 SWE-bench" /> **glm-5.1** — $1.40 / $4.40 per 1M tokens. 200K context. Best coding performance per dollar.
   </Card>
-  <Card title="Qwen" icon="document" href="https://bailian.console.alibabacloud.com">
+  <Card title="Qwen" icon="document" href="https://modelstudio.console.alibabacloud.com/ap-southeast-1?tab=dashboard#/api-key">
     **qwen3.6-plus** — ~$0.50 / $2.00 per 1M tokens. 1M context window. Best for large codebases.
   </Card>
   <Card title="MiniMax" icon="money" href="https://platform.minimax.io">
@@ -113,6 +113,10 @@ Each alias sets env vars and launches Claude Code automatically. To return to yo
     200+ models. Route to GLM, Qwen, Gemini, Llama. One config, any provider. Custom model IDs validated via API.
   </Card>
 </CardGrid>
+
+<Callout type="caution">
+**Qwen: Singapore region only.** The Anthropic-compatible endpoint works ONLY with API keys from the **Singapore** region. Open [Model Studio → Singapore → API Key](https://modelstudio.console.alibabacloud.com/ap-southeast-1?tab=dashboard#/api-key), create a key there. Valid format: `sk-...` (~36 chars). Keys from Frankfurt (`sk-ws-...`) return 403.
+</Callout>
 
 <Spoiler title="Technical details">
 
@@ -124,12 +128,9 @@ Env vars only persist in the current shell session. Opening a new terminal reset
 
 ### Auth by provider
 
-| Provider | Auth variable | Notes |
-|----------|--------------|-------|
-| Z.ai / GLM | `ANTHROPIC_API_KEY` | Native `x-api-key` header |
-| Qwen | `ANTHROPIC_AUTH_TOKEN` | DashScope bearer token |
-| MiniMax | `ANTHROPIC_AUTH_TOKEN` | Bearer token |
-| OpenRouter | `ANTHROPIC_AUTH_TOKEN` + `ANTHROPIC_API_KEY=""` | Empty API key prevents OAuth fallback |
+| Provider | Auth pattern | Notes |
+|----------|-------------|-------|
+| All providers | `ANTHROPIC_AUTH_TOKEN` + `ANTHROPIC_API_KEY=""` | Unified: Bearer token + empty API key blocks OAuth fallback |
 
 ### Context window
 
@@ -142,9 +143,28 @@ Claude Code defaults to 200K for non-Anthropic providers. The `[1m]` suffix on m
 | _(none)_ | Show status table |
 | `setup` | Interactive setup |
 | `glm` / `qwen` / `minimax` / `openrouter` | Single-provider setup |
+| `verify` | Test all configured tokens against endpoints |
+| `model-check` | Identify which model is actually responding (run inside provider session) |
 | `help` | Switching cheat sheet |
 
 </Spoiler>
+
+## Already set up? Verify it works.
+
+<Steps>
+  <li>
+    <div>
+      <strong>Test tokens</strong>
+      <p><code>/brewtools:provider-switch verify</code> — sends a minimal request to each configured provider. Shows HTTP status and response for every token.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Check the model</strong>
+      <p>Run your alias (<code>claudeglm</code>), then <code>/brewtools:provider-switch model-check</code> — asks 5 diagnostic questions to confirm which model is actually responding. No curl, no scripts — the model answers directly.</p>
+    </div>
+  </li>
+</Steps>
 
 <CardGrid>
   <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">

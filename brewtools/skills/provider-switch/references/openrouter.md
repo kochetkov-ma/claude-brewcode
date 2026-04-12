@@ -20,7 +20,7 @@ auto-sync-override: |
 | Pay model | Pay-per-token, varies by model |
 
 ## Auth Note
-CRITICAL: Must set `ANTHROPIC_API_KEY=""` (empty string, NOT unset). Without this, Claude Code falls back to Anthropic OAuth and ignores OpenRouter.
+Uses `ANTHROPIC_AUTH_TOKEN`. Must set `ANTHROPIC_API_KEY=""` (empty string, NOT unset) to prevent OAuth fallback.
 URL: `https://openrouter.ai/api` — no `/v1` suffix.
 
 ## Model Format
