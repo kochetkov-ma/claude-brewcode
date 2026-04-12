@@ -117,4 +117,11 @@ const { title, id, open = false } = Astro.props;
   .spoiler-content > :last-child {
     margin-bottom: 0;
   }
+
+  .spoiler-content :global(table) {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }
 </style>
