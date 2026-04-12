@@ -10,7 +10,7 @@ Verify and refresh provider reference data: models, pricing, endpoints, context 
 | Check | Source | Method |
 |-------|--------|--------|
 | Models | `https://docs.z.ai/guides/overview/pricing` | WebFetch |
-| Models | `https://open.bigmodel.cn/dev/api/normal-model/glm-5` | WebFetch |
+| Models | `https://open.bigmodel.cn/en/dev/api/normal-model/glm-5` | WebFetch |
 | Pricing | Same as above | WebFetch |
 | Endpoint | `https://api.z.ai/api/anthropic/v1/messages` (test call) | Bash curl |
 | Live test | `curl -s -X POST https://api.z.ai/api/anthropic/v1/messages -H "x-api-key: $ZAI_API_KEY" -H "content-type: application/json" -H "anthropic-version: 2023-06-01" -d '{"model":"glm-5.1","max_tokens":10,"messages":[{"role":"user","content":"ping"}]}'` | Bash |
@@ -27,7 +27,7 @@ Verify and refresh provider reference data: models, pricing, endpoints, context 
 | Check | Source | Method |
 |-------|--------|--------|
 | Models | `https://platform.minimax.io/docs/guides/text-ai-coding-tools` | WebFetch |
-| Pricing | `https://platform.minimax.io/pricing` | WebFetch |
+| Pricing | `https://platform.minimax.io/docs/guides/models-intro` | WebFetch |
 | New releases | WebSearch: `MiniMax new model 2026 site:platform.minimax.io` | WebSearch |
 
 ### OpenRouter

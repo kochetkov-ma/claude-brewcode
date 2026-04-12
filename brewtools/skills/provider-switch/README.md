@@ -91,8 +91,8 @@ brewtools/skills/provider-switch/
 
 | Provider | Dashboard |
 |----------|-----------|
-| Z.ai / GLM | https://open.bigmodel.cn |
-| Qwen / DashScope | https://alibabacloud.com/product/dashscope |
+| Z.ai / GLM | https://z.ai/subscribe |
+| Qwen / DashScope | https://bailian.console.alibabacloud.com |
 | MiniMax | https://platform.minimax.io |
 | OpenRouter | https://openrouter.ai |
 

@@ -286,7 +286,7 @@ Read `references/common.md` for help content and explain:
 | Context [1m] hack | `[1m]` suffix in model name forces Claude Code to use 1M context window |
 | Z.ai auth | Uses ANTHROPIC_API_KEY (native protocol). Others use ANTHROPIC_AUTH_TOKEN |
 | OpenRouter note | Must set ANTHROPIC_API_KEY="" (empty, not unset) to prevent OAuth fallback |
-| Provider dashboards | Z.ai: open.bigmodel.cn, Qwen: alibabacloud.com/product/dashscope, MiniMax: platform.minimax.io, OpenRouter: openrouter.ai |
+| Provider dashboards | Z.ai: z.ai/subscribe, Qwen: bailian.console.alibabacloud.com, MiniMax: platform.minimax.io, OpenRouter: openrouter.ai |
 
 ---
 
@@ -306,7 +306,7 @@ Spawn 4 Explore agents **in ONE message** via Task:
 
 | Agent | Provider | Sources |
 |-------|----------|---------|
-| 1 | Z.ai/GLM | docs.z.ai, open.bigmodel.cn — models, pricing |
+| 1 | Z.ai/GLM | docs.z.ai, open.bigmodel.cn/en — models, pricing |
 | 2 | Qwen/DashScope | alibabacloud.com/help, qwenlm.github.io — models, pricing |
 | 3 | MiniMax | platform.minimax.io — models, pricing |
 | 4 | OpenRouter | openrouter.ai/api/v1/models — top coding/free models |

@@ -40,4 +40,4 @@ alias claudeqwen='export ANTHROPIC_BASE_URL=https://dashscope-intl.aliyuncs.com/
 ```
 
 ## Dashboard
-https://www.alibabacloud.com/product/dashscope (international)
+https://bailian.console.alibabacloud.com (international console, API keys, billing)

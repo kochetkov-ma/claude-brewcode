@@ -3,7 +3,7 @@ auto-sync: enabled
 auto-sync-date: 2026-04-12
 auto-sync-type: doc
 auto-sync-override: |
-  sources: https://platform.minimax.io/docs/guides/text-ai-coding-tools, https://platform.minimax.io/pricing
+  sources: https://platform.minimax.io/docs/guides/text-ai-coding-tools, https://platform.minimax.io/docs/guides/models-intro
   focus: model IDs, pricing, context window, new model releases
   preserve: ## Alias, ## Dashboard, ## Auth Note
 ---
