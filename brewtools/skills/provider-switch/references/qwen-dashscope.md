@@ -21,18 +21,22 @@ auto-sync-override: |
 ## Auth Note
 Uses `ANTHROPIC_AUTH_TOKEN` (bearer-style). Must unset `ANTHROPIC_API_KEY` to prevent Anthropic fallback.
 
-## Models
-| Role | Model ID | Context | Input $/1M | Output $/1M |
-|------|----------|---------|-----------|------------|
-| opus | qwen3.6-plus[1m] | 1M | ~$0.50 | ~$2.00 |
-| sonnet | qwen3-coder-plus | 256K | $0.12 | $0.75 |
-| haiku | qwen3-coder-next | 262K | cheap | cheap |
+## Model
+| Field | Value |
+|-------|-------|
+| Model ID | `qwen3.6-plus[1m]` |
+| Context | 1M |
+| Input $/1M | ~$0.50 |
+| Output $/1M | ~$2.00 |
+| SWE-bench Pro | 56.6% |
 
-Note: `[1m]` suffix on qwen3.6-plus is REQUIRED — Claude Code defaults to 200K context otherwise. This is a workaround (GitHub issue #40753).
+Same model for all three Claude Code roles (opus/sonnet/haiku).
+
+Note: `[1m]` suffix is REQUIRED — Claude Code defaults to 200K context otherwise (GitHub issue #40753).
 
 ## Alias
 ```bash
-alias claude-qwen='export ANTHROPIC_BASE_URL=https://dashscope-intl.aliyuncs.com/apps/anthropic && export ANTHROPIC_AUTH_TOKEN=$DASHSCOPE_API_KEY && unset ANTHROPIC_API_KEY && export ANTHROPIC_DEFAULT_OPUS_MODEL="qwen3.6-plus[1m]" && export ANTHROPIC_DEFAULT_SONNET_MODEL=qwen3-coder-plus && export ANTHROPIC_DEFAULT_HAIKU_MODEL=qwen3-coder-next'
+alias claude-qwen='export ANTHROPIC_BASE_URL=https://dashscope-intl.aliyuncs.com/apps/anthropic && export ANTHROPIC_AUTH_TOKEN=$DASHSCOPE_API_KEY && unset ANTHROPIC_API_KEY && export ANTHROPIC_DEFAULT_OPUS_MODEL="qwen3.6-plus[1m]" && export ANTHROPIC_DEFAULT_SONNET_MODEL="qwen3.6-plus[1m]" && export ANTHROPIC_DEFAULT_HAIKU_MODEL="qwen3.6-plus[1m]"'
 ```
 
 ## Dashboard

@@ -59,13 +59,11 @@ Switch Claude Code between alternative API providers. Run one alias, start Claud
 
     **Auth:** `ANTHROPIC_API_KEY` (Z.ai uses native `x-api-key` header, not bearer token)
 
-    | Role | Model | Context | Input $/1M | Output $/1M |
-    |------|-------|---------|-----------|------------|
-    | opus | `glm-5.1` | 200K | $1.40 | $4.40 |
-    | sonnet | `glm-4.7` | 200K | $0.60 | $2.20 |
-    | haiku | `glm-4.5-air` | 200K | $0.14 | $1.10 |
+    | Model | Context | Input $/1M | Output $/1M | SWE-bench Pro |
+    |-------|---------|-----------|------------|--------------|
+    | `glm-5.1` | 200K | $1.40 | $4.40 | 58.4% (#1) |
 
-    Free models for testing: `glm-4.7-flash`, `glm-4.5-flash`
+    Same model for all Claude Code roles.
 
     **Alias:** `claude-glm`
   </TabItem>
@@ -74,13 +72,11 @@ Switch Claude Code between alternative API providers. Run one alias, start Claud
 
     **Auth:** `ANTHROPIC_AUTH_TOKEN` (DashScope API key)
 
-    | Role | Model | Context | Input $/1M | Output $/1M |
-    |------|-------|---------|-----------|------------|
-    | opus | `qwen3.6-plus[1m]` | 1M | ~$0.50 | ~$2.00 |
-    | sonnet | `qwen3-coder-plus` | 256K | $0.12 | $0.75 |
-    | haiku | `qwen3-coder-next` | 262K | cheap | cheap |
+    | Model | Context | Input $/1M | Output $/1M | SWE-bench Pro |
+    |-------|---------|-----------|------------|--------------|
+    | `qwen3.6-plus[1m]` | 1M | ~$0.50 | ~$2.00 | 56.6% |
 
-    Note: `[1m]` suffix forces Claude Code to use 1M context window instead of defaulting to 200K.
+    Same model for all Claude Code roles. `[1m]` suffix forces 1M context window.
 
     **Alias:** `claude-qwen`
   </TabItem>

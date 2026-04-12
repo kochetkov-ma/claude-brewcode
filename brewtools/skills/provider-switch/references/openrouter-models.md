@@ -11,8 +11,8 @@ auto-sync-override: |
 # OpenRouter — Model Selection
 
 ## How It Works
-OpenRouter aggregates 200+ models. The alias sets default models for each Claude Code role (opus/sonnet/haiku).
-User can customize which model fills each role.
+OpenRouter aggregates 200+ models. The alias sets ONE model for all three Claude Code roles (opus/sonnet/haiku).
+User picks a single model during setup — it is used everywhere.
 
 ## Recommended Models by Category
 
@@ -41,9 +41,11 @@ User can customize which model fills each role.
 
 ## Selection Flow (AskUserQuestion)
 
-For each role (opus, sonnet, haiku), ask user to pick:
-1. "Which model for [ROLE] role?" with top 4 options from coding category
+Ask user to pick ONE model (used for all roles):
+1. "Which model to use?" with top 4 options from coding category
 2. Allow "Other" for custom model ID input
+
+The selected model is set as OPUS, SONNET, and HAIKU simultaneously.
 
 ## Context Window Note
 Add `[1m]` suffix to model ID if the model supports >200K context.

@@ -2,6 +2,14 @@
 
 ---
 
+## v3.4.76 (2026-04-12)
+
+### brewtools
+#### Fixed
+- **provider-switch:** single top model for all 3 Claude Code roles (opus/sonnet/haiku). Never split across weaker models. GLM = glm-5.1 everywhere, Qwen = qwen3.6-plus[1m] everywhere, OpenRouter = one user-selected model everywhere.
+
+---
+
 ## v3.4.75 (2026-04-12)
 
 ### brewtools

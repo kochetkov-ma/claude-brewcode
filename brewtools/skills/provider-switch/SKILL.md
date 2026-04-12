@@ -107,10 +107,10 @@ Render status table to user:
 
 | Provider | Alias | API Key | Models (opus/sonnet/haiku) | Status |
 |----------|-------|---------|---------------------------|--------|
-| Anthropic Max | claude-max | OAuth | claude-opus-4-6 / sonnet-4-6 / haiku-4-5 | ... |
-| Z.ai / GLM | claude-glm | ZAI_API_KEY | glm-5.1 / glm-4.7 / glm-4.5-air | ... |
-| Qwen | claude-qwen | DASHSCOPE_API_KEY | qwen3.6-plus[1m] / qwen3-coder-plus / qwen3-coder-next | ... |
-| MiniMax | claude-minimax | MINIMAX_API_KEY | minimax-m2.7 / minimax-m2.7 / minimax-m2.7 | ... |
+| Anthropic Max | claude-max | OAuth | claude-opus-4-6 | ... |
+| Z.ai / GLM | claude-glm | ZAI_API_KEY | glm-5.1 | ... |
+| Qwen | claude-qwen | DASHSCOPE_API_KEY | qwen3.6-plus[1m] | ... |
+| MiniMax | claude-minimax | MINIMAX_API_KEY | minimax-m2.7 | ... |
 | OpenRouter | claude-openrouter | OPENROUTER_API_KEY | (user-selected) | ... |
 
 ## How to Switch
@@ -194,16 +194,16 @@ Replace KEY_VAR_NAME with: `ZAI_API_KEY`, `DASHSCOPE_API_KEY`, `MINIMAX_API_KEY`
 
 If provider is OpenRouter, read `references/openrouter-models.md` for available models.
 
-Use AskUserQuestion:
+Use AskUserQuestion — pick ONE model (same model for all three roles):
 
-Question: "Select models for OpenRouter (opus/sonnet/haiku roles):"
+Question: "Select model for OpenRouter:"
 Options:
-- "Coding: qwen/qwen3.6-plus[1m] / z-ai/glm-4.5 / z-ai/glm-4.5-air"
-- "Budget/Free: qwen/qwen3.6-plus-preview:free / qwen/qwen3-coder:free / z-ai/glm-4.5-air"
-- "Premium: z-ai/glm-5.1 / z-ai/glm-4.5 / z-ai/glm-4.5-air"
-- "Custom (I will specify)"
+- "qwen/qwen3.6-plus[1m] — 1M context, top coding (Recommended)"
+- "z-ai/glm-5.1 — #1 SWE-bench Pro, 200K"
+- "qwen/qwen3.6-plus-preview:free — free, rate-limited, 1M"
+- "Custom (I will specify model ID)"
 
-If "Custom" — ask for each role separately (3 AskUserQuestion calls).
+The selected model is set as OPUS, SONNET, and HAIKU simultaneously.
 
 ### Step 5: Write Alias
 
@@ -372,10 +372,10 @@ Final output after every mode:
 
 ## Current Status
 
-| Provider | Alias | API Key | Models (opus/sonnet/haiku) | Status |
-|----------|-------|---------|---------------------------|--------|
-| Anthropic Max | claude-max | OAuth | claude-opus-4-6 / sonnet-4-6 / haiku-4-5 | active |
-| Z.ai / GLM | claude-glm | ZAI_API_KEY | glm-5.1 / glm-4.7 / glm-4.5-air | configured |
+| Provider | Alias | API Key | Model | Status |
+|----------|-------|---------|-------|--------|
+| Anthropic Max | claude-max | OAuth | claude-opus-4-6 | active |
+| Z.ai / GLM | claude-glm | ZAI_API_KEY | glm-5.1 | configured |
 | Qwen | claude-qwen | DASHSCOPE_API_KEY | — | not configured |
 | MiniMax | claude-minimax | MINIMAX_API_KEY | — | not configured |
 | OpenRouter | claude-openrouter | OPENROUTER_API_KEY | — | not configured |

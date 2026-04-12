@@ -1,6 +1,6 @@
 {
   "name": "brewtools",
-  "version": "3.4.75",
+  "version": "3.4.76",
   "description": "Brewtools - universal utilities for Claude Code: text optimization, humanization, secrets scanning",
   "author": {
     "name": "Maksim Kochetkov",
