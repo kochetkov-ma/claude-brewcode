@@ -200,10 +200,12 @@ Question: "Select model for OpenRouter:"
 Options:
 - "qwen/qwen3.6-plus[1m] — 1M context, top coding (Recommended)"
 - "z-ai/glm-5.1 — #1 SWE-bench Pro, 200K"
-- "qwen/qwen3.6-plus-preview:free — free, rate-limited, 1M"
+- "qwen/qwen3-coder:free — free, 262K, code-focused"
 - "Custom (I will specify model ID)"
 
 The selected model is set as OPUS, SONNET, and HAIKU simultaneously.
+
+**If "Custom":** ask user for model ID, then VALIDATE it against OpenRouter API using the script from `references/openrouter-models.md` (## Model Validation section). If NOT_FOUND — show fuzzy suggestions from the API and re-ask. Max 2 retries, then fall back to default.
 
 ### Step 5: Write Alias
 

@@ -24,7 +24,7 @@ CRITICAL: Must set `ANTHROPIC_API_KEY=""` (empty string, NOT unset). Without thi
 URL: `https://openrouter.ai/api` — no `/v1` suffix.
 
 ## Model Format
-Models use `provider/model-name` format, e.g.: `qwen/qwen3.6-plus-preview:free`, `z-ai/glm-4.5`.
+Models use `provider/model-name` format, e.g.: `qwen/qwen3.6-plus`, `z-ai/glm-5.1`, `qwen/qwen3-coder:free`.
 Claude Code has 3 internal roles: opus, sonnet, haiku. Each overridden via env var.
 
 ## Default Model (customizable)
