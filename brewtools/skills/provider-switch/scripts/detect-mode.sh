@@ -34,7 +34,30 @@ elif [[ "$ARGS_LOWER" =~ (model-check|model.check|модель|identify|иден
 elif [[ "$ARGS_LOWER" =~ (update|refresh|обнови|sync) ]]; then
   MODE="update"
 else
-  MODE="status"
+  # Fuzzy matching for typos before final fallback
+  if [[ "$ARGS_LOWER" =~ (model.*check|check.*model|cehck|identif|модель|verif|провер) ]]; then
+    MODE="model-check"
+  elif [[ "$ARGS_LOWER" =~ (status|statu|stat|чек|текущ) ]]; then
+    MODE="status"
+  elif [[ "$ARGS_LOWER" =~ (setup|set.*up|setuo|config|настрой|добавь) ]]; then
+    MODE="setup"
+  elif [[ "$ARGS_LOWER" =~ (help|hlpe|how|помощь|хелп) ]]; then
+    MODE="help"
+  elif [[ "$ARGS_LOWER" =~ (glm|zai|z\.ai|zhipu) ]]; then
+    MODE="provider-glm"
+  elif [[ "$ARGS_LOWER" =~ (qwen|dash|alibaba) ]]; then
+    MODE="provider-qwen"
+  elif [[ "$ARGS_LOWER" =~ (minimax|mini) ]]; then
+    MODE="provider-minimax"
+  elif [[ "$ARGS_LOWER" =~ (openrouter|open\.router|router) ]]; then
+    MODE="provider-openrouter"
+  elif [[ "$ARGS_LOWER" =~ (verify|test|тест|токен|token) ]]; then
+    MODE="verify"
+  elif [[ "$ARGS_LOWER" =~ (update|updtae|refresh|sync) ]]; then
+    MODE="update"
+  else
+    MODE="status"
+  fi
 fi
 
 echo "MODE: $MODE"

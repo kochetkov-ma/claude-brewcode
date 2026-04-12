@@ -2,6 +2,17 @@
 
 ---
 
+## v3.5.1 (2026-04-12)
+
+> Docs: [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/)
+
+### brewtools
+#### Fixed
+- **provider-switch:** detect-mode.sh — fuzzy typo matching before status fallback (`model-cehck` → `model-check`, `setuo` → `setup`, etc.)
+- **provider-switch:** model-check mode — all 5 diagnostic questions sent in single prompt; model answers itself, user sees only Q&A table + verdict
+
+---
+
 ## v3.5.0 (2026-04-12)
 
 > Docs: [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/)

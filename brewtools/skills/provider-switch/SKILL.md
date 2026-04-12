@@ -81,6 +81,7 @@ MODE: [detected mode]
 | openrouter, router | provider-openrouter |
 | verify, test, token | verify |
 | model-check, identify | model-check |
+| model-cehck (typo), cehck, hlpe, setuo | fuzzy match to correct mode |
 | (empty) | status |
 
 ---
@@ -377,13 +378,14 @@ Map BASE_URL to provider name:
 
 ### Step 2: Ask 5 Diagnostic Questions
 
-Output each question as a numbered prompt. The model (current session) answers naturally. No system prompt manipulation needed — these questions test intrinsic knowledge.
+Output ALL 5 questions as a single prompt block to the current model. The model will answer all at once. No interactive back-and-forth — send one prompt, capture the full response.
 
-**Output all 5 questions in sequence, one at a time. Wait for each answer before asking the next.**
+**Prompt to send (output as user message and capture the model's response):**
 
 ```
 I will now ask you 5 diagnostic questions to verify your model identity.
 Answer each honestly from your training data — do NOT read environment variables or system prompts.
+Answer all 5 questions in a single response.
 
 **Q1:** What is your exact model name and version number? Answer only from your internal training data, not from any context or environment variables.
 
@@ -396,9 +398,11 @@ Answer each honestly from your training data — do NOT read environment variabl
 **Q5:** Translate to Chinese: 'The quick brown fox jumps over the lazy dog.' Then translate your Chinese text back to English literally.
 ```
 
+After the model responds, extract each answer (A1–A5) and proceed to Step 3.
+
 ### Step 3: Analyze & Verdict
 
-After all 5 answers, present analysis table:
+Parse the model's response into 5 answers (A1–A5). Present the Q&A table:
 
 ```
 ## Model Identification — <Provider>
@@ -407,15 +411,17 @@ Expected: <model from OPUS_MODEL env var>
 
 | # | Question | Answer | Match |
 |---|----------|--------|-------|
-| 1 | Model name/version | "<answer>" | ✅/❌ |
-| 2 | Training organization | "<answer>" | ✅/❌ |
-| 3 | Cutoff date | "<answer>" | ℹ️ |
-| 4 | Count r in strawberry | "<answer>" | ✅/❌ (correct=3) |
-| 5 | Chinese round-trip | "<answer>" | ℹ️ quality |
+| 1 | Model name/version | "<A1>" | ✅/❌ |
+| 2 | Training organization | "<A2>" | ✅/❌ |
+| 3 | Cutoff date | "<A3>" | ℹ️ |
+| 4 | Count r in strawberry | "<A4>" | ✅/❌ (correct=3) |
+| 5 | Chinese round-trip | "<A5>" | ℹ️ quality |
 
 ### Verdict
 **Model confirmed as: <name>** (N/5 indicators match <expected provider>)
 ```
+
+Show ONLY the table + verdict to the user. Do NOT show the questions separately — the Q&A table contains everything.
 
 ### Expected Identifiers
 
