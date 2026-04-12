@@ -1,6 +1,6 @@
 ---
 name: brewtools:provider-switch
-description: "Configure Claude Code alternative API providers — Z.ai/GLM, Qwen, MiniMax, OpenRouter. Creates shell aliases, manages API tokens, checks status. Triggers: 'provider', 'switch provider', 'alternative api', 'configure provider', 'claude-glm', 'claude-qwen', 'openrouter setup'."
+description: "Configure Claude Code alternative API providers — Z.ai/GLM, Qwen, MiniMax, OpenRouter. Creates shell aliases, manages API tokens, checks status. Triggers: 'provider', 'switch provider', 'alternative api', 'configure provider', 'claudeglm', 'claudeqwen', 'openrouter setup'."
 argument-hint: "[status|setup|help|<provider-name>] — no args = interactive status check"
 allowed-tools: Read, Write, Edit, Bash, AskUserQuestion, Glob, Grep
 model: opus
@@ -105,17 +105,16 @@ Render status table to user:
 
 ## Current Status
 
-| Provider | Alias | API Key | Models (opus/sonnet/haiku) | Status |
-|----------|-------|---------|---------------------------|--------|
-| Anthropic Max | claude-max | OAuth | claude-opus-4-6 | ... |
-| Z.ai / GLM | claude-glm | ZAI_API_KEY | glm-5.1 | ... |
-| Qwen | claude-qwen | DASHSCOPE_API_KEY | qwen3.6-plus[1m] | ... |
-| MiniMax | claude-minimax | MINIMAX_API_KEY | minimax-m2.7 | ... |
-| OpenRouter | claude-openrouter | OPENROUTER_API_KEY | (user-selected) | ... |
+| Provider | Alias | API Key | Model | Status |
+|----------|-------|---------|-------|--------|
+| Z.ai / GLM | claudeglm | ZAI_API_KEY | glm-5.1 | ... |
+| Qwen | claudeqwen | DASHSCOPE_API_KEY | qwen3.6-plus[1m] | ... |
+| MiniMax | claudeminimax | MINIMAX_API_KEY | minimax-m2.7 | ... |
+| OpenRouter | claudeor | OPENROUTER_API_KEY | (user-selected) | ... |
 
-## How to Switch
-Run `claude-glm` then start `claude` as usual.
-To return: `claude-max` then `claude`.
+## How to Use
+Run `claudeglm` — sets env vars and launches Claude in one command.
+To return to Anthropic subscription: open a new terminal and run `claude`.
 ```
 
 ### Auto-setup Logic (MODE = status only)
@@ -207,38 +206,49 @@ The selected model is set as OPUS, SONNET, and HAIKU simultaneously.
 
 **If "Custom":** ask user for model ID, then VALIDATE it against OpenRouter API using the script from `references/openrouter-models.md` (## Model Validation section). If NOT_FOUND — show fuzzy suggestions from the API and re-ask. Max 2 retries, then fall back to default.
 
-### Step 5: Write Alias
+### Step 5: Alias Name
 
-Construct alias body from reference file. The alias body is a single string of chained export/unset commands.
+Suggest a default alias name and let user customize via AskUserQuestion:
+
+| Provider | Default name |
+|----------|-------------|
+| Z.ai/GLM | `claudeglm` |
+| Qwen | `claudeqwen` |
+| MiniMax | `claudeminimax` |
+| OpenRouter | `claudeor` |
+
+Use AskUserQuestion:
+
+Question: "Alias name for <PROVIDER>:"
+Options:
+- "<default_name> (Recommended)"
+- "Custom (I will type my own)"
+
+If "Custom" — ask for the name. Validate: must start with `claude`, no spaces, only lowercase alphanumeric.
+
+### Step 6: Write Alias
+
+Construct alias body from reference file. Body = semicolon-separated exports + `claude` at the end.
 
 **EXECUTE** using Bash tool:
 ```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/write-alias.sh" set-alias "claude-PROVIDER" "ALIAS_BODY" && echo "OK set-alias" || echo "FAILED set-alias"
+bash "${CLAUDE_SKILL_DIR}/scripts/write-alias.sh" set-alias "ALIAS_NAME" "ALIAS_BODY" && echo "OK set-alias" || echo "FAILED set-alias"
 ```
 
 Replace:
-- PROVIDER: glm, qwen, minimax, openrouter
-- ALIAS_BODY: exact alias body from provider reference (the string inside single quotes after `alias claude-xxx=`)
+- ALIAS_NAME: user-chosen name (e.g., `claudeglm`)
+- ALIAS_BODY: from provider reference, ends with `; claude`
 
 > **STOP if FAILED** — report error, do not continue to next provider.
 
-### Step 6: Verify
+### Step 7: Verify
 
 **EXECUTE** using Bash tool:
 ```bash
-source ~/.zshrc 2>/dev/null && type claude-PROVIDER 2>/dev/null && echo "OK verify" || echo "FAILED verify"
+source ~/.zshrc 2>/dev/null && type ALIAS_NAME 2>/dev/null && echo "OK verify" || echo "FAILED verify"
 ```
 
 > **STOP if FAILED** — alias was not written correctly.
-
-### Step 7: claude-max alias (ALWAYS)
-
-After configuring any provider, ensure `claude-max` exists:
-
-**EXECUTE** using Bash tool:
-```bash
-grep -q "^alias claude-max=" ~/.zshrc && echo "OK claude-max exists" || bash "${CLAUDE_SKILL_DIR}/scripts/write-alias.sh" set-alias "claude-max" 'unset ANTHROPIC_BASE_URL ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_DEFAULT_OPUS_MODEL ANTHROPIC_DEFAULT_SONNET_MODEL ANTHROPIC_DEFAULT_HAIKU_MODEL DISABLE_PROMPT_CACHING CLAUDE_CODE_USE_BEDROCK' && echo "OK claude-max added" || echo "FAILED claude-max"
-```
 
 ---
 
@@ -258,12 +268,8 @@ Add activation instructions:
 ```
 ## Activation
 
-To use a configured provider:
-1. Run the alias: `claude-glm` (or claude-qwen, claude-minimax, claude-openrouter)
-2. Start Claude Code: `claude`
-3. To return to subscription: `claude-max` then `claude`
-
-Changes take effect in NEW terminal sessions. To apply now: `source ~/.zshrc`
+To use a configured provider, run the alias (e.g., `claudeglm`) — it sets env vars and launches Claude in one command.
+To return to Anthropic subscription: open a new terminal and run `claude` normally. Env vars only persist in the current shell session.
 ```
 
 ---
@@ -274,9 +280,9 @@ Read `references/common.md` for help content and explain:
 
 | Topic | Explanation |
 |-------|-------------|
-| How aliases work | Each alias sets ANTHROPIC_BASE_URL + auth + 3 model vars. Isolated — one provider at a time |
-| How to switch | Run alias (e.g., `claude-glm`) then start `claude`. Env vars override subscription |
-| How to return | `claude-max` unsets all provider vars, returns to Anthropic subscription |
+| How aliases work | Each alias sets env vars + launches `claude` in one command. Isolated — one provider at a time |
+| How to switch | Run alias (e.g., `claudeglm`). It sets vars and starts Claude automatically |
+| How to return | Open a new terminal and run `claude` — env vars only persist in the current shell |
 | Context [1m] hack | `[1m]` suffix in model name forces Claude Code to use 1M context window |
 | Z.ai auth | Uses ANTHROPIC_API_KEY (native protocol). Others use ANTHROPIC_AUTH_TOKEN |
 | OpenRouter note | Must set ANTHROPIC_API_KEY="" (empty, not unset) to prevent OAuth fallback |
@@ -376,15 +382,14 @@ Final output after every mode:
 
 | Provider | Alias | API Key | Model | Status |
 |----------|-------|---------|-------|--------|
-| Anthropic Max | claude-max | OAuth | claude-opus-4-6 | active |
-| Z.ai / GLM | claude-glm | ZAI_API_KEY | glm-5.1 | configured |
-| Qwen | claude-qwen | DASHSCOPE_API_KEY | — | not configured |
-| MiniMax | claude-minimax | MINIMAX_API_KEY | — | not configured |
-| OpenRouter | claude-openrouter | OPENROUTER_API_KEY | — | not configured |
+| Z.ai / GLM | claudeglm | ZAI_API_KEY | glm-5.1 | configured |
+| Qwen | claudeqwen | DASHSCOPE_API_KEY | — | not configured |
+| MiniMax | claudeminimax | MINIMAX_API_KEY | — | not configured |
+| OpenRouter | claudeor | OPENROUTER_API_KEY | — | not configured |
 
-## How to Switch
-Run `claude-glm` then start `claude` as usual.
-To return: `claude-max` then `claude`.
+## How to Use
+Run `claudeglm` — sets env vars and launches Claude in one command.
+To return to Anthropic: open a new terminal, run `claude`.
 ```
 
 </instructions>

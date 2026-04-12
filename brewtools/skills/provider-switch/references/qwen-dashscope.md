@@ -36,7 +36,7 @@ Note: `[1m]` suffix is REQUIRED — Claude Code defaults to 200K context otherwi
 
 ## Alias
 ```bash
-alias claude-qwen='export ANTHROPIC_BASE_URL=https://dashscope-intl.aliyuncs.com/apps/anthropic && export ANTHROPIC_AUTH_TOKEN=$DASHSCOPE_API_KEY && unset ANTHROPIC_API_KEY && export ANTHROPIC_DEFAULT_OPUS_MODEL="qwen3.6-plus[1m]" && export ANTHROPIC_DEFAULT_SONNET_MODEL="qwen3.6-plus[1m]" && export ANTHROPIC_DEFAULT_HAIKU_MODEL="qwen3.6-plus[1m]"'
+alias claudeqwen='export ANTHROPIC_BASE_URL=https://dashscope-intl.aliyuncs.com/apps/anthropic; export ANTHROPIC_AUTH_TOKEN=$DASHSCOPE_API_KEY; unset ANTHROPIC_API_KEY; export ANTHROPIC_DEFAULT_OPUS_MODEL="qwen3.6-plus[1m]"; export ANTHROPIC_DEFAULT_SONNET_MODEL="qwen3.6-plus[1m]"; export ANTHROPIC_DEFAULT_HAIKU_MODEL="qwen3.6-plus[1m]"; claude'
 ```
 
 ## Dashboard

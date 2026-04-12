@@ -85,7 +85,7 @@ Each provider alias sets six environment variables before `claude` starts:
 | `ANTHROPIC_DEFAULT_SONNET_MODEL` | Model ID for sonnet-class tasks |
 | `ANTHROPIC_DEFAULT_HAIKU_MODEL` | Model ID for haiku-class tasks |
 
-Claude Code reads these on startup — no restart needed between alias and `claude`. The `claude-max` alias unsets all six, restoring the default OAuth flow.
+Claude Code reads these on startup. The alias sets the vars and launches `claude` in one command — no separate step needed. To return to the default Anthropic OAuth flow, open a new terminal (env vars only persist in the current shell session).
 
 ## Files
 

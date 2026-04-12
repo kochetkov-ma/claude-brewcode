@@ -32,7 +32,7 @@ Note: MiniMax currently has only one model (M2.7), used for all three roles.
 
 ## Alias
 ```bash
-alias claude-minimax='export ANTHROPIC_BASE_URL=https://api.minimax.io/anthropic && export ANTHROPIC_AUTH_TOKEN=$MINIMAX_API_KEY && unset ANTHROPIC_API_KEY && export ANTHROPIC_DEFAULT_OPUS_MODEL=minimax-m2.7 && export ANTHROPIC_DEFAULT_SONNET_MODEL=minimax-m2.7 && export ANTHROPIC_DEFAULT_HAIKU_MODEL=minimax-m2.7'
+alias claudeminimax='export ANTHROPIC_BASE_URL=https://api.minimax.io/anthropic; export ANTHROPIC_AUTH_TOKEN=$MINIMAX_API_KEY; unset ANTHROPIC_API_KEY; export ANTHROPIC_DEFAULT_OPUS_MODEL=minimax-m2.7; export ANTHROPIC_DEFAULT_SONNET_MODEL=minimax-m2.7; export ANTHROPIC_DEFAULT_HAIKU_MODEL=minimax-m2.7; claude'
 ```
 
 ## Dashboard

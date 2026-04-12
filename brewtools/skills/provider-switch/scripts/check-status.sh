@@ -17,7 +17,6 @@ else
   echo "ALIAS_QWEN=false"
   echo "ALIAS_MINIMAX=false"
   echo "ALIAS_OPENROUTER=false"
-  echo "ALIAS_MAX=false"
   echo "KEY_ZAI=false"
   echo "KEY_DASHSCOPE=false"
   echo "KEY_MINIMAX=false"
@@ -38,10 +37,10 @@ else
   echo "SECTION_EXISTS=false"
 fi
 
-# Check aliases
+# Check aliases (support both new claudeX and old claude-X formats)
 check_alias() {
   local name="$1"
-  if grep -q "^alias claude-${name}=" "$ZSHRC" 2>/dev/null; then
+  if grep -qE "^alias claude${name}=|^alias claude-${name}=" "$ZSHRC" 2>/dev/null; then
     echo "true"
   else
     echo "false"
@@ -52,7 +51,8 @@ echo "ALIAS_GLM=$(check_alias glm)"
 echo "ALIAS_QWEN=$(check_alias qwen)"
 echo "ALIAS_MINIMAX=$(check_alias minimax)"
 echo "ALIAS_OPENROUTER=$(check_alias openrouter)"
-echo "ALIAS_MAX=$(check_alias max)"
+# Also detect custom alias names containing provider keyword
+echo "ALIAS_OR=$(check_alias or)"
 
 # Check API key exports (non-empty values)
 check_key() {

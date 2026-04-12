@@ -38,7 +38,7 @@ One model for all three roles. User selects during setup.
 
 ## Alias Template
 ```bash
-alias claude-openrouter='export ANTHROPIC_BASE_URL=https://openrouter.ai/api && export ANTHROPIC_AUTH_TOKEN=$OPENROUTER_API_KEY && export ANTHROPIC_API_KEY="" && export ANTHROPIC_DEFAULT_OPUS_MODEL="MODEL" && export ANTHROPIC_DEFAULT_SONNET_MODEL="MODEL" && export ANTHROPIC_DEFAULT_HAIKU_MODEL="MODEL"'
+alias claudeor='export ANTHROPIC_BASE_URL=https://openrouter.ai/api; export ANTHROPIC_AUTH_TOKEN=$OPENROUTER_API_KEY; export ANTHROPIC_API_KEY=""; export ANTHROPIC_DEFAULT_OPUS_MODEL="MODEL"; export ANTHROPIC_DEFAULT_SONNET_MODEL="MODEL"; export ANTHROPIC_DEFAULT_HAIKU_MODEL="MODEL"; claude'
 ```
 
 Replace `MODEL` with user's chosen model ID (same value for all three vars).
