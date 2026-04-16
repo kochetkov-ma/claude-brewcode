@@ -2,6 +2,21 @@
 
 ---
 
+## v3.6.0 (2026-04-16)
+
+> Docs: [skill-toggle](https://doc-claude.brewcode.app/brewtools/skills/skill-toggle/) | [agent-toggle](https://doc-claude.brewcode.app/brewtools/skills/agent-toggle/)
+
+### brewtools
+#### Added
+- **skill-toggle:** disable/enable individual plugin skills by renaming `SKILL.md` ⇄ `_SKILL.md` in the plugin cache. Two-tier scope (global `$BT_PLUGIN_DATA/toggle-state.json` + project `<cwd>/.claude/brewtools/toggle-state.json`, project overrides global). Operations: `disable`, `enable`, `status`, `list`, `reapply`, `prune`. Addresses targets as `plugin:name` (e.g. `brewui:image-gen`).
+- **agent-toggle:** symmetric skill for agents — renames `<name>.md` ⇄ `_<name>.md` under `agents/`. Same operations and scope model.
+- **reapply-disables SessionStart hook:** re-applies disables on the latest plugin version after `claude plugin update` (new version dir ⇒ entry files reappear). Early-exit <500ms on empty state; reports drift (`plugin_not_installed`, `file_missing`) via `additionalContext`.
+- **shared toggle library:** `skills/_shared/toggle/{state,cache,apply}.mjs` — atomic tmp+rename state writes, semver-latest selection across all marketplaces, idempotent rename primitives.
+
+Workaround for upstream [#47747](https://github.com/anthropics/claude-code/issues/47747), [#22345](https://github.com/anthropics/claude-code/issues/22345) (no native per-skill/agent disable).
+
+---
+
 ## v3.5.2 (2026-04-12)
 
 > Docs: [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/)

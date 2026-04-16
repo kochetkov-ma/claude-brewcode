@@ -4,8 +4,8 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 3.4.82 |
-| Skills | 8 |
+| Version | 3.6.0 |
+| Skills | 10 |
 | Agents | 3 |
 
 ## Install
@@ -84,6 +84,8 @@ claude --plugin-dir ./brewtools
 | [`/brewtools:debate`](skills/debate/README.md) | Evidence-based multi-agent debate | sonnet | `[challenge\|strategy\|critic]` |
 | [`/brewtools:plugin-update`](skills/plugin-update/README.md) | Check/install/update brewcode plugins | sonnet | `[check\|update\|all]` |
 | [`/brewtools:provider-switch`](skills/provider-switch/README.md) | Configure alternative API providers (Z.ai/GLM, Qwen, MiniMax, OpenRouter) | opus | `[status\|setup\|help\|<provider>]` |
+| [`/brewtools:skill-toggle`](skills/skill-toggle/README.md) | Disable/enable individual plugin skills (survives plugin updates) | sonnet | `<op> [plugin:name] [--scope=global\|project]` |
+| [`/brewtools:agent-toggle`](skills/agent-toggle/README.md) | Disable/enable individual plugin agents (survives plugin updates) | sonnet | `<op> [plugin:name] [--scope=global\|project]` |
 
 ## Agents
 
@@ -112,6 +114,8 @@ brewtools/
 |   +-- debate/                       # Evidence-based multi-agent debate
 |   +-- plugin-update/                # Plugin check / install / update
 |   +-- provider-switch/               # Alternative API provider management
+|   +-- skill-toggle/                  # Disable/enable individual plugin skills
+|   +-- agent-toggle/                  # Disable/enable individual plugin agents
 +-- agents/
     +-- text-optimizer.md             # Text optimization agent
     +-- ssh-admin.md                  # SSH and server administration
@@ -119,6 +123,14 @@ brewtools/
 ```
 
 > **Brewtools vs Brewcode:** Brewtools provides standalone text utilities with no lifecycle dependencies. Brewcode is a task execution engine with infinite context and session handoff. Both install from the same `claude-brewcode` marketplace but operate independently.
+
+## Hooks
+
+| Hook | Event | Purpose |
+|------|-------|---------|
+| `session-start.mjs` | SessionStart | Inject `BT_PLUGIN_ROOT` into session context |
+| `reapply-disables.mjs` | SessionStart | Re-apply disabled skills/agents after plugin update |
+| `pre-task.mjs` | PreToolUse: Task\|Agent | Inject `BT_PLUGIN_ROOT` into subagent prompts |
 
 ## Documentation
 
@@ -134,6 +146,8 @@ Full docs: [doc-claude.brewcode.app/brewtools/overview](https://doc-claude.brewc
 | Debate | [debate](https://doc-claude.brewcode.app/brewtools/skills/debate/) |
 | Plugin Update | [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) |
 | Provider Switch | [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/) |
+| Skill Toggle | [skill-toggle](https://doc-claude.brewcode.app/brewtools/skills/skill-toggle/) |
+| Agent Toggle | [agent-toggle](https://doc-claude.brewcode.app/brewtools/skills/agent-toggle/) |
 | Release Notes | [RELEASE-NOTES.md](../RELEASE-NOTES.md) |
 
 Author: Maksim Kochetkov | License: MIT

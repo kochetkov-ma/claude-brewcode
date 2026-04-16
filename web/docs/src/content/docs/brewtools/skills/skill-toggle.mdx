@@ -1,0 +1,155 @@
+---
+title: Skill Toggle
+description: Disable or enable individual plugin skills without uninstalling the plugin. State persists across plugin updates.
+order: 3120
+---
+import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+
+# Skill Toggle
+
+<Badge variant="default" text="sonnet" /> <Badge variant="accent" text="session" />
+
+С ростом числа установленных плагинов (рецептов) контекст Claude Code засоряется десятками скиллов, которые срабатывают автоматически в неподходящий момент. Нативного механизма отключить отдельный скилл без удаления плагина не существует — см. [#47747](https://github.com/anthropics/claude-code/issues/47747), [#22345](https://github.com/anthropics/claude-code/issues/22345). `skill-toggle` решает это: скилл переименовывается `SKILL.md` ↔ `_SKILL.md` в кеше плагина, состояние сохраняется в JSON-файле и автоматически переприменяется после обновления плагина.
+
+<Callout type="tip">
+Для агентов используйте [`/brewtools:agent-toggle`](/brewtools/skills/agent-toggle/).
+</Callout>
+
+## Quick reference
+
+| Command | Action |
+|---------|--------|
+| `disable brewui:image-gen` | Отключить скилл (global scope) |
+| `enable brewui:image-gen` | Включить скилл обратно |
+| `disable brewcode:convention --scope=project` | Отключить только в текущем проекте |
+| `skill-toggle status` | Показать все отключённые скиллы (merged global + project) |
+| `skill-toggle list` | Перечислить все скиллы с пометкой disabled/enabled |
+| `skill-toggle reapply` | Переприменить состояние из JSON без изменения записей |
+| `skill-toggle prune` | Удалить из JSON записи об удалённых плагинах |
+
+Формат цели: `plugin:name` (например, `brewui:image-gen`, `brewcode:convention`). Если указать только `name` без плагина — скилл спросит уточнение.
+
+## Когда использовать
+
+- **Засорённый контекст** — 10+ плагинов, автотриггеры конфликтуют, Claude выбирает не тот рецепт (скилл)
+- **Тихий режим** — временно отключить скиллы с агрессивными триггерами (например, `image-gen`) для текстовых задач
+- **Project overrides** — на конкретном проекте отключить скилл глобально включённый, без касания других проектов
+- **Сохранить плагин** — нужна только часть функционала плагина, удалять весь плагин нецелесообразно
+
+## Примеры
+
+Естественный язык (NL) работает наравне с явными командами:
+
+```
+отключи скил brewui:image-gen
+```
+
+```
+disable brewui:image-gen
+```
+
+```
+enable brewcode:convention for this project only
+```
+
+```
+/brewtools:skill-toggle disable brewcode:grepai --scope=project
+```
+
+Проверить текущее состояние:
+
+```
+skill-toggle status
+```
+
+Переприменить после ручного обновления плагина:
+
+```
+skill-toggle reapply
+```
+
+## Как работает
+
+<Steps>
+  <li>
+    <div>
+      <strong>P0 Parse</strong>
+      <p>LLM разбирает NL или аргументы в структуру: <code>{`{op, scope, targets[]}`}</code>. Scope по умолчанию — global. Если цель указана без префикса плагина — задаётся уточняющий вопрос.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>P1 Validate</strong>
+      <p>Перечисляет установленные плагины через кеш, разрешает абсолютные пути <code>SKILL.md</code> и <code>_SKILL.md</code>. Если плагин не найден или скилл отсутствует — операция останавливается с ошибкой.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>P2 Mutate state</strong>
+      <p>Атомарная запись в JSON-файл состояния (tmp + rename). Для <code>disable</code> добавляет запись с полями <code>kind</code>, <code>plugin</code>, <code>name</code>, <code>disabled_at</code>, <code>last_applied_version</code>. Для <code>enable</code> — удаляет запись.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>P3 Apply rename</strong>
+      <p>Переименовывает файл: <code>SKILL.md</code> → <code>_SKILL.md</code> (disable) или обратно (enable). Использует хелперы из <code>_shared/toggle/apply.mjs</code>. Статусы: <code>disabled</code>, <code>enabled</code>, <code>already_disabled</code>, <code>already_enabled</code>.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>P4 Notify</strong>
+      <p>Выводит таблицу результатов и напоминает запустить <code>/reload-plugins</code>.</p>
+    </div>
+  </li>
+</Steps>
+
+## Файлы состояния
+
+| Scope | Путь |
+|-------|------|
+| Global (default) | `~/.claude/plugins/data/brewtools-claude-brewcode/toggle-state.json` |
+| Project | `<cwd>/.claude/brewtools/toggle-state.json` |
+
+Project-scope переопределяет global по ключу — один и тот же скилл может быть включён глобально, но отключён в конкретном проекте.
+
+## Схема состояния
+
+```json
+{
+  "disabled": {
+    "brewui:image-gen": {
+      "kind": "skill",
+      "plugin": "brewui",
+      "name": "image-gen",
+      "disabled_at": "2026-04-16T10:00:00.000Z",
+      "last_applied_version": "3.5.2"
+    }
+  }
+}
+```
+
+## Стойкость к обновлениям плагина
+
+<Callout type="note">
+При каждом старте сессии хук `reapply-disables` (SessionStart) проверяет директорию кеша плагина. Если обнаружена новая версия, автоматически переприменяет все записи из JSON-файла состояния. Дрейф (плагин не установлен, файл не найден) сообщается в `additionalContext` с кодами `plugin_not_installed` / `file_missing`.
+</Callout>
+
+## После изменений — перезагрузка обязательна
+
+<Callout type="warning">
+После любого `disable` или `enable` выполните `/reload-plugins` или начните новую сессию. Только после перезагрузки Claude увидит изменённый список скиллов.
+</Callout>
+
+<CardGrid>
+  <Card title="Agent Toggle" icon="robot" href="/brewtools/skills/agent-toggle/">
+    Аналогичное управление для агентов — `/brewtools:agent-toggle`.
+  </Card>
+  <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">
+    Все скиллы и агенты brewtools в одном месте.
+  </Card>
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/skill-toggle">
+    Исходный код и хелперы `_shared/toggle/`.
+  </Card>
+</CardGrid>
+
+<UpdateNotice />
