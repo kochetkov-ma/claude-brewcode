@@ -52,6 +52,38 @@ Paths (substitute literally in Bash):
 
 ---
 
+## Phase I — Interactive Flow (entry gate)
+
+> **Full spec:** `_shared/toggle/interactive-flow.md` (phases I0-I4). Read it fully on entry. This section hardcodes `kind='agent'` — no `detectKind` call.
+
+**Enter interactive flow when:**
+- No args given, OR
+- User prompt is freeform without a concrete `plugin:name` target (e.g. "отключи лишнего агента", "hide the noisy one"), OR
+- Parsed target missing from cache.
+
+**Skip interactive (go straight to P0 → P1 → P2 → P3)** when op AND target are both explicit: `/brewtools:agent-toggle disable brewtools:ssh-admin`.
+
+| Phase | Action | Tool |
+|-------|--------|------|
+| I0 | Decide branch from input shape | — |
+| I1 | Op picker — single `AskUserQuestion`, 4 options (`status`, `disable`, `enable`, `list`), pre-selected hint: `disable` | AskUserQuestion |
+| I2 | Catalog one-liner — Bash+Node imports `enumeratePlugins` from `$CLAUDE_PLUGIN_ROOT/skills/_shared/toggle/cache.mjs`, emit `AVAILABLE TO {OP} (N total, Ctrl+F to search):` header then single space-separated line of `plugin:name` tokens (filter: `disable`→enabled only, `enable`→disabled only, kind=agent). Free-text "Which one?" prompt | Bash |
+| I3 | Resolve + confirm once: exact `plugin:name` or unique `name`→no confirm; fuzzy→one AskUserQuestion `Disable X? [yes / pick different / cancel]`; multiple→AskUserQuestion 2-4 options | AskUserQuestion |
+| I4 | Execute (P1→P2→P3) then ALWAYS print current state (see format below) | Bash |
+
+Terminal ops (`list`, `reapply`, `prune`, `status`) skip to I4 directly — no picker, no catalog.
+
+**I4 status format (always printed):**
+```
+DISABLED RIGHT NOW
+-------------------
+brewtools:ssh-admin   [agent, global, since 2026-04-16]
+(none)  ← if empty
+ENABLED (M agents across P plugins)
+```
+
+---
+
 ## P0: Parse Intent
 
 Parse `$ARGUMENTS` (or the user's NL prompt) into structured form:

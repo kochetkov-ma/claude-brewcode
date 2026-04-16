@@ -74,6 +74,45 @@ Expected output after disable:
 > Run /reload-plugins for the change to take effect.
 ```
 
+## Interactive mode
+
+<Callout type="tip">
+**Run with no args** — `/brewtools:agent-toggle` — and a guided flow walks you through it. Explicit commands still skip the flow.
+</Callout>
+
+Four phases:
+
+<Steps>
+  <li>
+    <div>
+      <strong>Pick an op</strong>
+      <p>One question, four options: <code>status</code>, <code>disable</code>, <code>enable</code>, or <code>list</code>. Pre-selected: <code>disable</code>.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Scan the catalog</strong>
+      <p>All agents printed as <em>one space-separated line</em> of <code>plugin:name</code> tokens. Use <kbd>Ctrl</kbd>+<kbd>F</kbd> / <kbd>Cmd</kbd>+<kbd>F</kbd> to search your terminal scrollback — no pagination, no multi-line clutter.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Resolve the target</strong>
+      <p>Exact <code>plugin:name</code> or unique shortname runs immediately — no confirmation. Fuzzy phrase ("hide a noisy agent") or ambiguous name triggers a single confirmation.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>See the result</strong>
+      <p>Every run ends with a status table: what's disabled right now, plus a count of enabled agents. No guessing what state you're in.</p>
+    </div>
+  </li>
+</Steps>
+
+<Callout type="note">
+**Explicit commands skip the flow.** `disable brewcode:reviewer` runs directly — no questions asked. The interactive path only triggers when your intent is ambiguous.
+</Callout>
+
 ## How it works
 
 <Steps>

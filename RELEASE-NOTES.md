@@ -2,6 +2,17 @@
 
 ---
 
+## v3.6.2 (2026-04-16)
+
+> Docs: [skill-toggle](https://doc-claude.brewcode.app/brewtools/skills/skill-toggle/) | [agent-toggle](https://doc-claude.brewcode.app/brewtools/skills/agent-toggle/)
+
+### brewtools
+#### Added
+- **skill-toggle / agent-toggle:** interactive flow when invoked without explicit args. Phase I1 asks op (`status`/`disable`/`enable`/`list`), Phase I2 prints the full catalog as a single space-separated line of `plugin:name` tokens for Ctrl+F search, Phase I3 resolves + confirms once only if ambiguous (fuzzy phrase, duplicate name), Phase I4 always ends with a current-status dump. Explicit commands (`disable brewui:image-gen`) skip the flow entirely.
+- **shared reference:** `brewtools/skills/_shared/toggle/interactive-flow.md` — full spec with decision matrix and anti-patterns, linked from both SKILL.md files.
+
+---
+
 ## v3.6.1 (2026-04-16)
 
 > Docs: [skill-toggle](https://doc-claude.brewcode.app/brewtools/skills/skill-toggle/) | [agent-toggle](https://doc-claude.brewcode.app/brewtools/skills/agent-toggle/)
