@@ -2,6 +2,16 @@
 
 ---
 
+## v3.6.1 (2026-04-16)
+
+> Docs: [skill-toggle](https://doc-claude.brewcode.app/brewtools/skills/skill-toggle/) | [agent-toggle](https://doc-claude.brewcode.app/brewtools/skills/agent-toggle/)
+
+### brewtools
+#### Fixed
+- **docs:** `skill-toggle` and `agent-toggle` MDX pages rewritten in English to match site language (v3.6.0 shipped them in Russian).
+
+---
+
 ## v3.6.0 (2026-04-16)
 
 > Docs: [skill-toggle](https://doc-claude.brewcode.app/brewtools/skills/skill-toggle/) | [agent-toggle](https://doc-claude.brewcode.app/brewtools/skills/agent-toggle/)
