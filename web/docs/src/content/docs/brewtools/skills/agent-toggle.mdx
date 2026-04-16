@@ -1,63 +1,70 @@
 ---
-title: Agent Toggle
-description: Disable or enable individual plugin agents without uninstalling the plugin. State persists across plugin updates.
-order: 3108
+title: "Agent Toggle"
+description: "Disable individual plugin agents without uninstalling. State persists across plugin updates."
+order: 3121
 ---
 import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# Agent Toggle
+# Too many agents. Hide the ones that keep getting picked.
 
 <Badge variant="default" text="sonnet" /> <Badge variant="accent" text="session" />
 
-Слишком много агентов (рецептовых исполнителей) в плагине — LLM начинает выбирать неправильного. Решение: переименовать файл агента `<name>.md` → `_<name>.md` в кеше плагина. Агент исчезает из auto-selection. Обратное переименование возвращает его. Состояние сохраняется между обновлениями плагина.
-
-Upstream issues: [#47747](https://github.com/anthropics/claude-code/issues/47747), [#22345](https://github.com/anthropics/claude-code/issues/22345) — при большом числе агентов Claude Code путает routing.
-
-<Callout type="tip">
-Для скиллов (рецептов) используйте [`/brewtools:skill-toggle`](/brewtools/skills/skill-toggle/).
+<Callout type="caution">
+**Claude Code has no native per-agent disable.** When too many agents are installed, the LLM's routing gets confused — it picks `reviewer` when you wanted `developer`, or triggers `ssh-admin` on unrelated tasks. Upstream: [#47747](https://github.com/anthropics/claude-code/issues/47747), [#22345](https://github.com/anthropics/claude-code/issues/22345).
 </Callout>
 
-## Быстрый справочник
+<Callout type="tip">
+**The fix: rename the agent file.** `agent-toggle` renames `<name>.md` → `_<name>.md` in the plugin cache. The agent vanishes from auto-selection. Reverse to bring it back. State persists across plugin updates. For skills (recipes), see [`/brewtools:skill-toggle`](/brewtools/skills/skill-toggle/).
+</Callout>
 
-| Операция | Что делает |
-|----------|-----------|
-| `disable` | Переименовывает `<name>.md` → `_<name>.md`, записывает в state |
-| `enable` | Переименовывает `_<name>.md` → `<name>.md`, удаляет из state |
-| `status` | Таблица всех отключённых агентов (merged global + project) |
-| `list` | Все агенты всех плагинов с пометкой disabled |
-| `reapply` | Повторяет переименования из state (после обновления плагина) |
-| `prune` | Удаляет устаревшие записи (плагин больше не установлен) |
+## Quick reference
 
-## Когда использовать
+| Command | Action |
+|---------|--------|
+| `disable plugin:name` | Rename `<name>.md` → `_<name>.md`, record in state |
+| `enable plugin:name` | Rename `_<name>.md` → `<name>.md`, remove from state |
+| `status` | Merged table of all disabled agents (global + project) |
+| `list` | All agents across all plugins, marked disabled/enabled |
+| `reapply` | Re-apply renames from state (use after a plugin update) |
+| `prune` | Drop stale state entries for uninstalled plugins |
 
-- Агент-исполнитель (`brewcode:tester`, `brewtools:ssh-admin`) триггерится слишком агрессивно и перехватывает задачи другого агента
-- Нужно спрятать специфичный агент только в контексте одного проекта (`--scope=project`)
-- Хочется исключить subagent из конкретного плагина, не удаляя плагин
-- После обновления плагина агенты "воскресли" — `reapply` восстанавливает нужное состояние
+Target format: `plugin:name` — e.g. `brewcode:reviewer`, `brewtools:ssh-admin`. Omitting the plugin prefix triggers a clarification prompt.
 
-## Примеры
+## When to use
 
-**Отключить агента глобально:**
+- An agent triggers too aggressively and hijacks tasks meant for another agent
+- You need to hide an agent only for a specific project — use `--scope=project`
+- You want to exclude a subagent from a plugin without uninstalling the whole plugin
+- After a plugin update agents "came back" — `reapply` restores the desired state
+
+## Examples
+
+**Disable an agent globally:**
 ```
 /brewtools:agent-toggle disable brewcode:reviewer
 ```
 
-**Отключить только для текущего проекта:**
+**Disable for the current project only:**
 ```
 /brewtools:agent-toggle disable brewcode:tester --scope=project
 ```
 
-**Включить обратно:**
+**Re-enable an agent:**
 ```
 /brewtools:agent-toggle enable brewtools:ssh-admin
 ```
 
-**Посмотреть статус всех отключённых агентов:**
+**Natural language also works:**
+```
+disable the brewcode reviewer agent for this project
+```
+
+**Check all disabled agents:**
 ```
 /brewtools:agent-toggle status
 ```
 
-Ожидаемый вывод после disable:
+Expected output after disable:
 
 ```
 | Plugin   | Name     | Kind  | Scope  | Action  | Result   |
@@ -67,55 +74,53 @@ Upstream issues: [#47747](https://github.com/anthropics/claude-code/issues/47747
 > Run /reload-plugins for the change to take effect.
 ```
 
-## Как работает
+## How it works
 
 <Steps>
   <li>
     <div>
-      <strong>P0 — Parse Intent</strong>
-      <p>Разбирает <code>$ARGUMENTS</code> или NL-запрос в структуру: <code>op / scope / targets[]</code>. Scope по умолчанию = global. Если агент указан без плагина (e.g. <code>tester</code>) — задаёт уточняющий вопрос через AskUserQuestion.</p>
+      <strong>P0 — Parse intent</strong>
+      <p>Parses <code>$ARGUMENTS</code> or the user's NL prompt into a structured form: <code>op / scope / targets[]</code>. Default scope is global. Override with <code>--scope=project</code> or the phrase "for this project". If a target has no plugin prefix (e.g. just <code>tester</code>), the skill asks which plugin via AskUserQuestion.</p>
     </div>
   </li>
   <li>
     <div>
-      <strong>P1 — Validate Target</strong>
-      <p>Через <code>enumeratePlugins + resolveTarget</code> проверяет, что плагин установлен и файл агента существует (в visible- или hidden-форме). Останавливается с ошибкой если ни того ни другого нет.</p>
+      <strong>P1 — Validate target</strong>
+      <p>Uses <code>enumeratePlugins + resolveTarget</code> to confirm the plugin is installed and the agent file exists in visible or hidden form. Stops with an error if neither path is found.</p>
     </div>
   </li>
   <li>
     <div>
-      <strong>P2 — Mutate State</strong>
-      <p>Записывает или удаляет запись <code>{`{kind:"agent"}`}</code> в <code>toggle-state.json</code> (глобальный или проектный). Атомарная запись через <code>writeStateAtomic</code>.</p>
+      <strong>P2 — Mutate state</strong>
+      <p>Atomically writes or removes a <code>{`{kind:"agent"}`}</code> entry in <code>toggle-state.json</code> (global or project-scoped). Uses a tmp-file + rename pattern via <code>writeStateAtomic</code>.</p>
     </div>
   </li>
   <li>
     <div>
-      <strong>P3 — Apply Rename</strong>
-      <p>Выполняет переименование: <code>disableTarget(visible, hidden)</code> или <code>enableTarget(visible, hidden)</code>. Статусы: <code>disabled / enabled / already_disabled / already_enabled / missing</code>.</p>
+      <strong>P3 — Apply rename</strong>
+      <p>Calls <code>disableTarget(visible, hidden)</code> or <code>enableTarget(visible, hidden)</code> from <code>_shared/toggle/apply.mjs</code>. Possible statuses: <code>disabled</code>, <code>enabled</code>, <code>already_disabled</code>, <code>already_enabled</code>, <code>missing</code>.</p>
     </div>
   </li>
   <li>
     <div>
       <strong>P4 — Notify</strong>
-      <p>Выводит таблицу результатов и напоминает запустить <code>/reload-plugins</code>.</p>
+      <p>Renders a result table and reminds the user to run <code>/reload-plugins</code>.</p>
     </div>
   </li>
 </Steps>
 
-## Технические детали
+## State files
 
-### Файлы состояния
+Both `agent-toggle` and `skill-toggle` share the **same** `toggle-state.json`. The `kind` field in each entry distinguishes agents (`"kind":"agent"`) from skills (`"kind":"skill"`).
 
-Оба скилла — `agent-toggle` и `skill-toggle` — **используют один и тот же** `toggle-state.json`. Поле `kind` в каждой записи отличает агентов от скиллов.
-
-| Scope | Путь |
+| Scope | Path |
 |-------|------|
-| Global | `$CLAUDE_PLUGIN_DATA/toggle-state.json` |
-| Project | `$PWD/.claude/brewtools/toggle-state.json` |
+| Global (default) | `~/.claude/plugins/data/brewtools-claude-brewcode/toggle-state.json` |
+| Project | `<cwd>/.claude/brewtools/toggle-state.json` |
 
-При конфликте project-scope перекрывает global.
+Project scope overrides global by key — the same agent can be enabled globally but disabled in one specific project.
 
-### Схема записи агента
+## State schema
 
 ```json
 {
@@ -131,25 +136,29 @@ Upstream issues: [#47747](https://github.com/anthropics/claude-code/issues/47747
 }
 ```
 
-Общие модули в `_shared/toggle/`: `cache.mjs` (пути), `state.mjs` (чтение/запись), `apply.mjs` (rename).
+Shared helpers live in `_shared/toggle/`: `cache.mjs` (path resolution), `state.mjs` (read/write), `apply.mjs` (rename).
 
-<Callout type="tip">
-**Resilience:** SessionStart-хук вызывает `reapply` автоматически при старте сессии. Даже если плагин обновился и файлы агентов пересозданы, состояние восстанавливается без ручного вмешательства.
+## Surviving plugin updates
+
+<Callout type="note">
+The `reapply-disables` SessionStart hook fires on every session start. When a new plugin version is detected in the cache, it automatically re-applies all entries from `toggle-state.json`. Drift cases (plugin not installed, file missing) are reported in `additionalContext` with codes `plugin_not_installed` / `file_missing` — no silent failures.
 </Callout>
 
-<Callout type="caution">
-**Требуется перезагрузка.** После `disable` или `enable` выполните `/reload-plugins` (или перезапустите сессию). Без этого изменение не вступит в силу — Claude Code читает список агентов только при загрузке плагина.
+## Reload required
+
+<Callout type="warning">
+After any `disable` or `enable`, run `/reload-plugins` or start a new session. Claude Code reads the agent list only at plugin load time — the change does not take effect until then.
 </Callout>
 
 <CardGrid>
   <Card title="Skill Toggle" icon="settings" href="/brewtools/skills/skill-toggle/">
-    Симметричная операция для скиллов (рецептов) — тот же механизм, тот же state file.
+    The symmetric operation for skills (recipes) — same mechanism, same state file, `"kind":"skill"`.
   </Card>
   <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">
-    Все скиллы и агенты плагина brewtools.
+    All brewtools skills and agents in one place.
   </Card>
   <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/agent-toggle">
-    Исходный код скилла и shared toggle helpers.
+    Source code and shared toggle helpers in `_shared/toggle/`.
   </Card>
 </CardGrid>
 
