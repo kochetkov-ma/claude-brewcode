@@ -1,204 +1,171 @@
 ---
 title: "Spec"
-description: "Creates task specification through research and user interaction."
+description: "Creates SPEC.md task specification through parallel codebase research and user interaction. First step in the brewcode pipeline before plan and start."
 order: 1102
 ---
-import { Card, CardGrid, Badge, UpdateNotice } from '../../../../components/mdx';
+import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# Spec
+# Write the specification before writing a single line of code.
 
-<Badge variant="primary" text="opus" /> <Badge variant="secondary" text="session" />
+<Callout type="caution">
+**Skipping spec means rewriting later.** Without a specification (рецепт задачи), parallel agents in `/brewcode:plan` and `/brewcode:start` have no shared ground truth — they duplicate work, contradict each other, and miss edge cases. The fix costs more than the spec would have.
+</Callout>
+
+<Callout type="tip">
+**`-n` / `--noask` for CI and scripts.** Pass the flag to suppress all `AskUserQuestion` calls — spec is generated and reviewed automatically, no human in the loop. Useful when piping requirements from a file or external tool.
+</Callout>
 
 ## Quick reference
 
 | Field | Value |
 |-------|-------|
 | Command | `/brewcode:spec` |
-| Arguments | `[-n] <description> \| <path-to-requirements>` -- `-n`/`--noask`: no questions to user |
+| Arguments | `[-n] <description> \| <path-to-requirements>` |
+| Flag | `-n`, `--noask` — skip all clarifying questions |
 | Model | opus |
 | Context | session |
 | Tools | Read, Write, Glob, Grep, Bash, Task, AskUserQuestion |
 
-## Input Handling
+## When to use
 
-| Input | Action |
-|-------|--------|
-| `$ARGUMENTS` empty | Read `.claude/TASK.md` -- first line = path -- derive task dir |
-| `$ARGUMENTS` has text | Use as task description |
-| `$ARGUMENTS` has path | Read file as task description |
+- **New feature or task** — turn a description or requirements file into a structured SPEC.md
+- **Ambiguous requirements** — clarifying questions surface scope, constraints, and edge cases before research begins
+- **Large scope** — the skill detects when requirements span more than 3 independent areas and suggests splitting
+- **Automated pipelines** — `--noask` skips interaction; pipe a requirements doc path as the argument
 
-### Flag Parsing
+## Examples
 
-Parse `$ARGUMENTS` for flags BEFORE input detection:
-
-| Flag | Effect |
-|------|--------|
-| `-n`, `--noask` | Skip all user questions, auto-approve defaults |
-
-Strip flag from `$ARGUMENTS`. Remaining text = description or path.
-
-### Naming
-
-- Timestamp: `YYYYMMDD_HHMMSS` (e.g., `20260208_143052`)
-- Name slug: lowercase, underscores, from description (e.g., `auth_feature`)
-- Task dir: `.claude/tasks/{TIMESTAMP}_{NAME}_task/`
-
-### Workflow
-
-**0. Check Adapted Templates** (REQUIRED FIRST)
-
-**EXECUTE** using Bash tool:
 ```bash
-test -f .claude/tasks/templates/SPEC.md.template && echo "SPEC.md.template" || echo "SPEC.md.template MISSING"
+# From a plain description
+/brewcode:spec "add JWT refresh token rotation to auth service"
+
+# From an existing requirements file
+/brewcode:spec path/to/requirements.md
+
+# No interaction — auto-approve all defaults
+/brewcode:spec -n "migrate database layer to async repositories"
 ```
 
-> **STOP if MISSING** -- Run [/brewcode:setup](/brewcode/skills/setup/) first.
-
-**1. Read &amp; Analyze Input**
-
-- Parse `$ARGUMENTS` per Input Handling table
-- Determine scope: files affected, areas of codebase
-- Identify what needs clarification
-
-**2. Clarifying Questions** (AskUserQuestion)
-
-**If `--noask`:** Skip. Record in SPEC User Q&amp;A: "Skipped (--noask mode)". Infer scope from description and codebase analysis.
-
-**Otherwise:** Use AskUserQuestion tool to ask 3-5 questions, grouped in batches of up to 4 per AskUserQuestion call. Focus on:
-
-| # | Category | Example Questions |
-|---|----------|-------------------|
-| 1 | Scope | What's in/out? Which modules affected? |
-| 2 | Constraints | Required libraries? Backward compatibility? API contracts? |
-| 3 | Edge cases / ambiguities | Concurrent access? Empty/null inputs? Error recovery? |
-
-Record all Q&amp;A for the User Q&amp;A section of SPEC.
-
-**2.5. Feature Splitting Check**
-
-After gathering requirements, evaluate scope:
+Expected output after a successful run:
 
 ```
-IF requirements cover >3 independent areas OR estimated complexity >12 plan phases:
-  -> AskUserQuestion: "I suggest splitting into X tasks: [A], [B], [C]. Agree?"
-  -> If yes: create SPEC only for first task, record others in Notes section
-  -> If no: continue with full scope
+# Spec Created
+
+Files Created:
+  SPEC: .claude/tasks/20260417_143052_auth_feature_task/SPEC.md
+  Task Dir: .claude/tasks/20260417_143052_auth_feature_task/
+
+Next Step:
+  /brewcode:plan .claude/tasks/20260417_143052_auth_feature_task/
 ```
 
-**3. Partition Research Areas** (5-10 areas)
+## Flow
 
-Analyze project and split into logical parts for parallel research:
+<Steps>
+  <li>
+    <div>
+      <strong>Check adapted templates</strong>
+      <p>Verifies <code>.claude/tasks/templates/SPEC.md.template</code> exists. Missing template means <code>/brewcode:setup</code> has not run — the skill stops here rather than writing a spec into the wrong structure.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Parse input and ask clarifying questions</strong>
+      <p>Reads <code>$ARGUMENTS</code>: plain text becomes the task description; a path is read as requirements; empty args fall back to <code>.claude/TASK.md</code>. Then (unless <code>--noask</code>) fires up to 3 batches of questions — scope, constraints, edge cases. If requirements span more than 3 independent areas, proposes splitting into separate tasks.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Partition research areas</strong>
+      <p>Divides the codebase into 5–10 logical zones: controllers, services, repositories, tests, config, docs, domain-specific paths. Each zone gets an assigned agent type. Team agents from <code>.claude/teams/</code> take priority over plugin agents.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Parallel codebase research</strong>
+      <p>Spawns 5–10 subagents in a <em>single message</em> — Plan, developer, tester, reviewer, Explore — each scoped to one research zone. Agents return findings as bullet lists and file:line references, never large code blocks.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Consolidate into SPEC.md</strong>
+      <p>Creates the task directory (<code>.claude/tasks/&#123;TIMESTAMP&#125;_&#123;NAME&#125;_task/</code>), merges and deduplicates agent findings, fills all SPEC sections per the project-adapted template, and writes the file. A research table records which agent covered which area.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Validate findings with user</strong>
+      <p>Unless <code>--noask</code>, presents key architectural decisions, risk assessment, and assumptions via <code>AskUserQuestion</code>. User feedback is incorporated into SPEC before the review pass.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Reviewer loop</strong>
+      <p>A reviewer agent checks the SPEC for completeness, consistency, feasibility, and risks. All critical and major remarks are fixed and re-reviewed — up to 3 iterations. Remaining remarks after 3 rounds are surfaced to the user.</p>
+    </div>
+  </li>
+</Steps>
 
-| Area | Pattern | Agent |
-|------|---------|-------|
-| Controllers | **/controllers/ | developer |
-| Services | **/services/ | developer |
-| DB/Repos | **/repositories/ | developer |
-| Tests | **/test/ | tester |
-| Config | *.yml, docker-* | developer |
-| Docs | *.md, docs/ | Explore |
+<details>
+<summary>Phase details — input handling, agent prompt template, output format</summary>
 
-> See `references/SPEC-creation.md` for detailed parallel research instructions.
+**Input detection (after flag stripping)**
 
-**4. Parallel Research** (ONE message, 5-10 agents)
+| `$ARGUMENTS` | Action |
+|--------------|--------|
+| Empty | Read `.claude/TASK.md` — first line = path — derive task dir |
+| Plain text | Use as task description |
+| File path | Read file contents as task description |
+
+**Naming convention**
+
+- Timestamp: `YYYYMMDD_HHMMSS` (e.g., `20260417_143052`)
+- Name slug: lowercase, underscores (e.g., `auth_feature`)
+- Task directory: `.claude/tasks/{TIMESTAMP}_{NAME}_task/`
+
+**Agent prompt template (research phase)**
+
+Each parallel subagent receives a prompt in this shape:
 
 ```
-ONE message with 5-10 Task calls in PARALLEL
-
-Task(subagent_type="Plan", prompt="Analyze architecture...")
-Task(subagent_type="developer", prompt="Analyze services...")
-Task(subagent_type="tester", prompt="Analyze test patterns...")
-Task(subagent_type="reviewer", prompt="Analyze quality...")
-Task(subagent_type="Explore", prompt="Find library docs...")
-```
-
-**Agent prompt template:**
-```
-> **Context:** BC_PLUGIN_ROOT is available in your context (injected by pre-task.mjs hook).
-
 Analyze {AREA} for task: "{TASK_DESCRIPTION}"
 Focus: patterns, reusable code, risks, constraints
 Context files: {FILES_IN_AREA}
 Output: findings (bullets), assets (table), risks, recommendations
-NO large code blocks - use file:line references
+NO large code blocks — use file:line references
 ```
 
-**5. Consolidate into SPEC**
+**Dynamic agent resolution order**
 
-- Create task directory: `.claude/tasks/{TIMESTAMP}_{NAME}_task/`
-- Read `.claude/tasks/templates/SPEC.md.template` (project-adapted)
-- Merge agent findings (deduplicate)
-- Fill SPEC sections per Consolidation Rules in `references/SPEC-creation.md`
-- Write `.claude/tasks/{TIMESTAMP}_{NAME}_task/SPEC.md`
-- Include Research table with per-agent findings
+1. Team agent from `.claude/teams/team.md` matching the domain
+2. Project agent from `.claude/agents/`
+3. Plugin agent (developer, tester, reviewer, Explore, Plan)
 
-**6. Present Key Findings** (AskUserQuestion)
+**Reviewer iteration loop**
 
-**If `--noask`:** Skip validation. Auto-approve all findings.
-
-**Otherwise:** Use AskUserQuestion to validate with user:
-- Key architectural decisions made
-- Risk assessment and proposed mitigations
-- Any assumptions that need confirmation
-- Completeness check: "Does this cover everything?"
-
-Incorporate user feedback into SPEC.
-
-**7. Review SPEC** (reviewer agent + fix loop)
-
-```
-Task(subagent_type="reviewer", prompt="> **Context:** BC_PLUGIN_ROOT is available in your context (injected by pre-task.mjs hook).
-
-Review SPEC at {SPEC_PATH}
-Check: completeness, consistency, feasibility, risks
-Output: list of remarks with severity (critical/major/minor), specific fixes")
-```
-
-**Iteration loop:**
 ```
 WHILE remarks.critical > 0 OR remarks.major > 0:
-  1. Fix all critical/major remarks in SPEC.md
-  2. Re-run reviewer
-MAX 3 iterations. After 3 rounds, present remaining remarks to user via AskUserQuestion.
+  Fix all critical/major remarks in SPEC.md
+  Re-run reviewer agent
+MAX 3 iterations — then surface remaining remarks via AskUserQuestion
 ```
 
-**Exit criteria:** No critical/major remarks remaining OR 3 iterations exhausted
+**Template source:** always from `.claude/tasks/templates/` (project-adapted), never from plugin base templates directly.
 
-> **Template source:** Always from `.claude/tasks/templates/` (project), never from plugin base templates directly.
-
-### Output
-
-```markdown
-# Spec Created
-
-## Detection
-
-| Field | Value |
-|-------|-------|
-| Arguments | `{received args}` |
-| Input Type | `{text description or file path}` |
-| Noask | `{yes or no}` |
-
-## Files Created
-- SPEC: .claude/tasks/{TIMESTAMP}_{NAME}_task/SPEC.md
-- Task Dir: .claude/tasks/{TIMESTAMP}_{NAME}_task/
-
-## Next Step
-
-> Copy the command below first, then clear context and paste it.
-
-1. Clear context: type `/clear` and press Enter
-2. Run (paste copied command):
-
-/brewcode:plan .claude/tasks/{TIMESTAMP}_{NAME}_task/
-```
+</details>
 
 <CardGrid>
-  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
-    Download, changelog, and installation instructions.
+  <Card title="Plan" icon="document" href="/brewcode/skills/plan/">
+    Next step — turn the SPEC into a phased execution plan with task breakdown.
   </Card>
-  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/spec">
-    Source code, README, and configuration files.
+  <Card title="Start" icon="play" href="/brewcode/skills/start/">
+    Execute the plan with infinite handoff and automatic session continuity.
+  </Card>
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/spec">
+    SKILL.md, references, and SPEC-creation.md consolidation rules.
+  </Card>
+  <Card title="Brewcode overview" icon="rocket" href="/brewcode/">
+    Full brewcode pipeline — setup, spec, plan, start, review, and more.
   </Card>
 </CardGrid>
 

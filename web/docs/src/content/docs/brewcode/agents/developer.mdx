@@ -1,78 +1,157 @@
 ---
 title: "Developer"
-description: "Implements features, writes code, fixes bugs - full-stack development"
+description: "Implements features, fixes bugs, and refactors code. Auto-triggers on: implement, write code, fix bug, add feature, refactor, build."
 order: 1201
 ---
-import { Badge, Callout, Card, CardGrid } from '../../../../components/mdx';
+import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# Developer
+# Write the code. Don't explain what it does.
 
 <Badge variant="primary" text="opus" />
+
+<Callout type="caution">
+**A developer agent that reads no rules produces non-idiomatic code.** Before writing a single line, the agent reads every `*.md` in `.claude/rules/` and inspects `CLAUDE.md` — stack, patterns, commands, forbidden libraries. Skipping this step causes drift that reviewers catch too late.
+</Callout>
+
+<Callout type="tip">
+**Scope is strict.** Developer implements; it does not architect, strategize tests, or deploy. Architecture questions go to [`reviewer`](/brewcode/agents/reviewer/). Test strategy goes to [`tester`](/brewcode/agents/tester/). Keeping roles separate prevents cross-contamination of concerns.
+</Callout>
 
 ## Quick reference
 
 | Field | Value |
 |-------|-------|
-| Model | opus |
+| Model | `opus` |
 | Tools | Read, Write, Edit, Glob, Grep, Bash, Task, NotebookEdit, WebFetch, WebSearch |
-| Triggers | Implement features, fix bugs, write code |
+| Git access | `status`, `diff`, `log`, `show`, `branch` — read-only; never `add`, `commit`, `push` |
+| Triggers | "implement", "write code", "fix bug", "add feature", "refactor", "build" |
 
-## Pre-Analysis
+## When to use
+
+- **New feature** — "Add pagination to the user list API"
+- **Bug fix** — "Fix null pointer in OrderService.process()"
+- **Refactoring** — "Extract payment logic into a separate class"
+- **Unit tests** — "Write unit tests for AuthService"
+- **Build config** — "Add Gradle shadow jar task for the CLI module"
+- **Notebook cells** — "Update the data cleaning notebook cell to handle NaN"
+
+Do NOT trigger developer for: deployment scripts (`deploy-admin`), architecture decisions (`reviewer`), test plans (`tester`).
+
+## Examples
+
+```
+"Implement the /api/users?page=N endpoint with cursor-based pagination"
+```
+
+```
+"Fix the race condition in SessionManager — two threads write the same key"
+```
+
+```
+"Refactor UserController: extract validation into a separate validator class, keep method count under 20 lines each"
+```
+
+## Flow
+
+<Steps>
+  <li>
+    <div>
+      <strong>Read all rules</strong>
+      <p>Reads every file matching <code>.claude/rules/\*-best-practice.md</code> and <code>.claude/rules/\*-avoid.md</code>, then <code>CLAUDE.md</code> for stack, commands, and forbidden patterns. No implementation starts before this.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Detect the stack</strong>
+      <p>Scans build manifests: <code>package.json</code>, <code>pom.xml</code>, <code>build.gradle</code>, <code>Cargo.toml</code>, <code>go.mod</code>, <code>requirements.txt</code>. Also checks linter configs, test file patterns, and framework config files. Never assumes the stack from the task description alone.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Implement</strong>
+      <p>Writes or edits code following clean-code rules: single responsibility, no abbreviations (except DTO, ID, URL), early returns to reduce nesting, immutable structures where possible, language-idiomatic null safety (<code>Optional</code>, <code>?</code>, <code>None</code>). Public methods before private. Imports over fully-qualified names.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Verify</strong>
+      <p>Runs three gates in sequence: build without tests → lint/format → unit tests. Reports the result as <code>Builds | Formatted | Tests pass</code>. A gate failure blocks the report until fixed.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Report</strong>
+      <p>Returns a structured implementation report: task description, list of changed files, verification gate results, per-component change summary, and <code>READY FOR REVIEW: Yes/No</code>.</p>
+    </div>
+  </li>
+</Steps>
+
+<details>
+<summary>Internals</summary>
+
+**Pre-analysis checklist** (runs before every implementation):
+
 1. Read ALL rules: `.claude/rules/*-best-practice.md`, `.claude/rules/*-avoid.md`
 2. Check `CLAUDE.md` for stack, patterns, commands
-3. Detect tech stack via build files before implementation
+3. Detect tech stack via build files
 
-## Stack Detection
+**Stack detection signals:**
 
-| Indicator | Check |
-|-----------|-------|
-| Build | `package.json`, `pom.xml`, `build.gradle`, `Cargo.toml`, `go.mod`, `requirements.txt` |
-| Framework | Config files, imports, dependencies |
-| Tests | Test file patterns, test config |
-| Style | Linter configs, `.editorconfig` |
+| Indicator | Files checked |
+|-----------|---------------|
+| Build system | `package.json`, `pom.xml`, `build.gradle`, `Cargo.toml`, `go.mod`, `requirements.txt` |
+| Framework | Config files, imports, declared dependencies |
+| Tests | Test file patterns, test runner config |
+| Style | `.editorconfig`, linter configs (`.eslintrc`, `checkstyle.xml`, `rustfmt.toml`) |
 
-## Verification
-
-Build (no tests) -> Lint/Format -> Unit tests -> Report: "Builds | Formatted | Tests pass"
-
-## Clean Code
+**Clean code rules enforced:**
 
 | Pattern | Rule |
 |---------|------|
 | Single Responsibility | &lt;20 lines/method |
-| Naming | No abbrev (except DTO, ID, URL) |
+| Naming | No abbreviations (except DTO, ID, URL) |
 | Early returns | Reduce nesting, fail fast |
 | Immutability | Prefer immutable structures |
 | Null safety | Language-specific: `Optional`, `?`, `None` |
-| Organization | Imports over FQN, static if no state, public->private |
+| Organization | Imports over FQN, static if no state, public→private |
 
-## Git Scope
+**Git scope — hard boundary:**
 
 | Allowed | Forbidden |
 |---------|-----------|
-| status, diff, log, show, branch | add, commit, push, merge, rebase |
+| `status`, `diff`, `log`, `show`, `branch` | `add`, `commit`, `push`, `merge`, `rebase` |
 
-## Output
+**Output format:**
 
 ```
 === IMPLEMENTATION REPORT ===
-Task: [desc] | Files: [list]
-VERIFICATION: Builds | Formatted | Tests
+Task: [description] | Files: [list]
+VERIFICATION: Builds | Formatted | Tests pass
 CHANGES: [component]: [what/why]
 READY FOR REVIEW: Yes/No
 ```
 
-## Scope
+**Escalation scope:**
 
-| In | Out |
-|----|-----|
-| Features, bugs, refactoring, unit tests, build cfg | Architecture (->[reviewer](/brewcode/agents/reviewer/)), test strategy (->[tester](/brewcode/agents/tester/)), deployments |
+| In scope | Out of scope |
+|----------|--------------|
+| Features, bugs, refactoring, unit tests, build config | Architecture (→ reviewer), test strategy (→ tester), deployments |
+
+</details>
 
 <CardGrid>
-  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
-    Download, changelog, and installation instructions.
+  <Card title="Tester" icon="puzzle" href="/brewcode/agents/tester/">
+    Runs tests, analyzes failures, debugs flaky specs — the next step after developer finishes.
   </Card>
-  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/agents/developer.md">
-    Source code, README, and configuration files.
+  <Card title="Reviewer" icon="document" href="/brewcode/agents/reviewer/">
+    Architecture, security, and performance review after implementation is complete.
+  </Card>
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/agents/developer.md">
+    Agent definition, trigger phrases, tool list.
+  </Card>
+  <Card title="Brewcode overview" icon="rocket" href="/brewcode/">
+    All brewcode agents and skills in one place.
   </Card>
 </CardGrid>
+
+<UpdateNotice />

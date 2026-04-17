@@ -1,271 +1,156 @@
 ---
 title: "image-gen"
-description: "AI image generation via 5 providers with anti-AI-slop prompt engineering"
+description: "AI image generation via 5 providers with anti-AI-slop prompt engineering. Modes: generate, edit, config, update."
 order: 3501
 ---
-import { Card, CardGrid, Callout, Steps, Badge, Tabs, TabItem, UpdateNotice } from '../../../../components/mdx';
+import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# image-gen
+# Generate images from a prompt. Anti-slop included.
 
-<Badge variant="accent" text="new" /> <Badge variant="primary" text="haiku" />
+<Callout type="caution">
+**Raw prompts produce AI-looking images.** Symmetrical faces, plastic skin, impossible reflections, airbrushed gradients — the usual tells. The skill applies a style-matched anti-slop prefix automatically so you don't have to fight defaults every time.
+</Callout>
 
-AI image generation via multiple providers with anti-AI-slop prompt engineering.
-Four modes, five providers, three art styles. Fast path for 99% of cases -- just type a prompt.
+<Callout type="tip">
+**Fast path: just type a prompt.** No flags needed — the skill picks Gemini Imagen 4, photo style, 1024×1024, and goes. Only asks questions when something is genuinely missing (API key, or you passed `--count`/`--style` flags explicitly).
+</Callout>
 
-<div style="display: flex; align-items: center; gap: 1.5rem; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); border-radius: 1rem; padding: 1.5rem; margin: 1.5rem 0; border: 1px solid #e2b340;">
-  <img src="/glm-image-badge.png" alt="GLM-image" style="width: 120px; height: 120px; flex-shrink: 0;" />
-  <div>
-    <strong style="color: #e2b340; font-size: 1.2rem;">GLM-image — flagship Z.ai model</strong>
-    <p style="color: #ccc; margin: 0.5rem 0 0 0;">
-      Top-tier image quality at just <strong style="color: #4ade80;">$0.015/image</strong>.
-      The best quality-to-price ratio among all providers.
-      <a href="https://docs.z.ai/guides/image/glm-image" style="color: #60a5fa;">Z.ai GLM-image docs</a>
-    </p>
-  </div>
-</div>
-
-<CardGrid>
-  <Card title="GENERATE" icon="sparkle">
-    Text-to-image generation. Default mode. Anti-slop prefix applied automatically based on style. Supports batch generation up to 10 images.
-  </Card>
-  <Card title="EDIT" icon="pencil">
-    Modify existing images. Supported by Gemini (native edit) and OpenAI (DALL-E 2). Provide image path and edit instructions.
-  </Card>
-  <Card title="CONFIG" icon="wrench">
-    Set up API keys for providers. Interactive key entry, validation, and storage to `.env`, `~/.zshrc`, or `.claude.local.md`.
-  </Card>
-  <Card title="UPDATE" icon="sync">
-    Check provider APIs for latest models, pricing, and breaking changes. Web search for current documentation.
-  </Card>
-</CardGrid>
-
-## Quick Reference
+## Quick reference
 
 | Field | Value |
 |-------|-------|
 | Command | `/brewui:image-gen` |
 | Arguments | `[prompt] [--edit image.png 'instructions'] [--config] [--update] [--service] [--style] [--count N] [--output dir] [--size WxH]` |
-| Modes | generate (default), edit, config, update |
-| Providers | 5 (Gemini Imagen 4, OpenRouter Gemini 2.5 Flash, OpenRouter GPT-5, Z.ai GLM-image, OpenAI DALL-E 3) |
-| Styles | photo, illustration, art |
 | Model | haiku |
-| Output | Images + sidecar JSON metadata |
+| Tools | Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion, WebSearch |
+| Output | PNG files + sidecar JSON metadata in `.claude/reports/images/` |
 
-## Quick Start
+## When to use
+
+- **Quick OG image** — `"minimalist tech blog header, dark mode, purple accents"` and done
+- **Batch variations** — `--count 4` to compare options before committing to one
+- **Edit an existing image** — `--edit hero.png "remove background, add soft shadow"` (Gemini + OpenAI only)
+- **Cost-conscious iteration** — use OpenRouter Gemini 2.5 Flash (~$0.001) for drafts, switch to GLM-image or Imagen 4 for finals
+- **API key setup** — `--config` walks through key entry, validation, and storage once
+
+## Examples
 
 ```bash
-# Generate with defaults (gemini, photo style, 1024x1024)
-/brewui:image-gen "a cozy coffee shop at sunset with warm lighting"
+# Default: Gemini Imagen 4, photo style, 1024×1024
+/brewui:image-gen "developer at a standing desk, morning light through large windows"
+```
 
-# Specific provider and style
-/brewui:image-gen --service openrouter --style illustration "tech blog header"
+```bash
+# Illustration style, custom provider
+/brewui:image-gen --style illustration --service zai "tech blog header, geometric shapes, dark background"
+```
 
-# Edit existing image
-/brewui:image-gen --edit photo.png "add warm golden hour lighting"
-
-# Configure API keys
-/brewui:image-gen --config
-
-# Batch generation
-/brewui:image-gen --count 4 "mountain lake at dawn, misty atmosphere"
+```bash
+# Edit an existing image (Gemini or OpenAI only)
+/brewui:image-gen --edit ./hero.png "remove the background, increase contrast"
 ```
 
 ## Providers
 
-<CardGrid>
-  <Card title="Gemini Imagen 4" icon="star">
-    Google's latest image model. Very high quality. Requires paid Gemini plan. Native edit support. Default provider.
-  </Card>
-  <Card title="OpenRouter Gemini 2.5 Flash" icon="sparkle">
-    Cheapest option (~$0.001/image). Fast, high quality. Via OpenRouter API. No edit support.
-  </Card>
-  <Card title="OpenRouter GPT-5 Image" icon="brain">
-    Highest quality. ~$0.01/image. Via OpenRouter API. Medium speed. No edit support.
-  </Card>
-  <Card title="Z.ai GLM-image" icon="eye">
-    Flagship Z.ai model. Top-tier quality at ~$0.015/image. Best quality-to-price ratio. Via <a href="https://docs.z.ai/guides/image/glm-image">Z.ai API</a>.
-  </Card>
-  <Card title="OpenAI DALL-E 3" icon="building">
-    Reliable, most expensive ($0.04-0.12/image). 1 image per request. Edit via DALL-E 2 fallback.
-  </Card>
-</CardGrid>
+| Provider | Model | Speed | Quality | Cost |
+|----------|-------|-------|---------|------|
+| `gemini` (default) | Imagen 4 | Fast | Very High | Paid plan required |
+| `openrouter` | Gemini 2.5 Flash Image | Fast | High | ~$0.001/image |
+| `openrouter-gpt5` | GPT-5 Image | Medium | Highest | ~$0.01/image |
+| `zai` | GLM-image | Fast | Very High | ~$0.015/image |
+| `openai` | DALL-E 3 | Medium | High | $0.04–0.12/image |
 
-## Anti-Slop System
+Edit support: `gemini` (native), `openai` (DALL-E 2 fallback). OpenRouter redirects to a supported provider.
 
-Style-aware prompt engineering that prevents common AI image artifacts. Applied automatically as a prefix to your prompt.
-
-<Tabs>
-  <TabItem label="Photo">
-    **Target:** Physically accurate photography.
-
-    Enforces: real lighting physics, correct human anatomy, natural material textures, proper depth of field,
-    no plastic skin, no impossible reflections, no symmetrical faces.
-  </TabItem>
-  <TabItem label="Illustration">
-    **Target:** Professional illustration.
-
-    Enforces: clean line work, proper color theory, organic imperfections, consistent style,
-    no airbrushed gradients, no floating elements, no generic clip-art feel.
-  </TabItem>
-  <TabItem label="Art">
-    **Target:** Consistent artistic medium.
-
-    Enforces: unified brushwork, intentional composition, coherent color temperature,
-    visible artistic technique, no mixed-media confusion, no over-processed look.
-  </TabItem>
-</Tabs>
-
-## Workflow
+## Flow
 
 <Steps>
   <li>
     <div>
-      <strong>Phase 0 -- Parse Arguments</strong>
-      <p>Run <code>parse-args.sh</code> to extract flags and detect mode from natural language context. Priority: explicit flags > context analysis > default (generate).</p>
+      <strong>Parse arguments</strong>
+      <p>Runs <code>parse-args.sh</code> to extract flags. Detects mode from explicit flags first, then natural language signals ("edit this", "configure key"), then defaults to <strong>generate</strong>.</p>
     </div>
   </li>
   <li>
     <div>
-      <strong>Phase 1 -- Validate and Gather</strong>
-      <p>Load environment, check API key (`.env` > shell env > ask user). Fast path: if prompt provided with no flags, skip service/style/count questions and use defaults.</p>
+      <strong>Resolve API key</strong>
+      <p>Checks in order: inline in prompt text → <code>.env</code> → shell environment variable → interactive config (Phase C). Stops here if no key is found and guides setup.</p>
     </div>
   </li>
   <li>
     <div>
-      <strong>Phase 2 -- Build and Generate</strong>
-      <p>Load anti-slop prefix for style. Build enhanced prompt. Load provider specs. Construct JSON payload. Send API request. Parse response (base64 or URL).</p>
+      <strong>Fast-path or gather params</strong>
+      <p>Prompt provided, no extra flags? Skip count/service/style/output questions — use defaults straight away. Explicit flags or missing prompt triggers targeted questions only.</p>
     </div>
   </li>
   <li>
     <div>
-      <strong>Phase 3 -- Save Images</strong>
-      <p>Generate kebab-case title from prompt. Save each image with sidecar JSON metadata (prompt, service, style, size, timestamp).</p>
+      <strong>Build enhanced prompt</strong>
+      <p>Loads the anti-slop prefix for the chosen style from <code>references/anti-slop.md</code>, prepends it to your prompt, then constructs the provider JSON payload.</p>
     </div>
   </li>
   <li>
     <div>
-      <strong>Phase 4 -- Report</strong>
-      <p>Display results table with file paths, provider, style, size, cost estimate. Offer: generate more, different prompt, edit, or done.</p>
+      <strong>Send request &amp; save</strong>
+      <p>Calls the provider API, parses base64 or URL response, saves each image as <code>kebab-title-NNN.png</code> with a sidecar <code>.json</code> (prompt, service, style, size, timestamp, cost estimate).</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Report &amp; offer next action</strong>
+      <p>Prints a results table with file paths, provider, cost estimate. Asks: generate more, different prompt, edit one, or done.</p>
     </div>
   </li>
 </Steps>
 
-## Modes Deep Dive
+<details>
+<summary>Full provider matrix, anti-slop rules, and parameter reference</summary>
 
-<Tabs>
-  <TabItem label="Generate">
-    **Default mode (99% of cases).**
+### Anti-slop prefixes by style
 
-    Fast path: when `$ARGUMENTS` is just a prompt text with no flags, skip interactive questions (count, service, style, output) and use defaults: count=1, service=gemini, style=photo, output=`.claude/reports/images/`.
+| Style | Enforces | Bans |
+|-------|----------|------|
+| `photo` | Real lighting physics, correct anatomy, natural material textures, depth of field | Plastic skin, impossible reflections, symmetrical faces |
+| `illustration` | Clean line work, proper color theory, organic imperfections, consistent style | Airbrushed gradients, floating elements, generic clip-art feel |
+| `art` | Unified brushwork, intentional composition, coherent color temperature, visible technique | Mixed-media confusion, over-processed look |
 
-    Only asks user questions when: prompt is missing, or API key is not found.
-
-    **Agent invocation:** When called from an agent, all provided args are treated as final. No confirmation step if all params are explicit.
-  </TabItem>
-  <TabItem label="Edit">
-    **Modify existing images.**
-
-    Requires: image path + edit instructions. Validates image exists and is valid image MIME type.
-
-    Supported providers: Gemini (native edit), OpenAI (DALL-E 2 fallback). OpenRouter redirects user to supported provider.
-  </TabItem>
-  <TabItem label="Config">
-    **Set up API keys.**
-
-    Interactive flow: select service > enter API key > validate with test request > choose storage location (`.env`, `~/.zshrc`, `.claude.local.md`).
-
-    Key URLs: Gemini (`aistudio.google.com/apikey`), OpenRouter (`openrouter.ai/keys`), OpenAI (`platform.openai.com/api-keys`).
-  </TabItem>
-  <TabItem label="Update">
-    **Check for API changes.**
-
-    Web searches each provider for latest models, pricing changes, and breaking API changes. Compares against current `references/providers.md` and offers to update.
-  </TabItem>
-</Tabs>
-
-## Configuration
+### All parameters
 
 | Parameter | Default | Options | Description |
 |-----------|---------|---------|-------------|
-| `--service` | gemini | gemini, openrouter, openrouter-gpt5, zai, openai | Image generation provider |
-| `--style` | photo | photo, illustration, art | Anti-slop style preset |
-| `--count` | 1 | 1-10 | Number of images to generate |
-| `--size` | 1024x1024 | WxH format | Image dimensions |
-| `--output` | `.claude/reports/images/` | Directory path | Where to save images |
-| `--edit` | -- | `<image.png> 'instructions'` | Edit mode with image path |
-| `--config` | -- | -- | Enter config mode |
-| `--update` | -- | -- | Check for API updates |
+| `--service` | gemini | gemini, openrouter, openrouter-gpt5, zai, openai | Provider |
+| `--style` | photo | photo, illustration, art | Anti-slop preset |
+| `--count` | 1 | 1–10 | Images per generation (DALL-E 3: sequential requests) |
+| `--size` | 1024x1024 | WxH | Image dimensions |
+| `--output` | `.claude/reports/images/` | Directory path | Save location |
+| `--edit` | — | `<image.png> 'instructions'` | Edit mode |
+| `--config` | — | — | API key setup |
+| `--update` | — | — | Check providers for latest models/pricing |
 
-## Examples
+### API key priority
 
-<Tabs>
-  <TabItem label="OG Image">
-    ```bash
-    # Blog post OG image with illustration style
-    /brewui:image-gen --style illustration "minimalist tech blog header with dark mode theme, code brackets, purple accent"
+1. Explicit key pasted in prompt text
+2. `.env` in project root (`source .env`)
+3. Shell environment variable
+4. Interactive config (Phase C)
 
-    # Output: .claude/reports/images/minimalist-tech-blog-header-001.png
-    # Sidecar: .claude/reports/images/minimalist-tech-blog-header-001.json
-    ```
-  </TabItem>
-  <TabItem label="Blog Illustration">
-    ```bash
-    # Photo-realistic hero image
-    /brewui:image-gen "developer working at a standing desk, morning light through large windows, multiple monitors showing code"
+For team projects use `.env` (add to `.gitignore`). For personal use `&#126;/.zshrc` works well.
 
-    # Uses defaults: gemini, photo style, 1024x1024
-    ```
-  </TabItem>
-  <TabItem label="Batch">
-    ```bash
-    # Generate 4 variations to compare
-    /brewui:image-gen --count 4 --service openrouter "abstract geometric pattern, blue and orange gradient"
+### Update mode
 
-    # Output: 4 images with sequential numbering
-    ```
-  </TabItem>
-  <TabItem label="Edit">
-    ```bash
-    # Edit existing image
-    /brewui:image-gen --edit ./hero.png "remove the background, add soft drop shadow, increase contrast"
+Runs WebSearch for each provider's latest models and pricing, compares against `references/providers.md`, and offers to update the file if changes are detected.
 
-    # Requires Gemini or OpenAI provider
-    ```
-  </TabItem>
-</Tabs>
-
-<Callout type="tip" title="Cost optimization">
-  OpenRouter Gemini 2.5 Flash is the cheapest at ~$0.001/image. Use it for iterations and drafts.
-  Switch to Gemini Imagen 4 or GPT-5 for final high-quality output.
-</Callout>
-
-<Callout type="tip" title="Remote viewing with Brewpage">
-  Working from a remote terminal or mobile? Can't open the generated image locally?
-  Combine with [`/brewdoc:publish`](/brewdoc/skills/publish/) to get a shareable URL instantly:
-
-  ```bash
-  # Generate an image
-  /brewui:image-gen "hero image for blog post about AI coding"
-
-  # Publish to get a viewable URL
-  /brewdoc:publish .claude/reports/images/hero-image-for-blog-001.png
-  # → https://brewpage.app/your-namespace/hero-image-for-blog-001
-  ```
-
-  This works great from SSH sessions, Telegram bots, or any headless environment where you can't open files directly.
-</Callout>
-
-<Callout type="note" title="API key priority">
-  Keys are resolved in order: explicit in prompt > `.env` file > shell environment variable > interactive config.
-  For team projects, use `.env` (add to `.gitignore`). For personal use, `~/.zshrc` works well.
-</Callout>
+</details>
 
 <CardGrid>
-  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
-    Download, changelog, and installation instructions.
+  <Card title="GLM Design to Code" icon="image" href="/brewui/skills/glm-design-to-code/">
+    Turn images, HTML, or URLs into multi-framework code using GLM vision.
   </Card>
-  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewui/skills/image-gen">
-    Source code, README, and configuration files.
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewui/skills/image-gen">
+    Source code, anti-slop references, and provider specs.
+  </Card>
+  <Card title="Brewui overview" icon="document" href="/brewui/">
+    All brewui skills in one place.
   </Card>
 </CardGrid>
 

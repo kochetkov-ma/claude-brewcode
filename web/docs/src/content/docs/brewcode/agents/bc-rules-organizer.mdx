@@ -3,11 +3,17 @@ title: "bc-rules-organizer"
 description: "Creates and optimizes .claude/rules/*.md files with path-specific frontmatter. Triggered by 'organize rules', 'path-specific rules', 'extract rules', 'split CLAUDE.md'."
 order: 1213
 ---
-import { Badge, Card, CardGrid } from '../../../../components/mdx';
+import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# bc-rules-organizer
+# Rules files that actually match the code they guard.
 
-<Badge variant="secondary" text="sonnet" />
+<Callout type="caution">
+**One giant CLAUDE.md loaded for every file is expensive.** Rules for React components load even when Claude is editing SQL migrations. Claude Code supports `paths:` frontmatter in `.claude/rules/*.md` to scope rules to file patterns — but setting it up correctly requires knowing the right fields, quoting conventions, and dedup logic. Bug [#16299](https://github.com/anthropics/claude-code/issues/16299): all rules still load at session start regardless of `paths:`, so keep files lean.
+</Callout>
+
+<Callout type="tip">
+**Invoke `bc-rules-organizer` to extract, split, and optimize rules files.** The agent reads any source (CLAUDE.md, docs, code comments), distributes rules by path pattern, runs the 3-Check Dedup Protocol, and finishes with `brewtools:text-optimize` on every created file. See the [rules skill](/brewcode/skills/rules/) for KNOWLEDGE-to-rules conversion.
+</Callout>
 
 ## Quick reference
 
@@ -15,69 +21,77 @@ import { Badge, Card, CardGrid } from '../../../../components/mdx';
 |-------|-------|
 | Model | sonnet |
 | Tools | Read, Write, Edit, Glob, Grep, Bash, Skill |
-| Skills | text-optimize |
-| Permission mode | acceptEdits |
+| Skills used | `brewtools:text-optimize` |
+| Permission mode | `acceptEdits` |
 | Triggers | "organize rules", "path-specific rules", "extract rules", "split CLAUDE.md" |
 
-## System prompt
+## When to use
 
-**Role:** Organize `.claude/rules/*.md` with path-specific frontmatter, extract rules from any file, optimize for LLM.
+- **Split a bloated CLAUDE.md** — extract sections into path-scoped rule files and replace with `@path/to/rule.md` references
+- **Scope rules to file types** — React rules only for `src/components/**/*.tsx`, SQL rules only for `**/*Repository*`
+- **Deduplicate across files** — merge semantically similar entries, eliminate cross-file antonym pairs
+- **Refactor existing rules** — add missing `paths:` frontmatter, fix unquoted globs, enforce table format standards
+- **Consolidate code comments** — extract actionable rules scattered in source files into `.claude/rules/`
 
-**Write access:** `.claude/rules/` directory.
+## Examples
 
-## Capabilities
-
-| Capability | Description |
-|------------|-------------|
-| Path-Specific Rules | Use `paths:` frontmatter for conditional loading |
-| Rule Extraction | Extract rules from CLAUDE.md, docs, code -> distribute by path patterns |
-| Lazy Documentation | Link to detailed docs instead of inline content |
-| LLM Optimization | Apply text-optimize: tables, abbreviations, remove filler |
-| Priority Management | Rules load globally, prioritize for matching files |
-
-## Table Formats (Authoritative)
-
-### Avoid Table
-
-```markdown
-| # | Avoid | Instead | Why |
-|---|-------|---------|-----|
-| 1 | `System.out.println()` | `@Slf4j` + `log.info()` | Structured logging |
-| 2 | `if (cond) { assert... }` | `assertThat(cond)` first | Unconditional assertions |
+```bash
+# Extract rules from CLAUDE.md and distribute by path pattern
+"organize rules from CLAUDE.md"
+"extract rules from CLAUDE.md"
 ```
 
-### Best Practice Table
-
-```markdown
-| # | Practice | Context | Source |
-|---|----------|---------|--------|
-| 1 | `allSatisfy()` over `forEach` | Collection assertions | AssertJ |
-| 2 | Constructor injection | Spring DI | convention |
+```bash
+# Create path-specific rules for a module
+"path-specific rules for src/components"
+"create rules file for bq-core module"
 ```
 
-### Table Constraints
+```bash
+# Refactor and deduplicate existing rules
+"split CLAUDE.md into rule files"
+"optimize .claude/rules/ — merge duplicates, add paths frontmatter"
+```
 
-| Rule | Details |
-|------|---------|
-| Numbered entries | Sequential `1, 2, 3...` in `#` column |
-| Max rows | 20 per file -- split into specialized files if exceeded |
-| Deduplication | Semantic similarity + 3-Check Protocol before adding any entry |
-| CLAUDE.md rule | Never add a rule already in project CLAUDE.md; "CLAUDE.md" forbidden as Source |
-| Priority | critical > important > nice-to-have |
+## Flow
 
-## Frontmatter Reference
+<Steps>
+  <li>
+    <div>
+      <strong>Analysis — ask at most 2 questions</strong>
+      <p>Identifies the source file (CLAUDE.md, docs, code) and any explicit path patterns. If not provided, auto-detects from project structure. Reads existing <code>.claude/rules/</code> files to map what's already covered.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Extraction — group by scope</strong>
+      <p>Classifies every rule as anti-pattern (avoid) or best practice. Groups rules into logical scopes: component rules, API rules, test rules, build config, module-level. Each group maps to a target file and a <code>paths:</code> pattern.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>3-Check Dedup Protocol</strong>
+      <p>Before writing any entry: (1) within-file similarity — skip if &gt;70% overlap, merge if 40–70%; (2) cross-file antonym — "don't do X" in avoid + "do not-X" in best-practice = keep avoid entry only; (3) CLAUDE.md duplicate — concept already in CLAUDE.md → skip entirely. Source column value "CLAUDE.md" is forbidden.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>File creation — standard structure</strong>
+      <p>Creates <code>avoid.md</code> / <code>best-practice.md</code> for global rules (no <code>paths:</code>) and <code>&#123;'&#123;prefix&#125;'&#125;-avoid.md</code> / domain files with quoted glob patterns. Max 20 rows per table — splits into specialized files if exceeded. All entries numbered sequentially.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Optimization — brewtools:text-optimize on every file</strong>
+      <p>Applies token-efficiency transforms: tables over prose, abbreviations, lazy documentation links (<code>&gt; Details: [file.md](path)</code>) instead of inline content, remove filler. Final files are dense and LLM-efficient.</p>
+    </div>
+  </li>
+</Steps>
 
-> Source: [code.claude.com/docs/en/memory](https://code.claude.com/docs/en/memory.md#path-specific-rules)
+<details>
+<summary>Frontmatter reference, file naming, and output report</summary>
 
-### Official Fields
-
-| Field | REQ | Type | Purpose |
-|-------|-----|------|---------|
-| `paths` | No | Array of quoted strings | Scope rules to matching files |
-
-Only `paths:` supported. `globs`, `alwaysApply`, `description` are not valid fields.
-
-### Syntax
+**Supported fields:** only `paths:` — `globs`, `alwaysApply`, `description` are not valid Claude Code fields.
 
 ```yaml
 ---
@@ -88,150 +102,38 @@ paths:
 ---
 ```
 
-| Rule | Bad | Good |
-|------|-----|------|
-| Quote patterns | `**/*.tsx` | `"**/*.tsx"` |
-| Array format | `paths: "**/*.ts"` | `paths: ["**/*.ts"]` |
-| Brace expansion | `{src,lib}/**` | `"{src,lib}/**"` |
+Quoting rules — patterns must be quoted strings, array format required, brace expansion needs quotes: `"{src,lib}/**"`.
 
-### Loading Behavior
+**File naming:**
 
-| Frontmatter | Behavior |
-|-------------|----------|
-| No `paths` | Loads unconditionally (always) |
-| With `paths` | Should load lazily, but Bug #16299 |
+| Convention | Examples | Use for |
+|------------|----------|---------|
+| `avoid.md`, `best-practice.md` | Global, no `paths:` | Pure anti-pattern or practice collections |
+| `{prefix}-avoid.md`, `{prefix}-best-practice.md` | `test-avoid.md`, `sql-best-practice.md` | Path-scoped by tech or type |
+| Descriptive domain file | `react-components.md`, `bq-core.md` | Mixed rules for a specific module/stack |
 
-Bug #16299: All rules load at session start regardless of `paths:`. Lazy loading not working.
-Source: [github.com/anthropics/claude-code/issues/16299](https://github.com/anthropics/claude-code/issues/16299)
+Common prefixes: `test`, `sql`, `api`, `security`, `performance`, `kotlin`, `java`, `react`.
 
-### Pattern Examples
+**Table formats (authoritative):**
+
+Avoid table: `| # | Avoid | Instead | Why |`
+Best practice table: `| # | Practice | Context | Source |`
+
+Both require sequential `#` column, max 20 rows, "CLAUDE.md" forbidden as Source value.
+
+**Pattern examples:**
 
 | Pattern | Matches |
 |---------|---------|
 | `"**/*.kt"` | All Kotlin files |
 | `"src/main/**/*.java"` | Java in src/main |
 | `"bq-core/**/*"` | All files in bq-core |
-| `"!**/*.test.ts"` | Exclude tests |
-| `"*.md"` | Root MD files only |
+| `"!**/*.test.ts"` | Exclude test files |
+| `"*.md"` | Root markdown files only |
 
-## Workflow
+**Example transformation:**
 
-### Phase 1: Analysis
-
-Ask user (max 2 questions):
-- Which file to extract rules from? (CLAUDE.md, docs, code)
-- Specific path patterns? (or auto-detect from structure)
-
-```
-Read file -> Identify rule categories -> Map to path patterns -> Check existing rules
-```
-
-### Phase 2: Extraction
-
-| Category | Path Pattern Example |
-|----------|---------------------|
-| Component rules | `src/components/**/*` |
-| API rules | `src/api/**/*` |
-| Test rules | `**/*.test.*` |
-| Build rules | `build.gradle.kts`, `package.json` |
-| Module rules | `bq-core/**/*` |
-
-Group rules by logical scope. Classify each rule as anti-pattern (avoid) or best practice.
-
-### Phase 3: Optimization
-
-Apply transformations: tables over prose, abbreviations (REQ, impl, cfg, env), remove filler, lazy links `> Details: [file.md](../docs/file.md)`.
-
-Deduplication: apply 3-Check Dedup Protocol (below). Max 20 rows per file.
-
-### 3-Check Dedup Protocol
-
-| Check | Scope | Action |
-|-------|-------|--------|
-| 1. Within-file | Same target file | &gt;70% skip; 40-70% merge |
-| 2. Cross-file antonym | Paired file (avoid &lt;-&gt; best-practice) | Same concept as opposite -> keep avoid entry only, delete best-practice |
-| 3. CLAUDE.md duplicate | Project CLAUDE.md | Already documented -> skip entirely |
-
-**Antonym rule:** "don't do X" in avoid + "do not-X" in best-practice = one rule twice. Keep avoid entry, ensure "Instead" column captures the positive.
-
-**CLAUDE.md rule:** If concept exists in CLAUDE.md -> skip. Source column value "CLAUDE.md" is forbidden.
-
-### Phase 4: File Creation
-
-```
-.claude/rules/
-  avoid.md             # Global anti-patterns (no paths:)
-  best-practice.md     # Global best practices (no paths:)
-  test-avoid.md        # paths: ["**/*.test.*"]
-  sql-best-practice.md # paths: ["src/**/*Repository*"]
-  components.md        # paths: ["src/components/**/*"] (domain-specific)
-  bq-core.md           # paths: ["bq-core/**/*"] (domain-specific)
-```
-
-File structure -- avoid/best-practice files:
-```markdown
----
-paths:
-  - "pattern1"
-  - "pattern2"
----
-
-# Avoid (or Best Practices)
-
-> **Details:** [link to full docs](../../docs/file.md)
-
-| # | Avoid | Instead | Why |
-|---|-------|---------|-----|
-| 1 | `bad pattern` | `good pattern` | Reason |
-```
-
-File structure -- domain-specific files:
-```markdown
----
-paths:
-  - "pattern1"
----
-
-# Domain Rules
-
-> **Details:** [link to full docs](../../docs/file.md)
-
-| # | Avoid | Instead | Why |
-|---|-------|---------|-----|
-| 1 | ... | ... | ... |
-
-| # | Practice | Context | Source |
-|---|----------|---------|--------|
-| 1 | ... | ... | ... |
-```
-
-## Patterns
-
-| # | Avoid | Instead | Why |
-|---|-------|---------|-----|
-| 1 | Global rules without `paths:` (many files) | Omit `paths:` or use specific patterns | Reduce token load |
-| 2 | Inline detailed docs | `> Details: [link](path)` | File bloat |
-| 3 | Prose explanations | Avoid/Best Practice tables | ~66% savings |
-| 4 | Generic filenames | `react-components.md`, `test-avoid.md` | Clarity |
-| 5 | Duplicate rules across files | Single source per pattern, merge semantically | Inconsistency |
-| 6 | Unquoted glob patterns | `"**/*.tsx"` with quotes | YAML syntax error |
-| 7 | `globs:` or `alwaysApply:` | Only `paths:` is valid | Not Claude Code fields |
-| 8 | `| Bad | Good |` table format | `| # | Avoid | Instead | Why |` | Standard format |
-
-## Example Transformation
-
-**Input: CLAUDE.md section**
-```markdown
-## React Components
-
-When you create React components, you should always use named exports
-instead of default exports. This is important because it makes imports
-more explicit and easier to track.
-
-Also, please remember to keep styles in separate files.
-```
-
-**Output: `.claude/rules/react-components.md`**
+Input CLAUDE.md prose section → Output `.claude/rules/react-components.md`:
 ```markdown
 ---
 paths:
@@ -247,101 +149,7 @@ paths:
 | 2 | Inline styles | Separate `*.styles.ts` | Separation of concerns |
 ```
 
-## Lazy Documentation Links
-
-Reference detailed docs instead of inlining:
-
-```markdown
-## API Guidelines
-> Details: [api-guidelines.md](../docs/api-guidelines.md)
-
-## Architecture
-> Diagram: [bq-core/CLAUDE.md#architecture](../../bq-core/CLAUDE.md#architecture)
-```
-
-## File Naming
-
-Two naming conventions -- use both as appropriate:
-
-### Avoid / Best Practice Files (anti-patterns and practices)
-
-| Pattern | Example | Content |
-|---------|---------|---------|
-| Main | `avoid.md`, `best-practice.md` | Global, no `paths:` |
-| Specialized | `{prefix}-avoid.md`, `{prefix}-best-practice.md` | Path-scoped |
-
-**Common prefixes:** `test`, `sql`, `api`, `security`, `performance`, `kotlin`, `java`, `react`
-
-### Domain-Specific Files (path-scoped mixed rules)
-
-| Pattern | Example |
-|---------|---------|
-| Component type | `react-components.md` |
-| Module/package | `bq-core.md`, `api-client.md` |
-| Tech stack | `kotlin-style.md`, `java-patterns.md` |
-| Functionality | `testing.md`, `logging.md`, `error-handling.md` |
-
-**Decision:** Use avoid/best-practice naming for pure anti-pattern or practice collections. Use descriptive naming for domain-specific rules that mix both.
-
-## Quality Checklist
-
-**Before extraction:** read source completely, identify rule categories, map to path patterns, check existing rules via 3-Check Protocol (within-file + cross-file antonym + CLAUDE.md).
-
-**During creation:** `paths:` frontmatter on all files, quoted glob patterns, tables for multi-column data, anti-patterns with "Instead" column, lazy links for detailed docs, text-optimize applied.
-
-**After creation:** all info preserved, no semantic duplicates across files, valid glob patterns, files in `.claude/rules/`, proper filenames, max 20 rows per table, all entries numbered.
-
-## Common Use Cases
-
-| Use Case | Flow |
-|----------|------|
-| Split large CLAUDE.md | Read -> Extract sections -> Map to paths -> Create rule files -> Update CLAUDE.md with refs |
-| Extract rules from docs | Read docs -> Identify actionable rules -> Create path-specific files |
-| Consolidate scattered rules | Find rules in code comments -> Group by module -> Create rule files |
-| Refactor existing rules | Read `.claude/rules/*.md` -> Optimize with text-optimize -> Add missing paths -> Merge duplicates |
-
-## Anti-Patterns
-
-| # | Avoid | Instead | Why |
-|---|-------|---------|-----|
-| 1 | Many path-scoped rules | Keep minimal, use broad rules | Bug #16299: all load anyway |
-| 2 | `globs:` or `alwaysApply:` | `paths:` only | Not Claude Code fields |
-| 3 | Unquoted glob patterns | Quote: `"**/*.ts"` | YAML syntax error |
-| 4 | Duplicate rules across files | Single source, merge semantically | Inconsistency |
-| 5 | Verbose prose | Tables with numbered entries | Token waste |
-| 6 | Inline detailed docs | Lazy links | File bloat |
-| 7 | `| Bad | Good |` tables | `| # | Avoid | Instead | Why |` | Standard format |
-| 8 | Unnumbered table entries | Sequential `1, 2, 3...` | Referenceability |
-| 9 | &gt;20 rows per file | Split into `{prefix}-avoid.md` | Readability, token budget |
-| 10 | "CLAUDE.md" as Source value | Skip -- already in CLAUDE.md | Duplication |
-
-## LLM Text Rules
-
-Write token-efficient text optimized for LLM consumption. Every token counts -- dense, clear, no waste.
-
-| Rule | Details |
-|------|---------|
-| Tables over prose, bullets over numbered | Multi-column ~66% savings, bullets when order irrelevant |
-| `code` over text, inline over blocks | Identifiers, paths, short values; blocks only if &gt;3 lines |
-| Comma-separated inline lists | `a, b, c` not bullet per item when saving space |
-| One-liner rules, arrows for flow | `old` -> `new`, conditions with `->` (~40% savings) |
-| No filler, no water | Cut "please note", "it's important", "only", "exactly", "basically" |
-| Positive framing, no aggressive lang | "Do Y" not "Don't X"; "Use when..." not "CRITICAL: MUST..." |
-| Imperative form | "Do X" not "You should do X"; 3rd person for descriptions |
-| Bold for key terms, no extra formatting | `**term**` for emphasis; no decorative lines, headers, dividers |
-| No emojis except status markers | Only 3 allowed: ✅, ❌, ⚠️ |
-| Merge duplicates, abbreviate in tables | Single source of truth; REQ, impl, cfg, args, ret, err |
-
-## Final Step: Optimization
-
-Run [text-optimize](/brewtools/skills/text-optimize/) skill on created/updated files before finishing:
-```
-Skill(skill="text-optimize", args="path/to/created-rule.md")
-```
-
-## Output Format
-
-**ALWAYS return this report as your final response.**
+**Output report format — always returned as final response:**
 
 ```markdown
 ## Rules Organization Complete
@@ -349,8 +157,8 @@ Skill(skill="text-optimize", args="path/to/created-rule.md")
 ### Created/Updated Files
 | File | Paths | Change |
 |------|-------|--------|
-| `components.md` | `src/components/**/*` | New |
-| `testing.md` | `**/*.test.*` | Updated |
+| `react-components.md` | `src/components/**/*` | New |
+| `test-avoid.md` | `**/*.test.*` | Updated |
 
 ### Stats
 | Metric | Value |
@@ -358,27 +166,20 @@ Skill(skill="text-optimize", args="path/to/created-rule.md")
 | Files created | 2 |
 | Files updated | 1 |
 | Total rules | 18 |
-
-### Next Steps
-- [ ] Review created files
-- [ ] Test with matching files
-- [ ] Update main CLAUDE.md with refs
 ```
 
-## Sources
-
-| Source | URL |
-|--------|-----|
-| Official Docs | [code.claude.com/docs/en/memory](https://code.claude.com/docs/en/memory.md) |
-| Bug #16299 | [Lazy loading broken](https://github.com/anthropics/claude-code/issues/16299) |
-| Bug #13905 | [YAML syntax fixed](https://github.com/anthropics/claude-code/issues/13905) |
-| Community Guide | [paddo.dev/blog/claude-rules-path-specific-native](https://paddo.dev/blog/claude-rules-path-specific-native/) |
+</details>
 
 <CardGrid>
-  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
-    Download, changelog, and installation instructions.
+  <Card title="Rules skill" icon="document" href="/brewcode/skills/rules/">
+    Convert KNOWLEDGE.jsonl entries into structured rules files — complementary to bc-rules-organizer.
   </Card>
-  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/agents/bc-rules-organizer.md">
-    Source code, README, and configuration files.
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/agents/bc-rules-organizer.md">
+    Agent definition, capabilities, and workflow phases.
+  </Card>
+  <Card title="Brewcode overview" icon="rocket" href="/brewcode/">
+    All brewcode agents, skills, and hooks in one place.
   </Card>
 </CardGrid>
+
+<UpdateNotice />

@@ -3,11 +3,17 @@ title: "Agents"
 description: "Interactive agent creation and improvement orchestrator. Create or improve Claude Code agents."
 order: 1114
 ---
-import { Card, CardGrid, Badge, UpdateNotice } from '../../../../components/mdx';
+import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# Agents
+# Create and improve Claude Code agents interactively.
 
-<Badge variant="primary" text="opus" /> <Badge variant="secondary" text="session" />
+<Callout type="caution">
+**Agents (субагенты) without sharp trigger descriptions misfire constantly.** Claude auto-selects agents by matching your request against their `description` field — a vague description means the wrong agent fires, or none at all. Writing good frontmatter by hand is tedious and error-prone.
+</Callout>
+
+<Callout type="tip">
+**One skill scaffolds or refines any agent.** `/brewcode:agents create` spawns `agent-creator` + runs `text-optimize` on the result. `/brewcode:agents up` improves triggers and system prompt quality on an existing agent. CLAUDE.md agents table update is optional and prompted.
+</Callout>
 
 ## Quick reference
 
@@ -19,295 +25,133 @@ import { Card, CardGrid, Badge, UpdateNotice } from '../../../../components/mdx'
 | Context | session |
 | Tools | Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion, Skill |
 
-> **Agent Management:** Create and improve Claude Code agents interactively.
+## When to use
 
-## Phase 1: Parse arguments
+- **New agent from scratch** — `create` mode scaffolds frontmatter, system prompt, and trigger phrases in one pass
+- **Existing agent misfires** — `up` mode tunes `description` trigger keywords and activation examples
+- **System prompt is stale** — `up` with "Full review + project context" option pulls in current codebase patterns
+- **CLAUDE.md agents table out of sync** — skill can update the table row automatically after create or improve
 
-Extract mode and target from `$ARGUMENTS`:
+| Scenario | Command |
+|----------|---------|
+| New agent for backend validation | `/brewcode:agents create backend validator` |
+| Improve the reviewer agent | `/brewcode:agents up reviewer` |
+| Improve by file path | `/brewcode:agents .claude/agents/reviewer.md` |
+| Show usage | `/brewcode:agents` |
+
+## Examples
+
+```bash
+# Create a new agent — guided placement + model + CLAUDE.md questions
+/brewcode:agents create backend validator
+
+# Improve existing agent — shorthand (no "up" prefix needed)
+/brewcode:agents reviewer
+
+# Explicit improve with full path
+/brewcode:agents up .claude/agents/tester.md
+```
+
+Expected output after `create`:
+
+```
+# agents [create]
+
+## Detection
+| Field    | Value             |
+|----------|-------------------|
+| Mode     | create            |
+| Target   | backend validator |
+
+## Result
+| Field     | Value                          |
+|-----------|--------------------------------|
+| Agent     | .claude/agents/validator.md    |
+| Model     | sonnet                         |
+| Scope     | project                        |
+| CLAUDE.md | updated                        |
+
+## Next Steps
+- Run /reload-plugins to pick up the new agent
+- Test with: "validate the API response schema"
+```
+
+## Flow
+
+<Steps>
+  <li>
+    <div>
+      <strong>Parse arguments</strong>
+      <p>Extracts mode and target from <code>$ARGUMENTS</code>. Empty args → prints usage and stops. Prefix <code>create</code> → create mode. Prefix <code>up</code> or a bare name/path → improve mode.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Ask clarifying questions (one batch)</strong>
+      <p><strong>create:</strong> three questions in a single <code>AskUserQuestion</code> call — placement scope (project / global / plugin), preferred model (sonnet / opus / haiku / inherit), and whether to update CLAUDE.md. <strong>up:</strong> two questions — improvement focus (triggers / system prompt / both / full review) and CLAUDE.md update.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Resolve target (up mode only)</strong>
+      <p>Searches <code>.claude/agents/</code>, <code>&#126;/.claude/agents/</code>, and <code>brewcode/agents/</code> for the name or path. Stops with an error and lists available agents if the target is not found.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Spawn agent-creator subagent</strong>
+      <p>Delegates to <code>brewcode:agent-creator</code> via Task tool with full context — description or current file content, placement, model, and improvement focus. Returns the written file path.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Optimize with text-optimize</strong>
+      <p>Runs <code>brewtools:text-optimize</code> on the agent file to trim token bloat without losing meaning. Skipped silently if brewtools is not installed.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Update CLAUDE.md (if approved)</strong>
+      <p>Finds the agents table by header pattern (<code>| Agent |</code> or <code>| Name |</code>) and adds or updates the row. Appends a new <code>## Agents</code> section if no table exists. Always uses <code>Edit</code>, never <code>Write</code>, on an existing file.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Print result summary</strong>
+      <p>Outputs a detection + result table: mode, target, agent path, model, scope, and CLAUDE.md status. Suggests next steps — typically <code>/reload-plugins</code> and a test invocation phrase.</p>
+    </div>
+  </li>
+</Steps>
+
+<details>
+<summary>Phase internals — argument parsing table</summary>
 
 | Pattern | Mode | Target |
 |---------|------|--------|
-| empty | help | -- |
+| empty | help | — |
 | `create <desc>` | create | description text |
 | `up <name\|path>` | up | agent name or path |
-| `<name\|path>` (not keyword) | **up** (shorthand) | name or path |
+| `<name\|path>` (no keyword) | up (shorthand) | name or path |
 
-**Examples:**
-- `/brewcode:agents` -- `help`
-- `/brewcode:agents create backend validator` -- `create`, target=`backend validator`
-- `/brewcode:agents up reviewer` -- `up`, target=`reviewer`
-- `/brewcode:agents .claude/agents/reviewer.md` -- `up`, target=path **(shorthand)**
+Placement path mapping:
 
----
+| Selection | Path |
+|-----------|------|
+| Project | `.claude/agents/` |
+| Global | `&#126;/.claude/agents/` |
+| Plugin | `brewcode/agents/` |
 
-## Mode: help (empty args)
-
-Print usage and stop:
-
-```
-# brewcode:agents
-
-Agent management - create and improve Claude Code agents.
-
-## Usage
-- `/brewcode:agents create <description>` -- create new agent
-- `/brewcode:agents up <name|path>` -- improve existing agent
-- `/brewcode:agents <name|path>` -- improve (shorthand)
-
-## Examples
-- `/brewcode:agents create backend validator`
-- `/brewcode:agents up reviewer`
-- `/brewcode:agents .claude/agents/reviewer.md`
-```
-
----
-
-## Mode: create
-
-### Step 1: AskUserQuestion (batch -- all questions in ONE call)
-
-Ask all 3 questions in a single AskUserQuestion:
-
-**Q1 -- Placement:**
-```
-header: "Agent scope"
-question: "Where to place the agent?"
-options:
-  - label: "Project (.claude/agents/)"
-    description: "Team-shared, scoped to this project"
-  - label: "Global (~/.claude/agents/)"
-    description: "Available in all projects"
-  - label: "Plugin (brewcode/agents/)"
-    description: "Distributed with plugin"
-```
-
-**Q2 -- Model:**
-```
-header: "Model"
-question: "Preferred model?"
-options:
-  - label: "sonnet -- balanced (Recommended)"
-    description: "Best balance of quality and speed for most agents"
-  - label: "opus -- complex analysis"
-    description: "For tasks requiring deep reasoning"
-  - label: "haiku -- fast/simple"
-    description: "For quick lookup or simple transformations"
-  - label: "inherit -- from session"
-    description: "No model field -- agent inherits model from calling session"
-```
-
-Model mapping: `sonnet` to `sonnet`, `opus` to `opus`, `haiku` to `haiku`, `inherit` to omitting `model:` field entirely.
-
-**Q3 -- CLAUDE.md update:**
-```
-header: "CLAUDE.md"
-question: "Update CLAUDE.md agents table after creation?"
-options:
-  - label: "Yes -- add row to agents table"
-    description: "Adds agent to the agents table in CLAUDE.md"
-  - label: "No -- skip"
-    description: "Skip CLAUDE.md update"
-```
-
-Save answers as: `SCOPE`, `SCOPE_PATH`, `MODEL`, `UPDATE_CLAUDE_MD`.
-
-Path mapping:
-- "Project (.claude/agents/)" -- `.claude/agents/`
-- "Global (~/.claude/agents/)" -- `~/.claude/agents/`
-- "Plugin (brewcode/agents/)" -- `brewcode/agents/`
-
-### Step 2: Spawn [agent-creator](/brewcode/agents/agent-creator/)
-
-```
-Task tool:
-  subagent_type: "brewcode:agent-creator"
-  prompt: |
-    Create an agent for: {DESCRIPTION}
-
-    Placement: {SCOPE} ({SCOPE_PATH})
-    Model: {MODEL}
-
-    Follow the agent-creator creation process:
-    1. Parallel codebase analysis (Explore agents)
-    2. Ask clarifying questions (role, tools, triggers)
-    3. Write frontmatter + system prompt
-    4. Validate against checklist
-
-    Output: full agent file path after creation.
-  model: opus
-```
-
-Capture result as `AGENT_PATH`.
-
-### Step 3: Apply text-optimize
-
-```
-Skill(skill="text-optimize", args="{AGENT_PATH}")
-```
-
-### Step 4: Update CLAUDE.md (if user approved)
-
-- Read project CLAUDE.md
-- Find agents table (look for `| Agent |` or `| Name |` header row with `| Scope |` or `| Purpose |` columns)
-- If table exists: add row `| agent-name | scope | model | triggers |`
-- If no table: append section:
-  ```markdown
-  ## Agents
-
-  | Agent | Scope | Model | Triggers |
-  |-------|-------|-------|----------|
-  | {agent-name} | {scope} | {model} | {triggers} |
-  ```
-- Use Edit tool (never Write for existing files)
-
----
-
-## Mode: up (improve existing)
-
-### Step 1: Resolve path/name
-
-**EXECUTE** using Bash tool:
-```bash
-TARGET="UP_TARGET_HERE"
-# Trim whitespace
-TARGET="$(echo "$TARGET" | xargs)"
-
-if [[ -z "$TARGET" ]]; then
-  echo "NO_TARGET"
-  exit 1
-fi
-
-# Check if direct file
-if [[ -f "$TARGET" ]]; then
-  echo "FOUND: $TARGET"
-elif [[ -f "$TARGET.md" ]]; then
-  echo "FOUND: $TARGET.md"
-elif [[ -d "$TARGET" ]] && [[ -f "$TARGET/$(basename "$TARGET").md" ]]; then
-  echo "FOUND: $TARGET/$(basename "$TARGET").md"
-else
-  # Search by name in known locations
-  FOUND=""
-  for loc in ".claude/agents" "$HOME/.claude/agents" "brewcode/agents"; do
-    if [[ -f "$loc/$TARGET.md" ]]; then
-      FOUND="$loc/$TARGET.md"
-      break
-    elif [[ -f "$loc/$TARGET" ]]; then
-      FOUND="$loc/$TARGET"
-      break
-    fi
-  done
-  if [[ -n "$FOUND" ]]; then
-    echo "FOUND: $FOUND"
-  else
-    echo "NOT_FOUND: $TARGET"
-  fi
-fi
-```
-
-Replace `UP_TARGET_HERE` with the actual target extracted from `$ARGUMENTS` (strip `up ` prefix if present).
-
-> **STOP if NOT\_FOUND** -- report error and list available agents.
-
-Read the resolved agent file to extract name, purpose, current content.
-
-### Step 2: AskUserQuestion (2 questions in ONE call)
-
-**Q1 -- Focus:**
-```
-header: "Improvement focus"
-question: "What to improve?"
-options:
-  - label: "Triggers/activation"
-    description: "Improve description and trigger examples for better auto-detection"
-  - label: "System prompt quality"
-    description: "Enhance instructions, checklist, output format"
-  - label: "Both (Recommended)"
-    description: "Triggers + system prompt quality"
-  - label: "Full review + project context"
-    description: "Complete review including project-specific knowledge update"
-```
-
-**Q2 -- CLAUDE.md update:**
-```
-header: "CLAUDE.md"
-question: "Update CLAUDE.md agents table after?"
-options:
-  - label: "Yes"
-    description: "Update agents table row in CLAUDE.md"
-  - label: "No"
-    description: "Skip CLAUDE.md update"
-```
-
-Save answers as: `IMPROVEMENT_FOCUS`, `UPDATE_CLAUDE_MD`.
-
-### Step 3: Spawn agent-creator
-
-```
-Task tool:
-  subagent_type: "brewcode:agent-creator"
-  prompt: |
-    Improve existing agent. Focus: {IMPROVEMENT_FOCUS}
-
-    Agent path: {AGENT_PATH}
-    Current content:
-    {AGENT_CONTENT}
-
-    Tasks:
-    1. Analyze current strengths/weaknesses
-    2. Improve description trigger examples
-    3. Enhance system prompt clarity
-    4. Apply agent-creator best practices
-    5. Save updated file
-
-    Output: full agent file path after update.
-  model: opus
-```
-
-### Step 4: Apply text-optimize
-
-```
-Skill(skill="text-optimize", args="{AGENT_PATH}")
-```
-
-### Step 5: Update CLAUDE.md (if approved)
-
-Same logic as create Step 4. If row already exists for this agent, update it instead of adding a new one.
-
----
-
-## Output format
-
-```markdown
-# agents [{MODE}]
-
-## Detection
-
-| Field | Value |
-|-------|-------|
-| Arguments | `$ARGUMENTS` |
-| Mode | `[create|up|help]` |
-| Target | `[description or path]` |
-
-## Result
-
-| Field | Value |
-|-------|-------|
-| Agent | `[path]` |
-| Model | `[model]` |
-| Scope | `[project|global|plugin]` |
-| CLAUDE.md | `[updated|skipped]` |
-
-## Next Steps
-
-- [recommendations]
-```
+</details>
 
 <CardGrid>
-  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
-    Download, changelog, and installation instructions.
+  <Card title="Skills skill" icon="puzzle" href="/brewcode/skills/skills/">
+    Same create/improve flow for skills (рецепты) instead of agents.
   </Card>
-  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/agents">
-    Source code, README, and configuration files.
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/agents">
+    Source SKILL.md and agent-creator subagent.
+  </Card>
+  <Card title="Brewcode overview" icon="document" href="/brewcode/">
+    All brewcode skills and agents in one place.
   </Card>
 </CardGrid>
 

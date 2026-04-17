@@ -1,159 +1,112 @@
 ---
 title: "Guide"
-description: "Interactive tutorial for the brewcode plugin suite — 9 topics, 3 domains, progress tracking"
+description: "Interactive tutorial for the brewcode plugin suite — 9 topics, 3 domains, progress tracking across sessions."
 order: 26
 ---
+import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-import { Card, CardGrid, Callout, Steps, Badge } from '../../../../components/mdx';
+# Learn the whole plugin suite. Step by step, at your pace.
 
-# Guide
-
-Guide is an interactive teaching skill that walks you through every feature of the
-brewcode/brewdoc/brewtools/brewui plugin suite. It tracks your progress, supports multiple
-languages, and adapts to your level.
-
-```bash
-/brewdoc:guide
-/brewdoc:guide overview
-/brewdoc:guide killer-flow
-```
-
-<Callout type="tip" title="Haiku-powered">
-  Guide runs on the haiku model for fast, lightweight responses.
-  It is read-only and never modifies your project files.
+<Callout type="caution">
+**Starting from scratch is overwhelming.** The brewcode suite has 4 plugins, 15+ skills, and 13+ agents. Reading all the docs at once doesn't work — there's no thread, no order, no feedback. Without a guide, most users discover 20% of the features and miss the rest.
 </Callout>
 
-## 9 Topics, 3 Domains
+<Callout type="tip">
+**Guide is a structured, interactive walkthrough.** 9 topics across 3 domains, delivered section by section with pauses for questions. Progress is saved — pick up where you left off next session. Runs on haiku for instant responses. Never modifies your project files.
+</Callout>
 
-The guide covers the entire plugin suite across three progressive domains:
+## Quick reference
 
-<CardGrid>
-  <Card title="A: Getting Started" icon="book">
-    Plugins overview, installation, updates. Foundation for everything else.
-  </Card>
-  <Card title="B: Core Workflow" icon="play">
-    Spec/Plan/Start pipeline, dynamic teams, full skills catalog.
-  </Card>
-  <Card title="C: Mastery" icon="star">
-    Agents catalog, build your own skills/agents/hooks, power features.
-  </Card>
-</CardGrid>
+| Field | Value |
+|-------|-------|
+| Command | `/brewdoc:guide [topic]` |
+| Arguments | `overview`, `installation`, `killer-flow`, `teams`, `skills-catalog`, `agents-catalog`, `customization`, `integration`, `advanced` — or none for interactive menu |
+| Model | haiku |
+| Tools | Read, Glob, Grep, Bash, WebSearch, AskUserQuestion |
 
-### Domain A: Getting Started
+## When to use
 
-<Steps>
-  <li>
-    <div>
-      <strong>Four Plugins Overview</strong> <Badge variant="primary" text="overview" />
-      <p>What is brewcode/brewdoc/brewtools/brewui, the philosophy behind the suite, and what makes it unique.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Installation and Updates</strong> <Badge variant="primary" text="installation" />
-      <p>Marketplace setup, installing all 4 plugins, verifying versions, enabling auto-update.</p>
-    </div>
-  </li>
-</Steps>
+- **First time with brewcode** — run `/brewdoc:guide` with no args, follow the menu
+- **Jump to a specific domain** — `/brewdoc:guide killer-flow` skips straight to Spec→Plan→Start
+- **Resume after a break** — the skill loads your saved progress and recommends the next topic
+- **Fuzzy navigation** — `/brewdoc:guide agent` resolves to the agents catalog via partial match
+- **After an update** — guide checks plugin versions on every launch and offers to update stale plugins
 
-### Domain B: Core Workflow
+## Examples
 
-<Steps>
-  <li>
-    <div>
-      <strong>Spec, Plan, Start</strong> <Badge variant="primary" text="killer-flow" />
-      <p>The infinite task pipeline: SPEC defines what, PLAN defines how, START does the work with automatic handoff.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Dynamic Teams</strong> <Badge variant="primary" text="teams" />
-      <p>Create 5-20 domain-specific agents tailored to your project. Self-evolving with trace tracking.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Skills Catalog</strong> <Badge variant="primary" text="skills-catalog" />
-      <p>All 28 skills across the four plugins with trigger examples and recommended order.</p>
-    </div>
-  </li>
-</Steps>
+```bash
+# Start the interactive menu (recommended for new users)
+/brewdoc:guide
 
-### Domain C: Mastery
+# Jump directly to a topic by name
+/brewdoc:guide killer-flow
 
-<Steps>
-  <li>
-    <div>
-      <strong>Agents Catalog</strong> <Badge variant="primary" text="agents-catalog" />
-      <p>All 18 agents with roles, model selection, and when to use each one.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Build Your Own</strong> <Badge variant="primary" text="customization" />
-      <p>Create custom skills, agents, and hooks using [skill-creator](/brewcode/agents/skill-creator/), [agent-creator](/brewcode/agents/agent-creator/), and [hook-creator](/brewcode/agents/hook-creator/).</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Project Configuration</strong> <Badge variant="primary" text="integration" />
-      <p>CLAUDE.md, rules, memory, teams directory, and the full <code>.claude/</code> structure.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Power Features</strong> <Badge variant="primary" text="advanced" />
-      <p>Grepai semantic search, convention extraction, quorum code review, secrets scanning.</p>
-    </div>
-  </li>
-</Steps>
+# Partial match — resolves to agents-catalog
+/brewdoc:guide agent
+```
 
-## How It Works
+Expected output when starting fresh:
 
-The guide follows a 5-phase flow:
+```
+Component     Status      Details
+Docs Site     UP          200
+Latest        v3.6.2      GitHub
+brewcode      3.6.2       current
+brewdoc       3.6.2       current
+brewtools     3.6.2       current
+Auto-update   ON
+
+Welcome! Choose a topic or follow the recommendation:
+→ Recommended next: Four Plugins Overview
+```
+
+## Flow
+
+The guide follows a 6-step onboarding walkthrough on every launch:
 
 <Steps>
   <li>
     <div>
       <strong>Validate environment</strong>
-      <p>Check docs site, GitHub release, installed plugin versions. Show health table.</p>
+      <p>Checks the docs site, GitHub latest release, and all four installed plugin versions. Prints a health table so you know exactly what's current before learning anything.</p>
     </div>
   </li>
   <li>
     <div>
-      <strong>Language and progress</strong>
-      <p>Select language (EN/RU/PT), load progress from previous sessions.</p>
+      <strong>Check plugin freshness</strong>
+      <p>Invokes <code>/brewtools:plugin-update check</code> silently. If any plugin is stale or missing, offers to update now, remind later, or skip — your choice, no forced interruptions.</p>
     </div>
   </li>
   <li>
     <div>
-      <strong>Menu or direct topic</strong>
-      <p>Show interactive menu or jump to a topic by name.</p>
+      <strong>Load language and progress</strong>
+      <p>First run asks your preferred language (English, Русский, Português). Returning users see their completion score and the recommended next topic based on what they've already covered.</p>
     </div>
   </li>
   <li>
     <div>
-      <strong>Deliver topic</strong>
-      <p>Present 3-4 sections with pauses for questions, examples, and deep dives.</p>
+      <strong>Route to topic</strong>
+      <p>With an argument — exact or fuzzy match against the 9 topic IDs, then straight to delivery. Without an argument — interactive menu with checkmarks (✅ completed, ⬜ pending) and a recommendation.</p>
     </div>
   </li>
   <li>
     <div>
-      <strong>Update progress</strong>
-      <p>Mark topic complete, recommend next topic.</p>
+      <strong>Deliver topic section by section</strong>
+      <p>Each topic has 3–4 sections. After each section: continue, show me an example, go deeper, skip, or back to menu. Examples use your actual project context (reads CLAUDE.md and <code>.claude/</code> structure) — not generic placeholders.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Update progress and recommend next</strong>
+      <p>Marks the topic complete in <code>.claude/brewdoc/guide-progress.json</code>. Shows updated completion status. If all 9 topics are done, prints a "what to do now" summary with concrete next commands.</p>
     </div>
   </li>
 </Steps>
 
-Between sections, you can choose:
-- **Continue** to the next section
-- **Show me an example** with project context
-- **Go deeper** for more detail
-- **Skip** or **Back to menu**
+<details>
+<summary>Progress tracking and topic map</summary>
 
-## Progress Tracking
-
-Progress is saved to `.claude/brewdoc/guide-progress.json` (project-relative) and persists across sessions. If the project directory is not writable, the script falls back to `${BD_PLUGIN_DATA}/guide-progress.json` for interactive sessions.
+Progress is saved to `.claude/brewdoc/guide-progress.json` (project-relative). If the project directory is not writable, falls back to `${BD_PLUGIN_DATA}/guide-progress.json`.
 
 ```json
 {
@@ -165,39 +118,35 @@ Progress is saved to `.claude/brewdoc/guide-progress.json` (project-relative) an
 }
 ```
 
-Returning users see their completion status and a recommendation for the next topic.
+| ID | Topic | Domain |
+|----|-------|--------|
+| `overview` | Four Plugins Overview | A: Getting Started |
+| `installation` | Installation & Updates | A: Getting Started |
+| `killer-flow` | Spec → Plan → Start | B: Core Workflow |
+| `teams` | Dynamic Teams | B: Core Workflow |
+| `skills-catalog` | All Skills Catalog | B: Core Workflow |
+| `agents-catalog` | All Agents Catalog | C: Mastery |
+| `customization` | Build Your Own | C: Mastery |
+| `integration` | Project Configuration | C: Mastery |
+| `advanced` | Power Features | C: Mastery |
 
-Two helper scripts manage the guide:
+Two helper scripts manage the guide: `validate.sh` checks docs site, GitHub release, and installed versions; `progress.sh` handles CRUD for the progress JSON (`read`, `complete`, `lang`, `reset`, `status`).
 
-| Script | Purpose |
-|--------|---------|
-| `validate.sh` | Check docs site, GitHub release, installed versions, auto-update status |
-| `progress.sh` | CRUD for progress JSON: `read`, `complete`, `lang`, `reset`, `status` |
-
-## Environment Health Check
-
-On every launch, the guide checks your environment and shows a health table:
-
-```
-Component     Status      Details
-Docs Site     UP          200
-Latest        v3.4.20     GitHub
-brewcode      3.4.20      current
-brewdoc       3.4.20      current
-brewtools     3.4.20      current
-Auto-update   ON
-```
-
-<Callout type="note" title="Direct topic access">
-  Jump straight to any topic: <code>/brewdoc:guide killer-flow</code>.
-  Partial matching works too: <code>/brewdoc:guide agent</code> resolves to the agents catalog.
-</Callout>
+</details>
 
 <CardGrid>
-  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
-    Download, changelog, and installation instructions.
+  <Card title="my-claude" icon="document" href="/brewdoc/skills/my-claude/">
+    Generate Claude Code installation docs for your project — complements the guide's installation topic.
   </Card>
-  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewdoc/skills/guide">
-    Source code, README, and configuration files.
+  <Card title="auto-sync" icon="robot" href="/brewdoc/skills/auto-sync/">
+    Universal doc sync skill — keep docs in sync as your project evolves after the guide.
+  </Card>
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewdoc/skills/guide">
+    Source code, topic reference files, and progress scripts.
+  </Card>
+  <Card title="brewdoc overview" icon="rocket" href="/brewdoc/">
+    All brewdoc skills (рецепты) in one place.
   </Card>
 </CardGrid>
+
+<UpdateNotice />

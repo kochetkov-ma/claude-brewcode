@@ -116,9 +116,9 @@ Initializes the session, logs the session ID, and manages Plan Mode symlinks.
 | `compact` + active task | Handoff instructions in additionalContext |
 
 **LATEST.md symlink:**
-1. Checks `~/.claude/plans/` for `.md` files
+1. Checks `&#126;/.claude/plans/` for `.md` files
 2. Picks the newest one (by mtime)
-3. If the file is less than 60 seconds old -- creates `.claude/plans/LATEST.md` -> `~/.claude/plans/<newest>.md`
+3. If the file is less than 60 seconds old -- creates `.claude/plans/LATEST.md` -> `&#126;/.claude/plans/<newest>.md`
 4. Used by the `/brewcode:plan` skill for Plan Mode
 
 ---
@@ -319,9 +319,9 @@ The hook applies additional safety checks for Bash commands:
 - **Path extraction:** all `.claude/` and temp path tokens are verified against the allow-list
 
 <Callout type="caution" title="Global config excluded">
-  The hook explicitly skips the global <code>{"~"}/.claude/</code> directory.
+  The hook explicitly skips the global <code>&#126;/.claude/</code> directory.
   Only project-level <code>.claude/</code> paths receive auto-allow.
-  Writes to <code>{"~"}/.claude/CLAUDE.md</code> or <code>{"~"}/.claude/rules/</code> still require manual permission.
+  Writes to <code>&#126;/.claude/CLAUDE.md</code> or <code>&#126;/.claude/rules/</code> still require manual permission.
 </Callout>
 
 **Decision logic:**

@@ -1,661 +1,137 @@
 ---
 title: "Agent Creator"
-description: "Creates, improves, and analyzes Claude Code agents"
+description: "Creates, improves, and analyzes Claude Code agents following Anthropic best practices."
 order: 1206
 ---
-import { Badge, Callout, Card, CardGrid, Tabs, TabItem } from '../../../../components/mdx';
+import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# Agent Creator
+# Your custom agents, built right the first time.
 
-<Badge variant="primary" text="opus" />
+<Callout type="caution">
+**Agents with vague descriptions trigger on the wrong requests — or never trigger at all.** A bad `description` means Claude picks the wrong agent, spams irrelevant ones, or silently falls back to the main conversation. Most hand-written agents also leak CLAUDE.md rules into the body (already injected) or forget the `Triggers:` keyword list that drives auto-selection.
+</Callout>
+
+<Callout type="tip">
+**Describe what you want — the agent handles the rest.** It runs parallel analysis of your codebase, drafts the frontmatter and system prompt, validates against Anthropic best practices, then optimizes with `brewtools:text-optimize`. Improvement and debugging of existing agents follow the same flow.
+</Callout>
 
 ## Quick reference
 
 | Field | Value |
 |-------|-------|
+| Triggers | "create agent", "new agent", "agent doesn't trigger", "improve agent", "fix agent description" |
 | Model | opus |
 | Tools | Read, Write, Edit, Glob, Grep, Task, Skill, WebFetch, WebSearch, AskUserQuestion |
-| Triggers | "Create agent", "new agent", agent structure, agent improvement |
 
-Creates Claude Code agents following Anthropic best practices.
-
-<Tabs>
-  <TabItem label="Agent Format">
-
-  ## Agent File Format
-
-  ```markdown
-  ---
-  name: agent-name                    # REQ: lowercase letters/hyphens
-  description: "Short description"    # REQ: trigger terms, when to delegate
-  model: sonnet                       # OPT: sonnet|opus|haiku|inherit (default: inherit)
-  effort: high                        # OPT: low|medium|high|auto (v2.1.78+, plugin only)
-  maxTurns: 20                        # OPT: max turns before stopping (v2.1.78+, plugin only)
-  tools: Read, Glob, Grep             # OPT: comma-separated (omit = inherit all)
-  disallowedTools: Write, Edit        # OPT: deny specific tools (v2.1.78+)
-  permissionMode: default             # OPT: see Permission Modes table
-  skills: skill1, skill2              # OPT: injected into context at startup
-  color: cyan                         # OPT: UI color semantics
-  memory: true                        # OPT: agent-specific MEMORY.md
-  initialPrompt: "Analyze this code"  # OPT: first prompt on start (v2.1.69+)
-  isolation: worktree                 # OPT: isolated git worktree (v2.1.50+)
-  mcpServers: [server1, server2]      # OPT: restrict MCP servers
-  hooks:                              # OPT: lifecycle hooks
-    PreToolUse:
-      - matcher: "Bash"
-        hooks:
-          - type: command
-            command: "./validate.sh"
-  ---
-
-  # System Prompt
-
-  Detailed instructions for the agent...
-  ```
-
-  ---
-
-  ## Frontmatter Reference
-
-  ### Required Fields
-
-  | Field | Format | Description |
-  |-------|--------|-------------|
-  | `name` | lowercase, hyphens | Unique identifier |
-  | `description` | trigger terms | When Claude delegates to this agent |
-
-  ### Optional Fields
-
-  | Field | Values | Default | Version | Description |
-  |-------|--------|---------|---------|-------------|
-  | `model` | `sonnet`, `opus`, `haiku`, `inherit` | `inherit` | -- | Model selection |
-  | `effort` | `low`, `medium`, `high`, `auto` | `inherit` | 2.1.78 | Override effort level (plugin agents only) |
-  | `maxTurns` | integer | unlimited | 2.1.78 | Max turns before stopping (plugin agents only) |
-  | `tools` | comma-separated | All inherited | -- | Allowed tools |
-  | `disallowedTools` | comma-separated | None | 2.1.78 | Denied tools (removed from inherited) |
-  | `permissionMode` | see below | `default` | -- | Permission handling |
-  | `skills` | comma-separated | None | -- | Injected into context at startup |
-  | `hooks` | YAML structure | None | -- | Lifecycle hooks |
-  | `color` | `cyan`, `green`, `yellow`, `red`, `magenta` | None | -- | UI color (see Color Semantics) |
-  | `memory` | `true`/`false` | `false` | -- | Agent-specific MEMORY.md; auto-adds Read/Write/Edit |
-  | `initialPrompt` | string | None | 2.1.69 | Text of first prompt sent to agent on start |
-  | `isolation` | `worktree` | None | 2.1.50 | Run agent in isolated git worktree |
-  | `mcpServers` | array of names | All inherited | -- | Restrict which MCP servers agent can access |
-
-  ### Permission Modes
-
-  | Mode | Behavior |
-  |------|----------|
-  | `default` | Standard permission prompts |
-  | `acceptEdits` | Auto-accept file edits |
-  | `dontAsk` | Auto-deny prompts (allowed tools still work) |
-  | `bypassPermissions` | Skip all checks (use with caution) |
-  | `plan` | Read-only exploration mode |
-
-  ### Available Tools
-
-  | Category | Tools |
-  |----------|-------|
-  | **Read** | Read, Glob, Grep |
-  | **Write** | Write, Edit, NotebookEdit |
-  | **Execute** | Bash, Task, TaskOutput, TaskStop |
-  | **Tasks** | TaskCreate, TaskUpdate, TaskList, TaskGet |
-  | **Web** | WebFetch, WebSearch |
-  | **Interactive** | AskUserQuestion, Skill, ExitPlanMode |
-  | **MCP** | `mcp__server__tool` format |
-
-  ### Hook Events
-
-  | Event | Matcher | When | Level |
-  |-------|---------|------|-------|
-  | `PreToolUse` | Tool name | Before tool execution | Agent frontmatter |
-  | `PostToolUse` | Tool name | After tool execution | Agent frontmatter |
-  | `Stop` | (none) | When agent finishes | Agent frontmatter |
-  | `SubagentStart` | (none) | Before subagent starts | settings.json only |
-  | `SubagentStop` | (none) | Before subagent stops (blockable) | settings.json only |
-  | `PreToolUse:Task` | (none) | Before Task tool call | settings.json only |
-  | `PostToolUse:Task` | (none) | After Task tool completes | settings.json only |
-  | `TaskCreated` | (none) | When task created (Teams, v2.1.84) | settings.json only |
-  | `TeammateIdle` | (none) | Teammate finished task (Teams) | settings.json only |
-  | `TaskCompleted` | (none) | Task completed by teammate (Teams) | settings.json only |
-
-  > Agent frontmatter hooks: `PreToolUse`, `PostToolUse`, `Stop` only.
-  > Settings-level hooks affect ALL subagents -- configure in `settings.json` or `plugin/hooks/hooks.json`.
-
-  </TabItem>
-  <TabItem label="Scope & Context">
-
-  ## Agent Scope and Precedence
-
-  | Priority | Location | Scope | How to Create |
-  |----------|----------|-------|---------------|
-  | 1 (highest) | `--agents` CLI flag | Current session | JSON at launch |
-  | 2 | `.claude/agents/` | Project | Manual or `/agents` |
-  | 3 | `~/.claude/agents/` | User (all projects) | Manual or `/agents` |
-  | 4 (lowest) | `plugin/agents/` | Where plugin enabled | Installed with plugin |
-
-  ### CLI JSON Format (session-only)
-
-  ```bash
-  claude --agents '{
-    "code-reviewer": {
-      "description": "Expert reviewer. Use after code changes.",
-      "prompt": "You are a senior code reviewer...",
-      "tools": ["Read", "Grep", "Glob", "Bash"],
-      "model": "sonnet"
-    }
-  }'
-  ```
-
-  ---
-
-  ## Subagents Cannot Spawn Subagents
-
-  **Architectural limitation:** subagents use `SubAgentLoop`, from which `AgentTool` is excluded. Nested agent spawning is impossible by any method:
-
-  | Attempt | Result |
-  |---------|-----------|
-  | `Task(subagent_type=...)` from subagent | Tool **absent** from toolset |
-  | `Skill` tool from subagent | **Unavailable** -- not in subagent toolset ([#4182](https://github.com/anthropics/claude-code/issues/4182)) |
-  | Skill with `context: fork` from subagent | **Won't work** -- `context: fork` uses same `AgentTool` for spawn |
-  | `claude -p` via Bash | Technically launches, but **not recommended**: OOM crashes, context loss |
-  | Specifying `Task` in `tools:` frontmatter | **Ignored** -- docs: *"Task(agent_type) has no effect in subagent definitions"* |
-
-  **Recommended patterns:**
-
-  | Pattern | How |
-  |---------|-----|
-  | **Chaining** | Main agent launches agents sequentially, passing results |
-  | **Preloaded skills** | `skills:` in frontmatter -- content injected at startup (not runtime) |
-  | **File-based communication** | Agents write results to files, next agent reads |
-  | **Agent Teams** (v2.1.33+) | Lead coordinates teammates (but teammates also don't spawn sub-teammates) |
-
-  **Agent Teams** -- lead coordinates teammates via Task API tools: `TaskCreate`, `TaskUpdate`, `TaskList`, `TaskGet`, `TaskOutput`, `TaskStop`. Hook events: `TeammateIdle`, `TaskCompleted`, `TaskCreated` (v2.1.84). One level deep only.
-
-  ---
-
-  ## Subagent Context Inheritance
-
-  What a subagent receives at runtime (important for system prompt design):
-
-  | Context | Inherited? | Notes |
-  |---------|-----------|-------|
-  | CLAUDE.md (project + user) | **Yes** | Via `&lt;system-reminder&gt;`, with "may or may not be relevant" disclaimer |
-  | `.claude/rules/*.md` | **Yes** | Bundled with CLAUDE.md injection |
-  | Git status | **Yes** | Basic project state |
-  | Permissions | **Yes** | Override via `permissionMode` |
-  | Tools / MCP servers | **Yes** | Configurable via `tools`/`disallowedTools`/`mcpServers` |
-  | Skills from `skills:` field | **Yes** | Full content injected at startup (not runtime) |
-  | Agent memory (`memory:` field) | **Yes** | First 200 lines of MEMORY.md; auto-adds Read/Write/Edit |
-  | Full Claude Code system prompt | **No** | Replaced with short ~294-token agent prompt |
-  | Parent conversation history | **No** | Clean slate each invocation |
-  | Parent's invoked skills | **No** | Must list explicitly in `skills:` field |
-  | Parent's auto memory (`memory/MEMORY.md`) | **No** | Only agent-specific memory |
-
-  > **Design implication:** Don't duplicate CLAUDE.md rules in agent body -- they're already injected. Focus system prompt on agent-specific role, patterns, and checklists.
-
-  ---
-
-  ## Skills Injection
-
-  Skills in frontmatter are injected as full content into agent context at startup.
-
-  ```yaml
-  skills: api-conventions, error-handling
-  ```
-
-  > List skills explicitly per agent -- no inheritance from parent.
-
-  ### Reference-Aware Skills
-
-  When an agent spawns from a skill that uses `references/`, the agent does NOT have `skill_base_dir`.
-
-  | Content Size | Approach | Example |
-  |-------------|----------|---------|
-  | &lt;50 lines | Inline into agent prompt | Pass reference content directly via Task prompt |
-  | &gt;50 lines | Use `$BC_PLUGIN_ROOT` path | `Read $BC_PLUGIN_ROOT/skills/skill-name/references/mode.md` |
-
-  `$BC_PLUGIN_ROOT` is injected by `pre-task.mjs` and available in all subagents.
-
-  > If the skill detects mode BEFORE spawning agent, pass only the relevant reference -- not all of them.
-
-  ---
-
-  ## Execution Modes
-
-  | Mode | Behavior | Permissions |
-  |------|----------|-------------|
-  | **Foreground** | Blocks main conversation | Interactive prompts |
-  | **Background** | Concurrent execution | Pre-approved only, auto-deny others |
-
-  - Background: say "run in background" or **Ctrl+B**
-  - Resume failed background agent in foreground to retry with prompts
-
-  </TabItem>
-  <TabItem label="System Prompts">
-
-  ## Description Patterns
-
-  | Pattern | Example |
-  |---------|---------|
-  | Action + triggers | `Expert reviewer. Use after code changes. Reviews quality, security.` |
-  | Role + capabilities | `Frontend impl: React, MUI, hooks. For UI features, fixes.` |
-  | Read-only explicit | `Architecture analyst: patterns, docs. READ-ONLY.` |
-
-  Use specific triggers and capabilities. Avoid vague ("Helps with code") or wordy ("Use this agent when...") descriptions.
-
-  ---
-
-  ## System Prompt Structure
-
-  ### 1. Role Header
-  ```markdown
-  # Agent Name
-
-  **Role:** One sentence.
-  **Scope:** READ-ONLY / Write access / Full access
-  ```
-
-  ### 2. Project Context (tables)
-  ```markdown
-  ## Context
-
-  **Stack:** React 17 | TypeScript 5.7 | MUI v5
-  **Auth:** keycloak-js | **Build:** vite
-
-  > Important constraint or limitation
-  ```
-
-  ### 3. Patterns (avoid/prefer tables)
-  ```markdown
-  ## Patterns
-
-  | Avoid | Prefer |
-  |-------|--------|
-  | export default | export function Name() |
-  | Inline styles | *.styles.ts files |
-  ```
-
-  ### 4. Commands (reference table)
-  ```markdown
-  ## Commands
-
-  | Task | Command |
-  |------|---------|
-  | Dev | yarn start |
-  | Test | yarn test |
-  ```
-
-  ### 5. Checklist (at end)
-  ```markdown
-  ## Checklist
-
-  - TypeScript compiles
-  - Tests pass
-  - No hardcoded values
-  ```
-
-  ---
-
-  ## System Prompt Patterns
-
-  Four agent archetypes with distinct workflows:
-
-  | Type | Purpose | Process |
-  |------|---------|---------|
-  | **Analysis** | Examine code/docs/PRs | Gather context -> Scan -> Deep analyze -> Synthesize -> Prioritize -> Report |
-  | **Generation** | Create code/tests/docs | Understand reqs -> Review conventions -> Design -> Generate -> Validate -> Document |
-  | **Validation** | Verify criteria | Load rules -> Scan targets -> Check each rule -> Collect violations -> Assess severity -> Pass/fail |
-  | **Orchestration** | Multi-step workflows | Plan dependencies -> Prepare -> Execute phases -> Monitor -> Verify -> Report |
-
-  ### Writing Principles
-
-  | Principle | Bad | Good |
-  |-----------|-----|------|
-  | Specific | "Look for security issues" | "Check for SQL injection by examining database queries for parameterization" |
-  | Actionable | "Analyze the code" | "Read the file using Read tool, then search for patterns using Grep" |
-  | Edge cases | (not mentioned) | "If insufficient context, ask clarifying questions before proceeding" |
-
-  ---
-
-  ## Color Semantics
-
-  | Color | Use for | Examples |
-  |-------|---------|----------|
-  | cyan | Analysis, review | code-reviewer, security-analyzer |
-  | green | Generation, creation | test-generator, doc-generator |
-  | yellow | Validation, warning | plugin-validator, schema-checker |
-  | red | Security, critical | security-scanner, vuln-finder |
-  | magenta | Transformation | code-migrator, refactorer |
-
-  ---
-
-  ## Triggering Examples Guide
-
-  ### Four Triggering Types
-
-  | Type | Description | Example trigger |
-  |------|-------------|-----------------|
-  | **Explicit** | User directly asks | "Review my code" |
-  | **Proactive** | After relevant work | (agent completes code) -> auto-review |
-  | **Implicit** | User implies need | "I just finished the auth module" |
-  | **Tool-based** | Based on prior activity | After multiple Write calls -> suggest review |
-
-  ### Example Quantity
-
-  - **Minimum:** 3-4 examples covering explicit, implicit, proactive
-  - **Maximum:** 6 examples (prevents description bloat)
-
-  ### Common Pitfalls
-
-  | Pitfall | Impact |
-  |---------|--------|
-  | Missing context | Unpredictable triggering |
-  | No commentary | Unclear trigger logic |
-  | Showing agent output | Should show triggering, not result |
-  | Overly similar examples | Doesn't demonstrate variety |
-
-  </TabItem>
-  <TabItem label="LLM Rules & Process">
-
-  ## LLM Text Rules
-
-  Write token-efficient text optimized for LLM consumption. Every token counts -- dense, clear, no waste.
-
-  | Rule | Details |
-  |------|---------|
-  | Tables over prose, bullets over numbered | Multi-column ~66% savings, bullets when order irrelevant |
-  | `code` over text, inline over blocks | Identifiers, paths, short values; blocks only if &gt;3 lines |
-  | Comma-separated inline lists | `a, b, c` not bullet per item when saving space |
-  | One-liner rules, arrows for flow | `old` -> `new`, conditions with `->` (~40% savings) |
-  | No filler, no water | Cut "please note", "it's important", "only", "exactly", "basically" |
-  | Positive framing, no aggressive lang | "Do Y" not "Don't X"; "Use when..." not "CRITICAL: MUST..." |
-  | Imperative form | "Do X" not "You should do X"; 3rd person for descriptions |
-  | Bold for key terms, no extra formatting | `**term**` for emphasis; no decorative lines, headers, dividers |
-  | No emojis except status markers | Only 3 allowed: pass, fail, warning |
-  | Merge duplicates, abbreviate in tables | Single source of truth; REQ, impl, cfg, args, ret, err |
-
-  ---
-
-  ## Creation Process
-
-  1. **Parallel analysis** -- Launch 4+ Explore agents
-  2. **Clarify** -- Ask 2-3 questions (role, tools, model)
-  3. **Synthesize** -- Extract patterns, rules, conventions from analysis
-  4. **Write** -- Frontmatter + system prompt with tables
-  5. **Validate** -- Check name, description, tools, structure
-  6. **Optimize** -- Run [text-optimize](/brewtools/skills/text-optimize/) skill: `Skill(skill="text-optimize", args="path/to/agent.md")`
-
-  ---
-
-  ## Agent Architect Process (Official)
-
-  Six-step framework for designing high-quality agents:
-
-  | Step | Focus | Details |
-  |------|-------|---------|
-  | 1. Extract Core Intent | Purpose | Identify fundamental purpose, success criteria, project context |
-  | 2. Design Expert Persona | Identity | Create domain-specific identity guiding decision-making |
-  | 3. Architect Instructions | System prompt | Behavioral boundaries, methodologies, edge case handling |
-  | 4. Optimize Performance | Quality | Decision frameworks, quality controls, escalation strategies |
-  | 5. Create Identifier | Name | Concise name: lowercase letters, numbers, hyphens (2-4 words) |
-  | 6. Craft Examples | Triggering | 2-4 scenarios showing different phrasings and contexts |
-
-  ---
-
-  ## Model Selection
-
-  | Model | Use Case | Examples |
-  |-------|----------|----------|
-  | opus | Complex orchestration, multi-phase | setup, create, review |
-  | sonnet | Medium complexity, optimization | rules, grepai |
-  | haiku | Simple, fast, cleanup | teardown, clean-cache |
-
-  </TabItem>
-  <TabItem label="Examples">
-
-  ## Common Agent Types
-
-  | Type | Model | Tools | Focus |
-  |------|-------|-------|-------|
-  | `developer-*` | opus | Read, Write, Edit, Bash, Task | Implementation |
-  | `reviewer` | opus | Read, Glob, Grep | Code review |
-  | `tester` | sonnet | Read, Bash | Test execution |
-  | `arch-*` | opus | Read, Glob, Grep, WebFetch | Architecture (read-only) |
-  | `docs-*` | sonnet | Read, Write, Edit | Documentation |
-  | `explorer` | haiku | Read, Glob, Grep | Quick search |
-
-  ---
-
-  ## Complete Agent Examples
-
-  Production-ready agents showing frontmatter + system prompt essentials.
-
-  ### code-reviewer
-
-  | Field | Value |
-  |-------|-------|
-  | model | opus |
-  | color | cyan |
-  | tools | Read, Glob, Grep |
-
-  ```yaml
-  ---
-  name: code-reviewer
-  description: Reviews code for quality, security, patterns. Use after code changes or for PR review.
-  model: opus
-  color: cyan
-  tools: Read, Glob, Grep
-  ---
-  ```
-
-  **System prompt key elements:**
-  - Role: Senior code reviewer with security focus
-  - Checklist: SQL injection, XSS, CSRF, hardcoded secrets, naming conventions, test coverage
-  - Output: Structured report with severity levels (Critical/High/Medium/Low)
-  - Read-only: no modifications, only analysis and recommendations
-
-  ---
-
-  ### test-generator
-
-  | Field | Value |
-  |-------|-------|
-  | model | sonnet |
-  | color | green |
-  | tools | Read, Write, Edit, Bash |
-
-  ```yaml
-  ---
-  name: test-generator
-  description: Creates unit tests for Java/Kotlin code. Use when tests needed for new features.
-  model: sonnet
-  color: green
-  tools: Read, Write, Edit, Bash
-  ---
-  ```
-
-  **System prompt key elements:**
-  - Role: QA engineer specializing in JUnit 5, Mockito, AssertJ
-  - Patterns: BDD format (GIVEN/WHEN/THEN), @DisplayName on methods, `.as()` on assertions
-  - Coverage: happy path, edge cases, error conditions, boundary values
-  - Validation: `mvn test` after generation, no compilation errors
-
-  ---
-
-  ### doc-generator
-
-  | Field | Value |
-  |-------|-------|
-  | model | sonnet |
-  | color | green |
-  | tools | Read, Write, Edit |
-
-  ```yaml
-  ---
-  name: doc-generator
-  description: Generates technical documentation from code. Use for README, API docs, architecture.
-  model: sonnet
-  color: green
-  tools: Read, Write, Edit
-  ---
-  ```
-
-  **System prompt key elements:**
-  - Role: Technical writer optimizing for LLM consumption
-  - Format: Tables over prose, code blocks over text, bullets over numbered lists
-  - Structure: Overview -> Quick Start -> API Reference -> Examples -> FAQ
-  - Token efficiency: no filler words, dense content, positive framing
-
-  ---
-
-  ### security-analyzer
-
-  | Field | Value |
-  |-------|-------|
-  | model | opus |
-  | color | red |
-  | tools | Read, Glob, Grep, Bash |
-
-  ```yaml
-  ---
-  name: security-analyzer
-  description: Scans code for security vulnerabilities. Use before releases or after security incidents.
-  model: opus
-  color: red
-  tools: Read, Glob, Grep, Bash
-  ---
-  ```
-
-  **System prompt key elements:**
-  - Role: Security expert specializing in OWASP Top 10
-  - Scan targets: hardcoded credentials, SQL injection, XSS, CSRF, insecure deserialization
-  - Process: Grep patterns -> Read suspicious files -> Deep analysis -> Risk assessment
-  - Output: Vulnerability report with CVSS scores, exploit scenarios, remediation steps
-
-  </TabItem>
-  <TabItem label="Best Practices">
-
-  ## Best Practices
-
-  | Practice | Benefit |
-  |----------|---------|
-  | Scope tools per agent | Principle of least privilege |
-  | Single clear goal | Focused behavior |
-  | Include checklist | Definition of Done |
-  | Ask before major changes | User control |
-  | Start restrictive | Expand tools as validated |
-  | Define next steps | Clear handoffs |
-
-  ---
-
-  ## Validation Checklist
-
-  - `name`: lowercase-hyphens only (`[a-z0-9-]+`)
-  - `description`: trigger terms + min 3 `&lt;example&gt;` blocks for complex agents
-  - `tools`: minimal required set (principle of least privilege)
-  - `disallowedTools`: no conflict with `tools` if both specified
-  - `model`: matches task complexity (opus=complex, sonnet=standard, haiku=light)
-  - System prompt: tables over prose, code over text
-  - Project-specific knowledge included (stack, conventions, commands)
-  - Checklist (DoD) present at end of system prompt
-  - READ-ONLY agents have no Write/Edit tools
-  - No CLAUDE.md rules duplicated in agent body (already injected)
-  - Unique name in scope (no conflict with existing agents)
-  - Optimized with `text-optimize` skill
-
-  </TabItem>
-  <TabItem label="Known Bugs">
-
-  ## Known Bugs
-
-  | Bug | Impact | Status | Workaround |
-  |-----|--------|--------|------------|
-  | [#29423](https://github.com/anthropics/claude-code/issues/29423) | Task subagents don't load CLAUDE.md and rules | Active | Pass rules in `Task(prompt=...)` |
-  | [#29110](https://github.com/anthropics/claude-code/issues/29110) | `bypassPermissions` breaks Write/Edit; worktree loses data | Active | Avoid `bypassPermissions` + `isolation: worktree` combo |
-  | [#19040](https://github.com/anthropics/claude-code/issues/19040) | Session files grow to multi-GB from subagent progress entries | Active | Monitor session file size |
-  | [#31392](https://github.com/anthropics/claude-code/issues/31392) | Global agents `~/.claude/agents/` not discovered | Active (v2.1.70+) | Use project-level or plugin-level agents |
-  | [#27736](https://github.com/anthropics/claude-code/issues/27736) | `skills:` in plugin agent frontmatter not rendered in Task tool | Active | Pre-inject skill content via `Task(prompt=...)` |
-  | [#25834](https://github.com/anthropics/claude-code/issues/25834) | Plugin agent `skills:` doesn't inject content | Active | Inline skill content or use `$BC_PLUGIN_ROOT` path |
-  | [#13627](https://github.com/anthropics/claude-code/issues/13627) | Agent body not injected via Task tool | Closed (NOT PLANNED) | `SubagentStart` hook with `additionalContext` |
-  | [#8395](https://github.com/anthropics/claude-code/issues/8395) | Subagents ignore user-level CLAUDE.md | Closed (NOT PLANNED) | `SubagentStart` hook with `additionalContext` |
-  | [#4182](https://github.com/anthropics/claude-code/issues/4182) | Skill tool unavailable in subagent | By design | Use `skills:` in frontmatter for pre-injection |
-  | [#17283](https://github.com/anthropics/claude-code/issues/17283) | Subagents cannot spawn subagents | By design | Chaining from main conversation |
-
-  ---
-
-  ## Architectural Limitations
-
-  | Limitation | Description | Workaround |
-  |------------|-------------|------------|
-  | No nested subagents | `SubAgentLoop` excludes `AgentTool` | Chaining, preloaded skills, file-based communication |
-  | No runtime skill injection | Skills injected only at startup | List all needed skills in frontmatter upfront |
-  | No parent history access | Clean context per invocation | Pass context via `Task(prompt=...)` |
-  | Short system prompt | ~294-token agent prompt replaces full Claude Code prompt | Compensate with detailed agent body |
-  | `effort`/`maxTurns` plugin-only | Don't work for project/user agents | Use plugin-level agents |
-  | Plugin agents: no hooks/mcpServers/permissionMode | Security restriction | Copy to `.claude/agents/` for full feature access |
-  | auto mode overrides permissionMode | Frontmatter `permissionMode` ignored in auto mode | Don't use auto mode with custom agents |
-
-  ---
-
-  ## Debugging
-
-  | Tool | Usage |
-  |------|-------|
-  | `CLAUDE_DEBUG=1` | Env var: full debug output, shows agent prompts |
-  | `Ctrl+O` | Verbose mode in UI: shows agent calls and stdout |
-  | `/agents` | Lists all registered agents with priorities |
-  | Manual `Task()` | `Task(subagent_type="name", prompt="test")` -- direct invocation for testing |
-
-  ### Common Problems
-
-  | Problem | Cause | Solution |
-  |---------|-------|----------|
-  | Agent doesn't trigger automatically | Vague description, no trigger words | Add specific trigger terms, `&lt;example&gt;` blocks |
-  | Agent triggers on irrelevant requests | Too broad description | Narrow description, add `&lt;commentary&gt;` conditions |
-  | Agent doesn't see CLAUDE.md rules | Bug [#8395] or [#29423] | `SubagentStart` hook with `additionalContext` |
-  | System prompt not injected | Bug [#13627] | Retry; pass instructions via `Task(prompt=...)` |
-  | Agent can't call skills | By design [#4182] | Use `skills:` in frontmatter for pre-injection |
-  | Agent can't spawn subagent | By design -- `SubAgentLoop` without `AgentTool` | Chaining from main conversation |
-  | `agents/` directory in plugin.json | Causes validation error | Remove from manifest -- auto-discovered by default |
-  | `effort`/`maxTurns` not working | Only available for plugin agents | Move agent to plugin scope |
-
-  ---
-
-  ## Version History (Agent Features)
-
-  | Version | Date | Changes |
-  |---------|------|---------|
-  | v2.1.85 | 2026-03-26 | `TaskCreated` hook, WorktreeCreate `type: http` |
-  | v2.1.78 | 2026-03-17 | `effort`, `maxTurns`, `disallowedTools` for plugin agents |
-  | v2.1.74 | 2026-03-12 | Fix: full model IDs in frontmatter; `--agents` flag visibility |
-  | v2.1.73 | 2026-03-11 | Fix: subagent model aliases on Bedrock/Vertex |
-  | v2.1.72 | 2026-03-10 | Restored `model` on Agent tool; deprecated `TaskOutput` |
-  | v2.1.70 | 2026-03-06 | Fix: background subagents invisible after compaction |
-  | v2.1.69 | 2026-03-05 | Agent name in terminal; `initialPrompt` frontmatter; `InstructionsLoaded` hook |
-  | v2.1.63 | ~2026-02-28 | **Task tool renamed to Agent tool.** `Task(...)` works as alias |
-  | v2.1.50 | 2026-02-20 | `isolation: worktree`; `WorktreeCreate`/`WorktreeRemove` hooks |
-  | v2.1.49 | 2026-02-19 | `--worktree` flag; `Ctrl+F` to kill background agents |
-
-  ---
-
-  ## Sources
-
-  - [Create Custom Subagents](https://code.claude.com/docs/en/sub-agents)
-  - [Claude Code Best Practices](https://www.anthropic.com/engineering/claude-code-best-practices)
-
-  </TabItem>
-</Tabs>
-
-## Output
-
-When creating agent: analysis summary (from parallel agents) -> agent file path -> full content -> validation summary
+## When to use
+
+- **New agent** — you need a specialized subagent (reviewer, code-generator, security-scanner, etc.)
+- **Agent not triggering** — the agent exists but Claude doesn't auto-select it reliably
+- **Trigger collisions** — two agents compete for the same request; need `<commentary>` disambiguation
+- **System prompt quality** — existing agent body is vague prose instead of dense tables + checklists
+- **Post-update drift** — agent worked before but a plugin update changed naming or available tools
+
+## Examples
+
+```text
+"Create an agent for code review — reads only, outputs severity table"
+"My reviewer agent doesn't trigger when I say 'check this PR'"
+"Improve the description of my tester agent, it keeps clashing with developer"
+```
+
+```text
+# Natural language triggers — all route to agent-creator
+"new agent for security scanning"
+"agent isn't picking up my requests"
+"fix agent description"
+```
+
+## Flow
+
+<Steps>
+  <li>
+    <div>
+      <strong>Clarify intent</strong>
+      <p>Asks 2-3 targeted questions: desired role, allowed tools, model tier (opus / sonnet / haiku). For improvement requests, reads the existing agent file first.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Parallel analysis</strong>
+      <p>Launches multiple Explore subagents concurrently — codebase conventions, existing agents in scope, CLAUDE.md rules, stack details. Results are merged before writing.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Synthesize</strong>
+      <p>Extracts project-specific patterns, naming conventions, and anti-patterns. Determines description format: single-line, with <code>Triggers:</code> list, or multi-line with <code>&lt;example&gt;</code> blocks (for ambiguous agents only).</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Write</strong>
+      <p>Produces a complete <code>.md</code> file: frontmatter with all required and relevant optional fields, then a system prompt structured as Role → Context → Patterns → Commands → Checklist.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Validate</strong>
+      <p>Checks name format (<code>[a-z0-9-]+</code>), description keyword density, tool minimality (least privilege), no duplicated CLAUDE.md rules in body, unique name in scope.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Optimize</strong>
+      <p>Runs <code>brewtools:text-optimize</code> on the output — converts prose to tables, removes filler, trims to dense LLM-readable format (~30% token savings typical).</p>
+    </div>
+  </li>
+</Steps>
+
+<details>
+<summary>Frontmatter reference — all fields</summary>
+
+```yaml
+---
+name: agent-name              # REQ: [a-z0-9-]+
+description: "..."            # REQ: action verb + Triggers: keyword list
+model: sonnet                 # OPT: sonnet|opus|haiku|inherit
+effort: high                  # OPT: low|medium|high|auto (plugin agents, v2.1.78+)
+maxTurns: 20                  # OPT: integer (plugin agents, v2.1.78+)
+tools: Read, Glob, Grep       # OPT: omit = inherit all
+disallowedTools: Write, Edit  # OPT: explicit deny list (v2.1.78+)
+permissionMode: default       # OPT: default|acceptEdits|dontAsk|bypassPermissions|plan
+skills: skill1, skill2        # OPT: full content injected at startup
+color: cyan                   # OPT: cyan|green|yellow|red|magenta
+memory: true                  # OPT: agent-specific MEMORY.md; auto-adds Read/Write/Edit
+initialPrompt: "..."          # OPT: first prompt sent on start (v2.1.69+)
+isolation: worktree           # OPT: isolated git worktree (v2.1.50+)
+mcpServers: [server1]         # OPT: restrict which MCP servers agent accesses
+---
+```
+
+Description patterns by ambiguity level:
+
+| Overlap | Format | Example |
+|---------|--------|---------|
+| None — unique domain | Single-line action + Triggers | `"Implements features, fixes bugs. Triggers: implement, fix bug, add feature"` |
+| Some — 1-2 other agents | Single-line + detailed Triggers | `"Creates bash scripts. Triggers: create script, bash script, shell script"` |
+| High — creator/meta agents | Multi-line + 2-3 `<example>` blocks | See agent-creator.md source |
+
+Subagent spawn constraint: subagents run in `SubAgentLoop` which excludes `AgentTool`. Nesting is not possible by design — chain from the main conversation instead.
+
+Known active bugs: [#29423](https://github.com/anthropics/claude-code/issues/29423) (subagents skip CLAUDE.md), [#27736](https://github.com/anthropics/claude-code/issues/27736) (`skills:` in plugin agents), [#31392](https://github.com/anthropics/claude-code/issues/31392) (global agents not discovered in v2.1.70+).
+</details>
 
 <CardGrid>
-  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
-    Download, changelog, and installation instructions.
+  <Card title="Skill Creator" icon="puzzle" href="/brewcode/skills/skill-creator/">
+    Same design process for skills (рецепты) instead of agents.
   </Card>
-  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/agents/agent-creator.md">
-    Source code, README, and configuration files.
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/agents/agent-creator.md">
+    Full frontmatter reference, description patterns, and system prompt templates.
+  </Card>
+  <Card title="Brewcode overview" icon="rocket" href="/brewcode/">
+    All brewcode agents, skills, and hooks in one place.
   </Card>
 </CardGrid>
+
+<UpdateNotice />

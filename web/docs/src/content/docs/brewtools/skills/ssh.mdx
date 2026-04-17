@@ -1,291 +1,167 @@
 ---
 title: "SSH"
-description: "Remote server management -- connect, configure, deploy with safety gates"
+description: "Remote server management — connect, configure, deploy, administer Linux servers with safety gates and persistent config."
 order: 3116
 ---
-import { Card, CardGrid, Callout, Steps, Badge, Tabs, TabItem, UpdateNotice } from '../../../../components/mdx';
+import { Card, CardGrid, Callout, Steps, Badge, UpdateNotice } from '../../../../components/mdx';
 
-# SSH
+# SSH server management through plain language.
 
-<Badge variant="accent" text="new" /> <Badge variant="primary" text="opus" />
+<Badge variant="primary" text="opus" /> <Badge variant="accent" text="brewtools" />
 
-Remote server management skill.
-Connect, configure, and deploy on remote servers through a conversational interface with automatic safety classification for every operation.
+<Callout type="caution">
+**Every destructive command requires explicit confirmation.** DELETE and PRIVILEGE operations always gate on user approval — even when chained with safe commands. The skill breaks compound requests into individually classified steps before executing anything.
+</Callout>
 
-<CardGrid>
-  <Card title="CONNECT" icon="link">
-    Set up SSH connections to new or existing servers with auto-discovery of OS, Docker, disks, and services.
-  </Card>
-  <Card title="EXECUTE" icon="terminal">
-    Run commands and tasks on remote servers through a conversational interface -- describe what you need in plain language.
-  </Card>
-  <Card title="MANAGE" icon="wrench">
-    Docker, services, deployments, disk management with safety classification -- destructive ops always require confirmation.
-  </Card>
-</CardGrid>
+<Callout type="tip">
+**No server configured yet?** Run `/brewtools:ssh setup` — the skill walks you through key auth, writes `&#126;/.ssh/config`, and generates the `ssh-admin` agent with full server context baked in. For complex multi-step operations (deploy, rollback, migration) the skill delegates to that agent automatically.
+</Callout>
 
-## Quick Reference
+## Quick reference
 
 | Field | Value |
 |-------|-------|
 | Command | `/brewtools:ssh` |
-| Arguments | `<task description>` or `setup/connect/configure/update-agent` |
-| Modes | setup, connect, configure, execute (default), update-agent |
-| Agent | [ssh-admin](/brewtools/agents/ssh-admin/) (auto-delegated for complex ops) |
-| Config storage | `CLAUDE.local.md` (gitignored) |
+| Arguments | `<task description>` or `setup` / `connect` / `configure` / `update-agent` |
 | Model | opus |
+| Agent | [ssh-admin](/brewtools/agents/ssh-admin/) — auto-delegated for complex ops |
+| Config storage | `CLAUDE.local.md` (gitignored, never committed) |
 
-## Quick Start
+## When to use
+
+- **First-time setup** — add a new server: `/brewtools:ssh setup`
+- **System admin** — disk usage, memory, logs, pending updates: `/brewtools:ssh check disk space on vps-main`
+- **Docker ops** — containers, images, compose lifecycle: `/brewtools:ssh show running containers`
+- **Deploy** — pull image, restart service, health check: `/brewtools:ssh pull latest and restart brewcode-docs`
+- **Security audit** — firewall rules, fail2ban, sshd config: `/brewtools:ssh check ufw and fail2ban status`
+- **Agent refresh** — after server changes: `/brewtools:ssh update-agent`
+
+## Examples
 
 ```bash
-# First time -- set up a new server connection
+# First time — set up a new server
 /brewtools:ssh setup
 
-# Connect to a configured server
-/brewtools:ssh connect to vps-main
+# Execute tasks (default mode when servers are configured)
+/brewtools:ssh check disk space and docker status on vps-main
 
-# Execute tasks (default mode)
-/brewtools:ssh check disk space and docker status
-
-# Deploy operations
-/brewtools:ssh pull latest image and restart brewcode-docs
-
-# Update server inventory
-/brewtools:ssh update agent
+# Deploy: pull + restart
+/brewtools:ssh pull ghcr.io/org/app:latest and restart on vps-main
 ```
 
-## Connection Flow
+```bash
+# Connect explicitly, then describe the task
+/brewtools:ssh connect to staging
+
+# Refresh the ssh-admin agent after infrastructure changes
+/brewtools:ssh update-agent
+```
+
+## Flow
 
 <Steps>
   <li>
     <div>
-      <strong>Phase 0 -- Mode detection</strong>
-      <p>Auto-parses your intent from the argument: <code>setup</code>, <code>connect</code>, <code>configure</code>, <code>update-agent</code>, or falls back to <code>execute</code> (default).</p>
+      <strong>Mode detection</strong>
+      <p>Auto-parses your intent: <code>setup</code>, <code>connect</code>, <code>configure</code>, <code>update-agent</code>, or <code>execute</code> (default). Empty args with no servers configured → <code>setup</code> automatically.</p>
     </div>
   </li>
   <li>
     <div>
-      <strong>Phase 1 -- Environment check</strong>
-      <p>Scans for SSH keys, running <code>ssh-agent</code>, existing <code>~/.ssh/config</code> entries, and previously stored server inventory in <code>CLAUDE.local.md</code>.</p>
+      <strong>Environment check</strong>
+      <p>Scans for SSH keys, running <code>ssh-agent</code>, existing <code>&#126;/.ssh/config</code> entries, and server inventory in <code>CLAUDE.local.md</code>. Fails fast with a clear error if SSH environment is broken.</p>
     </div>
   </li>
   <li>
     <div>
-      <strong>Phase 2 -- Connection setup</strong>
-      <p>Configures host, user, key-based authentication, and <code>known_hosts</code> verification. Supports jump hosts and custom ports.</p>
+      <strong>Connection setup (setup mode)</strong>
+      <p>Asks for host, user, port, alias. Tries available keys (ed25519 → rsa → ecdsa). On failure offers password login + key install flow. Writes a <code>Host</code> block to <code>&#126;/.ssh/config</code>.</p>
     </div>
   </li>
   <li>
     <div>
-      <strong>Phase 3 -- Server discovery</strong>
-      <p>Runs non-destructive read commands to catalog: OS version, kernel, Docker containers, disk usage, listening ports, and active services.</p>
+      <strong>Server discovery</strong>
+      <p>Runs read-only commands over SSH: OS, kernel, Docker version and containers, disk mounts, listening ports, active services. Max 30 s timeout — partial results reported if it times out.</p>
     </div>
   </li>
   <li>
     <div>
-      <strong>Phase 4 -- Persist config</strong>
-      <p>Saves server inventory to <code>CLAUDE.local.md</code> and generates or updates the <code>ssh-admin</code> agent with discovered server data.</p>
+      <strong>Persist config</strong>
+      <p>Saves server inventory to <code>CLAUDE.local.md</code>. Adds <code>CLAUDE.local.md</code> to <code>.gitignore</code>. Generates (or regenerates) <code>.claude/agents/ssh-admin.md</code> with discovered server data baked in.</p>
     </div>
   </li>
   <li>
     <div>
-      <strong>Phase 5 -- Execute user request</strong>
-      <p>Classifies each command by safety level (READ/CREATE/MODIFY/SERVICE/DELETE/PRIVILEGE), asks confirmation when required, then executes.</p>
+      <strong>Classify and confirm</strong>
+      <p>Each command is assigned a safety level. READ and CREATE run freely. MODIFY and SERVICE ask for confirmation. DELETE and PRIVILEGE show a destructive-action warning and always require explicit approval.</p>
     </div>
   </li>
   <li>
     <div>
-      <strong>Phase 6 -- Session report</strong>
-      <p>Summarizes all commands executed, their outputs, and any changes made to the remote server.</p>
+      <strong>Execute and report</strong>
+      <p>Simple ops run inline (max 5 SSH calls per invocation). Complex multi-step tasks delegate to the <code>ssh-admin</code> agent via Task tool. Session ends with a summary: server, mode, actions taken, changes made, status.</p>
     </div>
   </li>
 </Steps>
 
-## Safety Classification
+<details>
+<summary>Safety classification matrix & internals</summary>
 
-Every command is classified before execution. READ and CREATE run freely; MODIFY and above require confirmation.
+**Safety levels — what needs confirmation:**
 
-<CardGrid>
-  <Card title="READ" icon="search">
-    `ls`, `cat`, `df`, `docker ps`, `systemctl status` -- free, no confirmation needed.
-  </Card>
-  <Card title="CREATE" icon="plus">
-    `mkdir`, `docker pull`, `touch` -- free if non-destructive.
-  </Card>
-  <Card title="MODIFY" icon="pencil">
-    `chmod`, `sed`, config edits -- asks for confirmation before executing.
-  </Card>
-  <Card title="SERVICE" icon="sync">
-    `restart`, `reload`, `docker compose up` -- asks for confirmation before executing.
-  </Card>
-  <Card title="DELETE" icon="warning">
-    `rm`, `docker rm`, `prune` -- ALWAYS asks for confirmation.
-  </Card>
-  <Card title="PRIVILEGE" icon="shield">
-    `sudo`, firewall changes, user management -- ALWAYS asks for confirmation.
-  </Card>
-</CardGrid>
+| Level | Example commands | Confirmation |
+|-------|-----------------|--------------|
+| READ | `ls`, `cat`, `df`, `docker ps`, `systemctl status` | None — runs freely |
+| CREATE | `mkdir`, `docker pull`, `touch` | None if non-destructive |
+| MODIFY | `chmod`, `sed`, config edits | Required |
+| SERVICE | `restart`, `reload`, `docker compose up` | Required |
+| DELETE | `rm`, `docker rm`, `prune` | Always required |
+| PRIVILEGE | `sudo`, firewall changes, user management | Always required |
 
-<Callout type="caution">
-  Destructive operations (DELETE, PRIVILEGE) always require explicit confirmation, even when chained with safe commands. The skill will break compound commands into individual safety-classified steps.
-</Callout>
+**Loop and timeout limits:**
 
-## Server Discovery
+| Rule | Limit |
+|------|-------|
+| SSH connection timeout | 10 s (`ConnectTimeout=10 BatchMode=yes`) |
+| Server discovery script | 30 s total |
+| Single SSH command | 60 s — killed and reported on timeout |
+| Total SSH calls per invocation | 15 max, then stop and report |
+| Key auth attempts (setup) | 3, then ask user |
+| AskUserQuestion per phase | 3 max, combined into one if more needed |
 
-On first connection, the skill auto-detects the following information and stores it in your server inventory.
+**Server discovery collects:**
 
-<CardGrid>
-  <Card title="OS and Kernel" icon="document">
-    Distribution name, version, kernel version, architecture. Used to select correct package manager and service commands.
-  </Card>
-  <Card title="Docker and Containers" icon="star">
-    Docker version, running containers, images, compose projects. Enables container-aware deploy operations.
-  </Card>
-  <Card title="Disks and Storage" icon="check">
-    Mount points, filesystem types, usage percentages, available space. Alerts on low-disk conditions.
-  </Card>
-  <Card title="Services and Ports" icon="wrench">
-    Listening ports, active systemd services, open firewall rules. Provides context for deploy and troubleshooting tasks.
-  </Card>
-</CardGrid>
+- OS distribution, version, kernel, architecture
+- Docker version, running containers, compose projects
+- Disk mounts, filesystem types, usage percentages
+- Listening ports, active systemd services
 
-## Configuration
+**Config files:**
 
-<Tabs>
-  <TabItem label="CLAUDE.local.md">
-    Server inventory is stored in `CLAUDE.local.md` at the project root. This file is gitignored and never committed.
+| File | Purpose |
+|------|---------|
+| `CLAUDE.local.md` | Server inventory table — alias, host, user, key, OS, Docker |
+| `&#126;/.ssh/config` | Host blocks — skill reads but does not overwrite existing blocks |
+| `.claude/agents/ssh-admin.md` | Generated agent with server context; use `update-agent` to refresh |
 
-    ```markdown
-    ## SSH Servers
+**Fallback strategy:** if a helper script fails, the skill attempts the same operation inline (individual Bash calls). If both fail, it reports `SCRIPT_ERROR` / `EXIT_CODE` / `STDERR` / `PHASE` and stops — no silent swallowing.
 
-    | Alias | Host | User | Key | OS | Docker |
-    |-------|------|------|-----|----|--------|
-    | vps-main | your-server.example.com | deploy | ~/.ssh/id_ed25519 | Ubuntu 24.04 | 27.1.1 |
-    | staging | staging.example.com | deploy | ~/.ssh/staging_key | Debian 12 | 26.1.4 |
-    ```
+**Interactive terminal commands** (e.g., `sudo` with password prompt): use the Claude Code escape hatch `! ssh deploy@your-server` to open a direct terminal session.
 
-    The skill reads this table on every invocation to resolve server aliases and inject context into the ssh-admin agent.
-  </TabItem>
-  <TabItem label="~/.ssh/config">
-    Standard SSH config for connection defaults. The skill reads this but does not modify it.
-
-    ```
-    Host vps-main
-      HostName your-server.example.com
-      User deploy
-      Port 22
-      IdentityFile ~/.ssh/id_ed25519
-      StrictHostKeyChecking accept-new
-
-    Host staging
-      HostName staging.example.com
-      User deploy
-      Port 22
-      IdentityFile ~/.ssh/staging_key
-      ProxyJump bastion.example.com
-    ```
-
-    Best practice: define `Host` blocks for every server you manage. The skill resolves aliases from both `CLAUDE.local.md` and `~/.ssh/config`.
-  </TabItem>
-  <TabItem label="ssh-admin agent">
-    The skill dynamically generates an `ssh-admin` agent file with discovered server data baked into its prompt. This agent handles complex multi-step operations (deploy, rollback, migration) with full server context.
-
-    The agent receives:
-    - Server inventory from `CLAUDE.local.md`
-    - OS-specific command mappings (apt vs yum, systemd vs openrc)
-    - Docker container topology
-    - Disk and service state
-
-    Use `update-agent` mode to refresh agent data after server changes.
-  </TabItem>
-</Tabs>
-
-## Usage Examples
-
-<Tabs>
-  <TabItem label="System Admin">
-    ```bash
-    # Check disk space across all mounts
-    /brewtools:ssh check disk usage on vps-main
-
-    # View memory and CPU load
-    /brewtools:ssh show memory and cpu on staging
-
-    # Tail application logs
-    /brewtools:ssh show last 100 lines of nginx error log
-
-    # Check for pending OS updates
-    /brewtools:ssh list available security updates on vps-main
-    ```
-  </TabItem>
-  <TabItem label="Docker">
-    ```bash
-    # List running containers
-    /brewtools:ssh show docker containers on vps-main
-
-    # View container logs
-    /brewtools:ssh show logs for brewcode-docs container
-
-    # Compose operations (requires confirmation)
-    /brewtools:ssh docker compose up -d on staging
-
-    # Registry authentication
-    /brewtools:ssh login to ghcr.io on vps-main
-    ```
-  </TabItem>
-  <TabItem label="Deploy">
-    ```bash
-    # Pull latest image and restart
-    /brewtools:ssh pull ghcr.io/org/app:latest and restart on vps-main
-
-    # Blue-green deploy
-    /brewtools:ssh deploy new version of docs with zero downtime
-
-    # Verify deployment health
-    /brewtools:ssh check health endpoint after deploy on vps-main
-    ```
-  </TabItem>
-  <TabItem label="Security">
-    ```bash
-    # Check firewall rules
-    /brewtools:ssh show ufw status on vps-main
-
-    # Review fail2ban status
-    /brewtools:ssh check fail2ban banned IPs
-
-    # SSH hardening audit
-    /brewtools:ssh check sshd config for security issues
-
-    # Review active SSH sessions
-    /brewtools:ssh show who is connected via SSH
-    ```
-  </TabItem>
-</Tabs>
-
-<Callout type="tip">
-  For interactive commands that require password input (e.g., `sudo` with password prompt), use the Claude Code escape hatch: `! ssh deploy@your-server` to open a direct terminal session.
-</Callout>
-
-<Callout type="note">
-  `CLAUDE.local.md` is gitignored by default. Server inventory, credentials references, and connection details are never committed to version control.
-</Callout>
-
-## Troubleshooting
-
-| Issue | Solution |
-|-------|----------|
-| Permission denied | Check key path, run `ssh-add`, verify `authorized_keys` on remote server |
-| Connection timeout | Verify port is open, check firewall rules, confirm host is reachable with `ping` |
-| Host key changed | Remove old entry from `~/.ssh/known_hosts` for the target host |
-| Docker permission denied | User must be in the `docker` group or commands need `sudo` prefix |
-| Server not found in inventory | Run `/brewtools:ssh setup` to add the server or `/brewtools:ssh update-agent` to refresh |
+</details>
 
 <CardGrid>
-  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
-    Download, changelog, and installation instructions.
+  <Card title="ssh-admin agent" icon="robot" href="/brewtools/agents/ssh-admin/">
+    The agent generated by this skill — handles complex multi-step server operations with full inventory context.
   </Card>
-  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/ssh">
-    Source code, README, and configuration files.
+  <Card title="Deploy skill" icon="rocket" href="/brewtools/skills/deploy/">
+    GitHub Actions deployment — workflows, releases, GHCR, CI/CD automation.
+  </Card>
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/ssh">
+    Source code, helper scripts, and agent template.
+  </Card>
+  <Card title="Brewtools overview" icon="document" href="/brewtools/">
+    All brewtools skills — text, secrets, deploy, provider switching, plugin management.
   </Card>
 </CardGrid>
 

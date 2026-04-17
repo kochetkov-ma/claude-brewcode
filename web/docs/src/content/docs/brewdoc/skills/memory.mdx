@@ -1,157 +1,154 @@
 ---
 title: "Memory"
-description: "Interactive optimization of CLAUDE.md and MEMORY.md memory files in 4 steps"
+description: "Interactive 4-step optimizer for Claude Code memory files — removes duplicates, migrates to rules, compresses, validates."
 order: 22
 ---
+import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-import { Callout, Tabs, TabItem, Steps, Badge, Card, CardGrid } from '../../../../components/mdx';
+# Your memory files have been growing for months. Clean them up.
 
-# Memory
+<Callout type="caution">
+**Memory files accumulate silently.** Entries duplicate rules already in CLAUDE.md, verbose prose inflates every session load, and contradictions pile up unnoticed. Claude reads the full memory on every startup — deadweight entries cost real tokens every time.
+</Callout>
 
-Memory is a memory optimization skill (recipe notes) that interactively
-trims and reorganizes CLAUDE.md and MEMORY.md files.
-Through 4 sequential steps, it removes duplicates, migrates entries to proper locations,
-compresses what remains, and validates the result.
+<Callout type="tip">
+**One command, four interactive steps.** Each step shows exactly what it proposes and waits for your approval. Nothing is deleted without confirmation. Run it anytime memory feels noisy.
+</Callout>
+
+## Quick reference
+
+| Field | Value |
+|-------|-------|
+| Command | `/brewdoc:memory` |
+| Arguments | none — runs a 4-step interactive workflow |
+| Model | opus |
+| Tools | Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion |
+
+## When to use
+
+- Memory files have grown over weeks and feel cluttered
+- Claude auto-selects wrong rules because of conflicting memory entries
+- You added new `.claude/rules/` files and want to remove redundant memory entries
+- Session startup feels slow and you want to reduce context load
+- You want to move project-specific constraints from memory into proper rules files
+
+## Examples
 
 ```bash
+# Run the full 4-step interactive flow
 /brewdoc:memory
 ```
 
-## Why optimize memory
+The skill auto-detects your memory directory, loads all related files, then walks through each step.
 
-Claude Code memory files accumulate entries over time. Some of them duplicate rules
-already recorded in CLAUDE.md or `.claude/rules/`. Other entries are too verbose
-and waste tokens on every session load.
+```bash
+# Natural language also works
+"optimize my memory"
+"clean up claude memory files"
+"brewdoc:memory"
+```
 
-The Memory optimizer addresses these problems while keeping all useful knowledge in its proper place.
+After Step 4, the skill prints a summary report:
 
-## 4 optimization steps
+```markdown
+## Memory Optimization Complete
+
+| Metric         | Before | After | Saved      |
+|----------------|--------|-------|------------|
+| Total entries  | 42     | 18    | 24         |
+| Duplicates     | 11     | 0     | —          |
+| Migrated       | —      | —     | 8          |
+| Estimated tokens | ~1 800 | ~620 | ~1 180 (~65%) |
+```
+
+## Flow
 
 <Steps>
-  <li class="step step-primary">
+  <li>
     <div>
-      <strong>Remove duplicates</strong> <Badge variant="primary" text="Step 1" />
-      <p>
-        The <code>Explore</code> agent cross-references all memory files against CLAUDE.md and <code>.claude/rules/*.md</code>.
-        It finds entries that already exist in rules or conflict with CLAUDE.md (CLAUDE.md takes priority).
-        It shows a duplicates table and asks for confirmation: "Remove all", "Review each", or "Skip".
-      </p>
+      <strong>Load context</strong>
+      <p>The skill reads your memory directory (from <code>autoMemoryDirectory</code> in <code>.claude/settings.json</code>, or the legacy <code>&#126;/.claude/projects/&lt;hash&gt;/memory/</code> path), then loads <code>&#126;/.claude/CLAUDE.md</code>, project <code>CLAUDE.md</code>, and all rules files — both global and project-level. This full context map drives all four analysis steps.</p>
     </div>
   </li>
-  <li class="step step-primary">
+  <li>
     <div>
-      <strong>Migrate to rules/CLAUDE.md</strong> <Badge variant="primary" text="Step 2" />
-      <p>
-        Remaining entries are classified by target location.
-        Global rules are moved to <code>~/.claude/rules/</code>,
-        project rules to <code>.claude/rules/</code>,
-        architectural decisions to the project CLAUDE.md.
-        Facts and patterns useful across sessions stay in memory.
-      </p>
+      <strong>Step 1 — Remove duplicates</strong>
+      <p>An <code>Explore</code> agent cross-references every memory entry against CLAUDE.md and <code>.claude/rules/\*.md</code>. Entries that already exist in rules, or that contradict CLAUDE.md (CLAUDE.md wins), are shown in a table. You choose: "Delete all", "Review each", or "Skip".</p>
     </div>
   </li>
-  <li class="step step-primary">
+  <li>
     <div>
-      <strong>Compress</strong> <Badge variant="primary" text="Step 3" />
-      <p>
-        Remaining entries are compressed for token savings: prose is converted to table rows,
-        related entries are merged, verbose descriptions are replaced with imperative one-liners,
-        example lists are reduced to a pattern plus one example. A preview with estimated savings is shown.
-      </p>
+      <strong>Step 2 — Migrate to rules / CLAUDE.md</strong>
+      <p>Remaining entries are categorised by target: global rules go to <code>&#126;/.claude/rules/</code>, project rules to <code>.claude/rules/</code>, architectural decisions to project CLAUDE.md, cross-session facts stay in memory. A table with estimated token savings is shown before any migration is applied.</p>
     </div>
   </li>
-  <li class="step step-primary">
+  <li>
     <div>
-      <strong>Validate and clean up</strong> <Badge variant="primary" text="Step 4" />
-      <p>
-        The <code>reviewer</code> agent checks the final state: broken file references,
-        conflicts with CLAUDE.md, invalid markdown. Broken references are fixed automatically.
-        Orphaned memory files (not referenced from MEMORY.md) are detected and proposed for deletion.
-      </p>
+      <strong>Step 3 — Compress</strong>
+      <p>What remains is compressed for LLM efficiency: prose becomes table rows, related entries merge, verbose descriptions shrink to imperative one-liners, example lists reduce to a pattern plus one example. A before/after preview with estimated savings is shown. You confirm or skip.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Step 4 — Validate and clean up</strong>
+      <p>A <code>reviewer</code> agent checks the final state: broken file references, conflicts with CLAUDE.md, malformed markdown. Broken references are fixed automatically. Orphaned memory files — files in the memory directory not referenced from <code>MEMORY.md</code> — are detected and proposed for deletion.</p>
     </div>
   </li>
 </Steps>
 
-## Memory directory detection
+<details>
+<summary>Internals</summary>
 
-The skill automatically determines where memory files are stored:
+**Memory directory detection**
 
-1. Checks `.claude/settings.json` for the `autoMemoryDirectory` field
-2. If the field is set, uses `<git-root>/<autoMemoryDirectory>`
-3. If not set, uses the legacy path `~/.claude/projects/<hash>/memory/`
+The skill resolves `$MEMORY_DIR` in this order:
+1. Read `.claude/settings.json` → extract `autoMemoryDirectory`
+2. If set: `<git-root>/<autoMemoryDirectory>`
+3. If not set: glob `&#126;/.claude/projects/**/memory/*.md` (legacy path)
 
-## Analysis context
-
-Before starting optimization, all related files are loaded:
+**Context map built before Step 1**
 
 | Source | What is loaded |
-|--------|---------------|
+|--------|----------------|
 | Memory directory | All `*.md` files |
-| Global instructions | `~/.claude/CLAUDE.md` |
-| Project instructions | `CLAUDE.md` (if it exists) |
-| Global rules | `~/.claude/rules/*.md` |
+| Global instructions | `&#126;/.claude/CLAUDE.md` |
+| Project instructions | `CLAUDE.md` (if present) |
+| Global rules | `&#126;/.claude/rules/*.md` |
 | Project rules | `.claude/rules/*.md` |
 
-## Example: before and after
+**Migration decision tree (per entry)**
 
-<Tabs>
-  <TabItem label="Before optimization">
-    ```markdown
-    ## Memory - my-project
+- Applies to all projects + is a rule/constraint → `&#126;/.claude/rules/`
+- Applies to this project only + is a rule → `.claude/rules/`
+- Is an architectural decision → project `CLAUDE.md`
+- Is a fact/pattern reusable across sessions → stays in memory
 
-    When working with the database, always use the connection pool
-    from `src/db/pool.ts`. Never create direct connections because
-    they leak resources and cause timeout issues in production.
+**Compression techniques**
 
-    Always use grepai for code search before using Glob or Grep tools.
+- Prose → table row
+- Multiple related entries → single table
+- Verbose description → imperative one-liner
+- List of examples → pattern + one example
 
-    The project uses ESLint with the Airbnb config. Make sure to run
-    `npm run lint` before committing any changes to ensure code quality.
+Edits are applied bottom-up (descending line number order) to preserve line numbers during multi-edit operations.
 
-    Use grepai_search MCP tool for code exploration.
+**No `context: fork`** — the skill must run in the main conversation to spawn `Explore` and `reviewer` agents.
 
-    Architecture: microservices with API Gateway pattern.
-    ```
-  </TabItem>
-  <TabItem label="After optimization">
-    ```markdown
-    ## Memory - my-project
-
-    | Rule | Context |
-    |------|---------|
-    | DB: connection pool from `src/db/pool.ts` | Direct connections forbidden (resource leak) |
-    | Architecture: microservices + API Gateway | -- |
-    ```
-
-    **Removed (duplicate):** "Use grepai for code search" -- already in `.claude/rules/grepai-first.md`
-
-    **Removed (duplicate):** "Use grepai_search MCP tool" -- duplicates the previous rule
-
-    **Migrated to `.claude/rules/lint.md`:** "ESLint Airbnb config, `npm run lint` before commit"
-  </TabItem>
-</Tabs>
-
-## Summary report
-
-After all 4 steps are complete, a report is generated:
-
-| Metric | Before | After | Saved |
-|--------|--------|-------|-------|
-| Total entries | X | Y | Z |
-| Duplicates | X | 0 | -- |
-| Migrated | -- | -- | X |
-| Estimated tokens | ~X | ~Y | ~Z (~P%) |
-
-<Callout type="tip" title="Interactive process">
-  Each step requires user confirmation. You can skip any step,
-  review changes one by one, or apply them all at once. The skill does not delete data without approval.
-</Callout>
+</details>
 
 <CardGrid>
-  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
-    Download, changelog, and installation instructions.
+  <Card title="Auto-sync" icon="sync" href="/brewdoc/skills/auto-sync/">
+    Keep docs in sync automatically — the other core brewdoc skill (рецепт).
   </Card>
-  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewdoc/skills/memory">
-    Source code, README, and configuration files.
+  <Card title="My-claude" icon="document" href="/brewdoc/skills/my-claude/">
+    Generate Claude Code installation docs for your project.
+  </Card>
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewdoc/skills/memory">
+    Source code and full SKILL.md for the memory optimizer.
+  </Card>
+  <Card title="Brewdoc overview" icon="rocket" href="/brewdoc/">
+    All brewdoc skills (рецепты) in one place.
   </Card>
 </CardGrid>
+
+<UpdateNotice />

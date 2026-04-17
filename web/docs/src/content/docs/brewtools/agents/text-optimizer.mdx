@@ -1,81 +1,134 @@
 ---
 title: "Text Optimizer"
-description: "Optimizes text/docs for LLM efficiency. Triggers: optimize prompt, reduce tokens, compress text, too verbose."
+description: "Optimizes text and docs for LLM efficiency across 4 compression modes. Triggers: optimize prompt, reduce tokens, compress text, too verbose, deep compress."
 order: 3201
 ---
-import { Badge, Card, CardGrid } from '../../../../components/mdx';
+import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# Text Optimizer
+# Verbose docs cost tokens. The optimizer earns them back.
 
-<Badge variant="secondary" text="sonnet" />
+<Callout type="caution">
+**Every redundant word in a CLAUDE.md, agent definition, or system prompt is a token Claude reads on every turn.** At scale — multi-agent sessions, long-running tasks, compact-heavy workflows — that overhead compounds. Standard prose writing habits produce 2–3x more tokens than necessary for LLM consumption.
+</Callout>
+
+<Callout type="tip">
+**Mention the target file and intent — the agent picks the right mode automatically.** LLM-only files (agents, rules, SKILL.md) default to `deep`; user-facing docs default to `standard`. Override with `-l`, `-s`, or `-d` flags when needed. For skill-level access, see [`/brewtools:text-optimize`](/brewtools/skills/text-optimize/).
+</Callout>
 
 ## Quick reference
 
 | Field | Value |
 |-------|-------|
 | Model | sonnet |
-| Tools | Read, Write, Edit, Glob, Grep, WebFetch |
+| Tools | Read, Write, Edit, Glob, Grep, WebFetch, AskUserQuestion |
 | Skills | [text-optimize](/brewtools/skills/text-optimize/) |
-| Triggers | "optimize prompt", "reduce tokens", "compress text", "too verbose" |
+| Triggers | "optimize prompt", "reduce tokens", "compress text", "too verbose", "deep compress", "standard compress" |
+| Modes | `light`, `medium`, `standard` (30–50%, human-readable), `deep` (2–3×, LLM-only with DICT+symbols) |
 
-## System prompt
+## When to use
 
-Lean execution engine: load rules from reference, analyze target, apply optimizations, report metrics.
+- **Bloated CLAUDE.md** — project instructions grown beyond control; `deep` mode trims to the minimum Claude needs
+- **Agent/skill definitions** — trim prose, tighten trigger lists, remove filler from system prompts
+- **README or docs/** — `standard` mode cuts verbosity while keeping the file human-readable
+- **Pre-release token audit** — run before bumping a version to catch regressions in instruction size
+- **Rules files** — `.claude/rules/*.md` often accumulate redundant explanations; `deep` removes them safely
 
-## Step 0: Load Rules (REQUIRED)
+## Examples
 
-Read `$BT_PLUGIN_ROOT/skills/text-optimize/references/rules-review.md` using Read tool.
+```
+"Optimize this prompt for fewer tokens"
+"This CLAUDE.md is too long, compress it"
+"Make this more token-efficient"
+"deep compress brewtools/agents/text-optimizer.md"
+```
 
-**Verify:** File contains `## C - Claude Behavior` header and `## Summary` section.
+```bash
+# Explicit mode flags (passed as part of your message)
+"optimize -d brewcode/.claude/agents/developer.md"   # deep
+"optimize -s web/docs/README.md"                      # standard
+"optimize -l my-notes.md"                             # light (structure only)
+```
 
-> **STOP if read fails or headers missing** -- Cannot optimize without rules reference. Report error: `rules-review.md not loaded. Check $BT_PLUGIN_ROOT value.` Do not proceed to Step 1.
+## Flow
 
-## Content type priorities
+<Steps>
+  <li>
+    <div>
+      <strong>Determine mode</strong>
+      <p>Checks your message for a flag (<code>-l</code>, <code>-s</code>, <code>-d</code>) or context hints. No flag: LLM-only files (agents, rules, SKILL.md, KNOWLEDGE.*) → <code>deep</code>; README/docs → <code>standard</code>; unknown → <code>medium</code>.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Load references</strong>
+      <p>Reads <code>$BT_PLUGIN_ROOT/skills/text-optimize/references/rules-review.md</code> (always). Standard mode also loads <code>standard-compression.md</code>; deep mode loads <code>deep-compression.md</code>. Stops with an error if the base rules file is missing — no optimization without the ruleset.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Analyze target</strong>
+      <p>Reads the file, identifies content type from the priority table (system prompt / CLAUDE.md / agent / skill / doc / README), measures baseline lines and token estimate, notes critical facts to preserve.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Compress</strong>
+      <p><strong>Light/medium:</strong> applies rule groups C → T → S → R → P from rules-review.md. <strong>Standard:</strong> adds filler removal, paragraph-to-bullet, prose-to-table; targets 30–50% reduction. <strong>Deep:</strong> builds a DICT header for terms used 3+ times, applies symbol substitutions and structural compression; targets 2–3× reduction.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Verify</strong>
+      <p>Light/medium: no verification pass. Standard: one round comparing original vs compressed, patches any lost facts. Deep: two rounds — round 1 lists lost or distorted facts and calculates semantic match %; round 2 patches if below 95%, or warns with a loss list if it still falls short.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Report</strong>
+      <p>Outputs <code>## Optimization Report: [filename]</code> with a metrics table (lines / chars / words / ~tokens — before, after, change%, ratio), semantic match % for standard/deep, rule IDs applied, issues fixed, and verification result.</p>
+    </div>
+  </li>
+</Steps>
 
-| Content Type | Primary Rules | Focus |
-|--------------|---------------|-------|
-| System prompt | C.1-C.6, T.1-T.6 | Behavior clarity + token efficiency |
-| CLAUDE.md | S.1-S.6, T.1-T.8 | Structure + density |
-| Agent definition | C.5, S.2, P.1 | Triggering + clarity |
-| Skill SKILL.md | S.6, P.1-P.4, R.1-R.3 | Progressive disclosure + refs |
-| Documentation | T.1-T.8, S.1-S.5 | Token reduction + clarity |
+<details>
+<summary>Internals — content type priorities and verification thresholds</summary>
 
-## Capabilities
+| Content Type | Primary Rules | Default Mode |
+|--------------|---------------|--------------|
+| System prompt | C.1-C.8, T.1-T.8, T.10 | deep |
+| CLAUDE.md | S.1-S.8, T.1-T.8, T.10 | deep |
+| Agent definition | C.5, C.7, S.2, P.1 | deep |
+| Skill SKILL.md | S.6, P.1-P.6, R.1-R.3, L.1-L.7 | deep |
+| Documentation | T.1-T.8, T.10, S.1-S.8, L.1-L.7 | standard |
+| README | T.1-T.8, T.10, S.1-S.8, L.1-L.7 | standard |
 
-| Dimension | Actions |
-|-----------|---------|
-| Token Efficiency | Compress without information loss |
-| Logic Clarity | Resolve contradictions, ambiguities |
-| Reference Integrity | Verify links, paths, cross-refs |
-| LLM Perception | Structure for transformer attention |
+| Capability | What the agent does |
+|------------|---------------------|
+| Token efficiency | Compress without information loss |
+| Logic clarity | Resolve contradictions and ambiguities |
+| Reference integrity | Verify links, paths, cross-references |
+| LLM perception | Structure for transformer attention patterns |
 
-## Workflow
+**Verification thresholds (deep mode):**
+- Round 1: read original + compressed side-by-side, list lost/distorted facts, compute semantic match %
+- Round 2: if match < 95% — patch missing facts and re-verify; if still < 95% — warn user with explicit loss list
+- Light and medium modes skip verification entirely (fast path)
 
-### Step 1: Analyze
-Read target -> identify content type from table above -> measure baseline (lines, tokens) -> note critical info to preserve.
-
-### Step 2: Optimize
-Apply rules from `rules-review.md` matching the content type. Work in order: C.1-C.6 (Claude behavior) -> T.1-T.8 (token efficiency) -> S.1-S.8 (structure) -> R.1-R.3 (references) -> P.1-P.6 (perception). Also check "Rules NOT Recommended" to avoid over-optimization.
-
-### Step 3: Verify
-
-| Check | Fail Condition |
-|-------|----------------|
-| Information Loss | Any fact removed |
-| Logic Error | Contradiction introduced |
-| Broken Ref | Link/path invalid |
-| Readability | Hierarchy destroyed |
-| Token Count | No reduction achieved |
-
-### Step 4: Report
-
-Output: `## Optimization Report: [filename]` with metrics table (Lines/Tokens before/after/change), transformations applied, issues fixed, verification checklist (info preserved, logic consistent, refs valid).
+</details>
 
 <CardGrid>
-  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
-    Download, changelog, and installation instructions.
+  <Card title="text-optimize skill" icon="rocket" href="/brewtools/skills/text-optimize/">
+    Invoke compression directly as a skill — all four modes, same ruleset.
   </Card>
-  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/agents/text-optimizer.md">
-    Source code, README, and configuration files.
+  <Card title="text-human skill" icon="document" href="/brewtools/skills/text-human/">
+    Reverse direction: remove AI artifacts and humanize machine-written text.
+  </Card>
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/agents/text-optimizer.md">
+    Agent definition, rule references, and compression spec files.
+  </Card>
+  <Card title="Brewtools overview" icon="puzzle" href="/brewtools/">
+    All brewtools skills and agents — text, secrets, SSH, deploy, debate.
   </Card>
 </CardGrid>
+
+<UpdateNotice />

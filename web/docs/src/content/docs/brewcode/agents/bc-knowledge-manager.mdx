@@ -1,13 +1,19 @@
 ---
 title: "bc-knowledge-manager"
-description: "Brewcode knowledge manager - compacts KNOWLEDGE.jsonl, deduplicates entries, prioritizes by type. Triggers - before handoff, when duplicates reported by coordinator."
+description: "Compacts KNOWLEDGE.jsonl (Ингредиенты): deduplicates entries, merges similar, enforces priority order. Spawned before handoff or when the coordinator reports duplicates."
 order: 1211
 ---
-import { Badge, Card, CardGrid } from '../../../../components/mdx';
+import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# bc-knowledge-manager
+# Keep your Ingredients clean and compact.
 
-<Badge variant="secondary" text="haiku" />
+<Callout type="caution">
+**KNOWLEDGE.jsonl grows with every task.** Duplicate entries, similar patterns across different wordings, and low-priority noise accumulate quickly — the file bloats, compaction at handoff slows, and the most important ❌ entries get buried. The `pre-compact.mjs` hook fires before every auto-compact, but it can't help if the file is already in poor shape.
+</Callout>
+
+<Callout type="tip">
+**bc-knowledge-manager runs automatically.** The `bc-coordinator` spawns it before handoff and whenever duplicates are reported. You can also trigger it manually via Task tool with an explicit `knowledgePath` and `mode`. It never loses ❌ entries unless they are exact duplicates.
+</Callout>
 
 ## Quick reference
 
@@ -16,110 +22,129 @@ import { Badge, Card, CardGrid } from '../../../../components/mdx';
 | Model | haiku |
 | Tools | Read, Write |
 | Permission mode | acceptEdits |
+| Spawned by | bc-coordinator (via Task tool) |
 | Triggers | Before handoff, when duplicates reported by coordinator |
 
-## System prompt
+## When to use
 
-You are the knowledge manager agent for Brewcode plugin. Your role is to maintain KNOWLEDGE.jsonl quality and size.
+- **Before a session handoff** — compact Ингредиенты (KNOWLEDGE.jsonl) so the next session starts with a clean, prioritized file
+- **After `/brewcode:rules` export** — run `prune-rules` mode to strip ❌/✅ entries that have been promoted to rules files
+- **When coordinator reports duplicates** — deduplicate-only pass with `mode: dedupe` to keep the file clean mid-task
+- **When the file exceeds 100 entries** — full compaction removes excess, prioritizing ❌ over ✅ over ℹ️
 
-## Responsibilities
-
-| Action | When | Output |
-|--------|------|--------|
-| Deduplicate | Duplicates reported | Remove exact duplicates |
-| Merge similar | Before handoff | Combine entries matching on first 100 characters of `txt` field |
-| Prioritize | When over limit | Keep ❌ > ✅ > ℹ️ |
-| Truncate | When over limit | Remove lowest priority, oldest first |
-| Validate | Any operation | Ensure valid JSONL format |
-
-## KNOWLEDGE.jsonl Format
+## Examples
 
 ```jsonl
-{"ts":"ISO8601","t":"type","txt":"text","src":"agent"}
+# KNOWLEDGE.jsonl entry format
+{"ts":"2026-04-17T10:00:00Z","t":"❌","txt":"Avoid SELECT * in queries — causes N+1 on large tables","src":"developer"}
+{"ts":"2026-04-17T10:01:00Z","t":"✅","txt":"Use Read then Write (not Edit) for full file rewrites","src":"bc-coordinator"}
+{"ts":"2026-04-17T10:02:00Z","t":"ℹ️","txt":"Project uses PostgreSQL 15 with pgvector extension","src":"architect"}
 ```
 
-### Types (Priority Order)
+```
+# Spawn via Task tool (full compaction)
+Task: bc-knowledge-manager
+Prompt: knowledgePath=/abs/path/.claude/tasks/20260417_example_task/KNOWLEDGE.jsonl mode=full maxEntries=100
+
+# Output
+Knowledge compaction complete:
+- Before: 134 entries
+- After: 87 entries
+- Removed: 12 duplicates, 21 merged, 14 truncated
+- By type: ❌ 31, ✅ 28, ℹ️ 28
+- Size: 18420 bytes
+```
+
+```
+# Prune after rules export (prune-rules mode)
+Task: bc-knowledge-manager
+Prompt: knowledgePath=/abs/path/KNOWLEDGE.jsonl mode=prune-rules
+
+# Output
+Pruned 59 entries (❌/✅), kept 28 entries (ℹ️)
+```
+
+## Flow
+
+<Steps>
+  <li>
+    <div>
+      <strong>Read</strong>
+      <p>Reads KNOWLEDGE.jsonl at <code>knowledgePath</code>. File not found or empty — reports and exits without writing.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Parse</strong>
+      <p>Parses every line as JSON. Malformed lines are skipped and counted separately — they do not halt processing.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Deduplicate & merge</strong>
+      <p>Removes entries with identical <code>txt</code>. Then merges entries whose <code>txt</code> matches case-insensitively on the first 100 characters — keeps the higher-priority type (❌ wins over ✅ wins over ℹ️).</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Sort & truncate</strong>
+      <p>Sorts by priority (❌ → ✅ → ℹ️), then by timestamp descending. If the entry count exceeds <code>maxEntries</code> (default 100), lowest-priority and oldest entries are dropped first. ❌ entries are never removed unless they were exact duplicates.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Write</strong>
+      <p>Rewrites the file using Read then Write (never Edit). One valid JSON object per line, original timestamps preserved.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Report</strong>
+      <p>Returns a statistics block: before/after counts, removed breakdown (duplicates / merged / truncated), by-type counts, and final file size in bytes.</p>
+    </div>
+  </li>
+</Steps>
+
+<details>
+<summary>Priority &amp; dedup rules</summary>
+
+**Entry types (priority order)**
+
 | Type | Priority | Meaning |
 |------|----------|---------|
-| ❌ | 1 (highest) | Avoid - mistakes, failures |
-| ✅ | 2 | Best practice - what works |
-| ℹ️ | 3 (lowest) | Info - neutral facts |
+| `❌` | 1 — highest | Avoid: mistakes, failures, known anti-patterns |
+| `✅` | 2 | Best practice: what works reliably |
+| `ℹ️` | 3 — lowest | Info: neutral facts, architecture notes |
 
-## Workflow
+**Dedup matching**
 
-1. **Read** KNOWLEDGE.jsonl
-2. **Parse** all entries (handle malformed gracefully)
-3. **Deduplicate** - remove entries with identical `txt`
-4. **Merge similar** - combine entries with same `txt` content (case-insensitive), keep higher priority type
-5. **Sort** by priority (❌ > ✅ > ℹ️), then by timestamp (newest first)
-6. **Truncate** if over limit (maxEntries=100)
-7. **Write** cleaned KNOWLEDGE.jsonl
-8. **Report** statistics
+Exact match on `txt` field → remove the lower-priority copy (or older if same priority).
 
-## Input
+Similar match on first 100 characters of `txt` (case-insensitive) → merge into one entry, keep higher-priority `t` value and newer `ts`.
 
-Received via Task tool prompt:
+**Merge mode: `prune-rules`**
 
-| Param | Required | Default | Description |
-|-------|----------|---------|-------------|
-| `knowledgePath` | YES | - | Absolute path to KNOWLEDGE.jsonl |
-| `maxEntries` | no | 100 | Maximum entries to keep |
-| `mode` | no | `full` | `dedupe` (remove exact only), `full` (dedupe + merge + truncate), or `prune-rules` (keep only ℹ️) |
+After `/brewcode:rules` exports ❌/✅ entries to `.claude/rules/` files, run `prune-rules` to strip them from KNOWLEDGE.jsonl. Only `ℹ️` entries survive. This prevents double-loading the same knowledge as both KNOWLEDGE and rules.
 
-## Workflow: prune-rules
+**Rules frontmatter note**
 
-After rules export ([/brewcode:rules](/brewcode/skills/rules/)): remove ❌ and ✅ entries, keep only ℹ️.
+When rules are exported via `/brewcode:rules`, use `paths` (array of glob strings) in frontmatter — `globs` and `alwaysApply` are not supported. Rules without `paths` load always; path-specific rules should load lazily (Bug #16299 causes all to load at session start regardless).
 
-1. **Read** KNOWLEDGE.jsonl
-2. **Filter** -- keep only entries with `"t":"ℹ️"`
-3. **Write** filtered entries back to KNOWLEDGE.jsonl
-4. **Report** -- `"Pruned N entries (removed types), kept M entries (info)"`
-
-## Output Format
-
-```
-Knowledge compaction complete:
-- Before: {count} entries
-- After: {count} entries
-- Removed: {duplicates} duplicates, {merged} merged, {truncated} truncated
-- By type: {count} avoid, {count} best practice, {count} info
-- Size: {bytes} bytes
-```
-
-## Error Handling
-
-| Error | Action |
-|-------|--------|
-| File not found | Report error, exit without writing |
-| Empty file | Report "0 entries", exit without writing |
-| Malformed line | Skip line, count as "skipped", continue processing |
-
-## Rules
-
-- NEVER lose ❌ entries unless exact duplicate
-- ALWAYS maintain valid JSONL (one object per line)
-- PRESERVE original timestamps
-- Use Read then Write (not Edit) for full file rewrite
-
-## Rules Frontmatter Reference
-
-When knowledge is extracted to `.claude/rules/` via `/brewcode:rules`:
-
-| Field | Valid | Purpose |
-|-------|-------|---------|
-| `paths` | ✅ | Array of quoted glob patterns |
-| `globs` | ❌ | NOT supported |
-| `alwaysApply` | ❌ | NOT supported (Cursor field) |
-
-**Loading:** Rules without `paths` load always. Rules with `paths` should load lazily but Bug #16299 causes all to load at start.
-
-> **Source:** [code.claude.com/docs/en/memory](https://code.claude.com/docs/en/memory.md#path-specific-rules)
+</details>
 
 <CardGrid>
-  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
-    Download, changelog, and installation instructions.
+  <Card title="bc-coordinator" icon="robot" href="/brewcode/agents/bc-coordinator/">
+    Spawns bc-knowledge-manager before handoff and after duplicate reports.
   </Card>
-  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/agents/bc-knowledge-manager.md">
-    Source code, README, and configuration files.
+  <Card title="brewcode:start" icon="rocket" href="/brewcode/skills/start/">
+    Infinite execution skill — triggers compaction via pre-compact.mjs hook at context limit.
+  </Card>
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/agents/bc-knowledge-manager.md">
+    Agent definition and compaction logic.
+  </Card>
+  <Card title="Brewcode overview" icon="document" href="/brewcode/">
+    All brewcode skills, agents, and hooks in one place.
   </Card>
 </CardGrid>
+
+<UpdateNotice />

@@ -1,99 +1,130 @@
 ---
 title: "Plugin Update"
-description: "Check installed brewcode plugins, install missing ones, and update the full suite in one command -- with version status table and reload prompt."
+description: "Check installed brewcode plugins, install missing ones, and update the full suite in one command — with version status table and reload prompt."
 order: 3119
 ---
+import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-import { Badge, Callout, Card, CardGrid, Steps, InstallPrompt, UpdateNotice } from '../../../../components/mdx';
+# Plugins out of date? One command fixes it.
 
-# Plugin Update
+<Callout type="caution">
+**Running old plugin versions causes silent mismatches.** Skills added in newer releases are missing. Fixes don't apply. The skill manifest Claude loads at startup can be weeks behind the repo. There is no auto-update prompt — you have to ask.
+</Callout>
 
-<Badge variant="primary" text="sonnet" /> <Badge variant="secondary" text="session" />
-
-Check the installed version of every brewcode plugin, install any that are missing,
-update outdated ones to the latest release, and remind you to reload.
-Run it at the start of a session to stay current without touching the CLI manually.
+<Callout type="tip">
+**One skill checks, installs, and updates the full brewcode suite.** Interactive by default — or pass `check` / `update` / `all` to skip questions. For individual skill toggling, see [`/brewtools:skill-toggle`](/brewtools/skills/skill-toggle/).
+</Callout>
 
 ## Quick reference
 
 | Field | Value |
 |-------|-------|
 | Command | `/brewtools:plugin-update` |
-| Arguments | `[check\|update\|all]` -- no args = interactive |
+| Arguments | `[check\|update\|all]` — no args = interactive |
 | Model | sonnet |
 | Context | session |
 | Tools | Read, Bash, Write, AskUserQuestion, WebFetch |
 
-## Modes
+## When to use
 
-| Argument | Phases run | Prompts? | What it does |
-|----------|-----------|----------|-------------|
-| _(none)_ | All (0-6) | Yes | Interactive -- asks before install and update |
-| `check` | 0-2 only | No | Status table only; no changes made |
-| `update` | 0-4 | No | Auto-updates all outdated plugins; installs skipped |
-| `all` | 0-6 | No | Non-interactive: install missing + update all |
+- **Version check before a long session** — confirm the suite is current before investing time
+- **After seeing unfamiliar errors** — an outdated plugin may lack a fix already released
+- **First run on a new machine** — install all four plugins non-interactively with `all`
+- **CI / scripted setup** — `all` mode skips every confirmation prompt
 
-## Execution flow
+| Situation | Command |
+|-----------|---------|
+| Just check versions, change nothing | `/brewtools:plugin-update check` |
+| Update what's outdated, skip missing | `/brewtools:plugin-update update` |
+| Install missing + update all, no prompts | `/brewtools:plugin-update all` |
+| Walk through each decision interactively | `/brewtools:plugin-update` |
 
-<Steps>
-  <li>
-    <div>
-      <strong>Phase 0 -- Discover installed plugins</strong>
-      <p>Runs <code>discover-plugins.sh</code>, which reads <code>&#126;/.claude/settings.json</code> and walks the plugin cache at <code>&#126;/.claude/plugins/cache/</code>. Outputs a JSON object with each installed plugin and its version. No <code>claude plugin list</code> -- that subcommand does not exist.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Phase 1 -- Fetch latest versions</strong>
-      <p>Fetches the latest release metadata from GitHub. If the network request fails, marks all latest versions as "unknown" and continues.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Phase 2 -- Status table</strong>
-      <p>Renders a version table for all four suite plugins. Stops here when argument is <code>check</code>.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Phase 3 -- Install missing</strong>
-      <p>For any suite plugin not present, asks whether to install (interactive) or auto-installs (arg = <code>all</code>). Skipped for <code>update</code> argument. Runs marketplace add first (idempotent), then per-plugin install.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Phase 4 -- Update outdated</strong>
-      <p>Runs the full update chain in order, showing full CLI output for each step. In interactive mode, asks before proceeding.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Phase 5 -- Auto-update toggle (interactive / all only)</strong>
-      <p>Instructs how to enable auto-update via the <code>/plugin</code> UI if desired. Skipped for <code>check</code> and <code>update</code> modes.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Phase 6 -- Reload notice</strong>
-      <p>Always printed, even on no-op runs. Preferred: run <code>/reload-plugins</code> in this session. Fallback: type <code>exit</code>, then run <code>claude</code> again.</p>
-    </div>
-  </li>
-</Steps>
+## Examples
 
-## Status table example
+```bash
+# Interactive — check versions and decide what to update
+/brewtools:plugin-update
+
+# Status check only — no changes made
+/brewtools:plugin-update check
+```
+
+```bash
+# Update all outdated plugins non-interactively
+/brewtools:plugin-update update
+
+# Install missing + update all — fully non-interactive
+/brewtools:plugin-update all
+```
+
+After a run you will see a version table like this:
 
 | Plugin | Installed | Latest | Status |
 |--------|-----------|--------|--------|
 | brewcode | 3.4.51 | 3.4.52 | ⬇️ update available |
 | brewdoc | 3.4.51 | 3.4.51 | ✅ current |
-| brewtools | -- | 3.4.51 | ❌ missing |
+| brewtools | — | 3.4.51 | ❌ missing |
 | brewui | 3.4.51 | 3.4.51 | ✅ current |
 
-Status legend: ✅ current, ⬇️ update available, ❌ missing, ❓ unknown.
+Status legend: ✅ current · ⬇️ update available · ❌ missing · ❓ unknown.
 
-## Update command chain
+## Flow
 
-When updating, the skill runs these commands in order and shows full output for each:
+<Steps>
+  <li>
+    <div>
+      <strong>Discover installed plugins</strong>
+      <p>Runs <code>discover-plugins.sh</code>, which reads <code>&#126;/.claude/settings.json</code> and walks the plugin cache at <code>&#126;/.claude/plugins/cache/</code>. Outputs a JSON object with each installed plugin and its version. <code>claude plugin list</code> does not exist as a subcommand — the script bypasses it entirely.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Fetch latest versions</strong>
+      <p>Fetches release metadata from GitHub. If the network request fails, all latest versions are marked "unknown" and the run continues — you can still update without knowing the exact latest tag.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Render status table</strong>
+      <p>Prints the version table for all four suite plugins (brewcode, brewdoc, brewtools, brewui) plus any other installed plugins as informational rows. Argument <code>check</code> stops here — no changes are made.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Install missing plugins</strong>
+      <p>For each suite plugin not present: asks whether to install (interactive) or auto-installs (<code>all</code> mode). Runs <code>claude plugin marketplace add</code> first (idempotent), then per-plugin <code>install</code>. Skipped entirely for the <code>update</code> argument.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Update outdated plugins</strong>
+      <p>Runs the full update chain in order: marketplace refresh, then each of the four plugins. Shows full CLI output for every command. In interactive mode, asks before proceeding. Any single failure is reported and the chain continues.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Auto-update toggle hint</strong>
+      <p>Only in interactive and <code>all</code> modes. Explains how to enable per-marketplace auto-update via the <code>/plugin</code> UI (Marketplaces → claude-brewcode). The skill never patches <code>settings.json</code> directly — the exact key is unverified.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Reload notice + final summary</strong>
+      <p>Always printed, even on no-op runs. Lists what was installed, updated, skipped, and any errors. Preferred reload: run <code>/reload-plugins</code> in this session. Fallback: <code>exit</code>, then <code>claude</code> again.</p>
+    </div>
+  </li>
+</Steps>
+
+<Callout type="warning">
+Run `/reload-plugins` or restart the session after any install or update. Claude Code reads skill and agent definitions once at startup — changes take effect only after a reload.
+</Callout>
+
+<details>
+<summary>Internals</summary>
+
+**Discovery** — no `claude plugin list`. The skill uses `discover-plugins.sh`, which parses `&#126;/.claude/settings.json` for marketplace registrations and walks `&#126;/.claude/plugins/cache/` for installed version directories.
+
+**Update chain** — runs in this fixed order:
 
 ```bash
 claude plugin marketplace update claude-brewcode
@@ -103,66 +134,25 @@ claude plugin update brewtools@claude-brewcode
 claude plugin update brewui@claude-brewcode
 ```
 
-<Callout type="warning" title="claude plugin list does not exist">
-  The <code>claude plugin list</code> CLI subcommand does not exist. The skill uses a discovery
-  script that reads <code>~/.claude/settings.json</code> and walks the plugin cache directory instead.
-  Valid subcommands: <code>install</code>, <code>update</code>, <code>uninstall</code>, <code>marketplace</code>.
-</Callout>
+Each command runs via the Bash tool with full output shown. Failures are reported inline; remaining steps continue regardless.
 
-## Usage examples
+**Interactive gates** — `AskUserQuestion` presents option lists only (no free-text). Three decision points: install missing, update outdated, enable auto-update. Explicit arguments (`check`, `update`, `all`) bypass all three.
 
-```bash
-# Interactive -- check versions and decide what to update
-/brewtools:plugin-update
-
-# Status check only -- no changes made
-/brewtools:plugin-update check
-
-# Update all outdated plugins non-interactively
-/brewtools:plugin-update update
-
-# Install missing + update all -- fully non-interactive
-/brewtools:plugin-update all
-```
-
-## When Claude refuses to run the update commands
-
-If Claude skips or summarizes steps instead of executing them, paste this coercive prompt directly:
-
-<InstallPrompt plugin="all" mode="update" />
-
-<Callout type="tip" title="Session start habit">
-  Run <code>/brewtools:plugin-update check</code> at the start of a long-running task to confirm
-  your plugins are current before investing time in a session.
-</Callout>
-
-## Reload after update
-
-<Callout type="caution" title="Reload required">
-  Updates are not active until the session is reloaded. Preferred: run <code>/reload-plugins</code> in this session. Fallback: type <code>exit</code>, then run <code>claude</code> again.
-</Callout>
-
-## Troubleshooting
-
-| Issue | Solution |
-|-------|---------|
-| `discover-plugins.sh` fails | Ensure `jq` is installed: `brew install jq` |
-| Latest version shows "unknown" | Network issue -- run `update` anyway; the update chain is idempotent |
-| Install step fails | Re-run `/brewtools:plugin-update` -- marketplace add is idempotent |
-| Claude skips commands | Use the coercive prompt above |
-| Updates active after reload? | Check version with `/brewtools:plugin-update check` in the new session |
-
-## Related
+**Claude refuses to execute?** — if Claude summarizes instead of running commands, paste this coercive prompt: _"Execute every `claude plugin ...` command shown above using the Bash tool. Do not describe — run each command and show full output."_
+</details>
 
 <CardGrid>
-  <Card title="FAQ: Updating plugins" icon="book" href="/faq/">
-    Coercive update prompt, reload options, version cache paths.
+  <Card title="Skill Toggle" icon="settings" href="/brewtools/skills/skill-toggle/">
+    Disable individual skills without uninstalling. State persists across plugin updates.
   </Card>
-  <Card title="Installation" icon="file" href="/installation/">
-    First-time installation instructions and troubleshooting.
+  <Card title="Agent Toggle" icon="puzzle" href="/brewtools/skills/agent-toggle/">
+    Same disable/enable mechanic for agents instead of skills.
   </Card>
-  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/plugin-update">
-    Source code and references.
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/plugin-update">
+    Source code, discovery scripts, and update references.
+  </Card>
+  <Card title="Brewtools overview" icon="document" href="/brewtools/">
+    All brewtools skills in one place.
   </Card>
 </CardGrid>
 

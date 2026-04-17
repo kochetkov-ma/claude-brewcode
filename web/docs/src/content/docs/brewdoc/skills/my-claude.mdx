@@ -1,157 +1,181 @@
 ---
-title: "My-Claude"
-description: "Generates documentation about Claude Code installations - internal overview of local setup, external docs on hooks/context/agents, or web research from forums/GitHub/marketplaces"
+title: "My Claude"
+description: "Document your Claude Code installation — local setup overview, official architecture docs, or custom web research from forums, GitHub, and marketplaces."
 order: 24
 ---
+import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-import { Badge, Card, CardGrid } from '../../../../components/mdx';
+# Document your Claude Code environment in three modes.
 
-# My-Claude
+<Callout type="caution">
+**Claude Code's `/team-onboarding` covers the basics — nothing more.** It reads your local config and generates a ramp-up guide. It has no web access, no architecture research, and no citation tracking. As your setup grows — plugins, hooks, custom agents, alternative providers, project rules — the built-in command produces a flat snapshot that goes stale within days. There is no INDEX, no versioning, no reviewer pass.
+</Callout>
 
-<Badge variant="primary" text="opus" /> <Badge variant="secondary" text="main conversation" />
-
-My-Claude generates documentation about your Claude Code installation and environment.
-It operates in three modes: internal (local setup overview), external (hook/context/agent architecture),
-and research (web research on a specific query).
+<Callout type="tip">
+**`/brewdoc:my-claude` goes further.** Internal mode maps everything in `&#126;/.claude` and your project's `.claude`, then runs a reviewer agent to validate every file path and count before writing. External mode synthesizes hook/context/agent architecture from official Anthropic docs, GitHub releases, and community forums. Research mode launches parallel agents across multiple live sources for any Claude Code query — with per-fact source citations and a reliability table.
+</Callout>
 
 ## Quick reference
 
 | Field | Value |
 |-------|-------|
 | Command | `/brewdoc:my-claude` |
-| Arguments | `[ext [context]]` &#124; `[r <query>]` -- no args = internal installation docs |
+| Arguments | `[ext [context]]` \| `[r <query>]` — no args = internal mode |
 | Model | opus |
 | Context | main conversation |
 | Tools | Read, Write, Edit, Glob, Grep, Bash, Task, WebFetch, WebSearch, Skill, AskUserQuestion |
 
-## Mode detection
+## When to use
 
-Detect mode from `$ARGUMENTS`:
+- **New team member onboarding** — generate a complete map of your Claude Code setup as a shareable doc
+- **Plugin audit before a release** — snapshot your current skills, agents, hooks, and rules
+- **Architecture research** — pull official Anthropic docs on hooks, context injection, agent schema into one place
+- **Custom investigation** — research any Claude Code topic across multiple live sources with citations
+- **Version tracking** — INDEX entries persist across runs; compare docs over time
 
-| `$ARGUMENTS` value | Mode | Sub-mode |
-|---|---|---|
-| empty | INTERNAL | -- |
-| `ext` or `external` (alone) | EXTERNAL | default |
-| `ext context` or `external context` | EXTERNAL | context-schema |
-| starts with `r ` or `research ` | RESEARCH | query = rest of args |
+## Examples
 
-After detection, load the appropriate reference file:
-- INTERNAL: `references/internal-mode.md`
-- EXTERNAL: `references/external-mode.md`
-- RESEARCH: `references/research-mode.md`
+```bash
+# Internal mode — maps your full &#126;/.claude + project .claude
+/brewdoc:my-claude
 
-## Output directory
+# External mode — official architecture docs (hooks, context, agents)
+/brewdoc:my-claude ext
 
-All generated docs go to `.claude/brewdoc/my-claude/` (project-relative — required because Claude Code's protected-path policy blocks writes to `~/.claude/*` in headless sessions, even under `bypassPermissions`).
-Create if not exists: `mkdir -p .claude/brewdoc/my-claude`
+# External mode, context-schema sub-mode — focuses on additionalContext / updatedInput
+/brewdoc:my-claude ext context
 
-`${BD_PLUGIN_DATA}/my-claude/` is an optional fallback available in interactive sessions only.
+# Research mode — any Claude Code query, multi-source with citations
+/brewdoc:my-claude r plugin hooks additionalContext regression
+```
 
-## INDEX tracking
+## vs `/team-onboarding`
 
-Append entry to `.claude/brewdoc/INDEX.jsonl`:
+Claude Code 2.1.101 shipped a built-in `/team-onboarding` slash command. It generates a teammate ramp-up guide from your local config. Use it when you need a quick, one-shot handoff doc.
 
+Use `/brewdoc:my-claude` when you need any of the following that `/team-onboarding` does not provide:
+
+| Capability | `/team-onboarding` | `/brewdoc:my-claude` |
+|------------|--------------------|----------------------|
+| Local config map | yes | yes |
+| Web research (forums, GitHub, marketplaces) | no | RESEARCH mode |
+| Official architecture docs (hooks, context schema) | no | EXTERNAL mode |
+| Per-fact source citations | no | yes |
+| Reviewer agent validation pass | no | yes |
+| Persistent INDEX with versioning | no | yes |
+
+## Modes
+
+| Argument | Mode | What it does |
+|----------|------|--------------|
+| *(none)* | INTERNAL | Analyzes `&#126;/.claude` + project `.claude` — rules, agents, skills, memories |
+| `ext` or `external` | EXTERNAL (default) | Official docs + local hook analysis + recent releases |
+| `ext context` | EXTERNAL (context-schema) | Focuses on context injection schema: `additionalContext`, `updatedInput` |
+| `r <query>` or `research <query>` | RESEARCH | Custom query across GitHub, Reddit, forums, marketplaces |
+
+## Flow
+
+<Steps>
+  <li>
+    <div>
+      <strong>Detect mode</strong>
+      <p>Reads <code>$ARGUMENTS</code> and selects INTERNAL, EXTERNAL, or RESEARCH. Loads the corresponding reference file from <code>references/</code>.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Parallel discovery</strong>
+      <p>INTERNAL: spawns 3 parallel <code>Explore</code> agents — (1) global <code>&#126;/.claude</code> config, (2) project <code>.claude</code> config, (3) memory files. EXTERNAL/RESEARCH: spawns <code>general-purpose</code> agents per source group (official docs, GitHub, forums).</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Aggregate findings</strong>
+      <p>Merges agent outputs into a structured Markdown document. RESEARCH mode tracks source URL per fact for the citations table.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Reviewer pass</strong>
+      <p>Spawns an independent <code>reviewer</code> agent to validate facts — file paths exist, content accurate, no hallucinated versions. Applies fixes before writing the final doc.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Write output</strong>
+      <p>Writes to <code>.claude/brewdoc/my-claude/YYYYMMDD_my-claude-&#123;mode&#125;.md</code> (project-relative — <code>&#126;/.claude/\*</code> is protected and blocked in headless <code>claude -p</code> sessions, even under <code>bypassPermissions</code>). Creates the directory if needed with <code>mkdir -p</code>.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>INDEX entry</strong>
+      <p>Appends a record to <code>.claude/brewdoc/INDEX.jsonl</code> with timestamp, mode, path, title, and version. If an entry for this mode already exists, asks via <code>AskUserQuestion</code> whether to update (bump version) or create a new entry alongside the existing one.</p>
+    </div>
+  </li>
+</Steps>
+
+<details>
+<summary>Internals — output paths, INDEX schema, document structures</summary>
+
+**Output directory:** `.claude/brewdoc/my-claude/` (project-relative). `&#126;/.claude/*` is blocked by Claude Code's protected-path policy in headless sessions, even under `bypassPermissions`. The plugin data path `${BD_PLUGIN_DATA}/my-claude/` works in interactive sessions only — not recommended for scripts or CI.
+
+**INTERNAL sources analyzed:**
+- `&#126;/.claude/CLAUDE.md` — global instructions
+- `&#126;/.claude/rules/*.md` — global rules
+- `&#126;/.claude/agents/*.md` — global agents
+- `&#126;/.claude/skills/` — global skills
+- Project `CLAUDE.md` and `.claude/rules/*.md`
+- `&#126;/.claude/projects/**/memory/MEMORY.md` — memory files
+
+**INDEX format:**
 ```jsonl
 {"ts":"2026-02-28T10:00:00","mode":"internal","path":".claude/brewdoc/my-claude/20260228_my-claude-internal.md","title":"Internal Claude Setup Overview","version":"1.0"}
 ```
 
-If a legacy `~/.claude/brewdoc/INDEX.jsonl` exists and the project INDEX is empty, its entries are merged once (read-only) and a migration notice is printed. The legacy file is never written to.
+**Legacy migration:** if `&#126;/.claude/brewdoc/INDEX.jsonl` exists and the project INDEX is empty, entries are merged once (read-only). The legacy file is never written to. A notice is printed: `ℹ️ Migrated {N} entries from legacy &#126;/.claude/brewdoc/INDEX.jsonl`.
 
-If an existing entry for the same mode exists: use AskUserQuestion -- header: "INDEX", question: "Entry for this mode already exists (v&#123;VERSION&#125;). Update it?", options: "Yes, update (bump version)" / "No, create new entry".
-
-## INTERNAL mode
-
-**Goal:** Document your local Claude Code setup -- CLAUDE.md files, rules, agents, skills, memories.
-
-**Sources to analyze:**
-- `~/.claude/CLAUDE.md` -- global instructions
-- `~/.claude/rules/*.md` -- global rules
-- `~/.claude/agents/*.md` -- global agents
-- `~/.claude/skills/` -- global skills
-- Project `CLAUDE.md` (current working directory)
-- `.claude/rules/*.md` -- project rules
-- `~/.claude/projects/**/memory/MEMORY.md` -- memory files
-
-**Process:**
-1. Spawn 3 parallel `Explore` agents, one per source group: (1) global `~/.claude` config, (2) project `.claude` config, (3) memory files
-2. Aggregate findings into structured document
-3. Write to `.claude/brewdoc/my-claude/YYYYMMDD_my-claude-internal.md`
-4. Spawn independent [reviewer](/brewcode/agents/reviewer/) agent to validate facts (file paths exist, content accurate)
-5. Apply reviewer fixes if any
-6. Add INDEX entry
-
-**Output document structure:**
-
+**INTERNAL output structure:**
 ```markdown
-# Claude Code Internal Setup -- {date}
-
+# Claude Code Internal Setup — {date}
 ## Global Configuration
-### Instructions (CLAUDE.md)
-### Rules ({N} rules)
-### Agents ({N} agents)
-### Skills ({N} skills)
-
+### Instructions (CLAUDE.md) | Rules ({N}) | Agents ({N}) | Skills ({N})
 ## Project Configuration
-### Project Instructions
-### Project Rules
-
+### Project Instructions | Project Rules
 ## Memory
 ### Active Memories ({N} entries)
-
 ## Summary
 | Component | Count | Location |
-|-----------|-------|----------|
 ```
 
-## EXTERNAL mode
-
-**Goal:** Document Claude Code's hook/context/agent architecture from official sources + local analysis.
-
-**Sub-mode default:**
-1. Analyze local hook files for event model patterns
-2. WebSearch for recent Claude Code releases and CHANGELOG
-3. Spawn `general-purpose` agents for: official docs (code.claude.com), GitHub releases, community forums
-4. Generate `.claude/brewdoc/my-claude/YYYYMMDD_my-claude-external.md`
-
-**Sub-mode context-schema:**
-1. Focus specifically on context injection schema (`additionalContext`, `updatedInput`, etc.)
-2. Output: `.claude/brewdoc/my-claude/external/YYYYMMDD_context-schema.md`
-
-## RESEARCH mode
-
-**Goal:** Research a specific query about Claude Code using multiple sources.
-
-**Query:** everything after `r ` or `research ` in `$ARGUMENTS`
-
-**Process:**
-1. Analyze query -- divide into 2-5 source groups (official docs, GitHub, Reddit, forums, marketplaces)
-2. Spawn `general-purpose` agents per source group in parallel
-3. Aggregate with citation tracking (source URL per fact)
-4. Spawn independent [reviewer](/brewcode/agents/reviewer/) agent to validate facts and source reliability
-5. Output: `.claude/brewdoc/my-claude/YYYYMMDD_research-{slug}.md`
-
-**Output structure:**
-
+**RESEARCH output structure:**
 ```markdown
-# Research: {query} -- {date}
-
+# Research: {query} — {date}
 ## Findings
-
-### {Source Group 1}
-...
-
+### {Source Group 1} ...
 ## Sources
 | Fact | Source | Reliability |
-|------|--------|-------------|
-
 ## Review Verdict
 ```
 
+**EXTERNAL context-schema sub-mode** writes to `.claude/brewdoc/my-claude/external/YYYYMMDD_context-schema.md` instead of the default path.
+
+**RESEARCH agent count:** 2–5 `general-purpose` agents spawned in parallel, one per source group (official docs, GitHub issues, Reddit/forums, marketplaces, community Discord).
+
+</details>
+
 <CardGrid>
-  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
-    Download, changelog, and installation instructions.
+  <Card title="auto-sync" icon="sync" href="/brewdoc/skills/auto-sync/">
+    Universal doc sync — keeps Markdown, MDX, and knowledge files current automatically.
   </Card>
-  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewdoc/skills/my-claude">
-    Source code, README, and configuration files.
+  <Card title="memory" icon="robot" href="/brewdoc/skills/memory/">
+    Optimize memory files interactively — compress, deduplicate, restructure MEMORY.md.
+  </Card>
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewdoc/skills/my-claude">
+    Source code, reference files, and mode instructions.
+  </Card>
+  <Card title="brewdoc overview" icon="document" href="/brewdoc/">
+    All brewdoc skills — auto-sync, my-claude, memory, md-to-pdf, guide, publish.
   </Card>
 </CardGrid>
+
+<UpdateNotice />

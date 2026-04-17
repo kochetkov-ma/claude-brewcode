@@ -1,130 +1,153 @@
 ---
-title: "Brewpage"
-description: "Publish text, markdown, JSON, or files to brewpage.app — returns a public URL instantly"
+title: "Publish"
+description: "Publish text, markdown, JSON, files, or multi-file sites to brewpage.app — returns a public URL instantly, no sign-up required."
 order: 25
 ---
+import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-import { Callout, Steps, Card, CardGrid } from '../../../../components/mdx';
+# One command. Public link. No sign-up.
 
-# Brewpage
-
-Brewpage publishes text, markdown, JSON, or files to **[brewpage.app](https://brewpage.app)**
-and returns a public URL instantly. No sign-up, no configuration — just content in, link out.
-
-<Callout type="tip" title="brewpage.app">
-  Free instant hosting for HTML pages, JSON documents, files, and KV stores.
-  Visit <a href="https://brewpage.app" target="_blank" rel="noopener noreferrer">brewpage.app</a> to browse the public gallery.
+<Callout type="caution">
+**Your content stays local until you explicitly run this skill.** The skill asks for namespace and password interactively — nothing is uploaded until you confirm both prompts. Owner tokens (needed for deletion) are stored only in `.claude/brewpage-history.md` and never printed to conversation.
 </Callout>
 
+<Callout type="tip">
+**brewpage.app** is free instant hosting: HTML pages, JSON documents, files, and multi-file sites. Default TTL is 5 days — override with `--ttl N`. For the public gallery, visit [brewpage.app](https://brewpage.app).
+</Callout>
+
+## Quick reference
+
+| Field | Value |
+|-------|-------|
+| Command | `/brewdoc:publish <content> [--ttl N] [--entry filename]` |
+| Arguments | Text, file path, directory path, or `.zip` path |
+| Model | haiku |
+| Tools | Read, Bash, AskUserQuestion, Glob |
+
+## When to use
+
+- **Share a report instantly** — `/brewdoc:publish report.md` → public link in seconds
+- **Host a JSON dataset** — `/brewdoc:publish '{"status":"ok","count":42}'` → browseable JSON page
+- **Upload any file** — `/brewdoc:publish screenshot.png --ttl 1` → direct download link, expires in 1 day
+- **Deploy a static site** — `/brewdoc:publish ./dist/ --entry index.html` → full multi-file site with routing
+- **Password-protect a page** — set a password at the interactive prompt; page is hidden from gallery
+
+## Examples
+
 ```bash
+# Publish inline text or markdown
 /brewdoc:publish "Hello, world!"
 /brewdoc:publish report.md
+```
+
+```bash
+# Publish a JSON literal
 /brewdoc:publish '{"status": "ok", "count": 42}'
+
+# Publish a file (any MIME type)
 /brewdoc:publish screenshot.png --ttl 1
 ```
 
-## How it works
+```bash
+# Deploy a multi-file site from a directory
+/brewdoc:publish ./dist/ --entry index.html
+
+# Upload a pre-zipped site archive
+/brewdoc:publish site.zip --ttl 14
+```
+
+## Modes
+
+| Input | Detected type | Endpoint |
+|-------|--------------|----------|
+| Plain text or markdown string | HTML | `POST /api/html?format=markdown` |
+| Starts with `{` or `[` | JSON | `POST /api/json` |
+| Existing local file path | FILE | `POST /api/files` (multipart) |
+| Directory or `.zip` file | SITE | `POST /api/sites` (archive upload) |
+
+SITE is checked first — directories and `.zip` files would otherwise match the FILE branch.
+
+Entry file detection for sites: `--entry` flag → `index.html` if present → first `.html` alphabetically.
+
+## Flow
 
 <Steps>
   <li>
     <div>
-      <strong>Receive content</strong>
-      <p>The skill receives user input: inline text, a file path, or a JSON literal.</p>
+      <strong>Parse arguments</strong>
+      <p>Extracts <code>--ttl N</code> (default: 5 days), <code>--entry filename</code> (site mode), and the content argument. For a directory, counts HTML files and detects the entry file.</p>
     </div>
   </li>
   <li>
     <div>
       <strong>Detect content type</strong>
-      <p>Content is classified as HTML (text/markdown), JSON (object or array), or File (local path). The type determines which API endpoint will be used.</p>
+      <p>Classifies the input as SITE, FILE, JSON, or HTML — in that order. Computes size and shows a pre-publish summary before any interaction.</p>
     </div>
   </li>
   <li>
     <div>
       <strong>Ask namespace</strong>
-      <p>An interactive prompt asks for a namespace — a short slug that becomes part of the URL (e.g. <code>brewpage.app/my-ns/abc123</code>).</p>
+      <p>Interactive prompt offers: <code>public</code> (gallery-visible), an auto-suggested meaningful slug, or a custom value (3–32 alphanumeric chars + hyphens). The slug becomes the URL prefix: <code>brewpage.app/&#123;namespace&#125;/&#123;id&#125;</code>.</p>
     </div>
   </li>
   <li>
     <div>
       <strong>Ask password</strong>
-      <p>Optionally set a password. Visitors will need to enter it before viewing the page. Leave empty for public access.</p>
+      <p>Choose: no password, a generated 6-char random password, or your own (min 4 chars). Password-protected pages are hidden from the gallery.</p>
     </div>
   </li>
   <li>
     <div>
-      <strong>Render content</strong>
-      <p>For text/markdown, the content is converted to HTML. JSON is formatted for display. Files are prepared for upload as-is.</p>
+      <strong>Upload via API</strong>
+      <p>Calls the appropriate endpoint. For sites, zips the directory to a temp file, POSTs the archive, then removes the temp file. The owner token returned by the API is never printed — only appended to <code>.claude/brewpage-history.md</code>.</p>
     </div>
   </li>
   <li>
     <div>
-      <strong>Call API</strong>
-      <p>The skill sends a request to the appropriate brewpage.app endpoint: <code>POST /api/html</code>, <code>POST /api/json</code>, or <code>POST /api/files</code>.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Return URL</strong>
-      <p>The API responds with a public URL. The skill displays it immediately.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Save owner token</strong>
-      <p>The owner token, namespace, page ID, and URL are appended to <code>.claude/brewpage-history.md</code> for future reference and deletion.</p>
+      <strong>Return result</strong>
+      <p>Prints the public URL (and file count for sites). On error, prints <code>Publish failed.</code> — check <code>.claude/brewpage-history.md</code> for context.</p>
     </div>
   </li>
 </Steps>
 
-## Content type detection
+<details>
+<summary>Internals</summary>
 
-| Input | Detected type | Endpoint |
-|-------|---------------|----------|
-| Plain text or markdown string | HTML | `POST /api/html` |
-| Valid JSON object or array | JSON | `POST /api/json` |
-| Path to an existing local file | File | `POST /api/files` |
+**Security — owner token:** The `ownerToken` field from the API response is captured inside the Bash block and written directly to `.claude/brewpage-history.md`. The LLM only sees `OK {url}` or `FAILED: ...` — never the token value.
 
-## Namespace selection
-
-The namespace is a short identifier that forms part of the published URL.
-It is prompted interactively during each publish.
-
-- Must contain only lowercase letters, numbers, and hyphens
-- Becomes the first path segment: `brewpage.app/{namespace}/{id}`
-- Reusing a namespace groups pages under the same prefix
-
-## Password protection
-
-When prompted, you can set a password to restrict access. Visitors must enter the
-correct password before the page content is displayed. Leave the prompt empty for
-unrestricted public access.
-
-## Owner token and history
-
-Every successful publish appends a row to `.claude/brewpage-history.md`:
+**History file format:**
 
 ```markdown
-| Namespace | ID | URL | Token | Created |
-|-----------|-----|-----|-------|---------|
-| my-ns | abc123 | https://brewpage.app/my-ns/abc123 | tok_... | 2026-03-31 |
+| Date | URL | Owner Token | TTL | Type |
+|------|-----|-------------|-----|------|
+| 2026-04-17 12:00 | https://brewpage.app/my-ns/abc123 | `tok_...` | 5d | html |
 ```
 
-To delete a published page, use the saved owner token:
+**Delete a published page:**
 
 ```bash
-curl -X DELETE "https://brewpage.app/api/{ns}/{id}" -H "X-Owner-Token: {token}"
+curl -s -X DELETE "https://brewpage.app/api/{ns}/{id}" \
+  -H "X-Owner-Token: TOKEN"
 ```
 
-<Callout type="tip" title="TTL">
-  Default time-to-live is 5 days. Override with <code>--ttl N</code> where N is the number of days.
-  Example: <code>/brewdoc:publish report.md --ttl 30</code> keeps the page for 30 days.
-</Callout>
+For sites use `/api/sites/{ns}/{id}`.
+
+**Namespace rules:** lowercase alphanumeric + hyphens, 3–32 chars. Auto-suggestion is content-derived (`api-docs`, `report-q2`) — never a random string or truncated filename.
+
+**Site uploads:** directory → zipped to `mktemp /tmp/brewpage-site-XXXXXX.zip` → POSTed as `archive=@$TMPZIP` → temp file removed. `User-Agent: ClaudeCode/1.0` header included.
+
+</details>
 
 <CardGrid>
-  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
-    Download, changelog, and installation instructions.
+  <Card title="md-to-pdf" icon="document" href="/brewdoc/skills/md-to-pdf/">
+    Convert markdown to PDF before publishing — combine with publish for shareable PDFs.
   </Card>
-  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewdoc/skills/publish">
-    Source code, README, and configuration files.
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewdoc/skills/publish">
+    Source code, SKILL.md, and API integration details.
+  </Card>
+  <Card title="Brewdoc overview" icon="rocket" href="/brewdoc/">
+    All brewdoc skills — auto-sync, memory, my-claude, and more.
   </Card>
 </CardGrid>
+
+<UpdateNotice />

@@ -1,101 +1,174 @@
 ---
 title: "deploy-admin"
-description: "GitHub Actions and deployment agent -- workflows, releases, GHCR, CI/CD, semver"
+description: "GitHub Actions and deployment agent — workflows, releases, GHCR, CI/CD, semver, and VPS deployment tracking."
 order: 3213
 ---
-import { Badge, Callout, Card, CardGrid } from '../../../../components/mdx';
+import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# deploy-admin
+# GitHub Actions and releases — one agent handles it all.
 
-<Badge variant="accent" text="new" /> <Badge variant="primary" text="opus" />
+<Callout type="caution">
+**Deployment mistakes are irreversible.** Pushed tags, published releases, triggered workflows — none undo cleanly. `deploy-admin` classifies every operation by safety level and requires explicit confirmation before touching anything at SERVICE, DELETE, or PRIVILEGE tier.
+</Callout>
+
+<Callout type="tip">
+**Run `/brewtools:deploy setup` first.** The skill (рецепт) writes `CLAUDE.local.md` with your GitHub config, workflow inventory, and server targets. The agent reads that file automatically on every task start.
+</Callout>
 
 ## Quick reference
 
 | Field | Value |
 |-------|-------|
+| Agent name | `deploy-admin` |
 | Model | opus |
 | Tools | Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion, WebFetch, WebSearch |
-| Triggers | "deploy", "github actions", "workflow", "release", "ci cd" |
+| Triggers | "deploy", "github actions", "workflow", "release", "ci cd", "version bump", "publish" |
+| Safety gate | Confirms before MODIFY / SERVICE / DELETE / PRIVILEGE operations |
 
-**Role:** GitHub Actions and deployment administrator -- workflows, releases, CI/CD
+## When to use
 
-## Safety Classification
+- **Release a new version** — bump semver, generate changelog, commit, tag, push, verify CI green
+- **Create or update a workflow** — write workflow YAML, add matrix, configure caching, set up GHCR push
+- **Monitor CI** — check why a run failed, fetch step logs, rerun failed jobs
+- **Publish a draft release** — review notes, attach assets, flip draft to published
+- **Deploy to VPS** — dispatch workflow, watch run live, SSH health-check the server after deploy
+- **Manage secrets** — list names (never values), set from file, clean up stale entries
 
-| Category | Level | Examples |
-|----------|-------|---------|
-| READ | safe | `gh run list`, `gh workflow list`, `gh release view`, `gh secret list` |
-| CREATE | moderate | Create workflow YAML, `gh release create --draft` |
-| MODIFY | elevated | Edit workflow, `gh secret set`, `git commit/tag` |
-| SERVICE | elevated | `gh workflow run`, `gh run rerun`, `git push` |
-| DELETE | dangerous | `gh release delete`, `gh run cancel`, remove workflow |
-| PRIVILEGE | dangerous | `gh secret delete`, branch protection, `gh workflow disable` |
-
-<Callout type="caution" title="Destructive operations">
-  DELETE and PRIVILEGE operations require explicit user confirmation before execution.
-</Callout>
-
-## Knowledge Domains
-
-| Domain | Scope |
-|--------|-------|
-| GitHub Actions | Workflows, triggers, jobs, steps, matrix, caching, artifacts |
-| Releases | Semver, changelogs, tags, GitHub Releases, RELEASE-NOTES.md |
-| Docker/GHCR | Build, push, multi-platform, registry auth, image tagging |
-| CI/CD | Run monitoring, failure analysis, re-runs, workflow dispatch |
-| Secrets | Secret management (names only), environment variables |
-| VPS deploy | SCP, SSH deploy, health checks, rollback (via SSH integration) |
-| Security | CodeQL, Gitleaks, SARIF, dependency scanning |
-
-## Dynamic Context
-
-The agent reads `CLAUDE.local.md` in the project root for GitHub config and workflow inventory. This file is populated by the [`/brewtools:deploy`](/brewtools/skills/deploy/) skill.
-
-<Callout type="tip" title="Workflow inventory">
-  Run `/brewtools:deploy setup` first to configure GitHub integration. The skill writes `CLAUDE.local.md` with your GitHub config and workflow inventory, which deploy-admin reads automatically.
-</Callout>
-
-## Usage Examples
-
-### Release a new version
-
-> "Release v3.5.0 with changelog from recent commits"
-
-Runs bump-version.sh, generates changelog, updates RELEASE-NOTES.md, commits, tags, pushes, and verifies CI.
-
-### Create a workflow
-
-> "Create a Docker build workflow that pushes to ghcr.io on tags"
-
-Generates workflow YAML from templates, writes to `.github/workflows/`, and updates workflow inventory.
-
-### Monitor CI
-
-> "Check why the last docs workflow failed"
-
-Fetches run logs, identifies failure point, and suggests fixes.
-
-### Deploy to VPS
-
-> "Trigger deploy-docs workflow and verify health on vps-main"
-
-Dispatches workflow, monitors run progress, then SSH health checks the target server.
-
-## Output
+## Examples
 
 ```
-=== DEPLOY-ADMIN REPORT ===
-Repository: [owner/repo]
-Task: [description]
-ACTIONS: [what was done]
-VERIFICATION: [post-action checks]
-STATUS: Success / Partial / Failed
+# Release a new version with full pipeline
+"Release v3.6.0 with changelog from recent commits"
+
+# Investigate a failed run
+"Check why the last docs workflow failed and suggest a fix"
+
+# Trigger a deploy and verify it landed
+"Trigger deploy-docs workflow and verify health on the VPS"
 ```
+
+## Flow
+
+<Steps>
+  <li>
+    <div>
+      <strong>Read context</strong>
+      <p>Reads <code>CLAUDE.local.md</code> for GitHub config, workflow inventory, server targets, and secret names. Verifies <code>gh auth status</code> — wrong user stops everything before touching any resource.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Classify operations</strong>
+      <p>Every planned command is assigned a safety level: READ (free), CREATE (free), MODIFY (confirm), SERVICE (confirm), DELETE (always confirm), PRIVILEGE (always confirm). Compound pipelines inherit the highest level of any constituent command.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Confirm before mutating</strong>
+      <p>MODIFY and above: describes exactly what will happen, then calls <code>AskUserQuestion</code>. No mutation runs without an affirmative answer. Emergency stop fires immediately if the wrong repo, branch, or secret exposure is detected.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Execute operations</strong>
+      <p>Runs <code>gh</code> CLI commands in order — workflow dispatch, release create, secret set, <code>git push --tags</code>, Docker build + push to GHCR. Each command result is captured for the final report.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Verify</strong>
+      <p>Checks CI run status (<code>gh run list -L 3</code>), release state, and deployment health via SSH. For plugin releases, also verifies the plugin cache updated correctly.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Report</strong>
+      <p>Outputs a structured table: repository, task, operations executed, highest safety level reached, and per-check verification results. No silent failures.</p>
+    </div>
+  </li>
+</Steps>
+
+<details>
+<summary>Internals — safety levels and release pipeline</summary>
+
+### Safety classification
+
+| Level | Gate | Examples |
+|-------|------|---------|
+| READ | free | `gh run list/view`, `gh workflow list`, `gh release view`, `gh secret list` |
+| CREATE | free | Create workflow YAML, `gh release create --draft` |
+| MODIFY | confirm | Edit workflow, `gh secret set`, `git commit`, `git tag` |
+| SERVICE | confirm | `gh workflow run`, `gh run rerun`, `git push`, `git push --tags` |
+| DELETE | always confirm | `gh release delete`, `gh run cancel`, remove workflow file |
+| PRIVILEGE | always confirm | `gh secret delete`, branch protection changes, `gh workflow disable` |
+
+Pipelines (`cmd1 | cmd2`) and `curl | bash` patterns inherit PRIVILEGE regardless of base level.
+
+### Release pipeline steps
+
+| Step | Command | Level |
+|------|---------|-------|
+| 1. Bump version | `bash .claude/scripts/bump-version.sh X.Y.Z` | MODIFY |
+| 2. Changelog | `git log --oneline vPREV..HEAD` → update RELEASE-NOTES.md | MODIFY |
+| 3. Commit | `git commit -m "vX.Y.Z: summary"` | MODIFY |
+| 4. Tag | `git tag vX.Y.Z` | MODIFY |
+| 5. Push | `git push && git push --tags` | SERVICE |
+| 6. Update plugins | `bash .claude/scripts/update-plugin.sh` | SERVICE |
+| 7. Verify CI | `gh run list -L 3` | READ |
+| 8. Verify cache | `grep '"matcher"' &#126;/.claude/plugins/cache/.../hooks.json` | READ |
+
+### RELEASE-NOTES.md format
+
+```markdown
+## vX.Y.Z (YYYY-MM-DD)
+
+> Docs: [page](https://doc-claude.brewcode.app/plugin/path/) | [page2](...)
+
+### brewcode
+#### Fixed / Changed / Added
+- **category:** description
+```
+
+The `> Docs:` line must list pages for every affected skill, agent, or hook. URL pattern: `https://doc-claude.brewcode.app/{plugin}/{skills|agents}/{name}/`
+
+### Docker / GHCR
+
+```bash
+# Build for linux/amd64 and push
+docker build --platform linux/amd64 -t ghcr.io/OWNER/IMAGE:TAG .
+docker push ghcr.io/OWNER/IMAGE:TAG
+
+# Multi-tag (version + latest)
+docker build -t ghcr.io/OWNER/IMAGE:TAG -t ghcr.io/OWNER/IMAGE:latest .
+docker push ghcr.io/OWNER/IMAGE:TAG
+docker push ghcr.io/OWNER/IMAGE:latest
+```
+
+### SSH deploy
+
+```bash
+# Health check
+ssh -o ConnectTimeout=10 USER@HOST 'uptime && df -h && docker ps'
+
+# Pull and restart
+ssh USER@HOST 'cd /opt/app && docker compose pull && docker compose up -d'
+```
+
+</details>
 
 <CardGrid>
-  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
-    Download, changelog, and installation instructions.
+  <Card title="Deploy skill" icon="rocket" href="/brewtools/skills/deploy/">
+    The рецепт (skill) that configures GitHub integration and writes <code>CLAUDE.local.md</code> for this agent to read.
   </Card>
-  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/agents/deploy-admin.md">
-    Source code, README, and configuration files.
+  <Card title="ssh-admin agent" icon="terminal" href="/brewtools/agents/ssh-admin/">
+    Companion agent for VPS management — SSH connections, server config, and Docker operations on remote hosts.
+  </Card>
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/agents/deploy-admin.md">
+    Agent definition with full safety rules and workflow templates.
+  </Card>
+  <Card title="Brewtools overview" icon="document" href="/brewtools/">
+    All brewtools skills and agents in one place.
   </Card>
 </CardGrid>
+
+<UpdateNotice />

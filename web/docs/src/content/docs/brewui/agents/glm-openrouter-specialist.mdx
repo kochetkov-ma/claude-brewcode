@@ -1,42 +1,136 @@
 ---
-title: "glm-openrouter-specialist"
-description: "OpenRouter API expert for GLM model routing, cost optimization, provider selection"
+title: "GLM OpenRouter Specialist"
+description: "OpenRouter API expert for GLM model routing, cost optimization, and provider selection. Auto-delegated when glm-design-to-code uses OpenRouter provider."
 order: 3601
 ---
-import { Badge, Callout, Card, CardGrid } from '../../../../components/mdx';
+import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# glm-openrouter-specialist
+# Route GLM through OpenRouter — smart model selection, zero config
 
-<Badge variant="primary" text="opus" />
+<Callout type="caution">
+**OpenRouter adds a routing layer between Claude Code and the GLM backends.** Model IDs, auth headers, and provider fallback chains differ from the direct Z.ai API. Sending a direct-API payload to OpenRouter — or vice versa — returns a 400 or silent truncation. This agent handles the translation.
+</Callout>
+
+<Callout type="tip">
+**Auto-delegated by [`/brewui:glm-design-to-code`](/brewui/skills/glm-design-to-code/)** when OpenRouter is selected as provider. You can also invoke it directly for standalone API requests, cost audits, or model selection decisions.
+</Callout>
 
 ## Quick reference
 
 | Field | Value |
 |-------|-------|
-| Model | opus |
+| Name | `glm-openrouter-specialist` |
+| Model | sonnet |
 | Tools | Read, Bash, Glob, Grep, Write, Edit |
-| Triggers | "openrouter", "route glm", "openrouter api", "glm provider", "openrouter pricing" |
+| Triggers | "openrouter", "open router", "route glm", "openrouter api", "glm via openrouter", "glm provider", "openrouter pricing" |
+| Env required | `OPENROUTER_API_KEY`, `BU_PLUGIN_ROOT` (injected by hook) |
 
-**Role:** OpenRouter API expert for GLM model routing, cost optimization, and provider selection.
+## When to use
 
-## Knowledge Domains
+- **Design-to-code via OpenRouter** — send a screenshot or image to GLM through the OpenRouter gateway
+- **Model selection** — pick the right GLM variant (quality vs. cost vs. free tier) for the task
+- **Cost audit** — estimate or review token spend before a batch run
+- **Provider routing** — lock to a specific backend (e.g., SiliconFlow) or configure fallback chains
+- **Debugging 4xx/5xx** — diagnose auth errors, rate limits, and provider downtime
 
-| Domain | Scope |
-|--------|-------|
-| OpenRouter API | Model routing, provider selection, fallback chains |
-| GLM Models | glm-5v-turbo, glm-4.6v, glm-4.6v-flash capabilities |
-| Cost optimization | Token pricing, caching, batch requests |
-| Vision requests | Image encoding, multi-modal payloads |
+## Examples
 
-<Callout type="tip" title="Auto-delegated">
-  This agent is automatically delegated by the [`/brewui:glm-design-to-code`](/brewui/skills/glm-design-to-code/) skill when OpenRouter is selected as the provider.
-</Callout>
+```
+"use openrouter to send this screenshot to glm"
+"route glm via openrouter with cost optimization"
+"which openrouter GLM model should I use for batch design-to-code?"
+"openrouter pricing for glm vision tasks"
+"glm provider — openrouter api key check"
+```
+
+## Flow
+
+<Steps>
+  <li>
+    <div>
+      <strong>Validate env</strong>
+      <p>Checks <code>OPENROUTER_API_KEY</code> is set and valid via <code>/api/v1/auth/key</code>. Reads <code>BU_PLUGIN_ROOT</code> from prompt context (injected by <code>pre-task.mjs</code>). If either is missing — stops with an explicit error before touching any files.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Select model</strong>
+      <p>Matches the task to the optimal GLM variant: vision tasks get <code>z-ai/glm-5v-turbo</code> (quality) or <code>z-ai/glm-4.6v</code> (budget); text-only tasks use <code>z-ai/glm-4.5-air:free</code> at zero cost. Model IDs must carry the <code>z-ai/</code> prefix — bare names are rejected by OpenRouter.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Build payload</strong>
+      <p>Calls <code>glm-build-request.sh</code> from <code>$BU_PLUGIN_ROOT/skills/glm-design-to-code/scripts/</code> to construct the JSON payload with image (base64-encoded), prompt, model ID, and <code>max_tokens</code>. Optionally adds <code>provider.order</code> and <code>provider.allow_fallbacks</code> for backend routing control.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Send request</strong>
+      <p>Runs <code>glm-request.sh payload.json response.json openrouter</code>. The script posts to <code>https://openrouter.ai/api/v1/chat/completions</code> with the required <code>Authorization</code> and <code>Content-Type</code> headers, plus optional <code>HTTP-Referer</code> and <code>X-Title</code> for OpenRouter dashboard identification.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Parse response</strong>
+      <p>Checks HTTP status code and <code>finish_reason</code>. Extracts content via <code>jq -r '.choices[0].message.content'</code>. For multi-file design-to-code output, delegates extraction to <code>glm-extract.sh</code> which splits on <code>===FILE:===</code> / <code>===END_FILE===</code> markers.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Report cost</strong>
+      <p>Reads <code>.usage</code> from the response — OpenRouter returns <code>prompt_tokens</code>, <code>completion_tokens</code>, and <code>total_cost</code>. Prints a summary table: model, finish reason, token counts, estimated USD cost. Surfaces any 402/429/5xx errors with a concrete remediation step.</p>
+    </div>
+  </li>
+</Steps>
+
+<details>
+<summary><strong>Model matrix & pricing</strong></summary>
+
+| Model ID | Vision | Input $/1M | Output $/1M | Context | Best for |
+|----------|--------|-----------|-------------|---------|----------|
+| `z-ai/glm-5v-turbo` | image + video | $1.20 | $4.00 | 202K | Quality design-to-code |
+| `z-ai/glm-4.6v` | image + video | $0.30 | $0.90 | 131K | Cost-effective vision (default) |
+| `z-ai/glm-4.5-air:free` | text only | FREE | FREE | 131K | Text generation, no vision |
+
+**Provider routing snippet:**
+
+```json
+{
+  "provider": {
+    "order": ["SiliconFlow"],
+    "allow_fallbacks": true,
+    "require_parameters": true,
+    "data_collection": "deny"
+  }
+}
+```
+
+**Error reference:**
+
+| HTTP | Meaning | Fix |
+|------|---------|-----|
+| 400 | Bad request | Check payload format, verify `z-ai/` model prefix |
+| 401 | Auth failed | Verify `OPENROUTER_API_KEY` |
+| 402 | Insufficient credits | Top up OpenRouter account |
+| 429 | Rate limited | Wait and retry with exponential backoff |
+| 502/503 | Provider down | Retry or add `provider.order` fallback |
+
+</details>
 
 <CardGrid>
-  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
-    Download, changelog, and installation instructions.
+  <Card title="GLM Z.ai Specialist" icon="robot" href="/brewui/agents/glm-zai-specialist/">
+    Direct Z.ai API alternative — no routing layer, lower latency.
   </Card>
-  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewui/agents/glm-openrouter-specialist.md">
-    Source code, README, and configuration files.
+  <Card title="GLM Design to Code" icon="puzzle" href="/brewui/skills/glm-design-to-code/">
+    The skill that auto-delegates to this agent when OpenRouter is selected.
+  </Card>
+  <Card title="Brewui overview" icon="rocket" href="/brewui/">
+    All brewui skills and agents in one place.
+  </Card>
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewui/agents/glm-openrouter-specialist.md">
+    Agent definition, scripts, and request helpers.
   </Card>
 </CardGrid>
+
+<UpdateNotice />

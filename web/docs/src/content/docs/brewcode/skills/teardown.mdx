@@ -1,13 +1,19 @@
 ---
 title: "Teardown"
-description: "Removes brewcode project files (templates, configs, logs)."
+description: "Removes brewcode scaffolding (templates, configs, logs) while keeping task directories and user rules intact."
 order: 1109
 ---
-import { Card, CardGrid, Badge, UpdateNotice } from '../../../../components/mdx';
+import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# Teardown
+# Clean up brewcode scaffolding when you're done.
 
-<Badge variant="primary" text="haiku" /> <Badge variant="secondary" text="fork" />
+<Callout type="caution">
+**Teardown deletes brewcode project files permanently.** Templates, configs, logs, plan directories, and grepai indexes are removed. The operation asks for confirmation before touching anything — unless `--dry-run` is passed.
+</Callout>
+
+<Callout type="tip">
+**Task directories and user rules are never touched.** Everything under `.claude/tasks/*_task/` and `.claude/rules/` survives teardown unconditionally. Use `--dry-run` first to preview exactly what would be removed.
+</Callout>
 
 ## Quick reference
 
@@ -19,38 +25,106 @@ import { Card, CardGrid, Badge, UpdateNotice } from '../../../../components/mdx'
 | Context | fork |
 | Tools | Bash, Read, AskUserQuestion |
 
-## Execution
+## When to use
 
-**Skill arguments received:** `$ARGUMENTS`
+- **Project wrap-up** — the task batch is done and the brewcode scaffolding (рецепты-шаблоны, скиллы) is no longer needed in the repo
+- **Fresh start** — you want to re-run `/brewcode:setup` on a clean slate without leftover configs
+- **Disk cleanup** — `.grepai/` indexes or log directories have grown large and are no longer useful
+- **Preview before commit** — `--dry-run` shows exactly which files would go, without committing to removal
 
-**If NOT `--dry-run`:** Use AskUserQuestion to confirm before executing:
-> "This will delete brewcode project files (templates, configs, logs, plans). Task directories are preserved. Proceed?"
+## Examples
 
-**EXECUTE** using Bash tool -- run teardown script:
 ```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/teardown.sh" ARGS_HERE && echo "✅ done" || echo "❌ FAILED"
-```
-**IMPORTANT:** Replace `ARGS_HERE` with the actual value from "Skill arguments received" above. If empty, omit the argument.
+# Preview removals without deleting anything
+/brewcode:teardown --dry-run
 
-> **STOP if failed** -- check script path exists and teardown.sh has execute permissions.
+# Full teardown (prompts for confirmation)
+/brewcode:teardown
+```
+
+```bash
+# Natural language also triggers the skill
+"clean up brewcode files"
+"tear down brewcode setup"
+```
+
+## Flow
+
+<Steps>
+  <li>
+    <div>
+      <strong>Receive arguments</strong>
+      <p>The skill reads <code>$ARGUMENTS</code>. If <code>--dry-run</code> is present, skip confirmation and go straight to listing. Otherwise proceed to the confirmation step.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Confirm (full mode only)</strong>
+      <p>AskUserQuestion: <em>"This will delete brewcode project files (templates, configs, logs, plans). Task directories are preserved. Proceed?"</em> — answering No aborts with no changes made.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Run teardown script</strong>
+      <p>Executes <code>teardown.sh</code> from <code>$CLAUDE_SKILL_DIR/scripts/</code>. In dry-run mode the script only prints; in full mode it deletes. The skill stops with an error if the script is missing or not executable.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Print removal report</strong>
+      <p>Each removed path is listed with a ✅. Paths that were skipped (not found or preserved) are listed with ⏭️. No silent deletions.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Done</strong>
+      <p>The project directory is clean. Run <code>/brewcode:setup</code> again at any time to re-initialise scaffolding.</p>
+    </div>
+  </li>
+</Steps>
 
 ## Options
 
 | Option | Behavior |
 |--------|----------|
-| `--dry-run` | List files to delete without removing them |
-| (none) | Full removal after user confirmation |
+| `--dry-run` | List files that would be deleted — no confirmation prompt, no changes |
+| (none) | Full removal after explicit user confirmation |
 
-## Preserved
+<details>
+<summary>What teardown removes vs. keeps</summary>
 
-Task directories (`.claude/tasks/*_task/`) and user rules (`.claude/rules/`) are always preserved.
+**Removed**
+
+| Path | Contents |
+|------|----------|
+| `.claude/tasks/templates/` | PLAN.md, SPEC.md, KNOWLEDGE.jsonl starters |
+| `.claude/tasks/cfg/` | `brewcode.config.json`, `brewcode.state.json` |
+| `.claude/tasks/logs/` | Execution logs |
+| `.claude/plans/` | Intermediate plan files |
+| `.grepai/` | Semantic search indexes |
+| `.claude/skills/brewcode-review/` | Quorum review working files |
+
+**Always preserved**
+
+| Path | Reason |
+|------|--------|
+| `.claude/tasks/*_task/` | Completed task work — your artifacts |
+| `.claude/rules/` | User rules — not managed by brewcode |
+
+</details>
 
 <CardGrid>
-  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
-    Download, changelog, and installation instructions.
+  <Card title="Setup" icon="rocket" href="/brewcode/skills/setup/">
+    Re-initialise brewcode scaffolding after teardown.
   </Card>
-  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/teardown">
-    Source code, README, and configuration files.
+  <Card title="Start" icon="code" href="/brewcode/skills/start/">
+    Infinite task execution — the skill teardown cleans up after.
+  </Card>
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/teardown">
+    Source code and teardown.sh script.
+  </Card>
+  <Card title="Brewcode overview" icon="document" href="/brewcode/">
+    All brewcode skills and agents in one place.
   </Card>
 </CardGrid>
 

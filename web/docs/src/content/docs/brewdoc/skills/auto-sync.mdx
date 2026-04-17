@@ -1,87 +1,116 @@
 ---
 title: "Auto-Sync"
-description: "Synchronize documentation with the codebase -- detection, update, report"
+description: "Keep skill, agent, and markdown docs current by pulling updates from official sources. Runs in project, global, file, or folder scope."
 order: 21
 ---
+import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-import { Callout, Steps, Badge, Card, CardGrid } from '../../../../components/mdx';
+# Docs drift silently. Auto-Sync catches it before you notice.
 
-# Auto-Sync
+<Callout type="caution">
+**Skill files, agent definitions, and rule docs go stale as code changes.** Manual checks don't scale — one forgotten SKILL.md means Claude operates on outdated instructions. The longer the drift, the bigger the fix.
+</Callout>
 
-Auto-Sync is a documentation synchronization skill (label control) for keeping docs in sync with code.
-It detects outdated markdown files through INDEX, delegates updates to parallel agents,
-and produces a change report.
+<Callout type="tip">
+**One command syncs everything in scope.** Auto-Sync (рецепт синхронизации) discovers markdown files, checks what's stale via an INDEX, and delegates parallel updates to `bd-auto-sync-processor` agents. Run `status` first to see what's out of date before touching anything.
+</Callout>
 
-## How it works
+## Quick reference
 
-Auto-Sync tracks documents through an **INDEX** -- a JSONL file containing a record
-for each synchronized file: path, type, last sync date, and protocol.
+| Field | Value |
+|-------|-------|
+| Command | `/brewdoc:auto-sync [mode] [path]` |
+| Arguments | `status` · `init <path>` · `global` · `<file>` · `<folder>` · _(empty = project)_ |
+| Model | opus |
+| Tools | Read, Write, Edit, Glob, Grep, Bash, Task, WebFetch, Skill |
 
-Documents are marked for tracking via **frontmatter tags** in the file header.
-The skill periodically checks which files are stale and updates their content
-based on the current state of the code.
+## When to use
 
-```bash
-/brewdoc:auto-sync
-```
+- **After upgrading plugins** — skill and agent READMEs may have changed upstream; run project sync to pull them in
+- **Before a release** — verify all `.claude/**` docs reflect the current codebase state
+- **New file onboarding** — `init <path>` tags a file for tracking without running a full sync
+- **Global audit** — `global` mode sweeps `&#126;/.claude/**` to catch personal rule and config drift
+- **Single file refresh** — pass a path directly when only one doc needs updating
 
 ## Modes
 
-| Mode | Invocation | Scope |
-|------|-----------|-------|
-| STATUS | `/brewdoc:auto-sync status` | INDEX status report |
-| INIT | `/brewdoc:auto-sync init <path>` | Mark a file for tracking |
-| PROJECT | `/brewdoc:auto-sync` | All `.md` in `.claude/**` |
-| GLOBAL | `/brewdoc:auto-sync global` | All `.md` in `~/.claude/**` |
+| Mode | Command | Scope |
+|------|---------|-------|
+| STATUS | `/brewdoc:auto-sync status` | Report INDEX state — no writes |
+| INIT | `/brewdoc:auto-sync init <path>` | Tag one file, add to INDEX |
+| PROJECT | `/brewdoc:auto-sync` | All `.md` under `.claude/**` |
+| GLOBAL | `/brewdoc:auto-sync global` | All `.md` under `&#126;/.claude/**` |
 | FILE | `/brewdoc:auto-sync path/to/file.md` | Single file |
-| FOLDER | `/brewdoc:auto-sync path/to/folder` | All `.md` in the folder |
+| FOLDER | `/brewdoc:auto-sync path/to/folder` | All `.md` in folder |
 
-## Sync workflow
+Managed directories (`rules/`, `agents/`, `skills/`) are excluded from automatic scanning — pass the path explicitly to sync them.
+
+## Examples
+
+```bash
+# See what's tracked and what's stale — no writes
+/brewdoc:auto-sync status
+
+# Tag a new file for tracking (auto-detects type, adds frontmatter)
+/brewdoc:auto-sync init .claude/agents/my-agent.md
+
+# Sync everything in the current project
+/brewdoc:auto-sync
+```
+
+```bash
+# Sync managed directories explicitly
+/brewdoc:auto-sync .claude/rules
+/brewdoc:auto-sync .claude/agents
+
+# Sync all personal docs across &#126;/.claude/**
+/brewdoc:auto-sync global
+```
+
+```bash
+# Refresh a single file
+/brewdoc:auto-sync .claude/agents/reviewer.md
+```
+
+## Flow
 
 <Steps>
-  <li class="step step-primary">
+  <li>
     <div>
-      <strong>Discovery</strong> <Badge variant="primary" text="Phase 1" />
-      <p>
-        The <code>discover.sh</code> script finds all markdown files in the scope
-        and determines their type: skill, agent, rule, config, or doc.
-        Files without frontmatter tags are added automatically.
-      </p>
+      <strong>Detect mode</strong>
+      <p>The <code>detect-mode.sh</code> script parses <code>$ARGUMENTS</code> and outputs <code>MODE|ARG|FLAGS</code>. STATUS and INIT exit after their own phase; sync modes continue.</p>
     </div>
   </li>
-  <li class="step step-primary">
+  <li>
     <div>
-      <strong>Queue</strong> <Badge variant="primary" text="Phase 2" />
-      <p>
-        The <code>index-ops.sh stale</code> script identifies stale entries based on the configured interval
-        (<code>INTERVAL_DAYS</code> from config). New and stale files enter the processing queue.
-      </p>
+      <strong>Setup INDEX</strong>
+      <p>Resolves the INDEX file path — project-relative <code>.claude/auto-sync/INDEX.jsonl</code> for PROJECT/FILE/FOLDER, or <code>$BD_PLUGIN_DATA/auto-sync/INDEX.jsonl</code> for GLOBAL (the <code>&#126;/.claude/\*</code> path is blocked by Claude Code's protected-path policy).</p>
     </div>
   </li>
-  <li class="step step-primary">
+  <li>
     <div>
-      <strong>Processing</strong> <Badge variant="primary" text="Phase 3" />
-      <p>
-        For each file in the queue, a <code>bd-auto-sync-processor</code> agent (sonnet model) is launched.
-        Agents run in parallel (up to <code>PARALLEL_AGENTS</code> concurrently).
-        Each agent analyzes the code, compares it with the current document content, and applies changes.
-      </p>
+      <strong>Discover + queue</strong>
+      <p>Runs <code>discover.sh typed</code> to find markdown files and classify each as <code>skill</code>, <code>agent</code>, <code>rule</code>, <code>config</code>, or <code>doc</code>. Files absent from INDEX are auto-added with frontmatter. Stale entries (past <code>INTERVAL_DAYS</code>) join the queue. Cap: 50 files per run.</p>
     </div>
   </li>
-  <li class="step step-primary">
+  <li>
     <div>
-      <strong>Report</strong> <Badge variant="primary" text="Phase 4" />
-      <p>
-        Updated files receive a new date in the INDEX. Failed files remain stale for a retry.
-        A summary report is generated: discovered, queued, updated, unchanged, errors.
-      </p>
+      <strong>Parallel processing</strong>
+      <p>Spawns <code>bd-auto-sync-processor</code> agents (sonnet model) up to <code>PARALLEL_AGENTS</code> concurrently. Each agent receives <code>PATH | TYPE | FLAGS</code> and <code>BD_PLUGIN_ROOT</code> via the pre-task hook. Agents analyze sources, compare with current doc content, and apply changes.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Update INDEX + report</strong>
+      <p>Successful results (<code>updated</code> or <code>unchanged</code>) refresh the INDEX date via <code>index-ops.sh update</code>. Errors leave the entry stale for the next run. A summary table lists discovered, queued, updated, unchanged, and error counts.</p>
     </div>
   </li>
 </Steps>
 
-## INDEX format
+<details>
+<summary>Internals</summary>
 
-INDEX is stored in JSONL format. Project: `.claude/auto-sync/INDEX.jsonl`. Global: `${BD_PLUGIN_DATA}/auto-sync/INDEX.jsonl` (plugin data dir — `~/.claude/*` is blocked by protected-path policy).
+**INDEX format** — JSONL, one record per tracked file:
 
 ```jsonl
 {"p":"skills/auth/SKILL.md","t":"skill","u":"2026-02-05","pr":"default"}
@@ -89,78 +118,54 @@ INDEX is stored in JSONL format. Project: `.claude/auto-sync/INDEX.jsonl`. Globa
 
 | Field | Description |
 |-------|-------------|
-| `p` | Relative path from the scope root |
+| `p` | Relative path from scope root |
 | `t` | Type: `skill` / `agent` / `rule` / `config` / `doc` |
 | `u` | Last sync date (YYYY-MM-DD) |
 | `pr` | Protocol: `default` or `override` |
 
-## Frontmatter tags
-
-To include a file in synchronization, add 3 required fields to the frontmatter:
+**Frontmatter tags** — required to include a file in sync:
 
 ```yaml
----
 auto-sync: enabled
 auto-sync-date: 2026-02-05
 auto-sync-type: skill
----
 ```
 
-### Override protocol
-
-For fine-tuning synchronization of a specific file, use the optional `auto-sync-override` block:
+**Override protocol** — optional block for fine-grained control:
 
 ```yaml
----
-auto-sync: enabled
-auto-sync-date: 2026-02-05
-auto-sync-type: doc
 auto-sync-override: |
   sources: src/**/*.ts, .claude/agents/*.md
   focus: API endpoints, error handling
   preserve: ## User Notes, ## Custom Config
----
 ```
 
-| Parameter | Purpose |
-|-----------|---------|
-| `sources` | Glob patterns for code files to analyze |
-| `focus` | What to pay attention to during analysis |
-| `preserve` | Document sections to leave untouched during updates |
+When `auto-sync-override` is present, INDEX records `pr: "override"`. The block lives in frontmatter only — never in the document body.
 
-When `auto-sync-override` is present, the INDEX entry gets `pr: "override"`.
-
-## Managed directories
-
-By default, `rules/`, `agents/`, and `skills/` are excluded from automatic scanning.
-To sync them, specify the path explicitly:
-
-```bash
-/brewdoc:auto-sync .claude/rules
-/brewdoc:auto-sync .claude/agents
-/brewdoc:auto-sync .claude/skills
-```
-
-<Callout type="tip" title="Tips">
-  - Start with `/brewdoc:auto-sync status` to see the current INDEX state and find untracked files.
-  - Use `/brewdoc:auto-sync init <path>` to add individual files -- the skill will automatically determine the type and add frontmatter.
-  - For documents with non-standard structure, use `auto-sync-override` with the `preserve` parameter to protect custom sections from being overwritten.
-</Callout>
-
-## Error handling
+**Error handling:**
 
 | Error | Action |
 |-------|--------|
-| INDEX corrupted | Rebuild via discover |
+| INDEX corrupt | Rebuild from discovery |
 | File not found | Skip, add to errors |
-| Agent timeout | One retry attempt |
-| No marked files | Report "0 found" |
+| Agent timeout | Retry once |
+| No tagged files | Report "0 found" |
+
+</details>
 
 <CardGrid>
-  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
-    Download, changelog, and installation instructions.
+  <Card title="My Claude" icon="document" href="/brewdoc/skills/my-claude/">
+    Generate up-to-date Claude Code installation docs for your setup.
   </Card>
-  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewdoc/skills/auto-sync">
-    Source code, README, and configuration files.
+  <Card title="Memory" icon="sync" href="/brewdoc/skills/memory/">
+    Interactively compact and optimize memory files.
+  </Card>
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewdoc/skills/auto-sync">
+    Source, scripts, and discover.sh internals.
+  </Card>
+  <Card title="Brewdoc overview" icon="rocket" href="/brewdoc/">
+    All brewdoc skills — auto-sync, my-claude, memory, md-to-pdf.
   </Card>
 </CardGrid>
+
+<UpdateNotice />

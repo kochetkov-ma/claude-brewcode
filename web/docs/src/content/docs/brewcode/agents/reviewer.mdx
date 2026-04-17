@@ -1,13 +1,19 @@
 ---
 title: "Reviewer"
-description: "System architect & code reviewer - architecture, quality, security, performance"
+description: "System architect & code reviewer — architecture, quality, security, performance reviews with APPROVED/CONDITIONAL/REWORK verdicts."
 order: 1203
 ---
-import { Badge, Callout, Card, CardGrid } from '../../../../components/mdx';
+import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# Reviewer
+# Code merges only when it earns approval.
 
-<Badge variant="primary" text="opus" />
+<Callout type="caution">
+**Rubber-stamped reviews burn teams.** Reviewer never approves just to move forward. It reads every rule file first, searches for existing patterns before accepting new ones, and issues REWORK when issues are critical — regardless of how much work went in.
+</Callout>
+
+<Callout type="tip">
+**Reuse over reinvention.** Reviewer rejects duplicated functionality by default. New abstractions require a justification. All tests must pass before any approval is considered.
+</Callout>
 
 ## Quick reference
 
@@ -16,25 +22,66 @@ import { Badge, Callout, Card, CardGrid } from '../../../../components/mdx';
 | Model | opus |
 | Tools | Read, Glob, Grep, Bash, Task |
 | Disallowed tools | Write, Edit |
-| Triggers | Code review, architecture review, quality, security, performance |
+| Triggers | "code review", "architecture review", "review this", "check quality", "security review" |
+| Delegate to | Code changes → [developer](/brewcode/agents/developer/) · Tests → [tester](/brewcode/agents/tester/) |
 
-**Role:** Review architecture, consistency, risks -> approve/reject
-**Delegate:** Code -> [developer](/brewcode/agents/developer/) | Tests -> [tester](/brewcode/agents/tester/)
+## When to use
 
-<Callout type="tip" title="Reuse over reinvention">
-  Enforce existing patterns. Reject duplicated functionality. New abstractions require justification. All tests must pass.
-</Callout>
+- **Before merging a feature branch** — request a full review with verdict
+- **Architecture fitness check** — validate that new modules follow established layering patterns
+- **Security gate** — spot injection risks, missing auth checks, unvalidated inputs before they ship
+- **Performance audit** — unbounded queries, sync I/O in loops, missing caching, resource leaks
+- **Quorum review phase** — called by `/brewcode:review` as one of three parallel reviewers (2/3 consensus required)
 
-## Pre-Review
+## Examples
 
-Read ALL rules: `.claude/rules/*-best-practice.md`, `.claude/rules/*-avoid.md`, `CLAUDE.md` (stack, patterns, gates), `.claude/` (architecture)
+```
+"review the auth module changes"
+"architecture review for the new payment service"
+"security review — check for injection risks"
+```
 
-## Expertise
+The agent reads all `.claude/rules/` files first, runs `grepai_search` to find existing patterns, then produces a structured verdict.
 
-**Architecture:** Layered | Clean/Hexagonal | Microservices | Event-Driven | CQRS
-**Quality:** Correctness | Performance | Security | Maintainability | Testability | Scalability
+## Flow
 
-## Reuse First (Primary)
+<Steps>
+  <li>
+    <div>
+      <strong>Read all rules</strong>
+      <p>Loads <code>.claude/rules/\*-best-practice.md</code>, <code>.claude/rules/\*-avoid.md</code>, <code>CLAUDE.md</code>, and any <code>.claude/</code> architecture docs before touching a single line of diff.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Search for existing patterns</strong>
+      <p>Runs <code>grepai_search</code> across the codebase. Checks <code>common/utils/shared</code> for utilities, finds established patterns, confirms whether the reviewed code reimplements something that already exists.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Apply checklists</strong>
+      <p>Code checklist (Reuse → Architecture → SOLID → Errors → Resources → Thread safety → Performance → Security). Tests checklist (assertions, messages, integration, structure). Anti-patterns scan (magic numbers, nesting &gt;3, methods &gt;20 lines, copy-paste).</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Classify findings</strong>
+      <p>Each issue tagged CRITICAL / HIGH / MEDIUM. Positive patterns noted separately. CRITICAL issues alone force REWORK — no partial approval.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Issue verdict</strong>
+      <p>Structured output: scope, verdict (<code>APPROVED</code> / <code>CONDITIONAL</code> / <code>REWORK</code>), findings by severity, metrics (Complexity / Coverage / Security), and final DECISION with required actions if any.</p>
+    </div>
+  </li>
+</Steps>
+
+<details>
+<summary>Internals — checklists, red flags, output format</summary>
+
+### Reuse-first checks
 
 | Check | Action |
 |-------|--------|
@@ -44,28 +91,14 @@ Read ALL rules: `.claude/rules/*-best-practice.md`, `.claude/rules/*-avoid.md`, 
 | Library available? | Prefer library over custom |
 | Base class? | Extend, don't recreate |
 
-### Review Questions
+Red flags: new utility without search · reimplemented stdlib · pattern mismatch · duplicate logic · custom when library exists.
 
-| Question | If No -> |
-|----------|---------|
-| Searched existing? | Request evidence |
-| Duplicate functionality? | Flag for consolidation |
-| Follows patterns? | Request alignment |
-| Utility extendable? | Suggest extension |
-| Custom justified? | Request justification |
-
-### Red Flags
-
-New utility without search | Reimplemented stdlib | Pattern mismatch | Duplicate logic | Custom when library exists
-
-## Checklists
-
-### Code
+### Code checklist
 
 | # | Check | Details |
 |---|-------|---------|
 | 1 | **Reuse** | Existing utilities, patterns, libraries? |
-| 2 | Architecture | Follows patterns? |
+| 2 | Architecture | Follows project patterns? |
 | 3 | SOLID | SRP, OCP, DI? |
 | 4 | Errors | Specific exceptions, logging? |
 | 5 | Resources | Cleanup, no leaks? |
@@ -73,16 +106,16 @@ New utility without search | Reimplemented stdlib | Pattern mismatch | Duplicate
 | 7 | Performance | O(n) queries? Unbounded? Caching? |
 | 8 | Security | Validation, injection, auth? |
 
-### Tests
+### Tests checklist
 
 | Rule | Requirement |
 |------|-------------|
-| Assertions | Specific values, not existence |
-| Messages | Descriptive `.as()` |
+| Assertions | Specific values, not existence checks |
+| Messages | Descriptive `.as()` on every assertion |
 | Integration | Real deps over mocks |
 | Structure | AAA or GIVEN/WHEN/THEN |
 
-### SOLID
+### SOLID summary
 
 | P | Rule |
 |---|------|
@@ -92,15 +125,15 @@ New utility without search | Reimplemented stdlib | Pattern mismatch | Duplicate
 | I | Small interfaces |
 | D | Depend on abstractions |
 
-## Anti-patterns
+### Anti-patterns
 
-Magic numbers | Nesting &gt;3 | Methods &gt;20 lines | Classes &gt;300 | Copy-paste | Commented code | TODO without ticket
+Magic numbers · nesting &gt;3 · methods &gt;20 lines · classes &gt;300 lines · copy-paste · commented code · TODO without ticket.
 
-## Performance Red Flags
+### Performance red flags
 
-Unbounded queries | Missing indexes | Large objects in memory | Sync I/O in loops | No caching | Resource leaks
+Unbounded queries · missing indexes · large objects in memory · sync I/O in loops · no caching · resource leaks.
 
-## Output
+### Output format
 
 ```
 === CODE REVIEW ===
@@ -112,14 +145,24 @@ MEDIUM: [list]
 POSITIVE: [patterns]
 
 METRICS: Complexity | Coverage | Security
-DECISION: Approve/Changes/Reject
+DECISION: Approve / Changes required / Reject
 ```
 
+</details>
+
 <CardGrid>
-  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
-    Download, changelog, and installation instructions.
+  <Card title="Architect agent" icon="puzzle" href="/brewcode/agents/architect/">
+    Architecture analysis, patterns, scaling trade-offs — companion to Reviewer for structural decisions.
   </Card>
-  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/agents/reviewer.md">
-    Source code, README, and configuration files.
+  <Card title="Developer agent" icon="code" href="/brewcode/agents/developer/">
+    Reviewer delegates code fixes here. Developer implements; Reviewer approves.
+  </Card>
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/agents/reviewer.md">
+    Full agent definition, disallowed tools, and review protocol.
+  </Card>
+  <Card title="Brewcode overview" icon="document" href="/brewcode/">
+    All brewcode agents and skills — infinite task execution, quorum reviews, handoff.
   </Card>
 </CardGrid>
+
+<UpdateNotice />

@@ -1,105 +1,148 @@
 ---
 title: "Text Optimize"
-description: "Optimizes text and docs for LLM token efficiency with 30+ validated rules. Three modes: light, medium, deep."
+description: "Optimizes text and docs for LLM token efficiency with 30+ validated rules. Four modes: light, medium, standard, deep."
 order: 3101
 ---
-import { Badge, Callout, Card, CardGrid, UpdateNotice } from '../../../../components/mdx';
+import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# Text Optimize
+# Your prompts are too long. Fix that in one command.
 
-<Badge variant="primary" text="sonnet" /> <Badge variant="secondary" text="session" />
+<Callout type="caution">
+**Verbose prompts waste tokens and blur Claude's focus.** Every filler sentence, passive construction, and prose paragraph that could be a table adds cost and dilutes instruction signal. There is no native "compress this" in Claude Code — you get the full context or nothing.
+</Callout>
+
+<Callout type="tip">
+**30+ validated rules, four modes, parallel processing.** The skill (рецепт) reads your files, applies the right rule set for the mode, verifies references, and reports exact before/after metrics. For humanizing AI-generated text, see [`/brewtools:text-human`](/brewtools/skills/text-human/).
+</Callout>
 
 ## Quick reference
 
 | Field | Value |
 |-------|-------|
 | Command | `/brewtools:text-optimize` |
-| Arguments | `[-l\|-d] [file\|folder\|path1,path2]` -- `-l` light, `-d` deep, no flag = medium |
+| Arguments | `[-l\|-s\|-d] [file\|folder\|path1,path2]` |
 | Model | sonnet |
 | Context | session |
-| Tools | Read, Write, Edit, Grep, Glob, Task |
+| Tools | Read, Write, Edit, Grep, Glob, Task, AskUserQuestion |
+
+## When to use
+
+- **Shrink CLAUDE.md** — deep mode compresses with a DICT header; LLM-only output, 2-3x reduction
+- **Clean up agent/skill definitions** — medium mode strips filler, converts prose to tables, merges redundant sections
+- **Prepare user-facing docs** — standard mode targets 30-50% compression while staying human-readable
+- **Light pass on production prompts** — `-l` removes filler and fixes tone; structure untouched, safe to apply without review
 
 ## Modes
 
-| Mode | Flag | Best for | What changes |
-|------|------|----------|--------------|
-| **Light** | `-l` | Critical files, production prompts | Filler removal, tone fixes, reference checks -- structure untouched |
-| **Medium** | _(default)_ | General docs, agents, skills | Tables, bullets, merged sections, full rule set |
-| **Deep** | `-d` | Large prompts where every token counts | Aggressive rephrasing, max compression -- always review diff after |
+| Mode | Flag | Target | Compression | Human-readable |
+|------|------|--------|-------------|----------------|
+| Light | `-l` | Any file | Minimal | Yes |
+| Medium | _(default)_ | Any file | Moderate | Yes |
+| Standard | `-s` | Docs, README | 30-50% | Yes |
+| Deep | `-d` | CLAUDE.md, system prompts, agent/skill defs | 2-3x | No — LLM-only |
 
-## Usage examples
+**Auto-detection:** when no flag is given, the skill reads the file path and header. `CLAUDE.md`, `.claude/rules/*.md`, `KNOWLEDGE.*` → deep candidate. `README.md`, `docs/` → standard candidate. Ambiguous → asks via `AskUserQuestion`.
+
+## Examples
 
 ```bash
 # Single file, medium mode (default)
 /brewtools:text-optimize CLAUDE.md
 
-# Light mode on a production agent -- safe, minimal changes
+# Light mode — safe, minimal changes, no restructuring
 /brewtools:text-optimize -l .claude/agents/reviewer.md
 
-# Deep mode on a verbose prompt you want compressed
-/brewtools:text-optimize -d prompts/analysis-prompt.md
+# Standard mode — 30-50% reduction, stays readable
+/brewtools:text-optimize -s README.md
 
-# Multiple files processed in parallel
+# Deep mode — max compression for CLAUDE.md, review diff after
+/brewtools:text-optimize -d CLAUDE.md
+
+# Multiple files in parallel
 /brewtools:text-optimize agents/planner.md, agents/executor.md, CLAUDE.md
 
 # All markdown files in a directory
 /brewtools:text-optimize -d agents/
 ```
 
-## What it does
+Natural language also works: `"compress this for context"` → deep mode. `"slim down the README"` → standard mode.
 
-- Converts verbose prose to dense tables (up to 3x more token-efficient)
-- Removes filler words and passive constructions
-- Restructures numbered lists to bullets where order does not matter
-- Converts multi-line code blocks to inline code when a single expression suffices
-- Merges redundant or overlapping sections
-- Applies positive framing ("do Y" instead of "don't do X")
-- Verifies all file paths (R.1), URLs (R.2), and circular references (R.3)
-- Uses standard abbreviations in tables only (full words in prose)
+## Flow
 
-## Rule categories
+<Steps>
+  <li>
+    <div>
+      <strong>Parse input</strong>
+      <p>Extracts mode flag, file paths, and any prompt hints (<code>"deep compress"</code>, <code>"for LLM"</code>). No args → optimizes ALL: <code>CLAUDE.md</code>, <code>.claude/agents/\*.md</code>, <code>.claude/skills/*\*/SKILL.md</code>.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Auto-detect mode</strong>
+      <p>If no flag, classifies each file by path and header. Confident classification runs silently with a short notice. Ambiguous files trigger a single <code>AskUserQuestion</code> with mode options.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Analysis phase</strong>
+      <p>Parallel <code>Explore</code> agents scan each file for structure, cross-references, and redundancies. Results feed the optimization context.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Optimization phase</strong>
+      <p>Parallel <code>text-optimizer</code> agents apply the rule set for the selected mode. Deep mode builds a DICT header for repeated terms. Standard mode loads <code>standard-compression.md</code> reference. All modes verify file paths (R.1), URLs (R.2), and circular refs (R.3).</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Verification</strong>
+      <p>Standard mode runs 1 verification round comparing compressed vs original — any lost facts get patched. Deep mode runs up to 2 rounds targeting ≥95% semantic match; if still below, warns with a loss list.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Report</strong>
+      <p>Each file produces a report: lines/tokens before and after, rules applied by ID, issues found and fixed, cross-reference verification status. Files are modified in-place.</p>
+    </div>
+  </li>
+</Steps>
+
+<details>
+<summary>Rule categories (30+ rules)</summary>
 
 | Category | Rule IDs | Scope |
 |----------|----------|-------|
-| Claude behavior | C.1-C.6 | Literal following, avoid "think", positive framing, match style, descriptive instructions, overengineering |
-| Token efficiency | T.1-T.8 | Tables, bullets, one-liners, inline code, abbreviations, filler, comma lists, arrows |
+| Claude behavior | C.1-C.8 | Literal following, avoid "think", positive framing, match style, descriptive instructions, overengineering, avoid ALL-CAPS, prompt format |
+| Token efficiency | T.1-T.8, T.10 | Tables, bullets, one-liners, inline code, abbreviations, filler, comma lists, arrows, strip whitespace |
 | Structure | S.1-S.8 | XML tags, imperative, single source, context/motivation, blockquotes, progressive disclosure, consistent terminology, ref depth |
 | Reference integrity | R.1-R.3 | Verify file paths, check URLs, linearize circular refs |
 | Perception | P.1-P.6 | Examples near rules, hierarchy, bold keywords, standard symbols, instruction order, default over options |
+| LLM Comprehension | L.1-L.7 | Critical info position, documents-first, conciseness, quote-first, add WHY, reiterate constraint, prompt repetition |
 
-## Mode-to-rules mapping
+**Mode-to-rules mapping:**
 
 | Mode | Applies | Notes |
 |------|---------|-------|
-| Light | C.1-C.6, T.6, R.1-R.3, P.1-P.4 | Text cleanup only -- no restructuring |
-| Medium | All rules (C + T + S + R + P) | Balanced transformations |
-| Deep | All rules + aggressive rephrasing | Merge sections, max compression |
+| Light | C.1-C.8, T.6, R.1-R.3, P.1-P.4, L.1-L.7 | Text cleanup only — no restructuring |
+| Medium | All rules (C + T + S + R + P + L) | Balanced transformations |
+| Standard | All rules + `standard-compression.md` | 30-50% compression, 1 verification round |
+| Deep | All rules + `deep-compression.md` | DICT header, symbol substitutions, 1-2 verification rounds |
 
-## Output
-
-Each file produces an optimization report:
-
-| Section | Contents |
-|---------|----------|
-| Metrics | Lines and tokens -- before, after, percent reduction |
-| Rules Applied | Which rule IDs were used and what changed |
-| Issues Found | Broken references, redundancies, structural problems -- and how they were fixed |
-| Cross-Reference Check | Verification status for file paths, URLs, circular refs |
-
-Files are modified in-place. The report is printed to the conversation.
-
-<Callout type="tip" title="Tips">
-  Start with light mode (<code>-l</code>) on important files to preview changes.
-  Review deep mode diffs carefully -- aggressive rephrasing can alter meaning in domain-specific content.
-  Parallel processing kicks in automatically for multiple files or directories.
-</Callout>
+</details>
 
 <CardGrid>
-  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
-    Download, changelog, and installation instructions.
+  <Card title="Text Human" icon="sparkle" href="/brewtools/skills/text-human/">
+    Remove AI artifacts and humanize content — the complement to text-optimize.
   </Card>
-  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/text-optimize">
-    Source code, README, and configuration files.
+  <Card title="text-optimizer agent" icon="brain" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/agents">
+    The subagent that handles single-file optimization in parallel batches.
+  </Card>
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/text-optimize">
+    Source code, rule references, and compression guides.
+  </Card>
+  <Card title="Brewtools overview" icon="document" href="/brewtools/">
+    All brewtools skills — text, SSH, deploy, debate, plugin management.
   </Card>
 </CardGrid>
 

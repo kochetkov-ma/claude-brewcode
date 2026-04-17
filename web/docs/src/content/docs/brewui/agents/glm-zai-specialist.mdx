@@ -1,42 +1,142 @@
 ---
-title: "glm-zai-specialist"
-description: "Z.ai GLM API expert -- vision requests, model selection, rate limits, response parsing"
+title: "GLM Z.ai Specialist"
+description: "Z.ai GLM API expert for vision requests, model selection, rate limits, and response parsing in the design-to-code pipeline."
 order: 3602
 ---
-import { Badge, Callout, Card, CardGrid } from '../../../../components/mdx';
+import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# glm-zai-specialist
+# GLM Z.ai Specialist — direct API calls to Z.ai for vision requests
 
-<Badge variant="primary" text="opus" />
+<Badge variant="primary" text="sonnet" />
+<Badge variant="secondary" text="auto-delegated" />
+
+<Callout type="caution">
+**The Z.ai API uses OpenAI-compatible schema but its own endpoint and key.** Mixing up `ZAI_API_KEY` with `OPENROUTER_API_KEY`, or pointing at the wrong base URL, produces 401 errors with no helpful message. The agent always validates the environment before sending a request.
+</Callout>
+
+<Callout type="tip">
+**This agent is auto-delegated** by [`/brewui:glm-design-to-code`](/brewui/skills/glm-design-to-code/) when Z.ai is the selected provider (the default). You can also invoke it directly for ad-hoc API calls, rate-limit debugging, or model selection questions.
+</Callout>
 
 ## Quick reference
 
 | Field | Value |
 |-------|-------|
-| Model | opus |
+| Agent name | `glm-zai-specialist` |
+| Model | sonnet |
 | Tools | Read, Write, Edit, Bash, Glob, Grep |
-| Triggers | "zai api", "glm request", "z.ai", "send to glm", "glm vision", "glm model" |
+| Triggers | "zai api", "glm request", "z.ai", "send to glm", "glm vision", "glm model", "design to code api", "glm-5v", "glm-4.6v" |
+| Endpoint | `https://api.z.ai/api/paas/v4/chat/completions` |
+| Fallback | `https://openrouter.ai/api/v1/chat/completions` |
 
-**Role:** Z.ai GLM API expert for vision requests, model selection, rate limits, and response parsing in the design-to-code pipeline.
+## When to use
 
-## Knowledge Domains
+- **Vision request** — send a screenshot or image to a GLM vision model and get structured output (HTML, code, JSON)
+- **Model selection** — pick the right GLM tier (free flash vs paid turbo) for your budget and quality target
+- **Rate limit debugging** — diagnose and recover from 429 errors with backoff or provider switch
+- **Response parsing** — extract `===FILE: ...===` blocks from multi-file GLM output
+- **Pipeline troubleshooting** — validate `ZAI_API_KEY`, `jq`, `base64`, and pipeline scripts exist before any request
 
-| Domain | Scope |
-|--------|-------|
-| Z.ai API | Chat completions, vision endpoints, authentication |
-| GLM Models | glm-5v-turbo, glm-4.6v, glm-4.6v-flash selection |
-| Vision pipeline | Image encoding, system prompts, response parsing |
-| Rate limiting | 429 handling, backoff strategies, quota management |
+## Examples
 
-<Callout type="tip" title="Auto-delegated">
-  This agent is automatically delegated by the [`/brewui:glm-design-to-code`](/brewui/skills/glm-design-to-code/) skill when Z.ai is selected as the provider (default).
-</Callout>
+```
+"Send this screenshot to GLM for design-to-code conversion"
+```
+
+```
+"GLM is returning 429 errors, fix the request"
+```
+
+```
+"Which GLM model should I use for a free iteration round?"
+```
+
+## Flow
+
+<Steps>
+  <li>
+    <div>
+      <strong>Validate prerequisites</strong>
+      <p>Checks <code>ZAI_API_KEY</code> (or <code>OPENROUTER_API_KEY</code> for fallback), <code>jq</code>, <code>base64</code>, <code>curl</code>, and pipeline scripts under <code>$BU_PLUGIN_ROOT/skills/glm-design-to-code/scripts/</code>. Stops with an explicit error if anything is missing — never silently sends a broken request.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Select model</strong>
+      <p>Free dev/test: <code>glm-4.6v-flash</code>. Budget production: <code>glm-4.6v</code>. Max quality: <code>glm-5v-turbo</code>. Vision models required for image input — text-only models (<code>glm-4.5-flash</code>, <code>glm-5-turbo</code>) are rejected for image payloads.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Build payload</strong>
+      <p>Encodes the image as base64, wraps it in the OpenAI-compatible content array, merges the system prompt and context file, and sets <code>max_tokens</code>. Uses <code>glm-build-request.sh</code> or constructs manually with <code>jq</code> for non-standard inputs.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Send request</strong>
+      <p>Calls <code>glm-request.sh</code> which adds <code>--retry 3 --retry-delay 5</code> and streams the response to a file. Checks HTTP status, logs token usage (prompt / completion / reasoning), and reports estimated cost.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Parse response</strong>
+      <p>Extracts <code>choices[0].message.content</code>. Checks <code>finish_reason</code> — <code>stop</code> is complete, <code>length</code> means truncated (increases <code>max_tokens</code> or splits the task). If the response uses <code>===FILE: path===</code> markers, runs <code>glm-extract.sh</code> to write each file to the output directory.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Report</strong>
+      <p>Summarises: model used, tokens consumed, estimated cost, list of extracted files, and next step (e.g., open Playwright verification or hand off to <code>tester</code>).</p>
+    </div>
+  </li>
+</Steps>
+
+<details>
+<summary>Z.ai model matrix & rate limits</summary>
+
+| Model | Vision | Input $/1M | Output $/1M | Context | Notes |
+|-------|--------|------------|-------------|---------|-------|
+| `glm-5v-turbo` | image + video | $1.20 | $4.00 | 202K | Best quality, CogViT |
+| `glm-4.6v-flash` | image | FREE | FREE | 131K | Free dev/test |
+| `glm-4.6v` | image + video | $0.30 | $0.90 | 131K | Budget production |
+| `glm-5-turbo` | text only | $1.20 | $4.00 | 202K | Text flagship |
+| `glm-4.7-flash` | text only | FREE | FREE | 202K | Free text |
+| `glm-4.5-flash` | text only | FREE | FREE | 131K | Free text |
+
+**Rate limit handling:**
+
+| Scenario | Solution |
+|----------|----------|
+| Free tier 429 | `glm-request.sh` retries: 5 s → 10 s → 20 s |
+| Persistent 429 | Switch to paid model or wait 60 s |
+| Image too large | Resize to 1024 px max side, reduce JPEG quality |
+
+**Common errors:**
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| 401 Unauthorized | Invalid or missing API key | Check `ZAI_API_KEY` / `OPENROUTER_API_KEY` |
+| 429 Too Many Requests | Free-tier rate limit | Retry with delay or use paid tier |
+| 400 Bad Request | Malformed payload | `jq empty payload.json` |
+| Empty content | Reasoning-only response | Read `reasoning_content` field instead |
+| `finish_reason: length` | Output truncated | Increase `max_tokens` (up to 131072) |
+
+</details>
 
 <CardGrid>
-  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
-    Download, changelog, and installation instructions.
+  <Card title="GLM OpenRouter Specialist" icon="robot" href="/brewui/agents/glm-openrouter-specialist/">
+    Same capabilities routed via OpenRouter — use as a fallback when Z.ai is rate-limited or unavailable.
   </Card>
-  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewui/agents/glm-zai-specialist.md">
-    Source code, README, and configuration files.
+  <Card title="glm-design-to-code" icon="puzzle" href="/brewui/skills/glm-design-to-code/">
+    The skill that orchestrates this agent — screenshot or URL to multi-framework code in one command.
+  </Card>
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewui/agents/glm-zai-specialist.md">
+    Agent definition, pipeline scripts, and prompt templates.
+  </Card>
+  <Card title="Brewui overview" icon="document" href="/brewui/">
+    All brewui skills and agents — image generation, design-to-code, GLM providers.
   </Card>
 </CardGrid>
+
+<UpdateNotice />

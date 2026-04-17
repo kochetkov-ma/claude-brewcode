@@ -1,97 +1,126 @@
 ---
 title: "MD to PDF"
-description: "Convert Markdown to PDF: two engines, style customization, LLM preprocessing"
+description: "Convert Markdown to professional PDF. Two rendering engines, LLM preprocessing, style customization, dependency management."
 order: 23
 ---
+import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-import { Callout, Tabs, TabItem, Steps, Badge, Card, CardGrid } from '../../../../components/mdx';
+# Turn any Markdown file into a polished PDF.
 
-# md-to-pdf
-
-md-to-pdf is a Markdown-to-PDF conversion skill (label export) that turns
-markdown files into professional PDF documents. It supports two rendering engines,
-customizable styles, test mode, and LLM preprocessing of content before conversion.
-
-## Quick start
-
-```bash
-/brewdoc:md-to-pdf README.md
-```
-
-Converts `README.md` to `README.pdf` in the same directory, using the saved or default engine.
-
-## Modes
-
-| Mode | Invocation | Purpose |
-|------|-----------|---------|
-| CONVERT | `/brewdoc:md-to-pdf file.md` | Convert a file to PDF |
-| CONVERT+PROMPT | `/brewdoc:md-to-pdf file.md "remove section X"` | LLM processing, then conversion |
-| STYLES | `/brewdoc:md-to-pdf styles` | Interactive style customization |
-| TEST | `/brewdoc:md-to-pdf test` | Convert a test file to `/tmp/` |
-| HELP | `/brewdoc:md-to-pdf help` | Usage help |
-
-## Two rendering engines
-
-<Tabs>
-  <TabItem label="reportlab">
-    **Lightweight engine** -- pure Python, minimal dependencies.
-
-    | Feature | Value |
-    |---------|-------|
-    | Installation | pip only |
-    | Quality | Good |
-    | Speed | Fast |
-    | Images | Basic support |
-    | CSS styling | No |
-    | Code highlighting | No |
-
-    Best for quick conversion of text documents that do not require complex formatting.
-    No system dependencies needed -- just `pip install reportlab`.
-
-    ```bash
-    /brewdoc:md-to-pdf report.md --engine reportlab
-    ```
-  </TabItem>
-  <TabItem label="weasyprint">
-    **Full-featured engine** -- HTML/CSS pipeline with maximum quality.
-
-    | Feature | Value |
-    |---------|-------|
-    | Installation | pip + brew (system dependencies) |
-    | Quality | Excellent |
-    | Speed | Moderate |
-    | Images | Full support |
-    | CSS styling | Yes |
-    | Code highlighting | Yes (Pygments) |
-
-    Ideal for documents with tables, code blocks, images, and complex structure.
-    Requires system dependencies via brew.
-
-    ```bash
-    /brewdoc:md-to-pdf report.md --engine weasyprint
-    ```
-  </TabItem>
-</Tabs>
-
-<Callout type="warning" title="Choosing an engine">
-  **reportlab** -- choose when you need speed and easy setup. Good for text documents without complex formatting.
-
-  **weasyprint** -- choose when quality matters: syntax highlighting, full CSS support, proper rendering of tables and images. Keep in mind the heavier dependencies.
+<Callout type="caution">
+**Raw Markdown exports look raw.** Most PDF exporters produce plain text with no styling, no code highlighting, and broken tables. Sharing a PDF that looks like a terminal dump is worse than sharing nothing.
 </Callout>
 
-## Style customization
+<Callout type="tip">
+**Two engines, one command.** `reportlab` requires zero system dependencies — install and go. `weasyprint` adds full CSS, syntax highlighting, and pixel-perfect tables when quality matters. LLM preprocessing lets you strip or rewrite sections before conversion.
+</Callout>
 
-Interactive setup via `/brewdoc:md-to-pdf styles`. Configuration is saved
-to `.claude/md-to-pdf.config.json` (project) or `~/.claude/md-to-pdf.config.json` (global).
+## Quick reference
+
+| Field | Value |
+|-------|-------|
+| Command | `/brewdoc:md-to-pdf` |
+| Arguments | `<file.md> [--engine name] ["prompt"]` \| `styles` \| `test` \| `help` |
+| Model | sonnet |
+| Tools | Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion |
+
+## When to use
+
+- **Share a deliverable** — convert a SPEC.md or PLAN.md to PDF before a review meeting
+- **Archive a report** — turn a daily/weekly markdown report into a permanent PDF snapshot
+- **Preprocess before export** — strip internal sections, rewrite headings, restructure — then convert
+- **Verify engine setup** — run `test` mode to confirm your engine renders correctly end-to-end
+- **Customize appearance** — use `styles` mode once to set page size, color scheme, and code theme
+
+## Examples
+
+```bash
+# Basic conversion — output lands next to the source file
+/brewdoc:md-to-pdf README.md
+
+# Force a specific engine for this run
+/brewdoc:md-to-pdf report.md --engine weasyprint
+
+# LLM preprocessing before conversion
+/brewdoc:md-to-pdf spec.md "remove the Internal Notes section, rewrite all headings as imperatives"
+
+# Verify engine installation
+/brewdoc:md-to-pdf test
+
+# Configure page size, colors, code theme once
+/brewdoc:md-to-pdf styles
+```
+
+## Engines
+
+| Feature | reportlab | weasyprint |
+|---------|-----------|------------|
+| Installation | pip only | pip + brew (system deps) |
+| Quality | Good | Excellent |
+| Speed | Fast | Moderate |
+| Images | Basic | Full |
+| CSS styling | No | Yes |
+| Code highlighting | No | Yes (Pygments) |
+| Best for | Quick text docs | Tables, code, complex layout |
+
+Engine is saved to `.claude/md-to-pdf.config.json` after first selection. Override any run with `--engine`.
+
+## Flow
+
+<Steps>
+  <li>
+    <div>
+      <strong>Parse arguments</strong>
+      <p>Detects mode from arguments — HELP, STYLES, TEST, CONVERT, or CONVERT+PROMPT. Extracts <code>--engine</code> flag if present.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Dependency check</strong>
+      <p>Runs <code>check_deps.sh check ENGINE</code>. If packages are missing, offers three options: install the current engine, switch to the other engine, or cancel. Installation is automatic on user consent.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Engine selection</strong>
+      <p>Reads saved config from project (<code>.claude/md-to-pdf.config.json</code>) or global (<code>&#126;/.claude/md-to-pdf.config.json</code>). First run with no config triggers an interactive comparison prompt. Selection is written to project config.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>LLM preprocessing (CONVERT+PROMPT only)</strong>
+      <p>Reads the source file, applies the quoted instruction — delete sections, rewrite headings, restructure — writes result to a temp file. The temp file feeds the converter; original stays untouched.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Convert</strong>
+      <p>Runs <code>md_to_pdf.py INPUT OUTPUT --engine ENGINE</code>. On failure, reads error output, attempts one auto-fix, and retries. If still failing, reports the full error and stops.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Report results</strong>
+      <p>Prints a summary table: source path, output path, page count, file size, engine used, and preprocessing summary (or <code>none</code>).</p>
+    </div>
+  </li>
+</Steps>
+
+<details>
+<summary>Customization & internals</summary>
+
+### Styles mode
+
+Run `/brewdoc:md-to-pdf styles` for four interactive questions:
 
 | Parameter | Options | Default |
 |-----------|---------|---------|
 | Page size | A4, Letter, Legal | A4 |
-| Color scheme | Default blue (#1a3a5c), Dark (#2d3748), Custom | Default blue |
+| Color scheme | Default blue (#1a3a5c), Dark (#2d3748), Custom hex | Default blue |
 | Code theme (weasyprint) | github, monokai, friendly, solarized-dark, solarized-light | github |
-| Footer format | `Page {page} of {total}`, `{page}/{total}`, Disabled | `Page {page} of {total}` |
+| Footer | `Page {page} of {total}`, `{page}/{total}`, Disabled | `Page {page} of {total}` |
 
-Example saved configuration:
+Config is saved to `.claude/md-to-pdf.config.json`. Example:
 
 ```json
 {
@@ -100,79 +129,33 @@ Example saved configuration:
 }
 ```
 
-## LLM preprocessing
+### Config lookup order
 
-The last argument in double quotes is interpreted as an instruction for LLM processing
-of the content before conversion:
+1. `--engine` flag on the command line (always wins)
+2. Project config: `.claude/md-to-pdf.config.json`
+3. Global config: `&#126;/.claude/md-to-pdf.config.json`
+4. Default: `reportlab`
 
-```bash
-/brewdoc:md-to-pdf spec.md "remove the Dependencies section, rewrite headings in imperative form"
-```
+### Test mode
 
-The skill reads the file, applies the specified transformations (removing sections, rewriting headings,
-restructuring), saves to a temporary file, converts to PDF, and removes the temporary file.
+`/brewdoc:md-to-pdf test` converts the bundled `test-all-elements.md` to `/tmp/md-to-pdf-test-ENGINE.pdf`. The test file exercises all supported Markdown elements — headings, tables, code blocks, images, lists — so you can visually verify engine output before converting real files.
 
-## Dependency management
+### CONVERT+PROMPT temp file lifecycle
 
-On first run, the skill checks whether the selected engine's dependencies are available via the `check_deps.sh` script.
+The temp file is named `{original_dir}/.tmp_{original_name}.md`. It is deleted immediately after conversion regardless of success or failure. The original source file is never modified.
 
-<Steps>
-  <li class="step step-primary">
-    <div>
-      <strong>Check</strong>
-      <p>
-        The script determines whether pip packages and system dependencies for the target engine are installed.
-      </p>
-    </div>
-  </li>
-  <li class="step step-primary">
-    <div>
-      <strong>Choose</strong>
-      <p>
-        If dependencies are missing, you are offered to install the current engine,
-        switch to an alternative (if available), or cancel.
-      </p>
-    </div>
-  </li>
-  <li class="step step-primary">
-    <div>
-      <strong>Install</strong>
-      <p>
-        With user consent, the <code>check_deps.sh install</code> script installs
-        all required packages. If installation fails, conversion is aborted.
-      </p>
-    </div>
-  </li>
-</Steps>
-
-## Test mode
-
-```bash
-/brewdoc:md-to-pdf test
-```
-
-Converts the built-in test file `test-all-elements.md` (contains all supported markdown elements)
-to `/tmp/md-to-pdf-test-ENGINE.pdf`. Use it to verify that the engine is installed correctly
-and to preview styles.
-
-## Conversion result
-
-After conversion, a report is generated:
-
-| Parameter | Value |
-|-----------|-------|
-| Source | Absolute path to the source MD |
-| Output | Absolute path to the output PDF |
-| Pages | Number of pages |
-| Size | File size |
-| Engine | reportlab or weasyprint |
-| Preprocessing | LLM processing description or none |
+</details>
 
 <CardGrid>
-  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
-    Download, changelog, and installation instructions.
+  <Card title="Publish skill" icon="rocket" href="/brewdoc/skills/publish/">
+    Push generated PDFs (and other artifacts) to remote destinations via the publish skill.
   </Card>
-  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewdoc/skills/md-to-pdf">
-    Source code, README, and configuration files.
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewdoc/skills/md-to-pdf">
+    Source code, scripts, and bundled test file.
+  </Card>
+  <Card title="Brewdoc overview" icon="document" href="/brewdoc/">
+    All brewdoc skills — auto-sync, memory, my-claude, md-to-pdf, and more.
   </Card>
 </CardGrid>
+
+<UpdateNotice />

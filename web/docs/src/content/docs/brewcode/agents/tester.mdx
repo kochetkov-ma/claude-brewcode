@@ -1,13 +1,19 @@
 ---
 title: "Tester"
-description: "SDET/QA - runs tests, analyzes results, debugs flaky tests, reports issues to developer"
+description: "SDET/QA specialist — runs tests, analyzes failures, debugs flaky tests, and routes production bugs to developer."
 order: 1202
 ---
-import { Badge, Callout, Card, CardGrid } from '../../../../components/mdx';
+import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# Tester
+# Tests are failing. Find out why.
 
-<Badge variant="secondary" text="sonnet" />
+<Callout type="caution">
+**Flaky tests, regressions, and mysterious CI failures cost hours of developer time.** When tests start failing after a refactor, the root cause is rarely obvious — stack traces mislead, shared state hides bugs, and sleep-based waits mask timing issues. The tester agent exists to handle exactly this class of problem without pulling the developer away from production code.
+</Callout>
+
+<Callout type="tip">
+**Tester runs tests, diagnoses failures, and fixes test-level issues autonomously.** Production bugs are routed to [developer](/brewcode/agents/developer/) with a precise report — test code, assertion logic, and flakiness are fixed in place. Trigger with: "run tests", "tests failing", "flaky test", "debug test", "test coverage".
+</Callout>
 
 ## Quick reference
 
@@ -15,90 +21,131 @@ import { Badge, Callout, Card, CardGrid } from '../../../../components/mdx';
 |-------|-------|
 | Model | sonnet |
 | Tools | Read, Write, Edit, Glob, Grep, Bash, Task |
-| Triggers | Run tests, analyze failures, debug flaky tests, report issues |
+| Triggers | "run tests", "tests failing", "flaky test", "debug test", "test coverage" |
+| Scope YES | Run tests, analyze failures, debug flaky, fix test code, configure test runs, report issues |
+| Scope NO | Fix production code (→ developer), substantial test rewrites (→ developer) |
 
-## Role
+## When to use
 
-| Scope | Actions |
-|-------|---------|
-| **YES** | Run tests, analyze failures, debug flaky, configure runs, report issues, minor test fixes |
-| **NO** | Fix production code (->[developer](/brewcode/agents/developer/)), substantial test rewrites (->[developer](/brewcode/agents/developer/)) |
+- **Post-refactor validation** — tests broke after a code change, need failure triage before developer continues
+- **Flaky test elimination** — tests that pass sometimes and fail other times, timing or state issues
+- **CI failure investigation** — build is red, need a structured failure report with root cause
+- **Coverage gaps** — need to understand what's covered and what's missing before a release
+- **Framework migration** — existing tests need to run correctly under a new test runner or config
 
-Resolve regression, infrastructure, flaky test failures. Report production bugs to developer.
+## Examples
 
-## Pre-Analysis
+```
+"Run the tests, several are failing after my refactor"
+```
 
-- Read ALL rules: `.claude/rules/*-best-practice.md`, `.claude/rules/*-avoid.md`
-- Check `CLAUDE.md` for test commands, frameworks, coverage requirements
-- Analyze existing test patterns before writing
+```
+"This test passes sometimes and fails other times — debug it"
+```
 
-## Stack Detection
+```
+"Check test coverage before we release"
+```
 
-| Indicator | Framework |
-|-----------|-----------|
-| `jest.config.*` | Jest (JS/TS) |
-| `pytest.ini`, `conftest.py` | pytest (Python) |
-| `*Test.java`, `pom.xml` | JUnit (Java) |
-| `*_test.go` | go test (Go) |
-| `*.spec.ts` | Jasmine/Mocha (JS/TS) |
-| `Cargo.toml` + `#[test]` | Rust test |
+## Flow
 
-## Test Level Detection
+<Steps>
+  <li>
+    <div>
+      <strong>Pre-analysis</strong>
+      <p>Reads all rules (<code>.claude/rules/\*-best-practice.md</code>, <code>.claude/rules/\*-avoid.md</code>) and <code>CLAUDE.md</code> for test commands, frameworks, and coverage requirements. Analyzes existing test patterns before touching anything.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Stack detection</strong>
+      <p>Identifies test framework from project indicators: <code>jest.config.\*</code> → Jest, <code>pytest.ini</code>/<code>conftest.py</code> → pytest, <code>\*Test.java</code>/<code>pom.xml</code> → JUnit, <code>\*_test.go</code> → go test, <code>\*.spec.ts</code> → Jasmine/Mocha, <code>Cargo.toml</code> + <code>#[test]</code> → Rust. Also determines test level: unit, integration, E2E, or component.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Execute and capture</strong>
+      <p>Runs the test command from project config. Captures full output — pass/fail counts, stack traces, timing. No guessing at commands; uses the project-defined entrypoint.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Analyze failures</strong>
+      <p>Reads stack traces bottom-up, compares expected vs actual values. Categorizes each failure: TEST BUG (fix here), PRODUCTION BUG (route to developer), ENVIRONMENT issue, or FLAKY (fix here). Applies GIVEN/WHEN/THEN structure to new or modified tests.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Fix in scope</strong>
+      <p>Fixes test-level issues directly: flaky timing, shared state, over-mocking, conditional assertions, sleep-based waits. Enforces quality rules — unit tests under 100ms, integration under 5s, E2E under 30s.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Report</strong>
+      <p>Produces a structured report with scope, command, duration, summary counts, failure details with root cause and fix suggestions, flaky list, coverage numbers, and next steps. Production bugs go to developer with a precise reproduction path.</p>
+    </div>
+  </li>
+</Steps>
 
-| Level | Indicators |
-|-------|------------|
-| Unit | Single file, mocks, no external deps |
-| Integration | Database, HTTP clients, containers |
-| E2E | Full system, real services |
-| Component | Partial system, some mocks |
+<details>
+<summary>Internals</summary>
 
-## Test Analysis Workflow
-
-- **Run:** Execute test command from project config
-- **Analyze:** Stack trace (bottom-up), expected vs actual
-- **Categorize:** TEST BUG (you fix) | PRODUCTION BUG (->developer) | ENVIRONMENT | FLAKY (you fix)
-
-## Test Quality
-
-| Aspect | Rule |
-|--------|------|
-| Names | Describe behavior clearly |
-| Structure | Arrange/Act/Assert or GIVEN/WHEN/THEN |
-| Assertions | Single focus, clear messages |
-| Speed | Unit &lt;100ms, IT &lt;5s, E2E &lt;30s |
-
-### Anti-patterns
-
-| Pattern | Fix |
-|---------|-----|
-| Flaky tests | Add proper waits, remove timing deps |
-| Shared state | Reset before each test |
-| Over-mocking | Use real objects where practical |
-| Conditional assertions | Assert preconditions first |
-| Sleep-based waits | Use polling/async utilities |
-
-## Output Format
+**Output format**
 
 ```
 === TEST EXECUTION REPORT ===
 Scope: [level] | Command: [cmd] | Duration: [time]
-SUMMARY: Passed: X | Failed: Y | Skipped: Z
+SUMMARY: ✅ Passed: X | ❌ Failed: Y | Skipped: Z
 
-FAILURES (-> DEVELOPER):
+FAILURES (→ DEVELOPER):
 1. [Test#method] File: [path:line]
    Error: [msg] | Expected: [x] | Actual: [y]
    Root cause: [analysis] | Fix: [suggestion]
 
 FLAKY (I will fix): [list]
 COVERAGE: Line [%] | Branch [%]
-NEXT: Developer fixes [list] -> Re-run
+NEXT: Developer fixes [list] → Re-run
 ```
 
+**Anti-patterns the agent fixes**
+
+| Pattern | Fix |
+|---------|-----|
+| Flaky tests | Add proper waits, remove timing dependencies |
+| Shared state | Reset before each test |
+| Over-mocking | Use real objects where practical |
+| Conditional assertions | Assert preconditions first |
+| Sleep-based waits | Use polling/async utilities |
+
+**Test quality rules enforced**
+
+| Aspect | Rule |
+|--------|------|
+| Names | Describe behavior clearly |
+| Structure | Arrange/Act/Assert or GIVEN/WHEN/THEN |
+| Assertions | Single focus, concrete values, with description |
+| Speed | Unit &lt;100ms, IT &lt;5s, E2E &lt;30s |
+
+**Scope boundary**
+
+Tester fixes test code and configuration. Any failure that requires changing production code is handed off to developer with a report including test name, file path, expected vs actual values, and root cause analysis.
+
+</details>
+
 <CardGrid>
-  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
-    Download, changelog, and installation instructions.
+  <Card title="Developer" icon="code" href="/brewcode/agents/developer/">
+    Receives production bug reports from tester. Implements fixes, features, and refactors.
   </Card>
-  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/agents/tester.md">
-    Source code, README, and configuration files.
+  <Card title="Reviewer" icon="document" href="/brewcode/agents/reviewer/">
+    Architecture, security, and performance review after tests pass.
+  </Card>
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/agents/tester.md">
+    Agent definition, role boundaries, and output format specification.
+  </Card>
+  <Card title="Brewcode overview" icon="rocket" href="/brewcode/">
+    All brewcode agents and skills — infinite task execution, quorum reviews, session handoff.
   </Card>
 </CardGrid>
+
+<UpdateNotice />

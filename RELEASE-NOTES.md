@@ -2,6 +2,17 @@
 
 ---
 
+## v3.7.0 (2026-04-17)
+
+> Docs: [brewcode skills](https://doc-claude.brewcode.app/brewcode/skills/) | [brewcode agents](https://doc-claude.brewcode.app/brewcode/agents/) | [brewtools skills](https://doc-claude.brewcode.app/brewtools/skills/) | [brewdoc skills](https://doc-claude.brewcode.app/brewdoc/skills/) | [brewui skills](https://doc-claude.brewcode.app/brewui/skills/)
+
+### brewcode / brewdoc / brewtools / brewui
+#### Changed
+- **docs:** full rewrite of all 45 legacy skill/agent MDX pages on the site to the new user-first etalon format. Every page now leads with one-line headline, Callout context, Quick reference table, When to use, Examples (≤8 line blocks), and a visual Flow timeline via `<Steps>`. All bash/code internals moved into collapsed `<details>` spoilers so new users get an onboarding-friendly surface while technical readers still have full reference on demand.
+- **docs:** standardized section ordering and cross-link `<CardGrid>` at the bottom of every page. Fixed MDX parser issues (brace/tilde/angle-bracket escaping) across the tree.
+
+---
+
 ## v3.6.2 (2026-04-16)
 
 > Docs: [skill-toggle](https://doc-claude.brewcode.app/brewtools/skills/skill-toggle/) | [agent-toggle](https://doc-claude.brewcode.app/brewtools/skills/agent-toggle/)

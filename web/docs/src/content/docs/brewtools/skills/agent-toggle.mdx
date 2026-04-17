@@ -131,7 +131,7 @@ Four phases:
   <li>
     <div>
       <strong>P2 — Mutate state</strong>
-      <p>Atomically writes or removes a <code>{`{kind:"agent"}`}</code> entry in <code>toggle-state.json</code> (global or project-scoped). Uses a tmp-file + rename pattern via <code>writeStateAtomic</code>.</p>
+      <p>Atomically writes or removes a <code>&#123;`&#123;kind:"agent"&#125;`&#125;</code> entry in <code>toggle-state.json</code> (global or project-scoped). Uses a tmp-file + rename pattern via <code>writeStateAtomic</code>.</p>
     </div>
   </li>
   <li>
@@ -154,7 +154,7 @@ Both `agent-toggle` and `skill-toggle` share the **same** `toggle-state.json`. T
 
 | Scope | Path |
 |-------|------|
-| Global (default) | `~/.claude/plugins/data/brewtools-claude-brewcode/toggle-state.json` |
+| Global (default) | `&#126;/.claude/plugins/data/brewtools-claude-brewcode/toggle-state.json` |
 | Project | `<cwd>/.claude/brewtools/toggle-state.json` |
 
 Project scope overrides global by key — the same agent can be enabled globally but disabled in one specific project.

@@ -1,338 +1,163 @@
 ---
 title: "Debate"
-description: "Multi-agent debate orchestrator -- 3 modes, dynamic agents, structured decisions"
+description: "Multi-agent debate orchestrator — 3 modes, Discovery phase, judge-verified decisions."
 order: 3118
 ---
-import { Card, CardGrid, Callout, Steps, Badge, Tabs, TabItem, UpdateNotice } from '../../../../components/mdx';
+import { Card, CardGrid, Callout, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# Debate
+# Structure your decisions. Don't just brainstorm — debate.
 
-<Badge variant="accent" text="new" /> <Badge variant="primary" text="opus" />
+<Callout type="caution">
+**Opinion without evidence is noise.** Every debate starts with a mandatory Discovery phase: parallel research agents scan your codebase and the web. Arguments that don't cite Discovery findings don't count — the judge challenges them on the spot.
+</Callout>
 
-Multi-agent debate orchestrator.
-Spawn 2-5 dynamic agents with unique characters, run structured debates, and produce judge-verified decisions. Three modes for different goals: select the best option, synthesize strategy, or find all weaknesses.
+<Callout type="tip">
+**Three modes, one command.** Challenge picks the best option from competing variants. Strategy synthesizes independent proposals into a plan. Critic finds every weakness in what you already have. The skill (рецепт) auto-asks which mode if you don't specify.
+</Callout>
 
-<CardGrid>
-  <Card title="CHALLENGE" icon="pencil">
-    Generate or receive variants, debate to select the best one. Defenders argue FOR, critics attack. Outcome: selected variant with justification.
-  </Card>
-  <Card title="STRATEGY" icon="star">
-    Deep analysis -- each agent independently forms their approach, then debate to converge. Outcome: synthesized strategy or ranked approaches.
-  </Card>
-  <Card title="CRITIC" icon="search">
-    Find all weaknesses and risks in a given solution, plan, or code. All agents are critics with different perspectives. Outcome: prioritized issue list.
-  </Card>
-</CardGrid>
-
-## Quick Reference
+## Quick reference
 
 | Field | Value |
 |-------|-------|
 | Command | `/brewtools:debate` |
 | Arguments | `[topic] [-m challenge\|strategy\|critic] [-n 2-5] [-r max-rounds] [--review]` |
-| Modes | Challenge (default), Strategy, Critic |
-| Agents | 2-5 dynamic agents + secretary + judge (main session) |
-| Rounds | 1-10 (default: 5) |
-| Log format | JSONL -- one entry per debate turn |
 | Model | opus |
-| Output | `decisions.md`, `summary.md`, `debate-log.jsonl` |
+| Agents | 2–5 dynamic debaters + secretary + judge (main session) |
+| Output | `discovery.md`, `decisions.md`, `summary.md`, `debate-log.jsonl` |
 
-## Quick Start
+## When to use
+
+| Scenario | Command |
+|----------|---------|
+| Pick the best technology from several options | `/brewtools:debate "React vs Vue vs Svelte" -m challenge` |
+| Design a migration or architecture plan | `/brewtools:debate "monolith to microservices plan" -m strategy` |
+| Find all risks in an existing solution | `/brewtools:debate "critique our JWT auth flow" -m critic` |
+| Extended analysis with more agents and rounds | `/brewtools:debate "PostgreSQL vs DynamoDB" -n 4 -r 8` |
+| Post-debate code review of output | `/brewtools:debate "our deployment pipeline" -m critic --review` |
+
+## Modes
+
+| Mode | Goal | Agent setup |
+|------|------|-------------|
+| **Challenge** (default) | Select the best variant from competing options | Defenders argue FOR, critics attack; judge declares winner |
+| **Strategy** | Synthesize the strongest approach from independent proposals | All agents are strategists; goal is convergence, not a winner |
+| **Critic** | Find every weakness, risk, and flaw | All agents are critics with different perspectives; no defender |
+
+## Examples
 
 ```bash
-# Challenge mode -- compare options (default)
+# Challenge mode — compare options (default)
 /brewtools:debate "React vs Vue vs Svelte for our new dashboard"
 
-# Strategy mode -- deep analysis
-/brewtools:debate "Migration plan from monolith to microservices" -m strategy
+# Strategy mode — how to approach a problem
+/brewtools:debate "Migration plan from monolith to microservices" -m strategy -n 4
 
-# Critic mode -- find all weaknesses
-/brewtools:debate "Review our authentication flow" -m critic
-
-# Custom agent count and max rounds
-/brewtools:debate "Kubernetes vs ECS" -n 4 -r 8
-
-# Auto-detect mode from keywords
-/brewtools:debate "Which database should we pick for time-series data"
+# Critic mode — stress-test an existing plan
+/brewtools:debate "Review our authentication flow" -m critic -n 5 --review
 ```
 
-## Discovery Phase
-
-**Every debate begins with evidence, not opinions.** Before any argument starts, 2-3 research agents run in parallel to build a shared evidence base. This makes decisions grounded in real project code and current industry knowledge, not hallucinated reasoning.
-
-<CardGrid>
-  <Card title="Codebase Explorer" icon="search">
-    Searches your project for relevant code, patterns, dependencies, and existing conventions. Finds what already exists before debating what should exist.
-  </Card>
-  <Card title="Web Researcher" icon="external">
-    Searches the internet for current best practices, official documentation, benchmarks, and community discussions. Brings external context into the debate.
-  </Card>
-  <Card title="Evidence Aggregation" icon="document">
-    Combines all findings into `discovery.md` with full sources -- file paths, URLs, code snippets. Every debate agent receives this as context.
-  </Card>
-</CardGrid>
-
-<Callout type="caution">
-  **Evidence mandate:** Every debate argument MUST reference findings from Discovery. Unsourced claims are challenged by the judge and do not count toward consensus.
-</Callout>
-
-## Workflow
+## Flow
 
 <Steps>
   <li>
     <div>
-      <strong>Phase 0 -- Validation</strong>
-      <p>Run <code>validate.sh</code> to check all skill files exist. Load archetypes into context. Stop on failure.</p>
+      <strong>Parse and interview</strong>
+      <p>Extracts topic, mode (<code>-m</code>), agent count (<code>-n</code>), and max rounds (<code>-r</code>) from your command. If mode is omitted, asks explicitly — no auto-guessing. Confirms setup via <code>AskUserQuestion</code> before doing anything else.</p>
     </div>
   </li>
   <li>
     <div>
-      <strong>Phase 1-2 -- Parse and Init</strong>
-      <p>Parse arguments: topic, mode (<code>-m</code>), agent count (<code>-n</code>), max rounds (<code>-r</code>). Auto-detect mode from keywords if not specified. Create report directory and empty JSONL log.</p>
+      <strong>Generate agent team</strong>
+      <p>Assigns roles (defender / critic / strategist) based on mode, then selects character archetypes (Pragmatist, Skeptic, Visionary, Architect, Operator, and others) to create productive tension. Displays the full agent table and asks for confirmation before proceeding.</p>
     </div>
   </li>
   <li>
     <div>
-      <strong>Phase 3 -- User Interview</strong>
-      <p>Confirm or adjust: mode, agent count, agent profiles (auto or custom), max rounds. Interactive via <code>AskUserQuestion</code>.</p>
+      <strong>Discovery — mandatory evidence phase</strong>
+      <p>Two research agents run in parallel: <strong>Codebase Explorer</strong> scans your project for relevant code, patterns, and dependencies; <strong>Web Researcher</strong> fetches current best practices, official docs, and benchmarks. All findings — with file paths and URLs — are saved to <code>discovery.md</code> and injected into every debater's context.</p>
     </div>
   </li>
   <li>
     <div>
-      <strong>Phase 4 -- Agent Generation</strong>
-      <p>Detect domain, assign roles (mode-aware), select character archetypes. Display full agent table: name, role, character, perspective, rationale. User confirms or adjusts.</p>
+      <strong>Debate rounds</strong>
+      <p>Agents run sequentially; each reads the shared JSONL log before responding. Every argument must reference a Discovery finding — unsourced claims are challenged by the judge. The judge (main session) monitors for consensus, stalemate, or max rounds and can redirect mid-debate.</p>
     </div>
   </li>
   <li>
     <div>
-      <strong>Phase 4.5 -- Discovery (Research)</strong>
-      <p>2-3 research agents run in parallel: <strong>Codebase Explorer</strong> searches the project for relevant code, patterns, and dependencies; <strong>Web Researcher(s)</strong> search the internet for current best practices, official docs, and community discussions. All findings are documented with sources (file paths, URLs) in <code>discovery.md</code>. This evidence base is injected into every debate agent's context.</p>
+      <strong>Summary and decision</strong>
+      <p>A secretary agent writes <code>summary.md</code> with key arguments, turning points, and agreement areas. The judge then writes <code>decisions.md</code>: winning position (or synthesized result), decisive arguments, minority opinions, confidence level, and recommended next steps.</p>
     </div>
   </li>
   <li>
     <div>
-      <strong>Phase 5 -- Debate</strong>
-      <p>Execute mode-specific flow. Every argument must cite Discovery evidence -- unsourced claims are challenged by the judge. Each agent sees previous entries via JSONL log. Judge monitors for consensus, stalemate, or max rounds. Sequential execution ensures coherent argumentation.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Phase 6 -- Summary</strong>
-      <p>Secretary agent writes <code>summary.md</code> with key arguments, turning points, and areas of agreement/disagreement.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Phase 7 -- Decision</strong>
-      <p>Judge (main session) writes <code>decisions.md</code> with final verdict, reasoning, and minority opinions.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Phase 8 -- Final Output</strong>
-      <p>Status table, outcome (consensus / partial / none), decision bullets, links to all artifacts. Optional <a href="/brewcode/skills/review/"><code>/brewcode:review</code></a> if <code>--review</code> flag was set.</p>
+      <strong>Final output</strong>
+      <p>Status table: mode, rounds used, outcome (consensus / partial / none), top 3–5 decision bullets, and links to all four artifact files. If <code>--review</code> was set, triggers <a href="/brewcode/skills/review/"><code>/brewcode:review</code></a> on the output.</p>
     </div>
   </li>
 </Steps>
 
-## Modes Deep Dive
+<details>
+<summary>Internals: phases, Discovery rules, JSONL schema, agent prompt composition</summary>
 
-<Tabs>
-  <TabItem label="Challenge">
-    **Goal:** Select the best variant from multiple options.
+**Phases (SKILL.md)**
 
-    **Agent Roles:** Defenders argue FOR their assigned variant(s); Critics attack all variants, probing weaknesses. Split: 2 agents = 1/1, 3 = 1/2, 4 = 2/2, 5 = 2/3.
+| Phase | What happens |
+|-------|-------------|
+| 0 — Validation | Runs `validate.sh`; stops on failure. Loads `archetypes.md` into context. |
+| 1 — Parse | Reads `$ARGUMENTS`; blocks until user picks mode if `-m` omitted. |
+| 2 — Init | Runs `init-log.sh`; captures `REPORT_DIR` and `LOG_FILE`. |
+| 3 — Interview | `AskUserQuestion` to confirm or adjust mode, agent count, rounds, custom profiles. |
+| 4 — Agent profiles | Generates team from `setup-flow.md`; user confirms before proceeding. |
+| 5 — Discovery | Parallel research agents per `discovery-flow.md`; saves `discovery.md`. |
+| 6 — Debate | Mode-specific flow from `challenge-flow.md` / `strategy-flow.md` / `critic-flow.md`. |
+| 7 — Summary | Secretary agent writes `summary.md` from full log + discovery. |
+| 8 — Decision | Judge (main session) writes `decisions.md`. |
+| 9 — Output | Displays status table; optionally invokes `/brewcode:review`. |
 
-    **Flow:**
-    1. After Discovery, defenders present variants with evidence-backed arguments
-    2. Critics challenge each variant citing counter-evidence
-    3. Multiple rounds until judge detects consensus or max rounds reached
+**Discovery evidence mandate**
 
-    **Best for:** Technology choices, architecture decisions, comparing approaches, "A vs B" questions.
-  </TabItem>
-  <TabItem label="Strategy">
-    **Goal:** Synthesize the strongest approach from independent proposals.
+Every argument in Phase 6 MUST cite at least one finding from `discovery.md`. Format: `[Source: #N]` where N is the discovery entry number. The judge tracks sourcing — unsourced claims are challenged and do not count toward consensus.
 
-    **Agent Roles:** All agents are Strategists with different archetypes -- no defenders or critics.
+**JSONL log schema**
 
-    **Flow:**
-    1. After Discovery, each agent formulates their approach independently (parallel thinking)
-    2. Judge picks opening order -- most divergent proposals go first
-    3. Agents discuss, challenge, and synthesize, citing sources
-    4. Goal is convergence, not winner selection
+Each debate turn is one line in `debate-log.jsonl`:
 
-    **Best for:** Migration plans, system design, strategic decisions, "how should we approach X" questions.
-  </TabItem>
-  <TabItem label="Critic">
-    **Goal:** Find every weakness, risk, and flaw in a given solution.
+```jsonl
+{"ts":"2026-04-05T14:30:00","from":"agent-1","to":["agent-2"],"what":"React has larger ecosystem","why":"More packages, hiring pool [Source: #3]","type":"argument","mode":"challenge"}
+{"ts":"2026-04-05T14:30:15","from":"agent-2","to":["agent-1"],"what":"Ecosystem size != quality","why":"Vue curated ecosystem avoids dependency hell [Source: #7]","type":"counter","mode":"challenge"}
+```
 
-    **Agent Roles:** All agents are Critics with different perspectives (operational, security, UX, financial, architectural). No defender -- the target IS the document/plan/code.
+Entry types: `argument`, `counter`, `proposal`, `agree`, `question`, `redirect`.
 
-    **Flow:**
-    1. After Discovery, each critic analyzes from their unique angle, citing evidence
-    2. Rounds build on previous findings
-    3. Judge consolidates into prioritized issue list with severity ratings
+**Agent prompt composition (Phase 6)**
 
-    **Best for:** Code review, architecture review, plan validation, risk assessment, security audit.
-  </TabItem>
-</Tabs>
+Each agent's prompt is built dynamically from four layers:
+1. Base template — `agents/debater-template.md`
+2. Role overlay — `agents/{role}-template.md` (defender / critic / strategist)
+3. Character traits — from `archetypes.md` for the assigned archetype
+4. Evidence base — full contents of `discovery.md` injected as context
 
-## Agent Archetypes
-
-10 character archetypes define HOW an agent argues. Combined with roles (defender/critic/strategist) to create unique debate personas.
-
-<CardGrid>
-  <Card title="Pragmatist" icon="check">
-    Results-oriented, impatient with theory. "What actually works in production?" Cites real-world outcomes, dismisses hypotheticals.
-  </Card>
-  <Card title="Visionary" icon="star">
-    Big-picture, future-oriented. "Where is this heading in 5 years?" Argues from trends, first principles, emerging patterns.
-  </Card>
-  <Card title="Skeptic" icon="search">
-    Cautious, evidence-demanding. "Show me the data." Finds edge cases, stress-tests assumptions, demands proof.
-  </Card>
-  <Card title="Architect" icon="pencil">
-    Systematic, pattern-focused. "How does this fit the bigger system?" Argues from design principles, consistency, modularity.
-  </Card>
-  <Card title="Operator" icon="wrench">
-    Reliability-focused, operations-minded. "Who maintains this at 3 AM?" Argues from operational reality and incident response.
-  </Card>
-  <Card title="Advocate" icon="heart">
-    User-centric, empathetic. "What does the end user experience?" Argues from UX, adoption, accessibility, learning curve.
-  </Card>
-  <Card title="Economist" icon="money">
-    Cost-conscious, ROI-focused. "What's the total cost of ownership?" Argues with numbers, trade-off matrices, opportunity cost.
-  </Card>
-  <Card title="Historian" icon="library">
-    Precedent-aware, pattern-matching. "We tried this in 2019 and it failed because..." Argues from past failures and case studies.
-  </Card>
-  <Card title="Provocateur" icon="fire">
-    Contrarian, challenges consensus. "What if we're solving the wrong problem?" Reframes the debate, asks uncomfortable questions.
-  </Card>
-  <Card title="Diplomat" icon="handshake">
-    Consensus-seeking, synthesizing. "I hear both sides -- what if we combine..." Finds common ground, proposes compromises.
-  </Card>
-</CardGrid>
-
-<Callout type="tip">
-  Archetypes are auto-selected to create **productive tension**. Challenge mode pairs contrasting styles (e.g., Pragmatist defender vs Visionary critic). Avoid pairing archetypes that argue identically.
-</Callout>
-
-## Configuration
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `-m` | auto-detect | Mode: `challenge`, `strategy`, `critic` |
-| `-n` | 3 | Agent count: 2-5 |
-| `-r` | 5 | Max debate rounds: 1-10 |
-| `--review` | off | Run [`/brewcode:review`](/brewcode/skills/review/) on final output |
-| (positional) | -- | Topic text or file path |
-
-**Auto-detect mode** when `-m` is omitted:
+**Auto-detect keywords (when `-m` is omitted and topic is unambiguous)**
 
 | Keywords in topic | Detected mode |
 |-------------------|---------------|
-| compare, choose, select, best, vs, versus, pick, which | `challenge` |
-| strategy, approach, plan, how to, design, architecture | `strategy` |
-| critique, weakness, risk, flaw, review, audit, problem | `critic` |
-| (no match) | `challenge` (default) |
+| compare, choose, vs, best, pick, which, select | `challenge` |
+| strategy, approach, plan, how to, design | `strategy` |
+| critique, weakness, risk, flaw, review, audit | `critic` |
+| (none match) | asks user — never silently defaults |
 
-## Output Format
-
-All artifacts are written to `.claude/reports/{TS}_debate/`.
-
-### JSONL Log
-
-Each debate turn is a single line in `debate-log.jsonl`:
-
-```jsonl
-{"ts":"2026-04-05T14:30:00","from":"agent-1","to":["agent-2"],"what":"React has larger ecosystem","why":"More packages, hiring pool, community support","type":"argument","mode":"challenge"}
-{"ts":"2026-04-05T14:30:15","from":"agent-2","to":["agent-1"],"what":"Ecosystem size != quality","why":"Vue's curated ecosystem avoids dependency hell","type":"counter","mode":"challenge"}
-{"ts":"2026-04-05T14:31:00","from":"agent-3","to":["all"],"what":"Both miss the point","why":"Developer experience and bundle size matter more for our team size","type":"redirect","mode":"challenge"}
-```
-
-**Entry types:** `argument`, `counter`, `proposal`, `agree`, `question`, `redirect`
-
-### Artifacts
-
-Each debate produces four files:
-
-| File | Content |
-|------|---------|
-| `discovery.md` | Research findings with sources: file paths, URLs, code snippets, best practices |
-| `decisions.md` | Judge verdict, reasoning, minority opinions |
-| `summary.md` | Secretary summary: key arguments, turning points, agreement areas |
-| `debate-log.jsonl` | Full debate log, one entry per turn |
-
-## Examples
-
-<Tabs>
-  <TabItem label="Tech Choice">
-    ```bash
-    # Compare frontend frameworks for a new project
-    /brewtools:debate "React vs Vue vs Svelte for our dashboard" -n 3
-
-    # 3 agents: 1 defender (Pragmatist), 2 critics (Skeptic, Visionary)
-    # Output: selected framework with full justification
-    ```
-  </TabItem>
-  <TabItem label="Architecture">
-    ```bash
-    # Strategy for migration
-    /brewtools:debate "How to migrate from REST to GraphQL" -m strategy -n 4
-
-    # 4 strategists: Architect, Operator, Economist, Pragmatist
-    # Each proposes independently, then debate to converge
-    ```
-  </TabItem>
-  <TabItem label="Code Review">
-    ```bash
-    # Critic mode on authentication flow
-    /brewtools:debate "Critique our JWT auth implementation in auth/" -m critic -n 5
-
-    # 5 critics: Skeptic (edge cases), Operator (ops risks),
-    # Architect (design flaws), Advocate (UX), Economist (cost)
-    ```
-  </TabItem>
-  <TabItem label="Design Decision">
-    ```bash
-    # Database selection with extended rounds
-    /brewtools:debate "PostgreSQL vs DynamoDB for our event store" -n 4 -r 8
-
-    # 4 agents, up to 8 rounds for thorough analysis
-    # Auto-detects challenge mode from "vs" keyword
-    ```
-  </TabItem>
-  <TabItem label="Risk Assessment">
-    ```bash
-    # Find weaknesses in a deployment plan
-    /brewtools:debate "Review our Kubernetes migration plan" -m critic --review
-
-    # All-critic team reviews the plan
-    # --review flag triggers /brewcode:review on output
-    ```
-  </TabItem>
-</Tabs>
-
-<Callout type="note">
-  **Tips for effective debates:**
-  - Be specific in the topic -- "React vs Vue for our 5-person team building a real-time dashboard" produces better arguments than "React vs Vue"
-  - Use 3 agents for focused debates, 4-5 for complex multi-faceted topics
-  - Strategy mode works best when the problem space is open-ended
-  - Critic mode shines when you already have a solution and want to stress-test it
-  - The judge (main session) can intervene mid-debate to redirect if agents go off-topic
-</Callout>
-
-<Callout type="note">
-  **Design decisions:** Agent tool for dynamic prompts (no pre-defined files), sequential execution (each agent sees previous entries), JSONL shared state (minimal tokens, scriptable), Bash scripts for I/O (schema enforcement), judge as main session (full context, no overhead), mode-specific flows (token efficiency).
-</Callout>
+</details>
 
 <CardGrid>
-  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
-    Download, changelog, and installation instructions.
+  <Card title="Quorum review" icon="search" href="/brewcode/skills/review/">
+    Run `/brewcode:review` on debate output with the `--review` flag for a full quorum code review of the decision.
   </Card>
-  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/debate">
-    Source code, README, and configuration files.
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/debate">
+    Source files: SKILL.md, archetypes, role templates, flow references, scripts.
+  </Card>
+  <Card title="Brewtools overview" icon="document" href="/brewtools/">
+    All brewtools skills — text-optimize, secrets-scan, deploy, provider-switch, and more.
   </Card>
 </CardGrid>
 

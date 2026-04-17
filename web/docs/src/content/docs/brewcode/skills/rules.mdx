@@ -20,7 +20,7 @@ import { Card, CardGrid, Badge, Callout, UpdateNotice } from '../../../../compon
 | Tools | Read, Bash, Task |
 
 <Callout type="warning" title="Target">
-  Project <code>.claude/rules/</code> only. NEVER <code>~/.claude/rules/</code>
+  Project <code>.claude/rules/</code> only. NEVER <code>&#126;/.claude/rules/</code>
 </Callout>
 
 ## Mode Detection
@@ -56,7 +56,7 @@ Spawn [bc-rules-organizer](/brewcode/agents/bc-rules-organizer/) agent via Task 
 ### Agent Prompt Template
 
 ```
-Update PROJECT .claude/rules/ — NEVER ~/.claude/rules/
+Update PROJECT .claude/rules/ — NEVER &#126;/.claude/rules/
 
 Plugin templates: $BC_PLUGIN_ROOT/templates/rules/
 Validation: bash "$BC_PLUGIN_ROOT/skills/rules/scripts/rules.sh" validate

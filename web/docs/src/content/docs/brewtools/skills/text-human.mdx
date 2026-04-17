@@ -1,13 +1,19 @@
 ---
 title: "Text Human"
-description: "Removes AI artifacts, cleans comments, simplifies documentation in code. Process commits, files, or folders."
+description: "Remove AI artifacts, clean comments, and fix unicode in commits, files, or folders. Parallel sub-agents for large scopes."
 order: 3102
 ---
-import { Badge, Callout, Card, CardGrid, UpdateNotice } from '../../../../components/mdx';
+import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# Text Human
+# AI left traces in your code. This removes them.
 
-<Badge variant="primary" text="sonnet" /> <Badge variant="secondary" text="session" />
+<Callout type="caution">
+**AI pair-programming sessions leave fingerprints.** Fake issue references (`BUG-001`, `ISSUE-42`), unicode long dashes, curly quotes, and comment blocks like `// Added by AI` or `// Claude suggestion` accumulate silently across commits. They break diffs, confuse reviewers, and signal "generated code" to anyone reading later.
+</Callout>
+
+<Callout type="tip">
+**One command, any scope.** Pass a commit hash to process every changed file from that session, or pass a path for targeted cleanup. Everything after the first token becomes a custom instruction — no quotes needed. Parallel sub-agents (рецепты, скиллы) handle large folders without blocking.
+</Callout>
 
 ## Quick reference
 
@@ -19,95 +25,122 @@ import { Badge, Callout, Card, CardGrid, UpdateNotice } from '../../../../compon
 | Context | session |
 | Tools | Read, Write, Edit, Grep, Glob, Bash, Task, AskUserQuestion |
 
-Detect and remove AI-generated artifacts from code and documentation.
-Process commits, files, or folders with parallel sub-agents.
+## When to use
 
-## Modes
+- **After an AI-assisted commit** — pass the hash, clean all touched files in one run
+- **Before code review** — strip obvious AI markers so reviewers focus on logic, not noise
+- **Single file cleanup** — path to one file runs directly, no delegation overhead
+- **Folder-wide unicode pass** — fix arrows and curly quotes across an entire package
+- **Custom-rule pass** — append instructions to override or extend defaults (`"only fix unicode"`, `"also remove @author tags"`)
 
-| Mode | How to trigger | What it does |
-|------|---------------|--------------|
-| Commit | `text-human 3be67487` | Processes all text files changed in the given commit via `git diff` |
-| Single file | `text-human src/main/java/MyService.java` | Processes one file directly (no sub-agent delegation) |
-| Folder | `text-human src/main/java/services/` | Finds all source/config/doc files, splits into parallel blocks |
-| Custom prompt | `text-human <scope> <instructions>` | Everything after the first token becomes custom instructions |
-| Interactive | `text-human` (no args) | Asks what to humanize: commit hash, file path, or folder path |
-
-## Usage examples
+## Examples
 
 ```bash
-# Clean up all files from a recent AI-assisted commit
+# All files from a recent AI-assisted commit
 /brewtools:text-human 3be67487
 
-# Humanize a single service class after AI pair-programming
+# Single service class
 /brewtools:text-human src/main/java/com/example/OrderService.java
 
-# Process an entire package
+# Entire package
 /brewtools:text-human src/main/java/services/
 
-# Commit cleanup but preserve public API docs
+# Commit cleanup — preserve public API docs
 /brewtools:text-human 3be67487 don't touch docs on public records
 
-# Only fix unicode and AI markers, leave everything else
+# Folder pass — only unicode and AI markers
 /brewtools:text-human src/ only remove AI artifacts and fix unicode
+
+# Add extra rule on top of defaults
+/brewtools:text-human 3be67487 also remove all @author tags
 ```
 
-## What it changes
+No arguments? The skill asks: commit hash, file path, or folder path.
 
-| Category | Removed / Fixed | Example |
-|----------|----------------|---------|
-| AI comment markers | `// Added by AI`, `// Claude suggestion`, `// AI-generated` | Deleted entirely |
-| Fake issue numbers | `BUG-001`, `FIX-123`, `ISSUE-42` | Deleted (real project tickets kept) |
-| Unicode long dashes | U+2014 | Replaced with `--` |
-| Unicode arrows | Fancy arrows | Replaced with `->`, `<-`, `=>` |
-| Unicode bullets/quotes | Curly quotes, bullet chars | Replaced with ASCII equivalents |
-| Trivial docs | Javadoc/docstring restating method name | Deleted |
-| Obvious comments | `// Initialize the list`, `// Loop through items` | Deleted |
-| Formatting noise | 3+ blank lines, trailing whitespace, mixed tabs | Normalized |
+## Flow
 
-## What it keeps
+<Steps>
+  <li>
+    <div>
+      <strong>Scope resolution</strong>
+      <p>Parses the first token as commit hash (7+ hex digits), file path, or folder path. Missing or ambiguous scope triggers <code>AskUserQuestion</code> — "entire project" always asks to narrow down.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>File discovery</strong>
+      <p>Commit mode: <code>git diff --name-only hash^..hash</code>, all text files. Path mode: recursive find excluding <code>target/</code>, <code>node_modules/</code>, <code>build/</code>, binaries, images, archives. Single file: straight to processing.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Language detection and block formation</strong>
+      <p>Loads the matching language reference (Java/Kotlin, TypeScript/JS, Python) before classifying. Files split into 3–10 parallel blocks by complexity: simple config/data/text files go to haiku agents; source with logic, tests, and complex SQL go to sonnet agents.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Parallel execution</strong>
+      <p>All <code>Task</code> calls fire in one message for true parallelism. Each sub-agent receives its block, the language reference, and any custom instructions prepended at highest priority. Custom instructions override defaults on conflict.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Aggregation and report</strong>
+      <p>JSON results from all agents merge into a unified Humanization Report: total files, blocks used, haiku/sonnet split, comments removed, docs simplified, unicode fixed — per file and as totals. Files are edited in place; use git to revert.</p>
+    </div>
+  </li>
+</Steps>
 
-| Preserved | Why |
-|-----------|-----|
-| "Why" comments (`// Retry 3x due to flaky external API`) | Explain non-obvious behavior |
-| Public API documentation | External contracts matter |
-| Real issue references (`JIRA-456`, `GH-123`) | Project-specific tickets |
-| Structural comments in SQL/YAML | Section organization |
-| Complex algorithm explanations | Not trivially obvious |
+<details>
+<summary>Internals</summary>
 
-## Language references
+**What gets removed**
 
-| Language | Reference | Load when |
-|----------|-----------|-----------|
-| Java/Kotlin | `reference/java.md` | `*.java`, `*.kt`, `*.groovy`, Spring, Maven/Gradle |
-| TypeScript/JS/React | `reference/typescript.md` | `*.ts`, `*.tsx`, `*.js`, `*.jsx`, Node.js, React |
-| Python | `reference/python.md` | `*.py`, Django, FastAPI, Flask |
+| Category | Pattern | Action |
+|----------|---------|--------|
+| AI comment markers | `// Added by AI`, `// Claude suggestion`, `/* Suggested by */` | Delete |
+| Fake issue refs | `BUG-001`, `FIX-123`, `ISSUE-42` | Delete (real project tickets kept) |
+| Unicode long dash | U+2014 | Replace with `--` |
+| Unicode arrows | `→`, `←`, `⇒` | Replace with `->`, `<-`, `=>` |
+| Unicode bullets/quotes | `•`, `"`, `"`, `'`, `'` | Replace with ASCII equivalents |
+| Trivial docs | Javadoc/docstring restating method name | Delete |
+| Obvious comments | `// Initialize the list`, `// Loop through items` | Delete |
+| Formatting noise | 3+ blank lines, trailing whitespace, `/* single line */` | Normalize |
 
-## Output
+**What gets kept**
 
-Produces a **Humanization Report** at the end:
+| Preserved | Reason |
+|-----------|--------|
+| "Why" comments | `// Retry 3x — flaky external API` explains non-obvious behavior |
+| Public API docs | External contracts |
+| Real ticket refs | `JIRA-456`, `GH-123` are project-specific |
+| Structural SQL/YAML comments | Section organization |
+| Complex algorithm explanations | Not trivially obvious from code |
 
-| Metric | Description |
-|--------|-------------|
-| Total files | Number of files scanned |
-| Blocks | How many parallel blocks were used |
-| Haiku / Sonnet split | Simple files (config, data) vs complex files (logic, tests) |
-| Comments removed | Count per file |
-| Docs simplified | Count per file |
-| Unicode fixed | Count per file |
+**Block sizing**
 
-Files are edited in place. Use git to revert if needed.
+| Files | Lines | Blocks | Agents |
+|-------|-------|--------|--------|
+| 1–2 | &lt;200 | 1 | direct |
+| 3–5 | &lt;500 | 3 | parallel |
+| 6–10 | 500–1500 | 5 | parallel |
+| 11–20 | 1500–3000 | 7 | parallel |
+| 21+ | 3000+ | 10 | parallel |
 
-<Callout type="tip" title="Tips">
-  Start with a commit hash after an AI-assisted session -- it picks up all changed files
-  including YAML and config. Use custom instructions to narrow scope if needed.
-</Callout>
+**Custom prompt handling**: everything after the first arg token is prepended to every sub-agent prompt as `CUSTOM INSTRUCTIONS (highest priority, override defaults)`. It wins over all default rules on conflict.
+
+</details>
 
 <CardGrid>
-  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
-    Download, changelog, and installation instructions.
+  <Card title="Text Optimize" icon="sparkle" href="/brewtools/skills/text-optimize/">
+    Trim token waste from prompts and docs. Complements text-human for pre-commit cleanup.
   </Card>
-  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/text-human">
-    Source code, README, and configuration files.
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/text-human">
+    Source code, language references (java.md, typescript.md, python.md).
+  </Card>
+  <Card title="Brewtools overview" icon="rocket" href="/brewtools/">
+    All brewtools skills — text, secrets, deploy, SSH, provider switching.
   </Card>
 </CardGrid>
 

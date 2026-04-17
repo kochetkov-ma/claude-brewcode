@@ -1,13 +1,21 @@
 ---
 title: "Grepai"
-description: "Manages grepai semantic search (setup, status, start, stop, reindex, optimize, upgrade)."
+description: "Manages grepai semantic search — setup, start, stop, reindex, optimize, upgrade. Requires Ollama + bge-m3."
 order: 1107
 ---
-import { Card, CardGrid, Badge, Callout, UpdateNotice } from '../../../../components/mdx';
+import { Card, CardGrid, Badge, Callout, Steps, UpdateNotice } from '../../../../components/mdx';
 
 # Grepai
 
 <Badge variant="primary" text="sonnet" /> <Badge variant="secondary" text="session" />
+
+<Callout type="caution" title="Prerequisites">
+  Run [/brewcode:setup](/brewcode/skills/setup/) first — it installs Homebrew, Ollama, and grepai CLI automatically in Phase 0.
+</Callout>
+
+<Callout type="tip" title="Environment">
+  Ollama + bge-m3 model · GOB on-disk index · Java / Kotlin / JS / TS projects
+</Callout>
 
 ## Quick reference
 
@@ -19,234 +27,123 @@ import { Card, CardGrid, Badge, Callout, UpdateNotice } from '../../../../compon
 | Context | session |
 | Tools | Read, Write, Edit, Bash, Task, AskUserQuestion |
 
-<Callout type="note" title="Environment">
-  Ollama + bge-m3 | GOB storage | Java/Kotlin/JS/TS
-</Callout>
+## When to use
 
-## Mode Detection
+| Situation | Command |
+|-----------|---------|
+| First-time setup on a new project | `/brewcode:grepai setup` |
+| Check index health and watch status | `/brewcode:grepai status` |
+| Resume watch after restart | `/brewcode:grepai start` |
+| Stop the background watch process | `/brewcode:grepai stop` |
+| Rebuild stale index after large refactor | `/brewcode:grepai reindex` |
+| Tune boost patterns, update trace languages | `/brewcode:grepai optimize` |
+| Update grepai CLI via Homebrew | `/brewcode:grepai upgrade` |
+| Not sure which mode | `/brewcode:grepai` (interactive prompt) |
 
-### Step 1: Detect Mode (MANDATORY FIRST STEP)
+## Examples
 
-**EXECUTE** using Bash tool -- detect mode from skill arguments:
-```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/detect-mode.sh" "$ARGUMENTS"
+**First-time setup**
+
+```
+/brewcode:grepai setup
 ```
 
-Use `$ARGUMENTS` directly - it contains the skill invocation arguments.
+The skill runs infra-check, configures MCP, spawns `bc-grepai-configurator` to generate `.grepai/config.yaml`, then builds the initial index synchronously (10–30 min on large repos).
 
-Output format:
+**Daily health check**
+
 ```
-ARGS: [arguments received]
-MODE: [detected mode]
+/brewcode:grepai status
 ```
 
-**Use the MODE value and GOTO that section below.**
+Reports grepai CLI version, Ollama state, bge-m3 model, MCP connection, index size, watch process, and rule presence.
 
-### Mode Reference
+**Rebuild after a major merge**
+
+```
+/brewcode:grepai reindex
+```
+
+Stops watch, wipes the index, rebuilds from scratch, restarts watch. Monitor with `tail -f .grepai/logs/grepai-watch.log`.
+
+## Flow
+
+<Steps>
+  <li><div><strong>Mode detection</strong><p>The skill runs <code>detect-mode.sh</code> against <code>$ARGUMENTS</code>. Keywords like <code>setup</code>, <code>start</code>, <code>status</code> map to modes; empty args auto-detect from whether <code>.grepai/</code> exists; unrecognized text falls back to interactive prompt.</p></div></li>
+  <li><div><strong>Infra check (setup/optimize)</strong><p>Verifies Homebrew, Ollama daemon, bge-m3 model download, and grepai CLI. Stops with a clear error if any component is missing.</p></div></li>
+  <li><div><strong>MCP configuration</strong><p>Configures the grepai MCP server entry in <code>.claude/settings.json</code> and adds <code>mcp__grepai__\*</code> to <code>allowedTools</code>. Required once per project.</p></div></li>
+  <li><div><strong>Config generation — bc-grepai-configurator agent</strong><p>The <a href="/brewcode/agents/bc-grepai-configurator/">bc-grepai-configurator</a> agent (opus) analyzes build files, source layout, and test patterns to produce an optimal <code>.grepai/config.yaml</code> with boost weights and trace-language settings.</p></div></li>
+  <li><div><strong>Index build</strong><p>Runs <code>init-index.sh</code> synchronously. Embeds all source files via bge-m3 and writes GOB shards to <code>.grepai/</code>. Large repos (5k+ files) take 10–30 min — monitor the log.</p></div></li>
+  <li><div><strong>Rule creation</strong><p>Writes a <code>.claude/rules/grepai-first.md</code> rule so Claude always reaches for <code>grepai_search</code> / <code>trace_callers</code> / <code>trace_callees</code> before Glob or Grep.</p></div></li>
+  <li><div><strong>Verification</strong><p>Runs <code>verify.sh</code> — confirms MCP responds, index is readable, and the rule file exists. Prints a status table with ✅/❌ per component.</p></div></li>
+</Steps>
+
+<details>
+<summary>Config schema & internals</summary>
+
+**Mode detection table**
 
 | Keyword in args | MODE |
 |-----------------|------|
-| upgrade, upgrade | upgrade |
-| optimize, update | optimize |
-| stop, halt, kill | stop |
-| start, watch | start |
-| status, doctor, check, health | status |
-| setup, configure, init | setup |
-| reindex, rebuild, refresh | reindex |
+| `upgrade` | upgrade |
+| `optimize`, `update` | optimize |
+| `stop`, `halt`, `kill` | stop |
+| `start`, `watch` | start |
+| `status`, `doctor`, `check`, `health` | status |
+| `setup`, `configure`, `init` | setup |
+| `reindex`, `rebuild`, `refresh` | reindex |
 | (empty) + `.grepai/` exists | start |
 | (empty) + no `.grepai/` | setup |
-| (unrecognized text) | prompt |
+| (unrecognized text) | interactive prompt |
 
-<Callout type="tip" title="Prerequisites">
-  Run [/brewcode:setup](/brewcode/skills/setup/) first -- it installs prerequisites (brew, ollama, grepai) automatically as Phase 0.
-</Callout>
+**Scripts executed per mode**
 
----
+| Mode | Script(s) |
+|------|-----------|
+| setup | `infra-check.sh` → `mcp-check.sh` → bc-grepai-configurator → `init-index.sh` → `create-rule.sh` → `verify.sh` |
+| status | `status.sh` |
+| start | `start.sh` |
+| stop | `stop.sh` |
+| reindex | `reindex.sh` (stop → clean → rebuild → restart) |
+| optimize | `optimize.sh` (backup) → bc-grepai-configurator → `reindex.sh` |
+| upgrade | `upgrade.sh` (brew upgrade) |
 
-## Mode: setup
+**Status output format**
 
-Full grepai installation and project setup.
-
-### Phase 1: Infrastructure Check
-
-**EXECUTE** using Bash tool:
-```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/infra-check.sh" && echo "✅ infra-check" || echo "❌ infra-check FAILED"
-```
-
-> **STOP if failed** -- install missing components before continuing.
-
-### Phase 2: MCP Configuration & Permissions
-
-**EXECUTE** using Bash tool:
-```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/mcp-check.sh" && echo "✅ mcp-check" || echo "❌ mcp-check FAILED"
-```
-
-This script configures MCP server and allowedTools permissions.
-
-> **STOP if failed** -- fix MCP configuration before continuing.
-
-### Phase 3: Generate Config
-
-**SPAWN** the [bc-grepai-configurator](/brewcode/agents/bc-grepai-configurator/) agent using Task tool:
-
-| Parameter | Value |
-|-----------|-------|
-| `subagent_type` | `brewcode:bc-grepai-configurator` |
-| `prompt` | `Configure grepai for this project. Analyze all build files, test patterns, source structure. Generate optimal .grepai/config.yaml.` |
-| `model` | `opus` |
-
-> **Context:** `BC_PLUGIN_ROOT` is available in agent context (injected by pre-task.mjs hook).
-
-> **WAIT** for agent to complete before proceeding.
-
-### Phase 4: Initialize Index
-
-**EXECUTE** using Bash tool:
-```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/init-index.sh" && echo "✅ init-index" || echo "❌ init-index FAILED"
-```
-
-> **STOP if failed** -- check `.grepai/logs/grepai-watch.log` for errors.
-
-<Callout type="warning" title="Long-running operation">
-  Synchronous -- Large projects (5k+ files) take 10-30+ min. Monitor: <code>tail -f .grepai/logs/grepai-watch.log</code>
-</Callout>
-
-### Phase 5: Create Rule
-
-**EXECUTE** using Bash tool:
-```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/create-rule.sh" && echo "✅ create-rule" || echo "❌ create-rule FAILED"
-```
-
-> **STOP if failed** -- manually create rule in `.claude/rules/`.
-
-### Phase 6: Verification
-
-**EXECUTE** using Bash tool:
-```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/verify.sh" && echo "✅ verify" || echo "❌ verify FAILED"
-```
-
----
-
-## Mode: status
-
-**EXECUTE** using Bash tool:
-```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/status.sh" && echo "✅ status" || echo "❌ status FAILED"
-```
-
----
-
-## Mode: start
-
-**EXECUTE** using Bash tool:
-```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/start.sh" && echo "✅ start" || echo "❌ start FAILED"
-```
-
----
-
-## Mode: stop
-
-**EXECUTE** using Bash tool:
-```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/stop.sh" && echo "✅ stop" || echo "❌ stop FAILED"
-```
-
----
-
-## Mode: reindex
-
-Full index rebuild: stop watch, clean, rebuild, restart.
-
-**EXECUTE** using Bash tool:
-```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/reindex.sh" && echo "✅ reindex" || echo "❌ reindex FAILED"
-```
-
-<Callout type="warning" title="Long-running operation">
-  Synchronous -- Monitor: <code>tail -f .grepai/logs/grepai-watch.log</code>
-</Callout>
-
----
-
-## Mode: optimize
-
-Re-analyze project and regenerate config with backup.
-
-### Step 1: Backup current config
-
-**EXECUTE** using Bash tool:
-```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/optimize.sh" && echo "✅ optimize-backup" || echo "❌ optimize-backup FAILED"
-```
-
-> **STOP if failed** -- check if `.grepai/config.yaml` exists.
-
-### Step 2: Regenerate config
-
-**SPAWN** the `bc-grepai-configurator` agent using Task tool:
-
-| Parameter | Value |
-|-----------|-------|
-| `subagent_type` | `brewcode:bc-grepai-configurator` |
-| `prompt` | `Re-analyze project and regenerate .grepai/config.yaml. Compare with existing config, optimize boost patterns, update trace languages.` |
-| `model` | `opus` |
-
-> **Context:** `BC_PLUGIN_ROOT` is available in agent context (injected by pre-task.mjs hook).
-
-> **WAIT** for agent to complete.
-
-### Step 3: Reindex with new config
-
-**EXECUTE** using Bash tool:
-```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/reindex.sh" && echo "✅ reindex" || echo "❌ reindex FAILED"
-```
-
----
-
-## Mode: upgrade
-
-Update grepai CLI via Homebrew.
-
-**EXECUTE** using Bash tool:
-```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/upgrade.sh" && echo "✅ upgrade" || echo "❌ upgrade FAILED"
-```
-
----
-
-## Mode: prompt
-
-Use AskUserQuestion to ask which operation to run:
+The skill always prints a status table after any mode completes:
 
 ```
-header: "grepai"
-question: "Which grepai operation do you want to run?"
-options:
-  - label: "setup"
-    description: "Initialize and configure semantic search for this project"
-  - label: "status"
-    description: "Check health, index stats, doctor"
-  - label: "start / watch"
-    description: "Start watch mode (auto-index on file changes)"
-  - label: "optimize"
-    description: "Update and rebuild the search index"
+| Component    | Status              |
+|--------------|---------------------|
+| grepai CLI   | ✅ v0.x.y           |
+| ollama       | ✅ running          |
+| bge-m3 model | ✅ loaded           |
+| MCP          | ✅ connected        |
+| Permissions  | ✅ allowedTools set |
+| .grepai/     | ✅ exists           |
+| index        | 12 shards / 4.2 GB  |
+| watch        | ✅ running (PID 789)|
+| rule         | ✅ grepai-first.md  |
 ```
 
-For stop, reindex, upgrade -- user types via Other. After answer, GOTO that mode section.
+**Long-running operations warning**
+
+`setup` (Phase 4) and `reindex` run the embedding pass synchronously. On repos with 5 000+ files, expect 10–30 minutes. The process writes progress to `.grepai/logs/grepai-watch.log`.
+
+</details>
 
 <CardGrid>
-  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
-    Download, changelog, and installation instructions.
+  <Card title="bc-grepai-configurator" icon="robot" href="/brewcode/agents/bc-grepai-configurator/">
+    The opus agent that analyzes your project and generates the optimal <code>.grepai/config.yaml</code>.
   </Card>
-  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/grepai">
-    Source code, README, and configuration files.
+  <Card title="setup skill" icon="document" href="/brewcode/skills/setup/">
+    Run setup first — it installs all prerequisites including Ollama and grepai CLI.
+  </Card>
+  <Card title="Source on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/grepai">
+    Skill scripts, SKILL.md, and configuration templates.
+  </Card>
+  <Card title="brewcode overview" icon="rocket" href="/brewcode/">
+    Full plugin overview — all рецепты (скиллы) and agents in one place.
   </Card>
 </CardGrid>
 
