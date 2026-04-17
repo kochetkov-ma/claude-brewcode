@@ -5,7 +5,7 @@ order: 3601
 ---
 import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# Route GLM through OpenRouter — smart model selection, zero config
+# glm-openrouter-specialist
 
 <Callout type="caution">
 **OpenRouter adds a routing layer between Claude Code and the GLM backends.** Model IDs, auth headers, and provider fallback chains differ from the direct Z.ai API. Sending a direct-API payload to OpenRouter — or vice versa — returns a 400 or silent truncation. This agent handles the translation.

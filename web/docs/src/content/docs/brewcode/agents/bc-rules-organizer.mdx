@@ -5,7 +5,7 @@ order: 1213
 ---
 import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# Rules files that actually match the code they guard.
+# bc-rules-organizer
 
 <Callout type="caution">
 **One giant CLAUDE.md loaded for every file is expensive.** Rules for React components load even when Claude is editing SQL migrations. Claude Code supports `paths:` frontmatter in `.claude/rules/*.md` to scope rules to file patterns — but setting it up correctly requires knowing the right fields, quoting conventions, and dedup logic. Bug [#16299](https://github.com/anthropics/claude-code/issues/16299): all rules still load at session start regardless of `paths:`, so keep files lean.

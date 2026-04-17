@@ -5,14 +5,14 @@ order: 3213
 ---
 import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# GitHub Actions and releases — one agent handles it all.
+# Deploy Admin
 
 <Callout type="caution">
 **Deployment mistakes are irreversible.** Pushed tags, published releases, triggered workflows — none undo cleanly. `deploy-admin` classifies every operation by safety level and requires explicit confirmation before touching anything at SERVICE, DELETE, or PRIVILEGE tier.
 </Callout>
 
 <Callout type="tip">
-**Run `/brewtools:deploy setup` first.** The skill (рецепт) writes `CLAUDE.local.md` with your GitHub config, workflow inventory, and server targets. The agent reads that file automatically on every task start.
+**Run `/brewtools:deploy setup` first.** The skill writes `CLAUDE.local.md` with your GitHub config, workflow inventory, and server targets. The agent reads that file automatically on every task start.
 </Callout>
 
 ## Quick reference
@@ -158,7 +158,7 @@ ssh USER@HOST 'cd /opt/app && docker compose pull && docker compose up -d'
 
 <CardGrid>
   <Card title="Deploy skill" icon="rocket" href="/brewtools/skills/deploy/">
-    The рецепт (skill) that configures GitHub integration and writes <code>CLAUDE.local.md</code> for this agent to read.
+    The skill that configures GitHub integration and writes <code>CLAUDE.local.md</code> for this agent to read.
   </Card>
   <Card title="ssh-admin agent" icon="terminal" href="/brewtools/agents/ssh-admin/">
     Companion agent for VPS management — SSH connections, server config, and Docker operations on remote hosts.

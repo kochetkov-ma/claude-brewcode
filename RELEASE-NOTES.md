@@ -2,6 +2,18 @@
 
 ---
 
+## v3.7.1 (2026-04-17)
+
+> Docs: [brewcode skills](https://doc-claude.brewcode.app/brewcode/skills/) | [brewcode agents](https://doc-claude.brewcode.app/brewcode/agents/) | [brewtools skills](https://doc-claude.brewcode.app/brewtools/skills/) | [brewdoc skills](https://doc-claude.brewcode.app/brewdoc/skills/) | [brewui skills](https://doc-claude.brewcode.app/brewui/skills/)
+
+### brewcode / brewdoc / brewtools / brewui
+#### Changed
+- **docs:** simplified H1 headings on all 48 skill/agent pages — name + optional 2–4 word subtitle, no invented slogans
+- **docs:** removed all Russian text (рецепт/рецепты/скиллы/субагенты) from every MDX page
+- **docs:** removed brewery metaphor (Recipe=Skill, Ingredients=KNOWLEDGE) from all doc rules and agent instructions
+
+---
+
 ## v3.7.0 (2026-04-17)
 
 > Docs: [brewcode skills](https://doc-claude.brewcode.app/brewcode/skills/) | [brewcode agents](https://doc-claude.brewcode.app/brewcode/agents/) | [brewtools skills](https://doc-claude.brewcode.app/brewtools/skills/) | [brewdoc skills](https://doc-claude.brewcode.app/brewdoc/skills/) | [brewui skills](https://doc-claude.brewcode.app/brewui/skills/)

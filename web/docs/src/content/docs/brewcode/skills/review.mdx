@@ -5,7 +5,7 @@ order: 18
 ---
 import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# Multi-agent quorum code review — adapted to your project
+# review — quorum code review
 
 <Callout type="caution">
 **`/brewcode:review` is not a static plugin skill.** It is generated into each target project by [`/brewcode:setup`](/brewcode/skills/setup/). The generated skill knows your tech stack, your project agents, your coding conventions, and your etalon classes — every project gets its own version.
@@ -57,7 +57,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 ```bash
 # Natural language also works
 "review the last PR"
-"code review с критиком"   # auto-enables Critic phase
+"code review with critic"   # auto-enables Critic phase
 ```
 
 ## Flow
@@ -90,7 +90,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
   <li>
     <div>
       <strong>Critic phase (optional)</strong>
-      <p>Enabled with <code>-c</code> or when the prompt mentions <em>critic</em> / <em>критик</em>. A second Opus reviewer receives all confirmed, rejected, and discarded findings plus the raw source — tasked with finding what everyone missed (<code>missedFindings</code>). A third agent double-checks the Critic's output.</p>
+      <p>Enabled with <code>-c</code> or when the prompt mentions <em>critic</em>. A second Opus reviewer receives all confirmed, rejected, and discarded findings plus the raw source — tasked with finding what everyone missed (<code>missedFindings</code>). A third agent double-checks the Critic's output.</p>
     </div>
   </li>
   <li>
@@ -152,7 +152,7 @@ The skill is committable — check it into version control so your whole team sh
     The 460-line template instantiated per project by <code>/brewcode:setup</code>.
   </Card>
   <Card title="brewcode overview" icon="rocket" href="/brewcode/">
-    All brewcode skills (рецепты) and agents in one place.
+    All brewcode skills and agents in one place.
   </Card>
 </CardGrid>
 

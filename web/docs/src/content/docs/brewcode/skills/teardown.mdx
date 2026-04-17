@@ -5,7 +5,7 @@ order: 1109
 ---
 import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# Clean up brewcode scaffolding when you're done.
+# teardown — clean up plugin files
 
 <Callout type="caution">
 **Teardown deletes brewcode project files permanently.** Templates, configs, logs, plan directories, and grepai indexes are removed. The operation asks for confirmation before touching anything — unless `--dry-run` is passed.
@@ -27,7 +27,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 
 ## When to use
 
-- **Project wrap-up** — the task batch is done and the brewcode scaffolding (рецепты-шаблоны, скиллы) is no longer needed in the repo
+- **Project wrap-up** — the task batch is done and the brewcode scaffolding is no longer needed in the repo
 - **Fresh start** — you want to re-run `/brewcode:setup` on a clean slate without leftover configs
 - **Disk cleanup** — `.grepai/` indexes or log directories have grown large and are no longer useful
 - **Preview before commit** — `--dry-run` shows exactly which files would go, without committing to removal

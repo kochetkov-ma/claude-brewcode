@@ -5,7 +5,7 @@ order: 1206
 ---
 import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# Your custom agents, built right the first time.
+# Agent Creator
 
 <Callout type="caution">
 **Agents with vague descriptions trigger on the wrong requests — or never trigger at all.** A bad `description` means Claude picks the wrong agent, spams irrelevant ones, or silently falls back to the main conversation. Most hand-written agents also leak CLAUDE.md rules into the body (already injected) or forget the `Triggers:` keyword list that drives auto-selection.
@@ -124,7 +124,7 @@ Known active bugs: [#29423](https://github.com/anthropics/claude-code/issues/294
 
 <CardGrid>
   <Card title="Skill Creator" icon="puzzle" href="/brewcode/skills/skill-creator/">
-    Same design process for skills (рецепты) instead of agents.
+    Same design process for skills instead of agents.
   </Card>
   <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/agents/agent-creator.md">
     Full frontmatter reference, description patterns, and system prompt templates.

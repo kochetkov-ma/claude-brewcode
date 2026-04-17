@@ -5,7 +5,7 @@ order: 1207
 ---
 import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# Write a hook in one request, get it right the first time.
+# Hook Creator
 
 <Callout type="caution">
 **Hooks fail silently when the wrong output channel is used.** `additionalContext` on a `Stop` event does nothing — Claude never sees it. `decision:"block"` on `PostToolUse` is not a valid field. Getting the event-to-channel mapping wrong means the hook runs and produces zero effect, with no error to debug.

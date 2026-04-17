@@ -5,7 +5,7 @@ order: 1104
 ---
 import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# Execute a plan with infinite context
+# start — infinite context execution
 
 <Badge variant="primary" text="opus" /> <Badge variant="secondary" text="session" />
 
@@ -14,7 +14,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 </Callout>
 
 <Callout type="tip">
-**Start handles the full lifecycle.** It reads your PLAN.md (варка/task), spawns agents per phase, calls `bc-coordinator` after every agent, and after compaction resumes exactly where it left off — no manual intervention required.
+**Start handles the full lifecycle.** It reads your PLAN.md, spawns agents per phase, calls `bc-coordinator` after every agent, and after compaction resumes exactly where it left off — no manual intervention required.
 </Callout>
 
 ## Quick reference
@@ -91,7 +91,7 @@ After compaction in a long session:
   <li>
     <div>
       <strong>Load context</strong>
-      <p>Reads PLAN.md and KNOWLEDGE.jsonl (рецепт/ingredients if present). Verifies the <code>artifacts/</code> directory exists. The <code>phases/</code> directory is intentionally not read here — phase files are instructions for agents, not the manager.</p>
+      <p>Reads PLAN.md and KNOWLEDGE.jsonl. Verifies the <code>artifacts/</code> directory exists. The <code>phases/</code> directory is intentionally not read here — phase files are instructions for agents, not the manager.</p>
     </div>
   </li>
   <li>
@@ -130,7 +130,7 @@ After compaction, the skill resumes with this exact sequence:
 3. Continue with `in_progress` task or pick next `pending` with no blockers
 4. WRITE report → CALL `bc-coordinator` after **every** agent — no exceptions
 
-KNOWLEDGE.jsonl (ингредиенты/ingredients) accumulates entries during the run:
+KNOWLEDGE.jsonl accumulates entries during the run:
 
 | Priority | Tag | Meaning |
 |----------|-----|---------|

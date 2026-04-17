@@ -5,14 +5,14 @@ order: 21
 ---
 import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# Docs drift silently. Auto-Sync catches it before you notice.
+# auto-sync — fix docs drift
 
 <Callout type="caution">
 **Skill files, agent definitions, and rule docs go stale as code changes.** Manual checks don't scale — one forgotten SKILL.md means Claude operates on outdated instructions. The longer the drift, the bigger the fix.
 </Callout>
 
 <Callout type="tip">
-**One command syncs everything in scope.** Auto-Sync (рецепт синхронизации) discovers markdown files, checks what's stale via an INDEX, and delegates parallel updates to `bd-auto-sync-processor` agents. Run `status` first to see what's out of date before touching anything.
+**One command syncs everything in scope.** Auto-Sync discovers markdown files, checks what's stale via an INDEX, and delegates parallel updates to `bd-auto-sync-processor` agents. Run `status` first to see what's out of date before touching anything.
 </Callout>
 
 ## Quick reference

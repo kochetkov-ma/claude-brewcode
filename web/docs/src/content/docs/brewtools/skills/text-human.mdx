@@ -5,14 +5,14 @@ order: 3102
 ---
 import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# AI left traces in your code. This removes them.
+# text-human — remove AI artifacts
 
 <Callout type="caution">
 **AI pair-programming sessions leave fingerprints.** Fake issue references (`BUG-001`, `ISSUE-42`), unicode long dashes, curly quotes, and comment blocks like `// Added by AI` or `// Claude suggestion` accumulate silently across commits. They break diffs, confuse reviewers, and signal "generated code" to anyone reading later.
 </Callout>
 
 <Callout type="tip">
-**One command, any scope.** Pass a commit hash to process every changed file from that session, or pass a path for targeted cleanup. Everything after the first token becomes a custom instruction — no quotes needed. Parallel sub-agents (рецепты, скиллы) handle large folders without blocking.
+**One command, any scope.** Pass a commit hash to process every changed file from that session, or pass a path for targeted cleanup. Everything after the first token becomes a custom instruction — no quotes needed. Parallel sub-agents handle large folders without blocking.
 </Callout>
 
 ## Quick reference

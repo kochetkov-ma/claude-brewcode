@@ -1,11 +1,11 @@
 ---
 title: "bc-knowledge-manager"
-description: "Compacts KNOWLEDGE.jsonl (Ингредиенты): deduplicates entries, merges similar, enforces priority order. Spawned before handoff or when the coordinator reports duplicates."
+description: "Compacts KNOWLEDGE.jsonl: deduplicates entries, merges similar, enforces priority order. Spawned before handoff or when the coordinator reports duplicates."
 order: 1211
 ---
 import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# Keep your Ingredients clean and compact.
+# bc-knowledge-manager
 
 <Callout type="caution">
 **KNOWLEDGE.jsonl grows with every task.** Duplicate entries, similar patterns across different wordings, and low-priority noise accumulate quickly — the file bloats, compaction at handoff slows, and the most important ❌ entries get buried. The `pre-compact.mjs` hook fires before every auto-compact, but it can't help if the file is already in poor shape.
@@ -27,7 +27,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 
 ## When to use
 
-- **Before a session handoff** — compact Ингредиенты (KNOWLEDGE.jsonl) so the next session starts with a clean, prioritized file
+- **Before a session handoff** — compact KNOWLEDGE.jsonl so the next session starts with a clean, prioritized file
 - **After `/brewcode:rules` export** — run `prune-rules` mode to strip ❌/✅ entries that have been promoted to rules files
 - **When coordinator reports duplicates** — deduplicate-only pass with `mode: dedupe` to keep the file clean mid-task
 - **When the file exceeds 100 entries** — full compaction removes excess, prioritizing ❌ over ✅ over ℹ️

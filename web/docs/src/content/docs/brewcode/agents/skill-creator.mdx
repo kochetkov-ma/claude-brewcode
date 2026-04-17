@@ -5,7 +5,7 @@ order: 1205
 ---
 import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# The agent that turns a conversation into a working skill (рецепт)
+# Skill Creator
 
 <Callout type="caution">
 **Skills auto-activate only 20–50% of the time.** Trigger keywords, description format, and invocation type (user vs. LLM) determine whether Claude ever picks up the skill. A wrong description silently kills auto-activation — and the bug is invisible until you test it.
@@ -25,7 +25,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 
 ## When to use
 
-- You want a new Claude Code skill (рецепт) and need correct SKILL.md structure from the start
+- You want a new Claude Code skill and need correct SKILL.md structure from the start
 - An existing skill isn't auto-invoking and you need description optimization
 - You want to capture a workflow from the current conversation into a reusable skill
 - You need to choose the right context mode (`fork` vs inline) or invocation type for a new skill

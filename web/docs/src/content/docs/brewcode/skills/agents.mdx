@@ -5,10 +5,10 @@ order: 1114
 ---
 import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# Create and improve Claude Code agents interactively.
+# agents — create / improve agents
 
 <Callout type="caution">
-**Agents (субагенты) without sharp trigger descriptions misfire constantly.** Claude auto-selects agents by matching your request against their `description` field — a vague description means the wrong agent fires, or none at all. Writing good frontmatter by hand is tedious and error-prone.
+**Agents without sharp trigger descriptions misfire constantly.** Claude auto-selects agents by matching your request against their `description` field — a vague description means the wrong agent fires, or none at all. Writing good frontmatter by hand is tedious and error-prone.
 </Callout>
 
 <Callout type="tip">
@@ -145,7 +145,7 @@ Placement path mapping:
 
 <CardGrid>
   <Card title="Skills skill" icon="puzzle" href="/brewcode/skills/skills/">
-    Same create/improve flow for skills (рецепты) instead of agents.
+    Same create/improve flow for skills instead of agents.
   </Card>
   <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/agents">
     Source SKILL.md and agent-creator subagent.
