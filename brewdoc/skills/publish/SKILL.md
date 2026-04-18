@@ -235,6 +235,7 @@ RESPONSE=$(curl -s -X POST "https://brewpage.app/api/sites?ns={ns}&ttl={days}&en
 rm -f "$TMPZIP"
 
 URL=$(echo "$RESPONSE" | jq -r '.link // empty')
+URL="${URL%/}"  # strip any trailing slash — /public/<id>/ routes to brewpage landing
 TOKEN=$(echo "$RESPONSE" | jq -r '.ownerToken // empty')
 FCOUNT=$(echo "$RESPONSE" | jq -r '.fileCount // "?"')
 
@@ -268,6 +269,7 @@ RESPONSE=$(curl -s -X POST "https://brewpage.app/api/sites?ns={ns}&ttl={days}&en
   -F "archive=@{zip_file_path}")
 
 URL=$(echo "$RESPONSE" | jq -r '.link // empty')
+URL="${URL%/}"  # strip any trailing slash — /public/<id>/ routes to brewpage landing
 TOKEN=$(echo "$RESPONSE" | jq -r '.ownerToken // empty')
 FCOUNT=$(echo "$RESPONSE" | jq -r '.fileCount // "?"')
 
@@ -294,6 +296,10 @@ Owner token saved to .claude/brewpage-history.md
 Published site: {url from bash output}
 Entry: {entry_file} | Files: {count}
 Owner token saved to .claude/brewpage-history.md
+
+⚠ Share the URL exactly as printed — DO NOT append a trailing slash.
+  brewpage.app routes "/public/<id>/" to its own landing page, and the
+  redirect that saves the no-slash form does not fire for the slash-dir form.
 ```
 
 **NEVER print ownerToken in conversation.** The token is only in the history file.
@@ -313,3 +319,6 @@ Publish failed.
 - Site uploads use `/api/sites` endpoint (supports ZIP archives and multi-file form uploads).
 - Entry file detection: `--entry` override > `index.html` > first `.html` alphabetically.
 - `User-Agent: ClaudeCode/1.0` header is included for site uploads.
+- **SITE URL — NO trailing slash.** API returns `.link = "https://brewpage.app/public/<id>"` without trailing `/`. Store and share it **exactly as-is**. Appending `/` routes to brewpage.app's own landing page, and the JS redirect that rescues the no-slash form does NOT fire for the slash-dir form → site becomes inaccessible.
+- **SITE verification cannot be done via `curl`.** The no-slash URL serves the BrewPage landing HTML with an inline JS redirect that only executes in a real browser — `curl | grep title` will give a false-negative (sees landing, not the uploaded site). To verify: use Playwright / `browser_navigate`, or fetch `<url>/index.html` explicitly (leading `/index.html`, not the slash-dir form).
+- History file (`.claude/brewpage-history.md`) must also store the URL without trailing slash (the bash blocks above already do this — keep it that way).

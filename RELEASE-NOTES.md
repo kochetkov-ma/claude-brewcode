@@ -2,6 +2,18 @@
 
 ---
 
+## v3.7.2 (2026-04-18)
+
+> Docs: [brewdoc:publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
+
+### brewdoc
+#### Fixed
+- **publish (SITE):** strip trailing slash from `.link` returned by `/api/sites` — appending `/` routes to brewpage.app's own landing page instead of the uploaded site, and the JS redirect that rescues the no-slash form does not fire for the slash-dir form. URL is now stored and printed exactly as-is.
+- **publish (SITE):** output now includes an explicit warning not to append a trailing slash when sharing the URL.
+- **publish (SITE):** Notes clarified that `curl`-based verification is unreliable for SITE uploads (BrewPage landing serves a browser-only JS redirect) — use Playwright/browser_navigate or fetch `<url>/index.html` explicitly.
+
+---
+
 ## v3.7.1 (2026-04-17)
 
 > Docs: [brewcode skills](https://doc-claude.brewcode.app/brewcode/skills/) | [brewcode agents](https://doc-claude.brewcode.app/brewcode/agents/) | [brewtools skills](https://doc-claude.brewcode.app/brewtools/skills/) | [brewdoc skills](https://doc-claude.brewcode.app/brewdoc/skills/) | [brewui skills](https://doc-claude.brewcode.app/brewui/skills/)
