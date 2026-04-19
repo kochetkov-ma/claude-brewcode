@@ -51,6 +51,21 @@ Default if skipped: English.
 
 ---
 
+## Compatibility Flags (REQUIRED for this provider)
+
+Alternative providers (Z.ai, MiniMax) implement Anthropic-compatible APIs but have incompatibilities that require Claude Code flags:
+
+| Provider | Required Flags | Why |
+|----------|---------------|-----|
+| Z.ai (GLM) | `CLAUDE_ENABLE_BYTE_WATCHDOG=0` + `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` | Z.ai rejects beta headers with error 1210; SSE format triggers byte watchdog |
+| MiniMax | `CLAUDE_ENABLE_BYTE_WATCHDOG=0` + `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` | Same issues as Z.ai |
+| Qwen/DashScope | `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` | Beta headers may be rejected; SSE works fine |
+| OpenRouter | None required | OpenRouter is an aggregator with good compatibility |
+
+When constructing aliases (Step 6), ALWAYS include the compatibility flags from the provider's reference file.
+
+---
+
 ## Phase 1: Mode Detection
 
 **Skill arguments received:** `$ARGUMENTS`

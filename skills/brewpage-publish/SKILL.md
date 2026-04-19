@@ -115,13 +115,13 @@ CONTENT=$(cat <<'BREWPAGE_EOF'
 {content}
 BREWPAGE_EOF
 )
-PAYLOAD=$(jq -n --arg c "$CONTENT" '{content: $c, format: "markdown"}')
-RESPONSE=$(curl -s -X POST "https://brewpage.app/api/html?ns={ns}&ttl={days}" \
+PAYLOAD=$(jq -n --arg c "$CONTENT" '{content: $c}')
+RESPONSE=$(curl -s -X POST "https://brewpage.app/api/html?ns={ns}&ttl={days}&format=markdown" \
   -H "Content-Type: application/json" \
   {password_header} \
   -d "$PAYLOAD")
 
-URL=$(echo "$RESPONSE" | jq -r '.url // empty')
+URL=$(echo "$RESPONSE" | jq -r '.link // empty')
 TOKEN=$(echo "$RESPONSE" | jq -r '.ownerToken // empty')
 
 if [ -n "$URL" ]; then
@@ -153,7 +153,7 @@ RESPONSE=$(curl -s -X POST "https://brewpage.app/api/json?ns={ns}&ttl={days}" \
   {password_header} \
   -d '{original_json}')
 
-URL=$(echo "$RESPONSE" | jq -r '.url // empty')
+URL=$(echo "$RESPONSE" | jq -r '.link // empty')
 TOKEN=$(echo "$RESPONSE" | jq -r '.ownerToken // empty')
 
 if [ -n "$URL" ]; then
@@ -184,7 +184,7 @@ RESPONSE=$(curl -s -X POST "https://brewpage.app/api/files?ns={ns}&ttl={days}" \
   {password_header} \
   -F "file=@/absolute/path/to/file")
 
-URL=$(echo "$RESPONSE" | jq -r '.url // empty')
+URL=$(echo "$RESPONSE" | jq -r '.link // empty')
 TOKEN=$(echo "$RESPONSE" | jq -r '.ownerToken // empty')
 
 if [ -n "$URL" ]; then
@@ -216,7 +216,7 @@ Replace `{password_header}` with `-H "X-Password: {pass}"` only when password wa
 ## Notes
 
 - Always use absolute file paths with curl `-F "file=@..."`.
-- Use `jq -n --arg c "$CONTENT" '{content: $c, format: "markdown"}'` to safely encode text content.
+- Use `jq -n --arg c "$CONTENT" '{content: $c}'` to safely encode text content. **`format` is a query param**, not a body field — `/api/html` ignores any `format` key inside the JSON body and reads only `?format=` from the URL. Wrong location = server applies default `html` and stores your markdown as raw text.
 - TTL default is `5` days.
 - Namespace must be alphanumeric (3-32 chars). Default: `public`.
 - To **delete** a published page, find the owner token in `.claude/brewpage-history.md` and use the delete command shown in that file's header.

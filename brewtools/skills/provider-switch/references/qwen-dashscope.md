@@ -37,9 +37,12 @@ Same model for all three Claude Code roles (opus/sonnet/haiku).
 
 Note: `[1m]` suffix is REQUIRED — Claude Code defaults to 200K context otherwise (GitHub issue #40753).
 
+## Compatibility Flags
+- `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` — strips beta headers that DashScope may reject
+
 ## Alias
 ```bash
-alias claudeqwen='export ANTHROPIC_BASE_URL=https://dashscope-intl.aliyuncs.com/apps/anthropic; export ANTHROPIC_AUTH_TOKEN=$DASHSCOPE_API_KEY; export ANTHROPIC_API_KEY=""; export ANTHROPIC_DEFAULT_OPUS_MODEL="qwen3.6-plus[1m]"; export ANTHROPIC_DEFAULT_SONNET_MODEL="qwen3.6-plus[1m]"; export ANTHROPIC_DEFAULT_HAIKU_MODEL="qwen3.6-plus[1m]"; claude'
+alias claudeqwen='export ANTHROPIC_BASE_URL=https://dashscope-intl.aliyuncs.com/apps/anthropic; export ANTHROPIC_AUTH_TOKEN=$DASHSCOPE_API_KEY; export ANTHROPIC_API_KEY=""; export ANTHROPIC_DEFAULT_OPUS_MODEL="qwen3.6-plus[1m]"; export ANTHROPIC_DEFAULT_SONNET_MODEL="qwen3.6-plus[1m]"; export ANTHROPIC_DEFAULT_HAIKU_MODEL="qwen3.6-plus[1m]"; export CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1; claude'
 ```
 
 ## How to Get API Key

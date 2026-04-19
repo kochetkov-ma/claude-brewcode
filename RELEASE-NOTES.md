@@ -2,6 +2,23 @@
 
 ---
 
+## v3.7.3 (2026-04-19)
+
+> Docs: [brewtools:provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/)
+
+### brewtools
+#### Added
+- **provider-switch:** compatibility flags table added to SKILL.md — documents required `CLAUDE_ENABLE_BYTE_WATCHDOG=0` and `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` flags per provider
+- **provider-switch (Z.ai/GLM):** reference file now includes compatibility flags in documentation and alias template
+- **provider-switch (MiniMax):** reference file now includes compatibility flags in documentation and alias template
+- **provider-switch (Qwen/DashScope):** reference file now includes `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` in documentation and alias template
+
+### brewdoc / brewpage-publish
+#### Changed
+- **publish:** improved URL handling and verification flow
+
+---
+
 ## v3.7.2 (2026-04-18)
 
 > Docs: [brewdoc:publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
