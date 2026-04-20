@@ -58,7 +58,7 @@ After all commands succeed, run `/reload-plugins`. If `/reload-plugins` is unava
 |--------|---------|--------|---------|
 | [brewcode](brewcode/README.md) | Infinite task execution, quorum reviews, skill/agent creation, semantic search | 13 | `claude plugin install brewcode@claude-brewcode` |
 | [brewdoc](brewdoc/README.md) | Documentation tools: auto-sync, memory optimization, PDF conversion, publishing | 6 | `claude plugin install brewdoc@claude-brewcode` |
-| [brewtools](brewtools/README.md) | Universal text utilities: token optimization, humanization, secrets scanning, plugin updates | 7 | `claude plugin install brewtools@claude-brewcode` |
+| [brewtools](brewtools/README.md) | Universal text utilities: token optimization, humanization, secrets scanning, plugin updates | 11 | `claude plugin install brewtools@claude-brewcode` |
 | [brewui](brewui/README.md) | UI/visual tools: AI image generation, design-to-code conversion | 2 | `claude plugin install brewui@claude-brewcode` |
 
 ## Installation
@@ -219,12 +219,13 @@ After `/brewcode:setup`, each task follows the cycle: `spec` -> `plan` -> `start
 | `/brewdoc:publish` | Publish to brewpage.app -- returns public URL |
 | `/brewdoc:guide` | Interactive tutorial for the plugin suite |
 
-### Brewtools (7 skills)
+### Brewtools (11 skills)
 
 | Skill | Purpose |
 |-------|---------|
 | `/brewtools:text-optimize` | LLM token efficiency optimization (30+ rules) |
 | `/brewtools:text-human` | Remove AI artifacts, humanize code |
+| `/brewtools:think-short` | Toggle terse-output mode -- inject brevity directives via SessionStart + PreToolUse:Task hooks |
 | `/brewtools:secrets-scan` | Scan git-tracked files for leaked secrets |
 | `/brewtools:ssh` | SSH server management -- connect, configure, deploy |
 | `/brewtools:deploy` | GitHub Actions deployment -- workflows, releases, GHCR, CI/CD |

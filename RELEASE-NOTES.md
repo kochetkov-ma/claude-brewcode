@@ -2,6 +2,16 @@
 
 ---
 
+## v3.7.4 (2026-04-20)
+
+> Docs: [brewtools:think-short](https://doc-claude.brewcode.app/brewtools/skills/think-short/)
+
+### brewtools
+#### Added
+- **think-short:** new skill — toggle terse-output mode for Claude Code sessions. Injects brevity directives into the main conversation (SessionStart hook) and into sub-agent prompts (PreToolUse:Task hook). 3 profiles — `light` / `medium` / `aggressive`. Commands: `on`, `off`, `profile X`, `status`, `blacklist add|remove`. NL parsing (RU+EN): `включись`, `уровень 3`, `агрессивный`, `level 2`, `максимально`, etc. Default blacklist skips agents that need verbose output (`debate`, `docs-writer`, `architect`). State merged via chain `env → project → global → plugin.json → hardcoded`. Atomic state writes (O_NOFOLLOW, 0600). Cache-friendly — SessionStart profile is injected once and cached; PreToolUse:Task prepends first 2 lines of the profile fresh per sub-agent spawn. Disabled by default.
+
+---
+
 ## v3.7.3 (2026-04-19)
 
 > Docs: [brewtools:provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/)

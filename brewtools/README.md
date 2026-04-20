@@ -5,7 +5,7 @@
 | Field | Value |
 |-------|-------|
 | Version | 3.6.0 |
-| Skills | 10 |
+| Skills | 11 |
 | Agents | 3 |
 
 ## Install
@@ -86,6 +86,7 @@ claude --plugin-dir ./brewtools
 | [`/brewtools:provider-switch`](skills/provider-switch/README.md) | Configure alternative API providers (Z.ai/GLM, Qwen, MiniMax, OpenRouter) | opus | `[status\|setup\|help\|<provider>]` |
 | [`/brewtools:skill-toggle`](skills/skill-toggle/README.md) | Disable/enable individual plugin skills (survives plugin updates) | sonnet | `<op> [plugin:name] [--scope=global\|project]` |
 | [`/brewtools:agent-toggle`](skills/agent-toggle/README.md) | Disable/enable individual plugin agents (survives plugin updates) | sonnet | `<op> [plugin:name] [--scope=global\|project]` |
+| [`/brewtools:think-short`](skills/think-short/README.md) | Toggle terse-output mode — cut preamble/filler via SessionStart + PreToolUse:Task injection | sonnet | `[on\|off\|profile <light\|medium\|aggressive>\|status\|blacklist add\|remove <agent>]` |
 
 ## Agents
 
@@ -116,6 +117,7 @@ brewtools/
 |   +-- provider-switch/               # Alternative API provider management
 |   +-- skill-toggle/                  # Disable/enable individual plugin skills
 |   +-- agent-toggle/                  # Disable/enable individual plugin agents
+|   +-- think-short/                   # Terse-output mode toggle
 +-- agents/
     +-- text-optimizer.md             # Text optimization agent
     +-- ssh-admin.md                  # SSH and server administration
@@ -148,6 +150,7 @@ Full docs: [doc-claude.brewcode.app/brewtools/overview](https://doc-claude.brewc
 | Provider Switch | [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/) |
 | Skill Toggle | [skill-toggle](https://doc-claude.brewcode.app/brewtools/skills/skill-toggle/) |
 | Agent Toggle | [agent-toggle](https://doc-claude.brewcode.app/brewtools/skills/agent-toggle/) |
+| Think Short | [think-short](https://doc-claude.brewcode.app/brewtools/skills/think-short/) |
 | Release Notes | [RELEASE-NOTES.md](../RELEASE-NOTES.md) |
 
 Author: Maksim Kochetkov | License: MIT

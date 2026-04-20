@@ -1,0 +1,178 @@
+---
+title: "Think Short"
+description: "Toggle terse-output mode — inject brevity directives into main conversation and sub-agent prompts. Cuts preamble/filler/AI-artifacts in output-heavy workflows."
+order: 3122
+---
+import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+
+# Think Short — terse mode toggle
+
+<Badge variant="default" text="sonnet" /> <Badge variant="accent" text="session+task" />
+
+<Callout type="caution">
+**Output-token bloat kills long workflows.** Preamble ("Let me…"), filler phrases ("Great question!"), unsolicited alternatives, and chain-of-thought verbalization accumulate fast across many sub-agent turns. In a brewcode run with 10+ agents, this can waste thousands of tokens per phase and obscure signal with noise.
+</Callout>
+
+<Callout type="tip">
+**Three profiles, two injection points.** `light` / `medium` / `aggressive` profiles are injected once per session via SessionStart (cached, no repeat cost) and prepended fresh to every sub-agent prompt via PreToolUse:Task. Agents on the blacklist (`debate`, `docs-writer`, `architect`) are skipped automatically — they need full expressive output.
+</Callout>
+
+## Quick reference
+
+| Command | Argument | Action |
+|---------|----------|--------|
+| `/brewtools:think-short on` | `[--scope global\|project]` | Enable terse mode, default scope = project |
+| `/brewtools:think-short off` | — | Disable terse mode |
+| `/brewtools:think-short profile <name>` | `light \| medium \| aggressive` | Set active profile |
+| `/brewtools:think-short status` | — | Print effective state, sources, last 10 log lines |
+| `/brewtools:think-short blacklist add <agent>` | `<agent>` name | Add agent to injection skip-list (e.g. `docs-writer`) |
+| `/brewtools:think-short blacklist remove <agent>` | `<agent>` name | Remove agent from injection skip-list |
+
+Default scope for all mutations: `project`. Pass `--scope=global` to write globally.
+
+## When to use
+
+- Output-heavy brewcode runs with many sub-agent spawns — reduces noise per phase
+- Long single sessions where preamble accumulates across compacts
+- Cutting verbose boilerplate from agents that over-explain before acting
+- Enforcing ASCII-only output and no smart-quotes in structured data pipelines
+
+## Examples
+
+**Enable with default profile (medium):**
+```
+/brewtools:think-short on
+```
+
+**Switch to aggressive:**
+```
+/brewtools:think-short profile aggressive
+```
+
+**Natural language — RU combo (resolves to `on` + `profile aggressive`):**
+```
+включись максимально
+```
+
+**Natural language — level shorthand:**
+```
+уровень 3
+агрессивный
+макс
+level 2
+```
+
+**Check current state:**
+```
+/brewtools:think-short status
+```
+
+Expected status output:
+```
+think-short: ENABLED (source: project-state)
+profile: medium (source: project-state)
+blacklist: [debate, docs-writer, architect]
+state files:
+  project: .claude/brewtools/think-short.json (exists, updated 2026-04-20T12:34:56Z)
+  global:  ~/.claude/plugins/data/brewtools-claude-brewcode/think-short.json (missing)
+plugin.json defaults: enabled=false, profile=medium
+env override: THINK_SHORT_DEFAULT=(unset)
+recent log:
+  think-short: NL-prompt "включись максимально" → resolved as on + profile aggressive
+```
+
+**Disable:**
+```
+выключи
+/brewtools:think-short off
+```
+
+## Profiles
+
+| Profile | Directives | Approx tokens | Typical use |
+|---------|-----------|---------------|-------------|
+| `light` | Be terse. Results first, reasoning only if asked. | ~10 tokens | Light reduction, keeps reasoning visible |
+| `medium` | Be terse. No preamble, no filler. Skip AI phrasings. Direct answers. No sycophancy, no unsolicited alternatives. | ~35 tokens | Balanced — recommended default |
+| `aggressive` | Be terse. ASCII only. No preamble, closing fluff, sycophancy, restatement, unsolicited alternatives, "as an AI" framing. Results first. Prefer Edit over Write. | ~60 tokens | Maximum suppression — long automated runs |
+
+## How it works
+
+<Steps>
+  <li>
+    <div>
+      <strong>SessionStart — full profile injection</strong>
+      <p>When a new session starts, the SessionStart hook reads the effective state. If enabled, it injects the full profile text into <code>additionalContext</code>. This happens once per session — the profile is cached by the model context, so no repeat token cost on subsequent turns.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>PreToolUse:Task — per-agent prepend</strong>
+      <p>Before each sub-agent spawn (Task tool), the PreToolUse hook prepends the first 2 lines of the active profile to the agent's prompt. This ensures fresh injection even for agents spawned mid-session after context shifts. Agents in the blacklist are skipped entirely.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Blacklist filter</strong>
+      <p>Agents named <code>debate</code>, <code>docs-writer</code>, and <code>architect</code> are excluded from injection by default. These agents need full expressive output — injecting brevity directives breaks their output quality. The blacklist is configurable via <code>blacklist add/remove</code>.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>State merge — fallback chain</strong>
+      <p>Effective state is computed by merging all sources in priority order. The skill reads and writes through <code>helpers/state.mjs</code> and <code>helpers/safe-write.mjs</code> (atomic write, O_NOFOLLOW, mode 0600). Project-scope state wins over global; env override wins over all.</p>
+    </div>
+  </li>
+</Steps>
+
+## State files
+
+| Scope | Path |
+|-------|------|
+| Global | `$CLAUDE_PLUGIN_DATA/think-short.json` (fallback: `~/.claude/plugins/data/brewtools-claude-brewcode/think-short.json`) |
+| Project | `<cwd>/.claude/brewtools/think-short.json` |
+
+Project scope overrides global field-by-field — `enabled`, `profile`, and `blacklist` can each come from different scopes.
+
+## State schema
+
+```json
+{
+  "version": 1,
+  "enabled": false,
+  "profile": "medium",
+  "blacklist": ["debate", "docs-writer", "architect"],
+  "updated_at": "2026-04-20T12:00:00.000Z"
+}
+```
+
+## Fallback chain
+
+1. `THINK_SHORT_DEFAULT` env var (`on` / `off` / profile name) — highest priority
+2. Project state: `<cwd>/.claude/brewtools/think-short.json`
+3. Global state: `$CLAUDE_PLUGIN_DATA/think-short.json`
+4. `plugin.json` config (`config.think_short.default_enabled`, `config.think_short.default_profile`)
+5. Hardcoded defaults: `enabled=false`, `profile=medium`, `blacklist=[debate, docs-writer, architect]`
+
+## Injection timeline
+
+SessionStart profile injection fires once and is cached in the session context — no repeat cost. PreToolUse:Task injection fires fresh on every sub-agent spawn, so agents created later in a long session always receive the current profile. If you toggle or change profile mid-session, the new state applies to the next sub-agent spawn immediately; the main-conversation context retains the earlier SessionStart injection until the next session.
+
+## Logging
+
+<Callout type="note">
+All state mutations and NL-prompt resolutions are logged at INFO level to `.claude/brewtools.log`. Filter with `grep 'think-short'` to see only think-short events. The `status` command tails the last 10 matching lines automatically.
+</Callout>
+
+<CardGrid>
+  <Card title="Text Optimize" icon="settings" href="/brewtools/skills/text-optimize/">
+    Complementary token-reduction skill — rewrites prompts and docs for LLM efficiency rather than controlling output verbosity at runtime.
+  </Card>
+  <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">
+    All brewtools skills and agents in one place.
+  </Card>
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/think-short">
+    Source code — skill, hooks integration, profile texts, and state helpers.
+  </Card>
+</CardGrid>
+
+<UpdateNotice />

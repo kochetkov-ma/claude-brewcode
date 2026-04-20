@@ -83,6 +83,7 @@ export const navigation: NavSection[] = [
           { title: 'ssh', slug: 'brewtools/skills/ssh' },
           { title: 'text-human', slug: 'brewtools/skills/text-human' },
           { title: 'text-optimize', slug: 'brewtools/skills/text-optimize' },
+          { title: 'think-short', slug: 'brewtools/skills/think-short' },
         ],
       },
       {

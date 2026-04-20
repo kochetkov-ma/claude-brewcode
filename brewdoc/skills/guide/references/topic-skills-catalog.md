@@ -39,7 +39,7 @@ Documentation tools. Sync, generate, optimize, export, publish.
 | `/brewdoc:guide` | Interactive teaching for the plugin suite (this guide) |
 | `/brewdoc:publish` | Publish content to brewpage.app — text, markdown, or files |
 
-## Section 3: Brewtools Skills (8)
+## Section 3: Brewtools Skills (11)
 
 Universal utilities. Work in any project, no setup needed.
 
@@ -53,6 +53,9 @@ Universal utilities. Work in any project, no setup needed.
 | `/brewtools:debate` | Evidence-based multi-agent debate with Discovery phase and 3 modes |
 | `/brewtools:plugin-update` | Check, install, or update brewcode suite plugins from the marketplace |
 | `/brewtools:provider-switch` | Configure alternative API providers — Z.ai/GLM, Qwen, MiniMax, OpenRouter |
+| `/brewtools:skill-toggle` | Disable/enable individual plugin skills, survives plugin updates |
+| `/brewtools:agent-toggle` | Disable/enable individual plugin agents, survives plugin updates |
+| `/brewtools:think-short` | Toggle terse-output mode (light/medium/aggressive) to cut token bloat |
 
 These are standalone — no project configuration required. Run them anywhere.
 
