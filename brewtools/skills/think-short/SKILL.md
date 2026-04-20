@@ -57,17 +57,25 @@ user-invocable: true
 |------|---------|
 | Every Bash call ends with `&& echo "OK ..." \|\| echo "FAILED ..."` | ALL |
 | Never use `Write`/`Edit` on `~/.claude/*` or `$CLAUDE_PLUGIN_DATA` — use Bash + Node `fs` via helpers | ALL |
-| State writes go through `skills/think-short/helpers/safe-write.mjs` (atomic, O_NOFOLLOW, 0600) | P2 |
-| State reads go through `skills/think-short/helpers/state.mjs` (merge global+project, project wins) | P0, status |
-| NL-prompt resolution ALWAYS logged via `brewtools/hooks/lib/utils.mjs` `log()` at INFO level, prefix `think-short`, to `.claude/brewtools.log` | P0 |
+| State writes go through `writeState()` in `helpers/state.mjs` (atomic, O_NOFOLLOW, 0600, merges defaults + timestamps) | P2 |
+| State reads go through `resolveEffectiveState()` in `helpers/state.mjs` (merges hardcoded → plugin.json → global → project → env) | P0, status |
+| NL-prompt resolution ALWAYS logged via `log()` exported from `helpers/state.mjs` at INFO level (auto-prefixed `think-short`), to `.claude/brewtools.log` | P0 |
 
-Paths (substitute literally in Bash):
-- Global state: `$CLAUDE_PLUGIN_DATA/think-short.json` (fallback: `~/.claude/plugins/data/brewtools-claude-brewcode/think-short.json`)
-- Project state: `$PWD/.claude/brewtools/think-short.json`
-- State helper: `$CLAUDE_PLUGIN_ROOT/skills/think-short/helpers/state.mjs`
-- Safe-write helper: `$CLAUDE_PLUGIN_ROOT/skills/think-short/helpers/safe-write.mjs`
-- Log helper: `$CLAUDE_PLUGIN_ROOT/hooks/lib/utils.mjs`
-- Log file: `$PWD/.claude/brewtools.log`
+### BT_ROOT Resolver
+
+`$CLAUDE_PLUGIN_ROOT` is **NOT** inherited by the Bash tool in main-conversation slash invocations. Every Bash block MUST resolve `BT_ROOT` dynamically. Use the env var if present, else pick the newest cached version (survives version bumps — no hardcoded `3.7.4`):
+
+```bash
+BT_ROOT="${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::')}"
+test -d "$BT_ROOT/skills/think-short/helpers" || { echo "❌ BT_ROOT invalid: $BT_ROOT"; exit 1; }
+```
+
+Paths (use `$BT_ROOT` literally in Bash):
+- Global state: `$CLAUDE_PLUGIN_DATA/think-short.json` (fallback: `~/.claude/plugins/data/brewtools-claude-brewcode/think-short.json`) — computed by `getPaths(cwd)`
+- Project state: `$PWD/.claude/brewtools/think-short.json` — computed by `getPaths(cwd)`
+- State helper: `$BT_ROOT/skills/think-short/helpers/state.mjs` — exports `getPaths`, `readPluginDefaults`, `resolveEffectiveState`, `writeState`, `log`
+- Safe-write helper: `$BT_ROOT/skills/think-short/helpers/safe-write.mjs` — exports `safeReadJson`, `safeWriteJson`
+- Log file: `$PWD/.claude/brewtools.log` (auto-created by `log()`)
 
 State schema:
 ```json
@@ -119,13 +127,15 @@ If no structural match, treat argument as NL prompt. Algorithm:
 
 **EXECUTE** using Bash tool (resolve + log):
 ```bash
+BT_ROOT="${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::')}"
+test -d "$BT_ROOT/skills/think-short/helpers" || { echo "❌ BT_ROOT invalid: $BT_ROOT"; exit 1; }
 node --input-type=module -e "
-import {log} from '$CLAUDE_PLUGIN_ROOT/hooks/lib/utils.mjs';
-log('info', 'think-short:', 'NL-prompt \"INPUT\" → resolved as RESOLVED', process.cwd(), process.env.CLAUDE_SESSION_ID || null);
+import {log} from '${BT_ROOT}/skills/think-short/helpers/state.mjs';
+log('info', 'NL-prompt \"INPUT\" → resolved as RESOLVED', process.cwd(), process.env.CLAUDE_SESSION_ID || null);
 " && echo "OK log" || echo "FAILED log"
 ```
 
-Replace `INPUT` and `RESOLVED` literally.
+Replace `INPUT` and `RESOLVED` literally. The `log()` from `state.mjs` auto-prefixes with `think-short` — do NOT add it again.
 
 ---
 
@@ -142,7 +152,7 @@ Rules:
 | User prompt contains explicit ambiguity ("для всех проектов или только здесь", "global or project?", `--ask-scope`) | Use `AskUserQuestion` — options: Project (default) / Global |
 | Otherwise (including `--print` / headless / no tty) | `project` (silent default) |
 
-**ALWAYS log the chosen scope at INFO** using utils.mjs `log()`:
+**ALWAYS log the chosen scope at INFO** using `log()` from `state.mjs`:
 
 ```
 think-short: scope=<project|global> (<default|--scope|user-choice>, --scope <not specified|explicit>)
@@ -156,36 +166,50 @@ If user is invoking from a combo (e.g. `включись максимально`
 
 ## P2: Mutate State
 
-**EXECUTE** using Bash tool (generic pattern — substitute `OP_BLOCK`):
+**EXECUTE** using Bash tool (generic pattern — substitute `SCOPE`, `PATCH_JSON`, `OP`):
+
 ```bash
+BT_ROOT="${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::')}"
+test -d "$BT_ROOT/skills/think-short/helpers" || { echo "❌ BT_ROOT invalid: $BT_ROOT"; exit 1; }
 node --input-type=module -e "
-import {readMerged, globalPath, projectPath} from '$CLAUDE_PLUGIN_ROOT/skills/think-short/helpers/state.mjs';
-import {safeWrite} from '$CLAUDE_PLUGIN_ROOT/skills/think-short/helpers/safe-write.mjs';
-import fs from 'node:fs';
-
-const scope = 'SCOPE';                 // 'global' | 'project'
-const fp = scope === 'project' ? projectPath(process.cwd()) : globalPath();
-
-// Load existing scope-local state (not merged — we write only this scope)
-let st = {version:1, enabled:false, profile:'medium', blacklist:['debate','docs-writer','architect']};
-try { if (fs.existsSync(fp)) st = JSON.parse(fs.readFileSync(fp,'utf8')); } catch {}
-
-// OP_BLOCK — one of:
-//   on:        st.enabled = true;
-//   off:       st.enabled = false;
-//   profile:   st.profile = 'PROFILE_VALUE';
-//   blacklist-add:    if (!st.blacklist.includes('AGENT')) st.blacklist.push('AGENT');
-//   blacklist-remove: st.blacklist = st.blacklist.filter(a => a !== 'AGENT');
-
-st.updated_at = new Date().toISOString();
-safeWrite(fp, JSON.stringify(st, null, 2));
-console.log(JSON.stringify({scope, file:fp, state:st}));
+import {writeState, log} from '${BT_ROOT}/skills/think-short/helpers/state.mjs';
+const patch = PATCH_JSON;
+const r = await writeState('SCOPE', patch, process.cwd());
+log('info', 'toggle OP applied (scope=SCOPE) → ' + JSON.stringify(patch), process.cwd(), process.env.CLAUDE_SESSION_ID || null);
+console.log(JSON.stringify({scope:'SCOPE', file:r.path, state:r.after}));
 " && echo "OK mutate" || echo "FAILED mutate"
 ```
 
-Substitute `SCOPE`, `PROFILE_VALUE`, `AGENT`, and the `OP_BLOCK` line(s) per operation.
+Substitutions per op:
 
-On combo ops (`on` + `profile`) run both mutations in a single node invocation to keep `updated_at` atomic.
+| Op | `PATCH_JSON` | `OP` |
+|----|--------------|------|
+| `on` | `{enabled:true}` | `on` |
+| `off` | `{enabled:false}` | `off` |
+| `profile light` | `{profile:'light'}` | `profile-light` |
+| `profile medium` | `{profile:'medium'}` | `profile-medium` |
+| `profile aggressive` | `{profile:'aggressive'}` | `profile-aggressive` |
+| `blacklist add X` | `{blacklist:[...current,'X']}` (read via `resolveEffectiveState` first, dedupe) | `blacklist-add-X` |
+| `blacklist remove X` | `{blacklist:current.filter(a=>a!=='X')}` | `blacklist-remove-X` |
+
+`writeState` handles: reading existing scope file, merging defaults, atomic write via `safeWriteJson`, stamping `updated_at`, enforcing `version:1`. No manual `fs.existsSync` / `safeWrite` calls needed.
+
+**Combo ops** (e.g. `on` + `profile aggressive`): pass a single merged patch: `{enabled:true, profile:'aggressive'}` — one `writeState` call, atomic.
+
+**Blacklist mutation** example (inline — single node invocation reads current state then writes):
+
+```bash
+BT_ROOT="${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::')}"
+node --input-type=module -e "
+import {resolveEffectiveState, writeState, log} from '${BT_ROOT}/skills/think-short/helpers/state.mjs';
+const s = await resolveEffectiveState(process.cwd());
+const cur = Array.isArray(s.blacklist) ? s.blacklist : [];
+const next = Array.from(new Set([...cur, 'AGENT']));   // or: cur.filter(a => a !== 'AGENT')
+const r = await writeState('SCOPE', {blacklist: next}, process.cwd());
+log('info', 'blacklist OP AGENT (scope=SCOPE)', process.cwd(), process.env.CLAUDE_SESSION_ID || null);
+console.log(JSON.stringify({scope:'SCOPE', file:r.path, state:r.after}));
+" && echo "OK mutate" || echo "FAILED mutate"
+```
 
 ---
 
@@ -208,16 +232,25 @@ recent log:
 
 **EXECUTE** using Bash tool:
 ```bash
+BT_ROOT="${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::')}"
+test -d "$BT_ROOT/skills/think-short/helpers" || { echo "❌ BT_ROOT invalid: $BT_ROOT"; exit 1; }
 node --input-type=module -e "
-import {readMerged, globalPath, projectPath, effectiveSource} from '$CLAUDE_PLUGIN_ROOT/skills/think-short/helpers/state.mjs';
+import {resolveEffectiveState, getPaths} from '${BT_ROOT}/skills/think-short/helpers/state.mjs';
 import fs from 'node:fs';
-const g = globalPath(), p = projectPath(process.cwd());
-const merged = readMerged(process.cwd());
-const gExists = fs.existsSync(g), pExists = fs.existsSync(p);
-const envOverride = process.env.THINK_SHORT_DEFAULT || '(unset)';
-console.log(JSON.stringify({merged, g, p, gExists, pExists, envOverride,
-  gMtime: gExists ? fs.statSync(g).mtime.toISOString() : null,
-  pMtime: pExists ? fs.statSync(p).mtime.toISOString() : null}));
+const cwd = process.cwd();
+const state = await resolveEffectiveState(cwd);
+const {globalPath, projectPath, pluginJsonPath} = getPaths(cwd);
+const gExists = fs.existsSync(globalPath), pExists = fs.existsSync(projectPath);
+console.log(JSON.stringify({
+  enabled: state.enabled, profile: state.profile, blacklist: state.blacklist,
+  sources: state.sources,
+  files: {
+    global: {path: globalPath, exists: gExists, mtime: gExists ? fs.statSync(globalPath).mtime.toISOString() : null},
+    project: {path: projectPath, exists: pExists, mtime: pExists ? fs.statSync(projectPath).mtime.toISOString() : null}
+  },
+  pluginDefaults: state.raw.pluginDefaults,
+  envOverride: state.raw.env
+}, null, 2));
 " && echo "OK status" || echo "FAILED status"
 
 # Append last 10 log lines matching think-short
@@ -258,10 +291,28 @@ For combo ops, show the final merged state after all mutations.
 
 | Condition | Response |
 |-----------|----------|
-| `$CLAUDE_PLUGIN_ROOT` unset (likely not inside plugin runtime) | ERROR: `think-short: $CLAUDE_PLUGIN_ROOT missing — skill must run as plugin, not from raw file.` STOP. |
-| `helpers/state.mjs` or `helpers/safe-write.mjs` missing | ERROR: `think-short: helpers not installed yet (created by separate task) — cannot read/write state.` STOP. |
+| `BT_ROOT` resolves but `$BT_ROOT/skills/think-short/helpers` missing | ERROR: `think-short: helpers not found under $BT_ROOT — plugin cache incomplete.` STOP. |
+| Neither `$CLAUDE_PLUGIN_ROOT` set nor any cached plugin dir found under `~/.claude/plugins/cache/claude-brewcode/brewtools/` | ERROR: `think-short: cannot locate plugin root — install/update brewtools first.` STOP. |
 | NL prompt matches nothing | AskUserQuestion: "Which action? [on / off / profile light / profile medium / profile aggressive / status / cancel]" |
 | NL prompt matches >1 mutually-exclusive op (not a combo) | AskUserQuestion with the matched candidates as options. |
 | User picks `cancel` in any AskUserQuestion | Abort. No state mutation. Log at INFO: `think-short: user cancelled`. |
+
+---
+
+## Smoke Test
+
+Verify wiring (helpers resolve, state reads cleanly). Run after install/update or when debugging:
+
+```bash
+BT_ROOT="${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::')}"
+test -d "$BT_ROOT/skills/think-short/helpers" || { echo "❌ BT_ROOT invalid: $BT_ROOT"; exit 1; }
+node --input-type=module -e "
+import {resolveEffectiveState} from '${BT_ROOT}/skills/think-short/helpers/state.mjs';
+const s = await resolveEffectiveState(process.cwd());
+console.log('smoke OK:', JSON.stringify(s));
+" && echo '✅ smoke' || echo '❌ smoke FAILED'
+```
+
+Expected: one `smoke OK: {...}` line with `enabled`, `profile`, `blacklist`, `sources`, `raw`, then `✅ smoke`.
 
 </instructions>

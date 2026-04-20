@@ -2,6 +2,16 @@
 
 ---
 
+## v3.7.5 (2026-04-20)
+
+> Docs: [brewtools:think-short](https://doc-claude.brewcode.app/brewtools/skills/think-short/)
+
+### brewtools
+#### Fixed
+- **think-short:** SKILL.md Bash examples now work when invoked via slash command from the main conversation. Fixes: (1) `$CLAUDE_PLUGIN_ROOT` not inherited by Bash tool — added dynamic `BT_ROOT` resolver (glob newest cache dir, no hardcoded version), (2) imports realigned with actual helper exports (`writeState`, `resolveEffectiveState`, `getPaths`, `safeWriteJson`), (3) removed double `think-short think-short:` log prefix by switching to the `log` re-export from `state.mjs`, (4) P2 mutation simplified to a single `writeState(scope, patch, cwd)` call. Smoke-test block appended at the end of SKILL.md. Hooks and helpers unchanged.
+
+---
+
 ## v3.7.4 (2026-04-20)
 
 > Docs: [brewtools:think-short](https://doc-claude.brewcode.app/brewtools/skills/think-short/)
