@@ -41,9 +41,9 @@ State schema: `{"version":1, "enabled":false, "profile":"medium", "blacklist":["
 
 | Profile | Directives | Approx tokens | Typical use |
 |---------|-----------|---------------|-------------|
-| `light` | Be terse. Results first, reasoning only if asked. | ~10 tokens | Light reduction, keeps reasoning visible |
-| `medium` | Be terse. No preamble, no filler. Skip AI phrasings. Direct answers. No sycophancy, no unsolicited alternatives. | ~35 tokens | Balanced — recommended default |
-| `aggressive` | Be terse. ASCII only. No preamble, closing fluff, sycophancy, restatement, unsolicited alternatives, "as an AI" framing. Results first. Prefer Edit over Write. | ~60 tokens | Maximum suppression — long automated runs |
+| `light` | Be terse. Results first. Think through edits before executing. | ~20 tokens | Light reduction, keeps reasoning visible |
+| `medium` | Light + no AI phrasings, no sycophancy. Tool discipline: Grep before Read, Edit over Write, parallel independent calls, no re-Read of just-edited files. | ~60 tokens | Balanced — recommended default |
+| `aggressive` | Medium + ASCII-only, no closing fluff, no disclaimers. Full tool discipline: bundle edits, replace_all for N-identical, gather call-sites via Grep before parallel Edits. | ~120 tokens | Maximum suppression — long automated runs |
 
 ## Logs
 

@@ -2,6 +2,16 @@
 
 ---
 
+## v3.7.6 (2026-04-21)
+
+> Docs: [brewtools:think-short](https://doc-claude.brewcode.app/brewtools/skills/think-short/)
+
+### brewtools
+#### Changed
+- **think-short:** profiles extended with tool discipline and "think before acting" directives. `light` now includes "think through edits before executing"; `medium` gains Grep-before-Read, Edit-over-Write, parallel independent calls, no re-Read of just-edited files; `aggressive` adds bundle-edits, `replace_all` for N-identical edits, and gather-then-parallel-Edits pattern. Output-style directives retained in all profiles. Injection points unchanged (SessionStart + PreToolUse:Task). README profile table updated with new token estimates.
+
+---
+
 ## v3.7.5 (2026-04-20)
 
 > Docs: [brewtools:think-short](https://doc-claude.brewcode.app/brewtools/skills/think-short/)
