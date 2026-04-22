@@ -1,29 +1,6 @@
 ---
 name: brewtools:agent-toggle
-description: |
-  Disable or enable individual plugin agents by renaming <name>.md↔_<name>.md in the plugin cache, with persistent state (global or project scope). Use for hiding specific agents without uninstalling the plugin.
-
-  Triggers: "disable agent", "enable agent", "agent toggle", "hide agent", "agent-toggle", "toggle agent", "отключи агента", "выключи агента", "включи агента", "спрятать агента".
-
-  <example>
-  user: "отключи агента brewtools:ssh-admin"
-  <commentary>NL disable request — plugin=brewtools, name=ssh-admin, scope=global (default).</commentary>
-  </example>
-
-  <example>
-  user: "enable brewcode:developer for this project only"
-  <commentary>Scope=project — write to .claude/brewtools/toggle-state.json.</commentary>
-  </example>
-
-  <example>
-  user: "agent-toggle status"
-  <commentary>Show merged table of disabled agents (project overrides global).</commentary>
-  </example>
-
-  <example>
-  user: "disable tester"
-  <commentary>Ambiguous — no plugin prefix. Ask which plugin owns the agent before mutating.</commentary>
-  </example>
+description: "Disables or enables individual plugin agents by renaming <name>.md and _<name>.md in the plugin cache. Persistent state: global (default) or project. Triggers: disable agent, enable agent, toggle agent, hide agent, agent-toggle."
 argument-hint: "[disable|enable|status|list|reapply|prune] <plugin>:<name> [--scope=global|project]"
 allowed-tools: Read, Bash, AskUserQuestion
 model: sonnet

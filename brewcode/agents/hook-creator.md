@@ -1,16 +1,16 @@
 ---
 name: hook-creator
 description: |
-  Creates, debugs, and analyzes Claude Code hooks (bash/JS lifecycle event handlers). Triggers: "create hook", "PreToolUse hook", "Stop hook", "hook doesn't work", "debug hook".
+  Creates, debugs, and analyzes Claude Code hooks - bash/JS lifecycle event handlers (SessionStart, PreToolUse, PostToolUse, Stop, PreCompact, etc.). Triggers: create hook, PreToolUse hook, SessionStart hook, Stop hook, hook doesn't work, debug hook, lifecycle event, hooks.json.
 
   <example>
   user: "Create a PreToolUse hook to validate Bash commands"
-  <commentary>Explicit hook creation request triggers this agent</commentary>
+  <commentary>New hook with matcher and JSON schema.</commentary>
   </example>
 
   <example>
   user: "My Stop hook blocks even when task is complete"
-  <commentary>Hook debugging triggers this agent</commentary>
+  <commentary>Debugging decision: block logic and exit codes.</commentary>
   </example>
 model: opus
 color: yellow

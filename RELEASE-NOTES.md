@@ -2,6 +2,33 @@
 
 ---
 
+## v3.7.7 (2026-04-22)
+
+> Docs: [brewtools:think-short](https://doc-claude.brewcode.app/brewtools/skills/think-short/) | [brewtools:agent-toggle](https://doc-claude.brewcode.app/brewtools/skills/agent-toggle/) | [brewtools:skill-toggle](https://doc-claude.brewcode.app/brewtools/skills/skill-toggle/) | [brewui:glm-design-to-code](https://doc-claude.brewcode.app/brewui/skills/glm-design-to-code/) | [brewui:image-gen](https://doc-claude.brewcode.app/brewui/skills/image-gen/) | [brewtools:text-optimizer](https://doc-claude.brewcode.app/brewtools/agents/text-optimizer/) | [brewui:glm-zai-specialist](https://doc-claude.brewcode.app/brewui/agents/glm-zai-specialist/) | [brewcode:hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [brewcode:skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [brewcode:agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [brewcode:tester](https://doc-claude.brewcode.app/brewcode/agents/tester/) | [brewcode:developer](https://doc-claude.brewcode.app/brewcode/agents/developer/)
+
+### brewtools
+#### Changed
+- **think-short:** profile directives compressed with zero semantic loss. `light` ~35 -> ~20 tok, `medium` ~70 -> ~35 tok, `aggressive` ~200 -> ~120 tok. Removed redundant phrase examples, README-level justifications after dashes, duplicated directives. Critical `User instructions always override these rules` retained in aggressive. All profiles now ASCII-only (em-dash -> hyphen), matching the profile's own rule.
+- **think-short (SKILL.md):** description frontmatter compressed ~480 -> ~60 tokens. English-only triggers. Lead sentence <=160 chars.
+- **agent-toggle / skill-toggle (SKILL.md):** descriptions compressed ~255 -> ~45 tokens each. English-only triggers.
+- **text-optimizer (agent):** description tuned to ~170 tokens - kept 2 examples since it is a frequently invoked agent.
+- **session-start hook:** dropped redundant `brewtools: active | session: X` line from `additionalContext` (retained in `systemMessage` UI log). Saves ~30 tokens per session.
+
+### brewui
+#### Changed
+- **glm-design-to-code / image-gen (SKILL.md):** descriptions compressed ~55% each. English-only triggers.
+- **glm-zai-specialist (agent):** description compressed ~247 -> ~50 tokens.
+- **session-start hook:** same cleanup as brewtools - removed `active | session:` line from `additionalContext`.
+
+### brewcode
+#### Changed
+- **hook-creator / skill-creator / agent-creator (agents):** descriptions tuned to ~180 tokens each with 2 high-signal examples - these agents are frequently invoked so examples retained intentionally.
+- **tester / developer (agents):** descriptions compressed ~35%, example blocks removed (triggers already convey intent).
+- **skill-creator / agent-creator:** new "Description Budget" section enforces <=100 tok (skills) / <=150 tok (agents) default, English-only triggers, <=1 example for future creations.
+- **skills/skills/SKILL.md / skills/agents/SKILL.md:** creation flows now carry the same description-budget rule inline.
+
+---
+
 ## v3.7.6 (2026-04-21)
 
 > Docs: [brewtools:think-short](https://doc-claude.brewcode.app/brewtools/skills/think-short/)

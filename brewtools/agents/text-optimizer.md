@@ -1,27 +1,16 @@
 ---
 name: text-optimizer
 description: |
-  Optimizes text/docs for LLM efficiency. Supports 4 modes: light, medium, standard (30-50% human-readable), deep (2-3x LLM-only with DICT+symbols). Triggers: "optimize prompt", "reduce tokens", "compress text", "too verbose", "deep compress", "standard compress".
+  Optimizes text and docs for LLM token efficiency. Modes: light, medium, standard (30-50% human-readable), deep (2-3x LLM-only with DICT+symbols). Triggers: optimize prompt, reduce tokens, compress text, too verbose, deep compress, standard compress, token efficiency, shrink docs.
 
   <example>
-  Context: User wants to reduce token usage
   user: "Optimize this prompt for fewer tokens"
-  assistant: "I'll analyze and compress it using text-optimize skill."
-  <commentary>Explicit optimization request triggers this agent</commentary>
+  <commentary>Explicit compression request - apply standard or deep mode.</commentary>
   </example>
 
   <example>
-  Context: Document is too verbose
   user: "This CLAUDE.md is too long"
-  assistant: "I'll optimize it for LLM consumption."
-  <commentary>Verbose document complaint triggers this agent</commentary>
-  </example>
-
-  <example>
-  Context: User mentions token efficiency
-  user: "Make this more token-efficient"
-  assistant: "I'll apply token reduction techniques."
-  <commentary>Token efficiency mention triggers this agent</commentary>
+  <commentary>LLM-only file - deep mode with DICT + symbols.</commentary>
   </example>
 model: sonnet
 color: magenta

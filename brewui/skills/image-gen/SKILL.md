@@ -1,24 +1,6 @@
 ---
 name: brewui:image-gen
-description: |
-  Generates AI images via multiple providers (OpenRouter Gemini/GPT-5, Z.ai GLM-image, Google Imagen 4, OpenAI DALL-E 3) with anti-AI-slop controls.
-  Modes: generate (default), edit, config, update.
-  Triggers: "generate image", "create image", "make image", "AI image", "image-gen", "og image", "blog image", "illustration"
-
-  <example>
-  user: "Generate an OG image for my blog post about dark mode"
-  <commentary>generate mode — text prompt to image</commentary>
-  </example>
-
-  <example>
-  user: "Edit this image to add warm lighting"
-  <commentary>edit mode — modify existing image</commentary>
-  </example>
-
-  <example>
-  user: "/image-gen --config"
-  <commentary>config mode — set up API keys</commentary>
-  </example>
+description: "Generates AI images via OpenRouter (Gemini/GPT-5), Z.ai GLM-image, Google Imagen 4, or OpenAI DALL-E 3 with anti-AI-slop controls. Modes: generate, edit, config, update. Triggers: generate image, create image, AI image, og image, blog image, illustration."
 user-invocable: true
 argument-hint: "[prompt] [--edit image.png 'instructions'] [--config] [--update] [--service gemini|openrouter|openai] [--style photo|illustration|art] [--count N] [--output dir] [--size WxH]"
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion, WebSearch]

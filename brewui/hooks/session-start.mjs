@@ -14,8 +14,8 @@ async function main() {
     const sessionShort = session_id?.slice(0, 8) || 'unknown';
 
     const context = pluginRoot
-      ? `BU_PLUGIN_ROOT=${pluginRoot}\nbrewui: active | session: ${sessionShort}`
-      : `brewui: active | session: ${sessionShort}`;
+      ? `BU_PLUGIN_ROOT=${pluginRoot}`
+      : `brewui: ${sessionShort}`;
 
     output({
       systemMessage: `brewui: ${pluginRoot} | session: ${sessionShort}`,

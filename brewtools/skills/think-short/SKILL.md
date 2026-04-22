@@ -1,44 +1,6 @@
 ---
 name: brewtools:think-short
-description: |
-  Toggle terse-output mode for Claude Code — injects brief directives into main conversation (SessionStart) and sub-agent prompts (PreToolUse:Task) to reduce preamble, filler, and AI artifacts. Profiles: light / medium / aggressive. State is global or project-scoped with merge precedence (project > global).
-
-  Triggers: "think-short", "терсный режим", "короче отвечай", "reduce tokens mode", "be terse", "think shorter", "токен-экономия", "think-short on", "think-short off", "think-short profile", "think-short status", "think-short blacklist", "включи терсный", "выключи терсный", "сделай покороче", "меньше воды", "уровень 1", "уровень 2", "уровень 3", "level 1", "level 2", "level 3", "макс", "максимум", "максимально", "агрессивный режим", "средний режим", "лёгкий режим", "легкий режим".
-
-  <example>
-  user: "/brewtools:think-short on"
-  <commentary>Structural `on` — default scope=project, AskUserQuestion to confirm Project/Global.</commentary>
-  </example>
-
-  <example>
-  user: "включись максимально"
-  <commentary>NL combo — resolves to `on` + `profile aggressive`. Log the resolution, execute both.</commentary>
-  </example>
-
-  <example>
-  user: "think-short status"
-  <commentary>Print effective state, source, state-file existence, plugin defaults, env override, last 10 log lines.</commentary>
-  </example>
-
-  <example>
-  user: "покороче"
-  <commentary>Ambiguous (matches `on` OR `profile light`?) — AskUserQuestion to disambiguate.</commentary>
-  </example>
-
-  <example>
-  user: "уровень 3"
-  <commentary>Bare level → resolves to `profile aggressive`. Default scope=project (silent). Log resolution.</commentary>
-  </example>
-
-  <example>
-  user: "level 2"
-  <commentary>Bare English level → resolves to `profile medium`. Default scope=project (silent).</commentary>
-  </example>
-
-  <example>
-  user: "макс"
-  <commentary>Shorthand for aggressive → resolves to `profile aggressive`. Default scope=project (silent).</commentary>
-  </example>
+description: "Toggles terse-output mode for Claude Code - injects brief directives into main conversation (SessionStart) and sub-agent prompts (PreToolUse:Task) to cut preamble and filler. Profiles: light, medium, aggressive. Scope: global or project (project overrides). Triggers: think-short, be terse, think shorter, reduce tokens mode, level 1/2/3."
 argument-hint: "[on|off|profile <light|medium|aggressive>|status|blacklist add|remove <agent>] [--scope global|project]"
 allowed-tools: Read, Bash, AskUserQuestion
 model: sonnet

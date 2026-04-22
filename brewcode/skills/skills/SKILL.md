@@ -50,6 +50,10 @@ bash "${CLAUDE_SKILL_DIR}/scripts/list-skills.sh" && echo "‚úÖ list" || echo "‚ù
 
 Both `create` and `up` follow Phases 0-6. Differences noted per phase.
 
+### Description Budget (DEFAULT)
+
+Frontmatter `description`: <= 100 tokens (~400 chars). Lead sentence <= 160 chars, plain EN. Triggers: comma-list, EN only. At most 1 example. No RU/other languages unless user explicitly asks.
+
 ### Prerequisite (up only): Resolve Target
 
 **EXECUTE** using Bash tool:

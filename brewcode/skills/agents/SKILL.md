@@ -56,6 +56,10 @@ Agent management - create and improve Claude Code agents.
 
 ## Mode: create
 
+### Description Budget (DEFAULT)
+
+Frontmatter `description`: <= 150 tokens (~600 chars). Lead sentence <= 160 chars, plain EN. Triggers: comma-list, EN only. At most 1 example. No RU/other languages unless user explicitly asks. For often-invoked agents user may allow up to ~200 tokens.
+
 ### Step 1: AskUserQuestion (batch -- all questions in ONE call)
 
 Ask all 3 questions in a single AskUserQuestion:

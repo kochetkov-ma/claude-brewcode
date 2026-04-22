@@ -1,29 +1,6 @@
 ---
 name: brewtools:skill-toggle
-description: |
-  Disable or enable individual plugin skills by renaming SKILL.md↔_SKILL.md in the plugin cache, with persistent state (global or project scope). Use for hiding specific skills without uninstalling the plugin.
-
-  Triggers: "disable skill", "enable skill", "skill toggle", "hide skill", "skill-toggle", "toggle skill", "отключи скил", "выключи скил", "включи скил", "спрятать скил".
-
-  <example>
-  user: "отключи скил brewui:image-gen"
-  <commentary>NL disable request — plugin=brewui, name=image-gen, scope=global (default).</commentary>
-  </example>
-
-  <example>
-  user: "enable brewcode:convention for this project only"
-  <commentary>Scope=project — write to .claude/brewtools/toggle-state.json.</commentary>
-  </example>
-
-  <example>
-  user: "skill-toggle status"
-  <commentary>Show merged table of disabled skills (project overrides global).</commentary>
-  </example>
-
-  <example>
-  user: "disable image-gen"
-  <commentary>Ambiguous — no plugin prefix. Ask which plugin owns the skill before mutating.</commentary>
-  </example>
+description: "Disables or enables individual plugin skills by renaming SKILL.md and _SKILL.md in the plugin cache. Persistent state: global (default) or project. Triggers: disable skill, enable skill, toggle skill, hide skill, skill-toggle."
 argument-hint: "[disable|enable|status|list|reapply|prune] <plugin>:<name> [--scope=global|project]"
 allowed-tools: Read, Bash, AskUserQuestion
 model: sonnet

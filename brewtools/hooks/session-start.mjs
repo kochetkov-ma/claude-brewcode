@@ -68,8 +68,8 @@ async function main() {
     const sessionShort = session_id?.slice(0, 8) || 'unknown';
 
     let context = pluginRoot
-      ? `BT_PLUGIN_ROOT=${pluginRoot}\nbrewtools: active | session: ${sessionShort}`
-      : `brewtools: active | session: ${sessionShort}`;
+      ? `BT_PLUGIN_ROOT=${pluginRoot}`
+      : `brewtools: ${sessionShort}`;
 
     context = await injectThinkShort(context, cwd, session_id);
 

@@ -1,17 +1,6 @@
 ---
 name: glm-zai-specialist
-description: |
-  Z.ai GLM API expert — vision requests, model selection, rate limits, response parsing for design-to-code pipeline. Triggers: "zai api", "glm request", "z.ai", "send to glm", "glm vision", "glm model", "design to code api", "glm-5v", "glm-4.6v".
-
-  <example>
-  user: "Send this screenshot to GLM for design-to-code conversion"
-  <commentary>Direct GLM API request with vision input — core specialist task</commentary>
-  </example>
-
-  <example>
-  user: "GLM is returning 429 errors, fix the request"
-  <commentary>API troubleshooting with rate limit handling — specialist domain</commentary>
-  </example>
+description: "Z.ai GLM API expert - vision requests, model selection, rate limits, response parsing for design-to-code pipeline. Triggers: zai api, glm request, z.ai, send to glm, glm vision, glm-5v, glm-4.6v."
 model: sonnet
 color: cyan
 tools: Read, Write, Edit, Bash, Glob, Grep

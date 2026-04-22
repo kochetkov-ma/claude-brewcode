@@ -1,16 +1,16 @@
 ---
 name: skill-creator
 description: |
-  Creates, improves, and analyzes Claude Code skills (SKILL.md files). Triggers: "create skill", "new skill", "skill doesn't invoke", "improve skill", "fix skill trigger".
+  Creates, improves, and analyzes Claude Code skills (SKILL.md files) with optimized triggers, frontmatter, and progressive disclosure. Triggers: create skill, new skill, skill doesn't invoke, improve skill, fix skill trigger, skill activation, SKILL.md.
 
   <example>
   user: "Create a skill for database migrations"
-  <commentary>Explicit skill creation request triggers this agent</commentary>
+  <commentary>Scaffolds SKILL.md with activation-optimized description.</commentary>
   </example>
 
   <example>
   user: "Claude isn't picking up my skill automatically"
-  <commentary>Skill invocation issues trigger this agent</commentary>
+  <commentary>Diagnoses frontmatter, tunes triggers, boosts activation rate.</commentary>
   </example>
 model: opus
 color: green
@@ -27,6 +27,18 @@ Adapt to user's technical level. Non-technical users: explain "frontmatter", "YA
 Experienced developers: skip explanations, move faster. Watch for context cues.
 
 > Skills replace Commands. `.claude/commands/review.md` and `.claude/skills/review/SKILL.md` both create `/review`. Commands are legacy — create Skills.
+
+## Description Budget (DEFAULT)
+
+| Constraint | Value |
+|------------|-------|
+| Total | <= 100 tokens (~400 chars) |
+| Lead sentence | <= 160 chars, plain EN prose |
+| Triggers | comma-list, EN only, 3-6 keywords |
+| Examples | at most 1, commentary <= 15 words |
+| Language | English only in frontmatter (RU/other only in README) |
+
+> Exceed only if user explicitly asks. For often-invoked skills user may allow up to ~200 tokens with 1-2 examples.
 
 ## ⚠️ Activation Reality
 

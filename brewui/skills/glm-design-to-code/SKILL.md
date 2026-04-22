@@ -1,23 +1,6 @@
 ---
 name: brewui:glm-design-to-code
-description: |
-  Use for generates frontend code from design screenshots, mockups, text descriptions, HTML files, or URLs using external GLM vision API (not Claude). Three modes: CREATE, REVIEW, FIX. Supports HTML, React, Flutter output.
-  Triggers: "convert screenshot to code", "design to code", "mockup to code", "generate frontend from image", "turn design into React", "screenshot to HTML", "d2c"
-
-  <example>
-  user: "Convert this screenshot to React components"
-  <commentary>CREATE mode — user has a design image and wants framework code</commentary>
-  </example>
-
-  <example>
-  user: "Turn my mockup into a working landing page"
-  <commentary>CREATE mode — natural request for design-to-code generation</commentary>
-  </example>
-
-  <example>
-  user: "Review how well the generated code matches the original design"
-  <commentary>REVIEW mode — user wants visual comparison of design vs result</commentary>
-  </example>
+description: "Generates frontend code from design screenshots, mockups, text descriptions, HTML files, or URLs using external GLM vision API. Modes: CREATE, REVIEW, FIX. Output: HTML, React, Flutter. Triggers: design to code, screenshot to code, mockup to code, d2c, generate frontend from image."
 user-invocable: true
 argument-hint: "[input] [--framework html|react|flutter|custom] [--profile max|optimal|efficient] [--provider zai|openrouter] [--model MODEL_ID] [--output dir] [--review original.png result.png] [--fix 'feedback'] [--fix --review-file review.json]"
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, AskUserQuestion]
