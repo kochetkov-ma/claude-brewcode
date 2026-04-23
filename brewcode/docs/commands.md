@@ -649,7 +649,7 @@ Does not use subagents.
 |------|--------|
 | `.claude/tasks/templates/` | Removed |
 | `.claude/tasks/cfg/` | Removed |
-| `.claude/tasks/logs/` | Removed |
+| `.claude/logs/` | Removed |
 | `.claude/plans/` | Removed |
 | `.grepai/` | Removed |
 | `.claude/skills/brewcode-review/` | Removed |

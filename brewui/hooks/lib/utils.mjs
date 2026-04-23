@@ -1,7 +1,7 @@
 /**
  * Shared utilities for brewui hooks
  */
-import { existsSync, mkdirSync, appendFileSync } from 'fs';
+import { existsSync, mkdirSync, appendFileSync, readFileSync } from 'fs';
 import { dirname, join } from 'path';
 
 /**
@@ -34,8 +34,26 @@ export function output(response) {
   }
 }
 
-const LOG_LEVELS = { error: 0, warn: 1, info: 2, debug: 3 };
-const LOG_FILE = '.claude/brewui.log';
+const LOG_LEVELS = { error: 0, warn: 1, info: 2, debug: 3, trace: 4 };
+const LOG_FILE = '.claude/logs/brewui.log';
+const LOG_CONFIG = '.claude/tasks/cfg/brewcode.config.json';
+const DEFAULT_LEVEL = 'info';
+
+let _cachedLevel = null;
+function getLevel(cwd) {
+  if (_cachedLevel) return _cachedLevel;
+  const env = (process.env.BREWCODE_LOG_LEVEL || '').toLowerCase();
+  if (env in LOG_LEVELS) { _cachedLevel = env; return env; }
+  if (cwd) {
+    try {
+      const cfg = JSON.parse(readFileSync(join(cwd, LOG_CONFIG), 'utf8'));
+      const lvl = cfg.logging?.level;
+      if (lvl && lvl in LOG_LEVELS) { _cachedLevel = lvl; return lvl; }
+    } catch {}
+  }
+  _cachedLevel = DEFAULT_LEVEL;
+  return DEFAULT_LEVEL;
+}
 
 /**
  * Log message to file and stderr
@@ -45,7 +63,7 @@ export function log(level, prefix, message, cwd, sessionId = null) {
     if (level === 'error') console.error(`${prefix} ${message}`);
     return;
   }
-  if (LOG_LEVELS[level] > LOG_LEVELS['info']) return;
+  if (LOG_LEVELS[level] > LOG_LEVELS[getLevel(cwd)]) return;
   console.error(`${prefix} ${message}`);
 
   const timestamp = new Date().toISOString();

@@ -76,8 +76,8 @@ grepai is a semantic code search via embeddings. Integrated into brewcode plugin
 ├── .claude/
 │   ├── rules/
 │   │   └── grepai-first.md         # Attention-forcing rule
-│   └── tasks/logs/
-│       └── grepai.log              # Hook diagnostic log
+│   └── logs/
+│       └── brewcode.log            # Hook diagnostic log (all brewcode hooks)
 │
 └── CLAUDE.md                       # Contains "CRITICAL: Use grepai_search FIRST"
 

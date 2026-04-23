@@ -21,7 +21,7 @@ user-invocable: true
 | Never use `Write`/`Edit` on `~/.claude/*` or `$CLAUDE_PLUGIN_DATA` — use Bash + Node `fs` via helpers | ALL |
 | State writes go through `writeState()` in `helpers/state.mjs` (atomic, O_NOFOLLOW, 0600, merges defaults + timestamps) | P2 |
 | State reads go through `resolveEffectiveState()` in `helpers/state.mjs` (merges hardcoded → plugin.json → global → project → env) | P0, status |
-| NL-prompt resolution ALWAYS logged via `log()` exported from `helpers/state.mjs` at INFO level (auto-prefixed `think-short`), to `.claude/brewtools.log` | P0 |
+| NL-prompt resolution ALWAYS logged via `log()` exported from `helpers/state.mjs` at INFO level (auto-prefixed `think-short`), to `.claude/logs/brewtools.log` | P0 |
 
 ### BT_ROOT Resolver
 
@@ -37,7 +37,7 @@ Paths (use `$BT_ROOT` literally in Bash):
 - Project state: `$PWD/.claude/brewtools/think-short.json` — computed by `getPaths(cwd)`
 - State helper: `$BT_ROOT/skills/think-short/helpers/state.mjs` — exports `getPaths`, `readPluginDefaults`, `resolveEffectiveState`, `writeState`, `log`
 - Safe-write helper: `$BT_ROOT/skills/think-short/helpers/safe-write.mjs` — exports `safeReadJson`, `safeWriteJson`
-- Log file: `$PWD/.claude/brewtools.log` (auto-created by `log()`)
+- Log file: `$PWD/.claude/logs/brewtools.log` (auto-created by `log()`)
 
 State schema:
 ```json
@@ -189,7 +189,7 @@ state files:
 plugin.json defaults: enabled=false, profile=medium
 env override: THINK_SHORT_DEFAULT=(unset)
 recent log:
-  <last 10 lines from .claude/brewtools.log matching `think-short`>
+  <last 10 lines from .claude/logs/brewtools.log matching `think-short`>
 ```
 
 **EXECUTE** using Bash tool:
@@ -216,7 +216,7 @@ console.log(JSON.stringify({
 " && echo "OK status" || echo "FAILED status"
 
 # Append last 10 log lines matching think-short
-grep 'think-short' .claude/brewtools.log 2>/dev/null | tail -10 || echo "(no log entries)"
+grep 'think-short' .claude/logs/brewtools.log 2>/dev/null | tail -10 || echo "(no log entries)"
 ```
 
 Render the final output to the user in the shape shown above. Omit sections that are N/A (e.g. no log file).

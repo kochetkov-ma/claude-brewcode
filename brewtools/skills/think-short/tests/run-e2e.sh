@@ -123,7 +123,7 @@ evaluate_assert() {
 
   local project_state="${workdir}/.claude/brewtools/think-short.json"
   local global_state="${plugin_data_dir}/think-short.json"
-  local log_file="${workdir}/.claude/brewtools.log"
+  local log_file="${workdir}/.claude/logs/brewtools.log"
 
   case "$key" in
     EXIT_CODE)
@@ -361,7 +361,7 @@ run_scenario() {
   # Scenario 09 second pass (without CLAUDE_DEBUG)
   # -------------------------------------------------------------------------
   if [[ "$scenario_num" == "09" ]]; then
-    local log_file_2="${workdir}/.claude/brewtools.log"
+    local log_file_2="${workdir}/.claude/logs/brewtools.log"
     # Remove log so second pass creates a fresh one
     rm -f "$log_file_2"
     local exit_code_2=0
@@ -408,7 +408,7 @@ run_scenario() {
   # The second pass expects profile preview absent — evaluated separately
   # -------------------------------------------------------------------------
   if [[ "$scenario_num" == "09" ]]; then
-    local log_file_2="${workdir}/.claude/brewtools.log"
+    local log_file_2="${workdir}/.claude/logs/brewtools.log"
     local result_2=0
     evaluate_assert "LOG_NOT_CONTAINS" "think-short: profile preview =" \
       "$workdir" "${workdir}/out2.json" "$exit_code_2" "0" "$plugin_data_dir" || result_2=$?

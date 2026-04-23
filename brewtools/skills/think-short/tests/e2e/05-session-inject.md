@@ -11,7 +11,7 @@ user prompt: `say hi`
 
 ## Then
 - exit 0
-- log `.claude/brewtools.log` contains `SessionStart — injecting profile=medium`
+- log `.claude/logs/brewtools.log` contains `SessionStart — injecting profile=medium`
 
 ## Assert
 ASSERT_EXIT_CODE: 0

@@ -1,6 +1,8 @@
 /**
  * Shared utilities for brewdoc hooks
  */
+import { existsSync, mkdirSync, appendFileSync, readFileSync } from 'fs';
+import { dirname, join } from 'path';
 
 /**
  * Read JSON from stdin
@@ -33,17 +35,57 @@ export function output(response) {
   }
 }
 
+const LOG_LEVELS = { error: 0, warn: 1, info: 2, debug: 3, trace: 4 };
+const LOG_FILE = '.claude/logs/brewdoc.log';
+const LOG_CONFIG = '.claude/tasks/cfg/brewcode.config.json';
+const DEFAULT_LEVEL = 'info';
+
+let _cachedLevel = null;
+function getLevel(cwd) {
+  if (_cachedLevel) return _cachedLevel;
+  const env = (process.env.BREWCODE_LOG_LEVEL || '').toLowerCase();
+  if (env in LOG_LEVELS) { _cachedLevel = env; return env; }
+  if (cwd) {
+    try {
+      const cfg = JSON.parse(readFileSync(join(cwd, LOG_CONFIG), 'utf8'));
+      const lvl = cfg.logging?.level;
+      if (lvl && lvl in LOG_LEVELS) { _cachedLevel = lvl; return lvl; }
+    } catch {}
+  }
+  _cachedLevel = DEFAULT_LEVEL;
+  return DEFAULT_LEVEL;
+}
+
 /**
- * Log message to stderr
- * @param {string} level - Log level (error|warn|info|debug)
+ * Log message to file and stderr
+ * @param {string} level - Log level (error|warn|info|debug|trace)
  * @param {string} prefix - Log prefix (e.g., '[hook]')
  * @param {string} message - Log message
- * @param {string} cwd - Current working directory (unused, kept for API compat)
+ * @param {string} cwd - Current working directory
  * @param {string|null} sessionId - Optional session ID for correlation
  */
 export function log(level, prefix, message, cwd, sessionId = null) {
   const sessionTag = (typeof sessionId === 'string' && sessionId)
     ? `[${sessionId.slice(0, 8)}] `
     : '';
-  console.error(`${level.toUpperCase()} ${sessionTag}${prefix} ${message}`);
+  if (!cwd) {
+    if (level === 'error') console.error(`${prefix} ${message}`);
+    return;
+  }
+  if (LOG_LEVELS[level] > LOG_LEVELS[getLevel(cwd)]) return;
+  console.error(`${prefix} ${message}`);
+
+  const timestamp = new Date().toISOString();
+  const levelTag = level.toUpperCase().padEnd(5);
+  const line = `${timestamp} ${levelTag} ${sessionTag}${prefix} ${message}`;
+  try {
+    const logPath = join(cwd, LOG_FILE);
+    const logDir = dirname(logPath);
+    if (!existsSync(logDir)) {
+      mkdirSync(logDir, { recursive: true });
+    }
+    appendFileSync(logPath, line + '\n');
+  } catch {
+    // Ignore file write errors
+  }
 }

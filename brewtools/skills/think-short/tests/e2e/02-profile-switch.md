@@ -12,7 +12,7 @@ user prompt: `/brewtools:think-short profile aggressive`
 - exit 0
 - `.claude/brewtools/think-short.json` contains `"profile": "aggressive"`
 - `"enabled": true` is preserved (profile switch must not flip enabled)
-- log `.claude/brewtools.log` contains `think-short`
+- log `.claude/logs/brewtools.log` contains `think-short`
 
 ## Assert
 ASSERT_EXIT_CODE: 0

@@ -15,7 +15,7 @@ The runner pre-seeds no state files, so the skill writes a fresh project state.)
 - claude exits 0
 - file `.claude/brewtools/think-short.json` exists in the working dir
 - that file contains `"enabled": true`
-- log `.claude/brewtools.log` contains a line matching `think-short`
+- log `.claude/logs/brewtools.log` contains a line matching `think-short`
 - stdout JSON does not indicate an error
 
 ## Assert

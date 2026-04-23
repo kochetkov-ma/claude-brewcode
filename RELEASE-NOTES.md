@@ -2,6 +2,19 @@
 
 ---
 
+## v3.7.8 (2026-04-23)
+
+> Docs: plugin hooks internals — no user-facing skill/agent doc changes.
+
+### All plugins
+#### Changed
+- **Unified logging directory:** all plugin hook logs now land in `.claude/logs/{plugin}.log` (brewcode, brewdoc, brewtools, brewui). Previously brewtools/brewui wrote `.claude/brewtools.log` / `.claude/brewui.log` in the `.claude/` root; brewcode wrote `.claude/tasks/logs/brewcode.log`; brewdoc had no file logging. Single gitignored directory for all four.
+- **Shared log-level config:** single source of truth is `.claude/tasks/cfg/brewcode.config.json` -> `logging.level` (already used by brewcode). brewdoc/brewtools/brewui now read the same file. Override via env `BREWCODE_LOG_LEVEL`. Precedence: env > config > `info`. Levels: `error|warn|info|debug|trace`.
+- **brewdoc:** gained file logging (was stderr-only) and stderr format aligned with other plugins (no leading level tag).
+- **teardown.sh:** removes `.claude/logs/` (new unified dir) on brewcode teardown.
+
+---
+
 ## v3.7.7 (2026-04-22)
 
 > Docs: [brewtools:think-short](https://doc-claude.brewcode.app/brewtools/skills/think-short/) | [brewtools:agent-toggle](https://doc-claude.brewcode.app/brewtools/skills/agent-toggle/) | [brewtools:skill-toggle](https://doc-claude.brewcode.app/brewtools/skills/skill-toggle/) | [brewui:glm-design-to-code](https://doc-claude.brewcode.app/brewui/skills/glm-design-to-code/) | [brewui:image-gen](https://doc-claude.brewcode.app/brewui/skills/image-gen/) | [brewtools:text-optimizer](https://doc-claude.brewcode.app/brewtools/agents/text-optimizer/) | [brewui:glm-zai-specialist](https://doc-claude.brewcode.app/brewui/agents/glm-zai-specialist/) | [brewcode:hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [brewcode:skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [brewcode:agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [brewcode:tester](https://doc-claude.brewcode.app/brewcode/agents/tester/) | [brewcode:developer](https://doc-claude.brewcode.app/brewcode/agents/developer/)

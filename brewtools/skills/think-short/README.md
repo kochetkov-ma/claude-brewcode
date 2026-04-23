@@ -47,7 +47,7 @@ State schema: `{"version":1, "enabled":false, "profile":"medium", "blacklist":["
 
 ## Logs
 
-File: `.claude/brewtools.log`
+File: `.claude/logs/brewtools.log`
 Prefix: `think-short:`
 
 Every NL resolution and scope selection is logged at INFO level.

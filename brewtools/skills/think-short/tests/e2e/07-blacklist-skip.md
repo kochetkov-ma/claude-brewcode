@@ -11,7 +11,7 @@ user prompt: `Use the Task tool with subagent_type=architect to briefly describe
 
 ## Then
 - exit 0
-- log `.claude/brewtools.log` contains `SKIP (agent in blacklist)` with `architect` in the surrounding context
+- log `.claude/logs/brewtools.log` contains `SKIP (agent in blacklist)` with `architect` in the surrounding context
 - log does NOT contain `injecting profile-lite` for the architect call
 
 ## Assert

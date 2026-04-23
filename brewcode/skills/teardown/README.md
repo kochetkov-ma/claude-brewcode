@@ -29,7 +29,7 @@ You will be prompted to confirm before anything is deleted.
 |---------|-----------|
 | `.claude/tasks/templates/` -- setup templates | `.claude/tasks/*_task/` -- all task directories |
 | `.claude/tasks/cfg/` -- config files (brewcode.config.json, etc.) | `.claude/tasks/*_task/KNOWLEDGE.jsonl` -- knowledge files |
-| `.claude/tasks/logs/` -- session logs | `.claude/tasks/*_task/artifacts/` -- task artifacts and FINAL.md |
+| `.claude/logs/` -- session logs | `.claude/tasks/*_task/artifacts/` -- task artifacts and FINAL.md |
 | `.claude/tasks/sessions/` -- session metadata | `.claude/rules/` -- user rules |
 | `.claude/plans/` -- plan files | |
 | `.grepai/` -- semantic search index | |

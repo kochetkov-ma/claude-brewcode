@@ -575,16 +575,20 @@ export function isCoordinator(agentType) {
 // ============================================================================
 
 const LOG_LEVELS = { error: 0, warn: 1, info: 2, debug: 3, trace: 4 };
-const LOG_FILE = '.claude/tasks/logs/brewcode.log';
+const LOG_FILE = '.claude/logs/brewcode.log';
 
 /**
  * Get configured log level
+ * Priority: BREWCODE_LOG_LEVEL env > brewcode.config.json logging.level > 'info'
  * @param {string} cwd - Current working directory
  * @returns {string} Log level (error|warn|info|debug|trace)
  */
 export function getLogLevel(cwd) {
+  const env = (process.env.BREWCODE_LOG_LEVEL || '').toLowerCase();
+  if (env in LOG_LEVELS) return env;
   const config = loadConfig(cwd);
-  return config.logging?.level || 'info';
+  const lvl = config.logging?.level;
+  return (lvl && lvl in LOG_LEVELS) ? lvl : 'info';
 }
 
 /**

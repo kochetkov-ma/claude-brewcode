@@ -75,7 +75,7 @@ Each hook:
 1. Reads JSON from stdin (via `readStdin()`)
 2. Gets fields: `session_id`, `cwd`, `source` (SessionStart), `tool_input` (PreToolUse/PostToolUse)
 3. Outputs JSON to stdout (via `output()`)
-4. Writes logs to stderr (visible in terminal) and to file `.claude/tasks/logs/brewcode.log`
+4. Writes logs to stderr (visible in terminal) and to file `.claude/logs/brewcode.log`
 
 ### Configuration File
 
@@ -128,7 +128,7 @@ No matcher -- triggers on every SessionStart.
 | `.claude/TASK.md` | read | Get active task (via `getActiveTaskPath`) |
 | `~/.claude/plans/*.md` | read (stat) | Find fresh plan |
 | `.claude/plans/LATEST.md` | write (symlink) | Symlink to fresh plan |
-| `.claude/tasks/logs/brewcode.log` | append | Log file |
+| `.claude/logs/brewcode.log` | append | Log file |
 
 ### Console (stderr)
 
@@ -228,7 +228,7 @@ Watch logs are written to `.grepai/logs/`.
 | `.grepai/watch.pid` | read | PID file for watch process |
 | `.grepai/mcp-serve.pid` | read | PID file for mcp-serve process |
 | `.grepai/logs/` | mkdir + write | Log directory for watch process |
-| `.claude/tasks/logs/brewcode.log` | append | Log file |
+| `.claude/logs/brewcode.log` | append | Log file |
 
 ### Console (stderr)
 
@@ -353,7 +353,7 @@ grepai: USE grepai_search... <-- grepai (if present)
 | `{task_dir}/KNOWLEDGE.jsonl` | read | Read knowledge entries |
 | `{task_dir}/PLAN.md` | read | Extract constraints by tags |
 | `.claude/tasks/cfg/brewcode.config.json` | read | Configuration (maxTokens, system agents) |
-| `.claude/tasks/logs/brewcode.log` | append | Log file |
+| `.claude/logs/brewcode.log` | append | Log file |
 
 ### Console (stderr)
 
@@ -423,7 +423,7 @@ Matcher: `Glob|Grep` -- triggers on Glob or Grep calls.
 | `.grepai/` | exists | Check configuration |
 | `.grepai/index.gob` | exists | Check index presence |
 | `.grepai/.reminder-ts` | read (stat) + write | Throttle: max 1 reminder per 60 seconds |
-| `.claude/tasks/logs/brewcode.log` | append | Log file |
+| `.claude/logs/brewcode.log` | append | Log file |
 
 ### Console (stderr)
 
@@ -517,7 +517,7 @@ AGENT_NAME FAILED -> 1. Retry once with same agent 2. If retry fails: TaskUpdate
 | `.claude/TASK.md` | read | Get active task |
 | `{task_dir}/.lock` | read + write | Read lock, bind session_id |
 | `.claude/tasks/cfg/brewcode.config.json` | read | System agents list |
-| `.claude/tasks/logs/brewcode.log` | append | Log file |
+| `.claude/logs/brewcode.log` | append | Log file |
 
 ### Console (stderr)
 
@@ -634,7 +634,7 @@ No matcher -- triggers on every PreCompact.
 | `.claude/tasks/cfg/brewcode.config.json` | read | Configuration (maxEntries, maxTokens) |
 | `$CLAUDE_PLUGIN_DATA/modes.json` | read + write | Update state (3-scope: session > project > global) |
 | `.claude/tasks/cfg/brewcode.state.json` | read | Legacy fallback (flat `mode` field) |
-| `.claude/tasks/logs/brewcode.log` | append | Log file |
+| `.claude/logs/brewcode.log` | append | Log file |
 
 ### Console (stderr)
 
@@ -738,7 +738,7 @@ Task finished. Consider: /brewcode:rules {knowledgePath}
 | `{task_dir}/.lock` | read + delete | Check lock, delete on completion |
 | `{task_dir}/PLAN.md` | read | Parse task status |
 | `{task_dir}/KNOWLEDGE.jsonl` | exists | Check presence for rules reminder |
-| `.claude/tasks/logs/brewcode.log` | append | Log file |
+| `.claude/logs/brewcode.log` | append | Log file |
 
 ### Console (stderr)
 

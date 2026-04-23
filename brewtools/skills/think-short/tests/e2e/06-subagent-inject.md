@@ -11,7 +11,7 @@ user prompt: `Use the Task tool with subagent_type=general-purpose to say the wo
 
 ## Then
 - exit 0
-- log `.claude/brewtools.log` contains `injecting profile-lite`
+- log `.claude/logs/brewtools.log` contains `injecting profile-lite`
 
 ## Assert
 ASSERT_EXIT_CODE: 0

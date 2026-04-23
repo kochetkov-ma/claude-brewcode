@@ -39,8 +39,8 @@ remove_item ".claude/tasks/templates" "dir"
 # Config directory (includes brewcode.config.json)
 remove_item ".claude/tasks/cfg" "dir"
 
-# Logs directory
-remove_item ".claude/tasks/logs" "dir"
+# Logs directory (unified across all brewcode plugins)
+remove_item ".claude/logs" "dir"
 
 # Plans directory
 remove_item ".claude/plans" "dir"

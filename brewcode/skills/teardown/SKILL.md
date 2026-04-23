@@ -55,7 +55,7 @@ Task directories (`.claude/tasks/*_task/`) and user rules (`.claude/rules/`) are
 Removed:
   ✅ .claude/tasks/templates/
   ✅ .claude/tasks/cfg/
-  ✅ .claude/tasks/logs/
+  ✅ .claude/logs/
   ✅ .claude/plans/
   ✅ .grepai/
   ✅ .claude/skills/brewcode-review/

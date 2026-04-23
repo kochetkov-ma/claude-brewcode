@@ -11,7 +11,7 @@ user prompt: `say hi`
 
 ## Then
 - exit 0
-- log `.claude/brewtools.log` does NOT lack debug detail for the think-short session inject path
+- log `.claude/logs/brewtools.log` does NOT lack debug detail for the think-short session inject path
   (When CLAUDE_DEBUG=1, session-start.mjs logs `think-short: profile preview =` line)
 - stdout does not contain error
 
