@@ -2,6 +2,16 @@
 
 ---
 
+## v3.7.11 (2026-04-24)
+
+> Docs: [brewtools:provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/)
+
+### brewtools
+#### Changed
+- **provider-switch docs:** added [SWE-bench Verified leaderboard](https://www.swebench.com/) link in the top "NEW DeepSeek" callout (with current top-3 scores) and in the DeepSeek card. Lets readers cross-check model rankings against the canonical source before switching providers.
+
+---
+
 ## v3.7.10 (2026-04-24)
 
 > Docs: [brewtools:provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/)

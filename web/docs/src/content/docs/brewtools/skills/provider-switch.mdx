@@ -8,7 +8,9 @@ import { Card, CardGrid, Callout, Steps, Badge, Spoiler, UpdateNotice } from '..
 # provider-switch — switch LLM provider
 
 <Callout type="tip">
-**NEW — DeepSeek V4 (April 24, 2026)** — added as priority default. `deepseek-v4-pro` (1.6T MoE, 1M context, thinking modes), top open-source on SWE-bench, verified prompt caching (90% discount, automatic). Alias `claudedeepseek`. No compat flags required.
+**NEW — DeepSeek V4 (April 24, 2026)** — added as priority default. `deepseek-v4-pro` (1.6T MoE, 1M context, thinking modes), [top open-source on SWE-bench](https://www.swebench.com/), verified prompt caching (90% discount, automatic). Alias `claudedeepseek`. No compat flags required.
+
+Model rankings: [SWE-bench Verified leaderboard](https://www.swebench.com/) — Opus 4.7 (87.6%), GPT-5.3 Codex (85%), Gemini 3.1 Pro (80.6%), DeepSeek V4, GLM-5.1, Qwen, MiniMax. Cross-check before switching.
 </Callout>
 
 <Callout type="caution">
@@ -106,7 +108,7 @@ Each alias sets env vars and launches Claude Code automatically. To return to yo
 
 <CardGrid>
   <Card title="DeepSeek V4" icon="rocket" href="https://platform.deepseek.com">
-    <Badge variant="accent" text="Priority" /> <Badge variant="accent" text="Top open-source SWE-bench" /> <Badge variant="accent" text="Cache verified" /> **deepseek-v4-pro** — 1.6T MoE, 1M context, thinking modes. 90% cache discount, automatic. Alias `claudedeepseek`. No compat flags required.
+    <Badge variant="accent" text="Priority" /> <Badge variant="accent" text="Top open-source SWE-bench" /> <Badge variant="accent" text="Cache verified" /> **deepseek-v4-pro** — 1.6T MoE, 1M context, thinking modes. 90% cache discount, automatic. Alias `claudedeepseek`. No compat flags required. See [SWE-bench leaderboard](https://www.swebench.com/).
   </Card>
   <Card title="Z.ai / GLM" icon="star" href="https://z.ai/subscribe">
     <Badge variant="accent" text="Strong coding perf" /> <Badge variant="accent" text="Cache verified" /> **glm-5.1** — $1.40 / $4.40 per 1M tokens. 200K context. Backend auto-cache (native).
