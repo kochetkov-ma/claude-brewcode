@@ -7,6 +7,10 @@ import { Card, CardGrid, Callout, Steps, Badge, Spoiler, UpdateNotice } from '..
 
 # provider-switch — switch LLM provider
 
+<Callout type="tip">
+**NEW — DeepSeek V4 (April 24, 2026)** — added as priority default. `deepseek-v4-pro` (1.6T MoE, 1M context, thinking modes), top open-source on SWE-bench, verified prompt caching (90% discount, automatic). Alias `claudedeepseek`. No compat flags required.
+</Callout>
+
 <Callout type="caution">
 **Anthropic Max costs $100-200/month.** Hard rate limits still run out mid-workday. Thursday evening, Friday morning — locked out. Paid premium, zero output.
 </Callout>
@@ -102,16 +106,16 @@ Each alias sets env vars and launches Claude Code automatically. To return to yo
 
 <CardGrid>
   <Card title="DeepSeek V4" icon="rocket" href="https://platform.deepseek.com">
-    <Badge variant="accent" text="Priority" /> **deepseek-v4-pro** — 1.6T MoE, 1M context, thinking modes. Alias `claudedeepseek`. No compat flags required.
+    <Badge variant="accent" text="Priority" /> <Badge variant="accent" text="Top open-source SWE-bench" /> <Badge variant="accent" text="Cache verified" /> **deepseek-v4-pro** — 1.6T MoE, 1M context, thinking modes. 90% cache discount, automatic. Alias `claudedeepseek`. No compat flags required.
   </Card>
   <Card title="Z.ai / GLM" icon="star" href="https://z.ai/subscribe">
-    <Badge variant="accent" text="#1 SWE-bench" /> **glm-5.1** — $1.40 / $4.40 per 1M tokens. 200K context. Best coding performance per dollar.
+    <Badge variant="accent" text="Strong coding perf" /> <Badge variant="accent" text="Cache verified" /> **glm-5.1** — $1.40 / $4.40 per 1M tokens. 200K context. Backend auto-cache (native).
   </Card>
   <Card title="Qwen" icon="document" href="https://modelstudio.console.alibabacloud.com/ap-southeast-1?tab=dashboard#/api-key">
-    **qwen3.6-plus** — ~$0.50 / $2.00 per 1M tokens. 1M context window. Best for large codebases.
+    <Badge variant="accent" text="Cache verified" /> **qwen3.6-plus** — ~$0.50 / $2.00 per 1M tokens. 1M context. Implicit cache 20%, explicit 10% of standard (confirmed in billing).
   </Card>
   <Card title="MiniMax" icon="money" href="https://platform.minimax.io">
-    <Badge variant="accent" text="Prompt Cache" /> **minimax-m2.7** — $0.30 / $1.20 per 1M tokens. 200K context. Cheapest option with verified prompt caching.
+    <Badge variant="accent" text="Cache verified" /> **minimax-m2.7** — $0.30 / $1.20 per 1M tokens. 200K context. Cheapest option with documented cache pricing.
   </Card>
   <Card title="OpenRouter" icon="sync" href="https://openrouter.ai">
     200+ models. Route to GLM, Qwen, Gemini, Llama. One config, any provider. Custom model IDs validated via API.
@@ -161,11 +165,11 @@ Claude Code automatically sends `cache_control` markers to reduce input token co
 
 | Provider | Prompt Cache | Status | Details |
 |----------|:---:|---|---|
-| **DeepSeek V4** | Claimed | Unverified | Response surfaces `cache_creation_input_tokens` / `cache_read_input_tokens`. Cache pricing not documented publicly |
-| **MiniMax** | Yes | **Verified** | Fully documented — pricing, response fields, TTL. Recommended |
-| **Qwen** | Claimed | Unverified | Field accepted per compatibility matrix. No cache pricing or response fields documented |
-| **Z.ai / GLM** | Auto (backend) | Unverified | Native auto-cache may reduce costs on backend. Not visible to Claude Code |
-| **OpenRouter** | Model-dependent | — | Anthropic models: yes. Non-Anthropic (Qwen, GLM): no |
+| **DeepSeek V4** | Yes | **Verified** | Automatic on 1024+ token repeated prefixes. 90% discount ($0.03/M on Pro). No opt-in required |
+| **MiniMax** | Yes | **Verified** | Fully documented — pricing, response fields, TTL |
+| **Qwen** | Yes | **Verified** | Implicit cache 20%, explicit 10% of standard rate. Min 1024 tokens. Confirmed in Alibaba billing |
+| **Z.ai / GLM** | Yes | **Verified** | Backend auto-cache (native). Applied transparently at the provider side |
+| **OpenRouter** | Model-dependent | — | Anthropic models: yes. Non-Anthropic (Qwen, GLM): routed to provider cache |
 
 ### MiniMax cache pricing (minimax-m2.7)
 
@@ -183,10 +187,11 @@ A typical Claude Code request (~250K input tokens) with 90% cache hit rate:
 
 | Provider | Cost per request | Without cache |
 |----------|--:|--:|
-| **MiniMax** (cached) | **~$0.02** | $0.08 |
-| **Anthropic Opus 4.6** (cached) | ~$0.24 | $1.25 |
-| **Qwen** (no confirmed cache) | $0.10-0.13 | $0.10-0.13 |
-| **Z.ai** (no visible cache) | $0.35 | $0.35 |
+| **DeepSeek V4 Pro** (cached) | **~$0.01** | $0.44 |
+| **MiniMax** (cached) | ~$0.02 | $0.08 |
+| **Qwen** (cached, explicit 10%) | ~$0.02 | $0.13 |
+| **Anthropic Opus 4.7** (cached) | ~$0.24 | $1.25 |
+| **Z.ai / GLM** (backend cache) | ~$0.35 | $0.35 |
 
 </Spoiler>
 

@@ -2,6 +2,18 @@
 
 ---
 
+## v3.7.10 (2026-04-24)
+
+> Docs: [brewtools:provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/)
+
+### brewtools
+#### Changed
+- **provider-switch docs:** top "NEW — DeepSeek V4" callout announcing the April 24 priority addition. Highlights 1.6T MoE, 1M context, thinking modes, verified 90% cache discount, no compat flags.
+- **provider-switch docs:** SWE-bench badges realigned with actual April 2026 leaderboards. GLM "#1 SWE-bench" -> "Strong coding perf" (Opus 4.7 leads at 87.6%). DeepSeek V4 tagged "Top open-source SWE-bench".
+- **provider-switch docs:** all four alt providers now marked "Cache verified". DeepSeek V4 — automatic 90% discount, DeepSeek API docs. Qwen — implicit 20% / explicit 10% per Alibaba billing. GLM — native backend auto-cache. MiniMax — documented pricing/TTL. Cost-per-request table updated with DeepSeek cached row.
+
+---
+
 ## v3.7.9 (2026-04-24)
 
 > Docs: [brewtools:provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/)
