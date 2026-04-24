@@ -1,6 +1,6 @@
 ---
 name: brewtools:provider-switch
-description: "Configure Claude Code alternative API providers — Z.ai/GLM, Qwen, MiniMax, OpenRouter. Creates shell aliases, manages API tokens, checks status. Triggers: 'provider', 'switch provider', 'alternative api', 'configure provider', 'claudeglm', 'claudeqwen', 'openrouter setup'."
+description: "Configure Claude Code alternative API providers — DeepSeek (priority), Z.ai/GLM, Qwen, MiniMax, OpenRouter. Creates shell aliases, manages API tokens, checks status. Triggers: 'provider', 'switch provider', 'alternative api', 'configure provider', 'claudedeepseek', 'claudeglm', 'claudeqwen', 'openrouter setup', 'deepseek'."
 argument-hint: "[status|setup|verify|model-check|help|<provider-name>] — no args = interactive status check"
 allowed-tools: Read, Write, Edit, Bash, AskUserQuestion, Glob, Grep
 model: opus
@@ -9,7 +9,9 @@ user-invocable: true
 
 # Provider Switch
 
-> **Configure and switch between Claude Code alternative API providers** — Z.ai/GLM, Qwen/DashScope, MiniMax, OpenRouter. Creates isolated shell aliases in ~/.zshrc.
+> **Configure and switch between Claude Code alternative API providers** — DeepSeek (priority), Z.ai/GLM, Qwen/DashScope, MiniMax, OpenRouter. Creates isolated shell aliases in ~/.zshrc.
+>
+> **DeepSeek V4 is the priority default** (strongest Chinese open model, 1M context, Anthropic-compatible endpoint). Recommend it first in setup.
 
 <instructions>
 
@@ -57,6 +59,7 @@ Alternative providers (Z.ai, MiniMax) implement Anthropic-compatible APIs but ha
 
 | Provider | Required Flags | Why |
 |----------|---------------|-----|
+| DeepSeek | None required | DeepSeek silently ignores beta/version headers; native Anthropic endpoint |
 | Z.ai (GLM) | `CLAUDE_ENABLE_BYTE_WATCHDOG=0` + `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` | Z.ai rejects beta headers with error 1210; SSE format triggers byte watchdog |
 | MiniMax | `CLAUDE_ENABLE_BYTE_WATCHDOG=0` + `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` | Same issues as Z.ai |
 | Qwen/DashScope | `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` | Beta headers may be rejected; SSE works fine |
@@ -90,6 +93,7 @@ MODE: [detected mode]
 | status, check | status |
 | setup, configure | setup |
 | help, how | help |
+| deepseek, ds, dpsk | provider-deepseek |
 | glm, zai, z.ai | provider-glm |
 | qwen, dashscope | provider-qwen |
 | minimax, mini | provider-minimax |
@@ -125,13 +129,14 @@ Render status table to user:
 
 | Provider | Alias | API Key | Model | Status |
 |----------|-------|---------|-------|--------|
+| DeepSeek (priority) | claudedeepseek | DEEPSEEK_API_KEY | deepseek-v4-pro | ... |
 | Z.ai / GLM | claudeglm | ZAI_API_KEY | glm-5.1 | ... |
 | Qwen | claudeqwen | DASHSCOPE_API_KEY | qwen3.6-plus[1m] | ... |
 | MiniMax | claudeminimax | MINIMAX_API_KEY | minimax-m2.7 | ... |
 | OpenRouter | claudeor | OPENROUTER_API_KEY | (user-selected) | ... |
 
 ## How to Use
-Run `claudeglm` — sets env vars and launches Claude in one command.
+Run `claudedeepseek` — sets env vars and launches Claude in one command (recommended default).
 To return to Anthropic subscription: open a new terminal and run `claude`.
 ```
 
@@ -153,6 +158,7 @@ Use AskUserQuestion:
 
 Question: "Which providers do you want to configure?"
 Options:
+- "DeepSeek V4 (deepseek-v4-pro, 1M context, priority - Recommended)"
 - "Z.ai / GLM (glm-5.1, free models available)"
 - "Qwen / DashScope (qwen3.6-plus, 1M context)"
 - "MiniMax (minimax-m2.7, cheapest)"
@@ -170,6 +176,7 @@ For each selected provider, execute this sequence:
 ### Step 1: Load Reference
 
 Read the provider reference file using Read tool:
+- DeepSeek: `references/deepseek.md`
 - Z.ai/GLM: `references/zai-glm.md`
 - Qwen: `references/qwen-dashscope.md`
 - MiniMax: `references/minimax.md`
@@ -205,7 +212,7 @@ Then write:
 bash "${CLAUDE_SKILL_DIR}/scripts/write-alias.sh" set-key "KEY_VAR_NAME" "KEY_VALUE" && echo "OK set-key" || echo "FAILED set-key"
 ```
 
-Replace KEY_VAR_NAME with: `ZAI_API_KEY`, `DASHSCOPE_API_KEY`, `MINIMAX_API_KEY`, or `OPENROUTER_API_KEY`.
+Replace KEY_VAR_NAME with: `DEEPSEEK_API_KEY`, `ZAI_API_KEY`, `DASHSCOPE_API_KEY`, `MINIMAX_API_KEY`, or `OPENROUTER_API_KEY`.
 
 > **STOP if FAILED** — report error.
 
@@ -232,6 +239,7 @@ Suggest a default alias name and let user customize via AskUserQuestion:
 
 | Provider | Default name |
 |----------|-------------|
+| DeepSeek | `claudedeepseek` |
 | Z.ai/GLM | `claudeglm` |
 | Qwen | `claudeqwen` |
 | MiniMax | `claudeminimax` |
@@ -324,7 +332,7 @@ Read `references/common.md` for help content and explain:
 | Context [1m] hack | `[1m]` suffix in model name forces Claude Code to use 1M context window |
 | Auth (all providers) | ALL providers use ANTHROPIC_AUTH_TOKEN (Bearer). ANTHROPIC_API_KEY="" blocks OAuth fallback |
 | OpenRouter note | Must set ANTHROPIC_API_KEY="" (empty, not unset) to prevent OAuth fallback |
-| Provider dashboards | Z.ai: z.ai/subscribe, Qwen: bailian.console.alibabacloud.com, MiniMax: platform.minimax.io, OpenRouter: openrouter.ai |
+| Provider dashboards | DeepSeek: platform.deepseek.com, Z.ai: z.ai/subscribe, Qwen: bailian.console.alibabacloud.com, MiniMax: platform.minimax.io, OpenRouter: openrouter.ai |
 
 ---
 
@@ -386,6 +394,7 @@ echo "BASE_URL=${ANTHROPIC_BASE_URL:-not_set}" && echo "OPUS_MODEL=${ANTHROPIC_D
 ```
 
 Map BASE_URL to provider name:
+- `api.deepseek.com` → DeepSeek
 - `api.z.ai` → Z.ai / GLM
 - `dashscope` → Qwen / DashScope
 - `minimax` → MiniMax
@@ -442,6 +451,7 @@ Show ONLY the table + verdict to the user. Do NOT show the questions separately 
 
 | Provider | Expected org | Expected model family |
 |----------|-------------|----------------------|
+| DeepSeek | DeepSeek / 深度求索 | DeepSeek-V3 / DeepSeek-V4 / DeepSeek-R1 |
 | Z.ai / GLM | Zhipu AI / ZhipuAI / 智谱 | GLM-4 / GLM-5 / ChatGLM |
 | Qwen | Alibaba / Alibaba Cloud / 阿里 / Tongyi | Qwen / Qwen2 / Qwen3 / 通义千问 |
 | MiniMax | MiniMax / 稀宇科技 | MiniMax / abab / M2 |
@@ -463,14 +473,15 @@ Read `references/update-protocol.md` for per-provider sources and update flow.
 
 ### Step 2: Spawn Provider Research Agents
 
-Spawn 4 Explore agents **in ONE message** via Task:
+Spawn 5 Explore agents **in ONE message** via Task:
 
 | Agent | Provider | Sources |
 |-------|----------|---------|
-| 1 | Z.ai/GLM | docs.z.ai, open.bigmodel.cn/en — models, pricing |
-| 2 | Qwen/DashScope | alibabacloud.com/help, qwenlm.github.io — models, pricing |
-| 3 | MiniMax | platform.minimax.io — models, pricing |
-| 4 | OpenRouter | openrouter.ai/api/v1/models — top coding/free models |
+| 1 | DeepSeek | api-docs.deepseek.com — models, pricing, endpoint |
+| 2 | Z.ai/GLM | docs.z.ai, open.bigmodel.cn/en — models, pricing |
+| 3 | Qwen/DashScope | alibabacloud.com/help, qwenlm.github.io — models, pricing |
+| 4 | MiniMax | platform.minimax.io — models, pricing |
+| 5 | OpenRouter | openrouter.ai/api/v1/models — top coding/free models |
 
 Each agent: WebFetch/WebSearch sources from protocol, extract current model list + pricing + any endpoint changes.
 
@@ -543,13 +554,14 @@ Final output after every mode:
 
 | Provider | Alias | API Key | Model | Status |
 |----------|-------|---------|-------|--------|
+| DeepSeek (priority) | claudedeepseek | DEEPSEEK_API_KEY | deepseek-v4-pro | configured |
 | Z.ai / GLM | claudeglm | ZAI_API_KEY | glm-5.1 | configured |
 | Qwen | claudeqwen | DASHSCOPE_API_KEY | — | not configured |
 | MiniMax | claudeminimax | MINIMAX_API_KEY | — | not configured |
 | OpenRouter | claudeor | OPENROUTER_API_KEY | — | not configured |
 
 ## How to Use
-Run `claudeglm` — sets env vars and launches Claude in one command.
+Run `claudedeepseek` — sets env vars and launches Claude in one command (recommended default).
 To return to Anthropic: open a new terminal, run `claude`.
 ```
 

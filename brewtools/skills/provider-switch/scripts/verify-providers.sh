@@ -1,9 +1,15 @@
 #!/bin/bash
-set -euo pipefail
-# Usage: verify-providers.sh [glm|qwen|minimax|openrouter|all]
+set -uo pipefail
+# Usage: verify-providers.sh [deepseek|glm|qwen|minimax|openrouter|all]
 # Tests provider tokens by sending a minimal Anthropic API request.
 
-source ~/.zshrc 2>/dev/null || true
+# Load API keys from ~/.zshrc without executing zsh-only syntax: grep exports
+if [[ -f "$HOME/.zshrc" ]]; then
+  while IFS= read -r line; do
+    # Strip "export " prefix and eval to set variable in this shell
+    eval "$line" 2>/dev/null || true
+  done < <(grep -E '^export (DEEPSEEK_API_KEY|ZAI_API_KEY|DASHSCOPE_API_KEY|MINIMAX_API_KEY|OPENROUTER_API_KEY)=' "$HOME/.zshrc" 2>/dev/null || true)
+fi
 
 TARGET="${1:-all}"
 TARGET_LOWER="$(echo "$TARGET" | tr '[:upper:]' '[:lower:]')"
@@ -65,6 +71,13 @@ verify_provider() {
   echo ""
 }
 
+run_deepseek() {
+  verify_provider "deepseek" \
+    "https://api.deepseek.com/anthropic/v1/messages" \
+    "DEEPSEEK_API_KEY" \
+    "deepseek-v4-pro"
+}
+
 run_glm() {
   verify_provider "glm" \
     "https://api.z.ai/api/anthropic/v1/messages" \
@@ -101,18 +114,20 @@ run_openrouter() {
 }
 
 case "$TARGET_LOWER" in
+  deepseek|ds) run_deepseek ;;
   glm)        run_glm ;;
   qwen)       run_qwen ;;
   minimax)    run_minimax ;;
   openrouter) run_openrouter ;;
   all)
+    run_deepseek
     run_glm
     run_qwen
     run_minimax
     run_openrouter
     ;;
   *)
-    echo "Usage: verify-providers.sh [glm|qwen|minimax|openrouter|all]"
+    echo "Usage: verify-providers.sh [deepseek|glm|qwen|minimax|openrouter|all]"
     exit 1
     ;;
 esac

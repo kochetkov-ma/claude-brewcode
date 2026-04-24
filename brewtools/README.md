@@ -83,7 +83,7 @@ claude --plugin-dir ./brewtools
 | [`/brewtools:deploy`](skills/deploy/SKILL.md) | GitHub Actions deployment with safety gates | opus | `[release\|workflow\|...]` |
 | [`/brewtools:debate`](skills/debate/README.md) | Evidence-based multi-agent debate | sonnet | `[challenge\|strategy\|critic]` |
 | [`/brewtools:plugin-update`](skills/plugin-update/README.md) | Check/install/update brewcode plugins | sonnet | `[check\|update\|all]` |
-| [`/brewtools:provider-switch`](skills/provider-switch/README.md) | Configure alternative API providers (Z.ai/GLM, Qwen, MiniMax, OpenRouter) | opus | `[status\|setup\|help\|<provider>]` |
+| [`/brewtools:provider-switch`](skills/provider-switch/README.md) | Configure alternative API providers (DeepSeek V4 [priority], Z.ai/GLM, Qwen, MiniMax, OpenRouter) | opus | `[status\|setup\|help\|<provider>]` |
 | [`/brewtools:skill-toggle`](skills/skill-toggle/README.md) | Disable/enable individual plugin skills (survives plugin updates) | sonnet | `<op> [plugin:name] [--scope=global\|project]` |
 | [`/brewtools:agent-toggle`](skills/agent-toggle/README.md) | Disable/enable individual plugin agents (survives plugin updates) | sonnet | `<op> [plugin:name] [--scope=global\|project]` |
 | [`/brewtools:think-short`](skills/think-short/README.md) | Toggle terse-output mode — cut preamble/filler via SessionStart + PreToolUse:Task injection | sonnet | `[on\|off\|profile <light\|medium\|aggressive>\|status\|blacklist add\|remove <agent>]` |

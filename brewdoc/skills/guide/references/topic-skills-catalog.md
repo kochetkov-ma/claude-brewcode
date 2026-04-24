@@ -52,7 +52,7 @@ Universal utilities. Work in any project, no setup needed.
 | `/brewtools:deploy` | GitHub Actions deployment — workflows, releases, GHCR, CI/CD with safety gates |
 | `/brewtools:debate` | Evidence-based multi-agent debate with Discovery phase and 3 modes |
 | `/brewtools:plugin-update` | Check, install, or update brewcode suite plugins from the marketplace |
-| `/brewtools:provider-switch` | Configure alternative API providers — Z.ai/GLM, Qwen, MiniMax, OpenRouter |
+| `/brewtools:provider-switch` | Configure alternative API providers — DeepSeek V4 (priority), Z.ai/GLM, Qwen, MiniMax, OpenRouter |
 | `/brewtools:skill-toggle` | Disable/enable individual plugin skills, survives plugin updates |
 | `/brewtools:agent-toggle` | Disable/enable individual plugin agents, survives plugin updates |
 | `/brewtools:think-short` | Toggle terse-output mode (light/medium/aggressive) to cut token bloat |

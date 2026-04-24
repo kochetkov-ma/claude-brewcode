@@ -12,7 +12,7 @@ import { Card, CardGrid, Callout, Steps, Badge, Spoiler, UpdateNotice } from '..
 </Callout>
 
 <Callout type="tip">
-**One command fixes it.** Run `claudeglm` — Claude Code switches to GLM-5.1, the #1 model on SWE-bench Pro. Cost: ~$10/month backup budget. New terminal = back on Anthropic.
+**One command fixes it.** Run `claudedeepseek` or `claudeglm` — Claude Code switches to DeepSeek V4, GLM-5.1, or another backup. Cost: ~$10/month backup budget. New terminal = back on Anthropic.
 </Callout>
 
 ## Your week on Anthropic Max
@@ -45,7 +45,7 @@ import { Card, CardGrid, Callout, Steps, Badge, Spoiler, UpdateNotice } from '..
   <li>
     <div>
       <strong>Friday with provider-switch</strong>
-      <p><code>claudeglm</code> — back to coding in 3 seconds. Same quality. $0.04 per session.</p>
+      <p><code>claudedeepseek</code> — back to coding in 3 seconds. Same quality. $0.04 per session.</p>
     </div>
   </li>
 </Steps>
@@ -64,6 +64,7 @@ import { Card, CardGrid, Callout, Steps, Badge, Spoiler, UpdateNotice } from '..
 ## One command. That's it.
 
 ```bash
+claudedeepseek  # DeepSeek V4 Pro (PRIORITY) — 1.6T MoE, 1M ctx
 claudeglm       # GLM-5.1 — #1 SWE-bench Pro, 200K ctx
 claudeqwen      # Qwen 3.6 Plus — 1M context window
 claudeminimax    # MiniMax M2.7 — cheapest per token
@@ -92,7 +93,7 @@ Each alias sets env vars and launches Claude Code automatically. To return to yo
   <li>
     <div>
       <strong>Done</strong>
-      <p>Next time limits hit: type <code>claudeglm</code>. Back to coding.</p>
+      <p>Next time limits hit: type <code>claudedeepseek</code>. Back to coding.</p>
     </div>
   </li>
 </Steps>
@@ -100,6 +101,9 @@ Each alias sets env vars and launches Claude Code automatically. To return to yo
 ## Providers
 
 <CardGrid>
+  <Card title="DeepSeek V4" icon="rocket" href="https://platform.deepseek.com">
+    <Badge variant="accent" text="Priority" /> **deepseek-v4-pro** — 1.6T MoE, 1M context, thinking modes. Alias `claudedeepseek`. No compat flags required.
+  </Card>
   <Card title="Z.ai / GLM" icon="star" href="https://z.ai/subscribe">
     <Badge variant="accent" text="#1 SWE-bench" /> **glm-5.1** — $1.40 / $4.40 per 1M tokens. 200K context. Best coding performance per dollar.
   </Card>
@@ -142,7 +146,7 @@ Claude Code defaults to 200K for non-Anthropic providers. The `[1m]` suffix on m
 |----------|-------------|
 | _(none)_ | Show status table |
 | `setup` | Interactive setup |
-| `glm` / `qwen` / `minimax` / `openrouter` | Single-provider setup |
+| `deepseek` / `ds` / `glm` / `qwen` / `minimax` / `openrouter` | Single-provider setup |
 | `verify` | Test all configured tokens against endpoints |
 | `model-check` | Identify which model is actually responding (run inside provider session) |
 | `help` | Switching cheat sheet |
@@ -157,6 +161,7 @@ Claude Code automatically sends `cache_control` markers to reduce input token co
 
 | Provider | Prompt Cache | Status | Details |
 |----------|:---:|---|---|
+| **DeepSeek V4** | Claimed | Unverified | Response surfaces `cache_creation_input_tokens` / `cache_read_input_tokens`. Cache pricing not documented publicly |
 | **MiniMax** | Yes | **Verified** | Fully documented — pricing, response fields, TTL. Recommended |
 | **Qwen** | Claimed | Unverified | Field accepted per compatibility matrix. No cache pricing or response fields documented |
 | **Z.ai / GLM** | Auto (backend) | Unverified | Native auto-cache may reduce costs on backend. Not visible to Claude Code |

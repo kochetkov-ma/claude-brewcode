@@ -2,6 +2,20 @@
 
 ---
 
+## v3.7.9 (2026-04-24)
+
+> Docs: [brewtools:provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/)
+
+### brewtools
+#### Added
+- **provider-switch:** DeepSeek V4 as priority default provider. New reference `references/deepseek.md`. Endpoint `https://api.deepseek.com/anthropic`, model `deepseek-v4-pro` (1.6T MoE, 1M context). Alias `claudedeepseek`, key var `DEEPSEEK_API_KEY`. No compatibility flags required (DeepSeek silently ignores `anthropic-beta`/`anthropic-version`). Verified via live API call (HTTP 200).
+- **provider-switch:** new mode keywords `deepseek|ds|dpsk|дипсик` -> `provider-deepseek`. Updated `detect-mode.sh`, `check-status.sh` (new `ALIAS_DEEPSEEK`/`KEY_DEEPSEEK` fields, `api.deepseek.com` -> provider=deepseek mapping), `verify-providers.sh` (new `run_deepseek`).
+
+#### Fixed
+- **provider-switch/verify-providers.sh:** replaced `source ~/.zshrc` (failed under bash with `set -euo pipefail` when zshrc contained zsh-only syntax) with `grep ^export` + `eval` for API-key vars only. Script no longer aborts before reaching curl.
+
+---
+
 ## v3.7.8 (2026-04-23)
 
 > Docs: plugin hooks internals — no user-facing skill/agent doc changes.

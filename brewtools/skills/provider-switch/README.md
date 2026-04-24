@@ -6,13 +6,18 @@ auto-sync-type: doc
 
 # Provider Switch
 
-Switch Claude Code from Anthropic Max to a pay-per-token API provider — Z.ai/GLM, Qwen/DashScope, MiniMax, or OpenRouter — without touching any config files manually. The skill creates isolated shell aliases in `~/.zshrc`, backs up existing content before any write, and guides key entry interactively.
+Switch Claude Code from Anthropic Max to a pay-per-token API provider — **DeepSeek V4 (priority)**, Z.ai/GLM, Qwen/DashScope, MiniMax, or OpenRouter — without touching any config files manually. The skill creates isolated shell aliases in `~/.zshrc`, backs up existing content before any write, and guides key entry interactively.
+
+> **DeepSeek V4 is the recommended default** — strongest Chinese open model (1.6T MoE, 1M context), native Anthropic endpoint, no compatibility flags required.
 
 ## Quick Start
 
 ```bash
 # Check which providers are configured
 /brewtools:provider-switch
+
+# Set up DeepSeek V4 interactively (priority default)
+/brewtools:provider-switch deepseek
 
 # Set up Z.ai/GLM interactively
 /brewtools:provider-switch glm
@@ -45,6 +50,7 @@ After setup, run `claudeglm` — it sets env vars and starts Claude in one comma
 
 | Provider | Alias | Model (all roles) | Auth pattern | Notes |
 |----------|-------|-------------------|-------------|-------|
+| **DeepSeek V4** (priority) | `claudedeepseek` | deepseek-v4-pro | `ANTHROPIC_AUTH_TOKEN` + `API_KEY=""` | 1.6T MoE, 1M context, thinking modes, released 2026-04-24 |
 | Z.ai / GLM | `claudeglm` | glm-5.1 | `ANTHROPIC_AUTH_TOKEN` + `API_KEY=""` | #1 SWE-bench Pro, $1.40/$4.40 per 1M |
 | Qwen / DashScope | `claudeqwen` | qwen3.6-plus[1m] | `ANTHROPIC_AUTH_TOKEN` + `API_KEY=""` | 1M context, ~$0.50/$2.00 per 1M. **Singapore region keys only** |
 | MiniMax | `claudeminimax` | minimax-m2.7 | `ANTHROPIC_AUTH_TOKEN` + `API_KEY=""` | Cheapest: $0.30/$1.20 per 1M |
@@ -56,6 +62,7 @@ After setup, run `claudeglm` — it sets env vars and starts Claude in one comma
 |----------|------|-------------|
 | (none) | status | Shows provider table; auto-starts setup if nothing is configured |
 | `setup` | setup | Interactive selection of one or more providers to configure |
+| `deepseek` / `ds` / `dpsk` | provider-deepseek | Configure DeepSeek V4 only (priority default) |
 | `glm` / `zai` / `z.ai` | provider-glm | Configure Z.ai/GLM only |
 | `qwen` / `dashscope` | provider-qwen | Configure Qwen/DashScope only |
 | `minimax` / `mini` | provider-minimax | Configure MiniMax only |
@@ -100,6 +107,7 @@ brewtools/skills/provider-switch/
 │   └── verify-providers.sh              # Tests provider tokens (curl health check)
 └── references/
     ├── common.md                    # Env var reference, ~/.zshrc structure
+    ├── deepseek.md                  # DeepSeek V4 alias body and dashboard URL (priority)
     ├── zai-glm.md                   # Z.ai alias body and dashboard URL
     ├── qwen-dashscope.md            # Qwen alias body and dashboard URL
     ├── minimax.md                   # MiniMax alias body and dashboard URL
@@ -111,6 +119,7 @@ brewtools/skills/provider-switch/
 
 | Provider | Dashboard |
 |----------|-----------|
+| **DeepSeek** (priority) | https://platform.deepseek.com |
 | Z.ai / GLM | https://z.ai/subscribe |
 | Qwen / DashScope | https://modelstudio.console.alibabacloud.com/ap-southeast-1?tab=dashboard#/api-key |
 | MiniMax | https://platform.minimax.io |

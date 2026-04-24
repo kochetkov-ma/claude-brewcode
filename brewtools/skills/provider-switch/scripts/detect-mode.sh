@@ -19,6 +19,8 @@ elif [[ "$ARGS_LOWER" =~ (setup|configure|настрой|добавь) ]]; then
   MODE="setup"
 elif [[ "$ARGS_LOWER" =~ (help|how|как|помощь) ]]; then
   MODE="help"
+elif [[ "$ARGS_LOWER" =~ (deepseek|deep-seek|dpsk|дипсик|(^| )ds( |$)) ]]; then
+  MODE="provider-deepseek"
 elif [[ "$ARGS_LOWER" =~ (glm|zai|z\.ai|zhipu) ]]; then
   MODE="provider-glm"
 elif [[ "$ARGS_LOWER" =~ (qwen|dashscope|alibaba) ]]; then
@@ -43,6 +45,8 @@ else
     MODE="setup"
   elif [[ "$ARGS_LOWER" =~ (help|hlpe|how|помощь|хелп) ]]; then
     MODE="help"
+  elif [[ "$ARGS_LOWER" =~ (deepseek|deep-seek|dpsk|дипсик|(^| )ds( |$)) ]]; then
+    MODE="provider-deepseek"
   elif [[ "$ARGS_LOWER" =~ (glm|zai|z\.ai|zhipu) ]]; then
     MODE="provider-glm"
   elif [[ "$ARGS_LOWER" =~ (qwen|dash|alibaba) ]]; then

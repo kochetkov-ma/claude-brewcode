@@ -13,10 +13,12 @@ if [[ -f "$ZSHRC" ]]; then
 else
   echo "ZSHRC_EXISTS=false"
   echo "SECTION_EXISTS=false"
+  echo "ALIAS_DEEPSEEK=false"
   echo "ALIAS_GLM=false"
   echo "ALIAS_QWEN=false"
   echo "ALIAS_MINIMAX=false"
   echo "ALIAS_OPENROUTER=false"
+  echo "KEY_DEEPSEEK=false"
   echo "KEY_ZAI=false"
   echo "KEY_DASHSCOPE=false"
   echo "KEY_MINIMAX=false"
@@ -47,12 +49,14 @@ check_alias() {
   fi
 }
 
+echo "ALIAS_DEEPSEEK=$(check_alias deepseek)"
 echo "ALIAS_GLM=$(check_alias glm)"
 echo "ALIAS_QWEN=$(check_alias qwen)"
 echo "ALIAS_MINIMAX=$(check_alias minimax)"
 echo "ALIAS_OPENROUTER=$(check_alias openrouter)"
 # Also detect custom alias names containing provider keyword
 echo "ALIAS_OR=$(check_alias or)"
+echo "ALIAS_DS=$(check_alias ds)"
 
 # Check API key exports (non-empty values)
 check_key() {
@@ -64,6 +68,7 @@ check_key() {
   fi
 }
 
+echo "KEY_DEEPSEEK=$(check_key DEEPSEEK_API_KEY)"
 echo "KEY_ZAI=$(check_key ZAI_API_KEY)"
 echo "KEY_DASHSCOPE=$(check_key DASHSCOPE_API_KEY)"
 echo "KEY_MINIMAX=$(check_key MINIMAX_API_KEY)"
@@ -74,7 +79,9 @@ BASE_URL="${ANTHROPIC_BASE_URL:-}"
 PROVIDER="anthropic"
 
 if [[ -n "$BASE_URL" ]]; then
-  if [[ "$BASE_URL" == *"z.ai"* ]]; then
+  if [[ "$BASE_URL" == *"deepseek.com"* ]]; then
+    PROVIDER="deepseek"
+  elif [[ "$BASE_URL" == *"z.ai"* ]]; then
     PROVIDER="glm"
   elif [[ "$BASE_URL" == *"dashscope"* ]]; then
     PROVIDER="qwen"
