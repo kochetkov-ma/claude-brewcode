@@ -2,6 +2,18 @@
 
 ---
 
+## v3.7.12 (2026-04-24)
+
+> Docs: [brewtools:provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/)
+
+### brewtools
+#### Changed
+- **provider-switch docs:** top callout now includes a full SWE-bench snapshot table (Verified + Pro columns) for April 2026. Reflects GPT-5.5 (released April 23) as the new #1 on Verified at 88.7%; Opus 4.7 still wins Pro at 64.3%.
+- **provider-switch docs:** DeepSeek V4 card — concrete scores added: Verified 80.6%, Pro 55.4%. "Top open-source SWE-bench" simplified to "Top open-source".
+- **provider-switch docs:** OpenRouter card — now explicitly mentions GPT-5.5, GPT-5.3 Codex, Gemini 3.1 Pro as routable via `claudeor`.
+
+---
+
 ## v3.7.11 (2026-04-24)
 
 > Docs: [brewtools:provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/)

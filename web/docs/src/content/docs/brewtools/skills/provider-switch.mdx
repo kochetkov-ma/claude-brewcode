@@ -10,7 +10,20 @@ import { Card, CardGrid, Callout, Steps, Badge, Spoiler, UpdateNotice } from '..
 <Callout type="tip">
 **NEW — DeepSeek V4 (April 24, 2026)** — added as priority default. `deepseek-v4-pro` (1.6T MoE, 1M context, thinking modes), [top open-source on SWE-bench](https://www.swebench.com/), verified prompt caching (90% discount, automatic). Alias `claudedeepseek`. No compat flags required.
 
-Model rankings: [SWE-bench Verified leaderboard](https://www.swebench.com/) — Opus 4.7 (87.6%), GPT-5.3 Codex (85%), Gemini 3.1 Pro (80.6%), DeepSeek V4, GLM-5.1, Qwen, MiniMax. Cross-check before switching.
+**GPT-5.5 released April 23, 2026** — new #1 on [SWE-bench Verified](https://www.swebench.com/) (88.7%), but Opus 4.7 still wins SWE-bench Pro (64.3% vs 58.6%). Accessible via `claudeor` (OpenRouter).
+
+### SWE-bench snapshot (April 2026)
+
+| # | Model | Verified | Pro | Notes |
+|---|-------|--:|--:|---|
+| 1 | GPT-5.5 | **88.7%** | 58.6% | OpenRouter only |
+| 2 | Claude Opus 4.7 | 87.6% | **64.3%** | Native Anthropic |
+| 3 | GPT-5.3 Codex | 85.0% | — | OpenRouter only |
+| 4 | Gemini 3.1 Pro | 80.6% | — | OpenRouter only |
+| 4 | DeepSeek V4 Pro | 80.6% | 55.4% | `claudedeepseek` — top open-source |
+| — | GLM-5.1 | ~47% | — | `claudeglm` — strong per dollar |
+
+Sources: [SWE-bench](https://www.swebench.com/) · [SWE-bench Pro (Scale)](https://labs.scale.com/leaderboard/swe_bench_pro_public)
 </Callout>
 
 <Callout type="caution">
@@ -108,7 +121,7 @@ Each alias sets env vars and launches Claude Code automatically. To return to yo
 
 <CardGrid>
   <Card title="DeepSeek V4" icon="rocket" href="https://platform.deepseek.com">
-    <Badge variant="accent" text="Priority" /> <Badge variant="accent" text="Top open-source SWE-bench" /> <Badge variant="accent" text="Cache verified" /> **deepseek-v4-pro** — 1.6T MoE, 1M context, thinking modes. 90% cache discount, automatic. Alias `claudedeepseek`. No compat flags required. See [SWE-bench leaderboard](https://www.swebench.com/).
+    <Badge variant="accent" text="Priority" /> <Badge variant="accent" text="Top open-source" /> <Badge variant="accent" text="Cache verified" /> **deepseek-v4-pro** — 1.6T MoE, 1M context, thinking modes. SWE-bench Verified 80.6%, Pro 55.4%. 90% cache discount, automatic. Alias `claudedeepseek`. No compat flags. [Leaderboard](https://www.swebench.com/).
   </Card>
   <Card title="Z.ai / GLM" icon="star" href="https://z.ai/subscribe">
     <Badge variant="accent" text="Strong coding perf" /> <Badge variant="accent" text="Cache verified" /> **glm-5.1** — $1.40 / $4.40 per 1M tokens. 200K context. Backend auto-cache (native).
@@ -120,7 +133,7 @@ Each alias sets env vars and launches Claude Code automatically. To return to yo
     <Badge variant="accent" text="Cache verified" /> **minimax-m2.7** — $0.30 / $1.20 per 1M tokens. 200K context. Cheapest option with documented cache pricing.
   </Card>
   <Card title="OpenRouter" icon="sync" href="https://openrouter.ai">
-    200+ models. Route to GLM, Qwen, Gemini, Llama. One config, any provider. Custom model IDs validated via API.
+    200+ models. Route to **GPT-5.5** (new #1 Verified, 88.7%), GPT-5.3 Codex, Gemini 3.1 Pro, GLM, Qwen, Llama. One config, any provider. Custom model IDs validated via API.
   </Card>
 </CardGrid>
 
