@@ -2,6 +2,19 @@
 
 ---
 
+## v3.7.15 (2026-04-29)
+
+> Docs: [brewcode:setup](https://doc-claude.brewcode.app/brewcode/skills/setup/) | [bc-rules-organizer](https://doc-claude.brewcode.app/brewcode/agents/bc-rules-organizer/)
+
+### brewcode
+#### Fixed
+- **setup.sh:** placeholder warning now excludes known runtime placeholders (`{TIMESTAMP}`, `{CONFIRMED_FINDINGS_JSON}`, etc.) — previously every setup run emitted spurious "unresolved placeholders" warning even when all setup-time vars were resolved
+- **README.md:** `bc-rules-organizer` agent table row corrected from `sonnet` to `haiku` (was inconsistent with the actual agent frontmatter changed in v3.7.14)
+#### Changed
+- **setup.sh:** added inline comment documenting single-line constraint on env vars passed to `copy_review_skill` (newlines in values break sed line-by-line substitution)
+
+---
+
 ## v3.7.14 (2026-04-29)
 
 > Docs: [brewcode:setup](https://doc-claude.brewcode.app/brewcode/skills/setup/) | [bc-rules-organizer](https://doc-claude.brewcode.app/brewcode/agents/bc-rules-organizer/) | [bc-coordinator](https://doc-claude.brewcode.app/brewcode/agents/bc-coordinator/)

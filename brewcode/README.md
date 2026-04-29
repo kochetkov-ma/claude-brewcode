@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 3.7.14 |
+| Version | 3.7.15 |
 | Skills | 15 |
 | Agents | 12+ |
 | Hooks | 8 |
@@ -110,7 +110,7 @@ After `/brewcode:setup`, each task follows the cycle: `spec` -> `plan` -> `start
 | [bc-coordinator](agents/bc-coordinator.md) | haiku | Task coordination, artifact management |
 | [bc-knowledge-manager](agents/bc-knowledge-manager.md) | haiku | KNOWLEDGE.jsonl compaction and deduplication |
 | [bc-grepai-configurator](agents/bc-grepai-configurator.md) | opus | Generate grepai config.yaml |
-| [bc-rules-organizer](agents/bc-rules-organizer.md) | sonnet | Create and optimize `.claude/rules/` files |
+| [bc-rules-organizer](agents/bc-rules-organizer.md) | haiku | Create and optimize `.claude/rules/` files |
 
 > **Dynamic teams:** Use `/brewcode:teams create` to generate 5-20 project-specific agents with self-selection protocol and performance tracking.
 

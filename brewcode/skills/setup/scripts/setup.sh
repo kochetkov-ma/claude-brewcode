@@ -141,6 +141,8 @@ copy_review_skill() {
   mkdir -p .claude/skills/brewcode-review
 
   if [ -f "$PLUGIN_TEMPLATES/skills/review/SKILL.md.template" ]; then
+    # Constraint: env vars must be single-line (no newlines). sed processes line-by-line,
+    # so a newline in PROJECT_AGENTS_TABLE or CODEBASE_BLOCKS will silently truncate the substitution.
     _sep=$'\x01'
     sed \
       -e "s${_sep}{ADAPTATION_TIMESTAMP}${_sep}$(date -u +%Y-%m-%dT%H:%M:%SZ)${_sep}g" \
@@ -158,9 +160,11 @@ copy_review_skill() {
       -e "s${_sep}{REVIEW_PROMPT}${_sep}${REVIEW_PROMPT:-Review for quality and correctness}${_sep}g" \
       "$PLUGIN_TEMPLATES/skills/review/SKILL.md.template" \
       > .claude/skills/brewcode-review/SKILL.md
-    if grep -qE '\{[A-Z_]+\}' .claude/skills/brewcode-review/SKILL.md; then
-      echo "⚠️  WARNING: unresolved placeholders remain in brewcode-review/SKILL.md"
-      grep -oE '\{[A-Z_]+\}' .claude/skills/brewcode-review/SKILL.md | sort -u
+    _runtime_placeholders='CONFIRMED_FINDINGS_JSON|REJECTED_FINDINGS_JSON|DISCARDED_FINDINGS_JSON|FILE_LIST|CRITIC_MISSED_FINDINGS_JSON|CRITIC_CHALLENGES_JSON|CRITIC_BLIND_SPOTS|TOTAL|BLOCKERS|CRITICAL|MAJOR|N|P0_COUNT|ACCEPTED|COUNT|TIMESTAMP|NAME'
+    _unresolved=$(grep -oE '\{[A-Z_]+\}' .claude/skills/brewcode-review/SKILL.md | sort -u | grep -vE "^\{(${_runtime_placeholders})\}$")
+    if [ -n "$_unresolved" ]; then
+      echo "⚠️  WARNING: unresolved setup-time placeholders remain in brewcode-review/SKILL.md"
+      echo "$_unresolved"
     fi
     echo "✅ brewcode-review/SKILL.md generated"
   else
