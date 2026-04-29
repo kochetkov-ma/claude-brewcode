@@ -1,6 +1,6 @@
 ---
 name: brewtools:provider-switch
-description: "Configure Claude Code alternative API providers — DeepSeek (priority), Z.ai/GLM, Qwen, MiniMax, OpenRouter. Creates shell aliases, manages API tokens, checks status. Triggers: 'provider', 'switch provider', 'alternative api', 'configure provider', 'claudedeepseek', 'claudeglm', 'claudeqwen', 'openrouter setup', 'deepseek'."
+description: "Configure Claude Code alternative API providers — DeepSeek (priority), Z.ai/GLM, Qwen, MiniMax, OpenRouter. Creates shell aliases, manages API tokens, checks status. Triggers: 'provider', 'switch provider', 'alternative api', 'configure provider', 'claudeds', 'claudeglm', 'claudeqwen', 'openrouter setup', 'deepseek'."
 argument-hint: "[status|setup|verify|model-check|help|<provider-name>] — no args = interactive status check"
 allowed-tools: Read, Write, Edit, Bash, AskUserQuestion, Glob, Grep
 model: opus
@@ -129,14 +129,14 @@ Render status table to user:
 
 | Provider | Alias | API Key | Model | Status |
 |----------|-------|---------|-------|--------|
-| DeepSeek (priority) | claudedeepseek | DEEPSEEK_API_KEY | deepseek-v4-pro | ... |
+| DeepSeek (priority) | claudeds | DEEPSEEK_API_KEY | deepseek-v4-pro | ... |
 | Z.ai / GLM | claudeglm | ZAI_API_KEY | glm-5.1 | ... |
 | Qwen | claudeqwen | DASHSCOPE_API_KEY | qwen3.6-plus[1m] | ... |
 | MiniMax | claudeminimax | MINIMAX_API_KEY | minimax-m2.7 | ... |
 | OpenRouter | claudeor | OPENROUTER_API_KEY | (user-selected) | ... |
 
 ## How to Use
-Run `claudedeepseek` — sets env vars and launches Claude in one command (recommended default).
+Run `claudeds` — sets env vars and launches Claude in one command (recommended default).
 To return to Anthropic subscription: open a new terminal and run `claude`.
 ```
 
@@ -239,7 +239,7 @@ Suggest a default alias name and let user customize via AskUserQuestion:
 
 | Provider | Default name |
 |----------|-------------|
-| DeepSeek | `claudedeepseek` |
+| DeepSeek | `claudeds` |
 | Z.ai/GLM | `claudeglm` |
 | Qwen | `claudeqwen` |
 | MiniMax | `claudeminimax` |
@@ -554,14 +554,14 @@ Final output after every mode:
 
 | Provider | Alias | API Key | Model | Status |
 |----------|-------|---------|-------|--------|
-| DeepSeek (priority) | claudedeepseek | DEEPSEEK_API_KEY | deepseek-v4-pro | configured |
+| DeepSeek (priority) | claudeds | DEEPSEEK_API_KEY | deepseek-v4-pro | configured |
 | Z.ai / GLM | claudeglm | ZAI_API_KEY | glm-5.1 | configured |
 | Qwen | claudeqwen | DASHSCOPE_API_KEY | — | not configured |
 | MiniMax | claudeminimax | MINIMAX_API_KEY | — | not configured |
 | OpenRouter | claudeor | OPENROUTER_API_KEY | — | not configured |
 
 ## How to Use
-Run `claudedeepseek` — sets env vars and launches Claude in one command (recommended default).
+Run `claudeds` — sets env vars and launches Claude in one command (recommended default).
 To return to Anthropic: open a new terminal, run `claude`.
 ```
 

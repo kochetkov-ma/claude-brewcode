@@ -49,7 +49,7 @@ export MINIMAX_API_KEY="..."
 export OPENROUTER_API_KEY="sk-or-v1-..."
 
 # Provider Aliases (unified: AUTH_TOKEN + API_KEY="" + 3 model vars + claude)
-alias claudedeepseek='export ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic; export ANTHROPIC_AUTH_TOKEN=$DEEPSEEK_API_KEY; export ANTHROPIC_API_KEY=""; export ANTHROPIC_DEFAULT_OPUS_MODEL=deepseek-v4-pro; export ANTHROPIC_DEFAULT_SONNET_MODEL=deepseek-v4-pro; export ANTHROPIC_DEFAULT_HAIKU_MODEL=deepseek-v4-pro; claude'
+alias claudeds='export ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic; export ANTHROPIC_AUTH_TOKEN=$DEEPSEEK_API_KEY; export ANTHROPIC_API_KEY=""; export ANTHROPIC_DEFAULT_OPUS_MODEL=deepseek-v4-pro; export ANTHROPIC_DEFAULT_SONNET_MODEL=deepseek-v4-pro; export ANTHROPIC_DEFAULT_HAIKU_MODEL=deepseek-v4-pro; claude'
 alias claudeglm='export ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic; export ANTHROPIC_AUTH_TOKEN=$ZAI_API_KEY; export ANTHROPIC_API_KEY=""; export ANTHROPIC_DEFAULT_OPUS_MODEL=glm-5.1; export ANTHROPIC_DEFAULT_SONNET_MODEL=glm-5.1; export ANTHROPIC_DEFAULT_HAIKU_MODEL=glm-5.1; claude'
 alias claudeqwen='export ANTHROPIC_BASE_URL=https://dashscope-intl.aliyuncs.com/apps/anthropic; export ANTHROPIC_AUTH_TOKEN=$DASHSCOPE_API_KEY; export ANTHROPIC_API_KEY=""; export ANTHROPIC_DEFAULT_OPUS_MODEL="qwen3.6-plus[1m]"; export ANTHROPIC_DEFAULT_SONNET_MODEL="qwen3.6-plus[1m]"; export ANTHROPIC_DEFAULT_HAIKU_MODEL="qwen3.6-plus[1m]"; claude'
 # ... etc (same pattern for all providers)

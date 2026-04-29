@@ -2,6 +2,16 @@
 
 ---
 
+## v3.7.13 (2026-04-29)
+
+> Docs: [brewtools:provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/)
+
+### brewtools
+#### Changed
+- **provider-switch:** DeepSeek alias renamed from `claudedeepseek` to `claudeds` (shorter, consistent with "Claude DS" naming)
+
+---
+
 ## v3.7.12 (2026-04-24)
 
 > Docs: [brewtools:provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/)
