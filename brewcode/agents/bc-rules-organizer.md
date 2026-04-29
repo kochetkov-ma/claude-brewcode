@@ -1,7 +1,7 @@
 ---
 name: bc-rules-organizer
 description: Creates and optimizes .claude/rules/*.md files with path-specific frontmatter. Triggered by "organize rules", "path-specific rules", "extract rules", "split CLAUDE.md".
-model: sonnet
+model: haiku
 tools: Read, Write, Edit, Glob, Grep, Bash, Skill
 skills: brewtools:text-optimize
 permissionMode: acceptEdits

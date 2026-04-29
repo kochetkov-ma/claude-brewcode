@@ -33,6 +33,12 @@ Parse the state output table. Check required components: **brew**, **timeout**, 
 - **If ALL required show ✅** → Skip to Phase 1 (log: "All prerequisites present, skipping installation.")
 - **If ANY required show ❌ missing** → Continue to Step 3
 
+### Step 2.5: Load Deferred Tool Schemas
+
+Call **ToolSearch** with `query: "select:AskUserQuestion"` to load its schema.
+This is required for Claude Code v2.1.107+ where AskUserQuestion is deferred.
+If ToolSearch fails or returns no result, continue — AskUserQuestion may already be loaded.
+
 ### Step 3: Install Required Components
 
 **EXECUTE** using Bash tool:
@@ -183,6 +189,16 @@ bash "scripts/setup.sh" sync && echo "✅ sync" || echo "❌ sync FAILED"
 **Agent:** developer | **Action:** Copy review skill template and adapt for project
 
 ### Create Review Skill Directory and Copy Template
+
+Before running the script, export project analysis results as environment variables:
+```bash
+export DETECTED_TECH="<detected technology stack from analysis>"
+export AGENT_COUNT="<number of agents discovered>"
+export GROUP_COUNT="<number of review groups>"
+export MAIN_AGENT="<primary review agent name>"
+export TEST_AGENT="<test review agent name>"
+export DB_AGENT="<database review agent name>"
+```
 
 **EXECUTE** using Bash tool — create directory and copy review skill template:
 ```bash
@@ -344,6 +360,8 @@ bash "scripts/setup.sh" agents > /tmp/agents-section.md && cat /tmp/agents-secti
 - End line number (before next unrelated ## heading)
 
 ### Step 3: Ask User
+
+> **Preflight:** Call ToolSearch with `query: "select:AskUserQuestion"` before proceeding.
 
 **ASK USER** with AskUserQuestion:
 - Question: "Found agent sections in ~/.claude/CLAUDE.md. Replace with optimized LLM-friendly format?"

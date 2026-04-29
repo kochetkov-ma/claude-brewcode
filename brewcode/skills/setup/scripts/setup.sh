@@ -141,8 +141,28 @@ copy_review_skill() {
   mkdir -p .claude/skills/brewcode-review
 
   if [ -f "$PLUGIN_TEMPLATES/skills/review/SKILL.md.template" ]; then
-    cp "$PLUGIN_TEMPLATES/skills/review/SKILL.md.template" .claude/skills/brewcode-review/SKILL.md
-    echo "✅ Copied: .claude/skills/brewcode-review/SKILL.md"
+    _sep=$'\x01'
+    sed \
+      -e "s${_sep}{ADAPTATION_TIMESTAMP}${_sep}$(date -u +%Y-%m-%dT%H:%M:%SZ)${_sep}g" \
+      -e "s${_sep}{DETECTED_TECH}${_sep}${DETECTED_TECH:-unknown}${_sep}g" \
+      -e "s${_sep}{AGENT_COUNT}${_sep}${AGENT_COUNT:-0}${_sep}g" \
+      -e "s${_sep}{GROUP_COUNT}${_sep}${GROUP_COUNT:-3}${_sep}g" \
+      -e "s${_sep}{MAIN_AGENT}${_sep}${MAIN_AGENT:-reviewer}${_sep}g" \
+      -e "s${_sep}{TEST_AGENT}${_sep}${TEST_AGENT:-tester}${_sep}g" \
+      -e "s${_sep}{DB_AGENT}${_sep}${DB_AGENT:-sql_expert}${_sep}g" \
+      -e "s${_sep}{PROJECT_AGENTS_TABLE}${_sep}${PROJECT_AGENTS_TABLE:-| reviewer | General | All layers |}${_sep}g" \
+      -e "s${_sep}{TECH_SPECIFIC_CHECKS}${_sep}${TECH_SPECIFIC_CHECKS:-General code quality checks}${_sep}g" \
+      -e "s${_sep}{PROJECT_RULES}${_sep}${PROJECT_RULES:-Standard coding conventions}${_sep}g" \
+      -e "s${_sep}{CUSTOM_GROUPS}${_sep}${CUSTOM_GROUPS:-}${_sep}g" \
+      -e "s${_sep}{CODEBASE_BLOCKS}${_sep}${CODEBASE_BLOCKS:-src/**}${_sep}g" \
+      -e "s${_sep}{REVIEW_PROMPT}${_sep}${REVIEW_PROMPT:-Review for quality and correctness}${_sep}g" \
+      "$PLUGIN_TEMPLATES/skills/review/SKILL.md.template" \
+      > .claude/skills/brewcode-review/SKILL.md
+    if grep -qE '\{[A-Z_]+\}' .claude/skills/brewcode-review/SKILL.md; then
+      echo "⚠️  WARNING: unresolved placeholders remain in brewcode-review/SKILL.md"
+      grep -oE '\{[A-Z_]+\}' .claude/skills/brewcode-review/SKILL.md | sort -u
+    fi
+    echo "✅ brewcode-review/SKILL.md generated"
   else
     echo "❌ Template not found: $PLUGIN_TEMPLATES/skills/review/SKILL.md.template"
     exit 1

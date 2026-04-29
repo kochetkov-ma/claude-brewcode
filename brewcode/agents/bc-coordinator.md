@@ -125,11 +125,13 @@ Called when task completes (success or failure) to clean up.
 - `status`: "finished" (default) OR "failed"
 
 **Actions:**
-1. Generate FINAL.md from templates
-   - If `status="failed"`: include failure summary (failed phases, reasons from KNOWLEDGE.jsonl)
-2. **Update status** (CRITICAL for stop hook):
-   - Line 1: `status: in progress` or `status: handoff` -> `status: {status}`
-3. (Lock deletion handled by stop hook, NOT coordinator)
+1. **Verify artifact files exist on disk** before building index:
+   - For each expected `{P}-{N}{T}/{agent}_output.md` path: check with Bash `test -f`
+   - Missing files → mark row as `❌ missing` in FINAL.md artifact table
+   - If any missing → downgrade `status` to `failed` (not `finished`)
+2. Generate FINAL.md from templates (artifact table uses verified state)
+3. **Update status** (CRITICAL for stop hook): line 1 → `status: {status}`
+4. (Lock deletion handled by stop hook)
 
 > **WARNING:** Stop hook reads line 1. Terminal statuses: `finished`, `failed`, `cancelled`, `error`. Any other status BLOCKS exit.
 

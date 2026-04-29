@@ -2,6 +2,22 @@
 
 ---
 
+## v3.7.14 (2026-04-29)
+
+> Docs: [brewcode:setup](https://doc-claude.brewcode.app/brewcode/skills/setup/) | [bc-rules-organizer](https://doc-claude.brewcode.app/brewcode/agents/bc-rules-organizer/) | [bc-coordinator](https://doc-claude.brewcode.app/brewcode/agents/bc-coordinator/)
+
+### brewcode
+#### Fixed
+- **bc-rules-organizer:** model downgraded `sonnet` → `haiku` — Sonnet inherited 1M context from parent session, triggering `/extra-usage` gate on Pro/Max OAuth accounts; Haiku is sufficient for rules classification
+- **bc-coordinator:** finalize mode now verifies artifact files exist on disk before building FINAL.md index; missing files marked `❌ missing`, status downgraded to `failed` (was silently ignored)
+- **setup:** `copy_review_skill` replaced `cp` with `sed` substitution — 13 setup-time placeholders (`{DETECTED_TECH}`, `{AGENT_COUNT}`, etc.) are now resolved at copy time; unresolved-placeholder warning added; sed delimiter switched from `|` to `\x01` to avoid collision with markdown table values
+- **setup SKILL.md:** ToolSearch preflight added at two sites (Phase 0 Step 2.5 + Phase 5) to load deferred `AskUserQuestion` schema (required for Claude Code v2.1.107+)
+#### Changed
+- **README:** version field corrected from stale `3.4.29` to current `3.7.14`
+- **bump-version.sh:** now also updates `brewcode/README.md` version table row and verifies it in the summary
+
+---
+
 ## v3.7.13 (2026-04-29)
 
 > Docs: [brewtools:provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/)
