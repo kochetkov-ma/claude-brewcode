@@ -12,8 +12,22 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 </Callout>
 
 <Callout type="tip">
-**brewpage.app** is free instant hosting: HTML pages, JSON documents, files, and multi-file sites. Default TTL is 5 days — override with `--ttl N`. For the public gallery, visit [brewpage.app](https://brewpage.app).
+**brewpage.app** is free instant hosting: HTML pages, JSON documents, files, and multi-file sites. Default TTL is 15 days — override with `--ttl N`. For the public gallery, visit [brewpage.app](https://brewpage.app).
 </Callout>
+
+## Companion tools
+
+<CardGrid>
+  <Card title="brewpage-mcp" icon="package" href="https://www.npmjs.com/package/brewpage-mcp">
+    Official MCP server for BrewPage Sites API (v1.2.0, multi-file support). Install: `claude mcp add brewpage npx -- -y brewpage-mcp`
+  </Card>
+  <Card title="OpenAPI Spec" icon="document" href="https://kochetkov-ma.github.io/brewpage-openapi/">
+    Full API contract, Scalar UI. Use when building custom integrations or calling the API directly.
+  </Card>
+  <Card title="REST API" icon="globe" href="https://brewpage.app/api">
+    Direct REST access — no client needed. Base URL: `https://brewpage.app/api`
+  </Card>
+</CardGrid>
 
 ## Quick reference
 
@@ -75,7 +89,7 @@ Entry file detection for sites: `--entry` flag → `index.html` if present → f
   <li>
     <div>
       <strong>Parse arguments</strong>
-      <p>Extracts <code>--ttl N</code> (default: 5 days), <code>--entry filename</code> (site mode), and the content argument. For a directory, counts HTML files and detects the entry file.</p>
+      <p>Extracts <code>--ttl N</code> (default: 15 days), <code>--entry filename</code> (site mode), and the content argument. For a directory, counts HTML files and detects the entry file.</p>
     </div>
   </li>
   <li>

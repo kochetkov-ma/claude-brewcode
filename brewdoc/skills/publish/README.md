@@ -6,7 +6,7 @@ auto-sync-type: doc
 
 # Publish (Brewpage)
 
-Publish text, markdown, JSON, files, or multi-file sites to [brewpage.app](https://brewpage.app) and get a shareable public URL instantly. No sign-up required. Content is auto-deleted after the TTL expires (default 5 days).
+Publish text, markdown, JSON, files, or multi-file sites to [brewpage.app](https://brewpage.app) and get a shareable public URL instantly. No sign-up required. Content is auto-deleted after the TTL expires (default 15 days).
 
 ## Quick Start
 
@@ -33,7 +33,7 @@ All content types support `--ttl N` to set expiration in days. Site uploads also
 ### Good Usage
 
 ```sh
-# Publish markdown text (default 5-day TTL)
+# Publish markdown text (default 15-day TTL)
 /brewdoc:publish "# Meeting Notes\n\n- Action item 1\n- Action item 2"
 
 # Publish a local file
@@ -68,7 +68,7 @@ All content types support `--ttl N` to set expiration in days. Site uploads also
 /brewdoc:publish database-dump.sql.gz    # not the right tool
 
 # Do not assume the URL is permanent -- content expires after TTL
-/brewdoc:publish important-doc.md        # gone after 5 days by default
+/brewdoc:publish important-doc.md        # gone after 15 days by default
 ```
 
 ## Output
@@ -94,7 +94,7 @@ Find your owner tokens in `.claude/brewpage-history.md`.
 
 ## Tips
 
-- **TTL planning** -- default is 5 days. Use `--ttl 30` for content you need longer, or `--ttl 1` for quick one-off shares.
+- **TTL planning** -- default is 15 days. Use `--ttl 30` for content you need longer, or `--ttl 1` for quick one-off shares.
 - **Namespace controls the URL** -- choosing `public` places the page in the gallery. Pick a custom namespace (3-32 alphanumeric chars) for a cleaner URL or to avoid gallery listing.
 - **Password protection** -- when you set a password, the page is hidden from the gallery and requires the password to view.
 - **Each publish creates a new page** -- there is no "update" operation. Publish again and share the new URL. Delete the old page using the saved owner token if needed.

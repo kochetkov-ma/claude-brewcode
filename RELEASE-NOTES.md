@@ -2,6 +2,18 @@
 
 ---
 
+## v3.7.17 (2026-05-01)
+
+> Docs: [brewdoc:publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
+
+### brewdoc
+#### Fixed
+- **publish docs:** TTL default in `publish.mdx` (L15, L78) and `README.md` (4 occurrences) said `5 days` — server truth is `15` (verified vs `brewpage-app application.yml: default-ttl-days: 15`). Aligned with SKILL.md fixed in v3.7.16.
+#### Added
+- **publish docs:** "Companion tools" CardGrid section on the publish skill page — links to `brewpage-mcp` (npm MCP server, multi-file support), OpenAPI Scalar spec at `kochetkov-ma.github.io/brewpage-openapi`, and the REST API base at `brewpage.app/api`. Lets users discover non-Claude-Code paths to BrewPage Sites API.
+
+---
+
 ## v3.7.16 (2026-05-01)
 
 > Docs: [brewdoc:publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
