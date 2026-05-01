@@ -2,6 +2,20 @@
 
 ---
 
+## v3.7.16 (2026-05-01)
+
+> Docs: [brewdoc:publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
+
+### brewdoc
+#### Fixed
+- **publish:** `$PASS_H` was defined as a single line OUTSIDE bash code fences while referenced INSIDE 5 separate curl blocks — each block ran in its own shell, so the variable was empty and password protection silently dropped on every upload. Replaced with per-block `PASS_H=()` bash-array definition and `"${PASS_H[@]}"` quoted expansion in curl. Also fixed embedded-quote bug in the original `echo "-H \"X-Password: ...\""` form (curl rejects the literal-quoted single arg).
+- **publish:** TTL default corrected from `5` (stale doc) to `15` to match server config (`brewpage-app application.yml: default-ttl-days: 15`). Aligned in mode rules and limits sections.
+- **publish:** mode-detection rule tightened — explicit `ZIP → SITE / Directory → SITE / Single file → FILE` and explicit fail-loud on directory with no `.html` (no silent guess).
+#### Changed
+- **publish:** trimmed redundant intro/duplicate notes (User-Agent note, duplicated ownerToken warning, etc.) to keep SKILL.md within line budget after PASS_H array additions across 5 blocks.
+
+---
+
 ## v3.7.15 (2026-04-29)
 
 > Docs: [brewcode:setup](https://doc-claude.brewcode.app/brewcode/skills/setup/) | [bc-rules-organizer](https://doc-claude.brewcode.app/brewcode/agents/bc-rules-organizer/)
