@@ -16,7 +16,7 @@ Publish content to **brewpage.app** — free instant hosting for HTML pages, JSO
 ### Step 1: Parse Arguments
 
 Extract from `$ARGUMENTS`:
-- `--ttl N` → TTL in days (default: `5`)
+- `--ttl N` → TTL in days (default: `15`)
 - Remaining text → `content_arg`
 
 ### Step 2: Detect Content Type
@@ -217,7 +217,7 @@ Replace `{password_header}` with `-H "X-Password: {pass}"` only when password wa
 
 - Always use absolute file paths with curl `-F "file=@..."`.
 - Use `jq -n --arg c "$CONTENT" '{content: $c}'` to safely encode text content. **`format` is a query param**, not a body field — `/api/html` ignores any `format` key inside the JSON body and reads only `?format=` from the URL. Wrong location = server applies default `html` and stores your markdown as raw text.
-- TTL default is `5` days.
+- TTL default is `15` days.
 - Namespace must be alphanumeric (3-32 chars). Default: `public`.
 - To **delete** a published page, find the owner token in `.claude/brewpage-history.md` and use the delete command shown in that file's header.
 
