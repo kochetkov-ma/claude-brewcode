@@ -2,6 +2,40 @@
 
 ---
 
+## v3.8.0 (2026-05-12)
+
+> Docs: [brewtools/skills/skill-toggle](https://doc-claude.brewcode.app/brewtools/skills/skill-toggle/) | [brewcode/skills/grepai](https://doc-claude.brewcode.app/brewcode/skills/grepai/) | [brewcode/skills/teardown](https://doc-claude.brewcode.app/brewcode/skills/teardown/)
+
+### All plugins
+
+#### Fixed
+- **hooks.json exec form (CRITICAL):** all four plugins (`brewcode`, `brewdoc`, `brewtools`, `brewui`) had `hooks.json` entries using the broken dual `command`+`args` form which Claude Code 2.1.139 silently ignored. Converted every entry to the proper exec form: `"command":"node","args":["${CLAUDE_PLUGIN_ROOT}/hooks/<file>.mjs"]`. Restores SessionStart, PreToolUse, PostToolUse, PreCompact, Stop hook dispatch across the suite.
+
+### brewtools
+
+#### Added
+- **skill-toggle settings.json migration (CC 2.1.115+):** skill enable/disable now uses the official `~/.claude/settings.json` `skillOverrides` mechanism instead of file-rename (`SKILL.md` ⇄ `_SKILL.md`). Atomic writes (`tmp + fsync + rename`), lock-file identity check (PID + start-time), stale-lock recovery on crashed sessions. Survives plugin updates without filesystem mutation.
+- **reapply-disables embedded migrator:** one-shot SessionStart migrator detects legacy `toggle-state.json` skill entries and rewrites them into `skillOverrides`. Writes pre-migration backup `toggle-state.json.bak.pre-migration-<TS>` BEFORE any deletion. Idempotent — no-op on subsequent sessions.
+
+#### Changed
+- **skill-toggle helpers:** new `helpers/` directory consolidating settings.json read/write, lock management, and migration probes.
+
+### brewcode
+
+#### Added
+- **grepai `alwaysLoad:true`:** `mcp-check.sh` now sets `alwaysLoad:true` on the grepai MCP server via CLI-first / JSON-patch fallback (handles both `claude mcp` CLI presence and direct settings.json editing). Ensures grepai is hot at session-start without manual `/mcp` invocation.
+- **teardown `--full` mode (CC 2.1.115+):** `claude project purge` integration with inline `PURGE` confirmation prompt, Claude Code version probe (`claude --version`), and partial-recoverability backup. Removes plugin data + project state in one atomic flow when user explicitly opts in.
+
+#### Changed
+- **teardown SKILL.md:** documents `--full` flag, version-gate behavior, and recovery path.
+
+#### Migration & Rollback
+- **Auto-migration:** On first SessionStart after upgrade, brewtools `reapply-disables` hook migrates legacy `toggle-state.json` skill entries to `~/.claude/settings.json` `skillOverrides`. A backup is written to `toggle-state.json.bak.pre-migration-<TS>` BEFORE deletion.
+- **Downgrade to v3.7.x:** `skillOverrides` in settings.json is NOT read by v3.7.x. Restore the pre-migration backup: `cp toggle-state.json.bak.pre-migration-<TS> toggle-state.json` (path: `~/.claude/plugins/data/brewtools-claude-brewcode/` or scope-equivalent). Then `claude plugin update brewtools@claude-brewcode --version 3.7.19`.
+- **agent-toggle unaffected** — agent state still uses file-rename approach.
+
+---
+
 ## v3.7.19 (2026-05-12)
 
 > Docs: [brewtools/skills/think-short](https://doc-claude.brewcode.app/brewtools/skills/think-short/) | [brewtools/plugin](https://doc-claude.brewcode.app/brewtools/)

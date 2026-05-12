@@ -1,7 +1,7 @@
 ---
 name: brewtools:skill-toggle
-description: "Disables or enables individual plugin skills by renaming SKILL.md and _SKILL.md in the plugin cache. Persistent state: global (default) or project. Triggers: disable skill, enable skill, toggle skill, hide skill, skill-toggle."
-argument-hint: "[disable|enable|status|list|reapply|prune] <plugin>:<name> [--scope=global|project]"
+description: "Disables or enables individual plugin skills by writing skillOverrides to ~/.claude/settings.json (survives plugin updates). Modes: off, user-invocable-only, name-only. Triggers: disable skill, enable skill, toggle skill, hide skill, skill-toggle."
+argument-hint: "[disable|enable|status|list] <plugin>:<name> [--mode=off|user-invocable-only|name-only]"
 allowed-tools: Read, Bash, AskUserQuestion
 model: sonnet
 user-invocable: true
@@ -9,7 +9,7 @@ user-invocable: true
 
 # Skill Toggle
 
-> **Disable/enable individual plugin skills** by renaming `SKILL.md` ↔ `_SKILL.md` in the plugin cache. State persisted globally (default) or per-project. See also: `/brewtools:agent-toggle` for agents.
+> **Disable/enable individual plugin skills** via the stable `skillOverrides` mechanism in `~/.claude/settings.json` (Claude Code 2.1.115+). State survives plugin updates — **no SessionStart reapply hook needed**. See also: `/brewtools:agent-toggle` for agents (uses file-rename, different mechanism).
 
 <instructions>
 
@@ -18,44 +18,56 @@ user-invocable: true
 | Rule | Applies |
 |------|---------|
 | Every Bash call ends with `&& echo "OK ..." \|\| echo "FAILED ..."` | ALL |
-| Never use `Write`/`Edit` on `~/.claude/plugins/*` — use Bash + Node `fs` | ALL |
-| This skill mutates **skills only** (`kind='skill'`) — never agents | ALL |
-| Kind is hardcoded — do NOT call `detectKind`; skill IS the kind | P1 |
+| Never use `Write`/`Edit` on `~/.claude/settings.json` — use Bash + Node helper | ALL |
+| This skill mutates **skills only** (`skillOverrides`) — never agents | ALL |
+| Atomic writes via lockfile + temp + rename (handled by helper) | P2 |
 
 Paths (substitute literally in Bash):
-- Shared helpers: `$CLAUDE_PLUGIN_ROOT/skills/_shared/toggle/`
-- Global state: `$CLAUDE_PLUGIN_DATA/toggle-state.json` (fallback: `~/.claude/plugins/data/brewtools-claude-brewcode/toggle-state.json`)
-- Project state: `$PWD/.claude/brewtools/toggle-state.json`
+- Helper: `$CLAUDE_PLUGIN_ROOT/skills/skill-toggle/helpers/overrides.mjs`
+- Settings: `~/.claude/settings.json` (resolved to `$HOME/.claude/settings.json`)
+- Legacy global state (read-only, backwards visibility): `$CLAUDE_PLUGIN_DATA/toggle-state.json`
+
+## Override Modes
+
+| Mode | Effect |
+|------|--------|
+| `off` | Fully disabled — invisible to user and LLM |
+| `user-invocable-only` | Only via `/plugin:skill` slash; LLM cannot auto-invoke |
+| `name-only` | Name visible in autocomplete, instructions/body not loaded |
+| `on` | (Re-enable) — entry removed from settings.json |
+
+Default for "disable" intent without explicit mode: `off`.
 
 ---
 
 ## Phase I — Interactive Flow (entry gate)
 
-> **Full spec:** `_shared/toggle/interactive-flow.md` (phases I0-I4). Read it fully on entry. This section hardcodes `kind='skill'` — no `detectKind` call.
+> **Full spec:** `_shared/toggle/interactive-flow.md` (phases I0-I4). Read on entry. This skill hardcodes `kind='skill'`.
 
 **Enter interactive flow when:**
 - No args given, OR
-- User prompt is freeform without a concrete `plugin:name` target (e.g. "отключи лишнее", "hide something noisy"), OR
+- User prompt is freeform without concrete `plugin:name` (e.g. "отключи лишнее"), OR
 - Parsed target missing from cache.
 
-**Skip interactive (go straight to P0 → P1 → P2 → P3)** when op AND target are both explicit: `/brewtools:skill-toggle disable brewui:image-gen`.
+**Skip interactive (go straight to P0 → P2 → P4)** when op AND target both explicit: `/brewtools:skill-toggle disable brewui:image-gen`.
 
 | Phase | Action | Tool |
 |-------|--------|------|
 | I0 | Decide branch from input shape | — |
-| I1 | Op picker — single `AskUserQuestion`, 4 options (`status`, `disable`, `enable`, `list`), pre-selected hint: `disable` | AskUserQuestion |
-| I2 | Catalog one-liner — Bash+Node imports `enumeratePlugins` from `$CLAUDE_PLUGIN_ROOT/skills/_shared/toggle/cache.mjs`, emit `AVAILABLE TO {OP} (N total, Ctrl+F to search):` header then single space-separated line of `plugin:name` tokens (filter: `disable`→enabled only, `enable`→disabled only, kind=skill). Free-text "Which one?" prompt | Bash |
-| I3 | Resolve + confirm once: exact `plugin:name` or unique `name`→no confirm; fuzzy→one AskUserQuestion `Disable X? [yes / pick different / cancel]`; multiple→AskUserQuestion 2-4 options | AskUserQuestion |
-| I4 | Execute (P1→P2→P3) then ALWAYS print current state (see format below) | Bash |
+| I1 | Op picker — single `AskUserQuestion`, options: `status`, `disable`, `enable`, `list`, pre-selected: `disable` | AskUserQuestion |
+| I2 | Catalog one-liner — Bash+Node imports `enumeratePlugins` from `$CLAUDE_PLUGIN_ROOT/skills/_shared/toggle/cache.mjs`, emit `AVAILABLE TO {OP} (N total):` then space-separated `plugin:name` tokens (filter: `disable`→not in overrides; `enable`→in overrides; kind=skill) | Bash |
+| I3 | Resolve + confirm: exact `plugin:name` or unique `name`→no confirm; fuzzy→AskUserQuestion `[yes / pick different / cancel]`; multiple→AskUserQuestion 2-4 options. For `disable`, also ask mode if not specified | AskUserQuestion |
+| I4 | Execute (P2) then ALWAYS print current state | Bash |
 
-Terminal ops (`list`, `reapply`, `prune`, `status`) skip to I4 directly — no picker, no catalog.
+Terminal ops (`list`, `status`) skip to I4 directly.
 
 **I4 status format (always printed):**
 ```
-DISABLED RIGHT NOW
--------------------
-brewui:image-gen   [skill, global, since 2026-04-16]
-(none)  ← if empty
+DISABLED RIGHT NOW (via skillOverrides)
+---------------------------------------
+brewui:image-gen        off
+brewdoc:md-to-pdf       user-invocable-only
+(none)  <-- if empty
 ENABLED (M skills across P plugins)
 ```
 
@@ -63,23 +75,24 @@ ENABLED (M skills across P plugins)
 
 ## P0: Parse Intent
 
-Parse `$ARGUMENTS` (or the user's NL prompt) into structured form:
+Parse `$ARGUMENTS` (or NL prompt) into:
 
 ```
-{ op: disable|enable|status|list|reapply|prune, scope: global|project, targets: [{plugin, name}] }
+{ action: disable|enable|toggle|status|list, plugin?, skill?, mode?: off|user-invocable-only|name-only }
 ```
 
 Rules:
-- Default scope = `global`. Override with `--scope=project` (or phrase "for this project").
-- Target format: `plugin:name` (e.g., `brewui:image-gen`). If only `name` given → ask AskUserQuestion which plugin.
-- `status`, `list`, `reapply`, `prune` take no targets.
-- Multiple targets allowed for `disable`/`enable` — iterate P2–P3 per target.
+- Default mode for `disable` = `off`. User can specify e.g. `--mode=user-invocable-only` or "make it slash-only".
+- Target format: `plugin:name` (e.g., `brewui:image-gen`). Bare `name` → AskUserQuestion which plugin.
+- `status`, `list` take no targets.
+- Multiple targets allowed for disable/enable — iterate P2 per target.
+- No `--scope` flag — `skillOverrides` is global-only (per Claude Code design).
 
-If ambiguous (no plugin prefix for disable/enable) → AskUserQuestion with candidate plugins from P1 enumerate.
+If ambiguous (no plugin prefix for disable/enable) → AskUserQuestion with candidate plugins from `enumeratePlugins`.
 
 ---
 
-## P1: Validate Target (per target)
+## P1: Validate Target
 
 **EXECUTE** using Bash tool:
 ```bash
@@ -89,65 +102,64 @@ import fs from 'node:fs';
 const p = enumeratePlugins().get('PLUGIN_NAME');
 if (!p) { console.log(JSON.stringify({error:'plugin_not_installed', plugin:'PLUGIN_NAME'})); process.exit(0); }
 const t = resolveTarget(p, 'skill', 'SKILL_NAME');
-const visibleExists = fs.existsSync(t.visible);
-const hiddenExists = fs.existsSync(t.hidden);
-if (!visibleExists && !hiddenExists) { console.log(JSON.stringify({error:'skill_not_found', plugin:p.plugin, name:'SKILL_NAME'})); process.exit(0); }
-console.log(JSON.stringify({plugin:p.plugin, latest:p.latest, visible:t.visible, hidden:t.hidden, visibleExists, hiddenExists}));
+const exists = fs.existsSync(t.visible) || fs.existsSync(t.hidden);
+if (!exists) { console.log(JSON.stringify({error:'skill_not_found', plugin:p.plugin, name:'SKILL_NAME'})); process.exit(0); }
+console.log(JSON.stringify({plugin:p.plugin, latest:p.latest, name:'SKILL_NAME'}));
 " && echo "OK validate" || echo "FAILED validate"
 ```
 
-Replace `PLUGIN_NAME`, `SKILL_NAME`. On `error` → stop, report to user.
+Replace `PLUGIN_NAME`, `SKILL_NAME`. On `error` → stop, report.
 
 ---
 
-## P2: Mutate State
-
-**EXECUTE** using Bash tool (disable example):
-```bash
-node --input-type=module -e "
-import {readState, writeStateAtomic, stateKey, globalStatePath, projectStatePath} from '$CLAUDE_PLUGIN_ROOT/skills/_shared/toggle/state.mjs';
-const fp = 'SCOPE'==='project' ? projectStatePath(process.cwd()) : globalStatePath();
-const st = readState(fp);
-const key = stateKey('PLUGIN','NAME');
-st.disabled[key] = {kind:'skill', plugin:'PLUGIN', name:'NAME', disabled_at:new Date().toISOString(), last_applied_version:'VERSION'};
-writeStateAtomic(fp, st);
-console.log(JSON.stringify({scope:'SCOPE', file:fp, key}));
-" && echo "OK state" || echo "FAILED state"
-```
-
-For `enable` — replace body with `delete st.disabled[key]`.
-
----
-
-## P3: Apply Rename
+## P2: Write Override
 
 **EXECUTE** using Bash tool (disable):
 ```bash
 node --input-type=module -e "
-import {disableTarget} from '$CLAUDE_PLUGIN_ROOT/skills/_shared/toggle/apply.mjs';
-const r = disableTarget('VISIBLE_PATH','HIDDEN_PATH');
+import {writeOverride} from '$CLAUDE_PLUGIN_ROOT/skills/skill-toggle/helpers/overrides.mjs';
+const r = await writeOverride('PLUGIN','NAME','MODE');
 console.log(JSON.stringify(r));
-" && echo "OK apply" || echo "FAILED apply"
+" && echo "OK override" || echo "FAILED override"
 ```
 
-For `enable` — `enableTarget(visible, hidden)`. Substitute absolute paths from P1 output.
+For `disable` → `MODE` ∈ `off | user-invocable-only | name-only` (default `off`).
+For `enable` → `MODE='on'` (deletes the entry).
 
-Status meanings: `disabled`, `enabled`, `already_disabled`, `already_enabled`, `missing`.
+Substitute `PLUGIN`, `NAME`, `MODE` literally.
 
 ---
 
-## P4: Notify
+## P3 — DELETED (no rename step needed)
 
-Render a result table and remind user to reload:
+> **Persistence:** `~/.claude/settings.json` survives plugin updates — **no SessionStart reapply hook needed for skill-toggle.** The old file-rename approach (P3 in earlier versions) is removed. Plugin cache files are no longer touched by this skill.
+
+Agent-toggle still uses file-rename (`_shared/toggle/state.mjs` + `apply.mjs`) — that flow is untouched.
+
+---
+
+## P4: Verify + Notify
+
+**EXECUTE** using Bash tool:
+```bash
+node --input-type=module -e "
+import {readOverrides} from '$CLAUDE_PLUGIN_ROOT/skills/skill-toggle/helpers/overrides.mjs';
+const o = readOverrides();
+console.log(JSON.stringify(o));
+" && echo "OK verify" || echo "FAILED verify"
+```
+
+Confirm `PLUGIN:NAME` present (for disable) or absent (for enable). Render result table:
 
 ```
-# Skill Toggle — <op>
+# Skill Toggle — <action>
 
-| Plugin | Name | Kind | Scope | Action | Result |
-|--------|------|------|-------|--------|--------|
-| brewui | image-gen | skill | global | disable | disabled |
+| Plugin | Name | Mode | Action | File |
+|--------|------|------|--------|------|
+| brewui | image-gen | off | written | ~/.claude/settings.json |
 
-> Run `/reload-plugins` (or restart session) for the change to take effect.
+> Restart session or `/reload-plugins` for the change to take effect.
+> Persisted to ~/.claude/settings.json — survives plugin updates.
 ```
 
 ---
@@ -156,22 +168,27 @@ Render a result table and remind user to reload:
 
 ### status — merged view
 
+Reads both `skillOverrides` (current mechanism) AND legacy `toggle-state.json` (backwards visibility, read-only).
+
 **EXECUTE** using Bash tool:
 ```bash
 node --input-type=module -e "
-import {readState, mergeStates, globalStatePath, projectStatePath} from '$CLAUDE_PLUGIN_ROOT/skills/_shared/toggle/state.mjs';
-const g = readState(globalStatePath());
-const p = readState(projectStatePath(process.cwd()));
-const m = mergeStates(g, p);
-const rows = Object.entries(m.disabled).filter(([,v])=>v.kind==='skill').map(([k,v])=>({
-  key:k, ...v,
-  scope: p.disabled[k] ? 'project' : 'global'
-}));
-console.log(JSON.stringify({rows}));
+import {listOverrides} from '$CLAUDE_PLUGIN_ROOT/skills/skill-toggle/helpers/overrides.mjs';
+import {readState, globalStatePath, projectStatePath} from '$CLAUDE_PLUGIN_ROOT/skills/_shared/toggle/state.mjs';
+const overrides = listOverrides();
+const legacyG = readState(globalStatePath()).disabled || {};
+const legacyP = readState(projectStatePath(process.cwd())).disabled || {};
+const legacy = [];
+for (const [k,v] of Object.entries({...legacyG, ...legacyP})) {
+  if (v && v.kind === 'skill') legacy.push({key:k, ...v, scope: legacyP[k] ? 'project' : 'global'});
+}
+console.log(JSON.stringify({overrides, legacy}));
 " && echo "OK status" || echo "FAILED status"
 ```
 
-Render as table: plugin | name | scope | disabled_at | last_applied_version.
+Render two tables:
+1. **Current (skillOverrides):** plugin | name | mode
+2. **Legacy (toggle-state.json, read-only):** plugin | name | scope | disabled_at — with note: "Legacy state — migrate by re-running disable; legacy file is no longer authoritative for skills."
 
 ### list — enumerate all skills
 
@@ -179,30 +196,24 @@ Render as table: plugin | name | scope | disabled_at | last_applied_version.
 ```bash
 node --input-type=module -e "
 import {enumeratePlugins, resolveTarget} from '$CLAUDE_PLUGIN_ROOT/skills/_shared/toggle/cache.mjs';
+import {readOverrides} from '$CLAUDE_PLUGIN_ROOT/skills/skill-toggle/helpers/overrides.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
+const overrides = readOverrides();
 const out = [];
 for (const [plugin, e] of enumeratePlugins()) {
   const dir = path.join(e.path, 'skills');
   let entries = [];
   try { entries = fs.readdirSync(dir, {withFileTypes:true}).filter(d=>d.isDirectory() && !d.name.startsWith('_')); } catch {}
   for (const d of entries) {
-    const t = resolveTarget(e, 'skill', d.name);
-    out.push({plugin, name:d.name, version:e.latest, disabled: fs.existsSync(t.hidden) && !fs.existsSync(t.visible)});
+    const key = plugin + ':' + d.name;
+    out.push({plugin, name:d.name, version:e.latest, override: overrides[key] || null});
   }
 }
 console.log(JSON.stringify(out));
 " && echo "OK list" || echo "FAILED list"
 ```
 
-Render grouped by plugin; mark disabled rows.
-
-### reapply — re-run from state
-
-Read merged state (as in `status`), filter `kind==='skill'`, for each entry call P1 + P3 (no P2 mutate). Report per-target results.
-
-### prune — drop stale entries
-
-For each state entry where plugin no longer in `enumeratePlugins()` → remove via `writeStateAtomic`. Report removed keys.
+Render grouped by plugin; mark rows with override mode.
 
 </instructions>
