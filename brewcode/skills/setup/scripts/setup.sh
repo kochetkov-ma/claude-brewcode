@@ -161,7 +161,7 @@ copy_review_skill() {
       "$PLUGIN_TEMPLATES/skills/review/SKILL.md.template" \
       > .claude/skills/brewcode-review/SKILL.md
     _runtime_placeholders='CONFIRMED_FINDINGS_JSON|REJECTED_FINDINGS_JSON|DISCARDED_FINDINGS_JSON|FILE_LIST|CRITIC_MISSED_FINDINGS_JSON|CRITIC_CHALLENGES_JSON|CRITIC_BLIND_SPOTS|TOTAL|BLOCKERS|CRITICAL|MAJOR|N|P0_COUNT|ACCEPTED|COUNT|TIMESTAMP|NAME'
-    _unresolved=$(grep -oE '\{[A-Z_]+\}' .claude/skills/brewcode-review/SKILL.md | sort -u | grep -vE "^\{(${_runtime_placeholders})\}$")
+    _unresolved=$(grep -oE '\{[A-Z_]+\}' .claude/skills/brewcode-review/SKILL.md | sort -u | grep -vE "^\{(${_runtime_placeholders})\}$" || true)
     if [ -n "$_unresolved" ]; then
       echo "⚠️  WARNING: unresolved setup-time placeholders remain in brewcode-review/SKILL.md"
       echo "$_unresolved"
@@ -237,8 +237,8 @@ EOF
   if [ -d "$HOME/.claude/agents" ]; then
     for f in "$HOME/.claude/agents"/*.md; do
       [ -f "$f" ] || continue
-      name=$(grep "^name:" "$f" 2>/dev/null | head -1 | sed 's/^name: *//' | tr -d '"' | xargs)
-      desc=$(grep "^description:" "$f" 2>/dev/null | head -1 | sed 's/^description: *//' | tr -d '"')
+      name=$(grep "^name:" "$f" 2>/dev/null | head -1 | sed 's/^name: *//' | tr -d '"' | xargs || true)
+      desc=$(grep "^description:" "$f" 2>/dev/null | head -1 | sed 's/^description: *//' | tr -d '"' || true)
       # Truncate to 5 words max
       purpose=$(echo "$desc" | awk '{for(i=1;i<=5&&i<=NF;i++) printf "%s ", $i}' | xargs)
       [ -n "$name" ] && echo "| $name | global | $purpose |"
@@ -252,10 +252,10 @@ EOF
   if [ -d "$PLUGIN_ROOT/agents" ]; then
     for f in "$PLUGIN_ROOT/agents"/*.md; do
       [ -f "$f" ] || continue
-      name=$(grep "^name:" "$f" 2>/dev/null | head -1 | sed 's/^name: *//' | tr -d '"' | xargs)
+      name=$(grep "^name:" "$f" 2>/dev/null | head -1 | sed 's/^name: *//' | tr -d '"' | xargs || true)
       # Skip internal agents
       echo "$INTERNAL_AGENTS" | grep -qw "$name" && continue
-      desc=$(grep "^description:" "$f" 2>/dev/null | head -1 | sed 's/^description: *//' | tr -d '"')
+      desc=$(grep "^description:" "$f" 2>/dev/null | head -1 | sed 's/^description: *//' | tr -d '"' || true)
       purpose=$(echo "$desc" | awk '{for(i=1;i<=5&&i<=NF;i++) printf "%s ", $i}' | xargs)
       [ -n "$name" ] && echo "| $name | plugin | $purpose |"
     done
