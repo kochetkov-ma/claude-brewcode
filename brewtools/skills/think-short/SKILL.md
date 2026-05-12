@@ -20,7 +20,7 @@ user-invocable: true
 | Every Bash call ends with `&& echo "OK ..." \|\| echo "FAILED ..."` | ALL |
 | Never use `Write`/`Edit` on `~/.claude/*` or `$CLAUDE_PLUGIN_DATA` — use Bash + Node `fs` via helpers | ALL |
 | State writes go through `writeState()` in `helpers/state.mjs` (atomic, O_NOFOLLOW, 0600, merges defaults + timestamps) | P2 |
-| State reads go through `resolveEffectiveState()` in `helpers/state.mjs` (merges hardcoded → plugin.json → global → project → env) | P0, status |
+| State reads go through `resolveEffectiveState()` in `helpers/state.mjs` (merges hardcoded → global → project → env) | P0, status |
 | NL-prompt resolution ALWAYS logged via `log()` exported from `helpers/state.mjs` at INFO level (auto-prefixed `think-short`), to `.claude/logs/brewtools.log` | P0 |
 
 ### BT_ROOT Resolver
@@ -93,7 +93,7 @@ BT_ROOT="${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/claude-brewcode/b
 test -d "$BT_ROOT/skills/think-short/helpers" || { echo "❌ BT_ROOT invalid: $BT_ROOT"; exit 1; }
 node --input-type=module -e "
 import {log} from '${BT_ROOT}/skills/think-short/helpers/state.mjs';
-log('info', 'NL-prompt \"INPUT\" → resolved as RESOLVED', process.cwd(), process.env.CLAUDE_SESSION_ID || null);
+log('info', 'NL-prompt \"INPUT\" → resolved as RESOLVED', process.cwd(), process.env.CLAUDE_CODE_SESSION_ID || null);
 " && echo "OK log" || echo "FAILED log"
 ```
 
@@ -137,7 +137,7 @@ node --input-type=module -e "
 import {writeState, log} from '${BT_ROOT}/skills/think-short/helpers/state.mjs';
 const patch = PATCH_JSON;
 const r = await writeState('SCOPE', patch, process.cwd());
-log('info', 'toggle OP applied (scope=SCOPE) → ' + JSON.stringify(patch), process.cwd(), process.env.CLAUDE_SESSION_ID || null);
+log('info', 'toggle OP applied (scope=SCOPE) → ' + JSON.stringify(patch), process.cwd(), process.env.CLAUDE_CODE_SESSION_ID || null);
 console.log(JSON.stringify({scope:'SCOPE', file:r.path, state:r.after}));
 " && echo "OK mutate" || echo "FAILED mutate"
 ```
@@ -168,7 +168,7 @@ const s = await resolveEffectiveState(process.cwd());
 const cur = Array.isArray(s.blacklist) ? s.blacklist : [];
 const next = Array.from(new Set([...cur, 'AGENT']));   // or: cur.filter(a => a !== 'AGENT')
 const r = await writeState('SCOPE', {blacklist: next}, process.cwd());
-log('info', 'blacklist OP AGENT (scope=SCOPE)', process.cwd(), process.env.CLAUDE_SESSION_ID || null);
+log('info', 'blacklist OP AGENT (scope=SCOPE)', process.cwd(), process.env.CLAUDE_CODE_SESSION_ID || null);
 console.log(JSON.stringify({scope:'SCOPE', file:r.path, state:r.after}));
 " && echo "OK mutate" || echo "FAILED mutate"
 ```
@@ -186,7 +186,7 @@ blacklist: [debate, docs-writer, architect]
 state files:
   project: .claude/brewtools/think-short.json (exists, updated 2026-04-20T12:34:56Z)
   global:  ~/.claude/plugins/data/brewtools-claude-brewcode/think-short.json (missing)
-plugin.json defaults: enabled=false, profile=medium
+DEFAULT_THINK_SHORT: enabled=false, profile=medium
 env override: THINK_SHORT_DEFAULT=(unset)
 recent log:
   <last 10 lines from .claude/logs/brewtools.log matching `think-short`>

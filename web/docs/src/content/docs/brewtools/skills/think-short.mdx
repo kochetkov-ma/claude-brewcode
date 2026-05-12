@@ -75,7 +75,7 @@ blacklist: [debate, docs-writer, architect]
 state files:
   project: .claude/brewtools/think-short.json (exists, updated 2026-04-20T12:34:56Z)
   global:  ~/.claude/plugins/data/brewtools-claude-brewcode/think-short.json (missing)
-plugin.json defaults: enabled=false, profile=medium
+hardcoded defaults: enabled=false, profile=medium
 env override: THINK_SHORT_DEFAULT=(unset)
 recent log:
   think-short: NL-prompt "включись максимально" → resolved as on + profile aggressive
@@ -150,8 +150,7 @@ Project scope overrides global field-by-field — `enabled`, `profile`, and `bla
 1. `THINK_SHORT_DEFAULT` env var (`on` / `off` / profile name) — highest priority
 2. Project state: `<cwd>/.claude/brewtools/think-short.json`
 3. Global state: `$CLAUDE_PLUGIN_DATA/think-short.json`
-4. `plugin.json` config (`config.think_short.default_enabled`, `config.think_short.default_profile`)
-5. Hardcoded defaults: `enabled=false`, `profile=medium`, `blacklist=[debate, docs-writer, architect]`
+4. Hardcoded `DEFAULT_THINK_SHORT` constant in `helpers/state.mjs` — `enabled=false`, `profile=medium`, `blacklist=[debate, docs-writer, architect]`
 
 ## Injection timeline
 

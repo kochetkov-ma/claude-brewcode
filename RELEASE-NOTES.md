@@ -2,6 +2,19 @@
 
 ---
 
+## v3.7.19 (2026-05-12)
+
+> Docs: [brewtools/skills/think-short](https://doc-claude.brewcode.app/brewtools/skills/think-short/) | [brewtools/plugin](https://doc-claude.brewcode.app/brewtools/)
+
+### brewtools
+
+#### Fixed
+- **plugin schema:** removed `config` block from `plugin.json` (Claude Code 2.1.139 dropped support; was a BLOCKER causing schema validation to fail). think-short defaults relocated to inline `DEFAULT_THINK_SHORT` constant in `helpers/state.mjs`. Env-var override `THINK_SHORT_DEFAULT` and global/project state files unchanged.
+- **think-short env:** `process.env.CLAUDE_SESSION_ID` → `process.env.CLAUDE_CODE_SESSION_ID` (3 sites in `SKILL.md`). Template variable `${CLAUDE_SESSION_ID}` unchanged.
+- **docs:** updated fallback-chain documentation in MDX and SKILL.md to reflect removed plugin.json config block.
+
+---
+
 ## v3.7.18 (2026-05-12)
 
 > Docs: [brewcode:setup](https://doc-claude.brewcode.app/brewcode/skills/setup/)

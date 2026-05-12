@@ -3,9 +3,16 @@ import os from 'node:os';
 import { safeReadJson, safeWriteJson } from './safe-write.mjs';
 import { log as utilsLog } from '../../../hooks/lib/utils.mjs';
 
+// Inline defaults (relocated from brewtools plugin.json `config` block,
+// removed in CC 2.1.139 schema). Keep values in sync with prior plugin.json.
+const DEFAULT_THINK_SHORT = {
+  default_enabled: false,
+  default_profile: 'medium',
+};
+
 const HARDCODED = {
-  enabled: false,
-  profile: 'medium',
+  enabled: DEFAULT_THINK_SHORT.default_enabled,
+  profile: DEFAULT_THINK_SHORT.default_profile,
   blacklist: ['debate', 'docs-writer', 'architect'],
 };
 
@@ -28,22 +35,17 @@ export function getPaths(cwd) {
 }
 
 /**
+ * Plugin defaults. Previously read from plugin.json `config.think_short`,
+ * which was removed in CC 2.1.139. Now sourced from inline DEFAULT_THINK_SHORT.
+ * Signature preserved for API compatibility; pluginJsonPath is unused.
  * @returns {Promise<{enabled:boolean, profile:string}>}
  */
-export async function readPluginDefaults(pluginJsonPath) {
-  const fallback = { enabled: false, profile: 'medium' };
-  if (!pluginJsonPath) return fallback;
-  try {
-    const data = await safeReadJson(pluginJsonPath);
-    const ts = data && data.config && data.config.think_short;
-    if (!ts) return fallback;
-    return {
-      enabled: typeof ts.default_enabled === 'boolean' ? ts.default_enabled : fallback.enabled,
-      profile: VALID_PROFILES.includes(ts.default_profile) ? ts.default_profile : fallback.profile,
-    };
-  } catch {
-    return fallback;
-  }
+export async function readPluginDefaults(_pluginJsonPath) {
+  const ts = DEFAULT_THINK_SHORT;
+  return {
+    enabled: typeof ts.default_enabled === 'boolean' ? ts.default_enabled : false,
+    profile: VALID_PROFILES.includes(ts.default_profile) ? ts.default_profile : 'medium',
+  };
 }
 
 function applyEnvOverride(state, cwd) {
