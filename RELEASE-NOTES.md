@@ -2,6 +2,16 @@
 
 ---
 
+## v3.7.18 (2026-05-12)
+
+> Docs: [brewcode:setup](https://doc-claude.brewcode.app/brewcode/skills/setup/)
+
+### brewcode
+#### Fixed
+- **setup.sh:** `bash setup.sh review` (and `collect_agents` for global/plugin agents) aborted with rc=1 on the happy path under `set -euo pipefail`. The trailing filter pipelines at L164 (placeholder-warning filter) and L240/241/255/258 (agent-frontmatter `grep | head | sed | tr | xargs`) returned rc=1 when there was nothing to filter (no unresolved placeholders, no `name:`/`description:` line), `pipefail` propagated through `$(...)`, and the bare assignment tripped errexit. Appended `|| true` to each pipeline. Downstream `[ -n "$_unresolved" ]` / `[ -n "$name" ]` already gate on empty result; defense-in-depth `test -f .../SKILL.md` at L183 still catches missing output. Completes v3.7.15 direction.
+
+---
+
 ## v3.7.17 (2026-05-01)
 
 > Docs: [brewdoc:publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
