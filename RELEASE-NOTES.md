@@ -2,6 +2,36 @@
 
 ---
 
+## v3.9.0 (2026-05-12)
+
+> Docs: [brewcode/skills/start](https://doc-claude.brewcode.app/brewcode/skills/start/) | [brewcode/agents/reviewer](https://doc-claude.brewcode.app/brewcode/agents/reviewer/) | [brewcode/agents/architect](https://doc-claude.brewcode.app/brewcode/agents/architect/) | [brewcode/agents/developer](https://doc-claude.brewcode.app/brewcode/agents/developer/) | [brewtools/skills/plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/)
+
+### brewcode
+
+#### Added
+- **effort.level propagation:** `pre-task.mjs` and `forced-eval.mjs` now read effort.level from session state and prepend an idempotent `[EFFORT: <level> | MODE: terse-<variant>]` line to delegated prompts. Downstream subagents inherit the parent's effort budget without explicit relay.
+- **`/goal` anchor in start:** `brewcode/skills/start/SKILL.md` Step 2 now anchors the user-stated goal as `/goal` for stable reference across phases and handoffs.
+- **CRITICAL: PRESERVE handoff emphasis:** `pre-compact.mjs` writes handoff blocks with `CRITICAL: PRESERVE` prefix; the summarizer empirically retains prefixed content at higher fidelity. Wording softened to avoid alarmist tone while keeping the emphasis hook.
+- **❌ CRITICAL KNOWLEDGE prefix:** `pre-task.mjs` prefixes injected KNOWLEDGE entries with `❌ CRITICAL:` for `❌` priority items, improving recall in long contexts.
+- **mcpServers frontmatter (CLI-direct fallback):** `reviewer.md`, `architect.md`, `developer.md`, `bc-grepai-configurator.md` now declare `mcpServers: [grepai]` so the agent inherits the MCP server even when launched via CLI-direct flow (bypassing the parent session's auto-load).
+
+### brewtools
+
+#### Added
+- **plugin-update Phase 2b (token-details table):** `plugin-update/SKILL.md` adds a per-plugin token-cost table populated from `claude plugin --help` exit-code precheck; degrades gracefully if `--help` is unavailable on the running CC version.
+- **plugin-update Phase 5b (prune):** post-update prune of stale plugin cache versions, gated by the same `--help` precheck. No-op on unsupported CC versions.
+- **effort=low auto-enables think-short=light:** `brewtools/hooks/session-start.mjs` and `pre-task.mjs` detect effort.level=low at session/task boundaries and auto-enable `think-short=light` for the session, guarded by a session-marker to stay idempotent across reruns.
+
+### docs
+
+#### Added
+- **agent/skill/hook-creator MDX:** worktree.baseRef and bypassPermissions callouts added to `web/docs/src/content/docs/brewcode/agents/{agent,skill,hook}-creator.mdx` clarifying baseRef pin semantics and the bypassPermissions guard interplay.
+
+### Notes
+- **v3.8.0 Migration & Rollback corrected post-release:** the project-scope backup path (`<cwd>/.claude/brewtools/toggle-state.json.bak.pre-migration-<TS>`) was added, and the unverified `claude plugin update --version` flag was replaced with a marketplace tag-ref pin (`marketplace add ...#vX.Y.Z`). No code change in v3.8.0; doc-only correction applied before this release.
+
+---
+
 ## v3.8.0 (2026-05-12)
 
 > Docs: [brewtools/skills/skill-toggle](https://doc-claude.brewcode.app/brewtools/skills/skill-toggle/) | [brewcode/skills/grepai](https://doc-claude.brewcode.app/brewcode/skills/grepai/) | [brewcode/skills/teardown](https://doc-claude.brewcode.app/brewcode/skills/teardown/)
@@ -31,7 +61,13 @@
 
 #### Migration & Rollback
 - **Auto-migration:** On first SessionStart after upgrade, brewtools `reapply-disables` hook migrates legacy `toggle-state.json` skill entries to `~/.claude/settings.json` `skillOverrides`. A backup is written to `toggle-state.json.bak.pre-migration-<TS>` BEFORE deletion.
-- **Downgrade to v3.7.x:** `skillOverrides` in settings.json is NOT read by v3.7.x. Restore the pre-migration backup: `cp toggle-state.json.bak.pre-migration-<TS> toggle-state.json` (path: `~/.claude/plugins/data/brewtools-claude-brewcode/` or scope-equivalent). Then `claude plugin update brewtools@claude-brewcode --version 3.7.19`.
+- **Backup locations (BOTH scopes):**
+  - Global scope: `~/.claude/plugins/data/brewtools-claude-brewcode/toggle-state.json.bak.pre-migration-<TS>`
+  - Project scope: `<cwd>/.claude/brewtools/toggle-state.json.bak.pre-migration-<TS>` (one per project that had local skill disables)
+- **Downgrade to v3.7.x — steps:**
+  1. Restore the pre-migration backup in whichever scope(s) you used: `cp toggle-state.json.bak.pre-migration-<TS> toggle-state.json` at the matching path above.
+  2. (Optional) Manually remove the now-stale `skillOverrides` block from `~/.claude/settings.json` — v3.7.x ignores it, but the entries persist and may confuse future migrations or audits.
+  3. Re-pin to v3.7.19 by re-adding the marketplace at the tag ref: `claude plugin marketplace remove claude-brewcode && claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode.git#v3.7.19 && claude plugin update brewtools@claude-brewcode` (the `--version` flag on `claude plugin update` is not a verified subcommand option — use the marketplace tag-ref pin instead).
 - **agent-toggle unaffected** — agent state still uses file-rename approach.
 
 ---

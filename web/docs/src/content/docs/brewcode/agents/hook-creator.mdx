@@ -140,6 +140,8 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | `prompt` | 30s | Single Haiku LLM call for natural-language validation |
 | `agent` | 60s | Multi-step analysis with Read/Grep/Glob access |
 
+`agent`-type hooks spawn a subagent. The spawned subagent inherits the session's `permissionMode`. Never configure the parent session with `--dangerously-skip-permissions` just to avoid hook permission prompts — use a narrow `permissionMode: acceptEdits` on the hook's agent definition instead.
+
 </details>
 
 <CardGrid>

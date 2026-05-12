@@ -4,6 +4,8 @@ description: System architect & code reviewer - architecture, quality, security,
 model: opus
 tools: Read, Glob, Grep, Bash, Task
 disallowedTools: Write, Edit
+mcpServers:
+  - grepai
 auto-sync-date: 2026-02-10
 ---
 

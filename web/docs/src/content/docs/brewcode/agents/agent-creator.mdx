@@ -105,9 +105,15 @@ color: cyan                   # OPT: cyan|green|yellow|red|magenta
 memory: true                  # OPT: agent-specific MEMORY.md; auto-adds Read/Write/Edit
 initialPrompt: "..."          # OPT: first prompt sent on start (v2.1.69+)
 isolation: worktree           # OPT: isolated git worktree (v2.1.50+)
+worktree:
+  baseRef: main               # OPT: branch the worktree forks from (CC 2.1.115+, default: current HEAD)
 mcpServers: [server1]         # OPT: restrict which MCP servers agent accesses
 ---
 ```
+
+<Callout type="caution">
+**Do not set `permissionMode: bypassPermissions` by default.** This is equivalent to running with `--dangerously-skip-permissions` — it silently skips all safety prompts. Only use it for fully-sandboxed CI environments where there is no interactive user. For local development, prefer `permissionMode: default` or `permissionMode: acceptEdits`.
+</Callout>
 
 Description patterns by ambiguity level:
 

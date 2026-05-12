@@ -81,6 +81,14 @@ async function main() {
     let updatedPrompt = tool_input.prompt || '';
     let modified = false;
 
+    // 0.0 Effort-level prefix (CC 2.1.115+). Idempotent: skip if already present.
+    const effortLevel = input.effort?.level;
+    if (effortLevel === 'low' && !updatedPrompt.includes('[EFFORT:')) {
+      updatedPrompt = `[EFFORT: low | MODE: terse-light]\n${updatedPrompt}`;
+      modified = true;
+      log('debug', '[pre-task]', `Injected EFFORT=low prefix for ${subagentType}`, cwd, session_id);
+    }
+
     // 0. Inject BC_PLUGIN_ROOT for ALL agents (first injection)
     const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT || '';
     if (pluginRoot) {
@@ -131,9 +139,20 @@ async function main() {
         const entries = readKnowledge(knowledgePath);
 
         if (entries.length) {
-          const knowledge = compressKnowledge(entries, config.knowledge.maxTokens);
+          let knowledge = compressKnowledge(entries, config.knowledge.maxTokens);
 
           if (knowledge) {
+            // Empirical: prepending `❌ CRITICAL:` emphasizes anti-pattern lines
+            // for the autocompact summarizer LLM. Not a documented CC contract —
+            // best-effort emphasis, not guaranteed retention.
+            // Only affects lines starting with ❌; ✅ and ℹ️ lines pass through unchanged.
+            knowledge = knowledge
+              .split('\n')
+              .map(line => (line.startsWith('❌ ') && !line.startsWith('❌ CRITICAL:'))
+                ? `❌ CRITICAL: ${line.slice(2)}`
+                : line)
+              .join('\n');
+
             updatedPrompt = `${knowledge}\n\n${updatedPrompt}`;
             modified = true;
             log('info', '[pre-task]', `Injecting knowledge for ${subagentType} (${entries.length} entries)`, cwd, session_id);

@@ -4,11 +4,57 @@
  * Injects BT_PLUGIN_ROOT into sub-agent prompts
  * Optionally prepends think-short profile-lite directive (first 2 non-empty lines)
  */
-import { readFile } from 'node:fs/promises';
+import { readFile, mkdir, writeFile, access } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readStdin, output, log as rawLog } from './lib/utils.mjs';
-import { resolveEffectiveState, log as tsLog } from '../skills/think-short/helpers/state.mjs';
+import { resolveEffectiveState, writeState, log as tsLog } from '../skills/think-short/helpers/state.mjs';
+
+/**
+ * Auto-enable think-short=light when effort=low (CC 2.1.115+).
+ * Idempotent via per-session marker file.
+ */
+async function maybeAutoEnableThinkShortLow(input, cwd, session_id) {
+  try {
+    if (input.effort?.level !== 'low') return false;
+    if (!session_id || !cwd) return false;
+
+    const markerDir = path.join(cwd, '.claude', 'tasks', 'sessions');
+    const markerPath = path.join(markerDir, `${session_id}.think-short-effort-low`);
+
+    try {
+      await access(markerPath);
+      return false;
+    } catch {}
+
+    let state;
+    try {
+      state = await resolveEffectiveState(cwd);
+    } catch {
+      state = null;
+    }
+
+    if (!state || state.enabled !== true) {
+      try {
+        await writeState('project', { enabled: true, profile: 'light' }, cwd);
+        tsLog('info', `AUTO-ENABLED profile=light (effort=low)`, cwd, session_id);
+      } catch (err) {
+        tsLog('info', `auto-enable write failed (${err.message})`, cwd, session_id);
+        return false;
+      }
+    }
+
+    try {
+      await mkdir(markerDir, { recursive: true });
+      await writeFile(markerPath, `effort=low session=${session_id} ts=${new Date().toISOString()}\n`, 'utf8');
+    } catch {}
+
+    return true;
+  } catch (err) {
+    tsLog('info', `auto-enable guard error (${err.message})`, cwd, session_id);
+    return false;
+  }
+}
 
 async function tryInjectThinkShort(updatedPrompt, tool_input, cwd, session_id) {
   const agent = tool_input.subagent_type;
@@ -93,6 +139,9 @@ async function main() {
       output({});
       return;
     }
+
+    // Auto-enable think-short=light when effort=low (CC 2.1.115+).
+    await maybeAutoEnableThinkShortLow(input, cwd, session_id);
 
     let updatedPrompt = tool_input.prompt || '';
     let modified = false;

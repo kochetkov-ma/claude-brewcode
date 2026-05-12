@@ -1,8 +1,60 @@
 #!/usr/bin/env node
-import { readFile } from 'node:fs/promises';
+import { readFile, mkdir, writeFile, access } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readStdin, output, log } from './lib/utils.mjs';
+
+/**
+ * Auto-enable think-short=light when effort=low (CC 2.1.115+).
+ * Idempotent: marker file prevents double-toggle across repeated SessionStart fires.
+ * Returns true if newly auto-enabled this call.
+ */
+async function maybeAutoEnableThinkShortLow(input, cwd, session_id) {
+  try {
+    if (input.effort?.level !== 'low') return false;
+    if (!session_id || !cwd) return false;
+
+    const markerDir = path.join(cwd, '.claude', 'tasks', 'sessions');
+    const markerPath = path.join(markerDir, `${session_id}.think-short-effort-low`);
+
+    try {
+      await access(markerPath);
+      // Marker exists — already auto-enabled for this session.
+      return false;
+    } catch {
+      // No marker — proceed.
+    }
+
+    const { resolveEffectiveState, writeState } = await import('../skills/think-short/helpers/state.mjs');
+    let state;
+    try {
+      state = await resolveEffectiveState(cwd);
+    } catch {
+      state = null;
+    }
+
+    // Only auto-enable if not already enabled (respect explicit user state).
+    if (!state || state.enabled !== true) {
+      try {
+        await writeState('project', { enabled: true, profile: 'light' }, cwd);
+        log('info', '[session-start]', `think-short: AUTO-ENABLED profile=light (effort=low)`, cwd, session_id);
+      } catch (err) {
+        log('info', '[session-start]', `think-short: auto-enable write failed (${err.message})`, cwd, session_id);
+        return false;
+      }
+    }
+
+    try {
+      await mkdir(markerDir, { recursive: true });
+      await writeFile(markerPath, `effort=low session=${session_id} ts=${new Date().toISOString()}\n`, 'utf8');
+    } catch {}
+
+    return true;
+  } catch (err) {
+    log('info', '[session-start]', `think-short: auto-enable guard error (${err.message})`, cwd, session_id);
+    return false;
+  }
+}
 
 async function injectThinkShort(baseContext, cwd, session_id) {
   try {
@@ -70,6 +122,9 @@ async function main() {
     let context = pluginRoot
       ? `BT_PLUGIN_ROOT=${pluginRoot}`
       : `brewtools: ${sessionShort}`;
+
+    // Auto-enable think-short=light when effort=low (CC 2.1.115+). Idempotent via session marker.
+    await maybeAutoEnableThinkShortLow(input, cwd, session_id);
 
     context = await injectThinkShort(context, cwd, session_id);
 

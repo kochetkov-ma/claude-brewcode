@@ -77,6 +77,35 @@ Also list `other` plugins below with their versions (informational).
 
 **If arg = `check`** → STOP here. Skip to Phase 6.
 
+## Phase 2b — Token-Cost Table (Optional)
+
+Precheck command availability:
+
+```bash
+claude plugin details --help >/dev/null 2>&1 && echo "available" || echo "skip"
+```
+
+If unavailable → SKIP this phase entirely (proceed to Phase 3).
+
+If available, for each installed suite plugin run:
+
+```bash
+claude plugin details <plugin>@claude-brewcode
+```
+
+Parse output and render a token-cost table to the user:
+
+| Plugin | Base Tokens | With Skills | Hooks | Total |
+|--------|-------------|-------------|-------|-------|
+| brewcode | ... | ... | ... | ... |
+| brewdoc | ... | ... | ... | ... |
+| brewtools | ... | ... | ... | ... |
+| brewui | ... | ... | ... | ... |
+
+Column names depend on actual `claude plugin details` output fields — adapt accordingly. If a field is missing, render `—`. If the command fails for a specific plugin, render `❓` for that row and continue.
+
+Phase is informational only; do not block on errors.
+
 ## Phase 3 — Install Missing
 
 For each missing suite plugin, ask the user via AskUserQuestion (unless arg ∈ {`update`, `all`}, then skip installation or auto-install only for `all`).
@@ -150,6 +179,16 @@ Options:
 
 Do NOT patch settings.json blindly — the key is unverified. Tell the user to toggle via `/plugin` UI.
 
+## Phase 5b — Prune Stale Plugin Caches
+
+**EXECUTE** using Bash tool:
+
+```bash
+claude plugin prune --help >/dev/null 2>&1 && claude plugin prune || echo "skipped: claude plugin prune unavailable"
+```
+
+Cleans stale plugin caches left behind by older versions. Non-fatal: if the CLI lacks `prune`, the `||` fallback prints a skip notice and continues.
+
 ## Phase 6 — Reload Notice & Final Report
 
 **ALWAYS print** the contents of [references/reload-notice.md](references/reload-notice.md):
@@ -165,3 +204,5 @@ Then print a final summary:
 - Errors encountered: [...]
 
 Done.
+
+<!-- W3-T8 research note: Marketplace auto-update settings.json key not confirmed in CC docs as of 2026-05-12. Continue using UI guidance. Re-investigate when CC adds documented marketplace.autoUpdate setting. -->

@@ -49,6 +49,8 @@ Task tool:
 
 Coordinator validates, creates lock, updates status -> `in progress`.
 
+- Suggest user run `/goal` (CC 2.1.115+) to anchor the session's objective before execution proceeds.
+
 ### 3. Load Context
 
 - Read PLAN.md (ONLY PLAN.md from the task directory)

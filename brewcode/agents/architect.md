@@ -5,6 +5,8 @@ model: opus
 color: cyan
 tools: Read, Glob, Grep, Bash, WebFetch, WebSearch
 disallowedTools: Write, Edit, NotebookEdit
+mcpServers:
+  - grepai
 ---
 
 # Architect Agent

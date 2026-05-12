@@ -4,6 +4,8 @@ description: "grepai config specialist - project analysis, config.yaml generatio
 tools: Read, Write, Edit, Bash, WebFetch, Glob, Grep
 model: opus
 permissionMode: acceptEdits
+mcpServers:
+  - grepai
 ---
 
 # grepai Configurator

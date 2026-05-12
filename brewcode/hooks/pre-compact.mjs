@@ -109,7 +109,10 @@ async function main() {
     }
 
     // WRITE HANDOFF ENTRY
-    writeHandoffEntry(knowledgePath, task.currentPhase, 'context auto-compact');
+    // Empirical: prepending CRITICAL: PRESERVE emphasizes priority for the
+    // autocompact summarizer LLM. Not a documented CC contract — best-effort
+    // emphasis, not guaranteed retention.
+    writeHandoffEntry(knowledgePath, task.currentPhase, 'CRITICAL: PRESERVE handoff state across context auto-compact');
 
     // UPDATE STATUS to handoff
     updateTaskStatus(taskPath, 'handoff');
@@ -127,9 +130,12 @@ async function main() {
     const taskDir = dirname(taskPath);
     const isV3 = existsSync(join(taskDir, 'phases'));
 
+    // Empirical: CRITICAL/PRESERVE prefixes mark this content for summarizer
+    // emphasis during autocompact. Not a documented CC heuristic — best-effort
+    // in-context emphasis only, retention not guaranteed.
     const systemMessage = isV3
-      ? `brewcode: compact handoff, phase ${task.currentPhase}/${task.totalPhases}. After compact: 1) TaskList() for current task state 2) Read PLAN.md for protocol 3) DO NOT read phases/ — they are for agents 4) Continue with current in_progress or next pending task 5) WRITE report → CALL coordinator after EVERY agent`
-      : `brewcode: compact handoff, phase ${task.currentPhase}/${task.totalPhases}`;
+      ? `Marked for summarizer emphasis — brewcode compact handoff, phase ${task.currentPhase}/${task.totalPhases}. After compact: 1) TaskList() for current task state 2) Read PLAN.md for protocol 3) DO NOT read phases/ — they are for agents 4) Continue with current in_progress or next pending task 5) WRITE report → CALL coordinator after EVERY agent. Note: lock file session binding active.`
+      : `Marked for summarizer emphasis — brewcode compact handoff, phase ${task.currentPhase}/${task.totalPhases}. Note: lock file session binding active.`;
 
     // Return continue to allow compact
     // systemMessage = short status for user

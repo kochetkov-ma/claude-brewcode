@@ -134,7 +134,7 @@ description: "Creates conventional git commits with proper format. Triggers: com
 description: "Deploy application to production environment."
 ```
 
-Common mistakes: multiline `|` (truncated at 250 chars since v2.1.84), missing `Triggers:` (stays at 20%), starts with "Use this skill when" (should start with action verb), colon in description (YAML parse failure).
+Common mistakes: multiline `|` (truncated at 250 chars since v2.1.84), missing `Triggers:` (stays at 20%), starts with "Use this skill when" (should start with action verb), colon in description (YAML parse failure), setting `permissionMode: bypassPermissions` on production skills — this is equivalent to `--dangerously-skip-permissions` and skips all safety prompts. Only appropriate in sandboxed CI; never the right default for local skills.
 
 ### Frontmatter quick reference
 

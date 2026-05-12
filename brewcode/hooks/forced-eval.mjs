@@ -75,8 +75,13 @@ async function main() {
       return;
     }
 
+    // Effort-level prefix (CC 2.1.115+). Idempotent: skip if already present.
+    const effortLevel = input.effort?.level;
+    const needEffortPrefix = effortLevel === 'low' && !prompt.includes('[EFFORT:');
+    const effortPrefix = needEffortPrefix ? '[EFFORT: low | MODE: terse-light]\n' : '';
+
     // Prepend skill-check reminder to prompt
-    const modifiedPrompt = `${getModeReminder(cwd, session_id)}\n\n---\n\n${prompt}`;
+    const modifiedPrompt = `${effortPrefix}${getModeReminder(cwd, session_id)}\n\n---\n\n${prompt}`;
 
     output({
       updatedInput: {

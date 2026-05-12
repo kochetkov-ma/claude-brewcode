@@ -3,6 +3,8 @@ name: developer
 description: "Implements features, writes code, fixes bugs, refactors - full-stack development. Triggers: implement, write code, fix bug, add feature, refactor, build."
 model: opus
 tools: Read, Write, Edit, Glob, Grep, Bash, Task, NotebookEdit, WebFetch, WebSearch
+mcpServers:
+  - grepai
 auto-sync: true
 auto-sync-date: 2026-02-10
 auto-sync-type: agent
