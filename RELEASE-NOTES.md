@@ -2,6 +2,15 @@
 
 ---
 
+## v3.9.1 (2026-05-15)
+
+### brewdoc
+
+#### Changed
+- **publish skill — owner-token semantics:** `brewdoc/skills/publish/SKILL.md` HEADER comment in 5 history-file scaffolds now reads `Owner tokens allow delete (no in-place PUT for sites; html/json/kv support PUT). Keep this file private.` (was `Owner tokens allow update/delete. ...`). AI agents reading the prior wording inferred `PUT /api/sites/{ns}/{id}` exists and hit 405; the corrected text disambiguates which resources accept PUT.
+
+---
+
 ## v3.9.0 (2026-05-12)
 
 > Docs: [brewcode/skills/start](https://doc-claude.brewcode.app/brewcode/skills/start/) | [brewcode/agents/reviewer](https://doc-claude.brewcode.app/brewcode/agents/reviewer/) | [brewcode/agents/architect](https://doc-claude.brewcode.app/brewcode/agents/architect/) | [brewcode/agents/developer](https://doc-claude.brewcode.app/brewcode/agents/developer/) | [brewtools/skills/plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/)
