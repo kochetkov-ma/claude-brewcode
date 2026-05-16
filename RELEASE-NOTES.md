@@ -2,6 +2,15 @@
 
 ---
 
+## v3.9.2 (2026-05-16)
+
+### repo
+
+#### Fixed
+- **version sync restored:** v3.9.1 was tagged with only `brewdoc/.claude-plugin/plugin.json` bumped to 3.9.1; the other 5 version files (brewcode/brewtools/brewui `plugin.json`, `.claude-plugin/marketplace.json`, `brewcode/package.json`) stayed on 3.9.0, breaking the cross-plugin version check used by `/brewtools:plugin-update`. v3.9.2 re-runs `bump-version.sh` so all 6 JSON files share one version. No code changes in any plugin — version-sync release only.
+
+---
+
 ## v3.9.1 (2026-05-15)
 
 ### brewdoc
