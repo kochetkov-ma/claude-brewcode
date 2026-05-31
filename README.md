@@ -239,6 +239,15 @@ After `/brewcode:setup`, each task follows the cycle: `spec` -> `plan` -> `start
 | `/brewui:image-gen` | AI image generation via 5 providers with anti-slop controls |
 | `/brewui:glm-design-to-code` | GLM vision design-to-code: image/text/HTML/URL to multi-framework code |
 
+### Portable skills (standalone)
+
+Self-contained `SKILL.md` folders that ship outside the four plugins -- drop them into any compatible agent runtime. Both publish content to [brewpage.app](https://brewpage.app) (text, markdown, files, multi-file sites) and return a public URL.
+
+| Skill | Runtime | Path |
+|-------|---------|------|
+| `brewpage-publish` | Claude Code | [`skills/brewpage-publish`](skills/brewpage-publish/) |
+| `brewpage-publish` | OpenClaw / AgentSkills | [`openclaw/brewpage-publish`](openclaw/brewpage-publish/) |
+
 ## Agents (16 total)
 
 | Agent | Model | Purpose |

@@ -85,6 +85,8 @@ claude --plugin-dir ./brewdoc
 | [`/brewdoc:publish`](skills/publish/README.md) | Publish to brewpage.app -- returns public URL | haiku | `<text\|file\|json> [--ttl N]` |
 | [`/brewdoc:guide`](skills/guide/README.md) | Interactive tutorial for the plugin suite | haiku | `[topic]` |
 
+> Need a portable, plugin-free version? See the standalone [`brewpage-publish`](../skills/brewpage-publish/) (Claude Code) and [`openclaw/brewpage-publish`](../openclaw/brewpage-publish/) (OpenClaw / AgentSkills) skills.
+
 ## Agent
 
 | Agent | Model | Purpose |
