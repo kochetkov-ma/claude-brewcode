@@ -54,8 +54,8 @@ Use **AskUserQuestion**:
 
 ```
 Namespace sets the URL prefix, gallery visibility, and search-engine indexing on brewpage.app.
-By default publishing is PRIVATE: the page is reachable only via its exact link — not shown in the public gallery and not indexed by search engines.
-Choose `public` only when you want the page discoverable — listed in the gallery and indexed by search engines (e.g. a real site you want people to find).
+By default publishing is PRIVATE (unlisted): not in the public gallery and not indexed by search engines. The link is not secret, though — anyone who has it can open it (use a password to restrict access).
+Choose `public` to make the page discoverable — listed in the gallery and indexed by search engines (e.g. a real site you want people to find).
 
 Options:
 1) public — listed in gallery + indexed by search engines
@@ -307,6 +307,8 @@ Owner token saved to .claude/brewpage-history.md
   brewpage.app routes "/public/<id>/" to its own landing page, and the
   redirect that saves the no-slash form does not fire for the slash-dir form.
 ```
+
+For a private (non-`public`) namespace, append one short line after the link (skip if the reply must stay ultra-brief): *Unlisted link — anyone who has it can open it, but it's not in the gallery or search. Want it discoverable? Publish to `public`.*
 
 **Error** (bash printed `FAILED: ...`):
 ```
