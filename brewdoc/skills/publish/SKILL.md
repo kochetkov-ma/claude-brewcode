@@ -53,13 +53,15 @@ TTL:      <N> days
 Use **AskUserQuestion**:
 
 ```
-Namespace determines the URL prefix and gallery visibility on brewpage.app.
+Namespace sets the URL prefix, gallery visibility, and search-engine indexing on brewpage.app.
+By default publishing is PRIVATE: the page is reachable only via its exact link — not shown in the public gallery and not indexed by search engines.
+Choose `public` only when you want the page discoverable — listed in the gallery and indexed by search engines (e.g. a real site you want people to find).
 
 Options:
-1) public — visible in gallery (default)
-2) {auto-suggested 6-8 char slug}
+1) public — listed in gallery + indexed by search engines
+2) {auto-suggested 6-8 char slug} — private, link-only (default)
 3) Enter custom namespace
-4) Skip → use public
+4) Skip → use suggested slug (private)
 
 Reply with a number or your custom namespace (alphanumeric, 3-32 chars).
 ```
@@ -72,8 +74,8 @@ Auto-suggest: generate a **meaningful short slug** (3-16 chars, lowercase alphan
 Never use random strings or truncated filenames — the slug should be human-readable and describe what's being published.
 
 Resolution:
-- `1`, `4`, or empty → `public`
-- `2` → suggested slug
+- `2`, `4`, or empty → suggested slug
+- `1` → `public`
 - `3` or any other string → use as-is
 
 ### Step 5: Ask Password
@@ -314,7 +316,7 @@ Publish failed.
 ## Notes
 
 - Use `jq -n --arg c "$CONTENT" '{content: $c}'` to safely encode text content. **`format` is a query param**, not a body field — `/api/html` ignores any `format` key inside the JSON body and reads only `?format=` from the URL. Wrong location = server applies default `html` and stores your markdown as raw text.
-- TTL default is `15` days. Namespace must be alphanumeric (3-32 chars), default `public`.
+- TTL default is `15` days. Namespace must be alphanumeric (3-32 chars), default: suggested (private) namespace.
 - To **delete** a published page, find the owner token in `.claude/brewpage-history.md` and use the delete command shown in that file's header.
 - Entry file detection: `--entry` override > `index.html` > first `.html` alphabetically.
 - **SITE URL — NO trailing slash.** API returns `.link = "https://brewpage.app/public/<id>"` without trailing `/`. Appending `/` routes to brewpage.app's own landing page; the JS redirect that rescues the no-slash form does NOT fire for the slash-dir form → site becomes inaccessible.
