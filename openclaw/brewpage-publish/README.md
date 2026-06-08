@@ -1,6 +1,6 @@
 # brewpage-publish (OpenClaw skill)
 
-Publish text, markdown, any file, or a whole multi-file site to [brewpage.app](https://brewpage.app) — get a public URL instantly. No sign-up.
+Publish HTML, markdown, text, any file, or a whole multi-file site to [brewpage.app](https://brewpage.app) — free hosting with no sign-up. Paste text, share a file, host a temporary page, or upload a site and get an instant public URL to share a link.
 
 This is an [AgentSkills](https://docs.openclaw.ai/tools/skills)-standard skill for **OpenClaw**.
 
