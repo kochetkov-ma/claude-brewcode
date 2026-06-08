@@ -146,6 +146,16 @@ curl -s -X DELETE "https://brewpage.app/api/{ns}/{id}" \
 
 For sites use `/api/sites/{ns}/{id}`.
 
+**Update a published site (keep the same URL):**
+
+```bash
+curl -s -X PUT "https://brewpage.app/api/sites/{ns}/{id}" \
+  -H "X-Owner-Token: TOKEN" \
+  -F "archive=@/absolute/path/to/new-bundle.zip"
+```
+
+To update a published site, `PUT` the new bundle to the same site URL with your owner token — the uploaded bundle fully replaces the file set (adds new files, removes absent ones, overwrites matching). The link never changes; no DELETE-then-POST needed.
+
 **Namespace rules:** lowercase alphanumeric + hyphens, 3–32 chars. Auto-suggestion is content-derived (`api-docs`, `report-q2`) — never a random string or truncated filename.
 
 **Site uploads:** directory → zipped to `mktemp /tmp/brewpage-site-XXXXXX.zip` → POSTed as `archive=@$TMPZIP` → temp file removed. `User-Agent: ClaudeCode/1.0` header included.

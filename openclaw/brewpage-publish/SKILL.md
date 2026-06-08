@@ -116,9 +116,10 @@ if [ ! -f "$HISTORY_FILE" ]; then
 # brewpage.app — Published Pages
 
 > PRIVATE FILE — keep this out of version control and never share it.
-> Owner tokens allow delete (no in-place PUT for sites; html/json/kv support PUT).
+> Owner tokens allow delete and in-place republish (html/json/kv/sites all support PUT).
 > Delete html/json/kv: `curl -s -X DELETE "https://brewpage.app/api/{ns}/{id}" -H "X-Owner-Token: TOKEN"`
 > Delete site:         `curl -s -X DELETE "https://brewpage.app/api/sites/{ns}/{id}" -H "X-Owner-Token: TOKEN"`
+> Update site (keep same URL): `PUT /api/sites/{ns}/{id}` with `X-Owner-Token: TOKEN` + the new bundle — the uploaded bundle fully replaces the file set (adds new files, removes absent ones, overwrites matching). The link never changes.
 
 | Date | URL | Owner Token | TTL | Type |
 |------|-----|-------------|-----|------|
@@ -256,6 +257,7 @@ Publish failed.
 - Use `jq -n --arg c "$CONTENT" '{content: $c}'` to safely encode text content. **`format` is a query param**, not a body field — `/api/html` ignores any `format` key inside the JSON body and reads only `?format=` from the URL. Wrong location = server applies default `html` and stores your markdown as raw text.
 - TTL default is `15` days. Namespace must be alphanumeric (3-32 chars), default `public`.
 - To **delete** a published page, find the owner token in `./brewpage-history.md` and use the delete command shown in that file's header.
+- To **update a published site**, `PUT` the new bundle to the same site URL (`PUT /api/sites/{ns}/{id}`) with your `X-Owner-Token` — the uploaded bundle fully replaces the file set (adds new files, removes absent ones, overwrites matching) and the link never changes. No DELETE-then-POST needed.
 - **Sites: directory is the primary input** — it is auto-zipped (the only thing `POST /api/sites` accepts), which seals relative paths. A pre-built `.zip` is the alternative input, uploaded as-is. Always publish BUILT output (`dist/`, `build/`, `out/`, `_site/`, `public/`), never project sources.
 - The auto-zip excludes `.git/`, `.env`/`.env.*`, `node_modules/`, editor/OS junk, sourcemaps and logs — a deliberate secret-leak safeguard so credentials and VCS history never reach the public archive.
 - Entry file detection: `--entry` override > `index.html` > first `.html` alphabetically.

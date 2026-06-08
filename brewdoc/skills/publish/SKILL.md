@@ -116,7 +116,7 @@ if [ ! -f "$HISTORY_FILE" ]; then
   cat > "$HISTORY_FILE" <<'HEADER'
 # brewpage.app — Published Pages
 
-> Owner tokens allow delete (no in-place PUT for sites; html/json/kv support PUT). Keep this file private.
+> Owner tokens allow delete and in-place republish (html/json/kv/sites all support PUT). Keep this file private.
 > Delete: `curl -s -X DELETE "https://brewpage.app/api/{ns}/{id}" -H "X-Owner-Token: TOKEN"`
 
 | Date | URL | Owner Token | TTL | Type |
@@ -155,7 +155,7 @@ if [ ! -f "$HISTORY_FILE" ]; then
   cat > "$HISTORY_FILE" <<'HEADER'
 # brewpage.app — Published Pages
 
-> Owner tokens allow delete (no in-place PUT for sites; html/json/kv support PUT). Keep this file private.
+> Owner tokens allow delete and in-place republish (html/json/kv/sites all support PUT). Keep this file private.
 > Delete: `curl -s -X DELETE "https://brewpage.app/api/{ns}/{id}" -H "X-Owner-Token: TOKEN"`
 
 | Date | URL | Owner Token | TTL | Type |
@@ -189,7 +189,7 @@ if [ ! -f "$HISTORY_FILE" ]; then
   cat > "$HISTORY_FILE" <<'HEADER'
 # brewpage.app — Published Pages
 
-> Owner tokens allow delete (no in-place PUT for sites; html/json/kv support PUT). Keep this file private.
+> Owner tokens allow delete and in-place republish (html/json/kv/sites all support PUT). Keep this file private.
 > Delete: `curl -s -X DELETE "https://brewpage.app/api/{ns}/{id}" -H "X-Owner-Token: TOKEN"`
 
 | Date | URL | Owner Token | TTL | Type |
@@ -222,8 +222,9 @@ if [ ! -f "$HISTORY_FILE" ]; then
   cat > "$HISTORY_FILE" <<'HEADER'
 # brewpage.app — Published Pages
 
-> Owner tokens allow delete (no in-place PUT for sites; html/json/kv support PUT). Keep this file private.
+> Owner tokens allow delete and in-place republish (html/json/kv/sites all support PUT). Keep this file private.
 > Delete: `curl -s -X DELETE "https://brewpage.app/api/sites/{ns}/{id}" -H "X-Owner-Token: TOKEN"`
+> Update site (keep same URL): `PUT /api/sites/{ns}/{id}` with `X-Owner-Token: TOKEN` + the new bundle — fully replaces the file set (adds new, removes absent, overwrites matching). The link never changes.
 
 | Date | URL | Owner Token | TTL | Type |
 |------|-----|-------------|-----|------|
@@ -261,8 +262,9 @@ if [ ! -f "$HISTORY_FILE" ]; then
   cat > "$HISTORY_FILE" <<'HEADER'
 # brewpage.app — Published Pages
 
-> Owner tokens allow delete (no in-place PUT for sites; html/json/kv support PUT). Keep this file private.
+> Owner tokens allow delete and in-place republish (html/json/kv/sites all support PUT). Keep this file private.
 > Delete: `curl -s -X DELETE "https://brewpage.app/api/sites/{ns}/{id}" -H "X-Owner-Token: TOKEN"`
+> Update site (keep same URL): `PUT /api/sites/{ns}/{id}` with `X-Owner-Token: TOKEN` + the new bundle — fully replaces the file set (adds new, removes absent, overwrites matching). The link never changes.
 
 | Date | URL | Owner Token | TTL | Type |
 |------|-----|-------------|-----|------|
@@ -320,6 +322,7 @@ Publish failed.
 - Use `jq -n --arg c "$CONTENT" '{content: $c}'` to safely encode text content. **`format` is a query param**, not a body field — `/api/html` ignores any `format` key inside the JSON body and reads only `?format=` from the URL. Wrong location = server applies default `html` and stores your markdown as raw text.
 - TTL default is `15` days. Namespace must be alphanumeric (3-32 chars), default: suggested (private) namespace.
 - To **delete** a published page, find the owner token in `.claude/brewpage-history.md` and use the delete command shown in that file's header.
+- To **update a published site**, `PUT` the new bundle to the same site URL (`PUT /api/sites/{ns}/{id}`) with your `X-Owner-Token` — the uploaded bundle fully replaces the file set (adds new files, removes absent ones, overwrites matching) and the link never changes. No DELETE-then-POST needed.
 - Entry file detection: `--entry` override > `index.html` > first `.html` alphabetically.
 - **SITE URL — NO trailing slash.** API returns `.link = "https://brewpage.app/public/<id>"` without trailing `/`. Appending `/` routes to brewpage.app's own landing page; the JS redirect that rescues the no-slash form does NOT fire for the slash-dir form → site becomes inaccessible.
 - **SITE verification cannot be done via `curl`.** The no-slash URL serves the BrewPage landing HTML with an inline JS redirect that only executes in a real browser. To verify: use Playwright / `browser_navigate`, or fetch `<url>/index.html` explicitly.
