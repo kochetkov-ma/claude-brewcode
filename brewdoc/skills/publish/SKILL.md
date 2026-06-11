@@ -109,7 +109,7 @@ if [ ! -f "$HISTORY_FILE" ]; then
   cat > "$HISTORY_FILE" <<'HEADER'
 # brewpage.app — Published Pages
 
-> Owner tokens allow delete (no in-place PUT for sites; html/json/kv support PUT). Keep this file private.
+> Owner tokens allow delete and in-place republish (html/json/kv/sites all support PUT). Keep this file private.
 > Delete: `curl -s -X DELETE "https://brewpage.app/api/{ns}/{id}" -H "X-Owner-Token: TOKEN"`
 
 | Date | URL | Owner Token | TTL | Type |

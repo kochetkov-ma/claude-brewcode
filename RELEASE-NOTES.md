@@ -2,6 +2,52 @@
 
 ---
 
+## v3.10.0 (2026-06-11)
+
+> Docs: [brewcode/agents/skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [brewcode/agents/agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [brewcode/agents/hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [brewcode/hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | [brewtools/skills/plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) | [faq](https://doc-claude.brewcode.app/faq/) | [installation](https://doc-claude.brewcode.app/installation/)
+
+> **Theme:** sync the plugin suite with Claude Code 2.1.144-2.1.173 — remove false platform claims, document new features, shorten skill/agent descriptions, and deep-compress LLM-facing docs.
+
+### repo
+
+#### Fixed
+- **plugin list claim was false:** the suite documented that `claude plugin list` does not exist. It has existed since CC 2.1.163. `brewtools:plugin-update` now uses `claude plugin list --json` as the **primary** discovery path (objects: `id, version, scope, enabled, installPath, installedAt, lastUpdated, mcpServers?`; `version` may be `"unknown"`; prefix `unset CLAUDECODE &&` inside a session). `discover-plugins.sh` is kept as the **fallback** for CC < 2.1.163. Fixed in SKILL.md, references, README, `faq.mdx`, `installation.mdx`, and the plugin-update MDX page.
+- **"subagents cannot spawn subagents" was false:** CC 2.1.172 allows nesting up to 5 levels. Corrected in `CLAUDE.md`, `agent-creator`, `skill-creator`, guide refs, and MDX. Framed correctly: CC allows it, but the **brewcode workflow** still requires spawning from the main conversation (the 2-step report protocol binds the lock to one session and delivers report/coordinator instructions there; nested spawns bypass session binding, KNOWLEDGE injection, and the coordinator loop).
+- **"Stop additionalContext does nothing" was false:** Stop and SubagentStop hooks support `hookSpecificOutput.additionalContext` since CC 2.1.163. Corrected in `hook-creator` and `hooks.mdx`.
+
+### brewcode
+
+#### Added
+- **CC 2.1.144-2.1.173 platform facts** across creator agents: `disallowed-tools` skill frontmatter (2.1.152), `/reload-skills` (2.1.152), root-level `SKILL.md` with no `skills/` subdir (2.1.142), `MessageDisplay` hook event (2.1.152), SessionStart `reloadSkills` / `sessionTitle` outputs (2.1.152), `--safe-mode` / `CLAUDE_CODE_SAFE_MODE` and `disableBundledSkills` / `CLAUDE_CODE_DISABLE_BUNDLED_SKILLS` (2.1.169), post-session hook (2.1.169, self-hosted runner only — NOT a hooks.json event), and **Fable 5** (`claude-fable-5`, Mythos-class above Opus, CC 2.1.170) added to agent model lists.
+- **session-start hook sets sessionTitle:** `session-start.mjs` now sets `hookSpecificOutput.sessionTitle` to the active brewcode task name when a task lock exists (CC 2.1.152; ignored by older CC).
+
+#### Changed
+- **Shorter skill/agent descriptions:** every skill description trimmed to <= 120 chars (optimal ~100) and every agent description to <= 100 chars (optimal ~80), keeping the strongest distinct trigger keywords (EN + RU where present). `<example>` blocks removed from creator-agent frontmatter. The skill/agent generators (skill-creator, agent-creator, `skills`, `agents`, `teams`, `setup`, `e2e`) now emit descriptions within these caps.
+
+### Optimization
+
+#### Changed
+- **Deep/standard token compression of LLM-facing docs.** Top files compressed (chars, deep batch + key agents):
+
+| File | Before | After | Saved |
+|------|--------|-------|-------|
+| brewcode/docs/flow.md | ~72.3K | ~57.5K | -20% |
+| brewcode/docs/grepai.md | ~49.2K | ~16.8K | -66% |
+| brewcode/docs/commands.md | ~39.4K | ~17.5K | -55% |
+| brewcode/docs/hooks.md | ~30.7K | ~12.5K | -58% |
+| brewcode/agents/skill-creator.md | ~50.8K | ~38.6K | -25% |
+| brewcode/agents/hook-creator.md | ~44.8K | ~26.2K | -43% |
+| brewcode/agents/agent-creator.md | ~30.1K | ~21.8K | -23% |
+| brewui/skills/glm-design-to-code/SKILL.md | ~34.4K | ~21.5K | -37% |
+
+  Plus standard-mode passes on the remaining top-25 + Phase 1-2 touched files. Deep+key set: ~430.9K -> ~330.8K chars (~25K tokens, **-23%**). Frontmatter and all facts preserved; every compressed file passed a comprehension gate (32/32 questions) and path-existence check.
+
+### Next (deferred)
+- `MessageDisplay` hook adoption in brewcode hooks (2.1.152) — documented, not yet wired.
+- Nested subagents inside the brewcode workflow (2.1.172) — requires session-aware lock handling in `pre-task.mjs`/`post-task.mjs` first.
+
+---
+
 ## v3.9.2 (2026-05-16)
 
 ### repo

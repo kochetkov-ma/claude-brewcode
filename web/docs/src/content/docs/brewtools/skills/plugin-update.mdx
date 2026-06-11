@@ -74,7 +74,7 @@ Status legend: ✅ current · ⬇️ update available · ❌ missing · ❓ unkn
   <li>
     <div>
       <strong>Discover installed plugins</strong>
-      <p>Runs <code>discover-plugins.sh</code>, which reads <code>&#126;/.claude/settings.json</code> and walks the plugin cache at <code>&#126;/.claude/plugins/cache/</code>. Outputs a JSON object with each installed plugin and its version. <code>claude plugin list</code> does not exist as a subcommand — the script bypasses it entirely.</p>
+      <p>Primary path: runs <code>claude plugin list --json</code> (CC 2.1.163+, prefixed with <code>unset CLAUDECODE &&</code> inside a session). Returns an array of objects: <code>id</code>, <code>version</code>, <code>scope</code>, <code>enabled</code>, <code>installPath</code>, <code>installedAt</code>, <code>lastUpdated</code>, and optional <code>mcpServers</code>. The <code>version</code> field may read <code>"unknown"</code> for locally-loaded plugins. Fallback: if the command errors, returns empty output, or produces invalid JSON, the skill runs <code>discover-plugins.sh</code>, which reads <code>&#126;/.claude/settings.json</code> and walks <code>&#126;/.claude/plugins/cache/</code> directly.</p>
     </div>
   </li>
   <li>
@@ -122,7 +122,7 @@ Run `/reload-plugins` or restart the session after any install or update. Claude
 <details>
 <summary>Internals</summary>
 
-**Discovery** — no `claude plugin list`. The skill uses `discover-plugins.sh`, which parses `&#126;/.claude/settings.json` for marketplace registrations and walks `&#126;/.claude/plugins/cache/` for installed version directories.
+**Discovery** — primary: `claude plugin list --json` (available since CC 2.1.163). Returns objects with fields `id`, `version`, `scope`, `enabled`, `installPath`, `installedAt`, `lastUpdated`, and optionally `mcpServers`. The `version` field may be `"unknown"` for dev-mode plugins. When run inside a session, the Bash invocation is prefixed with `unset CLAUDECODE &&` to avoid the env-var conflict. Fallback: if the command errors, returns empty output, or returns invalid JSON (CC older than 2.1.163), the skill falls back to `discover-plugins.sh`, which parses `&#126;/.claude/settings.json` for marketplace registrations and walks `&#126;/.claude/plugins/cache/` for installed version directories.
 
 **Update chain** — runs in this fixed order:
 

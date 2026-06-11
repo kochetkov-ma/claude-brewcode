@@ -114,6 +114,7 @@ Initializes the session, logs the session ID, and manages Plan Mode symlinks.
 | `resume` | Log session_id |
 | `clear` | Create symlink LATEST.md -> newest plan |
 | `compact` + active task | Handoff instructions in additionalContext |
+| any + active task lock | Set `hookSpecificOutput.sessionTitle` to active task name (CC 2.1.152+; ignored by older versions) |
 
 **LATEST.md symlink:**
 1. Checks `&#126;/.claude/plans/` for `.md` files
@@ -274,6 +275,10 @@ Controls session exit: blocks when a task is active, cleans up the lock when fin
 
 **Recursion protection:** If `input.stop_hook_active === true`, the hook is skipped
 to prevent an infinite loop.
+
+**additionalContext (CC 2.1.163+):** Stop and SubagentStop events support
+`hookSpecificOutput.additionalContext`. `stop.mjs` uses this channel to surface the
+blocking reason in the Claude Code UI when exit is prevented.
 
 ---
 

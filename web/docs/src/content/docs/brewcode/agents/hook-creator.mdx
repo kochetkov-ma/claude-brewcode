@@ -8,11 +8,11 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 # Hook Creator
 
 <Callout type="caution">
-**Hooks fail silently when the wrong output channel is used.** `additionalContext` on a `Stop` event does nothing — Claude never sees it. `decision:"block"` on `PostToolUse` is not a valid field. Getting the event-to-channel mapping wrong means the hook runs and produces zero effect, with no error to debug.
+**Hooks fail silently when the wrong output channel is used.** On `Stop` and `SubagentStop`, use `hookSpecificOutput.additionalContext` to give Claude feedback and keep the turn going — plain `additionalContext` at the top level is not the correct channel for those events. `decision:"block"` on `PostToolUse` is not a valid field. Getting the event-to-channel mapping wrong means the hook runs and produces zero effect, with no error to debug.
 </Callout>
 
 <Callout type="tip">
-**hook-creator knows all 26 events, 4 hook types, and the full routing matrix.** Describe what you want in plain language — it picks the right event, output channel, and schema, then delivers a working file with fail-safe error handling included.
+**hook-creator knows all 27 events, 4 hook types, and the full routing matrix.** Describe what you want in plain language — it picks the right event, output channel, and schema, then delivers a working file with fail-safe error handling included.
 </Callout>
 
 ## Quick reference
@@ -60,7 +60,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
   <li>
     <div>
       <strong>Select event and channel</strong>
-      <p>Applies the routing matrix — picks the correct event from 26 options and the right output channel (<code>additionalContext</code>, <code>updatedInput</code>, <code>permissionDecision</code>, <code>decision</code>) for your goal. Wrong channel = silent failure, so this step is non-negotiable.</p>
+      <p>Applies the routing matrix — picks the correct event from 27 options and the right output channel (<code>additionalContext</code>, <code>updatedInput</code>, <code>permissionDecision</code>, <code>decision</code>, <code>hookSpecificOutput</code>) for your goal. Wrong channel = silent failure, so this step is non-negotiable.</p>
     </div>
   </li>
   <li>
@@ -94,25 +94,28 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | Inject into subagent prompt | `updatedInput.prompt` | PreToolUse (matcher: Task) |
 | Block tool execution | `permissionDecision:"deny"` | PreToolUse |
 | Block session stop | `decision:"block"` + `reason` | Stop |
+| Give Claude feedback at stop (keep turn going) | `hookSpecificOutput.additionalContext` | Stop, SubagentStop |
 | Post-tool feedback | `additionalContext` | PostToolUse |
 | Modify tool parameters | `updatedInput` | PreToolUse |
 | Show user warning (Claude does NOT see) | `systemMessage` | Any |
 | Auto-allow permission | `decision.behavior:"allow"` | PermissionRequest |
 | Control teammates | `{continue, stopReason}` JSON | TeammateIdle, TaskCompleted, TaskCreated |
+| Re-scan skill dirs on startup | `reloadSkills: true` | SessionStart (CC 2.1.152) |
+| Set session title on startup/resume | `hookSpecificOutput.sessionTitle` | SessionStart (CC 2.1.152) |
 
-### All 26 events
+### All 27 events
 
 | Event | Blocking? | Key use |
 |-------|-----------|---------|
-| SessionStart | No | Context injection on start/resume |
+| SessionStart | No | Context injection on start/resume; supports `reloadSkills` and `sessionTitle` outputs (CC 2.1.152) |
 | UserPromptSubmit | Yes | Gate or modify user prompts |
 | PreToolUse | Yes | Allow / deny / modify tool calls |
 | PermissionRequest | Yes | Auto-allow or auto-deny permission dialogs |
 | PostToolUse | No | Feedback after tool completes |
 | PostToolUseFailure | No | React to failed tool call |
 | SubagentStart | No | Inject into subagent context |
-| SubagentStop | Yes | Block subagent exit |
-| Stop | Yes | Block session exit until condition met |
+| SubagentStop | Yes | Block subagent exit; supports `additionalContext` to give Claude feedback |
+| Stop | Yes | Block session exit until condition met; supports `additionalContext` to give Claude feedback (CC 2.1.163) |
 | PreCompact | No | Write handoff before auto-compact |
 | PostCompact | No | React after compact |
 | Notification | No | Log or react to notifications |
@@ -130,6 +133,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | ElicitationResult | Yes | Post-elicitation hook |
 | SessionEnd | No | Cleanup on session close |
 | PermissionDenied | Yes | Retry after auto-mode denial (v2.1.89+) |
+| MessageDisplay | No | Transform or hide assistant message text as it is displayed to the user (CC 2.1.152) |
 
 ### Hook types
 
@@ -141,6 +145,26 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | `agent` | 60s | Multi-step analysis with Read/Grep/Glob access |
 
 `agent`-type hooks spawn a subagent. The spawned subagent inherits the session's `permissionMode`. Never configure the parent session with `--dangerously-skip-permissions` just to avoid hook permission prompts — use a narrow `permissionMode: acceptEdits` on the hook's agent definition instead.
+
+</details>
+
+<details>
+<summary>Troubleshooting flags and environment variables (expand)</summary>
+
+### Safe mode and bundled skills
+
+| Flag / Env var | Effect |
+|----------------|--------|
+| `--safe-mode` or `CLAUDE_CODE_SAFE_MODE=1` | Starts CC with ALL customizations disabled: CLAUDE.md, plugins, skills, hooks, MCP servers. Use to isolate whether a hook is causing a startup problem. (CC 2.1.169) |
+| `--disable-bundled-skills` or `CLAUDE_CODE_DISABLE_BUNDLED_SKILLS=1` | Hides all bundled skills, workflows, and built-in commands without disabling plugins or hooks. Useful when a bundled skill name collides with a project skill. |
+
+<Callout type="tip">
+`--safe-mode` is also the fastest way to verify a hook regression: if the problem disappears in safe mode, the hook is the cause.
+</Callout>
+
+### Post-session lifecycle hook
+
+A **post-session lifecycle hook** runs after a session ends and before the workspace is deleted. This is **NOT a hooks.json event** — do not add it to `hooks.json`; it will be silently ignored. It is available only on **self-hosted runners** as a workspace lifecycle callback configured at the runner level. (CC 2.1.169)
 
 </details>
 

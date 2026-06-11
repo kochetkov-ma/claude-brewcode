@@ -20,7 +20,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | Field | Value |
 |-------|-------|
 | Trigger | "create skill", "new skill", "skill doesn't invoke", "improve skill", "fix skill trigger" |
-| Model | opus |
+| Model | opus (default); `claude-fable-5` for Mythos-class tasks (CC 2.1.170+) |
 | Tools | Read, Write, Edit, Glob, Grep, Bash, Task, Skill, AskUserQuestion |
 
 ## When to use
@@ -146,9 +146,10 @@ Common mistakes: multiline `|` (truncated at 250 chars since v2.1.84), missing `
 | `user-invocable` | true/false | `false` = hide from menu, Claude-only |
 | `context` | `fork` | Isolated subagent, fresh context |
 | `agent` | Explore, Plan, general-purpose, developer | With `context: fork` |
-| `model` | opus, sonnet, haiku | Based on complexity |
+| `model` | opus, sonnet, haiku, `claude-fable-5` | Based on complexity; Fable 5 (Mythos-class) available since CC 2.1.170 — above Opus tier |
 | `effort` | low, medium, high, max, auto | v2.1.80+ |
 | `allowed-tools` | tool list | Minimal set |
+| `disallowed-tools` | tool list | Removes tools while the skill is active (CC 2.1.152) |
 | `argument-hint` | string | Autocomplete hint |
 | `once` | true/false | Fire once per session |
 
@@ -179,6 +180,12 @@ Replace ARGS_HERE with the actual value from above.
 | `context: fork` | 1–4 | Works well, context isolated |
 | `context: fork` | 5+ | Memory loss — forgets task structure, skips phases |
 
+### Additional skill facts (CC 2.1.142+)
+
+Root-level `SKILL.md`: a plugin with a `SKILL.md` at the plugin root (no `skills/` subdirectory) is surfaced as a skill automatically since CC 2.1.142. Useful for single-skill plugins.
+
+`/reload-skills` re-scans skill directories without restarting the session (CC 2.1.152). Use this after editing or adding a `SKILL.md` — no session restart needed.
+
 ### Known bugs
 
 | Issue | Impact | Workaround |
@@ -188,6 +195,10 @@ Replace ARGS_HERE with the actual value from above.
 | [#17688](https://github.com/anthropics/claude-code/issues/17688) | Skill-scoped hooks don't fire in plugins | Use plugin `hooks.json` |
 | [#17417](https://github.com/anthropics/claude-code/issues/17417) | `skill.md` (lowercase) silently ignored | Use `SKILL.md` (uppercase) |
 | [#10768](https://github.com/anthropics/claude-code/issues/10768) | Auto-activation 20–50% (NOT PLANNED) | Optimize description or use `/name` |
+
+### Subagent spawn constraint
+
+CC 2.1.172 allows nested subagent spawning up to 5 levels deep. However, brewcode workflow requires spawning only from the main conversation — the 2-step report protocol (`post-task.mjs`) binds the task lock to one session and delivers report/coordinator instructions back to the spawning conversation. Nested spawns bypass session binding, `KNOWLEDGE` injection, and the coordinator loop. This is a **brewcode workflow policy**, not a Claude Code platform limitation.
 
 </details>
 

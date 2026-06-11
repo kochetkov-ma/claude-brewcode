@@ -137,8 +137,8 @@ The marketplace metadata lives at:
 
 Run [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/) inside a Claude Code session. It reports the installed and latest available version for each plugin and prompts you to update if a newer version exists.
 
-<Callout type="note" title="Note">
-  The <code>claude plugin list</code> CLI command does not exist. Version checking must be done through the <a href="/brewtools/skills/plugin-update/"><code>/brewtools:plugin-update</code></a> skill or by inspecting the cache directory above.
+<Callout type="note" title="CLI version check (CC 2.1.163+)">
+  Run <code>claude plugin list</code> (or <code>claude plugin list --json</code> for machine-readable output) to see installed plugins with their versions. Inside an active Claude session, prefix with <code>unset CLAUDECODE &amp;&amp;</code> to avoid the env-var conflict. On CC older than 2.1.163 the command does not exist — use the cache directory path above or <a href="/brewtools/skills/plugin-update/"><code>/brewtools:plugin-update</code></a> as a fallback.
 </Callout>
 
 </Spoiler>
