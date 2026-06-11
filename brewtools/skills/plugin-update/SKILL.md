@@ -27,7 +27,6 @@ Parse the first token of `$ARGUMENTS`. Unknown or empty → interactive.
 ## Critical Rules
 
 - EXECUTE every `claude plugin ...` command in THIS session via Bash tool. Show full output.
-- NEVER use `claude plugin list` — that subcommand does not exist. Use scripts/discover-plugins.sh.
 - NEVER suggest `--plugin-dir` for end users (dev-only).
 - ALWAYS print the reload notice at the end, even on no-op runs.
 - AskUserQuestion: options lists only, no free-text fields.
@@ -36,18 +35,25 @@ Parse the first token of `$ARGUMENTS`. Unknown or empty → interactive.
 
 ## Phase 0 — Discover Installed Plugins
 
-**EXECUTE** using Bash tool:
+**PRIMARY** (CC 2.1.163+) — **EXECUTE** using Bash tool:
+```bash
+unset CLAUDECODE && claude plugin list --json && echo "✅ list OK" || echo "❌ list FAILED"
+```
+
+If the command succeeds and returns a non-empty JSON array, parse it directly. Each object has fields: `id` (`<plugin>@<marketplace>`), `version` (string, may be `"unknown"`), `scope`, `enabled` (boolean), `installPath`, `installedAt`, `lastUpdated`, optional `mcpServers`.
+
+**FALLBACK** (CC < 2.1.163 or empty/error output from above) — **EXECUTE** using Bash tool:
 ```bash
 bash "${CLAUDE_SKILL_DIR}/scripts/discover-plugins.sh" && echo "✅ discover OK" || echo "❌ discover FAILED"
 ```
 
-> **STOP if ❌** — inspect stderr, fix script, retry once. If still fails, report to user and continue without installed data (treat everything as missing).
+> **STOP if both fail** — report to user and continue without installed data (treat everything as missing).
 
-Parse the JSON output. Partition into:
+Partition results into:
 - `suite = {brewcode, brewdoc, brewtools, brewui}`
 - `other = everything else`
 
-Read [references/discovery.md](references/discovery.md) if you need details on how discovery works.
+Read [references/discovery.md](references/discovery.md) for details on both discovery paths.
 
 ## Phase 1 — Fetch Latest Versions
 

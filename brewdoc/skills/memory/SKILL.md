@@ -1,6 +1,6 @@
 ---
 name: brewdoc:memory
-description: Optimizes Claude Code memory in 4 interactive steps - removes duplicates, migrates to rules/CLAUDE.md, compresses, validates with cleanup
+description: Optimizes Claude Code memory in 4 interactive steps - removes duplicates, migrates to rules/CLAUDE.md, compresses, validates with cleanup. Use when - optimizing memory, cleaning CLAUDE.md, deduplicating memory files, compressing memory. Trigger keywords - optimize memory, memory cleanup, dedupe memory, organize CLAUDE.md, memory files.
 argument-hint: "— no args, runs 4-step interactive workflow"
 user-invocable: true
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion

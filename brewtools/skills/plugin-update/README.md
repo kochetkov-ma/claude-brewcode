@@ -44,9 +44,9 @@ Checks installed brewcode plugins (brewcode, brewdoc, brewtools, brewui) by read
 ### Common Mistakes
 
 ```bash
-# Running `claude plugin list` -- that subcommand does not exist
-# ERROR: unknown subcommand "list"
-# Use `/brewtools:plugin-update check` instead to see plugin status
+# Forgetting the unset prefix when running claude plugin list inside a session
+unset CLAUDECODE && claude plugin list --json   # correct
+claude plugin list --json                        # may fail inside a session
 
 # Using --plugin-dir for end users -- this is a dev-only flag
 claude --plugin-dir ./brewtools
@@ -61,7 +61,7 @@ claude --plugin-dir ./brewtools
 
 | Phase | Name | Description |
 |-------|------|-------------|
-| 0 | Discover | Runs `scripts/discover-plugins.sh` to read `settings.json` and the plugin cache; no `claude plugin list` (does not exist) |
+| 0 | Discover | Primary: `unset CLAUDECODE && claude plugin list --json` (CC 2.1.163+). Fallback: `scripts/discover-plugins.sh` reads `settings.json` and the plugin cache |
 | 1 | Fetch latest | Runs `scripts/fetch-latest-versions.sh` to get the current published versions from the marketplace |
 | 2 | Status table | Renders a markdown table: plugin name, installed version, latest version, and status (✅ current / ⬇️ update / ❌ missing / ❓ unknown) |
 | 3 | Install missing | For each missing suite plugin, prompts (interactive) or auto-installs (`all`); runs `claude plugin marketplace add` then `claude plugin install <plugin>@claude-brewcode` |
@@ -71,14 +71,15 @@ claude --plugin-dir ./brewtools
 
 ## Discovery Method
 
-Plugin discovery uses two sources rather than a non-existent `claude plugin list` command:
+Phase 0 uses two paths:
 
-1. `~/.claude/settings.json` (and `./.claude/settings.json` if present) — reads the `enabledPlugins` map where keys are `<plugin>@<marketplace>`.
+**Primary (CC 2.1.163+):** `unset CLAUDECODE && claude plugin list --json` returns a JSON array. Each entry has `id`, `version` (may be `"unknown"`), `scope`, `enabled` (boolean), `installPath`, `installedAt`, `lastUpdated`, and optional `mcpServers`.
+
+**Fallback (CC < 2.1.163 or command fails):** `scripts/discover-plugins.sh` reads two sources:
+1. `~/.claude/settings.json` (and `./.claude/settings.json` if present) — the `enabledPlugins` map where keys are `<plugin>@<marketplace>`.
 2. Plugin cache walk — `~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/` — the highest version directory per plugin is the installed version.
 
-The `scripts/discover-plugins.sh` script combines both sources and outputs a JSON object with `marketplaces`, `installed` versions, and the `cache_dir` path.
-
-> **Warning:** `claude plugin list` does not exist as a CLI subcommand. Valid subcommands are `install`, `update`, `uninstall`, and `marketplace`. Always use the discovery script.
+The script outputs a JSON object with `marketplaces`, `installed` versions, and the `cache_dir` path.
 
 ## Output
 

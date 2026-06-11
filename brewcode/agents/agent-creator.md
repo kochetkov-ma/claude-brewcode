@@ -79,7 +79,7 @@ Detailed instructions for the agent...
 
 | Field | Values | Default | Version | Description |
 |-------|--------|---------|---------|-------------|
-| `model` | `sonnet`, `opus`, `haiku`, `inherit` | `inherit` | -- | Model selection |
+| `model` | `haiku`, `sonnet`, `opus`, `fable` (`claude-fable-5`, Mythos-class, 2.1.170), `inherit` | `inherit` | -- | Model selection |
 | `effort` | `low`, `medium`, `high`, `auto` | `inherit` | 2.1.78 | Override effort level (plugin agents only) |
 | `maxTurns` | integer | unlimited | 2.1.78 | Max turns before stopping (plugin agents only) |
 | `tools` | comma-separated | All inherited | -- | Allowed tools |
@@ -161,17 +161,19 @@ claude --agents '{
 
 ---
 
-## ⚠️ Subagents Cannot Spawn Subagents
+## ⚠️ Spawn From Main Conversation Only (brewcode workflow)
 
-**Архитектурное ограничение:** субагенты используют `SubAgentLoop`, из которого исключен `AgentTool` (Task tool). Вложенный запуск агентов невозможен ни одним способом:
+**CC capability:** since v2.1.172, sub-agents can spawn their own sub-agents (up to 5 levels deep). **brewcode workflow stance:** spawn ONLY from the main conversation. The 2-step report protocol (`post-task.mjs`) binds the lock to one session and delivers report/coordinator instructions to the spawning conversation; nested spawns bypass session binding, KNOWLEDGE injection, and the coordinator loop.
 
-| Попытка | Результат |
-|---------|-----------|
-| `Task(subagent_type=...)` из субагента | Tool **отсутствует** в toolset -- субагент явно сообщает что не может |
+**Nesting-depth guidance (agent design):** nesting is allowed up to 5 levels, but each level multiplies token cost and loses context fidelity. Prefer flat fan-out from main. Give the `Task`/Agent tool to an agent only when it genuinely orchestrates.
+
+| Случай | brewcode workflow |
+|--------|-------------------|
+| `Task(subagent_type=...)` из субагента | CC allows (5 levels) -- but brewcode: spawn from main only |
 | `Skill` tool из субагента | **Недоступен** -- нет в toolset субагента ([#4182](https://github.com/anthropics/claude-code/issues/4182)) |
-| Skill с `context: fork` из субагента | **Не сработает** -- `context: fork` использует тот же `AgentTool` для spawn |
+| Skill с `context: fork` из субагента | Same `AgentTool` path -- avoid in brewcode, spawn from main |
 | `claude -p` через Bash | Технически запустит, но **не рекомендуется**: OOM crashes, потеря контекста, неуправляемость |
-| Указание `Task` в `tools:` frontmatter | **Игнорируется** -- docs: *"Task(agent_type) has no effect in subagent definitions"* |
+| Глубокая вложенность ради скорости | Каждый уровень множит токены и теряет контекст -- prefer flat fan-out |
 
 **Рекомендуемые паттерны:**
 
@@ -180,9 +182,9 @@ claude --agents '{
 | **Chaining** | Main agent запускает агентов последовательно, передавая результат |
 | **Preloaded skills** | `skills:` в frontmatter -- контент инжектируется при старте (не runtime) |
 | **File-based communication** | Агенты пишут результаты в файлы, следующий агент читает |
-| **Agent Teams** (v2.1.33+) | Lead координирует teammates (но teammates тоже не спавнят sub-teammates) |
+| **Agent Teams** (v2.1.33+) | Lead координирует teammates (brewcode: keep one level deep from main) |
 
-**Agent Teams** -- lead coordinates teammates via Task API tools: `TaskCreate`, `TaskUpdate`, `TaskList`, `TaskGet`, `TaskOutput`, `TaskStop`. Hook events: `TeammateIdle`, `TaskCompleted`, `TaskCreated` (v2.1.84). One level deep only.
+**Agent Teams** -- lead coordinates teammates via Task API tools: `TaskCreate`, `TaskUpdate`, `TaskList`, `TaskGet`, `TaskOutput`, `TaskStop`. Hook events: `TeammateIdle`, `TaskCompleted`, `TaskCreated` (v2.1.84). brewcode: keep coordination one level deep from main.
 
 > Sources: [Sub-agents docs](https://code.claude.com/docs/en/sub-agents), [#4182](https://github.com/anthropics/claude-code/issues/4182), [#17283](https://github.com/anthropics/claude-code/issues/17283)
 
@@ -606,7 +608,7 @@ tools: Read, Glob, Grep, Bash
 - [ ] `description`: action verb + `Triggers:` keywords; max 2 `<example>` blocks for ambiguous agents only
 - [ ] `tools`: minimal required set (principle of least privilege)
 - [ ] `disallowedTools`: no conflict with `tools` if both specified
-- [ ] `model`: matches task complexity (opus=complex, sonnet=standard, haiku=light)
+- [ ] `model`: matches task complexity (fable=mythos/hardest, opus=complex, sonnet=standard, haiku=light)
 - [ ] System prompt: tables over prose, code over text
 - [ ] Project-specific knowledge included (stack, conventions, commands)
 - [ ] Checklist (DoD) present at end of system prompt
@@ -630,7 +632,7 @@ tools: Read, Glob, Grep, Bash
 | [#13627](https://github.com/anthropics/claude-code/issues/13627) | Agent body not injected via Task tool | Closed (NOT PLANNED) | `SubagentStart` hook with `additionalContext` |
 | [#8395](https://github.com/anthropics/claude-code/issues/8395) | Subagents ignore user-level CLAUDE.md | Closed (NOT PLANNED) | `SubagentStart` hook with `additionalContext` |
 | [#4182](https://github.com/anthropics/claude-code/issues/4182) | Skill tool unavailable in subagent | By design | Use `skills:` in frontmatter for pre-injection |
-| [#17283](https://github.com/anthropics/claude-code/issues/17283) | Subagents cannot spawn subagents | By design | Chaining from main conversation |
+| [#17283](https://github.com/anthropics/claude-code/issues/17283) | Subagents cannot spawn subagents | Resolved v2.1.172 (up to 5 levels) | brewcode workflow: spawn from main only |
 
 ---
 
@@ -638,7 +640,7 @@ tools: Read, Glob, Grep, Bash
 
 | Limitation | Description | Workaround |
 |------------|-------------|------------|
-| No nested subagents | `SubAgentLoop` excludes `AgentTool` | Chaining, preloaded skills, file-based communication |
+| Spawn from main only (brewcode) | CC: up to 5 levels (2.1.172); brewcode workflow requires main-only | Chaining, preloaded skills, file-based communication |
 | No runtime skill injection | Skills injected only at startup | List all needed skills in frontmatter upfront |
 | No parent history access | Clean context per invocation | Pass context via `Task(prompt=...)` |
 | Short system prompt | ~294-token agent prompt replaces full Claude Code prompt | Compensate with detailed agent body |
@@ -652,6 +654,8 @@ tools: Read, Glob, Grep, Bash
 
 | Version | Date | Changes |
 |---------|------|---------|
+| v2.1.172 | 2026-05 | **Sub-agents can spawn their own sub-agents (up to 5 levels deep).** brewcode workflow still spawns from main only |
+| v2.1.170 | 2026-05 | **Fable 5 model** (`claude-fable-5`, Mythos-class tier above Opus) selectable in `model:` |
 | v2.1.85 | 2026-03-26 | `TaskCreated` hook, WorktreeCreate `type: http` |
 | v2.1.78 | 2026-03-17 | `effort`, `maxTurns`, `disallowedTools` for plugin agents |
 | v2.1.74 | 2026-03-12 | Fix: full model IDs in frontmatter; `--agents` flag visibility |
@@ -683,7 +687,7 @@ tools: Read, Glob, Grep, Bash
 | Agent doesn't see CLAUDE.md rules | Bug [#8395] or [#29423] | `SubagentStart` hook with `additionalContext` |
 | System prompt not injected | Bug [#13627] | Retry; pass instructions via `Task(prompt=...)` |
 | Agent can't call skills | By design [#4182] | Use `skills:` in frontmatter for pre-injection |
-| Agent can't spawn subagent | By design -- `SubAgentLoop` without `AgentTool` | Chaining from main conversation |
+| Agent can't spawn subagent | CC: up to 5 levels (2.1.172); brewcode workflow: spawn from main only | Chaining from main conversation |
 | `agents/` directory in plugin.json | Causes validation error | Remove from manifest -- auto-discovered by default |
 | `effort`/`maxTurns` not working | Only available for plugin agents | Move agent to plugin scope |
 

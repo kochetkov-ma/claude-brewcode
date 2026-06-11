@@ -262,7 +262,8 @@ Imperative form: "Do X" (not "You should do X").
 | Field | Values | Description |
 |-------|--------|-------------|
 | `allowed-tools` | Read, Grep, Glob, Bash(git:*), Skill | Restrict available tools |
-| `model` | opus, sonnet, haiku | Override model |
+| `disallowed-tools` | Write, Edit, Bash(rm:*) | Remove tools from model while skill is active (v2.1.152) |
+| `model` | opus, sonnet, haiku, fable-5 | Override model. `claude-fable-5` = Mythos-class tier above Opus (v2.1.170) |
 | `effort` | low, medium, high, max, auto | Override effort level for this skill invocation (v2.1.80+) |
 | `context` | fork | Run in isolated subagent |
 | `agent` | Explore, Plan, general-purpose, custom | Subagent type (with `context: fork`) |
@@ -325,17 +326,17 @@ Research $ARGUMENTS:
 
 # ⚠️ Subagent Spawning Constraints
 
-Skills with `context: fork` spawn a subagent. Subagents **cannot** spawn other subagents — `SubAgentLoop` excludes `AgentTool`.
+CC allows nesting up to 5 levels (v2.1.172), but brewcode workflow requires spawns only from the main conversation: the 2-step report protocol (post-task.mjs) binds the lock to one session and delivers report/coordinator instructions to the spawning conversation; nested spawns bypass session binding, KNOWLEDGE injection, and the coordinator loop.
 
-| Scenario | Works? | Why |
+| Scenario | brewcode workflow | Why |
 |----------|--------|-----|
-| Skill with `context: fork` from **main conversation** | **Yes** | Main agent has `AgentTool` |
-| Skill with `context: fork` from **subagent** | **No** | `AgentTool` absent from `SubAgentLoop` |
-| Task tool from **subagent** | **No** | Task tool = `AgentTool`, excluded |
-| Skill tool from **subagent** | **No** | Skill tool unavailable in SubAgentLoop |
-| Inline skill (no `context`) from subagent | **No** | Skill tool unavailable |
+| Skill with `context: fork` from **main conversation** | **Use this** | Lock binding + KNOWLEDGE injection intact |
+| Skill with `context: fork` from **subagent** | **Avoid** | CC: up to 5 levels (v2.1.172); bypasses session binding + coordinator loop |
+| Task tool from **subagent** | **Avoid** | Nested spawn skips post-task.mjs report protocol |
+| Skill tool from **subagent** | **Avoid** | Bypasses KNOWLEDGE injection |
+| Inline skill (no `context`) from subagent | **Avoid** | Same binding/injection bypass |
 
-**Design implications:** `context: fork` works only from main conversation or agent teams lead. For subagents, use `skills:` frontmatter (preload at startup). For multi-agent orchestration — chain from main agent, not nested spawning.
+**Design implications:** spawn from main only. For subagents, use `skills:` frontmatter (preload at startup). For multi-agent orchestration — chain from main agent, not nested spawning.
 
 > Sources: [Sub-agents docs](https://code.claude.com/docs/en/sub-agents)
 
@@ -366,6 +367,7 @@ Custom agents: reference from `.claude/agents/` or `~/.claude/agents/` via `agen
 
 | Model | Use Case | Examples |
 |-------|----------|----------|
+| fable-5 | Mythos-class tier above Opus (`claude-fable-5`, v2.1.170) | Hardest reasoning/orchestration |
 | opus | Complex orchestration, multi-phase | setup, create, review |
 | sonnet | Medium complexity, optimization | rules, grepai |
 | haiku | Simple, fast, cleanup | teardown, clean-cache |
@@ -1231,7 +1233,7 @@ Run optimization: `Skill(skill="brewtools:text-optimize", args="path/to/SKILL.md
 | [#39686](https://github.com/anthropics/claude-code/issues/39686) | claude.ai skills silently injected (~6000 tokens) | 37% of skill budget consumed; no opt-out | Open | No workaround |
 | [#22345](https://github.com/anthropics/claude-code/issues/22345) | Plugin skills ignore `disable-model-invocation` | Plugin skills always in context (~4400 tokens) | Open | No workaround |
 | [#17688](https://github.com/anthropics/claude-code/issues/17688) | Skill-scoped hooks don't fire in plugins | Hooks from SKILL.md frontmatter not working for plugin skills | Open | Use plugin hooks.json |
-| [#35641](https://github.com/anthropics/claude-code/issues/35641) | `/reload-plugins` doesn't load skills from new plugins | Skills emitter not called on reload | Open | Restart session |
+| [#35641](https://github.com/anthropics/claude-code/issues/35641) | `/reload-plugins` doesn't load skills from new plugins | Skills emitter not called on reload | Open | `/reload-skills` (v2.1.152) re-scans skill dirs without restart |
 | [#33080](https://github.com/anthropics/claude-code/issues/33080) | Built-in skills silently conflict with custom | Built-in takes priority; no notification | Open | Namespace prefix (e.g., `my-`) |
 | [#36031](https://github.com/anthropics/claude-code/issues/36031) | User-level skills visible in autocomplete but not invoked in Desktop | SKILL.md not loaded; CLI works | Open | Use CLI |
 | [#17417](https://github.com/anthropics/claude-code/issues/17417) | `skill.md` (lowercase) silently ignored | Skill not discovered | Open | Use `SKILL.md` (uppercase) |
@@ -1242,7 +1244,7 @@ Run optimization: `Skill(skill="brewtools:text-optimize", args="path/to/SKILL.md
 
 | Limitation | Details | Workaround |
 |------------|---------|------------|
-| Subagents cannot spawn subagents | `AgentTool` excluded from `SubAgentLoop` | Chain from main conversation |
+| Nested spawns bypass brewcode binding | CC: up to 5 levels (v2.1.172); brewcode workflow: spawn from main only | Chain from main conversation |
 | `context: fork` degrades at 5+ phases | Task structure memory loss | Inline + hooks/external state |
 | Description budget | 2% of context or 16K chars | `SLASH_COMMAND_TOOL_CHAR_BUDGET` env var |
 | `${CLAUDE_SKILL_DIR}` only in SKILL.md | Not available in hooks/agents | `$CLAUDE_PLUGIN_ROOT` in hooks/agents |
@@ -1255,6 +1257,11 @@ Run optimization: `Skill(skill="brewtools:text-optimize", args="path/to/SKILL.md
 
 | Version | Date | Changes |
 |---------|------|---------|
+| v2.1.172 | — | Nesting up to 5 levels (brewcode workflow: spawn from main only) |
+| v2.1.170 | — | Fable 5 model (`claude-fable-5`), Mythos-class tier above Opus |
+| v2.1.169 | — | `disableBundledSkills` setting + `CLAUDE_CODE_DISABLE_BUNDLED_SKILLS` env hide bundled skills |
+| v2.1.152 | — | `disallowed-tools` frontmatter; `/reload-skills` re-scans skill dirs without restart |
+| v2.1.142 | — | Plugins with a root-level SKILL.md and no skills/ subdir surfaced as a skill |
 | v2.1.85 | 2026-03-26 | `if` field for hooks; fix: skill hooks fired twice |
 | v2.1.84 | 2026-03-26 | Descriptions <=250 chars; alphabetical `/skills` sort |
 | v2.1.80 | 2026-03-19 | `effort` frontmatter for skills (`low`/`medium`/`high`/`max`) |

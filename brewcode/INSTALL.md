@@ -16,7 +16,7 @@ claude plugin install brewcode@claude-brewcode
 | **Update** | `claude plugin update brewcode` |
 | **Session only** | `claude --plugin-dir ./brewcode` |
 | Add marketplace | `claude plugin marketplace add <repo-path>` |
-| List plugins | `claude plugin list` |
+| List plugins / verify install | `claude plugin list` (add `--json` for machine-readable output) |
 
 ---
 

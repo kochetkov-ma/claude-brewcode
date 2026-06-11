@@ -23,7 +23,7 @@
 import { readStdin, output, log, getActiveTaskPath, getLock, getActiveMode, getState, saveState } from './lib/utils.mjs';
 import { readFileSync, readdirSync, statSync, mkdirSync, symlinkSync, unlinkSync, existsSync } from 'fs';
 import { execFileSync } from 'child_process';
-import { join, dirname } from 'path';
+import { join, dirname, basename } from 'path';
 import { homedir } from 'os';
 
 const VERSION_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -270,11 +270,16 @@ async function main() {
       if (pluginRoot) versionLines.push(`check brewcode updates: https://github.com/kochetkov-ma/claude-brewcode/releases/latest`);
     }
 
+    let sessionTitle = null;
     if (cwd) {
       const lock = getLock(cwd);
       if (lock?.task_path && (!lock.session_id || lock.session_id === session_id)) {
         const taskDir = dirname(join(cwd, lock.task_path));
         const isV3 = existsSync(join(taskDir, 'phases'));
+
+        const rawName = basename(taskDir);
+        const derived = rawName.replace(/_task$/, '').replace(/^\d{8}-\d{6}_/, '').replace(/[-_]/g, ' ').trim();
+        sessionTitle = derived || rawName;
 
         if (source === 'compact') {
           if (isV3) {
@@ -295,11 +300,13 @@ async function main() {
     }
 
     const modeTag = activeMode ? ` | mode: ${activeMode.name}` : '';
+    // reloadSkills not set: this hook toggles no skill files
     output({
       systemMessage: `brewcode: ${pluginRoot} | session: ${sessionShort}${modeTag}${versionLines.length ? '\n' + versionLines.join('\n') : ''}`,
       hookSpecificOutput: {
         hookEventName: 'SessionStart',
-        additionalContext: context
+        additionalContext: context,
+        ...(sessionTitle ? { sessionTitle } : {})
       }
     });
   } catch (error) {

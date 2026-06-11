@@ -37,7 +37,7 @@ claude plugin install brewtools@claude-brewcode
 claude plugin install brewui@claude-brewcode
 ```
 
-After installation, restart Claude Code. Close and reopen your terminal or IDE.
+After installation, run `/reload-plugins`. If plugins still do not appear, restart Claude Code (close and reopen your terminal or IDE).
 
 You can install only the plugins you need. brewcode is the core; brewdoc and brewtools are optional.
 
@@ -76,7 +76,7 @@ claude plugin update brewtools@claude-brewcode
 claude plugin update brewui@claude-brewcode
 ```
 
-After updating, restart Claude Code.
+After updating, run `/reload-plugins` (or `/reload-skills` for skill-only changes, Claude Code 2.1.152+). Restart Claude Code only if reloading does not pick up the changes.
 
 If you see version mismatches across plugins, update all four to fix it.
 

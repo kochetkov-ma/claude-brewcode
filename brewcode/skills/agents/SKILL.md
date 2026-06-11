@@ -84,15 +84,15 @@ question: "Preferred model?"
 options:
   - label: "sonnet -- balanced (Recommended)"
     description: "Best balance of quality and speed for most agents"
-  - label: "opus -- complex analysis"
-    description: "For tasks requiring deep reasoning"
+  - label: "opus/fable -- hardest tasks"
+    description: "opus for deep reasoning; fable (claude-fable-5, Mythos-class) for the hardest tasks"
   - label: "haiku -- fast/simple"
     description: "For quick lookup or simple transformations"
   - label: "inherit -- from session"
     description: "No model field — agent inherits model from calling session"
 ```
 
-Model mapping: `sonnet` → `sonnet`, `opus` → `opus`, `haiku` → `haiku`, `inherit` → omit `model:` field entirely.
+Model mapping: `sonnet` → `sonnet`, `opus/fable` option → pick `opus` → `opus` or `fable` → `fable` (claude-fable-5, Mythos-class), `haiku` → `haiku`, `inherit` → omit `model:` field entirely.
 
 **Q3 -- CLAUDE.md update:**
 ```

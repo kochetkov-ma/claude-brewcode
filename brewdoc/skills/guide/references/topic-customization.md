@@ -82,11 +82,13 @@ Available hook events:
 
 | Event | When | Can Do |
 |-------|------|--------|
-| SessionStart | Conversation begins | Inject context, set variables |
+| SessionStart | Conversation begins | Inject context, set variables; return `reloadSkills:true` + `hookSpecificOutput.sessionTitle` (2.1.152) |
 | PreToolUse | Before any tool runs | Block, modify input, add context |
 | PostToolUse | After any tool runs | Add context, track state |
 | PreCompact | Before auto-compaction | Save state, write handoff notes |
-| Stop | Conversation ending | Block stop, cleanup resources |
+| Stop | Conversation ending | Block stop, cleanup; `hookSpecificOutput.additionalContext` (2.1.163) |
+| SubagentStop | Subagent finishes | Add context via `hookSpecificOutput.additionalContext` (2.1.163) |
+| MessageDisplay | Message shown to user (2.1.152) | Inspect/annotate displayed message |
 | UserPromptSubmit | User submits a prompt | Validate, transform, inject context |
 | PermissionRequest | Tool asks for permission | Auto-approve, block, add rules |
 

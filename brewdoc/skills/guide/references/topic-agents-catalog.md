@@ -20,7 +20,7 @@ User request -> Manager analyzes -> Selects best agent -> Task tool spawns agent
   -> Agent executes in isolation -> Returns result -> Manager continues
 ```
 
-Agents cannot spawn other agents. Only the main conversation (manager level) can use the Task tool.
+Claude Code itself allows nested spawns up to 5 levels deep (since 2.1.172). The brewcode workflow, however, requires spawning only from the main conversation (manager level): the 2-step report protocol binds the task lock to a single session and delivers report/coordinator instructions to the spawning conversation. Nested spawns bypass session binding, KNOWLEDGE injection, and the coordinator loop, so under brewcode only the manager uses the Task tool.
 
 ## Section 2: Plugin Agents (18)
 

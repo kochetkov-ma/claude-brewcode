@@ -24,7 +24,7 @@ auto-sync-type: agent
 
 Creates production-quality Claude Code hooks (bash and JS/mjs) with correct message routing, JSON schemas, and fail-safe design.
 
-> **Reference version:** 2.1.89+ | 26 hook events | 4 hook types (command, http, prompt, agent)
+> **Reference version:** 2.1.173+ | 27 hook events | 4 hook types (command, http, prompt, agent)
 
 ### Session Lifecycle
 
@@ -77,8 +77,8 @@ TeammateIdle (exit 0=stop, 1=continue) | TaskCompleted (exit 0=accept, 1=redo)
 | PostToolUseFailure | YES | Needs verification | Presumed working, limited data |
 | SubagentStart | YES | Injected into **subagent** context | Not parent |
 | Notification | YES | `<system-reminder>` | Stable |
-| Stop | N/A | Field not supported | Use `reason` |
-| SubagentStop | N/A | Field not supported | Use `reason` |
+| Stop | YES | `<system-reminder>` | Feedback + keep turn going, not a hook error (v2.1.163+). Or `decision:"block"` + `reason` |
+| SubagentStop | YES | `<system-reminder>` | Feedback + keep turn going, not a hook error (v2.1.163+). Or `decision:"block"` + `reason` |
 | PreCompact | N/A | Field not supported | Use `systemMessage` |
 | SessionEnd | N/A | Field not supported | Informational event |
 | TeammateIdle | N/A | JSON `{continue, stopReason}` (v2.1.52+) | -- |
@@ -129,6 +129,7 @@ Silently modifies tool parameters. Claude unaware of change. Most reliable injec
 | Inject into subagent | `updatedInput.prompt` | PreToolUse (matcher: Task) |
 | Block tool execution | `permissionDecision:"deny"` | PreToolUse |
 | Block session stop | `decision:"block"` + `reason` | Stop |
+| Feedback at stop without blocking | `additionalContext` | Stop, SubagentStop (v2.1.163+) |
 | Inject into subagent context | `additionalContext` | SubagentStart |
 | Post-tool feedback | `additionalContext` | PostToolUse (stable) |
 | Modify tool parameters | `updatedInput` | PreToolUse |
@@ -138,7 +139,11 @@ Silently modifies tool parameters. Claude unaware of change. Most reliable injec
 | Control teammates | `{continue, stopReason}` JSON | TeammateIdle, TaskCompleted, TaskCreated |
 | Prompt gate | `decision:"block"` | UserPromptSubmit |
 
-## 2. All 25 Hook Events
+## 2. All 27 Hook Events
+
+> MessageDisplay (v2.1.152) lets hooks transform or hide assistant message text as it is displayed (display-layer only, non-blocking).
+
+> NOT a hooks.json event: the **post-session lifecycle hook** (v2.1.169) is a self-hosted runner hook that runs after the session ends and before the workspace is deleted. Configure it on the runner, not in hooks.json -- do not add it to the event list above.
 
 ### Event Reference
 
@@ -170,6 +175,7 @@ Silently modifies tool parameters. Claude unaware of change. Most reliable injec
 | 24 | FileChanged | No | filename (basename) | `file_path` | 2.1.83 |
 | 25 | TaskCreated | Yes | No | `task_id`, `task_subject`, `task_description`, `teammate_name`, `team_name` | 2.1.84 |
 | 26 | PermissionDenied | Yes | No | `tool_name`, `tool_input`, `denial_reason` | 2.1.89 |
+| 27 | MessageDisplay | No | No | assistant message text | 2.1.152 |
 
 ### Common stdin fields (ALL events)
 
@@ -344,6 +350,8 @@ Format: `ToolName(pattern)` -- same syntax as permission rules.
 | `$CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS` | SessionEnd hooks timeout in ms (default 1500ms, v2.1.78+) | SessionEnd hooks |
 | `$CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` | `1` = scrub Anthropic/cloud credentials from subprocess env (v2.1.83+) | All hooks |
 | `$CLAUDE_PLUGIN_OPTION_<KEY>` | Plugin `userConfig` values (v2.1.78+) | Plugin hooks |
+| `CLAUDE_CODE_SAFE_MODE` | `1` = start CC with ALL customizations disabled (CLAUDE.md, plugins, skills, hooks, MCP); also `--safe-mode` flag. Hook debug isolation (v2.1.169+) | Startup |
+| `CLAUDE_CODE_DISABLE_BUNDLED_SKILLS` | `1` = hide bundled skills/workflows/built-in commands; also `disableBundledSkills` setting (v2.1.169+) | Startup |
 
 ### Plugin Persistent State (`CLAUDE_PLUGIN_DATA`)
 
@@ -427,11 +435,15 @@ brewcode hooks inject `BC_PLUGIN_DATA` as text variable (same pattern as `BC_PLU
 {
   "hookSpecificOutput": {
     "hookEventName": "SessionStart",
-    "additionalContext": "Injected context for Claude"
+    "additionalContext": "Injected context for Claude",
+    "sessionTitle": "My session title",
+    "reloadSkills": true
   },
   "systemMessage": "Status shown to user only"
 }
 ```
+
+> `reloadSkills: true` re-scans skill directories; `sessionTitle` sets the session title on startup and resume (v2.1.152+).
 
 ### SubagentStart -- Inject into subagent
 
@@ -775,6 +787,7 @@ import { readStdin, output } from './lib/utils.mjs';
 | `additionalContext` (SessionStart) | High | Stable since v2.1.37+ |
 | `additionalContext` (PostToolUse) | High | Stable (Issue #15345 confirms) |
 | `decision`/`reason` (Stop) | High | Stable |
+| `additionalContext` (Stop/SubagentStop) | High | Feedback without hook-error label, keeps turn going (v2.1.163+) |
 | `systemMessage` | High | Stable (but Claude does NOT see it) |
 | `permissionDecision` (PreToolUse) | High | Stable |
 
@@ -1206,7 +1219,7 @@ try {
 2. **Design** -- Select event, matcher, output schema, routing channel
 3. **Implement** -- Use template, add logic, handle errors
 4. **Configure** -- Add to appropriate settings/hooks.json
-5. **Test** -- Run with `CLAUDE_DEBUG=1`, check verbose output (Ctrl+O)
+5. **Test** -- Run with `CLAUDE_DEBUG=1`, check verbose output (Ctrl+O). Isolate hook bugs: `claude --safe-mode` / `CLAUDE_CODE_SAFE_MODE=1` starts CC with ALL customizations off (CLAUDE.md, plugins, skills, hooks, MCP) to confirm a hook is the cause (v2.1.169+)
 6. **Validate** -- Run checklist
 
 ## 18. Validation Checklist
@@ -1279,6 +1292,11 @@ VERIFICATION:
 | 2.1.89 | PreToolUse `"defer"` decision — headless pause/resume | New feature |
 | 2.1.89 | Hook output >50K chars saved to disk (path+preview in context) | Enhancement |
 | 2.1.89 | Fix: PreToolUse/PostToolUse `file_path` is now absolute (Write/Edit/Read) | Bug fix |
+| 2.1.152 | `MessageDisplay` | New event |
+| 2.1.152 | SessionStart `reloadSkills`, `hookSpecificOutput.sessionTitle` outputs | Enhancement |
+| 2.1.163 | Stop/SubagentStop can return `hookSpecificOutput.additionalContext` (feedback, keep turn going) | Enhancement |
+| 2.1.169 | `--safe-mode` / `CLAUDE_CODE_SAFE_MODE`, `disableBundledSkills` / `CLAUDE_CODE_DISABLE_BUNDLED_SKILLS` | New flags |
+| 2.1.169 | self-hosted runner post-session lifecycle hook (runner-only, NOT hooks.json) | New feature |
 
 ## Sources
 
