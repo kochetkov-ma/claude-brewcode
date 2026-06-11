@@ -1,6 +1,6 @@
 ---
 name: brewcode:skills
-description: "Orchestrates Claude Code skill management — lists skills, improves existing skills, or creates new ones with activation optimization and triggers. Triggers: create skill, new skill, improve skill, fix skill activation, skill doesn't trigger, list skills, skill management, optimize skill."
+description: "Lists, improves, creates Claude Code skills. Triggers: create skill, improve skill, fix skill activation."
 user-invocable: true
 argument-hint: "[list|up|create] [target] | <skill-path>"
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Task, WebSearch, WebFetch, AskUserQuestion]
@@ -52,7 +52,7 @@ Both `create` and `up` follow Phases 0-6. Differences noted per phase.
 
 ### Description Budget (DEFAULT)
 
-Frontmatter `description`: <= 100 tokens (~400 chars). Lead sentence <= 160 chars, plain EN. Triggers: comma-list, EN only. At most 1 example. No RU/other languages unless user explicitly asks.
+Frontmatter `description`: <= 120 chars (optimal ~100), single line. What + when + 3-5 distinct triggers (comma-list). No filler, no `<example>` blocks. Some registries truncate long descriptions and dilute trigger matching. EN only unless user explicitly asks.
 
 ### Prerequisite (up only): Resolve Target
 

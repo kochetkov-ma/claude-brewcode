@@ -1,6 +1,6 @@
 ---
 name: brewcode:setup
-description: "Checks prerequisites and analyzes project structure to generate adapted templates in .claude/tasks/templates/."
+description: "Analyzes project, checks prerequisites, generates adapted brewcode templates. Triggers: setup, brewcode setup."
 disable-model-invocation: true
 argument-hint: "[universal-template-path]"
 allowed-tools: Read, Write, Glob, Grep, Bash, AskUserQuestion
@@ -15,7 +15,7 @@ model: opus
 
 **Agent:** developer | **Action:** Verify and install required tools
 
-> **Context:** This phase auto-checks prerequisites. If all required components are present, it skips to Phase 1 silently.
+> Auto-checks prerequisites. If all required components are present, skips to Phase 1 silently.
 
 ### Step 1: State Check
 
@@ -28,16 +28,14 @@ bash "${CLAUDE_SKILL_DIR}/scripts/install.sh" state && echo "✅ state" || echo 
 
 ### Step 2: Evaluate Results
 
-Parse the state output table. Check required components: **brew**, **timeout**, **jq**.
+Parse state output table. Required components: **brew**, **timeout**, **jq**.
 
-- **If ALL required show ✅** → Skip to Phase 1 (log: "All prerequisites present, skipping installation.")
-- **If ANY required show ❌ missing** → Continue to Step 3
+- All required show ✅ -> Skip to Phase 1 (log: "All prerequisites present, skipping installation.")
+- Any required show ❌ -> Continue to Step 3
 
 ### Step 2.5: Load Deferred Tool Schemas
 
-Call **ToolSearch** with `query: "select:AskUserQuestion"` to load its schema.
-This is required for Claude Code v2.1.107+ where AskUserQuestion is deferred.
-If ToolSearch fails or returns no result, continue — AskUserQuestion may already be loaded.
+Call **ToolSearch** with `query: "select:AskUserQuestion"` to load its schema. Required for Claude Code v2.1.107+ where AskUserQuestion is deferred. If ToolSearch fails, continue -- AskUserQuestion may already be loaded.
 
 ### Step 3: Install Required Components
 
@@ -46,11 +44,10 @@ If ToolSearch fails or returns no result, continue — AskUserQuestion may alrea
 bash "${CLAUDE_SKILL_DIR}/scripts/install.sh" check-timeout && echo "✅ timeout-check" || echo "❌ timeout-check FAILED"
 ```
 
-**If TIMEOUT_EXISTS=false** → **ASK** (AskUserQuestion):
-- Question: "The `timeout` command is missing. Create symlink to `gtimeout`? This is REQUIRED for brewcode."
-- Options: "Yes, create" | "Cancel setup"
+**If TIMEOUT_EXISTS=false** -> **ASK** (AskUserQuestion): "The `timeout` command is missing. Create symlink to `gtimeout`? This is REQUIRED for brewcode."
+Options: "Yes, create" | "Cancel setup"
 
-> **If cancel** → STOP: "Setup cancelled. timeout command is required for brewcode."
+> **If cancel** -> STOP: "Setup cancelled. timeout command is required for brewcode."
 
 **EXECUTE** using Bash tool:
 ```bash
@@ -59,15 +56,14 @@ bash "${CLAUDE_SKILL_DIR}/scripts/install.sh" required && echo "✅ required" ||
 
 > **STOP if ❌** — required components must be installed before continuing.
 
-**If timeout still missing** → **EXECUTE**: `bash "${CLAUDE_SKILL_DIR}/scripts/install.sh" timeout`
+If timeout still missing -> **EXECUTE**: `bash "${CLAUDE_SKILL_DIR}/scripts/install.sh" timeout`
 
 ### Step 4: Semantic Search (Optional)
 
-**If grepai not installed** → **ASK** (AskUserQuestion):
-- Question: "Install semantic search (grepai)? Enables AI-powered code search (~1.5GB)."
-- Options: "Yes, install grepai" | "Skip"
+**If grepai not installed** -> **ASK** (AskUserQuestion): "Install semantic search (grepai)? Enables AI-powered code search (~1.5GB)."
+Options: "Yes, install grepai" | "Skip"
 
-**If Yes** → **EXECUTE**: `bash "${CLAUDE_SKILL_DIR}/scripts/install.sh" grepai`
+If Yes -> **EXECUTE**: `bash "${CLAUDE_SKILL_DIR}/scripts/install.sh" grepai`
 
 ### Step 5: Summary
 
@@ -84,9 +80,7 @@ bash "${CLAUDE_SKILL_DIR}/scripts/install.sh" summary && echo "✅ summary" || e
 
 > **Context:** BC_PLUGIN_ROOT is available in your context (injected by pre-task.mjs hook).
 
-### Scan Commands
-
-**EXECUTE** using Bash tool — gather project info:
+**EXECUTE** using Bash tool:
 ```bash
 bash "scripts/setup.sh" scan && echo "✅ scan" || echo "❌ scan FAILED"
 ```
@@ -99,7 +93,7 @@ bash "scripts/setup.sh" scan && echo "✅ scan" || echo "❌ scan FAILED"
 
 **Agent:** Plan | **Action:** Consolidate findings and create adaptation strategy
 
-### Create Adaptation Plan
+Create Adaptation Plan:
 
 ```markdown
 # Adaptation Plan
@@ -151,14 +145,13 @@ bash "scripts/setup.sh" structure && echo "✅ structure" || echo "❌ structure
 
 ### Copy/Update Templates
 
-**EXECUTE** using Bash tool — sync templates from plugin (always overwrites if changed):
+**EXECUTE** using Bash tool:
 ```bash
 bash "scripts/setup.sh" sync && echo "✅ sync" || echo "❌ sync FAILED"
 ```
 
 > **STOP if ❌** — verify plugin templates exist.
-
-> **Note:** Templates synced from plugin. Rules created once (never overwritten). Review skill adapted by AI.
+> Templates synced from plugin. Rules created once (never overwritten). Review skill adapted by AI.
 
 ### Template Modifications
 
@@ -188,9 +181,7 @@ bash "scripts/setup.sh" sync && echo "✅ sync" || echo "❌ sync FAILED"
 
 **Agent:** developer | **Action:** Copy review skill template and adapt for project
 
-### Create Review Skill Directory and Copy Template
-
-Before running the script, export project analysis results as environment variables:
+Export project analysis results as environment variables before running the script:
 ```bash
 export DETECTED_TECH="<detected technology stack from analysis>"
 export AGENT_COUNT="<number of agents discovered>"
@@ -200,7 +191,7 @@ export TEST_AGENT="<test review agent name>"
 export DB_AGENT="<database review agent name>"
 ```
 
-**EXECUTE** using Bash tool — create directory and copy review skill template:
+**EXECUTE** using Bash tool:
 ```bash
 bash "scripts/setup.sh" review && echo "✅ review" || echo "❌ review FAILED"
 ```
@@ -209,7 +200,7 @@ bash "scripts/setup.sh" review && echo "✅ review" || echo "❌ review FAILED"
 
 ### Adapt Review Skill
 
-Replace placeholders based on Phase 2 analysis:
+> If you adapt the review skill `description`, keep it <= 120 chars (optimal ~100), single line, what + 3-5 distinct triggers. Some registries truncate long descriptions.
 
 | Placeholder | Source | Example |
 |-------------|--------|---------|
@@ -225,7 +216,6 @@ Replace placeholders based on Phase 2 analysis:
 ### Tech-Specific Checks Templates
 
 **Java/Spring:**
-```markdown
 | Category | Checks |
 |----------|--------|
 | DI | Constructor injection, no field injection, @RequiredArgsConstructor |
@@ -234,10 +224,8 @@ Replace placeholders based on Phase 2 analysis:
 | N+1 | Eager vs lazy loading, batch fetching, entity graphs |
 | Security | @PreAuthorize, input validation, SQL injection |
 | Lombok | @Value, @Builder, @Slf4j usage |
-```
 
 **Node.js/TypeScript:**
-```markdown
 | Category | Checks |
 |----------|--------|
 | Async | Promise handling, unhandled rejections, async/await |
@@ -245,10 +233,8 @@ Replace placeholders based on Phase 2 analysis:
 | Validation | Input sanitization, schema validation (Zod/Joi) |
 | Security | XSS prevention, CSRF tokens, helmet.js |
 | Imports | ESM vs CJS, barrel exports, circular deps |
-```
 
 **Python:**
-```markdown
 | Category | Checks |
 |----------|--------|
 | Type hints | Function signatures, return types, generics |
@@ -256,10 +242,8 @@ Replace placeholders based on Phase 2 analysis:
 | Async | asyncio patterns, event loop handling |
 | Security | SQL parameterization, input validation |
 | Style | PEP8, docstrings, comprehensions |
-```
 
 **Go:**
-```markdown
 | Category | Checks |
 |----------|--------|
 | Error handling | Error wrapping, sentinel errors, error types |
@@ -267,11 +251,10 @@ Replace placeholders based on Phase 2 analysis:
 | Memory | Slice capacity, pointer semantics, defer usage |
 | Security | SQL injection, input validation |
 | Interfaces | Small interfaces, composition |
-```
 
 ### Validation
 
-**EXECUTE** using Bash tool — verify review skill:
+**EXECUTE** using Bash tool:
 ```bash
 test -f .claude/skills/brewcode-review/SKILL.md && echo "✅ Review skill created" || echo "❌ Review skill MISSING"
 grep -q "Tech-Specific\|tech-specific\|Category.*Checks" .claude/skills/brewcode-review/SKILL.md && echo "✅ Tech checks" || echo "❌ Tech checks MISSING"
@@ -285,14 +268,12 @@ grep -q "Tech-Specific\|tech-specific\|Category.*Checks" .claude/skills/brewcode
 
 **Agent:** developer | **Action:** Copy configuration template for runtime settings
 
-**EXECUTE** using Bash tool — copy/update config template:
+**EXECUTE** using Bash tool:
 ```bash
 bash "scripts/setup.sh" config && echo "✅ config" || echo "❌ config FAILED"
 ```
 
 > **STOP if ❌** — verify .claude/tasks/cfg directory exists.
-
-### Configuration Options
 
 | Setting | Default | Description |
 |---------|---------|-------------|
@@ -310,14 +291,12 @@ bash "scripts/setup.sh" config && echo "✅ config" || echo "❌ config FAILED"
 
 **Agent:** developer | **Action:** Verify template structure
 
-**EXECUTE** using Bash tool — ALL must pass:
+**EXECUTE** using Bash tool:
 ```bash
 bash "scripts/setup.sh" validate && echo "✅ validate" || echo "❌ validate FAILED"
 ```
 
 > **STOP if any ❌** — go back to "Copy Templates" step and fix.
-
-### Validation Report
 
 | Check | Status |
 |-------|--------|
@@ -343,46 +322,32 @@ bash "scripts/setup.sh" validate && echo "✅ validate" || echo "❌ validate FA
 bash "scripts/setup.sh" agents > /tmp/agents-section.md && cat /tmp/agents-section.md
 ```
 
-> **Output = Ready-to-insert content.** Script collects system + global + plugin agents.
+> Output = ready-to-insert content. Script collects system + global + plugin agents.
 > Internal agents (bc-coordinator, bc-grepai-configurator, bc-knowledge-manager) are automatically excluded.
 
 ### Step 2: Analyze Existing CLAUDE.md
 
-**READ** `~/.claude/CLAUDE.md` using Read tool.
-
-**LLM Analysis** — find ALL agent-related sections:
-- `## Agents`, `## Agent Selection`, `### Core Agents`, `### Global Utility Agents`
-- Any tables with columns like `Agent | Model | Purpose`
-- Any lists of agent names (developer, tester, reviewer, etc.)
-
-**Identify boundaries:**
-- Start line number of agent section(s)
-- End line number (before next unrelated ## heading)
+Read `~/.claude/CLAUDE.md`. Find ALL agent-related sections: `## Agents`, `## Agent Selection`, `### Core Agents`, `### Global Utility Agents`, any tables with `Agent | Model | Purpose` columns, any lists of agent names. Identify start/end line boundaries.
 
 ### Step 3: Ask User
 
 > **Preflight:** Call ToolSearch with `query: "select:AskUserQuestion"` before proceeding.
 
-**ASK USER** with AskUserQuestion:
-- Question: "Found agent sections in ~/.claude/CLAUDE.md. Replace with optimized LLM-friendly format?"
-- Options:
-  - "Yes — replace all agent sections"
-  - "No — keep current format"
+**ASK** using AskUserQuestion: "Found agent sections in ~/.claude/CLAUDE.md. Replace with optimized LLM-friendly format?"
+Options: "Yes -- replace all agent sections" | "No -- keep current format"
 
-### Step 4: If YES — Replace
+### Step 4: If YES -- Replace
 
-> **CRITICAL:** Use EXACTLY the content from `/tmp/agents-section.md`.
-> DO NOT add agents manually — the script already filters internal agents.
-> Internal agents (bc-coordinator, bc-grepai-configurator, bc-knowledge-manager) are excluded by design.
+> Use content from `/tmp/agents-section.md`. Do not add agents manually -- the script already filters internal agents.
 
 Using Edit tool:
-1. **Read** `/tmp/agents-section.md` to get the exact replacement content
-2. Find the `## Agents — DELEGATE!` section in `~/.claude/CLAUDE.md`
-3. Replace that section with the EXACT content from `/tmp/agents-section.md`
+1. Read `/tmp/agents-section.md` to get exact replacement content
+2. Find `## Agents — DELEGATE!` section in `~/.claude/CLAUDE.md`
+3. Replace with content from `/tmp/agents-section.md`
 4. Preserve `### Global Skills` subsection if it exists (append after agents table)
 5. Preserve all non-agent content
 
-**Key:** LLM determines section boundaries, not grep. Content comes from script output.
+LLM determines section boundaries, not grep. Content comes from script output.
 
 </instructions>
 
@@ -430,6 +395,3 @@ Using Edit tool:
 /brewcode:spec "Implement feature X"
 /brewcode:review "Check null safety"
 ```
-
----
-

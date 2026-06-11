@@ -1,6 +1,6 @@
 ---
 name: brewdoc:my-claude
-description: Extended documentation skill for Claude Code installations. Complements built-in /team-onboarding with multi-mode research — internal setup analysis, external architecture docs, and web research from forums/GitHub/marketplaces.
+description: Document your Claude Code installation - setup, architecture, web research. Triggers - my claude, installation docs.
 argument-hint: "[ext [context]] | [r <query>] — no args = internal installation docs"
 user-invocable: true
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Task, WebFetch, WebSearch, Skill, AskUserQuestion

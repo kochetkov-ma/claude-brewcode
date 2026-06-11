@@ -1,6 +1,6 @@
 ---
 name: brewtools:agent-toggle
-description: "Disables or enables individual plugin agents by renaming <name>.md and _<name>.md in the plugin cache. Persistent state: global (default) or project. Triggers: disable agent, enable agent, toggle agent, hide agent, agent-toggle."
+description: "Disables/enables individual plugin agents (survives updates). Triggers: disable agent, enable agent, agent-toggle."
 argument-hint: "[disable|enable|status|list|reapply|prune] <plugin>:<name> [--scope=global|project]"
 allowed-tools: Read, Bash, AskUserQuestion
 model: sonnet

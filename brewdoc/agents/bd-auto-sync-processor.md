@@ -1,6 +1,6 @@
 ---
 name: bd-auto-sync-processor
-description: "Processes single document for auto-sync. Reads document, loads per-type instructions or override, runs adaptive research via direct tool calls, aggregates findings, updates document."
+description: "Processes single document for auto-sync: reads, researches, aggregates, updates in place."
 tools: Read, Write, Edit, Glob, Grep, WebFetch
 model: sonnet
 permissionMode: acceptEdits

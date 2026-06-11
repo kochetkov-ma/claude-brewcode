@@ -1,6 +1,6 @@
 ---
 name: architect
-description: "Architecture analysis, patterns, trade-offs, scaling. Triggers: review architecture, design service, performance limits, scaling strategy"
+description: "Architecture analysis, patterns, scaling. Triggers: review architecture, design service, scaling."
 model: opus
 color: cyan
 tools: Read, Glob, Grep, Bash, WebFetch, WebSearch

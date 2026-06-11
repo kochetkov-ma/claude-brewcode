@@ -1,6 +1,6 @@
 ---
 name: tester
-description: "Runs tests, analyzes failures, debugs flaky tests - SDET/QA specialist. Triggers: run tests, tests failing, flaky test, debug test, test coverage."
+description: "Runs tests, analyzes failures, debugs flaky tests. Triggers: run tests, tests failing, flaky test."
 model: sonnet
 tools: Read, Write, Edit, Glob, Grep, Bash, Task
 ---

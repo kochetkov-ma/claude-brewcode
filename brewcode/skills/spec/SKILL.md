@@ -1,6 +1,6 @@
 ---
 name: brewcode:spec
-description: "Creates SPEC.md task specification through codebase research and user interaction. First step in brewcode pipeline before plan and start. Triggers: create SPEC.md, brewcode spec, write task specification, generate spec from requirements, task SPEC from description, feature spec document."
+description: "Creates SPEC.md task spec via research + interaction. Triggers: create SPEC.md, brewcode spec, write spec."
 argument-hint: "[-n] <description> | <path-to-requirements> — -n/--noask: no questions to user"
 allowed-tools: Read, Write, Glob, Grep, Bash, Task, AskUserQuestion
 model: opus

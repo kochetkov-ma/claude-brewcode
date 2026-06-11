@@ -1,6 +1,6 @@
 ---
 name: brewdoc:md-to-pdf
-description: Converts Markdown to professional PDF. Two engines - reportlab (lightweight) or weasyprint (full CSS). Style customization, test mode, dependency management. Triggers - pdf, md to pdf, markdown to pdf, convert pdf, generate pdf.
+description: Convert Markdown to PDF via reportlab or weasyprint engines. Triggers - pdf, md to pdf, markdown to pdf, generate pdf.
 argument-hint: "<file.md> [--engine name] [\"prompt\"] | styles | test | (no args = help)"
 user-invocable: true
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion

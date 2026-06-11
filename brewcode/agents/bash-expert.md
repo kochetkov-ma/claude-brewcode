@@ -1,6 +1,6 @@
 ---
 name: bash-expert
-description: "Creates professional sh/bash scripts for Mac/Linux. Triggered by 'create script', 'bash script', 'shell script', 'install script', 'setup script'. Expert in Claude Code plugin scripts, brew, env vars."
+description: "Creates sh/bash scripts for Mac/Linux. Triggers: create script, bash script, shell script."
 model: opus
 color: green
 tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch

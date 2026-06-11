@@ -1,6 +1,6 @@
 ---
 name: brewcode:standards-review
-description: Reviews code for project standards compliance and finds duplicates. Use when - reviewing code quality, checking standards, finding duplicates, analyzing compliance. Trigger keywords - standards review, check standards, find duplicates, code review, compliance check, reusable code.
+description: "Reviews code for standards compliance, finds duplicates. Triggers: standards review, check standards, find duplicates."
 argument-hint: "[commit|branch|folder] [-p <prompt>]"
 allowed-tools: Read, Glob, Grep, Task, Bash, Write, mcp__grepai__search, AskUserQuestion, Skill
 model: opus

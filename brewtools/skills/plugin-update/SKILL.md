@@ -1,6 +1,6 @@
 ---
 name: brewtools:plugin-update
-description: Checks installed Claude Code plugins, installs missing brewcode plugins, updates outdated ones, reports versions. Triggers - "update plugins", "check plugin versions", "обнови плагины", "установить бриукод", "plugin update", "marketplace update".
+description: Checks, installs, updates Claude Code plugins. Triggers - update plugins, check versions, обнови плагины.
 user-invocable: true
 argument-hint: "[check|update|all] — no args = interactive. check = status only, update = prompt to update, all = everything non-interactive"
 allowed-tools: Read, Bash, AskUserQuestion, Write, WebFetch
@@ -9,7 +9,7 @@ model: sonnet
 
 # Brewcode Plugin Update
 
-> Check, install, and update the brewcode plugin suite (brewcode, brewdoc, brewtools, brewui). Executes all commands in the current Claude Code session — never gives "you should run" instructions.
+> Check, install, and update the brewcode plugin suite (brewcode, brewdoc, brewtools, brewui). Execute all commands in the current session — never give "you should run" instructions.
 
 ## Argument Handling
 
@@ -22,11 +22,11 @@ model: sonnet
 | `update` | Phases 0-4, non-interactive "Update all" |
 | `all` | Phases 0-6 non-interactive |
 
-Parse the first token of `$ARGUMENTS`. Unknown or empty → interactive.
+Parse first token of `$ARGUMENTS`. Unknown or empty → interactive.
 
 ## Critical Rules
 
-- EXECUTE every `claude plugin ...` command in THIS session via Bash tool. Show full output.
+- EXECUTE every `claude plugin ...` command via Bash tool. Show full output.
 - NEVER suggest `--plugin-dir` for end users (dev-only).
 - ALWAYS print the reload notice at the end, even on no-op runs.
 - AskUserQuestion: options lists only, no free-text fields.
@@ -49,9 +49,7 @@ bash "${CLAUDE_SKILL_DIR}/scripts/discover-plugins.sh" && echo "✅ discover OK"
 
 > **STOP if both fail** — report to user and continue without installed data (treat everything as missing).
 
-Partition results into:
-- `suite = {brewcode, brewdoc, brewtools, brewui}`
-- `other = everything else`
+Partition results into: `suite = {brewcode, brewdoc, brewtools, brewui}`, `other = everything else`.
 
 Read [references/discovery.md](references/discovery.md) for details on both discovery paths.
 
@@ -85,21 +83,14 @@ Also list `other` plugins below with their versions (informational).
 
 ## Phase 2b — Token-Cost Table (Optional)
 
-Precheck command availability:
-
+Precheck:
 ```bash
 claude plugin details --help >/dev/null 2>&1 && echo "available" || echo "skip"
 ```
 
-If unavailable → SKIP this phase entirely (proceed to Phase 3).
+If unavailable → SKIP (proceed to Phase 3).
 
-If available, for each installed suite plugin run:
-
-```bash
-claude plugin details <plugin>@claude-brewcode
-```
-
-Parse output and render a token-cost table to the user:
+If available, for each installed suite plugin run `claude plugin details <plugin>@claude-brewcode` and render:
 
 | Plugin | Base Tokens | With Skills | Hooks | Total |
 |--------|-------------|-------------|-------|-------|
@@ -108,50 +99,43 @@ Parse output and render a token-cost table to the user:
 | brewtools | ... | ... | ... | ... |
 | brewui | ... | ... | ... | ... |
 
-Column names depend on actual `claude plugin details` output fields — adapt accordingly. If a field is missing, render `—`. If the command fails for a specific plugin, render `❓` for that row and continue.
+Adapt column names to actual output fields. Missing field → `—`. Command failure for a plugin → `❓` for that row, continue.
 
 Phase is informational only; do not block on errors.
 
 ## Phase 3 — Install Missing
 
-For each missing suite plugin, ask the user via AskUserQuestion (unless arg ∈ {`update`, `all`}, then skip installation or auto-install only for `all`).
+For each missing suite plugin, ask via AskUserQuestion (unless arg ∈ {`update`, `all`} — `all` auto-installs, `update` skips install).
 
-**AskUserQuestion** (only in interactive mode, only if missing plugins exist):
+**AskUserQuestion** (interactive only, if missing plugins exist):
 
 Question: "Install missing brewcode plugins?"
-Options:
-- "Install all missing" — install every missing suite plugin
-- "Install selected" — ask per-plugin
-- "Skip install" — proceed to updates
+Options: "Install all missing" / "Install selected" / "Skip install"
 
 If "Install selected" — ask per plugin with options `["Install", "Skip"]`.
 
-**EXECUTE** (idempotent — re-adding marketplace is safe):
+**EXECUTE** (idempotent):
 ```bash
 claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode && echo "✅ marketplace add OK" || echo "⚠️ marketplace add warning (may already exist)"
 ```
 
-Then for each plugin to install:
+Then per plugin:
 ```bash
 claude plugin install <plugin>@claude-brewcode && echo "✅ install <plugin> OK" || echo "❌ install <plugin> FAILED"
 ```
 
-Show full output of each command to the user.
+Show full output of each command.
 
-Reference prompt for multi-command recovery: [references/install-prompt.md](references/install-prompt.md).
+Reference: [references/install-prompt.md](references/install-prompt.md).
 
 ## Phase 4 — Update Outdated
 
-**AskUserQuestion** (only interactive; `update` and `all` auto-pick "Update all"):
+**AskUserQuestion** (interactive only; `update` and `all` auto-pick "Update all"):
 
 Question: "Update brewcode plugin suite?"
-Options:
-- "Update all" — full chain (marketplace + all 4 plugins)
-- "Update suite only" — same as "all" (alias)
-- "Update selected" — ask per-plugin
-- "Skip updates" — proceed to Phase 5
+Options: "Update all" / "Update suite only" / "Update selected" / "Skip updates"
 
-**EXECUTE** full chain in order, showing output of each:
+**EXECUTE** full chain in order:
 ```bash
 claude plugin marketplace update claude-brewcode && echo "✅ marketplace update OK" || echo "❌ marketplace update FAILED"
 ```
@@ -168,32 +152,29 @@ claude plugin update brewtools@claude-brewcode && echo "✅ brewtools update OK"
 claude plugin update brewui@claude-brewcode && echo "✅ brewui update OK" || echo "❌ brewui update FAILED"
 ```
 
-If any step fails, report exact error and continue with remaining steps. Reference: [references/update-commands.md](references/update-commands.md), [references/update-prompt.md](references/update-prompt.md).
+On failure: report exact error and continue. Reference: [references/update-commands.md](references/update-commands.md), [references/update-prompt.md](references/update-prompt.md).
 
 ## Phase 5 — Auto-Update Toggle (Optional)
 
-**Skip for arg ∈ {`check`, `update`}.** Only interactive or `all`.
+**Skip for arg ∈ {`check`, `update`}.** Interactive or `all` only.
 
-Per Claude Code docs, third-party marketplace auto-update is OFF by default and toggled per-marketplace via `/plugin` UI → Marketplaces → claude-brewcode. The exact settings.json key is unverified — see [references/autoupdate-research.md](references/autoupdate-research.md).
+Auto-update for third-party marketplaces is OFF by default. Toggle per-marketplace via `/plugin` UI → Marketplaces → claude-brewcode. Exact settings.json key unverified — see [references/autoupdate-research.md](references/autoupdate-research.md).
 
 **AskUserQuestion** (interactive only):
 
 Question: "Enable auto-update for claude-brewcode marketplace?"
-Options:
-- "Enable via /plugin UI" — instruct user to open `/plugin` → Marketplaces → claude-brewcode → toggle auto-update
-- "Skip" — leave current setting
+Options: "Enable via /plugin UI" / "Skip"
 
-Do NOT patch settings.json blindly — the key is unverified. Tell the user to toggle via `/plugin` UI.
+Do NOT patch settings.json blindly. Instruct user to toggle via `/plugin` UI.
 
 ## Phase 5b — Prune Stale Plugin Caches
 
 **EXECUTE** using Bash tool:
-
 ```bash
 claude plugin prune --help >/dev/null 2>&1 && claude plugin prune || echo "skipped: claude plugin prune unavailable"
 ```
 
-Cleans stale plugin caches left behind by older versions. Non-fatal: if the CLI lacks `prune`, the `||` fallback prints a skip notice and continues.
+Non-fatal: if CLI lacks `prune`, prints skip notice and continues.
 
 ## Phase 6 — Reload Notice & Final Report
 
@@ -203,12 +184,10 @@ Cleans stale plugin caches left behind by older versions. Non-fatal: if the CLI 
 > Preferred: run `/reload-plugins` in this session.
 > Fallback: type `exit`, then run `claude` again.
 
-Then print a final summary:
+Final summary:
 - Plugins installed this run: [...]
 - Plugins updated this run: [...]
 - Plugins skipped: [...]
 - Errors encountered: [...]
-
-Done.
 
 <!-- W3-T8 research note: Marketplace auto-update settings.json key not confirmed in CC docs as of 2026-05-12. Continue using UI guidance. Re-investigate when CC adds documented marketplace.autoUpdate setting. -->

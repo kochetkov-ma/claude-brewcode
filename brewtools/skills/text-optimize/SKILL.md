@@ -1,6 +1,6 @@
 ---
 name: brewtools:text-optimize
-description: Optimizes text and docs for LLM token efficiency. Use when - optimizing prompts, reducing tokens, compressing text, condensing verbose content, encoding for CLAUDE.md, compressing for context/prompt/LLM. Trigger keywords - optimize, reduce tokens, compress, condense, slim, tighten, too verbose, shrink, encode, deep compress, deep encode, super compress, maximum compress.
+description: Optimizes text/docs for LLM token efficiency. Triggers - optimize, reduce tokens, compress, deep compress.
 argument-hint: "[-l|-s|-d] [file|folder|path1,path2] — -l light, -s standard (30-50%), -d deep (LLM-only), no flag = medium or auto-detect"
 user-invocable: true
 allowed-tools: [Read, Write, Edit, Grep, Glob, Task, AskUserQuestion]

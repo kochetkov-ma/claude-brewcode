@@ -1,6 +1,6 @@
 ---
 name: bc-knowledge-manager
-description: "Brewcode knowledge manager - compacts KNOWLEDGE.jsonl, deduplicates entries, prioritizes by type. Triggers - before handoff, when duplicates reported by coordinator."
+description: "Brewcode knowledge manager: compacts KNOWLEDGE.jsonl, dedups, prioritizes by type."
 tools: Read, Write
 model: haiku
 permissionMode: acceptEdits

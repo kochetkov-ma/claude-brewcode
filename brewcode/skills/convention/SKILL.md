@@ -1,6 +1,6 @@
 ---
 name: brewcode:convention
-description: "Analyzes project to extract etalon classes, reference patterns, and architecture by layer. Generates convention documents in .claude/convention/ and organizes project rules into a code style guide. Triggers: extract conventions, find etalon classes, analyze project patterns, code style guide, architecture conventions, convention docs, reference implementation, coding standards."
+description: "Extracts etalon classes, patterns, architecture into convention docs. Triggers: extract conventions, etalon classes."
 argument-hint: "[full|conventions|rules|paths <p1,p2>]"
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion, Skill
 model: opus
@@ -42,7 +42,7 @@ Output: JSON `{"stacks":[...],"primary":"...","build_file":"...","modules":[...]
 | rust | L1-L2, L4-L6, L8, L10-L11, T5 |
 | go | L1-L2, L4-L6, L8, L10, T5 |
 | Multi-stack | Union of all detected |
-| other/unknown | All main layers (L1-L14), all test layers (T1-T6) | Generic analysis -- agent determines relevance per layer |
+| other/unknown | All main layers (L1-L14), all test layers (T1-T6) — agent determines relevance per layer |
 
 ### Step 0.2: Scan Project
 
@@ -53,7 +53,7 @@ bash "${CLAUDE_SKILL_DIR}/scripts/convention.sh" scan && echo "---SCAN-OK---" ||
 
 Output: JSON with `source_dirs`, `file_counts`, `modules`, `total_files`.
 
-> If `total_files` > 1000: Warn user, suggest `paths` mode.
+> If `total_files` > 1000: warn user, suggest `paths` mode.
 
 ### Step 0.3: Setup Convention Directory
 
@@ -71,13 +71,13 @@ bash "${CLAUDE_SKILL_DIR}/scripts/convention.sh" setup && echo "---SETUP-OK---" 
 bash "${CLAUDE_SKILL_DIR}/scripts/convention.sh" validate && echo "---VALID---" || echo "---INVALID---"
 ```
 
-> If `rules` mode + `INVALID` -- Exit: "Run `/brewcode:convention conventions` first."
+> If `rules` mode + `INVALID` -- exit: "Run `/brewcode:convention conventions` first."
 
 ---
 
 ## P1: Load Layer Definitions
 
-Read `references/analysis-layers.md`. Filter layers by detected stack from P0. For `paths` mode: further filter by specified paths -- match layer file patterns against provided paths. Build `ACTIVE_LAYERS` for P2.
+Read `references/analysis-layers.md`. Filter layers by detected stack from P0. For `paths` mode: further filter by specified paths — match layer file patterns against provided paths. Build `ACTIVE_LAYERS` for P2.
 
 ---
 
@@ -86,13 +86,10 @@ Read `references/analysis-layers.md`. Filter layers by detected stack from P0. F
 ### Dynamic Agent Resolution
 
 Before spawning agents, check for project team agents:
-
 1. If `.claude/teams/` exists — read `team.md` for agent roster with domains
 2. If team has architecture/testing domain agents — prefer over plugin architect/tester
 3. Priority: **team agent > project agent > plugin agent > system agent**
 4. If agent refuses (Task Acceptance Protocol) — re-delegate to suggested colleague (max 2 retries)
-
-> Always fall back to plugin agents when no project agents match the task domain.
 
 Spawn ALL agents in a SINGLE message. Skip agents for inactive layers (filtered in P1).
 
@@ -210,11 +207,7 @@ Task(subagent_type="text-optimizer", prompt="FIRST: Read $BT_PLUGIN_ROOT/skills/
 
 ELSE (brewtools not installed -- fallback):
 
-Read `${CLAUDE_SKILL_DIR}/../convention/references/text-optimize-fallback.md` for compact rules.
-Apply rules manually to all 3 generated documents:
-- `.claude/convention/reference-patterns.md`
-- `.claude/convention/testing-conventions.md`
-- `.claude/convention/project-architecture.md`
+Read `${CLAUDE_SKILL_DIR}/../convention/references/text-optimize-fallback.md` for compact rules. Apply rules manually to all 3 generated documents.
 
 ---
 

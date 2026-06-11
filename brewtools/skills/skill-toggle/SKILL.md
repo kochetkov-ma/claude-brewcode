@@ -1,6 +1,6 @@
 ---
 name: brewtools:skill-toggle
-description: "Disables or enables individual plugin skills by writing skillOverrides to ~/.claude/settings.json (survives plugin updates). Modes: off, user-invocable-only, name-only. Triggers: disable skill, enable skill, toggle skill, hide skill, skill-toggle."
+description: "Disables/enables individual plugin skills (survives updates). Triggers: disable skill, enable skill, skill-toggle."
 argument-hint: "[disable|enable|status|list] <plugin>:<name> [--mode=off|user-invocable-only|name-only]"
 allowed-tools: Read, Bash, AskUserQuestion
 model: sonnet

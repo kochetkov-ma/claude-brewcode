@@ -1,17 +1,6 @@
 ---
 name: text-optimizer
-description: |
-  Optimizes text and docs for LLM token efficiency. Modes: light, medium, standard (30-50% human-readable), deep (2-3x LLM-only with DICT+symbols). Triggers: optimize prompt, reduce tokens, compress text, too verbose, deep compress, standard compress, token efficiency, shrink docs.
-
-  <example>
-  user: "Optimize this prompt for fewer tokens"
-  <commentary>Explicit compression request - apply standard or deep mode.</commentary>
-  </example>
-
-  <example>
-  user: "This CLAUDE.md is too long"
-  <commentary>LLM-only file - deep mode with DICT + symbols.</commentary>
-  </example>
+description: "Optimizes text/docs for LLM token efficiency. Triggers: optimize prompt, reduce tokens, compress."
 model: sonnet
 color: magenta
 tools: Read, Write, Edit, Glob, Grep, WebFetch, AskUserQuestion

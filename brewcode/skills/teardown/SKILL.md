@@ -1,6 +1,6 @@
 ---
 name: brewcode:teardown
-description: Removes brewcode project files (templates, configs, logs). Optional --full mode runs `claude project purge` to wipe ALL project state after typed PURGE confirmation.
+description: "Removes brewcode project files (templates, configs, logs); --full wipes all state. Triggers: teardown, cleanup."
 disable-model-invocation: true
 argument-hint: "[--dry-run] [--full]"
 allowed-tools: Bash, Read, AskUserQuestion

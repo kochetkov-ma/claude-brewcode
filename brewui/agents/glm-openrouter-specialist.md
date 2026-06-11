@@ -1,6 +1,6 @@
 ---
 name: glm-openrouter-specialist
-description: "OpenRouter API expert for GLM model routing, cost optimization, provider selection, vision requests. Triggers: 'openrouter', 'open router', 'route glm', 'openrouter api', 'glm via openrouter', 'glm provider', 'openrouter pricing'."
+description: "OpenRouter expert for GLM routing, cost, vision. Triggers: openrouter, route glm, glm provider."
 model: sonnet
 color: cyan
 tools: Read, Bash, Glob, Grep, Write, Edit

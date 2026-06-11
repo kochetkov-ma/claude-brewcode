@@ -4,7 +4,7 @@
 
 ## Template 1: Build + Push to GHCR
 
-> Based on: `docs.yml` — builds Docker image, pushes to GitHub Container Registry.
+> Based on: `docs.yml` -- builds Docker image, pushes to GitHub Container Registry.
 
 **Trigger:** Tag push `v*.*.*` + branch pushes (except main).
 **Key steps:** Checkout, compute tags, Docker Buildx, GHCR login, build+push, summary.
@@ -106,7 +106,7 @@ jobs:
 
 ## Template 2: Deploy to VPS
 
-> Based on: `deploy-docs.yml` — deploys via SSH after upstream build completes.
+> Based on: `deploy-docs.yml` -- deploys via SSH after upstream build completes.
 
 **Trigger:** `workflow_run` (after build) + `workflow_dispatch` (manual).
 **Key steps:** Compute tag, SCP deploy files, SSH deploy script, health check, rollback.
@@ -331,7 +331,7 @@ jobs:
 
 ## Template 3: Release
 
-> Based on: `release.yml` — creates GitHub Release from tag push, extracts changelog.
+> Based on: `release.yml` -- creates GitHub Release from tag push, extracts changelog.
 
 **Trigger:** Tag push `v*.*.*`
 **Key steps:** Extract changelog from RELEASE-NOTES.md, create GitHub Release.

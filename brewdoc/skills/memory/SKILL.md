@@ -1,6 +1,6 @@
 ---
 name: brewdoc:memory
-description: Optimizes Claude Code memory in 4 interactive steps - removes duplicates, migrates to rules/CLAUDE.md, compresses, validates with cleanup. Use when - optimizing memory, cleaning CLAUDE.md, deduplicating memory files, compressing memory. Trigger keywords - optimize memory, memory cleanup, dedupe memory, organize CLAUDE.md, memory files.
+description: Optimize Claude Code memory - dedupe, compress, organize CLAUDE.md. Triggers - optimize memory, memory cleanup.
 argument-hint: "— no args, runs 4-step interactive workflow"
 user-invocable: true
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion
@@ -59,12 +59,12 @@ rules_files: [paths with content]
    ...
    ```
 4. `AskUserQuestion`: "Delete X duplicate entries (Y% of memory)? This is safe — content exists elsewhere."
-   - Options: "Yes, delete all" / "Review each" / "Skip this step"
-5. Apply deletion using `Edit` tool if approved
+   Options: "Yes, delete all" / "Review each" / "Skip this step"
+5. Apply deletion via `Edit` if approved
 
 ## Step 2: Migration — Move to Rules/CLAUDE.md (Interactive)
 
-**Goal:** Identify remaining memory entries better suited to persistent config files.
+**Goal:** Identify remaining entries better suited to persistent config files.
 
 Decision tree (per entry):
 - Applies to ALL projects + IS a rule/constraint → `~/.claude/rules/`
@@ -82,11 +82,8 @@ Decision tree (per entry):
    Total: X entries → ~Y tokens saved
    ```
 2. `AskUserQuestion`: "Migrate X entries to rules/CLAUDE.md?"
-   - Options: "Yes, migrate all" / "Review each" / "Skip this step"
-3. If approved:
-   - Create/append to target rule files via `Edit`
-   - Remove migrated entries from memory via `Edit`
-   - If target file doesn't exist, create it
+   Options: "Yes, migrate all" / "Review each" / "Skip this step"
+3. If approved: create/append to target rule files via `Edit`, remove migrated entries from memory, create target file if missing
 
 ## Step 3: Compression (Interactive)
 
@@ -109,7 +106,7 @@ Compression techniques:
    ```
    Show 2-3 specific before/after samples.
 2. `AskUserQuestion`: "Compress remaining memory? (~Y% reduction)"
-   - Options: "Yes, compress all" / "Skip compression"
+   Options: "Yes, compress all" / "Skip compression"
 3. Apply compression via `Edit` (bottom-up order to preserve line numbers)
 
 ## Step 4: Validation (Automatic)
@@ -120,8 +117,8 @@ Compression techniques:
    - No broken file path references in memory files
    - No contradictions between memory and CLAUDE.md
    - Memory files are well-formed markdown
-2. Clean broken references (Edit tool)
-3. Check for orphaned memory files (files in `$MEMORY_DIR` with no MEMORY.md reference)
+2. Clean broken references via `Edit`
+3. Check for orphaned memory files (in `$MEMORY_DIR` with no MEMORY.md reference)
 4. Report orphaned files and ask to delete
 
 **Final Report:**

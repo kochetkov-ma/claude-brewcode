@@ -1,7 +1,8 @@
 ---
 name: ssh-admin
 model: opus
-description: "SSH server administration agent with live server inventory. Executes remote commands with safety classification."
+# description MUST be <=100 chars, single line
+description: "SSH server admin with live inventory. Runs remote commands with safety classification."
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob, AskUserQuestion
 ---
 

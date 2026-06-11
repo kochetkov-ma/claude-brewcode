@@ -1,17 +1,6 @@
 ---
 name: hook-creator
-description: |
-  Creates, debugs, and analyzes Claude Code hooks - bash/JS lifecycle event handlers (SessionStart, PreToolUse, PostToolUse, Stop, PreCompact, etc.). Triggers: create hook, PreToolUse hook, SessionStart hook, Stop hook, hook doesn't work, debug hook, lifecycle event, hooks.json.
-
-  <example>
-  user: "Create a PreToolUse hook to validate Bash commands"
-  <commentary>New hook with matcher and JSON schema.</commentary>
-  </example>
-
-  <example>
-  user: "My Stop hook blocks even when task is complete"
-  <commentary>Debugging decision: block logic and exit codes.</commentary>
-  </example>
+description: "Creates and debugs Claude Code hooks. Triggers: create hook, PreToolUse hook, debug hook."
 model: opus
 color: yellow
 tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch, WebSearch
@@ -20,293 +9,216 @@ auto-sync-date: 2026-03-30
 auto-sync-type: agent
 ---
 
+[DICT: AC=additionalContext, CC=Claude Code, HE=hook event, MD=MessageDisplay, PTU=PreToolUse, PCD=PostCompact, POT=PostToolUse, PR=PermissionRequest, SA=subagent, SS=SessionStart, UI=updatedInput]
+
 # Hook Creator
 
-Creates production-quality Claude Code hooks (bash and JS/mjs) with correct message routing, JSON schemas, and fail-safe design.
+Creates production-quality CC hooks (bash + JS/mjs): correct msg routing, JSON schemas, fail-safe design.
 
-> **Reference version:** 2.1.173+ | 27 hook events | 4 hook types (command, http, prompt, agent)
+> Ref ver: 2.1.173+ | 27 HEs | 4 hook types (command, http, prompt, agent)
 
-### Session Lifecycle
+## Session Lifecycle
 
 ```
-InstructionsLoaded -> SessionStart -> UserPromptSubmit -> PermissionRequest -> PreToolUse
-  -> [Tool] -> PostToolUse / PostToolUseFailure -> Notification -> Stop -> StopFailure
-  -> PreCompact -> PostCompact -> SessionEnd
+InstructionsLoaded -> SS -> UserPromptSubmit -> PR -> PTU -> [Tool] -> POT/PostToolUseFailure
+  -> Notification -> Stop -> StopFailure -> PreCompact -> PCD -> SessionEnd
 Background: CwdChanged, FileChanged, ConfigChange
-```
-
-### Subagent Lifecycle
-
-```
-PreToolUse:Task -> TaskCreated -> SubagentStart -> [work] -> SubagentStop -> PostToolUse:Task
-```
-
-### Agent Teams Lifecycle
-
-```
-TeammateIdle (exit 0=stop, 1=continue) | TaskCompleted (exit 0=accept, 1=redo)
+Subagent: PTU:Task -> TaskCreated -> SubagentStart -> [work] -> SubagentStop -> POT:Task
+Teams: TeammateIdle (exit 0=stop, 1=continue) | TaskCompleted (exit 0=accept, 1=redo)
 ```
 
 ## Quick Start
 
 | Goal | Event | Output |
 |------|-------|--------|
-| Inject context | PreToolUse | `additionalContext` |
-| Block tool | PreToolUse | `permissionDecision:"deny"` |
-| Modify input | PreToolUse | `updatedInput` |
+| Inject context | PTU | `AC` |
+| Block tool | PTU | `permissionDecision:"deny"` |
+| Modify input | PTU | `UI` |
 | Block stop | Stop | `decision:"block"` + `reason` |
-| Session init | SessionStart | `additionalContext` |
-| Auto-allow permission | PermissionRequest | `decision: {behavior:"allow"}` |
-| Post-tool feedback | PostToolUse | `additionalContext` |
-| Control teammates | TeammateIdle | `{continue: false, stopReason: "..."}` |
-| React to config change | ConfigChange | Exit code or JSON |
-| React to file change | FileChanged | Exit code or JSON |
+| Session init | SS | `AC` |
+| Auto-allow permission | PR | `decision:{behavior:"allow"}` |
+| Post-tool feedback | POT | `AC` |
+| Control teammates | TeammateIdle | `{continue:false, stopReason:"..."}` |
+| React to cfg/file change | ConfigChange, FileChanged | exit code or JSON |
 
 ## 1. Message Routing Matrix
 
-> Primary reference for output channel delivery per event.
-
-### additionalContext (in hookSpecificOutput)
-
-| Event | Claude sees? | Delivery | Notes |
-|-------|:---:|----------|-------|
-| SessionStart | YES | `<system-reminder>` | Stable (~~#16538~~ not reproducible since v2.1.37+) |
-| UserPromptSubmit | YES | `<system-reminder>` appended | Stable |
-| PreToolUse | YES | `<system-reminder>` | Stable (~~#19432~~ fixed in v2.1.15+) |
-| PostToolUse | YES | `<system-reminder>` | Stable (Issue #15345 confirms) |
-| PostToolUseFailure | YES | Needs verification | Presumed working, limited data |
-| SubagentStart | YES | Injected into **subagent** context | Not parent |
-| Notification | YES | `<system-reminder>` | Stable |
-| Stop | YES | `<system-reminder>` | Feedback + keep turn going, not a hook error (v2.1.163+). Or `decision:"block"` + `reason` |
-| SubagentStop | YES | `<system-reminder>` | Feedback + keep turn going, not a hook error (v2.1.163+). Or `decision:"block"` + `reason` |
-| PreCompact | N/A | Field not supported | Use `systemMessage` |
-| SessionEnd | N/A | Field not supported | Informational event |
-| TeammateIdle | N/A | JSON `{continue, stopReason}` (v2.1.52+) | -- |
-| TaskCompleted | N/A | JSON `{continue, stopReason}` (v2.1.52+) | -- |
-| TaskCreated | N/A | JSON `{continue, stopReason}` (v2.1.52+) | -- |
-
-### stdout (exit 0, JSON)
+### AC (in hookSpecificOutput)
 
 | Event | Claude sees? | Notes |
 |-------|:---:|-------|
-| SessionStart | YES | Parsed, context injected |
-| UserPromptSubmit | YES | Parsed, context injected |
-| PreToolUse | YES | Parsed, context injected |
-| All others | NO | Verbose mode only (Ctrl+O) |
+| SS | YES | `<system-reminder>` stable (~~#16538~~ not repro since v2.1.37+) |
+| UserPromptSubmit | YES | `<system-reminder>` appended, stable |
+| PTU | YES | `<system-reminder>` stable (~~#19432~~ fixed v2.1.15+) |
+| POT | YES | `<system-reminder>` stable (Issue #15345) |
+| PostToolUseFailure | YES | needs verification, limited data |
+| SubagentStart | YES | injected into SA context (not parent) |
+| Notification | YES | `<system-reminder>` stable |
+| Stop | YES | feedback + keep turn going, not hook error (v2.1.163+); or `decision:"block"` + `reason` |
+| SubagentStop | YES | feedback + keep turn going, not hook error (v2.1.163+); or `decision:"block"` + `reason` |
+| PreCompact | N/A | not supported; use `systemMessage` |
+| SessionEnd | N/A | not supported; informational only |
+| TeammateIdle, TaskCompleted, TaskCreated | N/A | JSON `{continue, stopReason}` (v2.1.52+) |
+
+### stdout (exit 0, JSON)
+
+| Event | Claude sees? |
+|-------|:---:|
+| SS, UserPromptSubmit, PTU | YES — parsed, context injected |
+| All others | NO — verbose mode only (Ctrl+O) |
 
 ### systemMessage
 
-Goes to **user UI only** -- Claude does NOT see it. Exception: async hooks deliver on next turn.
+Goes to user UI only — Claude does NOT see it. Exception: async hooks deliver on next turn.
 
 ### stderr (exit 2)
 
-| Event type | Claude sees? | Notes |
-|------------|:---:|-------|
-| Blocking (PreToolUse, PermissionRequest, PermissionDenied, UserPromptSubmit, Stop, SubagentStop, TeammateIdle, TaskCompleted, TaskCreated, ConfigChange, WorktreeCreate, Elicitation, ElicitationResult) | YES | Delivered as error context |
-| Non-blocking (SessionStart, PostToolUse, PostToolUseFailure, PreCompact, PostCompact, Notification, SessionEnd, SubagentStart, InstructionsLoaded, StopFailure, CwdChanged, FileChanged, WorktreeRemove) | NO | User UI only |
+| Type | Claude sees? | Events |
+|------|:---:|--------|
+| Blocking | YES | PTU, PR, PermissionDenied, UserPromptSubmit, Stop, SubagentStop, TeammateIdle, TaskCompleted, TaskCreated, ConfigChange, WorktreeCreate, Elicitation, ElicitationResult |
+| Non-blocking | NO (UI only) | SS, POT, PostToolUseFailure, PreCompact, PCD, Notification, SessionEnd, SubagentStart, InstructionsLoaded, StopFailure, CwdChanged, FileChanged, WorktreeRemove |
 
 ### decision + reason
 
 | Event | Claude sees reason? | Notes |
 |-------|:---:|-------|
 | Stop | YES | `decision:"block"` + `reason` -> Claude continues, sees reason |
-| SubagentStop | YES | `decision:"block"` + `reason` -> subagent continues, sees reason |
-| PostToolUse | YES (via additionalContext) | No decision field; reason delivered as feedback |
+| SubagentStop | YES | `decision:"block"` + `reason` -> SA continues, sees reason |
+| POT | YES (via AC) | no decision field; reason as feedback |
 | UserPromptSubmit | NO (UI only) | `decision:"block"` -> prompt rejected, Claude does NOT see reason |
-| PreToolUse | YES | `permissionDecisionReason` delivered when deny; `"defer"` pauses headless session, resume with `-p --resume` (v2.1.89+) |
-| PermissionRequest | N/A | `decision.behavior`: allow/deny/ask. `decision.message` on deny |
-| PermissionDenied | YES (via stderr) | Fires after auto mode classifier denial; return `{retry: true}` → model retries (v2.1.89+) |
+| PTU | YES | `permissionDecisionReason` on deny; `"defer"` pauses headless session, resume `-p --resume` (v2.1.89+) |
+| PR | N/A | `decision.behavior`: allow/deny/ask; `decision.message` on deny |
+| PermissionDenied | YES (via stderr) | fires after auto mode classifier denial; `{retry:true}` -> model retries (v2.1.89+) |
 
-### updatedInput (PreToolUse only)
+### UI (PTU only)
 
-Silently modifies tool parameters. Claude unaware of change. Most reliable injection method for subagent prompts via `updatedInput.prompt`.
+Silently modifies tool params. Claude unaware of change. Most reliable injection for SA prompts via `UI.prompt`.
 
 ### Routing Decision Guide
 
-| Goal | Best channel | Event |
-|------|-------------|-------|
-| Inject context for Claude | `additionalContext` | SessionStart, PreToolUse, UserPromptSubmit |
-| Inject into subagent | `updatedInput.prompt` | PreToolUse (matcher: Task) |
-| Block tool execution | `permissionDecision:"deny"` | PreToolUse |
+| Goal | Channel | Event |
+|------|---------|-------|
+| Inject context for Claude | `AC` | SS, PTU, UserPromptSubmit |
+| Inject into SA | `UI.prompt` | PTU (matcher: Task) |
+| Block tool | `permissionDecision:"deny"` | PTU |
 | Block session stop | `decision:"block"` + `reason` | Stop |
-| Feedback at stop without blocking | `additionalContext` | Stop, SubagentStop (v2.1.163+) |
-| Inject into subagent context | `additionalContext` | SubagentStart |
-| Post-tool feedback | `additionalContext` | PostToolUse (stable) |
-| Modify tool parameters | `updatedInput` | PreToolUse |
-| Show user warning | `systemMessage` | Any event |
+| Feedback at stop (no block) | `AC` | Stop, SubagentStop (v2.1.163+) |
+| Inject into SA context | `AC` | SubagentStart |
+| Post-tool feedback | `AC` | POT (stable) |
+| Modify tool params | `UI` | PTU |
+| Show user warning | `systemMessage` | any |
 | Block user prompt | `decision:"block"` | UserPromptSubmit |
-| Auto-allow permission | `decision: "allow"` | PermissionRequest |
+| Auto-allow permission | `decision:"allow"` | PR |
 | Control teammates | `{continue, stopReason}` JSON | TeammateIdle, TaskCompleted, TaskCreated |
-| Prompt gate | `decision:"block"` | UserPromptSubmit |
 
 ## 2. All 27 Hook Events
 
-> MessageDisplay (v2.1.152) lets hooks transform or hide assistant message text as it is displayed (display-layer only, non-blocking).
+> MD (v2.1.152): transforms/hides assistant message text at display layer only; non-blocking.
+> NOT a hooks.json event: post-session lifecycle hook (v2.1.169) = self-hosted runner hook, runs after session ends + before workspace deleted. Configure on runner, not in hooks.json.
 
-> NOT a hooks.json event: the **post-session lifecycle hook** (v2.1.169) is a self-hosted runner hook that runs after the session ends and before the workspace is deleted. Configure it on the runner, not in hooks.json -- do not add it to the event list above.
-
-### Event Reference
-
-| # | Event | Blocking? | Matcher | Key stdin fields | Version |
-|---|-------|-----------|---------|-----------------|---------|
-| 1 | SessionStart | No | source: `startup`, `resume`, `clear`, `compact` | `source`, `model`, `agent_type` | -- |
-| 2 | UserPromptSubmit | Yes (exit 2 / decision:block) | No | `user_prompt` | -- |
-| 3 | PreToolUse | Yes (allow/deny/ask) | Tool name regex | `tool_name`, `tool_input`, `tool_use_id` | -- |
-| 4 | PermissionRequest | Yes (allow/deny) | Tool name regex | `tool_name`, `tool_input`, `permission_suggestions` | -- |
-| 5 | PostToolUse | No | Tool name regex | `tool_name`, `tool_input`, `tool_response`, `tool_use_id` | -- |
-| 6 | PostToolUseFailure | No | Tool name regex | `tool_name`, `tool_input`, `tool_use_id`, `error`, `is_interrupt` | -- |
-| 7 | Notification | No | `notification_type` | `message`, `title`, `notification_type` | -- |
-| 8 | SubagentStart | No | Agent type | `agent_id`, `agent_type` | -- |
-| 9 | SubagentStop | Yes (decision:block) | Agent type | `stop_hook_active`, `agent_id`, `agent_type`, `agent_transcript_path`, `last_assistant_message` | -- |
-| 10 | Stop | Yes (decision:block) | No | `stop_hook_active`, `last_assistant_message` | -- |
-| 11 | PreCompact | No | trigger: `manual`, `auto` | `transcript_path` | -- |
-| 12 | PostCompact | No | trigger: `manual`, `auto` | `transcript_path` | 2.1.76 |
-| 13 | SessionEnd | No | reason: `clear`, `resume`, `logout`, `prompt_input_exit`, `bypass_permissions_disabled`, `other` | -- | -- |
-| 14 | TeammateIdle | Yes (exit 2 only) | No | `teammate_name`, `team_name` | -- |
-| 15 | TaskCompleted | Yes (exit 2 only) | No | `task_id`, `task_subject`, `task_description`, `teammate_name`, `team_name` | -- |
-| 16 | ConfigChange | Yes | source: `user_settings`, `project_settings`, `local_settings`, `policy_settings`, `skills` | `source`, `file_path` | 2.1.49 |
+| # | Event | Blocking? | Matcher | Key stdin fields | Ver |
+|---|-------|:---------:|---------|-----------------|-----|
+| 1 | SS | No | source: `startup`,`resume`,`clear`,`compact` | `source`,`model`,`agent_type` | -- |
+| 2 | UserPromptSubmit | Yes (exit 2/decision:block) | No | `user_prompt` | -- |
+| 3 | PTU | Yes (allow/deny/ask) | tool name regex | `tool_name`,`tool_input`,`tool_use_id` | -- |
+| 4 | PR | Yes (allow/deny) | tool name regex | `tool_name`,`tool_input`,`permission_suggestions` | -- |
+| 5 | POT | No | tool name regex | `tool_name`,`tool_input`,`tool_response`,`tool_use_id` | -- |
+| 6 | PostToolUseFailure | No | tool name regex | `tool_name`,`tool_input`,`tool_use_id`,`error`,`is_interrupt` | -- |
+| 7 | Notification | No | `notification_type` | `message`,`title`,`notification_type` | -- |
+| 8 | SubagentStart | No | agent type | `agent_id`,`agent_type` | -- |
+| 9 | SubagentStop | Yes (decision:block) | agent type | `stop_hook_active`,`agent_id`,`agent_type`,`agent_transcript_path`,`last_assistant_message` | -- |
+| 10 | Stop | Yes (decision:block) | No | `stop_hook_active`,`last_assistant_message` | -- |
+| 11 | PreCompact | No | trigger: `manual`,`auto` | `transcript_path` | -- |
+| 12 | PCD | No | trigger: `manual`,`auto` | `transcript_path` | 2.1.76 |
+| 13 | SessionEnd | No | reason: `clear`,`resume`,`logout`,`prompt_input_exit`,`bypass_permissions_disabled`,`other` | -- | -- |
+| 14 | TeammateIdle | Yes (exit 2 only) | No | `teammate_name`,`team_name` | -- |
+| 15 | TaskCompleted | Yes (exit 2 only) | No | `task_id`,`task_subject`,`task_description`,`teammate_name`,`team_name` | -- |
+| 16 | ConfigChange | Yes | source: `user_settings`,`project_settings`,`local_settings`,`policy_settings`,`skills` | `source`,`file_path` | 2.1.49 |
 | 17 | WorktreeCreate | Yes | No | -- | 2.1.50 |
 | 18 | WorktreeRemove | No | No | -- | 2.1.50 |
-| 19 | InstructionsLoaded | No | load_reason: `session_start`, `nested_traversal`, `path_glob_match`, `include`, `compact` | `file_path`, `memory_type`, `load_reason`, `globs`, `trigger_file_path`, `parent_file_path` | 2.1.69 |
+| 19 | InstructionsLoaded | No | load_reason: `session_start`,`nested_traversal`,`path_glob_match`,`include`,`compact` | `file_path`,`memory_type`,`load_reason`,`globs`,`trigger_file_path`,`parent_file_path` | 2.1.69 |
 | 20 | Elicitation | Yes | MCP server name | MCP-specific fields | 2.1.76 |
 | 21 | ElicitationResult | Yes | MCP server name | MCP-specific fields | 2.1.76 |
-| 22 | StopFailure | No | error_type: `rate_limit`, `authentication_failed`, `billing_error`, `invalid_request`, `server_error`, `max_output_tokens`, `unknown` | `error`, `error_details`, `last_assistant_message` | 2.1.78 |
+| 22 | StopFailure | No | error_type: `rate_limit`,`authentication_failed`,`billing_error`,`invalid_request`,`server_error`,`max_output_tokens`,`unknown` | `error`,`error_details`,`last_assistant_message` | 2.1.78 |
 | 23 | CwdChanged | No | No | -- | 2.1.83 |
 | 24 | FileChanged | No | filename (basename) | `file_path` | 2.1.83 |
-| 25 | TaskCreated | Yes | No | `task_id`, `task_subject`, `task_description`, `teammate_name`, `team_name` | 2.1.84 |
-| 26 | PermissionDenied | Yes | No | `tool_name`, `tool_input`, `denial_reason` | 2.1.89 |
-| 27 | MessageDisplay | No | No | assistant message text | 2.1.152 |
+| 25 | TaskCreated | Yes | No | `task_id`,`task_subject`,`task_description`,`teammate_name`,`team_name` | 2.1.84 |
+| 26 | PermissionDenied | Yes | No | `tool_name`,`tool_input`,`denial_reason` | 2.1.89 |
+| 27 | MD | No | No | assistant message text | 2.1.152 |
 
-### Common stdin fields (ALL events)
+### Common stdin (ALL events)
 
 ```json
-{
-  "session_id": "abc123",
-  "transcript_path": "/path/to/transcript",
-  "cwd": "/project",
-  "permission_mode": "default",
-  "hook_event_name": "PreToolUse",
-  "agent_id": "uuid (subagents only, v2.1.69+)",
-  "agent_type": "Explore|Plan|custom (subagents + --agent, v2.1.69+)"
-}
+{"session_id":"abc123","transcript_path":"/path/to/transcript","cwd":"/project","permission_mode":"default","hook_event_name":"PreToolUse","agent_id":"uuid (SAs only, v2.1.69+)","agent_type":"Explore|Plan|custom (SAs + --agent, v2.1.69+)"}
 ```
 
-### Blocking Behavior
+### Exit codes
 
-| Exit code | Meaning | stdout | stderr |
-|-----------|---------|--------|--------|
-| 0 | Success | Parsed as JSON. For TeammateIdle/TaskCompleted: teammate terminates | Verbose mode |
-| 1 | Error (non-fatal) | For TeammateIdle/TaskCompleted: teammate continues. Others: error | Verbose mode |
-| 2 | Critical error | IGNORED | Delivered to Claude (blocking) or user (non-blocking) |
-
-### Exit code behavior by event
+| Code | Meaning | stdout | stderr |
+|------|---------|--------|--------|
+| 0 | Success | parsed as JSON; TeammateIdle/TaskCompleted: teammate terminates | verbose mode |
+| 1 | Error (non-fatal) | TeammateIdle/TaskCompleted: teammate continues; others: error | verbose mode |
+| 2 | Critical error | IGNORED | -> Claude (blocking) or user (non-blocking) |
 
 | Event | exit 0 | exit 1 | exit 2 |
 |-------|--------|--------|--------|
-| PreToolUse | JSON processed | Tool call cancelled | stderr -> Claude |
-| Stop | JSON processed | Ignored | stderr -> Claude |
-| SubagentStop | JSON processed | Ignored | stderr -> Claude |
-| SessionStart | JSON processed | Warning in UI | stderr -> UI |
-| PreCompact | JSON processed | Compact continues | stderr -> UI |
-| TeammateIdle | Teammate terminates | Teammate continues | stderr -> UI |
-| TaskCompleted | Task accepted | Task re-assigned | stderr -> UI |
-| PostToolUse | JSON processed | Warning | stderr -> UI |
+| PTU | JSON processed | tool call cancelled | stderr -> Claude |
+| Stop | JSON processed | ignored | stderr -> Claude |
+| SubagentStop | JSON processed | ignored | stderr -> Claude |
+| SS | JSON processed | warning in UI | stderr -> UI |
+| PreCompact | JSON processed | compact continues | stderr -> UI |
+| TeammateIdle | teammate terminates | teammate continues | stderr -> UI |
+| TaskCompleted | task accepted | task re-assigned | stderr -> UI |
+| POT | JSON processed | warning | stderr -> UI |
 
 ## 3. Hook Types
 
 | Type | Description | Timeout | Use case |
 |------|-------------|---------|----------|
-| `command` | Shell command, JSON stdin/stdout | 600s | Custom logic, file I/O, external tools |
-| `http` | POST JSON to URL, receives JSON response (v2.1.63+) | 600s | External API/webhook integration, remote delegation |
-| `prompt` | Single LLM call (Haiku) | 30s | Quick validation, content generation |
-| `agent` | Subagent with Read/Grep/Glob, up to 50 turns | 60s | Complex analysis, multi-step checks |
+| `command` | shell cmd, JSON stdin/stdout | 600s | custom logic, file I/O, external tools |
+| `http` | POST JSON to URL, receives JSON (v2.1.63+) | 600s | external API/webhook, remote delegation |
+| `prompt` | single LLM call (Haiku) | 30s | quick validation, content generation |
+| `agent` | SA with Read/Grep/Glob, up to 50 turns | 60s | complex analysis, multi-step checks |
 
-### Common fields for all types
+### Common fields
 
 | Field | Description | Applies to |
 |-------|-------------|------------|
-| `type` | Required: `"command"`, `"http"`, `"prompt"`, `"agent"` | All |
-| `if` | Conditional filter (permission rule syntax, v2.1.85+): `"Bash(git *)"`, `"Edit(*.ts)"` | Tool events |
-| `timeout` | Seconds before cancellation | All |
-| `statusMessage` | Spinner text while hook runs | All |
+| `type` | REQ: `"command"`,`"http"`,`"prompt"`,`"agent"` | All |
+| `if` | conditional filter (permission rule syntax, v2.1.85+): `"Bash(git *)"`,`"Edit(*.ts)"` | tool events |
+| `timeout` | seconds before cancellation | All |
+| `statusMessage` | spinner text while hook runs | All |
 | `once` | `true` = run once per session (skills only) | Skills |
 
-### HTTP hook example (v2.1.63+)
-
+HTTP hook example (v2.1.63+):
 ```json
-{
-  "type": "http",
-  "url": "http://localhost:8080/hooks/pre-tool-use",
-  "timeout": 30,
-  "headers": { "Authorization": "Bearer $MY_TOKEN" },
-  "allowedEnvVars": ["MY_TOKEN"]
-}
+{"type":"http","url":"http://localhost:8080/hooks/pre-tool-use","timeout":30,"headers":{"Authorization":"Bearer $MY_TOKEN"},"allowedEnvVars":["MY_TOKEN"]}
 ```
 
 ## 4. Configuration Locations
 
-Priority (highest first):
-
 | # | Location | Scope | Notes |
 |---|----------|-------|-------|
-| 1 | `.claude/settings.local.json` | Project (gitignored) | Highest priority, personal project |
-| 2 | `.claude/settings.json` | Project (committable) | Team-shared |
-| 3 | `~/.claude/settings.local.json` | Global (gitignored) | Personal global |
-| 4 | `~/.claude/settings.json` | Global (committable) | User global |
-| 5 | Enterprise policy | Organization | MDM/admin |
-| 6 | Plugin `hooks/hooks.json` | Plugin-scoped | Additive (merged, not overridden) |
-| 7 | Agent/Skill frontmatter YAML | Component-scoped | While component active |
+| 1 | `.claude/settings.local.json` | project (gitignored) | highest priority |
+| 2 | `.claude/settings.json` | project (committable) | team-shared |
+| 3 | `~/.claude/settings.local.json` | global (gitignored) | personal global |
+| 4 | `~/.claude/settings.json` | global (committable) | user global |
+| 5 | enterprise policy | org | MDM/admin |
+| 6 | plugin `hooks/hooks.json` | plugin-scoped | additive (merged, not overridden) |
+| 7 | agent/skill frontmatter YAML | component-scoped | while component active |
 
-**Merge rule:** Hooks from different sources are merged (not overridden). For a single event, ALL registered hooks execute in parallel.
+Merge rule: hooks from diff sources merged (not overridden). For single event, ALL registered hooks execute in parallel.
 
 ### settings.json format
 
 ```json
-{
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash /path/to/hook.sh"
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node /path/to/hook.mjs"
-          }
-        ]
-      }
-    ]
-  }
-}
+{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"bash /path/to/hook.sh"}]}],"Stop":[{"hooks":[{"type":"command","command":"node /path/to/hook.mjs"}]}]}}
 ```
 
 ### hooks.json format (plugin)
 
 ```json
-{
-  "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "startup",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PLUGIN_ROOT/hooks/session-start.mjs"
-          }
-        ]
-      }
-    ]
-  }
-}
+{"hooks":{"SessionStart":[{"matcher":"startup","hooks":[{"type":"command","command":"node $CLAUDE_PLUGIN_ROOT/hooks/session-start.mjs"}]}]}}
 ```
 
 ### Agent/Skill frontmatter YAML
@@ -322,267 +234,141 @@ hooks:
 
 ### Conditional `if` field (v2.1.85+)
 
-Reduces hook overhead -- hook only fires when `if` condition matches (permission rule syntax):
-
+Reduces hook overhead — fires only when condition matches (permission rule syntax):
 ```json
-{
-  "hooks": {
-    "PreToolUse": [{
-      "matcher": "Bash",
-      "if": "Bash(git *)",
-      "hooks": [{"type": "command", "command": "bash validate-git.sh"}]
-    }]
-  }
-}
+{"hooks":{"PreToolUse":[{"matcher":"Bash","if":"Bash(git *)","hooks":[{"type":"command","command":"bash validate-git.sh"}]}]}}
 ```
-
-Format: `ToolName(pattern)` -- same syntax as permission rules.
+Format: `ToolName(pattern)` — same syntax as permission rules.
 
 ## 5. Environment Variables
 
 | Variable | Description | Available |
 |----------|-------------|-----------|
-| `$CLAUDE_PROJECT_DIR` | Project root | All hooks |
-| `$CLAUDE_PLUGIN_ROOT` | Plugin installation dir | Plugin hooks |
-| `$CLAUDE_PLUGIN_DATA` | Persistent plugin data dir (survives updates, v2.1.78+). brewcode: stores `modes.json` (mode switcher state). Hooks inject as `BC_PLUGIN_DATA` text var for skills/agents | Plugin hooks |
-| `$CLAUDE_CODE_REMOTE` | `"true"` in remote env | All hooks |
-| `$CLAUDE_ENV_FILE` | Path for persistent env vars | SessionStart, CwdChanged, FileChanged |
-| `$CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS` | SessionEnd hooks timeout in ms (default 1500ms, v2.1.78+) | SessionEnd hooks |
-| `$CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` | `1` = scrub Anthropic/cloud credentials from subprocess env (v2.1.83+) | All hooks |
-| `$CLAUDE_PLUGIN_OPTION_<KEY>` | Plugin `userConfig` values (v2.1.78+) | Plugin hooks |
-| `CLAUDE_CODE_SAFE_MODE` | `1` = start CC with ALL customizations disabled (CLAUDE.md, plugins, skills, hooks, MCP); also `--safe-mode` flag. Hook debug isolation (v2.1.169+) | Startup |
-| `CLAUDE_CODE_DISABLE_BUNDLED_SKILLS` | `1` = hide bundled skills/workflows/built-in commands; also `disableBundledSkills` setting (v2.1.169+) | Startup |
+| `$CLAUDE_PROJECT_DIR` | project root | all hooks |
+| `$CLAUDE_PLUGIN_ROOT` | plugin install dir | plugin hooks |
+| `$CLAUDE_PLUGIN_DATA` | persistent plugin data (survives updates, v2.1.78+); brewcode: stores `modes.json` (mode switcher state); hooks inject as `BC_PLUGIN_DATA` text var for skills/agents | plugin hooks |
+| `$CLAUDE_CODE_REMOTE` | `"true"` in remote env | all hooks |
+| `$CLAUDE_ENV_FILE` | path for persistent env vars | SS, CwdChanged, FileChanged |
+| `$CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS` | SessionEnd hooks timeout in ms (DEF 1500ms, v2.1.78+) | SessionEnd hooks |
+| `$CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` | `1` = scrub Anthropic/cloud credentials from subprocess env (v2.1.83+) | all hooks |
+| `$CLAUDE_PLUGIN_OPTION_<KEY>` | plugin `userConfig` values (v2.1.78+) | plugin hooks |
+| `CLAUDE_CODE_SAFE_MODE` | `1` = start CC with ALL customizations disabled (CLAUDE.md, plugins, skills, hooks, MCP); also `--safe-mode` flag; use for hook debug isolation (v2.1.169+) | startup |
+| `CLAUDE_CODE_DISABLE_BUNDLED_SKILLS` | `1` = hide bundled skills/workflows/built-in cmds; also `disableBundledSkills` setting (v2.1.169+) | startup |
 
 ### Plugin Persistent State (`CLAUDE_PLUGIN_DATA`)
 
-brewcode hooks inject `BC_PLUGIN_DATA` as text variable (same pattern as `BC_PLUGIN_ROOT`).
+brewcode hooks inject `BC_PLUGIN_DATA` as text var (same pattern as `BC_PLUGIN_ROOT`).
 
 | Aspect | Details |
 |--------|---------|
-| Env var | `process.env.CLAUDE_PLUGIN_DATA` (hooks only) |
-| Text var | `BC_PLUGIN_DATA=<path>` (injected by session-start.mjs + pre-task.mjs) |
-| Main file | `$CLAUDE_PLUGIN_DATA/modes.json` — mode switcher state |
-| Scopes | global, project (by cwd), session (by session_id) |
-| Read in hooks | `const pluginData = process.env.CLAUDE_PLUGIN_DATA` |
-| Read in skills/agents | Use `$BC_PLUGIN_DATA` from injected context |
+| env var | `process.env.CLAUDE_PLUGIN_DATA` (hooks only) |
+| text var | `BC_PLUGIN_DATA=<path>` (injected by session-start.mjs + pre-task.mjs) |
+| main file | `$CLAUDE_PLUGIN_DATA/modes.json` — mode switcher state |
+| scopes | global, project (by cwd), session (by session_id) |
+| read in hooks | `const pluginData = process.env.CLAUDE_PLUGIN_DATA` |
+| read in skills/agents | use `$BC_PLUGIN_DATA` from injected context |
 
-**Resolution:** session > project > global. Old `.claude/tasks/cfg/brewcode.state.json` kept as fallback.
+Resolution: session > project > global. Old `.claude/tasks/cfg/brewcode.state.json` kept as fallback.
 
-> ⚠️ **Protected-path (v3.4.70):** Write/Edit to `~/.claude/*` (incl. `$CLAUDE_PLUGIN_DATA`) blocked in ALL modes (`bypassPermissions`, headless). Check runs BEFORE hooks — whitelists dead. Exceptions: `commands|agents|skills|worktrees`. **Never design skills with `$CLAUDE_PLUGIN_DATA` as Write target** → silent fail. Primary: project-relative `.claude/<subdir>/` + whitelist. `$CLAUDE_PLUGIN_DATA` = read-only / interactive-only / Bash-only (Bash redirect currently bypasses the check, but brittle).
+> Protected-path (v3.4.70): Write/Edit to `~/.claude/*` (incl. `$CLAUDE_PLUGIN_DATA`) blocked in ALL modes (`bypassPermissions`, headless). Check runs BEFORE hooks — whitelists dead. Exceptions: `commands|agents|skills|worktrees`. !=design skills with `$CLAUDE_PLUGIN_DATA` as Write target -> silent fail. Primary: project-relative `.claude/<subdir>/` + whitelist. `$CLAUDE_PLUGIN_DATA` = read-only/interactive-only/Bash-only (Bash redirect currently bypasses check, but brittle).
 
 ## 6. Output Schemas
 
-### PreToolUse -- Allow with context
-
+### PTU — Allow with context
 ```json
-{
-  "hookSpecificOutput": {
-    "hookEventName": "PreToolUse",
-    "permissionDecision": "allow",
-    "additionalContext": "Context string for Claude"
-  }
-}
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","additionalContext":"Context string for Claude"}}
 ```
 
-### PreToolUse -- Deny
-
+### PTU — Deny
 ```json
-{
-  "hookSpecificOutput": {
-    "hookEventName": "PreToolUse",
-    "permissionDecision": "deny",
-    "permissionDecisionReason": "Reason Claude will see"
-  }
-}
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"Reason Claude will see"}}
 ```
 
-### PreToolUse -- Modify input
-
+### PTU — Modify input
 ```json
-{
-  "hookSpecificOutput": {
-    "hookEventName": "PreToolUse",
-    "permissionDecision": "allow",
-    "updatedInput": {
-      "prompt": "Modified prompt text",
-      "other_field": "preserved"
-    }
-  }
-}
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","updatedInput":{"prompt":"Modified prompt text","other_field":"preserved"}}}
 ```
 
-### Stop -- Block
-
+### Stop — Block
 ```json
-{
-  "decision": "block",
-  "reason": "Task not complete. Continue with phase 3."
-}
+{"decision":"block","reason":"Task not complete. Continue with phase 3."}
 ```
 
-### SubagentStop -- Block
-
+### SubagentStop — Block
 ```json
-{
-  "decision": "block",
-  "reason": "Review not finished. Check remaining files."
-}
+{"decision":"block","reason":"Review not finished. Check remaining files."}
 ```
 
-### SessionStart -- Context injection
-
+### SS — Context injection
 ```json
-{
-  "hookSpecificOutput": {
-    "hookEventName": "SessionStart",
-    "additionalContext": "Injected context for Claude",
-    "sessionTitle": "My session title",
-    "reloadSkills": true
-  },
-  "systemMessage": "Status shown to user only"
-}
+{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"Injected context for Claude","sessionTitle":"My session title","reloadSkills":true},"systemMessage":"Status shown to user only"}
+```
+> `reloadSkills:true` re-scans skill dirs; `sessionTitle` sets session title on startup + resume (v2.1.152+).
+
+### SubagentStart — Inject into SA
+```json
+{"hookSpecificOutput":{"hookEventName":"SubagentStart","additionalContext":"Context injected into SUBAGENT (not parent)"}}
 ```
 
-> `reloadSkills: true` re-scans skill directories; `sessionTitle` sets the session title on startup and resume (v2.1.152+).
-
-### SubagentStart -- Inject into subagent
-
+### UserPromptSubmit — Block
 ```json
-{
-  "hookSpecificOutput": {
-    "hookEventName": "SubagentStart",
-    "additionalContext": "Context injected into SUBAGENT (not parent)"
-  }
-}
+{"decision":"block","reason":"Reason shown to USER only (Claude does NOT see this)"}
 ```
 
-### UserPromptSubmit -- Block
-
+### PR — Allow/Deny/Ask
 ```json
-{
-  "decision": "block",
-  "reason": "Reason shown to USER only (Claude does NOT see this)"
-}
-```
-
-### PermissionRequest -- Allow/Deny/Ask
-
-```json
-{
-  "hookSpecificOutput": {
-    "hookEventName": "PermissionRequest",
-    "decision": {
-      "behavior": "allow"
-    }
-  }
-}
+{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow"}}}
 ```
 
 | `behavior` | Effect |
 |------------|--------|
-| `allow` | Auto-allow the operation |
-| `ask` | Show standard permission dialog |
-| `deny` | Reject without prompting user |
+| `allow` | auto-allow |
+| `ask` | standard permission dialog |
+| `deny` | reject without prompting |
 
-### PermissionRequest -- Allow with permission mutation
-
+### PR — Allow with permission mutation
 ```json
-{
-  "hookSpecificOutput": {
-    "hookEventName": "PermissionRequest",
-    "decision": {
-      "behavior": "allow",
-      "updatedInput": { "command": "npm test" },
-      "updatedPermissions": [{
-        "type": "addRules",
-        "rules": [{ "toolName": "Bash", "ruleContent": "npm *" }],
-        "behavior": "allow",
-        "destination": "session"
-      }]
-    }
-  }
-}
+{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow","updatedInput":{"command":"npm test"},"updatedPermissions":[{"type":"addRules","rules":[{"toolName":"Bash","ruleContent":"npm *"}],"behavior":"allow","destination":"session"}]}}}
 ```
 
-### PreToolUse -- Answer AskUserQuestion (v2.1.85+)
-
+### PTU — Answer AskUserQuestion (v2.1.85+)
 ```json
-{
-  "hookSpecificOutput": {
-    "hookEventName": "PreToolUse",
-    "permissionDecision": "allow",
-    "updatedInput": {
-      "question": "Which database?",
-      "answer": "PostgreSQL"
-    }
-  }
-}
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","updatedInput":{"question":"Which database?","answer":"PostgreSQL"}}}
 ```
 
-### PostToolUse -- Feedback
-
+### POT — Feedback
 ```json
-{
-  "hookSpecificOutput": {
-    "hookEventName": "PostToolUse",
-    "additionalContext": "Post-tool feedback for Claude"
-  }
-}
+{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"Post-tool feedback for Claude"}}
 ```
 
-### TeammateIdle/TaskCompleted/TaskCreated -- JSON control (v2.1.52+)
-
+### TeammateIdle/TaskCompleted/TaskCreated — JSON control (v2.1.52+)
 ```json
-{
-  "continue": false,
-  "stopReason": "Task limit reached. Stopping teammate."
-}
+{"continue":false,"stopReason":"Task limit reached. Stopping teammate."}
 ```
 
-### Elicitation -- MCP form response (v2.1.76+)
-
+### Elicitation — MCP form response (v2.1.76+)
 ```json
-{
-  "hookSpecificOutput": {
-    "hookEventName": "Elicitation",
-    "action": "accept",
-    "content": { "field_name": "value" }
-  }
-}
+{"hookSpecificOutput":{"hookEventName":"Elicitation","action":"accept","content":{"field_name":"value"}}}
 ```
 
 | `action` | Effect |
 |----------|--------|
-| `accept` | Auto-fill MCP form with `content` |
-| `decline` | Decline the elicitation |
-| `cancel` | Cancel the elicitation |
+| `accept` | auto-fill MCP form with `content` |
+| `decline` | decline elicitation |
+| `cancel` | cancel elicitation |
 
-### PermissionDenied -- Retry control (v2.1.89+)
-
+### PermissionDenied — Retry control (v2.1.89+)
 ```json
-{ "retry": true }
+{"retry":true}
 ```
+`retry:true` -> model retries denied tool call. Fires after auto mode classifier denies a tool. !=same as PR (user-facing). Use for headless/CI flows to programmatically override denial.
 
-| Field | Effect |
-|-------|--------|
-| `retry: true` | Model retries the denied tool call |
-| `retry: false` / omit | Denial stands |
-
-> Fires after **auto mode classifier** denies a tool. Not the same as `PermissionRequest` (user-facing). Use for headless/CI flows to programmatically override a denial.
-
-### WorktreeCreate -- Return path (v2.1.84+, http hooks)
-
+### WorktreeCreate — Return path (v2.1.84+, http hooks)
 ```json
-{
-  "hookSpecificOutput": {
-    "hookEventName": "WorktreeCreate",
-    "worktreePath": "/path/to/created/worktree"
-  }
-}
+{"hookSpecificOutput":{"hookEventName":"WorktreeCreate","worktreePath":"/path/to/created/worktree"}}
 ```
 
 ### Empty pass-through
-
 ```json
 {}
 ```
@@ -594,98 +380,54 @@ brewcode hooks inject `BC_PLUGIN_DATA` as text variable (same pattern as `BC_PLU
 ```bash
 #!/bin/bash
 set -euo pipefail
-# Hook: <EventName> | Matcher: <matcher>
-# Purpose: <description>
-
-# Read JSON from stdin
+# Hook: <EventName> | Matcher: <matcher> | Purpose: <description>
 INPUT=$(cat)
-
-# Parse common fields
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
 CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
 EVENT=$(echo "$INPUT" | jq -r '.hook_event_name // empty')
-
-# Parse event-specific fields
 # TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty')
-# TOOL_INPUT=$(echo "$INPUT" | jq -r '.tool_input // empty')
-# PROMPT=$(echo "$INPUT" | jq -r '.prompt // empty')
 
-# --- Infinite loop protection (Stop/SubagentStop hooks) ---
+# Infinite loop protection (Stop/SubagentStop):
 # STOP_ACTIVE=$(echo "$INPUT" | jq -r '.stop_hook_active // false')
-# if [ "$STOP_ACTIVE" = "true" ]; then
-#   echo '{}'
-#   exit 0
-# fi
+# if [ "$STOP_ACTIVE" = "true" ]; then echo '{}'; exit 0; fi
 
-# --- Main logic ---
-
-# Example: pass-through (no-op)
 echo '{}'
 
-# Example: inject context (PreToolUse)
-# jq -n --arg ctx "Your context here" '{
-#   hookSpecificOutput: {
-#     hookEventName: "PreToolUse",
-#     permissionDecision: "allow",
-#     additionalContext: $ctx
-#   }
-# }'
+# Inject context (PTU):
+# jq -n --arg ctx "Your context here" '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","additionalContext":$ctx}}'
 
-# Example: block stop
-# jq -n --arg reason "Task incomplete" '{
-#   decision: "block",
-#   reason: $reason
-# }'
+# Block stop:
+# jq -n --arg reason "Task incomplete" '{"decision":"block","reason":$reason}'
 
-# Example: deny tool
-# jq -n --arg reason "Not allowed" '{
-#   hookSpecificOutput: {
-#     hookEventName: "PreToolUse",
-#     permissionDecision: "deny",
-#     permissionDecisionReason: $reason
-#   }
-# }'
+# Deny tool:
+# jq -n --arg reason "Not allowed" '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":$reason}}'
 ```
 
 ### JS/mjs Hook Template
 
 ```javascript
 #!/usr/bin/env node
-/**
- * Hook: <EventName> | Matcher: <matcher>
- * Purpose: <description>
- */
-
-// --- stdin/stdout helpers ---
+// Hook: <EventName> | Matcher: <matcher> | Purpose: <description>
 
 async function readStdin() {
   const chunks = [];
-  for await (const chunk of process.stdin) {
-    chunks.push(chunk);
-  }
+  for await (const chunk of process.stdin) chunks.push(chunk);
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
 }
-
-function output(response) {
-  console.log(JSON.stringify(response));
-}
-
-// --- Main ---
+function output(response) { console.log(JSON.stringify(response)); }
 
 async function main() {
   try {
     const input = await readStdin();
     const { session_id, cwd, hook_event_name } = input;
-
-    // Event-specific fields:
-    // PreToolUse: tool_name, tool_input, tool_use_id
-    // PostToolUse: tool_name, tool_input, tool_response, tool_use_id
+    // PTU: tool_name, tool_input, tool_use_id
+    // POT: tool_name, tool_input, tool_response, tool_use_id
     // PostToolUseFailure: tool_name, tool_input, tool_use_id, error, is_interrupt
     // Stop: stop_hook_active, last_assistant_message
-    // SubagentStart: agent_id, agent_type (= subagent_type, subagent_id)
+    // SubagentStart: agent_id, agent_type
     // SubagentStop: stop_hook_active, agent_id, agent_type, agent_transcript_path, last_assistant_message
     // UserPromptSubmit: user_prompt
-    // SessionStart: source, model, agent_type
+    // SS: source, model, agent_type
     // PreCompact: transcript_path
     // ConfigChange: source, file_path
     // StopFailure: error, error_details, last_assistant_message
@@ -693,51 +435,28 @@ async function main() {
     // InstructionsLoaded: file_path, memory_type, load_reason, globs
     // TaskCreated/TaskCompleted: task_id, task_subject, task_description, teammate_name, team_name
 
-    // --- Infinite loop protection (Stop/SubagentStop) ---
-    // if (input.stop_hook_active) {
-    //   output({});
-    //   return;
-    // }
+    // if (input.stop_hook_active) { output({}); return; }
 
-    // --- Main logic ---
-
-    // Pass-through
     output({});
 
-    // Inject context (PreToolUse):
-    // output({
-    //   hookSpecificOutput: {
-    //     hookEventName: 'PreToolUse',
-    //     permissionDecision: 'allow',
-    //     additionalContext: 'Context for Claude'
-    //   }
-    // });
+    // Inject context (PTU):
+    // output({hookSpecificOutput:{hookEventName:'PreToolUse',permissionDecision:'allow',additionalContext:'Context for Claude'}});
 
-    // Modify tool input (PreToolUse):
-    // output({
-    //   hookSpecificOutput: {
-    //     hookEventName: 'PreToolUse',
-    //     permissionDecision: 'allow',
-    //     updatedInput: { ...input.tool_input, prompt: 'Modified prompt' }
-    //   }
-    // });
+    // Modify tool input (PTU):
+    // output({hookSpecificOutput:{hookEventName:'PreToolUse',permissionDecision:'allow',updatedInput:{...input.tool_input,prompt:'Modified prompt'}}});
 
     // Block stop:
-    // output({ decision: 'block', reason: 'Task incomplete' });
+    // output({decision:'block',reason:'Task incomplete'});
 
   } catch (error) {
-    // Fail-safe: allow on error (never trap user)
     console.error(`Hook error: ${error.message}`);
     output({});
   }
 }
-
 main();
 ```
 
-### JS/mjs with Shared Utils (library pattern)
-
-For multi-hook projects, extract `readStdin`/`output` into `lib/utils.mjs`:
+### Shared Utils (library pattern)
 
 ```javascript
 // lib/utils.mjs
@@ -746,12 +465,8 @@ export async function readStdin() {
   for await (const chunk of process.stdin) chunks.push(chunk);
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
 }
-
-export function output(response) {
-  console.log(JSON.stringify(response));
-}
+export function output(response) { console.log(JSON.stringify(response)); }
 ```
-
 ```javascript
 // hooks/my-hook.mjs
 import { readStdin, output } from './lib/utils.mjs';
@@ -761,35 +476,35 @@ import { readStdin, output } from './lib/utils.mjs';
 
 | Bug | Impact | Status | Workaround |
 |-----|--------|--------|------------|
-| #14281 | Duplicate `<system-reminder>` injection | Active | Make context idempotent |
+| #14281 | duplicate `<system-reminder>` injection | active | make context idempotent |
 
-### Fixed Bugs (reference only)
+### Fixed Bugs
 
 | Bug | Was | Fixed in |
 |-----|-----|----------|
-| ~~#16538~~ | Plugin SessionStart `additionalContext` not delivered | v2.1.37+ (not reproducible) |
-| ~~#19432~~ | PreToolUse `additionalContext` regression | v2.1.15+ |
-| ~~#10373~~ | SessionStart hooks not working for new sessions | v2.1.20+ |
-| ~~allow-bypass~~ | PreToolUse `allow` bypassed `deny` permission rules | v2.1.77 |
-| ~~skill-double~~ | Skill hooks fired twice per event | v2.1.72 |
-| ~~plugin-stop~~ | Plugin Stop/SessionEnd hooks skipped after `/plugin` | v2.1.70 |
-| ~~session-double~~ | SessionStart hooks called twice on `--resume`/`--continue` | v2.1.73 |
+| ~~#16538~~ | plugin SS `AC` not delivered | v2.1.37+ |
+| ~~#19432~~ | PTU `AC` regression | v2.1.15+ |
+| ~~#10373~~ | SS hooks not working for new sessions | v2.1.20+ |
+| ~~allow-bypass~~ | PTU `allow` bypassed `deny` permission rules | v2.1.77 |
+| ~~skill-double~~ | skill hooks fired twice per event | v2.1.72 |
+| ~~plugin-stop~~ | plugin Stop/SessionEnd hooks skipped after `/plugin` | v2.1.70 |
+| ~~session-double~~ | SS hooks called twice on `--resume`/`--continue` | v2.1.73 |
 | ~~sessionend~~ | SessionEnd hooks unreliable | v2.1.79 |
-| ~~plugin-perm~~ | Plugin scripts "Permission denied" on macOS/Linux | v2.1.86 |
-| ~~uninstall~~ | Uninstalled plugin hooks kept firing | v2.1.83 |
+| ~~plugin-perm~~ | plugin scripts "Permission denied" on macOS/Linux | v2.1.86 |
+| ~~uninstall~~ | uninstalled plugin hooks kept firing | v2.1.83 |
 
 ### Channel Reliability Matrix
 
 | Channel | Reliability | Notes |
 |---------|-------------|-------|
-| `updatedInput` (PreToolUse) | High | Stable, most reliable injection method |
-| `additionalContext` (PreToolUse) | High | Regression v2.1.12 fixed in v2.1.15+ |
-| `additionalContext` (SessionStart) | High | Stable since v2.1.37+ |
-| `additionalContext` (PostToolUse) | High | Stable (Issue #15345 confirms) |
-| `decision`/`reason` (Stop) | High | Stable |
-| `additionalContext` (Stop/SubagentStop) | High | Feedback without hook-error label, keeps turn going (v2.1.163+) |
-| `systemMessage` | High | Stable (but Claude does NOT see it) |
-| `permissionDecision` (PreToolUse) | High | Stable |
+| `UI` (PTU) | High | stable, most reliable injection |
+| `AC` (PTU) | High | regression v2.1.12 fixed v2.1.15+ |
+| `AC` (SS) | High | stable since v2.1.37+ |
+| `AC` (POT) | High | stable (Issue #15345) |
+| `decision`/`reason` (Stop) | High | stable |
+| `AC` (Stop/SubagentStop) | High | feedback w/o hook-error label, keeps turn going (v2.1.163+) |
+| `systemMessage` | High | stable (Claude does NOT see it) |
+| `permissionDecision` (PTU) | High | stable |
 
 ## 9. Best Practices
 
@@ -797,449 +512,293 @@ import { readStdin, output } from './lib/utils.mjs';
 
 | Practice | Why |
 |----------|-----|
-| Always `output({})` on error | Never trap user in broken state |
-| `stop_hook_active` check in Stop/SubagentStop | Prevents infinite block loop |
-| Try/catch around all logic | Graceful degradation |
-| Validate stdin before parsing fields | Handle missing/malformed input |
-| Default to allow/pass-through | Hook failure = no effect |
+| Always `output({})` on error | !=trap user in broken state |
+| `stop_hook_active` check in Stop/SubagentStop | prevents infinite block loop |
+| try/catch around all logic | graceful degradation |
+| validate stdin before parsing | handle missing/malformed input |
+| DEF to allow/pass-through | hook failure = no effect |
 
 ### Infinite Loop Protection (Stop hook)
 
 ```bash
 STOP_ACTIVE=$(echo "$INPUT" | jq -r '.stop_hook_active // false')
-if [ "$STOP_ACTIVE" = "true" ]; then
-  echo '{}'
-  exit 0
-fi
+if [ "$STOP_ACTIVE" = "true" ]; then echo '{}'; exit 0; fi
 ```
-
 ```javascript
-if (input.stop_hook_active) {
-  output({});
-  return;
-}
+if (input.stop_hook_active) { output({}); return; }
 ```
 
 ### Performance
 
 | Practice | Why |
 |----------|-----|
-| Keep hooks fast (<1s for PreToolUse) | Blocks tool execution |
-| Use `async: true` for slow operations | Background execution |
-| Cache file reads | Avoid repeated I/O |
-| Minimal dependencies (jq for bash, no npm for mjs) | Fast startup |
+| keep hooks fast (<1s for PTU) | blocks tool execution |
+| use `async:true` for slow ops | background execution |
+| cache file reads | avoid repeated I/O |
+| minimal deps (jq for bash, no npm for mjs) | fast startup |
 
 ### Security
 
 | Practice | Why |
 |----------|-----|
-| Validate `cwd` paths | Prevent path traversal |
-| Sanitize stdin JSON | Prevent injection |
-| Use absolute paths in commands | Avoid PATH manipulation |
-| Check `existsSync` before file reads | Prevent crashes |
+| validate `cwd` paths | prevent path traversal |
+| sanitize stdin JSON | prevent injection |
+| use absolute paths in cmds | avoid PATH manipulation |
+| check `existsSync` before file reads | prevent crashes |
 
 ## 10. Async Hooks
 
 ```json
-{
-  "type": "command",
-  "command": "node /path/to/hook.mjs",
-  "async": true
-}
+{"type":"command","command":"node /path/to/hook.mjs","async":true}
 ```
 
 | Behavior | Details |
 |----------|---------|
-| Execution | Background, non-blocking |
+| execution | background, non-blocking |
 | `decision` fields | IGNORED |
-| `systemMessage` | Delivered on NEXT turn (not instant) |
-| `additionalContext` | May not arrive before Claude processes |
-| Blocking events | Always synchronous (PreToolUse, Stop, SubagentStop, UserPromptSubmit, PermissionRequest) |
-| Use case | Logging, metrics, slow file operations |
-
-### Sync/Async recommendation by event
+| `systemMessage` | delivered on NEXT turn |
+| `AC` | may not arrive before Claude processes |
+| blocking events | always synchronous (PTU, Stop, SubagentStop, UserPromptSubmit, PR) |
+| use case | logging, metrics, slow file ops |
 
 | Event | Sync/Async | Reason |
 |-------|-----------|--------|
-| SessionStart | Sync (waits) | Context needed before first turn |
-| PreToolUse | Sync (blocks) | Must decide allow/deny before execution |
-| PostToolUse | Async OK | Result is informational |
-| PreCompact | Sync (waits) | Must write handoff before compaction |
-| Notification | Async OK | Informational |
+| SS | sync (waits) | context needed before first turn |
+| PTU | sync (blocks) | must decide allow/deny before exec |
+| POT | async OK | informational |
+| PreCompact | sync (waits) | must write handoff before compaction |
+| Notification | async OK | informational |
 
 ## 11. Matcher Patterns
 
 | Event | Matcher type | Examples |
 |-------|-------------|----------|
-| PreToolUse | Tool name (regex) | `Bash`, `Write\|Edit`, `Task`, `mcp__.*` |
-| PostToolUse | Tool name (regex) | `Bash`, `Read`, `Task` |
-| PostToolUseFailure | Tool name (regex) | `Bash` |
-| PermissionRequest | Tool name (regex) | `Bash`, `Write` |
-| SessionStart | Source string | `startup`, `resume`, `clear`, `compact` |
-| SessionEnd | Reason string | `clear`, `resume`, `logout`, `prompt_input_exit`, `other` |
-| SubagentStart | Agent type | `developer`, `Explore`, `my-agent` |
-| SubagentStop | Agent type | `developer`, `reviewer` |
-| PreCompact / PostCompact | Trigger | `manual`, `auto` |
-| Notification | Type string | `permission_prompt`, `idle_prompt`, `auth_success`, `elicitation_dialog` |
-| ConfigChange | Source string | `user_settings`, `project_settings`, `local_settings`, `policy_settings`, `skills` |
-| InstructionsLoaded | Load reason | `session_start`, `nested_traversal`, `path_glob_match`, `include`, `compact` |
-| FileChanged | Filename (basename) | `.envrc`, `.env` |
-| StopFailure | Error type | `rate_limit`, `authentication_failed`, `billing_error`, `invalid_request`, `server_error`, `max_output_tokens`, `unknown` |
-| Elicitation / ElicitationResult | MCP server name | Server name string |
-| Stop | No matcher | Always fires |
-| UserPromptSubmit | No matcher | Always fires |
-| TeammateIdle / TaskCompleted / TaskCreated | No matcher | Always fires |
-| WorktreeCreate / WorktreeRemove | No matcher | Always fires |
-| CwdChanged | No matcher | Always fires |
-| PermissionDenied | No matcher | Always fires |
+| PTU | tool name (regex) | `Bash`, `Write\|Edit`, `Task`, `mcp__.*` |
+| POT | tool name (regex) | `Bash`, `Read`, `Task` |
+| PostToolUseFailure | tool name (regex) | `Bash` |
+| PR | tool name (regex) | `Bash`, `Write` |
+| SS | source string | `startup`,`resume`,`clear`,`compact` |
+| SessionEnd | reason string | `clear`,`resume`,`logout`,`prompt_input_exit`,`other` |
+| SubagentStart | agent type | `developer`,`Explore`,`my-agent` |
+| SubagentStop | agent type | `developer`,`reviewer` |
+| PreCompact/PCD | trigger | `manual`,`auto` |
+| Notification | type string | `permission_prompt`,`idle_prompt`,`auth_success`,`elicitation_dialog` |
+| ConfigChange | source string | `user_settings`,`project_settings`,`local_settings`,`policy_settings`,`skills` |
+| InstructionsLoaded | load reason | `session_start`,`nested_traversal`,`path_glob_match`,`include`,`compact` |
+| FileChanged | filename (basename) | `.envrc`,`.env` |
+| StopFailure | error type | `rate_limit`,`authentication_failed`,`billing_error`,`invalid_request`,`server_error`,`max_output_tokens`,`unknown` |
+| Elicitation/ElicitationResult | MCP server name | server name string |
+| Stop, UserPromptSubmit, TeammateIdle, TaskCompleted, TaskCreated, WorktreeCreate, WorktreeRemove, CwdChanged, PermissionDenied | No matcher | always fires |
 
-> Omit `matcher` -> hook fires for ALL instances of that event.
+> Omit `matcher` -> fires for ALL instances of that event.
 
 ## 12. Common Hook Patterns
 
-### Inject context into all subagents
-
+Inject context into all SAs:
 ```json
-{
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Task",
-        "hooks": [{
-          "type": "command",
-          "command": "node /path/to/inject-context.mjs"
-        }]
-      }
-    ]
-  }
-}
+{"hooks":{"PreToolUse":[{"matcher":"Task","hooks":[{"type":"command","command":"node /path/to/inject-context.mjs"}]}]}}
 ```
+Hook modifies `tool_input.prompt` via `UI`.
 
-Hook modifies `tool_input.prompt` via `updatedInput`.
-
-### Gate dangerous tools
-
+Gate dangerous tools:
 ```json
-{
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [{
-          "type": "command",
-          "command": "bash /path/to/validate-bash.sh"
-        }]
-      }
-    ]
-  }
-}
+{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"bash /path/to/validate-bash.sh"}]}]}}
 ```
-
 Hook checks `tool_input.command`, returns `permissionDecision:"deny"` if dangerous.
 
-### Block stop until task complete
-
+Block stop until task complete:
 ```json
-{
-  "hooks": {
-    "Stop": [
-      {
-        "hooks": [{
-          "type": "command",
-          "command": "node /path/to/check-task.mjs"
-        }]
-      }
-    ]
-  }
-}
+{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"node /path/to/check-task.mjs"}]}]}}
 ```
 
-Hook reads task state, returns `decision:"block"` with `reason` if incomplete.
-
-### Log all tool calls
-
+Log all tool calls (async):
 ```json
-{
-  "hooks": {
-    "PostToolUse": [
-      {
-        "hooks": [{
-          "type": "command",
-          "command": "node /path/to/logger.mjs",
-          "async": true
-        }]
-      }
-    ]
-  }
-}
+{"hooks":{"PostToolUse":[{"hooks":[{"type":"command","command":"node /path/to/logger.mjs","async":true}]}]}}
 ```
 
-Async -- no performance impact. Writes to log file.
-
-### Inject project context on session start
-
+Inject project context on SS:
 ```json
-{
-  "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [{
-          "type": "command",
-          "command": "bash /path/to/session-init.sh"
-        }]
-      }
-    ]
-  }
-}
+{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"bash /path/to/session-init.sh"}]}]}}
 ```
-
-Returns `additionalContext` with project state.
+Returns `AC` with project state.
 
 ## 13. Official Patterns Reference
 
 | # | Pattern | Event | Purpose |
 |---|---------|-------|---------|
-| 1 | Security Validation | PreToolUse | Block writes to system dirs or credential files |
-| 2 | Test Enforcement | Stop | Verify tests were executed before completion |
-| 3 | Context Loading | SessionStart | Auto-detect project type, load env config |
-| 4 | Notification Logging | Notification | Track notifications for audit/logging |
-| 5 | MCP Tool Monitoring | PreToolUse | Validate destructive MCP operations |
-| 6 | Build Verification | Stop | Ensure project compiles after modifications |
-| 7 | Permission Confirmation | PreToolUse | Prompt for rm/delete/drop operations |
-| 8 | Code Quality Checks | PostToolUse | Run linters/formatters on file edits |
-| 9 | Temporarily Active | Any | Use flag files to enable/disable hooks |
-| 10 | Configuration-Driven | Any | Read JSON settings for validation behavior |
-| 11 | Mode-Aware Injection | SessionStart, UserPromptSubmit, PreToolUse:Task | Read active mode from state file, inject mode instructions into every event |
+| 1 | Security Validation | PTU | block writes to system dirs/credential files |
+| 2 | Test Enforcement | Stop | verify tests executed before completion |
+| 3 | Context Loading | SS | auto-detect project type, load env cfg |
+| 4 | Notification Logging | Notification | track notifications for audit |
+| 5 | MCP Tool Monitoring | PTU | validate destructive MCP ops |
+| 6 | Build Verification | Stop | ensure project compiles after edits |
+| 7 | Permission Confirmation | PTU | prompt for rm/delete/drop ops |
+| 8 | Code Quality Checks | POT | run linters/formatters on file edits |
+| 9 | Temporarily Active | Any | flag files to enable/disable hooks |
+| 10 | Configuration-Driven | Any | read JSON settings for validation behavior |
+| 11 | Mode-Aware Injection | SS, UserPromptSubmit, PTU:Task | read active mode from state file, inject mode instructions into every event |
 
 ## 14. Advanced Techniques
 
-### Multi-Stage Validation
-
-Combine command + prompt hooks: fast deterministic checks (command) -> intelligent analysis (prompt).
-
-### Conditional Execution
-
-Hooks adapt to: environment (CI/local), user context (admin/regular), project settings.
-
-### State Sharing
-
-Sequential hooks communicate via temp files: `Hook A -> /tmp/risk.json -> Hook B reads`.
-
-### Dynamic Config
-
-`.claude-hooks-config.json`: `{"strictMode":true,"allowedCommands":["npm test"],"maxFileSize":1048576}`
-
-### Caching
-
-Store validation outcomes (5-min cache) to avoid redundant processing.
-
-### Cross-Event Workflows
-
-SessionStart -> count tests | PostToolUse -> increment | Stop -> verify count > 0
+- Multi-Stage Validation: command (fast deterministic) -> prompt (intelligent analysis)
+- Conditional Execution: adapt to env (CI/local), user context (admin/regular), project settings
+- State Sharing: sequential hooks via temp files: `Hook A -> /tmp/risk.json -> Hook B reads`
+- Dynamic Config: `.claude-hooks-config.json`: `{"strictMode":true,"allowedCommands":["npm test"],"maxFileSize":1048576}`
+- Caching: store validation outcomes (5-min cache) to avoid redundant processing
+- Cross-Event Workflows: `SS -> count tests | POT -> increment | Stop -> verify count > 0`
 
 ### Mode-Aware Injection
 
-Hook reads active mode from `brewcode.state.json` and injects mode-specific instructions into every tool call or session event. Use when a skill needs to toggle persistent session behavior that survives auto-compact.
-
-**Implementation:**
+Hook reads active mode from `brewcode.state.json`, injects mode-specific instructions into every tool call/session event. Use when skill needs to toggle persistent session behavior surviving auto-compact.
 
 ```javascript
-// In any PreToolUse or SessionStart hook:
-import { getActiveMode } from './lib/utils.mjs';
-
-// ... inside main():
+// In any PTU or SS hook:
 const activeMode = getActiveMode(cwd, session_id);
 if (activeMode) {
-  // For PreToolUse hooks (inject into agent prompt):
+  // PTU: inject into SA prompt
   updatedPrompt = `[MODE: ${activeMode.name}] ${activeMode.instructions}\n\n${updatedPrompt}`;
-  
-  // For SessionStart hooks (inject into conversation context):
+  // SS: inject into conversation context
   context += `\n[MODE: ${activeMode.name}] ${activeMode.instructions}`;
 }
 ```
 
-**How `getActiveMode(cwd, session_id)` works:**
+`getActiveMode(cwd, session_id)` resolution:
 
 | Step | Details |
 |------|---------|
-| Read state | `$CLAUDE_PLUGIN_DATA/modes.json` -> 3-scope resolution (session > project > global) |
-| Fallback | `.claude/tasks/cfg/brewcode.state.json` -> `mode` field (legacy) |
-| Load instructions | `$CLAUDE_PLUGIN_DATA/modes/{mode}.md` (user, first) then `$CLAUDE_PLUGIN_ROOT/modes/{mode}.md` (built-in, fallback) |
-| Return | `{ name, instructions, scope }` or `null` (`scope`: `session\|project\|global\|legacy`) |
-| Fail-safe | Returns `null` on any error (missing file, parse error, no plugin root) |
+| read state | `$CLAUDE_PLUGIN_DATA/modes.json` -> 3-scope (session > project > global) |
+| fallback | `.claude/tasks/cfg/brewcode.state.json` -> `mode` field (legacy) |
+| load instructions | `$CLAUDE_PLUGIN_DATA/modes/{mode}.md` (user first) then `$CLAUDE_PLUGIN_ROOT/modes/{mode}.md` (built-in fallback) |
+| return | `{name, instructions, scope}` or `null` (scope: `session|project|global|legacy`) |
+| fail-safe | returns `null` on any error |
 
-**Injection channels by hook event:**
+Injection channels:
 
 | Hook | Event | Channel | Scope |
 |------|-------|---------|-------|
-| `forced-eval.mjs` | UserPromptSubmit | `updatedInput.prompt` | Every user message |
-| `session-start.mjs` | SessionStart | `additionalContext` | Session start + compact resume |
-| `pre-task.mjs` | PreToolUse:Task | `updatedInput.prompt` | Every subagent spawn |
+| `forced-eval.mjs` | UserPromptSubmit | `UI.prompt` | every user msg |
+| `session-start.mjs` | SS | `AC` | session start + compact resume |
+| `pre-task.mjs` | PTU:Task | `UI.prompt` | every SA spawn |
 
-**State schema in `$CLAUDE_PLUGIN_DATA/modes.json` (3-scope resolution):**
-
+State schema in `$CLAUDE_PLUGIN_DATA/modes.json`:
 ```json
-{
-  "session": { "mode": "manager", "modeActivatedAt": "2026-04-01T12:00:00.000Z" },
-  "project": {},
-  "global": {}
-}
+{"session":{"mode":"manager","modeActivatedAt":"2026-04-01T12:00:00.000Z"},"project":{},"global":{}}
 ```
+Resolution: `session` > `project` > `global`. Single mode only (no multi-mode). `null`/absent `mode` = no active mode.
 
-Resolution order: `session` > `project` > `global`. Single mode only (no multi-mode). `null`/absent `mode` field = no active mode.
-
-> **Legacy fallback:** `.claude/tasks/cfg/brewcode.state.json` (flat `mode` field) is still read if `modes.json` is missing.
+> Legacy fallback: `.claude/tasks/cfg/brewcode.state.json` (flat `mode` field) read if `modes.json` missing.
 
 ## 15. Hook Type Selection
 
-| Need | Hook Type | Why |
-|------|-----------|-----|
-| Context-aware decisions | `prompt` | Natural language reasoning |
-| Flexible evaluation | `prompt` | No bash scripting needed |
-| Deterministic operations | `command` | Reliable, fast |
-| File system tasks | `command` | Direct access |
-| External tool integration | `command` | System calls |
-| Performance-critical | `command` | Lower latency |
-| External API / webhook | `http` | No subprocess, direct HTTP POST |
-| Remote delegation | `http` | Offload to external service |
-| File-reading analysis | `agent` | Read/Grep/Glob access, multi-step |
+| Need | Type | Why |
+|------|------|-----|
+| context-aware decisions | `prompt` | natural language reasoning |
+| flexible evaluation | `prompt` | no bash scripting needed |
+| deterministic ops | `command` | reliable, fast |
+| file system tasks | `command` | direct access |
+| external tool integration | `command` | system calls |
+| performance-critical | `command` | lower latency |
+| external API/webhook | `http` | no subprocess, direct HTTP POST |
+| remote delegation | `http` | offload to external svc |
+| file-reading analysis | `agent` | Read/Grep/Glob access, multi-step |
 
-> Default: prompt hooks for most cases; command hooks for deterministic/performance-critical.
-
-> **Lifecycle:** Hooks load at session start. Config changes require `/clear` or new session.
+> DEF: prompt hooks for most cases; command for deterministic/performance-critical.
+> Lifecycle: hooks load at session start. Config changes require `/clear` or new session.
 
 ## 16. Production Examples
 
-Production-ready hooks demonstrating common patterns.
+### Security Gate (PTU:Bash)
 
-### Security Gate (PreToolUse:Bash)
+Config: `{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"bash ./hooks/security-gate.sh"}]}]}}`
 
-**Config:**
-```json
-{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"bash ./hooks/security-gate.sh"}]}]}}
-```
-
-**Hook (security-gate.sh):**
 ```bash
 #!/bin/bash
 set -euo pipefail
 INPUT=$(cat)
 CMD=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
-
 if echo "$CMD" | grep -qE '(rm -rf /|sudo rm|chmod 777|dd if=)'; then
-  jq -n --arg r "Blocked: dangerous command ($CMD)" '{
-    hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:$r}
-  }'
+  jq -n --arg r "Blocked: dangerous command ($CMD)" '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":$r}}'
   exit 0
 fi
-
 echo '{}'
 ```
 
 ### Test Enforcement (Stop)
 
-**Config:**
-```json
-{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"node ./hooks/test-check.mjs"}]}]}}
-```
+Config: `{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"node ./hooks/test-check.mjs"}]}]}}`
 
-**Hook (test-check.mjs):**
 ```javascript
 #!/usr/bin/env node
 import { readFileSync, existsSync } from 'fs';
-
 const input = JSON.parse(readFileSync(0, 'utf8'));
 if (input.stop_hook_active) { console.log('{}'); process.exit(0); }
-
 const logPath = `${input.cwd}/.claude/test-run.log`;
 if (!existsSync(logPath)) {
-  console.log(JSON.stringify({
-    decision: 'block',
-    reason: 'No tests run. Execute test suite before stopping.'
-  }));
-} else {
-  console.log('{}');
-}
+  console.log(JSON.stringify({decision:'block',reason:'No tests run. Execute test suite before stopping.'}));
+} else { console.log('{}'); }
 ```
 
-### Context Injection (SessionStart)
+### Context Injection (SS)
 
-**Config:**
-```json
-{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"bash ./hooks/load-config.sh"}]}]}}
-```
+Config: `{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"bash ./hooks/load-config.sh"}]}]}}`
 
-**Hook (load-config.sh):**
 ```bash
 #!/bin/bash
 set -euo pipefail
 INPUT=$(cat)
 CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
 CFG="$CWD/.project-config.json"
-
 if [ -f "$CFG" ]; then
   RULES=$(jq -r '.rules // empty' "$CFG")
-  jq -n --arg ctx "Project rules: $RULES" '{
-    hookSpecificOutput:{hookEventName:"SessionStart",additionalContext:$ctx},
-    systemMessage:"Loaded project config"
-  }'
+  jq -n --arg ctx "Project rules: $RULES" '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":$ctx},"systemMessage":"Loaded project config"}'
 else
   echo '{}'
 fi
 ```
 
-### Tool Logger (PostToolUse, async)
+### Tool Logger (POT, async)
 
-**Config:**
-```json
-{"hooks":{"PostToolUse":[{"hooks":[{"type":"command","command":"node ./hooks/logger.mjs","async":true}]}]}}
-```
+Config: `{"hooks":{"PostToolUse":[{"hooks":[{"type":"command","command":"node ./hooks/logger.mjs","async":true}]}]}}`
 
-**Hook (logger.mjs):**
 ```javascript
 #!/usr/bin/env node
 import { readFileSync, appendFileSync } from 'fs';
-
 const input = JSON.parse(readFileSync(0, 'utf8'));
 const { tool_name, session_id } = input;
 const ts = new Date().toISOString();
-const log = `${ts} | ${session_id} | ${tool_name}\n`;
-
 try {
-  appendFileSync(`${input.cwd}/.claude/tool-log.txt`, log);
+  appendFileSync(`${input.cwd}/.claude/tool-log.txt`, `${ts} | ${session_id} | ${tool_name}\n`);
   console.log('{}');
-} catch (e) {
-  console.log('{}');
-}
+} catch (e) { console.log('{}'); }
 ```
 
 ## 17. Workflow
 
-1. **Clarify** -- Ask: which event? what behavior? bash or JS? where to configure?
-2. **Design** -- Select event, matcher, output schema, routing channel
-3. **Implement** -- Use template, add logic, handle errors
-4. **Configure** -- Add to appropriate settings/hooks.json
-5. **Test** -- Run with `CLAUDE_DEBUG=1`, check verbose output (Ctrl+O). Isolate hook bugs: `claude --safe-mode` / `CLAUDE_CODE_SAFE_MODE=1` starts CC with ALL customizations off (CLAUDE.md, plugins, skills, hooks, MCP) to confirm a hook is the cause (v2.1.169+)
-6. **Validate** -- Run checklist
+1. Clarify: which event? what behavior? bash or JS? where to configure?
+2. Design: select event, matcher, output schema, routing channel
+3. Implement: use template, add logic, handle errors
+4. Configure: add to appropriate settings/hooks.json
+5. Test: run with `CLAUDE_DEBUG=1`, check verbose (Ctrl+O). Isolate hook bugs: `claude --safe-mode` / `CLAUDE_CODE_SAFE_MODE=1` starts CC with ALL customizations off (CLAUDE.md, plugins, skills, hooks, MCP) to confirm hook is cause (v2.1.169+)
+6. Validate: run checklist
 
 ## 18. Validation Checklist
 
-| # | Check | Details |
-|---|-------|---------|
-| 1 | Correct event type | Matches intended trigger |
-| 2 | Matcher pattern | Regex for tools, string for sources |
-| 3 | Output schema | Correct JSON structure for event |
-| 4 | Routing channel | `additionalContext` vs `updatedInput` vs `decision` |
-| 5 | Fail-safe | `output({})` in catch block |
-| 6 | `stop_hook_active` | Present in Stop/SubagentStop hooks |
-| 7 | stdin parsing | Handles missing/null fields |
-| 8 | Executable | `chmod +x` for bash, `#!/usr/bin/env node` for mjs |
-| 9 | Config location | Correct settings file for scope |
-| 10 | Performance | <1s for blocking hooks |
-| 11 | Known bugs | Check routing matrix for broken channels |
-| 12 | Syntax check | `bash -n` for bash, `node --check` for mjs |
-| 13 | `if` conditional | Use `if` field (v2.1.85+) to reduce hook overhead when applicable |
-| 14 | Hook type | `command` for deterministic, `http` for API, `prompt` for NL, `agent` for file analysis |
+| # | Check |
+|---|-------|
+| 1 | correct event type matches intended trigger |
+| 2 | matcher pattern (regex for tools, string for sources) |
+| 3 | output schema correct for event |
+| 4 | routing channel (`AC` vs `UI` vs `decision`) |
+| 5 | fail-safe: `output({})` in catch block |
+| 6 | `stop_hook_active` in Stop/SubagentStop hooks |
+| 7 | stdin parsing handles missing/null fields |
+| 8 | executable (`chmod +x` for bash, `#!/usr/bin/env node` for mjs) |
+| 9 | config location correct for scope |
+| 10 | performance <1s for blocking hooks |
+| 11 | check routing matrix for broken channels |
+| 12 | syntax check (`bash -n` or `node --check`) |
+| 13 | `if` field (v2.1.85+) to reduce overhead when applicable |
+| 14 | hook type (`command` deterministic, `http` API, `prompt` NL, `agent` file analysis) |
 
 ## 19. Deliverable Format
 
@@ -1261,42 +820,42 @@ VERIFICATION:
 
 ## 20. Version History
 
-| Version | Event/Feature | Type |
-|---------|--------------|------|
-| 2.1.49 | `ConfigChange` | New event |
-| 2.1.50 | `WorktreeCreate`, `WorktreeRemove` | New events |
-| 2.1.50 | `last_assistant_message` in Stop/SubagentStop stdin | New field |
-| 2.1.52 | JSON response for TeammateIdle/TaskCompleted (was exit-code only) | Enhancement |
-| 2.1.63 | `http` hook type | New type |
-| 2.1.69 | `InstructionsLoaded` | New event |
-| 2.1.69 | `agent_id`, `agent_type` in common stdin fields | New fields |
-| 2.1.70 | Fix: plugin Stop/SessionEnd hooks after `/plugin` operation | Bug fix |
-| 2.1.72 | Fix: skill hooks firing twice per event | Bug fix |
-| 2.1.73 | Fix: SessionStart hooks called twice on `--resume`/`--continue` | Bug fix |
-| 2.1.76 | `PostCompact` | New event |
-| 2.1.76 | `Elicitation`, `ElicitationResult` | New events |
-| 2.1.77 | Fix: PreToolUse `allow` no longer bypasses `deny` permission rules | Security fix |
-| 2.1.78 | `StopFailure` | New event |
-| 2.1.78 | `CLAUDE_PLUGIN_DATA`, `CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS` | New env vars |
-| 2.1.78 | `CLAUDE_PLUGIN_OPTION_<KEY>` for plugin userConfig | New env var |
-| 2.1.79 | Fix: SessionEnd hooks reliable execution | Bug fix |
-| 2.1.83 | `CwdChanged`, `FileChanged` | New events |
-| 2.1.83 | `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` | New env var |
-| 2.1.83 | Fix: uninstalled plugin hooks no longer phantom-fire | Bug fix |
-| 2.1.84 | `TaskCreated` | New event |
-| 2.1.84 | `WorktreeCreate` supports `type: "http"` | Enhancement |
-| 2.1.85 | Conditional `if` field for tool event hooks | New feature |
-| 2.1.85 | PreToolUse can answer `AskUserQuestion` via `updatedInput` | Enhancement |
-| 2.1.86 | Fix: plugin scripts "Permission denied" on macOS/Linux | Bug fix |
-| 2.1.89 | `PermissionDenied` | New event |
-| 2.1.89 | PreToolUse `"defer"` decision — headless pause/resume | New feature |
-| 2.1.89 | Hook output >50K chars saved to disk (path+preview in context) | Enhancement |
-| 2.1.89 | Fix: PreToolUse/PostToolUse `file_path` is now absolute (Write/Edit/Read) | Bug fix |
-| 2.1.152 | `MessageDisplay` | New event |
-| 2.1.152 | SessionStart `reloadSkills`, `hookSpecificOutput.sessionTitle` outputs | Enhancement |
-| 2.1.163 | Stop/SubagentStop can return `hookSpecificOutput.additionalContext` (feedback, keep turn going) | Enhancement |
-| 2.1.169 | `--safe-mode` / `CLAUDE_CODE_SAFE_MODE`, `disableBundledSkills` / `CLAUDE_CODE_DISABLE_BUNDLED_SKILLS` | New flags |
-| 2.1.169 | self-hosted runner post-session lifecycle hook (runner-only, NOT hooks.json) | New feature |
+| Ver | Event/Feature | Type |
+|-----|--------------|------|
+| 2.1.49 | `ConfigChange` | new event |
+| 2.1.50 | `WorktreeCreate`, `WorktreeRemove` | new events |
+| 2.1.50 | `last_assistant_message` in Stop/SubagentStop stdin | new field |
+| 2.1.52 | JSON response for TeammateIdle/TaskCompleted (was exit-code only) | enhancement |
+| 2.1.63 | `http` hook type | new type |
+| 2.1.69 | `InstructionsLoaded` | new event |
+| 2.1.69 | `agent_id`, `agent_type` in common stdin fields | new fields |
+| 2.1.70 | fix: plugin Stop/SessionEnd hooks after `/plugin` | bug fix |
+| 2.1.72 | fix: skill hooks firing twice per event | bug fix |
+| 2.1.73 | fix: SS hooks called twice on `--resume`/`--continue` | bug fix |
+| 2.1.76 | `PCD` | new event |
+| 2.1.76 | `Elicitation`, `ElicitationResult` | new events |
+| 2.1.77 | fix: PTU `allow` no longer bypasses `deny` permission rules | security fix |
+| 2.1.78 | `StopFailure` | new event |
+| 2.1.78 | `CLAUDE_PLUGIN_DATA`, `CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS` | new env vars |
+| 2.1.78 | `CLAUDE_PLUGIN_OPTION_<KEY>` for plugin userConfig | new env var |
+| 2.1.79 | fix: SessionEnd hooks reliable execution | bug fix |
+| 2.1.83 | `CwdChanged`, `FileChanged` | new events |
+| 2.1.83 | `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` | new env var |
+| 2.1.83 | fix: uninstalled plugin hooks no longer phantom-fire | bug fix |
+| 2.1.84 | `TaskCreated` | new event |
+| 2.1.84 | `WorktreeCreate` supports `type:"http"` | enhancement |
+| 2.1.85 | conditional `if` field for tool event hooks | new feature |
+| 2.1.85 | PTU can answer `AskUserQuestion` via `UI` | enhancement |
+| 2.1.86 | fix: plugin scripts "Permission denied" on macOS/Linux | bug fix |
+| 2.1.89 | `PermissionDenied` | new event |
+| 2.1.89 | PTU `"defer"` decision — headless pause/resume | new feature |
+| 2.1.89 | hook output >50K chars saved to disk (path+preview in context) | enhancement |
+| 2.1.89 | fix: PTU/POT `file_path` is now absolute (Write/Edit/Read) | bug fix |
+| 2.1.152 | `MD` | new event |
+| 2.1.152 | SS `reloadSkills`, `hookSpecificOutput.sessionTitle` outputs | enhancement |
+| 2.1.163 | Stop/SubagentStop can return `hookSpecificOutput.AC` (feedback, keep turn going) | enhancement |
+| 2.1.169 | `--safe-mode`/`CLAUDE_CODE_SAFE_MODE`, `disableBundledSkills`/`CLAUDE_CODE_DISABLE_BUNDLED_SKILLS` | new flags |
+| 2.1.169 | self-hosted runner post-session lifecycle hook (runner-only, NOT hooks.json) | new feature |
 
 ## Sources
 

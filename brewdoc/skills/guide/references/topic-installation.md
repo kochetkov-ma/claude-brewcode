@@ -13,7 +13,6 @@ Before installing, make sure you have:
 - **jq** — used by some internal scripts
 
 Check prerequisites:
-
 ```bash
 claude --version
 gh --version
@@ -37,25 +36,21 @@ claude plugin install brewtools@claude-brewcode
 claude plugin install brewui@claude-brewcode
 ```
 
-After installation, run `/reload-plugins`. If plugins still do not appear, restart Claude Code (close and reopen your terminal or IDE).
+After installation, run `/reload-plugins`. If plugins still do not appear, restart Claude Code.
 
 You can install only the plugins you need. brewcode is the core; brewdoc and brewtools are optional.
 
 ## Section 3: Verify Installation
-
-Confirm everything is installed:
 
 ```bash
 # List all installed plugins
 claude plugin list
 ```
 
-You should see all four plugins listed with matching version numbers.
+You should see all four plugins with matching version numbers.
 
 Quick smoke test:
-
 ```bash
-# Run the setup wizard in any project
 /brewcode:setup
 ```
 
@@ -63,7 +58,7 @@ If the setup wizard starts, installation is working.
 
 ## Section 4: Updating
 
-All three plugins share a version number. When one updates, update all of them:
+All four plugins share a version number. When one updates, update all of them:
 
 ```bash
 # Step 1: Update marketplace index
@@ -76,41 +71,36 @@ claude plugin update brewtools@claude-brewcode
 claude plugin update brewui@claude-brewcode
 ```
 
-After updating, run `/reload-plugins` (or `/reload-skills` for skill-only changes, Claude Code 2.1.152+). Restart Claude Code only if reloading does not pick up the changes.
+After updating, run `/reload-plugins` (or `/reload-skills` for skill-only changes, Claude Code 2.1.152+). Restart only if reloading does not pick up the changes.
 
 If you see version mismatches across plugins, update all four to fix it.
 
 ## Section 5: Dev Mode (for contributors)
 
-If you are working on the plugin source code itself, run from source without installing:
+If you are working on the plugin source code, run from source without installing:
 
 ```bash
-# Run individual plugins from source
 claude --plugin-dir ./brewcode
 claude --plugin-dir ./brewdoc
 claude --plugin-dir ./brewtools
 claude --plugin-dir ./brewui
 ```
 
-This loads the plugin directly from the local directory. Changes take effect immediately without reinstalling.
+Changes take effect immediately without reinstalling.
 
-Dev mode is for plugin developers only. Regular users should install from the marketplace.
+> Never use `--plugin-dir` for production — developer-only flag.
 
-> Never use `--plugin-dir` for production — that is a developer-only flag.
+## Section 6: Keeping Plugins Up to Date
 
-## Section 6: Keeping plugins up to date
-
-The easiest way to keep the whole brewcode suite current is one command:
+The easiest way to keep the whole suite current:
 
 ```bash
 /brewtools:plugin-update
 ```
 
-This checks the marketplace, compares installed versions, and updates everything in one pass. Use `check` for a status-only report, `update` for non-interactive update of all plugins, or `all` to do both.
+This checks the marketplace, compares installed versions, and updates everything in one pass. Use `check` for status-only, `update` for non-interactive update, or `all` for everything.
 
 ### Manual fallback
-
-If you prefer to run the raw CLI commands yourself:
 
 ```bash
 claude plugin marketplace update claude-brewcode
@@ -122,9 +112,7 @@ claude plugin update brewui@claude-brewcode
 
 ### After updating
 
-Reload plugins so the new versions become active:
-
 - Preferred: `/reload-plugins`
 - Fallback: `exit` the session, then run `claude` again
 
-If you see version mismatches across the four plugins after an update, re-run the update command — all four must share the same version.
+If version mismatches persist after an update, re-run — all four must share the same version.

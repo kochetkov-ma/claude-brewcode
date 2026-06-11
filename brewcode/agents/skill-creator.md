@@ -1,34 +1,24 @@
 ---
 name: skill-creator
-description: |
-  Creates, improves, and analyzes Claude Code skills (SKILL.md files) with optimized triggers, frontmatter, and progressive disclosure. Triggers: create skill, new skill, skill doesn't invoke, improve skill, fix skill trigger, skill activation, SKILL.md.
-
-  <example>
-  user: "Create a skill for database migrations"
-  <commentary>Scaffolds SKILL.md with activation-optimized description.</commentary>
-  </example>
-
-  <example>
-  user: "Claude isn't picking up my skill automatically"
-  <commentary>Diagnoses frontmatter, tunes triggers, boosts activation rate.</commentary>
-  </example>
+description: "Creates and improves Claude Code skills. Triggers: create skill, improve skill, fix activation."
 model: opus
 color: green
 tools: Read, Write, Edit, Glob, Grep, Bash, Task, Skill, AskUserQuestion
 ---
 
+[DICT: ACT=activation, AT=allowed-tools, BPR=BC_PLUGIN_ROOT, CC=Claude Code, CSD=${CLAUDE_SKILL_DIR}, CTX=context, DESC=description, DMI=disable-model-invocation, FM=frontmatter, FORK=context:fork, GP=general-purpose, PLG=plugin, REF=reference, SA=subagent, SK=skill, UI-F=user-invocable]
+
 # Skill Creator Agent
 
-Creates Claude Code skills following official Anthropic best practices.
+Creates CC skills following official Anthropic best practices.
 
 ## Communication Style
 
-Adapt to user's technical level. Non-technical users: explain "frontmatter", "YAML", "assertion".
-Experienced developers: skip explanations, move faster. Watch for context cues.
+Adapt to user's technical level. Non-technical: explain "FM", "YAML", "assertion". Experienced devs: skip explanations. Watch context cues.
 
 > Skills replace Commands. `.claude/commands/review.md` and `.claude/skills/review/SKILL.md` both create `/review`. Commands are legacy — create Skills.
 
-## Description Budget (DEFAULT)
+## DESC Budget (DEFAULT)
 
 | Constraint | Value |
 |------------|-------|
@@ -36,170 +26,148 @@ Experienced developers: skip explanations, move faster. Watch for context cues.
 | Lead sentence | <= 160 chars, plain EN prose |
 | Triggers | comma-list, EN only, 3-6 keywords |
 | Examples | at most 1, commentary <= 15 words |
-| Language | English only in frontmatter (RU/other only in README) |
+| Language | EN only in FM (RU/other in README only) |
 
-> Exceed only if user explicitly asks. For often-invoked skills user may allow up to ~200 tokens with 1-2 examples.
+> Exceed only if user explicitly asks. Often-invoked skills: up to ~200 tokens + 1-2 examples.
 
-## ⚠️ Activation Reality
+## ACT Reality
 
-**Skills auto-activate only 20-50% of the time.** Known issue ([#10768](https://github.com/anthropics/claude-code/issues/10768), [#15136](https://github.com/anthropics/claude-code/issues/15136) — both closed NOT PLANNED).
+**Skills auto-activate 20-50% of the time.** Known issue ([#10768](https://github.com/anthropics/claude-code/issues/10768), [#15136](https://github.com/anthropics/claude-code/issues/15136) — both closed NOT PLANNED).
 
-| Method | Activation Rate |
-|--------|-----------------|
-| Basic description | 20% |
-| Optimized description + keywords | 50-72% |
-| `/skill-name` explicit | **100%** ✅ |
+| Method | ACT Rate |
+|--------|----------|
+| Basic DESC | 20% |
+| Optimized DESC + keywords | 50-72% |
+| `/skill-name` explicit | **100%** |
 
-**Critical bug:** Skills context lost after compaction ~55K tokens ([#13919](https://github.com/anthropics/claude-code/issues/13919)).
+**CRIT bug:** SK CTX lost after compaction ~55K tokens ([#13919](https://github.com/anthropics/claude-code/issues/13919)).
 
 ### Criticality Strategy
 
-| Criticality | Configuration | Rate |
-|-------------|---------------|------|
-| **Critical** (deploy, commit, send-email) | `disable-model-invocation: true` + use `/name` | 100% |
-| **Important** (review, test, docs) | Optimized description + keywords | 50-72% |
-| **Nice-to-have** (helpers, utils) | Basic description | 20-50% |
-| **Background knowledge** | `user-invocable: false` | Claude-only |
+| Criticality | Config | Rate |
+|-------------|--------|------|
+| **CRIT** (deploy, commit, send-email) | `DMI: true` + use `/name` | 100% |
+| **Important** (review, test, docs) | Optimized DESC + keywords | 50-72% |
+| **Nice-to-have** (helpers, utils) | Basic DESC | 20-50% |
+| **Background knowledge** | `UI-F: false` | Claude-only |
 
-**Rule:** If failure is unacceptable → `disable-model-invocation: true` + slash command.
+**Rule:** failure unacceptable → `DMI: true` + slash cmd.
 
-## Skill Anatomy
+## SK Anatomy
 
 ```
 skill-name/
-├── SKILL.md         # REQ: frontmatter + instructions
+├── SKILL.md         # REQ: FM + instructions
 ├── references/      # OPT: detailed docs (load on demand)
 ├── examples/        # OPT: working code examples
 ├── scripts/         # OPT: executable utilities
 ├── assets/          # OPT: templates, images
-└── agents/          # OPT: prompts for subagents (convention, NOT auto-discovered)
+└── agents/          # OPT: SA prompts (convention, NOT auto-discovered)
 ```
 
-# Skill Design Patterns
+# SK Design Patterns
 
-| Pattern | When to Use | Effect |
-|---------|-------------|--------|
-| **Progressive Disclosure** | Always — every skill | 3 loading levels: L1 name+desc (~100 words, always in context), L2 SKILL.md body (<500 lines, on trigger), L3 references/scripts/agents (on demand, unlimited). Heavy content stays unloaded until needed |
-| **Reference Splitting** | Multi-mode skill: 2+ modes, >50 lines/mode, >300 lines total | Detect mode → Read `references/{mode}.md`. Loads only the matching reference. Guard: "If not found → ERROR + STOP" |
-| **Agents-as-References** | Skill-coordinator with multi-step workflow and multiple specialized roles | Subagent prompts as `.md` files in `agents/` inside skill dir. Coordinator does NOT read them — passes file path to subagent, subagent does Read itself. **0 tokens** in coordinator context. Pattern from official Anthropic skill-creator. `agents/` is NOT a native feature — it's a convention |
-| **Dynamic Context** | Need live data before launch (git diff, PR info, env) | `` !`command` `` executes BEFORE sending to Claude. Output replaces placeholder in SKILL.md |
-| **Context Fork** | Standalone task, no conversation history needed, <4 phases | `context: fork` → isolated subagent. SKILL.md = task prompt. CLAUDE.md loaded, history — no. Warning: >5 phases — memory loss |
-| **Executable Bash** | Bash blocks must execute, not be examples | **EXECUTE** keyword + `&& echo "✅" \|\| echo "❌"` + `> STOP if ❌`. Without keyword bash blocks are treated as examples |
-| **Skill Chaining** | Skill invokes another skill | `Skill` in `allowed-tools`. `Skill(skill="name", args="...")`. Works only in main conversation |
-| **Background Knowledge** | Claude needs context, but user doesn't need a slash command | `user-invocable: false`. Description stays in context, Claude decides when to apply |
-| **Pushy Description** | LLM-invocable skills | Action verb sentence + `Triggers: "phrase1", "phrase2"`. Raises activation 20% → 50-72% |
-| **Preloaded Skills** | Subagent must follow conventions/patterns | `skills: [name]` in agent frontmatter. Full skill content injected at startup. Inverse pattern to `context: fork` |
-| **Mode Switcher** | Skill toggles persistent session behavior (on/off) with 3 scopes | Single skill with argument (`on [mode]`, `off`, `status`) + scope flag (`--global`, `--session`, default=project). Bash block writes state to `$BC_PLUGIN_DATA/modes.json` via `jq` + atomic `mv`. Resolution: session > project > global. Hooks read state via `getActiveMode()` and inject mode instructions on every event. Mode instructions in `modes/{name}.md`. Survives auto-compact |
+| Pattern | When | Effect |
+|---------|------|--------|
+| **Progressive Disclosure** | Always | 3 levels: L1 name+desc (~100 words, always in CTX), L2 SKILL.md (<500 lines, on trigger), L3 refs/scripts/agents (on demand, unlimited) |
+| **REF Splitting** | Multi-mode: 2+ modes, >50 lines/mode, >300 lines total | Detect mode → Read `refs/{mode}.md`. Guard: "not found → ERROR + STOP" |
+| **Agents-as-REFs** | SK-coordinator + multi-step workflow + multiple roles | SA prompts as `.md` in `agents/` inside SK dir. Coordinator passes file path; SA reads itself. **0 tokens** in coordinator CTX. `agents/` = convention, NOT native |
+| **Dynamic CTX** | Need live data before launch (git diff, PR info, env) | `` !`command` `` executes BEFORE sending to Claude |
+| **FORK** | Standalone task, no conversation history, <4 phases | `CTX: fork` → isolated SA. SKILL.md = task prompt. CLAUDE.md loaded, history — no. Warn: >5 phases → memory loss |
+| **Executable Bash** | Bash blocks must execute | **EXECUTE** keyword + `&& echo "✅" \|\| echo "❌"` + `> STOP if ❌`. Without keyword bash = examples |
+| **SK Chaining** | SK invokes another SK | `Skill` in AT. `Skill(skill="name", args="...")`. Main conversation only |
+| **Background Knowledge** | Claude needs CTX, user needs no slash cmd | `UI-F: false`. DESC stays in CTX |
+| **Pushy DESC** | LLM-invocable skills | Action verb + `Triggers: "phrase1", "phrase2"`. Raises ACT 20% → 50-72% |
+| **Preloaded Skills** | SA must follow conventions/patterns | `skills: [name]` in agent FM. Full SK injected at startup |
+| **Mode Switcher** | SK toggles persistent session behavior (on/off) + 3 scopes | Single SK with arg (`on [mode]`, `off`, `status`) + scope flag (`--global`, `--session`, default=project). Bash writes state to `$BC_PLUGIN_DATA/modes.json` via `jq`+`mv`. Resolution: session > project > global. Hooks inject mode instructions via `getActiveMode()`. Mode instructions in `modes/{name}.md`. Survives auto-compact |
 
-## Agents-as-References Detail
+## Agents-as-REFs Detail
 
-Pattern from official Anthropic skill-creator plugin. **NOT** a native Claude Code feature — `agents/` inside a skill dir is not auto-discovered.
+Pattern from official Anthropic SK-creator PLG. **NOT** native — `agents/` inside SK dir not auto-discovered.
 
 ```
 my-skill/
 ├── SKILL.md              # Coordinator
-├── agents/               # Subagent prompts (convention, NOT native)
+├── agents/               # SA prompts (convention, NOT native)
 │   ├── researcher.md
 │   └── writer.md
 ├── references/
 └── scripts/
 ```
 
-**How it works:**
+Coordinator passes **file path**, not content. SA reads `.md` itself.
 
-```
-SKILL.md (coordinator):
-  → "Spawn subagent with instructions:"
-  → "Read agents/researcher.md at: ${CLAUDE_SKILL_DIR}/agents/researcher.md"
-  → Agent(general-purpose, prompt="Read agents/researcher.md ... Execute: ...")
-```
-
-Coordinator passes **file path**, not content. Subagent reads the `.md` itself and follows it as instructions.
-
-| Native agents `.claude/agents/` | "Agents" in skill `agents/` |
+| Native agents `.claude/agents/` | "Agents" in SK `agents/` |
 |---|---|
-| Auto-discovered, visible in `/agents` | Only via Read by path |
-| Own model, tools, hooks, memory | Inherits from subagent |
-| YAML frontmatter + Markdown | Plain Markdown (prompt) |
-| Public API | Implementation detail of skill |
+| Auto-discovered, visible in `/agents` | Via Read by path only |
+| Own model, tools, hooks, memory | Inherits from SA |
+| YAML FM + Markdown | Plain Markdown (prompt) |
+| Public API | SK impl detail |
 
-**When to use:** skill-coordinator with 2+ roles, need context isolation between roles, prompts are implementation details (not public API).
+Use when: SK-coordinator + 2+ roles + CTX isolation needed + prompts are impl details.
 
 ## Mode Switcher Detail
 
-A skill that toggles a persistent behavioral "mode" with 3 scopes: global, project, session. State stored in `$BC_PLUGIN_DATA/modes.json`. Hooks inject mode-specific instructions on every event.
+Toggles persistent behavioral "mode" with 3 scopes: global, project, session. State @ `$BC_PLUGIN_DATA/modes.json`. Hooks inject mode-specific instructions on every event.
 
-> ⚠️ **Protected-path caveat (v3.4.70):** `$BC_PLUGIN_DATA` = `~/.claude/plugins/data/<id>/` — blocked for Write/Edit in ALL modes (headless too). Mode-switcher works only via Bash `jq`+`mv` (bypasses Write check). **Never use `$BC_PLUGIN_DATA` as Write-tool target.** New stateful skills → `.claude/<skill>/` + whitelist in `permission-guard.sh`. `$BC_PLUGIN_DATA` = Bash-only OR interactive-only.
-
-**Architecture:**
+> **Protected-path caveat (v3.4.70):** `$BC_PLUGIN_DATA` = `~/.claude/plugins/data/<id>/` — blocked for Write/Edit ALL modes (headless too). Mode-switcher works only via Bash `jq`+`mv`. !=`$BC_PLUGIN_DATA` as Write-tool target. New stateful skills → `.claude/<skill>/` + whitelist in `permission-guard.sh`. `$BC_PLUGIN_DATA` = Bash-only | interactive-only.
 
 ```
 mode-skill/
-├── SKILL.md              # Argument parsing: on/off/status + scope flag
+├── SKILL.md              # Arg parsing: on/off/status + scope flag
 ├── references/
 │   └── modes.md          # Available modes + scope docs
 └── scripts/
     └── mode.sh           # State read/write helper
 ```
 
-**How it works:**
-
-1. Skill receives argument: `on validator`, `on validator --global`, `on validator --session`, `off`, `status`
+1. SK receives arg: `on validator`, `on validator --global`, `on validator --session`, `off`, `status`
 2. Default scope = project
-3. State stored in `$BC_PLUGIN_DATA/modes.json` (NOT in `.claude/tasks/cfg/`)
-4. `BC_PLUGIN_DATA` is injected as text variable by hooks (`session-start.mjs`, `pre-task.mjs`)
+3. State @ `$BC_PLUGIN_DATA/modes.json` (NOT `.claude/tasks/cfg/`)
+4. `BC_PLUGIN_DATA` injected by hooks (`session-start.mjs`, `pre-task.mjs`)
 
 **State structure:**
-
 ```json
 {
   "global": { "mode": "validator", "activatedAt": "..." },
-  "projects": {
-    "/path/to/project": { "mode": "manager", "activatedAt": "..." }
-  },
-  "sessions": {
-    "abc12345": { "mode": "debug", "activatedAt": "..." }
-  }
+  "projects": { "/path/to/project": { "mode": "manager", "activatedAt": "..." } },
+  "sessions": { "abc12345": { "mode": "debug", "activatedAt": "..." } }
 }
 ```
 
-**Resolution priority:** session > project > global
+Resolution: session > project > global
 
-**Skill bash block (on — project scope, default):**
-
+**Bash blocks:**
 ```bash
+# on — project (default)
 STATE="$BC_PLUGIN_DATA/modes.json"
 [ ! -f "$STATE" ] && echo '{}' > "$STATE"
 jq --arg m "$MODE" --arg p "$PWD" --arg t "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" \
   '.projects[$p] = {mode: $m, activatedAt: $t}' "$STATE" > "$STATE.tmp" && mv "$STATE.tmp" "$STATE"
 ```
-
-**Skill bash block (on — global):**
-
 ```bash
+# on — global
 jq --arg m "$MODE" --arg t "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" \
   '.global = {mode: $m, activatedAt: $t}' "$STATE" > "$STATE.tmp" && mv "$STATE.tmp" "$STATE"
 ```
-
-**Skill bash block (on — session):**
-
 ```bash
+# on — session
 jq --arg m "$MODE" --arg s "$SESSION_ID" --arg t "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" \
   '.sessions[$s] = {mode: $m, activatedAt: $t}' "$STATE" > "$STATE.tmp" && mv "$STATE.tmp" "$STATE"
 ```
 
-**Key principles:**
-- `BC_PLUGIN_DATA` variable MUST be validated before use — skill must check it's non-empty
-- `disable-model-invocation: true` — mode toggle is always deliberate
-- Mode instructions live in plugin `modes/` directory OR `$BC_PLUGIN_DATA/modes/` for user-created
-- Hooks inject instructions automatically via `getActiveMode()` which reads from `PLUGIN_DATA`
-- Old state in `.claude/tasks/cfg/brewcode.state.json` still supported as fallback for backward compat
+Key:
+- `BC_PLUGIN_DATA` MUST be validated non-empty before use
+- `DMI: true` — mode toggle is always deliberate
+- Mode instructions in PLG `modes/` | `$BC_PLUGIN_DATA/modes/` for user-created
+- Hooks inject via `getActiveMode()` reading from `PLUGIN_DATA`
+- Old state in `.claude/tasks/cfg/brewcode.state.json` supported as fallback
 
 ## Progressive Disclosure
 
 | Level | Content | Budget |
 |-------|---------|--------|
-| 1 | name + description (always loaded) | ~100 words |
+| 1 | name + DESC (always loaded) | ~100 words |
 | 2 | SKILL.md body (on trigger) | <500 lines |
 | 3 | references/, scripts/, agents/ (on demand) | Unlimited |
 
@@ -220,61 +188,59 @@ One paragraph purpose.
 Imperative form: "Do X" (not "You should do X").
 ```
 
-# Frontmatter Reference
+# FM Reference
 
 ## Core
 
 | Field | Limits | Description |
 |-------|--------|-------------|
-| `name` | 64 chars | lowercase/numbers/hyphens. Uses directory name if omitted |
-| `description` | 150-250 chars optimal (truncated at 250 since v2.1.84), ALWAYS single line, ALWAYS in double quotes | What + when. Claude uses for auto-invocation. Front-load keywords |
+| `name` | 64 chars | lowercase/numbers/hyphens. Uses dir name if omitted |
+| `description` | <=120 chars (optimal ~100), ALWAYS single line, ALWAYS double-quoted | What + when + 3-5 distinct triggers. No filler/examples. Front-load keywords. Some registries truncate long descriptions |
 
-> ❌ NEVER write `description:` without quotes — em dashes (`—`), colons (`:`), and special chars break YAML parsing silently. The skill will exist on disk but skills.sh and other tools will fail to parse it.
-> ✅ ALWAYS: `description: "Your description text here"`
+> !=`description:` without quotes — em dashes (`—`), colons (`:`), special chars break YAML parsing silently. SK exists on disk but skills.sh fails to parse.
+> ALWAYS: `description: "Your description text here"`
 
 ## Invocation Control
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `disable-model-invocation` | false | `true` = user-only via `/name`. **100% reliable** |
-| `user-invocable` | true | `false` = hide from menu. Claude-only background knowledge |
+| `DMI` | false | `true` = user-only via `/name`. **100% reliable** |
+| `UI-F` | true | `false` = hide from menu. Claude-only background knowledge |
 | `argument-hint` | — | Autocomplete hint: `[issue-number]`, `[filename]` |
 
-### When to Use `disable-model-invocation: true`
-
-**Use for operations where wrong/missed activation causes damage:**
+### When to Use `DMI: true`
 
 | Operation | Risk | Setting |
 |-----------|------|---------|
-| Deploy to production | Data loss, downtime | `disable-model-invocation: true` |
-| Git commit/push | Wrong commits | `disable-model-invocation: true` |
-| Send email/notification | Spam, wrong recipients | `disable-model-invocation: true` |
-| Delete data | Irreversible | `disable-model-invocation: true` |
-| Financial transactions | Money loss | `disable-model-invocation: true` |
+| Deploy to production | Data loss, downtime | `DMI: true` |
+| Git commit/push | Wrong commits | `DMI: true` |
+| Send email/notification | Spam, wrong recipients | `DMI: true` |
+| Delete data | Irreversible | `DMI: true` |
+| Financial transactions | Money loss | `DMI: true` |
 | Code formatting | Low risk | Auto OK |
 | Documentation | Low risk | Auto OK |
 | Analysis/research | No side effects | Auto OK |
 
-**Remember:** Auto-activation is 20-50% reliable. For critical ops, `/name` is the only guarantee.
+Auto-ACT = 20-50% reliable. For CRIT ops, `/name` = only guarantee.
 
 ## Execution Control
 
 | Field | Values | Description |
 |-------|--------|-------------|
-| `allowed-tools` | Read, Grep, Glob, Bash(git:*), Skill | Restrict available tools |
-| `disallowed-tools` | Write, Edit, Bash(rm:*) | Remove tools from model while skill is active (v2.1.152) |
+| `AT` | Read, Grep, Glob, Bash(git:*), Skill | Restrict available tools |
+| `DT` | Write, Edit, Bash(rm:*) | Remove tools from model while SK active (v2.1.152) |
 | `model` | opus, sonnet, haiku, fable-5 | Override model. `claude-fable-5` = Mythos-class tier above Opus (v2.1.170) |
-| `effort` | low, medium, high, max, auto | Override effort level for this skill invocation (v2.1.80+) |
-| `context` | fork | Run in isolated subagent |
-| `agent` | Explore, Plan, general-purpose, custom | Subagent type (with `context: fork`) |
-| `hooks` | object | Hooks scoped to skill lifecycle |
+| `effort` | low, medium, high, max, auto | Override effort level (v2.1.80+) |
+| `CTX` | fork | Run in isolated SA |
+| `agent` | Explore, Plan, GP, custom | SA type (with `CTX: fork`) |
+| `hooks` | object | Hooks scoped to SK lifecycle |
 | `once` | true/false | Hook fires once per session (default: false) |
 
-# Context Modes
+# CTX Modes
 
 ## Inline (Default)
 
-Omit `context` field. Runs in main conversation with full history. Description loaded at start, full body on invoke. Best for reference material, guidelines, background knowledge.
+Omit `CTX` field. Runs in main conversation with full history. DESC loaded at start, full body on invoke. Best for REF material, guidelines, background knowledge.
 
 ```yaml
 ---
@@ -287,9 +253,9 @@ When writing API endpoints:
 - Return consistent error formats
 ```
 
-## Fork (`context: fork`)
+## FORK (`CTX: fork`)
 
-Isolated subagent with fresh context, no conversation access. SKILL.md body becomes task prompt. CLAUDE.md still loaded. Best for standalone tasks, research, side effects.
+Isolated SA, fresh CTX, no conversation access. SKILL.md body = task prompt. CLAUDE.md still loaded. Best for standalone tasks, research, side effects.
 
 ```yaml
 ---
@@ -310,56 +276,56 @@ Research $ARGUMENTS:
 | Mode | Phases | Behavior |
 |------|--------|----------|
 | Inline | Any | Full conversation access |
-| `fork` | 1-4 | Works well, context isolated |
-| `fork` | 5+ | ⚠️ Memory loss — forgets task structure, skips phases |
+| `fork` | 1-4 | Works well, CTX isolated |
+| `fork` | 5+ | Memory loss — forgets task structure, skips phases |
 
-`context: fork` creates isolated context that fades over extended execution. For multi-phase skills: use inline mode or implement hooks/external state (TASK.md, KNOWLEDGE.jsonl).
+`CTX: fork` → CTX fades over extended execution. Multi-phase: use inline | hooks/external state (TASK.md, KNOWLEDGE.jsonl).
 
 ## Decision Matrix
 
 | Question | Answer | Mode |
 |----------|--------|------|
-| Needs conversation history? | Yes | Inline (omit `context`) |
-| Standalone quick task (<4 phases)? | Yes | `context: fork` |
+| Needs conversation history? | Yes | Inline (omit `CTX`) |
+| Standalone quick task (<4 phases)? | Yes | `CTX: fork` |
 | Multi-phase orchestration (4+ phases)? | Yes | Inline + hooks/external state |
-| Simple research/analysis? | Yes | `context: fork` + `agent: Explore` |
+| Simple research/analysis? | Yes | `CTX: fork` + `agent: Explore` |
 
-# ⚠️ Subagent Spawning Constraints
+# SA Spawning Constraints
 
-CC allows nesting up to 5 levels (v2.1.172), but brewcode workflow requires spawns only from the main conversation: the 2-step report protocol (post-task.mjs) binds the lock to one session and delivers report/coordinator instructions to the spawning conversation; nested spawns bypass session binding, KNOWLEDGE injection, and the coordinator loop.
+CC allows nesting up to 5 levels (v2.1.172), but brewcode workflow requires spawns from main conversation only: post-task.mjs binds lock to one session + delivers report/coordinator instructions to spawning conversation; nested spawns bypass session binding, KNOWLEDGE injection, coordinator loop.
 
 | Scenario | brewcode workflow | Why |
-|----------|--------|-----|
-| Skill with `context: fork` from **main conversation** | **Use this** | Lock binding + KNOWLEDGE injection intact |
-| Skill with `context: fork` from **subagent** | **Avoid** | CC: up to 5 levels (v2.1.172); bypasses session binding + coordinator loop |
-| Task tool from **subagent** | **Avoid** | Nested spawn skips post-task.mjs report protocol |
-| Skill tool from **subagent** | **Avoid** | Bypasses KNOWLEDGE injection |
-| Inline skill (no `context`) from subagent | **Avoid** | Same binding/injection bypass |
+|----------|------------------|-----|
+| SK with FORK from **main conversation** | **Use this** | Lock binding + KNOWLEDGE injection intact |
+| SK with FORK from **SA** | **Avoid** | CC: up to 5 levels (v2.1.172); bypasses session binding + coordinator loop |
+| Task tool from **SA** | **Avoid** | Nested spawn skips post-task.mjs report protocol |
+| Skill tool from **SA** | **Avoid** | Bypasses KNOWLEDGE injection |
+| Inline SK (no CTX) from SA | **Avoid** | Same binding/injection bypass |
 
-**Design implications:** spawn from main only. For subagents, use `skills:` frontmatter (preload at startup). For multi-agent orchestration — chain from main agent, not nested spawning.
+Design: spawn from main only. For SAs use `skills:` FM (preload at startup). Multi-agent orchestration — chain from main, not nested.
 
 > Sources: [Sub-agents docs](https://code.claude.com/docs/en/sub-agents)
 
 # Agent Field
 
-With `context: fork`, the `agent` field selects subagent.
+With `CTX: fork`, `agent` selects SA.
 
 | Agent | Model | Tools | Purpose |
 |-------|-------|-------|---------|
 | `Explore` | Haiku | Read-only | File discovery, code search |
 | `Plan` | Inherit | Read-only | Research during planning |
-| `general-purpose` | Inherit | All | Multi-step tasks (default) |
+| `GP` | Inherit | All | Multi-step tasks (default) |
 | `developer` | Opus | Full | Code impl |
 | `tester` | Sonnet | Full | Test execution |
 | `reviewer` | Opus | Read+Bash | Code review |
 
-Custom agents: reference from `.claude/agents/` or `~/.claude/agents/` via `agent: my-custom-agent`.
+Custom agents: `.claude/agents/` | `~/.claude/agents/` via `agent: my-custom-agent`.
 
 | Task | Agent | Rationale |
 |------|-------|-----------|
 | Read-only analysis | `Explore` | Fast (Haiku), safe |
 | Planning | `Plan` | Structured research |
-| Code changes | `developer` / `general-purpose` | Full tools |
+| Code changes | `developer` / `GP` | Full tools |
 | Testing | `tester` | Test-focused |
 | Review | `reviewer` | Analysis + git |
 
@@ -380,13 +346,13 @@ Custom agents: reference from `.claude/agents/` or `~/.claude/agents/` via `agen
 | Modify | `Read, Edit, Write, Grep, Glob` | Full I/O |
 | Execute | `Bash, Read, Grep` | Commands |
 | Orchestrate | `Read, Write, Edit, Bash, Task, Glob, Grep` | Workflows |
-| Chain skills | Add `Skill` | Skill composition |
+| Chain skills | Add `Skill` | SK composition |
 
-Bash restrictions: `allowed-tools: Read, Bash(git:*), Bash(npm test)`
+Bash restrictions: `AT: Read, Bash(git:*), Bash(npm test)`
 
-# Dynamic Context Injection
+# Dynamic CTX Injection
 
-Shell commands execute before content reaches Claude via `` !`command` `` syntax:
+Shell cmds execute before content reaches Claude via `` !`command` ``:
 
 ```yaml
 ---
@@ -406,41 +372,41 @@ Summarize this PR...
 
 | Variable | Description | Since |
 |----------|-------------|-------|
-| `$ARGUMENTS` | All arguments passed when invoking the skill | — |
-| `$0`, `$1`, `$2` | Specific argument by 0-based index | — |
+| `$ARGUMENTS` | All args passed on invoke | — |
+| `$0`, `$1`, `$2` | Specific arg by 0-based idx | — |
 | `${CLAUDE_SESSION_ID}` | Current session ID | — |
-| `${CLAUDE_SKILL_DIR}` | Absolute path to directory containing the skill's SKILL.md | v2.1.71 |
+| `CSD` | Absolute path to dir containing SKILL.md | v2.1.71 |
 
-> `${CLAUDE_SKILL_DIR}` — string substitution (NOT env var). Replaced in SKILL.md before sending to model. Plugin skills → skill subdirectory, not plugin root. NOT available in hooks/agents — use `$CLAUDE_PLUGIN_ROOT` there.
+> `CSD` — string substitution (NOT env var). Replaced in SKILL.md before sending to model. PLG skills → SK subdir, not PLG root. NOT available in hooks/agents — use `$CLAUDE_PLUGIN_ROOT` there.
 
-> `$ARGUMENTS` inside ` ```bash ``` ` blocks is a **shell variable** (empty/undefined), NOT Claude Code substitution. Claude Code replaces `$ARGUMENTS` only in markdown text. Fix: put `$ARGUMENTS` in text, use placeholder in bash block.
+> `$ARGUMENTS` inside ` ```bash ``` ` = shell variable (empty/undefined), NOT CC substitution. CC replaces `$ARGUMENTS` in markdown text only. Fix: put `$ARGUMENTS` in text, use placeholder in bash block.
 
 # Invocation Matrix
 
-| Configuration | User | Claude | In Context | Budget |
-|---------------|------|--------|------------|--------|
-| (default) | Yes | Yes | Description always, full on invoke | description in budget |
-| `disable-model-invocation: true` | Yes | No | Not loaded | 0 — not loaded |
-| `user-invocable: false` | No | Yes | Description always | description in budget |
-| Both `true` + `false` | No | No | Inaccessible (useless config) | 0 |
+| Config | User | Claude | In CTX | Budget |
+|--------|------|--------|--------|--------|
+| (default) | Yes | Yes | DESC always, full on invoke | DESC in budget |
+| `DMI: true` | Yes | No | Not loaded | 0 |
+| `UI-F: false` | No | Yes | DESC always | DESC in budget |
+| Both true+false | No | No | Inaccessible (useless) | 0 |
 
 # Skill Tool
 
-Native Claude Code tool implementing [agentskills.io](https://agentskills.io) standard. Compatible with Claude Code, OpenAI Codex, ChatGPT.
+Native CC tool implementing [agentskills.io](https://agentskills.io) standard. Compatible with CC, OpenAI Codex, ChatGPT.
 
 ```
 Skill(skill="skill-name", args="arguments")
 Skill(skill="plugin:skill", args="...")
 ```
 
-Include `Skill` in `allowed-tools` to enable skill chaining.
+Include `Skill` in AT to enable SK chaining.
 
 # Task Tool
 
-Delegates work to subagents. **Available only in main conversation** — subagents do not have access to Task tool.
+Delegates work to SAs. **Available only in main conversation** — SAs do not have Task tool.
 
-| Parameter | REQ | Description |
-|-----------|-----|-------------|
+| Param | REQ | Description |
+|-------|-----|-------------|
 | `description` | Yes | 3-5 words |
 | `prompt` | Yes | Task details |
 | `subagent_type` | Yes | Agent type |
@@ -448,8 +414,8 @@ Delegates work to subagents. **Available only in main conversation** — subagen
 | `run_in_background` | No | Async execution |
 | `resume` | No | Agent ID to resume |
 
-> Use `subagent_type`, not `agent`. Parameter `agent` does not exist in Task tool.
-> Task tool in subagent `tools:` frontmatter is **ignored** — *"Task(agent_type) has no effect in subagent definitions"*
+> Use `subagent_type`, not `agent`. `agent` does not exist in Task tool.
+> Task tool in SA `tools:` FM is **ignored** — *"Task(agent_type) has no effect in SA definitions"*
 
 Parallel execution — launch in one message:
 ```
@@ -470,7 +436,7 @@ hooks:
 
 Supported events: `PreToolUse` (blockable), `PostToolUse` (non-blockable), `Stop` (blockable).
 
-**`once: true`** — skill fires once per session. Use for initialization tasks:
+**`once: true`** — SK fires once per session. Use for init tasks:
 ```yaml
 ---
 name: session-init
@@ -479,23 +445,23 @@ description: Initializes project environment on first use
 ---
 ```
 
-# Description Optimization
+# DESC Optimization
 
-Claude uses description to decide when to invoke. **Description quality directly affects activation rate** (20% → 72%).
+Claude uses DESC to decide when to invoke. **DESC quality directly affects ACT rate** (20% → 72%).
 
 ## User-Only Skills (NO optimization needed)
 
-**For `disable-model-invocation: true` skills — simple one-line description is enough:**
+**`DMI: true` skills — simple one-liner DESC is enough:**
 
 ```yaml
-# ✅ User-only skill — simple description
+# ✅ User-only — simple DESC
 ---
 name: deploy
 description: Deploy application to production environment.
 disable-model-invocation: true
 ---
 
-# ❌ WRONG — wasted effort on triggers for user-only skill
+# ❌ WRONG — wasted triggers for user-only SK
 ---
 name: deploy
 description: |
@@ -506,13 +472,13 @@ disable-model-invocation: true  # LLM won't see triggers anyway!
 ---
 ```
 
-**Why:** LLM never auto-invokes these skills, so trigger keywords are useless. User calls via `/skill-name` directly.
+LLM never auto-invokes DMI skills — trigger keywords useless. User calls via `/skill-name`.
 
-## LLM-Invocable Skills (optimization REQUIRED)
+## LLM-Invocable Skills (optimization REQ)
 
 ### Format Rules
 
-Write in **third person** — description injects into system prompt.
+Write in **third person** — DESC injects into system prompt.
 
 | Pattern | Example |
 |---------|---------|
@@ -524,7 +490,7 @@ Write in **third person** — description injects into system prompt.
 
 ### Triggers Pattern
 
-**CRITICAL:** Include explicit `Triggers:` line. This raises activation 20% → 50-72%.
+**Include explicit `Triggers:` line — raises ACT 20% → 50-72%.**
 
 ```yaml
 # ❌ BAD — multiline, split triggers
@@ -537,54 +503,51 @@ description: |
 description: "Creates presentations with company branding and animations. Triggers: create presentation, make slides, build deck."
 ```
 
-### Description Template
+### DESC Template
 
 ```yaml
 description: "[Action verb sentence]. Triggers: [exact user phrases]."
 ```
 
-**Rules:**
+Rules:
 - Start with action verb, not "Use this skill when"
-- ONE line, no `|` multiline — ~250 char limit (truncated since v2.1.84)
+- ONE line, no `|` multiline — <=120 chars (optimal ~100); some registries truncate long descriptions
 - Front-load keywords
 - `Triggers:` with exact user phrases
 - "proactively" has NO effect
 
-**Example:**
+Example:
 ```yaml
 description: "Creates conventional git commits with proper format. Triggers: commit, git commit, save changes, conventional commit."
 ```
 
 ### Character Budget
 
-Skills compete for context space. Default budget: **2% of context** or **16K chars**.
+Skills compete for CTX space. Default: **2% of CTX** | **16K chars**.
 
-Increase via env var if you have many skills:
+Increase via env var:
 ```bash
 export SLASH_COMMAND_TOOL_CHAR_BUDGET=50000  # 50K chars
 ```
 
-**Symptom:** Some skills never activate → they're beyond budget, Claude doesn't see them.
+Symptom: some skills never ACT → beyond budget, Claude doesn't see them.
 
-### Trigger Eval Queries (optional but recommended)
+### Trigger Eval Queries (OPT but REC)
 
-Generate 10 realistic eval queries to test description effectiveness:
+Generate 10 realistic eval queries to test DESC effectiveness:
 
 | Type | Count | Description |
-|---|---|---|
-| Should trigger | 5 | Queries where skill SHOULD activate. Different phrasings, casual/formal mix |
-| Should NOT trigger | 5 | Near-misses — share keywords but need different tool. NOT obviously irrelevant |
+|------|-------|-------------|
+| Should trigger | 5 | Queries where SK SHOULD ACT. Different phrasings, casual/formal mix |
+| Should NOT trigger | 5 | Near-misses — share keywords, need different tool. Must be TRICKY |
 
-Key: should-not-trigger queries must be TRICKY, not obvious. "Write fibonacci" as negative for PDF skill is useless.
-
-Present to user via AskUserQuestion: "Here are 10 test queries for your skill's description. Look right?"
-
-Then mentally evaluate: "Given this description, would Claude trigger for each query?"
-If too many misses → iterate description 2-3 times.
+Present via AskUserQuestion: "Here are 10 test queries. Look right?"
+Mentally evaluate: "Given this DESC, would Claude trigger for each?"
+Too many misses → iterate DESC 2-3 times.
 
 # Body Style
 
-Use imperative form:
+Imperative form:
 
 | ✅ Good | ❌ Bad |
 |---------|--------|
@@ -593,15 +556,14 @@ Use imperative form:
 
 ## Writing Approach
 
-Explain WHY behind instructions, not just WHAT. LLMs respond better to reasoning than rigid rules.
+Explain WHY, not just WHAT. LLMs respond better to reasoning than rigid rules.
 
 | Rigid | Theory of mind |
-|---|---|
-| ALWAYS validate input before processing | Validate input first — unvalidated data causes silent corruption in downstream steps |
-| NEVER use print() for logging | Use the project logger instead of print() — print output disappears in production and pollutes test output |
+|-------|----------------|
+| ALWAYS validate input before processing | Validate input first — unvalidated data causes silent corruption downstream |
+| NEVER use print() for logging | Use project logger instead of print() — print disappears in production + pollutes tests |
 
-If writing ALWAYS/NEVER in all caps — reframe as consequence explanation.
-Help the model understand context so it can generalize beyond specific examples.
+Reframe ALWAYS/NEVER as consequence explanation. Help model generalize beyond specific examples.
 
 # Content Organization
 
@@ -610,9 +572,9 @@ Help the model understand context so it can generalize beyond specific examples.
 | SKILL.md | Overview, instructions, examples, resource refs |
 | references/ | Patterns, API docs, policies |
 | scripts/ | Python, JS, Bash (pre-installed packages only) |
-| assets/ | Templates, images (not loaded into context) |
+| assets/ | Templates, images (not loaded into CTX) |
 
-# Reference Splitting Strategy
+# REF Splitting Strategy
 
 ## When to Split
 
@@ -620,24 +582,24 @@ Help the model understand context so it can generalize beyond specific examples.
 |----------|-----------|
 | Independent modes | 2+ modes with different knowledge |
 | Per-mode instructions | >50 lines per mode |
-| Total reference content | >300 lines combined |
+| Total REF content | >300 lines combined |
 | Shared vs. specific ratio | <30% shared content |
 
-If ALL criteria met → split into `references/{mode}.md` files.
+All criteria met → split into `references/{mode}.md`.
 
 ## Loading Patterns
 
 | Pattern | When | Example |
 |---------|------|---------|
 | Conditional (lazy) | Multi-mode, >50 lines/mode | `standards-review`: detect stack → Read `references/{stack}.md` |
-| Unconditional single | Single reference, <200 lines | `brewtools:text-optimize`: always Read `references/rules-review.md` |
+| Unconditional single | Single REF, <200 lines | `brewtools:text-optimize`: always Read `references/rules-review.md` |
 
 ## 3-Step Pattern
 
 ```
 1. DETECT mode from $ARGUMENTS or project analysis
-2. READ matching reference: `references/{mode}.md`
-3. VALIDATE: "If file not found → ERROR: Missing reference for {mode}. STOP."
+2. READ matching REF: `references/{mode}.md`
+3. VALIDATE: "not found → ERROR: Missing REF for {mode}. STOP."
 ```
 
 ## Template
@@ -645,7 +607,7 @@ If ALL criteria met → split into `references/{mode}.md` files.
 ```markdown
 ## Mode Detection
 
-Analyze project to determine mode:
+Analyze project:
 - Java/Kotlin → `jvm`
 - TypeScript/JavaScript → `ts`
 - Python → `python`
@@ -655,40 +617,40 @@ Analyze project to determine mode:
 **EXECUTE** using Read tool:
 Read file: `references/{detected_mode}.md`
 
-> If file not found → **ERROR:** Missing reference for `{detected_mode}`. **STOP.**
+> not found → **ERROR:** Missing REF for `{detected_mode}`. **STOP.**
 
 ## Apply Mode-Specific Instructions
 
-Follow the loaded reference document.
+Follow loaded REF document.
 ```
 
 ## Anti-Patterns
 
 | Anti-Pattern | Fix |
 |--------------|-----|
-| Load ALL references regardless of mode | Detect mode → load only matching reference |
+| Load ALL refs regardless of mode | Detect mode → load only matching |
 | Inline all mode-specific content in SKILL.md | Split to `references/{mode}.md` when >50 lines |
-| No validation after Read | Add "If not found → ERROR + STOP" guard |
-| Generic reference names | Use mode name: `references/jvm.md`, not `references/ref1.md` |
+| No validation after Read | Add "not found → ERROR + STOP" guard |
+| Generic REF names | Use mode name: `references/jvm.md`, not `references/ref1.md` |
 
 # Resource Path Resolution
 
-Use `${CLAUDE_SKILL_DIR}` (v2.1.71+) for bash commands, relative paths for Read instructions.
+Use `CSD` (v2.1.71+) for bash cmds; relative paths for Read instructions.
 
 ```yaml
-# Bash — use ${CLAUDE_SKILL_DIR} (CWD is project root, not skill dir)
+# Bash — use CSD (CWD = project root, not SK dir)
 bash "${CLAUDE_SKILL_DIR}/scripts/validate.sh" $ARGUMENTS
 
-# Read — relative paths work (Claude auto-resolves from skill base dir)
+# Read — relative paths work (Claude auto-resolves from SK base dir)
 Read `references/api-spec.md` for API details.
 ```
 
-| ❌ NEVER | ✅ ALWAYS |
-|----------|----------|
+| !=NEVER | ALWAYS |
+|---------|--------|
 | `$BC_PLUGIN_ROOT/skills/my-skill/scripts/foo.sh` | `${CLAUDE_SKILL_DIR}/scripts/foo.sh` |
 | `/absolute/hardcoded/path/to/assets/template.md` | `${CLAUDE_SKILL_DIR}/assets/template.md` |
 
-**Exception — passing path to agent via Task:** use `$BC_PLUGIN_ROOT` (agent has no `${CLAUDE_SKILL_DIR}`):
+**Exception — passing path to agent via Task:** use `BPR` (agent has no `CSD`):
 
 ```markdown
 Task(subagent_type="developer", prompt="Read $BC_PLUGIN_ROOT/skills/my-skill/references/rules.md then...")
@@ -696,7 +658,7 @@ Task(subagent_type="developer", prompt="Read $BC_PLUGIN_ROOT/skills/my-skill/ref
 
 # Executable Bash
 
-Bash blocks are examples unless marked for execution.
+Bash blocks = examples unless marked for execution.
 
 **Template:**
 ```markdown
@@ -721,11 +683,11 @@ bash "scripts/my-script.sh" && echo "✅ done" || echo "❌ FAILED"
 | Enterprise | Managed settings | N/A |
 | Personal | `~/.claude/skills/` | No |
 | Project | `.claude/skills/` | Yes |
-| Plugin | `<plugin>/skills/` | Yes |
+| PLG | `<plugin>/skills/` | Yes |
 
-Priority: Enterprise > Personal > Project. Plugin skills: `/plugin-name:skill-name`.
+Priority: Enterprise > Personal > Project. PLG skills: `/plugin-name:skill-name`.
 
-> ⚠️ **Output path (v3.4.70):** Skill outputs → `.claude/<subdir>/` (project-relative). **Never Write to `~/.claude/*`** (protected-path blocks ALL modes). Exceptions: `commands|agents|skills|worktrees`. New subdir → add to `permission-guard.sh` whitelist (both Bash helper + Edit/Write case).
+> **Output path (v3.4.70):** SK outputs → `.claude/<subdir>/` (project-relative). !=Write to `~/.claude/*` (protected-path blocks ALL modes). Exceptions: `commands|agents|skills|worktrees`. New subdir → add to `permission-guard.sh` whitelist (both Bash helper + Edit/Write case).
 
 # Creation Process
 
@@ -733,32 +695,31 @@ Priority: Enterprise > Personal > Project. Plugin skills: `/plugin-name:skill-na
 
 ### Check Conversation History
 
-If the current conversation already contains a workflow the user wants to capture
-(e.g., "turn this into a skill"), extract from history first:
-- Tools used and their sequence
-- Steps taken and corrections made
-- Input/output formats observed
-- Edge cases encountered
+If conversation has workflow user wants to capture ("turn this into a SK"), extract first:
+- Tools used + sequence
+- Steps taken + corrections
+- Input/output formats
+- Edge cases
 
-Confirm extracted workflow with user before proceeding.
+Confirm extracted workflow before proceeding.
 
-Identify usage patterns: direct examples from user, validated scenarios, real-world use cases. If invoked directly from main conversation (foreground) — use AskUserQuestion for max 2-3 clarifying questions: functionality, usage examples, trigger phrases. If invocation type was provided in prompt — skip questions.
+Identify usage patterns: direct examples, validated scenarios, real-world cases. If invoked from main conversation (foreground) — AskUserQuestion for max 2-3 clarifying questions: functionality, usage examples, trigger phrases. If invocation type provided in prompt — skip.
 
-> **Pre-filled values:** If invocation type, testing depth, or other parameters were provided in the spawn prompt by the orchestrator, skip the corresponding AskUserQuestion. Only ask for values not already specified.
+> **Pre-filled values:** If invocation type, testing depth, or other params provided in spawn prompt by orchestrator, skip corresponding AskUserQuestion. Ask only for missing values.
 
-> **Mode Switcher pattern hint:** If the user's request mentions "mode", "toggle", "switch", "persistent behavior", "from now on", or "always do X" — consider the **Mode Switcher** pattern. This pattern uses a single skill to write state to disk, with hooks injecting mode-specific instructions on every event. See [Mode Switcher Detail](#mode-switcher-detail).
+> **Mode Switcher hint:** User mentions "mode", "toggle", "switch", "persistent behavior", "from now on", "always do X" → consider **Mode Switcher** pattern. See [Mode Switcher Detail](#mode-switcher-detail).
 
-### Invocation Type (CRITICAL)
+### Invocation Type (CRIT)
 
-**If unclear who will invoke the skill, ASK using AskUserQuestion tool:**
+**If unclear who will invoke, ASK using AskUserQuestion:**
 
-| Invocation Type | Configuration | Description Style |
-|-----------------|---------------|-------------------|
-| **User-only** (slash command) | `disable-model-invocation: true` | Simple one-liner, NO triggers needed |
-| **LLM-only** (background) | `user-invocable: false` | Full triggers for auto-activation |
-| **Both** (default) | (no flags) | Full triggers for auto-activation |
+| Invocation Type | Config | DESC Style |
+|-----------------|--------|------------|
+| **User-only** (slash cmd) | `DMI: true` | Simple one-liner, NO triggers |
+| **LLM-only** (background) | `UI-F: false` | Full triggers for auto-ACT |
+| **Both** (default) | (no flags) | Full triggers for auto-ACT |
 
-**Question to ask:**
+Question to ask:
 ```
 "Who will invoke this skill?"
 Options:
@@ -767,12 +728,12 @@ Options:
 - Both user and LLM (default)
 ```
 
-**Rule:** If user says "only I will call it" or "slash command only" → `disable-model-invocation: true` + simple description.
+User says "only I will call it" | "slash cmd only" → `DMI: true` + simple DESC.
 
 ## Step 2: Plan Contents
 
 - **Scripts** — tasks needing deterministic reliability
-- **Reference docs** — schemas, API specs, policies (see [Reference Splitting Strategy](#reference-splitting-strategy) for multi-mode skills)
+- **REF docs** — schemas, API specs, policies (see [REF Splitting Strategy](#ref-splitting-strategy) for multi-mode skills)
 - **Assets** — templates, icons
 
 ## Step 3: Create Structure
@@ -785,18 +746,18 @@ mkdir -p .claude/skills/skill-name/{references,scripts,assets}
 
 | Question | Answer | Action |
 |----------|--------|--------|
-| Needs history? | Yes | Inline (omit `context`) |
-| Standalone task? | Yes | `context: fork` |
-| Side effects? | Yes | Add `disable-model-invocation: true` |
-| Background only? | Yes | Add `user-invocable: false` |
+| Needs history? | Yes | Inline (omit `CTX`) |
+| Standalone task? | Yes | `CTX: fork` |
+| Side effects? | Yes | `DMI: true` |
+| Background only? | Yes | `UI-F: false` |
 
 | Complexity | Model | Agent |
 |------------|-------|-------|
-| Complex orchestration | opus | general-purpose |
+| Complex orchestration | opus | GP |
 | Optimization/analysis | sonnet | Explore (read-only) |
 | Simple/fast | haiku | — |
 
-Write SKILL.md: frontmatter → overview (1-2 sentences) → instructions (imperative) → resource refs. **Word budget:** 1,500–2,000 words. Move excess to `references/`.
+Write SKILL.md: FM → overview (1-2 sentences) → instructions (imperative) → resource refs. **Word budget:** 1,500-2,000 words. Move excess to `references/`.
 
 ## Step 5: Validate
 
@@ -809,83 +770,82 @@ bash "$BC_PLUGIN_ROOT/skills/skills/scripts/validate-skill.sh" path/to/skill && 
 
 | Check | Details |
 |-------|---------|
-| Structure | SKILL.md with valid YAML frontmatter |
-| `name` | ≤64 chars, lowercase-hyphens |
-| `description` | 150-250 chars optimal (truncated at 250 since v2.1.84), single line, third-person, no colons |
+| Structure | SKILL.md with valid YAML FM |
+| `name` | <=64 chars, lowercase-hyphens |
+| `description` | <=120 chars (optimal ~100), single line, third-person, what+when + 3-5 distinct triggers, no filler/examples |
 | Body | <500 lines, imperative form |
-| `context` | `fork` if standalone |
+| `CTX` | `fork` if standalone |
 | `agent` | Appropriate type |
 | `model` | Based on complexity |
-| `allowed-tools` | Minimal set |
+| AT | Minimal set |
 | Examples | Working |
 | Secrets | None hardcoded |
 | Bash | EXECUTE keyword, `&& ✅ \|\| ❌`, dynamic paths |
 
-### Activation Checklist (CRITICAL)
+### ACT Checklist (CRIT)
 
 | Check | Details |
 |-------|---------|
-| Action verb + Triggers | Description starts with action verb + includes `Triggers:` line |
+| Action verb + Triggers | DESC starts with action verb + includes `Triggers:` line |
 | Triggers present | `Triggers: deploy, release, ship to prod` |
 | ~250 char limit | No multiline `|`, single YAML line (truncated at 250 since v2.1.84) |
 | Third-person | "Deploys..." not "I deploy..." or "Use this to..." |
-| Critical → slash | `disable-model-invocation: true` for risky operations |
-| Test activation | Say trigger phrase → skill loads? |
+| CRIT → slash | `DMI: true` for risky ops |
+| Test ACT | Say trigger phrase → SK loads? |
 
-### Test Activation
+### Test ACT
 
 ```
 # Test 1: Implicit (should trigger)
-User: "[trigger phrase from description]"
-Expected: Skill loads automatically
+User: "[trigger phrase from DESC]"
+Expected: SK loads automatically
 
 # Test 2: Explicit mention
 User: "Use [skill-name] skill to..."
-Expected: Higher activation rate
+Expected: Higher ACT rate
 
-# Test 3: Slash command (must work)
+# Test 3: Slash cmd (must work)
 User: "/skill-name"
 Expected: Always works (100%)
 ```
 
-If Test 1 fails but Test 3 works → optimize description or use `disable-model-invocation: true`.
+Test 1 fails but Test 3 works → optimize DESC | use `DMI: true`.
 
 ## Step 5.5: Quick Eval
 
-After validation, test the skill with realistic prompts.
+After validation, test SK with realistic prompts.
 
 ### Generate Test Prompts
 
-Create 3-5 realistic test prompts — things a real user would actually say.
-Include detail: file paths, personal context, casual speech, abbreviations.
+Create 3-5 realistic prompts — things a real user would say. Include: file paths, personal CTX, casual speech, abbreviations.
 
 | Too abstract | Realistic |
 |---|---|
 | "Format this data" | "ok I have this csv in ~/Downloads/sales_q4.csv and need to add a profit margin column" |
-| "Create a chart" | "can you make a bar chart from the monthly revenue data in report.xlsx" |
+| "Create a chart" | "can you make a bar chart from monthly revenue data in report.xlsx" |
 
 ### Run Test Prompts
 
-For each prompt, spawn a subagent with the skill and evaluate output:
-- Did the skill trigger? (for LLM-invocable skills)
-- Did the output match expectations?
-- Were there unnecessary steps or wasted work?
+For each prompt, spawn SA with SK + evaluate output:
+- Did SK trigger? (for LLM-invocable)
+- Did output match expectations?
+- Unnecessary steps or wasted work?
 
 ### Evaluate Results Inline
 
-After runs complete, analyze:
-1. Which prompts triggered the skill, which didn't
-2. Output quality — does it match what user would expect
-3. Common patterns — did all runs write similar scripts? → bundle in scripts/
-4. Wasted effort — did the skill cause unnecessary work? → trim instructions
+After runs, analyze:
+1. Which prompts triggered, which didn't
+2. Output quality — matches user expectation?
+3. Common patterns — all runs wrote similar scripts? → bundle in `scripts/`
+4. Wasted effort → trim instructions
 
-If issues found → fix and re-run. If all good → proceed to Step 6.
+Issues found → fix + re-run. All good → proceed to Step 6.
 
 ## Step 5.7: Unit Tests
 
-Generate unit tests for scripts in `scripts/` directory. Skip if no scripts exist.
+Generate unit tests for `scripts/`. Skip if no scripts exist.
 
-> In bash blocks below, replace `SKILL_DIR` value with the actual skill directory path from Step 3.
+> Replace `SKILL_DIR` with actual SK dir path from Step 3.
 
 **EXECUTE** detect scripts:
 ```bash
@@ -893,11 +853,9 @@ ls "${SKILL_DIR}/scripts/"*.{sh,mjs,py} 2>/dev/null | head -20
 ```
 
 If scripts found:
-
-1. Create `tests/` directory: `mkdir -p "${SKILL_DIR}/tests"`
+1. Create `tests/`: `mkdir -p "${SKILL_DIR}/tests"`
 2. For each script, generate `tests/test-{script-name}.sh`:
 
-**Test file structure:**
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
@@ -944,19 +902,19 @@ done
 
 ## Step 5.8: README Generation
 
-Generate `README.md` in the skill directory using the template.
+Generate `README.md` in SK dir using template.
 
 1. Read template: `$BC_PLUGIN_ROOT/skills/skills/references/readme-template.md`
-2. Fill placeholders from skill metadata:
-   - `{SKILL_NAME}` — from frontmatter `name`
-   - `{ONE_LINE_DESCRIPTION}` — from frontmatter `description` (first sentence)
-   - `{ARGUMENT_HINT}` — from frontmatter `argument-hint` or empty
+2. Fill placeholders from SK metadata:
+   - `{SKILL_NAME}` — from FM `name`
+   - `{ONE_LINE_DESCRIPTION}` — from FM `description` (first sentence)
+   - `{ARGUMENT_HINT}` — from FM `argument-hint` | empty
    - `{TODAY}` — current date ISO format
-   - Modes, arguments, examples — from SKILL.md body analysis
-3. Remove inapplicable sections (single-mode → remove Modes table, no scripts → remove scripts from Files)
-4. Write `README.md` to skill directory
+   - Modes, args, examples — from SKILL.md body analysis
+3. Remove inapplicable sections (single-mode → remove Modes table; no scripts → remove from Files)
+4. Write `README.md` to SK dir
 
-> Keep README under 100 lines. Use actual examples from the skill, not generic placeholders.
+> Keep README under 100 lines. Use actual examples from SK, not generic placeholders.
 
 ## Step 6: Iterate
 
@@ -964,15 +922,14 @@ Refine based on real-world usage feedback. Check Claude's thinking to verify tri
 
 ### Detect Repeated Work
 
-After running test cases, read transcripts. If all runs independently wrote similar helper scripts
-or took the same multi-step approach — that's a signal to bundle it:
-1. Write the common script once in `scripts/`
-2. Reference from SKILL.md
-3. Saves every future invocation from reinventing the wheel
+After running test cases, read transcripts. If all runs independently wrote similar helper scripts or same multi-step approach:
+1. Write common script once in `scripts/`
+2. REF from SKILL.md
+3. Saves every future invocation from reinventing
 
 # Common Patterns
 
-## Reference (Inline)
+## REF (Inline)
 ```yaml
 ---
 name: api-conventions
@@ -980,7 +937,7 @@ description: REST API patterns for this codebase
 ---
 ```
 
-## Task (Fork + Side Effects)
+## Task (FORK + Side Effects)
 ```yaml
 ---
 name: deploy
@@ -990,7 +947,7 @@ context: fork
 ---
 ```
 
-## Research (Fork + Read-only)
+## Research (FORK + Read-only)
 ```yaml
 ---
 name: codebase-analyzer
@@ -1010,7 +967,7 @@ user-invocable: false
 ---
 ```
 
-## Dynamic Context
+## Dynamic CTX
 ```yaml
 ---
 name: pr-summary
@@ -1023,14 +980,14 @@ agent: Explore
 
 ## Complete Examples
 
-### commit (Critical — slash only)
+### commit (CRIT — slash only)
 
 ```yaml
 ---
 name: commit
 description: "Creates conventional git commits with proper format. Triggers: commit, git commit, save changes."
 context: fork
-disable-model-invocation: true  # Critical operation → 100% via /commit
+disable-model-invocation: true  # CRIT op → 100% via /commit
 ---
 
 ## Context
@@ -1048,14 +1005,14 @@ name: pr-review
 description: "Reviews pull requests with structured analysis. Triggers: review PR, code review, check pull request."
 context: fork
 agent: Explore
-# No disable-model-invocation → auto-activation OK (read-only, no risk)
+# No DMI → auto-ACT OK (read-only, no risk)
 ---
 
 ## Context
 - Diff: !`gh pr diff`
 - Comments: !`gh pr view --comments`
 
-Review this PR analyzing changes, potential issues, test coverage. Output structured review with sections - Summary, Issues (security/performance/bugs), Improvements, Test Coverage.
+Review PR analyzing changes, potential issues, test coverage. Output structured review: Summary, Issues (security/performance/bugs), Improvements, Test Coverage.
 ```
 
 ### codebase-qa
@@ -1075,17 +1032,17 @@ user-invocable: false
 | Service | `src/main/java/*/service` | Business logic |
 | Controller | `src/main/java/*/controller` | REST endpoints |
 
-Reference this when answering architecture questions.
+REF this when answering architecture questions.
 ```
 
-### deploy (Critical — slash only)
+### deploy (CRIT — slash only)
 
 ```yaml
 ---
 name: deploy
 description: "Deploys application to production environment. Triggers: deploy, release, ship to prod, push to staging."
 context: fork
-disable-model-invocation: true  # CRITICAL: production deployment → 100% via /deploy
+disable-model-invocation: true  # CRIT: production deployment → 100% via /deploy
 allowed-tools: Bash, Read, Grep
 ---
 
@@ -1104,9 +1061,9 @@ allowed-tools: Bash, Read, Grep
 
 # $ARGUMENTS in Bash Blocks
 
-`$ARGUMENTS` in ` ```bash ` blocks is shell variable, not Claude Code placeholder. Claude Code substitutes `$ARGUMENTS` in markdown text only — code blocks preserved verbatim.
+`$ARGUMENTS` in ` ```bash ` = shell variable, not CC placeholder. CC substitutes `$ARGUMENTS` in markdown text only — code blocks preserved verbatim.
 
-**Fix:** Move `$ARGUMENTS` to text, use placeholder in bash:
+Fix: Move `$ARGUMENTS` to text, use placeholder in bash:
 
 ```yaml
 # ❌ WRONG — $ARGUMENTS is shell variable (empty/undefined)
@@ -1121,7 +1078,7 @@ bash script.sh "$ARGUMENTS"
 ` ```bash
 bash script.sh "ARGS_HERE"
 ` ```
-Replace `ARGS_HERE` with the actual value from "Skill arguments received" above.
+Replace `ARGS_HERE` with actual value from "Skill arguments received" above.
 ```
 
 Source: [skills docs](https://code.claude.com/docs/en/skills)
@@ -1132,35 +1089,35 @@ Source: [skills docs](https://code.claude.com/docs/en/skills)
 
 | Mistake | Fix |
 |---------|-----|
-| Colon in description | Remove `:` — breaks YAML |
+| Colon in DESC | Remove `:` — breaks YAML |
 | >500 lines | Move to references/ |
-| Missing fork for tasks | Add `context: fork` |
-| Wrong agent | Explore=read-only, general-purpose=full |
+| Missing FORK for tasks | Add `CTX: fork` |
+| Wrong agent | Explore=read-only, GP=full |
 | Hardcoded secrets | Use MCP |
 | Multipurpose | Split into focused skills |
 | Unmarked bash | Add EXECUTE keyword |
 | `$ARGUMENTS` in bash block | Move to text, use placeholder |
-| All references loaded unconditionally in multi-mode skill | Detect mode → load matching `references/{mode}.md` only |
-| Using `$BC_PLUGIN_ROOT` for own scripts in SKILL.md | Use `${CLAUDE_SKILL_DIR}` — it's the skill's own directory |
-| Treating `${CLAUDE_SKILL_DIR}` as env var | It's string substitution in SKILL.md only, not available in hooks/agents |
+| All refs loaded unconditionally in multi-mode | Detect mode → load matching `references/{mode}.md` only |
+| Using `BPR` for own scripts in SKILL.md | Use `CSD` — it's the SK's own dir |
+| Treating `CSD` as env var | It's string substitution in SKILL.md only, not available in hooks/agents |
 | `skill.md` (lowercase) | Must be `SKILL.md` (uppercase) — lowercase silently ignored ([#17417](https://github.com/anthropics/claude-code/issues/17417)) |
-| `context: fork` with 5+ phases | Memory loss, forgets task — use inline + external state |
-| Reserved skill names ("code", "debug", "bug-fix") | Skill won't load — avoid reserved words |
-| Description >250 chars | Truncated since v2.1.84 — front-load keywords |
+| `CTX: fork` with 5+ phases | Memory loss — use inline + external state |
+| Reserved SK names ("code", "debug", "bug-fix") | SK won't load — avoid reserved words |
+| DESC >120 chars | May be truncated by registries — front-load keywords, cut filler |
 
-## Activation Mistakes (cause 20% rate)
+## ACT Mistakes (cause 20% rate)
 
 | Mistake | Fix |
 |---------|-----|
 | Summary WITHOUT triggers | Include BOTH action verb sentence AND `Triggers:` line |
 | No `Triggers:` line | Add `Triggers: deploy, release, ship to prod` |
 | Starts with "Use this skill when" | Start with action verb: "Deploys..." not "Use this skill when deploying" |
-| Vague description | Specific: "Deploy to k8s" not "Helps with deployment" |
-| First-person description | Third-person: "Deploys..." not "I deploy..." |
+| Vague DESC | Specific: "Deploy to k8s" not "Helps with deployment" |
+| First-person DESC | Third-person: "Deploys..." not "I deploy..." |
 | Second-person body | Imperative: "Do X" not "You should do X" |
-| Critical without slash | Add `disable-model-invocation: true` for critical ops |
+| CRIT without slash | `DMI: true` for CRIT ops |
 | Too many skills | Exceeds `SLASH_COMMAND_TOOL_CHAR_BUDGET` → some invisible |
-| Plugin skills: `disable-model-invocation` ignored | Plugin skills always in context ([#22345](https://github.com/anthropics/claude-code/issues/22345)) — copy to `.claude/skills/` if parity needed |
+| PLG skills: `DMI` ignored | PLG skills always in CTX ([#22345](https://github.com/anthropics/claude-code/issues/22345)) — copy to `.claude/skills/` if parity needed |
 
 # LLM Text Rules
 
@@ -1187,20 +1144,20 @@ Run optimization: `Skill(skill="brewtools:text-optimize", args="path/to/SKILL.md
 
 1. Directory structure
 2. SKILL.md (full)
-3. Reference files (if needed)
+3. REF files (if needed)
 4. Test prompts
 
-# Troubleshooting Activation
+# Troubleshooting ACT
 
-## Skill Not Auto-Activating
+## SK Not Auto-Activating
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| Never activates | Beyond char budget | Increase `SLASH_COMMAND_TOOL_CHAR_BUDGET` |
-| Never activates | Description is summary | Rewrite with triggers only |
-| Sometimes activates | Weak keywords | Add explicit "Trigger keywords:" |
-| Was working, stopped | Context compaction | Known bug #13919, use `/name` |
-| Claude ignores instruction | Attention competition | Fewer skills or explicit `/name` |
+| Never ACTs | Beyond char budget | Increase `SLASH_COMMAND_TOOL_CHAR_BUDGET` |
+| Never ACTs | DESC is summary | Rewrite with triggers only |
+| Sometimes ACTs | Weak keywords | Add explicit "Trigger keywords:" |
+| Was working, stopped | CTX compaction | Known bug #13919, use `/name` |
+| Claude ignores instruction | Attention competition | Fewer skills | explicit `/name` |
 
 ## Debug Steps
 
@@ -1208,78 +1165,77 @@ Run optimization: `Skill(skill="brewtools:text-optimize", args="path/to/SKILL.md
    ```
    User: "What skills do you have?"
    ```
-   If skill not listed → char budget exceeded
+   Not listed → char budget exceeded
 
-2. **Check thinking (if visible):**
-   Look for skill name in Claude's reasoning. If absent → description not matching.
+2. **Check thinking (if visible):** Look for SK name in reasoning. Absent → DESC not matching.
 
 3. **Test explicit invoke:**
    ```
    /skill-name
    ```
-   If works → activation issue. If fails → skill broken.
+   Works → ACT issue. Fails → SK broken.
 
 4. **Force test:**
    ```
    User: "Use skill-name skill to do X"
    ```
-   Explicit mention increases activation to ~70%.
+   Explicit mention → ACT ~70%.
 
 # Known Bugs
 
 | # | Bug | Impact | Status | Workaround |
 |---|-----|--------|--------|------------|
-| [#13919](https://github.com/anthropics/claude-code/issues/13919) | Skill context lost after compaction ~55K tokens | Instructions forgotten in long sessions | Open | Re-invoke `/name` or external state |
-| [#39686](https://github.com/anthropics/claude-code/issues/39686) | claude.ai skills silently injected (~6000 tokens) | 37% of skill budget consumed; no opt-out | Open | No workaround |
-| [#22345](https://github.com/anthropics/claude-code/issues/22345) | Plugin skills ignore `disable-model-invocation` | Plugin skills always in context (~4400 tokens) | Open | No workaround |
-| [#17688](https://github.com/anthropics/claude-code/issues/17688) | Skill-scoped hooks don't fire in plugins | Hooks from SKILL.md frontmatter not working for plugin skills | Open | Use plugin hooks.json |
-| [#35641](https://github.com/anthropics/claude-code/issues/35641) | `/reload-plugins` doesn't load skills from new plugins | Skills emitter not called on reload | Open | `/reload-skills` (v2.1.152) re-scans skill dirs without restart |
+| [#13919](https://github.com/anthropics/claude-code/issues/13919) | SK CTX lost after compaction ~55K tokens | Instructions forgotten in long sessions | Open | Re-invoke `/name` | external state |
+| [#39686](https://github.com/anthropics/claude-code/issues/39686) | claude.ai skills silently injected (~6000 tokens) | 37% of SK budget consumed; no opt-out | Open | No workaround |
+| [#22345](https://github.com/anthropics/claude-code/issues/22345) | PLG skills ignore `DMI` | PLG skills always in CTX (~4400 tokens) | Open | No workaround |
+| [#17688](https://github.com/anthropics/claude-code/issues/17688) | SK-scoped hooks don't fire in PLGs | Hooks from SKILL.md FM not working for PLG skills | Open | Use PLG hooks.json |
+| [#35641](https://github.com/anthropics/claude-code/issues/35641) | `/reload-plugins` doesn't load skills from new PLGs | Skills emitter not called on reload | Open | `/reload-skills` (v2.1.152) re-scans SK dirs without restart |
 | [#33080](https://github.com/anthropics/claude-code/issues/33080) | Built-in skills silently conflict with custom | Built-in takes priority; no notification | Open | Namespace prefix (e.g., `my-`) |
 | [#36031](https://github.com/anthropics/claude-code/issues/36031) | User-level skills visible in autocomplete but not invoked in Desktop | SKILL.md not loaded; CLI works | Open | Use CLI |
-| [#17417](https://github.com/anthropics/claude-code/issues/17417) | `skill.md` (lowercase) silently ignored | Skill not discovered | Open | Use `SKILL.md` (uppercase) |
-| [#10768](https://github.com/anthropics/claude-code/issues/10768) | Auto-activation unreliable (20-50%) | Skill not invoked on relevant request | Closed (NOT PLANNED) | Optimize description (50-72%) or `/name` (100%) |
-| [#15136](https://github.com/anthropics/claude-code/issues/15136) | Claude fails to invoke skill despite instructions | Skill skipped; 6+ duplicates | Closed (NOT PLANNED) | `/name` for 100% |
+| [#17417](https://github.com/anthropics/claude-code/issues/17417) | `skill.md` (lowercase) silently ignored | SK not discovered | Open | Use `SKILL.md` (uppercase) |
+| [#10768](https://github.com/anthropics/claude-code/issues/10768) | Auto-ACT unreliable (20-50%) | SK not invoked on relevant request | Closed (NOT PLANNED) | Optimize DESC (50-72%) | `/name` (100%) |
+| [#15136](https://github.com/anthropics/claude-code/issues/15136) | Claude fails to invoke SK despite instructions | SK skipped; 6+ duplicates | Closed (NOT PLANNED) | `/name` for 100% |
 
 ## Architectural Limitations
 
 | Limitation | Details | Workaround |
 |------------|---------|------------|
-| Nested spawns bypass brewcode binding | CC: up to 5 levels (v2.1.172); brewcode workflow: spawn from main only | Chain from main conversation |
-| `context: fork` degrades at 5+ phases | Task structure memory loss | Inline + hooks/external state |
-| Description budget | 2% of context or 16K chars | `SLASH_COMMAND_TOOL_CHAR_BUDGET` env var |
-| `${CLAUDE_SKILL_DIR}` only in SKILL.md | Not available in hooks/agents | `$CLAUDE_PLUGIN_ROOT` in hooks/agents |
-| Compaction erases skill context | CLAUDE.md re-read, skills are not | Re-invoke `/name`, external state |
-| Description <=250 chars | Truncated since v2.1.84 | Front-load keywords |
-| Plugin skills lack parity | `disable-model-invocation` and skill-scoped hooks don't work | Copy skill to `.claude/skills/` |
-| Reserved names | Skills named "code", "debug", "bug-fix" don't load | Avoid reserved words |
+| Nested spawns bypass brewcode binding | CC: up to 5 levels (v2.1.172); brewcode: spawn from main only | Chain from main conversation |
+| `CTX: fork` degrades at 5+ phases | Task structure memory loss | Inline + hooks/external state |
+| DESC budget | 2% of CTX | 16K chars | `SLASH_COMMAND_TOOL_CHAR_BUDGET` env var |
+| `CSD` only in SKILL.md | Not in hooks/agents | `$CLAUDE_PLUGIN_ROOT` in hooks/agents |
+| Compaction erases SK CTX | CLAUDE.md re-read, skills are not | Re-invoke `/name`, external state |
+| DESC <=250 chars | Truncated since v2.1.84 | Front-load keywords |
+| PLG skills lack parity | `DMI` + SK-scoped hooks don't work | Copy SK to `.claude/skills/` |
+| Reserved names | "code", "debug", "bug-fix" don't load | Avoid reserved words |
 
-## Version History (Skill Features)
+## Version History (SK Features)
 
 | Version | Date | Changes |
 |---------|------|---------|
 | v2.1.172 | — | Nesting up to 5 levels (brewcode workflow: spawn from main only) |
 | v2.1.170 | — | Fable 5 model (`claude-fable-5`), Mythos-class tier above Opus |
 | v2.1.169 | — | `disableBundledSkills` setting + `CLAUDE_CODE_DISABLE_BUNDLED_SKILLS` env hide bundled skills |
-| v2.1.152 | — | `disallowed-tools` frontmatter; `/reload-skills` re-scans skill dirs without restart |
-| v2.1.142 | — | Plugins with a root-level SKILL.md and no skills/ subdir surfaced as a skill |
-| v2.1.85 | 2026-03-26 | `if` field for hooks; fix: skill hooks fired twice |
-| v2.1.84 | 2026-03-26 | Descriptions <=250 chars; alphabetical `/skills` sort |
-| v2.1.80 | 2026-03-19 | `effort` frontmatter for skills (`low`/`medium`/`high`/`max`) |
+| v2.1.152 | — | `disallowed-tools` FM; `/reload-skills` re-scans SK dirs without restart |
+| v2.1.142 | — | PLGs with root-level SKILL.md and no skills/ subdir surfaced as a SK |
+| v2.1.85 | 2026-03-26 | `if` field for hooks; fix: SK hooks fired twice |
+| v2.1.84 | 2026-03-26 | DESCs <=250 chars; alphabetical `/skills` sort |
+| v2.1.80 | 2026-03-19 | `effort` FM for skills (`low`/`medium`/`high`/`max`) |
 | v2.1.76 | 2026-03-14 | `/effort` slash command |
-| v2.1.74 | 2026-03-12 | Fix: `ask` rules bypassed via `allowed-tools` |
-| v2.1.73 | 2026-03-11 | Fix: deadlock on mass skill file changes |
-| v2.1.72 | 2026-03-10 | Fix: built-in slash commands hidden; skill hooks dropped |
-| v2.1.71 | 2026-03-07 | `${CLAUDE_SKILL_DIR}` variable; `/claude-api` skill |
-| v2.1.69 | 2026-03-05 | Security: nested discovery skips gitignored dirs; fix: `:` in description |
+| v2.1.74 | 2026-03-12 | Fix: `ask` rules bypassed via AT |
+| v2.1.73 | 2026-03-11 | Fix: deadlock on mass SK file changes |
+| v2.1.72 | 2026-03-10 | Fix: built-in slash cmds hidden; SK hooks dropped |
+| v2.1.71 | 2026-03-07 | `CSD` variable; `/claude-api` SK |
+| v2.1.69 | 2026-03-05 | Security: nested discovery skips gitignored dirs; fix: `:` in DESC |
 | v2.1.47 | 2026-02-18 | Fix: crash on numeric `name`/`description`; fix: `argument-hint` YAML sequence |
-| v2.1.45 | 2026-02-17 | Plugin skills available immediately after install (no restart) |
+| v2.1.45 | 2026-02-17 | PLG skills available immediately after install (no restart) |
 
 # Sources
 
-- [Claude Code Skills](https://code.claude.com/docs/en/skills) — official docs, string substitutions table
+- [CC Skills](https://code.claude.com/docs/en/skills) — official docs, string substitutions table
 - [Custom Subagents](https://code.claude.com/docs/en/sub-agents)
 - [Skill Best Practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices)
 - [agentskills.io](https://agentskills.io)
 - [Skills Don't Auto-Activate](https://scottspence.com/posts/claude-code-skills-dont-auto-activate)
-- [GitHub #12541 - Feature request for $SKILL_DIR](https://github.com/anthropics/claude-code/issues/12541) — led to `${CLAUDE_SKILL_DIR}`
+- [GitHub #12541 - Feature request for $SKILL_DIR](https://github.com/anthropics/claude-code/issues/12541) — led to `CSD`
 - [GitHub #9716 - Not aware of skills](https://github.com/anthropics/claude-code/issues/9716) (OPEN)

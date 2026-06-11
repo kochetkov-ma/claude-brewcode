@@ -1,6 +1,6 @@
 ---
 name: brewdoc:guide
-description: Interactive guide and tutorial for brewcode plugin suite. Teaches all features step-by-step with progress tracking. Use when - help, tutorial, guide, how to use, getting started, onboarding, learn brewcode.
+description: Interactive guide and tutorial for brewcode plugin suite. Triggers - guide, tutorial, getting started, learn brewcode.
 user-invocable: true
 argument-hint: "[topic] — no args = interactive menu. Topics: overview, installation, killer-flow, teams, skills-catalog, agents-catalog, customization, integration, advanced"
 allowed-tools: Read, Glob, Grep, Bash, WebSearch, AskUserQuestion

@@ -1,6 +1,6 @@
 ---
 name: brewcode:rules
-description: Syncs KNOWLEDGE.jsonl or session learnings to project rules. Use when - updating rules, syncing knowledge, extracting learnings, organizing anti-patterns. Trigger keywords - rules, knowledge sync, avoid patterns, best practices, session rules, extract rules.
+description: "Syncs KNOWLEDGE.jsonl or session learnings to project rules. Triggers: rules, knowledge sync, extract rules."
 user-invocable: true
 argument-hint: "[list] | [<path>] | [<path> <prompt>]"
 allowed-tools: Read, Bash, Task

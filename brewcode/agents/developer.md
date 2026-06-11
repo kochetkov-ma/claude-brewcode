@@ -1,6 +1,6 @@
 ---
 name: developer
-description: "Implements features, writes code, fixes bugs, refactors - full-stack development. Triggers: implement, write code, fix bug, add feature, refactor, build."
+description: "Implements features, writes code, fixes bugs, refactors. Trig: implement, fix bug, add feature."
 model: opus
 tools: Read, Write, Edit, Glob, Grep, Bash, Task, NotebookEdit, WebFetch, WebSearch
 mcpServers:

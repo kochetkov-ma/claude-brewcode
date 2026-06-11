@@ -1,6 +1,6 @@
 # Canonical Update Command Chain
 
-> Always run in this exact order. Show full output for each step.
+> Run in this exact order. Show full output for each step.
 
 ## Full Chain
 
@@ -31,16 +31,15 @@ Fallback: type `exit`, then run `claude` again
 | `claude plugin marketplace list` | List marketplaces |
 | `claude plugin marketplace remove <name>` | Remove marketplace |
 
-When running inside a Claude session, prefix `claude plugin list` with `unset CLAUDECODE &&` to avoid interference with the session env variable.
+When running inside a Claude session, prefix `claude plugin list` with `unset CLAUDECODE &&`.
 
 ## Verification After Update
 
-After running the update chain, verify with:
 ```bash
 unset CLAUDECODE && claude plugin list --json
 ```
 
-Confirm expected versions appear in the output. If `claude plugin list` is unavailable (CC < 2.1.163), inspect the plugin cache directly or run `scripts/discover-plugins.sh`.
+Confirm expected versions appear. If CC < 2.1.163, inspect cache directly or run `scripts/discover-plugins.sh`.
 
 ## Environment Variables
 

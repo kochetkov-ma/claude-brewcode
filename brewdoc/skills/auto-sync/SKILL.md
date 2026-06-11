@@ -1,6 +1,6 @@
 ---
 name: brewdoc:auto-sync
-description: "Universal documentation sync for skills, agents, and markdown files. Pulls latest docs from official sources and updates files in place. Modes: status, init <path>, global, file, folder. Triggers: sync docs, auto-sync, update documentation, refresh skill docs, sync agent docs, documentation sync, pull latest docs."
+description: "Sync skill, agent, markdown docs from official sources in place. Triggers: sync docs, auto-sync, refresh skill docs."
 user-invocable: true
 argument-hint: "[status] | [init <path>] | [global] | [path]"
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Task, WebFetch, Skill

@@ -9,21 +9,21 @@ user-invocable: true
 
 # SSH Server Management
 
-> **Manage remote Linux servers** — connect, configure, deploy, administer with safety gates and persistent config.
+> Manage remote Linux servers — connect, configure, deploy, administer with safety gates and persistent config.
 
 <instructions>
 
-## Robustness Rules (MANDATORY — apply to ALL phases)
+## Robustness Rules (MANDATORY — all phases)
 
 ### Fail-Fast
 
 | Rule | Applies to |
 |------|-----------|
 | Every Bash call MUST end with `&& echo "OK ..." \|\| echo "FAILED ..."` | ALL scripts |
-| On `FAILED` — stop current phase, report error to user, DO NOT retry same command blindly | ALL phases |
+| On `FAILED` — stop phase, report error, do NOT retry same command blindly | ALL phases |
 | SSH commands MUST use `-o ConnectTimeout=10 -o BatchMode=yes` | ALL SSH calls |
-| Max **2 retries** per failed operation. After 2nd failure — report and stop | ALL phases |
-| If a script exits non-zero — read its stderr, diagnose, fix root cause, then retry ONCE | Scripts |
+| Max **2 retries** per failed operation; after 2nd failure — report and stop | ALL phases |
+| Non-zero script exit — read stderr, diagnose, fix root cause, retry ONCE | Scripts |
 
 ### Loop Protection
 
@@ -31,9 +31,9 @@ user-invocable: true
 |------|-------|
 | Phase 2 (Connection Setup) — max **3 key attempts**, then ask user | 3 keys |
 | Phase 2 → Phase 5 round-trips — if sent back to Phase 2 more than **once**, stop and report | 1 re-entry |
-| Phase 5 (Execute) — max **5 SSH commands per invocation**. If task needs more, delegate to ssh-admin agent via Task | 5 commands |
-| update-agent mode — max **3 servers** per run. If more, process first 3 and report remaining | 3 servers |
-| AskUserQuestion — max **3 questions per phase**. If skill needs more info, summarize what's missing in one combined question | 3 per phase |
+| Phase 5 (Execute) — max **5 SSH commands per invocation**; if more needed, delegate to ssh-admin agent via Task | 5 commands |
+| update-agent mode — max **3 servers** per run; process first 3 and report remaining | 3 servers |
+| AskUserQuestion — max **3 questions per phase**; summarize missing info in one combined question | 3 per phase |
 
 ### Timeouts
 
@@ -42,24 +42,21 @@ user-invocable: true
 | SSH connection test | 10s (`ConnectTimeout=10`) | Report "Server unreachable", stop |
 | server-discover.sh | 30s (`timeout 30 bash ...`) | Report partial results, continue |
 | Any single SSH command | 60s (`timeout 60 ssh ...`) | Kill, report "Command timed out", ask user |
-| Entire skill invocation | Do not exceed **15 SSH calls total** | Stop, report progress, suggest continuing manually |
+| Entire skill invocation | 15 SSH calls total max | Stop, report progress, suggest manual continuation |
 
 ### Fallback Strategy
 
-**If a script fails and cannot be fixed:**
-
-1. Report the exact error to user: script name, exit code, stderr
-2. Attempt the same operation manually (inline Bash) — scripts are helpers, not gatekeepers
-3. If manual fallback also fails — report both attempts and ask user what to do
-4. NEVER silently swallow errors or continue with stale/missing data
-
-**Manual fallback examples:**
+If a script fails and cannot be fixed:
+1. Report exact error: script name, exit code, stderr
+2. Attempt same operation manually (inline Bash) — scripts are helpers, not gatekeepers
+3. If manual fallback also fails — report both attempts, ask user
+4. Never silently swallow errors or continue with stale/missing data
 
 | Failed script | Manual alternative |
 |---------------|--------------------|
 | detect-mode.sh | Parse `$ARGUMENTS` yourself — keyword matching is simple |
 | ssh-env-check.sh | Run `ls ~/.ssh/id_* 2>/dev/null`, `ssh-add -l`, `cat ~/.ssh/config` |
-| server-discover.sh | Run individual commands via SSH: `uname -a`, `docker version`, `df -h` |
+| server-discover.sh | Run individual SSH commands: `uname -a`, `docker version`, `df -h` |
 | claude-local-ops.sh | Read/write CLAUDE.local.md directly with Read/Edit tools |
 
 ### Error Reporting (MANDATORY)
@@ -74,8 +71,6 @@ PHASE: <current phase>
 ACTION: <what was attempted>
 FALLBACK: <what will be tried next OR "asking user">
 ```
-
-This is non-negotiable. Silent failures are bugs.
 
 ---
 
@@ -92,9 +87,7 @@ ARGS: [arguments received]
 MODE: [detected mode]
 ```
 
-**Use the MODE value and GOTO that mode section below.**
-
-### Mode Reference
+Use the MODE value and GOTO that mode section below.
 
 | Keyword in args | MODE |
 |-----------------|------|
@@ -121,14 +114,10 @@ bash "${CLAUDE_SKILL_DIR}/scripts/ssh-env-check.sh" && echo "OK env-check" || ec
 
 Parse output key=value pairs. Note available keys and ssh-agent status.
 
-### Load Existing Server Config
-
 **EXECUTE** using Bash tool:
 ```bash
 bash "${CLAUDE_SKILL_DIR}/scripts/claude-local-ops.sh" list 2>/dev/null || echo "NO_SERVERS"
 ```
-
-**Branching logic:**
 
 | Condition | Action |
 |-----------|--------|
@@ -160,21 +149,19 @@ Collect via follow-up questions if not in $ARGUMENTS:
 
 ### Step 2: Key Discovery & Auth
 
-**EXECUTE** using Bash tool -- try existing keys:
+**EXECUTE** using Bash tool:
 ```bash
 bash "${CLAUDE_SKILL_DIR}/scripts/ssh-env-check.sh" && echo "OK keys" || echo "FAILED keys"
 ```
 
-Parse available keys from output. Try connection with each key (ed25519 first, then rsa, then ecdsa):
+Parse available keys. Try connection with each key (ed25519 first, then rsa, then ecdsa):
 
 **EXECUTE** using Bash tool:
 ```bash
 ssh-keyscan -p PORT HOST >> ~/.ssh/known_hosts 2>/dev/null && echo "OK keyscan" || echo "FAILED keyscan"
 ```
 
-Replace PORT and HOST with actual values.
-
-**EXECUTE** using Bash tool -- test key auth:
+**EXECUTE** using Bash tool:
 ```bash
 ssh -o BatchMode=yes -o ConnectTimeout=10 -p PORT USER@HOST echo "OK auth" 2>/dev/null || echo "FAILED auth"
 ```
@@ -258,14 +245,13 @@ ssh -o BatchMode=yes -o ConnectTimeout=10 SERVERNAME echo "OK connection" 2>/dev
 bash "${CLAUDE_SKILL_DIR}/scripts/server-discover.sh" "USER@HOST" PORT && echo "OK discovery" || echo "FAILED discovery"
 ```
 
-Replace USER@HOST and PORT with actual values. If using SSH config alias, pass that instead.
+Replace USER@HOST and PORT with actual values (or SSH config alias).
 
 Parse output key=value pairs. Key fields:
 - `OS`, `KERNEL`, `ARCH`
 - `DOCKER_VERSION`, `DOCKER_COMPOSE`
 - `DISK_INFO` (data disks, mount points)
-- `RUNNING_CONTAINERS`
-- `SERVICES`
+- `RUNNING_CONTAINERS`, `SERVICES`
 - `CURRENT_USER`, `USER_GROUPS`
 
 ---
@@ -278,8 +264,6 @@ Parse output key=value pairs. Key fields:
 ```bash
 bash "${CLAUDE_SKILL_DIR}/scripts/claude-local-ops.sh" add "SERVERNAME" "HOST" "USER" "PORT" "KEYPATH" && echo "OK add" || echo "FAILED add"
 ```
-
-Replace placeholders with actual values.
 
 **EXECUTE** using Bash tool:
 ```bash
@@ -297,8 +281,6 @@ grep -q "CLAUDE.local.md" .gitignore 2>/dev/null && echo "EXISTS" || (echo "CLAU
 
 ### Step 3: Generate ssh-admin Agent
 
-Read the agent template:
-
 **EXECUTE** using Bash tool:
 ```bash
 cat "${CLAUDE_SKILL_DIR}/templates/ssh-admin-agent.md.template"
@@ -309,7 +291,7 @@ Replace placeholders in template:
 - `{{SERVER_DETAILS}}` -- discovered OS/Docker/disk info per server
 - `{{LAST_UPDATED}}` -- current ISO timestamp
 
-Write result to `.claude/agents/ssh-admin.md` in the project using Write tool.
+Write result to `.claude/agents/ssh-admin.md` using Write tool.
 
 ### Step 4: Default Server
 
@@ -340,7 +322,7 @@ Read `references/safety-rules.md` from skill directory for command classificatio
 
 ### Step 2: Plan & Classify
 
-Analyze the user's request from `$ARGUMENTS`. Create execution plan:
+Analyze `$ARGUMENTS`. Create execution plan:
 
 | Step | Command(s) | Classification | Confirmation |
 |------|-----------|----------------|--------------|
@@ -402,13 +384,11 @@ Use AskUserQuestion for registry credentials -- NEVER hardcode tokens.
 | Changes | [list of changes made on server] |
 | Status | success / partial / failed |
 
-### Post-Actions
+After execution: if new info discovered, update CLAUDE.local.md; if server state changed significantly, update ssh-admin agent.
 
-- If new info discovered during execution, update CLAUDE.local.md:
-  ```bash
-  bash "${CLAUDE_SKILL_DIR}/scripts/claude-local-ops.sh" update "SERVERNAME" ...
-  ```
-- If server state changed significantly (new containers, services), update ssh-admin agent
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/claude-local-ops.sh" update "SERVERNAME" ...
+```
 
 ---
 
@@ -425,8 +405,6 @@ bash "${CLAUDE_SKILL_DIR}/scripts/claude-local-ops.sh" list
 
 ### Step 2: Re-discover Each Server
 
-For each server from list, run discovery:
-
 **EXECUTE** using Bash tool:
 ```bash
 bash "${CLAUDE_SKILL_DIR}/scripts/server-discover.sh" "USER@HOST" PORT && echo "OK discovery" || echo "FAILED discovery"
@@ -434,13 +412,7 @@ bash "${CLAUDE_SKILL_DIR}/scripts/server-discover.sh" "USER@HOST" PORT && echo "
 
 ### Step 3: Update Config & Agent
 
-Update CLAUDE.local.md with fresh data for each server.
-
-Regenerate `.claude/agents/ssh-admin.md` from template with updated inventory.
-
-Set `{{LAST_UPDATED}}` to current timestamp.
-
-Report what changed since last update.
+Update CLAUDE.local.md with fresh data for each server. Regenerate `.claude/agents/ssh-admin.md` from template with updated inventory. Set `{{LAST_UPDATED}}` to current timestamp. Report what changed since last update.
 
 </instructions>
 

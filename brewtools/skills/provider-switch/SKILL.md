@@ -1,95 +1,75 @@
 ---
 name: brewtools:provider-switch
-description: "Configure Claude Code alternative API providers — DeepSeek (priority), Z.ai/GLM, Qwen, MiniMax, OpenRouter. Creates shell aliases, manages API tokens, checks status. Triggers: 'provider', 'switch provider', 'alternative api', 'configure provider', 'claudeds', 'claudeglm', 'claudeqwen', 'openrouter setup', 'deepseek'."
+description: "Configure alt API providers: DeepSeek, Z.ai/GLM, Qwen, MiniMax, OpenRouter. Triggers: switch provider, openrouter."
 argument-hint: "[status|setup|verify|model-check|help|<provider-name>] — no args = interactive status check"
 allowed-tools: Read, Write, Edit, Bash, AskUserQuestion, Glob, Grep
 model: opus
 user-invocable: true
 ---
 
+[DICT: P=Phase, PRV=provider, EXEC=EXECUTE using Bash tool, AUQ=AskUserQuestion, REF=references, ALIAS=shell alias, CFG=configured, BASE=ANTHROPIC_BASE_URL, MOD=ANTHROPIC_DEFAULT_OPUS_MODEL]
+
 # Provider Switch
 
-> **Configure and switch between Claude Code alternative API providers** — DeepSeek (priority), Z.ai/GLM, Qwen/DashScope, MiniMax, OpenRouter. Creates isolated shell aliases in ~/.zshrc.
->
-> **DeepSeek V4 is the priority default** (strongest Chinese open model, 1M context, Anthropic-compatible endpoint). Recommend it first in setup.
+> Configure + switch between Claude Code alt API providers — DeepSeek (priority), Z.ai/GLM, Qwen/DashScope, MiniMax, OpenRouter. Creates isolated ALIAS in ~/.zshrc.
+> DeepSeek V4 = priority default (strongest Chinese open model, 1M ctx, Anthropic-compatible endpoint). Recommend first.
 
 <instructions>
 
 ## Robustness Rules (MANDATORY)
 
-| Rule | Applies to |
-|------|-----------|
-| Every Bash call MUST end with `&& echo "OK ..." \|\| echo "FAILED ..."` | ALL commands |
-| On `FAILED` — stop current phase, report error, DO NOT retry blindly | ALL phases |
-| Max **3 AskUserQuestion** per phase | ALL phases |
-| NEVER write secrets to any file other than ~/.zshrc | ALL phases |
-| NEVER commit ~/.zshrc changes | ALL phases |
-| All comments in ~/.zshrc MUST be in ENGLISH | ALL writes |
+| Rule | Scope |
+|------|-------|
+| Every Bash call: `&& echo "OK ..." \|\| echo "FAILED ..."` | ALL |
+| On FAILED: stop phase, report error, !=retry blindly | ALL |
+| Max 3 AUQ per phase | ALL |
+| !=write secrets anywhere except ~/.zshrc | ALL |
+| !=commit ~/.zshrc changes | ALL |
+| ~/.zshrc comments: ENGLISH only | ALL writes |
 
-### Error Reporting
-
-On ANY failure — before stopping — output:
-
+Error format on ANY failure:
 ```
-SCRIPT_ERROR: <script-name or command>
-PHASE: <current phase>
-ACTION: <what was attempted>
-SUGGESTION: <what user can try>
+SCRIPT_ERROR: <name>
+PHASE: <current>
+ACTION: <attempted>
+SUGGESTION: <fix>
 ```
 
 ---
 
-## Phase 0: Language Selection
+## P0: Language Selection
 
-**First interaction:** Use AskUserQuestion:
-
-Question: "Select language for this session / Выберите язык"
-Options:
-- "English (Recommended)"
-- "Russian / Русский"
-
-Remember choice — all subsequent messages in selected language.
-Default if skipped: English.
+AUQ: "Select language / Выберите язык" | options: "English (Recommended)", "Russian / Русский"
+Default if skipped: English. Remember for session.
 
 ---
 
-## Compatibility Flags (REQUIRED for this provider)
+## Compatibility Flags (REQ per PRV)
 
-Alternative providers (Z.ai, MiniMax) implement Anthropic-compatible APIs but have incompatibilities that require Claude Code flags:
+| PRV | Required Flags | Why |
+|-----|---------------|-----|
+| DeepSeek | none | silently ignores beta/ver headers; native Anthropic endpoint |
+| Z.ai (GLM) | `CLAUDE_ENABLE_BYTE_WATCHDOG=0` + `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` | rejects beta headers (err 1210); SSE triggers byte watchdog |
+| MiniMax | `CLAUDE_ENABLE_BYTE_WATCHDOG=0` + `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` | same as Z.ai |
+| Qwen/DashScope | `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` | beta headers may be rejected |
+| OpenRouter | none | aggregator, good compat |
 
-| Provider | Required Flags | Why |
-|----------|---------------|-----|
-| DeepSeek | None required | DeepSeek silently ignores beta/version headers; native Anthropic endpoint |
-| Z.ai (GLM) | `CLAUDE_ENABLE_BYTE_WATCHDOG=0` + `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` | Z.ai rejects beta headers with error 1210; SSE format triggers byte watchdog |
-| MiniMax | `CLAUDE_ENABLE_BYTE_WATCHDOG=0` + `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` | Same issues as Z.ai |
-| Qwen/DashScope | `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` | Beta headers may be rejected; SSE works fine |
-| OpenRouter | None required | OpenRouter is an aggregator with good compatibility |
-
-When constructing aliases (Step 6), ALWAYS include the compatibility flags from the provider's reference file.
+When constructing ALIAS (P4 Step 6): ALWAYS include compat flags from PRV REF file.
 
 ---
 
-## Phase 1: Mode Detection
+## P1: Mode Detection
 
-**Skill arguments received:** `$ARGUMENTS`
-
-**EXECUTE** using Bash tool:
+EXEC:
 ```bash
 bash "${CLAUDE_SKILL_DIR}/scripts/detect-mode.sh" "$ARGUMENTS" && echo "OK detect" || echo "FAILED detect"
 ```
+> STOP if FAILED — parse $ARGUMENTS manually (keyword match) as fallback.
 
-> **STOP if FAILED** — parse $ARGUMENTS manually as fallback (keyword matching).
+Output: `ARGS: [...] MODE: [...]`
 
-Output format:
-```
-ARGS: [arguments received]
-MODE: [detected mode]
-```
-
-### Mode Reference
-
-| Keyword in args | MODE |
-|-----------------|------|
+| Keyword | MODE |
+|---------|------|
 | status, check | status |
 | setup, configure | setup |
 | help, how | help |
@@ -100,35 +80,31 @@ MODE: [detected mode]
 | openrouter, router | provider-openrouter |
 | verify, test, token | verify |
 | model-check, identify | model-check |
-| model-cehck (typo), cehck, hlpe, setuo | fuzzy match to correct mode |
+| typos (model-cehck, cehck, hlpe, setuo) | fuzzy-match to correct |
 | (empty) | status |
 
 ---
 
-## Phase 2: Status Check (ALL modes)
+## P2: Status Check (ALL modes)
 
-**EXECUTE** using Bash tool:
+EXEC:
 ```bash
 bash "${CLAUDE_SKILL_DIR}/scripts/check-status.sh" && echo "OK status" || echo "FAILED status"
 ```
+> STOP if FAILED — check ~/.zshrc manually with grep.
 
-> **STOP if FAILED** — check ~/.zshrc manually with grep.
-
-Parse output key=value pairs. Determine status per provider:
+Parse key=value output. Status per PRV:
 - `configured` = ALIAS + KEY both true
 - `partial` = ALIAS true, KEY false
 - `not configured` = ALIAS false
 - `active` = ACTIVE_PROVIDER matches
 
-Render status table to user:
-
+Render status table:
 ```
 # Provider Switch — [MODE]
-
 ## Current Status
-
-| Provider | Alias | API Key | Model | Status |
-|----------|-------|---------|-------|--------|
+| PRV | Alias | API Key | Model | Status |
+|-----|-------|---------|-------|--------|
 | DeepSeek (priority) | claudeds | DEEPSEEK_API_KEY | deepseek-v4-pro | ... |
 | Z.ai / GLM | claudeglm | ZAI_API_KEY | glm-5.1 | ... |
 | Qwen | claudeqwen | DASHSCOPE_API_KEY | qwen3.6-plus[1m] | ... |
@@ -136,403 +112,280 @@ Render status table to user:
 | OpenRouter | claudeor | OPENROUTER_API_KEY | (user-selected) | ... |
 
 ## How to Use
-Run `claudeds` — sets env vars and launches Claude in one command (recommended default).
-To return to Anthropic subscription: open a new terminal and run `claude`.
+Run `claudeds` — sets env vars + launches Claude (recommended default).
+Return to Anthropic: new terminal → `claude`.
 ```
 
-### Auto-setup Logic (MODE = status only)
+Auto-setup logic (MODE=status only): zero CFG → auto-proceed to P3 ("No providers CFG yet. Starting setup..."). >=1 CFG → STOP here.
 
-After rendering the status table, count configured providers (status = `configured` or `active`):
-- **Zero configured** → automatically proceed to Phase 3 (setup). Tell the user: "No providers configured yet. Starting setup..."
-- **At least one configured** → STOP here with status table. User will re-run with specific mode if needed.
-
-**If MODE = help** — GOTO Phase 6.
+If MODE=help → GOTO P6.
 
 ---
 
-## Phase 3: Provider Selection
+## P3: PRV Selection
 
-**If MODE = setup** (no specific provider):
-
-Use AskUserQuestion:
-
-Question: "Which providers do you want to configure?"
-Options:
-- "DeepSeek V4 (deepseek-v4-pro, 1M context, priority - Recommended)"
+If MODE=setup (no specific PRV): AUQ options:
+- "DeepSeek V4 (deepseek-v4-pro, 1M ctx, priority - Recommended)"
 - "Z.ai / GLM (glm-5.1, free models available)"
-- "Qwen / DashScope (qwen3.6-plus, 1M context)"
+- "Qwen / DashScope (qwen3.6-plus, 1M ctx)"
 - "MiniMax (minimax-m2.7, cheapest)"
 - "OpenRouter (aggregator, any model)"
 - "All providers"
 
-**If MODE = provider-\<name\>** — skip to Phase 4 for that provider only.
+If MODE=provider-\<name\> → skip to P4 for that PRV only.
 
 ---
 
-## Phase 4: Provider Configuration
+## P4: PRV Configuration
 
-For each selected provider, execute this sequence:
+For each selected PRV:
 
-### Step 1: Load Reference
+### Step 1: Load REF
+Read PRV REF file: DeepSeek=`REF/deepseek.md` | Z.ai/GLM=`REF/zai-glm.md` | Qwen=`REF/qwen-dashscope.md` | MiniMax=`REF/minimax.md` | OpenRouter=`REF/openrouter.md`
+Also read `REF/common.md` for shared ALIAS structure (first time only).
 
-Read the provider reference file using Read tool:
-- DeepSeek: `references/deepseek.md`
-- Z.ai/GLM: `references/zai-glm.md`
-- Qwen: `references/qwen-dashscope.md`
-- MiniMax: `references/minimax.md`
-- OpenRouter: `references/openrouter.md`
-
-Also read `references/common.md` for shared alias structure (first time only).
-
-### Step 2: Initialize Section
-
-Ensure the provider aliases section exists in ~/.zshrc:
-
-**EXECUTE** using Bash tool:
+### Step 2: Init Section
+EXEC:
 ```bash
 bash "${CLAUDE_SKILL_DIR}/scripts/write-alias.sh" init && echo "OK init" || echo "FAILED init"
 ```
-
-> **STOP if FAILED** — cannot write to ~/.zshrc.
+> STOP if FAILED — cannot write ~/.zshrc.
 
 ### Step 3: API Key
+Check if key set (from P2: KEY_ZAI, KEY_DASHSCOPE, KEY_MINIMAX, KEY_OPENROUTER).
+If missing — AUQ: "Enter your <PRV> API key (from <dashboard-url>):"
 
-Check if key already set (from Phase 2 status output: KEY_ZAI, KEY_DASHSCOPE, KEY_MINIMAX, KEY_OPENROUTER).
+Qwen-specific: read `REF/qwen-dashscope.md` ## How to Get API Key before asking. Show step-by-step. Warn: key MUST be from Singapore region — other regions return 403. Valid fmt: `sk-...` (~40 chars). If starts with `sk-ws-` or >100 chars → warn wrong region, ask regenerate.
 
-If missing — Use AskUserQuestion:
-
-Question: "Enter your <PROVIDER_NAME> API key (from <dashboard-url>):"
-
-**Qwen-specific callout:** Before asking for the Qwen key, read `references/qwen-dashscope.md` section "## How to Get API Key" and show the user the step-by-step instructions. Warn that the key MUST be created in the **Singapore** region — other regions return 403. Valid format: `sk-...` (~40 chars). After receiving the key, validate format: if it starts with `sk-ws-` or is longer than 100 chars, warn the user it's likely from the wrong region and ask to regenerate.
-
-Then write:
-
-**EXECUTE** using Bash tool:
+EXEC:
 ```bash
 bash "${CLAUDE_SKILL_DIR}/scripts/write-alias.sh" set-key "KEY_VAR_NAME" "KEY_VALUE" && echo "OK set-key" || echo "FAILED set-key"
 ```
-
-Replace KEY_VAR_NAME with: `DEEPSEEK_API_KEY`, `ZAI_API_KEY`, `DASHSCOPE_API_KEY`, `MINIMAX_API_KEY`, or `OPENROUTER_API_KEY`.
-
-> **STOP if FAILED** — report error.
+KEY_VAR_NAME: `DEEPSEEK_API_KEY` | `ZAI_API_KEY` | `DASHSCOPE_API_KEY` | `MINIMAX_API_KEY` | `OPENROUTER_API_KEY`
+> STOP if FAILED.
 
 ### Step 4: Model Selection (OpenRouter only)
-
-If provider is OpenRouter, read `references/openrouter-models.md` for available models.
-
-Use AskUserQuestion — pick ONE model (same model for all three roles):
-
-Question: "Select model for OpenRouter:"
-Options:
-- "qwen/qwen3.6-plus[1m] — 1M context, top coding (Recommended)"
+Read `REF/openrouter-models.md`. AUQ options:
+- "qwen/qwen3.6-plus[1m] — 1M ctx, top coding (Recommended)"
 - "z-ai/glm-5.1 — #1 SWE-bench Pro, 200K"
 - "qwen/qwen3-coder:free — free, 262K, code-focused"
-- "Custom (I will specify model ID)"
+- "Custom (specify model ID)"
 
-The selected model is set as OPUS, SONNET, and HAIKU simultaneously.
+Selected model = OPUS + SONNET + HAIKU simultaneously.
+If Custom: validate via script from `REF/openrouter-models.md` ## Model Validation. If NOT_FOUND → fuzzy suggestions + re-ask. Max 2 retries then fall back to default.
 
-**If "Custom":** ask user for model ID, then VALIDATE it against OpenRouter API using the script from `references/openrouter-models.md` (## Model Validation section). If NOT_FOUND — show fuzzy suggestions from the API and re-ask. Max 2 retries, then fall back to default.
+### Step 5: ALIAS Name
+AUQ: "Alias name for <PRV>:" | options: "<default> (Recommended)", "Custom"
+If Custom: validate — must start with `claude`, no spaces, lowercase alphanumeric only.
 
-### Step 5: Alias Name
-
-Suggest a default alias name and let user customize via AskUserQuestion:
-
-| Provider | Default name |
-|----------|-------------|
+| PRV | Default |
+|-----|---------|
 | DeepSeek | `claudeds` |
 | Z.ai/GLM | `claudeglm` |
 | Qwen | `claudeqwen` |
 | MiniMax | `claudeminimax` |
 | OpenRouter | `claudeor` |
 
-Use AskUserQuestion:
-
-Question: "Alias name for <PROVIDER>:"
-Options:
-- "<default_name> (Recommended)"
-- "Custom (I will type my own)"
-
-If "Custom" — ask for the name. Validate: must start with `claude`, no spaces, only lowercase alphanumeric.
-
-### Step 6: Write Alias
-
-Construct alias body from reference file. Body = semicolon-separated exports + `claude` at the end.
-
-**EXECUTE** using Bash tool:
+### Step 6: Write ALIAS
+Construct body from REF file: semicolon-separated exports + `claude` at end.
+EXEC:
 ```bash
 bash "${CLAUDE_SKILL_DIR}/scripts/write-alias.sh" set-alias "ALIAS_NAME" "ALIAS_BODY" && echo "OK set-alias" || echo "FAILED set-alias"
 ```
-
-Replace:
-- ALIAS_NAME: user-chosen name (e.g., `claudeglm`)
-- ALIAS_BODY: from provider reference, ends with `; claude`
-
-> **STOP if FAILED** — report error, do not continue to next provider.
+> STOP if FAILED — !=continue to next PRV.
 
 ### Step 7: Verify
-
-**EXECUTE** using Bash tool:
+EXEC:
 ```bash
 source ~/.zshrc 2>/dev/null && type ALIAS_NAME 2>/dev/null && echo "OK verify" || echo "FAILED verify"
 ```
-
-> **STOP if FAILED** — alias was not written correctly.
+> STOP if FAILED — ALIAS not written correctly.
 
 ---
 
-## Phase 5: Verification & Final Status
+## P5: Verification + Final Status
 
-Re-run status check:
-
-**EXECUTE** using Bash tool:
+EXEC:
 ```bash
 bash "${CLAUDE_SKILL_DIR}/scripts/check-status.sh" && echo "OK final-status" || echo "FAILED final-status"
 ```
+Render updated status table (same fmt as P2).
 
-Render updated status table (same format as Phase 2).
-
-### Post-Setup Verification
-
-For each provider that was just configured, run token verification:
-
-**EXECUTE** using Bash tool:
+Token verification for each just-CFG PRV:
+EXEC:
 ```bash
 bash "${CLAUDE_SKILL_DIR}/scripts/verify-providers.sh" all && echo "OK verify" || echo "FAILED verify"
 ```
+Add verification column to table:
+| PRV | Status | Token Test |
+|-----|--------|-----------|
+| Z.ai/GLM | CFG | pass/fail |
 
-Parse output and add verification column to the status table:
+If any `fail` → warn, suggest check API key or endpoint.
 
-| Provider | Status | Token Test |
-|----------|--------|-----------|
-| Z.ai / GLM | configured | pass/fail |
-| ... | ... | ... |
-
-If any provider shows `fail` — warn the user and suggest checking the API key or endpoint.
-
-Add activation instructions:
-
+Activation instructions:
 ```
 ## Activation
-
-To use a configured provider, run the alias (e.g., `claudeglm`) — it sets env vars and launches Claude in one command.
-To return to Anthropic subscription: open a new terminal and run `claude` normally. Env vars only persist in the current shell session.
+Run ALIAS (e.g. `claudeglm`) — sets env vars + launches Claude.
+Return to Anthropic: new terminal → `claude`. Env vars persist current shell only.
 ```
 
 ---
 
-## Phase 6: Help Mode
+## P6: Help Mode
 
-Read `references/common.md` for help content and explain:
+Read `REF/common.md`. Explain:
 
-| Topic | Explanation |
-|-------|-------------|
-| How aliases work | Each alias sets env vars + launches `claude` in one command. Isolated — one provider at a time |
-| How to switch | Run alias (e.g., `claudeglm`). It sets vars and starts Claude automatically |
-| How to return | Open a new terminal and run `claude` — env vars only persist in the current shell |
-| Context [1m] hack | `[1m]` suffix in model name forces Claude Code to use 1M context window |
-| Auth (all providers) | ALL providers use ANTHROPIC_AUTH_TOKEN (Bearer). ANTHROPIC_API_KEY="" blocks OAuth fallback |
-| OpenRouter note | Must set ANTHROPIC_API_KEY="" (empty, not unset) to prevent OAuth fallback |
-| Provider dashboards | DeepSeek: platform.deepseek.com, Z.ai: z.ai/subscribe, Qwen: bailian.console.alibabacloud.com, MiniMax: platform.minimax.io, OpenRouter: openrouter.ai |
+| Topic | Detail |
+|-------|--------|
+| How ALIAS works | Sets env vars + launches `claude` — isolated, one PRV at a time |
+| How to switch | Run ALIAS (e.g. `claudeglm`) — sets vars + starts Claude |
+| How to return | New terminal → `claude` — env vars current shell only |
+| Context [1m] hack | `[1m]` suffix forces Claude Code to use 1M ctx window |
+| Auth (all PRVs) | ALL use ANTHROPIC_AUTH_TOKEN (Bearer). ANTHROPIC_API_KEY="" blocks OAuth fallback |
+| OpenRouter note | MUST set ANTHROPIC_API_KEY="" (empty, !=unset) to prevent OAuth fallback |
+| Dashboards | DeepSeek: platform.deepseek.com | Z.ai: z.ai/subscribe | Qwen: bailian.console.alibabacloud.com | MiniMax: platform.minimax.io | OpenRouter: openrouter.ai |
 
 ---
 
-## Phase 7: Verify Mode
+## P7: Verify Mode
 
-> Test that configured provider tokens and endpoints are working.
-
-**EXECUTE** using Bash tool:
+EXEC:
 ```bash
 bash "${CLAUDE_SKILL_DIR}/scripts/verify-providers.sh" all && echo "OK verify" || echo "FAILED verify"
 ```
+Parse: KEY_SET, HTTP_CODE, RESPONSE, STATUS per PRV.
 
-Parse output. For each provider, extract: KEY_SET, HTTP_CODE, RESPONSE, STATUS.
-
-Render results:
-
+Render:
 ```
 ## Token Verification
-
-| Provider | Key | HTTP | Response | Result |
-|----------|-----|------|----------|--------|
-| Z.ai / GLM | set | 200 | OK | pass |
+| PRV | Key | HTTP | Response | Result |
+|-----|-----|------|----------|--------|
+| Z.ai/GLM | set | 200 | OK | pass |
 | Qwen | set | 403 | invalid api-key | fail |
-| MiniMax | set | 200 | OK | pass |
-| OpenRouter | set | 200 | OK | pass |
 ```
 
-For failed providers, show troubleshooting:
-
-| HTTP Code | Meaning | Suggestion |
-|-----------|---------|------------|
-| 401/403 | Invalid or expired API key | Regenerate key at provider dashboard |
-| 404 | Wrong endpoint URL | Check provider reference for correct URL |
-| 429 | Rate limited | Wait and retry, or check billing |
-| 500+ | Server error | Provider may be down, try later |
+Troubleshooting:
+| HTTP | Meaning | Fix |
+|------|---------|-----|
+| 401/403 | invalid/expired key | regenerate @ PRV dashboard |
+| 404 | wrong endpoint | check PRV REF for correct URL |
+| 429 | rate limited | wait + retry, check billing |
+| 500+ | server error | PRV may be down, retry later |
 
 ---
 
-## Phase 8: Model Check Mode
+## P8: Model Check Mode
 
-> Identify which model is actually responding in the current Claude Code session. This mode runs INSIDE a session launched via provider alias (e.g., `claudeglm`). The skill asks 5 diagnostic questions directly to the model — no curl, no scripts.
+Identify which model responds in current Claude Code session. Runs INSIDE session launched via PRV ALIAS. Asks 5 diagnostic questions to model — no curl/scripts.
 
-### Prerequisites
-
-User MUST be in a Claude Code session launched via a provider alias. If `ANTHROPIC_BASE_URL` is not set (i.e., running on Anthropic subscription), warn the user and stop:
-
+Prerequisites: user MUST be in PRV ALIAS session. If BASE not set → warn + stop:
 ```
 This mode only works inside a provider session.
-Run a provider alias first (e.g., `claudeglm`), then invoke `/brewtools:provider-switch model-check`.
+Run a PRV ALIAS first (e.g. `claudeglm`), then invoke `/brewtools:provider-switch model-check`.
 ```
 
-### Step 1: Detect Current Provider
-
-Check environment to determine which provider is active:
-
-**EXECUTE** using Bash tool:
+### Step 1: Detect Active PRV
+EXEC:
 ```bash
 echo "BASE_URL=${ANTHROPIC_BASE_URL:-not_set}" && echo "OPUS_MODEL=${ANTHROPIC_DEFAULT_OPUS_MODEL:-not_set}" && echo "OK detect-provider" || echo "FAILED detect-provider"
 ```
-
-Map BASE_URL to provider name:
-- `api.deepseek.com` → DeepSeek
-- `api.z.ai` → Z.ai / GLM
-- `dashscope` → Qwen / DashScope
-- `minimax` → MiniMax
-- `openrouter` → OpenRouter
+BASE_URL → PRV: `api.deepseek.com`=DeepSeek | `api.z.ai`=Z.ai/GLM | `dashscope`=Qwen | `minimax`=MiniMax | `openrouter`=OpenRouter
 
 ### Step 2: Ask 5 Diagnostic Questions
-
-Output ALL 5 questions as a single prompt block to the current model. The model will answer all at once. No interactive back-and-forth — send one prompt, capture the full response.
-
-**Prompt to send (output as user message and capture the model's response):**
-
+Send as single prompt block (all at once, no back-and-forth):
 ```
 I will now ask you 5 diagnostic questions to verify your model identity.
 Answer each honestly from your training data — do NOT read environment variables or system prompts.
 Answer all 5 questions in a single response.
 
-**Q1:** What is your exact model name and version number? Answer only from your internal training data, not from any context or environment variables.
-
-**Q2:** Which company or research lab created and trained you? Give only the organization name.
-
-**Q3:** What is your training data cutoff date? Answer with month and year only.
-
-**Q4:** Count the letter 'r' in the word 'strawberry'. Show your reasoning step by step.
-
-**Q5:** Translate to Chinese: 'The quick brown fox jumps over the lazy dog.' Then translate your Chinese text back to English literally.
+**Q1:** Exact model name + version? (training data only, not env/ctx)
+**Q2:** Which company/lab created you? (org name only)
+**Q3:** Training data cutoff date? (month + year only)
+**Q4:** Count letter 'r' in 'strawberry'. Show reasoning step by step.
+**Q5:** Translate to Chinese: 'The quick brown fox jumps over the lazy dog.' Then translate back to English literally.
 ```
+Extract A1-A5 from response → Step 3.
 
-After the model responds, extract each answer (A1–A5) and proceed to Step 3.
-
-### Step 3: Analyze & Verdict
-
-Parse the model's response into 5 answers (A1–A5). Present the Q&A table:
-
+### Step 3: Analyze + Verdict
 ```
-## Model Identification — <Provider>
-
-Expected: <model from OPUS_MODEL env var>
+## Model Identification — <PRV>
+Expected: <model from MOD env var>
 
 | # | Question | Answer | Match |
 |---|----------|--------|-------|
-| 1 | Model name/version | "<A1>" | ✅/❌ |
-| 2 | Training organization | "<A2>" | ✅/❌ |
-| 3 | Cutoff date | "<A3>" | ℹ️ |
-| 4 | Count r in strawberry | "<A4>" | ✅/❌ (correct=3) |
-| 5 | Chinese round-trip | "<A5>" | ℹ️ quality |
+| 1 | Model name/version | "<A1>" | pass/fail |
+| 2 | Training org | "<A2>" | pass/fail |
+| 3 | Cutoff date | "<A3>" | info |
+| 4 | Count r in strawberry | "<A4>" | pass/fail (correct=3) |
+| 5 | Chinese round-trip | "<A5>" | info quality |
 
 ### Verdict
-**Model confirmed as: <name>** (N/5 indicators match <expected provider>)
+Model confirmed as: <name> (N/5 match <expected PRV>)
 ```
+Show ONLY table + verdict. !=show questions separately.
 
-Show ONLY the table + verdict to the user. Do NOT show the questions separately — the Q&A table contains everything.
-
-### Expected Identifiers
-
-| Provider | Expected org | Expected model family |
-|----------|-------------|----------------------|
-| DeepSeek | DeepSeek / 深度求索 | DeepSeek-V3 / DeepSeek-V4 / DeepSeek-R1 |
-| Z.ai / GLM | Zhipu AI / ZhipuAI / 智谱 | GLM-4 / GLM-5 / ChatGLM |
-| Qwen | Alibaba / Alibaba Cloud / 阿里 / Tongyi | Qwen / Qwen2 / Qwen3 / 通义千问 |
+Expected identifiers:
+| PRV | Expected org | Model family |
+|-----|-------------|-------------|
+| DeepSeek | DeepSeek / 深度求索 | DeepSeek-V3/V4/R1 |
+| Z.ai/GLM | Zhipu AI / ZhipuAI / 智谱 | GLM-4/5 / ChatGLM |
+| Qwen | Alibaba / Alibaba Cloud / 阿里 / Tongyi | Qwen/2/3 / 通义千问 |
 | MiniMax | MiniMax / 稀宇科技 | MiniMax / abab / M2 |
-| OpenRouter | Depends on selected model | Depends on selected model |
+| OpenRouter | depends on model | depends on model |
 
-For OpenRouter, check against the model in `ANTHROPIC_DEFAULT_OPUS_MODEL` env var.
+For OpenRouter: check against model in MOD env var.
 
 ---
 
-## Phase 9: Update (hidden, maintainer-only)
+## P9: Update (hidden, maintainer-only)
 
-> **Not user-facing.** Triggered by MODE=update. Not shown in help or output format. Not documented externally.
-
-**If MODE != update** — skip entirely. (Phase 9 only)
+If MODE != update → skip entirely.
 
 ### Step 1: Load Protocol
+Read `REF/update-protocol.md` for per-PRV sources + update flow.
 
-Read `references/update-protocol.md` for per-provider sources and update flow.
-
-### Step 2: Spawn Provider Research Agents
-
-Spawn 5 Explore agents **in ONE message** via Task:
-
-| Agent | Provider | Sources |
-|-------|----------|---------|
+### Step 2: Spawn PRV Research Agents (ONE message, 5 Task calls)
+| Agent | PRV | Sources |
+|-------|-----|---------|
 | 1 | DeepSeek | api-docs.deepseek.com — models, pricing, endpoint |
 | 2 | Z.ai/GLM | docs.z.ai, open.bigmodel.cn/en — models, pricing |
 | 3 | Qwen/DashScope | alibabacloud.com/help, qwenlm.github.io — models, pricing |
 | 4 | MiniMax | platform.minimax.io — models, pricing |
 | 5 | OpenRouter | openrouter.ai/api/v1/models — top coding/free models |
 
-Each agent: WebFetch/WebSearch sources from protocol, extract current model list + pricing + any endpoint changes.
+Each agent: WebFetch/WebSearch sources from protocol, extract current model list + pricing + endpoint changes.
 
-### Step 3: Aggregate & Diff
-
-For each provider, compare fetched data vs current reference file content:
-- Model IDs changed?
-- Pricing changed?
-- New models added?
-- Endpoint URL changed?
-- Context windows changed?
+### Step 3: Aggregate + Diff
+Per PRV: model IDs changed? pricing changed? new models? endpoint URL changed? ctx windows changed?
 
 ### Step 4: Present Changes
-
-Show diff table to maintainer:
-
 ```
 ## Update Results
-
-| Provider | Field | Current | Fetched | Action |
-|----------|-------|---------|---------|--------|
+| PRV | Field | Current | Fetched | Action |
+|-----|-------|---------|---------|--------|
 | Z.ai | opus model | glm-5.1 | glm-6.0 | UPDATE |
 | Qwen | pricing | ~$0.50 | $0.40 | UPDATE |
 | MiniMax | (no changes) | — | — | SKIP |
 ```
 
 ### Step 5: Apply Updates
-
-For each confirmed change, use Edit tool to update the corresponding reference file. Follow the field-to-line mapping in `references/update-protocol.md`.
-
-Also update:
-- Alias bodies in reference files if model IDs changed
+Edit REF files per field-to-line mapping in `REF/update-protocol.md`. Also update:
+- ALIAS bodies if model IDs changed
 - `openrouter-models.md` if recommended models changed
 - `common.md` if env var patterns changed (rare)
 
-### Step 6: Live Test (optional)
-
-If API keys are available in environment, run endpoint health check per provider:
-
-**EXECUTE** using Bash tool:
+### Step 6: Live Test (optional, if API keys in env)
+EXEC:
 ```bash
 curl -s -o /dev/null -w "%{http_code}" -X POST "https://api.z.ai/api/anthropic/v1/messages" -H "x-api-key: ${ZAI_API_KEY:-missing}" -H "content-type: application/json" -H "anthropic-version: 2023-06-01" -d '{"model":"glm-5.1","max_tokens":5,"messages":[{"role":"user","content":"ping"}]}' && echo " OK" || echo " FAILED"
 ```
 
 ### Step 7: Report
-
 ```
-## Provider Update Complete
-
-| Provider | Changes | Status |
-|----------|---------|--------|
+## PRV Update Complete
+| PRV | Changes | Status |
+|-----|---------|--------|
 | Z.ai/GLM | models updated | applied |
 | Qwen | no changes | current |
 | MiniMax | pricing updated | applied |
@@ -545,24 +398,21 @@ Files modified: [list]
 
 ## Output Format
 
-Final output after every mode:
-
 ```markdown
 # Provider Switch — [MODE]
 
 ## Current Status
-
-| Provider | Alias | API Key | Model | Status |
-|----------|-------|---------|-------|--------|
-| DeepSeek (priority) | claudeds | DEEPSEEK_API_KEY | deepseek-v4-pro | configured |
-| Z.ai / GLM | claudeglm | ZAI_API_KEY | glm-5.1 | configured |
-| Qwen | claudeqwen | DASHSCOPE_API_KEY | — | not configured |
-| MiniMax | claudeminimax | MINIMAX_API_KEY | — | not configured |
-| OpenRouter | claudeor | OPENROUTER_API_KEY | — | not configured |
+| PRV | Alias | API Key | Model | Status |
+|-----|-------|---------|-------|--------|
+| DeepSeek (priority) | claudeds | DEEPSEEK_API_KEY | deepseek-v4-pro | CFG |
+| Z.ai / GLM | claudeglm | ZAI_API_KEY | glm-5.1 | CFG |
+| Qwen | claudeqwen | DASHSCOPE_API_KEY | — | not CFG |
+| MiniMax | claudeminimax | MINIMAX_API_KEY | — | not CFG |
+| OpenRouter | claudeor | OPENROUTER_API_KEY | — | not CFG |
 
 ## How to Use
-Run `claudeds` — sets env vars and launches Claude in one command (recommended default).
-To return to Anthropic: open a new terminal, run `claude`.
+Run `claudeds` — sets env vars + launches Claude (recommended default).
+Return to Anthropic: new terminal → `claude`.
 ```
 
 </instructions>

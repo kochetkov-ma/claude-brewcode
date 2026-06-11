@@ -1,6 +1,6 @@
 ---
 name: brewcode:agents
-description: "Creates and improves Claude Code subagents interactively — scaffolds new agents from descriptions, refines existing agent definitions, tunes frontmatter, tools, model, and prompts. Triggers: create agent, new agent, claude code agent, make a subagent, improve agent, update agent, fix agent description, refactor agent, agent frontmatter, agent prompt, scaffold agent."
+description: "Creates and improves Claude Code subagents. Triggers: create agent, improve agent, scaffold agent, fix agent."
 user-invocable: true
 argument-hint: "[create <description>|up <name|path>] | <name|path>"
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion, Skill]
@@ -58,7 +58,7 @@ Agent management - create and improve Claude Code agents.
 
 ### Description Budget (DEFAULT)
 
-Frontmatter `description`: <= 150 tokens (~600 chars). Lead sentence <= 160 chars, plain EN. Triggers: comma-list, EN only. At most 1 example. No RU/other languages unless user explicitly asks. For often-invoked agents user may allow up to ~200 tokens.
+Frontmatter `description`: <= 100 chars (optimal ~80), single line. Role + 2-3 distinct triggers (comma-list). No filler, no `<example>` blocks in frontmatter. Some registries truncate long descriptions and dilute trigger matching. EN only unless user explicitly asks.
 
 ### Step 1: AskUserQuestion (batch -- all questions in ONE call)
 

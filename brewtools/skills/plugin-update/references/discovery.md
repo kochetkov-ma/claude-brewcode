@@ -1,6 +1,6 @@
 # Plugin Discovery
 
-> How installed plugins are discovered. Primary path: `claude plugin list --json` (CC 2.1.163+). Fallback: `scripts/discover-plugins.sh` filesystem scan.
+> Primary path: `claude plugin list --json` (CC 2.1.163+). Fallback: `scripts/discover-plugins.sh` filesystem scan.
 
 ## Primary — `claude plugin list` (CC 2.1.163+)
 
@@ -34,7 +34,7 @@ JSON format — array of objects:
 ]
 ```
 
-### JSON Schema Notes
+### JSON Schema
 
 | Field | Type | Notes |
 |-------|------|-------|
@@ -47,16 +47,14 @@ JSON format — array of objects:
 | `lastUpdated` | string | ISO 8601 timestamp |
 | `mcpServers` | object | Optional — present only if plugin registers MCP servers |
 
-Use `"unknown"` version entries as "installed but version undetectable" — fall back to cache walk for the version.
+`"unknown"` version means installed but version undetectable — fall back to cache walk for the version.
 
 Fall back to `scripts/discover-plugins.sh` when:
-- `claude plugin list` is not recognized (CC < 2.1.163)
+- `claude plugin list` not recognized (CC < 2.1.163)
 - Command exits non-zero
 - Output is empty or not valid JSON
 
 ## Fallback — `scripts/discover-plugins.sh` (filesystem scan)
-
-Used when `claude plugin list --json` is unavailable or fails.
 
 | Source | Path | Parser |
 |--------|------|--------|
@@ -76,11 +74,11 @@ Used when `claude plugin list --json` is unavailable or fails.
 }
 ```
 
-Keys are `<plugin>@<marketplace>`. Values truthy means enabled.
+Keys are `<plugin>@<marketplace>`. Truthy value means enabled.
 
 ### Cache Walk
 
-Plugin binaries live in `~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/`. Pick the highest `<version>` directory per plugin — that is the currently installed version.
+Plugin binaries live in `~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/`. Pick the highest `<version>` directory per plugin — that is the installed version.
 
 ### Output JSON
 

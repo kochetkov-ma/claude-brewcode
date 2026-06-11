@@ -1,6 +1,7 @@
 ---
 name: deploy-admin
 model: opus
+# description MUST be <=100 chars, single line
 description: "GitHub Actions and deployment agent with live workflow inventory."
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob, AskUserQuestion
 ---

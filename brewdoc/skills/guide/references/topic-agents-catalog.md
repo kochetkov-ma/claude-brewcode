@@ -6,7 +6,7 @@ Deliver section by section. Pause after each section with AskUserQuestion.
 
 ## Section 1: What Are Agents?
 
-Agents are specialized sub-processes spawned via the Task tool. Each agent has a specific model, toolset, and expertise area.
+Agents are specialized sub-processes spawned via the Task tool. Each has a specific model, toolset, and expertise area.
 
 Key concepts:
 - The main conversation acts as **manager** — it delegates, never implements directly
@@ -20,7 +20,7 @@ User request -> Manager analyzes -> Selects best agent -> Task tool spawns agent
   -> Agent executes in isolation -> Returns result -> Manager continues
 ```
 
-Claude Code itself allows nested spawns up to 5 levels deep (since 2.1.172). The brewcode workflow, however, requires spawning only from the main conversation (manager level): the 2-step report protocol binds the task lock to a single session and delivers report/coordinator instructions to the spawning conversation. Nested spawns bypass session binding, KNOWLEDGE injection, and the coordinator loop, so under brewcode only the manager uses the Task tool.
+Claude Code allows nested spawns up to 5 levels deep (since 2.1.172). The brewcode workflow, however, requires spawning only from the main conversation (manager level): the 2-step report protocol binds the task lock to a single session and delivers report/coordinator instructions to the spawning conversation. Nested spawns bypass session binding, KNOWLEDGE injection, and the coordinator loop — so under brewcode only the manager uses the Task tool.
 
 ## Section 2: Plugin Agents (18)
 
@@ -47,7 +47,7 @@ These agents ship with the brewcode plugin suite. Available immediately after in
 | glm-openrouter-specialist | brewui | opus | OpenRouter API routing |
 | glm-zai-specialist | brewui | opus | Z.ai GLM API vision |
 
-Agents prefixed with `bc-` are internal to brewcode workflows (coordinator, knowledge, grepai). The rest are user-facing.
+Agents prefixed with `bc-` are internal to brewcode workflows. The rest are user-facing.
 
 ## Section 3: System Agents
 
@@ -63,15 +63,13 @@ System agents are selected when no plugin agent is a better match.
 
 ## Section 4: Model Selection Guide
 
-Model choice determines agent capability and cost:
-
 | Model | Complexity | Best For | Examples |
 |-------|-----------|----------|----------|
 | opus | High | Implementation, architecture, code review, complex reasoning | developer, reviewer, architect |
 | sonnet | Medium | Testing, text processing, rule organization, document sync | tester, text-optimizer, bc-rules-organizer |
-| haiku | Low | Coordination, knowledge management, progress tracking, guided skills | bc-coordinator, bc-knowledge-manager |
+| haiku | Low | Coordination, knowledge management, progress tracking | bc-coordinator, bc-knowledge-manager |
 
 Rule of thumb:
-- If the agent writes or reviews code: **opus**
-- If the agent processes text or runs tests: **sonnet**
-- If the agent coordinates or tracks state: **haiku**
+- Agent writes or reviews code: **opus**
+- Agent processes text or runs tests: **sonnet**
+- Agent coordinates or tracks state: **haiku**

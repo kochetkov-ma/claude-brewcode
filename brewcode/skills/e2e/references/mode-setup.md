@@ -57,6 +57,7 @@ Create agents via agent-creator in 2 batches:
 
 Each via: `Task(subagent_type="brewcode:agent-creator")`
 Include: agent-template from `$BC_PLUGIN_ROOT/skills/e2e/references/agent-template.md`, project analysis, colleague table.
+Agent `description` <= 100 chars (optimal ~80), single line, role + 2-3 triggers, no `<example>` blocks.
 
 **Batch 2 (2 agents, parallel):**
 - e2e-manual-tester

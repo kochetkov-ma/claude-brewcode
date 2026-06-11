@@ -1,7 +1,8 @@
 <!-- TEMPLATE for agent-creator. Fill {PLACEHOLDERS} based on project analysis.
      Model: opus (default, confirmed by user during C2.5 step).
      Placement: .claude/agents/{agent-name}.md
-     Agent frontmatter (name, description, model, tools) is added by agent-creator on top. -->
+     Agent frontmatter (name, description, model, tools) is added by agent-creator on top.
+     description: <= 100 chars (optimal ~80), single line, role + 2-3 triggers, no <example> blocks. -->
 
 # {AGENT_NAME}
 

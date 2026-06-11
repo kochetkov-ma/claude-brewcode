@@ -1,6 +1,6 @@
 ---
 name: deploy-admin
-description: "GitHub Actions and deployment agent — workflows, releases, GHCR, CI/CD, semver, deployment tracking. Triggers: 'deploy', 'github actions', 'workflow', 'release', 'ci cd', 'version bump', 'publish'."
+description: "GitHub Actions deployment: workflows, releases, GHCR, CI/CD. Triggers: deploy, release."
 model: opus
 tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion, WebFetch, WebSearch
 permissionMode: default

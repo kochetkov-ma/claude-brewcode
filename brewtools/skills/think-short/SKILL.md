@@ -1,6 +1,6 @@
 ---
 name: brewtools:think-short
-description: "Toggles terse-output mode for Claude Code - injects brief directives into main conversation (SessionStart) and sub-agent prompts (PreToolUse:Task) to cut preamble and filler. Profiles: light, medium, aggressive. Scope: global or project (project overrides). Triggers: think-short, be terse, think shorter, reduce tokens mode, level 1/2/3."
+description: "Toggles terse-output mode to cut preamble and filler. Triggers: think-short, be terse, think shorter."
 argument-hint: "[on|off|profile <light|medium|aggressive>|status|blacklist add|remove <agent>] [--scope global|project]"
 allowed-tools: Read, Bash, AskUserQuestion
 model: sonnet
@@ -9,7 +9,7 @@ user-invocable: true
 
 # Think-Short
 
-> **Toggle terse-output mode.** Writes state to `$CLAUDE_PLUGIN_DATA/think-short.json` (global) or `.claude/brewtools/think-short.json` (project). Hooks (authored separately) read state and inject profile-specific directives into SessionStart + PreToolUse:Task. This skill ONLY parses intent and mutates state.
+> Toggle terse-output mode. Writes state to `$CLAUDE_PLUGIN_DATA/think-short.json` (global) or `.claude/brewtools/think-short.json` (project). Hooks read state and inject profile-specific directives into SessionStart + PreToolUse:Task. This skill ONLY parses intent and mutates state.
 
 <instructions>
 
@@ -21,11 +21,11 @@ user-invocable: true
 | Never use `Write`/`Edit` on `~/.claude/*` or `$CLAUDE_PLUGIN_DATA` — use Bash + Node `fs` via helpers | ALL |
 | State writes go through `writeState()` in `helpers/state.mjs` (atomic, O_NOFOLLOW, 0600, merges defaults + timestamps) | P2 |
 | State reads go through `resolveEffectiveState()` in `helpers/state.mjs` (merges hardcoded → global → project → env) | P0, status |
-| NL-prompt resolution ALWAYS logged via `log()` exported from `helpers/state.mjs` at INFO level (auto-prefixed `think-short`), to `.claude/logs/brewtools.log` | P0 |
+| NL-prompt resolution ALWAYS logged via `log()` from `helpers/state.mjs` at INFO level (auto-prefixed `think-short`), to `.claude/logs/brewtools.log` | P0 |
 
 ### BT_ROOT Resolver
 
-`$CLAUDE_PLUGIN_ROOT` is **NOT** inherited by the Bash tool in main-conversation slash invocations. Every Bash block MUST resolve `BT_ROOT` dynamically. Use the env var if present, else pick the newest cached version (survives version bumps — no hardcoded `3.7.4`):
+`$CLAUDE_PLUGIN_ROOT` is NOT inherited by the Bash tool in main-conversation slash invocations. Every Bash block MUST resolve `BT_ROOT` dynamically (no hardcoded version):
 
 ```bash
 BT_ROOT="${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::')}"
@@ -66,7 +66,7 @@ Parse `$ARGUMENTS` into structured form:
 
 ### NL-prompt fallback (MANDATORY)
 
-If no structural match, treat argument as NL prompt. Algorithm:
+If no structural match, treat argument as NL prompt:
 
 1. Trim + lowercase.
 2. Tokenize + apply synonym table:
@@ -81,8 +81,8 @@ If no structural match, treat argument as NL prompt. Algorithm:
 | `status\|статус\|как дела\|что сейчас` | `status` |
 
 3. **Combos allowed** — e.g. `включись максимально` → `on` + `profile aggressive`. Execute BOTH ops in sequence.
-4. **Ambiguous** (0 matches OR >1 mutually-exclusive match that isn't a combo) → `AskUserQuestion` with candidate operations as options.
-5. **After resolution**, INFO log via utils.mjs:
+4. **Ambiguous** (0 matches OR >1 mutually-exclusive match that is not a combo) → `AskUserQuestion` with candidate operations as options.
+5. After resolution, INFO log:
    ```
    think-short: NL-prompt "<input>" → resolved as <command>
    ```
@@ -105,8 +105,6 @@ Replace `INPUT` and `RESOLVED` literally. The `log()` from `state.mjs` auto-pref
 
 **Default = `project` scope.** Silent — no AskUserQuestion unless the user explicitly asks for disambiguation.
 
-Rules:
-
 | Signal | Scope |
 |--------|-------|
 | `--scope global` or `--scope=global` present | `global` |
@@ -114,21 +112,20 @@ Rules:
 | User prompt contains explicit ambiguity ("для всех проектов или только здесь", "global or project?", `--ask-scope`) | Use `AskUserQuestion` — options: Project (default) / Global |
 | Otherwise (including `--print` / headless / no tty) | `project` (silent default) |
 
-**ALWAYS log the chosen scope at INFO** using `log()` from `state.mjs`:
-
+Always log chosen scope at INFO:
 ```
 think-short: scope=<project|global> (<default|--scope|user-choice>, --scope <not specified|explicit>)
 ```
 
 For `status` — no scope question (reads merged state). For `blacklist` — defaults to project scope silently.
 
-If user is invoking from a combo (e.g. `включись максимально`) — determine scope ONCE via the rules above, apply to all ops in the combo.
+For combo ops — determine scope ONCE via rules above, apply to all ops.
 
 ---
 
 ## P2: Mutate State
 
-**EXECUTE** using Bash tool (generic pattern — substitute `SCOPE`, `PATCH_JSON`, `OP`):
+**EXECUTE** using Bash tool (substitute `SCOPE`, `PATCH_JSON`, `OP`):
 
 ```bash
 BT_ROOT="${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::')}"
@@ -142,8 +139,6 @@ console.log(JSON.stringify({scope:'SCOPE', file:r.path, state:r.after}));
 " && echo "OK mutate" || echo "FAILED mutate"
 ```
 
-Substitutions per op:
-
 | Op | `PATCH_JSON` | `OP` |
 |----|--------------|------|
 | `on` | `{enabled:true}` | `on` |
@@ -156,9 +151,9 @@ Substitutions per op:
 
 `writeState` handles: reading existing scope file, merging defaults, atomic write via `safeWriteJson`, stamping `updated_at`, enforcing `version:1`. No manual `fs.existsSync` / `safeWrite` calls needed.
 
-**Combo ops** (e.g. `on` + `profile aggressive`): pass a single merged patch: `{enabled:true, profile:'aggressive'}` — one `writeState` call, atomic.
+**Combo ops** (e.g. `on` + `profile aggressive`): pass a single merged patch `{enabled:true, profile:'aggressive'}` — one `writeState` call, atomic.
 
-**Blacklist mutation** example (inline — single node invocation reads current state then writes):
+**Blacklist mutation** example (inline — single node invocation):
 
 ```bash
 BT_ROOT="${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::')}"
@@ -177,7 +172,7 @@ console.log(JSON.stringify({scope:'SCOPE', file:r.path, state:r.after}));
 
 ## P3: Status Output
 
-For `op=status` — read merged state + metadata and print this shape:
+For `op=status` — read merged state + metadata and print:
 
 ```
 think-short: ENABLED (source: project-state)
@@ -219,13 +214,13 @@ console.log(JSON.stringify({
 grep 'think-short' .claude/logs/brewtools.log 2>/dev/null | tail -10 || echo "(no log entries)"
 ```
 
-Render the final output to the user in the shape shown above. Omit sections that are N/A (e.g. no log file).
+Render the final output in the shape shown above. Omit sections that are N/A.
 
 ---
 
 ## P4: Notify + Reload Reminder
 
-After mutation (non-status ops), render a compact result:
+After mutation (non-status ops), render:
 
 ```
 # Think-Short — <op>
@@ -242,8 +237,8 @@ For combo ops, show the final merged state after all mutations.
 
 ## Sub-operation: blacklist
 
-- `blacklist add <agent>` — append `<agent>` to state.blacklist if absent.
-- `blacklist remove <agent>` — remove `<agent>` from state.blacklist if present.
+- `blacklist add <agent>` — append to state.blacklist if absent
+- `blacklist remove <agent>` — remove from state.blacklist if present
 - Scope defaults to **project** (no AskUserQuestion). Override via `--scope=global`.
 - Log every mutation at INFO level with prefix `think-short`.
 
@@ -254,16 +249,16 @@ For combo ops, show the final merged state after all mutations.
 | Condition | Response |
 |-----------|----------|
 | `BT_ROOT` resolves but `$BT_ROOT/skills/think-short/helpers` missing | ERROR: `think-short: helpers not found under $BT_ROOT — plugin cache incomplete.` STOP. |
-| Neither `$CLAUDE_PLUGIN_ROOT` set nor any cached plugin dir found under `~/.claude/plugins/cache/claude-brewcode/brewtools/` | ERROR: `think-short: cannot locate plugin root — install/update brewtools first.` STOP. |
+| Neither `$CLAUDE_PLUGIN_ROOT` set nor any cached plugin dir found | ERROR: `think-short: cannot locate plugin root — install/update brewtools first.` STOP. |
 | NL prompt matches nothing | AskUserQuestion: "Which action? [on / off / profile light / profile medium / profile aggressive / status / cancel]" |
-| NL prompt matches >1 mutually-exclusive op (not a combo) | AskUserQuestion with the matched candidates as options. |
+| NL prompt matches >1 mutually-exclusive op (not a combo) | AskUserQuestion with matched candidates as options. |
 | User picks `cancel` in any AskUserQuestion | Abort. No state mutation. Log at INFO: `think-short: user cancelled`. |
 
 ---
 
 ## Smoke Test
 
-Verify wiring (helpers resolve, state reads cleanly). Run after install/update or when debugging:
+Verify wiring after install/update or when debugging:
 
 ```bash
 BT_ROOT="${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::')}"

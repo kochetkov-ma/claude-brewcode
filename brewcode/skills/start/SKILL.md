@@ -1,6 +1,6 @@
 ---
 name: brewcode:start
-description: "Executes a brewcode task PLAN.md with infinite context and automatic session handoff (third pipeline step after spec and plan). Triggers: start brewcode task, execute PLAN.md, run task with handoff, infinite execution, brewcode start, execute brewcode plan, run the plan."
+description: "Executes a brewcode PLAN.md with infinite context + handoff. Triggers: start brewcode task, execute PLAN.md."
 argument-hint: "[task-path] defaults to ref in .claude/TASK.md (first line = active path)"
 allowed-tools: Read, Write, Edit, Bash, Task, Glob, Grep, Skill, AskUserQuestion
 model: opus

@@ -1,6 +1,6 @@
 ---
 name: brewtools:text-human
-description: Removes AI artifacts, cleans comments, simplifies documentation in code. Use when - humanizing code, removing AI comments, cleaning docs, fixing unicode, making code human-readable. Trigger keywords - humanize, human, ai artifacts, ai comments, clean comments, simplify docs, unicode fix, remove generated, make readable.
+description: Removes AI artifacts, cleans comments, fixes unicode. Triggers - humanize, ai artifacts, ai comments, unicode fix.
 argument-hint: <commit-hash|path> [custom instructions]
 user-invocable: true
 allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Task, AskUserQuestion]

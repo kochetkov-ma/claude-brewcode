@@ -1,6 +1,6 @@
 ---
 name: glm-zai-specialist
-description: "Z.ai GLM API expert - vision requests, model selection, rate limits, response parsing for design-to-code pipeline. Triggers: zai api, glm request, z.ai, send to glm, glm vision, glm-5v, glm-4.6v."
+description: "Z.ai GLM API expert - vision, model selection. Triggers: zai api, glm request, z.ai, glm vision."
 model: sonnet
 color: cyan
 tools: Read, Write, Edit, Bash, Glob, Grep

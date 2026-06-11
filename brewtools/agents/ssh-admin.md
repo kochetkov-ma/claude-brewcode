@@ -1,6 +1,6 @@
 ---
 name: ssh-admin
-description: "Linux server administrator — SSH, Docker, Docker Compose, firewalls, VPN, systemd, Caddy/Nginx, SSL/TLS, disk management, security hardening. Triggers: 'ssh admin', 'server management', 'deploy to server', 'docker on server'."
+description: "Linux server admin: SSH, Docker, systemd, Nginx, SSL. Triggers: ssh admin, server management."
 model: opus
 tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion, WebFetch, WebSearch
 permissionMode: default

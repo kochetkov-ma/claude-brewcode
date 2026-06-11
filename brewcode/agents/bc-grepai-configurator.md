@@ -1,6 +1,6 @@
 ---
 name: bc-grepai-configurator
-description: "grepai config specialist - project analysis, config.yaml generation, verification. Triggers 'configure grepai', 'grepai config', 'analyze for grepai', 'setup grepai index'. Isolated subagent."
+description: "grepai config specialist: project analysis, config.yaml generation, verification. Subagent."
 tools: Read, Write, Edit, Bash, WebFetch, Glob, Grep
 model: opus
 permissionMode: acceptEdits
@@ -35,10 +35,10 @@ mcpServers:
 |-------|--------|--------|
 | Global | `~/.gitignore_global` | Applied first |
 | Local | `.gitignore` | Adds to global |
-| Config | `.grepai/config.yaml` `ignore:` | **ADDS** exclusions only |
+| Config | `.grepai/config.yaml` `ignore:` | Adds exclusions only |
 
-| ❌ Cannot | Why |
-|-----------|-----|
+| Cannot | Why |
+|--------|-----|
 | Index gitignored files | Reads gitignore before scan |
 | Use `!pattern` negation | Config only adds exclusions |
 | Override via config | No `include:` option |
@@ -47,11 +47,11 @@ mcpServers:
 **Workarounds:** Remove from `~/.gitignore_global` | `git update-index --no-assume-unchanged` | Separate workspace
 
 **Diagnostics:**
-- Check file: `git check-ignore -v path/to/file`
-- Global location: `git config --global core.excludesfile`
-- List ignored: `git status --ignored --porcelain | grep '^!!'`
+- `git check-ignore -v path/to/file`
+- `git config --global core.excludesfile`
+- `git status --ignored --porcelain | grep '^!!'`
 
-`external_gitignore: ~/.config/git/ignore` — ADDS restrictions, use for team patterns.
+`external_gitignore: ~/.config/git/ignore` — adds restrictions, use for team patterns.
 
 ## Embedder Models
 
@@ -89,7 +89,7 @@ Run ALL analyses using available tools (Glob, Grep, Read):
 | 4 | **SOURCE STRUCTURE** | `Glob` | `**/src/`, `**/lib/`, `**/app/`, `**/core/`, `**/modules/`, `**/components/`, `**/services/`, `**/domain/` |
 | 5 | **IGNORE PATTERNS** | `Read` | `.gitignore` + `~/.gitignore_global` (via `git config --global core.excludesfile`) |
 
-Run Glob/Grep/Read calls in parallel where possible. Aggregate results into a single analysis structure for Phase 3.
+Run Glob/Grep/Read calls in parallel. Aggregate into a single analysis structure for Phase 3.
 
 ### Phase 3: Generate Config
 
@@ -275,7 +275,7 @@ grepai trace callers "findBy" --compact 2>&1 | head -5
 | **JavaScript** (React, Node) | 512 | 50 | Balanced |
 | **SQL** | 384 | 40 | Statements, schemas |
 
-**By architecture:**
+By architecture:
 - Microservices (small services): 384/40
 - Monolith (large classes): 768-1024/100
 - React components: 512/50
@@ -315,7 +315,7 @@ Semantic + keyword via RRF.
 
 ### Trace Limitations: Embedded SQL
 
-> **For Java/Kotlin with JDBC, JOOQ, raw SQL strings!**
+> For Java/Kotlin with JDBC, JOOQ, raw SQL strings!
 
 grepai parses SQL keywords in string literals as function calls:
 ```java
@@ -334,8 +334,6 @@ var sql = """
 | Wrong symbols (switch, of) | AST misattribution |
 
 **Detection:** Phase 2 LANGUAGES agent → `HAS_EMBEDDED_SQL`
-
-**Workarounds:**
 
 | Use | Command |
 |-----|---------|

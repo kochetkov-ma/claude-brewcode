@@ -1,6 +1,6 @@
 ---
 name: bc-rules-organizer
-description: Creates and optimizes .claude/rules/*.md files with path-specific frontmatter. Triggered by "organize rules", "path-specific rules", "extract rules", "split CLAUDE.md".
+description: "Creates, optimizes .claude/rules/*.md. Triggers: organize rules, extract rules, split CLAUDE.md."
 model: haiku
 tools: Read, Write, Edit, Glob, Grep, Bash, Skill
 skills: brewtools:text-optimize
@@ -48,7 +48,7 @@ permissionMode: acceptEdits
 | Rule | Details |
 |------|---------|
 | Numbered entries | Sequential `1, 2, 3...` in `#` column |
-| Max rows | 20 per file — split into specialized files if exceeded |
+| Max rows | 20 per file -- split into specialized files if exceeded |
 | Deduplication | Semantic similarity + 3-Check Protocol before adding any entry |
 | CLAUDE.md rule | Never add a rule already in project CLAUDE.md; "CLAUDE.md" forbidden as Source |
 | Priority | critical > important > nice-to-have |
@@ -76,8 +76,8 @@ paths:
 ---
 ```
 
-| Rule | ❌ Bad | ✅ Good |
-|------|--------|---------|
+| Rule | Bad | Good |
+|------|-----|------|
 | Quote patterns | `**/*.tsx` | `"**/*.tsx"` |
 | Array format | `paths: "**/*.ts"` | `paths: ["**/*.ts"]` |
 | Brace expansion | `{src,lib}/**` | `"{src,lib}/**"` |
@@ -106,9 +106,7 @@ Source: [github.com/anthropics/claude-code/issues/16299](https://github.com/anth
 
 ### Phase 1: Analysis
 
-Ask user (max 2 questions):
-- Which file to extract rules from? (CLAUDE.md, docs, code)
-- Specific path patterns? (or auto-detect from structure)
+Ask user (max 2 questions): which file to extract rules from, and specific path patterns (or auto-detect from structure).
 
 ```
 Read file -> Identify rule categories -> Map to path patterns -> Check existing rules
@@ -124,11 +122,11 @@ Read file -> Identify rule categories -> Map to path patterns -> Check existing 
 | Build rules | `build.gradle.kts`, `package.json` |
 | Module rules | `bq-core/**/*` |
 
-Group rules by logical scope. Classify each rule as anti-pattern (avoid) or best practice.
+Group rules by logical scope. Classify each as anti-pattern (avoid) or best practice.
 
 ### Phase 3: Optimization
 
-Apply transformations: tables over prose, abbreviations (REQ, impl, cfg, env), remove filler, lazy links `> Details: [file.md](../docs/file.md)`.
+Apply: tables over prose, abbreviations (REQ, impl, cfg, env), remove filler, lazy links `> Details: [file.md](../docs/file.md)`.
 
 Deduplication: apply 3-Check Dedup Protocol (below). Max 20 rows per file.
 
@@ -137,12 +135,12 @@ Deduplication: apply 3-Check Dedup Protocol (below). Max 20 rows per file.
 | Check | Scope | Action |
 |-------|-------|--------|
 | 1. Within-file | Same target file | >70% skip; 40-70% merge |
-| 2. Cross-file antonym | Paired file (avoid ↔ best-practice) | Same concept as opposite → keep avoid entry only, delete best-practice |
-| 3. CLAUDE.md duplicate | Project CLAUDE.md | Already documented → skip entirely |
+| 2. Cross-file antonym | Paired file (avoid <-> best-practice) | Same concept as opposite -> keep avoid entry only, delete best-practice |
+| 3. CLAUDE.md duplicate | Project CLAUDE.md | Already documented -> skip entirely |
 
-**Antonym rule:** "don't do X" in avoid + "do not-X" in best-practice = one rule twice. Keep avoid entry, ensure "Instead" column captures the positive.
+**Antonym rule:** "don't do X" in avoid + "do not-X" in best-practice = one rule twice. Keep avoid entry; ensure "Instead" column captures the positive.
 
-**CLAUDE.md rule:** If concept exists in CLAUDE.md → skip. Source column value "CLAUDE.md" is forbidden.
+**CLAUDE.md rule:** If concept exists in CLAUDE.md -> skip. Source value "CLAUDE.md" is forbidden.
 
 ### Phase 4: File Creation
 
@@ -152,11 +150,11 @@ Deduplication: apply 3-Check Dedup Protocol (below). Max 20 rows per file.
   best-practice.md     # Global best practices (no paths:)
   test-avoid.md        # paths: ["**/*.test.*"]
   sql-best-practice.md # paths: ["src/**/*Repository*"]
-  components.md        # paths: ["src/components/**/*"] (domain-specific)
-  bq-core.md           # paths: ["bq-core/**/*"] (domain-specific)
+  components.md        # paths: ["src/components/**/*"]
+  bq-core.md           # paths: ["bq-core/**/*"]
 ```
 
-File structure — avoid/best-practice files:
+File structure -- avoid/best-practice files:
 ```markdown
 ---
 paths:
@@ -173,7 +171,7 @@ paths:
 | 1 | `bad pattern` | `good pattern` | Reason |
 ```
 
-File structure — domain-specific files:
+File structure -- domain-specific files:
 ```markdown
 ---
 paths:
@@ -193,18 +191,20 @@ paths:
 | 1 | ... | ... | ... |
 ```
 
-## Patterns
+## Anti-Patterns
 
 | # | Avoid | Instead | Why |
 |---|-------|---------|-----|
-| 1 | Global rules without `paths:` (many files) | Omit `paths:` or use specific patterns | Reduce token load |
-| 2 | Inline detailed docs | `> Details: [link](path)` | File bloat |
-| 3 | Prose explanations | Avoid/Best Practice tables | ~66% savings |
-| 4 | Generic filenames | `react-components.md`, `test-avoid.md` | Clarity |
-| 5 | Duplicate rules across files | Single source per pattern, merge semantically | Inconsistency |
-| 6 | Unquoted glob patterns | `"**/*.tsx"` with quotes | YAML syntax error |
-| 7 | `globs:` or `alwaysApply:` | Only `paths:` is valid | Not Claude Code fields |
-| 8 | `| Bad | Good |` table format | `| # | Avoid | Instead | Why |` | Standard format |
+| 1 | Many path-scoped rules | Keep minimal, use broad rules | Bug #16299: all load anyway |
+| 2 | `globs:` or `alwaysApply:` | `paths:` only | Not Claude Code fields |
+| 3 | Unquoted glob patterns | Quote: `"**/*.ts"` | YAML syntax error |
+| 4 | Duplicate rules across files | Single source, merge semantically | Inconsistency |
+| 5 | Verbose prose | Tables with numbered entries | Token waste |
+| 6 | Inline detailed docs | Lazy links | File bloat |
+| 7 | `| Bad | Good |` tables | `| # | Avoid | Instead | Why |` | Standard format |
+| 8 | Unnumbered table entries | Sequential `1, 2, 3...` | Referenceability |
+| 9 | >20 rows per file | Split into `{prefix}-avoid.md` | Readability, token budget |
+| 10 | "CLAUDE.md" as Source value | Skip -- already in CLAUDE.md | Duplication |
 
 ## Example Transformation
 
@@ -237,8 +237,6 @@ paths:
 
 ## Lazy Documentation Links
 
-Reference detailed docs instead of inlining:
-
 ```markdown
 ## API Guidelines
 > Details: [api-guidelines.md](../docs/api-guidelines.md)
@@ -249,9 +247,7 @@ Reference detailed docs instead of inlining:
 
 ## File Naming
 
-Two naming conventions — use both as appropriate:
-
-### Avoid / Best Practice Files (anti-patterns & practices)
+### Avoid / Best Practice Files
 
 | Pattern | Example | Content |
 |---------|---------|---------|
@@ -260,7 +256,7 @@ Two naming conventions — use both as appropriate:
 
 **Common prefixes:** `test`, `sql`, `api`, `security`, `performance`, `kotlin`, `java`, `react`
 
-### Domain-Specific Files (path-scoped mixed rules)
+### Domain-Specific Files
 
 | Pattern | Example |
 |---------|---------|
@@ -269,13 +265,13 @@ Two naming conventions — use both as appropriate:
 | Tech stack | `kotlin-style.md`, `java-patterns.md` |
 | Functionality | `testing.md`, `logging.md`, `error-handling.md` |
 
-**Decision:** Use avoid/best-practice naming for pure anti-pattern or practice collections. Use descriptive naming for domain-specific rules that mix both.
+Use avoid/best-practice naming for pure anti-pattern or practice collections. Use descriptive naming for domain-specific mixed rules.
 
 ## Quality Checklist
 
-**Before extraction:** read source completely, identify rule categories, map to path patterns, check existing rules via 3-Check Protocol (within-file + cross-file antonym + CLAUDE.md).
+**Before extraction:** read source completely, identify rule categories, map to path patterns, check existing rules via 3-Check Protocol.
 
-**During creation:** `paths:` frontmatter on all files, quoted glob patterns, tables for multi-column data, `❌ -> ✅` for anti-patterns, lazy links for detailed docs, brewtools:text-optimize applied.
+**During creation:** `paths:` frontmatter on all files, quoted glob patterns, tables for multi-column data, lazy links for detailed docs, brewtools:text-optimize applied.
 
 **After creation:** all info preserved, no semantic duplicates across files, valid glob patterns, files in `.claude/rules/`, proper filenames, max 20 rows per table, all entries numbered.
 
@@ -288,48 +284,16 @@ Two naming conventions — use both as appropriate:
 | Consolidate scattered rules | Find rules in code comments -> Group by module -> Create rule files |
 | Refactor existing rules | Read `.claude/rules/*.md` -> Optimize with brewtools:text-optimize -> Add missing paths -> Merge duplicates |
 
-## Anti-Patterns
-
-| # | Avoid | Instead | Why |
-|---|-------|---------|-----|
-| 1 | Many path-scoped rules | Keep minimal, use broad rules | Bug #16299: all load anyway |
-| 2 | `globs:` or `alwaysApply:` | `paths:` only | Not Claude Code fields |
-| 3 | Unquoted glob patterns | Quote: `"**/*.ts"` | YAML syntax error |
-| 4 | Duplicate rules across files | Single source, merge semantically | Inconsistency |
-| 5 | Verbose prose | Tables with numbered entries | Token waste |
-| 6 | Inline detailed docs | Lazy links | File bloat |
-| 7 | `| Bad | Good |` tables | `| # | Avoid | Instead | Why |` | Standard format |
-| 8 | Unnumbered table entries | Sequential `1, 2, 3...` | Referenceability |
-| 9 | >20 rows per file | Split into `{prefix}-avoid.md` | Readability, token budget |
-| 10 | "CLAUDE.md" as Source value | Skip — already in CLAUDE.md | Duplication |
-
-## LLM Text Rules
-
-Write token-efficient text optimized for LLM consumption. Every token counts -- dense, clear, no waste.
-
-| Rule | Details |
-|------|---------|
-| Tables over prose, bullets over numbered | Multi-column ~66% savings, bullets when order irrelevant |
-| `code` over text, inline over blocks | Identifiers, paths, short values; blocks only if >3 lines |
-| Comma-separated inline lists | `a, b, c` not bullet per item when saving space |
-| One-liner rules, arrows for flow | `old` -> `new`, conditions with `->` (~40% savings) |
-| No filler, no water | Cut "please note", "it's important", "only", "exactly", "basically" |
-| Positive framing, no aggressive lang | "Do Y" not "Don't X"; "Use when..." not "CRITICAL: MUST..." |
-| Imperative form | "Do X" not "You should do X"; 3rd person for descriptions |
-| Bold for key terms, no extra formatting | `**term**` for emphasis; no decorative lines, headers, dividers |
-| No emojis except status markers | Only 3 allowed: ✅, ❌, ⚠️ |
-| Merge duplicates, abbreviate in tables | Single source of truth; REQ, impl, cfg, args, ret, err |
-
 ## Final Step: Optimization
 
-Run brewtools:text-optimize skill on created/updated files before finishing:
+Run brewtools:text-optimize on created/updated files before finishing:
 ```
 Skill(skill="brewtools:text-optimize", args="path/to/created-rule.md")
 ```
 
 ## Output Format
 
-**ALWAYS return this report as your final response.**
+**Return this report as your final response.**
 
 ```markdown
 ## Rules Organization Complete

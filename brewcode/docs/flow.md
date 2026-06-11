@@ -4,52 +4,49 @@ auto-sync-date: 2026-02-11
 description: Flow diagrams for brewcode plugin execution
 ---
 
+[DICT: AR=architect, ART=artifacts/, AUQ=AskUserQuestion, BC_C=bc-coordinator, BCI=bc-coordinator(mode:initialize), DV=developer, IP=in_progress, KJ=KNOWLEDGE.jsonl, LK=.lock, PC=pre-compact.mjs, PM=PLAN.md, POT=post-task.mjs, PT=pre-task.mjs, RV=reviewer, SID=session_id, SM=stop.mjs]
+
 # Brewcode Flow Diagrams
 
-## Table of Contents
-
 | # | Diagram | Description |
-|---|-----------|----------|
-| a | Specification creation | `/brewcode:spec` — research and SPEC.md |
-| b | Plan creation | `/brewcode:plan` — SPEC.md to PLAN.md |
+|---|---------|-------------|
+| a | Spec creation | `/brewcode:spec` — research + SPEC.md |
+| b | Plan creation | `/brewcode:plan` — SPEC.md → PM |
 | c | Task execution | `/brewcode:start` — full cycle with hooks |
-| d | Lock file lifecycle | Creation, binding, checks, deletion |
-| e | Handoff during compaction | Context preservation during auto-compact |
+| d | Lock lifecycle | Creation, binding, checks, deletion |
+| e | Handoff/compaction | Context preservation during auto-compact |
 | f | Task lifecycle | State machine |
-| g | KNOWLEDGE pipeline | Knowledge extraction, rules, pruning |
+| g | KNOWLEDGE pipeline | Extraction, rules, pruning |
 
 ---
 
-## a) Specification creation (`/brewcode:spec`)
+## a) Spec creation (`/brewcode:spec`)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                         /brewcode:spec                                    │
 └─────────────────────────────────────────────────────────────────────────────┘
 
-  Input: task description OR path to file OR empty (.claude/TASK.md)
+  Input: task description | path to file | empty (.claude/TASK.md)
 
   ┌──────────────────┐
   │ 0. Check         │
   │    templates     │
   │ SPEC.md.template │
   └────────┬─────────┘
-           │
            │ Template found
            ▼
   ┌──────────────────┐
   │ 1. Read input    │
-  │ Parse arguments  │
+  │ Parse args       │
   │ Define scope     │
   └────────┬─────────┘
-           │
            ▼
   ┌──────────────────┐     ┌──────────────────────────────────┐
-  │ 2. Clarifying    │────▶│ AskUserQuestion                  │
-  │    questions     │◀────│ 3-5 questions in 3 categories:   │
-  │ (3-5 questions)  │     │ Scope, Constraints, Edge cases   │
+  │ 2. Clarifying    │────▶│ AUQ                              │
+  │    questions     │◀────│ 3-5 questions: Scope,            │
+  │ (3-5 questions)  │     │ Constraints, Edge cases          │
   └────────┬─────────┘     └──────────────────────────────────┘
-           │
            │ Answers received
            ▼
   ┌──────────────────────────────────────────────────────────────────────┐
@@ -59,7 +56,7 @@ description: Flow diagrams for brewcode plugin execution
   │  ┌──────┴──────┐                                                    │
   │  │ YES         │ NO                                                 │
   │  ▼             ▼                                                     │
-  │  AskUser:     Continue                                               │
+  │  AUQ:         Continue                                               │
   │  "Split into   with full                                             │
   │   X tasks?"    scope                                                 │
   │  ┌─────┴──────┐                                                     │
@@ -69,7 +66,6 @@ description: Flow diagrams for brewcode plugin execution
   │  1st     full scope                                                  │
   │  only                                                                │
   └──────────────────────────────────┬───────────────────────────────────┘
-           │
            ▼
   ┌──────────────────┐
   │ 3. Divide into   │
@@ -77,49 +73,42 @@ description: Flow diagrams for brewcode plugin execution
   │    areas         │
   │ (5-10 areas)     │
   └────────┬─────────┘
-           │
-           │ Standard research areas:
-           │ Controllers, Services, DB/Repos, Tests, Config, Docs
+           │ Standard areas: Controllers, Services, DB/Repos, Tests, Config, Docs
            ▼
   ┌──────────────────────────────────────────────────────────────────────┐
   │ 4. Parallel research (ONE call, 5-10 agents)                        │
   │                                                                      │
   │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐  │
-  │  │developer │ │developer │ │developer │ │ tester   │ │ Explore  │  │
+  │  │DV        │ │DV        │ │DV        │ │ tester   │ │ Explore  │  │
   │  │Controller│ │ Services │ │ DB/Repos │ │  Tests   │ │   Docs   │  │
   │  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘  │
   │       │            │            │            │            │          │
   │       ▼            ▼            ▼            ▼            ▼          │
   │  ┌──────────────────────────────────────────────────────────────┐    │
-  │  │              Agent results (patterns, risks,                 │    │
-  │  │              reusable code, constraints)                     │    │
+  │  │     Agent results (patterns, risks, reusable code,           │    │
+  │  │     constraints)                                             │    │
   │  └──────────────────────────────────────────────────────────────┘    │
-  │                                                                      │
-  │  + developer for Config (*.yml, docker-*) as needed                 │
+  │  + DV for Config (*.yml, docker-*) as needed                        │
   └──────────────────────────────────┬───────────────────────────────────┘
-                                     │
                                      ▼
                             ┌──────────────────┐
                             │ 5. Consolidation │
                             │    into SPEC.md  │
-                            │ (deduplication + │
-                            │  merging)        │
+                            │ (dedup + merge)  │
                             └────────┬─────────┘
-                                     │
                                      ▼
                             ┌──────────────────┐     ┌──────────────────┐
-                            │ 6. Validation    │────▶│ AskUserQuestion  │
+                            │ 6. Validation    │────▶│ AUQ              │
                             │    with user     │◀────│ Decisions, risks,│
                             │                  │     │ assumptions      │
                             └────────┬─────────┘     └──────────────────┘
-                                     │
                                      │ Feedback incorporated
                                      ▼
   ┌──────────────────────────────────────────────────────────────────────┐
   │ 7. SPEC review (iteration loop, MAX 3 iterations)                   │
   │                                                                      │
   │  ┌──────────┐                                                        │
-  │  │ reviewer │──▶ Findings (critical/major/minor)                     │
+  │  │ RV       │──▶ Findings (critical/major/minor)                     │
   │  └──────────┘          │                                             │
   │                        ▼                                             │
   │              critical > 0 OR major > 0?                              │
@@ -135,15 +124,12 @@ description: Flow diagrams for brewcode plugin execution
   │                                                                      │
   │  After 3 iterations with remaining remarks:                         │
   │  ┌──────────────────────────────────────────────────────────┐       │
-  │  │ Escalate to user via AskUserQuestion                     │       │
-  │  │ Present remaining critical/major remarks for decision    │       │
+  │  │ Escalate via AUQ — present remaining critical/major      │       │
   │  └──────────────────────────────────────────────────────────┘       │
   └──────────────────────────────────────────────────────────────────────┘
-                                     │
                                      ▼
                             ┌──────────────────┐
                             │    RESULT        │
-                            │                  │
                             │ .claude/tasks/   │
                             │ {TS}_{NAME}_task/│
                             │   SPEC.md        │
@@ -172,8 +158,8 @@ description: Flow diagrams for brewcode plugin execution
            │                   │                    │
            ▼                   ▼                    ▼
   ┌──────────────────┐ ┌────────────────┐ ┌──────────────────┐
-  │ SPEC flow        │ │ PlanMode flow  │ │ Read reference   │
-  │ (steps 1-8)      │ │ (steps 1-6)    │ │ to latest task   │
+  │ SPEC flow        │ │ PlanMode flow  │ │ Read ref to      │
+  │ (steps 1-8)      │ │ (steps 1-6)    │ │ latest task      │
   └────────┬─────────┘ └───────┬────────┘ └────────┬─────────┘
            │                   │                    │
            └───────────┬───────┘────────────────────┘
@@ -187,105 +173,84 @@ description: Flow diagrams for brewcode plugin execution
   │ 0. Check         │
   │ PLAN.md.template │
   └────────┬─────────┘
-           │
            ▼
   ┌──────────────────┐
   │ 1. Read SPEC     │
-  │ Goal, requirements,│
+  │ Goal, reqs,      │
   │ analysis, risks  │
   └────────┬─────────┘
-           │
            ▼
   ┌──────────────────┐
-  │ 2. Scan          │
-  │ project          │
-  │ Reference examples│
+  │ 2. Scan project  │
+  │ Ref examples     │
   │ (R1, R2...)      │
   └────────┬─────────┘
-           │
            ▼
   ┌──────────────────┐
-  │ 3. Generate phases│
+  │ 3. Gen phases    │
   │ 5-12 phases      │
-  │ + dependencies    │
-  │ + agents          │
-  │ + verification (NV)│
+  │ + deps + agents  │
+  │ + verification(NV)│
   └────────┬─────────┘
-           │
            ▼
   ┌──────────────────┐     ┌──────────────────────────────────┐
-  │ 4. Present to    │────▶│ AskUserQuestion                  │
-  │    user          │◀────│ Number of phases, descriptions,  │
-  │                  │     │ agents, dependencies             │
+  │ 4. Present to    │────▶│ AUQ                              │
+  │    user          │◀────│ Phases, descriptions,            │
+  │                  │     │ agents, deps                     │
   └────────┬─────────┘     └──────────────────────────────────┘
-           │
            │ Confirmed / adjusted
            ▼
   ┌──────────────────┐
-  │ 5. Generate      │
-  │    artifacts     │
-  │ PLAN.md          │
-  │ KNOWLEDGE.jsonl  │  (0-byte empty file via touch)
-  │ artifacts/       │
+  │ 5. Gen artifacts │
+  │ PM               │
+  │ KJ               │  (0-byte empty via touch)
+  │ ART              │
   │ backup/          │
   └────────┬─────────┘
-           │
            ▼
   ┌──────────────────────────────────────────────────────────────────────┐
   │ 5.5 Technology Choices                                              │
-  │                                                                      │
-  │  For each non-trivial choice (library, pattern, approach):          │
-  │  ┌──────────────────────────────────────────────────────────┐       │
-  │  │ Document in PLAN.md under Technology Choices section:    │       │
-  │  │  - Rationale for chosen approach                         │       │
-  │  │  - Alternatives considered and rejected                  │       │
-  │  │  - Examples: ORM, auth library, caching, test framework  │       │
-  │  └──────────────────────────────────────────────────────────┘       │
+  │  Per non-trivial choice (lib, pattern, approach):                   │
+  │  Document in PM under Technology Choices:                           │
+  │  - Rationale for chosen approach                                    │
+  │  - Alternatives considered + rejected                               │
+  │  - Examples: ORM, auth lib, caching, test framework                 │
   └──────────────────────────────────┬───────────────────────────────────┘
-                                     │
                                      ▼
   ┌──────────────────────────────────────────────────────────────────────┐
   │ 6. Quorum plan review (3 agents, MIXED expertise)                   │
   │                                                                      │
   │  ┌──────────┐  ┌──────────────┐  ┌────────────────┐                │
-  │  │  Plan    │  │  brewcode:   │  │   brewcode:    │                │
-  │  │ (cover-  │  │  architect   │  │   reviewer     │                │
-  │  │  age)    │  │ (arch+deps)  │  │ (quality+risk) │                │
+  │  │  Plan    │  │  AR          │  │   RV           │                │
+  │  │ (cover-  │  │ (arch+deps)  │  │ (quality+risk) │                │
+  │  │  age)    │  │              │  │                │                │
   │  └────┬─────┘  └──────┬───────┘  └───────┬────────┘                │
   │       │               │                  │                          │
   │       └───────┬───────┘──────────────────┘                          │
   │               ▼                                                      │
-  │   Quorum rule: 2/3 majority                                         │
-  │   Only findings confirmed by 2+ agents accepted                     │
+  │   Quorum: 2/3 majority — only findings confirmed by 2+ agents       │
   └──────────────────────────────────┬───────────────────────────────────┘
-                                     │
                                      ▼
   ┌──────────────────────────────────────────────────────────────────────┐
-  │ 7. Traceability Check (brewcode:reviewer)                           │
+  │ 7. Traceability Check (RV)                                          │
   │                                                                      │
-  │  Checks:                                                             │
-  │  ┌──────────────────────────────────────────────────────────┐       │
-  │  │ - Each item from SPEC > Scope > In has at least one phase│       │
-  │  │ - Each requirement from Original Requirements addressed  │       │
-  │  │ - Output: traceability matrix (requirement -> phase)     │       │
-  │  └──────────────────────────────────────────────────────────┘       │
+  │  - Each SPEC > Scope > In item has >= 1 phase                       │
+  │  - Each Original Requirement addressed                              │
+  │  - Output: traceability matrix (requirement -> phase)               │
   │                                                                      │
-  │  Gaps found?                                                         │
+  │  Gaps?                                                               │
   │  ┌──────┴──────┐                                                    │
   │  │ YES         │ NO                                                 │
   │  ▼             ▼                                                     │
-  │  Add missing   Proceed                                               │
-  │  phases to     to step 8                                             │
-  │  PLAN.md                                                             │
+  │  Add missing   Proceed to step 8                                     │
+  │  phases to PM                                                        │
   └──────────────────────────────────┬───────────────────────────────────┘
-                                     │
                                      ▼
   ┌──────────────────┐     ┌──────────────────────────────────┐
-  │ 8. Present       │────▶│ AskUserQuestion                  │
+  │ 8. Present       │────▶│ AUQ                              │
   │    review        │◀────│ Findings + verification          │
   │    results       │     │ Accept / reject each             │
   └────────┬─────────┘     └──────────────────────────────────┘
-           │
            │ Corrections applied
            ▼
   ┌──────────────────┐
@@ -293,28 +258,18 @@ description: Flow diagrams for brewcode plugin execution
   │ .claude/TASK.md  │
   │ (link at top)    │
   └────────┬─────────┘
-           │
            ▼
   ┌──────────────────┐
   │ Validation:      │
-  │ TASK_DIR         │
-  │ PLAN.md          │
-  │ KNOWLEDGE.jsonl  │
-  │ artifacts/       │
-  │ backup/          │
-  │ QUICK_REF        │
+  │ TASK_DIR, PM,    │
+  │ KJ, ART,         │
+  │ backup/, QUICK_REF│
   └────────┬─────────┘
-           │
            ▼
   ┌──────────────────────────────────────────┐
   │              RESULT                      │
-  │                                          │
   │ .claude/tasks/{TS}_{NAME}_task/          │
-  │   PLAN.md                                │
-  │   KNOWLEDGE.jsonl                        │
-  │   artifacts/                             │
-  │   backup/                                │
-  │                                          │
+  │   PM | KJ | ART | backup/               │
   │ Next: /brewcode:start {task_path}       │
   └──────────────────────────────────────────┘
 
@@ -323,21 +278,20 @@ description: Flow diagrams for brewcode plugin execution
   ╚═══════════════════════════════════════════════════════════╝
 
   Steps 1-5: same as SPEC flow (read plan, create dir, split
-  into phases, present to user, generate artifacts)
+  into phases, present to user, gen artifacts)
 
   ┌──────────────────────────────────────────────────────────────────────┐
   │ 6. Lightweight Plan Review (2 agents, 2/2 consensus)                │
   │                                                                      │
   │  ┌──────────────┐  ┌────────────────┐                               │
-  │  │  brewcode:   │  │   brewcode:    │                               │
-  │  │  architect   │  │   reviewer     │                               │
+  │  │  AR          │  │   RV           │                               │
   │  │ (arch+deps)  │  │ (quality+crit) │                               │
   │  └──────┬───────┘  └───────┬────────┘                               │
   │         │                  │                                         │
   │         └────────┬─────────┘                                         │
   │                  ▼                                                    │
-  │   Rule: BOTH agents must confirm a remark (2/2 consensus)           │
-  │   Fix confirmed remarks in PLAN.md before proceeding                │
+  │   Rule: BOTH agents must confirm (2/2 consensus)                    │
+  │   Fix confirmed remarks in PM before proceeding                     │
   └──────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -356,23 +310,19 @@ description: Flow diagrams for brewcode plugin execution
   │ 1. Determine     │     $ARGUMENTS path OR .claude/TASK.md
   │    task path     │
   └────────┬─────────┘
-           │
            ▼
   ┌──────────────────┐     ┌──────────────────────────────────┐
-  │ 2. Initialize    │────▶│ bc-coordinator (mode: initialize)│
-  │    via           │◀────│ Validation, .lock, status →      │
-  │    coordinator   │     │ "in progress"                    │
+  │ 2. Init via      │────▶│ BCI                              │
+  │    BC_C          │◀────│ Validation, LK, status → IP     │
   └────────┬─────────┘     └──────────────────────────────────┘
            │
            │                    ┌─────────────────────────────┐
-           │ ┌─ post-task.mjs ─▶│ Bind session_id to .lock    │
+           │ ┌─ POT ───────────▶│ Bind SID to LK              │
            │ │                  └─────────────────────────────┘
            ▼
   ┌──────────────────┐
-  │ 3. Load          │
-  │    context       │     PLAN.md + KNOWLEDGE.jsonl
+  │ 3. Load ctx      │     PM + KJ
   └────────┬─────────┘
-           │
            ▼
   ╔═══════════════════════════════════════════════════════════════════════╗
   ║ 4. PHASE EXECUTION LOOP (for each phase N)                          ║
@@ -382,32 +332,30 @@ description: Flow diagrams for brewcode plugin execution
   ║  │                    PHASE N (execution)                       │    ║
   ║  │                                                              │    ║
   ║  │   ┌───────────────────┐                                     │    ║
-  ║  │   │ pre-task.mjs      │  Injection:                         │    ║
+  ║  │   │ PT                │  Injection:                         │    ║
   ║  │   │ (PreToolUse:Task) │  1. grepai reminder                 │    ║
-  ║  │   │                   │  2. ## K (knowledge from KNOWLEDGE.jsonl) │    ║
+  ║  │   │                   │  2. ## K (knowledge from KJ)        │    ║
   ║  │   │                   │  3. Role constraints                │    ║
   ║  │   └─────────┬─────────┘                                     │    ║
   ║  │             ▼                                                │    ║
   ║  │   ┌───────────────────┐                                     │    ║
-  ║  │   │ Call worker       │  developer / tester / reviewer      │    ║
-  ║  │   │ agent             │                                     │    ║
+  ║  │   │ Call worker agent │  DV / tester / RV                   │    ║
   ║  │   └─────────┬─────────┘                                     │    ║
   ║  │             │                                                │    ║
   ║  │             │  ┌──────────────────────────────────────┐     │    ║
-  ║  │             ├──│ post-task.mjs (PostToolUse:Task)     │     │    ║
-  ║  │             │  │ "AGENT DONE -> 1.WRITE 2.CALL coord"│     │    ║
+  ║  │             ├──│ POT (PostToolUse:Task)               │     │    ║
+  ║  │             │  │ "AGENT DONE -> 1.WRITE 2.CALL coord" │     │    ║
   ║  │             │  └──────────────────────────────────────┘     │    ║
   ║  │             ▼                                                │    ║
   ║  │   ┌───────────────────┐                                     │    ║
-  ║  │   │ STEP 1: Write     │  artifacts/{P}-{N}{T}/             │    ║
+  ║  │   │ STEP 1: Write     │  ART/{P}-{N}{T}/                   │    ║
   ║  │   │ agent report      │  {AGENT}_output.md                 │    ║
   ║  │   └─────────┬─────────┘                                     │    ║
   ║  │             ▼                                                │    ║
   ║  │   ┌───────────────────┐                                     │    ║
-  ║  │   │ STEP 2: Call      │  bc-coordinator:                    │    ║
-  ║  │   │ coordinator       │  - Update phase status              │    ║
+  ║  │   │ STEP 2: Call BC_C │  - Update phase status              │    ║
   ║  │   │                   │  - Read report from disk            │    ║
-  ║  │   │                   │  - Extract knowledge -> KNOWLEDGE   │    ║
+  ║  │   │                   │  - Extract knowledge -> KJ          │    ║
   ║  │   │                   │  - Auto-compact if >= threshold     │    ║
   ║  │   │                   │  - Write summary.md                 │    ║
   ║  │   └─────────┬─────────┘                                     │    ║
@@ -419,8 +367,7 @@ description: Flow diagrams for brewcode plugin execution
   ║  │                    PHASE NV (verification)                   │    ║
   ║  │                                                              │    ║
   ║  │   ┌───────────────────┐                                     │    ║
-  ║  │   │ Call reviewer /   │  Check phase N results              │    ║
-  ║  │   │ tester            │                                     │    ║
+  ║  │   │ Call RV / tester  │  Check phase N results              │    ║
   ║  │   └─────────┬─────────┘                                     │    ║
   ║  │             ▼                                                │    ║
   ║  │        Result?                                               │    ║
@@ -465,67 +412,39 @@ description: Flow diagrams for brewcode plugin execution
   ║   Next phase (N+1) ─────────────────────▶ (return to loop start)   ║
   ║                                                                     ║
   ╚═════════════════════════════════════════════════════════════════════╝
-           │
            │ All phases completed
            ▼
   ┌──────────────────────────────────────────────────────────────────────┐
   │ 5. Final review (3+ parallel reviewers)                            │
-  │                                                                      │
   │  ┌──────────┐  ┌──────────┐  ┌──────────┐                          │
-  │  │reviewer#1│  │reviewer#2│  │reviewer#3│                          │
+  │  │RV#1      │  │RV#2      │  │RV#3      │                          │
   │  │business  │  │code      │  │patterns  │                          │
   │  │logic     │  │quality   │  │          │                          │
   │  └──────────┘  └──────────┘  └──────────┘                          │
   └──────────────────────────────────┬───────────────────────────────────┘
-                                     │
                                      ▼
   ┌──────────────────┐     ┌──────────────────────────────────┐
-  │ 6. Completion    │────▶│ bc-coordinator (mode: finalize)  │
-  │                  │◀────│ FINAL.md, status -> "finished"   │
-  │                  │     │       OR status -> "failed"      │
+  │ 6. Completion    │────▶│ BC_C (mode: finalize)            │
+  │                  │◀────│ FINAL.md, status → finished      │
+  │                  │     │       OR status → failed         │
   └────────┬─────────┘     └──────────────────────────────────┘
-           │
            ▼
   ┌──────────────────┐
   │ Extract rules    │
-  │ /brewcode:rules │
-  │ KNOWLEDGE -> rules│
+  │ /brewcode:rules  │
+  │ KJ -> rules      │
   └──────────────────┘
 ```
 
 ### c.2) Hook interaction during execution
 
-```
-  Hook                    Event                     Action
-  ════════════════════    ══════════════════════     ══════════════════════════
-
-  session-start.mjs      SessionStart               Log session_id,
-                                                     bind session to task,
-                                                     link LATEST.md (clear)
-
-  pre-task.mjs           PreToolUse:Task             1. grepai reminder
-                         (BEFORE each agent)          2. Inject ## K knowledge
-                                                     3. Role constraints
-
-  post-task.mjs          PostToolUse:Task            For coordinator:
-                         (AFTER each agent)            bind session -> lock
-                                                     For worker agents:
-                                                       remind 2-step protocol
-
-  pre-compact.mjs        PreCompact                  1. Check lock
-                         (during auto-compact)        2. Validate artifacts
-                                                     3. Compact KNOWLEDGE
-                                                     4. Write handoff entry
-                                                     5. Status -> "handoff"
-                                                     6. systemMessage with context
-
-  stop.mjs               Stop                        Task not in terminal state?
-                         (on exit attempt)              -> BLOCK exit
-                                                     Terminal (finished/failed/...)?
-                                                       -> Delete .lock
-                                                     Stale lock (>24h)?
-                                                       -> Auto-cleanup
-```
+| Hook | Event | Action |
+|------|-------|--------|
+| session-start.mjs | SessionStart | Log SID, bind session to task, link LATEST.md (clear) |
+| PT | PreToolUse:Task (BEFORE each agent) | 1. grepai reminder 2. Inject ## K knowledge 3. Role constraints |
+| POT | PostToolUse:Task (AFTER each agent) | coordinator: bind SID → LK; worker agents: remind 2-step protocol |
+| PC | PreCompact (during auto-compact) | 1. Check LK 2. Validate ART 3. Compact KJ 4. Write handoff entry 5. Status → handoff 6. systemMessage with ctx |
+| SM | Stop (on exit attempt) | task not terminal? → BLOCK exit; terminal (finished/failed/...)? → delete LK; stale LK (>24h)? → auto-cleanup |
 
 ---
 
@@ -535,80 +454,76 @@ description: Flow diagrams for brewcode plugin execution
   .claude/tasks/{TS}_{NAME}_task/.lock
 
   ┌──────────────────────────────────────────────────────────────────────┐
-  │                                                                      │
-  │   /brewcode:start                                                  │
+  │   /brewcode:start                                                   │
   │        │                                                             │
   │        ▼                                                             │
   │   ┌─────────────────┐                                               │
-  │   │ 1. CREATION     │  bc-coordinator (mode: initialize)            │
+  │   │ 1. CREATION     │  BCI                                          │
   │   │                 │                                               │
   │   │ {               │                                               │
-  │   │  "task_path":.. │  session_id NOT YET BOUND                     │
+  │   │  "task_path":.. │  SID NOT YET BOUND                            │
   │   │  "started_at":..│                                               │
   │   │ }               │                                               │
   │   └────────┬────────┘                                               │
-  │            │                                                         │
   │            ▼                                                         │
   │   ┌─────────────────┐                                               │
-  │   │ 2. SESSION      │  post-task.mjs (after coordinator)            │
+  │   │ 2. SESSION      │  POT (after coordinator)                      │
   │   │    BINDING      │                                               │
   │   │                 │                                               │
   │   │ {               │                                               │
-  │   │  "task_path":.. │  + session_id BOUND                           │
+  │   │  "task_path":.. │  + SID BOUND                                  │
   │   │  "started_at":..│                                               │
-  │   │  "session_id":..│  Now lock belongs to specific session         │
+  │   │  "session_id":..│  LK belongs to specific session               │
   │   │ }               │                                               │
   │   └────────┬────────┘                                               │
-  │            │                                                         │
   │            ▼                                                         │
   │   ┌─────────────────────────────────────────────────────────┐       │
   │   │ 3. CHECKS DURING LIFETIME                                │       │
   │   │                                                          │       │
-  │   │  checkLock(cwd, session_id) called in:                  │       │
+  │   │  checkLock(cwd, SID) called in:                         │       │
   │   │                                                          │       │
-  │   │  ┌──────────────┐  lock exists + session matches?       │       │
-  │   │  │ pre-task.mjs │──┬─ YES -> inject knowledge           │       │
+  │   │  ┌──────────────┐  LK exists + session matches?         │       │
+  │   │  │ PT           │──┬─ YES -> inject knowledge           │       │
   │   │  └──────────────┘  └─ NO -> skip injection              │       │
   │   │                                                          │       │
-  │   │  ┌──────────────┐  lock exists + session matches?       │       │
-  │   │  │ post-task.mjs│──┬─ YES -> remind 2-step              │       │
+  │   │  ┌──────────────┐  LK exists + session matches?         │       │
+  │   │  │ POT          │──┬─ YES -> remind 2-step              │       │
   │   │  └──────────────┘  └─ NO -> skip                        │       │
   │   │                                                          │       │
-  │   │  ┌────────────────┐  lock exists + session matches?     │       │
-  │   │  │pre-compact.mjs │──┬─ YES -> handoff logic            │       │
+  │   │  ┌────────────────┐  LK exists + session matches?       │       │
+  │   │  │ PC             │──┬─ YES -> handoff logic            │       │
   │   │  └────────────────┘  └─ NO -> normal compact            │       │
   │   │                                                          │       │
-  │   │  ┌──────────────┐  lock.session_id == current session?  │       │
-  │   │  │   stop.mjs   │──┬─ YES -> check task status          │       │
+  │   │  ┌──────────────┐  lock.SID == current session?         │       │
+  │   │  │   SM         │──┬─ YES -> check task status          │       │
   │   │  └──────────────┘  └─ NO -> allow exit                  │       │
   │   │                                                          │       │
-  │   │  IMPORTANT: session_id DOES NOT CHANGE after compact!   │       │
-  │   │  Lock remains valid within the same session.             │       │
+  │   │  IMP: SID does NOT change after compact!                │       │
+  │   │  LK remains valid within same session.                  │       │
   │   └──────────────────────────────────────────────────────────┘       │
-  │            │                                                         │
   │            ▼                                                         │
-  │   ┌─────────────────────────────────────────────────┐               │
-  │   │ 4. DELETION                                      │               │
-  │   │                                                  │               │
-  │   │  Scenario A: Task finished (finished)            │               │
-  │   │  ┌──────────┐                                   │               │
-  │   │  │ stop.mjs │──▶ deleteLock() + allow exit      │               │
-  │   │  └──────────┘                                   │               │
-  │   │                                                  │               │
-  │   │  Scenario B: Stale lock (> 24 hours)            │               │
-  │   │  ┌──────────┐                                   │               │
-  │   │  │ stop.mjs │──▶ deleteLock() + allow exit      │               │
-  │   │  └──────────┘                                   │               │
-  │   │                                                  │               │
-  │   │  Scenario C: No session_id (unbound)            │               │
-  │   │  ┌──────────┐                                   │               │
-  │   │  │ stop.mjs │──▶ deleteLock() + allow exit      │               │
-  │   │  └──────────┘                                   │               │
-  │   │                                                  │               │
-  │   │  Scenario D: Emergency exit (user)              │               │
-  │   │  rm .claude/tasks/*_task/.lock                   │               │
-  │   │                                                  │               │
-  │   └──────────────────────────────────────────────────┘               │
+  │   ┌─────────────────────────────────────────────┐               │
+  │   │ 4. DELETION                                  │               │
+  │   │                                              │               │
+  │   │  A: Task finished                            │               │
+  │   │  ┌──────────┐                               │               │
+  │   │  │ SM       │──▶ deleteLock() + allow exit  │               │
+  │   │  └──────────┘                               │               │
+  │   │                                              │               │
+  │   │  B: Stale LK (> 24h)                        │               │
+  │   │  ┌──────────┐                               │               │
+  │   │  │ SM       │──▶ deleteLock() + allow exit  │               │
+  │   │  └──────────┘                               │               │
+  │   │                                              │               │
+  │   │  C: No SID (unbound)                        │               │
+  │   │  ┌──────────┐                               │               │
+  │   │  │ SM       │──▶ deleteLock() + allow exit  │               │
+  │   │  └──────────┘                               │               │
+  │   │                                              │               │
+  │   │  D: Emergency exit (user)                   │               │
+  │   │  rm .claude/tasks/*_task/.lock               │               │
+  │   │                                              │               │
+  │   └──────────────────────────────────────────────┘               │
   │                                                                      │
   └──────────────────────────────────────────────────────────────────────┘
 ```
@@ -622,34 +537,28 @@ description: Flow diagrams for brewcode plugin execution
   │              INFINITE CONTEXT VIA AUTO-COMPACT                          │
   └─────────────────────────────────────────────────────────────────────────┘
 
-  Task execution (phase N, context growing)
-           │
-           │ Context approaching limit
-           │ Claude Code triggers auto-compact
+  Task execution (phase N, ctx growing)
+           │ ctx approaching limit -> Claude Code triggers auto-compact
            ▼
   ┌──────────────────────────────────────────────────────────────────────┐
-  │ pre-compact.mjs (PreCompact)                                        │
+  │ PC (PreCompact)                                                     │
   │                                                                      │
   │  ┌──────────────────┐                                               │
-  │  │ 1. Check lock    │  checkLock(cwd, session_id)                   │
-  │  │    and session   │  Lock not found? -> normal compact            │
+  │  │ 1. Check LK      │  checkLock(cwd, SID)                         │
+  │  │    and session   │  LK not found? -> normal compact             │
   │  └────────┬─────────┘                                               │
-  │           │ Lock valid                                               │
+  │           │ LK valid                                                 │
   │           ▼                                                          │
   │  ┌──────────────────┐                                               │
-  │  │ 2. Parse task    │  parseTask() -> status, current phase,        │
-  │  │                  │  total phases                                  │
+  │  │ 2. parseTask()   │  status, current phase, total phases          │
   │  └────────┬─────────┘                                               │
-  │           │                                                          │
   │           ▼                                                          │
   │  ┌──────────────────┐                                               │
-  │  │ 3. Validate      │  Check current phase artifacts                │
-  │  │    state         │  Warn if missing                              │
+  │  │ 3. Validate state│  Check current phase ART; warn if missing     │
   │  └────────┬─────────┘                                               │
-  │           │                                                          │
   │           ▼                                                          │
   │  ┌──────────────────────────────────────────────────────────┐       │
-  │  │ 4. Compact KNOWLEDGE.jsonl                               │       │
+  │  │ 4. Compact KJ                                            │       │
   │  │                                                          │       │
   │  │  localCompact(knowledgePath, maxEntries):                │       │
   │  │                                                          │       │
@@ -666,27 +575,22 @@ description: Flow diagrams for brewcode plugin execution
   │  │              │    (.tmp -> rename)         │             │       │
   │  │              └────────────────────────────┘             │       │
   │  └──────────────────────────────────────────────────────────┘       │
-  │           │                                                          │
   │           ▼                                                          │
   │  ┌──────────────────┐                                               │
-  │  │ 5. Write handoff │  KNOWLEDGE.jsonl +=                           │
+  │  │ 5. Write handoff │  KJ +=                                        │
   │  │    entry         │  {"t":"ℹ️","txt":"Handoff at phase N:         │
-  │  │                  │   context auto-compact","src":"pre-compact"}   │
+  │  │                  │   ctx auto-compact","src":"pre-compact"}      │
   │  └────────┬─────────┘                                               │
-  │           │                                                          │
   │           ▼                                                          │
   │  ┌──────────────────┐                                               │
-  │  │ 6. Update        │  PLAN.md line 1: status: handoff              │
-  │  │    status        │                                               │
+  │  │ 6. Update status │  PM line 1: status: handoff                  │
   │  └────────┬─────────┘                                               │
-  │           │                                                          │
   │           ▼                                                          │
   │  ┌──────────────────┐                                               │
-  │  │ 7. Save          │  state.lastHandoff = timestamp                │
-  │  │    state         │  state.lastPhase = N                          │
-  │  │                  │  state.lastCompactAt = new Date().toISOString()              │
+  │  │ 7. Save state    │  state.lastHandoff = timestamp                │
+  │  │                  │  state.lastPhase = N                          │
+  │  │                  │  state.lastCompactAt = new Date().toISOString()│
   │  └────────┬─────────┘                                               │
-  │           │                                                          │
   │           ▼                                                          │
   │  ┌──────────────────┐                                               │
   │  │ 8. systemMessage │  <ft-handoff>                                 │
@@ -695,48 +599,41 @@ description: Flow diagrams for brewcode plugin execution
   │  │                  │  AFTER COMPACT: re-read TASK.md               │
   │  │                  │  </ft-handoff>                                 │
   │  └────────┬─────────┘                                               │
-  │           │                                                          │
+  │                                                                      │
   │  return { continue: true, systemMessage: ... }                      │
   └──────────┬───────────────────────────────────────────────────────────┘
-             │
              ▼
   ┌──────────────────┐
-  │ AUTO-COMPACT     │  Claude Code compresses context
-  │ (Claude Code)    │  SAME SESSION (session_id does not change!)
+  │ AUTO-COMPACT     │  Claude Code compresses ctx
+  │ (Claude Code)    │  SAME SESSION (SID does not change!)
   └────────┬─────────┘
-           │
            ▼
   ┌──────────────────────────────────────────────────────────────────────┐
-  │ RESUMPTION (same session, compressed context)                       │
+  │ RESUMPTION (same session, compressed ctx)                           │
   │                                                                      │
   │  ┌──────────────────┐                                               │
-  │  │ 1. Re-read       │  .claude/TASK.md -> path to task              │
+  │  │ 1. Re-read       │  .claude/TASK.md -> path to task             │
   │  │    TASK.md       │                                               │
   │  └────────┬─────────┘                                               │
-  │           │                                                          │
   │           ▼                                                          │
   │  ┌──────────────────┐                                               │
-  │  │ 2. Re-read       │  Phase status, current position               │
-  │  │    PLAN.md       │  status: handoff -> continue from phase N     │
+  │  │ 2. Re-read PM    │  Phase status, current position               │
+  │  │                  │  status: handoff -> continue from phase N     │
   │  └────────┬─────────┘                                               │
-  │           │                                                          │
   │           ▼                                                          │
   │  ┌──────────────────┐                                               │
-  │  │ 3. Re-read       │  All accumulated knowledge (compacted)        │
-  │  │ KNOWLEDGE.jsonl  │                                               │
+  │  │ 3. Re-read KJ    │  All accumulated knowledge (compacted)        │
   │  └────────┬─────────┘                                               │
-  │           │                                                          │
   │           ▼                                                          │
   │  ┌──────────────────┐                                               │
-  │  │ 4. Continue      │  Phase N -> N+1 -> ... -> final              │
-  │  │    execution     │                                               │
+  │  │ 4. Continue exec │  Phase N -> N+1 -> ... -> final              │
   │  └──────────────────┘                                               │
   │                                                                      │
-  │  State fully preserved in files:                                    │
-  │  - PLAN.md: phase status, progress                                 │
-  │  - KNOWLEDGE.jsonl: accumulated knowledge                          │
-  │  - artifacts/: agent reports                                        │
-  │  - .lock: session binding (session_id does not change)             │
+  │  State preserved in files:                                          │
+  │  - PM: phase status, progress                                       │
+  │  - KJ: accumulated knowledge                                        │
+  │  - ART: agent reports                                               │
+  │  - LK: session binding (SID does not change)                       │
   └──────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -745,29 +642,18 @@ description: Flow diagrams for brewcode plugin execution
 ## f) Task lifecycle (state machine)
 
 ```
-  ┌──────────────────────────────────────────────────────────────────────────┐
-  │                    TASK STATE MACHINE                                    │
-  │                                                                          │
-  │    State stored in PLAN.md, line 1: status: {value}                     │
-  └──────────────────────────────────────────────────────────────────────────┘
-
+  State stored in PM, line 1: status: {value}
 
                         ┌───────────────────┐
-                        │                   │
-                        │     pending       │  Initial state
-                        │                   │  (after /brewcode:plan)
+                        │     pending       │  Initial state (after /brewcode:plan)
                         └─────────┬─────────┘
-                                  │
-                                  │  /brewcode:start
-                                  │  bc-coordinator (mode: initialize)
+                                  │ /brewcode:start -> BCI
                                   ▼
                         ┌───────────────────┐
                ┌───────▶│                   │◀──────────────────────────┐
-               │        │   in progress     │  Active execution         │
+               │        │   IP              │  Active execution         │
                │        │                   │  (phases N -> N+1 -> ...) │
                │        └──┬────────┬───────┘                           │
-               │           │        │                                    │
-               │           │        │                                    │
                │           │        │                                    │
      ┌─────────┘     ┌─────┘        └──────┐                            │
      │               │                     │                            │
@@ -775,91 +661,62 @@ description: Flow diagrams for brewcode plugin execution
      │    ┌───────────────────┐  ┌───────────────────┐                 │
      │    │                   │  │                   │                  │
      │    │     failed        │  │     handoff       │  Auto-compact   │
-     │    │                   │  │                   │  (PreCompact)   │
+     │    │                   │  │                   │  (PC)           │
      │    └──┬────────┬───────┘  └─────────┬─────────┘                 │
      │       │        │                    │                            │
-     │       │        │  Retry /           │  Resume                    │
-     │       │        │  escalation        │  after compact             │
-     │       │        │                    │  (same session)            │
+     │       │        │  Retry /           │  Resume after compact      │
+     │       │        │  escalation        │  (same session)            │
      │       │        └────────────────────┘────────────────────────────┘
      │       │
-     │       │  Escalation exhausted
-     │       │  (TERMINAL)
+     │       │  Escalation exhausted (TERMINAL)
      │       │
      │       │        ┌───────────────────┐
-     │       └───────▶│                   │
-     │                │  failed (terminal)│  Finalize(status="failed")
+     │       └───────▶│  failed (terminal)│  Finalize(status="failed")
      │                │                   │  FINAL.md created
      │                └─────────┬─────────┘
-     │                          │
-     │  Task restart            │  stop.mjs
-     │  (status "in progress"   ▼
-     │   also allowed        ┌───────────────────┐
-     │   during init)        │  Delete .lock     │
+     │                          │ SM
+     │  Task restart            ▼
+     │  (status IP also      ┌───────────────────┐
+     │   allowed during init)│  Delete LK        │
      │                       │  Allow exit       │
      │                       └───────────────────┘
      │
-     │
-     │          All phases completed
-     │          bc-coordinator (mode: finalize)
+     │  All phases completed -> BC_C (mode: finalize)
      │
      │        ┌───────────────────┐
-     └────────│                   │
-              │    finished       │  Final state
-              │                   │  (FINAL.md created)
+     └────────│    finished       │  Final state (FINAL.md created)
               └───────────────────┘
-                        │
-                        │  stop.mjs
+                        │ SM
                         ▼
               ┌───────────────────┐
-              │  Delete .lock     │
-              │  Allow            │
-              │  exit             │
+              │  Delete LK        │
+              │  Allow exit       │
               └───────────────────┘
 
 
-  ═══════════════════════════════════════════════════════════════════════
   Transition Table
-  ═══════════════════════════════════════════════════════════════════════
 
-  ┌──────────────┬──────────────┬────────────────────────────────────────┐
-  │ From         │ To           │ Trigger                                │
-  ├──────────────┼──────────────┼────────────────────────────────────────┤
-  │ pending      │ in progress  │ bc-coordinator mode:initialize         │
-  ├──────────────┼──────────────┼────────────────────────────────────────┤
-  │ in progress  │ in progress  │ Phase transition (N -> N+1)           │
-  ├──────────────┼──────────────┼────────────────────────────────────────┤
-  │ in progress  │ handoff      │ pre-compact.mjs (auto-compact)         │
-  ├──────────────┼──────────────┼────────────────────────────────────────┤
-  │ in progress  │ failed       │ Critical error in phase                │
-  ├──────────────┼──────────────┼────────────────────────────────────────┤
-  │ in progress  │ finished     │ bc-coordinator mode:finalize           │
-  ├──────────────┼──────────────┼────────────────────────────────────────┤
-  │ handoff      │ in progress  │ Resume after compact                   │
-  ├──────────────┼──────────────┼────────────────────────────────────────┤
-  │ failed       │ in progress  │ Restart / escalation                   │
-  ├──────────────┼──────────────┼────────────────────────────────────────┤
-  │ in progress  │ failed       │ Escalation exhausted (TERMINAL)        │
-  └──────────────┴──────────────┴────────────────────────────────────────┘
+  | From        | To          | Trigger                            |
+  |-------------|-------------|------------------------------------|
+  | pending     | IP          | BCI                                |
+  | IP          | IP          | Phase transition (N -> N+1)        |
+  | IP          | handoff     | PC (auto-compact)                  |
+  | IP          | failed      | Critical error in phase            |
+  | IP          | finished    | BC_C mode:finalize                 |
+  | handoff     | IP          | Resume after compact               |
+  | failed      | IP          | Restart / escalation               |
+  | IP          | failed      | Escalation exhausted (TERMINAL)    |
 
 
-  ═══════════════════════════════════════════════════════════════════════
-  Exit Blocking (stop.mjs)
-  ═══════════════════════════════════════════════════════════════════════
+  Exit Blocking (SM)
 
-  ┌──────────────┬──────────────────────────────────────────────────────┐
-  │ State        │ stop.mjs Behavior                                   │
-  ├──────────────┼──────────────────────────────────────────────────────┤
-  │ pending      │ Allow (no lock = task not started)                  │
-  ├──────────────┼──────────────────────────────────────────────────────┤
-  │ in progress  │ BLOCK exit, show progress                           │
-  ├──────────────┼──────────────────────────────────────────────────────┤
-  │ handoff      │ BLOCK exit, suggest continue                        │
-  ├──────────────┼──────────────────────────────────────────────────────┤
-  │ failed       │ Terminal: Allow, delete .lock (escalation exhausted)│
-  ├──────────────┼──────────────────────────────────────────────────────┤
-  │ finished     │ Terminal: Allow, delete .lock                       │
-  └──────────────┴──────────────────────────────────────────────────────┘
+  | State    | SM Behavior                                          |
+  |----------|------------------------------------------------------|
+  | pending  | Allow (no LK = task not started)                     |
+  | IP       | BLOCK exit, show progress                            |
+  | handoff  | BLOCK exit, suggest continue                         |
+  | failed   | Terminal: Allow, delete LK (escalation exhausted)   |
+  | finished | Terminal: Allow, delete LK                           |
 
   Emergency exit: rm .claude/tasks/*_task/.lock
 ```
@@ -869,17 +726,17 @@ description: Flow diagrams for brewcode plugin execution
 ## g) KNOWLEDGE Pipeline
 
 ```
-bc-coordinator            KNOWLEDGE.jsonl          .claude/rules/
-(after each phase)   →   [❌ avoid]           →    avoid.md
-                         [✅ best practice]   →    best-practice.md
-                         [ℹ️  info facts]     →    (kept after prune)
-      ↑                        ↑
-pre-task.mjs              bc-knowledge-manager
-injects ## K block         (dedupe / compact)
+BC_C               KJ                   .claude/rules/
+(after each phase) [❌ avoid]        →   avoid.md
+                   [✅ best practice] →   best-practice.md
+                   [ℹ️  info facts]   →   (kept after prune)
+      ↑                  ↑
+PT injects       bc-knowledge-manager
+## K block       (dedupe / compact)
 into every agent
 ```
 
-**At task COMPLETE (`/start` Step 5):**
+At task COMPLETE (`/start` Step 5):
 1. `Skill(brewcode:rules)` → bc-rules-organizer → writes `.claude/rules/*.md`
 2. `Task(bc-knowledge-manager, prune-rules)` → removes ❌/✅, keeps ℹ️
 
@@ -888,17 +745,17 @@ into every agent
 ## Legend
 
 ```
-  ┌──────────┐
-  │  Step    │  Action / stage
+  ┌──────────┐  Action / stage
+  │  Step    │
   └──────────┘
 
-  ╔══════════╗
-  ║  Block   ║  Group / loop
+  ╔══════════╗  Group / loop
+  ║  Block   ║
   ╚══════════╝
 
-  ──▶          Flow direction
-  ───          Connection
+  ──▶  Flow direction
+  ───  Connection
 
-  ⛔           Required action (2-step protocol)
-  ❌ ✅ ℹ️      KNOWLEDGE entry types (avoid / pattern / fact)
+  ⛔   Required action (2-step protocol)
+  ❌ ✅ ℹ️  KJ entry types (avoid / pattern / fact)
 ```

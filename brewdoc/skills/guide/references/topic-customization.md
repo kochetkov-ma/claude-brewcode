@@ -11,8 +11,7 @@ Skills are interactive instructions that Claude Code executes step by step.
 ```bash
 # Use the skill-creator agent
 /brewcode:skills
-# Or trigger directly by describing what you need:
-# "Create a skill for database migrations"
+# Or describe what you need: "Create a skill for database migrations"
 ```
 
 Skill structure:
@@ -37,7 +36,7 @@ model: haiku|sonnet|opus
 - `name` — how users invoke it: `/plugin:skill-name`
 - `description` — also used for auto-detection (include trigger keywords)
 - `model` — determines which model runs the skill
-- `allowed-tools` — restricts the skill to only necessary tools
+- `allowed-tools` — restricts skill to only necessary tools
 - Reference files use `${CLAUDE_SKILL_DIR}` to locate themselves
 
 ## Section 2: Create Custom Agents
@@ -47,8 +46,7 @@ Agents are single `.md` files placed in `.claude/agents/`.
 ```bash
 # Use the agent-creator agent
 /brewcode:agents
-# Or describe what you need:
-# "Create an agent for API testing"
+# Or describe what you need: "Create an agent for API testing"
 ```
 
 Agent file structure:
@@ -157,4 +155,4 @@ Team directory:
   agents/          # Generated agent .md files
 ```
 
-Teams make the manager smarter about your specific project. Instead of generic "developer" or "tester", you get agents that already know your stack.
+Teams make the manager smarter about your specific project — instead of generic "developer" or "tester", you get agents that already know your stack.
