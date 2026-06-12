@@ -131,7 +131,12 @@ jobs:
 
             docker compose up -d --no-deps --force-recreate docs
 
-            docker exec caddy caddy reload --config /etc/caddy/Caddyfile
+            # Reload main caddy to pick up the docs site snippet.
+            # admin is bound 0.0.0.0:2019 with origins {caddy:2019, localhost:2019};
+            # a plain `caddy reload` derives Origin http://0.0.0.0:2019 (the config's admin
+            # address), which is NOT in that allowlist -> HTTP 403. Connect via localhost:2019,
+            # which IS allowed, so the graceful reload succeeds.
+            docker exec caddy caddy reload --config /etc/caddy/Caddyfile --address localhost:2019
 
             for i in $(seq 1 10); do
               if curl -sf -o /dev/null "https://doc-claude.brewcode.app/getting-started/"; then
