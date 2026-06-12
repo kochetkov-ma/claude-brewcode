@@ -2,6 +2,25 @@
 
 ---
 
+## v3.11.0 (2026-06-12)
+
+> Docs: [brewtools/skills/text-human](https://doc-claude.brewcode.app/brewtools/skills/text-human/)
+
+> **Theme:** rebuild `brewtools:text-human` from a code-only cleaner into a universal, context-aware, flow-based humanizer backed by web-researched and adversarially-validated pattern catalogs.
+
+### brewtools
+
+#### Changed
+- **text-human is now universal:** works on source code, comments, docstrings/JavaDoc, technical docs, commits/PRs, published articles, and reddit/chat text -- not just code. A greedy flow-detection phase picks ONE of five domain flows from context (prompt + extension + content sniff) and announces it: `code`, `docs`, `social`, `article`, `mixed`.
+- **Two-pass model:** PASS 1 strips validated AI tells, tiered by reliability -- HIGH-tier acts on a single hit, MED-tier acts only on co-occurring density, and behaviour-changing items (hallucinated refs, fabricated tickets, try/except-everything) are surfaced for review and never auto-edited. PASS 2 injects register-fit human style, gated per domain.
+- **Hard guards:** human-injection is OFF for code / API docs / formal-contract; a global guard forbids injecting typos, errors, or fabricated references in any flow. Positioned honestly as "removes AI surface artifacts and fits register" -- it does not claim to detect authorship.
+- **Universal arguments:** accepts a path, commit hash, folder, free-text prompt, path + prompt, or no args. The prompt both selects/overrides the flow and adds custom rules.
+
+#### Added
+- **Validated pattern catalogs** (`reference/ai-patterns.md`, `reference/human-patterns.md`) and five flow references (`reference/flows/{code,docs,social,article,mixed}.md`). Catalogs are sourced from corpus studies, Wikipedia AI-cleanup consensus, and practitioner research, then filtered to drop high-false-positive folklore (em-dash, rule-of-three, smart quotes, "too clean" code). The existing per-language references (java/python/typescript) are retained and used by the `code` flow.
+
+---
+
 ## v3.10.0 (2026-06-11)
 
 > Docs: [brewcode/agents/skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [brewcode/agents/agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [brewcode/agents/hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [brewcode/hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | [brewtools/skills/plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) | [faq](https://doc-claude.brewcode.app/faq/) | [installation](https://doc-claude.brewcode.app/installation/)

@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 3.6.0 |
+| Version | 3.11.0 |
 | Skills | 11 |
 | Agents | 3 |
 
@@ -41,7 +41,7 @@ Update anytime with `/brewtools:plugin-update`.
 
 ## Overview
 
-Brewtools provides standalone utilities: token-efficient optimization with 30+ validated rules, AI-artifact removal from code and docs, security scanning for leaked credentials, SSH server management, GitHub Actions deployment with safety gates, evidence-based multi-agent debate, and plugin check/install/update. Each skill is self-contained and requires no prior setup.
+Brewtools provides standalone utilities: token-efficient optimization with 30+ validated rules, universal AI-artifact removal with greedy flow detection across code/docs/articles/reddit/chat (five domain flows, two-pass strip+inject model), security scanning for leaked credentials, SSH server management, GitHub Actions deployment with safety gates, evidence-based multi-agent debate, and plugin check/install/update. Each skill is self-contained and requires no prior setup.
 
 ## Installation
 
@@ -64,8 +64,10 @@ claude --plugin-dir ./brewtools
 /brewtools:text-optimize CLAUDE.md              # Medium mode (default)
 /brewtools:text-optimize -l agents/reviewer.md  # Light mode -- safe, minimal changes
 /brewtools:text-optimize -d prompts/            # Deep mode -- aggressive compression
-/brewtools:text-human 3be67487                  # Remove AI artifacts from a commit
-/brewtools:text-human src/main/java/services/   # Process an entire folder
+/brewtools:text-human 3be67487                              # mixed flow: clean all files from a commit
+/brewtools:text-human src/main/java/services/               # mixed flow: entire folder, parallel blocks
+/brewtools:text-human "humanize this blog post: <text>"     # article flow: burstiness + stance injection
+/brewtools:text-human src/ only strip AI artifacts, no inject  # custom prompt overrides defaults
 /brewtools:secrets-scan                         # Scan for leaked credentials
 /brewtools:secrets-scan --fix                   # Scan and fix interactively
 /brewtools:plugin-update                        # Interactive check + update
@@ -77,7 +79,7 @@ claude --plugin-dir ./brewtools
 | Skill | Purpose | Model | Arguments |
 |-------|---------|-------|-----------|
 | [`/brewtools:text-optimize`](skills/text-optimize/README.md) | Optimize text for LLM token efficiency | sonnet | `[-l\|-d] [file\|folder\|path1,path2]` |
-| [`/brewtools:text-human`](skills/text-human/README.md) | Remove AI artifacts from code and docs | sonnet | `<commit-hash\|path> [custom instructions]` |
+| [`/brewtools:text-human`](skills/text-human/README.md) | Universal context-aware humanizer: strip AI artifacts and fit register across code, docs, articles, reddit/chat, and commits | sonnet | `[path\|commit\|folder\|text] [custom instructions]` |
 | [`/brewtools:secrets-scan`](skills/secrets-scan/README.md) | Scan for leaked secrets and credentials | sonnet | `[--fix]` |
 | [`/brewtools:ssh`](skills/ssh/SKILL.md) | SSH server management and configuration | opus | `[connect\|deploy\|configure\|...]` |
 | [`/brewtools:deploy`](skills/deploy/SKILL.md) | GitHub Actions deployment with safety gates | opus | `[release\|workflow\|...]` |

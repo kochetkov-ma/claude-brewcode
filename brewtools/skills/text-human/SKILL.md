@@ -1,288 +1,116 @@
 ---
 name: brewtools:text-human
-description: Removes AI artifacts, cleans comments, fixes unicode. Triggers - humanize, ai artifacts, ai comments, unicode fix.
-argument-hint: <commit-hash|path> [custom instructions]
+description: Humanizes code, docs, articles, reddit/chat, javadoc -- strips AI artifacts, fixes unicode, injects context-fit human style. Triggers - humanize, ai artifacts, unicode fix, article, reddit, javadoc, text.
+argument-hint: [path|commit|folder|text] [custom instructions]
 user-invocable: true
 allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Task, AskUserQuestion]
 ---
 
 # Text Humanizer
 
-Detect and remove AI-generated artifacts from code and documentation. Process commits, files, or folders with parallel sub-agents.
+Universal, context-aware humanizer. Works on source code, comments, docstrings, technical docs, commits/PRs, published articles, and reddit/chat text. It picks ONE flow from context, lazy-loads only that flow plus the relevant pattern sections, and runs a two-pass model: STRIP validated AI tells, then a gated INJECT of human style fit for the domain.
 
-## Language References
+Position: removes AI surface artifacts and fits register -- it does NOT claim to detect authorship.
 
-| Language | Reference | Load When |
-|----------|-----------|-----------|
-| Java/Kotlin | `@reference/java.md` | `*.java`, `*.kt`, `*.groovy`, Spring, Maven/Gradle |
-| TypeScript/JS/React | `@reference/typescript.md` | `*.ts`, `*.tsx`, `*.js`, `*.jsx`, Node.js, React |
-| Python | `@reference/python.md` | `*.py`, Django, FastAPI, Flask |
+## Two-pass model (applies to every flow)
 
-Multi-language projects: Load ALL relevant references.
+- PASS 1 -- STRIP: remove validated AI tells per `@reference/ai-patterns.md`. Only HIGH-tier universal-strip acts on single instances. MED density-signals act ONLY when several co-occur. Behavior-changing items (hallucinated refs, fake tickets, try/except-everything) are SURFACED for review, never auto-edited.
+- PASS 2 -- INJECT (gated): apply `@reference/human-patterns.md` for the flow's domain. HARD-OFF for code / API / formal-contract. GLOBAL GUARD: never inject typos, errors, or fabricated references in any flow.
 
 ---
 
-## Argument
+## Phase 0 -- Greedy flow detection (do this FIRST)
 
-**First token** = scope (required):
+Before any processing, parse the argument, pick exactly ONE flow, and ANNOUNCE it:
 
-| Input | Action |
-|-------|--------|
-| None | Use AskUserQuestion: "What to humanize?" Options: "Commit hash (git diff)" / "File path" / "Folder path" |
-| Commit hash (7+ hex) | Process all text files from commit |
-| File path | Process single file |
-| Folder path | Process all files in folder |
-| "entire project" | Use AskUserQuestion: "Too broad — specify scope." Options: "Specific folder" / "File pattern (e.g. src/**/*.java)" |
+`Flow: <name> -- <one-line why>`
 
-**Everything after first token** = custom prompt (optional). Free-form text, no quotes needed. Overrides or extends default humanization rules for this run. Passed to every sub-agent prompt.
+Then greedy-load ONLY the chosen flow file plus the pattern sections it needs (lazy -- not everything).
 
-### Custom Prompt Handling
+### Argument parsing (universal)
+Accept all of: path, commit hash, folder, free-text prompt, path+prompt, no args.
 
-1. Parse: split args into `scope` (first token) and `customPrompt` (rest)
-2. If `customPrompt` is present, prepend it to every sub-agent Task prompt as:
-   ```
-   CUSTOM INSTRUCTIONS (highest priority, override defaults):
-   <customPrompt>
-   ```
-3. Custom prompt wins over default rules on conflict
+1. Take the first token. If it resolves to an existing path OR matches a 7+ hex git hash -> that is `scope`, the rest is `customPrompt`.
+2. Otherwise the WHOLE input is a `customPrompt` (the text to humanize may be inline, or it may describe intent). Flow is detected from the prompt + any inline content.
+3. `customPrompt` both selects/overrides the flow AND adds custom rules (highest priority on conflict).
+4. No args at all -> AskUserQuestion fallback is allowed ONLY here ("What to humanize?" -> commit / file / folder / paste text). Prefer inferring whenever possible.
+
+### Detection signals (priority order)
+1. Explicit intent keywords in the prompt (RU+EN):
+   - reddit / forum / slack / discord / chat / чат / форум -> social
+   - javadoc / jsdoc / kdoc / docstring / "api doc" / апи док -> code (CLEAN-ONLY sub-profile)
+   - pr / pull request / commit / changelog / readme / docs / guide / коммит / документация -> docs
+   - article / blog / essay / post / статья / эссе -> article
+   - commit hash, or folder of mixed files -> mixed
+2. Path / extension:
+   - `.java/.kt/.py/.ts/.tsx/.js/.jsx/.go/.rs/.cpp/...` -> code
+   - `.md/.mdx/.rst` -> docs; sniff content: long-form essay/blog -> article
+   - 7+ hex git hash -> mixed
+   - folder -> mixed
+3. Content sniff:
+   - short fragmented lines / no caps -> social
+   - structured prose paragraphs with a thesis -> article
+   - imperative + code blocks -> docs
+
+### Flow -> file
+| Flow | Load | Domain |
+|------|------|--------|
+| code | `@reference/flows/code.md` | source, comments, docstrings, JavaDoc/JSDoc/KDoc (inject OFF) |
+| docs | `@reference/flows/docs.md` | README, docs, guides, PR/commit (inject restrained) |
+| social | `@reference/flows/social.md` | reddit, forum, slack, discord, chat |
+| article | `@reference/flows/article.md` | formal essay, published blog, long-form |
+| mixed | `@reference/flows/mixed.md` | commit / folder dispatcher -> routes each file to its flow |
+
+Pattern files (load the sections the flow needs): `@reference/ai-patterns.md`, `@reference/human-patterns.md`.
 
 ---
 
-## Architecture
+## Phase 1 -- Execute the flow
 
+- Single file or inline text -> apply the chosen flow's rules directly, no Task delegation.
+- mixed (commit / folder) -> follow `@reference/flows/mixed.md`: block split, haiku/sonnet classification, parallel Task launch, JSON aggregation. Each file is routed to its correct flow's rules.
+
+Custom prompt, when present, is prepended to direct processing and to every sub-agent Task prompt:
 ```
-Orchestrator -> Detect Language -> Load Reference -> Analyze -> Classify -> Split (3-10 blocks) -> Parallel Task agents -> Aggregate
-```
-
-## Phase 1: Scope Analysis
-
-### Commit Mode
-
-Process all text files from commit. No extension filtering: `git diff --name-only <hash>^..<hash>`
-
-### File Inclusion Rules
-
-| Include | Exclude |
-|---------|---------|
-| Source code (`*.java`, `*.kt`, `*.py`, `*.ts`, `*.js`, etc.) | Binary files (`*.class`, `*.pyc`, `*.exe`) |
-| Config (`*.xml`, `*.yaml`, `*.yml`, `*.json`, `*.toml`) | Images (`*.png`, `*.jpg`, `*.gif`, `*.ico`) |
-| Docs (`*.md`, `*.txt`, `*.rst`) | Archives (`*.zip`, `*.tar`, `*.gz`) |
-| Build files (`pom.xml`, `package.json`, `pyproject.toml`) | Generated (`target/`, `build/`, `dist/`, `node_modules/`) |
-| SQL (`*.sql`, `*.ddl`) | Lock files, IDE files |
-
-### Path Mode
-
-```bash
-find <path> -type f \( -name "*.java" -o -name "*.py" -o -name "*.ts" -o -name "*.js" -o -name "*.md" \) | grep -v -E "(target/|node_modules/|\.git/|build/|dist/|__pycache__/)"
-```
-
-### Block Count
-
-| Files | Lines | Blocks |
-|-------|-------|--------|
-| 1-2 | <200 | 1 (direct) |
-| 3-5 | <500 | 3 |
-| 6-10 | 500-1500 | 5 |
-| 11-20 | 1500-3000 | 7 |
-| 21+ | 3000+ | 10 |
-
-Single file: process directly without Task delegation.
-
-## Phase 2: File Classification
-
-### Haiku (Simple)
-
-| Type | Patterns |
-|------|----------|
-| Config | `*.properties`, `*.yaml`, `*.yml`, `*.toml`, `*.ini` |
-| Data | `*.json`, `*.csv` |
-| Text | `*.txt`, `*.md` |
-| Simple SQL | Single CREATE/ALTER, no CTEs/subqueries |
-| Small files | <50 lines, no logic |
-
-### Sonnet (Complex)
-
-| Type | Patterns |
-|------|----------|
-| Source with logic | Business logic, algorithms |
-| Tests | Test files for any framework |
-| Complex SQL | CTEs, window functions, JOINs, subqueries |
-| Config classes | Framework configuration |
-
-> **Note:** See language-specific references for detailed classification rules.
-
-## Phase 3: Block Formation
-
-Group files by type, complexity (avoid mixed haiku/sonnet), line count balance. Keep related files together (same package/directory).
-
-Data files block: YAML, JSON, CSV with comments → haiku for unicode fixes
-
-## Phase 4: Parallel Execution
-
-Launch all Task calls in single message for true parallelism.
-
-```
-Task(subagent_type="developer", model="haiku", prompt="> **Context:** BT_PLUGIN_ROOT is available in your context (injected by pre-task.mjs hook).\n\n[CUSTOM_INSTRUCTIONS_IF_ANY]\nBlock 1: [files] [rules] Return JSON")
-Task(subagent_type="developer", model="sonnet", prompt="> **Context:** BT_PLUGIN_ROOT is available in your context (injected by pre-task.mjs hook).\n\n[CUSTOM_INSTRUCTIONS_IF_ANY]\nBlock 2: [files] [rules] Return JSON")
-```
-
-If custom prompt was provided, prepend to EVERY sub-agent prompt (after the Context line):
-```
-> **Context:** BT_PLUGIN_ROOT is available in your context (injected by pre-task.mjs hook).
-
 CUSTOM INSTRUCTIONS (highest priority, override defaults):
-<user's custom prompt text>
+<customPrompt>
 ---
 ```
 
-<output_format>
-{
-  "files_processed": N,
-  "changes": [{"file": "path", "removed_comments": N, "fixed_unicode": N, "simplified_docs": N}]
-}
-</output_format>
-
-## Phase 5: Aggregation
-
-Collect JSON results from all agents → merge statistics → generate unified report.
-
 ---
 
-<humanization_rules>
-
-## AI Artifacts (Universal)
-
-| Pattern | Action |
-|---------|--------|
-| `// Added by AI`, `// Claude suggestion`, `// AI-generated`, `// Generated by` | Delete |
-| `# Added by AI`, `# Claude suggestion` | Delete |
-| `/* Suggested by */` | Delete block |
-| **AI-invented issue numbers** (`BUG-001`, `FIX-123`, `ISSUE-1`) | Delete |
-| Unicode long dash (U+2014) | Replace → `--` |
-| Unicode arrows (→, ←, ⇒) | Replace → `->`, `<-`, `=>` |
-| Unicode bullets (•, ◦) | Replace → `-` or `*` |
-| Unicode quotes (" " ' ') | Replace → `"` or `'` |
-
-### Real vs Fake Issue References
-
-Keep project-specific ticket patterns (INTELDEV-XXXXX, JIRA-XXXXX, GH-XXX). Remove generic AI-invented patterns (BUG-001, FIX-123, ISSUE-42).
-
-## Documentation Cleanup (General Principles)
-
-| Remove | Keep |
-|--------|------|
-| Private/internal function docs | Public API documentation |
-| Test file documentation | Complex algorithm explanation |
-| Obvious classes/functions (name = purpose) | Non-obvious behavior/side effects |
-| Trivial parameter docs (restates name) | `@throws`/`Raises` with conditions |
-| Trivial return docs (restates function) | External API contracts |
-
-**Key Rule:** Never convert block docs to inline comments. Delete unnecessary docs entirely; for useful descriptions with trivial params, strip params and keep description.
-
-## Comments (Universal)
-
-Keep WHY, remove WHAT.
-
-| Remove | Keep |
-|--------|------|
-| `// Initialize the list` | `// Retry 3x due to flaky external API` |
-| `// Loop through items` | `// Uses UTC to match database timezone` |
-| `// Check if null` | `// Thread-safe: synchronized on class lock` |
-| Stale `// TODO: refactor this` | `// HACK: workaround for <issue-link>` |
-
-## Formatting (Universal)
-
-| Issue | Fix |
-|-------|-----|
-| `/* single line */` | `// single line` or `# single line` |
-| 3+ blank lines | Max 2 |
-| Trailing whitespace | Remove |
-| Mixed tabs/spaces | Spaces |
-
-</humanization_rules>
-
----
-
-## File Type Rules
-
-| Type | Rules |
-|------|-------|
-| Source code | Full doc cleanup per language reference |
-| Test files | Remove all docs, keep test descriptions |
-| SQL/XML | Preserve structural comments |
-| Markdown | Remove AI disclosures, fix unicode |
-| YAML/Properties | Fix unicode, keep config explanations |
-| JSON/CSV | Check for comments with unicode, usually skip |
-
-### YAML/Data Files
-
-Check for unicode in comments. Section comments are valuable.
-
-| Action | Example |
-|--------|---------|
-| FIX | `# Lane 90001→10001` → `# Lane 90001->10001` |
-| KEEP | `# ===== VAN loads for test =====` |
-| SKIP | Pure data without comments |
-
-### SQL/XML Comments
-
-Structural comments are valuable. Analyze neighboring files first.
-
-| Action | Example |
-|--------|---------|
-| KEEP | Section headers `-- ============ TABLES ============` |
-| KEEP | Block separators `<!-- ===== Mappers ===== -->` |
-| KEEP | Column/field documentation |
-| REMOVE | Exact duplicates, AI markers |
-
----
-
-## Custom Prompt Mode
-
-Custom prompt overrides or extends default rules. Use for:
-- Restricting scope: "only remove AI artifacts, don't touch docs"
-- Adding rules: "also remove all @author tags"
-- Excluding files: "skip test files"
-- Style reference: "use style from src/main/Service.java as reference"
-
-## Output Format
+## Output -- Humanization Report
 
 ```
 ## Humanization Report
 
-### Execution Summary
+Flow: <name>
+
+### Summary
 | Metric | Value |
 |--------|-------|
-| Total files | N |
-| Blocks | M |
-| Haiku/Sonnet | X/Y |
+| Scope | <file|commit|folder|text> |
+| Files / blocks | N / M |
+| Haiku / Sonnet | X / Y |
 
-### Block Results
-[Per-block tables with file metrics]
+### Results
+[per-file or per-block: stripped, injected, surfaced]
+
+### Surfaced for review (NOT auto-applied)
+[file:line -- issue]  e.g. hallucinated ref, fabricated ticket, try/except-everything
 
 ### Totals
 | Metric | Count |
 |--------|-------|
-| Files processed | N |
-| Comments removed | X |
-| Docs simplified | Y |
-| Unicode fixed | Z |
+| AI tells stripped | X |
+| Human edits injected | Y |
+| Items surfaced | Z |
+| Unicode normalized | W |
 ```
 
-## Best Practices
+Files are edited in place. No backups -- use git to revert.
 
-- Load language reference first
-- Process all commit files (include yaml/data files)
-- Check yaml for unicode (comments may have arrows)
-- Preserve valuable comments (they add context)
-- Skip binaries (avoid corruption)
-- Honor style reference if provided
-- Keep public API docs
-- Group files by complexity
-- Launch agents in parallel
-
-## Error Handling
-
+## Error handling
 | Error | Action |
 |-------|--------|
 | Agent timeout | Continue with other blocks |
@@ -291,12 +119,13 @@ Custom prompt overrides or extends default rules. Use for:
 | No changes | Report "No humanization required" |
 
 ## Examples
-
 ```bash
-/text-human 3be67487                                              # Commit - all files
-/text-human src/main/java/MyService.java                          # Single file
-/text-human src/main/java/services/                               # Folder
-/text-human 3be67487 don't touch docs on public records           # Commit + custom prompt
-/text-human src/ only remove AI artifacts and fix unicode         # Path + custom prompt
-/text-human 3be67487 also remove all @author tags                 # Commit + extra rule
+/text-human src/main/java/OrderService.java          # code flow, single file
+/text-human 3be67487                                 # mixed flow, commit
+/text-human src/main/java/services/                  # mixed flow, folder
+/text-human review this reddit reply: <text>         # social flow, inline text
+/text-human humanize this blog post: <text>          # article flow
+/text-human clean the javadoc in PaymentApi.java     # code flow, CLEAN-ONLY
+/text-human 3be67487 also drop all @author tags      # mixed + custom rule
+/text-human src/ only strip AI artifacts, no inject   # custom prompt overrides
 ```

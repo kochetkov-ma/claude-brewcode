@@ -1,112 +1,107 @@
 ---
 auto-sync: enabled
-auto-sync-date: 2026-04-01
+auto-sync-date: 2026-06-12
 auto-sync-type: doc
 ---
 
 # Text Humanizer
 
-Detects and removes AI-generated artifacts from code and documentation -- comments like `// Added by AI`, fake issue numbers, unicode characters, and trivial docs that just restate the function name. Works on commits, files, or folders with parallel sub-agents.
+Universal, context-aware humanizer. It removes AI surface artifacts (chat scaffolding, fake tickets, unicode, trivial docs that restate a name) and fits the text to its register -- code, technical docs, published articles, or reddit/chat. It does NOT claim to detect AI authorship.
 
 ## Quick Start
 
 ```bash
-/brewtools:text-human <commit-hash|path> [custom instructions]
+/brewtools:text-human [path|commit|folder|text] [custom instructions]
 ```
 
-## Modes
+## How it works
 
-| Mode | How to trigger | What it does |
-|------|---------------|--------------|
-| Commit | `text-human 3be67487` | Processes all text files changed in the given commit via `git diff` |
-| Single file | `text-human src/main/java/MyService.java` | Processes one file directly (no sub-agent delegation) |
-| Folder | `text-human src/main/java/services/` | Finds all source/config/doc files in the folder, splits into parallel blocks |
-| Custom prompt | `text-human <scope> <instructions>` | Everything after the first token becomes custom instructions that override defaults |
-| Interactive | `text-human` (no args) | Asks what to humanize: commit hash, file path, or folder path |
+### Phase 0 -- greedy flow detection
+At the start the skill picks exactly ONE flow from context and announces it (`Flow: <name> -- <why>`), then lazy-loads only that flow file plus the pattern sections it needs.
+
+| Flow | Domain | Inject stage |
+|------|--------|--------------|
+| code | source, comments, docstrings, JavaDoc/JSDoc/KDoc | OFF (formal contract) |
+| docs | README, guides, PR/commit, changelogs | ON, restrained (terse for PR/commit) |
+| social | reddit, forum, slack, discord, chat | ON, casual |
+| article | formal essay, published blog, long-form | ON, burstiness + stance |
+| mixed | commit / folder dispatcher | per-file routing |
+
+Detection priority: explicit intent keywords (RU+EN) -> path/extension -> content sniff.
+
+### Two-pass model
+- PASS 1 STRIP: remove validated AI tells. HIGH-tier acts on single hits; MED density-signals act only on clusters; behavior-changing items (hallucinated refs, fake tickets) are surfaced for review, never auto-edited.
+- PASS 2 INJECT (gated): apply human style for the domain. HARD-OFF for code and API docs. Never injects typos, errors, or fabricated references.
+
+## Arguments
+
+The first token is parsed as scope when it resolves to a path or a 7+ hex git hash; the rest is a custom prompt. Otherwise the whole input is treated as a prompt (the text to humanize may be inline). The custom prompt both selects/overrides the flow and adds rules. No args -> it asks what to humanize.
+
+| Input shape | Result |
+|-------------|--------|
+| File path | code/docs/article flow on one file, direct |
+| Commit hash | mixed flow, all changed files |
+| Folder | mixed flow, parallel blocks |
+| Free text | flow inferred from the text + intent |
+| Path + prompt | scope + custom rules |
+| No args | interactive fallback |
 
 ## Examples
 
-### Good Usage
-
 ```bash
-# Clean up all files from a recent AI-assisted commit
-/brewtools:text-human 3be67487
-
-# Humanize a single service class after AI pair-programming
+# Code -- strip AI tells, normalize unicode, inject OFF
 /brewtools:text-human src/main/java/com/example/OrderService.java
 
-# Process an entire package
-/brewtools:text-human src/main/java/services/
+# JavaDoc / API docs -- clean-only sub-profile
+/brewtools:text-human clean the javadoc in PaymentApi.java
 
-# Commit cleanup but preserve public API docs
-/brewtools:text-human 3be67487 don't touch docs on public records
+# Commit -- mixed flow routes each file to its domain
+/brewtools:text-human 3be67487
 
-# Only fix unicode and AI markers, leave everything else
-/brewtools:text-human src/ only remove AI artifacts and fix unicode
+# Reddit reply -- casual injection, sparse emoji, lowercase
+/brewtools:text-human review this reddit reply: <text>
 
-# Add an extra rule on top of defaults
-/brewtools:text-human 3be67487 also remove all @author tags
+# Blog post -- burstiness + real stance
+/brewtools:text-human humanize this blog post: <text>
+
+# Custom prompt overrides defaults
+/brewtools:text-human src/ only strip AI artifacts, no inject
+/brewtools:text-human 3be67487 also drop all @author tags
 ```
 
-### Common Mistakes
+## What it strips (PASS 1)
 
-```bash
-# Too broad -- will ask you to narrow the scope
-/brewtools:text-human entire project
+| Category | Example | Tier |
+|----------|---------|------|
+| Chat scaffolding | "Certainly!", "I hope this helps", "Here's the rewritten..." | HIGH |
+| AI self-attribution | `// AI-generated`, `# Claude suggestion`, bot trailers | HIGH |
+| Prompt residue | `// Replace with your...` placeholder narration | HIGH |
+| Unicode in code/text | em-dash, arrows, smart quotes -> ASCII | HIGH |
+| Trivial doc/comment | `// Loop through users`, `@param userId The user ID` | density |
+| Excess-vocab cluster | delve, leverage, seamless, landscape (co-occurring) | MED cluster only |
+| Promotional/template prose | "In today's fast-paced world", "plays a significant role" | HIGH/MED |
 
-# Running on hand-written code that has no AI artifacts -- wastes time, no changes made
-/brewtools:text-human src/legacy/HandCraftedUtils.java
+## What it surfaces (never auto-edits)
 
-# Pointing at generated/build output -- these files are excluded automatically
-/brewtools:text-human target/classes/
-```
+Hallucinated package/method/URL refs, fabricated tickets, try/except-everything, empty catch-all, placeholder TODO logic, duplicated abstractions, happy-path-only tests, CI gaming. These change meaning -- they are reported, not changed.
 
-## What It Changes
+## What it keeps
 
-| Category | Removed / Fixed | Example |
-|----------|----------------|---------|
-| AI comment markers | `// Added by AI`, `// Claude suggestion`, `// AI-generated`, `// Generated by` | Deleted entirely |
-| Fake issue numbers | `BUG-001`, `FIX-123`, `ISSUE-42` | Deleted (real project tickets like `JIRA-1234` are kept) |
-| Unicode long dashes | U+2014 `--` | Replaced with `--` |
-| Unicode arrows | `->`, `<-`, `=>` | Replaced with `->`, `<-`, `=>` |
-| Unicode bullets | Bullet characters | Replaced with `-` or `*` |
-| Unicode smart quotes | Curly quotes | Replaced with `"` or `'` |
-| Trivial docs | Javadoc/docstring that restates the method name | Deleted |
-| Obvious comments | `// Initialize the list`, `// Loop through items` | Deleted |
-| Formatting noise | 3+ blank lines, trailing whitespace, mixed tabs/spaces | Normalized |
+WHY comments, public API docs, real project tickets (INTELDEV-12345, JIRA-456), `@throws` with conditions, structural SQL/YAML banners, complex algorithm explanations, BDD comments.
 
-## What It Keeps
+## Injection (PASS 2, per flow)
 
-| Preserved | Why |
-|-----------|-----|
-| "Why" comments (`// Retry 3x due to flaky external API`) | Explain non-obvious behavior |
-| Public API documentation | External contracts matter |
-| Real issue references (`INTELDEV-12345`, `JIRA-456`) | Project-specific tickets |
-| Structural comments in SQL/YAML (`-- ===== TABLES =====`) | Section organization |
-| `@throws` / `Raises` with conditions | Documents failure modes |
-| Complex algorithm explanations | Not trivially obvious |
+| Signal | reddit | chat | docs | commit/PR | article | code/API |
+|--------|--------|------|------|-----------|---------|----------|
+| Burstiness | high | high | med | low | high | OFF |
+| Contractions | high | high | OK | low | high | FORBIDDEN |
+| Stance | high | med | none | grounded-why | high | FORBIDDEN |
+| Emoji | rare | incidental | no | no | no | no |
+| Inject stage | ON | ON | ON | ON terse | ON | OFF |
 
 ## Output
 
-Produces a **Humanization Report** at the end with:
-
-| Metric | Description |
-|--------|-------------|
-| Total files | Number of files scanned |
-| Blocks | How many parallel blocks were used |
-| Haiku / Sonnet split | Simple files (config, data) vs complex files (logic, tests) |
-| Comments removed | Count per file |
-| Docs simplified | Count per file |
-| Unicode fixed | Count per file |
-
-Files are edited in place. No backup files are created -- use git to revert if needed.
-
-## Tips
-
-- **Start with a commit hash** after an AI-assisted session -- it automatically picks up all changed files including YAML and config that you might forget.
-- **Use custom instructions** to narrow scope: `only remove AI artifacts and fix unicode` skips the doc cleanup entirely if you want to keep verbose docs.
-- **Language references are loaded automatically** based on file extensions -- Java/Kotlin, TypeScript/JS, and Python each have dedicated cleanup rules.
-- **Single files skip sub-agent delegation** and process directly, so small scopes are fast even without parallelism.
+A **Humanization Report**: flow, scope, files/blocks, haiku/sonnet split, per-file strip/inject counts, a surfaced-for-review section, and totals. Files are edited in place -- use git to revert.
 
 ## Documentation
 
