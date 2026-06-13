@@ -110,6 +110,7 @@ async function acquireLock(lockPath, { retries = 5, delayMs = 100 } = {}) {
 }
 
 function releaseLock(lockPath, token) {
+  if (!token) return;
   try {
     const current = fs.readFileSync(lockPath, 'utf8').trim();
     if (token && current !== token) {
@@ -161,6 +162,7 @@ export async function addDeny(scope, agentName, opts = {}) {
   fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
 
   const token = await acquireLock(lockPath, { retries: opts.retries ?? 5, delayMs: opts.delayMs ?? 100 });
+  if (!token) throw new Error('could not acquire lock');
   try {
     const settings = readJsonSafe(settingsPath);
     const perms = (settings.permissions && typeof settings.permissions === 'object' && !Array.isArray(settings.permissions))
@@ -203,6 +205,7 @@ export async function removeDeny(scope, agentName, opts = {}) {
   fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
 
   const token = await acquireLock(lockPath, { retries: opts.retries ?? 5, delayMs: opts.delayMs ?? 100 });
+  if (!token) throw new Error('could not acquire lock');
   try {
     const settings = readJsonSafe(settingsPath);
     const perms = (settings.permissions && typeof settings.permissions === 'object' && !Array.isArray(settings.permissions))

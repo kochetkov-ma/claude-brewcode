@@ -33,6 +33,11 @@ export function resolveStatePath(scope, cwd = process.cwd()) {
   return path.join(cwd, '.claude', 'brewtools', 'manager', 'state.json');
 }
 
+function clampMode(merged) {
+  if (!['full', 'planmode'].includes(merged.mode)) merged.mode = 'full';
+  return merged;
+}
+
 function readJsonSafe(filePath) {
   try {
     const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
@@ -51,9 +56,9 @@ function readJsonSafe(filePath) {
 export function resolveState(cwd = process.cwd()) {
   try {
     const project = readJsonSafe(resolveStatePath('project', cwd));
-    if (project) return { ...DEFAULT_STATE, ...project, source: 'project' };
+    if (project) return clampMode({ ...DEFAULT_STATE, ...project, source: 'project' });
     const global = readJsonSafe(resolveStatePath('global', cwd));
-    if (global) return { ...DEFAULT_STATE, ...global, source: 'global' };
+    if (global) return clampMode({ ...DEFAULT_STATE, ...global, source: 'global' });
     return { ...DEFAULT_STATE, source: 'default' };
   } catch {
     return { ...DEFAULT_STATE, source: 'default' };
@@ -99,6 +104,7 @@ async function acquireLock(lockPath, { retries = 5, delayMs = 100 } = {}) {
 }
 
 function releaseLock(lockPath, token) {
+  if (!token) return;
   try {
     const current = fs.readFileSync(lockPath, 'utf8').trim();
     if (token && current !== token) {
@@ -133,6 +139,7 @@ export async function writeState(scope, partial, cwd = process.cwd()) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
 
   const token = await acquireLock(lockPath);
+  if (!token) throw new Error('could not acquire lock');
   try {
     const existing = readJsonSafe(filePath) || {};
     const merged = { ...existing, ...partial };

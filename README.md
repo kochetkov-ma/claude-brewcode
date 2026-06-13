@@ -58,7 +58,7 @@ After all commands succeed, run `/reload-plugins`. If `/reload-plugins` is unava
 |--------|---------|--------|---------|
 | [brewcode](brewcode/README.md) | Infinite task execution, quorum reviews, skill/agent creation, semantic search | 13 | `claude plugin install brewcode@claude-brewcode` |
 | [brewdoc](brewdoc/README.md) | Documentation tools: auto-sync, memory optimization, PDF conversion, publishing | 6 | `claude plugin install brewdoc@claude-brewcode` |
-| [brewtools](brewtools/README.md) | Universal text utilities: token optimization, humanization, secrets scanning, plugin updates | 11 | `claude plugin install brewtools@claude-brewcode` |
+| [brewtools](brewtools/README.md) | Universal text utilities: token optimization, humanization, secrets scanning, plugin updates | 12 | `claude plugin install brewtools@claude-brewcode` |
 | [brewui](brewui/README.md) | UI/visual tools: AI image generation, design-to-code conversion | 2 | `claude plugin install brewui@claude-brewcode` |
 
 ## Installation
@@ -219,7 +219,7 @@ After `/brewcode:setup`, each task follows the cycle: `spec` -> `plan` -> `start
 | `/brewdoc:publish` | Publish to brewpage.app -- returns public URL |
 | `/brewdoc:guide` | Interactive tutorial for the plugin suite |
 
-### Brewtools (11 skills)
+### Brewtools (12 skills)
 
 | Skill | Purpose |
 |-------|---------|
@@ -231,6 +231,10 @@ After `/brewcode:setup`, each task follows the cycle: `spec` -> `plan` -> `start
 | `/brewtools:deploy` | GitHub Actions deployment -- workflows, releases, GHCR, CI/CD |
 | `/brewtools:debate` | Evidence-based multi-agent debate (Challenge, Strategy, Critic modes) |
 | `/brewtools:plugin-update` | Install and update the full plugin suite |
+| `/brewtools:skill-toggle` | Disable/enable individual plugin skills (survives updates) |
+| `/brewtools:agent-toggle` | Disable/enable individual agents via native permissions.deny |
+| `/brewtools:provider-switch` | Configure alternative API providers (DeepSeek, Z.ai/GLM, Qwen, MiniMax, OpenRouter) |
+| `/brewtools:manager` | Manager mode: codeword (++m/++mp) auto-injects delegate-everything Manager prompt |
 
 ### Brewui (2 skills)
 

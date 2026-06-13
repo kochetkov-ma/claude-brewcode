@@ -2,6 +2,26 @@
 
 ---
 
+## v3.12.1 (2026-06-13)
+
+> Docs: [brewtools/skills/manager](https://doc-claude.brewcode.app/brewtools/skills/manager/)
+
+> **Theme:** multi-agent review hardening of v3.12.0 `brewtools:manager` — security + correctness fixes and repo-wide count consistency.
+
+### brewtools
+
+#### Fixed
+- **Path-traversal guard:** `resolvePromptPath` (and `resolvePrompt`) now validate `scope` and `mode` against an allowlist before building a filesystem path — closes a traversal vector reachable via the skill's `edit`/`reset` actions (which call `unlinkSync`/`writeFileSync`).
+- **Lock safety:** `writeState` now throws instead of writing unlocked if the lock was not acquired, and `releaseLock` never unlinks a lock it does not own. Same guard applied to the shared `_shared/toggle/deny.mjs` (agent-toggle) which carried the identical latent bug.
+- **Codeword anchoring:** `++m`/`++mp` now match only as standalone tokens (anchored regex), so prompts like `++money` or `x++mx` no longer trigger Manager injection. `++mp`-before-`++m` ordering preserved.
+- **Override robustness:** the prompt-text extractor accepts both ` ``` ` and `~~~` fences, and the skill's `edit` action seeds overrides un-wrapped — fixing silent truncation when an override contained a backtick fence.
+- **Honest mode state:** invalid `mode` in a state file is clamped to `full`; `status` now labels the stored mode as an informational default (the codeword alone selects the injected block) instead of an inert "active mode".
+
+#### Changed
+- **Count consistency:** corrected stale skill/agent/hook counts across `brewtools/README.md` (version + skills), root `README.md` (brewtools 12 skills, missing rows added), `getting-started.mdx`, `brewtools/skills.mdx` (reconciled to all 12 skills incl. manager), `installation.mdx` (suite aggregate), the guide hook catalog (brewtools 3 hooks + `manager-prompt.mjs`), and project `CLAUDE.md`.
+
+---
+
 ## v3.12.0 (2026-06-13)
 
 > Docs: [brewtools/skills/manager](https://doc-claude.brewcode.app/brewtools/skills/manager/)

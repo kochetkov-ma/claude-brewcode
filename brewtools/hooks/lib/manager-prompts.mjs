@@ -3,12 +3,15 @@
 //   project:  <cwd>/.claude/brewtools/manager/prompts/<mode>.md
 //   global:   ~/.claude/manager/prompts/<mode>.md
 //   default:  <pluginRoot>/skills/manager/references/<mode>.md
-// Plugin default files wrap the block in fenced ``` code blocks — we extract just the
-// text INSIDE the fences (concatenated in order) so injected context is clean.
+// Injected text = inside fenced ``` or ~~~ blocks if present (concatenated in order),
+// else the whole file (raw-text fallback). Lets unfenced overrides work too.
 
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
+const VALID_SCOPES = new Set(['project', 'global']);
+export const VALID_MODES = new Set(['full', 'planmode']);
 
 function resolveHome(p) {
   if (!p) return p;
@@ -25,6 +28,8 @@ function resolveHome(p) {
  * @returns {string} absolute path
  */
 export function resolvePromptPath(scope, mode, cwd = process.cwd()) {
+  if (!VALID_SCOPES.has(scope)) throw new Error(`invalid scope '${scope}' — must be one of: ${[...VALID_SCOPES].join(', ')}`);
+  if (!VALID_MODES.has(mode)) throw new Error(`invalid mode '${mode}' — must be one of: ${[...VALID_MODES].join(', ')}`);
   if (scope === 'global') return resolveHome(`~/.claude/manager/prompts/${mode}.md`);
   return path.join(cwd, '.claude', 'brewtools', 'manager', 'prompts', `${mode}.md`);
 }
@@ -37,11 +42,11 @@ function readSafe(filePath) {
   }
 }
 
-// Extract text inside all fenced ``` blocks, concatenated in document order
+// Extract text inside all fenced ``` or ~~~ blocks, concatenated in document order
 // (blank-line separated). If none found, return the raw text trimmed.
 function extractFenced(raw) {
   const blocks = [];
-  const re = /```[^\n]*\n([\s\S]*?)```/g;
+  const re = /(?:```|~~~)[^\n]*\n([\s\S]*?)\n?(?:```|~~~)/g;
   let m;
   while ((m = re.exec(raw)) !== null) {
     blocks.push(m[1].replace(/\n+$/, ''));
@@ -58,6 +63,7 @@ function extractFenced(raw) {
  * @returns {{text:string, source:'project'|'global'|'default'|'missing'}}
  */
 export function resolvePrompt(mode, cwd = process.cwd(), pluginRoot) {
+  if (!VALID_MODES.has(mode)) return { text: '', source: 'missing' };
   try {
     const project = readSafe(resolvePromptPath('project', mode, cwd));
     if (project != null) return { text: extractFenced(project), source: 'project' };

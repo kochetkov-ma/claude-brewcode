@@ -19,8 +19,8 @@ A `UserPromptSubmit` hook watches every prompt for a codeword and injects the Ma
 |---------|-------------|
 | `/brewtools:manager on [--scope global\|project]` | Enable injection (codewords active). Default scope: project |
 | `/brewtools:manager off [--scope global\|project]` | Disable injection (codewords ignored) |
-| `/brewtools:manager mode <full\|planmode> [--scope ...]` | Set default mode |
-| `/brewtools:manager status` | Print enabled?, source, active mode, prompt sources, codewords, full injected blocks |
+| `/brewtools:manager mode <full\|planmode> [--scope ...]` | Set default mode (informational state field — the codeword still selects the block: ++m=full, ++mp=planmode) |
+| `/brewtools:manager status` | Print enabled?, source, default mode (informational), prompt sources, codewords, full injected blocks |
 | `/brewtools:manager edit [full\|planmode] [--scope ...]` | Copy default block to an override and open it for editing |
 | `/brewtools:manager reset [full\|planmode] [--scope ...]` | Delete the override, revert to plugin default |
 | `/brewtools:manager <any task>` | Inline Manager run — prepends the full block and delegates the task |
@@ -68,7 +68,7 @@ Global paths (`~/.claude/manager/*`) are protected for the Write/Edit tools, so 
 /brewtools:manager reset full         # drop override, back to plugin default
 ```
 
-`edit` creates the override (seeded with the current effective text) if absent, then shows the path. The injected text is everything inside the fenced ``` blocks.
+`edit` creates the override (seeded with the current effective text) if absent, then shows the path. The injected text is everything inside the fenced ``` or ~~~ blocks if present, else the whole file.
 
 ## Examples
 

@@ -12,10 +12,10 @@ import { resolvePrompt } from './lib/manager-prompts.mjs';
   try {
     const { prompt = '', cwd } = await readStdin();
 
-    let mode;
-    if (prompt.includes('++mp')) mode = 'planmode';
-    else if (prompt.includes('++m')) mode = 'full';
-    else { output({}); return; }
+    const hasMP = /(?<![\w+])\+\+mp(?![\w])/.test(prompt);
+    const hasM  = /(?<![\w+])\+\+m(?![\w])/.test(prompt);
+    const mode = hasMP ? 'planmode' : (hasM ? 'full' : null);
+    if (!mode) { output({}); return; }
 
     const state = resolveState(cwd);
     if (state.enabled === false) { output({}); return; }

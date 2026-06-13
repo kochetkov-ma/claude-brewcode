@@ -1,6 +1,6 @@
 ---
 title: "Skills"
-description: "All 6 Brewtools skills: commands, parameters, examples"
+description: "All 12 Brewtools skills: commands, parameters, examples"
 order: 31
 ---
 
@@ -8,43 +8,67 @@ import { Card, CardGrid, Callout } from '../../../components/mdx';
 
 # Skills
 
-Skills (recipes) are slash commands that define *what* to do. Brewtools includes 6 skills
-focused on text processing, security scanning, SSH management, deployment, and evidence-based debate -- each works independently with no prior setup required.
+Skills (recipes) are slash commands that define *what* to do. Brewtools includes 12 skills
+focused on text processing, security scanning, SSH management, deployment, evidence-based debate, plugin management, and session orchestration -- each works independently with no prior setup required.
 
 ## Summary table
 
 | # | Skill | Command | Model | Purpose |
 |---|-------|---------|-------|---------|
-| 1 | text-optimize | `/brewtools:text-optimize` | sonnet | Text optimization for LLMs |
-| 2 | text-human | `/brewtools:text-human` | sonnet | AI artifact removal from code |
-| 3 | secrets-scan | `/brewtools:secrets-scan` | sonnet | Secrets and key scanning |
-| 4 | ssh | `/brewtools:ssh` | opus | SSH server management |
-| 5 | deploy | `/brewtools:deploy` | opus | GitHub Actions deployment, CI/CD |
-| 6 | debate | `/brewtools:debate` | opus | Evidence-based multi-agent debate |
+| 1 | agent-toggle | `/brewtools:agent-toggle` | sonnet | Disable/enable individual agents (survives updates) |
+| 2 | debate | `/brewtools:debate` | opus | Evidence-based multi-agent debate |
+| 3 | deploy | `/brewtools:deploy` | opus | GitHub Actions deployment, CI/CD |
+| 4 | manager | `/brewtools:manager` | sonnet | Manager mode: codeword ++m/++mp injects delegate-everything prompt |
+| 5 | plugin-update | `/brewtools:plugin-update` | sonnet | Install and update the full plugin suite |
+| 6 | provider-switch | `/brewtools:provider-switch` | sonnet | Configure alternative API providers |
+| 7 | secrets-scan | `/brewtools:secrets-scan` | sonnet | Secrets and key scanning |
+| 8 | skill-toggle | `/brewtools:skill-toggle` | sonnet | Disable/enable individual skills (survives updates) |
+| 9 | ssh | `/brewtools:ssh` | opus | SSH server management |
+| 10 | text-human | `/brewtools:text-human` | sonnet | AI artifact removal from code |
+| 11 | text-optimize | `/brewtools:text-optimize` | sonnet | Text optimization for LLMs |
+| 12 | think-short | `/brewtools:think-short` | sonnet | Toggle terse-output mode |
 
 <CardGrid>
-  <Card title="text-optimize" icon="sparkle" href="/brewtools/skills/text-optimize/">
-    Text optimization for LLMs
-  </Card>
-  <Card title="text-human" icon="user" href="/brewtools/skills/text-human/">
-    AI artifact removal from code
-  </Card>
-  <Card title="secrets-scan" icon="lock" href="/brewtools/skills/secrets-scan/">
-    Secrets and key scanning
-  </Card>
-  <Card title="ssh" icon="terminal" href="/brewtools/skills/ssh/">
-    SSH server management with safety gates
-  </Card>
-  <Card title="deploy" icon="sync" href="/brewtools/skills/deploy/">
-    GitHub Actions deployment, CI/CD with safety gates
+  <Card title="agent-toggle" icon="settings" href="/brewtools/skills/agent-toggle/">
+    Disable/enable individual agents (survives plugin updates)
   </Card>
   <Card title="debate" icon="people" href="/brewtools/skills/debate/">
     Evidence-based multi-agent debate
   </Card>
+  <Card title="deploy" icon="sync" href="/brewtools/skills/deploy/">
+    GitHub Actions deployment, CI/CD with safety gates
+  </Card>
+  <Card title="manager" icon="star" href="/brewtools/skills/manager/">
+    Manager mode: codeword-activated delegate-everything prompt
+  </Card>
+  <Card title="plugin-update" icon="rocket" href="/brewtools/skills/plugin-update/">
+    Install and update the full plugin suite
+  </Card>
+  <Card title="provider-switch" icon="settings" href="/brewtools/skills/provider-switch/">
+    Configure alternative API providers (DeepSeek, Z.ai/GLM, Qwen, MiniMax, OpenRouter)
+  </Card>
+  <Card title="secrets-scan" icon="lock" href="/brewtools/skills/secrets-scan/">
+    Secrets and key scanning
+  </Card>
+  <Card title="skill-toggle" icon="settings" href="/brewtools/skills/skill-toggle/">
+    Disable/enable individual skills (survives plugin updates)
+  </Card>
+  <Card title="ssh" icon="terminal" href="/brewtools/skills/ssh/">
+    SSH server management with safety gates
+  </Card>
+  <Card title="text-human" icon="user" href="/brewtools/skills/text-human/">
+    AI artifact removal from code
+  </Card>
+  <Card title="text-optimize" icon="sparkle" href="/brewtools/skills/text-optimize/">
+    Text optimization for LLMs
+  </Card>
+  <Card title="think-short" icon="note" href="/brewtools/skills/think-short/">
+    Toggle terse-output mode
+  </Card>
 </CardGrid>
 
 <Callout type="tip" title="Standalone">
-  All six skills can be used independently -- they require no prior setup
+  All twelve skills can be used independently -- they require no prior setup
   and no dependency on Brewcode or Brewdoc plugins.
 </Callout>
 

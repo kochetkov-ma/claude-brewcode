@@ -111,7 +111,7 @@ console.log(JSON.stringify(r));
 
 ### mode <full|planmode>
 
-Same Bash block, `PATCH_JSON = {mode:'full'}` or `{mode:'planmode'}`.
+Same Bash block, `PATCH_JSON = {mode:'full'}` or `{mode:'planmode'}`. Sets the informational `mode` field in state only — it does NOT change what a given codeword injects (the hook always maps `++m`→full, `++mp`→planmode regardless of this field).
 
 ### status
 
@@ -141,7 +141,7 @@ Render in this shape:
 ```
 # Manager — status
 enabled:       <true|false>   (state source: <project|global|default>)
-active mode:   <full|planmode>
+default mode:  <full|planmode>   (informational — the codeword selects the block: ++m=full, ++mp=planmode)
 codewords:     ++m → full · ++mp → planmode
 prompt source: full=<default|project|global>  planmode=<default|project|global>
 
@@ -169,7 +169,7 @@ const dest = resolvePromptPath(scope, mode, cwd);
 if (!fs.existsSync(dest)) {
   const cur = resolvePrompt(mode, cwd, root);                 // current effective text
   fs.mkdirSync(path.dirname(dest), { recursive: true });
-  fs.writeFileSync(dest, '\`\`\`\n' + cur.text + '\n\`\`\`\n', 'utf8');
+  fs.writeFileSync(dest, cur.text + '\n', 'utf8');           // seed unfenced — extractor's raw-text fallback handles it
   console.log(JSON.stringify({created:true, path:dest, from:cur.source}));
 } else {
   console.log(JSON.stringify({created:false, path:dest, content:fs.readFileSync(dest,'utf8')}));
@@ -215,7 +215,7 @@ The user typed a real task, not a control verb. This skill itself must now ACT a
 
 After ANY non-status action, end by printing the resolved status (run the `status` Bash block, or reuse the result you already have):
 ```
-enabled · scope source (project/global/default) · active mode · prompt source per mode · codewords (++m=full, ++mp=planmode)
+enabled · scope source (project/global/default) · default mode (informational; codeword selects block) · prompt source per mode · codewords (++m=full, ++mp=planmode)
 ```
 
 ---

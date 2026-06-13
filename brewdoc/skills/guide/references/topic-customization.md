@@ -113,12 +113,13 @@ Response channels: `additionalContext` (inject text), `updatedInput` (modify too
 | `pre-compact.mjs` | PreCompact | Compacts KNOWLEDGE, writes handoff (respects terminal statuses) |
 | `stop.mjs` | Stop | Blocks if not terminal (finished/failed/cancelled/error), cleans lock |
 
-**brewtools (2):**
+**brewtools (3):**
 
 | Hook | Event | Purpose |
 |------|-------|---------|
 | `session-start.mjs` | SessionStart | Sets `BT_PLUGIN_ROOT`, session bootstrap |
 | `pre-task.mjs` | PreToolUse:Task\|Agent | Injects `BT_PLUGIN_ROOT` into subagent prompts |
+| `manager-prompt.mjs` | UserPromptSubmit | Injects Manager prompt on ++m/++mp codeword |
 
 **brewui (2):**
 
