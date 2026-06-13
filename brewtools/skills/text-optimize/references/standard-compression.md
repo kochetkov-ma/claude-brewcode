@@ -31,6 +31,7 @@ Apply filler removal from `rules-review.md` rule T.6 as baseline. Standard mode 
 - Convert step-by-step prose to numbered lists
 - Remove redundant section headers
 - Combine related short sections
+- Order by importance + put bulk reference content first, instructions/query last (measured up to +30% response quality on long inputs, Anthropic; +21.4% LongLLMLingua). Reorder — never delete — to fix lost-in-the-middle.
 
 ## 4. Abbreviation Rules (Conservative)
 
@@ -54,6 +55,7 @@ After compression, verify:
 - [ ] Compression ratio is 30-50%
 - [ ] No information merged incorrectly (two different concepts collapsed into one)
 - [ ] Headers and structure still logical
+- [ ] Terminology kept consistent — same concept uses the SAME term throughout (no paraphrase-for-variety; synonym variation hurts LLM retrieval)
 
 ## 6. What NOT to Compress
 
@@ -63,6 +65,8 @@ After compression, verify:
 - Legal/compliance text
 - Version numbers, dates, URLs
 - Command-line examples
+
+> **Note:** Never convert config blocks to TOML for "efficiency" — TOML is the most token-heavy structured format (more overhead than YAML/JSON). For uniform tabular data prefer markdown tables or TSV/CSV; for nested data prefer compact JSON.
 
 ## 7. Before/After Examples
 

@@ -9,7 +9,7 @@ user-invocable: true
 
 # Skill Toggle
 
-> **Disable/enable individual plugin skills** via the stable `skillOverrides` mechanism in `~/.claude/settings.json` (Claude Code 2.1.115+). State survives plugin updates — **no SessionStart reapply hook needed**. See also: `/brewtools:agent-toggle` for agents (uses file-rename, different mechanism).
+> **Disable/enable individual plugin skills** via the stable `skillOverrides` mechanism in `~/.claude/settings.json` (Claude Code 2.1.115+). State survives plugin updates — **no SessionStart reapply hook needed**. See also: `/brewtools:agent-toggle` for agents (uses native `permissions.deny`).
 
 <instructions>
 
@@ -134,7 +134,7 @@ Substitute `PLUGIN`, `NAME`, `MODE` literally.
 
 > **Persistence:** `~/.claude/settings.json` survives plugin updates — **no SessionStart reapply hook needed for skill-toggle.** The old file-rename approach (P3 in earlier versions) is removed. Plugin cache files are no longer touched by this skill.
 
-Agent-toggle still uses file-rename (`_shared/toggle/state.mjs` + `apply.mjs`) — that flow is untouched.
+Agent-toggle uses the native `permissions.deny` mechanism (`_shared/toggle/deny.mjs`) — a separate, also update-safe flow.
 
 ---
 

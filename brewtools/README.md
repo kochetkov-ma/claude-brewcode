@@ -5,7 +5,7 @@
 | Field | Value |
 |-------|-------|
 | Version | 3.11.0 |
-| Skills | 11 |
+| Skills | 12 |
 | Agents | 3 |
 
 ## Install
@@ -84,6 +84,7 @@ claude --plugin-dir ./brewtools
 | [`/brewtools:ssh`](skills/ssh/SKILL.md) | SSH server management and configuration | opus | `[connect\|deploy\|configure\|...]` |
 | [`/brewtools:deploy`](skills/deploy/SKILL.md) | GitHub Actions deployment with safety gates | opus | `[release\|workflow\|...]` |
 | [`/brewtools:debate`](skills/debate/README.md) | Evidence-based multi-agent debate | sonnet | `[challenge\|strategy\|critic]` |
+| [`/brewtools:manager`](skills/manager/README.md) | Codeword (++m/++mp) auto-injects a delegate-everything Manager prompt; RU+EN control | sonnet | `[on\|off\|status\|mode\|edit\|reset] \| <prompt>` |
 | [`/brewtools:plugin-update`](skills/plugin-update/README.md) | Check/install/update brewcode plugins | sonnet | `[check\|update\|all]` |
 | [`/brewtools:provider-switch`](skills/provider-switch/README.md) | Configure alternative API providers (DeepSeek V4 [priority], Z.ai/GLM, Qwen, MiniMax, OpenRouter) | opus | `[status\|setup\|help\|<provider>]` |
 | [`/brewtools:skill-toggle`](skills/skill-toggle/README.md) | Disable/enable individual plugin skills (survives plugin updates) | sonnet | `<op> [plugin:name] [--scope=global\|project]` |
@@ -133,7 +134,6 @@ brewtools/
 | Hook | Event | Purpose |
 |------|-------|---------|
 | `session-start.mjs` | SessionStart | Inject `BT_PLUGIN_ROOT` into session context |
-| `reapply-disables.mjs` | SessionStart | Re-apply disabled skills/agents after plugin update |
 | `pre-task.mjs` | PreToolUse: Task\|Agent | Inject `BT_PLUGIN_ROOT` into subagent prompts |
 
 ## Documentation
@@ -148,6 +148,7 @@ Full docs: [doc-claude.brewcode.app/brewtools/overview](https://doc-claude.brewc
 | SSH | [ssh](https://doc-claude.brewcode.app/brewtools/skills/ssh/) |
 | Deploy | [deploy](https://doc-claude.brewcode.app/brewtools/skills/deploy/) |
 | Debate | [debate](https://doc-claude.brewcode.app/brewtools/skills/debate/) |
+| Manager | [manager](https://doc-claude.brewcode.app/brewtools/skills/manager/) |
 | Plugin Update | [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) |
 | Provider Switch | [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/) |
 | Skill Toggle | [skill-toggle](https://doc-claude.brewcode.app/brewtools/skills/skill-toggle/) |

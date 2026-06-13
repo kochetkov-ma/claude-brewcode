@@ -2,6 +2,19 @@
 
 ---
 
+## v3.12.0 (2026-06-13)
+
+> Docs: [brewtools/skills/manager](https://doc-claude.brewcode.app/brewtools/skills/manager/)
+
+> **Theme:** new `brewtools:manager` skill + a `UserPromptSubmit` hook that turns a short codeword into an on-demand, auto-injected "delegate-everything" Manager prompt — controllable by natural language, editable, and surviving plugin updates.
+
+### brewtools
+
+#### Added
+- **`brewtools:manager` skill** — intent-driven control plane (RU+EN) for Manager mode. Turns natural language into `on` / `off` / `status` / `mode <full|planmode>` / `edit` / `reset` (with `--scope project|global`), and runs any bare prompt as an inline Manager (builds a TaskGraph, delegates to the best-matching agent). `status` prints the live state and the exact English block injected for each codeword.
+- **`UserPromptSubmit` hook (`manager-prompt.mjs`)** — detects a codeword anywhere in the prompt and injects the matching Manager block via `additionalContext` for the same turn: `++m` -> full Manager block, `++mp` -> full + Plan Mode addon (`++mp` is tested before `++m` to avoid prefix collision). State-gated (`enabled !== false`), zero overhead when off or no codeword, and fully fail-safe — any error injects nothing and never breaks the prompt.
+- **Editable, update-proof prompts.** State resolves project (`.claude/brewtools/manager/state.json`) -> global (`~/.claude/manager/state.json`) -> default `{enabled:true, mode:"full"}`. Prompt text resolves project override -> global override -> plugin default (`references/{full,planmode}.md`). Global writes go through bundled Node helpers (atomic lock + tmp + rename) since `~/.claude/*` is protected for the Write/Edit tools.
+
 ## v3.11.0 (2026-06-12)
 
 > Docs: [brewtools/skills/text-human](https://doc-claude.brewcode.app/brewtools/skills/text-human/)

@@ -76,6 +76,7 @@ export const navigation: NavSection[] = [
           { title: 'agent-toggle', slug: 'brewtools/skills/agent-toggle' },
           { title: 'debate', slug: 'brewtools/skills/debate' },
           { title: 'deploy', slug: 'brewtools/skills/deploy' },
+          { title: 'manager', slug: 'brewtools/skills/manager' },
           { title: 'plugin-update', slug: 'brewtools/skills/plugin-update' },
           { title: 'provider-switch', slug: 'brewtools/skills/provider-switch' },
           { title: 'secrets-scan', slug: 'brewtools/skills/secrets-scan' },

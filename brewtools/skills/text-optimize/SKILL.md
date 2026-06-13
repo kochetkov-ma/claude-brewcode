@@ -1,7 +1,7 @@
 ---
 name: brewtools:text-optimize
 description: Optimizes text/docs for LLM token efficiency. Triggers - optimize, reduce tokens, compress, deep compress.
-argument-hint: "[-l|-s|-d] [file|folder|path1,path2] — -l light, -s standard (30-50%), -d deep (LLM-only), no flag = medium or auto-detect"
+argument-hint: "[-l|-s|-d|-x|--max] [file|folder|path1,path2] — -l light, -s standard (30-50%), -d deep (LLM-only), -x|--max max (LLM-only, atomic fact-lines, 2-round verify), no flag = medium or auto-detect"
 user-invocable: true
 allowed-tools: [Read, Write, Edit, Grep, Glob, Task, AskUserQuestion]
 ---
@@ -15,7 +15,7 @@ allowed-tools: [Read, Write, Edit, Grep, Glob, Task, AskUserQuestion]
 
 ## Modes
 
-Parse `$ARGUMENTS`: `-l`/`--light` | `-s`/`--standard` | `-d`/`--deep` | no flag -> medium (default) or auto-detect.
+Parse `$ARGUMENTS`: `-l`/`--light` | `-s`/`--standard` | `-d`/`--deep` | `-x`/`--max` | no flag -> medium (default) or auto-detect.
 
 | Mode | Flag | Target | Compression | Human-readable | Verification |
 |------|------|--------|-------------|----------------|--------------|
@@ -23,6 +23,7 @@ Parse `$ARGUMENTS`: `-l`/`--light` | `-s`/`--standard` | `-d`/`--deep` | no flag
 | Medium | _(default)_ | Any | Moderate | Yes | None |
 | Standard | `-s`, `--standard` | Docs, README | 30-50% | Yes | 1 round |
 | Deep | `-d`, `--deep` | CLAUDE.md, system prompts, agent/skill defs, KNOWLEDGE | 2-3x | No (LLM-only) | 1-2 rounds |
+| Max | `-x`, `--max` | CLAUDE.md, system prompts, KNOWLEDGE | 3-4x | No (LLM-only) | 2 (mandatory) |
 
 ## Smart Auto-Detection
 
@@ -36,6 +37,7 @@ When no flag provided AND input suggests compression (not just optimization):
 3. If confident → tell user: "Selected mode: {mode} for {file} because {reason}"
 4. If ambiguous → AskUserQuestion with mode options
 5. User can override via flags regardless of auto-detection
+6. **Max is opt-in only** — NEVER auto-selected without an explicit `-x`/`--max` flag or an explicit maximum/extreme compress hint
 
 ### Context Hints from Prompt Text
 
@@ -45,6 +47,7 @@ When no flag provided AND input suggests compression (not just optimization):
 | "deep compress / deep encode / super compress / maximum" | deep |
 | "compress / slim / tighten" (generic) | standard |
 | "safe compress / human readable" | standard |
+| "max compress / extreme / maximum density / atomic" | max |
 | Explicit target (e.g., "reduce by 70%") | adjust aggressiveness |
 
 ## Rule ID Quick Reference
@@ -93,6 +96,7 @@ When no flag provided AND input suggests compression (not just optimization):
 | Medium | All rules (C + T + S + R + P + L) | Balanced transformations |
 | Standard | All rules (C + T + S + R + P + L) + `references/standard-compression.md` | 30-50% compression, human-readable, 1 verification round |
 | Deep | All rules (C + T + S + R + P + L) + `references/deep-compression.md` | DICT header, symbol substitutions, 1-2 verification rounds (conditional) |
+| Max | All rules (C + T + S + R + P + L) + `references/deep-compression.md` + `references/max-compression.md` | Atomic fact-lines, ASCII operators, format-aware tables, 4 mandatory guardrails, 2 verification rounds |
 
 ## Usage Examples
 
@@ -106,6 +110,7 @@ When no flag provided AND input suggests compression (not just optimization):
 | `/brewtools:text-optimize -d agents/` | Directory — all `.md` files with specified mode |
 | `/brewtools:text-optimize -s README.md` | Standard mode — 30-50% compression, human-readable |
 | `/brewtools:text-optimize -d CLAUDE.md` | Deep mode — dictionary compression, LLM-only output |
+| `/brewtools:text-optimize -x CLAUDE.md` | Max mode — atomic fact-lines + ASCII operators, LLM-only, 2-round verify |
 | `/brewtools:text-optimize CLAUDE.md` | Auto-detect → selects deep for CLAUDE.md |
 | `/brewtools:text-optimize README.md` | Auto-detect → selects standard for README |
 | `/brewtools:text-optimize "super compress" file.md` | Prompt hint → deep mode |
@@ -135,7 +140,7 @@ Task(subagent_type: "Explore", prompt: "Analyze {file}: structure, dependencies,
 > **Context:** BT_PLUGIN_ROOT is available in your context (injected by pre-task.mjs hook). Use it to access plugin resources.
 
 ```
-Task(subagent_type: "text-optimizer", prompt: "FIRST: Read $BT_PLUGIN_ROOT/skills/text-optimize/references/rules-review.md for validation rules. FOR STANDARD MODE: Also read $BT_PLUGIN_ROOT/skills/text-optimize/references/standard-compression.md. FOR DEEP MODE: Also read $BT_PLUGIN_ROOT/skills/text-optimize/references/deep-compression.md. THEN optimize {file} using {mode} mode. Apply transformations, verify refs, output report with metrics.")
+Task(subagent_type: "text-optimizer", prompt: "FIRST: Read $BT_PLUGIN_ROOT/skills/text-optimize/references/rules-review.md for validation rules. FOR STANDARD MODE: Also read $BT_PLUGIN_ROOT/skills/text-optimize/references/standard-compression.md. FOR DEEP MODE: Also read $BT_PLUGIN_ROOT/skills/text-optimize/references/deep-compression.md. FOR MAX MODE: Also read $BT_PLUGIN_ROOT/skills/text-optimize/references/max-compression.md and apply atomic fact-line decomposition + ASCII operator dialect + guardrails; run 2 verification rounds. THEN optimize {file} using {mode} mode. Apply transformations, verify refs, output report with metrics.")
 ```
 
 > **Spawn parallel:** For multiple files, spawn ALL agents in ONE message for speed.
@@ -149,20 +154,22 @@ Task(subagent_type: "text-optimizer", prompt: "FIRST: Read $BT_PLUGIN_ROOT/skill
 
 ### During — Apply by Mode
 
-| Check | Light | Med | Std | Deep |
-|-------|-------|-----|-----|------|
-| C.1-C.8 (Claude behavior) | Yes | Yes | Yes | Yes |
-| T.6 (filler removal) | Yes | Yes | Yes | Yes |
-| T.1-T.5, T.7-T.8 (token compression) | - | Yes | Yes | Yes |
-| S.1-S.8 (structure/clarity) | - | Yes | Yes | Yes |
-| R.1-R.3 (reference integrity) | Yes | Yes | Yes | Yes |
-| P.1-P.4 (LLM perception) | Yes | Yes | Yes | Yes |
-| L.1-L.7 (LLM comprehension) | Yes | Yes | Yes | Yes |
-| Standard compression ref | - | - | Yes | - |
-| Deep compression ref + DICT | - | - | - | Yes |
-| Aggressive rephrasing | - | - | - | Yes |
-| Verification round(s) | - | - | 1 | 2 |
-| No information loss | Yes | Yes | Yes | Yes |
+| Check | Light | Med | Std | Deep | Max |
+|-------|-------|-----|-----|------|-----|
+| C.1-C.8 (Claude behavior) | Yes | Yes | Yes | Yes | Yes |
+| T.6 (filler removal) | Yes | Yes | Yes | Yes | Yes |
+| T.1-T.5, T.7-T.8 (token compression) | - | Yes | Yes | Yes | Yes |
+| S.1-S.8 (structure/clarity) | - | Yes | Yes | Yes | Yes |
+| R.1-R.3 (reference integrity) | Yes | Yes | Yes | Yes | Yes |
+| P.1-P.4 (LLM perception) | Yes | Yes | Yes | Yes | Yes |
+| L.1-L.7 (LLM comprehension) | Yes | Yes | Yes | Yes | Yes |
+| Standard compression ref | - | - | Yes | - | - |
+| Deep compression ref + DICT | - | - | - | Yes | Yes |
+| Aggressive rephrasing | - | - | - | Yes | Yes |
+| Max compression ref (atomic fact-lines) | - | - | - | - | Yes |
+| Guardrails C1-C4 (scope, punctuation, signal/token) | - | - | - | - | Yes |
+| Verification round(s) | - | - | 1 | 2 | 2 |
+| No information loss | Yes | Yes | Yes | Yes | Yes |
 
 ## Deep Mode Pipeline
 
@@ -183,6 +190,24 @@ Task(subagent_type: "text-optimizer", prompt: "FIRST: Read $BT_PLUGIN_ROOT/skill
 - Apply patches for missing facts
 - Re-verify
 - If still < 95% → warn user with loss list
+- Output final result + statistics
+
+## Max Mode Pipeline
+
+### Phase 1: Compress
+- Apply all Deep techniques (DICT header, symbol substitutions, structural compression)
+- Load `references/max-compression.md` for atomic fact-line decomposition, ASCII operator dialect, format-aware tables
+- Respect guardrails C1-C4: optimize for signal/token (not raw token count); preserve scope qualifiers; ~20% deletion ceiling — never strip punctuation; consistent terminology throughout
+
+### Phase 2: Verify Round 1
+- Spawn verification agent with ORIGINAL + COMPRESSED text
+- Calculate semantic match %
+- Gate at >= 95% → proceed; if < 95% → return loss list
+
+### Phase 3: Patch + Verify Round 2 (MANDATORY)
+- Apply patches for missing/distorted facts
+- Re-verify — Round 2 is mandatory, NEVER skip
+- If still < 95% → warn user with explicit loss list
 - Output final result + statistics
 
 ## Standard Mode Pipeline
@@ -206,7 +231,9 @@ Task(subagent_type: "text-optimizer", prompt: "FIRST: Read $BT_PLUGIN_ROOT/skill
 | Preserve | Names, numbers, dates, URLs, file paths, versions, ports, sizes |
 | Preserve | Negative rule semantics (`!=` notation in deep mode) |
 | Preserve | At least one example per rule with examples |
+| Preserve | Scope qualifiers ("every section, not just the first") — Opus 4.8 literalism (Max/Deep) |
 | Deep only | DICT header at document start |
+| Max only | Atomic fact-lines, ASCII operators over unicode glyphs, 2 mandatory verification rounds |
 | Output | Statistics: original (chars/words/~tokens), compressed (chars/words/~tokens), ratio, semantic match % |
 
 ### After

@@ -24,7 +24,7 @@ Ambiguous / missing input → enter full interactive flow.
 | Input | Branch |
 |-------|--------|
 | No args at all | Full interactive (I1 → I2 → I3 → I4) |
-| Op only (`disable` / `enable` / `status` / `list` / `reapply` / `prune`), no target | Skip I1, start at I2 |
+| Op only (`disable` / `enable` / `status` / `list`), no target | Skip I1, start at I2 |
 | Op + target, both clear | Skip interactive, run, print status (I4 only) |
 | Freeform prose ("hide the noisy image skill") | LLM pre-parse → if target inferrable, confirm once (I3); else full interactive |
 
@@ -98,14 +98,16 @@ Match the user's reply against the filtered catalog:
 
 ### Scope
 
-If the op mutates state (`disable` / `enable`) and `--scope` wasn't given, default to **global**. Only ask if the user's phrasing hints at per-project ("for this repo", "только в этом проекте", "project scope") — then a single AskUserQuestion: global vs project.
+Scope handling is skill-specific:
+- `skill-toggle` — no scope (`skillOverrides` is global-only).
+- `agent-toggle` — if `--scope` wasn't given for `disable`/`enable`, ALWAYS ask via a single AskUserQuestion: `global` vs `project` vs `local`. No default.
 
 ---
 
 ## Phase I4 — Execute + print status
 
-1. Run the resolved op (`apply.mjs` for rename, `state.mjs` for state mutation).
-2. Remind: `/reload-plugins` required for Claude Code to see the change (only after disable/enable, not after status/list).
+1. Run the resolved op via the skill's own helper (`skill-toggle` -> `overrides.mjs`; `agent-toggle` -> `deny.mjs`).
+2. Remind: change takes effect on next session or `/reload-plugins` (only after disable/enable, not after status/list).
 3. Print the **current status** table — regardless of which op ran:
 
 ```
@@ -138,9 +140,9 @@ The second line is a count, not an enumeration — users who want to scan everyt
 ## Anti-patterns
 
 - **Don't** paginate the catalog or split it across messages — the whole value is a single Ctrl+F line.
-- **Don't** ask scope unless the user hinted at it — default global is fine for 95% of cases.
+- **Don't** assume scope for `agent-toggle` — always ask `global`/`project`/`local` when not given. (`skill-toggle` has no scope.)
 - **Don't** confirm when the user was explicit — respect clarity.
-- **Don't** show the full catalog on `status` / `list` / `reapply` / `prune` — those have their own output.
+- **Don't** show the full catalog on `status` / `list` — those have their own output.
 - **Don't** loop the interactive flow — if the user says `cancel` or gives unparseable input twice, abort with an error message.
 
 ---
@@ -154,4 +156,4 @@ Both skills enter this flow when:
 
 Skip this flow when:
 - Full explicit command given (`disable <plugin>:<name>`) — go straight to main P3 Apply
-- Terminal op (`status`, `list`, `reapply`, `prune`) with no target required — run directly, show output
+- Terminal op (`status`, `list`) with no target required — run directly, show output

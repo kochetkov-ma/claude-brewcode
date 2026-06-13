@@ -6,18 +6,22 @@ Reference for deep compression mode applied to LLM-only documents (CLAUDE.md, sy
 
 | Symbol | Meaning |
 |--------|---------|
-| `→` | leads to, results in, flow |
+| `->` | leads to, results in, flow (prefer over `→`; both ~1 tok but `->` portable) |
 | `+` | and, combined with |
 | `!=` | must not, never, prohibited |
 | `>` | greater than, preferred over |
 | `=` | equals, is defined as |
-| `∴` | therefore, consequently |
-| `∵` | because, since |
+| `so` / `->` | therefore, consequently (was `∴`) |
+| `bc` / `because` | because, since (was `∵`) |
 | `@` | at, located at |
 | `|` | or, alternative |
 | `:` | has property, contains |
 | `~` | approximately |
-| `⊃` | includes, contains (set) |
+| `includes` | includes, contains (set) (was `⊃`) |
+
+Token cost (measured, tiktoken cl100k/o200k): ASCII digraphs `-> != >= <= |` = 1 token each; unicode glyphs `∵ ∴ ⊃ ≤ ≥` = 2-3 tokens each. Prefer ASCII. The token win comes from deleting words, not the glyph.
+
+Status emoji cost 2-4 tokens each (measured): `✅`/`❌` = 2-3 tok, `ℹ️` = 3 tok (variation-selector, worst). In token-sensitive deep output prefer ASCII `[x]`/`OK`/`FAIL`/`!`. Keep emoji only where priority-signaling value (e.g. KNOWLEDGE ❌/✅/ℹ️ ordering) outweighs token cost.
 
 ## Priority Labels
 
@@ -87,7 +91,7 @@ Apply filler removal from `rules-review.md` rule T.6. Additional deep-mode remov
 ## Structural Compression Patterns
 
 - Conditionals: `if X → Y` or `X ? Y : Z`
-- Prohibitions: `!=X ∵Y` (must not X because Y)
+- Prohibitions: `!=X bc Y` (must not X because Y)
 - Lists: inline comma-separated when items are short
 - Tables: for multi-attribute data
 - Merge related one-liners into single line with `|` separator
@@ -111,7 +115,7 @@ Preserve in ALL cases regardless of compression level:
 > Please note that when you are working with the database connection, it is important to make sure that you close the connection after you are done with it. Failure to do so can result in connection pool exhaustion, which may lead to the application becoming unresponsive.
 
 **Compressed** (~15 words):
-> DB conn: close after use ∵ unclosed → pool exhaustion → app unresponsive
+> DB conn: close after use bc unclosed -> pool exhaustion -> app unresponsive
 
 ### Example 2 — Rule Block with DICT
 
@@ -125,7 +129,7 @@ Preserve in ALL cases regardless of compression level:
 >
 > ## File Handling
 > TF in BD: use FUL | cleanup via `cleanup()` in finally block | ext: `.tmp`
-> !=TF in src dir ∵ corrupts VCS state
+> !=TF in src dir bc corrupts VCS state
 
 ### Example 3 — Configuration Section
 
@@ -152,4 +156,4 @@ Preserve in ALL cases regardless of compression level:
 > !=plaintext passwords in cfg files
 > !=API keys in repo
 > !=log sensitive data (tokens, credentials) @ any log level
-> !=disable TLS cert verification in prod ∵ MITM exposure
+> !=disable TLS cert verification in prod bc MITM exposure

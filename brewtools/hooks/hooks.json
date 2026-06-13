@@ -23,13 +23,15 @@
             "timeout": 2000
           }
         ]
-      },
+      }
+    ],
+    "UserPromptSubmit": [
       {
         "hooks": [
           {
             "type": "command",
             "command": "node",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/reapply-disables.mjs"],
+            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/manager-prompt.mjs"],
             "timeout": 3000
           }
         ]

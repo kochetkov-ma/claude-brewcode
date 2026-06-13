@@ -1,6 +1,6 @@
 # LLM Text Optimization and Comprehension Rules
 
-Categorized rules for LLM token efficiency and comprehension optimization with 41 rules across 6 categories.
+Categorized rules for LLM token efficiency and comprehension optimization with 42 rules across 6 categories.
 Apply by category. Reference specific IDs in reviews (e.g., "violates T.1").
 
 ## C - Claude Behavior
@@ -8,7 +8,7 @@ Apply by category. Reference specific IDs in reviews (e.g., "violates T.1").
 | ID | Rule | Notes |
 |----|------|-------|
 | C.1 | Literal Instruction Following | Claude 4.x does exactly what asked. Precise, explicit instructions required |
-| C.2 | Avoid "think" Word | Opus 4.5 sensitive to "think" when extended thinking disabled. Alternatives: "consider", "evaluate", "believe" |
+| C.2 | Avoid "think" Word | Conditional: when extended thinking is OFF, Opus 4.5 is sensitive to "think". Not a blanket ban. Alternatives: consider, evaluate, reason through |
 | C.3 | Positive Framing | Tell Claude what to do, not what not to do. ❌ "Do not use markdown" → "Write in flowing prose". More examples: "Don't use mock data" → "Use only real production data"; "Avoid creating new files" → "Apply all fixes to existing files only"; "Never use ellipsis" → "Use only complete sentences and periods" |
 | C.4 | Match Prompt Style to Output | Formatting in prompt influences response. Less markdown in prompt → less markdown in output |
 | C.5 | Descriptive Over Emphatic Instructions | Opus 4.5/4.6 overtrigger with aggressive language. "Use this tool when..." not "CRITICAL: You MUST..." |
@@ -24,10 +24,10 @@ Apply by category. Reference specific IDs in reviews (e.g., "violates T.1").
 | T.2 | Bullets over Numbered | `-` (1 char) vs `1. ` (3 chars). ~5-10% savings. Keep numbers when order matters |
 | T.3 | One-liners for Rules | `❌ bad → good` is self-documenting. Complex rules still need explanation |
 | T.4 | Inline Code over Blocks | Code blocks add markers + newlines. Inline `code` for <3 lines. Multi-line needs blocks for readability |
-| T.5 | Standard Abbreviations | Tables/technical contexts only. Allowed: impl, cfg, args, ret, env, prod, dev, repo, docs. Anti-pattern: Do NOT abbreviate domain terms, variable names, or constraint language in instructions. Shortening "authentication" to "auth" can cause 30+ point accuracy drops on specific tasks (DETAIL Matters, arXiv:2512.02246) because the model uses the statistically dominant meaning of the abbreviation |
+| T.5 | Standard Abbreviations | Tables/technical contexts only. Allowed: impl, cfg, args, ret, env, prod, dev, repo, docs. Anti-pattern: Do NOT abbreviate domain terms, variable names, or constraint language in instructions. Abbreviations not defined in a DICT header risk being misread — unmarked abbreviations get missed; defining/marking them in a DICT mitigates (arXiv:2410.23866, abbreviation expansion) because the model otherwise resolves to the statistically dominant meaning of the abbreviation |
 | T.6 | Remove Filler Words | Cut: "please note", "it's important", "as mentioned", "basically" |
 | T.7 | Comma-separated Inline Lists | `a, b, c` instead of bullet list when items are short, order irrelevant. Use for 3-7 short items |
-| T.8 | Arrows for Flow Notation | `A → B → C` instead of prose descriptions of sequences. Dense, scannable. Caveat: each symbol (→, |, :) counts as exactly 1 token. Verify actual savings with a tokenizer before assuming compression — natural language connectors sometimes use fewer tokens than equivalent symbol notation |
+| T.8 | Arrows for Flow Notation | `A → B → C` instead of prose descriptions of sequences. Dense, scannable. Measured fact: ASCII digraphs `-> != >= <= |` = 1 token each; unicode glyphs `∵ ∴ ⊃ ≤ ≥` = 2-3 tokens each (measured tiktoken cl100k/o200k). Prefer ASCII digraphs over unicode glyphs. `→` is 1 token but `->` is equally cheap and portable. The token win comes from deleting words, not the glyph |
 | T.10 | Strip Whitespace from Code in Prompts | Code in prompts (C/Java/C#): strip whitespace and indentation before embedding. arXiv:2508.13666 shows 11-22% fewer input tokens (Java: 18.7%, C++: 13.4%, C#: 11.7%) with <1.6% quality impact on Claude and GPT-4o. Python excluded — whitespace is syntactically required. Not for Gemini — significant degradation |
 
 ## S - Structure
@@ -58,7 +58,7 @@ Apply by category. Reference specific IDs in reviews (e.g., "violates T.1").
 | P.1 | Examples Near Rules | Place inline, not in appendix. Proximity improves pattern recognition |
 | P.2 | Hierarchy via Headers | Max 3-4 levels deep. Structured documents improve retrieval |
 | P.3 | Bold for Keywords | High-signal definitions only. Max 2-3 per 100 lines. Prefer XML tags or headers |
-| P.4 | Standard Symbols | → (flow), + (and), / (or). Dense formats only (tables, compact lists), NOT in prose |
+| P.4 | Standard Symbols | → (flow), + (and), / (or). Dense formats only (tables, compact lists), NOT in prose. Prefer ASCII operators (-> != >= |) over unicode glyphs on token grounds |
 | P.5 | Instruction Order (Anchoring) | Place critical constraints BEFORE options/examples. First-position = strongest anchoring |
 | P.6 | Default Over Options | Recommend ONE default, mention exceptions only. Too many options cause decision paralysis |
 
@@ -75,6 +75,7 @@ How content is perceived and processed by the LLM — not about token count but 
 | L.5 | Add WHY to Instructions | Claude generalizes the reason to edge cases. "Never use ellipsis because TTS won't pronounce it" → Claude also avoids other TTS-incompatible symbols. "Never use ellipsis" alone gives no generalization. Source: Anthropic Claude 4 best practices |
 | L.6 | Reiterate Critical Constraint at END | Position effect amplifies with context length — constraints closest to the end have highest compliance rate. Source: Brex Prompt Engineering Guide + Anthropic |
 | L.7 | Prompt Repetition for Non-Reasoning Models | Repeat the entire prompt once. Google Research (arXiv:2512.14982): wins 47/70 benchmark-model combinations with 0 losses. Extreme case: 21% to 97% accuracy. Causal LMs benefit because the second pass has full first-pass context. Only for non-reasoning models — reasoning models already repeat internally |
+| L.8 | Preserve Scope Qualifiers | Opus 4.8 follows instructions literally and does not silently generalize. Scope words ("every section, not just the first", "all files", "each") are load-bearing — never strip them during compression. Source: Anthropic Opus 4.8 prompting |
 
 ## Rules NOT Recommended
 
@@ -87,6 +88,7 @@ How content is perceived and processed by the LLM — not about token count but 
 | Non-standard abbreviations | Stick to T.5 allowed list |
 | Overload single prompts | Multiple tasks in one prompt divide attention → hallucination |
 | Over-focus on wording | Structure and format matter more than specific word choice |
+| Strip all function words / punctuation | Punctuation is load-bearing for context memory (arXiv:2502.15007 LLM-Microscope); ~20% deletion is the safe ceiling — substitute, don't bulk-delete |
 
 ## Compression Ratios (Token Efficiency)
 
@@ -120,6 +122,7 @@ Standard/deep modes apply ALL rules above (C + T + S + R + P) plus their respect
 - [Position Bias in LLMs](https://dl.acm.org/doi/full/10.1145/3715275.3732038)
 - [Lost in the Middle (TACL 2024)](https://direct.mit.edu/tacl/article/doi/10.1162/tacl_a_00638/119630)
 - [Prompt Repetition (arXiv:2512.14982)](https://arxiv.org/abs/2512.14982)
-- [DETAIL Matters (arXiv:2512.02246)](https://arxiv.org/abs/2512.02246)
+- [Abbreviation Expansion (arXiv:2410.23866)](https://arxiv.org/abs/2410.23866)
+- [LLM-Microscope / Punctuation (arXiv:2502.15007)](https://arxiv.org/abs/2502.15007)
 - [Whitespace Stripping (arXiv:2508.13666)](https://arxiv.org/abs/2508.13666)
 - [Brex Prompt Engineering Guide](https://github.com/brexhq/prompt-engineering)
