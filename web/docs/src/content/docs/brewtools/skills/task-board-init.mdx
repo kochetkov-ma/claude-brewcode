@@ -1,0 +1,140 @@
+---
+title: "Task Board Init"
+description: "Multi-agent generator that deploys a file-based Kanban into any repo: board, curator agent, dashboard skill, rule."
+order: 3124
+---
+import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+
+# task-board-init — file-based Kanban scaffolder
+
+<Badge variant="default" text="opus" />
+
+<Callout type="tip">
+**One command, complete task system.** Point the skill at any repo and it spawns parallel analysis subagents, confirms the findings with you, then writes a fully parametrized file-based Kanban: curator agent, on-demand dashboard skill, lifecycle rule, and the complete `.claude/features/**` folder tree. After it runs, the repo is self-contained — no further dependency on this generator.
+</Callout>
+
+## Quick reference
+
+| Item | Value |
+|------|-------|
+| Skill command | `/brewtools:task-board-init` |
+| Argument | `[target repo path]` — empty = current working dir |
+| Emits | `.claude/agents/task-tracker.md`, `.claude/skills/task-board/SKILL.md`, `.claude/rules/tasks.md`, `.claude/features/**` |
+| Spawns | Parallel analysis subagents (architect + Explore) + multi-agent doc sweep |
+| Model | opus |
+| Commits? | Never — committing is a user / manager action |
+
+## When to use
+
+| Scenario | Command |
+|----------|---------|
+| New repo needs file-based task tracking | `/brewtools:task-board-init` |
+| Standardize an existing Kanban convention across repos | `/brewtools:task-board-init /path/to/repo` |
+| Migrate scattered TODO / backlog docs into a structured board | `/brewtools:task-board-init` — sweep subagents migrate legacy docs automatically |
+
+## Example
+
+```bash
+# Deploy into the current repo
+/brewtools:task-board-init
+
+# Deploy into another repo
+/brewtools:task-board-init /path/to/some-repo
+```
+
+After completion the repo gains `/task-board` (view/add/move tasks) and the `task-tracker` agent auto-runs at the start of every task.
+
+## How it works
+
+<Steps>
+  <li>
+    <div>
+      <strong>Multi-agent repo analysis</strong>
+      <p>Parallel subagents (<code>architect</code> + <code>Explore</code>) derive: domain id-segments, source-dir exclusions the curator must never touch, release style (<code>vX.Y.Z</code> tag / commit SHA / none), doc language, and an inventory of existing task docs. Findings are confirmed via <code>AskUserQuestion</code> — generation does not start until the user approves. If analysis yields no domains, the skill asks the user to name at least one (falls back to a single <code>CORE</code> domain).</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Generate <code>task-tracker</code> agent</strong>
+      <p>Writes <code>.claude/agents/task-tracker.md</code> — the board curator. It owns the Kanban: creates, moves, and closes tasks; grooms the backlog; keeps <code>board.md</code> in sync with the folder state. The agent writes <em>only</em> under <code>.claude/features/**</code> and never touches source directories. Release style shapes the closing-marker wording (<code>vX.Y.Z tag + commit SHA</code> / bare SHA / date / no tag).</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Generate <code>task-board</code> skill</strong>
+      <p>Writes <code>.claude/skills/task-board/SKILL.md</code> — the on-demand dashboard. Supports flows: view, add, move, backlog, groom. Non-trivial and bulk passes are delegated to the <code>task-tracker</code> agent. This skill is the everyday interface; the agent is the heavy-lifting backend.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Generate rule + scaffold + doc sweep</strong>
+      <p>Writes <code>.claude/rules/tasks.md</code> (paths-scoped to <code>.claude/features/**</code>) — lifecycle rules, id convention, required frontmatter, grooming cadence, and the run-at-task-start rule that spawns <code>task-tracker</code> as an isolated subagent at the beginning of every task. This rule lives <em>only</em> in <code>tasks.md</code> — the target's <code>CLAUDE.md</code> is never touched. Then scaffolds the folder tree and launches parallel sweep subagents over the discovered doc inventory to migrate legacy backlog / feature docs into the board (dedup, move done items into <code>closed/</code>, author initial <code>board.md</code> counts). If no legacy docs were found, the sweep is skipped entirely.</p>
+    </div>
+  </li>
+</Steps>
+
+## What gets deployed
+
+| Artifact | Path | Role |
+|----------|------|------|
+| Curator agent | `.claude/agents/task-tracker.md` | Owns the board — create / move / close tasks, groom backlog, keep `board.md` canonical. Writes only `.claude/features/**`. |
+| Dashboard skill | `.claude/skills/task-board/SKILL.md` | On-demand `/task-board` — view / add / move / backlog / groom; delegates bulk to the agent. |
+| Paths-scoped rule | `.claude/rules/tasks.md` | Lifecycle, id convention, required FM, grooming — plus "run `task-tracker` at the start of any task". Auto-loads on `.claude/features/**`. |
+| Board file | `.claude/features/board.md` | The Kanban board — counts and task table, authored by the doc sweep. |
+| Control files | `.claude/features/{TRACKER,TASK_TEMPLATE,INDEX}.md` + `backlog/README.md` | Tracker log, task template, index, backlog guide. |
+| Folders | `.claude/features/{backlog,todo,progress,closed,specs}/` | Status folders — folder name = task status. |
+
+## ID convention
+
+Task IDs follow `UPPER-KEBAB`: `<PREFIX>-<DOMAIN>-<SLUG>`.
+
+| Prefix | Use |
+|--------|-----|
+| `T-` | Feature / product task |
+| `BUG-` | Defect |
+| `M-` | Maintenance / refactor / tech-debt |
+| `EPIC-` | Umbrella over several tasks |
+
+`<DOMAIN>` is the per-repo first kebab id-segment, discovered and confirmed in Step 1 (e.g. a frontend project might use `UI`, `API`, `BUILD`).
+
+<details>
+<summary>Internals: placeholder map + reference files</summary>
+
+**Placeholder map** — derived from confirmed Step 1 findings and substituted into every template before writing:
+
+| Placeholder | Derivation |
+|-------------|------------|
+| `{{DOMAINS}}` | Confirmed domain id-segment list, comma-separated |
+| `{{FIRST_DOMAIN}}` | `DOMAINS[0]` |
+| `{{EXCLUSIONS}}` | Confirmed source-dir exclusion list |
+| `{{REPO_NAME}}` | `basename` of `TARGET` |
+| `{{LANG}}` | Confirmed doc language |
+| `{{TODAY}}` | ISO date (`YYYY-MM-DD`) |
+| `{{CLOSE_MARKER}}` / `{{CLOSE_MARKER_SHORT}}` | Derived from `RELEASE_STYLE`: `vtag` → `vX.Y.Z tag + commit SHA` / `vX.Y.Z tag`; `sha` → `commit SHA`; `none` → `date / no tag / superseded / cancelled` / `no tag` |
+
+**Reference files** (loaded from `${CLAUDE_SKILL_DIR}/references/`):
+
+| File | Purpose |
+|------|---------|
+| `01-analysis.md` | Step 1 analysis prompts + AskUserQuestion confirmation contract |
+| `02-task-tracker-agent.md` | `task-tracker` agent template (placeholders) |
+| `03-task-board-skill.md` | `task-board` skill template |
+| `04-tasks-rule.md` | `tasks.md` rule template (includes run-at-start rule) |
+| `05-features-templates.md` | `.claude/features/**` file templates |
+| `06-doc-sweep.md` | Multi-agent doc-sweep procedure |
+
+</details>
+
+<CardGrid>
+  <Card title="Manager skill" icon="clipboard" href="/brewtools/skills/manager/">
+    Delegation companion — arm a HARD wall that forces the main session to orchestrate via Task/Agent while subagents stay free. Pairs well with task-board-init for enforcing manager-only orchestration.
+  </Card>
+  <Card title="Brewtools overview" icon="document" href="/brewtools/">
+    All brewtools skills — text-optimize, debate, secrets-scan, deploy, provider-switch, and more.
+  </Card>
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/task-board-init">
+    Source files — SKILL.md and all six reference templates.
+  </Card>
+</CardGrid>
+
+<UpdateNotice />

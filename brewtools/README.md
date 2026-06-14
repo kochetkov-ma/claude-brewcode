@@ -90,6 +90,7 @@ claude --plugin-dir ./brewtools
 | [`/brewtools:skill-toggle`](skills/skill-toggle/README.md) | Disable/enable individual plugin skills (survives plugin updates) | sonnet | `<op> [plugin:name] [--scope=global\|project]` |
 | [`/brewtools:agent-toggle`](skills/agent-toggle/README.md) | Disable/enable individual plugin agents (survives plugin updates) | sonnet | `<op> [plugin:name] [--scope=global\|project]` |
 | [`/brewtools:think-short`](skills/think-short/README.md) | Toggle terse-output mode — cut preamble/filler via SessionStart + PreToolUse:Task injection | sonnet | `[on\|off\|profile <light\|medium\|aggressive>\|status\|blacklist add\|remove <agent>]` |
+| [`/brewtools:task-board-init`](skills/task-board-init/README.md) | Deploy a self-contained file-based Kanban into ANY repo via multi-agent analysis (task-tracker agent + task-board skill + tasks rule + .claude/features/**) | opus | `[target repo path \| empty = cwd]` |
 
 ## Agents
 
@@ -122,6 +123,7 @@ brewtools/
 |   +-- agent-toggle/                  # Disable/enable individual plugin agents
 |   +-- think-short/                   # Terse-output mode toggle
 |   +-- manager/                       # Codeword-triggered Manager mode + HARD delegation wall
+|   +-- task-board-init/                # File-based Kanban generator (multi-agent)
 +-- agents/
     +-- text-optimizer.md             # Text optimization agent
     +-- ssh-admin.md                  # SSH and server administration

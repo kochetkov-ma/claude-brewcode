@@ -39,7 +39,7 @@ Documentation tools. Sync, generate, optimize, export, publish.
 | `/brewdoc:guide` | Interactive teaching for the plugin suite (this guide) |
 | `/brewdoc:publish` | Publish content to brewpage.app — text, markdown, or files |
 
-## Section 3: Brewtools Skills (12)
+## Section 3: Brewtools Skills (13)
 
 Universal utilities. Work in any project, no setup needed.
 
@@ -57,6 +57,7 @@ Universal utilities. Work in any project, no setup needed.
 | `/brewtools:agent-toggle` | Disable/enable individual plugin agents, survives plugin updates |
 | `/brewtools:think-short` | Toggle terse-output mode (light/medium/aggressive) to cut token bloat |
 | `/brewtools:manager` | Codeword (++m/++mp) Manager prompt + opt-in HARD wall blocking mutating tools (RU+EN) |
+| `/brewtools:task-board-init` | Deploy a file-based Kanban into any repo via multi-agent analysis |
 
 These are standalone — no project configuration required. Run them anywhere.
 

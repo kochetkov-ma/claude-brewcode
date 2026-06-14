@@ -42,8 +42,8 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | `mode planmode` | `/brewtools:manager mode planmode`, `режим планирования` | Set prompt-text mode to `planmode` (informational only) |
 | `edit [full\|planmode]` | `/brewtools:manager edit`, `поправь промт` | Copy plugin default into project override for editing |
 | `reset [full\|planmode]` | `/brewtools:manager reset` | Delete project override, revert to plugin default |
-| `hard-one-shot` | `<task> в хард режиме` / `<task> in hard mode` | Wall ON → run task as Manager → auto-revert wall OFF |
-| `manager-run` | `<task> от роли менеджера` / `<task> as manager` | Run task as Manager (wall untouched) |
+| `hard-one-shot` | `<task> в хард режиме` / `<task> in hard mode` | Wall ON → run task as Manager → auto-revert wall OFF when done (reverts even on failure or abort -- never silently persists). Contrast with manager-run: this actually toggles the guard. |
+| `manager-run` | `<task> от роли менеджера` / `<task> as manager` | Run task as Manager with wall UNTOUCHED (discipline via injected prompt only -- no wall toggle, no state change). Use when you want Manager behavior without arming the guard. |
 | `inline-run` | `/brewtools:manager <task>` | Prepend Manager block, execute — no state change |
 
 ## When to use

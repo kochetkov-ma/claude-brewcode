@@ -2,6 +2,20 @@
 
 ---
 
+## v3.14.0 (2026-06-14)
+
+> Docs: [brewtools:task-board-init](https://doc-claude.brewcode.app/brewtools/skills/task-board-init/) | [brewtools:manager](https://doc-claude.brewcode.app/brewtools/skills/manager/)
+
+### brewtools
+
+#### Added
+- **task-board-init:** generator skill that deploys a self-contained file-based Kanban into ANY target repo via multi-agent analysis. Four steps: (1) multi-agent repo analysis -> domains/id-prefixes, source-path exclusions, release style, doc language (confirmed via AskUserQuestion); (2) generates a parametrized `.claude/agents/task-tracker.md` curator; (3) generates an on-demand `.claude/skills/task-board/` dashboard (view/add/move/backlog/groom, delegates heavy passes to task-tracker); (4) writes a paths-scoped `.claude/rules/tasks.md` (board canonical, folder==status, lifecycle, + run-task-tracker-at-task-start rule kept out of CLAUDE.md), scaffolds `.claude/features/**`, and runs a multi-agent doc sweep that migrates legacy backlog/feature docs into the board. Mirrors the brewpage-app/yasna-bot etalons.
+
+#### Changed
+- **docs:** full 4-level documentation pass for task-board-init (new MDX page, navigation.ts, plugin + repo README, guide catalog) and manager (clarified hard-one-shot auto-revert + manager-run no-wall-toggle distinction).
+
+---
+
 ## v3.13.0 (2026-06-14)
 
 > Docs: [brewtools:manager](https://doc-claude.brewcode.app/brewtools/skills/manager/)

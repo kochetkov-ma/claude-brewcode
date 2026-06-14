@@ -81,6 +81,7 @@ export const navigation: NavSection[] = [
           { title: 'provider-switch', slug: 'brewtools/skills/provider-switch' },
           { title: 'secrets-scan', slug: 'brewtools/skills/secrets-scan' },
           { title: 'skill-toggle', slug: 'brewtools/skills/skill-toggle' },
+          { title: 'task-board-init', slug: 'brewtools/skills/task-board-init' },
           { title: 'ssh', slug: 'brewtools/skills/ssh' },
           { title: 'text-human', slug: 'brewtools/skills/text-human' },
           { title: 'text-optimize', slug: 'brewtools/skills/text-optimize' },
