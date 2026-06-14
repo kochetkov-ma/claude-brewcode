@@ -2,6 +2,17 @@
 
 ---
 
+## v3.14.3 (2026-06-14)
+
+> Docs: [brewtools:manager](https://doc-claude.brewcode.app/brewtools/skills/manager/) | [Prompt Injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/)
+
+### brewtools
+
+#### Changed
+- **docs (manager):** rewrote the manager page user-first. The top now shows only the essentials -- a plain-language intro, a highlighted before/after example (you type `++m <task>` -> Claude receives an injected Manager contract + your task), simple codeword and everyday-command tables. All deep technical detail (HARD wall internals, tool buckets, strict/balanced, prompt-resolution chains, scopes, full intent reference) moved under collapsible `<details>` spoilers so a non-technical reader can ignore it.
+
+---
+
 ## v3.14.2 (2026-06-14)
 
 > Docs: [Prompt Injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/)

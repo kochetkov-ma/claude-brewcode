@@ -5,263 +5,154 @@ order: 3124
 ---
 import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# Manager — codeword-triggered Manager mode + HARD delegation wall
+# Manager -- codeword-triggered Manager mode + HARD delegation wall
 
 <Badge variant="default" text="sonnet" /> <Badge variant="accent" text="hook" />
 
 <Callout type="tip">
-**SOFT codewords (`++m` / `++mp`)** — autonomous, hook-driven, always fire. A `UserPromptSubmit` hook scans every prompt; when it finds a codeword it appends the matching Manager block as `additionalContext` for that one turn. This layer cannot be toggled by this skill — it is always on. The skill only explains it (`status`) and customizes its text (`mode`/`edit`/`reset`).
-
-**HARD wall** — opt-in, project-only, persistent. `/brewtools:manager on` installs a self-contained `PreToolUse` guard into this project and arms it. While armed, the main session physically cannot use Write/Edit/NotebookEdit/WebFetch/MCP-write — only delegate, read, and track. Subagents stay fully free. `/brewtools:manager off` disarms the wall without removing the guard. The two layers are orthogonal.
+**What is Manager mode?** You type a short codeword (`++m`) anywhere in your message and Claude instantly switches into "delegate-everything orchestrator" mode -- just for that one message. It stops writing code by hand and instead decomposes your task, builds a plan, and delegates every piece to the best specialist agent. No setup required. The codeword is stripped from your message; your actual text is preserved.
 </Callout>
 
-## Quick reference
+## What actually happens
 
-| Item | Value |
-|------|-------|
-| Skill command | `/brewtools:manager` |
-| Codewords (SOFT, always on) | `++m` — full Manager block; `++mp` — Manager + Plan Mode addon |
-| HARD wall default | OFF (disarmed) — project scope only |
-| Hook event (SOFT) | `UserPromptSubmit` — fires on every user message, checks for codeword |
-| Hook event (HARD) | `PreToolUse *` — installed per-project in `.claude/settings.local.json` |
-| Prompt resolution | project override → global override → plugin `references/<mode>.md` |
-| Wall state scope | project only — `<cwd>/.claude/brewtools/manager/state.json` |
-| Model | sonnet |
+**You type:**
 
-### Actions
+```
+++m сделай рефакторинг модуля оплаты
+```
 
-| Action | Command / natural language | Effect |
-|--------|---------------------------|--------|
-| `on` | `/brewtools:manager on`, `включи` | INSTALL guard + ARM the HARD wall (project). `/reload` on first install only |
-| `off` | `/brewtools:manager off`, `выключи` | DISARM the wall (state flip only — registration kept, guard no-ops) |
-| `uninstall` | `/brewtools:manager uninstall`, `снеси стену` | DEREGISTER guard from `settings.local.json`, then `/reload` |
-| `level strict` | `/brewtools:manager level strict`, `строгий режим` | Wall strictness = strict (Bash fully off) |
-| `level balanced` | `/brewtools:manager level balanced`, `сбалансированный` | Wall strictness = balanced (read-only Bash allowed) |
-| `status` | `/brewtools:manager status`, `что сейчас` | Full explainer: codewords + wall state + effective prompt sources |
-| `mode full` | `/brewtools:manager mode full`, `полный режим` | Set prompt-text mode to `full` (informational only) |
-| `mode planmode` | `/brewtools:manager mode planmode`, `режим планирования` | Set prompt-text mode to `planmode` (informational only) |
-| `edit [full\|planmode]` | `/brewtools:manager edit`, `поправь промт` | Copy plugin default into project override for editing |
-| `reset [full\|planmode]` | `/brewtools:manager reset` | Delete project override, revert to plugin default |
-| `hard-one-shot` | `<task> в хард режиме` / `<task> in hard mode` | Wall ON → run task as Manager → auto-revert wall OFF when done (reverts even on failure or abort -- never silently persists). Contrast with manager-run: this actually toggles the guard. |
-| `manager-run` | `<task> от роли менеджера` / `<task> as manager` | Run task as Manager with wall UNTOUCHED (discipline via injected prompt only -- no wall toggle, no state change). Use when you want Manager behavior without arming the guard. |
-| `inline-run` | `/brewtools:manager <task>` | Prepend Manager block, execute — no state change |
+**Claude actually receives** (you never see this part -- it is injected invisibly by a hook):
+
+<Callout type="note">
+**[ INJECTED: Manager operating contract ]**
+
+You are a Manager, not an executor. Your job is orchestration only.
+
+1. Decompose the task -- identify all pieces.
+2. Build a TaskGraph -- every piece becomes a task with dependencies.
+3. Delegate -- spawn the best specialist agent for each task.
+4. Run independent tasks in parallel -- maximize fan-out.
+5. Integrate results -- collect outputs, synthesize the answer.
+
+Never implement, fix, or edit code yourself. Never run builds or tests yourself. If you catch yourself writing production code -- stop and delegate instead.
+</Callout>
+
+```
+сделай рефакторинг модуля оплаты
+```
+
+Your single line becomes: the full Manager contract (highlighted above) + your original request. The codeword `++m` is consumed; your text reaches Claude unchanged. Curious how injection works? See [Prompt Injection](/brewtools/prompt-injection/).
+
+---
+
+## Codewords
+
+| Codeword | What it does |
+|----------|-------------|
+| `++m` | Inject Manager mode for this one message -- Claude orchestrates, never codes by hand |
+| `++mp` | Same as `++m` plus Plan Mode -- Claude writes out the full task graph in English before starting |
+
+Put the codeword anywhere: start, middle, or end of your message. Everything else is passed through unchanged.
+
+---
+
+## Everyday commands
+
+| Command | What it does |
+|---------|-------------|
+| `/brewtools:manager status` | Show what is currently on -- codeword state, wall state, prompt source |
+| `/brewtools:manager on` | Turn on the HARD wall -- Claude physically cannot write/edit files in this project until you turn it off |
+| `/brewtools:manager off` | Turn the HARD wall off |
+| `/brewtools:manager edit full` | Open the Manager prompt text so you can customize it |
+
+---
 
 ## When to use
 
-| Situation | Invocation |
-|-----------|-----------|
-| Delegate one task as Manager for that turn only | Type `do X ++m` — no state change |
-| Start a full Manager-mode plan with parallel tasks | Type `solve Y ++mp` |
-| Enforce delegation wall for an entire project session | `/brewtools:manager on` |
-| Run one task under the wall then auto-revert | `<task> в хард режиме` |
-| Run task in manager role without changing wall | `<task> от роли менеджера` |
-| Tighten the wall — no Bash at all | `/brewtools:manager level strict` |
-| Loosen back to read-only Bash | `/brewtools:manager level balanced` |
-| Remove the wall entirely from the project | `/brewtools:manager uninstall` |
-| Check effective state + prompt source | `/brewtools:manager status` / `что сейчас` |
-| Customize the Manager prompt text | `/brewtools:manager edit full` / `поправь промт` |
+| Situation | What to type |
+|-----------|-------------|
+| Delegate one complex task as Manager, just this turn | `do X ++m` |
+| Start a full parallel plan with task breakdown | `plan Y ++mp` |
+| Enforce the delegation rule for a whole project session | `/brewtools:manager on` |
+| Run one task under the wall then auto-revert | `refactor payment service в хард режиме` |
+| Run task as Manager without changing any wall state | `build release plan от роли менеджера` |
+| Check current state | `/brewtools:manager status` or `что сейчас` |
 
-## Examples
+---
 
-**Codeword in a normal prompt — Manager block injects for this turn only:**
-```
-разбери архитектуру модуля auth и предложи план рефакторинга ++m
-```
+<details>
+<summary>Technical: how the HARD wall works (tool buckets, strict vs balanced, agent_id linchpin)</summary>
 
-**Plan Mode codeword — adds TaskGraph + English-plan block:**
-```
-migrate the database layer to a new ORM ++mp
-```
+The HARD wall is an optional, project-scoped guard that physically blocks the main Claude session from writing or editing files. Subagents always stay fully free -- delegation is never blocked.
 
-**Install and arm the HARD wall (first time — requires `/reload`):**
-```
-/brewtools:manager on
-включи
-```
+### Install-once + state-gate
 
-**Disarm the wall (registration stays, guard no-ops):**
-```
-/brewtools:manager off
-выключи
-```
+`/brewtools:manager on` copies `hardmode-guard.mjs` from the plugin cache into `<cwd>/.claude/brewtools/manager/hardmode-guard.mjs` and registers a `PreToolUse *` entry in `<cwd>/.claude/settings.local.json` (personal, gitignored). The guard is registered once; subsequent `on` calls overwrite it (so plugin updates propagate) without adding duplicates. A `/reload` or session restart is required after first install.
 
-**Remove the wall registration entirely:**
-```
-/brewtools:manager uninstall
-снеси стену
-```
+The guard reads `<cwd>/.claude/brewtools/manager/state.json` on every `PreToolUse` call. When `hard !== true`, the guard exits immediately -- no denial. `off` flips `state.hard=false` without touching `settings.local.json`; the guard stays registered but becomes a no-op. This split exists because editing settings while the wall is armed would be blocked -- the state flip is self-exempt and always succeeds.
 
-**Switch to strict level (Bash fully off):**
-```
-/brewtools:manager level strict
-```
+### agent_id linchpin -- main session blocked, subagents free
 
-**One-shot task under the wall — wall auto-reverts after:**
-```
-refactor the payment service в хард режиме
-```
+The `PreToolUse` payload carries `agent_id` / `agent_type` only for subagent-internal tool calls. Main-session calls have no `agent_id`. The guard denies mutations only when `agent_id` is absent. Subagents pass through freely -- delegation itself is never blocked.
 
-**Run task as Manager without touching wall state:**
-```
-build a release plan от роли менеджера
-```
-
-**Check current state:**
-```
-что сейчас
-/brewtools:manager status
-```
-
-Expected status output (wall off):
-```
-# Manager — status
-
-## Codewords (ALWAYS active — hook-driven, independent of this skill)
-Type `++m` anywhere   → injects the Manager (full) block for that one turn.
-Type `++mp` anywhere  → injects the Manager + Plan Mode block for that one turn.
-
---- injected by ++m (full) ---
-<full Manager block text>
-
---- injected by ++mp (planmode) ---
-<planmode block text>
-
-## HARD wall (this project) — registered=no  armed=OFF  level=balanced  (state source: default)
-Enable:    /brewtools:manager on
-Disable:   /brewtools:manager off
-Uninstall: /brewtools:manager uninstall
-Level:     /brewtools:manager level strict | balanced
-```
-
-**Inline-run — prepend Manager block and execute the request now:**
-```
-/brewtools:manager build a task graph for refactoring the payment service
-```
-
-**Edit the Manager prompt (copies default into writable override):**
-```
-поправь промт
-/brewtools:manager edit full
-```
-
-**Switch to Plan Mode prompt text:**
-```
-переключи на planmode
-/brewtools:manager mode planmode
-```
-
-## How it works
-
-### SOFT codewords — UserPromptSubmit injection
-
-<Steps>
-  <li>
-    <div>
-      <strong>Codeword detection</strong>
-      <p>On every user message, <code>manager-prompt.mjs</code> scans the prompt text. It tests for <code>++mp</code> before <code>++m</code> to avoid prefix collision. If neither codeword is present (and the wall is not armed), the hook exits immediately — no file I/O, zero overhead.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Prompt resolution — three-level fallback</strong>
-      <p>The hook resolves the prompt text for the detected mode (<code>full</code> or <code>planmode</code>): project override <code>.claude/brewtools/manager/prompts/&lt;mode&gt;.md</code> → global override <code>~/.claude/manager/prompts/&lt;mode&gt;.md</code> → plugin default <code>references/&lt;mode&gt;.md</code>. Project and global overrides survive plugin updates because they live outside the plugin cache.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>additionalContext injection — same turn</strong>
-      <p>The resolved prompt text is returned as <code>additionalContext</code> for the current turn. The model receives the Manager block alongside the user message and applies it immediately. When the HARD wall is armed, the Manager (full) block is also ambient-injected every turn with no codeword needed — codewords and wall injection are independent.</p>
-    </div>
-  </li>
-</Steps>
-
-### HARD wall — install-once + state-gate model
-
-<Steps>
-  <li>
-    <div>
-      <strong>Install-once — guard copied + registered in project settings</strong>
-      <p><code>/brewtools:manager on</code> copies <code>hardmode-guard.mjs</code> from the plugin cache into <code>&lt;cwd&gt;/.claude/brewtools/manager/hardmode-guard.mjs</code> and idempotently registers a <code>PreToolUse *</code> entry in <code>&lt;cwd&gt;/.claude/settings.local.json</code> (personal, gitignored). The registered entry runs <code>node &lt;ABS-path-to-guard&gt;</code> tagged <code>brewtools-manager-guard</code>. A second <code>on</code> overwrites the guard (so plugin updates propagate) but adds no duplicate entry. If newly registered, a <code>/reload</code> (or session restart) is required for the guard to take effect.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>State-gate — runtime kill-switch</strong>
-      <p>The guard reads <code>&lt;cwd&gt;/.claude/brewtools/manager/state.json {"{"}hard{"}"}</code> on every <code>PreToolUse</code> call. When <code>hard !== true</code>, the guard exits immediately — no denial. <code>off</code> flips <code>state.hard=false</code> and does NOT touch <code>settings.local.json</code>; the guard stays registered but becomes a no-op. This split exists because editing settings while the wall is armed would be blocked — the state flip is self-exempt and always succeeds.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>agent_id linchpin — main session blocked, subagents free</strong>
-      <p>The <code>PreToolUse</code> payload carries <code>agent_id</code> / <code>agent_type</code> only for subagent-internal tool calls. Main-session calls have no <code>agent_id</code>. The guard denies mutations only when <code>agent_id</code> is absent. Subagents (which carry <code>agent_id</code>) pass through freely — delegation itself is never blocked.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Tool decision — bucket lookup</strong>
-      <p>The guard classifies each tool call: ALWAYS-ALLOW (delegate/read/track) passes unconditionally. ALWAYS-BLOCK (Write/Edit/NotebookEdit/WebFetch/MCP-write) is denied. LEVEL-gated tools (Bash, WebSearch, MCP-read) are decided by the current <code>level</code>: balanced allows read-only Bash; strict denies all Bash.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Off-switch safety — always escapable</strong>
-      <p>Three hard guarantees ensure the wall is never a deadlock — see the <strong>Off-switch safety</strong> table below for the full breakdown.</p>
-    </div>
-  </li>
-</Steps>
-
-## Tool buckets
+### Tool buckets
 
 | Bucket | Tools | Main session while wall ON |
 |--------|-------|----------------------------|
-| ALWAYS-ALLOW | `Read`, `Grep`, `Glob`, `Task`, `Agent`, `Skill`, `TaskCreate`, `TaskUpdate`, `TaskList`, `TaskGet`, `TodoWrite`, `AskUserQuestion` | Always allowed — delegate / read / track |
-| ALWAYS-BLOCK | `Write`, `Edit`, `NotebookEdit`, `WebFetch`, MCP-write tools | Always denied — hands-on mutation |
+| ALWAYS-ALLOW | `Read`, `Grep`, `Glob`, `Task`, `Agent`, `Skill`, `TaskCreate`, `TaskUpdate`, `TaskList`, `TaskGet`, `TodoWrite`, `AskUserQuestion` | Always allowed -- delegate / read / track |
+| ALWAYS-BLOCK | `Write`, `Edit`, `NotebookEdit`, `WebFetch`, MCP-write tools | Always denied -- hands-on mutation |
 | LEVEL-gated | `Bash`, `WebSearch`, MCP-read tools | Decided by `level` (see below) |
 
-## Levels: strict vs balanced
+### Strict vs balanced
 
 | Aspect | `strict` | `balanced` (default) |
 |--------|----------|----------------------|
-| `Bash` | Fully OFF — every command denied | Read-only classifier — allow inspection, deny mutation |
-| Allowed Bash (balanced) | — | `git status/log/diff/show/branch`, `ls`, `cat`, `pwd`, `which`, `echo`, `head`, `tail`, `wc`, `gh ... list/view`, `grep`/`rg`, `find` (no `-delete`/`-exec`) |
-| Denied Bash (balanced) | — | `>`, `>>`, `rm`, `mv`, `cp`, `git commit/push/reset`, `npm install`, `pnpm`, `yarn add`, `pip install`, `mkdir`, `touch`, `chmod`, `sed -i`, `tee`, `kill`, `$(...)`, `node -e` |
+| `Bash` | Fully OFF -- every command denied | Read-only classifier -- allow inspection, deny mutation |
+| Allowed Bash (balanced) | -- | `git status/log/diff/show/branch`, `ls`, `cat`, `pwd`, `which`, `echo`, `head`, `tail`, `wc`, `gh ... list/view`, `grep`/`rg`, `find` (no `-delete`/`-exec`) |
+| Denied Bash (balanced) | -- | `>`, `>>`, `rm`, `mv`, `cp`, `git commit/push/reset`, `npm install`, `pnpm`, `yarn add`, `pip install`, `mkdir`, `touch`, `chmod`, `sed -i`, `tee`, `kill`, `$(...)`, `node -e` |
 | `WebSearch` | OFF | ON |
 | MCP-read | Explicit-allow list only | Heuristic allow (read-shaped tool names) |
 | MCP-write | Denied | Denied |
 
-<Callout type="note">
-The balanced Bash classifier is an allowlist of known-safe read-only commands, NOT a shell evaluator. Command substitution `$(...)` and `node -e` / `--eval` are denied even in balanced mode. When in doubt, the guard denies — the model should delegate to a subagent instead.
-</Callout>
+The balanced Bash classifier is an allowlist of known-safe read-only commands, NOT a shell evaluator. Command substitution `$(...)` and `node -e` / `--eval` are denied even in balanced mode.
 
-## Off-switch safety
+### Off-switch safety
 
 | Guarantee | Mechanism |
 |-----------|-----------|
 | `/brewtools:manager off` is never blocked | `Skill` tool is ALWAYS-ALLOW; state writer is self-exempt by path anchor |
 | Works even at `level strict` | `writeState` target path (`.claude/brewtools/manager/state.json`) is exempt from Bash denial |
-| Every denied tool call shows the exit command | Deny reason: `Manager HARD wall is ON — delegate via Task/Agent, or run /brewtools:manager off to exit.` |
+| Every denied tool call shows the exit command | Deny reason: `Manager HARD wall is ON -- delegate via Task/Agent, or run /brewtools:manager off to exit.` |
 
-## Codewords
+</details>
 
-| Codeword | Injected content | Note |
-|----------|-----------------|------|
-| `++m` | Full Manager block (`references/full.md` or override) | Tested second — `++mp` takes priority |
-| `++mp` | Full Manager block + Plan Mode addon (`references/planmode.md` or override) | Tested first to avoid prefix collision with `++m` |
+<details>
+<summary>Technical: prompt resolution + scopes (where the Manager text comes from)</summary>
 
-Codewords can appear anywhere in the prompt — start, middle, or end. Surrounding text is preserved unchanged.
+### How the codeword injection works
 
-## State + scope
+On every user message, `manager-prompt.mjs` scans the prompt text. It tests for `++mp` before `++m` to avoid prefix collision. If neither codeword is present (and the wall is not armed), the hook exits immediately -- no file I/O, zero overhead.
+
+The hook resolves the prompt text for the detected mode (`full` or `planmode`) via three-level fallback:
+
+1. Project override: `.claude/brewtools/manager/prompts/<mode>.md`
+2. Global override: `~/.claude/manager/prompts/<mode>.md`
+3. Plugin default: plugin `references/<mode>.md`
+
+Project and global overrides survive plugin updates because they live outside the plugin cache.
+
+When the HARD wall is armed, the Manager (full) block is also ambient-injected every turn with no codeword needed -- codewords and wall injection are independent channels.
 
 ### Scope table
 
 | Thing | Scope | Files |
 |-------|-------|-------|
-| Wall flags `{"{"}hard, level{"}"}` | **PROJECT ONLY** | `<cwd>/.claude/brewtools/manager/state.json` |
-| Wall registration (guard) | **PROJECT ONLY** | `<cwd>/.claude/settings.local.json` + `<cwd>/.claude/brewtools/manager/hardmode-guard.mjs` |
+| Wall flags `{"{"}hard, level{"}"}` | PROJECT ONLY | `<cwd>/.claude/brewtools/manager/state.json` |
+| Wall registration (guard) | PROJECT ONLY | `<cwd>/.claude/settings.local.json` + `<cwd>/.claude/brewtools/manager/hardmode-guard.mjs` |
 | Soft `mode` field (informational) | project state | same `state.json` |
-| Prompt-text overrides (`edit`/`reset`) | project **or** global | project: `<cwd>/.claude/brewtools/manager/prompts/<mode>.md` · global: `~/.claude/manager/prompts/<mode>.md` |
+| Prompt-text overrides (`edit`/`reset`) | project or global | project: `<cwd>/.claude/brewtools/manager/prompts/<mode>.md` -- global: `~/.claude/manager/prompts/<mode>.md` |
 
-The wall flags (`hard`/`level`) are resolved project-only in code — the global `state.json` does NOT enable the wall. Passing `--scope global` to `on`/`off`/`level` is silently ignored (wall has no global); the flag only applies to prompt-text override scope in `edit`/`reset`.
+The wall flags (`hard`/`level`) are resolved project-only. Passing `--scope global` to `on`/`off`/`level` is silently ignored (wall has no global scope); the flag only applies to prompt-text override scope in `edit`/`reset`.
 
 ### Prompt resolution chain
 
@@ -271,30 +162,77 @@ The wall flags (`hard`/`level`) are resolved project-only in code — the global
 | 2 | `~/.claude/manager/state.json` | `~/.claude/manager/prompts/<mode>.md` |
 | 3 (lowest) | Hardcoded `{"{"}enabled:true, mode:"full"{"}"}` | Plugin `references/<mode>.md` |
 
-<Callout type="note">
-Global paths (`~/.claude/*`) are protected from direct Write/Edit tool access (Claude Code v3.4.70+). The skill writes them via bundled Node helpers using atomic lock+tmp+rename, so prompt-text edits are safe and survive interruptions.
-</Callout>
+Global paths (`~/.claude/*`) are protected from direct Write/Edit tool access (Claude Code v3.4.70+). The skill writes them via bundled Node helpers using atomic lock+tmp+rename.
 
 ### Plan Mode addon (`++mp`)
 
-When `++mp` is detected, the hook injects **both** the full Manager block and the Plan Mode addon. The addon instructs the model to:
+When `++mp` is detected, the hook injects both the full Manager block and the Plan Mode addon. The addon instructs the model to: write the full TaskGraph in English into the plan before starting; mark tasks with parallel / critical-path indicators; output all task and plan text in English regardless of user prompt language.
 
-- Write the full TaskGraph in English into the plan before starting
-- Mark tasks with parallel / critical-path indicators
-- Output all task and plan text in English regardless of user prompt language
+</details>
+
+<details>
+<summary>Full command and intent reference (all actions, RU+EN triggers, hard-one-shot vs manager-run)</summary>
+
+### Actions
+
+| Action | Command / natural language | Effect |
+|--------|---------------------------|--------|
+| `on` | `/brewtools:manager on`, `включи` | INSTALL guard + ARM the HARD wall (project). `/reload` on first install only |
+| `off` | `/brewtools:manager off`, `выключи` | DISARM the wall (state flip only -- registration kept, guard no-ops) |
+| `uninstall` | `/brewtools:manager uninstall`, `снеси стену` | DEREGISTER guard from `settings.local.json`, then `/reload` |
+| `level strict` | `/brewtools:manager level strict`, `строгий режим` | Wall strictness = strict (Bash fully off) |
+| `level balanced` | `/brewtools:manager level balanced`, `сбалансированный` | Wall strictness = balanced (read-only Bash allowed) |
+| `status` | `/brewtools:manager status`, `что сейчас` | Full explainer: codewords + wall state + effective prompt sources |
+| `mode full` | `/brewtools:manager mode full`, `полный режим` | Set prompt-text mode to `full` (informational only) |
+| `mode planmode` | `/brewtools:manager mode planmode`, `режим планирования` | Set prompt-text mode to `planmode` (informational only) |
+| `edit [full\|planmode]` | `/brewtools:manager edit`, `поправь промт` | Copy plugin default into project override for editing |
+| `reset [full\|planmode]` | `/brewtools:manager reset` | Delete project override, revert to plugin default |
+| `hard-one-shot` | `<task> в хард режиме` / `<task> in hard mode` | Wall ON -- run task as Manager -- auto-revert wall OFF when done (reverts even on failure or abort) |
+| `manager-run` | `<task> от роли менеджера` / `<task> as manager` | Run task as Manager with wall UNTOUCHED (discipline via injected prompt only -- no wall toggle) |
+| `inline-run` | `/brewtools:manager <task>` | Prepend Manager block, execute -- no state change |
+
+### Expected `status` output (wall off)
+
+```
+# Manager -- status
+
+## Codewords (ALWAYS active -- hook-driven, independent of this skill)
+Type `++m` anywhere   -> injects the Manager (full) block for that one turn.
+Type `++mp` anywhere  -> injects the Manager + Plan Mode block for that one turn.
+
+--- injected by ++m (full) ---
+<full Manager block text>
+
+--- injected by ++mp (planmode) ---
+<planmode block text>
+
+## HARD wall (this project) -- registered=no  armed=OFF  level=balanced  (state source: default)
+Enable:    /brewtools:manager on
+Disable:   /brewtools:manager off
+Uninstall: /brewtools:manager uninstall
+Level:     /brewtools:manager level strict | balanced
+```
+
+### `hard-one-shot` vs `manager-run`
+
+`hard-one-shot` (`в хард режиме`) actually toggles the guard: wall ON -- task runs -- wall auto-reverts OFF when done, even on failure or abort. The guard never silently persists.
+
+`manager-run` (`от роли менеджера`) does NOT touch the wall state at all. Manager discipline is enforced via the injected prompt only. Use this when you want Manager behavior without arming or changing the guard.
+
+</details>
 
 <CardGrid>
   <Card title="Think Short" icon="settings" href="/brewtools/skills/think-short/">
-    Companion output-control skill — inject brevity directives via SessionStart and per-agent PreToolUse rather than per-prompt codewords.
+    Companion output-control skill -- inject brevity directives via SessionStart and per-agent PreToolUse rather than per-prompt codewords.
+  </Card>
+  <Card title="Prompt Injection" icon="bolt" href="/brewtools/prompt-injection/">
+    How the `++m` / `++mp` codewords inject the Manager contract into the model -- the full mechanism explained.
   </Card>
   <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">
     All brewtools skills and agents in one place.
   </Card>
   <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/manager">
-    Source code — skill, manager-prompt.mjs hook, hardmode-guard.mjs, prompt references, and state helpers.
-  </Card>
-  <Card title="Prompt injection" icon="bolt" href="/brewtools/prompt-injection/">
-    How the ++m/++mp codewords inject this prompt into the model.
+    Source code -- skill, manager-prompt.mjs hook, hardmode-guard.mjs, prompt references, and state helpers.
   </Card>
 </CardGrid>
 
