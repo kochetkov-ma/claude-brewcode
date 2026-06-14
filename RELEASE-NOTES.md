@@ -2,6 +2,20 @@
 
 ---
 
+## v3.14.1 (2026-06-14)
+
+> Docs: [Prompt Injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/) | [brewtools:manager](https://doc-claude.brewcode.app/brewtools/skills/manager/)
+
+### brewtools
+
+#### Added
+- **docs:** new "Prompt Injection" concept page explaining the `++m`/`++mp` codeword mechanism -- how the `UserPromptSubmit` hook injects a full Manager operating contract via `additionalContext` (invisible to the user, fully in the model's context), the prompt-resolution fallback chain, and the codeword/HARD-wall trigger table. Two-way cross-links with the manager skill page.
+
+#### Fixed
+- **docs:** deduped brewtools skill sidebar `order` frontmatter (3119 collision -> unique 3120-3125).
+
+---
+
 ## v3.14.0 (2026-06-14)
 
 > Docs: [brewtools:task-board-init](https://doc-claude.brewcode.app/brewtools/skills/task-board-init/) | [brewtools:manager](https://doc-claude.brewcode.app/brewtools/skills/manager/)
