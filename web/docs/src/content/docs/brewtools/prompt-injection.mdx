@@ -1,0 +1,123 @@
+---
+title: "Prompt Injection"
+description: "How ++ codewords inject a full Manager prompt -- you type a shortcut, the model silently receives a complete operating contract."
+order: 3100
+---
+import { Badge, Callout, Card, CardGrid, Steps, Tabs, TabItem, UpdateNotice } from '../../../components/mdx';
+
+# Prompt Injection
+
+<Badge variant="accent" text="hook" />
+
+<Callout type="tip">
+Type a short codeword -- `++m` or `++mp` -- anywhere in your message. A `UserPromptSubmit` hook intercepts the message before the model sees it and appends a full Manager operating contract as a hidden system-reminder. You see only what you typed; the model receives your text plus the full contract for that one turn.
+</Callout>
+
+## The injection point
+
+```text
++---------------------------+
+| You type:                 |
+| "++m fix the login bug"   |
++---------------------------+
+            |
+            v
++----------------------------------+
+| UserPromptSubmit hook fires      |
+| (manager-prompt.mjs)             |
+| - detects "++m" codeword         |
+| - resolves prompt text           |
+| - emits additionalContext        |
++----------------------------------+
+            |
+            v
++---------------------------------------------+
+| Model receives:                             |
+| [system-reminder header line]               |
+| [full Manager operating contract]           |
+| [your original text: fix the login bug]     |
++---------------------------------------------+
+```
+
+## What you type vs what the model receives
+
+<Tabs>
+  <TabItem label="You type">
+```
+++m fix the login bug
+```
+  </TabItem>
+  <TabItem label="Model receives">
+```
+>> system-reminder (additionalContext) <<
+
+User typed ++m -- Manager mode is active for this turn:
+
+[ full Manager operating contract: decompose -> build TaskGraph
+  -> delegate to expert agents -> integrate; never hand-implement ]
+
+fix the login bug
+```
+  </TabItem>
+</Tabs>
+
+The injected block is a system-reminder -- invisible in the user's transcript but fully part of the model's context for that turn.
+
+## How it works
+
+<Steps>
+  <li>
+    <div>
+      <strong>You include a codeword anywhere in your message</strong>
+      <p>The codeword can appear at the start, middle, or end. Your surrounding text is preserved unchanged. No special formatting is required.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>The UserPromptSubmit hook fires before the model</strong>
+      <p><code>manager-prompt.mjs</code> runs on every user message. It tests for <code>++mp</code> first, then <code>++m</code>, to avoid prefix collision. If neither codeword is found (and the HARD wall is off), the hook exits immediately -- zero file I/O, zero overhead.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>The hook resolves the prompt text</strong>
+      <p>Three-level fallback: project override (<code>.claude/brewtools/manager/prompts/&lt;mode&gt;.md</code>) -&gt; global override (<code>~/.claude/manager/prompts/&lt;mode&gt;.md</code>) -&gt; plugin default (<code>references/&lt;mode&gt;.md</code>). Project and global overrides survive plugin updates because they live outside the plugin cache.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>The resolved text is emitted via additionalContext</strong>
+      <p>The model receives a system-reminder containing a header line plus the full prompt block, followed by your original message. The contract applies for that turn only -- the next message starts clean unless you type a codeword again.</p>
+    </div>
+  </li>
+</Steps>
+
+## Codewords and injected prompts
+
+| Trigger | When it fires | What gets injected |
+|---------|--------------|-------------------|
+| `++m` | any message containing it (checked second) | full Manager block -- delegate-everything orchestrator contract |
+| `++mp` | any message containing it (checked before `++m`) | full Manager block + Plan Mode addon (TaskGraph in English, parallel indicators) |
+| HARD wall ON | every turn, no codeword required | full Manager block (ambient injection alongside any codeword) |
+
+The prompt text is editable and update-proof. Use `/brewtools:manager edit` to copy the plugin default into a writable project or global override, and `/brewtools:manager reset` to revert to the plugin default.
+
+## Where this is used
+
+The `/brewtools:manager` skill is the control plane for the entire mechanism. It lets you inspect the current effective prompt source (`status`), customize the Manager or Plan Mode text (`edit`/`reset`), arm the HARD delegation wall (`on`/`off`), and run one-shot manager tasks (`inline-run`, `hard-one-shot`, `manager-run`).
+
+The codeword hook itself (`manager-prompt.mjs`) is always on -- it cannot be toggled by the skill. The skill manages text and state; the hook fires unconditionally on every turn.
+
+<CardGrid>
+  <Card title="Manager skill" icon="settings" href="/brewtools/skills/manager/">
+    The control plane for these prompts -- customize text, arm the HARD wall, check status, and run manager-mode tasks.
+  </Card>
+  <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">
+    All brewtools skills and agents in one place.
+  </Card>
+  <Card title="Hook source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/hooks/manager-prompt.mjs">
+    The UserPromptSubmit hook that performs the injection on every turn.
+  </Card>
+</CardGrid>
+
+<UpdateNotice />
