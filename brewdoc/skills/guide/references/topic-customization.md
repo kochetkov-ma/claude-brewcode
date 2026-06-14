@@ -87,7 +87,7 @@ Available hook events:
 | Stop | Conversation ending | Block stop, cleanup; `hookSpecificOutput.additionalContext` (2.1.163) |
 | SubagentStop | Subagent finishes | Add context via `hookSpecificOutput.additionalContext` (2.1.163) |
 | MessageDisplay | Message shown to user (2.1.152) | Inspect/annotate displayed message |
-| UserPromptSubmit | User submits a prompt | Validate, transform, inject context |
+| UserPromptSubmit | User submits a prompt | Validate or inject context via additionalContext; cannot rewrite the prompt |
 | PermissionRequest | Tool asks for permission | Auto-approve, block, add rules |
 
 Hooks are configured in `hooks.json`:
@@ -97,7 +97,7 @@ Hooks are configured in `hooks.json`:
 ]
 ```
 
-Response channels: `additionalContext` (inject text), `updatedInput` (modify tool input), `decision` (block/allow).
+Response channels: `additionalContext` (inject text), `updatedInput` (PreToolUse/PermissionRequest only — modify tool input), `decision` (block/allow).
 
 ### Hooks shipped with brewcode suite
 

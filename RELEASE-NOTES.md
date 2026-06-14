@@ -2,6 +2,22 @@
 
 ---
 
+## v3.12.3 (2026-06-14)
+
+> Docs: [brewcode/hooks](https://doc-claude.brewcode.app/brewcode/hooks/)
+
+> **Theme:** doc-accuracy follow-up to v3.12.2 — the public hooks page still described `forced-eval` via the old `updatedInput` channel. Found by a project-wide final review that otherwise confirmed all 15 hooks, agents, and manifests are clean.
+
+### brewcode
+
+#### Changed
+- **Docs match code:** the `brewcode/hooks` MDX page documented `forced-eval` as emitting `updatedInput` and "returning the modified prompt" — wrong since v3.12.2. Corrected to `additionalContext` (UserPromptSubmit cannot rewrite the prompt), and the payload description updated to the current default (`[SKILL?]` skill-check always-on + light `[HINT]`; full Manager mode on-demand via `++m`).
+- **Guide tightened:** `topic-customization` no longer implies UserPromptSubmit can transform the prompt, and scopes `updatedInput` to PreToolUse/PermissionRequest.
+
+> Final-review result: no remaining hook output-channel bugs across brewcode/brewdoc/brewtools/brewui; `hook-creator`/`agent-creator` agent guidance verified authoritative; all hook registrations and custom user hooks valid.
+
+---
+
 ## v3.12.2 (2026-06-14)
 
 > Docs: [brewcode/agents/hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/)

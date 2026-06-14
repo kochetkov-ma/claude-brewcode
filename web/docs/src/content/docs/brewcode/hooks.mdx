@@ -16,7 +16,7 @@ and ensure progress transfer between sessions. Brewcode registers 9 hooks in `ho
 
 | # | Hook | Event | Matcher | Channel | Timeout | Purpose |
 |---|------|-------|---------|---------|---------|---------|
-| 1 | forced-eval | UserPromptSubmit | -- | updatedInput | 1s | Skill activation (84%) |
+| 1 | forced-eval | UserPromptSubmit | -- | additionalContext | 1s | Skill activation (84%) |
 | 2 | session-start | SessionStart | -- | additionalContext | 3s | Session initialization, LATEST.md |
 | 3 | grepai-session | SessionStart | -- | systemMessage | 5s | Auto-start grepai watch |
 | 4 | pre-task | PreToolUse | Task | additionalContext, updatedInput | 5s | Knowledge injection into agents |
@@ -74,7 +74,7 @@ All hooks follow a unified protocol:
 
 ### 1. forced-eval.mjs
 
-<Badge variant="primary" text="UserPromptSubmit" /> <Badge variant="secondary" text="updatedInput" />
+<Badge variant="primary" text="UserPromptSubmit" /> <Badge variant="secondary" text="additionalContext" />
 
 Boosts skill activation from ~20-50% to ~84%. Intercepts every user prompt
 and adds a reminder to check available skills.
@@ -82,13 +82,13 @@ and adds a reminder to check available skills.
 | Parameter | Value |
 |-----------|-------|
 | Event | UserPromptSubmit |
-| Channel | updatedInput (prompt) |
+| Channel | additionalContext |
 | Timeout | 1000 ms |
 
 **What it does:**
 - Receives the user prompt
 - Adds a prefix: `[SKILL?] Check available skills. If one matches this request, use Skill tool before responding.`
-- Returns the modified prompt via `updatedInput`
+- Injects the skill-check reminder (and a light delegation hint) via `additionalContext` — UserPromptSubmit cannot rewrite the prompt
 
 **When it fires:** On every user input, except events with an incorrect `hook_event_name`.
 
