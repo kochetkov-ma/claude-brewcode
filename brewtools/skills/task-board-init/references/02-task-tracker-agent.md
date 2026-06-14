@@ -9,6 +9,27 @@ For the closing-marker wording, expand `{{RELEASE_STYLE}}` per this map when sub
 - `sha`  → `a bare commit SHA, ELSE no tag / superseded / cancelled`
 - `none` → `a date / no tag / superseded / cancelled`
 
+Plus, IF P5.5 ran and set `CMD_DECOMPOSED=true`, substitute `{{CMD_DECOMPOSED_NOTE}}` with the "Project memory layout" block below AND `{{CMD_DECOMPOSED_INVARIANT}}` with the extra invariant row below. When `CMD_DECOMPOSED` is false, REMOVE the entire placeholder line(s) (the line holding `{{CMD_DECOMPOSED_NOTE}}` and the line holding the invariant placeholder) -- do not leave them blank -- so the generated agent and the 7-row Invariants table are byte-identical to the non-decomposed original. Both placeholders share the single `CMD_DECOMPOSED` gate.
+
+`{{CMD_DECOMPOSED_NOTE}}` (only when `CMD_DECOMPOSED=true`) expands to:
+
+```markdown
+## Project memory layout (this repo)
+
+This repo's `CLAUDE.md` was decomposed for context efficiency:
+- Root `CLAUDE.md` = repo-wide rules + a MODULE INDEX only.
+- Each module has its OWN `CLAUDE.md` (nested), loaded ON-DEMAND when you work in that subtree -- NOT at launch.
+- Machine/user-specific items live in `CLAUDE.local.md` (gitignored), not the committed file.
+When a task touches a module, consult that module's `CLAUDE.md` for its build/test/convention detail; do not expect it in root context. !=duplicate module detail back into root `CLAUDE.md`.
+
+```
+
+`{{CMD_DECOMPOSED_INVARIANT}}` (only when `CMD_DECOMPOSED=true`) expands to one Invariants-table row appended as row 8 -- the original Invariants table ends at row 7; if prior invariants were added/removed, use last+1:
+
+```markdown
+| 8 | Module detail lives in that module's nested `CLAUDE.md` (on-demand); root `CLAUDE.md` keeps only the module index. Secrets/host paths -> `CLAUDE.local.md`. !=move detail back to root |
+```
+
 ---
 
 ```markdown
@@ -50,6 +71,7 @@ BRD is canonical task LIST + status. Update BRD in SAME change as ANY transition
 
 Folder name == task status. Always. There is NO root `TODO.md` -- !=create one anywhere; the board lives ONLY under `.claude/features/`.
 
+{{CMD_DECOMPOSED_NOTE}}
 ## Lifecycle
 
 ```
@@ -78,6 +100,7 @@ backlog --groom(promote)--> todo --pick up--> progress --ship--> closed
 | 5 | Closing records the closing marker in `## Notes` + bumps `updated`: {{CLOSE_MARKER}}. |
 | 6 | {{LANG}}-only headings + FM. Historical quotes inside migrated snapshots may stay verbatim. |
 | 7 | REQ FM on any task file: `id, title, status, priority, owner, created, updated`. |
+{{CMD_DECOMPOSED_INVARIANT}}
 
 ## ID convention
 

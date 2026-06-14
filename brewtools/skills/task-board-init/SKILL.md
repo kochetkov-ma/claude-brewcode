@@ -1,9 +1,11 @@
 ---
 name: task-board-init
-description: "Generator: deploys a file-based Kanban into ANY repo via multi-agent analysis. Triggers: init task board, scaffold kanban, set up task tracker, generate task board, добавь канбан-доску, разверни трекер задач."
-argument-hint: "[target repo path | empty = cwd]"
+description: "Generator: deploys a file-based Kanban into ANY repo via multi-agent analysis, with an optional gated CLAUDE.md-optimization pass. Triggers: init task board, scaffold kanban, set up task tracker, generate task board, optimize CLAUDE.md, добавь канбан-доску, разверни трекер задач."
+argument-hint: "[target repo path | empty = cwd] [free-text directive, e.g. 'also dedupe rules', 'skip module split']"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Task, AskUserQuestion
 model: opus
+meta:
+  phases: [P0, P1, P2, P3, P4, P5, P5.5]
 user-invocable: true
 ---
 
@@ -28,17 +30,24 @@ This skill ORCHESTRATES. It does not hand-do the bulk analysis or the doc sweep 
 
 ---
 
-## P0: Resolve target repo
+## P0: Resolve target repo + parse directive
 
-`$ARGUMENTS` = target repo path, or empty = current working dir. Resolve to `TARGET` (absolute). All emitted paths are `TARGET/.claude/**`.
+`$ARGUMENTS` carries TWO optional, order-independent things: (a) a target repo PATH, (b) a free-text DIRECTIVE that tunes the optional CLAUDE.md-optimization phase (e.g. "also dedupe rules", "skip module split", "report only"). Disambiguate:
+- A token that resolves to an existing directory (abs, or relative to cwd) = the PATH. Empty / unresolvable-as-dir = cwd.
+- Everything else (the remaining free text) = `DIR`, passed verbatim to P5.5. If no path-like token is present, the whole argument is `DIR` and `TARGET`=cwd.
+- If ambiguous (e.g. a bare word that is both a plausible relative dir and a directive verb), prefer PATH only if it resolves to an existing dir; else treat as DIR.
 
-**EXECUTE** using Bash tool. On the first line, set `ARG` to the user-supplied repo path (or `.` for cwd):
+**EXECUTE** using Bash tool. Set `ARG` to the path-like token (or `.`):
 ```bash
-ARG="{{ARGUMENTS_OR_DOT}}"   # replace with the user-supplied repo path, or . for cwd
+ARG="{{ARGUMENTS_PATH_OR_DOT}}"   # the path-like token, or . for cwd
 TARGET="$(cd "$ARG" 2>/dev/null && pwd)"
 test -n "$TARGET" && test -d "$TARGET" && echo "TARGET=$TARGET" && echo "OK" || echo "FAIL: target not a dir"
 ```
 > **STOP if FAIL** -- ask the user for a valid repo path.
+
+> `{{ARGUMENTS_PATH_OR_DOT}}` is resolved inline in P0 (the parsed path-like token, or `.`), not a template-emit placeholder -- it is absent from the Placeholder map by design.
+
+Record `DIR` = the remaining free text (may be empty); hold it for P5.5.
 
 Guard: refuse if `TARGET/.claude/features/board.md` already exists -- the board is already deployed. Offer the `task-board` skill / `task-tracker` agent instead. Do not overwrite.
 
@@ -77,6 +86,8 @@ DOCS      = [ ... ]   # existing backlog/feature/task docs found, for the Step-4
 ```
 
 Present FINDINGS to the user with **AskUserQuestion** per the contract in `01-analysis.md` (confirm/override DOMAINS and EXCLUSIONS especially). Do not generate until the user confirms.
+
+> In the SAME confirmation, also ask whether to run the optional **CLAUDE.md optimization** phase (P5.5) after the board is deployed. Default: offer it; if the user passed a `DIR` directive in `$ARGUMENTS`, default the answer to YES. Record `OPTIN`.
 
 > **Empty DOMAINS edge:** if analysis yields no domains, do NOT proceed with an empty `{{DOMAINS}}` (it would produce broken ids like `T--SLUG`); ask the user to name at least one domain via AskUserQuestion, or fall back to a single `CORE` domain.
 
@@ -130,7 +141,7 @@ Load the rule template:
 
 Read file: `${CLAUDE_SKILL_DIR}/references/04-tasks-rule.md`
 
-Substitute placeholders, then `Write` to `TARGET/.claude/rules/tasks.md`. Frontmatter `paths: [".claude/features/**"]`. It mirrors the brewpage rule PLUS one extra rule: **at the START of ANY task, run the `task-tracker` agent in ISOLATION (a spawned subagent, NOT inlined).** This rule lives ONLY in `.claude/rules/tasks.md` -- explicitly NOT in CLAUDE.md. Do not touch the target's CLAUDE.md.
+Substitute placeholders, then `Write` to `TARGET/.claude/rules/tasks.md`. Frontmatter `paths: [".claude/features/**"]`. It mirrors the brewpage rule PLUS one extra rule: **at the START of ANY task, run the `task-tracker` agent in ISOLATION (a spawned subagent, NOT inlined).** This rule lives ONLY in `.claude/rules/tasks.md` -- explicitly NOT in CLAUDE.md. Steps P0-P5 do NOT touch the target's CLAUDE.md; the ONLY sanctioned, gated way to modify it is the optional P5.5 phase below (opt-in, every change behind AskUserQuestion).
 
 ### 4b. Scaffold `.claude/features/**`
 
@@ -182,8 +193,25 @@ Report to the user:
 - DOMAINS, EXCLUSIONS, REL_STYLE, LANG used
 - the sweep manifest counts: docs migrated (by status) / docs trashed / board rows authored -- so a silent no-op sweep is visible
 - next step: `/task-board` to view, or just start a task (the new rule runs `task-tracker` at task start)
+- if P5.5 ran: CLAUDE.md lines before->after (vs ~200 optimal / 300 over), local-only items moved to CLAUDE.local.md, modules split into nested CLAUDE.md, rules deduped, whether text-optimize was invoked
 
 > Do NOT commit. Committing is a user / manager action.
+
+---
+
+## P5.5: CLAUDE.md optimization  (optional, gated)
+
+Run ONLY if `OPTIN` (from P1) is true. PROPOSE-ONLY: every restructuring is behind AskUserQuestion -- never force a change. This is the sanctioned replacement for the old "do not touch CLAUDE.md" stance.
+
+Load the procedure:
+
+Read file: `${CLAUDE_SKILL_DIR}/references/07-claude-md-optimize.md`
+
+Pass it `TARGET`, `DIR` (the directive parsed in P0), and `EXCLUSIONS`/`MODULES` context from P1. Follow it to: detect + report current-vs-target line count; propose (and on approval apply) local-only extraction to `CLAUDE.local.md`; over-budget decomposition into nested module CLAUDE.md (loaded on-demand) + path-scoped rules; rules dedup; then delegate token-compression to `brewtools:text-optimize` on the touched files. Set `CMD_DECOMPOSED` for the report and for the task-tracker note.
+
+> **Verified mechanic (code.claude.com/docs/en/memory):** root CLAUDE.md loads in full at launch; NESTED subdirectory CLAUDE.md loads ON-DEMAND when Claude works in that subtree; `@path` imports are EAGER (no context savings). Module detail therefore moves into nested module CLAUDE.md, never `@import`.
+
+> If `OPTIN` is false, skip silently. Never edit CLAUDE.md outside this phase.
 
 ---
 
@@ -198,3 +226,6 @@ Report to the user:
 | User does not confirm FINDINGS | Do NOT generate; re-ask or abort |
 | A subagent proposes editing source dirs (EXCLUSIONS) | Reject that edit; sweep writes ONLY `.claude/features/**` |
 | Nested spawn requested (Task from a subagent) | Forbidden -- orchestrate from main only |
+| `OPTIN` true but no root CLAUDE.md in target | report "no CLAUDE.md to optimize"; skip P5.5; do NOT create a root CLAUDE.md |
+| P5.5 proposal declined by user | make NO edit; continue/finish cleanly (never force) |
+| Secret detected in committed CLAUDE.md | mask value in output; on move, warn gitignore != history purge; never echo full secret |
