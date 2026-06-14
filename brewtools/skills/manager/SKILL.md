@@ -1,6 +1,6 @@
 ---
 name: brewtools:manager
-description: "Manager mode. on installs+arms a HARD delegation wall into THIS project (PreToolUse denies Write/Edit/Bash in main session, subagents free); off disarms; uninstall removes it. Codewords ++m/++mp ALWAYS auto-inject a delegate-everything prompt, independent of this skill. level strict|balanced, status, mode, edit, reset. Triggers: manager, менеджер, hard mode, хард режим, delegate."
+description: "Manager mode. on installs+arms a HARD delegation wall into THIS project (PreToolUse denies Write/Edit/Bash in main session, subagents free); off disarms; uninstall removes it. Codewords ++m/++mp auto-inject a delegate-everything prompt; ++rr/++r auto-inject review discipline (anti-regression / two-phase double-check), all independent of this skill. level strict|balanced, status, mode, edit, reset. Triggers: manager, менеджер, hard mode, хард режим, delegate."
 argument-hint: "[on|off|uninstall|status|level <strict|balanced>|mode <full|planmode>|edit|reset] | <task в хард режиме> | <task от роли менеджера> | <prompt>"
 allowed-tools: Read, Bash, AskUserQuestion
 model: sonnet
@@ -11,9 +11,12 @@ user-invocable: true
 
 > Manager mode has **TWO independent layers**. Keep them straight:
 >
-> 1. **SOFT codewords (`++m` / `++mp`) — autonomous, hook-driven, ALWAYS fire.** A `UserPromptSubmit` hook (`hooks/manager-prompt.mjs`) watches every prompt; when it sees a codeword it injects the matching Manager block as `additionalContext` for that one turn. This is NOT enabled/disabled by this skill — it works regardless of skill state. The skill only **explains** it (`status`) and **customizes its TEXT** (`mode`/`edit`/`reset`).
->     - `++mp` → Manager + Plan Mode (`planmode`) — tested first (prefix collision with `++m`).
->     - `++m`  → Manager mode (`full`).
+> 1. **SOFT codewords (`++m` / `++mp` / `++rr` / `++r`) — autonomous, hook-driven, ALWAYS fire.** A `UserPromptSubmit` hook (`hooks/manager-prompt.mjs`) watches every prompt; when it sees a codeword it injects the matching block as `additionalContext` for that one turn. This is NOT enabled/disabled by this skill — it works regardless of skill state. The skill only **explains** it (`status`) and **customizes its TEXT** (`mode`/`edit`/`reset`).
+>     Detection order (longest-prefix first):
+>     - `++mp` → Manager + Plan Mode (`planmode`) — writes the task graph, uses the tasks tool; tested first (prefix collision with `++m`).
+>     - `++m`  → Manager mode (`full`) — delegate-everything prompt.
+>     - `++rr` → Regression Review discipline (`review-regression`) — after each significant phase: no regression + project standard + correctness; two-phase review→double-check→fix; final cross-review at task end. Tested after `++m`, before `++r`.
+>     - `++r`  → Review discipline (`review-double`) — two-phase multi-agent review→double-check→fix after each significant change; codeword-only (no ambient/wall injection).
 >     - When the HARD wall is ON, the Manager (full) block is ALSO auto-injected on EVERY turn — no codeword needed. Codewords and wall injection are independent.
 > 2. **HARD wall — opt-in, this skill only, PER-PROJECT, INSTALLED-INTO-THE-PROJECT, persistent.** The wall is **NOT** a plugin hook. `on` does two things: it **installs** a self-contained `PreToolUse` guard into THIS project (copies the guard file + idempotently registers it in `<cwd>/.claude/settings.local.json`) and **arms** it by flipping `state.hard=true`. The registered guard then **physically denies** mutating tools (Write/Edit/Bash/WebFetch/...) in the **main session**, leaving only delegate/read/track. Subagents stay fully free (`agent_id` linchpin). `off` only flips `state.hard=false` (disarm) — registration stays, the guard no-ops. `uninstall` removes the registration. The wall lives in project state + project settings, defaults OFF, persists until `off`/`uninstall`. There is **no codeword** for the wall.
 >
@@ -294,6 +297,8 @@ Render using the canonical status block in `references/hard.md`, filling in `har
 ## Codewords (ALWAYS active — hook-driven, independent of this skill)
 Type `++m` anywhere   → injects the Manager (full) block for that one turn.
 Type `++mp` anywhere  → injects the Manager + Plan Mode block for that one turn.
+Type `++rr` anywhere  → injects the Regression Review contract for that one turn.
+Type `++r` anywhere   → injects the Review contract for that one turn.
 They fire on every prompt that contains them. This skill never turns them on or off.
 
 --- injected by ++m (full) ---

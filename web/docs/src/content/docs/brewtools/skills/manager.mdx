@@ -1,6 +1,6 @@
 ---
 title: "Manager"
-description: "Type ++m / ++mp to inject a Manager block for one turn. HARD wall denies Write/Edit/NotebookEdit/WebFetch/MCP-write in the main session. RU+EN."
+description: "Type ++m / ++mp / ++rr / ++r anywhere to inject a Manager or review-discipline block for one turn. The HARD wall denies Write/Edit/NotebookEdit/WebFetch/MCP-write in the main session, forcing delegation. RU+EN."
 order: 3124
 ---
 import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
@@ -10,7 +10,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 <Badge variant="default" text="sonnet" /> <Badge variant="accent" text="hook" />
 
 <Callout type="tip">
-**What is Manager mode?** You type a short codeword (`++m`) anywhere in your message and Claude instantly switches into "delegate-everything orchestrator" mode -- just for that one message. It stops writing code by hand and instead decomposes your task, builds a plan, and delegates every piece to the best specialist agent. No setup required. The codeword is stripped from your message; your actual text is preserved.
+**What is Manager mode?** You type a short codeword (`++m`, `++mp`, `++rr`, or `++r`) anywhere in your message and Claude instantly activates a discipline contract -- just for that one message. `++m` makes Claude a pure orchestrator that delegates all hands-on work. `++mp` adds a full task-graph planning pass. `++rr` and `++r` inject review discipline (anti-regression / two-phase double-check). No setup required. The codeword is stripped from your message; your actual text is preserved.
 </Callout>
 
 ## What actually happens
@@ -47,10 +47,14 @@ Your single line becomes: the full Manager contract (highlighted above) + your o
 
 ## Codewords
 
-| Codeword | What it does |
-|----------|-------------|
-| `++m` | Inject Manager mode for this one message -- Claude orchestrates, never codes by hand |
-| `++mp` | Same as `++m` plus Plan Mode -- Claude writes out the full task graph in English before starting |
+| Codeword | Means | What it does |
+|----------|-------|-------------|
+| `++m` | Manager | Manager + delegation for the current task -- Claude orchestrates, never codes by hand |
+| `++mp` | Manager for Plan | Manager role for plan + delegation -- writes the full task graph in English before starting, uses the tasks tool |
+| `++rr` | Regression Review | Regression review with double-check -- after each significant phase, run a review focused on no regression + project standard + correctness; two-phase (review → double-check → fix); mandatory final cross-review at task end |
+| `++r` | Review | Review with double-check -- after each significant change, run a two-phase multi-agent review (review → double-check → fix); codeword-only, no ambient injection or wall state change |
+
+Detection order: `++mp` → `++m` → `++rr` → `++r` (longest-prefix first; `++rr` is always tested before `++r`).
 
 Put the codeword anywhere: start, middle, or end of your message. Everything else is passed through unchanged.
 
@@ -172,7 +176,7 @@ The balanced Bash classifier is an allowlist of known-safe read-only commands, N
 
 ### How the codeword injection works
 
-On every user message, `manager-prompt.mjs` scans the prompt text. It tests for `++mp` before `++m` to avoid prefix collision. If neither codeword is present (and the wall is not armed), the hook exits immediately -- no file I/O, zero overhead.
+On every user message, `manager-prompt.mjs` scans the prompt text. Detection order follows longest-prefix first: `++mp` → `++m` → `++rr` → `++r`. This ensures `++mp` is never mis-matched as `++m`, and `++rr` is never mis-matched as `++r`. If no codeword is present (and the wall is not armed), the hook exits immediately -- no file I/O, zero overhead.
 
 The hook resolves the prompt text for the detected mode (`full` or `planmode`) via three-level fallback:
 
@@ -242,6 +246,8 @@ When `++mp` is detected, the hook injects both the full Manager block and the Pl
 ## Codewords (ALWAYS active -- hook-driven, independent of this skill)
 Type `++m` anywhere   -> injects the Manager (full) block for that one turn.
 Type `++mp` anywhere  -> injects the Manager + Plan Mode block for that one turn.
+Type `++rr` anywhere  -> injects the Regression Review contract for that one turn.
+Type `++r` anywhere   -> injects the Review contract for that one turn.
 
 --- injected by ++m (full) ---
 <full Manager block text>
@@ -269,7 +275,7 @@ Level:     /brewtools:manager level strict | balanced
     Companion output-control skill -- inject brevity directives via SessionStart and per-agent PreToolUse rather than per-prompt codewords.
   </Card>
   <Card title="Prompt Injection" icon="bolt" href="/brewtools/prompt-injection/">
-    How the `++m` / `++mp` codewords inject the Manager contract into the model -- the full mechanism explained.
+    How the `++m` / `++mp` / `++rr` / `++r` codewords inject the Manager / review contract into the model -- the full mechanism explained.
   </Card>
   <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">
     All brewtools skills and agents in one place.

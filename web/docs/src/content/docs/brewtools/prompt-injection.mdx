@@ -10,7 +10,7 @@ import { Badge, Callout, Card, CardGrid, Steps, Tabs, TabItem, UpdateNotice } fr
 <Badge variant="accent" text="hook" />
 
 <Callout type="tip">
-Type a short codeword -- `++m` or `++mp` -- anywhere in your message. A `UserPromptSubmit` hook intercepts the message before the model sees it and appends a full Manager operating contract as a hidden system-reminder. You see only what you typed; the model receives your text plus the full contract for that one turn.
+Type a short codeword -- `++mp`, `++m`, `++rr`, or `++r` -- anywhere in your message. A `UserPromptSubmit` hook intercepts the message before the model sees it and appends the matching operating contract as a hidden system-reminder. You see only what you typed; the model receives your text plus the full contract for that one turn.
 </Callout>
 
 ## The injection point
@@ -75,7 +75,7 @@ The injected block is a system-reminder -- invisible in the user's transcript bu
   <li>
     <div>
       <strong>The UserPromptSubmit hook fires before the model</strong>
-      <p><code>manager-prompt.mjs</code> runs on every user message. It tests for <code>++mp</code> first, then <code>++m</code>, to avoid prefix collision. If neither codeword is found (and the HARD wall is off), the hook exits immediately -- zero file I/O, zero overhead.</p>
+      <p><code>manager-prompt.mjs</code> runs on every user message. It tests codewords longest-prefix first: <code>++mp</code> → <code>++m</code> → <code>++rr</code> → <code>++r</code>, to avoid prefix collisions. The review codewords (<code>++rr</code>, <code>++r</code>) are codeword-only -- there is no ambient HARD-wall equivalent for review mode. If no codeword is found (and the HARD wall is off), the hook exits immediately -- zero file I/O, zero overhead.</p>
     </div>
   </li>
   <li>
@@ -94,11 +94,13 @@ The injected block is a system-reminder -- invisible in the user's transcript bu
 
 ## Codewords and injected prompts
 
-| Trigger | When it fires | What gets injected |
-|---------|--------------|-------------------|
-| `++m` | any message containing it (checked second) | full Manager block -- delegate-everything orchestrator contract |
-| `++mp` | any message containing it (checked before `++m`) | full Manager block + Plan Mode addon (TaskGraph in English, parallel indicators) |
-| HARD wall ON | every turn, no codeword required | full Manager block (ambient injection alongside any codeword) |
+| Trigger | Means | When it fires | What gets injected |
+|---------|-------|--------------|-------------------|
+| `++mp` | Manager for Plan | any message containing it (checked first) | full Manager block + Plan Mode addon (TaskGraph in English, parallel indicators) |
+| `++m` | Manager | any message containing it (checked after `++mp`) | full Manager block -- delegate-everything orchestrator contract |
+| `++rr` | Regression Review | any message containing it (checked after `++m`) | anti-regression review discipline -- review each significant phase for NO regression + project standard + correctness; two-phase review->double-check->fix; final cross-review at task end |
+| `++r` | Review | any message containing it (checked last; `++rr` tested first) | two-phase review discipline -- multi-agent review after each significant change, review->double-check->fix; codeword-only, no ambient |
+| HARD wall ON | (state) | every turn, no codeword required | full Manager block (ambient injection alongside any codeword) |
 
 The prompt text is editable and update-proof. Use `/brewtools:manager edit` to copy the plugin default into a writable project or global override, and `/brewtools:manager reset` to revert to the plugin default.
 

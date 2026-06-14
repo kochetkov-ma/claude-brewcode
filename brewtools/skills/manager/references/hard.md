@@ -148,6 +148,8 @@ current level.
 ## Codewords (ALWAYS active — hook-driven, independent of this skill)
 Type `++m` anywhere in a prompt   → injects the Manager (full) block for that one turn.
 Type `++mp` anywhere in a prompt  → injects the Manager + Plan Mode block for that one turn.
+Type `++rr` anywhere in a prompt  → injects the Regression Review contract for that one turn.
+Type `++r` anywhere in a prompt   → injects the Review contract for that one turn.
 These fire on EVERY prompt containing them. This skill never enables or disables them;
 it only customizes their TEXT via `mode` / `edit` / `reset`.
 When the HARD wall is ON, the Manager (full) block is ALSO auto-injected every turn —

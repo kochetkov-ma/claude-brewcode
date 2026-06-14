@@ -11,12 +11,16 @@ The two layers are orthogonal: codewords shape the Manager mindset; the wall enf
 
 ## Codewords (SOFT — always active)
 
-| Type anywhere in your prompt | Injects | When |
-|------------------------------|---------|------|
-| `++m` | Manager (full) block | Always — hook-driven, independent of this skill |
-| `++mp` | Manager + Plan Mode block | Always — `++mp` tested first (prefix collision) |
+Detection order — longest-prefix first: `++mp` → `++m` → `++rr` → `++r`.
 
-The block applies to that one turn only. When the HARD wall is armed, the Manager (full) block is also ambient-injected every turn — no codeword needed. Codewords and wall injection are independent.
+| Type anywhere in your prompt | Means | Injects | When |
+|------------------------------|-------|---------|------|
+| `++m` | Manager — delegate-everything for the current task | Manager (full) block | Always — hook-driven, independent of this skill |
+| `++mp` | Manager for Plan — manager role for plan + delegation; writes the task graph, uses the tasks tool | Manager + Plan Mode block | Always — tested first (prefix collision with `++m`) |
+| `++rr` | Regression Review — after each significant phase: no regression + project standard + correctness; two-phase review→double-check→fix; final cross-review at task end | Regression Review discipline (`review-regression`) block | Always — tested after `++m`, before `++r`; codeword-only |
+| `++r` | Review — two-phase multi-agent review→double-check→fix after each significant change | Review discipline (`review-double`) block | Always — codeword-only (no ambient/wall injection) |
+
+The block applies to that one turn only. When the HARD wall is armed, the Manager (full) block is also ambient-injected every turn — no codeword needed. Codewords and wall injection are independent. Review codewords (`++rr`/`++r`) are never ambient-injected.
 
 ## Commands
 

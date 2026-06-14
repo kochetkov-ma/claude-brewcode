@@ -2,6 +2,20 @@
 
 ---
 
+## v3.15.0 (2026-06-14)
+
+> Docs: [brewtools:manager](https://doc-claude.brewcode.app/brewtools/skills/manager/) | [brewtools prompt-injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/)
+
+### brewtools
+
+#### Added
+- **manager:** two new prompt-injection codewords. `++rr` (Regression Review) injects anti-regression review discipline -- after each significant phase, review for no-regression + project standard + correctness, two-phase review->double-check->fix, with a mandatory final cross-review at task end. `++r` (Review) injects a lighter two-phase multi-agent review (review->double-check->fix) after each significant change. Both are codeword-only (no ambient/HARD-wall injection); detection order is `++mp` -> `++m` -> `++rr` -> `++r` (longest-prefix first).
+
+#### Changed
+- **manager docs:** every codeword table across all doc levels (manager skill page, prompt-injection concept page, SKILL.md, READMEs, CLAUDE.md) now carries a plain-English decode for all four codewords (`++m` = Manager, `++mp` = Manager for Plan, `++rr` = Regression Review, `++r` = Review).
+
+---
+
 ## v3.14.5 (2026-06-14)
 
 > Docs: [brewtools:manager](https://doc-claude.brewcode.app/brewtools/skills/manager/) | [brewtools:think-short](https://doc-claude.brewcode.app/brewtools/skills/think-short/)

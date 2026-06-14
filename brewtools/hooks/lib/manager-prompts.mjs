@@ -1,5 +1,5 @@
 // brewtools:manager — resolve Manager mode prompt text.
-// Resolution chain (mode = 'full' | 'planmode'):
+// Resolution chain (mode = 'full' | 'planmode' | 'review-regression' | 'review-double'):
 //   project:  <cwd>/.claude/brewtools/manager/prompts/<mode>.md
 //   global:   ~/.claude/manager/prompts/<mode>.md
 //   default:  <pluginRoot>/skills/manager/references/<mode>.md
@@ -11,7 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 const VALID_SCOPES = new Set(['project', 'global']);
-export const VALID_MODES = new Set(['full', 'planmode']);
+export const VALID_MODES = new Set(['full', 'planmode', 'review-regression', 'review-double']);
 
 function resolveHome(p) {
   if (!p) return p;
@@ -23,7 +23,7 @@ function resolveHome(p) {
 /**
  * Resolve a prompt file path for a scope.
  * @param {string} scope - 'project' | 'global'
- * @param {string} mode - 'full' | 'planmode'
+ * @param {string} mode - 'full' | 'planmode' | 'review-regression' | 'review-double'
  * @param {string} cwd
  * @returns {string} absolute path
  */
@@ -57,7 +57,7 @@ function extractFenced(raw) {
 
 /**
  * Resolve the prompt text for a mode.
- * @param {string} mode - 'full' | 'planmode'
+ * @param {string} mode - 'full' | 'planmode' | 'review-regression' | 'review-double'
  * @param {string} cwd
  * @param {string} pluginRoot - CLAUDE_PLUGIN_ROOT
  * @returns {{text:string, source:'project'|'global'|'default'|'missing'}}

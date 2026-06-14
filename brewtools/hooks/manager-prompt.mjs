@@ -1,10 +1,17 @@
 // brewtools:manager — UserPromptSubmit hook.
-// Injects a Manager mode block via additionalContext. Two triggers:
+// Injects a Manager mode block via additionalContext. Triggers:
 //   1. Codeword in prompt (always, regardless of state):
 //        ++mp -> Manager + Plan Mode (planmode)  [tested before ++m: prefix collision]
 //        ++m  -> Manager mode (full)
+//        ++rr -> Anti-regression review discipline   [tested before ++r: prefix collision]
+//        ++r  -> Two-phase review discipline
 //   2. HARD wall ON (state.hard === true): ambient auto-inject of the 'full'
 //        orchestrator block every turn (codeword absent).
+// Precedence: a single prompt may contain several codewords; we check
+//   ++mp, ++m, ++rr, ++r in that order and inject the FIRST match only.
+//   Longer-prefix variants (++mp, ++rr) are tested before their shorter
+//   collisions (++m, ++r) so `++rr` never falsely triggers the ++r branch.
+//   The review codewords are codeword-ONLY (no ambient/state injection).
 // Fail-safe: any error -> output({}) so the user's prompt is never broken.
 
 import { readStdin, output } from './lib/utils.mjs';
@@ -18,15 +25,30 @@ import { resolvePrompt } from './lib/manager-prompts.mjs';
 
     const hasMP = /(?<![\w+])\+\+mp(?![\w])/.test(prompt);
     const hasM  = /(?<![\w+])\+\+m(?![\w])/.test(prompt);
-    const codewordMode = hasMP ? 'planmode' : (hasM ? 'full' : null);
+    const hasRR = /(?<![\w+])\+\+rr(?![\w])/.test(prompt);
+    const hasR  = /(?<![\w+])\+\+r(?![\w])/.test(prompt);
+
+    // First match wins: ++mp, ++m, ++rr, ++r (longer prefixes before collisions).
+    let codewordMode = null;
+    let header = null;
+    if (hasMP) {
+      codewordMode = 'planmode';
+      header = 'User typed `++mp` — Manager + Plan Mode is active for this turn:';
+    } else if (hasM) {
+      codewordMode = 'full';
+      header = 'User typed `++m` — Manager mode is active for this turn:';
+    } else if (hasRR) {
+      codewordMode = 'review-regression';
+      header = 'User typed `++rr` — Anti-regression review discipline is active for this turn:';
+    } else if (hasR) {
+      codewordMode = 'review-double';
+      header = 'User typed `++r` — Two-phase review discipline is active for this turn:';
+    }
 
     if (codewordMode) {
       // Codeword present -> inject matching mode block ALWAYS (state-independent).
       const { text } = resolvePrompt(codewordMode, cwd, pluginRoot);
       if (!text) { output({}); return; }
-      const header = codewordMode === 'planmode'
-        ? 'User typed `++mp` — Manager + Plan Mode is active for this turn:'
-        : 'User typed `++m` — Manager mode is active for this turn:';
       output({
         hookSpecificOutput: {
           hookEventName: 'UserPromptSubmit',
