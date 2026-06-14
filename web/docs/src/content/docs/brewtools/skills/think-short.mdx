@@ -49,16 +49,18 @@ Default scope for all mutations: `project`. Pass `--scope=global` to write globa
 /brewtools:think-short profile aggressive
 ```
 
-**Natural language — RU combo (resolves to `on` + `profile aggressive`):**
+**Natural language (resolves to `on` + `profile aggressive`):**
 ```
-включись максимально
+go all in
 ```
 
-**Natural language — level shorthand:**
+> The skill also accepts Russian natural language (e.g. on/off, profile names, "go aggressive"). The complete RU+EN trigger list lives in the skill's SKILL.md.
+
+**Natural language -- level shorthand:**
 ```
-уровень 3
-агрессивный
-макс
+level 3
+aggressive
+max
 level 2
 ```
 
@@ -78,12 +80,11 @@ state files:
 hardcoded defaults: enabled=false, profile=medium
 env override: THINK_SHORT_DEFAULT=(unset)
 recent log:
-  think-short: NL-prompt "включись максимально" → resolved as on + profile aggressive
+  think-short: NL-prompt "go all in" -> resolved as on + profile aggressive
 ```
 
 **Disable:**
 ```
-выключи
 /brewtools:think-short off
 ```
 

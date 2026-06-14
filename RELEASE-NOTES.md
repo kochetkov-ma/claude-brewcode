@@ -2,6 +2,17 @@
 
 ---
 
+## v3.14.5 (2026-06-14)
+
+> Docs: [brewtools:manager](https://doc-claude.brewcode.app/brewtools/skills/manager/) | [brewtools:think-short](https://doc-claude.brewcode.app/brewtools/skills/think-short/)
+
+### brewtools
+
+#### Fixed
+- **docs:** removed Russian text that had leaked into rendered examples and trigger tables on the manager and think-short pages -- all examples and invocations are now English. The skills still accept Russian natural language; that is now noted in one English line per page pointing to the skill's SKILL.md for the full RU+EN trigger list. Repo-wide sweep confirms zero Cyrillic in any docs MDX.
+
+---
+
 ## v3.14.4 (2026-06-14)
 
 > Docs: [brewtools:manager](https://doc-claude.brewcode.app/brewtools/skills/manager/)

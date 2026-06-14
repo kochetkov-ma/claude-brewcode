@@ -18,7 +18,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 **You type:**
 
 ```
-++m сделай рефакторинг модуля оплаты
+++m refactor the payment module
 ```
 
 **Claude actually receives** (you never see this part -- it is injected invisibly by a hook):
@@ -38,7 +38,7 @@ Never implement, fix, or edit code yourself. Never run builds or tests yourself.
 </Callout>
 
 ```
-сделай рефакторинг модуля оплаты
+refactor the payment module
 ```
 
 Your single line becomes: the full Manager contract (highlighted above) + your original request. The codeword `++m` is consumed; your text reaches Claude unchanged. Curious how injection works? See [Prompt Injection](/brewtools/prompt-injection/).
@@ -115,9 +115,9 @@ This is what "delegate everything" means in practice -- the wall makes it physic
 | Delegate one complex task as Manager, just this turn | `do X ++m` |
 | Start a full parallel plan with task breakdown | `plan Y ++mp` |
 | Enforce the delegation rule for a whole project session | `/brewtools:manager on` |
-| Run one task under the wall then auto-revert | `refactor payment service в хард режиме` |
-| Run task as Manager without changing any wall state | `build release plan от роли менеджера` |
-| Check current state | `/brewtools:manager status` or `что сейчас` |
+| Run one task under the wall then auto-revert | `refactor payment service in hard mode` |
+| Run task as Manager without changing any wall state | `build release plan as manager` |
+| Check current state | `/brewtools:manager status` |
 
 ---
 
@@ -212,24 +212,26 @@ When `++mp` is detected, the hook injects both the full Manager block and the Pl
 </details>
 
 <details>
-<summary>Full command and intent reference (all actions, RU+EN triggers, hard-one-shot vs manager-run)</summary>
+<summary>Full command and intent reference (all actions, hard-one-shot vs manager-run)</summary>
+
+> The skill also understands natural-language Russian (e.g. on/off, hard mode, status). The complete RU+EN trigger list lives in the skill's SKILL.md.
 
 ### Actions
 
 | Action | Command / natural language | Effect |
 |--------|---------------------------|--------|
-| `on` | `/brewtools:manager on`, `включи` | INSTALL guard + ARM the HARD wall (project). `/reload` on first install only |
-| `off` | `/brewtools:manager off`, `выключи` | DISARM the wall (state flip only -- registration kept, guard no-ops) |
-| `uninstall` | `/brewtools:manager uninstall`, `снеси стену` | DEREGISTER guard from `settings.local.json`, then `/reload` |
-| `level strict` | `/brewtools:manager level strict`, `строгий режим` | Wall strictness = strict (Bash fully off) |
-| `level balanced` | `/brewtools:manager level balanced`, `сбалансированный` | Wall strictness = balanced (read-only Bash allowed) |
-| `status` | `/brewtools:manager status`, `что сейчас` | Full explainer: codewords + wall state + effective prompt sources |
-| `mode full` | `/brewtools:manager mode full`, `полный режим` | Set prompt-text mode to `full` (informational only) |
-| `mode planmode` | `/brewtools:manager mode planmode`, `режим планирования` | Set prompt-text mode to `planmode` (informational only) |
-| `edit [full\|planmode]` | `/brewtools:manager edit`, `поправь промт` | Copy plugin default into project override for editing |
+| `on` | `/brewtools:manager on` | INSTALL guard + ARM the HARD wall (project). `/reload` on first install only |
+| `off` | `/brewtools:manager off` | DISARM the wall (state flip only -- registration kept, guard no-ops) |
+| `uninstall` | `/brewtools:manager uninstall` | DEREGISTER guard from `settings.local.json`, then `/reload` |
+| `level strict` | `/brewtools:manager level strict` | Wall strictness = strict (Bash fully off) |
+| `level balanced` | `/brewtools:manager level balanced` | Wall strictness = balanced (read-only Bash allowed) |
+| `status` | `/brewtools:manager status` | Full explainer: codewords + wall state + effective prompt sources |
+| `mode full` | `/brewtools:manager mode full` | Set prompt-text mode to `full` (informational only) |
+| `mode planmode` | `/brewtools:manager mode planmode` | Set prompt-text mode to `planmode` (informational only) |
+| `edit [full\|planmode]` | `/brewtools:manager edit` | Copy plugin default into project override for editing |
 | `reset [full\|planmode]` | `/brewtools:manager reset` | Delete project override, revert to plugin default |
-| `hard-one-shot` | `<task> в хард режиме` / `<task> in hard mode` | Wall ON -- run task as Manager -- auto-revert wall OFF when done (reverts even on failure or abort) |
-| `manager-run` | `<task> от роли менеджера` / `<task> as manager` | Run task as Manager with wall UNTOUCHED (discipline via injected prompt only -- no wall toggle) |
+| `hard-one-shot` | `<task> in hard mode` | Wall ON -- run task as Manager -- auto-revert wall OFF when done (reverts even on failure or abort) |
+| `manager-run` | `<task> as manager` | Run task as Manager with wall UNTOUCHED (discipline via injected prompt only -- no wall toggle) |
 | `inline-run` | `/brewtools:manager <task>` | Prepend Manager block, execute -- no state change |
 
 ### Expected `status` output (wall off)
@@ -256,9 +258,9 @@ Level:     /brewtools:manager level strict | balanced
 
 ### `hard-one-shot` vs `manager-run`
 
-`hard-one-shot` (`в хард режиме`) actually toggles the guard: wall ON -- task runs -- wall auto-reverts OFF when done, even on failure or abort. The guard never silently persists.
+`hard-one-shot` (`<task> in hard mode`) actually toggles the guard: wall ON -- task runs -- wall auto-reverts OFF when done, even on failure or abort. The guard never silently persists.
 
-`manager-run` (`от роли менеджера`) does NOT touch the wall state at all. Manager discipline is enforced via the injected prompt only. Use this when you want Manager behavior without arming or changing the guard.
+`manager-run` (`<task> as manager`) does NOT touch the wall state at all. Manager discipline is enforced via the injected prompt only. Use this when you want Manager behavior without arming or changing the guard.
 
 </details>
 
