@@ -7,7 +7,7 @@ const groupId = `tabs-${Math.random().toString(36).slice(2, 8)}`;
 </div>
 
 <script>
-  document.addEventListener('astro:page-load', () => {
+  function initTabs() {
     document.querySelectorAll<HTMLElement>('[data-tabs-group]').forEach((container) => {
       if (container.dataset.initialized) return;
       container.dataset.initialized = 'true';
@@ -48,5 +48,9 @@ const groupId = `tabs-${Math.random().toString(36).slice(2, 8)}`;
         if (radio) radio.addEventListener('change', updatePanels);
       });
     });
-  });
+  }
+
+  // Run on initial direct load AND on every view-transition page load (idempotent via dataset.initialized).
+  initTabs();
+  document.addEventListener('astro:page-load', initTabs);
 </script>

@@ -2,6 +2,17 @@
 
 ---
 
+## v3.14.2 (2026-06-14)
+
+> Docs: [Prompt Injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/)
+
+### docs-site
+
+#### Fixed
+- **Tabs component:** tab panels now initialize on direct page loads, not only on view-transition navigations. The init logic was extracted into `initTabs()` and is invoked immediately AND on `astro:page-load` (idempotent via the `dataset.initialized` guard). Previously, on a hard load the tab group never hydrated -- both panels rendered stacked and tab switching was inert. Fixes the Tabs on the new Prompt Injection page plus installation and brewcode overview.
+
+---
+
 ## v3.14.1 (2026-06-14)
 
 > Docs: [Prompt Injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/) | [brewtools:manager](https://doc-claude.brewcode.app/brewtools/skills/manager/)
