@@ -2,6 +2,17 @@
 
 ---
 
+## v3.14.4 (2026-06-14)
+
+> Docs: [brewtools:manager](https://doc-claude.brewcode.app/brewtools/skills/manager/)
+
+### brewtools
+
+#### Changed
+- **docs (manager):** surfaced the HARD wall for non-technical readers -- new visible "The HARD wall" section with a plain-language Callout, a concrete blocked-edit example (main session tries to edit a file -> blocked with a deny message -> delegates to a subagent that has full freedom), and an at-a-glance allowed/blocked table. Deep mechanics remain in the technical spoiler.
+
+---
+
 ## v3.14.3 (2026-06-14)
 
 > Docs: [brewtools:manager](https://doc-claude.brewcode.app/brewtools/skills/manager/) | [Prompt Injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/)

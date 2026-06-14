@@ -67,6 +67,47 @@ Put the codeword anywhere: start, middle, or end of your message. Everything els
 
 ---
 
+## The HARD wall
+
+<Callout type="caution">
+**With the HARD wall ON, Claude in the main chat physically cannot edit files, write, or run mutating commands.** It is forced to delegate every hands-on step to a subagent. Subagents have full freedom -- they can write, edit, run tests, push commits, anything. Turn the wall on and off with `/brewtools:manager on` / `/brewtools:manager off`. It is opt-in and per-project -- nothing changes until you enable it.
+</Callout>
+
+### The wall in action
+
+The wall is ON. You ask:
+
+```
+fix the bug in payment.ts
+```
+
+Claude tries to edit the file directly -- and is blocked:
+
+<Callout type="caution">
+**Edit blocked -- Manager HARD wall is ON.** The main session cannot edit files, write, or run mutating commands. Delegate this to a subagent.
+</Callout>
+
+So Claude does the right thing -- it spawns a subagent, which has full access:
+
+<Steps>
+  <li><div><strong>Main session: delegate</strong><p>Claude spawns a developer subagent with the task "fix the bug in payment.ts".</p></div></li>
+  <li><div><strong>Subagent: do the work</strong><p>The subagent edits <code>payment.ts</code>, runs the tests -- all tools allowed inside a subagent.</p></div></li>
+  <li><div><strong>Main session: integrate</strong><p>Claude reads the subagent's result and reports back. It never touched the file itself.</p></div></li>
+</Steps>
+
+### What is allowed vs blocked (wall ON)
+
+| In the MAIN chat (wall ON) | Allowed? |
+|----------------------------|----------|
+| Read, search, plan, delegate (Task) | Yes |
+| Edit / Write files | No -- delegate |
+| Run mutating commands | No -- delegate (read-only Bash allowed on the default level) |
+| Anything inside a subagent | Yes -- full freedom |
+
+This is what "delegate everything" means in practice -- the wall makes it physically true, not just a suggestion. For the deep mechanics (tool buckets, strict vs balanced, the agent_id linchpin) see the technical spoiler below.
+
+---
+
 ## When to use
 
 | Situation | What to type |
