@@ -3,20 +3,23 @@
  * Forced Eval Hook - Improves skill activation rate to 84%
  *
  * Event: UserPromptSubmit
- * Channel: updatedInput (most reliable)
+ * Channel: hookSpecificOutput.additionalContext
  *
  * Based on: https://scottspence.com/posts/how-to-make-claude-code-skills-activate-reliably
  *
  * Problem: Skills activate only ~20-50% of time because Claude may not check
  * available skills before responding to user prompts.
  *
- * Solution: Intercept every user prompt and prepend a reminder to check skills.
+ * Solution: Intercept every user prompt and inject a reminder to check skills.
  * This increases activation rate to ~84% by making skill evaluation explicit.
+ *
+ * NOTE: updatedInput is ignored on UserPromptSubmit in CC 2.1.x - must use additionalContext.
  *
  * Output schema (UserPromptSubmit):
  * {
- *   "updatedInput": {
- *     "prompt": "modified prompt with skill-check reminder"
+ *   "hookSpecificOutput": {
+ *     "hookEventName": "UserPromptSubmit",
+ *     "additionalContext": "skill-check + light hint (full Manager mode via ++m)"
  *   }
  * }
  */
@@ -25,8 +28,10 @@ import { readStdin, output, getActiveMode } from './lib/utils.mjs';
 
 // --- Skill evaluation reminder ---
 
+// SKILL_CHECK = always-on payload (every prompt). DEFAULT_MODE = light hint when no
+// active mode is set; full Manager framing is opt-in on demand via codeword ++m (brewtools:manager).
 const SKILL_CHECK = '[SKILL?] Check available skills. If one matches, use Skill tool before responding.';
-const DEFAULT_MODE = '[DELEGATE] You are a MANAGER. Delegate implementation to sub-agents via Task tool. Never implement directly.';
+const DEFAULT_MODE = '[HINT] Prefer delegating heavy implementation work to sub-agents (Task tool) when it helps. Full Manager mode: type ++m.';
 
 function getModeReminder(cwd, sessionId) {
   const activeMode = getActiveMode(cwd, sessionId);
@@ -75,17 +80,18 @@ async function main() {
       return;
     }
 
-    // Effort-level prefix (CC 2.1.115+). Idempotent: skip if already present.
+    // Effort-level prefix (CC 2.1.115+). Folded into injected context.
     const effortLevel = input.effort?.level;
-    const needEffortPrefix = effortLevel === 'low' && !prompt.includes('[EFFORT:');
-    const effortPrefix = needEffortPrefix ? '[EFFORT: low | MODE: terse-light]\n' : '';
+    const effortPrefix = effortLevel === 'low' ? '[EFFORT: low | MODE: terse-light]\n' : '';
 
-    // Prepend skill-check reminder to prompt
-    const modifiedPrompt = `${effortPrefix}${getModeReminder(cwd, session_id)}\n\n---\n\n${prompt}`;
+    // Inject skill-check reminder via additionalContext (updatedInput is ignored
+    // on UserPromptSubmit in CC 2.1.x).
+    const reminderText = `${effortPrefix}${getModeReminder(cwd, session_id)}`;
 
     output({
-      updatedInput: {
-        prompt: modifiedPrompt
+      hookSpecificOutput: {
+        hookEventName: 'UserPromptSubmit',
+        additionalContext: reminderText
       }
     });
 

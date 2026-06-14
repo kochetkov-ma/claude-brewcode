@@ -111,6 +111,22 @@ Silently modifies tool params. Claude unaware of change. Most reliable injection
 | Auto-allow permission | `decision:"allow"` | PR |
 | Control teammates | `{continue, stopReason}` JSON | TeammateIdle, TaskCompleted, TaskCreated |
 
+### Authoritative Per-Event Output Channels
+
+Consult BEFORE choosing output. Wrong channel = silently ignored (no error). `UI`=`updatedInput`.
+
+| Event | Add context / affect model | Do NOT use (IGNORED) |
+|-------|----------------------------|----------------------|
+| SS | `AC` | `UI` |
+| UserPromptSubmit | `AC` (cannot rewrite prompt); `decision:"block"`+`reason` to reject | **`UI` — IGNORED** |
+| PTU | `AC`; `UI` to rewrite tool args; `permissionDecision` | `updatedToolOutput` |
+| POT | `AC`; `updatedToolOutput` | `UI` |
+| Stop / SubagentStop | `decision:"block"`+`reason` (also `AC` feedback v2.1.163+) | `AC` for blocking |
+| PreCompact | no model-facing output | -- |
+| PR | `UI` / permission fields | -- |
+
+> **UserPromptSubmit CANNOT rewrite the prompt; `UI` (updatedInput) is ignored there — use `AC`.** To deliver per-turn context, `AC` is the channel for SS / UserPromptSubmit / PTU / POT. `UI` rewrites args ONLY on PTU (and PR). Root cause of the `forced-eval.mjs` bug: it emitted `UI.prompt` on UserPromptSubmit → silently dropped by CC 2.1.x.
+
 ## 2. All 27 Hook Events
 
 > MD (v2.1.152): transforms/hides assistant message text at display layer only; non-blocking.
@@ -513,6 +529,8 @@ import { readStdin, output } from './lib/utils.mjs';
 | Practice | Why |
 |----------|-----|
 | Always `output({})` on error | !=trap user in broken state |
+| Print exactly ONE JSON object to stdout | extra stdout lines corrupt parsing; CC reads single JSON |
+| All logging/diagnostics to stderr (`console.error`) | stdout reserved for the JSON contract |
 | `stop_hook_active` check in Stop/SubagentStop | prevents infinite block loop |
 | try/catch around all logic | graceful degradation |
 | validate stdin before parsing | handle missing/malformed input |
@@ -636,7 +654,7 @@ Returns `AC` with project state.
 | 8 | Code Quality Checks | POT | run linters/formatters on file edits |
 | 9 | Temporarily Active | Any | flag files to enable/disable hooks |
 | 10 | Configuration-Driven | Any | read JSON settings for validation behavior |
-| 11 | Mode-Aware Injection | SS, UserPromptSubmit, PTU:Task | read active mode from state file, inject mode instructions into every event |
+| 11 | Mode-Aware Injection | SS, UserPromptSubmit, PTU:Task | read active mode from state file, inject mode instructions; channel per event — `AC` for SS/UserPromptSubmit, `UI.prompt` for PTU:Task |
 
 ## 14. Advanced Techniques
 
@@ -652,12 +670,12 @@ Returns `AC` with project state.
 Hook reads active mode from `brewcode.state.json`, injects mode-specific instructions into every tool call/session event. Use when skill needs to toggle persistent session behavior surviving auto-compact.
 
 ```javascript
-// In any PTU or SS hook:
+// Channel depends on event — see Authoritative Per-Event Output Channels (Section 1):
 const activeMode = getActiveMode(cwd, session_id);
 if (activeMode) {
-  // PTU: inject into SA prompt
+  // PTU:Task — rewrite SA prompt via UI (updatedInput); only PTU accepts UI
   updatedPrompt = `[MODE: ${activeMode.name}] ${activeMode.instructions}\n\n${updatedPrompt}`;
-  // SS: inject into conversation context
+  // SS or UserPromptSubmit — inject via additionalContext (UI is IGNORED on these events)
   context += `\n[MODE: ${activeMode.name}] ${activeMode.instructions}`;
 }
 ```
@@ -676,9 +694,11 @@ Injection channels:
 
 | Hook | Event | Channel | Scope |
 |------|-------|---------|-------|
-| `forced-eval.mjs` | UserPromptSubmit | `UI.prompt` | every user msg |
+| `forced-eval.mjs` | UserPromptSubmit | `AC` (NOT `UI` — ignored on UserPromptSubmit) | every user msg |
 | `session-start.mjs` | SS | `AC` | session start + compact resume |
 | `pre-task.mjs` | PTU:Task | `UI.prompt` | every SA spawn |
+
+> Channel differs per event: `UserPromptSubmit`/`SS` inject via `AC`; only `PTU:Task` rewrites the SA prompt via `UI.prompt`. Emitting `UI` on UserPromptSubmit is silently dropped — see Authoritative Per-Event Output Channels (Section 1).
 
 State schema in `$CLAUDE_PLUGIN_DATA/modes.json`:
 ```json

@@ -2,6 +2,23 @@
 
 ---
 
+## v3.12.2 (2026-06-14)
+
+> Docs: [brewcode/agents/hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/)
+
+> **Theme:** fix a silent `UserPromptSubmit` hook bug found via live debug-log analysis, and correct the hook-creator agent's output-channel guidance so the bug can't recur.
+
+### brewcode
+
+#### Fixed
+- **`forced-eval.mjs` skill-activation hook now actually reaches the model.** It injected its `[SKILL?]` skill-check reminder via `updatedInput.prompt`, which Claude Code 2.1.x **silently ignores on `UserPromptSubmit`** (confirmed in a live debug log: `unrecognized keys (ignored): updatedInput`). Migrated to the supported `hookSpecificOutput.additionalContext` channel — the reminder now lands every turn. All skip logic (slash-commands, meta-replies, empty prompts) and the effort-level prefix are preserved.
+- **Softer default reminder.** The hook's default (no active mode) no longer asserts a hard always-on `[DELEGATE] You are a MANAGER … never implement directly`; it now emits a light `[HINT]` to prefer delegation, with full Manager framing left to the on-demand `++m` codeword (`brewtools:manager`). Removes redundancy with the manager skill and global instructions.
+
+#### Changed
+- **`hook-creator` agent corrected.** Its per-event output-channel reference was inaccurate (implied `updatedInput` was a general context channel). Replaced with an authoritative per-event matrix: `additionalContext` for SessionStart/UserPromptSubmit/PreToolUse/PostToolUse, `updatedInput` only for PreToolUse/PermissionRequest, `updatedToolOutput` for PostToolUse, and `Stop`/`SubagentStop` accept `additionalContext` since CC 2.1.163 — preventing this class of bug in generated hooks. An audit of all 15 hooks across the four plugins confirmed no other channel violations.
+
+---
+
 ## v3.12.1 (2026-06-13)
 
 > Docs: [brewtools/skills/manager](https://doc-claude.brewcode.app/brewtools/skills/manager/)
