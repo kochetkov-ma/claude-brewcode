@@ -2,6 +2,25 @@
 
 ---
 
+## v3.13.0 (2026-06-14)
+
+> Docs: [brewtools:manager](https://doc-claude.brewcode.app/brewtools/skills/manager/)
+
+### brewtools
+
+#### Added
+- **manager:** HARD Delegation Mode — opt-in PreToolUse wall installed per-project via `/brewtools:manager on`. Blocks Write/Edit/NotebookEdit/WebFetch/MCP-write and mutating Bash in the main session; subagents stay free (agent_id linchpin). Self-contained guard (zero plugin imports), fail-open.
+- **manager:** new intents `on` (install+arm), `off` (disarm, state-only), `uninstall` (deregister), `level <strict|balanced>` (Bash/WebSearch/MCP policy). Install-once + state-gate: guard registered in `.claude/settings.local.json`, runtime-gated by project `state.json {hard, level}`. Wall is PROJECT-ONLY.
+- **manager:** session-start banner `⛔ MANAGER HARD wall ON` when armed.
+
+#### Changed
+- **manager:** `++m`/`++mp` codewords now ALWAYS fire (removed the `enabled` state gate); when the wall is armed the Manager (full) block also auto-injects every turn. `status` rewritten as the main explainer (codewords + wall state + level + toggle).
+
+#### Notes
+- Migration: legacy `state.json {enabled}` is ignored; the wall defaults OFF (opt-in). Re-run `/brewtools:manager on` to arm.
+
+---
+
 ## v3.12.3 (2026-06-14)
 
 > Docs: [brewcode/hooks](https://doc-claude.brewcode.app/brewcode/hooks/)

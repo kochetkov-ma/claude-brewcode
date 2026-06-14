@@ -56,7 +56,7 @@ Universal utilities. Work in any project, no setup needed.
 | `/brewtools:skill-toggle` | Disable/enable individual plugin skills, survives plugin updates |
 | `/brewtools:agent-toggle` | Disable/enable individual plugin agents, survives plugin updates |
 | `/brewtools:think-short` | Toggle terse-output mode (light/medium/aggressive) to cut token bloat |
-| `/brewtools:manager` | Codeword (++m/++mp) auto-injects a delegate-everything Manager prompt; RU+EN control |
+| `/brewtools:manager` | Codeword (++m/++mp) Manager prompt + opt-in HARD wall blocking mutating tools (RU+EN) |
 
 These are standalone — no project configuration required. Run them anywhere.
 

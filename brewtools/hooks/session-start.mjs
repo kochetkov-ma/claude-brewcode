@@ -128,8 +128,23 @@ async function main() {
 
     context = await injectThinkShort(context, cwd, session_id);
 
+    let systemMessage = `brewtools: ${pluginRoot} | session: ${sessionShort}`;
+
+    // Manager HARD wall awareness (fail-open: never break session start).
+    try {
+      const { resolveState } = await import('./lib/manager-state.mjs');
+      const state = resolveState(cwd);
+      if (state?.hard === true) {
+        const level = state.level === 'strict' ? 'strict' : 'balanced';
+        systemMessage += ` | ⛔ MANAGER HARD wall ON (project, level=${level})`;
+        context += `\n\nManager HARD wall active (project, level=${level}): main session is orchestration-only; delegate to subagents. /brewtools:manager off to exit.`;
+      }
+    } catch (err) {
+      log('info', '[session-start]', `manager hard-wall check error (${err.message}), skipping`, cwd, session_id);
+    }
+
     output({
-      systemMessage: `brewtools: ${pluginRoot} | session: ${sessionShort}`,
+      systemMessage,
       hookSpecificOutput: {
         hookEventName: 'SessionStart',
         additionalContext: context

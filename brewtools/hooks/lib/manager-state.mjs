@@ -1,7 +1,12 @@
 // brewtools:manager — Manager mode state resolver/writer.
-// State shape: { enabled:boolean, mode:'full'|'planmode' }.
+// State shape: { hard:boolean, level:'strict'|'balanced', mode:'full'|'planmode' }.
+//   hard  — HARD wall toggle (PreToolUse guard physically denies main-session tools)
+//   level — HARD wall strictness: 'strict' (deny all non-read) | 'balanced' (allow read-only bash/search)
+//   mode  — soft codeword injection mode: 'full' | 'planmode'
 // project: <cwd>/.claude/brewtools/manager/state.json
 // global:  ~/.claude/manager/state.json  (protected for Write tool — only writable here)
+// resolveState: hard + level are PROJECT-ONLY (a global state.json must NOT enable the
+//   wall in projects lacking their own state.json); mode resolves project -> global -> default.
 // Atomic write: lockfile O_CREAT|O_EXCL + stale detection, tmp + rename.
 
 import fs from 'node:fs';
@@ -9,7 +14,7 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 
-const DEFAULT_STATE = { enabled: true, mode: 'full' };
+const DEFAULT_STATE = { hard: false, level: 'balanced', mode: 'full' };
 const VALID_SCOPES = new Set(['project', 'global']);
 
 function resolveHome(p) {
@@ -38,6 +43,11 @@ function clampMode(merged) {
   return merged;
 }
 
+function clampLevel(merged) {
+  if (!['strict', 'balanced'].includes(merged.level)) merged.level = 'balanced';
+  return merged;
+}
+
 function readJsonSafe(filePath) {
   try {
     const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
@@ -49,17 +59,21 @@ function readJsonSafe(filePath) {
 
 /**
  * Resolve effective Manager state.
- * Reads project first, then global, then default. Partial files merge over default.
+ * SECURITY: `hard` and `level` come ONLY from the PROJECT state.json — a global
+ * state.json must never enable the HARD wall in projects without their own state.
+ * `mode` resolves project -> global -> default.
  * @param {string} cwd
- * @returns {{enabled:boolean, mode:string, source:'project'|'global'|'default'}}
+ * @returns {{hard:boolean, level:string, mode:string, source:'project'|'global'|'default'}}
  */
 export function resolveState(cwd = process.cwd()) {
   try {
     const project = readJsonSafe(resolveStatePath('project', cwd));
-    if (project) return clampMode({ ...DEFAULT_STATE, ...project, source: 'project' });
-    const global = readJsonSafe(resolveStatePath('global', cwd));
-    if (global) return clampMode({ ...DEFAULT_STATE, ...global, source: 'global' });
-    return { ...DEFAULT_STATE, source: 'default' };
+    const global  = readJsonSafe(resolveStatePath('global', cwd));
+    const hard  = (project && typeof project.hard === 'boolean') ? project.hard : DEFAULT_STATE.hard;
+    const level = (project && project.level) ? project.level : DEFAULT_STATE.level;
+    const mode  = (project && project.mode) ?? (global && global.mode) ?? DEFAULT_STATE.mode;
+    const source = project ? 'project' : (global ? 'global' : 'default');
+    return clampLevel(clampMode({ hard, level, mode, source }));
   } catch {
     return { ...DEFAULT_STATE, source: 'default' };
   }

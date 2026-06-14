@@ -84,7 +84,7 @@ claude --plugin-dir ./brewtools
 | [`/brewtools:ssh`](skills/ssh/SKILL.md) | SSH server management and configuration | opus | `[connect\|deploy\|configure\|...]` |
 | [`/brewtools:deploy`](skills/deploy/SKILL.md) | GitHub Actions deployment with safety gates | opus | `[release\|workflow\|...]` |
 | [`/brewtools:debate`](skills/debate/README.md) | Evidence-based multi-agent debate | sonnet | `[challenge\|strategy\|critic]` |
-| [`/brewtools:manager`](skills/manager/README.md) | Codeword (++m/++mp) auto-injects a delegate-everything Manager prompt; RU+EN control | sonnet | `[on\|off\|status\|mode\|edit\|reset] \| <prompt>` |
+| [`/brewtools:manager`](skills/manager/README.md) | SOFT: codewords `++m`/`++mp` auto-inject a delegate-everything Manager prompt (RU+EN). HARD: `on` installs a PreToolUse guard that blocks Write/Edit/NotebookEdit/WebFetch/MCP-write in the main session (subagents stay free); `off` disarms (registration stays, guard no-ops); `uninstall` deregisters; `level strict\|balanced` tunes the wall | sonnet | `[on\|off\|uninstall\|status\|level <strict\|balanced>\|mode <full\|planmode>\|edit\|reset] \| <prompt>` |
 | [`/brewtools:plugin-update`](skills/plugin-update/README.md) | Check/install/update brewcode plugins | sonnet | `[check\|update\|all]` |
 | [`/brewtools:provider-switch`](skills/provider-switch/README.md) | Configure alternative API providers (DeepSeek V4 [priority], Z.ai/GLM, Qwen, MiniMax, OpenRouter) | opus | `[status\|setup\|help\|<provider>]` |
 | [`/brewtools:skill-toggle`](skills/skill-toggle/README.md) | Disable/enable individual plugin skills (survives plugin updates) | sonnet | `<op> [plugin:name] [--scope=global\|project]` |
@@ -121,6 +121,7 @@ brewtools/
 |   +-- skill-toggle/                  # Disable/enable individual plugin skills
 |   +-- agent-toggle/                  # Disable/enable individual plugin agents
 |   +-- think-short/                   # Terse-output mode toggle
+|   +-- manager/                       # Codeword-triggered Manager mode + HARD delegation wall
 +-- agents/
     +-- text-optimizer.md             # Text optimization agent
     +-- ssh-admin.md                  # SSH and server administration
