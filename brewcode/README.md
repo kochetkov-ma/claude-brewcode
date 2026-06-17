@@ -89,7 +89,6 @@ After `/brewcode:setup`, each task follows the cycle: `spec` -> `plan` -> `start
 | [`/brewcode:skills`](skills/skills/README.md) | Skill management: list, create, upgrade with activation optimization |
 | [`/brewcode:agents`](skills/agents/README.md) | Interactive agent creation and improvement |
 | [`/brewcode:e2e`](skills/e2e/README.md) | E2E testing orchestration with BDD scenarios and quorum review |
-| [`/brewcode:glm-design-to-code`](skills/glm-design-to-code/README.md) | Vision model design-to-code: screenshot/text/HTML/URL to multi-framework code |
 | [`/brewcode:debate`](skills/debate/README.md) | Evidence-based multi-agent debate: Challenge, Strategy, Critic modes |
 | [`/brewcode:teardown`](skills/teardown/README.md) | Plugin configuration cleanup (tasks are preserved) |
 

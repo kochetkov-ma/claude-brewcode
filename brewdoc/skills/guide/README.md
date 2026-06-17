@@ -18,7 +18,7 @@ Guide walks you through every feature of the plugin suite across three progressi
 /brewdoc:guide                  # Interactive menu
 /brewdoc:guide overview         # Jump to a specific topic
 /brewdoc:guide killer-flow      # Spec/Plan/Start pipeline
-/brewdoc:guide agents-catalog   # All 18 agents
+/brewdoc:guide agents-catalog   # All 16 agents
 ```
 
 ## Topics
@@ -30,7 +30,7 @@ Guide walks you through every feature of the plugin suite across three progressi
 | B: Core Workflow | killer-flow | The infinite task pipeline: spec, plan, start |
 | B: Core Workflow | teams | Dynamic agent teams with self-selection and tracking |
 | B: Core Workflow | skills-catalog | All 28 skills with trigger examples |
-| C: Mastery | agents-catalog | All 18 agents with roles and model selection |
+| C: Mastery | agents-catalog | All 16 agents with roles and model selection |
 | C: Mastery | customization | Create custom skills, agents, and hooks |
 | C: Mastery | integration | CLAUDE.md, rules, memory, teams directory |
 | C: Mastery | advanced | Grepai, convention, quorum review, secrets scanning |

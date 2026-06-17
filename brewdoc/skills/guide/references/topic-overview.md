@@ -22,7 +22,7 @@ One marketplace, four plugins, one version number. Install what you need.
 | brewcode | Infinite task execution, agent teams, project automation | setup, spec, plan, start, teams, review, convention, e2e |
 | brewdoc | Documentation tools: sync, generate, optimize, publish | auto-sync, my-claude, memory, md-to-pdf, guide, publish |
 | brewtools | Universal utilities: text optimization, security scanning | text-optimize, text-human, secrets-scan, ssh, deploy, debate, plugin-update |
-| brewui | UI/visual/creative tools | image-gen, glm-design-to-code |
+| brewui | UI/visual/creative tools | image-gen |
 
 **brewcode** is the core. It runs tasks that survive context limits through automatic handoff. It manages agents, hooks, and knowledge persistence.
 
@@ -30,7 +30,7 @@ One marketplace, four plugins, one version number. Install what you need.
 
 **brewtools** provides standalone utilities. Text-optimize reduces token usage in prompts. Secrets-scan catches leaked credentials. SSH and deploy handle server management and CI/CD workflows. These work in any project.
 
-**brewui** handles UI and visual tasks. Image-gen creates AI images via multiple providers. GLM-design-to-code converts designs into multi-framework code.
+**brewui** handles UI and visual tasks. Image-gen creates AI images via multiple providers.
 
 ## Section 3: How They Work Together
 

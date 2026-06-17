@@ -27,7 +27,7 @@ Uses `ANTHROPIC_AUTH_TOKEN` (bearer-style). Must set `ANTHROPIC_API_KEY=""` (emp
 ## Model
 | Field | Value |
 |-------|-------|
-| Model ID | `qwen3.6-plus[1m]` |
+| Model ID | `qwen3.7-plus[1m]` |
 | Context | 1M |
 | Input $/1M | ~$0.50 |
 | Output $/1M | ~$2.00 |
@@ -42,7 +42,7 @@ Note: `[1m]` suffix is REQUIRED — Claude Code defaults to 200K context otherwi
 
 ## Alias
 ```bash
-alias claudeqwen='export ANTHROPIC_BASE_URL=https://dashscope-intl.aliyuncs.com/apps/anthropic; export ANTHROPIC_AUTH_TOKEN=$DASHSCOPE_API_KEY; export ANTHROPIC_API_KEY=""; export ANTHROPIC_DEFAULT_OPUS_MODEL="qwen3.6-plus[1m]"; export ANTHROPIC_DEFAULT_SONNET_MODEL="qwen3.6-plus[1m]"; export ANTHROPIC_DEFAULT_HAIKU_MODEL="qwen3.6-plus[1m]"; export CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1; claude'
+alias claudeqwen='export ANTHROPIC_BASE_URL=https://dashscope-intl.aliyuncs.com/apps/anthropic; export ANTHROPIC_AUTH_TOKEN=$DASHSCOPE_API_KEY; export ANTHROPIC_API_KEY=""; export ANTHROPIC_DEFAULT_OPUS_MODEL="qwen3.7-plus[1m]"; export ANTHROPIC_DEFAULT_SONNET_MODEL="qwen3.7-plus[1m]"; export ANTHROPIC_DEFAULT_HAIKU_MODEL="qwen3.7-plus[1m]"; export CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1; claude'
 ```
 
 ## How to Get API Key

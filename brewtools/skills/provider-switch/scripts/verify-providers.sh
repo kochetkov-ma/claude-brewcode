@@ -82,25 +82,25 @@ run_glm() {
   verify_provider "glm" \
     "https://api.z.ai/api/anthropic/v1/messages" \
     "ZAI_API_KEY" \
-    "glm-5.1"
+    "glm-5.2"
 }
 
 run_qwen() {
   verify_provider "qwen" \
     "https://dashscope-intl.aliyuncs.com/apps/anthropic/v1/messages" \
     "DASHSCOPE_API_KEY" \
-    "qwen3.6-plus"
+    "qwen3.7-plus"
 }
 
 run_minimax() {
   verify_provider "minimax" \
     "https://api.minimax.io/anthropic/v1/messages" \
     "MINIMAX_API_KEY" \
-    "minimax-m2.7"
+    "MiniMax-M3"
 }
 
 run_openrouter() {
-  local model="qwen/qwen3.6-plus"
+  local model="qwen/qwen3.7-plus"
   local alias_file="${XDG_CONFIG_HOME:-$HOME/.config}/claude/provider-aliases.json"
   if [[ -f "$alias_file" ]]; then
     local alias_model

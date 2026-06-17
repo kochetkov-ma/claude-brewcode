@@ -1,6 +1,6 @@
 ---
 name: brewui:image-gen
-description: "Generate AI images via OpenRouter, Z.ai, Imagen 4, DALL-E 3, anti-slop. Triggers: generate image, AI image, og image."
+description: "Generate AI images via OpenRouter, Imagen 4, DALL-E 3, anti-slop. Triggers: generate image, AI image, og image."
 user-invocable: true
 argument-hint: "[prompt] [--edit image.png 'instructions'] [--config] [--update] [--service gemini|openrouter|openai] [--style photo|illustration|art] [--count N] [--output dir] [--size WxH]"
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion, WebSearch]
@@ -11,7 +11,7 @@ model: haiku
 
 # Image Gen
 
-Generates AI images via Gemini Imagen 4, OpenRouter (Gemini 2.5 Flash Image / GPT-5-image), Z.ai GLM-image, or OpenAI DALL-E 3. Applies anti-AI-slop prompt prefixes per style. Four modes: generate, edit, config, update.
+Generates AI images via Gemini Imagen 4, OpenRouter (Gemini 2.5 Flash Image / GPT-5-image), or OpenAI DALL-E 3. Applies anti-AI-slop prompt prefixes per style. Four modes: generate, edit, config, update.
 
 **Arguments:** `$ARGUMENTS`
 
@@ -109,12 +109,11 @@ Options: "1 (default, fastest)" | "2-3 (compare variations)" | "4+ (batch genera
 | Service | Model | Speed | Quality | Cost |
 |---------|-------|-------|---------|------|
 | openrouter | Gemini 2.5 Flash Image | Fast | High | ~$0.001/image |
-| zai | GLM-image | Fast | Very High | ~$0.015/image |
 | gemini | Imagen 4 | Fast | Very High | Paid plan required |
 | openrouter-gpt5 | GPT-5 Image | Medium | Highest | ~$0.01/image |
 | openai | DALL-E 3 | Medium | High | $0.04-0.12/image |
 
-Options: "openrouter (cheapest, default)" | "zai (GLM-image)" | "gemini (Imagen 4)" | "openrouter-gpt5 (GPT-5)" | "openai (DALL-E 3)" | "Keep current: {SERVICE}"
+Options: "openrouter (cheapest, default)" | "gemini (Imagen 4)" | "openrouter-gpt5 (GPT-5)" | "openai (DALL-E 3)" | "Keep current: {SERVICE}"
 
 Re-validate key if service changed.
 
@@ -244,7 +243,7 @@ Options: "Generate more (same settings)" | "Different prompt" | "Edit one of the
 
 ## Phase C: Config Mode
 
-1. **ASK** which service: "openrouter" | "zai" | "gemini" | "openrouter-gpt5" | "openai" | "All services"
+1. **ASK** which service: "openrouter" | "gemini" | "openrouter-gpt5" | "openai" | "All services"
 2. **ASK** for API key. Key URLs: Gemini `https://aistudio.google.com/apikey`, OpenRouter `https://openrouter.ai/keys`, OpenAI `https://platform.openai.com/api-keys`
 3. **EXECUTE** validate:
    ```bash

@@ -68,8 +68,8 @@ done
 
 # Validate service
 case "$SERVICE" in
-  gemini|openrouter|openrouter-gpt5|zai|openai) ;;
-  *) echo "ERROR: Invalid service: $SERVICE (use: gemini, openrouter, openrouter-gpt5, zai, openai)" >&2; exit 1 ;;
+  gemini|openrouter|openrouter-gpt5|openai) ;;
+  *) echo "ERROR: Invalid service: $SERVICE (use: gemini, openrouter, openrouter-gpt5, openai)" >&2; exit 1 ;;
 esac
 
 # Validate style

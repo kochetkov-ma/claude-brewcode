@@ -8,24 +8,8 @@ import { Card, CardGrid } from '../../../components/mdx';
 
 # Agents
 
-Agents are specialized roles defined in markdown files. Brewui includes 2 agents
-for GLM vision model integration.
-
-## Summary table
-
-| # | Agent | Model | Purpose |
-|---|-------|-------|---------|
-| 1 | [glm-openrouter-specialist](/brewui/agents/glm-openrouter-specialist/) | opus | OpenRouter API routing for GLM models |
-| 2 | [glm-zai-specialist](/brewui/agents/glm-zai-specialist/) | opus | Z.ai GLM API for design-to-code pipeline |
-
-<CardGrid>
-  <Card title="glm-openrouter-specialist" icon="sync" href="/brewui/agents/glm-openrouter-specialist/">
-    OpenRouter API routing for GLM models
-  </Card>
-  <Card title="glm-zai-specialist" icon="star" href="/brewui/agents/glm-zai-specialist/">
-    Z.ai GLM API for design-to-code pipeline
-  </Card>
-</CardGrid>
+Brewui currently ships no dedicated agents. Its functionality is delivered entirely
+through the `image-gen` skill.
 
 <CardGrid>
   <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">

@@ -32,7 +32,6 @@ description: Detailed description of all brewcode plugin commands
 | 16 | `/bc:convention` | Extract conventions/patterns/architecture → rules + docs | session | opus | -- |
 | 17 | `/bc:teams` | Create/manage specialized AG teams | session | opus | -- |
 | 18 | `/bc:e2e` | E2E testing: BDD scenarios, autotests, review | session | opus | setup |
-| 19 | `/bc:glm-design-to-code` | GLM vision design-to-code | session | opus | -- |
 
 ## Execution Order
 
@@ -754,99 +753,6 @@ Review cycle: MAX_CYCLES=3 — execute → reviewer validates → different AG r
 /bc:e2e create "Login flow with OAuth"
 /bc:e2e review
 /bc:e2e status
-```
-
----
-
-## 13. `/bc:glm-design-to-code`
-
-Converts designs to frontend code via GLM-5V-Turbo vision model. 4 input types: image, text desc, HTML file, URL. 3 modes: CREATE, REVIEW, FIX. Supports HTML/CSS, React 18, Flutter, custom. Powered by Z.ai GLM-5V-Turbo (94.8 Design2Code benchmark) or OpenRouter.
-
-| Param | Value |
-|-------|-------|
-| Args | `[input] [--framework html\|react\|flutter\|custom] [--profile max\|optimal\|efficient] [--provider zai\|openrouter] [--model MODEL_ID] [--output dir] [--review original.png result.png] [--fix 'feedback'] [--fix --review-file review.json]` |
-| Context | session |
-| Model | opus |
-| Deps | none (ZAI_API_KEY or OPENROUTER_API_KEY required) |
-| Tools | Read, Write, Edit, Glob, Grep, Bash, AskUserQuestion |
-
-### Input Types
-
-| Type | Example | Description |
-|------|---------|-------------|
-| Image | `screenshot.png` | PNG/JPG/WebP/GIF |
-| Text | `"Dark landing page with hero"` | Natural language UI desc |
-| HTML | `existing-page.html` | Convert/improve existing HTML |
-| URL | `https://example.com` | Playwright screenshot → convert |
-
-Auto-detected from arg.
-
-### Modes
-
-| Mode | Trigger | Description |
-|------|---------|-------------|
-| CREATE | img/text/html/url | Gen code from input |
-| REVIEW | `--review original.png result.png` | Compare generated vs original (10-pt scale) |
-| FIX | `--fix 'feedback'` | Improve code iteratively (fix → screenshot → review) |
-
-### Flags
-
-| Flag | Default | Options | Purpose |
-|------|---------|---------|---------|
-| `--framework` | html | html, react, flutter, custom | Output format |
-| `--profile` | max | max, optimal, efficient | Quality vs speed |
-| `--provider` | zai | zai, openrouter | API provider |
-| `--model` | (auto) | glm-5v-turbo, glm-4.6v | Override model |
-| `--output` | `./d2c-output` | any dir | Save location |
-| `--review` | -- | `original.png result.png` | REVIEW mode |
-| `--fix` | -- | `'feedback'` | FIX mode |
-| `--review-file` | -- | path to review JSON | Saved review as fix input |
-
-### Profiles
-
-| Profile | max_tokens | Quality | Speed | Best for |
-|---------|-----------|---------|-------|----------|
-| max | 32,768 | Pixel-perfect | 30-60s | Complex UIs |
-| optimal | 16,384 | Good | 15-30s | Production code |
-| efficient | 8,192 | Acceptable | 5-15s | Quick prototypes |
-
-### Framework Output
-
-| Framework | Files |
-|-----------|-------|
-| html | `index.html`, `styles.css`, `script.js` (opt) |
-| react | `package.json`, `src/App.jsx`, `src/components/`, `src/styles/` (Vite) |
-| flutter | `pubspec.yaml`, `lib/main.dart`, `lib/screens/`, `lib/widgets/` |
-| custom | User-guided |
-
-### Providers
-
-| Provider | Model ID | Free Tier | Pricing |
-|----------|----------|-----------|---------|
-| Z.ai (REC) | `glm-5v-turbo` | ~20M tokens | $1.20/1M in, $4.00/1M out |
-| OpenRouter | `z-ai/glm-5v-turbo` | No | Same as Z.ai |
-
-API key: `ZAI_API_KEY` (Z.ai) or `OPENROUTER_API_KEY` (OpenRouter).
-
-### Workflow (CREATE)
-
-1. P0: Parse args, detect mode, validate input, confirm settings
-2. P0.5: Check/request API key (first-time only)
-3. P1: Validate prereqs (jq, curl, base64), API key, scripts
-4. P2: Select prompt profile, build payload, call GLM API
-5. P3: Extract files from response, run framework build
-6. P4: Serve locally, take Playwright screenshot
-7. P5: Compare original vs generated (if `--review`)
-
-```
-/bc:glm-design-to-code mockup.png
-/bc:glm-design-to-code design.png --framework react --profile optimal
-/bc:glm-design-to-code "Dark landing page with hero section and pricing cards"
-/bc:glm-design-to-code legacy-page.html --framework react
-/bc:glm-design-to-code https://example.com/landing
-/bc:glm-design-to-code --review original.png generated.png
-/bc:glm-design-to-code --fix "button should be blue not red, spacing too loose"
-/bc:glm-design-to-code design.png --framework flutter --profile max --provider zai
 ```
 
 ---

@@ -22,7 +22,7 @@ User request -> Manager analyzes -> Selects best agent -> Task tool spawns agent
 
 Claude Code allows nested spawns up to 5 levels deep (since 2.1.172). The brewcode workflow, however, requires spawning only from the main conversation (manager level): the 2-step report protocol binds the task lock to a single session and delivers report/coordinator instructions to the spawning conversation. Nested spawns bypass session binding, KNOWLEDGE injection, and the coordinator loop — so under brewcode only the manager uses the Task tool.
 
-## Section 2: Plugin Agents (18)
+## Section 2: Plugin Agents (16)
 
 These agents ship with the brewcode plugin suite. Available immediately after installation.
 
@@ -44,8 +44,6 @@ These agents ship with the brewcode plugin suite. Available immediately after in
 | text-optimizer | brewtools | sonnet | Text/docs token optimization |
 | ssh-admin | brewtools | opus | SSH server management |
 | deploy-admin | brewtools | opus | GitHub Actions deployment |
-| glm-openrouter-specialist | brewui | opus | OpenRouter API routing |
-| glm-zai-specialist | brewui | opus | Z.ai GLM API vision |
 
 Agents prefixed with `bc-` are internal to brewcode workflows. The rest are user-facing.
 

@@ -1,6 +1,6 @@
 ---
 title: "image-gen"
-description: "AI image generation via 5 providers with anti-AI-slop prompt engineering. Modes: generate, edit, config, update."
+description: "AI image generation via multiple providers with anti-AI-slop prompt engineering. Modes: generate, edit, config, update."
 order: 3501
 ---
 import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
@@ -30,7 +30,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 - **Quick OG image** — `"minimalist tech blog header, dark mode, purple accents"` and done
 - **Batch variations** — `--count 4` to compare options before committing to one
 - **Edit an existing image** — `--edit hero.png "remove background, add soft shadow"` (Gemini + OpenAI only)
-- **Cost-conscious iteration** — use OpenRouter Gemini 2.5 Flash (~$0.001) for drafts, switch to GLM-image or Imagen 4 for finals
+- **Cost-conscious iteration** — use OpenRouter Gemini 2.5 Flash (~$0.001) for drafts, switch to Imagen 4 for finals
 - **API key setup** — `--config` walks through key entry, validation, and storage once
 
 ## Examples
@@ -42,7 +42,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 
 ```bash
 # Illustration style, custom provider
-/brewui:image-gen --style illustration --service zai "tech blog header, geometric shapes, dark background"
+/brewui:image-gen --style illustration --service openrouter "tech blog header, geometric shapes, dark background"
 ```
 
 ```bash
@@ -57,7 +57,6 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | `gemini` (default) | Imagen 4 | Fast | Very High | Paid plan required |
 | `openrouter` | Gemini 2.5 Flash Image | Fast | High | ~$0.001/image |
 | `openrouter-gpt5` | GPT-5 Image | Medium | Highest | ~$0.01/image |
-| `zai` | GLM-image | Fast | Very High | ~$0.015/image |
 | `openai` | DALL-E 3 | Medium | High | $0.04–0.12/image |
 
 Edit support: `gemini` (native), `openai` (DALL-E 2 fallback). OpenRouter redirects to a supported provider.
@@ -118,7 +117,7 @@ Edit support: `gemini` (native), `openai` (DALL-E 2 fallback). OpenRouter redire
 
 | Parameter | Default | Options | Description |
 |-----------|---------|---------|-------------|
-| `--service` | gemini | gemini, openrouter, openrouter-gpt5, zai, openai | Provider |
+| `--service` | gemini | gemini, openrouter, openrouter-gpt5, openai | Provider |
 | `--style` | photo | photo, illustration, art | Anti-slop preset |
 | `--count` | 1 | 1–10 | Images per generation (DALL-E 3: sequential requests) |
 | `--size` | 1024x1024 | WxH | Image dimensions |
@@ -143,9 +142,6 @@ Runs WebSearch for each provider's latest models and pricing, compares against `
 </details>
 
 <CardGrid>
-  <Card title="GLM Design to Code" icon="image" href="/brewui/skills/glm-design-to-code/">
-    Turn images, HTML, or URLs into multi-framework code using GLM vision.
-  </Card>
   <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewui/skills/image-gen">
     Source code, anti-slop references, and provider specs.
   </Card>

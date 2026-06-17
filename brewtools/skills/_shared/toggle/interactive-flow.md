@@ -66,7 +66,7 @@ Emit three lines — a header, the flat list, and a hint:
 
 ```
 AVAILABLE TO {OP} ({N} total, Ctrl+F to search):
-brewcode:spec brewcode:plan brewcode:start brewcode:review brewcode:convention brewtools:debate brewtools:secrets-scan brewui:image-gen brewui:glm-design-to-code ...
+brewcode:spec brewcode:plan brewcode:start brewcode:review brewcode:convention brewtools:debate brewtools:secrets-scan brewui:image-gen ...
 
 Tip: type "plugin:name" OR a few words; I'll match. "cancel" aborts.
 ```

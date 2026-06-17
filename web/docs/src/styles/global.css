@@ -61,8 +61,10 @@
 }
 
 .prose table {
-  @apply w-full overflow-x-auto;
-  display: table;
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
 }
 
 .prose img {

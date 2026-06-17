@@ -24,7 +24,7 @@ Uses `ANTHROPIC_AUTH_TOKEN`. Must set `ANTHROPIC_API_KEY=""` (empty string, NOT 
 URL: `https://openrouter.ai/api` — no `/v1` suffix.
 
 ## Model Format
-Models use `provider/model-name` format, e.g.: `qwen/qwen3.6-plus`, `z-ai/glm-5.1`, `qwen/qwen3-coder:free`.
+Models use `provider/model-name` format, e.g.: `qwen/qwen3.7-plus`, `z-ai/glm-5.2`, `qwen/qwen3-coder:free`.
 Claude Code has 3 internal roles: opus, sonnet, haiku. Each overridden via env var.
 
 ## Default Model (customizable)
@@ -33,7 +33,7 @@ One model for all three roles. User selects during setup.
 
 | Field | Default |
 |-------|---------|
-| Model | `qwen/qwen3.6-plus[1m]` |
+| Model | `qwen/qwen3.7-plus[1m]` |
 | Applied to | OPUS + SONNET + HAIKU (all same) |
 
 ## Alias Template

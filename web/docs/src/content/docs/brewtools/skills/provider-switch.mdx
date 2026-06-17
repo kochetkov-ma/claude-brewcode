@@ -21,7 +21,7 @@ import { Card, CardGrid, Callout, Steps, Badge, Spoiler, UpdateNotice } from '..
 | 3 | GPT-5.3 Codex | 85.0% | — | OpenRouter only |
 | 4 | Gemini 3.1 Pro | 80.6% | — | OpenRouter only |
 | 4 | DeepSeek V4 Pro | 80.6% | 55.4% | `claudedeepseek` — top open-source |
-| — | GLM-5.1 | ~47% | — | `claudeglm` — strong per dollar |
+| — | GLM-5.2 | ~47% | — | `claudeglm` — strong per dollar |
 
 Sources: [SWE-bench](https://www.swebench.com/) · [SWE-bench Pro (Scale)](https://labs.scale.com/leaderboard/swe_bench_pro_public)
 </Callout>
@@ -31,7 +31,7 @@ Sources: [SWE-bench](https://www.swebench.com/) · [SWE-bench Pro (Scale)](https
 </Callout>
 
 <Callout type="tip">
-**One command fixes it.** Run `claudedeepseek` or `claudeglm` — Claude Code switches to DeepSeek V4, GLM-5.1, or another backup. Cost: ~$10/month backup budget. New terminal = back on Anthropic.
+**One command fixes it.** Run `claudedeepseek` or `claudeglm` — Claude Code switches to DeepSeek V4, GLM-5.2, or another backup. Cost: ~$10/month backup budget. New terminal = back on Anthropic.
 </Callout>
 
 ## Your week on Anthropic Max
@@ -84,9 +84,9 @@ Sources: [SWE-bench](https://www.swebench.com/) · [SWE-bench Pro (Scale)](https
 
 ```bash
 claudedeepseek  # DeepSeek V4 Pro (PRIORITY) — 1.6T MoE, 1M ctx
-claudeglm       # GLM-5.1 — #1 SWE-bench Pro, 200K ctx
-claudeqwen      # Qwen 3.6 Plus — 1M context window
-claudeminimax    # MiniMax M2.7 — cheapest per token
+claudeglm       # GLM-5.2 — #1 SWE-bench Pro, 200K ctx
+claudeqwen      # Qwen 3.7 Plus — 1M context window
+claudeminimax    # MiniMax-M3 — cheapest per token
 claudeor         # OpenRouter — 200+ models, pick any
 ```
 
@@ -124,13 +124,13 @@ Each alias sets env vars and launches Claude Code automatically. To return to yo
     <Badge variant="accent" text="Priority" /> <Badge variant="accent" text="Top open-source" /> <Badge variant="accent" text="Cache verified" /> **deepseek-v4-pro** — 1.6T MoE, 1M context, thinking modes. SWE-bench Verified 80.6%, Pro 55.4%. 90% cache discount, automatic. Alias `claudedeepseek`. No compat flags. [Leaderboard](https://www.swebench.com/).
   </Card>
   <Card title="Z.ai / GLM" icon="star" href="https://z.ai/subscribe">
-    <Badge variant="accent" text="Strong coding perf" /> <Badge variant="accent" text="Cache verified" /> **glm-5.1** — $1.40 / $4.40 per 1M tokens. 200K context. Backend auto-cache (native).
+    <Badge variant="accent" text="Strong coding perf" /> <Badge variant="accent" text="Cache verified" /> **glm-5.2** — $1.40 / $4.40 per 1M tokens. 200K context. Backend auto-cache (native).
   </Card>
   <Card title="Qwen" icon="document" href="https://modelstudio.console.alibabacloud.com/ap-southeast-1?tab=dashboard#/api-key">
-    <Badge variant="accent" text="Cache verified" /> **qwen3.6-plus** — ~$0.50 / $2.00 per 1M tokens. 1M context. Implicit cache 20%, explicit 10% of standard (confirmed in billing).
+    <Badge variant="accent" text="Cache verified" /> **qwen3.7-plus** — ~$0.50 / $2.00 per 1M tokens. 1M context. Implicit cache 20%, explicit 10% of standard (confirmed in billing).
   </Card>
   <Card title="MiniMax" icon="money" href="https://platform.minimax.io">
-    <Badge variant="accent" text="Cache verified" /> **minimax-m2.7** — $0.30 / $1.20 per 1M tokens. 200K context. Cheapest option with documented cache pricing.
+    <Badge variant="accent" text="Cache verified" /> **MiniMax-M3** — $0.30 / $1.20 per 1M tokens. 200K context. Cheapest option with documented cache pricing.
   </Card>
   <Card title="OpenRouter" icon="sync" href="https://openrouter.ai">
     200+ models. Route to **GPT-5.5** (new #1 Verified, 88.7%), GPT-5.3 Codex, Gemini 3.1 Pro, GLM, Qwen, Llama. One config, any provider. Custom model IDs validated via API.
@@ -157,7 +157,7 @@ Env vars only persist in the current shell session. Opening a new terminal reset
 
 ### Context window
 
-Claude Code defaults to 200K for non-Anthropic providers. The `[1m]` suffix on model names (e.g., `qwen3.6-plus[1m]`) forces 1M context. Applied automatically by the skill.
+Claude Code defaults to 200K for non-Anthropic providers. The `[1m]` suffix on model names (e.g., `qwen3.7-plus[1m]`) forces 1M context. Applied automatically by the skill.
 
 ### Skill arguments
 
@@ -186,7 +186,7 @@ Claude Code automatically sends `cache_control` markers to reduce input token co
 | **Z.ai / GLM** | Yes | **Verified** | Backend auto-cache (native). Applied transparently at the provider side |
 | **OpenRouter** | Model-dependent | — | Anthropic models: yes. Non-Anthropic (Qwen, GLM): routed to provider cache |
 
-### MiniMax cache pricing (minimax-m2.7)
+### MiniMax cache pricing (MiniMax-M3)
 
 | Token type | Price / 1M | vs Standard input |
 |------------|--:|---|

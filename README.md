@@ -59,7 +59,7 @@ After all commands succeed, run `/reload-plugins`. If `/reload-plugins` is unava
 | [brewcode](brewcode/README.md) | Infinite task execution, quorum reviews, skill/agent creation, semantic search | 13 | `claude plugin install brewcode@claude-brewcode` |
 | [brewdoc](brewdoc/README.md) | Documentation tools: auto-sync, memory optimization, PDF conversion, publishing | 6 | `claude plugin install brewdoc@claude-brewcode` |
 | [brewtools](brewtools/README.md) | Universal text utilities: token optimization, humanization, secrets scanning, plugin updates | 13 | `claude plugin install brewtools@claude-brewcode` |
-| [brewui](brewui/README.md) | UI/visual tools: AI image generation, design-to-code conversion | 2 | `claude plugin install brewui@claude-brewcode` |
+| [brewui](brewui/README.md) | UI/visual tools: AI image generation via multiple providers | 1 | `claude plugin install brewui@claude-brewcode` |
 
 ## Installation
 
@@ -188,7 +188,7 @@ After `/brewcode:setup`, each task follows the cycle: `spec` -> `plan` -> `start
 
 ## Skills Reference
 
-### Brewcode (13 skills)
+### Brewcode (12 skills)
 
 | Skill | Purpose |
 |-------|---------|
@@ -204,7 +204,6 @@ After `/brewcode:setup`, each task follows the cycle: `spec` -> `plan` -> `start
 | `/brewcode:skills` | List, create, and upgrade skills |
 | `/brewcode:agents` | Interactive agent creation and improvement |
 | `/brewcode:e2e` | E2E testing orchestration with BDD scenarios |
-| `/brewcode:glm-design-to-code` | Vision model design-to-code (image, text, HTML, URL) |
 | `/brewcode:debate` | Evidence-based multi-agent debate (Challenge, Strategy, Critic modes) |
 | `/brewcode:teardown` | Remove plugin configuration (keeps task data) |
 
@@ -237,12 +236,11 @@ After `/brewcode:setup`, each task follows the cycle: `spec` -> `plan` -> `start
 | `/brewtools:manager` | Manager mode -- codewords ++m/++mp inject a delegate-everything prompt; HARD wall (on/off/uninstall) installs a project PreToolUse guard that blocks main-session edits, forcing delegation |
 | `/brewtools:task-board-init` | Deploy a file-based Kanban into ANY repo via multi-agent analysis -- task-tracker agent, task-board skill, tasks rule, .claude/features |
 
-### Brewui (2 skills)
+### Brewui (1 skill)
 
 | Skill | Purpose |
 |-------|---------|
-| `/brewui:image-gen` | AI image generation via 5 providers with anti-slop controls |
-| `/brewui:glm-design-to-code` | GLM vision design-to-code: image/text/HTML/URL to multi-framework code |
+| `/brewui:image-gen` | AI image generation via multiple providers with anti-slop controls |
 
 ### Portable skills (standalone)
 

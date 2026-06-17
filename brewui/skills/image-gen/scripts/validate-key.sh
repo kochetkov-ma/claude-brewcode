@@ -6,7 +6,7 @@
 
 set -e
 
-SERVICE="${1:?Usage: validate-key.sh <service> (gemini|openrouter|openrouter-gpt5|zai|openai)}"
+SERVICE="${1:?Usage: validate-key.sh <service> (gemini|openrouter|openrouter-gpt5|openai)}"
 
 fail() {
   echo "INVALID: $1"
@@ -48,17 +48,6 @@ case "$SERVICE" in
     echo "VALID"
     ;;
 
-  zai)
-    [ -n "${ZAI_API_KEY:-}" ] || fail "ZAI_API_KEY is not set"
-    RESPONSE=$(curl -s -w "\n%{http_code}" \
-      "https://api.z.ai/api/paas/v4/models" \
-      -H "Authorization: Bearer $ZAI_API_KEY" \
-      --max-time 10) || fail "Connection failed to Z.ai API"
-    HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-    [ "$HTTP_CODE" = "200" ] || fail "HTTP $HTTP_CODE from Z.ai API"
-    echo "VALID"
-    ;;
-
   openai)
     [ -n "${OPENAI_API_KEY:-}" ] || fail "OPENAI_API_KEY is not set"
     RESPONSE=$(curl -s -w "\n%{http_code}" \
@@ -71,7 +60,7 @@ case "$SERVICE" in
     ;;
 
   *)
-    echo "ERROR: Unknown service: $SERVICE (use: gemini, openrouter, openrouter-gpt5, zai, openai)" >&2
+    echo "ERROR: Unknown service: $SERVICE (use: gemini, openrouter, openrouter-gpt5, openai)" >&2
     exit 1
     ;;
 esac

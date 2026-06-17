@@ -106,9 +106,9 @@ Render status table:
 | PRV | Alias | API Key | Model | Status |
 |-----|-------|---------|-------|--------|
 | DeepSeek (priority) | claudeds | DEEPSEEK_API_KEY | deepseek-v4-pro | ... |
-| Z.ai / GLM | claudeglm | ZAI_API_KEY | glm-5.1 | ... |
-| Qwen | claudeqwen | DASHSCOPE_API_KEY | qwen3.6-plus[1m] | ... |
-| MiniMax | claudeminimax | MINIMAX_API_KEY | minimax-m2.7 | ... |
+| Z.ai / GLM | claudeglm | ZAI_API_KEY | glm-5.2 | ... |
+| Qwen | claudeqwen | DASHSCOPE_API_KEY | qwen3.7-plus[1m] | ... |
+| MiniMax | claudeminimax | MINIMAX_API_KEY | MiniMax-M3 | ... |
 | OpenRouter | claudeor | OPENROUTER_API_KEY | (user-selected) | ... |
 
 ## How to Use
@@ -126,9 +126,9 @@ If MODE=help → GOTO P6.
 
 If MODE=setup (no specific PRV): AUQ options:
 - "DeepSeek V4 (deepseek-v4-pro, 1M ctx, priority - Recommended)"
-- "Z.ai / GLM (glm-5.1, free models available)"
-- "Qwen / DashScope (qwen3.6-plus, 1M ctx)"
-- "MiniMax (minimax-m2.7, cheapest)"
+- "Z.ai / GLM (glm-5.2, free models available)"
+- "Qwen / DashScope (qwen3.7-plus, 1M ctx)"
+- "MiniMax (MiniMax-M3, cheapest)"
 - "OpenRouter (aggregator, any model)"
 - "All providers"
 
@@ -166,8 +166,8 @@ KEY_VAR_NAME: `DEEPSEEK_API_KEY` | `ZAI_API_KEY` | `DASHSCOPE_API_KEY` | `MINIMA
 
 ### Step 4: Model Selection (OpenRouter only)
 Read `REF/openrouter-models.md`. AUQ options:
-- "qwen/qwen3.6-plus[1m] — 1M ctx, top coding (Recommended)"
-- "z-ai/glm-5.1 — #1 SWE-bench Pro, 200K"
+- "qwen/qwen3.7-plus[1m] — 1M ctx, top coding (Recommended)"
+- "z-ai/glm-5.2 — #1 SWE-bench Pro, 200K"
 - "qwen/qwen3-coder:free — free, 262K, code-focused"
 - "Custom (specify model ID)"
 
@@ -364,7 +364,7 @@ Per PRV: model IDs changed? pricing changed? new models? endpoint URL changed? c
 ## Update Results
 | PRV | Field | Current | Fetched | Action |
 |-----|-------|---------|---------|--------|
-| Z.ai | opus model | glm-5.1 | glm-6.0 | UPDATE |
+| Z.ai | opus model | glm-5.2 | glm-6.0 | UPDATE |
 | Qwen | pricing | ~$0.50 | $0.40 | UPDATE |
 | MiniMax | (no changes) | — | — | SKIP |
 ```
@@ -378,7 +378,7 @@ Edit REF files per field-to-line mapping in `REF/update-protocol.md`. Also updat
 ### Step 6: Live Test (optional, if API keys in env)
 EXEC:
 ```bash
-curl -s -o /dev/null -w "%{http_code}" -X POST "https://api.z.ai/api/anthropic/v1/messages" -H "x-api-key: ${ZAI_API_KEY:-missing}" -H "content-type: application/json" -H "anthropic-version: 2023-06-01" -d '{"model":"glm-5.1","max_tokens":5,"messages":[{"role":"user","content":"ping"}]}' && echo " OK" || echo " FAILED"
+curl -s -o /dev/null -w "%{http_code}" -X POST "https://api.z.ai/api/anthropic/v1/messages" -H "x-api-key: ${ZAI_API_KEY:-missing}" -H "content-type: application/json" -H "anthropic-version: 2023-06-01" -d '{"model":"glm-5.2","max_tokens":5,"messages":[{"role":"user","content":"ping"}]}' && echo " OK" || echo " FAILED"
 ```
 
 ### Step 7: Report
@@ -405,7 +405,7 @@ Files modified: [list]
 | PRV | Alias | API Key | Model | Status |
 |-----|-------|---------|-------|--------|
 | DeepSeek (priority) | claudeds | DEEPSEEK_API_KEY | deepseek-v4-pro | CFG |
-| Z.ai / GLM | claudeglm | ZAI_API_KEY | glm-5.1 | CFG |
+| Z.ai / GLM | claudeglm | ZAI_API_KEY | glm-5.2 | CFG |
 | Qwen | claudeqwen | DASHSCOPE_API_KEY | — | not CFG |
 | MiniMax | claudeminimax | MINIMAX_API_KEY | — | not CFG |
 | OpenRouter | claudeor | OPENROUTER_API_KEY | — | not CFG |

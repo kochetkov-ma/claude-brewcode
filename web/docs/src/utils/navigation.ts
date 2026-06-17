@@ -109,15 +109,6 @@ export const navigation: NavSection[] = [
         slug: 'brewui/skills',
         children: [
           { title: 'image-gen', slug: 'brewui/skills/image-gen' },
-          { title: 'glm-design-to-code', slug: 'brewui/skills/glm-design-to-code' },
-        ],
-      },
-      {
-        title: 'Agents',
-        slug: 'brewui/agents',
-        children: [
-          { title: 'glm-openrouter-specialist', slug: 'brewui/agents/glm-openrouter-specialist' },
-          { title: 'glm-zai-specialist', slug: 'brewui/agents/glm-zai-specialist' },
         ],
       },
     ],

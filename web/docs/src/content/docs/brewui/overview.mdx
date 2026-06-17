@@ -1,6 +1,6 @@
 ---
 title: "Brewui Overview"
-description: "UI/visual/creative tools plugin for Claude Code: AI image generation, design-to-code conversion"
+description: "UI/visual/creative tools plugin for Claude Code: AI image generation via multiple providers"
 order: 35
 ---
 
@@ -9,7 +9,7 @@ import { Card, CardGrid, Callout, InstallPrompt } from '../../../components/mdx'
 # Brewui Overview
 
 Brewui is a plugin for UI/visual/creative tools: AI image generation via multiple providers
-with anti-AI-slop controls, and future design-to-code conversion. Each skill is self-contained
+with anti-AI-slop controls. Each skill is self-contained
 and requires no prior setup beyond an API key.
 
 ## Installation
@@ -24,13 +24,9 @@ Install the entire suite:
 
 <CardGrid>
   <Card title="image-gen" icon="sparkle" href="/brewui/skills/image-gen/">
-    AI image generation via 5 providers: Gemini Imagen 4, OpenRouter Gemini 2.5 Flash,
-    OpenRouter GPT-5, Z.ai CogView-4, OpenAI DALL-E 3. Anti-slop prompt engineering.
+    AI image generation via 4 providers: Gemini Imagen 4, OpenRouter Gemini 2.5 Flash,
+    OpenRouter GPT-5, OpenAI DALL-E 3. Anti-slop prompt engineering.
     Four modes: generate, edit, config, update.
-  </Card>
-  <Card title="glm-design-to-code" icon="star" href="/brewui/skills/glm-design-to-code/">
-    GLM vision design-to-code conversion: image, text description, HTML, or URL input
-    transformed into multi-framework code via OpenRouter and Z.ai providers.
   </Card>
 </CardGrid>
 
@@ -39,14 +35,6 @@ Install the entire suite:
 | Command | Purpose | Model | Arguments |
 |---------|---------|-------|-----------|
 | [`/brewui:image-gen`](/brewui/skills/image-gen/) | AI image generation | haiku | `[prompt] [--edit] [--config] [--update] [--service] [--style]` |
-| [`/brewui:glm-design-to-code`](/brewui/skills/glm-design-to-code/) | Vision design-to-code conversion | opus | `[image\|text\|html\|url]` |
-
-## Agents
-
-| Agent | Model | Purpose |
-|-------|-------|---------|
-| [glm-openrouter-specialist](/brewui/agents/glm-openrouter-specialist/) | opus | OpenRouter provider specialist for GLM design-to-code |
-| [glm-zai-specialist](/brewui/agents/glm-zai-specialist/) | opus | Z.ai provider specialist for GLM design-to-code |
 
 ## Plugin variable
 
@@ -65,22 +53,16 @@ brewui/
 │   ├── session-start.mjs        # BU_PLUGIN_ROOT injection
 │   ├── pre-task.mjs             # BU_PLUGIN_ROOT into subagents
 │   └── lib/utils.mjs            # I/O utilities
-├── skills/
-│   ├── image-gen/               # AI image generation
-│   │   ├── SKILL.md
-│   │   ├── references/          # Provider specs, anti-slop, modes
-│   │   ├── scripts/             # API request, parsing, saving
-│   │   └── tests/               # Integration tests
-│   └── glm-design-to-code/     # Vision design-to-code conversion
-│       ├── SKILL.md
-│       └── references/          # Provider specs, input types
-└── agents/
-    ├── glm-openrouter-specialist.md  # OpenRouter provider agent
-    └── glm-zai-specialist.md         # Z.ai provider agent
+└── skills/
+    └── image-gen/               # AI image generation
+        ├── SKILL.md
+        ├── references/          # Provider specs, anti-slop, modes
+        ├── scripts/             # API request, parsing, saving
+        └── tests/               # Integration tests
 ```
 
 <Callout type="note" title="Brewui vs Brewcode">
-  **Brewui** provides standalone visual/creative tools: image generation, design-to-code.
+  **Brewui** provides standalone visual/creative tools: image generation.
   Each skill works independently with no lifecycle dependencies.
 
   **Brewcode** is a task execution engine with infinite context, lifecycle hooks,

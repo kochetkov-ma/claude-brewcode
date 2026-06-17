@@ -1,6 +1,6 @@
 # Brewui
 
-> UI/visual/creative tools plugin for Claude Code -- AI image generation, design-to-code conversion.
+> UI/visual/creative tools plugin for Claude Code -- AI image generation via multiple providers.
 
 | Field | Value |
 |-------|-------|
@@ -40,7 +40,7 @@ Update anytime with `/brewtools:plugin-update`.
 
 ## Overview
 
-Brewui provides visual and creative tools for Claude Code: AI image generation via multiple providers (Gemini Imagen 4, OpenRouter, Z.ai CogView-4, OpenAI DALL-E 3) with anti-AI-slop controls, and future design-to-code conversion tools. Each skill is self-contained.
+Brewui provides visual and creative tools for Claude Code: AI image generation via multiple providers (Gemini Imagen 4, OpenRouter, OpenAI DALL-E 3) with anti-AI-slop controls. Each skill is self-contained.
 
 ## Installation
 
@@ -71,7 +71,7 @@ claude --plugin-dir ./brewui
 
 | Skill | Purpose | Model | Arguments |
 |-------|---------|-------|-----------|
-| [`/brewui:image-gen`](skills/image-gen/SKILL.md) | AI image generation via 5 providers | haiku | `[prompt] [--edit] [--config] [--update] [--service] [--style] [--count] [--output] [--size]` |
+| [`/brewui:image-gen`](skills/image-gen/SKILL.md) | AI image generation via 4 providers | haiku | `[prompt] [--edit] [--config] [--update] [--service] [--style] [--count] [--output] [--size]` |
 
 ## Architecture
 

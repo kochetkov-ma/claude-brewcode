@@ -1,7 +1,7 @@
 {
   "name": "brewui",
-  "version": "3.15.0",
-  "description": "Brewui - UI/visual/creative tools for Claude Code: AI image generation, design-to-code conversion",
+  "version": "3.16.0",
+  "description": "Brewui - UI/visual/creative tools for Claude Code: AI image generation",
   "author": {
     "name": "Maksim Kochetkov",
     "email": "apmatypa88@gmail.com",
@@ -13,8 +13,7 @@
   "keywords": [
     "brewui",
     "image-generation",
-    "visual-tools",
-    "design-to-code"
+    "visual-tools"
   ],
   "skills": "./skills/"
 }

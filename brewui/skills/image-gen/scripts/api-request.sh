@@ -1,7 +1,7 @@
 #!/bin/sh
 # api-request.sh — HTTP transport with provider routing for image generation
 # Usage: api-request.sh <payload.json> <output.json> <service>
-# Env vars: GEMINI_API_KEY, OPENROUTER_API_KEY, OPENAI_API_KEY, ZAI_API_KEY
+# Env vars: GEMINI_API_KEY, OPENROUTER_API_KEY, OPENAI_API_KEY
 # Output: raw API response saved to output.json, status info to stderr
 
 set -e
@@ -57,19 +57,6 @@ case "$SERVICE" in
       -d @"$PAYLOAD")
     ;;
 
-  zai)
-    API_KEY="${ZAI_API_KEY:?ERROR: ZAI_API_KEY not set}"
-    API_URL="https://api.z.ai/api/paas/v4/images/generations"
-    echo "Sending to Z.ai GLM-image ($API_URL)..." >&2
-    HTTP_CODE=$(curl -s -w "%{http_code}" -o "$OUTPUT" \
-      --retry 3 --retry-delay 5 --retry-max-time 60 \
-      --max-time 120 \
-      -X POST "$API_URL" \
-      -H "Authorization: Bearer $API_KEY" \
-      -H "Content-Type: application/json" \
-      -d @"$PAYLOAD")
-    ;;
-
   openai)
     API_KEY="${OPENAI_API_KEY:?ERROR: OPENAI_API_KEY not set}"
     API_URL="https://api.openai.com/v1/images/generations"
@@ -84,7 +71,7 @@ case "$SERVICE" in
     ;;
 
   *)
-    echo "ERROR: Unknown service: $SERVICE (use: gemini, openrouter, openrouter-gpt5, zai, openai)" >&2
+    echo "ERROR: Unknown service: $SERVICE (use: gemini, openrouter, openrouter-gpt5, openai)" >&2
     exit 1
     ;;
 esac

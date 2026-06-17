@@ -2,6 +2,18 @@
 
 ---
 
+## v3.16.0 (2026-06-17)
+
+### brewui
+
+#### Changed
+- **provider-switch model refresh:** updated the model catalog -- GLM bumped to GLM 5.2, Qwen to Qwen 3.7-plus, MiniMax to MiniMax-M3; DeepSeek stays on deepseek-v4-pro (unchanged); OpenRouter catalog refreshed.
+
+#### Removed
+- **complete GLM Vision removal:** dropped the `glm-design-to-code` skill, the `glm-zai-specialist` and `glm-openrouter-specialist` agents, the `glm-design-to-code-trial`, and the Z.ai provider from image-gen.
+
+---
+
 ## v3.15.0 (2026-06-14)
 
 > Docs: [brewtools:manager](https://doc-claude.brewcode.app/brewtools/skills/manager/) | [brewtools prompt-injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/)

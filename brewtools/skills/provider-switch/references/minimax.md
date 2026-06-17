@@ -24,9 +24,9 @@ Uses `ANTHROPIC_AUTH_TOKEN`. Must set `ANTHROPIC_API_KEY=""` (empty string, NOT 
 ## Models
 | Role | Model ID | Context | Input $/1M | Output $/1M |
 |------|----------|---------|-----------|------------|
-| opus | minimax-m2.7 | 200K | $0.30 | $1.20 |
-| sonnet | minimax-m2.7 | 200K | $0.30 | $1.20 |
-| haiku | minimax-m2.7 | 200K | $0.30 | $1.20 |
+| opus | MiniMax-M3 | 200K | $0.30 | $1.20 |
+| sonnet | MiniMax-M3 | 200K | $0.30 | $1.20 |
+| haiku | MiniMax-M3 | 200K | $0.30 | $1.20 |
 
 Note: MiniMax currently has only one model (M2.7), used for all three roles.
 
@@ -52,7 +52,7 @@ Docs: https://platform.minimax.io/docs/api-reference/anthropic-api-compatible-ca
 
 ## Alias
 ```bash
-alias claudeminimax='export ANTHROPIC_BASE_URL=https://api.minimax.io/anthropic; export ANTHROPIC_AUTH_TOKEN=$MINIMAX_API_KEY; export ANTHROPIC_API_KEY=""; export ANTHROPIC_DEFAULT_OPUS_MODEL=minimax-m2.7; export ANTHROPIC_DEFAULT_SONNET_MODEL=minimax-m2.7; export ANTHROPIC_DEFAULT_HAIKU_MODEL=minimax-m2.7; export CLAUDE_ENABLE_BYTE_WATCHDOG=0; export CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1; claude'
+alias claudeminimax='export ANTHROPIC_BASE_URL=https://api.minimax.io/anthropic; export ANTHROPIC_AUTH_TOKEN=$MINIMAX_API_KEY; export ANTHROPIC_API_KEY=""; export ANTHROPIC_DEFAULT_OPUS_MODEL=MiniMax-M3; export ANTHROPIC_DEFAULT_SONNET_MODEL=MiniMax-M3; export ANTHROPIC_DEFAULT_HAIKU_MODEL=MiniMax-M3; export CLAUDE_ENABLE_BYTE_WATCHDOG=0; export CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1; claude'
 ```
 
 ## Dashboard

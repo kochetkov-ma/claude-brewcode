@@ -61,14 +61,13 @@ Universal utilities. Work in any project, no setup needed.
 
 These are standalone — no project configuration required. Run them anywhere.
 
-## Section 3b: Brewui Skills (2)
+## Section 3b: Brewui Skills (1)
 
-UI/visual/creative tools. AI image generation and design-to-code conversion.
+UI/visual/creative tools. AI image generation via multiple providers.
 
 | Skill | Purpose |
 |-------|---------|
-| `/brewui:image-gen` | AI image generation via 5 providers with anti-slop controls |
-| `/brewui:glm-design-to-code` | GLM vision design-to-code: image/text/HTML/URL to multi-framework code |
+| `/brewui:image-gen` | AI image generation via multiple providers with anti-slop controls |
 
 ## Section 4: Common Patterns
 

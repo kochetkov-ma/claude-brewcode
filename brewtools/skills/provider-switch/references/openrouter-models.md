@@ -19,25 +19,26 @@ User picks a single model during setup — it is used everywhere.
 ### Coding (best for Claude Code)
 | Model ID | Context | Price (in/out $/1M) | Notes |
 |----------|---------|---------------------|-------|
-| qwen/qwen3.6-plus[1m] | 1M | ~$0.33/$1.95 | Top coding, 1M context (Recommended) |
-| z-ai/glm-5.1 | 200K | $1.40/$4.40 | #1 SWE-bench Pro |
-| qwen/qwen3-coder-plus | 1M | $0.65/$3.25 | Code-focused, 1M context |
-| deepseek/deepseek-r1 | 128K | $0.55/$2.19 | Strong reasoning |
+| qwen/qwen3.7-max | 1M | ~$0.33/$1.95 | Top coding, 1M context (Recommended) |
+| z-ai/glm-5.2 | 200K | $1.40/$4.40 | #1 SWE-bench Pro |
+| deepseek/deepseek-v4-pro | 128K | $0.55/$2.19 | Strong reasoning |
+| moonshotai/kimi-k2.7-code | 256K | $0.60/$2.50 | Code-focused |
+| qwen/qwen3.7-plus[1m] | 1M | $0.65/$3.25 | Code-focused, 1M context |
+| minimax/minimax-m3 | 200K | $0.30/$1.20 | Cheapest decent |
 
 ### Budget / Free
 | Model ID | Context | Price | Notes |
 |----------|---------|-------|-------|
-| qwen/qwen3-coder:free | 262K | FREE | Code-focused, rate-limited |
-| qwen/qwen3-next-80b-a3b-instruct:free | 262K | FREE | General, rate-limited |
-| minimax/minimax-m2.5:free | 196K | FREE | Rate-limited |
+| nvidia/nemotron-3-ultra-550b-a55b:free | 262K | FREE | Large general, rate-limited |
+| google/gemma-4-31b-it:free | 262K | FREE | General, rate-limited |
 | google/gemma-4-26b-a4b-it:free | 262K | FREE | Lightweight |
 
 ### General Purpose
 | Model ID | Context | Price (in/out $/1M) | Notes |
 |----------|---------|---------------------|-------|
-| google/gemini-2.5-pro | 1M | $1.25/$10.00 | Strong all-round |
-| minimax/minimax-m2.7 | 200K | $0.30/$1.20 | Cheapest decent |
-| qwen/qwen3.5-flash-02-23 | 1M | $0.065/$0.26 | Ultra-cheap, fast |
+| google/gemini-3.5-flash | 1M | $1.25/$10.00 | Strong all-round |
+| deepseek/deepseek-v4-flash | 200K | $0.30/$1.20 | Cheapest decent |
+| anthropic/claude-opus-4.8 | 1M | $0.065/$0.26 | Ultra-cheap, fast |
 
 ## Model Validation
 

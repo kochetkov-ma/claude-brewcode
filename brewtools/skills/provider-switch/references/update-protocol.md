@@ -13,7 +13,7 @@ Verify and refresh provider reference data: models, pricing, endpoints, context 
 | Models | `https://open.bigmodel.cn/en/dev/api/normal-model/glm-5` | WebFetch |
 | Pricing | Same as above | WebFetch |
 | Endpoint | `https://api.z.ai/api/anthropic/v1/messages` (test call) | Bash curl |
-| Live test | `curl -s -X POST https://api.z.ai/api/anthropic/v1/messages -H "x-api-key: $ZAI_API_KEY" -H "content-type: application/json" -H "anthropic-version: 2023-06-01" -d '{"model":"glm-5.1","max_tokens":10,"messages":[{"role":"user","content":"ping"}]}'` | Bash |
+| Live test | `curl -s -X POST https://api.z.ai/api/anthropic/v1/messages -H "x-api-key: $ZAI_API_KEY" -H "content-type: application/json" -H "anthropic-version: 2023-06-01" -d '{"model":"glm-5.2","max_tokens":10,"messages":[{"role":"user","content":"ping"}]}'` | Bash |
 
 ### Qwen / DashScope
 | Check | Source | Method |

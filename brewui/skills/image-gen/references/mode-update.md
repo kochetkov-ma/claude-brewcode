@@ -70,76 +70,7 @@ Store for final report:
 
 ---
 
-## Provider 2: Z.ai (Zhipu AI) GLM-image
-
-Current model: `glm-image`
-
-### Step 1: Check API Documentation
-
-Use WebSearch:
-```
-"Z.ai GLM-image API latest model site:docs.z.ai"
-```
-
-Direct URLs:
-- `https://docs.z.ai/guides/models`
-- `https://docs.z.ai/guides/image/glm-image`
-- `https://docs.z.ai/guides/overview/pricing`
-
-### Step 2: Test Model Availability
-
-**EXECUTE** using Bash tool:
-```bash
-[ -f .env ] && set -a && . .env && set +a
-if [ -z "$ZAI_API_KEY" ]; then
-  echo "SKIP_NO_KEY"
-else
-  curl -s -o /tmp/zai-test-response.json -w "%{http_code}" \
-    "https://api.z.ai/api/paas/v4/images/generations" \
-    -H "Authorization: Bearer $ZAI_API_KEY" \
-    -H "Content-Type: application/json" \
-    -d '{"model":"glm-image","prompt":"test solid blue square","size":"1280x1280"}' \
-    > /tmp/zai-test-status.txt 2>&1
-  HTTP_CODE=$(cat /tmp/zai-test-status.txt)
-  echo "HTTP status: $HTTP_CODE"
-  if [ "$HTTP_CODE" = "200" ]; then
-    echo "MODEL_ACTIVE"
-  elif [ "$HTTP_CODE" = "404" ]; then
-    echo "MODEL_DEPRECATED -- check for replacement"
-  else
-    echo "MODEL_ERROR"
-    jq -r '.error // .message // .' /tmp/zai-test-response.json 2>/dev/null
-  fi
-fi
-```
-
-### Step 3: Check for New Model Versions
-
-Use WebSearch:
-```
-"Z.ai GLM-image API model {current_year}"
-```
-
-Known progression: cogview-3 -> cogview-4 -> glm-image (current, flagship). Check for: new model versions, new size options, new endpoints.
-
-### Step 4: Check Pricing
-
-Use WebSearch:
-```
-"Z.ai API pricing image generation {current_year}"
-```
-
-URL: `https://docs.z.ai/guides/overview/pricing`
-
-Current: ~$0.015/image. Record any changes.
-
-### Step 5: Record Findings
-
-Store: `zai_status`, `zai_current`, `zai_latest`, `zai_pricing_changed`, `zai_notes`
-
----
-
-## Provider 3: Google Gemini Imagen
+## Provider 2: Google Gemini Imagen
 
 Current model: `imagen-4.0-generate-001`
 Also available: `imagen-4.0-ultra-generate-001`, `imagen-4.0-fast-generate-001`
@@ -208,7 +139,7 @@ Store: `gemini_status`, `gemini_current`, `gemini_latest`, `gemini_pricing_chang
 
 ---
 
-## Provider 4: OpenAI DALL-E
+## Provider 3: OpenAI DALL-E
 
 Current model: `dall-e-3`
 
@@ -283,7 +214,7 @@ Store: `openai_status`, `openai_current`, `openai_latest`, `openai_pricing_chang
 
 ---
 
-## Provider 5: New Provider Discovery
+## Provider 4: New Provider Discovery
 
 ### Step 1: Search for Emerging Providers
 
@@ -297,7 +228,7 @@ Use WebSearch (run both):
 
 ### Step 2: Check OpenRouter for New Image Models
 
-Review `/tmp/openrouter-image-models.json` (from Provider 1 Step 1) for models not from known providers (google, openai, zhipu). Look for: Flux, Stable Diffusion 4+, Midjourney API, Ideogram, Recraft, other newcomers.
+Review `/tmp/openrouter-image-models.json` (from Provider 1 Step 1) for models not from known providers (google, openai). Look for: Flux, Stable Diffusion 4+, Midjourney API, Ideogram, Recraft, other newcomers.
 
 ### Step 3: Evaluate Candidates
 
@@ -328,7 +259,6 @@ After completing all provider checks, output the comparison report.
 | Provider | Current Model | Latest Available | Pricing Change | Status |
 |----------|--------------|-----------------|----------------|--------|
 | openrouter | gemini-2.5-flash-image | {latest} | {yes/no/unknown} | {OK/CHANGED/DEPRECATED/ERROR} |
-| zai | glm-image | {latest} | {yes/no/unknown} | {OK/CHANGED/DEPRECATED/ERROR} |
 | gemini | imagen-4.0-generate-001 | {latest} | {yes/no/unknown} | {OK/CHANGED/DEPRECATED/ERROR} |
 | openrouter-gpt5 | gpt-5-image | {latest} | {yes/no/unknown} | {OK/CHANGED/DEPRECATED/ERROR} |
 | openai | dall-e-3 | {latest} | {yes/no/unknown} | {OK/CHANGED/DEPRECATED/ERROR} |
@@ -385,5 +315,5 @@ Output: "All providers are up to date. No changes needed."
 
 **EXECUTE** using Bash tool:
 ```bash
-rm -f /tmp/openrouter-image-models.json /tmp/gemini-imagen-models.json /tmp/openai-image-models.json /tmp/zai-test-response.json /tmp/zai-test-status.txt 2>/dev/null && echo "CLEANUP_OK"
+rm -f /tmp/openrouter-image-models.json /tmp/gemini-imagen-models.json /tmp/openai-image-models.json 2>/dev/null && echo "CLEANUP_OK"
 ```
