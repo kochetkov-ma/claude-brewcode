@@ -31,7 +31,7 @@ Uses `ANTHROPIC_AUTH_TOKEN` (bearer-style). Must set `ANTHROPIC_API_KEY=""` (emp
 | Context | 1M |
 | Input $/1M | ~$0.50 |
 | Output $/1M | ~$2.00 |
-| SWE-bench Pro | 56.6% |
+| SWE-bench Pro | 56.6% (self-reported) |
 
 Same model for all three Claude Code roles (opus/sonnet/haiku).
 

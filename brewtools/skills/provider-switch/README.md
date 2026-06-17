@@ -51,7 +51,7 @@ After setup, run `claudeglm` — it sets env vars and starts Claude in one comma
 | Provider | Alias | Model (all roles) | Auth pattern | Notes |
 |----------|-------|-------------------|-------------|-------|
 | **DeepSeek V4** (priority) | `claudeds` | deepseek-v4-pro | `ANTHROPIC_AUTH_TOKEN` + `API_KEY=""` | 1.6T MoE, 1M context, thinking modes, released 2026-04-24 |
-| Z.ai / GLM | `claudeglm` | glm-5.2 | `ANTHROPIC_AUTH_TOKEN` + `API_KEY=""` | #1 SWE-bench Pro, $1.40/$4.40 per 1M |
+| Z.ai / GLM | `claudeglm` | glm-5.2 | `ANTHROPIC_AUTH_TOKEN` + `API_KEY=""` | SWE-bench Pro 62.1% (self-reported), 1M ctx, $1.40/$4.40 per 1M |
 | Qwen / DashScope | `claudeqwen` | qwen3.7-plus[1m] | `ANTHROPIC_AUTH_TOKEN` + `API_KEY=""` | 1M context, ~$0.50/$2.00 per 1M. **Singapore region keys only** |
 | MiniMax | `claudeminimax` | MiniMax-M3 | `ANTHROPIC_AUTH_TOKEN` + `API_KEY=""` | Cheapest: $0.30/$1.20 per 1M |
 | OpenRouter | `claudeor` | user-selected | `ANTHROPIC_AUTH_TOKEN` + `API_KEY=""` | Default: qwen/qwen3.7-plus[1m]. Custom IDs validated via API |

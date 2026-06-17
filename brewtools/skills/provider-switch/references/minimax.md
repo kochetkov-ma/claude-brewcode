@@ -24,11 +24,11 @@ Uses `ANTHROPIC_AUTH_TOKEN`. Must set `ANTHROPIC_API_KEY=""` (empty string, NOT 
 ## Models
 | Role | Model ID | Context | Input $/1M | Output $/1M |
 |------|----------|---------|-----------|------------|
-| opus | MiniMax-M3 | 200K | $0.30 | $1.20 |
-| sonnet | MiniMax-M3 | 200K | $0.30 | $1.20 |
-| haiku | MiniMax-M3 | 200K | $0.30 | $1.20 |
+| opus | MiniMax-M3 | 1M | $0.30 | $1.20 |
+| sonnet | MiniMax-M3 | 1M | $0.30 | $1.20 |
+| haiku | MiniMax-M3 | 1M | $0.30 | $1.20 |
 
-Note: MiniMax currently has only one model (M2.7), used for all three roles.
+Note: MiniMax currently has one model (MiniMax-M3), used for all three roles.
 
 ## Compatibility Flags (REQUIRED)
 - `CLAUDE_ENABLE_BYTE_WATCHDOG=0` — disables byte-level streaming watchdog
@@ -48,7 +48,7 @@ Docs: https://platform.minimax.io/docs/api-reference/anthropic-api-compatible-ca
 - Max breakpoints: 4 per request
 - Min tokens: 512
 - Response fields: `cache_creation_input_tokens`, `cache_read_input_tokens`
-- Supported models: M2.7, M2.7-highspeed, M2.5, M2.1, M2
+- Supported models: MiniMax-M3
 
 ## Alias
 ```bash

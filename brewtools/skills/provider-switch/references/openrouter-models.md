@@ -20,7 +20,7 @@ User picks a single model during setup — it is used everywhere.
 | Model ID | Context | Price (in/out $/1M) | Notes |
 |----------|---------|---------------------|-------|
 | qwen/qwen3.7-max | 1M | ~$0.33/$1.95 | Top coding, 1M context (Recommended) |
-| z-ai/glm-5.2 | 200K | $1.40/$4.40 | #1 SWE-bench Pro |
+| z-ai/glm-5.2 | 1M | $1.40/$4.40 | Strong coding (self-reported 62.1% Pro) |
 | deepseek/deepseek-v4-pro | 128K | $0.55/$2.19 | Strong reasoning |
 | moonshotai/kimi-k2.7-code | 256K | $0.60/$2.50 | Code-focused |
 | qwen/qwen3.7-plus[1m] | 1M | $0.65/$3.25 | Code-focused, 1M context |

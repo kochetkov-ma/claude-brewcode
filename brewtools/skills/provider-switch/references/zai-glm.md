@@ -25,10 +25,11 @@ Z.ai supports both `x-api-key` and Bearer token auth. Uses `ANTHROPIC_AUTH_TOKEN
 | Field | Value |
 |-------|-------|
 | Model ID | `glm-5.2` |
-| Context | 200K |
+| Context | 1M |
 | Input $/1M | $1.40 |
 | Output $/1M | $4.40 |
-| SWE-bench Pro | 58.4% (#1) |
+| Cached input $/1M | $0.26 |
+| SWE-bench Pro | 62.1% (self-reported) |
 
 Same model for all three Claude Code roles (opus/sonnet/haiku).
 

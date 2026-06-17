@@ -8,21 +8,25 @@ import { Card, CardGrid, Callout, Steps, Badge, Spoiler, UpdateNotice } from '..
 # provider-switch — switch LLM provider
 
 <Callout type="tip">
-**NEW — DeepSeek V4 (April 24, 2026)** — added as priority default. `deepseek-v4-pro` (1.6T MoE, 1M context, thinking modes), [top open-source on SWE-bench](https://www.swebench.com/), verified prompt caching (90% discount, automatic). Alias `claudeds`. No compat flags required.
+**NEW — DeepSeek V4 (April 24, 2026)** — added as priority default. `deepseek-v4-pro` (1.6T MoE, 1M context, thinking modes), [top open-source on SWE-bench](https://www.swebench.com/) (self-reported 80.6% Verified / 55.4% Pro), verified prompt caching (90% discount, automatic). Alias `claudeds`. No compat flags required.
 
-**GPT-5.5 released April 23, 2026** — new #1 on [SWE-bench Verified](https://www.swebench.com/) (88.7%), but Opus 4.7 still wins SWE-bench Pro (64.3% vs 58.6%). Accessible via `claudeor` (OpenRouter).
+**GPT-5.5 (OpenAI, native API)** — has a first-party OpenAI API (`gpt-5.5`); also reachable through `claudeor` (OpenRouter) as one route among many. Anthropic's current baseline is now Claude Opus 4.8.
 </Callout>
 
-### SWE-bench snapshot (April 2026)
+### SWE-bench snapshot (June 2026)
 
-| # | Model | Verified | Pro | Notes |
-|---|-------|--:|--:|---|
-| 1 | GPT-5.5 | **88.7%** | 58.6% | OpenRouter only |
-| 2 | Claude Opus 4.7 | 87.6% | **64.3%** | Native Anthropic |
-| 3 | GPT-5.3 Codex | 85.0% | — | OpenRouter only |
-| 4 | Gemini 3.1 Pro | 80.6% | — | OpenRouter only |
-| 4 | DeepSeek V4 Pro | 80.6% | 55.4% | `claudeds` — top open-source |
-| — | GLM-5.2 | ~47% | — | `claudeglm` — strong per dollar |
+| Model | Access | Verified | Pro | Notes |
+|-------|--------|----------|-----|-------|
+| Gemini 3.1 Pro | Native (Google) | 80.6% (self-reported) | ~46.1% (self-reported) | Only publisher-stated Verified here; Pro from Scale, thinking mode |
+| DeepSeek V4 Pro | Native (DeepSeek) | 80.6% (self-reported) | 55.4% (self-reported) | `claudeds` — top open-source; 90% auto cache discount |
+| GLM-5.2 | Native (Z.ai) | — | 62.1% (self-reported) | `claudeglm` — strong per dollar |
+| MiniMax-M3 | Native (MiniMax) | — | ~59% (self-reported) | `claudeminimax` — cheapest per token |
+| Qwen 3.7 Plus | Native (Alibaba) | — | 56.6% (self-reported) | `claudeqwen` — 1M context |
+| Claude Opus 4.8 | Native (Anthropic) | — | — | Anthropic baseline; no Verified % published |
+| GPT-5.5 | Native (OpenAI) | — | — | Native OpenAI API; also via OpenRouter |
+| GPT-5.5 Codex | Native (OpenAI Codex) | — | — | No public benchmark figures |
+
+At publication the independent leaderboards (SWE-bench Verified and Scale SWE-bench Pro) had not yet listed the newest 2026 models; vendor figures are marked "(self-reported)" and the only publisher-stated Verified shown is Gemini 3.1 Pro (Google).
 
 Sources: [SWE-bench](https://www.swebench.com/) · [SWE-bench Pro (Scale)](https://labs.scale.com/leaderboard/swe_bench_pro_public)
 
@@ -84,9 +88,9 @@ Sources: [SWE-bench](https://www.swebench.com/) · [SWE-bench Pro (Scale)](https
 
 ```bash
 claudeds  # DeepSeek V4 Pro (PRIORITY) — 1.6T MoE, 1M ctx
-claudeglm       # GLM-5.2 — #1 SWE-bench Pro, 200K ctx
+claudeglm       # GLM-5.2 — strong coding per dollar, 1M ctx
 claudeqwen      # Qwen 3.7 Plus — 1M context window
-claudeminimax    # MiniMax-M3 — cheapest per token
+claudeminimax    # MiniMax-M3 — cheapest per token, 1M ctx
 claudeor         # OpenRouter — 200+ models, pick any
 ```
 
@@ -121,19 +125,19 @@ Each alias sets env vars and launches Claude Code automatically. To return to yo
 
 <CardGrid>
   <Card title="DeepSeek V4" icon="rocket" href="https://platform.deepseek.com">
-    <Badge variant="accent" text="Priority" /> <Badge variant="accent" text="Top open-source" /> <Badge variant="accent" text="Cache verified" /> **deepseek-v4-pro** — 1.6T MoE, 1M context, thinking modes. SWE-bench Verified 80.6%, Pro 55.4%. 90% cache discount, automatic. Alias `claudeds`. No compat flags. [Leaderboard](https://www.swebench.com/).
+    <Badge variant="accent" text="Priority" /> <Badge variant="accent" text="Top open-source" /> <Badge variant="accent" text="Cache verified" /> **deepseek-v4-pro** — 1.6T MoE, 1M context, thinking modes. SWE-bench Verified 80.6%, Pro 55.4% (both self-reported). 90% cache discount, automatic. Alias `claudeds`. No compat flags. [Leaderboard](https://www.swebench.com/).
   </Card>
   <Card title="Z.ai / GLM" icon="star" href="https://z.ai/subscribe">
-    <Badge variant="accent" text="Strong coding perf" /> <Badge variant="accent" text="Cache verified" /> **glm-5.2** — $1.40 / $4.40 per 1M tokens. 200K context. Backend auto-cache (native).
+    <Badge variant="accent" text="Strong coding perf" /> <Badge variant="accent" text="Cache verified" /> **glm-5.2** — $1.40 / $4.40 per 1M tokens, cached input $0.26. 1M context. SWE-bench Pro 62.1% (self-reported). Backend auto-cache (native).
   </Card>
   <Card title="Qwen" icon="document" href="https://modelstudio.console.alibabacloud.com/ap-southeast-1?tab=dashboard#/api-key">
     <Badge variant="accent" text="Cache verified" /> **qwen3.7-plus** — ~$0.50 / $2.00 per 1M tokens. 1M context. Implicit cache 20%, explicit 10% of standard (confirmed in billing).
   </Card>
   <Card title="MiniMax" icon="money" href="https://platform.minimax.io">
-    <Badge variant="accent" text="Cache verified" /> **MiniMax-M3** — $0.30 / $1.20 per 1M tokens. 200K context. Cheapest option with documented cache pricing.
+    <Badge variant="accent" text="Cache verified" /> **MiniMax-M3** — $0.30 / $1.20 per 1M tokens. 1M context. Cheapest option with documented cache pricing.
   </Card>
   <Card title="OpenRouter" icon="sync" href="https://openrouter.ai">
-    200+ models. Route to **GPT-5.5** (new #1 Verified, 88.7%), GPT-5.3 Codex, Gemini 3.1 Pro, GLM, Qwen, Llama. One config, any provider. Custom model IDs validated via API.
+    200+ models, one route among many. **GPT-5.5** has a native OpenAI API (`gpt-5.5`) and is also reachable here; route to GPT-5.5 Codex, Gemini 3.1 Pro, GLM, Qwen, Llama, or Claude Opus 4.8. One config, any provider. Custom model IDs validated via API.
   </Card>
 </CardGrid>
 
@@ -205,7 +209,7 @@ A typical Claude Code request (~250K input tokens) with 90% cache hit rate:
 | **DeepSeek V4 Pro** (cached) | **~$0.01** | $0.44 |
 | **MiniMax** (cached) | ~$0.02 | $0.08 |
 | **Qwen** (cached, explicit 10%) | ~$0.02 | $0.13 |
-| **Anthropic Opus 4.7** (cached) | ~$0.24 | $1.25 |
+| **Anthropic Opus 4.8** (cached) | ~$0.24 | $1.25 |
 | **Z.ai / GLM** (backend cache) | ~$0.35 | $0.35 |
 
 </Spoiler>

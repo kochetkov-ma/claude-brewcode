@@ -167,7 +167,7 @@ KEY_VAR_NAME: `DEEPSEEK_API_KEY` | `ZAI_API_KEY` | `DASHSCOPE_API_KEY` | `MINIMA
 ### Step 4: Model Selection (OpenRouter only)
 Read `REF/openrouter-models.md`. AUQ options:
 - "qwen/qwen3.7-plus[1m] — 1M ctx, top coding (Recommended)"
-- "z-ai/glm-5.2 — #1 SWE-bench Pro, 200K"
+- "z-ai/glm-5.2 — strong coding (self-reported), 1M"
 - "qwen/qwen3-coder:free — free, 262K, code-focused"
 - "Custom (specify model ID)"
 
