@@ -2,6 +2,14 @@
 
 ---
 
+## v3.16.3 (2026-06-17)
+
+Hotfix: finalizes the mobile horizontal-overflow fix.
+
+- Moved the wide SWE-bench comparison table out of the DaisyUI `.alert` callout on the provider-switch page so it renders as a plain table that scrolls horizontally within itself, eliminating page-level overflow at mobile widths. Verified at 390px (page scrollWidth == viewport width).
+
+---
+
 ## v3.16.2 (2026-06-17)
 
 Hotfix: completes the mobile horizontal-overflow fix from v3.16.1.
