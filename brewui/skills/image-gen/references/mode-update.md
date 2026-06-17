@@ -17,7 +17,7 @@ curl -s "https://openrouter.ai/api/v1/models" \
   -H "Authorization: Bearer $OPENROUTER_API_KEY" \
   | jq '[.data[] | select(
       (.architecture.modality // "" | test("image"; "i"))
-      or (.name // "" | test("image|imagen|dall|cogview|flux|stable.diffusion|midjourney"; "i"))
+      or (.name // "" | test("image|imagen|dall|flux|stable.diffusion|midjourney"; "i"))
       or (.id // "" | test("image"; "i"))
     ) | {id, name, pricing: .pricing, context_length}]' \
   > /tmp/openrouter-image-models.json \

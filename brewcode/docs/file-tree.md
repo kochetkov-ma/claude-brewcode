@@ -44,7 +44,7 @@ brewcode/                                    # Plugin root directory
 │   ├── reviewer.md                            # Reviewer (opus): code review, quality, security, performance
 │   └── tester.md                              # Tester (sonnet): SDET/QA - runs tests, analyzes failures
 │
-├── skills/                                    # Skills - plugin commands (12 total)
+├── skills/                                    # Skills - plugin commands (13 total)
 │   │
 │   ├── setup/                                 # /brewcode:setup - Plugin initialization
 │   │   ├── SKILL.md                           # Project analysis, adapted template generation (opus, fork)
@@ -211,9 +211,9 @@ Files created by the plugin in the user's project:
 | Category | Count | Items |
 |----------|-------|-------|
 | Plugin configuration | 2 | plugin.json, hooks.json |
-| Hooks (Node.js) | 9 | 7 scripts + 2 libraries |
+| Hooks (lifecycle) | 9 | forced-eval, grepai-reminder, grepai-session, permission-guard, post-task, pre-compact, pre-task, session-start, stop |
 | Agents | 12 | bc-coordinator, bc-knowledge-manager, bc-grepai-configurator, bc-rules-organizer, agent-creator, skill-creator, bash-expert, hook-creator, architect, developer, reviewer, tester |
-| Skills (SKILL.md) | 12 | setup, spec, plan, start, rules, convention, grepai, teardown, standards-review, skills, agents, teams |
+| Skills (SKILL.md) | 13 | setup, spec, plan, start, rules, convention, grepai, teardown, standards-review, skills, agents, teams, e2e |
 | Bash scripts | 16 | setup(2), rules(1), grepai(13) |
 | Templates | 17 | PLAN, SPEC, KNOWLEDGE, config, phase(4), reports(4), rules(3), review(3) |
 | Documentation | 7 | README, INSTALL, RELEASE-NOTES, grepai.md, file-tree.md, commands.md, flow.md, hooks.md |

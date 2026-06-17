@@ -5,9 +5,9 @@
 | Field | Value |
 |-------|-------|
 | Version | 3.15.0 |
-| Skills | 15 |
-| Agents | 12+ |
-| Hooks | 8 |
+| Skills | 13 |
+| Agents | 12 |
+| Hooks | 9 |
 | Model | opus |
 
 ## Install
@@ -45,7 +45,7 @@ Update anytime with `/brewtools:plugin-update`.
 
 Brewcode turns single Claude Code sessions into an infinite task pipeline. When context reaches ~90%, the PreCompact hook saves knowledge, writes handoff state, and the session continues automatically. One cycle: `spec` -- `plan` -- `start` -- and the task runs to completion regardless of how many compaction cycles occur.
 
-14 skills cover the full lifecycle: project analysis, specification creation through parallel research agents, phased plan generation with quorum review, execution with automatic handoff, code review, convention analysis, and project rules management. 12+ specialized agents handle implementation, testing, review, architecture, and coordination.
+13 skills cover the full lifecycle: project analysis, specification creation through parallel research agents, phased plan generation with quorum review, execution with automatic handoff, code review, convention analysis, and project rules management. 12 specialized agents handle implementation, testing, review, architecture, and coordination.
 
 ## Installation
 
@@ -118,7 +118,7 @@ After `/brewcode:setup`, each task follows the cycle: `spec` -> `plan` -> `start
 ```
 brewcode/
 +-- .claude-plugin/plugin.json          # Plugin manifest
-+-- hooks/                              # 8 lifecycle hooks
++-- hooks/                              # 9 lifecycle hooks
 |   +-- session-start.mjs              # Session initialization
 |   +-- grepai-session.mjs             # Auto-start grepai watch
 |   +-- pre-task.mjs                   # Knowledge injection into agents
@@ -127,8 +127,9 @@ brewcode/
 |   +-- pre-compact.mjs               # Knowledge compaction, handoff
 |   +-- stop.mjs                       # Exit blocking
 |   +-- forced-eval.mjs                # Skill activation
+|   +-- permission-guard.sh            # Manager-mode edit guard
 +-- agents/                            # 12 agents
-+-- skills/                            # 15 skills
++-- skills/                            # 13 skills
 +-- templates/                         # Rule templates
 ```
 
@@ -144,6 +145,7 @@ brewcode/
 | pre-compact | PreCompact | Compact KNOWLEDGE, write handoff entry |
 | stop | Stop | Block if not terminal, clean lock |
 | forced-eval | UserPromptSubmit | Skill activation |
+| permission-guard | PreToolUse | Manager-mode edit guard for main session |
 
 ## Task Structure
 

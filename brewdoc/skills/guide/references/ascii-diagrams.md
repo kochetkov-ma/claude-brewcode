@@ -16,7 +16,7 @@ Pre-drawn diagrams for the guide skill. Reference by name from topic files.
 │ convention, e2e │ md-to-pdf    │                │
 │ rules, grepai   │ guide        │                │
 │                 │ publish      │                │
-│ + 14 agents     │              │                │
+│ + 16 agents     │              │                │
 │ + 9 hooks       │              │                │
 └─────────────────┴──────────────┴────────────────┘
 ```

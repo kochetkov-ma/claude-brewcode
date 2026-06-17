@@ -400,7 +400,7 @@ Full rules with research citations: [`references/rules-review.md`](references/ru
 
 ## Part of Brewcode
 
-This skill is extracted from [brewcode](https://github.com/kochetkov-ma/claude-brewcode) — a development platform for Claude Code with infinite focus tasks, 14 agents, quorum reviews, and knowledge persistence.
+This skill is extracted from [brewcode](https://github.com/kochetkov-ma/claude-brewcode) — a development platform for Claude Code with infinite focus tasks, 16 agents, quorum reviews, and knowledge persistence.
 
 ```bash
 claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode

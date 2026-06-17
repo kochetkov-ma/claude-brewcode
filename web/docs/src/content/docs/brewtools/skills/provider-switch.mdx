@@ -8,7 +8,7 @@ import { Card, CardGrid, Callout, Steps, Badge, Spoiler, UpdateNotice } from '..
 # provider-switch — switch LLM provider
 
 <Callout type="tip">
-**NEW — DeepSeek V4 (April 24, 2026)** — added as priority default. `deepseek-v4-pro` (1.6T MoE, 1M context, thinking modes), [top open-source on SWE-bench](https://www.swebench.com/), verified prompt caching (90% discount, automatic). Alias `claudedeepseek`. No compat flags required.
+**NEW — DeepSeek V4 (April 24, 2026)** — added as priority default. `deepseek-v4-pro` (1.6T MoE, 1M context, thinking modes), [top open-source on SWE-bench](https://www.swebench.com/), verified prompt caching (90% discount, automatic). Alias `claudeds`. No compat flags required.
 
 **GPT-5.5 released April 23, 2026** — new #1 on [SWE-bench Verified](https://www.swebench.com/) (88.7%), but Opus 4.7 still wins SWE-bench Pro (64.3% vs 58.6%). Accessible via `claudeor` (OpenRouter).
 
@@ -20,7 +20,7 @@ import { Card, CardGrid, Callout, Steps, Badge, Spoiler, UpdateNotice } from '..
 | 2 | Claude Opus 4.7 | 87.6% | **64.3%** | Native Anthropic |
 | 3 | GPT-5.3 Codex | 85.0% | — | OpenRouter only |
 | 4 | Gemini 3.1 Pro | 80.6% | — | OpenRouter only |
-| 4 | DeepSeek V4 Pro | 80.6% | 55.4% | `claudedeepseek` — top open-source |
+| 4 | DeepSeek V4 Pro | 80.6% | 55.4% | `claudeds` — top open-source |
 | — | GLM-5.2 | ~47% | — | `claudeglm` — strong per dollar |
 
 Sources: [SWE-bench](https://www.swebench.com/) · [SWE-bench Pro (Scale)](https://labs.scale.com/leaderboard/swe_bench_pro_public)
@@ -31,7 +31,7 @@ Sources: [SWE-bench](https://www.swebench.com/) · [SWE-bench Pro (Scale)](https
 </Callout>
 
 <Callout type="tip">
-**One command fixes it.** Run `claudedeepseek` or `claudeglm` — Claude Code switches to DeepSeek V4, GLM-5.2, or another backup. Cost: ~$10/month backup budget. New terminal = back on Anthropic.
+**One command fixes it.** Run `claudeds` or `claudeglm` — Claude Code switches to DeepSeek V4, GLM-5.2, or another backup. Cost: ~$10/month backup budget. New terminal = back on Anthropic.
 </Callout>
 
 ## Your week on Anthropic Max
@@ -64,7 +64,7 @@ Sources: [SWE-bench](https://www.swebench.com/) · [SWE-bench Pro (Scale)](https
   <li>
     <div>
       <strong>Friday with provider-switch</strong>
-      <p><code>claudedeepseek</code> — back to coding in 3 seconds. Same quality. $0.04 per session.</p>
+      <p><code>claudeds</code> — back to coding in 3 seconds. Same quality. $0.04 per session.</p>
     </div>
   </li>
 </Steps>
@@ -83,7 +83,7 @@ Sources: [SWE-bench](https://www.swebench.com/) · [SWE-bench Pro (Scale)](https
 ## One command. That's it.
 
 ```bash
-claudedeepseek  # DeepSeek V4 Pro (PRIORITY) — 1.6T MoE, 1M ctx
+claudeds  # DeepSeek V4 Pro (PRIORITY) — 1.6T MoE, 1M ctx
 claudeglm       # GLM-5.2 — #1 SWE-bench Pro, 200K ctx
 claudeqwen      # Qwen 3.7 Plus — 1M context window
 claudeminimax    # MiniMax-M3 — cheapest per token
@@ -112,7 +112,7 @@ Each alias sets env vars and launches Claude Code automatically. To return to yo
   <li>
     <div>
       <strong>Done</strong>
-      <p>Next time limits hit: type <code>claudedeepseek</code>. Back to coding.</p>
+      <p>Next time limits hit: type <code>claudeds</code>. Back to coding.</p>
     </div>
   </li>
 </Steps>
@@ -121,7 +121,7 @@ Each alias sets env vars and launches Claude Code automatically. To return to yo
 
 <CardGrid>
   <Card title="DeepSeek V4" icon="rocket" href="https://platform.deepseek.com">
-    <Badge variant="accent" text="Priority" /> <Badge variant="accent" text="Top open-source" /> <Badge variant="accent" text="Cache verified" /> **deepseek-v4-pro** — 1.6T MoE, 1M context, thinking modes. SWE-bench Verified 80.6%, Pro 55.4%. 90% cache discount, automatic. Alias `claudedeepseek`. No compat flags. [Leaderboard](https://www.swebench.com/).
+    <Badge variant="accent" text="Priority" /> <Badge variant="accent" text="Top open-source" /> <Badge variant="accent" text="Cache verified" /> **deepseek-v4-pro** — 1.6T MoE, 1M context, thinking modes. SWE-bench Verified 80.6%, Pro 55.4%. 90% cache discount, automatic. Alias `claudeds`. No compat flags. [Leaderboard](https://www.swebench.com/).
   </Card>
   <Card title="Z.ai / GLM" icon="star" href="https://z.ai/subscribe">
     <Badge variant="accent" text="Strong coding perf" /> <Badge variant="accent" text="Cache verified" /> **glm-5.2** — $1.40 / $4.40 per 1M tokens. 200K context. Backend auto-cache (native).

@@ -163,7 +163,7 @@ Parse `$ARGUMENTS`: `-l`/`--light` | `-d`/`--deep` | no flag -> medium (default)
 
 ---
 
-**Full development platform:** [brewcode](https://github.com/kochetkov-ma/claude-brewcode) — infinite focus tasks, 14 agents, quorum reviews, knowledge persistence.
+**Full development platform:** [brewcode](https://github.com/kochetkov-ma/claude-brewcode) — infinite focus tasks, 16 agents, quorum reviews, knowledge persistence.
 Install: `claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode && claude plugin install brewcode@claude-brewcode`
 ```
 

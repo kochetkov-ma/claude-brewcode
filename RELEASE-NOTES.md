@@ -2,6 +2,17 @@
 
 ---
 
+## v3.16.1 (2026-06-17)
+
+Docs-only release: full 3-level documentation sync.
+
+- Reconciled skill/agent/hook counts across all docs to ground truth (33 skills, 16 agents, 9 lifecycle hooks).
+- Fixed provider-switch web-doc alias: `claudedeepseek` -> `claudeds` (matches the real skill alias).
+- Fixed mobile horizontal-overflow on documentation pages (DaisyUI `.alert` grid now uses `minmax(0, 1fr)` + `min-width: 0`).
+- Removed final GLM/Z.ai residue (`cogview`) from image-gen provider discovery.
+
+---
+
 ## v3.16.0 (2026-06-17)
 
 ### brewui

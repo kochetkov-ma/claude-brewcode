@@ -29,7 +29,7 @@ Guide walks you through every feature of the plugin suite across three progressi
 | A: Getting Started | installation | Marketplace setup, installing plugins, verifying versions |
 | B: Core Workflow | killer-flow | The infinite task pipeline: spec, plan, start |
 | B: Core Workflow | teams | Dynamic agent teams with self-selection and tracking |
-| B: Core Workflow | skills-catalog | All 28 skills with trigger examples |
+| B: Core Workflow | skills-catalog | All 33 skills with trigger examples |
 | C: Mastery | agents-catalog | All 16 agents with roles and model selection |
 | C: Mastery | customization | Create custom skills, agents, and hooks |
 | C: Mastery | integration | CLAUDE.md, rules, memory, teams directory |

@@ -10,7 +10,7 @@
 
 **Claude Code plugin suite** -- four plugins for development, documentation, text utility, and visual workflows.
 
-A regular Claude Code session loses context during compaction. Brewcode automatically saves knowledge, passes state between compaction cycles, and continues work without restarting. Four plugins. 28+ skills. 14 agents. 9 lifecycle hooks.
+A regular Claude Code session loses context during compaction. Brewcode automatically saves knowledge, passes state between compaction cycles, and continues work without restarting. Four plugins. 33 skills. 16 agents. 9 lifecycle hooks.
 
 [**Full Documentation**](https://doc-claude.brewcode.app/getting-started/)
 
@@ -188,7 +188,7 @@ After `/brewcode:setup`, each task follows the cycle: `spec` -> `plan` -> `start
 
 ## Skills Reference
 
-### Brewcode (12 skills)
+### Brewcode (13 skills)
 
 | Skill | Purpose |
 |-------|---------|
@@ -264,6 +264,8 @@ Self-contained `SKILL.md` folders that ship outside the four plugins -- drop the
 | hook-creator | opus | Create and debug Claude Code hooks |
 | bash-expert | opus | Create professional shell scripts |
 | text-optimizer | sonnet | Optimize text and docs for LLM efficiency |
+| ssh-admin | opus | Linux server administration via SSH |
+| deploy-admin | opus | GitHub Actions deployment and CI/CD |
 | bc-coordinator | haiku | Task coordination, artifact management |
 | bc-knowledge-manager | haiku | KNOWLEDGE.jsonl compaction and deduplication |
 | bc-grepai-configurator | opus | Generate grepai config.yaml |
