@@ -2,6 +2,14 @@
 
 ---
 
+## v3.16.2 (2026-06-17)
+
+Hotfix: completes the mobile horizontal-overflow fix from v3.16.1.
+
+- Wide tables inside DaisyUI `.alert` callouts (e.g. the provider-switch SWE-bench table) now scroll within the callout instead of forcing page-level horizontal overflow at mobile widths.
+
+---
+
 ## v3.16.1 (2026-06-17)
 
 Docs-only release: full 3-level documentation sync.

@@ -108,7 +108,14 @@
   grid-template-columns: auto minmax(0, 1fr);
   min-width: 0;
 }
-.alert > :last-child { min-width: 0; }
+.alert > :last-child { min-width: 0; overflow-x: auto; }
+
+.alert table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+}
 
 .alert-info {
   background-color: rgba(235, 187, 64, 0.15) !important;
