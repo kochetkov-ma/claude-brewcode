@@ -2,6 +2,12 @@
 
 ---
 
+## v3.16.5 (2026-06-18)
+
+`brewdoc:publish` now auto-renders Markdown files as styled pages. A `.md`/`.markdown` file path is published via `/api/html?format=markdown` (pretty rendered) instead of `/api/files` (raw download). All other file types are unchanged — only Markdown files switch to the rendered path.
+
+---
+
 ## v3.16.4 (2026-06-17)
 
 Provider-switch model-data accuracy pass: refreshed every provider model in the docs, not just GLM. Updated to Claude Opus 4.8, corrected GPT-5.5 to native OpenAI API (was mislabeled OpenRouter-only) and added GPT-5.5 Codex, set GLM-5.2 to 1M context with SWE-bench Pro 62.1% (self-reported) and dropped the unverified "#1" claim, and fixed MiniMax to MiniMax-M3 (1M). All vendor SWE-bench figures now carry a "(self-reported)" label since independent leaderboards had not yet listed the newest 2026 models.

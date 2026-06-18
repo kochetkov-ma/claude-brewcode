@@ -26,6 +26,7 @@ Extract from `$ARGUMENTS`:
 |-------|------|-----|
 | `content_arg` is a directory (`test -d`) | SITE | `POST /api/sites` (ZIP created from dir) |
 | `content_arg` ends with `.zip` AND file exists (`test -f`) | SITE | `POST /api/sites` (archive upload) |
+| `content_arg` is a `.md`/`.markdown` file AND exists (`test -f`) | MARKDOWN | `POST /api/html` (format=markdown, content read from the file — renders styled, NOT a raw download) |
 | `content_arg` is a file path AND file exists (`test -f`) | FILE | `POST /api/files` (multipart) |
 | `content_arg` starts with `{` or `[` | JSON | `POST /api/json` |
 | Anything else | HTML | `POST /api/html` (format=markdown) |
@@ -117,6 +118,8 @@ if [ ! -f "$HISTORY_FILE" ]; then
 HEADER
 fi
 ```
+
+> For a MARKDOWN **file** (type MARKDOWN from Step 2), use this same block but replace the heredoc with `CONTENT=$(cat "/abs/path/to/file.md")`. Everything else (the `?format=markdown` endpoint, token handling, history row) is identical — this renders the `.md` as styled markdown instead of a raw downloadable file.
 
 **HTML/Markdown text** — **EXECUTE** using Bash tool:
 ```bash
