@@ -22,6 +22,12 @@
 // bricks the session.
 //
 // PreToolUse stdin fields used: tool_name, tool_input.command, cwd, agent_id, agent_type.
+//
+// Re-verified 2026-06-27 on CC 2.1.195: agent_id/agent_type presence still
+// discriminates main-session (absent) vs subagent (present); linchpin HOLDS.
+// These keys are NOT-IN-DOC (HOOKS-REFERENCE.md lists only subagent_type/subagent_id);
+// kept intentionally. The undocumented `effort` payload key (used by other brewtools
+// hooks) is irrelevant here and intentionally NOT read by this guard. No logic change.
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';

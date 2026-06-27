@@ -26,6 +26,12 @@
 
 import { readStdin, output, getActiveMode } from './lib/utils.mjs';
 
+// Cap text channels under the 2.1.174 10K disk-spill threshold (headroom 9000).
+const TEXT_CHANNEL_CAP = 9000;
+function capText(s, max = TEXT_CHANNEL_CAP) {
+  return (typeof s === 'string' && s.length > max) ? s.slice(0, max) + '\n...[truncated]' : s;
+}
+
 // --- Skill evaluation reminder ---
 
 // SKILL_CHECK = always-on payload (every prompt). DEFAULT_MODE = light hint when no
@@ -81,6 +87,7 @@ async function main() {
     }
 
     // Effort-level prefix (CC 2.1.115+). Folded into injected context.
+    // NOTE: effort.level is NOT in HOOKS-REFERENCE.md (2.1.195). Presence-guarded existing read; do not expand to other hooks.
     const effortLevel = input.effort?.level;
     const effortPrefix = effortLevel === 'low' ? '[EFFORT: low | MODE: terse-light]\n' : '';
 
@@ -91,7 +98,7 @@ async function main() {
     output({
       hookSpecificOutput: {
         hookEventName: 'UserPromptSubmit',
-        additionalContext: reminderText
+        additionalContext: capText(reminderText)
       }
     });
 

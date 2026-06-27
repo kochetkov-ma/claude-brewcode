@@ -30,6 +30,12 @@ const VERSION_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 const PLAN_FRESHNESS_MS = 60_000;
 
+// Cap text channels under the 2.1.174 10K disk-spill threshold (headroom 9000).
+const TEXT_CHANNEL_CAP = 9000;
+function capText(s, max = TEXT_CHANNEL_CAP) {
+  return (typeof s === 'string' && s.length > max) ? s.slice(0, max) + '\n...[truncated]' : s;
+}
+
 /**
  * Creates symlink .claude/plans/LATEST.md → ~/.claude/plans/<newest>.md
  * Only if newest plan is < 60 seconds old (fresh from Plan Mode)
@@ -218,8 +224,10 @@ async function main() {
     session_id = input.session_id;
     cwd = input.cwd || cwd;
     const source = input.source;
+    // permission_mode: DOC-VERIFIED common field (2.1.195). Presence-guarded use below.
+    const permMode = input.permission_mode;
 
-    log('info', '[session-start]', `Started: ${session_id?.slice(0, 8) || 'unknown'} (${source})`, cwd, session_id);
+    log('info', '[session-start]', `Started: ${session_id?.slice(0, 8) || 'unknown'} (${source}${permMode ? ', ' + permMode : ''})`, cwd, session_id);
 
     if (source === 'clear' && cwd) {
       try {
@@ -301,11 +309,12 @@ async function main() {
 
     const modeTag = activeMode ? ` | mode: ${activeMode.name}` : '';
     // reloadSkills not set: this hook toggles no skill files
+    const permTag = permMode ? ` | perm: ${permMode}` : '';
     output({
-      systemMessage: `brewcode: ${pluginRoot} | session: ${sessionShort}${modeTag}${versionLines.length ? '\n' + versionLines.join('\n') : ''}`,
+      systemMessage: `brewcode: ${pluginRoot} | session: ${sessionShort}${modeTag}${permTag}${versionLines.length ? '\n' + versionLines.join('\n') : ''}`,
       hookSpecificOutput: {
         hookEventName: 'SessionStart',
-        additionalContext: context,
+        additionalContext: capText(context),
         ...(sessionTitle ? { sessionTitle } : {})
       }
     });

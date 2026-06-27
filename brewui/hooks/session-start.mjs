@@ -12,13 +12,16 @@ async function main() {
 
     const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT || '';
     const sessionShort = session_id?.slice(0, 8) || 'unknown';
+    const permMode = input.permission_mode; // doc-verified common field (HOOKS-REFERENCE.md 2.1.195)
 
     const context = pluginRoot
       ? `BU_PLUGIN_ROOT=${pluginRoot}`
       : `brewui: ${sessionShort}`;
 
+    // systemMessage is fixed-shape (plugin path + 8-char sid + short perm enum) -> well under
+    // the 10K text-channel spill threshold; no capText needed.
     output({
-      systemMessage: `brewui: ${pluginRoot} | session: ${sessionShort}`,
+      systemMessage: `brewui: ${pluginRoot} | session: ${sessionShort}${permMode ? ` | perm: ${permMode}` : ''}`,
       hookSpecificOutput: {
         hookEventName: 'SessionStart',
         additionalContext: context

@@ -60,7 +60,7 @@ Stop
 All hooks follow a unified protocol:
 
 1. Read JSON from stdin (via `readStdin()`)
-2. Receive fields: `session_id`, `cwd`, `source` (SessionStart), `tool_input` (PreToolUse/PostToolUse)
+2. Receive fields: `session_id`, `cwd`, `source` (SessionStart), `tool_input` (PreToolUse/PostToolUse), `permission_mode` (all events)
 3. Output JSON to stdout (via `output()`)
 4. Write logs to stderr and to the file `.claude/tasks/logs/brewcode.log`
 
@@ -89,6 +89,7 @@ and adds a reminder to check available skills.
 - Receives the user prompt
 - Adds a prefix: `[SKILL?] Check available skills. If one matches this request, use Skill tool before responding.`
 - Injects the skill-check reminder (and a light delegation hint) via `additionalContext` — UserPromptSubmit cannot rewrite the prompt
+- Output is capped at ~9000 chars (10K disk-spill safety, CC 2.1.174+)
 
 **When it fires:** On every user input, except events with an incorrect `hook_event_name`.
 
@@ -98,13 +99,15 @@ and adds a reminder to check available skills.
 
 <Badge variant="primary" text="SessionStart" /> <Badge variant="secondary" text="additionalContext" />
 
-Initializes the session, logs the session ID, and manages Plan Mode symlinks.
+Initializes the session, logs the session ID, manages Plan Mode symlinks, and reports the active `permission_mode` in the system message for audit.
 
 | Parameter | Value |
 |-----------|-------|
 | Event | SessionStart |
 | Channel | additionalContext |
 | Timeout | 3000 ms |
+
+The hook reads `permission_mode` from the hook payload and appends it to `systemMessage` so every session records its trust level (default / plan / bypassPermissions). Output is capped at ~9000 chars (10K disk-spill safety, CC 2.1.174+).
 
 **Logic by session source:**
 
@@ -174,7 +177,11 @@ Injects context into the subagent prompt before every Task tool call.
 **Knowledge compression:** KNOWLEDGE.jsonl is compressed to `maxTokens` (default 500 tokens)
 via `compressKnowledge()` -- priority ❌ > ✅ > ℹ️.
 
+**Plan mode:** when `permission_mode === 'plan'` the `## K` (KNOWLEDGE) block is skipped entirely -- plan-mode sessions are read-only explorers and do not need runtime knowledge.
+
 **System agents** (Explore, Plan, general-purpose) do not receive the `## K` injection.
+
+**Output bounding:** `additionalContext` is capped at ~9000 chars (10K disk-spill safety, CC 2.1.174+).
 
 ---
 

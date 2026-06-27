@@ -81,7 +81,11 @@ async function main() {
     let updatedPrompt = tool_input.prompt || '';
     let modified = false;
 
+    // permission_mode: DOC-VERIFIED common field (2.1.195). Presence-guarded; falsy when absent -> current behavior.
+    const planMode = input.permission_mode === 'plan';
+
     // 0.0 Effort-level prefix (CC 2.1.115+). Idempotent: skip if already present.
+    // NOTE: effort.level is NOT in HOOKS-REFERENCE.md (2.1.195). Presence-guarded existing read; do not expand to other hooks.
     const effortLevel = input.effort?.level;
     if (effortLevel === 'low' && !updatedPrompt.includes('[EFFORT:')) {
       updatedPrompt = `[EFFORT: low | MODE: terse-light]\n${updatedPrompt}`;
@@ -134,7 +138,9 @@ async function main() {
       const config = loadConfig(cwd);
       const lock = checkLock(cwd, session_id);
 
-      if (lock && lock.task_path) {
+      // In plan mode the parent is designing, not executing -> anti-pattern KNOWLEDGE is noise. Skip injection.
+      // Guard: planMode falsy when permission_mode absent or any non-'plan' value -> current injection behavior.
+      if (lock && lock.task_path && !planMode) {
         const knowledgePath = getKnowledgePath(join(cwd, lock.task_path));
         const entries = readKnowledge(knowledgePath);
 

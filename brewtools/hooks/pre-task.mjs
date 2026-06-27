@@ -16,6 +16,7 @@ import { resolveEffectiveState, writeState, log as tsLog } from '../skills/think
  */
 async function maybeAutoEnableThinkShortLow(input, cwd, session_id) {
   try {
+    // NOTE: effort.level is NOT in HOOKS-REFERENCE.md (2.1.195). Presence-guarded existing read; do not expand to other hooks.
     if (input.effort?.level !== 'low') return false;
     if (!session_id || !cwd) return false;
 

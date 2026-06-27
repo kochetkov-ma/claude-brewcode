@@ -26,7 +26,7 @@ async function main() {
     session_id = input.session_id;
     cwd = input.cwd || cwd;
     const tool_input = input.tool_input;
-    const tool_result = input.tool_result;
+    const tool_result = input.tool_result ?? input.tool_response;
 
     // Only process Task tool calls
     if (!tool_input) {

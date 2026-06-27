@@ -11,6 +11,7 @@ import { readStdin, output, log } from './lib/utils.mjs';
  */
 async function maybeAutoEnableThinkShortLow(input, cwd, session_id) {
   try {
+    // NOTE: effort.level is NOT in HOOKS-REFERENCE.md (2.1.195). Presence-guarded existing read; do not expand to other hooks.
     if (input.effort?.level !== 'low') return false;
     if (!session_id || !cwd) return false;
 
@@ -129,6 +130,9 @@ async function main() {
     context = await injectThinkShort(context, cwd, session_id);
 
     let systemMessage = `brewtools: ${pluginRoot} | session: ${sessionShort}`;
+    // E7: surface permission_mode (DOC-VERIFIED common field, 2.1.195). Presence-guarded for audit.
+    const permMode = input.permission_mode;
+    if (permMode) systemMessage += ` | perm: ${permMode}`;
 
     // Manager HARD wall awareness (fail-open: never break session start).
     try {

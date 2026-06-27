@@ -2,6 +2,32 @@
 
 ---
 
+## v3.17.0 (2026-06-27)
+
+> Docs: [brewcode hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | [brewtools manager](https://doc-claude.brewcode.app/brewtools/skills/manager/)
+
+Hook modernization for Claude Code SDK 2.1.195. All changes are backward-compatible and presence-guarded -- zero behavior regression.
+
+### brewcode
+
+#### Changed
+- **hooks:** `session-start` now logs `permission_mode` for audit and bounds its `additionalContext` to ~9K (10K disk-spill safety threshold, CC 2.1.174). `pre-task` skips KNOWLEDGE injection when `permission_mode === 'plan'`. `forced-eval` bounds its `additionalContext` to ~9K.
+
+#### Fixed
+- **post-task:** hardened subagent-failure detection to read `tool_result ?? tool_response` -- the legacy field stays primary (zero regression) while future-proofing against the documented SDK field rename.
+
+### brewtools
+
+#### Changed
+- **hooks:** `session-start` logs `permission_mode`. `manager-prompt` bounds injected `additionalContext` to ~9K at both output sites (codeword detection + HARD-wall logic UNCHANGED). `hardmode-guard` re-verified on 2026-06-27 that the `agent_id`/`agent_type` main-vs-subagent discriminator still HOLDS on CC 2.1.195 (defensive comment added).
+
+### brewui
+
+#### Changed
+- **hooks:** `session-start` logs `permission_mode`.
+
+---
+
 ## v3.16.6 (2026-06-27)
 
 > Docs: [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [brewcode hooks](https://doc-claude.brewcode.app/brewcode/hooks/)

@@ -140,6 +140,8 @@ The guard reads `<cwd>/.claude/brewtools/manager/state.json` on every `PreToolUs
 
 The `PreToolUse` payload carries `agent_id` / `agent_type` only for subagent-internal tool calls. Main-session calls have no `agent_id`. The guard denies mutations only when `agent_id` is absent. Subagents pass through freely -- delegation itself is never blocked.
 
+Re-verified on CC 2.1.195 (2026-06-27) -- the discriminator still holds. `agent_id` / `agent_type` presence is an undocumented field; re-verify on each major CC upgrade.
+
 ### Tool buckets
 
 | Bucket | Tools | Main session while wall ON |

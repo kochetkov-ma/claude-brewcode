@@ -18,6 +18,13 @@ import { readStdin, output } from './lib/utils.mjs';
 import { resolveState } from './lib/manager-state.mjs';
 import { resolvePrompt } from './lib/manager-prompts.mjs';
 
+// E8: bound additionalContext under the 2.1.174 10K text-channel disk-spill threshold.
+// Override prompt files (project/global) are user-authored and unbounded; cap the final
+// injected string only. Does NOT affect which prompt is selected or codeword detection.
+function capText(s, max = 9000) {
+  return s.length > max ? s.slice(0, max) + '\n...[truncated]' : s;
+}
+
 (async () => {
   try {
     const { prompt = '', cwd } = await readStdin();
@@ -52,7 +59,7 @@ import { resolvePrompt } from './lib/manager-prompts.mjs';
       output({
         hookSpecificOutput: {
           hookEventName: 'UserPromptSubmit',
-          additionalContext: `${header}\n\n${text}`
+          additionalContext: capText(`${header}\n\n${text}`, 9000)
         }
       });
       return;
@@ -67,7 +74,7 @@ import { resolvePrompt } from './lib/manager-prompts.mjs';
       output({
         hookSpecificOutput: {
           hookEventName: 'UserPromptSubmit',
-          additionalContext: `${header}\n\n${text}`
+          additionalContext: capText(`${header}\n\n${text}`, 9000)
         }
       });
       return;
