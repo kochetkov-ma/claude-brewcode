@@ -1,16 +1,21 @@
 // brewtools:manager — UserPromptSubmit hook.
-// Injects a Manager mode block via additionalContext. Triggers:
-//   1. Codeword in prompt (always, regardless of state):
-//        ++mp -> Manager + Plan Mode (planmode)  [tested before ++m: prefix collision]
-//        ++m  -> Manager mode (full)
-//        ++rr -> Anti-regression review discipline   [tested before ++r: prefix collision]
-//        ++r  -> Two-phase review discipline
+// Injects Manager/Review mode block(s) via additionalContext. Triggers:
+//   1. Codeword in prompt (always, regardless of state). Codewords form TWO
+//      INDEPENDENT groups; a prompt may activate one from each:
+//        Manager group (mutually exclusive, ++mp wins over ++m):
+//          ++mp -> Manager + Plan Mode (planmode)
+//          ++m  -> Manager mode (full)
+//        Review group (mutually exclusive, ++rr wins over ++r):
+//          ++rr -> Anti-regression review discipline
+//          ++r  -> Two-phase review discipline
 //   2. HARD wall ON (state.hard === true): ambient auto-inject of the 'full'
 //        orchestrator block every turn (codeword absent).
-// Precedence: a single prompt may contain several codewords; we check
-//   ++mp, ++m, ++rr, ++r in that order and inject the FIRST match only.
-//   Longer-prefix variants (++mp, ++rr) are tested before their shorter
-//   collisions (++m, ++r) so `++rr` never falsely triggers the ++r branch.
+// Precedence: each group is detected INDEPENDENTLY. When both groups are present
+//   we inject BOTH blocks (manager block first, then review block), concatenated
+//   with a blank-line separator. When only one group is present, only that block
+//   is injected. Longer-prefix variants (++mp, ++rr) win over their shorter
+//   collisions (++m, ++r); the `(?![\w])` lookahead also keeps `++rr` from
+//   falsely matching ++r and `++mp` from matching ++m.
 //   The review codewords are codeword-ONLY (no ambient/state injection).
 // Fail-safe: any error -> output({}) so the user's prompt is never broken.
 
@@ -35,31 +40,38 @@ function capText(s, max = 9000) {
     const hasRR = /(?<![\w+])\+\+rr(?![\w])/.test(prompt);
     const hasR  = /(?<![\w+])\+\+r(?![\w])/.test(prompt);
 
-    // First match wins: ++mp, ++m, ++rr, ++r (longer prefixes before collisions).
-    let codewordMode = null;
-    let header = null;
+    // Two independent groups. Manager: ++mp wins over ++m. Review: ++rr wins over ++r.
+    let managerMode = null, managerHeader = null;
     if (hasMP) {
-      codewordMode = 'planmode';
-      header = 'User typed `++mp` — Manager + Plan Mode is active for this turn:';
+      managerMode = 'planmode';
+      managerHeader = 'User typed `++mp` — Manager + Plan Mode is active for this turn:';
     } else if (hasM) {
-      codewordMode = 'full';
-      header = 'User typed `++m` — Manager mode is active for this turn:';
-    } else if (hasRR) {
-      codewordMode = 'review-regression';
-      header = 'User typed `++rr` — Anti-regression review discipline is active for this turn:';
-    } else if (hasR) {
-      codewordMode = 'review-double';
-      header = 'User typed `++r` — Two-phase review discipline is active for this turn:';
+      managerMode = 'full';
+      managerHeader = 'User typed `++m` — Manager mode is active for this turn:';
     }
 
-    if (codewordMode) {
-      // Codeword present -> inject matching mode block ALWAYS (state-independent).
-      const { text } = resolvePrompt(codewordMode, cwd, pluginRoot);
-      if (!text) { output({}); return; }
+    let reviewMode = null, reviewHeader = null;
+    if (hasRR) {
+      reviewMode = 'review-regression';
+      reviewHeader = 'User typed `++rr` — Anti-regression review discipline is active for this turn:';
+    } else if (hasR) {
+      reviewMode = 'review-double';
+      reviewHeader = 'User typed `++r` — Two-phase review discipline is active for this turn:';
+    }
+
+    if (managerMode || reviewMode) {
+      // Codeword(s) present -> inject matching block(s) ALWAYS (state-independent).
+      const blocks = [];
+      for (const [mode, head] of [[managerMode, managerHeader], [reviewMode, reviewHeader]]) {
+        if (!mode) continue;
+        const { text } = resolvePrompt(mode, cwd, pluginRoot);
+        if (text) blocks.push(`${head}\n\n${text}`);
+      }
+      if (blocks.length === 0) { output({}); return; }
       output({
         hookSpecificOutput: {
           hookEventName: 'UserPromptSubmit',
-          additionalContext: capText(`${header}\n\n${text}`, 9000)
+          additionalContext: capText(blocks.join('\n\n---\n\n'), 9000)
         }
       });
       return;

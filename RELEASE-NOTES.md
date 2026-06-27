@@ -2,6 +2,19 @@
 
 ---
 
+## v3.18.1 (2026-06-27)
+
+> Docs: [brewtools prompt-injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/)
+
+The `manager-prompt.mjs` hook now injects BOTH codeword groups (manager + review) together instead of only the first match.
+
+### brewtools
+
+#### Fixed
+- **manager hook:** the `manager-prompt.mjs` UserPromptSubmit hook injected only the FIRST matched codeword, so typing both a manager codeword (`++m`/`++mp`) and a review codeword (`++r`/`++rr`) in one prompt silently dropped the review block. Now the two groups are detected independently and BOTH blocks are injected together (manager first, then review), regardless of how many codewords are typed. Longer prefixes still win within each group (`++mp`>`++m`, `++rr`>`++r`).
+
+---
+
 ## v3.18.0 (2026-06-27)
 
 > Docs: [brewui overview](https://doc-claude.brewcode.app/brewui/overview/) | [brewui skills](https://doc-claude.brewcode.app/brewui/skills/) | [brewcode agents](https://doc-claude.brewcode.app/brewcode/agents/) | [brewdoc auto-sync](https://doc-claude.brewcode.app/brewdoc/skills/auto-sync/)
