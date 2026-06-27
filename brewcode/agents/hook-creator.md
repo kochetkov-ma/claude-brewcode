@@ -15,7 +15,7 @@ auto-sync-type: agent
 
 Creates production-quality CC hooks (bash + JS/mjs): correct msg routing, JSON schemas, fail-safe design.
 
-> Ref ver: 2.1.173+ | 27 HEs | 4 hook types (command, http, prompt, agent)
+> Ref ver: 2.1.195 | 27 HEs | 5 hook types (command, http, mcp_tool, prompt, agent)
 
 ## Session Lifecycle
 
@@ -191,16 +191,28 @@ Consult BEFORE choosing output. Wrong channel = silently ignored (no error). `UI
 
 | Type | Description | Timeout | Use case |
 |------|-------------|---------|----------|
-| `command` | shell cmd, JSON stdin/stdout | 600s | custom logic, file I/O, external tools |
-| `http` | POST JSON to URL, receives JSON (v2.1.63+) | 600s | external API/webhook, remote delegation |
-| `prompt` | single LLM call (Haiku) | 30s | quick validation, content generation |
-| `agent` | SA with Read/Grep/Glob, up to 50 turns | 60s | complex analysis, multi-step checks |
+| `command` | shell/node script, JSON via stdin/stdout | 600s | custom logic, file I/O, external tools |
+| `http` | POSTs FULL hook JSON payload to URL (axios), blocks for response, parses JSON body as hook output (decision / `AC`). Both directions. In the POSTed payload the user-prompt field is named `prompt` (v2.1.63+) | 600s | external API/webhook, remote delegation |
+| `mcp_tool` | invokes a tool on an already-configured MCP server and AWAITS it synchronously; returned text content parsed exactly like a `command` hook's stdout JSON (can return `decision:block` or `hookSpecificOutput.additionalContext`) | 600s | reuse an MCP tool as gate/injector |
+| `prompt` | inline-LLM allow/block GATE: evaluates the prompt, decides allow vs block, surfaces a reason on block. Its NL text is NOT added to the model's context | 30s | quick validation / policy gate |
+| `agent` | LLM-agent allow/block GATE, same semantics as `prompt` (evaluate condition -> allow or block+reason). NOT a general subagent whose output is injected. Experimental | 60s | complex condition gate |
+
+> `prompt`/`agent` = gates (allow/block only). `command`/`http`/`mcp_tool` = can both gate AND inject context.
+
+### mcp_tool config fields
+
+| Field | Req | Description |
+|-------|:---:|-------------|
+| `server` | yes | name of a configured MCP server |
+| `tool` | yes | tool name to invoke |
+| `input` | no | args object; string values support `${...}` interpolation from hook input JSON (e.g. `"${tool_input.file_path}"`) |
+| `if`,`timeout`,`statusMessage`,`once` | no | same as other types |
 
 ### Common fields
 
 | Field | Description | Applies to |
 |-------|-------------|------------|
-| `type` | REQ: `"command"`,`"http"`,`"prompt"`,`"agent"` | All |
+| `type` | REQ: `"command"`,`"http"`,`"mcp_tool"`,`"prompt"`,`"agent"` | All |
 | `if` | conditional filter (permission rule syntax, v2.1.85+): `"Bash(git *)"`,`"Edit(*.ts)"` | tool events |
 | `timeout` | seconds before cancellation | All |
 | `statusMessage` | spinner text while hook runs | All |
@@ -712,17 +724,17 @@ Resolution: `session` > `project` > `global`. Single mode only (no multi-mode). 
 
 | Need | Type | Why |
 |------|------|-----|
-| context-aware decisions | `prompt` | natural language reasoning |
-| flexible evaluation | `prompt` | no bash scripting needed |
+| allow/block policy gate | `prompt` | inline LLM evaluates, allow or block+reason (no context injection) |
+| LLM-agent condition gate | `agent` | same gate semantics as `prompt`; experimental |
 | deterministic ops | `command` | reliable, fast |
 | file system tasks | `command` | direct access |
 | external tool integration | `command` | system calls |
 | performance-critical | `command` | lower latency |
 | external API/webhook | `http` | no subprocess, direct HTTP POST |
 | remote delegation | `http` | offload to external svc |
-| file-reading analysis | `agent` | Read/Grep/Glob access, multi-step |
+| reuse a configured MCP tool | `mcp_tool` | awaits MCP tool, parses result as command JSON (gate or inject) |
 
-> DEF: prompt hooks for most cases; command for deterministic/performance-critical.
+> DEF: command for deterministic/performance-critical; prompt/agent only when an allow/block gate needs LLM judgment.
 > Lifecycle: hooks load at session start. Config changes require `/clear` or new session.
 
 ## 16. Production Examples
@@ -818,7 +830,7 @@ try {
 | 11 | check routing matrix for broken channels |
 | 12 | syntax check (`bash -n` or `node --check`) |
 | 13 | `if` field (v2.1.85+) to reduce overhead when applicable |
-| 14 | hook type (`command` deterministic, `http` API, `prompt` NL, `agent` file analysis) |
+| 14 | hook type (`command` deterministic, `http` API/remote, `mcp_tool` MCP tool, `prompt`/`agent` allow-block gate) |
 
 ## 19. Deliverable Format
 

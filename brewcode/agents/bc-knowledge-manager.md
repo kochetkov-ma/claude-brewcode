@@ -1,6 +1,6 @@
 ---
 name: bc-knowledge-manager
-description: "Brewcode knowledge manager: compacts KNOWLEDGE.jsonl, dedups, prioritizes by type."
+description: Internal. Spawned only by /brewcode:start. No direct/auto use.
 tools: Read, Write
 model: haiku
 permissionMode: acceptEdits

@@ -1,6 +1,6 @@
 ---
 name: bd-auto-sync-processor
-description: "Processes single document for auto-sync: reads, researches, aggregates, updates in place."
+description: Internal. Spawned only by /brewdoc:auto-sync. No direct/auto use.
 tools: Read, Write, Edit, Glob, Grep, WebFetch
 model: sonnet
 permissionMode: acceptEdits

@@ -2,6 +2,17 @@
 
 ---
 
+## v3.16.6 (2026-06-27)
+
+> Docs: [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [brewcode hooks](https://doc-claude.brewcode.app/brewcode/hooks/)
+
+### brewcode
+
+#### Changed
+- **docs:** hooks reference synced to Claude Code 2.1.195 (empirically verified). Documented all **5 hook entry types** -- added the previously-missing `mcp_tool` (invokes + awaits a configured MCP server tool; `server`/`tool`/`input` with `${...}` interpolation; returned text parsed as command-style stdout JSON), and **corrected `prompt`/`agent`** to allow/block **gates** (LLM evaluates allow vs block+reason; their text is NOT injected into model context) rather than context injectors. Clarified `http` (POSTs full payload via axios, blocks for JSON response; user-prompt field named `prompt`). Added control facts: hooks cannot select/change the model; `updatedInput` rewrites tool args on PreToolUse only (silently ignored on UserPromptSubmit). `pre-task`/`post-task` matchers shown as `Task|Agent`.
+
+---
+
 ## v3.16.5 (2026-06-18)
 
 `brewdoc:publish` now auto-renders Markdown files as styled pages. A `.md`/`.markdown` file path is published via `/api/html?format=markdown` (pretty rendered) instead of `/api/files` (raw download). All other file types are unchanged — only Markdown files switch to the rendered path.

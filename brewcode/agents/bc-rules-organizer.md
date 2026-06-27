@@ -1,6 +1,6 @@
 ---
 name: bc-rules-organizer
-description: "Creates, optimizes .claude/rules/*.md. Triggers: organize rules, extract rules, split CLAUDE.md."
+description: Internal. Spawned only by /brewcode:rules. No direct/auto use.
 model: haiku
 tools: Read, Write, Edit, Glob, Grep, Bash, Skill
 skills: brewtools:text-optimize

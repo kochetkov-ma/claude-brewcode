@@ -3,7 +3,7 @@ title: "Hook Creator"
 description: "Creates, debugs, and validates Claude Code lifecycle hooks (bash/JS) with correct event routing, JSON schemas, and fail-safe design."
 order: 1207
 ---
-import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
 # Hook Creator
 
@@ -12,7 +12,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 </Callout>
 
 <Callout type="tip">
-**hook-creator knows all 27 events, 4 hook types, and the full routing matrix.** Describe what you want in plain language — it picks the right event, output channel, and schema, then delivers a working file with fail-safe error handling included.
+**hook-creator knows all 27 events, 5 hook types, and the full routing matrix.** Describe what you want in plain language — it picks the right event, output channel, and schema, then delivers a working file with fail-safe error handling included.
 </Callout>
 
 ## Quick reference
@@ -29,7 +29,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 - **Create a new hook** — you know what you want the hook to do, but not which event or output format to use
 - **Debug a broken hook** — the hook runs but Claude ignores it, or the session is stuck
 - **Validate an existing hook** — check routing, schema, fail-safe, and `stop_hook_active` guard
-- **Choose a hook type** — unsure whether to use `command`, `http`, `prompt`, or `agent` hook
+- **Choose a hook type** — unsure whether to use `command`, `http`, `mcp_tool`, `prompt`, or `agent` hook
 - **Add context injection** — inject project rules, mode state, or subagent instructions at session or tool boundaries
 
 ## Examples
@@ -137,14 +137,17 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 
 ### Hook types
 
-| Type | Timeout | When to use |
+| Type | Timeout | Description |
 |------|---------|-------------|
-| `command` | 600s | Shell/Node script — deterministic, file I/O, external tools |
-| `http` | 600s | POST JSON to external API or webhook (v2.1.63+) |
-| `prompt` | 30s | Single Haiku LLM call for natural-language validation |
-| `agent` | 60s | Multi-step analysis with Read/Grep/Glob access |
+| `command` | 600s | Shell/Node script; receives hook JSON on stdin, returns JSON on stdout. Deterministic, file I/O, external tools. |
+| `http` | 600s | POSTs the full hook JSON payload to a URL (axios); blocks for response; parses JSON body as hook output (`decision` / `additionalContext`). User-prompt field is named `prompt` in the payload. (v2.1.63+) |
+| `mcp_tool` | 600s | Invokes a tool on an already-configured MCP server synchronously; returned text parsed exactly like a `command` hook's stdout JSON. Config: `server` (required), `tool` (required), `input` (optional; string values support `${...}` interpolation from hook input JSON). |
+| `prompt` | 30s | Inline-LLM allow/block gate -- evaluates the natural-language text, decides allow vs block+reason. Its text is NOT added to the model's context. |
+| `agent` | 60s | LLM-agent allow/block gate, same semantics as `prompt` (allow or block+reason). NOT a general subagent whose output is injected. Experimental. |
 
-`agent`-type hooks spawn a subagent. The spawned subagent inherits the session's `permissionMode`. Never configure the parent session with `--dangerously-skip-permissions` just to avoid hook permission prompts — use a narrow `permissionMode: acceptEdits` on the hook's agent definition instead.
+`prompt`/`agent` = gates only (allow/block). `command`/`http`/`mcp_tool` = can both gate AND inject context.
+
+For `agent`-type hooks: the spawned subagent inherits the session's `permissionMode`. Never configure the parent session with `--dangerously-skip-permissions` just to avoid hook permission prompts -- use a narrow `permissionMode: acceptEdits` on the hook's agent definition instead.
 
 </details>
 

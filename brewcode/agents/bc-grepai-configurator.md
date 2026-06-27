@@ -1,6 +1,6 @@
 ---
 name: bc-grepai-configurator
-description: "grepai config specialist: project analysis, config.yaml generation, verification. Subagent."
+description: Internal. Spawned only by /brewcode:grepai. No direct/auto use.
 tools: Read, Write, Edit, Bash, WebFetch, Glob, Grep
 model: opus
 permissionMode: acceptEdits

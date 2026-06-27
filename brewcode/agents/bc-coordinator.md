@@ -1,6 +1,6 @@
 ---
 name: bc-coordinator
-description: "Brewcode coordinator: extracts knowledge from reports, manages PLAN.md status, generates FINAL.md."
+description: Internal. Spawned only by /brewcode:start + post-task hook. No direct/auto use.
 tools: Read, Write, Edit, Bash
 model: haiku
 permissionMode: acceptEdits
