@@ -121,13 +121,6 @@ Response channels: `additionalContext` (inject text), `updatedInput` (PreToolUse
 | `pre-task.mjs` | PreToolUse:Task\|Agent | Injects `BT_PLUGIN_ROOT` into subagent prompts |
 | `manager-prompt.mjs` | UserPromptSubmit | Injects Manager prompt on ++m/++mp codeword |
 
-**brewui (2):**
-
-| Hook | Event | Purpose |
-|------|-------|---------|
-| `session-start.mjs` | SessionStart | Sets `BU_PLUGIN_ROOT`, session bootstrap |
-| `pre-task.mjs` | PreToolUse:Task\|Agent | Injects `BU_PLUGIN_ROOT` into subagent prompts |
-
 **brewdoc (1):**
 
 | Hook | Event | Purpose |

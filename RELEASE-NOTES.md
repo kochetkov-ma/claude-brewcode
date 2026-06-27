@@ -2,6 +2,19 @@
 
 ---
 
+## v3.18.2 (2026-06-27)
+
+> Docs: [brewui overview](https://doc-claude.brewcode.app/brewui/overview/)
+
+Brewui no longer ships any hooks -- they were dead weight (brewui has no skills/agents and never registered hooks in its manifest).
+
+### brewui
+
+#### Removed
+- **hooks:** deleted the entire `brewui/hooks/` directory (`hooks.json`, `session-start.mjs`, `pre-task.mjs`, `lib/utils.mjs`). brewui registered no hooks in `plugin.json`, so these files were inert. `BU_PLUGIN_ROOT` is no longer injected (nothing consumed it). Docs scrubbed accordingly (brewui overview, brewui skills page, brewdoc guide hook catalog).
+
+---
+
 ## v3.18.1 (2026-06-27)
 
 > Docs: [brewtools prompt-injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/)

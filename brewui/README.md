@@ -40,7 +40,7 @@ Update anytime with `/brewtools:plugin-update`.
 
 ## Overview
 
-Brewui is a placeholder plugin for future UI/visual/creative tools. It currently ships no skills or agents, but installs cleanly and registers its hooks so it can be wired into your suite ahead of time. Content will be added in a future release.
+Brewui is a placeholder plugin for future UI/visual/creative tools. It currently ships no skills, agents, or hooks, but installs cleanly so it can be wired into your suite ahead of time. Content will be added in a future release.
 
 ## Installation
 
@@ -67,11 +67,6 @@ No skills yet -- coming soon. Brewui is an empty placeholder; the `/brewui:*` co
 brewui/
 ├── .claude-plugin/
 │   └── plugin.json              # Plugin manifest
-├── hooks/
-│   ├── hooks.json               # Hook registry
-│   ├── session-start.mjs        # BU_PLUGIN_ROOT injection
-│   ├── pre-task.mjs             # BU_PLUGIN_ROOT into subagents
-│   └── lib/utils.mjs            # I/O utilities
 ├── skills/                      # Empty -- placeholder for future tools
 └── README.md
 ```
