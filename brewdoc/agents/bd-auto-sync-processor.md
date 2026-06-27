@@ -1,7 +1,7 @@
 ---
 name: bd-auto-sync-processor
 description: Internal. Spawned only by /brewdoc:auto-sync. No direct/auto use.
-tools: Read, Write, Edit, Glob, Grep, WebFetch
+tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch
 model: sonnet
 permissionMode: acceptEdits
 ---

@@ -2,6 +2,26 @@
 
 ---
 
+## v3.18.4 (2026-06-27)
+
+> Docs: [brewdoc overview](https://doc-claude.brewcode.app/brewdoc/overview/) | [brewtools overview](https://doc-claude.brewcode.app/brewtools/overview/) | [brewcode overview](https://doc-claude.brewcode.app/brewcode/overview/)
+
+> Native Grep/Glob tools were removed on the macOS Claude Code build (v2.1.117+); code search now runs through Bash (shadow `grep`->ugrep, `find`->bfs, `rg`). Agents that search MUST list `Bash` in their `tools:`.
+
+### brewcode
+#### Fixed
+- **agent-creator:** added `Bash` to `tools:` — could no longer grep/find without it on macOS CC builds.
+
+### brewdoc
+#### Fixed
+- **bd-auto-sync-processor:** added `Bash` to `tools:` — search now works on macOS CC builds.
+
+### brewtools
+#### Fixed
+- **text-optimizer:** added `Bash` to `tools:` — search now works on macOS CC builds.
+
+---
+
 ## v3.18.3 (2026-06-27)
 
 > Docs: [brewcode hooks](https://doc-claude.brewcode.app/brewcode/overview/)

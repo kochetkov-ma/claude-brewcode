@@ -3,7 +3,7 @@ name: text-optimizer
 description: "Optimizes text/docs for LLM token efficiency. Triggers: optimize prompt, reduce tokens, compress."
 model: sonnet
 color: magenta
-tools: Read, Write, Edit, Glob, Grep, WebFetch, AskUserQuestion
+tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch, AskUserQuestion
 skills: text-optimize
 ---
 

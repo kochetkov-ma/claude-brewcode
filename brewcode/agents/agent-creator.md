@@ -3,7 +3,7 @@ name: agent-creator
 description: "Creates and improves Claude Code agents. Triggers: create agent, improve agent, scaffold agent."
 model: opus
 color: cyan
-tools: Read, Write, Edit, Glob, Grep, Task, Skill, WebFetch, WebSearch, AskUserQuestion
+tools: Read, Write, Edit, Glob, Grep, Bash, Task, Skill, WebFetch, WebSearch, AskUserQuestion
 ---
 
 [DICT: AG=agent, BC=brewcode, CC=Claude Code, CD=CLAUDE.md, EX=example, FM=frontmatter, MDL=model, PLG=plugin, SA=subagent, SK=skill, SP=system prompt, TL=tool(s), TRG=trigger, VH=version history]
