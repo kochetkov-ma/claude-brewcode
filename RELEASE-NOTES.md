@@ -2,6 +2,17 @@
 
 ---
 
+## v3.18.3 (2026-06-27)
+
+> Docs: [brewcode hooks](https://doc-claude.brewcode.app/brewcode/overview/)
+
+### brewcode
+
+#### Fixed
+- **grepai-reminder hook:** retargeted from dead `PreToolUse:Glob|Grep` to `PreToolUse:Bash`. Native Grep/Glob tools were removed on the macOS Claude Code build -- code search now runs through Bash (shadow `grep`->ugrep, `find`->bfs, `rg`). The hook now gates on a search-command regex (grep/egrep/fgrep/ugrep/rg/ag/ack/find/bfs) so the grepai reminder still fires only on actual searches; `.grepai/index.gob` guard + 60s throttle preserved.
+
+---
+
 ## v3.18.2 (2026-06-27)
 
 > Docs: [brewui overview](https://doc-claude.brewcode.app/brewui/overview/)

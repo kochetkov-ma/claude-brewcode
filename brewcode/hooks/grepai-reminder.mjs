@@ -1,13 +1,17 @@
 #!/usr/bin/env node
 
 /**
- * PreToolUse hook for Glob/Grep tools.
- * Reminds Claude to prefer grepai_search for semantic queries.
+ * PreToolUse:Bash hook.
+ * Native Grep/Glob tools were removed on this CC build; code search runs via Bash
+ * (shadow grep->ugrep / find->bfs / rg). Reminds Claude to prefer grepai_search
+ * when a grep/find/rg search command is run through Bash.
  */
 
 import { existsSync, statSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { readStdin, output, log } from './lib/utils.mjs';
+
+const SEARCH_RE = /(?:^|[|;&(]|&&|\|\|)\s*(?:command\s+)?(grep|egrep|fgrep|ugrep|rg|ag|ack|find|bfs)\b/;
 
 async function main() {
   let cwd = null;
@@ -18,6 +22,17 @@ async function main() {
     const input = await readStdin();
     session_id = input.session_id;
     cwd = input.cwd || cwd;
+
+    const command = input.tool_input && input.tool_input.command;
+    if (!command) {
+      output({});
+      return;
+    }
+
+    if (!SEARCH_RE.test(command)) {
+      output({});
+      return;
+    }
 
     const grepaiDir = join(cwd, '.grepai');
     const indexFile = join(grepaiDir, 'index.gob');
