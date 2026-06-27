@@ -36,11 +36,11 @@ These agents ship with the brewcode plugin suite. Available immediately after in
 | agent-creator | brewcode | opus | Create/update Claude Code agents |
 | hook-creator | brewcode | opus | Create/debug Claude Code hooks |
 | bash-expert | brewcode | opus | Create professional sh/bash scripts |
-| bc-coordinator | brewcode | haiku | Task coordination, artifact management, 2-step protocol |
-| bc-knowledge-manager | brewcode | haiku | KNOWLEDGE.jsonl compaction and dedup |
-| bc-grepai-configurator | brewcode | opus | grepai config.yaml generation |
-| bc-rules-organizer | brewcode | sonnet | .claude/rules/*.md organization |
-| bd-auto-sync-processor | brewdoc | sonnet | Single document sync processing |
+| bc-coordinator | brewcode | haiku | Internal. Spawned only by /brewcode:start + post-task hook. No direct/auto use. |
+| bc-knowledge-manager | brewcode | haiku | Internal. Spawned only by /brewcode:start. No direct/auto use. |
+| bc-grepai-configurator | brewcode | opus | Internal. Spawned only by /brewcode:grepai. No direct/auto use. |
+| bc-rules-organizer | brewcode | sonnet | Internal. Spawned only by /brewcode:rules. No direct/auto use. |
+| bd-auto-sync-processor | brewdoc | sonnet | Internal. Spawned only by /brewdoc:auto-sync. No direct/auto use. |
 | text-optimizer | brewtools | sonnet | Text/docs token optimization |
 | ssh-admin | brewtools | opus | SSH server management |
 | deploy-admin | brewtools | opus | GitHub Actions deployment |

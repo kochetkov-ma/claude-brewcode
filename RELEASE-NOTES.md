@@ -2,6 +2,36 @@
 
 ---
 
+## v3.18.0 (2026-06-27)
+
+> Docs: [brewui overview](https://doc-claude.brewcode.app/brewui/overview/) | [brewui skills](https://doc-claude.brewcode.app/brewui/skills/) | [brewcode agents](https://doc-claude.brewcode.app/brewcode/agents/) | [brewdoc auto-sync](https://doc-claude.brewcode.app/brewdoc/skills/auto-sync/)
+
+Documentation sync to reality: internal agents hidden from public docs, brewui shipped as an empty-but-installable placeholder, and skill/agent counts recomputed across all doc levels. Skill total is now 32; shipped agents 16.
+
+### brewui
+
+#### Changed
+- **plugin:** now ships as an empty, installable placeholder for future UI/visual/creative tools. The `image-gen` skill was removed and `skills/` is empty. Installing brewui still registers its hooks and reserves the `/brewui:*` namespace, with no commands yet.
+- **docs:** overview, skills, and agents pages rewritten to a "coming soon" placeholder; README, plugin manifest, and marketplace entry updated to the placeholder description.
+
+### brewcode
+
+#### Changed
+- **agents:** `bc-coordinator`, `bc-knowledge-manager`, `bc-grepai-configurator`, and `bc-rules-organizer` are now documented as internal (spawned only by skills and hooks). Their dedicated doc pages were removed; summary tables, navigation, the architecture overview, and the README mark them internal with no deep links.
+- **docs:** removed a spurious `/brewcode:debate` row from the skill tables (debate is a brewtools skill); the brewcode skill count stays 13 and the suite total is recomputed to 32.
+
+### brewdoc
+
+#### Changed
+- **agents:** `bd-auto-sync-processor` documented as internal across the README, overview, the auto-sync skill page, and the guide catalog.
+
+### brewtools
+
+#### Changed
+- **skill-toggle:** running example updated from the removed `brewui:image-gen` to the existing `brewdoc:md-to-pdf`.
+
+---
+
 ## v3.17.0 (2026-06-27)
 
 > Docs: [brewcode hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | [brewtools manager](https://doc-claude.brewcode.app/brewtools/skills/manager/)

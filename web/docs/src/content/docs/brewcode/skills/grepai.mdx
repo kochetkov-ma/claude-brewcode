@@ -72,7 +72,7 @@ Stops watch, wipes the index, rebuilds from scratch, restarts watch. Monitor wit
   <li><div><strong>Mode detection</strong><p>The skill runs <code>detect-mode.sh</code> against <code>$ARGUMENTS</code>. Keywords like <code>setup</code>, <code>start</code>, <code>status</code> map to modes; empty args auto-detect from whether <code>.grepai/</code> exists; unrecognized text falls back to interactive prompt.</p></div></li>
   <li><div><strong>Infra check (setup/optimize)</strong><p>Verifies Homebrew, Ollama daemon, bge-m3 model download, and grepai CLI. Stops with a clear error if any component is missing.</p></div></li>
   <li><div><strong>MCP configuration</strong><p>Configures the grepai MCP server entry in <code>.claude/settings.json</code> and adds <code>mcp__grepai__\*</code> to <code>allowedTools</code>. Required once per project.</p></div></li>
-  <li><div><strong>Config generation — bc-grepai-configurator agent</strong><p>The <a href="/brewcode/agents/bc-grepai-configurator/">bc-grepai-configurator</a> agent (opus) analyzes build files, source layout, and test patterns to produce an optimal <code>.grepai/config.yaml</code> with boost weights and trace-language settings.</p></div></li>
+  <li><div><strong>Config generation — bc-grepai-configurator agent</strong><p>The bc-grepai-configurator agent (opus) analyzes build files, source layout, and test patterns to produce an optimal <code>.grepai/config.yaml</code> with boost weights and trace-language settings.</p></div></li>
   <li><div><strong>Index build</strong><p>Runs <code>init-index.sh</code> synchronously. Embeds all source files via bge-m3 and writes GOB shards to <code>.grepai/</code>. Large repos (5k+ files) take 10–30 min — monitor the log.</p></div></li>
   <li><div><strong>Rule creation</strong><p>Writes a <code>.claude/rules/grepai-first.md</code> rule so Claude always reaches for <code>grepai_search</code> / <code>trace_callers</code> / <code>trace_callees</code> before Glob or Grep.</p></div></li>
   <li><div><strong>Verification</strong><p>Runs <code>verify.sh</code> — confirms MCP responds, index is readable, and the rule file exists. Prints a status table with ✅/❌ per component.</p></div></li>
@@ -133,9 +133,6 @@ The skill always prints a status table after any mode completes:
 </details>
 
 <CardGrid>
-  <Card title="bc-grepai-configurator" icon="robot" href="/brewcode/agents/bc-grepai-configurator/">
-    The opus agent that analyzes your project and generates the optimal <code>.grepai/config.yaml</code>.
-  </Card>
   <Card title="setup skill" icon="document" href="/brewcode/skills/setup/">
     Run setup first — it installs all prerequisites including Ollama and grepai CLI.
   </Card>

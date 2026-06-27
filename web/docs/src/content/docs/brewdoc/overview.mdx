@@ -89,7 +89,7 @@ brewdoc/
 │   ├── publish/                 # brewpage.app publishing
 │   └── guide/                   # Interactive tutorial
 └── agents/
-    └── bd-auto-sync-processor   # File processing agent
+    └── bd-auto-sync-processor   # Internal: spawned by /brewdoc:auto-sync
 ```
 
 The single hook `pre-task.mjs` injects the `BD_PLUGIN_ROOT` variable into subagent prompts

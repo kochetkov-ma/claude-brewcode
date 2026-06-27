@@ -10,7 +10,7 @@
 
 **Claude Code plugin suite** -- four plugins for development, documentation, text utility, and visual workflows.
 
-A regular Claude Code session loses context during compaction. Brewcode automatically saves knowledge, passes state between compaction cycles, and continues work without restarting. Four plugins. 33 skills. 16 agents. 9 lifecycle hooks.
+A regular Claude Code session loses context during compaction. Brewcode automatically saves knowledge, passes state between compaction cycles, and continues work without restarting. Four plugins. 32 skills. 16 agents. 9 lifecycle hooks.
 
 [**Full Documentation**](https://doc-claude.brewcode.app/getting-started/)
 
@@ -59,7 +59,7 @@ After all commands succeed, run `/reload-plugins`. If `/reload-plugins` is unava
 | [brewcode](brewcode/README.md) | Infinite task execution, quorum reviews, skill/agent creation, semantic search | 13 | `claude plugin install brewcode@claude-brewcode` |
 | [brewdoc](brewdoc/README.md) | Documentation tools: auto-sync, memory optimization, PDF conversion, publishing | 6 | `claude plugin install brewdoc@claude-brewcode` |
 | [brewtools](brewtools/README.md) | Universal text utilities: token optimization, humanization, secrets scanning, plugin updates | 13 | `claude plugin install brewtools@claude-brewcode` |
-| [brewui](brewui/README.md) | UI/visual tools: AI image generation via multiple providers | 1 | `claude plugin install brewui@claude-brewcode` |
+| [brewui](brewui/README.md) | UI/visual/creative tools (placeholder, currently empty) | 0 | `claude plugin install brewui@claude-brewcode` |
 
 ## Installation
 
@@ -151,11 +151,7 @@ After `/brewcode:setup`, each task follows the cycle: `spec` -> `plan` -> `start
 
 ### brewui -- visual tools
 
-```bash
-/brewui:image-gen "a cozy coffee shop at sunset"          # Generate image (default)
-/brewui:image-gen --edit photo.png "add warm lighting"    # Edit existing image
-/brewui:image-gen --config                                 # Configure API keys
-```
+Placeholder plugin, currently empty. No commands yet -- coming soon.
 
 ## How It Works
 
@@ -204,7 +200,6 @@ After `/brewcode:setup`, each task follows the cycle: `spec` -> `plan` -> `start
 | `/brewcode:skills` | List, create, and upgrade skills |
 | `/brewcode:agents` | Interactive agent creation and improvement |
 | `/brewcode:e2e` | E2E testing orchestration with BDD scenarios |
-| `/brewcode:debate` | Evidence-based multi-agent debate (Challenge, Strategy, Critic modes) |
 | `/brewcode:teardown` | Remove plugin configuration (keeps task data) |
 
 ### Brewdoc (6 skills)
@@ -236,11 +231,9 @@ After `/brewcode:setup`, each task follows the cycle: `spec` -> `plan` -> `start
 | `/brewtools:manager` | Manager mode -- codewords ++m/++mp inject a delegate-everything prompt; HARD wall (on/off/uninstall) installs a project PreToolUse guard that blocks main-session edits, forcing delegation |
 | `/brewtools:task-board-init` | Deploy a file-based Kanban into ANY repo via multi-agent analysis -- task-tracker agent, task-board skill, tasks rule, .claude/features |
 
-### Brewui (1 skill)
+### Brewui (0 skills)
 
-| Skill | Purpose |
-|-------|---------|
-| `/brewui:image-gen` | AI image generation via multiple providers with anti-slop controls |
+No skills yet -- placeholder for future UI/visual/creative tools.
 
 ### Portable skills (standalone)
 
@@ -266,11 +259,11 @@ Self-contained `SKILL.md` folders that ship outside the four plugins -- drop the
 | text-optimizer | sonnet | Optimize text and docs for LLM efficiency |
 | ssh-admin | opus | Linux server administration via SSH |
 | deploy-admin | opus | GitHub Actions deployment and CI/CD |
-| bc-coordinator | haiku | Task coordination, artifact management |
-| bc-knowledge-manager | haiku | KNOWLEDGE.jsonl compaction and deduplication |
-| bc-grepai-configurator | opus | Generate grepai config.yaml |
-| bd-auto-sync-processor | sonnet | Process documents for auto-sync |
-| bc-rules-organizer | sonnet | Create and optimize `.claude/rules/` files |
+| bc-coordinator | haiku | Internal: spawned by /brewcode:start + post-task hook |
+| bc-knowledge-manager | haiku | Internal: spawned by /brewcode:start |
+| bc-grepai-configurator | opus | Internal: spawned by /brewcode:grepai |
+| bd-auto-sync-processor | sonnet | Internal: spawned by /brewdoc:auto-sync |
+| bc-rules-organizer | sonnet | Internal: spawned by /brewcode:rules |
 
 ## Documentation
 

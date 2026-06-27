@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 3.4.29 |
+| Version | 3.18.0 |
 | Skills | 6 |
 | Agents | 1 |
 | Hooks | 1 |
@@ -91,7 +91,7 @@ claude --plugin-dir ./brewdoc
 
 | Agent | Model | Purpose |
 |-------|-------|---------|
-| [bd-auto-sync-processor](agents/bd-auto-sync-processor.md) | sonnet | Process documents for auto-sync |
+| bd-auto-sync-processor | sonnet | Internal: spawned by /brewdoc:auto-sync |
 
 ## Architecture
 

@@ -61,13 +61,9 @@ Universal utilities. Work in any project, no setup needed.
 
 These are standalone — no project configuration required. Run them anywhere.
 
-## Section 3b: Brewui Skills (1)
+## Section 3b: Brewui Skills (0)
 
-UI/visual/creative tools. AI image generation via multiple providers.
-
-| Skill | Purpose |
-|-------|---------|
-| `/brewui:image-gen` | AI image generation via multiple providers with anti-slop controls |
+Brewui currently ships no skills -- placeholder for future UI/visual/creative tools.
 
 ## Section 4: Common Patterns
 

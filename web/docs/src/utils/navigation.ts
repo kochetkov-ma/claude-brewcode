@@ -55,10 +55,6 @@ export const navigation: NavSection[] = [
           { title: 'agent-creator', slug: 'brewcode/agents/agent-creator' },
           { title: 'hook-creator', slug: 'brewcode/agents/hook-creator' },
           { title: 'bash-expert', slug: 'brewcode/agents/bash-expert' },
-          { title: 'bc-coordinator', slug: 'brewcode/agents/bc-coordinator' },
-          { title: 'bc-knowledge-manager', slug: 'brewcode/agents/bc-knowledge-manager' },
-          { title: 'bc-grepai-configurator', slug: 'brewcode/agents/bc-grepai-configurator' },
-          { title: 'bc-rules-organizer', slug: 'brewcode/agents/bc-rules-organizer' },
         ],
       },
       { title: 'Hooks', slug: 'brewcode/hooks' },
@@ -104,13 +100,8 @@ export const navigation: NavSection[] = [
     title: 'Brewui',
     items: [
       { title: 'Overview', slug: 'brewui/overview' },
-      {
-        title: 'Skills',
-        slug: 'brewui/skills',
-        children: [
-          { title: 'image-gen', slug: 'brewui/skills/image-gen' },
-        ],
-      },
+      { title: 'Skills', slug: 'brewui/skills' },
+      { title: 'Agents', slug: 'brewui/agents' },
     ],
   },
   {

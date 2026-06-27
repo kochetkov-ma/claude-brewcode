@@ -1,11 +1,11 @@
 # Brewui
 
-> UI/visual/creative tools plugin for Claude Code -- AI image generation via multiple providers.
+> UI/visual/creative tools plugin for Claude Code -- placeholder, currently empty but installable.
 
 | Field | Value |
 |-------|-------|
-| Version | 3.4.42 |
-| Skills | 1 |
+| Version | 3.18.0 |
+| Skills | 0 |
 
 ## Install
 
@@ -40,7 +40,7 @@ Update anytime with `/brewtools:plugin-update`.
 
 ## Overview
 
-Brewui provides visual and creative tools for Claude Code: AI image generation via multiple providers (Gemini Imagen 4, OpenRouter, OpenAI DALL-E 3) with anti-AI-slop controls. Each skill is self-contained.
+Brewui is a placeholder plugin for future UI/visual/creative tools. It currently ships no skills or agents, but installs cleanly and registers its hooks so it can be wired into your suite ahead of time. Content will be added in a future release.
 
 ## Installation
 
@@ -57,21 +57,9 @@ claude plugin update brewui@claude-brewcode
 claude --plugin-dir ./brewui
 ```
 
-## Quick Start
-
-```bash
-/brewui:image-gen "a cozy coffee shop at sunset"          # Generate (default)
-/brewui:image-gen --edit photo.png "add warm lighting"    # Edit existing
-/brewui:image-gen --config                                 # Configure API keys
-/brewui:image-gen --style illustration "tech blog header" # Illustration style
-/brewui:image-gen --service openrouter "mountain lake"    # Specific provider
-```
-
 ## Skills
 
-| Skill | Purpose | Model | Arguments |
-|-------|---------|-------|-----------|
-| [`/brewui:image-gen`](skills/image-gen/SKILL.md) | AI image generation via 4 providers | haiku | `[prompt] [--edit] [--config] [--update] [--service] [--style] [--count] [--output] [--size]` |
+No skills yet -- coming soon. Brewui is an empty placeholder; the `/brewui:*` command namespace is reserved for future tools.
 
 ## Architecture
 
@@ -82,13 +70,9 @@ brewui/
 ├── hooks/
 │   ├── hooks.json               # Hook registry
 │   ├── session-start.mjs        # BU_PLUGIN_ROOT injection
+│   ├── pre-task.mjs             # BU_PLUGIN_ROOT into subagents
 │   └── lib/utils.mjs            # I/O utilities
-├── skills/
-│   └── image-gen/               # AI image generation
-│       ├── SKILL.md
-│       ├── references/          # Provider specs, anti-slop, modes
-│       ├── scripts/             # API request, parsing, saving
-│       └── tests/               # Integration tests
+├── skills/                      # Empty -- placeholder for future tools
 └── README.md
 ```
 
@@ -98,7 +82,6 @@ Full docs: [doc-claude.brewcode.app/brewui/overview](https://doc-claude.brewcode
 
 | Resource | Link |
 |----------|------|
-| Image Gen | [image-gen](https://doc-claude.brewcode.app/brewui/skills/image-gen/) |
 | Release Notes | [RELEASE-NOTES.md](../RELEASE-NOTES.md) |
 
 Author: Maksim Kochetkov | License: MIT

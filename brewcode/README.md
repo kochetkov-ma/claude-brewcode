@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 3.17.0 |
+| Version | 3.18.0 |
 | Skills | 13 |
 | Agents | 12 |
 | Hooks | 9 |
@@ -89,7 +89,6 @@ After `/brewcode:setup`, each task follows the cycle: `spec` -> `plan` -> `start
 | [`/brewcode:skills`](skills/skills/README.md) | Skill management: list, create, upgrade with activation optimization |
 | [`/brewcode:agents`](skills/agents/README.md) | Interactive agent creation and improvement |
 | [`/brewcode:e2e`](skills/e2e/README.md) | E2E testing orchestration with BDD scenarios and quorum review |
-| [`/brewcode:debate`](skills/debate/README.md) | Evidence-based multi-agent debate: Challenge, Strategy, Critic modes |
 | [`/brewcode:teardown`](skills/teardown/README.md) | Plugin configuration cleanup (tasks are preserved) |
 
 > **Note:** `/brewcode:review` is a local skill created in the project during `/brewcode:setup`.
@@ -106,10 +105,10 @@ After `/brewcode:setup`, each task follows the cycle: `spec` -> `plan` -> `start
 | [agent-creator](agents/agent-creator.md) | opus | Create and improve Claude Code agents |
 | [hook-creator](agents/hook-creator.md) | opus | Create and debug Claude Code hooks |
 | [bash-expert](agents/bash-expert.md) | opus | Create professional shell scripts |
-| [bc-coordinator](agents/bc-coordinator.md) | haiku | Task coordination, artifact management |
-| [bc-knowledge-manager](agents/bc-knowledge-manager.md) | haiku | KNOWLEDGE.jsonl compaction and deduplication |
-| [bc-grepai-configurator](agents/bc-grepai-configurator.md) | opus | Generate grepai config.yaml |
-| [bc-rules-organizer](agents/bc-rules-organizer.md) | haiku | Create and optimize `.claude/rules/` files |
+| bc-coordinator | haiku | Internal: spawned by /brewcode:start + post-task hook |
+| bc-knowledge-manager | haiku | Internal: spawned by /brewcode:start |
+| bc-grepai-configurator | opus | Internal: spawned by /brewcode:grepai |
+| bc-rules-organizer | sonnet | Internal: spawned by /brewcode:rules |
 
 > **Dynamic teams:** Use `/brewcode:teams create` to generate 5-20 project-specific agents with self-selection protocol and performance tracking.
 

@@ -218,7 +218,7 @@ Handles the Task tool result: binds the session and reminds about the 2-step pro
 | Timeout | 5000 ms |
 
 **Logic:**
-- If [bc-coordinator](/brewcode/agents/bc-coordinator/) finished -- binds session_id to the lock file
+- If bc-coordinator finished -- binds session_id to the lock file
 - If a worker agent finished ([developer](/brewcode/agents/developer/), [tester](/brewcode/agents/tester/), etc.) -- reminds: "WRITE report -> CALL bc-coordinator"
 - System agents -- skipped
 

@@ -49,7 +49,7 @@ Default for "disable" intent without explicit mode: `off`.
 - User prompt is freeform without concrete `plugin:name` (e.g. "отключи лишнее"), OR
 - Parsed target missing from cache.
 
-**Skip interactive (go straight to P0 → P2 → P4)** when op AND target both explicit: `/brewtools:skill-toggle disable brewui:image-gen`.
+**Skip interactive (go straight to P0 → P2 → P4)** when op AND target both explicit: `/brewtools:skill-toggle disable brewdoc:md-to-pdf`.
 
 | Phase | Action | Tool |
 |-------|--------|------|
@@ -65,7 +65,7 @@ Terminal ops (`list`, `status`) skip to I4 directly.
 ```
 DISABLED RIGHT NOW (via skillOverrides)
 ---------------------------------------
-brewui:image-gen        off
+brewdoc:md-to-pdf       off
 brewdoc:md-to-pdf       user-invocable-only
 (none)  <-- if empty
 ENABLED (M skills across P plugins)
@@ -83,7 +83,7 @@ Parse `$ARGUMENTS` (or NL prompt) into:
 
 Rules:
 - Default mode for `disable` = `off`. User can specify e.g. `--mode=user-invocable-only` or "make it slash-only".
-- Target format: `plugin:name` (e.g., `brewui:image-gen`). Bare `name` → AskUserQuestion which plugin.
+- Target format: `plugin:name` (e.g., `brewdoc:md-to-pdf`). Bare `name` → AskUserQuestion which plugin.
 - `status`, `list` take no targets.
 - Multiple targets allowed for disable/enable — iterate P2 per target.
 - No `--scope` flag — `skillOverrides` is global-only (per Claude Code design).
@@ -156,7 +156,7 @@ Confirm `PLUGIN:NAME` present (for disable) or absent (for enable). Render resul
 
 | Plugin | Name | Mode | Action | File |
 |--------|------|------|--------|------|
-| brewui | image-gen | off | written | ~/.claude/settings.json |
+| brewdoc | md-to-pdf | off | written | ~/.claude/settings.json |
 
 > Restart session or `/reload-plugins` for the change to take effect.
 > Persisted to ~/.claude/settings.json — survives plugin updates.

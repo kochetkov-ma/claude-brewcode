@@ -19,14 +19,14 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 
 | Command | Action |
 |---------|--------|
-| `/brewtools:skill-toggle disable brewui:image-gen` | Hide a skill (renames `SKILL.md` → `_SKILL.md`) |
-| `/brewtools:skill-toggle enable brewui:image-gen` | Restore a hidden skill |
+| `/brewtools:skill-toggle disable brewdoc:md-to-pdf` | Hide a skill (renames `SKILL.md` → `_SKILL.md`) |
+| `/brewtools:skill-toggle enable brewdoc:md-to-pdf` | Restore a hidden skill |
 | `/brewtools:skill-toggle status` | Show all disabled skills (merged global + project) |
 | `/brewtools:skill-toggle list` | List every installed skill with enabled/disabled state |
 | `/brewtools:skill-toggle reapply` | Re-apply state after manual plugin cache changes |
 | `/brewtools:skill-toggle prune` | Remove state entries for uninstalled plugins |
 
-Target format: `plugin:name` — e.g., `brewui:image-gen`, `brewcode:convention`. Name without a plugin prefix triggers a clarifying question before any mutation.
+Target format: `plugin:name` — e.g., `brewdoc:md-to-pdf`, `brewcode:convention`. Name without a plugin prefix triggers a clarifying question before any mutation.
 
 ## When to use
 
@@ -39,11 +39,11 @@ Target format: `plugin:name` — e.g., `brewui:image-gen`, `brewcode:convention`
 
 ```bash
 # Disable a skill globally (default scope)
-/brewtools:skill-toggle disable brewui:image-gen
+/brewtools:skill-toggle disable brewdoc:md-to-pdf
 
 # Natural language also works
-"disable brewui:image-gen"
-"hide the image-gen skill"
+"disable brewdoc:md-to-pdf"
+"hide the md-to-pdf skill"
 ```
 
 ```bash
@@ -51,7 +51,7 @@ Target format: `plugin:name` — e.g., `brewui:image-gen`, `brewcode:convention`
 /brewtools:skill-toggle disable brewcode:convention --scope=project
 
 # Enable a previously disabled skill
-/brewtools:skill-toggle enable brewui:image-gen
+/brewtools:skill-toggle enable brewdoc:md-to-pdf
 ```
 
 ```bash
@@ -103,7 +103,7 @@ Four phases:
 </Steps>
 
 <Callout type="note">
-**Explicit commands skip the flow.** `disable brewui:image-gen` runs directly — no questions asked. The interactive path only triggers when your intent is ambiguous.
+**Explicit commands skip the flow.** `disable brewdoc:md-to-pdf` runs directly — no questions asked. The interactive path only triggers when your intent is ambiguous.
 </Callout>
 
 ## How it works
@@ -155,10 +155,10 @@ Project scope overrides global per key — a project-level enable wins over a gl
 ```json
 {
   "disabled": {
-    "brewui:image-gen": {
+    "brewdoc:md-to-pdf": {
       "kind": "skill",
-      "plugin": "brewui",
-      "name": "image-gen",
+      "plugin": "brewdoc",
+      "name": "md-to-pdf",
       "disabled_at": "2026-04-16T10:30:00.000Z",
       "last_applied_version": "3.5.2"
     }
