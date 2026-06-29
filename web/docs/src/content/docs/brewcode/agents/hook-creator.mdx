@@ -116,7 +116,7 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 | SubagentStart | No | Inject into subagent context |
 | SubagentStop | Yes | Block subagent exit; supports `additionalContext` to give Claude feedback |
 | Stop | Yes | Block session exit until condition met; supports `additionalContext` to give Claude feedback (CC 2.1.163) |
-| PreCompact | No | React before auto-compact (e.g. persist state) |
+| PreCompact | No | Write handoff before auto-compact |
 | PostCompact | No | React after compact |
 | Notification | No | Log or react to notifications |
 | TeammateIdle | Yes | Control agent team flow |

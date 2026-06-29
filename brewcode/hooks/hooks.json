@@ -36,6 +36,17 @@
     ],
     "PreToolUse": [
       {
+        "matcher": "Task|Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/pre-task.mjs"],
+            "timeout": 5000
+          }
+        ]
+      },
+      {
         "matcher": "Bash",
         "hooks": [
           {
@@ -43,6 +54,31 @@
             "command": "node",
             "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/grepai-reminder.mjs"],
             "timeout": 1000
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Task|Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/post-task.mjs"],
+            "timeout": 5000
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/pre-compact.mjs"],
+            "timeout": 60000
           }
         ]
       }
@@ -56,6 +92,18 @@
             "command": "bash",
             "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/permission-guard.sh"],
             "timeout": 1000
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/stop.mjs"],
+            "timeout": 5000
           }
         ]
       }

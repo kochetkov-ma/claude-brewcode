@@ -1,0 +1,128 @@
+status: pending
+current_phase: 0
+total_phases: {N}
+
+# Plan: {NAME}
+
+> Work ONLY through Task API (TaskCreate/TaskUpdate/TaskList). NEVER read phases/ files.
+> After compact: TaskList() -> Read PLAN.md -> continue.
+
+## Meta
+| Field | Value |
+|-------|-------|
+| Created | {TIMESTAMP} |
+| Spec | SPEC.md |
+| Knowledge | KNOWLEDGE.jsonl |
+| Task Dir | {TASK_DIR} |
+| Phases | phases/ |
+
+## KNOWLEDGE Protocol
+> Format: `{"ts":"ISO","t":"❌|✅|ℹ️","txt":"...","src":"agent"}`
+> Priority: ❌ > ✅ > ℹ️. Only unique, reusable discoveries.
+
+## Completion Criteria
+- [ ] {CRITERION_1}
+- [ ] {CRITERION_2}
+
+## Agents
+### Project Agents
+| Agent | Purpose | Model |
+|-------|---------|-------|
+
+### Core Agents
+| Agent | Purpose |
+|-------|---------|
+| developer | Implementation, fixes |
+| tester | Tests, verification |
+| reviewer | Code review, architecture |
+| Explore | Code search, research |
+| bc-coordinator | Knowledge extraction, report verification |
+
+## Technology Choices
+| Choice | Decision | Rationale | Alternatives |
+|--------|----------|-----------|--------------|
+
+## Role Constraints
+<!-- ALL -->
+<!-- /ALL -->
+<!-- DEV -->
+<!-- /DEV -->
+<!-- TEST -->
+<!-- /TEST -->
+<!-- REVIEW -->
+<!-- /REVIEW -->
+
+## Phase Registry
+> Manager: TaskCreate for each row. Description = summary + "Full instructions: phases/{file}"
+> Parallel group: tasks in same group can run simultaneously.
+
+| # | Phase File | Agent | Subject | Summary | Artifact Dir | Blocked By | Parallel |
+|---|------------|-------|---------|---------|--------------|------------|----------|
+| 1 | phases/1-{name}.md | {AGENT} | {SUBJECT} | {SUMMARY} | 1-1e | - | A |
+| 1V | phases/1V-verify-{name}.md | {VERIFY_AGENT} | Verify {name} | Verify phase 1 output | 1-1v | 1 | - |
+
+## Execution Protocol
+> After EACH agent: WRITE report -> CALL bc-coordinator (ALWAYS)
+> Task API (TaskCreate/TaskUpdate/TaskList) is source of truth. Phase Status table is observability only.
+
+### Task Creation
+FOR each row in Phase Registry:
+  TaskCreate(subject="Phase {#}: {Subject}", description="Phase {#}: {Summary}\n\nFull instructions: phases/{Phase File}\nTask dir: {TASK_DIR}\nArtifacts: artifacts/{Artifact Dir from Phase Registry}/\nKNOWLEDGE: KNOWLEDGE.jsonl", activeForm="{Present continuous of Subject}")
+THEN set dependencies per Blocked By column.
+
+### Execution Loop
+1. TaskList() -> find tasks: status=pending, blockedBy=[]
+2. Same Parallel group -> spawn in ONE message
+3. Per task: TaskUpdate(in_progress) -> Task(agent) -> WRITE report to artifacts/{Artifact Dir from Phase Registry}/ -> CALL bc-coordinator -> TaskUpdate(completed)
+4. Repeat while pending tasks remain
+5. All completed -> bc-coordinator mode:finalize
+
+### Coordinator Protocol
+| Phase | Coordinator Does | Does NOT Do (Task API) |
+|-------|-----------------|----------------------|
+| Execution (N) | Knowledge extraction, report verification | Status update |
+| Verification (NV) | Knowledge extraction, report verification, phase validation | Status update |
+| Final Review (FR) | FINAL.md generation, knowledge extraction | Status update |
+| Finalize | status -> {finished\|failed} (line 1 PLAN.md), FINAL.md generation | - |
+
+### Failure Protocol
+When NV finds issues:
+1. Write phases/{N}F{I}-fix-{name}.md with issues from verification report
+2. TaskCreate(subject="Fix phase {N} issues (iter {I})")
+3. TaskCreate(subject="Re-verify phase {N} (iter {I+1})", blockedBy=[fix task])
+4. Max 3 iterations -> Escalation
+
+### Escalation
+| After | Action |
+|-------|--------|
+| 1 fail | R&D task: explore root cause |
+| 2 fails | Split phase into sub-phases |
+| 3 fails | Upgrade model (sonnet->opus), reassign, AskUserQuestion |
+
+### Failure Cascade & Deadlock Recovery
+When escalation exhausted (task permanently failed):
+1. TaskUpdate(failedTaskId, status="failed")
+2. Persist to KNOWLEDGE.jsonl: {"ts":"...","t":"❌","txt":"Phase {N} permanently failed: {reason}","src":"manager"}
+3. Cascade failure to ALL transitive dependents: TaskList() -> TaskUpdate(T.id, status="failed") for each blocked task
+4. Independent tasks (no dependency on failed task) continue normally
+5. Deadlock check: pending+unblocked=0 AND in_progress=0 AND blocked>0 -> abort all blocked, Finalize(status="failed")
+6. bc-coordinator mode:finalize with status="failed" generates failure summary in FINAL.md
+
+## Handoff
+After compact:
+1. TaskList() - current task state
+2. Read PLAN.md - protocol and Phase Registry
+3. DO NOT read phases/ - they are for agents
+4. Continue with current in_progress or next pending task
+5. WRITE report -> CALL coordinator after EVERY agent (ALWAYS)
+
+## Reports
+| Field | Path |
+|-------|------|
+| Artifacts | artifacts/ |
+| Final | artifacts/FINAL.md |
+| Report | artifacts/{P}-{N}{T}/{AGENT}_output.md |
+
+## Phase Status
+| # | Status | Started | Completed | Iterations |
+|---|--------|---------|-----------|------------|

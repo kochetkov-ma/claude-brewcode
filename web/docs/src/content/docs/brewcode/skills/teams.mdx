@@ -1,0 +1,166 @@
+---
+title: "Teams"
+description: "Build a domain-specific agent team (5-20 agents) from your codebase. Quorum review, trace log, self-updating via performance data."
+order: 1106
+---
+import { Card, CardGrid, Callout, Steps, Badge, UpdateNotice } from '../../../../components/mdx';
+
+# teams — set up agent batch
+
+<Callout type="caution">
+**Generic agents handle everything — and excel at nothing.** A frontend task routed to a generic backend agent loses domain context, triggers wrong tools, and produces half-correct results. Claude Code has no native way to scope agents to domains or enforce routing between them.
+</Callout>
+
+<Callout type="tip">
+**`/brewcode:teams create`** analyzes your codebase, proposes agent variants (Minimal / Balanced / Maximum), creates each agent via quorum-reviewed scaffolding, and sets up a `trace.jsonl` log so the team self-improves via `/brewcode:teams update`.
+</Callout>
+
+## Quick reference
+
+| Field | Value |
+|-------|-------|
+| Command | `/brewcode:teams` |
+| Arguments | `create <name> [prompt]`, `status <name>`, `update <name>`, `cleanup <name>` |
+| Model | opus |
+| Tools | Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion |
+
+## When to use
+
+- **New project onboarding** — turn architectural analysis into a ready-to-use agent roster
+- **Large codebase** — split domains (API, data, frontend, infra, testing) so each agent stays focused
+- **Repeated failures** — a specific domain keeps producing poor results; `create` or `update` that agent
+- **Maintenance** — `status` to see health, `update` to tune underperformers, `cleanup` to archive old trace data
+
+## Examples
+
+```bash
+# Create a balanced team for the current project
+/brewcode:teams create my-team
+
+# Create with a free-form hint about what matters
+/brewcode:teams create my-team "focus on API and data pipeline domains"
+
+# Check team health and success rates
+/brewcode:teams status my-team
+
+# Tune agents that are underperforming
+/brewcode:teams update my-team
+
+# Archive old trace data, remove inactive agents
+/brewcode:teams cleanup my-team
+```
+
+## Modes
+
+| Mode | Command | What it does |
+|------|---------|--------------|
+| `create` | `/brewcode:teams create <name> [prompt]` | Analyze codebase → propose team → create agents → quorum review → framework setup |
+| `update` | `/brewcode:teams update <name>` | Read trace data → classify agents → tune or replace underperformers |
+| `status` | `/brewcode:teams status <name>` | Read-only health report: success rates, open issues, insights, recommendations |
+| `cleanup` | `/brewcode:teams cleanup <name>` | Archive trace entries, remove inactive agents, reset cursor |
+
+## Flow
+
+<Steps>
+  <li>
+    <div>
+      <strong>Parse + confirm</strong>
+      <p>Mode, team name, and optional prompt are extracted from arguments. Current team state (if any) and agent roster are loaded. The plan is shown via <code>AskUserQuestion</code> before any mutation.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Project analysis</strong>
+      <p>3–5 Explore agents run in parallel: code structure, existing agents, tech stack, CI/CD, domain boundaries. Results are consolidated into a single analysis document before the team proposal.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Team proposal + model selection</strong>
+      <p>Three variants presented: Minimal (5 agents), Balanced (10–12, recommended), Maximum (15–20). User selects variant and default model (Opus / Sonnet / Haiku / Mixed). Final agent list confirmed before creation.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Agent creation</strong>
+      <p>Agents created in batches of 3–4 in parallel via <code>agent-creator</code>. Each receives: unified template, domain mission, colleague list, project context. After each batch, <code>/brewtools:text-optimize</code> compresses agent instructions.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Quorum review pipeline (C5–C9)</strong>
+      <p>3 reviewers analyze all agents in parallel (instruction quality, domain accuracy, architecture consistency). Issues confirmed by 2/3 pass the threshold. A verification agent filters false positives. <code>agent-creator</code> fixes critical and important findings. Re-verify confirms no regressions. Skip with <code>--skip-review</code>.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Framework setup</strong>
+      <p><code>.claude/teams/&lt;name&gt;/team.md</code> (roster) and <code>trace.jsonl</code> (empty log) created. <code>verify-team.sh</code> validates structure — stops if anything is missing.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Epilogue: CLAUDE.md + final status</strong>
+      <p>Optionally writes a Teams section to project or local CLAUDE.md. Always outputs the full Team Status table (agents, tasks tracked, success rate, open issues) so you know exactly what was created.</p>
+    </div>
+  </li>
+</Steps>
+
+<details>
+<summary>Internals</summary>
+
+**Framework files**
+
+| File | Purpose |
+|------|---------|
+| `.claude/teams/<name>/team.md` | Agent roster: names, domains, missions, health status. Source of truth for team composition. |
+| `.claude/teams/<name>/trace.jsonl` | JSONL log per session: tasks (took/refused/completed/failed), issues (by severity), insights (by category). Written via `trace-ops.sh add` — append-only, ~96% token savings vs full reads. |
+| `.claude/teams/<name>/trace-archive.jsonl` | Archived entries after cleanup. Cursor reset after archiving. |
+
+**Task Acceptance Protocol**
+
+Every generated agent contains a self-selection protocol. When a task arrives, the agent evaluates three questions before accepting:
+
+1. **Domain check** — "Is this my domain?" If not, refuses and names a better-suited colleague from `team.md`.
+2. **Duplicate check** — "Has this been done?" If yes, refuses and links the existing result in `trace.jsonl`.
+3. **Best candidate** — "Is a colleague better suited?" If yes, redirects without accepting.
+
+**Agent health classification**
+
+| Health | Criteria | Action |
+|--------|----------|--------|
+| Green | >70% success, active in recent tasks | No action needed |
+| Yellow | 30–70% success or many refusals | Tune instructions via `update` |
+| Red | &lt;30% success or inactive | Replace or remove via `update` |
+
+**Immutable vs mutable traits**
+
+| Trait | Mutable? | If wrong |
+|-------|----------|----------|
+| Name | No | Delete + create new |
+| Base role | No | Delete + create new |
+| Character | Yes | Update during tuning |
+| Instructions | Yes | Update during tuning |
+
+**Integration with core skills**
+
+Team agents are preferred by `/brewcode:spec`, `/brewcode:plan`, and `/brewcode:start` when matching domains are found. Priority: team agent → project agent → plugin agent.
+
+</details>
+
+<CardGrid>
+  <Card title="Agents skill" icon="robot" href="/brewcode/skills/agents/">
+    Create individual domain agents — the same scaffolding teams use under the hood.
+  </Card>
+  <Card title="E2E skill" icon="puzzle" href="/brewcode/skills/e2e/">
+    End-to-end task execution using a team: spec → plan → start in one flow.
+  </Card>
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/teams">
+    Source code, scripts, and framework file templates.
+  </Card>
+  <Card title="Brewcode overview" icon="document" href="/brewcode/">
+    All brewcode skills — setup, spec, plan, start, review, and more.
+  </Card>
+</CardGrid>
+
+<UpdateNotice />

@@ -20,10 +20,10 @@
  *
  * Cleanup: /brewcode:teardown removes .claude/plans/ directory
  */
-import { readStdin, output, log, getActiveMode, getState, saveState } from './lib/utils.mjs';
+import { readStdin, output, log, getActiveTaskPath, getLock, getActiveMode, getState, saveState } from './lib/utils.mjs';
 import { readFileSync, readdirSync, statSync, mkdirSync, symlinkSync, unlinkSync, existsSync } from 'fs';
 import { execFileSync } from 'child_process';
-import { join } from 'path';
+import { join, dirname, basename } from 'path';
 import { homedir } from 'os';
 
 const VERSION_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -279,6 +279,33 @@ async function main() {
     }
 
     let sessionTitle = null;
+    if (cwd) {
+      const lock = getLock(cwd);
+      if (lock?.task_path && (!lock.session_id || lock.session_id === session_id)) {
+        const taskDir = dirname(join(cwd, lock.task_path));
+        const isV3 = existsSync(join(taskDir, 'phases'));
+
+        const rawName = basename(taskDir);
+        const derived = rawName.replace(/_task$/, '').replace(/^\d{8}-\d{6}_/, '').replace(/[-_]/g, ' ').trim();
+        sessionTitle = derived || rawName;
+
+        if (source === 'compact') {
+          if (isV3) {
+            context += '\n\n[HANDOFF after compact] 1) TaskList() for current task state 2) Read PLAN.md for protocol 3) DO NOT read phases/ — they are for agents 4) Continue with current in_progress or next pending task 5) WRITE report -> CALL coordinator after EVERY agent';
+          } else {
+            context += '\n\n[HANDOFF after compact] Re-read PLAN.md and KNOWLEDGE.jsonl, then continue current phase.';
+          }
+        }
+
+        if (isV3) {
+          context += '\n\nbrewcode v3: You work through Task API. Call TaskList() to get current task state. DO NOT read phases/ files.';
+          log('info', '[session-start]', `v3 task detected at ${taskDir}, injected Task API reminder`, cwd, session_id);
+        }
+      } else if (source === 'compact' && getActiveTaskPath(cwd)) {
+        // Fallback: lock missing/mismatch but TASK.md reference exists (v2 task without lock)
+        context += '\n\n[HANDOFF after compact] Re-read PLAN.md and KNOWLEDGE.jsonl, then continue current phase.';
+      }
+    }
 
     const modeTag = activeMode ? ` | mode: ${activeMode.name}` : '';
     // reloadSkills not set: this hook toggles no skill files

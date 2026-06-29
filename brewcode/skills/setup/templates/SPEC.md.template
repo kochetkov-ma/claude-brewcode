@@ -1,0 +1,45 @@
+# {NAME}
+> {TIMESTAMP}
+
+## Goal
+{GOAL}
+
+## Scope
+
+| In | Out |
+|----|-----|
+| {IN_SCOPE} | {OUT_OF_SCOPE} |
+
+## Original Requirements
+{FULL_REQUIREMENTS}
+
+## User Q&A
+| # | Question | Answer |
+|---|----------|--------|
+
+## Analysis
+### Architecture
+{ARCHITECTURE_ANALYSIS}
+
+### Data & State
+{DATA_STATE_ANALYSIS}
+
+### Impact
+| Area | Files | Change |
+|------|-------|--------|
+
+## Context Files
+| ID | File | Purpose |
+|----|------|---------|
+
+## Risks
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+
+## Decisions
+| Decision | Rationale |
+|----------|-----------|
+
+## Research
+| Area | Agent | Key Findings |
+|------|-------|--------------|

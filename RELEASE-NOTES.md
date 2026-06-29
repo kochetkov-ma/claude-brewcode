@@ -2,6 +2,25 @@
 
 ---
 
+## v3.19.1 (2026-06-29)
+
+> Docs: [brewcode overview](https://doc-claude.brewcode.app/brewcode/overview/) | [setup skill](https://doc-claude.brewcode.app/brewcode/skills/setup/) | [convention skill](https://doc-claude.brewcode.app/brewcode/skills/convention/) | [e2e skill](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [rules skill](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [skills skill](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [agents skill](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [teams skill](https://doc-claude.brewcode.app/brewcode/skills/teams/) | [teardown skill](https://doc-claude.brewcode.app/brewcode/skills/teardown/) | [standards-review skill](https://doc-claude.brewcode.app/brewcode/skills/standards-review/)
+
+> Partial revert of v3.19.0: only `plan` + `start` stay removed. Everything else the strip removed is restored.
+
+### brewcode
+#### Restored
+- **skills (9):** setup, convention, e2e, rules, skills, agents, teams, teardown, standards-review — re-added; brewcode now ships 11 skills (these + spec + grepai)
+- **internal agents:** bc-coordinator, bc-knowledge-manager, bc-rules-organizer
+- **hooks:** pre-task.mjs, post-task.mjs, pre-compact.mjs, stop.mjs + lib/knowledge.mjs; session-start.mjs / utils.mjs task/lock/KNOWLEDGE logic
+- **templates:** reports/ and skills/review/ template dirs
+- **internal docs:** brewcode/docs/{flow,hooks,commands}.md
+
+#### Removed
+- **plan + start skills:** stay stripped — infinite task-execution flow retired; spec hands off to the `developer` agent
+
+---
+
 ## v3.19.0 (2026-06-29)
 
 > Docs: [brewcode overview](https://doc-claude.brewcode.app/brewcode/overview/) | [spec skill](https://doc-claude.brewcode.app/brewcode/skills/spec/) | [grepai skill](https://doc-claude.brewcode.app/brewcode/skills/grepai/)

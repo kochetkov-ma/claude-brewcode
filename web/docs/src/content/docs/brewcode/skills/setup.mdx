@@ -1,0 +1,246 @@
+---
+title: "Setup"
+description: "Analyzes project structure and tech stack to generate adapted PLAN.md.template in .claude/tasks/templates/."
+order: 1101
+---
+import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+
+# setup — one-time project init
+
+<Callout type="caution">
+**brewcode needs to know your stack before it can plan.** Without setup, the PLAN.md template is generic — wrong agents, wrong reference files, no tech-specific review checks. Running `/brewcode:setup` once produces a template and review skill calibrated to your actual codebase.
+</Callout>
+
+<Callout type="tip">
+**Prerequisites are handled automatically.** Phase 0 checks for `brew`, `timeout`, and `jq`. If everything is present it completes silently and moves on. Semantic search (grepai) is offered as an optional install — ~1.5 GB, skippable.
+</Callout>
+
+## Quick reference
+
+| Field | Value |
+|-------|-------|
+| Command | `/brewcode:setup` |
+| Arguments | `[universal-template-path]` |
+| Model | opus |
+| Context | fork |
+| Tools | Read, Write, Glob, Grep, Bash, AskUserQuestion |
+
+## When to use
+
+- **New project** — run once after installing brewcode to generate `.claude/tasks/templates/`
+- **Stack changed** — added a new framework, switched DB, introduced a new agent — re-run to refresh templates
+- **After reinstall** — templates are synced from the plugin cache; a fresh install wipes them
+- **Review skill missing** — `/brewcode:review` depends on `.claude/skills/brewcode-review/SKILL.md` created here
+
+## Examples
+
+```bash
+# Standard: analyze the current project and generate all templates
+/brewcode:setup
+```
+
+```bash
+# Use a custom universal template instead of the plugin default
+/brewcode:setup /path/to/my-PLAN.md.template
+```
+
+```bash
+# After setup, start the workflow
+/brewcode:spec "Implement payment gateway"
+/brewcode:plan
+/brewcode:start
+```
+
+## Flow
+
+<Steps>
+  <li>
+    <div>
+      <strong>Prerequisites check (Phase 0)</strong>
+      <p>Detects installed tools: <code>brew</code>, <code>timeout</code>, <code>jq</code> (required), <code>ollama</code> and <code>grepai</code> (optional). Missing required tools are installed automatically. If <code>timeout</code> is absent, the skill asks before creating a <code>gtimeout</code> symlink. Semantic search is offered as an optional upgrade.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Project scan (Phase 1)</strong>
+      <p>The Explore agent scans the repo: language, framework, build tool, test framework, assertion library, mocking library, database type and access layer, and any existing <code>.claude/agents/</code> entries. Output feeds directly into the adaptation plan.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Adaptation plan (Phase 2)</strong>
+      <p>The Plan agent consolidates scan findings into a structured document: tech stack, testing setup, DB config, detected project agents, key patterns from <code>CLAUDE.md</code>, and a list of template modifications to apply.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Template generation (Phase 3)</strong>
+      <p>Creates <code>.claude/tasks/</code> directory structure, syncs PLAN / SPEC / KNOWLEDGE templates from the plugin cache, then adapts the PLAN template: inserts project agents, fills Reference Examples with canonical files, customises Phase V reviewers and Final Review agents for the detected stack.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Review skill + config (Phases 3.5 & 3.6)</strong>
+      <p>Copies the review skill template to <code>.claude/skills/brewcode-review/SKILL.md</code> and replaces placeholders (<code>&#123;`&#123;TECH_SPECIFIC_CHECKS&#125;`&#125;</code>, <code>&#123;`&#123;PROJECT_AGENTS_TABLE&#125;`&#125;</code>, etc.) from the adaptation plan. Also copies <code>brewcode.config.json</code> with runtime settings for KNOWLEDGE compaction and stop-hook limits.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Validation + CLAUDE.md update (Phases 4 & 5)</strong>
+      <p>Validates all generated files exist and contain required sections. Then collects all installed agents (excluding internal ones) and offers to replace the agent table in <code>&#126;/.claude/CLAUDE.md</code> with an LLM-optimised format. Asks before writing.</p>
+    </div>
+  </li>
+</Steps>
+
+<details>
+<summary>Internals & phases — full phase dumps, scripts, and template fragments</summary>
+
+### Phase 0: Prerequisites — script details
+
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/install.sh" state
+bash "${CLAUDE_SKILL_DIR}/scripts/install.sh" check-timeout
+bash "${CLAUDE_SKILL_DIR}/scripts/install.sh" required
+bash "${CLAUDE_SKILL_DIR}/scripts/install.sh" grepai   # if user accepts
+bash "${CLAUDE_SKILL_DIR}/scripts/install.sh" summary
+```
+
+| Component | Type | Purpose |
+|-----------|------|---------|
+| brew | required | Package manager |
+| coreutils + timeout | required | Command timeout for hooks |
+| jq | required | JSON processor used by hooks |
+| ollama | optional | Local embedding server |
+| bge-m3 | optional | Multilingual embedding model (~1.2 GB) |
+| grepai | optional | Semantic code search CLI |
+
+### Phase 1: Scan script
+
+```bash
+bash "scripts/setup.sh" scan
+```
+
+### Phase 3: Template structure + sync scripts
+
+```bash
+bash "scripts/setup.sh" structure
+bash "scripts/setup.sh" sync
+```
+
+Template sections the skill adapts:
+
+| Section | Adaptation |
+|---------|-----------|
+| Agents | Add project-specific agents from `.claude/agents/` |
+| Reference Examples | Fill with project's canonical files (controllers, services, tests) |
+| Phase V agents | Customise reviewer focus for detected testing/code patterns |
+| Final Review | Add project agents (db_expert, etc.) if relevant tech detected |
+
+Required sections preserved verbatim:
+
+```markdown
+## Agents — Add project agents above Core Agents
+## Reference Examples — R1..RN with project's canonical files
+## Phases — Each phase has: Agent, Status, Context (C#), Refs (R#)
+## Phase NV: Verification — 2+ agents, one checks patterns compliance
+## Final Review — 3+ agents parallel
+## Context Index — C1..CN task-specific files
+```
+
+### Phase 3.5: Review skill placeholders
+
+| Placeholder | Source | Example |
+|-------------|--------|---------|
+| `{PROJECT_AGENTS_TABLE}` | `.claude/agents/` scan | `\| db_expert \| PostgreSQL \| DB layer \|` |
+| `{TECH_SPECIFIC_CHECKS}` | Detected tech stack | Java/Node/Python/Go tables |
+| `{PROJECT_RULES}` | CLAUDE.md patterns | AssertJ rules, Lombok, logging |
+| `{MAIN_AGENT}` | Project agent or `reviewer` | `reviewer` |
+| `{TEST_AGENT}` | Project agent or `tester` | `tester` |
+| `{DB_AGENT}` | Project agent or `sql_expert` | `db_expert` |
+| `{CUSTOM_GROUPS}` | Additional review groups | Security, API validation |
+| `{CODEBASE_BLOCKS}` | Detected source patterns | `src/main/**`, `src/test/**` |
+
+Validation:
+
+```bash
+bash "scripts/setup.sh" review
+test -f .claude/skills/brewcode-review/SKILL.md && echo "Review skill created" || echo "MISSING"
+```
+
+### Phase 3.6: Configuration options
+
+```bash
+bash "scripts/setup.sh" config
+```
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `knowledge.maxEntries` | 100 | Max KNOWLEDGE.jsonl entries after compaction |
+| `knowledge.maxTokens` | 500 | Max tokens in `## K` block injected to agents |
+| `knowledge.priorities` | `["❌","✅","ℹ️"]` | Priority order for knowledge entries |
+| `stop.maxAttempts` | 20 | Stop attempts before escape mechanism triggers |
+| `agents.system` | [...] | System agents (excluded from `## K` injection) |
+
+### Phase 4: Validation script
+
+```bash
+bash "scripts/setup.sh" validate
+```
+
+| Check | Expected path |
+|-------|--------------|
+| PLAN template | `.claude/tasks/templates/PLAN.md.template` |
+| SPEC template | `.claude/tasks/templates/SPEC.md.template` |
+| KNOWLEDGE template | `.claude/tasks/templates/KNOWLEDGE.jsonl.template` |
+| Config file | `.claude/tasks/cfg/brewcode.config.json` |
+| Review skill | `.claude/skills/brewcode-review/SKILL.md` |
+
+### Phase 5: CLAUDE.md agent update
+
+```bash
+bash "scripts/setup.sh" agents > /tmp/agents-section.md
+```
+
+The skill reads `&#126;/.claude/CLAUDE.md`, finds all agent-related sections by LLM analysis (not grep), then asks the user before replacing. Internal agents `bc-coordinator`, `bc-grepai-configurator`, `bc-knowledge-manager` are excluded by the script — do not add them manually.
+
+### Output format
+
+```markdown
+# Template Adaptation Complete
+
+## Tech Stack
+| Category | Value |
+|----------|-------|
+| Language | [detected] |
+| Framework | [detected] |
+| Testing | [framework] |
+| Database | [type/access] |
+| Project Agents | [N]: `agent1`, `agent2` |
+
+## Adaptations
+| Section | Changes |
+|---------|---------|
+| Agents | +[N] project agents |
+| Reference Examples | [N] canonical files |
+| Phase V | Reviewers for [tech] patterns |
+| Review Skill | Tech-specific checks, project rules |
+```
+
+</details>
+
+<CardGrid>
+  <Card title="Plan skill" icon="document" href="/brewcode/skills/plan/">
+    Use the adapted PLAN.md.template — `/brewcode:plan` builds a task plan from SPEC.
+  </Card>
+  <Card title="Grepai skill" icon="search" href="/brewcode/skills/grepai/">
+    Configure semantic code search — offered during setup Phase 0.
+  </Card>
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/setup">
+    Scripts, install.sh, setup.sh, and template sources.
+  </Card>
+  <Card title="Brewcode overview" icon="puzzle" href="/brewcode/">
+    All brewcode skills and the infinite-task execution model.
+  </Card>
+</CardGrid>
+
+<UpdateNotice />

@@ -10,7 +10,7 @@ import { Card, CardGrid, Badge, Callout, Steps, UpdateNotice } from '../../../..
 <Badge variant="primary" text="sonnet" /> <Badge variant="secondary" text="session" />
 
 <Callout type="caution" title="Prerequisites">
-  Needs Homebrew, Ollama, and the grepai CLI. Run `/brewcode:grepai setup` — it checks for each component and stops with a clear error if anything is missing.
+  Run [/brewcode:setup](/brewcode/skills/setup/) first — it installs Homebrew, Ollama, and grepai CLI automatically in Phase 0.
 </Callout>
 
 <Callout type="tip" title="Environment">
@@ -133,8 +133,8 @@ The skill always prints a status table after any mode completes:
 </details>
 
 <CardGrid>
-  <Card title="spec skill" icon="document" href="/brewcode/skills/spec/">
-    Write a SPEC.md — research agents lean on grepai to find reusable code fast.
+  <Card title="setup skill" icon="document" href="/brewcode/skills/setup/">
+    Run setup first — it installs all prerequisites including Ollama and grepai CLI.
   </Card>
   <Card title="Source on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/grepai">
     Skill scripts, SKILL.md, and configuration templates.

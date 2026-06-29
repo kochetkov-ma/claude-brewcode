@@ -1,6 +1,6 @@
 ---
 title: "Agents"
-description: "All 9 Brewcode agents: models, triggers, tools"
+description: "All 12 Brewcode agents: models, triggers, tools"
 order: 12
 ---
 
@@ -9,8 +9,8 @@ import { Card, CardGrid, Callout } from '../../../components/mdx';
 # Agents
 
 Agents (brewers) are specialized roles defined in markdown files with frontmatter metadata.
-Each agent has its own model, toolset, and system prompt. Brewcode includes 9 agents,
-from developer to grepai configuration.
+Each agent has its own model, toolset, and system prompt. Brewcode includes 12 agents,
+from developer to task coordination.
 
 ## Summary table
 
@@ -24,7 +24,10 @@ from developer to grepai configuration.
 | 6 | agent-creator | opus | Read, Write, Edit | Agent creation and improvement |
 | 7 | hook-creator | opus | Read, Write, Edit, Bash | Hook creation and debugging |
 | 8 | bash-expert | opus | Read, Write, Edit, Bash | Bash/sh script creation |
-| 9 | bc-grepai-configurator | opus | Read, Write, Edit, Bash | Internal: spawned by /brewcode:grepai |
+| 9 | bc-coordinator | haiku | Read, Write, Edit, Bash | Internal: spawned by /brewcode:start + post-task hook |
+| 10 | bc-knowledge-manager | haiku | Read, Write | Internal: spawned by /brewcode:start |
+| 11 | bc-grepai-configurator | opus | Read, Write, Edit, Bash | Internal: spawned by /brewcode:grepai |
+| 12 | bc-rules-organizer | sonnet | Read, Write, Edit, Bash | Internal: spawned by /brewcode:rules |
 
 <CardGrid>
   <Card title="developer" icon="code" href="/brewcode/agents/developer/">
@@ -53,9 +56,8 @@ from developer to grepai configuration.
   </Card>
 </CardGrid>
 
-:::note[Internal agent]
-`bc-grepai-configurator` is internal. It is spawned automatically by the
-[/brewcode:grepai](/brewcode/skills/grepai/) skill, is not user-invokable, and has no dedicated page.
+:::note[Internal agents]
+`bc-coordinator`, `bc-knowledge-manager`, `bc-grepai-configurator`, and `bc-rules-organizer` are internal. They are spawned automatically by brewcode skills and hooks, are not user-invokable, and have no dedicated page.
 :::
 
 ## Models and cost
@@ -63,10 +65,17 @@ from developer to grepai configuration.
 | Model | Agents | When to use |
 |-------|--------|-------------|
 | **opus** | [developer](/brewcode/agents/developer/), [reviewer](/brewcode/agents/reviewer/), [architect](/brewcode/agents/architect/), [skill-creator](/brewcode/agents/skill-creator/), [agent-creator](/brewcode/agents/agent-creator/), [hook-creator](/brewcode/agents/hook-creator/), [bash-expert](/brewcode/agents/bash-expert/), bc-grepai-configurator | Complex tasks, deep analysis, code generation |
-| **sonnet** | [tester](/brewcode/agents/tester/) | Balanced tasks, review, optimization |
+| **sonnet** | [tester](/brewcode/agents/tester/), bc-rules-organizer | Balanced tasks, review, optimization |
+| **haiku** | bc-coordinator, bc-knowledge-manager | Lightweight operations: statuses, knowledge extraction, compaction |
+
+<Callout type="tip" title="Automatic selection">
+  Agents are selected automatically based on the Phase Registry in PLAN.md.
+  The [/brewcode:start](/brewcode/skills/start/) skill reads agent assignments from the phase table
+  and launches the corresponding agents via Task API.
+</Callout>
 
 <Callout type="note" title="Moved Agents">
-  Agents [text-optimizer](/brewtools/agents/text-optimizer/), [ssh-admin](/brewtools/agents/ssh-admin/), and [deploy-admin](/brewtools/agents/deploy-admin/) live in
+  Agents [text-optimizer](/brewtools/agents/text-optimizer/), [ssh-admin](/brewtools/agents/ssh-admin/), and [deploy-admin](/brewtools/agents/deploy-admin/) have been moved to
   <a href="/brewtools/agents/">Brewtools</a>.
 </Callout>
 

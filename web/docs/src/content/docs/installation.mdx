@@ -90,10 +90,10 @@ import { Card, CardGrid, Callout, Steps, Tabs, TabItem, InstallPrompt } from '..
   </li>
   <li class="step step-primary">
     <div>
-      <strong>Create your first spec</strong>
+      <strong>Run project setup</strong>
       <p>Inside a Claude Code session, run:</p>
-      <pre><a href="/brewcode/skills/spec/"><code>/brewcode:spec "your task description"</code></a></pre>
-      <p>The spec skill launches research agents to analyze your project and produces a structured specification. To enable semantic code search, run <a href="/brewcode/skills/grepai/"><code>/brewcode:grepai</code></a> (it can install ollama and the local index on first run).</p>
+      <pre><a href="/brewcode/skills/setup/"><code>/brewcode:setup</code></a></pre>
+      <p>Setup automatically checks and installs prerequisites (brew, jq, coreutils) as Phase 0 before analyzing your project. Optionally installs ollama and grepai for semantic search.</p>
     </div>
   </li>
 </Steps>
@@ -133,8 +133,8 @@ claude plugin update brewui@claude-brewcode
   **`/brewcode:*` commands are not recognized**
   -- Restart Claude Code after installation. Plugins only load at session start.
 
-  **Semantic search reports a missing prerequisite**
-  -- <a href="/brewcode/skills/grepai/">`/brewcode:grepai`</a> installs ollama and the local index on first run. If a tool is still missing: `brew install coreutils jq`.
+  **<a href="/brewcode/skills/setup/">`/brewcode:setup`</a> reports missing `timeout`**
+  -- The setup skill creates a symlink automatically during Phase 0. If the issue persists: `brew install coreutils`.
 
   **`CLAUDECODE` environment variable interferes with launch**
   -- Run `unset CLAUDECODE` before running `claude` in scripts (applies to v0.2.47+).
@@ -144,10 +144,10 @@ claude plugin update brewui@claude-brewcode
 
 <CardGrid>
   <Card title="Quick Start" icon="rocket" href="/quickstart/">
-    Run the lean cycle in 15 minutes: [spec](/brewcode/skills/spec/) to draft a task, [grepai](/brewcode/skills/grepai/) for semantic search, then delegate.
+    Run your first infinite task in 15 minutes: [setup](/brewcode/skills/setup/), [spec](/brewcode/skills/spec/), [plan](/brewcode/skills/plan/), [start](/brewcode/skills/start/).
   </Card>
   <Card title="Brewcode Overview" icon="building" href="/brewcode/overview/">
-    Architecture, concepts, skills, and agents across the suite.
+    Architecture, concepts, all 32 skills, 16 agents, and 9 hooks.
   </Card>
 </CardGrid>
 

@@ -27,9 +27,18 @@ export const navigation: NavSection[] = [
         title: 'Skills',
         slug: 'brewcode/skills',
         children: [
+          { title: 'setup', slug: 'brewcode/skills/setup' },
           { title: 'spec', slug: 'brewcode/skills/spec' },
+          { title: 'teams', slug: 'brewcode/skills/teams' },
+          { title: 'convention', slug: 'brewcode/skills/convention' },
+          { title: 'rules', slug: 'brewcode/skills/rules' },
           { title: 'grepai', slug: 'brewcode/skills/grepai' },
+          { title: 'teardown', slug: 'brewcode/skills/teardown' },
+          { title: 'standards-review', slug: 'brewcode/skills/standards-review' },
+          { title: 'review (dynamic)', slug: 'brewcode/skills/review' },
+          { title: 'skills', slug: 'brewcode/skills/skills' },
           { title: 'agents', slug: 'brewcode/skills/agents' },
+          { title: 'e2e', slug: 'brewcode/skills/e2e' },
         ],
       },
       {

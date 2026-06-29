@@ -198,7 +198,7 @@ Root-level `SKILL.md`: a plugin with a `SKILL.md` at the plugin root (no `skills
 
 ### Subagent spawn constraint
 
-CC 2.1.172 allows nested subagent spawning up to 5 levels deep. Spawn agents from the main conversation when you need their results integrated back into your session.
+CC 2.1.172 allows nested subagent spawning up to 5 levels deep. However, brewcode workflow requires spawning only from the main conversation — the 2-step report protocol (`post-task.mjs`) binds the task lock to one session and delivers report/coordinator instructions back to the spawning conversation. Nested spawns bypass session binding, `KNOWLEDGE` injection, and the coordinator loop. This is a **brewcode workflow policy**, not a Claude Code platform limitation.
 
 </details>
 

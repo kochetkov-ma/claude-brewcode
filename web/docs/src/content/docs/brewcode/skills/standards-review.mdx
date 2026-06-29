@@ -1,0 +1,171 @@
+---
+title: "Standards Review"
+description: "Multi-agent code review against project rules, stack guidelines, and reuse opportunities. Spawns parallel expert agents per file group, validates findings, writes a structured report."
+order: 1112
+---
+import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+
+# standards-review — check code standards
+
+<Callout type="caution">
+**Manual code review misses pattern creep.** As projects grow, the same utility gets re-implemented three times, `avoid#5` quietly gets skipped, and stack-specific rules (entity suffixes, constructor injection, no hardcoded colors) erode one PR at a time. A single reviewer can't track all of this across a large diff.
+</Callout>
+
+<Callout type="tip">
+**`/brewcode:standards-review` delegates the tedious parts.** Parallel haiku agents cover each file group simultaneously — entities, services, tests, build files — then a sonnet validator confirms every finding against the actual source. The report lands in `.claude/reports/` with violations, reuse opportunities, and good patterns all separated. Optionally chains into `/simplify` for a second pass on efficiency and hot-paths.
+</Callout>
+
+## Quick reference
+
+| Field | Value |
+|-------|-------|
+| Command | `/brewcode:standards-review` |
+| Arguments | `[commit\|branch\|folder] [-p <prompt>]` |
+| Model | opus |
+| Context | session |
+| Tools | Read, Glob, Grep, Task, Bash, Write, mcp\_\_grepai\_\_search, AskUserQuestion, Skill |
+
+## When to use
+
+- **Before merging a feature branch** — run without args to diff the branch against `main`/`master`
+- **Spot-check a single commit** — pass the short SHA: `/brewcode:standards-review abc123`
+- **Review a folder in isolation** — pass the path: `/brewcode:standards-review src/main/java/com/example/orders`
+- **Pre-release compliance sweep** — catch any `avoid#N` violations before tagging
+- **After onboarding a new stack** — confirm new files follow project conventions from day one
+
+## Examples
+
+```bash
+# Review current branch vs main
+/brewcode:standards-review
+
+# Review a specific commit
+/brewcode:standards-review a3f9c12
+
+# Review a folder
+/brewcode:standards-review src/main/java/com/example/payments
+
+# Natural language triggers also work
+"check standards on my branch"
+"find duplicates in the current diff"
+```
+
+## Flow
+
+<Steps>
+  <li>
+    <div>
+      <strong>Confirm scope</strong>
+      <p>Before any analysis, asks one question: run <code>/simplify</code> afterward for an efficiency pass? Answer is remembered — no second prompt.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Detect tech stack</strong>
+      <p>Scans project root for <code>pom.xml</code>, <code>package.json</code>, <code>pyproject.toml</code>, and similar markers. Loads the matching <code>references/&#123;stack&#125;.md</code> as expert guidelines. Multiple stacks → all references loaded and processed separately.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Collect files</strong>
+      <p>Runs <code>git diff --name-only</code> (branch or commit) or <code>find</code> (folder). Filters to stack-specific extensions. Hard cap at 50 files — warns if the scope is too broad.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Load context</strong>
+      <p>Reads <code>.claude/rules/avoid.md</code>, <code>best-practice.md</code>, all <code>\*.md</code> rule files, and <code>CLAUDE.md</code> if present. Skips gracefully when files don't exist.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Spawn expert agents</strong>
+      <p>Files are grouped by type (entities, services, tests, build config). One haiku agent fires per non-empty group in parallel. Each agent runs search-first via <code>grepai_search</code> before flagging potential duplicates, then outputs structured JSON with violations and reuse signals.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Validate findings</strong>
+      <p>A sonnet reviewer agent reads every <code>file:line</code> location from the expert JSON, confirms the rule actually applies in context, and returns <code>CONFIRM</code> or <code>REJECT</code> per finding. False positives are dropped.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Write report</strong>
+      <p>Confirmed findings land in <code>.claude/reports/&#123;timestamp&#125;_standards-review/REPORT.md</code> — split into violations (errors / warnings), reuse opportunities (with similarity %, recommended action), and good patterns. If the user said Yes in step 1, invokes <code>/simplify</code> on the same scope.</p>
+    </div>
+  </li>
+</Steps>
+
+## How it works
+
+The skill runs as an opus orchestrator. It reads your project's rules and stack guidelines once, then fans out to specialist haiku agents — one per file group — that can run in parallel. Each agent is instructed to use `grepai_search` before flagging a potential duplicate, applying the similarity decision matrix (90-100% → REUSE, 70-89% → EXTEND, 50-69% → CONSIDER, below 50% → KEEP\_NEW). A sonnet validation pass eliminates false positives by reading actual source at reported line ranges. The final report separates errors (must fix), warnings (should fix), and informational notes.
+
+<details>
+<summary>Internals — priority stack, similarity matrix, report structure</summary>
+
+**Review priority order**
+
+| Priority | Source | Focus |
+|----------|--------|-------|
+| 1 | Existing codebase | Search FIRST — import instead of creating |
+| 2 | `CLAUDE.md` | Project standards, conventions, patterns |
+| 3 | `rules/*.md` | Strict rules with numbers — check ALL `[avoid#N]`, `[bp#N]` |
+| 4 | `references/{stack}.md` | Stack-specific guidelines bundled with this skill |
+
+**Similarity decision matrix**
+
+| Similarity | Decision | Action |
+|------------|----------|--------|
+| 90–100% | REUSE | Import existing |
+| 70–89% | EXTEND | Add params/config to existing |
+| 50–69% | CONSIDER | Evaluate effort vs benefit |
+| &lt;50% | KEEP\_NEW | Justified new code |
+
+**Stack groupings (Phase 4)**
+
+Java/Kotlin groups: `entities`, `services`, `tests`, `build`.
+TypeScript/React groups: `styles`, `components`, `tests`, `build`.
+Python groups: `modules`, `tests`, `configs`, `build`.
+
+Each group maps to a pattern (e.g., `**/entity/*.java`) and a focus area (e.g., entity suffix, DI, Lombok).
+
+**Report structure**
+
+`REPORT.md` sections: Summary table → Violations (errors / warnings) → Reuse Opportunities → Good Patterns Found → Reuse Statistics → Legend.
+
+**Phase 7: optional simplify**
+
+If the user answered "Yes" at Phase 0, the skill invokes:
+
+```
+Skill(skill="simplify", args="{INPUT_VALUE}")
+```
+
+where `{INPUT_VALUE}` is the same scope (commit hash, branch, or folder path) used in the review.
+
+**Error handling**
+
+| Condition | Action |
+|-----------|--------|
+| No files found | Exit: "No files to review for &#123;SCOPE&#125;" |
+| &gt;50 files | Warn user, suggest narrowing scope |
+| Unknown stack | Continue with project rules only |
+| No rules found | Continue with stack reference only |
+| All compliant | Report: "All code compliant with standards" |
+
+</details>
+
+<CardGrid>
+  <Card title="Review skill" icon="star" href="/brewcode/skills/review/">
+    Quorum code review — 3 agents vote, 2/3 consensus required for any finding.
+  </Card>
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/standards-review">
+    Source code, stack reference files, and SKILL.md.
+  </Card>
+  <Card title="Brewcode overview" icon="document" href="/brewcode/">
+    All brewcode skills — infinite tasks, convention extraction, setup.
+  </Card>
+</CardGrid>
+
+<UpdateNotice />

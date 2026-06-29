@@ -26,7 +26,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | `/brewtools:skill-toggle reapply` | Re-apply state after manual plugin cache changes |
 | `/brewtools:skill-toggle prune` | Remove state entries for uninstalled plugins |
 
-Target format: `plugin:name` — e.g., `brewdoc:md-to-pdf`, `brewcode:spec`. Name without a plugin prefix triggers a clarifying question before any mutation.
+Target format: `plugin:name` — e.g., `brewdoc:md-to-pdf`, `brewcode:convention`. Name without a plugin prefix triggers a clarifying question before any mutation.
 
 ## When to use
 
@@ -48,7 +48,7 @@ Target format: `plugin:name` — e.g., `brewdoc:md-to-pdf`, `brewcode:spec`. Nam
 
 ```bash
 # Disable for current project only
-/brewtools:skill-toggle disable brewcode:spec --scope=project
+/brewtools:skill-toggle disable brewcode:convention --scope=project
 
 # Enable a previously disabled skill
 /brewtools:skill-toggle enable brewdoc:md-to-pdf

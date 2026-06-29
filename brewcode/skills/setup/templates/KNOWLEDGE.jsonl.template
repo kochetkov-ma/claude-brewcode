@@ -1,0 +1,41 @@
+# KNOWLEDGE.jsonl Format
+
+## Record Structure
+
+```jsonl
+{"ts":"ISO8601","t":"type","txt":"knowledge text","src":"agent-name"}
+```
+
+## Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `ts` | string | ISO8601 timestamp (e.g., "2026-01-26T14:00:00") |
+| `t` | string | Type: `❌` (avoid), `✅` (best practice), `ℹ️` (info) |
+| `txt` | string | Knowledge text - what was learned |
+| `src` | string | Source agent name (e.g., "developer", "tester") |
+
+## Types Priority
+
+| Type | Priority | Meaning |
+|------|----------|---------|
+| `❌` | 1 (highest) | What NOT to do - mistakes, failures |
+| `✅` | 2 | Best practices - what works well |
+| `ℹ️` | 3 (lowest) | Neutral information - facts |
+
+## Examples
+
+```jsonl
+{"ts":"2026-01-26T14:00:00","t":"❌","txt":"Do not use SELECT * in production queries","src":"sql_expert"}
+{"ts":"2026-01-26T14:05:00","t":"✅","txt":"Use @Valid annotation for request DTOs","src":"developer"}
+{"ts":"2026-01-26T14:10:00","t":"ℹ️","txt":"DBRider resets sequences after each test","src":"tester"}
+{"ts":"2026-01-26T15:00:00","t":"❌","txt":"mem_limit only, not deploy.resources in non-Swarm","src":"developer"}
+```
+
+## Compaction Rules
+
+1. Remove exact duplicates
+2. Merge semantically similar entries
+3. Keep `❌` over `✅` over `ℹ️`
+4. Limit to N entries per agent (configurable)
+5. Preserve most recent entries when trimming

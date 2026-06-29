@@ -1,0 +1,36 @@
+# Phase {PHASE_NUM}F{ITERATION}: Fix {PHASE_NAME} (Iteration {ITERATION})
+
+## Agent
+
+`{FIX_AGENT}`
+
+## Original Phase
+
+`phases/{ORIGINAL_PHASE_FILE}`
+
+## Issues to Fix
+
+> From verification report: `artifacts/{VERIFY_ARTIFACT_DIR}/{VERIFY_AGENT}_output.md`
+
+{ISSUES_TABLE}
+
+## Files to Fix
+
+{FILES_TO_FIX}
+
+## Constraints
+
+- Fix ONLY the listed issues
+- Do NOT refactor unrelated code
+- Preserve existing tests
+- Run tests after fixes
+
+## Exit Criteria
+
+- All issues from the table addressed
+- Tests pass
+- No new issues introduced
+
+## Artifacts
+
+- Report: `artifacts/{ARTIFACT_DIR}/{FIX_AGENT}_output.md`

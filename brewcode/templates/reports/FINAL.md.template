@@ -1,0 +1,73 @@
+# Final Report: {NAME}
+
+> Completed: {TIMESTAMP} | Phases: {PHASE_COUNT} | Iterations: {ITER_COUNT}
+
+## Summary
+
+{TASK_SUMMARY}
+
+## Completion Criteria
+
+| Criterion | Status | Phase |
+|-----------|--------|-------|
+| {CRITERION_1} | {PASS/FAIL} | {N} |
+| {CRITERION_2} | {PASS/FAIL} | {N} |
+
+## Phases Summary
+
+| Phase | Description | Iterations | Status | Key Results |
+|-------|-------------|------------|--------|-------------|
+| 1 | {DESCRIPTION} | {N} | completed | {SUMMARY} |
+| 1V | Verification | {N} | completed | {ISSUES_FOUND/CLEAN} |
+
+## Files Created/Modified
+
+| File | Action | Phase | Purpose |
+|------|--------|-------|---------|
+| {PATH} | created | 1 | {WHY} |
+| {PATH} | modified | 2 | {WHY} |
+
+## Agents Used
+
+| Agent | Phases | Invocations | Notes |
+|-------|--------|-------------|-------|
+| developer | 1, 2 | 3 | - |
+| tester | 1V, 2V | 2 | - |
+| reviewer | 1V, 2V, Final | 3 | - |
+
+## Knowledge Extracted
+
+### Best Practices
+
+- {BEST_PRACTICE_1}
+- {BEST_PRACTICE_2}
+
+### Avoid
+
+- {AVOID_1}
+- {AVOID_2}
+
+### Info
+
+- {INFO_1}
+- {INFO_2}
+
+## Artifacts Index
+
+| Path | Type | Description |
+|------|------|-------------|
+| `artifacts/1-1e/` | exec | Phase 1 execution |
+| `artifacts/1-1v/` | verify | Phase 1 verification |
+
+## Metrics
+
+| Metric | Value |
+|--------|-------|
+| Total Duration | - |
+| Handoffs | {N} |
+| Issues Found | {N} |
+| Issues Resolved | {N} |
+
+---
+
+**Generated:** {TIMESTAMP} by bc-coordinator

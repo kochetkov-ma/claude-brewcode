@@ -1,0 +1,40 @@
+# Phase {PHASE_NUM}V: Verify {PHASE_NAME}
+
+## Scope
+
+Verify Phase {PHASE_NUM} ({PHASE_NAME}) output.
+
+## Agent
+
+`{VERIFY_AGENT}`
+
+## Files to Review
+
+{FILES_TO_REVIEW}
+
+## Checklist
+
+{VERIFICATION_CHECKLIST}
+
+## Against References
+
+{AGAINST_REFERENCES}
+
+## Verdict
+
+> Write PASS or FAIL with justification.
+
+### If FAIL -- Issues Format
+
+| # | Severity | File | Line | Issue | Suggested Fix |
+|---|----------|------|------|-------|---------------|
+
+## Artifacts
+
+- Report: `artifacts/{ARTIFACT_DIR}/{AGENT}_output.md`
+
+## Exit Criteria
+
+- All checklist items verified
+- Verdict: PASS or FAIL with justification
+- If FAIL: issues table populated with actionable items
