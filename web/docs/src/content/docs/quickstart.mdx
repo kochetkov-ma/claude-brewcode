@@ -1,6 +1,6 @@
 ---
 title: "Quick Start"
-description: "Your first 15 minutes with Brewcode: setup, spec, plan, start"
+description: "Your first 15 minutes with Brewcode: spec, semantic search, delegate"
 order: 3
 ---
 
@@ -8,8 +8,9 @@ import { Card, CardGrid, Callout, Steps, Badge } from '../../components/mdx';
 
 # Quick Start
 
-In 15 minutes you will go through the full Brewcode cycle: from project analysis to launching an infinite task.
-By the end you will have a specification, a plan, and a running task with automatic context handoff.
+In 15 minutes you will go through the lean Brewcode cycle: write a task spec, wire up
+semantic code search, then hand the work to a coding agent.
+By the end you will have a structured specification and a fast way to explore any codebase.
 
 <Callout type="note" title="Before you begin">
   Make sure Claude Code and the brewcode plugin are installed.
@@ -21,29 +22,12 @@ By the end you will have a specification, a plan, and a running task with automa
 <Steps>
   <li class="step step-primary">
     <div>
-      <strong>Project setup</strong> <Badge variant="primary" text="/brewcode:setup" />
-      <p>Open Claude Code in your project root and run:</p>
-      <pre><code>/brewcode:setup</code></pre>
-      <p><strong>What happens:</strong> the skill analyzes your project structure, tech stack,
-      test frameworks, and existing agents. It generates tailored templates based on the analysis.</p>
-      <p><strong>Result:</strong></p>
-      <ul>
-        <li><code>.claude/tasks/templates/PLAN.md.template</code> -- plan template</li>
-        <li><code>.claude/tasks/templates/SPEC.md.template</code> -- specification template</li>
-        <li><code>.claude/tasks/cfg/brewcode.config.json</code> -- configuration</li>
-        <li><code>.claude/skills/brewcode-review/</code> -- <a href="/brewcode/skills/review/">tailored code review skill</a></li>
-      </ul>
-      <p>This step runs once per project.</p>
-    </div>
-  </li>
-  <li class="step step-primary">
-    <div>
       <strong>Creating a specification</strong> <Badge variant="primary" text="/brewcode:spec" />
-      <p>Describe the task in plain text or point to a requirements file:</p>
+      <p>Open Claude Code in your project root. Describe the task in plain text or point to a requirements file:</p>
       <pre><code>/brewcode:spec "Implement JWT authorization with role-based access"</code></pre>
       <p>Or from a file:</p>
       <pre><code>/brewcode:spec ./docs/requirements/auth.md</code></pre>
-      <p><strong>What happens:</strong> the plugin launches 5-10 research agents in parallel.
+      <p><strong>What happens:</strong> the plugin launches research agents in parallel.
       The agents analyze the codebase, find related code, dependencies, and patterns.
       Then it asks clarifying questions (use the <code>-n</code> flag for autonomous mode without questions).</p>
       <p><strong>Result:</strong> a <code>SPEC.md</code> file -- a structured specification with project context.</p>
@@ -51,45 +35,44 @@ By the end you will have a specification, a plan, and a running task with automa
   </li>
   <li class="step step-primary">
     <div>
-      <strong>Generating a plan</strong> <Badge variant="primary" text="/brewcode:plan" />
-      <pre><code>/brewcode:plan</code></pre>
-      <p><strong>What happens:</strong> a phased execution plan is generated from SPEC.md.
-      Each phase contains specific steps, expected artifacts, and completion criteria.</p>
-      <p><strong>Result:</strong> a <code>PLAN.md</code> file -- a plan with phases, ready for execution.</p>
+      <strong>Semantic code search</strong> <Badge variant="primary" text="/brewcode:grepai" />
+      <pre><code>/brewcode:grepai</code></pre>
+      <p><strong>What happens:</strong> the skill sets up grepai semantic search over your repository
+      (it can install ollama and the local index on first run). Once indexed, agents query the codebase
+      by intent -- "validate credentials", "error handling" -- instead of exact strings.</p>
+      <p><strong>Result:</strong> fast, meaning-based lookups that feed precise context into the next step.</p>
     </div>
   </li>
   <li class="step step-primary">
     <div>
-      <strong>Running the task</strong> <Badge variant="primary" text="/brewcode:start" />
-      <pre><code>/brewcode:start</code></pre>
-      <p><strong>What happens:</strong> Brewcode begins executing the plan phase by phase.
-      Agents work on the task, recording knowledge in KNOWLEDGE.jsonl.
-      When context reaches ~90%, the PreCompact hook fires:
-      knowledge is compressed, handoff state is written, and the session continues automatically.</p>
-      <p><strong>Result:</strong> the task runs to completion regardless of how many compaction cycles occur.
-      All artifacts are saved in `.claude/tasks/<ts>_<name>_task/artifacts/`.</p>
+      <strong>Delegate the implementation</strong> <Badge variant="primary" text="developer agent" />
+      <p>Hand the spec to the <code>developer</code> agent to write the code:</p>
+      <pre><code>Implement the spec in SPEC.md</code></pre>
+      <p><strong>What happens:</strong> the <code>developer</code> agent reads the specification,
+      uses grepai to locate the relevant code, then implements, builds, and verifies the change.</p>
+      <p><strong>Result:</strong> the feature is implemented against the spec, with semantic search keeping the agent grounded in your actual codebase.</p>
     </div>
   </li>
 </Steps>
 
 ## What's next
 
-<Callout type="tip" title="After the task completes">
-  The task is done. Here is what you can do with the results:
-
-  **[Code review](/brewcode/skills/standards-review/)** -- run a quorum review of the changes:
-  ```bash
-  /brewcode:standards-review
-  ```
-
-  **[Extract rules](/brewcode/skills/rules/)** -- convert accumulated knowledge into project rules:
-  ```bash
-  /brewcode:rules
-  ```
+<Callout type="tip" title="After the work is done">
+  Here is what you can do next with the results:
 
   **[Prompt optimization](/brewtools/skills/text-optimize/)** -- reduce tokens in prompts and agents:
   ```bash
   /brewtools:text-optimize
+  ```
+
+  **[Remove AI artifacts](/brewtools/skills/text-human/)** -- humanize generated code and docs:
+  ```bash
+  /brewtools:text-human
+  ```
+
+  **[Scan for secrets](/brewtools/skills/secrets-scan/)** -- check changes for leaked credentials:
+  ```bash
+  /brewtools:secrets-scan
   ```
 </Callout>
 
@@ -97,25 +80,25 @@ By the end you will have a specification, a plan, and a running task with automa
 
 <CardGrid>
   <Card title="brewcode" icon="building" href="/brewcode/overview/">
-    13 skills for development: infinite tasks, review, semantic search,
-    skill and agent creation, dynamic teams.
+    Lean development toolkit: task specs and grepai semantic code search,
+    plus a roster of coding agents.
   </Card>
   <Card title="brewtools" icon="wrench" href="/brewtools/overview/">
-    13 skills for text utilities: prompt optimization, AI artifact removal,
+    Text utilities: prompt optimization, AI artifact removal,
     secrets scanning, SSH, deploy.
   </Card>
   <Card title="brewui" icon="image" href="/brewui/overview/">
     Placeholder for future UI/visual/creative tools (currently empty).
   </Card>
   <Card title="brewdoc" icon="document" href="/brewdoc/overview/">
-    6 skills for documentation: automatic sync with the codebase,
+    Documentation tools: automatic sync with the codebase,
     doc generation, memory optimization, PDF conversion, publishing.
   </Card>
   <Card title="All brewcode skills" icon="clipboard" href="/brewcode/skills/">
-    Full list of 13 brewcode skills with commands, parameters, and dependencies.
+    Full list of brewcode skills with commands, parameters, and dependencies.
   </Card>
-  <Card title="Dynamic teams" icon="group" href="/brewcode/skills/teams/">
-    Create 5-20 project-specific agents with self-selection and performance tracking.
+  <Card title="Semantic search" icon="search" href="/brewcode/skills/grepai/">
+    Set up grepai for intent-based code exploration across any repository.
   </Card>
 </CardGrid>
 

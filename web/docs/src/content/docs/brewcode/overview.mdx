@@ -14,47 +14,45 @@ Install the entire suite:
 
 <InstallPrompt plugin="all" mode="install" />
 
-Brewcode is a plugin for Claude Code that turns single sessions into an **infinite task pipeline**
-with automatic context handoff between sessions. The name is a nod to brewing: skills (recipes) define
-what to brew, agents (brewers) do the work, and hooks (processes) manage the lifecycle.
+Brewcode is a lean **skill + prompt-injection toolkit** for Claude Code. It ships two focused skills --
+[spec](/brewcode/skills/spec/) for structured task specifications and [grepai](/brewcode/skills/grepai/)
+for semantic code search -- backed by nine developer-facing agents and five lifecycle hooks that wire
+everything into the Claude Code session. The name is a nod to brewing: skills (recipes) define what to
+brew, agents (brewers) do the work, and hooks (processes) manage the lifecycle.
 
 ## Key Features
 
 <CardGrid>
-  <Card title="Infinite context" icon="infinity">
-    Automatic knowledge transfer between sessions via KNOWLEDGE.jsonl and the handoff mechanism.
-    Tasks continue after compaction without losing progress.
-  </Card>
-  <Card title="13 skills (recipes)" icon="terminal">
-    Full cycle: from project analysis (<a href="/brewcode/skills/setup/">/brewcode:setup</a>) to task execution (<a href="/brewcode/skills/start/">/brewcode:start</a>)
-    and code review (<a href="/brewcode/skills/standards-review/">/brewcode:standards-review</a>).
-  </Card>
-  <Card title="12+ agents (brewers)" icon="users">
-    Specialized agents: [developer](/brewcode/agents/developer/), [tester](/brewcode/agents/tester/), [reviewer](/brewcode/agents/reviewer/), [architect](/brewcode/agents/architect/), [skill-creator](/brewcode/agents/skill-creator/),
-    [agent-creator](/brewcode/agents/agent-creator/), and coordinators.
-  </Card>
-  <Card title="9 hooks (processes)" icon="settings">
-    Lifecycle hooks for context management: knowledge injection, grepai integration,
-    exit blocking when a task is still active.
+  <Card title="Structured specs" icon="document">
+    The <a href="/brewcode/skills/spec/">/brewcode:spec</a> skill turns a rough request into a
+    structured task specification through parallel codebase research and a short user dialog.
   </Card>
   <Card title="Semantic search" icon="search">
-    Integration with grepai -- AI-powered code search via Ollama + bge-m3.
-    Auto-start, reminders, configurator.
+    The <a href="/brewcode/skills/grepai/">/brewcode:grepai</a> skill integrates grepai --
+    AI-powered code search via Ollama + bge-m3. Auto-start, reminders, and a configurator agent.
   </Card>
-  <Card title="Code quality" icon="shield">
-    Standards-review, convention analysis.
-    Rules are automatically synced to .claude/rules/.
+  <Card title="9 developer agents" icon="users">
+    Specialized agents: [developer](/brewcode/agents/developer/), [tester](/brewcode/agents/tester/), [reviewer](/brewcode/agents/reviewer/), [architect](/brewcode/agents/architect/), [skill-creator](/brewcode/agents/skill-creator/),
+    [agent-creator](/brewcode/agents/agent-creator/), [hook-creator](/brewcode/agents/hook-creator/), [bash-expert](/brewcode/agents/bash-expert/), and a grepai configurator.
   </Card>
-  <Card title="Dynamic teams" icon="group">
-    Create project-specific agent teams (5-20) with self-selection,
-    performance tracking, and automatic tuning.
+  <Card title="5 lifecycle hooks" icon="settings">
+    Session initialization, grepai auto-start and reminders, and skill-activation boosting --
+    all through built-in Claude Code events.
+  </Card>
+  <Card title="Skill & agent authoring" icon="puzzle">
+    Dedicated creator agents ([skill-creator](/brewcode/agents/skill-creator/), [agent-creator](/brewcode/agents/agent-creator/), [hook-creator](/brewcode/agents/hook-creator/))
+    scaffold and improve your own Claude Code extensions.
+  </Card>
+  <Card title="No external runtime" icon="shield">
+    Brewcode is a thin layer on top of Claude Code. No daemon, no database --
+    everything runs through Claude Code's own hook and skill system.
   </Card>
 </CardGrid>
 
 ## Architecture
 
 Brewcode works as a layer on top of Claude Code through the hook system. The plugin has no external runtime --
-all context is managed through built-in Claude Code events.
+everything is managed through built-in Claude Code events.
 
 ```
                          Brewcode Plugin
@@ -62,35 +60,20 @@ all context is managed through built-in Claude Code events.
   │                                                          │
   │   Skills (recipes)            Agents (brewers)           │
   │   ┌──────────────┐          ┌──────────────────┐         │
-  │   │ setup, spec  │          │ developer, tester │         │
-  │   │ plan, start  │ ──────>  │ reviewer, architect│         │
-  │   │ convention,. │          │ + dynamic teams   │         │
+  │   │ spec         │          │ developer, tester │         │
+  │   │ grepai       │ ──────>  │ reviewer, architect│         │
+  │   │              │          │ creators, bash    │         │
   │   └──────────────┘          └──────────────────┘         │
   │          │                          │                     │
   │          v                          v                     │
-  │   Hooks (processes)           Templates + Knowledge      │
-  │   ┌──────────────┐          ┌──────────────────┐         │
-  │   │ session-start│          │ PLAN.md.template  │         │
-  │   │ pre-task     │ <──────> │ KNOWLEDGE.jsonl   │         │
-  │   │ pre-compact  │          │ SPEC.md.template  │         │
-  │   │ stop         │          │ artifacts/        │         │
-  │   └──────────────┘          └──────────────────┘         │
+  │   Hooks (processes)                                       │
+  │   ┌──────────────────────────────┐                       │
+  │   │ session-start, forced-eval   │                       │
+  │   │ grepai-session, grepai-remind │                       │
+  │   │ permission-guard             │                       │
+  │   └──────────────────────────────┘                       │
   │                                                          │
   └──────────────────────────────────────────────────────────┘
-```
-
-### Task execution flow
-
-```
-PLAN.md --> phases (phases/) --> agents execute --> hooks manage
-   │                               │                     │
-   │  Phase Registry               │  Task API           │  SessionStart
-   │  (phase table)                │  (create/update)    │  PreToolUse
-   │                               │                     │  PostToolUse
-   v                               v                     │  PreCompact
-artifacts/{P}-{N}{T}/          KNOWLEDGE.jsonl            │  Stop
-{AGENT}_output.md              (knowledge accumulation)   v
-                                                    handoff (auto)
 ```
 
 ## Plugin structure
@@ -100,19 +83,15 @@ brewcode/
 ├── .claude-plugin/
 │   └── plugin.json                    # Plugin manifest
 ├── hooks/
-│   ├── hooks.json                     # Binding 9 hooks to events
+│   ├── hooks.json                     # Binding 5 hooks to events
 │   ├── session-start.mjs              # Session initialization
 │   ├── grepai-session.mjs             # Auto-start grepai watch
-│   ├── pre-task.mjs                   # Knowledge injection into agents
-│   ├── grepai-reminder.mjs            # grepai reminder
-│   ├── post-task.mjs                  # Session binding, 2-step protocol
-│   ├── pre-compact.mjs               # Knowledge compaction, handoff
-│   ├── stop.mjs                       # Exit blocking
-│   ├── forced-eval.mjs                # Skill activation (84%)
+│   ├── grepai-reminder.mjs            # grepai reminder (Bash matcher)
+│   ├── forced-eval.mjs                # Skill activation boost
+│   ├── permission-guard.sh            # Auto-allow safe .claude/ writes
 │   └── lib/
-│       ├── utils.mjs                  # I/O, lock files, configuration
-│       └── knowledge.mjs             # KNOWLEDGE.jsonl operations
-├── agents/                            # 12 agents
+│       └── utils.mjs                  # I/O, configuration, logging
+├── agents/                            # 9 agents
 │   ├── developer.md                   # Feature implementation (opus)
 │   ├── tester.md                      # Testing (sonnet)
 │   ├── reviewer.md                    # Code review (opus)
@@ -121,78 +100,25 @@ brewcode/
 │   ├── agent-creator.md               # Agent creation (opus)
 │   ├── hook-creator.md                # Hook creation (opus)
 │   ├── bash-expert.md                 # Bash scripts (opus)
-│   ├── bc-coordinator.md              # Task coordinator (haiku)
-│   ├── bc-knowledge-manager.md        # Knowledge manager (haiku)
-│   ├── bc-grepai-configurator.md      # grepai configurator (opus)
-│   └── bc-rules-organizer.md          # Rules organizer (sonnet)
-├── skills/                            # 13 skills
-│   ├── setup/                         # Project analysis, templates
-│   ├── spec/                          # Specification creation
-│   ├── plan/                          # Plan creation
-│   ├── start/                         # Task execution
-│   ├── convention/                    # Convention analysis
-│   ├── rules/                         # Rule extraction
-│   ├── grepai/                        # Semantic search
-│   ├── teardown/                      # Cleanup
-│   ├── standards-review/              # Standards review
-│   ├── skills/                        # Skill management
-│   ├── agents/                        # Agent management
-│   ├── teams/                         # Dynamic agent teams
-│   └── e2e/                           # E2E testing orchestration
-└── templates/                         # Rule templates
-```
-
-## Target project structure
-
-After running [`/brewcode:setup`](/brewcode/skills/setup/) and [`/brewcode:start`](/brewcode/skills/start/), the following appears in your project:
-
-```
-{PROJECT}/
-└── .claude/
-    └── tasks/
-        ├── cfg/
-        │   ├── brewcode.config.json    # Plugin configuration
-        │   └── brewcode.state.json     # Execution state
-        ├── templates/                  # Adapted templates
-        │   ├── PLAN.md.template
-        │   ├── SPEC.md.template
-        │   └── phase*.template
-        ├── logs/
-        │   └── brewcode.log            # Hook log
-        ├── sessions/
-        │   └── {session_id}.info       # Session information
-        └── {TS}_{NAME}_task/           # Task directory
-            ├── PLAN.md                 # Execution plan
-            ├── SPEC.md                 # Specification
-            ├── KNOWLEDGE.jsonl         # Accumulated knowledge
-            ├── phases/                 # Phase files
-            │   ├── 1-create-entity.md
-            │   ├── 1V-verify-entity.md
-            │   └── FR-final-review.md
-            ├── artifacts/              # Agent reports
-            │   ├── FINAL.md
-            │   └── {P}-{N}{T}/
-            ├── backup/                 # Backups
-            └── .lock                   # Session lock file
+│   └── bc-grepai-configurator.md      # grepai configurator (opus)
+└── skills/                            # 2 skills
+    ├── spec/                          # Specification creation
+    └── grepai/                        # Semantic search
 ```
 
 ## Components in detail
 
 <Tabs>
   <TabItem label="Skills">
-    13 skills (recipes) cover the full task lifecycle.
-    See [Skills](/brewcode/skills/) for details.
+    Two focused skills. See [Skills](/brewcode/skills/) for details.
 
-    | Group | Skills | Purpose |
-    |-------|--------|---------|
-    | Core cycle | setup, spec, plan, start | Task creation and execution |
-    | Quality | standards-review, convention, rules | Code analysis and review |
-    | Dynamic | teams | Agent team creation and management |
-    | Testing | e2e | E2E testing orchestration with BDD scenarios |
-    | Utilities | grepai, teardown, skills, agents | Tools and configuration |
+    | Skill | Command | Purpose |
+    |-------|---------|---------|
+    | [spec](/brewcode/skills/spec/) | `/brewcode:spec` | Structured task specifications via parallel research |
+    | [grepai](/brewcode/skills/grepai/) | `/brewcode:grepai` | Semantic code search management |
   </TabItem>
   <TabItem label="Agents">
-    12+ agents (brewers) with different models and specializations.
+    Nine agents (brewers) with different models and specializations.
     See the [Agents](/brewcode/agents/) section for details.
 
     | Role | Agents | Model |
@@ -200,64 +126,47 @@ After running [`/brewcode:setup`](/brewcode/skills/setup/) and [`/brewcode:start
     | Implementation | developer, tester, architect | opus/sonnet |
     | Review | reviewer | opus |
     | Creation | skill-creator, agent-creator, hook-creator | opus |
-    | Optimization | bash-expert | opus |
-    | Coordination (internal) | bc-coordinator, bc-knowledge-manager, bc-grepai-configurator, bc-rules-organizer | haiku/sonnet/opus |
-
-    + dynamic project agents created by [`/brewcode:teams`](/brewcode/skills/teams/)
+    | Tooling | bash-expert, bc-grepai-configurator | opus |
   </TabItem>
   <TabItem label="Hooks">
-    9 hooks (processes) manage the lifecycle through Claude Code events.
+    Five hooks (processes) manage the session lifecycle through Claude Code events.
     See the [Hooks](/brewcode/hooks/) section for details.
 
     | Event | Hooks | Purpose |
     |-------|-------|---------|
     | UserPromptSubmit | forced-eval | Skill activation |
-    | SessionStart | session-start, grepai-session | Initialization |
-    | PreToolUse | pre-task, grepai-reminder | Context injection |
-    | PostToolUse | post-task | Session binding |
-    | PreCompact | pre-compact | Knowledge handoff |
-    | Stop | stop | Exit blocking |
+    | SessionStart | session-start, grepai-session | Initialization, grepai auto-start |
+    | PreToolUse | grepai-reminder | Search reminder |
+    | PermissionRequest | permission-guard | Auto-allow safe writes |
   </TabItem>
 </Tabs>
 
-## Recommended launch order
+## Typical flow
 
 <Steps>
   <li class="step step-primary">
     <div>
-      <strong>Project setup</strong> <Badge variant="primary" text="/brewcode:setup" />
-      <p>Install prerequisites (Phase 0), analyze the project and generate adapted templates.</p>
+      <strong>Specify</strong> <Badge variant="primary" text="/brewcode:spec" />
+      <p>Turn a request into a structured SPEC.md through parallel codebase research and a short dialog.</p>
     </div>
   </li>
   <li class="step step-primary">
     <div>
-      <strong>Specification</strong> <Badge variant="primary" text="/brewcode:spec" />
-      <p>Parallel codebase research, SPEC.md creation.</p>
+      <strong>Search</strong> <Badge variant="primary" text="/brewcode:grepai" />
+      <p>Configure semantic search; agents use grepai_search to locate relevant code fast.</p>
     </div>
   </li>
   <li class="step step-primary">
     <div>
-      <strong>Plan</strong> <Badge variant="primary" text="/brewcode:plan" />
-      <p>Phase generation, quorum review, requirements tracing.</p>
-    </div>
-  </li>
-  <li class="step step-primary">
-    <div>
-      <strong>Execution</strong> <Badge variant="primary" text="/brewcode:start" />
-      <p>Launch the task with infinite context and automatic handoff.</p>
-    </div>
-  </li>
-  <li class="step step-secondary">
-    <div>
-      <strong>Team Creation (optional)</strong> <Badge variant="secondary" text="/brewcode:teams" />
-      <p>Create a project-specific agent team with trace system. Agents auto-integrate with spec/plan/start.</p>
+      <strong>Delegate</strong> <Badge variant="primary" text="agents" />
+      <p>Hand implementation, testing, and review to the specialized developer agents.</p>
     </div>
   </li>
 </Steps>
 
 <Callout type="tip" title="Next steps">
-  Check [Skills](/brewcode/skills/) for detailed descriptions of all 13 skills,
-  or go to [Workflow](/brewcode/workflow/) for a deep dive into the full task execution cycle.
+  Check [Skills](/brewcode/skills/) for the spec and grepai skills,
+  or go to [Workflow](/brewcode/workflow/) for how the pieces fit together.
 </Callout>
 
 <CardGrid>

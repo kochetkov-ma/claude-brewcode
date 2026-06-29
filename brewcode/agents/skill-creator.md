@@ -279,7 +279,7 @@ Research $ARGUMENTS:
 | `fork` | 1-4 | Works well, CTX isolated |
 | `fork` | 5+ | Memory loss — forgets task structure, skips phases |
 
-`CTX: fork` → CTX fades over extended execution. Multi-phase: use inline | hooks/external state (TASK.md, KNOWLEDGE.jsonl).
+`CTX: fork` → CTX fades over extended execution. Multi-phase: use inline | hooks/external state files (e.g. TASK.md, a progress log).
 
 ## Decision Matrix
 

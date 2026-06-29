@@ -1,240 +1,111 @@
 ---
 auto-sync: enabled
-auto-sync-date: 2026-02-11
+auto-sync-date: 2026-06-29
 description: Complete file tree of the brewcode plugin with descriptions
 ---
 
 # Brewcode Plugin - File Tree
 
-> Version: 3.1.0 | Files: 73 | Directories: 31
+> Version: 3.19.0 | Skills: 2 | Agents: 9 | Hooks: 5
+
+> Brewcode is a lean skill plus prompt-injection toolkit: specification authoring (`/brewcode:spec`) and semantic code search (`/brewcode:grepai`), backed by lifecycle hooks and a set of asset-creation agents.
 
 ## Plugin Structure
 
 ```
 brewcode/                                    # Plugin root directory
 │
-├── .claude-plugin/                            # Claude Code plugin configuration
-│   └── plugin.json                            # Manifest (name, version 3.1.0, skills/ reference)
+├── .claude-plugin/
+│   └── plugin.json                          # Manifest (name, version, skills/ reference)
 │
-├── hooks/                                     # Node.js scripts for Claude Code events
-│   ├── hooks.json                             # Binds 5 events (SessionStart, PreToolUse, PostToolUse, PreCompact, Stop)
+├── hooks/                                   # Node.js scripts for Claude Code events
+│   ├── hooks.json                           # Binds events: UserPromptSubmit, SessionStart, PreToolUse(Bash), PermissionRequest
 │   ├── lib/
-│   │   ├── utils.mjs                          # readStdin, output, log, lock files, config, state, task parsing
-│   │   └── knowledge.mjs                      # KNOWLEDGE.jsonl: validation, compression, compaction, scope-aware retention
-│   ├── session-start.mjs                      # SessionStart: session log, creates LATEST.md symlink on source='clear'
-│   ├── grepai-session.mjs                     # SessionStart: auto-starts grepai watch if .grepai/ exists, checks MCP server
-│   ├── pre-task.mjs                           # PreToolUse(Task): injects grepai reminder + KNOWLEDGE + role constraints
-│   ├── grepai-reminder.mjs                    # PreToolUse(Glob|Grep): reminds to use grepai_search
-│   ├── post-task.mjs                          # PostToolUse(Task): binds session_id to lock, enforces 2-step protocol
-│   ├── pre-compact.mjs                        # PreCompact: validates state, compacts KNOWLEDGE, writes handoff
-│   └── stop.mjs                               # Stop: blocks exit on active task, removes stale lock
+│   │   └── utils.mjs                         # readStdin, output, log, config, state, getActiveMode
+│   ├── session-start.mjs                    # SessionStart: session init, permission_mode, mode injection
+│   ├── grepai-session.mjs                   # SessionStart: auto-starts grepai watch if .grepai/ exists
+│   ├── grepai-reminder.mjs                  # PreToolUse(Bash): reminds to use grepai_search first
+│   ├── forced-eval.mjs                      # UserPromptSubmit: skill activation reminder
+│   └── permission-guard.sh                  # PermissionRequest: auto-allow safe .claude/ + /tmp writes
 │
-├── agents/                                    # Plugin agents (system prompts in Markdown)
-│   ├── bc-coordinator.md                      # Task coordinator (haiku): phase status, knowledge extraction, NEXT ACTION
-│   ├── bc-knowledge-manager.md                # Knowledge manager (haiku): dedup, sort, trim KNOWLEDGE.jsonl
-│   ├── bc-grepai-configurator.md              # grepai configurator (opus): project analysis, config.yaml via 5 parallel investigations
-│   ├── bc-rules-organizer.md                  # Rules organizer (sonnet): creates/optimizes .claude/rules/*.md
-│   ├── agent-creator.md                       # Agent creator (opus): Agent Architect Process, System Prompt Patterns
-│   ├── skill-creator.md                       # Skill creator (opus): Six-Step Creation Process, word budget 1500-2000
-│   ├── bash-expert.md                         # Bash expert (opus): professional sh/bash scripts
-│   ├── hook-creator.md                        # Hook creator (opus): 10 Hook Patterns, Advanced Techniques, Multi-Stage
-│   ├── text-optimizer.md                      # [moved to brewtools] Text optimizer (sonnet)
-│   ├── architect.md                           # System architect (opus): design, planning, architecture decisions
-│   ├── developer.md                           # Developer (opus): implements features, fixes bugs
-│   ├── reviewer.md                            # Reviewer (opus): code review, quality, security, performance
-│   └── tester.md                              # Tester (sonnet): SDET/QA - runs tests, analyzes failures
+├── agents/                                  # Plugin agents (system prompts in Markdown)
+│   ├── bc-grepai-configurator.md            # grepai configurator (opus): project analysis, config.yaml
+│   ├── agent-creator.md                     # Agent creator (opus): Agent Architect Process
+│   ├── skill-creator.md                     # Skill creator (opus): Six-Step Creation Process
+│   ├── bash-expert.md                       # Bash expert (opus): professional sh/bash scripts
+│   ├── hook-creator.md                      # Hook creator (opus): Hook Patterns, Advanced Techniques
+│   ├── architect.md                         # System architect (opus): design, planning, decisions
+│   ├── developer.md                         # Developer (opus): implements features, fixes bugs
+│   ├── reviewer.md                          # Reviewer (opus): code review, quality, security
+│   └── tester.md                            # Tester (sonnet): runs tests, analyzes failures
 │
-├── skills/                                    # Skills - plugin commands (13 total)
+├── skills/                                  # Skills - plugin commands (2 total)
 │   │
-│   ├── setup/                                 # /brewcode:setup - Plugin initialization
-│   │   ├── SKILL.md                           # Project analysis, adapted template generation (opus, fork)
-│   │   ├── scripts/
-│   │   │   ├── setup.sh                       # scan/structure/sync/review/config/validate/all
-│   │   │   └── install.sh                     # state/check-updates/check-timeout/required/grepai/summary
-│   │   └── templates/
-│   │       ├── PLAN.md.template               # Slim Phase Registry table + 3-line header (v3)
-│   │       ├── SPEC.md.template               # Goal, Scope, Requirements, Analysis, Context Files, Risks, Decisions
-│   │       ├── KNOWLEDGE.jsonl.template       # KNOWLEDGE.jsonl format: fields, types, examples, compaction rules
-│   │       ├── phase.md.template              # Execution phase (v3): task, agent, acceptance criteria
-│   │       ├── phase-verify.md.template       # Verification phase (v3): review scope, pass/fail criteria
-│   │       ├── phase-fix.md.template          # Fix phase (v3, dynamic): generated on verification failure
-│   │       ├── phase-final-review.md.template # Final review phase (v3): comprehensive quality review
-│   │       └── brewcode.config.json.template  # Config: knowledge, logging, agents, constraints, autoSync
+│   ├── spec/                                # /brewcode:spec - Specification creation
+│   │   ├── SKILL.md                         # Research (5-10 parallel agents) + dialog + reviewer gate (opus)
+│   │   ├── references/
+│   │   │   └── SPEC-creation.md             # Parallel research + consolidation rules
+│   │   └── README.md
 │   │
-│   ├── spec/                                  # /brewcode:spec - Specification creation
-│   │   └── SKILL.md                           # 7 steps: investigation (5-10 parallel agents), dialog, review (opus, session)
-│   │
-│   ├── plan/                                  # /brewcode:plan - Execution plan creation
-│   │   └── SKILL.md                           # SPEC/Plan Mode → 5-12 phases, quorum review by 3 agents (opus, session)
-│   │
-│   ├── start/                                 # /brewcode:start - Task execution launch
-│   │   └── SKILL.md                           # Infinite context via hooks, 2-step protocol, escalation after 3 failures (opus, session)
-│   │
-│   ├── rules/                                 # /brewcode:rules - Extract rules from knowledge
-│   │   ├── SKILL.md                           # KNOWLEDGE.jsonl → avoid.md + best-practice.md, dedup, 20 line limit (sonnet, session)
-│   │   └── scripts/
-│   │       └── rules.sh                       # read/check/create/validate
-│   │
-│   ├── grepai/                                # /brewcode:grepai - Semantic search management
-│   │   ├── SKILL.md                           # 7 modes: setup/status/start/stop/reindex/optimize/upgrade (sonnet, session)
-│   │   ├── config.yaml.example                # Example grepai config: embedder, chunking, trace, ignore
-│   │   └── scripts/
-│   │       ├── detect-mode.sh                 # Argument parsing: operation mode
-│   │       ├── infra-check.sh                 # grepai CLI, ollama, bge-m3
-│   │       ├── install.sh                     # grepai via Homebrew
-│   │       ├── mcp-check.sh                   # MCP server: settings.json, allowedTools
-│   │       ├── init-index.sh                  # Index init: grepai watch, waits for build
-│   │       ├── start.sh                       # Starts grepai watch in background
-│   │       ├── stop.sh                        # Stops grepai watch
-│   │       ├── reindex.sh                     # Rebuild: stop → clean → rebuild → restart
-│   │       ├── optimize.sh                    # Reanalysis, new config.yaml with backup
-│   │       ├── upgrade.sh                     # brew upgrade grepai
-│   │       ├── status.sh                      # Diagnostics: CLI, ollama, bge-m3, MCP, index, versions
-│   │       ├── verify.sh                      # Full functionality check
-│   │       └── create-rule.sh                 # Creates grepai-first.md in .claude/rules/
-│   │
-│   ├── teardown/                              # /brewcode:teardown - Plugin files cleanup
-│   │   └── SKILL.md                           # Removes templates/, cfg/, skills/brewcode-review/; preserves tasks (haiku, fork)
-│   │
-│   ├── secrets-scan/                          # [moved to brewtools] /brewcode:secrets-scan
-│   │   └── SKILL.md
-│   │
-│   ├── text-human/                            # [moved to brewtools] /brewcode:text-human
-│   │   └── SKILL.md
-│   │
-│   ├── text-optimize/                         # [moved to brewtools] /brewcode:text-optimize
-│   │   └── SKILL.md
-│   │
-│   └── agents/                                # /brewcode:agents - Interactive agent creation/improvement
-│       └── SKILL.md                           # Create/improve agents, delegates to agent-creator + brewtools:text-optimize (opus, session)
+│   └── grepai/                              # /brewcode:grepai - Semantic search management
+│       ├── SKILL.md                         # Modes: setup/status/start/stop/reindex/optimize/upgrade (sonnet)
+│       ├── config.yaml.example              # Example grepai config: embedder, chunking, trace, ignore
+│       ├── README.md
+│       └── scripts/                         # 13 bash scripts
+│           ├── detect-mode.sh               # Argument parsing: operation mode
+│           ├── infra-check.sh               # grepai CLI, ollama, bge-m3
+│           ├── install.sh                   # grepai via Homebrew
+│           ├── mcp-check.sh                 # MCP server: settings.json, allowedTools
+│           ├── init-index.sh                # Index init: grepai watch, waits for build
+│           ├── start.sh                     # Starts grepai watch in background
+│           ├── stop.sh                      # Stops grepai watch
+│           ├── reindex.sh                   # Rebuild: stop -> clean -> rebuild -> restart
+│           ├── optimize.sh                  # Reanalysis, new config.yaml with backup
+│           ├── upgrade.sh                   # brew upgrade grepai
+│           ├── status.sh                    # Diagnostics: CLI, ollama, bge-m3, MCP, index
+│           ├── verify.sh                    # Full functionality check
+│           └── create-rule.sh              # Creates grepai-first.md in .claude/rules/
+│
+├── modes/
+│   └── manager.md                           # Manager mode instructions (resolved by getActiveMode)
 │
 ├── templates/
-│   │
-│   ├── reports/
-│   │   ├── FINAL.md.template                  # Final report: Summary, Completion Criteria, Artifacts Index, Knowledge
-│   │   ├── agent_output.md.template           # Agent report (execution): metadata, task, result, files
-│   │   ├── agent_review.md.template           # Agent report (verification): review scope, findings, verdict
-│   │   └── summary.md.template                # Phase summary: agents, statuses, key results
-│   │
 │   ├── rules/
-│   │   ├── avoid.md.template                  # Anti-patterns: Avoid/Instead/Why table with YAML frontmatter
-│   │   ├── best-practice.md.template          # Best practices: Practice/Context/Source table with YAML frontmatter
-│   │   └── grepai-first.md.template           # grepai priority rule: call examples, tool selection table
-│   │
-│   └── skills/
-│       └── review/
-│           ├── SKILL.md.template              # /brewcode:review template: quorum, groups, Critic mode, DoubleCheck (opus, fork)
-│           └── references/
-│               ├── agent-prompt.md            # Review agent prompt: group, focus, files, output format
-│               └── report-template.md         # Review report: P0-P3 priorities, quorum, statistics
+│   │   ├── grepai-first.md.template         # grepai priority rule: call examples, tool selection
+│   │   ├── best-practice.md.template        # Best practices table with YAML frontmatter
+│   │   └── avoid.md.template                # Anti-patterns table with YAML frontmatter
+│   └── auto-sync/
+│       └── INDEX.jsonl.template             # Auto-sync index template
 │
 ├── docs/
-│   ├── file-tree.md                           # This file
-│   ├── grepai.md                              # grepai integration: ecosystem, attention architecture, MCP, gitignore limitations
-│   ├── commands.md                            # Command reference: all /brewcode:* skills, arguments, examples
-│   ├── flow.md                                # Execution flow diagrams: hook lifecycle, 2-step protocol, compaction
-│   └── hooks.md                               # Hook reference: events, timeouts, input/output contracts
+│   ├── file-tree.md                         # This file
+│   └── grepai.md                            # grepai integration: attention architecture, MCP, config
 │
-├── README.md                                  # Components, commands, agents, hooks, architecture, flow diagrams
-├── INSTALL.md                                 # Installation: plugin-dir, marketplace, embedding, troubleshooting
-├── RELEASE-NOTES.md                           # Version history: v2.0.41 - v3.0.0, Breaking Changes, migration
-└── package.json                               # npm: claude-plugin-brewcode@3.1.0, build/publish scripts
+├── README.md                                # Components, commands, agents, hooks
+├── INSTALL.md                               # Installation: plugin-dir, marketplace, troubleshooting
+├── LICENSE
+└── package.json                             # npm: claude-plugin-brewcode
 ```
-
-## Target Project Structure
-
-Files created by the plugin in the user's project:
-
-```
-{PROJECT}/
-└── .claude/
-    ├── TASK.md                                # Quick reference: path to active task
-    ├── plans/
-    │   └── LATEST.md                          # Symlink → ~/.claude/plans/<newest>.md (session-start.mjs on Clear)
-    │
-    ├── tasks/
-    │   ├── cfg/
-    │   │   ├── brewcode.config.json           # User settings: knowledge, logging, agents, constraints, autoSync
-    │   │   └── brewcode.state.json            # Inter-session state: current task, last compaction
-    │   │
-    │   ├── templates/                         # Adapted templates (from /brewcode:setup)
-    │   │   ├── PLAN.md.template
-    │   │   ├── SPEC.md.template
-    │   │   ├── SPEC-creation.md
-    │   │   ├── KNOWLEDGE.jsonl.template
-    │   │   └── ...                            # Remaining plugin templates
-    │   │
-    │   ├── sessions/
-    │   │   └── {session_id}.info              # Task path, creation time
-    │   │
-    │   ├── logs/
-    │   │   └── brewcode.log                   # Unified hook log: [info/warn/error] [hook] message
-    │   │
-    │   ├── reviews/
-    │   │   └── {TS}_{NAME}_report.md          # P0-P3 findings, quorum, statistics
-    │   │
-    │   └── {TS}_{NAME}_task/                  # e.g. 20260130_150000_auth_task/
-    │       ├── PLAN.md                        # Slim plan: 3-line header + Phase Registry table (v3)
-    │       ├── SPEC.md                        # Goal, scope, requirements, analysis, risks
-    │       ├── KNOWLEDGE.jsonl                # Anti-patterns, practices, facts (JSONL)
-    │       ├── .lock                          # task_path, started_at, session_id (JSON)
-    │       │
-    │       ├── phases/
-    │       │   ├── 1-research.md              # Execution phase: agent reads directly
-    │       │   ├── 1V-verify-research.md      # Verification phase: review criteria, pass/fail
-    │       │   ├── 2-implement.md
-    │       │   ├── 2V-verify-implement.md
-    │       │   ├── 2F-fix-implement.md        # Fix phase (dynamic): generated on failure
-    │       │   └── FR-final-review.md         # Final review: comprehensive quality check
-    │       │
-    │       ├── artifacts/
-    │       │   ├── FINAL.md                   # Final report: summary, criteria, artifacts index
-    │       │   └── {P}-{N}{T}/                # P=phase, N=iteration, T=type (e=execution, v=verification)
-    │       │       ├── {AGENT}_output.md
-    │       │       └── summary.md
-    │       │
-    │       └── backup/                        # PLAN.md backups before significant changes
-    │
-    ├── skills/
-    │   └── brewcode-review/
-    │       ├── SKILL.md                       # Quorum review, adapted for project
-    │       └── references/
-    │
-    └── rules/
-        ├── avoid.md                           # Anti-patterns from KNOWLEDGE
-        ├── best-practice.md                   # Best practices from KNOWLEDGE
-        └── grepai-first.md                    # grepai priority rule (from /brewcode:grepai setup)
-```
-
-## Statistics
-
-| Category | Count | Items |
-|----------|-------|-------|
-| Plugin configuration | 2 | plugin.json, hooks.json |
-| Hooks (lifecycle) | 9 | forced-eval, grepai-reminder, grepai-session, permission-guard, post-task, pre-compact, pre-task, session-start, stop |
-| Agents | 12 | bc-coordinator, bc-knowledge-manager, bc-grepai-configurator, bc-rules-organizer, agent-creator, skill-creator, bash-expert, hook-creator, architect, developer, reviewer, tester |
-| Skills (SKILL.md) | 13 | setup, spec, plan, start, rules, convention, grepai, teardown, standards-review, skills, agents, teams, e2e |
-| Bash scripts | 16 | setup(2), rules(1), grepai(13) |
-| Templates | 17 | PLAN, SPEC, KNOWLEDGE, config, phase(4), reports(4), rules(3), review(3) |
-| Documentation | 7 | README, INSTALL, RELEASE-NOTES, grepai.md, file-tree.md, commands.md, flow.md, hooks.md |
-| npm | 1 | package.json |
-| **Total** | **76** | |
 
 ## Hook Events
 
 | Event | Hooks | Timeout | Purpose |
 |-------|-------|---------|---------|
-| SessionStart | session-start.mjs, grepai-session.mjs | 3s, 5s | Initialization, grepai auto-start |
-| PreToolUse(Task) | pre-task.mjs | 5s | Knowledge and constraints injection |
-| PreToolUse(Glob\|Grep) | grepai-reminder.mjs | 1s | grepai reminder |
-| PostToolUse(Task) | post-task.mjs | 30s | Session binding, 2-step protocol |
-| PreCompact | pre-compact.mjs | 60s | Compaction, handoff |
-| Stop | stop.mjs | 5s | Exit blocking/allowing |
+| UserPromptSubmit | forced-eval.mjs | 1s | Skill activation reminder |
+| SessionStart | session-start.mjs, grepai-session.mjs | 3s, 5s | Session init, grepai auto-start |
+| PreToolUse(Bash) | grepai-reminder.mjs | 1s | grepai_search reminder |
+| PermissionRequest(Edit\|Write\|MultiEdit\|Bash) | permission-guard.sh | 1s | Auto-allow safe .claude/ + /tmp writes |
 
 ## Agent Models
 
 | Agent | Model | Purpose |
 |-------|-------|---------|
-| bc-coordinator | haiku | Orchestration: status, knowledge, NEXT ACTION |
-| bc-knowledge-manager | haiku | KNOWLEDGE.jsonl compaction |
 | bc-grepai-configurator | opus | Project analysis, config.yaml generation |
+| agent-creator | opus | Create and improve agents |
+| skill-creator | opus | Create and improve skills |
+| bash-expert | opus | Professional sh/bash scripts |
+| hook-creator | opus | Create and debug hooks |
+| architect | opus | Architecture analysis, patterns, scaling |
+| developer | opus | Implement features, fix bugs, refactor |
+| reviewer | opus | Code review, quality, security, performance |
+| tester | sonnet | Run tests, analyze failures, debug flaky tests |

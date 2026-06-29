@@ -31,7 +31,6 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 - **Architecture fitness check** — validate that new modules follow established layering patterns
 - **Security gate** — spot injection risks, missing auth checks, unvalidated inputs before they ship
 - **Performance audit** — unbounded queries, sync I/O in loops, missing caching, resource leaks
-- **Quorum review phase** — called by `/brewcode:review` as one of three parallel reviewers (2/3 consensus required)
 
 ## Examples
 
@@ -161,7 +160,7 @@ DECISION: Approve / Changes required / Reject
     Full agent definition, disallowed tools, and review protocol.
   </Card>
   <Card title="Brewcode overview" icon="document" href="/brewcode/">
-    All brewcode agents and skills — infinite task execution, quorum reviews, handoff.
+    All brewcode agents and skills in one place.
   </Card>
 </CardGrid>
 

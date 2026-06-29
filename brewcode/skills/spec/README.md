@@ -6,7 +6,7 @@ auto-sync-type: doc
 
 # Spec
 
-Creates a detailed task specification (SPEC.md) by researching your codebase in parallel, asking clarifying questions, and running a reviewer quality gate. The output is a self-contained document ready for `/brewcode:plan`.
+Creates a detailed task specification (SPEC.md) by researching your codebase in parallel, asking clarifying questions, and running a reviewer quality gate. The output is a self-contained document ready to hand to the `developer` agent for implementation.
 
 ## Quick Start
 
@@ -54,15 +54,14 @@ The `-n` / `--noask` flag can be combined with any input mode. It is parsed and 
 # FIX: Be concrete about what to improve and where
 /brewcode:spec "Add pagination and sorting to the /api/products endpoint"
 
-# BAD: Running spec before setup — templates are missing
-/brewcode:spec "Add caching layer"
-# FIX: Run setup first, then spec
-/brewcode:setup
+# BAD: Vague one-liner — agents have nothing concrete to research
+/brewcode:spec "Make it faster"
+# FIX: Name the target and the desired outcome
 /brewcode:spec "Add Redis caching for product catalog queries"
 
 # BAD: Writing a spec for code that is already implemented — spec is for new/changed work
 /brewcode:spec "The login page that we shipped last sprint"
-# FIX: Use spec only for upcoming changes; use /brewcode:review for existing code
+# FIX: Use spec only for upcoming changes
 /brewcode:spec "Add MFA to the existing login flow"
 ```
 
@@ -85,10 +84,10 @@ SPEC.md contains:
 
 ## Tips
 
-- Run `/brewcode:setup` once per project before your first spec. It generates adapted templates that the spec skill depends on.
+- The skill works out of the box. If a project provides a `.claude/tasks/templates/SPEC.md.template`, it is used; otherwise a built-in SPEC structure is applied.
 - Use `-n` when you already have a well-defined requirements document and do not need interactive clarification.
-- If the skill detects that your request spans more than 3 independent areas or 12+ plan phases, it will suggest splitting into smaller tasks. Accept the split to keep specs focused.
-- After the spec is ready, clear context with `/clear` and then run `/brewcode:plan .claude/tasks/{TIMESTAMP}_{NAME}_task/` to generate the execution plan.
+- If the skill detects that your request spans more than 3 independent areas, it will suggest splitting into smaller tasks. Accept the split to keep specs focused.
+- After the spec is ready, clear context with `/clear` and then hand the SPEC to the `developer` agent: "Implement the spec at .claude/tasks/{TIMESTAMP}_{NAME}_task/SPEC.md".
 
 ## Documentation
 

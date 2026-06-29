@@ -10,7 +10,7 @@
 
 **Claude Code plugin suite** -- four plugins for development, documentation, text utility, and visual workflows.
 
-A regular Claude Code session loses context during compaction. Brewcode automatically saves knowledge, passes state between compaction cycles, and continues work without restarting. Four plugins. 32 skills. 16 agents. 9 lifecycle hooks.
+A lean toolkit for Claude Code: specification authoring, semantic code search, documentation tooling, text utilities, and prompt-injection workflows. Four plugins. 21 skills. 13 agents. 5 lifecycle hooks.
 
 [**Full Documentation**](https://doc-claude.brewcode.app/getting-started/)
 
@@ -56,7 +56,7 @@ After all commands succeed, run `/reload-plugins`. If `/reload-plugins` is unava
 
 | Plugin | Purpose | Skills | Install |
 |--------|---------|--------|---------|
-| [brewcode](brewcode/README.md) | Infinite task execution, quorum reviews, skill/agent creation, semantic search | 13 | `claude plugin install brewcode@claude-brewcode` |
+| [brewcode](brewcode/README.md) | Specification authoring, semantic code search, lifecycle hooks | 2 | `claude plugin install brewcode@claude-brewcode` |
 | [brewdoc](brewdoc/README.md) | Documentation tools: auto-sync, memory optimization, PDF conversion, publishing | 6 | `claude plugin install brewdoc@claude-brewcode` |
 | [brewtools](brewtools/README.md) | Universal text utilities: token optimization, humanization, secrets scanning, plugin updates | 13 | `claude plugin install brewtools@claude-brewcode` |
 | [brewui](brewui/README.md) | UI/visual/creative tools (placeholder, currently empty) | 0 | `claude plugin install brewui@claude-brewcode` |
@@ -118,16 +118,12 @@ claude --plugin-dir ./brewcode --plugin-dir ./brewdoc --plugin-dir ./brewtools -
 
 ## Quick Start
 
-### brewcode -- infinite task execution
+### brewcode -- spec authoring + semantic search
 
 ```bash
-/brewcode:setup                              # 1. Analyze project, generate templates (one-time)
-/brewcode:spec "Implement JWT authorization"  # 2. Research codebase + create specification
-/brewcode:plan                                # 3. Generate phased execution plan
-/brewcode:start                               # 4. Execute with infinite context handoff
+/brewcode:spec "Implement JWT authorization"  # Research codebase + create specification
+/brewcode:grepai setup                          # Set up semantic code search
 ```
-
-After `/brewcode:setup`, each task follows the cycle: `spec` -> `plan` -> `start`. During execution, the plugin automatically compacts knowledge at ~90% context, writes handoff state, and continues without interruption.
 
 ### brewdoc -- documentation tools
 
@@ -153,54 +149,14 @@ After `/brewcode:setup`, each task follows the cycle: `spec` -> `plan` -> `start
 
 Placeholder plugin, currently empty. No commands yet -- coming soon.
 
-## How It Works
-
-```
-  /brewcode:spec --> 5-10 research agents + user Q&A (*) --> SPEC.md
-                                                                │
-  /brewcode:plan <──────────────────────────────────────────────┘
-        │
-        └──> phased plan + user Q&A (*) ──────────────────> PLAN.md
-                                            (*) skip with -n/--noask
-                                                                │
-  /brewcode:start <─────────────────────────────────────────────┘
-        │
-        v
-  ┌─ Execute phases with agents ──────────────────────────────────┐
-  │   Phase 1 --> Phase 2 --> ... --> Phase N                      │
-  │       │  (context ~90%)                                        │
-  │   PreCompact: compact KNOWLEDGE + write handoff                │
-  │       │                                                        │
-  │   [auto-compact] --> same session resumes --> next phase        │
-  └────────────────────────────────────────────────────────────────┘
-```
-
-### Knowledge lifecycle
-
-1. Agents accumulate knowledge entries during execution (KNOWLEDGE.jsonl)
-2. PreCompact hook compacts and deduplicates before context handoff
-3. Pre-task hook injects knowledge into every agent prompt
-4. Knowledge accumulates across phases, converted to permanent rules at task end
-
 ## Skills Reference
 
-### Brewcode (13 skills)
+### Brewcode (2 skills)
 
 | Skill | Purpose |
 |-------|---------|
-| `/brewcode:setup` | Analyze project, check prerequisites, generate adapted templates |
 | `/brewcode:spec` | Research codebase + user dialog -> SPEC.md |
-| `/brewcode:plan` | Generate phased PLAN.md from SPEC or Plan Mode |
-| `/brewcode:start` | Execute task with infinite context handoff |
-| `/brewcode:teams` | Create and manage dynamic teams of domain-specific agents |
-| `/brewcode:standards-review` | Review code for project standards compliance |
-| `/brewcode:convention` | Extract etalon classes, patterns, architecture into convention docs |
-| `/brewcode:rules` | Extract rules from KNOWLEDGE to `.claude/rules/` |
 | `/brewcode:grepai` | Semantic code search (setup, status, start, stop, reindex) |
-| `/brewcode:skills` | List, create, and upgrade skills |
-| `/brewcode:agents` | Interactive agent creation and improvement |
-| `/brewcode:e2e` | E2E testing orchestration with BDD scenarios |
-| `/brewcode:teardown` | Remove plugin configuration (keeps task data) |
 
 ### Brewdoc (6 skills)
 
@@ -244,7 +200,7 @@ Self-contained `SKILL.md` folders that ship outside the four plugins -- drop the
 | `brewpage-publish` | Claude Code | [`skills/brewpage-publish`](skills/brewpage-publish/) |
 | `brewpage-publish` | OpenClaw / AgentSkills | [`openclaw/brewpage-publish`](openclaw/brewpage-publish/) |
 
-## Agents (16 total)
+## Agents (13 total)
 
 | Agent | Model | Purpose |
 |-------|-------|---------|
@@ -259,11 +215,8 @@ Self-contained `SKILL.md` folders that ship outside the four plugins -- drop the
 | text-optimizer | sonnet | Optimize text and docs for LLM efficiency |
 | ssh-admin | opus | Linux server administration via SSH |
 | deploy-admin | opus | GitHub Actions deployment and CI/CD |
-| bc-coordinator | haiku | Internal: spawned by /brewcode:start + post-task hook |
-| bc-knowledge-manager | haiku | Internal: spawned by /brewcode:start |
 | bc-grepai-configurator | opus | Internal: spawned by /brewcode:grepai |
 | bd-auto-sync-processor | sonnet | Internal: spawned by /brewdoc:auto-sync |
-| bc-rules-organizer | sonnet | Internal: spawned by /brewcode:rules |
 
 ## Documentation
 

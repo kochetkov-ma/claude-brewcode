@@ -1,6 +1,6 @@
 ---
 title: "Spec"
-description: "Creates SPEC.md task specification through parallel codebase research and user interaction. First step in the brewcode pipeline before plan and start."
+description: "Creates SPEC.md task specification through parallel codebase research and user interaction. Hand the spec to the developer agent to implement."
 order: 1102
 ---
 import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
@@ -8,7 +8,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 # spec — research and write spec
 
 <Callout type="caution">
-**Skipping spec means rewriting later.** Without a specification, parallel agents in `/brewcode:plan` and `/brewcode:start` have no shared ground truth — they duplicate work, contradict each other, and miss edge cases. The fix costs more than the spec would have.
+**Skipping spec means rewriting later.** Without a specification, the agents implementing a feature have no shared ground truth — they duplicate work, contradict each other, and miss edge cases. The fix costs more than the spec would have.
 </Callout>
 
 <Callout type="tip">
@@ -56,7 +56,7 @@ Files Created:
   Task Dir: .claude/tasks/20260417_143052_auth_feature_task/
 
 Next Step:
-  /brewcode:plan .claude/tasks/20260417_143052_auth_feature_task/
+  Hand SPEC.md to the developer agent to implement.
 ```
 
 ## Flow
@@ -65,7 +65,7 @@ Next Step:
   <li>
     <div>
       <strong>Check adapted templates</strong>
-      <p>Verifies <code>.claude/tasks/templates/SPEC.md.template</code> exists. Missing template means <code>/brewcode:setup</code> has not run — the skill stops here rather than writing a spec into the wrong structure.</p>
+      <p>Verifies <code>.claude/tasks/templates/SPEC.md.template</code> exists. If no project-adapted template is present, the skill falls back to the plugin base template rather than writing a spec into the wrong structure.</p>
     </div>
   </li>
   <li>
@@ -155,17 +155,17 @@ MAX 3 iterations — then surface remaining remarks via AskUserQuestion
 </details>
 
 <CardGrid>
-  <Card title="Plan" icon="document" href="/brewcode/skills/plan/">
-    Next step — turn the SPEC into a phased execution plan with task breakdown.
+  <Card title="developer agent" icon="rocket" href="/brewcode/agents/developer/">
+    Next step — hand SPEC.md to the developer agent to implement the feature.
   </Card>
-  <Card title="Start" icon="play" href="/brewcode/skills/start/">
-    Execute the plan with infinite handoff and automatic session continuity.
+  <Card title="grepai" icon="document" href="/brewcode/skills/grepai/">
+    Semantic search — set it up so research agents find reusable code fast.
   </Card>
   <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/spec">
     SKILL.md, references, and SPEC-creation.md consolidation rules.
   </Card>
   <Card title="Brewcode overview" icon="rocket" href="/brewcode/">
-    Full brewcode pipeline — setup, spec, plan, start, review, and more.
+    Full brewcode plugin — spec, grepai, and the agent creator.
   </Card>
 </CardGrid>
 

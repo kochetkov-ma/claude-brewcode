@@ -47,7 +47,7 @@ MODE: [detected mode]
 | (empty) + no .grepai/ | setup |
 | (unrecognized text) | prompt |
 
-> **Prerequisites:** Run `/brewcode:setup` first to install brew, ollama, grepai, etc.
+> **Prerequisites:** Homebrew, Ollama, and the grepai CLI must be installed. The `setup` mode below runs `infra-check.sh` to verify them and reports anything missing.
 
 ---
 

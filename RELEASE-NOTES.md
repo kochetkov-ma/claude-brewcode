@@ -2,6 +2,28 @@
 
 ---
 
+## v3.19.0 (2026-06-29)
+
+> Docs: [brewcode overview](https://doc-claude.brewcode.app/brewcode/overview/) | [spec skill](https://doc-claude.brewcode.app/brewcode/skills/spec/) | [grepai skill](https://doc-claude.brewcode.app/brewcode/skills/grepai/)
+
+### brewcode
+#### Removed
+- **task execution system:** stripped plan, start, setup, rules, convention, teardown, teams, standards-review, skills, agents, e2e (11 skills removed; 2 kept: spec + grepai)
+- **internal agents:** bc-coordinator, bc-knowledge-manager, bc-rules-organizer removed
+- **task-system hooks:** pre-task.mjs, post-task.mjs, pre-compact.mjs, stop.mjs removed
+- **lib/knowledge.mjs:** removed
+- **utils.mjs:** task/lock functions removed; also dropped dead `knowledge`/`agents.system` config and `isSystemAgent`
+- **session-start.mjs:** KNOWLEDGE.jsonl + lock-file handoff logic stripped
+- **templates:** reports/ and skills/ template dirs removed
+- **internal docs:** brewcode/docs/{flow,hooks,commands}.md deleted; file-tree.md + grepai.md rewritten to current state
+
+#### Changed
+- **brewcode reframed:** lean skill + prompt-injection toolkit (spec authoring + semantic code search via grepai)
+- **spec skill:** no longer depends on `/brewcode:setup` templates or `/brewcode:plan`; hands the finished SPEC to the `developer` agent
+- **grepai docs:** injection points updated for macOS CC (PreToolUse:Bash; native Grep/Glob removed)
+
+---
+
 ## v3.18.4 (2026-06-27)
 
 > Docs: [brewdoc overview](https://doc-claude.brewcode.app/brewdoc/overview/) | [brewtools overview](https://doc-claude.brewcode.app/brewtools/overview/) | [brewcode overview](https://doc-claude.brewcode.app/brewcode/overview/)

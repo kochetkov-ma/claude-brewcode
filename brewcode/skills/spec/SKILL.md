@@ -34,14 +34,14 @@ Strip flag from `$ARGUMENTS`. Remaining text = description or path.
 
 ### Workflow
 
-0. **Check Adapted Templates** (REQUIRED FIRST)
+0. **Detect SPEC Template** (OPTIONAL)
 
    **EXECUTE** using Bash tool:
    ```bash
-   test -f .claude/tasks/templates/SPEC.md.template && echo "SPEC.md.template" || echo "SPEC.md.template MISSING"
+   test -f .claude/tasks/templates/SPEC.md.template && echo "PROJECT TEMPLATE" || echo "BUILT-IN STRUCTURE"
    ```
 
-   > **STOP if MISSING** — Run `/brewcode:setup` first.
+   > If a project template exists, use it. Otherwise use the built-in SPEC structure from the Output section below.
 
 1. **Read & Analyze Input**
 
@@ -129,7 +129,7 @@ Before spawning agents, check for project team agents:
 5. **Consolidate into SPEC**
 
    - Create task directory: `.claude/tasks/{TIMESTAMP}_{NAME}_task/`
-   - Read `.claude/tasks/templates/SPEC.md.template` (project-adapted)
+   - Use the project `SPEC.md.template` if detected in Step 0, otherwise the built-in structure
    - Merge agent findings (deduplicate)
    - Fill SPEC sections per Consolidation Rules in `references/SPEC-creation.md`
    - Write `.claude/tasks/{TIMESTAMP}_{NAME}_task/SPEC.md`
@@ -167,7 +167,7 @@ Before spawning agents, check for project team agents:
 
    **Exit criteria:** No critical/major remarks remaining OR 3 iterations exhausted
 
-> **Template source:** Always from `.claude/tasks/templates/` (project), never from plugin base templates directly.
+> **Template source:** Prefer a project `.claude/tasks/templates/SPEC.md.template` when present; otherwise use the built-in SPEC structure below.
 
 ### Output
 
@@ -188,12 +188,12 @@ Before spawning agents, check for project team agents:
 
 ## Next Step
 
-> Copy the command below first, then clear context and paste it.
+> Clear context, then hand the SPEC to the developer agent for implementation.
 
 1. Clear context: type `/clear` and press Enter
-2. Run (paste copied command):
+2. Delegate implementation to the `developer` agent, pointing it at the SPEC:
 \`\`\`
-/brewcode:plan .claude/tasks/{TIMESTAMP}_{NAME}_task/
+Implement the spec at .claude/tasks/{TIMESTAMP}_{NAME}_task/SPEC.md
 \`\`\`
 ```
 

@@ -92,7 +92,7 @@ import { Card, CardGrid, Callout, Steps, UpdateNotice } from '../../../../compon
   <li>
     <div>
       <strong>Final output</strong>
-      <p>Status table: mode, rounds used, outcome (consensus / partial / none), top 3–5 decision bullets, and links to all four artifact files. If <code>--review</code> was set, triggers <a href="/brewcode/skills/review/"><code>/brewcode:review</code></a> on the output.</p>
+      <p>Status table: mode, rounds used, outcome (consensus / partial / none), top 3–5 decision bullets, and links to all four artifact files. If <code>--review</code> was set, triggers a follow-up code review of the decision output.</p>
     </div>
   </li>
 </Steps>
@@ -113,7 +113,7 @@ import { Card, CardGrid, Callout, Steps, UpdateNotice } from '../../../../compon
 | 6 — Debate | Mode-specific flow from `challenge-flow.md` / `strategy-flow.md` / `critic-flow.md`. |
 | 7 — Summary | Secretary agent writes `summary.md` from full log + discovery. |
 | 8 — Decision | Judge (main session) writes `decisions.md`. |
-| 9 — Output | Displays status table; optionally invokes `/brewcode:review`. |
+| 9 — Output | Displays status table; optionally triggers a follow-up code review. |
 
 **Discovery evidence mandate**
 
@@ -150,9 +150,6 @@ Each agent's prompt is built dynamically from four layers:
 </details>
 
 <CardGrid>
-  <Card title="Quorum review" icon="search" href="/brewcode/skills/review/">
-    Run `/brewcode:review` on debate output with the `--review` flag for a full quorum code review of the decision.
-  </Card>
   <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/debate">
     Source files: SKILL.md, archetypes, role templates, flow references, scripts.
   </Card>

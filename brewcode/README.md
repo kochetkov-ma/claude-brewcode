@@ -1,13 +1,13 @@
 # Brewcode
 
-> Infinite task execution plugin for Claude Code -- automatic context handoff, multi-agent workflows, knowledge persistence.
+> Lean skill + prompt-injection toolkit for Claude Code -- specification authoring, semantic code search, and lifecycle hooks.
 
 | Field | Value |
 |-------|-------|
-| Version | 3.18.2 |
-| Skills | 13 |
-| Agents | 12 |
-| Hooks | 9 |
+| Version | 3.19.0 |
+| Skills | 2 |
+| Agents | 9 |
+| Hooks | 5 |
 | Model | opus |
 
 ## Install
@@ -43,9 +43,7 @@ Update anytime with `/brewtools:plugin-update`.
 
 ## Overview
 
-Brewcode turns single Claude Code sessions into an infinite task pipeline. When context reaches ~90%, the PreCompact hook saves knowledge, writes handoff state, and the session continues automatically. One cycle: `spec` -- `plan` -- `start` -- and the task runs to completion regardless of how many compaction cycles occur.
-
-13 skills cover the full lifecycle: project analysis, specification creation through parallel research agents, phased plan generation with quorum review, execution with automatic handoff, code review, convention analysis, and project rules management. 12 specialized agents handle implementation, testing, review, architecture, and coordination.
+Brewcode is a lean skill plus prompt-injection toolkit. Two focused skills cover specification authoring and semantic code search, backed by a small set of lifecycle hooks that inject plugin context, auto-start grepai, and steer search toward semantic queries. Nine specialized agents handle implementation, testing, review, architecture, and asset creation (skills, agents, hooks, scripts).
 
 ## Installation
 
@@ -65,33 +63,16 @@ claude --plugin-dir ./brewcode
 ## Quick Start
 
 ```bash
-/brewcode:setup                              # 1. Adapt templates for the project (one-time)
-/brewcode:spec "Implement JWT authorization"  # 2. Research + specification
-/brewcode:plan                                # 3. Generate phased plan
-/brewcode:start                               # 4. Execute with infinite context
+/brewcode:spec "Implement JWT authorization"  # Research + specification
+/brewcode:grepai setup                          # Semantic code search
 ```
-
-After `/brewcode:setup`, each task follows the cycle: `spec` -> `plan` -> `start`.
 
 ## Skills
 
 | Skill | Purpose |
 |-------|---------|
-| [`/brewcode:setup`](skills/setup/README.md) | Analyze project, check prerequisites, generate adapted templates and config |
 | [`/brewcode:spec`](skills/spec/README.md) | Research codebase + user dialog -> SPEC.md |
-| [`/brewcode:plan`](skills/plan/README.md) | Generate phased PLAN.md from SPEC or Plan Mode with quorum review |
-| [`/brewcode:start`](skills/start/README.md) | Execute task with infinite context through automatic handoffs |
-| [`/brewcode:teams`](skills/teams/README.md) | Dynamic agent team creation, management, and performance tracking |
-| [`/brewcode:standards-review`](skills/standards-review/README.md) | Review code for project standards compliance |
-| [`/brewcode:convention`](skills/convention/README.md) | Extract etalon classes, patterns, architecture into convention docs and rules |
-| [`/brewcode:rules`](skills/rules/README.md) | Extract rules from accumulated knowledge to `.claude/rules/` |
 | [`/brewcode:grepai`](skills/grepai/README.md) | Semantic code search (setup, status, start, stop, reindex) |
-| [`/brewcode:skills`](skills/skills/README.md) | Skill management: list, create, upgrade with activation optimization |
-| [`/brewcode:agents`](skills/agents/README.md) | Interactive agent creation and improvement |
-| [`/brewcode:e2e`](skills/e2e/README.md) | E2E testing orchestration with BDD scenarios and quorum review |
-| [`/brewcode:teardown`](skills/teardown/README.md) | Plugin configuration cleanup (tasks are preserved) |
-
-> **Note:** `/brewcode:review` is a local skill created in the project during `/brewcode:setup`.
 
 ## Agents
 
@@ -105,30 +86,21 @@ After `/brewcode:setup`, each task follows the cycle: `spec` -> `plan` -> `start
 | [agent-creator](agents/agent-creator.md) | opus | Create and improve Claude Code agents |
 | [hook-creator](agents/hook-creator.md) | opus | Create and debug Claude Code hooks |
 | [bash-expert](agents/bash-expert.md) | opus | Create professional shell scripts |
-| bc-coordinator | haiku | Internal: spawned by /brewcode:start + post-task hook |
-| bc-knowledge-manager | haiku | Internal: spawned by /brewcode:start |
 | bc-grepai-configurator | opus | Internal: spawned by /brewcode:grepai |
-| bc-rules-organizer | sonnet | Internal: spawned by /brewcode:rules |
-
-> **Dynamic teams:** Use `/brewcode:teams create` to generate 5-20 project-specific agents with self-selection protocol and performance tracking.
 
 ## Architecture
 
 ```
 brewcode/
 +-- .claude-plugin/plugin.json          # Plugin manifest
-+-- hooks/                              # 9 lifecycle hooks
++-- hooks/                              # 5 lifecycle hooks
 |   +-- session-start.mjs              # Session initialization
 |   +-- grepai-session.mjs             # Auto-start grepai watch
-|   +-- pre-task.mjs                   # Knowledge injection into agents
 |   +-- grepai-reminder.mjs            # grepai reminder
-|   +-- post-task.mjs                  # Session binding, 2-step protocol
-|   +-- pre-compact.mjs               # Knowledge compaction, handoff
-|   +-- stop.mjs                       # Exit blocking
 |   +-- forced-eval.mjs                # Skill activation
 |   +-- permission-guard.sh            # Manager-mode edit guard
-+-- agents/                            # 12 agents
-+-- skills/                            # 13 skills
++-- agents/                            # 9 agents
++-- skills/                            # 2 skills
 +-- templates/                         # Rule templates
 ```
 
@@ -138,26 +110,9 @@ brewcode/
 |------|-------|---------|
 | session-start | SessionStart | Initialize session, inject plugin path |
 | grepai-session | SessionStart | Auto-start grepai watch process |
-| pre-task | PreToolUse:Task | Inject grepai + KNOWLEDGE into agent prompts |
-| grepai-reminder | PreToolUse:Glob/Grep | Remind to prefer semantic search |
-| post-task | PostToolUse:Task | Bind session, enforce 2-step protocol |
-| pre-compact | PreCompact | Compact KNOWLEDGE, write handoff entry |
-| stop | Stop | Block if not terminal, clean lock |
+| grepai-reminder | PreToolUse:Bash | Remind to prefer semantic search |
 | forced-eval | UserPromptSubmit | Skill activation |
 | permission-guard | PreToolUse | Manager-mode edit guard for main session |
-
-## Task Structure
-
-```
-.claude/tasks/{TS}_{NAME}_task/
-  SPEC.md             # Specification (research results)
-  PLAN.md             # Phased execution plan
-  KNOWLEDGE.jsonl     # Accumulated knowledge (survives compactions)
-  phases/             # Individual phase files for agents
-  artifacts/          # Execution reports by phases
-  backup/             # Backups
-  .lock               # Session lock file
-```
 
 ## Documentation
 
@@ -168,7 +123,6 @@ Full docs: [doc-claude.brewcode.app/brewcode/overview](https://doc-claude.brewco
 | Skills reference | [Skills](https://doc-claude.brewcode.app/brewcode/skills/) |
 | Agents reference | [Agents](https://doc-claude.brewcode.app/brewcode/agents/) |
 | Hooks reference | [Hooks](https://doc-claude.brewcode.app/brewcode/hooks/) |
-| Workflow | [Workflow](https://doc-claude.brewcode.app/brewcode/workflow/) |
 | Release Notes | [RELEASE-NOTES.md](../RELEASE-NOTES.md) |
 
 Author: Maksim Kochetkov | License: MIT
