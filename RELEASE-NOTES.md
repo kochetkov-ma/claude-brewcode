@@ -2,6 +2,19 @@
 
 ---
 
+## v3.19.4 (2026-06-29)
+
+### brewcode
+#### Removed
+- **lib/knowledge.mjs:** deleted (orphaned, zero imports)
+- **KNOWLEDGE.jsonl.template + brewcode.config.json knowledge settings:** removed from setup
+- **report templates:** brewcode/templates/reports/ deleted (only consumer was bc-coordinator)
+- **session-start.mjs:** PLAN.md/KNOWLEDGE.jsonl handoff injection removed
+- **utils.mjs:** DEFAULT_CONFIG.knowledge block + validateConfig knowledge checks removed
+- all remaining stale references to deleted hooks (post-task, pre-compact, stop) cleaned from docs
+
+---
+
 ## v3.19.3 (2026-06-29)
 
 ### brewcode

@@ -17,17 +17,15 @@ brewcode/                                    # Plugin root directory
 │   └── plugin.json                            # Manifest (name, version 3.1.0, skills/ reference)
 │
 ├── hooks/                                     # Node.js scripts for Claude Code events
-│   ├── hooks.json                             # Binds 5 events (SessionStart, PreToolUse, PostToolUse, PreCompact, Stop)
+│   ├── hooks.json                             # Binds 4 events (UserPromptSubmit, SessionStart, PreToolUse, PermissionRequest)
 │   ├── lib/
-│   │   ├── utils.mjs                          # readStdin, output, log, lock files, config, state, task parsing
-│   │   └── knowledge.mjs                      # KNOWLEDGE.jsonl: validation, compression, compaction, scope-aware retention
+│   │   └── utils.mjs                          # readStdin, output, log, lock files, config, state, task parsing
 │   ├── session-start.mjs                      # SessionStart: session log, creates LATEST.md symlink on source='clear'
 │   ├── grepai-session.mjs                     # SessionStart: auto-starts grepai watch if .grepai/ exists, checks MCP server
-│   ├── pre-task.mjs                           # PreToolUse(Task): injects grepai reminder + KNOWLEDGE + role constraints
-│   ├── grepai-reminder.mjs                    # PreToolUse(Glob|Grep): reminds to use grepai_search
-│   ├── post-task.mjs                          # PostToolUse(Task): binds session_id to lock, enforces 2-step protocol
-│   ├── pre-compact.mjs                        # PreCompact: validates state, compacts KNOWLEDGE, writes handoff
-│   └── stop.mjs                               # Stop: blocks exit on active task, removes stale lock
+│   ├── pre-task.mjs                           # PreToolUse(Task): injects grepai reminder + role constraints
+│   ├── grepai-reminder.mjs                    # PreToolUse(Bash): reminds to use grepai_search
+│   ├── forced-eval.mjs                        # UserPromptSubmit: skill activation reminder
+│   └── permission-guard.sh                    # PermissionRequest: manager-mode edit guard
 │
 ├── agents/                                    # Plugin agents (system prompts in Markdown)
 │   ├── bc-grepai-configurator.md              # grepai configurator (opus): project analysis, config.yaml via 5 parallel investigations
@@ -52,12 +50,11 @@ brewcode/                                    # Plugin root directory
 │   │   └── templates/
 │   │       ├── PLAN.md.template               # Slim Phase Registry table + 3-line header (v3)
 │   │       ├── SPEC.md.template               # Goal, Scope, Requirements, Analysis, Context Files, Risks, Decisions
-│   │       ├── KNOWLEDGE.jsonl.template       # KNOWLEDGE.jsonl format: fields, types, examples, compaction rules
 │   │       ├── phase.md.template              # Execution phase (v3): task, agent, acceptance criteria
 │   │       ├── phase-verify.md.template       # Verification phase (v3): review scope, pass/fail criteria
 │   │       ├── phase-fix.md.template          # Fix phase (v3, dynamic): generated on verification failure
 │   │       ├── phase-final-review.md.template # Final review phase (v3): comprehensive quality review
-│   │       └── brewcode.config.json.template  # Config: knowledge, logging, agents, constraints, autoSync
+│   │       └── brewcode.config.json.template  # Config: logging, agents, constraints, autoSync
 │   │
 │   ├── spec/                                  # /brewcode:spec - Specification creation
 │   │   └── SKILL.md                           # 7 steps: investigation (5-10 parallel agents), dialog, review (opus, session)
@@ -102,12 +99,6 @@ brewcode/                                    # Plugin root directory
 │
 ├── templates/
 │   │
-│   ├── reports/
-│   │   ├── FINAL.md.template                  # Final report: Summary, Completion Criteria, Artifacts Index, Knowledge
-│   │   ├── agent_output.md.template           # Agent report (execution): metadata, task, result, files
-│   │   ├── agent_review.md.template           # Agent report (verification): review scope, findings, verdict
-│   │   └── summary.md.template                # Phase summary: agents, statuses, key results
-│   │
 │   ├── rules/
 │   │   ├── avoid.md.template                  # Anti-patterns: Avoid/Instead/Why table with YAML frontmatter
 │   │   ├── best-practice.md.template          # Best practices: Practice/Context/Source table with YAML frontmatter
@@ -146,14 +137,13 @@ Files created by the plugin in the user's project:
     │
     ├── tasks/
     │   ├── cfg/
-    │   │   ├── brewcode.config.json           # User settings: knowledge, logging, agents, constraints, autoSync
+    │   │   ├── brewcode.config.json           # User settings: logging, agents, constraints, autoSync
     │   │   └── brewcode.state.json            # Inter-session state: current task, last compaction
     │   │
     │   ├── templates/                         # Adapted templates (from /brewcode:setup)
     │   │   ├── PLAN.md.template
     │   │   ├── SPEC.md.template
     │   │   ├── SPEC-creation.md
-    │   │   ├── KNOWLEDGE.jsonl.template
     │   │   └── ...                            # Remaining plugin templates
     │   │
     │   ├── sessions/
@@ -203,11 +193,11 @@ Files created by the plugin in the user's project:
 | Category | Count | Items |
 |----------|-------|-------|
 | Plugin configuration | 2 | plugin.json, hooks.json |
-| Hooks (lifecycle) | 9 | forced-eval, grepai-reminder, grepai-session, permission-guard, post-task, pre-compact, pre-task, session-start, stop |
+| Hooks (lifecycle) | 6 | forced-eval, grepai-reminder, grepai-session, permission-guard, pre-task, session-start |
 | Agents | 10 | bc-grepai-configurator, bc-rules-organizer, agent-creator, skill-creator, bash-expert, hook-creator, architect, developer, reviewer, tester |
 | Skills (SKILL.md) | 11 | setup, spec, rules, convention, grepai, teardown, standards-review, skills, agents, teams, e2e |
 | Bash scripts | 16 | setup(2), rules(1), grepai(13) |
-| Templates | 17 | PLAN, SPEC, KNOWLEDGE, config, phase(4), reports(4), rules(3), review(3) |
+| Templates | 12 | PLAN, SPEC, config, phase(4), rules(3), review(3) |
 | Documentation | 7 | README, INSTALL, RELEASE-NOTES, grepai.md, file-tree.md, commands.md, flow.md, hooks.md |
 | npm | 1 | package.json |
 | **Total** | **76** | |
@@ -216,12 +206,11 @@ Files created by the plugin in the user's project:
 
 | Event | Hooks | Timeout | Purpose |
 |-------|-------|---------|---------|
+| UserPromptSubmit | forced-eval.mjs | 1s | Skill activation reminder |
 | SessionStart | session-start.mjs, grepai-session.mjs | 3s, 5s | Initialization, grepai auto-start |
-| PreToolUse(Task) | pre-task.mjs | 5s | Knowledge and constraints injection |
-| PreToolUse(Glob\|Grep) | grepai-reminder.mjs | 1s | grepai reminder |
-| PostToolUse(Task) | post-task.mjs | 30s | Session binding, 2-step protocol |
-| PreCompact | pre-compact.mjs | 60s | Compaction, handoff |
-| Stop | stop.mjs | 5s | Exit blocking/allowing |
+| PreToolUse(Task) | pre-task.mjs | 5s | grepai and constraints injection |
+| PreToolUse(Bash) | grepai-reminder.mjs | 1s | grepai reminder |
+| PermissionRequest | permission-guard.sh | 1s | Manager-mode edit guard |
 
 ## Agent Models
 

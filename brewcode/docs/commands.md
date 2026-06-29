@@ -5,7 +5,7 @@ auto-sync-type: doc
 description: Detailed description of all brewcode plugin commands
 ---
 
-[DICT: BC=brewcode, AG=agent, SK=skill, KB=KNOWLEDGE.jsonl, PL=PLAN.md, SP=SPEC.md, TD=task dir (.claude/tasks/{TS}_{NAME}_task/), TS=timestamp, PLG=plugin, QR=quorum review, PR=Phase Registry, TK=task, PC=pre-compact, PT=pre-task]
+[DICT: BC=brewcode, AG=agent, SK=skill, KB=KNOWLEDGE.jsonl, PL=PLAN.md, SP=SPEC.md, TD=task dir (.claude/tasks/{TS}_{NAME}_task/), TS=timestamp, PLG=plugin, QR=quorum review, PR=Phase Registry, TK=task, PT=pre-task]
 
 # BC Plugin Commands
 
@@ -292,10 +292,7 @@ Manager !=reads `phases/` directly. Only spawned AGs read their assigned phase f
 | Hook | Event | Purpose |
 |------|-------|---------|
 | `session-start.mjs` | SessionStart | Session init, Task API reminder on active v3 TK |
-| `pre-task.mjs` | PreToolUse:Task | KB `## K` injection + v3 phase file reminder |
-| `post-task.mjs` | PostToolUse:Task | Task API instructions for manager |
-| `pre-compact.mjs` | PreCompact | KB compaction, v3-aware handoff |
-| `stop.mjs` | Stop | Block if incomplete, clean lock |
+| `pre-task.mjs` | PreToolUse:Task | grepai reminder + v3 phase file reminder |
 
 ### Workflow
 
@@ -762,11 +759,10 @@ Hooks-only, no external runtime. Claude Code hooks provide ctx mgmt.
 |------|-------|---------|
 | `session-start.mjs` | SessionStart | Session init |
 | `grepai-session.mjs` | SessionStart | Auto-start grepai watch |
-| `pre-task.mjs` | PreToolUse:Task | KB `## K` injection + protocol into AG prompts |
-| `grepai-reminder.mjs` | PreToolUse:Glob\|Grep | Reminder to use grepai |
-| `post-task.mjs` | PostToolUse:Task | Reminder: WRITE report → CALL ct |
-| `pre-compact.mjs` | PreCompact | KB compaction, write handoff |
-| `stop.mjs` | Stop | Block if incomplete, clean lock |
+| `pre-task.mjs` | PreToolUse:Task | grepai reminder + protocol into AG prompts |
+| `grepai-reminder.mjs` | PreToolUse:Bash | Reminder to use grepai |
+| `forced-eval.mjs` | UserPromptSubmit | Skill activation reminder |
+| `permission-guard.sh` | PermissionRequest | Manager-mode edit guard |
 
 ## KB Format
 

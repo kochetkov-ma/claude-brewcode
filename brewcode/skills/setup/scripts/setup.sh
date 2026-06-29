@@ -105,7 +105,6 @@ sync_templates() {
   }
 
   sync_template "$SETUP_TEMPLATES/SPEC.md.template" ".claude/tasks/templates/SPEC.md.template"
-  sync_template "$SETUP_TEMPLATES/KNOWLEDGE.jsonl.template" ".claude/tasks/templates/KNOWLEDGE.jsonl.template"
 
   # grepai-first: always sync (plugin-managed rule)
   if [ -f "$PLUGIN_TEMPLATES/rules/grepai-first.md.template" ]; then
@@ -263,7 +262,6 @@ validate_setup() {
   ERRORS=0
 
   test -f .claude/tasks/templates/SPEC.md.template && echo "✅ SPEC template" || { echo "❌ SPEC template MISSING"; ERRORS=$((ERRORS+1)); }
-  test -f .claude/tasks/templates/KNOWLEDGE.jsonl.template && echo "✅ KNOWLEDGE template" || { echo "❌ KNOWLEDGE template MISSING"; ERRORS=$((ERRORS+1)); }
   test -f .claude/rules/avoid.md && echo "✅ avoid.md rules" || { echo "❌ avoid.md MISSING"; ERRORS=$((ERRORS+1)); }
   test -f .claude/rules/best-practice.md && echo "✅ best-practice.md rules" || { echo "❌ best-practice.md MISSING"; ERRORS=$((ERRORS+1)); }
   test -f .claude/tasks/cfg/brewcode.config.json && echo "✅ Config file" || echo "⚠️ Config MISSING (optional)"

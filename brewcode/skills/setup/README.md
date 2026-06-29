@@ -86,8 +86,7 @@ The skill runs these phases: **check prerequisites**, scan, analyze, generate te
 | File | Location | Purpose |
 |------|----------|---------|
 | SPEC template | `.claude/tasks/templates/SPEC.md.template` | Specification template for `brewcode:spec` |
-| KNOWLEDGE template | `.claude/tasks/templates/KNOWLEDGE.jsonl.template` | Knowledge base seed for task sessions |
-| Config | `.claude/tasks/cfg/brewcode.config.json` | Runtime settings (knowledge limits, agent lists) |
+| Config | `.claude/tasks/cfg/brewcode.config.json` | Runtime settings (logging level, agent lists) |
 | Review skill | `.claude/skills/brewcode-review/SKILL.md` | Tech-specific code review checklist |
 
 The review skill is generated with checks matched to the detected stack (e.g., Spring DI rules for Java, async patterns for Node.js, error wrapping for Go).
@@ -97,7 +96,7 @@ The review skill is generated with checks matched to the detected stack (e.g., S
 - Run setup again whenever you change your tech stack, add project agents, or update your test framework. Templates are overwritten; rules are preserved.
 - The skill asks for confirmation before modifying `~/.claude/CLAUDE.md`. You can safely decline and still get all project-level templates.
 - After setup completes, continue with `spec`. Each downstream skill depends on the templates setup creates.
-- Check `.claude/tasks/cfg/brewcode.config.json` to tune knowledge compaction limits and agent injection settings after the initial run.
+- Check `.claude/tasks/cfg/brewcode.config.json` to tune logging level and agent injection settings after the initial run.
 - Setup handles prerequisites automatically. No need to install anything manually before running it.
 
 ## Documentation

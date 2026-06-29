@@ -292,14 +292,14 @@ Research $ARGUMENTS:
 
 # SA Spawning Constraints
 
-CC allows nesting up to 5 levels (v2.1.172), but brewcode workflow requires spawns from main conversation only: nested spawns bypass session binding + KNOWLEDGE injection.
+CC allows nesting up to 5 levels (v2.1.172), but brewcode workflow requires spawns from main conversation only: nested spawns bypass session binding + grepai injection.
 
 | Scenario | brewcode workflow | Why |
 |----------|------------------|-----|
-| SK with FORK from **main conversation** | **Use this** | Lock binding + KNOWLEDGE injection intact |
+| SK with FORK from **main conversation** | **Use this** | Lock binding + grepai injection intact |
 | SK with FORK from **SA** | **Avoid** | CC: up to 5 levels (v2.1.172); bypasses session binding + coordinator loop |
-| Task tool from **SA** | **Avoid** | Nested spawn bypasses session binding + KNOWLEDGE injection |
-| Skill tool from **SA** | **Avoid** | Bypasses KNOWLEDGE injection |
+| Task tool from **SA** | **Avoid** | Nested spawn bypasses session binding + grepai injection |
+| Skill tool from **SA** | **Avoid** | Bypasses grepai injection |
 | Inline SK (no CTX) from SA | **Avoid** | Same binding/injection bypass |
 
 Design: spawn from main only. For SAs use `skills:` FM (preload at startup). Multi-agent orchestration — chain from main, not nested.

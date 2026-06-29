@@ -33,8 +33,8 @@ Scans the current session for the 5 most impactful findings and writes them to y
 # After a debugging session -- capture what you learned
 /brewcode:rules
 
-# Import rules from a completed brewcode task's knowledge file
-/brewcode:rules .claude/tasks/20260401_auth_task/KNOWLEDGE.jsonl
+# Import rules from a KNOWLEDGE.jsonl file
+/brewcode:rules path/to/KNOWLEDGE.jsonl
 
 # Extract SQL-specific rules from a code review document
 /brewcode:rules docs/sql-review.md "Extract SQL anti-patterns and best practices"
@@ -47,9 +47,9 @@ Scans the current session for the 5 most impactful findings and writes them to y
 
 ```bash
 # WRONG: Passing a directory instead of a file
-/brewcode:rules .claude/tasks/
-# FIX: Point to the specific KNOWLEDGE.jsonl inside the task directory
-/brewcode:rules .claude/tasks/20260401_auth_task/KNOWLEDGE.jsonl
+/brewcode:rules path/to/
+# FIX: Point to the specific KNOWLEDGE.jsonl file
+/brewcode:rules path/to/KNOWLEDGE.jsonl
 
 # WRONG: Using "list" with extra arguments
 /brewcode:rules list some-filter

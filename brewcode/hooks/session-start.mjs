@@ -20,7 +20,7 @@
  *
  * Cleanup: /brewcode:teardown removes .claude/plans/ directory
  */
-import { readStdin, output, log, getActiveTaskPath, getLock, getActiveMode, getState, saveState } from './lib/utils.mjs';
+import { readStdin, output, log, getLock, getActiveMode, getState, saveState } from './lib/utils.mjs';
 import { readFileSync, readdirSync, statSync, mkdirSync, symlinkSync, unlinkSync, existsSync } from 'fs';
 import { execFileSync } from 'child_process';
 import { join, dirname, basename } from 'path';
@@ -289,21 +289,14 @@ async function main() {
         const derived = rawName.replace(/_task$/, '').replace(/^\d{8}-\d{6}_/, '').replace(/[-_]/g, ' ').trim();
         sessionTitle = derived || rawName;
 
-        if (source === 'compact') {
-          if (isV3) {
-            context += '\n\n[HANDOFF after compact] 1) TaskList() for current task state 2) Read PLAN.md for protocol 3) DO NOT read phases/ — they are for agents 4) Continue with current in_progress or next pending task 5) WRITE report -> CALL coordinator after EVERY agent';
-          } else {
-            context += '\n\n[HANDOFF after compact] Re-read PLAN.md and KNOWLEDGE.jsonl, then continue current phase.';
-          }
+        if (source === 'compact' && isV3) {
+          context += '\n\n[HANDOFF after compact] 1) TaskList() for current task state 2) Read PLAN.md for protocol 3) DO NOT read phases/ — they are for agents 4) Continue with current in_progress or next pending task 5) WRITE report -> CALL coordinator after EVERY agent';
         }
 
         if (isV3) {
           context += '\n\nbrewcode v3: You work through Task API. Call TaskList() to get current task state. DO NOT read phases/ files.';
           log('info', '[session-start]', `v3 task detected at ${taskDir}, injected Task API reminder`, cwd, session_id);
         }
-      } else if (source === 'compact' && getActiveTaskPath(cwd)) {
-        // Fallback: lock missing/mismatch but TASK.md reference exists (v2 task without lock)
-        context += '\n\n[HANDOFF after compact] Re-read PLAN.md and KNOWLEDGE.jsonl, then continue current phase.';
       }
     }
 

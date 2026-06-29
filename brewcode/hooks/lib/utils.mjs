@@ -59,15 +59,6 @@ export function getActiveTaskPath(cwd) {
 }
 
 /**
- * Get KNOWLEDGE.jsonl path for a task
- * @param {string} taskPath - Path to PLAN.md file
- * @returns {string} Path to KNOWLEDGE.jsonl
- */
-export function getKnowledgePath(taskPath) {
-  return join(dirname(taskPath), 'KNOWLEDGE.jsonl');
-}
-
-/**
  * Get artifacts directory for a task
  * @param {string} taskPath - Path to PLAN.md file
  * @returns {string} Path to artifacts directory
@@ -206,15 +197,6 @@ export function updateTaskStatus(taskPath, newStatus) {
 
 /** Default configuration */
 const DEFAULT_CONFIG = {
-  knowledge: {
-    maxEntries: 100,
-    maxTokens: 500,
-    priorities: ['❌', '✅', 'ℹ️'],
-    validation: {
-      enabled: true,
-      blocklist: true
-    }
-  },
   logging: {
     level: 'info'
   },
@@ -274,11 +256,6 @@ export function loadConfig(cwd) {
 
   // Deep merge with defaults
   cachedConfig = {
-    knowledge: {
-      ...DEFAULT_CONFIG.knowledge,
-      ...userConfig.knowledge,
-      validation: { ...DEFAULT_CONFIG.knowledge.validation, ...(userConfig.knowledge?.validation || {}) },
-    },
     logging: { ...DEFAULT_CONFIG.logging, ...userConfig.logging },
     agents: {
       system: [...new Set([
@@ -303,15 +280,6 @@ export function loadConfig(cwd) {
   if (!Number.isInteger(as.parallelAgents) || as.parallelAgents < 1) {
     log('warn', '[config]', `Invalid parallelAgents=${as.parallelAgents}, using default ${DEFAULT_CONFIG.autoSync.parallelAgents}`, cwd);
     as.parallelAgents = DEFAULT_CONFIG.autoSync.parallelAgents;
-  }
-  const k = cachedConfig.knowledge;
-  if (!Number.isInteger(k.maxEntries) || k.maxEntries < 1) {
-    log('warn', '[config]', `Invalid maxEntries=${k.maxEntries}, using default ${DEFAULT_CONFIG.knowledge.maxEntries}`, cwd);
-    k.maxEntries = DEFAULT_CONFIG.knowledge.maxEntries;
-  }
-  if (!Number.isInteger(k.maxTokens) || k.maxTokens < 1) {
-    log('warn', '[config]', `Invalid maxTokens=${k.maxTokens}, using default ${DEFAULT_CONFIG.knowledge.maxTokens}`, cwd);
-    k.maxTokens = DEFAULT_CONFIG.knowledge.maxTokens;
   }
 
   _loadingConfig = false;

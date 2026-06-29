@@ -132,7 +132,7 @@ Create Adaptation Plan:
 
 ## Phase 3: Template Generation
 
-**Agent:** developer | **Action:** Sync project templates (SPEC, KNOWLEDGE) and rules
+**Agent:** developer | **Action:** Sync project templates (SPEC) and rules
 
 ### Create Structure
 
@@ -255,11 +255,8 @@ bash "scripts/setup.sh" config && echo "✅ config" || echo "❌ config FAILED"
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `knowledge.maxEntries` | 100 | Max KNOWLEDGE.jsonl entries after compaction |
-| `knowledge.maxTokens` | 500 | Max tokens in ## K block injected to agents |
-| `knowledge.priorities` | `["❌","✅","ℹ️"]` | Priority order for knowledge entries |
-| `stop.maxAttempts` | 20 | Stop attempts before escape mechanism triggers |
-| `agents.system` | [...] | System agents (don't receive ## K injection) |
+| `logging.level` | info | Hook log verbosity (error/warn/info/debug/trace) |
+| `agents.system` | [...] | System agents (excluded from prompt injection) |
 
 > **Hooks-only architecture:** No external runtime. All context management via Claude Code hooks.
 
@@ -279,7 +276,6 @@ bash "scripts/setup.sh" validate && echo "✅ validate" || echo "❌ validate FA
 | Check | Status |
 |-------|--------|
 | SPEC template | `.claude/tasks/templates/SPEC.md.template` |
-| KNOWLEDGE template | `.claude/tasks/templates/KNOWLEDGE.jsonl.template` |
 | Config file | `.claude/tasks/cfg/brewcode.config.json` |
 | Project agents | [N] from `.claude/agents/` |
 | Reference Examples | [N] canonical files populated |

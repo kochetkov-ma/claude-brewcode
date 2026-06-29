@@ -4,10 +4,10 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 3.19.3 |
+| Version | 3.19.4 |
 | Skills | 13 |
 | Agents | 12 |
-| Hooks | 9 |
+| Hooks | 6 |
 | Model | opus |
 
 ## Install
@@ -43,7 +43,7 @@ Update anytime with `/brewtools:plugin-update`.
 
 ## Overview
 
-Brewcode turns single Claude Code sessions into an infinite task pipeline. When context reaches ~90%, the PreCompact hook saves knowledge, writes handoff state, and the session continues automatically, so the task runs to completion regardless of how many compaction cycles occur.
+Brewcode turns single Claude Code sessions into an infinite task pipeline. Claude Code's native auto-compaction preserves the working context, and brewcode hooks re-inject plugin state on each session so the task runs to completion regardless of how many compaction cycles occur.
 
 Skills cover project analysis, specification creation through parallel research agents, code review, convention analysis, and project rules management. Specialized agents handle implementation, testing, review, architecture, and coordination.
 
@@ -109,14 +109,11 @@ claude --plugin-dir ./brewcode
 ```
 brewcode/
 +-- .claude-plugin/plugin.json          # Plugin manifest
-+-- hooks/                              # 9 lifecycle hooks
++-- hooks/                              # 6 lifecycle hooks
 |   +-- session-start.mjs              # Session initialization
 |   +-- grepai-session.mjs             # Auto-start grepai watch
-|   +-- pre-task.mjs                   # Knowledge injection into agents
+|   +-- pre-task.mjs                   # grepai injection into agents
 |   +-- grepai-reminder.mjs            # grepai reminder
-|   +-- post-task.mjs                  # Session binding, 2-step protocol
-|   +-- pre-compact.mjs               # Knowledge compaction, handoff
-|   +-- stop.mjs                       # Exit blocking
 |   +-- forced-eval.mjs                # Skill activation
 |   +-- permission-guard.sh            # Manager-mode edit guard
 +-- agents/                            # 12 agents
@@ -130,13 +127,10 @@ brewcode/
 |------|-------|---------|
 | session-start | SessionStart | Initialize session, inject plugin path |
 | grepai-session | SessionStart | Auto-start grepai watch process |
-| pre-task | PreToolUse:Task | Inject grepai + KNOWLEDGE into agent prompts |
-| grepai-reminder | PreToolUse:Glob/Grep | Remind to prefer semantic search |
-| post-task | PostToolUse:Task | Bind session, enforce 2-step protocol |
-| pre-compact | PreCompact | Compact KNOWLEDGE, write handoff entry |
-| stop | Stop | Block if not terminal, clean lock |
+| pre-task | PreToolUse:Task | Inject grepai reminder into agent prompts |
+| grepai-reminder | PreToolUse:Bash | Remind to prefer semantic search |
 | forced-eval | UserPromptSubmit | Skill activation |
-| permission-guard | PreToolUse | Manager-mode edit guard for main session |
+| permission-guard | PermissionRequest | Manager-mode edit guard for main session |
 
 ## Task Structure
 
