@@ -2,6 +2,14 @@
 
 ---
 
+## v3.19.2 (2026-06-29)
+
+### brewcode
+#### Removed
+- **teardown skill:** brewcode:teardown removed
+
+---
+
 ## v3.19.1 (2026-06-29)
 
 > Docs: [brewcode overview](https://doc-claude.brewcode.app/brewcode/overview/) | [setup skill](https://doc-claude.brewcode.app/brewcode/skills/setup/) | [convention skill](https://doc-claude.brewcode.app/brewcode/skills/convention/) | [e2e skill](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [rules skill](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [skills skill](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [agents skill](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [teams skill](https://doc-claude.brewcode.app/brewcode/skills/teams/) | [teardown skill](https://doc-claude.brewcode.app/brewcode/skills/teardown/) | [standards-review skill](https://doc-claude.brewcode.app/brewcode/skills/standards-review/)
