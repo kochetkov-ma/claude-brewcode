@@ -58,31 +58,6 @@
         ]
       }
     ],
-    "PostToolUse": [
-      {
-        "matcher": "Task|Agent",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/post-task.mjs"],
-            "timeout": 5000
-          }
-        ]
-      }
-    ],
-    "PreCompact": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/pre-compact.mjs"],
-            "timeout": 60000
-          }
-        ]
-      }
-    ],
     "PermissionRequest": [
       {
         "matcher": "Edit|Write|MultiEdit|Bash",
@@ -92,18 +67,6 @@
             "command": "bash",
             "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/permission-guard.sh"],
             "timeout": 1000
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/stop.mjs"],
-            "timeout": 5000
           }
         ]
       }

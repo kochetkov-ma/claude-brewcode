@@ -5,7 +5,7 @@ auto-sync-type: doc
 description: Detailed description of all brewcode plugin commands
 ---
 
-[DICT: BC=brewcode, AG=agent, SK=skill, KB=KNOWLEDGE.jsonl, PL=PLAN.md, SP=SPEC.md, TD=task dir (.claude/tasks/{TS}_{NAME}_task/), TS=timestamp, PLG=plugin, QR=quorum review, PR=Phase Registry, TK=task, PC=pre-compact, PT=pre-task, CT=bc-coordinator]
+[DICT: BC=brewcode, AG=agent, SK=skill, KB=KNOWLEDGE.jsonl, PL=PLAN.md, SP=SPEC.md, TD=task dir (.claude/tasks/{TS}_{NAME}_task/), TS=timestamp, PLG=plugin, QR=quorum review, PR=Phase Registry, TK=task, PC=pre-compact, PT=pre-task]
 
 # BC Plugin Commands
 
@@ -47,8 +47,6 @@ setup --> spec --> plan --> start --> review --> rules
 
 | AG | Model | Purpose |
 |----|-------|---------|
-| `ct` (bc-coordinator) | haiku | Phase statuses, validation, report mgmt |
-| `bc-knowledge-manager` | haiku | KB compaction, dedup, prioritization |
 | `bc-grepai-configurator` | opus | Gen `.grepai/config.yaml` via deep project analysis |
 | `bc-rules-organizer` | sonnet | Create/optimize `.claude/rules/*.md` |
 
@@ -336,9 +334,8 @@ State preserved: phase statuses in PL, knowledge in KB, artifacts on disk.
 | Step | Action | AG | Result |
 |------|--------|----|--------|
 | 1 | `Skill(bc:rules)` | bc-rules-organizer | Reads KB, writes ❌ → `.claude/rules/avoid.md`, ✅ → `.claude/rules/best-practice.md` |
-| 2 | `Task(bc-knowledge-manager, prune-rules)` | bc-knowledge-manager | Removes ❌ + ✅ entries (already in rules) |
 
-After prune: only ℹ️ context facts remain (architecture decisions, project-specific facts, env details).
+After extraction: only ℹ️ context facts remain (architecture decisions, project-specific facts, env details).
 
 ```
 /bc:start .claude/tasks/20260208_143052_auth_feature_task/PLAN.md

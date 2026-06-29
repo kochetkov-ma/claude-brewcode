@@ -172,8 +172,6 @@ When other skills (spec, plan, start, convention, standards-review) spawn agents
 |-------|-------------|
 | `/brewcode:setup` | Run first to analyze project structure |
 | `/brewcode:spec` | Create task specifications for agents to execute |
-| `/brewcode:plan` | Build execution plans from specs |
-| `/brewcode:start` | Execute plans using the created team |
 | `/brewcode:rules` | Extract team insights into project rules |
 
 ## Documentation

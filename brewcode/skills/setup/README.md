@@ -33,9 +33,8 @@ Required components are installed automatically. Optional components are offered
 | Mode | How to trigger | What it does |
 |------|---------------|--------------|
 | Full auto-detect | `/brewcode:setup` | Scans the project, detects stack, generates all templates and review skill |
-| Custom template | `/brewcode:setup path/to/PLAN.md.template` | Uses the provided template as a base and adapts it to the project |
 
-Both modes run the same phases: **check prerequisites**, scan, analyze, generate templates, create review skill, and update the global `~/.claude/CLAUDE.md` agents section (with confirmation).
+The skill runs these phases: **check prerequisites**, scan, analyze, generate templates, create review skill, and update the global `~/.claude/CLAUDE.md` agents section (with confirmation).
 
 ## Examples
 
@@ -59,11 +58,6 @@ Both modes run the same phases: **check prerequisites**, scan, analyze, generate
 ```
 
 ```bash
-# Use a shared team template as the starting point
-/brewcode:setup ~/.claude/templates/PLAN.md.template
-```
-
-```bash
 # After switching from JPA to jOOQ -- re-run so templates reflect the new stack
 /brewcode:setup
 ```
@@ -81,14 +75,6 @@ Both modes run the same phases: **check prerequisites**, scan, analyze, generate
 ```
 
 ```bash
-# WRONG: Editing .claude/tasks/templates/PLAN.md.template by hand
-# The next /brewcode:setup will overwrite your manual changes.
-
-# FIX: Put customizations in the source template and pass it as an argument.
-/brewcode:setup ~/my-custom-template.md
-```
-
-```bash
 # WRONG: Running setup from a different directory than the project root
 # The scan script looks at the current working directory for build files and agents.
 
@@ -99,7 +85,6 @@ Both modes run the same phases: **check prerequisites**, scan, analyze, generate
 
 | File | Location | Purpose |
 |------|----------|---------|
-| PLAN template | `.claude/tasks/templates/PLAN.md.template` | Multi-phase task plan adapted to your stack |
 | SPEC template | `.claude/tasks/templates/SPEC.md.template` | Specification template for `brewcode:spec` |
 | KNOWLEDGE template | `.claude/tasks/templates/KNOWLEDGE.jsonl.template` | Knowledge base seed for task sessions |
 | Config | `.claude/tasks/cfg/brewcode.config.json` | Runtime settings (knowledge limits, agent lists) |

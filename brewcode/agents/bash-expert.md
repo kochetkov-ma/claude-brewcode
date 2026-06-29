@@ -130,7 +130,7 @@ echo "| brew | ✅ |"
 | `$CLAUDE_PLUGIN_ROOT` | Hooks only |
 | `$PLUGIN_ROOT/skills/X/scripts/` | All contexts |
 
-> In Skills: `${CLAUDE_SKILL_DIR}` for own files (string substitution in SKILL.md). In Agents (subagents): `$BC_PLUGIN_ROOT` (injected by pre-task.mjs)
+> In Skills: `${CLAUDE_SKILL_DIR}` for own files (string substitution in SKILL.md). In Agents (subagents): `$BC_PLUGIN_ROOT` (injected by session-start.mjs)
 
 ## 6. Homebrew
 

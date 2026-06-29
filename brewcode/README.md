@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 3.19.2 |
+| Version | 3.19.3 |
 | Skills | 13 |
 | Agents | 12 |
 | Hooks | 9 |
@@ -43,9 +43,9 @@ Update anytime with `/brewtools:plugin-update`.
 
 ## Overview
 
-Brewcode turns single Claude Code sessions into an infinite task pipeline. When context reaches ~90%, the PreCompact hook saves knowledge, writes handoff state, and the session continues automatically. One cycle: `spec` -- `plan` -- `start` -- and the task runs to completion regardless of how many compaction cycles occur.
+Brewcode turns single Claude Code sessions into an infinite task pipeline. When context reaches ~90%, the PreCompact hook saves knowledge, writes handoff state, and the session continues automatically, so the task runs to completion regardless of how many compaction cycles occur.
 
-13 skills cover the full lifecycle: project analysis, specification creation through parallel research agents, phased plan generation with quorum review, execution with automatic handoff, code review, convention analysis, and project rules management. 12 specialized agents handle implementation, testing, review, architecture, and coordination.
+Skills cover project analysis, specification creation through parallel research agents, code review, convention analysis, and project rules management. Specialized agents handle implementation, testing, review, architecture, and coordination.
 
 ## Installation
 
@@ -67,11 +67,7 @@ claude --plugin-dir ./brewcode
 ```bash
 /brewcode:setup                              # 1. Adapt templates for the project (one-time)
 /brewcode:spec "Implement JWT authorization"  # 2. Research + specification
-/brewcode:plan                                # 3. Generate phased plan
-/brewcode:start                               # 4. Execute with infinite context
 ```
-
-After `/brewcode:setup`, each task follows the cycle: `spec` -> `plan` -> `start`.
 
 ## Skills
 
@@ -79,8 +75,6 @@ After `/brewcode:setup`, each task follows the cycle: `spec` -> `plan` -> `start
 |-------|---------|
 | [`/brewcode:setup`](skills/setup/README.md) | Analyze project, check prerequisites, generate adapted templates and config |
 | [`/brewcode:spec`](skills/spec/README.md) | Research codebase + user dialog -> SPEC.md |
-| [`/brewcode:plan`](skills/plan/README.md) | Generate phased PLAN.md from SPEC or Plan Mode with quorum review |
-| [`/brewcode:start`](skills/start/README.md) | Execute task with infinite context through automatic handoffs |
 | [`/brewcode:teams`](skills/teams/README.md) | Dynamic agent team creation, management, and performance tracking |
 | [`/brewcode:standards-review`](skills/standards-review/README.md) | Review code for project standards compliance |
 | [`/brewcode:convention`](skills/convention/README.md) | Extract etalon classes, patterns, architecture into convention docs and rules |
@@ -105,8 +99,6 @@ After `/brewcode:setup`, each task follows the cycle: `spec` -> `plan` -> `start
 | [agent-creator](agents/agent-creator.md) | opus | Create and improve Claude Code agents |
 | [hook-creator](agents/hook-creator.md) | opus | Create and debug Claude Code hooks |
 | [bash-expert](agents/bash-expert.md) | opus | Create professional shell scripts |
-| bc-coordinator | haiku | Internal: spawned by /brewcode:start + post-task hook |
-| bc-knowledge-manager | haiku | Internal: spawned by /brewcode:start |
 | bc-grepai-configurator | opus | Internal: spawned by /brewcode:grepai |
 | bc-rules-organizer | sonnet | Internal: spawned by /brewcode:rules |
 

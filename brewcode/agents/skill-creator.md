@@ -292,13 +292,13 @@ Research $ARGUMENTS:
 
 # SA Spawning Constraints
 
-CC allows nesting up to 5 levels (v2.1.172), but brewcode workflow requires spawns from main conversation only: post-task.mjs binds lock to one session + delivers report/coordinator instructions to spawning conversation; nested spawns bypass session binding, KNOWLEDGE injection, coordinator loop.
+CC allows nesting up to 5 levels (v2.1.172), but brewcode workflow requires spawns from main conversation only: nested spawns bypass session binding + KNOWLEDGE injection.
 
 | Scenario | brewcode workflow | Why |
 |----------|------------------|-----|
 | SK with FORK from **main conversation** | **Use this** | Lock binding + KNOWLEDGE injection intact |
 | SK with FORK from **SA** | **Avoid** | CC: up to 5 levels (v2.1.172); bypasses session binding + coordinator loop |
-| Task tool from **SA** | **Avoid** | Nested spawn skips post-task.mjs report protocol |
+| Task tool from **SA** | **Avoid** | Nested spawn bypasses session binding + KNOWLEDGE injection |
 | Skill tool from **SA** | **Avoid** | Bypasses KNOWLEDGE injection |
 | Inline SK (no CTX) from SA | **Avoid** | Same binding/injection bypass |
 

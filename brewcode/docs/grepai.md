@@ -121,7 +121,7 @@ if (hasGrepai) {
 }
 ```
 
-Scope: ALL agents (Explore, Plan, Bash, developer, tester, reviewer, bc-coordinator, custom)
+Scope: ALL agents (Explore, Plan, Bash, developer, tester, reviewer, custom)
 Mechanism: prepend — reminder = FIRST line of agent prompt
 
 Output structure:

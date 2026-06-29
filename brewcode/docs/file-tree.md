@@ -30,8 +30,6 @@ brewcode/                                    # Plugin root directory
 │   └── stop.mjs                               # Stop: blocks exit on active task, removes stale lock
 │
 ├── agents/                                    # Plugin agents (system prompts in Markdown)
-│   ├── bc-coordinator.md                      # Task coordinator (haiku): phase status, knowledge extraction, NEXT ACTION
-│   ├── bc-knowledge-manager.md                # Knowledge manager (haiku): dedup, sort, trim KNOWLEDGE.jsonl
 │   ├── bc-grepai-configurator.md              # grepai configurator (opus): project analysis, config.yaml via 5 parallel investigations
 │   ├── bc-rules-organizer.md                  # Rules organizer (sonnet): creates/optimizes .claude/rules/*.md
 │   ├── agent-creator.md                       # Agent creator (opus): Agent Architect Process, System Prompt Patterns
@@ -63,12 +61,6 @@ brewcode/                                    # Plugin root directory
 │   │
 │   ├── spec/                                  # /brewcode:spec - Specification creation
 │   │   └── SKILL.md                           # 7 steps: investigation (5-10 parallel agents), dialog, review (opus, session)
-│   │
-│   ├── plan/                                  # /brewcode:plan - Execution plan creation
-│   │   └── SKILL.md                           # SPEC/Plan Mode → 5-12 phases, quorum review by 3 agents (opus, session)
-│   │
-│   ├── start/                                 # /brewcode:start - Task execution launch
-│   │   └── SKILL.md                           # Infinite context via hooks, 2-step protocol, escalation after 3 failures (opus, session)
 │   │
 │   ├── rules/                                 # /brewcode:rules - Extract rules from knowledge
 │   │   ├── SKILL.md                           # KNOWLEDGE.jsonl → avoid.md + best-practice.md, dedup, 20 line limit (sonnet, session)
@@ -212,8 +204,8 @@ Files created by the plugin in the user's project:
 |----------|-------|-------|
 | Plugin configuration | 2 | plugin.json, hooks.json |
 | Hooks (lifecycle) | 9 | forced-eval, grepai-reminder, grepai-session, permission-guard, post-task, pre-compact, pre-task, session-start, stop |
-| Agents | 12 | bc-coordinator, bc-knowledge-manager, bc-grepai-configurator, bc-rules-organizer, agent-creator, skill-creator, bash-expert, hook-creator, architect, developer, reviewer, tester |
-| Skills (SKILL.md) | 13 | setup, spec, plan, start, rules, convention, grepai, teardown, standards-review, skills, agents, teams, e2e |
+| Agents | 10 | bc-grepai-configurator, bc-rules-organizer, agent-creator, skill-creator, bash-expert, hook-creator, architect, developer, reviewer, tester |
+| Skills (SKILL.md) | 11 | setup, spec, rules, convention, grepai, teardown, standards-review, skills, agents, teams, e2e |
 | Bash scripts | 16 | setup(2), rules(1), grepai(13) |
 | Templates | 17 | PLAN, SPEC, KNOWLEDGE, config, phase(4), reports(4), rules(3), review(3) |
 | Documentation | 7 | README, INSTALL, RELEASE-NOTES, grepai.md, file-tree.md, commands.md, flow.md, hooks.md |
@@ -235,6 +227,4 @@ Files created by the plugin in the user's project:
 
 | Agent | Model | Purpose |
 |-------|-------|---------|
-| bc-coordinator | haiku | Orchestration: status, knowledge, NEXT ACTION |
-| bc-knowledge-manager | haiku | KNOWLEDGE.jsonl compaction |
 | bc-grepai-configurator | opus | Project analysis, config.yaml generation |

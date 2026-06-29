@@ -220,8 +220,6 @@ const DEFAULT_CONFIG = {
   },
   agents: {
     system: [
-      'bc-coordinator', 'bc-knowledge-manager',
-      'brewcode:bc-coordinator', 'brewcode:bc-knowledge-manager',
       'bd-auto-sync-processor', 'brewcode:bd-auto-sync-processor',
       'bc-grepai-configurator', 'brewcode:bc-grepai-configurator',
       'Explore', 'Plan', 'Bash', 'general-purpose',
@@ -558,16 +556,6 @@ export function createLock(cwd, taskPath) {
   writeFileSync(tmpPath, JSON.stringify(lock, null, 2));
   renameSync(tmpPath, lockPath);
   return lock;
-}
-
-/**
- * Check if coordinator agent
- * @param {string} agentType - The subagent_type value
- * @returns {boolean} True if bc-coordinator
- */
-export function isCoordinator(agentType) {
-  return agentType === 'bc-coordinator' ||
-         agentType === 'brewcode:bc-coordinator';
 }
 
 // ============================================================================

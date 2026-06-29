@@ -2,6 +2,18 @@
 
 ---
 
+## v3.19.3 (2026-06-29)
+
+### brewcode
+#### Removed
+- **bc-coordinator, bc-knowledge-manager agents:** removed (coupled to deleted start skill)
+- **setup templates:** PLAN.md.template + phase templates removed; setup now generates SPEC + KNOWLEDGE templates only
+- **hooks:** post-task.mjs, pre-compact.mjs, stop.mjs deleted (dead start/coordinator flow); hooks.json PostToolUse/PreCompact/Stop entries removed; pre-task.mjs stripped of lock/KNOWLEDGE injection; utils.mjs isCoordinator() + coordinator system-agent entries removed
+- **docs/hooks.md:** removed (entirely about start/coordinator flow)
+- all remaining /brewcode:plan and /brewcode:start references purged from agents, README, docs, setup skill
+
+---
+
 ## v3.19.2 (2026-06-29)
 
 ### brewcode

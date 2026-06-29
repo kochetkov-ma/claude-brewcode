@@ -104,13 +104,8 @@ sync_templates() {
     fi
   }
 
-  sync_template "$SETUP_TEMPLATES/PLAN.md.template" ".claude/tasks/templates/PLAN.md.template"
   sync_template "$SETUP_TEMPLATES/SPEC.md.template" ".claude/tasks/templates/SPEC.md.template"
   sync_template "$SETUP_TEMPLATES/KNOWLEDGE.jsonl.template" ".claude/tasks/templates/KNOWLEDGE.jsonl.template"
-  sync_template "$SETUP_TEMPLATES/phase.md.template" ".claude/tasks/templates/phase.md.template"
-  sync_template "$SETUP_TEMPLATES/phase-verify.md.template" ".claude/tasks/templates/phase-verify.md.template"
-  sync_template "$SETUP_TEMPLATES/phase-fix.md.template" ".claude/tasks/templates/phase-fix.md.template"
-  sync_template "$SETUP_TEMPLATES/phase-final-review.md.template" ".claude/tasks/templates/phase-final-review.md.template"
 
   # grepai-first: always sync (plugin-managed rule)
   if [ -f "$PLUGIN_TEMPLATES/rules/grepai-first.md.template" ]; then
@@ -246,9 +241,9 @@ EOF
   fi
 
   # Plugin agents from PLUGIN_ROOT/agents/ (excluding internal agents)
-  # Internal agents (bc-coordinator, bc-grepai-configurator, bc-knowledge-manager) are not listed
+  # Internal agents (bc-grepai-configurator) are not listed
   # because they are only called by the plugin itself, not by users
-  INTERNAL_AGENTS="bc-coordinator bc-grepai-configurator bc-knowledge-manager"
+  INTERNAL_AGENTS="bc-grepai-configurator"
   if [ -d "$PLUGIN_ROOT/agents" ]; then
     for f in "$PLUGIN_ROOT/agents"/*.md; do
       [ -f "$f" ] || continue
@@ -267,13 +262,8 @@ validate_setup() {
   echo "=== Phase 4: Validation ==="
   ERRORS=0
 
-  test -f .claude/tasks/templates/PLAN.md.template && echo "✅ PLAN template" || { echo "❌ PLAN template MISSING"; ERRORS=$((ERRORS+1)); }
   test -f .claude/tasks/templates/SPEC.md.template && echo "✅ SPEC template" || { echo "❌ SPEC template MISSING"; ERRORS=$((ERRORS+1)); }
   test -f .claude/tasks/templates/KNOWLEDGE.jsonl.template && echo "✅ KNOWLEDGE template" || { echo "❌ KNOWLEDGE template MISSING"; ERRORS=$((ERRORS+1)); }
-  test -f .claude/tasks/templates/phase.md.template && echo "✅ phase template" || { echo "❌ phase template MISSING"; ERRORS=$((ERRORS+1)); }
-  test -f .claude/tasks/templates/phase-verify.md.template && echo "✅ phase-verify template" || { echo "❌ phase-verify template MISSING"; ERRORS=$((ERRORS+1)); }
-  test -f .claude/tasks/templates/phase-fix.md.template && echo "✅ phase-fix template" || { echo "❌ phase-fix template MISSING"; ERRORS=$((ERRORS+1)); }
-  test -f .claude/tasks/templates/phase-final-review.md.template && echo "✅ phase-final-review template" || { echo "❌ phase-final-review template MISSING"; ERRORS=$((ERRORS+1)); }
   test -f .claude/rules/avoid.md && echo "✅ avoid.md rules" || { echo "❌ avoid.md MISSING"; ERRORS=$((ERRORS+1)); }
   test -f .claude/rules/best-practice.md && echo "✅ best-practice.md rules" || { echo "❌ best-practice.md MISSING"; ERRORS=$((ERRORS+1)); }
   test -f .claude/tasks/cfg/brewcode.config.json && echo "✅ Config file" || echo "⚠️ Config MISSING (optional)"

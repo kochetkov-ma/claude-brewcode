@@ -132,7 +132,7 @@ Create Adaptation Plan:
 
 ## Phase 3: Template Generation
 
-**Agent:** developer | **Action:** Generate adapted template at `.claude/tasks/templates/PLAN.md.template`
+**Agent:** developer | **Action:** Sync project templates (SPEC, KNOWLEDGE) and rules
 
 ### Create Structure
 
@@ -152,28 +152,6 @@ bash "scripts/setup.sh" sync && echo "✅ sync" || echo "❌ sync FAILED"
 
 > **STOP if ❌** — verify plugin templates exist.
 > Templates synced from plugin. Rules created once (never overwritten). Review skill adapted by AI.
-
-### Template Modifications
-
-| Section | Adaptation |
-|---------|-----------|
-| Agents | Add project-specific agents from `.claude/agents/` |
-| Reference Examples | Fill with project's reference files (controllers, services, tests) |
-| Phase V agents | Customize reviewer focus for detected testing/code patterns |
-| Final Review | Add project agents (db_expert, etc.) if relevant tech detected |
-
-### Required Sections
-
-> Preserve universal structure. Key sections to adapt:
-
-```markdown
-## Agents — Add project agents above Core Agents
-## Reference Examples — R1..RN with project's canonical files
-## Phases — Each phase has: Agent, Status, Context (C#), Refs (R#)
-## Phase NV: Verification — 2+ agents, one checks patterns compliance
-## Final Review — 3+ agents parallel
-## Context Index — C1..CN task-specific files
-```
 
 ---
 
@@ -300,7 +278,6 @@ bash "scripts/setup.sh" validate && echo "✅ validate" || echo "❌ validate FA
 
 | Check | Status |
 |-------|--------|
-| PLAN template | `.claude/tasks/templates/PLAN.md.template` |
 | SPEC template | `.claude/tasks/templates/SPEC.md.template` |
 | KNOWLEDGE template | `.claude/tasks/templates/KNOWLEDGE.jsonl.template` |
 | Config file | `.claude/tasks/cfg/brewcode.config.json` |
@@ -323,7 +300,7 @@ bash "scripts/setup.sh" agents > /tmp/agents-section.md && cat /tmp/agents-secti
 ```
 
 > Output = ready-to-insert content. Script collects system + global + plugin agents.
-> Internal agents (bc-coordinator, bc-grepai-configurator, bc-knowledge-manager) are automatically excluded.
+> Internal agents (bc-grepai-configurator) are automatically excluded.
 
 ### Step 2: Analyze Existing CLAUDE.md
 
@@ -387,7 +364,7 @@ LLM determines section boundaries, not grep. Content comes from script output.
 
 ## Templates
 
-**Plan template:** `.claude/tasks/templates/PLAN.md.template`
+**SPEC template:** `.claude/tasks/templates/SPEC.md.template`
 **Review skill:** `.claude/skills/brewcode-review/SKILL.md`
 
 ## Usage
