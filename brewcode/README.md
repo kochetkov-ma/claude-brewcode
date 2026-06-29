@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 3.19.4 |
+| Version | 3.19.5 |
 | Skills | 13 |
 | Agents | 12 |
 | Hooks | 6 |
@@ -136,13 +136,7 @@ brewcode/
 
 ```
 .claude/tasks/{TS}_{NAME}_task/
-  SPEC.md             # Specification (research results)
-  PLAN.md             # Phased execution plan
-  KNOWLEDGE.jsonl     # Accumulated knowledge (survives compactions)
-  phases/             # Individual phase files for agents
-  artifacts/          # Execution reports by phases
-  backup/             # Backups
-  .lock               # Session lock file
+  SPEC.md             # Specification (research results from /brewcode:spec)
 ```
 
 ## Documentation

@@ -5,7 +5,7 @@ auto-sync-type: doc
 description: Detailed description of all brewcode plugin commands
 ---
 
-[DICT: BC=brewcode, AG=agent, SK=skill, KB=KNOWLEDGE.jsonl, PL=PLAN.md, SP=SPEC.md, TD=task dir (.claude/tasks/{TS}_{NAME}_task/), TS=timestamp, PLG=plugin, QR=quorum review, PR=Phase Registry, TK=task, PT=pre-task]
+[DICT: BC=brewcode, AG=agent, SK=skill, KB=KNOWLEDGE.jsonl, SP=SPEC.md, TD=task dir (.claude/tasks/{TS}_{NAME}_task/), TS=timestamp, PLG=plugin, QR=quorum review, TK=task]
 
 # BC Plugin Commands
 
@@ -17,10 +17,8 @@ description: Detailed description of all brewcode plugin commands
 |---|---------|---------|---------|-------|------|
 | 1 | `/bc:setup` | Analyze project, gen templates, install prereqs | fork | opus | -- |
 | 2 | `/bc:spec` | Create task SP | session | opus | setup |
-| 3 | `/bc:plan` | Create PL from SP or Plan Mode | session | opus | spec |
-| 4 | `/bc:start` | Execute TK phases | session | opus | plan |
 | 5 | `/bc:review` | Code review w/ QR | fork | opus | setup |
-| 6 | `/bc:rules` | Extract rules from KB | session | sonnet | start |
+| 6 | `/bc:rules` | Extract rules from KB | session | sonnet | -- |
 | 7 | `/bc:grepai` | Semantic code search | session | sonnet | setup |
 | 8 | `/bc:teardown` | Remove PLG files | fork | haiku | setup |
 | ~~10~~ | ~~`/bc:secrets-scan`~~ | **moved to brewtools** | -- | -- | -- |
@@ -36,9 +34,9 @@ description: Detailed description of all brewcode plugin commands
 ## Execution Order
 
 ```
-setup --> spec --> plan --> start --> review --> rules
-                                       |
-                                grepai / teardown
+setup --> spec --> review --> rules
+            |
+     grepai / teardown
 ```
 
 ---
@@ -68,9 +66,7 @@ Analyzes project structure, tech stack, test frameworks, project AGs. Generates 
 
 | Path | Purpose |
 |------|---------|
-| `.claude/tasks/templates/PLAN.md.template` | Plan template |
 | `.claude/tasks/templates/SPEC.md.template` | SP template |
-| `.claude/tasks/templates/KNOWLEDGE.jsonl.template` | KB template |
 | `.claude/tasks/cfg/brewcode.config.json` | PLG cfg |
 | `.claude/skills/brewcode-review/SKILL.md` | Code review SK |
 | `.claude/skills/brewcode-review/references/` | Prompt + report templates |
@@ -110,7 +106,7 @@ Re-run when: adding AG in `.claude/agents/`, updating `CLAUDE.md`, changing test
 
 ```
 /bc:setup
-/bc:setup ~/.claude/templates/PLAN.md.template
+/bc:setup ~/.claude/templates/SPEC.md.template
 ```
 
 ---
@@ -162,7 +158,6 @@ Creates SPEC.md via parallel codebase research + interactive user clarification.
 
 | Input | Action |
 |-------|--------|
-| Empty `$ARGUMENTS` | Read `.claude/TASK.md` — first line = path |
 | Text | Use as task desc |
 | Path | Read file as task desc |
 
@@ -171,172 +166,6 @@ Naming: `YYYYMMDD_HHMMSS` + lowercase slug, e.g. `20260208_143052_auth_feature`
 ```
 /bc:spec "Implement authorization via JWT tokens"
 /bc:spec requirements/auth-feature.md
-```
-
----
-
-## 3. `/bc:plan`
-
-Creates PL from SPEC.md or Plan Mode file. Phase breakdown, AG assignment, QR, requirements coverage check.
-
-| Param | Value |
-|-------|-------|
-| Args | Path to TD, SPEC.md, or `.claude/plans/LATEST.md` |
-| Context | session |
-| Model | opus |
-| Deps | `/bc:spec` or Plan Mode file |
-| Tools | Read, Write, Glob, Grep, Bash, Task, AskUserQuestion |
-
-### Created Files
-
-| Path | Purpose |
-|------|---------|
-| `TD/PLAN.md` | Slim PL w/ PR table |
-| `TD/phases/` | Individual phase instruction files (v3) |
-| `TD/phases/{N}-{name}.md` | Execution phase (e.g. `1-research.md`) |
-| `TD/phases/{N}V-verify-{name}.md` | Verification phase |
-| `TD/phases/FR-final-review.md` | Final review phase |
-| `TD/KNOWLEDGE.jsonl` | Empty KB |
-| `TD/artifacts/` | AG reports dir |
-| `TD/backup/` | Backups dir |
-| `.claude/TASK.md` | Quick ref (path to latest TK prepended) |
-
-v3: phase details in `phases/` files, PL.md has only slim PR table (name, status, AG, parallel group). Manager !=reads `phases/` directly — only AGs receive phase file path via Task API.
-
-### Agents (QR)
-
-| AG | Cnt | Purpose |
-|----|-----|---------|
-| Plan | 1 | Coverage check |
-| `bc:architect` | 1 | Architecture, tech choices, deps |
-| `bc:reviewer` | 1-2 | Quality, risks + traceability |
-
-QR: 3 mixed AGs (Plan + bc:architect + bc:reviewer), 2/3 majority.
-
-### Workflow (from SPEC)
-
-1. Verify PLAN.md.template + phase templates
-2. Read SP: goals, requirements, risks
-3. Scan project for Reference Examples (R1, R2...)
-4. Gen 5-12 phases w/ deps + AGs
-5. User approval via AskUserQuestion
-6. Gen: slim PL (PR table), `phases/` dir, KB (0-byte), artifacts/, backup/
-7. Doc non-trivial tech choices (lib, pattern, approach) w/ rationale + rejected alternatives in PL
-8. QR: 3 AGs in parallel, 2/3 accepted
-9. Traceability: bc:reviewer verifies Scope > In + original requirements; gaps → added phases before step 10
-10. User approval
-
-### Workflow (from Plan Mode)
-
-1. Verify templates
-2. Read `.claude/plans/LATEST.md`
-3. Create TD, scan project
-4. Each plan item → 1-3 phases + verification
-5. User approval
-6. Gen artifacts (same as step 6 above)
-7. Lightweight review: 2 AGs (bc:architect + bc:reviewer), 2/2 consensus
-
-### Input Handling
-
-| Input | Action |
-|-------|--------|
-| Path to `{TS}_{NAME}_task/` | Read SPEC.md from that dir |
-| Path to `SPEC.md` | TD = parent |
-| `.claude/plans/LATEST.md` | Plan Mode: create TK w/o SP |
-| Empty | Read `.claude/TASK.md` |
-
-```
-/bc:plan .claude/tasks/20260208_143052_auth_feature_task/
-/bc:plan .claude/plans/LATEST.md
-/bc:plan
-```
-
----
-
-## 4. `/bc:start`
-
-Executes TK by PL phases w/ infinite context via auto handoff. v3 uses Task API (TC/TU/TL) for phase mgmt. Hooks inject knowledge, compact on limit, auto-continue.
-
-| Param | Value |
-|-------|-------|
-| Args | `[task-path]` (default from `.claude/TASK.md`) |
-| Context | session |
-| Model | opus |
-| Deps | `/bc:plan` (PL + `phases/` must exist) |
-| Tools | Read, Write, Edit, Bash, Task, Glob, Grep, Skill |
-
-### Created Files
-
-| Path | Purpose |
-|------|---------|
-| `TD/.lock` | Session lock |
-| `TD/artifacts/{P}-{N}{T}/` | Phase dirs |
-| `TD/artifacts/{P}-{N}{T}/{AG}_output.md` | AG reports |
-| `TD/artifacts/MANIFEST.md` | Artifacts manifest |
-| `TD/artifacts/FINAL.md` | Final report |
-| `TD/sessions/{session_id}.info` | Session info |
-| `TD/phases/{N}F-fix-{name}.md` | Fix phase files (dynamic, on verification failure) |
-
-### v3 Task API
-
-| API | Purpose |
-|-----|---------|
-| `TaskCreate` | Spawn AG w/ phase file path — AG reads its own `phases/{N}-{name}.md` |
-| `TaskUpdate` | Update phase status in PL PR |
-| `TaskList` | Check running/completed for parallel group mgmt |
-
-Manager !=reads `phases/` directly. Only spawned AGs read their assigned phase file. Keeps manager ctx slim, enables parallel phases in same Parallel group.
-
-### Hooks
-
-| Hook | Event | Purpose |
-|------|-------|---------|
-| `session-start.mjs` | SessionStart | Session init, Task API reminder on active v3 TK |
-| `pre-task.mjs` | PreToolUse:Task | grepai reminder + v3 phase file reminder |
-
-### Workflow
-
-1. Resolve TK path from args or `.claude/TASK.md`
-2. Init via CT: validation, create lock, status `in progress`
-3. Load ctx: read PL PR + KB (manager !=reads `phases/`)
-4. Execute phases via Task API:
-   - `TaskCreate` → spawn AG w/ `phases/{N}-{name}.md` path
-   - AG executes, WRITES report to `artifacts/{P}-{N}{T}/{AG}_output.md`
-   - CALL CT → read report, extract knowledge
-   - `TaskCreate` → spawn verify AG w/ `phases/{N}V-verify-{name}.md`
-   - On verify fail: gen `phases/{N}F-fix-{name}.md`, spawn fix AG
-   - Same Parallel group AGs → multiple `TaskCreate` simultaneously
-5. Final review: 3+ `reviewer` AGs in parallel via `TaskCreate`
-6. Complete: status `finished`, call `/bc:rules`
-
-### Handoff (infinite context)
-
-```
-Phase exec → PreCompact (approaching limit)
-    → KB compaction → auto-compact (ctx compression)
-    → Re-read PL + KB → continue from current phase
-```
-
-State preserved: phase statuses in PL, knowledge in KB, artifacts on disk.
-
-### 2-step Protocol (after EVERY AG)
-
-```
-1. WRITE report → artifacts/{P}-{N}{T}/{AG}_output.md
-2. CALL ct → reads report from disk, extracts knowledge
-```
-
-### KB → Rules (auto at step 5)
-
-| Step | Action | AG | Result |
-|------|--------|----|--------|
-| 1 | `Skill(bc:rules)` | bc-rules-organizer | Reads KB, writes ❌ → `.claude/rules/avoid.md`, ✅ → `.claude/rules/best-practice.md` |
-
-After extraction: only ℹ️ context facts remain (architecture decisions, project-specific facts, env details).
-
-```
-/bc:start .claude/tasks/20260208_143052_auth_feature_task/PLAN.md
-/bc:start
 ```
 
 ---
@@ -424,7 +253,7 @@ Extracts anti-patterns + best practices from KB or session ctx → updates `.cla
 | Args | `[path-to-KNOWLEDGE.jsonl]` (empty = session mode) |
 | Context | session |
 | Model | sonnet |
-| Deps | `/bc:start` or current session |
+| Deps | current session |
 | Tools | Read, Write, Edit, Glob, Grep, Bash |
 
 ### Created Files

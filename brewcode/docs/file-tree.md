@@ -48,12 +48,7 @@ brewcode/                                    # Plugin root directory
 │   │   │   ├── setup.sh                       # scan/structure/sync/review/config/validate/all
 │   │   │   └── install.sh                     # state/check-updates/check-timeout/required/grepai/summary
 │   │   └── templates/
-│   │       ├── PLAN.md.template               # Slim Phase Registry table + 3-line header (v3)
 │   │       ├── SPEC.md.template               # Goal, Scope, Requirements, Analysis, Context Files, Risks, Decisions
-│   │       ├── phase.md.template              # Execution phase (v3): task, agent, acceptance criteria
-│   │       ├── phase-verify.md.template       # Verification phase (v3): review scope, pass/fail criteria
-│   │       ├── phase-fix.md.template          # Fix phase (v3, dynamic): generated on verification failure
-│   │       ├── phase-final-review.md.template # Final review phase (v3): comprehensive quality review
 │   │       └── brewcode.config.json.template  # Config: logging, agents, constraints, autoSync
 │   │
 │   ├── spec/                                  # /brewcode:spec - Specification creation
@@ -141,7 +136,6 @@ Files created by the plugin in the user's project:
     │   │   └── brewcode.state.json            # Inter-session state: current task, last compaction
     │   │
     │   ├── templates/                         # Adapted templates (from /brewcode:setup)
-    │   │   ├── PLAN.md.template
     │   │   ├── SPEC.md.template
     │   │   ├── SPEC-creation.md
     │   │   └── ...                            # Remaining plugin templates
@@ -156,26 +150,7 @@ Files created by the plugin in the user's project:
     │   │   └── {TS}_{NAME}_report.md          # P0-P3 findings, quorum, statistics
     │   │
     │   └── {TS}_{NAME}_task/                  # e.g. 20260130_150000_auth_task/
-    │       ├── PLAN.md                        # Slim plan: 3-line header + Phase Registry table (v3)
-    │       ├── SPEC.md                        # Goal, scope, requirements, analysis, risks
-    │       ├── KNOWLEDGE.jsonl                # Anti-patterns, practices, facts (JSONL)
-    │       ├── .lock                          # task_path, started_at, session_id (JSON)
-    │       │
-    │       ├── phases/
-    │       │   ├── 1-research.md              # Execution phase: agent reads directly
-    │       │   ├── 1V-verify-research.md      # Verification phase: review criteria, pass/fail
-    │       │   ├── 2-implement.md
-    │       │   ├── 2V-verify-implement.md
-    │       │   ├── 2F-fix-implement.md        # Fix phase (dynamic): generated on failure
-    │       │   └── FR-final-review.md         # Final review: comprehensive quality check
-    │       │
-    │       ├── artifacts/
-    │       │   ├── FINAL.md                   # Final report: summary, criteria, artifacts index
-    │       │   └── {P}-{N}{T}/                # P=phase, N=iteration, T=type (e=execution, v=verification)
-    │       │       ├── {AGENT}_output.md
-    │       │       └── summary.md
-    │       │
-    │       └── backup/                        # PLAN.md backups before significant changes
+    │       └── SPEC.md                        # Goal, scope, requirements, analysis, risks (from /brewcode:spec)
     │
     ├── skills/
     │   └── brewcode-review/
@@ -183,8 +158,8 @@ Files created by the plugin in the user's project:
     │       └── references/
     │
     └── rules/
-        ├── avoid.md                           # Anti-patterns from KNOWLEDGE
-        ├── best-practice.md                   # Best practices from KNOWLEDGE
+        ├── avoid.md                           # Anti-patterns (from /brewcode:rules)
+        ├── best-practice.md                   # Best practices (from /brewcode:rules)
         └── grepai-first.md                    # grepai priority rule (from /brewcode:grepai setup)
 ```
 
@@ -197,10 +172,10 @@ Files created by the plugin in the user's project:
 | Agents | 10 | bc-grepai-configurator, bc-rules-organizer, agent-creator, skill-creator, bash-expert, hook-creator, architect, developer, reviewer, tester |
 | Skills (SKILL.md) | 11 | setup, spec, rules, convention, grepai, teardown, standards-review, skills, agents, teams, e2e |
 | Bash scripts | 16 | setup(2), rules(1), grepai(13) |
-| Templates | 12 | PLAN, SPEC, config, phase(4), rules(3), review(3) |
+| Templates | 7 | SPEC, config, rules(3), review(3) |
 | Documentation | 7 | README, INSTALL, RELEASE-NOTES, grepai.md, file-tree.md, commands.md, flow.md, hooks.md |
 | npm | 1 | package.json |
-| **Total** | **76** | |
+| **Total** | **71** | |
 
 ## Hook Events
 

@@ -2,6 +2,16 @@
 
 ---
 
+## v3.19.5 (2026-06-29)
+
+### brewcode
+#### Removed
+- **session-start.mjs:** dead lock-detection block removed (injected stale bc-coordinator/PLAN.md instructions)
+- **utils.mjs:** 16 dead task/lock exported functions removed (backed deleted hooks)
+- **docs:** remaining plan/start/KNOWLEDGE/PLAN.md stale refs cleaned from commands.md, file-tree.md, README.md
+
+---
+
 ## v3.19.4 (2026-06-29)
 
 ### brewcode
