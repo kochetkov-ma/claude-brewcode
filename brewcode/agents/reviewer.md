@@ -1,7 +1,7 @@
 ---
 name: reviewer
 description: System architect & code reviewer - architecture, quality, security, performance
-model: opus
+model: inherit
 tools: Read, Glob, Grep, Bash, Task
 disallowedTools: Write, Edit
 mcpServers:

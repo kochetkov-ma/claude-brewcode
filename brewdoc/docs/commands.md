@@ -382,6 +382,4 @@ No arguments. All interaction via `AskUserQuestion`. Each step can be skipped in
 
 ## Plugin Variable
 
-| Variable | Injected By | Available In | Value |
-|----------|-------------|--------------|-------|
-| `BD_PLUGIN_ROOT` | pre-task.mjs | Agents (subagents via Task tool only) | Absolute path to brewdoc plugin root |
+brewdoc has no hooks. The `bd-auto-sync-processor` agent resolves its plugin root natively via `${CLAUDE_PLUGIN_ROOT}` — substituted at Task spawn by Claude Code itself. No hook injection is needed.

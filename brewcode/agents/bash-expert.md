@@ -1,7 +1,7 @@
 ---
 name: bash-expert
 description: "Creates sh/bash scripts for Mac/Linux. Triggers: create script, bash script, shell script."
-model: opus
+model: inherit
 color: green
 tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch
 auto-sync: enabled
@@ -130,7 +130,7 @@ echo "| brew | ✅ |"
 | `$CLAUDE_PLUGIN_ROOT` | Hooks only |
 | `$PLUGIN_ROOT/skills/X/scripts/` | All contexts |
 
-> In Skills: `${CLAUDE_SKILL_DIR}` for own files (string substitution in SKILL.md). In Agents (subagents): `$BC_PLUGIN_ROOT` (injected by session-start.mjs)
+> In Skills: `${CLAUDE_SKILL_DIR}` for own files (string substitution in SKILL.md). In Agents (subagents): `${CLAUDE_PLUGIN_ROOT}` (brace form, natively substituted at spawn to this plugin's root)
 
 ## 6. Homebrew
 
@@ -246,7 +246,7 @@ Validate: `cmd && echo "✅" || echo "❌ FAILED"`
 
 Stop on error: `> **STOP if ❌** — fix before continuing.`
 
-Skill files: `${CLAUDE_SKILL_DIR}` (own dir) | Cross-skill/agent: `$BC_PLUGIN_ROOT` (pre-task.mjs)
+Skill files: `${CLAUDE_SKILL_DIR}` (own dir) | Cross-skill/agent: `${CLAUDE_PLUGIN_ROOT}` (brace form, native substitution to this plugin's root)
 
 ## 11. Checklist
 

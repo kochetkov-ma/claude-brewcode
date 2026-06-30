@@ -51,10 +51,10 @@ You should see all four plugins with matching version numbers.
 
 Quick smoke test:
 ```bash
-/brewcode:setup
+/brewcode:grepai
 ```
 
-If the setup wizard starts, installation is working.
+If the grepai setup starts, installation is working.
 
 ## Section 4: Updating
 

@@ -19,12 +19,12 @@
  * {
  *   "hookSpecificOutput": {
  *     "hookEventName": "UserPromptSubmit",
- *     "additionalContext": "skill-check + light hint (full Manager mode via ++m)"
+ *     "additionalContext": "skill-check + delegation hint"
  *   }
  * }
  */
 
-import { readStdin, output, getActiveMode } from './lib/utils.mjs';
+import { readStdin, output } from './lib/utils.mjs';
 
 // Cap text channels under the 2.1.174 10K disk-spill threshold (headroom 9000).
 const TEXT_CHANNEL_CAP = 9000;
@@ -34,18 +34,10 @@ function capText(s, max = TEXT_CHANNEL_CAP) {
 
 // --- Skill evaluation reminder ---
 
-// SKILL_CHECK = always-on payload (every prompt). DEFAULT_MODE = light hint when no
-// active mode is set; full Manager framing is opt-in on demand via codeword ++m (brewtools:manager).
-const SKILL_CHECK = '[SKILL?] Check available skills. If one matches, use Skill tool before responding.';
-const DEFAULT_MODE = '[HINT] Prefer delegating heavy implementation work to sub-agents (Task tool) when it helps. Full Manager mode: type ++m.';
-
-function getModeReminder(cwd, sessionId) {
-  const activeMode = getActiveMode(cwd, sessionId);
-  if (activeMode) {
-    return `${SKILL_CHECK}\n[MODE: ${activeMode.name}] ${activeMode.instructions}`;
-  }
-  return `${SKILL_CHECK}\n${DEFAULT_MODE}`;
-}
+// SKILL_CHECK = always-on payload (every prompt). DEFAULT_MODE = light delegation hint.
+const SKILL_CHECK = '[SKILL?] If a skill matches this request, use Skill tool first.';
+const DEFAULT_MODE = '[HINT] Delegate heavy implementation to sub-agents via Task tool.';
+const REMINDER_TEXT = `${SKILL_CHECK}\n${DEFAULT_MODE}`;
 
 // --- Main ---
 
@@ -86,19 +78,12 @@ async function main() {
       return;
     }
 
-    // Effort-level prefix (CC 2.1.115+). Folded into injected context.
-    // NOTE: effort.level is NOT in HOOKS-REFERENCE.md (2.1.195). Presence-guarded existing read; do not expand to other hooks.
-    const effortLevel = input.effort?.level;
-    const effortPrefix = effortLevel === 'low' ? '[EFFORT: low | MODE: terse-light]\n' : '';
-
     // Inject skill-check reminder via additionalContext (updatedInput is ignored
     // on UserPromptSubmit in CC 2.1.x).
-    const reminderText = `${effortPrefix}${getModeReminder(cwd, session_id)}`;
-
     output({
       hookSpecificOutput: {
         hookEventName: 'UserPromptSubmit',
-        additionalContext: capText(reminderText)
+        additionalContext: capText(REMINDER_TEXT)
       }
     });
 

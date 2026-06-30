@@ -4,10 +4,10 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 3.19.5 |
+| Version | 4.0.0 |
 | Skills | 13 |
 | Agents | 12 |
-| Hooks | 6 |
+| Hooks | 2 |
 | Model | opus |
 
 ## Install
@@ -65,7 +65,7 @@ claude --plugin-dir ./brewcode
 ## Quick Start
 
 ```bash
-/brewcode:setup                              # 1. Adapt templates for the project (one-time)
+/brewcode:grepai                              # 1. Set up semantic code search (one-time)
 /brewcode:spec "Implement JWT authorization"  # 2. Research + specification
 ```
 
@@ -73,19 +73,17 @@ claude --plugin-dir ./brewcode
 
 | Skill | Purpose |
 |-------|---------|
-| [`/brewcode:setup`](skills/setup/README.md) | Analyze project, check prerequisites, generate adapted templates and config |
 | [`/brewcode:spec`](skills/spec/README.md) | Research codebase + user dialog -> SPEC.md |
-| [`/brewcode:teams`](skills/teams/README.md) | Dynamic agent team creation, management, and performance tracking |
-| [`/brewcode:standards-review`](skills/standards-review/README.md) | Review code for project standards compliance |
-| [`/brewcode:convention`](skills/convention/README.md) | Extract etalon classes, patterns, architecture into convention docs and rules |
-| [`/brewcode:rules`](skills/rules/README.md) | Extract rules from accumulated knowledge to `.claude/rules/` |
 | [`/brewcode:grepai`](skills/grepai/README.md) | Semantic code search (setup, status, start, stop, reindex) |
-| [`/brewcode:skills`](skills/skills/README.md) | Skill management: list, create, upgrade with activation optimization |
-| [`/brewcode:agents`](skills/agents/README.md) | Interactive agent creation and improvement |
+| [`/brewcode:superreview`](skills/superreview/README.md) | Generate a project-tailored deep-review skill (review + standards merged) |
+| [`/brewcode:teams`](skills/teams/README.md) | Dynamic agent team creation, management, and performance tracking |
+| [`/brewcode:convention`](skills/convention/README.md) | Extract etalon classes, patterns, architecture into convention docs and rules |
+| [`/brewcode:rules`](skills/rules/README.md) | Prompt-driven rules management: status, create, improve, review |
+| [`/brewcode:skills`](skills/skills/README.md) | Prompt-driven skill management: status, create, improve, review |
+| [`/brewcode:agents`](skills/agents/README.md) | Prompt-driven agent management: status, create, improve, review |
 | [`/brewcode:e2e`](skills/e2e/README.md) | E2E testing orchestration with BDD scenarios and quorum review |
-| [`/brewcode:teardown`](skills/teardown/README.md) | Plugin configuration cleanup (tasks are preserved) |
 
-> **Note:** `/brewcode:review` is a local skill created in the project during `/brewcode:setup`.
+> **Note:** `/brewcode:superreview` emits a self-contained, project-local deep-review skill tailored to your stack.
 
 ## Agents
 
@@ -109,15 +107,13 @@ claude --plugin-dir ./brewcode
 ```
 brewcode/
 +-- .claude-plugin/plugin.json          # Plugin manifest
-+-- hooks/                              # 6 lifecycle hooks
-|   +-- session-start.mjs              # Session initialization
-|   +-- grepai-session.mjs             # Auto-start grepai watch
-|   +-- pre-task.mjs                   # grepai injection into agents
-|   +-- grepai-reminder.mjs            # grepai reminder
-|   +-- forced-eval.mjs                # Skill activation
-|   +-- permission-guard.sh            # Manager-mode edit guard
-+-- agents/                            # 12 agents
-+-- skills/                            # 13 skills
++-- hooks/                              # 2 lifecycle hooks
+|   +-- session-start.mjs              # SessionStart: version-check, plan-symlink, permission_mode
+|   +-- forced-eval.mjs                # UserPromptSubmit: skill activation reminder
+|   +-- hooks.json                     # Event bindings
+|   +-- lib/utils.mjs                  # Shared utilities
++-- agents/                            # 10 agents
++-- skills/                            # 9 skills
 +-- templates/                         # Rule templates
 ```
 
@@ -125,12 +121,8 @@ brewcode/
 
 | Hook | Event | Purpose |
 |------|-------|---------|
-| session-start | SessionStart | Initialize session, inject plugin path |
-| grepai-session | SessionStart | Auto-start grepai watch process |
-| pre-task | PreToolUse:Task | Inject grepai reminder into agent prompts |
-| grepai-reminder | PreToolUse:Bash | Remind to prefer semantic search |
-| forced-eval | UserPromptSubmit | Skill activation |
-| permission-guard | PermissionRequest | Manager-mode edit guard for main session |
+| session-start | SessionStart | Version-check, plan-symlink, permission_mode tag |
+| forced-eval | UserPromptSubmit | Skill activation reminder (~9K additionalContext bound) |
 
 ## Task Structure
 

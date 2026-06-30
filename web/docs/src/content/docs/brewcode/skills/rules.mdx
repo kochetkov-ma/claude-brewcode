@@ -1,90 +1,90 @@
 ---
 title: "Rules"
-description: "Syncs KNOWLEDGE.jsonl or session learnings to project rules. Use when - updating rules, syncing knowledge, extracting learnings, organizing anti-patterns. Trigger keywords - rules, knowledge sync, avoid patterns, best practices, session rules, extract rules."
+description: "Syncs KNOWLEDGE.jsonl or session learnings to project rules. Use when updating rules, syncing knowledge, extracting learnings, organizing anti-patterns."
 order: 1106
 ---
-import { Card, CardGrid, Badge, Callout, UpdateNotice } from '../../../../components/mdx';
+import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# rules — build Claude rules
+# rules <Badge variant="secondary" text="sonnet" />
 
-<Badge variant="primary" text="sonnet" /> <Badge variant="secondary" text="session" />
+<Callout type="caution" title="Project scope only">Writes to project `.claude/rules/` only — never `~/.claude/rules/`.</Callout>
 
 ## Quick reference
 
 | Field | Value |
 |-------|-------|
 | Command | `/brewcode:rules` |
-| Arguments | `[list] \| [<path>] \| [<path> <prompt>]` |
-| Model | sonnet |
-| Context | session |
-| Tools | Read, Bash, Task |
+| Input | `[list] \| [<path>] \| [<path> <prompt>]` |
+| Specialist | bc-rules-organizer (Task) |
+| List source | `rules.sh list` (Bash) |
+| Target dir | `.claude/rules/` (project only) |
 
-<Callout type="warning" title="Target">
-  Project <code>.claude/rules/</code> only. NEVER <code>&#126;/.claude/rules/</code>
-</Callout>
+## When to use
 
-## Mode Detection
+- After fixing a bug: capture what went wrong and the correct pattern
+- After a code review: lock in the standards that were enforced
+- After a session with many learnings: extract the 5 most impactful findings
+- To inspect which rules already exist in the project
+- To import structured knowledge from a `KNOWLEDGE.jsonl` file
 
-**Arguments:** `$ARGUMENTS`
+## Examples
 
-| Input | Mode |
-|-------|------|
-| `list` | List mode |
-| `<path> <text>` | Prompt mode |
-| `<path-to-file>` | File mode |
-| (empty) | Session mode |
-
-## List Mode
-
-**EXECUTE** and **STOP:**
 ```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/rules.sh" list
+/brewcode:rules
+/brewcode:rules what is the current state of our rules
+/brewcode:rules capture what we learned fixing the auth bug
+/brewcode:rules path/to/KNOWLEDGE.jsonl add new entries
+/brewcode:rules list
 ```
 
-## File / Prompt / Session Mode
+## How it works
 
-Spawn bc-rules-organizer agent via Task tool.
+<Steps>
+  <li><div><strong>Input gate</strong><p>Reads `$ARGUMENTS`. If the first token is `list`, routes immediately to `rules.sh list` and exits. Otherwise continues to mode detection.</p></div></li>
+  <li><div><strong>Auto-mode select</strong><p>Announces <code>Mode: &lt;mode&gt; (rules) — chosen because &lt;evidence&gt;</code>. Defaults to <code>status</code> when arguments are empty or conversational; detects <code>create</code>, <code>improve</code>, or <code>review</code> from explicit cues. A `.jsonl` path or inline prompt is treated as a knowledge source passed to the organizer, not a separate mode.</p></div></li>
+  <li><div><strong>No-prompt menu</strong><p>When no arguments are given and mode cannot be inferred, sends a single AskUserQuestion with options in this order: <strong>Status (rules)</strong> (recommended), <strong>Status (all: agents+rules+skills)</strong>, <strong>Create</strong>, <strong>Improve</strong>, <strong>Review</strong>, <strong>List (plain)</strong>, <strong>Cancel</strong>.</p></div></li>
+  <li><div><strong>Dispatch</strong><p>Routes to bc-rules-organizer via the Task tool, passing the prepared knowledge block and mode. For `list` mode, runs `rules.sh list` directly via Bash instead.</p></div></li>
+  <li><div><strong>Real status</strong><p>Reports which files were created or updated (`avoid.md`, `best-practice.md`, or prefix variants). If bc-rules-organizer is unavailable, outputs: `bc-rules-organizer not available — install brewcode plugin`.</p></div></li>
+  <li><div><strong>Final output</strong><p>Prints a summary of rules added, merged, or skipped, grouped by target file. Skipped entries include the dedup reason (similarity %, cross-file antonym, or CLAUDE.md duplicate).</p></div></li>
+</Steps>
 
-### Prepare Knowledge by Mode
+## Modes
 
-| Mode | Preparation |
-|------|-------------|
-| **file** | Read KNOWLEDGE.jsonl; parse `t:"❌"` -> avoid, `t:"✅"` -> practice |
-| **prompt** | Extract `<path>` (first arg), `<prompt>` (rest) |
-| **session** | Extract **5 most impactful** findings: errors, fixes, patterns. Format as `❌` or `✅` |
+| Mode | Trigger | Execution |
+|------|---------|-----------|
+| `status` (default) | Empty input or conversational status query | Reports current rule files and coverage; delegates to bc-rules-organizer |
+| `list` | Explicit `list` argument only | Runs `rules.sh list` directly — no agent spawned |
+| `create` | Conversational cue or menu selection | Creates missing rule files from plugin templates; accepts KNOWLEDGE.jsonl or inline prompt as knowledge source |
+| `improve` | Conversational cue or menu selection | Rewrites weak or redundant entries for clarity; accepts KNOWLEDGE.jsonl or inline prompt as knowledge source |
+| `review` | Conversational cue or menu selection | Reads all rule files and reports coverage gaps |
+| `batch` | Auto fan-out flag | Processes multiple knowledge entries in one pass alongside the selected mode |
 
-### Agent Prompt Template
+<details>
+<summary>Knowledge sources &amp; dedup</summary>
 
-```
-Update PROJECT .claude/rules/ — NEVER &#126;/.claude/rules/
+**Sources accepted:**
 
-Plugin templates: $BC_PLUGIN_ROOT/templates/rules/
-Validation: bash "$BC_PLUGIN_ROOT/skills/rules/scripts/rules.sh" validate
-Create missing: bash "$BC_PLUGIN_ROOT/skills/rules/scripts/rules.sh" create
+- `KNOWLEDGE.jsonl` path — parses each line; `t:"❌"` maps to avoid, `t:"✅"` maps to best-practice
+- File path + inline prompt — organizer reads the file and uses the prompt as instruction
+- Session learnings — the skill selects the 5 most impactful findings from the current conversation and formats them as ❌/✅ pairs
 
-Targets: avoid.md, best-practice.md, {prefix}-avoid.md, {prefix}-best-practice.md
+**Output files:** `avoid.md`, `best-practice.md`, `{prefix}-avoid.md`, `{prefix}-best-practice.md` — all inside `.claude/rules/`
 
-MODE: {detected mode}
-KNOWLEDGE: {prepared from table above}
-DEDUP: 3-Check Protocol:
-  1. Within-file similarity (>70% skip, 40-70% merge)
-  2. Cross-file antonym (avoid↔best-practice — keep avoid only)
-  3. CLAUDE.md duplicate (skip if in CLAUDE.md; "CLAUDE.md" forbidden as Source)
-```
+**3-Check dedup protocol:**
 
-> `BC_PLUGIN_ROOT` injected by pre-task.mjs hook.
+1. Within-file similarity: &gt;70% match → skip; 40–70% match → merge into existing entry
+2. Cross-file antonym check: if the same pattern appears in both avoid and best-practice → keep the avoid entry only
+3. CLAUDE.md duplicate: if the content already appears in `CLAUDE.md`, skip entirely. The string `"CLAUDE.md"` is forbidden as a Source value in rule entries
 
-### Fallback
+**Specialist:** bc-rules-organizer — acts as organizer only (no separate creator agent). Spawned via the Task tool; the agent resolves paths via native `${CLAUDE_PLUGIN_ROOT}` (substituted in its .md at Task spawn).
 
-Agent unavailable -> error: `bc-rules-organizer not available — install brewcode plugin`
+</details>
 
 <CardGrid>
-  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
-    Download, changelog, and installation instructions.
-  </Card>
-  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/rules">
-    Source code, README, and configuration files.
-  </Card>
+  <Card title="agents" icon="settings" href="/brewcode/skills/agents/">Sibling: manage agents</Card>
+  <Card title="skills" icon="pencil" href="/brewcode/skills/skills/">Sibling: manage skills</Card>
+  <Card title="brewcode" icon="rocket" href="/brewcode/">Plugin overview</Card>
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/rules/SKILL.md">SKILL.md</Card>
 </CardGrid>
 
 <UpdateNotice />

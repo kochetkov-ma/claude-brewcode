@@ -11,6 +11,9 @@ import os from 'node:os';
 import path from 'node:path';
 
 const VALID_SCOPES = new Set(['project', 'global']);
+// 'planmode' is now hook-INTERNAL (selected by ++m when permission_mode === 'plan'),
+// not a user-typed codeword. It stays resolvable here so the plan-aware ++m and the
+// status explainer can still load its block.
 export const VALID_MODES = new Set(['full', 'planmode', 'review-regression', 'review-double']);
 
 function resolveHome(p) {

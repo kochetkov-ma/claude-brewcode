@@ -1,7 +1,7 @@
 ---
 name: brewtools:manager
-description: "Manager mode. on installs+arms a HARD delegation wall into THIS project (PreToolUse denies Write/Edit/Bash in main session, subagents free); off disarms; uninstall removes it. Codewords ++m/++mp auto-inject a delegate-everything prompt; ++rr/++r auto-inject review discipline (anti-regression / two-phase double-check), all independent of this skill. level strict|balanced, status, mode, edit, reset. Triggers: manager, менеджер, hard mode, хард режим, delegate."
-argument-hint: "[on|off|uninstall|status|level <strict|balanced>|mode <full|planmode>|edit|reset] | <task в хард режиме> | <task от роли менеджера> | <prompt>"
+description: "Manager mode. on installs+arms a HARD delegation wall into THIS project (PreToolUse denies Write/Edit/Bash in main session, subagents free); off disarms; uninstall removes it. Codeword ++m auto-injects a delegate-everything prompt (plan-aware: adds the plan supplement in plan mode); ++rr/++r auto-inject review discipline (anti-regression / two-phase double-check), all independent of this skill. level strict|balanced, status, edit, reset. Triggers: manager, менеджер, hard mode, хард режим, delegate."
+argument-hint: "[on|off|uninstall|status|level <strict|balanced>|edit|reset] | <task в хард режиме> | <task от роли менеджера> | <prompt>"
 allowed-tools: Read, Bash, AskUserQuestion
 model: sonnet
 user-invocable: true
@@ -11,11 +11,10 @@ user-invocable: true
 
 > Manager mode has **TWO independent layers**. Keep them straight:
 >
-> 1. **SOFT codewords (`++m` / `++mp` / `++rr` / `++r`) — autonomous, hook-driven, ALWAYS fire.** A `UserPromptSubmit` hook (`hooks/manager-prompt.mjs`) watches every prompt; when it sees a codeword it injects the matching block as `additionalContext` for that one turn. This is NOT enabled/disabled by this skill — it works regardless of skill state. The skill only **explains** it (`status`) and **customizes its TEXT** (`mode`/`edit`/`reset`).
->     Detection order (longest-prefix first):
->     - `++mp` → Manager + Plan Mode (`planmode`) — writes the task graph, uses the tasks tool; tested first (prefix collision with `++m`).
->     - `++m`  → Manager mode (`full`) — delegate-everything prompt.
->     - `++rr` → Regression Review discipline (`review-regression`) — after each significant phase: no regression + project standard + correctness; two-phase review→double-check→fix; final cross-review at task end. Tested after `++m`, before `++r`.
+> 1. **SOFT codewords (`++m` / `++rr` / `++r`) — autonomous, hook-driven, ALWAYS fire.** A `UserPromptSubmit` hook (`hooks/manager-prompt.mjs`) watches every prompt; when it sees a codeword it injects the matching block as `additionalContext` for that one turn. This is NOT enabled/disabled by this skill — it works regardless of skill state. The skill only **explains** it (`status`) and **customizes its TEXT** (`edit`/`reset`).
+>     Detection (longest-prefix first within the review group):
+>     - `++m`  → Manager mode. PLAN-AWARE: when the session is in plan mode (`permission_mode === 'plan'`) it injects the `planmode` block (full + plan addon — writes the task graph, uses the tasks tool); otherwise the plain `full` delegate-everything block. There is NO separate `++mp` codeword.
+>     - `++rr` → Regression Review discipline (`review-regression`) — after each significant phase: no regression + project standard + correctness; two-phase review→double-check→fix; final cross-review at task end. Tested before `++r`.
 >     - `++r`  → Review discipline (`review-double`) — two-phase multi-agent review→double-check→fix after each significant change; codeword-only (no ambient/wall injection).
 >     - When the HARD wall is ON, the Manager (full) block is ALSO auto-injected on EVERY turn — no codeword needed. Codewords and wall injection are independent.
 > 2. **HARD wall — opt-in, this skill only, PER-PROJECT, INSTALLED-INTO-THE-PROJECT, persistent.** The wall is **NOT** a plugin hook. `on` does two things: it **installs** a self-contained `PreToolUse` guard into THIS project (copies the guard file + idempotently registers it in `<cwd>/.claude/settings.local.json`) and **arms** it by flipping `state.hard=true`. The registered guard then **physically denies** mutating tools (Write/Edit/Bash/WebFetch/...) in the **main session**, leaving only delegate/read/track. Subagents stay fully free (`agent_id` linchpin). `off` only flips `state.hard=false` (disarm) — registration stays, the guard no-ops. `uninstall` removes the registration. The wall lives in project state + project settings, defaults OFF, persists until `off`/`uninstall`. There is **no codeword** for the wall.
@@ -86,7 +85,7 @@ Project install targets (resolved from `process.cwd()`):
 
 Parse `$ARGUMENTS` (or the user's NL prompt, RU+EN) into `{ action, scope, mode, level, task }` using `references/intent-routing.md` — **Read and follow it**.
 
-Actions: `on`, `off`, `uninstall`, `status`, `level <strict|balanced>`, `mode <full|planmode>`, `edit [full|planmode]`, `reset [full|planmode]`, `hard-one-shot`, `manager-run`, `inline-run`.
+Actions: `on`, `off`, `uninstall`, `status`, `level <strict|balanced>`, `edit`, `reset`, `hard-one-shot`, `manager-run`, `inline-run`.
 
 | Signal | Resolves |
 |--------|----------|
@@ -96,10 +95,8 @@ Actions: `on`, `off`, `uninstall`, `status`, `level <strict|balanced>`, `mode <f
 | `status` / `статус` / `что сейчас` | `action=status` — the main explainer |
 | `level strict` / `режим строгий` | `action=level, level=strict` |
 | `level balanced` / `режим сбалансированный` | `action=level, level=balanced` |
-| `mode full` / `полный режим` | `action=mode, mode=full` (prompt-text only) |
-| `mode planmode` / `режим планирования` | `action=mode, mode=planmode` (prompt-text only) |
-| `edit [mode]` / `поправь промт` | `action=edit` (mode default = active) — prompt-text only |
-| `reset [mode]` / `верни дефолт` | `action=reset` (mode default = active) — prompt-text only |
+| `edit` / `поправь промт` | `action=edit` — prompt-text only (Manager prompt text) |
+| `reset` / `верни дефолт` | `action=reset` — prompt-text only (Manager prompt text) |
 | `<task> в хард режиме` / `<task> in hard mode` | `action=hard-one-shot` — has a REAL task + hard marker |
 | `<task> от роли менеджера` / `<task> as manager` | `action=manager-run` — run task in manager role, wall untouched |
 | bare task, no control verb, no marker | `action=inline-run` |
@@ -249,14 +246,10 @@ console.log(JSON.stringify(r));
 " && echo "✅ level set" || echo "❌ FAILED set level"
 ```
 
-### mode <full|planmode>  (PROMPT TEXT ONLY — does not enable/disable anything)
-
-Same Bash block, `PATCH_JSON = {mode:'full'}` or `{mode:'planmode'}`. This sets only the informational `mode` field. It does **not** toggle the codewords (the hook always maps `++m`→full, `++mp`→planmode) and it does **not** touch the wall. Use `--scope` here only if you mean the prompt-text override scope.
-
 ### status  (the MAIN user-facing explainer — ALWAYS the teaching surface)
 
 Read merged state, resolve BOTH mode blocks, detect whether the guard is registered in `settings.local.json`, then render the canonical explainer from `references/hard.md`. It must teach the user the FULL model:
-1. **How `++m`/`++mp` work** — ALWAYS, per-turn, hook-driven (`manager-prompt.mjs`), independent of this skill — and show BOTH injected blocks (full + planmode). Also state: when the HARD wall is armed, the Manager (full) block is ALSO ambient-injected every turn with no codeword needed (codewords and wall injection are independent). The session-start banner is the other read-only plugin layer.
+1. **How `++m` works** — ALWAYS, per-turn, hook-driven (`manager-prompt.mjs`), independent of this skill. `++m` is plan-aware: it injects the planmode block (full + plan addon) when `permission_mode === 'plan'`, else the plain full block — there is NO separate `++mp` codeword. Show BOTH resolved blocks (full + planmode) so the user sees each variant. Also state: when the HARD wall is armed, the Manager (full) block is ALSO ambient-injected every turn with no codeword needed (codewords and wall injection are independent). The session-start banner is the other read-only plugin layer.
 2. **The wall delivery model** — it is INSTALLED INTO this project, not a plugin hook: registered (once) in `<cwd>/.claude/settings.local.json` (personal, gitignored), gated at runtime by project `state.json {hard}`. Report BOTH: is it registered? is it armed (`hard`)?
 3. **Current WALL state for THIS project** — `hard` armed/disarmed, `level` strict/balanced, and a brief allowlist summary (what main session may/may not do).
 4. **How on/off/uninstall work** — `on` = install+arm (`/reload` only on FIRST install), `off` = disarm only (registration kept), `uninstall` = deregister, `level` = strictness.
@@ -295,16 +288,15 @@ Render using the canonical status block in `references/hard.md`, filling in `har
 # Manager — status
 
 ## Codewords (ALWAYS active — hook-driven, independent of this skill)
-Type `++m` anywhere   → injects the Manager (full) block for that one turn.
-Type `++mp` anywhere  → injects the Manager + Plan Mode block for that one turn.
+Type `++m` anywhere   → injects the Manager block for that one turn (plan-aware: planmode block in plan mode, else full).
 Type `++rr` anywhere  → injects the Regression Review contract for that one turn.
 Type `++r` anywhere   → injects the Review contract for that one turn.
 They fire on every prompt that contains them. This skill never turns them on or off.
 
---- injected by ++m (full) ---
+--- injected by ++m (full — plain mode) ---
 <full block text>
 
---- injected by ++mp (planmode) ---
+--- injected by ++m (planmode — when permission_mode === 'plan') ---
 <planmode block text>
 
 ## HARD wall (this project) — registered=<yes|no>  armed=<ON|OFF>  level=<strict|balanced>  (state source: <project|global|default>)
@@ -319,11 +311,11 @@ Level:     /brewtools:manager level strict | balanced
 prompt source: full=<default|project|global>  planmode=<default|project|global>
 ```
 
-### edit [mode]  (PROMPT TEXT ONLY)
+### edit  (PROMPT TEXT ONLY)
 
-Default mode = current `mode`. If no project/global override exists for that scope+mode, copy the current effective text into the override path, then print the path + content for the user to edit. This changes only what the codewords inject — it never touches the wall.
+Operates on the Manager prompt text (internal mode `full`). If no project/global override exists for that scope, copy the current effective text into the override path, then print the path + content for the user to edit. This changes only what the codewords inject — it never touches the wall.
 
-**EXECUTE** using Bash tool (substitute `SCOPE`, `MODE`):
+**EXECUTE** using Bash tool (substitute `SCOPE`):
 ```bash
 BT_ROOT="${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::')}"
 test -f "$BT_ROOT/hooks/lib/manager-prompts.mjs" || { echo "❌ BT_ROOT invalid: $BT_ROOT"; exit 1; }
@@ -331,7 +323,7 @@ node --input-type=module -e "
 import {resolvePromptPath, resolvePrompt} from '${BT_ROOT}/hooks/lib/manager-prompts.mjs';
 import fs from 'node:fs'; import path from 'node:path';
 const cwd = process.cwd(); const root = '${BT_ROOT}';
-const scope = 'SCOPE'; const mode = 'MODE';
+const scope = 'SCOPE'; const mode = 'full';
 const dest = resolvePromptPath(scope, mode, cwd);
 if (!fs.existsSync(dest)) {
   const cur = resolvePrompt(mode, cwd, root);
@@ -346,18 +338,18 @@ if (!fs.existsSync(dest)) {
 
 > `SCOPE` here is the prompt-text override scope (`project` default, or `global`), NOT the wall. Global override goes under `~/.claude/manager/prompts/` (protected) — must go through this Node block. Tell the user the path; they (or you, for project scope) edit it with the Edit tool.
 
-### reset [mode]  (PROMPT TEXT ONLY)
+### reset  (PROMPT TEXT ONLY)
 
-Default mode = current `mode`. Delete the override file at the chosen prompt-text scope, reverting to plugin default. Does not touch the wall.
+Operates on the Manager prompt text (internal mode `full`). Delete the override file at the chosen prompt-text scope, reverting to plugin default. Does not touch the wall.
 
-**EXECUTE** using Bash tool (substitute `SCOPE`, `MODE`):
+**EXECUTE** using Bash tool (substitute `SCOPE`):
 ```bash
 BT_ROOT="${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::')}"
 test -f "$BT_ROOT/hooks/lib/manager-prompts.mjs" || { echo "❌ BT_ROOT invalid: $BT_ROOT"; exit 1; }
 node --input-type=module -e "
 import {resolvePromptPath} from '${BT_ROOT}/hooks/lib/manager-prompts.mjs';
 import fs from 'node:fs';
-const target = resolvePromptPath('SCOPE', 'MODE', process.cwd());
+const target = resolvePromptPath('SCOPE', 'full', process.cwd());
 const existed = fs.existsSync(target);
 if (existed) fs.unlinkSync(target);
 console.log(JSON.stringify({removed:existed, path:target}));
@@ -396,9 +388,9 @@ Same as `manager-run`: prepend the `full` block, build a TaskGraph, delegate, ne
 
 ## P3: Status Dump (ALWAYS last)
 
-After ANY non-status action (`on`, `off`, `uninstall`, `level`, `mode`, `edit`, `reset`, `hard-one-shot`, `manager-run`, `inline-run`), end by emitting the resolved status (run the `status` Bash block, or reuse a result you already have). At minimum print:
+After ANY non-status action (`on`, `off`, `uninstall`, `level`, `edit`, `reset`, `hard-one-shot`, `manager-run`, `inline-run`), end by emitting the resolved status (run the `status` Bash block, or reuse a result you already have). At minimum print:
 ```
-registered · armed(hard) · level · state source (project/global/default) · prompt source per mode · codewords (++m=full ALWAYS, ++mp=planmode ALWAYS)
+registered · armed(hard) · level · state source (project/global/default) · prompt source per mode · codewords (++m ALWAYS — plan-aware: planmode in plan mode, else full)
 ```
 For `on` that NEWLY registered, and for `uninstall`, also surface the `/reload` note.
 

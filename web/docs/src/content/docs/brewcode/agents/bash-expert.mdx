@@ -151,7 +151,7 @@ Always derive prefix via `$(brew --prefix)` — never hardcode.
 |----------|-------------|
 | `$CLAUDE_PLUGIN_ROOT` | Hooks only |
 | `${CLAUDE_SKILL_DIR}` | Skills (string substitution) |
-| `$BC_PLUGIN_ROOT` | Agents (injected by `pre-task.mjs`) |
+| `${CLAUDE_PLUGIN_ROOT}` | Agents (native substitution in agent .md at Task spawn) |
 
 ### Anti-patterns
 

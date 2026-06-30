@@ -1,0 +1,400 @@
+---
+name: superreview
+description: "Deep {PROJECT_NAME} code review the MODEL or the USER can invoke: routes changed files to domain-owner agents, checks correctness + architecture + reuse + version pins against the project rules, reverse-validates every finding, writes one merged report. Triggers: review code, deep review, superreview, super review, validate changes, check architecture, check standards, check reuse."
+user-invocable: true
+argument-hint: "<prompt-or-file-path> [scope: commit|branch|folder]"
+allowed-tools: Read, Glob, Grep, Task, Bash, Write, AskUserQuestion
+model: opus
+---
+
+# Super Review ({PROJECT_NAME})
+
+**ROLE:** Self-contained deep-review coordinator + final validator.
+**OUTPUT:** ONE merged, de-duplicated, severity-prioritized, validated report.
+
+The most thorough review in this repo, run INLINE — no sibling skills, no plugin dependency. It:
+
+0. **deterministically resolves ONE review MODE** and ANNOUNCES it to the user (mode + branch + concrete scope)
+   BEFORE any review work — no interactive guessing,
+1. routes each changed file to its **domain-owner agent** (uses project agents to the MAX),
+2. checks **functional correctness + architecture + reuse + version pins + business-requirements** against the
+   focus ordering below (folds in the old standards-review + review essence),
+3. runs a **single, targeted, parallel fan-out** — only the agents the changed files actually need (FEWER spawns
+   than a multi-vote quorum + a separate standards pass + a separate arbiter),
+4. ends with a **VALIDATION phase**: a per-finding adversarial double-check that re-verifies EVERY candidate is
+   REAL (rejects false positives) BEFORE it lands in the report, then merges + checks consistency.
+
+> Two-phase by design: **find -> validate**. Only findings that survive per-finding reverse-validation are reported.
+
+All agents are project-local (`.claude/agents/`) or a built-in (`Explore`/`Plan`/`general-purpose`). This skill
+never invokes any sibling skill, NO plugin cache; the validator/arbiter fallback is the
+built-in `general-purpose`.
+
+---
+
+## Mode Detection (deterministic — run FIRST, then ANNOUNCE)
+
+**Arguments:** `$ARGUMENTS`
+
+At launch, resolve EXACTLY ONE review `{MODE}` by the strict priority order below, then PRINT the resolved mode +
+current branch + concrete scope to the user BEFORE any review. The mode is COMPUTED, never guessed interactively;
+the same rule applies on `master`/`main` and on feature branches.
+
+| # | Condition (checked in order) | Resolved `{MODE}` | Scope reviewed |
+|---|------------------------------|-------------------|----------------|
+| 1 | User prompt asks for the WHOLE project, in any language ("whole project", "entire project", "everything", "all the code", or the same intent in another language) | `FULL_PROJECT` | ALL tracked `{SOURCE_GLOB}` + build/CI files in the repo |
+| 2 | User passed an explicit scope token (commit SHA, branch name, or folder path) | `EXPLICIT` | that commit / branch-vs-main / folder |
+| 3a | DEFAULT + working tree has UNCOMMITTED changes (`git status --porcelain` non-empty) | `UNCOMMITTED` | working-tree diff vs `HEAD` |
+| 3b | DEFAULT + clean tree (everything committed) | `LAST_COMMITS` | last 1-2 commits: `HEAD~2..HEAD` if it exists, else `HEAD~1..HEAD`, else the single root commit |
+
+> A text prompt that is NOT a whole-project request and NOT a scope token is treated as a `{FOCUS}` directive
+> (see Focus below); the mode still resolves via rule 3.
+
+**Mode-resolution commands** (runnable as-written; `PATHSPEC` = the file globs every mode reviews):
+
+```bash
+PATHSPEC=({PATHSPEC_GLOBS})
+
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+PORCELAIN=$(git status --porcelain)
+# robust MAIN fallback: the `|| echo main` must bind to git, not sed
+MAIN=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null); MAIN=${MAIN##*/}; MAIN=${MAIN:-main}
+
+# Resolve FILES for the chosen mode, then derive an EXACT count (no head-truncation of the count).
+# FULL_PROJECT (rule 1): all tracked source + build/CI files
+FILES=$(git ls-files -- "${PATHSPEC[@]}")
+
+# EXPLICIT commit (rule 2):  FILES=$(git diff --name-only "${SHA}^..${SHA}" -- "${PATHSPEC[@]}")
+# EXPLICIT branch (rule 2):  FILES=$(git diff --name-only "${MAIN}...HEAD" -- "${PATHSPEC[@]}")
+# EXPLICIT folder (rule 2):  build files are included too, not just source
+# FILES=$(find "$FOLDER" -type f \( -name '{SOURCE_GLOB}' -o -name 'Dockerfile*' -o -name 'docker-compose.yml' -o -name '*.yml' \))
+
+# UNCOMMITTED (rule 3a): working-tree diff vs HEAD (staged + unstaged)
+# FILES=$(git diff --name-only HEAD -- "${PATHSPEC[@]}")
+
+# LAST_COMMITS (rule 3b): nested fallback so a single-commit repo never errors
+# if HEAD~2 exists -> HEAD~2..HEAD ; elif HEAD~1 exists -> HEAD~1..HEAD ; else the single root commit
+# if git rev-parse --verify -q HEAD~2 >/dev/null; then
+#   FILES=$(git diff --name-only "HEAD~2..HEAD" -- "${PATHSPEC[@]}")
+# elif git rev-parse --verify -q HEAD~1 >/dev/null; then
+#   FILES=$(git diff --name-only "HEAD~1..HEAD" -- "${PATHSPEC[@]}")
+# else
+#   FILES=$(git show --name-only --pretty="" HEAD -- "${PATHSPEC[@]}")   # root commit
+# fi
+
+# EXACT count for the mandatory announcement (count, never the displayed list, is truncated):
+COUNT=$(printf '%s\n' "$FILES" | grep -c .)
+echo "$FILES" | head -50   # DISPLAY only — truncating the shown list is fine; COUNT above stays exact
+```
+
+**MANDATORY announcement to the user (before reviewing):**
+
+```
+superreview MODE = {MODE}
+Branch: {BRANCH}
+Scope: {commit range | branch-vs-main | folder path | working-tree diff vs HEAD | full project}
+Files: {COUNT} ({list, or "see range"})
+Focus: {resolved focus — user directive, else default ordering}
+```
+
+---
+
+## Focus (user directive, else default ordering)
+
+If the user passed a focus directive in the prompt ("focus on X"), PRIORITIZE it. Otherwise use this DEFAULT focus
+order (highest first). Bake this exact ordering into BOTH the shared agent prompt and the validator prompt.
+
+{FOCUS_TABLE}
+
+> **Project emphasis:** {FOCUS_EMPHASIS}
+
+> **Security is explicitly NOT a priority.** Report a security finding ONLY when it is CRITICAL (P0) — e.g. logged
+> secret, missing auth on a public path, injection. Do NOT spend agent effort on low/medium security.
+
+---
+
+## Project Agents (project-local + built-in ONLY)
+
+> Every `subagent_type` below resolves to a real file in `.claude/agents/`, or a built-in (`Explore`/`Plan`/`general-purpose`).
+> Do NOT pass a `model` override to project agents — they define their own. NO external/plugin agent is referenced.
+
+{DOMAIN_AGENTS_TABLE}
+
+PLUS up to two GENERAL cross-cutting agents — they are NOT auto-spawned every time; **the model DECIDES** whether
+(and which) to include, by JUDGEMENT of the scope. Each, if included, runs ONCE over the full changed set:
+
+{GENERAL_AGENTS_TABLE}
+
+> For a SMALL, single-domain, low-risk change, the model MAY skip one or BOTH general agents and rely on the
+> domain owner alone. Do NOT spawn them reflexively — include only when the guidance above applies.
+
+---
+
+## {PROJECT_NAME} rules — REFERENCE the canonical files, do NOT restate them
+
+The project rules are authoritative in their own files; this skill does NOT duplicate them. Every agent READS the
+files relevant to its area and CITES the rule number it enforces (`avoid#N`, `architecture#N`, `containers#N`, …).
+One-line gist per pointer only — the file is the authority. Phase 0 PREFLIGHT-validates that these exist (see below).
+
+{RULE_POINTER_TABLE}
+
+> `CLAUDE.md` (+ any per-module `CLAUDE.md`) auto-load and add project context.
+> Breach of any cited rule = P0/P1 candidate (per the Focus ordering; security only as P0).
+
+---
+
+## Execution
+
+### Phase 0 — Preflight, Resolve MODE, ANNOUNCE, read references
+
+1. **PREFLIGHT — validate the rule files before relying on them.** Verify the canonical rule/convention files
+   referenced above EXIST; WARN per missing file and degrade gracefully (do NOT hard-fail):
+
+```bash
+{RULE_PREFLIGHT_LIST}
+```
+
+2. **Resolve `{MODE}` + `{FOCUS}`** per the **Mode Detection** and **Focus** sections above (deterministic; not
+   interactive). Run the mode-resolution commands to get `{BRANCH}`, `{SCOPE}`, the `FILES` list, and EXACT `COUNT`.
+3. Compute a single `TIMESTAMP` for the report dir:
+
+```bash
+TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
+```
+
+4. **ANNOUNCE to the user** (MANDATORY, before any review) the resolved mode block — `{COUNT}` is the EXACT count
+   computed in Mode Detection (never truncated); include any `WARN missing rule` lines:
+
+```
+superreview MODE = {MODE}
+Branch: {BRANCH}
+Scope: {commit range | branch-vs-main | folder | working-tree diff vs HEAD | full project}
+Files: {COUNT} ({displayed list — may be truncated; COUNT stays exact})
+Focus: {resolved focus — user directive, else default ordering}
+Rules preflight: {OK | "WARN missing: <files>"}
+```
+
+5. **READ** `references/{STACK_REF}` (relative to this skill dir) — {STACK_LABEL} stack guidelines passed to every
+   agent. Also note `references/agent-prompt.md` (the domain-owner prompt contract).
+6. If `FILES` is empty (`COUNT == 0`) -> **exit** ("Nothing to deep-review for {MODE} / {SCOPE}.").
+7. If `COUNT > 50` (and `{MODE}` != `FULL_PROJECT`) -> warn the user; suggest narrowing (per-folder or per-commit).
+   For `FULL_PROJECT`, proceed but warn it is a large, slower pass.
+8. Optionally study context with a few parallel read-only `Explore` agents (changed-file modules + `.claude/rules/**`).
+   This is context only, NOT findings.
+
+### Phase 1 — Agent selection (route changed files to domain owners)
+
+Group the `{FILE_LIST}` by path. **Enable ONLY the groups whose files actually changed** — this is the key
+"fewer agents" constraint: ONE targeted spawn per relevant group, NOT a quorum × N + a separate full standards pass.
+
+{FILE_GROUP_MAP}
+
+PLUS up to two GENERAL cross-cutting agents (see **Project Agents** above). They are NOT auto-spawned every time;
+**the model DECIDES** whether (and which) to include, by JUDGEMENT of the scope. Each, if included, runs ONCE over
+the full changed set (not per group).
+
+> Total spawns = (number of NON-EMPTY domain groups) + **{0, 1, or 2} general agents (model's call)**.
+> Examples: a tiny single-file tweak = its domain owner alone (**1 agent**); a change with non-trivial logic =
+> domain owner + `{VALIDATOR_AGENT}` (**2**); a change spanning multiple domains/abstractions = both domain owners +
+> `{ARBITER_AGENT}` (+ `{VALIDATOR_AGENT}` if logic is risky) (**3-4**). Far fewer than the old quorum + standards + arbiter
+> combo. If a mapped domain agent is unavailable, fall back to built-in `Explore`; note it in the report.
+
+> **Test-bloat audit:** when the `tests` group is non-empty, its prompt MUST also audit for TEST OVER-PROLIFERATION
+> (LLMs over-write tests) — cite the project `testing` rule, do NOT restate it. Flag, as `category: test-quality`:
+> redundant tests to DELETE (duplicate coverage, trivial getters, internal-mock-only tests); tests to COLLAPSE/MERGE
+> or PARAMETRIZE via HELPER FUNCTIONS; over-granular micro-tests violating "FEW targeted scenario tests over BIG user
+> journeys". **NON-NEGOTIABLE:** reducing test COUNT must NOT cost quality — every remaining/merged test stays
+> ISOLATED + FAST + REAL (fakes-over-mocks). Also flag any slow or non-isolated test as its own finding; never
+> recommend a merge that makes a test slow or non-isolated. Full prompt text in `references/agent-prompt.md`.
+
+### Phase 2 — ONE parallel fan-out (find candidates)
+
+Spawn ALL selected agents (the non-empty domain owners + whichever general agents the model chose in Phase 1) in
+**ONE message** (parallel). Use the prompt contract in `references/agent-prompt.md`: pass `{FILE_LIST}` (scoped to that
+group for domain owners; full set for any included general agent), the resolved `{FOCUS}`, and the
+`references/{STACK_REF}` guidelines. Each prompt MUST instruct the agent to **apply `.claude/rules/*` +
+`.claude/convention/*` for its area and CITE the rule number it enforces** — the skill does NOT restate the rules; the
+agents read the canonical files. Each prompt MUST also embed the focus ordering verbatim so agents spend effort in
+priority order, and **report security findings ONLY when CRITICAL (P0)**. Each prompt MUST also include the
+**over-complexity / over-engineering** dimension: flag speculative abstractions, needless params/config/methods "just
+in case", premature generalization, KISS/YAGNI-removable indirection, and duplicated logic to collapse — `category:
+over-complexity`, citing the project best-practices + avoid rules. Every agent returns the SAME JSON shape:
+
+```
+{
+  "findings": [{
+    "file": "path/to/file{SOURCE_GLOB}", "lineStart": 42, "lineEnd": 45,
+    "category": "boundary|architecture|reuse|over-complexity|security|logic|persistence|test-quality|pins|style",
+    "severity": "blocker|critical|major|minor",
+    "rule": "avoid#N|best-practices#N|architecture#N|containers#N|... or null",
+    "title": "...", "description": "...", "suggestion": "...",
+    "existing": "path|null", "reuse": "REUSE|EXTEND|CONSIDER|KEEP_NEW|null",
+    "confidence": 0.85
+  }]
+}
+```
+
+Each agent MUST search-first (grep / verify imports, prefer `mcp__grepai__search` if available) before flagging any
+reuse/duplicate, and read the ACTUAL code at every cited line. Collect every agent's findings into one pool
+`{CANDIDATES}` (tag each finding with its producing agent as `source`).
+
+### Phase 3 — VALIDATION (per-finding adversarial reverse-check, the GATE)
+
+Spawn ONE `{VALIDATOR_AGENT}` that **independently RE-VERIFIES EVERY candidate finding in reverse** against the real
+code BEFORE anything reaches the user report, AND merges the survivors into one consistent, de-duplicated, prioritized
+list. This is a per-finding gate, NOT a sample: a finding reaches the report ONLY after it survives reverse-validation.
+
+```
+Task(subagent_type="{VALIDATOR_AGENT}", prompt="
+## superreview — per-finding VALIDATION + Merge ({PROJECT_NAME})
+
+You are the adversarial validator + final arbiter. For EVERY candidate finding (no sampling, no skipping),
+READ the ACTUAL code at the cited file:line and try to DISPROVE it. Decide CONFIRM or REJECT per finding. Only
+CONFIRMed findings may appear in the final report. Then merge the survivors.
+
+**Focus ordering (effort + tie-breaks, highest first):** {FOCUS}
+  Security = report ONLY if CRITICAL (P0); ignore low/medium.
+  Also validate OVER-COMPLEXITY findings (category over-complexity): speculative abstraction, gold-plating,
+  premature generalization, KISS/YAGNI-removable indirection, collapsible duplication. Keep them (with the simpler
+  shape) when real; drop if the complexity is justified.
+
+**Candidate findings (pool from the domain owners + any included general agents):**
+{CANDIDATES}
+**Files under review:** {FILE_LIST}
+**Focus:** {FOCUS}
+
+### 1. Reverse-validate EACH candidate (per finding — drop false positives)
+  a. Existence — does the cited code/line actually exist and exhibit the issue NOW? (REJECT if not / already fixed)
+  b. Accuracy — is the claim a correct reading of the code? (REJECT if it misreads the code)
+  c. Actionability — is there a concrete fix path? (REJECT if vague / not actionable)
+  d. Severity — is the severity right for the focus ordering? (adjust if wrong)
+  Adversarial: actively argue AGAINST the finding first. It survives ONLY if it withstands a-d. Do this for every
+  single candidate; none is reported unverified.
+
+### 2. Merge + de-duplicate ACROSS agents
+  Same file +/-5 lines + same category = ONE finding. Keep the most detailed description, highest severity,
+  union of sources (comma-join). A 'duplicate/reuse' miss + an 'architecture' flag on the same code = one row.
+
+### 3. Prioritize (MANDATORY P0 -> P3)
+  - P0 = architecture/boundary BLOCKERS + CRITICAL security (logged secret, missing auth, injection) + any miss you RESTORE.
+  - P1 = confirmed functional-correctness + architecture/boundary issues.
+  - P2 = reuse misses/duplication + over-complexity + library version-pin violations rated 'error'.
+  - P3 = business-requirements nits + minor over-complexity + warnings + minor/info.
+
+### 4. Consistency check on the merged list
+  No duplicate rows, severities monotonic with priority, every row has file:line + actionable suggestion,
+  findings ORDERED P0 -> P3.
+
+**Output JSON ONLY:**
+{
+  \"findings\": [{
+    \"id\": \"P0-1\", \"priority\": \"P0|P1|P2|P3\", \"source\": \"agent(s)\",
+    \"file\": \"path\", \"lineStart\": 42, \"lineEnd\": 45,
+    \"category\": \"boundary|architecture|reuse|over-complexity|security|logic|persistence|test-quality|pins|style\",
+    \"severity\": \"blocker|critical|major|minor\",
+    \"title\": \"...\", \"description\": \"...\", \"suggestion\": \"...\",
+    \"existing\": \"path|null\", \"reuse\": \"REUSE|EXTEND|CONSIDER|KEEP_NEW|null\",
+    \"verdict\": \"CONFIRM\", \"confidence\": 0.9
+  }],
+  \"dropped\": [{\"title\": \"...\", \"reason\": \"already-fixed|false-positive|not-actionable|duplicate-of:P0-1\"}],
+  \"verdict\": \"APPROVED|CONDITIONAL|REWORK\",
+  \"stats\": {\"p0\": 0, \"p1\": 0, \"p2\": 0, \"p3\": 0, \"overComplexity\": 0, \"candidates\": 0, \"confirmed\": 0, \"dropped\": 0}
+}
+
+### Verdict rule
+- REWORK if any P0; CONDITIONAL if any P1/P2 (no P0); APPROVED if only P3 / none.
+")
+```
+
+Record output as `{MERGED}`. If `{VALIDATOR_AGENT}` is unavailable, run the SAME prompt on the built-in `general-purpose`.
+
+### Phase 4 — Write the merged report
+
+```bash
+REPORT_DIR=".claude/reports/${TIMESTAMP}_superreview"
+mkdir -p "${REPORT_DIR}"
+```
+
+Write ONE consolidated report to `.claude/reports/{TIMESTAMP}_superreview/REPORT.md` using the layout in
+`references/report-template.md`. Findings section is MANDATORY-sorted by priority P0 -> P3 (highest severity first).
+
+### Phase 5 — Chat summary
+
+```
+Super Review complete — MODE={MODE} (branch {BRANCH}), {COUNT} files, {N} agents.
+
+VERDICT: {APPROVED | CONDITIONAL | REWORK}
+
+Priority breakdown (sorted P0 -> P3):
+- P0 (architecture blockers + CRITICAL security + validator-restored): {N}
+- P1 (confirmed correctness + architecture/boundary): {N}
+- P2 (reuse misses + over-complexity + version-pin errors): {N}
+- P3 (business-requirements nits + warnings): {N}
+Over-complexity findings: {OC}
+
+Per-finding reverse-validation dropped {N} candidates (false-positive/already-fixed/duplicate).
+
+Report: .claude/reports/{TIMESTAMP}_superreview/REPORT.md
+
+Recommendations / next steps (superreview is READ-ONLY — it does not apply fixes):
+- To fix: new session (English) in Manager mode (++m); delegate to the domain-owner agents ({SIMPLIFY_AGENTS});
+  P0/P1 first, then P2/P3.
+- To reduce over-complexity: {OC} finding(s).{if >0: run the built-in /simplify skill (reviews + APPLIES
+  reuse/simplification/efficiency cleanups), then re-run superreview.}{if 0: /simplify optional.}
+  /simplify is a BUILT-IN skill (not this skill, not a plugin); skip if unavailable.
+- Optional: /code-review (built-in) for a focused correctness diff pass.
+superreview does NOT run /simplify or any skill and does NOT edit code — these are recommendations only.
+```
+
+---
+
+## Configuration
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Mode | deterministic | `FULL_PROJECT` \| `EXPLICIT` \| `UNCOMMITTED` \| `LAST_COMMITS`; computed + announced |
+| Focus | ordered | user directive wins; default = correctness, architecture, reuse, pins, business-reqs; security only if P0 |
+| Fan-out | targeted | non-empty domain groups + {0,1,2} general agents, model's call |
+| Validation | ALWAYS, per-finding | Phase 3 reverse-checks EVERY candidate; only CONFIRMed findings reported |
+| Validator agent | `{VALIDATOR_AGENT}` (fallback built-in `general-purpose`) | Phase 3 merge + validate |
+| Report dir | `.claude/reports/{TIMESTAMP}_superreview/` | Merged report, findings sorted P0 -> P3 |
+| Max files | 50 (except `FULL_PROJECT`) | Warn + suggest narrowing above this |
+| Search tool | `mcp__grepai__search` if available, else `Grep`/`Glob`/Bash | reuse-first search; note which in report |
+
+---
+
+## Error Handling
+
+| Condition | Action |
+|-----------|--------|
+| No changed files for scope | **Exit** ("Nothing to deep-review for {SCOPE}") |
+| >50 files | Warn the user; suggest narrowing (per-folder or per-commit) |
+| A domain agent unavailable | Fall back to built-in `Explore` with the same prompt; note in report |
+| `{VALIDATOR_AGENT}` unavailable | Run Phase 3 validation prompt on the built-in `general-purpose`; note in report |
+| `grepai` unavailable | Fall back to `Grep`/`Glob`/Bash; state which path was used in the report |
+| Agent timeout | Retry once, then mark that source unavailable + warn in report |
+| Validation rejects everything | Report "No issues survived validation" — verdict APPROVED |
+| All sources clean | Report "No issues found across standards, architecture, and correctness" — verdict APPROVED |
+
+---
+
+## References
+
+- `references/{STACK_REF}` — {STACK_LABEL} stack guidelines (passed to every agent).
+- `references/agent-prompt.md` — domain-owner agent prompt contract (Phase 2) + the group->agent map.
+- `references/report-template.md` — merged-report layout (Phase 4).
+
+<!--
+SKILL METADATA — generated {GENERATED_AT}
+
+Self-contained project-local deep-review skill for {PROJECT_NAME}. NO sibling-skill orchestration, never invokes
+another skill, NO plugin dependency. Two-phase: targeted domain-owner fan-out (find) -> adversarial validation (gate)
+-> ONE merged report at .claude/reports/{TIMESTAMP}_superreview/REPORT.md.
+Agents: project-local (.claude/agents/) + built-in (Explore/Plan/general-purpose).
+
+Re-adopt triggers:
+- New / renamed agent in .claude/agents/
+- CLAUDE.md / .claude/rules invariants updated
+- New service group (path pattern) added
+Regenerate with: /brewcode:superreview
+-->

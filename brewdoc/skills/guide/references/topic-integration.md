@@ -128,6 +128,5 @@ Complete directory layout for a project using brewcode:
 ```
 
 Key directories:
-- `cfg/` — created by `/brewcode:setup`, stores config and state
 - `tasks/` — each task gets its own isolated directory
 - `teams/` — created by `/brewcode:teams`, stores generated agents

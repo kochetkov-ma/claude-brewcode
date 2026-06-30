@@ -1,10 +1,11 @@
 // brewtools:manager — UserPromptSubmit hook.
 // Injects Manager/Review mode block(s) via additionalContext. Triggers:
-//   1. Codeword in prompt (always, regardless of state). Codewords form TWO
+//   1. Codeword in prompt (always, regardless of state). THREE codewords in TWO
 //      INDEPENDENT groups; a prompt may activate one from each:
-//        Manager group (mutually exclusive, ++mp wins over ++m):
-//          ++mp -> Manager + Plan Mode (planmode)
-//          ++m  -> Manager mode (full)
+//        Manager group:
+//          ++m  -> Manager mode. PLAN-AWARE: when permission_mode === 'plan'
+//                  it injects the planmode block (full + plan addon); otherwise
+//                  the plain full block. There is NO separate ++mp codeword.
 //        Review group (mutually exclusive, ++rr wins over ++r):
 //          ++rr -> Anti-regression review discipline
 //          ++r  -> Two-phase review discipline
@@ -13,9 +14,8 @@
 // Precedence: each group is detected INDEPENDENTLY. When both groups are present
 //   we inject BOTH blocks (manager block first, then review block), concatenated
 //   with a blank-line separator. When only one group is present, only that block
-//   is injected. Longer-prefix variants (++mp, ++rr) win over their shorter
-//   collisions (++m, ++r); the `(?![\w])` lookahead also keeps `++rr` from
-//   falsely matching ++r and `++mp` from matching ++m.
+//   is injected. The longer-prefix variant ++rr wins over ++r; the `(?![\w])`
+//   lookahead also keeps `++rr` from falsely matching ++r.
 //   The review codewords are codeword-ONLY (no ambient/state injection).
 // Fail-safe: any error -> output({}) so the user's prompt is never broken.
 
@@ -32,22 +32,23 @@ function capText(s, max = 9000) {
 
 (async () => {
   try {
-    const { prompt = '', cwd } = await readStdin();
+    const { prompt = '', cwd, permission_mode } = await readStdin();
     const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT;
 
-    const hasMP = /(?<![\w+])\+\+mp(?![\w])/.test(prompt);
     const hasM  = /(?<![\w+])\+\+m(?![\w])/.test(prompt);
     const hasRR = /(?<![\w+])\+\+rr(?![\w])/.test(prompt);
     const hasR  = /(?<![\w+])\+\+r(?![\w])/.test(prompt);
 
-    // Two independent groups. Manager: ++mp wins over ++m. Review: ++rr wins over ++r.
+    // Two independent groups. Manager (++m) is plan-aware: when the session is in
+    // plan mode (permission_mode === 'plan') it injects the planmode block (full +
+    // plan addon), otherwise the plain full block. Review: ++rr wins over ++r.
     let managerMode = null, managerHeader = null;
-    if (hasMP) {
-      managerMode = 'planmode';
-      managerHeader = 'User typed `++mp` — Manager + Plan Mode is active for this turn:';
-    } else if (hasM) {
-      managerMode = 'full';
-      managerHeader = 'User typed `++m` — Manager mode is active for this turn:';
+    if (hasM) {
+      const planMode = permission_mode === 'plan';
+      managerMode = planMode ? 'planmode' : 'full';
+      managerHeader = planMode
+        ? 'User typed `++m` — Manager + Plan Mode is active for this turn:'
+        : 'User typed `++m` — Manager mode is active for this turn:';
     }
 
     let reviewMode = null, reviewHeader = null;

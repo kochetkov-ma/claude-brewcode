@@ -1,7 +1,7 @@
 ---
 name: agent-creator
 description: "Creates and improves Claude Code agents. Triggers: create agent, improve agent, scaffold agent."
-model: opus
+model: inherit
 color: cyan
 tools: Read, Write, Edit, Glob, Grep, Bash, Task, Skill, WebFetch, WebSearch, AskUserQuestion
 ---
@@ -131,7 +131,7 @@ Detailed instructions for the AG...
 | 3 | `~/.claude/agents/` | User (all projects) | Manual or `/agents` |
 | 4 (lowest) | `plugin/agents/` | Where PLG enabled | Installed with PLG |
 
-> Protected-path (v3.4.70): AG Write targets → `.claude/<subdir>/` (project-relative, whitelisted in `permission-guard.sh`). `~/.claude/*` blocked ALL modes; exceptions: `commands|agents|skills|worktrees`. See memory `protected_path_write_block.md`.
+> Protected-path (v3.4.70): AG Write targets → `.claude/<subdir>/` (project-relative). `~/.claude/*` blocked ALL modes; exceptions: `commands|agents|skills|worktrees`. See memory `protected_path_write_block.md`.
 
 ### CLI JSON Format (session-only)
 
@@ -209,9 +209,9 @@ When AG spawns from a SK that uses `references/`, AG does NOT have `skill_base_d
 | Content Size | Approach | EX |
 |-------------|----------|----|
 | <50 lines | Inline into AG prompt | Pass ref content directly via Task prompt |
-| >50 lines | Use `$BC_PLUGIN_ROOT` path | `Read $BC_PLUGIN_ROOT/skills/skill-name/references/mode.md` |
+| >50 lines | Use `${CLAUDE_PLUGIN_ROOT}` path | `Read ${CLAUDE_PLUGIN_ROOT}/skills/skill-name/references/mode.md` |
 
-`$BC_PLUGIN_ROOT` injected by `pre-task.mjs`, available in all SAs.
+`${CLAUDE_PLUGIN_ROOT}` (brace form) is natively substituted at spawn to this plugin's root, available in all SAs.
 
 > If SK detects mode BEFORE spawning AG, pass only relevant ref -- not all of them.
 
@@ -558,7 +558,7 @@ SP key elements:
 | [#19040](https://github.com/anthropics/claude-code/issues/19040) | Session files grow to multi-GB from SA progress entries | Active | Monitor session file size |
 | [#31392](https://github.com/anthropics/claude-code/issues/31392) | Global AGs `~/.claude/agents/` not discovered | Active (v2.1.70+) | Use project-level or PLG-level AGs |
 | [#27736](https://github.com/anthropics/claude-code/issues/27736) | `skills:` in PLG AG FM not rendered in Task TL | Active | Pre-inject SK content via `Task(prompt=...)` |
-| [#25834](https://github.com/anthropics/claude-code/issues/25834) | PLG AG `skills:` doesn't inject content | Active | Inline SK content or use `$BC_PLUGIN_ROOT` path |
+| [#25834](https://github.com/anthropics/claude-code/issues/25834) | PLG AG `skills:` doesn't inject content | Active | Inline SK content or use `${CLAUDE_PLUGIN_ROOT}` path |
 | [#13627](https://github.com/anthropics/claude-code/issues/13627) | AG body not injected via Task TL | Closed (NOT PLANNED) | `SubagentStart` hook with `additionalContext` |
 | [#8395](https://github.com/anthropics/claude-code/issues/8395) | SAs ignore user-level CD | Closed (NOT PLANNED) | `SubagentStart` hook with `additionalContext` |
 | [#4182](https://github.com/anthropics/claude-code/issues/4182) | SK TL unavailable in SA | By design | Use `skills:` in FM for pre-injection |

@@ -1,7 +1,7 @@
 ---
 name: developer
 description: "Implements features, writes code, fixes bugs, refactors. Trig: implement, fix bug, add feature."
-model: opus
+model: inherit
 tools: Read, Write, Edit, Glob, Grep, Bash, Task, NotebookEdit, WebFetch, WebSearch
 mcpServers:
   - grepai

@@ -1,7 +1,7 @@
 ---
 name: hook-creator
 description: "Creates and debugs Claude Code hooks. Triggers: create hook, PreToolUse hook, debug hook."
-model: opus
+model: inherit
 color: yellow
 tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch, WebSearch
 auto-sync: true
@@ -274,7 +274,7 @@ Format: `ToolName(pattern)` — same syntax as permission rules.
 |----------|-------------|-----------|
 | `$CLAUDE_PROJECT_DIR` | project root | all hooks |
 | `$CLAUDE_PLUGIN_ROOT` | plugin install dir | plugin hooks |
-| `$CLAUDE_PLUGIN_DATA` | persistent plugin data (survives updates, v2.1.78+); brewcode: stores `modes.json` (mode switcher state); hooks inject as `BC_PLUGIN_DATA` text var for skills/agents | plugin hooks |
+| `$CLAUDE_PLUGIN_DATA` | persistent per-plugin data dir, survives updates (v2.1.78+); `~/.claude/plugins/data/<plugin-id>/` | plugin hooks |
 | `$CLAUDE_CODE_REMOTE` | `"true"` in remote env | all hooks |
 | `$CLAUDE_ENV_FILE` | path for persistent env vars | SS, CwdChanged, FileChanged |
 | `$CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS` | SessionEnd hooks timeout in ms (DEF 1500ms, v2.1.78+) | SessionEnd hooks |
@@ -285,18 +285,13 @@ Format: `ToolName(pattern)` — same syntax as permission rules.
 
 ### Plugin Persistent State (`CLAUDE_PLUGIN_DATA`)
 
-brewcode hooks inject `BC_PLUGIN_DATA` as text var (same pattern as `BC_PLUGIN_ROOT`).
+Persistent per-plugin data dir, survives updates (v2.1.78+). Hook-only env var.
 
 | Aspect | Details |
 |--------|---------|
 | env var | `process.env.CLAUDE_PLUGIN_DATA` (hooks only) |
-| text var | `BC_PLUGIN_DATA=<path>` (injected by session-start.mjs + pre-task.mjs) |
-| main file | `$CLAUDE_PLUGIN_DATA/modes.json` — mode switcher state |
-| scopes | global, project (by cwd), session (by session_id) |
+| path | `~/.claude/plugins/data/<plugin-id>/` |
 | read in hooks | `const pluginData = process.env.CLAUDE_PLUGIN_DATA` |
-| read in skills/agents | use `$BC_PLUGIN_DATA` from injected context |
-
-Resolution: session > project > global. Old `.claude/tasks/cfg/brewcode.state.json` kept as fallback.
 
 > Protected-path (v3.4.70): Write/Edit to `~/.claude/*` (incl. `$CLAUDE_PLUGIN_DATA`) blocked in ALL modes (`bypassPermissions`, headless). Check runs BEFORE hooks — whitelists dead. Exceptions: `commands|agents|skills|worktrees`. !=design skills with `$CLAUDE_PLUGIN_DATA` as Write target -> silent fail. Primary: project-relative `.claude/<subdir>/` + whitelist. `$CLAUDE_PLUGIN_DATA` = read-only/interactive-only/Bash-only (Bash redirect currently bypasses check, but brittle).
 
@@ -676,49 +671,6 @@ Returns `AC` with project state.
 - Dynamic Config: `.claude-hooks-config.json`: `{"strictMode":true,"allowedCommands":["npm test"],"maxFileSize":1048576}`
 - Caching: store validation outcomes (5-min cache) to avoid redundant processing
 - Cross-Event Workflows: `SS -> count tests | POT -> increment | Stop -> verify count > 0`
-
-### Mode-Aware Injection
-
-Hook reads active mode from `brewcode.state.json`, injects mode-specific instructions into every tool call/session event. Use when skill needs to toggle persistent session behavior surviving auto-compact.
-
-```javascript
-// Channel depends on event — see Authoritative Per-Event Output Channels (Section 1):
-const activeMode = getActiveMode(cwd, session_id);
-if (activeMode) {
-  // PTU:Task — rewrite SA prompt via UI (updatedInput); only PTU accepts UI
-  updatedPrompt = `[MODE: ${activeMode.name}] ${activeMode.instructions}\n\n${updatedPrompt}`;
-  // SS or UserPromptSubmit — inject via additionalContext (UI is IGNORED on these events)
-  context += `\n[MODE: ${activeMode.name}] ${activeMode.instructions}`;
-}
-```
-
-`getActiveMode(cwd, session_id)` resolution:
-
-| Step | Details |
-|------|---------|
-| read state | `$CLAUDE_PLUGIN_DATA/modes.json` -> 3-scope (session > project > global) |
-| fallback | `.claude/tasks/cfg/brewcode.state.json` -> `mode` field (legacy) |
-| load instructions | `$CLAUDE_PLUGIN_DATA/modes/{mode}.md` (user first) then `$CLAUDE_PLUGIN_ROOT/modes/{mode}.md` (built-in fallback) |
-| return | `{name, instructions, scope}` or `null` (scope: `session|project|global|legacy`) |
-| fail-safe | returns `null` on any error |
-
-Injection channels:
-
-| Hook | Event | Channel | Scope |
-|------|-------|---------|-------|
-| `forced-eval.mjs` | UserPromptSubmit | `AC` (NOT `UI` — ignored on UserPromptSubmit) | every user msg |
-| `session-start.mjs` | SS | `AC` | session start + compact resume |
-| `pre-task.mjs` | PTU:Task | `UI.prompt` | every SA spawn |
-
-> Channel differs per event: `UserPromptSubmit`/`SS` inject via `AC`; only `PTU:Task` rewrites the SA prompt via `UI.prompt`. Emitting `UI` on UserPromptSubmit is silently dropped — see Authoritative Per-Event Output Channels (Section 1).
-
-State schema in `$CLAUDE_PLUGIN_DATA/modes.json`:
-```json
-{"session":{"mode":"manager","modeActivatedAt":"2026-04-01T12:00:00.000Z"},"project":{},"global":{}}
-```
-Resolution: `session` > `project` > `global`. Single mode only (no multi-mode). `null`/absent `mode` = no active mode.
-
-> Legacy fallback: `.claude/tasks/cfg/brewcode.state.json` (flat `mode` field) read if `modes.json` missing.
 
 ## 15. Hook Type Selection
 

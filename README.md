@@ -10,7 +10,7 @@
 
 **Claude Code plugin suite** -- four plugins for development, documentation, text utility, and visual workflows.
 
-A regular Claude Code session loses context during compaction. Brewcode automatically saves knowledge, passes state between compaction cycles, and continues work without restarting. Four plugins. 32 skills. 16 agents. 9 lifecycle hooks.
+A regular Claude Code session loses context during compaction. Brewcode automatically saves knowledge, passes state between compaction cycles, and continues work without restarting. Four plugins. 25 skills. 14 agents. 9 lifecycle hooks.
 
 [**Full Documentation**](https://doc-claude.brewcode.app/getting-started/)
 
@@ -56,9 +56,9 @@ After all commands succeed, run `/reload-plugins`. If `/reload-plugins` is unava
 
 | Plugin | Purpose | Skills | Install |
 |--------|---------|--------|---------|
-| [brewcode](brewcode/README.md) | Infinite task execution, quorum reviews, skill/agent creation, semantic search | 13 | `claude plugin install brewcode@claude-brewcode` |
+| [brewcode](brewcode/README.md) | Infinite task execution, quorum reviews, skill/agent creation, semantic search | 9 | `claude plugin install brewcode@claude-brewcode` |
 | [brewdoc](brewdoc/README.md) | Documentation tools: auto-sync, memory optimization, PDF conversion, publishing | 6 | `claude plugin install brewdoc@claude-brewcode` |
-| [brewtools](brewtools/README.md) | Universal text utilities: token optimization, humanization, secrets scanning, plugin updates | 13 | `claude plugin install brewtools@claude-brewcode` |
+| [brewtools](brewtools/README.md) | Universal text utilities: token optimization, humanization, secrets scanning, plugin updates | 10 | `claude plugin install brewtools@claude-brewcode` |
 | [brewui](brewui/README.md) | UI/visual/creative tools (placeholder, currently empty) | 0 | `claude plugin install brewui@claude-brewcode` |
 
 ## Installation
@@ -184,7 +184,7 @@ Placeholder plugin, currently empty. No commands yet -- coming soon.
 
 ## Skills Reference
 
-### Brewcode (13 skills)
+### Brewcode (9 skills)
 
 | Skill | Purpose |
 |-------|---------|
@@ -195,10 +195,10 @@ Placeholder plugin, currently empty. No commands yet -- coming soon.
 | `/brewcode:teams` | Create and manage dynamic teams of domain-specific agents |
 | `/brewcode:standards-review` | Review code for project standards compliance |
 | `/brewcode:convention` | Extract etalon classes, patterns, architecture into convention docs |
-| `/brewcode:rules` | Extract rules from KNOWLEDGE to `.claude/rules/` |
+| `/brewcode:rules` | Prompt-driven rules management: status, create, improve, review |
 | `/brewcode:grepai` | Semantic code search (setup, status, start, stop, reindex) |
-| `/brewcode:skills` | List, create, and upgrade skills |
-| `/brewcode:agents` | Interactive agent creation and improvement |
+| `/brewcode:skills` | Prompt-driven skill management: status, create, improve, review |
+| `/brewcode:agents` | Prompt-driven agent management: status, create, improve, review |
 | `/brewcode:e2e` | E2E testing orchestration with BDD scenarios |
 | `/brewcode:teardown` | Remove plugin configuration (keeps task data) |
 
@@ -213,22 +213,19 @@ Placeholder plugin, currently empty. No commands yet -- coming soon.
 | `/brewdoc:publish` | Publish to brewpage.app -- returns public URL |
 | `/brewdoc:guide` | Interactive tutorial for the plugin suite |
 
-### Brewtools (13 skills)
+### Brewtools (10 skills)
 
 | Skill | Purpose |
 |-------|---------|
 | `/brewtools:text-optimize` | LLM token efficiency optimization (30+ rules) |
 | `/brewtools:text-human` | Remove AI artifacts, humanize code |
-| `/brewtools:think-short` | Toggle terse-output mode -- inject brevity directives via SessionStart + PreToolUse:Task hooks |
+| `/brewtools:think-short` | Install/remove terse-mode hooks (SessionStart + every-10th UserPromptSubmit + subagent Task) that inject brevity directives; project or global |
 | `/brewtools:secrets-scan` | Scan git-tracked files for leaked secrets |
 | `/brewtools:ssh` | SSH server management -- connect, configure, deploy |
 | `/brewtools:deploy` | GitHub Actions deployment -- workflows, releases, GHCR, CI/CD |
-| `/brewtools:debate` | Evidence-based multi-agent debate (Challenge, Strategy, Critic modes) |
 | `/brewtools:plugin-update` | Install and update the full plugin suite |
-| `/brewtools:skill-toggle` | Disable/enable individual plugin skills (survives updates) |
-| `/brewtools:agent-toggle` | Disable/enable individual agents via native permissions.deny |
 | `/brewtools:provider-switch` | Configure alternative API providers (DeepSeek, Z.ai/GLM, Qwen, MiniMax, OpenRouter) |
-| `/brewtools:manager` | Manager mode -- codewords ++m/++mp inject a delegate-everything prompt; HARD wall (on/off/uninstall) installs a project PreToolUse guard that blocks main-session edits, forcing delegation |
+| `/brewtools:manager` | Manager mode -- codeword ++m injects a delegate-everything prompt (plan-aware); HARD wall (on/off/uninstall) installs a project PreToolUse guard that blocks main-session edits, forcing delegation |
 | `/brewtools:task-board-init` | Deploy a file-based Kanban into ANY repo via multi-agent analysis -- task-tracker agent, task-board skill, tasks rule, .claude/features |
 
 ### Brewui (0 skills)

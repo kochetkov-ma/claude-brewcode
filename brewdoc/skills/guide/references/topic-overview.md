@@ -19,9 +19,9 @@ One marketplace, four plugins, one version number. Install what you need.
 
 | Plugin | Purpose | Key Skills |
 |--------|---------|------------|
-| brewcode | Infinite task execution, agent teams, project automation | setup, spec, plan, start, teams, review, convention, e2e |
+| brewcode | Spec authoring, semantic search, deep review, agent teams | spec, grepai, superreview, convention, teams, e2e |
 | brewdoc | Documentation tools: sync, generate, optimize, publish | auto-sync, my-claude, memory, md-to-pdf, guide, publish |
-| brewtools | Universal utilities: text optimization, security scanning | text-optimize, text-human, secrets-scan, ssh, deploy, debate, plugin-update |
+| brewtools | Universal utilities: text optimization, security scanning | text-optimize, text-human, secrets-scan, ssh, deploy, plugin-update |
 | brewui | UI/visual/creative tools (placeholder, empty) | (none yet) |
 
 **brewcode** is the core. It runs tasks that survive context limits through automatic handoff. It manages agents, hooks, and knowledge persistence.
@@ -44,9 +44,9 @@ The plugins complement each other:
 All four share the same version number. They update together from the same marketplace. No version mismatches.
 
 Example workflow:
-1. `/brewcode:setup` initializes a project
-2. `/brewcode:spec` + `/brewcode:plan` + `/brewcode:start` executes a feature
-3. `/brewdoc:auto-sync` updates affected documentation
+1. `/brewcode:grepai` indexes the project for semantic search
+2. `/brewcode:spec` defines the feature, then you implement it
+3. `/brewcode:superreview` reviews it, `/brewdoc:auto-sync` updates docs
 4. `/brewtools:secrets-scan` checks nothing was leaked
 
 ## Section 4: What Makes It Unique

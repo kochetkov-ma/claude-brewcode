@@ -2,70 +2,142 @@
 name: brewcode:skills
 description: "Lists, improves, creates Claude Code skills. Triggers: create skill, improve skill, fix skill activation."
 user-invocable: true
-argument-hint: "[list|up|create] [target] | <skill-path>"
-allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Task, WebSearch, WebFetch, AskUserQuestion]
+argument-hint: "<free-form prompt: what to do with skills>"
+allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Task, WebSearch, WebFetch, AskUserQuestion, Skill]
 model: opus
 ---
 
 # skills Skill
 
-> **Skill Management:** List, improve, create skills with activation optimization.
+> **Skill Management:** status, list, create, improve, review skills via one free-form prompt.
 
 <instructions>
 
-## Parse Arguments
+## Constants
 
-Extract mode and target from `$ARGUMENTS`:
+| Const | Value |
+|-------|-------|
+| ARTIFACT | `skills` |
+| SPECIALIST | `brewcode:skill-creator` |
+| LIST_CMD | `bash "${CLAUDE_SKILL_DIR}/scripts/list-skills.sh"` |
 
-| Pattern | Mode | Target |
-|---------|------|--------|
-| empty / `list` | list | none |
-| `up <name\|path\|folder>` | up | skill name, path, or folder |
-| `create <prompt\|spec-path>` | create | prompt or path to spec file |
-| `<path\|name>` (not a mode) | **up** (default) | skill name, path, or folder |
+## Step 1 — Input gate
 
-**Smart Detection:** If first argument is NOT a mode keyword (`list`, `up`, `create`), treat entire input as target for `up` mode.
+Treat the **entire** user input (`$ARGUMENTS`) as ONE free-form natural-language prompt.
+There is NO keyword grammar and NO argument parser — `argument-hint` is only a loose example.
 
-**Examples:**
-- `/brewcode:skills` or `list` → `list`
-- `/brewcode:skills up commit` → `up`, target=`commit`
-- `/brewcode:skills create "semantic code search"` → `create`, target=prompt
-- `/brewcode:skills commit` → `up`, target=`commit` **(shorthand)**
-- `/brewcode:skills ~/.claude/skills/` → `up`, target=folder **(shorthand)**
+- prompt non-empty -> go to **Step 2**
+- prompt empty / whitespace-only -> go to **Step 3**
 
----
+## Step 2 — Auto-mode selection
 
-## Mode: list
+Classify the prompt + recent conversation context into exactly ONE mode:
 
-**EXECUTE** using Bash tool:
-```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/list-skills.sh" && echo "✅ list" || echo "❌ list FAILED"
+| Mode | Chosen when prompt signals |
+|------|----------------------------|
+| `status` | "статус", "что есть", "состояние", health / overview / "show me" (DEFAULT for any "show me" intent) |
+| `list` | explicit "список" / "list" / "перечисли" ONLY |
+| `create` | "создай" / "create" / "new" / "добавь" / "scaffold" |
+| `improve` | "улучши" / "improve" / "refactor" / "fix" / "почини", OR a bare existing name/path |
+| `review` | "ревью" / "review" / "validate" / "проверь корректность" |
+
+**Batch flag:** plural form, "все" / "all", or multiple names/paths -> fan-out (one specialist spawn per item).
+
+Then **ANNOUNCE the chosen mode (MANDATORY, before any work):**
+
+```
+Mode: <mode> (skills) — chosen because <evidence quoted from the prompt>
 ```
 
-> **STOP if ❌** — verify skill base directory is resolved and scripts exist.
+Proceed to **Step 4**.
+
+## Step 3 — No-prompt menu (single AskUserQuestion, scoped + cross-link)
+
+Ask ONE AskUserQuestion. Question: `What do you want to do with skills?`
+Options (in this order):
+
+- `Status (skills)` — **(Recommended)** rich status of this artifact
+- `Status (all: agents+rules+skills)` — cross-link: run the collector for all three
+- `Create new skills`
+- `Improve existing skills`
+- `Review skills`
+- `List (plain)`
+- `Nothing / cancel`
+
+After the choice:
+- `Nothing / cancel` -> stop.
+- `create` or `improve` -> ask ONE follow-up AskUserQuestion for the target/description
+  plus the artifact-specific params (see "Artifact-specific params" below).
+- Then ANNOUNCE the mode using the Step 2 format and proceed to **Step 4**.
+
+## Step 4 — Dispatch
+
+- `status` -> go to **Step 5**.
+- `status (all)` -> go to **Step 5**, running the collector for agents + rules + skills together.
+- `list` -> run `LIST_CMD`, print the plain inventory it produces, then STOP (no status assembly).
+- `create` -> gather minimal params (Step 3 / artifact-specific), spawn `SPECIALIST` via Task.
+  Batch -> spawn one `SPECIALIST` per item, ALL in ONE message (parallel).
+- `improve` -> resolve target(s), spawn `SPECIALIST` via Task per target (parallel for batch).
+- `review` -> spawn `brewcode:reviewer` (two-phase: review -> double-check findings -> report).
+
+## Step 5 — Real status (NOT a flat list)
+
+Delegate collection to ONE Explore/Bash subagent, then assemble a rich status (never a bare list):
+
+- **Inventory by scope:** plugin (BC) / project (`.claude/`) / global (`~/.claude/`) — counts + names + load path.
+- **State:** enabled/disabled (toggle markers `_SKILL.md` / `_<name>.md`), model.
+- **Overlaps / conflicts:** same-name across scopes (shadowing), duplicate triggers/descriptions, naming collisions.
+- **Health flags:** missing README/frontmatter; agents missing `Bash` in `tools:` (macOS search rule);
+  skills with weak description triggers; rules duplicated in CLAUDE.md.
+
+For the `Status (all)` menu option: run the SAME collector for agents + rules + skills together.
+
+## Step 6 — Final formatted output (MANDATORY for every run except `list`)
+
+```
+# skills [<mode>]
+## Detection
+| Input  | <prompt or "(none -> menu)"> |
+| Mode   | <mode> |
+| Reason | <why this mode> |
+| Targets| <names/paths> |
+## Result
+(create/improve/review: each output path + specialist agent + scope/model)
+## Status
+(status mode: full table from Step 5; else short "what changed" for touched artifacts)
+## Next Steps
+(recommendations; ALWAYS remind to run /docs for any created/changed artifact)
+```
+
+For `status` mode the report **is** the Step 5 status table.
+
+## Artifact-specific params (create / improve only)
+
+Keep the existing Phase 0 (Discovery: 2-3 parallel Explore agents) and Phase 4 (Review:
+Simple = reviewer + verify + fix; Quorum = 3 reviewers threshold 2/3 + DoubleCheck + fix)
+machinery, but they are reachable ONLY through `create` / `improve` modes — never by default.
+For `create`/`improve`: AskUserQuestion for invocation type (User-only / LLM-auto / Both),
+testing depth (Quick (Recommended) / Standard / Deep), and review type (Simple / Quorum,
+only if Standard/Deep). Frontmatter description budget: <= 120 chars. Spawn SPECIALIST (brewcode:skill-creator)
+with discovery results + chosen params. Phase 6 summary == the Step 6 output block (do not
+duplicate a second summary). Reference files: ${CLAUDE_SKILL_DIR}/references/review-prompt.md,
+e2e-template.md, summary-template.md.
 
 ---
 
-## Mode: create / up (Unified Flow)
+## create / improve machinery (detail — reachable ONLY via Step 4 create/improve)
 
-Both `create` and `up` follow Phases 0-6. Differences noted per phase.
+> Default mode is `status`. The phases below run ONLY after Step 4 dispatches `create` or `improve`.
 
-### Description Budget (DEFAULT)
+### Description Budget
 
 Frontmatter `description`: <= 120 chars (optimal ~100), single line. What + when + 3-5 distinct triggers (comma-list). No filler, no `<example>` blocks. Some registries truncate long descriptions and dilute trigger matching. EN only unless user explicitly asks.
 
-### Prerequisite (up only): Resolve Target
+### Prerequisite (improve only): Resolve Target
 
 **EXECUTE** using Bash tool:
 ```bash
-TARGET="$ARGUMENTS"
-if [[ "$TARGET" == up\ * ]] || [[ "$TARGET" == "up" ]]; then
-  TARGET="${TARGET#up }"; TARGET="${TARGET#up}"
-fi
-TARGET="$(echo "$TARGET" | xargs)"
-if [[ -z "$TARGET" ]]; then
-  echo "❌ No target. Usage: /brewcode:skills up <name|path|folder>"; exit 1
-fi
+TARGET="TARGET_HERE"
 if [[ -d "$TARGET" ]]; then
   echo "TYPE: folder"; echo "PATH: $TARGET"
   find "$TARGET" -name "SKILL.md" -type f 2>/dev/null | head -20
@@ -80,6 +152,7 @@ else
   done
 fi
 ```
+Replace `TARGET_HERE` with the resolved target name/path from Step 4.
 
 > **STOP if ❌** — target must resolve to at least one SKILL.md.
 
@@ -87,86 +160,61 @@ fi
 
 Spawn 2-3 Explore agents in parallel (single message).
 
-**create mode** — spawn in ONE message:
+**create** — spawn in ONE message:
 1. `Explore`: Research skill patterns in `$BC_PLUGIN_ROOT/skills/` and `~/.claude/skills/` — structure, naming, frontmatter, references, scripts.
 2. `Explore`: Analyze target project structure for `{TOPIC}` — code, APIs, configs, tooling.
 3. (Optional) `general-purpose`: Web research for `{TOPIC}` — best practices, similar tools. Use WebSearch/WebFetch.
 
-**up mode** — spawn in ONE message:
+**improve** — spawn in ONE message:
 1. `Explore`: Analyze skill at `{SKILL_PATH}` — SKILL.md, references/, scripts/, tests/, README.md. Report quality and gaps.
 2. `Explore`: Compare `{SKILL_PATH}` against patterns in `$BC_PLUGIN_ROOT/skills/`. Output improvement recommendations.
 
 ### Phase 1: User Interaction
 
-**Step 1: Check Conversation History** (create only)
-Check if current conversation already contains workflow to capture. If yes: extract tools, steps, corrections, I/O formats for Phase 2.
+**Check Conversation History** (create only): if the current conversation already contains a workflow to capture, extract tools, steps, corrections, I/O formats for Phase 2.
 
-**Step 2: Determine Input Type** (create only)
+**Determine Input Type** (create only): path to `.md` file -> read as spec; text prompt -> use as research query.
 
-| Input | Action |
-|-------|--------|
-| Path to `.md` file | Read as spec |
-| Text prompt | Use as research query |
-
-**Step 3: Invocation Type** (AskUserQuestion)
+**Invocation Type** (AskUserQuestion):
 
 ```
 header: "Invocation"
 question: "Who will invoke this skill?"
 options:
-  - label: "User only (slash command)"
-    description: "disable-model-invocation: true, simple description"
-  - label: "LLM auto-detect"
-    description: "Full trigger keyword optimization"
-  - label: "Both (default)"
-    description: "User slash command + LLM auto-detection"
+  - label: "User only (slash command)"   — disable-model-invocation: true, simple description
+  - label: "LLM auto-detect"             — full trigger keyword optimization
+  - label: "Both (default)"              — user slash command + LLM auto-detection
 ```
 
 Save as `INVOCATION_TYPE`.
 
-**Step 4: Mode Switcher Detection** (create only)
 
-**Keywords:** "mode", "toggle", "switch", "persistent", "from now on", "always do", "session behavior"
-
-If detected — AskUserQuestion: "Create as Mode Switcher skill?" (Yes/No).
-If Yes: set `IS_MODE_SWITCHER=true`, then ask scope (Project/Global/Session) via AskUserQuestion, save as `MODE_SCOPE`.
-
-Validate BC_PLUGIN_DATA:
-**EXECUTE** using Bash tool:
-```bash
-if [ -n "$BC_PLUGIN_DATA" ]; then echo "✅ BC_PLUGIN_DATA=$BC_PLUGIN_DATA"; else echo "❌ BC_PLUGIN_DATA not set"; fi
-```
-
-> **STOP if ❌** — BC_PLUGIN_DATA required for Mode Switcher.
-
-**Step 5: Testing Depth** (AskUserQuestion)
+**Testing Depth** (AskUserQuestion):
 
 ```
 header: "Testing Depth"
 question: "How thoroughly should the skill be tested?"
 options:
-  - label: "Quick (default)" — validate-skill.sh + 3-5 test prompts
-  - label: "Standard" — + unit tests + simple review (1 reviewer + verification)
-  - label: "Deep" — + quorum review (3 reviewers, threshold 2) + E2E tests
+  - label: "Quick (Recommended)" — validate-skill.sh + 3-5 test prompts
+  - label: "Standard"            — + unit tests + simple review (1 reviewer + verification)
+  - label: "Deep"               — + quorum review (3 reviewers, threshold 2) + E2E tests
 ```
 
 Save as `TESTING_DEPTH`.
 
-**Step 6: Review Type** (AskUserQuestion, only if Standard or Deep)
+**Review Type** (AskUserQuestion, only if Standard or Deep):
 
 ```
 header: "Review Type"
 question: "What review approach?"
 options:
   - label: "Simple (default for Standard)" — 1 reviewer + 1 verification agent
-  - label: "Quorum (default for Deep)" — 3 reviewers parallel, threshold 2/3, DoubleCheck
+  - label: "Quorum (default for Deep)"     — 3 reviewers parallel, threshold 2/3, DoubleCheck
 ```
 
 Save as `REVIEW_TYPE`.
 
-**Step 7: Plan Confirmation** (AskUserQuestion)
-
-Output plan summary: Action (Create/Improve), skill path/name, files to create/modify, references used, testing approach, review type.
+**Plan Confirmation** (AskUserQuestion). Output plan summary: action (create/improve), skill path/name, files to create/modify, references used, testing approach, review type.
 
 ```
 header: "Plan Confirmation"
@@ -192,16 +240,8 @@ Task(subagent_type="brewcode:skill-creator", model="opus", prompt="
   - Invocation type pre-filled: {INVOCATION_TYPE} — skip asking
 ")
 
-**Mode Switcher additions** (if `IS_MODE_SWITCHER=true`) — append:
-- Single skill with argument parsing: on [mode-name], off, status
-- State in `$BC_PLUGIN_DATA/modes.json` — structure: `.global`, `.projects["$PWD"]`, `.sessions["$SESSION_ID"]`
-- Scope: `{MODE_SCOPE}`, resolution priority: session > project > global
-- `disable-model-invocation: true`, mode instructions in `references/`
-- Bash MUST validate: `if [ -z "$BC_PLUGIN_DATA" ]; then echo "❌"; exit 1; fi`
 
-After creation (if Mode Switcher): AskUserQuestion — create mode file in `brewcode/modes/`? If yes: spawn `brewcode:hook-creator`.
-
-**Folder target (multiple skills):** spawn parallel agents in ONE message, one per SKILL.md found.
+**Folder target (batch):** spawn parallel agents in ONE message, one per SKILL.md found.
 
 ### Phase 3: Validate (automatic)
 
@@ -209,18 +249,14 @@ Skill-creator Steps 5-5.8 run automatically (validate, unit tests, README). No o
 
 ### Phase 4: Review
 
-**Skip if `TESTING_DEPTH` is Quick.**
-
-Read review prompt: `${CLAUDE_SKILL_DIR}/references/review-prompt.md`
+**Skip if `TESTING_DEPTH` is Quick.** Read review prompt: `${CLAUDE_SKILL_DIR}/references/review-prompt.md`
 
 **Simple Review (`REVIEW_TYPE` = Simple):**
-
 1. Task(subagent_type="brewcode:reviewer", model="opus", prompt="Review skill quality at: {SKILL_PATH}\n\n{REVIEW_PROMPT_CONTENT}")
 2. If findings: Task(subagent_type="brewcode:reviewer", model="sonnet", prompt="Verify these review findings against actual code...\n\n{REVIEWER_FINDINGS}")
 3. Confirmed findings: Task(subagent_type="brewcode:skill-creator", model="opus", prompt="Fix verified issues in skill at: {SKILL_PATH}\n\n{CONFIRMED_FINDINGS}")
 
 **Quorum Review (`REVIEW_TYPE` = Quorum):**
-
 1. Three in parallel (ONE message):
    Task(subagent_type="brewcode:reviewer", model="opus", prompt="Review skill quality at: {SKILL_PATH}\n\n{REVIEW_PROMPT_CONTENT}")
    Task(subagent_type="brewcode:reviewer", model="opus", prompt="Review skill quality at: {SKILL_PATH}\n\n{REVIEW_PROMPT_CONTENT}")
@@ -229,64 +265,27 @@ Read review prompt: `${CLAUDE_SKILL_DIR}/references/review-prompt.md`
 3. Task(subagent_type="brewcode:reviewer", model="opus", prompt="DoubleCheck: verify quorum findings against code.\n\n{QUORUM_FINDINGS}")
 4. Confirmed: Task(subagent_type="brewcode:skill-creator", model="opus", prompt="Fix verified issues...\n\n{CONFIRMED_FINDINGS}")
 
-> **Collect findings:** After Phase 4 completes, compile all confirmed findings (source, severity, issue, fix applied, verified status) into a structured list. Pass to Phase 6 for summary.
+> **Collect findings:** compile all confirmed findings (source, severity, issue, fix applied, verified status) into a structured list for the Step 6 output block.
 
 ### Phase 5: E2E Testing (Optional)
 
 **Only if `TESTING_DEPTH` is Deep.** Otherwise skip.
-
 1. Read: `${CLAUDE_SKILL_DIR}/references/e2e-template.md`
 2. Create test scenarios in `{SKILL_DIR}/tests/` — 1 per mode (happy path) + 1 edge case per mode.
-3. Execute each scenario:
-
-**EXECUTE** using Bash tool:
+3. Execute each scenario — **EXECUTE** using Bash tool:
 ```bash
 TMPDIR=$(mktemp -d)
 mkdir -p "$TMPDIR/.claude/skills"
-cp -r "{SKILL_DIR}" "$TMPDIR/.claude/skills/"
-cd "$TMPDIR" && timeout 120 claude -p "{PROMPT}" 2>&1 | tee "$TMPDIR/output.log"
-{ASSERTION_COMMANDS}
+cp -r "SKILL_DIR_HERE" "$TMPDIR/.claude/skills/"
+cd "$TMPDIR" && timeout 120 claude -p "PROMPT_HERE" 2>&1 | tee "$TMPDIR/output.log"
 rm -rf "$TMPDIR"
 ```
+Replace `SKILL_DIR_HERE` / `PROMPT_HERE` with the skill dir and scenario prompt; append assertion commands before cleanup.
 
-4. Iteration: scenario failure = fix (max 2 retries). Small skill issues = fix + re-run. Major issues = back to Phase 2.
+4. Iteration: scenario failure = fix (max 2 retries). Small issues = fix + re-run. Major issues = back to Phase 2.
 
-### Phase 6: Summary
+### Final output for create/improve
 
-Read: `${CLAUDE_SKILL_DIR}/references/summary-template.md`
-
-Fill: action, path, invocation type, testing depth, review type, completed phases checklist, problems found/fixed (Phase 4), test results (Phase 3 + 5), suggestions, skipped phases with reasons.
-
-Output filled summary to user.
+Use the **Step 6 output block** as the single summary (do NOT emit a second report). Reference `${CLAUDE_SKILL_DIR}/references/summary-template.md` to populate the `## Result` / `## Status` detail (action, path, invocation, testing depth, review type, problems found/fixed, test results, suggestions).
 
 </instructions>
-
----
-
-## Output Format
-
-> For `list` mode only. For `create`/`up` modes, Phase 6 summary replaces this section.
-
-```markdown
-# skills [list]
-
-## Detection
-
-| Field | Value |
-|-------|-------|
-| Arguments | `$ARGUMENTS` |
-| Mode | `list` |
-| Target | `none` |
-
-## Skills Summary
-
-| Location | Count | Skills |
-|----------|-------|--------|
-| Global (~/.claude/skills/) | N | skill1, skill2 |
-| Project (.claude/skills/) | N | skill3 |
-| Plugins | N | plugin:skill1 |
-
-## Next Steps
-
-- [recommendations based on results]
-```

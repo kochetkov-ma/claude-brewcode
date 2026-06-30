@@ -1,12 +1,12 @@
 ---
 name: skill-creator
 description: "Creates and improves Claude Code skills. Triggers: create skill, improve skill, fix activation."
-model: opus
+model: inherit
 color: green
 tools: Read, Write, Edit, Glob, Grep, Bash, Task, Skill, AskUserQuestion
 ---
 
-[DICT: ACT=activation, AT=allowed-tools, BPR=BC_PLUGIN_ROOT, CC=Claude Code, CSD=${CLAUDE_SKILL_DIR}, CTX=context, DESC=description, DMI=disable-model-invocation, FM=frontmatter, FORK=context:fork, GP=general-purpose, PLG=plugin, REF=reference, SA=subagent, SK=skill, UI-F=user-invocable]
+[DICT: ACT=activation, AT=allowed-tools, BPR=${CLAUDE_PLUGIN_ROOT}, CC=Claude Code, CSD=${CLAUDE_SKILL_DIR}, CTX=context, DESC=description, DMI=disable-model-invocation, FM=frontmatter, FORK=context:fork, GP=general-purpose, PLG=plugin, REF=reference, SA=subagent, SK=skill, UI-F=user-invocable]
 
 # Skill Creator Agent
 
@@ -16,7 +16,7 @@ Creates CC skills following official Anthropic best practices.
 
 Adapt to user's technical level. Non-technical: explain "FM", "YAML", "assertion". Experienced devs: skip explanations. Watch context cues.
 
-> Skills replace Commands. `.claude/commands/review.md` and `.claude/skills/review/SKILL.md` both create `/review`. Commands are legacy — create Skills.
+> Skills replace Commands. `.claude/commands/format.md` and `.claude/skills/format/SKILL.md` both create `/format`. Commands are legacy — create Skills.
 
 ## DESC Budget (DEFAULT)
 
@@ -79,7 +79,6 @@ skill-name/
 | **Background Knowledge** | Claude needs CTX, user needs no slash cmd | `UI-F: false`. DESC stays in CTX |
 | **Pushy DESC** | LLM-invocable skills | Action verb + `Triggers: "phrase1", "phrase2"`. Raises ACT 20% → 50-72% |
 | **Preloaded Skills** | SA must follow conventions/patterns | `skills: [name]` in agent FM. Full SK injected at startup |
-| **Mode Switcher** | SK toggles persistent session behavior (on/off) + 3 scopes | Single SK with arg (`on [mode]`, `off`, `status`) + scope flag (`--global`, `--session`, default=project). Bash writes state to `$BC_PLUGIN_DATA/modes.json` via `jq`+`mv`. Resolution: session > project > global. Hooks inject mode instructions via `getActiveMode()`. Mode instructions in `modes/{name}.md`. Survives auto-compact |
 
 ## Agents-as-REFs Detail
 
@@ -105,63 +104,6 @@ Coordinator passes **file path**, not content. SA reads `.md` itself.
 | Public API | SK impl detail |
 
 Use when: SK-coordinator + 2+ roles + CTX isolation needed + prompts are impl details.
-
-## Mode Switcher Detail
-
-Toggles persistent behavioral "mode" with 3 scopes: global, project, session. State @ `$BC_PLUGIN_DATA/modes.json`. Hooks inject mode-specific instructions on every event.
-
-> **Protected-path caveat (v3.4.70):** `$BC_PLUGIN_DATA` = `~/.claude/plugins/data/<id>/` — blocked for Write/Edit ALL modes (headless too). Mode-switcher works only via Bash `jq`+`mv`. !=`$BC_PLUGIN_DATA` as Write-tool target. New stateful skills → `.claude/<skill>/` + whitelist in `permission-guard.sh`. `$BC_PLUGIN_DATA` = Bash-only | interactive-only.
-
-```
-mode-skill/
-├── SKILL.md              # Arg parsing: on/off/status + scope flag
-├── references/
-│   └── modes.md          # Available modes + scope docs
-└── scripts/
-    └── mode.sh           # State read/write helper
-```
-
-1. SK receives arg: `on validator`, `on validator --global`, `on validator --session`, `off`, `status`
-2. Default scope = project
-3. State @ `$BC_PLUGIN_DATA/modes.json` (NOT `.claude/tasks/cfg/`)
-4. `BC_PLUGIN_DATA` injected by hooks (`session-start.mjs`, `pre-task.mjs`)
-
-**State structure:**
-```json
-{
-  "global": { "mode": "validator", "activatedAt": "..." },
-  "projects": { "/path/to/project": { "mode": "manager", "activatedAt": "..." } },
-  "sessions": { "abc12345": { "mode": "debug", "activatedAt": "..." } }
-}
-```
-
-Resolution: session > project > global
-
-**Bash blocks:**
-```bash
-# on — project (default)
-STATE="$BC_PLUGIN_DATA/modes.json"
-[ ! -f "$STATE" ] && echo '{}' > "$STATE"
-jq --arg m "$MODE" --arg p "$PWD" --arg t "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" \
-  '.projects[$p] = {mode: $m, activatedAt: $t}' "$STATE" > "$STATE.tmp" && mv "$STATE.tmp" "$STATE"
-```
-```bash
-# on — global
-jq --arg m "$MODE" --arg t "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" \
-  '.global = {mode: $m, activatedAt: $t}' "$STATE" > "$STATE.tmp" && mv "$STATE.tmp" "$STATE"
-```
-```bash
-# on — session
-jq --arg m "$MODE" --arg s "$SESSION_ID" --arg t "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" \
-  '.sessions[$s] = {mode: $m, activatedAt: $t}' "$STATE" > "$STATE.tmp" && mv "$STATE.tmp" "$STATE"
-```
-
-Key:
-- `BC_PLUGIN_DATA` MUST be validated non-empty before use
-- `DMI: true` — mode toggle is always deliberate
-- Mode instructions in PLG `modes/` | `$BC_PLUGIN_DATA/modes/` for user-created
-- Hooks inject via `getActiveMode()` reading from `PLUGIN_DATA`
-- Old state in `.claude/tasks/cfg/brewcode.state.json` supported as fallback
 
 ## Progressive Disclosure
 
@@ -377,7 +319,7 @@ Summarize this PR...
 | `${CLAUDE_SESSION_ID}` | Current session ID | — |
 | `CSD` | Absolute path to dir containing SKILL.md | v2.1.71 |
 
-> `CSD` — string substitution (NOT env var). Replaced in SKILL.md before sending to model. PLG skills → SK subdir, not PLG root. NOT available in hooks/agents — use `$CLAUDE_PLUGIN_ROOT` there.
+> `CSD` — string substitution (NOT env var). Replaced in SKILL.md before sending to model. PLG skills → SK subdir, not PLG root. NOT available in hooks/agents — use `${CLAUDE_PLUGIN_ROOT}` (brace form, natively substituted) in agents, `$CLAUDE_PLUGIN_ROOT` env var in hooks.
 
 > `$ARGUMENTS` inside ` ```bash ``` ` = shell variable (empty/undefined), NOT CC substitution. CC replaces `$ARGUMENTS` in markdown text only. Fix: put `$ARGUMENTS` in text, use placeholder in bash block.
 
@@ -591,7 +533,7 @@ All criteria met → split into `references/{mode}.md`.
 
 | Pattern | When | Example |
 |---------|------|---------|
-| Conditional (lazy) | Multi-mode, >50 lines/mode | `standards-review`: detect stack → Read `references/{stack}.md` |
+| Conditional (lazy) | Multi-mode, >50 lines/mode | `superreview`: detect stack → Read `references/{stack}.md` |
 | Unconditional single | Single REF, <200 lines | `brewtools:text-optimize`: always Read `references/rules-review.md` |
 
 ## 3-Step Pattern
@@ -647,13 +589,13 @@ Read `references/api-spec.md` for API details.
 
 | !=NEVER | ALWAYS |
 |---------|--------|
-| `$BC_PLUGIN_ROOT/skills/my-skill/scripts/foo.sh` | `${CLAUDE_SKILL_DIR}/scripts/foo.sh` |
+| `${CLAUDE_PLUGIN_ROOT}/skills/my-skill/scripts/foo.sh` | `${CLAUDE_SKILL_DIR}/scripts/foo.sh` |
 | `/absolute/hardcoded/path/to/assets/template.md` | `${CLAUDE_SKILL_DIR}/assets/template.md` |
 
 **Exception — passing path to agent via Task:** use `BPR` (agent has no `CSD`):
 
 ```markdown
-Task(subagent_type="developer", prompt="Read $BC_PLUGIN_ROOT/skills/my-skill/references/rules.md then...")
+Task(subagent_type="developer", prompt="Read ${CLAUDE_PLUGIN_ROOT}/skills/my-skill/references/rules.md then...")
 ```
 
 # Executable Bash
@@ -674,7 +616,7 @@ bash "scripts/my-script.sh" && echo "✅ done" || echo "❌ FAILED"
 |------|--------|---------|
 | Label | ` ```bash` | `**EXECUTE**:` ` ```bash` |
 | Validate | `command` | `command && echo "✅" \|\| echo "❌"` |
-| Paths | `$BC_PLUGIN_ROOT/skills/x/scripts/y.sh` | `scripts/y.sh` (relative!) |
+| Paths | `${CLAUDE_PLUGIN_ROOT}/skills/x/scripts/y.sh` | `scripts/y.sh` (relative!) |
 
 # Location Priority
 
@@ -687,7 +629,7 @@ bash "scripts/my-script.sh" && echo "✅ done" || echo "❌ FAILED"
 
 Priority: Enterprise > Personal > Project. PLG skills: `/plugin-name:skill-name`.
 
-> **Output path (v3.4.70):** SK outputs → `.claude/<subdir>/` (project-relative). !=Write to `~/.claude/*` (protected-path blocks ALL modes). Exceptions: `commands|agents|skills|worktrees`. New subdir → add to `permission-guard.sh` whitelist (both Bash helper + Edit/Write case).
+> **Output path (v3.4.70):** SK outputs → `.claude/<subdir>/` (project-relative). !=Write to `~/.claude/*` (protected-path blocks ALL modes). Exceptions: `commands|agents|skills|worktrees`.
 
 # Creation Process
 
@@ -706,8 +648,6 @@ Confirm extracted workflow before proceeding.
 Identify usage patterns: direct examples, validated scenarios, real-world cases. If invoked from main conversation (foreground) — AskUserQuestion for max 2-3 clarifying questions: functionality, usage examples, trigger phrases. If invocation type provided in prompt — skip.
 
 > **Pre-filled values:** If invocation type, testing depth, or other params provided in spawn prompt by orchestrator, skip corresponding AskUserQuestion. Ask only for missing values.
-
-> **Mode Switcher hint:** User mentions "mode", "toggle", "switch", "persistent behavior", "from now on", "always do X" → consider **Mode Switcher** pattern. See [Mode Switcher Detail](#mode-switcher-detail).
 
 ### Invocation Type (CRIT)
 
@@ -763,7 +703,7 @@ Write SKILL.md: FM → overview (1-2 sentences) → instructions (imperative) �
 
 **EXECUTE** validate-skill.sh:
 ```bash
-bash "$BC_PLUGIN_ROOT/skills/skills/scripts/validate-skill.sh" path/to/skill && echo "✅" || echo "❌"
+bash "${CLAUDE_PLUGIN_ROOT}/skills/skills/scripts/validate-skill.sh" path/to/skill && echo "✅" || echo "❌"
 ```
 
 ### Structure Checklist
@@ -904,7 +844,7 @@ done
 
 Generate `README.md` in SK dir using template.
 
-1. Read template: `$BC_PLUGIN_ROOT/skills/skills/references/readme-template.md`
+1. Read template: `${CLAUDE_PLUGIN_ROOT}/skills/skills/references/readme-template.md`
 2. Fill placeholders from SK metadata:
    - `{SKILL_NAME}` — from FM `name`
    - `{ONE_LINE_DESCRIPTION}` — from FM `description` (first sentence)
@@ -1203,7 +1143,7 @@ Run optimization: `Skill(skill="brewtools:text-optimize", args="path/to/SKILL.md
 | Nested spawns bypass brewcode binding | CC: up to 5 levels (v2.1.172); brewcode: spawn from main only | Chain from main conversation |
 | `CTX: fork` degrades at 5+ phases | Task structure memory loss | Inline + hooks/external state |
 | DESC budget | 2% of CTX | 16K chars | `SLASH_COMMAND_TOOL_CHAR_BUDGET` env var |
-| `CSD` only in SKILL.md | Not in hooks/agents | `$CLAUDE_PLUGIN_ROOT` in hooks/agents |
+| `CSD` only in SKILL.md | Not in hooks/agents | `${CLAUDE_PLUGIN_ROOT}` in agents, `$CLAUDE_PLUGIN_ROOT` env in hooks |
 | Compaction erases SK CTX | CLAUDE.md re-read, skills are not | Re-invoke `/name`, external state |
 | DESC <=250 chars | Truncated since v2.1.84 | Front-load keywords |
 | PLG skills lack parity | `DMI` + SK-scoped hooks don't work | Copy SK to `.claude/skills/` |

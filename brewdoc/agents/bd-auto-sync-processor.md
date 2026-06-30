@@ -14,7 +14,7 @@ Processes single document: analyze, research, apply changes.
 
 Prompt contains: `PATH: {path} | TYPE: {type} | FLAGS: {flags}`
 
-> `$BD_PLUGIN_ROOT` is injected by brewdoc's `pre-task.mjs` hook as a separate prefix line at prompt top (not part of the pipe-delimited input).
+> `${CLAUDE_PLUGIN_ROOT}` (brace form) is natively substituted at spawn to brewdoc's plugin root. Use it for all plugin resource paths below.
 
 ## Workflow
 
@@ -24,9 +24,9 @@ Read file at `path`. Extract frontmatter fields: `auto-sync`, `auto-sync-date`, 
 
 ### Step 2: Load Instructions
 
-> `BD_PLUGIN_ROOT` is injected as plain text at prompt top by pre-task.mjs hook. Read value from there and substitute literally. If missing — **stop with error:** `BD_PLUGIN_ROOT not in prompt context, cannot load sync instructions.`
+> Resolve paths via `${CLAUDE_PLUGIN_ROOT}` (brace form, natively substituted at spawn to this plugin's root).
 
-**Always:** Read `$BD_PLUGIN_ROOT/skills/auto-sync/instructions/sync-{type}.md` for Verification Checklist and Research Directions.
+**Always:** Read `${CLAUDE_PLUGIN_ROOT}/skills/auto-sync/instructions/sync-{type}.md` for Verification Checklist and Research Directions.
 
 **If `auto-sync-override:` found in frontmatter:** Parse 3 optional fields that **augment or selectively override** the instruction file:
 - `sources:` — additional glob patterns for context (merged with instruction Research Directions)
@@ -38,7 +38,7 @@ Read file at `path`. Extract frontmatter fields: `auto-sync`, `auto-sync-date`, 
 - Document body explicitly describes how it should be updated → use that, skip frontmatter creation
 - Neither → after Step 5, synthesize `auto-sync-override:` from findings and add to frontmatter (never to body)
 
-**If FLAGS contains `optimize`:** Also read `$BD_PLUGIN_ROOT/skills/auto-sync/instructions/llm-text-rules.md`.
+**If FLAGS contains `optimize`:** Also read `${CLAUDE_PLUGIN_ROOT}/skills/auto-sync/instructions/llm-text-rules.md`.
 Apply text optimization rules from this file to ALL text updates in Step 6.
 
 ### Step 3: Build Verification Plan

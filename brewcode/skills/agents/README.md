@@ -6,97 +6,87 @@ auto-sync-type: doc
 
 # Agents
 
-Interactive agent creation and improvement orchestrator. Create new Claude Code agents or improve existing ones through a guided, multi-step workflow powered by the `agent-creator` subagent.
+Manages Claude Code subagents across all scopes — create new agents, improve existing ones, audit quality, or inspect what is installed. Input is ONE free-form natural-language prompt; there are no keyword subcommands.
 
 ## Quick Start
 
 ```
-/brewcode:agents create backend validator
-/brewcode:agents up reviewer
+/brewcode:agents
 ```
+
+No arguments: presents the interactive menu with Status (agents) pre-selected as the recommended action.
+
+Pass a free-form prompt to skip the menu entirely:
+
+```
+/brewcode:agents create a backend validator agent for Java Spring projects
+```
+
+## How It Works — Unified 6-Step Flow
+
+Every invocation goes through the same flow:
+
+1. **Input gate** — reads `$ARGUMENTS`; if empty, goes to the interactive menu.
+2. **Auto-mode select** — infers mode from the prompt and announces:
+   `Mode: <mode> (agents) — chosen because <evidence>`
+3. **No-prompt menu** — when no arguments given, shows a single `AskUserQuestion`:
+   - Status (agents) [recommended]
+   - Status (all: agents + rules + skills)
+   - Create
+   - Improve
+   - Review
+   - List (plain)
+   - Cancel
+4. **Dispatch** — routes to `brewcode:agent-creator` subagent (create / improve / review / batch) or runs Glob `*.md` over agent scopes directly (list mode).
+5. **Real status** — rich inventory by scope showing agent names, models, trigger coverage, and last-modified — not a flat file listing.
+6. **Mandatory final output** — structured summary of what was created, modified, or reviewed. Omitted only for `list` mode.
 
 ## Modes
 
-| Mode | How to trigger | What it does |
-|------|---------------|--------------|
-| help | `/brewcode:agents` (no args) | Print usage summary and stop |
-| create | `/brewcode:agents create <description>` | Interactive wizard: scope, model, CLAUDE.md update, then spawns agent-creator |
-| up | `/brewcode:agents up <name\|path>` | Resolve agent file, ask improvement focus, spawn agent-creator to enhance it |
-| shorthand | `/brewcode:agents <name\|path>` | Same as `up` -- any non-keyword argument triggers improve mode |
+| Mode | How it activates | What it does |
+|------|-----------------|--------------|
+| `status` | Default when no other mode is detected | Shows agents per scope, model breakdown, trigger coverage |
+| `list` | Explicit only — "list", "show agents", "what agents" | Globs `*.md` over all agent scopes, plain file listing |
+| `create` | "create", "add", "new agent" in prompt | agent-creator builds frontmatter + system prompt from description |
+| `improve` | "improve", "update", "refine", or agent name/path in prompt | agent-creator enhances an existing agent file per chosen focus |
+| `review` | "review", "check", "audit" in prompt | agent-creator audits agent files for quality and coverage gaps |
+| `batch` | "all", "multiple", "both" or plural scope detected | agent-creator fans out across all matching agents in one pass |
+
+## Parameters for Create / Improve
+
+| Parameter | Options | Notes |
+|-----------|---------|-------|
+| Scope | Project (`.claude/agents/`), Global (`~/.claude/agents/`), Plugin (`brewcode/agents/`) | Asked via single AskUserQuestion |
+| Model | `sonnet` (recommended), `opus` / `fable`, `haiku`, `inherit` | `inherit` omits the `model:` field entirely |
+| CLAUDE.md update | Yes / No | Adds or updates the agents table row in CLAUDE.md |
+| Improve focus | `triggers`, `system-prompt`, `both`, `full review` | Improve mode only |
+| Description budget | <=100 characters | Create mode — used as the agent's frontmatter `description` seed |
 
 ## Examples
 
-### Good Usage
+```bash
+# Open the interactive menu
+/brewcode:agents
 
-```
+# Check the current state of all installed agents
+/brewcode:agents what agents do we have
+
 # Create a new agent with a plain-English description
-/brewcode:agents create database migration checker
+/brewcode:agents create a SQL migration reviewer for PostgreSQL
 
-# Improve an existing agent by name (searches known locations)
-/brewcode:agents up reviewer
+# Improve an existing agent by describing what to fix
+/brewcode:agents improve the reviewer agent's trigger keywords
 
-# Improve by explicit path (shorthand -- no "up" keyword needed)
-/brewcode:agents .claude/agents/reviewer.md
+# Audit all agents for quality issues
+/brewcode:agents review all project agents
 
-# Improve a global agent
-/brewcode:agents up ~/.claude/agents/my-helper.md
+# Plain listing of agent files across all scopes
+/brewcode:agents list
 ```
 
-### Common Mistakes
+## Output — Agent Scopes
 
-```
-# Missing description after "create" -- nothing to create
-/brewcode:agents create
-
-# Trying to improve an agent that does not exist -- will fail with NOT_FOUND
-/brewcode:agents up nonexistent-agent
-
-# Passing multiple keywords -- only the first keyword is recognized
-/brewcode:agents create up reviewer
-```
-
-## Workflow
-
-### Create Mode
-
-1. **Questions (single prompt)** -- scope (project / global / plugin), model (sonnet / opus / haiku / inherit), CLAUDE.md update preference.
-2. **agent-creator** -- subagent analyzes codebase in parallel, asks clarifying questions about role and tools, writes frontmatter + system prompt, validates against checklist.
-3. **brewtools:text-optimize** -- automatic token optimization pass on the generated agent file (requires brewtools plugin).
-4. **CLAUDE.md update** -- if approved, adds or creates an agents table row.
-
-### Improve (up) Mode
-
-1. **Resolve** -- locates the agent file by name or path across `.claude/agents/`, `~/.claude/agents/`, and `brewcode/agents/`.
-2. **Questions (single prompt)** -- improvement focus (triggers, system prompt, both, or full review) and CLAUDE.md update preference.
-3. **agent-creator** -- subagent analyzes current strengths and weaknesses, enhances the file per the chosen focus.
-4. **brewtools:text-optimize** -- automatic token optimization pass (requires brewtools plugin).
-5. **CLAUDE.md update** -- if approved, updates the existing row or adds a new one.
-
-## Output
-
-The skill produces a structured report:
-
-```
-# agents [create|up]
-
-## Detection
-| Field | Value |
-| Arguments | ... |
-| Mode | create / up / help |
-| Target | description or resolved path |
-
-## Result
-| Field | Value |
-| Agent | /path/to/agent.md |
-| Model | sonnet / opus / haiku / inherit |
-| Scope | project / global / plugin |
-| CLAUDE.md | updated / skipped |
-
-## Next Steps
-- [recommendations]
-```
-
-Agent files are written to the directory matching the chosen scope:
+Agent files are located in or written to the directory matching the chosen scope:
 
 | Scope | Directory |
 |-------|-----------|
@@ -104,12 +94,15 @@ Agent files are written to the directory matching the chosen scope:
 | Global | `~/.claude/agents/` |
 | Plugin | `brewcode/agents/` |
 
+Status and list modes report agents from all three scopes simultaneously. Create and improve modes write to whichever scope the user selects during the guided prompt.
+
 ## Tips
 
-- Use **shorthand** (`/brewcode:agents reviewer`) for the fastest path to improving an existing agent -- no `up` keyword needed.
+- Run `/brewcode:agents` with no arguments to get the menu — the guided flow is faster than remembering free-form phrases.
 - The **"inherit" model** option omits the `model:` field entirely, so the agent uses whatever model the calling session runs on.
-- After creation, review the generated triggers in the agent's `description` frontmatter -- good triggers are the main driver of automatic agent selection.
-- Run `/brewcode:agents up` periodically on high-use agents to incorporate new project context and best practices.
+- After creation, verify the generated triggers in the agent's `description` frontmatter — trigger quality is the primary driver of automatic agent selection.
+- Use `improve` with focus `triggers` periodically on high-use agents to incorporate new project vocabulary and updated invocation patterns.
+- `list` is the fastest way to count agents and spot scope imbalance before a review session.
 
 ## Documentation
 

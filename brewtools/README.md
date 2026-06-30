@@ -1,11 +1,11 @@
 # Brewtools
 
-> Universal text utilities plugin for Claude Code -- token optimization, AI artifact removal, secrets scanning, SSH management, GitHub Actions deployment, evidence-based debate, and plugin updates.
+> Universal text utilities plugin for Claude Code -- token optimization, AI artifact removal, secrets scanning, SSH management, GitHub Actions deployment, and plugin updates.
 
 | Field | Value |
 |-------|-------|
 | Version | 3.18.0 |
-| Skills | 13 |
+| Skills | 10 |
 | Agents | 3 |
 
 ## Install
@@ -41,7 +41,7 @@ Update anytime with `/brewtools:plugin-update`.
 
 ## Overview
 
-Brewtools provides standalone utilities: token-efficient optimization with 30+ validated rules, universal AI-artifact removal with greedy flow detection across code/docs/articles/reddit/chat (five domain flows, two-pass strip+inject model), security scanning for leaked credentials, SSH server management, GitHub Actions deployment with safety gates, evidence-based multi-agent debate, and plugin check/install/update. Each skill is self-contained and requires no prior setup.
+Brewtools provides standalone utilities: token-efficient optimization with 30+ validated rules, universal AI-artifact removal with greedy flow detection across code/docs/articles/reddit/chat (five domain flows, two-pass strip+inject model), security scanning for leaked credentials, SSH server management, GitHub Actions deployment with safety gates, and plugin check/install/update. Each skill is self-contained and requires no prior setup.
 
 ## Installation
 
@@ -83,13 +83,10 @@ claude --plugin-dir ./brewtools
 | [`/brewtools:secrets-scan`](skills/secrets-scan/README.md) | Scan for leaked secrets and credentials | sonnet | `[--fix]` |
 | [`/brewtools:ssh`](skills/ssh/SKILL.md) | SSH server management and configuration | opus | `[connect\|deploy\|configure\|...]` |
 | [`/brewtools:deploy`](skills/deploy/SKILL.md) | GitHub Actions deployment with safety gates | opus | `[release\|workflow\|...]` |
-| [`/brewtools:debate`](skills/debate/README.md) | Evidence-based multi-agent debate | sonnet | `[challenge\|strategy\|critic]` |
-| [`/brewtools:manager`](skills/manager/README.md) | SOFT: codewords `++m`/`++mp` auto-inject a delegate-everything Manager prompt; `++rr`/`++r` auto-inject review discipline (anti-regression / two-phase double-check) (RU+EN). HARD: `on` installs a PreToolUse guard that blocks Write/Edit/NotebookEdit/WebFetch/MCP-write in the main session (subagents stay free); `off` disarms (registration stays, guard no-ops); `uninstall` deregisters; `level strict\|balanced` tunes the wall | sonnet | `[on\|off\|uninstall\|status\|level <strict\|balanced>\|mode <full\|planmode>\|edit\|reset] \| <prompt>` |
+| [`/brewtools:manager`](skills/manager/README.md) | SOFT: codeword `++m` auto-injects a delegate-everything Manager prompt (plan-aware: adds the plan supplement when the session is in plan mode); `++rr`/`++r` auto-inject review discipline (anti-regression / two-phase double-check) (RU+EN). HARD: `on` installs a PreToolUse guard that blocks Write/Edit/NotebookEdit/WebFetch/MCP-write in the main session (subagents stay free); `off` disarms (registration stays, guard no-ops); `uninstall` deregisters; `level strict\|balanced` tunes the wall | sonnet | `[on\|off\|uninstall\|status\|level <strict\|balanced>\|edit\|reset] \| <prompt>` |
 | [`/brewtools:plugin-update`](skills/plugin-update/README.md) | Check/install/update brewcode plugins | sonnet | `[check\|update\|all]` |
 | [`/brewtools:provider-switch`](skills/provider-switch/README.md) | Configure alternative API providers (DeepSeek V4 [priority], Z.ai/GLM, Qwen, MiniMax, OpenRouter) | opus | `[status\|setup\|help\|<provider>]` |
-| [`/brewtools:skill-toggle`](skills/skill-toggle/README.md) | Disable/enable individual plugin skills (survives plugin updates) | sonnet | `<op> [plugin:name] [--scope=global\|project]` |
-| [`/brewtools:agent-toggle`](skills/agent-toggle/README.md) | Disable/enable individual plugin agents (survives plugin updates) | sonnet | `<op> [plugin:name] [--scope=global\|project]` |
-| [`/brewtools:think-short`](skills/think-short/README.md) | Toggle terse-output mode — cut preamble/filler via SessionStart + PreToolUse:Task injection | sonnet | `[on\|off\|profile <light\|medium\|aggressive>\|status\|blacklist add\|remove <agent>]` |
+| [`/brewtools:think-short`](skills/think-short/README.md) | Install/remove terse-mode hooks (SessionStart + every-10th UserPromptSubmit + subagent Task) that inject brevity directives; project or global | sonnet | `[<free-text prompt>] [Project\|Global]` |
 | [`/brewtools:task-board-init`](skills/task-board-init/README.md) | Deploy a self-contained file-based Kanban into ANY repo via multi-agent analysis (task-tracker agent + task-board skill + tasks rule + .claude/features/**) | opus | `[target repo path \| empty = cwd]` |
 
 ## Agents
@@ -107,8 +104,8 @@ brewtools/
 +-- .claude-plugin/plugin.json        # Plugin manifest
 +-- hooks/
 |   +-- hooks.json                    # Hook registry
-|   +-- session-start.mjs            # BT_PLUGIN_ROOT injection
-|   +-- pre-task.mjs                  # BT_PLUGIN_ROOT into subagents
+|   +-- session-start.mjs            # Manager HARD-wall awareness
+|   +-- manager-prompt.mjs           # ++m / ++rr / ++r codeword injection
 |   +-- lib/utils.mjs                 # I/O utilities
 +-- skills/
 |   +-- text-optimize/                # Token optimization
@@ -116,12 +113,9 @@ brewtools/
 |   +-- secrets-scan/                 # Secrets scanning
 |   +-- ssh/                          # SSH server management
 |   +-- deploy/                       # GitHub Actions deployment
-|   +-- debate/                       # Evidence-based multi-agent debate
 |   +-- plugin-update/                # Plugin check / install / update
 |   +-- provider-switch/               # Alternative API provider management
-|   +-- skill-toggle/                  # Disable/enable individual plugin skills
-|   +-- agent-toggle/                  # Disable/enable individual plugin agents
-|   +-- think-short/                   # Terse-output mode toggle
+|   +-- think-short/                   # Terse-mode hooks install/remove
 |   +-- manager/                       # Codeword-triggered Manager mode + HARD delegation wall
 |   +-- task-board-init/                # File-based Kanban generator (multi-agent)
 +-- agents/
@@ -136,8 +130,8 @@ brewtools/
 
 | Hook | Event | Purpose |
 |------|-------|---------|
-| `session-start.mjs` | SessionStart | Inject `BT_PLUGIN_ROOT` into session context |
-| `pre-task.mjs` | PreToolUse: Task\|Agent | Inject `BT_PLUGIN_ROOT` into subagent prompts |
+| `session-start.mjs` | SessionStart | Manager HARD-wall awareness -- injects guard tag into systemMessage and additionalContext |
+| `manager-prompt.mjs` | UserPromptSubmit | Injects `++m` / `++rr` / `++r` manager codewords |
 
 ## Documentation
 
@@ -150,12 +144,9 @@ Full docs: [doc-claude.brewcode.app/brewtools/overview](https://doc-claude.brewc
 | Secrets Scan | [secrets-scan](https://doc-claude.brewcode.app/brewtools/skills/secrets-scan/) |
 | SSH | [ssh](https://doc-claude.brewcode.app/brewtools/skills/ssh/) |
 | Deploy | [deploy](https://doc-claude.brewcode.app/brewtools/skills/deploy/) |
-| Debate | [debate](https://doc-claude.brewcode.app/brewtools/skills/debate/) |
 | Manager | [manager](https://doc-claude.brewcode.app/brewtools/skills/manager/) |
 | Plugin Update | [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) |
 | Provider Switch | [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/) |
-| Skill Toggle | [skill-toggle](https://doc-claude.brewcode.app/brewtools/skills/skill-toggle/) |
-| Agent Toggle | [agent-toggle](https://doc-claude.brewcode.app/brewtools/skills/agent-toggle/) |
 | Think Short | [think-short](https://doc-claude.brewcode.app/brewtools/skills/think-short/) |
 | Release Notes | [RELEASE-NOTES.md](../RELEASE-NOTES.md) |
 

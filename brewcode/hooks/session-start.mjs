@@ -20,7 +20,7 @@
  *
  * Cleanup: /brewcode:teardown removes .claude/plans/ directory
  */
-import { readStdin, output, log, getActiveMode, getState, saveState } from './lib/utils.mjs';
+import { readStdin, output, log, getState, saveState } from './lib/utils.mjs';
 import { readFileSync, readdirSync, statSync, mkdirSync, symlinkSync, unlinkSync, existsSync } from 'fs';
 import { execFileSync } from 'child_process';
 import { join } from 'path';
@@ -29,12 +29,6 @@ import { homedir } from 'os';
 const VERSION_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 const PLAN_FRESHNESS_MS = 60_000;
-
-// Cap text channels under the 2.1.174 10K disk-spill threshold (headroom 9000).
-const TEXT_CHANNEL_CAP = 9000;
-function capText(s, max = TEXT_CHANNEL_CAP) {
-  return (typeof s === 'string' && s.length > max) ? s.slice(0, max) + '\n...[truncated]' : s;
-}
 
 /**
  * Creates symlink .claude/plans/LATEST.md → ~/.claude/plans/<newest>.md
@@ -241,22 +235,7 @@ async function main() {
     }
 
     const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT || '';
-    const pluginData = process.env.CLAUDE_PLUGIN_DATA || '';
     const sessionShort = session_id?.slice(0, 8) || 'unknown';
-
-    let context = pluginRoot
-      ? `BC_PLUGIN_ROOT=${pluginRoot}\nbrewcode: active | session: ${sessionShort}`
-      : `brewcode: active | session: ${sessionShort}`;
-
-    if (pluginData) {
-      context = `BC_PLUGIN_DATA=${pluginData}\n${context}`;
-    }
-
-    // Inject active mode
-    const activeMode = getActiveMode(cwd, session_id);
-    if (activeMode) {
-      context += `\n[MODE: ${activeMode.name}] ${activeMode.instructions}`;
-    }
 
     const versionLines = [];
     try {
@@ -278,15 +257,12 @@ async function main() {
       if (pluginRoot) versionLines.push(`check brewcode updates: https://github.com/kochetkov-ma/claude-brewcode/releases/latest`);
     }
 
-    const modeTag = activeMode ? ` | mode: ${activeMode.name}` : '';
     // reloadSkills not set: this hook toggles no skill files
+    // No additionalContext: version/plan info is user-facing (systemMessage) only;
+    // there is nothing model-facing to inject now that root/mode payloads are gone.
     const permTag = permMode ? ` | perm: ${permMode}` : '';
     output({
-      systemMessage: `brewcode: ${pluginRoot} | session: ${sessionShort}${modeTag}${permTag}${versionLines.length ? '\n' + versionLines.join('\n') : ''}`,
-      hookSpecificOutput: {
-        hookEventName: 'SessionStart',
-        additionalContext: capText(context)
-      }
+      systemMessage: `brewcode: ${pluginRoot} | session: ${sessionShort}${permTag}${versionLines.length ? '\n' + versionLines.join('\n') : ''}`
     });
   } catch (error) {
     log('error', '[session-start]', `Error: ${error.message}`, cwd, session_id);

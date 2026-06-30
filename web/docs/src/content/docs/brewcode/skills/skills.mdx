@@ -5,146 +5,88 @@ order: 1114
 ---
 import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# skills — create / improve skills
+# skills <Badge variant="secondary" text="opus" />
 
-<Callout type="caution">
-**Skills multiply fast.** Every plugin adds more skills, and Claude's auto-detection starts misfiring — wrong skill fires, redundant triggers compete. Maintaining them manually means hand-editing SKILL.md files and hoping the activation description is optimized.
-</Callout>
-
-<Callout type="tip">
-**One skill, three operations.** `/brewcode:skills` lists what you have, improves what's broken, and creates what's missing — through a guided 7-phase pipeline with optional quorum review and E2E testing.
-</Callout>
+<Callout type="tip" title="Prompt-driven">Give a free-form prompt; the skill auto-selects a mode and tells you why. Status is the default — a list only on explicit request.</Callout>
 
 ## Quick reference
 
 | Field | Value |
 |-------|-------|
 | Command | `/brewcode:skills` |
-| Arguments | `[list\|up\|create] [target]` |
+| Input | free-form prompt, mode keyword, or empty |
+| Specialist | `brewcode:skill-creator` agent |
+| List source | `list-skills.sh` |
 | Model | opus |
-| Context | session |
-| Tools | Read, Write, Edit, Glob, Grep, Bash, Task, WebSearch, WebFetch, AskUserQuestion |
-
-| Mode | Trigger | Effect |
-|------|---------|--------|
-| `list` | no args or `list` | Print all skills across global / project / plugins |
-| `up` | `up <name\|path\|folder>` or just `<name>` | Improve an existing skill |
-| `create` | `create <prompt\|spec-path>` | Build a new skill from scratch |
 
 ## When to use
 
-- **Audit your library** — `/brewcode:skills` with no args gives a full table of global, project, and plugin skills
-- **Fix a skill that doesn't trigger** — `/brewcode:skills up commit` re-optimizes activation phrases and description
-- **Batch-improve a folder** — `/brewcode:skills up &#126;/.claude/skills/` processes every `SKILL.md` in parallel
-- **Create from a prompt** — `/brewcode:skills create "semantic code search"` researches and scaffolds a complete skill
-- **Create from a spec** — `/brewcode:skills create ./spec.md` reads your spec file as the source of truth
+- **Check skill health** — run with no args to see status of all skills across global, project, and plugins
+- **Fix a non-triggering skill** — `/brewcode:skills improve commit` re-optimizes activation phrases and description
+- **Create from a prompt** — `/brewcode:skills create a semantic code search skill` researches and scaffolds a complete skill
+- **Batch improve a folder** — `/brewcode:skills improve ~/.claude/skills/` processes every SKILL.md in parallel
+- **Explicit listing** — `/brewcode:skills list` when you need a raw table, not a status summary
 
 ## Examples
 
 ```bash
-# List all skills (global + project + plugins)
 /brewcode:skills
-
-# Improve a skill by name — "up" is the default mode
-/brewcode:skills commit
-
-# Improve all skills in a folder at once
-/brewcode:skills up &#126;/.claude/skills/
-
-# Create from a text prompt
-/brewcode:skills create "semantic code search"
-
-# Create from a prepared spec file
-/brewcode:skills create ./spec.md
+/brewcode:skills status
+/brewcode:skills create a semantic code search skill
+/brewcode:skills improve commit
+/brewcode:skills list
 ```
 
-## Flow
-
-Both `create` and `up` run the same 7-phase pipeline. Differences are noted per step.
+## How it works
 
 <Steps>
-  <li>
-    <div>
-      <strong>Discovery</strong>
-      <p>2–3 Explore agents run in parallel. For <code>create</code>: scan existing skill patterns, project structure, and optionally web-research the topic. For <code>up</code>: analyze the target skill and compare it against brewcode plugin patterns to identify gaps.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>User interview</strong>
-      <p>Seven interactive questions via <code>AskUserQuestion</code>: check conversation history (create only), determine input type (create only), choose invocation type (user / LLM / both), detect Mode Switcher keywords (create only), pick testing depth, pick review type, confirm the plan.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Create / Improve</strong>
-      <p>Spawns the <a href="/brewcode/agents/skill-creator/">Skill Creator</a> agent with discovery results and user choices. The agent builds the full skill structure: frontmatter, activation triggers, references, and scripts. Folder targets run parallel agents — one per <code>SKILL.md</code> found.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Validate</strong>
-      <p>Automatic inside the Skill Creator agent: structure checks, <code>validate-skill.sh</code>, unit tests for scripts, README generation. No orchestrator action required at this step.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Review</strong>
-      <p><strong>Skipped for Quick depth.</strong> Simple review: one reviewer agent plus one verification agent — confirmed findings go back to Skill Creator. Quorum review: three reviewers in parallel, 2/3 threshold, DoubleCheck pass, then Skill Creator fixes verified issues.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>E2E testing</strong>
-      <p><strong>Deep depth only.</strong> Creates test scenarios (one per mode + edge cases), executes each in an isolated temp project via <code>claude -p</code>. Failed scenarios retry up to 2 times; major failures loop back to Create/Improve.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Summary</strong>
-      <p>Structured report: action, skill path, invocation type, testing depth, review type, phases completed, confirmed findings, test results, and suggestions for follow-up.</p>
-    </div>
-  </li>
+  <li><div><strong>Input gate</strong><p>The skill reads the argument. Empty, `status`, a create/improve/list keyword, or a free-form sentence — each routes differently. No input triggers the no-prompt menu.</p></div></li>
+  <li><div><strong>Auto-mode select</strong><p>Announces `Mode: &lt;mode&gt; (skills) — chosen because &lt;evidence&gt;` so you always know which branch executed and why the classifier picked it.</p></div></li>
+  <li><div><strong>No-prompt menu</strong><p>When invoked with no argument, presents a single AskUserQuestion with options (in order): Status (skills) — recommended, Status (all: agents+rules+skills), Create, Improve, Review, List (plain), Cancel.</p></div></li>
+  <li><div><strong>Dispatch</strong><p>Routes to the appropriate handler: `list-skills.sh` for list mode, `brewcode:skill-creator` agent for create/improve, parallel agents for batch. Review mode spawns reviewer agents with quorum logic.</p></div></li>
+  <li><div><strong>Real status</strong><p>Status mode scans all SKILL.md files, checks trigger keyword coverage, description budget (&lt;=120 chars), and reports health per skill — not just a file listing.</p></div></li>
+  <li><div><strong>Final output</strong><p>Structured report: mode executed, skills affected, findings, paths written or changed, and suggested next invocation if follow-up is warranted.</p></div></li>
 </Steps>
 
+## Modes
+
+| Mode | Trigger | Source / agent |
+|------|---------|----------------|
+| status (default) | no args or `status` | inline scan, no external script |
+| list | `list` keyword only | `list-skills.sh` |
+| create | `create &lt;prompt&gt;` or `create &lt;path&gt;` | `brewcode:skill-creator` |
+| improve | `improve &lt;name&gt;`, `&lt;path&gt;`, or `&lt;folder&gt;` | `brewcode:skill-creator` |
+| review | `review &lt;name&gt;` or `&lt;path&gt;` | reviewer agents + quorum |
+| batch | improve with a folder target detected | parallel `brewcode:skill-creator` |
+
 <details>
-<summary>Internals</summary>
+<summary>Create / improve pipeline (advanced)</summary>
 
-**Testing depth matrix**
+Reachable ONLY via create/improve modes.
 
-| Depth | Validate | Review | E2E |
-|-------|----------|--------|-----|
-| Quick (default) | ✅ | — | — |
-| Standard | ✅ | Simple (1 reviewer + verify) | — |
-| Deep | ✅ | Quorum (3 reviewers, 2/3) | ✅ |
+**User parameters collected via AskUserQuestion:**
 
-**Mode Switcher pattern**
+- Invocation type: User-only / LLM-auto / Both
+- Testing depth: Quick / Standard / Deep
+- Review type: Simple / Quorum (available for Standard and Deep only)
 
-When `create` detects keywords like "mode", "toggle", "switch", or "persistent", it asks whether to generate a Mode Switcher skill. The generated skill supports three arguments — `on [mode-name]`, `off`, `status` — with state stored in `brewcode.state.json`. Scope priority: session > project > global. A `SessionStart` hook injects mode instructions on every event.
+**Pipeline phases:**
 
-**Folder target resolution**
+- Phase 0 Discovery: 2–3 parallel Explore agents scan existing skill patterns, project structure, and (for create) web-research the topic.
+- Phase 4 Review: Simple = one reviewer + one verify agent. Quorum = three reviewers in parallel, 2/3 consensus threshold, DoubleCheck pass, Skill Creator fixes verified findings.
+- Phase 5 E2E: Deep depth only. Isolated temp project, `claude -p` execution, up to 2 retries per failed scenario.
 
-`up &#126;/.claude/skills/` runs `find <folder> -name "SKILL.md" -type f` and spawns one Skill Creator agent per result — all in a single message for parallel execution.
+**Description budget:** &lt;=120 chars enforced — trigger keywords must fit within this limit.
 
-**Smart mode detection**
-
-If the first argument is not a mode keyword (`list`, `up`, `create`), the entire input is treated as a target for `up`. `/brewcode:skills commit` is identical to `/brewcode:skills up commit`.
+**Specialist:** `brewcode:skill-creator` agent.
 
 </details>
 
 <CardGrid>
-  <Card title="Agents skill" icon="robot" href="/brewcode/skills/agents/">
-    Manage agents the same way — list, improve, or create agent definitions.
-  </Card>
-  <Card title="Skill Creator agent" icon="wrench" href="/brewcode/agents/skill-creator/">
-    The agent spawned by this skill to build and validate skill files.
-  </Card>
-  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/skills">
-    Source SKILL.md, scripts, and references.
-  </Card>
-  <Card title="Brewcode overview" icon="document" href="/brewcode/">
-    Full brewcode plugin — all skills, agents, and hooks.
-  </Card>
+  <Card title="agents" icon="settings" href="/brewcode/skills/agents/">Sibling: manage agents</Card>
+  <Card title="rules" icon="list" href="/brewcode/skills/rules/">Sibling: manage rules</Card>
+  <Card title="brewcode" icon="rocket" href="/brewcode/">Plugin overview</Card>
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/skills/SKILL.md">SKILL.md</Card>
 </CardGrid>
 
 <UpdateNotice />

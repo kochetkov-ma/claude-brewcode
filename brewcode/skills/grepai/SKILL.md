@@ -47,7 +47,7 @@ MODE: [detected mode]
 | (empty) + no .grepai/ | setup |
 | (unrecognized text) | prompt |
 
-> **Prerequisites:** Homebrew, Ollama, and the grepai CLI must be installed. The `setup` mode below runs `infra-check.sh` to verify them and reports anything missing.
+> **Prerequisites:** Homebrew, Ollama, the bge-m3 model, and the grepai CLI. The `setup` mode below runs `infra-check.sh` to verify them and, if anything is missing, offers to auto-install everything via `scripts/install.sh` (after confirmation).
 
 ---
 
@@ -55,14 +55,40 @@ MODE: [detected mode]
 
 Full grepai installation and project setup.
 
-### Phase 1: Infrastructure Check
+### Phase 1: Infrastructure Check & Auto-Install
+
+**EXECUTE** using Bash tool:
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/infra-check.sh" && echo "✅ infra-check" || echo "⚠️ infra-check: prerequisites missing"
+```
+
+- Printed `✅ infra-check` (all present) -> skip to Phase 2.
+- Printed `⚠️ infra-check: prerequisites missing` -> continue to auto-install below.
+
+#### Offer Auto-Install
+
+> `scripts/install.sh` installs every missing prerequisite via Homebrew: brew, coreutils + `timeout` symlink, jq, ollama (+ service start), the bge-m3 embedding model, and the grepai CLI. It is idempotent — already-installed components are skipped.
+
+**ASK** (AskUserQuestion): "grepai prerequisites are missing. Auto-install them now? This creates a `timeout` symlink (coreutils) and downloads the grepai CLI + bge-m3 model (~1.5GB)."
+Options: "Yes, install" | "Cancel"
+
+> **If Cancel** -> STOP: "grepai setup cancelled. Install prerequisites manually, then re-run `/brewcode:grepai setup`."
+
+**EXECUTE** using Bash tool:
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/install.sh" && echo "✅ install" || echo "❌ install FAILED"
+```
+
+> **STOP if ❌** — check the install output for the failed component and install it manually.
+
+#### Re-verify
 
 **EXECUTE** using Bash tool:
 ```bash
 bash "${CLAUDE_SKILL_DIR}/scripts/infra-check.sh" && echo "✅ infra-check" || echo "❌ infra-check FAILED"
 ```
 
-> **STOP if ❌** — install missing components before continuing.
+> **STOP if ❌** — prerequisites still missing after install; inspect the install output above.
 
 ### Phase 2: MCP Configuration & Permissions
 
@@ -85,7 +111,7 @@ This script configures MCP server and allowedTools permissions.
 | `prompt` | `Configure grepai for this project. Analyze all build files, test patterns, source structure. Generate optimal .grepai/config.yaml.` |
 | `model` | `opus` |
 
-> **Context:** `BC_PLUGIN_ROOT` is available in agent context (injected by pre-task.mjs hook).
+> **Context:** the agent resolves its plugin root natively via `${CLAUDE_PLUGIN_ROOT}` (substituted in its .md at Task spawn).
 
 > **WAIT** for agent to complete before proceeding.
 
@@ -109,7 +135,125 @@ bash "${CLAUDE_SKILL_DIR}/scripts/create-rule.sh" && echo "✅ create-rule" || e
 
 > **STOP if ❌** — manually create rule in `.claude/rules/`.
 
-### Phase 6: Verification
+### Phase 6: Install grepai Hooks (self-install)
+
+> grepai ships two self-contained hooks that travel into the user's project (NOT
+> the plugin): `grepai-session.mjs` (SessionStart — auto-starts `grepai watch` and
+> injects "USE grepai_search FIRST" when the index is live) and
+> `grepai-reminder.mjs` (PreToolUse:Bash — nudges toward `grepai_search` when a
+> `grep/find/rg` command runs). Self-install is idempotent. Runbook + jq/python3
+> merge details: `${CLAUDE_SKILL_DIR}/assets/INSTALL.md`.
+
+#### Step 1: Detect (idempotent — skip if already installed)
+
+**EXECUTE** using Bash tool:
+```bash
+SETTINGS="$PWD/.claude/settings.json"
+if [ -f "$SETTINGS" ] && grep -q 'grepai-session.mjs' "$SETTINGS" 2>/dev/null; then
+  echo "✅ hooks already installed — skip Phase 6"
+else
+  echo "⚠️ hooks not installed — continue"
+fi
+```
+
+- Printed `✅ hooks already installed` -> SKIP to Phase 7. Do NOT re-copy/re-merge.
+- Printed `⚠️ hooks not installed` -> continue.
+
+#### Step 2: Choose scope
+
+Scope is PROJECT by default. grepai setup always runs against THIS repo, so the
+scope is unambiguous — **default to PROJECT and SKIP the questions**.
+
+Ask via `AskUserQuestion` ONLY when scope is genuinely ambiguous (e.g. the user
+explicitly says "for all my projects" / "globally", or there is no obvious single
+project root):
+- "Install grepai hooks for this Project or Globally?" (options: **Project** / **Global**)
+- Confirm hook creation: "grepai will copy two SessionStart + PreToolUse:Bash hooks into `<scope>/.claude/grepai/hooks/` and merge them into `settings.json`. Proceed?" (options: **Yes, install** / **Skip hooks**)
+
+> Skip hooks -> note it and GOTO Phase 7 (search config still works via MCP; only
+> the auto-watch + reminder are skipped).
+
+#### Step 3: Copy + merge (no clobber)
+
+Follow the runbook. `SRC` = this skill's assets dir; `DST`/`SETTINGS` by scope.
+PROJECT writes freely; GLOBAL (`~/.claude/*`) MUST go through the Bash tool only
+(protected path — Bash `cp`/`jq`/`python3`/`mv` are allowed, Write/Edit are not).
+
+**EXECUTE** using Bash tool (PROJECT scope shown; for GLOBAL set the two GLOBAL
+paths from the comments):
+```bash
+SRC="${CLAUDE_SKILL_DIR}/assets"
+# PROJECT: DST="$PWD/.claude/grepai/hooks";   SETTINGS="$PWD/.claude/settings.json"
+# GLOBAL:  DST="$HOME/.claude/grepai/hooks";  SETTINGS="$HOME/.claude/settings.json"
+DST="$PWD/.claude/grepai/hooks"
+SETTINGS="$PWD/.claude/settings.json"
+
+mkdir -p "$DST" && cp "$SRC/grepai-session.mjs" "$SRC/grepai-reminder.mjs" "$DST/" \
+  && echo "✅ copied to $DST" || { echo "❌ copy FAILED"; exit 1; }
+
+mkdir -p "$(dirname "$SETTINGS")"
+[ -f "$SETTINGS" ] || echo '{}' > "$SETTINGS"
+S_CMD="node $DST/grepai-session.mjs"
+R_CMD="node $DST/grepai-reminder.mjs"
+
+if command -v jq >/dev/null 2>&1; then
+  TMP="$(mktemp)"
+  jq --arg scmd "$S_CMD" --arg rcmd "$R_CMD" '
+    .hooks = (.hooks // {})
+    | .hooks.SessionStart = (.hooks.SessionStart // [])
+    | (if (.hooks.SessionStart | map(.hooks // [] | map(.command // "") | any(test("grepai-session\\.mjs"))) | any)
+       then .
+       else (if (.hooks.SessionStart | length) > 0
+             then .hooks.SessionStart[0].hooks += [{"type":"command","command":$scmd}]
+             else .hooks.SessionStart += [{"hooks":[{"type":"command","command":$scmd}]}] end)
+       end)
+    | .hooks.PreToolUse = (.hooks.PreToolUse // [])
+    | (if (.hooks.PreToolUse | map(.hooks // [] | map(.command // "") | any(test("grepai-reminder\\.mjs"))) | any)
+       then .
+       else (.hooks.PreToolUse | map((.matcher // "") == "Bash") | index(true)) as $i
+            | (if $i != null
+               then .hooks.PreToolUse[$i].hooks += [{"type":"command","command":$rcmd}]
+               else .hooks.PreToolUse += [{"matcher":"Bash","hooks":[{"type":"command","command":$rcmd}]}] end)
+       end)
+  ' "$SETTINGS" > "$TMP" && mv "$TMP" "$SETTINGS" \
+    && jq empty "$SETTINGS" >/dev/null 2>&1 && echo "✅ merged $SETTINGS (jq)" || echo "❌ merge FAILED"
+elif command -v python3 >/dev/null 2>&1; then
+  SETTINGS="$SETTINGS" S_CMD="$S_CMD" R_CMD="$R_CMD" python3 - <<'PY'
+import json, os
+f = os.environ["SETTINGS"]; scmd = os.environ["S_CMD"]; rcmd = os.environ["R_CMD"]
+try: data = json.load(open(f))
+except Exception: data = {}
+hooks = data.setdefault("hooks", {})
+def has(groups, basename):
+    return any(basename in (h.get("command") or "") for g in groups for h in g.get("hooks", []))
+ss = hooks.setdefault("SessionStart", [])
+if not has(ss, "grepai-session.mjs"):
+    (ss[0].setdefault("hooks", []).append({"type":"command","command":scmd}) if ss
+     else ss.append({"hooks":[{"type":"command","command":scmd}]}))
+pt = hooks.setdefault("PreToolUse", [])
+if not has(pt, "grepai-reminder.mjs"):
+    bg = next((g for g in pt if g.get("matcher") == "Bash"), None)
+    (bg.setdefault("hooks", []).append({"type":"command","command":rcmd}) if bg is not None
+     else pt.append({"matcher":"Bash","hooks":[{"type":"command","command":rcmd}]}))
+json.dump(data, open(f,"w"), indent=2)
+print("OK")
+PY
+  echo "✅ merged $SETTINGS (python3)"
+else
+  echo "❌ neither jq nor python3 — add the two entries from assets/INSTALL.md manually"
+fi
+```
+
+> **STOP if ❌** — see `${CLAUDE_SKILL_DIR}/assets/INSTALL.md` for the manual entries.
+
+#### Step 4: Report what was created
+
+After install, tell the user EXACTLY what changed:
+- Hook files copied: `<scope>/.claude/grepai/hooks/grepai-session.mjs`, `<scope>/.claude/grepai/hooks/grepai-reminder.mjs`
+- `settings.json` entries merged: `SessionStart -> node .../grepai-session.mjs`, `PreToolUse(matcher "Bash") -> node .../grepai-reminder.mjs`
+- Reminder: a NEW session picks them up (SessionStart fires on next `claude` start / `--resume`); no `/reload-plugins` needed.
+
+### Phase 7: Verification
 
 **EXECUTE** using Bash tool:
 ```bash
@@ -181,7 +325,7 @@ bash "${CLAUDE_SKILL_DIR}/scripts/optimize.sh" && echo "✅ optimize-backup" || 
 | `prompt` | `Re-analyze project and regenerate .grepai/config.yaml. Compare with existing config, optimize boost patterns, update trace languages.` |
 | `model` | `opus` |
 
-> **Context:** `BC_PLUGIN_ROOT` is available in agent context (injected by pre-task.mjs hook).
+> **Context:** the agent resolves its plugin root natively via `${CLAUDE_PLUGIN_ROOT}` (substituted in its .md at Task spawn).
 
 > **WAIT** for agent to complete.
 

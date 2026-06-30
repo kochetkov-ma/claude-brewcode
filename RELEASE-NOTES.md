@@ -2,6 +2,48 @@
 
 ---
 
+## v4.0.0 (2026-06-30)
+
+> **MAJOR / breaking** — injection-hook architecture removed across all plugins; plugin-root now resolved natively via `${CLAUDE_PLUGIN_ROOT}`.
+
+> Docs: [brewcode hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | [brewcode overview](https://doc-claude.brewcode.app/brewcode/overview/) | [grepai](https://doc-claude.brewcode.app/brewcode/skills/grepai/) | [superreview](https://doc-claude.brewcode.app/brewcode/skills/superreview/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [brewdoc hooks](https://doc-claude.brewcode.app/brewdoc/hooks/) | [brewtools hooks](https://doc-claude.brewcode.app/brewtools/hooks/) | [think-short](https://doc-claude.brewcode.app/brewtools/skills/think-short/) | [manager](https://doc-claude.brewcode.app/brewtools/skills/manager/)
+
+### brewcode
+#### Removed
+- **pre-task.mjs:** deleted; entire family-roots injection machinery removed (`hooks/lib/family-roots.mjs`, `.claude/scripts/check-family-roots.sh` + bump-version drift guard)
+- **dead mode system:** `getActiveMode`, `modes.json`, `[MODE:]`/`[EFFORT: terse-light]` injections, SID/teams injection all removed; `getActiveMode` dropped from `hooks/lib/utils.mjs`
+- **grepai always-on hooks:** `grepai-session.mjs` + `grepai-reminder.mjs` deregistered from `hooks.json`; orphan sources deleted
+- **skills/skills:** Mode Switcher skill-generation pattern removed
+#### Changed
+- **plugin-root (breaking):** resolved NATIVELY via `${CLAUDE_PLUGIN_ROOT}` substituted in each agent `.md` at Task spawn — no more hook injection of `BC_PLUGIN_ROOT`; all agents converted
+- **forced-eval.mjs:** stripped of mode/effort/plugin-root injection — now injects only the constant `[SKILL?]` reminder
+- **session-start.mjs:** keeps version-check + plan-symlink + permission tag; mode/effort/root injection removed
+- brewcode now registers exactly 2 hooks (forced-eval, session-start)
+#### Added
+- **grepai self-install:** self-contained assets (`skills/grepai/assets/{grepai-session.mjs,grepai-reminder.mjs,INSTALL.md}`); `/brewcode:grepai` detects + installs hooks into project `.claude/grepai/hooks/` and merges into `.claude/settings.json` (jq + python3, no clobber), default project scope, reports
+- **superreview** skill (+ docs page)
+
+### brewdoc
+#### Removed
+- **pre-task.mjs + lib/family-roots.mjs:** deleted — brewdoc now ships ZERO hooks (`hooks.json` is `{"hooks":{}}`)
+#### Changed
+- **bd-auto-sync-processor:** resolves its root natively via `${CLAUDE_PLUGIN_ROOT}`
+
+### brewtools
+#### Removed
+- **pre-task.mjs + lib/family-roots.mjs:** deleted; `skills/think-short/assets/family-roots.mjs` removed
+- **skills debate, skill-toggle, agent-toggle:** removed entirely (incl. `_shared/toggle`)
+#### Changed
+- **session-start.mjs:** stripped of `BT_PLUGIN_ROOT` injection + session-id display (manager HARD-wall awareness kept)
+- **think-short:** task hook injects `${injection}\n\n${tool_input.prompt}`, copies 4 files; E2E suite updated (family-roots tests removed)
+- brewtools registers 2 hooks (session-start, manager-prompt)
+
+### docs
+#### Changed
+- root `CLAUDE.md`, all plugin READMEs, `brewcode/docs/*`, `brewdoc/docs/hooks.md`, `web/docs` MDX (hooks/overview/think-short/grepai/skills/agents) and `brewdoc/skills/guide/references/*` updated to new hook inventory + native `${CLAUDE_PLUGIN_ROOT}` + grepai self-install + Mode Switcher removal
+
+---
+
 ## v3.19.5 (2026-06-29)
 
 ### brewcode

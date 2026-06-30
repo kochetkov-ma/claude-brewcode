@@ -42,7 +42,7 @@ The "infinite" part: tasks survive context window limits automatically.
 No user intervention needed. The hook chain drives it all:
 
 ```
-session-start -> pre-task -> post-task -> pre-compact -> stop
+session-start -> forced-eval
 ```
 
 Pre-compact writes handoff state. Session-start reads it back. The loop is seamless.
@@ -66,7 +66,7 @@ Priority levels (highest to lowest):
 | ✅ | Do this instead | "Always use ORM query builder" |
 | ℹ️ | Informational fact | "Project uses Spring Boot 3.2" |
 
-Knowledge is injected into every agent prompt via the pre-task hook. Agents learn from previous sessions without re-discovering.
+Knowledge persists across sessions. Agents learn from previous sessions without re-discovering.
 
 ## Section 4: Task Directory Structure
 

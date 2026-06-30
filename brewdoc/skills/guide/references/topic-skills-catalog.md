@@ -2,29 +2,23 @@
 
 Domain: Core Workflow
 
-## Section 1: Brewcode Skills (13)
+## Section 1: Brewcode Skills (9)
 
-The main plugin. Task execution, code quality, project management.
+The main plugin. Spec authoring, semantic search, code quality.
 
 | Skill | Purpose |
 |-------|---------|
-| `/brewcode:setup` | Analyze project, create templates, check prerequisites |
 | `/brewcode:spec "desc"` | Create SPEC through research + user interaction |
-| `/brewcode:plan` | Create PLAN.md from SPEC with phases and dependencies |
-| `/brewcode:start` | Execute plan with infinite context handoff |
-| `/brewcode:teams` | Create and manage dynamic agent teams |
-| `/brewcode:convention` | Extract code conventions, patterns, architecture |
-| `/brewcode:rules` | Convert KNOWLEDGE.jsonl to `.claude/rules/` files |
 | `/brewcode:grepai` | Setup grepai semantic code search |
-| `/brewcode:standards-review` | Review code against project standards |
-| `/brewcode:teardown` | Cleanup task files (keeps task directory) |
+| `/brewcode:superreview` | Deep multi-perspective quorum code review |
+| `/brewcode:convention` | Extract code conventions, patterns, architecture |
+| `/brewcode:rules` | Prompt-driven rules management: status, create, improve, review |
+| `/brewcode:teams` | Create and manage dynamic agent teams |
 | `/brewcode:e2e` | Full-cycle E2E test orchestration |
-| `/brewcode:skills` | Skill management utilities |
-| `/brewcode:agents` | Agent management utilities |
+| `/brewcode:skills` | Prompt-driven skill management: status, create, improve, review |
+| `/brewcode:agents` | Prompt-driven agent management: status, create, improve, review |
 
-Note: `/brewcode:setup` also generates a local `/brewcode:review` skill for quorum code review (3 reviewers, 2/3 consensus). It is project-specific, not shipped with the plugin.
-
-Typical flow: `setup` (once) -> `spec` -> `plan` -> `start` -> `standards-review`
+Typical flow: `spec` -> implement -> `superreview` (use `grepai` for search)
 
 ## Section 2: Brewdoc Skills (6)
 
@@ -39,7 +33,7 @@ Documentation tools. Sync, generate, optimize, export, publish.
 | `/brewdoc:guide` | Interactive teaching for the plugin suite (this guide) |
 | `/brewdoc:publish` | Publish content to brewpage.app — text, markdown, or files |
 
-## Section 3: Brewtools Skills (13)
+## Section 3: Brewtools Skills (10)
 
 Universal utilities. Work in any project, no setup needed.
 
@@ -50,13 +44,10 @@ Universal utilities. Work in any project, no setup needed.
 | `/brewtools:secrets-scan` | Scan for leaked secrets, credentials, API keys |
 | `/brewtools:ssh` | SSH server management — connect, configure, deploy, administer remote servers |
 | `/brewtools:deploy` | GitHub Actions deployment — workflows, releases, GHCR, CI/CD with safety gates |
-| `/brewtools:debate` | Evidence-based multi-agent debate with Discovery phase and 3 modes |
 | `/brewtools:plugin-update` | Check, install, or update brewcode suite plugins from the marketplace |
 | `/brewtools:provider-switch` | Configure alternative API providers — DeepSeek V4 (priority), Z.ai/GLM, Qwen, MiniMax, OpenRouter |
-| `/brewtools:skill-toggle` | Disable/enable individual plugin skills, survives plugin updates |
-| `/brewtools:agent-toggle` | Disable/enable individual plugin agents, survives plugin updates |
-| `/brewtools:think-short` | Toggle terse-output mode (light/medium/aggressive) to cut token bloat |
-| `/brewtools:manager` | Codeword (++m/++mp) Manager prompt + opt-in HARD wall blocking mutating tools (RU+EN) |
+| `/brewtools:think-short` | Install terse-mode hooks (project or global) that inject brevity directives to cut token bloat |
+| `/brewtools:manager` | Codeword (++m, plan-aware) Manager prompt + opt-in HARD wall blocking mutating tools (RU+EN) |
 | `/brewtools:task-board-init` | Deploy a file-based Kanban into any repo via multi-agent analysis |
 
 These are standalone — no project configuration required. Run them anywhere.
@@ -72,23 +63,20 @@ Brewui currently ships no skills -- placeholder for future UI/visual/creative to
 /brewcode:spec "add user authentication with OAuth2"
 /brewcode:teams create backend-team
 /brewcode:convention extract
-/brewcode:review -q 3-5
+/brewcode:superreview
 ```
 
 **Recommended order for new projects:**
 
 | Step | Skill | Why |
 |------|-------|-----|
-| 1 | `/brewcode:setup` | Initialize project, detect stack |
-| 2 | `/brewcode:grepai` | Enable semantic search |
-| 3 | `/brewcode:convention` | Learn existing patterns |
-| 4 | `/brewcode:spec "task"` | Define what to build |
-| 5 | `/brewcode:plan` | Create execution plan |
-| 6 | `/brewcode:start` | Execute the plan |
-| 7 | `/brewcode:standards-review` | Review the result |
-| 8 | `/brewcode:rules` | Save learnings as rules |
+| 1 | `/brewcode:grepai` | Enable semantic search |
+| 2 | `/brewcode:convention` | Learn existing patterns |
+| 3 | `/brewcode:spec "task"` | Define what to build |
+| 4 | `/brewcode:superreview` | Review the result |
+| 5 | `/brewcode:rules` | Save learnings as rules |
 
 **Tips:**
 - Skills that modify files always confirm before writing
-- Use `/brewcode:setup` first in any new project — it detects your stack and creates templates
-- `/brewcode:teardown` removes task artifacts but keeps the task directory for reference
+- Use `/brewcode:grepai` first in any new project — it indexes your code for semantic search
+- `/brewcode:convention` extracts patterns so new code matches your existing style

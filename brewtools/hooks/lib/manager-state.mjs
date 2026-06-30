@@ -1,8 +1,11 @@
 // brewtools:manager — Manager mode state resolver/writer.
-// State shape: { hard:boolean, level:'strict'|'balanced', mode:'full'|'planmode' }.
+// State shape: { hard:boolean, level:'strict'|'balanced', mode:'full' }.
 //   hard  — HARD wall toggle (PreToolUse guard physically denies main-session tools)
 //   level — HARD wall strictness: 'strict' (deny all non-read) | 'balanced' (allow read-only bash/search)
-//   mode  — soft codeword injection mode: 'full' | 'planmode'
+//   mode  — vestigial informational field, ALWAYS 'full'. No user action sets it;
+//           kept so status/readers of state.mode keep working. planmode is NOT a stored
+//           mode — ++m derives it at runtime from permission_mode === 'plan'; planmode
+//           stays resolvable in manager-prompts.mjs only.
 // project: <cwd>/.claude/brewtools/manager/state.json
 // global:  ~/.claude/manager/state.json  (protected for Write tool — only writable here)
 // resolveState: hard + level are PROJECT-ONLY (a global state.json must NOT enable the
@@ -39,7 +42,9 @@ export function resolveStatePath(scope, cwd = process.cwd()) {
 }
 
 function clampMode(merged) {
-  if (!['full', 'planmode'].includes(merged.mode)) merged.mode = 'full';
+  // mode is vestigial — always 'full'. planmode is hook-internal (driven by
+  // permission_mode in manager-prompt.mjs), never stored as state.mode.
+  if (merged.mode !== 'full') merged.mode = 'full';
   return merged;
 }
 
@@ -143,7 +148,7 @@ function writeAtomic(filePath, obj) {
 /**
  * Write (merge) Manager state for a scope, atomically.
  * @param {string} scope - 'project' | 'global'
- * @param {object} partial - fields to merge (e.g. { enabled:false } or { mode:'planmode' })
+ * @param {object} partial - fields to merge (e.g. { hard:false } or { level:'strict' })
  * @param {string} cwd
  * @returns {{file:string, action:'written', state:object}}
  */

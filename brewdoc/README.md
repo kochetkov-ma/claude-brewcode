@@ -7,7 +7,7 @@
 | Version | 3.18.0 |
 | Skills | 6 |
 | Agents | 1 |
-| Hooks | 1 |
+| Hooks | 0 |
 
 ## Install
 
@@ -99,9 +99,7 @@ claude --plugin-dir ./brewdoc
 brewdoc/
 +-- .claude-plugin/plugin.json        # Plugin manifest
 +-- hooks/
-|   +-- hooks.json                    # 1 hook (Pre-Task)
-|   +-- pre-task.mjs                  # BD_PLUGIN_ROOT injection
-|   +-- lib/utils.mjs                 # I/O utilities
+|   +-- hooks.json                    # no hooks ({"hooks":{}})
 +-- skills/
 |   +-- auto-sync/                    # Documentation sync
 |   +-- my-claude/                    # Installation documentation
@@ -113,7 +111,7 @@ brewdoc/
     +-- bd-auto-sync-processor.md     # File processing agent
 ```
 
-> **Brewdoc vs Brewcode:** Brewdoc is a set of documentation utilities. Each skill is self-contained. Brewcode is a task execution engine with infinite context, 9 lifecycle hooks, and session handoff. Both install from the same `claude-brewcode` marketplace but operate independently.
+> **Brewdoc vs Brewcode:** Brewdoc is a set of documentation utilities. Each skill is self-contained. Brewcode is a task execution engine with infinite context, 2 hooks, and session handoff. Both install from the same `claude-brewcode` marketplace but operate independently.
 
 ## Documentation
 

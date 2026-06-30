@@ -1,6 +1,6 @@
 ---
 title: "Skills"
-description: "All 12 Brewtools skills: commands, parameters, examples"
+description: "All 10 Brewtools skills: commands, parameters, examples"
 order: 31
 ---
 
@@ -8,33 +8,25 @@ import { Card, CardGrid, Callout } from '../../../components/mdx';
 
 # Skills
 
-Skills (recipes) are slash commands that define *what* to do. Brewtools includes 13 skills
-focused on text processing, security scanning, SSH management, deployment, evidence-based debate, plugin management, and session orchestration -- each works independently with no prior setup required.
+Skills (recipes) are slash commands that define *what* to do. Brewtools includes 10 skills
+focused on text processing, security scanning, SSH management, deployment, plugin management, and session orchestration -- each works independently with no prior setup required.
 
 ## Summary table
 
 | # | Skill | Command | Model | Purpose |
 |---|-------|---------|-------|---------|
-| 1 | agent-toggle | `/brewtools:agent-toggle` | sonnet | Disable/enable individual agents (survives updates) |
-| 2 | debate | `/brewtools:debate` | opus | Evidence-based multi-agent debate |
-| 3 | deploy | `/brewtools:deploy` | opus | GitHub Actions deployment, CI/CD |
-| 4 | manager | `/brewtools:manager` | sonnet | Manager mode: codeword ++m/++mp injects delegate-everything prompt |
-| 5 | plugin-update | `/brewtools:plugin-update` | sonnet | Install and update the full plugin suite |
-| 6 | provider-switch | `/brewtools:provider-switch` | sonnet | Configure alternative API providers |
-| 7 | secrets-scan | `/brewtools:secrets-scan` | sonnet | Secrets and key scanning |
-| 8 | skill-toggle | `/brewtools:skill-toggle` | sonnet | Disable/enable individual skills (survives updates) |
-| 9 | ssh | `/brewtools:ssh` | opus | SSH server management |
-| 10 | text-human | `/brewtools:text-human` | sonnet | AI artifact removal from code |
-| 11 | text-optimize | `/brewtools:text-optimize` | sonnet | Text optimization for LLMs |
-| 12 | think-short | `/brewtools:think-short` | sonnet | Toggle terse-output mode |
+| 1 | deploy | `/brewtools:deploy` | opus | GitHub Actions deployment, CI/CD |
+| 2 | manager | `/brewtools:manager` | sonnet | Manager mode: codeword ++m injects delegate-everything prompt (plan-aware)  |
+| 3 | plugin-update | `/brewtools:plugin-update` | sonnet | Install and update the full plugin suite |
+| 4 | provider-switch | `/brewtools:provider-switch` | sonnet | Configure alternative API providers |
+| 5 | secrets-scan | `/brewtools:secrets-scan` | sonnet | Secrets and key scanning |
+| 6 | ssh | `/brewtools:ssh` | opus | SSH server management |
+| 7 | task-board-init | `/brewtools:task-board-init` | sonnet | Deploy a file-based Kanban board into any repo |
+| 8 | text-human | `/brewtools:text-human` | sonnet | AI artifact removal from code |
+| 9 | text-optimize | `/brewtools:text-optimize` | sonnet | Text optimization for LLMs |
+| 10 | think-short | `/brewtools:think-short` | sonnet | Toggle terse-output mode |
 
 <CardGrid>
-  <Card title="agent-toggle" icon="settings" href="/brewtools/skills/agent-toggle/">
-    Disable/enable individual agents (survives plugin updates)
-  </Card>
-  <Card title="debate" icon="people" href="/brewtools/skills/debate/">
-    Evidence-based multi-agent debate
-  </Card>
   <Card title="deploy" icon="sync" href="/brewtools/skills/deploy/">
     GitHub Actions deployment, CI/CD with safety gates
   </Card>
@@ -50,11 +42,11 @@ focused on text processing, security scanning, SSH management, deployment, evide
   <Card title="secrets-scan" icon="lock" href="/brewtools/skills/secrets-scan/">
     Secrets and key scanning
   </Card>
-  <Card title="skill-toggle" icon="settings" href="/brewtools/skills/skill-toggle/">
-    Disable/enable individual skills (survives plugin updates)
-  </Card>
   <Card title="ssh" icon="terminal" href="/brewtools/skills/ssh/">
     SSH server management with safety gates
+  </Card>
+  <Card title="task-board-init" icon="clipboard" href="/brewtools/skills/task-board-init/">
+    Deploy a file-based Kanban board into any repo
   </Card>
   <Card title="text-human" icon="user" href="/brewtools/skills/text-human/">
     AI artifact removal from code
@@ -68,7 +60,7 @@ focused on text processing, security scanning, SSH management, deployment, evide
 </CardGrid>
 
 <Callout type="tip" title="Standalone">
-  All twelve skills can be used independently -- they require no prior setup
+  All ten skills can be used independently -- they require no prior setup
   and no dependency on Brewcode or Brewdoc plugins.
 </Callout>
 

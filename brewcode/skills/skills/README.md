@@ -6,144 +6,110 @@ auto-sync-type: doc
 
 # Skills
 
-Manage Claude Code skills -- list installed skills, improve existing ones via the skill-creator agent, or create new skills from a prompt or spec file with research-driven generation.
+Manages Claude Code skills — check status, create new skills from a free-form prompt, improve or review existing ones. Input is ONE free-form natural-language prompt; there is no keyword grammar. Skill operations are delegated to the `brewcode:skill-creator` specialist agent.
+
+**Default action:** status (rich inventory). List-by-default is removed — typing `/brewcode:skills` alone now opens the interactive menu.
 
 ## Quick Start
 
-```bash
+```
 /brewcode:skills
 ```
 
-Lists all available skills across global, project, and plugin locations.
+No arguments: presents the interactive menu with Status (skills) pre-selected as the recommended action.
+
+Pass a free-form prompt to skip the menu entirely:
+
+```
+/brewcode:skills create a skill that scans for hardcoded secrets
+```
+
+## How It Works — Unified 6-Step Flow
+
+Every invocation goes through the same flow:
+
+1. **Input gate** — reads `$ARGUMENTS`; if empty, goes to the interactive menu.
+2. **Auto-mode select** — infers mode from the prompt and announces:
+   `Mode: <mode> (skills) — chosen because <evidence>`
+3. **No-prompt menu** — when no arguments given, shows a single `AskUserQuestion`:
+   - Status (skills) [recommended]
+   - Status (all: agents + rules + skills)
+   - Create
+   - Improve
+   - Review
+   - List (plain)
+   - Cancel
+4. **Dispatch** — routes to `brewcode:skill-creator` agent (create / improve / review / batch) or runs `list-skills.sh` directly (list mode).
+5. **Real status** — rich inventory showing installed skills grouped by location (global, project, plugin), with description and trigger keywords for each.
+6. **Mandatory final output** — structured summary of what was created, changed, or reviewed. Omitted only for `list` mode.
 
 ## Modes
 
-| Mode | How to trigger | What it does |
-|------|---------------|--------------|
-| `list` | `/brewcode:skills` or `/brewcode:skills list` | Lists all skills grouped by location (global, project, plugin) |
-| `up` | `/brewcode:skills up <name\|path\|folder>` | Improves one or more skills using the skill-creator agent |
-| `up` (shorthand) | `/brewcode:skills <name\|path\|folder>` | Same as `up` -- auto-detected when the argument is not a mode keyword |
-| `create` | `/brewcode:skills create <prompt>` | Researches the topic (codebase + web), then creates a new skill |
-| `create` (from spec) | `/brewcode:skills create ./spec.md` | Reads the spec file and creates a skill based on its contents |
+| Mode | How it activates | What it does |
+|------|-----------------|--------------|
+| `status` | Default when no other mode is detected | Shows skill inventory grouped by location |
+| `list` | Explicit only — "list", "show skills", "what skills" | Runs `list-skills.sh`, plain file listing |
+| `create` | "create", "add", "new skill" in prompt | skill-creator researches and generates a new SKILL.md + README.md |
+| `improve` | "improve", "update", "refine" in prompt | skill-creator rewrites target SKILL.md with optimized content |
+| `review` | "review", "check", "audit" in prompt | skill-creator audits skill files for quality and best practices |
+| `batch` | Multiple targets detected | skill-creator processes all targets in one pass |
+
+## Create / Improve Parameters
+
+When creating or improving a skill, the skill-creator agent asks three questions before generating:
+
+| Parameter | Options | Notes |
+|-----------|---------|-------|
+| Invocation type | User-only / LLM-auto / Both | Determines `user-invocable` and matcher strategy |
+| Testing depth | Quick (recommended) / Standard / Deep | Drives the scope of Phase 5 E2E evaluation |
+| Review type | Simple / Quorum | Quorum available only at Standard or Deep testing depth |
+
+**Description budget:** the generated `description:` field must be ≤ 120 characters (trigger keywords count toward the budget).
+
+The full creation pipeline includes Phase 0 Discovery (parallel Explore agents), Phase 4 Review (Simple or 3-reviewer Quorum with DoubleCheck + fix loop), and Phase 5 E2E. This machinery is only reachable via `create` or `improve` mode.
 
 ## Examples
 
-### Good Usage
-
 ```bash
-# List everything installed
-/brewcode:skills list
+# Open the interactive menu
+/brewcode:skills
 
-# Improve a skill by name (searches global and project locations)
-/brewcode:skills up commit
-
-# Shorthand -- same as above, "up" is implied
-/brewcode:skills commit
-
-# Improve a skill by explicit path
-/brewcode:skills up ~/.claude/skills/commit/SKILL.md
-
-# Shorthand with path
-/brewcode:skills brewcode/skills/setup
-
-# Improve all skills in a folder (parallel agents)
-/brewcode:skills ~/.claude/skills/
+# Check the current state of all installed skills
+/brewcode:skills what is the current state of our skills
 
 # Create a brand new skill from a prompt
-/brewcode:skills create "semantic code search"
+/brewcode:skills create a skill that scans for hardcoded API keys
 
-# Create a skill from a spec file
-/brewcode:skills create ./my-skill-spec.md
+# Improve an existing skill by name
+/brewcode:skills improve the grepai skill
+
+# Improve a skill by explicit path
+/brewcode:skills update brewcode/skills/grepai
+
+# Review all skills in a folder for quality
+/brewcode:skills review ~/.claude/skills/
+
+# Plain listing of all skill files
+/brewcode:skills list
 ```
-
-### Common Mistakes
-
-| Mistake | Why it fails | Correct |
-|---------|-------------|---------|
-| `/brewcode:skills up` (no target) | `up` mode requires a skill name, path, or folder | `/brewcode:skills up commit` |
-| `/brewcode:skills create` (no prompt) | `create` mode requires a prompt or spec file path | `/brewcode:skills create "my new skill"` |
-| `/brewcode:skills up list` | Interprets `list` as a skill name to improve, not the list mode | `/brewcode:skills list` |
 
 ## Output
 
 Depends on mode:
 
-- **list** -- a summary table of all skills grouped by location (global `~/.claude/skills/`, project `.claude/skills/`, plugins).
-- **up** -- the skill-creator agent rewrites the target SKILL.md with optimized description, trigger keywords, imperative voice, and best practices. For folders, multiple agents run in parallel.
-- **create** -- a new skill directory containing `SKILL.md` and `README.md`, placed in `.claude/skills/` (project) or `~/.claude/skills/` (global). Before creation you are asked whether the skill should be user-invocable, LLM auto-detected, or both.
+- **status** — rich inventory table of all skills grouped by location (global `~/.claude/skills/`, project `.claude/skills/`, plugins), with description and trigger keywords for each.
+- **list** — plain file listing from `list-skills.sh`.
+- **create** — a new skill directory containing `SKILL.md` and `README.md`, placed in `.claude/skills/` (project) or `~/.claude/skills/` (global).
+- **improve** — the target `SKILL.md` rewritten with optimized description, trigger keywords, imperative voice, and best practices.
+- **review** — a structured audit report with issues found and recommended fixes applied.
 
-## Mode Switcher
-
-The `create` mode can generate **Mode Switcher** skills — special skills that toggle persistent behavioral modes for the entire Claude Code session.
-
-### What is a Mode Switcher?
-
-A mode switcher is a skill that changes how Claude behaves for the rest of the session. For example, "manager mode" makes Claude delegate all tasks via agents, "researcher mode" makes Claude prioritize depth and source verification.
-
-### How it works
-
-```
-/brewcode:skills create "toggle research mode"
-                    ↓
-         Step 2.5 detects "mode/toggle" keywords
-                    ↓
-         Asks: "Create as a Mode Switcher skill?"
-                    ↓  Yes
-         skill-creator uses Mode Switcher pattern
-                    ↓
-    Creates skill with on/off/status arguments
-                    ↓
-    Skill writes state → hooks inject instructions
-```
-
-### Flow
-
-```
-Skill writes {"mode":"research"} → $CLAUDE_PLUGIN_DATA/modes.json
-                    ↓
-  forced-eval.mjs   → injects [MODE: research] into every user prompt
-  session-start.mjs → injects mode into session context (survives compact)
-  pre-task.mjs      → injects mode into every sub-agent prompt
-```
-
-### Example
-
-```bash
-# Create a mode switcher skill
-/brewcode:skills create "toggle deep research mode that prioritizes source verification"
-
-# The created skill will support:
-/my-mode on research    # activate mode
-/my-mode off            # deactivate
-/my-mode status         # show current mode
-```
-
-### Creating a mode manually
-
-1. Create mode instructions file: `brewcode/modes/{name}.md` (plain text)
-2. Activate:
-   ```bash
-   MODES="$BC_PLUGIN_DATA/modes.json"
-   [ ! -f "$MODES" ] && echo '{}' > "$MODES"
-   jq --arg m "research" --arg p "$PWD" --arg t "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" \
-     '.projects[$p] = {mode: $m, activatedAt: $t}' "$MODES" > "$MODES.tmp" && mv "$MODES.tmp" "$MODES"
-   ```
-3. Deactivate:
-   ```bash
-   MODES="$BC_PLUGIN_DATA/modes.json"
-   jq --arg p "$PWD" 'del(.projects[$p])' "$MODES" > "$MODES.tmp" && mv "$MODES.tmp" "$MODES"
-   ```
-
-> **Legacy fallback:** `.claude/tasks/cfg/brewcode.state.json` (flat `mode` field) is still supported but deprecated.
-
-Hooks pick up the change automatically — no code modifications needed.
 
 ## Tips
 
-- Use the shorthand form (`/brewcode:skills commit`) for quick improvements -- no need to type `up` explicitly.
-- Point at a folder (`/brewcode:skills ~/.claude/skills/`) to batch-improve every skill inside it. Each skill gets its own parallel agent.
+- Run `/brewcode:skills` with no arguments to see the menu — `Status (skills)` is pre-selected and answers "what do I have installed?" in one step.
 - The `create` mode checks conversation history first. If the current conversation already contains a workflow worth capturing, it extracts context directly and skips web research.
-- After creating a skill, you are offered an optional eval step that runs three test prompts to verify the skill activates correctly.
+- After creating a skill, Phase 5 E2E runs three test prompts to verify the skill activates correctly. Choose `Deep` testing depth for safety-critical or frequently-used skills.
+- `list` is the fastest mode for verifying file counts — use `status` when you need trigger keywords and descriptions alongside each entry.
 
 ## Documentation
 

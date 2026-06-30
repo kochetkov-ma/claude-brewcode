@@ -13,11 +13,11 @@ Lean execution engine: load rules from reference, analyze target, apply optimiza
 
 ## Step 0: Load Rules (REQUIRED)
 
-Read `$BT_PLUGIN_ROOT/skills/text-optimize/references/rules-review.md` using Read tool.
+Read `${CLAUDE_PLUGIN_ROOT}/skills/text-optimize/references/rules-review.md` using Read tool (`${CLAUDE_PLUGIN_ROOT}` brace form is natively substituted at spawn to this plugin's root).
 
 **Verify:** File contains `## C - Claude Behavior` header and `## Sources` section.
 
-> **STOP if read fails or headers missing** — Cannot optimize without rules reference. Report error: `❌ rules-review.md not loaded. Check $BT_PLUGIN_ROOT value.` Do not proceed to Step 1.
+> **STOP if read fails or headers missing** — Cannot optimize without rules reference. Report error: `❌ rules-review.md not loaded.` Do not proceed to Step 1.
 
 ## Content Type Priorities
 
@@ -48,11 +48,11 @@ Check prompt for mode flag (`-l`, `-s`, `-d`) or context hints. If no flag:
 - Unknown → use medium (default)
 
 ### Step 2: Load References
-- Always: Read `$BT_PLUGIN_ROOT/skills/text-optimize/references/rules-review.md`
-- Standard mode: Also read `$BT_PLUGIN_ROOT/skills/text-optimize/references/standard-compression.md`
-- Deep mode: Also read `$BT_PLUGIN_ROOT/skills/text-optimize/references/deep-compression.md`
+- Always: Read `${CLAUDE_PLUGIN_ROOT}/skills/text-optimize/references/rules-review.md`
+- Standard mode: Also read `${CLAUDE_PLUGIN_ROOT}/skills/text-optimize/references/standard-compression.md`
+- Deep mode: Also read `${CLAUDE_PLUGIN_ROOT}/skills/text-optimize/references/deep-compression.md`
 
-> STOP if rules-review.md read fails — report error: `❌ rules-review.md not loaded. Check $BT_PLUGIN_ROOT value.`
+> STOP if rules-review.md read fails — report error: `❌ rules-review.md not loaded.`
 
 ### Step 3: Analyze
 Read target → identify content type from table above → measure baseline (lines, ~tokens) → note critical info to preserve.

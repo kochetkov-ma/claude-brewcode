@@ -146,8 +146,10 @@ current level.
 # Manager — status
 
 ## Codewords (ALWAYS active — hook-driven, independent of this skill)
-Type `++m` anywhere in a prompt   → injects the Manager (full) block for that one turn.
-Type `++mp` anywhere in a prompt  → injects the Manager + Plan Mode block for that one turn.
+Type `++m` anywhere in a prompt   → injects the Manager block for that one turn. PLAN-AWARE:
+                                    in plan mode (permission_mode === 'plan') it injects the
+                                    Manager + Plan Mode block (full + plan addon); otherwise the
+                                    plain full block. There is NO separate `++mp` codeword.
 Type `++rr` anywhere in a prompt  → injects the Regression Review contract for that one turn.
 Type `++r` anywhere in a prompt   → injects the Review contract for that one turn.
 These fire on EVERY prompt containing them. This skill never enables or disables them;
@@ -155,10 +157,10 @@ it only customizes their TEXT via `mode` / `edit` / `reset`.
 When the HARD wall is ON, the Manager (full) block is ALSO auto-injected every turn —
 no codeword needed. Codewords and wall injection are independent.
 
---- injected by ++m (full) ---
+--- injected by ++m (full — plain mode) ---
 <full block text>
 
---- injected by ++mp (planmode) ---
+--- injected by ++m (planmode — when permission_mode === 'plan', full + plan addon) ---
 <planmode block text>
 
 ## HARD wall (this project) — registered=<yes|no>  armed=<ON|OFF>  level=<strict|balanced>  (state source: <project|global|default>)

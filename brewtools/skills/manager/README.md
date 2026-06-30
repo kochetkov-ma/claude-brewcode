@@ -4,20 +4,19 @@ Manager mode has **two independent layers**. Keep them straight:
 
 | Layer | What | Scope | Persistent |
 |-------|------|-------|-----------|
-| **SOFT codewords** (`++m` / `++mp`) | A `UserPromptSubmit` hook auto-injects a delegate-everything Manager prompt for ONE turn when it sees a codeword. **Always fires — this skill does NOT enable/disable it.** The skill only customizes the TEXT (`mode`/`edit`/`reset`) and explains it (`status`). | Global or project (prompt text) | Yes (hook is always on) |
+| **SOFT codewords** (`++m` / `++rr` / `++r`) | A `UserPromptSubmit` hook auto-injects a delegate-everything Manager prompt for ONE turn when it sees a codeword (`++m` is plan-aware — adds the plan supplement when `permission_mode === 'plan'`). **Always fires — this skill does NOT enable/disable it.** The skill only customizes the TEXT (`mode`/`edit`/`reset`) and explains it (`status`). | Global or project (prompt text) | Yes (hook is always on) |
 | **HARD wall** | An opt-in `PreToolUse` guard physically DENIES mutating tools (Write/Edit/Bash/…) in the **main session**, leaving only delegate/read/track. Subagents stay fully free. **Project-only, defaults OFF, installed into the project by this skill.** No codeword for the wall. | Project only | Yes, until `off`/`uninstall` |
 
 The two layers are orthogonal: codewords shape the Manager mindset; the wall enforces delegation by removing the tools that let the agent act as an executor. Either can be used alone.
 
 ## Codewords (SOFT — always active)
 
-Detection order — longest-prefix first: `++mp` → `++m` → `++rr` → `++r`.
+Detection — `++m` (plan-aware), and the review group `++rr` → `++r` (longest-prefix first).
 
 | Type anywhere in your prompt | Means | Injects | When |
 |------------------------------|-------|---------|------|
-| `++m` | Manager — delegate-everything for the current task | Manager (full) block | Always — hook-driven, independent of this skill |
-| `++mp` | Manager for Plan — manager role for plan + delegation; writes the task graph, uses the tasks tool | Manager + Plan Mode block | Always — tested first (prefix collision with `++m`) |
-| `++rr` | Regression Review — after each significant phase: no regression + project standard + correctness; two-phase review→double-check→fix; final cross-review at task end | Regression Review discipline (`review-regression`) block | Always — tested after `++m`, before `++r`; codeword-only |
+| `++m` | Manager — delegate-everything for the current task; PLAN-AWARE (auto-adds the plan supplement in plan mode) | Manager (full) block, or full + plan addon when `permission_mode === 'plan'` | Always — hook-driven, independent of this skill |
+| `++rr` | Regression Review — after each significant phase: no regression + project standard + correctness; two-phase review→double-check→fix; final cross-review at task end | Regression Review discipline (`review-regression`) block | Always — tested before `++r`; codeword-only |
 | `++r` | Review — two-phase multi-agent review→double-check→fix after each significant change | Review discipline (`review-double`) block | Always — codeword-only (no ambient/wall injection) |
 
 The block applies to that one turn only. When the HARD wall is armed, the Manager (full) block is also ambient-injected every turn — no codeword needed. Codewords and wall injection are independent. Review codewords (`++rr`/`++r`) are never ambient-injected.
@@ -30,10 +29,10 @@ The block applies to that one turn only. When the HARD wall is armed, the Manage
 | `/brewtools:manager off [--scope global\|project]` | Disarm the HARD wall (state flip only; registration stays in `settings.local.json`). Guard no-ops until re-armed. |
 | `/brewtools:manager uninstall` | Deregister the wall from `settings.local.json` + delete the copied guard. Auto-disarms first. Run `/reload` after. |
 | `/brewtools:manager level <strict\|balanced>` | Set wall strictness (project only). `balanced` = read-only Bash allowed; `strict` = all Bash denied. |
-| `/brewtools:manager mode <full\|planmode> [--scope ...]` | Set default prompt-text mode (informational — codeword still selects the block: `++m`=full, `++mp`=planmode) |
+| `/brewtools:manager mode full [--scope ...]` | Set default prompt-text mode (informational; `full` is the only user-settable mode — `++m` auto-selects planmode in plan mode) |
 | `/brewtools:manager status` | Print wall state (armed/disarmed, level, registered?), prompt sources, and both injected blocks |
-| `/brewtools:manager edit [full\|planmode] [--scope ...]` | Copy default block to an override and show the path for editing |
-| `/brewtools:manager reset [full\|planmode] [--scope ...]` | Delete the override, revert to plugin default |
+| `/brewtools:manager edit [full] [--scope ...]` | Copy default block to an override and show the path for editing |
+| `/brewtools:manager reset [full] [--scope ...]` | Delete the override, revert to plugin default |
 | `/brewtools:manager <any task>` | Inline Manager run — prepends the full block and delegates the task |
 
 ## NL prompts (RU+EN)
@@ -46,7 +45,6 @@ The block applies to that one turn only. When the HARD wall is armed, the Manage
 | `уровень строгий`, `level strict`, `режим строгий`, `strict mode` | `level strict` |
 | `уровень сбалансированный`, `level balanced`, `режим сбалансированный` | `level balanced` |
 | `включи глобально`, `enable globally` | `on --scope global` |
-| `режим planmode`, `plan mode`, `режим планирования` | `mode planmode` |
 | `полный режим`, `full mode` | `mode full` |
 | `статус`, `что сейчас`, `manager status` | `status` |
 | `поправь промт`, `edit prompt`, `customize` | `edit` |
@@ -110,16 +108,15 @@ The `agent_id` linchpin: subagent tool calls carry `agent_id` → guard allows. 
 
 ## Modes (prompt text)
 
-| Mode | Codeword | Block |
-|------|----------|-------|
-| `full` | `++m` | Manager role + protocol: decompose → TaskGraph → delegate → observe → integrate. Hands off everything. |
-| `planmode` | `++mp` | Full block + Plan Mode addon: the plan itself must encode the whole TaskGraph in English, pre-decomposed with owners, dependencies, and parallel markers. |
+| Mode | Selected by | Block |
+|------|-------------|-------|
+| `full` | `++m` (not in plan mode) | Manager role + protocol: decompose → TaskGraph → delegate → observe → integrate. Hands off everything. |
+| `planmode` | `++m` when `permission_mode === 'plan'` (auto — no separate codeword) | Full block + Plan Mode addon: the plan itself must encode the whole TaskGraph in English, pre-decomposed with owners, dependencies, and parallel markers. |
 
 ## Customizing the prompt
 
 ```
 /brewtools:manager edit full          # copy default into project override, then edit it
-/brewtools:manager edit planmode --scope global
 /brewtools:manager reset full         # drop override, back to plugin default
 ```
 
@@ -130,7 +127,8 @@ The `agent_id` linchpin: subagent tool calls carry `agent_id` → guard allows. 
 ```
 # Codewords (always work, no setup needed)
 ++m implement the new caching layer
-++mp design the migration from v1 to v2 schema
+# In plan mode (permission_mode === 'plan'), ++m auto-adds the plan supplement:
+++m design the migration from v1 to v2 schema
 
 # Hard wall — install and arm for this project
 /brewtools:manager on
@@ -151,7 +149,6 @@ The `agent_id` linchpin: subagent tool calls carry `agent_id` → guard allows. 
 # → deregisters from settings.local.json, run /reload after
 
 # Prompt-text customization (independent of the wall)
-/brewtools:manager mode planmode
 /brewtools:manager edit full
 /brewtools:manager reset full
 

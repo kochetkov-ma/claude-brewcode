@@ -1,0 +1,198 @@
+---
+title: "superreview"
+description: "Generates a project-tailored deep-review skill that merges code review and standards review into one deterministic pass."
+order: 1106
+---
+
+import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+
+<Badge text="opus" />
+<Badge text="generator" />
+<Badge text="human-invoked" />
+
+<Callout type="note">
+  **Generator skill.** `/brewcode:superreview` does not review code itself. It analyzes the
+  target project and writes a self-contained `.claude/skills/superreview/` into it. The emitted
+  skill does the reviewing.
+</Callout>
+
+## Quick reference
+
+| Field | Value |
+|-------|-------|
+| Command | `/brewcode:superreview "<fine-tune-prompt>" [scope]` |
+| Arguments | `<fine-tune-prompt>` — free-text priority emphasis woven into the emitted skill; optional `[scope]` hint passed through |
+| Model | opus |
+| Tools | Read, Write, Edit, Bash, Task, AskUserQuestion |
+| Output | `.claude/skills/superreview/` in the target project |
+
+## What it does
+
+`superreview` is a generator skill. It scans the target project — enumerating agents, rule files,
+source directories, and tech stack — then writes a self-contained review skill wired to that
+project's actual structure. No plugin dependency remains after generation.
+
+The emitted skill fuses two earlier passes: the `review` engine (two-phase find-then-validate,
+per-finding adversarial gate, single merged P0-P3 report) and the `standards-review` pass
+(reuse and duplication focus, 90/70/50 percent reuse matrix, per-stack guidelines). Both run as
+one `/superreview` invocation, producing one report.
+
+The `<fine-tune-prompt>` argument shapes the emitted skill's Focus rank table. Values such as
+"treat any security issue as P0" or "focus on architecture boundaries and reuse" are woven into
+the emitted `SKILL.md` so every `/superreview` run in the target project reflects those priorities.
+
+## When to use
+
+| Situation | Command |
+|-----------|---------|
+| Wire up a new project for deep review | `/brewcode:superreview "default ordering"` |
+| Security is the top concern | `/brewcode:superreview "treat any security issue as P0"` |
+| Architecture and reuse are the priority | `/brewcode:superreview "focus on architecture boundaries and reuse"` |
+| An agent, rule file, or source group changed | Re-run to refresh routing and rule pointers |
+
+## Example
+
+```
+/brewcode:superreview "focus on reuse and duplicate-detection"
+```
+
+The generator scans the project, asks about ambiguous domain mappings if needed, then writes:
+
+```
+superreview generated -> .claude/skills/superreview/
+
+Stack:         Node/TypeScript  (reference: typescript-react.md)
+Domain agents wired: 3  (developer, tester, architect)
+Review agents: reviewer, architect
+Rule pointers: 5 files referenced (not restated inline)
+File groups:   4  (src/developer, tests/tester, infra/architect, docs/general)
+Focus:         1 reuse  2 correctness  3 architecture  4 version-pins  5 business-reqs
+               fine-tune: "focus on reuse and duplicate-detection"
+
+Files written:
+  .claude/skills/superreview/SKILL.md
+  .claude/skills/superreview/references/agent-prompt.md
+  .claude/skills/superreview/references/report-template.md
+  .claude/skills/superreview/references/typescript-react.md
+
+Run it:  /superreview "<focus>" [scope: commit|branch|folder]
+```
+
+To run the emitted skill after generation:
+
+```
+/superreview "focus on reuse" last_3
+```
+
+## Workflow
+
+<Steps>
+  <li>
+    <div>
+      <strong>Phase 0 — Load templates</strong>
+      <p>The generator reads the four emit templates bundled with the skill: <code>SKILL.md.template</code>, <code>agent-prompt.md</code>, <code>report-template.md</code>, and the stack reference files. These are the scaffold for the emitted skill.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Phase 1 — Scan the target project</strong>
+      <p>Runs <code>generate.sh scan</code> to enumerate agents, rule files, source directories, and tech stack. Produces a SCAN_REPORT with agent list, rule list, source groups, and stack hint.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Phase 1.5 — Clarify ambiguous params</strong>
+      <p>Sends an <code>AskUserQuestion</code> when stack detection is ambiguous, domain-agent mapping is uncertain, or source group boundaries are unclear. Skipped when all params resolve unambiguously from the scan.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Phase 2 — Scalar substitution</strong>
+      <p>Calls <code>generate.sh emit</code> to fill all deterministic placeholder values: agent names, rule file paths, file groups, stack reference path. Writes initial file content to <code>.claude/skills/superreview/</code>.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Phase 3 — AI fills block placeholders</strong>
+      <p>The AI edits the emitted files via the Edit tool to fill block sections: per-domain review rules, focus rank table, tech-stack check list, and adversarial validation prompt.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Phase 4 — Validate</strong>
+      <p>Runs <code>generate.sh validate</code> to confirm no unresolved placeholder tokens remain. Errors block completion and prompt a targeted Phase 3 retry.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Phase 5 — Report</strong>
+      <p>Prints a summary: files written, agent wiring table, focus rank, and the invocation command for the emitted skill.</p>
+    </div>
+  </li>
+</Steps>
+
+## Technical details
+
+### Emitted skill — review modes
+
+The emitted `/superreview` is fully self-contained after generation. It resolves the review mode
+from the scope argument:
+
+| Mode | Scope keyword |
+|------|---------------|
+| `FULL_PROJECT` | No scope, or explicit `full` |
+| `EXPLICIT` | Named files or directories |
+| `UNCOMMITTED` | `uncommitted` / `staged` |
+| `LAST_COMMITS` | `last_N` / `branch` |
+
+The emitted skill is **READ-ONLY by design** — it reports findings, never edits source code.
+Per-finding adversarial validation: for each finding in the parallel fan-out, a second agent pass
+challenges it before it enters the merged report. Findings that fail validation are dropped or
+downgraded. Output: `.claude/reports/{TIMESTAMP}_superreview/REPORT.md`.
+
+### Re-run triggers
+
+Regenerate the emitted skill when any of the following change in the target project:
+
+- Agent added, removed, or renamed
+- Rule or convention file added
+- Tech stack changes (new runtime, framework, or language)
+- Source group boundaries shift (new top-level directory)
+
+### Error handling
+
+| Error | Resolution |
+|-------|------------|
+| No agents found in target project | Generator stops; create at least one agent first |
+| Unknown tech stack | Emits with generic reference; warns to review manually |
+| Multi-stack project | Emits one reference per detected stack; adds merge note |
+| Unresolved placeholder after Phase 3 | Phase 4 blocks completion; re-run Phase 3 on affected file |
+| Unwritable target path | Generator stops; check permissions on `.claude/skills/` |
+
+### Emitted file structure
+
+```
+.claude/skills/superreview/
+  SKILL.md                          # emitted review skill (self-contained)
+  references/
+    agent-prompt.md                 # per-agent review instructions
+    report-template.md              # merged P0-P3 report template
+    {stack}.md                      # java-kotlin | typescript-react | python | go
+```
+
+<CardGrid>
+  <Card title="spec skill" icon="document" href="/brewcode/skills/spec/">
+    Produces the project SPEC.md. Start with spec before generating a review skill for a new repo.
+  </Card>
+  <Card title="convention skill" icon="star" href="/brewcode/skills/convention/">
+    Another generator skill: writes project-wide coding conventions into `.claude/skills/convention/`.
+  </Card>
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/superreview">
+    Browse templates, generate.sh, and per-stack reference docs in the source tree.
+  </Card>
+  <Card title="Brewcode overview" icon="rocket" href="/brewcode/">
+    Plugin overview: hooks, all skills, all agents.
+  </Card>
+</CardGrid>
+
+<UpdateNotice />

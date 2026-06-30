@@ -78,9 +78,7 @@ brewdoc/
 ├── .claude-plugin/
 │   └── plugin.json              # Plugin manifest
 ├── hooks/
-│   ├── hooks.json               # 1 hook (Pre-Task)
-│   ├── pre-task.mjs             # BD_PLUGIN_ROOT injection
-│   └── lib/utils.mjs            # I/O utilities
+│   └── hooks.json               # no hooks registered ({"hooks":{}})
 ├── skills/
 │   ├── auto-sync/               # Documentation sync
 │   ├── my-claude/               # Installation documentation
@@ -92,9 +90,9 @@ brewdoc/
     └── bd-auto-sync-processor   # Internal: spawned by /brewdoc:auto-sync
 ```
 
-The single hook `pre-task.mjs` injects the `BD_PLUGIN_ROOT` variable into subagent prompts
-so they can locate the plugin's instruction files. Skills in the main conversation use
-`${CLAUDE_SKILL_DIR}` to access their own files.
+Brewdoc ships no runtime hooks. Agent subagents resolve plugin paths via the native
+`${CLAUDE_PLUGIN_ROOT}` variable provided by Claude Code at Task spawn. Skills in the
+main conversation use `${CLAUDE_SKILL_DIR}` to access their own files.
 
 <Callout type="note" title="Brewdoc vs Brewcode">
   **Brewdoc** is a set of documentation utilities: sync, memory optimization, PDF export.

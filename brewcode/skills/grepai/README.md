@@ -65,6 +65,18 @@ First-time setup takes 5-30+ minutes depending on project size. It checks infras
 /brewcode:grepai setup    <-- fails on missing Ollama or bge-m3
 ```
 
+## Hook Self-Install
+
+On first `/brewcode:grepai` setup run, the skill self-installs two project hooks:
+
+1. Detects whether `.claude/grepai/hooks/` already exists (idempotent -- safe to re-run).
+2. Default scope: PROJECT. Asks via AskUserQuestion only when scope is ambiguous.
+3. Copies `assets/grepai-session.mjs` and `assets/grepai-reminder.mjs` to `.claude/grepai/hooks/`.
+4. Merges SessionStart and PreToolUse:Bash entries into `.claude/settings.json` (jq + python3 fallback, no clobber).
+5. Reports what was created.
+
+After install, grepai reminders fire automatically at session start (SS) and on every Bash call (PTU:Bash).
+
 ## Output
 
 After `setup` completes, the following is created in your project:

@@ -11,9 +11,8 @@
 ```
 Claude Code CLI
     |
-    +-- SS hook: grepai-session.mjs  (auto-start + health check + status)
-    +-- PTU:Task hook: pre-task.mjs  (inject reminder + modify prompt)
-    +-- PTU:Glob/Grep: grepai-reminder.mjs  (remind about GA option)
+    +-- [project-installed] SS hook: grepai-session.mjs  (health check + status)
+    +-- [project-installed] PTU:Bash: grepai-reminder.mjs  (remind to use grepai_search)
     |
     v
 Unified Reminder: "grepai: USE grepai_search FIRST for code exploration"
@@ -34,6 +33,9 @@ Unified Reminder: "grepai: USE grepai_search FIRST for code exploration"
 │   ├── symbols.gob              # Call graph data
 │   └── logs/grepai-watch.log   # Daemon log
 ├── .claude/
+│   ├── grepai/hooks/            # Hook assets installed by /brewcode:grepai setup
+│   │   ├── grepai-session.mjs   # Copied from brewcode/skills/grepai/assets/
+│   │   └── grepai-reminder.mjs  # Copied from brewcode/skills/grepai/assets/
 │   ├── rules/grepai-first.md   # Attention-forcing rule
 │   └── logs/brewcode.log       # Hook diagnostic log
 └── CLAUDE.md                    # Contains "CRITICAL: Use grepai_search FIRST"
@@ -42,51 +44,47 @@ brewcode/
 ├── skills/grepai/
 │   ├── SKILL.md
 │   ├── config.yaml.example
+│   ├── assets/
+│   │   ├── grepai-session.mjs   # SS hook asset (installed by setup)
+│   │   ├── grepai-reminder.mjs  # PTU:Bash hook asset (installed by setup)
+│   │   └── INSTALL.md           # Install instructions
 │   └── scripts/  # 11 bash scripts (detect-mode, infra-check, mcp-check, init-index,
 │                 #   start, stop, reindex, optimize, upgrade, status, verify, create-rule)
 ├── agents/bc-grepai-configurator.md
-├── templates/rules/grepai-first.md.template
-└── hooks/
-    ├── grepai-session.mjs       # SS hook
-    ├── grepai-reminder.mjs      # PTU:Glob|Grep hook
-    └── pre-task.mjs             # PTU:Task hook
+└── templates/rules/grepai-first.md.template
 ```
 
 ---
 
 # ATTENTION SYSTEM
 
-> 7 INJs ensuring GA priority over Glob/Grep.
+> 5 INJs ensuring GA priority. INJ #1 and #2 active only after /brewcode:grepai setup installs hooks.
 
 **Unified reminder:** `grepai: USE grepai_search FIRST for code exploration`
 - Prefix `grepai:` for categorization
 - Uppercase `USE...FIRST` for imperative force
 - Exact tool name: `grepai_search`
 
-## 7 INJ Points
+## 5 INJ Points
 
 | # | Point | Hook/File | Event | Scope | Strength |
 |---|-------|-----------|-------|-------|----------|
-| 1 | SS | grepai-session.mjs:146 | SS | Session ctx | MUST |
-| 2 | PTU:Task | pre-task.mjs:20,56 | PTU | ALL agents | MUST (prepend) |
-| 3 | PTU:Glob/Grep | grepai-reminder.mjs:24 | PTU | Glob/Grep calls | MUST |
-| 4 | Rule file | grepai-first.md.template:7 | Always | All files (`**/*`) | CRITICAL |
-| 5 | CLAUDE.md | create-rule.sh:18 | Persistent | Project cfg | CRITICAL |
-| 6 | Root CLAUDE.md | CLAUDE.md:101 | Always | Global | CRITICAL |
-| 7 | Agent prompts | pre-task.mjs (prepend) | Every Task | Line 1 of prompt | MUST |
+| 1 | SS | grepai-session.mjs (project-installed) | SS | Session ctx | MUST |
+| 2 | PTU:Bash | grepai-reminder.mjs (project-installed) | PTU | Bash calls | MUST |
+| 3 | Rule file | grepai-first.md.template:7 | Always | All files (`**/*`) | CRITICAL |
+| 4 | CLAUDE.md | create-rule.sh:18 | Persistent | Project cfg | CRITICAL |
+| 5 | Root CLAUDE.md | CLAUDE.md:101 | Always | Global | CRITICAL |
 
 ## INJ Flow
 
 ```
-SS → INJ #1 (grepai-session.mjs):
+SS → INJ #1 (grepai-session.mjs, project-installed):
   Check: .grepai/ exists? + OL running? + index.gob exists?
-  YES → auto-start watch if needed
-      → AC: "grepai: USE grepai_search FIRST..."
+  YES → AC: "grepai: USE grepai_search FIRST..."
       → systemMessage: "grepai: ready | index: 150MB"
 
-User triggers Task/Glob/Grep →
-  Task → INJ #2 (pre-task.mjs): prepend reminder to ALL agent prompts
-  Glob/Grep → INJ #3 (grepai-reminder.mjs): AC reminder
+User triggers Bash →
+  Bash → INJ #2 (grepai-reminder.mjs, project-installed): AC reminder
 
 Persistent (always active):
   INJ #4: .claude/rules/grepai-first.md  (paths: **/*)
@@ -96,47 +94,22 @@ Persistent (always active):
 
 ## Detailed INJ Mechanisms
 
-### INJ #1: grepai-session.mjs (SS)
+### INJ #1: grepai-session.mjs (SS, project-installed)
 
 ```javascript
-// hooks/grepai-session.mjs:143-148
+// skills/grepai/assets/grepai-session.mjs (project-installed by /brewcode:grepai setup)
 if (status.length === 0) {  // All systems healthy
   hookSpecificOutput.additionalContext =
     'grepai: USE grepai_search FIRST for code exploration';
 }
 ```
 
-Trigger conditions: `.grepai/` exists + OL running (`curl localhost:11434/api/tags`) + `index.gob` exists + `grepai watch` active (or auto-started)
+Trigger conditions: `.grepai/` exists + OL running (`curl localhost:11434/api/tags`) + `index.gob` exists + `grepai watch` active. Requires prior setup install.
 
-### INJ #2: pre-task.mjs (PTU:Task)
-
-```javascript
-// hooks/pre-task.mjs:20
-const GREPAI_REMINDER = 'grepai: USE grepai_search FIRST for code exploration';
-
-// hooks/pre-task.mjs:48-59
-const hasGrepai = existsSync(join(cwd, '.grepai'));
-if (hasGrepai) {
-  updatedPrompt = `${GREPAI_REMINDER}\n\n${updatedPrompt}`;
-}
-```
-
-Scope: ALL agents (Explore, Plan, Bash, developer, tester, reviewer, custom)
-Mechanism: prepend — reminder = FIRST line of agent prompt
-
-Output structure:
-```javascript
-hookSpecificOutput: {
-  hookEventName: 'PreToolUse',
-  permissionDecision: 'allow',
-  updatedInput: { ...tool_input, prompt: updatedPrompt }
-}
-```
-
-### INJ #3: grepai-reminder.mjs (PTU:Glob|Grep)
+### INJ #2: grepai-reminder.mjs (PTU:Bash, project-installed)
 
 ```javascript
-// hooks/grepai-reminder.mjs:24-31
+// skills/grepai/assets/grepai-reminder.mjs (project-installed by /brewcode:grepai setup)
 if (existsSync(grepaiDir)) {
   output({ hookSpecificOutput: {
     hookEventName: 'PreToolUse',
@@ -145,9 +118,9 @@ if (existsSync(grepaiDir)) {
 }
 ```
 
-Trigger: every Glob or Grep call. Reminds about semantic alternative.
+Trigger: every Bash call (PTU:Bash, when installed by setup). Reminds about semantic alternative.
 
-### INJ #4: grepai-first.md.template (Rule)
+### INJ #3: grepai-first.md.template (Rule)
 
 ```markdown
 ---
@@ -171,23 +144,12 @@ description: grepai-first - semantic search FIRST for code exploration
 **Decision:** "Need exact text/pattern?" → YES: Grep/Glob, NO: grepai
 ```
 
-### INJ #5 & #6: CLAUDE.md (project + root)
+### INJ #4 & #5: CLAUDE.md (project + root)
 
 ```markdown
 ## Code Search
 > **CRITICAL:** Use `grepai_search` FIRST for code exploration.
 ```
-
-### INJ #7: Prompt Prepending (Position-Based)
-
-```
-Agent prompt:
-  Line 1: grepai: USE grepai_search FIRST for code exploration  ← FIRST
-  Line 2: (empty)
-  Line 3: [original prompt]
-```
-
-LLMs process sequentially; first lines have greatest weight (primacy effect) — reminder seen BEFORE any instructions.
 
 ## Attention Strength Escalation
 
@@ -196,12 +158,21 @@ LLMs process sequentially; first lines have greatest weight (primacy effect) —
 | v2.0.57 | `consider grepai_search FIRST` | Advisory |
 | v2.0.58 | `USE grepai_search FIRST` | Imperative |
 
-## No Opt-Out Design
+## Install State Design
 
 ```
 .grepai/ exists?
-  YES → all 3 hooks inject (no config to disable; removal = delete .grepai/)
-  NO  → graceful skip, no injection
+  NO  → graceful skip, no injection from any hook
+
+  YES + hooks project-installed (via /brewcode:grepai setup)?
+    grepai-session.mjs → injects AC at SS
+    grepai-reminder.mjs → injects AC at PTU:Bash
+
+  YES + hooks NOT installed?
+    run /brewcode:grepai setup to self-install:
+      copies assets to .claude/grepai/hooks/
+      merges SessionStart + PTU:Bash entries into .claude/settings.json (jq + python3 fallback)
+      idempotent — safe to re-run
 ```
 
 ---
@@ -218,7 +189,7 @@ LLMs process sequentially; first lines have greatest weight (primacy effect) —
 | 1a - MCP Server Instructions | `grepai` server `instructions` field | "Use semantic search for CE..." |
 | 2 - Tools array | MCP server `tools` | `mcp__grepai__grepai_search` schema with full param descriptions |
 | 3 - User messages (dynamic) | CLAUDE.md + rules + hook AC | grepai-first.md rule injected each turn |
-| 4 - Hook injections | grepai-session.mjs, pre-task.mjs | AC + systemMessage at PTU/SS |
+| 4 - Hook injections | grepai-session.mjs (project-installed), grepai-reminder.mjs (project-installed) | AC at SS + PTU:Bash |
 
 ## Attention Flow: Rule → MCP Tool Descriptions
 
@@ -260,7 +231,6 @@ Use semantic search for code exploration...
 |-------|--------|-----------|
 | System prompt (static) | MCP server `instructions` + `tools` | GA instructions + tool defs |
 | User messages (dynamic) | CLAUDE.md + grepai-first.md + hook AC | Per-turn rule + hook context |
-| Subagent prompts | pre-task.mjs prepend | "grepai: USE grepai_search FIRST..." |
 
 ---
 

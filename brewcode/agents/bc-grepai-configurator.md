@@ -2,7 +2,7 @@
 name: bc-grepai-configurator
 description: Internal. Spawned only by /brewcode:grepai. No direct/auto use.
 tools: Read, Write, Edit, Bash, WebFetch, Glob, Grep
-model: opus
+model: inherit
 permissionMode: acceptEdits
 mcpServers:
   - grepai

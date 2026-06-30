@@ -1,6 +1,6 @@
 ---
 title: "Manager"
-description: "Type ++m / ++mp / ++rr / ++r anywhere to inject a Manager or review-discipline block for one turn. The HARD wall denies Write/Edit/NotebookEdit/WebFetch/MCP-write in the main session, forcing delegation. RU+EN."
+description: "Type ++m / ++rr / ++r anywhere to inject a Manager or review-discipline block for one turn. The HARD wall denies Write/Edit/NotebookEdit/WebFetch/MCP-write in the main session, forcing delegation. RU+EN."
 order: 3124
 ---
 import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
@@ -10,7 +10,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 <Badge variant="default" text="sonnet" /> <Badge variant="accent" text="hook" />
 
 <Callout type="tip">
-**What is Manager mode?** You type a short codeword (`++m`, `++mp`, `++rr`, or `++r`) anywhere in your message and Claude instantly activates a discipline contract -- just for that one message. `++m` makes Claude a pure orchestrator that delegates all hands-on work. `++mp` adds a full task-graph planning pass. `++rr` and `++r` inject review discipline (anti-regression / two-phase double-check). No setup required. The codeword is stripped from your message; your actual text is preserved.
+**What is Manager mode?** You type a short codeword (`++m`, `++rr`, or `++r`) anywhere in your message and Claude instantly activates a discipline contract -- just for that one message. `++m` makes Claude a pure orchestrator that delegates all hands-on work -- and when you are in plan mode it automatically adds a full task-graph planning pass. `++rr` and `++r` inject review discipline (anti-regression / two-phase double-check). No setup required. The codeword is stripped from your message; your actual text is preserved.
 </Callout>
 
 ## What actually happens
@@ -50,11 +50,10 @@ Your single line becomes: the full Manager contract (highlighted above) + your o
 | Codeword | Means | What it does |
 |----------|-------|-------------|
 | `++m` | Manager | Manager + delegation for the current task -- Claude orchestrates, never codes by hand |
-| `++mp` | Manager for Plan | Manager role for plan + delegation -- writes the full task graph in English before starting, uses the tasks tool |
 | `++rr` | Regression Review | Regression review with double-check -- after each significant phase, run a review focused on no regression + project standard + correctness; two-phase (review → double-check → fix); mandatory final cross-review at task end |
 | `++r` | Review | Review with double-check -- after each significant change, run a two-phase multi-agent review (review → double-check → fix); codeword-only, no ambient injection or wall state change |
 
-Detection order: `++mp` → `++m` → `++rr` → `++r` (longest-prefix first; `++rr` is always tested before `++r`).
+Detection order: within the review group, `++rr` is tested before `++r` (longest-prefix first). `++m` is matched as a standalone token; in plan mode it auto-adds the plan addon.
 
 Put the codeword anywhere: start, middle, or end of your message. Everything else is passed through unchanged.
 
@@ -67,7 +66,7 @@ Put the codeword anywhere: start, middle, or end of your message. Everything els
 | `/brewtools:manager status` | Show what is currently on -- codeword state, wall state, prompt source |
 | `/brewtools:manager on` | Turn on the HARD wall -- Claude physically cannot write/edit files in this project until you turn it off |
 | `/brewtools:manager off` | Turn the HARD wall off |
-| `/brewtools:manager edit full` | Open the Manager prompt text so you can customize it |
+| `/brewtools:manager edit` | Open the Manager prompt text so you can customize it |
 
 ---
 
@@ -117,7 +116,7 @@ This is what "delegate everything" means in practice -- the wall makes it physic
 | Situation | What to type |
 |-----------|-------------|
 | Delegate one complex task as Manager, just this turn | `do X ++m` |
-| Start a full parallel plan with task breakdown | `plan Y ++mp` |
+| Start a full parallel plan with task breakdown (in plan mode) | `plan Y ++m` |
 | Enforce the delegation rule for a whole project session | `/brewtools:manager on` |
 | Run one task under the wall then auto-revert | `refactor payment service in hard mode` |
 | Run task as Manager without changing any wall state | `build release plan as manager` |
@@ -178,7 +177,7 @@ The balanced Bash classifier is an allowlist of known-safe read-only commands, N
 
 ### How the codeword injection works
 
-On every user message, `manager-prompt.mjs` scans the prompt text. Detection order follows longest-prefix first: `++mp` → `++m` → `++rr` → `++r`. This ensures `++mp` is never mis-matched as `++m`, and `++rr` is never mis-matched as `++r`. If no codeword is present (and the wall is not armed), the hook exits immediately -- no file I/O, zero overhead.
+On every user message, `manager-prompt.mjs` scans the prompt text. It matches `++m` as a standalone token, and tests the review group longest-prefix first (`++rr` before `++r`) so `++rr` is never mis-matched as `++r`. If no codeword is present (and the wall is not armed), the hook exits immediately -- no file I/O, zero overhead.
 
 The hook resolves the prompt text for the detected mode (`full` or `planmode`) via three-level fallback:
 
@@ -211,9 +210,9 @@ The wall flags (`hard`/`level`) are resolved project-only. Passing `--scope glob
 
 Global paths (`~/.claude/*`) are protected from direct Write/Edit tool access (Claude Code v3.4.70+). The skill writes them via bundled Node helpers using atomic lock+tmp+rename.
 
-### Plan Mode addon (`++mp`)
+### Plan Mode addon (auto in plan mode)
 
-When `++mp` is detected, the hook injects both the full Manager block and the Plan Mode addon. The addon instructs the model to: write the full TaskGraph in English into the plan before starting; mark tasks with parallel / critical-path indicators; output all task and plan text in English regardless of user prompt language.
+When `++m` is used while the session is in plan mode (`permission_mode === 'plan'`), the hook injects both the full Manager block and the Plan Mode addon. The addon instructs the model to: write the full TaskGraph in English into the plan before starting; mark tasks with parallel / critical-path indicators; output all task and plan text in English regardless of user prompt language.
 
 </details>
 
@@ -232,10 +231,8 @@ When `++mp` is detected, the hook injects both the full Manager block and the Pl
 | `level strict` | `/brewtools:manager level strict` | Wall strictness = strict (Bash fully off) |
 | `level balanced` | `/brewtools:manager level balanced` | Wall strictness = balanced (read-only Bash allowed) |
 | `status` | `/brewtools:manager status` | Full explainer: codewords + wall state + effective prompt sources |
-| `mode full` | `/brewtools:manager mode full` | Set prompt-text mode to `full` (informational only) |
-| `mode planmode` | `/brewtools:manager mode planmode` | Set prompt-text mode to `planmode` (informational only) |
-| `edit [full\|planmode]` | `/brewtools:manager edit` | Copy plugin default into project override for editing |
-| `reset [full\|planmode]` | `/brewtools:manager reset` | Delete project override, revert to plugin default |
+| `edit` | `/brewtools:manager edit` | Copy plugin default into project override for editing |
+| `reset` | `/brewtools:manager reset` | Delete project override, revert to plugin default |
 | `hard-one-shot` | `<task> in hard mode` | Wall ON -- run task as Manager -- auto-revert wall OFF when done (reverts even on failure or abort) |
 | `manager-run` | `<task> as manager` | Run task as Manager with wall UNTOUCHED (discipline via injected prompt only -- no wall toggle) |
 | `inline-run` | `/brewtools:manager <task>` | Prepend Manager block, execute -- no state change |
@@ -247,14 +244,14 @@ When `++mp` is detected, the hook injects both the full Manager block and the Pl
 
 ## Codewords (ALWAYS active -- hook-driven, independent of this skill)
 Type `++m` anywhere   -> injects the Manager (full) block for that one turn.
-Type `++mp` anywhere  -> injects the Manager + Plan Mode block for that one turn.
+Type `++m` while in plan mode -> injects the Manager + Plan Mode block for that one turn.
 Type `++rr` anywhere  -> injects the Regression Review contract for that one turn.
 Type `++r` anywhere   -> injects the Review contract for that one turn.
 
 --- injected by ++m (full) ---
 <full Manager block text>
 
---- injected by ++mp (planmode) ---
+--- injected by ++m (planmode -- auto when permission_mode === 'plan') ---
 <planmode block text>
 
 ## HARD wall (this project) -- registered=no  armed=OFF  level=balanced  (state source: default)
@@ -277,7 +274,7 @@ Level:     /brewtools:manager level strict | balanced
     Companion output-control skill -- inject brevity directives via SessionStart and per-agent PreToolUse rather than per-prompt codewords.
   </Card>
   <Card title="Prompt Injection" icon="bolt" href="/brewtools/prompt-injection/">
-    How the `++m` / `++mp` / `++rr` / `++r` codewords inject the Manager / review contract into the model -- the full mechanism explained.
+    How the `++m` / `++rr` / `++r` codewords inject the Manager / review contract into the model -- the full mechanism explained.
   </Card>
   <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">
     All brewtools skills and agents in one place.

@@ -96,7 +96,7 @@ Managed directories (`rules/`, `agents/`, `skills/`) are excluded from automatic
   <li>
     <div>
       <strong>Parallel processing</strong>
-      <p>Spawns <code>bd-auto-sync-processor</code> agents (sonnet model) up to <code>PARALLEL_AGENTS</code> concurrently. Each agent receives <code>PATH | TYPE | FLAGS</code> and <code>BD_PLUGIN_ROOT</code> via the pre-task hook. Agents analyze sources, compare with current doc content, and apply changes.</p>
+      <p>Spawns <code>bd-auto-sync-processor</code> agents (sonnet model) up to <code>PARALLEL_AGENTS</code> concurrently. Each agent receives <code>PATH | TYPE | FLAGS</code>; the agent resolves its plugin root natively via <code>$&#123;CLAUDE_PLUGIN_ROOT&#125;</code> (substituted in its .md at Task spawn). Agents analyze sources, compare with current doc content, and apply changes.</p>
     </div>
   </li>
   <li>

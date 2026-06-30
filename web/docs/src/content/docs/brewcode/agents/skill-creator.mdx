@@ -121,7 +121,6 @@ skill-name/
 | **Agents-as-References** | Coordinator with multi-step workflow — pass file path to subagent, subagent reads itself. 0 tokens in coordinator context |
 | **Context Fork** | Standalone task, no history needed, &lt;4 phases — `context: fork` + isolated subagent |
 | **Executable Bash** | `**EXECUTE** using Bash tool:` keyword + `&& echo "✅" \|\| echo "❌"` + `> STOP if ❌` |
-| **Mode Switcher** | "toggle", "persistent behavior", "from now on" → state in `$BC_PLUGIN_DATA/modes.json`, hooks inject on every event |
 | **Pushy Description** | LLM-invocable skills — action verb + `Triggers: "exact user phrases"`. Raises rate 20% → 50-72% |
 
 ### Description format

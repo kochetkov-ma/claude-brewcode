@@ -10,9 +10,11 @@ verb and carries no hard/manager marker falls through to `inline-run`.
 >   `state.hard`/`state.level` + a guard INSTALLED into the project's
 >   `.claude/settings.local.json`, **PROJECT scope only**, persistent, this skill only.
 >   `on` = install+arm; `off` = disarm (state only); `uninstall` = deregister.
-> - **SOFT codewords** `++m`/`++mp` = autonomous hook injection, ALWAYS fire,
->   not toggled here. `mode`/`edit`/`reset` only shape the injected TEXT.
->   Note: `++mp` is tested BEFORE `++m` (prefix collision — both present ⇒ planmode wins).
+> - **SOFT codewords** `++m`/`++rr`/`++r` = autonomous hook injection, ALWAYS fire,
+>   not toggled here. `edit`/`reset` only shape the injected TEXT.
+>   Note: `++m` is plan-aware — when the session is in plan mode (permission_mode === 'plan')
+>   it injects the planmode block (full + plan addon); otherwise the plain full block.
+>   There is NO separate `++mp` codeword.
 
 ## Actions
 
@@ -24,10 +26,8 @@ verb and carries no hard/manager marker falls through to `inline-run`.
 | status | status, state, what now, show, current | статус, состояние, что сейчас, покажи, текущий | Main explainer: codewords + wall state + how to toggle |
 | level strict | level strict, strict, strict mode | режим строгий, строгий, строгий режим | Wall strictness = strict |
 | level balanced | level balanced, balanced, default level | режим сбалансированный, сбалансированный, баланс | Wall strictness = balanced (default) |
-| mode full | mode full, full mode, set full | режим full, полный режим, переключи на full | Prompt TEXT only: use full.md block |
-| mode planmode | mode planmode, plan mode, planning | режим planmode, режим планирования | Prompt TEXT only: use planmode.md block |
-| edit | edit, customize, change prompt, fix prompt | правка, поправь промт, измени промт, кастомизируй | Edit `[full\|planmode]` prompt text |
-| reset | reset, restore default, revert | сброс, верни дефолт, сбрось, по умолчанию | Reset `[full\|planmode]` prompt to default |
+| edit | edit, customize, change prompt, fix prompt | правка, поправь промт, измени промт, кастомизируй | Edit the Manager prompt text |
+| reset | reset, restore default, revert | сброс, верни дефолт, сбрось, по умолчанию | Reset the Manager prompt to default |
 | hard-one-shot | `<task> in hard mode`, `<task> under the wall` | `<задача> в хард режиме`, `<задача> в режиме стены` | Real task + hard marker → wall ON, run, auto-revert OFF |
 | manager-run | `<task> as manager`, `<task> in manager role` | `<задача> от роли менеджера`, `<задача> как менеджер` | Run task in manager role, wall untouched |
 | inline-run | any bare task/request, no verb, no marker | любой обычный запрос без глагола и маркера | Prepend full block and run as manager, wall untouched. When the wall is ON the full block is already ambient-injected by the hook; the skill still prepends it for consistency (one-shot runs may not have the wall on). |

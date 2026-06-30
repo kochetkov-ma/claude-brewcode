@@ -17,15 +17,11 @@ brewcode/                                    # Plugin root directory
 │   └── plugin.json                            # Manifest (name, version 3.1.0, skills/ reference)
 │
 ├── hooks/                                     # Node.js scripts for Claude Code events
-│   ├── hooks.json                             # Binds 4 events (UserPromptSubmit, SessionStart, PreToolUse, PermissionRequest)
+│   ├── hooks.json                             # Binds 2 events (UserPromptSubmit, SessionStart)
 │   ├── lib/
 │   │   └── utils.mjs                          # readStdin, output, log, lock files, config, state, task parsing
-│   ├── session-start.mjs                      # SessionStart: session log, creates LATEST.md symlink on source='clear'
-│   ├── grepai-session.mjs                     # SessionStart: auto-starts grepai watch if .grepai/ exists, checks MCP server
-│   ├── pre-task.mjs                           # PreToolUse(Task): injects grepai reminder + role constraints
-│   ├── grepai-reminder.mjs                    # PreToolUse(Bash): reminds to use grepai_search
-│   ├── forced-eval.mjs                        # UserPromptSubmit: skill activation reminder
-│   └── permission-guard.sh                    # PermissionRequest: manager-mode edit guard
+│   ├── session-start.mjs                      # SessionStart: version-check, plan-symlink, permission_mode tag
+│   └── forced-eval.mjs                        # UserPromptSubmit: skill activation reminder (~9K additionalContext bound)
 │
 ├── agents/                                    # Plugin agents (system prompts in Markdown)
 │   ├── bc-grepai-configurator.md              # grepai configurator (opus): project analysis, config.yaml via 5 parallel investigations
@@ -40,24 +36,10 @@ brewcode/                                    # Plugin root directory
 │   ├── reviewer.md                            # Reviewer (opus): code review, quality, security, performance
 │   └── tester.md                              # Tester (sonnet): SDET/QA - runs tests, analyzes failures
 │
-├── skills/                                    # Skills - plugin commands (13 total)
-│   │
-│   ├── setup/                                 # /brewcode:setup - Plugin initialization
-│   │   ├── SKILL.md                           # Project analysis, adapted template generation (opus, fork)
-│   │   ├── scripts/
-│   │   │   ├── setup.sh                       # scan/structure/sync/review/config/validate/all
-│   │   │   └── install.sh                     # state/check-updates/check-timeout/required/grepai/summary
-│   │   └── templates/
-│   │       ├── SPEC.md.template               # Goal, Scope, Requirements, Analysis, Context Files, Risks, Decisions
-│   │       └── brewcode.config.json.template  # Config: logging, agents, constraints, autoSync
+├── skills/                                    # Skills - plugin commands (9 total)
 │   │
 │   ├── spec/                                  # /brewcode:spec - Specification creation
 │   │   └── SKILL.md                           # 7 steps: investigation (5-10 parallel agents), dialog, review (opus, session)
-│   │
-│   ├── rules/                                 # /brewcode:rules - Extract rules from knowledge
-│   │   ├── SKILL.md                           # KNOWLEDGE.jsonl → avoid.md + best-practice.md, dedup, 20 line limit (sonnet, session)
-│   │   └── scripts/
-│   │       └── rules.sh                       # read/check/create/validate
 │   │
 │   ├── grepai/                                # /brewcode:grepai - Semantic search management
 │   │   ├── SKILL.md                           # 7 modes: setup/status/start/stop/reindex/optimize/upgrade (sonnet, session)
@@ -77,20 +59,43 @@ brewcode/                                    # Plugin root directory
 │   │       ├── verify.sh                      # Full functionality check
 │   │       └── create-rule.sh                 # Creates grepai-first.md in .claude/rules/
 │   │
-│   ├── teardown/                              # /brewcode:teardown - Plugin files cleanup
-│   │   └── SKILL.md                           # Removes templates/, cfg/, skills/brewcode-review/; preserves tasks (haiku, fork)
+│   ├── superreview/                           # /brewcode:superreview - Generate project-tailored deep-review skill
+│   │   ├── SKILL.md                           # Generator: emits .claude/skills/superreview/ into target project (opus, fork)
+│   │   ├── references/                        # Per-stack reviewer guidelines + SKILL.md.template
+│   │   └── scripts/
+│   │       └── generate.sh                    # Scaffold the project-local review skill
 │   │
-│   ├── secrets-scan/                          # [moved to brewtools] /brewcode:secrets-scan
-│   │   └── SKILL.md
+│   ├── convention/                            # /brewcode:convention - Extract conventions/patterns/architecture
+│   │   ├── SKILL.md
+│   │   ├── references/
+│   │   └── scripts/
+│   │       └── convention.sh
 │   │
-│   ├── text-human/                            # [moved to brewtools] /brewcode:text-human
-│   │   └── SKILL.md
+│   ├── rules/                                 # /brewcode:rules - Extract rules from knowledge
+│   │   ├── SKILL.md                           # KNOWLEDGE.jsonl → avoid.md + best-practice.md, dedup, 20 line limit (sonnet, session)
+│   │   └── scripts/
+│   │       └── rules.sh                       # read/check/create/validate
 │   │
-│   ├── text-optimize/                         # [moved to brewtools] /brewcode:text-optimize
-│   │   └── SKILL.md
+│   ├── skills/                                # /brewcode:skills - Skill management
+│   │   ├── SKILL.md
+│   │   └── scripts/
+│   │       ├── list-skills.sh
+│   │       └── validate-skill.sh
 │   │
-│   └── agents/                                # /brewcode:agents - Interactive agent creation/improvement
-│       └── SKILL.md                           # Create/improve agents, delegates to agent-creator + brewtools:text-optimize (opus, session)
+│   ├── agents/                                # /brewcode:agents - Interactive agent creation/improvement
+│   │   └── SKILL.md                           # Create/improve agents, delegates to agent-creator + brewtools:text-optimize (opus, session)
+│   │
+│   ├── teams/                                 # /brewcode:teams - Dynamic agent team creation/management
+│   │   ├── SKILL.md
+│   │   └── scripts/
+│   │       ├── detect-mode.sh
+│   │       ├── verify-team.sh
+│   │       └── trace-ops.sh
+│   │
+│   └── e2e/                                   # /brewcode:e2e - E2E testing orchestration
+│       ├── SKILL.md
+│       └── scripts/
+│           └── detect-mode.sh
 │
 ├── templates/
 │   │
@@ -99,12 +104,8 @@ brewcode/                                    # Plugin root directory
 │   │   ├── best-practice.md.template          # Best practices: Practice/Context/Source table with YAML frontmatter
 │   │   └── grepai-first.md.template           # grepai priority rule: call examples, tool selection table
 │   │
-│   └── skills/
-│       └── review/
-│           ├── SKILL.md.template              # /brewcode:review template: quorum, groups, Critic mode, DoubleCheck (opus, fork)
-│           └── references/
-│               ├── agent-prompt.md            # Review agent prompt: group, focus, files, output format
-│               └── report-template.md         # Review report: P0-P3 priorities, quorum, statistics
+│   └── auto-sync/
+│       └── INDEX.jsonl.template               # auto-sync index seed
 │
 ├── docs/
 │   ├── file-tree.md                           # This file
@@ -135,7 +136,7 @@ Files created by the plugin in the user's project:
     │   │   ├── brewcode.config.json           # User settings: logging, agents, constraints, autoSync
     │   │   └── brewcode.state.json            # Inter-session state: current task, last compaction
     │   │
-    │   ├── templates/                         # Adapted templates (from /brewcode:setup)
+    │   ├── templates/                         # Project-local templates (e.g. SPEC.md.template)
     │   │   ├── SPEC.md.template
     │   │   ├── SPEC-creation.md
     │   │   └── ...                            # Remaining plugin templates
@@ -168,24 +169,21 @@ Files created by the plugin in the user's project:
 | Category | Count | Items |
 |----------|-------|-------|
 | Plugin configuration | 2 | plugin.json, hooks.json |
-| Hooks (lifecycle) | 6 | forced-eval, grepai-reminder, grepai-session, permission-guard, pre-task, session-start |
+| Hooks | 2 | forced-eval, session-start |
 | Agents | 10 | bc-grepai-configurator, bc-rules-organizer, agent-creator, skill-creator, bash-expert, hook-creator, architect, developer, reviewer, tester |
-| Skills (SKILL.md) | 11 | setup, spec, rules, convention, grepai, teardown, standards-review, skills, agents, teams, e2e |
-| Bash scripts | 16 | setup(2), rules(1), grepai(13) |
-| Templates | 7 | SPEC, config, rules(3), review(3) |
+| Skills (SKILL.md) | 9 | spec, grepai, superreview, convention, rules, skills, agents, teams, e2e |
+| Bash scripts | 22 | grepai(13), teams(3), skills(2), superreview(1), convention(1), rules(1), e2e(1) |
+| Templates | 4 | rules(3), auto-sync(1) |
 | Documentation | 7 | README, INSTALL, RELEASE-NOTES, grepai.md, file-tree.md, commands.md, flow.md, hooks.md |
 | npm | 1 | package.json |
-| **Total** | **71** | |
+| **Total** | **70** | |
 
 ## Hook Events
 
 | Event | Hooks | Timeout | Purpose |
 |-------|-------|---------|---------|
-| UserPromptSubmit | forced-eval.mjs | 1s | Skill activation reminder |
-| SessionStart | session-start.mjs, grepai-session.mjs | 3s, 5s | Initialization, grepai auto-start |
-| PreToolUse(Task) | pre-task.mjs | 5s | grepai and constraints injection |
-| PreToolUse(Bash) | grepai-reminder.mjs | 1s | grepai reminder |
-| PermissionRequest | permission-guard.sh | 1s | Manager-mode edit guard |
+| UserPromptSubmit | forced-eval.mjs | 1s | Skill activation reminder (~9K additionalContext bound) |
+| SessionStart | session-start.mjs | 3s | Version-check, plan-symlink, permission_mode tag |
 
 ## Agent Models
 

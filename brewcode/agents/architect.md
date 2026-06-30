@@ -1,7 +1,7 @@
 ---
 name: architect
 description: "Architecture analysis, patterns, scaling. Triggers: review architecture, design service, scaling."
-model: opus
+model: inherit
 color: cyan
 tools: Read, Glob, Grep, Bash, WebFetch, WebSearch
 disallowedTools: Write, Edit, NotebookEdit

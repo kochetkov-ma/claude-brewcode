@@ -43,10 +43,6 @@ Install the entire suite:
     GitHub Actions deployment -- workflows, releases, GHCR, CI/CD pipelines
     with safety gates and rollback support.
   </Card>
-  <Card title="debate" icon="people" href="/brewtools/skills/debate/">
-    Multi-agent debate orchestrator -- 3 modes (Challenge, Strategy, Critic),
-    dynamic agents, Discovery phase, structured judge-verified decisions.
-  </Card>
   <Card title="plugin-update" icon="sync" href="/brewtools/skills/plugin-update/">
     Check, install, and update the full brewcode plugin suite in one command.
     Version status table, install missing plugins, reload prompt.
@@ -66,7 +62,6 @@ Install the entire suite:
 | [`/brewtools:secrets-scan`](/brewtools/skills/secrets-scan/) | Scan for leaked secrets and credentials | sonnet | `[--fix]` |
 | [`/brewtools:ssh`](/brewtools/skills/ssh/) | SSH server management | opus | `[connect\|configure\|deploy\|admin]` |
 | [`/brewtools:deploy`](/brewtools/skills/deploy/) | GitHub Actions deployment, CI/CD | opus | `[workflow\|release\|ghcr]` |
-| [`/brewtools:debate`](/brewtools/skills/debate/) | Evidence-based multi-agent debate | opus | `[topic] [-m challenge\|strategy\|critic] [-n 2-5] [-r max-rounds]` |
 | [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/) | Check and update the full brewcode plugin suite | sonnet | `[check\|update\|all]` |
 | [`/brewtools:provider-switch`](/brewtools/skills/provider-switch/) | Configure alternative API providers | opus | `[status\|setup\|help\|<provider>]` |
 
@@ -80,9 +75,9 @@ Install the entire suite:
 
 ## Plugin variable
 
-`BT_PLUGIN_ROOT` -- injected by the SessionStart hook into every session context.
+Plugin paths resolve natively via `${CLAUDE_PLUGIN_ROOT}` at Task spawn — no hook injection required.
 Skills in the main conversation use `${CLAUDE_SKILL_DIR}` to access their own files;
-subagents use `$BT_PLUGIN_ROOT` to locate plugin resources.
+subagents receive `${CLAUDE_PLUGIN_ROOT}` as a built-in variable from Claude Code.
 
 ## Architecture
 
@@ -92,8 +87,8 @@ brewtools/
 │   └── plugin.json              # Plugin manifest
 ├── hooks/
 │   ├── hooks.json               # Hook registry
-│   ├── session-start.mjs        # BT_PLUGIN_ROOT injection
-│   ├── pre-task.mjs             # BT_PLUGIN_ROOT into subagents
+│   ├── session-start.mjs        # SessionStart: HARD-wall awareness, manager codeword prep
+│   ├── manager-prompt.mjs       # UserPromptSubmit: ++m / ++rr / ++r codewords
 │   └── lib/utils.mjs            # I/O utilities
 ├── skills/
 │   ├── text-optimize/           # Token optimization
@@ -101,7 +96,6 @@ brewtools/
 │   ├── secrets-scan/            # Secrets scanning
 │   ├── ssh/                     # SSH server management
 │   ├── deploy/                  # GitHub Actions deployment
-│   ├── debate/                  # Evidence-based multi-agent debate
 │   ├── plugin-update/           # Check, install, and update plugin suite
 │   └── provider-switch/          # Alternative API provider management
 └── agents/

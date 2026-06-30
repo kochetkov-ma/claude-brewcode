@@ -1,30 +1,42 @@
-# Summary Report Template for Skills Orchestrator (Phase 6)
+# Step 6 Output Template — skills create/improve detail
 
 > **Instructions for orchestrator:**
-> - Fill all `{PLACEHOLDERS}` from collected data across phases
-> - Remove empty sections (e.g., E2E Tests if Quick mode, Review if None)
-> - Checkboxes reflect actual phase completion: `[x]` done, `[ ]` skipped
-> - Problems table only includes confirmed and verified findings
-> - After generation, remove this instructions block entirely
+> - This template is the SINGLE summary. It mirrors the canonical Step 6 output block
+>   (`# skills [<mode>]` / `## Detection` / `## Result` / `## Status` / `## Next Steps`).
+>   Do NOT emit a second report.
+> - Fill all `{PLACEHOLDERS}` from collected data across phases.
+> - Remove empty sub-tables (e.g., E2E Tests if Quick mode, Problems if none).
+> - After generation, remove this instructions block entirely.
 
 ---
 
 ## Template
 
 ```markdown
-# Skill {ACTION}: {SKILL_NAME}
+# skills [{MODE}]
+
+## Detection
+
+| Field | Value |
+|-------|-------|
+| Input | {PROMPT or "(none -> menu)"} |
+| Mode | {MODE} |
+| Reason | {WHY_THIS_MODE} |
+| Targets | {SKILL_NAME / SKILL_PATH} |
+
+## Result
 
 | Field | Value |
 |-------|-------|
 | Location | {SKILL_PATH} |
+| Specialist | brewcode:skill-creator |
 | Action | {ACTION} |
 | Invocation | {INVOCATION_TYPE} |
 | Testing Depth | {TESTING_DEPTH} |
 | Review Type | {REVIEW_TYPE} |
 | Model | {MODEL} |
 
-## What Was Done
-
+Phases completed:
 - [{DISCOVERY}] Discovery (Explore agents)
 - [{INTERACTION}] User interaction (invocation, testing depth)
 - [{CREATE}] {ACTION_VERB} (skill-creator)
@@ -34,13 +46,13 @@
 - [{REVIEW}] Review ({REVIEW_TYPE})
 - [{E2E}] E2E Testing
 
-## Problems Found and Fixed
+## Status
+
+### Problems Found and Fixed
 
 | # | Source | Severity | Issue | Fix | Verified |
 |---|--------|----------|-------|-----|----------|
 | {N} | {PHASE_OR_AGENT} | {HIGH/MEDIUM/LOW} | {DESCRIPTION} | {WHAT_WAS_DONE} | {YES/NO} |
-
-## Test Results
 
 ### Unit Tests
 
@@ -54,12 +66,9 @@
 |----------|------|---------|--------|------------|---------|
 | {SCENARIO} | {MODE} | {VARIANT} | {PASS/FAIL} | {COUNT} | {NOTES} |
 
-## What Could Be Improved
+## Next Steps
 
+- Run `/docs "обнови документацию для brewcode:{SKILL_NAME}"` for any created/changed skill
 - {SUGGESTION_1}
-- {SUGGESTION_2}
-
-## What Was NOT Done
-
-- {SKIPPED_ITEM} -- Reason: {WHY}
+- Not done: {SKIPPED_ITEM} -- Reason: {WHY}
 ```

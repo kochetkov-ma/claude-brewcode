@@ -101,31 +101,23 @@ Response channels: `additionalContext` (inject text), `updatedInput` (PreToolUse
 
 ### Hooks shipped with brewcode suite
 
-**brewcode (7):**
+**brewcode (2):**
 
 | Hook | Event | Purpose |
 |------|-------|---------|
-| `session-start.mjs` | SessionStart | Session initialization |
-| `grepai-session.mjs` | SessionStart | Auto-starts grepai watch |
-| `pre-task.mjs` | PreToolUse:Task\|Agent | Injects grepai + KNOWLEDGE into prompts |
-| `grepai-reminder.mjs` | PreToolUse:Glob\|Grep | Reminds to use grepai first |
-| `post-task.mjs` | PostToolUse:Task | Binds session, enforces 2-step protocol (success/failure branching) |
-| `pre-compact.mjs` | PreCompact | Compacts KNOWLEDGE, writes handoff (respects terminal statuses) |
-| `stop.mjs` | Stop | Blocks if not terminal (finished/failed/cancelled/error), cleans lock |
+| `session-start.mjs` | SessionStart | Version check, permission_mode tag |
+| `forced-eval.mjs` | UserPromptSubmit | Skill-activation [SKILL?] reminder |
 
-**brewtools (3):**
+**brewtools (2):**
 
 | Hook | Event | Purpose |
 |------|-------|---------|
-| `session-start.mjs` | SessionStart | Sets `BT_PLUGIN_ROOT`, session bootstrap |
-| `pre-task.mjs` | PreToolUse:Task\|Agent | Injects `BT_PLUGIN_ROOT` into subagent prompts |
-| `manager-prompt.mjs` | UserPromptSubmit | Injects Manager prompt on ++m/++mp codeword |
+| `session-start.mjs` | SessionStart | Manager HARD-wall awareness, session bootstrap |
+| `manager-prompt.mjs` | UserPromptSubmit | ++m/++rr/++r codeword injection (plan-aware) |
 
-**brewdoc (1):**
+**brewdoc (0):** No hooks.
 
-| Hook | Event | Purpose |
-|------|-------|---------|
-| `pre-task.mjs` | PreToolUse:Task\|Agent | Injects `BD_PLUGIN_ROOT` into subagent prompts |
+**brewui (0):** No hooks.
 
 ## Section 4: Dynamic Teams
 

@@ -1,56 +1,45 @@
 # Think-Short
 
-Toggle terse-output mode — cuts preamble and filler via SessionStart + PreToolUse:Task injection.
+Install-only skill that wires (or removes) three self-contained hooks injecting a terse-output prompt. No on/off toggle, no profiles, no project-level config — only an ephemeral per-session counter in the OS temp dir (`os.tmpdir()/brewtools-think-short/<session_id>.think-short-counter`), auto-pruned. The hooks own all runtime behavior.
 
-## Commands
+## What it does
 
-| Command | What it does |
-|---------|-------------|
-| `/brewtools:think-short on [--scope global\|project]` | Enable terse mode (default scope: project) |
-| `/brewtools:think-short off` | Disable terse mode |
-| `/brewtools:think-short profile <light\|medium\|aggressive>` | Set compression profile |
-| `/brewtools:think-short status` | Print effective state, source, state files, last 10 log lines |
-| `/brewtools:think-short blacklist add\|remove <agent>` | Exclude/include agent from terse injection |
+| Hook | Behavior |
+|------|----------|
+| SessionStart | injects the full terse prompt + resets the per-session counter |
+| UserPromptSubmit | injects the full prompt every 10th user prompt (10/20/30…, not the 1st) |
+| PreToolUse:`Task\|Agent` | injects the full terse prompt into spawned subagents (coexistence-safe with other Task hooks) |
 
-## NL prompts (RU+EN)
+The terse prompt cuts preamble, AI phrasings, and filler, and enforces tool discipline.
 
-| Phrase | Resolves to |
-|--------|-------------|
-| `включи терсный`, `be terse`, `think-short on` | `on` |
-| `выключи терсный`, `turn off`, `think-short off` | `off` |
-| `лёгкий режим`, `light`, `уровень 1`, `level 1` | `profile light` |
-| `средний режим`, `medium`, `уровень 2`, `level 2` | `profile medium` |
-| `агрессивный`, `макс`, `aggressive`, `уровень 3`, `level 3` | `profile aggressive` |
-| `включись максимально`, `be terse max` | `on` + `profile aggressive` (combo) |
-| `что сейчас`, `think-short status` | `status` |
+## Usage
 
-Ambiguous input triggers `AskUserQuestion` with candidate operations.
+```
+/brewtools:think-short                      # install — asks Project or Global
+/brewtools:think-short install global       # install globally (~/.claude)
+/brewtools:think-short install project      # install for this repo (.claude)
+/brewtools:think-short remove                # remove — asks which target
+/brewtools:think-short убери глобально       # free-text intent also works (RU+EN)
+```
 
-## State files
+The skill decides **install vs remove** and **project vs global** (asking when unspecified), then delegates the file work to the `brewcode:hook-creator` agent.
 
-| Scope | Path |
-|-------|------|
-| Global | `~/.claude/plugins/data/brewtools-claude-brewcode/think-short.json` |
-| Project | `.claude/brewtools/think-short.json` |
+## Where it installs
 
-Project state wins over global (merge precedence). Default scope for writes is `project` (silent).
+| Target | Hooks dir | settings.json |
+|--------|-----------|---------------|
+| Project | `<repo>/.claude/hooks/` | `<repo>/.claude/settings.json` |
+| Global | `~/.claude/hooks/` | `~/.claude/settings.json` |
 
-State schema: `{"version":1, "enabled":false, "profile":"medium", "blacklist":["debate","docs-writer","architect"], "updated_at":"ISO"}`
+Merge is append + dedupe by the `think-short-*.mjs` script path (idempotent re-install). Remove strips entries by those markers and deletes the 4 copied files. Global writes go through Bash only (`~/.claude/*` is a protected path).
 
-## Profiles
+## Cadence
 
-| Profile | Directives | Approx tokens | Typical use |
-|---------|-----------|---------------|-------------|
-| `light` | Be terse. Results first. Think through edits before executing. | ~20 tokens | Light reduction, keeps reasoning visible |
-| `medium` | Light + no AI phrasings, no sycophancy. Tool discipline: Grep before Read, Edit over Write, parallel independent calls, no re-Read of just-edited files. | ~60 tokens | Balanced — recommended default |
-| `aggressive` | Medium + ASCII-only, no closing fluff, no disclaimers. Full tool discipline: bundle edits, replace_all for N-identical, gather call-sites via Grep before parallel Edits. | ~120 tokens | Maximum suppression — long automated runs |
+The UserPromptSubmit hook re-injects on every 10th prompt (counter stored in the OS temp dir per session, reset at SessionStart). This keeps the directive in context across long sessions without spamming every turn.
 
-## Logs
+## After install/remove
 
-File: `.claude/logs/brewtools.log`
-Prefix: `think-short:`
-
-Every NL resolution and scope selection is logged at INFO level.
+A new session picks up the change automatically — no `/reload-plugins` needed (these are plain settings.json hooks). SessionStart fires on the next `claude` start or `--resume`.
 
 ## Docs
 

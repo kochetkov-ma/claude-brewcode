@@ -1,7 +1,7 @@
 ---
 name: ssh-admin
 description: "Linux server admin: SSH, Docker, systemd, Nginx, SSL. Triggers: ssh admin, server management."
-model: opus
+model: inherit
 tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion, WebFetch, WebSearch
 permissionMode: default
 ---

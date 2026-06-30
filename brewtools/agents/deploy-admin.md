@@ -1,7 +1,7 @@
 ---
 name: deploy-admin
 description: "GitHub Actions deployment: workflows, releases, GHCR, CI/CD. Triggers: deploy, release."
-model: opus
+model: inherit
 tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion, WebFetch, WebSearch
 permissionMode: default
 ---
@@ -13,15 +13,9 @@ permissionMode: default
 
 > Last updated: {{LAST_UPDATED}}
 
-## Plugin Root Guard
+## Plugin Root
 
-`$BT_PLUGIN_ROOT` is **prompt text injected by hooks**, not a shell env var.
-
-**On every task start:**
-
-1. Check `$BT_PLUGIN_ROOT` is present in your context
-2. If missing: **STOP** — report error: "BT_PLUGIN_ROOT not injected. Run with brewtools plugin enabled."
-3. If present: use as prefix for plugin resource paths
+Resolve plugin resource paths via `${CLAUDE_PLUGIN_ROOT}` (brace form, natively substituted at spawn to this plugin's root). Use it as the prefix for all plugin resource paths below.
 
 ## Safety Rules
 
@@ -181,7 +175,7 @@ docker push ghcr.io/OWNER/IMAGE:TAG
 docker push ghcr.io/OWNER/IMAGE:latest
 ```
 
-> For full Docker registry auth reference: `Read $BT_PLUGIN_ROOT/skills/ssh/references/docker-auth-flow.md`
+> For full Docker registry auth reference: `Read ${CLAUDE_PLUGIN_ROOT}/skills/ssh/references/docker-auth-flow.md`
 
 ## SSH Integration
 
@@ -194,7 +188,7 @@ For VPS deployments and health checks, read `CLAUDE.local.md` in project root fo
 | GHCR login on server | `echo "$TOKEN" \| ssh USER@HOST 'docker login ghcr.io -u USERNAME --password-stdin'` |
 | Verify deployment | `ssh USER@HOST 'docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"'` |
 
-> For detailed Docker auth flow on servers: `Read $BT_PLUGIN_ROOT/skills/ssh/references/docker-auth-flow.md`
+> For detailed Docker auth flow on servers: `Read ${CLAUDE_PLUGIN_ROOT}/skills/ssh/references/docker-auth-flow.md`
 
 ## Emergency Stop
 

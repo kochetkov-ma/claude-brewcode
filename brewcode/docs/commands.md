@@ -15,28 +15,23 @@ description: Detailed description of all brewcode plugin commands
 
 | # | Command | Purpose | Context | Model | Deps |
 |---|---------|---------|---------|-------|------|
-| 1 | `/bc:setup` | Analyze project, gen templates, install prereqs | fork | opus | -- |
-| 2 | `/bc:spec` | Create task SP | session | opus | setup |
-| 5 | `/bc:review` | Code review w/ QR | fork | opus | setup |
-| 6 | `/bc:rules` | Extract rules from KB | session | sonnet | -- |
-| 7 | `/bc:grepai` | Semantic code search | session | sonnet | setup |
-| 8 | `/bc:teardown` | Remove PLG files | fork | haiku | setup |
-| ~~10~~ | ~~`/bc:secrets-scan`~~ | **moved to brewtools** | -- | -- | -- |
-| ~~11~~ | ~~`/bc:text-optimize`~~ | **moved to brewtools** | -- | -- | -- |
-| ~~12~~ | ~~`/bc:text-human`~~ | **moved to brewtools** | -- | -- | -- |
-| 13 | `/bc:skills` | SK management | session | sonnet | -- |
-| 14 | `/bc:standards-review` | Standards compliance review | fork | opus | setup |
-| 15 | `/bc:agents` | AG creation + improvement | session | opus | -- |
-| 16 | `/bc:convention` | Extract conventions/patterns/architecture → rules + docs | session | opus | -- |
-| 17 | `/bc:teams` | Create/manage specialized AG teams | session | opus | -- |
-| 18 | `/bc:e2e` | E2E testing: BDD scenarios, autotests, review | session | opus | setup |
+| 1 | `/bc:spec` | Create task SP | session | opus | -- |
+| 2 | `/bc:grepai` | Semantic code search | session | sonnet | -- |
+| 3 | `/bc:superreview` | Generate project-tailored deep-review skill | fork | opus | -- |
+| 4 | `/bc:rules` | Extract rules from KB | session | sonnet | -- |
+| ~~5~~ | ~~`/bc:secrets-scan`~~ | **moved to brewtools** | -- | -- | -- |
+| ~~6~~ | ~~`/bc:text-optimize`~~ | **moved to brewtools** | -- | -- | -- |
+| ~~7~~ | ~~`/bc:text-human`~~ | **moved to brewtools** | -- | -- | -- |
+| 8 | `/bc:skills` | SK management | session | sonnet | -- |
+| 9 | `/bc:agents` | AG creation + improvement | session | opus | -- |
+| 10 | `/bc:convention` | Extract conventions/patterns/architecture → rules + docs | session | opus | -- |
+| 11 | `/bc:teams` | Create/manage specialized AG teams | session | opus | -- |
+| 12 | `/bc:e2e` | E2E testing: BDD scenarios, autotests, review | session | opus | -- |
 
 ## Execution Order
 
 ```
-setup --> spec --> review --> rules
-            |
-     grepai / teardown
+grepai --> spec --> superreview --> rules
 ```
 
 ---
@@ -50,68 +45,7 @@ setup --> spec --> review --> rules
 
 ---
 
-## 1. `/bc:setup`
-
-Analyzes project structure, tech stack, test frameworks, project AGs. Generates adapted templates + code review SK in `.claude/tasks/templates/`.
-
-| Param | Value |
-|-------|-------|
-| Args | `[universal-template-path]` (opt) |
-| Context | fork |
-| Model | opus |
-| Deps | none |
-| Tools | Read, Write, Glob, Grep, Bash |
-
-### Created Files
-
-| Path | Purpose |
-|------|---------|
-| `.claude/tasks/templates/SPEC.md.template` | SP template |
-| `.claude/tasks/cfg/brewcode.config.json` | PLG cfg |
-| `.claude/skills/brewcode-review/SKILL.md` | Code review SK |
-| `.claude/skills/brewcode-review/references/` | Prompt + report templates |
-
-### Bash Scripts
-
-| Cmd | Phase | Purpose |
-|-----|-------|---------|
-| `setup.sh scan` | 1 | Scan project structure |
-| `setup.sh structure` | 3 | Create dirs |
-| `setup.sh sync` | 3 | Sync templates from PLG |
-| `setup.sh review` | 3.5 | Copy review SK template |
-| `setup.sh config` | 3.6 | Copy cfg |
-| `setup.sh validate` | 4 | Validate artifacts |
-| `setup.sh all` | all | Run all phases |
-
-### Workflow
-
-1. P1: Scan project: language, framework, tests, DB, AGs
-2. P2: Consolidate findings, plan adaptation
-3. P3: Create structure, sync templates
-4. P3.5: Copy + adapt review SK to project stack
-5. P3.6: Copy cfg with defaults
-6. P4: Validate all artifacts
-
-### Tech Detection
-
-| Tech | Indicators |
-|------|------------|
-| Java/Spring | `pom.xml`, `build.gradle`, `src/main/java`, `@SpringBootApplication` |
-| Node.js | `package.json`, `node_modules`, `express`, `nest` |
-| Python | `requirements.txt`, `Pipfile`, `pytest`, `unittest` |
-| Go | `go.mod`, `*_test.go` |
-| Rust | `Cargo.toml` |
-
-Re-run when: adding AG in `.claude/agents/`, updating `CLAUDE.md`, changing test framework.
-
-```
-/bc:setup
-/bc:setup ~/.claude/templates/SPEC.md.template
-```
-
----
-
-## 2. `/bc:spec`
+## 1. `/bc:spec`
 
 Creates SPEC.md via parallel codebase research + interactive user clarification. Includes QR.
 
@@ -120,7 +54,7 @@ Creates SPEC.md via parallel codebase research + interactive user clarification.
 | Args | Text desc or path to requirements file |
 | Context | session |
 | Model | opus |
-| Deps | `/bc:setup` (SPEC.md.template must exist) |
+| Deps | none |
 | Tools | Read, Write, Glob, Grep, Bash, Task, AskUserQuestion |
 
 ### Created Files
@@ -170,81 +104,7 @@ Naming: `YYYYMMDD_HHMMSS` + lowercase slug, e.g. `20260208_143052_auth_feature`
 
 ---
 
-## 5. `/bc:review`
-
-Code review w/ QR consensus. Multiple AGs review in parallel, findings confirmed by quorum, verified by DoubleCheck. Optional Critic phase.
-
-> SK !=shipped in PLG directly — generated by `/bc:setup` as project SK in `.claude/skills/brewcode-review/SKILL.md`, adapted to project stack.
-
-| Param | Value |
-|-------|-------|
-| Args | `<prompt-or-path> [-q\|--quorum [G-]N-M] [-c\|--critic]` |
-| Context | fork |
-| Model | opus |
-| Deps | `/bc:setup` |
-| Tools | Read, Glob, Grep, Task, Bash, Write |
-
-### Created Files
-
-| Path | Purpose |
-|------|---------|
-| `.claude/tasks/reviews/{TS}_{NAME}_report.md` | Review report |
-
-### Agents
-
-| AG | Phase | Purpose |
-|----|-------|---------|
-| Explore | 1 | 5-10 AGs scan codebase |
-| reviewer / project | 3 | N AGs per group, parallel review |
-| reviewer (opus) | 5 | DoubleCheck — verify confirmed findings |
-| reviewer (opus) | 5.5 | Critic — find missed issues (opt, `-c`) |
-| reviewer (opus) | 5.75 | DoubleCheck Critic (opt) |
-
-### Quorum Params
-
-| Format | Meaning | Example |
-|--------|---------|---------|
-| `N-M` | N AGs, threshold M | `-q 3-2` (3 AGs, quorum 2) |
-| `G-N-M` | G groups, N AGs, threshold M | `-q 4-3-2` (4 groups of 3) |
-| Default | 3 AGs, quorum 2 | `-q 3-2` |
-
-### Review Groups
-
-| Group | Focus | Files |
-|-------|-------|-------|
-| main-code | Logic, architecture, security | `src/main/**` |
-| tests | Coverage, asserts, quality | `src/test/**` |
-| db-layer | Queries, transactions | `**/repositories/**` |
-
-### Phases
-
-1. P1: 5-10 Explore AGs scan code in parallel
-2. P2: Determine active groups by detected files
-3. P3: N AGs per group, each w/ tech-specific checks
-4. P4: Cluster findings, confirm by quorum
-5. P5: 1 reviewer (opus) verifies all confirmed findings
-6. P5.5: Critic (opt, `-c`) — devil's advocate finds missed issues
-7. P5.75: DoubleCheck Critic (opt) — verify Critic findings
-8. P6: Report w/ P0-P3 priorities
-
-### Finding Priorities
-
-| Priority | Source | Description |
-|----------|--------|-------------|
-| P0 | Critic + DoubleCheck | Verified Critic findings (only w/ `-c`) |
-| P1 | Quorum + DoubleCheck | Confirmed + verified |
-| P2 | Quorum only | Confirmed, failed DoubleCheck |
-| P3 | Exceptions | Blocker/critical w/o quorum |
-
-```
-/bc:review "Check null-safety in service layer"
-/bc:review -q 5-3 -c "Full review of authorization module"
-/bc:review requirements/review-checklist.md --quorum 4-3-2
-```
-
----
-
-## 6. `/bc:rules`
+## 2. `/bc:rules`
 
 Extracts anti-patterns + best practices from KB or session ctx → updates `.claude/rules/avoid.md` + `.claude/rules/best-practice.md`.
 
@@ -300,7 +160,7 @@ Rules optimization: dedup by semantic similarity, merge related, prioritize by i
 
 ---
 
-## 7. `/bc:grepai`
+## 3. `/bc:grepai`
 
 Setup + mgmt of semantic code search (grepai: Ollama + bge-m3). Modes: setup, status, start, stop, reindex, optimize, upgrade.
 
@@ -309,7 +169,7 @@ Setup + mgmt of semantic code search (grepai: Ollama + bge-m3). Modes: setup, st
 | Args | `[setup\|status\|start\|stop\|reindex\|optimize\|upgrade]` |
 | Context | session |
 | Model | sonnet |
-| Deps | `/bc:setup` (brew, jq via Phase 0) |
+| Deps | none |
 | Tools | Read, Write, Edit, Bash, Task |
 
 ### Created Files (setup)
@@ -374,48 +234,7 @@ Setup + mgmt of semantic code search (grepai: Ollama + bge-m3). Modes: setup, st
 
 ---
 
-## 8. `/bc:teardown`
-
-Removes all files created by `/bc:setup`. Preserves TK dirs + user rules.
-
-| Param | Value |
-|-------|-------|
-| Args | `[--dry-run]` |
-| Context | fork |
-| Model | haiku |
-| Deps | `/bc:setup` |
-| Tools | Bash, Read |
-
-| Script | Purpose |
-|--------|---------|
-| `teardown.sh` | Remove files (supports `--dry-run`) |
-
-### Removed
-
-| Path | Status |
-|------|--------|
-| `.claude/tasks/templates/` | removed |
-| `.claude/tasks/cfg/` | removed |
-| `.claude/logs/` | removed |
-| `.claude/plans/` | removed |
-| `.grepai/` | removed |
-| `.claude/skills/brewcode-review/` | removed |
-
-### Preserved
-
-| Path | Reason |
-|------|--------|
-| `.claude/tasks/*_task/` | TK data |
-| `.claude/rules/` | User rules |
-
-```
-/bc:teardown --dry-run
-/bc:teardown
-```
-
----
-
-## 9. `/bc:agents`
+## 4. `/bc:agents`
 
 Interactive orchestrator for creating + improving Claude Code AGs. Collects requirements via AskUserQuestion, delegates to `agent-creator`, applies `brewtools:text-optimize` (if installed). Optionally updates CLAUDE.md agents table.
 
@@ -459,7 +278,7 @@ Interactive orchestrator for creating + improving Claude Code AGs. Collects requ
 
 ---
 
-## 10. `/bc:convention`
+## 5. `/bc:convention`
 
 Analyzes project to extract etalon classes, patterns, architecture by layer. Generates convention docs in `.claude/convention/` + organizes rules in `.claude/rules/`.
 
@@ -508,7 +327,7 @@ Analyzes project to extract etalon classes, patterns, architecture by layer. Gen
 
 ---
 
-## 11. `/bc:teams`
+## 6. `/bc:teams`
 
 Creates + manages dynamic teams of domain-specific AGs w/ tracking framework. Analyzes project, proposes team (5-20 AGs), creates w/ self-selection protocol + performance tracking.
 
@@ -546,7 +365,7 @@ Creates + manages dynamic teams of domain-specific AGs w/ tracking framework. An
 
 ---
 
-## 12. `/bc:e2e`
+## 7. `/bc:e2e`
 
 Full-cycle E2E testing: setup testing AGs, create BDD scenarios, write autotests, QR. Stack-agnostic, layered test architecture.
 
@@ -555,7 +374,7 @@ Full-cycle E2E testing: setup testing AGs, create BDD scenarios, write autotests
 | Args | `[setup\|create\|update\|review\|rules\|status] [prompt]` |
 | Context | session |
 | Model | opus |
-| Deps | `/bc:setup` (for non-setup modes: e2e AGs must exist) |
+| Deps | `/bc:e2e setup` (for non-setup modes: e2e AGs must exist) |
 | Tools | Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion, Skill, WebSearch, WebFetch |
 
 ### Modes
@@ -586,12 +405,10 @@ Hooks-only, no external runtime. Claude Code hooks provide ctx mgmt.
 
 | Hook | Event | Purpose |
 |------|-------|---------|
-| `session-start.mjs` | SessionStart | Session init |
-| `grepai-session.mjs` | SessionStart | Auto-start grepai watch |
-| `pre-task.mjs` | PreToolUse:Task | grepai reminder + protocol into AG prompts |
-| `grepai-reminder.mjs` | PreToolUse:Bash | Reminder to use grepai |
-| `forced-eval.mjs` | UserPromptSubmit | Skill activation reminder |
-| `permission-guard.sh` | PermissionRequest | Manager-mode edit guard |
+| `session-start.mjs` | SessionStart | Session init: version-check, plan-symlink, permission tag |
+| `forced-eval.mjs` | UserPromptSubmit | Skill activation reminder ([SKILL?] injection) |
+
+> grepai hooks (`grepai-session.mjs`, `grepai-reminder.mjs`) self-install per-project via `/brewcode:grepai setup` — they are not part of the plugin's always-on hook set.
 
 ## KB Format
 
