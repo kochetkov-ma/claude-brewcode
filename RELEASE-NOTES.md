@@ -2,6 +2,18 @@
 
 ---
 
+## v4.0.2 (2026-06-30)
+
+> Patch fix — think-short's own smoke test was broken since the v4.0.0 family-roots purge.
+
+> Docs: [think-short](https://doc-claude.brewcode.app/brewtools/skills/think-short/)
+
+### brewtools
+#### Fixed
+- **think-short:** `SKILL.md` still listed `family-roots.mjs` as a required asset and smoke-tested it, but the file was deleted in v4.0.0's family-roots purge — every install hit a false `❌ missing family-roots.mjs`. Removed the 3 stale references; asset list and smoke test now match the actual 3-script + prompt.md asset set.
+
+---
+
 ## v4.0.1 (2026-06-30)
 
 > Docs-only follow-up to v4.0.0 — purges leftover v3.19.0 task-system documentation debt from the site so docs match the real plugin.

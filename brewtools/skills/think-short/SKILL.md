@@ -32,7 +32,7 @@ test -d "$BT_ROOT/skills/think-short/assets" || { echo "❌ BT_ROOT invalid: $BT
 
 Asset paths (all under `$BT_ROOT/skills/think-short/assets/`):
 - `INSTALL.md` — full install/remove runbook (project + global + remove)
-- `think-short-session.mjs`, `think-short-prompt-counter.mjs`, `think-short-task.mjs`, `family-roots.mjs`, `think-short-prompt.md` — the hook files that travel together (`family-roots.mjs` is imported by `think-short-task.mjs` and MUST be copied alongside it)
+- `think-short-session.mjs`, `think-short-prompt-counter.mjs`, `think-short-task.mjs`, `think-short-prompt.md` — the hook files that travel together
 
 > Never use `Write`/`Edit` on `~/.claude/*` — protected path, blocked in ALL modes. Global install/remove runs through the Bash tool only (`cp` + `node` merge). The hook-creator agent handles this per the runbook.
 
@@ -118,13 +118,12 @@ Verify the 4 assets exist and the scripts parse before delegating:
 BT_ROOT="${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::')}"
 A="$BT_ROOT/skills/think-short/assets"
 test -d "$A" || { echo "❌ assets dir missing"; exit 1; }
-for f in think-short-session.mjs think-short-prompt-counter.mjs think-short-task.mjs family-roots.mjs think-short-prompt.md INSTALL.md; do
+for f in think-short-session.mjs think-short-prompt-counter.mjs think-short-task.mjs think-short-prompt.md INSTALL.md; do
   test -f "$A/$f" || { echo "❌ missing $f"; exit 1; }
 done
 node --check "$A/think-short-session.mjs" && \
 node --check "$A/think-short-prompt-counter.mjs" && \
 node --check "$A/think-short-task.mjs" && \
-node --check "$A/family-roots.mjs" && \
 echo "✅ smoke" || echo "❌ smoke FAILED"
 ```
 
