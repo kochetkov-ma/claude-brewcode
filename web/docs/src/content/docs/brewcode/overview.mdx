@@ -14,24 +14,24 @@ Install the entire suite:
 
 <InstallPrompt plugin="all" mode="install" />
 
-Brewcode is a plugin for Claude Code that turns single sessions into an **infinite task pipeline**
-with automatic context handoff between sessions. The name is a nod to brewing: skills (recipes) define
-what to brew, agents (brewers) do the work, and hooks (processes) manage the lifecycle.
+Brewcode is a plugin for Claude Code for spec authoring, semantic code search, and a toolkit of
+skills and agents. The name is a nod to brewing: skills (recipes) define what to brew, agents
+(brewers) do the work, and hooks (processes) manage prompt-time injection.
 
 ## Key Features
 
 <CardGrid>
-  <Card title="Infinite context" icon="infinity">
-    Automatic knowledge transfer between sessions via KNOWLEDGE.jsonl and the handoff mechanism.
-    Tasks continue after compaction without losing progress.
+  <Card title="Native plugin paths" icon="infinity">
+    Agents resolve paths via native `${CLAUDE_PLUGIN_ROOT}`, substituted in each agent .md at Task spawn.
+    No hook injection, no shared runtime state.
   </Card>
   <Card title="9 skills (recipes)" icon="terminal">
-    Full cycle: from project analysis (<a href="/brewcode/skills/setup/">/brewcode:setup</a>) to task execution (<a href="/brewcode/skills/start/">/brewcode:start</a>)
-    and code review (<a href="/brewcode/skills/standards-review/">/brewcode:standards-review</a>).
+    From specification (<a href="/brewcode/skills/spec/">/brewcode:spec</a>) to semantic search (<a href="/brewcode/skills/grepai/">/brewcode:grepai</a>)
+    and multi-agent review (<a href="/brewcode/skills/superreview/">/brewcode:superreview</a>).
   </Card>
-  <Card title="12+ agents (brewers)" icon="users">
+  <Card title="10 agents (brewers)" icon="users">
     Specialized agents: [developer](/brewcode/agents/developer/), [tester](/brewcode/agents/tester/), [reviewer](/brewcode/agents/reviewer/), [architect](/brewcode/agents/architect/), [skill-creator](/brewcode/agents/skill-creator/),
-    [agent-creator](/brewcode/agents/agent-creator/), and coordinators.
+    [agent-creator](/brewcode/agents/agent-creator/), [hook-creator](/brewcode/agents/hook-creator/), and bash-expert.
   </Card>
   <Card title="2 hooks (processes)" icon="settings">
     Prompt-time skill-activation reminder and session-start version-check.
@@ -62,8 +62,8 @@ all context is managed through built-in Claude Code events.
   │                                                          │
   │   Skills (recipes)            Agents (brewers)           │
   │   ┌──────────────┐          ┌──────────────────┐         │
-  │   │ setup, spec  │          │ developer, tester │         │
-  │   │ plan, start  │ ──────>  │ reviewer, architect│         │
+  │   │ spec, grepai │          │ developer, tester │         │
+  │   │ superreview  │ ──────>  │ reviewer, architect│         │
   │   │ convention,. │          │ + dynamic teams   │         │
   │   └──────────────┘          └──────────────────┘         │
   │          │                          │                     │
@@ -100,20 +100,14 @@ brewcode/
 │   ├── agent-creator.md               # Agent creation (opus)
 │   ├── hook-creator.md                # Hook creation (opus)
 │   ├── bash-expert.md                 # Bash scripts (opus)
-│   ├── bc-coordinator.md              # Task coordinator (haiku)
-│   ├── bc-knowledge-manager.md        # Knowledge manager (haiku)
 │   ├── bc-grepai-configurator.md      # grepai configurator (opus)
 │   └── bc-rules-organizer.md          # Rules organizer (sonnet)
 ├── skills/                            # 9 skills
-│   ├── setup/                         # Project analysis, templates
 │   ├── spec/                          # Specification creation
-│   ├── plan/                          # Plan creation
-│   ├── start/                         # Task execution
+│   ├── grepai/                        # Semantic search (self-install hooks)
 │   ├── convention/                    # Convention analysis
 │   ├── rules/                         # Rule extraction
-│   ├── grepai/                        # Semantic search
-│   ├── teardown/                      # Cleanup
-│   ├── standards-review/              # Standards review
+│   ├── superreview/                   # Multi-agent quorum review
 │   ├── skills/                        # Skill management
 │   ├── agents/                        # Agent management
 │   ├── teams/                         # Dynamic agent teams
@@ -126,19 +120,19 @@ brewcode/
 
 <Tabs>
   <TabItem label="Skills">
-    9 skills (recipes) cover the full task lifecycle.
+    9 skills (recipes) cover spec, search, review, and meta-tooling.
     See [Skills](/brewcode/skills/) for details.
 
     | Group | Skills | Purpose |
     |-------|--------|---------|
-    | Core cycle | setup, spec, plan, start | Task creation and execution |
-    | Quality | standards-review, convention, rules | Code analysis and review |
+    | Spec | spec | Specification authoring via research + interaction |
+    | Quality | superreview, convention, rules | Multi-agent review, conventions, rule extraction |
     | Dynamic | teams | Agent team creation and management |
     | Testing | e2e | E2E testing orchestration with BDD scenarios |
-    | Utilities | grepai, teardown, skills, agents | Tools and configuration |
+    | Meta | grepai, skills, agents | Semantic search + skill/agent management |
   </TabItem>
   <TabItem label="Agents">
-    12+ agents (brewers) with different models and specializations.
+    10 agents (brewers) with different models and specializations.
     See the [Agents](/brewcode/agents/) section for details.
 
     | Role | Agents | Model |
@@ -147,7 +141,7 @@ brewcode/
     | Review | reviewer | opus |
     | Creation | skill-creator, agent-creator, hook-creator | opus |
     | Optimization | bash-expert | opus |
-    | Coordination (internal) | bc-coordinator, bc-knowledge-manager, bc-grepai-configurator, bc-rules-organizer | haiku/sonnet/opus |
+    | Internal | bc-grepai-configurator, bc-rules-organizer | opus/sonnet |
 
     + dynamic project agents created by [`/brewcode:teams`](/brewcode/skills/teams/)
   </TabItem>

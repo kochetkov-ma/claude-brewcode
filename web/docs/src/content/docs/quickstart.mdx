@@ -1,6 +1,6 @@
 ---
 title: "Quick Start"
-description: "Your first 15 minutes with Brewcode: setup, spec, plan, start"
+description: "Your first 15 minutes with Brewcode: spec, semantic search, deep review"
 order: 3
 ---
 
@@ -8,8 +8,8 @@ import { Card, CardGrid, Callout, Steps, Badge } from '../../components/mdx';
 
 # Quick Start
 
-In 15 minutes you will go through the full Brewcode cycle: from project analysis to launching an infinite task.
-By the end you will have a specification, a plan, and a running task with automatic context handoff.
+In 15 minutes you will go through the core Brewcode workflow: from writing a structured specification
+to indexing your codebase for semantic search and generating a project-tailored deep review skill.
 
 <Callout type="note" title="Before you begin">
   Make sure Claude Code and the brewcode plugin are installed.
@@ -21,68 +21,69 @@ By the end you will have a specification, a plan, and a running task with automa
 <Steps>
   <li class="step step-primary">
     <div>
-      <strong>Project setup</strong> <Badge variant="primary" text="/brewcode:setup" />
-      <p>Open Claude Code in your project root and run:</p>
-      <pre><code>/brewcode:setup</code></pre>
-      <p><strong>What happens:</strong> the skill analyzes your project structure, tech stack,
-      test frameworks, and existing agents. It generates tailored templates based on the analysis.</p>
-      <p><strong>Result:</strong></p>
-      <ul>
-        <li><code>.claude/tasks/templates/PLAN.md.template</code> -- plan template</li>
-        <li><code>.claude/tasks/templates/SPEC.md.template</code> -- specification template</li>
-        <li><code>.claude/tasks/cfg/brewcode.config.json</code> -- configuration</li>
-        <li><code>.claude/skills/brewcode-review/</code> -- <a href="/brewcode/skills/review/">tailored code review skill</a></li>
-      </ul>
-      <p>This step runs once per project.</p>
+      <strong>Install brewcode</strong> <Badge variant="primary" text="plugin install" />
+      <p>Add the plugin from the marketplace and install it into your Claude Code session:</p>
+      <pre><code>claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
+claude plugin install brewcode@claude-brewcode</code></pre>
+      <p>This step runs once per machine. Reload with <code>/reload-plugins</code> if already inside a session.</p>
     </div>
   </li>
   <li class="step step-primary">
     <div>
-      <strong>Creating a specification</strong> <Badge variant="primary" text="/brewcode:spec" />
+      <strong>Write a specification</strong> <Badge variant="primary" text="/brewcode:spec" />
       <p>Describe the task in plain text or point to a requirements file:</p>
       <pre><code>/brewcode:spec "Implement JWT authorization with role-based access"</code></pre>
       <p>Or from a file:</p>
       <pre><code>/brewcode:spec ./docs/requirements/auth.md</code></pre>
-      <p><strong>What happens:</strong> the plugin launches 5-10 research agents in parallel.
-      The agents analyze the codebase, find related code, dependencies, and patterns.
-      Then it asks clarifying questions (use the <code>-n</code> flag for autonomous mode without questions).</p>
-      <p><strong>Result:</strong> a <code>SPEC.md</code> file -- a structured specification with project context.</p>
+      <p><strong>What happens:</strong> the skill launches 5-10 research agents in parallel.
+      They analyze the codebase, locate related code, dependencies, and patterns,
+      then ask clarifying questions (use the <code>-n</code> flag for autonomous mode without questions).</p>
+      <p><strong>Result:</strong> a <code>SPEC.md</code> file — a structured specification with full project context.</p>
     </div>
   </li>
   <li class="step step-primary">
     <div>
-      <strong>Generating a plan</strong> <Badge variant="primary" text="/brewcode:plan" />
-      <pre><code>/brewcode:plan</code></pre>
-      <p><strong>What happens:</strong> a phased execution plan is generated from SPEC.md.
-      Each phase contains specific steps, expected artifacts, and completion criteria.</p>
-      <p><strong>Result:</strong> a <code>PLAN.md</code> file -- a plan with phases, ready for execution.</p>
+      <strong>Index for semantic search</strong> <Badge variant="primary" text="/brewcode:grepai setup" />
+      <pre><code>/brewcode:grepai setup</code></pre>
+      <p><strong>What happens:</strong> checks and installs Ollama and the CLI if missing, builds a vector
+      index of your codebase using the <code>bge-m3</code> embedding model, and self-installs grepai hooks
+      into the project.</p>
+      <p><strong>Result:</strong> all subsequent Claude Code sessions can query the project semantically —
+      faster and more precise context retrieval for every agent working on the spec.</p>
     </div>
   </li>
   <li class="step step-primary">
     <div>
-      <strong>Running the task</strong> <Badge variant="primary" text="/brewcode:start" />
-      <pre><code>/brewcode:start</code></pre>
-      <p><strong>What happens:</strong> Brewcode begins executing the plan phase by phase.
-      Agents work on the task, recording knowledge in KNOWLEDGE.jsonl.
-      When context reaches ~90%, the PreCompact hook fires:
-      knowledge is compressed, handoff state is written, and the session continues automatically.</p>
-      <p><strong>Result:</strong> the task runs to completion regardless of how many compaction cycles occur.
-      All artifacts are saved in `.claude/tasks/<ts>_<name>_task/artifacts/`.</p>
+      <strong>Generate a deep review skill</strong> <Badge variant="primary" text="/brewcode:superreview" />
+      <pre><code>/brewcode:superreview</code></pre>
+      <p><strong>What happens:</strong> analyzes your codebase and conventions, then generates a
+      project-tailored quorum review skill that merges code review and standards checking
+      into one reusable skill installed locally at <code>.claude/skills/</code>.</p>
+      <p><strong>Result:</strong> a custom review skill ready to invoke any time you need a deep,
+      project-aware code review.</p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>Create a domain agent team</strong> <Badge variant="primary" text="/brewcode:teams — optional" />
+      <pre><code>/brewcode:teams</code></pre>
+      <p>Generates 5-20 project-specific agents with self-selection logic and performance tracking.
+      Skip this step if the default agent set is sufficient for your project.</p>
     </div>
   </li>
 </Steps>
 
 ## What's next
 
-<Callout type="tip" title="After the task completes">
-  The task is done. Here is what you can do with the results:
+<Callout type="tip" title="After the workflow">
+  Your project is set up for iterative development. Here is what you can do next:
 
-  **[Code review](/brewcode/skills/standards-review/)** -- run a quorum review of the changes:
+  **[Deep review](/brewcode/skills/superreview/)** -- run a quorum review of any changes:
   ```bash
-  /brewcode:standards-review
+  /brewcode:superreview
   ```
 
-  **[Extract rules](/brewcode/skills/rules/)** -- convert accumulated knowledge into project rules:
+  **[Extract rules](/brewcode/skills/rules/)** -- convert knowledge into project-wide coding rules:
   ```bash
   /brewcode:rules
   ```
@@ -97,8 +98,7 @@ By the end you will have a specification, a plan, and a running task with automa
 
 <CardGrid>
   <Card title="brewcode" icon="building" href="/brewcode/overview/">
-    9 skills for development: infinite tasks, review, semantic search,
-    skill and agent creation, dynamic teams.
+    9 skills: spec, semantic search, deep review, conventions, teams, and more.
   </Card>
   <Card title="brewtools" icon="wrench" href="/brewtools/overview/">
     10 skills for text utilities: prompt optimization, AI artifact removal,

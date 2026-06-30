@@ -1,6 +1,6 @@
 {
   "name": "brewcode",
-  "version": "4.0.0",
+  "version": "4.0.1",
   "description": "Brewcode - full-featured development platform for Claude Code: infinite focus tasks, prompt optimization, skill/agent creation, quorum reviews, rules management",
   "author": {
     "name": "Maksim Kochetkov",

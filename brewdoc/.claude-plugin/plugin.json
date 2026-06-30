@@ -1,6 +1,6 @@
 {
   "name": "brewdoc",
-  "version": "4.0.0",
+  "version": "4.0.1",
   "description": "Brewdoc - Claude Code documentation tools: auto-sync for skills/agents/rules, my-claude installation docs, memory optimization",
   "author": {
     "name": "Maksim Kochetkov",

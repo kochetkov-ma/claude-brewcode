@@ -90,10 +90,10 @@ import { Card, CardGrid, Callout, Steps, Tabs, TabItem, InstallPrompt } from '..
   </li>
   <li class="step step-primary">
     <div>
-      <strong>Run project setup</strong>
+      <strong>Author a spec</strong>
       <p>Inside a Claude Code session, run:</p>
-      <pre><a href="/brewcode/skills/setup/"><code>/brewcode:setup</code></a></pre>
-      <p>Setup automatically checks and installs prerequisites (brew, jq, coreutils) as Phase 0 before analyzing your project. Optionally installs ollama and grepai for semantic search.</p>
+      <pre><a href="/brewcode/skills/spec/"><code>/brewcode:spec</code></a></pre>
+      <p>Spec runs parallel codebase research and a refinement loop to produce a SPEC.md. For semantic search, run <a href="/brewcode/skills/grepai/"><code>/brewcode:grepai setup</code></a>, which checks/installs prerequisites (brew, ollama, grepai CLI) and self-installs its hooks.</p>
     </div>
   </li>
 </Steps>
@@ -133,8 +133,8 @@ claude plugin update brewui@claude-brewcode
   **`/brewcode:*` commands are not recognized**
   -- Restart Claude Code after installation. Plugins only load at session start.
 
-  **<a href="/brewcode/skills/setup/">`/brewcode:setup`</a> reports missing `timeout`**
-  -- The setup skill creates a symlink automatically during Phase 0. If the issue persists: `brew install coreutils`.
+  **`timeout` command missing on macOS**
+  -- Brewcode's session-start hook expects `timeout`/`gtimeout`. Install it with `brew install coreutils`.
 
   **`CLAUDECODE` environment variable interferes with launch**
   -- Run `unset CLAUDECODE` before running `claude` in scripts (applies to v0.2.47+).
@@ -144,10 +144,10 @@ claude plugin update brewui@claude-brewcode
 
 <CardGrid>
   <Card title="Quick Start" icon="rocket" href="/quickstart/">
-    Run your first infinite task in 15 minutes: [setup](/brewcode/skills/setup/), [spec](/brewcode/skills/spec/), [plan](/brewcode/skills/plan/), [start](/brewcode/skills/start/).
+    Get started in 15 minutes: [spec](/brewcode/skills/spec/), [semantic search](/brewcode/skills/grepai/), [deep review](/brewcode/skills/superreview/).
   </Card>
   <Card title="Brewcode Overview" icon="building" href="/brewcode/overview/">
-    Architecture, concepts, all 25 skills, 14 agents, and 9 hooks.
+    Architecture, concepts, all 25 skills, 14 agents, and 4 hooks.
   </Card>
 </CardGrid>
 

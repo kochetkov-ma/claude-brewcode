@@ -123,7 +123,7 @@ Description patterns by ambiguity level:
 | Some — 1-2 other agents | Single-line + detailed Triggers | `"Creates bash scripts. Triggers: create script, bash script, shell script"` |
 | High — creator/meta agents | Multi-line + 2-3 `<example>` blocks | See agent-creator.md source |
 
-Subagent spawn constraint: CC 2.1.172 allows nested subagent spawning up to 5 levels deep. However, brewcode workflow requires spawning only from the main conversation — the 2-step report protocol (`post-task.mjs`) binds the task lock to one session and delivers report/coordinator instructions back to the spawning conversation. Nested spawns bypass session binding, `KNOWLEDGE` injection, and the coordinator loop. This is a **brewcode workflow policy**, not a Claude Code platform limitation.
+Subagent spawn note: CC allows nested subagent spawning, but prefer spawning from the main conversation so the orchestrator can integrate each agent's result directly. Brewcode agents are stateless and resolve plugin paths via `${CLAUDE_PLUGIN_ROOT}`.
 
 Known active bugs: [#29423](https://github.com/anthropics/claude-code/issues/29423) (subagents skip CLAUDE.md), [#27736](https://github.com/anthropics/claude-code/issues/27736) (`skills:` in plugin agents), [#31392](https://github.com/anthropics/claude-code/issues/31392) (global agents not discovered in v2.1.70+).
 </details>

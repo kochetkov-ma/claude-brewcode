@@ -10,7 +10,11 @@ import { Card, CardGrid, Badge, Callout, Steps, UpdateNotice } from '../../../..
 <Badge variant="primary" text="sonnet" /> <Badge variant="secondary" text="session" />
 
 <Callout type="caution" title="Prerequisites">
-  Run [/brewcode:setup](/brewcode/skills/setup/) first — it installs Homebrew, Ollama, and grepai CLI automatically in Phase 0.
+  Run `/brewcode:grepai setup` — it checks/installs Homebrew, Ollama, and the grepai CLI, builds the index, and self-installs the grepai hooks into your project.
+</Callout>
+
+<Callout type="note" title="Self-install hooks">
+  `setup` mode detects whether grepai hooks are present in your project. If not, it copies `grepai-session.mjs` (SessionStart auto-start/health) and `grepai-reminder.mjs` (PreToolUse:Bash reminder) from the plugin's `skills/grepai/assets/` into `.claude/grepai/hooks/`, then merges the SessionStart and PreToolUse:Bash entries into `.claude/settings.json` using jq (python3 fallback, no-clobber, idempotent). A summary of created files is printed when done.
 </Callout>
 
 <Callout type="tip" title="Environment">
@@ -133,8 +137,8 @@ The skill always prints a status table after any mode completes:
 </details>
 
 <CardGrid>
-  <Card title="setup skill" icon="document" href="/brewcode/skills/setup/">
-    Run setup first — it installs all prerequisites including Ollama and grepai CLI.
+  <Card title="Hooks" icon="document" href="/brewcode/hooks/">
+    Auto-start and reminder hooks that setup mode installs into your project.
   </Card>
   <Card title="Source on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/grepai">
     Skill scripts, SKILL.md, and configuration templates.

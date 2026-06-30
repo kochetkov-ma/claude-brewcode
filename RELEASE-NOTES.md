@@ -2,6 +2,24 @@
 
 ---
 
+## v4.0.1 (2026-06-30)
+
+> Docs-only follow-up to v4.0.0 — purges leftover v3.19.0 task-system documentation debt from the site so docs match the real plugin.
+
+> Docs: [brewcode overview](https://doc-claude.brewcode.app/brewcode/overview/) | [agents](https://doc-claude.brewcode.app/brewcode/agents/) | [grepai](https://doc-claude.brewcode.app/brewcode/skills/grepai/) | [superreview](https://doc-claude.brewcode.app/brewcode/skills/superreview/) | [getting-started](https://doc-claude.brewcode.app/getting-started/) | [quickstart](https://doc-claude.brewcode.app/quickstart/) | [installation](https://doc-claude.brewcode.app/installation/)
+
+### docs
+#### Removed
+- **workflow page:** deleted `brewcode/workflow.mdx` (described the removed KNOWLEDGE/plan/start/handoff pipeline) + its `navigation.ts` entry
+- **dead skill/agent refs:** purged all links to removed skills (`/brewcode:setup`, `/brewcode:plan`, `/brewcode:start`, `/brewcode:standards-review`, `/brewcode:teardown`) and removed agents (`bc-coordinator`, `bc-knowledge-manager`) across getting-started, quickstart, installation, overview, agents, and skill/agent pages
+- **task-system framing:** removed dead KNOWLEDGE auto-accumulation / post-task / coordinator-loop / "infinite task" descriptions
+#### Changed
+- **brewcode counts reconciled:** 9 skills (spec, grepai, convention, rules, superreview, skills, agents, teams, e2e), 10 agents, 2 hooks; suite total 4 hooks
+- **grepai:** documented self-install behavior on its MDX page
+- **superreview:** now documented as the generator of the project-tailored deep-review skill (review + standards merged)
+
+---
+
 ## v4.0.0 (2026-06-30)
 
 > **MAJOR / breaking** — injection-hook architecture removed across all plugins; plugin-root now resolved natively via `${CLAUDE_PLUGIN_ROOT}`.

@@ -118,7 +118,7 @@ skill-name/
 |---|---|
 | **Progressive Disclosure** | Always — L1 name+desc in context, L2 SKILL.md on trigger, L3 references on demand |
 | **Reference Splitting** | 2+ modes, >50 lines/mode, >300 lines total — detect mode → load only matching `references/{mode}.md` |
-| **Agents-as-References** | Coordinator with multi-step workflow — pass file path to subagent, subagent reads itself. 0 tokens in coordinator context |
+| **Agents-as-References** | Orchestrator with multi-step workflow -- pass file path to subagent, subagent reads itself. 0 tokens in orchestrator context |
 | **Context Fork** | Standalone task, no history needed, &lt;4 phases — `context: fork` + isolated subagent |
 | **Executable Bash** | `**EXECUTE** using Bash tool:` keyword + `&& echo "✅" \|\| echo "❌"` + `> STOP if ❌` |
 | **Pushy Description** | LLM-invocable skills — action verb + `Triggers: "exact user phrases"`. Raises rate 20% → 50-72% |
@@ -197,7 +197,7 @@ Root-level `SKILL.md`: a plugin with a `SKILL.md` at the plugin root (no `skills
 
 ### Subagent spawn constraint
 
-CC 2.1.172 allows nested subagent spawning up to 5 levels deep. However, brewcode workflow requires spawning only from the main conversation — the 2-step report protocol (`post-task.mjs`) binds the task lock to one session and delivers report/coordinator instructions back to the spawning conversation. Nested spawns bypass session binding, `KNOWLEDGE` injection, and the coordinator loop. This is a **brewcode workflow policy**, not a Claude Code platform limitation.
+CC allows nested subagent spawning, but prefer spawning from the main conversation so the orchestrator can integrate each agent's result directly. Brewcode agents are stateless and resolve plugin paths via `${CLAUDE_PLUGIN_ROOT}`.
 
 </details>
 

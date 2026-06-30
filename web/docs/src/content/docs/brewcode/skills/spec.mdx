@@ -8,7 +8,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 # spec — research and write spec
 
 <Callout type="caution">
-**Skipping spec means rewriting later.** Without a specification, parallel agents in `/brewcode:plan` and `/brewcode:start` have no shared ground truth — they duplicate work, contradict each other, and miss edge cases. The fix costs more than the spec would have.
+**Skipping spec means rewriting later.** Without a specification, parallel agents and reviewers have no shared ground truth — they duplicate work, contradict each other, and miss edge cases. The fix costs more than the spec would have.
 </Callout>
 
 <Callout type="tip">
@@ -55,8 +55,6 @@ Files Created:
   SPEC: .claude/tasks/20260417_143052_auth_feature_task/SPEC.md
   Task Dir: .claude/tasks/20260417_143052_auth_feature_task/
 
-Next Step:
-  /brewcode:plan .claude/tasks/20260417_143052_auth_feature_task/
 ```
 
 ## Flow
@@ -65,7 +63,7 @@ Next Step:
   <li>
     <div>
       <strong>Check adapted templates</strong>
-      <p>Verifies <code>.claude/tasks/templates/SPEC.md.template</code> exists. Missing template means <code>/brewcode:setup</code> has not run — the skill stops here rather than writing a spec into the wrong structure.</p>
+      <p>Verifies <code>.claude/tasks/templates/SPEC.md.template</code> exists. Missing template means the project structure is not initialized — the skill stops here rather than writing a spec into the wrong structure.</p>
     </div>
   </li>
   <li>
@@ -155,11 +153,11 @@ MAX 3 iterations — then surface remaining remarks via AskUserQuestion
 </details>
 
 <CardGrid>
-  <Card title="Plan" icon="document" href="/brewcode/skills/plan/">
-    Next step — turn the SPEC into a phased execution plan with task breakdown.
+  <Card title="Semantic Search" icon="document" href="/brewcode/skills/grepai/">
+    Search the codebase semantically to ground the spec in real code patterns and dependencies.
   </Card>
-  <Card title="Start" icon="play" href="/brewcode/skills/start/">
-    Execute the plan with infinite handoff and automatic session continuity.
+  <Card title="All Brewcode Skills" icon="star" href="/brewcode/skills/">
+    Browse every skill available in the brewcode plugin.
   </Card>
   <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/spec">
     SKILL.md, references, and SPEC-creation.md consolidation rules.

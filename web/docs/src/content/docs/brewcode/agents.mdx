@@ -1,6 +1,6 @@
 ---
 title: "Agents"
-description: "All 12 Brewcode agents: models, triggers, tools"
+description: "All 10 Brewcode agents: models, triggers, tools"
 order: 12
 ---
 
@@ -24,10 +24,8 @@ from developer to task coordination.
 | 6 | agent-creator | opus | Read, Write, Edit | Agent creation and improvement |
 | 7 | hook-creator | opus | Read, Write, Edit, Bash | Hook creation and debugging |
 | 8 | bash-expert | opus | Read, Write, Edit, Bash | Bash/sh script creation |
-| 9 | bc-coordinator | haiku | Read, Write, Edit, Bash | Internal: spawned by /brewcode:start + post-task hook |
-| 10 | bc-knowledge-manager | haiku | Read, Write | Internal: spawned by /brewcode:start |
-| 11 | bc-grepai-configurator | opus | Read, Write, Edit, Bash | Internal: spawned by /brewcode:grepai |
-| 12 | bc-rules-organizer | sonnet | Read, Write, Edit, Bash | Internal: spawned by /brewcode:rules |
+| 9 | bc-grepai-configurator | opus | Read, Write, Edit, Bash | Internal: spawned by /brewcode:grepai |
+| 10 | bc-rules-organizer | sonnet | Read, Write, Edit, Bash | Internal: spawned by /brewcode:rules |
 
 <CardGrid>
   <Card title="developer" icon="code" href="/brewcode/agents/developer/">
@@ -57,7 +55,7 @@ from developer to task coordination.
 </CardGrid>
 
 :::note[Internal agents]
-`bc-coordinator`, `bc-knowledge-manager`, `bc-grepai-configurator`, and `bc-rules-organizer` are internal. They are spawned automatically by brewcode skills and hooks, are not user-invokable, and have no dedicated page.
+`bc-grepai-configurator` and `bc-rules-organizer` are internal. They are spawned automatically by brewcode skills and hooks, are not user-invokable, and have no dedicated page.
 :::
 
 ## Models and cost
@@ -66,12 +64,10 @@ from developer to task coordination.
 |-------|--------|-------------|
 | **opus** | [developer](/brewcode/agents/developer/), [reviewer](/brewcode/agents/reviewer/), [architect](/brewcode/agents/architect/), [skill-creator](/brewcode/agents/skill-creator/), [agent-creator](/brewcode/agents/agent-creator/), [hook-creator](/brewcode/agents/hook-creator/), [bash-expert](/brewcode/agents/bash-expert/), bc-grepai-configurator | Complex tasks, deep analysis, code generation |
 | **sonnet** | [tester](/brewcode/agents/tester/), bc-rules-organizer | Balanced tasks, review, optimization |
-| **haiku** | bc-coordinator, bc-knowledge-manager | Lightweight operations: statuses, knowledge extraction, compaction |
 
 <Callout type="tip" title="Automatic selection">
-  Agents are selected automatically based on the Phase Registry in PLAN.md.
-  The [/brewcode:start](/brewcode/skills/start/) skill reads agent assignments from the phase table
-  and launches the corresponding agents via Task API.
+  Agents are launched automatically by brewcode skills via the Task API.
+  Each skill spawns the relevant agent for its domain — no manual agent selection required.
 </Callout>
 
 <Callout type="note" title="Moved Agents">

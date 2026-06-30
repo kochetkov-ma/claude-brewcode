@@ -54,7 +54,6 @@ export const navigation: NavSection[] = [
         ],
       },
       { title: 'Hooks', slug: 'brewcode/hooks' },
-      { title: 'Workflow', slug: 'brewcode/workflow' },
     ],
   },
   {
