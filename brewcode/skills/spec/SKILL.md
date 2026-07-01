@@ -1,6 +1,7 @@
 ---
 name: brewcode:spec
 description: "Creates SPEC.md task spec via research + interaction. Triggers: create SPEC.md, brewcode spec, write spec."
+disable-model-invocation: true
 argument-hint: "[-n] <description> | <path-to-requirements> — -n/--noask: no questions to user"
 allowed-tools: Read, Write, Glob, Grep, Bash, Task, AskUserQuestion
 model: opus

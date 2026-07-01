@@ -7,6 +7,7 @@ model: opus
 meta:
   phases: [P0, P1, P2, P3, P4, P5, P5.5]
 user-invocable: true
+disable-model-invocation: true
 ---
 
 [DICT: TT=task-tracker agent (generated), TB=task-board skill (generated), BRD=board.md, FEAT=.claude/features, EXCL=source-path exclusions, REL=release style (vX.Y.Z tag | commit SHA | no tag), DOM=domain id segment, FM=frontmatter]

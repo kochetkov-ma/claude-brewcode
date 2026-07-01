@@ -3,6 +3,7 @@ name: brewdoc:memory
 description: Optimize Claude Code memory - dedupe, compress, organize CLAUDE.md. Triggers - optimize memory, memory cleanup.
 argument-hint: "— no args, runs 4-step interactive workflow"
 user-invocable: true
+disable-model-invocation: true
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion
 model: opus
 ---

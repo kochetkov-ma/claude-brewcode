@@ -2,6 +2,7 @@
 name: brewcode:skills
 description: "Lists, improves, creates Claude Code skills. Triggers: create skill, improve skill, fix skill activation."
 user-invocable: true
+disable-model-invocation: true
 argument-hint: "<free-form prompt: what to do with skills>"
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Task, WebSearch, WebFetch, AskUserQuestion, Skill]
 model: opus

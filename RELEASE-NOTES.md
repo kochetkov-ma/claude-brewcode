@@ -2,6 +2,26 @@
 
 ---
 
+## v4.0.3 (2026-07-01)
+
+> Restricts 15 skills across brewcode/brewdoc/brewtools to user-only invocation (`disable-model-invocation: true`) — side-effect or config-mutating skills (create agent/skill/team, generate spec/e2e/convention docs, sync rules, optimize memory, document installation, manager mode, plugin-update, provider-switch, task-board-init, think-short, guide) no longer auto-trigger from LLM description matching; still callable via `/plugin:skill`.
+
+> Docs: [agents](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [convention](https://doc-claude.brewcode.app/brewcode/skills/convention/) | [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [rules](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [spec](https://doc-claude.brewcode.app/brewcode/skills/spec/) | [teams](https://doc-claude.brewcode.app/brewcode/skills/teams/) | [guide](https://doc-claude.brewcode.app/brewdoc/skills/guide/) | [memory](https://doc-claude.brewcode.app/brewdoc/skills/memory/) | [my-claude](https://doc-claude.brewcode.app/brewdoc/skills/my-claude/) | [manager](https://doc-claude.brewcode.app/brewtools/skills/manager/) | [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) | [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/) | [task-board-init](https://doc-claude.brewcode.app/brewtools/skills/task-board-init/) | [think-short](https://doc-claude.brewcode.app/brewtools/skills/think-short/)
+
+### brewcode
+#### Changed
+- **agents, convention, e2e, rules, skills, spec, teams:** added `disable-model-invocation: true` — user-invoked only, no more LLM auto-trigger on generic trigger words
+
+### brewdoc
+#### Changed
+- **guide, memory, my-claude:** added `disable-model-invocation: true` — user-invoked only
+
+### brewtools
+#### Changed
+- **manager, plugin-update, provider-switch, task-board-init, think-short:** added `disable-model-invocation: true` — user-invoked only, prevents accidental config/hook/provider mutation from ambiguous LLM-detected triggers
+
+---
+
 ## v4.0.2 (2026-06-30)
 
 > Patch fix — think-short's own smoke test was broken since the v4.0.0 family-roots purge.

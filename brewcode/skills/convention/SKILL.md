@@ -1,6 +1,7 @@
 ---
 name: brewcode:convention
 description: "Extracts etalon classes, patterns, architecture into convention docs. Triggers: extract conventions, etalon classes."
+disable-model-invocation: true
 argument-hint: "[full|conventions|rules|paths <p1,p2>]"
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion, Skill
 model: opus

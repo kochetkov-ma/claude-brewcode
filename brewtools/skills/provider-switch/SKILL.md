@@ -5,6 +5,7 @@ argument-hint: "[status|setup|verify|model-check|help|<provider-name>] — no ar
 allowed-tools: Read, Write, Edit, Bash, AskUserQuestion, Glob, Grep
 model: opus
 user-invocable: true
+disable-model-invocation: true
 ---
 
 [DICT: P=Phase, PRV=provider, EXEC=EXECUTE using Bash tool, AUQ=AskUserQuestion, REF=references, ALIAS=shell alias, CFG=configured, BASE=ANTHROPIC_BASE_URL, MOD=ANTHROPIC_DEFAULT_OPUS_MODEL]

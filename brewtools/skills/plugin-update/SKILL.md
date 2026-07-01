@@ -2,6 +2,7 @@
 name: brewtools:plugin-update
 description: Checks, installs, updates Claude Code plugins. Triggers - update plugins, check versions, обнови плагины.
 user-invocable: true
+disable-model-invocation: true
 argument-hint: "[check|update|all] — no args = interactive. check = status only, update = prompt to update, all = everything non-interactive"
 allowed-tools: Read, Bash, AskUserQuestion, Write, WebFetch
 model: sonnet

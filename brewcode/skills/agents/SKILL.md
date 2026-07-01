@@ -2,6 +2,7 @@
 name: brewcode:agents
 description: "Creates and improves Claude Code subagents. Triggers: create agent, improve agent, scaffold agent, fix agent."
 user-invocable: true
+disable-model-invocation: true
 argument-hint: "<free-form prompt: what to do with agents>"
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion, Skill]
 model: opus

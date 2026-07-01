@@ -2,6 +2,7 @@
 name: brewdoc:guide
 description: Interactive guide and tutorial for brewcode plugin suite. Triggers - guide, tutorial, getting started, learn brewcode.
 user-invocable: true
+disable-model-invocation: true
 argument-hint: "[topic] — no args = interactive menu. Topics: overview, installation, killer-flow, teams, skills-catalog, agents-catalog, customization, integration, advanced"
 allowed-tools: Read, Glob, Grep, Bash, WebSearch, AskUserQuestion
 model: haiku

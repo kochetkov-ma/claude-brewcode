@@ -5,6 +5,7 @@ argument-hint: "[install|remove] [project|global] | free-text intent"
 allowed-tools: Read, Bash, AskUserQuestion, Task
 model: sonnet
 user-invocable: true
+disable-model-invocation: true
 ---
 
 # Think-Short

@@ -5,6 +5,7 @@ argument-hint: "[on|off|uninstall|status|level <strict|balanced>|edit|reset] | <
 allowed-tools: Read, Bash, AskUserQuestion
 model: sonnet
 user-invocable: true
+disable-model-invocation: true
 ---
 
 # Manager

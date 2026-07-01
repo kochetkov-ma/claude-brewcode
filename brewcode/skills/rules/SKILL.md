@@ -2,6 +2,7 @@
 name: brewcode:rules
 description: "Syncs KNOWLEDGE.jsonl or session learnings to project rules. Triggers: rules, knowledge sync, extract rules."
 user-invocable: true
+disable-model-invocation: true
 argument-hint: "<free-form prompt: what to do with rules>"
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion, Skill]
 model: sonnet

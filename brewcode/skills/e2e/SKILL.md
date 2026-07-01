@@ -2,6 +2,7 @@
 name: brewcode:e2e
 description: "Orchestrates e2e testing: BDD scenarios, Playwright autotests. Triggers: e2e tests, BDD scenarios, write autotest."
 user-invocable: true
+disable-model-invocation: true
 argument-hint: "[setup|create|update|review|rules|status] [prompt]"
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion, Skill, WebSearch, WebFetch]
 model: opus

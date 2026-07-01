@@ -3,6 +3,7 @@ name: brewdoc:my-claude
 description: Document your Claude Code installation - setup, architecture, web research. Triggers - my claude, installation docs.
 argument-hint: "[ext [context]] | [r <query>] — no args = internal installation docs"
 user-invocable: true
+disable-model-invocation: true
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Task, WebFetch, WebSearch, Skill, AskUserQuestion
 model: opus
 ---
