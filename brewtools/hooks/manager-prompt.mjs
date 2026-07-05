@@ -1,22 +1,27 @@
 // brewtools:manager — UserPromptSubmit hook.
-// Injects Manager/Review mode block(s) via additionalContext. Triggers:
-//   1. Codeword in prompt (always, regardless of state). THREE codewords in TWO
+// Injects Manager/Architecture/Review mode block(s) via additionalContext. Triggers:
+//   1. Codeword in prompt (always, regardless of state). FOUR codewords in THREE
 //      INDEPENDENT groups; a prompt may activate one from each:
 //        Manager group:
 //          ++m  -> Manager mode. PLAN-AWARE: when permission_mode === 'plan'
 //                  it injects the planmode block (full + plan addon); otherwise
 //                  the plain full block. There is NO separate ++mp codeword.
+//        Architecture group:
+//          ++a  -> Architecture-first directive. Mode-agnostic: the SAME block
+//                  injects in plan and normal mode (in plan mode the design is
+//                  written into the plan itself). Independent of manager/review;
+//                  freely combinable with either or both.
 //        Review group (mutually exclusive, ++rr wins over ++r):
 //          ++rr -> Anti-regression review discipline
 //          ++r  -> Two-phase review discipline
 //   2. HARD wall ON (state.hard === true): ambient auto-inject of the 'full'
 //        orchestrator block every turn (codeword absent).
-// Precedence: each group is detected INDEPENDENTLY. When both groups are present
-//   we inject BOTH blocks (manager block first, then review block), concatenated
+// Precedence: each group is detected INDEPENDENTLY. When groups co-occur we inject
+//   ALL matching blocks (manager first, then architect, then review), concatenated
 //   with a blank-line separator. When only one group is present, only that block
 //   is injected. The longer-prefix variant ++rr wins over ++r; the `(?![\w])`
 //   lookahead also keeps `++rr` from falsely matching ++r.
-//   The review codewords are codeword-ONLY (no ambient/state injection).
+//   The architect and review codewords are codeword-ONLY (no ambient/state injection).
 // Fail-safe: any error -> output({}) so the user's prompt is never broken.
 
 import { readStdin, output } from './lib/utils.mjs';
@@ -38,6 +43,7 @@ function capText(s, max = 9000) {
     const hasM  = /(?<![\w+])\+\+m(?![\w])/.test(prompt);
     const hasRR = /(?<![\w+])\+\+rr(?![\w])/.test(prompt);
     const hasR  = /(?<![\w+])\+\+r(?![\w])/.test(prompt);
+    const hasA  = /(?<![\w+])\+\+a(?![\w])/.test(prompt);
 
     // Two independent groups. Manager (++m) is plan-aware: when the session is in
     // plan mode (permission_mode === 'plan') it injects the planmode block (full +
@@ -51,6 +57,12 @@ function capText(s, max = 9000) {
         : 'User typed `++m` — Manager mode is active for this turn:';
     }
 
+    let archMode = null, archHeader = null;
+    if (hasA) {
+      archMode = 'architect';
+      archHeader = 'User typed `++a` — Architecture-first discipline is active for this turn:';
+    }
+
     let reviewMode = null, reviewHeader = null;
     if (hasRR) {
       reviewMode = 'review-regression';
@@ -60,10 +72,10 @@ function capText(s, max = 9000) {
       reviewHeader = 'User typed `++r` — Two-phase review discipline is active for this turn:';
     }
 
-    if (managerMode || reviewMode) {
+    if (managerMode || archMode || reviewMode) {
       // Codeword(s) present -> inject matching block(s) ALWAYS (state-independent).
       const blocks = [];
-      for (const [mode, head] of [[managerMode, managerHeader], [reviewMode, reviewHeader]]) {
+      for (const [mode, head] of [[managerMode, managerHeader], [archMode, archHeader], [reviewMode, reviewHeader]]) {
         if (!mode) continue;
         const { text } = resolvePrompt(mode, cwd, pluginRoot);
         if (text) blocks.push(`${head}\n\n${text}`);

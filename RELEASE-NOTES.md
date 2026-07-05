@@ -2,6 +2,21 @@
 
 ---
 
+## v4.0.5 (2026-07-05)
+
+> New Manager codeword `++a` (Architecture-first) plus a think-short comment-discipline gate. `++a` is a third independent codeword group alongside `++m` (manager) and `++rr`/`++r` (review): it injects a `[DIRECTIVE: ARCHITECTURE-FIRST]` block that forces an architecture pass before implementation — design fitting the project's existing architecture/patterns/rules, robust + scalable + simple (no over-engineering), reuse-first, clean seams. Mode-agnostic (same block in normal and plan mode; in plan mode it is written into the plan) and combinable with `++m`/`++rr`/`++r`. think-short now tells the model to comment like a human, not an AI — fewer comments, only where non-obvious, docstrings/JavaDoc/PyDoc kept.
+
+> Docs: [manager](https://doc-claude.brewcode.app/brewtools/skills/manager/) | [prompt-injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/) | [think-short](https://doc-claude.brewcode.app/brewtools/skills/think-short/)
+
+### brewtools
+#### Added
+- **manager:** `++a` codeword — Architecture-first directive. Independent third group (combines with `++m` and the review group); injects `references/architect.md` (`[DIRECTIVE: ARCHITECTURE-FIRST]`); mode-agnostic, written into the plan in plan mode. Hook detection + injection order manager -> architect -> review; `architect` added to `VALID_MODES`
+
+#### Changed
+- **think-short:** injected prompt gains a comment-discipline gate — comment like a human not an AI: fewer comments, only non-obvious logic / public APIs / docstrings; stop line-by-line AI-slop narration; docstrings (JavaDoc/PyDoc) kept, just terser
+
+---
+
 ## v4.0.4 (2026-07-05)
 
 > Strengthens Manager mode so the role survives the plan/exit boundary. The plan-mode block now forces the role INTO the plan itself (PREAMBLE restating `[ROLE: MANAGER]` + protocol, explicit `STEP 0` = re-assume role + build the whole TaskGraph + delegate on exit), because the injected hook context dies when plan mode ends while the plan document persists. Both `full` and `planmode` prompt blocks recompacted (~35% shorter) without losing meaning. brewcode's `forced-eval` reminder gains a standing `[ROLE]` manager delegation line.

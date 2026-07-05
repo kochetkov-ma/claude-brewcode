@@ -1,6 +1,6 @@
 ---
 name: brewtools:manager
-description: "Manager mode. on installs+arms a HARD delegation wall into THIS project (PreToolUse denies Write/Edit/Bash in main session, subagents free); off disarms; uninstall removes it. Codeword ++m auto-injects a delegate-everything prompt (plan-aware: adds the plan supplement in plan mode); ++rr/++r auto-inject review discipline (anti-regression / two-phase double-check), all independent of this skill. level strict|balanced, status, edit, reset. Triggers: manager, менеджер, hard mode, хард режим, delegate."
+description: "Manager mode. on installs+arms a HARD delegation wall into THIS project (PreToolUse denies Write/Edit/Bash in main session, subagents free); off disarms; uninstall removes it. Codeword ++m auto-injects a delegate-everything prompt (plan-aware: adds the plan supplement in plan mode); ++a auto-injects an architecture-first directive (mode-agnostic); ++rr/++r auto-inject review discipline (anti-regression / two-phase double-check), all independent of this skill. level strict|balanced, status, edit, reset. Triggers: manager, менеджер, hard mode, хард режим, delegate."
 argument-hint: "[on|off|uninstall|status|level <strict|balanced>|edit|reset] | <task в хард режиме> | <task от роли менеджера> | <prompt>"
 allowed-tools: Read, Bash, AskUserQuestion
 model: sonnet
@@ -12,9 +12,10 @@ disable-model-invocation: true
 
 > Manager mode has **TWO independent layers**. Keep them straight:
 >
-> 1. **SOFT codewords (`++m` / `++rr` / `++r`) — autonomous, hook-driven, ALWAYS fire.** A `UserPromptSubmit` hook (`hooks/manager-prompt.mjs`) watches every prompt; when it sees a codeword it injects the matching block as `additionalContext` for that one turn. This is NOT enabled/disabled by this skill — it works regardless of skill state. The skill only **explains** it (`status`) and **customizes its TEXT** (`edit`/`reset`).
+> 1. **SOFT codewords (`++m` / `++a` / `++rr` / `++r`) — autonomous, hook-driven, ALWAYS fire.** A `UserPromptSubmit` hook (`hooks/manager-prompt.mjs`) watches every prompt; when it sees a codeword it injects the matching block as `additionalContext` for that one turn. This is NOT enabled/disabled by this skill — it works regardless of skill state. The skill only **explains** it (`status`) and **customizes its TEXT** (`edit`/`reset`).
 >     Detection (longest-prefix first within the review group):
 >     - `++m`  → Manager mode. PLAN-AWARE: when the session is in plan mode (`permission_mode === 'plan'`) it injects the `planmode` block (full + plan addon — writes the task graph, uses the tasks tool); otherwise the plain `full` delegate-everything block. There is NO separate `++mp` codeword.
+>     - `++a`  → Architecture-first directive (`architect`). Injects `[DIRECTIVE: ARCHITECTURE-FIRST]` before implementation — delegate an architecture pass that fits the project's existing architecture, patterns and rules; robust, scalable, and SIMPLE (no over-engineering); reuse existing patterns/classes first, clean seams. Independent group — combines with `++m` and the review group. Mode-agnostic: same block in plan and normal mode (in plan mode it is written into the plan).
 >     - `++rr` → Regression Review discipline (`review-regression`) — after each significant phase: no regression + project standard + correctness; two-phase review→double-check→fix; final cross-review at task end. Tested before `++r`.
 >     - `++r`  → Review discipline (`review-double`) — two-phase multi-agent review→double-check→fix after each significant change; codeword-only (no ambient/wall injection).
 >     - When the HARD wall is ON, the Manager (full) block is ALSO auto-injected on EVERY turn — no codeword needed. Codewords and wall injection are independent.
@@ -290,6 +291,7 @@ Render using the canonical status block in `references/hard.md`, filling in `har
 
 ## Codewords (ALWAYS active — hook-driven, independent of this skill)
 Type `++m` anywhere   → injects the Manager block for that one turn (plan-aware: planmode block in plan mode, else full).
+Type `++a` anywhere   → injects the Architecture-first directive for that one turn (mode-agnostic: same block in plan and normal mode).
 Type `++rr` anywhere  → injects the Regression Review contract for that one turn.
 Type `++r` anywhere   → injects the Review contract for that one turn.
 They fire on every prompt that contains them. This skill never turns them on or off.

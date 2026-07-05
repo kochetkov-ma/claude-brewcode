@@ -10,7 +10,7 @@ verb and carries no hard/manager marker falls through to `inline-run`.
 >   `state.hard`/`state.level` + a guard INSTALLED into the project's
 >   `.claude/settings.local.json`, **PROJECT scope only**, persistent, this skill only.
 >   `on` = install+arm; `off` = disarm (state only); `uninstall` = deregister.
-> - **SOFT codewords** `++m`/`++rr`/`++r` = autonomous hook injection, ALWAYS fire,
+> - **SOFT codewords** `++m`/`++a`/`++rr`/`++r` = autonomous hook injection, ALWAYS fire,
 >   not toggled here. `edit`/`reset` only shape the injected TEXT.
 >   Note: `++m` is plan-aware — when the session is in plan mode (permission_mode === 'plan')
 >   it injects the planmode block (full + plan addon); otherwise the plain full block.

@@ -4,20 +4,21 @@ Manager mode has **two independent layers**. Keep them straight:
 
 | Layer | What | Scope | Persistent |
 |-------|------|-------|-----------|
-| **SOFT codewords** (`++m` / `++rr` / `++r`) | A `UserPromptSubmit` hook auto-injects a delegate-everything Manager prompt for ONE turn when it sees a codeword (`++m` is plan-aware — adds the plan supplement when `permission_mode === 'plan'`). **Always fires — this skill does NOT enable/disable it.** The skill only customizes the TEXT (`mode`/`edit`/`reset`) and explains it (`status`). | Global or project (prompt text) | Yes (hook is always on) |
+| **SOFT codewords** (`++m` / `++rr` / `++r` / `++a`) | A `UserPromptSubmit` hook auto-injects a delegate-everything Manager prompt for ONE turn when it sees a codeword (`++m` is plan-aware — adds the plan supplement when `permission_mode === 'plan'`). **Always fires — this skill does NOT enable/disable it.** The skill only customizes the TEXT (`mode`/`edit`/`reset`) and explains it (`status`). | Global or project (prompt text) | Yes (hook is always on) |
 | **HARD wall** | An opt-in `PreToolUse` guard physically DENIES mutating tools (Write/Edit/Bash/…) in the **main session**, leaving only delegate/read/track. Subagents stay fully free. **Project-only, defaults OFF, installed into the project by this skill.** No codeword for the wall. | Project only | Yes, until `off`/`uninstall` |
 
 The two layers are orthogonal: codewords shape the Manager mindset; the wall enforces delegation by removing the tools that let the agent act as an executor. Either can be used alone.
 
 ## Codewords (SOFT — always active)
 
-Detection — `++m` (plan-aware), and the review group `++rr` → `++r` (longest-prefix first).
+Detection — `++m` (plan-aware), the review group `++rr` → `++r` (longest-prefix first), and `++a` (Architecture — standalone independent group, no prefix collision).
 
 | Type anywhere in your prompt | Means | Injects | When |
 |------------------------------|-------|---------|------|
 | `++m` | Manager — delegate-everything for the current task; PLAN-AWARE (auto-adds the plan supplement in plan mode) | Manager (full) block, or full + plan addon when `permission_mode === 'plan'` | Always — hook-driven, independent of this skill |
 | `++rr` | Regression Review — after each significant phase: no regression + project standard + correctness; two-phase review→double-check→fix; final cross-review at task end | Regression Review discipline (`review-regression`) block | Always — tested before `++r`; codeword-only |
 | `++r` | Review — two-phase multi-agent review→double-check→fix after each significant change | Review discipline (`review-double`) block | Always — codeword-only (no ambient/wall injection) |
+| `++a` | Architecture — architecture-first directive before implementation: fits existing project architecture/patterns/rules, robust + scalable + SIMPLE (no over-engineering), reuse existing patterns first, clean seams | `[DIRECTIVE: ARCHITECTURE-FIRST]` block | Independent group; combines with `++m`/`++rr`/`++r`; mode-agnostic — same block in normal and plan mode (written into the plan in plan mode) |
 
 The block applies to that one turn only. When the HARD wall is armed, the Manager (full) block is also ambient-injected every turn — no codeword needed. Codewords and wall injection are independent. Review codewords (`++rr`/`++r`) are never ambient-injected.
 
@@ -129,6 +130,8 @@ The `agent_id` linchpin: subagent tool calls carry `agent_id` → guard allows. 
 ++m implement the new caching layer
 # In plan mode (permission_mode === 'plan'), ++m auto-adds the plan supplement:
 ++m design the migration from v1 to v2 schema
+# Architecture-first, combine with Manager delegation:
+++m ++a implement the new caching layer
 
 # Hard wall — install and arm for this project
 /brewtools:manager on

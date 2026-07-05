@@ -150,6 +150,7 @@ Type `++m` anywhere in a prompt   → injects the Manager block for that one tur
                                     in plan mode (permission_mode === 'plan') it injects the
                                     Manager + Plan Mode block (full + plan addon); otherwise the
                                     plain full block. There is NO separate `++mp` codeword.
+Type `++a` anywhere      → injects the Architecture-first directive for that one turn (mode-agnostic: same block in plan and normal mode).
 Type `++rr` anywhere in a prompt  → injects the Regression Review contract for that one turn.
 Type `++r` anywhere in a prompt   → injects the Review contract for that one turn.
 These fire on EVERY prompt containing them. This skill never enables or disables them;

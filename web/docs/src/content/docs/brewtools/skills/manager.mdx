@@ -1,6 +1,6 @@
 ---
 title: "Manager"
-description: "Type ++m / ++rr / ++r anywhere to inject a Manager or review-discipline block for one turn. The HARD wall denies Write/Edit/NotebookEdit/WebFetch/MCP-write in the main session, forcing delegation. RU+EN."
+description: "Type ++m / ++rr / ++r / ++a anywhere to inject a Manager, review-discipline, or architecture-first directive for one turn. The HARD wall denies Write/Edit/NotebookEdit/WebFetch/MCP-write in the main session, forcing delegation. RU+EN."
 order: 3124
 ---
 import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
@@ -10,7 +10,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 <Badge variant="default" text="sonnet" /> <Badge variant="accent" text="hook" />
 
 <Callout type="tip">
-**What is Manager mode?** You type a short codeword (`++m`, `++rr`, or `++r`) anywhere in your message and Claude instantly activates a discipline contract -- just for that one message. `++m` makes Claude a pure orchestrator that delegates all hands-on work -- and when you are in plan mode it automatically adds a full task-graph planning pass. `++rr` and `++r` inject review discipline (anti-regression / two-phase double-check). No setup required. The codeword is stripped from your message; your actual text is preserved.
+**What is Manager mode?** You type a short codeword (`++m`, `++rr`, `++r`, or `++a`) anywhere in your message and Claude instantly activates a discipline contract -- just for that one message. `++m` makes Claude a pure orchestrator that delegates all hands-on work -- and when you are in plan mode it automatically adds a full task-graph planning pass. `++rr` and `++r` inject review discipline (anti-regression / two-phase double-check). `++a` injects an architecture-first directive -- design before code, reuse existing patterns, no over-engineering. No setup required. The codeword is stripped from your message; your actual text is preserved.
 </Callout>
 
 ## What actually happens
@@ -52,8 +52,9 @@ Your single line becomes: the full Manager contract (highlighted above) + your o
 | `++m` | Manager | Manager + delegation for the current task -- Claude orchestrates, never codes by hand |
 | `++rr` | Regression Review | Regression review with double-check -- after each significant phase, run a review focused on no regression + project standard + correctness; two-phase (review → double-check → fix); mandatory final cross-review at task end |
 | `++r` | Review | Review with double-check -- after each significant change, run a two-phase multi-agent review (review → double-check → fix); codeword-only, no ambient injection or wall state change |
+| `++a` | Architecture | Architecture-first pass before coding -- delegate a design that fits the existing project architecture, patterns and rules; robust, scalable, and simple (no over-engineering); reuse existing patterns first, keep clean seams. Independent group, combines with `++m`/`++rr`/`++r`; same block in normal and plan mode (in plan mode it is written into the plan). |
 
-Detection order: within the review group, `++rr` is tested before `++r` (longest-prefix first). `++m` is matched as a standalone token; in plan mode it auto-adds the plan addon.
+Detection order: within the review group, `++rr` is tested before `++r` (longest-prefix first). `++m` is matched as a standalone token; in plan mode it auto-adds the plan addon. `++a` is its own independent group and can combine with either.
 
 Put the codeword anywhere: start, middle, or end of your message. Everything else is passed through unchanged.
 
@@ -247,6 +248,7 @@ Type `++m` anywhere   -> injects the Manager (full) block for that one turn.
 Type `++m` while in plan mode -> injects the Manager + Plan Mode block for that one turn.
 Type `++rr` anywhere  -> injects the Regression Review contract for that one turn.
 Type `++r` anywhere   -> injects the Review contract for that one turn.
+Type `++a` anywhere   -> injects the Architecture-first contract for that one turn.
 
 --- injected by ++m (full) ---
 <full Manager block text>
@@ -274,7 +276,7 @@ Level:     /brewtools:manager level strict | balanced
     Companion output-control skill -- inject brevity directives via SessionStart and per-agent PreToolUse rather than per-prompt codewords.
   </Card>
   <Card title="Prompt Injection" icon="bolt" href="/brewtools/prompt-injection/">
-    How the `++m` / `++rr` / `++r` codewords inject the Manager / review contract into the model -- the full mechanism explained.
+    How the `++m` / `++rr` / `++r` / `++a` codewords inject the Manager / review / architecture contract into the model -- the full mechanism explained.
   </Card>
   <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">
     All brewtools skills and agents in one place.
