@@ -2,6 +2,23 @@
 
 ---
 
+## v4.0.4 (2026-07-05)
+
+> Strengthens Manager mode so the role survives the plan/exit boundary. The plan-mode block now forces the role INTO the plan itself (PREAMBLE restating `[ROLE: MANAGER]` + protocol, explicit `STEP 0` = re-assume role + build the whole TaskGraph + delegate on exit), because the injected hook context dies when plan mode ends while the plan document persists. Both `full` and `planmode` prompt blocks recompacted (~35% shorter) without losing meaning. brewcode's `forced-eval` reminder gains a standing `[ROLE]` manager delegation line.
+
+> Docs: [manager](https://doc-claude.brewcode.app/brewtools/skills/manager/)
+
+### brewtools
+#### Changed
+- **manager:** `planmode` block now bakes the manager role into the plan — PREAMBLE (role + 5-step protocol verbatim) and a literal `STEP 0` (re-assume MANAGER, create the ENTIRE TaskGraph, then delegate) as the first implementation action; fixes the role evaporating on plan exit
+- **manager:** `full` + `planmode` prompt blocks recompacted (~35% fewer lines), same protocol and visceral framing preserved
+
+### brewcode
+#### Changed
+- **forced-eval:** always-on UserPromptSubmit reminder now appends a standing `[ROLE] You are the manager — delegate, do not implement directly.` line alongside the existing `[SKILL?]`/`[HINT]` payload
+
+---
+
 ## v4.0.3 (2026-07-01)
 
 > Restricts 15 skills across brewcode/brewdoc/brewtools to user-only invocation (`disable-model-invocation: true`) — side-effect or config-mutating skills (create agent/skill/team, generate spec/e2e/convention docs, sync rules, optimize memory, document installation, manager mode, plugin-update, provider-switch, task-board-init, think-short, guide) no longer auto-trigger from LLM description matching; still callable via `/plugin:skill`.

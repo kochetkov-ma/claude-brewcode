@@ -37,7 +37,8 @@ function capText(s, max = TEXT_CHANNEL_CAP) {
 // SKILL_CHECK = always-on payload (every prompt). DEFAULT_MODE = light delegation hint.
 const SKILL_CHECK = '[SKILL?] If a skill matches this request, use Skill tool first.';
 const DEFAULT_MODE = '[HINT] Delegate heavy implementation to sub-agents via Task tool.';
-const REMINDER_TEXT = `${SKILL_CHECK}\n${DEFAULT_MODE}`;
+const MANAGER_ROLE = '[ROLE] You are the manager — delegate, do not implement directly.';
+const REMINDER_TEXT = `${SKILL_CHECK}\n${DEFAULT_MODE}\n${MANAGER_ROLE}`;
 
 // --- Main ---
 
