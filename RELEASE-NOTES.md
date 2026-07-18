@@ -2,6 +2,16 @@
 
 ---
 
+## v4.0.6 (2026-07-18)
+
+> Infra: production moved off the decommissioned Contabo VPS to Fornex (79.132.136.83, Ubuntu 24.04.4 LTS). The docs site doc-claude.brewcode.app was redeployed on the new host with no plugin behavior changes. SSH reference docs and the eurodns skill example were repointed to the new server IP.
+
+### brewtools
+#### Changed
+- **ssh:** best-practices `HostName` example repointed to the new Fornex server IP (79.132.136.83)
+
+---
+
 ## v4.0.5 (2026-07-05)
 
 > New Manager codeword `++a` (Architecture-first) plus a think-short comment-discipline gate. `++a` is a third independent codeword group alongside `++m` (manager) and `++rr`/`++r` (review): it injects a `[DIRECTIVE: ARCHITECTURE-FIRST]` block that forces an architecture pass before implementation — design fitting the project's existing architecture/patterns/rules, robust + scalable + simple (no over-engineering), reuse-first, clean seams. Mode-agnostic (same block in normal and plan mode; in plan mode it is written into the plan) and combinable with `++m`/`++rr`/`++r`. think-short now tells the model to comment like a human, not an AI — fewer comments, only where non-obvious, docstrings/JavaDoc/PyDoc kept.
