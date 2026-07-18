@@ -35,7 +35,7 @@ ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa_SERVERNAME -C "user@purpose"
 
 ```
 Host vps-main
-    HostName 173.249.57.235
+    HostName 79.132.136.83
     User deploy
     Port 22
     IdentityFile ~/.ssh/id_ed25519_vps-main
