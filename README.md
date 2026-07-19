@@ -10,7 +10,7 @@
 
 **Claude Code plugin suite** -- four plugins for development, documentation, text utility, and visual workflows.
 
-A regular Claude Code session loses context during compaction. Brewcode automatically saves knowledge, passes state between compaction cycles, and continues work without restarting. Four plugins. 25 skills. 14 agents. 9 lifecycle hooks.
+A regular Claude Code session loses context during compaction. Brewcode automatically saves knowledge, passes state between compaction cycles, and continues work without restarting. Four plugins. 25 skills. 15 agents. 9 lifecycle hooks.
 
 [**Full Documentation**](https://doc-claude.brewcode.app/getting-started/)
 
@@ -57,7 +57,7 @@ After all commands succeed, run `/reload-plugins`. If `/reload-plugins` is unava
 | Plugin | Purpose | Skills | Install |
 |--------|---------|--------|---------|
 | [brewcode](brewcode/README.md) | Infinite task execution, quorum reviews, skill/agent creation, semantic search | 9 | `claude plugin install brewcode@claude-brewcode` |
-| [brewdoc](brewdoc/README.md) | Documentation tools: auto-sync, memory optimization, PDF conversion, publishing | 6 | `claude plugin install brewdoc@claude-brewcode` |
+| [brewdoc](brewdoc/README.md) | Documentation tools: docsync, memory optimization, PDF conversion, publishing | 6 | `claude plugin install brewdoc@claude-brewcode` |
 | [brewtools](brewtools/README.md) | Universal text utilities: token optimization, humanization, secrets scanning, plugin updates | 10 | `claude plugin install brewtools@claude-brewcode` |
 | [brewui](brewui/README.md) | UI/visual/creative tools (placeholder, currently empty) | 0 | `claude plugin install brewui@claude-brewcode` |
 
@@ -132,7 +132,7 @@ After `/brewcode:setup`, each task follows the cycle: `spec` -> `plan` -> `start
 ### brewdoc -- documentation tools
 
 ```bash
-/brewdoc:auto-sync                    # Sync all project docs with codebase
+/brewdoc:docsync                      # Track and sync stale project docs
 /brewdoc:my-claude                    # Generate Claude Code installation docs
 /brewdoc:memory                       # Optimize memory files interactively
 /brewdoc:md-to-pdf ./docs/report.md   # Convert markdown to PDF
@@ -206,7 +206,7 @@ Placeholder plugin, currently empty. No commands yet -- coming soon.
 
 | Skill | Purpose |
 |-------|---------|
-| `/brewdoc:auto-sync` | Universal document sync with codebase |
+| `/brewdoc:docsync` | Track & sync stale project docs via hooks |
 | `/brewdoc:my-claude` | Generate Claude Code installation docs |
 | `/brewdoc:memory` | Optimize memory files interactively |
 | `/brewdoc:md-to-pdf` | Convert markdown to professional PDF |
@@ -241,7 +241,7 @@ Self-contained `SKILL.md` folders that ship outside the four plugins -- drop the
 | `brewpage-publish` | Claude Code | [`skills/brewpage-publish`](skills/brewpage-publish/) |
 | `brewpage-publish` | OpenClaw / AgentSkills | [`openclaw/brewpage-publish`](openclaw/brewpage-publish/) |
 
-## Agents (16 total)
+## Agents (15 total)
 
 | Agent | Model | Purpose |
 |-------|-------|---------|
@@ -259,7 +259,6 @@ Self-contained `SKILL.md` folders that ship outside the four plugins -- drop the
 | bc-coordinator | haiku | Internal: spawned by /brewcode:start + post-task hook |
 | bc-knowledge-manager | haiku | Internal: spawned by /brewcode:start |
 | bc-grepai-configurator | opus | Internal: spawned by /brewcode:grepai |
-| bd-auto-sync-processor | sonnet | Internal: spawned by /brewdoc:auto-sync |
 | bc-rules-organizer | sonnet | Internal: spawned by /brewcode:rules |
 
 ## Documentation

@@ -1,9 +1,3 @@
----
-auto-sync: enabled
-auto-sync-date: 2026-04-01
-auto-sync-type: doc
----
-
 # Publish (Brewpage)
 
 Publish text, markdown, JSON, files, or multi-file sites to [brewpage.app](https://brewpage.app) and get a shareable public URL instantly. No sign-up required. Content is auto-deleted after the TTL expires (default 15 days).

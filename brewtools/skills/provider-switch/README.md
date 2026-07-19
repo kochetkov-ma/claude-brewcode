@@ -1,9 +1,3 @@
----
-auto-sync: enabled
-auto-sync-date: 2026-04-12
-auto-sync-type: doc
----
-
 # Provider Switch
 
 Switch Claude Code from Anthropic Max to a pay-per-token API provider — **DeepSeek V4 (priority)**, Z.ai/GLM, Qwen/DashScope, MiniMax, or OpenRouter — without touching any config files manually. The skill creates isolated shell aliases in `~/.zshrc`, backs up existing content before any write, and guides key entry interactively.

@@ -1,13 +1,3 @@
----
-auto-sync: enabled
-auto-sync-date: 2026-04-24
-auto-sync-type: doc
-auto-sync-override: |
-  sources: https://api-docs.deepseek.com/guides/anthropic_api, https://api-docs.deepseek.com/
-  focus: model IDs, pricing per 1M tokens, context window, endpoint URL
-  preserve: ## Alias, ## Dashboard
----
-
 # DeepSeek (V4)
 
 > **Priority provider** — DeepSeek V4 is the strongest Chinese open model (1.6T MoE, 1M context) with a native Anthropic-compatible endpoint. Recommended default for this skill.

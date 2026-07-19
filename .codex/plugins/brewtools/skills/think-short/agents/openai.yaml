@@ -1,0 +1,6 @@
+interface:
+  display_name: "Think Short"
+  short_description: "Terse-mode hook setup; user invoked"
+  default_prompt: "Use $brewtools:think-short only when the user explicitly requests terse-hook setup."
+policy:
+  allow_implicit_invocation: false

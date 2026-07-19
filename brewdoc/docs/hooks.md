@@ -1,7 +1,4 @@
 ---
-auto-sync: enabled
-auto-sync-date: 2026-06-30
-auto-sync-type: doc
 description: Brewdoc hook configuration -- none active
 ---
 
@@ -15,14 +12,7 @@ brewdoc ships **no runtime hooks**. The `hooks.json` file exists but is empty:
 
 ## Why No Hooks?
 
-A `PreToolUse:Task` hook previously handled plugin root injection for subagents so that agents could locate plugin reference files. This is no longer needed. The `bd-auto-sync-processor` agent resolves its plugin root natively via `${CLAUDE_PLUGIN_ROOT}` -- a brace-form substitution that Claude Code performs at Task spawn time. No hook, no extra injection step.
-
-## Path Resolution in bd-auto-sync-processor
-
-| Context | Variable | Resolved by |
-|---------|----------|-------------|
-| Subagent (`bd-auto-sync-processor`) | `${CLAUDE_PLUGIN_ROOT}` | Claude Code at Task spawn |
-| Skills (main conversation) | `${CLAUDE_SKILL_DIR}` | Claude Code natively |
+A `PreToolUse:Task` hook previously handled plugin root injection for subagents so that agents could locate plugin reference files. This is no longer needed: skills and agents resolve plugin resources natively via `${CLAUDE_SKILL_DIR}` and `${CLAUDE_PLUGIN_ROOT}` -- brace-form substitutions that Claude Code performs at invocation time. No hook, no extra injection step.
 
 ## Comparison with brewcode
 

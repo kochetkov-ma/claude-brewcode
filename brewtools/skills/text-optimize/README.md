@@ -1,9 +1,3 @@
----
-auto-sync: enabled
-auto-sync-date: 2026-04-01
-auto-sync-type: doc
----
-
 # Text Optimizer
 
 Optimizes text files for LLM token efficiency with 4 compression modes — from light cleanup to deep dictionary-encoded compression for LLM-only documents. Applies 40+ validated rules for Claude 4.x, supports smart auto-detection of optimal mode, and verifies no information loss. Works on single files, multiple files in parallel, or entire directories.

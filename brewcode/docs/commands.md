@@ -1,7 +1,4 @@
 ---
-auto-sync: enabled
-auto-sync-date: 2026-02-11
-auto-sync-type: doc
 description: Detailed description of all brewcode plugin commands
 ---
 
@@ -153,10 +150,6 @@ Rules optimization: dedup by semantic similarity, merge related, prioritize by i
 /bc:rules .claude/tasks/20260208_143052_auth_feature_task/KNOWLEDGE.jsonl
 /bc:rules
 ```
-
----
-
-> **Moved:** `/bc:auto-sync` + `bd-auto-sync-processor` AG → `brewdoc` PLG. Use `/brewdoc:auto-sync`.
 
 ---
 

@@ -28,7 +28,7 @@ Read the entire skill directory: SKILL.md, references/, scripts/, tests/, README
 | 14 | Tests exist | `tests/` directory exists with test files for each script |
 | 15 | Tests pass | All tests execute successfully, cover happy path + at least one error path |
 | 16 | README exists | `README.md` present in skill directory |
-| 17 | README quality | Has auto-sync frontmatter, Quick Start section, content matches actual skill behavior |
+| 17 | README quality | Has Quick Start section, content matches actual skill behavior |
 | 18 | Progressive L1 | Description acts as L1 (~100 words equivalent): enough to decide whether to invoke |
 | 19 | Progressive L2 | Body acts as L2 (<500 lines): full instructions without needing references |
 | 20 | Progressive L3 | References act as L3: loaded on demand per phase, not eagerly |

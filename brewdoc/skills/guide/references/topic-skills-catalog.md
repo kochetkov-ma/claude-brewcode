@@ -26,7 +26,7 @@ Documentation tools. Sync, generate, optimize, export, publish.
 
 | Skill | Purpose |
 |-------|---------|
-| `/brewdoc:auto-sync` | Sync documentation with code changes automatically |
+| `/brewdoc:docsync` | Track & sync stale project docs via session hooks |
 | `/brewdoc:my-claude` | Generate docs about your Claude Code setup |
 | `/brewdoc:memory` | Interactive 4-step memory file optimization |
 | `/brewdoc:md-to-pdf` | Convert markdown to PDF (reportlab/weasyprint) |

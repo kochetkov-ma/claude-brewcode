@@ -1,0 +1,6 @@
+interface:
+  display_name: "Md To Pdf"
+  short_description: "Convert Markdown to PDF via reportlab or weasyprint engines. Tri"
+  default_prompt: "Use $brewdoc:md-to-pdf for this task."
+policy:
+  allow_implicit_invocation: true

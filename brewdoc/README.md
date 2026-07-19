@@ -4,9 +4,9 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 3.18.0 |
+| Version | 4.1.0 |
 | Skills | 6 |
-| Agents | 1 |
+| Agents | 0 |
 | Hooks | 0 |
 
 ## Install
@@ -62,9 +62,9 @@ claude --plugin-dir ./brewdoc
 ## Quick Start
 
 ```bash
-/brewdoc:auto-sync                    # Sync all project docs with codebase
-/brewdoc:auto-sync status             # See what's indexed and what's stale
-/brewdoc:auto-sync init ./docs/api.md # Add file to auto-sync tracking
+/brewdoc:docsync                      # First run -> init tracking; otherwise status
+/brewdoc:docsync status               # What is tracked and what is stale
+/brewdoc:docsync sync                 # Sync stale docs (with confirmation)
 /brewdoc:my-claude                    # Document your local Claude setup
 /brewdoc:my-claude ext                # Document Claude Code architecture
 /brewdoc:my-claude r "how do hooks work"  # Research any Claude topic
@@ -78,7 +78,7 @@ claude --plugin-dir ./brewdoc
 
 | Skill | Purpose | Model | Arguments |
 |-------|---------|-------|-----------|
-| [`/brewdoc:auto-sync`](skills/auto-sync/README.md) | Synchronize documentation with code | opus | `[status] \| [init <path>] \| [global] \| [path]` |
+| [`/brewdoc:docsync`](skills/docsync/README.md) | Track & sync stale project docs via hooks | sonnet | `[status] \| [sync] \| [reread] \| [frontmatter] \| [uninstall]` |
 | [`/brewdoc:my-claude`](skills/my-claude/README.md) | Generate documentation about Claude Code installation | opus | `[ext [context]] \| [r <query>]` |
 | [`/brewdoc:memory`](skills/memory/README.md) | Optimize memory files in 4 steps | opus | -- |
 | [`/brewdoc:md-to-pdf`](skills/md-to-pdf/README.md) | Convert Markdown to PDF | sonnet | `<file.md> [--engine name] ["prompt"] \| styles \| test` |
@@ -86,12 +86,6 @@ claude --plugin-dir ./brewdoc
 | [`/brewdoc:guide`](skills/guide/README.md) | Interactive tutorial for the plugin suite | haiku | `[topic]` |
 
 > Need a portable, plugin-free version? See the standalone [`brewpage-publish`](../skills/brewpage-publish/) (Claude Code) and [`openclaw/brewpage-publish`](../openclaw/brewpage-publish/) (OpenClaw / AgentSkills) skills.
-
-## Agent
-
-| Agent | Model | Purpose |
-|-------|-------|---------|
-| bd-auto-sync-processor | sonnet | Internal: spawned by /brewdoc:auto-sync |
 
 ## Architecture
 
@@ -101,14 +95,12 @@ brewdoc/
 +-- hooks/
 |   +-- hooks.json                    # no hooks ({"hooks":{}})
 +-- skills/
-|   +-- auto-sync/                    # Documentation sync
-|   +-- my-claude/                    # Installation documentation
-|   +-- memory/                       # Memory optimization
-|   +-- md-to-pdf/                    # PDF conversion
-|   +-- publish/                      # brewpage.app publishing
-|   +-- guide/                        # Interactive tutorial
-+-- agents/
-    +-- bd-auto-sync-processor.md     # File processing agent
+    +-- docsync/                      # Doc-staleness tracker
+    +-- my-claude/                    # Installation documentation
+    +-- memory/                       # Memory optimization
+    +-- md-to-pdf/                    # PDF conversion
+    +-- publish/                      # brewpage.app publishing
+    +-- guide/                        # Interactive tutorial
 ```
 
 > **Brewdoc vs Brewcode:** Brewdoc is a set of documentation utilities. Each skill is self-contained. Brewcode is a task execution engine with infinite context, 2 hooks, and session handoff. Both install from the same `claude-brewcode` marketplace but operate independently.
@@ -119,7 +111,7 @@ Full docs: [doc-claude.brewcode.app/brewdoc/overview](https://doc-claude.brewcod
 
 | Resource | Link |
 |----------|------|
-| Auto-Sync | [Auto-Sync](https://doc-claude.brewcode.app/brewdoc/auto-sync/) |
+| Docsync | [Docsync](https://doc-claude.brewcode.app/brewdoc/skills/docsync/) |
 | My-Claude | [My-Claude](https://doc-claude.brewcode.app/brewdoc/my-claude/) |
 | Memory | [Memory](https://doc-claude.brewcode.app/brewdoc/memory/) |
 | Release Notes | [RELEASE-NOTES.md](../RELEASE-NOTES.md) |

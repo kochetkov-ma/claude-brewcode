@@ -1,9 +1,3 @@
----
-auto-sync: enabled
-auto-sync-date: 2026-04-01
-auto-sync-type: doc
----
-
 # Convention
 
 Analyzes a project codebase to extract etalon (reference) classes, coding patterns, and architecture conventions by layer. Produces structured documentation in `.claude/convention/` and organizes extracted rules into `.claude/rules/`.

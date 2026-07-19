@@ -1,0 +1,6 @@
+interface:
+  display_name: "Text Human"
+  short_description: "Humanizes code, docs, articles, reddit/chat, javadoc -- strips A"
+  default_prompt: "Use $brewtools:text-human for this task."
+policy:
+  allow_implicit_invocation: true

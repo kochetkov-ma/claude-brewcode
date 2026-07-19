@@ -1,0 +1,21 @@
+{
+  "name": "brewtools",
+  "version": "4.0.6+codex.20260713124026",
+  "description": "Codex-native text utilities plus user-invoked Manager, task-board, and terse-hook workflows.",
+  "author": { "name": "Maksim Kochetkov", "email": "apmatypa88@gmail.com", "url": "https://github.com/kochetkov-ma" },
+  "homepage": "https://github.com/kochetkov-ma/claude-brewcode",
+  "repository": "https://github.com/kochetkov-ma/claude-brewcode.git",
+  "license": "MIT",
+  "keywords": ["codex", "utilities", "manager", "task-board", "text"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Brewtools",
+    "shortDescription": "Codex utility workflows",
+    "longDescription": "Reusable Codex text optimization and humanization, plus explicitly invoked Manager, task-board, and terse-hook configuration.",
+    "developerName": "Maksim Kochetkov",
+    "category": "Developer Tools",
+    "capabilities": ["Read", "Write", "Interactive"],
+    "websiteURL": "https://github.com/kochetkov-ma/claude-brewcode",
+    "defaultPrompt": ["Use Brewtools to inspect and improve this workflow."]
+  }
+}

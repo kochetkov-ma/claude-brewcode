@@ -43,7 +43,6 @@ const DEFAULT_CONFIG = {
   },
   agents: {
     system: [
-      'bd-auto-sync-processor', 'brewcode:bd-auto-sync-processor',
       'bc-grepai-configurator', 'brewcode:bc-grepai-configurator',
       'Explore', 'Plan', 'Bash', 'general-purpose',
       'claude-code-guide', 'skill-creator', 'agent-creator',
@@ -52,14 +51,6 @@ const DEFAULT_CONFIG = {
   },
   constraints: {
     enabled: true
-  },
-  autoSync: {
-    intervalDays: 7,
-    retention: {
-      maxEntries: 200
-    },
-    optimize: false,
-    parallelAgents: 5
   }
 };
 
@@ -104,24 +95,9 @@ export function loadConfig(cwd) {
         ...(userConfig.agents?.system || [])
       ])]
     },
-    constraints: { ...DEFAULT_CONFIG.constraints, ...userConfig.constraints },
-    autoSync: {
-      ...DEFAULT_CONFIG.autoSync,
-      ...userConfig.autoSync,
-      retention: { ...DEFAULT_CONFIG.autoSync.retention, ...(userConfig.autoSync?.retention || {}) }
-    }
+    constraints: { ...DEFAULT_CONFIG.constraints, ...userConfig.constraints }
   };
   cachedConfigCwd = cwd;
-  // Validate critical numeric fields — clamp to defaults if invalid
-  const as = cachedConfig.autoSync;
-  if (!Number.isInteger(as.intervalDays) || as.intervalDays < 1) {
-    log('warn', '[config]', `Invalid intervalDays=${as.intervalDays}, using default ${DEFAULT_CONFIG.autoSync.intervalDays}`, cwd);
-    as.intervalDays = DEFAULT_CONFIG.autoSync.intervalDays;
-  }
-  if (!Number.isInteger(as.parallelAgents) || as.parallelAgents < 1) {
-    log('warn', '[config]', `Invalid parallelAgents=${as.parallelAgents}, using default ${DEFAULT_CONFIG.autoSync.parallelAgents}`, cwd);
-    as.parallelAgents = DEFAULT_CONFIG.autoSync.parallelAgents;
-  }
 
   _loadingConfig = false;
   return cachedConfig;

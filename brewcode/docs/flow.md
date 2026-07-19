@@ -1,6 +1,4 @@
 ---
-auto-sync: enabled
-auto-sync-date: 2026-02-11
 description: Flow diagrams for brewcode plugin execution
 ---
 

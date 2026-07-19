@@ -1,6 +1,6 @@
 ---
 title: "Brewdoc Overview"
-description: "Documentation plugin for Claude Code: auto-sync, memory, md-to-pdf, my-claude"
+description: "Documentation plugin for Claude Code: docsync, memory, md-to-pdf, my-claude"
 order: 20
 ---
 
@@ -25,10 +25,10 @@ Install the entire suite:
 Brewdoc contains 6 skills, each handling a separate documentation task.
 
 <CardGrid>
-  <Card title="Auto-Sync" icon="sync" href="/brewdoc/skills/auto-sync/">
-    Synchronize documentation (labels) with code.
-    Detects outdated files through INDEX, launches parallel agents for updates.
-    Supports project, global, file, and folder modes.
+  <Card title="Docsync" icon="sync" href="/brewdoc/skills/docsync/">
+    Track doc staleness by frontmatter date, not INDEX files.
+    Installs three project-local hooks that watch touched Markdown and nag once when a doc goes stale.
+    Modes: init, status, sync, reread, frontmatter, uninstall.
   </Card>
   <Card title="My-Claude" icon="clipboard" href="/brewdoc/skills/my-claude/">
     Generate documentation about your Claude Code installation.
@@ -58,7 +58,7 @@ Brewdoc contains 6 skills, each handling a separate documentation task.
 
 | Command | Purpose | Model | Arguments |
 |---------|---------|-------|-----------|
-| [`/brewdoc:auto-sync`](/brewdoc/skills/auto-sync/) | Synchronize documentation with code | opus | `[status] \| [init <path>] \| [global] \| [path]` |
+| [`/brewdoc:docsync`](/brewdoc/skills/docsync/) | Track and fix stale project docs via hooks | sonnet | `[status] \| [sync [--all]] \| [reread] \| [frontmatter] \| [uninstall]` |
 | [`/brewdoc:my-claude`](/brewdoc/skills/my-claude/) | Generate documentation about Claude Code installation | opus | `[ext [context]] \| [r <query>]` |
 | [`/brewdoc:memory`](/brewdoc/skills/memory/) | Optimize memory files in 4 steps | opus | -- |
 | [`/brewdoc:md-to-pdf`](/brewdoc/skills/md-to-pdf/) | Convert Markdown to PDF | sonnet | `<file.md> [--engine name] ["prompt"] \| styles \| test` |
@@ -79,20 +79,18 @@ brewdoc/
 │   └── plugin.json              # Plugin manifest
 ├── hooks/
 │   └── hooks.json               # no hooks registered ({"hooks":{}})
-├── skills/
-│   ├── auto-sync/               # Documentation sync
-│   ├── my-claude/               # Installation documentation
-│   ├── memory/                  # Memory optimization
-│   ├── md-to-pdf/               # PDF conversion
-│   ├── publish/                 # brewpage.app publishing
-│   └── guide/                   # Interactive tutorial
-└── agents/
-    └── bd-auto-sync-processor   # Internal: spawned by /brewdoc:auto-sync
+└── skills/
+    ├── docsync/                  # Doc-staleness tracker
+    ├── my-claude/                # Installation documentation
+    ├── memory/                   # Memory optimization
+    ├── md-to-pdf/                # PDF conversion
+    ├── publish/                  # brewpage.app publishing
+    └── guide/                    # Interactive tutorial
 ```
 
-Brewdoc ships no runtime hooks. Agent subagents resolve plugin paths via the native
-`${CLAUDE_PLUGIN_ROOT}` variable provided by Claude Code at Task spawn. Skills in the
-main conversation use `${CLAUDE_SKILL_DIR}` to access their own files.
+Brewdoc ships no runtime hooks of its own — `docsync` installs project-local hooks
+on demand, into the *target* project, not into brewdoc itself. Skills in the main
+conversation use `${CLAUDE_SKILL_DIR}` to access their own files.
 
 <Callout type="note" title="Brewdoc vs Brewcode">
   **Brewdoc** is a set of documentation utilities: sync, memory optimization, PDF export.

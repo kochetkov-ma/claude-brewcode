@@ -1,0 +1,21 @@
+{
+  "name": "brewdoc",
+  "version": "4.0.6+codex.20260713124026",
+  "description": "Codex-native documentation synchronization and Markdown-to-PDF workflows.",
+  "author": { "name": "Maksim Kochetkov", "email": "apmatypa88@gmail.com", "url": "https://github.com/kochetkov-ma" },
+  "homepage": "https://github.com/kochetkov-ma/claude-brewcode",
+  "repository": "https://github.com/kochetkov-ma/claude-brewcode.git",
+  "license": "MIT",
+  "keywords": ["codex", "documentation", "sync", "pdf"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Brewdoc",
+    "shortDescription": "Codex documentation workflows",
+    "longDescription": "Reusable Codex workflows for controlled documentation synchronization and verified Markdown-to-PDF conversion.",
+    "developerName": "Maksim Kochetkov",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write", "Interactive"],
+    "websiteURL": "https://github.com/kochetkov-ma/claude-brewcode",
+    "defaultPrompt": ["Use Brewdoc to synchronize this documentation."]
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "name": "claude-brewcode-codex-local",
+  "interface": {
+    "displayName": "Brewcode Codex Local"
+  },
+  "plugins": [
+    {
+      "name": "brewcode",
+      "source": {
+        "source": "local",
+        "path": "./.codex/plugins/brewcode"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    },
+    {
+      "name": "brewdoc",
+      "source": {
+        "source": "local",
+        "path": "./.codex/plugins/brewdoc"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "brewtools",
+      "source": {
+        "source": "local",
+        "path": "./.codex/plugins/brewtools"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}

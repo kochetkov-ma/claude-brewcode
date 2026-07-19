@@ -1,9 +1,3 @@
----
-auto-sync: enabled
-auto-sync-date: 2026-04-01
-auto-sync-type: doc
----
-
 # Skills
 
 Manages Claude Code skills — check status, create new skills from a free-form prompt, improve or review existing ones. Input is ONE free-form natural-language prompt; there is no keyword grammar. Skill operations are delegated to the `brewcode:skill-creator` specialist agent.

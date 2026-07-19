@@ -1,9 +1,3 @@
----
-auto-sync: enabled
-auto-sync-date: 2026-04-01
-auto-sync-type: doc
----
-
 # Memory Optimizer
 
 Optimizes Claude Code memory files through a 4-step interactive workflow -- removes duplicates, migrates entries to persistent config, compresses remaining content, and validates the final state.

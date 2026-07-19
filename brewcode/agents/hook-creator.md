@@ -4,9 +4,6 @@ description: "Creates and debugs Claude Code hooks. Triggers: create hook, PreTo
 model: inherit
 color: yellow
 tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch, WebSearch
-auto-sync: true
-auto-sync-date: 2026-03-30
-auto-sync-type: agent
 ---
 
 [DICT: AC=additionalContext, CC=Claude Code, HE=hook event, MD=MessageDisplay, PTU=PreToolUse, PCD=PostCompact, POT=PostToolUse, PR=PermissionRequest, SA=subagent, SS=SessionStart, UI=updatedInput]

@@ -1,6 +1,4 @@
 ---
-auto-sync: enabled
-auto-sync-date: 2026-02-11
 description: Complete file tree of the brewcode plugin with descriptions
 ---
 
@@ -103,9 +101,6 @@ brewcode/                                    # Plugin root directory
 │   │   ├── avoid.md.template                  # Anti-patterns: Avoid/Instead/Why table with YAML frontmatter
 │   │   ├── best-practice.md.template          # Best practices: Practice/Context/Source table with YAML frontmatter
 │   │   └── grepai-first.md.template           # grepai priority rule: call examples, tool selection table
-│   │
-│   └── auto-sync/
-│       └── INDEX.jsonl.template               # auto-sync index seed
 │
 ├── docs/
 │   ├── file-tree.md                           # This file
@@ -133,7 +128,7 @@ Files created by the plugin in the user's project:
     │
     ├── tasks/
     │   ├── cfg/
-    │   │   ├── brewcode.config.json           # User settings: logging, agents, constraints, autoSync
+    │   │   ├── brewcode.config.json           # User settings: logging, agents, constraints
     │   │   └── brewcode.state.json            # Inter-session state: current task, last compaction
     │   │
     │   ├── templates/                         # Project-local templates (e.g. SPEC.md.template)
@@ -173,10 +168,10 @@ Files created by the plugin in the user's project:
 | Agents | 10 | bc-grepai-configurator, bc-rules-organizer, agent-creator, skill-creator, bash-expert, hook-creator, architect, developer, reviewer, tester |
 | Skills (SKILL.md) | 9 | spec, grepai, superreview, convention, rules, skills, agents, teams, e2e |
 | Bash scripts | 22 | grepai(13), teams(3), skills(2), superreview(1), convention(1), rules(1), e2e(1) |
-| Templates | 4 | rules(3), auto-sync(1) |
+| Templates | 3 | rules(3) |
 | Documentation | 7 | README, INSTALL, RELEASE-NOTES, grepai.md, file-tree.md, commands.md, flow.md, hooks.md |
 | npm | 1 | package.json |
-| **Total** | **70** | |
+| **Total** | **69** | |
 
 ## Hook Events
 

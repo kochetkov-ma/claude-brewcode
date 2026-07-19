@@ -105,7 +105,7 @@ Reports any issues found and offers to fix them.
 
 ## Part of Brewdoc
 
-This skill is extracted from [brewdoc](https://github.com/kochetkov-ma/claude-brewcode) -- a documentation tools plugin for Claude Code with memory optimization, auto-sync, Claude installation docs, and Markdown to PDF.
+This skill is extracted from [brewdoc](https://github.com/kochetkov-ma/claude-brewcode) -- a documentation tools plugin for Claude Code with memory optimization, Claude installation docs, and Markdown to PDF.
 
 ```bash
 claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode

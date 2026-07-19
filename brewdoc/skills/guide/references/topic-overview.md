@@ -20,13 +20,13 @@ One marketplace, four plugins, one version number. Install what you need.
 | Plugin | Purpose | Key Skills |
 |--------|---------|------------|
 | brewcode | Spec authoring, semantic search, deep review, agent teams | spec, grepai, superreview, convention, teams, e2e |
-| brewdoc | Documentation tools: sync, generate, optimize, publish | auto-sync, my-claude, memory, md-to-pdf, guide, publish |
+| brewdoc | Documentation tools: sync, generate, optimize, publish | docsync, my-claude, memory, md-to-pdf, guide, publish |
 | brewtools | Universal utilities: text optimization, security scanning | text-optimize, text-human, secrets-scan, ssh, deploy, plugin-update |
 | brewui | UI/visual/creative tools (placeholder, empty) | (none yet) |
 
 **brewcode** is the core. It runs tasks that survive context limits through automatic handoff. It manages agents, hooks, and knowledge persistence.
 
-**brewdoc** handles documentation. Auto-sync keeps docs updated. My-claude generates Claude Code setup docs for any project. Memory optimizes memory files. Publish shares content via brewpage.app.
+**brewdoc** handles documentation. Docsync tracks stale docs and syncs them via project hooks. My-claude generates Claude Code setup docs for any project. Memory optimizes memory files. Publish shares content via brewpage.app.
 
 **brewtools** provides standalone utilities. Text-optimize reduces token usage in prompts. Secrets-scan catches leaked credentials. SSH and deploy handle server management and CI/CD workflows. These work in any project.
 
@@ -37,7 +37,7 @@ One marketplace, four plugins, one version number. Install what you need.
 The plugins complement each other:
 
 - **brewcode** handles the heavy lifting: task execution, planning, code review, convention extraction
-- **brewdoc** keeps documentation in sync with your codebase as it evolves
+- **brewdoc** tracks doc staleness and keeps docs in sync with your codebase as it evolves
 - **brewtools** provides utility skills you can call from anywhere
 - **brewui** is a placeholder for future UI/visual/creative tools (currently empty)
 
@@ -46,7 +46,7 @@ All four share the same version number. They update together from the same marke
 Example workflow:
 1. `/brewcode:grepai` indexes the project for semantic search
 2. `/brewcode:spec` defines the feature, then you implement it
-3. `/brewcode:superreview` reviews it, `/brewdoc:auto-sync` updates docs
+3. `/brewcode:superreview` reviews it, `/brewdoc:docsync` syncs stale docs
 4. `/brewtools:secrets-scan` checks nothing was leaked
 
 ## Section 4: What Makes It Unique

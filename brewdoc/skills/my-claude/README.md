@@ -1,9 +1,3 @@
----
-auto-sync: enabled
-auto-sync-date: 2026-04-01
-auto-sync-type: doc
----
-
 # My Claude
 
 Generates documentation about your Claude Code installation and environment. Supports four modes: document your local setup, analyze the external hook/context architecture, deep-dive the context injection schema, or research any Claude Code topic across the web.

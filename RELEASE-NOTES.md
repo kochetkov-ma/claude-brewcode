@@ -2,6 +2,22 @@
 
 ---
 
+## v4.1.0 (2026-07-19)
+
+> New **`/brewdoc:docsync`** skill replaces the retired `auto-sync`. docsync is a user-run, project-scoped generator: point it at any repo and it installs three project-local hooks (`docsync-track` on Write/Edit/MultiEdit, `docsync-watch` on Read, `docsync-gate` on Stop) plus config into `.claude/`, then tracks documentation staleness by the `last_updated` frontmatter date. When docs you touched this session are stale, the Stop hook blocks once and asks (via AskUserQuestion) whether to sync — never auto-syncs without confirmation. Prompt-driven modes (no rigid flags): `init`, `status`, `sync [--all]`, `reread`, `frontmatter`, `uninstall`. Frontmatter schema: `doc_type` (llm|user|skip), `last_updated`, `sync_procedure`. The settings.json merge is non-clobbering (backup + abort-on-parse-fail + BOM-tolerant), hook paths use `$CLAUDE_PROJECT_DIR` for portability, and `uninstall` removes only docsync entries while preserving foreign hooks — verified against fresh, existing-hooks, and corrupt-settings projects.
+
+> The legacy `auto-sync` skill, its `bd-auto-sync-processor` agent, the old `auto-sync:*` frontmatter tag mechanism (swept from ~44 files), and the skill-creator template injection were removed completely.
+
+> Docs: [docsync](https://doc-claude.brewcode.app/brewdoc/skills/docsync/) | [brewdoc overview](https://doc-claude.brewcode.app/brewdoc/overview/)
+
+### brewdoc
+#### Added
+- **docsync:** new hook-driven doc-staleness tracker with init/status/sync/reread/frontmatter/uninstall modes, project-local install, and confirm-before-sync gate
+#### Removed
+- **auto-sync:** retired the skill + `bd-auto-sync-processor` agent + `auto-sync:*` frontmatter tags across the suite; replaced by docsync
+
+---
+
 ## v4.0.6 (2026-07-18)
 
 > Infra: production moved off the decommissioned Contabo VPS to Fornex (79.132.136.83, Ubuntu 24.04.4 LTS). The docs site doc-claude.brewcode.app was redeployed on the new host with no plugin behavior changes. SSH reference docs and the eurodns skill example were repointed to the new server IP.

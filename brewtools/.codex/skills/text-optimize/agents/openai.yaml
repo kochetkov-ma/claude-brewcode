@@ -1,0 +1,6 @@
+interface:
+  display_name: "Text Optimize"
+  short_description: "Optimizes text/docs for LLM token efficiency. Triggers - optimiz"
+  default_prompt: "Use $brewtools:text-optimize for this task."
+policy:
+  allow_implicit_invocation: true

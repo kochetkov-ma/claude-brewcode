@@ -159,6 +159,6 @@ Compression techniques:
 
 ---
 
-**Part of brewdoc:** [brewcode](https://github.com/kochetkov-ma/claude-brewcode) — docs tools: memory optimization, auto-sync, Claude installation docs, Markdown to PDF.
+**Part of brewdoc:** [brewcode](https://github.com/kochetkov-ma/claude-brewcode) — docs tools: memory optimization, Claude installation docs, Markdown to PDF.
 Install: `claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode && claude plugin install brewdoc@claude-brewcode`
 ```

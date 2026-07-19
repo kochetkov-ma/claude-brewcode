@@ -104,7 +104,7 @@ export const navigation: NavSection[] = [
         title: 'Skills',
         slug: 'brewdoc/skills',
         children: [
-          { title: 'auto-sync', slug: 'brewdoc/skills/auto-sync' },
+          { title: 'docsync', slug: 'brewdoc/skills/docsync' },
           { title: 'my-claude', slug: 'brewdoc/skills/my-claude' },
           { title: 'memory', slug: 'brewdoc/skills/memory' },
           { title: 'md-to-pdf', slug: 'brewdoc/skills/md-to-pdf' },

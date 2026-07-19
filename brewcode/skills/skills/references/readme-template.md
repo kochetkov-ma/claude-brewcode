@@ -13,12 +13,6 @@
 ## Template
 
 ```markdown
----
-auto-sync: enabled
-auto-sync-date: {TODAY}
-auto-sync-type: skill
----
-
 # {SKILL_NAME}
 
 > {ONE_LINE_DESCRIPTION}

@@ -1,9 +1,3 @@
----
-auto-sync: enabled
-auto-sync-date: 2026-04-10
-auto-sync-type: doc
----
-
 # Plugin Update
 
 Checks installed brewcode plugins (brewcode, brewdoc, brewtools, brewui) by reading the filesystem and settings.json, fetches the latest versions from the marketplace, installs any missing plugins, updates outdated ones, and always prints a reload notice at the end. All commands execute directly in the current Claude Code session — no "run this yourself" instructions.

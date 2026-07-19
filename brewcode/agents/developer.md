@@ -5,9 +5,6 @@ model: inherit
 tools: Read, Write, Edit, Glob, Grep, Bash, Task, NotebookEdit, WebFetch, WebSearch
 mcpServers:
   - grepai
-auto-sync: true
-auto-sync-date: 2026-02-10
-auto-sync-type: agent
 ---
 
 # Developer

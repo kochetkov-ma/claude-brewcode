@@ -10,7 +10,7 @@ Pre-drawn diagrams for the guide skill. Reference by name from topic files.
 ├─────────────────┬──────────────┬────────────────┤
 │    brewcode      │   brewdoc    │   brewtools    │
 │─────────────────│──────────────│────────────────│
-│ setup, spec     │ auto-sync    │ text-optimize  │
+│ setup, spec     │ docsync      │ text-optimize  │
 │ plan, start     │ my-claude    │ text-human     │
 │ teams, review   │ memory       │ secrets-scan   │
 │ convention, e2e │ md-to-pdf    │                │

@@ -1,9 +1,3 @@
----
-auto-sync: enabled
-auto-sync-date: 2026-06-12
-auto-sync-type: doc
----
-
 # Text Humanizer
 
 Universal, context-aware humanizer. It removes AI surface artifacts (chat scaffolding, fake tickets, unicode, trivial docs that restate a name) and fits the text to its register -- code, technical docs, published articles, or reddit/chat. It does NOT claim to detect AI authorship.

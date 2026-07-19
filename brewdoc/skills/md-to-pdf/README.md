@@ -1,9 +1,3 @@
----
-auto-sync: enabled
-auto-sync-date: 2026-04-01
-auto-sync-type: doc
----
-
 # MD to PDF
 
 Converts Markdown files to professional PDF documents. Supports two rendering engines: **reportlab** (lightweight, pure Python) and **weasyprint** (full HTML/CSS pipeline with syntax highlighting).

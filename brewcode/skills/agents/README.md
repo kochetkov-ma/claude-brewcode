@@ -1,9 +1,3 @@
----
-auto-sync: enabled
-auto-sync-date: 2026-04-01
-auto-sync-type: doc
----
-
 # Agents
 
 Manages Claude Code subagents across all scopes — create new agents, improve existing ones, audit quality, or inspect what is installed. Input is ONE free-form natural-language prompt; there are no keyword subcommands.

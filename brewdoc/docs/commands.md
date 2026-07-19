@@ -1,7 +1,4 @@
 ---
-auto-sync: enabled
-auto-sync-date: 2026-02-28
-auto-sync-type: doc
 description: Detailed description of all brewdoc plugin commands
 ---
 
@@ -13,144 +10,12 @@ description: Detailed description of all brewdoc plugin commands
 
 | # | Command | Purpose | Model | Args |
 |---|---------|---------|-------|------|
-| 1 | `/brewdoc:auto-sync` | Universal doc sync for skills, agents, rules, markdown | opus | `[status] \| [init <path>] \| [global] \| [path]` |
-| 2 | `/brewdoc:my-claude` | Generate docs about Claude Code installation and environment | opus | `[ext [context]] \| [r <query>]` |
-| 3 | `/brewdoc:memory` | Optimize Claude Code memory in 4 interactive steps | opus | -- |
-
-## Plugin Agents
-
-| Agent | Model | Purpose |
-|-------|-------|---------|
-| `bd-auto-sync-processor` | sonnet | Process single doc for auto-sync: analyze, research, apply changes |
+| 1 | `/brewdoc:my-claude` | Generate docs about Claude Code installation and environment | opus | `[ext [context]] \| [r <query>]` |
+| 2 | `/brewdoc:memory` | Optimize Claude Code memory in 4 interactive steps | opus | -- |
 
 ---
 
-## 1. `/brewdoc:auto-sync`
-
-**Purpose:** Discovers tagged markdown files, detects staleness via INDEX, delegates per-file processing to `bd-auto-sync-processor` agents in parallel. Supports project-scoped, global, single-file, and folder-level sync.
-
-| Parameter | Value |
-|-----------|-------|
-| **Arguments** | `[status] \| [init <path>] \| [global] \| [path]` |
-| **Model** | `opus` |
-| **Dependencies** | None |
-| **Allowed tools** | `Read`, `Write`, `Edit`, `Glob`, `Grep`, `Bash`, `Task`, `WebFetch`, `Skill` |
-
-### Arguments
-
-| Argument | Mode | Description |
-|----------|------|-------------|
-| `status` | STATUS | Report INDEX state and exit |
-| `init <path>` | INIT | Tag single file with frontmatter + add to INDEX |
-| `global` | GLOBAL | Sync all tagged `.md` in `~/.claude/**` |
-| *(empty)* | PROJECT | Sync all tagged `.md` in `.claude/**` |
-| `<file path>` | FILE | Sync a single file |
-| `<folder path>` | FOLDER | Sync all `.md` in folder |
-
-**Managed directories** (excluded from auto-scan; explicit path required):
-- `rules/` -- sync via `/brewdoc:auto-sync .claude/rules`
-- `agents/` -- sync via `/brewdoc:auto-sync .claude/agents`
-- `skills/` -- sync via `/brewdoc:auto-sync .claude/skills`
-
-### INDEX Format
-
-Location: `.claude/auto-sync/INDEX.jsonl` (project) or `~/.claude/auto-sync/INDEX.jsonl` (global)
-
-```jsonl
-{"p":"skills/auth/SKILL.md","t":"skill","u":"2026-02-05","pr":"default"}
-```
-
-| Field | Description |
-|-------|-------------|
-| `p` | Relative path from scope root |
-| `t` | Type: `skill` / `agent` / `rule` / `config` / `doc` |
-| `u` | Last sync date (`YYYY-MM-DD`) |
-| `pr` | Protocol: `default` / `override` |
-
-### Frontmatter Tags
-
-Required on each synced document (3 fields):
-
-```yaml
-auto-sync: enabled
-auto-sync-date: 2026-02-28
-auto-sync-type: skill   # skill | agent | rule | config | doc
-```
-
-Optional override (stored in frontmatter only -- never in body):
-
-```yaml
-auto-sync-override: |
-  sources: src/**/*.ts, .claude/agents/*.md
-  focus: API endpoints, error handling
-  preserve: ## User Notes, ## Custom Config
-```
-
-When `auto-sync-override:` is present, INDEX entry gets `pr: "override"`.
-
-| Override Field | Purpose |
-|----------------|---------|
-| `sources:` | Additional glob patterns (merged with Research Directions) |
-| `focus:` | Override research areas (replaces Research Directions focus) |
-| `preserve:` | Sections to never modify |
-
-### Bash Scripts
-
-| Script | Purpose |
-|--------|---------|
-| `detect-mode.sh $ARGUMENTS` | Parse arguments, output `MODE\|ARG\|FLAGS` |
-| `discover.sh "$SCOPE_PATH" typed` | Find tagged files, output `TYPE\|PATH` per line (max 50) |
-| `index-ops.sh add` | Add entry to INDEX |
-| `index-ops.sh stale "$INDEX_FILE" "$INTERVAL_DAYS"` | Find stale entries |
-| `index-ops.sh update` | Update entry's `u` field to today |
-
-### Workflow
-
-**STATUS mode:**
-1. Read `INDEX.jsonl`, verify indexed files exist
-2. Find all `.md` files in scope
-3. Compare indexed vs found; identify non-indexed
-4. Detect type for non-indexed via `discover.sh typed`
-5. Output report: Indexed, Non-Indexed, Summary
-
-**INIT mode:**
-1. Read `<path>` -- if not found, error and exit
-2. If already has `auto-sync: enabled` -- report "Already tagged", exit
-3. Detect type via `discover.sh`
-4. Add frontmatter: `auto-sync: enabled`, `auto-sync-date: {today}`, `auto-sync-type: {type}`
-5. Check `auto-sync-override:` -- set `pr: override|default`
-6. Add to INDEX via `index-ops.sh add`
-7. Output: path, type, protocol; exit
-
-**SYNC mode (PROJECT / GLOBAL / FILE / FOLDER):**
-1. **Setup INDEX** -- create `INDEX.jsonl` if missing
-2. **Discover + Queue** -- find tagged files, auto-add new ones, find stale entries via `index-ops.sh stale`
-3. **Process** -- launch `bd-auto-sync-processor` agents (max `PARALLEL_AGENTS` batches, model=sonnet)
-4. **Update INDEX** -- `updated`/`unchanged`: update `u` to today; `error`: skip (remains stale for retry)
-5. **Report** -- output table: Discovered, Queued, Updated, Unchanged, Errors
-
-### Output
-
-| Mode | Created/Modified |
-|------|------------------|
-| STATUS | *(read-only report)* |
-| INIT | Target file (frontmatter added), `INDEX.jsonl` (entry added) |
-| SYNC | Synced files (content updated), `INDEX.jsonl` (dates updated) |
-
-### Examples
-
-```
-/brewdoc:auto-sync status
-/brewdoc:auto-sync init .claude/agents/reviewer.md
-/brewdoc:auto-sync global
-/brewdoc:auto-sync
-/brewdoc:auto-sync .claude/rules/
-/brewdoc:auto-sync brewdoc/skills/auto-sync/SKILL.md
-```
-
----
-
-## 2. `/brewdoc:my-claude`
+## 1. `/brewdoc:my-claude`
 
 **Purpose:** Generates docs about your Claude Code installation and environment. Three modes: INTERNAL (local setup inventory), EXTERNAL (hook/context/agent architecture from official sources), RESEARCH (query-driven investigation from multiple web sources). Output goes to `~/.claude/brewdoc/` with INDEX tracking.
 
@@ -268,7 +133,7 @@ If an existing entry for the same mode exists, the skill offers to update (versi
 
 ---
 
-## 3. `/brewdoc:memory`
+## 2. `/brewdoc:memory`
 
 **Purpose:** Optimizes Claude Code memory files through 4 interactive steps: remove duplicates (entries already in CLAUDE.md/rules), migrate entries to proper locations, compress remaining entries for token efficiency, and validate final state.
 
@@ -369,17 +234,10 @@ No arguments. All interaction via `AskUserQuestion`. Each step can be skipped in
 
 | Error | Applies To | Action |
 |-------|-----------|--------|
-| INDEX corrupt | auto-sync | Rebuild from discovery |
-| File not found | auto-sync, memory | Skip, add to errors |
-| Agent timeout | auto-sync | Retry once |
-| No tagged files | auto-sync | Report "0 found" |
-| Instruction file missing | auto-sync (processor) | Fall back to basic checklist |
-| Edit conflict | auto-sync (processor) | Log error, skip that change |
-| Override parse error | auto-sync (processor) | Fall back to default instructions |
 | Memory file empty | memory | Skip, report in validation |
 | Broken file reference | memory | Clean in Step 4 |
-| `/brewdoc:doc` called | auto-sync | "Use /brewdoc:auto-sync" |
+| File not found | my-claude, memory | Skip, add to errors |
 
 ## Plugin Variable
 
-brewdoc has no hooks. The `bd-auto-sync-processor` agent resolves its plugin root natively via `${CLAUDE_PLUGIN_ROOT}` — substituted at Task spawn by Claude Code itself. No hook injection is needed.
+brewdoc has no hooks. Skills resolve their own resources natively via `${CLAUDE_SKILL_DIR}` -- substituted by Claude Code itself. No hook injection is needed.

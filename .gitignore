@@ -27,3 +27,12 @@ data/
 d2c-output/
 .playwright-mcp/
 brewtools/skills/think-short/tests/e2e/results/
+
+# Codex-native plugin source is tracked in this repository.
+!.codex/
+!.codex/**
+!**/.codex/
+!**/.codex/**
+!.agents/
+!.agents/plugins/
+!.agents/plugins/marketplace.json

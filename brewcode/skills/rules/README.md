@@ -1,9 +1,3 @@
----
-auto-sync: enabled
-auto-sync-date: 2026-04-01
-auto-sync-type: doc
----
-
 # Rules
 
 Captures learnings, anti-patterns, and best practices — from KNOWLEDGE files, arbitrary files, or the current conversation — then organizes them into structured `.claude/rules/` files that Claude Code loads automatically on every session.

@@ -1,9 +1,3 @@
----
-auto-sync: enabled
-auto-sync-date: 2026-04-01
-auto-sync-type: doc
----
-
 # Secrets Scan
 
 Security audit for leaked credentials in git-tracked files. Spawns 10 parallel agents to scan the entire repository, classifies findings by severity, and generates a detailed report with optional interactive remediation.

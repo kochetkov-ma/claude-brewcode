@@ -4,9 +4,6 @@ description: "Creates sh/bash scripts for Mac/Linux. Triggers: create script, ba
 model: inherit
 color: green
 tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch
-auto-sync: enabled
-auto-sync-date: 2026-02-10
-auto-sync-type: agent
 ---
 
 # Bash Expert

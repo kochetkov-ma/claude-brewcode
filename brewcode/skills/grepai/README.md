@@ -1,9 +1,3 @@
----
-auto-sync: enabled
-auto-sync-date: 2026-04-01
-auto-sync-type: doc
----
-
 # Grepai
 
 Sets up and manages semantic code search powered by grepai (Ollama + bge-m3 embeddings). Lets Claude find code by meaning rather than exact keywords -- search for "user authentication" and find `validateCredentials()`.

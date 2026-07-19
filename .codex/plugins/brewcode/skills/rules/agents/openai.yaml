@@ -1,0 +1,6 @@
+interface:
+  display_name: "Rules"
+  short_description: "Project rules and AGENTS.md index; user invoked"
+  default_prompt: "Use $brewcode:rules to maintain project rules and the AGENTS.md rule index."
+policy:
+  allow_implicit_invocation: false

@@ -1,0 +1,21 @@
+{
+  "name": "brewcode",
+  "version": "4.0.6+codex.20260713192629",
+  "description": "Codex-native workflows for agents, conventions, project rules, reviews, and teams.",
+  "author": { "name": "Maksim Kochetkov", "email": "apmatypa88@gmail.com", "url": "https://github.com/kochetkov-ma" },
+  "homepage": "https://github.com/kochetkov-ma/claude-brewcode",
+  "repository": "https://github.com/kochetkov-ma/claude-brewcode.git",
+  "license": "MIT",
+  "keywords": ["codex", "development", "rules", "agents", "review"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Brewcode",
+    "shortDescription": "Codex development workflows",
+    "longDescription": "Reusable Codex workflows for agent authoring, conventions, indexed project rules, team coordination, and deep reviews.",
+    "developerName": "Maksim Kochetkov",
+    "category": "Developer Tools",
+    "capabilities": ["Read", "Write", "Interactive"],
+    "websiteURL": "https://github.com/kochetkov-ma/claude-brewcode",
+    "defaultPrompt": ["Use Brewcode to prepare a verified implementation plan."]
+  }
+}

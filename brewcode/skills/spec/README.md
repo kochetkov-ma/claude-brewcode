@@ -1,9 +1,3 @@
----
-auto-sync: enabled
-auto-sync-date: 2026-04-01
-auto-sync-type: doc
----
-
 # Spec
 
 Creates a detailed task specification (SPEC.md) by researching your codebase in parallel, asking clarifying questions, and running a reviewer quality gate. The output is a self-contained document ready to hand to the `developer` agent for implementation.
