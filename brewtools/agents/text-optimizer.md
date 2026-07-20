@@ -101,7 +101,7 @@ Build numbered atomic-fact inventory -> flag repeats (exact, reworded, cross-for
 
 Output: `## Optimization Report: [filename]` with:
 - Metrics table: Lines/Chars/Words/~Tokens — before, after, change%, compression ratio
-- Semantic match % (standard/deep only)
+- Semantic match % (standard/deep/max)
 - Transformations applied (rule IDs)
 - Issues fixed
 - Verification result (pass/fail, any losses)

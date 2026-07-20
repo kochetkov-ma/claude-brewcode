@@ -1,9 +1,9 @@
 ---
 title: "Text Optimize"
-description: "Optimizes text and docs for LLM token efficiency with 30+ validated rules. Four modes: light, medium, standard, deep."
+description: "Optimizes text and docs for LLM token efficiency with 48 validated rules. Five modes: light, medium, standard, deep, max."
 order: 3101
 ---
-import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
 # text-optimize — deep token optimization
 
@@ -12,7 +12,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 </Callout>
 
 <Callout type="tip">
-**30+ validated rules, four modes, parallel processing.** The skill reads your files, applies the right rule set for the mode, verifies references, and reports exact before/after metrics. For humanizing AI-generated text, see [`/brewtools:text-human`](/brewtools/skills/text-human/).
+**48 validated rules, five modes, parallel processing.** The skill reads your files, applies the right rule set for the mode, verifies references, and reports exact before/after metrics. For humanizing AI-generated text, see [`/brewtools:text-human`](/brewtools/skills/text-human/).
 </Callout>
 
 ## Quick reference
@@ -20,7 +20,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | Field | Value |
 |-------|-------|
 | Command | `/brewtools:text-optimize` |
-| Arguments | `[-l\|-s\|-d] [file\|folder\|path1,path2]` |
+| Arguments | `[-l\|-s\|-d\|-x\|--max] [file\|folder\|path1,path2]` |
 | Model | sonnet |
 | Context | session |
 | Tools | Read, Write, Edit, Grep, Glob, Task, AskUserQuestion |
@@ -34,14 +34,15 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 
 ## Modes
 
-| Mode | Flag | Target | Compression | Human-readable |
-|------|------|--------|-------------|----------------|
-| Light | `-l` | Any file | Minimal | Yes |
-| Medium | _(default)_ | Any file | Moderate | Yes |
-| Standard | `-s` | Docs, README | 30-50% | Yes |
-| Deep | `-d` | CLAUDE.md, system prompts, agent/skill defs | 2-3x | No — LLM-only |
+| Mode | Flag | Target | Compression | Human-readable | Verification |
+|------|------|--------|-------------|----------------|---------------|
+| Light | `-l` | Any file | Minimal | Yes | None |
+| Medium | _(default)_ | Any file | Moderate | Yes | Self-check (fact inventory) |
+| Standard | `-s` | Docs, README | 30-50% | Yes | 1 round (≥98% match) |
+| Deep | `-d` | CLAUDE.md, system prompts, agent/skill defs, KNOWLEDGE | 2-3x | No — LLM-only | 1-2 rounds (≥95% match) |
+| Max | `-x`/`--max` | CLAUDE.md, system prompts, KNOWLEDGE | 3-4x | No — LLM-only | 2 mandatory rounds (≥95% + 100% sub-gate) |
 
-**Auto-detection:** when no flag is given, the skill reads the file path and header. `CLAUDE.md`, `.claude/rules/*.md`, `KNOWLEDGE.*` → deep candidate. `README.md`, `docs/` → standard candidate. Ambiguous → asks via `AskUserQuestion`.
+**Auto-detection:** when no flag is given, the skill reads the file path and header. `CLAUDE.md`, `.claude/rules/*.md`, `KNOWLEDGE.*` → deep candidate. `README.md`, `docs/` → standard candidate. Ambiguous → asks via `AskUserQuestion`. **Max is never auto-selected** — requires an explicit `-x`/`--max` flag or an explicit max/extreme compress hint.
 
 ## Examples
 
@@ -58,6 +59,9 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 # Deep mode — max compression for CLAUDE.md, review diff after
 /brewtools:text-optimize -d CLAUDE.md
 
+# Max mode — 3-4x compression (opt-in)
+/brewtools:text-optimize -x CLAUDE.md
+
 # Multiple files in parallel
 /brewtools:text-optimize agents/planner.md, agents/executor.md, CLAUDE.md
 
@@ -73,7 +77,7 @@ Natural language also works: `"compress this for context"` → deep mode. `"slim
   <li>
     <div>
       <strong>Parse input</strong>
-      <p>Extracts mode flag, file paths, and any prompt hints (<code>"deep compress"</code>, <code>"for LLM"</code>). No args → optimizes ALL: <code>CLAUDE.md</code>, <code>.claude/agents/\*.md</code>, <code>.claude/skills/*\*/SKILL.md</code>.</p>
+      <p>Extracts mode flag, file paths, and any prompt hints (<code>"deep compress"</code>, <code>"for LLM"</code>). No args → optimizes ALL: <code>CLAUDE.md</code>, <code>.claude/agents/\*.md</code>, <code>.claude/skills/\*\*/SKILL.md</code>.</p>
     </div>
   </li>
   <li>
@@ -97,7 +101,15 @@ Natural language also works: `"compress this for context"` → deep mode. `"slim
   <li>
     <div>
       <strong>Verification</strong>
-      <p>Standard mode runs 1 verification round comparing compressed vs original — any lost facts get patched. Deep mode runs up to 2 rounds targeting ≥95% semantic match; if still below, warns with a loss list.</p>
+      <p>Loss budget scales with mode — any lost facts trigger a patch pass:</p>
+
+| Mode | Rounds | Gate |
+|------|--------|------|
+| Light / Medium | 0 / self-check | 100% lossless |
+| Standard | 1 | ≥98% match |
+| Deep | 1-2 | ≥95% match |
+| Max | 2 mandatory | ≥95% + 100% sub-gate |
+
     </div>
   </li>
   <li>
@@ -109,25 +121,29 @@ Natural language also works: `"compress this for context"` → deep mode. `"slim
 </Steps>
 
 <details>
-<summary>Rule categories (30+ rules)</summary>
+<summary>Rule categories (48 rules)</summary>
 
 | Category | Rule IDs | Scope |
 |----------|----------|-------|
 | Claude behavior | C.1-C.8 | Literal following, avoid "think", positive framing, match style, descriptive instructions, overengineering, avoid ALL-CAPS, prompt format |
 | Token efficiency | T.1-T.8, T.10 | Tables, bullets, one-liners, inline code, abbreviations, filler, comma lists, arrows, strip whitespace |
 | Structure | S.1-S.8 | XML tags, imperative, single source, context/motivation, blockquotes, progressive disclosure, consistent terminology, ref depth |
+| Deduplication | D.1-D.6 | Exact-duplicate merge, near-duplicate merge (most specific variant wins), cross-format duplicate (prose vs table), emphasis cap ≤2/doc, cross-file dedup (canonical location + pointer), wrong-merge guard |
 | Reference integrity | R.1-R.3 | Verify file paths, check URLs, linearize circular refs |
 | Perception | P.1-P.6 | Examples near rules, hierarchy, bold keywords, standard symbols, instruction order, default over options |
-| LLM Comprehension | L.1-L.7 | Critical info position, documents-first, conciseness, quote-first, add WHY, reiterate constraint, prompt repetition |
+| LLM Comprehension | L.1-L.8 | Critical info position, documents-first, conciseness, quote-first, add WHY, reiterate constraint, prompt repetition, preserve scope qualifiers |
+
+A dedup pass runs in every mode during analysis, before compression. Dedup-merged facts count as preserved: match % = (kept + merged) / total.
 
 **Mode-to-rules mapping:**
 
 | Mode | Applies | Notes |
 |------|---------|-------|
-| Light | C.1-C.8, T.6, R.1-R.3, P.1-P.4, L.1-L.7 | Text cleanup only — no restructuring |
-| Medium | All rules (C + T + S + R + P + L) | Balanced transformations |
+| Light | C.1-C.8, T.6, D.1, R.1-R.3, P.1-P.4, L.1-L.8 | Text cleanup only — no restructuring |
+| Medium | All rules (C + T + S + D + R + P + L) | Balanced transformations |
 | Standard | All rules + `standard-compression.md` | 30-50% compression, 1 verification round |
 | Deep | All rules + `deep-compression.md` | DICT header, symbol substitutions, 1-2 verification rounds |
+| Max | All rules + `deep-compression.md` + `max-compression.md` (opt-in) | 3-4x compression, 2 mandatory verification rounds + 100% sub-gate |
 
 </details>
 
@@ -135,13 +151,13 @@ Natural language also works: `"compress this for context"` → deep mode. `"slim
   <Card title="Text Human" icon="sparkle" href="/brewtools/skills/text-human/">
     Remove AI artifacts and humanize content — the complement to text-optimize.
   </Card>
-  <Card title="text-optimizer agent" icon="brain" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/agents">
+  <Card title="text-optimizer agent" icon="brain" href="/brewtools/agents/text-optimizer/">
     The subagent that handles single-file optimization in parallel batches.
   </Card>
   <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/text-optimize">
     Source code, rule references, and compression guides.
   </Card>
-  <Card title="Brewtools overview" icon="document" href="/brewtools/">
+  <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">
     All brewtools skills — text, SSH, deploy, plugin management.
   </Card>
 </CardGrid>

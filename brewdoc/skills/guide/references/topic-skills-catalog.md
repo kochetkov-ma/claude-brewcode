@@ -39,7 +39,7 @@ Universal utilities. Work in any project, no setup needed.
 
 | Skill | Purpose |
 |-------|---------|
-| `/brewtools:text-optimize` | Optimize text for LLM token efficiency (~30% savings) |
+| `/brewtools:text-optimize` | Optimizes text for LLM tokens — 5 modes, smart dedup, up to 4x |
 | `/brewtools:text-human` | Remove AI artifacts, humanize code and docs |
 | `/brewtools:secrets-scan` | Scan for leaked secrets, credentials, API keys |
 | `/brewtools:ssh` | SSH server management — connect, configure, deploy, administer remote servers |

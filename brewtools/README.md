@@ -41,7 +41,7 @@ Update anytime with `/brewtools:plugin-update`.
 
 ## Overview
 
-Brewtools provides standalone utilities: token-efficient optimization with 30+ validated rules, universal AI-artifact removal with greedy flow detection across code/docs/articles/reddit/chat (five domain flows, two-pass strip+inject model), security scanning for leaked credentials, SSH server management, GitHub Actions deployment with safety gates, and plugin check/install/update. Each skill is self-contained and requires no prior setup.
+Brewtools provides standalone utilities: token-efficient optimization with 48 validated rules, universal AI-artifact removal with greedy flow detection across code/docs/articles/reddit/chat (five domain flows, two-pass strip+inject model), security scanning for leaked credentials, SSH server management, GitHub Actions deployment with safety gates, and plugin check/install/update. Each skill is self-contained and requires no prior setup.
 
 ## Installation
 
@@ -64,6 +64,8 @@ claude --plugin-dir ./brewtools
 /brewtools:text-optimize CLAUDE.md              # Medium mode (default)
 /brewtools:text-optimize -l agents/reviewer.md  # Light mode -- safe, minimal changes
 /brewtools:text-optimize -d prompts/            # Deep mode -- aggressive compression
+/brewtools:text-optimize -s README.md           # Standard mode -- 30-50%, human-readable, verified
+/brewtools:text-optimize -x CLAUDE.md           # Max mode -- 3-4x, opt-in, 2 verification rounds
 /brewtools:text-human 3be67487                              # mixed flow: clean all files from a commit
 /brewtools:text-human src/main/java/services/               # mixed flow: entire folder, parallel blocks
 /brewtools:text-human "humanize this blog post: <text>"     # article flow: burstiness + stance injection
@@ -78,7 +80,7 @@ claude --plugin-dir ./brewtools
 
 | Skill | Purpose | Model | Arguments |
 |-------|---------|-------|-----------|
-| [`/brewtools:text-optimize`](skills/text-optimize/README.md) | Optimize text for LLM token efficiency | sonnet | `[-l\|-d] [file\|folder\|path1,path2]` |
+| [`/brewtools:text-optimize`](skills/text-optimize/README.md) | Optimize text for LLM token efficiency | sonnet | `[-l\|-s\|-d\|-x] [file\|folder\|path1,path2]` |
 | [`/brewtools:text-human`](skills/text-human/README.md) | Universal context-aware humanizer: strip AI artifacts and fit register across code, docs, articles, reddit/chat, and commits | sonnet | `[path\|commit\|folder\|text] [custom instructions]` |
 | [`/brewtools:secrets-scan`](skills/secrets-scan/README.md) | Scan for leaked secrets and credentials | sonnet | `[--fix]` |
 | [`/brewtools:ssh`](skills/ssh/SKILL.md) | SSH server management and configuration | opus | `[connect\|deploy\|configure\|...]` |
@@ -148,6 +150,9 @@ Full docs: [doc-claude.brewcode.app/brewtools/overview](https://doc-claude.brewc
 | Plugin Update | [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) |
 | Provider Switch | [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/) |
 | Think Short | [think-short](https://doc-claude.brewcode.app/brewtools/skills/think-short/) |
+| Text Optimizer (agent) | [text-optimizer](https://doc-claude.brewcode.app/brewtools/agents/text-optimizer/) |
+| SSH Admin (agent) | [ssh-admin](https://doc-claude.brewcode.app/brewtools/agents/ssh-admin/) |
+| Deploy Admin (agent) | [deploy-admin](https://doc-claude.brewcode.app/brewtools/agents/deploy-admin/) |
 | Release Notes | [RELEASE-NOTES.md](../RELEASE-NOTES.md) |
 
 Author: Maksim Kochetkov | License: MIT

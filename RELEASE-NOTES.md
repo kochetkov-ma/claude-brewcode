@@ -2,6 +2,28 @@
 
 ---
 
+## v4.2.1 (2026-07-20)
+
+> Docs: [text-optimize](https://doc-claude.brewcode.app/brewtools/skills/text-optimize/) | [text-optimizer](https://doc-claude.brewcode.app/brewtools/agents/text-optimizer/)
+
+### brewtools
+
+#### Changed
+- **docs:** text-optimize and text-optimizer pages updated for v4.2.0 — five modes incl. opt-in max (`-x`/`--max`), 48 rules across 7 categories, new Deduplication category D.1-D.6, L.1-L.8, per-mode verification gates (standard >=98%, deep >=95%, max >=95% + 100% sub-gate on numbers/names/negations/scope), dedup pass step in the agent flow
+- **docs:** agent page now lists the `Bash` tool and the correct `${CLAUDE_PLUGIN_ROOT}` reference path (was a stale `$BT_PLUGIN_ROOT`)
+- **docs:** repo README and brewtools README rule count 30+ -> 48, added `-s`/`-x` usage examples and agent documentation links
+
+#### Fixed
+- **docs:** 32 MDX pages linked to bare plugin slugs (`/brewtools/`, `/brewcode/`, `/brewdoc/`) that return 404 — all now point at `/{plugin}/overview/`
+- **docs:** removed unused `Badge` imports, converted over-long flow paragraphs into mode/rounds/gate tables, escaped globs, GitHub file links use `/blob/`
+
+### brewdoc
+
+#### Changed
+- **guide:** skills catalog row for `/brewtools:text-optimize` refreshed (5 modes, smart dedup, up to 4x)
+
+---
+
 ## v4.2.0 (2026-07-20)
 
 > Docs: [text-optimize](https://doc-claude.brewcode.app/brewtools/skills/text-optimize/) | [text-optimizer](https://doc-claude.brewcode.app/brewtools/agents/text-optimizer/)

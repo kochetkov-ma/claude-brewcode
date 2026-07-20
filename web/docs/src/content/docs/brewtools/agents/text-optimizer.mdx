@@ -1,9 +1,9 @@
 ---
 title: "Text Optimizer"
-description: "Optimizes text and docs for LLM efficiency across 4 compression modes. Triggers: optimize prompt, reduce tokens, compress text, too verbose, deep compress."
+description: "Optimizes text/docs for LLM token efficiency across five modes, light to opt-in max. Triggers: optimize prompt, reduce tokens, compress."
 order: 3201
 ---
-import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
 # Verbose docs cost tokens. The optimizer earns them back.
 
@@ -12,7 +12,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 </Callout>
 
 <Callout type="tip">
-**Mention the target file and intent — the agent picks the right mode automatically.** LLM-only files (agents, rules, SKILL.md) default to `deep`; user-facing docs default to `standard`. Override with `-l`, `-s`, or `-d` flags when needed. For skill-level access, see [`/brewtools:text-optimize`](/brewtools/skills/text-optimize/).
+**Mention the target file and intent — the agent picks the right mode automatically.** LLM-only files (agents, rules, SKILL.md) default to `deep`; user-facing docs default to `standard`. Override with `-l`, `-s`, `-d`, or `-x` (opt-in) flags when needed. For skill-level access, see [`/brewtools:text-optimize`](/brewtools/skills/text-optimize/).
 </Callout>
 
 ## Quick reference
@@ -20,10 +20,10 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | Field | Value |
 |-------|-------|
 | Model | sonnet |
-| Tools | Read, Write, Edit, Glob, Grep, WebFetch, AskUserQuestion |
+| Tools | Read, Write, Edit, Glob, Grep, Bash, WebFetch, AskUserQuestion |
 | Skills | [text-optimize](/brewtools/skills/text-optimize/) |
-| Triggers | "optimize prompt", "reduce tokens", "compress text", "too verbose", "deep compress", "standard compress" |
-| Modes | `light`, `medium`, `standard` (30–50%, human-readable), `deep` (2–3×, LLM-only with DICT+symbols) |
+| Triggers | "optimize prompt", "reduce tokens", "compress" |
+| Modes | `light`, `medium` (default), `standard` (30–50%, human-readable), `deep` (2–3×, LLM-only with DICT+symbols), `max` (opt-in, 3–4×, `-x`/`--max`) |
 
 ## When to use
 
@@ -47,6 +47,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 "optimize -d brewcode/.claude/agents/developer.md"   # deep
 "optimize -s web/docs/README.md"                      # standard
 "optimize -l my-notes.md"                             # light (structure only)
+"optimize -x brewcode/.claude/agents/developer.md"    # max (opt-in)
 ```
 
 ## Flow
@@ -55,13 +56,13 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
   <li>
     <div>
       <strong>Determine mode</strong>
-      <p>Checks your message for a flag (<code>-l</code>, <code>-s</code>, <code>-d</code>) or context hints. No flag: LLM-only files (agents, rules, SKILL.md, KNOWLEDGE.*) → <code>deep</code>; README/docs → <code>standard</code>; unknown → <code>medium</code>.</p>
+      <p>Checks your message for a flag (<code>-l</code>, <code>-s</code>, <code>-d</code>, <code>-x</code>) or context hints. No flag: LLM-only files (agents, rules, SKILL.md, KNOWLEDGE.*) → <code>deep</code>; README/docs → <code>standard</code>; unknown → <code>medium</code> (default). <code>-x</code>/<code>--max</code> is opt-in only — never auto-selected.</p>
     </div>
   </li>
   <li>
     <div>
       <strong>Load references</strong>
-      <p>Reads <code>$BT_PLUGIN_ROOT/skills/text-optimize/references/rules-review.md</code> (always). Standard mode also loads <code>standard-compression.md</code>; deep mode loads <code>deep-compression.md</code>. Stops with an error if the base rules file is missing — no optimization without the ruleset.</p>
+      <p>Reads `${CLAUDE_PLUGIN_ROOT}/skills/text-optimize/references/rules-review.md` (always). Standard mode also loads `standard-compression.md`; deep mode loads `deep-compression.md`; max mode loads both `deep-compression.md` and `max-compression.md`. Stops with an error if the base rules file is missing — no optimization without the ruleset.</p>
     </div>
   </li>
   <li>
@@ -72,20 +73,46 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
   </li>
   <li>
     <div>
+      <strong>Dedup pass</strong>
+      <p>Before compressing (all modes): builds a numbered atomic-fact inventory and flags repeats (exact, reworded, cross-format).</p>
+
+      - Merge accidental dups into the most specific statement (D.1–D.3)
+      - Cap intentional emphasis at 2 per document — full form early, short echo at the end (D.4)
+      - Different scope, numbers, or conditions = different facts, never merged (D.6)
+      - Multi-file runs: one canonical location + pointer (D.5); deep/max log a dedup ledger
+    </div>
+  </li>
+  <li>
+    <div>
       <strong>Compress</strong>
-      <p><strong>Light/medium:</strong> applies rule groups C → T → S → R → P from rules-review.md. <strong>Standard:</strong> adds filler removal, paragraph-to-bullet, prose-to-table; targets 30–50% reduction. <strong>Deep:</strong> builds a DICT header for terms used 3+ times, applies symbol substitutions and structural compression; targets 2–3× reduction.</p>
+      <p>Applies the ruleset for the chosen mode, escalating technique and target ratio:</p>
+
+      | Mode | Adds | Target |
+      |------|------|--------|
+      | Light/medium | Rule groups C → T → S → R → P (rules-review.md) | — |
+      | Standard | + filler removal, paragraph-to-bullet, prose-to-table | 30–50% |
+      | Deep | + DICT header (terms used 3+×), symbol substitutions, structural compression | 2–3× |
+      | Max (opt-in) | + atomic fact-lines, ASCII operator dialect, format-aware tables, Chain-of-Density pass | 3–4× |
     </div>
   </li>
   <li>
     <div>
       <strong>Verify</strong>
-      <p>Light/medium: no verification pass. Standard: one round comparing original vs compressed, patches any lost facts. Deep: two rounds — round 1 lists lost or distorted facts and calculates semantic match %; round 2 patches if below 95%, or warns with a loss list if it still falls short.</p>
+      <p>Verification scales with mode. Dedup-merged facts always count as preserved, never as loss.</p>
+
+      | Mode | Rounds | Gate |
+      |------|--------|------|
+      | Light | none | — |
+      | Medium | self-check vs fact inventory | zero loss |
+      | Standard | 1 | (kept + merged) / total ≥ 98% |
+      | Deep | 1-2 | round 2 patches if match < 95% |
+      | Max | 2 (mandatory, independent self-QA probe) | ≥ 95% overall + 100% on numbers/names/negations/scope |
     </div>
   </li>
   <li>
     <div>
       <strong>Report</strong>
-      <p>Outputs <code>## Optimization Report: [filename]</code> with a metrics table (lines / chars / words / ~tokens — before, after, change%, ratio), semantic match % for standard/deep, rule IDs applied, issues fixed, and verification result.</p>
+      <p>Outputs <code>## Optimization Report: [filename]</code> with a metrics table (lines / chars / words / ~tokens — before, after, change%, ratio), semantic match % for standard/deep/max, rule IDs applied, issues fixed, verification result, and a dedup summary (N merged, N emphasis repeats capped).</p>
     </div>
   </li>
 </Steps>
@@ -96,11 +123,11 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | Content Type | Primary Rules | Default Mode |
 |--------------|---------------|--------------|
 | System prompt | C.1-C.8, T.1-T.8, T.10 | deep |
-| CLAUDE.md | S.1-S.8, T.1-T.8, T.10 | deep |
+| CLAUDE.md | S.1-S.8, T.1-T.8, T.10, D.1-D.6 | deep |
 | Agent definition | C.5, C.7, S.2, P.1 | deep |
-| Skill SKILL.md | S.6, P.1-P.6, R.1-R.3, L.1-L.7 | deep |
-| Documentation | T.1-T.8, T.10, S.1-S.8, L.1-L.7 | standard |
-| README | T.1-T.8, T.10, S.1-S.8, L.1-L.7 | standard |
+| Skill SKILL.md | S.6, P.1-P.6, R.1-R.3, L.1-L.8 | deep |
+| Documentation | T.1-T.8, T.10, S.1-S.8, D.1-D.6, L.1-L.8 | standard |
+| README | T.1-T.8, T.10, S.1-S.8, L.1-L.8 | standard |
 
 | Capability | What the agent does |
 |------------|---------------------|
@@ -109,24 +136,29 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | Reference integrity | Verify links, paths, cross-references |
 | LLM perception | Structure for transformer attention patterns |
 
-**Verification thresholds (deep mode):**
-- Round 1: read original + compressed side-by-side, list lost/distorted facts, compute semantic match %
-- Round 2: if match < 95% — patch missing facts and re-verify; if still < 95% — warn user with explicit loss list
-- Light and medium modes skip verification entirely (fast path)
+**Verification thresholds:**
+- Light: no verification pass
+- Medium: self-check — re-check fact inventory against output, zero loss required
+- Standard: 1 round — fact inventory original vs compressed, gate (kept + merged) / total ≥ 98%, patch any slips
+- Deep — Round 1: read original + compressed side-by-side, list lost/distorted facts, compute semantic match %
+- Deep — Round 2: if match < 95% — patch missing facts and re-verify; if still < 95% — warn user with explicit loss list
+- Max — Round 1: claim inventory (one predicate per claim), labels kept/merged/lost/distorted, match % = (kept + merged)/total
+- Max — Round 2 (mandatory, independent): self-QA probe of 10–20 questions from the original, answered from the compressed text only. Gates: ≥ 95% overall + 100% sub-gate on numbers, names, negations, and scope qualifiers
+- Dedup-merged facts always count as preserved (labeled "merged"), never as loss
 
 </details>
 
 <CardGrid>
   <Card title="text-optimize skill" icon="rocket" href="/brewtools/skills/text-optimize/">
-    Invoke compression directly as a skill — all four modes, same ruleset.
+    Invoke compression directly as a skill — all five modes, same ruleset.
   </Card>
   <Card title="text-human skill" icon="document" href="/brewtools/skills/text-human/">
     Reverse direction: remove AI artifacts and humanize machine-written text.
   </Card>
-  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/agents/text-optimizer.md">
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewtools/agents/text-optimizer.md">
     Agent definition, rule references, and compression spec files.
   </Card>
-  <Card title="Brewtools overview" icon="puzzle" href="/brewtools/">
+  <Card title="Brewtools overview" icon="puzzle" href="/brewtools/overview/">
     All brewtools skills and agents — text, secrets, SSH, deploy.
   </Card>
 </CardGrid>
