@@ -2,6 +2,25 @@
 
 ---
 
+## v4.2.0 (2026-07-20)
+
+> Docs: [text-optimize](https://doc-claude.brewcode.app/brewtools/skills/text-optimize/) | [text-optimizer](https://doc-claude.brewcode.app/brewtools/agents/text-optimizer/)
+
+### brewtools
+
+#### Added
+- **dedup:** new Deduplication rule category D.1-D.6 in `rules-review.md` — exact/near/cross-format duplicate merge (most-specific variant wins), emphasis cap <=2 per document (full form early + <=1-line echo at end, 3+ collapse to 2), cross-file SSOT dedup with pointer + 1-line summary, wrong-merge guard (different scope/numbers/conditions = different facts). Rule count 42 -> 48, 7 categories
+- **loss-budget:** per-mode Loss Budget table — light/medium 100% lossless, standard >=98%, deep >=95%, max >=95% + 100% sub-gate on numbers/names/negations/scope qualifiers; dedup-merged facts count as preserved ((kept+merged)/total)
+- **verification:** fact-inventory protocol at all verified modes; medium gains a self-check; max now runs 2 independent rounds — claim inventory (one predicate per claim) + self-QA probe (10-20 questions); dedup ledger with lost/distorted/merged loss-list labels
+- **compression:** sentence-level zero-loss pruning + structure-aware compression (standard); Redundancy Factoring (phrase-DICT, path-prefix hoisting, header echo removal, number normalization) + LLMLingua-2 token-class keep/drop heuristics (deep); Chain-of-Density final pass B4 (max); emphasis-inflation downgrade + anti-laziness booster deletion (C.7/T.6)
+- **agent:** text-optimizer agent gains `-x`/`--max` mode (opt-in), Step 3a dedup pass, 7-row verification table
+- **tests:** `test-optimize.sh` 34 -> 44 checks (D category, `-x` flag, Max/Dedup/Loss Budget sections, L.1-L.8)
+
+#### Fixed
+- **skill:** removed stale `$BT_PLUGIN_ROOT` / `pre-task.mjs` references from SKILL.md orchestration (native `${CLAUDE_PLUGIN_ROOT}` substitution)
+- **markdown:** escaped raw `|` inside backticked code spans in table cells (GFM cell splits) across rules-review, deep/max-compression
+- **standalone:** `skills/text-optimizer` synced — L.8, C.7/C.8/T.10 surfaced in SKILL.md, D category, dedup pass, loss budget, v2.16.0; category table corrected to sum 48
+
 ## v4.1.0 (2026-07-19)
 
 > New **`/brewdoc:docsync`** skill replaces the retired `auto-sync`. docsync is a user-run, project-scoped generator: point it at any repo and it installs three project-local hooks (`docsync-track` on Write/Edit/MultiEdit, `docsync-watch` on Read, `docsync-gate` on Stop) plus config into `.claude/`, then tracks documentation staleness by the `last_updated` frontmatter date. When docs you touched this session are stale, the Stop hook blocks once and asks (via AskUserQuestion) whether to sync — never auto-syncs without confirmation. Prompt-driven modes (no rigid flags): `init`, `status`, `sync [--all]`, `reread`, `frontmatter`, `uninstall`. Frontmatter schema: `doc_type` (llm|user|skip), `last_updated`, `sync_procedure`. The settings.json merge is non-clobbering (backup + abort-on-parse-fail + BOM-tolerant), hook paths use `$CLAUDE_PROJECT_DIR` for portability, and `uninstall` removes only docsync entries while preserving foreign hooks — verified against fresh, existing-hooks, and corrupt-settings projects.

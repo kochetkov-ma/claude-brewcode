@@ -1,10 +1,10 @@
 ---
 name: text-optimizer
-description: "Optimizes text, prompts, and documentation for LLM token efficiency. Applies 41 research-backed rules across 6 categories: Claude behavior, token efficiency, structure, reference integrity, perception, and LLM comprehension. Use when optimizing prompts, reducing tokens, compressing verbose docs, or improving LLM instruction quality."
+description: "Optimizes text, prompts, and documentation for LLM token efficiency. Applies 48 research-backed rules across 7 categories: Claude behavior, token efficiency, structure, deduplication, reference integrity, perception, and LLM comprehension. Use when optimizing prompts, reducing tokens, compressing verbose docs, or improving LLM instruction quality."
 license: MIT
 metadata:
   author: "kochetkov-ma"
-  version: "2.15.6"
+  version: "2.16.0"
   source: "claude-brewcode"
 allowed-tools: Read Write Edit Grep Glob
 ---
@@ -14,7 +14,7 @@ allowed-tools: Read Write Edit Grep Glob
 ## Text Optimizer
 
 Reduces token count in prompts, docs, and agent instructions by **20–40%** without losing meaning.
-Applies **41 research-backed rules** across 6 categories: Claude behavior, token efficiency, structure, reference integrity, perception, LLM comprehension.
+Applies **48 research-backed rules** across 7 categories: Claude behavior, token efficiency, structure, deduplication, reference integrity, perception, LLM comprehension.
 
 **Benefits:** cheaper API calls · faster model responses · clearer LLM instructions · fewer hallucinations
 
@@ -49,11 +49,13 @@ Parse `$ARGUMENTS`: `-l`/`--light` | `-d`/`--deep` | no flag -> medium (default)
 
 | Category | Rule IDs | Scope |
 |----------|----------|-------|
-| Claude behavior | C.1-C.6 | Literal following, avoid "think", positive framing, match style, descriptive instructions, overengineering |
-| Token efficiency | T.1-T.8 | Tables, bullets, one-liners, inline code, abbreviations, filler, comma lists, arrows |
+| Claude behavior | C.1-C.8 | Literal following, avoid "think", positive framing, match style, descriptive instructions, overengineering, avoid ALL-CAPS, prompt format |
+| Token efficiency | T.1-T.8, T.10 | Tables, bullets, one-liners, inline code, abbreviations, filler, comma lists, arrows, strip whitespace |
 | Structure | S.1-S.8 | XML tags, imperative, single source, context/motivation, blockquotes, progressive disclosure, consistent terminology, ref depth |
+| Deduplication | D.1-D.6 | Exact/near/cross-format merge, emphasis cap <=2, cross-file SSOT, wrong-merge guard |
 | Reference integrity | R.1-R.3 | Verify file paths, check URLs, linearize circular refs |
 | Perception | P.1-P.6 | Examples near rules, hierarchy, bold keywords, standard symbols, instruction order, default over options |
+| LLM Comprehension | L.1-L.8 | Critical info position, documents-first, conciseness, quote-first, add WHY, reiterate constraint, prompt repetition, preserve scope qualifiers |
 
 ### ID-to-Rule Mapping
 
@@ -75,14 +77,44 @@ Parse `$ARGUMENTS`: `-l`/`--light` | `-d`/`--deep` | no flag -> medium (default)
 | P.4 | Standard symbols (→ + / ✅❌⚠️) | | |
 | S.7 | Consistent terminology | S.8 | One-level reference depth |
 | P.5 | Instruction order (anchoring) | P.6 | Default over options |
+| C.7 | Avoid ALL-CAPS emphasis (4.x) | C.8 | Prompt format → output format |
+| T.10 | Strip whitespace from code | | |
+| L.1 | Critical info at START or END | L.2 | Documents first, query last |
+| L.3 | Explicitly request conciseness | L.4 | Quote-first grounding |
+| L.5 | Add WHY to instructions | L.6 | Reiterate constraint at END |
+| L.7 | Prompt repetition (non-reasoning) | L.8 | Preserve scope qualifiers |
+| D.1 | Exact-duplicate merge | D.2 | Near-duplicate merge (keep specific) |
+| D.3 | Cross-format duplicate | D.4 | Emphasis cap (<=2/doc, echo @ END) |
+| D.5 | Cross-file dedup (SSOT + pointer) | D.6 | Wrong-merge guard |
 
 ## Mode-to-Rules Mapping
 
 | Mode | Applies | Notes |
 |------|---------|-------|
-| Light | C.1-C.6, T.6, R.1-R.3, P.1-P.4 | Text cleanup only — no restructuring |
-| Medium | All rules (C + T + S + R + P) | Balanced transformations |
-| Deep | All rules + aggressive rephrasing | Merge sections, max compression |
+| Light | C.1-C.8, T.6, D.1, R.1-R.3, P.1-P.4, L.1-L.8 | Text cleanup only — no restructuring |
+| Medium | All rules (C + T + S + D + R + P + L) | Balanced transformations |
+| Deep | All rules (C + T + S + D + R + P + L) + aggressive rephrasing | Merge sections, max compression |
+
+## Loss Budget per Mode
+
+Content essence is untouchable at light/medium; small deliberate loss only at deep — explicitly reported. Dedup-merged facts count as preserved, never as loss.
+
+| Mode | Semantic match target | Allowed loss |
+|------|----------------------|--------------|
+| Light | 100% | None — wording cleanup only |
+| Medium | 100% | None — self-check fact inventory, zero loss |
+| Deep | >= 95% | Low-value connective detail; self-verify round required, warn with loss list if < 95% |
+
+## Deduplication Pass (All Modes)
+
+Runs during analysis, BEFORE compression:
+
+1. Build fact inventory: one atomic fact per line, numbered
+2. Flag facts appearing 2+ times (exact, reworded, or cross-format)
+3. Classify each repeat: intentional emphasis (marked critical/blockquote, or start+end sandwich) vs accidental
+4. Accidental -> merge to single MOST SPECIFIC statement (D.1-D.3), best position wins
+5. Intentional -> cap at 2: full form early + <=1-line echo at END (D.4)
+6. Wrong-merge guard (D.6): differing scope/numbers/conditions = NOT duplicates — keep both
 
 ## Usage
 
@@ -110,8 +142,11 @@ Parse `$ARGUMENTS`: `-l`/`--light` | `-d`/`--deep` | no flag -> medium (default)
 1. Read `references/rules-review.md` — load all optimization rules
 2. Read target file(s)
 3. Analyze: identify type (prompt, docs, agent, skill), note critical info and cross-references
+3a. Dedup pass (D.1-D.6): fact inventory -> merge accidental dups -> cap intentional emphasis at 2/doc
 4. Apply rules by mode (see Mode-to-Rules Mapping)
 5. Edit file with optimized content
+5a. Medium: self-check — re-check fact inventory against output, zero loss required
+5b. Deep mode: self-verify — fact inventory original vs compressed, (kept + merged)/total >= 95%; merged = preserved; warn with loss list if below
 6. Generate optimization report
 
 ## Quality Checklist
@@ -125,14 +160,20 @@ Parse `$ARGUMENTS`: `-l`/`--light` | `-d`/`--deep` | no flag -> medium (default)
 
 | Check | Light | Med | Deep |
 |-------|-------|-----|------|
-| C.1-C.6 (Claude behavior) | Yes | Yes | Yes |
+| C.1-C.8 (Claude behavior) | Yes | Yes | Yes |
 | T.6 (filler removal) | Yes | Yes | Yes |
 | T.1-T.5, T.7-T.8 (token compression) | - | Yes | Yes |
+| T.10 (strip code whitespace) | - | Yes | Yes |
 | S.1-S.8 (structure/clarity) | - | Yes | Yes |
+| D.1 (exact dedup) | Yes | Yes | Yes |
+| D.2-D.4, D.6 (smart dedup + emphasis cap) | - | Yes | Yes |
+| D.5 (cross-file dedup, folder runs) | Yes | Yes | Yes |
 | R.1-R.3 (reference integrity) | Yes | Yes | Yes |
 | P.1-P.4 (LLM perception) | Yes | Yes | Yes |
+| P.5-P.6 (anchoring, default-over-options) | - | Yes | Yes |
+| L.1-L.8 (LLM comprehension) | Yes | Yes | Yes |
 | Aggressive rephrasing | - | - | Yes |
-| No information loss | Yes | Yes | Yes |
+| Loss within mode budget | 100% | 100% | >=95% |
 
 ### After
 - [ ] All facts preserved
@@ -180,3 +221,4 @@ Install: `claude plugin marketplace add https://github.com/kochetkov-ma/claude-b
 | Overengineer prompts | Opus 4.5 follows literally (C.6) |
 | Overload single prompts | Divided attention, hallucinations (S.3) |
 | Over-focus on wording | Structure > word choice (T.1) |
+| Merge similar-looking facts blindly | Different scope/numbers/conditions = different facts (D.6) |

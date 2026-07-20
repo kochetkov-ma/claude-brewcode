@@ -1,6 +1,6 @@
 # Text Optimizer
 
-Optimize prompts, CLAUDE.md, agent instructions, and documentation for LLM token efficiency. Applies 41 research-backed rules across 6 categories. Typical savings: **30-50%** on prose, **20-30%** on technical specs.
+Optimize prompts, CLAUDE.md, agent instructions, and documentation for LLM token efficiency. Applies 48 research-backed rules across 7 categories. Typical savings: **30-50%** on prose, **20-30%** on technical specs.
 
 ## Quick Start
 
@@ -23,15 +23,16 @@ Optimize prompts, CLAUDE.md, agent instructions, and documentation for LLM token
    Optimize all agent instructions in .claude/agents/
    ```
 
-Claude reads 41 rules, analyzes your files, applies transformations, and outputs a before/after report with token counts. For directories — finds all `.md` files and processes them in parallel.
+Claude reads 48 rules, analyzes your files, applies transformations, and outputs a before/after report with token counts. For directories — finds all `.md` files and processes them in parallel.
 
 ## Why Use This
 
 - **Token savings** — 30-50% fewer tokens in system prompts means lower cost and more room for context
 - **Better compliance** — rules based on how Claude 4.x actually processes instructions, not intuition
 - **Research-backed** — every rule cites a source (Anthropic docs, arXiv papers, TACL 2024)
-- **Non-destructive** — preserves all facts, logic, and cross-references; only changes form
+- **Non-destructive at light/medium** — all facts, logic, and cross-references preserved, only form changes; deep reports any loss (>= 95% match + loss list)
 - **Three modes** — light cleanup for stable docs, deep compression for cost-critical prompts
+- **Smart deduplication** — accidental repeats merged (most specific variant wins), intentional emphasis capped at 2 per document (full form early + short echo at end)
 
 ## Examples
 
@@ -41,7 +42,7 @@ Claude reads 41 rules, analyzes your files, applies transformations, and outputs
 /text-optimizer CLAUDE.md
 ```
 
-Applies all 41 rules with balanced restructuring. Best for most files.
+Applies all 48 rules with balanced restructuring. Best for most files.
 
 <details>
 <summary>Optimization: filler removal + positive framing</summary>
@@ -344,7 +345,7 @@ The optimizer wraps `{{VARIABLE}}` sections in XML tags. Without boundaries, inj
 
 Text cleanup without restructuring. Safe for stable, reviewed documents.
 
-**Applies:** Claude behavior rules (C.1-C.8), filler removal (T.6), reference checks (R.1-R.3), perception basics (P.1-P.4).
+**Applies:** Claude behavior rules (C.1-C.8), filler removal (T.6), exact-dup removal (D.1), reference checks (R.1-R.3), perception basics (P.1-P.4).
 
 **Skips:** Table/bullet restructuring, XML tags, section merging.
 
@@ -352,9 +353,9 @@ Text cleanup without restructuring. Safe for stable, reviewed documents.
 
 ### Medium (default)
 
-Balanced restructuring — all 41 rules applied with standard transformations.
+Balanced restructuring — all 48 rules applied with standard transformations.
 
-**Applies:** All categories (C + T + S + R + P + L).
+**Applies:** All categories (C + T + S + D + R + P + L).
 
 **Use for:** Most files — CLAUDE.md, agent instructions, skill definitions, technical docs.
 
@@ -362,7 +363,7 @@ Balanced restructuring — all 41 rules applied with standard transformations.
 
 Maximum compression. Merges sections, rephrases aggressively, eliminates all redundancy.
 
-**Applies:** All rules + aggressive rephrasing and section merging.
+**Applies:** All rules + aggressive rephrasing and section merging. Self-verify round: fact inventory, >= 95% match, loss list on shortfall.
 
 **Use for:** Cost-critical system prompts, context-limited scenarios. Review the diff carefully after.
 
@@ -379,11 +380,12 @@ Maximum compression. Merges sections, rephrases aggressively, eliminates all red
 | Category | Count | What it covers |
 |----------|-------|----------------|
 | Claude behavior | 8 | How Claude 4.x interprets instructions differently |
-| Token efficiency | 10 | Structural compression without information loss |
+| Token efficiency | 9 | Structural compression without information loss |
 | Structure | 8 | Organization patterns LLMs parse better |
+| Deduplication | 6 | Merging repeats without losing emphasis or distinct facts |
 | Reference integrity | 3 | Catching broken paths, URLs, circular refs |
 | Perception | 6 | Visual hierarchy and attention patterns |
-| LLM comprehension | 7 | Position bias, grounding, repetition effects |
+| LLM comprehension | 8 | Position bias, grounding, repetition effects + scope-qualifier preservation |
 
 Full rules with research citations: [`references/rules-review.md`](references/rules-review.md)
 
@@ -396,6 +398,8 @@ Full rules with research citations: [`references/rules-review.md`](references/ru
 - [DETAIL Matters](https://arxiv.org/abs/2512.02246) — arXiv 2024
 - [Whitespace Stripping](https://arxiv.org/abs/2508.13666) — arXiv 2025
 - [Prompt Repetition](https://arxiv.org/abs/2512.14982) — Google Research 2024
+- [LLMLingua-2](https://arxiv.org/abs/2403.12968) — arXiv 2024
+- [Instruction-Budget Degradation](https://arxiv.org/abs/2507.11538) — arXiv 2025
 - [Brex Prompt Engineering](https://github.com/brexhq/prompt-engineering) — Brex
 
 ## Part of Brewcode

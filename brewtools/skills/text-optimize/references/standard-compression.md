@@ -32,6 +32,9 @@ Apply filler removal from `rules-review.md` rule T.6 as baseline. Standard mode 
 - Remove redundant section headers
 - Combine related short sections
 - Order by importance + put bulk reference content first, instructions/query last (measured up to +30% response quality on long inputs, Anthropic; +21.4% LongLLMLingua). Reorder — never delete — to fix lost-in-the-middle.
+- Dedup pass first (D.1-D.4, D.6, rules-review.md): merge accidental repeats before any wording work; cap intentional emphasis at 2 (full early + short echo at end)
+- Sentence-level zero-loss pruning: rank sentences — does removal lose any unique atomic fact? Drop zero-loss sentences BEFORE token-level compression (15-20 pts better fidelity at same ratio, arXiv:2410.12388)
+- Structure-aware: compress within structural units, never across; keep headers, compress bodies (heading structure aids retrieval)
 
 ## 4. Abbreviation Rules (Conservative)
 
@@ -56,6 +59,8 @@ After compression, verify:
 - [ ] No information merged incorrectly (two different concepts collapsed into one)
 - [ ] Headers and structure still logical
 - [ ] Terminology kept consistent — same concept uses the SAME term throughout (no paraphrase-for-variety; synonym variation hurts LLM retrieval)
+- [ ] Fact-inventory gate: extract atomic facts from original, check each in compressed; (kept + dedup-merged) / total >= 98% — patch any slip, one round
+- [ ] Dedup-merged facts counted as preserved, not lost; no two DIFFERENT facts merged into one (D.6)
 
 ## 6. What NOT to Compress
 

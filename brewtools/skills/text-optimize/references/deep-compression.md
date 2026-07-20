@@ -14,7 +14,7 @@ Reference for deep compression mode applied to LLM-only documents (CLAUDE.md, sy
 | `so` / `->` | therefore, consequently (was `∴`) |
 | `bc` / `because` | because, since (was `∵`) |
 | `@` | at, located at |
-| `|` | or, alternative |
+| `\|` | or, alternative |
 | `:` | has property, contains |
 | `~` | approximately |
 | `includes` | includes, contains (set) (was `⊃`) |
@@ -99,6 +99,25 @@ Apply filler removal from `rules-review.md` rule T.6. Additional deep-mode remov
 - Headers: flatten to 2 levels max
 - Remove blank lines between items in lists/tables
 
+## Redundancy Factoring
+
+Run dedup pass (D.1-D.6, rules-review.md) BEFORE symbol substitution — merging first shrinks the text remaining passes must process and keeps verification cheap. Record merges in a dedup ledger (kept <- dropped).
+
+- Phrase-DICT: recurring phrase >= 3 words appearing 2+ times -> DICT entry (counts toward the 20-entry cap). Source: CompactPrompt arXiv:2510.18043
+- Path-prefix hoisting: repeated path/URL prefixes -> single DICT entry (e.g. `[DICT: SR=src/main/resources]`)
+- Header echo removal: subsection headers repeating parent header words -> drop the echo ("## Server Config / ### Server Config Ports" -> "### Ports")
+- Number/unit normalization: "approximately 30 percent" -> `~30%`; "greater than or equal to 21" -> `>=21`
+
+## Token-Class Keep/Drop Heuristics
+
+Source: LLMLingua-2 arXiv:2403.12968. When compressing at word level:
+
+| Keep | Drop (when meaning survives) |
+|------|------------------------------|
+| Nouns, verbs, numerals, NEGATIONS, named entities | Determiners, copulas ("is", "are"), auxiliaries, discourse connectors ("furthermore", "as a result") |
+
+Never drop negations or scope qualifiers (L.8; max-mode guardrail C2).
+
 ## Iron Rules
 
 Preserve in ALL cases regardless of compression level:
@@ -106,6 +125,7 @@ Preserve in ALL cases regardless of compression level:
 - Negative rule semantics (use `!=` notation)
 - At least one example per rule that originally has examples
 - DICT header at document start
+- Dedup ledger: every merged pair recorded (kept <- dropped); merged facts count as preserved in verification
 
 ## Before/After Examples
 
