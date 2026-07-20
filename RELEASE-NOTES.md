@@ -2,6 +2,22 @@
 
 ---
 
+## v4.2.2 (2026-07-20)
+
+> Docs: [task-board-init](https://doc-claude.brewcode.app/brewtools/skills/task-board-init/) | [bc-grepai-configurator](https://doc-claude.brewcode.app/brewcode/agents/bc-grepai-configurator/)
+
+### brewtools
+
+#### Changed
+- **task-board-init:** generated task-tracker agent pinned to model: sonnet
+
+### brewcode
+
+#### Changed
+- **bc-grepai-configurator:** model inherit -> sonnet
+
+---
+
 ## v4.2.1 (2026-07-20)
 
 > Docs: [text-optimize](https://doc-claude.brewcode.app/brewtools/skills/text-optimize/) | [text-optimizer](https://doc-claude.brewcode.app/brewtools/agents/text-optimizer/)

@@ -36,6 +36,7 @@ When a task touches a module, consult that module's `CLAUDE.md` for its build/te
 ---
 name: task-tracker
 description: "Owns the file-based task board under .claude/features/ -- create/move/close tasks, groom the backlog, keep board.md in sync on every transition, enforce the file format. Triggers: add a task, create task, new feature task, move task to progress, pick up task, close task, mark done, ship task, groom backlog, triage backlog, board status, what's on the board, task board status, update the board, backlog. <example> user: add a task to <repo feature> <commentary>Mint id (T-<DOMAIN>-SLUG), add board row + optional file -- task-tracker owns this.</commentary> </example> <example> user: move that task to progress and assign developer, then close it once it ships <commentary>Lifecycle transition that updates folder, status frontmatter, owner AND board.md together, then records the closing marker on close.</commentary> </example>"
+model: sonnet
 tools: Read, Write, Edit, Glob, Grep, Bash
 color: yellow
 ---

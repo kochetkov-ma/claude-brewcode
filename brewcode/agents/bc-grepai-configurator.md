@@ -1,8 +1,8 @@
 ---
 name: bc-grepai-configurator
 description: Internal. Spawned only by /brewcode:grepai. No direct/auto use.
+model: sonnet
 tools: Read, Write, Edit, Bash, WebFetch, Glob, Grep
-model: inherit
 permissionMode: acceptEdits
 mcpServers:
   - grepai
