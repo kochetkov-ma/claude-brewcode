@@ -91,14 +91,16 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
       |------|------|--------|
       | Light/medium | Rule groups C → T → S → R → P (rules-review.md) | — |
       | Standard | + filler removal, paragraph-to-bullet, prose-to-table | 30–50% |
-      | Deep | + DICT header (terms used 3+×), symbol substitutions, structural compression | 2–3× |
-      | Max (opt-in) | + atomic fact-lines, ASCII operator dialect, format-aware tables, Chain-of-Density pass | 3–4× |
+      | Deep | + DICT header (terms used 3+×), symbol substitutions, structural compression, aggressive lossy pass (A.1 fusion &rarr; A.3 paraphrase &rarr; A.2 word drop &rarr; A.4 known-fact elision) | 2–3× |
+      | Max (opt-in) | + atomic fact-lines, ASCII operator dialect, format-aware tables, Chain-of-Density pass, same aggressive lossy pass as deep | 3–4× |
+
+      Deep/max log every A.2 drop and A.4 elision to a loss ledger alongside the dedup ledger — A.1 fusions and A.3 paraphrases are not losses, they're recorded as merged/kept.
     </div>
   </li>
   <li>
     <div>
       <strong>Verify</strong>
-      <p>Verification scales with mode. Dedup-merged facts always count as preserved, never as loss.</p>
+      <p>Verification scales with mode. Dedup-merged facts always count as preserved, never as loss. A.1 fused and A.3 paraphrased facts also count as preserved; A.4 elisions get a distinct <code>elided-known</code> label and are checked against the same gate as any other loss. A.2 drops are ledgered but gate-neutral; a drop that degrades meaning marks the fact <code>distorted</code>.</p>
 
       | Mode | Rounds | Gate |
       |------|--------|------|
@@ -129,6 +131,8 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 | Documentation | T.1-T.8, T.10, S.1-S.8, D.1-D.6, L.1-L.8 | standard |
 | README | T.1-T.8, T.10, S.1-S.8, L.1-L.8 | standard |
 
+A.1-A.4 (aggressive lossy) apply whenever the resolved mode is deep or max, regardless of content type.
+
 | Capability | What the agent does |
 |------------|---------------------|
 | Token efficiency | Compress without information loss |
@@ -140,11 +144,10 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 - Light: no verification pass
 - Medium: self-check — re-check fact inventory against output, zero loss required
 - Standard: 1 round — fact inventory original vs compressed, gate (kept + merged) / total ≥ 98%, patch any slips
-- Deep — Round 1: read original + compressed side-by-side, list lost/distorted facts, compute semantic match %
+- Deep — Round 1: atomic-fact inventory from the original, each fact labeled kept/merged/lost/distorted, match % = (kept + merged)/total
 - Deep — Round 2: if match < 95% — patch missing facts and re-verify; if still < 95% — warn user with explicit loss list
-- Max — Round 1: claim inventory (one predicate per claim), labels kept/merged/lost/distorted, match % = (kept + merged)/total
+- Max — Round 1: claim inventory (one predicate per claim), labels kept/merged/lost/distorted/elided-known, match % = (kept + merged)/total
 - Max — Round 2 (mandatory, independent): self-QA probe of 10–20 questions from the original, answered from the compressed text only. Gates: ≥ 95% overall + 100% sub-gate on numbers, names, negations, and scope qualifiers
-- Dedup-merged facts always count as preserved (labeled "merged"), never as loss
 
 </details>
 

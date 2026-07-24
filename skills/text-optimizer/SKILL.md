@@ -1,6 +1,6 @@
 ---
 name: text-optimizer
-description: "Optimizes text, prompts, and documentation for LLM token efficiency. Applies 48 research-backed rules across 7 categories: Claude behavior, token efficiency, structure, deduplication, reference integrity, perception, and LLM comprehension. Use when optimizing prompts, reducing tokens, compressing verbose docs, or improving LLM instruction quality."
+description: "Optimizes text, prompts, and documentation for LLM token efficiency. Applies 52 research-backed rules across 8 categories: Claude behavior, token efficiency, structure, deduplication, reference integrity, perception, LLM comprehension, and aggressive lossy (deep only). Use when optimizing prompts, reducing tokens, compressing verbose docs, or improving LLM instruction quality."
 license: MIT
 metadata:
   author: "kochetkov-ma"
@@ -14,7 +14,7 @@ allowed-tools: Read Write Edit Grep Glob
 ## Text Optimizer
 
 Reduces token count in prompts, docs, and agent instructions by **20–40%** without losing meaning.
-Applies **48 research-backed rules** across 7 categories: Claude behavior, token efficiency, structure, deduplication, reference integrity, perception, LLM comprehension.
+Applies **52 research-backed rules** across 8 categories: Claude behavior, token efficiency, structure, deduplication, reference integrity, perception, LLM comprehension, aggressive lossy (deep only).
 
 **Benefits:** cheaper API calls · faster model responses · clearer LLM instructions · fewer hallucinations
 
@@ -56,6 +56,7 @@ Parse `$ARGUMENTS`: `-l`/`--light` | `-d`/`--deep` | no flag -> medium (default)
 | Reference integrity | R.1-R.3 | Verify file paths, check URLs, linearize circular refs |
 | Perception | P.1-P.6 | Examples near rules, hierarchy, bold keywords, standard symbols, instruction order, default over options |
 | LLM Comprehension | L.1-L.8 | Critical info position, documents-first, conciseness, quote-first, add WHY, reiterate constraint, prompt repetition, preserve scope qualifiers |
+| Aggressive lossy (deep only) | A.1-A.4 | Line fusion, low-value word drop, aggressive paraphrase, common-knowledge elision |
 
 ### ID-to-Rule Mapping
 
@@ -86,6 +87,8 @@ Parse `$ARGUMENTS`: `-l`/`--light` | `-d`/`--deep` | no flag -> medium (default)
 | D.1 | Exact-duplicate merge | D.2 | Near-duplicate merge (keep specific) |
 | D.3 | Cross-format duplicate | D.4 | Emphasis cap (<=2/doc, echo @ END) |
 | D.5 | Cross-file dedup (SSOT + pointer) | D.6 | Wrong-merge guard |
+| A.1 | Line fusion (loss-free merge) | A.2 | Low-value word drop (gate-neutral) |
+| A.3 | Aggressive paraphrase (preserved) | A.4 | Common-knowledge elision (ledger) |
 
 ## Mode-to-Rules Mapping
 
@@ -93,7 +96,7 @@ Parse `$ARGUMENTS`: `-l`/`--light` | `-d`/`--deep` | no flag -> medium (default)
 |------|---------|-------|
 | Light | C.1-C.8, T.6, D.1, R.1-R.3, P.1-P.4, L.1-L.8 | Text cleanup only — no restructuring |
 | Medium | All rules (C + T + S + D + R + P + L) | Balanced transformations |
-| Deep | All rules (C + T + S + D + R + P + L) + aggressive rephrasing | Merge sections, max compression |
+| Deep | All rules (C + T + S + D + R + P + L) + A.1-A.4 (aggressive lossy) | Merge sections, max compression |
 
 ## Loss Budget per Mode
 
@@ -143,6 +146,7 @@ Runs during analysis, BEFORE compression:
 2. Read target file(s)
 3. Analyze: identify type (prompt, docs, agent, skill), note critical info and cross-references
 3a. Dedup pass (D.1-D.6): fact inventory -> merge accidental dups -> cap intentional emphasis at 2/doc
+3b. Deep only: aggressive lossy pass (A.1 fusion -> A.3 paraphrase -> A.2 word drop -> A.4 elision); A.2/A.4 drops -> loss ledger; A.4 counts as `elided-known` against the >=95% gate, A.2 is gate-neutral
 4. Apply rules by mode (see Mode-to-Rules Mapping)
 5. Edit file with optimized content
 5a. Medium: self-check — re-check fact inventory against output, zero loss required
@@ -172,7 +176,7 @@ Runs during analysis, BEFORE compression:
 | P.1-P.4 (LLM perception) | Yes | Yes | Yes |
 | P.5-P.6 (anchoring, default-over-options) | - | Yes | Yes |
 | L.1-L.8 (LLM comprehension) | Yes | Yes | Yes |
-| Aggressive rephrasing | - | - | Yes |
+| A.1-A.4 (aggressive lossy) | - | - | Yes |
 | Loss within mode budget | 100% | 100% | >=95% |
 
 ### After

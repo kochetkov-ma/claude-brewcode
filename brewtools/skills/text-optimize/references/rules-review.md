@@ -1,6 +1,6 @@
 # LLM Text Optimization and Comprehension Rules
 
-Categorized rules for LLM token efficiency and comprehension optimization with 48 rules across 7 categories.
+Categorized rules for LLM token efficiency and comprehension optimization with 52 rules across 8 categories.
 Apply by category. Reference specific IDs in reviews (e.g., "violates T.1").
 
 ## C - Claude Behavior
@@ -90,6 +90,24 @@ How content is perceived and processed by the LLM — not about token count but 
 | L.7 | Prompt Repetition for Non-Reasoning Models | Repeat the entire prompt once. Google Research (arXiv:2512.14982): wins 47/70 benchmark-model combinations with 0 losses. Extreme case: 21% to 97% accuracy. Causal LMs benefit because the second pass has full first-pass context. Only for non-reasoning models — reasoning models already repeat internally |
 | L.8 | Preserve Scope Qualifiers | Opus 4.8 follows instructions literally and does not silently generalize. Scope words ("every section, not just the first", "all files", "each") are load-bearing — never strip them during compression. Source: Anthropic Opus 4.8 prompting |
 
+## A - Aggressive Lossy (deep/max only)
+
+Deliberate-loss techniques, applied ONLY in deep and max modes. A.1/A.3 outputs count as PRESERVED (kept/merged) in verification. A.2 is word-level and gate-neutral: drops are recorded in the loss ledger (dropped -> reason) for transparency but do NOT move the fact-level (kept + merged)/total ratio; if an A.2 drop degrades a fact's meaning, the verifier labels that fact `distorted` (normal gate impact). A.4 elisions consume the fact-level loss budget as `elided-known` and MUST appear in the loss ledger. D.6 wrong-merge guard and L.8 scope qualifiers always win over A rules.
+
+| ID | Rule | Notes |
+|----|------|-------|
+| A.1 | Line Fusion | Merge related short lines/bullets/sentences into ONE line with `\|` separators or comma lists; fuse a rule + its reason via `bc`. Fusion is loss-free: fused facts count as preserved |
+| A.2 | Low-Value Word Drop | Drop words whose removal minimally degrades meaning: decorative adjectives/adverbs, politeness, meta-commentary, self-evident qualifiers. Never drop negations, numbers, named entities, scope qualifiers (L.8, C2 still win) |
+| A.3 | Aggressive Paraphrase | Rewrite whole phrases/sentences into shorter equivalents: restructure, not just delete. Meaning-preserving paraphrase counts as preserved in verification |
+| A.4 | Common-Knowledge Elision | Delete statements any modern LLM already knows from training (generic best practices like "write tests", "keep functions small", standard tool behavior, textbook definitions). Keep ONLY project-specific deltas: concrete names, numbers, paths, versions, prohibitions, deviations from defaults. Every elision -> loss ledger, counts against mode loss budget. Unsure whether generic -> keep |
+
+Examples (before -> after):
+
+- A.1: "Close the DB connection after use. Unclosed connections exhaust the pool." -> "close DB conn after use bc unclosed -> pool exhaustion"
+- A.2: "Carefully review the extremely important production configuration file" -> "review prod cfg file"
+- A.3: "In the event that the build process does not complete successfully, notify the team" -> "build fails -> notify team"
+- A.4: "Write unit tests for new code, tests catch regressions. Coverage gate is 85% (jacoco); build fails below." -> "coverage gate 85% (jacoco), build fails below" (generic "write tests" elided -> ledger; project delta kept)
+
 ## Rules NOT Recommended
 
 | Avoid | Reality |
@@ -124,7 +142,7 @@ These ratios reflect token savings from applying T and S category rules. L categ
 | Deep | `references/deep-compression.md` | 2-3x compression, LLM-only. DICT header, symbol substitutions, abbreviation dictionary |
 | Max | `references/max-compression.md` | 3-4x, LLM-only, opt-in. Atomic fact-lines, ASCII operators, Chain-of-Density pass, 2 mandatory verify rounds |
 
-Standard/deep/max modes apply ALL rules above (C + T + S + D + R + P + L) plus their compression reference. All modes run the Deduplication pass (D.1-D.6) during analysis, before compression.
+Standard/deep/max modes apply ALL rules above (C + T + S + D + R + P + L) plus their compression reference. Deep/max additionally apply A.1-A.4 (aggressive lossy). All modes run the Deduplication pass (D.1-D.6) during analysis, before compression.
 
 ## Sources
 

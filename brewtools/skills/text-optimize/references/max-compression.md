@@ -2,7 +2,7 @@
 
 Max mode = deep compression + atomic-fact-line rewriting + format-aware tables. LLM-only. Opt-in via `-x`/`--max`. ALWAYS runs 2 verification rounds. Use only when caller explicitly wants maximum density and accepts review burden.
 
-> Inherits everything in `deep-compression.md`. Max adds 4 techniques (B1, A1, B3, B4) + 4 guardrails (C1-C4) + mandatory 2-round verify.
+> Inherits everything in `deep-compression.md`, including aggressive lossy rules A.1-A.4 (dotted, rules-review.md category A) with their loss-ledger requirement. Max adds 4 techniques (B1, A1, B3, B4) + 4 guardrails (C1-C4) + mandatory 2-round verify. Dotless A1 below = ASCII operator dialect, distinct from dotted A.1 (line fusion).
 
 ## Atomic Fact-Line Decomposition (B1)
 
@@ -103,7 +103,7 @@ Never silently ship lossy max output. Two rounds use DIFFERENT methods — they 
 
 | Round | Method |
 |-------|--------|
-| 1 — Claim inventory | Decompose ORIGINAL into numbered atomic claims, ONE predicate per claim (over-decomposition hurts verifier accuracy, arXiv:2411.02400). Check each claim derivable from COMPRESSED. Label: kept \| merged \| lost \| distorted. Match % = (kept + merged) / total |
+| 1 — Claim inventory | Decompose ORIGINAL into numbered atomic claims, ONE predicate per claim (over-decomposition hurts verifier accuracy, arXiv:2411.02400). Check each claim derivable from COMPRESSED. Label: kept \| merged \| lost \| distorted \| elided-known (A.4). Match % = (kept + merged) / total |
 | 2 — Self-QA probe | Generate 10-20 questions from ORIGINAL targeting entities, numbers, conditions, negations. Answer each from COMPRESSED ONLY. Mismatch = loss. Patch, recompute both scores |
 | Gates | Overall >= 95% AND 100% sub-gate: every number, name, negation, and scope qualifier answerable/verbatim (CompactPrompt arXiv:2510.18043). Sub-gate fail -> patch via Chain-of-Density pass (B4) -> re-verify. Still failing -> WARNING + full loss list, ship with caveat |
 
@@ -111,3 +111,4 @@ Dedup audit: dedup-merged facts count as PRESERVED (kept once). Loss list fmt (1
 > lost: artifact retention policy (30d) dropped
 > distorted: "every endpoint" -> "endpoints" (scope weakened, C2 violation)
 > merged: TLS-required rule deduplicated, kept once @ Security section (NOT a loss)
+> elided-known: generic "write unit tests" advice elided (A.4, counts as loss)

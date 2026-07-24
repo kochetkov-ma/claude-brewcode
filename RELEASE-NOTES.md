@@ -2,6 +2,18 @@
 
 ---
 
+## v4.2.3 (2026-07-24)
+
+> Docs: [text-optimize](https://doc-claude.brewcode.app/brewtools/skills/text-optimize/) | [text-optimizer](https://doc-claude.brewcode.app/brewtools/agents/text-optimizer/)
+
+### brewtools
+#### Added
+- **text-optimize:** new rule category A - Aggressive Lossy (A.1 line fusion, A.2 low-value word drop, A.3 aggressive paraphrase, A.4 common-knowledge elision) — deep/max only; 52 rules / 8 categories (was 48/7)
+- **text-optimize:** loss ledger for A.2/A.4 drops; verification label `elided-known` for A.4 counts against the >=95% gate, A.2 is gate-neutral
+- **text-optimizer agent:** aggressive lossy pass wired into deep/max compress, verify labels, report loss ledger
+#### Changed
+- **docs:** rule counts 48 -> 52 across repo/plugin/skill READMEs + docs site pages; standalone sksh copy skills/text-optimizer synced
+
 ## v4.2.2 (2026-07-20)
 
 > Docs: [task-board-init](https://doc-claude.brewcode.app/brewtools/skills/task-board-init/) | [bc-grepai-configurator](https://doc-claude.brewcode.app/brewcode/agents/bc-grepai-configurator/)

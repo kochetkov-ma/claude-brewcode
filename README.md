@@ -143,7 +143,7 @@ After `/brewcode:setup`, each task follows the cycle: `spec` -> `plan` -> `start
 ### brewtools -- text utilities
 
 ```bash
-/brewtools:text-optimize CLAUDE.md         # Token-efficient optimization (48 rules)
+/brewtools:text-optimize CLAUDE.md         # Token-efficient optimization (52 rules)
 /brewtools:text-human 3be67487             # Remove AI artifacts from a commit
 /brewtools:secrets-scan                    # Scan for leaked credentials
 /brewtools:plugin-update                   # Install or update the plugin suite
@@ -217,7 +217,7 @@ Placeholder plugin, currently empty. No commands yet -- coming soon.
 
 | Skill | Purpose |
 |-------|---------|
-| `/brewtools:text-optimize` | LLM token efficiency optimization (48 rules, smart dedup) |
+| `/brewtools:text-optimize` | LLM token efficiency optimization (52 rules, smart dedup + aggressive lossy) |
 | `/brewtools:text-human` | Remove AI artifacts, humanize code |
 | `/brewtools:think-short` | Install/remove terse-mode hooks (SessionStart + every-10th UserPromptSubmit + subagent Task) that inject brevity directives; project or global |
 | `/brewtools:secrets-scan` | Scan git-tracked files for leaked secrets |

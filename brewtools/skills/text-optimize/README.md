@@ -1,6 +1,6 @@
 # Text Optimizer
 
-Optimizes text files for LLM token efficiency with 5 compression modes — from light cleanup to deep dictionary-encoded compression for LLM-only documents. Applies 48 validated rules for Claude 4.x, supports smart auto-detection of optimal mode, and verifies content against per-mode loss budgets (lossless through standard; small explicit loss at deep/max). Works on single files, multiple files in parallel, or entire directories. Includes a smart deduplication pass: accidental repeats merged, intentional emphasis capped at 2 per document.
+Optimizes text files for LLM token efficiency with 5 compression modes — from light cleanup to deep dictionary-encoded compression for LLM-only documents. Applies 52 validated rules for Claude 4.x, supports smart auto-detection of optimal mode, and verifies content against per-mode loss budgets (lossless through standard; small explicit loss at deep/max). Works on single files, multiple files in parallel, or entire directories. Includes a smart deduplication pass: accidental repeats merged, intentional emphasis capped at 2 per document.
 
 ## Quick Start
 
@@ -17,8 +17,8 @@ Auto-detects optimal mode for the file (deep for CLAUDE.md, standard for README.
 | **Light** | `-l` | Critical files, production prompts | Filler removal, tone fixes, reference checks — structure untouched |
 | **Medium** | _(default)_ | General docs, agents, skills | Tables, bullets, merged sections, full rule set |
 | **Standard** | `-s` | README, docs, user-facing content | 30-50% compression preserving human readability. Filler removal, paragraph→bullets, prose→tables. 1 verification round |
-| **Deep** | `-d` | CLAUDE.md, system prompts, agent/skill defs | 2-3x compression for LLM-only consumption. Dictionary encoding, symbol substitutions, abbreviation tables. 1-2 verification rounds |
-| **Max** | `-x` | Cost-critical LLM-only prompts (opt-in) | 3-4x. Atomic fact-lines, ASCII operators, Chain-of-Density pass. 2 independent verification rounds |
+| **Deep** | `-d` | CLAUDE.md, system prompts, agent/skill defs | 2-3x compression for LLM-only consumption. Dictionary encoding, symbol substitutions, abbreviation tables, plus aggressive lossy pass (line fusion, word drop, paraphrase, known-fact elision) gated at >=95% semantic match. 1-2 verification rounds |
+| **Max** | `-x` | Cost-critical LLM-only prompts (opt-in) | 3-4x. Atomic fact-lines, ASCII operators, Chain-of-Density pass, same aggressive lossy pass as deep (A.1-A.4), same gate. 2 independent verification rounds |
 
 ## Examples
 
@@ -120,6 +120,7 @@ The report includes a semantic match percentage and lists any facts that were lo
 - Applies positive framing ("do Y" instead of "don't do X")
 - Verifies all file paths (R.1), URLs (R.2), and circular references (R.3)
 - Uses standard abbreviations in tables only (full words in prose)
+- Deep/max apply the A.1-A.4 lossy pass (see Modes); A.2/A.4 drops logged in loss ledger
 
 ## Output
 

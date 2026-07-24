@@ -1,6 +1,6 @@
 ---
 title: "Text Optimize"
-description: "Optimizes text and docs for LLM token efficiency with 48 validated rules. Five modes: light, medium, standard, deep, max."
+description: "Optimizes text and docs for LLM token efficiency with 52 validated rules. Five modes: light, medium, standard, deep, max."
 order: 3101
 ---
 import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
@@ -12,7 +12,7 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 </Callout>
 
 <Callout type="tip">
-**48 validated rules, five modes, parallel processing.** The skill reads your files, applies the right rule set for the mode, verifies references, and reports exact before/after metrics. For humanizing AI-generated text, see [`/brewtools:text-human`](/brewtools/skills/text-human/).
+**52 validated rules, five modes, parallel processing.** The skill reads your files, applies the right rule set for the mode, verifies references, and reports exact before/after metrics. For humanizing AI-generated text, see [`/brewtools:text-human`](/brewtools/skills/text-human/).
 </Callout>
 
 ## Quick reference
@@ -95,7 +95,7 @@ Natural language also works: `"compress this for context"` → deep mode. `"slim
   <li>
     <div>
       <strong>Optimization phase</strong>
-      <p>Parallel <code>text-optimizer</code> agents apply the rule set for the selected mode. Deep mode builds a DICT header for repeated terms. Standard mode loads <code>standard-compression.md</code> reference. All modes verify file paths (R.1), URLs (R.2), and circular refs (R.3).</p>
+      <p>Parallel <code>text-optimizer</code> agents apply the rule set for the selected mode. Deep mode builds a DICT header for repeated terms and runs an aggressive lossy pass (A.1-A.4) — merges related lines, drops low-value words, paraphrases shorter, and elides generic facts the model already knows; A.2 word drops are ledgered but gate-neutral, A.4 elisions are labeled <code>elided-known</code> and count against the &gt;=95% gate. Standard mode loads <code>standard-compression.md</code> reference. All modes verify file paths (R.1), URLs (R.2), and circular refs (R.3).</p>
     </div>
   </li>
   <li>
@@ -121,7 +121,7 @@ Natural language also works: `"compress this for context"` → deep mode. `"slim
 </Steps>
 
 <details>
-<summary>Rule categories (48 rules)</summary>
+<summary>Rule categories (52 rules)</summary>
 
 | Category | Rule IDs | Scope |
 |----------|----------|-------|
@@ -132,6 +132,7 @@ Natural language also works: `"compress this for context"` → deep mode. `"slim
 | Reference integrity | R.1-R.3 | Verify file paths, check URLs, linearize circular refs |
 | Perception | P.1-P.6 | Examples near rules, hierarchy, bold keywords, standard symbols, instruction order, default over options |
 | LLM Comprehension | L.1-L.8 | Critical info position, documents-first, conciseness, quote-first, add WHY, reiterate constraint, prompt repetition, preserve scope qualifiers |
+| Aggressive lossy | A.1-A.4 | Line fusion, low-value word drop, aggressive paraphrase, known-fact elision (deep/max only) |
 
 A dedup pass runs in every mode during analysis, before compression. Dedup-merged facts count as preserved: match % = (kept + merged) / total.
 
@@ -142,8 +143,8 @@ A dedup pass runs in every mode during analysis, before compression. Dedup-merge
 | Light | C.1-C.8, T.6, D.1, R.1-R.3, P.1-P.4, L.1-L.8 | Text cleanup only — no restructuring |
 | Medium | All rules (C + T + S + D + R + P + L) | Balanced transformations |
 | Standard | All rules + `standard-compression.md` | 30-50% compression, 1 verification round |
-| Deep | All rules + `deep-compression.md` | DICT header, symbol substitutions, 1-2 verification rounds |
-| Max | All rules + `deep-compression.md` + `max-compression.md` (opt-in) | 3-4x compression, 2 mandatory verification rounds + 100% sub-gate |
+| Deep | All rules + A.1-A.4 + `deep-compression.md` | DICT header, symbol substitutions, aggressive lossy pass, 1-2 verification rounds |
+| Max | All rules + A.1-A.4 + `deep-compression.md` + `max-compression.md` (opt-in) | 3-4x compression, 2 mandatory verification rounds + 100% sub-gate |
 
 </details>
 

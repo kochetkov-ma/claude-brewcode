@@ -73,12 +73,14 @@ Build numbered atomic-fact inventory -> flag repeats (exact, reworded, cross-for
 - Target: 30-50% compression, human-readable output
 
 **Deep mode:**
+- Aggressive lossy pass after dedup: A.1 fusion -> A.3 paraphrase -> A.2 word drop -> A.4 known-fact elision (deep/max only; per deep-compression.md Aggressive Lossy Techniques); record every A.2/A.4 drop in the loss ledger (dropped -> reason) alongside the dedup ledger
 - Scan text for terms occurring 3+ times → build DICT header
 - Apply deep-compression.md techniques: symbol substitutions, abbreviations, structural compression
 - Apply all standard rules (C + T + S + R + P)
 - Target: 2-3x compression, LLM-only output
 
 **Max mode (opt-in only):**
+- Aggressive lossy pass after dedup: A.1 fusion -> A.3 paraphrase -> A.2 word drop -> A.4 known-fact elision (per deep-compression.md Aggressive Lossy Techniques); every A.2/A.4 drop -> loss ledger (dropped -> reason)
 - All Deep techniques + max-compression.md: atomic fact-lines, ASCII operator dialect, format-aware tables, Chain-of-Density final pass
 - Guardrails C1-C4: signal/token over raw count; scope qualifiers verbatim; ~20% deletion ceiling, punctuation preserved; consistent terminology
 - Target: 3-4x compression, LLM-only output
@@ -97,6 +99,8 @@ Build numbered atomic-fact inventory -> flag repeats (exact, reworded, cross-for
 
 > Dedup-merged facts count as preserved (label: merged), never as loss.
 
+> A.1 fused / A.3 paraphrased facts count as kept/merged. A.4 elisions labeled `elided-known` — count as loss against the 95% gate. A.2 drops are ledgered but gate-neutral: if a drop degrades a fact's meaning, label that fact `distorted`.
+
 ### Step 6: Report
 
 Output: `## Optimization Report: [filename]` with:
@@ -106,3 +110,4 @@ Output: `## Optimization Report: [filename]` with:
 - Issues fixed
 - Verification result (pass/fail, any losses)
 - Dedup summary: N merged (ledger), N emphasis repeats capped
+- Loss ledger (deep/max): every A.2/A.4 drop (dropped -> reason)

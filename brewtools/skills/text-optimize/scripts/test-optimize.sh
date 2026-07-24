@@ -122,8 +122,10 @@ else
 fi
 
 check_contains "$SKILL_DIR/references/rules-review.md" "## D - Deduplication" "rules-review.md contains D - Deduplication section"
-check_contains "$SKILL_DIR/references/rules-review.md" "48 rules" "rules-review.md declares 48 rules"
+check_contains "$SKILL_DIR/references/rules-review.md" "52 rules" "rules-review.md declares 52 rules"
 check_contains "$SKILL_DIR/references/rules-review.md" "Wrong-Merge Guard" "rules-review.md contains D.6 Wrong-Merge Guard"
+check_contains "$SKILL_DIR/references/rules-review.md" "## A - Aggressive Lossy" "rules-review.md contains A - Aggressive Lossy section"
+check_contains "$SKILL_DIR/SKILL.md" "A\.1-A\.4" "SKILL.md references A.1-A.4 (aggressive lossy) range"
 check_contains "$SKILL_DIR/references/deep-compression.md" "Redundancy Factoring" "deep-compression.md contains Redundancy Factoring section"
 check_contains "$SKILL_DIR/references/max-compression.md" "Self-QA probe" "max-compression.md contains Self-QA probe round"
 check_contains "$SKILL_DIR/references/max-compression.md" "merged:" "max-compression.md loss list supports merged label"

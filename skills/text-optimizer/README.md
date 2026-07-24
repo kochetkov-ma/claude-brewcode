@@ -1,6 +1,6 @@
 # Text Optimizer
 
-Optimize prompts, CLAUDE.md, agent instructions, and documentation for LLM token efficiency. Applies 48 research-backed rules across 7 categories. Typical savings: **30-50%** on prose, **20-30%** on technical specs.
+Optimize prompts, CLAUDE.md, agent instructions, and documentation for LLM token efficiency. Applies 52 research-backed rules across 8 categories. Typical savings: **30-50%** on prose, **20-30%** on technical specs.
 
 ## Quick Start
 
@@ -23,7 +23,7 @@ Optimize prompts, CLAUDE.md, agent instructions, and documentation for LLM token
    Optimize all agent instructions in .claude/agents/
    ```
 
-Claude reads 48 rules, analyzes your files, applies transformations, and outputs a before/after report with token counts. For directories — finds all `.md` files and processes them in parallel.
+Claude reads 52 rules, analyzes your files, applies transformations, and outputs a before/after report with token counts. For directories — finds all `.md` files and processes them in parallel.
 
 ## Why Use This
 
@@ -42,7 +42,7 @@ Claude reads 48 rules, analyzes your files, applies transformations, and outputs
 /text-optimizer CLAUDE.md
 ```
 
-Applies all 48 rules with balanced restructuring. Best for most files.
+Applies all 48 lossless rules (A.1-A.4 aggressive lossy stay deep-only) with balanced restructuring. Best for most files.
 
 <details>
 <summary>Optimization: filler removal + positive framing</summary>
@@ -353,7 +353,7 @@ Text cleanup without restructuring. Safe for stable, reviewed documents.
 
 ### Medium (default)
 
-Balanced restructuring — all 48 rules applied with standard transformations.
+Balanced restructuring — all 48 lossless rules applied with standard transformations.
 
 **Applies:** All categories (C + T + S + D + R + P + L).
 
@@ -363,7 +363,7 @@ Balanced restructuring — all 48 rules applied with standard transformations.
 
 Maximum compression. Merges sections, rephrases aggressively, eliminates all redundancy.
 
-**Applies:** All rules + aggressive rephrasing and section merging. Self-verify round: fact inventory, >= 95% match, loss list on shortfall.
+**Applies:** All rules + aggressive lossy pass (A.1-A.4: line fusion, word drop, paraphrase, common-knowledge elision) with section merging. Self-verify round: fact inventory, >= 95% match, loss list on shortfall.
 
 **Use for:** Cost-critical system prompts, context-limited scenarios. Review the diff carefully after.
 
@@ -386,6 +386,7 @@ Maximum compression. Merges sections, rephrases aggressively, eliminates all red
 | Reference integrity | 3 | Catching broken paths, URLs, circular refs |
 | Perception | 6 | Visual hierarchy and attention patterns |
 | LLM comprehension | 8 | Position bias, grounding, repetition effects + scope-qualifier preservation |
+| Aggressive lossy | 4 | Deep-mode only: line fusion, word drop, paraphrase, common-knowledge elision (ledgered) |
 
 Full rules with research citations: [`references/rules-review.md`](references/rules-review.md)
 
