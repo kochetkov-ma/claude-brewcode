@@ -2,6 +2,16 @@
 
 ---
 
+## v4.2.4 (2026-07-30)
+
+> Docs: [brewcode hooks](https://doc-claude.brewcode.app/brewcode/hooks/)
+
+### brewcode
+#### Changed
+- **forced-eval:** `[ROLE]` line rewritten to expert-first delegation — `Manager: scan agents (project .claude/agents/ first) — expert for this domain exists -> delegate regardless of size; no expert or trivial one-off -> self.`
+#### Removed
+- **forced-eval:** `[HINT] Delegate heavy implementation...` line — "heavy" let domain tasks (ssh, deploy, CI) self-execute even when a project expert agent existed; the trigger is now expert match, not task size
+
 ## v4.2.3 (2026-07-24)
 
 > Docs: [text-optimize](https://doc-claude.brewcode.app/brewtools/skills/text-optimize/) | [text-optimizer](https://doc-claude.brewcode.app/brewtools/agents/text-optimizer/)

@@ -70,8 +70,9 @@ and adds a reminder to check available skills.
 
 **What it does:**
 - Receives the user prompt
-- Adds a prefix: `[SKILL?] Check available skills. If one matches this request, use Skill tool before responding.`
-- Injects the skill-check reminder (and a light delegation hint) via `additionalContext` — UserPromptSubmit cannot rewrite the prompt
+- Adds a prefix: `[SKILL?] If a skill matches this request, use Skill tool first.`
+- Adds the manager role: `[ROLE] Manager: scan agents (project .claude/agents/ first) — expert for this domain exists -> delegate regardless of size; no expert or trivial one-off -> self.`
+- Injects both lines via `additionalContext` — UserPromptSubmit cannot rewrite the prompt
 - Output is capped at ~9000 chars (10K disk-spill safety, CC 2.1.174+)
 
 **When it fires:** On every user input, except events with an incorrect `hook_event_name`.

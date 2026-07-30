@@ -34,11 +34,12 @@ function capText(s, max = TEXT_CHANNEL_CAP) {
 
 // --- Skill evaluation reminder ---
 
-// SKILL_CHECK = always-on payload (every prompt). DEFAULT_MODE = light delegation hint.
+// SKILL_CHECK = always-on payload (every prompt). MANAGER_ROLE = expert-first delegation.
+// Trigger is expert match, not task size — "heavy" wording let domain tasks (ssh, deploy)
+// bypass delegation even when a project expert existed.
 const SKILL_CHECK = '[SKILL?] If a skill matches this request, use Skill tool first.';
-const DEFAULT_MODE = '[HINT] Delegate heavy implementation to sub-agents via Task tool.';
-const MANAGER_ROLE = '[ROLE] You are the manager — delegate, do not implement directly.';
-const REMINDER_TEXT = `${SKILL_CHECK}\n${DEFAULT_MODE}\n${MANAGER_ROLE}`;
+const MANAGER_ROLE = '[ROLE] Manager: scan agents (project .claude/agents/ first) — expert for this domain exists -> delegate regardless of size; no expert or trivial one-off -> self.';
+const REMINDER_TEXT = `${SKILL_CHECK}\n${MANAGER_ROLE}`;
 
 // --- Main ---
 
