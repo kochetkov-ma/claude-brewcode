@@ -194,6 +194,7 @@ process.stdout.write(((j.changed||[]).length)+" "+((j.skipped||[]).length));')"
   sr_rm_file "$root/.claude/rules/semble-first.md" "rule"
   sr_rm_file "$root/.claude/hooks/semble-session.mjs" "hook"
   sr_rm_file "$root/.claude/hooks/semble-reminder.mjs" "hook"
+  sr_rm_file "$root/.claude/hooks/semble-explore.mjs" "hook"
   sr_strip_claudemd
   sr_skipped "settings: semble-guidance.sh unavailable — .claude/settings.json entries not unwired"
 }
@@ -330,6 +331,7 @@ sr_plan() {
       sr_would "$root/.claude/rules/semble-first.md"
       sr_would "$root/.claude/hooks/semble-session.mjs"
       sr_would "$root/.claude/hooks/semble-reminder.mjs"
+      sr_would "$root/.claude/hooks/semble-explore.mjs"
       sr_would "$root/CLAUDE.md marker block $SR_CLAUDEMD_BEGIN .. $SR_CLAUDEMD_END"
       sr_would "$root/.claude/semble/"
       ;;
@@ -339,6 +341,7 @@ sr_plan() {
       sr_would "$root/.claude/rules/semble-first.md"
       sr_would "$root/.claude/hooks/semble-session.mjs"
       sr_would "$root/.claude/hooks/semble-reminder.mjs"
+      sr_would "$root/.claude/hooks/semble-explore.mjs"
       sr_would "$root/CLAUDE.md marker block $SR_CLAUDEMD_BEGIN .. $SR_CLAUDEMD_END"
       sr_would "$root/.claude/semble/"
       sr_would "$(sc_cache_root_code)  (ENTIRE code cache root — every repo index under it)"

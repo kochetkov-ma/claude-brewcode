@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * suite-hooks.mjs — unit D: rule template, CLAUDE.md marker block, the two
+ * suite-hooks.mjs — unit D: rule template, CLAUDE.md marker block, the three
  * hooks, and the settings.json merge performed by semble-guidance.sh.
  *
  * Self-contained: inlines its own check()/run() helpers, runs standalone
@@ -27,6 +27,7 @@ const SCRIPTS = join(SKILL, 'scripts');
 const TEMPLATE_SRC = join(ASSETS, 'semble-first.md.template');
 const SESSION_SRC = join(ASSETS, 'semble-session.mjs');
 const REMINDER_SRC = join(ASSETS, 'semble-reminder.mjs');
+const EXPLORE_SRC = join(ASSETS, 'semble-explore.mjs');
 
 const BASE = realpathSync(mkdtempSync(join(tmpdir(), 'semble-d-')));
 const HOME = join(BASE, 'home');
@@ -93,7 +94,7 @@ const SKILL_COPY = join(BASE, 'skill');
 mkdirSync(join(SKILL_COPY, 'scripts', 'lib'), { recursive: true });
 mkdirSync(join(SKILL_COPY, 'assets'), { recursive: true });
 copyFileSync(join(SCRIPTS, 'semble-guidance.sh'), join(SKILL_COPY, 'scripts', 'semble-guidance.sh'));
-for (const f of ['semble-first.md.template', 'semble-session.mjs', 'semble-reminder.mjs']) {
+for (const f of ['semble-first.md.template', 'semble-session.mjs', 'semble-reminder.mjs', 'semble-explore.mjs']) {
   copyFileSync(join(ASSETS, f), join(SKILL_COPY, 'assets', f));
 }
 
@@ -194,7 +195,11 @@ function countEntry(s, ev, matcher, full) {
 
 function semblePaths(proj) {
   const d = hooksDirOf(proj);
-  return { session: join(d, 'semble-session.mjs'), reminder: join(d, 'semble-reminder.mjs') };
+  return {
+    session: join(d, 'semble-session.mjs'),
+    reminder: join(d, 'semble-reminder.mjs'),
+    explore: join(d, 'semble-explore.mjs'),
+  };
 }
 
 const READY_STATE = (extra) =>
@@ -254,7 +259,7 @@ const REMIND_OK = (cwd) => ({
   check('A1.statusTrailingNewline', guidance(p, ['status', '--json']).stdout.endsWith('\n'), true,
     'status --json carries the same trailing newline');
   const s = readSettings(p);
-  const { session, reminder: rem } = semblePaths(p);
+  const { session, reminder: rem, explore: exp } = semblePaths(p);
   check('A1.sessionEntry', s.hooks.SessionStart, [
     { hooks: [{ type: 'command', command: 'node', args: [session], timeout: 5000 }] },
   ], 'SessionStart entry has the exact contract shape with an explicit 5000 ms timeout');
@@ -262,9 +267,13 @@ const REMIND_OK = (cwd) => ({
     { hooks: [{ type: 'command', command: 'node', args: [rem], timeout: 5000 }], matcher: 'Bash' },
     { hooks: [{ type: 'command', command: 'node', args: [rem], timeout: 5000 }], matcher: 'Grep' },
   ], 'the reminder is registered once under Bash and once under Grep');
+  check('A1.subagentStart', s.hooks.SubagentStart, [
+    { hooks: [{ type: 'command', command: 'node', args: [exp], timeout: 5000 }], matcher: 'Explore' },
+  ], 'the explore hook is registered once under SubagentStart with matcher Explore');
   check('A1.perm', s.permissions.allow, ['mcp__semble_code__search', 'mcp__semble_code__find_related'],
     'both MCP tool names land in permissions.allow');
-  check('A1.files', [existsSync(session), existsSync(rem)], [true, true], 'both .mjs assets were copied into .claude/hooks');
+  check('A1.files', [existsSync(session), existsSync(rem), existsSync(exp)], [true, true, true],
+    'all three .mjs assets were copied into .claude/hooks');
   check('A1.rule', readRaw(join(p, '.claude', 'rules', 'semble-first.md')), TPL_TEXT,
     'the rule file is byte-identical to the template');
 }
@@ -283,12 +292,13 @@ const REMIND_OK = (cwd) => ({
   check('A2.bytes2', after2, after1, 'settings.json is byte-identical after run 2');
   check('A2.bytes3', after3, after1, 'settings.json is byte-identical after run 3');
   const s = readSettings(p);
-  const { session, reminder: rem } = semblePaths(p);
+  const { session, reminder: rem, explore: exp } = semblePaths(p);
   check('A2.counts', [
     countEntry(s, 'SessionStart', null, session),
     countEntry(s, 'PreToolUse', 'Bash', rem),
     countEntry(s, 'PreToolUse', 'Grep', rem),
-  ], [1, 1, 1], 'exactly one entry per event+matcher after three merges');
+    countEntry(s, 'SubagentStart', 'Explore', exp),
+  ], [1, 1, 1, 1], 'exactly one entry per event+matcher after three merges');
   check('A2.permCounts', [
     s.permissions.allow.filter((x) => x === 'mcp__semble_code__search').length,
     s.permissions.allow.filter((x) => x === 'mcp__semble_code__find_related').length,
@@ -322,12 +332,13 @@ const FOREIGN = {
   check('A3.allow', s.permissions.allow,
     ['Bash(git *)', 'mcp__semble_code__search', 'mcp__semble_code__find_related'],
     'the two tool names are appended after the existing allow entries');
-  const { session, reminder: rem } = semblePaths(p);
+  const { session, reminder: rem, explore: exp } = semblePaths(p);
   check('A3.counts', [
     countEntry(s, 'SessionStart', null, session),
     countEntry(s, 'PreToolUse', 'Bash', rem),
     countEntry(s, 'PreToolUse', 'Grep', rem),
-  ], [1, 1, 1], 'exactly one semble entry per event+matcher alongside the foreign ones');
+    countEntry(s, 'SubagentStart', 'Explore', exp),
+  ], [1, 1, 1, 1], 'exactly one semble entry per event+matcher alongside the foreign ones');
 }
 
 // A4 — unparseable settings ABORTs and writes nothing
@@ -362,12 +373,13 @@ const FOREIGN = {
   const flat = Object.values(s.hooks).flat();
   check('A5.staleGone', flat.filter((e) => argsOf(e).some((a) => a.startsWith(staleDir))).length, 0,
     'zero entries still point at the old hooks dir');
-  const { session, reminder: rem } = semblePaths(p);
+  const { session, reminder: rem, explore: exp } = semblePaths(p);
   check('A5.counts', [
     countEntry(s, 'SessionStart', null, session),
     countEntry(s, 'PreToolUse', 'Bash', rem),
     countEntry(s, 'PreToolUse', 'Grep', rem),
-  ], [1, 1, 1], 'the new-dir entries were added exactly once each');
+    countEntry(s, 'SubagentStart', 'Explore', exp),
+  ], [1, 1, 1, 1], 'the new-dir entries were added exactly once each');
   check('A5.foreign', s.hooks.PreToolUse.filter((e) => argsOf(e).includes('/opt/foreign/other.mjs')).length, 1,
     'the foreign Write entry survived the stale-path purge');
 }
@@ -376,7 +388,7 @@ const FOREIGN = {
 {
   const p = freshProject({});
   guidance(p, ['install', '--part', 'all', '--json']);
-  const { session, reminder: rem } = semblePaths(p);
+  const { session, reminder: rem, explore: exp } = semblePaths(p);
   const r = guidance(p, ['remove', '--part', 'all', '--json']);
   check('A6.exit', r.status, 0, 'remove --part all exits 0');
   const s = readSettings(p);
@@ -384,7 +396,8 @@ const FOREIGN = {
     'the hooks object is deleted once every event array empties');
   check('A6.permissionsKey', Object.prototype.hasOwnProperty.call(s, 'permissions'), false,
     'the permissions object is deleted once allow empties');
-  check('A6.files', [existsSync(session), existsSync(rem)], [false, false], 'both .mjs files are deleted');
+  check('A6.files', [existsSync(session), existsSync(rem), existsSync(exp)], [false, false, false],
+    'all three .mjs files are deleted');
   check('A6.rule', existsSync(join(p, '.claude', 'rules', 'semble-first.md')), false, 'the managed rule file is deleted');
 }
 
@@ -406,18 +419,59 @@ const FOREIGN = {
   const before = guidance(p, ['status', '--json']);
   const b = safeParse(before.stdout);
   check('A8.beforeRule', b.rule.state, 'absent', 'status reports an absent rule before install');
-  check('A8.beforeWired', [b.hooks.session.wired, b.hooks.reminder.wired, b.permissions.wired],
-    [false, false, false], 'nothing is reported as wired before install');
+  check('A8.beforeWired',
+    [b.hooks.session.wired, b.hooks.reminder.wired, b.hooks.explore.wired, b.permissions.wired],
+    [false, false, false, false], 'nothing is reported as wired before install');
   guidance(p, ['install', '--part', 'all', '--json']);
   const after = guidance(p, ['status', '--json']);
   const a = safeParse(after.stdout);
   check('A8.afterRule', a.rule.state, 'managed', 'status reports the rule as managed after install');
   check('A8.afterClaudeMd', a.claudeMd.state, 'present', 'status reports the CLAUDE.md block as present');
-  check('A8.afterWired', [a.hooks.session.wired, a.hooks.reminder.wired, a.permissions.wired],
-    [true, true, true], 'session hook, reminder (both matchers) and permissions all report wired');
+  check('A8.afterWired',
+    [a.hooks.session.wired, a.hooks.reminder.wired, a.hooks.explore.wired, a.permissions.wired],
+    [true, true, true, true],
+    'session hook, reminder (both matchers), explore hook and permissions all report wired');
+  check('A8.afterFiles', [a.hooks.session.file, a.hooks.reminder.file, a.hooks.explore.file],
+    ['present', 'present', 'present'], 'status sees all three hook files on disk');
   check('A8.stale', a.hooks.staleEntries, 0, 'no stale entries after a clean install');
-  check('A8.wiredCount', a.hooks.wiredCount, 3, 'all 3 settings entries are counted as wired');
+  check('A8.wiredCount', a.hooks.wiredCount, 4, 'all 4 settings entries are counted as wired');
   check('A8.exitReadOnly', before.status, 0, 'status exits 0');
+}
+
+// A9 — a half-wired install is reported honestly, never rounded up
+{
+  const p = freshProject({});
+  guidance(p, ['install', '--part', 'all', '--json']);
+  const { explore: exp } = semblePaths(p);
+  const s = readSettings(p);
+  delete s.hooks.SubagentStart;                       // the old two hooks stay wired
+  writeFileSync(settingsPath(p), JSON.stringify(s, null, 2) + '\n');
+  const a = safeParse(guidance(p, ['status', '--json']).stdout);
+  check('A9.wiredCount', a.hooks.wiredCount, 3,
+    'dropping the SubagentStart entry reports 3 of 4, not "wired"');
+  check('A9.exploreWired', [a.hooks.session.wired, a.hooks.reminder.wired, a.hooks.explore.wired],
+    [true, true, false], 'only the explore entry is reported as unwired');
+  check('A9.exploreFileStillThere', [a.hooks.explore.file, existsSync(exp)], ['present', true],
+    'the file is still on disk — file presence and wiring are reported separately');
+  const human = guidance(p, ['status']).stdout;
+  check('A9.human', human.includes('hooks 3/4 wired'), true,
+    'the human line spells the partial count out as 3/4');
+}
+
+// A10 — remove takes the explore registration with the file
+{
+  const p = freshProject({});
+  guidance(p, ['install', '--part', 'hooks', '--json']);
+  const { explore: exp } = semblePaths(p);
+  const r = guidance(p, ['remove', '--part', 'hooks', '--json']);
+  check('A10.exit', r.status, 0, 'remove --part hooks exits 0');
+  const s = readSettings(p);
+  check('A10.registrationGone', Object.prototype.hasOwnProperty.call(s.hooks || {}, 'SubagentStart'), false,
+    'the SubagentStart array emptied and its key was pruned');
+  check('A10.fileGone', existsSync(exp), false, 'the explore .mjs is deleted too');
+  check('A10.noDanglingPath',
+    JSON.stringify(s).includes('semble-explore.mjs'), false,
+    'no settings entry is left pointing at the deleted file');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -673,22 +727,120 @@ for (const [name, command, why] of SILENT_BASH) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// X. SubagentStart explore hook — matcher-gated, advisory only
+// ═══════════════════════════════════════════════════════════════════════════
+const allExploreOutputs = [];
+function explore(proj, agentType, extra) {
+  const payload = { session_id: 'S1', cwd: proj, hook_event_name: 'SubagentStart', ...(extra || {}) };
+  if (agentType !== undefined) payload.agent_type = agentType;
+  const r = runNode(EXPLORE_SRC, JSON.stringify(payload));
+  allExploreOutputs.push(r.stdout);
+  return r;
+}
+
+const EXPLORE_OK = (cwd) => ({
+  hookSpecificOutput: {
+    hookEventName: 'SubagentStart',
+    additionalContext:
+      'semble: call mcp__semble_code__search directly first (repo="' + cwd +
+      '", top_k=5) for intent/behavior questions — it is already available, no ' +
+      'ToolSearch needed. rg/Grep stay for exact/exhaustive matches.',
+  },
+});
+
+{
+  const p = freshProject({ state: READY_STATE() });
+  const r = explore(p, 'Explore');
+  check('X1.ready', safeParse(r.stdout), EXPLORE_OK(p), 'Explore on a ready project gets the exact advisory string');
+  check('X1.exit', r.status, 0, 'the emitting path exits 0');
+  const again = explore(p, 'Explore');
+  check('X2.noThrottle', safeParse(again.stdout), EXPLORE_OK(p),
+    'a second spawn is advised again — this hook has no throttle');
+  check('X2.noMarker', existsSync(join(p, '.claude', 'semble', '.reminder-ts')), false,
+    'the explore hook never writes the reminder throttle marker');
+}
+const SILENT_AGENTS = [
+  ['X3.generalPurpose', 'general-purpose'],
+  ['X4.plan', 'Plan'],
+  ['X5.projectAgent', 'brewcode:developer'],
+  ['X6.lowercase', 'explore'],
+  ['X7.emptyType', ''],
+];
+for (const [name, agentType] of SILENT_AGENTS) {
+  const p = freshProject({ state: READY_STATE() });
+  check(name, safeParse(explore(p, agentType).stdout), {},
+    `silent for agent_type=\`${agentType}\` — only the exact string Explore is matched`);
+}
+{
+  const p = freshProject({ state: READY_STATE() });
+  check('X8.missingType', safeParse(explore(p, undefined).stdout), {}, 'silent when agent_type is absent');
+}
+{
+  const p = freshProject({ state: READY_STATE() });
+  check('X9.nonStringType', safeParse(explore(p, 42).stdout), {}, 'silent when agent_type is not a string');
+}
+{
+  const p = freshProject({});
+  const r = explore(p, 'Explore');
+  check('X10.noState', [r.status, safeParse(r.stdout)], [0, {}], 'no state file -> {} exit 0');
+}
+{
+  const p = freshProject({ state: '{,}' });
+  const r = explore(p, 'Explore');
+  check('X11.corrupt', [r.status, safeParse(r.stdout)], [0, {}],
+    'a corrupt state file -> {} exit 0 — the explore hook never reports state health');
+}
+{
+  const p = freshProject({ stateDir: true });
+  const r = explore(p, 'Explore');
+  check('X12.stateDir', [r.status, safeParse(r.stdout)], [0, {}], 'state.json as a directory -> {} exit 0');
+}
+{
+  const p = freshProject({ state: READY_STATE({ enabled: false }) });
+  check('X13.disabled', safeParse(explore(p, 'Explore').stdout), {}, 'silent when the project has semble disabled');
+}
+const SILENT_PHASES = ['awaiting_reload', 'verifying', 'disabled', 'error', 'prereq_ready'];
+for (const phase of SILENT_PHASES) {
+  const p = freshProject({ state: READY_STATE({ phase }) });
+  check(`X14.phase.${phase}`, safeParse(explore(p, 'Explore').stdout), {},
+    `silent while phase is \`${phase}\` — only phase=ready is advised`);
+}
+{
+  const bad = runNode(EXPLORE_SRC, '{ not json');
+  const empty = runNode(EXPLORE_SRC, '');
+  allExploreOutputs.push(bad.stdout, empty.stdout);
+  check('X15.badStdin', [bad.status, safeParse(bad.stdout)], [0, {}], 'explore: malformed stdin -> {} exit 0');
+  check('X16.emptyStdin', [empty.status, safeParse(empty.stdout)], [0, {}], 'explore: empty stdin -> {} exit 0');
+}
+{
+  const joined = allExploreOutputs.join('\n');
+  check('X17.noDecision', joined.includes('permissionDecision'), false, 'no recorded output ever carries permissionDecision');
+  check('X17.noDeny', joined.includes('"deny"'), false, 'no recorded output ever carries a deny');
+  check('X17.oneObject', allExploreOutputs.every((o) => o.trim().split('\n').length === 1), true,
+    'every explore invocation printed exactly one line of JSON');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // F. static guarantees of both hook files
 // ═══════════════════════════════════════════════════════════════════════════
 {
-  const src = [readFileSync(SESSION_SRC, 'utf8'), readFileSync(REMINDER_SRC, 'utf8')];
+  const src = [readFileSync(SESSION_SRC, 'utf8'), readFileSync(REMINDER_SRC, 'utf8'),
+    readFileSync(EXPLORE_SRC, 'utf8')];
   const both = src.join('\n');
-  check('F1.noChildProcess', both.includes('child_process'), false, 'neither hook imports child_process');
-  check('F2.noSpawn', both.includes('spawn('), false, 'neither hook spawns a process');
-  check('F3.noPgrep', both.includes('pgrep'), false, 'neither hook probes for a daemon with pgrep');
-  check('F4.noExecSync', both.includes('execSync'), false, 'neither hook shells out');
+  check('F1.noChildProcess', both.includes('child_process'), false, 'no hook imports child_process');
+  check('F2.noSpawn', both.includes('spawn('), false, 'no hook spawns a process');
+  check('F3.noPgrep', both.includes('pgrep'), false, 'no hook probes for a daemon with pgrep');
+  check('F4.noExecSync', both.includes('execSync'), false, 'no hook shells out');
   check('F5.reminderNeverDecides', readFileSync(REMINDER_SRC, 'utf8').includes('permissionDecision:'), false,
     'the reminder source contains no permissionDecision field');
   check('F6.notABlock', readFileSync(REMINDER_SRC, 'utf8').includes('this is a reminder, not a block.'), true,
     'the advisory text contains the words "reminder, not a block"');
-  check('F7.shebang', src.every((s) => s.startsWith('#!/usr/bin/env node')), true, 'both hooks carry a node shebang');
-  const checks = [SESSION_SRC, REMINDER_SRC].map((f) => spawnSync(process.execPath, ['--check', f]).status);
-  check('F8.nodeCheck', checks, [0, 0], 'node --check passes on both hook files');
+  check('F7.shebang', src.every((s) => s.startsWith('#!/usr/bin/env node')), true, 'every hook carries a node shebang');
+  const checks = [SESSION_SRC, REMINDER_SRC, EXPLORE_SRC]
+    .map((f) => spawnSync(process.execPath, ['--check', f]).status);
+  check('F8.nodeCheck', checks, [0, 0, 0], 'node --check passes on all three hook files');
+  check('F9.exploreNeverDecides', readFileSync(EXPLORE_SRC, 'utf8').includes('permissionDecision'), false,
+    'the explore hook source contains no permissionDecision field');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -727,14 +879,15 @@ const PRE_MD = '# CLAUDE.md\n\n## Overview\n\nproject text\n';
 // H1 — install aborts on an unparseable settings.json BEFORE touching anything
 {
   const p = freshProject({ settings: BROKEN_SETTINGS, claudeMd: PRE_MD });
-  const { session, reminder: rem } = semblePaths(p);
+  const { session, reminder: rem, explore: exp } = semblePaths(p);
   const r = guidance(p, ['install', '--part', 'all', '--json']);
   check('H1.exit', r.status, 1, 'install --part all over unparseable settings exits 1');
   check('H1.abort', (r.stdout + r.stderr).includes('ABORT'), true, 'the failure names ABORT');
   check('H1.settings', readRaw(settingsPath(p)), BROKEN_SETTINGS, 'the unparseable settings file is byte-identical');
   check('H1.rule', existsSync(join(p, '.claude', 'rules', 'semble-first.md')), false, 'no rule file was written');
   check('H1.claudeMd', readRaw(join(p, 'CLAUDE.md')), PRE_MD, 'CLAUDE.md is byte-identical, no marker block');
-  check('H1.hookFiles', [existsSync(session), existsSync(rem)], [false, false], 'neither .mjs hook file was written');
+  check('H1.hookFiles', [existsSync(session), existsSync(rem), existsSync(exp)], [false, false, false],
+    'no .mjs hook file was written');
   check('H1.hooksDir', existsSync(hooksDirOf(p)), false, 'the .claude/hooks directory was never created');
 }
 
@@ -744,9 +897,10 @@ const PRE_MD = '# CLAUDE.md\n\n## Overview\n\nproject text\n';
   guidance(p, ['install', '--part', 'all', '--json']);
   const rulePath = join(p, '.claude', 'rules', 'semble-first.md');
   const mdPath = join(p, 'CLAUDE.md');
-  const { session, reminder: rem } = semblePaths(p);
+  const { session, reminder: rem, explore: exp } = semblePaths(p);
   const before = {
     rule: readRaw(rulePath), md: readRaw(mdPath), session: readRaw(session), reminder: readRaw(rem),
+    explore: readRaw(exp),
   };
   writeFileSync(settingsPath(p), BROKEN_SETTINGS);
   const r = guidance(p, ['remove', '--part', 'all', '--json']);
@@ -755,8 +909,9 @@ const PRE_MD = '# CLAUDE.md\n\n## Overview\n\nproject text\n';
   check('H2.settings', readRaw(settingsPath(p)), BROKEN_SETTINGS, 'the unparseable settings file is byte-identical');
   check('H2.rule', readRaw(rulePath), before.rule, 'the rule file is still there, byte-identical');
   check('H2.claudeMd', readRaw(mdPath), before.md, 'the CLAUDE.md marker block is still there, byte-identical');
-  check('H2.hookFiles', [readRaw(session), readRaw(rem)], [before.session, before.reminder],
-    'both .mjs hook files are still there, byte-identical — settings.json may still reference them');
+  check('H2.hookFiles', [readRaw(session), readRaw(rem), readRaw(exp)],
+    [before.session, before.reminder, before.explore],
+    'all three .mjs hook files are still there, byte-identical — settings.json may still reference them');
 }
 
 // H3 — a second install reports nothing as changed
@@ -807,7 +962,7 @@ const FOREIGN_HOOK = { type: 'command', command: 'node', args: ['/opt/foreign/gu
   check('H5.exit', r.status, 0, 'merge over a mixed foreign+stale entry exits 0');
   const s = readSettings(p);
   const pre = (s.hooks || {}).PreToolUse || [];
-  const { session, reminder: rem } = semblePaths(p);
+  const { session, reminder: rem, explore: exp } = semblePaths(p);
   check('H5.mixedEntry', pre[0] || null, { matcher: 'Bash', hooks: [FOREIGN_HOOK] },
     'the mixed entry keeps the foreign hook and loses only the stale semble hook');
   check('H5.staleGone', Object.values(s.hooks || {}).flat().filter((e) => argsOf(e).some((a) => a.startsWith(staleDir))).length, 0,
@@ -816,7 +971,8 @@ const FOREIGN_HOOK = { type: 'command', command: 'node', args: ['/opt/foreign/gu
     countEntry(s, 'SessionStart', null, session),
     countEntry(s, 'PreToolUse', 'Bash', rem),
     countEntry(s, 'PreToolUse', 'Grep', rem),
-  ], [1, 1, 1], 'exactly one current entry per event+matcher');
+    countEntry(s, 'SubagentStart', 'Explore', exp),
+  ], [1, 1, 1, 1], 'exactly one current entry per event+matcher');
   check('H5.preToolUseSize', pre.length, 3,
     'the repaired foreign entry plus the two appended semble entries');
 }

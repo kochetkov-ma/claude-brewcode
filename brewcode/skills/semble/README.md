@@ -60,7 +60,7 @@ Free text in Russian or English routes to one mode. The full table and the resol
 | State | `<repo>/.claude/semble/state.json` |
 | Rule | `<repo>/.claude/rules/semble-first.md` |
 | CLAUDE.md | a marked `<!-- BEGIN brewcode:semble -->` block |
-| Hooks | `<repo>/.claude/hooks/semble-session.mjs` (SessionStart) + `semble-reminder.mjs` (PreToolUse, advisory only) |
+| Hooks | `<repo>/.claude/hooks/semble-session.mjs` (SessionStart) + `semble-reminder.mjs` (PreToolUse, advisory only) + `semble-explore.mjs` (SubagentStart, matcher `Explore` — tells the spawned Explore subagent it can call `mcp__semble_code__search` without a `ToolSearch` first) |
 | Permissions | `<repo>/.claude/settings.json` -> exactly `mcp__semble_code__search` and `mcp__semble_code__find_related`, never a wildcard |
 | Agents | `<repo>/.claude/agents/**/*.md` get the two tool names; agents with no `tools:` key inherit and are left untouched. Global agents are never touched by `setup` |
 
@@ -132,7 +132,7 @@ Every script takes `--json` and uses the same exit codes: `0` ok · `1` hard fai
 | Every call errors offline | model pre-load cannot reach HuggingFace | run once online, or set `SEMBLE_NO_NETWORK=1` to skip warm steps |
 | `search` rejects the call | `repo` is missing — it is required | pass the absolute project root |
 | A `.html` / `.json` file is never found | not in this corpus by design | use `rg` |
-| Status says `partial` | half-wired (e.g. hooks 1/3) | `/brewcode:semble setup` re-runs idempotently |
+| Status says `partial` | half-wired (e.g. hooks 1/4) | `/brewcode:semble setup` re-runs idempotently |
 | `malformed` | `~/.claude.json` or `.mcp.json` is not valid JSON | the skill refuses to write; fix that file by hand, then re-run |
 
 ## License

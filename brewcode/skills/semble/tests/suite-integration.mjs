@@ -444,26 +444,28 @@ check('wired: --strict exit', strict.status, 0, '--strict exits 0 exactly when t
 check('guidance: keys', keysOf(R.guidance),
   ['claudeMd', 'hooks', 'permissionsWired', 'rule', 'settingsFile', 'staleEntries', 'wiredCount'],
   'the §9.1 guidance shape plus the derived wiredCount');
-check('guidance: hooks sub-keys', keysOf(R.guidance.hooks), ['reminder', 'session'],
-  'hooks collapses to two file-presence strings');
+check('guidance: hooks sub-keys', keysOf(R.guidance.hooks), ['explore', 'reminder', 'session'],
+  'hooks collapses to three file-presence strings');
 check('guidance: flattened states',
-  [R.guidance.rule, R.guidance.claudeMd, R.guidance.hooks.session, R.guidance.hooks.reminder],
+  [R.guidance.rule, R.guidance.claudeMd, R.guidance.hooks.session, R.guidance.hooks.reminder,
+    R.guidance.hooks.explore],
   [rawGuid.rule.state, rawGuid.claudeMd.state,
-    rawGuid.hooks.session.file, rawGuid.hooks.reminder.file],
+    rawGuid.hooks.session.file, rawGuid.hooks.reminder.file, rawGuid.hooks.explore.file],
   'each flattened field equals the sibling sub-object it was taken from');
 check('guidance: installed states', [R.guidance.rule, R.guidance.claudeMd,
-  R.guidance.hooks.session, R.guidance.hooks.reminder],
-['managed', 'present', 'present', 'present'],
-'after a real install: managed rule, marker block in CLAUDE.md, both hook files copied');
+  R.guidance.hooks.session, R.guidance.hooks.reminder, R.guidance.hooks.explore],
+['managed', 'present', 'present', 'present', 'present'],
+'after a real install: managed rule, marker block in CLAUDE.md, all three hook files copied');
 check('guidance: settingsFile + staleEntries + permissionsWired',
   [R.guidance.settingsFile, R.guidance.staleEntries, R.guidance.permissionsWired],
   [join(P1, '.claude/settings.json'), 0, true],
   'project settings path, no stale entries, both tool permissions wired');
-check('guidance: wiredCount fully wired', [R.guidance.wiredCount, rawGuid.hooks.wiredCount], [3, 3],
-  'all three entries (SessionStart + PreToolUse/Bash + PreToolUse/Grep) are registered');
+check('guidance: wiredCount fully wired', [R.guidance.wiredCount, rawGuid.hooks.wiredCount], [4, 4],
+  'all four entries (SessionStart + PreToolUse/Bash + PreToolUse/Grep + SubagentStart/Explore)'
+  + ' are registered');
 
 // Partial wiring: strip the PreToolUse/Grep entry only. Independent truth is
-// 2 of 3 registered entries, which is also what semble-guidance.sh reports.
+// 3 of 4 registered entries, which is also what semble-guidance.sh reports.
 const P2 = join(WORLD, 'p-partial');
 const p2Env = { SEMBLE_PROJECT_ROOT: P2 };
 write(join(P2, 'src/app.py'), `def main():\n    return 1\n# ${PAD}\n`);
@@ -482,14 +484,16 @@ check('partial: exactly one Grep entry was removed',
 
 const rawGuid2 = safeParse(run(GUIDANCE_SH, ['status', '--json'], p2Env).stdout);
 const R2 = safeParse(runStatus(['--section', 'guidance', '--json'], p2Env).stdout);
-check('partial: sibling counts 2 of 3 entries',
-  [rawGuid2.hooks.session.wired, rawGuid2.hooks.reminder.wired, rawGuid2.hooks.wiredCount],
-  [true, false, 2],
-  'semble-guidance.sh:128 counts registered entries: SessionStart + Bash = 2, reminder not fully wired');
+check('partial: sibling counts 3 of 4 entries',
+  [rawGuid2.hooks.session.wired, rawGuid2.hooks.reminder.wired, rawGuid2.hooks.explore.wired,
+    rawGuid2.hooks.wiredCount],
+  [true, false, true, 3],
+  'semble-guidance.sh counts registered entries: SessionStart + Bash + Explore = 3,'
+  + ' reminder not fully wired');
 check('partial: guidance.wiredCount agrees with the sibling',
-  [R2.guidance.wiredCount, rawGuid2.hooks.wiredCount], [2, 2],
+  [R2.guidance.wiredCount, rawGuid2.hooks.wiredCount], [3, 3],
   'status reads guidance.hooks.wiredCount instead of re-deriving it, so a half-wired reminder'
-  + ' (SessionStart + Bash present, Grep gone) reports 2/3 on both sides');
+  + ' (SessionStart + Bash + Explore present, Grep gone) reports 3/4 on both sides');
 check('partial: section filter emits guidance only', keysOf(R2),
   ['generatedAt', 'guidance', 'nextStep', 'pin', 'platform', 'projectRoot', 'schema', 'verdict'],
   '--section guidance adds exactly one section to the header + verdict');
@@ -512,10 +516,12 @@ write(join(P3, 'CLAUDE.md'), `# CLAUDE.md\n\n${PAD}\n`);
 const rawGuid3 = safeParse(run(GUIDANCE_SH, ['status', '--json'], p3Env).stdout);
 const R3 = safeParse(runStatus(['--section', 'all', '--json'], p3Env).stdout);
 check('bare: wiredCount zero both sides', [R3.guidance.wiredCount, rawGuid3.hooks.wiredCount], [0, 0],
-  'nothing installed => 0/3 on both sides');
+  'nothing installed => 0/4 on both sides');
 check('bare: guidance states', [R3.guidance.rule, R3.guidance.claudeMd,
-  R3.guidance.hooks.session, R3.guidance.hooks.reminder, R3.guidance.permissionsWired],
-['absent', 'absent', 'missing', 'missing', false], 'an untouched project reports everything absent');
+  R3.guidance.hooks.session, R3.guidance.hooks.reminder, R3.guidance.hooks.explore,
+  R3.guidance.permissionsWired],
+['absent', 'absent', 'missing', 'missing', 'missing', false],
+'an untouched project reports everything absent');
 check('bare: no section degraded to an error placeholder',
   SECTIONS.filter((k) => hasError(R3[k])), [],
   'even with nothing installed every section is produced by its real sibling');
@@ -700,8 +706,9 @@ check('lifecycle: guidance install exit', lifeGuid.status, 0, 'guidance installe
 check('lifecycle: guidance artefacts on disk',
   [existsSync(join(LIFE, '.claude/rules/semble-first.md')),
     existsSync(join(LIFE, '.claude/hooks/semble-session.mjs')),
-    existsSync(join(LIFE, '.claude/hooks/semble-reminder.mjs'))],
-  [true, true, true], 'rule + both hook assets landed in the project');
+    existsSync(join(LIFE, '.claude/hooks/semble-reminder.mjs')),
+    existsSync(join(LIFE, '.claude/hooks/semble-explore.mjs'))],
+  [true, true, true, true], 'rule + all three hook assets landed in the project');
 
 // resume: a new session observes the live server, verifies, goes ready
 run(STATE_SH, ['phase', 'verifying'], lifeEnv);
@@ -752,8 +759,9 @@ check('lifecycle: guidance + state removed',
   [existsSync(join(LIFE, '.claude/semble')),
     existsSync(join(LIFE, '.claude/rules/semble-first.md')),
     existsSync(join(LIFE, '.claude/hooks/semble-session.mjs')),
-    existsSync(join(LIFE, '.claude/hooks/semble-reminder.mjs'))],
-  [false, false, false, false], 'state dir, rule and both hooks are gone');
+    existsSync(join(LIFE, '.claude/hooks/semble-reminder.mjs')),
+    existsSync(join(LIFE, '.claude/hooks/semble-explore.mjs'))],
+  [false, false, false, false, false], 'state dir, rule and all three hooks are gone');
 check('lifecycle: ~/.claude.json byte-identical', sha(LIFE_CJ), claudeJsonBefore,
   'remove integration leaves the MCP registration untouched');
 check('lifecycle: claude mcp remove was never called',

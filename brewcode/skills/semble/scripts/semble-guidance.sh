@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# semble-guidance.sh — rule file, CLAUDE.md marker block, the two hooks,
+# semble-guidance.sh — rule file, CLAUDE.md marker block, the three hooks,
 # settings.json wiring and permission entries for brewcode:semble.
 # Contracts: DESIGN §9.8 and §10. All JSON goes through `node -e`, never jq.
 set -euo pipefail
@@ -10,6 +10,8 @@ SRC="$(cd "$SC_DIR/.." && pwd)/assets"
 TPL="$SRC/semble-first.md.template"
 SESSION_MJS="semble-session.mjs"
 REMINDER_MJS="semble-reminder.mjs"
+EXPLORE_MJS="semble-explore.mjs"
+HOOK_MJS="$SESSION_MJS $REMINDER_MJS $EXPLORE_MJS"
 
 MODE=""
 PART="all"
@@ -65,7 +67,7 @@ want_part() { [ "$PART" = "all" ] || [ "$PART" = "$1" ]; }
 
 # Preflight: settings.json must be a parseable JSON object BEFORE anything is
 # written or deleted. The merge/unmerge step runs last, so its own ABORT would
-# otherwise leave the rule, the CLAUDE.md block and the two .mjs files half
+# otherwise leave the rule, the CLAUDE.md block and the three .mjs files half
 # applied (install) or already gone (remove) — DESIGN §10 merge discipline.
 settings_is_object() {
   [ -f "$SETTINGS" ] || return 0
@@ -107,13 +109,14 @@ const fs=require("fs"), path=require("path");
 const rule=process.env.SG_RULE, tpl=process.env.SG_TPL, cmd=process.env.SG_CLAUDEMD;
 const dir=process.env.SG_HOOKS, sf=process.env.SG_SETTINGS;
 const BEGIN="<!-- BEGIN brewcode:semble -->", END="<!-- END brewcode:semble -->";
-const marks=["semble-session.mjs","semble-reminder.mjs"];
+const marks=["semble-session.mjs","semble-reminder.mjs","semble-explore.mjs"];
 const tools=[process.env.SG_SEARCH,process.env.SG_RELATED];
 const readSafe=f=>{ try{ return fs.readFileSync(f,"utf8"); }catch(e){ return null; } };
 const out={schema:1,
   rule:{state:"absent",path:rule},
   claudeMd:{state:"absent",path:cmd,malformed:false},
   hooks:{session:{file:"missing",wired:false},reminder:{file:"missing",wired:false},
+         explore:{file:"missing",wired:false},
          settingsFile:sf,settingsParsable:true,staleEntries:0,wiredCount:0},
   permissions:{allow:[],wired:false}};
 const rr=readSafe(rule), tt=readSafe(tpl);
@@ -124,6 +127,7 @@ if(cc!==null){ const b=cc.indexOf(BEGIN), e=cc.indexOf(END);
   else if(b>=0||e>=0) out.claudeMd.malformed=true; }
 out.hooks.session.file=fs.existsSync(path.join(dir,marks[0]))?"present":"missing";
 out.hooks.reminder.file=fs.existsSync(path.join(dir,marks[1]))?"present":"missing";
+out.hooks.explore.file=fs.existsSync(path.join(dir,marks[2]))?"present":"missing";
 let s=null; const raw=readSafe(sf);
 if(raw!==null&&raw.trim()){ try{ s=JSON.parse(raw); }catch(e){ out.hooks.settingsParsable=false; } }
 if(s!==null&&(typeof s!=="object"||Array.isArray(s))){ s=null; out.hooks.settingsParsable=false; }
@@ -131,7 +135,7 @@ const argsOf=e=>((e&&e.hooks)||[]).flatMap(h=>(h&&h.args)||[]).filter(a=>typeof 
 const matcherOf=e=>(e&&typeof e.matcher==="string")?e.matcher:null;
 const isMine=a=>marks.some(m=>a===m||a.endsWith("/"+m)||a.endsWith("\\"+m));
 const wanted=new Set(marks.map(m=>path.join(dir,m)));
-let stale=0,sess=0,bash=0,grep=0;
+let stale=0,sess=0,bash=0,grep=0,expl=0;
 if(s&&s.hooks&&typeof s.hooks==="object"&&!Array.isArray(s.hooks)){
   for(const ev of Object.keys(s.hooks)){
     const arr=Array.isArray(s.hooks[ev])?s.hooks[ev]:[];
@@ -142,13 +146,15 @@ if(s&&s.hooks&&typeof s.hooks==="object"&&!Array.isArray(s.hooks)){
       const m=matcherOf(e), a=argsOf(e);
       if(ev==="SessionStart"&&a.includes(path.join(dir,marks[0]))) sess++;
       if(ev==="PreToolUse"&&a.includes(path.join(dir,marks[1]))){ if(m==="Bash")bash++; if(m==="Grep")grep++; }
+      if(ev==="SubagentStart"&&a.includes(path.join(dir,marks[2]))&&m==="Explore") expl++;
     }
   }
 }
 out.hooks.staleEntries=stale;
 out.hooks.session.wired=(sess===1);
 out.hooks.reminder.wired=(bash===1&&grep===1);
-out.hooks.wiredCount=(sess===1?1:0)+(bash===1?1:0)+(grep===1?1:0);
+out.hooks.explore.wired=(expl===1);
+out.hooks.wiredCount=(sess===1?1:0)+(bash===1?1:0)+(grep===1?1:0)+(expl===1?1:0);
 const allow=(s&&s.permissions&&Array.isArray(s.permissions.allow))?s.permissions.allow:[];
 out.permissions.allow=tools.filter(t=>allow.includes(t));
 out.permissions.wired=tools.every(t=>allow.filter(x=>x===t).length===1);
@@ -160,9 +166,10 @@ status_human() {
   SG_J="$1" node -e '
 const j=JSON.parse(process.env.SG_J);
 console.log("guidance: rule "+j.rule.state+" | CLAUDE.md "+(j.claudeMd.malformed?"malformed":j.claudeMd.state)
-  +" | hooks "+j.hooks.wiredCount+"/3 wired | permissions "+(j.permissions.wired?"yes":"no"));
+  +" | hooks "+j.hooks.wiredCount+"/4 wired | permissions "+(j.permissions.wired?"yes":"no"));
 console.log("rule:      "+j.rule.path);
-console.log("hooks:     "+j.hooks.session.file+" session, "+j.hooks.reminder.file+" reminder"
+console.log("hooks:     "+j.hooks.session.file+" session, "+j.hooks.reminder.file+" reminder, "
+  +j.hooks.explore.file+" explore"
   +(j.hooks.staleEntries?" | "+j.hooks.staleEntries+" stale settings entr"+(j.hooks.staleEntries===1?"y":"ies"):""));
 console.log("settings:  "+j.hooks.settingsFile+(j.hooks.settingsParsable?"":"  (UNPARSEABLE - fix it, nothing can be merged)"));
 '
@@ -282,12 +289,12 @@ do_claudemd() {
 # ── hook files ──────────────────────────────────────────────────────────────
 install_hook_files() {
   local f
-  for f in "$SESSION_MJS" "$REMINDER_MJS"; do
+  for f in $HOOK_MJS; do
     [ -f "$SRC/$f" ] || { add_failed "hooks: asset missing at $SRC/$f"; return 0; }
   done
-  if [ "${SEMBLE_DRY_RUN:-}" = "1" ]; then sc_dry "cp hooks -> $HOOKS_DIR" >/dev/null; add_changed "hooks: would copy 2 files into $HOOKS_DIR"; return 0; fi
+  if [ "${SEMBLE_DRY_RUN:-}" = "1" ]; then sc_dry "cp hooks -> $HOOKS_DIR" >/dev/null; add_changed "hooks: would copy 3 files into $HOOKS_DIR"; return 0; fi
   mkdir -p "$HOOKS_DIR"
-  for f in "$SESSION_MJS" "$REMINDER_MJS"; do
+  for f in $HOOK_MJS; do
     if [ -f "$HOOKS_DIR/$f" ] && cmp -s "$SRC/$f" "$HOOKS_DIR/$f"; then
       add_unchanged "hooks: $f already current"
       continue
@@ -302,7 +309,7 @@ install_hook_files() {
 
 remove_hook_files() {
   local f
-  for f in "$SESSION_MJS" "$REMINDER_MJS"; do
+  for f in $HOOK_MJS; do
     if [ -e "$HOOKS_DIR/$f" ]; then
       if [ "${SEMBLE_DRY_RUN:-}" = "1" ]; then sc_dry "rm $HOOKS_DIR/$f" >/dev/null; add_changed "hooks: would remove $HOOKS_DIR/$f"; continue; fi
       rm -f "$HOOKS_DIR/$f" && add_changed "hooks: removed $HOOKS_DIR/$f" || add_failed "hooks: cannot remove $HOOKS_DIR/$f"
@@ -319,10 +326,11 @@ merge_settings() {
 const fs=require("fs"), path=require("path");
 const f=process.env.SG_SETTINGS, dir=process.env.SG_HOOKS;
 const doHooks=process.env.SG_DO_HOOKS==="1", doPerms=process.env.SG_DO_PERMS==="1";
-const marks=["semble-session.mjs","semble-reminder.mjs"];
+const marks=["semble-session.mjs","semble-reminder.mjs","semble-explore.mjs"];
 const want=[["SessionStart",null,"semble-session.mjs",5000],
             ["PreToolUse","Bash","semble-reminder.mjs",5000],
-            ["PreToolUse","Grep","semble-reminder.mjs",5000]];
+            ["PreToolUse","Grep","semble-reminder.mjs",5000],
+            ["SubagentStart","Explore","semble-explore.mjs",5000]];
 const tools=[process.env.SG_SEARCH,process.env.SG_RELATED];
 let s={};
 if(fs.existsSync(f)){
@@ -393,7 +401,7 @@ unmerge_settings() {
 const fs=require("fs");
 const f=process.env.SG_SETTINGS;
 const doHooks=process.env.SG_DO_HOOKS==="1", doPerms=process.env.SG_DO_PERMS==="1";
-const marks=["semble-session.mjs","semble-reminder.mjs"];
+const marks=["semble-session.mjs","semble-reminder.mjs","semble-explore.mjs"];
 const tools=[process.env.SG_SEARCH,process.env.SG_RELATED];
 if(!fs.existsSync(f)){ console.log("no settings to clean: "+f); process.exit(0); }
 const raw=fs.readFileSync(f,"utf8");

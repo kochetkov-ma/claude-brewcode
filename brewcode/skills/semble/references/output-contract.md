@@ -16,7 +16,7 @@ scope: <user|project|local>
 cli:      uv <ver|absent> | uvx <ver|absent> | semble pin 0.5.2 (<uvx-ephemeral|uv-tool ver>) | claude <ver>
 mcp:      <state> @ <scope>  [<connectivity>]
 cache:    <code root> | repo <hash8> | <size> | <staleness> | docs root reserved: <yes|no>
-guidance: rule <state> | CLAUDE.md <state> | hooks <n>/3 wired | permissions <yes|no>
+guidance: rule <state> | CLAUDE.md <state> | hooks <n>/4 wired | permissions <yes|no>
 agents:   <total> total | <inherit> inherit | <patched> patched | <conflict> conflict | <skipped> skipped
 state:    phase=<phase> enabled=<bool> completed=[...]
 
@@ -71,7 +71,7 @@ Checkpoint: <abs>/.claude/semble/state.json
 | `commands` is verbatim and complete | Every command actually executed, one per line, exactly as run — including the ones that failed. Never a paraphrase, never a plan. Nothing that was not run may appear here. |
 | `scope` | Where `semble_code` is (or would be) registered. Default and expected value is `user`. |
 | `<hash8>` | First 8 hex chars of the repo's sha256 cache-dir name. Empty when unresolvable. |
-| `hooks <n>/3 wired` | 3 = SessionStart + PreToolUse(`Bash`) + PreToolUse(`Grep`). Anything below 3 is half-wired — say so, do not round up to "installed". |
+| `hooks <n>/4 wired` | 4 = SessionStart + PreToolUse(`Bash`) + PreToolUse(`Grep`) + SubagentStart(`Explore`). Anything below 4 is half-wired — say so, do not round up to "installed". |
 | `staleness` | One of `absent | incomplete | mismatch | stale | fresh | unknown`. `stale` is reported as **likely stale** — the check approximates semble's own validation. |
 | `smoke` | `skipped (<reason>)` when `SEMBLE_NO_NETWORK=1`, when the MCP is not yet live, or when the mode never warms. Reasons are concrete, never "n/a". |
 | `uncovered` | Printed on every invocation, verbatim as in the template. It is a standing limit of the corpus, not a per-run finding. |
@@ -86,7 +86,7 @@ Checkpoint: <abs>/.claude/semble/state.json
 | Never write | Because |
 |-------------|---------|
 | anything about a watcher, daemon, background indexer, or service being "started"/"running"/"stopped" | semble 0.5.2 has none. Staleness is re-checked inside each tool call behind a `3x last-build-duration` cooldown. |
-| `installed` when `hooks` < 3, or when the MCP is registered but never verified | Half-wired is a distinct state; report `partial`. |
+| `installed` when `hooks` < 4, or when the MCP is registered but never verified | Half-wired is a distinct state; report `partial`. |
 | `connected` from config alone | `connectivity` comes only from the exit status of `claude mcp get semble_code`; with no signal it stays `unknown`. |
 | `stale` as a certainty | The check approximates `get_validated_cache`; say `likely stale` and offer `reindex` rather than acting. |
 | a result field named `line` | Results carry `file_path`, `start_line`, `end_line`, `score` and optional `content`. |
@@ -110,7 +110,7 @@ scope: user
 cli:      uv absent | uvx absent | semble pin 0.5.2 (uvx-ephemeral) | claude 2.1.220
 mcp:      absent @ user  [unknown]
 cache:    /Users/me/Library/Caches/semble-code | repo — | 0 B | absent | docs root reserved: no
-guidance: rule absent | CLAUDE.md absent | hooks 0/3 wired | permissions no
+guidance: rule absent | CLAUDE.md absent | hooks 0/4 wired | permissions no
 agents:   7 total | 3 inherit | 0 patched | 4 conflict | 0 skipped
 state:    phase=absent enabled=null completed=[]
 

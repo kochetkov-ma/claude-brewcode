@@ -12,9 +12,10 @@ wires nothing on its own.
 | — (marker block) | `<repo>/CLAUDE.md` | — | 6 lines between HTML markers |
 | `semble-session.mjs` | `<repo>/.claude/hooks/` | SessionStart | `systemMessage` + `additionalContext` |
 | `semble-reminder.mjs` | `<repo>/.claude/hooks/` | PreToolUse (`Bash`, `Grep`) | `additionalContext` ONLY — advisory |
+| `semble-explore.mjs` | `<repo>/.claude/hooks/` | SubagentStart (`Explore`) | `additionalContext` into the SPAWNED subagent |
 
 > Pure ESM, Node built-ins only, no plugin-root and no npm deps. Each reads
-> stdin, never throws, prints exactly one JSON object and exits 0. Neither hook
+> stdin, never throws, prints exactly one JSON object and exits 0. No hook
 > spawns a process, calls `pgrep`, or implies a daemon: **semble has no watcher
 > and no daemon** — the index is rebuilt inside a tool call and cached.
 
@@ -26,7 +27,7 @@ scripts/semble-guidance.sh status  [--json]
 scripts/semble-guidance.sh remove  [--part ...|all] [--force] [--json]
 ```
 
-`install --part all` does, in order: rule -> CLAUDE.md block -> copy the two
+`install --part all` does, in order: rule -> CLAUDE.md block -> copy the three
 `.mjs` -> `.gitignore` line -> settings hooks + permissions merge. Every step is
 idempotent and re-runnable. `--json` prints one object
 `{schema,mode,part,changed,unchanged,skipped,failed}` and nothing else; a
@@ -157,11 +158,30 @@ The `Grep` matcher is registered even though native `Grep`/`Glob` are no-ops on
 the macOS Claude Code build (search there goes through `Bash`). Other builds
 still have the tool; the entry is inert where it is not.
 
+### `semble-explore.mjs` — SubagentStart, matcher `Explore`
+
+The built-in `Explore` subagent type has the semble MCP tools available but not
+pre-listed in its own tool set, so it has to `ToolSearch` its way to
+`mcp__semble_code__search` before it can call it — and usually reaches for `rg`
+instead. `SubagentStart`'s `additionalContext` lands in the SPAWNED subagent's
+own transcript, not the parent's, so the reminder arrives before its first move.
+
+Reads exactly one file, `<cwd>/.claude/semble/state.json`. Returns `{}` unless
+ALL of these hold: `agent_type === "Explore"`, the state file parses,
+`enabled !== false`, and `phase === "ready"`. Otherwise:
+
+```json
+{"hookSpecificOutput":{"hookEventName":"SubagentStart","additionalContext":"semble: call mcp__semble_code__search directly first (repo=\"<cwd>\", top_k=5) for intent/behavior questions — it is already available, no ToolSearch needed. rg/Grep stay for exact/exhaustive matches."}}
+```
+
+Advisory only, like the reminder: no `permissionDecision`, no throttle, no
+process. The matcher is exactly `Explore` — no other subagent type is touched.
+
 ---
 
 ## 4. settings.json entry shape
 
-`<absdir>` = absolute path of the hooks dir the two files were copied into
+`<absdir>` = absolute path of the hooks dir the three files were copied into
 (`<repo>/.claude/hooks`).
 
 ```json
@@ -173,6 +193,9 @@ still have the tool; the entry is inert where it is not.
     "PreToolUse": [
       { "matcher": "Bash", "hooks": [ { "type": "command", "command": "node", "args": ["<absdir>/semble-reminder.mjs"], "timeout": 5000 } ] },
       { "matcher": "Grep", "hooks": [ { "type": "command", "command": "node", "args": ["<absdir>/semble-reminder.mjs"], "timeout": 5000 } ] }
+    ],
+    "SubagentStart": [
+      { "matcher": "Explore", "hooks": [ { "type": "command", "command": "node", "args": ["<absdir>/semble-explore.mjs"], "timeout": 5000 } ] }
     ]
   },
   "permissions": {
@@ -187,7 +210,7 @@ stall every tool call in the session for a minute. 5000 is ~80x the measured
 runtime of these hooks.
 
 The marker for all semble entries is `args` containing a path whose basename is
-`semble-session.mjs` or `semble-reminder.mjs` — which is exactly why the
+`semble-session.mjs`, `semble-reminder.mjs` or `semble-explore.mjs` — which is exactly why the
 `{hooks:[{type,command:"node",args:[abs],timeout}]}` form is mandatory. An entry
 written as `command: "node /abs/x.mjs"` has no `args` and would be invisible to
 both the stale-path purge and the uninstall.
@@ -207,8 +230,9 @@ both the stale-path purge and the uninstall.
    alone — deduping on the path would silently drop the `Grep` registration.
 4. Merge `permissions.allow` with the two tool names, deduped.
 5. **Re-read the written file and assert**: exactly 1 `SessionStart` entry,
-   exactly 1 `PreToolUse`/`Bash`, exactly 1 `PreToolUse`/`Grep`, and each tool
-   name present exactly once in `permissions.allow`. Any other count exits 1.
+   exactly 1 `PreToolUse`/`Bash`, exactly 1 `PreToolUse`/`Grep`, exactly 1
+   `SubagentStart`/`Explore`, and each tool name present exactly once in
+   `permissions.allow`. Any other count exits 1.
 
 **EXECUTE** merge (project, Bash tool). `SETTINGS`/`HOOKS_DIR` are the only
 inputs; this is the canonical block — use it, not a hand `Edit`, because it is
@@ -218,10 +242,11 @@ the only path that aborts on a broken file and verifies afterwards:
 SETTINGS="$PWD/.claude/settings.json" HOOKS_DIR="$PWD/.claude/hooks" node -e '
 const fs=require("fs"), path=require("path");
 const f=process.env.SETTINGS, dir=process.env.HOOKS_DIR;
-const marks=["semble-session.mjs","semble-reminder.mjs"];
+const marks=["semble-session.mjs","semble-reminder.mjs","semble-explore.mjs"];
 const want=[["SessionStart",null,"semble-session.mjs",5000],
             ["PreToolUse","Bash","semble-reminder.mjs",5000],
-            ["PreToolUse","Grep","semble-reminder.mjs",5000]];
+            ["PreToolUse","Grep","semble-reminder.mjs",5000],
+            ["SubagentStart","Explore","semble-explore.mjs",5000]];
 const tools=["mcp__semble_code__search","mcp__semble_code__find_related"];
 let s={};
 if(fs.existsSync(f)){
@@ -276,15 +301,16 @@ console.log("OK merged "+f);
 > EXACTLY as it was: `model`, `env`, `permissions.deny` and every foreign hook
 > are intact. Fix the JSON by hand, then re-run.
 
-**EXECUTE** copy the two hook files first (project, Bash tool; `SRC` = the
+**EXECUTE** copy the three hook files first (project, Bash tool; `SRC` = the
 directory holding THIS runbook, i.e. the skill's `assets/`):
 
 ```
 SRC="$(dirname "$RUNBOOK")"
 DST="$PWD/.claude/hooks"
 mkdir -p "$DST" && \
-cp "$SRC/semble-session.mjs" "$SRC/semble-reminder.mjs" "$DST/" && \
+cp "$SRC/semble-session.mjs" "$SRC/semble-reminder.mjs" "$SRC/semble-explore.mjs" "$DST/" && \
 node --check "$DST/semble-session.mjs" && node --check "$DST/semble-reminder.mjs" && \
+node --check "$DST/semble-explore.mjs" && \
 echo "✅ copied + verified in $DST" || echo "❌ FAILED"
 ```
 
@@ -292,7 +318,7 @@ echo "✅ copied + verified in $DST" || echo "❌ FAILED"
 
 ### Scope
 
-These hooks are project-scoped by design: both read
+These hooks are project-scoped by design: all three read
 `<cwd>/.claude/semble/state.json`, so a **global** install into `~/.claude/` is
 inert in every project that has no semble state — silent, but it still pays a
 Node start-up per `Bash` call everywhere. Install per project. If a global
@@ -322,7 +348,7 @@ creates one. Uninstall removes exactly those two lines.
 
 Do NOT unwire the hooks to mute them. Flip the project state instead:
 `enabled:false` (or `phase:"disabled"`) in `<repo>/.claude/semble/state.json`
-makes both hooks go quiet immediately — they read the state on every call, so no
+makes all three hooks go quiet immediately — they read the state on every call, so no
 restart is needed. That is what `/brewcode:semble disable` and `enable` do via
 `semble-project.sh`; the rule, the CLAUDE.md block, the hook files and the
 settings entries all stay in place.
@@ -332,11 +358,15 @@ settings entries all stay in place.
 ## 6. UNINSTALL
 
 `scripts/semble-guidance.sh remove --part all` — or the equivalent by hand. It
-strips settings by the two basenames, deletes an event array that empties, the
+strips settings by the three basenames, deletes an event array that empties, the
 `hooks` object if it empties, only the two permission strings (and `allow` /
-`permissions` if they empty), then deletes the two `.mjs` files, the managed rule
+`permissions` if they empty), then deletes the three `.mjs` files, the managed rule
 file and the CLAUDE.md marker range. Foreign hook entries and every other
 settings key are never touched.
+
+> Removing the files without removing the registration is the one failure that
+> hurts: Claude Code then runs `node <deleted path>` on every SessionStart and
+> every matching tool call. Settings first, files second.
 
 **EXECUTE** using Bash tool (project):
 
@@ -345,7 +375,7 @@ export HOOKS_DIR="$PWD/.claude/hooks" SETTINGS="$PWD/.claude/settings.json"
 node -e '
 const fs=require("fs");
 const f=process.env.SETTINGS;
-const marks=["semble-session.mjs","semble-reminder.mjs"];
+const marks=["semble-session.mjs","semble-reminder.mjs","semble-explore.mjs"];
 const tools=["mcp__semble_code__search","mcp__semble_code__find_related"];
 if(!fs.existsSync(f)){ console.log("no settings to clean: "+f); process.exit(0); }
 const raw=fs.readFileSync(f,"utf8");
@@ -377,8 +407,9 @@ const left=Object.values(back.hooks||{}).flat().filter(e=>argsOf(e).some(isMine)
 const perm=((back.permissions&&back.permissions.allow)||[]).filter(x=>tools.includes(x)).length;
 if(left!==0||perm!==0){ console.error("ABORT: verification failed - "+left+" hook / "+perm+" permission entries still in "+f); process.exit(1); }
 console.log("OK cleaned "+f);
-' && rm -f "$HOOKS_DIR/semble-session.mjs" "$HOOKS_DIR/semble-reminder.mjs" \
+' && rm -f "$HOOKS_DIR/semble-session.mjs" "$HOOKS_DIR/semble-reminder.mjs" "$HOOKS_DIR/semble-explore.mjs" \
   && test ! -e "$HOOKS_DIR/semble-session.mjs" && test ! -e "$HOOKS_DIR/semble-reminder.mjs" \
+  && test ! -e "$HOOKS_DIR/semble-explore.mjs" \
   && echo "✅ uninstalled from $HOOKS_DIR" || echo "❌ FAILED"
 ```
 
@@ -409,6 +440,14 @@ echo '{"cwd":"<repo>","hook_event_name":"PreToolUse","tool_name":"Bash","tool_in
 # 5. exact search -> {} (must NEVER be anything else)
 echo '{"cwd":"<repo>","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"rg -l foo"}}' \
   | node <absdir>/semble-reminder.mjs; echo " exit=$?"
+
+# 6. Explore subagent on a ready project -> one additionalContext naming search
+echo '{"cwd":"<repo>","hook_event_name":"SubagentStart","agent_type":"Explore"}' \
+  | node <absdir>/semble-explore.mjs; echo " exit=$?"
+
+# 7. any other subagent type -> {} (must NEVER be anything else)
+echo '{"cwd":"<repo>","hook_event_name":"SubagentStart","agent_type":"general-purpose"}' \
+  | node <absdir>/semble-explore.mjs; echo " exit=$?"
 ```
 
 Full regression: `node tests/suite-hooks.mjs` from the skill dir — it runs the

@@ -252,6 +252,7 @@ if (guidRaw === null || isErr(guidRaw)) {
   const h = (guidRaw.hooks && typeof guidRaw.hooks === "object") ? guidRaw.hooks : {};
   const ses = (h.session && typeof h.session === "object") ? h.session : {};
   const rem = (h.reminder && typeof h.reminder === "object") ? h.reminder : {};
+  const exp = (h.explore && typeof h.explore === "object") ? h.explore : {};
   const rule = (guidRaw.rule && typeof guidRaw.rule === "object") ? guidRaw.rule : {};
   const cmd = (guidRaw.claudeMd && typeof guidRaw.claudeMd === "object") ? guidRaw.claudeMd : {};
   const perm = (guidRaw.permissions && typeof guidRaw.permissions === "object") ? guidRaw.permissions : {};
@@ -262,11 +263,13 @@ if (guidRaw === null || isErr(guidRaw)) {
     hooks: {
       session: ses.file === "present" ? "present" : "missing",
       reminder: rem.file === "present" ? "present" : "missing",
+      explore: exp.file === "present" ? "present" : "missing",
     },
     permissionsWired: perm.wired === true,
     // Read the authoritative sibling count (SessionStart + PreToolUse/Bash +
-    // PreToolUse/Grep). Never re-derive it from the two `wired` booleans: the
-    // reminder spans two matchers, so a half-wired reminder loses one entry.
+    // PreToolUse/Grep + SubagentStart/Explore). Never re-derive it from the
+    // `wired` booleans: the reminder spans two matchers, so a half-wired
+    // reminder loses one entry.
     wiredCount: typeof h.wiredCount === "number" ? h.wiredCount : 0,
     staleEntries: typeof h.staleEntries === "number" ? h.staleEntries : 0,
   };
@@ -408,7 +411,7 @@ if (jsonMode) {
     } else {
       const g = report.guidance;
       L.push("guidance: rule " + g.rule + " | CLAUDE.md " + g.claudeMd +
-        " | hooks " + g.wiredCount + "/3 wired" +
+        " | hooks " + g.wiredCount + "/4 wired" +
         " | permissions " + (g.permissionsWired ? "yes" : "no"));
     }
   }

@@ -311,7 +311,7 @@ echo "RC=$RC"
 
 ### 4.2 Guidance, permissions and agents
 
-`install --part all` writes the `semble-first` rule (never blind-overwriting a user-edited file), refreshes the `<!-- BEGIN brewcode:semble -->` block in `CLAUDE.md`, copies the two hooks into `.claude/hooks/`, and merges the settings + the two exact permission entries. Every step is idempotent. Then the project agents are audited and patched — **project scope only**; global agents are never touched by `setup`/`resume`.
+`install --part all` writes the `semble-first` rule (never blind-overwriting a user-edited file), refreshes the `<!-- BEGIN brewcode:semble -->` block in `CLAUDE.md`, copies the three hooks into `.claude/hooks/` (SessionStart, PreToolUse advisory, SubagentStart/`Explore`), and merges the settings + the two exact permission entries. Every step is idempotent. Then the project agents are audited and patched — **project scope only**; global agents are never touched by `setup`/`resume`.
 
 **EXECUTE** using Bash tool:
 

@@ -168,7 +168,7 @@ Subsequent searches are sub-second and require the absolute repo path:
 | Docs cache root | same path with a `semble-docs` leaf — created empty, **reserved, never registered** |
 | State | `<repo>/.claude/semble/state.json` |
 | Rule | `<repo>/.claude/rules/semble-first.md` |
-| Hooks | SessionStart + a PreToolUse advisory reminder |
+| Hooks | `semble-session.mjs` (SessionStart) + `semble-reminder.mjs` (PreToolUse `Bash`/`Grep`, advisory) + `semble-explore.mjs` (SubagentStart `Explore` — primes the spawned Explore subagent to call `mcp__semble_code__search` directly, skipping its own `ToolSearch`) — `hooks <n>/4 wired` in status, silent unless phase is `ready` and `enabled` |
 | Agents | project `.claude/agents/**/*.md` get the two tool names added to `tools:`; global agents are never touched |
 
 ### Reload boundary
