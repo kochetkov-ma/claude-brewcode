@@ -2,6 +2,22 @@
 
 ---
 
+## v4.5.0 (2026-08-02)
+
+> Docs: [semble](https://doc-claude.brewcode.app/brewcode/skills/semble/)
+
+### brewcode
+
+#### Added
+- **semble skill:** `/brewcode:semble` installs and configures the Semble semantic code-search MCP server for any project — prompt-driven lifecycle (status, setup, resume, enable, disable, reindex, warm, optimize, update, remove, purge), routes free-text RU/EN, empty input defaults to read-only status
+- **install:** no Homebrew formula exists for Semble, so setup installs `uv` via brew and runs the exact pin `uvx --from 'semble[mcp]==0.5.2' semble --content code config`; a confirmation gate precedes any machine-level install
+- **mcp:** registers `semble_code` at user scope with an absolute `SEMBLE_CACHE_LOCATION`; code and docs cache roots are isolated from the first release — docs is reserved, not registered
+- **adoption:** a `semble-first` project rule, a SessionStart hook and an advisory-only PreToolUse search reminder that never blocks exact `rg`/Grep searches; project agents' `tools:` allowlists get both MCP tool names
+- **reload boundary:** setup writes a checkpoint before the MCP mutation and stops, because a newly registered MCP server is unusable until a new Claude Code session; `resume` continues at verification
+- **limits:** no watcher/daemon exists; `.html`/`.htm` and `.json`/`.json5`/`.csv`/`.tsv`/`.psv` are not in the code corpus; both MCP tools require an absolute `repo` argument and return `start_line`/`end_line` (there is no `line` field)
+
+---
+
 ## v4.4.0 (2026-08-02)
 
 > **grepai removed.** The `/brewcode:grepai` skill, the `bc-grepai-configurator` agent, the two project hooks it self-installed, the `grepai-first` rule template and every "use `grepai_search` first" instruction across all four plugins are gone. Every place that pointed at semantic search now points at the Bash search path (`grep`->ugrep, `find`->bfs, `rg`) that this macOS Claude Code build actually has. brewcode is now **8 skills / 9 agents**.

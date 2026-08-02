@@ -1,0 +1,18 @@
+:root {
+  --brand-fg: #1f2933;
+  --brand-bg: #f8fafc;
+  --brand-accent: #2563eb;
+}
+
+body {
+  color: var(--brand-fg);
+  background: var(--brand-bg);
+  font-family: system-ui, sans-serif;
+  margin: 0;
+}
+
+.login-panel button {
+  background: var(--brand-accent);
+  color: #ffffff;
+  border-radius: 6px;
+}

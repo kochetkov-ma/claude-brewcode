@@ -1,0 +1,66 @@
+---
+paths:
+  - "**/*"
+description: semble-first — one semantic search, then read the exact line; rg stays for exact matching
+---
+
+# semble-first
+
+Semantic code search runs through the `semble_code` MCP server. Code is authoritative.
+
+## The two tools
+
+| Tool | Purpose |
+|------|---------|
+| `mcp__semble_code__search` | find code by intent/behavior/name |
+| `mcp__semble_code__find_related` | neighbors of a KNOWN location, after a useful seed |
+
+## `repo` is REQUIRED on both tools
+
+Both tools take a mandatory `repo` parameter: the **absolute path of the project root**
+(or an explicit `https://` git URL). It is not optional and it is never inferred.
+
+```json
+{"query": "how sessions are persisted", "repo": "/abs/project/root", "top_k": 5, "max_snippet_lines": 10}
+```
+
+```json
+{"file_path": "src/store/session.ts", "line": 42, "repo": "/abs/project/root", "top_k": 5}
+```
+
+`find_related` takes `file_path` + `line` exactly as they came back from a search result
+(`file_path` is repo-relative; `line` is 1-indexed).
+
+## What a result looks like
+
+```json
+{"query":"...","results":[
+  {"file_path":"src/store/session.ts","start_line":41,"end_line":58,"score":0.83,"content":"..."}
+]}
+```
+
+Fields are `file_path`, `start_line`, `end_line`, `score`, and `content`
+(`content` is omitted when `max_snippet_lines` is 0). There is no `line` field —
+open the file at `start_line`.
+
+## Workflow
+
+1. ONE focused `mcp__semble_code__search` with `top_k=5`, `max_snippet_lines=10`.
+2. Open the top hit at `start_line` and read it. Do not re-run the same query with `rg`.
+3. Need more context on one hit? Re-call with `max_snippet_lines=null` for the full chunk.
+4. Need siblings of a confirmed location? `find_related` with that `file_path`/`start_line`.
+5. Never issue two equivalent searches across semble, `rg`, and Grep.
+
+## Keep using rg / Grep for
+
+exact identifiers, literal error strings, regexes, path and filename patterns,
+exhaustive enumeration (`-l`, `-c`), and verifying a semble hit.
+
+## Not in this corpus
+
+The server indexes `--content code config`. NOT indexed: `.html`/`.htm`
+(semble classifies HTML as docs) and `.json`/`.json5`/`.csv`/`.tsv`/`.psv`
+(excluded from every semble content type). Use `rg` for those.
+
+Semble has no background watcher. The index is (re)built inside a tool call
+and cached; the first call on a cold cache is slow, later calls are fast.

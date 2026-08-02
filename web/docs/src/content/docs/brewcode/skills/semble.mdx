@@ -1,0 +1,218 @@
+---
+title: "semble"
+description: "Installs, audits, repairs and removes the semble_code semantic code-search MCP server for a project — pinned version, user-scope registration, honest limits."
+order: 1117
+---
+
+import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+
+<Badge text="opus" />
+<Badge text="mcp" />
+<Badge text="human-invoked" />
+
+## Quick reference
+
+| Field | Value |
+|-------|-------|
+| Command | `/brewcode:semble [status\|setup\|resume\|enable\|disable\|reindex\|optimize\|update\|remove\|purge]` |
+| Arguments | a mode keyword, or free text in RU/EN — empty input is always `status` |
+| Model | opus |
+| Tools | Read, Bash, AskUserQuestion |
+| MCP server | `semble_code`, registered at **user** scope, pin `semble[mcp]==0.5.2` |
+
+## What it does
+
+`semble` is the lifecycle router for `semble_code` — a semantic code-search MCP server that gives Claude two tools: `mcp__semble_code__search` (find code by intent) and `mcp__semble_code__find_related` (neighbors of a known location). The skill never edits code itself; it installs the prerequisite, registers the MCP server, wires a project rule and hooks, and migrates project agents so they can call the tools.
+
+It always prints the current state before changing anything. Every mutation goes through a script under `scripts/` — the skill only decides which one to run and reports the result.
+
+Semble has no Homebrew formula of its own. The skill installs `uv` via `brew` (a machine-level step gated by an explicit confirmation) and then runs the pinned `uvx --from 'semble[mcp]==0.5.2' semble --content code config` — never a floating version.
+
+## When to use
+
+| Situation | Command |
+|-----------|---------|
+| First time on a project, nothing wired yet | `/brewcode:semble setup` |
+| Just reloaded Claude Code after `setup` | `/brewcode:semble resume` |
+| Check current state, no changes | `/brewcode:semble` (empty input) |
+| Something looks off, want a diagnostic | `/brewcode:semble optimize` |
+| A newer `semble[mcp]` pin is approved | `/brewcode:semble update` |
+| Turn search off without deleting anything | `/brewcode:semble disable` |
+| One repo's index looks stale | `/brewcode:semble reindex` |
+| Free-text works too, RU or EN | `/brewcode:semble переиндексируй` |
+| Remove the wiring, keep or drop pieces | `/brewcode:semble remove` |
+| Wipe everything, including the cache | `/brewcode:semble purge` |
+
+## Example
+
+```
+/brewcode:semble setup
+```
+
+```
+uv missing — plan: brew install uv; uvx --from 'semble[mcp]==0.5.2' semble --help
+[AskUserQuestion] Install uv via Homebrew now?  -> Install
+✅ uv resolved, pin 0.5.2 confirmed
+✅ docs cache root reserved (RESERVED-FOR-DOCS.txt)
+✅ semble_code registered at user scope
+
+Reload Claude Code (new session), then run: /brewcode:semble resume
+Checkpoint: /abs/project/root/.claude/semble/state.json
+```
+
+After a fresh session:
+
+```
+/brewcode:semble resume
+```
+
+```
+smoke query ok — cold index built in 23s, 7.6 MiB on disk
+rule + hooks + permissions installed, 2 project agents migrated
+phase: ready
+```
+
+Subsequent searches are sub-second and require the absolute repo path:
+
+```json
+{"query": "how sessions are persisted", "repo": "/abs/project/root", "top_k": 5}
+```
+
+```json
+{"results": [
+  {"file_path": "src/store/session.ts", "start_line": 41, "end_line": 58, "score": 0.83}
+]}
+```
+
+## Workflow
+
+<Steps>
+  <li>
+    <div>
+      <strong>Status first, every mode</strong>
+      <p>Runs <code>semble-status.sh --section all --json</code> — read-only, writes nothing under the project, the cache root or <code>~/.claude/settings.json</code>. Prints the pre-mutation <strong>Before</strong> snapshot.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Resolve the mode</strong>
+      <p>Applies the 5-step routing algorithm to <code>$ARGUMENTS</code>: empty input is always <code>status</code>; a pending reload routes straight to <code>resume</code>; otherwise the highest count of matched keywords wins. States the resolved mode and the reason before acting.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Setup — prerequisite gate</strong>
+      <p>Probes for <code>uv</code> without <code>--yes</code> first. If missing, asks one <code>AskUserQuestion</code> before running <code>brew install uv</code> — a machine-level mutation outside the project, never silent.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Setup — register and checkpoint</strong>
+      <p>Reserves the separate docs cache root, registers <code>semble_code</code> at user scope, then writes a reload checkpoint and stops. The server does not exist for the running session — no smoke query is attempted.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Resume — verify and wire</strong>
+      <p>Re-checks status; if the MCP state is not <code>correct</code>, falls back into setup instead of verifying. Runs a smoke query (up to 600s on a cold embedding-model download), installs the <code>semble-first</code> rule, hooks and permissions, then migrates project agents' <code>tools:</code> allowlists.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Other modes — one delegation each</strong>
+      <p><code>enable</code>/<code>disable</code> flip a flag, deleting nothing. <code>reindex</code> and <code>purge</code> run dry first (exit 4), show the exact paths, then require one confirmation before the destructive pass. <code>optimize</code> only reads. <code>update</code> compares the recorded pin against <code>0.5.2</code> and no-ops if identical.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Report</strong>
+      <p>Re-runs status after the last write and prints six fixed sections: Detection, Before, Actions, Verification, Current Status, Next Step — including every command actually run and an <code>uncovered:</code> line on every invocation.</p>
+    </div>
+  </li>
+</Steps>
+
+## Technical details
+
+### Modes
+
+| Mode | Effect | Mutates |
+|------|--------|---------|
+| `status` | full report: prereqs, MCP, cache, guidance, agents, coverage, state | no |
+| `setup` | install `uv`, register `semble_code` at user scope, checkpoint for reload | yes |
+| `resume` | after reload: smoke query, rule + hooks + permissions, agent migration | yes |
+| `enable` | turn back on: verify, warm, phase -> `ready` | yes |
+| `disable` | `enabled=false` — hooks go silent, nothing deleted | yes |
+| `reindex` | delete exactly this repo's cache dir (confirmed), then warm | yes |
+| `warm` | free-text intent ("warm", "прогрей") — pre-builds the index, deletes nothing | yes (cache write only) |
+| `optimize` | read-only audit fan-out with concrete recommendations | no |
+| `update` | compare the recorded pin against `0.5.2`, re-register if different | yes |
+| `remove` | four flavours: `integration` / `mcp` / `cli` / `purge` | yes |
+| `purge` | everything, including the code cache root — typed confirmation required | yes |
+
+### What `setup` installs
+
+| Surface | Location |
+|---------|----------|
+| MCP server | `~/.claude.json` `.mcpServers.semble_code`, user scope — `-s user` is mandatory, the CLI default is `local` |
+| Command | `uvx --from 'semble[mcp]==0.5.2' semble --content code config` |
+| Code cache root | absolute `SEMBLE_CACHE_LOCATION`: macOS `~/Library/Caches/semble-code` / Linux `${XDG_CACHE_HOME:-~/.cache}/semble-code` |
+| Docs cache root | same path with a `semble-docs` leaf — created empty, **reserved, never registered** |
+| State | `<repo>/.claude/semble/state.json` |
+| Rule | `<repo>/.claude/rules/semble-first.md` |
+| Hooks | SessionStart + a PreToolUse advisory reminder |
+| Agents | project `.claude/agents/**/*.md` get the two tool names added to `tools:`; global agents are never touched |
+
+### Reload boundary
+
+A newly registered MCP server is not usable until a **new Claude Code session**. `setup` writes the checkpoint and stops there — it never claims success it cannot verify. `/brewcode:semble resume` continues at the smoke query in the new session.
+
+### Tool contract
+
+Both `mcp__semble_code__search` and `mcp__semble_code__find_related` require an absolute `repo` argument — it is never inferred. Results carry `file_path`, `start_line`, `end_line`, `score` and optional `content` — there is no `line` field. Defaults: `top_k=5`, `max_snippet_lines=10`.
+
+### Corpus and coverage
+
+<Callout type="note">
+  Corpus is `--content code config`. `.html`/`.htm` are **not indexed** — semble classifies HTML as docs. `.json`/`.json5`/`.csv`/`.tsv`/`.psv` are excluded from every content type, unreachable even with `--content all`. `rg` stays the tool for those, and for exact identifiers, regexes, and exhaustive enumeration.
+</Callout>
+
+### Honest limits
+
+| Fact | Consequence |
+|------|-------------|
+| No watcher, no daemon | The index is built inside a tool call and cached; staleness is re-checked per call. Nothing runs in the background. |
+| Cold cache = slow first query | The embedding model download can take up to 600s and fails offline with a cold HuggingFace cache. |
+| Docs corpus is reserved, not registered | The per-repo cache key does not encode content type — mixing code and docs in one cache dir would collide and invalidate on every call, so the docs root exists empty and untouched. |
+| `semble clear index` wipes everything under the cache root | There is no per-repo rebuild CLI; `reindex` deletes exactly one resolved `<code root>/<64-hex>` directory, guarded and confirmed. |
+| Windows is unsupported | The skill refuses every mutation on a non-macOS/Linux platform. |
+
+### Removal flavours
+
+| Flavour | Rule / hooks | MCP | Agent frontmatter | Cache | uv tool |
+|---------|--------------|-----|--------------------|-------|---------|
+| `integration` | removed | kept | semble entries removed | kept | kept |
+| `mcp` | kept | removed | kept | kept | kept |
+| `cli` | kept | kept | kept | kept | uninstalled |
+| `purge` | removed | removed | removed | code root removed | typed confirmation |
+
+### Measured on this repo
+
+| Metric | Value |
+|--------|-------|
+| Cold index build | 23s |
+| Cache size on disk | 7.6 MiB |
+| Subsequent queries | sub-second |
+
+<CardGrid>
+  <Card title="brewcode overview" icon="rocket" href="/brewcode/overview/">
+    Full plugin overview — all skills, agents, and hooks in one place.
+  </Card>
+  <Card title="agents skill" icon="robot" href="/brewcode/skills/agents/">
+    Manages the project agent roster — semble's `resume` step patches those same agents' `tools:` allowlists.
+  </Card>
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/semble">
+    SKILL.md, scripts, and the reference files behind every mode.
+  </Card>
+</CardGrid>
+
+<UpdateNotice />

@@ -36,3 +36,6 @@ brewtools/skills/think-short/tests/e2e/results/
 !.agents/
 !.agents/plugins/
 !.agents/plugins/marketplace.json
+
+# brewcode:semble
+.claude/semble/.reminder-ts

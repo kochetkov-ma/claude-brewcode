@@ -1,0 +1,11 @@
+rootProject.name = 'semble-fixture-repo-a'
+
+include ':api'
+include ':web'
+
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        mavenCentral()
+    }
+}

@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 4.4.0 |
+| Version | 4.5.0 |
 | Skills | 9 |
 | Agents | 10 |
 | Hooks | 2 |
@@ -80,6 +80,7 @@ claude --plugin-dir ./brewcode
 | [`/brewcode:skills`](skills/skills/README.md) | Prompt-driven skill management: status, create, improve, sync, review |
 | [`/brewcode:agents`](skills/agents/README.md) | Prompt-driven agent management: status, create, improve, sync, review |
 | [`/brewcode:e2e`](skills/e2e/README.md) | E2E testing orchestration with BDD scenarios and quorum review |
+| [`/brewcode:semble`](skills/semble/README.md) | Semantic code search setup: installs the pinned semble_code MCP, isolated cache, semble-first rule + hooks, agent migration |
 
 > **Note:** `/brewcode:superreview` emits a self-contained, project-local deep-review skill tailored to your stack.
 > It first makes sure the project HAS domain experts (creating the missing ones via `agent-creator`), then wires the
@@ -114,7 +115,7 @@ brewcode/
 |   +-- hooks.json                     # Event bindings
 |   +-- lib/utils.mjs                  # Shared utilities
 +-- agents/                            # 9 agents
-+-- skills/                            # 8 skills
++-- skills/                            # 9 skills
 +-- templates/                         # Rule templates
 ```
 

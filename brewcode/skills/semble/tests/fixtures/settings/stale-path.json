@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": ["Bash(git status:*)", "mcp__semble_code__search"]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          { "type": "command", "command": "node", "args": ["__PROJECT_ROOT__/.claude/hooks-old/semble-session.mjs"], "timeout": 10 }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "node", "args": ["/opt/foreign/pre-bash.mjs"], "timeout": 5 },
+          { "type": "command", "command": "node", "args": ["__PROJECT_ROOT__/.claude/hooks-old/semble-reminder.mjs"], "timeout": 5 }
+        ]
+      },
+      {
+        "matcher": "Grep",
+        "hooks": [
+          { "type": "command", "command": "node", "args": ["__PROJECT_ROOT__/.claude/hooks-old/semble-reminder.mjs"], "timeout": 5 }
+        ]
+      }
+    ]
+  }
+}

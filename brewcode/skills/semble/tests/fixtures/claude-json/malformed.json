@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "semble_code": {
+      "command": "uvx",
+    }
+  }
+}

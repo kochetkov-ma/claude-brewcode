@@ -10,7 +10,7 @@
 
 **Claude Code plugin suite** -- four plugins for development, documentation, text utility, and visual workflows.
 
-A regular Claude Code session hands a big task to one agent and loses sight of it. Brewcode splits work into bounded units, gives every spawn a six-field brief, and re-states the delegation rule on every prompt. Four plugins. 25 skills. 13 agents. 4 lifecycle hooks.
+A regular Claude Code session hands a big task to one agent and loses sight of it. Brewcode splits work into bounded units, gives every spawn a six-field brief, and re-states the delegation rule on every prompt. Four plugins. 26 skills. 13 agents. 4 lifecycle hooks.
 
 [**Full Documentation**](https://doc-claude.brewcode.app/getting-started/)
 
@@ -162,9 +162,10 @@ Placeholder plugin, currently empty. No commands yet -- coming soon.
         v
   /brewcode:superreview --> project-tailored deep-review skill
 
-  every prompt: forced-eval (UserPromptSubmit) injects 2 lines --
-    [ROLE]  scan agents, project .claude/agents/ first; domain expert exists -> delegate
-    [SPLIT] one agent for an hour = drift you cannot observe -> split and fan out
+  every prompt: forced-eval (UserPromptSubmit) injects 3 lines --
+    [ROLE]   scan agents, project .claude/agents/ first; domain expert exists -> delegate
+    [SPLIT]  one agent for an hour = drift you cannot observe -> split and fan out
+    [BRANCH] no branch chosen -> main; no explicit branch/PR -> take over the whole workspace
 ```
 
 ### Delegation contract
@@ -184,7 +185,7 @@ Every spawn prompt carries six fields:
 
 ## Skills Reference
 
-### Brewcode (8 skills)
+### Brewcode (9 skills)
 
 | Skill | Purpose |
 |-------|---------|
@@ -196,6 +197,7 @@ Every spawn prompt carries six fields:
 | `/brewcode:skills` | Prompt-driven skill management: status, create, improve, sync, review |
 | `/brewcode:agents` | Prompt-driven agent management: status, create, improve, sync, review |
 | `/brewcode:e2e` | E2E testing orchestration with BDD scenarios and quorum review |
+| `/brewcode:semble` | Semantic code search setup: installs the pinned semble_code MCP, isolated cache, semble-first rule + hooks, agent migration |
 
 ### Brewdoc (6 skills)
 

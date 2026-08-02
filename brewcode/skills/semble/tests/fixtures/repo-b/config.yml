@@ -1,0 +1,11 @@
+queue:
+  capacity: 128
+  drainIntervalMs: 250
+
+metrics:
+  enabled: true
+  prefix: repo_b
+
+retries:
+  max: 3
+  backoffMs: 500

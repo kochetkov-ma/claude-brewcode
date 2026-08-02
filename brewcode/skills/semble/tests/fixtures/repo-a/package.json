@@ -1,0 +1,13 @@
+{
+  "name": "semble-fixture-repo-a",
+  "version": "0.1.0",
+  "private": true,
+  "description": "JSON is excluded from every semble content type",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "react": "19.0.0"
+  }
+}

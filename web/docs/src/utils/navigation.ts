@@ -36,6 +36,7 @@ export const navigation: NavSection[] = [
           { title: 'skills', slug: 'brewcode/skills/skills' },
           { title: 'agents', slug: 'brewcode/skills/agents' },
           { title: 'e2e', slug: 'brewcode/skills/e2e' },
+          { title: 'semble', slug: 'brewcode/skills/semble' },
         ],
       },
       {

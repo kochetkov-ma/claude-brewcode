@@ -1,0 +1,12 @@
+service:
+  name: repo-a-api
+  port: 8080
+  timeoutSeconds: 30
+
+auth:
+  tokenTtlSeconds: 3600
+  issuer: fixtures.repoa
+
+logging:
+  level: warn
+  format: json
