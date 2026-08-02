@@ -633,6 +633,76 @@ writeClaudeJson(FIXTURES.wrongscope_stale);
 check('deviation.precedence', sh('sc_mcp_state').out, 'wrong_scope',
   'local scope + floating pin reports wrong_scope: precedence wins over the §6.2 definition');
 
+// ── 19. sc_timeout: the bound is enforced with or without a timeout binary ──
+// PATH cannot be trusted to lack `timeout` (every Linux has it) or to have it
+// (stock macOS has neither), so the backend is pinned via SEMBLE_TIMEOUT_BIN.
+const TBIN = join(BASE, 'tbin');
+mkdirSync(TBIN, { recursive: true });
+const TIMEOUT_STUB = join(TBIN, 'timeout');
+const TIMEOUT_LOG = join(BASE, 'timeout-calls.log');
+writeFileSync(TIMEOUT_STUB, `#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "${TIMEOUT_LOG}"
+secs="$1"; shift
+exec "$@"
+`);
+spawnSync('chmod', ['+x', TIMEOUT_STUB]);
+writeFileSync(TIMEOUT_LOG, '');
+
+check('timeout.backend.none', sh('sc_timeout_backend', { SEMBLE_TIMEOUT_BIN: 'none' }).out, 'none',
+  'SEMBLE_TIMEOUT_BIN=none pins the pure-bash watchdog');
+check('timeout.backend.stub', sh('sc_timeout_backend', { SEMBLE_TIMEOUT_BIN: TIMEOUT_STUB }).out, 'timeout',
+  'an overridden binary is reported by its basename');
+check('timeout.backend.missing', sh('sc_timeout_backend', { SEMBLE_TIMEOUT_BIN: '/no/such/gtimeout' }).out, 'none',
+  'an override that is not executable falls back to the watchdog, never to an unbounded run');
+check('timeout.path.none', sh('sc_timeout_path', { SEMBLE_TIMEOUT_BIN: 'none' }).out, '',
+  'the watchdog has no backing binary path');
+check('timeout.path.stub', sh('sc_timeout_path', { SEMBLE_TIMEOUT_BIN: TIMEOUT_STUB }).out, TIMEOUT_STUB,
+  'the backing binary is reported by absolute path');
+
+// Delegation to a real binary keeps every argument its own argv element.
+const delegated = sh(`sc_timeout 42 printf '%s|%s\\n' 'semble[mcp]==0.5.2' two`,
+  { SEMBLE_TIMEOUT_BIN: TIMEOUT_STUB });
+check('timeout.delegate.stdout', delegated.out, 'semble[mcp]==0.5.2|two',
+  'the wrapped command runs with its argv intact');
+check('timeout.delegate.log', readFileSync(TIMEOUT_LOG, 'utf8'),
+  "42 printf %s|%s\\n semble[mcp]==0.5.2 two\n",
+  'the binary was invoked with the seconds first and the pin as one word');
+
+{
+  const t0 = Date.now();
+  const r = sh('sc_timeout 1 sleep 5', { SEMBLE_TIMEOUT_BIN: 'none' });
+  const elapsed = Date.now() - t0;
+  check('timeout.watch.code', r.status, 124, 'the watchdog reports 124, the GNU timeout convention');
+  // Bash startup + a 100 ms TERM->KILL grace sit on top of the 1 s bound.
+  check('timeout.watch.elapsed', Math.abs(elapsed - 1350) <= 700, true,
+    'it returns at ~1.35 s (+/-0.7), not after the full 5 s sleep');
+}
+{
+  const t0 = Date.now();
+  const r = sh('sc_timeout 30 printf ok', { SEMBLE_TIMEOUT_BIN: 'none' });
+  const elapsed = Date.now() - t0;
+  check('timeout.watch.fast.out', r.out, 'ok', 'stdout passes through the watchdog unchanged');
+  check('timeout.watch.fast.code', r.status, 0, 'a command that finishes keeps its own exit code');
+  check('timeout.watch.fast.elapsed', Math.abs(elapsed - 0) <= 1500, true,
+    'a fast command is not slowed to anywhere near its 30 s bound');
+}
+check('timeout.watch.exitcode', sh('sc_timeout 30 sh -c "exit 7"', { SEMBLE_TIMEOUT_BIN: 'none' }).status, 7,
+  'a non-zero exit is passed through, not rewritten to 124');
+check('timeout.watch.stderr',
+  sh('sc_timeout 30 sh -c "echo boom >&2" 2>&1', { SEMBLE_TIMEOUT_BIN: 'none' }).out, 'boom',
+  'stderr passes through and job-control chatter never joins it');
+
+// The whole process group dies: a grandchild that would outlive the child must
+// never get to write its marker.
+{
+  const MARK = join(BASE, 'watchdog-grandchild.marker');
+  const r = sh(`sc_timeout 1 bash -c '(sleep 3; touch "${MARK}") & sleep 5'; sleep 4`,
+    { SEMBLE_TIMEOUT_BIN: 'none' });
+  check('timeout.watch.group.code', r.status, 0, 'the trailing sleep makes the probe itself succeed');
+  check('timeout.watch.group.marker', existsSync(MARK), false,
+    'the grandchild died with the group instead of surviving the timeout');
+}
+
 // ── report ─────────────────────────────────────────────────────────────────
 console.log('suite-core.mjs (unit B: lib + mcp + cache + state)');
 for (const line of results) console.log(line);

@@ -75,6 +75,7 @@ Checkpoint: <abs>/.claude/semble/state.json
 | `staleness` | One of `absent | incomplete | mismatch | stale | fresh | unknown`. `stale` is reported as **likely stale** — the check approximates semble's own validation. |
 | `smoke` | `skipped (<reason>)` when `SEMBLE_NO_NETWORK=1`, when the MCP is not yet live, or when the mode never warms. Reasons are concrete, never "n/a". |
 | `uncovered` | Printed on every invocation, verbatim as in the template. It is a standing limit of the corpus, not a per-run finding. |
+| the `coreutils` step | `semble-install.sh`'s `.timeout.coreutils.status`: `installed` -> `Actions -> changed`, everything else (`present`, `skipped`, `failed`, declined) -> `Actions -> skipped` with its `.reason` verbatim. It never reaches `failed:` and never changes the verdict — it is an optional upgrade, not a prerequisite. |
 | `Next Step` | Exactly one concrete action, or the literal `none`. Never a list, never a suggestion the user cannot act on immediately. |
 | Verdict domain | `ready | reload_required | verifying | partial | disabled | not_installed | error` (rendered in the human form as `reload required` / `not installed`). |
 
@@ -90,6 +91,7 @@ Checkpoint: <abs>/.claude/semble/state.json
 | `stale` as a certainty | The check approximates `get_validated_cache`; say `likely stale` and offer `reindex` rather than acting. |
 | a result field named `line` | Results carry `file_path`, `start_line`, `end_line`, `score` and optional `content`. |
 | a tool call without `repo` | `repo` is a REQUIRED absolute path (or `https://` git URL) on **both** tools. |
+| that a shell-out ran unbounded, or that `coreutils`/`gtimeout` is missing/required | `sc_timeout` bounds every shell-out — with `timeout`/`gtimeout` when one exists, with a pure-bash watchdog when none does. `.timeout.bounded` is always `true`; `gtimeout` is an optional upgrade of *how* the bound is enforced. |
 
 ---
 

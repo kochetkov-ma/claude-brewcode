@@ -102,7 +102,7 @@ Subsequent searches are sub-second and require the absolute repo path:
   <li>
     <div>
       <strong>Setup — prerequisite gate</strong>
-      <p>Probes for <code>uv</code> without <code>--yes</code> first. If missing, asks one <code>AskUserQuestion</code> before running <code>brew install uv</code> — a machine-level mutation outside the project, never silent.</p>
+      <p><code>semble-install.sh &lt;check|uv|coreutils|semble|all&gt;</code> — <code>all</code> runs <code>check -&gt; uv -&gt; coreutils -&gt; semble</code>. Probes without <code>--yes</code> first. <code>uv</code> is a hard gate: missing, it asks one <code>AskUserQuestion</code> before running <code>brew install uv</code> — a machine-level mutation outside the project, never silent. <code>coreutils</code> is a soft, optional offer for the same question — see Technical details below.</p>
     </div>
   </li>
   <li>
@@ -149,6 +149,15 @@ Subsequent searches are sub-second and require the absolute repo path:
 | `remove` | four flavours: `integration` / `mcp` / `cli` / `purge` | yes |
 | `purge` | everything, including the code cache root — typed confirmation required | yes |
 
+### Prerequisites
+
+| Package | Required? | If declined or impossible |
+|---------|-----------|----------------------------|
+| `uv` / `uvx` (`brew install uv`) | required — setup asks first, stops on decline | manual fallback `curl -LsSf https://astral.sh/uv/install.sh \| sh` is printed, never run |
+| `coreutils` (`brew install coreutils` -> `gtimeout`) | optional — offered only when no `timeout`/`gtimeout` binary exists and `brew` does | nothing breaks: `sc_timeout` keeps its pure-bash watchdog, every shell-out stays bounded either way |
+
+`semble-install.sh` takes one of `check \| uv \| coreutils \| semble \| all` — `all` runs them in that order and is what `setup` calls.
+
 ### What `setup` installs
 
 | Surface | Location |
@@ -181,6 +190,7 @@ Both `mcp__semble_code__search` and `mcp__semble_code__find_related` require an 
 | Fact | Consequence |
 |------|-------------|
 | No watcher, no daemon | The index is built inside a tool call and cached; staleness is re-checked per call. Nothing runs in the background. |
+| Every shell-out is time-bounded, with or without `coreutils` | `sc_timeout` uses `timeout`/`gtimeout` when a binary is present and a pure-bash watchdog when none is — the report's `timeout.bounded` is always `true`. `coreutils` only upgrades which binary enforces the bound; it is never required and never a reason a run can fail. |
 | Cold cache = slow first query | The embedding model download can take up to 600s and fails offline with a cold HuggingFace cache. |
 | Docs corpus is reserved, not registered | The per-repo cache key does not encode content type — mixing code and docs in one cache dir would collide and invalidate on every call, so the docs root exists empty and untouched. |
 | `semble clear index` wipes everything under the cache root | There is no per-repo rebuild CLI; `reindex` deletes exactly one resolved `<code root>/<64-hex>` directory, guarded and confirmed. |

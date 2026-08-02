@@ -2,6 +2,29 @@
 
 ---
 
+## v4.5.2 (2026-08-02)
+
+> Docs: [semble](https://doc-claude.brewcode.app/brewcode/skills/semble/)
+
+### brewcode
+
+#### Added
+- **semble install:** new `coreutils` subcommand runs `brew install coreutils` to provide `gtimeout` on macOS; `all` now runs check -> uv -> coreutils -> semble
+- **semble report:** new `timeout` key — `{backend, path, bounded, coreutils:{status,reason,changed}}`; `bounded` is always `true`
+- **semble env:** `SEMBLE_TIMEOUT_BIN` seam to point at a specific timeout binary; `SP_SEARCH_TIMEOUT` is now overridable
+
+#### Fixed
+- **semble timeout:** `sc_timeout` is unconditionally bounded — `timeout`, else `gtimeout`, else a pure-bash watchdog that kills the whole process group and returns 124
+- **semble search:** `sp_run_search` kept its 600 s bound when no timeout binary is present, instead of silently running unbounded
+- **semble guidance:** `semble-guidance.sh` JSON output was missing its trailing newline
+- **semble skill:** step 3 offers the coreutils install from the report instead of gating on exit 4, so it is no longer silently skipped
+- **semble tests:** `suite-hooks` ran `runNode` with cwd at the repo root and read the developer's real `.claude/semble/state.json`
+
+#### Changed
+- **semble install:** coreutils is optional and soft — no brew, a failed brew, `SEMBLE_NO_NETWORK`, `SEMBLE_DRY_RUN` or a missing `--yes` inside `all` all yield status ok and exit 0; only a direct `coreutils` without `--yes` exits 4
+
+---
+
 ## v4.5.1 (2026-08-02)
 
 > Docs: [brewcode/hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | [brewtools/prompt-injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/) | [brewtools:manager](https://doc-claude.brewcode.app/brewtools/skills/manager/)

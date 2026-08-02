@@ -31,7 +31,7 @@ Free text in Russian or English routes to one mode. The full table and the resol
 | Mode | Effect | Mutates |
 |------|--------|---------|
 | `status` | full report: prereqs, MCP, cache, guidance, agents, coverage, state | no |
-| `setup` | install `uv`, register `semble_code` at user scope, checkpoint for reload | yes |
+| `setup` | install `uv` (and, if you accept, `coreutils`), register `semble_code` at user scope, checkpoint for reload | yes |
 | `resume` | after the reload: smoke query, rule + hooks + permissions, agent migration | yes |
 | `enable` | back on: verify, warm, `phase=ready` | yes |
 | `disable` | `enabled=false` — hooks go silent, nothing is deleted | yes |
@@ -59,6 +59,15 @@ Free text in Russian or English routes to one mode. The full table and the resol
 | Agents | `<repo>/.claude/agents/**/*.md` get the two tool names; agents with no `tools:` key inherit and are left untouched. Global agents are never touched by `setup` |
 
 Installation is **uvx-ephemeral** by default: no `semble` on `PATH`. That is deliberate — any unrecognized argv makes `semble` start a *blocking* stdio server, so a stray bare invocation would hang. `uv tool install` is opt-in.
+
+### Prerequisites — one required, one optional
+
+| Package | Gate | If you decline or it is impossible |
+|---------|------|------------------------------------|
+| `uv` / `uvx` (`brew install uv`) | **required** — setup asks first and stops if you decline; manual fallback `curl -LsSf https://astral.sh/uv/install.sh \| sh` is printed, never run | setup cannot continue |
+| `coreutils` (`brew install coreutils` -> `gtimeout`) | **optional** — offered only when no `timeout`/`gtimeout` exists and `brew` does | nothing breaks: the scripts' `sc_timeout` falls back to a pure-bash watchdog, so every shell-out stays time-bounded either way |
+
+`coreutils` is never a hard requirement: no brew, a failed install, `SEMBLE_NO_NETWORK=1` or a declined offer all leave the run at exit `0` with a note. Setup never blocks on it.
 
 ## Limits — read before trusting it
 
@@ -91,7 +100,7 @@ Installation is **uvx-ephemeral** by default: no `semble` on `PATH`. That is del
 |------|------|
 | `SKILL.md` | the router: status first, mode selection, delegation |
 | `scripts/semble-status.sh` | read-only full report (`--json`, `--section`, `--strict`) |
-| `scripts/semble-install.sh` | `uv` via brew, pin priming through `uvx` |
+| `scripts/semble-install.sh` | `check` \| `uv` \| `coreutils` \| `semble` \| `all` — `uv` via brew, optional `coreutils`, pin priming through `uvx` |
 | `scripts/semble-mcp.sh` | detect / add / repair / remove / checkpoint |
 | `scripts/semble-cache.sh` | resolve, inspect, reserve the docs root, guarded purge |
 | `scripts/semble-state.sh` | `.claude/semble/state.json` read-modify-write |

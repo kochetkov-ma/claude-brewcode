@@ -7,7 +7,7 @@ SC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SC_DIR/lib/semble-common.sh"
 
 SP_WARM_QUERY_DEFAULT="entry point main function"
-SP_SEARCH_TIMEOUT=600
+SP_SEARCH_TIMEOUT="${SP_SEARCH_TIMEOUT:-600}"
 
 # Never-walked directory names (semble/index/file_walker.py:14-33).
 SP_SKIP_DIRS=".git .hg .svn __pycache__ node_modules .venv venv .tox .mypy_cache .pytest_cache .ruff_cache .cache .semble .next dist build .eggs"
@@ -214,7 +214,7 @@ sp_search_cmd_str() {
 
 # sp_run_search QUERY -> JSON {schema,query,command,exit,resultCount,firstResult,durationMs,status,reason}
 sp_run_search() {
-  local query="$1" root cache cmd start finish out rc tmo
+  local query="$1" root cache cmd start finish out rc
   root="$(sc_project_root)"; cache="$(sc_cache_root_code)"
   cmd="$(sp_search_cmd_str "$query")"
 
@@ -232,13 +232,12 @@ sp_run_search() {
     return 0
   fi
 
-  tmo=""
-  if sc_have timeout; then tmo="timeout $SP_SEARCH_TIMEOUT"
-  elif sc_have gtimeout; then tmo="gtimeout $SP_SEARCH_TIMEOUT"; fi
-
+  # `env` carries SEMBLE_CACHE_LOCATION into the child because sc_timeout may be a
+  # shell function (bash watchdog), not a binary a var prefix would apply to.
   start="$(date +%s)"
   set +e
-  out="$(SEMBLE_CACHE_LOCATION="$cache" $tmo uvx --from "$SEMBLE_PIN_SPEC" semble search \
+  out="$(sc_timeout "$SP_SEARCH_TIMEOUT" env SEMBLE_CACHE_LOCATION="$cache" \
+        uvx --from "$SEMBLE_PIN_SPEC" semble search \
         "$query" "$root" --content code config -k 5 --max-snippet-lines 10 2>/dev/null)"
   rc=$?
   set -e

@@ -177,7 +177,7 @@ emit_report() {
 const split=v=>(v||"").split("\n").map(x=>x.trim()).filter(Boolean);
 process.stdout.write(JSON.stringify({schema:1,mode:process.env.SG_MODE,part:process.env.SG_PART,
   changed:split(process.env.SG_CHANGED),unchanged:split(process.env.SG_UNCHANGED),
-  skipped:split(process.env.SG_SKIPPED),failed:split(process.env.SG_FAILED)}));'
+  skipped:split(process.env.SG_SKIPPED),failed:split(process.env.SG_FAILED)})+"\n");'
   else
     printf '%s' "$CHANGED"   | while IFS= read -r l; do [ -n "$l" ] && sc_ok   "$l"; done
     printf '%s' "$UNCHANGED" | while IFS= read -r l; do [ -n "$l" ] && sc_skip "$l"; done

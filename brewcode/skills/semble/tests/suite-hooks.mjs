@@ -66,11 +66,15 @@ function check(name, actual, expected, message) {
   }
 }
 
-function runNode(script, stdinStr) {
+// Unparseable stdin makes a hook fall back to process.cwd(); running from the
+// repo root let the developer machine's own .claude/semble/state.json decide the
+// answer. cwd is pinned to a state-less temp dir so the fixture is the only input.
+function runNode(script, stdinStr, cwd = BASE) {
   const r = spawnSync(process.execPath, [script], {
     input: stdinStr,
     encoding: 'utf8',
     env: { ...process.env },
+    cwd,
     timeout: 15000,
   });
   return { stdout: r.stdout || '', stderr: r.stderr || '', status: r.status };
@@ -244,6 +248,11 @@ const REMIND_OK = (cwd) => ({
   const p = freshProject({});
   const r = guidance(p, ['install', '--part', 'all', '--json']);
   check('A1.exit', r.status, 0, 'install --part all exits 0 on a fresh project');
+  // Every script's --json ends its single object with exactly one newline.
+  check('A1.trailingNewline', [r.stdout.endsWith('\n'), r.stdout.endsWith('\n\n')], [true, false],
+    'the report ends with exactly one trailing newline');
+  check('A1.statusTrailingNewline', guidance(p, ['status', '--json']).stdout.endsWith('\n'), true,
+    'status --json carries the same trailing newline');
   const s = readSettings(p);
   const { session, reminder: rem } = semblePaths(p);
   check('A1.sessionEntry', s.hooks.SessionStart, [

@@ -258,6 +258,95 @@ check('smoke shape', Object.keys(smokeJson).sort(),
 check('smoke query override', smokeJson.query, 'auth handler', '--query is honoured');
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 2b. the real search path is bounded by sc_timeout, with or without a
+// timeout binary. uvx is stubbed in a dedicated bin dir prepended to PATH so
+// the rest of the suite still runs with no uvx at all; SP_SEARCH_TIMEOUT is
+// dialled down from its production 600 s and the backend is pinned, because
+// PATH cannot be trusted to have (macOS) or lack (Linux) `timeout`.
+// ═══════════════════════════════════════════════════════════════════════════
+const UVX_BIN = join(BASE, 'uvxbin');
+const UVX_STUB = join(UVX_BIN, 'uvx');
+const UVX_ENV_LOG = join(BASE, 'uvx-env.log');
+const HANG_MARKER = join(BASE, 'uvx-outlived-the-bound.marker');
+const TIMEOUT_STUB = join(UVX_BIN, 'timeout-stub');
+const TIMEOUT_LOG = join(BASE, 'search-timeout-calls.log');
+
+function writeExec(p, body) {
+  write(p, body);
+  chmodSync(p, 0o755);
+  return p;
+}
+
+// A uvx that records the injected cache location, then either answers or hangs.
+writeExec(UVX_STUB, `#!/usr/bin/env bash
+printf '%s\\n' "\${SEMBLE_CACHE_LOCATION:-<unset>}" >> "${UVX_ENV_LOG}"
+if [ "\${UVX_STUB_MODE}" = "hang" ]; then
+  sleep 30
+  : > "${HANG_MARKER}"
+  exit 0
+fi
+printf '%s' '{"results":[{"file_path":"src/main.py","start_line":3,"end_line":9,"score":0.75,"content":"x"}]}'
+`);
+writeExec(TIMEOUT_STUB, `#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "${TIMEOUT_LOG}"
+secs="$1"; shift
+exec "$@"
+`);
+writeFileSync(UVX_ENV_LOG, '');
+writeFileSync(TIMEOUT_LOG, '');
+
+const SEARCH_ENV = {
+  SEMBLE_PROJECT_ROOT: COV,
+  SEMBLE_NO_NETWORK: '',
+  PATH: `${UVX_BIN}:${BIN}:${process.env.PATH}`,
+};
+
+// WHEN: the stubbed uvx answers — the wrapper must not disturb the happy path.
+const okRun = run(PROJECT_SH, ['smoke', '--query', 'bounded ok', '--json'],
+  { ...SEARCH_ENV, SEMBLE_TIMEOUT_BIN: 'none', SP_SEARCH_TIMEOUT: '30' });
+const okJson = safeParse(okRun.stdout);
+check('search.ok.exit', okRun.status, 0, 'a search that answers exits 0');
+check('search.ok.status', okJson.status, 'ok', 'the stubbed results parse as ok');
+check('search.ok.count', okJson.resultCount, 1, 'the single stubbed result is counted');
+check('search.ok.first', okJson.firstResult,
+  { file_path: 'src/main.py', start_line: 3, end_line: 9, score: 0.75 },
+  'the first result survives the sc_timeout wrapper intact');
+check('search.ok.cache-env', readFileSync(UVX_ENV_LOG, 'utf8'), `${CACHE_CODE}\n`,
+  'SEMBLE_CACHE_LOCATION reaches the child even though sc_timeout is a shell function');
+
+// WHEN: a real timeout binary backs sc_timeout — same shape, one argv element per arg.
+writeFileSync(UVX_ENV_LOG, '');
+const okBin = run(PROJECT_SH, ['smoke', '--query', 'bounded ok', '--json'],
+  { ...SEARCH_ENV, SEMBLE_TIMEOUT_BIN: TIMEOUT_STUB, SP_SEARCH_TIMEOUT: '30' });
+check('search.bin.status', safeParse(okBin.stdout).status, 'ok',
+  'the binary backend runs the same search');
+check('search.bin.log', readFileSync(TIMEOUT_LOG, 'utf8'),
+  `30 env SEMBLE_CACHE_LOCATION=${CACHE_CODE} uvx --from ${PIN_SPEC} semble search `
+  + `bounded ok ${COV} --content code config -k 5 --max-snippet-lines 10\n`,
+  'the bound goes first and the env prefix is passed as argv, not as a shell string');
+check('search.bin.cache-env', readFileSync(UVX_ENV_LOG, 'utf8'), `${CACHE_CODE}\n`,
+  'the binary backend injects the cache location too');
+
+// WHEN: uvx wedges and NO timeout binary exists — the bound must still fire.
+{
+  const t0 = Date.now();
+  const hung = run(PROJECT_SH, ['warm', '--json'],
+    { ...SEARCH_ENV, SEMBLE_TIMEOUT_BIN: 'none', SP_SEARCH_TIMEOUT: '2', UVX_STUB_MODE: 'hang' });
+  const elapsed = Date.now() - t0;
+  const hungJson = safeParse(hung.stdout);
+  check('search.hang.exit', hung.status, 3, 'warm reports 3 when the search does not succeed');
+  check('search.hang.code', hungJson.exit, 124, 'the watchdog 124 is carried into the report');
+  check('search.hang.status', hungJson.status, 'failed', 'a timed-out search is a failure, not a skip');
+  check('search.hang.reason', hungJson.reason, 'semble search exited 124',
+    'the exit code is named in the reason');
+  // 2 s bound + bash/node startup + the 100 ms TERM->KILL grace.
+  check('search.hang.elapsed', Math.abs(elapsed - 2600) <= 1400, true,
+    'it returns at ~2.6 s (+/-1.4), not after the stub 30 s sleep');
+  check('search.hang.marker', existsSync(HANG_MARKER), false,
+    'the wedged uvx was killed instead of outliving its bound');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 3. reindex — guards, --yes, blast radius
 // ═══════════════════════════════════════════════════════════════════════════
 const RIDX = join(BASE, 'repo-reindex');

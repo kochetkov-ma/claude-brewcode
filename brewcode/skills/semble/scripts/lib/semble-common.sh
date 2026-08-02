@@ -102,22 +102,76 @@ sc_semble_tool_version() {
   { uv tool list 2>/dev/null | awk '$1=="semble"{print $2; exit}' | tr -d 'v'; } || true
 }
 
-# sc_timeout SECONDS CMD [ARG...] — run CMD with an upper bound.
-# GNU `timeout` (Linux) or `gtimeout` (coreutils on macOS) when available; macOS
-# ships neither by default, so the fallback runs CMD unbounded rather than
-# failing — a missing bound must never turn into a missing feature. Every
-# argument is passed through as its own argv element, so 'semble[mcp]==X.Y.Z'
-# stays one word and is never re-parsed by a shell.
+# Which binary backs sc_timeout: `timeout` (GNU/Linux) | `gtimeout` (coreutils
+# on macOS) | `none`. `none` is NOT unbounded — sc_timeout_watch takes over.
+# SEMBLE_TIMEOUT_BIN overrides detection: `none` forces the pure-bash watchdog,
+# any other value is used as the binary. Production leaves it unset.
+sc_timeout_backend() {
+  local ovr="${SEMBLE_TIMEOUT_BIN:-}"
+  if [ -n "$ovr" ]; then
+    if [ "$ovr" != "none" ] && sc_have "$ovr"; then printf '%s\n' "${ovr##*/}"; else printf 'none\n'; fi
+    return 0
+  fi
+  if   sc_have timeout;  then printf 'timeout\n'
+  elif sc_have gtimeout; then printf 'gtimeout\n'
+  else printf 'none\n'; fi
+}
+
+# Absolute path of the backing binary, empty when the watchdog is in use.
+sc_timeout_path() {
+  local b; b="$(sc_timeout_backend)"
+  [ "$b" = "none" ] && return 0
+  sc_bin "${SEMBLE_TIMEOUT_BIN:-$b}"
+}
+
+# sc_timeout_watch SECONDS CMD [ARG...] — dependency-free stand-in for GNU
+# `timeout`, used on a stock macOS that has neither binary. `set -m` puts the
+# child in its own process group so the whole tree dies, not just the wrapper;
+# the poll starts at 10 ms and backs off to 250 ms, so a fast command pays ~10 ms
+# and a 60 s probe costs a few hundred sleeps. Job-control chatter ("Terminated")
+# is muted by swapping the SHELL's fd 2 — the child already holds the real one.
+# 124 is reported only when the deadline passed AND the child died of a signal,
+# so an unreaped child that finished on its own still yields its own status.
+sc_timeout_watch() {
+  local secs="${1:?sc_timeout needs seconds}"; shift
+  local had_m=0; case "$-" in *m*) had_m=1 ;; esac
+  set -m
+  "$@" &
+  local pid=$!
+  [ "$had_m" = "1" ] || set +m
+  local slept=0 limit=$(( secs * 100 )) step=1 timedout=0 rc=0
+  while kill -0 "$pid" 2>/dev/null; do
+    if [ "$slept" -ge "$limit" ]; then timedout=1; break; fi
+    sleep "$(printf '0.%02d' "$step")" 2>/dev/null || sleep 1
+    slept=$(( slept + step ))
+    if   [ "$slept" -ge 100 ]; then step=25
+    elif [ "$slept" -ge 10 ];  then step=5
+    fi
+  done
+  exec 3>&2 2>/dev/null
+  if [ "$timedout" = "1" ]; then
+    kill -TERM "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+    sleep 0.1
+    kill -KILL "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
+  fi
+  wait "$pid" 2>/dev/null || rc=$?
+  exec 2>&3 3>&-
+  if [ "$timedout" = "1" ] && [ "$rc" -ge 128 ]; then rc=124; fi
+  return "$rc"
+}
+
+# sc_timeout SECONDS CMD [ARG...] — run CMD with an upper bound. The bound is
+# always enforced: a real `timeout`/`gtimeout` when one exists, the pure-bash
+# watchdog otherwise. Every argument is passed through as its own argv element,
+# so 'semble[mcp]==X.Y.Z' stays one word and is never re-parsed by a shell.
 # Exit: 124 = timed out (GNU convention), else CMD's own status.
 sc_timeout() {
   local secs="${1:?sc_timeout needs seconds}"; shift
-  if sc_have timeout; then
-    timeout "$secs" "$@"
-  elif sc_have gtimeout; then
-    gtimeout "$secs" "$@"
-  else
-    "$@"
-  fi
+  local backend; backend="$(sc_timeout_backend)"
+  case "$backend" in
+    none) sc_timeout_watch "$secs" "$@" ;;
+    *)    "${SEMBLE_TIMEOUT_BIN:-$backend}" "$secs" "$@" ;;
+  esac
 }
 
 # Why the probe failed, set by every sc_semble_probe call:

@@ -86,11 +86,14 @@ const PROJECT = join(BASE, 'project');
 const CACHE_CODE = join(BASE, 'cache', 'semble-code');
 const CACHE_DOCS = join(BASE, 'cache', 'semble-docs');
 const STAGE = join(BASE, 'scripts');
+const BIN3 = join(BASE, 'bin3');
 const CLAUDE_LOG = join(BIN, 'claude-calls.log');
 const BREW_LOG = join(BIN2, 'brew-calls.log');
+const BREW_FAIL_LOG = join(BIN3, 'brew-fail-calls.log');
+const TIMEOUT_STUB = join(BIN3, 'timeout');
 const DETECT_FILE = join(BIN, 'detect.json');
 
-for (const d of [BIN, BIN2, HOME_DIR, join(HOME_DIR, '.claude'), PROJECT,
+for (const d of [BIN, BIN2, BIN3, HOME_DIR, join(HOME_DIR, '.claude'), PROJECT,
   join(PROJECT, '.claude'), CACHE_CODE, CACHE_DOCS, STAGE, join(STAGE, 'lib')]) {
   mkdirSync(d, { recursive: true });
 }
@@ -112,8 +115,23 @@ printf 'brew %s\\n' "$*" >> "${BREW_LOG}"
 exit 0
 `);
 chmodSync(join(BIN2, 'brew'), 0o755);
+
+// A brew that fails: `brew install coreutils` blowing up is a warning, never a
+// failure, so the failing path needs its own stub to be provable.
+writeFileSync(join(BIN3, 'brew'), `#!/usr/bin/env bash
+printf 'brew %s\\n' "$*" >> "${BREW_FAIL_LOG}"
+echo "stub brew: boom" >&2
+exit 1
+`);
+chmodSync(join(BIN3, 'brew'), 0o755);
+writeFileSync(TIMEOUT_STUB, `#!/usr/bin/env bash
+secs="$1"; shift
+exec "$@"
+`);
+chmodSync(TIMEOUT_STUB, 0o755);
 writeFileSync(CLAUDE_LOG, '');
 writeFileSync(BREW_LOG, '');
+writeFileSync(BREW_FAIL_LOG, '');
 
 // ── stage the two scripts under test + the shared library ───────────────────
 copyFileSync(join(SRC_SCRIPTS, 'lib', 'semble-common.sh'), join(STAGE, 'lib', 'semble-common.sh'));
@@ -625,6 +643,121 @@ writeFileSync(BREW_LOG, '');
   check('91-human-exit', human.status, 3, 'the human form keeps the same exit code');
   check('91-human-head', human.stdout.split('\n')[0], '# Semble install (check)', 'human heading');
   check('91-human-json', human.stdout.trim().startsWith('{'), false, 'the human form must not emit JSON');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 9b. the coreutils step and the timeout backend report
+// ═══════════════════════════════════════════════════════════════════════════
+// PATH decides nothing here: every Linux has `timeout` in /usr/bin and stock
+// macOS has neither binary, so the backend is pinned with SEMBLE_TIMEOUT_BIN.
+{
+  const NOTMO = { SEMBLE_TIMEOUT_BIN: 'none' };
+  const HASTMO = { SEMBLE_TIMEOUT_BIN: TIMEOUT_STUB };
+  const brewEnv = { PATH: `${BIN2}:${BIN}:/usr/bin:/bin` };
+  const brewFailEnv = { PATH: `${BIN3}:${BIN}:/usr/bin:/bin` };
+  writeFileSync(BREW_LOG, '');
+  writeFileSync(BREW_FAIL_LOG, '');
+
+  const chkNo = safeParse(runInstall(['check', '--json'], NOTMO).stdout);
+  check('92-check-timeout-none', chkNo.timeout,
+    { backend: 'none', path: '', bounded: true,
+      coreutils: { status: 'skipped', reason: 'the coreutils step does not run in mode check', changed: false } },
+    'check reports the backend, and bounded stays true because the bash watchdog takes over');
+
+  const chkYes = safeParse(runInstall(['check', '--json'], HASTMO).stdout);
+  check('92-check-timeout-binary', chkYes.timeout,
+    { backend: 'timeout', path: TIMEOUT_STUB, bounded: true,
+      coreutils: { status: 'present', reason: 'timeout already backs sc_timeout', changed: false } },
+    'a real binary is named with its absolute path');
+
+  const chkHuman = runInstall(['check'], NOTMO);
+  check('92-check-timeout-human',
+    chkHuman.stdout.split('\n').filter((l) => l.startsWith('timeout:')),
+    ['timeout: none (bash watchdog) | bounded yes | coreutils skipped - '
+      + 'the coreutils step does not run in mode check'],
+    'the human summary carries exactly one timeout line');
+
+  const cuNoYes = runInstall(['coreutils', '--json'], NOTMO);
+  const cuj = safeParse(cuNoYes.stdout);
+  check('93-coreutils-noyes-exit', cuNoYes.status, 4, '`coreutils` without --yes must exit exactly 4');
+  check('93-coreutils-noyes-status', cuj.status, 'needs_confirmation', 'status must be needs_confirmation');
+  check('93-coreutils-noyes-commands', cuj.commands, ['brew install coreutils'],
+    'the exact command it would have run');
+  check('93-coreutils-noyes-step', cuj.timeout.coreutils,
+    { status: 'needs_confirmation', reason: 'brew install coreutils needs --yes', changed: false },
+    'the step reports its own outcome');
+  check('93-coreutils-noyes-brewlog', readFileSync(BREW_LOG, 'utf8'), '',
+    'nothing may be installed without --yes');
+
+  const cuPresent = runInstall(['coreutils', '--yes', '--json'], { ...brewEnv, ...HASTMO });
+  const cupj = safeParse(cuPresent.stdout);
+  check('94a-coreutils-present-exit', cuPresent.status, 0, 'an existing timeout binary short-circuits the step');
+  check('94a-coreutils-present-commands', cupj.commands, [],
+    'a skipped step records no command at all');
+  check('94a-coreutils-present-brewlog', readFileSync(BREW_LOG, 'utf8'), '',
+    'brew is never consulted when timeout is already there');
+
+  const cuDry = runInstall(['coreutils', '--yes', '--json'], { ...brewEnv, ...NOTMO, SEMBLE_DRY_RUN: '1' });
+  const cudj = safeParse(cuDry.stdout);
+  check('94b-coreutils-dry-exit', cuDry.status, 0, 'SEMBLE_DRY_RUN=1 changes nothing and exits 0');
+  check('94b-coreutils-dry-step', cudj.timeout.coreutils,
+    { status: 'skipped', reason: 'SEMBLE_DRY_RUN=1', changed: false }, 'the dry run is reported as a skip');
+  check('94b-coreutils-dry-commands', cudj.commands, ['brew install coreutils'],
+    'the command it would have run is still printed');
+  check('94b-coreutils-dry-brewlog', readFileSync(BREW_LOG, 'utf8'), '', 'a dry run must not execute brew');
+
+  // SEMBLE_NO_NETWORK=1 comes from ENV: the uv step calls that a precondition,
+  // the coreutils step may not - a missing bound is degraded, never fatal.
+  const cuNoNet = runInstall(['coreutils', '--yes', '--json'], { ...brewEnv, ...NOTMO });
+  const cunj = safeParse(cuNoNet.stdout);
+  check('94c-coreutils-nonet-exit', cuNoNet.status, 0, 'no network must not turn coreutils into exit 3');
+  check('94c-coreutils-nonet-status', cunj.status, 'ok', 'the overall status stays ok');
+  check('94c-coreutils-nonet-step', cunj.timeout.coreutils.status, 'skipped', 'the step itself reports skipped');
+  check('94c-coreutils-nonet-brewlog', readFileSync(BREW_LOG, 'utf8'), '', 'no network means brew is never called');
+
+  const cuNoBrew = runInstall(['coreutils', '--yes', '--json'], NOTMO);
+  const cubj = safeParse(cuNoBrew.stdout);
+  check('94d-coreutils-nobrew-exit', cuNoBrew.status, 0, 'a missing brew must not raise precondition here');
+  check('94d-coreutils-nobrew-status', cubj.status, 'ok', 'the overall status stays ok');
+  check('94d-coreutils-nobrew-step', cubj.timeout.coreutils,
+    { status: 'skipped',
+      reason: 'brew is not installed - sc_timeout keeps using its bash watchdog',
+      changed: false },
+    'the reason names the fallback the user is left with');
+
+  const cuFail = runInstall(['coreutils', '--yes', '--json'], { ...brewFailEnv, ...NOTMO, SEMBLE_NO_NETWORK: '' });
+  const cufj = safeParse(cuFail.stdout);
+  check('94e-coreutils-fail-exit', cuFail.status, 0, 'a failed brew install coreutils still exits 0');
+  check('94e-coreutils-fail-status', cufj.status, 'ok', 'it never escalates the overall status');
+  check('94e-coreutils-fail-step', cufj.timeout.coreutils,
+    { status: 'failed',
+      reason: 'brew install coreutils failed - sc_timeout keeps using its bash watchdog',
+      changed: false },
+    'the failure is reported as a warning-level step outcome');
+  check('94e-coreutils-fail-brewlog', readFileSync(BREW_FAIL_LOG, 'utf8'), 'brew install coreutils\n',
+    'brew was called exactly once, with exactly that argv');
+
+  writeFileSync(BREW_LOG, '');
+  const allDry = runInstall(['all', '--yes', '--json'], { ...brewEnv, ...NOTMO, SEMBLE_DRY_RUN: '1' });
+  const adj = safeParse(allDry.stdout);
+  // uv/uvx stay absent under this PATH and a dry run installs nothing, so the
+  // pin cannot resolve: exit 3 is the uv/uvx precondition, unchanged by the new
+  // step - the note must not mention coreutils at all.
+  check('94f-all-dry-exit', allDry.status, 3, '`all` keeps the pre-existing uv/uvx precondition');
+  check('94f-all-dry-note', adj.note, 'uv/uvx not on PATH; uvx is not on PATH - install uv first',
+    'the coreutils step adds nothing to the note when it is only skipped');
+  check('94f-all-dry-order', adj.commands,
+    ['brew install uv', 'brew install coreutils', "uvx --from 'semble[mcp]==0.5.2' semble --help"],
+    'all runs check -> uv -> coreutils -> semble, in that order');
+  check('94f-all-dry-step', adj.timeout.coreutils.status, 'skipped', 'the coreutils step is reported in `all`');
+  check('94f-all-dry-brewlog', readFileSync(BREW_LOG, 'utf8'), '', 'a dry `all` installs nothing');
+
+  const allSoft = runInstall(['all', '--json'], { ...brewEnv, ...NOTMO });
+  const asj = safeParse(allSoft.stdout);
+  check('94g-all-soft-status', asj.status, 'needs_confirmation',
+    'the uv gate still owns the status; coreutils never adds one of its own');
+  check('94g-all-soft-note', String(asj.note).includes('brew install coreutils needs --yes (optional)'), true,
+    'inside `all` the coreutils confirmation is a note, not an escalation');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
