@@ -219,29 +219,6 @@ Use Codex collaboration only when the user or active repository instructions exp
     'brewcode/e2e': `# End-to-end testing
 
 Translate the requested behavior into GIVEN/WHEN/THEN scenarios, inspect the active application and test stack, then implement the smallest deterministic end-to-end suite. Use Codex collaboration agents only when the user or project instructions explicitly request delegation. Run against mocks or local services unless live side effects are explicitly authorized, and report exact commands and failures.`,
-    'brewcode/grepai': `# grepai for Codex
-
-Resolve the mode first with \`scripts/detect-mode.sh\`: \`setup\`, \`status\`, \`start\`, \`stop\`, \`reindex\`, \`optimize\`, \`upgrade\`, or \`prompt\`.
-
-## Setup
-
-1. Run \`scripts/infra-check.sh\`; install only pinned prerequisites approved by the user.
-2. Verify MCP state with \`codex mcp list\`. Register the installed CLI exactly with \`codex mcp add grepai -- grepai mcp-serve\`.
-3. Generate or review \`.grepai/config.yaml\` from \`config.yaml.example\` without overwriting local choices.
-4. Initialize the index with \`scripts/init-index.sh\`, then verify it with \`scripts/verify.sh\`.
-5. Offer the project rule produced by \`scripts/create-rule.sh\` as a reviewable patch.
-6. Install optional reminders from \`assets/INSTALL.md\` into the selected \`.codex/hooks.json\`; preserve unrelated hooks and require \`/hooks\` review.
-
-## Operational modes
-
-- \`status\`: run \`scripts/status.sh\` and \`scripts/mcp-check.sh status\` without mutation.
-- \`start\` / \`stop\`: use the matching script and report process state.
-- \`reindex\`: confirm destructive index replacement, then run \`scripts/reindex.sh\` and verify.
-- \`optimize\`: back up config, run \`scripts/optimize.sh\`, reindex, and compare status.
-- \`upgrade\`: report current and target pinned versions before \`scripts/upgrade.sh\`.
-- \`prompt\`: inspect the request and perform semantic search without changing configuration.
-
-Never edit Codex plugin caches or use an unpinned dependency command.`,
     'brewcode/rules': `# Codex project rules
 
 Use only when the user explicitly requests rule creation, synchronization, improvement, review, or inventory.
@@ -678,114 +655,6 @@ After a change, review the exact hook definition with \`/hooks\`. Removal delete
 `);
   }
 
-  if (plugin === 'brewcode' && skill === 'grepai') {
-    writeFile(path.join(targetDir, 'assets', 'INSTALL.md'), `# Codex grepai hook runbook
-
-Copy \`grepai-session.mjs\` and \`grepai-reminder.mjs\` into \`<project-root>/.codex/hooks/grepai/\`, then merge the following handlers into \`<project-root>/.codex/hooks.json\` without replacing unrelated entries:
-
-- \`SessionStart\`: matcher \`startup|resume|clear|compact\`, one command string \`node "<absolute-hook-directory>/grepai-session.mjs"\`, \`timeout: 2\`.
-- \`PreToolUse\`: matcher \`^Bash$\`, one command string \`node "<absolute-hook-directory>/grepai-reminder.mjs"\`, \`timeout: 2\`.
-
-Use no matcher for events whose schema forbids one. Deduplicate by exact command string and review the changed definition with \`/hooks\`. To remove, delete only handlers whose commands name these two scripts, then remove their copied files.
-
-Register the MCP server with \`codex mcp add grepai -- grepai mcp-serve\` and verify with \`codex mcp list\`.
-`);
-    writeFile(path.join(targetDir, 'assets', 'grepai-session.mjs'), `#!/usr/bin/env node
-import { existsSync } from 'node:fs';
-import path from 'node:path';
-
-const chunks = [];
-for await (const chunk of process.stdin) chunks.push(chunk);
-let input = {};
-try { input = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'); } catch {}
-const cwd = typeof input.cwd === 'string' ? input.cwd : process.cwd();
-if (!existsSync(path.join(cwd, '.grepai'))) {
-  process.stdout.write('{}');
-} else {
-  process.stdout.write(JSON.stringify({
-    hookSpecificOutput: {
-      hookEventName: 'SessionStart',
-      additionalContext: 'grepai is configured for this repository; prefer grepai semantic search for code exploration.'
-    }
-  }));
-}
-`, 0o755);
-    writeFile(path.join(targetDir, 'assets', 'grepai-reminder.mjs'), `#!/usr/bin/env node
-import { existsSync } from 'node:fs';
-import path from 'node:path';
-
-const chunks = [];
-for await (const chunk of process.stdin) chunks.push(chunk);
-let input = {};
-try { input = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'); } catch {}
-const cwd = typeof input.cwd === 'string' ? input.cwd : process.cwd();
-const command = typeof input.tool_input?.command === 'string' ? input.tool_input.command : '';
-const searchesCode = /(?:^|[|;&(])\\s*(?:command\\s+)?(?:grep|egrep|fgrep|ugrep|rg|ag|ack|find|bfs)\\b/.test(command);
-if (!searchesCode || !existsSync(path.join(cwd, '.grepai'))) {
-  process.stdout.write('{}');
-} else {
-  process.stdout.write(JSON.stringify({
-    hookSpecificOutput: {
-      hookEventName: 'PreToolUse',
-      additionalContext: 'Prefer grepai semantic search before broad shell-based code search.'
-    }
-  }));
-}
-`, 0o755);
-    writeFile(path.join(targetDir, 'scripts', 'mcp-check.sh'), `#!/usr/bin/env bash
-set -euo pipefail
-
-action="\${1:-status}"
-case "$action" in
-  status)
-    codex mcp list
-    ;;
-  add)
-    command -v grepai >/dev/null
-    codex mcp add grepai -- grepai mcp-serve
-    ;;
-  *)
-    echo "usage: mcp-check.sh [status|add]" >&2
-    exit 2
-    ;;
-esac
-`, 0o755);
-    for (const name of ['grepai-session.mjs', 'grepai-reminder.mjs']) {
-      copySelected(path.join(sourceDir, 'assets', name), path.join(targetDir, 'assets', name));
-    }
-    writeFile(path.join(targetDir, 'scripts', 'infra-check.sh'), `#!/usr/bin/env bash
-set -euo pipefail
-
-check_exact() {
-  local label="$1" actual="$2" expected="$3"
-  test "$actual" = "$expected" || { echo "$label requires exact version $expected; found \${actual:-missing}" >&2; return 1; }
-}
-
-command -v grepai >/dev/null || { echo "grepai 0.26.0 is required" >&2; exit 1; }
-command -v ollama >/dev/null || { echo "ollama 0.15.2 is required" >&2; exit 1; }
-check_exact grepai "$(grepai version 2>/dev/null | awk '{print $NF}')" 0.26.0
-check_exact ollama "$(ollama --version 2>/dev/null | awk '{print $NF}')" 0.15.2
-echo "Pinned grepai infrastructure is ready."
-`, 0o755);
-    writeFile(path.join(targetDir, 'scripts', 'install.sh'), `#!/usr/bin/env bash
-set -euo pipefail
-
-HERE="$(cd "$(dirname "$0")" && pwd)"
-if "$HERE/infra-check.sh"; then exit 0; fi
-echo "Install exact grepai 0.26.0 and ollama 0.15.2 from approved pinned package sources, then rerun setup." >&2
-exit 1
-`, 0o755);
-    writeFile(path.join(targetDir, 'scripts', 'upgrade.sh'), `#!/usr/bin/env bash
-set -euo pipefail
-
-target="\${1:-0.26.0}"
-test "$target" = 0.26.0 || { echo "Unsupported unpinned target: $target" >&2; exit 2; }
-actual="$(grepai version 2>/dev/null | awk '{print $NF}' || true)"
-test "$actual" = "$target" || { echo "Install exact grepai $target through an approved pinned package source; automatic floating upgrades are disabled." >&2; exit 1; }
-echo "grepai $target is installed."
-`, 0o755);
-  }
-
   if (plugin === 'brewtools' && skill === 'plugin-update') {
     writeFile(path.join(targetDir, 'scripts', 'discover-plugins.sh'), `#!/usr/bin/env bash
 set -euo pipefail
@@ -1012,7 +881,6 @@ function generateAgent(plugin, agentName) {
     'agent-creator': `Create or improve Codex custom-agent TOMLs. Use one standalone file per agent under project .codex/agents/ or personal ~/.codex/agents/. Require name, description, and developer_instructions. Use only supported optional configuration keys. Validate TOML with Python tomllib and keep the role narrow.`,
     architect: `Design changes from repository evidence. Identify system boundaries, ownership, data flow, contracts, failure modes, migration constraints, and verification before recommending an implementation. Preserve existing behavior unless the task explicitly changes it. Return concrete decisions, affected files, and unresolved risks.`,
     'bash-expert': `Write and review portable shell automation. Default to strict mode, quote expansions, avoid destructive operations, keep output deterministic, and make failure states explicit. Validate syntax with bash -n and use shellcheck when available. Never expose secrets or mutate systems outside the requested scope.`,
-    'bc-grepai-configurator': `Configure and diagnose grepai for Codex repositories. Inspect current grepai and MCP state first, use native codex mcp list and codex mcp add commands, and keep hook definitions under the selected .codex/hooks.json. Pin versions, test with local fixtures, and never edit installed plugin caches.`,
     developer: `Implement scoped repository changes from existing architecture and instructions. Reuse established patterns, preserve unrelated user edits, keep dependencies pinned, and verify behavior with the narrowest reliable tests. Report exact files changed, commands run, and any remaining risk.`,
     'hook-creator': `Create or improve Codex hooks using current official schemas. Use hooks.json or config.toml at an active .codex layer. Command handlers use one command string, timeout in seconds, and JSON stdin and stdout. Respect matcher limitations, test malformed input and timeout behavior, and explain review through /hooks after definitions change.`,
     reviewer: `Review changes without modifying them unless explicitly asked. Prioritize correctness, regressions, security, contracts, and missing tests. Cite precise files and lines, assign severity only when justified, and distinguish confirmed defects from questions or optional improvements.`,

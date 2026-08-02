@@ -4,7 +4,7 @@ description: "Both Brewcode hooks: events, channels, logic"
 order: 13
 ---
 
-import { Card, CardGrid, Callout, Badge } from '../../../components/mdx';
+import { Card, CardGrid, Badge } from '../../../components/mdx';
 
 # Hooks
 
@@ -115,15 +115,6 @@ The hook reads `permission_mode` from the hook payload and appends it to `system
 3. If the file is less than 60 seconds old -- creates `.claude/plans/LATEST.md` -> `~/.claude/plans/<newest>.md`
 
 ---
-
-## grepai hooks
-
-<Callout type="note" title="grepai hooks are per-project, not always-on">
-  The grepai hooks are <strong>not</strong> shipped as always-on brewcode hooks.
-  They are installed per-project by the <code>/brewcode:grepai</code> self-install skill, which copies hook scripts from
-  <code>skills/grepai/assets/</code> into <code>.claude/grepai/hooks/</code> and merges the entries
-  into <code>.claude/settings.json</code>.
-</Callout>
 
 <CardGrid>
   <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">

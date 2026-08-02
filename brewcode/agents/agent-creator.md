@@ -187,7 +187,7 @@ claude --agents '{
 
 ## Spawn From Main Conversation Only (BC workflow)
 
-**CC capability:** since v2.1.172, SAs can spawn their own SAs (up to 5 levels deep). **BC workflow stance:** spawn ONLY from main conversation. Nested spawns bypass session binding + grepai injection.
+**CC capability:** since v2.1.172, SAs can spawn their own SAs (up to 5 levels deep). **BC workflow stance:** spawn ONLY from main conversation. Nested spawns bypass session binding + hook context injection.
 
 **Nesting-depth guidance:** depth cap is configurable via `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` (v2.1.219+) -- verify the live cap, !=hardcode "5". Each level multiplies token cost + loses ctx fidelity. Prefer flat fan-out from main. Give Task/AG TL to an AG only when it genuinely orchestrates.
 

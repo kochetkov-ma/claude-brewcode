@@ -2,6 +2,46 @@
 
 ---
 
+## v4.4.0 (2026-08-02)
+
+> **grepai removed.** The `/brewcode:grepai` skill, the `bc-grepai-configurator` agent, the two project hooks it self-installed, the `grepai-first` rule template and every "use `grepai_search` first" instruction across all four plugins are gone. Every place that pointed at semantic search now points at the Bash search path (`grep`->ugrep, `find`->bfs, `rg`) that this macOS Claude Code build actually has. brewcode is now **8 skills / 9 agents**.
+
+> Docs: [brewcode overview](https://doc-claude.brewcode.app/brewcode/overview/) | [brewcode skills](https://doc-claude.brewcode.app/brewcode/skills/) | [brewcode agents](https://doc-claude.brewcode.app/brewcode/agents/) | [brewcode hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | [spec](https://doc-claude.brewcode.app/brewcode/skills/spec/) | [convention](https://doc-claude.brewcode.app/brewcode/skills/convention/) | [superreview](https://doc-claude.brewcode.app/brewcode/skills/superreview/) | [architect](https://doc-claude.brewcode.app/brewcode/agents/architect/) | [developer](https://doc-claude.brewcode.app/brewcode/agents/developer/) | [reviewer](https://doc-claude.brewcode.app/brewcode/agents/reviewer/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [guide](https://doc-claude.brewcode.app/brewdoc/skills/guide/) | [text-human](https://doc-claude.brewcode.app/brewtools/skills/text-human/) | [getting-started](https://doc-claude.brewcode.app/getting-started/) | [installation](https://doc-claude.brewcode.app/installation/) | [quickstart](https://doc-claude.brewcode.app/quickstart/)
+
+### brewcode
+
+#### Removed
+- **grepai skill:** `skills/grepai/` deleted whole — SKILL.md, README, `config.yaml.example`, 14 shell scripts, `scripts/lib/index-common.sh`, and the two hook assets (`grepai-session.mjs`, `grepai-reminder.mjs`) it installed into consumer projects
+- **bc-grepai-configurator:** the internal config-generating agent is gone; agent roster 10 -> 9
+- **docs + template:** `docs/grepai.md` and `templates/rules/grepai-first.md.template` deleted
+- **hooks:** `bc-grepai-configurator` dropped from the system-agent allowlist in `hooks/lib/utils.mjs`
+
+#### Changed
+- **architect / reviewer agents:** reuse-first discovery and the "similar exists?" check now run through Bash (`grep`/`rg`/`find`) instead of `grepai_search`. The instruction survives — only the tool changed
+- **convention skill:** discovery step moved to Bash search + Read; the "grepai unavailable" error row is gone
+- **superreview:** Phase 1 exploration, the emitted `SKILL.md.template` search-first rule, the generated report's "Search tool used" field and the TypeScript/React hook-existence check all retargeted to `rg`/`grep`/`git ls-files`
+- **skill-creator / agent-creator:** "grepai injection" generalised to "hook context injection" — the claim was always about UserPromptSubmit context, not about grepai
+- **docs:** `docs/commands.md` renumbered (grepai was command 2), `docs/file-tree.md` statistics recounted — 9 agents, 8 skills, 9 scripts, 2 templates, 5 docs
+
+### brewdoc
+
+#### Changed
+- **guide:** grepai removed from the skills catalog (brewcode 9 -> 8), the agents catalog (15 -> 12 plugin agents), the advanced-topics list (section 1 deleted, 2-4 renumbered), the installation smoke test (now `/brewcode:skills status`) and the overview workflow. The Plugin Suite ASCII diagram was redrawn rather than line-deleted; brewui, which was missing entirely, is now shown
+
+### brewtools
+
+#### Changed
+- **text-human:** the semantic-search block in the java/python/typescript references is gone; the grep block is promoted from "fallback" to the primary pattern
+
+### repo
+
+#### Changed
+- **docs site:** `brewcode/skills/grepai.mdx` deleted, nav entry removed, 6 dead links to `/brewcode/skills/grepai/` fixed, and Ollama + bge-m3 dropped from the installation prerequisites — they were only ever needed as grepai's embedder. All counts and card grids recomputed; `npm run build` green, 57 pages
+- **rules:** `.claude/rules/grepai-first.md` deleted; the `last_index_time` entry in `avoid.md` went with it (the lesson was purely about grepai's own YAML)
+- **codex compat:** `.codex/scripts/generate-compat.mjs` no longer enumerates or generates the grepai skill mirror (-132 lines), so regeneration cannot reintroduce it
+
+---
+
 ## v4.3.0 (2026-08-02)
 
 > Repo-wide prompt audit (delegation contract, scope guards, dead-weight removal) **plus** subagent resource limits: verified frontmatter contract, calibrated `maxTurns` across all agents, and the new `agent-deadline` skill — a soft wall-clock deadline that forces a subagent to finalize instead of being killed.

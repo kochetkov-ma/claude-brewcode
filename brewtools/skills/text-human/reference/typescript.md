@@ -183,12 +183,7 @@ export const createMockUser = () => { }
 ### Scan Pattern
 
 ```
-# Semantic search:
-grepai_search("jsdoc on private functions")
-grepai_search("redundant type annotations")
-grepai_search("test file documentation")
-
-# Fallback grep:
+# grep patterns:
 grep -n "/\*\*" <file>              // Find JSDoc
 grep -n "^const.*=" <file>         // Find functions
 ```

@@ -1,6 +1,6 @@
 ---
 title: "Skills"
-description: "All 9 Brewcode skills + 1 dynamic per-project review skill"
+description: "All 8 Brewcode skills + 1 dynamic per-project review skill"
 order: 11
 ---
 
@@ -9,10 +9,10 @@ import { Card, CardGrid, Callout, Steps, UpdateNotice } from '../../../component
 # Skills
 
 Skills (recipes) are slash commands that define *what* to do. Each skill is described in a `SKILL.md` file
-with frontmatter metadata and instructions for agents. Brewcode includes 9 skills covering
+with frontmatter metadata and instructions for agents. Brewcode includes 8 skills covering
 the full task lifecycle -- from project analysis to E2E testing.
 
-On top of those there is a **dynamic tenth skill**: it is not shipped with the plugin, it is **generated into every target project** by [`/brewcode:superreview`](/brewcode/skills/superreview/) and invoked there as `/superreview`, tailored to that project's tech stack, agents, rules and tracker. See the [emitted skill page](/brewcode/skills/review/) for details.
+On top of those there is a **dynamic ninth skill**: it is not shipped with the plugin, it is **generated into every target project** by [`/brewcode:superreview`](/brewcode/skills/superreview/) and invoked there as `/superreview`, tailored to that project's tech stack, agents, rules and tracker. See the [emitted skill page](/brewcode/skills/review/) for details.
 
 ## Summary table
 
@@ -21,12 +21,11 @@ On top of those there is a **dynamic tenth skill**: it is not shipped with the p
 | 1 | [agents](/brewcode/skills/agents/) | [`/brewcode:agents`](/brewcode/skills/agents/) | opus | Creates, improves, syncs Claude Code subagents |
 | 2 | [convention](/brewcode/skills/convention/) | [`/brewcode:convention`](/brewcode/skills/convention/) | opus | Extracts etalon classes, patterns, architecture into convention docs |
 | 3 | [e2e](/brewcode/skills/e2e/) | [`/brewcode:e2e`](/brewcode/skills/e2e/) | opus | Orchestrates e2e testing: BDD scenarios, Playwright autotests |
-| 4 | [grepai](/brewcode/skills/grepai/) | [`/brewcode:grepai`](/brewcode/skills/grepai/) | sonnet | Manages grepai semantic code search: setup, status, start, stop, reindex, optimize, upgrade, uninstall |
-| 5 | [rules](/brewcode/skills/rules/) | [`/brewcode:rules`](/brewcode/skills/rules/) | sonnet | Syncs KNOWLEDGE.jsonl or session learnings to project rules |
-| 6 | [skills](/brewcode/skills/skills/) | [`/brewcode:skills`](/brewcode/skills/skills/) | opus | Lists, improves, creates, syncs Claude Code skills |
-| 7 | [spec](/brewcode/skills/spec/) | [`/brewcode:spec`](/brewcode/skills/spec/) | opus | Creates SPEC.md task spec via research + interaction |
-| 8 | [superreview](/brewcode/skills/superreview/) | [`/brewcode:superreview`](/brewcode/skills/superreview/) | opus | Generates a project-tailored deep-review skill: domain-expert routing + scope discipline + mechanical gates + adversarial validation |
-| 9 | [teams](/brewcode/skills/teams/) | [`/brewcode:teams`](/brewcode/skills/teams/) | opus | Creates and manages dynamic teams of domain agents |
+| 4 | [rules](/brewcode/skills/rules/) | [`/brewcode:rules`](/brewcode/skills/rules/) | sonnet | Syncs KNOWLEDGE.jsonl or session learnings to project rules |
+| 5 | [skills](/brewcode/skills/skills/) | [`/brewcode:skills`](/brewcode/skills/skills/) | opus | Lists, improves, creates, syncs Claude Code skills |
+| 6 | [spec](/brewcode/skills/spec/) | [`/brewcode:spec`](/brewcode/skills/spec/) | opus | Creates SPEC.md task spec via research + interaction |
+| 7 | [superreview](/brewcode/skills/superreview/) | [`/brewcode:superreview`](/brewcode/skills/superreview/) | opus | Generates a project-tailored deep-review skill: domain-expert routing + scope discipline + mechanical gates + adversarial validation |
+| 8 | [teams](/brewcode/skills/teams/) | [`/brewcode:teams`](/brewcode/skills/teams/) | opus | Creates and manages dynamic teams of domain agents |
 | ★ | [superreview (emitted)](/brewcode/skills/review/) | `/superreview` | opus | **Per-project** deep review — written into your repo by `/brewcode:superreview` |
 
 <CardGrid>
@@ -38,9 +37,6 @@ On top of those there is a **dynamic tenth skill**: it is not shipped with the p
   </Card>
   <Card title="e2e" icon="check" href="/brewcode/skills/e2e/">
     E2E testing: scenarios, autotests, quorum review
-  </Card>
-  <Card title="grepai" icon="search" href="/brewcode/skills/grepai/">
-    Semantic search management
   </Card>
   <Card title="rules" icon="shield" href="/brewcode/skills/rules/">
     Knowledge-to-rules synchronization
@@ -62,7 +58,7 @@ On top of those there is a **dynamic tenth skill**: it is not shipped with the p
   </Card>
 </CardGrid>
 
-## Delegation — one contract, all nine skills
+## Delegation — one contract, all eight skills
 
 Every skill here fans work out to subagents, and all of them follow the same sizing rule.
 
@@ -126,7 +122,6 @@ The recommended skill execution order for a standard project cycle:
 ```
 spec --> superreview --> /superreview (emitted into your repo)
   |
-  +-- grepai (optional)
   +-- convention (optional)
   +-- rules
   +-- teams (optional)

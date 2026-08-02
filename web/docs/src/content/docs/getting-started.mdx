@@ -8,17 +8,17 @@ import { Card, CardGrid, Callout, InstallPrompt, Spoiler } from '../../component
 
 # Introduction
 
-**Brewcode** is a plugin suite for Claude Code: spec authoring, semantic code search, multi-agent quorum review, and tooling to build your own skills, agents, and hooks. Recipes (skills) define what to brew, brewers (agents) do the work, and hooks manage prompt-time injection.
+**Brewcode** is a plugin suite for Claude Code: spec authoring, multi-agent quorum review, and tooling to build your own skills, agents, and hooks. Recipes (skills) define what to brew, brewers (agents) do the work, and hooks manage prompt-time injection.
 
 <Callout type="tip" title="Spec first, then build">
-  `spec` → `grepai` → `superreview` — author the spec, index the code for semantic search, then generate a project-tailored deep-review skill.
+  `spec` → `convention` → `superreview` — author the spec, capture the project's conventions, then generate a project-tailored deep-review skill.
 </Callout>
 
 ## Four plugins, one suite
 
 <CardGrid>
   <Card title="brewcode" icon="infinity" href="/brewcode/overview/">
-    The core: codebase exploration, quorum review, spec authoring, skill/agent/hook creation. 9 skills · 10 agents · 2 hooks.
+    The core: codebase exploration, quorum review, spec authoring, skill/agent/hook creation. 8 skills · 9 agents · 2 hooks.
   </Card>
   <Card title="brewtools" icon="settings" href="/brewtools/overview/">
     Universal utilities: prompt optimization, AI artifact removal, secrets scanning, SSH, deploy. 11 skills · 3 agents.
@@ -42,12 +42,12 @@ import { Card, CardGrid, Callout, InstallPrompt, Spoiler } from '../../component
     3 to 5 parallel reviewers work independently. Results are merged via a
     quorum algorithm (2/3 agreement). Deduplication and ranking by severity.
   </Card>
-  <Card title="Semantic code search" icon="brain" href="/brewcode/skills/grepai/">
-    grepai indexes the project with Ollama + bge-m3 embeddings. Self-installs its
-    hooks into the project and steers agents to grepai_search first.
+  <Card title="Convention capture" icon="book" href="/brewcode/skills/convention/">
+    Extracts etalon classes, patterns, and architecture into convention docs,
+    then syncs the distilled rules into <code>.claude/rules/</code>.
   </Card>
   <Card title="Skills and agents" icon="settings" href="/brewcode/skills/">
-    25 skills and 13 specialized agents across 4 plugins. Built-in tools for
+    25 skills and 12 specialized agents across 4 plugins. Built-in tools for
     creating your own skills, agents, and hooks. Prompt optimization included.
   </Card>
 </CardGrid>
@@ -56,7 +56,7 @@ import { Card, CardGrid, Callout, InstallPrompt, Spoiler } from '../../component
 
 | Plugin | Purpose | Skills | Agents | Hooks |
 |--------|---------|--------|--------|-------|
-| **brewcode** | Spec authoring, codebase exploration, quorum review, skill/agent/hook creation | 9 | 10 | 2 |
+| **brewcode** | Spec authoring, codebase exploration, quorum review, skill/agent/hook creation | 8 | 9 | 2 |
 | **brewtools** | Text utilities: prompt optimization, AI artifact removal, secrets scanning, SSH, deploy | 11 | 3 | — |
 | **brewui** | UI / visual / creative tools (placeholder, empty) | 0 | 0 | — |
 | **brewdoc** | Documentation tools: doc-staleness tracking, generation, memory sync, PDF conversion | 6 | 0 | — |
@@ -78,7 +78,7 @@ All four plugins install with a single marketplace and load automatically with e
     Set up Brewcode in 2 minutes. One command to add the marketplace, one to install.
   </Card>
   <Card title="Quick Start" icon="play" href="/quickstart/">
-    Get started in 15 minutes: [spec](/brewcode/skills/spec/), [semantic search](/brewcode/skills/grepai/), [deep review](/brewcode/skills/superreview/).
+    Get started in 15 minutes: [spec](/brewcode/skills/spec/), [conventions](/brewcode/skills/convention/), [deep review](/brewcode/skills/superreview/).
   </Card>
 </CardGrid>
 

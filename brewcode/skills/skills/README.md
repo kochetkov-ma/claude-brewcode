@@ -96,10 +96,10 @@ The full creation pipeline includes Phase 0 Discovery (parallel Explore agents),
 /brewcode:skills create a skill that scans for hardcoded API keys
 
 # Improve an existing skill by name
-/brewcode:skills improve the grepai skill
+/brewcode:skills improve the superreview skill
 
 # Improve a skill by explicit path
-/brewcode:skills update brewcode/skills/grepai
+/brewcode:skills update brewcode/skills/convention
 
 # Review all skills in a folder for quality
 /brewcode:skills review ~/.claude/skills/

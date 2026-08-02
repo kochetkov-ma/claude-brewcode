@@ -2,14 +2,13 @@
 
 Domain: Core Workflow
 
-## Section 1: Brewcode Skills (9)
+## Section 1: Brewcode Skills (8)
 
-The main plugin. Spec authoring, semantic search, code quality.
+The main plugin. Spec authoring, deep review, code quality.
 
 | Skill | Purpose |
 |-------|---------|
 | `/brewcode:spec "desc"` | Create SPEC through research + user interaction |
-| `/brewcode:grepai` | Setup grepai semantic code search |
 | `/brewcode:superreview` | Deep multi-perspective quorum code review |
 | `/brewcode:convention` | Extract code conventions, patterns, architecture |
 | `/brewcode:rules` | Prompt-driven rules management: status, create, improve, review |
@@ -18,7 +17,7 @@ The main plugin. Spec authoring, semantic search, code quality.
 | `/brewcode:skills` | Prompt-driven skill management: status, create, improve, review, sync |
 | `/brewcode:agents` | Prompt-driven agent management: status, create, improve, review, sync |
 
-Typical flow: `spec` -> implement -> `superreview` (use `grepai` for search)
+Typical flow: `spec` -> implement -> `superreview`
 
 ## Section 2: Brewdoc Skills (6)
 
@@ -33,7 +32,7 @@ Documentation tools. Sync, generate, optimize, export, publish.
 | `/brewdoc:guide` | Interactive teaching for the plugin suite (this guide) |
 | `/brewdoc:publish` | Publish content to brewpage.app — text, markdown, or files |
 
-## Section 3: Brewtools Skills (10)
+## Section 3: Brewtools Skills (11)
 
 Universal utilities. Work in any project, no setup needed.
 
@@ -49,6 +48,7 @@ Universal utilities. Work in any project, no setup needed.
 | `/brewtools:think-short` | Install terse-mode hooks (project or global) that inject brevity directives to cut token bloat |
 | `/brewtools:manager` | Codeword (++m, plan-aware) Manager prompt + opt-in HARD wall blocking mutating tools (RU+EN) |
 | `/brewtools:task-board-init` | Deploy a file-based Kanban into any repo via multi-agent analysis |
+| `/brewtools:agent-deadline` | Install a soft wall-clock budget for subagents — warn at 80%, block at 100% |
 
 These are standalone — no project configuration required. Run them anywhere.
 
@@ -70,13 +70,11 @@ Brewui currently ships no skills -- placeholder for future UI/visual/creative to
 
 | Step | Skill | Why |
 |------|-------|-----|
-| 1 | `/brewcode:grepai` | Enable semantic search |
-| 2 | `/brewcode:convention` | Learn existing patterns |
-| 3 | `/brewcode:spec "task"` | Define what to build |
-| 4 | `/brewcode:superreview` | Review the result |
-| 5 | `/brewcode:rules` | Save learnings as rules |
+| 1 | `/brewcode:convention` | Learn existing patterns |
+| 2 | `/brewcode:spec "task"` | Define what to build |
+| 3 | `/brewcode:superreview` | Review the result |
+| 4 | `/brewcode:rules` | Save learnings as rules |
 
 **Tips:**
 - Skills that modify files always confirm before writing
-- Use `/brewcode:grepai` first in any new project — it indexes your code for semantic search
 - `/brewcode:convention` extracts patterns so new code matches your existing style

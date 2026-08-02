@@ -1,6 +1,6 @@
 ---
 title: "Quick Start"
-description: "Your first 15 minutes with Brewcode: spec, semantic search, deep review"
+description: "Your first 15 minutes with Brewcode: spec, conventions, deep review"
 order: 3
 ---
 
@@ -9,7 +9,7 @@ import { Card, CardGrid, Callout, Steps, Badge } from '../../components/mdx';
 # Quick Start
 
 In 15 minutes you will go through the core Brewcode workflow: from writing a structured specification
-to indexing your codebase for semantic search and generating a project-tailored deep review skill.
+to capturing your project's conventions and generating a project-tailored deep review skill.
 
 <Callout type="note" title="Before you begin">
   Make sure Claude Code and the brewcode plugin are installed.
@@ -43,13 +43,12 @@ claude plugin install brewcode@claude-brewcode</code></pre>
   </li>
   <li class="step step-primary">
     <div>
-      <strong>Index for semantic search</strong> <Badge variant="primary" text="/brewcode:grepai setup" />
-      <pre><code>/brewcode:grepai setup</code></pre>
-      <p><strong>What happens:</strong> checks and installs Ollama and the CLI if missing, builds a vector
-      index of your codebase using the <code>bge-m3</code> embedding model, and self-installs grepai hooks
-      into the project.</p>
-      <p><strong>Result:</strong> all subsequent Claude Code sessions can query the project semantically —
-      faster and more precise context retrieval for every agent working on the spec.</p>
+      <strong>Capture project conventions</strong> <Badge variant="primary" text="/brewcode:convention" />
+      <pre><code>/brewcode:convention</code></pre>
+      <p><strong>What happens:</strong> parallel agents analyze each architectural layer, extract etalon
+      classes and recurring patterns, and write them into <code>.claude/convention/</code>.</p>
+      <p><strong>Result:</strong> every later agent has a written reference for how this project does
+      things — no more guessing at style or structure.</p>
     </div>
   </li>
   <li class="step step-primary">
@@ -98,7 +97,7 @@ claude plugin install brewcode@claude-brewcode</code></pre>
 
 <CardGrid>
   <Card title="brewcode" icon="building" href="/brewcode/overview/">
-    9 skills: spec, semantic search, deep review, conventions, teams, and more.
+    8 skills: spec, deep review, conventions, rules, teams, and more.
   </Card>
   <Card title="brewtools" icon="wrench" href="/brewtools/overview/">
     11 skills for text utilities: prompt optimization, AI artifact removal,
@@ -112,7 +111,7 @@ claude plugin install brewcode@claude-brewcode</code></pre>
     doc generation, memory sync, PDF conversion, publishing.
   </Card>
   <Card title="All brewcode skills" icon="clipboard" href="/brewcode/skills/">
-    Full list of 9 brewcode skills with commands, parameters, and dependencies.
+    Full list of 8 brewcode skills with commands, parameters, and dependencies.
   </Card>
   <Card title="Dynamic teams" icon="group" href="/brewcode/skills/teams/">
     Create 5-20 project-specific agents with self-selection and performance tracking.

@@ -88,8 +88,8 @@ single agent that owns half the repo.
 
 ### Phase 1 — Analyze the TARGET project
 
-Gather everything the emitted skill must be wired to. Prefer `grepai_search` first for code exploration; fall back to
-Bash search (`grep`->ugrep / `find`->bfs on macOS CC).
+Gather everything the emitted skill must be wired to. Explore the code with Bash search (`grep`->ugrep / `find`->bfs
+on macOS CC; native Grep/Glob are no-ops there).
 
 **EXECUTE** using Bash tool (project scan):
 ```bash

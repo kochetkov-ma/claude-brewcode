@@ -461,7 +461,7 @@ closeout comment.
 ")
 ```
 
-Each agent MUST search-first (grep / verify imports, prefer `mcp__grepai__search` if available) before flagging any
+Each agent MUST search-first (Bash `grep`/`rg` + verify imports) before flagging any
 reuse/duplicate, and read the ACTUAL code at every cited line. Collect every agent's findings into one pool
 `{CANDIDATES}` (tag each finding with its producing agent as `source`). Gate failures from Phase 0 step 4 enter the
 pool with `source: gate` and verdict `CONFIRMED-BY-EXECUTION`, citing the command + output line: they carry their
@@ -721,7 +721,7 @@ superreview does NOT run /simplify or any skill and does NOT edit code — these
 | Validator agent | first non-owning in the Phase 3 chain (`{VALIDATOR_AGENT}` -> `{ARBITER_AGENT}` -> generic) | batches <=40, max 4 spawns, merge/de-dup ONCE over all batches |
 | Report dir | `<repo-root>/.claude/reports/{TIMESTAMP}_superreview/` | Merged report, findings sorted P0 -> P3 |
 | Max files | 50 (except `FULL_PROJECT`) | AskUserQuestion: narrow or proceed |
-| Search tool | `mcp__grepai__search` if available, else Bash `rg`/`grep`/`git ls-files` | reuse-first search; note which in report |
+| Search tool | Bash `rg`/`grep`/`git ls-files` | reuse-first search; note which in report |
 
 ---
 
@@ -746,7 +746,6 @@ superreview does NOT run /simplify or any skill and does NOT edit code — these
 | `{SCOPE_AGENT_A}` unavailable | Run scope pass A's prompt on `Explore`, note the downgrade |
 | `{PR_ISSUE_JSON}` empty | Pass B still runs DELIVERY vs the local task; records `PR: none`, skips closeout `scope#C*` |
 | Scope gate cannot be asked (non-interactive) | Report at the priority the finding ENTERED with, tagged `unconfirmed-sanction`; never silently downgrade or upgrade past a cap |
-| `grepai` unavailable | Fall back to Bash `rg`/`grep`/`git ls-files`; state which path was used in the report |
 | Agent timeout | Retry once, then mark that source unavailable + warn; the verdict inherits INCOMPLETE — a timed-out group was NOT reviewed |
 | Validation rejects everything, gates green | Report "No issues survived validation" — verdict APPROVED |
 | All sources clean | Report "No issues found across standards, architecture, scope and correctness" — verdict APPROVED |

@@ -218,12 +218,7 @@ def mock_user():
 ### Scan Pattern
 
 ```
-# Semantic search:
-grepai_search("private methods with docstrings")
-grepai_search("trivial docstring parameters")
-grepai_search("test file documentation")
-
-# Fallback grep:
+# grep patterns:
 grep -n '"""' <file>              # Find docstrings
 grep -n "def _" <file>            # Find private methods
 ```

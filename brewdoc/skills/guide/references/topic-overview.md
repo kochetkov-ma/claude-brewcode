@@ -19,7 +19,7 @@ One marketplace, four plugins, one version number. Install what you need.
 
 | Plugin | Purpose | Key Skills |
 |--------|---------|------------|
-| brewcode | Spec authoring, semantic search, deep review, agent teams | spec, grepai, superreview, convention, teams, e2e |
+| brewcode | Spec authoring, deep review, agent teams, conventions | spec, superreview, convention, teams, rules, e2e |
 | brewdoc | Documentation tools: sync, generate, optimize, publish | docsync, my-claude, memory, md-to-pdf, guide, publish |
 | brewtools | Universal utilities: text optimization, security scanning | text-optimize, text-human, secrets-scan, ssh, deploy, plugin-update |
 | brewui | UI/visual/creative tools (placeholder, empty) | (none yet) |
@@ -44,7 +44,7 @@ The plugins complement each other:
 All four share the same version number. They update together from the same marketplace. No version mismatches.
 
 Example workflow:
-1. `/brewcode:grepai` indexes the project for semantic search
+1. `/brewcode:convention` extracts the project patterns
 2. `/brewcode:spec` defines the feature, then you implement it
 3. `/brewcode:superreview` reviews it, `/brewdoc:docsync` syncs stale docs
 4. `/brewtools:secrets-scan` checks nothing was leaked

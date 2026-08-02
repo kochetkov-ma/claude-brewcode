@@ -67,7 +67,7 @@ rules_files: [paths with content]
    Found X duplicate/redundant entries (Y% of memory):
    | Entry | Memory File | Already In | Action |
    |-------|-------------|------------|--------|
-   | "Use grepai first" | MEMORY.md:5 | rules/grepai-first.md | DELETE |
+   | "Search via Bash grep" | MEMORY.md:5 | rules/code-search.md | DELETE |
    ...
    ```
 4. `AskUserQuestion`: "Delete X duplicate entries (Y% of memory)? This is safe — content exists elsewhere."

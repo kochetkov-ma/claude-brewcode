@@ -41,7 +41,7 @@ Example:
 Found 4 duplicate/redundant entries (35% of memory):
 | Entry | Memory File | Already In | Action |
 |-------|-------------|------------|--------|
-| "Use grepai first" | MEMORY.md:5 | rules/grepai-first.md | DELETE |
+| "Search via Bash grep" | MEMORY.md:5 | rules/code-search.md | DELETE |
 | "Constructor injection" | MEMORY.md:12 | CLAUDE.md:## DI | DELETE |
 | "No System.out" | MEMORY.md:18 | rules/best-practice.md:7 | DELETE |
 | "Edit bottom-up" | MEMORY.md:23 | rules/avoid.md:8 | DELETE |

@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 4.3.0 |
+| Version | 4.4.0 |
 | Skills | 9 |
 | Agents | 10 |
 | Hooks | 2 |
@@ -65,8 +65,7 @@ claude --plugin-dir ./brewcode
 ## Quick Start
 
 ```bash
-/brewcode:grepai                              # 1. Set up semantic code search (one-time)
-/brewcode:spec "Implement JWT authorization"  # 2. Research + specification
+/brewcode:spec "Implement JWT authorization"  # Research + specification
 ```
 
 ## Skills
@@ -74,7 +73,6 @@ claude --plugin-dir ./brewcode
 | Skill | Purpose |
 |-------|---------|
 | [`/brewcode:spec`](skills/spec/README.md) | Research codebase + user dialog -> SPEC.md |
-| [`/brewcode:grepai`](skills/grepai/README.md) | Manages grepai semantic code search: setup, status, start, stop, reindex, optimize, upgrade, uninstall |
 | [`/brewcode:superreview`](skills/superreview/README.md) | Generate a project-tailored deep-review skill: domain-expert routing + scope discipline + mechanical gates + adversarial validation |
 | [`/brewcode:teams`](skills/teams/README.md) | Dynamic agent team creation, management, and performance tracking |
 | [`/brewcode:convention`](skills/convention/README.md) | Extract etalon classes, patterns, architecture into convention docs and rules |
@@ -99,7 +97,6 @@ claude --plugin-dir ./brewcode
 | [agent-creator](agents/agent-creator.md) | inherit | Creates and improves Claude Code agents |
 | [hook-creator](agents/hook-creator.md) | inherit | Creates and debugs Claude Code hooks |
 | [bash-expert](agents/bash-expert.md) | inherit | Creates sh/bash scripts for Mac/Linux |
-| bc-grepai-configurator | sonnet | Internal: spawned by /brewcode:grepai |
 | bc-rules-organizer | haiku | Internal: spawned by /brewcode:rules |
 
 > **Dynamic teams:** Use `/brewcode:teams create` to generate 5-20 project-specific agents with self-selection protocol and performance tracking.
@@ -116,8 +113,8 @@ brewcode/
 |   +-- forced-eval.mjs                # UserPromptSubmit: manager-role + split-discipline reminder
 |   +-- hooks.json                     # Event bindings
 |   +-- lib/utils.mjs                  # Shared utilities
-+-- agents/                            # 10 agents
-+-- skills/                            # 9 skills
++-- agents/                            # 9 agents
++-- skills/                            # 8 skills
 +-- templates/                         # Rule templates
 ```
 

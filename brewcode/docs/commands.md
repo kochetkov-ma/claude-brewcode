@@ -13,22 +13,21 @@ description: Detailed description of all brewcode plugin commands
 | # | Command | Purpose | Context | Model | Deps |
 |---|---------|---------|---------|-------|------|
 | 1 | `/brewcode:spec` | Create task SP | session | opus | -- |
-| 2 | `/brewcode:grepai` | Semantic code search | session | sonnet | -- |
-| 3 | `/brewcode:superreview` | Generate project-tailored deep-review skill | fork | opus | -- |
-| 4 | `/brewcode:rules` | Sync KB/session learnings → project rules | session | sonnet | -- |
-| 5 | `/brewcode:skills` | SK status/list/create/improve/review/sync | session | opus | -- |
-| 6 | `/brewcode:agents` | AG status/list/create/improve/review/sync | session | opus | -- |
-| 7 | `/brewcode:convention` | Extract conventions/patterns/architecture → rules + docs | session | opus | -- |
-| 8 | `/brewcode:teams` | Create/manage specialized AG teams | session | opus | -- |
-| 9 | `/brewcode:e2e` | E2E testing: BDD scenarios, autotests, review | session | opus | -- |
-| ~~10~~ | ~~`/bc:secrets-scan`~~ | **moved to brewtools** | -- | -- | -- |
-| ~~11~~ | ~~`/bc:text-optimize`~~ | **moved to brewtools** | -- | -- | -- |
-| ~~12~~ | ~~`/bc:text-human`~~ | **moved to brewtools** | -- | -- | -- |
+| 2 | `/brewcode:superreview` | Generate project-tailored deep-review skill | fork | opus | -- |
+| 3 | `/brewcode:rules` | Sync KB/session learnings → project rules | session | sonnet | -- |
+| 4 | `/brewcode:skills` | SK status/list/create/improve/review/sync | session | opus | -- |
+| 5 | `/brewcode:agents` | AG status/list/create/improve/review/sync | session | opus | -- |
+| 6 | `/brewcode:convention` | Extract conventions/patterns/architecture → rules + docs | session | opus | -- |
+| 7 | `/brewcode:teams` | Create/manage specialized AG teams | session | opus | -- |
+| 8 | `/brewcode:e2e` | E2E testing: BDD scenarios, autotests, review | session | opus | -- |
+| ~~9~~ | ~~`/bc:secrets-scan`~~ | **moved to brewtools** | -- | -- | -- |
+| ~~10~~ | ~~`/bc:text-optimize`~~ | **moved to brewtools** | -- | -- | -- |
+| ~~11~~ | ~~`/bc:text-human`~~ | **moved to brewtools** | -- | -- | -- |
 
 ## Execution Order
 
 ```
-grepai --> spec --> superreview --> rules
+spec --> superreview --> rules
 ```
 
 ---
@@ -37,7 +36,6 @@ grepai --> spec --> superreview --> rules
 
 | AG | Model | Purpose |
 |----|-------|---------|
-| `bc-grepai-configurator` | sonnet | Gen `.grepai/config.yaml` via deep project analysis |
 | `bc-rules-organizer` | haiku | Create/optimize `.claude/rules/*.md` |
 
 ---
@@ -86,63 +84,7 @@ Input: text → task desc; path → read file as task desc. Naming: `YYYYMMDD_HH
 
 ---
 
-## 2. `/brewcode:grepai`
-
-Setup + mgmt of semantic code search (grepai: Ollama + bge-m3). Modes: setup, status, start, stop, reindex, optimize, upgrade, uninstall.
-
-| Param | Value |
-|-------|-------|
-| Args | `[setup\|status\|start\|stop\|reindex\|optimize\|upgrade\|uninstall]` |
-| Context | session |
-| Model | sonnet |
-| Deps | none |
-| Tools | Read, Write, Edit, Bash, Task, AskUserQuestion |
-
-### Created Files (setup)
-
-| Path | Purpose |
-|------|---------|
-| `.grepai/config.yaml` | grepai cfg for project |
-| `.grepai/logs/grepai-watch.log` | Indexing log |
-| `.claude/rules/grepai-first.md` | "Use grepai FIRST" rule |
-| `.claude/grepai/hooks/*.mjs` + `settings.json` entries | self-installed SessionStart + PreToolUse hooks (Phase 6) |
-
-### Bash Scripts
-
-`detect-mode.sh`, `infra-check.sh`, `install.sh`, `mcp-check.sh`, `init-index.sh`, `create-rule.sh`, `verify.sh`, `status.sh`, `start.sh`, `stop.sh`, `reindex.sh`, `optimize.sh`, `upgrade.sh`, `uninstall.sh` — one per mode/phase, under `${CLAUDE_SKILL_DIR}/scripts/`.
-
-### Agents
-
-| AG | Model | Mode | Purpose |
-|----|-------|------|---------|
-| `bc-grepai-configurator` | sonnet | setup, optimize | Analyze project, gen config.yaml |
-
-### Modes
-
-| Mode | Description |
-|------|-------------|
-| `setup` | infra check (auto-install offer) → MCP → cfg → index → rule → hooks self-install → verify |
-| `status` | State: CLI, ollama, model, MCP, index, watch |
-| `start` | Start watcher |
-| `stop` | Stop watcher |
-| `reindex` | stop → clean → rebuild → start |
-| `optimize` | Backup cfg → regen via bc-grepai-configurator → reindex |
-| `upgrade` | Update grepai CLI via Homebrew |
-| `uninstall` | Stop watch, remove project hooks + rule, unwire `settings.json`; optional `.grepai/` purge |
-| `prompt` | Interactive mode selection (unrecognized text) |
-
-Auto: empty args + `.grepai/` exists → `start`; empty args + no `.grepai/` → `setup`.
-
-```
-/brewcode:grepai setup
-/brewcode:grepai status
-/brewcode:grepai reindex
-/brewcode:grepai uninstall
-```
-
----
-
-## 3. `/brewcode:superreview`
+## 2. `/brewcode:superreview`
 
 GENERATOR skill (human-invoked). Analyzes the TARGET project and WRITES a self-contained, project-local `.claude/skills/superreview/` — a merged deep-review skill (domain-expert routing + scope discipline + mechanical gates + adversarial validation). Does not review code itself; it emits the skill that does.
 
@@ -199,7 +141,7 @@ All three treat the ENTIRE `$ARGUMENTS` as ONE free-form prompt — no keyword g
 
 ---
 
-## 4. `/brewcode:rules`
+## 3. `/brewcode:rules`
 
 Manages `.claude/rules/*.md` from a free-form prompt (see shared pattern above, no `sync`). Syncs KB (`KNOWLEDGE.jsonl`) or session learnings into deduplicated, table-form rules. Project scope only — never `~/.claude/rules/`.
 
@@ -221,7 +163,7 @@ Manages `.claude/rules/*.md` from a free-form prompt (see shared pattern above, 
 
 ---
 
-## 5. `/brewcode:skills`
+## 4. `/brewcode:skills`
 
 Manages Claude Code skills from a free-form prompt (see shared pattern above, incl. `sync`).
 
@@ -245,7 +187,7 @@ Manages Claude Code skills from a free-form prompt (see shared pattern above, in
 
 ---
 
-## 6. `/brewcode:agents`
+## 5. `/brewcode:agents`
 
 Manages Claude Code subagents from a free-form prompt (see shared pattern above, incl. `sync`, same engine as `skills`).
 
@@ -271,7 +213,7 @@ Manages Claude Code subagents from a free-form prompt (see shared pattern above,
 
 ---
 
-## 7. `/brewcode:convention`
+## 6. `/brewcode:convention`
 
 Analyzes project to extract etalon classes, patterns, architecture by layer. Generates convention docs in `.claude/convention/` + organizes rules in `.claude/rules/`.
 
@@ -320,7 +262,7 @@ Analyzes project to extract etalon classes, patterns, architecture by layer. Gen
 
 ---
 
-## 8. `/brewcode:teams`
+## 7. `/brewcode:teams`
 
 Creates + manages dynamic teams of domain-specific AGs w/ tracking framework. Analyzes project, proposes team (5-20 AGs), creates w/ self-selection protocol + performance tracking + quorum review.
 
@@ -358,7 +300,7 @@ Creates + manages dynamic teams of domain-specific AGs w/ tracking framework. An
 
 ---
 
-## 9. `/brewcode:e2e`
+## 8. `/brewcode:e2e`
 
 Full-cycle E2E testing: setup testing AGs, create BDD scenarios, write autotests, QR. Stack-agnostic, layered test architecture.
 
@@ -400,8 +342,6 @@ Hooks-only, no external runtime. Claude Code hooks provide ctx mgmt.
 |------|-------|---------|
 | `session-start.mjs` | SessionStart | Session init: version-check, plan-symlink, permission tag |
 | `forced-eval.mjs` | UserPromptSubmit | Skill activation reminder ([SKILL?] injection) |
-
-> grepai hooks (`grepai-session.mjs`, `grepai-reminder.mjs`) self-install per-project via `/brewcode:grepai setup` — they are not part of the plugin's always-on hook set.
 
 ## KB Format
 

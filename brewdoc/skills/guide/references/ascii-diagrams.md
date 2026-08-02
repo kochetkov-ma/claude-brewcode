@@ -5,20 +5,21 @@ Pre-drawn diagrams for the guide skill. Reference by name from topic files.
 ## Diagram: Plugin Suite Architecture
 
 ```
-┌─────────────────────────────────────────────────┐
-│              claude-brewcode (marketplace)       │
-├─────────────────┬──────────────┬────────────────┤
-│    brewcode      │   brewdoc    │   brewtools    │
-│─────────────────│──────────────│────────────────│
-│ setup, spec     │ docsync      │ text-optimize  │
-│ plan, start     │ my-claude    │ text-human     │
-│ teams, review   │ memory       │ secrets-scan   │
-│ convention, e2e │ md-to-pdf    │                │
-│ rules, grepai   │ guide        │                │
-│                 │ publish      │                │
-│ + 14 agents     │              │                │
-│ + 9 hooks       │              │                │
-└─────────────────┴──────────────┴────────────────┘
+┌───────────────────────────────────────────────────────┐
+│             claude-brewcode (marketplace)             │
+├───────────────────┬────────────────┬──────────────────┤
+│     brewcode      │    brewdoc     │    brewtools     │
+│───────────────────┼────────────────┼──────────────────│
+│ spec, superreview │ docsync        │ text-optimize    │
+│ convention, teams │ my-claude      │ text-human       │
+│ rules, skills     │ memory         │ secrets-scan     │
+│ agents, e2e       │ md-to-pdf      │ ssh, deploy      │
+│                   │ guide, publish │ manager, plugins │
+│ + 9 agents        │                │ + 3 agents       │
+│ + 2 hooks         │                │ + 2 hooks        │
+└───────────────────┴────────────────┴──────────────────┘
+
+brewui: placeholder, no skills yet
 ```
 
 ## Diagram: Killer Flow Pipeline

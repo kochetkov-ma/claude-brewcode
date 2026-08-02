@@ -189,13 +189,7 @@ Keep project-specific ticket patterns (INTELDEV-XXXXX, JIRA-XXXXX). Remove gener
 ### Scan Pattern
 
 ```
-# Semantic search queries for grepai_search:
-grepai_search("private methods with javadoc")
-grepai_search("trivial param documentation")
-grepai_search("test helper classes")
-grepai_search("DTO classes with javadoc")
-
-# Fallback grep patterns:
+# grep patterns:
 grep -n "^\s*/\*\*" <file>           // Find all JavaDoc
 grep -n "private.*{" <file>          // Find private methods
 ```

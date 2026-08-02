@@ -250,7 +250,7 @@ bash "${CLAUDE_SKILL_DIR}/scripts/progress.sh" complete "{TOPIC_ID}"
    You now know everything about the brewcode plugin suite.
    
    Useful next steps:
-   - Index your project with /brewcode:grepai
+   - Extract your project conventions with /brewcode:convention
    - Create a team with /brewcode:teams create
    - Start a task with /brewcode:spec "your task description"
    ```

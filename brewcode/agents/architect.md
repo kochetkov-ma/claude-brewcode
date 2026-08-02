@@ -47,15 +47,15 @@ On resume: read that file first, continue from the last component covered.
 
 | Check | How |
 |-------|-----|
-| Utilities | `grepai_search` for similar functionality |
-| Patterns | Grep for established conventions |
+| Utilities | Bash `grep`/`rg` for similar functionality |
+| Patterns | Bash `grep` for established conventions |
 | Base classes | Find abstractions to extend |
 | Common modules | Check shared/common/utils dirs |
 | Libraries | Prefer battle-tested: JDK → Apache Commons → Guava |
 
 ### Reuse Flow
 
-`Need → grepai search → Found? → extend/adapt | Not found? → library? → use | Create new`
+`Need → Bash grep/find search → Found? → extend/adapt | Not found? → library? → use | Create new`
 
 ### Checklist
 - [ ] Searched codebase for similar functionality
@@ -115,4 +115,4 @@ Scope → Discover → Assess → Identify → Recommend → Prioritize
 
 ## Tools
 
-`grepai_search` FIRST for patterns and boundaries, then Grep/Glob/Read for structure, Bash for git log + dep graphs, WebSearch for external research.
+Bash `grep`/`rg`/`find` FIRST for patterns and boundaries (on macOS CC builds `grep`→ugrep, `find`→bfs are shadowed; native Grep/Glob are no-ops), then Read for structure, Bash for git log + dep graphs, WebSearch for external research.

@@ -45,7 +45,7 @@ const UserCard: React.FC<UserCardProps> = ({ user, onEdit }) => {
 | `useRef` | Using for state |
 
 Custom hooks: `use*` prefix, extract reusable logic, return object for >2 values. **Check existing hooks first**
-(`hooks/`, `use*.ts`, grepai_search) before creating.
+(`hooks/`, `use*.ts`, Bash `grep`) before creating.
 
 ## TypeScript Type Safety
 

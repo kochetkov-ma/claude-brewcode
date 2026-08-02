@@ -22,27 +22,24 @@ User request -> Manager analyzes -> Selects best agent -> Task tool spawns agent
 
 Claude Code allows nested spawns up to 5 levels deep (since 2.1.172). The brewcode workflow, however, requires spawning only from the main conversation (manager level): the 2-step report protocol binds the task lock to a single session and delivers report/coordinator instructions to the spawning conversation. Nested spawns bypass session binding, KNOWLEDGE injection, and the coordinator loop — so under brewcode only the manager uses the Task tool.
 
-## Section 2: Plugin Agents (15)
+## Section 2: Plugin Agents (12)
 
 These agents ship with the brewcode plugin suite. Available immediately after installation.
 
 | Agent | Plugin | Model | When to Use |
 |-------|--------|-------|-------------|
-| developer | brewcode | opus | Implement features, write code, fix bugs |
+| developer | brewcode | inherit | Implement features, write code, fix bugs |
 | tester | brewcode | sonnet | Run tests, analyze failures, debug flaky tests |
-| reviewer | brewcode | opus | Code review, architecture, security, performance |
-| architect | brewcode | opus | Architecture analysis, patterns, trade-offs, scaling |
-| skill-creator | brewcode | opus | Create/improve Claude Code skills (SKILL.md) |
-| agent-creator | brewcode | opus | Create/update Claude Code agents |
-| hook-creator | brewcode | opus | Create/debug Claude Code hooks |
-| bash-expert | brewcode | opus | Create professional sh/bash scripts |
-| bc-coordinator | brewcode | haiku | Internal. Spawned only by /brewcode:start + post-task hook. No direct/auto use. |
-| bc-knowledge-manager | brewcode | haiku | Internal. Spawned only by /brewcode:start. No direct/auto use. |
-| bc-grepai-configurator | brewcode | opus | Internal. Spawned only by /brewcode:grepai. No direct/auto use. |
-| bc-rules-organizer | brewcode | sonnet | Internal. Spawned only by /brewcode:rules. No direct/auto use. |
+| reviewer | brewcode | inherit | Code review, architecture, security, performance |
+| architect | brewcode | inherit | Architecture analysis, patterns, trade-offs, scaling |
+| skill-creator | brewcode | inherit | Create/improve Claude Code skills (SKILL.md) |
+| agent-creator | brewcode | inherit | Create/update Claude Code agents |
+| hook-creator | brewcode | inherit | Create/debug Claude Code hooks |
+| bash-expert | brewcode | inherit | Create professional sh/bash scripts |
+| bc-rules-organizer | brewcode | haiku | Internal. Spawned only by /brewcode:rules. No direct/auto use. |
 | text-optimizer | brewtools | sonnet | Text/docs token optimization |
-| ssh-admin | brewtools | opus | SSH server management |
-| deploy-admin | brewtools | opus | GitHub Actions deployment |
+| ssh-admin | brewtools | inherit | SSH server management |
+| deploy-admin | brewtools | inherit | GitHub Actions deployment |
 
 Agents prefixed with `bc-` are internal to brewcode workflows. The rest are user-facing.
 

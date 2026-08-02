@@ -14,7 +14,7 @@ Install the entire suite:
 
 <InstallPrompt plugin="all" mode="install" />
 
-Brewcode is a plugin for Claude Code for spec authoring, semantic code search, and a toolkit of
+Brewcode is a plugin for Claude Code for spec authoring, multi-agent review, and a toolkit of
 skills and agents. The name is a nod to brewing: skills (recipes) define what to brew, agents
 (brewers) do the work, and hooks (processes) manage prompt-time injection.
 
@@ -25,21 +25,20 @@ skills and agents. The name is a nod to brewing: skills (recipes) define what to
     Agents resolve paths via native `${CLAUDE_PLUGIN_ROOT}`, substituted in each agent .md at Task spawn.
     No hook injection, no shared runtime state.
   </Card>
-  <Card title="9 skills (recipes)" icon="terminal">
-    From specification (<a href="/brewcode/skills/spec/">/brewcode:spec</a>) to semantic search (<a href="/brewcode/skills/grepai/">/brewcode:grepai</a>)
+  <Card title="8 skills (recipes)" icon="terminal">
+    From specification (<a href="/brewcode/skills/spec/">/brewcode:spec</a>) to convention analysis (<a href="/brewcode/skills/convention/">/brewcode:convention</a>)
     and multi-agent review (<a href="/brewcode/skills/superreview/">/brewcode:superreview</a>).
   </Card>
-  <Card title="10 agents (brewers)" icon="users">
+  <Card title="9 agents (brewers)" icon="users">
     Specialized agents: [developer](/brewcode/agents/developer/), [tester](/brewcode/agents/tester/), [reviewer](/brewcode/agents/reviewer/), [architect](/brewcode/agents/architect/), [skill-creator](/brewcode/agents/skill-creator/),
     [agent-creator](/brewcode/agents/agent-creator/), [hook-creator](/brewcode/agents/hook-creator/), and bash-expert.
   </Card>
   <Card title="2 hooks (processes)" icon="settings">
-    Prompt-time skill-activation reminder and session-start version-check.
-    grepai hooks self-install per project on demand.
+    Prompt-time delegation reminder and session-start version-check.
   </Card>
-  <Card title="Semantic search" icon="search">
-    Integration with grepai -- AI-powered code search via Ollama + bge-m3.
-    Auto-start, reminders, configurator.
+  <Card title="E2E testing" icon="check">
+    BDD scenario authoring and Playwright autotest orchestration
+    via <a href="/brewcode/skills/e2e/">/brewcode:e2e</a>.
   </Card>
   <Card title="Code quality" icon="shield">
     Standards-review, convention analysis.
@@ -62,7 +61,7 @@ all context is managed through built-in Claude Code events.
   │                                                          │
   │   Skills (recipes)            Agents (brewers)           │
   │   ┌──────────────┐          ┌──────────────────┐         │
-  │   │ spec, grepai │          │ developer, tester │         │
+  │   │ spec, e2e    │          │ developer, tester │         │
   │   │ superreview  │ ──────>  │ reviewer, architect│         │
   │   │ convention,. │          │ + dynamic teams   │         │
   │   └──────────────┘          └──────────────────┘         │
@@ -91,7 +90,7 @@ brewcode/
 │   ├── forced-eval.mjs                # [ROLE] delegate + [SPLIT] bounded units
 │   └── lib/
 │       └── utils.mjs                  # I/O, version cache, configuration
-├── agents/                            # 10 agents
+├── agents/                            # 9 agents
 │   ├── developer.md                   # Feature implementation (opus)
 │   ├── tester.md                      # Testing (sonnet)
 │   ├── reviewer.md                    # Code review (opus)
@@ -100,11 +99,9 @@ brewcode/
 │   ├── agent-creator.md               # Agent creation (opus)
 │   ├── hook-creator.md                # Hook creation (opus)
 │   ├── bash-expert.md                 # Bash scripts (opus)
-│   ├── bc-grepai-configurator.md      # grepai configurator (opus)
-│   └── bc-rules-organizer.md          # Rules organizer (sonnet)
-├── skills/                            # 9 skills
+│   └── bc-rules-organizer.md          # Rules organizer (haiku)
+├── skills/                            # 8 skills
 │   ├── spec/                          # Specification creation
-│   ├── grepai/                        # Semantic search (self-install hooks)
 │   ├── convention/                    # Convention analysis
 │   ├── rules/                         # Rule extraction
 │   ├── superreview/                   # Multi-agent quorum review
@@ -120,7 +117,7 @@ brewcode/
 
 <Tabs>
   <TabItem label="Skills">
-    9 skills (recipes) cover spec, search, review, and meta-tooling.
+    8 skills (recipes) cover spec, review, conventions, and meta-tooling.
     See [Skills](/brewcode/skills/) for details.
 
     | Group | Skills | Purpose |
@@ -129,10 +126,10 @@ brewcode/
     | Quality | superreview, convention, rules | Multi-agent review, conventions, rule extraction |
     | Dynamic | teams | Agent team creation and management |
     | Testing | e2e | E2E testing orchestration with BDD scenarios |
-    | Meta | grepai, skills, agents | Semantic search + skill/agent management |
+    | Meta | skills, agents | Skill and agent management |
   </TabItem>
   <TabItem label="Agents">
-    10 agents (brewers) with different models and specializations.
+    9 agents (brewers) with different models and specializations.
     See the [Agents](/brewcode/agents/) section for details.
 
     | Role | Agents | Model |
@@ -141,7 +138,7 @@ brewcode/
     | Review | reviewer | opus |
     | Creation | skill-creator, agent-creator, hook-creator | opus |
     | Optimization | bash-expert | opus |
-    | Internal | bc-grepai-configurator, bc-rules-organizer | opus/sonnet |
+    | Internal | bc-rules-organizer | haiku |
 
     + dynamic project agents created by [`/brewcode:teams`](/brewcode/skills/teams/)
   </TabItem>
@@ -167,8 +164,8 @@ brewcode/
   </li>
   <li class="step step-primary">
     <div>
-      <strong>Semantic search (optional)</strong> <Badge variant="primary" text="/brewcode:grepai" />
-      <p>Configure Ollama-backed semantic search for the project. Run once per project.</p>
+      <strong>Deep review</strong> <Badge variant="primary" text="/brewcode:superreview" />
+      <p>Generate a project-tailored quorum review skill. Run once per project.</p>
     </div>
   </li>
   <li class="step step-secondary">

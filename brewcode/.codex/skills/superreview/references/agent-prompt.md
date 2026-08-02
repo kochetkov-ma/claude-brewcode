@@ -11,8 +11,7 @@ Codex delegation brief (task_role="{AGENT}", message="
 You review ONLY the files below. Read the ACTUAL code. Report STANDARDS + ARCHITECTURE + CORRECTNESS issues.
 
 **SEARCH-FIRST (HARD rule — reuse-first):** before flagging a 'duplicate' or 'reuse' miss, grep the repo
-(Bash grep/find over the shared/util/common/domain/adapters dirs) and verify imports. If grepai
-(mcp__grepai__search) is available, prefer it for semantic search.
+(Bash grep/find over the shared/util/common/domain/adapters dirs) and verify imports.
 
 **Files:** {FILE_LIST}
 **Focus:** {FOCUS}

@@ -74,8 +74,7 @@ be validated or merged and is dropped; the JSON below is the merge contract — 
 DONE: JSON only, in the schema below; issues only; every finding with exact lines and an actionable suggestion.
 
 **SEARCH-FIRST (HARD rule — reuse-first):** before flagging a 'duplicate' or 'reuse' miss, grep the repo
-(Bash grep/find over the shared/util/common/domain/adapters dirs) and verify imports. If grepai
-(mcp__grepai__search) is available, prefer it for semantic search. No verification -> no finding.
+(Bash grep/find over the shared/util/common/domain/adapters dirs) and verify imports. No verification -> no finding.
 NOTE: git-IGNORED = outside the review corpus. Where the instruction tree (`.claude/**`, `CLAUDE.md`) is ignored,
 you may READ it as authority (cite a rule id) but never raise a finding ON it. Untracked-but-not-ignored files ARE
 in scope — `git ls-files` alone misses them, so add `git ls-files --others --exclude-standard` to any reuse sweep.

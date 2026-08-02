@@ -30,10 +30,10 @@ Guide walks you through every feature of the plugin suite across three progressi
 | B: Core Workflow | killer-flow | The infinite task pipeline: spec, plan, start |
 | B: Core Workflow | teams | Dynamic agent teams with self-selection and tracking |
 | B: Core Workflow | skills-catalog | All 25 skills with trigger examples |
-| C: Mastery | agents-catalog | All 14 agents with roles and model selection |
+| C: Mastery | agents-catalog | All 12 agents with roles and model selection |
 | C: Mastery | customization | Create custom skills, agents, and hooks |
 | C: Mastery | integration | CLAUDE.md, rules, memory, teams directory |
-| C: Mastery | advanced | Grepai, convention, quorum review, secrets scanning |
+| C: Mastery | advanced | Convention extraction, quorum review, secrets scanning |
 
 ## Progress Tracking
 

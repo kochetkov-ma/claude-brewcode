@@ -13,7 +13,7 @@ Output: `.claude/reports/{TIMESTAMP}_superreview/REPORT.md`. ONE consolidated, v
 **Sanctioned scope:** task {T-ID | none} / issue {id | none | not reached} / decisions {ids | none} — {K}/{COUNT} files outside it
 **Gates:** {gate} {OK|FAIL|not run} / ...
 **Validation:** {all {N} findings validated | **{U} UNVALIDATED of {N} — run is INCOMPLETE ({reason})**} — every row below carries a verdict
-**Search tool used:** {grepai | Bash rg/grep fallback}
+**Search tool used:** {Bash rg/grep/git ls-files}
 **Agents run (derived from live roster):** {AGENT_LIST}{, DEGRADED: <group> -> generic}
 
 > Findings section below is MANDATORY-sorted by priority P0 -> P3 (highest severity first).

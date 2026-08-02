@@ -23,7 +23,6 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 | Tools | Read, Glob, Grep, Bash, Task |
 | Disallowed tools | Write, Edit |
 | Triggers | "review code", "code review", "review PR", "check architecture", "approve changes" |
-| MCP | grepai |
 | Delegate to | Code changes → [developer](/brewcode/agents/developer/) · Tests → [tester](/brewcode/agents/tester/) |
 
 ## Scope guard
@@ -59,7 +58,7 @@ Reviewer sizes the review before starting. One bounded unit = one deliverable, r
 "security review — check for injection risks"
 ```
 
-The agent reads all `.claude/rules/` files first, runs `grepai_search` to find existing patterns, then produces a structured verdict.
+The agent reads all `.claude/rules/` files first, greps for existing patterns, then produces a structured verdict.
 
 ## Flow
 
@@ -73,7 +72,7 @@ The agent reads all `.claude/rules/` files first, runs `grepai_search` to find e
   <li>
     <div>
       <strong>Search for existing patterns</strong>
-      <p>Runs <code>grepai_search</code> across the codebase. Checks <code>common/utils/shared</code> for utilities, finds established patterns, confirms whether the reviewed code reimplements something that already exists.</p>
+      <p>Greps across the codebase. Checks <code>common/utils/shared</code> for utilities, finds established patterns, confirms whether the reviewed code reimplements something that already exists.</p>
     </div>
   </li>
   <li>
@@ -103,7 +102,7 @@ The agent reads all `.claude/rules/` files first, runs `grepai_search` to find e
 
 | Check | Action |
 |-------|--------|
-| Similar exists? | `grepai_search` codebase |
+| Similar exists? | Grep the codebase |
 | Utility exists? | Check common/utils/shared |
 | Pattern established? | Find existing impl |
 | Library available? | Prefer library over custom |

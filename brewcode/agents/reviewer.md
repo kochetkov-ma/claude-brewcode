@@ -44,7 +44,7 @@ Read ALL rules: `.claude/rules/*-best-practice.md`, `.claude/rules/*-avoid.md`, 
 
 | Check | Action |
 |-------|--------|
-| Similar exists? | `grepai_search` codebase |
+| Similar exists? | Bash `grep`/`rg` the codebase |
 | Utility exists? | Check common/utils/shared |
 | Pattern established? | Find existing impl |
 | Library available? | Prefer library over custom |

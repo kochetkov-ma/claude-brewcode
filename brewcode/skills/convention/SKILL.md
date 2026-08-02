@@ -144,7 +144,7 @@ Stack: {DETECTED_STACK}
 Layer definitions:
 {LAYER_CRITERIA_FROM_ANALYSIS_LAYERS_MD}
 
-Use grepai_search FIRST for file discovery, then Glob/Grep for verification.
+Use Bash search for file discovery (`grep`->ugrep / `find`->bfs on macOS CC), then Read for verification.
 
 CONSUMER: P3 (1 architect) merges all 10 reports and picks 1-2 etalons per layer, then P4
       writes .claude/convention/*.md from that. Your tables are parsed as-is — keep the exact
@@ -372,7 +372,6 @@ Next Steps: Review `.claude/convention/` | `/brewcode:convention rules` to re-ex
 | >1000 source files | Warn user, suggest `paths` mode |
 | Unknown stack | Continue with generic analysis (no stack-specific layers) |
 | Agent timeout | Log warning, continue with available results |
-| grepai unavailable | Fall back to Glob + Grep for file discovery |
 | Convention doc generation fails | Retry once, then present partial results |
 
 </instructions>

@@ -10,7 +10,7 @@ Output: `.codex/reports/{TIMESTAMP}_superreview/REPORT.md`. ONE consolidated, va
 **Scope:** {concrete scope — commit range | branch-vs-main | folder | working-tree vs HEAD | full project}
 **Focus:** {resolved focus — user directive, else default ordering; security only if P0}
 **Files Reviewed:** {COUNT}
-**Search tool used:** {grepai | Grep/Glob/Bash fallback}
+**Search tool used:** {Bash rg/grep/git ls-files}
 **Agents run (targeted fan-out):** {AGENT_LIST}
 
 > Findings section below is MANDATORY-sorted by priority P0 -> P3 (highest severity first).

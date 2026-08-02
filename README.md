@@ -121,9 +121,8 @@ claude --plugin-dir ./brewcode --plugin-dir ./brewdoc --plugin-dir ./brewtools -
 ### brewcode -- infinite task execution
 
 ```bash
-/brewcode:grepai                              # 1. Set up semantic code search (one-time)
-/brewcode:spec "Implement JWT authorization"  # 2. Research codebase + create specification
-/brewcode:superreview                         # 3. Generate a project-tailored deep-review skill
+/brewcode:spec "Implement JWT authorization"  # 1. Research codebase + create specification
+/brewcode:superreview                         # 2. Generate a project-tailored deep-review skill
 ```
 
 Skills orchestrate, agents execute. Each spawn is a bounded unit with a six-field brief, and the `forced-eval` hook re-states the manager role and the split rule on every prompt, so work stays observable across compaction cycles.
@@ -155,9 +154,6 @@ Placeholder plugin, currently empty. No commands yet -- coming soon.
 ## How It Works
 
 ```
-  /brewcode:grepai --> semantic index over the repo (one-time setup)
-        │
-        v
   /brewcode:spec "..." --> 5-10 parallel research agents + user Q&A --> SPEC.md
         │
         v
@@ -188,12 +184,11 @@ Every spawn prompt carries six fields:
 
 ## Skills Reference
 
-### Brewcode (9 skills)
+### Brewcode (8 skills)
 
 | Skill | Purpose |
 |-------|---------|
 | `/brewcode:spec` | Research codebase + user dialog -> SPEC.md |
-| `/brewcode:grepai` | Semantic code search: setup, status, start, stop, reindex, optimize, upgrade, uninstall |
 | `/brewcode:superreview` | Generate a project-tailored deep-review skill: domain-expert routing + scope discipline + mechanical gates + adversarial validation |
 | `/brewcode:teams` | Create and manage dynamic teams of domain-specific agents |
 | `/brewcode:convention` | Extract etalon classes, patterns, architecture into convention docs |
@@ -242,7 +237,7 @@ Self-contained `SKILL.md` folders that ship outside the four plugins -- drop the
 | `brewpage-publish` | Claude Code | [`skills/brewpage-publish`](skills/brewpage-publish/) |
 | `brewpage-publish` | OpenClaw / AgentSkills | [`openclaw/brewpage-publish`](openclaw/brewpage-publish/) |
 
-## Agents (13 total)
+## Agents (12 total)
 
 | Agent | Plugin | Model | Purpose |
 |-------|--------|-------|---------|
@@ -254,7 +249,6 @@ Self-contained `SKILL.md` folders that ship outside the four plugins -- drop the
 | agent-creator | brewcode | inherit | Create and improve Claude Code agents |
 | hook-creator | brewcode | inherit | Create and debug Claude Code hooks |
 | bash-expert | brewcode | inherit | Create professional shell scripts |
-| bc-grepai-configurator | brewcode | sonnet | Internal: spawned by /brewcode:grepai |
 | bc-rules-organizer | brewcode | haiku | Internal: spawned by /brewcode:rules |
 | text-optimizer | brewtools | sonnet | Optimize text and docs for LLM efficiency |
 | ssh-admin | brewtools | inherit | Linux server administration via SSH |

@@ -190,5 +190,4 @@ CLAUDE_DEBUG=1 claude --plugin-dir ./brewcode
 | Document | Description |
 |----------|-------------|
 | [README.md](README.md) | Plugin overview and commands |
-| [grepai.md](docs/grepai.md) | Semantic search integration |
-| [/brewcode:grepai](skills/grepai/README.md) | Semantic search setup (includes prerequisites installation) |
+| [commands.md](docs/commands.md) | Skills and agents reference |

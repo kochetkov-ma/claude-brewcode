@@ -4,42 +4,7 @@ Domain: Mastery
 
 Deliver section by section. Pause after each section with AskUserQuestion.
 
-## Section 1: Grepai -- Semantic Code Search
-
-Grepai indexes your codebase for semantic search. Much smarter than grep — it understands intent, not just text patterns.
-
-```bash
-# Setup grepai for your project
-/brewcode:grepai
-
-# After setup, search semantically:
-grepai_search query:"user authentication flow"
-grepai_search query:"error handling", compact:true
-
-# Trace call chains:
-trace_callers symbol:"validateToken"
-trace_callees symbol:"processOrder"
-trace_graph symbol:"main" depth:2
-```
-
-Search modes:
-
-| Tool | Purpose | Example |
-|------|---------|---------|
-| grepai_search | Find code by meaning | `query:"payment processing"` |
-| trace_callers | Who calls this function? | `symbol:"validateToken"` |
-| trace_callees | What does this function call? | `symbol:"processOrder"` |
-| trace_graph | Full dependency tree | `symbol:"main", depth:2` |
-
-Query tips:
-- Use natural English, 3-7 words
-- Describe intent, not syntax: "validate credentials" not "validateUser"
-- Add `compact:true` for large result sets (returns file + line, no content)
-- Add `limit:5` for quick exploration
-
-Grepai auto-activates via the grepai-session hook at conversation start.
-
-## Section 2: Convention Extraction
+## Section 1: Convention Extraction
 
 Convention extraction analyzes your existing code to discover patterns and enforce them automatically.
 
@@ -63,7 +28,7 @@ Output goes to `.claude/rules/` as auto-loaded rule files. New code follows your
 
 The convention skill identifies etalon (reference) classes in your codebase. These become the standard that generated rules point to.
 
-## Section 3: Deep Code Review
+## Section 2: Deep Code Review
 
 Quorum code review with multiple independent perspectives.
 
@@ -89,7 +54,7 @@ Code submitted -> 3 reviewers analyze independently
 
 The quorum approach filters out subjective preferences and focuses on issues that multiple reviewers agree on.
 
-## Section 4: Secrets Scanning
+## Section 3: Secrets Scanning
 
 Detect leaked credentials before they reach your repository.
 

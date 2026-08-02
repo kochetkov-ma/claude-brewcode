@@ -232,7 +232,7 @@ over-complexity`, citing the project best-practices + avoid rules. Every agent r
 }
 ```
 
-Each agent MUST search-first (grep / verify imports, prefer `mcp__grepai__search` if available) before flagging any
+Each agent MUST search-first (Bash `grep`/`rg` + verify imports) before flagging any
 reuse/duplicate, and read the ACTUAL code at every cited line. Collect every agent's findings into one pool
 `{CANDIDATES}` (tag each finding with its producing agent as `source`).
 
@@ -357,7 +357,7 @@ superreview does NOT run /simplify or any skill and does NOT edit code — these
 | Validator agent | `{VALIDATOR_AGENT}` (fallback built-in `general-purpose`) | Phase 3 merge + validate |
 | Report dir | `.codex/reports/{TIMESTAMP}_superreview/` | Merged report, findings sorted P0 -> P3 |
 | Max files | 50 (except `FULL_PROJECT`) | Warn + suggest narrowing above this |
-| Search tool | `mcp__grepai__search` if available, else `Grep`/`Glob`/Bash | reuse-first search; note which in report |
+| Search tool | Bash `rg`/`grep`/`git ls-files` | reuse-first search; note which in report |
 
 ---
 
@@ -369,7 +369,6 @@ superreview does NOT run /simplify or any skill and does NOT edit code — these
 | >50 files | Warn the user; suggest narrowing (per-folder or per-commit) |
 | A domain agent unavailable | Fall back to built-in `Explore` with the same prompt; note in report |
 | `{VALIDATOR_AGENT}` unavailable | Run Phase 3 validation prompt on the built-in `general-purpose`; note in report |
-| `grepai` unavailable | Fall back to `Grep`/`Glob`/Bash; state which path was used in the report |
 | Agent timeout | Retry once, then mark that source unavailable + warn in report |
 | Validation rejects everything | Report "No issues survived validation" — verdict APPROVED |
 | All sources clean | Report "No issues found across standards, architecture, and correctness" — verdict APPROVED |

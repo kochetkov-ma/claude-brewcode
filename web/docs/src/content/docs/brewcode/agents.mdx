@@ -1,6 +1,6 @@
 ---
 title: "Agents"
-description: "All 10 brewcode agents: models, tools, triggers, and the shared Scope guard that stops oversized tasks."
+description: "All 9 brewcode agents: models, tools, triggers, and the shared Scope guard that stops oversized tasks."
 order: 12
 ---
 
@@ -9,7 +9,7 @@ import { Card, CardGrid, Callout } from '../../../components/mdx';
 # Agents
 
 Agents (brewers) are specialized roles defined in markdown files with frontmatter metadata.
-Each agent has its own model, toolset, and system prompt. Brewcode includes 10 agents (8 public + 2 internal helpers),
+Each agent has its own model, toolset, and system prompt. Brewcode includes 9 agents (8 public + 1 internal helper),
 from developer to task coordination.
 
 ## Summary table
@@ -26,10 +26,9 @@ Purpose column = the agent's own `description` frontmatter, verbatim. That strin
 | 6 | agent-creator | inherit | Read, Write, Edit, Bash | Creates and improves Claude Code agents. Triggers: create agent, improve agent, scaffold agent. |
 | 7 | hook-creator | inherit | Read, Write, Edit, Bash | Creates and debugs Claude Code hooks. Triggers: create hook, PreToolUse hook, debug hook. |
 | 8 | bash-expert | inherit | Read, Write, Edit, Bash | Creates sh/bash scripts for Mac/Linux. Triggers: create script, bash script, shell script. |
-| 9 | bc-grepai-configurator | sonnet | Read, Write, Edit, Bash | Internal. Spawned only by /brewcode:grepai. No direct/auto use. |
-| 10 | bc-rules-organizer | haiku | Read, Write, Edit, Bash | Internal. Spawned only by /brewcode:rules. No direct/auto use. |
+| 9 | bc-rules-organizer | haiku | Read, Write, Edit, Bash | Internal. Spawned only by /brewcode:rules. No direct/auto use. |
 
-`model: inherit` means the agent runs on whatever model the session runs on — no per-agent pin. Only `tester` (sonnet) and the two internal helpers (sonnet / haiku) are pinned.
+`model: inherit` means the agent runs on whatever model the session runs on — no per-agent pin. Only `tester` (sonnet) and the internal `bc-rules-organizer` (haiku) are pinned.
 
 <CardGrid>
   <Card title="developer" icon="code" href="/brewcode/agents/developer/">
@@ -59,7 +58,7 @@ Purpose column = the agent's own `description` frontmatter, verbatim. That strin
 </CardGrid>
 
 :::note[Internal agents]
-`bc-grepai-configurator` and `bc-rules-organizer` are internal. They are spawned automatically by brewcode skills and hooks, are not user-invokable, and have no dedicated page.
+`bc-rules-organizer` is internal. It is spawned automatically by brewcode skills and hooks, is not user-invokable, and has no dedicated page.
 :::
 
 ## Scope guard — shared by all 8 agents
@@ -84,7 +83,7 @@ Agents deliver for the CONSUMER, not the literal wording: the result must be usa
 | Model | Agents | Meaning |
 |-------|--------|---------|
 | **inherit** | [developer](/brewcode/agents/developer/), [reviewer](/brewcode/agents/reviewer/), [architect](/brewcode/agents/architect/), [skill-creator](/brewcode/agents/skill-creator/), [agent-creator](/brewcode/agents/agent-creator/), [hook-creator](/brewcode/agents/hook-creator/), [bash-expert](/brewcode/agents/bash-expert/) | Runs on the session's model — you control the tier |
-| **sonnet** | [tester](/brewcode/agents/tester/), bc-grepai-configurator | Pinned: mechanical, high-volume work |
+| **sonnet** | [tester](/brewcode/agents/tester/) | Pinned: mechanical, high-volume work |
 | **haiku** | bc-rules-organizer | Pinned: cheap file reorganization |
 
 <Callout type="tip" title="Automatic selection">

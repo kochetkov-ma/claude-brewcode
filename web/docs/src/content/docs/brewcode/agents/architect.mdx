@@ -23,7 +23,6 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 | Model | `inherit` — runs on the session's model |
 | Tools | Read, Glob, Grep, Bash, WebFetch, WebSearch |
 | Disallowed | Write, Edit, NotebookEdit |
-| MCP | grepai |
 
 ## Scope guard
 
@@ -72,7 +71,7 @@ The agent reads every `.claude/rules/` file and `CLAUDE.md` first, then searches
   <li>
     <div>
       <strong>Discovery</strong>
-      <p>Uses <code>grepai_search</code> first to find similar functionality, patterns, and boundaries. Falls back to Grep for specific deps and Glob for config and schema files. Runs <code>git log</code> via Bash to understand change history.</p>
+      <p>Greps for similar functionality, patterns, and boundaries, then uses Glob for config and schema files. Runs <code>git log</code> via Bash to understand change history.</p>
     </div>
   </li>
   <li>
@@ -131,7 +130,7 @@ The agent reads every `.claude/rules/` file and `CLAUDE.md` first, then searches
 | Trade-off evaluation | Code review (→ reviewer) |
 | Scaling strategies | Deployment execution |
 
-**Tool order:** `grepai_search` first for patterns and boundaries, then Grep/Glob/Read for structure, Bash for `git log` and dependency graphs, WebSearch for external research.
+**Tool order:** Grep/Glob/Read for patterns, boundaries, and structure, Bash for `git log` and dependency graphs, WebSearch for external research.
 
 </details>
 

@@ -43,7 +43,6 @@ const DEFAULT_CONFIG = {
   },
   agents: {
     system: [
-      'bc-grepai-configurator', 'brewcode:bc-grepai-configurator',
       'Explore', 'Plan', 'Bash', 'general-purpose',
       'claude-code-guide', 'skill-creator', 'agent-creator',
       'text-optimizer', 'statusline-setup'

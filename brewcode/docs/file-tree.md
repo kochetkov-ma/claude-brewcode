@@ -22,7 +22,6 @@ brewcode/                                    # Plugin root directory
 │   └── forced-eval.mjs                        # UserPromptSubmit: skill activation reminder (~9K additionalContext bound)
 │
 ├── agents/                                    # Plugin agents (system prompts in Markdown)
-│   ├── bc-grepai-configurator.md              # grepai configurator (opus): project analysis, config.yaml via 5 parallel investigations
 │   ├── bc-rules-organizer.md                  # Rules organizer (sonnet): creates/optimizes .claude/rules/*.md
 │   ├── agent-creator.md                       # Agent creator (opus): Agent Architect Process, System Prompt Patterns
 │   ├── skill-creator.md                       # Skill creator (opus): Six-Step Creation Process, word budget 1500-2000
@@ -34,28 +33,10 @@ brewcode/                                    # Plugin root directory
 │   ├── reviewer.md                            # Reviewer (opus): code review, quality, security, performance
 │   └── tester.md                              # Tester (sonnet): SDET/QA - runs tests, analyzes failures
 │
-├── skills/                                    # Skills - plugin commands (9 total)
+├── skills/                                    # Skills - plugin commands (8 total)
 │   │
 │   ├── spec/                                  # /brewcode:spec - Specification creation
 │   │   └── SKILL.md                           # 7 steps: investigation (5-10 parallel agents), dialog, review (opus, session)
-│   │
-│   ├── grepai/                                # /brewcode:grepai - Semantic search management
-│   │   ├── SKILL.md                           # 7 modes: setup/status/start/stop/reindex/optimize/upgrade (sonnet, session)
-│   │   ├── config.yaml.example                # Example grepai config: embedder, chunking, trace, ignore
-│   │   └── scripts/
-│   │       ├── detect-mode.sh                 # Argument parsing: operation mode
-│   │       ├── infra-check.sh                 # grepai CLI, ollama, bge-m3
-│   │       ├── install.sh                     # grepai via Homebrew
-│   │       ├── mcp-check.sh                   # MCP server: settings.json, allowedTools
-│   │       ├── init-index.sh                  # Index init: grepai watch, waits for build
-│   │       ├── start.sh                       # Starts grepai watch in background
-│   │       ├── stop.sh                        # Stops grepai watch
-│   │       ├── reindex.sh                     # Rebuild: stop → clean → rebuild → restart
-│   │       ├── optimize.sh                    # Reanalysis, new config.yaml with backup
-│   │       ├── upgrade.sh                     # brew upgrade grepai
-│   │       ├── status.sh                      # Diagnostics: CLI, ollama, bge-m3, MCP, index, versions
-│   │       ├── verify.sh                      # Full functionality check
-│   │       └── create-rule.sh                 # Creates grepai-first.md in .claude/rules/
 │   │
 │   ├── superreview/                           # /brewcode:superreview - Generate project-tailored deep-review skill
 │   │   ├── SKILL.md                           # Generator: emits .claude/skills/superreview/ into target project (opus, fork)
@@ -97,21 +78,17 @@ brewcode/                                    # Plugin root directory
 │
 ├── templates/
 │   │
-│   ├── rules/
-│   │   ├── avoid.md.template                  # Anti-patterns: Avoid/Instead/Why table with YAML frontmatter
-│   │   ├── best-practice.md.template          # Best practices: Practice/Context/Source table with YAML frontmatter
-│   │   └── grepai-first.md.template           # grepai priority rule: call examples, tool selection table
+│   └── rules/
+│       ├── avoid.md.template                  # Anti-patterns: Avoid/Instead/Why table with YAML frontmatter
+│       └── best-practice.md.template          # Best practices: Practice/Context/Source table with YAML frontmatter
 │
 ├── docs/
 │   ├── file-tree.md                           # This file
-│   ├── grepai.md                              # grepai integration: ecosystem, attention architecture, MCP, gitignore limitations
 │   ├── commands.md                            # Command reference: all /brewcode:* skills, arguments, examples
-│   ├── flow.md                                # Execution flow diagrams: hook lifecycle, 2-step protocol, compaction
-│   └── hooks.md                               # Hook reference: events, timeouts, input/output contracts
+│   └── flow.md                                # Execution flow diagrams: hook lifecycle, 2-step protocol, compaction
 │
 ├── README.md                                  # Components, commands, agents, hooks, architecture, flow diagrams
 ├── INSTALL.md                                 # Installation: plugin-dir, marketplace, embedding, troubleshooting
-├── RELEASE-NOTES.md                           # Version history: v2.0.41 - v3.0.0, Breaking Changes, migration
 └── package.json                               # npm: claude-plugin-brewcode@3.1.0, build/publish scripts
 ```
 
@@ -156,7 +133,6 @@ Files created by the plugin in the user's project:
     └── rules/
         ├── avoid.md                           # Anti-patterns (from /brewcode:rules)
         ├── best-practice.md                   # Best practices (from /brewcode:rules)
-        └── grepai-first.md                    # grepai priority rule (from /brewcode:grepai setup)
 ```
 
 ## Statistics
@@ -165,13 +141,13 @@ Files created by the plugin in the user's project:
 |----------|-------|-------|
 | Plugin configuration | 2 | plugin.json, hooks.json |
 | Hooks | 2 | forced-eval, session-start |
-| Agents | 10 | bc-grepai-configurator, bc-rules-organizer, agent-creator, skill-creator, bash-expert, hook-creator, architect, developer, reviewer, tester |
-| Skills (SKILL.md) | 9 | spec, grepai, superreview, convention, rules, skills, agents, teams, e2e |
-| Bash scripts | 22 | grepai(13), teams(3), skills(2), superreview(1), convention(1), rules(1), e2e(1) |
-| Templates | 3 | rules(3) |
-| Documentation | 7 | README, INSTALL, RELEASE-NOTES, grepai.md, file-tree.md, commands.md, flow.md, hooks.md |
+| Agents | 9 | bc-rules-organizer, agent-creator, skill-creator, bash-expert, hook-creator, architect, developer, reviewer, tester |
+| Skills (SKILL.md) | 8 | spec, superreview, convention, rules, skills, agents, teams, e2e |
+| Bash scripts | 9 | teams(3), skills(2), superreview(1), convention(1), rules(1), e2e(1) |
+| Templates | 2 | rules(2) |
+| Documentation | 5 | README, INSTALL, file-tree.md, commands.md, flow.md |
 | npm | 1 | package.json |
-| **Total** | **69** | |
+| **Total** | **38** | |
 
 ## Hook Events
 
@@ -184,4 +160,3 @@ Files created by the plugin in the user's project:
 
 | Agent | Model | Purpose |
 |-------|-------|---------|
-| bc-grepai-configurator | opus | Project analysis, config.yaml generation |

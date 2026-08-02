@@ -245,14 +245,14 @@ Research $ARGUMENTS:
 
 # SA Spawning Constraints
 
-CC allows nesting up to 5 levels (v2.1.172), but brewcode workflow requires spawns from main conversation only: nested spawns bypass session binding + grepai injection.
+CC allows nesting up to 5 levels (v2.1.172), but brewcode workflow requires spawns from main conversation only: nested spawns bypass session binding + hook context injection.
 
 | Scenario | brewcode workflow | Why |
 |----------|------------------|-----|
-| SK with FORK from **main conversation** | **Use this** | Lock binding + grepai injection intact |
+| SK with FORK from **main conversation** | **Use this** | Lock binding + hook context injection intact |
 | SK with FORK from **SA** | **Avoid** | CC: up to 5 levels (v2.1.172); bypasses session binding + coordinator loop |
-| Task tool from **SA** | **Avoid** | Nested spawn bypasses session binding + grepai injection |
-| Skill tool from **SA** | **Avoid** | Bypasses grepai injection |
+| Task tool from **SA** | **Avoid** | Nested spawn bypasses session binding + hook context injection |
+| Skill tool from **SA** | **Avoid** | Bypasses hook context injection |
 | Inline SK (no CTX) from SA | **Avoid** | Same binding/injection bypass |
 
 Design: spawn from main only. For SAs use `skills:` FM (preload at startup). Multi-agent orchestration — chain from main, not nested.
@@ -288,7 +288,7 @@ Custom agents: `.claude/agents/` | `~/.claude/agents/` via `agent: my-custom-age
 |-------|----------|----------|
 | fable-5 | Mythos-class tier above Opus (`claude-fable-5`, v2.1.170) | Hardest reasoning/orchestration |
 | opus | Complex orchestration, multi-phase | setup, create, review |
-| sonnet | Medium complexity, optimization | rules, grepai |
+| sonnet | Medium complexity, optimization | rules, convention |
 | haiku | Simple, fast, cleanup | teardown, clean-cache |
 
 # Tool Restrictions
