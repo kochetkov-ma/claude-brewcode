@@ -355,10 +355,11 @@ check('state.unknownkey.phase', afterPatch.phase, 'prereq_ready', 'the patched k
 check('state.unknownkey.projectRoot', afterPatch.projectRoot, PROJ, 'projectRoot is rewritten from sc_project_root');
 check('state.unknownkey.version', afterPatch.approvedVersion, '0.5.2', 'approvedVersion is the pin');
 
+// `disabled` is not healable from absent: nothing was ever set up to disable.
 resetProject();
-const illegal = run(STATE_SH, ['phase', 'ready']);
-check('state.illegal.exit', illegal.status, 1, 'absent -> ready is refused');
-check('state.illegal.msg', illegal.out.includes('illegal phase transition'), true, 'the refusal names the transition');
+const illegal = run(STATE_SH, ['phase', 'disabled']);
+check('state.illegal.exit', illegal.status, 1, 'absent -> disabled is refused');
+check('state.illegal.msg', illegal.out.includes('illegal phase transition absent -> disabled'), true, 'the refusal names the transition');
 check('state.illegal.nofile', existsSync(STATE_FILE), false, 'no state file was created');
 
 resetProject();
@@ -399,6 +400,96 @@ check('state.clear.kept', existsSync(STATE_FILE), true, 'the state file survives
 check('state.clear.yes', run(STATE_SH, ['clear', '--yes']).status, 0, 'clear --yes exits 0');
 check('state.clear.gone', existsSync(join(PROJ, '.claude', 'semble')), false, '.claude/semble is removed');
 check('state.clear.claude-kept', existsSync(join(PROJ, '.claude')), true, 'the surrounding .claude dir is untouched');
+
+// ── 10b. the field defect: close-out on a genuinely absent state file ──────
+// A project that inherits an already-correct USER-scope registration never gets
+// a checkpoint (semble-mcp.sh add short-circuits with "unchanged"), so `resume`
+// reaches Step 4.3 with phase=absent. `phase ready` must heal, not die.
+resetProject();
+const healed = run(STATE_SH, ['phase', 'ready', '--json']);
+const healedJson = json(healed);
+check('state.heal.exit', healed.status, 0, 'absent -> ready self-heals instead of failing the close-out');
+check('state.heal.flag', healedJson.healed, true, 'the JSON marks the run as healed');
+check('state.heal.from', healedJson.from, 'absent', 'from is reported as absent');
+check('state.heal.to', healedJson.to, 'ready', 'to is the requested phase');
+check('state.heal.walk', healedJson.walked,
+  ['absent', 'prereq_ready', 'awaiting_reload', 'verifying', 'ready'],
+  'the whole legal forward chain is walked - no pair of the machine is skipped');
+const healedState = JSON.parse(readFileSync(STATE_FILE, 'utf8'));
+check('state.heal.phase', healedState.phase, 'ready', 'phase on disk is ready');
+check('state.heal.schema', healedState.schema, 1, 'the healed file is a schema-1 document');
+check('state.heal.completed', healedState.completed, [], 'healing marks no step complete on its own');
+check('state.heal.enabled', healedState.enabled, true, 'the healed file carries the init defaults');
+check('state.heal.resume', healedState.resumePrompt, '/brewcode:semble resume', 'init defaults verbatim');
+check('state.heal.root', healedState.projectRoot, PROJ, 'projectRoot is the resolved project root');
+
+resetProject();
+const healMid = json(run(STATE_SH, ['phase', 'verifying', '--json']));
+check('state.heal.mid.walk', healMid.walked, ['absent', 'prereq_ready', 'awaiting_reload', 'verifying'],
+  'the walk stops exactly at the requested phase');
+check('state.heal.mid.phase', JSON.parse(readFileSync(STATE_FILE, 'utf8')).phase, 'verifying', 'phase on disk is verifying');
+// Healing is confined to the absent case: a PRESENT file keeps the full table.
+check('state.heal.nobypass', run(STATE_SH, ['phase', 'prereq_ready']).status, 1,
+  'verifying -> prereq_ready is still refused after a heal');
+check('state.heal.nobypass.phase', JSON.parse(readFileSync(STATE_FILE, 'utf8')).phase, 'verifying', 'the refusal left the phase alone');
+resetProject();
+const healErr = run(STATE_SH, ['phase', 'error', '--json']);
+check('state.heal.error.exit', healErr.status, 0, 'absent -> error was legal before and still is');
+check('state.heal.error.flag', json(healErr).healed, false, 'it is a plain transition, not a heal');
+
+// ── 10c. `complete` takes a list ──────────────────────────────────────────
+resetProject();
+run(STATE_SH, ['init']);
+const single = run(STATE_SH, ['complete', 'warm']);
+check('state.complete.single.out', single.out, '✅ completed += warm -> ["warm"]', 'the single-step human line is unchanged');
+const singleJson = json(run(STATE_SH, ['complete', 'warm', '--json']));
+check('state.complete.single.step', singleJson.step, 'warm', '`step` still carries the single step verbatim');
+check('state.complete.single.steps', singleJson.steps, ['warm'], '`steps` is the array form of the same call');
+
+resetProject();
+run(STATE_SH, ['init']);
+const multiArgs = run(STATE_SH, ['complete', 'prereq', 'mcp', 'permissions', '--json']);
+check('state.complete.multiargs.exit', multiArgs.status, 0, 'several arguments are accepted');
+check('state.complete.multiargs.completed', json(multiArgs).completed, ['prereq', 'mcp', 'permissions'],
+  'all three land in ONE patch');
+const oneString = run(STATE_SH, ['complete', 'guidance agents warm smoke', '--json']);
+check('state.complete.string.exit', oneString.status, 0, 'a single whitespace-separated string is accepted');
+check('state.complete.string.completed', json(oneString).completed,
+  ['prereq', 'mcp', 'permissions', 'guidance', 'agents', 'warm', 'smoke'],
+  'the string form union-merges onto the existing set');
+check('state.complete.disk', JSON.parse(readFileSync(STATE_FILE, 'utf8')).completed,
+  ['prereq', 'mcp', 'permissions', 'guidance', 'agents', 'warm', 'smoke'],
+  'the state file holds exactly the seven closed-set steps');
+
+const shaBeforeBadList = sha(STATE_FILE);
+const badList = run(STATE_SH, ['complete', 'prereq', 'bogus', 'mcp']);
+check('state.complete.badlist.exit', badList.status, 2, 'an unknown token inside the list -> exit 2');
+check('state.complete.badlist.msg', badList.out.includes('unknown step: bogus'), true, 'the message names the offending token');
+check('state.complete.badlist.bytes', sha(STATE_FILE), shaBeforeBadList, 'nothing was written: the file is byte-identical');
+const badString = run(STATE_SH, ['complete', 'warm bogus smoke']);
+check('state.complete.badstring.exit', badString.status, 2, 'the string form validates every token too');
+check('state.complete.badstring.bytes', sha(STATE_FILE), shaBeforeBadList, 'still byte-identical');
+check('state.complete.dedupe', json(run(STATE_SH, ['complete', 'warm', 'warm', 'smoke', '--json'])).steps, ['warm', 'smoke'],
+  'a repeated token is deduped inside one call');
+check('state.complete.nosteps', run(STATE_SH, ['complete']).status, 2, 'complete without a STEP -> exit 2');
+check('state.complete.blank', run(STATE_SH, ['complete', '   ']).status, 2, 'a whitespace-only argument -> exit 2');
+check('usage.state.second-positional', run(STATE_SH, ['get', 'phase', 'extra']).status, 2,
+  'every other subcommand still rejects a second positional');
+
+// ── 10d. the full Step 4.3 close-out, from a genuinely absent state ────────
+resetProject();
+const closePhase = run(STATE_SH, ['phase', 'ready']);
+const closeSteps = run(STATE_SH, ['complete', 'prereq mcp permissions guidance agents warm smoke']);
+const closed = JSON.parse(readFileSync(STATE_FILE, 'utf8'));
+check('state.closeout.phase.exit', closePhase.status, 0, 'Step 4.3 `phase ready` exits 0 with no prior state file');
+check('state.closeout.steps.exit', closeSteps.status, 0, 'Step 4.3 `complete <seven>` exits 0');
+check('state.closeout.phase', closed.phase, 'ready', 'the close-out leaves phase=ready');
+check('state.closeout.completed', closed.completed,
+  ['prereq', 'mcp', 'permissions', 'guidance', 'agents', 'warm', 'smoke'],
+  'all seven steps are recorded in the state file, not just claimed on stdout');
+check('state.closeout.readback', run(STATE_SH, ['get', 'completed']).out,
+  '["prereq","mcp","permissions","guidance","agents","warm","smoke"]',
+  '`get completed` is what SKILL.md prints as `recorded:`');
 
 // ── 11. cache: resolve / info / staleness ──────────────────────────────────
 const res = json(run(CACHE_SH, ['resolve', '--repo', REPO_A, '--json']));

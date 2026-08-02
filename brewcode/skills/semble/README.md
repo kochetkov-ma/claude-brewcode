@@ -24,6 +24,12 @@ Two MCP tools, once wired:
 
 Both take a **required `repo`** parameter — the absolute project root or an explicit `https://` git URL. It is never inferred. Results carry `file_path`, `start_line`, `end_line`, `score` and optional `content`; there is **no `line` field**. Defaults: `top_k=5`, `max_snippet_lines=10`.
 
+## Future alternative
+
+[Codebase Memory MCP](https://github.com/DeusData/codebase-memory-mcp) is a candidate companion or fallback for a future skill. Its main advantage is structural code intelligence — call graphs, impact analysis, dead-code detection, route tracing and architecture queries — rather than Semble's focused intent and semantic search.
+
+It is **not integrated or installed by this skill**, and it is not currently a replacement for Semble. If adopted, it should get a separate pinned lifecycle skill, isolated cache and a narrow MCP tool profile. Public benchmark results are not directly comparable: Semble's published Codebase Memory baseline exercises its fast lexical graph search, not its current semantic-query path.
+
 ## Modes
 
 Free text in Russian or English routes to one mode. The full table and the resolution algorithm live in `references/intent-routing.md`.

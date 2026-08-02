@@ -643,6 +643,16 @@ check('phase machine: the drifted pair', [projMatrix['ready->error'], stateMatri
 check('phase machine: no private copy of the table',
   readFileSync(PROJECT_SH, 'utf8').includes('sp_phase_legal'), false,
   'semble-project.sh holds no second copy of the §4.2 transition table');
+// §4.2 self-heal: an absent file is initialised and walked forward, and both
+// implementations do it identically (they are the same implementation).
+check('phase machine: absent self-heals forward', [
+  projMatrix['absent->awaiting_reload'], projMatrix['absent->verifying'], projMatrix['absent->ready'],
+], [['ok', 'awaiting_reload'], ['ok', 'verifying'], ['ok', 'ready']],
+'absent -> awaiting_reload|verifying|ready creates the file and lands on the requested phase');
+check('phase machine: absent -> disabled stays illegal',
+  [projMatrix['absent->disabled'], stateMatrix['absent->disabled']],
+  [['refused', 'absent'], ['refused', 'absent']],
+  'a setup that never happened cannot be disabled, and no file is created');
 rmSync(join(PH_A, '.claude'), { recursive: true, force: true });
 rmSync(join(PH_B, '.claude'), { recursive: true, force: true });
 

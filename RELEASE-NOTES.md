@@ -2,6 +2,25 @@
 
 ---
 
+## v4.5.3 (2026-08-02)
+
+> Docs: [semble](https://doc-claude.brewcode.app/brewcode/skills/semble/)
+
+### brewcode
+
+#### Fixed
+- **semble state:** `phase` self-heals from `absent` for `awaiting_reload|verifying|ready` — it writes the canonical init document at `prereq_ready`, then walks the legal chain hop by hop, each hop validated as usual; the legality table is unchanged, so `absent -> ready` is still not a pair and `absent -> disabled` is still refused
+- **semble state:** the second project in a session died at close-out with `illegal phase transition absent -> ready` — `init` only ran when MCP registration mutated, and registration is user-scoped, so every project after the first got `unchanged` and never had a state file
+- **semble state:** `complete` took one step, so a close-out passing the whole list failed with `unknown step: prereq mcp permissions guidance agents warm smoke`; it now accepts several steps as multiple arguments or as one whitespace-separated string
+- **semble state:** an unknown step token now names itself and writes nothing (exit 2) instead of being partially applied
+- **semble skill:** step 4.3 printed a shell variable and so reported `completed:` steps that were never recorded; it now reads the state file back and prints what is actually there
+
+#### Changed
+- **semble state:** `--json` for `phase` gained `healed` and `walked`; `complete` gained `steps`. Single-step `complete` is byte-compatible with before
+- **semble docs:** README notes Codebase Memory MCP as a possible future companion — not integrated, not installed
+
+---
+
 ## v4.5.2 (2026-08-02)
 
 > Docs: [semble](https://doc-claude.brewcode.app/brewcode/skills/semble/)

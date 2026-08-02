@@ -184,7 +184,7 @@ semble-state.sh init      [--json]
 semble-state.sh get <KEY>
 semble-state.sh show      [--json]
 semble-state.sh phase <PHASE>
-semble-state.sh complete <STEP>
+semble-state.sh complete <STEP>...
 semble-state.sh patch '<json object>'
 semble-state.sh clear --yes
 ```
@@ -204,5 +204,9 @@ Legal phase transitions (`absent` is the no-file state; `clear` returns to it):
 | `error` | `verifying`, `prereq_ready` |
 
 Identity transitions are legal (a re-run is idempotent). Anything else prints `⚠️ illegal phase transition <from> -> <to>; state left unchanged` and exits 1 without writing.
+
+**Self-heal from `absent`.** The state file is created only inside an MCP mutation, so a project that inherits an already-correct **user-scope** registration never gets one — `add` reports `unchanged` and the checkpoint is skipped. `phase awaiting_reload|verifying|ready` therefore initialises the file at `prereq_ready` and walks the forward chain `prereq_ready -> awaiting_reload -> verifying -> ready`, stopping at the requested phase; every hop is checked against the same table and written like any other patch. `--json` reports `"healed":true` with the `walked` array. `disabled` is **not** healable from `absent` (nothing was ever set up to disable) and `prereq_ready`/`error` need no heal — they are already legal from `absent`.
+
+`complete` takes one or more STEPs: separate arguments or a single whitespace-separated string. All tokens are validated first — an unknown one exits 2 naming that token and writes nothing — then the accepted set is union-merged in one patch.
 
 Never store credentials, session ids, transcripts or tool output in the state file; `notes` are authored by the skill, never copied from command output.

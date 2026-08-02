@@ -332,6 +332,8 @@ echo "agents apply RC=$ARC   # 3 = reported conflict, not a failure"
 
 Only steps that actually ran may be marked complete. `warm` and `smoke` are marked **only** when Step 4.1 exited `0` with a real result — a `"status":"skipped"` smoke (no network, MCP not live) verified nothing, so those two stay incomplete and the gap is reported in **Actions -> skipped**.
 
+`complete` takes the whole list in one call. `phase ready` self-heals a **missing** state file (it is created at `prereq_ready` and walked forward through the legal chain) — that happens whenever the MCP was already registered at user scope by an earlier project, so `add` reported `unchanged` and no checkpoint was ever written. The last line prints what the **state file** actually holds, read back after the writes — never the shell variable.
+
 **EXECUTE** using Bash tool:
 
 ```bash
@@ -339,13 +341,16 @@ SD="${CLAUDE_SKILL_DIR:-$(ls -d "$HOME"/.claude/plugins/cache/claude-brewcode/br
 SMOKE_OK=1   # set to 0 when Step 4.1 reported "status":"skipped" — never guess
 STEPS="prereq mcp permissions guidance agents"
 [ "$SMOKE_OK" = "1" ] && STEPS="$STEPS warm smoke"
-RC=0; bash "$SD/scripts/semble-state.sh" phase ready || RC=1
-for S in $STEPS; do bash "$SD/scripts/semble-state.sh" complete "$S" || RC=1; done
-echo "completed: $STEPS"
+RC=0
+bash "$SD/scripts/semble-state.sh" phase ready    || RC=1
+bash "$SD/scripts/semble-state.sh" complete $STEPS || RC=1
+RECORDED="$(bash "$SD/scripts/semble-state.sh" get completed 2>/dev/null || true)"
+echo "recorded: ${RECORDED:-NOTHING — no state file was written}"
 [ "$RC" -eq 0 ] && echo "✅" || echo "❌ FAILED"
 ```
 
-> **STOP if ❌** — an illegal phase transition or an unparseable state file. Nothing was written; report the message verbatim.
+> **STOP if ❌** — an illegal phase transition, an unknown step name or an unparseable state file. Nothing was written; report the message verbatim and quote the `recorded:` line as it stands.
+> Report `recorded:` verbatim — it is the state file read back. Never restate `$STEPS` as if it were the outcome.
 > With `SMOKE_OK=0` the phase is still `ready` (the wiring is done) but **Current Status** says `partial — smoke skipped (<reason>)` and **Next Step** is a re-run of `/brewcode:semble resume` once the reason is gone. Never claim a verification that did not run.
 
 ---
