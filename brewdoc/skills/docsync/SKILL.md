@@ -34,9 +34,9 @@ Run in the main conversation (uses `AskUserQuestion`). No `context: fork`.
 > ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")}"
 > ```
 
-> **Enumerating docs.** Native `Glob`/`Grep` tools are no-ops on macOS Claude Code
-> (removed in CC 2.1.117+). Enumerate `.md` via the **Bash** tool (`find`/bfs),
-> as shown below. `Glob` wording is kept only as a non-macOS fallback.
+> **Enumerating docs.** Native `Glob`/`Grep` are no-ops on macOS Claude Code
+> (removed in CC 2.1.117+). Enumerate `.md` via the **Bash** tool (`find`/bfs), as
+> shown below; `Glob **/*.md` is a non-macOS fallback only.
 
 ## Mode Resolution — prompt-driven
 
@@ -93,9 +93,6 @@ globs from config and any `doc_type: skip` in your own reasoning afterward):
 ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")}"
 cd "$ROOT" && find . -type f -name '*.md' -not -path './.git/*' | sed 's#^\./##' | sort
 ```
-
-> Non-macOS fallback only: `Glob **/*.md`. On macOS this returns nothing — use the
-> Bash `find` above.
 
 ---
 

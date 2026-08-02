@@ -1,7 +1,7 @@
 ---
 title: "superreview"
-description: "Generates a project-tailored deep-review skill that merges code review and standards review into one deterministic pass."
-order: 1106
+description: "Generates a project-tailored deep-review skill: domain-expert routing, scope discipline (blast radius, delivery, closeout), and mechanical gates."
+order: 1108
 ---
 
 import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
@@ -13,7 +13,8 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 <Callout type="note">
   **Generator skill.** `/brewcode:superreview` does not review code itself. It analyzes the
   target project and writes a self-contained `.claude/skills/superreview/` into it. The emitted
-  skill does the reviewing.
+  skill does the reviewing, built on two mandatory axes: **domain experts** and **scope
+  discipline**.
 </Callout>
 
 ## Quick reference
@@ -21,25 +22,27 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | Field | Value |
 |-------|-------|
 | Command | `/brewcode:superreview "<fine-tune-prompt>" [scope]` |
-| Arguments | `<fine-tune-prompt>` — free-text priority emphasis woven into the emitted skill; optional `[scope]` hint passed through |
+| Arguments | `<fine-tune-prompt>` — free-text emphasis that reorders the emitted skill's Focus table; optional `[scope]` hint passed through |
 | Model | opus |
-| Tools | Read, Write, Edit, Bash, Task, AskUserQuestion |
+| Tools | Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion |
 | Output | `.claude/skills/superreview/` in the target project |
 
 ## What it does
 
-`superreview` is a generator skill. It scans the target project — enumerating agents, rule files,
-source directories, and tech stack — then writes a self-contained review skill wired to that
+`superreview` is a generator skill. It scans the target project — agents, rule files, source
+directories, tech stack, tracker — then writes a self-contained review skill wired to that
 project's actual structure. No plugin dependency remains after generation.
 
-The emitted skill fuses two earlier passes: the `review` engine (two-phase find-then-validate,
-per-finding adversarial gate, single merged P0-P3 report) and the `standards-review` pass
-(reuse and duplication focus, 90/70/50 percent reuse matrix, per-stack guidelines). Both run as
-one `/superreview` invocation, producing one report.
+Two axes decide whether the emitted review is worth running: **domain experts** (routing to
+generic agents produces generic findings) and **scope discipline** (was the change sanctioned,
+was all of it delivered, what else did it touch). The generator treats both as mandatory — Phase
+1.6 creates missing domain experts before it will emit, and every emitted skill ships a dedicated
+`references/scope.md`.
 
-The `<fine-tune-prompt>` argument shapes the emitted skill's Focus rank table. Values such as
-"treat any security issue as P0" or "focus on architecture boundaries and reuse" are woven into
-the emitted `SKILL.md` so every `/superreview` run in the target project reflects those priorities.
+The emitted skill fuses two earlier passes: the `review` engine (mechanical gates first,
+two-phase find-then-validate, one merged P0-P3 report) and `standards-review` (reuse/duplication
+focus, 90/70/50 percent reuse matrix, per-stack guidelines). The `<fine-tune-prompt>` argument
+reorders the emitted Focus table — scope discipline can be raised, never dropped below rank 1.
 
 ## When to use
 
@@ -48,7 +51,7 @@ the emitted `SKILL.md` so every `/superreview` run in the target project reflect
 | Wire up a new project for deep review | `/brewcode:superreview "default ordering"` |
 | Security is the top concern | `/brewcode:superreview "treat any security issue as P0"` |
 | Architecture and reuse are the priority | `/brewcode:superreview "focus on architecture boundaries and reuse"` |
-| An agent, rule file, or source group changed | Re-run to refresh routing and rule pointers |
+| Agent roster, rules, stack, or tracker changed | Re-run to refresh routing, rule pointers, and the scope baseline |
 
 ## Example
 
@@ -56,22 +59,27 @@ the emitted `SKILL.md` so every `/superreview` run in the target project reflect
 /brewcode:superreview "focus on reuse and duplicate-detection"
 ```
 
-The generator scans the project, asks about ambiguous domain mappings if needed, then writes:
+The generator scans the project, fills gaps in the agent roster (Phase 1.6), asks about
+ambiguous params if needed, then writes:
 
 ```
 superreview generated -> .claude/skills/superreview/
 
-Stack:         Node/TypeScript  (reference: typescript-react.md)
-Domain agents wired: 3  (developer, tester, architect)
-Review agents: reviewer, architect
-Rule pointers: 5 files referenced (not restated inline)
-File groups:   4  (src/developer, tests/tester, infra/architect, docs/general)
-Focus:         1 reuse  2 correctness  3 architecture  4 version-pins  5 business-reqs
-               fine-tune: "focus on reuse and duplicate-detection"
+Stack:            Node/TypeScript  (reference: typescript-react.md)
+Domain experts:   3 wired (developer, tester, architect)
+General agents:   reviewer, architect (arbiter + validator)
+Scope baseline:   .claude/features board + GitHub issues; passes A=task-tracker / B=Explore
+Shared surfaces:  4 listed in references/scope.md
+Mechanical gates: npm run lint, npm run typecheck, npm test
+Rule pointers:    5 files referenced (not restated inline)
+File groups:      4  (src/developer, tests/tester, infra/architect, docs/general)
+Focus:            1 reuse  2 correctness  3 architecture  4 version-pins  5 business-reqs
+                  fine-tune: "focus on reuse and duplicate-detection"
 
 Files written:
   .claude/skills/superreview/SKILL.md
   .claude/skills/superreview/references/agent-prompt.md
+  .claude/skills/superreview/references/scope.md
   .claude/skills/superreview/references/report-template.md
   .claude/skills/superreview/references/typescript-react.md
 
@@ -81,8 +89,11 @@ Run it:  /superreview "<focus>" [scope: commit|branch|folder]
 To run the emitted skill after generation:
 
 ```
-/superreview "focus on reuse" last_3
+/superreview "focus on reuse" feat/42-payment-retry
 ```
+
+The optional scope token is a commit SHA, a branch name, a folder, or a single file. With no
+token the mode falls back to the working-tree diff, or to the last commits on a clean tree.
 
 ## Workflow
 
@@ -90,65 +101,167 @@ To run the emitted skill after generation:
   <li>
     <div>
       <strong>Phase 0 — Load templates</strong>
-      <p>The generator reads the four emit templates bundled with the skill: <code>SKILL.md.template</code>, <code>agent-prompt.md</code>, <code>report-template.md</code>, and the stack reference files. These are the scaffold for the emitted skill.</p>
+      <p>Reads the emit templates bundled with the skill: <code>SKILL.md.template</code>, <code>agent-prompt.md</code>, <code>scope.md.template</code>, <code>report-template.md</code>, and the per-stack reference files.</p>
     </div>
   </li>
   <li>
     <div>
       <strong>Phase 1 — Scan the target project</strong>
-      <p>Runs <code>generate.sh scan</code> to enumerate agents, rule files, source directories, and tech stack. Produces a SCAN_REPORT with agent list, rule list, source groups, and stack hint.</p>
+      <p>Runs <code>generate.sh scan</code> to enumerate build files, agents, rules and convention files, source groups, the real mechanical gate commands, and the scope tracker (task board, GitHub issues, branch naming).</p>
     </div>
   </li>
   <li>
     <div>
       <strong>Phase 1.5 — Clarify ambiguous params</strong>
-      <p>Sends an <code>AskUserQuestion</code> when stack detection is ambiguous, domain-agent mapping is uncertain, or source group boundaries are unclear. Skipped when all params resolve unambiguously from the scan.</p>
+      <p>Sends an <code>AskUserQuestion</code> for the scope baseline and tracker, always-shared surfaces, the arbiter/validator agent, the domain-owner mapping, the dominant stack, and the gate commands — only when the scan cannot resolve them confidently.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Phase 1.6 — Domain experts (mandatory)</strong>
+      <p>Classifies the live agent roster, excludes read-only recon agents, and finds source groups with no owner. For every gap it offers to spawn <code>brewcode:agent-creator</code> — one agent per missing domain, all in one message — then re-scans. Declining leaves the group DEGRADED and requires <code>SUPERREVIEW_ALLOW_NO_EXPERTS=1</code> at validate.</p>
     </div>
   </li>
   <li>
     <div>
       <strong>Phase 2 — Scalar substitution</strong>
-      <p>Calls <code>generate.sh emit</code> to fill all deterministic placeholder values: agent names, rule file paths, file groups, stack reference path. Writes initial file content to <code>.claude/skills/superreview/</code>.</p>
+      <p>Calls <code>generate.sh emit</code> to fill deterministic placeholders (agent names, rule paths, file groups, stack reference) via sed. Writes SKILL.md, agent-prompt.md, scope.md, report-template.md, and the chosen stack reference into <code>.claude/skills/superreview/</code>.</p>
     </div>
   </li>
   <li>
     <div>
       <strong>Phase 3 — AI fills block placeholders</strong>
-      <p>The AI edits the emitted files via the Edit tool to fill block sections: per-domain review rules, focus rank table, tech-stack check list, and adversarial validation prompt.</p>
+      <p>Edits the emitted SKILL.md (domain/general agent tables, rule pointers, file-group map, gate commands, focus table) and the emitted <code>references/scope.md</code> (baseline resolution, sanction precedence, ownership probe, shared-surfaces table).</p>
     </div>
   </li>
   <li>
     <div>
       <strong>Phase 4 — Validate</strong>
-      <p>Runs <code>generate.sh validate</code> to confirm no unresolved placeholder tokens remain. Errors block completion and prompt a targeted Phase 3 retry.</p>
+      <p>Runs <code>generate.sh validate</code>. Fails on a leftover setup-time placeholder, an unknown agent name, a missing emitted asset, or zero wired domain experts.</p>
     </div>
   </li>
   <li>
     <div>
       <strong>Phase 5 — Report</strong>
-      <p>Prints a summary: files written, agent wiring table, focus rank, and the invocation command for the emitted skill.</p>
+      <p>Prints a summary: stack, domain experts, general agents, scope baseline, shared surfaces, mechanical gates, rule pointers, file groups, focus ordering, and the files written.</p>
     </div>
   </li>
 </Steps>
 
+## Delegation
+
+<Callout type="caution" title="Why the rule exists">
+  A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target.
+</Callout>
+
+One subagent = **ONE bounded unit** — here, ONE file group's review: roughly 5 files, roughly 10
+steps. Anything bigger is split into N tasks fired in **ONE message**. That is exactly why the
+emitted skill routes file *groups* to domain owners: when filling `FILE_GROUP_MAP` in Phase 3, an
+oversized group becomes two rows rather than one agent that owns half the repo.
+
+Every spawn prompt carries six fields. A bare one-line task is never enough:
+
+| Field | Content |
+|-------|---------|
+| GOAL | the overall task and why it exists — the point beyond the file edit |
+| ROLE | what this agent owns; what it must NOT touch |
+| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
+| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what THIS agent needs |
+| CONSUMER | who or what uses the result next, and the shape it must fit |
+| DONE | acceptance criteria + the exact report shape you want back |
+
+<Callout type="tip" title="The brief ships with the emitted skill">
+  The contract binds this generator's own spawns <strong>and</strong> the fan-out it emits. It is written into
+  <code>references/SKILL.md.template</code> and <code>references/agent-prompt.md</code>, so the review skill
+  generated into your repo hands the same six-field brief to every domain expert, scope pass and validator
+  it spawns — a fan-out two levels below this command still gets a full brief.
+</Callout>
+
 ## Technical details
 
-### Emitted skill — review modes
+### Emitted skill — mode resolution
 
-The emitted `/superreview` is fully self-contained after generation. It resolves the review mode
-from the scope argument:
+Mode is resolved deterministically, not by scanning for keywords:
 
-| Mode | Scope keyword |
-|------|---------------|
-| `FULL_PROJECT` | No scope, or explicit `full` |
-| `EXPLICIT` | Named files or directories |
-| `UNCOMMITTED` | `uncommitted` / `staged` |
-| `LAST_COMMITS` | `last_N` / `branch` |
+| Mode | Trigger |
+|------|---------|
+| `FULL_PROJECT` | A whole-project request, in any language |
+| `EXPLICIT` | A commit SHA, branch name, folder, or file token |
+| `UNCOMMITTED` | Working tree is dirty and neither of the above matched |
+| `LAST_COMMITS` | Fallback: `HEAD~2..HEAD`, with further fallbacks |
 
-The emitted skill is **READ-ONLY by design** — it reports findings, never edits source code.
-Per-finding adversarial validation: for each finding in the parallel fan-out, a second agent pass
-challenges it before it enters the merged report. Findings that fail validation are dropped or
-downgraded. Output: `.claude/reports/{TIMESTAMP}_superreview/REPORT.md`.
+Corpus rule applied to every mode: git-ignored files are OUT; tracked-or-will-be-tracked files
+are IN (`git ls-files --others --exclude-standard` catches new, unignored files).
+
+### Emitted skill — execution shape
+
+- **Mechanical gates run first.** The project's real build/lint/type/test commands execute
+  before the fan-out. Their output carries the verdict `CONFIRMED-BY-EXECUTION` — the only
+  non-adversarial verdict — and is passed to every agent so nobody re-runs or re-litigates it.
+- **Experts selected at runtime.** The live `.claude/agents/*.md` roster is read each run,
+  recon-only agents are excluded, and any surface without an owner falls back to `Explore` and
+  is marked DEGRADED.
+- **Scope baseline resolved read-only.** Task + issue + recorded decisions. No baseline ->
+  `UNKNOWN` and a permanent P2 cap on every scope finding.
+- **One parallel fan-out.** Domain experts + scope pass A (diff side, creep shapes 1-6) + scope
+  pass B (baseline side, delivery D1-D4 with mandatory proof-of-absence, closeout C1-C4) + 0-2
+  general passes, all spawned in one message.
+- **Per-finding adversarial validation.** A non-owning validator reverse-validates every
+  candidate, batched at most 40 per spawn, at most 4 spawns, merge + dedup done once over all
+  batches. Anything unvalidatable is reported `UNVALIDATED` and the run verdict is suffixed
+  `- INCOMPLETE`.
+- **Scope gate.** A Phase 3b `AskUserQuestion` on unsanctioned expansion or an unproven absence.
+  It rewrites priorities only — never adds findings, never lifts the UNKNOWN cap.
+- **One merged report** at `.claude/reports/{TIMESTAMP}_superreview/REPORT.md`: a Scope
+  Discipline / Blast Radius section, a Mechanical Gate Results section, a verdict column on
+  every finding row, and stats for scope-creep / confirmed-by-execution / UNVALIDATED counts.
+  READ-ONLY by design — it recommends `/simplify`, never edits code.
+
+### Scope taxonomy
+
+| Creep shape | Meaning | Severity |
+|-------------|---------|----------|
+| 1 foreign-surface | Touches a surface outside the sanctioned scope | P0 |
+| 2 unsanctioned-feature | Adds functionality nobody asked for | P1 |
+| 3 drive-by-refactor | Refactors unrelated code along the way | P2 |
+| 4 opportunistic-dependency | Bumps or adds a dependency outside scope | P2 |
+| 5 silent-doc-mutation | Docs rewritten to match the code instead of the code following the doc | P1 |
+| 6 sanctioned-but-unrecorded | Genuinely needed, but the decision lives only in chat or a commit body | P2 |
+
+| Delivery gap | Meaning | Severity |
+|--------------|---------|----------|
+| D1 undelivered criterion | Acceptance criterion not met | P0, proof required |
+| D2 partial | Criterion partially met, or met only by a stub where the done-when says real | P1 |
+| D3 unprovable | Criterion met but not provable — no test, no evidence cited | P2 |
+| D4 unrecorded reduction | Scope reduced with no recorded, named blocker | P0, proof required |
+
+| Closeout gap | Meaning | Severity |
+|---------------|---------|----------|
+| C1 PR body | Does not state what shipped, what was deliberately not built, what consumers may rely on | P2 |
+| C2 wrong Closes/Refs | `Closes` on an issue not fully owned, or a claim the diff does not support | P1 |
+| C3 missing closeout comment | An issue this work touched carries no comment on what landed | P2 |
+| C4 AI attribution | AI attribution left in a PR body, commit message, or issue comment | P2 |
+
+Overlap into a neighbour's surface is not automatically shape 1: correctness-driven and recorded
+is not a finding; correctness-driven and unrecorded is shape 6.
+
+### Setup-time placeholders
+
+Scalar (Phase 2, sed substitution): `PROJECT_NAME`, `STACK_LABEL`, `STACK_REF`, `SOURCE_GLOB`,
+`PATHSPEC_GLOBS`, `ARBITER_AGENT`, `VALIDATOR_AGENT`, `SCOPE_AGENT_A`, `SCOPE_AGENT_B`,
+`TRACKER_LABEL`.
+
+Block, filled via Edit in SKILL.md (Phase 3): `DOMAIN_AGENTS_TABLE`, `GENERAL_AGENTS_TABLE`,
+`RULE_POINTER_TABLE`, `RULE_PREFLIGHT_LIST`, `FILE_GROUP_MAP`, `GATE_COMMANDS`, `FOCUS_TABLE`,
+`FOCUS_EMPHASIS`, `SIMPLIFY_AGENTS`.
+
+Block, filled via Edit in `references/scope.md` (Phase 3): `TEAM_NOTE`,
+`BASELINE_RESOLUTION_BASH`, `SANCTION_PRECEDENCE_TABLE`, `OWNERSHIP_SIGNALS_BASH`,
+`SHARED_SURFACES_TABLE`.
+
+Runtime placeholders (`{MODE}`, `{COUNT}`, `{FILE_LIST}`, `{SCOPE_BASELINE}`, ...) are
+allow-listed in `generate.sh validate` — they stay in the emitted SKILL.md and resolve on every
+`/superreview` run in the target project.
 
 ### Re-run triggers
 
@@ -157,16 +270,21 @@ Regenerate the emitted skill when any of the following change in the target proj
 - Agent added, removed, or renamed
 - Rule or convention file added
 - Tech stack changes (new runtime, framework, or language)
+- Tracker or branch-naming convention changes
+- A new always-shared surface appears
 - Source group boundaries shift (new top-level directory)
 
 ### Error handling
 
-| Error | Resolution |
-|-------|------------|
-| No agents found in target project | Generator stops; create at least one agent first |
-| Unknown tech stack | Emits with generic reference; warns to review manually |
-| Multi-stack project | Emits one reference per detected stack; adds merge note |
-| Unresolved placeholder after Phase 3 | Phase 4 blocks completion; re-run Phase 3 on affected file |
+| Situation | Resolution |
+|-----------|------------|
+| No agents in target project | Phase 1.6 offers to create domain experts via `brewcode:agent-creator`; declining emits a DEGRADED skill and requires `SUPERREVIEW_ALLOW_NO_EXPERTS=1` at validate |
+| Some source groups have no owner | Same Phase 1.6 flow, scoped to the uncovered group; declining marks it DEGRADED in `DOMAIN_AGENTS_TABLE` |
+| Only recon agents match a group | Never routed to them — treated as uncovered |
+| No tracker or no issues in target | `TRACKER_LABEL="none"`; scope reference still emitted; findings capped at P2, documented not silent |
+| Unknown tech stack | Emits with a generic reference; warns to review manually |
+| Multi-stack project | ONE dominant-stack reference is emitted; secondaries are noted in the agent and file-group tables |
+| Unresolved placeholder after Phase 3 | Phase 4 blocks completion; re-run Phase 3 on the affected file |
 | Unwritable target path | Generator stops; check permissions on `.claude/skills/` |
 
 ### Emitted file structure
@@ -175,17 +293,21 @@ Regenerate the emitted skill when any of the following change in the target proj
 .claude/skills/superreview/
   SKILL.md                          # emitted review skill (self-contained)
   references/
-    agent-prompt.md                 # per-agent review instructions
+    agent-prompt.md                 # runtime expert-selection + domain-owner prompt contract
+    scope.md                        # baseline, ownership, taxonomy, delivery, closeout
     report-template.md              # merged P0-P3 report template
-    {stack}.md                      # java-kotlin | typescript-react | python | go
+    {stack}.md                      # java-kotlin | typescript-react | python | go (dominant only)
 ```
 
 <CardGrid>
   <Card title="spec skill" icon="document" href="/brewcode/skills/spec/">
     Produces the project SPEC.md. Start with spec before generating a review skill for a new repo.
   </Card>
+  <Card title="The emitted skill" icon="magic" href="/brewcode/skills/review/">
+    What `/superreview` does once it lands in your repo: modes, gates, scope gate, merged report.
+  </Card>
   <Card title="convention skill" icon="star" href="/brewcode/skills/convention/">
-    Another generator skill: writes project-wide coding conventions into `.claude/skills/convention/`.
+    Another generator skill: writes project-wide coding conventions into `.claude/convention/`.
   </Card>
   <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/superreview">
     Browse templates, generate.sh, and per-stack reference docs in the source tree.

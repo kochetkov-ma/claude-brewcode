@@ -352,12 +352,40 @@ options:
 
 ### Step 4: Execute
 
-For complex multi-step operations, delegate to ssh-admin agent via Task tool:
+For complex multi-step operations, delegate to the `ssh-admin` agent via Task tool.
 
-| Parameter | Value |
-|-----------|-------|
-| `subagent_type` | `ssh-admin` |
-| `prompt` | `[Detailed task description with server info, safety classification, and specific commands to run]` |
+**Delegation.** A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target. One subagent = ONE bounded unit — one deliverable on ONE host, ~<=5 files/services, ~<=10 commands. Bigger MUST be split into N tasks (one per host, one deliverable each), all spawned in ONE message. The confirmation gates in Step 3 are NOT delegable: DELETE/PRIVILEGE approval stays here, in the main conversation, before any spawn.
+
+Every spawn prompt MUST carry:
+
+| Field | Content |
+|-------|---------|
+| GOAL | the overall task and why it exists — the point beyond the file edit |
+| ROLE | what this agent owns; what it must NOT touch |
+| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
+| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what THIS agent needs |
+| CONSUMER | who or what uses the result next, and the shape it must fit |
+| DONE | acceptance criteria + the exact report shape you want back |
+
+A bare one-line task is never enough. Shape:
+```
+Task(subagent_type="ssh-admin", prompt="
+GOAL: bringing SERVERNAME up to the state the user asked for (<one line>); this task is
+  the <N>th of <M> bounded steps, the others are handled by sibling agents.
+ROLE: you own <this one deliverable> on SERVERNAME. Do NOT touch other servers, do NOT
+  edit local repo files, do NOT run DELETE/PRIVILEGE commands — those were gated out.
+SCOPE: in — ssh SERVERNAME, these exact commands: <list>. Out — <explicit paths/services>.
+CONTEXT: host HOST, user USER, port PORT, key KEYPATH; Phase 3 already discovered
+  OS/Docker/disk (below) — do not re-probe. The user already approved classification
+  <READ|CREATE|MODIFY|SERVICE> in Step 3 and DELETE/PRIVILEGE commands were gated out before
+  this spawn. Sibling agents run steps <list> on their own hosts; SERVERNAME is yours alone.
+CONSUMER: Phase 6 assembles every agent's rows into one Session Report for the user, who
+  decides the next action from it — a command whose output you summarize instead of quoting
+  cannot be verified, and a silent failure reads there as a success.
+DONE: per-command output + final state check, plus the Phase 6 Session Report table
+  (Server, Mode, Actions, Changes, Status). Report FAILED commands verbatim, never silently.
+")
+```
 
 For simple single-command operations, execute directly:
 

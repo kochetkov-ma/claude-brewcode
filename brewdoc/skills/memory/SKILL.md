@@ -1,145 +1,83 @@
 ---
 name: brewdoc:memory
-description: Optimize Claude Code memory - dedupe, compress, organize CLAUDE.md. Triggers - optimize memory, memory cleanup.
-argument-hint: "— no args, runs 4-step interactive workflow"
+description: "Syncs and shrinks memory: CLAUDE.md (incl. nested), rules, conventions, memory files. `full` adds agent + skill rosters."
+argument-hint: "<free-form prompt: emphasis only; empty = sync whole memory surface; 'full' adds agent+skill rosters>"
 user-invocable: true
 disable-model-invocation: true
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion
 model: opus
 ---
 
-# Memory Optimizer
+# Memory Sync
 
-Optimizes Claude Code memory files through 4 interactive steps.
+> **Default mode = `sync`.** Every invocation — with or without a prompt — syncs the WHOLE memory
+> surface: memory files + root CLAUDE.md + **all nested CLAUDE.md** + all rules + all conventions.
+> A prompt never narrows the sweep, it only steers emphasis.
 
-> **No `context: fork`** — must run in main conversation to spawn agents.
+> **No `context: fork`** — must run in the main conversation: it spawns Task subagents and needs
+> the current session's history (a `session`-flavoured emphasis is worthless in a fork).
 
-## Phase 0: Load Context
+<instructions>
 
-0. **Determine memory directory (`$MEMORY_DIR`):**
-   ```bash
-   CUSTOM_DIR=$(cat .claude/settings.json 2>/dev/null | jq -r '.autoMemoryDirectory // empty')
-   if [ -n "$CUSTOM_DIR" ]; then
-     MEMORY_DIR="$(git rev-parse --show-toplevel)/$CUSTOM_DIR"
-   else
-     MEMORY_DIR=~/.claude/projects/<hash>/memory
-   fi
-   ```
-   Read `.claude/settings.json` (if exists) → extract `autoMemoryDirectory`.
-   If set → resolve as `<git-root>/<autoMemoryDirectory>`.
-   If not set → use legacy `~/.claude/projects/<hash>/memory/` glob pattern.
+## Constants
 
-1. Glob all memory files: `$MEMORY_DIR/*.md` (or `~/.claude/projects/**/memory/*.md` for legacy)
-2. Read `~/.claude/CLAUDE.md` and project `CLAUDE.md` (if exists)
-3. Glob `.claude/rules/*.md` — read all project rules
-4. Read `~/.claude/rules/*.md` — read all global rules
+| Const | Value |
+|-------|-------|
+| SYNC_REF | `${CLAUDE_SKILL_DIR}/references/mode-sync.md` |
+| FULL_REF | `${CLAUDE_SKILL_DIR}/references/mode-sync-full.md` |
+| GUIDE | `${CLAUDE_SKILL_DIR}/references/memory-guide.md` |
+| ROSTERS | agents + skills files, synced in-place by `full` only (see FULL_REF for why !=`Skill()` the brewcode siblings) |
 
-Build context map:
+## Step 1 — Input gate
+
+Treat the **entire** user input (`$ARGUMENTS`) as ONE free-form natural-language prompt — no
+keyword grammar, no argument parser (`argument-hint` is a loose example only).
+
+- prompt empty / whitespace-only -> mode `sync`, no questions asked. !=menu.
+- prompt non-empty -> mode `sync` as well; the prompt is emphasis, NOT a filter. The full memory
+  surface is still checked.
+- prompt asks for `full` / `фулл` / "всё" / "+ agents" / "+ skills" / "agents и skills" ->
+  mode `full`.
+
+## Step 2 — Mode
+
+| Mode | Chosen when | Does |
+|------|-------------|------|
+| `sync` (**DEFAULT**) | always, unless `full` is signalled | follow `SYNC_REF` end to end |
+| `full` | prompt says full / всё / names agents or skills | follow `FULL_REF`: `sync` + agent roster + skill roster + cross-layer dedup |
+
+ANNOUNCE before any work:
+
 ```
-memory_dir: $MEMORY_DIR
-memory_files: [paths]
-claude_md_sections: [sections]
-rules_files: [paths with content]
+Mode: <sync|full> (memory) — <evidence quoted from the prompt, or "no prompt -> default sync">
+Emphasis: <what the prompt steers toward, or "none">
 ```
 
-## Step 1: Analysis — Remove Duplicates (Interactive)
+## Step 3 — Dispatch
 
-**Goal:** Find memory entries that duplicate content already in CLAUDE.md or rules.
+- `sync` -> read `SYNC_REF`, execute S0..S5.
+- `full` -> read `FULL_REF`, execute F0..F4 (it re-uses `SYNC_REF` for the memory part and for the
+  roster verdicts/fan-out shape).
 
-1. Spawn `Explore` agent to cross-reference all loaded files
-2. Identify entries where:
-   - Same rule already in CLAUDE.md
-   - Same pattern already in a rules file
-   - Contradicts CLAUDE.md (CLAUDE.md wins)
-3. Show analysis:
-   ```
-   Found X duplicate/redundant entries (Y% of memory):
-   | Entry | Memory File | Already In | Action |
-   |-------|-------------|------------|--------|
-   | "Use grepai first" | MEMORY.md:5 | rules/grepai-first.md | DELETE |
-   ...
-   ```
-4. `AskUserQuestion`: "Delete X duplicate entries (Y% of memory)? This is safe — content exists elsewhere."
-   Options: "Yes, delete all" / "Review each" / "Skip this step"
-5. Apply deletion via `Edit` if approved
+Read `GUIDE` for the where-does-it-belong decision tree and compression patterns.
 
-## Step 2: Migration — Move to Rules/CLAUDE.md (Interactive)
+## Delegation (applies to EVERY Task spawn in this skill)
 
-**Goal:** Identify remaining entries better suited to persistent config files.
+A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct
+it, and it usually drifts off-target. One subagent = ONE bounded unit — one deliverable,
+~<=5 files, ~<=10 steps. Bigger MUST be split into N tasks, all spawned in ONE message.
 
-Decision tree (per entry):
-- Applies to ALL projects + IS a rule/constraint → `~/.claude/rules/`
-- Applies to THIS project only + IS a rule → `.claude/rules/`
-- IS an architectural decision → project `CLAUDE.md`
-- IS a fact/pattern reusable across sessions → KEEP in memory
+Every spawn prompt MUST carry:
 
-1. Show categorization:
-   ```
-   X entries suitable for migration:
-   | Entry | Current Location | Target | Reduction |
-   |-------|-----------------|--------|-----------|
-   | "Always use BD_PLUGIN_ROOT" | MEMORY.md:12 | .claude/rules/brewdoc.md | 15 tokens |
-   ...
-   Total: X entries → ~Y tokens saved
-   ```
-2. `AskUserQuestion`: "Migrate X entries to rules/CLAUDE.md?"
-   Options: "Yes, migrate all" / "Review each" / "Skip this step"
-3. If approved: create/append to target rule files via `Edit`, remove migrated entries from memory, create target file if missing
+| Field | Content |
+|-------|---------|
+| GOAL | the overall task and why it exists — the point beyond the file edit |
+| ROLE | what this agent owns; what it must NOT touch |
+| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
+| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what THIS agent needs |
+| CONSUMER | who or what uses the result next, and the shape it must fit |
+| DONE | acceptance criteria + the exact report shape you want back |
 
-## Step 3: Compression (Interactive)
+A bare one-line task is never enough.
 
-**Goal:** Compress remaining entries using LLM-efficient formatting.
-
-Compression techniques:
-- Prose → table row
-- Multiple related entries → single table
-- Verbose description → imperative one-liner
-- List of examples → pattern + one example
-
-1. Show compression preview:
-   ```
-   Compression opportunities found:
-   | Before | After | Savings |
-   |--------|-------|---------|
-   | "When you need to... always use..." | "Use X for Y" | 8 tokens |
-   ...
-   Total: ~Y% token reduction (~Z tokens)
-   ```
-   Show 2-3 specific before/after samples.
-2. `AskUserQuestion`: "Compress remaining memory? (~Y% reduction)"
-   Options: "Yes, compress all" / "Skip compression"
-3. Apply compression via `Edit` (bottom-up order to preserve line numbers)
-
-## Step 4: Validation (Automatic)
-
-**Goal:** Verify final state and clean orphaned references.
-
-1. Spawn `reviewer` agent to verify:
-   - No broken file path references in memory files
-   - No contradictions between memory and CLAUDE.md
-   - Memory files are well-formed markdown
-2. Clean broken references via `Edit`
-3. Check for orphaned memory files (in `$MEMORY_DIR` with no MEMORY.md reference)
-4. Report orphaned files and ask to delete
-
-**Final Report:**
-```markdown
-## Memory Optimization Complete
-
-### Summary
-| Metric | Before | After | Saved |
-|--------|--------|-------|-------|
-| Total entries | X | Y | Z |
-| Duplicate entries | X | 0 | — |
-| Migrated entries | — | — | X |
-| Token estimate | ~X | ~Y | ~Z (~P%) |
-
-### Changes Made
-- Step 1: Deleted X duplicate entries
-- Step 2: Migrated X entries to rules/CLAUDE.md
-- Step 3: Compressed X entries (Y% reduction)
-- Step 4: Fixed X broken references, removed X orphaned files
-
-### Final Memory Structure
-{directory listing of $MEMORY_DIR}
-```
+</instructions>

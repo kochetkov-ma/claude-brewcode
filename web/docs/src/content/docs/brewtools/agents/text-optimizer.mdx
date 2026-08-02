@@ -24,6 +24,21 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 | Skills | [text-optimize](/brewtools/skills/text-optimize/) |
 | Triggers | "optimize prompt", "reduce tokens", "compress" |
 | Modes | `light`, `medium` (default), `standard` (30–50%, human-readable), `deep` (2–3×, LLM-only with DICT+symbols), `max` (opt-in, 3–4×, `-x`/`--max`) |
+| Scope | One bounded unit per run — one deliverable, ~5 files, ~10 steps |
+
+## Scope guard
+
+The agent sizes the job before it starts compressing.
+
+| Situation | What the agent does |
+|-----------|--------------------|
+| Task fits one bounded unit — one deliverable, ~5 files, ~10 steps | Runs it |
+| Bigger, or several independent deliverables | Stops **before starting**, returns a split proposal: 2-N bounded subtasks, each with scope and suggested owner |
+| Scope grows mid-flight | Stops at the next clean boundary, reports done / remaining / how to split |
+| Brief missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance | States the assumption in the report, or asks once. Never invents scope |
+
+"Optimize every file in `.claude/`" comes back as a split proposal, not as an hour of unsupervised
+rewriting. Point it at one file or one tight group and it runs straight through.
 
 ## When to use
 
@@ -132,13 +147,6 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 | README | T.1-T.8, T.10, S.1-S.8, L.1-L.8 | standard |
 
 A.1-A.4 (aggressive lossy) apply whenever the resolved mode is deep or max, regardless of content type.
-
-| Capability | What the agent does |
-|------------|---------------------|
-| Token efficiency | Compress without information loss |
-| Logic clarity | Resolve contradictions and ambiguities |
-| Reference integrity | Verify links, paths, cross-references |
-| LLM perception | Structure for transformer attention patterns |
 
 **Verification thresholds:**
 - Light: no verification pass

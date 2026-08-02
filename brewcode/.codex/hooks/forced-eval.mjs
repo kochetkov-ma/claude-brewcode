@@ -10,7 +10,7 @@ try {
   } else {
     const prompt = typeof input.prompt === 'string' ? input.prompt.trim() : '';
     const skip = /^(?:yes|no|y|n|ok|okay|thanks|done|cancel|stop|continue|proceed|approved?|confirm(?:ed)?|\d+)$/i;
-    if (!prompt || prompt.startsWith('$') || skip.test(prompt)) {
+    if (!prompt || skip.test(prompt)) {
       respond({});
     } else {
       respond({

@@ -6,8 +6,8 @@ lib, no plugin-root deps) and travel together:
 
 | File | Event | Channel |
 |------|-------|---------|
-| `grepai-session.mjs` | SessionStart | `systemMessage` (status line) + `additionalContext` ("USE grepai_search FIRST") when index+ollama+mcp are all up; also auto-starts `grepai watch --background` when an index exists and ollama is running |
-| `grepai-reminder.mjs` | PreToolUse `Bash` | `additionalContext` ("USE grepai_search FIRST") when a `grep/find/rg/...` command is run AND the project has `.grepai/index.gob`; self-throttled to once / 60s via `.grepai/.reminder-ts` |
+| `grepai-session.mjs` | SessionStart | `systemMessage` (status line) + `additionalContext` ("USE grepai_search FIRST" + compact-first directive: `compact:true` + `format:"toon"` by default, full content only after a compact pass with `limit<=3`) when index+ollama+mcp are all up; also auto-starts `grepai watch --background` when an index exists and ollama is running |
+| `grepai-reminder.mjs` | PreToolUse `Bash` | `additionalContext` ("USE grepai_search FIRST" + compact-first directive: `compact:true` + `format:"toon"` by default, full content only after a compact pass with `limit<=3`) when a `grep/find/rg/...` command is run AND the project has `.grepai/index.gob`; self-throttled to once / 60s via `.grepai/.reminder-ts` |
 
 > Scripts are pure ESM, Node built-ins only (`fs`, `path`, `child_process`), no
 > plugin-root / npm deps. Each reads stdin, never throws, always exits 0. They
@@ -27,18 +27,18 @@ lib, no plugin-root deps) and travel together:
 
 ## settings.json hook entries
 
-`<absdir>` = absolute path of the hooks dir the 2 files were copied into
-(`<repo>/.claude/grepai/hooks` for project, expanded `~/.claude/grepai/hooks`
-for global).
+`<hookdir>` = the hooks dir the 2 files were copied into — write it relocatable:
+`$CLAUDE_PROJECT_DIR/.claude/grepai/hooks` for project scope, expanded
+`~/.claude/grepai/hooks` (absolute) for global scope.
 
 ```json
 {
   "hooks": {
     "SessionStart": [
-      { "hooks": [ { "type": "command", "command": "node <absdir>/grepai-session.mjs" } ] }
+      { "hooks": [ { "type": "command", "command": "node <hookdir>/grepai-session.mjs" } ] }
     ],
     "PreToolUse": [
-      { "matcher": "Bash", "hooks": [ { "type": "command", "command": "node <absdir>/grepai-reminder.mjs" } ] }
+      { "matcher": "Bash", "hooks": [ { "type": "command", "command": "node <hookdir>/grepai-reminder.mjs" } ] }
     ]
   }
 }
@@ -88,8 +88,11 @@ SessionStart / PreToolUse(Bash) group when present. EXECUTE with the Bash tool:
 mkdir -p "$(dirname "$SETTINGS")"
 [ -f "$SETTINGS" ] || echo '{}' > "$SETTINGS"
 
-S_CMD="node $DST/grepai-session.mjs"
-R_CMD="node $DST/grepai-reminder.mjs"
+# Path written INTO settings.json — relocatable for project scope
+# PROJECT: HOOK_REF='$CLAUDE_PROJECT_DIR/.claude/grepai/hooks'   (single quotes — keep the var literal)
+# GLOBAL:  HOOK_REF="$HOME/.claude/grepai/hooks"
+S_CMD="node $HOOK_REF/grepai-session.mjs"
+R_CMD="node $HOOK_REF/grepai-reminder.mjs"
 
 if command -v jq >/dev/null 2>&1; then
   TMP="$(mktemp)"

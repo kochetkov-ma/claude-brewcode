@@ -1,9 +1,9 @@
 ---
 title: "Bash Expert"
-description: "Creates professional sh/bash scripts for macOS/Linux. Triggered by 'create script', 'bash script', 'shell script', 'install script', 'setup script'."
+description: "Creates production-quality sh/bash scripts for Mac/Linux. Triggers: create script, bash script, shell script."
 order: 1209
 ---
-import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
 # Bash Expert
 
@@ -19,10 +19,27 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 
 | Field | Value |
 |-------|-------|
-| Model | opus |
+| Model | `inherit` — runs on the session's model |
 | Tools | Read, Write, Edit, Glob, Grep, Bash, WebFetch |
-| Triggers | "create script", "bash script", "shell script", "install script", "setup script" |
+| Triggers | "create script", "bash script", "shell script" |
 | Output | `.sh` file + `bash -n` + ShellCheck report |
+
+## Scope guard
+
+Bash Expert sizes the task before writing. One bounded unit = one deliverable, roughly 5 files, roughly 10 steps.
+
+| Situation | What the agent does |
+|-----------|---------------------|
+| Brief fits one bounded unit | Starts immediately |
+| Brief exceeds ~5 files / ~10 steps, or bundles several independent deliverables | Stops before starting, returns a split proposal: 2-N bounded subtasks, each with scope and a suggested owner |
+| Scope grows mid-flight | Stops at the next clean boundary, reports done / remaining / how to split |
+| Brief is missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance | States the assumption explicitly in the report, or asks once — never invents scope |
+
+"Write the whole CI toolchain" gets a split proposal. "Write the install script for brewtools" gets a script.
+
+<Callout type="tip">
+**Got a split proposal instead of a script?** That is the guard working. Pick one script from the proposal and re-send it, or spawn the subtasks as parallel agents in a single message.
+</Callout>
 
 ## When to use
 
@@ -42,13 +59,13 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 ```
 
 ```bash
-# Direct invocation
-/brewcode bash-expert — write a multi-mode script with status/install/help commands
+# Multi-mode dispatch
+"write a multi-mode script with status/install/help commands"
 ```
 
 ```bash
-# Plugin path context automatically injected
-"create a version-bump script using BC_PLUGIN_ROOT"
+# Plugin-aware paths resolve via ${CLAUDE_PLUGIN_ROOT}
+"create a version-bump script for the plugin"
 ```
 
 ## Flow
@@ -63,7 +80,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
   <li>
     <div>
       <strong>Choose a template</strong>
-      <p>Minimal (single-purpose, ≤20 lines) or full multi-mode dispatch ({'`CMD="${1:-help}"`'} + <code>case</code> block). Plugin scripts always get <code>SCRIPT_DIR</code> self-location and <code>$BC_PLUGIN_ROOT</code> awareness.</p>
+      <p>Minimal (single-purpose, ≤20 lines) or full multi-mode dispatch ({'`CMD="${1:-help}"`'} + <code>case</code> block). Plugin scripts always get <code>SCRIPT_DIR</code> self-location and correct plugin-root resolution.</p>
     </div>
   </li>
   <li>
@@ -89,24 +106,23 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 <details>
 <summary>Internals — patterns, templates, and platform handling</summary>
 
-### Strict mode and error handling
+### Conventions
 
 | Pattern | Example | Use |
 |---------|---------|-----|
-| Strict mode | `set -euo pipefail` | Every script, always |
-| Exit on fail | `cmd \|\| exit 1` | Critical steps |
-| Capture code | `cmd; EC=$?` | Conditional branching |
-| Default value | `${VAR:-default}` | Missing vars |
-| Required var | `${VAR:?error msg}` | Mandatory args |
-| Cleanup trap | `trap cleanup EXIT` | Temp files, locks |
+| Strict mode | `set -euo pipefail` | Every script, by default |
+| Cleanup trap | `trap cleanup EXIT` | Temp files, locks, other resources |
+| Required var | `${VAR:?error msg}` | Mandatory input |
+| Soft failure | `cmd \|\| echo "⚠️ warning"` | Optional steps |
 
-### Arguments
+### Mode detection
 
-| Type | Pattern |
-|------|---------|
-| Positional with default | `CMD="${1:-help}"` |
-| Flag parsing | `while getopts "hvdf:" opt; do case $opt in ...` |
-| Keyword detection | `[[ "$ARG" =~ (install\|setup) ]] && MODE="install"` |
+```bash
+ARGS_LOWER=$(echo "${1:-}" | tr '[:upper:]' '[:lower:]')
+[[ "$ARGS_LOWER" =~ (install|setup|init) ]] && MODE="install"
+[[ "$ARGS_LOWER" =~ (update|upgrade) ]] && MODE="update"
+[[ -z "$ARGS_LOWER" ]] && MODE="default"
+```
 
 ### Minimal template
 
@@ -130,14 +146,13 @@ echo "✅ Done"
 
 Always derive prefix via `$(brew --prefix)` — never hardcode.
 
-### Homebrew service operations
+### Structured output
 
-| Op | Command |
-|----|---------|
-| Check installed | `brew list PKG &>/dev/null` |
-| Install | `brew install PKG` |
-| Service start | `brew services start PKG` |
-| Service status | `brew services list \| grep PKG \| grep started` |
+| Element | Pattern |
+|---------|---------|
+| Status symbols | `✅` success · `❌` error · `⚠️` warning · `⏭️` skipped · `🔄` updated |
+| Markdown table | `echo "\| Component \| Status \|"` then the separator row, then data rows |
+| Phase header | `echo "=== Phase 1: Scanning ===" && echo ""` |
 
 ### JSON parsing fallback chain
 
@@ -173,10 +188,11 @@ Always derive prefix via `$(brew --prefix)` — never hardcode.
 | 2 | `set -euo pipefail` |
 | 3 | Usage header comment |
 | 4 | `shellcheck` clean |
-| 5 | `bash -n` passes |
-| 6 | `help` subcommand works |
-| 7 | Error paths tested |
-| 8 | Idempotent — safe re-run |
+| 5 | `chmod +x` applied |
+| 6 | `bash -n` passes |
+| 7 | `help` subcommand works |
+| 8 | Error paths tested |
+| 9 | Idempotent — safe re-run |
 
 </details>
 

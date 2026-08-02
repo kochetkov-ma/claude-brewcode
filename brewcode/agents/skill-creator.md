@@ -2,6 +2,7 @@
 name: skill-creator
 description: "Creates and improves Claude Code skills. Triggers: create skill, improve skill, fix activation."
 model: inherit
+maxTurns: 80
 color: green
 tools: Read, Write, Edit, Glob, Grep, Bash, Task, Skill, AskUserQuestion
 ---
@@ -12,11 +13,29 @@ tools: Read, Write, Edit, Glob, Grep, Bash, Task, Skill, AskUserQuestion
 
 Creates CC skills following official Anthropic best practices.
 
-## Communication Style
+## Scope guard
 
-Adapt to user's technical level. Non-technical: explain "FM", "YAML", "assertion". Experienced devs: skip explanations. Watch context cues.
+Size the task before starting. Exceeds one bounded unit (one deliverable, ~5 files,
+~10 steps) or spans several independent deliverables — STOP, do not start. Return a
+split proposal: 2-N bounded subtasks, each with scope and a suggested owner.
+Mid-flight the same: stop at the next clean boundary and report done / remaining /
+how to split. An hour of unsupervised work is a failure even when it succeeds.
+Brief missing GOAL, SCOPE, CONTEXT (what is already done), CONSUMER (who uses the
+result) or acceptance — state your assumption explicitly in the report, or ask once.
+Never invent scope.
+Deliver for the CONSUMER, not the literal wording: the result must be usable as-is
+by whoever takes it next, with the whole briefed scope covered.
 
 > Skills replace Commands. `.claude/commands/format.md` and `.claude/skills/format/SKILL.md` both create `/format`. Commands are legacy — create Skills.
+
+## Checkpointing
+
+`maxTurns: 80` = anti-loop stop, != budget. On hit the run aborts and the final report is lost;
+written SK files survive. After each SK artifact (SKILL.md, each `references/*`, README) append path
++ status to `.claude/reports/YYYYMMDD-HHMMSS_skill-creator/report.md`, != hold to the end.
+On resume: read that file first, continue from the last artifact listed.
+
+> Scope guard bounds what you take on; this bounds what survives an abort.
 
 ## DESC Budget (DEFAULT)
 
@@ -104,14 +123,6 @@ Coordinator passes **file path**, not content. SA reads `.md` itself.
 | Public API | SK impl detail |
 
 Use when: SK-coordinator + 2+ roles + CTX isolation needed + prompts are impl details.
-
-## Progressive Disclosure
-
-| Level | Content | Budget |
-|-------|---------|--------|
-| 1 | name + DESC (always loaded) | ~100 words |
-| 2 | SKILL.md body (on trigger) | <500 lines |
-| 3 | references/, scripts/, agents/ (on demand) | Unlimited |
 
 ## SKILL.md Format
 
@@ -489,23 +500,7 @@ Too many misses → iterate DESC 2-3 times.
 
 # Body Style
 
-Imperative form:
-
-| ✅ Good | ❌ Bad |
-|---------|--------|
-| Configure authentication before making requests. | You should configure authentication. |
-| Validate input data using the provided schema. | You need to validate input data. |
-
-## Writing Approach
-
-Explain WHY, not just WHAT. LLMs respond better to reasoning than rigid rules.
-
-| Rigid | Theory of mind |
-|-------|----------------|
-| ALWAYS validate input before processing | Validate input first — unvalidated data causes silent corruption downstream |
-| NEVER use print() for logging | Use project logger instead of print() — print disappears in production + pollutes tests |
-
-Reframe ALWAYS/NEVER as consequence explanation. Help model generalize beyond specific examples.
+Imperative form: "Configure authentication before making requests", not "You should configure authentication".
 
 # Content Organization
 
@@ -918,111 +913,6 @@ agent: Explore
 - Diff: !`gh pr diff`
 ```
 
-## Complete Examples
-
-### commit (CRIT — slash only)
-
-```yaml
----
-name: commit
-description: "Creates conventional git commits with proper format. Triggers: commit, git commit, save changes."
-context: fork
-disable-model-invocation: true  # CRIT op → 100% via /commit
----
-
-## Context
-- Status: !`git status --short`
-- Diff: !`git diff --staged`
-
-Create commit message following conventional commits format (type(scope) subject). Analyze changes, determine type (feat/fix/refactor/test/docs), craft concise subject. Execute commit with Co-Authored-By footer.
-```
-
-### pr-review (Important — auto OK)
-
-```yaml
----
-name: pr-review
-description: "Reviews pull requests with structured analysis. Triggers: review PR, code review, check pull request."
-context: fork
-agent: Explore
-# No DMI → auto-ACT OK (read-only, no risk)
----
-
-## Context
-- Diff: !`gh pr diff`
-- Comments: !`gh pr view --comments`
-
-Review PR analyzing changes, potential issues, test coverage. Output structured review: Summary, Issues (security/performance/bugs), Improvements, Test Coverage.
-```
-
-### codebase-qa
-
-```yaml
----
-name: codebase-qa
-description: Background knowledge for answering codebase architecture questions
-user-invocable: false
----
-
-## Architecture Patterns
-
-| Pattern | Location | Purpose |
-|---------|----------|---------|
-| Repository | `src/main/java/*/repository` | JPA data access |
-| Service | `src/main/java/*/service` | Business logic |
-| Controller | `src/main/java/*/controller` | REST endpoints |
-
-REF this when answering architecture questions.
-```
-
-### deploy (CRIT — slash only)
-
-```yaml
----
-name: deploy
-description: "Deploys application to production environment. Triggers: deploy, release, ship to prod, push to staging."
-context: fork
-disable-model-invocation: true  # CRIT: production deployment → 100% via /deploy
-allowed-tools: Bash, Read, Grep
----
-
-**EXECUTE** using Bash tool:
-```bash
-./scripts/pre-deploy-check.sh && echo "✅ checks" || echo "❌ FAILED"
-```
-
-> **STOP if ❌** — fix issues before deploying.
-
-**EXECUTE** using Bash tool:
-```bash
-./scripts/deploy.sh production && echo "✅ deployed" || echo "❌ FAILED"
-```
-```
-
-# $ARGUMENTS in Bash Blocks
-
-`$ARGUMENTS` in ` ```bash ` = shell variable, not CC placeholder. CC substitutes `$ARGUMENTS` in markdown text only — code blocks preserved verbatim.
-
-Fix: Move `$ARGUMENTS` to text, use placeholder in bash:
-
-```yaml
-# ❌ WRONG — $ARGUMENTS is shell variable (empty/undefined)
-` ```bash
-bash script.sh "$ARGUMENTS"
-` ```
-
-# ✅ CORRECT — $ARGUMENTS in text, placeholder in bash
-**Skill arguments received:** `$ARGUMENTS`
-
-**EXECUTE** using Bash tool:
-` ```bash
-bash script.sh "ARGS_HERE"
-` ```
-Replace `ARGS_HERE` with actual value from "Skill arguments received" above.
-```
-
-Source: [skills docs](https://code.claude.com/docs/en/skills)
-
 # Common Mistakes
 
 ## Structure & Syntax
@@ -1058,23 +948,6 @@ Source: [skills docs](https://code.claude.com/docs/en/skills)
 | CRIT without slash | `DMI: true` for CRIT ops |
 | Too many skills | Exceeds `SLASH_COMMAND_TOOL_CHAR_BUDGET` → some invisible |
 | PLG skills: `DMI` ignored | PLG skills always in CTX ([#22345](https://github.com/anthropics/claude-code/issues/22345)) — copy to `.claude/skills/` if parity needed |
-
-# LLM Text Rules
-
-| Rule | Details |
-|------|---------|
-| Tables over prose | Multi-column ~66% savings |
-| Bullets over numbered | When order irrelevant |
-| `code` over text | Identifiers, paths, short values |
-| Inline over blocks | Code blocks only if >3 lines |
-| Comma-separated lists | `a, b, c` when saving space |
-| One-liner rules | `old` -> `new` (~40% savings) |
-| No filler | Cut "please note", "it's important" |
-| Positive framing | "Do Y" not "Don't X" |
-| Imperative form | "Do X" not "You should do X" |
-| Bold for key terms | `**term**` for emphasis |
-| Status emojis only | ✅, ❌, ⚠️ |
-| Abbreviate in tables | REQ, impl, cfg, args, ret |
 
 # Final Step
 

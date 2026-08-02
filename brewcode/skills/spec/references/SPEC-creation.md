@@ -38,40 +38,44 @@
 
 ## Step 3: Parallel Agent Execution
 
+> Sizing: one agent = ONE research area — ~<=5 files, ~<=10 steps; an area bigger than that is split into two areas and both are fanned out in the SAME message.
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  ONE message with 5-10 Task tool calls in PARALLEL          │
-│                                                             │
-│  Task(subagent_type="Plan", prompt="Analyze architecture in {area}")│
-│  Task(subagent_type="developer", prompt="Analyze DB layer...")      │
-│  Task(subagent_type="developer", prompt="Analyze services...")      │
-│  Task(subagent_type="tester", prompt="Analyze test patterns...")    │
-│  Task(subagent_type="reviewer", prompt="Analyze quality...")        │
-│  ...                                                        │
+│  ONE message, 5-10 Task calls in PARALLEL. Every prompt is  │
+│  the 6-field brief below, filled for that area:             │
+│    Plan       -> architecture area                          │
+│    developer  -> DB layer                                   │
+│    developer  -> services                                   │
+│    tester     -> test patterns                              │
+│    reviewer   -> quality / security                         │
+│    ...                                                      │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ### Agent Prompt Template
 
 ```
-Analyze {AREA_NAME} for task: "{TASK_DESCRIPTION}"
-
-Focus:
-- Existing patterns and conventions
-- Reusable components/code
-- Potential impact areas
-- Risks and constraints
-- Best practices observed
-
-Context files: {LIST_OF_FILES_IN_AREA}
-
-Output format:
-1. Key findings (bullet points)
-2. Reusable assets (table: path | purpose)
-3. Risks/constraints (bullet points)
-4. Recommendations (bullet points)
-
-DO NOT include large code blocks - reference file:line instead.
+Task(subagent_type="{AGENT}", prompt="
+GOAL: build the SPEC for task \"{TASK_DESCRIPTION}\" — the plan a later implementation session executes.
+  It is assembled from 5-10 areas analyzed in parallel and is only as good as its weakest area.
+ROLE: you own the {AREA_NAME} area. Analyze and report ONLY — do NOT edit code, do NOT write the SPEC,
+  do NOT cover another agent's area.
+SCOPE: in — {LIST_OF_FILES_IN_AREA}. Out — every path outside that list, and the SPEC file itself.
+CONTEXT: nothing is implemented yet; this is the research pass. The user's answers so far: {USER_QA}.
+  Sibling agents analyze the other areas ({SIBLING_AREAS}) in the same message — assume each covers its
+  own, and stay inside yours.
+CONSUMER: the orchestrator merges every area report into SPEC.md (Analysis > Architecture / Data & State /
+  Impact, Context Files, Risks, Recommendations). A finding without a `file:line` cannot be merged, and
+  large code blocks are stripped — reference `file:line` instead.
+DONE: report exactly these blocks, nothing else:
+  1. Key findings (bullet points)
+  2. Reusable assets (table: path | purpose)
+  3. Risks/constraints (bullet points)
+  4. Recommendations (bullet points)
+  Cover: existing patterns and conventions, reusable components/code, potential impact areas, risks and
+  constraints, best practices observed. DO NOT include large code blocks - reference file:line instead.
+")
 ```
 
 ## Step 4: Consolidate Results

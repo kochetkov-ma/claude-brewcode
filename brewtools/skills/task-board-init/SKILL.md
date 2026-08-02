@@ -1,6 +1,6 @@
 ---
-name: task-board-init
-description: "Generator: deploys a file-based Kanban into ANY repo via multi-agent analysis, with an optional gated CLAUDE.md-optimization pass. Triggers: init task board, scaffold kanban, set up task tracker, generate task board, optimize CLAUDE.md, добавь канбан-доску, разверни трекер задач."
+name: brewtools:task-board-init
+description: "Generator: deploys a file-based Kanban into any repo via multi-agent analysis, plus an optional gated CLAUDE.md-optimization pass. Triggers: init task board, scaffold kanban, task tracker, канбан-доска."
 argument-hint: "[target repo path | empty = cwd] [free-text directive, e.g. 'also dedupe rules', 'skip module split']"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Task, AskUserQuestion
 model: opus
@@ -28,6 +28,42 @@ This skill ORCHESTRATES. It does not hand-do the bulk analysis or the doc sweep 
 > **Spawn from MAIN only.** This skill is inline (no `context`), so its Task spawns are first-level. Do not nest.
 
 > **Read reference templates** with the `Read` tool using `${CLAUDE_SKILL_DIR}/references/<file>` to load them into context.
+
+## Delegation
+
+A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target. One subagent = ONE bounded unit — ONE doc group, ~<=5 files, ~<=10 steps. Bigger MUST be split into N tasks, all spawned in ONE message. Applies to both spawn points: P1 analysis and P4c doc sweep.
+
+Every spawn prompt MUST carry:
+
+| Field | Content |
+|-------|---------|
+| GOAL | the overall task and why it exists — the point beyond the file edit |
+| ROLE | what this agent owns; what it must NOT touch |
+| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
+| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what THIS agent needs |
+| CONSUMER | who or what uses the result next, and the shape it must fit |
+| DONE | acceptance criteria + the exact report shape you want back |
+
+A bare one-line task is never enough. Shape (P4c sweep agent):
+```
+Task(subagent_type="general-purpose", prompt="
+GOAL: deploying a file-based Kanban into TARGET; the board skeleton exists and this pass
+  fills it from the repo's pre-existing task docs. Sibling agents handle other doc groups.
+ROLE: you own <these DOCS>. Do NOT create tasks that no document supports, do NOT edit
+  source dirs, do NOT touch CLAUDE.md.
+SCOPE: in — write ONLY under TARGET/.claude/features/**; read the listed DOCS.
+  Out — EXCLUSIONS (<list from P1>), TARGET/CLAUDE.md, .claude/agents, .claude/skills.
+CONTEXT: P1 already confirmed DOMAINS=<...>, REL_STYLE=<...>, LANG=<...> with the user, and
+  P4a-b already wrote the board skeleton, TASK_TEMPLATE.md (id convention) and board.md
+  (row format) — read them, do not reinvent either. Sibling agents sweep the other doc
+  groups into the same tree right now, so touch only the DOCS listed for you.
+CONSUMER: P5 verification counts what landed under closed/ + backlog/, and the installed
+  task-tracker agent reads those files from then on — an id or status dir that deviates from
+  TASK_TEMPLATE.md makes the task invisible to it.
+DONE: files written under closed/ + backlog/, and a manifest: docs migrated by status,
+  docs trashed, board rows authored. A no-op sweep must say so explicitly.
+")
+```
 
 ---
 

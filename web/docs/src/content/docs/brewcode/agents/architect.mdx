@@ -1,6 +1,6 @@
 ---
 title: "Architect"
-description: "Architecture analysis, patterns, trade-offs, scaling. Triggers: review architecture, design service, performance limits, scaling strategy"
+description: "Read-only architecture analysis, patterns, scaling. Triggers: review architecture, design service, scaling."
 order: 1204
 ---
 import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
@@ -19,17 +19,35 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 
 | Field | Value |
 |-------|-------|
-| Trigger | "review architecture", "design service", "performance limits", "scaling strategy" |
-| Model | opus |
+| Trigger | "review architecture", "design service", "scaling" |
+| Model | `inherit` — runs on the session's model |
 | Tools | Read, Glob, Grep, Bash, WebFetch, WebSearch |
 | Disallowed | Write, Edit, NotebookEdit |
+| MCP | grepai |
+
+## Scope guard
+
+The architect sizes the task before starting. One bounded unit = one deliverable, roughly 5 files, roughly 10 steps.
+
+| Situation | What the agent does |
+|-----------|---------------------|
+| Brief fits one bounded unit | Starts immediately |
+| Brief exceeds ~5 files / ~10 steps, or bundles several independent deliverables | Stops before starting, returns a split proposal: 2-N bounded subtasks, each with scope and a suggested owner |
+| Scope grows mid-flight | Stops at the next clean boundary, reports done / remaining / how to split |
+| Brief is missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance | States the assumption explicitly in the report, or asks once — never invents scope |
+
+"Review the architecture of the whole repo" is exactly the shape that gets refused. Ask for one module, one service, or one boundary instead.
+
+<Callout type="tip">
+**Got a split proposal instead of an analysis?** That is the guard working. Pick one subtask and re-send it, or spawn the subtasks as parallel agents in a single message.
+</Callout>
 
 ## When to use
 
-- **Design review** — assess an existing module, service, or system before a major change
-- **Pattern selection** — choose between architecture styles (monolith vs microservices, CQRS, hexagonal)
+- **Design review** — assess one existing module, service, or boundary before a major change
+- **Pattern selection** — pick an approach that fits the patterns already established in your codebase
 - **Trade-off analysis** — document the gains and costs of a decision before committing
-- **Scaling strategy** — identify bottlenecks, quality dimensions, anti-patterns in the current design
+- **Scaling strategy** — identify bottlenecks and the quality dimensions they threaten
 - **Pre-implementation** — set boundaries and contracts before handing off to `developer`
 
 ## Examples
@@ -37,9 +55,10 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 ```
 "review the architecture of the payment module"
 "design a service for async order processing"
-"what are the performance limits of the current data layer?"
 "scaling strategy for high-traffic checkout"
 ```
+
+The agent reads every `.claude/rules/` file and `CLAUDE.md` first, then searches `.claude/` and `docs/` for existing architecture decisions before forming an opinion — so recommendations follow your conventions, not a textbook.
 
 ## Flow
 
@@ -65,7 +84,7 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
   <li>
     <div>
       <strong>Assessment</strong>
-      <p>Evaluates quality dimensions — performance, scalability, reliability, maintainability, security, testability — and identifies anti-patterns (God Service, Distributed Monolith, Circular Deps, Leaky Abstraction).</p>
+      <p>Evaluates six quality dimensions — performance, scalability, reliability, maintainability, security, testability — and names the trade-off behind every finding. It reads your project's own rules and conventions rather than applying a generic architecture checklist.</p>
     </div>
   </li>
   <li>
@@ -112,15 +131,7 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 | Trade-off evaluation | Code review (→ reviewer) |
 | Scaling strategies | Deployment execution |
 
-**Good vs bad patterns (quick ref):**
-
-| Area | Avoid | Prefer |
-|------|-------|--------|
-| Naming | `DataManager`, `Helper` | `OrderRepository`, `PriceCalculator` |
-| State | Mutable shared state | Immutable, stateless |
-| Coupling | Direct deps everywhere | Interfaces, DI |
-| Inheritance | Deep hierarchy (>3 levels) | Composition, delegation |
-| Errors | Swallow exceptions | Fail fast, explicit types |
+**Tool order:** `grepai_search` first for patterns and boundaries, then Grep/Glob/Read for structure, Bash for `git log` and dependency graphs, WebSearch for external research.
 
 </details>
 

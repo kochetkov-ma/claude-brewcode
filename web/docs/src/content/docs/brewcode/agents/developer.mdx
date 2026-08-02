@@ -1,13 +1,13 @@
 ---
 title: "Developer"
-description: "Implements features, fixes bugs, and refactors code. Auto-triggers on: implement, write code, fix bug, add feature, refactor, build."
+description: "Implements features, writes code, fixes bugs, refactors. Trig: implement, fix bug, add feature."
 order: 1201
 ---
 import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
 # Developer
 
-<Badge variant="primary" text="opus" />
+<Badge variant="primary" text="model: inherit" />
 
 <Callout type="caution">
 **A developer agent that reads no rules produces non-idiomatic code.** Before writing a single line, the agent reads every `*.md` in `.claude/rules/` and inspects `CLAUDE.md` — stack, patterns, commands, forbidden libraries. Skipping this step causes drift that reviewers catch too late.
@@ -21,10 +21,28 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 
 | Field | Value |
 |-------|-------|
-| Model | `opus` |
+| Model | `inherit` — runs on the session's model |
 | Tools | Read, Write, Edit, Glob, Grep, Bash, Task, NotebookEdit, WebFetch, WebSearch |
+| MCP | grepai |
 | Git access | `status`, `diff`, `log`, `show`, `branch` — read-only; never `add`, `commit`, `push` |
-| Triggers | "implement", "write code", "fix bug", "add feature", "refactor", "build" |
+| Triggers | "implement", "fix bug", "add feature" |
+
+## Scope guard
+
+Developer sizes the task before writing a line. One bounded unit = one deliverable, roughly 5 files, roughly 10 steps.
+
+| Situation | What the agent does |
+|-----------|---------------------|
+| Brief fits one bounded unit | Starts immediately |
+| Brief exceeds ~5 files / ~10 steps, or bundles several independent deliverables | Stops before starting, returns a split proposal: 2-N bounded subtasks, each with scope and a suggested owner |
+| Scope grows mid-flight | Stops at the next clean boundary, reports done / remaining / how to split |
+| Brief is missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance | States the assumption explicitly in the report, or asks once — never invents scope |
+
+"Build the whole billing feature" gets a split proposal. "Add the `/api/invoices` endpoint with cursor pagination" gets built.
+
+<Callout type="tip">
+**Got a split proposal instead of code?** That is the guard working, not a refusal to help. An hour of unsupervised implementation counts as a failure even when the code compiles — the split keeps every unit reviewable. Pick one subtask and re-send it, or spawn the subtasks as parallel developers in a single message.
+</Callout>
 
 ## When to use
 
@@ -63,13 +81,13 @@ Do NOT trigger developer for: deployment scripts (`deploy-admin`), architecture 
   <li>
     <div>
       <strong>Detect the stack</strong>
-      <p>Scans build manifests: <code>package.json</code>, <code>pom.xml</code>, <code>build.gradle</code>, <code>Cargo.toml</code>, <code>go.mod</code>, <code>requirements.txt</code>. Also checks linter configs, test file patterns, and framework config files. Never assumes the stack from the task description alone.</p>
+      <p>Reads the project's build files to determine the actual stack before implementing. Never assumes the stack from the task description alone.</p>
     </div>
   </li>
   <li>
     <div>
       <strong>Implement</strong>
-      <p>Writes or edits code following clean-code rules: single responsibility, no abbreviations (except DTO, ID, URL), early returns to reduce nesting, immutable structures where possible, language-idiomatic null safety (<code>Optional</code>, <code>?</code>, <code>None</code>). Public methods before private. Imports over fully-qualified names.</p>
+      <p>Writes or edits code following the conventions found in step 1 — the project's own rules files, <code>CLAUDE.md</code>, and existing code. The agent brings no built-in style guide of its own.</p>
     </div>
   </li>
   <li>
@@ -95,25 +113,9 @@ Do NOT trigger developer for: deployment scripts (`deploy-admin`), architecture 
 2. Check `CLAUDE.md` for stack, patterns, commands
 3. Detect tech stack via build files
 
-**Stack detection signals:**
+Code style is not hardcoded into the agent. It comes from your `.claude/rules/` files, `CLAUDE.md`, and the conventions already visible in the codebase — which is why step 1 is non-negotiable.
 
-| Indicator | Files checked |
-|-----------|---------------|
-| Build system | `package.json`, `pom.xml`, `build.gradle`, `Cargo.toml`, `go.mod`, `requirements.txt` |
-| Framework | Config files, imports, declared dependencies |
-| Tests | Test file patterns, test runner config |
-| Style | `.editorconfig`, linter configs (`.eslintrc`, `checkstyle.xml`, `rustfmt.toml`) |
-
-**Clean code rules enforced:**
-
-| Pattern | Rule |
-|---------|------|
-| Single Responsibility | &lt;20 lines/method |
-| Naming | No abbreviations (except DTO, ID, URL) |
-| Early returns | Reduce nesting, fail fast |
-| Immutability | Prefer immutable structures |
-| Null safety | Language-specific: `Optional`, `?`, `None` |
-| Organization | Imports over FQN, static if no state, public→private |
+**Verification gates:** build without tests → lint/format → unit tests. Reported as `Builds | Formatted | Tests pass`.
 
 **Git scope — hard boundary:**
 

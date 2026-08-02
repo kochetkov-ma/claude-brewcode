@@ -1,7 +1,7 @@
 ---
 title: "Agents"
-description: "Manage Claude Code agents — create, improve, review, or list project and global agents with auto-mode selection."
-order: 1114
+description: "Manage Claude Code agents — create, improve, review, sync (memory sync), or list project and global agents with auto-mode selection."
+order: 1116
 ---
 import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
@@ -25,6 +25,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 - Create a new agent from a plain-English description
 - Improve an existing agent's trigger phrases or system prompt
 - Review an agent for quality, focus, and trigger coverage
+- Sync agent files against real code/CLAUDE.md/rules after a repo, session, or commit changed (memory sync)
 - Batch-create or batch-improve a set of agents in one pass
 
 ## Examples
@@ -34,6 +35,8 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 /brewcode:agents status of my agents
 /brewcode:agents create a backend validator agent
 /brewcode:agents improve reviewer
+/brewcode:agents sync
+/brewcode:agents синк по текущей сессии
 ```
 
 ## How it works
@@ -41,9 +44,9 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 <Steps>
   <li><div><strong>Input gate</strong><p>Reads <code>$ARGUMENTS</code>. An empty prompt skips analysis and jumps directly to the No-prompt menu; a non-empty prompt proceeds to mode selection.</p></div></li>
   <li><div><strong>Auto-mode select</strong><p>Announces <code>Mode: &lt;mode&gt; (agents) — chosen because ...</code> based on keywords, intent, and target presence in the prompt.</p></div></li>
-  <li><div><strong>No-prompt menu</strong><p>Sends a single AskUserQuestion with options: <code>Status (agents)</code> (recommended), <code>Status (all: agents+rules+skills)</code>, <code>Create</code>, <code>Improve</code>, <code>Review</code>, <code>List (plain)</code>, <code>Cancel</code>. The skill continues with the chosen mode.</p></div></li>
-  <li><div><strong>Dispatch</strong><p>Routes to the appropriate handler. Create and improve modes delegate to the <code>brewcode:agent-creator</code> specialist via Task tool, passing full context — description, scope, model, and improvement focus.</p></div></li>
-  <li><div><strong>Real status</strong><p>Scans <code>.claude/agents/</code>, <code>~/.claude/agents/</code>, and plugin <code>agents/</code> directories; reads each agent file to extract name, model, and trigger count. Reports scope, path, and quality signal per agent.</p></div></li>
+  <li><div><strong>No-prompt menu</strong><p>Sends a single AskUserQuestion with options: <code>Status (agents)</code> (recommended), <code>Status (all: agents+rules+skills)</code>, <code>Create</code>, <code>Improve</code>, <code>Review</code>, <code>Sync agents (memory sync)</code>, <code>List (plain)</code>, <code>Cancel</code>. The skill continues with the chosen mode.</p></div></li>
+  <li><div><strong>Dispatch</strong><p>Routes to the appropriate handler. Create, improve and sync delegate to the <code>brewcode:agent-creator</code> specialist via Task tool, passing full context — description, scope, model, and improvement focus; review goes to <code>brewcode:reviewer</code> instead, two-phase. Sync mode reads the shared <code>mode-sync.md</code> reference (also used by <code>/brewcode:skills</code>) and fans out one <code>agent-creator</code> subagent per target file.</p></div></li>
+  <li><div><strong>Real status</strong><p>Four blocks, never a flat list: inventory by scope (plugin / project / global — counts, names, load path), state (enabled or disabled via the <code>_name.md</code> toggle marker, model), overlaps and conflicts (same name shadowed across scopes, duplicate triggers or descriptions), and health flags (missing README or frontmatter, agents missing <code>Bash</code> in <code>tools:</code>).</p></div></li>
   <li><div><strong>Final output</strong><p>Prints a detection + result table: mode chosen, target, file path, model, scope, and CLAUDE.md update status. Suggests next steps such as <code>/reload-plugins</code> and a test invocation phrase.</p></div></li>
 </Steps>
 
@@ -51,12 +54,34 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 
 | Mode | Trigger | Action |
 |------|---------|--------|
-| status | default — no explicit mode keyword | Scans all scopes, prints agents with model, scope, and trigger count |
-| list | `list` keyword | Globs `*.md` across ALL agent scopes (`.claude/agents/`, `~/.claude/agents/`, `brewcode/agents/`) |
-| create | `create <description>` | Scaffolds a new agent file via `agent-creator`; asks scope, model, CLAUDE.md update |
-| improve | `improve <name>` or bare `<name\|path>` | Tunes description triggers and system prompt quality |
-| review | `review <name>` | Full quality review: trigger coverage, prompt focus, redundancy check |
-| batch | auto-detected fan-out flag | Not a menu item — auto-detected from prompt ("batch", "all", "each"); triggers parallel delegation when creating or improving multiple agents |
+| status | default for any "show me" intent — "статус", "что есть", "состояние" | Inventory by scope, state, overlaps, health flags |
+| list | explicit only — "list" / "список" / "перечисли" | Globs `*.md` across ALL agent scopes (`.claude/agents/`, `~/.claude/agents/`, `brewcode/agents/`) |
+| create | "создай" / "create" / "new" / "добавь" / "scaffold" | Scaffolds a new agent file via `agent-creator`; asks scope, model, CLAUDE.md update |
+| improve | "улучши" / "improve" / "refactor" / "fix" / "почини", or a bare existing `<name\|path>` | Tunes description triggers and system prompt quality |
+| review | "ревью" / "review" / "validate" / "проверь корректность" | Single `brewcode:reviewer`, two-phase: review, then double-check the findings |
+| sync | `sync`, `синк`, `memory sync`, `актуализируй`, `обнови знания`, `приведи в соответствие с кодом` | Memory sync: rewrites agent files against ground truth via the shared reference; non-growth guaranteed |
+| batch | auto-detected fan-out flag | Not a menu item — auto-detected from plural form, "все" / "all", or multiple names/paths; triggers parallel delegation when creating or improving multiple agents |
+
+## Delegation
+
+<Callout type="caution" title="Why the rule exists">
+  A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target.
+</Callout>
+
+One subagent = **ONE bounded unit** — here, ONE agent definition: roughly 5 files, roughly 10 steps. "Create the whole roster" is never one task; a batch is split into N spawns fired in **ONE message**, one `agent-creator` per agent file.
+
+Every spawn prompt carries six fields. A bare one-line task is never enough:
+
+| Field | Content |
+|-------|---------|
+| GOAL | the overall task and why it exists — the point beyond the file edit |
+| ROLE | what this agent owns; what it must NOT touch |
+| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
+| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what THIS agent needs |
+| CONSUMER | who or what uses the result next, and the shape it must fit |
+| DONE | acceptance criteria + the exact report shape you want back |
+
+For `create`, that means the specialist is told the scope and model were already decided (do not re-ask), which agents already exist and must not be duplicated, how many siblings run in parallel, and that its description line drops verbatim into the CLAUDE.md agents table row written right after it finishes.
 
 <details>
 <summary>Create / improve parameters</summary>
@@ -64,17 +89,44 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | Parameter | Options | Notes |
 |-----------|---------|-------|
 | Scope | Project / Global / Plugin | Project → `.claude/agents/`; Global → `~/.claude/agents/`; Plugin → `brewcode/agents/` |
-| Model | sonnet / opus / haiku / inherit | `inherit` keeps the model from the existing file (improve only) |
+| Model | sonnet (recommended) / opus or fable / haiku / inherit | `inherit` omits the `model:` field entirely, so the agent runs on the calling session's model |
 | CLAUDE.md update | yes / no | Adds or updates the agent row in the agents table; appends a new section if none exists |
-| Improve focus | triggers / system prompt / both / full review | For improve and review modes |
+| Improve focus | triggers / system prompt / both / full review | Asked for improve mode only |
 | Description | free-form, aim ≤100 chars | Used as the agent `description` frontmatter — drives LLM auto-invocation |
 | Specialist | `brewcode:agent-creator` | Handles file scaffolding and prompt engineering |
+
+</details>
+
+<details>
+<summary>Sync mode</summary>
+
+| Scope | Meaning |
+|-------|---------|
+| `repo` (default) | Whole working tree |
+| `session` | This conversation only — decisions, user corrections, bugs hit |
+| `commit` | `git show`/`git diff <ref>`, default `HEAD` |
+
+Announced as `Sync scope: <scope> — <evidence> | targets: <N> agents`. Implemented in `brewcode/skills/skills/references/mode-sync.md` (steps S1-S6) via the constant `SYNC_REF` = `${CLAUDE_SKILL_DIR}/../skills/references/mode-sync.md` — the same file `/brewcode:skills sync` runs, so the two rosters cannot drift apart.
+
+**Non-growth directive:** each synced file ends `<=` its original line count; total delta `<= 0`. Any positive delta needs per-line justification. Order: DELETE first, then FIX, then ADD last.
+
+| Verdict | Action |
+|---------|--------|
+| STALE | Fix to minimal true form |
+| DEAD | Delete, plus anything that only existed to explain it |
+| DUPLICATE | Keep the single best location |
+| OBVIOUS | Delete |
+| DRIFT | Compress prose to a table row |
+| MISSING | Add `<=` 1 line, only if verified against a real source and its absence costs a real failure |
+
+**Report:** per-target table (File \| Lines before → after \| Fixed \| Deleted \| Added \| Key change), stale facts corrected, added items with source, skipped agents, total delta.
 
 </details>
 
 <CardGrid>
   <Card title="rules" icon="list" href="/brewcode/skills/rules/">Sibling: manage project rules</Card>
   <Card title="skills" icon="pencil" href="/brewcode/skills/skills/">Sibling: manage skills</Card>
+  <Card title="memory" icon="sync" href="/brewdoc/skills/memory/">Sibling: same non-growth sync over memory files, CLAUDE.md, rules</Card>
   <Card title="brewcode" icon="rocket" href="/brewcode/overview/">Plugin overview</Card>
   <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/SKILL.md">SKILL.md</Card>
 </CardGrid>

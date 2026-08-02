@@ -10,7 +10,7 @@
 
 **Claude Code plugin suite** -- four plugins for development, documentation, text utility, and visual workflows.
 
-A regular Claude Code session loses context during compaction. Brewcode automatically saves knowledge, passes state between compaction cycles, and continues work without restarting. Four plugins. 25 skills. 15 agents. 9 lifecycle hooks.
+A regular Claude Code session hands a big task to one agent and loses sight of it. Brewcode splits work into bounded units, gives every spawn a six-field brief, and re-states the delegation rule on every prompt. Four plugins. 25 skills. 13 agents. 4 lifecycle hooks.
 
 [**Full Documentation**](https://doc-claude.brewcode.app/getting-started/)
 
@@ -57,7 +57,7 @@ After all commands succeed, run `/reload-plugins`. If `/reload-plugins` is unava
 | Plugin | Purpose | Skills | Install |
 |--------|---------|--------|---------|
 | [brewcode](brewcode/README.md) | Infinite task execution, quorum reviews, skill/agent creation, semantic search | 9 | `claude plugin install brewcode@claude-brewcode` |
-| [brewdoc](brewdoc/README.md) | Documentation tools: docsync, memory optimization, PDF conversion, publishing | 6 | `claude plugin install brewdoc@claude-brewcode` |
+| [brewdoc](brewdoc/README.md) | Documentation tools: docsync, memory sync, PDF conversion, publishing | 6 | `claude plugin install brewdoc@claude-brewcode` |
 | [brewtools](brewtools/README.md) | Universal text utilities: token optimization, humanization, secrets scanning, plugin updates | 10 | `claude plugin install brewtools@claude-brewcode` |
 | [brewui](brewui/README.md) | UI/visual/creative tools (placeholder, currently empty) | 0 | `claude plugin install brewui@claude-brewcode` |
 
@@ -121,20 +121,19 @@ claude --plugin-dir ./brewcode --plugin-dir ./brewdoc --plugin-dir ./brewtools -
 ### brewcode -- infinite task execution
 
 ```bash
-/brewcode:setup                              # 1. Analyze project, generate templates (one-time)
+/brewcode:grepai                              # 1. Set up semantic code search (one-time)
 /brewcode:spec "Implement JWT authorization"  # 2. Research codebase + create specification
-/brewcode:plan                                # 3. Generate phased execution plan
-/brewcode:start                               # 4. Execute with infinite context handoff
+/brewcode:superreview                         # 3. Generate a project-tailored deep-review skill
 ```
 
-After `/brewcode:setup`, each task follows the cycle: `spec` -> `plan` -> `start`. During execution, the plugin automatically compacts knowledge at ~90% context, writes handoff state, and continues without interruption.
+Skills orchestrate, agents execute. Each spawn is a bounded unit with a six-field brief, and the `forced-eval` hook re-states the manager role and the split rule on every prompt, so work stays observable across compaction cycles.
 
 ### brewdoc -- documentation tools
 
 ```bash
 /brewdoc:docsync                      # Track and sync stale project docs
 /brewdoc:my-claude                    # Generate Claude Code installation docs
-/brewdoc:memory                       # Optimize memory files interactively
+/brewdoc:memory                       # Memory sync: memory + CLAUDE.md (incl. nested) + rules + conventions
 /brewdoc:md-to-pdf ./docs/report.md   # Convert markdown to PDF
 /brewdoc:publish "Hello world"        # Publish to brewpage.app -- returns public URL
 /brewdoc:guide                        # Interactive tutorial for the plugin suite
@@ -156,31 +155,36 @@ Placeholder plugin, currently empty. No commands yet -- coming soon.
 ## How It Works
 
 ```
-  /brewcode:spec --> 5-10 research agents + user Q&A (*) --> SPEC.md
-                                                                │
-  /brewcode:plan <──────────────────────────────────────────────┘
-        │
-        └──> phased plan + user Q&A (*) ──────────────────> PLAN.md
-                                            (*) skip with -n/--noask
-                                                                │
-  /brewcode:start <─────────────────────────────────────────────┘
+  /brewcode:grepai --> semantic index over the repo (one-time setup)
         │
         v
-  ┌─ Execute phases with agents ──────────────────────────────────┐
-  │   Phase 1 --> Phase 2 --> ... --> Phase N                      │
-  │       │  (context ~90%)                                        │
-  │   PreCompact: compact KNOWLEDGE + write handoff                │
-  │       │                                                        │
-  │   [auto-compact] --> same session resumes --> next phase        │
-  └────────────────────────────────────────────────────────────────┘
+  /brewcode:spec "..." --> 5-10 parallel research agents + user Q&A --> SPEC.md
+        │
+        v
+  developer / tester / reviewer / architect --> bounded units, fanned out in ONE message
+        │
+        v
+  /brewcode:superreview --> project-tailored deep-review skill
+
+  every prompt: forced-eval (UserPromptSubmit) injects 2 lines --
+    [ROLE]  scan agents, project .claude/agents/ first; domain expert exists -> delegate
+    [SPLIT] one agent for an hour = drift you cannot observe -> split and fan out
 ```
 
-### Knowledge lifecycle
+### Delegation contract
 
-1. Agents accumulate knowledge entries during execution (KNOWLEDGE.jsonl)
-2. PreCompact hook compacts and deduplicates before context handoff
-3. Pre-task hook injects knowledge into every agent prompt
-4. Knowledge accumulates across phases, converted to permanent rules at task end
+Every skill that spawns subagents carries a `## Delegation` section; every shipped agent carries a `## Scope guard`. Both encode the same rule: one subagent = ONE bounded unit -- one deliverable, ~5 files, ~10 steps. Anything bigger is split into N tasks spawned in a single message.
+
+Every spawn prompt carries six fields:
+
+| Field | Content |
+|-------|---------|
+| GOAL | the overall task and why it exists -- the point beyond the file edit |
+| ROLE | what this agent owns; what it must NOT touch |
+| SCOPE | exact paths and commands in bounds, plus explicit out-of-bounds |
+| CONTEXT | what is already done, by whom, what runs in parallel |
+| CONSUMER | who or what uses the result next, and the shape it must fit |
+| DONE | acceptance criteria plus the exact report shape expected back |
 
 ## Skills Reference
 
@@ -188,19 +192,15 @@ Placeholder plugin, currently empty. No commands yet -- coming soon.
 
 | Skill | Purpose |
 |-------|---------|
-| `/brewcode:setup` | Analyze project, check prerequisites, generate adapted templates |
 | `/brewcode:spec` | Research codebase + user dialog -> SPEC.md |
-| `/brewcode:plan` | Generate phased PLAN.md from SPEC or Plan Mode |
-| `/brewcode:start` | Execute task with infinite context handoff |
+| `/brewcode:grepai` | Semantic code search: setup, status, start, stop, reindex, optimize, upgrade, uninstall |
+| `/brewcode:superreview` | Generate a project-tailored deep-review skill: domain-expert routing + scope discipline + mechanical gates + adversarial validation |
 | `/brewcode:teams` | Create and manage dynamic teams of domain-specific agents |
-| `/brewcode:standards-review` | Review code for project standards compliance |
 | `/brewcode:convention` | Extract etalon classes, patterns, architecture into convention docs |
 | `/brewcode:rules` | Prompt-driven rules management: status, create, improve, review |
-| `/brewcode:grepai` | Semantic code search (setup, status, start, stop, reindex) |
-| `/brewcode:skills` | Prompt-driven skill management: status, create, improve, review |
-| `/brewcode:agents` | Prompt-driven agent management: status, create, improve, review |
-| `/brewcode:e2e` | E2E testing orchestration with BDD scenarios |
-| `/brewcode:teardown` | Remove plugin configuration (keeps task data) |
+| `/brewcode:skills` | Prompt-driven skill management: status, create, improve, sync, review |
+| `/brewcode:agents` | Prompt-driven agent management: status, create, improve, sync, review |
+| `/brewcode:e2e` | E2E testing orchestration with BDD scenarios and quorum review |
 
 ### Brewdoc (6 skills)
 
@@ -208,24 +208,25 @@ Placeholder plugin, currently empty. No commands yet -- coming soon.
 |-------|---------|
 | `/brewdoc:docsync` | Track & sync stale project docs via hooks |
 | `/brewdoc:my-claude` | Generate Claude Code installation docs |
-| `/brewdoc:memory` | Optimize memory files interactively |
+| `/brewdoc:memory` | Memory sync: memory + CLAUDE.md (incl. nested) + rules + conventions; `full` adds agent/skill rosters |
 | `/brewdoc:md-to-pdf` | Convert markdown to professional PDF |
 | `/brewdoc:publish` | Publish to brewpage.app -- returns public URL |
 | `/brewdoc:guide` | Interactive tutorial for the plugin suite |
 
-### Brewtools (10 skills)
+### Brewtools (11 skills)
 
 | Skill | Purpose |
 |-------|---------|
 | `/brewtools:text-optimize` | LLM token efficiency optimization (52 rules, smart dedup + aggressive lossy) |
 | `/brewtools:text-human` | Remove AI artifacts, humanize code |
 | `/brewtools:think-short` | Install/remove terse-mode hooks (SessionStart + every-10th UserPromptSubmit + subagent Task) that inject brevity directives; project or global |
+| `/brewtools:agent-deadline` | Install/remove a soft wall-clock budget for subagents -- 80% warns "wrap up", 100% blocks all but finalization tools; project or global, opt-in |
 | `/brewtools:secrets-scan` | Scan git-tracked files for leaked secrets |
 | `/brewtools:ssh` | SSH server management -- connect, configure, deploy |
 | `/brewtools:deploy` | GitHub Actions deployment -- workflows, releases, GHCR, CI/CD |
 | `/brewtools:plugin-update` | Install and update the full plugin suite |
 | `/brewtools:provider-switch` | Configure alternative API providers (DeepSeek, Z.ai/GLM, Qwen, MiniMax, OpenRouter) |
-| `/brewtools:manager` | Manager mode -- codeword ++m injects a delegate-everything prompt (plan-aware); HARD wall (on/off/uninstall) installs a project PreToolUse guard that blocks main-session edits, forcing delegation |
+| `/brewtools:manager` | Manager mode -- hook-driven codewords `++m` (delegate-everything, plan-aware), `++a` (architecture-first), `++rr` (anti-regression review), `++r` (two-phase double-check); the opt-in HARD wall (`on`/`off`/`uninstall`/`status`/`level`/`edit`/`reset`) installs a project PreToolUse guard that blocks main-session writes while subagents stay free |
 | `/brewtools:task-board-init` | Deploy a file-based Kanban into ANY repo via multi-agent analysis -- task-tracker agent, task-board skill, tasks rule, .claude/features |
 
 ### Brewui (0 skills)
@@ -241,25 +242,25 @@ Self-contained `SKILL.md` folders that ship outside the four plugins -- drop the
 | `brewpage-publish` | Claude Code | [`skills/brewpage-publish`](skills/brewpage-publish/) |
 | `brewpage-publish` | OpenClaw / AgentSkills | [`openclaw/brewpage-publish`](openclaw/brewpage-publish/) |
 
-## Agents (15 total)
+## Agents (13 total)
 
-| Agent | Model | Purpose |
-|-------|-------|---------|
-| developer | opus | Implement features, write code, fix bugs |
-| tester | sonnet | Run tests, analyze failures, debug flaky tests |
-| reviewer | opus | Code review, architecture, security, performance |
-| architect | opus | Architecture analysis, patterns, trade-offs, scaling |
-| skill-creator | opus | Create and improve Claude Code skills |
-| agent-creator | opus | Create and improve Claude Code agents |
-| hook-creator | opus | Create and debug Claude Code hooks |
-| bash-expert | opus | Create professional shell scripts |
-| text-optimizer | sonnet | Optimize text and docs for LLM efficiency |
-| ssh-admin | opus | Linux server administration via SSH |
-| deploy-admin | opus | GitHub Actions deployment and CI/CD |
-| bc-coordinator | haiku | Internal: spawned by /brewcode:start + post-task hook |
-| bc-knowledge-manager | haiku | Internal: spawned by /brewcode:start |
-| bc-grepai-configurator | opus | Internal: spawned by /brewcode:grepai |
-| bc-rules-organizer | sonnet | Internal: spawned by /brewcode:rules |
+| Agent | Plugin | Model | Purpose |
+|-------|--------|-------|---------|
+| developer | brewcode | inherit | Implement features, write code, fix bugs |
+| tester | brewcode | sonnet | Run tests, analyze failures, debug flaky tests |
+| reviewer | brewcode | inherit | Code review, architecture, security, performance |
+| architect | brewcode | inherit | Architecture analysis, patterns, trade-offs, scaling |
+| skill-creator | brewcode | inherit | Create and improve Claude Code skills |
+| agent-creator | brewcode | inherit | Create and improve Claude Code agents |
+| hook-creator | brewcode | inherit | Create and debug Claude Code hooks |
+| bash-expert | brewcode | inherit | Create professional shell scripts |
+| bc-grepai-configurator | brewcode | sonnet | Internal: spawned by /brewcode:grepai |
+| bc-rules-organizer | brewcode | haiku | Internal: spawned by /brewcode:rules |
+| text-optimizer | brewtools | sonnet | Optimize text and docs for LLM efficiency |
+| ssh-admin | brewtools | inherit | Linux server administration via SSH |
+| deploy-admin | brewtools | inherit | GitHub Actions deployment and CI/CD |
+
+> **Scope guard:** every shipped agent carries a `## Scope guard` -- a task larger than one bounded unit (one deliverable, ~5 files, ~10 steps) makes the agent stop before starting and return a split proposal instead of grinding for an hour. `ssh-admin` and `deploy-admin` additionally split per host, repo, and environment.
 
 ## Documentation
 

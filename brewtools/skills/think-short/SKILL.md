@@ -74,19 +74,50 @@ echo "RUNBOOK=$BT_ROOT/skills/think-short/assets/INSTALL.md" && echo "✅ assets
 
 > **STOP if ❌** — plugin cache incomplete; reinstall/update brewtools first.
 
+### Delegation
+
+A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target. Install/remove for ONE target is ONE bounded unit (4 asset files + one settings.json, well under 10 steps) — a single `hook-creator` spawn. A wider request ("install here AND globally AND clean three other repos") MUST be split into N tasks, one per target, all spawned in ONE message.
+
+Every spawn prompt MUST carry:
+
+| Field | Content |
+|-------|---------|
+| GOAL | the overall task and why it exists — the point beyond the file edit |
+| ROLE | what this agent owns; what it must NOT touch |
+| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
+| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what THIS agent needs |
+| CONSUMER | who or what uses the result next, and the shape it must fit |
+| DONE | acceptance criteria + the exact report shape you want back |
+
+A bare one-line task is never enough. The prompt below is that shape.
+
 Spawn the agent (substitute `ACTION`, `TARGET`, `RUNBOOK`, `ASSETS_DIR` from above):
 
 ```
 Task(subagent_type="brewcode:hook-creator", prompt="
-Follow the runbook at RUNBOOK exactly — it self-locates its source via SRC=\$(dirname \"\$RUNBOOK\").
-ACTION = ACTION (install|remove)
-TARGET = TARGET (project|global)
-RUNBOOK = RUNBOOK (absolute path to assets/INSTALL.md)
-ASSETS_DIR = ASSETS_DIR (absolute path to the assets source dir — copy the 4 hook files FROM here)
-Copy/merge or strip the 4 think-short hook assets per the runbook's marker convention, copying from ASSETS_DIR.
-Project target: Write/Edit settings.json freely. Global target (~/.claude/*): BASH ONLY (cp + node merge), never Write/Edit — protected path.
-Merge = append + dedupe by think-short-*.mjs script path. Remove = strip entries by those markers, drop empty event arrays, delete the 4 files.
-Report which hooks were installed/removed and the exact settings.json path.
+GOAL: the user wants think-short terse-mode hooks ACTION-ed for TARGET. Three hooks
+(SessionStart, UserPromptSubmit, PreToolUse:Task) inject a terse-output prompt; runtime
+behavior lives entirely in the hook files, so this task is pure file + settings wiring.
+ROLE: you own the file copy/strip and the settings.json merge. Do NOT edit hook logic,
+do NOT touch unrelated hooks or settings keys, do NOT install to the other target.
+SCOPE: in — the 4 assets under ASSETS_DIR, the target .claude/ dir, its settings.json.
+Out — everything else. Project target: Write/Edit settings.json freely. Global target
+(~/.claude/*): BASH ONLY (cp + node merge), never Write/Edit — protected path.
+CONTEXT:
+  Step 2 already verified the plugin cache and resolved every path below; nothing has been
+  copied or merged yet, and no sibling agent is running — you are the only writer.
+  ACTION = ACTION (install|remove)
+  TARGET = TARGET (project|global)
+  RUNBOOK = RUNBOOK (absolute path to assets/INSTALL.md)
+  ASSETS_DIR = ASSETS_DIR (absolute path to the assets source dir — copy the 4 hook files FROM here)
+  Follow the runbook at RUNBOOK exactly — it self-locates its source via SRC=\$(dirname \"\$RUNBOOK\").
+  Copy/merge or strip the 4 think-short hook assets per the runbook's marker convention,
+  copying from ASSETS_DIR. Merge = append + dedupe by think-short-*.mjs script path.
+  Remove = strip entries by those markers, drop empty event arrays, delete the 4 files.
+CONSUMER: Step 4 reports your result to the user; the settings.json you write is then loaded
+  by the NEXT Claude Code session, so a malformed merge breaks that session instead of
+  failing here — report the exact path you touched so it can be checked.
+DONE: report which hooks were installed/removed and the exact settings.json path.
 ")
 ```
 

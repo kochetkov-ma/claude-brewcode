@@ -11,6 +11,10 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 **Deployment mistakes are irreversible.** Pushed tags, published releases, triggered workflows — none undo cleanly. `deploy-admin` classifies every operation by safety level and requires explicit confirmation before touching anything at SERVICE, DELETE, or PRIVILEGE tier.
 </Callout>
 
+<Callout type="caution">
+**One agent per target.** A multi-repo, multi-environment or multi-service deployment is split per target — the agent will not loop one run over staging and prod, or over several repos. Send them as separate tasks, or take the split proposal it returns.
+</Callout>
+
 <Callout type="tip">
 **Run `/brewtools:deploy setup` first.** The skill writes `CLAUDE.local.md` with your GitHub config, workflow inventory, and server targets. The agent reads that file automatically on every task start.
 </Callout>
@@ -20,10 +24,26 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | Field | Value |
 |-------|-------|
 | Agent name | `deploy-admin` |
-| Model | opus |
+| Model | `inherit` — runs on the session's model |
 | Tools | Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion, WebFetch, WebSearch |
 | Triggers | "deploy", "github actions", "workflow", "release", "ci cd", "version bump", "publish" |
 | Safety gate | Confirms before MODIFY / SERVICE / DELETE / PRIVILEGE operations |
+| Scope | One bounded unit per run; one agent per repo / environment / service |
+
+## Scope guard
+
+The agent sizes the task before it touches CI.
+
+| Situation | What the agent does |
+|-----------|--------------------|
+| Task fits one bounded unit — one deliverable, ~5 files, ~10 steps | Runs it |
+| Bigger, or several independent deliverables | Stops **before starting**, returns a split proposal: 2-N bounded subtasks, each with scope and suggested owner |
+| Several repos / environments / services in one request | Split per target — one agent per repo, per environment, per service. Never one agent looping over all of them |
+| Scope grows mid-flight | Stops at the next clean boundary, reports done / remaining / how to split |
+| Brief missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance | States the assumption in the report, or asks once. Never invents scope |
+
+How this changes your request: "release v3.6.0 in staging" and "promote v3.6.0 to prod" are two tasks,
+not one. Send them separately, or send the broad request and approve the split proposal that comes back.
 
 ## When to use
 
@@ -102,7 +122,25 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | DELETE | always confirm | `gh release delete`, `gh run cancel`, remove workflow file |
 | PRIVILEGE | always confirm | `gh secret delete`, branch protection changes, `gh workflow disable` |
 
-Pipelines (`cmd1 | cmd2`) and `curl | bash` patterns inherit PRIVILEGE regardless of base level.
+Compound rules:
+
+| Combination | Result |
+|-------------|--------|
+| `sudo` + any command | PRIVILEGE (overrides base level) |
+| Pipeline `cmd1 \| cmd2` | Highest level of both |
+| `curl \| bash`, `wget && chmod +x` | PRIVILEGE (arbitrary execution) |
+| Multiple operations in one script | Highest level among all operations |
+| Draft release + undraft (`gh release edit --draft=false`) | SERVICE (publishes the release) |
+
+Secret names are listed, never their values — the agent will not read, print, or log a secret value.
+
+### gh CLI conventions
+
+| Area | Convention |
+|------|-----------|
+| Releases | Create with `--draft` first, publish separately via `gh release edit TAG --draft=false` (SERVICE level) |
+| Secrets | Set from file or stdin: `gh secret set NAME < FILE` — never `--body "VALUE"`, it lands in shell history |
+| Failure triage | `gh run view RUN_ID --log-failed` before rerunning; `gh run watch RUN_ID` to follow a live run |
 
 ### Release pipeline steps
 
@@ -137,12 +175,11 @@ The `> Docs:` line must list pages for every affected skill, agent, or hook. URL
 # Build for linux/amd64 and push
 docker build --platform linux/amd64 -t ghcr.io/OWNER/IMAGE:TAG .
 docker push ghcr.io/OWNER/IMAGE:TAG
-
-# Multi-tag (version + latest)
-docker build -t ghcr.io/OWNER/IMAGE:TAG -t ghcr.io/OWNER/IMAGE:latest .
-docker push ghcr.io/OWNER/IMAGE:TAG
-docker push ghcr.io/OWNER/IMAGE:latest
 ```
+
+Deployed images pin an exact tag. `:latest` is convenience tagging only — never what a server pulls.
+Deleting a GHCR version (`gh api -X DELETE /user/packages/container/IMAGE/versions/VERSION_ID`) is
+DELETE level and always confirmed.
 
 ### SSH deploy
 

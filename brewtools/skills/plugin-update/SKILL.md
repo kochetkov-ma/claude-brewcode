@@ -190,5 +190,3 @@ Final summary:
 - Plugins updated this run: [...]
 - Plugins skipped: [...]
 - Errors encountered: [...]
-
-<!-- W3-T8 research note: Marketplace auto-update settings.json key not confirmed in CC docs as of 2026-05-12. Continue using UI guidance. Re-investigate when CC adds documented marketplace.autoUpdate setting. -->

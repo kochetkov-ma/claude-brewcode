@@ -30,15 +30,24 @@ After detection, load the appropriate reference file:
 
 ## vs built-in `/team-onboarding`
 
-Claude Code 2.1.101 shipped `/team-onboarding` — a built-in slash that generates a teammate ramp-up guide from local usage. It's simpler and sufficient for basic onboarding.
+Built-in `/team-onboarding` (CC 2.1.101+) is enough for a quick teammate handoff doc from local config. Use this skill instead when the job needs web research, EXTERNAL architecture synthesis, RESEARCH mode, or the persistent `.claude/brewdoc/INDEX.jsonl` with citations.
 
-Use `/team-onboarding` when you need: quick teammate handoff doc from your local config.
+## Delegation
 
-Use `/brewdoc:my-claude` when you need:
-- **Web research** — current releases, forum discussions, GitHub issues (beyond static docs)
-- **EXTERNAL mode** — architecture synthesis from official Anthropic docs
-- **RESEARCH mode** — custom query-driven multi-source investigation
-- **Persistent INDEX** — tracked in `.claude/brewdoc/INDEX.jsonl` with citation links
+A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target. One subagent = ONE bounded unit — one source group, ~<=5 files, ~<=10 steps. Bigger MUST be split into N tasks, all spawned in ONE message.
+
+Every spawn prompt MUST carry:
+
+| Field | Content |
+|-------|---------|
+| GOAL | the overall task and why it exists — the point beyond the file edit |
+| ROLE | what this agent owns; what it must NOT touch |
+| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
+| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what THIS agent needs |
+| CONSUMER | who or what uses the result next, and the shape it must fit |
+| DONE | acceptance criteria + the exact report shape you want back |
+
+A bare one-line task is never enough. Applies to every `Explore` / `general-purpose` / `reviewer` spawn in all three modes.
 
 ## Output Directory
 
@@ -72,7 +81,24 @@ If an existing entry for the same mode exists: use AskUserQuestion — header: "
 - `~/.claude/projects/**/memory/MEMORY.md` — memory files
 
 **Process:**
-1. Spawn 3 parallel `Explore` agents, one per source group: (1) global ~/.claude config, (2) project .claude config, (3) memory files
+1. Spawn 3 parallel `Explore` agents, one per source group: (1) global `~/.claude` config, (2) project `.claude` config, (3) memory files. Brief each in full shape, e.g. group (1):
+   ```
+   Task(subagent_type="Explore", prompt="
+   GOAL: producing a document describing this user's whole Claude Code installation;
+     you cover the global ~/.claude layer only, another agent covers project + memory.
+   ROLE: read-only inventory of global config. Do NOT edit any file, do NOT read project files.
+   SCOPE: in — ~/.claude/CLAUDE.md, ~/.claude/rules/*.md, ~/.claude/agents/*.md, ~/.claude/skills/.
+     Out — project CLAUDE.md, .claude/**, memory files, source code.
+   CONTEXT: nothing has been read yet — you are the first pass for this group. Two sibling
+     agents scan project `.claude` config and memory files in parallel right now; the output
+     dir `.claude/brewdoc/my-claude/` and the INDEX entry are already resolved by the skill.
+   CONSUMER: the aggregation step merges the three inventories into one INTERNAL-mode
+     document, then a `reviewer` agent re-checks that every path you name exists — absolute
+     paths only, and flag a missing file instead of dropping its row.
+   DONE: per-section inventory (instructions summary, rules N + one line each, agents N + purpose,
+     skills N + purpose) with absolute paths for every item. Flag missing files explicitly.
+   ")
+   ```
 2. Aggregate findings into structured document
 3. Write to `.claude/brewdoc/my-claude/YYYYMMDD_my-claude-internal.md`
 4. Spawn independent `reviewer` agent to validate facts (file paths exist, content accurate)

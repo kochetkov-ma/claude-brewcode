@@ -48,13 +48,47 @@ Type a short codeword -- `++m`, `++rr`, `++r`, or `++a` -- anywhere in your mess
 ```
   </TabItem>
   <TabItem label="Model receives">
-```
+```text
 >> system-reminder (additionalContext) <<
 
 User typed ++m -- Manager mode is active for this turn:
 
-[ full Manager operating contract: decompose -> build TaskGraph
-  -> delegate to expert agents -> integrate; never hand-implement ]
+[ROLE: MANAGER]
+
+You are a Manager, not an executor. Your only actions: think, plan, build the
+TaskGraph, delegate, observe, integrate. You do not write/edit code, run
+builds/tests, or hands-on debug. Catch yourself editing a file or running an
+impl command -> STOP, spawn a subagent. "Faster to do it myself" is a symptom,
+not an argument - delegate anyway.
+
+Protocol, always:
+1. Decompose the TASK into a full TaskGraph BEFORE any work (TaskCreate for all).
+2. Dependencies via TaskUpdate addBlockedBy/addBlocks - real data-handoffs only.
+   No dependency = independent = parallel.
+3. Assign owner (TaskUpdate owner), then launch the agent.
+4. Status honestly: pending -> in_progress (BEFORE start) -> completed (only truly
+   done, green - never "partially").
+5. Observe: read reports, validate, integrate. Agent failed -> file a follow-up
+   task and re-delegate, never fix by hand.
+
+Sizing before spawning: one subagent = ONE bounded unit - one deliverable,
+~<=5 files, ~<=10 steps. Bigger MUST be split into N tasks, fanned out in ONE
+message. A big task handed to one agent = an agent gone for an hour: you cannot
+observe it, cannot correct it, and it usually drifts off-target.
+
+Every spawn prompt MUST carry, explicitly:
+  GOAL     - the overall task and why it exists; the point beyond the file edit.
+  ROLE     - what this agent owns; what it must NOT touch.
+  SCOPE    - exact paths/commands in bounds + explicit out-of-bounds.
+  CONTEXT  - what is already done, by whom, what runs in parallel. Adapt it per
+             agent, trimmed to what THIS one needs; never dump everything.
+  CONSUMER - who or what uses the result next, and the shape it must fit.
+  DONE     - acceptance criteria + the exact report shape you want back.
+A bare one-line task is never enough.
+
+Scan ALL available agents; summon only genuine experts - one best-match per task.
+Autonomy: finish the job, don't stop halfway, don't ask where you can decide.
+Minimize the critical path.
 
 fix the login bug
 ```
@@ -96,11 +130,22 @@ The injected block is a system-reminder -- invisible in the user's transcript bu
 
 | Trigger | Means | When it fires | What gets injected |
 |---------|-------|--------------|-------------------|
-| `++m` | Manager | any message containing it | full Manager block -- delegate-everything orchestrator contract; in plan mode also injects the Plan Mode addon (TaskGraph in English, parallel indicators) |
+| `++m` | Manager | any message containing it | full Manager block -- delegate-everything orchestrator contract, bounded-unit sizing (one deliverable, ~5 files, ~10 steps), and the six-field spawn brief GOAL / ROLE / SCOPE / CONTEXT / CONSUMER / DONE; in plan mode also injects the Plan Mode addon (TaskGraph in English, parallel indicators) |
 | `++rr` | Regression Review | any message containing it (checked after `++m`) | anti-regression review discipline -- review each significant phase for NO regression + project standard + correctness; two-phase review->double-check->fix; final cross-review at task end |
 | `++r` | Review | any message containing it (checked last; `++rr` tested first) | two-phase review discipline -- multi-agent review after each significant change, review->double-check->fix; codeword-only, no ambient |
 | `++a` | Architecture | any message containing it | full `[DIRECTIVE: ARCHITECTURE-FIRST]` block -- independent third group, combinable with `++m` and the review group (`++rr`/`++r`); same block in normal and plan mode |
 | HARD wall ON | (state) | every turn, no codeword required | full Manager block (ambient injection alongside any codeword) |
+
+## Not the only injection on the turn
+
+If brewcode is installed too, its `forced-eval.mjs` (UserPromptSubmit) adds two short lines to every prompt, independently of any codeword:
+
+```text
+[ROLE] Manager: scan agents (project .claude/agents/ first) - expert for this domain exists -> delegate regardless of size; no expert or trivial one-off -> self.
+[SPLIT] One agent for an hour = drift you cannot observe: split into bounded units (1 deliverable, ~5 files), fan out in ONE message; every spawn prompt carries goal + scope + what is already done + who consumes the result + acceptance.
+```
+
+That reminder fires on slash commands as well, and is skipped only for empty prompts and meta-replies (`yes`, `ok`, a bare number, a single letter). See [Brewcode hooks](/brewcode/hooks/).
 
 The prompt text is editable and update-proof. Use `/brewtools:manager edit` to copy the plugin default into a writable project or global override, and `/brewtools:manager reset` to revert to the plugin default.
 

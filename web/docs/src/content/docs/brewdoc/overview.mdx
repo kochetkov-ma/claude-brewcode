@@ -28,7 +28,7 @@ Brewdoc contains 6 skills, each handling a separate documentation task.
   <Card title="Docsync" icon="sync" href="/brewdoc/skills/docsync/">
     Track doc staleness by frontmatter date, not INDEX files.
     Installs three project-local hooks that watch touched Markdown and nag once when a doc goes stale.
-    Modes: init, status, sync, reread, frontmatter, uninstall.
+    Modes: init, status, sync (`--all` forces every in-scope doc), reread, frontmatter, uninstall — or plain free text in RU/EN.
   </Card>
   <Card title="My-Claude" icon="clipboard" href="/brewdoc/skills/my-claude/">
     Generate documentation about your Claude Code installation.
@@ -36,8 +36,7 @@ Brewdoc contains 6 skills, each handling a separate documentation task.
     research (search across forums, GitHub, marketplaces).
   </Card>
   <Card title="Memory" icon="brain" href="/brewdoc/skills/memory/">
-    Interactive optimization of memory files (CLAUDE.md and MEMORY.md).
-    4 steps: remove duplicates, migrate to rules, compress, validate.
+    One sweep re-verifies memory files, root and every nested CLAUDE.md, rules, and conventions against the codebase — delete first, total line delta at or below zero. `full` also syncs the agent and skill rosters.
   </Card>
   <Card title="md-to-pdf" icon="file" href="/brewdoc/skills/md-to-pdf/">
     Convert Markdown to professional PDF.
@@ -45,7 +44,7 @@ Brewdoc contains 6 skills, each handling a separate documentation task.
     Style customization, test mode, LLM preprocessing.
   </Card>
   <Card title="Publish" icon="link" href="/brewdoc/skills/publish/">
-    Publish text, markdown, JSON, or files to brewpage.app.
+    Publish text, markdown, JSON, files, or a whole multi-file site (directory or `.zip`) to brewpage.app.
     Interactive namespace and password selection. Owner token saved locally for later delete.
   </Card>
   <Card title="Guide" icon="book" href="/brewdoc/skills/guide/">
@@ -59,15 +58,11 @@ Brewdoc contains 6 skills, each handling a separate documentation task.
 | Command | Purpose | Model | Arguments |
 |---------|---------|-------|-----------|
 | [`/brewdoc:docsync`](/brewdoc/skills/docsync/) | Track and fix stale project docs via hooks | sonnet | `[status] \| [sync [--all]] \| [reread] \| [frontmatter] \| [uninstall]` |
-| [`/brewdoc:my-claude`](/brewdoc/skills/my-claude/) | Generate documentation about Claude Code installation | opus | `[ext [context]] \| [r <query>]` |
-| [`/brewdoc:memory`](/brewdoc/skills/memory/) | Optimize memory files in 4 steps | opus | -- |
-| [`/brewdoc:md-to-pdf`](/brewdoc/skills/md-to-pdf/) | Convert Markdown to PDF | sonnet | `<file.md> [--engine name] ["prompt"] \| styles \| test` |
-| [`/brewdoc:publish`](/brewdoc/skills/publish/) | Publish to brewpage.app — returns public URL | haiku | `<text\|file\|json> [--ttl N]` |
+| [`/brewdoc:my-claude`](/brewdoc/skills/my-claude/) | Generate documentation about Claude Code installation | opus | `[ext [context]] \| [r <query>]` — no args = internal installation docs |
+| [`/brewdoc:memory`](/brewdoc/skills/memory/) | Sync memory, CLAUDE.md (incl. nested), rules, conventions — delete-first; `full` adds agent+skill rosters | opus | `free-form prompt (emphasis only); "full" adds rosters` |
+| [`/brewdoc:md-to-pdf`](/brewdoc/skills/md-to-pdf/) | Convert Markdown to PDF | sonnet | `<file.md> [--engine name] ["prompt"] \| styles \| test \| no args = help` |
+| [`/brewdoc:publish`](/brewdoc/skills/publish/) | Publish to brewpage.app — returns public URL | haiku | `<text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename]` |
 | [`/brewdoc:guide`](/brewdoc/skills/guide/) | Interactive tutorial for the plugin suite | haiku | `[topic]` |
-
-<Callout type="tip" title="My-Claude">
-  The <code>/brewdoc:my-claude</code> skill now has a <a href="/brewdoc/skills/my-claude/">dedicated page</a> with full documentation.
-</Callout>
 
 ## Architecture
 
@@ -82,7 +77,7 @@ brewdoc/
 └── skills/
     ├── docsync/                  # Doc-staleness tracker
     ├── my-claude/                # Installation documentation
-    ├── memory/                   # Memory optimization
+    ├── memory/                   # Memory sync (references/: mode-sync, mode-sync-full, memory-guide)
     ├── md-to-pdf/                # PDF conversion
     ├── publish/                  # brewpage.app publishing
     └── guide/                    # Interactive tutorial
@@ -93,7 +88,7 @@ on demand, into the *target* project, not into brewdoc itself. Skills in the mai
 conversation use `${CLAUDE_SKILL_DIR}` to access their own files.
 
 <Callout type="note" title="Brewdoc vs Brewcode">
-  **Brewdoc** is a set of documentation utilities: sync, memory optimization, PDF export.
+  **Brewdoc** is a set of documentation utilities: sync, memory sync, PDF export.
   Each skill is self-contained and independent of the others.
 
   **Brewcode** is a task execution engine with infinite context, 9 lifecycle hooks,

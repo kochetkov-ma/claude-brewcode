@@ -3,12 +3,12 @@ title: "Guide"
 description: "Interactive tutorial for the brewcode plugin suite — 9 topics, 3 domains, progress tracking across sessions."
 order: 26
 ---
-import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
 # guide
 
 <Callout type="caution">
-**Starting from scratch is overwhelming.** The brewcode suite has 4 plugins, 25 skills, and 14 agents. Reading all the docs at once doesn't work — there's no thread, no order, no feedback. Without a guide, most users discover 20% of the features and miss the rest.
+**Starting from scratch is overwhelming.** The brewcode suite has 4 plugins, 25 skills, and 13 agents. Reading all the docs at once doesn't work — there's no thread, no order, no feedback. Without a guide, most users discover 20% of the features and miss the rest.
 </Callout>
 
 <Callout type="tip">
@@ -22,6 +22,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | Command | `/brewdoc:guide [topic]` |
 | Arguments | `overview`, `installation`, `killer-flow`, `teams`, `skills-catalog`, `agents-catalog`, `customization`, `integration`, `advanced` — or none for interactive menu |
 | Model | haiku |
+| Invocation | user-only (`disable-model-invocation: true`) |
 | Tools | Read, Glob, Grep, Bash, WebSearch, AskUserQuestion |
 
 ## When to use
@@ -50,10 +51,11 @@ Expected output when starting fresh:
 ```
 Component     Status      Details
 Docs Site     UP          200
-Latest        v3.6.2      GitHub
-brewcode      3.6.2       current
-brewdoc       3.6.2       current
-brewtools     3.6.2       current
+Latest        v4.2.4      GitHub
+brewcode      4.2.4       current
+brewdoc       4.2.4       current
+brewtools     4.2.4       current
+brewui        4.2.4       current
 Auto-update   ON
 
 Welcome! Choose a topic or follow the recommendation:
@@ -74,13 +76,13 @@ The guide follows a 6-step onboarding walkthrough on every launch:
   <li>
     <div>
       <strong>Check plugin freshness</strong>
-      <p>Invokes <code>/brewtools:plugin-update check</code> silently. If any plugin is stale or missing, offers to update now, remind later, or skip — your choice, no forced interruptions.</p>
+      <p>Invokes <code>/brewtools:plugin-update check</code>. A plugin counts as stale when it is missing or older than the marketplace version; if all four are current the guide moves on without a word. Otherwise it offers update now, remind later, or skip.</p>
     </div>
   </li>
   <li>
     <div>
       <strong>Load language and progress</strong>
-      <p>First run asks your preferred language (English, Russian). Returning users see their completion score and the recommended next topic based on what they've already covered.</p>
+      <p>First run asks your preferred language (English, Русский, Português). Returning users see their completion score and the recommended next topic based on what they've already covered.</p>
     </div>
   </li>
   <li>

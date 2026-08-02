@@ -1,8 +1,8 @@
 ---
 name: brewcode:grepai
-description: Manages grepai semantic search (setup, status, start, stop, reindex, optimize, upgrade).
+description: "Manages grepai semantic code search: setup, status, start, stop, reindex, optimize, upgrade, uninstall. Triggers: grepai, semantic search, reindex, index status."
 disable-model-invocation: true
-argument-hint: "[setup|status|start|stop|reindex|optimize|upgrade]"
+argument-hint: "[setup|status|start|stop|reindex|optimize|upgrade|uninstall]"
 allowed-tools: Read, Write, Edit, Bash, Task, AskUserQuestion
 model: sonnet
 ---
@@ -22,8 +22,6 @@ model: sonnet
 bash "${CLAUDE_SKILL_DIR}/scripts/detect-mode.sh" "$ARGUMENTS"
 ```
 
-Use `$ARGUMENTS` directly - it contains the skill invocation arguments.
-
 Output format:
 ```
 ARGS: [arguments received]
@@ -36,6 +34,7 @@ MODE: [detected mode]
 
 | Keyword in args | MODE |
 |-----------------|------|
+| uninstall, remove, удали, снеси | uninstall |
 | upgrade, апгрейд | upgrade |
 | optimize, update, улучши, обнови | optimize |
 | stop, halt, kill | stop |
@@ -108,8 +107,45 @@ This script configures MCP server and allowedTools permissions.
 | Parameter | Value |
 |-----------|-------|
 | `subagent_type` | `brewcode:bc-grepai-configurator` |
-| `prompt` | `Configure grepai for this project. Analyze all build files, test patterns, source structure. Generate optimal .grepai/config.yaml.` |
-| `model` | `opus` |
+| `prompt` | see the delegation brief below |
+| `model` | `sonnet` (matches the agent's own pin — do NOT override to opus) |
+
+**Delegation brief — applies to every Task spawn in this skill.**
+
+A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct
+it, and it usually drifts off-target. One subagent = ONE bounded unit — one deliverable
+(here: ONE config file), ~<=5 files, ~<=10 steps. Bigger MUST be split into N tasks, all spawned
+in ONE message.
+
+Every spawn prompt MUST carry:
+
+| Field | Content |
+|-------|---------|
+| GOAL | the overall task and why it exists — the point beyond the file edit |
+| ROLE | what this agent owns; what it must NOT touch |
+| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
+| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what THIS agent needs |
+| CONSUMER | who or what uses the result next, and the shape it must fit |
+| DONE | acceptance criteria + the exact report shape you want back |
+
+A bare one-line task is never enough. Filled in for this phase:
+
+```
+GOAL: this project is being wired for semantic code search; this task delivers the ONE
+      config file that drives indexing quality.
+ROLE: you own .grepai/config.yaml only. Do NOT touch source code, .claude/settings.json,
+      hooks, or the index itself.
+SCOPE: read build files, test patterns, source structure; write .grepai/config.yaml.
+       Out of bounds: everything else.
+CONTEXT: Phases 1-2 already installed and verified the grepai CLI and the MCP server — do not
+      re-install or re-check them. You are the only agent running; Phases 5-6 install the
+      project hooks and merge .claude/settings.json afterwards, so leave both alone.
+CONSUMER: Phase 4 runs `grepai index` straight off this file and Phase 5 keeps it watched;
+      every later grepai_search hit is only as good as these globs. A wrong exclude silently
+      hides code rather than erroring — flag what you could not infer instead of guessing.
+DONE: valid config.yaml written; report as: languages | include/exclude globs | boost
+      patterns | anything you could not infer.
+```
 
 > **Context:** the agent resolves its plugin root natively via `${CLAUDE_PLUGIN_ROOT}` (substituted in its .md at Task spawn).
 
@@ -187,14 +223,16 @@ SRC="${CLAUDE_SKILL_DIR}/assets"
 # GLOBAL:  DST="$HOME/.claude/grepai/hooks";  SETTINGS="$HOME/.claude/settings.json"
 DST="$PWD/.claude/grepai/hooks"
 SETTINGS="$PWD/.claude/settings.json"
+# Path written INTO settings.json — keep it relocatable (GLOBAL: use "$HOME/.claude/grepai/hooks")
+HOOK_REF='$CLAUDE_PROJECT_DIR/.claude/grepai/hooks'
 
 mkdir -p "$DST" && cp "$SRC/grepai-session.mjs" "$SRC/grepai-reminder.mjs" "$DST/" \
   && echo "✅ copied to $DST" || { echo "❌ copy FAILED"; exit 1; }
 
 mkdir -p "$(dirname "$SETTINGS")"
 [ -f "$SETTINGS" ] || echo '{}' > "$SETTINGS"
-S_CMD="node $DST/grepai-session.mjs"
-R_CMD="node $DST/grepai-reminder.mjs"
+S_CMD="node $HOOK_REF/grepai-session.mjs"
+R_CMD="node $HOOK_REF/grepai-reminder.mjs"
 
 if command -v jq >/dev/null 2>&1; then
   TMP="$(mktemp)"
@@ -250,7 +288,7 @@ fi
 
 After install, tell the user EXACTLY what changed:
 - Hook files copied: `<scope>/.claude/grepai/hooks/grepai-session.mjs`, `<scope>/.claude/grepai/hooks/grepai-reminder.mjs`
-- `settings.json` entries merged: `SessionStart -> node .../grepai-session.mjs`, `PreToolUse(matcher "Bash") -> node .../grepai-reminder.mjs`
+- `settings.json` entries merged: `SessionStart -> node $CLAUDE_PROJECT_DIR/.claude/grepai/hooks/grepai-session.mjs`, `PreToolUse(matcher "Bash") -> node $CLAUDE_PROJECT_DIR/.claude/grepai/hooks/grepai-reminder.mjs`
 - Reminder: a NEW session picks them up (SessionStart fires on next `claude` start / `--resume`); no `/reload-plugins` needed.
 
 ### Phase 7: Verification
@@ -323,7 +361,7 @@ bash "${CLAUDE_SKILL_DIR}/scripts/optimize.sh" && echo "✅ optimize-backup" || 
 |-----------|-------|
 | `subagent_type` | `brewcode:bc-grepai-configurator` |
 | `prompt` | `Re-analyze project and regenerate .grepai/config.yaml. Compare with existing config, optimize boost patterns, update trace languages.` |
-| `model` | `opus` |
+| `model` | `sonnet` (matches the agent's own pin — do NOT override to opus) |
 
 > **Context:** the agent resolves its plugin root natively via `${CLAUDE_PLUGIN_ROOT}` (substituted in its .md at Task spawn).
 
@@ -335,6 +373,24 @@ bash "${CLAUDE_SKILL_DIR}/scripts/optimize.sh" && echo "✅ optimize-backup" || 
 ```bash
 bash "${CLAUDE_SKILL_DIR}/scripts/reindex.sh" && echo "✅ reindex" || echo "❌ reindex FAILED"
 ```
+
+---
+
+## Mode: uninstall
+
+Removes grepai from THIS project: stops watch, deletes the two hook files, unwires
+them from `.claude/settings.json` (jq, backup kept), drops `.claude/rules/grepai-first.md`.
+Keeps the CLI, ollama, bge-m3 and the user-scope MCP entry.
+
+**ASK** (AskUserQuestion): "Also delete `.grepai/` (config + index)? Rebuilding it later takes a full reindex."
+Options: "Keep index" | "Delete everything"
+
+**EXECUTE** using Bash tool (add `--purge-index` only for "Delete everything"):
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/uninstall.sh" && echo "✅ uninstall" || echo "❌ uninstall FAILED"
+```
+
+> Tell the user the `## Code Search` section stays in `CLAUDE.md` and must be removed by hand.
 
 ---
 

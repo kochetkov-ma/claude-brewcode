@@ -174,6 +174,25 @@ Claude Code defaults to 200K for non-Anthropic providers. The `[1m]` suffix on m
 | `model-check` | Identify which model is actually responding (run inside provider session) |
 | `help` | Switching cheat sheet |
 
+### Research delegation
+
+When the skill refreshes its provider reference files, it spawns **one agent per provider** — five `Task` calls in a single message (DeepSeek, Z.ai/GLM, Qwen/DashScope, MiniMax, OpenRouter). `Task` is in the skill's `allowed-tools`, so that fan-out actually happens instead of collapsing into a serial single-agent crawl.
+
+A big task handed to one agent is an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target. One subagent = **one provider**, ~5 files, ~10 steps — never all five providers in one prompt.
+
+Each research prompt carries six fields; a bare one-line task is never enough:
+
+| Field | Content |
+|-------|---------|
+| GOAL | refresh the reference files so users get current model ids, pricing and endpoints |
+| ROLE | research and report only — the skill applies changes later, the agent edits nothing |
+| SCOPE | in — that provider's doc sources; out — other providers, `&#126;/.zshrc`, any reference file on disk |
+| CONTEXT | the current on-disk baseline (model, alias, endpoint) to diff against; four siblings fetch the rest |
+| CONSUMER | the skill diffs the table, shows it to the user, who approves each update before anything is written |
+| DONE | a Field / Current / Fetched / Source URL table — say "no change" explicitly, never omit a field |
+
+An omitted field reads as "unknown" downstream and blocks that provider's whole update, which is why DONE spells out the shape.
+
 </Spoiler>
 
 <Spoiler title="Prompt caching">

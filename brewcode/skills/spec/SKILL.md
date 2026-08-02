@@ -87,6 +87,26 @@ Before spawning agents, check for project team agents:
 
 > Always fall back to plugin agents when no project agents match the task domain.
 
+## Delegation (applies to EVERY Task spawn in this skill)
+
+A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct
+it, and it usually drifts off-target. One subagent = ONE bounded unit — one deliverable
+(here: ONE research area), ~<=5 files, ~<=10 steps. Bigger MUST be split into N tasks, all
+spawned in ONE message.
+
+Every spawn prompt MUST carry:
+
+| Field | Content |
+|-------|---------|
+| GOAL | the overall task and why it exists — the point beyond the file edit |
+| ROLE | what this agent owns; what it must NOT touch |
+| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
+| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what THIS agent needs |
+| CONSUMER | who or what uses the result next, and the shape it must fit |
+| DONE | acceptance criteria + the exact report shape you want back |
+
+A bare one-line task is never enough. See Step 4 for the canonical spawn shape.
+
 3. **Partition Research Areas** (5-10 areas)
 
    Analyze project and split into logical parts for parallel research:
@@ -116,15 +136,26 @@ Before spawning agents, check for project team agents:
    Task(subagent_type="Explore", prompt="Find library docs...")
    ```
 
-   **Agent prompt template:**
+   Partitioning into 5-10 areas IS the Delegation sizing rule applied — see **Delegation** above.
+
+   **Agent prompt template — every spawn carries all six Delegation fields:**
    ```
    > **Context:** BC_PLUGIN_ROOT is available in your context (injected by pre-task.mjs hook).
 
-   Analyze {AREA} for task: "{TASK_DESCRIPTION}"
-   Focus: patterns, reusable code, risks, constraints
-   Context files: {FILES_IN_AREA}
-   Output: findings (bullets), assets (table), risks, recommendations
-   NO large code blocks - use file:line references
+   GOAL: we are writing a SPEC for "{TASK_DESCRIPTION}". Your findings become one section of
+         that SPEC; other agents cover the other areas in parallel.
+   ROLE: you own the {AREA} analysis only. Read-only — do NOT edit code, do NOT write the SPEC.
+   SCOPE: {FILES_IN_AREA}. Out of bounds: every other area (owned by sibling agents).
+   CONTEXT: scope and constraints are already settled with the user in Step 2 — do NOT re-open
+         them: {USER_ANSWERS_AND_CONSTRAINTS}. Step 2.5 already fixed the task boundary, so
+         out-of-scope areas stay out. {N} sibling agents research the other areas from the
+         Step 3 partition table in this same message; assume their areas are covered.
+   CONSUMER: Step 5 merges the 5-10 reports into one SPEC.md and deduplicates them, then Step 7
+         has a reviewer grade that SPEC on completeness, consistency, feasibility and risks.
+         Findings that are not in the four sections below get dropped in the merge; a risk you
+         omit becomes a gap the reviewer bounces back.
+   DONE: report exactly — findings (bullets), assets (table), risks, recommendations.
+         NO large code blocks - use file:line references.
    ```
 
 5. **Consolidate into SPEC**

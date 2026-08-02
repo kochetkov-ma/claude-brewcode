@@ -107,6 +107,25 @@ No arguments? The skill asks: commit hash, file path, folder, or paste text.
   </li>
 </Steps>
 
+## Delegation (mixed flow)
+
+<Callout type="warning">
+**A big task handed to one agent = an agent gone for an hour.** You cannot observe it, you cannot correct it, and it usually drifts off-target. In the mixed flow one subagent = **one block** of ~5 files, ~10 steps. A large commit or folder is split into N blocks, all spawned in a single message.
+</Callout>
+
+Every block prompt carries six fields. A bare one-line task is never enough:
+
+| Field | Content |
+|-------|---------|
+| GOAL | humanize the commit or folder so it reads as human-written; this agent owns block N of M |
+| ROLE | edit only this block's files in place; never auto-fix behavior-changing items — surface them |
+| SCOPE | in — the exact file list; out — every other path, git history, build output |
+| CONTEXT | flow per file already classified, PASS 2 inject ON/OFF, custom instructions verbatim, sibling blocks listed |
+| CONSUMER | the skill merges each block's JSON into one Humanization Report the user acts on |
+| DONE | JSON per the `mixed.md` aggregation schema — stripped, injected, surfaced per file |
+
+Two failure modes the brief prevents: a "helpful" edit outside the block collides with a sibling agent that already owns that file, and a surfaced item quietly fixed never reaches the user who was supposed to decide on it.
+
 <details>
 <summary>Internals</summary>
 

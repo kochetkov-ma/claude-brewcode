@@ -20,7 +20,7 @@ async function main() {
       if (state?.hard === true) {
         const level = state.level === 'strict' ? 'strict' : 'balanced';
         systemMessage = `⛔ MANAGER HARD wall ON (project, level=${level})`;
-        context = `Manager HARD wall active (project, level=${level}): main session is orchestration-only; delegate to subagents. /brewtools:manager off to exit.`;
+        context = `Manager HARD wall active (project, level=${level}): main session is orchestration-only - delegate in bounded units (one deliverable, ~5 files) and split a big job across several agents instead of one agent running for an hour. Brief every agent with goal + scope + what is already done + who consumes the result + acceptance; /brewtools:manager off to exit.`;
       }
     } catch (err) {
       log('info', '[session-start]', `manager hard-wall check error (${err.message}), skipping`, cwd, session_id);

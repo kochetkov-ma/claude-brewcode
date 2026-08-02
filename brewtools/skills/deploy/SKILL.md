@@ -63,7 +63,23 @@ PHASE: <current>
 ACTION: <attempted>
 FALLBACK: <next OR "asking user">
 ```
-Silent failures = bugs.
+
+### Delegation (any `Task` spawn, e.g. `deploy-admin`)
+
+A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target. One subagent = ONE bounded unit — one deliverable, ~<=5 files, ~<=10 steps, and never more than ONE repo / ONE environment per agent. Bigger MUST be split into N tasks (one per repo, one per environment), all spawned in ONE message.
+
+Every spawn prompt MUST carry:
+
+| Field | Content |
+|-------|---------|
+| GOAL | the overall task and why it exists — the point beyond the file edit |
+| ROLE | what this agent owns; what it must NOT touch |
+| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
+| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what THIS agent needs |
+| CONSUMER | who or what uses the result next, and the shape it must fit |
+| DONE | acceptance criteria + the exact report shape you want back |
+
+A bare one-line task is never enough. Safety gates are NOT delegable: confirmation gates (P4 Step 5, P5 Step 4) stay in this skill, in the main conversation.
 
 ---
 

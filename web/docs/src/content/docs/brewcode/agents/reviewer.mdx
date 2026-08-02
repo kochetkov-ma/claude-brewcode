@@ -1,9 +1,9 @@
 ---
 title: "Reviewer"
-description: "System architect & code reviewer — architecture, quality, security, performance reviews with APPROVED/CONDITIONAL/REWORK verdicts."
+description: "Reviews architecture, quality, security, performance. Triggers: review code, code review, review PR, check architecture, approve changes."
 order: 1203
 ---
-import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
 # Reviewer
 
@@ -19,11 +19,29 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 
 | Field | Value |
 |-------|-------|
-| Model | opus |
+| Model | `inherit` — runs on the session's model |
 | Tools | Read, Glob, Grep, Bash, Task |
 | Disallowed tools | Write, Edit |
-| Triggers | "code review", "architecture review", "review this", "check quality", "security review" |
+| Triggers | "review code", "code review", "review PR", "check architecture", "approve changes" |
+| MCP | grepai |
 | Delegate to | Code changes → [developer](/brewcode/agents/developer/) · Tests → [tester](/brewcode/agents/tester/) |
+
+## Scope guard
+
+Reviewer sizes the review before starting. One bounded unit = one deliverable, roughly 5 files, roughly 10 steps.
+
+| Situation | What the agent does |
+|-----------|---------------------|
+| Brief fits one bounded unit | Starts immediately |
+| Brief exceeds ~5 files / ~10 steps, or bundles several independent deliverables | Stops before starting, returns a split proposal: 2-N bounded subtasks, each with scope and a suggested owner |
+| Scope grows mid-flight | Stops at the next clean boundary, reports done / remaining / how to split |
+| Brief is missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance | States the assumption explicitly in the report, or asks once — never invents scope |
+
+"Review this 40-file PR" gets a split proposal, not a verdict. Send it module by module, or spawn one reviewer per module in parallel.
+
+<Callout type="tip">
+**Got a split proposal instead of a verdict?** That is the guard working. Reviewer delivers for the CONSUMER — a verdict you can act on — rather than a shallow pass over everything you pasted.
+</Callout>
 
 ## When to use
 
@@ -61,7 +79,7 @@ The agent reads all `.claude/rules/` files first, runs `grepai_search` to find e
   <li>
     <div>
       <strong>Apply checklists</strong>
-      <p>Code checklist (Reuse → Architecture → SOLID → Errors → Resources → Thread safety → Performance → Security). Tests checklist (assertions, messages, integration, structure). Anti-patterns scan (magic numbers, nesting &gt;3, methods &gt;20 lines, copy-paste).</p>
+      <p>Eight-point code checklist: Reuse → Architecture → SOLID → Errors → Resources → Thread safety → Performance → Security. Then the tests checklist: concrete assertions, descriptive messages, real deps over mocks, AAA or GIVEN/WHEN/THEN structure.</p>
     </div>
   </li>
   <li>
@@ -114,24 +132,6 @@ Red flags: new utility without search · reimplemented stdlib · pattern mismatc
 | Messages | Descriptive `.as()` on every assertion |
 | Integration | Real deps over mocks |
 | Structure | AAA or GIVEN/WHEN/THEN |
-
-### SOLID summary
-
-| P | Rule |
-|---|------|
-| S | One reason to change |
-| O | Extend, don't modify |
-| L | Subtypes replace base |
-| I | Small interfaces |
-| D | Depend on abstractions |
-
-### Anti-patterns
-
-Magic numbers · nesting &gt;3 · methods &gt;20 lines · classes &gt;300 lines · copy-paste · commented code · TODO without ticket.
-
-### Performance red flags
-
-Unbounded queries · missing indexes · large objects in memory · sync I/O in loops · no caching · resource leaks.
 
 ### Output format
 

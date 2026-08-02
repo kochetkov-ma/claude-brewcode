@@ -23,25 +23,66 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 
 **Claude actually receives** (you never see this part -- it is injected invisibly by a hook):
 
-<Callout type="note">
-**[ INJECTED: Manager operating contract ]**
+```text
+[ROLE: MANAGER]
 
-You are a Manager, not an executor. Your job is orchestration only.
+You are a Manager, not an executor. Your only actions: think, plan, build the
+TaskGraph, delegate, observe, integrate. You do not write/edit code, run
+builds/tests, or hands-on debug. Catch yourself editing a file or running an
+impl command -> STOP, spawn a subagent. "Faster to do it myself" is a symptom,
+not an argument - delegate anyway.
 
-1. Decompose the task -- identify all pieces.
-2. Build a TaskGraph -- every piece becomes a task with dependencies.
-3. Delegate -- spawn the best specialist agent for each task.
-4. Run independent tasks in parallel -- maximize fan-out.
-5. Integrate results -- collect outputs, synthesize the answer.
+Protocol, always:
+1. Decompose the TASK into a full TaskGraph BEFORE any work (TaskCreate for all).
+2. Dependencies via TaskUpdate addBlockedBy/addBlocks - real data-handoffs only.
+   No dependency = independent = parallel.
+3. Assign owner (TaskUpdate owner), then launch the agent.
+4. Status honestly: pending -> in_progress (BEFORE start) -> completed (only truly
+   done, green - never "partially").
+5. Observe: read reports, validate, integrate. Agent failed -> file a follow-up
+   task and re-delegate, never fix by hand.
 
-Never implement, fix, or edit code yourself. Never run builds or tests yourself. If you catch yourself writing production code -- stop and delegate instead.
-</Callout>
+Sizing before spawning: one subagent = ONE bounded unit - one deliverable,
+~<=5 files, ~<=10 steps. Bigger MUST be split into N tasks, fanned out in ONE
+message. A big task handed to one agent = an agent gone for an hour: you cannot
+observe it, cannot correct it, and it usually drifts off-target.
+
+Every spawn prompt MUST carry, explicitly:
+  GOAL     - the overall task and why it exists; the point beyond the file edit.
+  ROLE     - what this agent owns; what it must NOT touch.
+  SCOPE    - exact paths/commands in bounds + explicit out-of-bounds.
+  CONTEXT  - what is already done, by whom, what runs in parallel. Adapt it per
+             agent, trimmed to what THIS one needs; never dump everything.
+  CONSUMER - who or what uses the result next, and the shape it must fit.
+  DONE     - acceptance criteria + the exact report shape you want back.
+A bare one-line task is never enough.
+
+Scan ALL available agents; summon only genuine experts - one best-match per task.
+Autonomy: finish the job, don't stop halfway, don't ask where you can decide.
+Minimize the critical path.
+```
 
 ```
 refactor the payment module
 ```
 
-Your single line becomes: the full Manager contract (highlighted above) + your original request. The codeword `++m` is consumed; your text reaches Claude unchanged. Curious how injection works? See [Prompt Injection](/brewtools/prompt-injection/).
+Your single line becomes: the full Manager contract (above) + your original request. The codeword `++m` is consumed; your text reaches Claude unchanged. Curious how injection works? See [Prompt Injection](/brewtools/prompt-injection/).
+
+### Two rules that do the heavy lifting
+
+<Steps>
+  <li><div><strong>Bounded units, not one giant agent</strong><p>One subagent = one deliverable, roughly 5 files and 10 steps. Anything bigger is split into N tasks fanned out in ONE message. A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target.</p></div></li>
+  <li><div><strong>Six-field brief on every spawn</strong><p>Each spawn prompt carries GOAL, ROLE, SCOPE, CONTEXT, CONSUMER, DONE. CONTEXT is trimmed per agent -- never dump everything. A bare one-line task is never enough.</p></div></li>
+</Steps>
+
+| Field | What it must say |
+|-------|------------------|
+| GOAL | The overall task and why it exists; the point beyond the file edit |
+| ROLE | What this agent owns; what it must NOT touch |
+| SCOPE | Exact paths/commands in bounds + explicit out-of-bounds |
+| CONTEXT | What is already done, by whom, what runs in parallel -- trimmed to what THIS agent needs |
+| CONSUMER | Who or what uses the result next, and the shape it must fit |
+| DONE | Acceptance criteria + the exact report shape you want back |
 
 ---
 
@@ -49,7 +90,7 @@ Your single line becomes: the full Manager contract (highlighted above) + your o
 
 | Codeword | Means | What it does |
 |----------|-------|-------------|
-| `++m` | Manager | Manager + delegation for the current task -- Claude orchestrates, never codes by hand |
+| `++m` | Manager | Manager + delegation for the current task -- Claude orchestrates, never codes by hand; splits work into bounded units and briefs every spawn with GOAL / ROLE / SCOPE / CONTEXT / CONSUMER / DONE |
 | `++rr` | Regression Review | Regression review with double-check -- after each significant phase, run a review focused on no regression + project standard + correctness; two-phase (review → double-check → fix); mandatory final cross-review at task end |
 | `++r` | Review | Review with double-check -- after each significant change, run a two-phase multi-agent review (review → double-check → fix); codeword-only, no ambient injection or wall state change |
 | `++a` | Architecture | Architecture-first pass before coding -- delegate a design that fits the existing project architecture, patterns and rules; robust, scalable, and simple (no over-engineering); reuse existing patterns first, keep clean seams. Independent group, combines with `++m`/`++rr`/`++r`; same block in normal and plan mode (in plan mode it is written into the plan). |
@@ -188,7 +229,7 @@ The hook resolves the prompt text for the detected mode (`full` or `planmode`) v
 
 Project and global overrides survive plugin updates because they live outside the plugin cache.
 
-When the HARD wall is armed, the Manager (full) block is also ambient-injected every turn with no codeword needed -- codewords and wall injection are independent channels.
+When the HARD wall is armed, the Manager (full) block is also ambient-injected every turn with no codeword needed -- codewords and wall injection are independent channels. On top of that, brewtools' `session-start.mjs` reports the armed wall at session start and repeats the same two rules: delegate in bounded units (one deliverable, ~5 files), and brief every agent with goal + scope + what is already done + who consumes the result + acceptance.
 
 ### Scope table
 

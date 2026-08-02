@@ -1,6 +1,6 @@
 ---
 title: "Agents"
-description: "All 10 Brewcode agents: models, triggers, tools"
+description: "All 10 brewcode agents: models, tools, triggers, and the shared Scope guard that stops oversized tasks."
 order: 12
 ---
 
@@ -14,18 +14,22 @@ from developer to task coordination.
 
 ## Summary table
 
-| # | Agent | Model | Write tools | Purpose |
-|---|-------|-------|-------------|---------|
-| 1 | developer | opus | Read, Write, Edit, Bash | Feature implementation, bug fixes |
-| 2 | tester | sonnet | Read, Write, Edit, Bash | Test execution, failure analysis |
-| 3 | reviewer | opus | Read (read-only) | Code review, architecture, security |
-| 4 | architect | opus | Read (read-only) | Architecture analysis, patterns |
-| 5 | skill-creator | opus | Read, Write, Edit | Skill creation and improvement |
-| 6 | agent-creator | opus | Read, Write, Edit | Agent creation and improvement |
-| 7 | hook-creator | opus | Read, Write, Edit, Bash | Hook creation and debugging |
-| 8 | bash-expert | opus | Read, Write, Edit, Bash | Bash/sh script creation |
-| 9 | bc-grepai-configurator | opus | Read, Write, Edit, Bash | Internal: spawned by /brewcode:grepai |
-| 10 | bc-rules-organizer | sonnet | Read, Write, Edit, Bash | Internal: spawned by /brewcode:rules |
+Purpose column = the agent's own `description` frontmatter, verbatim. That string is what Claude matches against when auto-selecting an agent.
+
+| # | Agent | Model | Write tools | Description (verbatim) |
+|---|-------|-------|-------------|------------------------|
+| 1 | developer | inherit | Read, Write, Edit, Bash | Implements features, writes code, fixes bugs, refactors. Trig: implement, fix bug, add feature. |
+| 2 | tester | sonnet | Read, Write, Edit, Bash | Runs tests, analyzes failures, debugs flaky tests. Triggers: run tests, tests failing, flaky test. |
+| 3 | reviewer | inherit | Read (read-only) | Reviews architecture, quality, security, performance. Triggers: review code, code review, review PR, check architecture, approve changes. |
+| 4 | architect | inherit | Read (read-only) | Architecture analysis, patterns, scaling. Triggers: review architecture, design service, scaling. |
+| 5 | skill-creator | inherit | Read, Write, Edit, Bash | Creates and improves Claude Code skills. Triggers: create skill, improve skill, fix activation. |
+| 6 | agent-creator | inherit | Read, Write, Edit, Bash | Creates and improves Claude Code agents. Triggers: create agent, improve agent, scaffold agent. |
+| 7 | hook-creator | inherit | Read, Write, Edit, Bash | Creates and debugs Claude Code hooks. Triggers: create hook, PreToolUse hook, debug hook. |
+| 8 | bash-expert | inherit | Read, Write, Edit, Bash | Creates sh/bash scripts for Mac/Linux. Triggers: create script, bash script, shell script. |
+| 9 | bc-grepai-configurator | sonnet | Read, Write, Edit, Bash | Internal. Spawned only by /brewcode:grepai. No direct/auto use. |
+| 10 | bc-rules-organizer | haiku | Read, Write, Edit, Bash | Internal. Spawned only by /brewcode:rules. No direct/auto use. |
+
+`model: inherit` means the agent runs on whatever model the session runs on — no per-agent pin. Only `tester` (sonnet) and the two internal helpers (sonnet / haiku) are pinned.
 
 <CardGrid>
   <Card title="developer" icon="code" href="/brewcode/agents/developer/">
@@ -58,12 +62,30 @@ from developer to task coordination.
 `bc-grepai-configurator` and `bc-rules-organizer` are internal. They are spawned automatically by brewcode skills and hooks, are not user-invokable, and have no dedicated page.
 :::
 
-## Models and cost
+## Scope guard — shared by all 8 agents
 
-| Model | Agents | When to use |
-|-------|--------|-------------|
-| **opus** | [developer](/brewcode/agents/developer/), [reviewer](/brewcode/agents/reviewer/), [architect](/brewcode/agents/architect/), [skill-creator](/brewcode/agents/skill-creator/), [agent-creator](/brewcode/agents/agent-creator/), [hook-creator](/brewcode/agents/hook-creator/), [bash-expert](/brewcode/agents/bash-expert/), bc-grepai-configurator | Complex tasks, deep analysis, code generation |
-| **sonnet** | [tester](/brewcode/agents/tester/), bc-rules-organizer | Balanced tasks, review, optimization |
+Every public brewcode agent sizes the task before starting. One bounded unit = one deliverable, roughly 5 files, roughly 10 steps. Anything larger is refused up front.
+
+| Situation | What the agent does |
+|-----------|---------------------|
+| Brief fits one bounded unit | Starts immediately |
+| Brief exceeds ~5 files / ~10 steps, or bundles several independent deliverables | Stops before starting, returns a split proposal: 2-N bounded subtasks, each with scope and a suggested owner |
+| Scope grows mid-flight | Stops at the next clean boundary, reports done / remaining / how to split |
+| Brief is missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance | States the assumption explicitly in the report, or asks once — never invents scope |
+
+Agents deliver for the CONSUMER, not the literal wording: the result must be usable as-is by whoever picks it up next, with the whole briefed scope covered.
+
+<Callout type="tip" title="Got a split proposal instead of a result?">
+  The brief was too big — this is the guard working, not a failure. Pick one subtask from the proposal and re-send it, or spawn the subtasks as parallel agents in a single message.
+</Callout>
+
+## Models
+
+| Model | Agents | Meaning |
+|-------|--------|---------|
+| **inherit** | [developer](/brewcode/agents/developer/), [reviewer](/brewcode/agents/reviewer/), [architect](/brewcode/agents/architect/), [skill-creator](/brewcode/agents/skill-creator/), [agent-creator](/brewcode/agents/agent-creator/), [hook-creator](/brewcode/agents/hook-creator/), [bash-expert](/brewcode/agents/bash-expert/) | Runs on the session's model — you control the tier |
+| **sonnet** | [tester](/brewcode/agents/tester/), bc-grepai-configurator | Pinned: mechanical, high-volume work |
+| **haiku** | bc-rules-organizer | Pinned: cheap file reorganization |
 
 <Callout type="tip" title="Automatic selection">
   Agents are launched automatically by brewcode skills via the Task API.

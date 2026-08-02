@@ -4,9 +4,9 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 4.2.4 |
-| Skills | 13 |
-| Agents | 12 |
+| Version | 4.3.0 |
+| Skills | 9 |
+| Agents | 10 |
 | Hooks | 2 |
 | Model | opus |
 
@@ -74,33 +74,37 @@ claude --plugin-dir ./brewcode
 | Skill | Purpose |
 |-------|---------|
 | [`/brewcode:spec`](skills/spec/README.md) | Research codebase + user dialog -> SPEC.md |
-| [`/brewcode:grepai`](skills/grepai/README.md) | Semantic code search (setup, status, start, stop, reindex) |
-| [`/brewcode:superreview`](skills/superreview/README.md) | Generate a project-tailored deep-review skill (review + standards merged) |
+| [`/brewcode:grepai`](skills/grepai/README.md) | Manages grepai semantic code search: setup, status, start, stop, reindex, optimize, upgrade, uninstall |
+| [`/brewcode:superreview`](skills/superreview/README.md) | Generate a project-tailored deep-review skill: domain-expert routing + scope discipline + mechanical gates + adversarial validation |
 | [`/brewcode:teams`](skills/teams/README.md) | Dynamic agent team creation, management, and performance tracking |
 | [`/brewcode:convention`](skills/convention/README.md) | Extract etalon classes, patterns, architecture into convention docs and rules |
 | [`/brewcode:rules`](skills/rules/README.md) | Prompt-driven rules management: status, create, improve, review |
-| [`/brewcode:skills`](skills/skills/README.md) | Prompt-driven skill management: status, create, improve, review |
-| [`/brewcode:agents`](skills/agents/README.md) | Prompt-driven agent management: status, create, improve, review |
+| [`/brewcode:skills`](skills/skills/README.md) | Prompt-driven skill management: status, create, improve, sync, review |
+| [`/brewcode:agents`](skills/agents/README.md) | Prompt-driven agent management: status, create, improve, sync, review |
 | [`/brewcode:e2e`](skills/e2e/README.md) | E2E testing orchestration with BDD scenarios and quorum review |
 
 > **Note:** `/brewcode:superreview` emits a self-contained, project-local deep-review skill tailored to your stack.
+> It first makes sure the project HAS domain experts (creating the missing ones via `agent-creator`), then wires the
+> emitted skill to the project's real gates, rules and scope baseline (task + issue + recorded decisions).
 
 ## Agents
 
 | Agent | Model | Purpose |
 |-------|-------|---------|
-| [developer](agents/developer.md) | opus | Implement features, write code, fix bugs |
-| [tester](agents/tester.md) | sonnet | Run tests, analyze failures, debug flaky tests |
-| [reviewer](agents/reviewer.md) | opus | Code review, architecture, security, performance |
-| [architect](agents/architect.md) | opus | Architecture analysis, patterns, trade-offs, scaling |
-| [skill-creator](agents/skill-creator.md) | opus | Create and improve Claude Code skills |
-| [agent-creator](agents/agent-creator.md) | opus | Create and improve Claude Code agents |
-| [hook-creator](agents/hook-creator.md) | opus | Create and debug Claude Code hooks |
-| [bash-expert](agents/bash-expert.md) | opus | Create professional shell scripts |
-| bc-grepai-configurator | opus | Internal: spawned by /brewcode:grepai |
-| bc-rules-organizer | sonnet | Internal: spawned by /brewcode:rules |
+| [developer](agents/developer.md) | inherit | Implements features, writes code, fixes bugs, refactors |
+| [tester](agents/tester.md) | sonnet | Runs tests, analyzes failures, debugs flaky tests |
+| [reviewer](agents/reviewer.md) | inherit | Reviews architecture, quality, security, performance |
+| [architect](agents/architect.md) | inherit | Architecture analysis, patterns, scaling |
+| [skill-creator](agents/skill-creator.md) | inherit | Creates and improves Claude Code skills |
+| [agent-creator](agents/agent-creator.md) | inherit | Creates and improves Claude Code agents |
+| [hook-creator](agents/hook-creator.md) | inherit | Creates and debugs Claude Code hooks |
+| [bash-expert](agents/bash-expert.md) | inherit | Creates sh/bash scripts for Mac/Linux |
+| bc-grepai-configurator | sonnet | Internal: spawned by /brewcode:grepai |
+| bc-rules-organizer | haiku | Internal: spawned by /brewcode:rules |
 
 > **Dynamic teams:** Use `/brewcode:teams create` to generate 5-20 project-specific agents with self-selection protocol and performance tracking.
+
+> **Scope guard:** every agent carries a `## Scope guard` -- if a task exceeds one bounded unit (one deliverable, ~5 files), the agent stops and proposes a split instead of running for an hour.
 
 ## Architecture
 
@@ -109,7 +113,7 @@ brewcode/
 +-- .claude-plugin/plugin.json          # Plugin manifest
 +-- hooks/                              # 2 lifecycle hooks
 |   +-- session-start.mjs              # SessionStart: version-check, plan-symlink, permission_mode
-|   +-- forced-eval.mjs                # UserPromptSubmit: skill activation reminder
+|   +-- forced-eval.mjs                # UserPromptSubmit: manager-role + split-discipline reminder
 |   +-- hooks.json                     # Event bindings
 |   +-- lib/utils.mjs                  # Shared utilities
 +-- agents/                            # 10 agents
@@ -122,7 +126,7 @@ brewcode/
 | Hook | Event | Purpose |
 |------|-------|---------|
 | session-start | SessionStart | Version-check, plan-symlink, permission_mode tag |
-| forced-eval | UserPromptSubmit | Skill activation reminder (~9K additionalContext bound) |
+| forced-eval | UserPromptSubmit | Manager-role + split-discipline reminder, 2 lines via additionalContext (9K bound) |
 
 ## Task Structure
 

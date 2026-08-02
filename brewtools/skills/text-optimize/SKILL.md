@@ -75,38 +75,7 @@ When no flag provided AND input suggests compression (not just optimization):
 | LLM Comprehension | L.1-L.8 | Critical info position, documents-first, conciseness, quote-first, add WHY, reiterate constraint, prompt repetition, preserve scope qualifiers |
 | Aggressive lossy | A.1-A.4 | Line fusion, word drop, paraphrase, known-fact elision (deep/max) |
 
-### ID-to-Rule Mapping
-
-| ID | Rule | ID | Rule |
-|----|------|----|------|
-| C.1 | Literal instruction following | C.2 | Avoid "think" word |
-| C.3 | Positive framing (do Y not don't X) | C.4 | Match prompt style to output |
-| C.5 | Descriptive over emphatic instructions | C.6 | Overengineering prevention |
-| T.1 | Tables over prose (multi-column) | T.2 | Bullets over numbered (~5-10%) |
-| T.3 | One-liners for rules | T.4 | Inline code over blocks |
-| T.5 | Standard abbreviations (tables only) | T.6 | Remove filler words |
-| T.7 | Comma-separated inline lists | T.8 | Arrows for flow notation |
-| S.1 | XML tags for sections | S.2 | Imperative form |
-| S.3 | Single source of truth | S.4 | Add context/motivation |
-| S.5 | Blockquotes for critical | S.6 | Progressive disclosure |
-| R.1 | Verify file paths | R.2 | Check URLs |
-| R.3 | Linearize circular refs | P.1 | Examples near rules |
-| P.2 | Hierarchy via headers (max 3-4) | P.3 | Bold for keywords (max 2-3/100 lines) |
-| P.4 | Standard symbols (→ + / ✅❌⚠️) | | |
-| S.7 | Consistent terminology | S.8 | One-level reference depth |
-| P.5 | Instruction order (anchoring) | P.6 | Default over options |
-| C.7 | Avoid ALL-CAPS emphasis (4.x) | C.8 | Prompt format → output format |
-| T.10 | Strip whitespace from code | | |
-| L.1 | Critical info at START or END | L.2 | Documents first, query last |
-| L.3 | Explicitly request conciseness | L.4 | Quote-first grounding |
-| L.5 | Add WHY to instructions | L.6 | Reiterate constraint at END |
-| L.7 | Prompt repetition (non-reasoning) | | |
-| L.8 | Preserve scope qualifiers | D.1 | Exact-duplicate merge |
-| D.2 | Near-duplicate merge (keep specific) | D.3 | Cross-format duplicate |
-| D.4 | Emphasis cap (<=2/doc, echo @ END) | D.5 | Cross-file dedup (SSOT + pointer) |
-| D.6 | Wrong-merge guard | A.1 | Line fusion (deep/max) |
-| A.2 | Low-value word drop (deep/max) | A.3 | Aggressive paraphrase (deep/max) |
-| A.4 | Common-knowledge elision (deep/max) | | |
+> Full per-ID definitions live in `references/rules-review.md` (loaded at Step 0) — do not restate them here.
 
 ## Mode-to-Rules Mapping
 
@@ -163,16 +132,50 @@ Runs during analysis, BEFORE compression:
 
 > **Orchestration:** Phase 1+2 are executed by the SKILL in the main conversation (manager level). The text-optimizer agent handles single-file optimization only — it cannot spawn sub-agents.
 
+### Delegation
+
+A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target. One subagent = ONE bounded unit — ONE file, ~<=10 steps. A folder or multi-path run MUST be split one-file-per-agent, all spawned in ONE message.
+
+Every spawn prompt MUST carry:
+
+| Field | Content |
+|-------|---------|
+| GOAL | the overall task and why it exists — the point beyond the file edit |
+| ROLE | what this agent owns; what it must NOT touch |
+| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
+| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what THIS agent needs |
+| CONSUMER | who or what uses the result next, and the shape it must fit |
+| DONE | acceptance criteria + the exact report shape you want back |
+
+A bare one-line task is never enough.
+
 **Phase 1: Analysis** — Parallel `Explore` agents
 
 ```
 Task(subagent_type: "Explore", prompt: "Analyze {file}: structure, dependencies, cross-refs, redundancies")
 ```
 
-**Phase 2: Optimization** — Parallel text-optimizer agents
+**Phase 2: Optimization** — Parallel text-optimizer agents, full brief shape:
 
 ```
-Task(subagent_type: "text-optimizer", prompt: "Optimize {file} in {mode} mode. Load rule and compression references per your agent definition Step 0/Step 2 (${CLAUDE_PLUGIN_ROOT} is natively substituted at spawn). Run the dedup pass (D.1-D.6) before compressing. Apply transformations, verify refs, run the mode's verification protocol, output report with metrics + fact-inventory result.")
+Task(subagent_type: "text-optimizer", prompt: "
+GOAL: cutting token cost across {N} files for this repo without losing meaning; you own
+  {file} only, sibling agents own the rest and the reports are merged.
+ROLE: optimize {file} in place. Do NOT touch any other file, do NOT change behavior,
+  do NOT drop project-specific names, numbers, paths, versions or prohibitions.
+SCOPE: in — {file}. Out — every other path; references/ are read-only inputs.
+CONTEXT: mode={mode} is already chosen (loss budget per the mode table); Phase 1 Explore
+  already analyzed {file} — findings: {cross-refs, redundancies}, so do not re-analyze.
+  Sibling agents are optimizing the other {N-1} files of this run at the same time; rule and
+  compression references come from your agent definition Step 0/Step 2 (${CLAUDE_PLUGIN_ROOT}
+  is natively substituted at spawn).
+CONSUMER: the skill merges every agent's Optimization Report into one summary for the user;
+  {file} itself is consumed by an LLM loading it as a prompt/doc, and other files still point
+  at its headings — a heading you rename must stay resolvable or you break a sibling's file.
+DONE: run the dedup pass (D.1-D.6) before compressing, apply transformations, verify refs
+  (R.1-R.3), run the mode's verification protocol, then output the Optimization Report
+  (metrics table + rules applied + fact-inventory result + semantic match %).
+")
 ```
 
 > **Spawn parallel:** For multiple files, spawn ALL agents in ONE message for speed.

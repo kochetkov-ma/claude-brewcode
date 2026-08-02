@@ -83,7 +83,7 @@ Memory types:
 | project | Architecture decisions, deployment notes |
 | reference | API keys locations, environment setup |
 
-Optimize memory with `/brewdoc:memory` — removes duplicates, consolidates entries, reduces token usage.
+Sync with `/brewdoc:memory` — keeps memory, CLAUDE.md, and rules consistent and free of duplicates.
 
 Memory is different from KNOWLEDGE.jsonl:
 - **Memory** = cross-conversation persistence (about the user/project)

@@ -83,7 +83,9 @@ async function main() {
       output({
         hookSpecificOutput: {
           hookEventName: 'PreToolUse',
-          additionalContext: 'grepai: USE grepai_search FIRST for code exploration'
+          additionalContext:
+            'grepai: USE grepai_search FIRST for code exploration — compact:true + format:"toon", ' +
+            'then Read the top hits. Full content (compact:false) only with limit<=3 after a compact pass.'
         }
       });
     } else {

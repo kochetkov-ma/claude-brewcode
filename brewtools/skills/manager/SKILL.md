@@ -1,6 +1,6 @@
 ---
 name: brewtools:manager
-description: "Manager mode. on installs+arms a HARD delegation wall into THIS project (PreToolUse denies Write/Edit/Bash in main session, subagents free); off disarms; uninstall removes it. Codeword ++m auto-injects a delegate-everything prompt (plan-aware: adds the plan supplement in plan mode); ++a auto-injects an architecture-first directive (mode-agnostic); ++rr/++r auto-inject review discipline (anti-regression / two-phase double-check), all independent of this skill. level strict|balanced, status, edit, reset. Triggers: manager, менеджер, hard mode, хард режим, delegate."
+description: "Manager mode: installs a hard delegation wall into this project — on, off, uninstall, status, level, edit, reset — and explains/customizes codewords ++m, ++a, ++rr, ++r. Triggers: manager, менеджер, hard mode, хард режим, delegate."
 argument-hint: "[on|off|uninstall|status|level <strict|balanced>|edit|reset] | <task в хард режиме> | <task от роли менеджера> | <prompt>"
 allowed-tools: Read, Bash, AskUserQuestion
 model: sonnet

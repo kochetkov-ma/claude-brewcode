@@ -15,8 +15,8 @@ The main plugin. Spec authoring, semantic search, code quality.
 | `/brewcode:rules` | Prompt-driven rules management: status, create, improve, review |
 | `/brewcode:teams` | Create and manage dynamic agent teams |
 | `/brewcode:e2e` | Full-cycle E2E test orchestration |
-| `/brewcode:skills` | Prompt-driven skill management: status, create, improve, review |
-| `/brewcode:agents` | Prompt-driven agent management: status, create, improve, review |
+| `/brewcode:skills` | Prompt-driven skill management: status, create, improve, review, sync |
+| `/brewcode:agents` | Prompt-driven agent management: status, create, improve, review, sync |
 
 Typical flow: `spec` -> implement -> `superreview` (use `grepai` for search)
 
@@ -28,7 +28,7 @@ Documentation tools. Sync, generate, optimize, export, publish.
 |-------|---------|
 | `/brewdoc:docsync` | Track & sync stale project docs via session hooks |
 | `/brewdoc:my-claude` | Generate docs about your Claude Code setup |
-| `/brewdoc:memory` | Interactive 4-step memory file optimization |
+| `/brewdoc:memory` | Sync memory, CLAUDE.md, and rules; `full` also syncs rosters |
 | `/brewdoc:md-to-pdf` | Convert markdown to PDF (reportlab/weasyprint) |
 | `/brewdoc:guide` | Interactive teaching for the plugin suite (this guide) |
 | `/brewdoc:publish` | Publish content to brewpage.app — text, markdown, or files |

@@ -120,6 +120,25 @@ Natural language also works: `"compress this for context"` → deep mode. `"slim
   </li>
 </Steps>
 
+## Delegation
+
+<Callout type="warning">
+**A big task handed to one agent = an agent gone for an hour.** You cannot observe it, you cannot correct it, and it usually drifts off-target. One `text-optimizer` agent = **one file**, ~10 steps. A folder or comma-separated multi-path run is split one file per agent, all spawned in a single message — never one agent for the whole folder.
+</Callout>
+
+Every spawn prompt carries six fields. A bare one-line task is never enough:
+
+| Field | Content |
+|-------|---------|
+| GOAL | cut token cost across the run without losing meaning; this agent owns one file |
+| ROLE | optimize that file in place — no behavior change, no dropped names, numbers, paths, versions, prohibitions |
+| SCOPE | in — the one file; out — every other path, `references/` are read-only inputs |
+| CONTEXT | mode already chosen, Phase 1 `Explore` findings supplied, siblings hold the other files |
+| CONSUMER | the skill merges every Optimization Report into one summary; other files still link to this file's headings |
+| DONE | dedup pass (D.1-D.6) → transformations → ref checks (R.1-R.3) → mode verification → Optimization Report |
+
+The CONSUMER field is what keeps a parallel run coherent: a heading renamed without care breaks a sibling agent's cross-reference in the same batch.
+
 <details>
 <summary>Rule categories (52 rules)</summary>
 

@@ -62,8 +62,8 @@ Files Created:
 <Steps>
   <li>
     <div>
-      <strong>Check adapted templates</strong>
-      <p>Verifies <code>.claude/tasks/templates/SPEC.md.template</code> exists. Missing template means the project structure is not initialized — the skill stops here rather than writing a spec into the wrong structure.</p>
+      <strong>Detect a SPEC template (optional)</strong>
+      <p>Checks for <code>.claude/tasks/templates/SPEC.md.template</code>. Present, it is used as-is; absent, the skill falls back to its built-in SPEC structure. Either way the run continues — a missing template is not an error.</p>
     </div>
   </li>
   <li>
@@ -87,7 +87,7 @@ Files Created:
   <li>
     <div>
       <strong>Consolidate into SPEC.md</strong>
-      <p>Creates the task directory (<code>.claude/tasks/&#123;TIMESTAMP&#125;_&#123;NAME&#125;_task/</code>), merges and deduplicates agent findings, fills all SPEC sections per the project-adapted template, and writes the file. A research table records which agent covered which area.</p>
+      <p>Creates the task directory (<code>.claude/tasks/&#123;TIMESTAMP&#125;_&#123;NAME&#125;_task/</code>), merges and deduplicates agent findings, fills all SPEC sections per the detected template or the built-in structure, and writes the file. A research table records which agent covered which area.</p>
     </div>
   </li>
   <li>
@@ -103,6 +103,27 @@ Files Created:
     </div>
   </li>
 </Steps>
+
+## Delegation
+
+<Callout type="caution" title="Why research is partitioned">
+  A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target.
+</Callout>
+
+One subagent = **ONE bounded unit** — here, ONE research area: roughly 5 files, roughly 10 steps. Splitting the codebase into 5-10 areas *is* that sizing rule applied; all of them are spawned in **ONE message**, never chained.
+
+Every spawn prompt carries six fields. A bare one-line task is never enough:
+
+| Field | Content |
+|-------|---------|
+| GOAL | the overall task and why it exists — the point beyond the file edit |
+| ROLE | what this agent owns; what it must NOT touch |
+| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
+| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what THIS agent needs |
+| CONSUMER | who or what uses the result next, and the shape it must fit |
+| DONE | acceptance criteria + the exact report shape you want back |
+
+A research agent is therefore told: it is read-only and does not write the SPEC; scope and constraints were settled with you in step 2 and must not be re-opened; the step 2.5 split already fixed the task boundary; N siblings cover the other areas from the partition table. Its CONSUMER line does the real work — step 5 merges and deduplicates the reports and step 7 has a reviewer grade the SPEC, so a finding outside the four required sections is dropped in the merge, and an omitted risk comes back as a reviewer bounce. The same brief lives in `references/SPEC-creation.md`.
 
 <details>
 <summary>Phase details — input handling, agent prompt template, output format</summary>
@@ -126,11 +147,16 @@ Files Created:
 Each parallel subagent receives a prompt in this shape:
 
 ```
-Analyze {AREA} for task: "{TASK_DESCRIPTION}"
-Focus: patterns, reusable code, risks, constraints
-Context files: {FILES_IN_AREA}
-Output: findings (bullets), assets (table), risks, recommendations
-NO large code blocks — use file:line references
+GOAL: we are writing a SPEC for "{TASK_DESCRIPTION}". Your findings become one section of
+      that SPEC; other agents cover the other areas in parallel.
+ROLE: you own the {AREA} analysis only. Read-only — do NOT edit code, do NOT write the SPEC.
+SCOPE: {FILES_IN_AREA}. Out of bounds: every other area (owned by sibling agents).
+CONTEXT: scope and constraints are already settled with the user — do NOT re-open them.
+      {N} sibling agents research the other areas in this same message.
+CONSUMER: step 5 merges the 5-10 reports into one SPEC.md; step 7 has a reviewer grade it on
+      completeness, consistency, feasibility and risks.
+DONE: report exactly — findings (bullets), assets (table), risks, recommendations.
+      NO large code blocks — use file:line references.
 ```
 
 **Dynamic agent resolution order**
@@ -148,7 +174,7 @@ WHILE remarks.critical > 0 OR remarks.major > 0:
 MAX 3 iterations — then surface remaining remarks via AskUserQuestion
 ```
 
-**Template source:** always from `.claude/tasks/templates/` (project-adapted), never from plugin base templates directly.
+**Template source:** a project `.claude/tasks/templates/SPEC.md.template` when one exists; otherwise the skill's built-in SPEC structure.
 
 </details>
 

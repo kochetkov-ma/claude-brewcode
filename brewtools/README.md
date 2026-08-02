@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 3.18.0 |
+| Version | 4.2.4 |
 | Skills | 10 |
 | Agents | 3 |
 
@@ -81,23 +81,26 @@ claude --plugin-dir ./brewtools
 | Skill | Purpose | Model | Arguments |
 |-------|---------|-------|-----------|
 | [`/brewtools:text-optimize`](skills/text-optimize/README.md) | Optimize text for LLM token efficiency | sonnet | `[-l\|-s\|-d\|-x] [file\|folder\|path1,path2]` |
-| [`/brewtools:text-human`](skills/text-human/README.md) | Universal context-aware humanizer: strip AI artifacts and fit register across code, docs, articles, reddit/chat, and commits | sonnet | `[path\|commit\|folder\|text] [custom instructions]` |
+| [`/brewtools:text-human`](skills/text-human/README.md) | Humanizes code, docs, articles, reddit/chat, javadoc -- strips AI artifacts, fixes unicode, fits register | sonnet | `[path\|commit\|folder\|text] [custom instructions]` |
 | [`/brewtools:secrets-scan`](skills/secrets-scan/README.md) | Scan for leaked secrets and credentials | sonnet | `[--fix]` |
 | [`/brewtools:ssh`](skills/ssh/SKILL.md) | SSH server management and configuration | opus | `[connect\|deploy\|configure\|...]` |
 | [`/brewtools:deploy`](skills/deploy/SKILL.md) | GitHub Actions deployment with safety gates | opus | `[release\|workflow\|...]` |
-| [`/brewtools:manager`](skills/manager/README.md) | SOFT: codeword `++m` auto-injects a delegate-everything Manager prompt (plan-aware: adds the plan supplement when the session is in plan mode); `++rr`/`++r` auto-inject review discipline (anti-regression / two-phase double-check) (RU+EN). HARD: `on` installs a PreToolUse guard that blocks Write/Edit/NotebookEdit/WebFetch/MCP-write in the main session (subagents stay free); `off` disarms (registration stays, guard no-ops); `uninstall` deregisters; `level strict\|balanced` tunes the wall | sonnet | `[on\|off\|uninstall\|status\|level <strict\|balanced>\|edit\|reset] \| <prompt>` |
+| [`/brewtools:manager`](skills/manager/README.md) | Manager mode: installs a hard delegation wall into this project -- on, off, uninstall, status, level, edit, reset -- and explains/customizes codewords `++m` (delegate-everything, plan-aware), `++a` (architecture-first), `++rr` (anti-regression review), `++r` (two-phase double-check). Codewords are hook-driven and always fire; the wall is opt-in, per-project, and blocks main-session writes while subagents stay free | sonnet | `[on\|off\|uninstall\|status\|level <strict\|balanced>\|edit\|reset] \| <task в хард режиме> \| <task от роли менеджера> \| <prompt>` |
 | [`/brewtools:plugin-update`](skills/plugin-update/README.md) | Check/install/update brewcode plugins | sonnet | `[check\|update\|all]` |
-| [`/brewtools:provider-switch`](skills/provider-switch/README.md) | Configure alternative API providers (DeepSeek V4 [priority], Z.ai/GLM, Qwen, MiniMax, OpenRouter) | opus | `[status\|setup\|help\|<provider>]` |
+| [`/brewtools:provider-switch`](skills/provider-switch/README.md) | Configure alt API providers: DeepSeek, Z.ai/GLM, Qwen, MiniMax, OpenRouter | opus | `[status\|setup\|verify\|model-check\|help\|<provider-name>]` -- no args = interactive status check |
 | [`/brewtools:think-short`](skills/think-short/README.md) | Install/remove terse-mode hooks (SessionStart + every-10th UserPromptSubmit + subagent Task) that inject brevity directives; project or global | sonnet | `[<free-text prompt>] [Project\|Global]` |
-| [`/brewtools:task-board-init`](skills/task-board-init/README.md) | Deploy a self-contained file-based Kanban into ANY repo via multi-agent analysis (task-tracker agent + task-board skill + tasks rule + .claude/features/**) | opus | `[target repo path \| empty = cwd]` |
+| [`/brewtools:agent-deadline`](skills/agent-deadline/SKILL.md) | Install/remove a soft wall-clock budget for subagents: 80% -- non-blocking "wrap up" warning, 100% -- deny all tools except the finalization set; project or global, opt-in | sonnet | `[status\|install\|disable\|enable\|uninstall\|purge] [project\|global] [minutes] \| free-text intent` |
+| [`/brewtools:task-board-init`](skills/task-board-init/README.md) | Generator: deploys a file-based Kanban into any repo via multi-agent analysis, plus an optional gated CLAUDE.md-optimization pass | opus | `[target repo path \| empty = cwd] [free-text directive, e.g. 'also dedupe rules', 'skip module split']` |
 
 ## Agents
 
 | Agent | Model | Purpose |
 |-------|-------|---------|
-| [text-optimizer](agents/text-optimizer.md) | sonnet | Lean execution engine for text optimization with rule-based validation |
-| [ssh-admin](agents/ssh-admin.md) | opus | Linux server administration -- SSH, Docker, firewalls, VPN, systemd, Caddy/Nginx |
-| [deploy-admin](agents/deploy-admin.md) | opus | GitHub Actions, releases, GHCR, CI/CD, semver, deployment tracking |
+| [text-optimizer](agents/text-optimizer.md) | sonnet | Optimizes text/docs for LLM token efficiency |
+| [ssh-admin](agents/ssh-admin.md) | inherit | Linux server admin: SSH, Docker, systemd, Nginx, SSL |
+| [deploy-admin](agents/deploy-admin.md) | inherit | GitHub Actions deployment: workflows, releases, GHCR, CI/CD |
+
+> **Scope guard:** every agent stops and proposes a split when a task exceeds one bounded unit (one deliverable, ~5 files). `ssh-admin` splits per host, `deploy-admin` per repo and per environment.
 
 ## Architecture
 
@@ -107,7 +110,7 @@ brewtools/
 +-- hooks/
 |   +-- hooks.json                    # Hook registry
 |   +-- session-start.mjs            # Manager HARD-wall awareness
-|   +-- manager-prompt.mjs           # ++m / ++rr / ++r codeword injection
+|   +-- manager-prompt.mjs           # ++m / ++a / ++rr / ++r codeword injection
 |   +-- lib/utils.mjs                 # I/O utilities
 +-- skills/
 |   +-- text-optimize/                # Token optimization
@@ -118,6 +121,7 @@ brewtools/
 |   +-- plugin-update/                # Plugin check / install / update
 |   +-- provider-switch/               # Alternative API provider management
 |   +-- think-short/                   # Terse-mode hooks install/remove
+|   +-- agent-deadline/                # Subagent soft wall-clock budget hooks install/remove
 |   +-- manager/                       # Codeword-triggered Manager mode + HARD delegation wall
 |   +-- task-board-init/                # File-based Kanban generator (multi-agent)
 +-- agents/
@@ -132,8 +136,8 @@ brewtools/
 
 | Hook | Event | Purpose |
 |------|-------|---------|
-| `session-start.mjs` | SessionStart | Manager HARD-wall awareness -- injects guard tag into systemMessage and additionalContext |
-| `manager-prompt.mjs` | UserPromptSubmit | Injects `++m` / `++rr` / `++r` manager codewords |
+| `session-start.mjs` | SessionStart | Manager HARD-wall awareness -- injects guard tag plus the bounded-unit delegation brief (goal + scope + what is already done + who consumes the result + acceptance) into systemMessage and additionalContext |
+| `manager-prompt.mjs` | UserPromptSubmit | Injects `++m` (manager, plan-aware) / `++a` (architecture-first) / `++rr` / `++r` codeword blocks |
 
 ## Documentation
 
@@ -150,6 +154,7 @@ Full docs: [doc-claude.brewcode.app/brewtools/overview](https://doc-claude.brewc
 | Plugin Update | [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) |
 | Provider Switch | [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/) |
 | Think Short | [think-short](https://doc-claude.brewcode.app/brewtools/skills/think-short/) |
+| Agent Deadline | [agent-deadline](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline/) |
 | Text Optimizer (agent) | [text-optimizer](https://doc-claude.brewcode.app/brewtools/agents/text-optimizer/) |
 | SSH Admin (agent) | [ssh-admin](https://doc-claude.brewcode.app/brewtools/agents/ssh-admin/) |
 | Deploy Admin (agent) | [deploy-admin](https://doc-claude.brewcode.app/brewtools/agents/deploy-admin/) |

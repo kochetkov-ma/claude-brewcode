@@ -2,6 +2,60 @@
 
 ---
 
+## v4.3.0 (2026-08-02)
+
+> Repo-wide prompt audit (delegation contract, scope guards, dead-weight removal) **plus** subagent resource limits: verified frontmatter contract, calibrated `maxTurns` across all agents, and the new `agent-deadline` skill — a soft wall-clock deadline that forces a subagent to finalize instead of being killed.
+
+> Docs: [brewcode hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | [spec](https://doc-claude.brewcode.app/brewcode/skills/spec/) | [grepai](https://doc-claude.brewcode.app/brewcode/skills/grepai/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [agents](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [rules](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [teams](https://doc-claude.brewcode.app/brewcode/skills/teams/) | [superreview](https://doc-claude.brewcode.app/brewcode/skills/superreview/) | [convention](https://doc-claude.brewcode.app/brewcode/skills/convention/) | [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [developer](https://doc-claude.brewcode.app/brewcode/agents/developer/) | [tester](https://doc-claude.brewcode.app/brewcode/agents/tester/) | [reviewer](https://doc-claude.brewcode.app/brewcode/agents/reviewer/) | [architect](https://doc-claude.brewcode.app/brewcode/agents/architect/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [bash-expert](https://doc-claude.brewcode.app/brewcode/agents/bash-expert/) | [memory](https://doc-claude.brewcode.app/brewdoc/skills/memory/) | [docsync](https://doc-claude.brewcode.app/brewdoc/skills/docsync/) | [my-claude](https://doc-claude.brewcode.app/brewdoc/skills/my-claude/) | [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/) | [guide](https://doc-claude.brewcode.app/brewdoc/skills/guide/) | [manager](https://doc-claude.brewcode.app/brewtools/skills/manager/) | [prompt-injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/) | [task-board-init](https://doc-claude.brewcode.app/brewtools/skills/task-board-init/) | [text-human](https://doc-claude.brewcode.app/brewtools/skills/text-human/) | [text-optimize](https://doc-claude.brewcode.app/brewtools/skills/text-optimize/) | [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/) | [secrets-scan](https://doc-claude.brewcode.app/brewtools/skills/secrets-scan/) | [ssh](https://doc-claude.brewcode.app/brewtools/skills/ssh/) | [deploy](https://doc-claude.brewcode.app/brewtools/skills/deploy/) | [think-short](https://doc-claude.brewcode.app/brewtools/skills/think-short/) | [agent-deadline](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline/) | [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) | [ssh-admin](https://doc-claude.brewcode.app/brewtools/agents/ssh-admin/) | [deploy-admin](https://doc-claude.brewcode.app/brewtools/agents/deploy-admin/) | [text-optimizer](https://doc-claude.brewcode.app/brewtools/agents/text-optimizer/)
+
+### brewcode
+
+#### Added
+- **skills:** `## Delegation` section in every subagent-spawning skill (spec, skills, agents, rules, teams) — names the failure mode ("a big task handed to one agent = an agent gone for an hour"), caps one subagent at ONE bounded unit (one deliverable, ~<=5 files, ~<=10 steps), and requires a six-field spawn brief: GOAL / ROLE / SCOPE / CONTEXT / CONSUMER / DONE
+- **superreview:** the emitted `references/SKILL.md.template` carries the same Delegation block, so every generated project-local review skill inherits the contract in the user's repo
+- **agents:** `## Scope guard` in all 8 shipped agents (developer, tester, reviewer, architect, skill-creator, agent-creator, hook-creator, bash-expert) — size the task before starting; beyond one bounded unit, STOP and return a split proposal of 2-N subtasks with scope and suggested owner instead of grinding for an hour
+- **agents:** every agent now carries an explicit `maxTurns` (developer 120, hook/skill/agent-creator 80, reviewer/architect/tester/bash-expert/bc-* 60) plus a role-specific `## Checkpointing` section. Values are calibrated from real subagent transcripts in this repo (observed runs of 12-51 turns at ~10-20 s/turn), sized at ~2-3x a typical run: `maxTurns` is a runaway backstop, not a budget — a tight limit loses the agent's final report, so it always ships paired with checkpointing
+- **agent-creator:** new `SA Resource Limits` section — no wall-clock timeout for a subagent exists anywhere (not frontmatter, not `settings.json`, not an env var); table of what actually bounds one (`CLAUDE_CODE_MAX_TURNS`, `API_TIMEOUT_MS`, `CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS`, concurrency/session/spawn-depth caps, token caps); `maxTurns` exhaustion behavior (files persist, final report is lost); which hooks fire inside a subagent loop; partial-result recovery via the subagent transcript, `TaskOutput`/`TaskStop`/`SendMessage`. Plus a definition of *turn* (one inference + its tool calls; parallel calls in one message count as one)
+
+#### Fixed
+- **agent-creator:** the documented frontmatter contract was inverted and actively harmful. It claimed `effort`/`maxTurns`/`disallowedTools` were "plugin agents only" and told authors to move an agent into plugin scope to make them work. Verified against both agent parsers in the Claude Code v2.1.220 binary, the truth is the reverse: those keys (plus `memory`, `background`, `model`, `skills`) work in **both** scopes, while `permissionMode`/`hooks`/`mcpServers` are the ones ignored in *plugin* agents — the loader emits `Plugin agent file <path> sets <key>, which is ignored for plugin agents` for each. Also documents the previously unlisted keys `skills`, `memory`, `background`, `initialPrompt`, `observer`, `observerMessage`, `observeSubagents`, `isolation: remote` (last five local-only) and the `name` constraints (no leading `-`, no `:`). `isolation` demoted to low priority — not a default
+- **agents:** removed the dead keys the contract fix exposed — `mcpServers: [grepai]` from architect/developer/reviewer/bc-grepai-configurator and `permissionMode` from bc-grepai-configurator/bc-rules-organizer/ssh-admin/deploy-admin. Every one was silently ignored and logged a warning at load; `mcpServers` in particular never granted these agents grepai (they inherit the session's MCP servers instead)
+
+#### Changed
+- **forced-eval hook:** payload is now the delegation pair only — `[ROLE]` expert-first manager + new `[SPLIT]` bounded-unit/context-handoff line. The `[SKILL?]` skill-activation nudge is gone (modern models pick skills unaided), and the `/`-prefix skip went with it: a slash command can still carry a task worth delegating, so the reminder fires there too. Meta-reply skip list (yes/no/ok/number/single letter) unchanged
+- **grepai:** skill description gained `Triggers:` for LLM auto-invocation; install/reindex/init scripts trimmed
+- **reviewer agent:** description gained `Triggers: review code, code review, review PR, check architecture, approve changes`
+
+#### Removed
+- **agents + skills:** ~1300 net lines of dead weight — stack-detection tables, SOLID/clean-code lectures, and generic command tables the model already knows
+
+### brewdoc
+
+#### Added
+- **memory, my-claude:** `## Delegation` section with the six-field spawn brief
+
+#### Changed
+- **docsync, guide, publish:** prompt text trimmed; behavior and modes unchanged
+
+### brewtools
+
+#### Added
+- **agent-deadline (NEW skill):** soft wall-clock deadline for subagents. Claude Code has no subagent timeout, and `maxTurns` simply aborts the agent and discards its final report — this installs two hooks that force finalization instead. `PreToolUse` warns the agent once at 80% of its budget, blocks everything but the finalization tools at 100%, and past `hardStopRatio` (default 2x) narrows the allowance to `Write`/`Edit`; `SubagentStop` reaps the state. Modes: `status` (default), `install`, `disable`, `enable`, `uninstall`, `purge`; project or global scope; default budget 20 min with optional per-`agent_type` overrides. **Opt-in** — installing the plugin does not enable it. Fail-open by construction: any hook error passes the call through. Honest limit, stated on the page: this is *not* a timeout — elapsed time is sampled only at tool-call boundaries, so a subagent stuck inside one 25-minute `Bash` is invisible until the next call (`BASH_MAX_TIMEOUT_MS` is the mitigation). 169 tests
+- **manager:** the `++m` / `++a` / `++rr` / `++r` reference blocks now name the failure mode and carry the six-field spawn brief (GOAL / ROLE / SCOPE / CONTEXT / CONSUMER / DONE). Codewords themselves unchanged
+- **task-board-init:** `## Delegation` section, mirrored into the emitted `references/03-task-board-skill.md` so generated task-board skills inherit it
+- **text-human:** per-block Delegation contract for the mixed flow
+- **agents:** `## Scope guard` in text-optimizer, ssh-admin, deploy-admin — ssh-admin and deploy-admin additionally split per host, repo, and environment
+
+#### Fixed
+- **think-short:** the global install/remove merge parsed `settings.json` inside a swallowing `try/catch` and then wrote unconditionally — one stray comma in `~/.claude/settings.json` and the whole file (model, env, the entire `Bash(rm *)` deny-list, every foreign hook) was replaced by the two think-short entries. It now aborts and leaves the file byte-identical. Hook dedupe also compares full paths instead of basenames, so reinstalling into a different hooks dir no longer leaves a settings entry pointing at a deleted file
+- **task-board-init:** frontmatter `name:` was bare `task-board-init`, missing the `brewtools:` prefix
+- **text-human:** frontmatter was invalid YAML (unquoted `description`/`argument-hint` containing `--` and `:`); both now quoted
+- **provider-switch:** `Task` added to `allowed-tools` — phase P9 spawns 5 Tasks and previously could not
+
+#### Changed
+- **manager:** skill description 604 -> 231 chars, triggers preserved
+- **ssh, deploy, secrets-scan, think-short, text-optimize, plugin-update:** generic `gh` / `docker` / `systemd` command tables and stack-detection boilerplate removed
+
 ## v4.2.4 (2026-07-30)
 
 > Docs: [brewcode hooks](https://doc-claude.brewcode.app/brewcode/hooks/)

@@ -20,7 +20,8 @@ Check `.claude/agents/e2e-*.md` count.
 
 ## S2: Project Analysis
 
-Spawn 3-5 Explore agents in ONE message via Task tool:
+Spawn 3-5 Explore agents in ONE message via Task tool — one agent = ONE focus row below; never
+hand one agent the whole analysis.
 
 | # | Focus |
 |---|-------|
@@ -55,9 +56,29 @@ Create agents via agent-creator in 2 batches:
 - e2e-scenario-analyst
 - e2e-automation-tester
 
-Each via: `Task(subagent_type="brewcode:agent-creator")`
-Include: agent-template from `$BC_PLUGIN_ROOT/skills/e2e/references/agent-template.md`, project analysis, colleague table.
-Agent `description` <= 100 chars (optimal ~80), single line, role + 2-3 triggers, no `<example>` blocks.
+One creator = ONE agent definition; that is why the roster goes out as 3 + 2 parallel spawns, not
+one big task. Each batch is spawned in ONE message.
+
+```
+Task(subagent_type="brewcode:agent-creator", prompt="
+GOAL: this project is standing up an E2E practice; the approved roster is its permanent crew and
+      you write ONE member of it so later e2e modes can spawn it by name.
+ROLE: you own `.claude/agents/{AGENT_NAME}.md` only. Do NOT create or edit the other agents in
+      this batch, do NOT touch project code, tests, or `.claude/e2e/config.json`.
+SCOPE: write `.claude/agents/{AGENT_NAME}.md` using the agent-template from
+       `$BC_PLUGIN_ROOT/skills/e2e/references/agent-template.md`. Model and tools are fixed by the
+       roster row: {MODEL} / {TOOLS}{DISALLOWED_TOOLS}. Out of bounds: everything else.
+CONTEXT: S2 already analysed the project and S3 already got the user to approve the roster,
+      models and tools -- do not re-analyse and do not renegotiate. Project analysis: {ANALYSIS}.
+      Colleague table (who else exists and what each owns): {ROSTER}. The other agents of this
+      batch are being written in parallel right now -- reference them by name, never define them.
+CONSUMER: `/brewcode:e2e create|update|review` spawn this agent by name and feed it scenarios and
+      rules; the file may be run through brewtools:text-optimize immediately after. So frontmatter
+      must parse and `description` must be <= 100 chars (optimal ~80), single line, role + 2-3
+      triggers, no `<example>` blocks.
+DONE: file written and parses; report as: path | model | tools | description line.
+")
+```
 
 **Batch 2 (2 agents, parallel):**
 - e2e-manual-tester
@@ -67,9 +88,40 @@ After each batch: AskUser "Optimize agent prompts with text-optimizer?" If yes, 
 
 ## S5: Rules Generation
 
-1. `Task(subagent_type="brewcode:architect")`: analyze project patterns + `WebSearch` best practices for detected stack
+1. ```
+   Task(subagent_type="brewcode:architect", prompt="
+   GOAL: the e2e-* agents just created will write every test in this repo against one rules file;
+         this task produces the project-specific half of it.
+   ROLE: you own rules research and drafting. Read-only on the codebase -- do NOT edit agents,
+         tests, or config.json.
+   SCOPE: analyze project patterns + WebSearch best practices for the detected stack.
+          Out of bounds: writing the merged rules file (step 2 does that), agent definitions.
+   CONTEXT: S2 already analysed structure, stack, existing tests, endpoints and CI -- reuse
+         {ANALYSIS}, do not re-scan. S3 approved the roster and S4 created the agents, so the
+         division of work is fixed. Base rules `${CLAUDE_SKILL_DIR}/references/e2e-rules.md`
+         already cover the S/D/I/A/R/P categories -- add only what they miss for {STACK}.
+   CONSUMER: step 2 merges your output into the base rules and step 3 validates the merge; the
+         merged file becomes config.rulesPath, loaded by every e2e agent on every later run --
+         so each rule must be one checkable sentence, tagged [WEB] or [PROJECT].
+   DONE: table of rule | category | tag | rationale | evidence (repo path or URL).
+   ")
+   ```
 2. Merge findings with base rules from `${CLAUDE_SKILL_DIR}/references/e2e-rules.md`
-3. `Task(subagent_type="brewcode:reviewer")`: validate generated rules
+3. ```
+   Task(subagent_type="brewcode:reviewer", prompt="
+   GOAL: this rules file is about to become the standing law for every E2E agent in the repo;
+         you are the last gate before it is persisted.
+   ROLE: validate the merged rules. Read-only -- do NOT edit the rules, agents, or code.
+   SCOPE: the merged rule set from step 2 only. Out of bounds: the tests and agents themselves.
+   CONTEXT: base rules plus the architect's [WEB]/[PROJECT] additions were merged in step 2;
+         base rules stay unless explicitly superseded, so flag conflicts rather than dropping a
+         side. Stack {STACK}, framework {FRAMEWORK}.
+   CONSUMER: S6 writes the accepted result to config.rulesPath and optionally exports ~20-30 key
+         lines to .claude/rules/e2e-conventions.md -- so tie every verdict to one rule id.
+   DONE: contradictions, duplicates and unactionable rules listed as: rule id | issue | verdict
+         (keep/fix/drop) | one-line reason.
+   ")
+   ```
 
 ## S6: Config Persistence
 

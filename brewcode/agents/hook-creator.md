@@ -2,6 +2,7 @@
 name: hook-creator
 description: "Creates and debugs Claude Code hooks. Triggers: create hook, PreToolUse hook, debug hook."
 model: inherit
+maxTurns: 80
 color: yellow
 tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch, WebSearch
 ---
@@ -13,6 +14,28 @@ tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch, WebSearch
 Creates production-quality CC hooks (bash + JS/mjs): correct msg routing, JSON schemas, fail-safe design.
 
 > Ref ver: 2.1.195 | 27 HEs | 5 hook types (command, http, mcp_tool, prompt, agent)
+
+## Scope guard
+
+Size the task before starting. Exceeds one bounded unit (one deliverable, ~5 files,
+~10 steps) or spans several independent deliverables — STOP, do not start. Return a
+split proposal: 2-N bounded subtasks, each with scope and a suggested owner.
+Mid-flight the same: stop at the next clean boundary and report done / remaining /
+how to split. An hour of unsupervised work is a failure even when it succeeds.
+Brief missing GOAL, SCOPE, CONTEXT (what is already done), CONSUMER (who uses the
+result) or acceptance — state your assumption explicitly in the report, or ask once.
+Never invent scope.
+Deliver for the CONSUMER, not the literal wording: the result must be usable as-is
+by whoever takes it next, with the whole briefed scope covered.
+
+## Checkpointing
+
+`maxTurns: 80` = anti-loop stop, != budget. On hit the run aborts and the final report is lost;
+hook files + settings edits survive. After each hook is written and test-fired, append its path,
+event, exit-code result to `.claude/reports/YYYYMMDD-HHMMSS_hook-creator/report.md`, != hold to the end.
+On resume: read that file first, continue from the last hook listed.
+
+> Scope guard bounds what you take on; this bounds what survives an abort.
 
 ## Session Lifecycle
 
@@ -550,24 +573,6 @@ if [ "$STOP_ACTIVE" = "true" ]; then echo '{}'; exit 0; fi
 if (input.stop_hook_active) { output({}); return; }
 ```
 
-### Performance
-
-| Practice | Why |
-|----------|-----|
-| keep hooks fast (<1s for PTU) | blocks tool execution |
-| use `async:true` for slow ops | background execution |
-| cache file reads | avoid repeated I/O |
-| minimal deps (jq for bash, no npm for mjs) | fast startup |
-
-### Security
-
-| Practice | Why |
-|----------|-----|
-| validate `cwd` paths | prevent path traversal |
-| sanitize stdin JSON | prevent injection |
-| use absolute paths in cmds | avoid PATH manipulation |
-| check `existsSync` before file reads | prevent crashes |
-
 ## 10. Async Hooks
 
 ```json
@@ -644,32 +649,7 @@ Inject project context on SS:
 ```
 Returns `AC` with project state.
 
-## 13. Official Patterns Reference
-
-| # | Pattern | Event | Purpose |
-|---|---------|-------|---------|
-| 1 | Security Validation | PTU | block writes to system dirs/credential files |
-| 2 | Test Enforcement | Stop | verify tests executed before completion |
-| 3 | Context Loading | SS | auto-detect project type, load env cfg |
-| 4 | Notification Logging | Notification | track notifications for audit |
-| 5 | MCP Tool Monitoring | PTU | validate destructive MCP ops |
-| 6 | Build Verification | Stop | ensure project compiles after edits |
-| 7 | Permission Confirmation | PTU | prompt for rm/delete/drop ops |
-| 8 | Code Quality Checks | POT | run linters/formatters on file edits |
-| 9 | Temporarily Active | Any | flag files to enable/disable hooks |
-| 10 | Configuration-Driven | Any | read JSON settings for validation behavior |
-| 11 | Mode-Aware Injection | SS, UserPromptSubmit, PTU:Task | read active mode from state file, inject mode instructions; channel per event — `AC` for SS/UserPromptSubmit, `UI.prompt` for PTU:Task |
-
-## 14. Advanced Techniques
-
-- Multi-Stage Validation: command (fast deterministic) -> prompt (intelligent analysis)
-- Conditional Execution: adapt to env (CI/local), user context (admin/regular), project settings
-- State Sharing: sequential hooks via temp files: `Hook A -> /tmp/risk.json -> Hook B reads`
-- Dynamic Config: `.claude-hooks-config.json`: `{"strictMode":true,"allowedCommands":["npm test"],"maxFileSize":1048576}`
-- Caching: store validation outcomes (5-min cache) to avoid redundant processing
-- Cross-Event Workflows: `SS -> count tests | POT -> increment | Stop -> verify count > 0`
-
-## 15. Hook Type Selection
+## 13. Hook Type Selection
 
 | Need | Type | Why |
 |------|------|-----|
@@ -686,74 +666,7 @@ Returns `AC` with project state.
 > DEF: command for deterministic/performance-critical; prompt/agent only when an allow/block gate needs LLM judgment.
 > Lifecycle: hooks load at session start. Config changes require `/clear` or new session.
 
-## 16. Production Examples
-
-### Security Gate (PTU:Bash)
-
-Config: `{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"bash ./hooks/security-gate.sh"}]}]}}`
-
-```bash
-#!/bin/bash
-set -euo pipefail
-INPUT=$(cat)
-CMD=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
-if echo "$CMD" | grep -qE '(rm -rf /|sudo rm|chmod 777|dd if=)'; then
-  jq -n --arg r "Blocked: dangerous command ($CMD)" '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":$r}}'
-  exit 0
-fi
-echo '{}'
-```
-
-### Test Enforcement (Stop)
-
-Config: `{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"node ./hooks/test-check.mjs"}]}]}}`
-
-```javascript
-#!/usr/bin/env node
-import { readFileSync, existsSync } from 'fs';
-const input = JSON.parse(readFileSync(0, 'utf8'));
-if (input.stop_hook_active) { console.log('{}'); process.exit(0); }
-const logPath = `${input.cwd}/.claude/test-run.log`;
-if (!existsSync(logPath)) {
-  console.log(JSON.stringify({decision:'block',reason:'No tests run. Execute test suite before stopping.'}));
-} else { console.log('{}'); }
-```
-
-### Context Injection (SS)
-
-Config: `{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"bash ./hooks/load-config.sh"}]}]}}`
-
-```bash
-#!/bin/bash
-set -euo pipefail
-INPUT=$(cat)
-CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
-CFG="$CWD/.project-config.json"
-if [ -f "$CFG" ]; then
-  RULES=$(jq -r '.rules // empty' "$CFG")
-  jq -n --arg ctx "Project rules: $RULES" '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":$ctx},"systemMessage":"Loaded project config"}'
-else
-  echo '{}'
-fi
-```
-
-### Tool Logger (POT, async)
-
-Config: `{"hooks":{"PostToolUse":[{"hooks":[{"type":"command","command":"node ./hooks/logger.mjs","async":true}]}]}}`
-
-```javascript
-#!/usr/bin/env node
-import { readFileSync, appendFileSync } from 'fs';
-const input = JSON.parse(readFileSync(0, 'utf8'));
-const { tool_name, session_id } = input;
-const ts = new Date().toISOString();
-try {
-  appendFileSync(`${input.cwd}/.claude/tool-log.txt`, `${ts} | ${session_id} | ${tool_name}\n`);
-  console.log('{}');
-} catch (e) { console.log('{}'); }
-```
-
-## 17. Workflow
+## 14. Workflow
 
 1. Clarify: which event? what behavior? bash or JS? where to configure?
 2. Design: select event, matcher, output schema, routing channel
@@ -762,7 +675,7 @@ try {
 5. Test: run with `CLAUDE_DEBUG=1`, check verbose (Ctrl+O). Isolate hook bugs: `claude --safe-mode` / `CLAUDE_CODE_SAFE_MODE=1` starts CC with ALL customizations off (CLAUDE.md, plugins, skills, hooks, MCP) to confirm hook is cause (v2.1.169+)
 6. Validate: run checklist
 
-## 18. Validation Checklist
+## 15. Validation Checklist
 
 | # | Check |
 |---|-------|
@@ -781,7 +694,7 @@ try {
 | 13 | `if` field (v2.1.85+) to reduce overhead when applicable |
 | 14 | hook type (`command` deterministic, `http` API/remote, `mcp_tool` MCP tool, `prompt`/`agent` allow-block gate) |
 
-## 19. Deliverable Format
+## 16. Deliverable Format
 
 ```
 === HOOK CREATED ===
@@ -799,7 +712,7 @@ VERIFICATION:
 - Syntax valid
 ```
 
-## 20. Version History
+## 17. Version History
 
 | Ver | Event/Feature | Type |
 |-----|--------------|------|

@@ -19,8 +19,8 @@ fi
 # Create logs directory
 mkdir -p .grepai/logs
 
-# Start watch
-grepai watch --background --log-dir .grepai/logs 2>/dev/null
+# Start watch (|| true: set -e must not pre-empt the failure branch below)
+grepai watch --background --log-dir .grepai/logs 2>/dev/null || true
 
 # Verify
 sleep 1
@@ -33,21 +33,26 @@ else
   exit 1
 fi
 
-# TODO: Extract shared CLAUDE.md logic to common function (duplicated in create-rule.sh)
 # Ensure CLAUDE.md has grepai entry
 CLAUDE_MD="CLAUDE.md"
 GREPAI_MARKER="grepai_search"
+
+append_claude_md_entry() {
+  {
+    echo ""
+    echo "## Code Search"
+    echo ""
+    echo "> **CRITICAL:** Use \`grepai_search\` FIRST for code exploration."
+    echo "> **ALWAYS \`compact:true\` + \`format:\"toon\"\`** → path+lines only, then \`Read\` the top hits."
+    echo "> Full content (\`compact:false\`) only as an exception, after a compact pass, with \`limit<=3\` — it overflows the context."
+  } >> "$1"
+}
+
 if [ ! -f "$CLAUDE_MD" ]; then
   echo "# CLAUDE.md" > "$CLAUDE_MD"
-  echo "" >> "$CLAUDE_MD"
-  echo "## Code Search" >> "$CLAUDE_MD"
-  echo "" >> "$CLAUDE_MD"
-  echo "> **CRITICAL:** Use \`grepai_search\` FIRST for code exploration." >> "$CLAUDE_MD"
+  append_claude_md_entry "$CLAUDE_MD"
   echo "✅ CLAUDE.md created with grepai entry"
 elif ! grep -q "$GREPAI_MARKER" "$CLAUDE_MD" 2>/dev/null; then
-  echo "" >> "$CLAUDE_MD"
-  echo "## Code Search" >> "$CLAUDE_MD"
-  echo "" >> "$CLAUDE_MD"
-  echo "> **CRITICAL:** Use \`grepai_search\` FIRST for code exploration." >> "$CLAUDE_MD"
+  append_claude_md_entry "$CLAUDE_MD"
   echo "✅ CLAUDE.md updated with grepai entry"
 fi

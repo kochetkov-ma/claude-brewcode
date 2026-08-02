@@ -1,6 +1,6 @@
 ---
 name: brewcode:skills
-description: "Lists, improves, creates Claude Code skills. Triggers: create skill, improve skill, fix skill activation."
+description: "Lists, improves, creates, syncs Claude Code skills. Triggers: create skill, improve skill, sync skills, memory sync."
 user-invocable: true
 disable-model-invocation: true
 argument-hint: "<free-form prompt: what to do with skills>"
@@ -24,8 +24,7 @@ model: opus
 
 ## Step 1 — Input gate
 
-Treat the **entire** user input (`$ARGUMENTS`) as ONE free-form natural-language prompt.
-There is NO keyword grammar and NO argument parser — `argument-hint` is only a loose example.
+Treat the **entire** user input (`$ARGUMENTS`) as ONE free-form natural-language prompt — no keyword grammar, no argument parser (`argument-hint` is only a loose example).
 
 - prompt non-empty -> go to **Step 2**
 - prompt empty / whitespace-only -> go to **Step 3**
@@ -41,6 +40,7 @@ Classify the prompt + recent conversation context into exactly ONE mode:
 | `create` | "создай" / "create" / "new" / "добавь" / "scaffold" |
 | `improve` | "улучши" / "improve" / "refactor" / "fix" / "почини", OR a bare existing name/path |
 | `review` | "ревью" / "review" / "validate" / "проверь корректность" |
+| `sync` | "sync" / "синк" / "memory sync" / "меморисинк" / "актуализируй" / "обнови знания" / "приведи в соответствие с кодом" — alone or with a scope word |
 
 **Batch flag:** plural form, "все" / "all", or multiple names/paths -> fan-out (one specialist spawn per item).
 
@@ -62,6 +62,7 @@ Options (in this order):
 - `Create new skills`
 - `Improve existing skills`
 - `Review skills`
+- `Sync skills (memory sync)` — re-verify all knowledge vs code, shrink not grow
 - `List (plain)`
 - `Nothing / cancel`
 
@@ -70,6 +71,26 @@ After the choice:
 - `create` or `improve` -> ask ONE follow-up AskUserQuestion for the target/description
   plus the artifact-specific params (see "Artifact-specific params" below).
 - Then ANNOUNCE the mode using the Step 2 format and proceed to **Step 4**.
+
+## Delegation (applies to EVERY Task spawn in this skill)
+
+A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct
+it, and it usually drifts off-target. One subagent = ONE bounded unit — one deliverable
+(here: ONE skill directory), ~<=5 files, ~<=10 steps. Bigger MUST be split into N tasks, all
+spawned in ONE message.
+
+Every spawn prompt MUST carry:
+
+| Field | Content |
+|-------|---------|
+| GOAL | the overall task and why it exists — the point beyond the file edit |
+| ROLE | what this agent owns; what it must NOT touch |
+| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
+| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what THIS agent needs |
+| CONSUMER | who or what uses the result next, and the shape it must fit |
+| DONE | acceptance criteria + the exact report shape you want back |
+
+A bare one-line task is never enough. See Phase 2 for the canonical spawn shape.
 
 ## Step 4 — Dispatch
 
@@ -80,6 +101,8 @@ After the choice:
   Batch -> spawn one `SPECIALIST` per item, ALL in ONE message (parallel).
 - `improve` -> resolve target(s), spawn `SPECIALIST` via Task per target (parallel for batch).
 - `review` -> spawn `brewcode:reviewer` (two-phase: review -> double-check findings -> report).
+- `sync` -> read `${CLAUDE_SKILL_DIR}/references/mode-sync.md` and follow it end to end
+  (S1 scope -> S6 report). It replaces Steps 5-6 for this mode.
 
 ## Step 5 — Real status (NOT a flat list)
 
@@ -119,7 +142,7 @@ Simple = reviewer + verify + fix; Quorum = 3 reviewers threshold 2/3 + DoubleChe
 machinery, but they are reachable ONLY through `create` / `improve` modes — never by default.
 For `create`/`improve`: AskUserQuestion for invocation type (User-only / LLM-auto / Both),
 testing depth (Quick (Recommended) / Standard / Deep), and review type (Simple / Quorum,
-only if Standard/Deep). Frontmatter description budget: <= 120 chars. Spawn SPECIALIST (brewcode:skill-creator)
+only if Standard/Deep). Spawn SPECIALIST (brewcode:skill-creator)
 with discovery results + chosen params. Phase 6 summary == the Step 6 output block (do not
 duplicate a second summary). Reference files: ${CLAUDE_SKILL_DIR}/references/review-prompt.md,
 e2e-template.md, summary-template.md.
@@ -127,8 +150,6 @@ e2e-template.md, summary-template.md.
 ---
 
 ## create / improve machinery (detail — reachable ONLY via Step 4 create/improve)
-
-> Default mode is `status`. The phases below run ONLY after Step 4 dispatches `create` or `improve`.
 
 ### Description Budget
 
@@ -227,18 +248,31 @@ If Adjust — ask what to change, update, re-confirm. If Cancel — stop.
 
 ### Phase 2: Create/Improve (skill-creator agent)
 
+Canonical spawn shape (copy this structure for every Task in this skill):
+
 Task(subagent_type="brewcode:skill-creator", model="opus", prompt="
-  {ACTION} skill based on research and user preferences.
-  Action: {create|improve}
-  Topic/Skill: {TOPIC or SKILL_PATH}
-  Invocation type: {INVOCATION_TYPE}
-  ## Discovery Results
-  {EXPLORE_RESULTS}
-  ## Requirements
-  - Follow skill-creator best practices
-  - Generate unit tests for scripts/ (Step 5.7)
-  - Generate README.md (Step 5.8)
-  - Invocation type pre-filled: {INVOCATION_TYPE} — skip asking
+  GOAL: {one-line why the user wants this skill} — this task delivers ONE working skill
+        the user can invoke immediately.
+  ROLE: you own the skill directory {SKILL_DIR} only. Do NOT edit other skills, agents,
+        CLAUDE.md, or project source.
+  SCOPE: {SKILL_DIR}/SKILL.md + references/ + scripts/ + tests/ + README.md.
+         Out of bounds: everything outside {SKILL_DIR}.
+  CONTEXT:
+    Action: {create|improve}
+    Topic/Skill: {TOPIC or SKILL_PATH}
+    Invocation type (already decided in Phase 1, do NOT re-ask): {INVOCATION_TYPE}
+    Discovery already done by prior Explore agents: {EXPLORE_RESULTS}
+    Folder/batch mode: {N} sibling skill-creators run in parallel, one SKILL.md each —
+      do not touch theirs.
+  CONSUMER:
+    Phase 4 reviewers ({REVIEW_TYPE}) read your output against
+    ${CLAUDE_SKILL_DIR}/references/review-prompt.md, then a skill-creator applies their
+    confirmed findings to this same directory. Leave open questions explicit so they are
+    reviewed, not guessed. Your report also feeds the Step 6 user-facing block.
+  DONE:
+    - SKILL.md valid frontmatter, description <= 120 chars single line
+    - unit tests for scripts/ (Step 5.7), README.md (Step 5.8)
+    - report back: files written | description line | validation output | open questions
 ")
 
 

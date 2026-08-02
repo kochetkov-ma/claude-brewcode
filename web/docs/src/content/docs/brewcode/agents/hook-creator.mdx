@@ -19,10 +19,28 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 
 | Field | Value |
 |-------|-------|
-| Trigger | "create hook", "PreToolUse hook", "Stop hook", "hook doesn't work", "debug hook" |
-| Model | opus |
+| Trigger | "create hook", "PreToolUse hook", "debug hook" |
+| Model | `inherit` — runs on the session's model |
 | Tools | Read, Write, Edit, Glob, Grep, Bash, WebFetch, WebSearch |
+| Reference version | CC 2.1.195 — 27 events, 5 hook types |
 | Output | Hook file (`.sh` or `.mjs`) + config snippet + verification checklist |
+
+## Scope guard
+
+Hook Creator sizes the task before starting. One bounded unit = one deliverable, roughly 5 files, roughly 10 steps.
+
+| Situation | What the agent does |
+|-----------|---------------------|
+| Brief fits one bounded unit | Starts immediately |
+| Brief exceeds ~5 files / ~10 steps, or bundles several independent deliverables | Stops before starting, returns a split proposal: 2-N bounded subtasks, each with scope and a suggested owner |
+| Scope grows mid-flight | Stops at the next clean boundary, reports done / remaining / how to split |
+| Brief is missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance | States the assumption explicitly in the report, or asks once — never invents scope |
+
+"Set up a full hook suite for my repo" gets a split proposal. One hook, one event, one behavior gets built.
+
+<Callout type="tip">
+**Got a split proposal instead of a hook?** That is the guard working. Pick one hook from the proposal and re-send it, or spawn the subtasks as parallel agents in a single message.
+</Callout>
 
 ## When to use
 
@@ -147,7 +165,7 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 
 `prompt`/`agent` = gates only (allow/block). `command`/`http`/`mcp_tool` = can both gate AND inject context.
 
-For `agent`-type hooks: the spawned subagent inherits the session's `permissionMode`. Never configure the parent session with `--dangerously-skip-permissions` just to avoid hook permission prompts -- use a narrow `permissionMode: acceptEdits` on the hook's agent definition instead.
+For `agent`-type hooks: the spawned subagent inherits the session's `permissionMode`. Never configure the parent session with `--dangerously-skip-permissions` just to avoid hook permission prompts -- use a narrow `permissionMode: acceptEdits` on the hook's agent definition instead. This applies to **local agents only** (`.claude/agents/`) -- the plugin-agent parser ignores `permissionMode` and logs a warn at load time, so a hook agent that needs this key must be defined locally, not shipped inside a plugin.
 
 </details>
 

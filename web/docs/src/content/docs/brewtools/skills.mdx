@@ -1,6 +1,6 @@
 ---
 title: "Skills"
-description: "All 10 Brewtools skills: commands, parameters, examples"
+description: "All 11 Brewtools skills: commands, parameters, examples"
 order: 31
 ---
 
@@ -8,61 +8,85 @@ import { Card, CardGrid, Callout } from '../../../components/mdx';
 
 # Skills
 
-Skills (recipes) are slash commands that define *what* to do. Brewtools includes 10 skills
-focused on text processing, security scanning, SSH management, deployment, plugin management, and session orchestration -- each works independently with no prior setup required.
+Skills (recipes) are slash commands that define *what* to do. Brewtools includes 11 skills
+focused on text processing, security scanning, SSH management, deployment, plugin management, subagent budgeting, and session orchestration -- each works independently with no prior setup required.
 
 ## Summary table
 
 | # | Skill | Command | Model | Purpose |
 |---|-------|---------|-------|---------|
-| 1 | deploy | `/brewtools:deploy` | opus | GitHub Actions deployment, CI/CD |
-| 2 | manager | `/brewtools:manager` | sonnet | Manager mode: codeword ++m injects delegate-everything prompt (plan-aware); ++a injects architecture-first design directive |
-| 3 | plugin-update | `/brewtools:plugin-update` | sonnet | Install and update the full plugin suite |
-| 4 | provider-switch | `/brewtools:provider-switch` | sonnet | Configure alternative API providers |
-| 5 | secrets-scan | `/brewtools:secrets-scan` | sonnet | Secrets and key scanning |
-| 6 | ssh | `/brewtools:ssh` | opus | SSH server management |
-| 7 | task-board-init | `/brewtools:task-board-init` | sonnet | Deploy a file-based Kanban board into any repo |
-| 8 | text-human | `/brewtools:text-human` | sonnet | AI artifact removal from code |
-| 9 | text-optimize | `/brewtools:text-optimize` | sonnet | Text optimization for LLMs |
-| 10 | think-short | `/brewtools:think-short` | sonnet | Toggle terse-output mode |
+| 1 | agent-deadline | `/brewtools:agent-deadline` | sonnet | Install a soft wall-clock budget for subagents — warns at 80%, blocks non-finalizing tools past 100% |
+| 2 | deploy | `/brewtools:deploy` | opus | GitHub Actions deployment: workflows, releases, GHCR, CI/CD with safety gates |
+| 3 | manager | `/brewtools:manager` | sonnet | Manager mode: installs a hard delegation wall into this project — on, off, uninstall, status, level, edit, reset — and explains/customizes codewords `++m`, `++a`, `++rr`, `++r` |
+| 4 | plugin-update | `/brewtools:plugin-update` | sonnet | Checks, installs, updates Claude Code plugins |
+| 5 | provider-switch | `/brewtools:provider-switch` | opus | Configure alt API providers: DeepSeek, Z.ai/GLM, Qwen, MiniMax, OpenRouter |
+| 6 | secrets-scan | `/brewtools:secrets-scan` | sonnet | Scans git-tracked files for leaked secrets |
+| 7 | ssh | `/brewtools:ssh` | opus | SSH server management — connect, configure, deploy, administer Linux servers with safety gates |
+| 8 | task-board-init | `/brewtools:task-board-init` | opus | Generator: deploys a file-based Kanban into any repo via multi-agent analysis, plus an optional gated CLAUDE.md-optimization pass |
+| 9 | text-human | `/brewtools:text-human` | sonnet | Humanizes code, docs, articles, reddit/chat, javadoc — strips AI artifacts, fixes unicode, fits register |
+| 10 | text-optimize | `/brewtools:text-optimize` | sonnet | Optimizes text/docs for LLM token efficiency |
+| 11 | think-short | `/brewtools:think-short` | sonnet | Installs or removes the think-short terse-mode hooks |
 
 <CardGrid>
+  <Card title="agent-deadline" icon="clock" href="/brewtools/skills/agent-deadline/">
+    Soft wall-clock budget for subagents — warns at 80%, blocks non-finalizing tools past 100%
+  </Card>
   <Card title="deploy" icon="sync" href="/brewtools/skills/deploy/">
-    GitHub Actions deployment, CI/CD with safety gates
+    GitHub Actions deployment: workflows, releases, GHCR, CI/CD with safety gates
   </Card>
   <Card title="manager" icon="star" href="/brewtools/skills/manager/">
-    Manager mode: codeword-activated delegate-everything prompt, plus ++a architecture-first directive
+    Hard delegation wall for this project, plus the ++m / ++a / ++rr / ++r codewords
   </Card>
   <Card title="plugin-update" icon="rocket" href="/brewtools/skills/plugin-update/">
-    Install and update the full plugin suite
+    Checks, installs, updates Claude Code plugins
   </Card>
   <Card title="provider-switch" icon="settings" href="/brewtools/skills/provider-switch/">
-    Configure alternative API providers (DeepSeek, Z.ai/GLM, Qwen, MiniMax, OpenRouter)
+    Configure alt API providers: DeepSeek, Z.ai/GLM, Qwen, MiniMax, OpenRouter
   </Card>
   <Card title="secrets-scan" icon="lock" href="/brewtools/skills/secrets-scan/">
-    Secrets and key scanning
+    Scans git-tracked files for leaked secrets
   </Card>
   <Card title="ssh" icon="terminal" href="/brewtools/skills/ssh/">
-    SSH server management with safety gates
+    Connect, configure, deploy, administer Linux servers with safety gates
   </Card>
   <Card title="task-board-init" icon="clipboard" href="/brewtools/skills/task-board-init/">
-    Deploy a file-based Kanban board into any repo
+    Deploys a file-based Kanban into any repo, plus a gated CLAUDE.md-optimization pass
   </Card>
   <Card title="text-human" icon="user" href="/brewtools/skills/text-human/">
-    AI artifact removal from code
+    Strips AI artifacts, fixes unicode, fits register across code, docs, and posts
   </Card>
   <Card title="text-optimize" icon="sparkle" href="/brewtools/skills/text-optimize/">
-    Text optimization for LLMs
+    Optimizes text and docs for LLM token efficiency
   </Card>
   <Card title="think-short" icon="note" href="/brewtools/skills/think-short/">
-    Toggle terse-output mode
+    Installs or removes the terse-mode hooks
   </Card>
 </CardGrid>
 
 <Callout type="tip" title="Standalone">
-  All ten skills can be used independently -- they require no prior setup
+  All eleven skills can be used independently -- they require no prior setup
   and no dependency on Brewcode or Brewdoc plugins.
 </Callout>
+
+## How these skills delegate
+
+Nine of the eleven spawn subagents, and they all follow the same sizing rule: **one subagent = one bounded unit** — one deliverable, roughly 5 files and 10 steps. A big task handed to one agent is an agent gone for an hour: you cannot observe it, you cannot correct it, and it usually drifts off-target. Bigger work is split into N tasks fanned out in a single message.
+
+Every spawn prompt carries six fields — GOAL, ROLE, SCOPE, CONTEXT, CONSUMER, DONE. A bare one-line task is never enough.
+
+| Skill | One bounded unit is... |
+|-------|------------------------|
+| [agent-deadline](/brewtools/skills/agent-deadline/) | one mode-and-scope combination — a single `brewcode:hook-creator` spawn per combination |
+| [deploy](/brewtools/skills/deploy/) | one deliverable, one repo, one environment — confirmation gates stay in the main conversation |
+| [provider-switch](/brewtools/skills/provider-switch/) | one provider — five research agents, one message |
+| [secrets-scan](/brewtools/skills/secrets-scan/) | one chunk of the file list — a bigger repo gets more chunks, not bigger ones |
+| [ssh](/brewtools/skills/ssh/) | one deliverable on one host — DELETE/PRIVILEGE approval happens before any spawn |
+| [task-board-init](/brewtools/skills/task-board-init/) | one doc group — same rule at both spawn points |
+| [text-human](/brewtools/skills/text-human/) | one block of files from the commit or folder |
+| [text-optimize](/brewtools/skills/text-optimize/) | one file — a folder run is split one file per agent |
+| [think-short](/brewtools/skills/think-short/) | one install target — a wider request is one task per target |
+
+[plugin-update](/brewtools/skills/plugin-update/) and [manager](/brewtools/skills/manager/) spawn nothing — neither carries `Task` in its `allowed-tools`, so every command runs in front of you.
 
 <CardGrid>
   <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">

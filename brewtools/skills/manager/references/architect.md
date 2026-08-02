@@ -3,20 +3,21 @@
 ```
 [DIRECTIVE: ARCHITECTURE-FIRST]
 
-Before implementation, nail the architecture — delegate an architecture pass to
-the best-matching architect/reviewer agent(s); do not design it inline.
+Before implementation, delegate an architecture pass to the best-matching
+architect/reviewer agent(s); do not design it inline. A large design is split by
+area across several agents, never one long pass. Brief each with its area +
+out-of-bounds, what is already decided and must not be reopened, and who consumes
+the design next.
 
 Required of the design:
 - Fits the EXISTING project architecture, patterns, rules and conventions;
   breaks nothing that already works.
-- Robust and scalable, yet as SIMPLE as possible — no over-engineering. Optimized
-  for future change and easy maintenance, not one-shot dumping into a single spot.
-- Abstractions ONLY where they earn it. First reuse existing patterns/classes/
-  code; add a new pattern only when nothing fits.
+- As SIMPLE as possible while staying scalable - no over-engineering.
+- Abstractions ONLY where they earn it. Reuse existing patterns/classes/code
+  first; add a new pattern only when nothing fits.
 - Clean seams and boundaries so the code stays easy to modify later.
 
-Deliverable before coding: a short, concrete architecture plan — components,
-boundaries, data flow, reused-vs-new, trade-offs — vetted against best practices
-and the project's own rules, then handed to implementers. In plan mode, write
-this into the plan itself.
+Deliverable before coding: a short, concrete architecture plan - components,
+boundaries, data flow, reused-vs-new, trade-offs - handed to implementers.
+In plan mode, write this into the plan itself.
 ```

@@ -1,7 +1,7 @@
 ---
 title: "Teams"
 description: "Build a domain-specific agent team (5-20 agents) from your codebase. Quorum review, trace log, self-updating via performance data."
-order: 1106
+order: 1109
 ---
 import { Card, CardGrid, Callout, Steps, Badge, UpdateNotice } from '../../../../components/mdx';
 
@@ -22,7 +22,7 @@ import { Card, CardGrid, Callout, Steps, Badge, UpdateNotice } from '../../../..
 | Command | `/brewcode:teams` |
 | Arguments | `create <name> [prompt]`, `status <name>`, `update <name>`, `cleanup <name>` |
 | Model | opus |
-| Tools | Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion |
+| Tools | Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion, Skill |
 
 ## When to use
 
@@ -83,7 +83,7 @@ import { Card, CardGrid, Callout, Steps, Badge, UpdateNotice } from '../../../..
   <li>
     <div>
       <strong>Agent creation</strong>
-      <p>Agents created in batches of 3–4 in parallel via <code>agent-creator</code>. Each receives: unified template, domain mission, colleague list, project context. After each batch, <code>/brewtools:text-optimize</code> compresses agent instructions.</p>
+      <p>ONE agent file per spawn — never "create the whole team" in one task. Batches of 3–4 <code>agent-creator</code> spawns run in parallel, each carrying the full six-field brief (see Delegation below). After each batch, <code>/brewtools:text-optimize</code> compresses agent instructions.</p>
     </div>
   </li>
   <li>
@@ -105,6 +105,27 @@ import { Card, CardGrid, Callout, Steps, Badge, UpdateNotice } from '../../../..
     </div>
   </li>
 </Steps>
+
+## Delegation
+
+<Callout type="caution" title="Why one agent file per spawn">
+  A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target.
+</Callout>
+
+One subagent = **ONE bounded unit** — here, ONE agent file: roughly 5 files, roughly 10 steps. A 12-agent roster is 12 spawns, batched 3–4 per message in parallel; the C5 review and the C8 fix pass fan out the same way.
+
+Every spawn prompt carries six fields. A bare one-line task is never enough:
+
+| Field | Content |
+|-------|---------|
+| GOAL | the overall task and why it exists — the point beyond the file edit |
+| ROLE | what this agent owns; what it must NOT touch |
+| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
+| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what THIS agent needs |
+| CONSUMER | who or what uses the result next, and the shape it must fit |
+| DONE | acceptance criteria + the exact report shape you want back |
+
+In C3 that means each `agent-creator` owns exactly `.claude/agents/{name}.md`, is told which colleagues its batch-mates are building (stay off their domains, do not duplicate their triggers), and knows its description line lands in the `team.md` roster row. In C8 the fixer is told the finding is already verified by 2/3 reviewers plus the C7 double-check — do not re-litigate it — and that C9 will re-verify the same file for regressions.
 
 <details>
 <summary>Internals</summary>

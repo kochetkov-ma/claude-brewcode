@@ -81,4 +81,4 @@ If a legacy `~/.claude/brewdoc/INDEX.jsonl` exists from an older install, its en
 
 ## Documentation
 
-Full docs: [my-claude](https://doc-claude.brewcode.app/brewdoc/my-claude/)
+Full docs: [my-claude](https://doc-claude.brewcode.app/brewdoc/skills/my-claude/)

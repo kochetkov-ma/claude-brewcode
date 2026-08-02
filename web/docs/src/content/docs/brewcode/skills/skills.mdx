@@ -1,6 +1,6 @@
 ---
 title: "Skills"
-description: "Orchestrate skill management — list, improve, or create Claude Code skills with activation optimization and guided multi-phase workflow."
+description: "Manage Claude Code skills — status, create, improve, review, and sync (memory sync) across global, project, and plugin scopes."
 order: 1114
 ---
 import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
@@ -21,11 +21,12 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 
 ## When to use
 
-- **Check skill health** — run with no args to see status of all skills across global, project, and plugins
+- **Check skill health** — run with no args to open the menu, then pick Status (skills), the recommended default, for a health view across global, project, and plugins
 - **Fix a non-triggering skill** — `/brewcode:skills improve commit` re-optimizes activation phrases and description
 - **Create from a prompt** — `/brewcode:skills create a semantic code search skill` researches and scaffolds a complete skill
 - **Batch improve a folder** — `/brewcode:skills improve ~/.claude/skills/` processes every SKILL.md in parallel
 - **Explicit listing** — `/brewcode:skills list` when you need a raw table, not a status summary
+- **Refresh stale skill knowledge** — `/brewcode:skills sync` (or `синк`) re-verifies claims in every SKILL.md against the real repo, deletes dead lines, never grows a file
 
 ## Examples
 
@@ -35,16 +36,18 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 /brewcode:skills create a semantic code search skill
 /brewcode:skills improve commit
 /brewcode:skills list
+/brewcode:skills sync
+/brewcode:skills синк по последнему коммиту
 ```
 
 ## How it works
 
 <Steps>
-  <li><div><strong>Input gate</strong><p>The skill reads the argument. Empty, `status`, a create/improve/list keyword, or a free-form sentence — each routes differently. No input triggers the no-prompt menu.</p></div></li>
+  <li><div><strong>Input gate</strong><p>The whole argument is treated as ONE free-form sentence — no keyword grammar, no argument parser. A non-empty prompt goes to mode selection; no input triggers the no-prompt menu.</p></div></li>
   <li><div><strong>Auto-mode select</strong><p>Announces `Mode: &lt;mode&gt; (skills) — chosen because &lt;evidence&gt;` so you always know which branch executed and why the classifier picked it.</p></div></li>
-  <li><div><strong>No-prompt menu</strong><p>When invoked with no argument, presents a single AskUserQuestion with options (in order): Status (skills) — recommended, Status (all: agents+rules+skills), Create, Improve, Review, List (plain), Cancel.</p></div></li>
-  <li><div><strong>Dispatch</strong><p>Routes to the appropriate handler: `list-skills.sh` for list mode, `brewcode:skill-creator` agent for create/improve, parallel agents for batch. Review mode spawns reviewer agents with quorum logic.</p></div></li>
-  <li><div><strong>Real status</strong><p>Status mode scans all SKILL.md files, checks trigger keyword coverage, description budget (&lt;=120 chars), and reports health per skill — not just a file listing.</p></div></li>
+  <li><div><strong>No-prompt menu</strong><p>When invoked with no argument, presents a single AskUserQuestion with options (in order): Status (skills) — recommended, Status (all: agents+rules+skills), Create, Improve, Review, Sync skills (memory sync), List (plain), Cancel.</p></div></li>
+  <li><div><strong>Dispatch</strong><p>Routes to the appropriate handler: `list-skills.sh` for list mode, `brewcode:skill-creator` agent for create/improve, parallel agents for batch, `references/mode-sync.md` for sync. Review mode spawns a single `brewcode:reviewer` agent, two-phase: review, then double-check findings, then report.</p></div></li>
+  <li><div><strong>Real status</strong><p>Four blocks, never a flat list: inventory by scope (plugin / project / global — counts, names, load path), state (enabled or disabled via the <code>_SKILL.md</code> toggle marker, model), overlaps and conflicts (same name shadowed across scopes, duplicate triggers or descriptions), and health flags (missing README or frontmatter, weak description triggers).</p></div></li>
   <li><div><strong>Final output</strong><p>Structured report: mode executed, skills affected, findings, paths written or changed, and suggested next invocation if follow-up is warranted.</p></div></li>
 </Steps>
 
@@ -52,12 +55,34 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 
 | Mode | Trigger | Source / agent |
 |------|---------|----------------|
-| status (default) | no args or `status` | inline scan, no external script |
-| list | `list` keyword only | `list-skills.sh` |
-| create | `create &lt;prompt&gt;` or `create &lt;path&gt;` | `brewcode:skill-creator` |
-| improve | `improve &lt;name&gt;`, `&lt;path&gt;`, or `&lt;folder&gt;` | `brewcode:skill-creator` |
-| review | `review &lt;name&gt;` or `&lt;path&gt;` | reviewer agents + quorum |
-| batch | improve with a folder target detected | parallel `brewcode:skill-creator` |
+| status (default) | any "show me" / "статус" / health intent | inline scan, no external script |
+| list | explicit "list" / "список" / "перечисли" only | `list-skills.sh` |
+| create | "create" / "создай" / "new" / "добавь" / "scaffold" | `brewcode:skill-creator` |
+| improve | "improve" / "улучши" / "refactor" / "fix", or a bare existing name or path | `brewcode:skill-creator` |
+| review | "review" / "ревью" / "validate" / "проверь корректность" | single `brewcode:reviewer`, two-phase (review, double-check) |
+| sync | `sync`, `синк`, `memory sync`, `актуализируй`, `обнови знания`, `приведи в соответствие с кодом` | `references/mode-sync.md` |
+| batch | plural form, "все" / "all", or multiple names or paths | parallel `brewcode:skill-creator` |
+
+## Delegation
+
+<Callout type="caution" title="Why the rule exists">
+  A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target.
+</Callout>
+
+One subagent = **ONE bounded unit** — here, ONE skill directory: roughly 5 files, roughly 10 steps. A folder target is never one task; it becomes N spawns fired in **ONE message**, one `skill-creator` per `SKILL.md` found.
+
+Every spawn prompt carries six fields. A bare one-line task is never enough:
+
+| Field | Content |
+|-------|---------|
+| GOAL | the overall task and why it exists — the point beyond the file edit |
+| ROLE | what this agent owns; what it must NOT touch |
+| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
+| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what THIS agent needs |
+| CONSUMER | who or what uses the result next, and the shape it must fit |
+| DONE | acceptance criteria + the exact report shape you want back |
+
+The Phase 2 spawn is the canonical shape: SCOPE is the skill directory and nothing outside it; CONTEXT states that the invocation type was decided in Phase 1 (do not re-ask), hands over the Explore discovery results, and names how many siblings run in parallel; CONSUMER explains that Phase 4 reviewers read the output against `review-prompt.md`, so open questions must stay explicit instead of being guessed away.
 
 <details>
 <summary>Create / improve pipeline (advanced)</summary>
@@ -82,10 +107,43 @@ Reachable ONLY via create/improve modes.
 
 </details>
 
+<details>
+<summary>Sync mode</summary>
+
+Reachable via `sync` / `синк` / `memory sync` / `актуализируй` / `обнови знания` / `приведи в соответствие с кодом`. Owns `references/mode-sync.md` (steps S1-S6) — `/brewcode:agents` reads the same file, so the two rosters never drift apart.
+
+**Scope (S1):**
+
+| Scope | Meaning | Default |
+|-------|---------|---------|
+| `repo` | whole working tree | yes |
+| `session` | this conversation: decisions, corrections, bugs hit | no |
+| `commit` | `git show`/`git diff &lt;ref&gt;`, default HEAD | no |
+
+Announced as `Sync scope: &lt;scope&gt; — &lt;evidence&gt; | targets: &lt;N&gt; skills`.
+
+**Non-growth directive:** each file ends &lt;= its original line count, total delta &lt;= 0 (a positive delta needs per-line justification, never buried). Order: DELETE first, FIX, ADD last.
+
+**Verdicts (S5):**
+
+| Verdict | Action |
+|---------|--------|
+| STALE | fix to minimal true form |
+| DEAD | delete, plus anything that only explained it |
+| DUPLICATE | keep the single best location |
+| OBVIOUS | delete |
+| DRIFT | compress prose to a table row |
+| MISSING | add &lt;= 1 line, only if verified against a real source |
+
+**Report (S6):** per-target table (File, Lines before-&gt;after, Fixed, Deleted, Added, Key change) + stale facts corrected + skipped + total delta.
+
+</details>
+
 <CardGrid>
   <Card title="agents" icon="settings" href="/brewcode/skills/agents/">Sibling: manage agents</Card>
   <Card title="rules" icon="list" href="/brewcode/skills/rules/">Sibling: manage rules</Card>
   <Card title="brewcode" icon="rocket" href="/brewcode/overview/">Plugin overview</Card>
+  <Card title="memory" icon="sync" href="/brewdoc/skills/memory/">Sibling: syncs memory files, CLAUDE.md, rules</Card>
   <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/skills/SKILL.md">SKILL.md</Card>
 </CardGrid>
 

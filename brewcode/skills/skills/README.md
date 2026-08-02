@@ -1,6 +1,6 @@
 # Skills
 
-Manages Claude Code skills — check status, create new skills from a free-form prompt, improve or review existing ones. Input is ONE free-form natural-language prompt; there is no keyword grammar. Skill operations are delegated to the `brewcode:skill-creator` specialist agent.
+Manages Claude Code skills — check status, create new skills from a free-form prompt, improve, review, or sync existing ones with the codebase. Input is ONE free-form natural-language prompt; there is no keyword grammar. Skill operations are delegated to the `brewcode:skill-creator` specialist agent.
 
 **Default action:** status (rich inventory). List-by-default is removed — typing `/brewcode:skills` alone now opens the interactive menu.
 
@@ -31,26 +31,47 @@ Every invocation goes through the same flow:
    - Create
    - Improve
    - Review
+   - Sync skills (memory sync)
    - List (plain)
    - Cancel
-4. **Dispatch** — routes to `brewcode:skill-creator` agent (create / improve / review / batch) or runs `list-skills.sh` directly (list mode).
-5. **Real status** — rich inventory showing installed skills grouped by location (global, project, plugin), with description and trigger keywords for each.
+4. **Dispatch** — routes create / improve / sync to `brewcode:skill-creator`, review to `brewcode:reviewer` (two-phase), or runs `list-skills.sh` directly (list mode).
+5. **Real status** — four blocks, never a flat list: inventory by scope (plugin / project / global, with counts, names, load path), state (enabled or disabled via the `_SKILL.md` marker, model), overlaps and conflicts (shadowing across scopes, duplicate triggers or descriptions), health flags (missing README or frontmatter, weak description triggers).
 6. **Mandatory final output** — structured summary of what was created, changed, or reviewed. Omitted only for `list` mode.
 
 ## Modes
 
 | Mode | How it activates | What it does |
 |------|-----------------|--------------|
-| `status` | Default when no other mode is detected | Shows skill inventory grouped by location |
-| `list` | Explicit only — "list", "show skills", "what skills" | Runs `list-skills.sh`, plain file listing |
-| `create` | "create", "add", "new skill" in prompt | skill-creator researches and generates a new SKILL.md + README.md |
-| `improve` | "improve", "update", "refine" in prompt | skill-creator rewrites target SKILL.md with optimized content |
-| `review` | "review", "check", "audit" in prompt | skill-creator audits skill files for quality and best practices |
-| `batch` | Multiple targets detected | skill-creator processes all targets in one pass |
+| `status` | Default for any "show me" intent — "статус" / "что есть" / "состояние" | Inventory per scope, state and model, overlaps, health flags |
+| `list` | Explicit only — "list" / "список" / "перечисли" | Runs `list-skills.sh`, plain file listing |
+| `create` | "создай" / "create" / "new" / "добавь" / "scaffold" | skill-creator researches and generates a new SKILL.md + README.md |
+| `improve` | "улучши" / "improve" / "refactor" / "fix" / "почини", or a bare existing name/path | skill-creator rewrites target SKILL.md with optimized content |
+| `review` | "ревью" / "review" / "validate" / "проверь корректность" | brewcode:reviewer audits skill files, two-phase (review -> double-check findings -> report) |
+| `sync` | "sync", "синк", "memory sync", "актуализируй", "обнови знания", "приведи в соответствие с кодом" | skill-creator re-verifies SKILL.md/reference claims against the codebase and corrects stale knowledge |
+
+Batch flag (not a mode): plural form, "все" / "all", or multiple names/paths — fan-out, one specialist spawn per item.
+
+## Sync mode
+
+Re-verifies every claim in `SKILL.md` and its `references/*.md` against the current codebase and corrects drift. Shared implementation with `/brewcode:agents sync`: `references/mode-sync.md`.
+
+| Scope | Trigger | Evidence |
+|-------|---------|----------|
+| `repo` (default) | no scope given | whole working tree |
+| `session` | "session", "this conversation" | decisions, user corrections, bugs hit in the current conversation |
+| `commit` | "commit", "last commit" | `git show`/`git diff <ref>`, default `HEAD` |
+
+Announces `Sync scope: <scope> — <evidence> | targets: <N>` before editing. Non-growth: every edited file ends at or below its original line count, total delta <= 0. Order: DELETE stale/dead/duplicate/obvious content first, then FIX, then ADD (non-obvious, source-verified only).
+
+Verdicts: `STALE`, `DEAD`, `DUPLICATE`, `OBVIOUS`, `DRIFT`, `MISSING`.
+
+Report table: `File | Lines before -> after | Fixed | Deleted | Added | Key change`, plus corrected facts, additions with source, skipped files, and total delta.
+
+Targets: `.claude/skills/*/SKILL.md`, `*/skills/*/SKILL.md` and each skill's `references/*.md` (repo-local only). Disabled skills (`_SKILL.md`) are skipped and reported. `/brewdoc:memory` applies the same non-growth sync to memory files, CLAUDE.md, rules and conventions; its `full` mode also syncs the agent and skill rosters in-place — use this skill when you want a roster on its own.
 
 ## Create / Improve Parameters
 
-When creating or improving a skill, the skill-creator agent asks three questions before generating:
+Before spawning `skill-creator`, the orchestrating skill itself asks up to four questions in Phase 1 (invocation type, testing depth, review type if Standard/Deep, plan confirmation) — skill-creator is told these are already decided and must not re-ask:
 
 | Parameter | Options | Notes |
 |-----------|---------|-------|
@@ -83,6 +104,12 @@ The full creation pipeline includes Phase 0 Discovery (parallel Explore agents),
 # Review all skills in a folder for quality
 /brewcode:skills review ~/.claude/skills/
 
+# Sync skill knowledge with the codebase (default scope: repo)
+/brewcode:skills sync
+
+# Sync only what changed in the current session
+/brewcode:skills sync session
+
 # Plain listing of all skill files
 /brewcode:skills list
 ```
@@ -102,7 +129,7 @@ Depends on mode:
 
 - Run `/brewcode:skills` with no arguments to see the menu — `Status (skills)` is pre-selected and answers "what do I have installed?" in one step.
 - The `create` mode checks conversation history first. If the current conversation already contains a workflow worth capturing, it extracts context directly and skips web research.
-- After creating a skill, Phase 5 E2E runs three test prompts to verify the skill activates correctly. Choose `Deep` testing depth for safety-critical or frequently-used skills.
+- Deep testing depth runs Phase 5 E2E in an isolated temp project (1 happy-path + 1 edge-case scenario per mode); Quick depth instead runs `validate-skill.sh` + 3-5 test prompts. Choose `Deep` for safety-critical or frequently-used skills.
 - `list` is the fastest mode for verifying file counts — use `status` when you need trigger keywords and descriptions alongside each entry.
 
 ## Documentation

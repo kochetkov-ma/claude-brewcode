@@ -8,7 +8,7 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 # my-claude — document your setup
 
 <Callout type="caution">
-**Claude Code's `/team-onboarding` covers the basics — nothing more.** It reads your local config and generates a ramp-up guide. It has no web access, no architecture research, and no citation tracking. As your setup grows — plugins, hooks, custom agents, alternative providers, project rules — the built-in command produces a flat snapshot that goes stale within days. There is no INDEX, no versioning, no reviewer pass.
+**A local-config dump stops being enough once the setup grows.** Plugins, hooks, custom agents, alternative providers, project rules — a flat snapshot of `settings.json` and a couple of CLAUDE.md files does not explain how any of it fits together, and there is nothing to compare against next month.
 </Callout>
 
 <Callout type="tip">
@@ -20,8 +20,9 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 | Field | Value |
 |-------|-------|
 | Command | `/brewdoc:my-claude` |
-| Arguments | `[ext [context]]` \| `[r <query>]` — no args = internal mode |
+| Arguments | `[ext [context]]` \| `[r <query>]` — no args = internal installation docs |
 | Model | opus |
+| Invocation | user-only (`disable-model-invocation: true`) |
 | Context | main conversation |
 | Tools | Read, Write, Edit, Glob, Grep, Bash, Task, WebFetch, WebSearch, Skill, AskUserQuestion |
 
@@ -49,20 +50,9 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 /brewdoc:my-claude r plugin hooks additionalContext regression
 ```
 
-## vs `/team-onboarding`
+## vs built-in `/team-onboarding`
 
-Claude Code 2.1.101 shipped a built-in `/team-onboarding` slash command. It generates a teammate ramp-up guide from your local config. Use it when you need a quick, one-shot handoff doc.
-
-Use `/brewdoc:my-claude` when you need any of the following that `/team-onboarding` does not provide:
-
-| Capability | `/team-onboarding` | `/brewdoc:my-claude` |
-|------------|--------------------|----------------------|
-| Local config map | yes | yes |
-| Web research (forums, GitHub, marketplaces) | no | RESEARCH mode |
-| Official architecture docs (hooks, context schema) | no | EXTERNAL mode |
-| Per-fact source citations | no | yes |
-| Reviewer agent validation pass | no | yes |
-| Persistent INDEX with versioning | no | yes |
+Built-in `/team-onboarding` (Claude Code 2.1.101+) is enough for a quick teammate handoff doc from local config. Use `/brewdoc:my-claude` instead when the job needs web research, EXTERNAL architecture synthesis, RESEARCH mode, or the persistent `.claude/brewdoc/INDEX.jsonl` with citations.
 
 ## Modes
 
@@ -103,7 +93,7 @@ Use `/brewdoc:my-claude` when you need any of the following that `/team-onboardi
   <li>
     <div>
       <strong>Write output</strong>
-      <p>Writes to <code>.claude/brewdoc/my-claude/YYYYMMDD_my-claude-&#123;mode&#125;.md</code> (project-relative — <code>&#126;/.claude/\*</code> is protected and blocked in headless <code>claude -p</code> sessions, even under <code>bypassPermissions</code>). Creates the directory if needed with <code>mkdir -p</code>.</p>
+      <p>Writes to <code>.claude/brewdoc/my-claude/YYYYMMDD_my-claude-&#123;mode&#125;.md</code> (project-relative — <code>&#126;/.claude/&#42;</code> is protected and blocked in headless <code>claude -p</code> sessions, even under <code>bypassPermissions</code>). Creates the directory if needed with <code>mkdir -p</code>.</p>
     </div>
   </li>
   <li>
@@ -113,6 +103,25 @@ Use `/brewdoc:my-claude` when you need any of the following that `/team-onboardi
     </div>
   </li>
 </Steps>
+
+## Delegation — how every spawn is briefed
+
+The rule applies to every `Explore` / `general-purpose` / `reviewer` spawn in all three modes: a big task handed to one agent = an agent gone for an hour. You cannot observe it, cannot correct it, and it usually drifts off-target.
+
+One subagent = ONE bounded unit — one source group, about 5 files and 10 steps at most. Anything bigger is split into N tasks and all of them are spawned in a **single** message.
+
+Every spawn prompt carries six fields:
+
+| Field | Content |
+|-------|---------|
+| GOAL | the overall task and why it exists — the point beyond the file edit |
+| ROLE | what this agent owns; what it must NOT touch |
+| SCOPE | exact paths and commands in bounds + explicit out-of-bounds |
+| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what this agent needs |
+| CONSUMER | who or what uses the result next, and the shape it must fit |
+| DONE | acceptance criteria + the exact report shape expected back |
+
+A bare one-line task is never enough. INTERNAL mode uses this shape for its three `Explore` groups; EXTERNAL and RESEARCH use it per source group.
 
 <details>
 <summary>Internals — output paths, INDEX schema, document structures</summary>
@@ -167,8 +176,8 @@ Use `/brewdoc:my-claude` when you need any of the following that `/team-onboardi
   <Card title="docsync" icon="sync" href="/brewdoc/skills/docsync/">
     Track doc staleness — keeps Markdown, MDX, and knowledge files current by date.
   </Card>
-  <Card title="memory" icon="robot" href="/brewdoc/skills/memory/">
-    Optimize memory files interactively — compress, deduplicate, restructure MEMORY.md.
+  <Card title="memory" icon="brain" href="/brewdoc/skills/memory/">
+    Sync memory, CLAUDE.md (incl. nested), rules and conventions — delete-first, non-growth.
   </Card>
   <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewdoc/skills/my-claude">
     Source code, reference files, and mode instructions.

@@ -163,7 +163,10 @@ async function checkGrepai(cwd, session_id = null) {
   if (hasIndex && ollamaRunning && mcpRunning) {
     result.hookSpecificOutput = {
       hookEventName: 'SessionStart',
-      additionalContext: 'grepai: USE grepai_search FIRST for code exploration'
+      additionalContext:
+        'grepai: USE grepai_search FIRST for code exploration. ALWAYS compact:true + format:"toon" ' +
+        '(returns path+lines only) -> then Read the top 1-3 hits. compact:false ONLY after a compact ' +
+        'pass, with limit<=3 — full content of many chunks overflows the context.'
     };
   }
 

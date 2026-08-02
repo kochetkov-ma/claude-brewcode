@@ -80,23 +80,34 @@ Options: Accept all | Select by number (e.g., "1,3,5") | Skip batch | Stop
 
 After all batches processed, spawn with accepted rules:
 
+One organizer = ONE bounded unit: the accepted rules for ONE target file. If the accepted set
+spans several target files and exceeds ~5 files / ~10 steps, split per target file and spawn all
+organizers in ONE message.
+
 ```
 Task(subagent_type="bc-rules-organizer", prompt="
-Update PROJECT .claude/rules/ -- NEVER ~/.claude/rules/
-
-Plugin templates: $BC_PLUGIN_ROOT/templates/rules/
-Validation: bash \"$BC_PLUGIN_ROOT/skills/rules/scripts/rules.sh\" validate
-Create missing: bash \"$BC_PLUGIN_ROOT/skills/rules/scripts/rules.sh\" create
-
-Accepted rules:
-{ACCEPTED_RULES_JSON}
-
-Format each rule in table row:
-avoid.md: | # | Avoid | Instead | Why |
-best-practice.md: | # | Practice | Context | Source |
-
-Source column: 'convention' for all extracted rules.
-Check for duplicates with existing rules.
+GOAL: this project's conventions were just extracted into .claude/convention/ docs; the rules the
+      user accepted must land in .claude/rules/ so every later session picks them up automatically.
+ROLE: you own .claude/rules/ files only. Update PROJECT .claude/rules/ -- NEVER ~/.claude/rules/.
+      Do NOT touch .claude/convention/ docs, CLAUDE.md, or project source.
+SCOPE: .claude/rules/{stack}-avoid.md and .claude/rules/{stack}-best-practice.md (generic
+       avoid.md / best-practice.md when no stack detected).
+       Plugin templates: $BC_PLUGIN_ROOT/templates/rules/
+       Validation: bash \"$BC_PLUGIN_ROOT/skills/rules/scripts/rules.sh\" validate
+       Create missing: bash \"$BC_PLUGIN_ROOT/skills/rules/scripts/rules.sh\" create
+       Out of bounds: every other file.
+CONTEXT: these rules already passed extraction from the convention docs, similarity dedup against
+      the existing .claude/rules/*.md, and per-batch user approval -- do not re-judge them and do
+      not invent extra rules. Still check for duplicates against the files on disk before writing;
+      40-70% similar means merge into the existing numbered entry, not a new row.
+      Accepted rules:
+      {ACCEPTED_RULES_JSON}
+CONSUMER: .claude/rules/*.md is auto-loaded into every session verbatim, so the rows must parse.
+      Format each rule in table row:
+      avoid.md: | # | Avoid | Instead | Why |
+      best-practice.md: | # | Practice | Context | Source |
+      Source column: 'convention' for all extracted rules.
+DONE: validate script passes; report as: file | rules added | rules merged | rules skipped.
 ")
 ```
 

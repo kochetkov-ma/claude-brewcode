@@ -14,7 +14,9 @@ echo "ARGS: [$ARGS]"
 MODE=""
 
 # Check keywords (order matters - first match wins)
-if [[ "$ARGS_LOWER" =~ (upgrade|апгрейд) ]]; then
+if [[ "$ARGS_LOWER" =~ (uninstall|remove|удали|снеси) ]]; then
+    MODE="uninstall"
+elif [[ "$ARGS_LOWER" =~ (upgrade|апгрейд) ]]; then
     MODE="upgrade"
 elif [[ "$ARGS_LOWER" =~ (optimize|update|улучши|обнови) ]]; then
     MODE="optimize"

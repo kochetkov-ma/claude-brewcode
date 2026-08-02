@@ -102,24 +102,9 @@ Resolution: `1`, `4`, or empty → no password | `2` → use generated random pa
 
 > **SECURITY:** The ownerToken MUST NEVER appear in conversation output. Bash blocks handle curl + token parsing + history save atomically; LLM sees only the URL. Each block sets `PASS_H` first (empty when no password) and uses `"${PASS_H[@]}"` quoted.
 
-History file init (used in all blocks below):
-```bash
-HISTORY_FILE=".claude/brewpage-history.md"
-if [ ! -f "$HISTORY_FILE" ]; then
-  mkdir -p "$(dirname "$HISTORY_FILE")"
-  cat > "$HISTORY_FILE" <<'HEADER'
-# brewpage.app — Published Pages
+Each block below self-initializes `.claude/brewpage-history.md` if absent.
 
-> Owner tokens allow delete and in-place republish (html/json/kv/sites all support PUT). Keep this file private.
-> Delete: `curl -s -X DELETE "https://brewpage.app/api/{ns}/{id}" -H "X-Owner-Token: TOKEN"`
-
-| Date | URL | Owner Token | TTL | Type |
-|------|-----|-------------|-----|------|
-HEADER
-fi
-```
-
-> For a MARKDOWN **file** (type MARKDOWN from Step 2), use this same block but replace the heredoc with `CONTENT=$(cat "/abs/path/to/file.md")`. Everything else (the `?format=markdown` endpoint, token handling, history row) is identical — this renders the `.md` as styled markdown instead of a raw downloadable file.
+> For a MARKDOWN **file** (type MARKDOWN from Step 2), use the **HTML/Markdown text** block below but replace the `CONTENT=$(cat <<'BREWPAGE_EOF' ...)` heredoc with `CONTENT=$(cat "/abs/path/to/file.md")`. Everything else (the `?format=markdown` endpoint, token handling, history row) is identical — this renders the `.md` as styled markdown instead of a raw downloadable file.
 
 **HTML/Markdown text** — **EXECUTE** using Bash tool:
 ```bash

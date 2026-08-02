@@ -136,6 +136,8 @@ claude plugin update brewui@claude-brewcode
 
 Each command runs via the Bash tool with full output shown. Failures are reported inline; remaining steps continue regardless.
 
+**No delegation** — this skill spawns nothing. `Task` is deliberately absent from its `allowed-tools`: discovery, the update chain, and the gates all run in the main conversation, where you can see every command and its output.
+
 **Interactive gates** — `AskUserQuestion` presents option lists only (no free-text). Three decision points: install missing, update outdated, enable auto-update. Explicit arguments (`check`, `update`, `all`) bypass all three.
 
 **Claude refuses to execute?** — if Claude summarizes instead of running commands, paste this coercive prompt: _"Execute every `claude plugin ...` command shown above using the Bash tool. Do not describe — run each command and show full output."_

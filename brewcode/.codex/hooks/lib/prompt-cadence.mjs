@@ -10,9 +10,8 @@ const PROMPT_INTERVAL = 5;
 const STALE_MS = 24 * 60 * 60 * 1000;
 
 export const PROMPT_CONTEXT = [
-  '[SKILL?] Check the available Codex skills and invoke every matching skill before acting.',
-  '[HINT] Use Codex sub-agent collaboration for substantial independent work.',
-  '[ROLE] Coordinate specialized work when delegation is requested; keep simple tasks direct.'
+  '[ROLE] Coordinate: a project expert in .codex/agents matches this domain -> delegate via sub-agent collaboration; no expert or trivial one-off -> do it directly.',
+  '[SPLIT] One agent for an hour = drift you cannot observe: split into bounded units (1 deliverable, ~5 files), fan out in ONE message; every spawn brief carries goal + scope + what is already done + who consumes the result + acceptance.'
 ].join('\n');
 
 function sessionKey(sessionId) {

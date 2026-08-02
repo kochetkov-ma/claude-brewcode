@@ -11,6 +11,10 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 **Every destructive command requires explicit confirmation.** MODIFY, DELETE, and PRIVILEGE operations pause and ask via `AskUserQuestion` before touching anything on the remote host. READ and non-destructive CREATE run freely.
 </Callout>
 
+<Callout type="caution">
+**One agent per host.** A multi-server, multi-environment or multi-service job is split per target — the agent refuses to loop over your whole fleet in a single run. Ask for "check prod-1" and "check prod-2" as separate tasks, or accept the split proposal it returns.
+</Callout>
+
 <Callout type="tip">
 **Run `/brewtools:ssh` first** to configure server connections. The skill writes `CLAUDE.local.md` with your server inventory — ssh-admin reads it automatically on every task start. No inventory file? The agent asks for connection details before proceeding.
 </Callout>
@@ -19,11 +23,28 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 
 | Field | Value |
 |-------|-------|
-| Model | opus |
+| Model | `inherit` — runs on the session's model |
 | Tools | Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion, WebFetch, WebSearch |
 | Triggers | "ssh admin", "server management", "deploy to server", "docker on server" |
 | Inventory | Reads `CLAUDE.local.md` in project root |
 | Permission | `default` — destructive ops require confirmation |
+| Scope | One bounded unit per run; one agent per host |
+
+## Scope guard
+
+The agent sizes the task before it touches a server.
+
+| Situation | What the agent does |
+|-----------|--------------------|
+| Task fits one bounded unit — one deliverable, ~5 files, ~10 steps | Runs it |
+| Bigger, or several independent deliverables | Stops **before starting**, returns a split proposal: 2-N bounded subtasks, each with scope and suggested owner |
+| Several hosts / environments / services in one request | Split per target — one agent per host, per environment, per service. Never one agent looping over all of them |
+| Scope grows mid-flight | Stops at the next clean boundary, reports done / remaining / how to split |
+| Brief missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance | States the assumption in the report, or asks once. Never invents scope |
+
+How this changes your request: instead of "restart the app on all three prod nodes", phrase it as three
+tasks (one per node) — or send the broad request, get the split proposal back, and approve it. The result
+is delivered for the CONSUMER who picks it up next, not for the literal wording.
 
 ## When to use
 
@@ -102,12 +123,23 @@ Reviews current UFW rules, proposes changes, asks for confirmation, applies, ver
 
 | Class | Examples | Action |
 |-------|----------|--------|
-| READ | `ls`, `cat`, `df`, `docker ps`, `systemctl status` | Free |
+| READ | `ls`, `cat`, `df`, `docker ps`, `systemctl status`, `ufw status` | Free |
 | CREATE | `mkdir`, `touch`, `docker pull` | Free if non-destructive |
-| MODIFY | `chmod`, config edits, `sed` | AskUserQuestion |
+| MODIFY | `chmod`, `chown`, `sed`, config edits | AskUserQuestion |
 | SERVICE | `restart`, `reload`, `docker compose up` | AskUserQuestion |
-| DELETE | `rm`, `docker rm`, `docker volume rm` | Always AskUserQuestion |
-| PRIVILEGE | `sudo`, firewall rules, user management | Always AskUserQuestion |
+| DELETE | `rm`, `docker rm`, `docker volume rm`, `drop` | Always AskUserQuestion |
+| PRIVILEGE | `sudo`, `su`, firewall rules, user management | Always AskUserQuestion |
+
+Before any MODIFY / SERVICE / DELETE / PRIVILEGE command on a remote server, the agent describes what
+will happen and asks for confirmation.
+
+**Operational guards**
+
+| Guard | Rule |
+|-------|------|
+| Non-interactive output | `--no-pager` on `journalctl`/`systemctl`, bounded log reads (`-n 50`, `--tail 100`) — a pager on a remote shell hangs the run |
+| Lockout | Before `ufw enable` or any sshd/port change: verify the current SSH port is allowed and keep an open session until the new config is proven |
+| Data destruction | `docker system prune -af --volumes` and `rsync --delete` are DELETE level — always confirmed, with an explicit statement of what gets removed |
 
 **SSH connection patterns**
 

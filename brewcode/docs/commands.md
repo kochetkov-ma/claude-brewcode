@@ -6,24 +6,24 @@ description: Detailed description of all brewcode plugin commands
 
 # BC Plugin Commands
 
-> **ver:** 3.4.22 | **Author:** Maksim Kochetkov | **License:** MIT
+> **ver:** 4.2.4 | **Author:** Maksim Kochetkov | **License:** MIT
 
 ## Quick Reference
 
 | # | Command | Purpose | Context | Model | Deps |
 |---|---------|---------|---------|-------|------|
-| 1 | `/bc:spec` | Create task SP | session | opus | -- |
-| 2 | `/bc:grepai` | Semantic code search | session | sonnet | -- |
-| 3 | `/bc:superreview` | Generate project-tailored deep-review skill | fork | opus | -- |
-| 4 | `/bc:rules` | Extract rules from KB | session | sonnet | -- |
-| ~~5~~ | ~~`/bc:secrets-scan`~~ | **moved to brewtools** | -- | -- | -- |
-| ~~6~~ | ~~`/bc:text-optimize`~~ | **moved to brewtools** | -- | -- | -- |
-| ~~7~~ | ~~`/bc:text-human`~~ | **moved to brewtools** | -- | -- | -- |
-| 8 | `/bc:skills` | SK management | session | sonnet | -- |
-| 9 | `/bc:agents` | AG creation + improvement | session | opus | -- |
-| 10 | `/bc:convention` | Extract conventions/patterns/architecture → rules + docs | session | opus | -- |
-| 11 | `/bc:teams` | Create/manage specialized AG teams | session | opus | -- |
-| 12 | `/bc:e2e` | E2E testing: BDD scenarios, autotests, review | session | opus | -- |
+| 1 | `/brewcode:spec` | Create task SP | session | opus | -- |
+| 2 | `/brewcode:grepai` | Semantic code search | session | sonnet | -- |
+| 3 | `/brewcode:superreview` | Generate project-tailored deep-review skill | fork | opus | -- |
+| 4 | `/brewcode:rules` | Sync KB/session learnings → project rules | session | sonnet | -- |
+| 5 | `/brewcode:skills` | SK status/list/create/improve/review/sync | session | opus | -- |
+| 6 | `/brewcode:agents` | AG status/list/create/improve/review/sync | session | opus | -- |
+| 7 | `/brewcode:convention` | Extract conventions/patterns/architecture → rules + docs | session | opus | -- |
+| 8 | `/brewcode:teams` | Create/manage specialized AG teams | session | opus | -- |
+| 9 | `/brewcode:e2e` | E2E testing: BDD scenarios, autotests, review | session | opus | -- |
+| ~~10~~ | ~~`/bc:secrets-scan`~~ | **moved to brewtools** | -- | -- | -- |
+| ~~11~~ | ~~`/bc:text-optimize`~~ | **moved to brewtools** | -- | -- | -- |
+| ~~12~~ | ~~`/bc:text-human`~~ | **moved to brewtools** | -- | -- | -- |
 
 ## Execution Order
 
@@ -37,22 +37,24 @@ grepai --> spec --> superreview --> rules
 
 | AG | Model | Purpose |
 |----|-------|---------|
-| `bc-grepai-configurator` | opus | Gen `.grepai/config.yaml` via deep project analysis |
-| `bc-rules-organizer` | sonnet | Create/optimize `.claude/rules/*.md` |
+| `bc-grepai-configurator` | sonnet | Gen `.grepai/config.yaml` via deep project analysis |
+| `bc-rules-organizer` | haiku | Create/optimize `.claude/rules/*.md` |
 
 ---
 
-## 1. `/bc:spec`
+## 1. `/brewcode:spec`
 
 Creates SPEC.md via parallel codebase research + interactive user clarification. Includes QR.
 
 | Param | Value |
 |-------|-------|
-| Args | Text desc or path to requirements file |
+| Args | `[-n] <description>` \| `<path-to-requirements>` |
 | Context | session |
 | Model | opus |
 | Deps | none |
 | Tools | Read, Write, Glob, Grep, Bash, Task, AskUserQuestion |
+
+`-n`/`--noask`: skip all user questions, auto-approve defaults, record "Skipped (--noask mode)" in SPEC.
 
 ### Created Files
 
@@ -61,109 +63,40 @@ Creates SPEC.md via parallel codebase research + interactive user clarification.
 | `TD/` | TK dir |
 | `TD/SPEC.md` | TK specification |
 
-### Agents
-
-| AG | Cnt | Purpose |
-|----|-----|---------|
-| Plan | 1 | Architecture analysis |
-| developer | 2-3 | Services, controllers, configs |
-| tester | 1 | Test patterns |
-| reviewer | 1-2 | Quality + final SP review |
-| Explore | 1-2 | Docs + library search |
-
-5-10 AGs launched in parallel in single message.
+Agents (5-10 launched in parallel, one message): Plan(1) architecture, developer(2-3) services/controllers/configs, tester(1) test patterns, reviewer(1-2) quality + final SP review, Explore(1-2) docs/library search.
 
 ### Workflow
 
 1. Check SPEC.md.template exists
-2. Parse args, determine scope
-3. AskUserQuestion (3-5 Qs, 3 categories: Scope, Constraints, Edge cases; no NFR/AC)
+2. Parse flags + args, determine scope
+3. AskUserQuestion (3-5 Qs, 3 categories: Scope, Constraints, Edge cases) unless `-n`
 4. If >3 independent areas OR >12 phases estimated → suggest splitting
 5. Split into 5-10 research areas
 6. Parallel research (5-10 AGs in single message)
 7. Merge findings → SPEC.md
-8. Validation w/ user via AskUserQuestion
+8. Validation w/ user via AskUserQuestion unless `-n`
 9. QR w/ `reviewer`; MAX 3 iterations, then escalate to user
 
-### Input Handling
-
-| Input | Action |
-|-------|--------|
-| Text | Use as task desc |
-| Path | Read file as task desc |
-
-Naming: `YYYYMMDD_HHMMSS` + lowercase slug, e.g. `20260208_143052_auth_feature`
+Input: text → task desc; path → read file as task desc. Naming: `YYYYMMDD_HHMMSS` + lowercase slug, e.g. `20260208_143052_auth_feature`
 
 ```
-/bc:spec "Implement authorization via JWT tokens"
-/bc:spec requirements/auth-feature.md
+/brewcode:spec "Implement authorization via JWT tokens"
+/brewcode:spec -n requirements/auth-feature.md
 ```
 
 ---
 
-## 2. `/bc:rules`
+## 2. `/brewcode:grepai`
 
-Extracts anti-patterns + best practices from KB or session ctx → updates `.claude/rules/avoid.md` + `.claude/rules/best-practice.md`.
-
-| Param | Value |
-|-------|-------|
-| Args | `[path-to-KNOWLEDGE.jsonl]` (empty = session mode) |
-| Context | session |
-| Model | sonnet |
-| Deps | current session |
-| Tools | Read, Write, Edit, Glob, Grep, Bash |
-
-### Created Files
-
-| Path | Purpose |
-|------|---------|
-| `.claude/rules/avoid.md` | Anti-patterns table (created/updated) |
-| `.claude/rules/best-practice.md` | Best practices table (created/updated) |
-
-### Bash Scripts
-
-| Cmd | Purpose |
-|-----|---------|
-| `rules.sh read "PATH"` | Read KB file |
-| `rules.sh check` | Check rules files exist |
-| `rules.sh create` | Create rules files from templates |
-| `rules.sh validate` | Validate table structure |
-
-### Modes
-
-| Mode | Condition | Source |
-|------|-----------|--------|
-| File | Path in `$ARGUMENTS` | Parse KB |
-| Session | Empty `$ARGUMENTS` | Session ctx (max 5 rules) |
-
-### KB Type Mapping
-
-| Record type | Target |
-|-------------|--------|
-| `t: "❌"` | `avoid.md` |
-| `t: "✅"` | `best-practice.md` |
-| `t: "ℹ️"` | Only if `scope: "global"` |
-
-Rules optimization: dedup by semantic similarity, merge related, prioritize by impact, max 20 rows/file, `code` preferred (~30% token savings).
-
-```
-/bc:rules .claude/tasks/20260208_143052_auth_feature_task/KNOWLEDGE.jsonl
-/bc:rules
-```
-
----
-
-## 3. `/bc:grepai`
-
-Setup + mgmt of semantic code search (grepai: Ollama + bge-m3). Modes: setup, status, start, stop, reindex, optimize, upgrade.
+Setup + mgmt of semantic code search (grepai: Ollama + bge-m3). Modes: setup, status, start, stop, reindex, optimize, upgrade, uninstall.
 
 | Param | Value |
 |-------|-------|
-| Args | `[setup\|status\|start\|stop\|reindex\|optimize\|upgrade]` |
+| Args | `[setup\|status\|start\|stop\|reindex\|optimize\|upgrade\|uninstall]` |
 | Context | session |
 | Model | sonnet |
 | Deps | none |
-| Tools | Read, Write, Edit, Bash, Task |
+| Tools | Read, Write, Edit, Bash, Task, AskUserQuestion |
 
 ### Created Files (setup)
 
@@ -172,106 +105,173 @@ Setup + mgmt of semantic code search (grepai: Ollama + bge-m3). Modes: setup, st
 | `.grepai/config.yaml` | grepai cfg for project |
 | `.grepai/logs/grepai-watch.log` | Indexing log |
 | `.claude/rules/grepai-first.md` | "Use grepai FIRST" rule |
+| `.claude/grepai/hooks/*.mjs` + `settings.json` entries | self-installed SessionStart + PreToolUse hooks (Phase 6) |
 
 ### Bash Scripts
 
-| Script | Purpose |
-|--------|---------|
-| `detect-mode.sh` | Mode from args |
-| `infra-check.sh` | Check infra (ollama, bge-m3, grepai) |
-| `mcp-check.sh` | Configure MCP server + permissions |
-| `init-index.sh` | Init index (synchronous) |
-| `create-rule.sh` | Create grepai-first rule |
-| `verify.sh` | Final verification |
-| `status.sh` | All component status |
-| `start.sh` | Start watcher |
-| `stop.sh` | Stop watcher |
-| `reindex.sh` | Full reindexation |
-| `optimize.sh` | Backup cfg before regen |
-| `upgrade.sh` | Update grepai via brew |
+`detect-mode.sh`, `infra-check.sh`, `install.sh`, `mcp-check.sh`, `init-index.sh`, `create-rule.sh`, `verify.sh`, `status.sh`, `start.sh`, `stop.sh`, `reindex.sh`, `optimize.sh`, `upgrade.sh`, `uninstall.sh` — one per mode/phase, under `${CLAUDE_SKILL_DIR}/scripts/`.
 
 ### Agents
 
 | AG | Model | Mode | Purpose |
 |----|-------|------|---------|
-| `bc-grepai-configurator` | opus | setup, optimize | Analyze project, gen config.yaml |
+| `bc-grepai-configurator` | sonnet | setup, optimize | Analyze project, gen config.yaml |
 
 ### Modes
 
 | Mode | Description |
 |------|-------------|
-| `setup` | Full install: infra → MCP → cfg → index → rule → verify |
+| `setup` | infra check (auto-install offer) → MCP → cfg → index → rule → hooks self-install → verify |
 | `status` | State: CLI, ollama, model, MCP, index, watch |
 | `start` | Start watcher |
 | `stop` | Stop watcher |
 | `reindex` | stop → clean → rebuild → start |
 | `optimize` | Backup cfg → regen via bc-grepai-configurator → reindex |
 | `upgrade` | Update grepai CLI via Homebrew |
-| `prompt` | Interactive mode selection (unknown args) |
+| `uninstall` | Stop watch, remove project hooks + rule, unwire `settings.json`; optional `.grepai/` purge |
+| `prompt` | Interactive mode selection (unrecognized text) |
 
-### Auto Detection
-
-| Condition | Mode |
-|-----------|------|
-| Empty args + `.grepai/` exists | `start` |
-| Empty args + no `.grepai/` | `setup` |
-| Unrecognized text | `prompt` |
+Auto: empty args + `.grepai/` exists → `start`; empty args + no `.grepai/` → `setup`.
 
 ```
-/bc:grepai setup
-/bc:grepai status
-/bc:grepai reindex
-/bc:grepai optimize
-/bc:grepai upgrade
+/brewcode:grepai setup
+/brewcode:grepai status
+/brewcode:grepai reindex
+/brewcode:grepai uninstall
 ```
 
 ---
 
-## 4. `/bc:agents`
+## 3. `/brewcode:superreview`
 
-Interactive orchestrator for creating + improving Claude Code AGs. Collects requirements via AskUserQuestion, delegates to `agent-creator`, applies `brewtools:text-optimize` (if installed). Optionally updates CLAUDE.md agents table.
+GENERATOR skill (human-invoked). Analyzes the TARGET project and WRITES a self-contained, project-local `.claude/skills/superreview/` — a merged deep-review skill (domain-expert routing + scope discipline + mechanical gates + adversarial validation). Does not review code itself; it emits the skill that does.
 
 | Param | Value |
 |-------|-------|
-| Args | `create <desc>` \| `up <name\|path>` \| `<name\|path>` |
+| Args | `<fine-tune-prompt> [scope]` |
+| Context | fork |
+| Model | opus |
+| Deps | none |
+| Tools | Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion |
+
+### Emitted Files
+
+| Path | Purpose |
+|------|---------|
+| `<target>/.claude/skills/superreview/SKILL.md` | project-tailored review skill |
+| `references/{agent-prompt,scope,report-template}.md` | expert selection, scope discipline, report layout |
+| `references/{python\|java-kotlin\|typescript-react\|go}.md` | one per-stack checklist (dominant stack) |
+
+### Workflow
+
+1. Read emit templates; confirm TARGET = cwd
+2. Analyze project: stack, agents, rules/convention, gate commands, scope tracker, shared surfaces
+3. AskUserQuestion for ambiguous params (scope baseline, shared surfaces, arbiter agent, gate commands)
+4. **Domain experts (mandatory):** classify live agent roster, fill gaps via `agent-creator` (or mark DEGRADED if declined)
+5. Scalar substitution emit (`generate.sh emit`)
+6. Block placeholders filled via Edit (tables, bash blocks)
+7. Validate — no `{PLACEHOLDER}` may remain, every agent name resolves (`generate.sh validate`)
+8. Print generation summary; run the emitted skill via `/superreview "<focus>" [scope]` in the target project
+
+Two non-negotiables: domain experts (Phase 1.6, `validate` fails with zero) and scope discipline (`references/scope.md` — baseline, ownership, 6-shape creep taxonomy, delivery D1-D4, closeout C1-C4).
+
+```
+/brewcode:superreview "weight security higher"
+/brewcode:superreview "focus on reuse" src/payments
+```
+
+---
+
+### Shared dispatch pattern (`rules` / `skills` / `agents`)
+
+All three treat the ENTIRE `$ARGUMENTS` as ONE free-form prompt — no keyword grammar, `argument-hint` is a loose example only. Mode is classified from prompt signals:
+
+| Mode | Chosen when prompt signals |
+|------|----------------------------|
+| `status` (default) | "статус" / "что есть" / health / overview / "show me" |
+| `list` | explicit "список" / "list" / "перечисли" |
+| `create` | "создай" / "create" / "new" / "добавь" |
+| `improve` | "улучши" / "improve" / "fix", or a bare existing name/path |
+| `review` | "ревью" / "review" / "validate" |
+| `sync` (**`skills`/`agents` only**) | "sync" / "синк" / "memory sync" / "актуализируй" / "приведи в соответствие с кодом" |
+
+**Batch flag** (not a mode): plural / "все" / "all" / multiple names → fan-out, one specialist spawn per item. Empty prompt → AskUserQuestion menu (Status / Status-all / Create / Improve / Review [/ Sync] / List / Cancel). `rules` has no `sync` mode — no memory-sync counterpart to `agents`/`skills`.
+
+---
+
+## 4. `/brewcode:rules`
+
+Manages `.claude/rules/*.md` from a free-form prompt (see shared pattern above, no `sync`). Syncs KB (`KNOWLEDGE.jsonl`) or session learnings into deduplicated, table-form rules. Project scope only — never `~/.claude/rules/`.
+
+| Param | Value |
+|-------|-------|
+| Args | `<free-form prompt: what to do with rules>` |
+| Context | session |
+| Model | sonnet |
+| Deps | none |
+| Tools | Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion, Skill |
+| Specialist | `bc-rules-organizer` (haiku) — only agent for rules, no separate creator |
+
+`create`/`improve` knowledge source (AskUserQuestion): (a) `KNOWLEDGE.jsonl` path (`t:"❌"`→avoid, `t:"✅"`→practice), (b) inline prompt, (c) session learnings (top 5). Dedup 3-check: within-file (>70% skip, 40-70% merge), cross-file antonym (avoid<->best-practice keeps avoid), CLAUDE.md duplicate (skip).
+
+```
+/brewcode:rules create rules from .claude/tasks/20260208_143052_auth_feature_task/KNOWLEDGE.jsonl
+/brewcode:rules status
+```
+
+---
+
+## 5. `/brewcode:skills`
+
+Manages Claude Code skills from a free-form prompt (see shared pattern above, incl. `sync`).
+
+| Param | Value |
+|-------|-------|
+| Args | `<free-form prompt: what to do with skills>` |
+| Context | session |
+| Model | opus |
+| Deps | none |
+| Tools | Read, Write, Edit, Glob, Grep, Bash, Task, WebSearch, WebFetch, AskUserQuestion, Skill |
+| Specialist | `brewcode:skill-creator` — create + improve |
+
+`sync` runs `references/mode-sync.md` (Steps S1-S6, shared engine with `agents`): scope `repo` (default) / `session` / `commit` → real inventory + `CLAUDE.md`/rules as ground truth → one subagent per skill file, parallel, ≤8/batch → verdicts `STALE`/`DEAD`/`DUPLICATE`/`OBVIOUS`/`DRIFT`/`MISSING` → **DELETE first, FIX, ADD last** → every file ends ≤ its original line count, total delta ≤ 0.
+
+`create`/`improve`: AskUserQuestion for invocation (User-only / LLM-auto / Both), testing depth (Quick / Standard / Deep), review type (Simple / Quorum, if Standard/Deep). Quick = validate script only, Standard = 1 reviewer + verify, Deep = 3-reviewer quorum (2/3) + E2E scenarios.
+
+```
+/brewcode:skills create a skill for db migrations
+/brewcode:skills sync
+```
+
+---
+
+## 6. `/brewcode:agents`
+
+Manages Claude Code subagents from a free-form prompt (see shared pattern above, incl. `sync`, same engine as `skills`).
+
+| Param | Value |
+|-------|-------|
+| Args | `<free-form prompt: what to do with agents>` |
 | Context | session |
 | Model | opus |
 | Deps | none |
 | Tools | Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion, Skill |
+| Specialist | `brewcode:agent-creator` — create + improve |
 
-### Modes
+`sync` -- `SYNC_REF` = `${CLAUDE_SKILL_DIR}/../skills/references/mode-sync.md` (same S1-S6 engine as `/brewcode:skills sync`, scoped to `.claude/agents/*.md` + `*/agents/*.md`). Non-growth: every agent file ends ≤ its original line count.
 
-| Mode | Trigger | Description |
-|------|---------|-------------|
-| `help` | no args | Print usage |
-| `create` | `create <desc>` | Create new AG interactively |
-| `up` | `up <name\|path>` or `<name\|path>` | Improve existing AG |
+`create`: AskUserQuestion for scope (Project `.claude/agents/` / Global `~/.claude/agents/` / Plugin `brewcode/agents/`), model (sonnet recommended / opus / haiku / inherit), CLAUDE.md table update. Description budget ≤ 100 chars, 2-3 triggers.
 
-### Create Flow
-
-1. AskUserQuestion (3 Qs in one call): placement (project/global/PLG), model (sonnet/opus/haiku/inherit), CLAUDE.md update
-2. Spawn `agent-creator`: parallel codebase analysis, clarifying Qs, writes AG file
-3. Apply `brewtools:text-optimize` (requires brewtools PLG)
-4. Update CLAUDE.md if approved
-
-### Improve Flow
-
-1. Resolve path/name: search `.claude/agents/`, `~/.claude/agents/`, `brewcode/agents/`
-2. AskUserQuestion (2 Qs): improvement focus (triggers/quality/both/full), CLAUDE.md update
-3. Spawn `agent-creator`: analyze + improve AG file
-4. Apply `brewtools:text-optimize`
-5. Update CLAUDE.md if approved
+`improve`: resolve by name/path across the 3 scopes; AskUserQuestion for focus (triggers / system-prompt / both / full review) + CLAUDE.md update.
 
 ```
-/bc:agents create backend validator
-/bc:agents up reviewer
-/bc:agents .claude/agents/reviewer.md
-/bc:agents
+/brewcode:agents create backend validator
+/brewcode:agents sync all
 ```
 
 ---
 
-## 5. `/bc:convention`
+## 7. `/brewcode:convention`
 
 Analyzes project to extract etalon classes, patterns, architecture by layer. Generates convention docs in `.claude/convention/` + organizes rules in `.claude/rules/`.
 
@@ -287,9 +287,9 @@ Analyzes project to extract etalon classes, patterns, architecture by layer. Gen
 
 | Mode | Trigger | Description |
 |------|---------|-------------|
-| `full` (DEF) | `/bc:convention` | Detect stack, analyze layers, select etalons, gen docs, extract rules |
+| `full` (DEF) | `/brewcode:convention` | Detect stack, analyze layers, select etalons, gen docs, extract rules |
 | `conventions` | `conventions` | Gen convention docs only (skip rules) |
-| `rules` | `rules` | Extract rules from `.claude/convention/` docs |
+| `rules` | `rules` | Extract rules from `.claude/convention/` docs (requires it to exist) |
 | `paths` | `paths src/a,src/b` | Scoped analysis on specified paths |
 
 ### Generated Docs
@@ -302,27 +302,27 @@ Analyzes project to extract etalon classes, patterns, architecture by layer. Gen
 
 ### Workflow
 
-1. P0: Detect languages, frameworks, modules via scripts
-2. P1: Filter analysis layers by stack
+1. P0: Detect stack + scan project via scripts
+2. P1: Filter analysis layers by stack (`references/analysis-layers.md`)
 3. P2: 10 AGs (architect + tester) analyze layers in ONE message
 4. P3: 1 architect selects 1-2 etalons per layer
 5. P4: 3 developer AGs write convention docs in parallel
-6. P5: text-optimizer (brewtools) or fallback
+6. P5: text-optimizer (brewtools) or fallback rules
 7. P6: User review — approve, revise (max 2 iter), or skip to rules
 8. P7: Extract rules, dedup, interactive batching, bc-rules-organizer
-9. P8: Summary: etalon table + metrics
+9. P7.5/P8: Optional CLAUDE.md etalon table + summary
 
 ```
-/bc:convention
-/bc:convention rules
-/bc:convention paths src/main,src/test
+/brewcode:convention
+/brewcode:convention rules
+/brewcode:convention paths src/main,src/test
 ```
 
 ---
 
-## 6. `/bc:teams`
+## 8. `/brewcode:teams`
 
-Creates + manages dynamic teams of domain-specific AGs w/ tracking framework. Analyzes project, proposes team (5-20 AGs), creates w/ self-selection protocol + performance tracking.
+Creates + manages dynamic teams of domain-specific AGs w/ tracking framework. Analyzes project, proposes team (5-20 AGs), creates w/ self-selection protocol + performance tracking + quorum review.
 
 | Param | Value |
 |-------|-------|
@@ -336,7 +336,7 @@ Creates + manages dynamic teams of domain-specific AGs w/ tracking framework. An
 
 | Mode | Description |
 |------|-------------|
-| `create` | Analyze project, propose 3 variants (5/10-12/15-20 AGs), create w/ agent-creator |
+| `create` | Analyze project, propose 3 variants (5/10-12/15-20 AGs), create w/ agent-creator, quorum review (3 reviewers, 2/3 consensus), fix loop |
 | `update` | Self-reflection: analyze trace data, tune/replace underperformers |
 | `status` | Read-only health report: per-AG stats, success rates, recommendations |
 | `cleanup` | Archive trace data, remove inactive AGs |
@@ -350,15 +350,15 @@ Creates + manages dynamic teams of domain-specific AGs w/ tracking framework. An
 | `.claude/agents/{agent}.md` | Individual AG files (via agent-creator) |
 
 ```
-/bc:teams create backend
-/bc:teams status backend
-/bc:teams update backend
-/bc:teams cleanup backend
+/brewcode:teams create backend
+/brewcode:teams status backend
+/brewcode:teams update backend
+/brewcode:teams cleanup backend
 ```
 
 ---
 
-## 7. `/bc:e2e`
+## 9. `/brewcode:e2e`
 
 Full-cycle E2E testing: setup testing AGs, create BDD scenarios, write autotests, QR. Stack-agnostic, layered test architecture.
 
@@ -367,7 +367,7 @@ Full-cycle E2E testing: setup testing AGs, create BDD scenarios, write autotests
 | Args | `[setup\|create\|update\|review\|rules\|status] [prompt]` |
 | Context | session |
 | Model | opus |
-| Deps | `/bc:e2e setup` (for non-setup modes: e2e AGs must exist) |
+| Deps | `/brewcode:e2e setup` (for non-setup modes: e2e AGs must exist) |
 | Tools | Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion, Skill, WebSearch, WebFetch |
 
 ### Modes
@@ -384,10 +384,10 @@ Full-cycle E2E testing: setup testing AGs, create BDD scenarios, write autotests
 Review cycle: MAX_CYCLES=3 — execute → reviewer validates → different AG re-checks → fix confirmed → repeat.
 
 ```
-/bc:e2e setup
-/bc:e2e create "Login flow with OAuth"
-/bc:e2e review
-/bc:e2e status
+/brewcode:e2e setup
+/brewcode:e2e create "Login flow with OAuth"
+/brewcode:e2e review
+/brewcode:e2e status
 ```
 
 ---

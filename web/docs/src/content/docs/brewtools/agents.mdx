@@ -13,11 +13,11 @@ Each agent has its own model, toolset, and system prompt. Brewtools includes 3 a
 
 ## Summary table
 
-| # | Agent | Model | Purpose |
-|---|-------|-------|---------|
-| 1 | text-optimizer | sonnet | Text optimization with rule-based validation |
-| 2 | ssh-admin | opus | SSH server administration |
-| 3 | deploy-admin | opus | GitHub Actions, CI/CD, releases |
+| # | Agent | Model | Description (agent frontmatter) |
+|---|-------|-------|---------------------------------|
+| 1 | text-optimizer | sonnet | Optimizes text/docs for LLM token efficiency. Triggers: optimize prompt, reduce tokens, compress. |
+| 2 | ssh-admin | inherit | Linux server admin: SSH, Docker, systemd, Nginx, SSL. Triggers: ssh admin, server management. |
+| 3 | deploy-admin | inherit | GitHub Actions deployment: workflows, releases, GHCR, CI/CD. Triggers: deploy, release. |
 
 <CardGrid>
   <Card title="text-optimizer" icon="sparkle" href="/brewtools/agents/text-optimizer/">
@@ -30,6 +30,25 @@ Each agent has its own model, toolset, and system prompt. Brewtools includes 3 a
     GitHub Actions, CI/CD, releases
   </Card>
 </CardGrid>
+
+## Scope guard — all three agents
+
+Each agent sizes the task before starting. **One bounded unit = one deliverable, ~5 files, ~10 steps.**
+Anything bigger, or spanning several independent deliverables, and the agent stops before starting and
+returns a split proposal: 2-N bounded subtasks, each with its scope and a suggested owner. Mid-flight
+the rule is the same — stop at the next clean boundary, report done / remaining / how to split.
+
+A brief missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance criteria is not invented: the agent
+states its assumption in the report or asks once. The result is delivered for the CONSUMER — whoever
+picks it up next — not for the literal wording of the request.
+
+| Rule | Applies to |
+|------|-----------|
+| One bounded unit per run, otherwise split proposal | text-optimizer, ssh-admin, deploy-admin |
+| **Split per target** — one agent per host / environment / service / repo, never one agent looping over all of them | ssh-admin, deploy-admin |
+| Missing brief fields: state the assumption or ask once, never invent scope | all three |
+
+> Phrase multi-target work as separate requests: "deploy staging" + "deploy prod", not "deploy to all environments".
 
 <CardGrid>
   <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">

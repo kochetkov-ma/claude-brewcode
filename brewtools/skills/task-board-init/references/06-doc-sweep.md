@@ -10,16 +10,31 @@ Goal: consolidate every existing backlog/feature/task doc found in Step 1 (`DOCS
 
 Partition the `DOCS` inventory across N subagents (1 if small, 2-3 if many docs / large). Each gets a slice + the same contract. Use `general-purpose` (it must Read source docs and Write under `.claude/features/`).
 
+> Sizing: one agent = ONE doc slice — ~<=5 docs, ~<=10 steps; a bigger slice is split into more slices, all fanned out in the SAME message.
+
 ```
 Task(subagent_type="general-purpose", prompt="
-TARGET=<abs path>. You are migrating legacy task/backlog docs into a new file-based Kanban at TARGET/.claude/features/.
-You may WRITE only under TARGET/.claude/features/**. NEVER edit these source dirs: <EXCLUSIONS>.
-Procedure + format: read TARGET/.claude/features/TRACKER.md and TARGET/.claude/rules/tasks.md FIRST and follow them exactly.
-Id domains allowed: <DOMAINS>. Language: <LANG>. Closing marker style: <CLOSE_MARKER_SHORT>.
+GOAL: deploying a file-based Kanban into TARGET=<abs path>; the board skeleton exists and this pass fills it
+  from the repo's pre-existing task/backlog docs. Skip it and the board ships empty while the repo keeps two
+  sources of truth.
+ROLE: you own the slice of legacy docs listed below. Do NOT create tasks no document supports, do NOT author
+  board.md (the orchestrator does that after merging all slices), do NOT delete the legacy source docs.
+SCOPE: in — read your slice; WRITE only under TARGET/.claude/features/**.
+  Out — NEVER edit these source dirs: <EXCLUSIONS>; TARGET/CLAUDE.md; .claude/agents; .claude/skills.
+  Your slice of legacy docs: <subset of DOCS with paths>.
+CONTEXT: Step 1 already confirmed with the user — id domains allowed: <DOMAINS>; language: <LANG>; closing
+  marker style: <CLOSE_MARKER_SHORT>; exclusions above. Step 4a-b already wrote the rule, the empty board
+  skeleton and TASK_TEMPLATE.md. Procedure + format: read TARGET/.claude/features/TRACKER.md and
+  TARGET/.claude/rules/tasks.md FIRST and follow them exactly — do not reinvent either. Sibling agents sweep
+  the OTHER doc slices into the same tree right now, so touch only your slice.
+CONSUMER: the orchestrator globs the status folders, reads each file's frontmatter and authors the real
+  board.md from what is on disk (your manifest is cross-checked against disk, not trusted); the installed
+  task-tracker agent reads the same files from then on. An id or status folder that deviates from
+  TASK_TEMPLATE.md makes the task invisible to both.
+DONE: return ONLY a manifest: a table of every file you created (path | id | status-folder | one-line title)
+  + a count of items skipped as noise + any duplicates folded. A no-op slice must say so explicitly.
 
-Your slice of legacy docs: <subset of DOCS with paths>.
-
-For each legacy item:
+Procedure — for each legacy item:
 1. Classify: open/ready task | in-progress | done/shipped | duplicate | noise/obsolete.
 2. open + scoped       -> create TARGET/.claude/features/todo/<ID>.md from TASK_TEMPLATE.md (or a board row if thin).
 3. clearly in-progress -> create under progress/<ID>.md (progress REQUIRES a file).
@@ -28,9 +43,6 @@ For each legacy item:
 6. duplicate           -> fold into the existing task's ## Notes, do not create a second.
 7. noise/obsolete      -> skip (do NOT create anything).
 Mint UPPER-KEBAB ids: <PREFIX>-<DOMAIN>-<SLUG>, domain from the allowed list. Ensure unique (Glob .claude/features/**/<ID>.md).
-Do NOT author board.md (the orchestrator does that after merging all slices). Do NOT delete the legacy source docs.
-
-Return ONLY a manifest: a table of every file you created (path | id | status-folder | one-line title) + a count of items skipped as noise + any duplicates folded.
 ")
 ```
 

@@ -26,7 +26,7 @@ One marketplace, four plugins, one version number. Install what you need.
 
 **brewcode** is the core. It runs tasks that survive context limits through automatic handoff. It manages agents, hooks, and knowledge persistence.
 
-**brewdoc** handles documentation. Docsync tracks stale docs and syncs them via project hooks. My-claude generates Claude Code setup docs for any project. Memory optimizes memory files. Publish shares content via brewpage.app.
+**brewdoc** handles documentation. Docsync tracks stale docs and syncs them via project hooks. My-claude generates Claude Code setup docs for any project. Memory syncs memory, CLAUDE.md (incl. nested), rules and conventions. Publish shares content via brewpage.app.
 
 **brewtools** provides standalone utilities. Text-optimize reduces token usage in prompts. Secrets-scan catches leaked credentials. SSH and deploy handle server management and CI/CD workflows. These work in any project.
 

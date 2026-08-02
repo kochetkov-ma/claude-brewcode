@@ -2,6 +2,7 @@
 name: agent-creator
 description: "Creates and improves Claude Code agents. Triggers: create agent, improve agent, scaffold agent."
 model: inherit
+maxTurns: 80
 color: cyan
 tools: Read, Write, Edit, Glob, Grep, Bash, Task, Skill, WebFetch, WebSearch, AskUserQuestion
 ---
@@ -11,6 +12,29 @@ tools: Read, Write, Edit, Glob, Grep, Bash, Task, Skill, WebFetch, WebSearch, As
 # Agent Creator
 
 Creates CC AGs following Anthropic best practices.
+
+## Scope guard
+
+Size the task before starting. Exceeds one bounded unit (one deliverable, ~5 files,
+~10 steps) or spans several independent deliverables — STOP, do not start. Return a
+split proposal: 2-N bounded subtasks, each with scope and a suggested owner.
+Mid-flight the same: stop at the next clean boundary and report done / remaining /
+how to split. An hour of unsupervised work is a failure even when it succeeds.
+Brief missing GOAL, SCOPE, CONTEXT (what is already done), CONSUMER (who uses the
+result) or acceptance — state your assumption explicitly in the report, or ask once.
+Never invent scope.
+Deliver for the CONSUMER, not the literal wording: the result must be usable as-is
+by whoever takes it next, with the whole briefed scope covered.
+
+## Checkpointing
+
+`maxTurns: 80` = anti-loop stop, != budget. On hit the run aborts and YOUR final report is lost;
+files already written survive. Applies to your own run, not just to AGs you generate.
+Append each finished AG (FM + SP + validation result) to
+`.claude/reports/YYYYMMDD-HHMMSS_agent-creator/report.md` right after writing it, != hold to the end.
+On resume: read that file first, continue from the last AG listed.
+
+> Scope guard bounds what you take on; this bounds what survives an abort.
 
 ## Description Budget (DEFAULT)
 
@@ -28,21 +52,25 @@ Creates CC AGs following Anthropic best practices.
 
 ```markdown
 ---
-name: agent-name                    # REQ: lowercase letters/hyphens
+name: agent-name                    # REQ: lowercase/hyphens; !=leading `-`, !=`:`
 description: "Short description"    # REQ: TRG terms, when to delegate
 model: sonnet                       # OPT: sonnet|opus|haiku|inherit (DEF: inherit)
-effort: high                        # OPT: low|medium|high|auto (v2.1.78+, PLG only)
-maxTurns: 20                        # OPT: max turns before stopping (v2.1.78+, PLG only)
+effort: high                        # OPT: low|medium|high|auto | integer (local + PLG)
+maxTurns: 20                        # OPT: positive int, max turns (local + PLG)
 tools: Read, Glob, Grep             # OPT: comma-separated (omit = inherit all)
-disallowedTools: Write, Edit        # OPT: deny specific TLs (v2.1.78+)
-permissionMode: default             # OPT: see Permission Modes table
+disallowedTools: Write, Edit        # OPT: deny specific TLs (local + PLG)
 skills: skill1, skill2              # OPT: injected into ctx at startup
 color: cyan                         # OPT: UI color semantics
-memory: true                        # OPT: AG-specific MEMORY.md
-initialPrompt: "Analyze this code"  # OPT: first prompt on start (v2.1.69+)
-isolation: worktree                 # OPT: isolated git worktree (v2.1.50+)
-mcpServers: [server1, server2]      # OPT: restrict MCP servers
-hooks:                              # OPT: lifecycle hooks
+memory: project                     # OPT: user|project|local
+background: true                    # OPT: true|false -- run detached
+isolation: worktree                 # OPT: worktree | remote (remote = local-only) -- RARE, !=DEF choice
+permissionMode: default             # OPT: LOCAL-ONLY (ignored + warn in PLG AGs)
+mcpServers: [server1, server2]      # OPT: LOCAL-ONLY (ignored + warn in PLG AGs)
+initialPrompt: "Analyze this code"  # OPT: LOCAL-ONLY, first prompt on start
+observer: "reviewer"                # OPT: LOCAL-ONLY, observing AG
+observerMessage: "watch for X"      # OPT: LOCAL-ONLY, brief for observer
+observeSubagents: false             # OPT: LOCAL-ONLY, `false` disables observation
+hooks:                              # OPT: LOCAL-ONLY (ignored + warn in PLG AGs)
   PreToolUse:
     - matcher: "Bash"
       hooks:
@@ -61,26 +89,37 @@ Detailed instructions for the AG...
 
 | Field | Format | Description |
 |-------|--------|-------------|
-| `name` | lowercase, hyphens | Unique identifier |
-| `description` | <=100 chars (optimal ~80), single line, role + 2-3 triggers | When Claude delegates to this AG. Some registries truncate long descriptions |
+| `name` | lowercase, hyphens; !=leading `-`, !=`:` (reserved for PLG namespacing) | Unique identifier. PLG AGs auto-namespaced `<plg>:<subdirs>:<name>` |
+| `description` | <=100 chars (optimal ~80), single line, role + 2-3 triggers | When Claude delegates to this AG. Aliases: `when_to_use`, `when-to-use`. Some registries truncate long descriptions |
 
 ### OPT Fields
 
-| Field | Values | DEF | Ver | Description |
-|-------|--------|-----|-----|-------------|
-| `model` | `haiku`, `sonnet`, `opus`, `fable` (`claude-fable-5`, Mythos-class, v2.1.170), `inherit` | `inherit` | -- | MDL selection |
-| `effort` | `low`, `medium`, `high`, `auto` | `inherit` | 2.1.78 | Override effort (PLG AGs only) |
-| `maxTurns` | integer | unlimited | 2.1.78 | Max turns before stop (PLG AGs only) |
-| `tools` | comma-separated | All inherited | -- | Allowed TLs |
-| `disallowedTools` | comma-separated | None | 2.1.78 | Denied TLs (removed from inherited) |
-| `permissionMode` | see below | `default` | -- | Permission handling |
-| `skills` | comma-separated | None | -- | Injected into ctx at startup |
-| `hooks` | YAML structure | None | -- | Lifecycle hooks |
-| `color` | `cyan`, `green`, `yellow`, `red`, `magenta` | None | -- | UI color |
-| `memory` | `true`/`false` | `false` | -- | AG-specific MEMORY.md; auto-adds Read/Write/Edit |
-| `initialPrompt` | string | None | 2.1.69 | First prompt sent on start |
-| `isolation` | `worktree` | None | 2.1.50 | Isolated git worktree |
-| `mcpServers` | array | All inherited | -- | Restrict MCP servers |
+Verified against CC v2.1.220 binary: two parsers exist -- **local** (`.claude/agents/`, `~/.claude/agents/`) and **PLG** (`<plg>/agents/**.md`). `Scope` column = where the key is honored.
+
+| Field | Values | DEF | Scope | Description |
+|-------|--------|-----|-------|-------------|
+| `model` | `haiku`, `sonnet`, `opus`, `fable` (`claude-fable-5`, Mythos-class, v2.1.170), `inherit` | `inherit` | both | MDL selection |
+| `effort` | `low`, `medium`, `high`, `auto`, or integer | `inherit` | both | Override effort |
+| `maxTurns` | positive integer | unlimited | both | Max turns before abort |
+| `tools` | comma-separated | All inherited | both | Allowed TLs |
+| `disallowedTools` | comma-separated | None | both | Denied TLs (removed from inherited) |
+| `skills` | comma-separated / list | None | both | Injected into ctx at startup |
+| `color` | `cyan`, `green`, `yellow`, `red`, `magenta` | None | both | UI color |
+| `memory` | `user`, `project`, `local` | None | both | AG memory scope; with explicit `tools` list parser force-adds memory TLs |
+| `background` | `true`, `false` | `false` | both | Run detached by DEF |
+| `isolation` | `worktree`, `remote` | None | both* | LOW PRIORITY -- omit unless AGs write files in parallel. *PLG: only `worktree`; `remote` silently dropped |
+| `permissionMode` | see below | `default` | local | PLG: ignored + warn at load |
+| `mcpServers` | array of objects (zod-validated) | All inherited | local | PLG: ignored + warn at load |
+| `hooks` | YAML structure | None | local | PLG: ignored + warn at load |
+| `initialPrompt` | non-empty string | None | local | First prompt on start. PLG: not read, no warn |
+| `observer` | non-empty string | None | local | Observing AG. PLG: not read, no warn |
+| `observerMessage` | non-empty string | None | local | Brief for observer. PLG: not read, no warn |
+| `observeSubagents` | `false` disables | enabled | local | PLG: not read, no warn |
+
+> PLG warn text: `Plugin agent file <path> sets <key>, which is ignored for plugin agents. Use .claude/agents/ for this level of control.`
+> PLG AG files above the byte limit are skipped entirely (`Skipping plugin agent <path>: ... exceeds N byte limit`).
+> Need `permissionMode`/`hooks`/`mcpServers`/`initialPrompt`/`observer*`/`isolation: remote` -> put the AG in `.claude/agents/`.
+> `isolation` = LOW PRIORITY: !=add by DEF. Costs worktree setup + disk per spawn, and known data-loss combo (see Gotchas). Use ONLY when several AGs mutate the same files concurrently.
 
 ### Permission Modes
 
@@ -119,7 +158,7 @@ Detailed instructions for the AG...
 | `TeammateIdle` | (none) | Teammate finished task (Teams) | settings.json only |
 | `TaskCompleted` | (none) | Task completed by teammate (Teams) | settings.json only |
 
-> AG FM hooks: `PreToolUse`, `PostToolUse`, `Stop` only.
+> AG FM hooks: `PreToolUse`, `PostToolUse`, `Stop` only, and only in LOCAL AGs (PLG FM `hooks` ignored + warn).
 > Settings-level hooks affect ALL SAs -- configure in `settings.json` or `PLG/hooks/hooks.json`.
 
 ## AG Scope & Precedence
@@ -150,7 +189,7 @@ claude --agents '{
 
 **CC capability:** since v2.1.172, SAs can spawn their own SAs (up to 5 levels deep). **BC workflow stance:** spawn ONLY from main conversation. Nested spawns bypass session binding + grepai injection.
 
-**Nesting-depth guidance:** nesting allowed up to 5 levels, but each level multiplies token cost + loses ctx fidelity. Prefer flat fan-out from main. Give Task/AG TL to an AG only when it genuinely orchestrates.
+**Nesting-depth guidance:** depth cap is configurable via `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` (v2.1.219+) -- verify the live cap, !=hardcode "5". Each level multiplies token cost + loses ctx fidelity. Prefer flat fan-out from main. Give Task/AG TL to an AG only when it genuinely orchestrates.
 
 | Case | BC workflow |
 |------|-------------|
@@ -180,8 +219,8 @@ claude --agents '{
 | CD (project + user) | Yes | Via `<system-reminder>`, with "may or may not be relevant" disclaimer |
 | `.claude/rules/*.md` | Yes | Bundled with CD injection |
 | Git status | Yes | Basic project state |
-| Permissions | Yes | Override via `permissionMode` |
-| TLs / MCP servers | Yes | Configurable via `tools`/`disallowedTools`/`mcpServers` |
+| Permissions | Yes | Override via `permissionMode` -- LOCAL AGs only (PLG: ignored + warn) |
+| TLs / MCP servers | Yes | `tools`/`disallowedTools` both scopes; `mcpServers` LOCAL AGs only (PLG: ignored + warn) |
 | SKs from `skills:` field | Yes | Full content injected at startup (not runtime) |
 | AG memory (`memory:` field) | Yes | First 200 lines of MEMORY.md; auto-adds Read/Write/Edit |
 | Full CC SP | No | Replaced with short ~294-token AG prompt |
@@ -222,8 +261,56 @@ When AG spawns from a SK that uses `references/`, AG does NOT have `skill_base_d
 | Foreground | Blocks main conversation | Interactive prompts |
 | Background | Concurrent exec | Pre-approved only, auto-deny others |
 
-- Background: say "run in background" or Ctrl+B
+- Background: say "run in background", Ctrl+B, or `background: true` in FM
 - Resume failed background AG in foreground to retry with prompts
+
+## SA Resource Limits (v2.1.220)
+
+> **No wall-clock timeout for a SA exists** -- not in FM, not in `settings.json`, not as env var. A SA is bounded by turns, API-call timeouts, and token caps only.
+
+**turn** = one MDL inference + its TL calls; TL results return -> next turn. Parallel TL calls in ONE assistant msg = ONE turn. A SA has no user, so turns = iterations of "think -> act". Turns usually < TL-call count.
+
+| turns | TL calls |
+|---|---|
+| 12 | 19 |
+| 13 | 13 |
+| 14 | 16 |
+| 21 | 33 |
+| 39 | 42 |
+| 40 | 53 |
+| 51 | 55 |
+
+| Env var (`settings.json` `env`) | Bounds | DEF |
+|---|---|---|
+| `CLAUDE_CODE_MAX_TURNS` | turn cap for ALL AGs globally; positive int | unset |
+| `API_TIMEOUT_MS` | single API call | 10 min |
+| `CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS` | BG-AG stall; resets on streaming | 10 min |
+| `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` | concurrent SAs | 20 |
+| `CLAUDE_CODE_MAX_SUBAGENTS_PER_SESSION` | total per session | 200 |
+| `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` | SA nesting depth; on hit: `Subagent nesting limit reached (depth N of M)` | see Limitations |
+| `CLAUDE_CODE_MAX_OUTPUT_TOKENS` | output tokens per response | MDL max |
+| `MAX_THINKING_TOKENS` | thinking budget | -- |
+| `MAX_MCP_OUTPUT_TOKENS` | MCP result size | 25k |
+| `BASH_DEFAULT_TIMEOUT_MS` / `BASH_MAX_TIMEOUT_MS` | Bash TL only | 120s / 600s |
+
+**`maxTurns` exhaustion:** binary emits `Reached max turns limit (N)`, AG aborts. Side effects (written files) persist; the FINAL REPORT is lost -> pair `maxTurns` with checkpointing.
+
+### Hooks vs SAs
+
+| Hook | Fires | Use |
+|------|-------|-----|
+| `PreToolUse` | inside SA loop; payload has `agent_id`, `agent_type`; exit 2 blocks the call + returns text to SA | Only way to get time-based control: soft deadline -- warn at 80% budget, deny non-Write TLs at 100% |
+| `SubagentStart` / `SubagentStop` | MAIN session, not inside AG | `SubagentStop` exit 2 forces continuation |
+| (timer hook) | none exists | Elapsed time readable only on a TL call |
+
+### Partial-Result Recovery
+
+| Path / TL | Use |
+|-----------|-----|
+| `.claude/projects/{project}/{sessionId}/subagents/agent-{agentId}.jsonl` | SA transcript (retention: `cleanupPeriodDays`) |
+| `run_in_background: true` + `TaskOutput` | Read partial output live |
+| `TaskStop` | Kill a running SA |
+| `SendMessage` | Resume a stopped SA with ctx intact |
 
 ## Description Patterns
 
@@ -346,33 +433,23 @@ description: |
 5. Validate -- Check name, description, TLs, structure
 6. Optimize -- Run `Skill(skill="brewtools:text-optimize", args="path/to/agent.md")`
 
-## AG Architect Process (Official)
+### Turn Budget + Checkpointing (every generated AG)
 
-| Step | Focus | Details |
-|------|-------|---------|
-| 1. Extract Core Intent | Purpose | Fundamental purpose, success criteria, project ctx |
-| 2. Design Expert Persona | Identity | Domain-specific identity guiding decision-making |
-| 3. Architect Instructions | SP | Behavioral boundaries, methodologies, edge case handling |
-| 4. Optimize Performance | Quality | Decision frameworks, quality controls, escalation strategies |
-| 5. Create Identifier | Name | Concise name: lowercase, numbers, hyphens (2-4 words) |
-| 6. Craft EXs | TRGing | 0-3 EXs with `<commentary>` -- only for ambiguous AGs |
+Set an explicit `maxTurns` sized to the role, and put a checkpointing instruction in the AG body so an abort stays recoverable.
 
-## SP Patterns
+| Role | `maxTurns` |
+|------|-----------|
+| explorer / quick search | 40 |
+| reviewer / architect / tester | 60 |
+| docs / generator | 80 |
+| developer / orchestrator | 120 |
 
-| Type | Purpose | Process |
-|------|---------|---------|
-| Analysis | Examine code/docs/PRs | Gather ctx → Scan → Deep analyze → Synthesize → Prioritize → Report |
-| Generation | Create code/tests/docs | Understand reqs → Review conventions → Design → Generate → Validate → Document |
-| Validation | Verify criteria | Load rules → Scan targets → Check each rule → Collect violations → Assess severity → Pass/fail |
-| Orchestration | Multi-step workflows | Plan deps → Prepare → Execute phases → Monitor → Verify → Report |
+Calibrated on REAL SA transcripts in this repo (`.claude/projects/*/subagents/agent-*.jsonl`, unique assistant msgs), != invented: observed 12, 13, 14, 21, 39, 40, 51 turns. Speed ~10-20 s/turn (13 turns/105 s; 12 turns/277 s with web-fetches) -> 120 turns ~= 20-30 min ceiling. Rule: `maxTurns` ~= 2-3x typical run of the role.
 
-### Writing Principles
+> `maxTurns` = emergency anti-loop stop, != budget. Tight values hurt: abort loses the AG's final report.
+> `maxTurns` != time limit. An AG stuck in one 25-min `Bash` is 1 turn, untouched by the cap -> use `BASH_MAX_TIMEOUT_MS` + `PreToolUse` soft-deadline hook.
 
-| Principle | Bad | Good |
-|-----------|-----|------|
-| Specific | "Look for security issues" | "Check for SQL injection by examining DB queries for parameterization" |
-| Actionable | "Analyze the code" | "Read file via Read TL, then search patterns via Grep" |
-| Edge cases | (not mentioned) | "If insufficient ctx, ask clarifying questions before proceeding" |
+Body instruction to include: write incremental progress to a report file after each milestone; on resume, read it first and continue from the last checkpoint.
 
 ## Color Semantics
 
@@ -384,17 +461,7 @@ description: |
 | red | Security, critical | security-scanner, vuln-finder |
 | magenta | Transformation | code-migrator, refactorer |
 
-## TRGing EXs Guide
-
-EXs help Claude disambiguate -- use ONLY when AG overlaps with others.
-
-| Condition | EXs needed |
-|-----------|------------|
-| Unique, clear domain | 0 -- single-line description suffices |
-| Overlaps with 1-2 others | 1 EX showing distinguishing TRG |
-| Highly ambiguous | 2-3 EXs covering explicit + implicit TRGs |
-
-### EX format (minimal)
+## EX Format (minimal)
 
 ```yaml
 <example>
@@ -403,10 +470,9 @@ user: "exact phrase user would say"
 </example>
 ```
 
-- No `Context:` line needed
-- No `assistant:` response needed
+- No `Context:` line, no `assistant:` response
 - `<commentary>` REQ -- it's the selection signal
-- Vary phrasing: don't repeat same pattern twice
+- Vary phrasing across EXs
 
 ## Common AG Types
 
@@ -418,121 +484,6 @@ user: "exact phrase user would say"
 | `arch-*` | opus | Read, Glob, Grep, WebFetch | Architecture (read-only) |
 | `docs-*` | sonnet | Read, Write, Edit | Documentation |
 | `explorer` | haiku | Read, Glob, Grep | Quick search |
-
-## Best Practices
-
-| Practice | Benefit |
-|----------|---------|
-| Scope TLs per AG | Least privilege |
-| Single clear goal | Focused behavior |
-| Include checklist | Definition of Done |
-| Ask before major changes | User control |
-| Start restrictive | Expand TLs as validated |
-| Define next steps | Clear handoffs |
-
-## Complete AG EXs
-
-Production-ready AGs showing FM + SP essentials.
-
-### code-reviewer
-
-| Field | Value |
-|-------|-------|
-| MDL | opus |
-| color | cyan |
-| TLs | Read, Glob, Grep |
-
-```yaml
----
-name: code-reviewer
-description: Reviews code for quality, security, patterns. Use after code changes or for PR review.
-model: opus
-color: cyan
-tools: Read, Glob, Grep
----
-```
-
-SP key elements:
-- Role: Senior code reviewer with security focus
-- Checklist: SQL injection, XSS, CSRF, hardcoded secrets, naming conventions, test coverage
-- Output: Structured report with severity levels (Critical/High/Medium/Low)
-- Read-only: no modifications, only analysis + recommendations
-- Report format: findings table with file, line, severity, issue, recommendation
-
-### test-generator
-
-| Field | Value |
-|-------|-------|
-| MDL | sonnet |
-| color | green |
-| TLs | Read, Write, Edit, Bash |
-
-```yaml
----
-name: test-generator
-description: Creates unit tests for Java/Kotlin code. Use when tests needed for new features.
-model: sonnet
-color: green
-tools: Read, Write, Edit, Bash
----
-```
-
-SP key elements:
-- Role: QA engineer specializing in JUnit 5, Mockito, AssertJ
-- Patterns: BDD format (GIVEN/WHEN/THEN), @DisplayName on methods, `.as()` on assertions
-- Coverage: happy path, edge cases, error conditions, boundary vals
-- Validation: `mvn test` after generation, no compilation errors
-- Output: test file path, coverage summary, cmd to run tests
-
-### doc-generator
-
-| Field | Value |
-|-------|-------|
-| MDL | sonnet |
-| color | green |
-| TLs | Read, Write, Edit |
-
-```yaml
----
-name: doc-generator
-description: Generates technical documentation from code. Use for README, API docs, architecture.
-model: sonnet
-color: green
-tools: Read, Write, Edit
----
-```
-
-SP key elements:
-- Role: Technical writer optimizing for LLM consumption
-- Format: Tables over prose, code blocks over text, bullets over numbered lists
-- Structure: Overview → Quick Start → API Reference → EXs → FAQ
-- Token efficiency: no filler words, dense content, positive framing
-- Output: markdown files with consistent structure + clear navigation
-
-### security-analyzer
-
-| Field | Value |
-|-------|-------|
-| MDL | opus |
-| color | red |
-| TLs | Read, Glob, Grep, Bash |
-
-```yaml
----
-name: security-analyzer
-description: Scans code for security vulnerabilities. Use before releases or after security incidents.
-model: opus
-color: red
-tools: Read, Glob, Grep, Bash
----
-```
-
-SP key elements:
-- Role: Security expert specializing in OWASP Top 10
-- Scan targets: hardcoded credentials, SQL injection, XSS, CSRF, insecure deserialization
-- Process: Grep patterns → Read suspicious files → Deep analysis → Risk assessment
-- Output: Vulnerability report with CVSS scores, exploit scenarios, remediation steps
-- TLs: `grep` for pattern matching, dep vulnerability checks via `mvn dependency:tree`
 
 ## Validation Checklist
 
@@ -572,18 +523,23 @@ SP key elements:
 | No runtime SK injection | SKs injected only at startup | List all needed SKs in FM upfront |
 | No parent history access | Clean ctx per invocation | Pass ctx via `Task(prompt=...)` |
 | Short SP | ~294-token AG prompt replaces full CC prompt | Compensate with detailed AG body |
-| `effort`/`maxTurns` PLG-only | Don't work for project/user AGs | Use PLG-level AGs |
-| PLG AGs: no hooks/mcpServers/permissionMode | Security restriction | Copy to `.claude/agents/` for full feature access |
+| No SA wall-clock timeout | Turns/tokens bound a SA, never elapsed time | `maxTurns` + `PreToolUse` soft deadline |
+| PLG AGs: `permissionMode`/`hooks`/`mcpServers` ignored | Parser skips them + warns at load | Move AG to `.claude/agents/` |
+| PLG AGs: `initialPrompt`/`observer*`/`observeSubagents` not read | Silently dropped, no warn | Move AG to `.claude/agents/` |
+| PLG AGs: `isolation` only `worktree` | `remote` silently dropped | Move AG to `.claude/agents/` |
 | auto mode overrides permissionMode | FM `permissionMode` ignored in auto mode | Don't use auto mode with custom AGs |
 
 ## VH (AG Features)
 
+> FM contract verified against the v2.1.220 native macOS binary (both parsers). Binary > docs on key scope.
+
 | Ver | Date | Changes |
 |-----|------|---------|
+| v2.1.220 | -- | FM contract verified: `effort`/`maxTurns`/`disallowedTools`/`memory`/`background`/`skills` work in local + PLG; `permissionMode`/`hooks`/`mcpServers` local-only (PLG warn); `initialPrompt`/`observer`/`observerMessage`/`observeSubagents`/`isolation: remote` local-only |
 | v2.1.172 | 2026-05 | SAs can spawn their own SAs (up to 5 levels deep). BC workflow still spawns from main only |
 | v2.1.170 | 2026-05 | Fable 5 MDL (`claude-fable-5`, Mythos-class tier above Opus) selectable in `model:` |
 | v2.1.85 | 2026-03-26 | `TaskCreated` hook, WorktreeCreate `type: http` |
-| v2.1.78 | 2026-03-17 | `effort`, `maxTurns`, `disallowedTools` for PLG AGs |
+| v2.1.78 | 2026-03-17 | `effort`, `maxTurns`, `disallowedTools` in FM |
 | v2.1.74 | 2026-03-12 | Fix: full MDL IDs in FM; `--agents` flag visibility |
 | v2.1.73 | 2026-03-11 | Fix: SA MDL aliases on Bedrock/Vertex |
 | v2.1.72 | 2026-03-10 | Restored `model` on AG TL; deprecated `TaskOutput` |
@@ -613,7 +569,9 @@ SP key elements:
 | AG can't call SKs | By design [#4182] | Use `skills:` in FM for pre-injection |
 | AG can't spawn SA | CC: up to 5 levels (v2.1.172); BC workflow: spawn from main only | Chaining from main conversation |
 | `agents/` dir in plugin.json | Causes validation error | Remove from manifest -- auto-discovered by DEF |
-| `effort`/`maxTurns` not working | PLG AGs only | Move AG to PLG scope |
+| `permissionMode`/`hooks`/`mcpServers` not working | Ignored in PLG AGs (warn at load) | Move AG to `.claude/agents/` |
+| AG stops early, no final report | `maxTurns` hit -- `Reached max turns limit (N)` | Raise `maxTurns`; read checkpoint file / SA transcript |
+| AG "hangs" with no timeout | No wall-clock timeout exists | `PreToolUse` soft deadline; `TaskStop` to kill |
 
 ## Output
 

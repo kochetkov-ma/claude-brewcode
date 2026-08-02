@@ -84,6 +84,26 @@ Read `references/analysis-layers.md`. Filter layers by detected stack from P0. F
 
 ## P2: Parallel Layer Analysis (10 agents, ONE message)
 
+### Delegation (applies to EVERY Task spawn in this skill — P2, P3, P4, P5, P7.4)
+
+A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct
+it, and it usually drifts off-target. One subagent = ONE bounded unit — one deliverable
+(here: ONE layer analysis, ONE document), ~<=5 files, ~<=10 steps. Bigger MUST be split into N
+tasks, all spawned in ONE message — that is why analysis runs as 10 layer agents, not one.
+
+Every spawn prompt MUST carry:
+
+| Field | Content |
+|-------|---------|
+| GOAL | the overall task and why it exists — the point beyond the file edit |
+| ROLE | what this agent owns; what it must NOT touch |
+| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
+| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what THIS agent needs |
+| CONSUMER | who or what uses the result next, and the shape it must fit |
+| DONE | acceptance criteria + the exact report shape you want back |
+
+A bare one-line task is never enough. The per-agent template below is the canonical shape.
+
 ### Dynamic Agent Resolution
 
 Before spawning agents, check for project team agents:
@@ -107,19 +127,30 @@ Spawn ALL agents in a SINGLE message. Skip agents for inactive layers (filtered 
 | 9 | tester | T1-T4 | Test data, base classes, helpers, ExpectedData |
 | 10 | tester | T5-T6 | BDD style, assertion patterns, @ParameterizedTest |
 
-**Per-agent prompt template:**
+**Per-agent prompt template — every spawn carries all six Delegation fields:**
 
 ```
-Analyze {LAYERS} in the project.
+GOAL: we are extracting this project's coding conventions into .claude/convention/ docs.
+      Your layer analysis is ONE input; 9 sibling agents cover the other layers in parallel.
+ROLE: you own the analysis of {LAYERS} only. Read-only — do NOT edit any file, do NOT
+      analyse layers owned by siblings.
+SCOPE: source files matching {LAYERS} patterns. For paths mode, scope analysis to: {SCOPED_PATHS}.
+       Out of bounds: every other layer.
+CONTEXT: P1 already detected the stack and filtered out inactive layers — do not re-detect.
+      9 sibling agents analyse the other layers in this same message; assume their layers are
+      covered and do not report findings about them.
 Stack: {DETECTED_STACK}
 
 Layer definitions:
 {LAYER_CRITERIA_FROM_ANALYSIS_LAYERS_MD}
 
 Use grepai_search FIRST for file discovery, then Glob/Grep for verification.
-For paths mode, scope analysis to: {SCOPED_PATHS}
 
-Output format:
+CONSUMER: P3 (1 architect) merges all 10 reports and picks 1-2 etalons per layer, then P4
+      writes .claude/convention/*.md from that. Your tables are parsed as-is — keep the exact
+      column shape below, score every candidate, and give file paths, not prose.
+
+DONE — report in exactly this format:
 
 ## Etalon Candidates
 | Class | Path | Why Etalon | Score (1-10) |

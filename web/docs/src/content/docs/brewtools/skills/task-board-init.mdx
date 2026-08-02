@@ -1,6 +1,6 @@
 ---
 title: "Task Board Init"
-description: "Multi-agent generator that deploys a file-based Kanban into any repo: board, curator agent, dashboard skill, rule."
+description: "Multi-agent generator that deploys a file-based Kanban into any repo: board, curator agent, dashboard skill, rule, plus a gated CLAUDE.md pass."
 order: 3125
 ---
 import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
@@ -18,9 +18,10 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | Item | Value |
 |------|-------|
 | Skill command | `/brewtools:task-board-init` |
-| Argument | `[target repo path]` — empty = current working dir |
+| Arguments | `[target repo path \| empty = cwd] [free-text directive]` — e.g. `'also dedupe rules'`, `'skip module split'` |
 | Emits | `.claude/agents/task-tracker.md`, `.claude/skills/task-board/SKILL.md`, `.claude/rules/tasks.md`, `.claude/features/**` |
-| Spawns | Parallel analysis subagents (architect + Explore) + multi-agent doc sweep |
+| Spawns | Parallel analysis subagents (architect + Explore) + multi-agent doc sweep — one bounded unit each |
+| Optional | Gated `CLAUDE.md` optimization pass — propose-only, opt-in during confirmation |
 | Model | opus |
 | Commits? | Never — committing is a user / manager action |
 
@@ -40,6 +41,9 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 
 # Deploy into another repo
 /brewtools:task-board-init /path/to/some-repo
+
+# Deploy, then steer the optional CLAUDE.md pass with a free-text directive
+/brewtools:task-board-init /path/to/some-repo also dedupe rules, skip module split
 ```
 
 After completion the repo gains `/task-board` (view/add/move tasks) and the `task-tracker` agent auto-runs at the start of every task.
@@ -68,10 +72,39 @@ After completion the repo gains `/task-board` (view/add/move tasks) and the `tas
   <li>
     <div>
       <strong>Generate rule + scaffold + doc sweep</strong>
-      <p>Writes <code>.claude/rules/tasks.md</code> (paths-scoped to <code>.claude/features/**</code>) — lifecycle rules, id convention, required frontmatter, grooming cadence, and the run-at-task-start rule that spawns <code>task-tracker</code> as an isolated subagent at the beginning of every task. This rule lives <em>only</em> in <code>tasks.md</code> — the target's <code>CLAUDE.md</code> is never touched. Then scaffolds the folder tree and launches parallel sweep subagents over the discovered doc inventory to migrate legacy backlog / feature docs into the board (dedup, move done items into <code>closed/</code>, author initial <code>board.md</code> counts). If no legacy docs were found, the sweep is skipped entirely.</p>
+      <p>Writes <code>.claude/rules/tasks.md</code> (paths-scoped to <code>.claude/features/**</code>) — lifecycle rules, id convention, required frontmatter, grooming cadence, and the run-at-task-start rule that spawns <code>task-tracker</code> as an isolated subagent at the beginning of every task. This rule lives <em>only</em> in <code>tasks.md</code> — board generation never edits the target's <code>CLAUDE.md</code>. Then scaffolds the folder tree and launches parallel sweep subagents over the discovered doc inventory to migrate legacy backlog / feature docs into the board (dedup, move done items into <code>closed/</code>, author initial <code>board.md</code> counts). If no legacy docs were found, the sweep is skipped entirely.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Optional <code>CLAUDE.md</code> optimization (gated)</strong>
+      <p>Runs only if you opted in during the Step 1 confirmation. Propose-only: it reports current-vs-target line count, then asks before every change — extracting local-only content to <code>CLAUDE.local.md</code>, decomposing an over-budget file into nested module <code>CLAUDE.md</code> files (loaded on demand, unlike eager <code>@path</code> imports), deduping rules, then handing the touched files to <a href="/brewtools/skills/text-optimize/">text-optimize</a> for token compression. Decline it and nothing is written. Pass a free-text directive in the argument (<code>"also dedupe rules"</code>, <code>"skip module split"</code>, <code>"report only"</code>) to steer this phase.</p>
     </div>
   </li>
 </Steps>
+
+## Delegation
+
+<Callout type="warning">
+**A big task handed to one agent = an agent gone for an hour.** You cannot observe it, you cannot correct it, and it usually drifts off-target. Both spawn points — the Step 1 repo analysis and the doc sweep — give one subagent ONE bounded unit: **one doc group**, ~5 files, ~10 steps. Bigger work is split into N tasks, all spawned in a single message.
+</Callout>
+
+Every spawn prompt carries six fields. A bare one-line task is never enough:
+
+| Field | Content |
+|-------|---------|
+| GOAL | deploy the board into the target repo; this pass fills it from pre-existing task docs |
+| ROLE | own the listed docs — no invented tasks, no source-dir edits, no `CLAUDE.md` |
+| SCOPE | write only under `.claude/features/**`; out — exclusions, `CLAUDE.md`, `.claude/agents`, `.claude/skills` |
+| CONTEXT | confirmed domains / release style / language, plus the already-written skeleton and templates; siblings sweep other groups now |
+| CONSUMER | verification counts what landed, and the installed `task-tracker` agent reads those files from then on |
+| DONE | files under `closed/` + `backlog/` plus a manifest — a no-op sweep must say so explicitly |
+
+The CONSUMER field is load-bearing here: an id or status folder that deviates from `TASK_TEMPLATE.md` makes the task invisible to the `task-tracker` agent forever after.
+
+<Callout type="note">
+The same six-field brief ships into your repo. The generated `.claude/skills/task-board/SKILL.md` carries its own Delegation section with the identical GOAL / ROLE / SCOPE / CONTEXT / CONSUMER / DONE contract, so bulk groom and transition passes delegated to `task-tracker` are briefed the same way long after this generator is gone.
+</Callout>
 
 ## What gets deployed
 
@@ -122,6 +155,7 @@ Task IDs follow `UPPER-KEBAB`: `<PREFIX>-<DOMAIN>-<SLUG>`.
 | `04-tasks-rule.md` | `tasks.md` rule template (includes run-at-start rule) |
 | `05-features-templates.md` | `.claude/features/**` file templates |
 | `06-doc-sweep.md` | Multi-agent doc-sweep procedure |
+| `07-claude-md-optimize.md` | Optional gated CLAUDE.md optimization procedure (P5.5) |
 
 </details>
 

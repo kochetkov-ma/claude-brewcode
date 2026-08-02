@@ -3,7 +3,7 @@ title: "Publish"
 description: "Publish text, markdown, JSON, files, or multi-file sites to brewpage.app — returns a public URL instantly, no sign-up required."
 order: 25
 ---
-import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
 # publish — share content, get link
 
@@ -33,8 +33,8 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 
 | Field | Value |
 |-------|-------|
-| Command | `/brewdoc:publish <content> [--ttl N] [--entry filename]` |
-| Arguments | Text, file path, directory path, or `.zip` path |
+| Command | `/brewdoc:publish <text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename]` |
+| Arguments | Inline text, a file path, a directory, or a `.zip` archive. `--ttl N` = days (default 15), `--entry filename` = entry file for site uploads |
 | Model | haiku |
 | Tools | Read, Bash, AskUserQuestion, Glob |
 
@@ -129,7 +129,7 @@ Entry file detection for sites: `--entry` flag → `index.html` if present → f
 
 **Security — owner token:** The `ownerToken` field from the API response is captured inside the Bash block and written directly to `.claude/brewpage-history.md`. The LLM only sees `OK {url}` or `FAILED: ...` — never the token value.
 
-**History file format:**
+**History file format** — each upload block creates `.claude/brewpage-history.md` with this header if it does not exist yet, then appends one row:
 
 ```markdown
 | Date | URL | Owner Token | TTL | Type |

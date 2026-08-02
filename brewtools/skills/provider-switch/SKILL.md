@@ -2,7 +2,7 @@
 name: brewtools:provider-switch
 description: "Configure alt API providers: DeepSeek, Z.ai/GLM, Qwen, MiniMax, OpenRouter. Triggers: switch provider, openrouter."
 argument-hint: "[status|setup|verify|model-check|help|<provider-name>] — no args = interactive status check"
-allowed-tools: Read, Write, Edit, Bash, AskUserQuestion, Glob, Grep
+allowed-tools: Read, Write, Edit, Bash, Task, AskUserQuestion, Glob, Grep
 model: opus
 user-invocable: true
 disable-model-invocation: true
@@ -355,7 +355,42 @@ Read `REF/update-protocol.md` for per-PRV sources + update flow.
 | 4 | MiniMax | platform.minimax.io — models, pricing |
 | 5 | OpenRouter | openrouter.ai/api/v1/models — top coding/free models |
 
-Each agent: WebFetch/WebSearch sources from protocol, extract current model list + pricing + endpoint changes.
+#### Delegation
+
+A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target. One subagent = ONE bounded unit — ONE provider, ~<=5 files, ~<=10 steps. !=hand all five providers to one agent; bigger MUST be split into N tasks, all spawned in ONE message.
+
+Every spawn prompt MUST carry:
+
+| Field | Content |
+|-------|---------|
+| GOAL | the overall task and why it exists — the point beyond the file edit |
+| ROLE | what this agent owns; what it must NOT touch |
+| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
+| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what THIS agent needs |
+| CONSUMER | who or what uses the result next, and the shape it must fit |
+| DONE | acceptance criteria + the exact report shape you want back |
+
+Shape for agent 2, verbatim pattern for the other four:
+```
+Task(subagent_type="general-purpose", prompt="
+GOAL: refreshing this skill's provider reference files so users get current model ids,
+  pricing and endpoints; you cover Z.ai/GLM only, four sibling agents cover the others.
+ROLE: research + report. Do NOT edit any file — the skill applies changes in Step 5.
+SCOPE: in — docs.z.ai, open.bigmodel.cn/en via WebFetch/WebSearch. Out — other providers,
+  ~/.zshrc, any reference file on disk.
+CONTEXT: references/zai-glm.md on disk currently records model glm-5.2, alias claudeglm,
+  Anthropic-compatible endpoint https://api.z.ai/api/anthropic — that is your baseline to
+  diff against. Four sibling agents fetch DeepSeek, Qwen, MiniMax and OpenRouter right now;
+  nothing has been written to disk yet.
+CONSUMER: Step 3 diffs your table against the reference file and Step 4 shows the diff to
+  the user, who approves each UPDATE before Step 5 writes it. An omitted field reads as
+  'unknown' and blocks the whole provider's update.
+DONE: table | Field | Current | Fetched | Source URL | for model ids, pricing, endpoint,
+  context window. Say 'no change' explicitly per field rather than omitting it.
+")
+```
+
+A bare one-line task is never enough. Each agent: WebFetch/WebSearch sources from protocol, extract current model list + pricing + endpoint changes.
 
 ### Step 3: Aggregate + Diff
 Per PRV: model IDs changed? pricing changed? new models? endpoint URL changed? ctx windows changed?

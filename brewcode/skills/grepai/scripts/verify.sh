@@ -17,10 +17,12 @@ test -f .grepai/config.yaml && echo "✅ config.yaml" || echo "❌ config.yaml m
 test -f .grepai/index.gob && echo "✅ index.gob ($(du -h .grepai/index.gob | cut -f1))" || echo "⚠️ index.gob (indexing...)"
 test -f .claude/rules/grepai-first.md && echo "✅ grepai-first.md rule" || echo "❌ rule missing"
 
-# Plugin hook (self-location)
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PLUGIN_ROOT="$(dirname "$(dirname "$(dirname "$SCRIPT_DIR")")")"
-test -f "$PLUGIN_ROOT/hooks/grepai-session.mjs" && echo "✅ hook: built-in (plugin)" || echo "❌ hook: missing in plugin"
+# Project hooks (self-installed by Phase 6 into the project, not the plugin)
+HOOK_DIR=".claude/grepai/hooks"
+test -f "$HOOK_DIR/grepai-session.mjs" && echo "✅ hook file: grepai-session.mjs" || echo "⚠️ hook file: grepai-session.mjs missing"
+test -f "$HOOK_DIR/grepai-reminder.mjs" && echo "✅ hook file: grepai-reminder.mjs" || echo "⚠️ hook file: grepai-reminder.mjs missing"
+grep -q 'grepai-session.mjs' .claude/settings.json 2>/dev/null && echo "✅ hook wired: SessionStart" || echo "⚠️ hook wired: SessionStart missing in .claude/settings.json"
+grep -q 'grepai-reminder.mjs' .claude/settings.json 2>/dev/null && echo "✅ hook wired: PreToolUse:Bash" || echo "⚠️ hook wired: PreToolUse:Bash missing in .claude/settings.json"
 
 # Watch status
 pgrep -f "grepai watch" >/dev/null && echo "✅ watch running" || echo "⚠️ watch not running"

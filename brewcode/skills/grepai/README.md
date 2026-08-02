@@ -21,6 +21,7 @@ First-time setup takes 5-30+ minutes depending on project size. It checks infras
 | `reindex` | reindex, rebuild, refresh | Full index rebuild: stops watcher, cleans index, rebuilds from scratch, restarts watcher |
 | `optimize` | optimize, update | Backs up current config, re-analyzes the project, regenerates config, then reindexes |
 | `upgrade` | upgrade | Updates grepai CLI to the latest version via Homebrew |
+| `uninstall` | uninstall, remove | Removes grepai from this project: stops watch, deletes + unwires both hooks, drops the rule; asks before deleting `.grepai/`. Keeps CLI, ollama, bge-m3, MCP entry |
 | `prompt` | (unrecognized text) | Interactive menu -- asks which operation to run |
 
 **Auto-detection:** Running `/brewcode:grepai` with no arguments defaults to `start` if `.grepai/` exists, or `setup` if it does not.
@@ -79,10 +80,22 @@ After `setup` completes, the following is created in your project:
 |------|---------|
 | `.grepai/config.yaml` | Project-specific search configuration (languages, boost patterns, exclusions) |
 | `.grepai/logs/grepai-watch.log` | Watcher and indexing logs |
-| `.grepai/index/` | Embedded search index (GOB storage) |
-| `.claude/rules/grepai-*.md` | Rule reminding Claude to use grepai for code exploration |
+| `.grepai/index.gob`, `.grepai/symbols.gob` | Embedded search index + symbol table (GOB storage) |
+| `.claude/rules/grepai-first.md` | Rule: grepai FIRST for code exploration, compact output by default |
+| `.claude/grepai/hooks/*.mjs` | SessionStart + PreToolUse:Bash hooks (see below) |
+| `CLAUDE.md` | `## Code Search` section appended if absent |
 
 MCP server is configured with `grepai_search` and related tools (`trace_callers`, `trace_callees`, `trace_graph`).
+
+## Compact-first (enforced)
+
+Full-content results from 10 chunks can flood the context in a single call. The rule, the CLAUDE.md entry, and both hooks all push the same policy:
+
+| | Rule |
+|---|---|
+| Default | `compact:true, format:"toon", limit:10` -> path+lines only -> `Read` the top 1-3 hits |
+| `compact:false` only if | a compact pass already ran, `limit<=3`, one narrow query |
+| Never | `compact:false` as the first call, with `limit>3`, or on a broad query |
 
 ## Tips
 

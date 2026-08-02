@@ -56,11 +56,13 @@ grep -q 'mcp__grepai__' ~/.claude/settings.json 2>/dev/null && echo "✅ Permiss
 test -f .claude/rules/grepai-first.md && echo "✅ rule: grepai-first.md" || echo "⚠️ rule: missing"
 
 echo ""
-echo "--- Hook ---"
-# Self-location
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PLUGIN_ROOT="$(dirname "$(dirname "$(dirname "$SCRIPT_DIR")")")"
-test -f "$PLUGIN_ROOT/hooks/grepai-session.mjs" && echo "✅ hook: built-in (plugin)" || echo "⚠️ hook: missing in plugin"
+echo "--- Hooks ---"
+# Hooks are self-installed into the PROJECT (not the plugin) by /brewcode:grepai setup
+HOOK_DIR=".claude/grepai/hooks"
+test -f "$HOOK_DIR/grepai-session.mjs" && echo "✅ hook file: grepai-session.mjs" || echo "⚠️ hook file: grepai-session.mjs missing (run /brewcode:grepai setup)"
+test -f "$HOOK_DIR/grepai-reminder.mjs" && echo "✅ hook file: grepai-reminder.mjs" || echo "⚠️ hook file: grepai-reminder.mjs missing (run /brewcode:grepai setup)"
+grep -q 'grepai-session.mjs' .claude/settings.json 2>/dev/null && echo "✅ hook wired: SessionStart" || echo "⚠️ hook wired: SessionStart missing in .claude/settings.json"
+grep -q 'grepai-reminder.mjs' .claude/settings.json 2>/dev/null && echo "✅ hook wired: PreToolUse:Bash" || echo "⚠️ hook wired: PreToolUse:Bash missing in .claude/settings.json"
 
 echo ""
 echo "--- MCP Tools ---"

@@ -15,14 +15,14 @@ They inject context and manage session state. Brewcode registers 2 hooks in `hoo
 
 | # | Hook | Event | Matcher | Channel | Timeout | Purpose |
 |---|------|-------|---------|---------|---------|---------|
-| 1 | forced-eval | UserPromptSubmit | -- | additionalContext | 1s | Skill activation reminder |
+| 1 | forced-eval | UserPromptSubmit | -- | additionalContext | 1s | Manager-role + split-discipline reminder |
 | 2 | session-start | SessionStart | -- | additionalContext | 3s | Session init, permission_mode tag |
 
 ## Execution flow
 
 ```
 UserPromptSubmit
-  └── forced-eval.mjs          [SKILL?] Check available skills
+  └── forced-eval.mjs          [ROLE] delegate-to-expert + [SPLIT] bounded units
 
 SessionStart
   └── session-start.mjs        Version check, plan-symlink, permission_mode tag
@@ -59,8 +59,9 @@ All hooks follow a unified protocol:
 
 <Badge variant="primary" text="UserPromptSubmit" /> <Badge variant="secondary" text="additionalContext" />
 
-Boosts skill activation from ~20-50% to ~84%. Intercepts every user prompt
-and adds a reminder to check available skills.
+Keeps delegation discipline in front of the model. Intercepts every user prompt
+and appends two short lines: the Manager role rule and the split rule.
+There is no skill-activation nudge -- modern models pick skills on their own.
 
 | Parameter | Value |
 |-----------|-------|
@@ -68,14 +69,21 @@ and adds a reminder to check available skills.
 | Channel | additionalContext |
 | Timeout | 1000 ms |
 
+**Exact injected text:**
+
+```text
+[ROLE] Manager: scan agents (project .claude/agents/ first) - expert for this domain exists -> delegate regardless of size; no expert or trivial one-off -> self.
+[SPLIT] One agent for an hour = drift you cannot observe: split into bounded units (1 deliverable, ~5 files), fan out in ONE message; every spawn prompt carries goal + scope + what is already done + who consumes the result + acceptance.
+```
+
 **What it does:**
 - Receives the user prompt
-- Adds a prefix: `[SKILL?] If a skill matches this request, use Skill tool first.`
-- Adds the manager role: `[ROLE] Manager: scan agents (project .claude/agents/ first) — expert for this domain exists -> delegate regardless of size; no expert or trivial one-off -> self.`
-- Injects both lines via `additionalContext` — UserPromptSubmit cannot rewrite the prompt
-- Output is capped at ~9000 chars (10K disk-spill safety, CC 2.1.174+)
+- Injects both lines via `additionalContext` -- UserPromptSubmit cannot rewrite the prompt (`updatedInput` is silently dropped in CC 2.1.x)
+- Output is capped at 9000 chars (10K disk-spill safety, CC 2.1.174+)
 
-**When it fires:** On every user input, except events with an incorrect `hook_event_name`.
+**When it fires:** On every user input, including slash commands. Skipped only for
+a wrong `hook_event_name`, an empty prompt, and meta-replies that carry no task:
+`yes`/`no`/`ok`/`thanks`/`continue`/`confirm`-style answers, a bare number, or a single letter.
 
 ---
 

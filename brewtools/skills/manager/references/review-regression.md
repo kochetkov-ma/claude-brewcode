@@ -11,5 +11,7 @@ Review is two-phase, always:
   b. Double-check - re-verify each finding before acting (no blind fixes).
   c. Fix - confirmed findings only, then re-review the fix.
 At task end: mandatory FINAL cross-review across all phases (regression first).
-Prefer independent multi-agent reviewers for significant changes.
+Use independent reviewers for significant changes: split a large review by area
+across several, never one long pass. Brief each with goal + its area + acceptance,
+what is already reviewed and must not be re-litigated, and who consumes the verdict.
 ```

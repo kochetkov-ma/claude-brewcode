@@ -1,64 +1,78 @@
 ---
 title: "Memory"
-description: "Interactive 4-step optimizer for Claude Code memory files — removes duplicates, migrates to rules, compresses, validates."
+description: "Re-verifies memory files, CLAUDE.md, rules, and conventions against reality and shrinks them — non-growth is the prime directive."
 order: 22
 ---
-import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# memory — clean up memory files
+# memory — sync and shrink persistent knowledge
 
 <Callout type="caution">
-**Memory files accumulate silently.** Entries duplicate rules already in CLAUDE.md, verbose prose inflates every session load, and contradictions pile up unnoticed. Claude reads the full memory on every startup — deadweight entries cost real tokens every time.
+**Memory drifts and only ever grows.** Facts duplicate what CLAUDE.md or a rule already says, claims go stale after a refactor, session scratch notes never get cleaned up — and Claude reads all of it on every session start. A sync that only touches the root `CLAUDE.md` misses nested `CLAUDE.md` files, rules, and conventions, and leaves the drift in place.
 </Callout>
 
 <Callout type="tip">
-**One command, four interactive steps.** Each step shows exactly what it proposes and waits for your approval. Nothing is deleted without confirmation. Run it anytime memory feels noisy.
+**One sweep, non-growth enforced.** `/brewdoc:memory` re-verifies the whole surface against the codebase, deletes before it adds, and every file must end at or below its original line count. `full` extends the same pass to the agent and skill rosters.
 </Callout>
 
 ## Quick reference
 
 | Field | Value |
 |-------|-------|
-| Command | `/brewdoc:memory` |
-| Arguments | none — runs a 4-step interactive workflow |
+| Command | `/brewdoc:memory [free-form prompt]` |
+| Arguments | `<free-form prompt: emphasis only; empty = sync whole memory surface; 'full' adds agent+skill rosters>` — a prompt sets emphasis, never narrows the sweep; say "full" / "всё" / name agents or skills to add the roster pass |
 | Model | opus |
+| Invocation | user-only (`disable-model-invocation: true`) — Claude never auto-triggers it |
 | Tools | Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion |
 
 ## When to use
 
-- Memory files have grown over weeks and feel cluttered
-- Claude auto-selects wrong rules because of conflicting memory entries
-- You added new `.claude/rules/` files and want to remove redundant memory entries
-- Session startup feels slow and you want to reduce context load
-- You want to move project-specific constraints from memory into proper rules files
+| Scenario | Command |
+|----------|---------|
+| Regular hygiene after a batch of sessions | `/brewdoc:memory` |
+| Just renamed paths/flags across the repo | `/brewdoc:memory "focus on renamed paths"` |
+| Before a release — also clean agents and skills | `/brewdoc:memory "full"` |
+| Suspect a memory entry contradicts a rule | `/brewdoc:memory` (CLAUDE.md + rules win, memory gets corrected) |
+| Only the agent roster needs a pass, brewcode installed | `/brewcode:agents sync` (standalone, not via memory) |
+| Only the skill roster needs a pass, brewcode installed | `/brewcode:skills sync` (standalone, not via memory) |
 
 ## Examples
 
 ```bash
-# Run the full 4-step interactive flow
+# Default: sync the whole memory surface, no prompt needed
 /brewdoc:memory
 ```
 
-The skill auto-detects your memory directory, loads all related files, then walks through each step.
-
 ```bash
-# Natural language also works
-"optimize my memory"
-"clean up claude memory files"
-"brewdoc:memory"
+# Prompt steers emphasis only — the sweep still covers everything
+/brewdoc:memory "focus on the CI facts"
 ```
 
-After Step 4, the skill prints a summary report:
+```bash
+# Full: memory + agent roster + skill roster + cross-layer dedup
+/brewdoc:memory "full"
+/brewdoc:memory "всё, включая агентов и скиллы"
+```
+
+The skill announces its mode before doing anything:
+
+```
+Mode: sync (memory) — no prompt -> default sync
+Emphasis: none
+```
+
+Final report shape:
 
 ```markdown
-## Memory Optimization Complete
-
-| Metric         | Before | After | Saved      |
-|----------------|--------|-------|------------|
-| Total entries  | 42     | 18    | 24         |
-| Duplicates     | 11     | 0     | —          |
-| Migrated       | —      | —     | 8          |
-| Estimated tokens | ~1 800 | ~620 | ~1 180 (~65%) |
+# memory [sync]
+## Surface
+| Layer | Files | Lines before | Lines after | Delta |
+| memory | 4 | 210 | 128 | -82 |
+| CLAUDE.md (root) | 1 | 180 | 165 | -15 |
+| CLAUDE.md (nested) | 3 | 96 | 71 | -25 |
+| rules | 6 | 240 | 178 | -62 |
+| conventions | 1 | 44 | 44 | 0 |
+| **Total** | 15 | 770 | 586 | **-184** |
 ```
 
 ## Flow
@@ -66,32 +80,44 @@ After Step 4, the skill prints a summary report:
 <Steps>
   <li>
     <div>
-      <strong>Load context</strong>
-      <p>The skill reads your memory directory (from <code>autoMemoryDirectory</code> in <code>.claude/settings.json</code>, or the legacy <code>&#126;/.claude/projects/&lt;hash&gt;/memory/</code> path), then loads <code>&#126;/.claude/CLAUDE.md</code>, project <code>CLAUDE.md</code>, and all rules files — both global and project-level. This full context map drives all four analysis steps.</p>
+      <strong>Input gate</strong>
+      <p>The whole prompt is read as free-form emphasis, not a keyword grammar. Empty or any ordinary prompt selects mode <code>sync</code>. Only "full" / "всё" / naming agents or skills selects mode <code>full</code>. A prompt never shrinks the surface, it only steers which facts get scrutinized first.</p>
     </div>
   </li>
   <li>
     <div>
-      <strong>Step 1 — Remove duplicates</strong>
-      <p>An <code>Explore</code> agent cross-references every memory entry against CLAUDE.md and <code>.claude/rules/\*.md</code>. Entries that already exist in rules, or that contradict CLAUDE.md (CLAUDE.md wins), are shown in a table. You choose: "Delete all", "Review each", or "Skip".</p>
+      <strong>Build the surface</strong>
+      <p>Read-only discovery of the whole knowledge surface: memory files (<code>$MEMORY_DIR</code> from <code>autoMemoryDirectory</code>, else the legacy <code>&#126;/.claude/projects/&lt;hash&gt;/memory/</code> path), root and <code>.claude/CLAUDE.md</code>, every nested <code>CLAUDE.md</code> at any depth, <code>&#126;/.claude/CLAUDE.md</code> as reference, project and global <code>rules/&#42;.md</code>, and conventions (<code>CONVENTIONS.md</code>, <code>CONTRIBUTING.md</code>, <code>AGENTS.md</code>, <code>docs/&#42;&#42;/convention&#42;.md</code>, <code>@path</code> imports). A run that only touches the root <code>CLAUDE.md</code> is treated as incomplete.</p>
     </div>
   </li>
   <li>
     <div>
-      <strong>Step 2 — Migrate to rules / CLAUDE.md</strong>
-      <p>Remaining entries are categorised by target: global rules go to <code>&#126;/.claude/rules/</code>, project rules to <code>.claude/rules/</code>, architectural decisions to project CLAUDE.md, cross-session facts stay in memory. A table with estimated token savings is shown before any migration is applied.</p>
+      <strong>Verdicts per entry</strong>
+      <p>Every fact gets one of eight verdicts: DUPLICATE, OBVIOUS, STALE, OLD, EPHEMERAL, DRIFT, MISPLACED, MISSING. Order of operations is DELETE first, then COMPRESS, then ADD last — never add before cutting. MISPLACED verdicts are queued, not applied here — they move in the cross-file pass below.</p>
     </div>
   </li>
   <li>
     <div>
-      <strong>Step 3 — Compress</strong>
-      <p>What remains is compressed for LLM efficiency: prose becomes table rows, related entries merge, verbose descriptions shrink to imperative one-liners, example lists reduce to a pattern plus one example. A before/after preview with estimated savings is shown. You confirm or skip.</p>
+      <strong>Fan-out, longest file first</strong>
+      <p>One subagent per file, parallel batches of up to 8, longest file first. Add gate and line-budget rules: see Internals below.</p>
     </div>
   </li>
   <li>
     <div>
-      <strong>Step 4 — Validate and clean up</strong>
-      <p>A <code>reviewer</code> agent checks the final state: broken file references, conflicts with CLAUDE.md, malformed markdown. Broken references are fixed automatically. Orphaned memory files — files in the memory directory not referenced from <code>MEMORY.md</code> — are detected and proposed for deletion.</p>
+      <strong>Cross-file pass</strong>
+      <p>The orchestrator re-reads the changed files: kills facts that now live in two layers, applies queued MISPLACED moves, deletes orphaned memory files after asking, and fixes broken path references left behind by the moves.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Full mode adds the rosters</strong>
+      <p>When mode is <code>full</code>, the same directive and verdicts run again over the agent roster (<code>.claude/agents/&#42;.md</code>, <code>&#42;/agents/&#42;.md</code>) and skill roster (<code>.claude/skills/&#42;/SKILL.md</code>, <code>&#42;/skills/&#42;/SKILL.md</code> plus their <code>references/&#42;.md</code>) — via <code>brewcode:agent-creator</code> / <code>brewcode:skill-creator</code> when brewcode is installed, general-purpose subagents otherwise. A cross-layer dedup pass then keeps duplicated facts in the rule (rules auto-load; artifacts pay the token cost again on every use). This is a separate pass, not a call to <code>/brewcode:agents</code> or <code>/brewcode:skills</code> — both are user-only and brewcode may not even be installed.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Confirm and report</strong>
+      <p>One <code>AskUserQuestion</code> shows total delta, the top-5 longest files before/after, counts per verdict, and every proposed addition with its source — options are Apply all / Apply deletions and compression only / Review each / Cancel. The report then lists the surface table per layer, longest files, deleted entries, stale facts corrected, moves, additions, skipped files, and next steps. Total delta must be <code>&lt;= 0</code>, or justified per line if it is not.</p>
     </div>
   </li>
 </Steps>
@@ -99,56 +125,37 @@ After Step 4, the skill prints a summary report:
 <details>
 <summary>Internals</summary>
 
-**Memory directory detection**
+**Non-growth is the prime directive** — every file ends at or below its original line count, total delta at or below zero. Longest files are ranked first and compressed hardest.
 
-The skill resolves `$MEMORY_DIR` in this order:
-1. Read `.claude/settings.json` → extract `autoMemoryDirectory`
-2. If set: `<git-root>/<autoMemoryDirectory>`
-3. If not set: glob `&#126;/.claude/projects/**/memory/*.md` (legacy path)
+**Add gate** — a fact enters only if ALL of: non-obvious for a competent model, domain-specific to this project, verified against a real source, and its absence would cost a real failure. One line, with its source.
 
-**Context map built before Step 1**
+Banned additions: "write good code", "use clean architecture", "follow SOLID", "add tests", "handle errors", any restatement of a tool's own docs. Wanted instead: domain invariants, environment quirks, mistakes actually hit and their cause.
 
-| Source | What is loaded |
-|--------|----------------|
-| Memory directory | All `*.md` files |
-| Global instructions | `&#126;/.claude/CLAUDE.md` |
-| Project instructions | `CLAUDE.md` (if present) |
-| Global rules | `&#126;/.claude/rules/*.md` |
-| Project rules | `.claude/rules/*.md` |
+**Authority** — CLAUDE.md and rules win over memory on conflict. A nested `CLAUDE.md` wins over the root one for its own subtree.
 
-**Migration decision tree (per entry)**
+**Mechanics** — one subagent per file, `Edit` only, applied bottom-up by descending line number to preserve line numbers across a multi-edit run. Edits never use `Write` on an existing file.
 
-- Applies to all projects + is a rule/constraint → `&#126;/.claude/rules/`
-- Applies to this project only + is a rule → `.claude/rules/`
-- Is an architectural decision → project `CLAUDE.md`
-- Is a fact/pattern reusable across sessions → stays in memory
+**Delegation** — every subagent spawn carries GOAL / ROLE / SCOPE / CONTEXT / CONSUMER / DONE; one subagent = one bounded unit, batches spawned in a single message.
 
-**Compression techniques**
+**No `context: fork`** — the skill runs in the main conversation because it needs the session's history and spawns `Task` subagents from there.
 
-- Prose → table row
-- Multiple related entries → single table
-- Verbose description → imperative one-liner
-- List of examples → pattern + one example
+**Files**
 
-Edits are applied bottom-up (descending line number order) to preserve line numbers during multi-edit operations.
-
-**No `context: fork`** — the skill must run in the main conversation to spawn `Explore` and `reviewer` agents.
+| File | Purpose |
+|------|---------|
+| `SKILL.md` | Input gate, mode selection, dispatch |
+| `references/mode-sync.md` | Steps S0-S5: surface discovery, verdicts, fan-out, report |
+| `references/mode-sync-full.md` | Steps F0-F4: sync + agent/skill rosters + cross-layer dedup |
+| `references/memory-guide.md` | Where-does-it-belong decision tree, compression patterns, obvious-vs-domain table |
 
 </details>
 
 <CardGrid>
-  <Card title="Docsync" icon="sync" href="/brewdoc/skills/docsync/">
-    Track doc staleness by date — the other core brewdoc skill.
-  </Card>
-  <Card title="My-claude" icon="document" href="/brewdoc/skills/my-claude/">
-    Generate Claude Code installation docs for your project.
-  </Card>
-  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewdoc/skills/memory">
-    Source code and full SKILL.md for the memory optimizer.
-  </Card>
-  <Card title="Brewdoc overview" icon="rocket" href="/brewdoc/overview/">
-    All brewdoc skills in one place.
-  </Card>
+  <Card title="Docsync" icon="sync" href="/brewdoc/skills/docsync/">Track doc staleness by date — the sibling brewdoc sync skill.</Card>
+  <Card title="My-claude" icon="document" href="/brewdoc/skills/my-claude/">Generate Claude Code installation docs for your project.</Card>
+  <Card title="Agents" icon="settings" href="/brewcode/skills/agents/">Standalone agent roster sync, same non-growth directive.</Card>
+  <Card title="Skills" icon="pencil" href="/brewcode/skills/skills/">Standalone skill roster sync, same non-growth directive.</Card>
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewdoc/skills/memory">Source code and full SKILL.md for the memory sync skill.</Card>
 </CardGrid>
 
 <UpdateNotice />

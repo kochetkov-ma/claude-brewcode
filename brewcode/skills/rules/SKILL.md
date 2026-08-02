@@ -24,8 +24,7 @@ model: sonnet
 
 ## Step 1 — Input gate
 
-Treat the **entire** user input (`$ARGUMENTS`) as ONE free-form natural-language prompt.
-There is NO keyword grammar and NO argument parser — `argument-hint` is only a loose example.
+Treat the **entire** user input (`$ARGUMENTS`) as ONE free-form natural-language prompt — no keyword grammar, no argument parser (`argument-hint` is only a loose example).
 
 - prompt non-empty -> go to **Step 2**
 - prompt empty / whitespace-only -> go to **Step 3**
@@ -70,6 +69,26 @@ After the choice:
 - `create` or `improve` -> ask ONE follow-up AskUserQuestion for the target/description
   plus the artifact-specific params (see "Artifact-specific params" below).
 - Then ANNOUNCE the mode using the Step 2 format and proceed to **Step 4**.
+
+## Delegation (applies to EVERY Task spawn in this skill)
+
+A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct
+it, and it usually drifts off-target. One subagent = ONE bounded unit — one deliverable
+(here: ONE rule file), ~<=5 files, ~<=10 steps. Bigger MUST be split into N tasks, all spawned
+in ONE message.
+
+Every spawn prompt MUST carry:
+
+| Field | Content |
+|-------|---------|
+| GOAL | the overall task and why it exists — the point beyond the file edit |
+| ROLE | what this agent owns; what it must NOT touch |
+| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
+| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what THIS agent needs |
+| CONSUMER | who or what uses the result next, and the shape it must fit |
+| DONE | acceptance criteria + the exact report shape you want back |
+
+A bare one-line task is never enough.
 
 ## Step 4 — Dispatch
 
@@ -118,7 +137,13 @@ Note: rules has only an ORGANIZER (bc-rules-organizer), no separate creator — 
 organizer-driven. For `create`/`improve`: AskUserQuestion for the knowledge source —
 (a) KNOWLEDGE.jsonl path (parse t:"❌"->avoid, t:"✅"->practice), (b) inline prompt
 (<path> + text), (c) session learnings (extract 5 most impactful findings as ❌/✅).
-Spawn SPECIALIST (bc-rules-organizer) with the agent-prompt template:
+Spawn SPECIALIST (bc-rules-organizer) with the Delegation shape — GOAL: the project needs a
+deduplicated, machine-usable rule set in `.claude/rules/`; ROLE: this agent owns ONLY the target
+rule files, never CLAUDE.md and never global rules; CONTEXT: the knowledge source and its parsed
+entries are already chosen above (do NOT re-ask), the existing `.claude/rules/*.md` are the
+dedup baseline, and no sibling agent touches those files; CONSUMER: Claude Code auto-loads
+`.claude/rules/*.md` into every session, so entries must be table rows, not prose, and the Step 6
+report needs the per-file added/merged/skipped counts; SCOPE + DONE per the template below:
   - Update PROJECT .claude/rules/ — NEVER ~/.claude/rules/
   - Plugin templates: $BC_PLUGIN_ROOT/templates/rules/
   - Validate: bash "$BC_PLUGIN_ROOT/skills/rules/scripts/rules.sh" validate

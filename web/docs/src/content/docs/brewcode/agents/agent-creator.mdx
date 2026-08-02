@@ -19,9 +19,26 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 
 | Field | Value |
 |-------|-------|
-| Triggers | "create agent", "new agent", "agent doesn't trigger", "improve agent", "fix agent description" |
-| Model | opus |
-| Tools | Read, Write, Edit, Glob, Grep, Task, Skill, WebFetch, WebSearch, AskUserQuestion |
+| Triggers | "create agent", "improve agent", "scaffold agent" |
+| Model | `inherit` — runs on the session's model |
+| Tools | Read, Write, Edit, Glob, Grep, Bash, Task, Skill, WebFetch, WebSearch, AskUserQuestion |
+
+## Scope guard
+
+Agent Creator sizes the task before starting. One bounded unit = one deliverable, roughly 5 files, roughly 10 steps.
+
+| Situation | What the agent does |
+|-----------|---------------------|
+| Brief fits one bounded unit | Starts immediately |
+| Brief exceeds ~5 files / ~10 steps, or bundles several independent deliverables | Stops before starting, returns a split proposal: 2-N bounded subtasks, each with scope and a suggested owner |
+| Scope grows mid-flight | Stops at the next clean boundary, reports done / remaining / how to split |
+| Brief is missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance | States the assumption explicitly in the report, or asks once — never invents scope |
+
+"Create six agents for my team" gets a split proposal — one agent per subtask. The same rule that agent-creator applies to itself is the one it writes into every agent it generates.
+
+<Callout type="tip">
+**Got a split proposal instead of an agent file?** That is the guard working. Pick one agent from the proposal and re-send it, or spawn the subtasks as parallel agents in a single message.
+</Callout>
 
 ## When to use
 
@@ -70,7 +87,7 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
   <li>
     <div>
       <strong>Write</strong>
-      <p>Produces a complete <code>.md</code> file: frontmatter with all required and relevant optional fields, then a system prompt structured as Role → Context → Patterns → Commands → Checklist.</p>
+      <p>Produces a complete <code>.md</code> file: frontmatter with all required and relevant optional fields, then a system prompt structured as Role → Context → Patterns → Commands → Checklist. Every generated agent also gets a <code>maxTurns</code> sized to its role plus a checkpointing instruction, so an abort stays recoverable.</p>
     </div>
   </li>
   <li>
@@ -92,27 +109,43 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 
 ```yaml
 ---
-name: agent-name              # REQ: [a-z0-9-]+
+name: agent-name              # REQ: lowercase-hyphens; no leading `-`, no `:` (reserved for plugin namespacing)
 description: "..."            # REQ: action verb + Triggers: keyword list
 model: sonnet                 # OPT: fable|opus|sonnet|haiku|inherit  (fable=claude-fable-5, Mythos-class, CC 2.1.170+)
-effort: high                  # OPT: low|medium|high|auto (plugin agents, v2.1.78+)
-maxTurns: 20                  # OPT: integer (plugin agents, v2.1.78+)
+effort: high                  # OPT: low|medium|high|auto|integer
+maxTurns: 20                  # OPT: integer, max turns before abort
 tools: Read, Glob, Grep       # OPT: omit = inherit all
-disallowedTools: Write, Edit  # OPT: explicit deny list (v2.1.78+)
-permissionMode: default       # OPT: default|acceptEdits|dontAsk|bypassPermissions|plan
-skills: skill1, skill2        # OPT: full content injected at startup
+disallowedTools: Write, Edit  # OPT: explicit deny list
+skills: skill1, skill2        # OPT: full content injected into context at startup
 color: cyan                   # OPT: cyan|green|yellow|red|magenta
-memory: true                  # OPT: agent-specific MEMORY.md; auto-adds Read/Write/Edit
-initialPrompt: "..."          # OPT: first prompt sent on start (v2.1.69+)
-isolation: worktree           # OPT: isolated git worktree (v2.1.50+)
-worktree:
-  baseRef: main               # OPT: branch the worktree forks from (CC 2.1.115+, default: current HEAD)
-mcpServers: [server1]         # OPT: restrict which MCP servers agent accesses
+memory: project               # OPT: user|project|local -- auto-adds Read/Write/Edit
+background: true              # OPT: run detached (default: false)
+isolation: worktree           # OPT: worktree|remote -- LOW PRIORITY, see below
+permissionMode: default       # OPT: LOCAL-ONLY -- ignored + warn in plugin agents
+mcpServers: [server1]         # OPT: LOCAL-ONLY -- ignored + warn in plugin agents
+initialPrompt: "..."          # OPT: LOCAL-ONLY -- first prompt sent on start
+observer: "reviewer"          # OPT: LOCAL-ONLY -- observing agent
+observerMessage: "watch for X"  # OPT: LOCAL-ONLY -- brief for observer
+observeSubagents: false       # OPT: LOCAL-ONLY -- `false` disables observation
 ---
 ```
 
+**Scope — verified against the CC v2.1.220 binary (two separate parsers: local `.claude/agents/` and plugin `<plugin>/agents/**.md`):**
+
+| Scope | Fields |
+|-------|--------|
+| Local + plugin — both parsers honor it | `model`, `effort`, `maxTurns`, `tools`, `disallowedTools`, `skills`, `color`, `memory`, `background`, `isolation: worktree` |
+| Local only — ignored, with a warning at load in plugin agents | `permissionMode`, `hooks`, `mcpServers` |
+| Local only — silently dropped in plugin agents, no warning | `initialPrompt`, `observer`, `observerMessage`, `observeSubagents`, `isolation: remote` |
+
+Warning text emitted at load: `Plugin agent file <path> sets <key>, which is ignored for plugin agents. Use .claude/agents/ for this level of control.` Need one of the local-only fields? Move the agent to `.claude/agents/` — plugin agents cannot use them, no matter how the frontmatter is written.
+
 <Callout type="caution">
-**Do not set `permissionMode: bypassPermissions` by default.** This is equivalent to running with `--dangerously-skip-permissions` — it silently skips all safety prompts. Only use it for fully-sandboxed CI environments where there is no interactive user. For local development, prefer `permissionMode: default` or `permissionMode: acceptEdits`.
+**`isolation` is low priority — don't set it by default.** Every spawn with `isolation: worktree` costs a git worktree setup plus disk, and there's a known data-loss bug when it's combined with `permissionMode: bypassPermissions` ([#29110](https://github.com/anthropics/claude-code/issues/29110)). Use it only when several agents write to the same files concurrently.
+</Callout>
+
+<Callout type="caution">
+**Do not set `permissionMode: bypassPermissions` by default.** This is equivalent to running with `--dangerously-skip-permissions` — it silently skips all safety prompts. Only use it for fully-sandboxed CI environments where there is no interactive user. For local development, prefer `permissionMode: default` or `permissionMode: acceptEdits`. Also note: `permissionMode` is local-only — plugin agents ignore it entirely.
 </Callout>
 
 Description patterns by ambiguity level:
@@ -128,9 +161,61 @@ Subagent spawn note: CC allows nested subagent spawning, but prefer spawning fro
 Known active bugs: [#29423](https://github.com/anthropics/claude-code/issues/29423) (subagents skip CLAUDE.md), [#27736](https://github.com/anthropics/claude-code/issues/27736) (`skills:` in plugin agents), [#31392](https://github.com/anthropics/claude-code/issues/31392) (global agents not discovered in v2.1.70+).
 </details>
 
+<details>
+<summary>Subagent resource limits — turns, timeouts, checkpointing</summary>
+
+<Callout type="caution">
+**There is no wall-clock timeout for a subagent.** Not in frontmatter, not in `settings.json`, not as an environment variable. A subagent is bounded by turns, API-call timeouts, and token caps only. An agent stuck inside a single 25-minute `Bash` call is one turn — `maxTurns` will not touch it.
+</Callout>
+
+A **turn** = one model inference plus its tool calls; tool results return, then the next turn begins. Parallel tool calls in one assistant message count as ONE turn, so turns are usually fewer than tool calls. Observed in real transcripts from this repo: 12 turns / 19 tool calls, 21 / 33, 40 / 53, 51 / 55.
+
+**`maxTurns` sized by role** — every generated agent gets an explicit value:
+
+| Role | `maxTurns` |
+|------|-----------|
+| explorer / quick search | 40 |
+| reviewer / architect / tester | 60 |
+| docs / generator | 80 |
+| developer / orchestrator | 120 |
+
+Calibrated against real subagent transcripts (`.claude/projects/*/subagents/agent-*.jsonl`), not invented. At roughly 10-20 seconds per turn, 120 turns is a 20-30 minute ceiling. Rule of thumb: `maxTurns` ≈ 2-3x the role's typical run.
+
+`maxTurns` is an emergency anti-loop stop, not a budget. On exhaustion the binary emits `Reached max turns limit (N)` and the agent aborts — written files persist, but the final report is lost. That is why agent-creator also writes a **checkpointing instruction** into every generated agent body: record incremental progress to a report file after each milestone, and on resume read that file first and continue from the last checkpoint.
+
+**Relevant environment variables** (set under `env` in `settings.json`):
+
+| Variable | Bounds | Default |
+|----------|--------|---------|
+| `CLAUDE_CODE_MAX_TURNS` | Turn cap for ALL agents globally | unset |
+| `API_TIMEOUT_MS` | A single API call | 10 min |
+| `CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS` | Background-agent stall; resets on streaming | 10 min |
+| `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` | Concurrent subagents | 20 |
+| `CLAUDE_CODE_MAX_SUBAGENTS_PER_SESSION` | Total per session | 200 |
+| `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` | Subagent nesting depth (v2.1.219+) — verify the live cap, don't hardcode a number | unset |
+| `CLAUDE_CODE_MAX_OUTPUT_TOKENS` | Output tokens per response | model max |
+| `MAX_MCP_OUTPUT_TOKENS` | MCP result size | 25k |
+| `BASH_DEFAULT_TIMEOUT_MS` / `BASH_MAX_TIMEOUT_MS` | Bash tool only | 120s / 600s |
+
+**Time-based control** is only reachable through `PreToolUse`, which fires inside the subagent loop and carries `agent_id` and `agent_type`: warn at 80% of the budget, deny non-Write tools at 100%. `SubagentStart` and `SubagentStop` fire in the MAIN session, not inside the agent. No timer hook exists.
+
+**Recovering a partial result:**
+
+| Path / tool | Use |
+|-------------|-----|
+| `.claude/projects/{project}/{sessionId}/subagents/agent-{agentId}.jsonl` | Full subagent transcript (retention: `cleanupPeriodDays`) |
+| `run_in_background: true` + `TaskOutput` | Read partial output while it runs |
+| `TaskStop` | Kill a running subagent |
+| `SendMessage` | Resume a stopped subagent with context intact |
+
+</details>
+
 <CardGrid>
-  <Card title="Skill Creator" icon="puzzle" href="/brewcode/skills/skill-creator/">
+  <Card title="Skill Creator" icon="puzzle" href="/brewcode/agents/skill-creator/">
     Same design process for skills instead of agents.
+  </Card>
+  <Card title="Agent Deadline" icon="clock" href="/brewtools/skills/agent-deadline/">
+    Installs soft-deadline hooks for subagent runs — the practical continuation of the resource-limits section above.
   </Card>
   <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/agents/agent-creator.md">
     Full frontmatter reference, description patterns, and system prompt templates.

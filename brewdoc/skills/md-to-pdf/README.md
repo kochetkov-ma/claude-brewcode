@@ -106,4 +106,4 @@ After conversion, a result report is printed:
 
 ## Documentation
 
-Full docs: [md-to-pdf](https://doc-claude.brewcode.app/brewdoc/md-to-pdf/)
+Full docs: [md-to-pdf](https://doc-claude.brewcode.app/brewdoc/skills/md-to-pdf/)

@@ -95,4 +95,4 @@ Find your owner tokens in `.claude/brewpage-history.md`.
 
 ## Documentation
 
-Full docs: [publish](https://doc-claude.brewcode.app/brewdoc/publish/)
+Full docs: [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/)

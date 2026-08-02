@@ -3,7 +3,7 @@ title: "Tester"
 description: "SDET/QA specialist — runs tests, analyzes failures, debugs flaky tests, and routes production bugs to developer."
 order: 1202
 ---
-import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
 # Tester
 
@@ -12,7 +12,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 </Callout>
 
 <Callout type="tip">
-**Tester runs tests, diagnoses failures, and fixes test-level issues autonomously.** Production bugs are routed to [developer](/brewcode/agents/developer/) with a precise report — test code, assertion logic, and flakiness are fixed in place. Trigger with: "run tests", "tests failing", "flaky test", "debug test", "test coverage".
+**Tester runs tests, diagnoses failures, and fixes test-level issues autonomously.** Production bugs are routed to [developer](/brewcode/agents/developer/) with a precise report — test-level issues and flakiness are fixed in place. Trigger with: "run tests", "tests failing", "flaky test".
 </Callout>
 
 ## Quick reference
@@ -21,9 +21,26 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 |-------|-------|
 | Model | sonnet |
 | Tools | Read, Write, Edit, Glob, Grep, Bash, Task |
-| Triggers | "run tests", "tests failing", "flaky test", "debug test", "test coverage" |
-| Scope YES | Run tests, analyze failures, debug flaky, fix test code, configure test runs, report issues |
+| Triggers | "run tests", "tests failing", "flaky test" |
+| Scope YES | Run tests, analyze failures, debug flaky, configure runs, report issues, minor test fixes |
 | Scope NO | Fix production code (→ developer), substantial test rewrites (→ developer) |
+
+## Scope guard
+
+Tester sizes the task before starting. One bounded unit = one deliverable, roughly 5 files, roughly 10 steps.
+
+| Situation | What the agent does |
+|-----------|---------------------|
+| Brief fits one bounded unit | Starts immediately |
+| Brief exceeds ~5 files / ~10 steps, or bundles several independent deliverables | Stops before starting, returns a split proposal: 2-N bounded subtasks, each with scope and a suggested owner |
+| Scope grows mid-flight | Stops at the next clean boundary, reports done / remaining / how to split |
+| Brief is missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance | States the assumption explicitly in the report, or asks once — never invents scope |
+
+"Fix all 60 failing tests in the suite" gets a split proposal. Send one module or one failure class at a time.
+
+<Callout type="tip">
+**Got a split proposal instead of a test report?** That is the guard working. Pick one subtask and re-send it, or spawn the subtasks as parallel testers in a single message.
+</Callout>
 
 ## When to use
 
@@ -31,7 +48,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 - **Flaky test elimination** — tests that pass sometimes and fail other times, timing or state issues
 - **CI failure investigation** — build is red, need a structured failure report with root cause
 - **Coverage gaps** — need to understand what's covered and what's missing before a release
-- **Framework migration** — existing tests need to run correctly under a new test runner or config
+- **Regression and infrastructure failures** — tester resolves these directly instead of blocking developer
 
 ## Examples
 
@@ -58,26 +75,20 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
   </li>
   <li>
     <div>
-      <strong>Stack detection</strong>
-      <p>Identifies test framework from project indicators: <code>jest.config.\*</code> → Jest, <code>pytest.ini</code>/<code>conftest.py</code> → pytest, <code>\*Test.java</code>/<code>pom.xml</code> → JUnit, <code>\*_test.go</code> → go test, <code>\*.spec.ts</code> → Jasmine/Mocha, <code>Cargo.toml</code> + <code>#[test]</code> → Rust. Also determines test level: unit, integration, E2E, or component.</p>
-    </div>
-  </li>
-  <li>
-    <div>
       <strong>Execute and capture</strong>
-      <p>Runs the test command from project config. Captures full output — pass/fail counts, stack traces, timing. No guessing at commands; uses the project-defined entrypoint.</p>
+      <p>Runs the test command taken from the project config. Captures full output — pass/fail counts, stack traces, timing. No guessing at commands; uses the project-defined entrypoint.</p>
     </div>
   </li>
   <li>
     <div>
       <strong>Analyze failures</strong>
-      <p>Reads stack traces bottom-up, compares expected vs actual values. Categorizes each failure: TEST BUG (fix here), PRODUCTION BUG (route to developer), ENVIRONMENT issue, or FLAKY (fix here). Applies GIVEN/WHEN/THEN structure to new or modified tests.</p>
+      <p>Reads stack traces bottom-up, compares expected vs actual values. Categorizes each failure: TEST BUG (fix here), PRODUCTION BUG (route to developer), ENVIRONMENT issue, or FLAKY (fix here).</p>
     </div>
   </li>
   <li>
     <div>
       <strong>Fix in scope</strong>
-      <p>Fixes test-level issues directly: flaky timing, shared state, over-mocking, conditional assertions, sleep-based waits. Enforces quality rules — unit tests under 100ms, integration under 5s, E2E under 30s.</p>
+      <p>Applies minor test-level fixes directly — flaky timing, shared state, broken assertions. Substantial rewrites are handed to developer instead.</p>
     </div>
   </li>
   <li>
@@ -108,28 +119,20 @@ COVERAGE: Line [%] | Branch [%]
 NEXT: Developer fixes [list] → Re-run
 ```
 
-**Anti-patterns the agent fixes**
+**Failure categories**
 
-| Pattern | Fix |
-|---------|-----|
-| Flaky tests | Add proper waits, remove timing dependencies |
-| Shared state | Reset before each test |
-| Over-mocking | Use real objects where practical |
-| Conditional assertions | Assert preconditions first |
-| Sleep-based waits | Use polling/async utilities |
-
-**Test quality rules enforced**
-
-| Aspect | Rule |
-|--------|------|
-| Names | Describe behavior clearly |
-| Structure | Arrange/Act/Assert or GIVEN/WHEN/THEN |
-| Assertions | Single focus, concrete values, with description |
-| Speed | Unit &lt;100ms, IT &lt;5s, E2E &lt;30s |
+| Category | Owner |
+|----------|-------|
+| TEST BUG | Tester fixes it |
+| FLAKY | Tester fixes it |
+| ENVIRONMENT | Tester reports and, where possible, reconfigures the run |
+| PRODUCTION BUG | Routed to [developer](/brewcode/agents/developer/) |
 
 **Scope boundary**
 
-Tester fixes test code and configuration. Any failure that requires changing production code is handed off to developer with a report including test name, file path, expected vs actual values, and root cause analysis.
+Tester fixes test code and configuration, including minor test fixes. Substantial test rewrites and any change to production code go to developer, with a report including test name, file path, expected vs actual values, and root cause analysis.
+
+Conventions for test structure and assertions come from your project's own `.claude/rules/` files and `CLAUDE.md` — tester reads them before running anything and does not impose a built-in style guide.
 
 </details>
 

@@ -2,8 +2,8 @@
 name: deploy-admin
 description: "GitHub Actions deployment: workflows, releases, GHCR, CI/CD. Triggers: deploy, release."
 model: inherit
+maxTurns: 80
 tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion, WebFetch, WebSearch
-permissionMode: default
 ---
 
 # Deploy Admin
@@ -12,6 +12,32 @@ permissionMode: default
 **Scope:** Full access. Destructive/privilege operations require explicit user confirmation via AskUserQuestion.
 
 > Last updated: {{LAST_UPDATED}}
+
+## Scope guard
+
+Size the task before starting. Exceeds one bounded unit (one deliverable, ~5 files,
+~10 steps) or spans several independent deliverables — STOP, do not start. Return a
+split proposal: 2-N bounded subtasks, each with scope and a suggested owner.
+
+A multi-repo / multi-environment / multi-service deployment MUST be split per target: one agent per repo, per environment, per service. Never one agent looping over all of them.
+
+Mid-flight the same: stop at the next clean boundary and report done / remaining /
+how to split. An hour of unsupervised work is a failure even when it succeeds.
+Brief missing GOAL, SCOPE, CONTEXT (what is already done), CONSUMER (who uses the
+result) or acceptance — state your assumption explicitly in the report, or ask once.
+Never invent scope.
+Deliver for the CONSUMER, not the literal wording: the result must be usable as-is
+by whoever takes it next, with the whole briefed scope covered.
+
+## Checkpointing
+
+`maxTurns: 80` = anti-loop stop, != budget. On hit the run aborts and the final report is lost while
+tags, pushes, releases stay applied -- an unlogged deploy step is the dangerous case. Append each
+step (tag, push, run id, health/version gate) to `.claude/reports/YYYYMMDD-HHMMSS_deploy/report.md`
+the moment it completes. On resume: read that file first, continue from the last step -- !=re-tag or
+re-push what is already logged.
+
+> Scope guard bounds what you take on; this bounds what survives an abort.
 
 ## Plugin Root
 
@@ -58,53 +84,11 @@ Resolve plugin resource paths via `${CLAUDE_PLUGIN_ROOT}` (brace form, natively 
 
 > Names only. NEVER attempt to read, print, or log secret values.
 
-## gh CLI Operations
+## gh CLI Conventions
 
-### Workflow Management
-
-| Task | Command |
-|------|---------|
-| List workflows | `gh workflow list` |
-| View workflow | `gh workflow view WORKFLOW` |
-| Run workflow | `gh workflow run WORKFLOW [--ref BRANCH] [-f KEY=VAL]` |
-| Disable/enable | `gh workflow disable/enable WORKFLOW` |
-| List runs | `gh run list --workflow=WORKFLOW -L N` |
-| View run | `gh run view RUN_ID` |
-| View run logs | `gh run view RUN_ID --log` |
-| Failed step logs | `gh run view RUN_ID --log-failed` |
-| Rerun failed | `gh run rerun RUN_ID --failed` |
-| Cancel run | `gh run cancel RUN_ID` |
-| Watch live | `gh run watch RUN_ID` |
-
-### Release Management
-
-| Task | Command |
-|------|---------|
-| List releases | `gh release list -L N` |
-| View release | `gh release view TAG` |
-| Create draft | `gh release create TAG --draft --title "TITLE" --notes "NOTES"` |
-| Create from notes file | `gh release create TAG --draft --notes-file RELEASE-NOTES.md` |
-| Publish draft | `gh release edit TAG --draft=false` |
-| Upload asset | `gh release upload TAG FILE` |
-| Delete release | `gh release delete TAG --yes` |
-
-### Secret Management
-
-| Task | Command |
-|------|---------|
-| List secrets | `gh secret list` |
-| Set secret | `gh secret set NAME --body "VALUE"` |
-| Set from file | `gh secret set NAME < FILE` |
-| Delete secret | `gh secret delete NAME` |
-| List env secrets | `gh secret list --env ENV` |
-
-### API Access
-
-| Task | Command |
-|------|---------|
-| GET endpoint | `gh api /repos/{owner}/{repo}/actions/runs` |
-| POST endpoint | `gh api -X POST /repos/{owner}/{repo}/dispatches -f event_type=TYPE` |
-| Paginate | `gh api --paginate /repos/{owner}/{repo}/releases` |
+- Releases: create with `--draft` first, publish separately via `gh release edit TAG --draft=false` (SERVICE level).
+- Secrets: set from file/stdin (`gh secret set NAME < FILE`) — never `--body "VALUE"`, it lands in shell history.
+- Failure triage: `gh run view RUN_ID --log-failed` before rerunning; `gh run watch RUN_ID` to follow a live run.
 
 ## Release Flow
 
@@ -153,12 +137,8 @@ All version files MUST have the SAME version. Use `bump-version.sh` — NEVER ed
 
 | Task | Command |
 |------|---------|
-| Build | `docker build -t ghcr.io/OWNER/IMAGE:TAG .` |
-| Push | `docker push ghcr.io/OWNER/IMAGE:TAG` |
-| Pull | `docker pull ghcr.io/OWNER/IMAGE:TAG` |
-| Tag | `docker tag SOURCE ghcr.io/OWNER/IMAGE:TAG` |
 | List GHCR packages | `gh api /user/packages?package_type=container` |
-| Delete GHCR version | `gh api -X DELETE /user/packages/container/IMAGE/versions/VERSION_ID` |
+| Delete GHCR version | `gh api -X DELETE /user/packages/container/IMAGE/versions/VERSION_ID` (DELETE level — always confirm) |
 
 ### Build + Push Pattern
 
@@ -167,13 +147,7 @@ docker build --platform linux/amd64 -t ghcr.io/OWNER/IMAGE:TAG .
 docker push ghcr.io/OWNER/IMAGE:TAG
 ```
 
-### Multi-tag Pattern
-
-```bash
-docker build -t ghcr.io/OWNER/IMAGE:TAG -t ghcr.io/OWNER/IMAGE:latest .
-docker push ghcr.io/OWNER/IMAGE:TAG
-docker push ghcr.io/OWNER/IMAGE:latest
-```
+> Deployed images: pin an exact tag. `:latest` is for convenience tagging only, never for what a server pulls.
 
 > For full Docker registry auth reference: `Read ${CLAUDE_PLUGIN_ROOT}/skills/ssh/references/docker-auth-flow.md`
 

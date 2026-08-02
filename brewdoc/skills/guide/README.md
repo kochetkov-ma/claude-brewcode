@@ -41,4 +41,4 @@ Progress is saved to `.claude/brewdoc/guide-progress.json` (project-relative) an
 
 ## Documentation
 
-Full docs: [guide](https://doc-claude.brewcode.app/brewdoc/guide/)
+Full docs: [guide](https://doc-claude.brewcode.app/brewdoc/skills/guide/)

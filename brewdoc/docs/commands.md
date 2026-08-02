@@ -11,7 +11,7 @@ description: Detailed description of all brewdoc plugin commands
 | # | Command | Purpose | Model | Args |
 |---|---------|---------|-------|------|
 | 1 | `/brewdoc:my-claude` | Generate docs about Claude Code installation and environment | opus | `[ext [context]] \| [r <query>]` |
-| 2 | `/brewdoc:memory` | Optimize Claude Code memory in 4 interactive steps | opus | -- |
+| 2 | `/brewdoc:memory` | Sync and shrink Claude Code memory, rules, CLAUDE.md, conventions | opus | `<free-form prompt: emphasis only; empty = sync whole memory surface; 'full' adds agent+skill rosters>` |
 
 ---
 
@@ -135,98 +135,64 @@ If an existing entry for the same mode exists, the skill offers to update (versi
 
 ## 2. `/brewdoc:memory`
 
-**Purpose:** Optimizes Claude Code memory files through 4 interactive steps: remove duplicates (entries already in CLAUDE.md/rules), migrate entries to proper locations, compress remaining entries for token efficiency, and validate final state.
+**Purpose:** Re-verifies every piece of persistent memory against the code and shrinks it. `sync` (default) covers memory files + root/nested CLAUDE.md + rules + conventions; `full` adds the agent and skill rosters. A prompt is emphasis only, never a filter -- the whole surface is always checked.
 
 | Parameter | Value |
 |-----------|-------|
-| **Arguments** | -- (no arguments, runs 4-step interactive workflow) |
+| **Arguments** | `<free-form prompt: emphasis only; empty = sync whole memory surface; 'full' adds agent+skill rosters>` |
 | **Model** | `opus` |
 | **Dependencies** | None |
 | **Allowed tools** | `Read`, `Write`, `Edit`, `Glob`, `Grep`, `Bash`, `Task`, `AskUserQuestion` |
 
-### Steps Overview
+### Modes
 
-| Step | Name | Interactive | What Happens |
-|------|------|-------------|--------------|
-| 0 | Load Context | No | Glob memory files, read CLAUDE.md, read all rules |
-| 1 | Analysis | Yes | Find entries duplicating CLAUDE.md/rules -- ask to delete |
-| 2 | Migration | Yes | Categorize remaining entries -- ask to move to rules/CLAUDE.md |
-| 3 | Compression | Yes | Compress prose to tables, verbose to concise -- ask to apply |
-| 4 | Validation | No | `reviewer` agent checks; clean broken refs; final report |
+| Mode | Chosen when | Runs |
+|------|-------------|------|
+| `sync` (**default**) | empty prompt, or any prompt without a `full` signal | `references/mode-sync.md` S0-S5 |
+| `full` | prompt says full / всё / names agents or skills | `references/mode-sync-full.md` F0-F4: `sync` + agent roster + skill roster + cross-layer dedup |
+
+### Surface (every run)
+
+| Layer | Path |
+|-------|------|
+| Memory files | `$MEMORY_DIR/*.md` (`autoMemoryDirectory`, else `~/.claude/projects/<hash>/memory/`) |
+| Root CLAUDE.md | `./CLAUDE.md`, `./.claude/CLAUDE.md` |
+| Nested CLAUDE.md | every `**/CLAUDE.md` at any depth |
+| Global CLAUDE.md | `~/.claude/CLAUDE.md` (reference) |
+| Rules | `.claude/rules/*.md`, `~/.claude/rules/*.md` |
+| Conventions | `CONVENTIONS.md`, `CONTRIBUTING.md`, `AGENTS.md`, `docs/**/convention*.md`, `@path` imports |
+
+`full` additionally syncs `.claude/agents/*.md` + `*/agents/*.md` and `.claude/skills/*/SKILL.md` + `*/skills/*/SKILL.md` (with `brewcode:agent-creator`/`brewcode:skill-creator` when brewcode is installed) -- it never calls `/brewcode:agents` or `/brewcode:skills` directly (both `disable-model-invocation: true`, user-only).
 
 ### Workflow
 
-**Phase 0: Load Context**
-1. Glob all memory files: `~/.claude/projects/**/memory/*.md`
-2. Read `~/.claude/CLAUDE.md` and project `CLAUDE.md` (if exists)
-3. Glob and read `.claude/rules/*.md` (project) and `~/.claude/rules/*.md` (global)
-4. Build context map: `memory_files`, `claude_md_sections`, `rules_files`
-
-**Step 1: Analysis -- Remove Duplicates (Interactive)**
-1. Spawn `Explore` agent to cross-reference all loaded files
-2. Identify: same rule in CLAUDE.md, same pattern in a rules file, or contradicts CLAUDE.md (CLAUDE.md wins)
-3. Show analysis table: Entry, Memory File, Already In, Action
-4. `AskUserQuestion`: "Delete X duplicate entries (Y% of memory)?" -- Options: "Yes, delete all" / "Review each" / "Skip this step"
-5. Apply deletion via `Edit` if approved
-
-**Step 2: Migration -- Move to Rules/CLAUDE.md (Interactive)**
-
-| Entry Type | Target |
-|------------|--------|
-| Rule/constraint, ALL projects | `~/.claude/rules/{topic}.md` |
-| Rule/constraint, THIS project | `.claude/rules/{topic}.md` |
-| Architectural decision | Project `CLAUDE.md` |
-| Reusable pattern/fact | KEEP in memory |
-| Session-specific | DELETE (ephemeral) |
-
-1. Show categorization table: Entry, Current Location, Target, Token Reduction
-2. `AskUserQuestion`: "Migrate X entries to rules/CLAUDE.md?" -- Options: "Yes, migrate all" / "Review each" / "Skip this step"
-3. If approved: create/append target rule files, remove migrated entries from memory
-
-**Step 3: Compression (Interactive)**
-
-Techniques: prose to table row, multiple related entries to single table, verbose to imperative one-liner, list of examples to pattern + one example.
-
-1. Show compression preview: Before, After, Savings (with 2-3 specific samples)
-2. `AskUserQuestion`: "Compress remaining memory? (~Y% reduction)" -- Options: "Yes, compress all" / "Skip compression"
-3. Apply via `Edit` (bottom-up order to preserve line numbers)
-
-**Step 4: Validation (Automatic)**
-1. Spawn `reviewer` agent: verify no broken file path refs, no contradictions with CLAUDE.md, well-formed markdown
-2. Clean broken references via `Edit`
-3. Check for orphaned memory files (`~/.claude/projects/**/memory/` with no reference)
-4. Report orphaned files and ask to delete
+1. **Order:** DELETE -> COMPRESS -> MOVE -> ADD, per file, longest files first.
+2. **Verdicts:** DUPLICATE, OBVIOUS, STALE, OLD, EPHEMERAL, DRIFT, MISPLACED, MISSING. Adds must be non-obvious, domain-specific, source-verified, and their absence must cost a real failure.
+3. **Non-growth:** each file `<=` its original line count, total delta `<= 0`.
+4. **Fan-out:** one subagent per file, batches `<= 8`, `Edit`-only bottom-up; orchestrator runs a cross-file pass.
+5. **Gate:** one `AskUserQuestion` -- "Apply all" / "Apply deletions+compression only" / "Review each" / "Cancel".
+6. **`full` only:** agent + skill rosters synced in-place under the same rules, then cross-layer dedup.
 
 ### Output
 
 ```markdown
-## Memory Optimization Complete
+## memory [sync|full]
 
-### Summary
-| Metric | Before | After | Saved |
-|--------|--------|-------|-------|
-| Total entries | X | Y | Z |
-| Duplicate entries | X | 0 | -- |
-| Migrated entries | -- | -- | X |
-| Token estimate | ~X | ~Y | ~Z (~P%) |
+### Surface (per layer)
+| Layer | Files | Lines before | Lines after | Delta |
 
-### Changes Made
-- Step 1: Deleted X duplicate entries
-- Step 2: Migrated X entries to rules/CLAUDE.md
-- Step 3: Compressed X entries (Y% reduction)
-- Step 4: Fixed X broken references, removed X orphaned files
-
-### Final Memory Structure
-{directory listing}
+### Longest files / Deleted / Stale facts corrected / Moved / Added / Skipped / Next Steps
 ```
 
 ### Examples
 
 ```
 /brewdoc:memory
+/brewdoc:memory "focus on the CI facts"
+/brewdoc:memory "full"
 ```
 
-No arguments. All interaction via `AskUserQuestion`. Each step can be skipped individually.
+Empty prompt and free-text prompt run the same `sync` sweep; only a `full` signal changes scope.
 
 ---
 
@@ -234,9 +200,10 @@ No arguments. All interaction via `AskUserQuestion`. Each step can be skipped in
 
 | Error | Applies To | Action |
 |-------|-----------|--------|
-| Memory file empty | memory | Skip, report in validation |
-| Broken file reference | memory | Clean in Step 4 |
-| File not found | my-claude, memory | Skip, add to errors |
+| Memory dir absent | memory | Report; sync the rest of the surface |
+| Total delta positive | memory | State per-line justification, never buried |
+| Confirmation cancelled | memory | Nothing written; `full` skips the roster pass |
+| File not found | my-claude | Skip, add to errors |
 
 ## Plugin Variable
 

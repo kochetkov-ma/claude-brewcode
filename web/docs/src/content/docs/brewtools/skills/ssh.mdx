@@ -104,6 +104,25 @@ import { Card, CardGrid, Callout, Steps, Badge, UpdateNotice } from '../../../..
   </li>
 </Steps>
 
+## Delegation
+
+<Callout type="warning">
+**A big task handed to one agent = an agent gone for an hour.** You cannot observe it, you cannot correct it, and it usually drifts off-target. One `ssh-admin` spawn gets ONE bounded unit: one deliverable on **one host**, ~5 files or services, ~10 commands. Three hosts means three tasks, one deliverable each, all spawned in a single message.
+</Callout>
+
+Every spawn prompt carries six fields. A bare one-line task is never enough:
+
+| Field | Content |
+|-------|---------|
+| GOAL | the overall task and why it exists — the point beyond the command |
+| ROLE | what this agent owns; what it must NOT touch |
+| SCOPE | exact host and commands in bounds + explicit out-of-bounds |
+| CONTEXT | host / user / port / key, what discovery already found, what runs in parallel |
+| CONSUMER | who or what uses the result next, and the shape it must fit |
+| DONE | acceptance criteria + the exact report shape expected back |
+
+**The confirmation gates are not delegable.** DELETE and PRIVILEGE approval happens in Step 3, in the main conversation, *before* any spawn — a subagent never receives an unapproved destructive command.
+
 <details>
 <summary>Safety classification matrix & internals</summary>
 

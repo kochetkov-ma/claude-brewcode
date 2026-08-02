@@ -88,7 +88,7 @@ brewcode/
 ├── hooks/
 │   ├── hooks.json                     # 2 hooks (SessionStart, UserPromptSubmit)
 │   ├── session-start.mjs              # Version-check, plan-symlink, permission tag
-│   ├── forced-eval.mjs                # Skill activation reminder (84%)
+│   ├── forced-eval.mjs                # [ROLE] delegate + [SPLIT] bounded units
 │   └── lib/
 │       └── utils.mjs                  # I/O, version cache, configuration
 ├── agents/                            # 10 agents
@@ -152,7 +152,7 @@ brewcode/
     | Event | Hook | Purpose |
     |-------|------|---------|
     | SessionStart | session-start | Initialization, version-check |
-    | UserPromptSubmit | forced-eval | Skill activation reminder |
+    | UserPromptSubmit | forced-eval | Manager-role + split-discipline reminder |
   </TabItem>
 </Tabs>
 

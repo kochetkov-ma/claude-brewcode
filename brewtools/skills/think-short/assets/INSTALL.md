@@ -114,13 +114,27 @@ cp "$SRC/think-short-session.mjs" "$SRC/think-short-prompt-counter.mjs" \
 echo "OK copied to $DST" || echo "FAILED"
 ```
 
-Merge settings.json (Bash + node, idempotent append + dedupe by script path):
+Merge settings.json (Bash + node, idempotent append + dedupe by FULL script path).
+Think-short entries pointing at a DIFFERENT hooks dir are dropped first — a basename
+match would keep a stale path from an earlier install into another directory, and
+Claude Code then logs a hook failure on every call. Foreign entries are never touched.
+A `settings.json` that does not parse ABORTS the merge — it is never rewritten,
+because overwriting it would silently destroy `model`, `env`, `permissions.deny`
+and every foreign hook over one stray comma:
 ```
 node -e '
 const fs=require("fs"), os=require("os"), path=require("path");
 const f=path.join(os.homedir(),".claude","settings.json");
 const dir=path.join(os.homedir(),".claude","hooks");
-let s={}; try{s=JSON.parse(fs.readFileSync(f,"utf8"))||{}}catch{}
+let s={};
+if(fs.existsSync(f)){
+  const raw=fs.readFileSync(f,"utf8");
+  if(raw.trim()){
+    try{ s=JSON.parse(raw); }
+    catch(e){ console.error("ABORT: "+f+" is not valid JSON ("+e.message+") - fix or delete it; nothing was written"); process.exit(1); }
+    if(s===null||typeof s!=="object"||Array.isArray(s)){ console.error("ABORT: "+f+" is not a JSON object; nothing was written"); process.exit(1); }
+  }
+}
 s.hooks=s.hooks||{};
 const want=[
   ["SessionStart",null,"think-short-session.mjs"],
@@ -128,19 +142,37 @@ const want=[
   ["PreToolUse","Task|Agent","think-short-task.mjs"],
 ];
 const marks=["think-short-session.mjs","think-short-prompt-counter.mjs","think-short-task.mjs"];
-const refs=e=>JSON.stringify((e&&e.hooks)||[]);
+const argsOf=e=>((e&&e.hooks)||[]).flatMap(h=>(h&&h.args)||[]).filter(a=>typeof a==="string");
+const isTS=a=>marks.some(m=>a===m||a.endsWith("/"+m)||a.endsWith("\\"+m));
+const wanted=new Set(marks.map(m=>path.join(dir,m)));
+for(const ev of Object.keys(s.hooks)){                 // drop stale-path think-short entries, keep foreign ones
+  if(!Array.isArray(s.hooks[ev])) continue;
+  s.hooks[ev]=s.hooks[ev].filter(e=>{
+    const ts=argsOf(e).filter(isTS);
+    return ts.length===0 || ts.every(a=>wanted.has(a));
+  });
+}
 for(const [ev,matcher,script] of want){
   s.hooks[ev]=s.hooks[ev]||[];
-  const has=s.hooks[ev].some(e=>marks.some(m=>refs(e).includes(m)&&refs(e).includes(script)));
-  if(has) continue;
-  const entry={hooks:[{type:"command",command:"node",args:[path.join(dir,script)]}]};
+  const full=path.join(dir,script);
+  if(s.hooks[ev].some(e=>argsOf(e).includes(full))) continue;
+  const entry={hooks:[{type:"command",command:"node",args:[full]}]};
   if(matcher) entry.matcher=matcher;
   s.hooks[ev].push(entry);
 }
-fs.writeFileSync(f,JSON.stringify(s,null,2));
+fs.mkdirSync(path.dirname(f),{recursive:true});
+fs.writeFileSync(f,JSON.stringify(s,null,2)+"\n");
+const back=JSON.parse(fs.readFileSync(f,"utf8"));   // post-write verification
+for(const [ev,,script] of want){
+  const n=(back.hooks&&back.hooks[ev]||[]).filter(e=>argsOf(e).includes(path.join(dir,script))).length;
+  if(n!==1){ console.error("ABORT: verification failed - "+ev+"/"+script+" present "+n+" times in "+f); process.exit(1); }
+}
 console.log("OK merged "+f);
-'
+' && echo "✅ merged" || echo "❌ FAILED"
 ```
+
+> **STOP if ❌** — an ABORT leaves `settings.json` byte-for-byte unchanged. Fix
+> the JSON by hand, then re-run.
 
 > For PROJECT target the same `node -e` merge works — point `f` at
 > `<repo>/.claude/settings.json` and `dir` at `<repo>/.claude/hooks`. Or use the
@@ -168,15 +200,25 @@ node -e '
 const fs=require("fs");
 const f=process.env.SETTINGS, dir=process.env.HOOKS_DIR;
 const marks=["think-short-session.mjs","think-short-prompt-counter.mjs","think-short-task.mjs"];
-let s={}; try{s=JSON.parse(fs.readFileSync(f,"utf8"))||{}}catch{s=null}
-if(s&&s.hooks){
+let s={};
+if(!fs.existsSync(f)){ console.log("no settings to clean: "+f); process.exit(0); }
+const raw=fs.readFileSync(f,"utf8");
+if(!raw.trim()){ console.log("empty settings, nothing to clean: "+f); process.exit(0); }
+try{ s=JSON.parse(raw); }
+catch(e){ console.error("ABORT: "+f+" is not valid JSON ("+e.message+") - fix or delete it; nothing was written"); process.exit(1); }
+if(s===null||typeof s!=="object"||Array.isArray(s)){ console.error("ABORT: "+f+" is not a JSON object; nothing was written"); process.exit(1); }
+const hit=e=>marks.some(m=>JSON.stringify((e&&e.hooks)||[]).includes(m));
+if(s&&s.hooks&&typeof s.hooks==="object"){
   for(const ev of Object.keys(s.hooks)){
     if(!Array.isArray(s.hooks[ev])) continue;
-    s.hooks[ev]=s.hooks[ev].filter(e=>!marks.some(m=>JSON.stringify((e&&e.hooks)||[]).includes(m)));
+    s.hooks[ev]=s.hooks[ev].filter(e=>!hit(e));
     if(s.hooks[ev].length===0) delete s.hooks[ev];
   }
-  if(s.hooks&&Object.keys(s.hooks).length===0) delete s.hooks;
-  fs.writeFileSync(f,JSON.stringify(s,null,2));
+  if(Object.keys(s.hooks).length===0) delete s.hooks;
+  fs.writeFileSync(f,JSON.stringify(s,null,2)+"\n");
+  const back=JSON.parse(fs.readFileSync(f,"utf8"));   // post-write verification
+  const left=Object.values((back.hooks)||{}).flat().filter(hit).length;
+  if(left!==0){ console.error("ABORT: verification failed - "+left+" think-short entries still in "+f); process.exit(1); }
   console.log("OK cleaned "+f);
 }
 ' && \
@@ -184,8 +226,12 @@ rm -f "$HOOKS_DIR/think-short-session.mjs" \
       "$HOOKS_DIR/think-short-prompt-counter.mjs" \
       "$HOOKS_DIR/think-short-task.mjs" \
       "$HOOKS_DIR/think-short-prompt.md" && \
-echo "OK removed files from $HOOKS_DIR" || echo "removal had errors"
+test ! -e "$HOOKS_DIR/think-short-task.mjs" && \
+echo "✅ removed files from $HOOKS_DIR" || echo "❌ FAILED"
 ```
+
+> **STOP if ❌** — an ABORT (unparseable `settings.json`) skips the `rm` too, so
+> settings and files stay consistent. Fix the JSON, then re-run.
 
 > Global removal: file-editing tools are blocked on `~/.claude/*`, so use the
 > Bash `node`/`rm` approach above (do NOT use Edit/Write). Project removal may use

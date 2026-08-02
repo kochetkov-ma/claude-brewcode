@@ -70,13 +70,39 @@ Drop an unclear/raw item into `.claude/features/backlog/<slug>.md` -- raw idea, 
 
 ## Delegation
 
-For non-trivial passes (bulk transitions, large groom, migrating many rows) delegate to the `task-tracker` agent rather than hand-editing:
+A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target. One subagent = ONE bounded unit — ONE board pass (one groom run, or one status folder's transitions), ~<=5 files, ~<=10 steps. Bigger MUST be split into N tasks, all spawned in ONE message.
+
+Every spawn prompt MUST carry:
+
+| Field | Content |
+|-------|---------|
+| GOAL | the overall task and why it exists — the point beyond the file edit |
+| ROLE | what this agent owns; what it must NOT touch |
+| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
+| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what THIS agent needs |
+| CONSUMER | who or what uses the result next, and the shape it must fit |
+| DONE | acceptance criteria + the exact report shape you want back |
+
+A bare one-line task is never enough. Simple single-task view/add/move: do it directly here. For non-trivial passes (bulk transitions, large groom, migrating many rows) delegate to the `task-tracker` agent rather than hand-editing:
 
 \`\`\`
-Task(subagent_type="task-tracker", prompt="Groom .claude/features/backlog/ per TRACKER.md and sync board.md")
+Task(subagent_type="task-tracker", prompt="
+GOAL: keep .claude/features/ truthful — a lagging board.md is a wrong board, and every reader
+  (this skill's VIEW flow, any status report) trusts it over the files.
+ROLE: you own this groom pass. Promote / merge / trash each backlog item, then sync board.md.
+  Do NOT touch source dirs, do NOT invent tasks no backlog item supports, do NOT rename existing ids.
+SCOPE: in — .claude/features/backlog/*.md (skip README.md), the task files you promote into todo/,
+  and board.md. Out — progress/, closed/, specs/, source code, CLAUDE.md.
+CONTEXT: the authoritative procedure is .claude/features/TRACKER.md and the id convention is in
+  TASK_TEMPLATE.md — read both first, do not reinvent them. Ids are UPPER-KEBAB and never change.
+  Nothing else is editing the board right now; the current counts in board.md are the pre-groom ones.
+CONSUMER: the VIEW flow reads board.md counts + tables next, and folder == status: a file whose
+  status: frontmatter disagrees with its folder, or a task missing from board.md, is invisible.
+DONE: every backlog file handled (promoted / merged / trashed — none left behind); board.md tables,
+  counts and backlog count refreshed in the SAME change. Report a table: promoted ids | merged-into
+  ids | trashed slugs, plus the new counts.
+")
 \`\`\`
-
-Simple single-task view/add/move: do it directly here.
 
 ## References
 

@@ -90,6 +90,25 @@ In all three cases the skill calls `AskUserQuestion` to confirm scope (Project v
   </li>
 </Steps>
 
+## Delegation
+
+<Callout type="warning">
+**A big task handed to one agent = an agent gone for an hour.** You cannot observe it, you cannot correct it, and it usually drifts off-target. Install or remove for **one target** is one bounded unit — 4 asset files plus one `settings.json`, well under 10 steps — so it is a single `brewcode:hook-creator` spawn. A wider request ("install here AND globally AND clean three other repos") is split into N tasks, one per target, all spawned in a single message.
+</Callout>
+
+The spawn prompt carries six fields. A bare one-line task is never enough:
+
+| Field | Content |
+|-------|---------|
+| GOAL | the user wants terse-mode hooks installed or removed for this target; pure file + settings wiring |
+| ROLE | own the file copy/strip and the `settings.json` merge — never edit hook logic or unrelated settings keys |
+| SCOPE | in — the 4 assets, the target `.claude/` dir, its `settings.json`; global target is Bash-only (protected path) |
+| CONTEXT | the plugin cache is already verified and every path resolved; nothing copied yet, no sibling writer |
+| CONSUMER | the settings file is loaded by the *next* Claude Code session — a malformed merge breaks that session, not this one |
+| DONE | which hooks were installed or removed, plus the exact `settings.json` path touched |
+
+That CONSUMER line is the reason the agent must report the exact path: the failure surfaces one session later, so it has to be checkable now.
+
 ## How it works
 
 Three hooks are installed, each targeting a different injection point:

@@ -44,11 +44,7 @@ Otherwise — show the health table to the user as-is.
 
 ## Phase 0.5: Plugin freshness check
 
-Before teaching anything, make sure the user's plugin suite is current.
-
 ### 0.5a: Check plugin status
-
-Invoke the `brewtools:plugin-update` skill with the `check` argument. This runs in non-interactive status mode — no prompts, no side effects, just a report of installed vs available versions for `brewcode`, `brewdoc`, `brewtools`, `brewui`.
 
 Use the `Skill` tool if available:
 ```
@@ -59,9 +55,7 @@ Otherwise instruct the main conversation to run `/brewtools:plugin-update check`
 
 ### 0.5b: Evaluate result
 
-Parse the check output. A plugin is **stale** if:
-- it is missing (not installed), or
-- its installed version is older than the marketplace version.
+A plugin is **stale** if it is missing (not installed) or its installed version is older than the marketplace version.
 
 If all four plugins are current → skip to Phase 1 silently.
 

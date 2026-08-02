@@ -1,9 +1,9 @@
 ---
 title: "Skill Creator"
-description: "Creates, improves, and analyzes Claude Code skills (SKILL.md files)"
+description: "Creates and improves Claude Code skills. Triggers: create skill, improve skill, fix activation."
 order: 1205
 ---
-import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
 # Skill Creator
 
@@ -19,9 +19,26 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 
 | Field | Value |
 |-------|-------|
-| Trigger | "create skill", "new skill", "skill doesn't invoke", "improve skill", "fix skill trigger" |
-| Model | opus (default); `claude-fable-5` for Mythos-class tasks (CC 2.1.170+) |
+| Trigger | "create skill", "improve skill", "fix activation" |
+| Model | `inherit` — runs on the session's model |
 | Tools | Read, Write, Edit, Glob, Grep, Bash, Task, Skill, AskUserQuestion |
+
+## Scope guard
+
+Skill Creator sizes the task before starting. One bounded unit = one deliverable, roughly 5 files, roughly 10 steps.
+
+| Situation | What the agent does |
+|-----------|---------------------|
+| Brief fits one bounded unit | Starts immediately |
+| Brief exceeds ~5 files / ~10 steps, or bundles several independent deliverables | Stops before starting, returns a split proposal: 2-N bounded subtasks, each with scope and a suggested owner |
+| Scope grows mid-flight | Stops at the next clean boundary, reports done / remaining / how to split |
+| Brief is missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance | States the assumption explicitly in the report, or asks once — never invents scope |
+
+"Build me a plugin with five skills" gets a split proposal — one skill per subtask. One skill, with its references and scripts, is a bounded unit.
+
+<Callout type="tip">
+**Got a split proposal instead of a SKILL.md?** That is the guard working. Pick one skill from the proposal and re-send it, or spawn the subtasks as parallel agents in a single message.
+</Callout>
 
 ## When to use
 

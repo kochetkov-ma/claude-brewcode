@@ -82,7 +82,9 @@ if command -v ollama &>/dev/null; then
     else
         echo "⚠️ ollama: installed but not running"
         echo "   Starting ollama service..."
-        brew services start ollama &>/dev/null || ollama serve &>/dev/null &
+        if ! brew services start ollama &>/dev/null; then
+            nohup ollama serve &>/dev/null &
+        fi
         sleep 2
         if curl -s --connect-timeout 3 --max-time 5 localhost:11434/api/tags &>/dev/null; then
             echo "✅ ollama: started"

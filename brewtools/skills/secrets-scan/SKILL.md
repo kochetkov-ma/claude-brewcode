@@ -37,12 +37,45 @@ cat "$DIR/files.txt"
 
 Config: `Task(subagent_type="general-purpose", model="haiku", description="Agent N/10 scan")`
 
+### Delegation
+
+A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target. The 10-way split IS the sizing rule: one subagent = ONE bounded unit — ONE chunk, ~<=10 steps. A repo big enough that a chunk still exceeds that gets more chunks, not bigger ones; all Task calls go out in ONE message.
+
+Every spawn prompt MUST carry:
+
+| Field | Content |
+|-------|---------|
+| GOAL | the overall task and why it exists — the point beyond the file edit |
+| ROLE | what this agent owns; what it must NOT touch |
+| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
+| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what THIS agent needs |
+| CONSUMER | who or what uses the result next, and the shape it must fit |
+| DONE | acceptance criteria + the exact report shape you want back |
+
+A bare one-line task is never enough. The prompt below is that shape; reuse it verbatim per chunk.
+
 <agent-prompt>
 Agent {N}/10 secrets scanner.
 
+GOAL: auditing this repo for leaked credentials before they reach a remote. Ten agents split
+the git-tracked file list; you own chunk {N} and the merged report depends on your JSON.
+
+ROLE: read + classify only. Do NOT edit, delete, redact, or rewrite any file. Do NOT scan
+files outside your chunk.
+
+SCOPE: in — exactly these files. Out — every other path in the repo, git history, .git/.
 FILES: {FILES}
 
-Read each file → detect secrets → return JSON.
+CONTEXT: repo root {REPO}. The file list was already produced from git-tracked files and
+filtered (binaries, vendor and ignored paths dropped) — do not re-discover or re-filter it.
+Nine sibling agents are scanning chunks 1..10 of that same list in parallel right now.
+Patterns, criticality ladder and skip rules below are final — do not invent extra categories.
+
+CONSUMER: the skill merges the ten JSON objects into one Secrets Report the user triages
+before pushing. Malformed JSON, or any prose around it, drops your whole chunk from that
+report — a missed CRITICAL there is a credential shipped to a remote.
+
+DONE: the JSON object specified under OUTPUT, nothing else. No prose, no markdown fence.
 
 PATTERNS:
 | Category | Match |

@@ -1,27 +1,12 @@
 #!/usr/bin/env node
 /**
- * Forced Eval Hook - Improves skill activation rate to 84%
+ * Forced Eval Hook - manager-role + split-discipline reminder.
  *
- * Event: UserPromptSubmit
- * Channel: hookSpecificOutput.additionalContext
- *
- * Based on: https://scottspence.com/posts/how-to-make-claude-code-skills-activate-reliably
- *
- * Problem: Skills activate only ~20-50% of time because Claude may not check
- * available skills before responding to user prompts.
- *
- * Solution: Intercept every user prompt and inject a reminder to check skills.
- * This increases activation rate to ~84% by making skill evaluation explicit.
- *
- * NOTE: updatedInput is ignored on UserPromptSubmit in CC 2.1.x - must use additionalContext.
- *
- * Output schema (UserPromptSubmit):
- * {
- *   "hookSpecificOutput": {
- *     "hookEventName": "UserPromptSubmit",
- *     "additionalContext": "skill-check + delegation hint"
- *   }
- * }
+ * Event:   UserPromptSubmit
+ * Channel: hookSpecificOutput.additionalContext — updatedInput is IGNORED on
+ *          UserPromptSubmit in CC 2.1.x (silently dropped, no error).
+ * Payload: 2 short lines, injected on EVERY prompt — keep it tiny.
+ * Cap:     9000 chars, under the 2.1.174 10K disk-spill threshold.
  */
 
 import { readStdin, output } from './lib/utils.mjs';
@@ -32,14 +17,15 @@ function capText(s, max = TEXT_CHANNEL_CAP) {
   return (typeof s === 'string' && s.length > max) ? s.slice(0, max) + '\n...[truncated]' : s;
 }
 
-// --- Skill evaluation reminder ---
+// --- Delegation reminder ---
 
-// SKILL_CHECK = always-on payload (every prompt). MANAGER_ROLE = expert-first delegation.
-// Trigger is expert match, not task size — "heavy" wording let domain tasks (ssh, deploy)
-// bypass delegation even when a project expert existed.
-const SKILL_CHECK = '[SKILL?] If a skill matches this request, use Skill tool first.';
-const MANAGER_ROLE = '[ROLE] Manager: scan agents (project .claude/agents/ first) — expert for this domain exists -> delegate regardless of size; no expert or trivial one-off -> self.';
-const REMINDER_TEXT = `${SKILL_CHECK}\n${MANAGER_ROLE}`;
+// MANAGER_ROLE trigger is expert match, not task size — "heavy" wording let domain
+// tasks (ssh, deploy) bypass delegation even when a project expert existed.
+// SPLIT covers what models still get wrong: subagent sizing + context handoff.
+// No skill-activation nudge: modern models pick skills on their own.
+const MANAGER_ROLE = '[ROLE] Manager: scan agents (project .claude/agents/ first) - expert for this domain exists -> delegate regardless of size; no expert or trivial one-off -> self.';
+const SPLIT = '[SPLIT] One agent for an hour = drift you cannot observe: split into bounded units (1 deliverable, ~5 files), fan out in ONE message; every spawn prompt carries goal + scope + what is already done + who consumes the result + acceptance.';
+const REMINDER_TEXT = `${MANAGER_ROLE}\n${SPLIT}`;
 
 // --- Main ---
 
@@ -60,14 +46,12 @@ async function main() {
       return;
     }
 
-    // Skip if user is already invoking a skill (starts with /)
     const trimmedPrompt = prompt.trim();
-    if (trimmedPrompt.startsWith('/')) {
-      output({});
-      return;
-    }
 
-    // Skip meta-commands that shouldn't trigger skill check
+    // No '/' skip: it existed for the removed skill nudge. A slash command can
+    // still carry a task worth delegating, so the reminder applies there too.
+
+    // Skip meta-commands that carry no task to delegate
     const skipPatterns = [
       /^(yes|no|y|n|ok|okay|sure|thanks|thank you|done|cancel|stop|exit|quit)$/i,
       /^(continue|proceed|go ahead|approved?|confirm(ed)?|accept(ed)?)$/i,
@@ -80,8 +64,8 @@ async function main() {
       return;
     }
 
-    // Inject skill-check reminder via additionalContext (updatedInput is ignored
-    // on UserPromptSubmit in CC 2.1.x).
+    // Inject the delegation reminder via additionalContext (updatedInput is
+    // ignored on UserPromptSubmit in CC 2.1.x).
     output({
       hookSpecificOutput: {
         hookEventName: 'UserPromptSubmit',
