@@ -5,7 +5,7 @@
  * Event:   UserPromptSubmit
  * Channel: hookSpecificOutput.additionalContext — updatedInput is IGNORED on
  *          UserPromptSubmit in CC 2.1.x (silently dropped, no error).
- * Payload: 2 short lines, injected on EVERY prompt — keep it tiny.
+ * Payload: 3 short lines, injected on EVERY prompt — keep it tiny.
  * Cap:     9000 chars, under the 2.1.174 10K disk-spill threshold.
  */
 
@@ -24,8 +24,11 @@ function capText(s, max = TEXT_CHANNEL_CAP) {
 // SPLIT covers what models still get wrong: subagent sizing + context handoff.
 // No skill-activation nudge: modern models pick skills on their own.
 const MANAGER_ROLE = '[ROLE] Manager: scan agents (project .claude/agents/ first) - expert for this domain exists -> delegate regardless of size; no expert or trivial one-off -> self.';
-const SPLIT = '[SPLIT] One agent for an hour = drift you cannot observe: split into bounded units (1 deliverable, ~5 files), fan out in ONE message; every spawn prompt carries goal + scope + what is already done + who consumes the result + acceptance.';
-const REMINDER_TEXT = `${MANAGER_ROLE}\n${SPLIT}`;
+const SPLIT = '[SPLIT] One agent for an hour = drift you cannot observe: split into bounded units (1 deliverable, ~5 files, ~20 min), fan out in ONE message; a dependency must be a REAL data handoff, else parallel; every spawn prompt carries goal + scope + what is already done + who consumes the result + acceptance.';
+// BRANCH: sessions default to main and inherit the whole workspace - a branch/PR
+// is opt-in, stated by the user, never inferred.
+const BRANCH = '[BRANCH] Stay on the current branch; none chosen -> main. No explicit branch/PR instruction -> work on main and take over ALL workspace changes, incl. from other sessions.';
+const REMINDER_TEXT = `${MANAGER_ROLE}\n${SPLIT}\n${BRANCH}`;
 
 // --- Main ---
 

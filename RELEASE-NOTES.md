@@ -2,6 +2,26 @@
 
 ---
 
+## v4.5.1 (2026-08-02)
+
+> Docs: [brewcode/hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | [brewtools/prompt-injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/) | [brewtools:manager](https://doc-claude.brewcode.app/brewtools/skills/manager/)
+
+### brewcode
+
+#### Added
+- **forced-eval hook:** new `[BRANCH]` line — `Stay on the current branch; none chosen -> main. No explicit branch/PR instruction -> work on main and take over ALL workspace changes, incl. from other sessions.` A branch or PR is opt-in and stated by the user, never inferred; without it a session owns the whole working tree, including edits left by other sessions
+
+#### Changed
+- **forced-eval hook:** `[SPLIT]` now bounds a unit by time as well as size (`1 deliverable, ~5 files, ~20 min`) and states the fan-out rule explicitly — a dependency must be a REAL data handoff, else parallel. Payload is 3 lines, still far under the 9K cap
+- **codex mirror:** `.codex/hooks/lib/prompt-cadence.mjs` carries the same `[SPLIT]` widening and the new `[BRANCH]` line
+
+### brewtools
+
+#### Changed
+- **manager `full` + `planmode` blocks (`++m`):** two new paragraphs — widest fan-out (a dependency must be a REAL data handoff, else parallel; size a unit to ~20 min of agent work, longer -> split again) and the branch rule (current branch, none chosen -> main, no explicit branch/PR -> take over all workspace changes). Same additions in the `.codex` manager mirrors
+
+---
+
 ## v4.5.0 (2026-08-02)
 
 > Docs: [semble](https://doc-claude.brewcode.app/brewcode/skills/semble/)

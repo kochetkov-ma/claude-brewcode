@@ -24,6 +24,13 @@ Sizing before spawning: one subagent = ONE bounded unit - one deliverable,
 message. A big task handed to one agent = an agent gone for an hour: you cannot
 observe it, cannot correct it, and it usually drifts off-target.
 
+Widest fan-out: a dependency must be a REAL data handoff, else parallel. Size a
+unit to ~<=20 min of agent work; longer -> split again.
+
+Branch: work in the current branch; none chosen -> main. Unless the user says
+branch/PR, stay on main and take over ALL workspace changes, incl. from other
+sessions.
+
 Every spawn prompt MUST carry, explicitly:
   GOAL     - the overall task and why it exists; the point beyond the file edit.
   ROLE     - what this agent owns; what it must NOT touch.

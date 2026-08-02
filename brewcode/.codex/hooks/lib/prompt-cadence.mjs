@@ -11,7 +11,8 @@ const STALE_MS = 24 * 60 * 60 * 1000;
 
 export const PROMPT_CONTEXT = [
   '[ROLE] Coordinate: a project expert in .codex/agents matches this domain -> delegate via sub-agent collaboration; no expert or trivial one-off -> do it directly.',
-  '[SPLIT] One agent for an hour = drift you cannot observe: split into bounded units (1 deliverable, ~5 files), fan out in ONE message; every spawn brief carries goal + scope + what is already done + who consumes the result + acceptance.'
+  '[SPLIT] One agent for an hour = drift you cannot observe: split into bounded units (1 deliverable, ~5 files, ~20 min), fan out in ONE message; a dependency must be a REAL data handoff, else parallel; every spawn brief carries goal + scope + what is already done + who consumes the result + acceptance.',
+  '[BRANCH] Stay on the current branch; none chosen -> main. No explicit branch/PR instruction -> work on main and take over ALL workspace changes, incl. from other sessions.'
 ].join('\n');
 
 function sessionKey(sessionId) {
