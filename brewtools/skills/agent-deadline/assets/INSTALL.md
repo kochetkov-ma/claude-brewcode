@@ -188,10 +188,10 @@ Nothing is ever written under `~/.claude` (harness-protected path).
 {
   "hooks": {
     "PreToolUse": [
-      { "matcher": ".*", "hooks": [ { "type": "command", "command": "node", "args": ["<absdir>/agent-deadline-guard.mjs"], "timeout": 5000 } ] }
+      { "matcher": ".*", "hooks": [ { "type": "command", "command": "node", "args": ["<absdir>/agent-deadline-guard.mjs"], "timeout": 5 } ] }
     ],
     "SubagentStop": [
-      { "hooks": [ { "type": "command", "command": "node", "args": ["<absdir>/agent-deadline-cleanup.mjs"], "timeout": 3000 } ] }
+      { "hooks": [ { "type": "command", "command": "node", "args": ["<absdir>/agent-deadline-cleanup.mjs"], "timeout": 3 } ] }
     ]
   }
 }
@@ -212,9 +212,9 @@ Merge rule, in order:
 Marker for all agent-deadline entries = any hook whose `args` contain a path
 ending in one of those two basenames.
 
-`timeout` is in MILLISECONDS and is not optional here: an entry without it inherits
-Claude Code's 60 s default, so a hung `node` on a `.*` matcher would stall every tool
-call in the session for a minute. 5000 for the guard, 3000 for the cleanup — both are
+`timeout` is in SECONDS and is not optional here: an entry without it inherits
+Claude Code's 600 s default, so a hung `node` on a `.*` matcher would stall the tool
+call for 10 minutes. 5 s for the guard, 3 s for the cleanup — both are
 ~80x the measured runtime.
 
 > Coexistence: the guard NEVER returns `updatedInput`, so it cannot clobber
@@ -278,7 +278,7 @@ if(fs.existsSync(f)){
   }
 }
 s.hooks=s.hooks||{};
-const want=[["PreToolUse",".*","agent-deadline-guard.mjs",5000],["SubagentStop",null,"agent-deadline-cleanup.mjs",3000]];
+const want=[["PreToolUse",".*","agent-deadline-guard.mjs",5],["SubagentStop",null,"agent-deadline-cleanup.mjs",3]];
 const argsOf=e=>((e&&e.hooks)||[]).flatMap(h=>(h&&h.args)||[]).filter(a=>typeof a==="string");
 const isAD=a=>marks.some(m=>a===m||a.endsWith("/"+m)||a.endsWith("\\"+m));
 const wanted=new Set(marks.map(m=>path.join(dir,m)));
@@ -349,7 +349,7 @@ if(fs.existsSync(f)){
   }
 }
 s.hooks=s.hooks||{};
-const want=[["PreToolUse",".*","agent-deadline-guard.mjs",5000],["SubagentStop",null,"agent-deadline-cleanup.mjs",3000]];
+const want=[["PreToolUse",".*","agent-deadline-guard.mjs",5],["SubagentStop",null,"agent-deadline-cleanup.mjs",3]];
 const argsOf=e=>((e&&e.hooks)||[]).flatMap(h=>(h&&h.args)||[]).filter(a=>typeof a==="string");
 const isAD=a=>marks.some(m=>a===m||a.endsWith("/"+m)||a.endsWith("\\"+m));
 const wanted=new Set(marks.map(m=>path.join(dir,m)));

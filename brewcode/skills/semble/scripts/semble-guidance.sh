@@ -327,10 +327,10 @@ const fs=require("fs"), path=require("path");
 const f=process.env.SG_SETTINGS, dir=process.env.SG_HOOKS;
 const doHooks=process.env.SG_DO_HOOKS==="1", doPerms=process.env.SG_DO_PERMS==="1";
 const marks=["semble-session.mjs","semble-reminder.mjs","semble-explore.mjs"];
-const want=[["SessionStart",null,"semble-session.mjs",5000],
-            ["PreToolUse","Bash","semble-reminder.mjs",5000],
-            ["PreToolUse","Grep","semble-reminder.mjs",5000],
-            ["SubagentStart","Explore","semble-explore.mjs",5000]];
+const want=[["SessionStart",null,"semble-session.mjs",5],
+            ["PreToolUse","Bash","semble-reminder.mjs",5],
+            ["PreToolUse","Grep","semble-reminder.mjs",5],
+            ["SubagentStart","Explore","semble-explore.mjs",5]];
 const tools=[process.env.SG_SEARCH,process.env.SG_RELATED];
 let s={};
 if(fs.existsSync(f)){

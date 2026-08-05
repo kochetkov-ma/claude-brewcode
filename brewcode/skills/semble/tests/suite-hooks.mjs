@@ -261,14 +261,14 @@ const REMIND_OK = (cwd) => ({
   const s = readSettings(p);
   const { session, reminder: rem, explore: exp } = semblePaths(p);
   check('A1.sessionEntry', s.hooks.SessionStart, [
-    { hooks: [{ type: 'command', command: 'node', args: [session], timeout: 5000 }] },
-  ], 'SessionStart entry has the exact contract shape with an explicit 5000 ms timeout');
+    { hooks: [{ type: 'command', command: 'node', args: [session], timeout: 5 }] },
+  ], 'SessionStart entry has the exact contract shape with an explicit 5 s timeout');
   check('A1.preToolUse', s.hooks.PreToolUse, [
-    { hooks: [{ type: 'command', command: 'node', args: [rem], timeout: 5000 }], matcher: 'Bash' },
-    { hooks: [{ type: 'command', command: 'node', args: [rem], timeout: 5000 }], matcher: 'Grep' },
+    { hooks: [{ type: 'command', command: 'node', args: [rem], timeout: 5 }], matcher: 'Bash' },
+    { hooks: [{ type: 'command', command: 'node', args: [rem], timeout: 5 }], matcher: 'Grep' },
   ], 'the reminder is registered once under Bash and once under Grep');
   check('A1.subagentStart', s.hooks.SubagentStart, [
-    { hooks: [{ type: 'command', command: 'node', args: [exp], timeout: 5000 }], matcher: 'Explore' },
+    { hooks: [{ type: 'command', command: 'node', args: [exp], timeout: 5 }], matcher: 'Explore' },
   ], 'the explore hook is registered once under SubagentStart with matcher Explore');
   check('A1.perm', s.permissions.allow, ['mcp__semble_code__search', 'mcp__semble_code__find_related'],
     'both MCP tool names land in permissions.allow');
@@ -358,10 +358,10 @@ const FOREIGN = {
   const seed = {
     hooks: {
       SessionStart: [
-        { hooks: [{ type: 'command', command: 'node', args: [staleDir + '/semble-session.mjs'], timeout: 5000 }] },
+        { hooks: [{ type: 'command', command: 'node', args: [staleDir + '/semble-session.mjs'], timeout: 5 }] },
       ],
       PreToolUse: [
-        { matcher: 'Bash', hooks: [{ type: 'command', command: 'node', args: [staleDir + '/semble-reminder.mjs'], timeout: 5000 }] },
+        { matcher: 'Bash', hooks: [{ type: 'command', command: 'node', args: [staleDir + '/semble-reminder.mjs'], timeout: 5 }] },
         { matcher: 'Write', hooks: [{ type: 'command', command: 'node', args: ['/opt/foreign/other.mjs'], timeout: 2000 }] },
       ],
     },
@@ -955,7 +955,7 @@ const PRE_MD = '# CLAUDE.md\n\n## Overview\n\nproject text\n';
 const FOREIGN_HOOK = { type: 'command', command: 'node', args: ['/opt/foreign/guard.mjs'], timeout: 3000 };
 {
   const staleDir = '/old/elsewhere/.claude/hooks';
-  const staleHook = { type: 'command', command: 'node', args: [staleDir + '/semble-reminder.mjs'], timeout: 5000 };
+  const staleHook = { type: 'command', command: 'node', args: [staleDir + '/semble-reminder.mjs'], timeout: 5 };
   const seed = { hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [FOREIGN_HOOK, staleHook] }] } };
   const p = freshProject({ settings: JSON.stringify(seed, null, 2) + '\n' });
   const r = guidance(p, ['install', '--part', 'hooks', '--json']);

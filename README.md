@@ -10,7 +10,7 @@
 
 **Claude Code plugin suite** -- four plugins for development, documentation, text utility, and visual workflows.
 
-A regular Claude Code session hands a big task to one agent and loses sight of it. Brewcode splits work into bounded units, gives every spawn a six-field brief, and re-states the delegation rule on every prompt. Four plugins. 26 skills. 8 agents. 4 lifecycle hooks.
+A regular Claude Code session hands a big task to one agent and loses sight of it. Brewcode splits work into bounded units, gives every spawn a six-field brief, and re-states the delegation rule on every prompt. Four plugins. 27 skills. 8 agents. 4 lifecycle hooks.
 
 [**Full Documentation**](https://doc-claude.brewcode.app/getting-started/)
 
@@ -58,7 +58,7 @@ After all commands succeed, run `/reload-plugins`. If `/reload-plugins` is unava
 |--------|---------|--------|---------|
 | [brewcode](brewcode/README.md) | Infinite task execution, quorum reviews, skill/agent creation, semantic search | 9 | `claude plugin install brewcode@claude-brewcode` |
 | [brewdoc](brewdoc/README.md) | Documentation tools: docsync, memory sync, PDF conversion, publishing | 6 | `claude plugin install brewdoc@claude-brewcode` |
-| [brewtools](brewtools/README.md) | Universal text utilities: token optimization, humanization, secrets scanning, plugin updates | 10 | `claude plugin install brewtools@claude-brewcode` |
+| [brewtools](brewtools/README.md) | Universal text utilities: token optimization, humanization, secrets scanning, plugin updates | 12 | `claude plugin install brewtools@claude-brewcode` |
 | [brewui](brewui/README.md) | UI/visual/creative tools (placeholder, currently empty) | 0 | `claude plugin install brewui@claude-brewcode` |
 
 ## Installation
@@ -210,7 +210,7 @@ Every spawn prompt carries six fields:
 | `/brewdoc:publish` | Publish to brewpage.app -- returns public URL |
 | `/brewdoc:guide` | Interactive tutorial for the plugin suite |
 
-### Brewtools (11 skills)
+### Brewtools (12 skills)
 
 | Skill | Purpose |
 |-------|---------|
@@ -218,6 +218,7 @@ Every spawn prompt carries six fields:
 | `/brewtools:text-human` | Remove AI artifacts, humanize code |
 | `/brewtools:think-short` | Install/remove terse-mode hooks (SessionStart + every-10th UserPromptSubmit + subagent Task) that inject brevity directives; project or global |
 | `/brewtools:agent-deadline` | Install/remove a soft wall-clock budget for subagents -- 80% warns "wrap up", 100% blocks all but finalization tools; project or global, opt-in |
+| `/brewtools:agent-router` | EXPERIMENTAL -- install/remove a PreToolUse hook that denies a generic subagent spawn in favor of the real project/plugin expert, or nudges when the fit is only uncertain; project scope only, opt-in |
 | `/brewtools:secrets-scan` | Scan git-tracked files for leaked secrets |
 | `/brewtools:ssh` | SSH server management -- connect, configure, deploy |
 | `/brewtools:deploy` | GitHub Actions deployment -- workflows, releases, GHCR, CI/CD |

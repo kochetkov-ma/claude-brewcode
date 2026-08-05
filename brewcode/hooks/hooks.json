@@ -7,7 +7,7 @@
             "type": "command",
             "command": "node",
             "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/forced-eval.mjs"],
-            "timeout": 1000
+            "timeout": 2
           }
         ]
       }
@@ -19,7 +19,7 @@
             "type": "command",
             "command": "node",
             "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/session-start.mjs"],
-            "timeout": 3000
+            "timeout": 3
           }
         ]
       }

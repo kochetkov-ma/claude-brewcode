@@ -1,0 +1,528 @@
+# agent-router hook — install / configure / remove runbook
+
+Self-contained hook asset. The `/brewtools:agent-router` skill copies it into the
+project hooks dir and wires `settings.json`. Opt-in and EXPERIMENTAL: NOT registered
+in `brewtools/hooks/hooks.json`, installing the plugin does nothing on its own.
+
+**Project scope only.** The agent roster (`.claude/agents/*.md`) is inherently
+per-project, so there is no global target here. Never write to `~/.claude/*` —
+harness-protected, and a global router would judge every repo against one repo's
+roster.
+
+| File | Role | Installed as |
+|------|------|--------------|
+| `agent-router.mjs` | tier-1 hook, PreToolUse matcher `Agent` | copied to `<repo>/.claude/hooks/agent-router.mjs` |
+| `judge-prompt.md` | tier-2 judge prompt | **inlined** into `settings.json`, never copied |
+
+> Pure ESM, Node built-ins only, no plugin-root / npm deps. Reads stdin, never
+> throws, always writes one JSON object and exits 0.
+
+## What it does
+
+Tier 1 — always on, deterministic, single-digit ms, **zero tokens**. Decision order,
+allowing as early as possible:
+
+| # | Check | Result |
+|---|-------|--------|
+| 1 | tool is not `Agent` | allow |
+| 2 | `agent_id` present (a SUBAGENT issued the spawn) | allow — only the main loop is policed |
+| 3 | `enabled` is `false`, or the config file exists but does not parse | allow |
+| 4 | the picked type IS a project agent | allow |
+| 5 | the picked type is a specialist / built-in not listed in `genericTypes` | allow |
+| 6 | intent rules — regex over the task text | deny, naming the expert; a project agent covering the same intent OUTRANKS the plugin specialist |
+| 7 | score the task against every `.claude/agents/*.md` frontmatter (`name` + `Triggers:`) | one clear winner (`minScore`, `margin`) -> deny naming it; several plausible -> `additionalContext` nudge with the top 3, NO deny; nothing -> silent allow |
+| 8 | anti-loop guard | a given task in a given project is denied at most ONCE per session (marker under `os.tmpdir()/brewtools-agent-router/`); a retry passes |
+| 9 | any error | fail OPEN |
+
+Scanned text = the spawn's `description` (first 500 chars) + `prompt` (first 2000).
+Both are re-read from the roster on EVERY call; there is no cache, so editing an agent
+description takes effect on the very next spawn.
+
+**Where "the project" is.** The hook does NOT use `cwd` literally: it climbs from
+`cwd` to the NEAREST ANCESTOR that holds a `.claude` directory (at most 16 levels)
+and reads the config and the roster from there. `claude` started in a subdirectory
+therefore still resolves the repo root. If no ancestor has a `.claude` dir, `cwd`
+itself is used and both lookups simply find nothing.
+
+**A missing `.claude/agents/` is an EMPTY roster, not a failure.** Steps 6 and 7 are
+independent: with no roster dir at all the intent rules STILL fire and still redirect
+to the plugin specialist (`brewcode:skill-creator` etc). Only the step-7 scoring goes
+silent, because it has nothing to score.
+
+Default intent routes (step 6):
+
+| Intent | Expert |
+|--------|--------|
+| skill authoring | `brewcode:skill-creator` |
+| agent authoring | `brewcode:agent-creator` |
+| hooks | `brewcode:hook-creator` |
+| bash / sh scripts | `brewcode:bash-expert` |
+
+A deny is returned to the model as a tool error it can act on. The human is never
+prompted, the turn is not interrupted, and retrying once always gets through.
+
+Tier 2 — OPT-IN, wired only at `level strict`: a `type: "agent"` hook running
+`judge-prompt.md` on `claude-haiku-4-5-20251001`; an LLM adjudicates the ambiguous
+picks.
+
+## Known limitations — read before trusting it
+
+- **Claude Code runs ALL hooks matching an event in parallel and no hook can skip
+  another.** Tier 1 therefore CANNOT gate tier 2. Once installed, tier 2 fires a
+  model call on EVERY `Agent` spawn; its own Step-1 fast exit is the only cost
+  control that exists. That is why `level fast` is the default and the
+  recommendation.
+- **There is no supported signal for "this tool call came from inside a Skill."**
+  Tier 2 can only guess from `transcript_path`, which is written asynchronously and
+  may lag. Tier 1 does not attempt it at all.
+- **Tier 1 matches trigger words, not meaning.** It deliberately errs toward
+  allowing: an ambiguous case becomes a nudge, never a block. The intent regexes are
+  English trigger words.
+- **Everything fails open** — bad config, unreadable roster, timeout, malformed
+  output. The spawn goes through; the session never breaks. A config file that
+  exists but does not parse turns the feature fully OFF (every spawn allowed
+  silently) — it is NOT a fall-back to the defaults, precisely so a typo cannot
+  quietly change the routing you configured.
+- **No writable tmp = no denies.** The anti-loop marker lives under
+  `os.tmpdir()`. If that directory cannot be created or written (read-only tmp,
+  a foreign-owned or group-writable `brewtools-agent-router/`, a locked-down
+  sandbox), EVERY deny degrades to a non-blocking `additionalContext` notice: a
+  deny that cannot be recorded is a deny that could repeat forever. The hook
+  keeps working, it just stops blocking. Check
+  `ls -ld "$TMPDIR/brewtools-agent-router"` if denies never appear.
+- **Experimental**, opt-in, project scope only.
+
+---
+
+## Config
+
+`<repo>/.claude/brewtools/agent-router.json`
+
+```json
+{
+  "enabled": true,
+  "level": "fast",
+  "genericTypes": ["general-purpose", "worker"],
+  "neverFlag": ["Explore", "Plan", "statusline-setup", "output-style-setup"],
+  "minScore": 3,
+  "margin": 2,
+  "intents": [
+    { "match": "regex", "expert": "brewcode:skill-creator", "label": "skill authoring" }
+  ]
+}
+```
+
+| Key | Meaning |
+|-----|---------|
+| `enabled` | only exactly `false` turns the hook off. Any other value — and a MISSING config file — leaves it ON with the defaults below. A config file that exists but does not PARSE is a different thing: the feature goes fully silent (see the limits above) |
+| `level` | `fast` (tier 1 only) or `strict` (tier 1 + the LLM judge). A RECORD of what is wired — editing it by hand does not add or remove the tier-2 settings.json entry; run the `LEVEL` section for that. Tier 1 itself ignores this key |
+| `genericTypes` | the types that are policed at all. Anything else exits at step 5 |
+| `neverFlag` | never flagged, whatever the task says. FOUR entries by default: `Explore`, `Plan`, `statusline-setup`, `output-style-setup` — `Explore` is the right tool for search, `Plan` for planning |
+| `minScore` | minimum roster score (step 7) before a project agent can win |
+| `margin` | how far the winner must lead the runner-up; inside the margin it is a nudge, not a deny |
+| `intents` | OPTIONAL override of the step-6 routes; `{ "match": <regex source>, "expert": <agent type>, "label": <human label> }`. **Omit the key to keep the hook's built-in 4 routes** — see the warning below |
+
+There is no nudge-threshold key. The nudge floor is DERIVED as
+`max(1, ceil(minScore / 2))`: a best score at or above it, without a clear win,
+produces the `additionalContext` nudge. Tune `minScore` to move it. Any key not
+listed above is ignored.
+
+> **`intents` REPLACES the built-in table wholesale — it does not merge.** Writing a
+> one-element array silently drops the other three routes (agent authoring, hook
+> authoring, shell scripting) with no warning from the hook. To add ONE route,
+> copy the built-in four out of `agent-router.mjs` (`DEFAULT_INTENTS`) and append to
+> them. Rules missing `match` or `expert` are dropped; a rule whose `match` does not
+> compile is skipped and the remaining rules still run.
+
+Install deliberately does NOT write `intents`: the built-in routes stay
+authoritative and a half-written override cannot silently disable three of them.
+Add the key by hand only to change a route.
+
+Config values are read on every hook call, so `enabled`, `genericTypes`,
+`neverFlag`, `minScore`, `margin` and `intents` take effect immediately. Hook
+WIRING changes (install / level / uninstall / purge) need a new session.
+
+> A syntactically BROKEN config ABORTS every block below rather than being
+> overwritten blind, and makes the hook fail open (every spawn allowed) until it is
+> fixed.
+
+### Parameters — export these before running any block below
+
+| Var | Set by | Meaning |
+|-----|--------|---------|
+| `RUNBOOK` | skill | absolute path to THIS file (source dir = its dirname) |
+| `LEVEL` | skill (user's answer) | `fast` or `strict`; REQUIRED for install/level — empty aborts |
+
+These are read from `process.env` by the node blocks below — they must be REAL shell
+variables, exported before the block runs:
+
+```
+export RUNBOOK='/abs/path/to/assets/INSTALL.md' LEVEL='fast'
+echo "LEVEL=$LEVEL RUNBOOK=$RUNBOOK"
+```
+
+A value that exists only as prose in a prompt reaches nothing: `LEVEL` stays empty
+and the blocks ABORT loudly rather than writing a silent `fast` over the level the
+user picked. Each Bash call starts a fresh shell — re-export in EVERY call, or
+prefix the block.
+
+**EXECUTE** config write (read-modify-write, Bash tool):
+
+```
+CFG="$PWD/.claude/brewtools/agent-router.json" node -e '
+const fs=require("fs"), p=require("path");
+const f=process.env.CFG;
+const level=(process.env.LEVEL||"").trim();
+if(level!=="fast"&&level!=="strict"){ console.error("ABORT: LEVEL must be fast|strict, got: "+JSON.stringify(level)+" - export it before this block"); process.exit(1); }
+let c={};
+if(fs.existsSync(f)){
+  const raw=fs.readFileSync(f,"utf8");
+  if(raw.trim()){
+    try{ c=JSON.parse(raw); }
+    catch(e){ console.error("ABORT: "+f+" is not valid JSON ("+e.message+") - fix or delete it; nothing was written"); process.exit(1); }
+    if(c===null||typeof c!=="object"||Array.isArray(c)){ console.error("ABORT: "+f+" is not a JSON object; nothing was written"); process.exit(1); }
+  }
+}
+const has=k=>Object.prototype.hasOwnProperty.call(c,k);
+if(!has("enabled")) c.enabled=true;            // reinstall must NOT silently re-enable a disabled setup
+c.level=level;
+if(!has("genericTypes")) c.genericTypes=["general-purpose","worker"];   // hand-edited lists survive a reinstall
+if(!has("neverFlag")) c.neverFlag=["Explore","Plan","statusline-setup","output-style-setup"];
+if(!has("minScore")) c.minScore=3;
+if(!has("margin")) c.margin=2;
+fs.mkdirSync(p.dirname(f),{recursive:true});
+fs.writeFileSync(f,JSON.stringify(c,null,2)+"\n");
+const back=JSON.parse(fs.readFileSync(f,"utf8"));   // post-write verification
+if(back.level!==level){ console.error("ABORT: verification failed for "+f); process.exit(1); }
+console.log("OK wrote "+f+" "+JSON.stringify(back));
+if(back.enabled!==true) console.log("NOTE: enabled=false was preserved from the existing config - run ENABLE to switch it on");
+' && echo "✅ config" || echo "❌ FAILED"
+```
+
+> **STOP if ❌** — fix before continuing. A broken existing config aborts the
+> install ON PURPOSE: it is never overwritten blind. `intents` is never written and
+> never removed here.
+
+### State
+
+One directory, one kind of file:
+
+```text
+<os.tmpdir()>/brewtools-agent-router/          mode 0700, must be owned by you
+  <session_id>/                                 sanitized session id
+    <sha1(root + normalized task text) first 32 hex>   an already-denied (session, root, task)
+```
+
+That is the whole layout — no roster cache, no config copy, no logs. Markers older
+than ~24 h are pruned by the hook itself; `PURGE` removes the directory outright, so
+nothing of the hook's survives it. Nothing is ever written under `~/.claude`
+(harness-protected path). If this directory is not usable, denies degrade to notices
+— see the limits above.
+
+---
+
+## settings.json hook entry shape
+
+`<absdir>` = `<repo>/.claude/hooks` (absolute).
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      { "matcher": "Agent", "hooks": [ { "type": "command", "command": "node", "args": ["<absdir>/agent-router.mjs"], "timeout": 5 } ] },
+      { "matcher": "Agent", "hooks": [ { "type": "agent", "prompt": "<inlined judge-prompt.md>", "model": "claude-haiku-4-5-20251001", "timeout": 30, "statusMessage": "agent-router: checking agent fit" } ] }
+    ]
+  }
+}
+```
+
+The second entry exists ONLY at `level strict`.
+
+Markers, used by every block below:
+
+| Tier | Marker |
+|------|--------|
+| 1 | a hook whose `args` contain a path ending in `agent-router.mjs` |
+| 2 | a hook with `type: "agent"` and `statusMessage: "agent-router: checking agent fit"` |
+
+Merge rule, in order:
+
+1. ABORT if `settings.json` exists and is not valid JSON — never rewrite a file you
+   could not parse (that turns one stray comma into total data loss).
+2. Drop own entries pointing at a DIFFERENT hooks dir (stale paths from an earlier
+   install elsewhere — Claude Code logs a hook failure on every matching tool call
+   for each of them). Match on the FULL path, not the basename. Entries with no
+   agent-router arg are foreign: never touched.
+3. Drop own tier-2 entries unconditionally — tier 2 is re-derived from `LEVEL` below,
+   which also refreshes the inlined prompt after a plugin update.
+4. APPEND the tier-1 entry into `PreToolUse` — never overwrite — only if the exact
+   `<absdir>/agent-router.mjs` path is not already there (idempotent re-install).
+5. APPEND the tier-2 entry only when `LEVEL=strict`, inlining `judge-prompt.md` from
+   the assets dir.
+6. Re-read the written file and assert exactly one tier-1 entry and exactly
+   `strict ? 1 : 0` tier-2 entries.
+
+`timeout` is in SECONDS for BOTH tiers — Claude Code has no millisecond hook field.
+Tier 1 gets `5` (the hook itself finishes in well under 100 ms including node
+startup); without the key it would inherit the 600 s command-hook default, so a hung
+`node` could stall an `Agent` spawn for ten minutes. Tier 2 gets `30` (agent-hook
+default is 60). Do NOT "fix" either of these into milliseconds: `5000` means 5000
+seconds, not 5.
+
+> Coexistence: the hook NEVER returns `updatedInput`, so it cannot clobber another
+> `PreToolUse` hook's payload edits. It returns `permissionDecision` only to DENY,
+> and emits `additionalContext` WITHOUT a decision, so it never upgrades a spawn
+> past the user's own deny rules.
+
+---
+
+## INSTALL  (`<repo>/.claude/`)
+
+Run every block from the REPO ROOT (`$PWD` is used throughout) with `RUNBOOK` and
+`LEVEL` exported in the SAME Bash call.
+
+1. Ensure `<repo>/.claude/hooks/`.
+2. Copy `agent-router.mjs` there (**EXECUTE** copy, below). Source dir = this
+   `assets/` dir; derive it from THIS runbook's own path — the skill passes
+   `RUNBOOK` = absolute path to this `INSTALL.md`, which lives IN the assets dir, so
+   `SRC="$(dirname "$RUNBOOK")"`. (Do not rely on any plugin env var — it is
+   injected as prompt text and expands to empty in Bash.)
+3. Write `<repo>/.claude/brewtools/agent-router.json` — run the **EXECUTE config
+   write** block in the *Config* section above, unchanged.
+4. Merge the hook entries into `<repo>/.claude/settings.json` (create `{}` if
+   absent), `<absdir>` = `<repo>/.claude/hooks` (**EXECUTE** merge, below).
+
+Order matters only in that the copy must precede the merge; the config write is
+independent.
+
+**EXECUTE** copy (Bash tool; `RUNBOOK` = absolute path to this INSTALL.md):
+```
+SRC="$(dirname "$RUNBOOK")"
+DST="$PWD/.claude/hooks"
+mkdir -p "$DST" && \
+cp "$SRC/agent-router.mjs" "$DST/" && \
+test -f "$DST/agent-router.mjs" && \
+node --check "$DST/agent-router.mjs" && \
+echo "✅ copied + verified in $DST" || echo "❌ FAILED"
+```
+
+> **STOP if ❌** — fix before continuing.
+
+**EXECUTE** merge settings. Use this node merge, NOT a hand `Edit` — it is the only
+path that aborts on a broken file and verifies afterwards. `JUDGE` is read only at
+`LEVEL=strict`:
+```
+SRC="$(dirname "$RUNBOOK")"
+SETTINGS="$PWD/.claude/settings.json" HOOKS_DIR="$PWD/.claude/hooks" JUDGE="$SRC/judge-prompt.md" node -e '
+const fs=require("fs"), path=require("path");
+const f=process.env.SETTINGS, dir=process.env.HOOKS_DIR;
+const level=(process.env.LEVEL||"").trim();
+if(level!=="fast"&&level!=="strict"){ console.error("ABORT: LEVEL must be fast|strict, got: "+JSON.stringify(level)+" - export it before this block"); process.exit(1); }
+const MARK="agent-router.mjs", SM="agent-router: checking agent fit";
+const full=path.join(dir,MARK);
+let s={};
+if(fs.existsSync(f)){
+  const raw=fs.readFileSync(f,"utf8");
+  if(raw.trim()){
+    try{ s=JSON.parse(raw); }
+    catch(e){ console.error("ABORT: "+f+" is not valid JSON ("+e.message+") - fix or delete it; nothing was written"); process.exit(1); }
+    if(s===null||typeof s!=="object"||Array.isArray(s)){ console.error("ABORT: "+f+" is not a JSON object; nothing was written"); process.exit(1); }
+  }
+}
+s.hooks=s.hooks||{};
+const hooksOf=e=>((e&&e.hooks)||[]);
+const argsOf=e=>hooksOf(e).flatMap(h=>(h&&h.args)||[]).filter(a=>typeof a==="string");
+const isT1=a=>a===MARK||a.endsWith("/"+MARK)||a.endsWith("\\"+MARK);
+const isOwnT2=e=>hooksOf(e).some(h=>h&&h.type==="agent"&&h.statusMessage===SM);
+for(const ev of Object.keys(s.hooks)){                 // drop own tier2 + stale-path tier1, keep foreign entries
+  if(!Array.isArray(s.hooks[ev])) continue;
+  s.hooks[ev]=s.hooks[ev].filter(e=>{
+    if(isOwnT2(e)) return false;
+    const own=argsOf(e).filter(isT1);
+    return own.length===0 || own.every(a=>a===full);
+  });
+  if(s.hooks[ev].length===0) delete s.hooks[ev];
+}
+s.hooks.PreToolUse=s.hooks.PreToolUse||[];
+if(!s.hooks.PreToolUse.some(e=>argsOf(e).includes(full)))   // idempotent: exact path already there = nothing to do
+  s.hooks.PreToolUse.push({matcher:"Agent",hooks:[{type:"command",command:"node",args:[full],timeout:5}]});
+if(level==="strict"){
+  const jf=(process.env.JUDGE||"").trim();
+  if(!jf||!fs.existsSync(jf)){ console.error("ABORT: JUDGE prompt not found: "+jf); process.exit(1); }
+  const prompt=fs.readFileSync(jf,"utf8");
+  if(!prompt.trim()){ console.error("ABORT: JUDGE prompt is empty: "+jf); process.exit(1); }
+  s.hooks.PreToolUse.push({matcher:"Agent",hooks:[{type:"agent",prompt,model:"claude-haiku-4-5-20251001",timeout:30,statusMessage:SM}]});
+}
+fs.mkdirSync(path.dirname(f),{recursive:true});
+fs.writeFileSync(f,JSON.stringify(s,null,2)+"\n");
+const back=JSON.parse(fs.readFileSync(f,"utf8"));      // post-write verification
+const pre=(back.hooks&&back.hooks.PreToolUse)||[];
+const n1=pre.filter(e=>argsOf(e).includes(full)).length;
+const n2=pre.filter(isOwnT2).length;
+if(n1!==1||n2!==(level==="strict"?1:0)){ console.error("ABORT: verification failed - tier1="+n1+" tier2="+n2+" in "+f); process.exit(1); }
+console.log("OK merged "+f+" (level="+level+", tier1="+n1+", tier2="+n2+")");
+' && echo "✅ settings" || echo "❌ FAILED"
+```
+
+> **STOP if ❌** — fix before continuing. An ABORT means `settings.json` was left
+> EXACTLY as it was: every foreign hook and key intact.
+
+Re-install is a no-op: the same `LEVEL`, the same paths, the same one entry.
+
+---
+
+## LEVEL  (`fast` <-> `strict`)
+
+Two steps, in this order: run the **Config** block with the new `LEVEL`, then re-run
+the **merge settings** block above with the same `LEVEL`. The merge always strips its
+own tier-2 entry first and re-adds it only for `strict`, so it converges either way
+and also refreshes the inlined judge prompt after a plugin update.
+
+Nothing is copied or deleted; the hook file stays put.
+
+> Wiring changed -> a NEW session is required before the level takes effect.
+
+---
+
+## DISABLE / ENABLE  (no file removal)
+
+Flip `enabled` in the config. The hook stays wired and becomes a no-op — it reads the
+config on every call, so this takes effect immediately, no restart. At `strict` the
+tier-2 entry ALSO stays wired and keeps costing a model call per spawn: use
+`level fast` first if that is what you want stopped.
+
+**EXECUTE** using Bash tool. The block below DISABLES as written; to ENABLE, prefix
+the whole line with `ON=1 ` (i.e. `ON=1 CFG="$PWD/..." node -e '...'`). Any other
+value of `ON`, or no `ON` at all, disables. Re-running either direction is a no-op.
+```
+CFG="$PWD/.claude/brewtools/agent-router.json" node -e '
+const fs=require("fs"), p=require("path"); const f=process.env.CFG;
+let c={};
+if(fs.existsSync(f)){
+  const raw=fs.readFileSync(f,"utf8");
+  if(raw.trim()){
+    try{ c=JSON.parse(raw); }
+    catch(e){ console.error("ABORT: "+f+" is not valid JSON ("+e.message+") - fix or delete it; nothing was written"); process.exit(1); }
+    if(c===null||typeof c!=="object"||Array.isArray(c)){ console.error("ABORT: "+f+" is not a JSON object; nothing was written"); process.exit(1); }
+  }
+}
+c.enabled = process.env.ON === "1";
+fs.mkdirSync(p.dirname(f),{recursive:true});
+fs.writeFileSync(f,JSON.stringify(c,null,2)+"\n");
+const back=JSON.parse(fs.readFileSync(f,"utf8"));
+if(back.enabled!==c.enabled){ console.error("ABORT: verification failed for "+f); process.exit(1); }
+console.log((back.enabled?"ENABLED ":"DISABLED ")+f);
+' && echo "✅ toggled" || echo "❌ FAILED"
+```
+
+> **STOP if ❌** — fix before continuing.
+
+Tune the routing the same way — edit `genericTypes`, `neverFlag`, `minScore`,
+`margin` or `intents` in the config; no reinstall, no restart.
+
+---
+
+## UNINSTALL  (settings entries + hook file; config and markers kept)
+
+Markers = the tier-1 basename and the tier-2 `statusMessage`. Foreign hook entries
+are never touched.
+
+**EXECUTE** using Bash tool:
+```
+export HOOKS_DIR="$PWD/.claude/hooks" SETTINGS="$PWD/.claude/settings.json"
+node -e '
+const fs=require("fs");
+const f=process.env.SETTINGS;
+const MARK="agent-router.mjs", SM="agent-router: checking agent fit";
+if(!fs.existsSync(f)){ console.log("no settings to clean: "+f); process.exit(0); }
+const raw=fs.readFileSync(f,"utf8");
+if(!raw.trim()){ console.log("empty settings, nothing to clean: "+f); process.exit(0); }
+let s;
+try{ s=JSON.parse(raw); }
+catch(e){ console.error("ABORT: "+f+" is not valid JSON ("+e.message+") - fix or delete it; nothing was written"); process.exit(1); }
+if(s===null||typeof s!=="object"||Array.isArray(s)){ console.error("ABORT: "+f+" is not a JSON object; nothing was written"); process.exit(1); }
+const hooksOf=e=>((e&&e.hooks)||[]);
+const argsOf=e=>hooksOf(e).flatMap(h=>(h&&h.args)||[]).filter(a=>typeof a==="string");
+const isT1=a=>a===MARK||a.endsWith("/"+MARK)||a.endsWith("\\"+MARK);
+const isOwn=e=>argsOf(e).some(isT1)||hooksOf(e).some(h=>h&&h.type==="agent"&&h.statusMessage===SM);
+if(s.hooks&&typeof s.hooks==="object"){
+  for(const ev of Object.keys(s.hooks)){
+    if(!Array.isArray(s.hooks[ev])) continue;
+    s.hooks[ev]=s.hooks[ev].filter(e=>!isOwn(e));
+    if(s.hooks[ev].length===0) delete s.hooks[ev];
+  }
+  if(Object.keys(s.hooks).length===0) delete s.hooks;
+}
+fs.writeFileSync(f,JSON.stringify(s,null,2)+"\n");
+const back=JSON.parse(fs.readFileSync(f,"utf8"));      // post-write verification
+const left=Object.values((back.hooks)||{}).flat().filter(isOwn).length;
+if(left!==0){ console.error("ABORT: verification failed - "+left+" agent-router entries still in "+f); process.exit(1); }
+console.log("OK cleaned "+f);
+' && rm -f "$HOOKS_DIR/agent-router.mjs" && test ! -e "$HOOKS_DIR/agent-router.mjs" \
+  && echo "✅ uninstalled from $HOOKS_DIR" || echo "❌ FAILED"
+```
+
+> **STOP if ❌** — fix before continuing. Re-running is safe: it converges to "no own
+> entries, no hook file".
+
+## PURGE  (uninstall + config + tmp markers)
+
+Run UNINSTALL first, then delete the config and the anti-loop markers.
+
+**EXECUTE** using Bash tool:
+```
+CFG="$PWD/.claude/brewtools/agent-router.json"
+rm -f "$CFG" && test ! -e "$CFG" && echo "✅ removed $CFG" || echo "❌ FAILED"
+rmdir "$PWD/.claude/brewtools" 2>/dev/null || true
+node -e 'const fs=require("fs"),os=require("os"),p=require("path");
+const d=p.join(os.tmpdir(),"brewtools-agent-router");
+fs.rmSync(d,{recursive:true,force:true});console.log("OK purged "+d);' && echo "✅ markers" || echo "❌ FAILED"
+```
+
+> **STOP if ❌** — fix before continuing.
+
+The marker dir is keyed by session (with project root folded into each marker's hash),
+holds only "this task was already denied once" flags, and is shared with any other
+live session: wiping it merely lets one already denied task be denied once more. It
+is cheap to purge — unlike a deadline state, it carries nothing worth preserving.
+
+---
+
+## Verify
+
+Synthetic payloads, no session needed. Run from the repo root, with
+`.claude/brewtools/agent-router.json` at `enabled:true`. Copy-paste as one block:
+
+```
+H="$PWD/.claude/hooks/agent-router.mjs"
+fire(){ echo "$2" | node "$H"; echo "   <- $1 exit=$?"; }
+P='"cwd":"'"$PWD"'","hook_event_name":"PreToolUse"'
+TI='"subagent_type":"general-purpose","description":"write a skill","prompt":"create a new SKILL.md for the repo"'
+
+# 1. not the Agent tool -> ALLOW (no stdout)
+fire "not-Agent" '{"session_id":"V1",'"$P"',"tool_name":"Bash","tool_input":{}}'
+# 2. spawn issued BY a subagent -> ALLOW (only the main loop is policed)
+fire "subagent"  '{"session_id":"V1",'"$P"',"agent_id":"A1","tool_name":"Agent","tool_input":{'"$TI"'}}'
+# 3. main-loop generic spawn, clear intent -> DENY naming brewcode:skill-creator
+#    (or a PROJECT agent, if one of yours covers skill authoring - that is correct)
+fire "intent"    '{"session_id":"V2",'"$P"',"tool_name":"Agent","tool_input":{'"$TI"'}}'
+# 4. replay 3 verbatim -> additionalContext, NOT a deny (anti-loop, same session)
+fire "replay"    '{"session_id":"V2",'"$P"',"tool_name":"Agent","tool_input":{'"$TI"'}}'
+# 5. Explore -> ALLOW (neverFlag)
+fire "explore"   '{"session_id":"V2",'"$P"',"tool_name":"Agent","tool_input":{"subagent_type":"Explore","description":"find code","prompt":"find the payment handler"}}'
+# 6. garbage stdin -> ALLOW, exit 0 (fail open)
+fire "garbage"   'not json at all'
+```
+
+Expected: 1, 2, 5 and 6 print NOTHING; 3 prints a `permissionDecision:"deny"`; 4
+prints an `additionalContext` notice. Every line ends `exit=0` — the hook never
+exits non-zero. If 3 prints a notice instead of a deny, the tmp state root is not
+writable (see the limits).
+
+Full behavioral coverage lives in the skill's `tests/run.sh`.
+
+> After install / level / uninstall / purge, `/reload-plugins` is NOT needed (plain
+> settings.json hooks, not plugin hooks), but Claude Code loads hook config at
+> session start — a NEW session is required for wiring changes. Config-VALUE changes
+> (`enabled`, `genericTypes`, `neverFlag`, `minScore`, `margin`, `intents`) are read
+> live and need no restart.

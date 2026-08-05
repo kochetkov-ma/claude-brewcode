@@ -188,14 +188,14 @@ process. The matcher is exactly `Explore` — no other subagent type is touched.
 {
   "hooks": {
     "SessionStart": [
-      { "hooks": [ { "type": "command", "command": "node", "args": ["<absdir>/semble-session.mjs"], "timeout": 5000 } ] }
+      { "hooks": [ { "type": "command", "command": "node", "args": ["<absdir>/semble-session.mjs"], "timeout": 5 } ] }
     ],
     "PreToolUse": [
-      { "matcher": "Bash", "hooks": [ { "type": "command", "command": "node", "args": ["<absdir>/semble-reminder.mjs"], "timeout": 5000 } ] },
-      { "matcher": "Grep", "hooks": [ { "type": "command", "command": "node", "args": ["<absdir>/semble-reminder.mjs"], "timeout": 5000 } ] }
+      { "matcher": "Bash", "hooks": [ { "type": "command", "command": "node", "args": ["<absdir>/semble-reminder.mjs"], "timeout": 5 } ] },
+      { "matcher": "Grep", "hooks": [ { "type": "command", "command": "node", "args": ["<absdir>/semble-reminder.mjs"], "timeout": 5 } ] }
     ],
     "SubagentStart": [
-      { "matcher": "Explore", "hooks": [ { "type": "command", "command": "node", "args": ["<absdir>/semble-explore.mjs"], "timeout": 5000 } ] }
+      { "matcher": "Explore", "hooks": [ { "type": "command", "command": "node", "args": ["<absdir>/semble-explore.mjs"], "timeout": 5 } ] }
     ]
   },
   "permissions": {
@@ -204,9 +204,9 @@ process. The matcher is exactly `Explore` — no other subagent type is touched.
 }
 ```
 
-`timeout` is in MILLISECONDS and is **not optional**: an entry without it
-inherits Claude Code's 60 s default, so a hung `node` on the `Bash` matcher would
-stall every tool call in the session for a minute. 5000 is ~80x the measured
+`timeout` is in SECONDS and is **not optional**: an entry without it
+inherits Claude Code's 600 s default, so a hung `node` on the `Bash` matcher would
+stall the tool call for 10 minutes. 5 s is ~80x the measured
 runtime of these hooks.
 
 The marker for all semble entries is `args` containing a path whose basename is
@@ -243,10 +243,10 @@ SETTINGS="$PWD/.claude/settings.json" HOOKS_DIR="$PWD/.claude/hooks" node -e '
 const fs=require("fs"), path=require("path");
 const f=process.env.SETTINGS, dir=process.env.HOOKS_DIR;
 const marks=["semble-session.mjs","semble-reminder.mjs","semble-explore.mjs"];
-const want=[["SessionStart",null,"semble-session.mjs",5000],
-            ["PreToolUse","Bash","semble-reminder.mjs",5000],
-            ["PreToolUse","Grep","semble-reminder.mjs",5000],
-            ["SubagentStart","Explore","semble-explore.mjs",5000]];
+const want=[["SessionStart",null,"semble-session.mjs",5],
+            ["PreToolUse","Bash","semble-reminder.mjs",5],
+            ["PreToolUse","Grep","semble-reminder.mjs",5],
+            ["SubagentStart","Explore","semble-explore.mjs",5]];
 const tools=["mcp__semble_code__search","mcp__semble_code__find_related"];
 let s={};
 if(fs.existsSync(f)){

@@ -32,7 +32,7 @@ Documentation tools. Sync, generate, optimize, export, publish.
 | `/brewdoc:guide` | Interactive teaching for the plugin suite (this guide) |
 | `/brewdoc:publish` | Publish content to brewpage.app — text, markdown, or files |
 
-## Section 3: Brewtools Skills (11)
+## Section 3: Brewtools Skills (12)
 
 Universal utilities. Work in any project, no setup needed.
 
@@ -49,6 +49,7 @@ Universal utilities. Work in any project, no setup needed.
 | `/brewtools:manager` | Codeword (++m, plan-aware) Manager prompt + opt-in HARD wall blocking mutating tools (RU+EN) |
 | `/brewtools:task-board-init` | Deploy a file-based Kanban into any repo via multi-agent analysis |
 | `/brewtools:agent-deadline` | Install a soft wall-clock budget for subagents — warn at 80%, block at 100% |
+| `/brewtools:agent-router` | EXPERIMENTAL: deny a generic subagent spawn in favor of the real project/plugin expert |
 
 These are standalone — no project configuration required. Run them anywhere.
 

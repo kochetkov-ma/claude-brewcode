@@ -62,6 +62,7 @@ export const navigation: NavSection[] = [
         slug: 'brewtools/skills',
         children: [
           { title: 'agent-deadline', slug: 'brewtools/skills/agent-deadline' },
+          { title: 'agent-router', slug: 'brewtools/skills/agent-router' },
           { title: 'deploy', slug: 'brewtools/skills/deploy' },
           { title: 'manager', slug: 'brewtools/skills/manager' },
           { title: 'plugin-update', slug: 'brewtools/skills/plugin-update' },

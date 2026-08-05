@@ -2,6 +2,29 @@
 
 ---
 
+## v4.7.0 (2026-08-05)
+
+> Docs: [agent-router](https://doc-claude.brewcode.app/brewtools/skills/agent-router/) | [agent-deadline](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline/) | [manager](https://doc-claude.brewcode.app/brewtools/skills/manager/) | [semble](https://doc-claude.brewcode.app/brewcode/skills/semble/)
+
+### brewtools
+
+#### Added
+- **`/brewtools:agent-router` (EXPERIMENTAL):** installer skill for a project-local `PreToolUse` hook on matcher `Agent`. When the main loop spawns a generic subagent type for a task a real expert owns, the spawn is denied and the expert is named; when the fit is only uncertain the hook appends a nudge instead; otherwise it stays silent. Modes `status | install | level fast | level strict | disable | enable | uninstall | purge`, all idempotent, foreign hooks never touched. Config at `<project>/.claude/brewtools/agent-router.json` (`enabled, level, genericTypes, neverFlag, minScore, margin, intents`)
+  - **tier 1** (default, `level fast`): deterministic Node script, zero tokens, ~69 ms median including node startup; scores the project roster in `.claude/agents/` against the task text and routes to a plugin specialist (`skill-creator` / `agent-creator` / `hook-creator` / `bash-expert`) when no project agent fits. A project agent always beats a plugin specialist
+  - **tier 2** (opt-in, `level strict`): `type: "agent"` hook, model `claude-haiku-4-5-20251001`, adjudicates ambiguous picks. Wired and installed/stripped correctly, but **not yet behaviorally verified** — treat as untested. Tier 1 cannot gate it: all matching `PreToolUse` hooks run in parallel and none can skip another, which is why tier 2 is opt-in rather than triggered-on-doubt
+  - fails open everywhere — bad input, unparsable config, missing roster, unwritable tmp all allow the spawn. Anti-loop guard keyed by (project root, session, normalized task text) so a deny can never deadlock the model: a repeat becomes a notice
+  - not registered in `brewtools/hooks/hooks.json`; nothing is installed until the skill is run. 55 tests, all green
+
+#### Fixed
+- **hook `timeout` units:** Claude Code hook `timeout` is **seconds**, not milliseconds (default 600). `brewtools/hooks/hooks.json` shipped `2000`/`3000` — 33 and 50 minute ceilings instead of 2 s and 3 s. Now `2`/`3`. Same bug fixed in the `manager` hard-wall installer (`5000` -> `5`) and in the `agent-deadline` runbook (guard `5000` -> `5`, cleanup `3000` -> `3`, both `want=[...]` verify arrays and the prose rationale)
+
+### brewcode
+
+#### Fixed
+- **hook `timeout` units:** `brewcode/hooks/hooks.json` `1000`/`3000` -> `2`/`3` (seconds). `semble` runbook, `semble-guidance.sh` verify/repair arrays and the hook contract tests corrected from `5000` to `5`
+
+---
+
 ## v4.6.0 (2026-08-05)
 
 > Docs: [agents](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [rules](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [spec](https://doc-claude.brewcode.app/brewcode/skills/spec/) | [convention](https://doc-claude.brewcode.app/brewcode/skills/convention/) | [teams](https://doc-claude.brewcode.app/brewcode/skills/teams/) | [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [superreview](https://doc-claude.brewcode.app/brewcode/skills/superreview/) | [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [bash-expert](https://doc-claude.brewcode.app/brewcode/agents/bash-expert/) | [manager](https://doc-claude.brewcode.app/brewtools/skills/manager/) | [think-short](https://doc-claude.brewcode.app/brewtools/skills/think-short/) | [task-board-init](https://doc-claude.brewcode.app/brewtools/skills/task-board-init/) | [agent-deadline](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline/) | [text-human](https://doc-claude.brewcode.app/brewtools/skills/text-human/) | [text-optimize](https://doc-claude.brewcode.app/brewtools/skills/text-optimize/) | [guide](https://doc-claude.brewcode.app/brewdoc/skills/guide/) | [memory](https://doc-claude.brewcode.app/brewdoc/skills/memory/)

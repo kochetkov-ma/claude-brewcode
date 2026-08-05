@@ -156,7 +156,7 @@ const has = m => Array.isArray(m.hooks) && m.hooks.some(h => typeof h.command===
 const already = arr.some(has);
 let newlyRegistered = false;
 if (!already) {
-  arr.push({ matcher:'*', hooks:[{ type:'command', command:\`node \"\${guard}\" # \${TAG}\`, timeout:5000 }] });
+  arr.push({ matcher:'*', hooks:[{ type:'command', command:\`node \"\${guard}\" # \${TAG}\`, timeout:5 }] });
   newlyRegistered = true;
 }
 cfg.hooks.PreToolUse = arr;

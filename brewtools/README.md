@@ -5,7 +5,7 @@
 | Field | Value |
 |-------|-------|
 | Version | 4.2.4 |
-| Skills | 10 |
+| Skills | 12 |
 | Agents | 3 |
 
 ## Install
@@ -90,6 +90,7 @@ claude --plugin-dir ./brewtools
 | [`/brewtools:provider-switch`](skills/provider-switch/README.md) | Configure alt API providers: DeepSeek, Z.ai/GLM, Qwen, MiniMax, OpenRouter | opus | `[status\|setup\|verify\|model-check\|help\|<provider-name>]` -- no args = interactive status check |
 | [`/brewtools:think-short`](skills/think-short/README.md) | Install/remove terse-mode hooks (SessionStart + every-10th UserPromptSubmit + subagent Task) that inject brevity directives; project or global | sonnet | `[<free-text prompt>] [Project\|Global]` |
 | [`/brewtools:agent-deadline`](skills/agent-deadline/SKILL.md) | Install/remove a soft wall-clock budget for subagents: 80% -- non-blocking "wrap up" warning, 100% -- deny all tools except the finalization set; project or global, opt-in | sonnet | `[status\|install\|disable\|enable\|uninstall\|purge] [project\|global] [minutes] \| free-text intent` |
+| [`/brewtools:agent-router`](skills/agent-router/SKILL.md) | EXPERIMENTAL. Install/remove a PreToolUse hook that denies a generic subagent spawn in favor of the real project/plugin expert, or nudges when the fit is only uncertain; tier 1 free and deterministic, tier 2 opt-in LLM judge not yet behaviorally verified; project scope only | sonnet | `[status\|install\|level fast\|level strict\|disable\|enable\|uninstall\|purge] \| free-text intent` |
 | [`/brewtools:task-board-init`](skills/task-board-init/README.md) | Generator: deploys a file-based Kanban into any repo via multi-agent analysis, plus an optional gated CLAUDE.md-optimization pass | opus | `[target repo path \| empty = cwd] [free-text directive, e.g. 'also dedupe rules', 'skip module split']` |
 
 ## Agents
@@ -122,6 +123,7 @@ brewtools/
 |   +-- provider-switch/               # Alternative API provider management
 |   +-- think-short/                   # Terse-mode hooks install/remove
 |   +-- agent-deadline/                # Subagent soft wall-clock budget hooks install/remove
+|   +-- agent-router/                  # EXPERIMENTAL: route generic subagent spawns to the real expert
 |   +-- manager/                       # Codeword-triggered Manager mode + HARD delegation wall
 |   +-- task-board-init/                # File-based Kanban generator (multi-agent)
 +-- agents/
@@ -155,6 +157,7 @@ Full docs: [doc-claude.brewcode.app/brewtools/overview](https://doc-claude.brewc
 | Provider Switch | [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/) |
 | Think Short | [think-short](https://doc-claude.brewcode.app/brewtools/skills/think-short/) |
 | Agent Deadline | [agent-deadline](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline/) |
+| Agent Router | [agent-router](https://doc-claude.brewcode.app/brewtools/skills/agent-router/) |
 | Text Optimizer (agent) | [text-optimizer](https://doc-claude.brewcode.app/brewtools/agents/text-optimizer/) |
 | SSH Admin (agent) | [ssh-admin](https://doc-claude.brewcode.app/brewtools/agents/ssh-admin/) |
 | Deploy Admin (agent) | [deploy-admin](https://doc-claude.brewcode.app/brewtools/agents/deploy-admin/) |
