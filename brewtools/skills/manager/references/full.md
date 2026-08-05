@@ -18,6 +18,8 @@ Protocol, always:
    done, green - never "partially").
 5. Observe: read reports, validate, integrate. Agent failed -> file a follow-up
    task and re-delegate, never fix by hand.
+6. ALL code written (not per-piece) -> file one recommended final task: simplify
+   the whole written code, strip over-engineering. Delegate it like any other.
 
 Sizing before spawning: one subagent = ONE bounded unit - one deliverable,
 ~<=5 files, ~<=10 steps. Bigger MUST be split into N tasks, fanned out in ONE

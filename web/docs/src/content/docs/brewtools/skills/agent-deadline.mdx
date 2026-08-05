@@ -101,7 +101,7 @@ Budget resolves as `byAgentType[agent_type] ?? defaultMinutes`, read fresh on ev
 **Honest limits — read before relying on this.**
 
 - **Not a timeout.** Elapsed time is sampled only at tool-call boundaries. An agent stuck inside one 25-minute `Bash` call is not observed until its next call — cap long commands separately with `BASH_MAX_TIMEOUT_MS`.
-- **`agent_type` for plugin agents is unverified.** Whether the payload reports `brewcode:developer` or `developer` for a plugin agent has not been confirmed against a live payload. A `byAgentType` key that doesn't match silently falls back to `defaultMinutes` — no error, no warning.
+- **`agent_type` for plugin agents is unverified.** Whether the payload reports `brewcode:skill-creator` or `skill-creator` for a plugin agent has not been confirmed against a live payload. A `byAgentType` key that doesn't match silently falls back to `defaultMinutes` — no error, no warning.
 - **Fail-open.** Any error inside the hook lets the call through; the session never breaks because of it.
 - **The matcher is `.*` — every tool call pays the cost, not only subagent ones.** Measured on Apple M-series, Node v24.1.0, 30 runs: median **58.3 ms**, p90 **62.5 ms** per call, including the main-session no-op path. A **global** install therefore taxes every tool call in every repo and every session, whether or not that session ever spawns a subagent. Numbers are from one machine and one Node version — re-measure before trusting them as a budget line item.
 - **The declared finalization set is narrower than what's actually allowed.** `TaskCreate`, `BashOutput`, `TaskOutput` pass through past 100% but are intentionally left out of the directive text shown to the agent — by design, not an oversight.

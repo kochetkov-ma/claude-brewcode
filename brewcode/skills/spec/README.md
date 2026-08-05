@@ -1,6 +1,6 @@
 # Spec
 
-Creates a detailed task specification (SPEC.md) by researching your codebase in parallel, asking clarifying questions, and running a reviewer quality gate. The output is a self-contained document ready to hand to the `developer` agent for implementation.
+Creates a detailed task specification (SPEC.md) by researching your codebase in parallel, asking clarifying questions, and running a reviewer quality gate. The output is a self-contained document ready to hand to an implementation agent.
 
 ## Quick Start
 

@@ -70,11 +70,20 @@ Protocol, always:
    done, green - never "partially").
 5. Observe: read reports, validate, integrate. Agent failed -> file a follow-up
    task and re-delegate, never fix by hand.
+6. ALL code written (not per-piece) -> file one recommended final task: simplify
+   the whole written code, strip over-engineering. Delegate it like any other.
 
 Sizing before spawning: one subagent = ONE bounded unit - one deliverable,
 ~<=5 files, ~<=10 steps. Bigger MUST be split into N tasks, fanned out in ONE
 message. A big task handed to one agent = an agent gone for an hour: you cannot
 observe it, cannot correct it, and it usually drifts off-target.
+
+Widest fan-out: a dependency must be a REAL data handoff, else parallel. Size a
+unit to ~<=20 min of agent work; longer -> split again.
+
+Branch: work in the current branch; none chosen -> main. Unless the user says
+branch/PR, stay on main and take over ALL workspace changes, incl. from other
+sessions.
 
 Every spawn prompt MUST carry, explicitly:
   GOAL     - the overall task and why it exists; the point beyond the file edit.
@@ -130,19 +139,20 @@ The injected block is a system-reminder -- invisible in the user's transcript bu
 
 | Trigger | Means | When it fires | What gets injected |
 |---------|-------|--------------|-------------------|
-| `++m` | Manager | any message containing it | full Manager block -- delegate-everything orchestrator contract, bounded-unit sizing (one deliverable, ~5 files, ~10 steps), and the six-field spawn brief GOAL / ROLE / SCOPE / CONTEXT / CONSUMER / DONE; in plan mode also injects the Plan Mode addon (TaskGraph in English, parallel indicators) |
-| `++rr` | Regression Review | any message containing it (checked after `++m`) | anti-regression review discipline -- review each significant phase for NO regression + project standard + correctness; two-phase review->double-check->fix; final cross-review at task end |
-| `++r` | Review | any message containing it (checked last; `++rr` tested first) | two-phase review discipline -- multi-agent review after each significant change, review->double-check->fix; codeword-only, no ambient |
+| `++m` | Manager | any message containing it | full Manager block -- delegate-everything orchestrator contract, bounded-unit sizing (one deliverable, ~5 files, ~10 steps), one final delegated task to simplify all written code, and the six-field spawn brief GOAL / ROLE / SCOPE / CONTEXT / CONSUMER / DONE; in plan mode also injects the Plan Mode addon (TaskGraph in English, parallel indicators) |
+| `++rr` | Regression Review | any message containing it (checked after `++m`) | anti-regression review discipline -- review each significant phase for NO regression + project standard + correctness; simplification pass before the review proper; two-phase review->double-check->fix; final cross-review at task end |
+| `++r` | Review | any message containing it (checked last; `++rr` tested first) | two-phase review discipline -- simplification pass first, then multi-agent review after each significant change, review->double-check->fix; codeword-only, no ambient |
 | `++a` | Architecture | any message containing it | full `[DIRECTIVE: ARCHITECTURE-FIRST]` block -- independent third group, combinable with `++m` and the review group (`++rr`/`++r`); same block in normal and plan mode |
 | HARD wall ON | (state) | every turn, no codeword required | full Manager block (ambient injection alongside any codeword) |
 
 ## Not the only injection on the turn
 
-If brewcode is installed too, its `forced-eval.mjs` (UserPromptSubmit) adds two short lines to every prompt, independently of any codeword:
+If brewcode is installed too, its `forced-eval.mjs` (UserPromptSubmit) adds three short lines to every prompt, independently of any codeword:
 
 ```text
 [ROLE] Manager: scan agents (project .claude/agents/ first) - expert for this domain exists -> delegate regardless of size; no expert or trivial one-off -> self.
-[SPLIT] One agent for an hour = drift you cannot observe: split into bounded units (1 deliverable, ~5 files), fan out in ONE message; every spawn prompt carries goal + scope + what is already done + who consumes the result + acceptance.
+[SPLIT] One agent for an hour = drift you cannot observe: split into bounded units (1 deliverable, ~5 files, ~20 min), fan out in ONE message; a dependency must be a REAL data handoff, else parallel; every spawn prompt carries goal + scope + what is already done + who consumes the result + acceptance.
+[BRANCH] Stay on the current branch; none chosen -> main. No explicit branch/PR instruction -> work on main and take over ALL workspace changes, incl. from other sessions.
 ```
 
 That reminder fires on slash commands as well, and is skipped only for empty prompts and meta-replies (`yes`, `ok`, a bare number, a single letter). See [Brewcode hooks](/brewcode/hooks/).

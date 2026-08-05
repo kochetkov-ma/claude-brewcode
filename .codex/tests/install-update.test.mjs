@@ -64,7 +64,7 @@ function managedAgentNames() {
     const sourceRoot = path.join(ROOT, plugin, '.codex', 'agents');
     for (const name of fs.readdirSync(sourceRoot).filter(value => value.endsWith('.toml')).sort()) names.push(`${plugin}-${name}`);
   }
-  assert.equal(names.length, 9);
+  assert.equal(names.length, 4);
   return names;
 }
 

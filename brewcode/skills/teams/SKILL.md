@@ -160,7 +160,8 @@ If "Mixed" -- ask model per agent in C3. Store as `DEFAULT_MODEL` (default: opus
 
 ### C5: Quorum Review
 
-Spawn 3 reviewer agents in ONE message via Task tool:
+Spawn 3 reviewer agents in ONE message via Task tool. `REVIEWER` (here and in C7/C9) = the
+project's reviewer agent from `.claude/agents/`, else `general-purpose`:
 
 | # | Focus |
 |---|-------|
@@ -189,7 +190,7 @@ FIX: suggested fix
 ### C7: Verification
 
 ```
-Task(subagent_type="brewcode:reviewer", prompt="
+Task(subagent_type=REVIEWER, prompt="
   Verify these findings against actual agent files. For each:
   1. Read the agent file
   2. Check if the issue actually exists
@@ -228,7 +229,7 @@ Batch: up to 3 parallel per message. Minor issues skipped.
 ### C9: Re-verify
 
 ```
-Task(subagent_type="brewcode:reviewer", prompt="
+Task(subagent_type=REVIEWER, prompt="
   Re-verify these fixes. For each:
   1. Read the fixed agent file
   2. Check original issue is resolved

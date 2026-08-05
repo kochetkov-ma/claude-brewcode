@@ -43,10 +43,6 @@ export const navigation: NavSection[] = [
         title: 'Agents',
         slug: 'brewcode/agents',
         children: [
-          { title: 'developer', slug: 'brewcode/agents/developer' },
-          { title: 'tester', slug: 'brewcode/agents/tester' },
-          { title: 'reviewer', slug: 'brewcode/agents/reviewer' },
-          { title: 'architect', slug: 'brewcode/agents/architect' },
           { title: 'skill-creator', slug: 'brewcode/agents/skill-creator' },
           { title: 'agent-creator', slug: 'brewcode/agents/agent-creator' },
           { title: 'hook-creator', slug: 'brewcode/agents/hook-creator' },

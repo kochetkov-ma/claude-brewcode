@@ -1,1 +1,1 @@
-Review for behavioral regressions first. Compare old and new contracts, exercise negative paths, and require evidence for compatibility claims.
+Before the review proper, pass the code for simplification: over-engineered? simpler? Then review for behavioral regressions first. Compare old and new contracts, exercise negative paths, and require evidence for compatibility claims.

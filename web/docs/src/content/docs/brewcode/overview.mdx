@@ -29,9 +29,10 @@ skills and agents. The name is a nod to brewing: skills (recipes) define what to
     From specification (<a href="/brewcode/skills/spec/">/brewcode:spec</a>) to convention analysis (<a href="/brewcode/skills/convention/">/brewcode:convention</a>)
     and multi-agent review (<a href="/brewcode/skills/superreview/">/brewcode:superreview</a>).
   </Card>
-  <Card title="9 agents (brewers)" icon="users">
-    Specialized agents: [developer](/brewcode/agents/developer/), [tester](/brewcode/agents/tester/), [reviewer](/brewcode/agents/reviewer/), [architect](/brewcode/agents/architect/), [skill-creator](/brewcode/agents/skill-creator/),
-    [agent-creator](/brewcode/agents/agent-creator/), [hook-creator](/brewcode/agents/hook-creator/), and bash-expert.
+  <Card title="5 agents (brewers)" icon="users">
+    Specialists only: [skill-creator](/brewcode/agents/skill-creator/), [agent-creator](/brewcode/agents/agent-creator/),
+    [hook-creator](/brewcode/agents/hook-creator/), [bash-expert](/brewcode/agents/bash-expert/), and the internal bc-rules-organizer.
+    Generic roles are generated per project into .claude/agents/.
   </Card>
   <Card title="2 hooks (processes)" icon="settings">
     Prompt-time delegation reminder and session-start version-check.
@@ -61,9 +62,9 @@ all context is managed through built-in Claude Code events.
   │                                                          │
   │   Skills (recipes)            Agents (brewers)           │
   │   ┌──────────────┐          ┌──────────────────┐         │
-  │   │ spec, e2e    │          │ developer, tester │         │
-  │   │ superreview  │ ──────>  │ reviewer, architect│         │
-  │   │ convention,. │          │ + dynamic teams   │         │
+  │   │ spec, e2e    │          │ skill/agent/hook  │         │
+  │   │ superreview  │ ──────>  │ creator, bash     │         │
+  │   │ convention,. │          │ + project teams   │         │
   │   └──────────────┘          └──────────────────┘         │
   │          │                          │                     │
   │          v                          v                     │
@@ -90,11 +91,7 @@ brewcode/
 │   ├── forced-eval.mjs                # [ROLE] delegate + [SPLIT] bounded units
 │   └── lib/
 │       └── utils.mjs                  # I/O, version cache, configuration
-├── agents/                            # 9 agents
-│   ├── developer.md                   # Feature implementation (opus)
-│   ├── tester.md                      # Testing (sonnet)
-│   ├── reviewer.md                    # Code review (opus)
-│   ├── architect.md                   # Architecture (opus)
+├── agents/                            # 5 agents
 │   ├── skill-creator.md               # Skill creation (opus)
 │   ├── agent-creator.md               # Agent creation (opus)
 │   ├── hook-creator.md                # Hook creation (opus)
@@ -129,15 +126,15 @@ brewcode/
     | Meta | skills, agents | Skill and agent management |
   </TabItem>
   <TabItem label="Agents">
-    9 agents (brewers) with different models and specializations.
+    5 agents (brewers), all specialists. Generic implementation/review roles are generated per project
+    into `.claude/agents/` by [/brewcode:teams](/brewcode/skills/teams/) — brewcode no longer ships them.
     See the [Agents](/brewcode/agents/) section for details.
 
     | Role | Agents | Model |
     |------|--------|-------|
-    | Implementation | developer, tester, architect | opus/sonnet |
-    | Review | reviewer | opus |
-    | Creation | skill-creator, agent-creator, hook-creator | opus |
-    | Optimization | bash-expert | opus |
+    | Creation | skill-creator, agent-creator, hook-creator | inherit |
+    | Scripting | bash-expert | inherit |
+    | Internal | bc-rules-organizer | haiku |
     | Internal | bc-rules-organizer | haiku |
 
     + dynamic project agents created by [`/brewcode:teams`](/brewcode/skills/teams/)

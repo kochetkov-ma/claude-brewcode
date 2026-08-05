@@ -108,7 +108,7 @@ A bare one-line task is never enough. The per-agent template below is the canoni
 
 Before spawning agents, check for project team agents:
 1. If `.claude/teams/` exists — read `team.md` for agent roster with domains
-2. If team has architecture/testing domain agents — prefer over plugin architect/tester
+2. If team has architecture/testing domain agents — prefer them over generic agents
 3. Priority: **team agent > project agent > plugin agent > system agent**
 4. If agent refuses (Task Acceptance Protocol) — re-delegate to suggested colleague (max 2 retries)
 
@@ -116,16 +116,16 @@ Spawn ALL agents in a SINGLE message. Skip agents for inactive layers (filtered 
 
 | # | Agent | Layers | Focus |
 |---|-------|--------|-------|
-| 1 | architect | L1-L3 | Build config, dependency management, code generation |
-| 2 | architect | L4 | @UtilityClass, static helpers, shared converters |
-| 3 | architect | L5+L14 | REST endpoints, security, config, caching |
-| 4 | architect | L6+L9 | DI patterns, @Transactional, domain services |
-| 5 | architect | L7 | Feign clients, external API integrations |
-| 6 | architect | L8 | JOOQ DSL, raw SQL, mappers, query patterns |
-| 7 | architect | L10+L11 | Records, @Value @Builder, naming conventions |
-| 8 | architect | L12+L13 | DDL scripts, config files, templates |
-| 9 | tester | T1-T4 | Test data, base classes, helpers, ExpectedData |
-| 10 | tester | T5-T6 | BDD style, assertion patterns, @ParameterizedTest |
+| 1 | Explore | L1-L3 | Build config, dependency management, code generation |
+| 2 | Explore | L4 | @UtilityClass, static helpers, shared converters |
+| 3 | Explore | L5+L14 | REST endpoints, security, config, caching |
+| 4 | Explore | L6+L9 | DI patterns, @Transactional, domain services |
+| 5 | Explore | L7 | Feign clients, external API integrations |
+| 6 | Explore | L8 | JOOQ DSL, raw SQL, mappers, query patterns |
+| 7 | Explore | L10+L11 | Records, @Value @Builder, naming conventions |
+| 8 | Explore | L12+L13 | DDL scripts, config files, templates |
+| 9 | Explore | T1-T4 | Test data, base classes, helpers, ExpectedData |
+| 10 | Explore | T5-T6 | BDD style, assertion patterns, @ParameterizedTest |
 
 **Per-agent prompt template — every spawn carries all six Delegation fields:**
 
@@ -146,7 +146,7 @@ Layer definitions:
 
 Use Bash search for file discovery (`grep`->ugrep / `find`->bfs on macOS CC), then Read for verification.
 
-CONSUMER: P3 (1 architect) merges all 10 reports and picks 1-2 etalons per layer, then P4
+CONSUMER: P3 (1 `Plan` agent) merges all 10 reports and picks 1-2 etalons per layer, then P4
       writes .claude/convention/*.md from that. Your tables are parsed as-is — keep the exact
       column shape below, score every candidate, and give file paths, not prose.
 
@@ -172,9 +172,9 @@ Why: explanation
 
 ---
 
-## P3: Etalon Selection (1 architect agent)
+## P3: Etalon Selection (1 `Plan` agent)
 
-After all P2 agents complete, spawn 1 architect agent with combined results.
+After all P2 agents complete, spawn 1 `Plan` agent (or the project architecture agent from `.claude/agents/`) with combined results.
 
 **Prompt:**
 ```
@@ -201,9 +201,9 @@ Output:
 
 ---
 
-## P4: Document Generation (3 developer agents, PARALLEL)
+## P4: Document Generation (3 writer agents, PARALLEL)
 
-Read `references/conventions-guide.md` for templates. Spawn 3 developer agents in ONE message.
+Read `references/conventions-guide.md` for templates. Spawn 3 writer agents in ONE message — the project doc/dev agent from `.claude/agents/`, else `general-purpose`.
 
 | # | Document | Target |
 |---|----------|--------|

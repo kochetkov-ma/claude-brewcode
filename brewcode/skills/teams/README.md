@@ -155,10 +155,10 @@ When other skills (spec, convention, superreview, e2e) spawn agents, they check 
 |----------|--------|---------|
 | 1 | Team agent | `.claude/agents/backend-api-expert.md` (from teams) |
 | 2 | Project agent | `.claude/agents/custom-agent.md` (manually created) |
-| 3 | Plugin agent | `brewcode:developer`, `brewcode:tester` |
-| 4 | System agent | `Explore`, `Plan` |
+| 3 | Plugin specialist | `brewcode:agent-creator`, `brewcode:bash-expert` |
+| 4 | System agent | `Explore`, `Plan`, `general-purpose` |
 
-> If a team agent refuses a task (Task Acceptance Protocol), the skill re-delegates to the next priority level. Max 2 retries before falling back to plugin agents.
+> If a team agent refuses a task (Task Acceptance Protocol), the skill re-delegates to the next priority level. Max 2 retries before falling back to system agents.
 
 ## Related Skills
 

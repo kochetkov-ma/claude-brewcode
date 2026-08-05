@@ -4,11 +4,14 @@ The user's ++M codeword authorizes foreground delegation for this task. Orchestr
 
 1. Inspect the applicable AGENTS.md files, current task state, and the minimum repository evidence needed to understand the request.
 2. Use update_plan for the session execution plan. If the project requires a durable board, synchronize it through its task-tracker workflow before implementation and again at completion.
-3. Map dependencies and split only independent, bounded workstreams. Parallelize useful read-only or non-overlapping work; keep dependent work sequential.
+3. Map dependencies and split only independent, bounded workstreams. One agent = one bounded unit (one deliverable, ~5 files, ~10 steps); anything larger is split into N tasks and fanned out. A big task handed to one agent is an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target. Parallelize useful read-only or non-overlapping work; keep dependent work sequential. Widest fan-out: a dependency must be a REAL data handoff, else parallel. Size a unit to ~<=20 min of agent work; longer -> split again.
 4. When delegation is useful, select the matching project expert from .codex/agents before built-in or global agents. If the collaboration surface cannot select a custom type, name the expert explicitly and include its developer instructions in the brief without claiming the type was instantiated.
-5. Use spawn_agent, send_message, followup_task, and wait_agent for foreground collaboration. Give each agent concrete scope, expected evidence, allowed mutation surface, and validation duties.
+5. Use spawn_agent, send_message, followup_task, and wait_agent for foreground collaboration. Give each agent the goal it serves, concrete scope with explicit out-of-bounds, the context it needs (what is already done and what runs in parallel, trimmed to that agent), who consumes its result and in what shape, expected evidence, allowed mutation surface, and validation duties.
 6. Review every delegated result before using it. Reconcile conflicts against authoritative project files and run validation proportional to risk.
-7. Lead the final handoff with the outcome, changed surfaces, exact validation, and any genuine remaining risk.
+7. Once ALL code is written (not per-piece), file one recommended final task: simplify the whole written code and strip over-engineering. Delegate it like any other task.
+8. Lead the final handoff with the outcome, changed surfaces, exact validation, and any genuine remaining risk.
+
+Branch: work in the current branch; none chosen -> main. Unless the user says branch/PR, stay on main and take over ALL workspace changes, incl. from other sessions.
 
 # [ADDON: PLAN MODE]
 

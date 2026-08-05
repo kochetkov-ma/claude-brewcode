@@ -83,12 +83,12 @@ Global:  `~/.claude/agent-deadline.json` — fallback.
 |-----|---------|
 | `enabled` | must be exactly `true`; anything else (or no file) = feature off |
 | `defaultMinutes` | budget for every agent type; default `20` if missing/invalid |
-| `byAgentType` | optional per-type overrides, e.g. `{"Explore": 10, "brewcode:developer": 45}`. Empty by default = one limit for all |
+| `byAgentType` | optional per-type overrides, e.g. `{"Explore": 10, "brewtools:text-optimizer": 45}`. Empty by default = one limit for all |
 | `hardStopRatio` | optional, default `2`, must be `> 1` — multiple of the budget past which the allow-list shrinks from the finalize set to `Write, Edit`. Anything `<= 1` or non-numeric falls back to `2`. Omit the key entirely to take the default |
 
 Budget = `byAgentType[agent_type] ?? defaultMinutes`. `agent_type` is the value
 Claude Code puts in the payload — plain (`Explore`, `developer`) or
-plugin-scoped (`brewcode:developer`). Check a real value in hook debug output
+plugin-scoped (`brewtools:text-optimizer`). Check a real value in hook debug output
 before adding an override; a typo silently falls back to `defaultMinutes`.
 
 > A syntactically BROKEN project config is skipped and the GLOBAL config is used

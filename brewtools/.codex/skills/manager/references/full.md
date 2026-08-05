@@ -8,6 +8,7 @@ The user's ++M codeword authorizes foreground delegation for this task. Orchestr
 4. When delegation is useful, select the matching project expert from .codex/agents before built-in or global agents. If the collaboration surface cannot select a custom type, name the expert explicitly and include its developer instructions in the brief without claiming the type was instantiated.
 5. Use spawn_agent, send_message, followup_task, and wait_agent for foreground collaboration. Give each agent the goal it serves, concrete scope with explicit out-of-bounds, the context it needs (what is already done and what runs in parallel, trimmed to that agent), who consumes its result and in what shape, expected evidence, allowed mutation surface, and validation duties.
 6. Review every delegated result before using it. Reconcile conflicts against authoritative project files and run validation proportional to risk.
-7. Lead the final handoff with the outcome, changed surfaces, exact validation, and any genuine remaining risk.
+7. Once ALL code is written (not per-piece), file one recommended final task: simplify the whole written code and strip over-engineering. Delegate it like any other task.
+8. Lead the final handoff with the outcome, changed surfaces, exact validation, and any genuine remaining risk.
 
 Branch: work in the current branch; none chosen -> main. Unless the user says branch/PR, stay on main and take over ALL workspace changes, incl. from other sessions.

@@ -2,7 +2,7 @@
 
 Max mode = deep compression + atomic-fact-line rewriting + format-aware tables. LLM-only. Opt-in via `-x`/`--max`. ALWAYS runs 2 verification rounds. Use only when caller explicitly wants maximum density and accepts review burden.
 
-> Inherits everything in `deep-compression.md`. Max adds 3 techniques (B1, A1, B3) + 4 guardrails (C1-C4) + mandatory 2-round verify.
+> Inherits everything in `deep-compression.md`, including aggressive lossy rules A.1-A.4 (dotted, rules-review.md category A) with their loss-ledger requirement. Max adds 4 techniques (B1, A1, B3, B4) + 4 guardrails (C1-C4) + mandatory 2-round verify. Dotless A1 below = ASCII operator dialect, distinct from dotted A.1 (line fusion).
 
 ## Atomic Fact-Line Decomposition (B1)
 
@@ -28,7 +28,7 @@ Prefer ASCII digraphs over unicode glyphs. Measured token cost (tiktoken cl100k/
 
 | Glyph | Tokens | ASCII | Tokens |
 |-------|--------|-------|--------|
-| `∵` `∴` `⊃` `≤` `≥` | 2-3 each | `->` `!=` `>=` `<=` `|` | 1 each |
+| `∵` `∴` `⊃` `≤` `≥` | 2-3 each | `->` `!=` `>=` `<=` `\|` | 1 each |
 | `→` | 1 | `->` | 1 (equally cheap + portable) |
 
 Mapping:
@@ -39,7 +39,7 @@ Mapping:
 | not / never | `!=` |
 | greater | `>=` |
 | less | `<=` |
-| or | `|` |
+| or | `\|` |
 | because | `bc` or `because` |
 | therefore | `so` |
 | includes | `includes` |
@@ -69,9 +69,13 @@ CONDITIONAL:
 > 1 ann admin
 > 2 bob user
 
+## Chain-of-Density Final Pass (B4)
+
+Source: arXiv:2309.04269. After all compression passes, run 1-3 rewrite iterations at FIXED length: each pass fuses 1-3 missing entities from the original back in WITHOUT growing the text (~3 iterations reach human-preferred density). Use to repair entity loss found by verification instead of re-inflating.
+
 ## Guardrails (MANDATORY)
 
-These CAP the aggression. Sources: Anthropic context-engineering blog; Anthropic high-reasoning model 4.8 prompting guide; arXiv:2502.15007 LLM-Microscope.
+These CAP the aggression. Sources: Anthropic context-engineering blog; Anthropic high-reasoning model 4.8 prompting guide; arXiv:2502.15007 LLM-Microscope. Dotless IDs C1-C4 are max-mode guardrails — distinct from Codex-behavior rules C.1-C.8 (dotted).
 
 | ID | Rule |
 |----|------|
@@ -89,19 +93,22 @@ Inherits ALL `deep-compression.md` iron rules:
 
 Max adds:
 - Scope qualifiers preserved verbatim (C2)
-- 2 mandatory verification rounds (never optional)
+- 2 mandatory verification rounds, independent methods: claim inventory + self-QA probe (never optional)
 - Semantic match must be >= 95% -> else warn user with loss list
+- 100% sub-gate: numbers, names, negations, scope qualifiers
 
-## Verification (2 rounds, mandatory)
+## Verification (2 rounds, mandatory, INDEPENDENT methods)
 
-Never silently ship lossy max output.
+Never silently ship lossy max output. Two rounds use DIFFERENT methods — they catch different losses.
 
-| Round | Action |
+| Round | Method |
 |-------|--------|
-| 1 | Spawn verifier with ORIGINAL + COMPRESSED -> list lost/distorted facts -> compute semantic match % |
-| 2 | Patch losses -> re-verify -> recompute match % |
-| after R2 | match >= 95% -> ship. match < 95% -> output WARNING + full loss list, ship with caveat |
+| 1 — Claim inventory | Decompose ORIGINAL into numbered atomic claims, ONE predicate per claim (over-decomposition hurts verifier accuracy, arXiv:2411.02400). Check each claim derivable from COMPRESSED. Label: kept \| merged \| lost \| distorted \| elided-known (A.4). Match % = (kept + merged) / total |
+| 2 — Self-QA probe | Generate 10-20 questions from ORIGINAL targeting entities, numbers, conditions, negations. Answer each from COMPRESSED ONLY. Mismatch = loss. Patch, recompute both scores |
+| Gates | Overall >= 95% AND 100% sub-gate: every number, name, negation, and scope qualifier answerable/verbatim (CompactPrompt arXiv:2510.18043). Sub-gate fail -> patch via Chain-of-Density pass (B4) -> re-verify. Still failing -> WARNING + full loss list, ship with caveat |
 
-Loss list fmt (1 fact/line, atomic):
+Dedup audit: dedup-merged facts count as PRESERVED (kept once). Loss list fmt (1 fact/line, atomic):
 > lost: artifact retention policy (30d) dropped
 > distorted: "every endpoint" -> "endpoints" (scope weakened, C2 violation)
+> merged: TLS-required rule deduplicated, kept once @ Security section (NOT a loss)
+> elided-known: generic "write unit tests" advice elided (A.4, counts as loss)

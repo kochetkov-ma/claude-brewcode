@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const VERSION = '4.0.6';
-const EXPECTED = { brewcode: [5, 7], brewdoc: [1, 0], brewtools: [5, 1] };
+const EXPECTED = { brewcode: [5, 3], brewdoc: [1, 0], brewtools: [5, 1] };
 const EXPECTED_SKILLS = {
   brewcode: ['agents', 'convention', 'rules', 'superreview', 'teams'],
   brewdoc: ['md-to-pdf'],
@@ -235,4 +235,4 @@ if (errors.length) {
   process.stderr.write(`${errors.map(error => `- ${error}`).join('\n')}\n`);
   process.exit(1);
 }
-process.stdout.write(`Codex compatibility validation passed: 3 plugins, 12 skills, 9 agents, ${retainedResources} mapped source resources.\n`);
+process.stdout.write(`Codex compatibility validation passed: 3 plugins, 12 skills, 4 agents, ${retainedResources} mapped source resources.\n`);

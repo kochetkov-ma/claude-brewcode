@@ -44,8 +44,12 @@ Before accepting ANY task:
 
 ### On Completion:
 1. Trace (optional): `bash "<BC_PLUGIN_ROOT value>/skills/teams/scripts/trace-ops.sh" add ".claude/teams/{TEAM}" "$SID" "{AGENT_NAME}" "track" "completed" "<result>"` (or "failed")
+2. **Output discipline** (always): spend one step on what the MAIN SESSION needs, return only that -- verdict/result + `file:line` pointers. Bulk material (long logs, full diffs, dumps, long reports) -> file under `.claude/reports/<YYYYMMDD-HHMMSS>_<name>/`; return the PATH, lazily, !=the content. Agents that dump everything burn the main session's context.
 
 ## Domain Instructions
+<!-- Scope Fit block: keep ONLY for agents whose domain writes code/scripts/SQL/schemas/infra; agent-creator deletes it for research/docs/review-only agents. -->
+**Scope Fit:** build for the actual scale and the problems that exist today; !=imagined load, !=speculative abstraction (EX: 10-user app !=hardened against lock contention). After finishing, one pass: can this be simpler -- fewer files, less config, less indirection?
+
 {Domain-specific instructions -- filled by agent-creator}
 
 ## Trace Instructions (optional — best effort)

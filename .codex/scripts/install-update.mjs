@@ -67,7 +67,7 @@ function agentPlans() {
       });
     }
   }
-  if (plans.length !== 9) throw new Error(`Expected 9 managed agents, found ${plans.length}`);
+  if (plans.length !== 4) throw new Error(`Expected 4 managed agents, found ${plans.length}`);
   return plans;
 }
 
@@ -189,7 +189,7 @@ try {
       restoreAgents(agentsBefore, errors);
       throw new Error(`${error.message}\nAgent rollback: ${errors.length ? errors.join('; ') : 'complete'}`);
     }
-    process.stdout.write('Installed 9 Codex agent TOMLs and removed retired agents. Start a new Codex session.\n');
+    process.stdout.write('Installed 4 Codex agent TOMLs and removed retired agents. Start a new Codex session.\n');
     process.exit(0);
   }
 
@@ -230,7 +230,7 @@ try {
     throw new Error(`${error.message}\nRollback: ${errors.length ? errors.join('; ') : 'complete'}`);
   }
 
-  process.stdout.write(`Installed exact Codex ${LOCAL_VERSION} plugins and 9 agents (${action}); retired agents removed. Review hook definitions with /hooks, then start a new session.\n`);
+  process.stdout.write(`Installed exact Codex ${LOCAL_VERSION} plugins and 4 agents (${action}); retired agents removed. Review hook definitions with /hooks, then start a new session.\n`);
 } catch (error) {
   process.stderr.write(`ERROR: ${error.message}\n`);
   process.exit(1);

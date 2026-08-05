@@ -1,6 +1,6 @@
 ---
 name: agents
-description: "Creates and improves Codex subagents. Triggers: create agent, improve agent, scaffold agent, fix agent."
+description: "Creates, improves, syncs Codex subagents. Triggers: create agent, improve agent, sync agents, memory sync."
 ---
 
 # Codex agent authoring
@@ -25,11 +25,11 @@ Follow every phase below. When a phase delegates work, use Codex collaboration w
 | ARTIFACT | `agents` |
 | SPECIALIST | `brewcode:agent-creator` |
 | LIST_CMD | Glob `*.md` over `.codex/agents/`, `~/.codex/agents/`, `brewcode/agents/` |
+| SYNC_REF | `<skill-directory>/../skills/references/mode-sync.md` (shared with `$brewcode:skills`) |
 
 ## Step 1 — Input gate
 
-Treat the **entire** user input (`<arguments>`) as ONE free-form natural-language prompt.
-There is NO keyword grammar and NO argument parser — `argument-hint` is only a loose example.
+Treat the **entire** user input (`<arguments>`) as ONE free-form natural-language prompt — no keyword grammar, no argument parser (`argument-hint` is only a loose example).
 
 - prompt non-empty -> go to **Step 2**
 - prompt empty / whitespace-only -> go to **Step 3**
@@ -45,6 +45,7 @@ Classify the prompt + recent conversation context into exactly ONE mode:
 | `create` | "создай" / "create" / "new" / "добавь" / "scaffold" |
 | `improve` | "улучши" / "improve" / "refactor" / "fix" / "почини", OR a bare existing name/path |
 | `review` | "ревью" / "review" / "validate" / "проверь корректность" |
+| `sync` | "sync" / "синк" / "memory sync" / "меморисинк" / "актуализируй" / "обнови знания" / "приведи в соответствие с кодом" — alone or with a scope word |
 
 **Batch flag:** plural form, "все" / "all", or multiple names/paths -> fan-out (one specialist spawn per item).
 
@@ -66,6 +67,7 @@ Options (in this order):
 - `Create new agents`
 - `Improve existing agents`
 - `Review agents`
+- `Sync agents (memory sync)` — re-verify all knowledge vs code, shrink not grow
 - `List (plain)`
 - `Nothing / cancel`
 
@@ -75,6 +77,26 @@ After the choice:
   plus the artifact-specific params (see "Artifact-specific params" below).
 - Then ANNOUNCE the mode using the Step 2 format and proceed to **Step 4**.
 
+## Delegation (applies to EVERY sub-agent task spawn in this skill)
+
+A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct
+it, and it usually drifts off-target. One subagent = ONE bounded unit — one deliverable
+(here: ONE agent definition), ~<=5 files, ~<=10 steps. Bigger MUST be split into N tasks, all
+spawned in ONE message.
+
+Every spawn prompt MUST carry:
+
+| Field | Content |
+|-------|---------|
+| GOAL | the overall task and why it exists — the point beyond the file edit |
+| ROLE | what this agent owns; what it must NOT touch |
+| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
+| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what THIS agent needs |
+| CONSUMER | who or what uses the result next, and the shape it must fit |
+| DONE | acceptance criteria + the exact report shape you want back |
+
+A bare one-line task is never enough.
+
 ## Step 4 — Dispatch
 
 - `status` -> go to **Step 5**.
@@ -83,7 +105,10 @@ After the choice:
 - `create` -> gather minimal params (Step 3 / artifact-specific), spawn `SPECIALIST` via sub-agent task.
   Batch -> spawn one `SPECIALIST` per item, ALL in ONE message (parallel).
 - `improve` -> resolve target(s), spawn `SPECIALIST` via sub-agent task per target (parallel for batch).
-- `review` -> spawn `brewcode:reviewer` (two-phase: review -> double-check findings -> report).
+- `review` -> spawn the project's reviewer agent from `.codex/agents/`, else `general-purpose`
+  (two-phase: review -> double-check findings -> report).
+- `sync` -> read `SYNC_REF` and follow it end to end (S1 scope -> S6 report).
+  It replaces Steps 5-6 for this mode.
 
 ## Step 5 — Real status (NOT a flat list)
 
@@ -122,7 +147,25 @@ For `create`: ONE request_user_input batch — (Q1) scope: Project `.codex/agent
 Global `~/.codex/agents/` / Plugin `brewcode/agents/`; (Q2) model: balanced model (Recommended) /
 high-reasoning model / fast model / inherit (omit model: field); (Q3) update AGENTS.md agents table? yes/no.
 Frontmatter description budget: <= 100 chars, single line, role + 2-3 triggers, EN only.
-Spawn SPECIALIST (brewcode:agent-creator) with the description, scope+path, model.
+Spawn SPECIALIST (brewcode:agent-creator) using the Delegation shape, e.g.:
+
+```
+Codex delegation brief (task_role="brewcode:agent-creator", message="
+GOAL: user is building an agent roster for this project; this task delivers ONE agent
+      definition that fits alongside the existing ones.
+ROLE: you own exactly one file — {SCOPE_PATH}/{name}.md. Do NOT touch other agents,
+      AGENTS.md, skills, or project source.
+SCOPE: create {SCOPE_PATH}/{name}.md. Out of bounds: every other path.
+CONTEXT: description='{DESC}', scope={SCOPE_PATH} and reasoning_tier={MODEL} are already decided in
+      Step 3 — do NOT re-ask. Agents that already exist and must not be duplicated:
+      {EXISTING_NAMES}. In batch mode {N} sibling agent-creators run in parallel, one file each.
+CONSUMER: this skill's Step 6 report, and the AGENTS.md agents table row appended right after
+      you finish — the description line must drop into that row verbatim.
+DONE: file exists, valid frontmatter, description <= 100 chars single line with 2-3 triggers.
+      Report: path | model | description line | 1-line rationale.
+")
+```
+
 After creation, if user approved, update the AGENTS.md agents table via Edit (add/replace row).
 For `improve`: resolve agent by name/path across the 3 scopes; ONE request_user_input —
 (Q1) focus: triggers / system-prompt / both (Recommended) / full review; (Q2) update AGENTS.md? yes/no.

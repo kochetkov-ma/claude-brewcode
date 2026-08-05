@@ -112,7 +112,7 @@ Load the analysis contract and confirmation template:
 
 Read file: `${CLAUDE_SKILL_DIR}/references/01-analysis.md`
 
-Follow it to spawn analysis subagents IN PARALLEL (one message, multiple Task calls). Spawn the agents prescribed there (default: `brewcode:architect` for domains + release style, `Explore` for source-path exclusions + doc inventory). Each returns a structured block. Integrate into a single FINDINGS object:
+Follow it to spawn analysis subagents IN PARALLEL (one message, multiple Task calls). Spawn the agents prescribed there (default: `Plan` for domains + release style, `Explore` for source-path exclusions + doc inventory). Each returns a structured block. Integrate into a single FINDINGS object:
 
 ```
 DOMAINS   = [ ... ]   # per-repo first-kebab id segments, derived from the repo

@@ -40,6 +40,17 @@ Agent Creator sizes the task before starting. One bounded unit = one deliverable
 **Got a split proposal instead of an agent file?** That is the guard working. Pick one agent from the proposal and re-send it, or spawn the subtasks as parallel agents in a single message.
 </Callout>
 
+## Guardrails in every generated agent
+
+Two blocks land in the body of every agent Agent Creator writes. They are part of the output contract, not advice.
+
+| Guardrail | Applies to | What it says |
+|-----------|-----------|--------------|
+| **Output Discipline** | Every generated agent, unconditionally | Before returning, spend one step on what the MAIN SESSION actually needs, and return only that: verdict / result + `file:line` pointers. Bulk material — long logs, full diffs, dumps, long reports — goes into a file under `.claude/reports/<YYYYMMDD-HHMMSS>_<name>/`, and only the PATH comes back. Agents that dump everything burn the main session's context. |
+| **Scope Fit** | Only agents whose domain writes code, scripts, SQL, schemas, infra or config | Build for the actual scale and the problems that exist today, not imagined load or speculative abstraction — a 10-user app does not need hardening against DB lock contention. After finishing, one pass: can this be simpler — fewer files, less config, less indirection? |
+
+Scope Fit is dropped for research, docs, and review-only agents; Output Discipline never is. Both are validation-checklist items, so an agent missing the Output Discipline block does not pass. Agent Creator applies Output Discipline to itself: its report is agent paths plus a frontmatter / validation verdict, never the full agent bodies.
+
 ## When to use
 
 - **New agent** — you need a specialized subagent (reviewer, code-generator, security-scanner, etc.)
@@ -93,7 +104,7 @@ Agent Creator sizes the task before starting. One bounded unit = one deliverable
   <li>
     <div>
       <strong>Validate</strong>
-      <p>Checks name format (<code>[a-z0-9-]+</code>), description keyword density, tool minimality (least privilege), no duplicated CLAUDE.md rules in body, unique name in scope.</p>
+      <p>Checks name format (<code>[a-z0-9-]+</code>), description keyword density, tool minimality (least privilege), no duplicated CLAUDE.md rules in body, unique name in scope, the <code>Output Discipline</code> block present, and <code>Scope Fit</code> present exactly when the agent writes code.</p>
     </div>
   </li>
   <li>

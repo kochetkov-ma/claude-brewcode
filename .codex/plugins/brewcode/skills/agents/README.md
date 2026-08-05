@@ -1,6 +1,6 @@
 # Agents
 
-Manages Codex subagents across all scopes — create new agents, improve existing ones, audit quality, or inspect what is installed. Input is ONE free-form natural-language prompt; there are no keyword subcommands.
+Manages Codex subagents across all scopes — create new agents, improve existing ones, audit quality, sync agent knowledge with the codebase, or inspect what is installed. Input is ONE free-form natural-language prompt; there are no keyword subcommands.
 
 ## Quick Start
 
@@ -29,22 +29,43 @@ Every invocation goes through the same flow:
    - Create
    - Improve
    - Review
+   - Sync agents (memory sync)
    - List (plain)
    - Cancel
-4. **Dispatch** — routes to `brewcode:agent-creator` subagent (create / improve / review / batch) or runs Glob `*.md` over agent scopes directly (list mode).
-5. **Real status** — rich inventory by scope showing agent names, models, trigger coverage, and last-modified — not a flat file listing.
+4. **Dispatch** — routes create / improve / sync to `brewcode:agent-creator`, review to the project reviewer agent from `.codex/agents/` (else `general-purpose`, two-phase), or runs Glob `*.md` over agent scopes directly (list mode).
+5. **Real status** — inventory by scope (counts, names, load path); state (enabled/disabled via `_name.md`, model); overlaps/conflicts (same-name shadowing, duplicate triggers/descriptions); health flags (missing README/frontmatter, agents missing `Bash` in `tools:`, weak triggers, rules duplicated in AGENTS.md) — not a flat file listing.
 6. **Mandatory final output** — structured summary of what was created, modified, or reviewed. Omitted only for `list` mode.
 
 ## Modes
 
 | Mode | How it activates | What it does |
 |------|-----------------|--------------|
-| `status` | Default when no other mode is detected | Shows agents per scope, model breakdown, trigger coverage |
-| `list` | Explicit only — "list", "show agents", "what agents" | Globs `*.md` over all agent scopes, plain file listing |
-| `create` | "create", "add", "new agent" in prompt | agent-creator builds frontmatter + system prompt from description |
-| `improve` | "improve", "update", "refine", or agent name/path in prompt | agent-creator enhances an existing agent file per chosen focus |
-| `review` | "review", "check", "audit" in prompt | agent-creator audits agent files for quality and coverage gaps |
-| `batch` | "all", "multiple", "both" or plural scope detected | agent-creator fans out across all matching agents in one pass |
+| `status` | Default for any "show me" intent — "статус" / "что есть" / "состояние" | Inventory per scope, state and model, overlaps, health flags |
+| `list` | Explicit only — "list" / "список" / "перечисли" | Globs `*.md` over all agent scopes, plain file listing |
+| `create` | "создай" / "create" / "new" / "добавь" / "scaffold" | agent-creator builds frontmatter + system prompt from description |
+| `improve` | "улучши" / "improve" / "refactor" / "fix" / "почини", or a bare existing name/path | agent-creator enhances an existing agent file per chosen focus |
+| `review` | "ревью" / "review" / "validate" / "проверь корректность" | the project reviewer agent from `.codex/agents/` (else `general-purpose`) audits agent files, two-phase (review -> double-check findings -> report) |
+| `sync` | "sync", "синк", "memory sync", "актуализируй", "обнови знания", "приведи в соответствие с кодом" | agent-creator re-verifies agent claims against the codebase and corrects stale knowledge |
+
+Batch flag (not a mode): plural form, "все" / "all", or multiple names/paths — fan-out, one specialist spawn per item.
+
+## Sync mode
+
+Re-verifies every claim in agent files against the current codebase and corrects drift. Shared implementation with `$brewcode:skills sync`: `references/mode-sync.md` (path `<skill-directory>/../skills/references/mode-sync.md`).
+
+| Scope | Trigger | Evidence |
+|-------|---------|----------|
+| `repo` (default) | no scope given | whole working tree |
+| `session` | "session", "this conversation" | decisions, user corrections, bugs hit in the current conversation |
+| `commit` | "commit", "last commit" | `git show`/`git diff <ref>`, default `HEAD` |
+
+Announces `Sync scope: <scope> — <evidence> | targets: <N>` before editing. Non-growth: every edited file ends at or below its original line count, total delta <= 0. Order: DELETE stale/dead/duplicate/obvious content first, then FIX, then ADD (non-obvious, source-verified only).
+
+Verdicts: `STALE`, `DEAD`, `DUPLICATE`, `OBVIOUS`, `DRIFT`, `MISSING`.
+
+Report table: `File | Lines before -> after | Fixed | Deleted | Added | Key change`, plus corrected facts, additions with source, skipped files, and total delta.
+
+Targets: `.codex/agents/*.toml`, `*/agents/*.md` (repo-local only). Disabled files (`_name.md`) are skipped and reported. `$brewdoc:memory` applies the same non-growth sync to memory files, AGENTS.md, rules and conventions; its `full` mode also syncs the agent and skill rosters in-place — use this skill when you want a roster on its own.
 
 ## Parameters for Create / Improve
 
@@ -73,6 +94,12 @@ $brewcode:agents improve the reviewer agent's trigger keywords
 
 # Audit all agents for quality issues
 $brewcode:agents review all project agents
+
+# Sync agent knowledge with the codebase (default scope: repo)
+$brewcode:agents sync
+
+# Sync only what changed in the last commit
+$brewcode:agents sync commit
 
 # Plain listing of agent files across all scopes
 $brewcode:agents list

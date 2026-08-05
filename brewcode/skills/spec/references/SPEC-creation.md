@@ -26,13 +26,15 @@
 
 | Area Type | Preferred Agent | Fallback |
 |-----------|-----------------|----------|
-| Project Domain | matching team agent | `developer` |
-| Code/Architecture | `Plan`, `developer` | `Explore` |
-| Database/SQL | `developer` | `Explore` |
-| Tests | `tester` | `developer` |
-| Quality/Security | `reviewer` | `Plan` |
+| Project Domain | matching team agent | project agent from `.claude/agents/` |
+| Code/Architecture | project architecture agent, `Plan` | `Explore` |
+| Database/SQL | project data agent | `Explore` |
+| Tests | project test agent | `Explore` |
+| Quality/Security | project reviewer agent | `Plan` |
 | External Docs | `Explore` | - |
-| Config/Infra | `developer` | `Plan` |
+| Config/Infra | project infra agent | `Plan` |
+
+> No matching project agent -> `Explore` (research) / `Plan` (design) / `general-purpose`.
 
 **Rule:** If team exists in `.claude/teams/`, prefer team agents for matching domains. Otherwise use project-specific agents from `.claude/agents/` when available.
 
@@ -45,11 +47,11 @@
 │  ONE message, 5-10 Task calls in PARALLEL. Every prompt is  │
 │  the 6-field brief below, filled for that area:             │
 │    Plan       -> architecture area                          │
-│    developer  -> DB layer                                   │
-│    developer  -> services                                   │
-│    tester     -> test patterns                              │
-│    reviewer   -> quality / security                         │
-│    ...                                                      │
+│    Explore    -> DB layer                                   │
+│    Explore    -> services                                   │
+│    Explore    -> test patterns                              │
+│    Explore    -> quality / security                         │
+│    ...  (project agents from .claude/agents/ when they fit) │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -118,12 +120,12 @@ For a Spring Boot project with auth feature:
 
 | # | Area | Agent | Focus |
 |---|------|-------|-------|
-| 1 | Controllers | developer | Existing endpoints, patterns |
-| 2 | Services | developer | Business logic, dependencies |
-| 3 | Repositories | developer | Data access, queries |
-| 4 | Security config | reviewer | Auth patterns, vulnerabilities |
-| 5 | Tests | tester | Test patterns, coverage |
-| 6 | Migrations | developer | Schema, constraints |
+| 1 | Controllers | `api-expert` (project) or `Explore` | Existing endpoints, patterns |
+| 2 | Services | project domain agent or `Explore` | Business logic, dependencies |
+| 3 | Repositories | project data agent or `Explore` | Data access, queries |
+| 4 | Security config | project reviewer agent or `Explore` | Auth patterns, vulnerabilities |
+| 5 | Tests | project test agent or `Explore` | Test patterns, coverage |
+| 6 | Migrations | project data agent or `Explore` | Schema, constraints |
 | 7 | External docs | Explore | Library usage (Spring Security) |
 
 ## Timing

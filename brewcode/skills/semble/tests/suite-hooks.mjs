@@ -762,7 +762,7 @@ const EXPLORE_OK = (cwd) => ({
 const SILENT_AGENTS = [
   ['X3.generalPurpose', 'general-purpose'],
   ['X4.plan', 'Plan'],
-  ['X5.projectAgent', 'brewcode:developer'],
+  ['X5.projectAgent', 'brewcode:bash-expert'],
   ['X6.lowercase', 'explore'],
   ['X7.emptyType', ''],
 ];

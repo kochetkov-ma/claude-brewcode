@@ -81,7 +81,7 @@ Files Created:
   <li>
     <div>
       <strong>Parallel codebase research</strong>
-      <p>Spawns 5–10 subagents in a <em>single message</em> — Plan, developer, tester, reviewer, Explore — each scoped to one research zone. Agents return findings as bullet lists and file:line references, never large code blocks.</p>
+      <p>Spawns 5–10 subagents in a <em>single message</em> — <code>Plan</code>, <code>Explore</code>, and the project's own agents from <code>.claude/agents/</code> — each scoped to one research zone. Agents return findings as bullet lists and file:line references, never large code blocks.</p>
     </div>
   </li>
   <li>
@@ -163,7 +163,7 @@ DONE: report exactly — findings (bullets), assets (table), risks, recommendati
 
 1. Team agent from `.claude/teams/team.md` matching the domain
 2. Project agent from `.claude/agents/`
-3. Plugin agent (developer, tester, reviewer, Explore, Plan)
+3. Built-in agent (`Explore`, `Plan`, `general-purpose`)
 
 **Reviewer iteration loop**
 

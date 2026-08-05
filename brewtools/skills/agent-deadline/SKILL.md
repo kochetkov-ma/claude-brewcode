@@ -37,7 +37,7 @@ Actually allowed past 100%: those 7 **plus** `TaskCreate`, `BashOutput`, `TaskOu
 | Clock starts at the agent's FIRST tool call, not at spawn | Pre-tool thinking time is free. |
 | The subagent-spawn tool is named `Agent` in the payload, not `Task` | Matters when matching payloads / writing sibling hooks. |
 | Main session vs subagent is discriminated by absence of `agent_id`/`agent_type` | Main session = no-op, always. |
-| `agent_type` for plugin agents (`brewcode:developer` vs `developer`) was NOT observed live | A `byAgentType` key that does not match the real payload value silently falls back to `defaultMinutes`. Verify against a real payload before relying on an override. |
+| `agent_type` for plugin agents (`brewtools:text-optimizer` vs `text-optimizer`) was NOT observed live | A `byAgentType` key that does not match the real payload value silently falls back to `defaultMinutes`. Verify against a real payload before relying on an override. |
 | Hook is fail-open | Any error = the call passes through; the session never breaks. |
 | Cost per tool call: median **58.3 ms**, p90 **62.5 ms** (measured: Apple M-series, Node v24.1.0, 30 runs) | Node startup dominates; on top of it the guard does up to 19 `readFileSync` — stdin payload, up to 16 project-config probes (walk from `cwd` to the filesystem root), global config, state file. |
 | The PreToolUse matcher is `.*` | The tax is paid by EVERY tool call, not only subagent ones. The main-session no-op path measured **61.5 ms**. A **global** install therefore charges ~60 ms to every tool call of every session in every repo, including sessions that never spawn a subagent. State this before installing globally, not after. |
@@ -144,7 +144,7 @@ Skip any question already answered by `$ARGUMENTS` or settled by the status tabl
 
 When question 1 is asked, the **Global** option description MUST carry the cost: `.*` matcher = ~58 ms median added to every tool call of every session, main sessions included.
 
-Question 3 is asked ONLY if the user brought up per-type limits themselves; otherwise install uniform and mention in the final report that overrides exist. If overrides ARE requested, warn verbatim: *`agent_type` for plugin agents (e.g. `brewcode:developer` vs `developer`) has not been observed live — a key that does not match the real payload silently falls back to `defaultMinutes`. Verify against a real payload first.*
+Question 3 is asked ONLY if the user brought up per-type limits themselves; otherwise install uniform and mention in the final report that overrides exist. If overrides ARE requested, warn verbatim: *`agent_type` for plugin agents (e.g. `brewtools:text-optimizer` vs `text-optimizer`) has not been observed live — a key that does not match the real payload silently falls back to `defaultMinutes`. Verify against a real payload first.*
 
 For `disable`/`enable`/`uninstall`/`purge` only question 1 applies, and only when the status table shows the feature present in more than one scope.
 

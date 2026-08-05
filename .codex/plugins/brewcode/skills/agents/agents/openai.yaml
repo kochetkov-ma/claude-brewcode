@@ -1,6 +1,6 @@
 interface:
   display_name: "Agents"
-  short_description: "Creates and improves Codex subagents. Triggers: create agent, im"
+  short_description: "Creates, improves, syncs Codex subagents. Triggers: create agent"
   default_prompt: "Use $brewcode:agents for this task."
 policy:
   allow_implicit_invocation: false

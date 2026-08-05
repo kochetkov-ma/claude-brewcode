@@ -23,43 +23,76 @@ TARGET=".codex/skills/superreview"
 TARGET_REFS="$TARGET/references"
 
 validate_templates() {
-  if [ ! -f "$REFS/SKILL.md.template" ]; then
-    echo "❌ Emit template not found: $REFS/SKILL.md.template"
-    exit 1
-  fi
+  for t in "$REFS/SKILL.md.template" "$REFS/scope.md.template" "$REFS/agent-prompt.md" "$REFS/report-template.md"; do
+    if [ ! -f "$t" ]; then
+      echo "❌ Emit template not found: $t"
+      exit 1
+    fi
+  done
 }
 
 # ── scan: report what the emitted skill must be wired to ────────────────────────
+# `find | sort` exits 0 on an empty result, so every listing goes through this helper:
+# a bare `find ... || echo "(none)"` would never print the fallback.
+# `|| true` is required: a missing dir makes find exit 1, and under `set -e` a failing command
+# substitution in an assignment aborts the whole script.
+_list() { _out=$(eval "$1" 2>/dev/null || true); if [ -n "$_out" ]; then printf '%s\n' "$_out"; else echo "${2:-(none)}"; fi; }
+
 scan_target() {
   echo "=== superreview: target scan ==="
   echo ""
   echo "--- Build files ---"
-  find . -maxdepth 3 -type f \( \
+  _list 'find . -maxdepth 3 -type f \( \
     -name "package.json" -o -name "pom.xml" -o -name "build.gradle" -o \
     -name "build.gradle.kts" -o -name "requirements*.txt" -o -name "pyproject.toml" -o \
     -name "Pipfile" -o -name "Cargo.toml" -o -name "go.mod" -o -name "composer.json" \
-  \) 2>/dev/null | sort || echo "(none found)"
+  \) | sort' "(none found)"
 
   echo ""
-  echo "--- Project agents (.codex/agents/) ---"
-  find .codex/agents -type f -name "*.md" 2>/dev/null | sort || echo "(none)"
+  echo "--- Project agents (.codex/agents/) — DOMAIN EXPERT roster ---"
+  if [ -d .codex/agents ]; then
+    for f in .codex/agents/*.toml; do
+      [ -f "$f" ] || continue
+      printf '%s :: %s :: %s\n' "$f" \
+        "$(grep -m1 '^name:' "$f" | sed 's/^name:[[:space:]]*//')" \
+        "$(grep -m1 '^description:' "$f" | sed 's/^description:[[:space:]]*//' | cut -c1-220)"
+    done
+    _n=$(find .codex/agents -maxdepth 1 -type f -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
+    echo "agents=$_n"
+    [ "$_n" -eq 0 ] && echo "⚠️ NO domain experts — superreview routed to generic agents is a DEGRADED review"
+  else
+    echo "(none)"
+    echo "⚠️ NO .codex/agents/ — create domain experts before generating (see SKILL.md Phase 1.6)"
+  fi
+
+  echo ""
+  echo "--- Scope baseline sources (tracker) ---"
+  test -d .codex/features && echo "✅ .codex/features/ (file-based Kanban)" || echo "— no .codex/features/"
+  command -v gh >/dev/null 2>&1 && echo "✅ gh CLI present" || echo "— no gh CLI"
+  git rev-parse --abbrev-ref HEAD 2>/dev/null | sed 's/^/branch: /' || true
+  test -d .github && echo "✅ .github/ present" || echo "— no .github/"
 
   echo ""
   echo "--- Rules (.codex/rules/) ---"
-  find .codex/rules -type f -name "*.md" 2>/dev/null | sort || echo "(none)"
+  _list 'find .codex/rules -type f -name "*.md" | sort'
 
   echo ""
   echo "--- Conventions (.codex/convention/) ---"
-  find .codex/convention -type f -name "*.md" 2>/dev/null | sort || echo "(none)"
+  _list 'find .codex/convention -type f -name "*.md" | sort'
 
   echo ""
   echo "--- Source / service dirs (top level) ---"
-  find . -maxdepth 2 -type d \( -name "src" -o -name "app" -o -name "lib" -o \
-    -name "pkg" -o -name "internal" -o -name "cmd" \) 2>/dev/null | sort || echo "(none)"
+  _list 'find . -maxdepth 2 -type d \( -name "src" -o -name "app" -o -name "lib" -o \
+    -name "pkg" -o -name "internal" -o -name "cmd" \) | sort'
 
   echo ""
   echo "--- Test dirs ---"
-  find . -type d \( -name "test" -o -name "tests" -o -name "__tests__" \) 2>/dev/null | head -20 || echo "(none)"
+  _list 'find . -type d \( -name "test" -o -name "tests" -o -name "__tests__" \) | head -20'
+
+  echo ""
+  echo "--- Gate commands (candidates for GATE_COMMANDS) ---"
+  _list 'grep -oE "\"(build|lint|typecheck|type-check|test)\"[[:space:]]*:" package.json | tr -d "\":" | sed "s/^/npm run /"'
+  _list 'grep -oE "^[a-zA-Z_-]+:" Makefile | tr -d ":" | sed "s/^/make /"' "(no Makefile targets)"
 
   echo ""
   echo "--- AGENTS.md ---"
@@ -81,13 +114,17 @@ emit_skill() {
   PATHSPEC_GLOBS="${PATHSPEC_GLOBS:-'*' 'Dockerfile*' 'docker-compose.yml' '.github/workflows/*.yml'}"
   ARBITER_AGENT="${ARBITER_AGENT:-general-purpose}"
   VALIDATOR_AGENT="${VALIDATOR_AGENT:-general-purpose}"
+  SCOPE_AGENT_A="${SCOPE_AGENT_A:-Explore}"
+  SCOPE_AGENT_B="${SCOPE_AGENT_B:-Explore}"
+  TRACKER_LABEL="${TRACKER_LABEL:-local task board + issue tracker (read-only)}"
   GENERATED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
   _sep=$'\x01'
 
   # Sanitize every scalar before it lands on a sed RHS: escape backslash FIRST, then ampersand
   # (& is the whole-match backreference in sed replacements). Order matters.
-  for _var in PROJECT_NAME STACK_LABEL STACK_REF SOURCE_GLOB PATHSPEC_GLOBS ARBITER_AGENT VALIDATOR_AGENT GENERATED_AT; do
+  for _var in PROJECT_NAME STACK_LABEL STACK_REF SOURCE_GLOB PATHSPEC_GLOBS ARBITER_AGENT VALIDATOR_AGENT \
+              SCOPE_AGENT_A SCOPE_AGENT_B TRACKER_LABEL GENERATED_AT; do
     v="${!_var}"; v="${v//\\/\\\\}"; v="${v//&/\\&}"; printf -v "$_var" '%s' "$v"
   done
 
@@ -101,6 +138,9 @@ emit_skill() {
       -e "s${_sep}{PATHSPEC_GLOBS}${_sep}${PATHSPEC_GLOBS}${_sep}g" \
       -e "s${_sep}{ARBITER_AGENT}${_sep}${ARBITER_AGENT}${_sep}g" \
       -e "s${_sep}{VALIDATOR_AGENT}${_sep}${VALIDATOR_AGENT}${_sep}g" \
+      -e "s${_sep}{SCOPE_AGENT_A}${_sep}${SCOPE_AGENT_A}${_sep}g" \
+      -e "s${_sep}{SCOPE_AGENT_B}${_sep}${SCOPE_AGENT_B}${_sep}g" \
+      -e "s${_sep}{TRACKER_LABEL}${_sep}${TRACKER_LABEL}${_sep}g" \
       -e "s${_sep}{GENERATED_AT}${_sep}${GENERATED_AT}${_sep}g" \
       "$1" > "$2"
   }
@@ -113,6 +153,9 @@ emit_skill() {
 
   _subst "$REFS/report-template.md" "$TARGET_REFS/report-template.md"
   echo "✅ $TARGET_REFS/report-template.md"
+
+  _subst "$REFS/scope.md.template" "$TARGET_REFS/scope.md"
+  echo "✅ $TARGET_REFS/scope.md"
 
   if [ -f "$REFS/$STACK_REF" ]; then
     cp "$REFS/$STACK_REF" "$TARGET_REFS/$STACK_REF"
@@ -135,10 +178,11 @@ validate_emit() {
   fi
 
   # Runtime tokens the emitted skill legitimately keeps (resolved at REVIEW time, not GENERATION time).
-  _runtime='MODE|BRANCH|SCOPE|FILES|COUNT|TIMESTAMP|FOCUS|FILE_LIST|AGENT_LIST|CANDIDATES|MERGED|PATHSPEC|MAIN|SHA|FOLDER|GROUP|AGENT|N|OC|REPORT_DIR'
+  _runtime='MODE|BRANCH|SCOPE|FILES|COUNT|TIMESTAMP|FOCUS|FILE_LIST|AGENT_LIST|CANDIDATES|MERGED|PATHSPEC|MAIN|SHA|FOLDER|GROUP|AGENT|N|OC|SC|K|U|D|ROOT|TOK|RANGE|REPORT_DIR|SCOPE_BASELINE|OWNERSHIP|GATE_RESULTS|PR_ISSUE_JSON'
 
   _errors=0
-  for f in "$TARGET/SKILL.md" "$TARGET_REFS/agent-prompt.md" "$TARGET_REFS/report-template.md"; do
+  for f in "$TARGET/SKILL.md" "$TARGET_REFS/agent-prompt.md" "$TARGET_REFS/report-template.md" \
+           "$TARGET_REFS/scope.md"; do
     [ -f "$f" ] || continue
     _unresolved=$(grep -oE '\{[A-Z_]+\}' "$f" | sort -u | grep -vE "^\{(${_runtime})\}$" || true)
     if [ -n "$_unresolved" ]; then
@@ -188,6 +232,32 @@ EOF
       _errors=$((_errors+1))
     fi
   done
+
+  # (c) required emitted assets — a missing one silently guts a phase of the emitted skill.
+  for _req in "$TARGET_REFS/agent-prompt.md" "$TARGET_REFS/report-template.md" "$TARGET_REFS/scope.md"; do
+    if [ ! -f "$_req" ]; then
+      echo "❌ missing emitted asset: $_req"
+      _errors=$((_errors+1))
+    fi
+  done
+
+  # (d) DOMAIN EXPERTS — a review routed only to generic agents is a degraded review.
+  # Override with SUPERREVIEW_ALLOW_NO_EXPERTS=1 when the target genuinely has no domain agents.
+  _experts=0
+  for _name in $_local_agents; do
+    grep -qF "$_name" "$TARGET/SKILL.md" && _experts=$((_experts+1))
+  done
+  if [ "$_experts" -eq 0 ]; then
+    if [ "${SUPERREVIEW_ALLOW_NO_EXPERTS:-0}" = "1" ]; then
+      echo "⚠️ no project domain expert wired (allowed by SUPERREVIEW_ALLOW_NO_EXPERTS=1) — the emitted review is DEGRADED"
+    else
+      echo "❌ no project domain expert (.codex/agents/*.toml) is wired into SKILL.md — create the missing experts"
+      echo "   (see SKILL.md Phase 1.6) or re-run with SUPERREVIEW_ALLOW_NO_EXPERTS=1 to accept a degraded review"
+      _errors=$((_errors+1))
+    fi
+  else
+    echo "✅ domain experts wired: $_experts"
+  fi
 
   if [ "$_errors" -eq 0 ]; then
     echo "✅ no unresolved setup-time placeholders"

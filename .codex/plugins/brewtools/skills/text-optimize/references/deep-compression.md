@@ -14,7 +14,7 @@ Reference for deep compression mode applied to LLM-only documents (AGENTS.md, sy
 | `so` / `->` | therefore, consequently (was `∴`) |
 | `bc` / `because` | because, since (was `∵`) |
 | `@` | at, located at |
-| `|` | or, alternative |
+| `\|` | or, alternative |
 | `:` | has property, contains |
 | `~` | approximately |
 | `includes` | includes, contains (set) (was `⊃`) |
@@ -99,6 +99,51 @@ Apply filler removal from `rules-review.md` rule T.6. Additional deep-mode remov
 - Headers: flatten to 2 levels max
 - Remove blank lines between items in lists/tables
 
+## Redundancy Factoring
+
+Run dedup pass (D.1-D.6, rules-review.md) BEFORE symbol substitution — merging first shrinks the text remaining passes must process and keeps verification cheap. Record merges in a dedup ledger (kept <- dropped).
+
+- Phrase-DICT: recurring phrase >= 3 words appearing 2+ times -> DICT entry (counts toward the 20-entry cap). Source: CompactPrompt arXiv:2510.18043
+- Path-prefix hoisting: repeated path/URL prefixes -> single DICT entry (e.g. `[DICT: SR=src/main/resources]`)
+- Header echo removal: subsection headers repeating parent header words -> drop the echo ("## Server Config / ### Server Config Ports" -> "### Ports")
+- Number/unit normalization: "approximately 30 percent" -> `~30%`; "greater than or equal to 21" -> `>=21`
+
+## Token-Class Keep/Drop Heuristics
+
+Source: LLMLingua-2 arXiv:2403.12968. When compressing at word level:
+
+| Keep | Drop (when meaning survives) |
+|------|------------------------------|
+| Nouns, verbs, numerals, NEGATIONS, named entities | Determiners, copulas ("is", "are"), auxiliaries, discourse connectors ("furthermore", "as a result") |
+
+Never drop negations or scope qualifiers (L.8; max-mode guardrail C2).
+
+## Aggressive Lossy Techniques (A.1-A.4)
+
+Deep/max only. Rule definitions: rules-review.md category A. Application order:
+
+dedup (D.1-D.6) -> line fusion (A.1) -> paraphrase (A.3) -> word drop (A.2) -> knowledge elision (A.4) -> symbol substitution
+
+Loss ledger REQUIRED: every A.2/A.4 drop recorded as `dropped -> reason`, listed in the report. A.4 elisions count against the fact-level loss budget (deep gate >= 95%) as `elided-known`; A.2 is word-level and gate-neutral — ledgered for transparency, no direct gate impact, but if a drop degrades a fact's meaning the verifier labels that fact `distorted` (normal gate impact). A.1/A.3 results count as preserved (kept/merged), no ledger entry. Guards: never drop negations, numbers, named entities, scope qualifiers (L.8, C2); D.6 wrong-merge guard applies before A.1 fusion; unsure whether A.4 knowledge is generic -> keep.
+
+### Example: A.1 fusion + A.3 paraphrase (loss-free)
+
+**Original**:
+> The deployment script should be executed from the project root directory. In the event that the script fails, you can check the log file which is located at `logs/deploy.log`.
+
+**Compressed**:
+> run deploy script from project root | fail -> check `logs/deploy.log`
+
+### Example: A.4 elision, project delta kept
+
+**Original**:
+> Always write unit tests for new code, since testing catches regressions early. Keep functions small and readable. The project coverage gate is 85% (jacoco); builds fail below it.
+
+**Compressed**:
+> coverage gate 85% (jacoco), build fails below
+
+Ledger: dropped "write unit tests / catches regressions" -> generic LLM knowledge; dropped "keep functions small" -> generic. Kept: 85%, jacoco, build-fail behavior (project-specific).
+
 ## Iron Rules
 
 Preserve in ALL cases regardless of compression level:
@@ -106,6 +151,8 @@ Preserve in ALL cases regardless of compression level:
 - Negative rule semantics (use `!=` notation)
 - At least one example per rule that originally has examples
 - DICT header at document start
+- Dedup ledger: every merged pair recorded (kept <- dropped); merged facts count as preserved in verification
+- Loss ledger: every A.2/A.4 drop recorded (dropped -> reason); never elide project-specific facts (names, numbers, paths, versions, prohibitions)
 
 ## Before/After Examples
 

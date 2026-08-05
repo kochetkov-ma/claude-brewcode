@@ -41,11 +41,20 @@ Protocol, always:
    done, green - never "partially").
 5. Observe: read reports, validate, integrate. Agent failed -> file a follow-up
    task and re-delegate, never fix by hand.
+6. ALL code written (not per-piece) -> file one recommended final task: simplify
+   the whole written code, strip over-engineering. Delegate it like any other.
 
 Sizing before spawning: one subagent = ONE bounded unit - one deliverable,
 ~<=5 files, ~<=10 steps. Bigger MUST be split into N tasks, fanned out in ONE
 message. A big task handed to one agent = an agent gone for an hour: you cannot
 observe it, cannot correct it, and it usually drifts off-target.
+
+Widest fan-out: a dependency must be a REAL data handoff, else parallel. Size a
+unit to ~<=20 min of agent work; longer -> split again.
+
+Branch: work in the current branch; none chosen -> main. Unless the user says
+branch/PR, stay on main and take over ALL workspace changes, incl. from other
+sessions.
 
 Every spawn prompt MUST carry, explicitly:
   GOAL     - the overall task and why it exists; the point beyond the file edit.
@@ -73,6 +82,7 @@ Your single line becomes: the full Manager contract (above) + your original requ
 <Steps>
   <li><div><strong>Bounded units, not one giant agent</strong><p>One subagent = one deliverable, roughly 5 files and 10 steps. Anything bigger is split into N tasks fanned out in ONE message. A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target.</p></div></li>
   <li><div><strong>Six-field brief on every spawn</strong><p>Each spawn prompt carries GOAL, ROLE, SCOPE, CONTEXT, CONSUMER, DONE. CONTEXT is trimmed per agent -- never dump everything. A bare one-line task is never enough.</p></div></li>
+  <li><div><strong>One simplification task at the end</strong><p>Once ALL code is written -- not per piece -- the Manager files one recommended final task: simplify the whole written code and strip over-engineering. It is delegated like any other task, never done by hand.</p></div></li>
 </Steps>
 
 | Field | What it must say |
@@ -91,8 +101,8 @@ Your single line becomes: the full Manager contract (above) + your original requ
 | Codeword | Means | What it does |
 |----------|-------|-------------|
 | `++m` | Manager | Manager + delegation for the current task -- Claude orchestrates, never codes by hand; splits work into bounded units and briefs every spawn with GOAL / ROLE / SCOPE / CONTEXT / CONSUMER / DONE |
-| `++rr` | Regression Review | Regression review with double-check -- after each significant phase, run a review focused on no regression + project standard + correctness; two-phase (review → double-check → fix); mandatory final cross-review at task end |
-| `++r` | Review | Review with double-check -- after each significant change, run a two-phase multi-agent review (review → double-check → fix); codeword-only, no ambient injection or wall state change |
+| `++rr` | Regression Review | Regression review with double-check -- after each significant phase, run a review focused on no regression + project standard + correctness; before the review proper the code goes through a simplification pass (over-engineered? simpler?); two-phase (review → double-check → fix); mandatory final cross-review at task end |
+| `++r` | Review | Review with double-check -- after each significant change, run a two-phase multi-agent review (review → double-check → fix), preceded by a simplification pass over the code; codeword-only, no ambient injection or wall state change |
 | `++a` | Architecture | Architecture-first pass before coding -- delegate a design that fits the existing project architecture, patterns and rules; robust, scalable, and simple (no over-engineering); reuse existing patterns first, keep clean seams. Independent group, combines with `++m`/`++rr`/`++r`; same block in normal and plan mode (in plan mode it is written into the plan). |
 
 Detection order: within the review group, `++rr` is tested before `++r` (longest-prefix first). `++m` is matched as a standalone token; in plan mode it auto-adds the plan addon. `++a` is its own independent group and can combine with either.

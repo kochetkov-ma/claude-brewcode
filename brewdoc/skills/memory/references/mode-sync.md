@@ -69,7 +69,8 @@ One subagent = ONE file. Spawn in parallel, ONE message per batch (<= 8). Never 
 whole surface. Order batches longest-file-first.
 
 ```
-Task(subagent_type="Explore" for read-only audit | "brewcode:developer" for the edit, prompt="
+Task(subagent_type="Explore" for read-only audit | the project's editor agent from `.claude/agents/`,
+     else "general-purpose", for the edit, prompt="
 GOAL: this project's persistent memory has drifted and bloated; this task re-syncs ONE file so its
       knowledge is true again and SMALLER than before.
 ROLE: you own exactly {TARGET_PATH}. Do NOT touch other memory/CLAUDE.md/rules files, docs, or source.

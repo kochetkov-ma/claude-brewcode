@@ -2,6 +2,44 @@
 
 ---
 
+## v4.6.0 (2026-08-05)
+
+> Docs: [agents](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [rules](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [spec](https://doc-claude.brewcode.app/brewcode/skills/spec/) | [convention](https://doc-claude.brewcode.app/brewcode/skills/convention/) | [teams](https://doc-claude.brewcode.app/brewcode/skills/teams/) | [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [superreview](https://doc-claude.brewcode.app/brewcode/skills/superreview/) | [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [bash-expert](https://doc-claude.brewcode.app/brewcode/agents/bash-expert/) | [manager](https://doc-claude.brewcode.app/brewtools/skills/manager/) | [think-short](https://doc-claude.brewcode.app/brewtools/skills/think-short/) | [task-board-init](https://doc-claude.brewcode.app/brewtools/skills/task-board-init/) | [agent-deadline](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline/) | [text-human](https://doc-claude.brewcode.app/brewtools/skills/text-human/) | [text-optimize](https://doc-claude.brewcode.app/brewtools/skills/text-optimize/) | [guide](https://doc-claude.brewcode.app/brewdoc/skills/guide/) | [memory](https://doc-claude.brewcode.app/brewdoc/skills/memory/)
+
+### brewcode
+
+#### Removed
+- **generic agents:** `developer`, `architect`, `reviewer`, `tester` deleted. Every project generates its own agents in `.claude/agents/` (via `/brewcode:teams create`), so the generic four were dead weight that competed with the real specialists. brewcode now ships 5: `agent-creator`, `skill-creator`, `hook-creator`, `bash-expert`, `bc-rules-organizer`
+- **docs:** the 4 agent pages and their navigation entries removed; agent counts corrected across README, brewcode README, guide catalog and ASCII diagram (12/9 -> 8/5)
+
+#### Changed
+- **agent selection:** every internal spawn that named a generic agent now resolves to "the project's agent from `.claude/agents/`, else `general-purpose`" — `skills`, `agents`, `rules` (`review` mode), `spec` (research fan-out + review gate), `teams` (C5/C7/C9 quorum), `convention` (P2 `Explore` x10, P3 `Plan`, P4 writers), `e2e` (`e2e-architect` / `e2e-reviewer` instead of the plugin pair), `brewdoc:memory` sync, `brewtools:text-human` mixed flow, `brewtools:task-board-init` analysis agent A (`Plan`)
+- **agent-creator:** new step 6 — emit two guardrail blocks verbatim into every generated agent. `Output Discipline` is unconditional; `Scope Fit` only for agents whose domain writes code/scripts/SQL/schemas/infra/config. Both added to the definition-of-done checklist; agent-creator applies `Output Discipline` to its own report (agent paths + validation verdict, not full bodies)
+- **teams agent-template:** generated agents carry `Output Discipline` on completion (decide what the MAIN session needs, return verdict + `file:line`, bulk output -> `.claude/reports/<ts>_<name>/`, return the path) and a `Scope Fit` block that agent-creator strips for research/docs/review-only agents
+- **teams:** agent priority table reworded — plugin level is now "plugin specialist", fallback is `Explore` / `Plan` / `general-purpose`
+
+### brewtools
+
+#### Changed
+- **manager `++m`:** protocol step 6 — once ALL code is written (not per-piece), file one recommended final task to simplify the whole written code and strip over-engineering, delegated like any other task
+- **manager `++r` / `++rr`:** a simplification pass ("over-engineered? simpler?") runs before the review proper
+- **think-short:** injected prompt gained "think short: minimal internal reasoning, no exploring aloud" and a post-write "can this be simpler?" pass; em-dash replaced with ASCII
+- **task-board-init:** generated `task-tracker` agent gained an `Output discipline` section (verdict + task ids + `file:line`; no BRD/task-body/backlog dumps; bulk -> `.claude/reports/<ts>_<name>/`) plus a matching checklist item; analysis agent A is now `Plan`
+- **agent-deadline:** `byAgentType` examples repointed from the deleted `brewcode:developer` to `brewtools:text-optimizer`
+
+### codex
+
+#### Fixed
+- **generate-compat.mjs:** the generator is the source of truth for the Codex mirror and had drifted — regenerating silently reverted the v4.5.1/v4.5.2 manager content. Restored and updated, so the mirror now carries bounded-unit sizing, the six-field brief, the branch rule, the simplification step, and the v4.6.0 output-discipline/scope-fit templates
+- **mirror sync:** `.codex/plugins/**` and the per-plugin `.codex/**` trees regenerated — catches up superreview (incl. the new `references/scope.md.template`), text-optimize, text-human, agents, teams and task-board-init content that had drifted out of the mirror
+
+#### Changed
+- **agents:** managed Codex agent TOMLs 9 -> 4 (`agent-creator`, `bash-expert`, `hook-creator` for brewcode plus the brewdoc/brewtools set); `install-update.mjs` and `validate-compat.mjs` counts updated
+- **prompts:** Codex `PROMPT_CONTEXT` replaced the old `[SKILL?]`/`[HINT]` pair with `[ROLE]` / `[SPLIT]` / `[BRANCH]`, matching the Claude `forced-eval` hook; brewtools SessionStart context now states the bounded-unit rule
+- **forced-eval:** `$`-prefixed prompts are no longer skipped
+
+---
+
 ## v4.5.3 (2026-08-02)
 
 > Docs: [semble](https://doc-claude.brewcode.app/brewcode/skills/semble/)

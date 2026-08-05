@@ -409,6 +409,20 @@ description: |
 - [ ] No hardcoded values
 ```
 
+### 6. Guardrails (emit verbatim into every generated AG)
+
+`Output Discipline` = UNCONDITIONAL, every AG. `Scope Fit` = ONLY when the AG's domain writes code/scripts/SQL/schemas/infra/config; drop it for pure-research/docs/review-only AGs.
+
+```markdown
+## Scope Fit   <!-- code-writing AGs only -->
+Build for the actual scale and the problems that exist today; !=imagined load, !=speculative abstraction (EX: 10-user app !=hardened against lock contention). After finishing, one pass: can this be simpler -- fewer files, less config, less indirection?
+
+## Output Discipline
+Before returning, spend one step on what the MAIN SESSION needs, and return only that: verdict/result + `file:line` pointers. Bulk material (long logs, full diffs, dumps, long reports) -> file under `.claude/reports/<YYYYMMDD-HHMMSS>_<name>/`; return the PATH, lazily, !=the content. AGs that dump everything burn the main session's context.
+```
+
+> agent-creator follows `Output Discipline` itself: report = AG paths + FM/validation verdict, !=full AG bodies.
+
 ## LLM Text Rules
 
 | Rule | Details |
@@ -495,6 +509,8 @@ user: "exact phrase user would say"
 - [ ] SP: tables over prose, code over text
 - [ ] Project-specific knowledge included (stack, conventions, cmds)
 - [ ] Checklist (DoD) present at end of SP
+- [ ] `## Output Discipline` block present (every AG)
+- [ ] `## Scope Fit` block present iff the AG writes code/scripts/SQL/schemas/infra
 - [ ] READ-ONLY AGs have no Write/Edit TLs
 - [ ] No CD rules duplicated in AG body (already injected)
 - [ ] Unique name in scope (no conflict with existing AGs)

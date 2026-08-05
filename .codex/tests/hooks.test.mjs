@@ -31,7 +31,7 @@ const brewcodeEnv = { PLUGIN_ROOT: brewcodeRoot, PLUGIN_DATA: brewcodeStateDir }
 
 const session = invoke(path.join(brewcodeRoot, 'hooks', 'session-start.mjs'), JSON.stringify({ ...common, hook_event_name: 'SessionStart', source: 'startup' }), brewcodeEnv);
 assert.equal(session.hookSpecificOutput.hookEventName, 'SessionStart');
-assert.match(session.hookSpecificOutput.additionalContext, /\[SKILL\?\]/);
+assert.match(session.hookSpecificOutput.additionalContext, /\[ROLE\][\s\S]*\[SPLIT\][\s\S]*\[BRANCH\]/);
 
 for (let index = 1; index <= 10; index += 1) {
   const forced = invoke(

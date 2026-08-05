@@ -34,7 +34,7 @@ Every invocation goes through the same flow:
    - Sync skills (memory sync)
    - List (plain)
    - Cancel
-4. **Dispatch** — routes create / improve / sync to `brewcode:skill-creator`, review to `brewcode:reviewer` (two-phase), or runs `list-skills.sh` directly (list mode).
+4. **Dispatch** — routes create / improve / sync to `brewcode:skill-creator`, review to the project reviewer agent from `.claude/agents/` (else `general-purpose`, two-phase), or runs `list-skills.sh` directly (list mode).
 5. **Real status** — four blocks, never a flat list: inventory by scope (plugin / project / global, with counts, names, load path), state (enabled or disabled via the `_SKILL.md` marker, model), overlaps and conflicts (shadowing across scopes, duplicate triggers or descriptions), health flags (missing README or frontmatter, weak description triggers).
 6. **Mandatory final output** — structured summary of what was created, changed, or reviewed. Omitted only for `list` mode.
 
@@ -46,7 +46,7 @@ Every invocation goes through the same flow:
 | `list` | Explicit only — "list" / "список" / "перечисли" | Runs `list-skills.sh`, plain file listing |
 | `create` | "создай" / "create" / "new" / "добавь" / "scaffold" | skill-creator researches and generates a new SKILL.md + README.md |
 | `improve` | "улучши" / "improve" / "refactor" / "fix" / "почини", or a bare existing name/path | skill-creator rewrites target SKILL.md with optimized content |
-| `review` | "ревью" / "review" / "validate" / "проверь корректность" | brewcode:reviewer audits skill files, two-phase (review -> double-check findings -> report) |
+| `review` | "ревью" / "review" / "validate" / "проверь корректность" | the project reviewer agent from `.claude/agents/` (else `general-purpose`) audits skill files, two-phase (review -> double-check findings -> report) |
 | `sync` | "sync", "синк", "memory sync", "актуализируй", "обнови знания", "приведи в соответствие с кодом" | skill-creator re-verifies SKILL.md/reference claims against the codebase and corrects stale knowledge |
 
 Batch flag (not a mode): plural form, "все" / "all", or multiple names/paths — fan-out, one specialist spawn per item.

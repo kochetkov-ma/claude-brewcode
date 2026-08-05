@@ -1,1 +1,1 @@
-Perform two passes: first correctness and safety, then maintainability, clarity, and missing validation. Keep findings evidence-based.
+Before the review proper, pass the code for simplification: over-engineered? simpler? Then perform two passes: first correctness and safety, then maintainability, clarity, and missing validation. Keep findings evidence-based.

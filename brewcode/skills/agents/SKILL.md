@@ -101,7 +101,8 @@ A bare one-line task is never enough.
 - `create` -> gather minimal params (Step 3 / artifact-specific), spawn `SPECIALIST` via Task.
   Batch -> spawn one `SPECIALIST` per item, ALL in ONE message (parallel).
 - `improve` -> resolve target(s), spawn `SPECIALIST` via Task per target (parallel for batch).
-- `review` -> spawn `brewcode:reviewer` (two-phase: review -> double-check findings -> report).
+- `review` -> spawn the project's reviewer agent from `.claude/agents/`, else `general-purpose`
+  (two-phase: review -> double-check findings -> report).
 - `sync` -> read `SYNC_REF` and follow it end to end (S1 scope -> S6 report).
   It replaces Steps 5-6 for this mode.
 

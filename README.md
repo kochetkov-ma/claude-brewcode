@@ -10,7 +10,7 @@
 
 **Claude Code plugin suite** -- four plugins for development, documentation, text utility, and visual workflows.
 
-A regular Claude Code session hands a big task to one agent and loses sight of it. Brewcode splits work into bounded units, gives every spawn a six-field brief, and re-states the delegation rule on every prompt. Four plugins. 26 skills. 13 agents. 4 lifecycle hooks.
+A regular Claude Code session hands a big task to one agent and loses sight of it. Brewcode splits work into bounded units, gives every spawn a six-field brief, and re-states the delegation rule on every prompt. Four plugins. 26 skills. 8 agents. 4 lifecycle hooks.
 
 [**Full Documentation**](https://doc-claude.brewcode.app/getting-started/)
 
@@ -157,7 +157,7 @@ Placeholder plugin, currently empty. No commands yet -- coming soon.
   /brewcode:spec "..." --> 5-10 parallel research agents + user Q&A --> SPEC.md
         │
         v
-  developer / tester / reviewer / architect --> bounded units, fanned out in ONE message
+  project agents from .claude/agents/ --> bounded units, fanned out in ONE message
         │
         v
   /brewcode:superreview --> project-tailored deep-review skill
@@ -239,14 +239,10 @@ Self-contained `SKILL.md` folders that ship outside the four plugins -- drop the
 | `brewpage-publish` | Claude Code | [`skills/brewpage-publish`](skills/brewpage-publish/) |
 | `brewpage-publish` | OpenClaw / AgentSkills | [`openclaw/brewpage-publish`](openclaw/brewpage-publish/) |
 
-## Agents (12 total)
+## Agents (8 total)
 
 | Agent | Plugin | Model | Purpose |
 |-------|--------|-------|---------|
-| developer | brewcode | inherit | Implement features, write code, fix bugs |
-| tester | brewcode | sonnet | Run tests, analyze failures, debug flaky tests |
-| reviewer | brewcode | inherit | Code review, architecture, security, performance |
-| architect | brewcode | inherit | Architecture analysis, patterns, trade-offs, scaling |
 | skill-creator | brewcode | inherit | Create and improve Claude Code skills |
 | agent-creator | brewcode | inherit | Create and improve Claude Code agents |
 | hook-creator | brewcode | inherit | Create and debug Claude Code hooks |

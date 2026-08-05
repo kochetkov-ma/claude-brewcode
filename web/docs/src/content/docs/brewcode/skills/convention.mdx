@@ -83,7 +83,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
   </li>
   <li>
     <div>
-      <strong>Etalon selection (P3 — 1 architect agent)</strong>
+      <strong>Etalon selection (P3 — 1 `Plan` agent, or the project's architecture agent)</strong>
       <p>Receives all 10 layer reports, scores candidates on pattern coverage, naming adherence, and anti-pattern count. Selects 1–2 etalon classes per layer. Resolves conflicts when the same class appears as a candidate for multiple layers.</p>
     </div>
   </li>
@@ -135,16 +135,16 @@ A P2 layer agent is therefore told: the stack was already detected in P1 (do not
 
 | # | Agent | Layers | Focus |
 |---|-------|--------|-------|
-| 1 | architect | L1–L3 | Build config, dependency management, code generation |
-| 2 | architect | L4 | @UtilityClass, static helpers, shared converters |
-| 3 | architect | L5+L14 | REST endpoints, security, config, caching |
-| 4 | architect | L6+L9 | DI patterns, @Transactional, domain services |
-| 5 | architect | L7 | Feign clients, external API integrations |
-| 6 | architect | L8 | JOOQ DSL, raw SQL, mappers, query patterns |
-| 7 | architect | L10+L11 | Records, @Value @Builder, naming conventions |
-| 8 | architect | L12+L13 | DDL scripts, config files, templates |
-| 9 | tester | T1–T4 | Test data, base classes, helpers, ExpectedData |
-| 10 | tester | T5–T6 | BDD style, assertion patterns, @ParameterizedTest |
+| 1 | Explore | L1–L3 | Build config, dependency management, code generation |
+| 2 | Explore | L4 | @UtilityClass, static helpers, shared converters |
+| 3 | Explore | L5+L14 | REST endpoints, security, config, caching |
+| 4 | Explore | L6+L9 | DI patterns, @Transactional, domain services |
+| 5 | Explore | L7 | Feign clients, external API integrations |
+| 6 | Explore | L8 | JOOQ DSL, raw SQL, mappers, query patterns |
+| 7 | Explore | L10+L11 | Records, @Value @Builder, naming conventions |
+| 8 | Explore | L12+L13 | DDL scripts, config files, templates |
+| 9 | Explore | T1–T4 | Test data, base classes, helpers, ExpectedData |
+| 10 | Explore | T5–T6 | BDD style, assertion patterns, @ParameterizedTest |
 
 **Active layers by stack**
 

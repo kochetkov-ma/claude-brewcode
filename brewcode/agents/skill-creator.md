@@ -590,7 +590,7 @@ Read `references/api-spec.md` for API details.
 **Exception — passing path to agent via Task:** use `BPR` (agent has no `CSD`):
 
 ```markdown
-Task(subagent_type="developer", prompt="Read ${CLAUDE_PLUGIN_ROOT}/skills/my-skill/references/rules.md then...")
+Task(subagent_type="general-purpose", prompt="Read ${CLAUDE_PLUGIN_ROOT}/skills/my-skill/references/rules.md then...")
 ```
 
 # Executable Bash

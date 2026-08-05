@@ -1,6 +1,6 @@
 ---
 title: "Agents"
-description: "All 9 brewcode agents: models, tools, triggers, and the shared Scope guard that stops oversized tasks."
+description: "All 5 brewcode agents: models, tools, triggers, and the shared Scope guard that stops oversized tasks."
 order: 12
 ---
 
@@ -9,8 +9,9 @@ import { Card, CardGrid, Callout } from '../../../components/mdx';
 # Agents
 
 Agents (brewers) are specialized roles defined in markdown files with frontmatter metadata.
-Each agent has its own model, toolset, and system prompt. Brewcode includes 9 agents (8 public + 1 internal helper),
-from developer to task coordination.
+Each agent has its own model, toolset, and system prompt. Brewcode ships 5 agents (4 public + 1 internal helper) — specialists only, for building skills, agents, hooks, and shell scripts.
+
+Generic roles (developer, tester, reviewer, architect) are no longer shipped: every project generates its own agents into `.claude/agents/` via [/brewcode:teams](/brewcode/skills/teams/) or [/brewcode:agents](/brewcode/skills/agents/), tuned to that project's stack. Skills that need a reviewer or an implementer pick the project's agent from `.claude/agents/`, falling back to `general-purpose`.
 
 ## Summary table
 
@@ -18,31 +19,15 @@ Purpose column = the agent's own `description` frontmatter, verbatim. That strin
 
 | # | Agent | Model | Write tools | Description (verbatim) |
 |---|-------|-------|-------------|------------------------|
-| 1 | developer | inherit | Read, Write, Edit, Bash | Implements features, writes code, fixes bugs, refactors. Trig: implement, fix bug, add feature. |
-| 2 | tester | sonnet | Read, Write, Edit, Bash | Runs tests, analyzes failures, debugs flaky tests. Triggers: run tests, tests failing, flaky test. |
-| 3 | reviewer | inherit | Read (read-only) | Reviews architecture, quality, security, performance. Triggers: review code, code review, review PR, check architecture, approve changes. |
-| 4 | architect | inherit | Read (read-only) | Architecture analysis, patterns, scaling. Triggers: review architecture, design service, scaling. |
-| 5 | skill-creator | inherit | Read, Write, Edit, Bash | Creates and improves Claude Code skills. Triggers: create skill, improve skill, fix activation. |
-| 6 | agent-creator | inherit | Read, Write, Edit, Bash | Creates and improves Claude Code agents. Triggers: create agent, improve agent, scaffold agent. |
-| 7 | hook-creator | inherit | Read, Write, Edit, Bash | Creates and debugs Claude Code hooks. Triggers: create hook, PreToolUse hook, debug hook. |
-| 8 | bash-expert | inherit | Read, Write, Edit, Bash | Creates sh/bash scripts for Mac/Linux. Triggers: create script, bash script, shell script. |
-| 9 | bc-rules-organizer | haiku | Read, Write, Edit, Bash | Internal. Spawned only by /brewcode:rules. No direct/auto use. |
+| 1 | skill-creator | inherit | Read, Write, Edit, Bash | Creates and improves Claude Code skills. Triggers: create skill, improve skill, fix activation. |
+| 2 | agent-creator | inherit | Read, Write, Edit, Bash | Creates and improves Claude Code agents. Triggers: create agent, improve agent, scaffold agent. |
+| 3 | hook-creator | inherit | Read, Write, Edit, Bash | Creates and debugs Claude Code hooks. Triggers: create hook, PreToolUse hook, debug hook. |
+| 4 | bash-expert | inherit | Read, Write, Edit, Bash | Creates sh/bash scripts for Mac/Linux. Triggers: create script, bash script, shell script. |
+| 5 | bc-rules-organizer | haiku | Read, Write, Edit, Bash | Internal. Spawned only by /brewcode:rules. No direct/auto use. |
 
-`model: inherit` means the agent runs on whatever model the session runs on — no per-agent pin. Only `tester` (sonnet) and the internal `bc-rules-organizer` (haiku) are pinned.
+`model: inherit` means the agent runs on whatever model the session runs on — no per-agent pin. Only the internal `bc-rules-organizer` (haiku) is pinned.
 
 <CardGrid>
-  <Card title="developer" icon="code" href="/brewcode/agents/developer/">
-    Feature implementation, bug fixes
-  </Card>
-  <Card title="tester" icon="flask" href="/brewcode/agents/tester/">
-    Test execution, failure analysis
-  </Card>
-  <Card title="reviewer" icon="eye" href="/brewcode/agents/reviewer/">
-    Code review, architecture, security
-  </Card>
-  <Card title="architect" icon="building" href="/brewcode/agents/architect/">
-    Architecture analysis, patterns
-  </Card>
   <Card title="skill-creator" icon="puzzle" href="/brewcode/agents/skill-creator/">
     Skill creation and improvement
   </Card>
@@ -61,7 +46,7 @@ Purpose column = the agent's own `description` frontmatter, verbatim. That strin
 `bc-rules-organizer` is internal. It is spawned automatically by brewcode skills and hooks, is not user-invokable, and has no dedicated page.
 :::
 
-## Scope guard — shared by all 8 agents
+## Scope guard — shared by all 4 public agents
 
 Every public brewcode agent sizes the task before starting. One bounded unit = one deliverable, roughly 5 files, roughly 10 steps. Anything larger is refused up front.
 
@@ -82,8 +67,7 @@ Agents deliver for the CONSUMER, not the literal wording: the result must be usa
 
 | Model | Agents | Meaning |
 |-------|--------|---------|
-| **inherit** | [developer](/brewcode/agents/developer/), [reviewer](/brewcode/agents/reviewer/), [architect](/brewcode/agents/architect/), [skill-creator](/brewcode/agents/skill-creator/), [agent-creator](/brewcode/agents/agent-creator/), [hook-creator](/brewcode/agents/hook-creator/), [bash-expert](/brewcode/agents/bash-expert/) | Runs on the session's model — you control the tier |
-| **sonnet** | [tester](/brewcode/agents/tester/) | Pinned: mechanical, high-volume work |
+| **inherit** | [skill-creator](/brewcode/agents/skill-creator/), [agent-creator](/brewcode/agents/agent-creator/), [hook-creator](/brewcode/agents/hook-creator/), [bash-expert](/brewcode/agents/bash-expert/) | Runs on the session's model — you control the tier |
 | **haiku** | bc-rules-organizer | Pinned: cheap file reorganization |
 
 <Callout type="tip" title="Automatic selection">

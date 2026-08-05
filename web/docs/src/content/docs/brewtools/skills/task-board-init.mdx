@@ -117,6 +117,10 @@ The same six-field brief ships into your repo. The generated `.claude/skills/tas
 | Control files | `.claude/features/{TRACKER,TASK_TEMPLATE,INDEX}.md` + `backlog/README.md` | Tracker log, task template, index, backlog guide. |
 | Folders | `.claude/features/{backlog,todo,progress,closed,specs}/` | Status folders — folder name = task status. |
 
+## Output discipline in the generated curator
+
+`task-tracker` ships with an output contract: before returning, it spends one step on what the main session actually needs and returns only that — a verdict plus task ids and `file:line` pointers. It never pastes the board, task bodies or backlog listings back. Bulk material (long logs, full diffs, dumps, long reports) goes into a file under `.claude/reports/<YYYYMMDD-HHMMSS>_<name>/` and only the path comes back. Its finishing checklist carries this as a row, so a curator run that dumps the whole board into the reply fails its own check.
+
 ## ID convention
 
 Task IDs follow `UPPER-KEBAB`: `<PREFIX>-<DOMAIN>-<SLUG>`.

@@ -62,11 +62,11 @@ import { Card, CardGrid, Callout, Steps, UpdateNotice } from '../../../../compon
 
 | Mode | What happens |
 |------|-------------|
-| `setup` | 3-5 Explore agents analyze the project; `agent-creator` spawns 5 specialized e2e agents in 2 batches; architect + WebSearch + reviewer generate rules; config saved to `.claude/e2e/config.json` |
+| `setup` | 3-5 Explore agents analyze the project; `agent-creator` spawns 5 specialized e2e agents in 2 batches; `e2e-architect` + WebSearch + `e2e-reviewer` generate rules; config saved to `.claude/e2e/config.json` |
 | `create` | Prerequisite check → define scope (from prompt or AskUser) → `scenario-analyst` writes BDD → 3-round review cycle → user approves → `automation-tester` writes tests → compile smoke check |
 | `update` | Locate existing artifacts → apply changes via the appropriate e2e agent → 3-round review cycle → summary with diff |
 | `review` | Split scope into parts → 3 parallel reviewers per part → quorum (2/3 consensus) → cross-agent re-check of confirmed findings → report with fix proposals |
-| `rules` | Load current rules → WebSearch + architect analysis → reviewer validates diff → optional export to `.claude/rules/` |
+| `rules` | Load current rules → WebSearch + `e2e-architect` analysis → `e2e-reviewer` validates diff → optional export to `.claude/rules/` |
 | `status` | Read-only: count `e2e-*` agents, show config (stack, framework, paths), artifact counts, freshness dates |
 
 ## Flow

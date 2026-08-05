@@ -42,7 +42,7 @@ CONSUMER: L3 merges your rules into the rules file tagged `[WEB]`, then a review
 DONE: table of rule | category | rationale | source URL; drop anything unactionable.
 ")
 
-2. Task(e2e-architect or architect, prompt="
+2. Task(e2e-architect, prompt="
 GOAL: the project's E2E rules file is being refreshed; you supply the half that only this
       codebase can tell us.
 ROLE: you own analysis of this project's existing E2E code. Read-only -- do NOT edit tests, rules,
@@ -66,7 +66,7 @@ Merge findings into rules:
 - Existing rules preserved unless explicitly superseded
 
 ```
-Task(e2e-reviewer or reviewer, prompt="
+Task(e2e-reviewer, prompt="
 GOAL: the project's E2E rules file is being refreshed; you are the gate before the user sees a
       diff of it, so bad rules never reach the agents that write tests against them.
 ROLE: you own validation of the merged rule set. Read-only -- do NOT edit the rules file, do NOT

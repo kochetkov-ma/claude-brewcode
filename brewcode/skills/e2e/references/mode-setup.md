@@ -89,7 +89,7 @@ After each batch: AskUser "Optimize agent prompts with text-optimizer?" If yes, 
 ## S5: Rules Generation
 
 1. ```
-   Task(subagent_type="brewcode:architect", prompt="
+   Task(subagent_type="e2e-architect", prompt="
    GOAL: the e2e-* agents just created will write every test in this repo against one rules file;
          this task produces the project-specific half of it.
    ROLE: you own rules research and drafting. Read-only on the codebase -- do NOT edit agents,
@@ -108,7 +108,7 @@ After each batch: AskUser "Optimize agent prompts with text-optimizer?" If yes, 
    ```
 2. Merge findings with base rules from `${CLAUDE_SKILL_DIR}/references/e2e-rules.md`
 3. ```
-   Task(subagent_type="brewcode:reviewer", prompt="
+   Task(subagent_type="e2e-reviewer", prompt="
    GOAL: this rules file is about to become the standing law for every E2E agent in the repo;
          you are the last gate before it is persisted.
    ROLE: validate the merged rules. Read-only -- do NOT edit the rules, agents, or code.

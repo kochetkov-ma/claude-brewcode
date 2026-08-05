@@ -10,10 +10,10 @@ Spawn these in a SINGLE message so they run concurrently. Use `subagent_type` sh
 
 > Sizing: one agent = ONE analysis dimension — ~<=10 steps; a dimension too big for that is split further and all parts fanned out in the SAME message.
 
-### Agent A -- domains + release style  (`brewcode:architect`)
+### Agent A -- domains + release style  (`Plan`)
 
 ```
-Task(subagent_type="brewcode:architect", prompt="
+Task(subagent_type="Plan", prompt="
 GOAL: deploying a file-based Kanban into the repo at TARGET=<abs path>. You are scoping its id scheme —
   every emitted artifact is parametrized from this, so a wrong domain list produces broken ids repo-wide.
 ROLE: you own DOMAINS + RELEASE_STYLE. Analyze and report only — do NOT create, write or edit any file, and

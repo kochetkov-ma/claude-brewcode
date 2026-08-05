@@ -8,11 +8,25 @@ Goal: inspect the TARGET repo and produce a FINDINGS object, then CONFIRM it wit
 
 Spawn these in a SINGLE message so they run concurrently. Use `subagent_type` shown; fall back to `general-purpose` if an agent is unavailable.
 
-### Agent A -- domains + release style  (`brewcode:architect`)
+> Sizing: one agent = ONE analysis dimension — ~<=10 steps; a dimension too big for that is split further and all parts fanned out in the SAME message.
+
+### Agent A -- domains + release style  (`Plan`)
 
 ```
-Codex delegation brief (task_role="brewcode:architect", message="
-Analyze the repo at TARGET=<abs path>. You are scoping a file-based Kanban id scheme. Return ONLY this block, no prose:
+Codex delegation brief (task_role="Plan", message="
+GOAL: deploying a file-based Kanban into the repo at TARGET=<abs path>. You are scoping its id scheme —
+  every emitted artifact is parametrized from this, so a wrong domain list produces broken ids repo-wide.
+ROLE: you own DOMAINS + RELEASE_STYLE. Analyze and report only — do NOT create, write or edit any file, and
+  do NOT report exclusions, doc language or the doc inventory (Agent B owns those).
+SCOPE: in — read TARGET: top-level source dirs, module/package names, bounded contexts, `git tag -l | head`,
+  CI config, AGENTS.md release section. Out — writing anything; .codex/features/**.
+CONTEXT: nothing has been generated yet; this is the first pass, running in parallel with Agent B
+  (exclusions + doc inventory). The user reviews your output in an request_user_input and may override it
+  before generation.
+CONSUMER: DOMAINS becomes the allowed id-segment enum in the emitted task-tracker agent, the tasks.md rule
+  and every minted id (<PREFIX>-<DOMAIN>-<SLUG>); RELEASE_STYLE picks the closing-marker wording. Both are
+  shown to the user verbatim, so keep each segment short and self-explanatory.
+DONE: return ONLY this block, no prose:
 
 DOMAINS:
 - 6-12 SHORT UPPER-KEBAB segments naming the repo's functional areas (the first kebab segment after an id prefix). Derive from top-level source dirs, module names, package names, bounded contexts, major features. Example shape (brewpage): HTML, KV, JSON, FILES, SITE, SEO, ABUSE, PREVIEW, DEDUP, SWEEP. Yours must reflect THIS repo.
@@ -31,7 +45,19 @@ Evidence: bullet the files/commands you used (git tag -l | head, package.json/bu
 
 ```
 Codex delegation brief (task_role="Explore", message="
-Explore the repo at TARGET=<abs path>. Return ONLY this block, no prose:
+GOAL: deploying a file-based Kanban into the repo at TARGET=<abs path>. The curator agent that ships with it
+  must never write outside .codex/features/, and the board must be seeded from the task docs the repo already
+  has — both come from this inventory.
+ROLE: you own EXCLUSIONS + LANG + DOCS. Explore and report only — do NOT create, write or edit any file, and
+  do NOT propose domains or a release style (Agent A owns those).
+SCOPE: in — read anywhere under TARGET to inventory it. Out — writing anything; classifying or rewriting the
+  legacy docs you find (a later sweep does that).
+CONTEXT: nothing has been generated yet; this is the first pass, running in parallel with Agent A (domains +
+  release style). The user reviews your output in an request_user_input and may override it before generation.
+CONSUMER: EXCLUSIONS is pasted verbatim into the emitted task-tracker agent + tasks.md rule as a hard
+  never-write list, and into every sweep agent's prompt; DOCS is the migration inventory the doc-sweep agents
+  are partitioned over — a doc you miss never reaches the board. Keep both as plain path lists.
+DONE: return ONLY this block, no prose:
 
 EXCLUSIONS:
 - The top-level SOURCE / build / test dirs a docs-only curator agent must NEVER write to. Include things like src/, app/, backend/, frontend/, lib/, e2e-tests/, tests/, docs/, and any language/build dirs. List the ACTUAL dirs present in this repo.

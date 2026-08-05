@@ -3,6 +3,7 @@
 ```
 [REVIEW DISCIPLINE: DOUBLE-CHECK]
 After every significant change, run a multi-agent review.
+Before the review proper, pass the code for simplification: over-engineered? simpler?
 Every review is two-phase, always:
   1. Review - find issues.
   2. Double-check - re-verify findings are real.

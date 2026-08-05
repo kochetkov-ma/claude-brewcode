@@ -22,16 +22,12 @@ User request -> Manager analyzes -> Selects best agent -> Task tool spawns agent
 
 Claude Code allows nested spawns up to 5 levels deep (since 2.1.172). The brewcode workflow, however, requires spawning only from the main conversation (manager level): the 2-step report protocol binds the task lock to a single session and delivers report/coordinator instructions to the spawning conversation. Nested spawns bypass session binding, KNOWLEDGE injection, and the coordinator loop — so under brewcode only the manager uses the Task tool.
 
-## Section 2: Plugin Agents (12)
+## Section 2: Plugin Agents (8)
 
 These agents ship with the brewcode plugin suite. Available immediately after installation.
 
 | Agent | Plugin | Model | When to Use |
 |-------|--------|-------|-------------|
-| developer | brewcode | inherit | Implement features, write code, fix bugs |
-| tester | brewcode | sonnet | Run tests, analyze failures, debug flaky tests |
-| reviewer | brewcode | inherit | Code review, architecture, security, performance |
-| architect | brewcode | inherit | Architecture analysis, patterns, trade-offs, scaling |
 | skill-creator | brewcode | inherit | Create/improve Claude Code skills (SKILL.md) |
 | agent-creator | brewcode | inherit | Create/update Claude Code agents |
 | hook-creator | brewcode | inherit | Create/debug Claude Code hooks |
@@ -59,8 +55,8 @@ System agents are selected when no plugin agent is a better match.
 
 | Model | Complexity | Best For | Examples |
 |-------|-----------|----------|----------|
-| opus | High | Implementation, architecture, code review, complex reasoning | developer, reviewer, architect |
-| sonnet | Medium | Testing, text processing, rule organization, document sync | tester, text-optimizer, bc-rules-organizer |
+| opus | High | Implementation, architecture, code review, complex reasoning | skill-creator, agent-creator, hook-creator |
+| sonnet | Medium | Testing, text processing, rule organization, document sync | text-optimizer, bc-rules-organizer |
 | haiku | Low | Coordination, knowledge management, progress tracking | bc-coordinator, bc-knowledge-manager |
 
 Rule of thumb:

@@ -130,11 +130,14 @@ A bare one-line task is never enough. See Step 4 for the canonical spawn shape.
    ONE message with 5-10 Task calls in PARALLEL
 
    Task(subagent_type="Plan", prompt="Analyze architecture...")
-   Task(subagent_type="developer", prompt="Analyze services...")
-   Task(subagent_type="tester", prompt="Analyze test patterns...")
-   Task(subagent_type="reviewer", prompt="Analyze quality...")
+   Task(subagent_type="Explore", prompt="Analyze services...")
+   Task(subagent_type="Explore", prompt="Analyze test patterns...")
+   Task(subagent_type="Explore", prompt="Analyze quality...")
    Task(subagent_type="Explore", prompt="Find library docs...")
    ```
+
+   Prefer the project's own agents from `.claude/agents/` (or `.claude/teams/`) whenever one
+   matches the area; `Explore` / `Plan` are the fallback.
 
    Partitioning into 5-10 areas IS the Delegation sizing rule applied — see **Delegation** above.
 
@@ -179,10 +182,11 @@ A bare one-line task is never enough. See Step 4 for the canonical spawn shape.
 
    Incorporate user feedback into SPEC.
 
-7. **Review SPEC** (reviewer agent + fix loop)
+7. **Review SPEC** (reviewer agent + fix loop) — `REVIEWER` = the project's reviewer agent from
+   `.claude/agents/`, else `general-purpose`
 
    ```
-   Task(subagent_type="reviewer", prompt="> **Context:** BC_PLUGIN_ROOT is available in your context (injected by pre-task.mjs hook).
+   Task(subagent_type=REVIEWER, prompt="> **Context:** BC_PLUGIN_ROOT is available in your context (injected by pre-task.mjs hook).
 
    Review SPEC at {SPEC_PATH}
    Check: completeness, consistency, feasibility, risks

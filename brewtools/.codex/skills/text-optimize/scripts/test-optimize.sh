@@ -47,13 +47,14 @@ echo "[Structure]"
 
 check_file_exists "$SKILL_DIR/SKILL.md" "SKILL.md exists"
 
-for section in "Modes" "Smart Auto-Detection" "Deep Mode Pipeline" "Standard Mode Pipeline" "Iron Rules"; do
+for section in "Modes" "Smart Auto-Detection" "Deep Mode Pipeline" "Standard Mode Pipeline" "Max Mode Pipeline" "Deduplication Pass" "Loss Budget" "Iron Rules"; do
   check_contains "$SKILL_DIR/SKILL.md" "$section" "SKILL.md contains '$section' section"
 done
 
 check_file_exists "$SKILL_DIR/references/rules-review.md" "Reference: rules-review.md exists"
 check_file_exists "$SKILL_DIR/references/deep-compression.md" "Reference: deep-compression.md exists"
 check_file_exists "$SKILL_DIR/references/standard-compression.md" "Reference: standard-compression.md exists"
+check_file_exists "$SKILL_DIR/references/max-compression.md" "Reference: max-compression.md exists"
 
 AGENT_DIR="$(cd "$SKILL_DIR/../../agents" && pwd)"
 AGENT_FILE="$AGENT_DIR/text-optimizer.md"
@@ -69,7 +70,7 @@ echo ""
 
 echo "[Content]"
 
-for flag in "\-l" "\-s" "\-d"; do
+for flag in "\-l" "\-s" "\-d" "\-x"; do
   check_contains "$SKILL_DIR/SKILL.md" "$flag" "SKILL.md contains mode flag '$flag'"
 done
 
@@ -82,6 +83,7 @@ check_contains "$SKILL_DIR/references/standard-compression.md" "Verification Che
 
 check_contains "$AGENT_DIR/text-optimizer.md" "standard-compression.md" "text-optimizer.md references standard-compression.md"
 check_contains "$AGENT_DIR/text-optimizer.md" "deep-compression.md" "text-optimizer.md references deep-compression.md"
+check_contains "$AGENT_DIR/text-optimizer.md" "max-compression.md" "text-optimizer.md references max-compression.md"
 
 check_contains "$SKILL_DIR/references/rules-review.md" "Compression References" "rules-review.md contains Compression References section"
 
@@ -99,10 +101,10 @@ else
 fi
 
 # Check that SKILL.md references L category
-if grep -q "L\.1-L\.7" "$SKILL_DIR/SKILL.md"; then
-  pass "SKILL.md references L.1-L.7 category"
+if grep -q "L\.1-L\.8" "$SKILL_DIR/SKILL.md"; then
+  pass "SKILL.md references L.1-L.8 category"
 else
-  fail "SKILL.md missing L.1-L.7 (LLM Comprehension) category"
+  fail "SKILL.md missing L.1-L.8 (LLM Comprehension) category"
 fi
 
 # Check that SKILL.md references T.10
@@ -111,6 +113,24 @@ if grep -q "T\.10" "$SKILL_DIR/SKILL.md"; then
 else
   fail "SKILL.md missing T.10 (strip whitespace) rule"
 fi
+
+# Check D category present everywhere
+if grep -q "D\.1-D\.6" "$SKILL_DIR/SKILL.md"; then
+  pass "SKILL.md references D.1-D.6 (Deduplication) category"
+else
+  fail "SKILL.md missing D.1-D.6 (Deduplication) category"
+fi
+
+check_contains "$SKILL_DIR/references/rules-review.md" "## D - Deduplication" "rules-review.md contains D - Deduplication section"
+check_contains "$SKILL_DIR/references/rules-review.md" "52 rules" "rules-review.md declares 52 rules"
+check_contains "$SKILL_DIR/references/rules-review.md" "Wrong-Merge Guard" "rules-review.md contains D.6 Wrong-Merge Guard"
+check_contains "$SKILL_DIR/references/rules-review.md" "## A - Aggressive Lossy" "rules-review.md contains A - Aggressive Lossy section"
+check_contains "$SKILL_DIR/SKILL.md" "A\.1-A\.4" "SKILL.md references A.1-A.4 (aggressive lossy) range"
+check_contains "$SKILL_DIR/references/deep-compression.md" "Redundancy Factoring" "deep-compression.md contains Redundancy Factoring section"
+check_contains "$SKILL_DIR/references/max-compression.md" "Self-QA probe" "max-compression.md contains Self-QA probe round"
+check_contains "$SKILL_DIR/references/max-compression.md" "merged:" "max-compression.md loss list supports merged label"
+check_contains "$SKILL_DIR/SKILL.md" "Loss Budget" "SKILL.md contains Loss Budget section"
+check_contains "$AGENT_DIR/text-optimizer.md" "Dedup Pass" "Agent contains Dedup Pass step"
 
 # Check agent references Sources not Summary
 if grep -q '## Sources' "$AGENT_FILE" && ! grep -q '## Summary' "$AGENT_FILE"; then

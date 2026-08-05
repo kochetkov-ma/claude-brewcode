@@ -32,7 +32,7 @@ Every invocation goes through the same flow:
    - Sync agents (memory sync)
    - List (plain)
    - Cancel
-4. **Dispatch** — routes create / improve / sync to `brewcode:agent-creator`, review to `brewcode:reviewer` (two-phase), or runs Glob `*.md` over agent scopes directly (list mode).
+4. **Dispatch** — routes create / improve / sync to `brewcode:agent-creator`, review to the project reviewer agent from `.claude/agents/` (else `general-purpose`, two-phase), or runs Glob `*.md` over agent scopes directly (list mode).
 5. **Real status** — inventory by scope (counts, names, load path); state (enabled/disabled via `_name.md`, model); overlaps/conflicts (same-name shadowing, duplicate triggers/descriptions); health flags (missing README/frontmatter, agents missing `Bash` in `tools:`, weak triggers, rules duplicated in CLAUDE.md) — not a flat file listing.
 6. **Mandatory final output** — structured summary of what was created, modified, or reviewed. Omitted only for `list` mode.
 
@@ -44,7 +44,7 @@ Every invocation goes through the same flow:
 | `list` | Explicit only — "list" / "список" / "перечисли" | Globs `*.md` over all agent scopes, plain file listing |
 | `create` | "создай" / "create" / "new" / "добавь" / "scaffold" | agent-creator builds frontmatter + system prompt from description |
 | `improve` | "улучши" / "improve" / "refactor" / "fix" / "почини", or a bare existing name/path | agent-creator enhances an existing agent file per chosen focus |
-| `review` | "ревью" / "review" / "validate" / "проверь корректность" | brewcode:reviewer audits agent files, two-phase (review -> double-check findings -> report) |
+| `review` | "ревью" / "review" / "validate" / "проверь корректность" | the project reviewer agent from `.claude/agents/` (else `general-purpose`) audits agent files, two-phase (review -> double-check findings -> report) |
 | `sync` | "sync", "синк", "memory sync", "актуализируй", "обнови знания", "приведи в соответствие с кодом" | agent-creator re-verifies agent claims against the codebase and corrects stale knowledge |
 
 Batch flag (not a mode): plural form, "все" / "all", or multiple names/paths — fan-out, one specialist spawn per item.

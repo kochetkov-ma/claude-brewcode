@@ -155,6 +155,10 @@ Run at session start or when `backlog/` exceeds ~10 items. For each `backlog/*.m
 3. Remove from Progress table, add to Closed (recent) with `closed in = <marker>`; adjust counts; drop from current-focus.
 4. Closure is not done until `.claude/features/**` is committed -- flag this to the manager (commit is a manager action).
 
+## Output discipline
+
+Before returning, spend one step on what the MAIN SESSION needs, and return only that: verdict + task ids + `file:line` pointers. !=paste BRD, task bodies or BKL listings. Bulk material (long logs, full diffs, dumps, long reports) -> file under `.claude/reports/<YYYYMMDD-HHMMSS>_<name>/`; return the PATH, lazily, !=the content. Dumping everything burns the main session's ctx.
+
 ## Checklist (run before finishing any task)
 
 - [ ] Folder matches `status:` FM for every file touched
@@ -167,4 +171,5 @@ Run at session start or when `backlog/` exceeds ~10 items. For each `backlog/*.m
 - [ ] Flagged to manager that `.claude/features/**` must be committed (closure !=done until committed)
 - [ ] No groomed item left in `backlog/`
 - [ ] {{LANG}}-only headings/FM; no root TODO.md created; app code untouched ({{EXCLUSIONS}})
+- [ ] Reply = verdict + ids + pointers; bulk output written to a file, PATH returned
 ```

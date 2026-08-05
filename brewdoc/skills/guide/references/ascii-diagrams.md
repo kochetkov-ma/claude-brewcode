@@ -15,7 +15,7 @@ Pre-drawn diagrams for the guide skill. Reference by name from topic files.
 │ rules, skills     │ memory         │ secrets-scan     │
 │ agents, e2e       │ md-to-pdf      │ ssh, deploy      │
 │                   │ guide, publish │ manager, plugins │
-│ + 9 agents        │                │ + 3 agents       │
+│ + 5 agents        │                │ + 3 agents       │
 │ + 2 hooks         │                │ + 2 hooks        │
 └───────────────────┴────────────────┴──────────────────┘
 

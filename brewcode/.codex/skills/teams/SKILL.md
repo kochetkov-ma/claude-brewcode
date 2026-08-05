@@ -64,6 +64,28 @@ Output: `MODE:`, `TEAM_NAME:`, `PROMPT:` (optional). Store all three.
 
 ---
 
+## Delegation (applies to EVERY sub-agent task spawn in this skill)
+
+A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct
+it, and it usually drifts off-target. One subagent = ONE bounded unit — one deliverable
+(here: ONE agent file), ~<=5 files, ~<=10 steps. Bigger MUST be split into N tasks, all spawned
+in ONE message. That is why agents are created one-per-spawn and reviews are fanned out.
+
+Every spawn prompt MUST carry:
+
+| Field | Content |
+|-------|---------|
+| GOAL | the overall task and why it exists — the point beyond the file edit |
+| ROLE | what this agent owns; what it must NOT touch |
+| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
+| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what THIS agent needs |
+| CONSUMER | who or what uses the result next, and the shape it must fit |
+| DONE | acceptance criteria + the exact report shape you want back |
+
+A bare one-line task is never enough. See C8 for the canonical spawn shape.
+
+---
+
 ## Mode: CREATE (9 phases)
 
 ### C1: Project Analysis
@@ -116,7 +138,7 @@ If "Mixed" -- ask model per agent in C3. Store as `DEFAULT_MODEL` (default: high
 ### C3: Agent Creation (agent-creator x N)
 
 1. Read `<skill-directory>/references/agent-template.md`
-2. For each agent, spawn `Codex delegation brief (task_role="brewcode:agent-creator")` with: placement=`.codex/agents/`, reasoning_tier=DEFAULT_MODEL (or per-agent), context=template + mission + domain + project analysis + colleague list. Agent `description` <= 100 chars (optimal ~80), single line, role + 2-3 triggers, no `<example>` blocks.
+2. For each agent, spawn `Codex delegation brief (task_role="brewcode:agent-creator")` — ONE agent file per spawn, never "create the whole team" in one task. Prompt carries GOAL (this roster is being built for {TEAM_NAME}; siblings own the other domains), ROLE (owns `.codex/agents/{name}.toml` only), SCOPE (that file; out of bounds: other agents, team.md, project source), CONTEXT (mission + domain + project analysis from C1 are settled; reasoning_tier={DEFAULT_MODEL or per-agent} chosen in C2; the 3-4 sibling agent-creators in this batch own {COLLEAGUE_NAMES} — stay off their domains and do not duplicate their triggers), CONSUMER (C4 writes `.codex/teams/{TEAM_NAME}/team.md` from your path + description line, C5 quorum-reviews the file, and colleagues re-delegate to it by domain via the sub-agent task Acceptance Protocol), DONE (file written, `description` <= 100 chars (optimal ~80), single line, role + 2-3 triggers, no `<example>` blocks; report path + description line).
 3. Batch 3-4 agents in parallel per message
 4. After each batch, optimize:
    ```
@@ -142,7 +164,8 @@ If "Mixed" -- ask model per agent in C3. Store as `DEFAULT_MODEL` (default: high
 
 ### C5: Quorum Review
 
-Spawn 3 reviewer agents in ONE message via sub-agent collaboration tools:
+Spawn 3 reviewer agents in ONE message via sub-agent collaboration tools. `REVIEWER` (here and in C7/C9) = the
+project's reviewer agent from `.codex/agents/`, else `general-purpose`:
 
 | # | Focus |
 |---|-------|
@@ -171,7 +194,7 @@ FIX: suggested fix
 ### C7: Verification
 
 ```
-Codex delegation brief (task_role="brewcode:reviewer", message="
+Codex delegation brief (task_role=REVIEWER, message="
   Verify these findings against actual agent files. For each:
   1. Read the agent file
   2. Check if the issue actually exists
@@ -187,11 +210,22 @@ Filter out false positives. Final list = verified critical + important issues.
 For each verified critical/important issue:
 ```
 Codex delegation brief (task_role="brewcode:agent-creator", message="
-  Fix this issue in {agent_file}:
-  ISSUE: {description}
-  FIX: {suggested_fix}
-  SEVERITY: {severity}
-  Read the file, apply the fix, validate.
+  GOAL: team '{TEAM_NAME}' was just generated and quorum-reviewed; this task clears ONE
+        confirmed defect so the roster ships clean.
+  ROLE: you own {agent_file} only. Do NOT touch other agent files, team.md, trace.jsonl,
+        AGENTS.md, or project source.
+  SCOPE: {agent_file}. Out of bounds: everything else.
+  CONTEXT: C3 already wrote the whole roster and C5-C7 quorum-reviewed it; this finding is
+    verified (2/3 reviewers + C7 double-check) — do NOT re-litigate it. Up to 3 sibling
+    agent-creators fix other agent files in this same batch; team.md already lists the final
+    roster, so do not rename the agent or change its domain.
+    ISSUE: {description}
+    FIX: {suggested_fix}
+    SEVERITY: {severity}
+  CONSUMER: C9 re-verifies your file for "issue resolved + no regression", and the team
+    manifest .codex/teams/{TEAM_NAME}/team.md must stay accurate — keep name, domain and
+    description shape intact so its roster row still matches.
+  DONE: fix applied and validated; report as: file | what changed | validation result.
 ")
 ```
 Batch: up to 3 parallel per message. Minor issues skipped.
@@ -199,7 +233,7 @@ Batch: up to 3 parallel per message. Minor issues skipped.
 ### C9: Re-verify
 
 ```
-Codex delegation brief (task_role="brewcode:reviewer", message="
+Codex delegation brief (task_role=REVIEWER, message="
   Re-verify these fixes. For each:
   1. Read the fixed agent file
   2. Check original issue is resolved

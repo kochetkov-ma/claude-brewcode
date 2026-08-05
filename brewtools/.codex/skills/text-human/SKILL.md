@@ -1,6 +1,6 @@
 ---
 name: text-human
-description: "Humanizes code, docs, articles, reddit/chat, javadoc -- strips AI artifacts, fixes unicode, injects context-fit human style. Triggers - humanize, ai artifacts, unicode fix, article, reddit, javadoc, text."
+description: "Humanizes code, docs, articles, reddit/chat, javadoc -- strips AI artifacts, fixes unicode, fits register. Triggers: humanize, ai artifacts, unicode fix, article, reddit, javadoc."
 ---
 
 # Humanize text
@@ -81,6 +81,40 @@ Custom prompt, when present, is prepended to direct processing and to every sub-
 CUSTOM INSTRUCTIONS (highest priority, override defaults):
 <customPrompt>
 ---
+```
+
+### Delegation (mixed flow)
+
+A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target. One subagent = ONE bounded unit — ONE block of ~<=5 files, ~<=10 steps. A large commit or folder MUST be split into N blocks, all spawned in ONE message.
+
+Every spawn prompt MUST carry:
+
+| Field | Content |
+|-------|---------|
+| GOAL | the overall task and why it exists — the point beyond the file edit |
+| ROLE | what this agent owns; what it must NOT touch |
+| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
+| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what THIS agent needs |
+| CONSUMER | who or what uses the result next, and the shape it must fit |
+| DONE | acceptance criteria + the exact report shape you want back |
+
+A bare one-line task is never enough. Shape:
+```
+Codex delegation brief (task_role="general-purpose", message="
+GOAL: humanizing <commit|folder> so it reads as human-written; you own block <N>/<M>,
+  siblings own the rest and the reports are merged into one Humanization Report.
+ROLE: edit only your block's files in place. Do NOT touch files outside the block,
+  do NOT auto-fix behavior-changing items — surface them instead.
+SCOPE: in — <exact file list>. Out — every other path, git history, build output.
+CONTEXT: classification is already done — flow=<code|docs|social|article> per file, PASS 2
+  inject <ON|OFF> for this domain, custom instructions (verbatim, highest priority) if any.
+  Sibling agents hold blocks <list> of the same commit; every file outside your list is
+  already claimed, so a "helpful" extra edit collides with another agent.
+CONSUMER: the skill merges each block's JSON into one Humanization Report; the user acts on
+  'surfaced' items by hand, so a surfaced item you silently fixed never reaches them.
+DONE: JSON per the mixed.md aggregation schema — stripped, injected, surfaced per file.
+  Surfaced items are listed, never applied.
+")
 ```
 
 ---

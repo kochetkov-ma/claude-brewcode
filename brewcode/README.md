@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 4.5.3 |
+| Version | 4.6.0 |
 | Skills | 9 |
 | Agents | 10 |
 | Hooks | 2 |
@@ -90,17 +90,13 @@ claude --plugin-dir ./brewcode
 
 | Agent | Model | Purpose |
 |-------|-------|---------|
-| [developer](agents/developer.md) | inherit | Implements features, writes code, fixes bugs, refactors |
-| [tester](agents/tester.md) | sonnet | Runs tests, analyzes failures, debugs flaky tests |
-| [reviewer](agents/reviewer.md) | inherit | Reviews architecture, quality, security, performance |
-| [architect](agents/architect.md) | inherit | Architecture analysis, patterns, scaling |
 | [skill-creator](agents/skill-creator.md) | inherit | Creates and improves Claude Code skills |
 | [agent-creator](agents/agent-creator.md) | inherit | Creates and improves Claude Code agents |
 | [hook-creator](agents/hook-creator.md) | inherit | Creates and debugs Claude Code hooks |
 | [bash-expert](agents/bash-expert.md) | inherit | Creates sh/bash scripts for Mac/Linux |
 | bc-rules-organizer | haiku | Internal: spawned by /brewcode:rules |
 
-> **Dynamic teams:** Use `/brewcode:teams create` to generate 5-20 project-specific agents with self-selection protocol and performance tracking.
+> **No generic agents:** brewcode ships specialists only. Implementation, testing, review and architecture work goes to project-specific agents in `.claude/agents/` — generate them with `/brewcode:teams create` (5-20 agents with self-selection protocol and performance tracking).
 
 > **Scope guard:** every agent carries a `## Scope guard` -- if a task exceeds one bounded unit (one deliverable, ~5 files), the agent stops and proposes a split instead of running for an hour.
 
@@ -114,7 +110,7 @@ brewcode/
 |   +-- forced-eval.mjs                # UserPromptSubmit: manager-role + split-discipline reminder
 |   +-- hooks.json                     # Event bindings
 |   +-- lib/utils.mjs                  # Shared utilities
-+-- agents/                            # 9 agents
++-- agents/                            # 5 agents
 +-- skills/                            # 9 skills
 +-- templates/                         # Rule templates
 ```

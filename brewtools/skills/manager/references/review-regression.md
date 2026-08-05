@@ -6,6 +6,7 @@ After every significant phase, run a review. ONE primary focus, three axes:
   1. NO REGRESSION (primary) - new code must not break existing behavior.
   2. Project standard - follows existing conventions/patterns.
   3. Functional correctness - the new functionality actually works.
+Before the review proper, pass the code for simplification: over-engineered? simpler?
 Review is two-phase, always:
   a. Review - find issues.
   b. Double-check - re-verify each finding before acting (no blind fixes).

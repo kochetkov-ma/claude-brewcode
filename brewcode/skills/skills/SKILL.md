@@ -100,7 +100,8 @@ A bare one-line task is never enough. See Phase 2 for the canonical spawn shape.
 - `create` -> gather minimal params (Step 3 / artifact-specific), spawn `SPECIALIST` via Task.
   Batch -> spawn one `SPECIALIST` per item, ALL in ONE message (parallel).
 - `improve` -> resolve target(s), spawn `SPECIALIST` via Task per target (parallel for batch).
-- `review` -> spawn `brewcode:reviewer` (two-phase: review -> double-check findings -> report).
+- `review` -> spawn the project's reviewer agent from `.claude/agents/`, else `general-purpose`
+  (two-phase: review -> double-check findings -> report).
 - `sync` -> read `${CLAUDE_SKILL_DIR}/references/mode-sync.md` and follow it end to end
   (S1 scope -> S6 report). It replaces Steps 5-6 for this mode.
 
@@ -286,18 +287,20 @@ Skill-creator Steps 5-5.8 run automatically (validate, unit tests, README). No o
 
 **Skip if `TESTING_DEPTH` is Quick.** Read review prompt: `${CLAUDE_SKILL_DIR}/references/review-prompt.md`
 
+`REVIEWER` below = the project's reviewer agent from `.claude/agents/`, else `general-purpose`.
+
 **Simple Review (`REVIEW_TYPE` = Simple):**
-1. Task(subagent_type="brewcode:reviewer", model="opus", prompt="Review skill quality at: {SKILL_PATH}\n\n{REVIEW_PROMPT_CONTENT}")
-2. If findings: Task(subagent_type="brewcode:reviewer", model="sonnet", prompt="Verify these review findings against actual code...\n\n{REVIEWER_FINDINGS}")
+1. Task(subagent_type=REVIEWER, model="opus", prompt="Review skill quality at: {SKILL_PATH}\n\n{REVIEW_PROMPT_CONTENT}")
+2. If findings: Task(subagent_type=REVIEWER, model="sonnet", prompt="Verify these review findings against actual code...\n\n{REVIEWER_FINDINGS}")
 3. Confirmed findings: Task(subagent_type="brewcode:skill-creator", model="opus", prompt="Fix verified issues in skill at: {SKILL_PATH}\n\n{CONFIRMED_FINDINGS}")
 
 **Quorum Review (`REVIEW_TYPE` = Quorum):**
 1. Three in parallel (ONE message):
-   Task(subagent_type="brewcode:reviewer", model="opus", prompt="Review skill quality at: {SKILL_PATH}\n\n{REVIEW_PROMPT_CONTENT}")
-   Task(subagent_type="brewcode:reviewer", model="opus", prompt="Review skill quality at: {SKILL_PATH}\n\n{REVIEW_PROMPT_CONTENT}")
-   Task(subagent_type="brewcode:reviewer", model="opus", prompt="Review skill quality at: {SKILL_PATH}\n\n{REVIEW_PROMPT_CONTENT}")
+   Task(subagent_type=REVIEWER, model="opus", prompt="Review skill quality at: {SKILL_PATH}\n\n{REVIEW_PROMPT_CONTENT}")
+   Task(subagent_type=REVIEWER, model="opus", prompt="Review skill quality at: {SKILL_PATH}\n\n{REVIEW_PROMPT_CONTENT}")
+   Task(subagent_type=REVIEWER, model="opus", prompt="Review skill quality at: {SKILL_PATH}\n\n{REVIEW_PROMPT_CONTENT}")
 2. Quorum: same file + +-5 lines + same category = threshold 2/3 agree.
-3. Task(subagent_type="brewcode:reviewer", model="opus", prompt="DoubleCheck: verify quorum findings against code.\n\n{QUORUM_FINDINGS}")
+3. Task(subagent_type=REVIEWER, model="opus", prompt="DoubleCheck: verify quorum findings against code.\n\n{QUORUM_FINDINGS}")
 4. Confirmed: Task(subagent_type="brewcode:skill-creator", model="opus", prompt="Fix verified issues...\n\n{CONFIRMED_FINDINGS}")
 
 > **Collect findings:** compile all confirmed findings (source, severity, issue, fix applied, verified status) into a structured list for the Step 6 output block.

@@ -16,7 +16,7 @@ try {
         systemMessage: `Brewtools manager prompt mode is active (${current.level})`,
         hookSpecificOutput: {
           hookEventName: 'SessionStart',
-          additionalContext: 'Manager prompt mode is active. Codex PreToolUse cannot distinguish parent and sub-agent calls, so this package does not claim a hard enforcement boundary.'
+          additionalContext: 'Manager prompt mode is active: delegate in bounded units (one deliverable, ~5 files) and split a big job across several agents rather than leaving one agent running for an hour, briefing each with goal + scope + what is already done + who consumes the result + acceptance. Codex PreToolUse cannot distinguish parent and sub-agent calls, so this package does not claim a hard enforcement boundary.'
         }
       });
     }

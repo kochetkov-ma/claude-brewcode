@@ -64,9 +64,9 @@ Runs the full pipeline: detect stack, analyze all layers, generate convention do
 |-------|------|--------|--------|
 | P0 | Stack + Scan | -- | Detect tech stack, scan project structure, setup `.claude/convention/` |
 | P1 | Load Layers | -- | Filter analysis layers (L1-L14, T1-T6) by detected stack |
-| P2 | Layer Analysis | 10 parallel (architect + tester) | Etalon candidates, patterns, naming conventions, anti-patterns |
-| P3 | Etalon Selection | 1 architect | Final etalon summary with conflict resolution |
-| P4 | Doc Generation | 3 parallel developer | Three convention documents |
+| P2 | Layer Analysis | 10 parallel `Explore` | Etalon candidates, patterns, naming conventions, anti-patterns |
+| P3 | Etalon Selection | 1 `Plan` | Final etalon summary with conflict resolution |
+| P4 | Doc Generation | 3 parallel writers | Three convention documents |
 | P5 | Text Optimization | 3 parallel text-optimizer (brewtools) | Token-efficient versions of all docs (requires brewtools plugin) |
 | P6 | User Review | -- | Approve, revise (up to 2 iterations), or skip to rules |
 | P7 | Rules Organization | bc-rules-organizer | Interactive rule extraction into `.claude/rules/` |

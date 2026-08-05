@@ -52,8 +52,8 @@ Group by type and complexity (avoid mixing fast model/balanced model in one bloc
 Launch ALL sub-agent calls in a single message for true parallelism. Each block prompt states its files, the sub-flow each file uses, the two-pass rules, and requests JSON.
 
 ```
-Codex delegation brief (task_role="developer", reasoning_tier="fast model", message="> <plugin-root> is in your context (pre-task.mjs).\n[CUSTOM_INSTRUCTIONS_IF_ANY]\nBlock 1 files: [...]. Per file apply its flow rules from $<plugin-root>/skills/text-human/reference/flows/<flow>.md plus ai-patterns.md / human-patterns.md. Two-pass: STRIP then gated INJECT. Return JSON.")
-Codex delegation brief (task_role="developer", reasoning_tier="balanced model", message="> <plugin-root> is in your context (pre-task.mjs).\n[CUSTOM_INSTRUCTIONS_IF_ANY]\nBlock 2 files: [...]. Same rules. Return JSON.")
+Codex delegation brief (task_role="general-purpose", reasoning_tier="fast model", message="> <plugin-root> is in your context (pre-task.mjs).\n[CUSTOM_INSTRUCTIONS_IF_ANY]\nBlock 1 files: [...]. Per file apply its flow rules from $<plugin-root>/skills/text-human/reference/flows/<flow>.md plus ai-patterns.md / human-patterns.md. Two-pass: STRIP then gated INJECT. Return JSON.")
+Codex delegation brief (task_role="general-purpose", reasoning_tier="balanced model", message="> <plugin-root> is in your context (pre-task.mjs).\n[CUSTOM_INSTRUCTIONS_IF_ANY]\nBlock 2 files: [...]. Same rules. Return JSON.")
 ```
 
 If a custom prompt was provided, prepend to EVERY sub-agent prompt after the context line:

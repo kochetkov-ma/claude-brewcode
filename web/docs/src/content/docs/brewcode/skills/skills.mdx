@@ -46,7 +46,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
   <li><div><strong>Input gate</strong><p>The whole argument is treated as ONE free-form sentence — no keyword grammar, no argument parser. A non-empty prompt goes to mode selection; no input triggers the no-prompt menu.</p></div></li>
   <li><div><strong>Auto-mode select</strong><p>Announces `Mode: &lt;mode&gt; (skills) — chosen because &lt;evidence&gt;` so you always know which branch executed and why the classifier picked it.</p></div></li>
   <li><div><strong>No-prompt menu</strong><p>When invoked with no argument, presents a single AskUserQuestion with options (in order): Status (skills) — recommended, Status (all: agents+rules+skills), Create, Improve, Review, Sync skills (memory sync), List (plain), Cancel.</p></div></li>
-  <li><div><strong>Dispatch</strong><p>Routes to the appropriate handler: `list-skills.sh` for list mode, `brewcode:skill-creator` agent for create/improve, parallel agents for batch, `references/mode-sync.md` for sync. Review mode spawns a single `brewcode:reviewer` agent, two-phase: review, then double-check findings, then report.</p></div></li>
+  <li><div><strong>Dispatch</strong><p>Routes to the appropriate handler: `list-skills.sh` for list mode, `brewcode:skill-creator` agent for create/improve, parallel agents for batch, `references/mode-sync.md` for sync. Review mode spawns a single reviewer — the project's agent from `.claude/agents/`, else `general-purpose` — two-phase: review, then double-check findings, then report.</p></div></li>
   <li><div><strong>Real status</strong><p>Four blocks, never a flat list: inventory by scope (plugin / project / global — counts, names, load path), state (enabled or disabled via the <code>_SKILL.md</code> toggle marker, model), overlaps and conflicts (same name shadowed across scopes, duplicate triggers or descriptions), and health flags (missing README or frontmatter, weak description triggers).</p></div></li>
   <li><div><strong>Final output</strong><p>Structured report: mode executed, skills affected, findings, paths written or changed, and suggested next invocation if follow-up is warranted.</p></div></li>
 </Steps>
@@ -59,7 +59,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | list | explicit "list" / "список" / "перечисли" only | `list-skills.sh` |
 | create | "create" / "создай" / "new" / "добавь" / "scaffold" | `brewcode:skill-creator` |
 | improve | "improve" / "улучши" / "refactor" / "fix", or a bare existing name or path | `brewcode:skill-creator` |
-| review | "review" / "ревью" / "validate" / "проверь корректность" | single `brewcode:reviewer`, two-phase (review, double-check) |
+| review | "review" / "ревью" / "validate" / "проверь корректность" | single reviewer: project's `.claude/agents/`, else `general-purpose` — two-phase (review, double-check) |
 | sync | `sync`, `синк`, `memory sync`, `актуализируй`, `обнови знания`, `приведи в соответствие с кодом` | `references/mode-sync.md` |
 | batch | plural form, "все" / "all", or multiple names or paths | parallel `brewcode:skill-creator` |
 

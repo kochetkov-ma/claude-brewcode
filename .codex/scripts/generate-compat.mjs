@@ -10,10 +10,7 @@ const REPO_ROOT = path.resolve(SCRIPT_DIR, '..', '..');
 const PLUGINS = {
   brewcode: {
     skills: ['agents', 'convention', 'rules', 'superreview', 'teams'],
-    agents: [
-      'agent-creator', 'architect', 'bash-expert', 'developer',
-      'hook-creator', 'reviewer', 'tester'
-    ]
+    agents: ['agent-creator', 'bash-expert', 'hook-creator']
   },
   brewdoc: {
     skills: ['md-to-pdf'],
@@ -601,11 +598,14 @@ The user's ++M codeword authorizes foreground delegation for this task. Orchestr
 
 1. Inspect the applicable AGENTS.md files, current task state, and the minimum repository evidence needed to understand the request.
 2. Use update_plan for the session execution plan. If the project requires a durable board, synchronize it through its task-tracker workflow before implementation and again at completion.
-3. Map dependencies and split only independent, bounded workstreams. Parallelize useful read-only or non-overlapping work; keep dependent work sequential.
+3. Map dependencies and split only independent, bounded workstreams. One agent = one bounded unit (one deliverable, ~5 files, ~10 steps); anything larger is split into N tasks and fanned out. A big task handed to one agent is an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target. Parallelize useful read-only or non-overlapping work; keep dependent work sequential. Widest fan-out: a dependency must be a REAL data handoff, else parallel. Size a unit to ~<=20 min of agent work; longer -> split again.
 4. When delegation is useful, select the matching project expert from .codex/agents before built-in or global agents. If the collaboration surface cannot select a custom type, name the expert explicitly and include its developer instructions in the brief without claiming the type was instantiated.
-5. Use spawn_agent, send_message, followup_task, and wait_agent for foreground collaboration. Give each agent concrete scope, expected evidence, allowed mutation surface, and validation duties.
+5. Use spawn_agent, send_message, followup_task, and wait_agent for foreground collaboration. Give each agent the goal it serves, concrete scope with explicit out-of-bounds, the context it needs (what is already done and what runs in parallel, trimmed to that agent), who consumes its result and in what shape, expected evidence, allowed mutation surface, and validation duties.
 6. Review every delegated result before using it. Reconcile conflicts against authoritative project files and run validation proportional to risk.
-7. Lead the final handoff with the outcome, changed surfaces, exact validation, and any genuine remaining risk.`;
+7. Once ALL code is written (not per-piece), file one recommended final task: simplify the whole written code and strip over-engineering. Delegate it like any other task.
+8. Lead the final handoff with the outcome, changed surfaces, exact validation, and any genuine remaining risk.
+
+Branch: work in the current branch; none chosen -> main. Unless the user says branch/PR, stay on main and take over ALL workspace changes, incl. from other sessions.`;
     const managerPlan = `${managerFull}
 
 # [ADDON: PLAN MODE]
@@ -619,8 +619,8 @@ The future implementation prompt must begin with Step 0: re-assume [ROLE: MANAGE
       'full.md': managerFull,
       'planmode.md': managerPlan,
       'architect.md': 'Start from system boundaries, data flow, ownership, failure modes, and compatibility constraints before choosing an implementation.',
-      'review-regression.md': 'Review for behavioral regressions first. Compare old and new contracts, exercise negative paths, and require evidence for compatibility claims.',
-      'review-double.md': 'Perform two passes: first correctness and safety, then maintainability, clarity, and missing validation. Keep findings evidence-based.'
+      'review-regression.md': 'Before the review proper, pass the code for simplification: over-engineered? simpler? Then review for behavioral regressions first. Compare old and new contracts, exercise negative paths, and require evidence for compatibility claims.',
+      'review-double.md': 'Before the review proper, pass the code for simplification: over-engineered? simpler? Then perform two passes: first correctness and safety, then maintainability, clarity, and missing validation. Keep findings evidence-based.'
     };
     for (const [name, content] of Object.entries(prompts)) {
       writeFile(path.join(targetDir, 'references', name), `${content}\n`);
@@ -638,8 +638,10 @@ The future implementation prompt must begin with Step 0: re-assume [ROLE: MANAGE
     fs.writeFileSync(counterPath, fs.readFileSync(counterPath, 'utf8').replace('const INTERVAL = 10;', 'const INTERVAL = 5;'), 'utf8');
     writeFile(path.join(targetDir, 'assets', 'think-short-prompt.md'), `<!-- think-short -->
 Be terse. Lead with results. Use ASCII unless the requested artifact requires other text.
+Think short: keep internal reasoning minimal and do not narrate exploration.
 Search before opening large files. Prefer focused edits and parallel read-only checks.
 Plan the complete edit set, then execute it. Reuse existing code before adding new abstractions.
+After writing code, make one pass for simplification: if it can be simpler, simplify it.
 Keep comments only for non-obvious decisions and public contracts.
 `);
     writeFile(path.join(targetDir, 'assets', 'INSTALL.md'), `# Codex think-short hook runbook
@@ -751,6 +753,8 @@ Write \`TARGET/.codex/agents/task-tracker.toml\` with exactly these TOML keys:
 \`developer_instructions\` owns only \`.codex/features/**\`. It enforces folder equals status, updates \`board.md\` in the same change as every transition, keeps stable upper-kebab ids, requires a file for progress tasks, records the configured close marker, and never touches application code. It reads \`.codex/features/TRACKER.md\` and the active task rule before mutation.
 
 Substitute the analyzed domains, exclusions, release-marker policy, and artifact language. Validate the result with Python \`tomllib\`.
+
+\`developer_instructions\` also states output discipline: reply with a verdict, task ids, and \`file:line\` pointers only; never paste the BRD, task bodies, or backlog listings. Write bulk material to a file under \`.codex/reports/<YYYYMMDD-HHMMSS>_<name>/\` and return the path.
 `);
     writeFile(path.join(targetDir, 'references', '03-task-board-skill.md'), `# Native task-board skill template
 
@@ -803,6 +807,10 @@ echo "Codex environment is ready."
     writeFile(path.join(targetDir, 'references', 'agent-template.md'), `# Native Codex agent template
 
 Create a TOML file under \`.codex/agents/\` with \`name\`, \`description\`, and \`developer_instructions\`. The instructions define mission, domain, scope, task acceptance, self-check, and colleague handoff. Delegate through Codex collaboration with \`task_name\` and \`message\` only. Do not add Markdown frontmatter, tool allowlists, or legacy model aliases.
+
+Every generated agent states output discipline: return only what the main session needs, a verdict or result plus \`file:line\` pointers; write bulk material such as long logs, full diffs, or long reports to a file under \`.codex/reports/<YYYYMMDD-HHMMSS>_<name>/\` and return the path instead of the content.
+
+Agents whose domain writes code, scripts, SQL, schemas, infrastructure, or configuration also state scope fit: build for the scale and problems that exist today, not imagined load or speculative abstraction, and make one simplification pass after finishing. Omit that paragraph for research, documentation, and review-only agents.
 `);
   }
 
@@ -878,14 +886,10 @@ function generateAgent(plugin, agentName) {
   const { values, body } = readFrontmatter(source);
   const description = transformText(values.description || `${agentName} specialist.`, { agent: true });
   const nativeInstructions = {
-    'agent-creator': `Create or improve Codex custom-agent TOMLs. Use one standalone file per agent under project .codex/agents/ or personal ~/.codex/agents/. Require name, description, and developer_instructions. Use only supported optional configuration keys. Validate TOML with Python tomllib and keep the role narrow.`,
-    architect: `Design changes from repository evidence. Identify system boundaries, ownership, data flow, contracts, failure modes, migration constraints, and verification before recommending an implementation. Preserve existing behavior unless the task explicitly changes it. Return concrete decisions, affected files, and unresolved risks.`,
+    'agent-creator': `Create or improve Codex custom-agent TOMLs. Use one standalone file per agent under project .codex/agents/ or personal ~/.codex/agents/. Require name, description, and developer_instructions. Use only supported optional configuration keys. Validate TOML with Python tomllib and keep the role narrow. Emit an output-discipline paragraph into every generated agent (return a verdict plus file:line pointers; write bulk material to a file and return its path), and a scope-fit paragraph only for agents that write code, scripts, SQL, schemas, infrastructure, or configuration. Report agent paths and a validation verdict, not full agent bodies.`,
     'bash-expert': `Write and review portable shell automation. Default to strict mode, quote expansions, avoid destructive operations, keep output deterministic, and make failure states explicit. Validate syntax with bash -n and use shellcheck when available. Never expose secrets or mutate systems outside the requested scope.`,
-    developer: `Implement scoped repository changes from existing architecture and instructions. Reuse established patterns, preserve unrelated user edits, keep dependencies pinned, and verify behavior with the narrowest reliable tests. Report exact files changed, commands run, and any remaining risk.`,
     'hook-creator': `Create or improve Codex hooks using current official schemas. Use hooks.json or config.toml at an active .codex layer. Command handlers use one command string, timeout in seconds, and JSON stdin and stdout. Respect matcher limitations, test malformed input and timeout behavior, and explain review through /hooks after definitions change.`,
-    reviewer: `Review changes without modifying them unless explicitly asked. Prioritize correctness, regressions, security, contracts, and missing tests. Cite precise files and lines, assign severity only when justified, and distinguish confirmed defects from questions or optional improvements.`,
     'skill-creator': `Create or improve Codex skills. SKILL.md frontmatter contains only name and description and uses lowercase hyphen-case folders. Keep instructions concise, add agents/openai.yaml when appropriate, and colocate reusable scripts, references, and assets. Run the Codex skill quick validator and forward-test without production side effects.`,
-    tester: `Design and run deterministic tests for the requested behavior. Cover positive, negative, malformed-input, timeout, and compatibility paths in proportion to risk. Use exact assertions, avoid live external side effects, and report reproducible commands plus concise failure evidence.`,
     'deploy-admin': `Plan and execute deployment work only within explicit authorization. Inspect repository deployment documentation and CI first, pin every dependency, preserve rollback and safety gates, and default smoke tests to mocks. Do not release, push, or mutate production without confirmation.`,
     'ssh-admin': `Perform SSH diagnostics and administration conservatively. Confirm target and scope, default to read-only commands, redact credentials, and require explicit confirmation for remote mutation, service restarts, firewall changes, or destructive actions. Return commands and observed evidence.`,
     'text-optimizer': `Optimize text for clarity and token efficiency while preserving every load-bearing constraint, identifier, example, and safety rule. Match the artifact's language and house style, measure the result, and explain material removals. Write only to the requested path.`

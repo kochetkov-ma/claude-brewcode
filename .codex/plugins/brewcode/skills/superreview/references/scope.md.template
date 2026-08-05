@@ -1,0 +1,159 @@
+# Scope Discipline Reference (superreview — {PROJECT_NAME})
+
+SINGLE home of: sanctioned-scope resolution, sanction sources + precedence, the ownership map, the scope-creep
+taxonomy + severity map, the full-scope DELIVERY map, the CLOSEOUT map, the "not creep" exclusion list, and the
+Phase 3b user gate. `SKILL.md` and `references/agent-prompt.md` POINT here (path only) and never restate any of it.
+
+**WHY this ranks as a principle, not a style note:** {TEAM_NOTE}. Every file touched outside the task's sanctioned
+surface is a merge conflict, a contract changed under someone else's feet, or work nobody agreed to.
+**Minimal blast radius is a hard project principle.**
+
+---
+
+## 1. Resolve the SANCTIONED SCOPE baseline (Phase 0, before the fan-out)
+
+Tracker for this project: **{TRACKER_LABEL}**.
+
+`{RANGE}` = the commit range `SKILL.md` resolved for `{MODE}`. EXPORT it before running this block; unset, step `e`
+records "not read" rather than reading a range this run never chose. `FULL_PROJECT` / `UNCOMMITTED` have no range —
+leaving it empty is correct there.
+
+{BASELINE_RESOLUTION_BASH}
+
+{SANCTION_PRECEDENCE_TABLE}
+
+**Degradation (never invent a baseline):**
+
+| Condition | Action |
+|-----------|--------|
+| Issue tracker unreachable / unauthenticated / issue not found | baseline = local task + docs only; record `issue: not reached` |
+| No task file AND no issue resolvable | baseline = `UNKNOWN`; report scope findings at **P2 max** and raise the Phase 3b gate. The cap is PERMANENT for the run — the gate may lower a finding further but NEVER restores a pre-cap P0/P1 while the baseline is still `UNKNOWN` |
+| Branch carries no issue id in the agreed `<type>/<issue>-<slug>` position | match the task by branch NAME in the board; else `UNKNOWN`. Never take a digit run from elsewhere in the branch name (`fix/oauth2-login` -> 2 is the classic false match) |
+| Branch issue id disagrees with the matched task's recorded link | the branch id is unreliable -> baseline = `UNKNOWN`, recorded as `issue N from branch not in task links`. Cross-check ALWAYS |
+| sub-agent task matched by MENTION only (no explicit link) | usable as CONTEXT; treat the baseline as `UNKNOWN` for severity (P2 cap) unless the issue body independently confirms the deliverable |
+| MODE = `FULL_PROJECT` | scope axis is INFORMATIONAL only — a full-project sweep has no single task; report shapes 3/4 only. `SKILL.md` runs scope pass A alone there and SKIPS pass B: with no criteria and no single PR, sections 3b + 4b have nothing to score |
+
+---
+
+## 2. Ownership map (who else gets hit) — derived at RUNTIME, never hardcoded
+
+{OWNERSHIP_SIGNALS_BASH}
+
+Owners come from: the board's owner column, the task file's `owner:` field, the issue `assignees`, and recent
+authorship. A file whose recent authorship, or whose owning task, belongs to someone else = **another owner's
+surface** -> shape 1 below, UNLESS the overlap is correctness-driven (section 4: not a finding when recorded,
+shape 6 when only unrecorded).
+
+**Always-shared surfaces** (touching them widens blast radius across the whole team regardless of authorship):
+
+{SHARED_SURFACES_TABLE}
+
+> The instruction tree (`.codex/rules/**`, `.codex/convention/**`, `.codex/agents/**`, `.codex/skills/**`,
+> `AGENTS.md`, `AGENTS.md`) is NOT on this list: it is the AUTHORITY reviewers cite. Whether it is a review target
+> at all is decided by the corpus rule in `SKILL.md` (git-IGNORED = OUT) — a path that is never reviewed cannot
+> carry a review severity. sub-agent task-board files are the baseline INPUT, likewise never a finding target.
+
+---
+
+## 3. Scope-creep taxonomy (finding category `scope-creep`, rule ids `scope#1`..`scope#6`)
+
+| # | Shape | Example | Default severity / priority |
+|---|-------|---------|-----------------------------|
+| 1 | **foreign-surface** | a shared contract / schema / migration / design token / registry / CI / lint config edited while task + issue never mention it, or a file owned by another task AND not needed for correctness | `blocker` / **P0** |
+| 2 | **unsanctioned-feature** | behaviour beyond the acceptance criteria — extra endpoint, extra role, extra flag, "while I was here" capability | `critical` / **P1** |
+| 3 | **drive-by-refactor** | unrelated rename / reorg / format churn in files the task did not need | `major` / P2 |
+| 4 | **opportunistic-dependency** | new dependency / config / tooling not required by the acceptance criteria | `major` / P2 |
+| 5 | **silent-doc-mutation** | documentation edited to MATCH the code instead of the code following the doc | `critical` / **P1** |
+| 6 | **sanctioned-but-unrecorded** | genuinely needed, but the decision exists only in chat or a commit body — not in the issue or the task notes | `minor` / P2 + "record the decision" |
+
+**Overlap is NOT automatically shape 1.** Scope MAY expand into a neighbouring task's surface where correctness
+requires it (section 4). Shape 1 fires only on an UNSANCTIONED, correctness-irrelevant touch. Correctness-driven
+overlap that is merely UNRECORDED is **shape 6**, P2 + "record the boundary" — never a shape-1 blocker.
+
+**Inverse:** under-delivery is equally reportable and gets its own severity map — section 3b.
+
+Every scope finding MUST carry, in `description`: the baseline source it was checked against (issue id / task id /
+decision id, or `UNKNOWN`), the shape or rule id, and — for shape 1 — the other owner or shared surface hit.
+
+---
+
+## 3b. Full-scope DELIVERY (category `scope-creep`, rule ids `scope#D*`)
+
+Full sanctioned scope must be DELIVERED. Reducing it is legitimate ONLY against a real blocker, and only when that
+blocker is RECORDED and NAMED (task notes / issue comment). Under-delivery outranks over-delivery.
+
+| Rule | Condition | Default severity / priority |
+|------|-----------|-----------------------------|
+| `scope#D1` | acceptance criterion / issue done-when with NO corresponding code | `blocker` / **P0** |
+| `scope#D2` | criterion partially met, or met only by fixture/stub where the done-when says real | `critical` / **P1** |
+| `scope#D3` | criterion met but not provable — no test, no evidence cited | `major` / P2 |
+| `scope#D4` | scope reduced with NO recorded blocker — title `unrecorded scope reduction` | `blocker` / **P0** |
+| — | scope reduced WITH the blocker recorded + named | NOT a finding — report as an **accepted reduction**, citing where it is recorded |
+
+### PROOF OF ABSENCE — mandatory for D1 and D4 (the only P0s built on a negative)
+
+D1 and D4 assert that something is NOT there. A criterion delivered under a different NAME looks identical to a
+criterion never built, and the resulting false P0 flips the verdict to REWORK without anyone questioning it. So:
+
+| Requirement | Detail |
+|-------------|--------|
+| Quote | the criterion VERBATIM from the task acceptance list / issue done-when, plus its baseline source |
+| Search proof | the exact command run and its empty result — by CONCEPT and by SYNONYM, across the source tree AND the tests (e.g. `rg -n 'readiness\|Readiness\|ready_at' src` -> 0 hits). Reading the diff alone is NOT proof: the criterion may be met by code the diff never touched |
+| Missing either | you may NOT claim P0. Report at **P2** with `"deliveryProofMissing": true`; the Phase 3b gate then asks the user, and a `Not sanctioned` answer restores P0 |
+
+With quote + search proof present, D1/D4 stay P0 and bypass the gate. Every other `scope#D*` finding still quotes
+the criterion verbatim and names the baseline source it came from.
+
+---
+
+## 4. NOT scope creep — do NOT flag
+
+- Files the acceptance criteria imply: a use-case + its test + its interface + its wiring + its route.
+- A fix REQUIRED to make the sanctioned change compile / pass the gates.
+- An expansion covered by a recorded decision (cite it — decision id, issue comment, docs section).
+- Board / task-file bookkeeping for THIS task.
+- Anything the user explicitly asked for in this run.
+- A trivial one-liner fix in a file already inside the baseline surface.
+- **Overlap into a neighbouring task's surface** when BOTH hold: (a) the sanctioned deliverable cannot be CORRECT
+  without it, and (b) the boundary is recorded — which part we own, which part stays theirs. Both hold -> not a
+  finding. (a) only -> **shape 6**, P2 + "record the boundary". Neither -> shape 1.
+
+---
+
+## 4b. Closeout artefacts — PR/MR body + issue comments (rule ids `scope#C*`)
+
+Runs ONLY when a PR/MR exists for the branch (read-only). No PR -> record `PR: none`, SKIP, invent nothing. What
+shipped must be DISCOVERABLE from these artefacts by the next person who touches the surface.
+
+| Rule | Check | Default priority |
+|------|-------|------------------|
+| `scope#C1` | PR body states what SHIPPED, what is deliberately NOT built, what consumers may rely on | P2 |
+| `scope#C2` | `Closes #nn` only for an issue we FULLY own; `Refs #nn` for a shared or partially delivered one. Closing a co-assigned issue is a finding | **P1** |
+| `scope#C3` | every issue this work touches carries a closeout comment — what landed, what remains | P2 |
+| `scope#C4` | AI attribution in a PR body, commit message or issue comment | P2 |
+
+**Quality bar for both artefacts: maximally short and clear.** Flag an essay-length body, restated rationale,
+marketing tone, or a wall that buries the one fact a reader needs — and equally the opposite, a body so thin a
+colleague cannot tell what shipped. **P1** instead of P2 whenever the artefact would actively MISLEAD a colleague
+(wrong `Closes`, or a claim the diff does not support).
+
+---
+
+## 5. Phase 3b user gate (request_user_input) — MANDATORY
+
+**Trigger:** >=1 CONFIRMED scope-creep of shape **1, 2 or 5** whose sanction could NOT be found in section 1, OR a
+`scope#D1` / `scope#D4` row carrying `deliveryProofMissing: true` (section 3b — an absence claim with no verbatim
+criterion and no cited search must be asked about before it can weigh as a P0).
+
+| Rule | Detail |
+|------|--------|
+| Batch | ONE `request_user_input` call, one question per distinct expansion, max 4 (merge the rest into the largest) |
+| Question | name the FILES + the surface + who else owns it + the baseline checked; ask whether it is sanctioned. For a `deliveryProofMissing` row: quote the criterion and ask whether it was delivered (possibly under another name) |
+| Options | `Sanctioned — decision exists` (-> demote to P3 "record the decision") / `Not sanctioned — report as {P0\|P1}` (recommended, first) / `Intentional — accept for now` (-> P2, marked `accepted-scope`) |
+| Never ask | shapes 3, 4, 6, every `scope#C*` row, and any `scope#D*` row whose proof IS present — report those directly |
+| **Baseline UNKNOWN** | the P2 cap set in section 1 SURVIVES this gate. `Not sanctioned` restores the mapped P0/P1 **only when the baseline was known** — the user confirmed the expansion, not the baseline |
+| Non-interactive | gate unavailable -> report at the priority the finding ENTERED with (full severity when the baseline was known, the P2 cap when it was `UNKNOWN`), flagged `unconfirmed-sanction`. Never silently downgrade, never silently upgrade past a cap |
+| Record | the question and the user's answer go into the report VERBATIM, and into the chat summary |
+
+The gate runs AFTER Phase 3 validation (only survivors are worth asking about) and BEFORE the report is written.
+superreview is READ-ONLY: the gate never edits the board, an issue, or a PR.
