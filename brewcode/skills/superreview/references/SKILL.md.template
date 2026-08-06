@@ -3,7 +3,7 @@ name: superreview
 description: "Deep {PROJECT_NAME} code review the MODEL or the USER can invoke: routes changed files to domain-expert agents, runs the mechanical gates, checks correctness + architecture + reuse + version pins + scope discipline (blast radius vs the sanctioned task/issue) against the project rules, reverse-validates every finding, writes one merged report. Triggers: review code, deep review, superreview, super review, validate changes, check architecture, check standards, check reuse, check scope, blast radius, scope creep."
 user-invocable: true
 argument-hint: "<prompt-or-file-path> [scope: commit|branch|folder]"
-allowed-tools: Read, Glob, Grep, Task, Bash, Write, AskUserQuestion
+allowed-tools: Read, Glob, Grep, Agent, Bash, Write, AskUserQuestion
 model: opus
 ---
 

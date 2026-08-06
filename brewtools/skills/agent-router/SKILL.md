@@ -2,7 +2,7 @@
 name: brewtools:agent-router
 description: "Installs, configures or removes the agent-router hook (routes a generic Agent spawn to the real project/plugin expert). Triggers: agent-router, wrong agent, route to expert, роутер агентов, не тот агент."
 argument-hint: "[status|install|level fast|level strict|disable|enable|uninstall|purge] | free-text intent"
-allowed-tools: Read, Bash, AskUserQuestion, Task
+allowed-tools: Read, Bash, AskUserQuestion, Agent
 model: sonnet
 user-invocable: true
 disable-model-invocation: true

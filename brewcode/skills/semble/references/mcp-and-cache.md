@@ -1,7 +1,7 @@
 # MCP registration and cache layout
 
 > Ground truth for `semble_code`: what gets registered, how it is detected, where the index lives, and how a rebuild is guarded.
-> Verified against semble **0.5.2** (sdist) and Claude Code **2.1.220**. Owner: `scripts/semble-mcp.sh`, `scripts/semble-cache.sh`, `scripts/semble-state.sh`.
+> Verified against semble **0.5.2** (sdist) and Claude Code **2.1.223**. Owner: `scripts/semble-mcp.sh`, `scripts/semble-cache.sh`, `scripts/semble-state.sh`.
 
 ## Constants
 

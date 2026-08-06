@@ -2,7 +2,7 @@
 name: brewtools:agent-deadline
 description: "Installs, configures or removes the agent-deadline hooks (soft wall-clock budget for subagents). Triggers: agent-deadline, subagent timeout, agent time limit, дедлайн агента, таймаут саб-агента."
 argument-hint: "[status|install|disable|enable|uninstall|purge] [project|global] [minutes] | free-text intent"
-allowed-tools: Read, Bash, AskUserQuestion, Task
+allowed-tools: Read, Bash, AskUserQuestion, Agent
 model: sonnet
 user-invocable: true
 disable-model-invocation: true
@@ -29,7 +29,7 @@ Actually allowed past 100%: those 7 **plus** `TaskCreate`, `BashOutput`, `TaskOu
 
 **Hard stop.** Past `hardStopRatio` x budget (config key, default `2`, must be `>1`) the allow-set shrinks from the finalize set to `Write, Edit` only, and the deny reason changes to `AGENT DEADLINE HARD STOP`. This catches the agent that loops *inside* the finalize set (re-reading files, rewriting todos) instead of finishing.
 
-## Honest limits (verified on CC 2.1.220 — state these to the user, do not oversell)
+## Honest limits (verified on CC 2.1.223 — state these to the user, do not oversell)
 
 | Fact | Consequence |
 |------|-------------|

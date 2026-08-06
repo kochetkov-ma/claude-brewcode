@@ -19,7 +19,7 @@
 
 ## `mcpServers` — deliberate SPEC override
 
-**No `mcpServers` key is ever added.** Claude Code 2.1.220 documents no `mcpServers` frontmatter field for subagents; subagents inherit the session's MCP servers, and an unknown key only risks frontmatter validation noise. This overrides SPEC line 222, whose own wording is conditional ("when explicit self-contained MCP declaration is required by the final design" — it is not).
+**No `mcpServers` key is ever added.** Claude Code 2.1.223 documents no `mcpServers` frontmatter field for subagents; subagents inherit the session's MCP servers, and an unknown key only risks frontmatter validation noise. This overrides SPEC line 222, whose own wording is conditional ("when explicit self-contained MCP declaration is required by the final design" — it is not).
 
 An **existing** `mcpServers` key is preserved byte-for-byte and left in place. The suite asserts that no file gains one.
 

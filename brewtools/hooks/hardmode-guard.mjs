@@ -9,8 +9,10 @@
 // leaving only delegation (Task/Agent/Skill), reading, and task tracking.
 // Subagents stay fully free.
 //
-// LINCHPIN (verified live CC 2.1.177): this PreToolUse hook fires inside subagents
-// too, but subagent tool-call stdin carries `agent_id`/`agent_type` keys; the MAIN
+// LINCHPIN (verified live CC 2.1.177, last empirical re-check 2.1.195; NOT yet
+// re-run on 2.1.223 - flagged for empirical retest, doc-unverifiable): this
+// PreToolUse hook fires inside subagents too, but subagent tool-call stdin
+// carries `agent_id`/`agent_type` keys; the MAIN
 // session stdin does NOT. session_id is identical for both. => Discriminator: DENY
 // only when `agent_id`/`agent_type` are ABSENT (main session). Present -> pass-through.
 //
@@ -25,6 +27,9 @@
 //
 // Re-verified 2026-06-27 on CC 2.1.195: agent_id/agent_type presence still
 // discriminates main-session (absent) vs subagent (present); linchpin HOLDS.
+// Not empirically re-run on 2.1.223 (2026-08-06 pass) - behavior assumed
+// unchanged, no CHANGELOG entry touches these fields; re-verify live if
+// PreToolUse stdin shape ever looks off.
 // These keys are NOT-IN-DOC (HOOKS-REFERENCE.md lists only subagent_type/subagent_id);
 // kept intentionally. The undocumented `effort` payload key (used by other brewtools
 // hooks) is irrelevant here and intentionally NOT read by this guard. No logic change.

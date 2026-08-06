@@ -3,7 +3,7 @@ name: brewcode:superreview
 description: "Generates a project-tailored deep-review skill: domain-expert routing + scope discipline (blast radius, delivery, closeout) + mechanical gates + adversarial validation. Triggers: superreview, generate review skill, deep review skill, scope discipline review"
 user-invocable: true
 argument-hint: "<fine-tune-prompt> [scope]"
-allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion
+allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion
 model: opus
 ---
 

@@ -2,6 +2,29 @@
 
 ---
 
+## v4.8.0 (2026-08-06)
+
+> Docs: [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [agents](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [semble](https://doc-claude.brewcode.app/brewcode/skills/semble/) | [agent-router](https://doc-claude.brewcode.app/brewtools/skills/agent-router/) | [agent-deadline](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline/)
+
+### brewcode
+
+#### Changed
+- **`hook-creator` agent (759 -> 622 lines):** facts refreshed to CC 2.1.223 — 31 hook events (was 27/25), 5 hook types incl. `http` and `mcp_tool`, `timeout` unit is seconds with per-event floors, managed/enterprise settings are now documented as HIGHEST precedence (was wrongly documented as lowest), new `async`/`asyncRewake`/`shell` fields, v2.1.195 hyphen matcher exact-match, v2.1.207 shell-interpolation change, v2.1.214 `dir/**` glob breaking change, managed-only settings keys `disableAllHooks`/`allowManagedHooksOnly`/`allowedHttpHookUrls`
+- **`agent-creator` agent (599 -> 517 lines):** new discovery section — subagents load by walking UP from cwd to repo root scanning every `.claude/agents/`, so an agent under `<repo>/<module>/.claude/agents/` is invisible to a session launched at repo root; recursive subfolders, `name:` is identity, closest-to-cwd wins on collision. Background-by-default since v2.1.198, nested spawn depth default 3 (not 5), `effort` low/medium/high/xhigh/max, 8 color values, `isolation: worktree` only, `name:` rejects `:` since v2.1.218, `TeamCreate`/`TeamDelete` removed v2.1.178
+- **`skill-creator` agent (1054 -> 730 lines):** fabricated `once` frontmatter key removed, description caps corrected to 1024/1536 (not 120/250), listing budget is a dynamic 1% via `skillListingBudgetFraction`, reserved names only `anthropic`/`claude`, project/user skill now overrides a bundled skill, `context: fork` runs background by default since v2.1.218, nested `<subdir>:skill` namespacing and symlinks supported, model alias `fable` -> canonical `claude-fable-5`
+- **`.claude/skills/claude-plugin-guide` (project setup docs):** `npm` marketplace source is fully implemented, `pip` source never existed and was removed, `git-subdir` source documented, 13 plugin.json/marketplace fields added, hook catalog replaced by a pointer to the canonical list
+- **repo-wide:** `Task` -> `Agent` tool rename across 22 agent/skill frontmatter files; semble version markers and agent-deadline runbook bumped to 2.1.223
+
+#### Added
+- **`user/features/CLAUDE-CODE-AUTHORING-UPDATE-2.1.223.md`:** verified source-of-truth doc used for every fact change in this release, plus refreshed `HOOKS-REFERENCE.md`, `CLAUDE-SKILL-DIR-GUIDE.md`, `CLAUDE-CODE-SETTINGS-GUIDE.md`
+
+### brewtools
+
+#### Changed
+- **`agent-router`, `agent-deadline`:** version markers and referenced CC facts bumped to 2.1.223 alongside the brewcode authoring stack refresh
+
+---
+
 ## v4.7.1 (2026-08-06)
 
 > Docs: [agent-router](https://doc-claude.brewcode.app/brewtools/skills/agent-router/)

@@ -16,7 +16,7 @@ Substitute `{{LANG}}`, `{{CLOSE_MARKER_SHORT}}`. Write the body below to `TARGET
 name: task-board
 description: "Views and updates this repo's file-based task board at .claude/features/. Triggers: show the board, task board, board status, what's in progress, add a task, create task, move task to progress, close task, dump to backlog, groom backlog."
 argument-hint: "[view | add | move | backlog | groom]"
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Task
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Agent
 ---
 
 # Task Board (dashboard)

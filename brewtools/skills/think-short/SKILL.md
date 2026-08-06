@@ -2,7 +2,7 @@
 name: brewtools:think-short
 description: "Installs or removes the think-short terse-mode hooks. Triggers: think-short, be terse, terse mode, инжект терс-режим."
 argument-hint: "[install|remove] [project|global] | free-text intent"
-allowed-tools: Read, Bash, AskUserQuestion, Task
+allowed-tools: Read, Bash, AskUserQuestion, Agent
 model: sonnet
 user-invocable: true
 disable-model-invocation: true

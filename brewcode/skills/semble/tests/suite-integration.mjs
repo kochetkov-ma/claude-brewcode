@@ -121,7 +121,7 @@ symlinkSync(process.execPath, join(BIN, 'node'));
 // and emulates add/add-json/remove against the injected HOME.
 writeFileSync(CLAUDE_STUB, `#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "${CLAUDE_LOG}"
-if [ "\${1:-}" = "--version" ]; then echo "2.1.220 (Claude Code)"; exit 0; fi
+if [ "\${1:-}" = "--version" ]; then echo "2.1.223 (Claude Code)"; exit 0; fi
 if [ "\${1:-}" = "mcp" ]; then
   case "\${2:-}" in
     add|add-json)
@@ -376,7 +376,7 @@ check('wired: prereq semble', R.prereq.semble,
   { present: false, version: '', source: 'uvx-ephemeral', resolvable: false },
   'without uvx the pin is unresolvable and the source stays uvx-ephemeral');
 check('wired: prereq claude', [R.prereq.claude.present, R.prereq.claude.version, R.prereq.claude.path],
-  [true, '2.1.220', CLAUDE_STUB], 'the stubbed claude is the only binary detected');
+  [true, '2.1.223', CLAUDE_STUB], 'the stubbed claude is the only binary detected');
 
 // mcp: transform of semble-mcp.sh detect
 check('wired: mcp keys', keysOf(R.mcp),

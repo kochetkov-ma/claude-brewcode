@@ -13,17 +13,17 @@ tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch, WebSearch
 
 Creates production-quality CC hooks (bash + JS/mjs): correct msg routing, JSON schemas, fail-safe design.
 
-> Ref ver: 2.1.195 | 27 HEs | 5 hook types (command, http, mcp_tool, prompt, agent)
+> Ref ver: 2.1.223 | 31 HEs | 5 hook types (command, http, mcp_tool, prompt, agent)
 
 ## Scope guard
 
 Size the task before starting. Exceeds one bounded unit (one deliverable, ~5 files,
-~10 steps) or spans several independent deliverables — STOP, do not start. Return a
+~10 steps) or spans several independent deliverables -- STOP, do not start. Return a
 split proposal: 2-N bounded subtasks, each with scope and a suggested owner.
 Mid-flight the same: stop at the next clean boundary and report done / remaining /
 how to split. An hour of unsupervised work is a failure even when it succeeds.
 Brief missing GOAL, SCOPE, CONTEXT (what is already done), CONSUMER (who uses the
-result) or acceptance — state your assumption explicitly in the report, or ask once.
+result) or acceptance -- state your assumption explicitly in the report, or ask once.
 Never invent scope.
 Deliver for the CONSUMER, not the literal wording: the result must be usable as-is
 by whoever takes it next, with the whole briefed scope covered.
@@ -63,33 +63,35 @@ Teams: TeammateIdle (exit 0=stop, 1=continue) | TaskCompleted (exit 0=accept, 1=
 
 ## 1. Message Routing Matrix
 
-### AC (in hookSpecificOutput)
+Consult BEFORE choosing output -- wrong channel = silently ignored (no error). `UI`=`updatedInput`.
 
-| Event | Claude sees? | Notes |
-|-------|:---:|-------|
-| SS | YES | `<system-reminder>` stable (~~#16538~~ not repro since v2.1.37+) |
-| UserPromptSubmit | YES | `<system-reminder>` appended, stable |
-| PTU | YES | `<system-reminder>` stable (~~#19432~~ fixed v2.1.15+) |
-| POT | YES | `<system-reminder>` stable (Issue #15345) |
-| PostToolUseFailure | YES | needs verification, limited data |
-| SubagentStart | YES | injected into SA context (not parent) |
-| Notification | YES | `<system-reminder>` stable |
-| Stop | YES | feedback + keep turn going, not hook error (v2.1.163+); or `decision:"block"` + `reason` |
-| SubagentStop | YES | feedback + keep turn going, not hook error (v2.1.163+); or `decision:"block"` + `reason` |
-| PreCompact | N/A | not supported; use `systemMessage` |
-| SessionEnd | N/A | not supported; informational only |
-| TeammateIdle, TaskCompleted, TaskCreated | N/A | JSON `{continue, stopReason}` (v2.1.52+) |
+| Event | `AC` (Claude sees) | `decision`/reason | IGNORED (do not use) |
+|-------|---------------------|--------------------|------------------------|
+| SS | YES, `<system-reminder>`, stable | -- | `UI` |
+| UserPromptSubmit | YES, appended; **cannot rewrite prompt** | `decision:"block"` -> UI only, Claude does NOT see reason | **`UI` -- IGNORED** (root cause of the `forced-eval.mjs` bug: emitted `UI.prompt` here, silently dropped) |
+| PTU | YES, stable | `permissionDecision`: allow/deny/ask/defer; `permissionDecisionReason` on deny; `"defer"` pauses headless, resume `-p --resume` (v2.1.89+) | `updatedToolOutput` |
+| POT | YES, stable (#15345) | feedback via `AC`, no decision field | `UI` |
+| PostToolUseFailure | YES, limited data | -- | -- |
+| SubagentStart | YES, into SA (not parent) | -- | -- |
+| Notification | YES, stable | -- | -- |
+| Stop | YES, feedback + keeps turn going, not hook-error label (v2.1.163+); or `decision:"block"`+`reason` -> Claude continues, sees reason | -- | `AC` for blocking (use `decision` instead) |
+| SubagentStop | same as Stop, scoped to SA | -- | same |
+| PreCompact | N/A, not supported | -- | -- (use `systemMessage`) |
+| SessionEnd | N/A, not supported | -- | -- (informational only) |
+| PR | N/A | `decision.behavior`: `allow\|deny` only (no `ask` -- that's PTU `permissionDecision`); `decision.message` on deny | -- |
+| PermissionDenied | via stderr | `{retry:true}` -> model retries; fires after auto-mode classifier denial (v2.1.89+) | -- |
+| TeammateIdle, TaskCompleted, TaskCreated | N/A | JSON `{continue, stopReason}` (v2.1.52+) | -- |
 
 ### stdout (exit 0, JSON)
 
 | Event | Claude sees? |
 |-------|:---:|
-| SS, UserPromptSubmit, PTU | YES — parsed, context injected |
-| All others | NO — verbose mode only (Ctrl+O) |
+| SS, UserPromptSubmit, PTU | YES -- parsed, context injected |
+| All others | NO -- verbose mode only (Ctrl+O) |
 
 ### systemMessage
 
-Goes to user UI only — Claude does NOT see it. Exception: async hooks deliver on next turn.
+Goes to user UI only -- Claude does NOT see it. Exception: async hooks deliver on next turn.
 
 ### stderr (exit 2)
 
@@ -98,56 +100,11 @@ Goes to user UI only — Claude does NOT see it. Exception: async hooks deliver 
 | Blocking | YES | PTU, PR, PermissionDenied, UserPromptSubmit, Stop, SubagentStop, TeammateIdle, TaskCompleted, TaskCreated, ConfigChange, WorktreeCreate, Elicitation, ElicitationResult |
 | Non-blocking | NO (UI only) | SS, POT, PostToolUseFailure, PreCompact, PCD, Notification, SessionEnd, SubagentStart, InstructionsLoaded, StopFailure, CwdChanged, FileChanged, WorktreeRemove |
 
-### decision + reason
-
-| Event | Claude sees reason? | Notes |
-|-------|:---:|-------|
-| Stop | YES | `decision:"block"` + `reason` -> Claude continues, sees reason |
-| SubagentStop | YES | `decision:"block"` + `reason` -> SA continues, sees reason |
-| POT | YES (via AC) | no decision field; reason as feedback |
-| UserPromptSubmit | NO (UI only) | `decision:"block"` -> prompt rejected, Claude does NOT see reason |
-| PTU | YES | `permissionDecisionReason` on deny; `"defer"` pauses headless session, resume `-p --resume` (v2.1.89+) |
-| PR | N/A | `decision.behavior`: allow/deny/ask; `decision.message` on deny |
-| PermissionDenied | YES (via stderr) | fires after auto mode classifier denial; `{retry:true}` -> model retries (v2.1.89+) |
-
 ### UI (PTU only)
 
-Silently modifies tool params. Claude unaware of change. Most reliable injection for SA prompts via `UI.prompt`.
+Silently modifies tool params. Claude unaware of change. Most reliable injection for SA prompts via `UI.prompt`. `UI` also rewrites on PR.
 
-### Routing Decision Guide
-
-| Goal | Channel | Event |
-|------|---------|-------|
-| Inject context for Claude | `AC` | SS, PTU, UserPromptSubmit |
-| Inject into SA | `UI.prompt` | PTU (matcher: Task) |
-| Block tool | `permissionDecision:"deny"` | PTU |
-| Block session stop | `decision:"block"` + `reason` | Stop |
-| Feedback at stop (no block) | `AC` | Stop, SubagentStop (v2.1.163+) |
-| Inject into SA context | `AC` | SubagentStart |
-| Post-tool feedback | `AC` | POT (stable) |
-| Modify tool params | `UI` | PTU |
-| Show user warning | `systemMessage` | any |
-| Block user prompt | `decision:"block"` | UserPromptSubmit |
-| Auto-allow permission | `decision:"allow"` | PR |
-| Control teammates | `{continue, stopReason}` JSON | TeammateIdle, TaskCompleted, TaskCreated |
-
-### Authoritative Per-Event Output Channels
-
-Consult BEFORE choosing output. Wrong channel = silently ignored (no error). `UI`=`updatedInput`.
-
-| Event | Add context / affect model | Do NOT use (IGNORED) |
-|-------|----------------------------|----------------------|
-| SS | `AC` | `UI` |
-| UserPromptSubmit | `AC` (cannot rewrite prompt); `decision:"block"`+`reason` to reject | **`UI` — IGNORED** |
-| PTU | `AC`; `UI` to rewrite tool args; `permissionDecision` | `updatedToolOutput` |
-| POT | `AC`; `updatedToolOutput` | `UI` |
-| Stop / SubagentStop | `decision:"block"`+`reason` (also `AC` feedback v2.1.163+) | `AC` for blocking |
-| PreCompact | no model-facing output | -- |
-| PR | `UI` / permission fields | -- |
-
-> **UserPromptSubmit CANNOT rewrite the prompt; `UI` (updatedInput) is ignored there — use `AC`.** To deliver per-turn context, `AC` is the channel for SS / UserPromptSubmit / PTU / POT. `UI` rewrites args ONLY on PTU (and PR). Root cause of the `forced-eval.mjs` bug: it emitted `UI.prompt` on UserPromptSubmit → silently dropped by CC 2.1.x.
-
-## 2. All 27 Hook Events
+## 2. All 31 Hook Events
 
 > MD (v2.1.152): transforms/hides assistant message text at display layer only; non-blocking.
 > NOT a hooks.json event: post-session lifecycle hook (v2.1.169) = self-hosted runner hook, runs after session ends + before workspace deleted. Configure on runner, not in hooks.json.
@@ -181,6 +138,12 @@ Consult BEFORE choosing output. Wrong channel = silently ignored (no error). `UI
 | 25 | TaskCreated | Yes | No | `task_id`,`task_subject`,`task_description`,`teammate_name`,`team_name` | 2.1.84 |
 | 26 | PermissionDenied | Yes | No | `tool_name`,`tool_input`,`denial_reason` | 2.1.89 |
 | 27 | MD | No | No | assistant message text | 2.1.152 |
+| 28 | Setup | unverified | unverified | unverified | unverified |
+| 29 | UserPromptExpansion | unverified | unverified | unverified | unverified |
+| 30 | PostToolBatch | unverified | unverified | unverified | unverified |
+| 31 | DirectoryAdded | unverified | unverified | unverified | 2.1.219 |
+
+> Rows 28-31: names confirmed via binary's 31-entry event array; per-field/blocking detail not fetched this pass (see `## STILL UNVERIFIED` note if extending).
 
 ### Common stdin (ALL events)
 
@@ -206,6 +169,10 @@ Consult BEFORE choosing output. Wrong channel = silently ignored (no error). `UI
 | TeammateIdle | teammate terminates | teammate continues | stderr -> UI |
 | TaskCompleted | task accepted | task re-assigned | stderr -> UI |
 | POT | JSON processed | warning | stderr -> UI |
+| Setup, UserPromptExpansion, PostToolBatch, DirectoryAdded | unverified | unverified | unverified |
+| `http`/`mcp_tool` type (any event) | N/A -- no OS exit code | N/A | N/A |
+
+> Sample, not exhaustive (31 events total). `http`/`mcp_tool` convey success/failure via response JSON (`decision`/`AC`) or HTTP/tool-call failure, not exit code; empty body = pass-through. Rows 28-31 exit-code semantics unverified (see `## 2.` note).
 
 ## 3. Hook Types
 
@@ -234,9 +201,14 @@ Consult BEFORE choosing output. Wrong channel = silently ignored (no error). `UI
 |-------|-------------|------------|
 | `type` | REQ: `"command"`,`"http"`,`"mcp_tool"`,`"prompt"`,`"agent"` | All |
 | `if` | conditional filter (permission rule syntax, v2.1.85+): `"Bash(git *)"`,`"Edit(*.ts)"` | tool events |
-| `timeout` | seconds before cancellation | All |
+| `timeout` | seconds before cancellation; DEF 600s. Floors: 30s (UserPromptSubmit/UserPromptExpansion event, or `prompt` type), 60s (`agent` type), 10s (MessageDisplay event) | All |
 | `statusMessage` | spinner text while hook runs | All |
 | `once` | `true` = run once per session (skills only) | Skills |
+| `async` | `true` = fire-and-forget, non-blocking (see sec.10) | command/http/mcp_tool |
+| `asyncRewake` | `true` = wakes the model on hook exit code 2 (async only) | command/http/mcp_tool |
+| `shell` | shell to run `command` in (overrides platform default) | `command` |
+
+> BREAKING (v2.1.207): `${user_config.*}` interpolation rejected in shell-form `command`/monitors/`headersHelper` (shell-injection fix). Use non-shell forms or env vars instead.
 
 HTTP hook example (v2.1.63+):
 ```json
@@ -245,17 +217,31 @@ HTTP hook example (v2.1.63+):
 
 ## 4. Configuration Locations
 
+Precedence (HIGHEST to lowest): **Managed/enterprise policy > CLI args > `.claude/settings.local.json`
+> `.claude/settings.json` > `~/.claude/settings.json`**. Managed can suppress every other scope
+(see settings keys below). Plugin `hooks/hooks.json` and agent/skill frontmatter merge additively
+on top, scoped to when their component is active -- not part of the override chain.
+
 | # | Location | Scope | Notes |
 |---|----------|-------|-------|
-| 1 | `.claude/settings.local.json` | project (gitignored) | highest priority |
-| 2 | `.claude/settings.json` | project (committable) | team-shared |
-| 3 | `~/.claude/settings.local.json` | global (gitignored) | personal global |
-| 4 | `~/.claude/settings.json` | global (committable) | user global |
-| 5 | enterprise policy | org | MDM/admin |
-| 6 | plugin `hooks/hooks.json` | plugin-scoped | additive (merged, not overridden) |
-| 7 | agent/skill frontmatter YAML | component-scoped | while component active |
+| 1 | managed/enterprise policy | org | HIGHEST -- MDM/admin, can gate all lower scopes |
+| 2 | CLI args | session | -- |
+| 3 | `.claude/settings.local.json` | project (gitignored) | -- |
+| 4 | `.claude/settings.json` | project (committable) | team-shared |
+| 5 | `~/.claude/settings.local.json` | global (gitignored) | personal global; local overrides non-local at same scope |
+| 6 | `~/.claude/settings.json` | global (committable) | user global |
+| 7 | plugin `hooks/hooks.json` | plugin-scoped | additive (merged, not overridden) |
+| 8 | agent/skill frontmatter YAML | component-scoped | while component active; workspace-trust dialog required first (v2.1.218+) |
 
 Merge rule: hooks from diff sources merged (not overridden). For single event, ALL registered hooks execute in parallel.
+
+### Managed-only settings keys
+
+| Key | Effect |
+|-----|--------|
+| `disableAllHooks` | disables every hook regardless of source |
+| `allowManagedHooksOnly` | only managed-policy hooks run; all lower-scope hooks ignored |
+| `allowedHttpHookUrls` | allowlist of URLs `http`-type hooks may POST to |
 
 ### settings.json format
 
@@ -282,11 +268,12 @@ hooks:
 
 ### Conditional `if` field (v2.1.85+)
 
-Reduces hook overhead — fires only when condition matches (permission rule syntax):
+Reduces hook overhead -- fires only when condition matches (permission rule syntax):
 ```json
 {"hooks":{"PreToolUse":[{"matcher":"Bash","if":"Bash(git *)","hooks":[{"type":"command","command":"bash validate-git.sh"}]}]}}
 ```
-Format: `ToolName(pattern)` — same syntax as permission rules.
+Format: `ToolName(pattern)` -- same syntax as permission rules.
+> BREAKING (v2.1.214): single-segment `dir/**` now matches only `<cwd>/dir`, not any-depth. Use `**/dir/**` for any-depth matching.
 
 ## 5. Environment Variables
 
@@ -302,63 +289,46 @@ Format: `ToolName(pattern)` — same syntax as permission rules.
 | `$CLAUDE_PLUGIN_OPTION_<KEY>` | plugin `userConfig` values (v2.1.78+) | plugin hooks |
 | `CLAUDE_CODE_SAFE_MODE` | `1` = start CC with ALL customizations disabled (CLAUDE.md, plugins, skills, hooks, MCP); also `--safe-mode` flag; use for hook debug isolation (v2.1.169+) | startup |
 | `CLAUDE_CODE_DISABLE_BUNDLED_SKILLS` | `1` = hide bundled skills/workflows/built-in cmds; also `disableBundledSkills` setting (v2.1.169+) | startup |
+| `CLAUDE_EFFORT` | reasoning-effort override propagated into hook env | v2.1.199+ |
+| `CLAUDE_CODE_BRIDGE_SESSION_ID` | bridge-session identifier | v2.1.199+ |
 
-### Plugin Persistent State (`CLAUDE_PLUGIN_DATA`)
-
-Persistent per-plugin data dir, survives updates (v2.1.78+). Hook-only env var.
-
-| Aspect | Details |
-|--------|---------|
-| env var | `process.env.CLAUDE_PLUGIN_DATA` (hooks only) |
-| path | `~/.claude/plugins/data/<plugin-id>/` |
-| read in hooks | `const pluginData = process.env.CLAUDE_PLUGIN_DATA` |
-
-> Protected-path (v3.4.70): Write/Edit to `~/.claude/*` (incl. `$CLAUDE_PLUGIN_DATA`) blocked in ALL modes (`bypassPermissions`, headless). Check runs BEFORE hooks — whitelists dead. Exceptions: `commands|agents|skills|worktrees`. !=design skills with `$CLAUDE_PLUGIN_DATA` as Write target -> silent fail. Primary: project-relative `.claude/<subdir>/` + whitelist. `$CLAUDE_PLUGIN_DATA` = read-only/interactive-only/Bash-only (Bash redirect currently bypasses check, but brittle).
+> Protected-path (v3.4.70): Write/Edit to `~/.claude/*` (incl. `$CLAUDE_PLUGIN_DATA`) blocked in ALL modes (`bypassPermissions`, headless). Check runs BEFORE hooks -- whitelists dead. Exceptions: `commands|agents|skills|worktrees`. !=design skills with `$CLAUDE_PLUGIN_DATA` as Write target -> silent fail. Primary: project-relative `.claude/<subdir>/` + whitelist. `$CLAUDE_PLUGIN_DATA` = read-only/interactive-only/Bash-only (Bash redirect currently bypasses check, but brittle).
 
 ## 6. Output Schemas
 
-### PTU — Allow with context
-```json
-{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","additionalContext":"Context string for Claude"}}
-```
+Single-field schemas (compact):
 
-### PTU — Deny
-```json
-{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"Reason Claude will see"}}
-```
+| Event -- purpose | Schema |
+|---|---|
+| PTU -- allow w/ context | `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","additionalContext":"..."}}` |
+| PTU -- deny | `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"..."}}` |
+| Stop -- block | `{"decision":"block","reason":"Task not complete. Continue with phase 3."}` |
+| SubagentStop -- block | `{"decision":"block","reason":"Review not finished. Check remaining files."}` |
+| SubagentStart -- inject into SA | `{"hookSpecificOutput":{"hookEventName":"SubagentStart","additionalContext":"Context injected into SUBAGENT (not parent)"}}` |
+| UserPromptSubmit -- block | `{"decision":"block","reason":"Reason shown to USER only (Claude does NOT see this)"}` |
+| POT -- feedback | `{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"Post-tool feedback for Claude"}}` |
+| TeammateIdle/TaskCompleted/TaskCreated -- control (v2.1.52+) | `{"continue":false,"stopReason":"Task limit reached."}` |
+| PermissionDenied -- retry (v2.1.89+) | `{"retry":true}` -- model retries; fires after auto-mode classifier denial; not user-facing like PR |
+| WorktreeCreate -- return path (v2.1.84+, http hooks) | `{"hookSpecificOutput":{"hookEventName":"WorktreeCreate","worktreePath":"/path/to/worktree"}}` |
+| Empty pass-through | `{}` |
 
-### PTU — Modify input
+### PTU -- Modify input
 ```json
 {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","updatedInput":{"prompt":"Modified prompt text","other_field":"preserved"}}}
 ```
 
-### Stop — Block
+### PTU -- Answer AskUserQuestion (v2.1.85+)
 ```json
-{"decision":"block","reason":"Task not complete. Continue with phase 3."}
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","updatedInput":{"question":"Which database?","answer":"PostgreSQL"}}}
 ```
 
-### SubagentStop — Block
-```json
-{"decision":"block","reason":"Review not finished. Check remaining files."}
-```
-
-### SS — Context injection
+### SS -- Context injection
 ```json
 {"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"Injected context for Claude","sessionTitle":"My session title","reloadSkills":true},"systemMessage":"Status shown to user only"}
 ```
 > `reloadSkills:true` re-scans skill dirs; `sessionTitle` sets session title on startup + resume (v2.1.152+).
 
-### SubagentStart — Inject into SA
-```json
-{"hookSpecificOutput":{"hookEventName":"SubagentStart","additionalContext":"Context injected into SUBAGENT (not parent)"}}
-```
-
-### UserPromptSubmit — Block
-```json
-{"decision":"block","reason":"Reason shown to USER only (Claude does NOT see this)"}
-```
-
-### PR — Allow/Deny/Ask
+### PR -- Allow/Deny
 ```json
 {"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow"}}}
 ```
@@ -366,30 +336,16 @@ Persistent per-plugin data dir, survives updates (v2.1.78+). Hook-only env var.
 | `behavior` | Effect |
 |------------|--------|
 | `allow` | auto-allow |
-| `ask` | standard permission dialog |
 | `deny` | reject without prompting |
 
-### PR — Allow with permission mutation
+> PR `decision.behavior` is `allow\|deny` ONLY -- no `ask` member. `ask` exists only as a PTU `permissionDecision` value (deny/allow/ask/defer).
+
+### PR -- Allow with permission mutation
 ```json
 {"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow","updatedInput":{"command":"npm test"},"updatedPermissions":[{"type":"addRules","rules":[{"toolName":"Bash","ruleContent":"npm *"}],"behavior":"allow","destination":"session"}]}}}
 ```
 
-### PTU — Answer AskUserQuestion (v2.1.85+)
-```json
-{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","updatedInput":{"question":"Which database?","answer":"PostgreSQL"}}}
-```
-
-### POT — Feedback
-```json
-{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"Post-tool feedback for Claude"}}
-```
-
-### TeammateIdle/TaskCompleted/TaskCreated — JSON control (v2.1.52+)
-```json
-{"continue":false,"stopReason":"Task limit reached. Stopping teammate."}
-```
-
-### Elicitation — MCP form response (v2.1.76+)
+### Elicitation -- MCP form response (v2.1.76+)
 ```json
 {"hookSpecificOutput":{"hookEventName":"Elicitation","action":"accept","content":{"field_name":"value"}}}
 ```
@@ -399,22 +355,6 @@ Persistent per-plugin data dir, survives updates (v2.1.78+). Hook-only env var.
 | `accept` | auto-fill MCP form with `content` |
 | `decline` | decline elicitation |
 | `cancel` | cancel elicitation |
-
-### PermissionDenied — Retry control (v2.1.89+)
-```json
-{"retry":true}
-```
-`retry:true` -> model retries denied tool call. Fires after auto mode classifier denies a tool. !=same as PR (user-facing). Use for headless/CI flows to programmatically override denial.
-
-### WorktreeCreate — Return path (v2.1.84+, http hooks)
-```json
-{"hookSpecificOutput":{"hookEventName":"WorktreeCreate","worktreePath":"/path/to/created/worktree"}}
-```
-
-### Empty pass-through
-```json
-{}
-```
 
 ## 7. Templates
 
@@ -463,20 +403,7 @@ async function main() {
   try {
     const input = await readStdin();
     const { session_id, cwd, hook_event_name } = input;
-    // PTU: tool_name, tool_input, tool_use_id
-    // POT: tool_name, tool_input, tool_response, tool_use_id
-    // PostToolUseFailure: tool_name, tool_input, tool_use_id, error, is_interrupt
-    // Stop: stop_hook_active, last_assistant_message
-    // SubagentStart: agent_id, agent_type
-    // SubagentStop: stop_hook_active, agent_id, agent_type, agent_transcript_path, last_assistant_message
-    // UserPromptSubmit: user_prompt
-    // SS: source, model, agent_type
-    // PreCompact: transcript_path
-    // ConfigChange: source, file_path
-    // StopFailure: error, error_details, last_assistant_message
-    // FileChanged: file_path
-    // InstructionsLoaded: file_path, memory_type, load_reason, globs
-    // TaskCreated/TaskCompleted: task_id, task_subject, task_description, teammate_name, team_name
+    // per-event fields: see "Key stdin fields" column, ## 2. All 31 Hook Events
 
     // if (input.stop_hook_active) { output({}); return; }
 
@@ -499,21 +426,7 @@ async function main() {
 main();
 ```
 
-### Shared Utils (library pattern)
-
-```javascript
-// lib/utils.mjs
-export async function readStdin() {
-  const chunks = [];
-  for await (const chunk of process.stdin) chunks.push(chunk);
-  return JSON.parse(Buffer.concat(chunks).toString('utf8'));
-}
-export function output(response) { console.log(JSON.stringify(response)); }
-```
-```javascript
-// hooks/my-hook.mjs
-import { readStdin, output } from './lib/utils.mjs';
-```
+> Multi-hook plugin: extract `readStdin`/`output` into `lib/utils.mjs`, `import` into each hook file.
 
 ## 8. Known Bugs
 
@@ -521,33 +434,7 @@ import { readStdin, output } from './lib/utils.mjs';
 |-----|--------|--------|------------|
 | #14281 | duplicate `<system-reminder>` injection | active | make context idempotent |
 
-### Fixed Bugs
-
-| Bug | Was | Fixed in |
-|-----|-----|----------|
-| ~~#16538~~ | plugin SS `AC` not delivered | v2.1.37+ |
-| ~~#19432~~ | PTU `AC` regression | v2.1.15+ |
-| ~~#10373~~ | SS hooks not working for new sessions | v2.1.20+ |
-| ~~allow-bypass~~ | PTU `allow` bypassed `deny` permission rules | v2.1.77 |
-| ~~skill-double~~ | skill hooks fired twice per event | v2.1.72 |
-| ~~plugin-stop~~ | plugin Stop/SessionEnd hooks skipped after `/plugin` | v2.1.70 |
-| ~~session-double~~ | SS hooks called twice on `--resume`/`--continue` | v2.1.73 |
-| ~~sessionend~~ | SessionEnd hooks unreliable | v2.1.79 |
-| ~~plugin-perm~~ | plugin scripts "Permission denied" on macOS/Linux | v2.1.86 |
-| ~~uninstall~~ | uninstalled plugin hooks kept firing | v2.1.83 |
-
-### Channel Reliability Matrix
-
-| Channel | Reliability | Notes |
-|---------|-------------|-------|
-| `UI` (PTU) | High | stable, most reliable injection |
-| `AC` (PTU) | High | regression v2.1.12 fixed v2.1.15+ |
-| `AC` (SS) | High | stable since v2.1.37+ |
-| `AC` (POT) | High | stable (Issue #15345) |
-| `decision`/`reason` (Stop) | High | stable |
-| `AC` (Stop/SubagentStop) | High | feedback w/o hook-error label, keeps turn going (v2.1.163+) |
-| `systemMessage` | High | stable (Claude does NOT see it) |
-| `permissionDecision` (PTU) | High | stable |
+> All routing channels (`UI`, `AC`, `decision`/`reason`, `systemMessage`, `permissionDecision`) are High reliability today; fix history is in `## 17. Version History` -- no separate table.
 
 ## 9. Best Practices
 
@@ -563,15 +450,7 @@ import { readStdin, output } from './lib/utils.mjs';
 | validate stdin before parsing | handle missing/malformed input |
 | DEF to allow/pass-through | hook failure = no effect |
 
-### Infinite Loop Protection (Stop hook)
-
-```bash
-STOP_ACTIVE=$(echo "$INPUT" | jq -r '.stop_hook_active // false')
-if [ "$STOP_ACTIVE" = "true" ]; then echo '{}'; exit 0; fi
-```
-```javascript
-if (input.stop_hook_active) { output({}); return; }
-```
+> Infinite loop protection (Stop/SubagentStop): check `stop_hook_active` and short-circuit to `{}` -- see commented block in Bash template, `if (input.stop_hook_active)` in JS template (## 7).
 
 ## 10. Async Hooks
 
@@ -618,62 +497,29 @@ if (input.stop_hook_active) { output({}); return; }
 | Stop, UserPromptSubmit, TeammateIdle, TaskCompleted, TaskCreated, WorktreeCreate, WorktreeRemove, CwdChanged, PermissionDenied | No matcher | always fires |
 
 > Omit `matcher` -> fires for ALL instances of that event.
+> Hyphenated matcher identifiers exact-match since v2.1.195 (was accidental substring match). Comma- and pipe-separated matcher lists equivalent since v2.1.191.
 
 ## 12. Common Hook Patterns
 
-Inject context into all SAs:
-```json
-{"hooks":{"PreToolUse":[{"matcher":"Task","hooks":[{"type":"command","command":"node /path/to/inject-context.mjs"}]}]}}
-```
-Hook modifies `tool_input.prompt` via `UI`.
-
-Gate dangerous tools:
-```json
-{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"bash /path/to/validate-bash.sh"}]}]}}
-```
-Hook checks `tool_input.command`, returns `permissionDecision:"deny"` if dangerous.
-
-Block stop until task complete:
-```json
-{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"node /path/to/check-task.mjs"}]}]}}
-```
-
-Log all tool calls (async):
-```json
-{"hooks":{"PostToolUse":[{"hooks":[{"type":"command","command":"node /path/to/logger.mjs","async":true}]}]}}
-```
-
-Inject project context on SS:
-```json
-{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"bash /path/to/session-init.sh"}]}]}}
-```
-Returns `AC` with project state.
+| Pattern | matcher | hooks[0] | Mechanism |
+|---------|---------|----------|-----------|
+| Inject context into all SAs | `PreToolUse` / `Task` | `{"type":"command","command":"node inject-context.mjs"}` | modifies `tool_input.prompt` via `UI` |
+| Gate dangerous tools | `PreToolUse` / `Bash` | `{"type":"command","command":"bash validate-bash.sh"}` | checks `tool_input.command`, `permissionDecision:"deny"` if dangerous |
+| Block stop until task complete | `Stop` / none | `{"type":"command","command":"node check-task.mjs"}` | `decision:"block"`+`reason` while incomplete |
+| Log all tool calls | `PostToolUse` / none | `{"type":"command","command":"node logger.mjs","async":true}` | fire-and-forget, no output needed |
+| Inject project context on SS | `SessionStart` / none | `{"type":"command","command":"bash session-init.sh"}` | returns `AC` with project state |
 
 ## 13. Hook Type Selection
 
-| Need | Type | Why |
-|------|------|-----|
-| allow/block policy gate | `prompt` | inline LLM evaluates, allow or block+reason (no context injection) |
-| LLM-agent condition gate | `agent` | same gate semantics as `prompt`; experimental |
-| deterministic ops | `command` | reliable, fast |
-| file system tasks | `command` | direct access |
-| external tool integration | `command` | system calls |
-| performance-critical | `command` | lower latency |
-| external API/webhook | `http` | no subprocess, direct HTTP POST |
-| remote delegation | `http` | offload to external svc |
-| reuse a configured MCP tool | `mcp_tool` | awaits MCP tool, parses result as command JSON (gate or inject) |
-
-> DEF: command for deterministic/performance-critical; prompt/agent only when an allow/block gate needs LLM judgment.
+> DEF to `command` for deterministic/file/system/performance-critical work; use `http` for external API/webhook/remote delegation; `mcp_tool` to reuse an already-configured MCP tool as gate/injector; `prompt`/`agent` ONLY when an allow/block gate needs LLM judgment (full type table: `## 3. Hook Types`).
 > Lifecycle: hooks load at session start. Config changes require `/clear` or new session.
 
 ## 14. Workflow
 
-1. Clarify: which event? what behavior? bash or JS? where to configure?
-2. Design: select event, matcher, output schema, routing channel
-3. Implement: use template, add logic, handle errors
-4. Configure: add to appropriate settings/hooks.json
-5. Test: run with `CLAUDE_DEBUG=1`, check verbose (Ctrl+O). Isolate hook bugs: `claude --safe-mode` / `CLAUDE_CODE_SAFE_MODE=1` starts CC with ALL customizations off (CLAUDE.md, plugins, skills, hooks, MCP) to confirm hook is cause (v2.1.169+)
-6. Validate: run checklist
+1. Clarify+Design: event, behavior, bash/JS, matcher, output schema, routing channel, config location
+2. Implement: use template, add logic, handle errors; configure in settings/hooks.json
+3. Test: `CLAUDE_DEBUG=1`, check verbose (Ctrl+O). Isolate bugs: `claude --safe-mode`/`CLAUDE_CODE_SAFE_MODE=1` disables ALL customizations (CLAUDE.md, plugins, skills, hooks, MCP) to confirm hook is cause (v2.1.169+)
+4. Validate: run checklist below
 
 ## 15. Validation Checklist
 
@@ -714,8 +560,13 @@ VERIFICATION:
 
 ## 17. Version History
 
+> Single merged table (event/feature additions + bug fixes) through 2.1.223. Facts marked "current" are confirmed-live but not version-pinpointed.
+
 | Ver | Event/Feature | Type |
 |-----|--------------|------|
+| 2.1.15 | fix: PTU `AC` delivery regression (introduced v2.1.12) | bug fix |
+| 2.1.20 | fix: SS hooks not working for new sessions | bug fix |
+| 2.1.37 | fix: plugin SS `AC` not delivered | bug fix |
 | 2.1.49 | `ConfigChange` | new event |
 | 2.1.50 | `WorktreeCreate`, `WorktreeRemove` | new events |
 | 2.1.50 | `last_assistant_message` in Stop/SubagentStop stdin | new field |
@@ -742,7 +593,7 @@ VERIFICATION:
 | 2.1.85 | PTU can answer `AskUserQuestion` via `UI` | enhancement |
 | 2.1.86 | fix: plugin scripts "Permission denied" on macOS/Linux | bug fix |
 | 2.1.89 | `PermissionDenied` | new event |
-| 2.1.89 | PTU `"defer"` decision — headless pause/resume | new feature |
+| 2.1.89 | PTU `"defer"` decision -- headless pause/resume | new feature |
 | 2.1.89 | hook output >50K chars saved to disk (path+preview in context) | enhancement |
 | 2.1.89 | fix: PTU/POT `file_path` is now absolute (Write/Edit/Read) | bug fix |
 | 2.1.152 | `MD` | new event |
@@ -750,6 +601,18 @@ VERIFICATION:
 | 2.1.163 | Stop/SubagentStop can return `hookSpecificOutput.AC` (feedback, keep turn going) | enhancement |
 | 2.1.169 | `--safe-mode`/`CLAUDE_CODE_SAFE_MODE`, `disableBundledSkills`/`CLAUDE_CODE_DISABLE_BUNDLED_SKILLS` | new flags |
 | 2.1.169 | self-hosted runner post-session lifecycle hook (runner-only, NOT hooks.json) | new feature |
+| 2.1.191 | fix: comma- and pipe-separated matcher lists now equivalent | bug fix |
+| 2.1.195 | fix: hyphenated matcher identifiers exact-match (was accidental substring match) | bug fix |
+| 2.1.199 | fix: SS/Setup/SubagentStart stderr no longer silently hidden on exit 2 | bug fix |
+| 2.1.199 | `CLAUDE_EFFORT`, `CLAUDE_CODE_BRIDGE_SESSION_ID` | new env vars |
+| 2.1.207 | `${user_config.*}` rejected in shell-form `command`/monitors/`headersHelper` (shell-injection fix) | BREAKING |
+| 2.1.214 | single-segment `dir/**` `if:` glob now matches only `<cwd>/dir` (use `**/dir/**` for any-depth) | BREAKING |
+| 2.1.218 | agent/skill-frontmatter hooks require workspace-trust dialog before running | new gate |
+| 2.1.219 | `DirectoryAdded` (fires after `/add-dir`) | new event |
+| current | `mcp_tool` hook type (5 types total: command/http/mcp_tool/prompt/agent) | new type |
+| current | `async`, `asyncRewake`, `shell` command-hook fields | new fields |
+| current | `disableAllHooks`, `allowedHttpHookUrls`, `allowManagedHooksOnly` managed settings keys | new settings |
+| current | Managed/enterprise confirmed HIGHEST precedence (not lowest) | clarification |
 
 ## Sources
 

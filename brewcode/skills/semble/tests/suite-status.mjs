@@ -104,7 +104,7 @@ symlinkSync(process.execPath, join(BIN, 'node'));
 writeFileSync(join(BIN, 'claude'), `#!/usr/bin/env bash
 printf 'claude %s\\n' "$*" >> "${CLAUDE_LOG}"
 case "\${1:-}" in
-  --version) echo "2.1.220 (Claude Code)" ;;
+  --version) echo "2.1.223 (Claude Code)" ;;
   *) echo "stub claude: unsupported invocation: $*" >&2; exit 1 ;;
 esac
 `);
@@ -319,7 +319,7 @@ function clearState() {
   check('14-brew-present', j.prereq.brew.present, false, 'brew must be absent under the narrowed test PATH');
   check('14-node-present', j.prereq.node.present, true, 'node must be present (symlinked into the stub bin)');
   check('14-claude-present', j.prereq.claude.present, true, 'the claude stub must be detected');
-  check('14-claude-version', j.prereq.claude.version, '2.1.220', 'claude version must come from `claude --version`');
+  check('14-claude-version', j.prereq.claude.version, '2.1.223', 'claude version must come from `claude --version`');
   check('15-semble-source', j.prereq.semble.source, 'uvx-ephemeral',
     'an empty `uv tool list` must report source=uvx-ephemeral');
   check('15-semble', j.prereq.semble,

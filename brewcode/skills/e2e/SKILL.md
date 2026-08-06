@@ -4,7 +4,7 @@ description: "Orchestrates e2e testing: BDD scenarios, Playwright autotests. Tri
 user-invocable: true
 disable-model-invocation: true
 argument-hint: "[setup|create|update|review|rules|status] [prompt]"
-allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion, Skill, WebSearch, WebFetch]
+allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion, Skill, WebSearch, WebFetch]
 model: opus
 ---
 

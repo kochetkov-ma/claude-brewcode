@@ -4,7 +4,7 @@ description: "Lists, improves, creates, syncs Claude Code skills. Triggers: crea
 user-invocable: true
 disable-model-invocation: true
 argument-hint: "<free-form prompt: what to do with skills>"
-allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Task, WebSearch, WebFetch, AskUserQuestion, Skill]
+allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Agent, WebSearch, WebFetch, AskUserQuestion, Skill]
 model: opus
 ---
 

@@ -4,7 +4,7 @@ description: "Creates and manages dynamic teams of domain agents. Triggers: crea
 user-invocable: true
 disable-model-invocation: true
 argument-hint: "[create [name] [prompt]|update [name]|status [name]|cleanup [name]]"
-allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion, Skill]
+allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion, Skill]
 model: opus
 ---
 

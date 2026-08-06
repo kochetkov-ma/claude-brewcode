@@ -3,7 +3,7 @@ name: brewtools:text-optimize
 description: Optimizes text/docs for LLM token efficiency. Triggers - optimize, reduce tokens, compress, deep compress.
 argument-hint: "[-l|-s|-d|-x|--max] [file|folder|path1,path2] — -l light, -s standard (30-50%), -d deep (LLM-only), -x|--max max (LLM-only, atomic fact-lines, 2-round verify), no flag = medium or auto-detect"
 user-invocable: true
-allowed-tools: [Read, Write, Edit, Grep, Glob, Task, AskUserQuestion]
+allowed-tools: [Read, Write, Edit, Grep, Glob, Agent, AskUserQuestion]
 ---
 
 # Text & File Optimizer

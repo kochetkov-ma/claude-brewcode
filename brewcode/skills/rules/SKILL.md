@@ -4,7 +4,7 @@ description: "Syncs KNOWLEDGE.jsonl or session learnings to project rules. Trigg
 user-invocable: true
 disable-model-invocation: true
 argument-hint: "<free-form prompt: what to do with rules>"
-allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion, Skill]
+allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion, Skill]
 model: sonnet
 ---
 

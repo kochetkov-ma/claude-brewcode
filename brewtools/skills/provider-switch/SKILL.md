@@ -2,7 +2,7 @@
 name: brewtools:provider-switch
 description: "Configure alt API providers: DeepSeek, Z.ai/GLM, Qwen, MiniMax, OpenRouter. Triggers: switch provider, openrouter."
 argument-hint: "[status|setup|verify|model-check|help|<provider-name>] — no args = interactive status check"
-allowed-tools: Read, Write, Edit, Bash, Task, AskUserQuestion, Glob, Grep
+allowed-tools: Read, Write, Edit, Bash, Agent, AskUserQuestion, Glob, Grep
 model: opus
 user-invocable: true
 disable-model-invocation: true

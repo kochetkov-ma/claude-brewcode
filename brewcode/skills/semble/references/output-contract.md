@@ -107,7 +107,7 @@ mode: status  (reason: default)
 scope: user
 
 ## Before
-cli:      uv absent | uvx absent | semble pin 0.5.2 (uvx-ephemeral) | claude 2.1.220
+cli:      uv absent | uvx absent | semble pin 0.5.2 (uvx-ephemeral) | claude 2.1.223
 mcp:      absent @ user  [unknown]
 cache:    /Users/me/Library/Caches/semble-code | repo — | 0 B | absent | docs root reserved: no
 guidance: rule absent | CLAUDE.md absent | hooks 0/4 wired | permissions no

@@ -2,7 +2,7 @@
 name: brewtools:task-board-init
 description: "Generator: deploys a file-based Kanban into any repo via multi-agent analysis, plus an optional gated CLAUDE.md-optimization pass. Triggers: init task board, scaffold kanban, task tracker, канбан-доска."
 argument-hint: "[target repo path | empty = cwd] [free-text directive, e.g. 'also dedupe rules', 'skip module split']"
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Task, AskUserQuestion
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Agent, AskUserQuestion
 model: opus
 meta:
   phases: [P0, P1, P2, P3, P4, P5, P5.5]

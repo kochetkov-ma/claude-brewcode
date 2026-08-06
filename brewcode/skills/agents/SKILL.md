@@ -4,7 +4,7 @@ description: "Creates, improves, syncs Claude Code subagents. Triggers: create a
 user-invocable: true
 disable-model-invocation: true
 argument-hint: "<free-form prompt: what to do with agents>"
-allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion, Skill]
+allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion, Skill]
 model: opus
 ---
 

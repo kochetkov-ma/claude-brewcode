@@ -2,7 +2,7 @@
 name: brewtools:deploy
 description: "GitHub Actions deployment: workflows, releases, GHCR, CI/CD with safety gates. Triggers: deploy, release, workflow."
 argument-hint: "<prompt describing what to do>"
-allowed-tools: Read, Write, Edit, Bash, Task, AskUserQuestion, Glob, Grep
+allowed-tools: Read, Write, Edit, Bash, Agent, AskUserQuestion, Glob, Grep
 model: opus
 user-invocable: true
 ---

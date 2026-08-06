@@ -3,7 +3,7 @@ name: brewtools:text-human
 description: "Humanizes code, docs, articles, reddit/chat, javadoc -- strips AI artifacts, fixes unicode, fits register. Triggers: humanize, ai artifacts, unicode fix, article, reddit, javadoc."
 argument-hint: "[path|commit|folder|text] [custom instructions]"
 user-invocable: true
-allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Task, AskUserQuestion]
+allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Agent, AskUserQuestion]
 ---
 
 # Text Humanizer

@@ -2,7 +2,7 @@
 name: brewtools:secrets-scan
 description: Scans git-tracked files for leaked secrets. Triggers - secrets scan, find credentials, leaked keys, security audit.
 user-invocable: true
-allowed-tools: [Read, Task, Write, Bash, AskUserQuestion]
+allowed-tools: [Read, Agent, Write, Bash, AskUserQuestion]
 argument-hint: "[--fix] — no args = scan only, --fix = interactive remediation"
 model: sonnet
 ---

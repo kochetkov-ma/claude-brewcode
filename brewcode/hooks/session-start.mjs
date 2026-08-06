@@ -218,7 +218,7 @@ async function main() {
     session_id = input.session_id;
     cwd = input.cwd || cwd;
     const source = input.source;
-    // permission_mode: DOC-VERIFIED common field (2.1.195). Presence-guarded use below.
+    // permission_mode: DOC-VERIFIED common field (2.1.223). Presence-guarded use below.
     const permMode = input.permission_mode;
 
     log('info', '[session-start]', `Started: ${session_id?.slice(0, 8) || 'unknown'} (${source}${permMode ? ', ' + permMode : ''})`, cwd, session_id);

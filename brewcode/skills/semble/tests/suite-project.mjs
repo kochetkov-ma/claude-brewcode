@@ -143,7 +143,7 @@ function installClaudeStub() {
   const body = `#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "${CLAUDE_LOG}"
 CJ="${HOME}/.claude.json"
-if [ "$1" = "--version" ]; then echo "2.1.220 (Claude Code)"; exit 0; fi
+if [ "$1" = "--version" ]; then echo "2.1.223 (Claude Code)"; exit 0; fi
 if [ "$1" = "mcp" ]; then
   case "$2" in
     add|add-json)
