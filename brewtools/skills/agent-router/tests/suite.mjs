@@ -850,6 +850,75 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// 34 - the four intent experts, spawned directly on their own intent's task,
+//      are never flagged - a redirect target can never be a redirect victim
+// GIVEN: subagent_type is the very expert an intent rule would have named
+// WHEN: the hook runs with matching intent text
+// THEN: stdout empty - neverFlag pre-seeded with the built-in intent experts
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const cases = [
+    ['34-self-exempt-skill', 'brewcode:skill-creator', INTENT_SKILL],
+    ['34-self-exempt-agent', 'brewcode:agent-creator', INTENT_AGENT],
+    ['34-self-exempt-hook', 'brewcode:hook-creator', INTENT_HOOK],
+    ['34-self-exempt-bash', 'brewcode:bash-expert', INTENT_BASH],
+  ];
+  for (const [name, type, text] of cases) {
+    const { proj, env } = newRoot(name);
+    standardRoster(proj);
+    const r = run(payload({ cwd: proj, type, description: text }), env);
+    check(name, r.stdout, '', `${type} on its own intent task must allow silently`);
+    check(`${name}-exit`, r.status, 0, 'hook must exit 0');
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 35 - a CUSTOM intents entry's expert is auto-exempt without being listed in
+//      neverFlag explicitly
+// GIVEN: intents [{ match: /widget/, expert: "my-db-guru" }], no neverFlag key
+// WHEN: subagent_type "my-db-guru" is spawned on a matching task
+// THEN: stdout empty - normalizeConfig() unions neverFlag with intents[].expert
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const { proj, env } = newRoot('t35');
+  standardRoster(proj);
+  writeConfig(proj, {
+    enabled: true,
+    intents: [{ match: '\\bwidget\\b', expert: 'my-db-guru', label: 'db work' }],
+  });
+  const r = run(
+    payload({ cwd: proj, type: 'my-db-guru', description: 'Rebuild the widget renderer' }),
+    env,
+  );
+  check('35-custom-intent-expert-self-exempt', r.stdout, '', 'a custom intent expert is auto-exempt');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 36 - regression guard: the self-exemption must not weaken normal routing
+// GIVEN: the same custom-intents config as 35
+// WHEN: general-purpose is spawned on the same matching task
+// THEN: deny naming my-db-guru - the exemption only protects the expert itself
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const { proj, env } = newRoot('t36');
+  standardRoster(proj);
+  writeConfig(proj, {
+    enabled: true,
+    intents: [{ match: '\\bwidget\\b', expert: 'my-db-guru', label: 'db work' }],
+  });
+  const r = run(
+    payload({ cwd: proj, description: 'Rebuild the widget renderer' }),
+    env,
+  );
+  check(
+    '36-generic-still-denied',
+    safeParse(r.stdout),
+    denyOut(intentPluginDeny('db work', 'my-db-guru', 'general-purpose')),
+    'general-purpose on a skill/intent task must still be denied',
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Cleanup
 // ─────────────────────────────────────────────────────────────────────────────
 try {

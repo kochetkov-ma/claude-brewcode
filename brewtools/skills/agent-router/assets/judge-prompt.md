@@ -3,8 +3,9 @@ Purpose: the project routes implementation/review work to a domain expert - a pr
 
 You are judging one Agent tool call. Hook input: $ARGUMENTS
 
-Step 1 - fast exit, NO tools, answer immediately. Do not read any file, do not think this over. Return `{"ok": true}` at once if EITHER holds:
+Step 1 - fast exit, NO tools, answer immediately. Do not read any file, do not think this over. Return `{"ok": true}` at once if ANY holds:
 - `tool_input.subagent_type` is not exactly one of the generic types: "general-purpose", "worker". Everything else is already an expert pick and is never flagged - Explore, Plan, statusline-setup, every `brewcode:*` / `brewtools:*` plugin agent, and every one of this project's own `.claude/agents/*.md` agents.
+- `tool_input.subagent_type` is one of the intent experts this very router redirects to - `brewcode:skill-creator`, `brewcode:agent-creator`, `brewcode:hook-creator`, `brewcode:bash-expert` - or anything else listed in the config's `neverFlag`. A redirect target can never itself be flagged.
 - `agent_id` is present in the hook input. That means a subagent issued this call; only the main loop is policed.
 Only when the pick IS generic AND `agent_id` is absent do you continue to Step 2. This is the common case for cost: most spawns must cost you zero tool calls.
 

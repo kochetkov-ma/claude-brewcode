@@ -33,7 +33,7 @@ It allows as early as it can:
 
 Intent routes (step 6): skill authoring -> `brewcode:skill-creator`, agent authoring -> `brewcode:agent-creator`, hooks -> `brewcode:hook-creator`, bash/sh scripts -> `brewcode:bash-expert`. **A project agent covering the same intent outranks the plugin specialist.**
 
-`neverFlag` holds four entries by default — `Explore`, `Plan`, `statusline-setup`, `output-style-setup`. `Explore` is the right tool for search, `Plan` for planning.
+`neverFlag` holds eight entries by default — `Explore`, `Plan`, `statusline-setup`, `output-style-setup`, plus the four intent experts (`brewcode:agent-creator`, `brewcode:skill-creator`, `brewcode:hook-creator`, `brewcode:bash-expert`). `Explore` is the right tool for search, `Plan` for planning, and an intent's own redirect target can never be flagged by the router that redirects to it — a custom `intents` table exempts its own experts too, auto-unioned into `neverFlag` at load time.
 
 **"The project" = the nearest ancestor of `cwd` that has a `.claude` directory** (up to 16 levels up), not `cwd` itself — `claude` started in a subdirectory still resolves the repo root. Config and roster are both read from there, fresh on every call.
 
@@ -98,7 +98,7 @@ The tier-2 judge prompt is **inlined into `settings.json`**, not copied — re-r
   "enabled": true,
   "level": "fast",
   "genericTypes": ["general-purpose", "worker"],
-  "neverFlag": ["Explore", "Plan", "statusline-setup", "output-style-setup"],
+  "neverFlag": ["Explore", "Plan", "statusline-setup", "output-style-setup", "brewcode:agent-creator", "brewcode:skill-creator", "brewcode:hook-creator", "brewcode:bash-expert"],
   "minScore": 3,
   "margin": 2
 }
@@ -109,7 +109,7 @@ The tier-2 judge prompt is **inlined into `settings.json`**, not copied — re-r
 | `enabled` | only exactly `false` turns it off. Any other value — and no config file at all — means ON with these defaults. A config that exists but does not PARSE is different: the feature goes fully silent |
 | `level` | `fast` / `strict` — a record of what is wired, ignored by tier 1 itself. Editing it by hand does NOT add or remove the tier-2 entry; run `level strict` / `level fast` |
 | `genericTypes` | the types policed at all; anything else exits at step 5 |
-| `neverFlag` | never flagged whatever the task says; four entries by default |
+| `neverFlag` | never flagged whatever the task says; eight entries by default (four fixed + the four intent experts). Auto-unioned with every `intents[].expert` at load time — a custom `intents` table exempts its own experts without touching this key |
 | `minScore` | minimum roster score before a project agent can win |
 | `margin` | how far the winner must lead the runner-up; inside the margin it is a nudge, not a deny |
 | `intents` | optional override of the step-6 routes: `{ "match": "<regex>", "expert": "<agent type>", "label": "<label>" }`. **It REPLACES the built-in table wholesale — it does not merge.** Install never writes this key |

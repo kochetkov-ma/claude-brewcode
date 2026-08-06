@@ -2,7 +2,14 @@
 
 ---
 
-## v4.7.0 (2026-08-05)
+## v4.7.1 (2026-08-06)
+
+> Docs: [agent-router](https://doc-claude.brewcode.app/brewtools/skills/agent-router/)
+
+### brewtools
+
+#### Fixed
+- **agent-router:** an agent the router redirects TO can never be an agent the router flags. `neverFlag` now seeds with `brewcode:agent-creator`, `brewcode:skill-creator`, `brewcode:hook-creator`, `brewcode:bash-expert` — spawning one of them is by definition already the right expert. Made structural rather than a hardcoded list: `normalizeConfig` unions `neverFlag` with every `expert` in the effective `intents` table, so a custom `intents` entry exempts its own expert automatically. Tier-2 judge prompt short-circuits on the same set. The install runbook writes the full 8-entry list — a short list there would silently override the code default. 65 tests, all green
 
 > Docs: [agent-router](https://doc-claude.brewcode.app/brewtools/skills/agent-router/) | [agent-deadline](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline/) | [manager](https://doc-claude.brewcode.app/brewtools/skills/manager/) | [semble](https://doc-claude.brewcode.app/brewcode/skills/semble/)
 

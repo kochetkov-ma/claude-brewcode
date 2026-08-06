@@ -117,8 +117,14 @@ const DEFAULTS = {
   level: 'fast',
   genericTypes: ['general-purpose', 'worker'],
   // Explore is the right tool for search, Plan for planning - never flagged by
-  // roster scoring. Only an explicit intent rule may override that.
-  neverFlag: ['Explore', 'Plan', 'statusline-setup', 'output-style-setup'],
+  // roster scoring. Only an explicit intent rule may override that. The four
+  // intent experts are also here explicitly, and normalizeConfig() below unions
+  // this list with every configured intent's `expert` - a router redirect target
+  // can never itself be flagged, built-in or user-defined.
+  neverFlag: [
+    'Explore', 'Plan', 'statusline-setup', 'output-style-setup',
+    'brewcode:agent-creator', 'brewcode:skill-creator', 'brewcode:hook-creator', 'brewcode:bash-expert',
+  ],
   minScore: 3,
   margin: 2,
   intents: DEFAULT_INTENTS,
@@ -229,6 +235,9 @@ function normalizeConfig(raw) {
       (r) => r && typeof r === 'object' && nonEmpty(r.match) && nonEmpty(r.expert),
     );
   }
+  // An intent's redirect target is by definition already the right expert - it
+  // can never be something this hook itself flags, built-in table or user override.
+  cfg.neverFlag = [...new Set([...cfg.neverFlag, ...cfg.intents.map((r) => r.expert)])];
   return cfg;
 }
 

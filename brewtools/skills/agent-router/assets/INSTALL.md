@@ -103,7 +103,7 @@ picks.
   "enabled": true,
   "level": "fast",
   "genericTypes": ["general-purpose", "worker"],
-  "neverFlag": ["Explore", "Plan", "statusline-setup", "output-style-setup"],
+  "neverFlag": ["Explore", "Plan", "statusline-setup", "output-style-setup", "brewcode:agent-creator", "brewcode:skill-creator", "brewcode:hook-creator", "brewcode:bash-expert"],
   "minScore": 3,
   "margin": 2,
   "intents": [
@@ -117,7 +117,7 @@ picks.
 | `enabled` | only exactly `false` turns the hook off. Any other value — and a MISSING config file — leaves it ON with the defaults below. A config file that exists but does not PARSE is a different thing: the feature goes fully silent (see the limits above) |
 | `level` | `fast` (tier 1 only) or `strict` (tier 1 + the LLM judge). A RECORD of what is wired — editing it by hand does not add or remove the tier-2 settings.json entry; run the `LEVEL` section for that. Tier 1 itself ignores this key |
 | `genericTypes` | the types that are policed at all. Anything else exits at step 5 |
-| `neverFlag` | never flagged, whatever the task says. FOUR entries by default: `Explore`, `Plan`, `statusline-setup`, `output-style-setup` — `Explore` is the right tool for search, `Plan` for planning |
+| `neverFlag` | never flagged, whatever the task says. EIGHT entries by default: `Explore`, `Plan`, `statusline-setup`, `output-style-setup` — `Explore` is the right tool for search, `Plan` for planning — plus the four built-in intent experts (`brewcode:agent-creator`, `brewcode:skill-creator`, `brewcode:hook-creator`, `brewcode:bash-expert`), since a redirect target can never be flagged. `normalizeConfig()` also auto-unions this list with every configured `intents[].expert`, so a custom `intents` table exempts its own experts without editing `neverFlag` by hand |
 | `minScore` | minimum roster score (step 7) before a project agent can win |
 | `margin` | how far the winner must lead the runner-up; inside the margin it is a nudge, not a deny |
 | `intents` | OPTIONAL override of the step-6 routes; `{ "match": <regex source>, "expert": <agent type>, "label": <human label> }`. **Omit the key to keep the hook's built-in 4 routes** — see the warning below |
@@ -187,7 +187,7 @@ const has=k=>Object.prototype.hasOwnProperty.call(c,k);
 if(!has("enabled")) c.enabled=true;            // reinstall must NOT silently re-enable a disabled setup
 c.level=level;
 if(!has("genericTypes")) c.genericTypes=["general-purpose","worker"];   // hand-edited lists survive a reinstall
-if(!has("neverFlag")) c.neverFlag=["Explore","Plan","statusline-setup","output-style-setup"];
+if(!has("neverFlag")) c.neverFlag=["Explore","Plan","statusline-setup","output-style-setup","brewcode:agent-creator","brewcode:skill-creator","brewcode:hook-creator","brewcode:bash-expert"];
 if(!has("minScore")) c.minScore=3;
 if(!has("margin")) c.margin=2;
 fs.mkdirSync(p.dirname(f),{recursive:true});
@@ -510,11 +510,13 @@ fire "intent"    '{"session_id":"V2",'"$P"',"tool_name":"Agent","tool_input":{'"
 fire "replay"    '{"session_id":"V2",'"$P"',"tool_name":"Agent","tool_input":{'"$TI"'}}'
 # 5. Explore -> ALLOW (neverFlag)
 fire "explore"   '{"session_id":"V2",'"$P"',"tool_name":"Agent","tool_input":{"subagent_type":"Explore","description":"find code","prompt":"find the payment handler"}}'
-# 6. garbage stdin -> ALLOW, exit 0 (fail open)
+# 6. brewcode:agent-creator -> ALLOW (neverFlag, auto-exempt intent expert - it's the redirect target of check 3/4)
+fire "agent-creator" '{"session_id":"V2",'"$P"',"tool_name":"Agent","tool_input":{"subagent_type":"brewcode:agent-creator","description":"write an agent","prompt":"create a new agent definition under .claude/agents/"}}'
+# 7. garbage stdin -> ALLOW, exit 0 (fail open)
 fire "garbage"   'not json at all'
 ```
 
-Expected: 1, 2, 5 and 6 print NOTHING; 3 prints a `permissionDecision:"deny"`; 4
+Expected: 1, 2, 5, 6 and 7 print NOTHING; 3 prints a `permissionDecision:"deny"`; 4
 prints an `additionalContext` notice. Every line ends `exit=0` — the hook never
 exits non-zero. If 3 prints a notice instead of a deny, the tmp state root is not
 writable (see the limits).
