@@ -2,6 +2,17 @@
 
 ---
 
+## v4.8.1 (2026-08-07)
+
+> Docs: [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/)
+
+### brewcode
+
+#### Added
+- **`cli` / `version` frontmatter contract:** both keys documented as OPTIONAL-but-mandatory-in-their-case across `skill-creator` agent and the `skills` authoring skill (FM Reference, checklist, common mistakes, review-prompt checks 23-24). `cli` names the command(s) a skill owns when the invocation isn't spelled like the skill directory name (e.g. `fitness-nutrition` invoked as `fit`); a fixed denylist blocks claiming a generic command (`sh`, `bash`, `ls`, `curl`, `git`, ...) and `cli` must never be inferred from `allowed-tools`. `version` is a free-form, non-semver change signal: bump it whenever a skill's behaviour lives outside its own directory (a binary on PATH, a wrapper baked into an image, a remote service), since editing that behaviour leaves the directory byte-identical and any consumer watching the dir's content hash sees nothing. `updated:` is a human-facing date only and does not substitute. This closes the plugin-side half of the skill-staleness contract: a host orchestrator on the consuming side detects a skill's content change by hash and tells a running agent its cached copy is stale — it needs both keys authored correctly to do that
+
+---
+
 ## v4.8.0 (2026-08-06)
 
 > Docs: [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [agents](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [semble](https://doc-claude.brewcode.app/brewcode/skills/semble/) | [agent-router](https://doc-claude.brewcode.app/brewtools/skills/agent-router/) | [agent-deadline](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline/)

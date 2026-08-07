@@ -124,6 +124,8 @@ Use when: SK-coordinator + 2+ roles + CTX isolation needed + prompts are impl de
 ---
 name: my-skill                               # max 64 chars, lowercase-hyphens
 description: "Apply X guidelines for Y"     # ALWAYS quoted -- prevents YAML parse failure
+cli: fit                                     # OPT -- REQUIRED when the cmd != the SK name
+version: "3"                                 # OPT -- REQUIRED when behaviour lives outside this dir
 ---
 
 # Skill Name
@@ -134,6 +136,9 @@ One paragraph purpose.
 ## Instructions
 Imperative form: "Do X" (not "You should do X").
 ```
+
+> `cli` + `version` are OPT -- OMIT both unless their case applies, but DECIDE on both every
+> time. Rules + mandatory denylist: FM Reference -> Ownership + Change Signal.
 
 # FM Reference
 
@@ -146,6 +151,44 @@ Imperative form: "Do X" (not "You should do X").
 
 > !=`description:` without quotes -- em dashes (`--`), colons (`:`), special chars break YAML parsing silently. SK exists on disk but skills.sh fails to parse.
 > ALWAYS: `description: "Your description text here"`
+
+## Ownership + Change Signal -- `cli`, `version` (OPT keys, MANDATORY in their case)
+
+Both keys are OPTIONAL and both have a case where OMITTING them is a BUG. Decide on both
+for every SK you write -- do not skip this section because the keys are optional.
+
+| Field | Type | Rule |
+|-------|------|------|
+| `cli` | string \| list of strings; each token matches `/^[\w.-]{1,42}$/` | Names the cmd(s) the SK OWNS, for the case where the cmd is NOT spelled like the SK dir name. Absent means "the cmd equals the SK name" |
+| `version` | free-form short string | ONLY contract: changing the value changes the SK dir's content hash. Nothing interprets it, nothing compares it |
+
+### `cli` -- declare a cmd that is not spelled like the SK
+
+**Denylist -- a SK may NOT claim a generic cmd. Verbatim:**
+
+```
+sh bash zsh ls cat stat mv rm cp mkdir df du curl wget python python3 node npm git echo grep sed awk find head tail chmod chown
+```
+
+Claim one of these and any tooling that keys off these tokens sweeps unrelated history.
+
+> !=infer `cli` from `AT` -- WRONG SOURCE. A publishing SK legitimately declares
+> `Bash(curl:*), Bash(ls:*), Bash(cat:*)` while owning NONE of those cmds.
+
+| SK name | Invoked as | FM |
+|---------|-----------|-----|
+| `budget` | `budget` | omit `cli` -- name already matches |
+| `fitness-nutrition` | `fit` | `cli: fit` -- MUST declare |
+
+### `version` -- bump when behaviour lives OUTSIDE the SK dir
+
+NOT semver. No ordering. Decreasing is as valid as increasing. !=build comparison logic on it.
+
+**MANDATORY case:** a SK whose behaviour lives outside its own dir -- a binary on PATH, a
+wrapper shipped in an image, a remote service -- keeps a byte-identical dir when that
+behaviour is edited, so every consumer watching the dir sees NOTHING. Bump `version:` then.
+
+`updated:` is a human-facing date with no mechanical role and is NOT a substitute. The two coexist.
 
 ## Invocation Control
 
@@ -195,6 +238,8 @@ Auto-ACT = 20-50% reliable. For CRIT ops, `/name` = only guarantee.
 | `metadata` | Free-form key/value block for registries/tooling |
 | `license` | SPDX license identifier |
 | `compatibility` | Declares compatible CC/platform version range |
+| `cli` | Cmd(s) the SK owns when the cmd is not spelled like the SK name -- **see Ownership + Change Signal, denylist is mandatory** |
+| `version` | Content-hash change signal; **bump it when the SK's behaviour lives outside its own dir -- see Ownership + Change Signal** |
 
 # CTX Modes
 
@@ -547,6 +592,8 @@ bash "${CLAUDE_PLUGIN_ROOT}/skills/skills/scripts/validate-skill.sh" path/to/ski
 | Structure | SKILL.md with valid YAML FM |
 | `name` | <=64 chars, lowercase-hyphens |
 | `description` | Per FM Reference caps, third-person, what+when + 3-5 distinct triggers, no filler |
+| `cli` | Decided, not skipped. Cmd != SK name -> `cli:` declared, tokens match `/^[\w.-]{1,42}$/`, NONE from the denylist. !=copied from `AT` |
+| `version` | Decided, not skipped. Behaviour lives outside the SK dir (binary on PATH, wrapper in an image, remote svc) -> `version:` present AND bumped on this change. `updated:` != substitute |
 | Body | <500 lines, imperative form |
 | `context` | `fork` if standalone |
 | `agent` | Appropriate type |
@@ -654,6 +701,10 @@ the common script once in `scripts/` and REF it from SKILL.md.
 | `context: fork` with 5+ phases | Memory loss -- use inline + external state |
 | Reserved SK names (`anthropic`, `claude`) | SK won't load -- avoid these two reserved words |
 | DESC over spec/listing caps | May be truncated -- front-load keywords, cut filler |
+| Cmd differs from SK name, no `cli:` | Declare `cli: <cmd>` -- absent means "cmd == SK name" |
+| `cli:` inferred from `AT` / claims a denylisted cmd | List only cmds the SK OWNS; never a generic one (`sh`, `ls`, `curl`, `git`, ...) |
+| Behaviour changed outside the SK dir, `version:` untouched | Bump `version:` -- the dir stays byte-identical otherwise and consumers see nothing |
+| Treating `version:` as semver / comparing it | Free-form string, no ordering; only the hash change matters |
 
 ## ACT Mistakes (cause 20% rate)
 

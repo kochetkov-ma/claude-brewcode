@@ -156,6 +156,29 @@ e2e-template.md, summary-template.md.
 
 Frontmatter `description`: <= 120 chars (optimal ~100), single line. What + when + 3-5 distinct triggers (comma-list). No filler, no `<example>` blocks. Some registries truncate long descriptions and dilute trigger matching. EN only unless user explicitly asks.
 
+### Optional frontmatter that is MANDATORY in its case -- `cli`, `version`
+
+Decide on BOTH for every skill created or improved. Optional does not mean skippable.
+
+| Field | Type | Rule |
+|-------|------|------|
+| `cli` | string \| list of strings; each token matches `/^[\w.-]{1,42}$/` | Names the command(s) the skill OWNS when the command is not spelled like the skill directory name. Absent means "the command equals the skill name" |
+| `version` | free-form short string | Only contract: changing the value changes the skill directory's content hash. Nothing interprets it, nothing compares it |
+
+`cli` denylist -- a skill may NOT claim a generic command. Verbatim:
+
+```
+sh bash zsh ls cat stat mv rm cp mkdir df du curl wget python python3 node npm git echo grep sed awk find head tail chmod chown
+```
+
+Claim one and any tooling keyed off these tokens sweeps unrelated history.
+
+> Never infer `cli` from `allowed-tools` -- WRONG SOURCE. A publishing skill legitimately declares `Bash(curl:*), Bash(ls:*), Bash(cat:*)` while owning none of those commands.
+
+Examples: a skill named `budget` invoked as `budget` omits the key; a skill named `fitness-nutrition` invoked as `fit` MUST declare `cli: fit`.
+
+`version` is NOT semver -- no ordering, decreasing is as valid as increasing, build no comparison logic on it. MANDATORY when the skill's behaviour lives OUTSIDE its own directory (a binary on PATH, a wrapper shipped in an image, a remote service): editing that behaviour leaves the directory byte-identical, so consumers watching it see nothing. `updated:` is a human-facing date with no mechanical role and is NOT a substitute; the two coexist.
+
 ### Prerequisite (improve only): Resolve Target
 
 **EXECUTE** using Bash tool:
@@ -272,6 +295,10 @@ Task(subagent_type="brewcode:skill-creator", model="opus", prompt="
     reviewed, not guessed. Your report also feeds the Step 6 user-facing block.
   DONE:
     - SKILL.md valid frontmatter, description <= 120 chars single line
+    - `cli` + `version` DECIDED, not skipped: `cli:` declared whenever the command is not
+      spelled like the skill name (tokens /^[\w.-]{1,42}$/, none from the denylist, never
+      inferred from allowed-tools); `version:` present AND bumped whenever the skill's
+      behaviour lives outside its own directory
     - unit tests for scripts/ (Step 5.7), README.md (Step 5.8)
     - report back: files written | description line | validation output | open questions
 ")

@@ -34,6 +34,8 @@ Read the entire skill directory: SKILL.md, references/, scripts/, tests/, README
 | 20 | Progressive L3 | References act as L3: loaded on demand per phase, not eagerly |
 | 21 | Security: secrets | No hardcoded tokens, passwords, API keys, or credentials anywhere |
 | 22 | Security: injection | No unescaped user input in bash blocks, no `eval` on external data |
+| 23 | Frontmatter `cli` | Command not spelled like the skill name -> `cli:` declared (string or list, each token `/^[\w.-]{1,42}$/`). No token from the denylist: `sh bash zsh ls cat stat mv rm cp mkdir df du curl wget python python3 node npm git echo grep sed awk find head tail chmod chown`. Never inferred from `allowed-tools` |
+| 24 | Frontmatter `version` | Skill's behaviour lives outside its own directory (binary on PATH, wrapper in an image, remote service) -> `version:` present. Free-form string, not semver, no ordering. `updated:` is not a substitute |
 
 ---
 
