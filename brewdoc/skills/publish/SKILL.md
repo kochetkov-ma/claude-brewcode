@@ -1,9 +1,10 @@
 ---
 name: brewdoc:publish
 description: "Publish text/markdown/file/site to brewpage.app, returns URL. Triggers: publish, share link, brewpage, опубликуй."
-argument-hint: "<text|file_path|directory_path|zip_path> [--ttl N] [--entry filename]"
 user-invocable: true
-allowed-tools: Read, Bash, AskUserQuestion, Glob
+disable-model-invocation: true
+argument-hint: "<text|file_path|directory_path|zip_path> [--ttl N] [--entry filename]"
+allowed-tools: [Read, Bash, AskUserQuestion, Glob]
 model: haiku
 ---
 
@@ -98,9 +99,17 @@ LC_ALL=C tr -dc 'a-z0-9' < /dev/urandom | head -c6 2>/dev/null
 
 Resolution: `1`, `4`, or empty → no password | `2` → use generated random password | `3` or custom text → use as-is.
 
+> **MANDATORY substitution.** Every Bash block in Step 6 contains the literal placeholder `{password_header}`. Before running a block:
+> - password set → replace `{password_header}` with `-H "X-Password: <the resolved password>"`
+> - no password → delete the whole `  {password_header} \` line
+>
+> Never leave `{password_header}` literal in the command, and never report a password to the user unless you actually substituted it in the block you ran. Skipping this publishes the page UNPROTECTED while the output still says `Published:`.
+
 ### Step 6: Publish and Save Token (secure)
 
-> **SECURITY:** The ownerToken MUST NEVER appear in conversation output. Bash blocks handle curl + token parsing + history save atomically; LLM sees only the URL. Each block sets `PASS_H` first (empty when no password) and uses `"${PASS_H[@]}"` quoted.
+> **SECURITY:** The ownerToken MUST NEVER appear in conversation output. Bash blocks handle curl + token parsing + history save atomically; LLM sees only the URL. The failure branch prints no response body, so a token in an error payload never reaches the transcript.
+>
+> **`{password_header}` is a placeholder you substitute before running the block** — exactly like `{content}`, `{ns}`, `{days}`. There is no `$PASSWORD` shell variable; each Bash call is a fresh shell and nothing assigns it. See the substitution rule in Step 5.
 
 Each block below self-initializes `.claude/brewpage-history.md` if absent.
 
@@ -108,6 +117,7 @@ Each block below self-initializes `.claude/brewpage-history.md` if absent.
 
 **HTML/Markdown text** — **EXECUTE** using Bash tool:
 ```bash
+command -v jq >/dev/null || { echo "FAILED: jq required"; exit 1; }
 HISTORY_FILE=".claude/brewpage-history.md"
 if [ ! -f "$HISTORY_FILE" ]; then
   mkdir -p "$(dirname "$HISTORY_FILE")"
@@ -127,11 +137,9 @@ CONTENT=$(cat <<'BREWPAGE_EOF'
 BREWPAGE_EOF
 )
 PAYLOAD=$(jq -n --arg c "$CONTENT" '{content: $c}')
-PASS_H=()
-[ -n "$PASSWORD" ] && PASS_H=(-H "X-Password: $PASSWORD")
 RESPONSE=$(curl -s -X POST "https://brewpage.app/api/html?ns={ns}&ttl={days}&format=markdown" \
   -H "Content-Type: application/json" \
-  "${PASS_H[@]}" \
+  {password_header} \
   -d "$PAYLOAD")
 
 URL=$(echo "$RESPONSE" | jq -r '.link // empty')
@@ -141,12 +149,13 @@ if [ -n "$URL" ]; then
   [ -n "$TOKEN" ] && echo "| $(date '+%Y-%m-%d %H:%M') | [$URL]($URL) | \`$TOKEN\` | {ttl}d | html |" >> "$HISTORY_FILE"
   echo "OK $URL"
 else
-  echo "FAILED: $RESPONSE"
+  echo "FAILED: publish rejected (no .link in response)"
 fi
 ```
 
 **JSON** — **EXECUTE** using Bash tool:
 ```bash
+command -v jq >/dev/null || { echo "FAILED: jq required"; exit 1; }
 HISTORY_FILE=".claude/brewpage-history.md"
 if [ ! -f "$HISTORY_FILE" ]; then
   mkdir -p "$(dirname "$HISTORY_FILE")"
@@ -161,11 +170,9 @@ if [ ! -f "$HISTORY_FILE" ]; then
 HEADER
 fi
 
-PASS_H=()
-[ -n "$PASSWORD" ] && PASS_H=(-H "X-Password: $PASSWORD")
 RESPONSE=$(curl -s -X POST "https://brewpage.app/api/json?ns={ns}&ttl={days}" \
   -H "Content-Type: application/json" \
-  "${PASS_H[@]}" \
+  {password_header} \
   -d '{original_json}')
 
 URL=$(echo "$RESPONSE" | jq -r '.link // empty')
@@ -175,12 +182,13 @@ if [ -n "$URL" ]; then
   [ -n "$TOKEN" ] && echo "| $(date '+%Y-%m-%d %H:%M') | [$URL]($URL) | \`$TOKEN\` | {ttl}d | json |" >> "$HISTORY_FILE"
   echo "OK $URL"
 else
-  echo "FAILED: $RESPONSE"
+  echo "FAILED: publish rejected (no .link in response)"
 fi
 ```
 
 **File** — **EXECUTE** using Bash tool:
 ```bash
+command -v jq >/dev/null || { echo "FAILED: jq required"; exit 1; }
 HISTORY_FILE=".claude/brewpage-history.md"
 if [ ! -f "$HISTORY_FILE" ]; then
   mkdir -p "$(dirname "$HISTORY_FILE")"
@@ -195,10 +203,8 @@ if [ ! -f "$HISTORY_FILE" ]; then
 HEADER
 fi
 
-PASS_H=()
-[ -n "$PASSWORD" ] && PASS_H=(-H "X-Password: $PASSWORD")
 RESPONSE=$(curl -s -X POST "https://brewpage.app/api/files?ns={ns}&ttl={days}" \
-  "${PASS_H[@]}" \
+  {password_header} \
   -F "file=@/absolute/path/to/file")
 
 URL=$(echo "$RESPONSE" | jq -r '.link // empty')
@@ -208,12 +214,13 @@ if [ -n "$URL" ]; then
   [ -n "$TOKEN" ] && echo "| $(date '+%Y-%m-%d %H:%M') | [$URL]($URL) | \`$TOKEN\` | {ttl}d | file |" >> "$HISTORY_FILE"
   echo "OK $URL"
 else
-  echo "FAILED: $RESPONSE"
+  echo "FAILED: publish rejected (no .link in response)"
 fi
 ```
 
 **Site (directory)** — **EXECUTE** using Bash tool:
 ```bash
+command -v jq >/dev/null || { echo "FAILED: jq required"; exit 1; }
 HISTORY_FILE=".claude/brewpage-history.md"
 if [ ! -f "$HISTORY_FILE" ]; then
   mkdir -p "$(dirname "$HISTORY_FILE")"
@@ -229,13 +236,12 @@ if [ ! -f "$HISTORY_FILE" ]; then
 HEADER
 fi
 
-PASS_H=()
-[ -n "$PASSWORD" ] && PASS_H=(-H "X-Password: $PASSWORD")
+command -v zip >/dev/null || { echo "FAILED: zip required"; exit 1; }
 TMPZIP=$(mktemp /tmp/brewpage-site-XXXXXX.zip)
 (cd "{directory_path}" && zip -r "$TMPZIP" .)
 RESPONSE=$(curl -s -X POST "https://brewpage.app/api/sites?ns={ns}&ttl={days}&entry={entry}" \
   -H "User-Agent: ClaudeCode/1.0" \
-  "${PASS_H[@]}" \
+  {password_header} \
   -F "archive=@$TMPZIP")
 rm -f "$TMPZIP"
 
@@ -248,12 +254,13 @@ if [ -n "$URL" ]; then
   [ -n "$TOKEN" ] && echo "| $(date '+%Y-%m-%d %H:%M') | [$URL]($URL) | \`$TOKEN\` | {ttl}d | site ($FCOUNT files) |" >> "$HISTORY_FILE"
   echo "OK $URL | Files: $FCOUNT"
 else
-  echo "FAILED: $RESPONSE"
+  echo "FAILED: publish rejected (no .link in response)"
 fi
 ```
 
 **Site (ZIP file)** — **EXECUTE** using Bash tool:
 ```bash
+command -v jq >/dev/null || { echo "FAILED: jq required"; exit 1; }
 HISTORY_FILE=".claude/brewpage-history.md"
 if [ ! -f "$HISTORY_FILE" ]; then
   mkdir -p "$(dirname "$HISTORY_FILE")"
@@ -269,11 +276,9 @@ if [ ! -f "$HISTORY_FILE" ]; then
 HEADER
 fi
 
-PASS_H=()
-[ -n "$PASSWORD" ] && PASS_H=(-H "X-Password: $PASSWORD")
 RESPONSE=$(curl -s -X POST "https://brewpage.app/api/sites?ns={ns}&ttl={days}&entry={entry}" \
   -H "User-Agent: ClaudeCode/1.0" \
-  "${PASS_H[@]}" \
+  {password_header} \
   -F "archive=@{zip_file_path}")
 
 URL=$(echo "$RESPONSE" | jq -r '.link // empty')
@@ -285,7 +290,7 @@ if [ -n "$URL" ]; then
   [ -n "$TOKEN" ] && echo "| $(date '+%Y-%m-%d %H:%M') | [$URL]($URL) | \`$TOKEN\` | {ttl}d | site ($FCOUNT files) |" >> "$HISTORY_FILE"
   echo "OK $URL | Files: $FCOUNT"
 else
-  echo "FAILED: $RESPONSE"
+  echo "FAILED: publish rejected (no .link in response)"
 fi
 ```
 

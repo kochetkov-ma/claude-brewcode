@@ -4,20 +4,26 @@ Create, update, and improve E2E testing rules.
 
 ## L0: Prerequisite Check
 
-Check `.claude/agents/e2e-*.md` count. If <3 -> "Run `/brewcode:e2e setup` first." STOP.
+Check `.claude/agents/e2e-*.md` count. If <3 -> "Run `/brewcode:e2e install` first." STOP.
 Read `.claude/e2e/config.json`.
 
 ## L1: Load Current Rules
 
-1. Read base rules: `${CLAUDE_SKILL_DIR}/references/e2e-rules.md`
-2. Read project rules (if exists): `.claude/rules/e2e-conventions.md`
-3. Check freshness: compare lastSetup date from config with current date
-4. Present current state:
+1. Read the live rules: `{config.rulesPath}` (`.claude/e2e/e2e-rules.md`) — this is the file the
+   agents actually load; it is the one this mode updates
+2. Read base rules: `${CLAUDE_SKILL_DIR}/references/e2e-rules.md` (upstream reference, for diffing)
+3. Read the condensed export (if exists): `.claude/rules/e2e-conventions.md`
+4. Check freshness: compare lastSetup date from config with current date
+5. Present current state:
 
 | Source | Rules Count | Last Updated |
 |--------|-------------|-------------|
+| Live (`{config.rulesPath}`) | {N} | {date} |
 | Base (plugin) | {N} | {date} |
-| Project | {N or "none"} | {date or "N/A"} |
+| Conventions export | {N or "none"} | {date or "N/A"} |
+
+> `{config.rulesPath}` missing -> "Run `/brewcode:e2e install` first." STOP. Never fall back to the
+> plugin copy: the agents cannot read it.
 
 ## L2: Research + Analysis
 
@@ -28,13 +34,15 @@ Parallel, both spawned in ONE message. One agent = ONE research angle (external 
 project's code); a third angle means a third agent, never a bigger brief for one.
 
 ```
-1. Task(WebSearch, prompt="
+1. Task(subagent_type="general-purpose", prompt="
 GOAL: the project's E2E rules file is being refreshed; you supply its external half.
-ROLE: you own web research only. Read-only -- do NOT edit the rules file or any project file.
-SCOPE: search best practices for `{config.stack} E2E testing {PROMPT context}` -- 2-3 queries,
+ROLE: you own web research only, via the WebSearch tool. Read-only -- do NOT edit the rules file
+      or any project file.
+SCOPE: WebSearch best practices for `{config.stack} E2E testing {PROMPT context}` -- 2-3 queries,
        collect actionable rules. Out of bounds: this project's source and its existing rules.
-CONTEXT: L1 already loaded the base rules `${CLAUDE_SKILL_DIR}/references/e2e-rules.md` and the
-      project rules `.claude/rules/e2e-conventions.md`; their S/D/I/A/R/P categories are already
+CONTEXT: L1 already loaded the live rules `{config.rulesPath}` and the base rules
+      `${CLAUDE_SKILL_DIR}/references/e2e-rules.md` (paste the resolved absolute path -- a subagent
+      cannot expand that variable); their S/D/I/A/R/P categories are already
       covered -- skip anything they already state. A sibling agent mines this project's own
       patterns in parallel, so stay strictly on external sources.
 CONSUMER: L3 merges your rules into the rules file tagged `[WEB]`, then a reviewer checks them for
@@ -50,7 +58,8 @@ ROLE: you own analysis of this project's existing E2E code. Read-only -- do NOT 
 SCOPE: {config.testSourceDir} and {config.scenarioDir}; analyze project patterns -- look for
        recurring issues, anti-patterns, and conventions specific to this project.
        Out of bounds: web research (a sibling agent owns it), production code changes.
-CONTEXT: L1 already loaded base + project rules; report only what they do NOT already cover.
+CONTEXT: L1 already loaded the live rules `{config.rulesPath}` plus the base rules; report only
+      what they do NOT already cover.
       Stack {config.stack}, framework {config.testFramework}. Research focus this run: {PROMPT}.
 CONSUMER: L3 merges your rules into the rules file tagged `[PROJECT]`, then a reviewer validates
       them -- so each rule needs one concrete file:line in this repo as evidence.
@@ -99,14 +108,18 @@ Options:
 - "Select changes" -> AskUser per change
 - "Cancel"
 
-## L5: Export (Optional)
+## L5: Persist
 
-AskUserQuestion: "Export updated rules to project?"
+Accepted changes are written to `{config.rulesPath}` (`.claude/e2e/e2e-rules.md`) — always, not
+optionally: that file IS the rule set the agents load, so an unwritten merge changes nothing.
+
+Then AskUserQuestion: "Also refresh the condensed export?"
 Options:
 - "Update .claude/rules/e2e-conventions.md" -> write/update with key rules (~20-30 lines)
-- "Update base rules only" -> update e2e-rules.md in plugin (dev mode only)
-- "Both"
 - "Skip"
+
+> Never write back into the plugin's `references/e2e-rules.md`. It is the upstream baseline, it is
+> read-only for this skill, and a plugin update overwrites it.
 
 Update `config.json` lastSetup date.
 

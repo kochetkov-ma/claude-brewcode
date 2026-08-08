@@ -2,6 +2,112 @@
 
 ---
 
+## v5.0.0 (2026-08-08)
+
+> Docs: [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) | [superreview-setup](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [teams-setup](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [convention](https://doc-claude.brewcode.app/brewcode/skills/convention/) | [rules](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [task-board-setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [think-short-setup](https://doc-claude.brewcode.app/brewtools/skills/think-short-setup/) | [agent-deadline-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline-setup/) | [agent-router-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-router-setup/) | [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/) | [deploy](https://doc-claude.brewcode.app/brewtools/skills/deploy/) | [secrets-scan](https://doc-claude.brewcode.app/brewtools/skills/secrets-scan/) | [text-human](https://doc-claude.brewcode.app/brewtools/skills/text-human/) | [deploy-admin](https://doc-claude.brewcode.app/brewtools/agents/deploy-admin/) | [docsync-setup](https://doc-claude.brewcode.app/brewdoc/skills/docsync-setup/) | [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/) | [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/) | [my-claude](https://doc-claude.brewcode.app/brewdoc/skills/my-claude/) | [full-setup](https://doc-claude.brewcode.app/full-setup/) | [faq](https://doc-claude.brewcode.app/faq/)
+
+> **BREAKING.** Ten skills were renamed and one was deleted. There are no back-compat aliases — an old command name is simply not found. Migrate with the table below.
+
+> **This release also carries a review-and-fix pass over every skill, agent and script in the suite.** Several of the bugs it found were *silent* failures that shipped for multiple releases: a mechanism reported itself as working while doing nothing, or did something other than what it told you. If you have existing installs, three of them affect you directly and are called out under **Action required** below.
+
+### Action required for existing installs
+
+| If you have | Do this | Why |
+|-------------|---------|-----|
+| `manager-setup` installed in a project | `/brewtools:manager-setup upgrade` once, per project | The disarm command changed shape and now needs a `manager-state.mjs` helper copied into the project. `upgrade` backfills it and preserves `hard`/`level` exactly. Without it, disarming fails with `Cannot find module` |
+| `think-short-setup` installed alongside `agent-router-setup` or `agent-deadline-setup` | `/brewtools:think-short-setup upgrade` | think-short has been injecting **nothing** while its status block said `3/3 enabled`. See brewtools Fixed |
+| a page published with `/brewdoc:publish` and a password | treat it as public; delete and republish | The password header was never actually sent. See brewdoc Fixed |
+| a team created by `/brewcode:teams` or `teams-setup` | `/brewcode:teams-setup upgrade <name>` | Existing teams self-heal: the dead trace variable is repaired, so `trace.jsonl` starts recording and `upgrade` stops proposing to delete every agent as inactive |
+
+### Migration
+
+| Old | New |
+|-----|-----|
+| `/brewcode:teams` | `/brewcode:teams-setup` |
+| `/brewcode:semble` | `/brewcode:semble-setup` |
+| `/brewcode:superreview` | `/brewcode:superreview-setup` |
+| `/brewtools:task-board-init` | `/brewtools:task-board-setup` |
+| `/brewtools:think-short` | `/brewtools:think-short-setup` |
+| `/brewtools:agent-deadline` | `/brewtools:agent-deadline-setup` |
+| `/brewtools:agent-router` | `/brewtools:agent-router-setup` |
+| `/brewtools:manager` | `/brewtools:manager-setup` |
+| `/brewdoc:memory-sync-init` | `/brewdoc:memory-sync-setup` |
+| `/brewdoc:docsync` | `/brewdoc:docsync-setup` |
+| `/brewdoc:guide` | deleted — use [doc-claude.brewcode.app](https://doc-claude.brewcode.app/getting-started/) |
+| any `init` / `on` / `setup` / `create` argument | `install` |
+| any `off` argument | `disable` |
+| any `remove` / `cleanup` argument | `uninstall` (or `purge` to also drop config/state) |
+| any `reset` argument | `purge` then `install` |
+| any `update` argument | `upgrade` |
+| `/brewcode:e2e setup` | `/brewcode:e2e install` |
+| `/brewtools:provider-switch setup` | `/brewtools:provider-switch install` |
+
+### all plugins
+
+#### Changed
+- **The `-setup` suffix now means something.** A skill carries `-setup` when it **installs a mechanism** and you afterwards use what it produced — a generated skill, a hook, an MCP server — not the skill itself. Recurring tools you invoke every day (`text-optimize`, `publish`, `convention`, `rules`, `e2e`) keep bare names. Ten skills were renamed to match: directory, `name:` frontmatter and command string moved together, with no aliases left behind. This is deliberate: an alias would have kept the old vocabulary alive in muscle memory and in every LLM's prior, which is exactly what the rename exists to end
+- **One mode vocabulary across every setup skill,** in this exact order: `status | install | upgrade | enable | disable | uninstall | purge`. No argument means `status` when the mechanism is installed and `install` when it is not. One deliberate exception: `semble-setup` always defaults to `status`, because a bare invocation must never kick off a machine-level package install. Removed aliases: `init, on, off, setup, remove, reset, create, update, cleanup`. Skill-specific verbs survive but now come **after** the canonical set — `semble-setup`: `reindex`/`optimize`/`resume`; `agent-router-setup`: `level fast|strict`; `manager-setup`: `level strict|balanced` and `edit`; `docsync-setup`: `sync`/`reread`/`frontmatter`; `teams-setup` keeps its `[name]` positional
+- **Frontmatter is uniform across all 26 skills:** keys `name, description, user-invocable, disable-model-invocation, argument-hint, allowed-tools, model` in that order, `allowed-tools` always in bracket-list form, and `disable-model-invocation` always written out
+- **All 26 distributed skills are now `user-invocable: true` + `disable-model-invocation: true`, without exception.** They run only when you type `/plugin:skill`; the model never sees their descriptions and never auto-activates one. This is a deliberate design decision about context cost, not a side effect of the frontmatter normalization. A model-visible skill description is paid for in *every* request, forever, purely to stay discoverable — 26 of them is a permanent tax on the context window of every conversation you have. And these skills do not want auto-activation anyway: the ten `-setup` skills are interactive generators that write real files into your repo after asking you real questions, and the recurring tools are things you point at a scope you choose, at a moment you choose. The practical consequence is worth stating plainly: asking "can you sync my docs?" will not trigger `/brewdoc:docsync-setup`. Type the command; tab completion after `/` lists what is installed
+
+### brewcode
+
+#### Fixed
+- **`/brewcode:teams-setup purge` installed a team literally named "purge".** `purge` was not a recognized mode, and the unrecognized argument fell through to the `[name]` positional — so the destructive verb quietly ran an interactive install of a team called `purge`, complete with generated agents. `purge` is now implemented (it removes the team plus its archive, trace and state), and `enable`/`disable` are rejected with an error instead of falling through the same way: a team either exists on disk or it does not, there is no armed state to flip
+- **Generated team agents traced through a dead variable,** so `trace.jsonl` was always empty. Nothing consumed the trace except `upgrade`'s activity analysis, which read the empty file and concluded every agent in the team was inactive — then proposed deleting all of them. Fixed at the source; **existing teams self-heal on `/brewcode:teams-setup upgrade <name>`**
+- **`/brewcode:e2e`'s five generated agents were dead on arrival.** The generator read its agent definitions through a dead variable inside a STOP-if-missing check, so the read returned nothing and generation stopped — every generated agent was empty. Its config also persisted a `plugin://` path that resolves to nothing outside the generating session, so a config written on Monday was unusable on Tuesday. Rules now live at a real project path, `.claude/e2e/e2e-rules.md`
+- **`/brewcode:skills`' `list-skills.sh` was blind to every plugin skill** — it enumerated only project-local ones, so `status`, `list` and `review` all under-reported by the entire plugin surface. Separately, the skill carried two contradicting description-length limits (150-250 characters in one place, `<=120` in another); resolved to **`<=120`**
+- **`/brewcode:convention`'s `conventions` mode overwrote `.claude/rules/`** despite being documented, in the same file, as the mode that leaves rules alone. Anyone running it to refresh conventions lost hand-written rules. It now skips them, as documented
+- **`/brewcode:rules`' `create-specialized` wrote nothing on macOS.** It used bash 4 syntax against the bash 3.2 that ships with macOS; the failure was not surfaced, so the mode reported success and produced no files
+- **`skill-creator` agent advertised three built-in agents that do not exist** — `developer`, `tester`, `reviewer`. Generated skills therefore named subagents that could never be resolved, and the failure only appeared later, at the generated skill's first run. Removed; generated skills now name agents that exist
+- **`hook-creator` agent taught `matcher: "Task"` into downstream projects.** Every hook it generated for subagent events carried a matcher that does not match, so those hooks never fired in the projects it was used on
+
+#### Added
+- **`/brewcode:setup-status` — a read-only cross-plugin dashboard.** It reports which setup skills are installed, stale, partial or missing in the current project and prints the exact command to run for each. It never runs any of them, and that is the design: every setup is an interactive generator that spawns a fan of subagents, so firing several inside one session degrades all of them. Takes an optional plugin or skill filter; no argument gives the full report
+
+#### Changed
+- **`teams` -> `teams-setup`, `semble` -> `semble-setup`, `superreview` -> `superreview-setup`,** each with the canonical mode set. `semble-setup` is the sole no-arg-defaults-to-`status` skill in the suite
+- **`/brewcode:e2e setup` is now `/brewcode:e2e install`.** `e2e` keeps its bare name — it is a recurring tool, not an installer — but its one installer-shaped verb joins the shared vocabulary
+
+### brewtools
+
+#### Fixed
+- **`manager-setup`: the HARD wall could not be disarmed from the main session, and its one exemption was a code-execution hole.** Both halves are closed. The wall blocks `Write`/`Edit`/`Bash` in the main session, so the documented exit — itself a `Bash` call — was denied by the very thing it was meant to exit; the wall was a trap you could only leave by editing state files the wall also protected. The exit is now exactly one command shape, `node <ABS project root>/.claude/brewtools/manager/manager-state.mjs set hard=false`, and `install`/`upgrade` copy that helper into the project so it needs no path resolution. Separately, the old exemption matched loosely enough to execute arbitrary code: it is now granted only when the command starts with `node `, the FIRST argument after `node` is that exact helper path (a `manager-state.mjs` substring elsewhere does not count), and the remainder is the helper's own CLI — with no shell operator outside quotes, no `$` expansion, and no `node` eval flag (`-e`/`--eval`/`-p`/`--print`/`--input-type`/`--require`/`--import`/`--loader`). A `BT_ROOT=` prelude, an `&& echo` tail, a `|| echo` or a `test -f` each turn the exemption off. **Existing installs must run `/brewtools:manager-setup upgrade` once** to get the helper; it never calls `writeState`, so an armed wall stays armed and a disarmed one stays disarmed
+- **`manager-setup`: `ALWAYS_ALLOW` audited.** Plan-mode sessions were trapped — the tools a plan-mode session needs were not on the list, so the wall blocked the session's own workflow. Task-tracking tools were unreachable for the same reason, which is perverse in a mechanism whose whole point is delegation and tracking. Both classes are now allowed
+- **`think-short-setup` silently stopped injecting the moment any sibling hook registered on the same matcher.** Its yield check looked for a file that was deleted in v4.0.0; finding a *different* hook on the matcher, it deferred and emitted nothing. So every project that installed `agent-router-setup` or `agent-deadline-setup` has been running with think-short doing exactly nothing — while its own status block still reported `3/3 enabled`. That combination, a dead mechanism plus a status display that confirms it is alive, is the worst shape a bug can take, and it shipped for several releases. The yield check now tests for the condition that actually exists. Run `upgrade` on affected projects
+- **`deploy`'s release mode hardcoded this repo's private tooling.** The generic release path referenced scripts and paths that exist only in claude-brewcode, so it was unusable in any other project — the exact repos it is meant for. Removed. Three script-level aborts fixed alongside it
+- **`provider-switch`: the API key was passed as an argv value,** which puts it in the process table for every user on the machine and in shell history. It is no longer passed as an argument. `remove-key` left the key behind in `~/.zshrc.bak`, world-readable, so "removing" a key published it instead — the backup is now handled properly. `sed -i ''` (a macOS-only spelling) silently misbehaved on Linux and is fixed. `model-check` was unreachable code. `KEY_DEEPSEEK` added
+- **`secrets-scan` really filters the file list it claimed to have filtered.** The filter was documented and computed, then the unfiltered list was scanned
+- **`text-human`'s `mixed` flow loaded no rules at all** — it ran with an empty rule set and reported success
+- **`deploy-admin` agent shipped 5 unsubstituted `{{PLACEHOLDER}}` tokens** in live prose sections, not in template blocks, so the agent was instructing itself with literal placeholder text
+
+#### Changed
+- **`task-board-init` -> `task-board-setup`, `think-short` -> `think-short-setup`, `agent-deadline` -> `agent-deadline-setup`, `agent-router` -> `agent-router-setup`, `manager` -> `manager-setup`.** `manager-setup`'s HARD wall loses `on`/`off`/`reset` for `enable`/`disable`/`purge`; `level strict|balanced` and `edit` are unaffected. The `++m`/`++a`/`++rr`/`++r` codewords are hook-driven and independent of the skill name — they keep working untouched
+- **`/brewtools:provider-switch setup` is now `/brewtools:provider-switch install`.** The skill keeps its bare name: switching providers is something you do repeatedly, not once
+
+### brewdoc
+
+#### Fixed
+- **`/brewdoc:publish` published password-protected pages with no password.** Every curl block referenced `"${PASS_H[@]}"`, an array built from a `$PASSWORD` variable that was never assigned anywhere: the password was resolved interactively in conversation, and each Bash call is a fresh shell, so the header expanded to nothing. The page went out **unprotected** while the skill reported a password back to you — undetectable except by opening the link logged out. All five upload blocks now use a `{password_header}` placeholder that the model substitutes before running (restoring the convention the ancestor skill used), with a mandatory substitution rule at the end of the password step: substitute `-H "X-Password: <pass>"`, or delete the line, and never report a password you did not substitute. **Pages published protected by an earlier version are public** — delete them with their owner token and republish. Also added: `command -v jq` gates on every block (plus `command -v zip` on the site-directory path) so a missing tool aborts instead of half-publishing, and the failure branch no longer echoes the response body, which can contain an `ownerToken`
+- **`/brewdoc:my-claude` spawned an agent that does not exist.** Both the internal and the research mode validated their output by spawning `reviewer` — the step that guaranteed "no invented file names" — and no `reviewer` agent exists in any plugin, in the project, or in the built-in set. The validation step therefore never ran, on either path, which is precisely the step whose absence lets invented paths reach the final document. It now uses `Explore` for the read-only path-existence checks and `general-purpose` for the research-mode source re-check, which needs `WebFetch`/`WebSearch`. Separately, `${BD_PLUGIN_DATA}/my-claude/` was offered as an output directory in both `SKILL.md` and `README.md`; nothing has set that variable since v4.0.0, so a run taking that branch created and wrote into a literal directory named `${BD_PLUGIN_DATA}`. Project-relative `.claude/brewdoc/my-claude/` is now the only supported target
+
+#### Removed
+- **`/brewdoc:guide` deleted.** The interactive in-session tutorial was a worse copy of [doc-claude.brewcode.app](https://doc-claude.brewcode.app/getting-started/), and it kept drifting — v4.10.0 had to fix a killer-flow topic still teaching skills removed several releases earlier. The site is the single source now. Its pipeline dependency inside the repo-local `/docs` skill went with it: Phase 5.5 (Guide sync) and `references/guide-update.md` are gone
+
+#### Changed
+- **`memory-sync-init` -> `memory-sync-setup`, `docsync` -> `docsync-setup`,** both on the canonical mode set
+- **`docsync-setup` and `memory-sync-setup` were the last two skills the model could still reach for on its own.** Both rewrite project memory or install hooks, so being model-invocable was a real hazard, not just a context cost. They now match the rest of the suite (see the suite-wide entry under **all plugins**)
+
+### docs
+
+#### Changed
+- **Every doc surface follows the rename:** the root `README.md` and `CLAUDE.md`, all four plugin READMEs, the per-skill READMEs, the Astro pages under `web/docs/src/content/docs/**` and `navigation.ts`. Page URLs moved with the skills — `/brewtools/skills/task-board-init/` is now `/brewtools/skills/task-board-setup/`, and so on for all ten. The `-setup` naming rule and the canonical mode vocabulary are documented once, where the skill tables are introduced
+- **Counts corrected to the post-rename tree:** brewcode 9 skills / 5 agents / 2 hooks, brewdoc 5 / 0 / 0, brewtools 12 / 3 / 2, brewui 0. Suite total stays 26 skills and 8 agents — brewcode gained `setup-status`, brewdoc lost `guide`
+- **[Full Setup](https://doc-claude.brewcode.app/full-setup/) reconciled against the fix wave** and rewritten to answer *why* the setups are run by hand, one at a time: each asks real questions, spawns many subagents, and creates a lot of files, so each wants its own session. Every recommended command now carries a concrete prompt rather than a bare skill name. New sections cover the six `setup-status` verdicts and why `disabled` outranks `partial`/`stale`, `teams-setup`'s `purge` and its rejection of `enable`/`disable`, and how to get back out of the manager wall including the `upgrade` that existing installs need
+- **The user-invoked-only invariant is documented once and cross-linked** — a new [FAQ entry](https://doc-claude.brewcode.app/faq/#auto-invoke) explains the context-cost reasoning, with pointers from the root `README`, `CLAUDE.md`, the brewdoc surfaces and Full Setup
+
+---
+
 ## v4.10.1 (2026-08-08)
 
 > Docs: [memory-sync-init](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-init/)

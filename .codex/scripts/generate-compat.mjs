@@ -9,7 +9,7 @@ const REPO_ROOT = path.resolve(SCRIPT_DIR, '..', '..');
 
 const PLUGINS = {
   brewcode: {
-    skills: ['agents', 'convention', 'rules', 'superreview', 'teams'],
+    skills: ['agents', 'convention', 'rules', 'superreview-setup', 'teams-setup'],
     agents: ['agent-creator', 'bash-expert', 'hook-creator']
   },
   brewdoc: {
@@ -17,24 +17,24 @@ const PLUGINS = {
     agents: []
   },
   brewtools: {
-    skills: ['manager', 'task-board-init', 'text-human', 'text-optimize', 'think-short'],
+    skills: ['manager-setup', 'task-board-setup', 'text-human', 'text-optimize', 'think-short-setup'],
     agents: ['text-optimizer']
   }
 };
 
 const EXPLICIT_ONLY = new Set([
-  'brewcode/agents', 'brewcode/convention', 'brewcode/rules', 'brewcode/teams',
-  'brewtools/manager', 'brewtools/task-board-init', 'brewtools/think-short'
+  'brewcode/agents', 'brewcode/convention', 'brewcode/rules', 'brewcode/teams-setup',
+  'brewtools/manager-setup', 'brewtools/task-board-setup', 'brewtools/think-short-setup'
 ]);
 
 const MANUAL_NATIVE_SKILLS = new Set([
-  'brewcode/convention', 'brewcode/rules', 'brewtools/manager', 'brewtools/task-board-init',
-  'brewtools/think-short'
+  'brewcode/convention', 'brewcode/rules', 'brewtools/manager-setup', 'brewtools/task-board-setup',
+  'brewtools/think-short-setup'
 ]);
 
 // Etalon-first wording mirrored into the Codex variants. Sources of truth:
-// brewcode/skills/teams/references/agent-template.md and
-// brewtools/skills/manager/references/architect.md. Edit here only, never at the call sites.
+// brewcode/skills/teams-setup/references/agent-template.md and
+// brewtools/skills/manager-setup/references/architect.md. Edit here only, never at the call sites.
 const ETALON_ADDITIVE = 'in addition to conventions, rules, and documentation, never instead of them';
 const ETALON_SENTENCE = `before writing a class, module, or test, find the closest well-built existing one in this repository and take its principles, ${ETALON_ADDITIVE}`;
 const ETALON_BRIEF = `find the closest well-built counterpart in the repository and follow its principles, ${ETALON_ADDITIVE}`;
@@ -192,9 +192,9 @@ function skillDocument(name, description, body) {
 function effectiveDescription(plugin, skill, description) {
   return {
     'brewcode/rules': 'Maintains project .codex/rules and the AGENTS.md rule index. Explicit user invocation only.',
-    'brewtools/manager': 'Configures Manager and review prompt modes. Explicit user invocation only.',
-    'brewtools/task-board-init': 'Creates a Codex file-based task board. Explicit user invocation only.',
-    'brewtools/think-short': 'Installs or removes terse-mode hooks. Explicit user invocation only.'
+    'brewtools/manager-setup': 'Configures Manager and review prompt modes. Explicit user invocation only.',
+    'brewtools/task-board-setup': 'Creates a Codex file-based task board. Explicit user invocation only.',
+    'brewtools/think-short-setup': 'Installs or removes terse-mode hooks. Explicit user invocation only.'
   }[`${plugin}/${skill}`] || description;
 }
 
@@ -249,15 +249,12 @@ The index makes rules discoverable; it does not auto-load their bodies. During l
     'brewcode/skills': `# Codex skill authoring
 
 List, create, or improve Codex skills. A skill uses \`SKILL.md\` with only \`name\` and \`description\` frontmatter, optional \`agents/openai.yaml\`, and colocated scripts, references, or assets. Keep activation wording specific, run the Codex skill quick validator, and forward-test complex workflows without production side effects.`,
-    'brewcode/superreview': `# Project-tailored review
+    'brewcode/superreview-setup': `# Project-tailored review
 
 Inspect repository instructions, architecture, tests, and recent changes, then create a focused Codex review skill in the user-selected project \`.codex/skills/\` path. Encode evidence-based checks, severity guidance, and verification commands. Validate the generated skill and do not create Markdown agent definitions.`,
-    'brewcode/teams': `# Codex team coordination
+    'brewcode/teams-setup': `# Codex team coordination
 
 Use collaboration agents only when the user or project instructions explicitly request a team. Split work into bounded independent tasks, keep one owner per file or surface, exchange evidence through collaboration messages, and synthesize results in the parent session. Do not invent unsupported agent parameters or create persistent team configuration unless requested.`,
-    'brewdoc/guide': `# Brewcode Codex guide
-
-Explain the installed Brewcode, Brewdoc, and Brewtools Codex capabilities using the active plugin and skill listings. Recommend the smallest matching workflow, show native \`$plugin:skill\` invocation examples, and distinguish read-only checks from state-changing operations. Do not claim commands or settings that the installed Codex CLI does not expose.`,
     'brewdoc/md-to-pdf': `# Markdown to PDF
 
 Convert a local Markdown file with \`scripts/md_to_pdf.py\`. Check dependencies with \`scripts/check_deps.sh\`, choose a bundled style from \`styles/\`, and write only to the requested output path. Store project preferences in \`.codex/md-to-pdf.config.json\` only after confirmation. Render and inspect the result before reporting completion.`,
@@ -315,7 +312,7 @@ If the user requests real publishing, stop and explain that this package intenti
     'brewtools/deploy': `# Deployment workflow
 
 Inspect the repository's documented deployment target and existing CI before proposing changes. Pin dependencies, preserve safety gates, use mocks for smoke tests, and require explicit authorization for release, push, infrastructure mutation, or production traffic. Keep any Codex agent definitions as TOML under \`.codex/agents/\`.`,
-    'brewtools/manager': `# Ambient manager prompt mode
+    'brewtools/manager-setup': `# Ambient manager prompt mode
 
 This skill configures ambient prompt guidance only. It does not create, claim, or enforce a hard security wall.
 
@@ -385,7 +382,7 @@ Scan only files in scope with existing repository tools or a pinned scanner, and
     'brewtools/ssh': `# SSH administration
 
 Inspect connection targets and the requested operation before connecting. Default to read-only diagnostics, redact credentials, and require explicit confirmation for remote mutation, restart, deployment, firewall changes, or destructive commands. Persist optional Codex agents only as supported TOML files under \`.codex/agents/\`.`,
-    'brewtools/task-board-init': `# Codex task-board initializer
+    'brewtools/task-board-setup': `# Codex task-board initializer
 
 Create exactly one Codex-owned file board; never create or mirror it under another assistant namespace.
 
@@ -419,7 +416,7 @@ Edit the supplied text or repository artifact in place only when authorized. Pre
     'brewtools/text-optimize': `# Optimize text for tokens
 
 Compress the requested text while preserving every load-bearing constraint, identifier, example, and safety rule. Measure before and after size, explain material removals, and write only to the requested Codex-owned artifact path. Do not create Markdown agent definitions or unsupported agent calls.`,
-    'brewtools/think-short': `# Think-short hooks
+    'brewtools/think-short-setup': `# Think-short hooks
 
 ## Resolve intent and target
 
@@ -445,17 +442,17 @@ function openAiYaml(plugin, skill, description) {
   const display = (skill === 'my-claude' ? 'my-codex' : skill).split('-').map(part => part[0].toUpperCase() + part.slice(1)).join(' ');
   const specialShort = {
     'brewcode/rules': 'Project rules and AGENTS.md index; user invoked',
-    'brewtools/manager': 'Manager prompt modes; user invoked',
-    'brewtools/task-board-init': 'Codex task-board setup; user invoked',
-    'brewtools/think-short': 'Terse-mode hook setup; user invoked'
+    'brewtools/manager-setup': 'Manager prompt modes; user invoked',
+    'brewtools/task-board-setup': 'Codex task-board setup; user invoked',
+    'brewtools/think-short-setup': 'Terse-mode hook setup; user invoked'
   }[`${plugin}/${skill}`];
   const short = (specialShort || description).replace(/\s+/g, ' ').slice(0, 64).replace(/[ .,:;-]+$/, '');
   const implicit = !EXPLICIT_ONLY.has(`${plugin}/${skill}`);
   const defaultPrompt = {
     'brewcode/rules': 'Use $brewcode:rules to maintain project rules and the AGENTS.md rule index.',
-    'brewtools/manager': 'Use $brewtools:manager only when the user explicitly requests Manager configuration.',
-    'brewtools/task-board-init': 'Use $brewtools:task-board-init only when the user explicitly requests board setup.',
-    'brewtools/think-short': 'Use $brewtools:think-short only when the user explicitly requests terse-hook setup.'
+    'brewtools/manager-setup': 'Use $brewtools:manager-setup only when the user explicitly requests Manager configuration.',
+    'brewtools/task-board-setup': 'Use $brewtools:task-board-setup only when the user explicitly requests board setup.',
+    'brewtools/think-short-setup': 'Use $brewtools:think-short-setup only when the user explicitly requests terse-hook setup.'
   }[`${plugin}/${skill}`] || `Use $${plugin}:${skill} for this task.`;
   return `interface:\n  display_name: ${JSON.stringify(display)}\n  short_description: ${JSON.stringify(short.length >= 25 ? short : `${short} workflow`)}\n  default_prompt: ${JSON.stringify(defaultPrompt)}\npolicy:\n  allow_implicit_invocation: ${implicit}\n`;
 }
@@ -589,7 +586,7 @@ esac
     }
   }
 
-  if (plugin === 'brewtools' && skill === 'manager') {
+  if (plugin === 'brewtools' && skill === 'manager-setup') {
     fs.rmSync(path.join(targetDir, 'references', 'hard.md'), { force: true });
     fs.rmSync(path.join(targetDir, 'references', 'intent-routing.md'), { force: true });
     writeFile(path.join(targetDir, 'README.md'), '# Manager for Codex\n\nAmbient manager, architecture, and review prompt guidance. This variant provides no hard security wall and no parent-only enforcement.\n');
@@ -628,7 +625,7 @@ The future implementation prompt must begin with Step 0: re-assume [ROLE: MANAGE
     }
   }
 
-  if (plugin === 'brewtools' && skill === 'think-short') {
+  if (plugin === 'brewtools' && skill === 'think-short-setup') {
     fs.rmSync(path.join(targetDir, 'assets', 'think-short-task.mjs'), { force: true });
     fs.rmSync(path.join(targetDir, 'tests'), { recursive: true, force: true });
     writeFile(path.join(targetDir, 'README.md'), '# Think-short for Codex\n\nInstalls or removes the native SessionStart and UserPromptSubmit terse-mode hooks described in assets/INSTALL.md.\n');
@@ -742,7 +739,7 @@ PY
 `, 0o755);
   }
 
-  if (plugin === 'brewtools' && skill === 'task-board-init') {
+  if (plugin === 'brewtools' && skill === 'task-board-setup') {
     writeFile(path.join(targetDir, 'references', '02-task-tracker-agent.md'), `# Native task-tracker agent template
 
 Write \`TARGET/.codex/agents/task-tracker.toml\` with exactly these TOML keys:
@@ -780,31 +777,7 @@ Every transition moves or creates the task file, updates frontmatter, and synchr
     writeFile(path.join(targetDir, 'README.md'), '# My Codex\n\nCompatibility skill id for documenting a Codex installation in internal, external, or focused research mode. The workflow is read-only except for the requested local report.\n');
   }
 
-  if (plugin === 'brewdoc' && skill === 'guide') {
-    writeFile(path.join(targetDir, 'scripts', 'validate.sh'), `#!/usr/bin/env bash
-set -euo pipefail
-codex --version
-codex plugin marketplace list --json >/dev/null
-codex plugin list --json >/dev/null
-codex mcp list >/dev/null
-echo "Codex environment is ready."
-`, 0o755);
-    writeFile(path.join(targetDir, 'references', 'topic-installation.md'), `# Codex installation
-
-1. Verify \`codex --version\`.
-2. Validate this repository with \`node .codex/scripts/validate-compat.mjs\`.
-3. Add the local marketplace with \`codex plugin marketplace add <repository-root>\`.
-4. Add brewcode, brewdoc, and brewtools from \`claude-brewcode-codex-local\` with \`codex plugin add <plugin>@<marketplace>\`.
-5. Use \`node .codex/scripts/install-update.mjs migrate\` when replacing known remote 4.0.5 packages.
-6. Review hooks with \`/hooks\` and start a fresh session.
-`);
-    const overview = path.join(targetDir, 'references', 'topic-overview.md');
-    let value = fs.readFileSync(overview, 'utf8');
-    value = value.replace(/Publish shares content[^.]*\./g, 'Publish builds an explicit offline mock preview and never uploads content.');
-    fs.writeFileSync(overview, value, 'utf8');
-  }
-
-  if (plugin === 'brewcode' && (skill === 'e2e' || skill === 'teams')) {
+  if (plugin === 'brewcode' && (skill === 'e2e' || skill === 'teams-setup')) {
     writeFile(path.join(targetDir, 'references', 'agent-template.md'), `# Native Codex agent template
 
 Create a TOML file under \`.codex/agents/\` with \`name\`, \`description\`, and \`developer_instructions\`. The instructions define mission, domain, scope, task acceptance, self-check, and colleague handoff. Delegate through Codex collaboration with \`task_name\` and \`message\` only. Do not add Markdown frontmatter, tool allowlists, or legacy model aliases.
@@ -825,15 +798,6 @@ developer_instructions = '''
 Substitute the generated inventory and target configuration here. Classify every command as read, create, modify, service, delete, or privilege. Read-only checks may run directly; obtain explicit confirmation before remote mutation, release, service control, deletion, privilege escalation, or production traffic. Stop on target mismatch and report exact commands and evidence.
 '''
 `);
-  }
-
-  if (plugin === 'brewdoc' && skill === 'guide') {
-    for (const file of walkFiles(targetDir)) {
-      const data = fs.readFileSync(file);
-      if (data.includes(0)) continue;
-      const value = data.toString('utf8').replaceAll('brew install jq', 'install exact jq 1.7.1 through an approved pinned package source');
-      fs.writeFileSync(file, value, 'utf8');
-    }
   }
 
   if (plugin === 'brewtools' && skill === 'text-optimize') {

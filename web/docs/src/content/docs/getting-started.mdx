@@ -8,37 +8,41 @@ import { Card, CardGrid, Callout, InstallPrompt, Spoiler } from '../../component
 
 # Introduction
 
-**Brewcode** is a plugin suite for Claude Code: spec authoring, multi-agent quorum review, and tooling to build your own skills, agents, and hooks. Recipes (skills) define what to brew, brewers (agents) do the work, and hooks manage prompt-time injection.
+**Brewcode** is a plugin suite for Claude Code: project conventions and rules, domain agent teams, multi-agent quorum review, semantic code search, and tooling to build your own skills, agents, and hooks. Recipes (skills) define what to brew, brewers (agents) do the work, and hooks manage prompt-time injection.
+
+Every skill here is invoked by you typing `/plugin:skill`. None of them auto-activate — see the [FAQ](/faq/#auto-invoke) for why that is deliberate.
 
 <Callout type="tip" title="Spec first, then build">
-  `spec` → `convention` → `superreview` — author the spec, capture the project's conventions, then generate a project-tailored deep-review skill.
+  `task-board-setup` → `convention` → `superreview-setup` — deploy the board and its per-task specs, capture the project's conventions, then generate a project-tailored deep-review skill.
 </Callout>
 
 ## Four plugins, one suite
 
 <CardGrid>
   <Card title="brewcode" icon="infinity" href="/brewcode/overview/">
-    The core: semantic code search, quorum review, conventions, skill/agent/hook creation. 8 skills · 5 agents · 2 hooks.
+    The core: semantic code search, quorum review, conventions, skill/agent/hook creation. 9 skills · 5 agents · 2 hooks.
   </Card>
   <Card title="brewtools" icon="settings" href="/brewtools/overview/">
-    Universal utilities: prompt optimization, AI artifact removal, secrets scanning, SSH, deploy. 12 skills · 3 agents.
+    Universal utilities: prompt optimization, AI artifact removal, secrets scanning, SSH, deploy. 12 skills · 3 agents · 2 hooks.
   </Card>
   <Card title="brewui" icon="image" href="/brewui/overview/">
     UI / visual / creative tools (placeholder, currently empty). 0 skills · 0 agents.
   </Card>
   <Card title="brewdoc" icon="file" href="/brewdoc/overview/">
-    Documentation tools: docsync doc-staleness tracking, memory-sync generation, Markdown → PDF, interactive guide. 6 skills · 0 agents.
+    Documentation tools: docsync doc-staleness tracking, memory-sync generation, Markdown → PDF, publishing. 5 skills · 0 agents.
   </Card>
 </CardGrid>
+
+**Naming rule:** a skill whose name ends in `-setup` installs a mechanism into the project — after it runs you use the installed thing, not the skill. Recurring tools keep bare names and are correct to run over and over. See [Full Setup](/full-setup/) for the ordered run list.
 
 ## What makes it different
 
 <CardGrid>
-  <Card title="Task board with specs" icon="document" href="/brewtools/skills/task-board-init/">
+  <Card title="Task board with specs" icon="document" href="/brewtools/skills/task-board-setup/">
     Deploys a file-based Kanban into the repo, plus a generated <code>/task-spec</code> skill that
     writes a per-task spec and system design before any code is written.
   </Card>
-  <Card title="Quorum code review" icon="search" href="/brewcode/skills/superreview/">
+  <Card title="Quorum code review" icon="search" href="/brewcode/skills/superreview-setup/">
     3 to 5 parallel reviewers work independently. Results are merged via a
     quorum algorithm (2/3 agreement). Deduplication and ranking by severity.
   </Card>
@@ -50,16 +54,20 @@ import { Card, CardGrid, Callout, InstallPrompt, Spoiler } from '../../component
     26 skills and 8 specialized agents across 4 plugins. Built-in tools for
     creating your own skills, agents, and hooks. Prompt optimization included.
   </Card>
+  <Card title="One setup dashboard" icon="clipboard" href="/full-setup/">
+    <code>/brewcode:setup-status</code> reports which of the 10 setups are installed, stale,
+    disabled, partial or missing here, and prints the exact command for each row.
+  </Card>
 </CardGrid>
 
 ## What's included
 
 | Plugin | Purpose | Skills | Agents | Hooks |
 |--------|---------|--------|--------|-------|
-| **brewcode** | Spec authoring, codebase exploration, quorum review, skill/agent/hook creation | 8 | 5 | 2 |
-| **brewtools** | Text utilities: prompt optimization, AI artifact removal, secrets scanning, SSH, deploy | 11 | 3 | — |
+| **brewcode** | Conventions and rules, agent teams, semantic search, quorum review, skill/agent/hook creation | 9 | 5 | 2 |
+| **brewtools** | Text utilities, secrets scanning, SSH, deploy, manager mode, the opt-in hook layer | 12 | 3 | 2 |
 | **brewui** | UI / visual / creative tools (placeholder, empty) | 0 | 0 | — |
-| **brewdoc** | Documentation tools: doc-staleness tracking, generation, memory sync, PDF conversion | 6 | 0 | — |
+| **brewdoc** | Documentation tools: doc-staleness tracking, memory sync, setup docs, PDF, publishing | 5 | 0 | — |
 
 All four plugins install with a single marketplace and load automatically with every Claude Code session.
 
@@ -78,7 +86,10 @@ All four plugins install with a single marketplace and load automatically with e
     Set up Brewcode in 2 minutes. One command to add the marketplace, one to install.
   </Card>
   <Card title="Quick Start" icon="play" href="/quickstart/">
-    Get started in 15 minutes: [conventions](/brewcode/skills/convention/), [task board](/brewtools/skills/task-board-init/), [deep review](/brewcode/skills/superreview/).
+    Get started in 15 minutes: [conventions](/brewcode/skills/convention/), [task board](/brewtools/skills/task-board-setup/), [deep review](/brewcode/skills/superreview-setup/).
+  </Card>
+  <Card title="Full Setup" icon="list" href="/full-setup/">
+    All 10 <code>-setup</code> skills in recommended order, one per session, with the mode vocabulary.
   </Card>
 </CardGrid>
 

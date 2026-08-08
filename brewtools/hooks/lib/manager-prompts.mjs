@@ -1,8 +1,8 @@
-// brewtools:manager — resolve Manager mode prompt text.
+// brewtools:manager-setup — resolve Manager mode prompt text.
 // Resolution chain (mode = 'full' | 'planmode' | 'architect' | 'review-regression' | 'review-double'):
 //   project:  <cwd>/.claude/brewtools/manager/prompts/<mode>.md
 //   global:   ~/.claude/manager/prompts/<mode>.md
-//   default:  <pluginRoot>/skills/manager/references/<mode>.md
+//   default:  <pluginRoot>/skills/manager-setup/references/<mode>.md
 // Injected text = inside fenced ``` or ~~~ blocks if present (concatenated in order),
 // else the whole file (raw-text fallback). Lets unfenced overrides work too.
 
@@ -75,7 +75,7 @@ export function resolvePrompt(mode, cwd = process.cwd(), pluginRoot) {
     if (global != null) return { text: extractFenced(global), source: 'global' };
 
     if (pluginRoot) {
-      const defPath = path.join(pluginRoot, 'skills', 'manager', 'references', `${mode}.md`);
+      const defPath = path.join(pluginRoot, 'skills', 'manager-setup', 'references', `${mode}.md`);
       const def = readSafe(defPath);
       if (def != null) return { text: extractFenced(def), source: 'default' };
     }

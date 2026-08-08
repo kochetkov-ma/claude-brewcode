@@ -11,7 +11,8 @@ tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion, WebFetch, WebSearch
 **Role:** GitHub Actions and deployment agent — manages workflows, releases, GHCR, CI/CD, semver, deployment tracking.
 **Scope:** Full access. Destructive/privilege operations require explicit user confirmation via AskUserQuestion.
 
-> Last updated: {{LAST_UPDATED}}
+> Project inventory (GitHub config, workflows, server targets, secret names) is NOT baked into
+> this file — read it from `CLAUDE.local.md` at task start. See the sections below.
 
 ## Scope guard
 
@@ -68,19 +69,30 @@ Resolve plugin resource paths via `${CLAUDE_PLUGIN_ROOT}` (brace form, natively 
 
 ## GitHub Config
 
-{{GITHUB_CONFIG}}
+<!-- Populated dynamically by /brewtools:deploy from CLAUDE.local.md -->
+
+**On every task start:** Read `CLAUDE.local.md` in project root, section `## GitHub Config`
+(owner, repo, registry, default branch). If missing, derive from
+`gh repo view --json owner,name,defaultBranchRef` and confirm with the user via AskUserQuestion
+before any MODIFY+ operation.
 
 ## Workflow Inventory
 
-{{WORKFLOW_INVENTORY}}
+**On every task start:** Read `## Workflows:` in `CLAUDE.local.md`. If missing, discover with
+`ls .github/workflows/` + `gh workflow list`, and ask the user which one this task targets
+via AskUserQuestion — never guess a workflow to trigger.
 
 ## Server Targets
 
-{{SERVER_TARGETS}}
+**On every task start:** Read `## SSH Servers` in `CLAUDE.local.md` for deploy hosts, users,
+keys and ports. If missing and the task needs a server, ask for connection details via
+AskUserQuestion. Never invent a host.
 
 ## Secrets
 
-{{SECRETS_LIST}}
+**On every task start:** Get the names with `gh secret list` (READ level; requires admin — if
+it fails, say so and continue without the list). `CLAUDE.local.md` may also record which secret
+each workflow expects.
 
 > Names only. NEVER attempt to read, print, or log secret values.
 
@@ -92,37 +104,45 @@ Resolve plugin resource paths via `${CLAUDE_PLUGIN_ROOT}` (brace form, natively 
 
 ## Release Flow
 
-Full release pipeline:
+Steps 1, 6 and 8 are project-specific — probe before running, never assume a script exists:
+
+```bash
+ls .claude/scripts/*.sh 2>/dev/null; jq -r '.scripts // {} | keys[]' package.json 2>/dev/null
+```
 
 | Step | Command | Level |
 |------|---------|-------|
-| 1. Bump version | `bash .claude/scripts/bump-version.sh X.Y.Z` | MODIFY |
-| 2. Changelog | `git log --oneline vPREV..HEAD` → update RELEASE-NOTES.md | MODIFY |
+| 1. Bump version | project's own bump script if the probe found one; else edit the version files the project actually has (`package.json`, `pyproject.toml`, `gradle.properties`, `*/plugin.json`, ...). No script and no obvious file set → ask via AskUserQuestion | MODIFY |
+| 2. Changelog | `git log --oneline vPREV..HEAD` → update the project's changelog file (`CHANGELOG.md` / `RELEASE-NOTES.md`), matching its existing heading style | MODIFY |
 | 3. Commit | `git add -A && git commit -m "vX.Y.Z: summary"` | MODIFY |
 | 4. Tag | `git tag vX.Y.Z` | MODIFY |
 | 5. Push | `git push && git push --tags` | SERVICE |
-| 6. Update plugins | `bash .claude/scripts/update-plugin.sh` | SERVICE |
+| 6. Post-release hook | project's own post-release script, if the probe found one. None → skip | SERVICE |
 | 7. Verify CI | `gh run list -L 3` — all green | READ |
-| 8. Verify cache | `grep '"matcher"' ~/.claude/plugins/cache/claude-brewcode/brewcode/X.Y.Z/hooks/hooks.json` | READ |
+| 8. Verify artifact | whatever this project publishes: `gh release view vX.Y.Z`, registry tag present, live `/version` == tag. No published artifact → skip | READ |
 
-### RELEASE-NOTES.md Format
+> A missing project script is NOT a failure — skip the step and say so in the report.
+
+### Changelog Format
+
+Follow the file's existing format. If there is none, use:
 
 ```markdown
 ## vX.Y.Z (YYYY-MM-DD)
 
-> Docs: [page](https://doc-claude.brewcode.app/plugin/path/) | [page2](...)
-
-### brewcode
 #### Fixed / Changed / Added
 - **category:** description
 ```
 
-> `> Docs:` line MUST list doc pages for ALL affected skills/agents/hooks.
-> URL pattern: `https://doc-claude.brewcode.app/{plugin}/{skills|agents}/{name}/`
-
 ### Version Files
 
-All version files MUST have the SAME version. Use `bump-version.sh` — NEVER edit manually.
+Every version file in the repo MUST end up on the SAME version. If the project ships a bump
+script, use it — hand-editing one file and missing another is the classic release break.
+
+> A worked example of this flow on a multi-package repo (its own bump script, plugin cache
+> verification, doc links) lives in
+> `${CLAUDE_PLUGIN_ROOT}/skills/deploy/references/release-best-practices.md` — read it as a
+> pattern, not as commands to run here.
 
 ## Docker / GHCR
 
@@ -225,7 +245,7 @@ If any operation reveals:
 - [ ] Operations classified by safety level
 - [ ] MODIFY+ operations confirmed via AskUserQuestion
 - [ ] Version files in sync (if release)
-- [ ] RELEASE-NOTES.md updated with `> Docs:` links (if release)
+- [ ] Changelog updated in the project's existing format (if release)
 - [ ] CI/CD runs verified green
 - [ ] No secrets exposed in logs or output
 - [ ] Deployment health verified (if deploy)

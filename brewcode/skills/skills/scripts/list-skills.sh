@@ -7,7 +7,8 @@ set -euo pipefail
 # --- Configuration ---
 GLOBAL_SKILLS="$HOME/.claude/skills"
 PROJECT_SKILLS=".claude/skills"
-PLUGIN_ROOT="${BC_PLUGIN_ROOT:-}"
+# Self-location: scripts/ -> skills/skills/ -> skills/ -> plugin root
+PLUGIN_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 
 # --- Functions ---
 
@@ -132,47 +133,55 @@ scan_skills() {
     done
 }
 
-# Scan plugin skills from cache directory
+# Scan plugin skills — installed cache first, then the dev/local-marketplace workspace.
+# Both roots are derived from this script's own location; no env var is involved.
 scan_plugin_skills() {
-    local plugins_cache=""
+    local seen=" "
+    local cache_root=""
+    local plugin_name
 
-    # Determine plugins cache root from BC_PLUGIN_ROOT
-    if [[ -n "$PLUGIN_ROOT" && -d "$PLUGIN_ROOT" ]]; then
-        # BC_PLUGIN_ROOT format: ~/.claude/plugins/cache/{repo}/{plugin}/{version}
-        # Go up to cache root: ../../..
-        plugins_cache=$(dirname "$(dirname "$(dirname "$PLUGIN_ROOT")")")
-    fi
+    # Installed layout: <cache>/<repo>/<plugin>/<version>/skills/skills/scripts
+    case "$PLUGIN_ROOT" in
+        */plugins/cache/*) cache_root="${PLUGIN_ROOT%%/plugins/cache/*}/plugins/cache" ;;
+        *) cache_root="$HOME/.claude/plugins/cache" ;;
+    esac
 
-    [[ -d "$plugins_cache" ]] || return 0
+    # Dev / local-marketplace layout: <workspace>/<plugin>/skills.
+    # Scanned first so the copy this script actually ships in wins over a stale cached one.
+    local workspace
+    workspace=$(dirname "$PLUGIN_ROOT")
+    for plugin_dir in "$workspace"/*/; do
+        [[ -d "$plugin_dir/skills" ]] || continue
+        [[ -f "$plugin_dir/.claude-plugin/plugin.json" ]] || continue
+        plugin_name=$(basename "$plugin_dir")
 
-    # Scan all repos in cache
-    for repo_dir in "$plugins_cache"/*/; do
-        [[ -d "$repo_dir" ]] || continue
-        local repo_name
-        repo_name=$(basename "$repo_dir")
-
-        # Scan all plugins in repo
-        for plugin_dir in "$repo_dir"/*/; do
-            [[ -d "$plugin_dir" ]] || continue
-            local plugin_name
-            plugin_name=$(basename "$plugin_dir")
-
-            # Find latest version (highest version dir)
-            local latest_version=""
-            for version_dir in "$plugin_dir"/*/; do
-                [[ -d "$version_dir" ]] || continue
-                latest_version="$version_dir"
-            done
-
-            [[ -d "$latest_version" ]] || continue
-
-            # Scan skills in this plugin
-            local skills_dir="$latest_version/skills"
-            if [[ -d "$skills_dir" ]]; then
-                scan_skills "plugin" "$skills_dir" "$plugin_name"
-            fi
-        done
+        case "$seen" in *" $plugin_name "*) continue ;; esac
+        seen="$seen$plugin_name "
+        scan_skills "plugin" "$plugin_dir/skills" "$plugin_name"
     done
+
+    if [[ -d "$cache_root" ]]; then
+        for repo_dir in "$cache_root"/*/; do
+            [[ -d "$repo_dir" ]] || continue
+
+            for plugin_dir in "$repo_dir"*/; do
+                [[ -d "$plugin_dir" ]] || continue
+                plugin_name=$(basename "$plugin_dir")
+
+                # Last version dir that actually ships skills/ wins
+                local latest_version=""
+                for version_dir in "$plugin_dir"*/; do
+                    [[ -d "$version_dir/skills" ]] || continue
+                    latest_version="$version_dir"
+                done
+                [[ -n "$latest_version" ]] || continue
+
+                case "$seen" in *" $plugin_name "*) continue ;; esac
+                seen="$seen$plugin_name "
+                scan_skills "plugin" "$latest_version/skills" "$plugin_name"
+            done
+        done
+    fi
 }
 
 # --- Main ---
@@ -213,5 +222,6 @@ while IFS=$'\t' read -r scope skill desc invocation; do
 done <<< "$SORTED_SKILLS"
 
 echo ""
-SKILL_COUNT=$(echo -n "$SKILLS" | grep -c '^' 2>/dev/null || echo 0)
+# `|| true`, not `|| echo 0`: grep -c already prints 0 on no-match, it just exits 1
+SKILL_COUNT=$(echo -n "$SKILLS" | grep -c '^' 2>/dev/null || true); SKILL_COUNT=${SKILL_COUNT:-0}
 echo "Total: $SKILL_COUNT skills found"

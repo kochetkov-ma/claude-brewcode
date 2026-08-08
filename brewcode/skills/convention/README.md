@@ -15,8 +15,8 @@ Runs the full pipeline: detect stack, analyze all layers, generate convention do
 | Mode | Invocation | What it does |
 |------|------------|--------------|
 | `full` (default) | `/brewcode:convention` | Complete analysis: docs + rules + CLAUDE.md update (P0-P8) |
-| `conventions` | `/brewcode:convention conventions` | Generate convention docs only, skip rules extraction (P0-P7) |
-| `rules` | `/brewcode:convention rules` | Re-extract rules from existing convention docs (P0, P7-P8). Requires `.claude/convention/` to exist |
+| `conventions` | `/brewcode:convention conventions` | Generate convention docs only, skip rules extraction (P0-P6). P7 is what writes `.claude/rules/`, so the run stops before it |
+| `rules` | `/brewcode:convention rules` | Re-extract rules from existing convention docs (P0, P7, P7.5, P8). Requires `.claude/convention/` to exist |
 | `paths` | `/brewcode:convention paths src/a,src/b` | Full analysis scoped to specified comma-separated paths (P0-P7) |
 
 ## Examples

@@ -9,13 +9,13 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 const VERSION = '4.0.6';
 const EXPECTED = { brewcode: [5, 3], brewdoc: [1, 0], brewtools: [5, 1] };
 const EXPECTED_SKILLS = {
-  brewcode: ['agents', 'convention', 'rules', 'superreview', 'teams'],
+  brewcode: ['agents', 'convention', 'rules', 'superreview-setup', 'teams-setup'],
   brewdoc: ['md-to-pdf'],
-  brewtools: ['manager', 'task-board-init', 'text-human', 'text-optimize', 'think-short']
+  brewtools: ['manager-setup', 'task-board-setup', 'text-human', 'text-optimize', 'think-short-setup']
 };
 const MANUAL_NATIVE_SKILLS = new Set([
-  'brewcode/convention', 'brewcode/rules', 'brewtools/manager', 'brewtools/task-board-init',
-  'brewtools/think-short'
+  'brewcode/convention', 'brewcode/rules', 'brewtools/manager-setup', 'brewtools/task-board-setup',
+  'brewtools/think-short-setup'
 ]);
 const errors = [];
 let retainedResources = 0;
@@ -54,8 +54,8 @@ function checkHookCommand(plugin, distRoot, hook) {
 
 function resourceTarget(plugin, skill, relative) {
   if (relative === 'SKILL.md' || relative.startsWith('.claude/') || relative.includes('/__pycache__/') || relative.endsWith('.pyc')) return null;
-  if (plugin === 'brewtools' && skill === 'manager' && ['references/hard.md', 'references/intent-routing.md'].includes(relative)) return null;
-  if (plugin === 'brewtools' && skill === 'think-short' && (relative === 'assets/think-short-task.mjs' || relative.startsWith('tests/'))) return null;
+  if (plugin === 'brewtools' && skill === 'manager-setup' && ['references/hard.md', 'references/intent-routing.md'].includes(relative)) return null;
+  if (plugin === 'brewtools' && skill === 'think-short-setup' && (relative === 'assets/think-short-task.mjs' || relative.startsWith('tests/'))) return null;
   return relative.replaceAll('claude-md', 'agents-md').replaceAll('claude-local', 'codex-local');
 }
 
@@ -184,11 +184,11 @@ for (const [plugin, [skillCount, agentCount]] of Object.entries(EXPECTED)) {
   if (result.status !== 0) fail(`${plugin}: direct plugin-creator validation failed: ${result.stdout || result.stderr}`);
 }
 
-const managerRoot = path.join(ROOT, 'brewtools', '.codex', 'skills', 'manager');
+const managerRoot = path.join(ROOT, 'brewtools', '.codex', 'skills', 'manager-setup');
 const managerMetadata = `${fs.readFileSync(path.join(managerRoot, 'SKILL.md'), 'utf8')}\n${fs.readFileSync(path.join(managerRoot, 'agents', 'openai.yaml'), 'utf8')}`;
 if (!/allow_implicit_invocation: false/.test(managerMetadata)) fail('manager must require explicit user invocation');
 
-for (const skill of ['task-board-init', 'think-short']) {
+for (const skill of ['task-board-setup', 'think-short-setup']) {
   const metadata = fs.readFileSync(path.join(ROOT, 'brewtools', '.codex', 'skills', skill, 'agents', 'openai.yaml'), 'utf8');
   if (!/allow_implicit_invocation: false/.test(metadata)) fail(`${skill} must require explicit user invocation`);
 }
@@ -210,11 +210,11 @@ for (const literal of ["'migrate'", "REMOTE_VERSION = '4.0.5'", 'item.version', 
 }
 
 for (const root of [
-  path.join(ROOT, 'brewtools', '.codex', 'skills', 'task-board-init'),
-  path.join(ROOT, '.codex', 'plugins', 'brewtools', 'skills', 'task-board-init')
+  path.join(ROOT, 'brewtools', '.codex', 'skills', 'task-board-setup'),
+  path.join(ROOT, '.codex', 'plugins', 'brewtools', 'skills', 'task-board-setup')
 ]) {
   if (walk(root).some(file => file.includes(`${path.sep}.claude${path.sep}`) || file.endsWith(`${path.sep}.claude`))) {
-    fail('task-board-init Codex variant contains a stale foreign-assistant artifact');
+    fail('task-board-setup Codex variant contains a stale foreign-assistant artifact');
   }
 }
 

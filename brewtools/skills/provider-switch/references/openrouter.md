@@ -19,7 +19,7 @@ Claude Code has 3 internal roles: opus, sonnet, haiku. Each overridden via env v
 
 ## Default Model (customizable)
 
-One model for all three roles. User selects during setup.
+One model for all three roles. User selects during install.
 
 | Field | Default |
 |-------|---------|

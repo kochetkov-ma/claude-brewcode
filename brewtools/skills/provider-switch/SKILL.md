@@ -1,11 +1,11 @@
 ---
 name: brewtools:provider-switch
 description: "Configure alt API providers: DeepSeek, Z.ai/GLM, Qwen, MiniMax, OpenRouter. Triggers: switch provider, openrouter."
-argument-hint: "[status|setup|verify|model-check|help|<provider-name>] — no args = interactive status check"
-allowed-tools: Read, Write, Edit, Bash, Agent, AskUserQuestion, Glob, Grep
-model: opus
 user-invocable: true
 disable-model-invocation: true
+argument-hint: "[status|install|verify|model-check|help|<provider-name>] — no args = interactive status check"
+allowed-tools: [Read, Write, Edit, Bash, Agent, AskUserQuestion, Glob, Grep]
+model: opus
 ---
 
 [DICT: P=Phase, PRV=provider, EXEC=EXECUTE using Bash tool, AUQ=AskUserQuestion, REF=references, ALIAS=shell alias, CFG=configured, BASE=ANTHROPIC_BASE_URL, MOD=ANTHROPIC_DEFAULT_OPUS_MODEL]
@@ -72,7 +72,7 @@ Output: `ARGS: [...] MODE: [...]`
 | Keyword | MODE |
 |---------|------|
 | status, check | status |
-| setup, configure | setup |
+| install, configure | install |
 | help, how | help |
 | deepseek, ds, dpsk | provider-deepseek |
 | glm, zai, z.ai | provider-glm |
@@ -81,7 +81,7 @@ Output: `ARGS: [...] MODE: [...]`
 | openrouter, router | provider-openrouter |
 | verify, test, token | verify |
 | model-check, identify | model-check |
-| typos (model-cehck, cehck, hlpe, setuo) | fuzzy-match to correct |
+| typos (model-cehck, cehck, hlpe, instal) | fuzzy-match to correct |
 | (empty) | status |
 
 ---
@@ -117,7 +117,7 @@ Run `claudeds` — sets env vars + launches Claude (recommended default).
 Return to Anthropic: new terminal → `claude`.
 ```
 
-Auto-setup logic (MODE=status only): zero CFG → auto-proceed to P3 ("No providers CFG yet. Starting setup..."). >=1 CFG → STOP here.
+Auto-install logic (MODE=status only): zero CFG → auto-proceed to P3 ("No providers CFG yet. Starting install..."). >=1 CFG → STOP here.
 
 If MODE=help → GOTO P6.
 
@@ -125,7 +125,7 @@ If MODE=help → GOTO P6.
 
 ## P3: PRV Selection
 
-If MODE=setup (no specific PRV): AUQ options:
+If MODE=install (no specific PRV): AUQ options:
 - "DeepSeek V4 (deepseek-v4-pro, 1M ctx, priority - Recommended)"
 - "Z.ai / GLM (glm-5.2, free models available)"
 - "Qwen / DashScope (qwen3.7-plus, 1M ctx)"
@@ -153,14 +153,19 @@ bash "${CLAUDE_SKILL_DIR}/scripts/write-alias.sh" init && echo "OK init" || echo
 > STOP if FAILED — cannot write ~/.zshrc.
 
 ### Step 3: API Key
-Check if key set (from P2: KEY_ZAI, KEY_DASHSCOPE, KEY_MINIMAX, KEY_OPENROUTER).
+Check if key set (from P2: KEY_DEEPSEEK, KEY_ZAI, KEY_DASHSCOPE, KEY_MINIMAX, KEY_OPENROUTER).
+If already `true` for this PRV → SKIP this step, !=re-ask, !=rewrite the key.
 If missing — AUQ: "Enter your <PRV> API key (from <dashboard-url>):"
 
 Qwen-specific: read `REF/qwen-dashscope.md` ## How to Get API Key before asking. Show step-by-step. Warn: key MUST be from Singapore region — other regions return 403. Valid fmt: `sk-...` (~40 chars). If starts with `sk-ws-` or >100 chars → warn wrong region, ask regenerate.
 
+The key goes in on **stdin**, NEVER as an argument — argv is visible to `ps` for the whole
+process lifetime and is written verbatim into the session transcript (Robustness Rule:
+`!=write secrets anywhere except ~/.zshrc`).
+
 EXEC:
 ```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/write-alias.sh" set-key "KEY_VAR_NAME" "KEY_VALUE" && echo "OK set-key" || echo "FAILED set-key"
+printf '%s' 'KEY_VALUE' | bash "${CLAUDE_SKILL_DIR}/scripts/write-alias.sh" set-key "KEY_VAR_NAME" && echo "OK set-key" || echo "FAILED set-key"
 ```
 KEY_VAR_NAME: `DEEPSEEK_API_KEY` | `ZAI_API_KEY` | `DASHSCOPE_API_KEY` | `MINIMAX_API_KEY` | `OPENROUTER_API_KEY`
 > STOP if FAILED.

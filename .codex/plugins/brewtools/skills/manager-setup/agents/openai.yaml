@@ -1,0 +1,6 @@
+interface:
+  display_name: "Manager Setup"
+  short_description: "Manager prompt modes; user invoked"
+  default_prompt: "Use $brewtools:manager-setup only when the user explicitly requests Manager configuration."
+policy:
+  allow_implicit_invocation: false

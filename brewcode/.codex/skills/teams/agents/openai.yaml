@@ -1,6 +1,0 @@
-interface:
-  display_name: "Teams"
-  short_description: "Creates and manages dynamic teams of domain agents. Triggers: cr"
-  default_prompt: "Use $brewcode:teams for this task."
-policy:
-  allow_implicit_invocation: false

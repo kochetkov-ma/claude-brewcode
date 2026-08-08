@@ -1,6 +1,6 @@
 ---
 title: "Skills"
-description: "All 6 Brewdoc skills: commands, parameters, examples"
+description: "All 5 Brewdoc skills: commands, parameters, examples, and the -setup naming rule"
 order: 41
 ---
 
@@ -8,27 +8,30 @@ import { Card, CardGrid, Callout } from '../../../components/mdx';
 
 # Skills
 
-Skills (recipes) are slash commands that define *what* to do. Brewdoc includes 6 skills focused on doc-staleness tracking, memory-sync generation, Markdown → PDF conversion, content publishing, and an interactive suite guide -- each works independently with no prior setup required.
+Skills (recipes) are slash commands that define *what* to do. Brewdoc includes 5 skills focused on doc-staleness tracking, memory-sync generation, Markdown → PDF conversion and content publishing -- each works independently with no prior setup required.
+
+<Callout type="note" title="The -setup naming rule">
+  A `-setup` suffix marks a skill that **installs a mechanism you afterwards use instead of the skill** -- project-local hooks, or a generated `/memory-sync` command. Recurring tools keep bare names (`my-claude`, `md-to-pdf`, `publish`). Both `-setup` skills share one canonical mode set, in this order: `status | install | upgrade | enable | disable | uninstall | purge` (each implements the subset that makes sense for it). **Every** brewdoc skill, bare tools included, is **user-invoked only** -- `user-invocable: true` plus `disable-model-invocation: true`, so the model never fires any of them on its own. The same holds for all 26 skills in the suite; the [FAQ](/faq/#auto-invoke) explains why.
+</Callout>
 
 ## Summary table
 
 | # | Skill | Command | Model | Purpose | Arguments |
 |---|-------|---------|-------|---------|-----------|
-| 1 | docsync | [/brewdoc:docsync](/brewdoc/skills/docsync/) | sonnet | Track and fix stale project docs via hooks | `[status] \| [sync [--all]] \| [reread] \| [frontmatter] \| [uninstall] \| free-text` |
+| 1 | docsync-setup | [/brewdoc:docsync-setup](/brewdoc/skills/docsync-setup/) | sonnet | Track and fix stale project docs via hooks | `[status\|install\|upgrade\|uninstall\|purge] [sync [--all]\|reread\|frontmatter] \| free-text` |
 | 2 | my-claude | [/brewdoc:my-claude](/brewdoc/skills/my-claude/) | opus | Generate documentation about Claude Code installation | `[ext [context]] \| [r <query>]` — no args = internal installation docs |
-| 3 | memory-sync-init | [/brewdoc:memory-sync-init](/brewdoc/skills/memory-sync-init/) | opus | Generator: emits a project-tailored `/memory-sync` skill into the target repo — it never syncs memory itself | `[status \| init \| upgrade] [fine-tune-prompt]` — no args = `init` |
+| 3 | memory-sync-setup | [/brewdoc:memory-sync-setup](/brewdoc/skills/memory-sync-setup/) | opus | Generator: emits a project-tailored `/memory-sync` skill into the target repo — it never syncs memory itself | `[status\|install\|upgrade\|uninstall] [fine-tune-prompt]` |
 | 4 | md-to-pdf | [/brewdoc:md-to-pdf](/brewdoc/skills/md-to-pdf/) | sonnet | Convert Markdown to PDF (reportlab / weasyprint) | `<file.md> [--engine name] ["prompt"] \| styles \| test` — no args = help |
 | 5 | publish | [/brewdoc:publish](/brewdoc/skills/publish/) | haiku | Publish text, files, or multi-file sites to brewpage.app — returns public URL | `<text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename]` |
-| 6 | guide | [/brewdoc:guide](/brewdoc/skills/guide/) | haiku | Interactive tutorial for the plugin suite | `[topic]` — no args = interactive menu |
 
 <CardGrid>
-  <Card title="docsync" icon="sync" href="/brewdoc/skills/docsync/">
+  <Card title="docsync-setup" icon="sync" href="/brewdoc/skills/docsync-setup/">
     Track and fix stale project docs via hooks
   </Card>
   <Card title="my-claude" icon="clipboard" href="/brewdoc/skills/my-claude/">
     Generate Claude Code installation docs
   </Card>
-  <Card title="memory-sync-init" icon="brain" href="/brewdoc/skills/memory-sync-init/">
+  <Card title="memory-sync-setup" icon="brain" href="/brewdoc/skills/memory-sync-setup/">
     Generates a project-tailored `/memory-sync` skill: repo-specific batches, fact catalogue, non-growth sync, independent verify.
   </Card>
   <Card title="md-to-pdf" icon="file" href="/brewdoc/skills/md-to-pdf/">
@@ -37,13 +40,10 @@ Skills (recipes) are slash commands that define *what* to do. Brewdoc includes 6
   <Card title="publish" icon="link" href="/brewdoc/skills/publish/">
     Publish text, files, or a multi-file site to brewpage.app
   </Card>
-  <Card title="guide" icon="book" href="/brewdoc/skills/guide/">
-    Interactive tutorial for brewcode suite
-  </Card>
 </CardGrid>
 
 <Callout type="tip" title="Standalone">
-  All six skills can be used independently -- they require no dependency on the other plugins in the suite.
+  All five skills can be used independently -- they require no dependency on the other plugins in the suite.
 </Callout>
 
 <CardGrid>

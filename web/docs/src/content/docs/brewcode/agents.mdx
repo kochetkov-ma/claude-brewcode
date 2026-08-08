@@ -11,7 +11,7 @@ import { Card, CardGrid, Callout } from '../../../components/mdx';
 Agents (brewers) are specialized roles defined in markdown files with frontmatter metadata.
 Each agent has its own model, toolset, and system prompt. Brewcode ships 5 agents (4 public + 1 internal helper) — specialists only, for building skills, agents, hooks, and shell scripts.
 
-Generic roles (developer, tester, reviewer, architect) are no longer shipped: every project generates its own agents into `.claude/agents/` via [/brewcode:teams](/brewcode/skills/teams/) or [/brewcode:agents](/brewcode/skills/agents/), tuned to that project's stack. Skills that need a reviewer or an implementer pick the project's agent from `.claude/agents/`, falling back to `general-purpose`.
+Generic roles (developer, tester, reviewer, architect) are no longer shipped: every project generates its own agents into `.claude/agents/` via [/brewcode:teams-setup](/brewcode/skills/teams-setup/) or [/brewcode:agents](/brewcode/skills/agents/), tuned to that project's stack. Skills that need a reviewer or an implementer pick the project's agent from `.claude/agents/`, falling back to `general-purpose`.
 
 ## Summary table
 

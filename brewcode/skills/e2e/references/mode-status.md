@@ -11,13 +11,15 @@ Scan `.claude/agents/e2e-*.md`:
 ## T2: Rules Scan
 
 Scan for E2E rules:
-- `${CLAUDE_SKILL_DIR}/references/e2e-rules.md` — exists? rule count?
-- `.claude/rules/e2e-*.md` — project-level rules? count?
+- `.claude/e2e/e2e-rules.md` (`{config.rulesPath}`) — exists? rule count? **Absent = broken install:
+  every e2e agent stops on its Rules Loading Protocol. Report it as the top finding.**
+- `${CLAUDE_SKILL_DIR}/references/e2e-rules.md` — the plugin baseline; rule count, for comparison only
+- `.claude/rules/e2e-*.md` — condensed project export? count?
 
 ## T3: Config Check
 
 Read `.claude/e2e/config.json`:
-- If not found → report "Not configured. Run `/brewcode:e2e setup`."
+- If not found → report "Not configured. Run `/brewcode:e2e install`."
 - If found → extract: stack, testFramework, testSourceDir, scenarioDir, lastSetup
 
 ## T4: Artifact Scan
@@ -57,7 +59,7 @@ Scan configured paths:
 | Last test | {date} |
 
 ## Recommendations
-- {if agents < 5}: "Missing agents. Run `/brewcode:e2e setup`."
+- {if agents < 5}: "Missing agents. Run `/brewcode:e2e install`."
 - {if scenarios with status=approved but no test}: "Approved scenarios without tests. Run `/brewcode:e2e create`."
 - {if config.lastSetup > 30 days}: "Setup is stale. Consider `/brewcode:e2e rules` to refresh."
 ```

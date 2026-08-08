@@ -52,11 +52,16 @@ Group by type and complexity (avoid mixing haiku/sonnet in one block), balance l
 Launch ALL Task calls in a single message for true parallelism. Each block prompt states its files, the sub-flow each file uses, the two-pass rules, and requests JSON.
 
 ```
-Task(subagent_type="general-purpose", model="haiku", prompt="> BT_PLUGIN_ROOT is in your context (pre-task.mjs).\n[CUSTOM_INSTRUCTIONS_IF_ANY]\nBlock 1 files: [...]. Per file apply its flow rules from $BT_PLUGIN_ROOT/skills/text-human/reference/flows/<flow>.md plus ai-patterns.md / human-patterns.md. Two-pass: STRIP then gated INJECT. Return JSON.")
-Task(subagent_type="general-purpose", model="sonnet", prompt="> BT_PLUGIN_ROOT is in your context (pre-task.mjs).\n[CUSTOM_INSTRUCTIONS_IF_ANY]\nBlock 2 files: [...]. Same rules. Return JSON.")
+Task(subagent_type="general-purpose", model="haiku", prompt="[CUSTOM_INSTRUCTIONS_IF_ANY]\nBlock 1 files: [...]. Per file apply its flow rules from <ROOT>/skills/text-human/reference/flows/<flow>.md plus ai-patterns.md / human-patterns.md. Two-pass: STRIP then gated INJECT. Return JSON.")
+Task(subagent_type="general-purpose", model="sonnet", prompt="[CUSTOM_INSTRUCTIONS_IF_ANY]\nBlock 2 files: [...]. Same rules. Return JSON.")
 ```
 
-If a custom prompt was provided, prepend to EVERY sub-agent prompt after the context line:
+> `<ROOT>` = the value `${CLAUDE_PLUGIN_ROOT}` resolves to in THIS skill. Substitute the
+> absolute path into every sub-agent prompt before spawning — subagents get no plugin-root
+> variable of their own, so an unexpanded `${CLAUDE_PLUGIN_ROOT}` or `$BT_PLUGIN_ROOT`
+> leaves them with no flow rules and they humanize against nothing.
+
+If a custom prompt was provided, prepend to EVERY sub-agent prompt:
 ```
 CUSTOM INSTRUCTIONS (highest priority, override defaults):
 <user prompt text>

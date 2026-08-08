@@ -30,6 +30,21 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | Safety gate | Confirms before MODIFY / SERVICE / DELETE / PRIVILEGE operations |
 | Scope | One bounded unit per run; one agent per repo / environment / service |
 
+## Where its facts come from
+
+The agent carries no baked-in inventory. On **every task start** it resolves four things by the same three-step chain — read `CLAUDE.local.md`, else probe, else ask. It never invents any of them.
+
+| Fact | Read | Probe | Ask |
+|------|------|-------|-----|
+| GitHub config | `## GitHub Config` (owner, repo, registry, default branch) | `gh repo view --json owner,name,defaultBranchRef` | Confirm via `AskUserQuestion` before any MODIFY-or-above operation |
+| Workflow inventory | `## Workflows:` | `ls .github/workflows/` + `gh workflow list` | Ask which workflow this task targets — never guess one to trigger |
+| Server targets | `## SSH Servers` (hosts, users, keys, ports) | — | Ask for connection details. Never invent a host |
+| Secret names | `CLAUDE.local.md` may record which secret each workflow expects | `gh secret list` (READ level — needs admin; if it fails, say so and continue without the list) | — |
+
+<Callout type="caution">
+**Names only.** The agent never reads, prints, or logs a secret value.
+</Callout>
+
 ## Scope guard
 
 The agent sizes the task before it touches CI.
@@ -146,28 +161,20 @@ Secret names are listed, never their values — the agent will not read, print, 
 
 | Step | Command | Level |
 |------|---------|-------|
-| 1. Bump version | `bash .claude/scripts/bump-version.sh X.Y.Z` | MODIFY |
-| 2. Changelog | `git log --oneline vPREV..HEAD` → update RELEASE-NOTES.md | MODIFY |
+| 1. Bump version | The project's own bump script if it ships one; otherwise edit every version file the repo has, all to the SAME X.Y.Z | MODIFY |
+| 2. Changelog | `git log --oneline vPREV..HEAD` → write into the project's changelog file, in its existing heading style | MODIFY |
 | 3. Commit | `git commit -m "vX.Y.Z: summary"` | MODIFY |
 | 4. Tag | `git tag vX.Y.Z` | MODIFY |
 | 5. Push | `git push && git push --tags` | SERVICE |
-| 6. Update plugins | `bash .claude/scripts/update-plugin.sh` | SERVICE |
+| 6. Post-release | The project's own post-release/publish script, if it has one | SERVICE |
 | 7. Verify CI | `gh run list -L 3` | READ |
-| 8. Verify cache | `grep '"matcher"' &#126;/.claude/plugins/cache/.../hooks.json` | READ |
+| 8. Verify artifact | Whatever this project publishes — container image, npm/PyPI package, a live `/version` endpoint. Nothing published is not a failure | READ |
 
-### RELEASE-NOTES.md format
+<Callout type="note">
+No script path in that table is hardcoded. The agent reads `${CLAUDE_PLUGIN_ROOT}/skills/deploy/references/release-best-practices.md` as a *worked example* from one multi-package repo — the shape of the flow (probe, then run; every version file in lockstep; verify the published artifact), never as commands to execute in yours.
+</Callout>
 
-```markdown
-## vX.Y.Z (YYYY-MM-DD)
-
-> Docs: [page](https://doc-claude.brewcode.app/plugin/path/) | [page2](...)
-
-### brewcode
-#### Fixed / Changed / Added
-- **category:** description
-```
-
-The `> Docs:` line must list pages for every affected skill, agent, or hook. URL pattern: `https://doc-claude.brewcode.app/{plugin}/{skills|agents}/{name}/`
+Rule that survives every repo: **every version file must end up on the same version.** Hand-editing one and missing another is the classic release break, which is why a project bump script is used when one exists.
 
 ### Docker / GHCR
 

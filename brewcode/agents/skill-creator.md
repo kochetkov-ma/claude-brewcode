@@ -4,7 +4,7 @@ description: "Creates and improves Claude Code skills. Triggers: create skill, i
 model: inherit
 maxTurns: 80
 color: green
-tools: Read, Write, Edit, Glob, Grep, Bash, Agent, Skill, AskUserQuestion
+tools: Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion
 ---
 
 [DICT: ACT=activation, AT=allowed-tools, BPR=${CLAUDE_PLUGIN_ROOT}, CC=Claude Code, CSD=${CLAUDE_SKILL_DIR}, CTX=context, DESC=description, DMI=disable-model-invocation, FM=frontmatter, FORK=context:fork, GP=general-purpose, PLG=plugin, REF=reference, SA=subagent, SK=skill, UI-F=user-invocable]
@@ -298,7 +298,7 @@ injection regardless of the depth limit.
 | SK with FORK from **main conversation** | **Use this** | Lock binding + hook context injection intact |
 | SK with FORK from **SA** | **Avoid** | Bypasses session binding + coordinator loop |
 | Agent tool from **SA** | **Avoid** | Nested spawn bypasses session binding + hook context injection |
-| Skill tool from **SA** | **Avoid** | Bypasses hook context injection |
+| Skill tool from **SA** | **Never** | Bypasses hook context injection, and `DMI: true` SKs (all distributed brewcode/brewtools/brewdoc SKs) silently no-op — use the SK's twin AG instead |
 | Inline SK (no `context`) from SA | **Avoid** | Same binding/injection bypass |
 
 Design: spawn from main only. For SAs use `skills:` FM (preload at startup). Multi-agent orchestration -- chain from main, not nested.
@@ -313,10 +313,9 @@ With `context: fork`, `agent` selects SA.
 |-------|-------|-------|---------|
 | `Explore` | Haiku | Read-only | Read-only analysis, file discovery -- fast, safe |
 | `Plan` | Inherit | Read-only | Planning, structured research |
-| `GP` | Inherit | All | Multi-step tasks (default), code changes |
-| `developer` | Opus | Full | Code impl |
-| `tester` | Sonnet | Full | Test execution -- test-focused |
-| `reviewer` | Opus | Read+Bash | Code review -- analysis + git |
+| `general-purpose` | Inherit | All | Multi-step tasks (default), code changes |
+
+> Only these three are built in. `developer`/`tester`/`reviewer` do NOT exist -- a generated SK naming one fails to resolve its SA on first run.
 
 Custom agents: `.claude/agents/` | `~/.claude/agents/` via `agent: my-custom-agent`.
 
@@ -368,7 +367,7 @@ Include `Skill` in AT to enable SK chaining.
 
 # Task Tool
 
-Delegates work to SAs (renamed `Agent` in CC v2.1.63; `Task(...)` still resolves as alias).
+Delegates work to SAs (renamed `Agent` in CC v2.1.49-74; `Task(...)` still resolves as alias).
 **Available only in main conversation** -- SAs do not have this tool.
 
 | Param | REQ | Description |
@@ -461,7 +460,7 @@ All criteria met -> split into `references/{mode}.md`.
 
 | Pattern | When | Example |
 |---------|------|---------|
-| Conditional (lazy) | Multi-mode, >50 lines/mode | `superreview`: detect stack -> Read `references/{stack}.md` |
+| Conditional (lazy) | Multi-mode, >50 lines/mode | `superreview-setup`: detect stack -> Read `references/{stack}.md` |
 | Unconditional single | Single REF, <200 lines | `brewtools:text-optimize`: always Read `references/rules-review.md` |
 
 ## 3-Step Pattern
@@ -722,7 +721,8 @@ the common script once in `scripts/` and REF it from SKILL.md.
 
 # Final Step
 
-Run optimization: `Skill(skill="brewtools:text-optimize", args="path/to/SKILL.md")`
+Run optimization: `Task(subagent_type="brewtools:text-optimizer", prompt="Optimize path/to/SKILL.md. Output report with metrics.")`
+`brewtools` absent (`text-optimizer` unavailable) -> skip, note it in the report.
 
 # Output Format
 

@@ -53,13 +53,13 @@ Reliability:
 {if any}
 
 ## Review Verdict
-{reviewer agent assessment}
+{validation agent assessment}
 
 ## Sources
 {full URL list}
 ```
 
-## Self-Review Checklist (for reviewer agent)
+## Self-Review Checklist (for the validation agent)
 - All facts have citations
 - No contradictions between high-reliability sources
 - Conflicting low-reliability claims flagged

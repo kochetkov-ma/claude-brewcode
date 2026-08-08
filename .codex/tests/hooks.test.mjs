@@ -77,7 +77,7 @@ assert.equal(claudeForced.hookSpecificOutput.hookEventName, 'UserPromptSubmit');
 const claudeManager = invoke(path.join(brewtoolsSource, 'hooks', 'manager-prompt.mjs'), JSON.stringify({ ...common, hook_event_name: 'UserPromptSubmit', prompt: '++r review this' }), { CLAUDE_PLUGIN_ROOT: brewtoolsSource });
 assert.equal(claudeManager.hookSpecificOutput.hookEventName, 'UserPromptSubmit');
 
-const thinkAssets = path.join(brewtoolsRoot, 'skills', 'think-short', 'assets');
+const thinkAssets = path.join(brewtoolsRoot, 'skills', 'think-short-setup', 'assets');
 const thinkSessionId = `fixture-${process.pid}-${Date.now()}`;
 const thinkSession = invoke(path.join(thinkAssets, 'think-short-session.mjs'), JSON.stringify({ ...common, session_id: thinkSessionId, hook_event_name: 'SessionStart', source: 'startup' }));
 assert.equal(thinkSession.hookSpecificOutput.hookEventName, 'SessionStart');

@@ -1,10 +1,11 @@
 ---
 name: brewtools:ssh
 description: "SSH server management — connect, configure, deploy, administer Linux servers with safety gates."
-argument-hint: "<prompt describing what to do>"
-allowed-tools: Read, Write, Edit, Bash, Agent, AskUserQuestion, Glob, Grep
-model: opus
 user-invocable: true
+disable-model-invocation: true
+argument-hint: "<prompt describing what to do>"
+allowed-tools: [Read, Write, Edit, Bash, Agent, AskUserQuestion, Glob, Grep]
+model: opus
 ---
 
 # SSH Server Management

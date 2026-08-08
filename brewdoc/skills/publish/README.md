@@ -10,6 +10,8 @@ Publish text, markdown, JSON, files, or multi-file sites to [brewpage.app](https
 
 The skill will ask for a namespace (URL slug) and optional password, then return a public URL.
 
+Requires `jq` on `PATH`. Publishing a directory as a site also requires `zip`. Each upload block checks for them and aborts with `FAILED: jq required` / `FAILED: zip required` rather than half-publishing.
+
 ## What You Can Publish
 
 | Content Type | Example Input | API Endpoint | Notes |
@@ -70,13 +72,12 @@ All content types support `--ttl N` to set expiration in days. Site uploads also
 On success, the skill returns:
 
 ```
-Published!
-URL:         https://brewpage.app/{namespace}/{id}
-Owner token: {ownerToken}
+Published: https://brewpage.app/{namespace}/{id}
+Owner token saved to .claude/brewpage-history.md
 ```
 
 - **URL** -- shareable link to the published content.
-- **Owner token** -- saved automatically to `.claude/brewpage-history.md` (or `~/.claude/brewpage-history.md` if the project has no `.claude/` directory). Use it to delete the page later.
+- **Owner token** -- never printed to the conversation. The curl, the token parse and the history append all happen inside one Bash block; the model sees only `OK {url}`. The token lands in `.claude/brewpage-history.md`. The failure branch prints `FAILED: ...` with no response body, so a token in an error payload cannot leak into the transcript either.
 
 ### Deleting a Published Page
 
@@ -90,8 +91,16 @@ Find your owner tokens in `.claude/brewpage-history.md`.
 
 - **TTL planning** -- default is 15 days. Use `--ttl 30` for content you need longer, or `--ttl 1` for quick one-off shares.
 - **Namespace controls the URL** -- choosing `public` places the page in the gallery. Pick a custom namespace (3-32 alphanumeric chars) for a cleaner URL or to avoid gallery listing.
-- **Password protection** -- when you set a password, the page is hidden from the gallery and requires the password to view.
-- **Each publish creates a new page** -- there is no "update" operation. Publish again and share the new URL. Delete the old page using the saved owner token if needed.
+- **Password protection** -- when you set a password, the page is hidden from the gallery and requires the password to view. Verify it by opening the link in a logged-out / private window: a protected page asks for the password before it renders anything.
+- **Republish in place** -- `PUT` the new bundle to the same URL with your owner token (`PUT /api/sites/{ns}/{id}` for sites). The upload fully replaces the file set and the link never changes, so there is no DELETE-then-POST dance.
+
+## Password protection: what was broken before v5.0.0
+
+Every upload block referenced a `"${PASS_H[@]}"` array built from a `$PASSWORD` shell variable that **nothing ever assigned**. The password was resolved in conversation, and each Bash call is a fresh shell, so the header expanded to nothing: the page went out with **no password at all** while the skill still reported one to you. The only way to notice was opening the link logged out.
+
+The blocks now carry a literal `{password_header}` placeholder that the model substitutes before running -- `-H "X-Password: <pass>"` when a password was chosen, or the whole line deleted when it was not. The rule is stated as mandatory at the end of the password step, together with its consequence: never report a password you did not actually substitute into the block you ran.
+
+If you published a password-protected page with an earlier version, treat it as public. Delete it with its owner token and publish again.
 
 ## Documentation
 

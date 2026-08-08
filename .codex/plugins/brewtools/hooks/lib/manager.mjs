@@ -28,8 +28,8 @@ export function prompt(mode, cwd, pluginRoot) {
   const candidates = [
     path.join(cwd, '.codex', 'brewtools', 'manager', 'prompts', `${mode}.md`),
     path.join(os.homedir(), '.codex', 'manager', 'prompts', `${mode}.md`),
-    path.join(pluginRoot || '', 'skills', 'manager', 'references', `${mode}.md`),
-    path.join(pluginRoot || '', '.codex', 'skills', 'manager', 'references', `${mode}.md`)
+    path.join(pluginRoot || '', 'skills', 'manager-setup', 'references', `${mode}.md`),
+    path.join(pluginRoot || '', '.codex', 'skills', 'manager-setup', 'references', `${mode}.md`)
   ];
   for (const candidate of candidates) {
     const value = readText(candidate);

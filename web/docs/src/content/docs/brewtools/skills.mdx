@@ -1,6 +1,6 @@
 ---
 title: "Skills"
-description: "All 11 Brewtools skills: commands, parameters, examples"
+description: "All 12 Brewtools skills: commands, parameters, examples, and the -setup naming rule"
 order: 31
 ---
 
@@ -11,34 +11,38 @@ import { Card, CardGrid, Callout } from '../../../components/mdx';
 Skills (recipes) are slash commands that define *what* to do. Brewtools includes 12 skills
 focused on text processing, security scanning, SSH management, deployment, plugin management, subagent budgeting, and session orchestration -- each works independently with no prior setup required.
 
+<Callout type="note" title="The -setup naming rule">
+  A `-setup` suffix marks a skill that **installs a mechanism you afterwards use instead of the skill** -- hooks, a generated board, a delegation wall. Recurring tools you run over and over keep bare names (`text-optimize`, `deploy`, `ssh`). Every `-setup` skill shares one canonical mode set, in this order: `status | install | upgrade | enable | disable | uninstall | purge`. No argument means `status` when it is installed and `install` when it is not. The old aliases `init`, `on`, `off`, `setup`, `remove` and `reset` are gone as commands. Where a skill still recognizes one, it is only as free text and it is echoed back as the canonical verb -- never document them as commands.
+</Callout>
+
 ## Summary table
 
 | # | Skill | Command | Model | Purpose |
 |---|-------|---------|-------|---------|
-| 1 | agent-deadline | `/brewtools:agent-deadline` | sonnet | Install a soft wall-clock budget for subagents — warns at 80%, blocks non-finalizing tools past 100% |
-| 2 | agent-router | `/brewtools:agent-router` | sonnet | EXPERIMENTAL. Denies a generic subagent spawn when a real project/plugin expert owns the task, naming it |
+| 1 | agent-deadline-setup | `/brewtools:agent-deadline-setup` | sonnet | Install a soft wall-clock budget for subagents — warns at 80%, blocks non-finalizing tools past 100% |
+| 2 | agent-router-setup | `/brewtools:agent-router-setup` | sonnet | EXPERIMENTAL. Denies a generic subagent spawn when a real project/plugin expert owns the task, naming it |
 | 3 | deploy | `/brewtools:deploy` | opus | GitHub Actions deployment: workflows, releases, GHCR, CI/CD with safety gates |
-| 4 | manager | `/brewtools:manager` | sonnet | Manager mode: installs a hard delegation wall into this project — on, off, uninstall, status, level, edit, reset — and explains/customizes codewords `++m`, `++a`, `++rr`, `++r` |
+| 4 | manager-setup | `/brewtools:manager-setup` | sonnet | Manager mode: installs a hard delegation wall into this project — status, install, upgrade, enable, disable, uninstall, purge, plus level and edit — and explains/customizes codewords `++m`, `++a`, `++rr`, `++r` |
 | 5 | plugin-update | `/brewtools:plugin-update` | sonnet | Checks, installs, updates Claude Code plugins |
 | 6 | provider-switch | `/brewtools:provider-switch` | opus | Configure alt API providers: DeepSeek, Z.ai/GLM, Qwen, MiniMax, OpenRouter |
 | 7 | secrets-scan | `/brewtools:secrets-scan` | sonnet | Scans git-tracked files for leaked secrets |
 | 8 | ssh | `/brewtools:ssh` | opus | SSH server management — connect, configure, deploy, administer Linux servers with safety gates |
-| 9 | task-board-init | `/brewtools:task-board-init` | opus | Generator: deploys a file-based Kanban into any repo via multi-agent analysis, plus an optional gated CLAUDE.md-optimization pass |
+| 9 | task-board-setup | `/brewtools:task-board-setup` | opus | Generator: deploys a file-based Kanban into any repo via multi-agent analysis, plus an optional gated CLAUDE.md-optimization pass |
 | 10 | text-human | `/brewtools:text-human` | sonnet | Humanizes code, docs, articles, reddit/chat, javadoc — strips AI artifacts, fixes unicode, fits register |
 | 11 | text-optimize | `/brewtools:text-optimize` | sonnet | Optimizes text/docs for LLM token efficiency |
-| 12 | think-short | `/brewtools:think-short` | sonnet | Installs or removes the think-short terse-mode hooks |
+| 12 | think-short-setup | `/brewtools:think-short-setup` | sonnet | Installs, upgrades or removes the think-short terse-mode hooks |
 
 <CardGrid>
-  <Card title="agent-deadline" icon="clock" href="/brewtools/skills/agent-deadline/">
+  <Card title="agent-deadline-setup" icon="clock" href="/brewtools/skills/agent-deadline-setup/">
     Soft wall-clock budget for subagents — warns at 80%, blocks non-finalizing tools past 100%
   </Card>
-  <Card title="agent-router" icon="target" href="/brewtools/skills/agent-router/">
+  <Card title="agent-router-setup" icon="target" href="/brewtools/skills/agent-router-setup/">
     Routes a generic subagent spawn to the real project or plugin expert (experimental)
   </Card>
   <Card title="deploy" icon="sync" href="/brewtools/skills/deploy/">
     GitHub Actions deployment: workflows, releases, GHCR, CI/CD with safety gates
   </Card>
-  <Card title="manager" icon="star" href="/brewtools/skills/manager/">
+  <Card title="manager-setup" icon="star" href="/brewtools/skills/manager-setup/">
     Hard delegation wall for this project, plus the ++m / ++a / ++rr / ++r codewords
   </Card>
   <Card title="plugin-update" icon="rocket" href="/brewtools/skills/plugin-update/">
@@ -53,7 +57,7 @@ focused on text processing, security scanning, SSH management, deployment, plugi
   <Card title="ssh" icon="terminal" href="/brewtools/skills/ssh/">
     Connect, configure, deploy, administer Linux servers with safety gates
   </Card>
-  <Card title="task-board-init" icon="clipboard" href="/brewtools/skills/task-board-init/">
+  <Card title="task-board-setup" icon="clipboard" href="/brewtools/skills/task-board-setup/">
     Deploys a file-based Kanban into any repo, plus a gated CLAUDE.md-optimization pass
   </Card>
   <Card title="text-human" icon="user" href="/brewtools/skills/text-human/">
@@ -62,35 +66,35 @@ focused on text processing, security scanning, SSH management, deployment, plugi
   <Card title="text-optimize" icon="sparkle" href="/brewtools/skills/text-optimize/">
     Optimizes text and docs for LLM token efficiency
   </Card>
-  <Card title="think-short" icon="note" href="/brewtools/skills/think-short/">
-    Installs or removes the terse-mode hooks
+  <Card title="think-short-setup" icon="note" href="/brewtools/skills/think-short-setup/">
+    Installs, upgrades or removes the terse-mode hooks
   </Card>
 </CardGrid>
 
 <Callout type="tip" title="Standalone">
-  All eleven skills can be used independently -- they require no prior setup
+  All twelve skills can be used independently -- they require no prior setup
   and no dependency on Brewcode or Brewdoc plugins.
 </Callout>
 
 ## How these skills delegate
 
-Nine of the eleven spawn subagents, and they all follow the same sizing rule: **one subagent = one bounded unit** — one deliverable, roughly 5 files and 10 steps. A big task handed to one agent is an agent gone for an hour: you cannot observe it, you cannot correct it, and it usually drifts off-target. Bigger work is split into N tasks fanned out in a single message.
+Nine of the twelve spawn subagents, and they all follow the same sizing rule: **one subagent = one bounded unit** — one deliverable, roughly 5 files and 10 steps. A big task handed to one agent is an agent gone for an hour: you cannot observe it, you cannot correct it, and it usually drifts off-target. Bigger work is split into N tasks fanned out in a single message.
 
 Every spawn prompt carries six fields — GOAL, ROLE, SCOPE, CONTEXT, CONSUMER, DONE. A bare one-line task is never enough.
 
 | Skill | One bounded unit is... |
 |-------|------------------------|
-| [agent-deadline](/brewtools/skills/agent-deadline/) | one mode-and-scope combination — a single `brewcode:hook-creator` spawn per combination |
+| [agent-deadline-setup](/brewtools/skills/agent-deadline-setup/) | one mode-and-scope combination — a single `brewcode:hook-creator` spawn per combination |
 | [deploy](/brewtools/skills/deploy/) | one deliverable, one repo, one environment — confirmation gates stay in the main conversation |
 | [provider-switch](/brewtools/skills/provider-switch/) | one provider — five research agents, one message |
 | [secrets-scan](/brewtools/skills/secrets-scan/) | one chunk of the file list — a bigger repo gets more chunks, not bigger ones |
 | [ssh](/brewtools/skills/ssh/) | one deliverable on one host — DELETE/PRIVILEGE approval happens before any spawn |
-| [task-board-init](/brewtools/skills/task-board-init/) | one doc group — same rule at both spawn points |
+| [task-board-setup](/brewtools/skills/task-board-setup/) | one doc group — same rule at both spawn points |
 | [text-human](/brewtools/skills/text-human/) | one block of files from the commit or folder |
 | [text-optimize](/brewtools/skills/text-optimize/) | one file — a folder run is split one file per agent |
-| [think-short](/brewtools/skills/think-short/) | one install target — a wider request is one task per target |
+| [think-short-setup](/brewtools/skills/think-short-setup/) | one install target — a wider request is one task per target |
 
-[plugin-update](/brewtools/skills/plugin-update/) and [manager](/brewtools/skills/manager/) spawn nothing — neither carries `Task` in its `allowed-tools`, so every command runs in front of you.
+[plugin-update](/brewtools/skills/plugin-update/) and [manager-setup](/brewtools/skills/manager-setup/) spawn nothing — neither carries `Task` in its `allowed-tools`, so every command runs in front of you.
 
 <CardGrid>
   <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">

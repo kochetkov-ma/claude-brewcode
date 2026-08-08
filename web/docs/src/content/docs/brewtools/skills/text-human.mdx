@@ -96,7 +96,7 @@ No arguments? The skill asks: commit hash, file path, folder, or paste text.
   <li>
     <div>
       <strong>Parallel execution (mixed flow)</strong>
-      <p>Commit or folder scope uses the mixed flow dispatcher: files split into blocks by complexity, classified as haiku (simple config/data/text) or sonnet (source with logic, tests, complex SQL). All <code>Task</code> calls fire in one message for true parallelism. Each sub-agent receives its block, the flow rules, and any custom instructions prepended at highest priority.</p>
+      <p>Commit or folder scope uses the mixed flow dispatcher: files split into blocks by complexity, classified as haiku (simple config/data/text) or sonnet (source with logic, tests, complex SQL). All <code>Task</code> calls fire in one message for true parallelism. Each sub-agent receives its block, the flow rules, and any custom instructions prepended at highest priority. The skill substitutes the <strong>resolved absolute path</strong> of the rules directory into every sub-agent prompt before spawning — subagents get no plugin-root variable of their own, so an unexpanded one would leave them humanizing against no rules at all.</p>
     </div>
   </li>
   <li>
@@ -120,7 +120,7 @@ Every block prompt carries six fields. A bare one-line task is never enough:
 | GOAL | humanize the commit or folder so it reads as human-written; this agent owns block N of M |
 | ROLE | edit only this block's files in place; never auto-fix behavior-changing items — surface them |
 | SCOPE | in — the exact file list; out — every other path, git history, build output |
-| CONTEXT | flow per file already classified, PASS 2 inject ON/OFF, custom instructions verbatim, sibling blocks listed |
+| CONTEXT | flow per file already classified, PASS 2 inject ON/OFF, custom instructions verbatim, sibling blocks listed, and the **absolute** path to the flow rules — never a plugin-root variable, which does not resolve inside a subagent |
 | CONSUMER | the skill merges each block's JSON into one Humanization Report the user acts on |
 | DONE | JSON per the `mixed.md` aggregation schema — stripped, injected, surfaced per file |
 

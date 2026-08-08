@@ -1,9 +1,10 @@
 ---
 name: brewdoc:md-to-pdf
 description: Convert Markdown to PDF via reportlab or weasyprint engines. Triggers - pdf, md to pdf, markdown to pdf, generate pdf.
-argument-hint: "<file.md> [--engine name] [\"prompt\"] | styles | test | (no args = help)"
 user-invocable: true
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
+disable-model-invocation: true
+argument-hint: "<file.md> [--engine name] [\"prompt\"] | styles | test | (no args = help)"
+allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion]
 model: sonnet
 ---
 

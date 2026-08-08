@@ -25,9 +25,13 @@ skills and agents. The name is a nod to brewing: skills (recipes) define what to
     Agents resolve paths via native `${CLAUDE_PLUGIN_ROOT}`, substituted in each agent .md at Task spawn.
     No hook injection, no shared runtime state.
   </Card>
-  <Card title="8 skills (recipes)" icon="terminal">
+  <Card title="9 skills (recipes)" icon="terminal">
     From convention analysis (<a href="/brewcode/skills/convention/">/brewcode:convention</a>) and agent teams
-    (<a href="/brewcode/skills/teams/">/brewcode:teams</a>) to multi-agent review (<a href="/brewcode/skills/superreview/">/brewcode:superreview</a>).
+    (<a href="/brewcode/skills/teams-setup/">/brewcode:teams-setup</a>) to multi-agent review (<a href="/brewcode/skills/superreview-setup/">/brewcode:superreview-setup</a>).
+  </Card>
+  <Card title="One dashboard for every setup" icon="clipboard">
+    <a href="/brewcode/skills/setup-status/">/brewcode:setup-status</a> reports, read-only, which setup skills across
+    brewcode, brewtools and brewdoc are installed, stale, partial or missing here — and prints the command for each row.
   </Card>
   <Card title="5 agents (brewers)" icon="users">
     Specialists only: [skill-creator](/brewcode/agents/skill-creator/), [agent-creator](/brewcode/agents/agent-creator/),
@@ -62,9 +66,9 @@ all context is managed through built-in Claude Code events.
   │                                                          │
   │   Skills (recipes)            Agents (brewers)           │
   │   ┌──────────────┐          ┌──────────────────┐         │
-  │   │ semble, e2e  │          │ skill/agent/hook  │         │
-  │   │ superreview  │ ──────>  │ creator, bash     │         │
-  │   │ convention,. │          │ + project teams   │         │
+  │   │ semble-setup │          │ skill/agent/hook  │         │
+  │   │ superrev-... │ ──────>  │ creator, bash     │         │
+  │   │ e2e, conv... │          │ + project teams   │         │
   │   └──────────────┘          └──────────────────┘         │
   │          │                          │                     │
   │          v                          v                     │
@@ -97,37 +101,45 @@ brewcode/
 │   ├── hook-creator.md                # Hook creation (opus)
 │   ├── bash-expert.md                 # Bash scripts (opus)
 │   └── bc-rules-organizer.md          # Rules organizer (haiku)
-├── skills/                            # 8 skills
-│   ├── semble/                        # Semantic code search setup
+├── skills/                            # 9 skills
+│   ├── semble-setup/                  # Semantic code search MCP
 │   ├── convention/                    # Convention analysis
 │   ├── rules/                         # Rule extraction
-│   ├── superreview/                   # Multi-agent quorum review
+│   ├── superreview-setup/             # Multi-agent quorum review generator
+│   ├── setup-status/                  # Read-only cross-plugin setup dashboard
 │   ├── skills/                        # Skill management
 │   ├── agents/                        # Agent management
-│   ├── teams/                         # Dynamic agent teams
+│   ├── teams-setup/                   # Dynamic agent teams
 │   └── e2e/                           # E2E testing orchestration
 └── templates/                         # Rule templates
 ```
+
+## Naming: `-setup` vs bare
+
+<Callout type="tip" title="The suffix tells you how often to run it">
+A **`-setup`** skill installs a mechanism — agents, hooks, a rule, a generated skill — that you then use *instead of* the skill itself. Run it once, `upgrade` it when the plugin moves on. A **bare-named** skill is a recurring tool you run again and again, leaving no installed state behind. Every `-setup` skill answers the same seven verbs in this order: `status`, `install`, `upgrade`, `enable`, `disable`, `uninstall`, `purge`. Bare invocation means `status` when installed, `install` when not — except [`semble-setup`](/brewcode/skills/semble-setup/), which always defaults to `status` because its install reaches outside the project.
+</Callout>
 
 
 ## Components in detail
 
 <Tabs>
   <TabItem label="Skills">
-    8 skills (recipes) cover search, review, conventions, and meta-tooling.
+    9 skills (recipes) cover search, review, conventions, and meta-tooling.
     See [Skills](/brewcode/skills/) for details.
 
     | Group | Skills | Purpose |
     |-------|--------|---------|
-    | Search | semble | Semantic code-search MCP setup and maintenance |
-    | Quality | superreview, convention, rules | Multi-agent review, conventions, rule extraction |
-    | Dynamic | teams | Agent team creation and management |
+    | Search | semble-setup | Semantic code-search MCP install and maintenance |
+    | Quality | superreview-setup, convention, rules | Multi-agent review, conventions, rule extraction |
+    | Dynamic | teams-setup | Agent team creation and management |
     | Testing | e2e | E2E testing orchestration with BDD scenarios |
     | Meta | skills, agents | Skill and agent management |
+    | Dashboard | setup-status | Read-only: what is installed, stale or missing across all four plugins |
   </TabItem>
   <TabItem label="Agents">
     5 agents (brewers), all specialists. Generic implementation/review roles are generated per project
-    into `.claude/agents/` by [/brewcode:teams](/brewcode/skills/teams/) — brewcode no longer ships them.
+    into `.claude/agents/` by [/brewcode:teams-setup](/brewcode/skills/teams-setup/) — brewcode no longer ships them.
     See the [Agents](/brewcode/agents/) section for details.
 
     | Role | Agents | Model |
@@ -136,7 +148,7 @@ brewcode/
     | Scripting | bash-expert | inherit |
     | Internal | bc-rules-organizer | haiku |
 
-    + dynamic project agents created by [`/brewcode:teams`](/brewcode/skills/teams/)
+    + dynamic project agents created by [`/brewcode:teams-setup`](/brewcode/skills/teams-setup/)
   </TabItem>
   <TabItem label="Hooks">
     2 hooks manage prompt-time injection and session start.
@@ -154,23 +166,33 @@ brewcode/
 <Steps>
   <li class="step step-primary">
     <div>
+      <strong>See what is already here</strong> <Badge variant="primary" text="/brewcode:setup-status" />
+      <p>Read-only. One table of every setup skill across brewcode, brewtools and brewdoc: installed, stale, partial, missing — plus the exact command for each row. Writes nothing.</p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
       <strong>Conventions</strong> <Badge variant="primary" text="/brewcode:convention" />
       <p>Parallel per-layer analysis. Writes etalon classes and recurring patterns into <code>.claude/convention/</code>.</p>
     </div>
   </li>
   <li class="step step-primary">
     <div>
-      <strong>Deep review</strong> <Badge variant="primary" text="/brewcode:superreview" />
-      <p>Generate a project-tailored quorum review skill. Run once per project.</p>
+      <strong>Deep review</strong> <Badge variant="primary" text="/brewcode:superreview-setup install" />
+      <p>Generate a project-tailored quorum review skill. Run once per project, then <code>upgrade</code> it.</p>
     </div>
   </li>
   <li class="step step-secondary">
     <div>
-      <strong>Team Creation (optional)</strong> <Badge variant="secondary" text="/brewcode:teams" />
-      <p>Create a project-specific agent team with performance tracking.</p>
+      <strong>Team install (optional)</strong> <Badge variant="secondary" text="/brewcode:teams-setup install" />
+      <p>Install a project-specific agent team with performance tracking.</p>
     </div>
   </li>
 </Steps>
+
+<Callout type="caution" title="One setup per session">
+  Every `-setup` skill is an interactive generator: it fans out subagents, analyses the repo and asks you real questions. Two in one session degrade each other — the second answers against the first one's stale analysis. Run them one at a time, ideally in a fresh session each. That is exactly why `setup-status` reports and stops instead of running anything.
+</Callout>
 
 <Callout type="tip" title="Next steps">
   Check [Skills](/brewcode/skills/) for detailed descriptions of all available skills,

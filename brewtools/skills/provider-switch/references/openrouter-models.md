@@ -2,7 +2,7 @@
 
 ## How It Works
 OpenRouter aggregates 200+ models. The alias sets ONE model for all three Claude Code roles (opus/sonnet/haiku).
-User picks a single model during setup — it is used everywhere.
+User picks a single model during install — it is used everywhere.
 
 ## Recommended Models by Category
 

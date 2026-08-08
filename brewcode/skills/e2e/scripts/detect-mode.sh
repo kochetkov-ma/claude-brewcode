@@ -15,7 +15,16 @@ fi
 
 is_keyword() {
   case "$1" in
-    setup|create|update|review|rules|status) return 0 ;;
+    install|create|update|review|rules|status) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Verbs e2e does not implement. Without this they would fall through to the prompt branch
+# and start a full INSTALL -- the opposite of what the user typed.
+is_unsupported_keyword() {
+  case "$1" in
+    uninstall|purge|upgrade|enable|disable) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -29,14 +38,17 @@ if [ -z "$FIRST" ]; then
   if [ "$AGENT_COUNT" -ge 3 ]; then
     MODE="status"
   else
-    MODE="setup"
+    MODE="install"
   fi
+elif is_unsupported_keyword "$FIRST"; then
+  printf 'ERROR:e2e has no %s mode. Use: install | create | update | review | rules | status. To remove the setup, delete .claude/agents/e2e-*.md and .claude/e2e/ by hand.\n' "$FIRST"
+  exit 1
 elif is_keyword "$FIRST"; then
   MODE="$FIRST"
   PROMPT="$REST"
 else
-  # Non-keyword first word: setup with full args as prompt
-  MODE="setup"
+  # Non-keyword first word: install with full args as prompt
+  MODE="install"
   PROMPT="$ARGS"
 fi
 

@@ -21,8 +21,10 @@ else
 fi
 
 # Enumerate each workflow file
+# bash 3.2 (macOS) raises "unbound variable" on "${arr[@]}" of an empty array under set -u.
 echo "=== Workflows ==="
 IDX=0
+if [[ ${#WORKFLOW_FILES[@]} -gt 0 ]]; then
 for wf_file in "${WORKFLOW_FILES[@]}"; do
     IDX=$((IDX + 1))
     BASENAME=$(basename "$wf_file")
@@ -35,6 +37,7 @@ for wf_file in "${WORKFLOW_FILES[@]}"; do
     echo "WF_${IDX}_FILE=$BASENAME"
     echo "WF_${IDX}_TRIGGER=$WF_TRIGGER"
 done
+fi
 
 # Get workflow status from GitHub API
 echo "=== Workflow Status ==="

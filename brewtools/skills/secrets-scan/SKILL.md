@@ -2,8 +2,9 @@
 name: brewtools:secrets-scan
 description: Scans git-tracked files for leaked secrets. Triggers - secrets scan, find credentials, leaked keys, security audit.
 user-invocable: true
-allowed-tools: [Read, Agent, Write, Bash, AskUserQuestion]
+disable-model-invocation: true
 argument-hint: "[--fix] — no args = scan only, --fix = interactive remediation"
+allowed-tools: [Read, Agent, Write, Bash, AskUserQuestion]
 model: sonnet
 ---
 
@@ -19,7 +20,11 @@ git rev-parse --is-inside-work-tree 2>/dev/null || { echo "ERROR: Not git repo";
 REPO=$(git rev-parse --show-toplevel) && cd "$REPO"
 TS=$(date +%Y%m%d-%H%M%S)
 DIR="$REPO/.claude/reports/${TS}_secrets-scan" && mkdir -p "$DIR"
-git ls-files > "$DIR/files.txt"
+git ls-files \
+  | grep -viE '\.(png|jpe?g|gif|bmp|ico|svgz|webp|tiff?|pdf|psd|ai|eot|ttf|otf|woff2?|mp[34]|m4a|wav|ogg|avi|mov|mkv|webm|zip|tar|t?gz|tgz|bz2|xz|7z|rar|jar|war|ear|class|pyc|pyo|so|dylib|dll|exe|bin|dat|db|sqlite3?|wasm|pack|idx|min\.js|min\.css|map)$' \
+  | grep -vE '(^|/)(node_modules|vendor|third_party|\.venv|venv|dist|build|target|out|coverage|__pycache__|\.next|\.nuxt|\.gradle|Pods|bower_components)/' \
+  | grep -vE '(^|/)(package-lock\.json|yarn\.lock|pnpm-lock\.yaml|poetry\.lock|Cargo\.lock|composer\.lock|Gemfile\.lock|go\.sum|Pipfile\.lock|gradle\.lockfile)$' \
+  > "$DIR/files.txt" || true
 echo "DIR=$DIR|REPO=$REPO|TS=$TS|TOTAL=$(wc -l < "$DIR/files.txt" | tr -d ' ')"
 cat "$DIR/files.txt"
 ```
@@ -67,7 +72,8 @@ SCOPE: in — exactly these files. Out — every other path in the repo, git his
 FILES: {FILES}
 
 CONTEXT: repo root {REPO}. The file list was already produced from git-tracked files and
-filtered (binaries, vendor and ignored paths dropped) — do not re-discover or re-filter it.
+filtered in Phase 1 (binary/media extensions, vendor + build dirs, lock files and
+git-ignored paths already dropped) — do not re-discover or re-filter it.
 Nine sibling agents are scanning chunks 1..10 of that same list in parallel right now.
 Patterns, criticality ladder and skip rules below are final — do not invent extra categories.
 

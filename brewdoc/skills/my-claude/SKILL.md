@@ -1,10 +1,10 @@
 ---
 name: brewdoc:my-claude
 description: Document your Claude Code installation - setup, architecture, web research. Triggers - my claude, installation docs.
-argument-hint: "[ext [context]] | [r <query>] — no args = internal installation docs"
 user-invocable: true
 disable-model-invocation: true
-allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Task, WebFetch, WebSearch, Skill, AskUserQuestion
+argument-hint: "[ext [context]] | [r <query>] — no args = internal installation docs"
+allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Agent, Task, WebFetch, WebSearch, AskUserQuestion]
 model: opus
 ---
 
@@ -47,14 +47,14 @@ Every spawn prompt MUST carry:
 | CONSUMER | who or what uses the result next, and the shape it must fit |
 | DONE | acceptance criteria + the exact report shape you want back |
 
-A bare one-line task is never enough. Applies to every `Explore` / `general-purpose` / `reviewer` spawn in all three modes.
+A bare one-line task is never enough. Applies to every `Explore` / `general-purpose` spawn in all three modes.
 
 ## Output Directory
 
 All generated docs go to `.claude/brewdoc/my-claude/` (project-relative — required because `~/.claude/*` is blocked by Claude Code's protected-path policy in headless sessions, even under `bypassPermissions`).
 Create if not exists: `mkdir -p .claude/brewdoc/my-claude`
 
-**Optional interactive fallback:** `${BD_PLUGIN_DATA}/my-claude/` may be used when running interactively — it is NOT usable in headless `claude -p` sessions due to the protected-path restriction. Prefer the project-relative path everywhere.
+This is the only supported target — there is no `~/.claude` or plugin-data fallback.
 
 ## INDEX Tracking
 
@@ -93,7 +93,7 @@ If an existing entry for the same mode exists: use AskUserQuestion — header: "
      agents scan project `.claude` config and memory files in parallel right now; the output
      dir `.claude/brewdoc/my-claude/` and the INDEX entry are already resolved by the skill.
    CONSUMER: the aggregation step merges the three inventories into one INTERNAL-mode
-     document, then a `reviewer` agent re-checks that every path you name exists — absolute
+     document, then an `Explore` agent re-checks that every path you name exists — absolute
      paths only, and flag a missing file instead of dropping its row.
    DONE: per-section inventory (instructions summary, rules N + one line each, agents N + purpose,
      skills N + purpose) with absolute paths for every item. Flag missing files explicitly.
@@ -101,8 +101,8 @@ If an existing entry for the same mode exists: use AskUserQuestion — header: "
    ```
 2. Aggregate findings into structured document
 3. Write to `.claude/brewdoc/my-claude/YYYYMMDD_my-claude-internal.md`
-4. Spawn independent `reviewer` agent to validate facts (file paths exist, content accurate)
-5. Apply reviewer fixes if any
+4. Spawn an independent `Explore` agent to validate facts (file paths exist, content accurate) — read-only check, no edits
+5. Apply the validation fixes if any
 6. Add INDEX entry
 
 **Output document structure:**
@@ -151,7 +151,7 @@ If an existing entry for the same mode exists: use AskUserQuestion — header: "
 1. Analyze query — divide into 2-5 source groups (official docs, GitHub, Reddit, forums, marketplaces)
 2. Spawn `general-purpose` agents per source group in parallel
 3. Aggregate with citation tracking (source URL per fact)
-4. Spawn independent `reviewer` agent to validate facts and source reliability
+4. Spawn an independent `general-purpose` agent to validate facts and source reliability (needs WebFetch/WebSearch to re-check sources)
 5. Output: `.claude/brewdoc/my-claude/YYYYMMDD_research-{slug}.md`
 
 **Output structure:**

@@ -12,7 +12,7 @@ Read the entire skill directory: SKILL.md, references/, scripts/, tests/, README
 
 | # | Category | What to Check |
 |---|----------|---------------|
-| 1 | Description | Single line, quoted, 150-250 chars, starts with action verb, no multiline `\|` pipe |
+| 1 | Description | Single line, quoted, <= 120 chars (optimal ~100), starts with action verb, no multiline `\|` pipe |
 | 2 | Description (LLM) | If `disable-model-invocation` is NOT true: has `Triggers -` line with 3-5 keyword phrases |
 | 3 | Frontmatter | Valid YAML, `name` is lowercase-hyphens and <=64 chars |
 | 4 | Frontmatter flags | `user-invocable`, `disable-model-invocation`, `allowed-tools`, `model` all present and correct |

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// brewtools:manager — HARD wall guard (PreToolUse, matcher "*").
+// brewtools:manager-setup — HARD wall guard (PreToolUse, matcher "*").
 //
 // SELF-CONTAINED — copied into <project>/.claude/brewtools/manager/ by
-// `/brewtools:manager on` and registered in .claude/settings.local.json
+// `/brewtools:manager-setup install` and registered in .claude/settings.local.json
 // (PreToolUse "*"). No external imports. Project-only state.
 //
 // When state.hard === true, physically DENIES tool calls in the MAIN session,
@@ -71,12 +71,29 @@ function readProjectState(cwd) {
 // ---- guard tables -----------------------------------------------------------
 
 // Tools always permitted in the main session under the hard wall.
+// Audited bucket-by-bucket: nothing here can mutate the workspace on its own. Tools that
+// merely SPAWN work (Task/Agent/Skill/SlashCommand/SendMessage) are safe because every tool
+// call they cause in the main session comes back through this same guard.
 const ALWAYS_ALLOW = new Set([
-  'Read', 'Grep', 'Glob',
-  'Task', 'Agent', 'Skill',
-  'TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet', 'TodoWrite',
+  // read — inspect files, never write
+  'Read', 'Grep', 'Glob', 'NotebookRead',
+  // delegate / orchestrate — hands the work to a subagent, which is where mutation belongs
+  'Task', 'Agent', 'Skill', 'SlashCommand', 'ListAgents', 'SendMessage', 'Monitor',
+  // plan mode — without these an armed wall traps a plan-mode session forever
+  'EnterPlanMode', 'ExitPlanMode',
+  // tool discovery — with ENABLE_TOOL_SEARCH the Task* tools below are DEFERRED, so
+  // denying ToolSearch would make the tracking bucket unreachable
+  'ToolSearch',
+  // track / report — task graph + findings, no filesystem side effects
+  'TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet', 'TodoWrite', 'ReportFindings',
+  // background shells — read output of / stop a shell started before arming; neither writes
+  'BashOutput', 'KillShell', 'KillBash',
+  // MCP resource introspection — read-only by protocol definition
+  'ListMcpResourcesTool', 'ReadMcpResourceTool',
+  // ask the human
   'AskUserQuestion'
 ]);
+// Deliberately NOT allowed: Artifact (publishes a page), WebFetch, Write/Edit/NotebookEdit.
 
 // Tools never permitted in the main session under the hard wall (any level).
 const ALWAYS_BLOCK = new Set(['Write', 'Edit', 'NotebookEdit', 'WebFetch']);
@@ -86,7 +103,7 @@ const MCP_WRITE_VERB = /mcp__.*(write|create|update|delete|put|post|send|comment
 // MCP tool names whose verb implies read-only access.
 const MCP_READ_VERB = /mcp__.*(search|get|list|read|fetch|query|trace|status|describe)/i;
 
-const EXIT_HINT = 'Manager HARD wall is ON — delegate via Task/Agent, or run `/brewtools:manager off` to exit.';
+const EXIT_HINT = 'Manager HARD wall is ON — delegate via Task/Agent. To exit run `/brewtools:manager-setup disable`; the only Bash it needs — `node <project>/.claude/brewtools/manager/manager-state.mjs set hard=false` — is self-exempt at every level.';
 
 function deny(reason) {
   output({
@@ -98,10 +115,20 @@ function deny(reason) {
   });
 }
 
-// Self-exempt: ONLY the genuine `node ... manager-state.mjs ...` invocation used by
-// `/brewtools:manager off`. Must be a node command with NO shell operators outside
-// quoted segments (so `echo manager-state.mjs > evil`, `cat manager-state.mjs && rm f`,
-// `rm f # manager-state.mjs` etc. can NOT smuggle a bypass).
+// Self-exempt: ONLY the genuine `node <path>/manager-state.mjs get|set ...` CLI invocation
+// used by `/brewtools:manager-setup disable` / `level`.
+//
+// The exemption is anchored on the SCRIPT NODE ACTUALLY EXECUTES (argv[1]), never on a
+// substring of the command line. A substring anchor was an arbitrary-code-execution hole:
+// `node -e "<payload>" manager-state.mjs` and `node -e "console.log('manager-state.mjs')"`
+// both satisfied it and ran before the Bash classifier ever saw them.
+//
+// Four independent conditions, all required:
+//   1. the command starts with `node ` (no env prefix, no other binary),
+//   2. no shell operator outside quotes and no `$` expansion anywhere,
+//   3. no eval/print/input-type flag — those make node a shell,
+//   4. argv[1] (the first token after `node`, i.e. the script) is the helper at one of its
+//      two shipped locations, and the remaining tokens are the helper's own CLI shape.
 function noShellOpsOutsideQuotes(s) {
   let inDQ = false, inSQ = false;
   for (let i = 0; i < s.length; i++) {
@@ -116,12 +143,58 @@ function noShellOpsOutsideQuotes(s) {
   }
   return true;
 }
+
+// The two locations the helper is ever shipped to: the project copy written by
+// `manager-setup install`/`upgrade`, and the plugin's own hooks/lib. Anchoring on the
+// full tail (not just the basename) means an arbitrary `/tmp/evil/manager-state.mjs`
+// is not exempt.
+const HELPER_PATH = /(^|\/)(\.claude\/brewtools\/manager|hooks\/lib)\/manager-state\.mjs$/;
+
+// Any flag that turns `node` into an evaluator. Rejected outright.
+const NODE_EVAL_FLAG = /(^|\s)(-e|--eval|-p|--print|--input-type|--experimental-loader|--import|--require|-r|--loader)(\s|=|$)/;
+
+// Split into argv-ish tokens honouring quotes. null when quoting is unbalanced.
+function tokenizeCommand(s) {
+  const out = [];
+  let cur = '', started = false, inDQ = false, inSQ = false;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (c === '\\' && !inSQ && i + 1 < s.length) { cur += s[++i]; started = true; continue; }
+    if (c === '"' && !inSQ) { inDQ = !inDQ; started = true; continue; }
+    if (c === "'" && !inDQ) { inSQ = !inSQ; started = true; continue; }
+    if (!inDQ && !inSQ && /\s/.test(c)) { if (started) { out.push(cur); cur = ''; started = false; } continue; }
+    cur += c; started = true;
+  }
+  if (inDQ || inSQ) return null;
+  if (started) out.push(cur);
+  return out;
+}
+
+// The helper's own CLI grammar: get|set [key=value ...] [--cwd DIR]. Mirrors parseCliArgs
+// in lib/manager-state.mjs — the guard must never allow a shape the helper would not.
+function isStateCliArgs(args) {
+  if (args[0] !== 'get' && args[0] !== 'set') return false;
+  for (let i = 1; i < args.length; i++) {
+    const a = args[i];
+    if (a === '--cwd') { if (!args[++i]) return false; continue; }
+    if (a.startsWith('-')) return false;
+    if (args[0] !== 'set') return false;
+    if (!/^(hard=(true|false)|level=(strict|balanced))$/.test(a)) return false;
+  }
+  return true;
+}
+
 function isStateWriteCommand(cmd) {
   if (typeof cmd !== 'string' || !cmd) return false;
   const s = cmd.trim();
-  if (!/^node[\s]/.test(s)) return false;                 // must be a node invocation
+  if (!/^node\s/.test(s)) return false;                   // must be a bare node invocation
   if (!noShellOpsOutsideQuotes(s)) return false;          // no operators outside quotes
-  return /(^|[\s'"\/])manager-state\.mjs([\s'"]|$)/.test(s); // path-anchored token
+  if (s.includes('$')) return false;                      // no variable/command expansion
+  if (NODE_EVAL_FLAG.test(s)) return false;               // node must not act as an evaluator
+  const argv = tokenizeCommand(s);
+  if (!argv || argv.length < 3) return false;
+  if (!HELPER_PATH.test(argv[1])) return false;           // the SCRIPT must be the shipped helper
+  return isStateCliArgs(argv.slice(2));
 }
 
 // Read-only base commands allowed under `balanced`.

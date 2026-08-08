@@ -84,17 +84,20 @@ One organizer = ONE bounded unit: the accepted rules for ONE target file. If the
 spans several target files and exceeds ~5 files / ~10 steps, split per target file and spawn all
 organizers in ONE message.
 
+> `${CLAUDE_PLUGIN_ROOT}` below is the brewcode plugin root. Expand it to the absolute path
+> before spawning — bc-rules-organizer receives the prompt as plain text and cannot resolve it.
+
 ```
-Task(subagent_type="bc-rules-organizer", prompt="
+Task(subagent_type="brewcode:bc-rules-organizer", prompt="
 GOAL: this project's conventions were just extracted into .claude/convention/ docs; the rules the
       user accepted must land in .claude/rules/ so every later session picks them up automatically.
 ROLE: you own .claude/rules/ files only. Update PROJECT .claude/rules/ -- NEVER ~/.claude/rules/.
       Do NOT touch .claude/convention/ docs, CLAUDE.md, or project source.
 SCOPE: .claude/rules/{stack}-avoid.md and .claude/rules/{stack}-best-practice.md (generic
        avoid.md / best-practice.md when no stack detected).
-       Plugin templates: $BC_PLUGIN_ROOT/templates/rules/
-       Validation: bash \"$BC_PLUGIN_ROOT/skills/rules/scripts/rules.sh\" validate
-       Create missing: bash \"$BC_PLUGIN_ROOT/skills/rules/scripts/rules.sh\" create
+       Plugin templates: ${CLAUDE_PLUGIN_ROOT}/templates/rules/
+       Validation: bash \"${CLAUDE_PLUGIN_ROOT}/skills/rules/scripts/rules.sh\" validate
+       Create missing: bash \"${CLAUDE_PLUGIN_ROOT}/skills/rules/scripts/rules.sh\" create
        Out of bounds: every other file.
 CONTEXT: these rules already passed extraction from the convention docs, similarity dedup against
       the existing .claude/rules/*.md, and per-batch user approval -- do not re-judge them and do

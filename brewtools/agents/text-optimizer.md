@@ -5,7 +5,7 @@ model: sonnet
 maxTurns: 60
 color: magenta
 tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch, AskUserQuestion
-skills: text-optimize
+skills: brewtools:text-optimize
 ---
 
 # Text Optimizer Agent

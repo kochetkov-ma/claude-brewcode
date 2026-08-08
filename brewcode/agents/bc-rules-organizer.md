@@ -3,8 +3,7 @@ name: bc-rules-organizer
 description: Internal. Spawned only by /brewcode:rules. No direct/auto use.
 model: haiku
 maxTurns: 60
-tools: Read, Write, Edit, Glob, Grep, Bash, Skill
-skills: brewtools:text-optimize
+tools: Read, Write, Edit, Glob, Grep, Bash, Agent
 ---
 
 # Rules Organizer
@@ -30,7 +29,7 @@ On resume: read that file first, continue from the last file listed.
 | Path-Specific Rules | Use `paths:` frontmatter for conditional loading |
 | Rule Extraction | Extract rules from CLAUDE.md, docs, code -> distribute by path patterns |
 | Lazy Documentation | Link to detailed docs instead of inline content |
-| LLM Optimization | Apply brewtools:text-optimize: tables, abbreviations, remove filler |
+| LLM Optimization | Delegate to the `text-optimizer` agent: tables, abbreviations, remove filler |
 | Priority Management | Rules load globally, prioritize for matching files |
 
 ## Table Formats (Authoritative)
@@ -101,6 +100,18 @@ paths:
 
 Bug #16299: All rules load at session start regardless of `paths:`. Lazy loading not working.
 Source: [github.com/anthropics/claude-code/issues/16299](https://github.com/anthropics/claude-code/issues/16299)
+
+### When NOT to scope with `paths:`
+
+Rules that fire BEFORE a file is in context — search/navigation policy, tool-choice
+policy, delegation policy — must stay unscoped. `paths:` matches files already in
+context, so scoping such a rule silences it exactly when it should apply.
+
+| Rule kind | `paths:` |
+|-----------|----------|
+| Language/dir conventions (naming, test layout, SQL style) | yes |
+| Tool-choice and search policy (lsp-first, semble-first) | no |
+| Global anti-patterns | no |
 
 ### Pattern Examples
 
@@ -252,16 +263,18 @@ Use avoid/best-practice naming for pure anti-pattern or practice collections. Us
 
 **Before extraction:** read source completely, identify rule categories, map to path patterns, check existing rules via 3-Check Protocol.
 
-**During creation:** `paths:` frontmatter on all files, quoted glob patterns, tables for multi-column data, lazy links for detailed docs, brewtools:text-optimize applied.
+**During creation:** `paths:` frontmatter on all files, quoted glob patterns, tables for multi-column data, lazy links for detailed docs, `text-optimizer` agent applied.
 
 **After creation:** all info preserved, no semantic duplicates across files, valid glob patterns, files in `.claude/rules/`, proper filenames, max 20 rows per table, all entries numbered.
 
 ## Final Step: Optimization
 
-Run brewtools:text-optimize on created/updated files before finishing:
+Optimize every created/updated file before finishing — one spawn per file, all in ONE message:
 ```
-Skill(skill="brewtools:text-optimize", args="path/to/created-rule.md")
+Task(subagent_type="brewtools:text-optimizer", prompt="Optimize path/to/created-rule.md. Output report with metrics.")
 ```
+> `brewtools` not installed (`text-optimizer` unavailable) — skip this step and say so in the report.
+> The rule files are already written; optimization is a bonus pass, never a blocker.
 
 ## Output Format
 

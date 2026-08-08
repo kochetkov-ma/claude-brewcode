@@ -139,7 +139,7 @@ list_rules() {
   local avoid_count=0
   for f in .claude/rules/avoid.md .claude/rules/*-avoid.md; do
     if [ -f "$f" ]; then
-      rows=$(grep -c "^|" "$f" 2>/dev/null || echo 0)
+      rows=$(grep -c "^|" "$f" 2>/dev/null || true); rows=${rows:-0}
       rows=$((rows - 2))  # Subtract header and separator
       [ $rows -lt 0 ] && rows=0
       echo "  $(basename "$f") ($rows entries)"
@@ -152,7 +152,7 @@ list_rules() {
   local bp_count=0
   for f in .claude/rules/best-practice.md .claude/rules/*-best-practice.md; do
     if [ -f "$f" ]; then
-      rows=$(grep -c "^|" "$f" 2>/dev/null || echo 0)
+      rows=$(grep -c "^|" "$f" 2>/dev/null || true); rows=${rows:-0}
       rows=$((rows - 2))  # Subtract header and separator
       [ $rows -lt 0 ] && rows=0
       echo "  $(basename "$f") ($rows entries)"
@@ -163,6 +163,13 @@ list_rules() {
 
   echo "---"
   echo "Total: $((avoid_count + bp_count)) rule files"
+}
+
+# Uppercase the first character. `${var^}` is bash 4; macOS /bin/bash is 3.2.
+capitalize() {
+  local s="$1"
+  [ -z "$s" ] && return 0
+  printf '%s%s' "$(printf '%s' "${s%"${s#?}"}" | tr '[:lower:]' '[:upper:]')" "${s#?}"
 }
 
 # Create specialized rules from template with prefix
@@ -181,17 +188,19 @@ create_specialized() {
 
   local avoid_file=".claude/rules/${prefix}-avoid.md"
   local bp_file=".claude/rules/${prefix}-best-practice.md"
+  local cap
+  cap=$(capitalize "$prefix")
 
   if [ ! -f "$avoid_file" ]; then
     # Create from template with prefix substitution
-    sed "s/# Avoid/# ${prefix^} Avoid/" "$PLUGIN_TEMPLATES/rules/avoid.md.template" > "$avoid_file"
+    sed "s/# Avoid/# ${cap} Avoid/" "$PLUGIN_TEMPLATES/rules/avoid.md.template" > "$avoid_file"
     echo "V Created: $avoid_file"
   else
     echo ">> Preserved: $avoid_file (exists)"
   fi
 
   if [ ! -f "$bp_file" ]; then
-    sed "s/# Best Practices/# ${prefix^} Best Practices/" "$PLUGIN_TEMPLATES/rules/best-practice.md.template" > "$bp_file"
+    sed "s/# Best Practices/# ${cap} Best Practices/" "$PLUGIN_TEMPLATES/rules/best-practice.md.template" > "$bp_file"
     echo "V Created: $bp_file"
   else
     echo ">> Preserved: $bp_file (exists)"

@@ -4,7 +4,7 @@ description: "Creates and improves Claude Code agents. Triggers: create agent, i
 model: inherit
 maxTurns: 80
 color: cyan
-tools: Read, Write, Edit, Glob, Grep, Bash, Agent, Skill, WebFetch, WebSearch, AskUserQuestion
+tools: Read, Write, Edit, Glob, Grep, Bash, Agent, WebFetch, WebSearch, AskUserQuestion
 ---
 
 [DICT: AG=agent, BC=brewcode, CC=Claude Code, CD=CLAUDE.md, EX=example, FM=frontmatter, MDL=model, PLG=plugin, SA=subagent, SK=skill, SP=system prompt, TL=tool(s), TRG=trigger, VH=version history]
@@ -377,7 +377,7 @@ Before returning, spend one step on what the MAIN SESSION needs, and return only
 3. Synthesize -- Extract patterns, rules, conventions
 4. Write -- FM + SP with tables, at a path on the walk-up scan for the intended launch cwd (see Discovery)
 5. Validate -- Check name, description, TLs, structure, placement; warn if the file won't be discovered from the stated launch cwd
-6. Optimize -- Run `Skill(skill="brewtools:text-optimize", args="path/to/agent.md")`
+6. Optimize -- `Task(subagent_type="brewtools:text-optimizer", prompt="Optimize path/to/agent.md. Output report with metrics.")`. `brewtools` absent -> skip, note it in the report
 
 ### Turn Budget + Checkpointing (every generated AG)
 
@@ -447,7 +447,7 @@ No `Context:` line, no `assistant:` response -- `<commentary>` is the selection 
 - [ ] READ-ONLY AGs have no Write/Edit TLs
 - [ ] No CD rules duplicated in AG body (already injected)
 - [ ] Unique name in scope (no conflict with existing AGs)
-- [ ] Optimized with `brewtools:text-optimize` SK
+- [ ] Optimized by the `text-optimizer` AG (or skipped -- brewtools absent, noted in report)
 
 ## Known Bugs
 

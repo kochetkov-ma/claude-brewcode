@@ -1,7 +1,7 @@
 ---
 title: "FAQ"
 description: "Frequently asked questions about installing, updating, and using the brewcode plugin suite."
-order: 4
+order: 5
 tocItems:
   - slug: "update-plugins"
     text: "How do I update brewcode plugins?"
@@ -11,6 +11,10 @@ tocItems:
     text: "Claude refuses to run the update commands"
   - slug: "which-plugins"
     text: "Which plugins are in the suite?"
+  - slug: "setup-suffix"
+    text: "Why do some skills end in -setup?"
+  - slug: "auto-invoke"
+    text: "Why does Claude never run these skills on its own?"
   - slug: "restart-after-update"
     text: "Do I need to restart after updating?"
   - slug: "install-missing"
@@ -68,12 +72,39 @@ Paste the following prompt directly into the chat. The coercive phrasing is inte
 
 | Plugin | Purpose | Install command |
 |--------|---------|----------------|
-| **brewcode** | Infinite task execution, 8 skills, 5 agents, 2 hooks | `claude plugin install brewcode@claude-brewcode` |
-| **brewdoc** | Documentation tools: docsync, memory-sync generation, PDF, publishing | `claude plugin install brewdoc@claude-brewcode` |
-| **brewtools** | Text utilities, [SSH](/brewtools/skills/ssh/), [deploy](/brewtools/skills/deploy/), [plugin-update](/brewtools/skills/plugin-update/) | `claude plugin install brewtools@claude-brewcode` |
-| **brewui** | UI/visual/creative tools (placeholder, empty) | `claude plugin install brewui@claude-brewcode` |
+| **brewcode** | Conventions, rules, teams, deep review, semantic search: 9 skills, 5 agents, 2 hooks | `claude plugin install brewcode@claude-brewcode` |
+| **brewdoc** | Documentation tools: docsync-setup, memory-sync-setup, my-claude, PDF, publishing — 5 skills, 0 agents, 0 hooks | `claude plugin install brewdoc@claude-brewcode` |
+| **brewtools** | Text utilities, [SSH](/brewtools/skills/ssh/), [deploy](/brewtools/skills/deploy/), [plugin-update](/brewtools/skills/plugin-update/), manager mode, hook layer: 12 skills, 3 agents, 2 hooks | `claude plugin install brewtools@claude-brewcode` |
+| **brewui** | UI/visual/creative tools (placeholder, empty): 0 skills | `claude plugin install brewui@claude-brewcode` |
 
-All four plugins install from the same `claude-brewcode` marketplace on GitHub.
+All four plugins install from the same `claude-brewcode` marketplace on GitHub — 26 skills and 8 agents in total.
+
+</Spoiler>
+
+<Spoiler id="setup-suffix" title="Why do some skills end in -setup?">
+
+A `-setup` suffix marks a skill that installs a mechanism into the project — agents, hooks, a generated skill, a board. After it runs you use the installed thing, not the skill. Skills without the suffix are recurring tools: running them repeatedly is the intended usage.
+
+There are ten `-setup` skills. They share one mode vocabulary — `status | install | upgrade | enable | disable | uninstall | purge` — and a bare invocation reports instead of installing once something is already there.
+
+Skill-specific verbs come after the canonical set, never in place of it. A setup with no on/off state rejects `enable` and `disable` with an error instead of quietly doing something else: `/brewcode:teams-setup enable` is an error, because a team either exists on disk or does not.
+
+<Callout type="warning" title="Run them one at a time">
+  Each setup is an interactive generator: it fans out subagents, analyses the repo and asks you real questions. Two in one session degrade each other. Start with [`/brewcode:setup-status`](/brewcode/skills/setup-status/) and work its list, one setup per fresh session — full details on the [Full Setup](/full-setup/) page.
+</Callout>
+
+</Spoiler>
+
+<Spoiler id="auto-invoke" title="Why does Claude never run these skills on its own?">
+
+Because that is the design. All 26 distributed skills carry both `user-invocable: true` and `disable-model-invocation: true` in their frontmatter. The model never sees their descriptions and never auto-activates one — a skill in this suite runs only when **you** type `/plugin:skill`.
+
+This is a deliberate trade about context cost, not an oversight. Every skill whose description is model-visible spends tokens in every single request, forever, just to stay discoverable. Twenty-six of them would be a permanent tax on the context window of every conversation, in exchange for auto-activation that these particular skills do not want anyway:
+
+- The ten `-setup` skills are interactive generators that write real files into your repo. Nothing should reach for one without you asking.
+- The recurring tools (`convention`, `rules`, `e2e`, `publish`, `text-optimize`, `secrets-scan`, `deploy`, `ssh`) are things you run at a moment you choose, on a scope you choose.
+
+The practical consequence: asking "can you sync my docs?" will not trigger `/brewdoc:docsync-setup`. Type the command. Tab completion after `/` lists everything that is installed.
 
 </Spoiler>
 
@@ -121,8 +152,8 @@ Plugins are stored locally after installation:
 For example:
 
 ```
-&#126;/.claude/plugins/cache/claude-brewcode/brewcode/3.4.51/
-&#126;/.claude/plugins/cache/claude-brewcode/brewtools/3.4.51/
+&#126;/.claude/plugins/cache/claude-brewcode/brewcode/5.0.0/
+&#126;/.claude/plugins/cache/claude-brewcode/brewtools/5.0.0/
 ```
 
 The marketplace metadata lives at:

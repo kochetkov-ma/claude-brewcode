@@ -4,7 +4,7 @@ Update existing E2E scenarios and tests.
 
 ## U0: Prerequisite Check
 
-Check `.claude/agents/e2e-*.md` count. If <3 → "Run `/brewcode:e2e setup` first." STOP.
+Check `.claude/agents/e2e-*.md` count. If <3 → "Run `/brewcode:e2e install` first." STOP.
 Read `.claude/e2e/config.json` for stack, framework, paths.
 
 ## U1: Scope Definition
@@ -51,7 +51,7 @@ ROLE: you own {TARGET_FILES} and the action '{ACTION_FROM_TABLE}'. Do NOT touch 
       scenarios or tests, shared layers you were not assigned, CI config, or production code.
 SCOPE: {TARGET_FILES} under {config.scenarioDir} / {config.testSourceDir}.
        Out of bounds: every artifact U2 did not list.
-CONTEXT: setup already fixed the framework {config.testFramework}, the e2e-* agent roster and the
+CONTEXT: install already fixed the framework {config.testFramework}, the e2e-* agent roster and the
       rules at {config.rulesPath} -- follow them, do not re-decide. U2 listed the existing
       artifacts and the user confirmed these targets in U2, so the scope is closed. Existing
       scenarios/tests outside your target keep working; sibling agents may be updating other

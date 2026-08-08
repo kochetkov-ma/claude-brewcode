@@ -83,7 +83,7 @@ import { Card, CardGrid, Callout, Steps, UpdateNotice } from '../../../../compon
   <li>
     <div>
       <strong>Operation</strong>
-      <p><strong>create</strong> — generates workflow YAML from template, writes to <code>.github/workflows/</code>, updates config. <strong>release</strong> — bump → changelog → RELEASE-NOTES.md → commit → tag → push → <code>update-plugin.sh</code>. <strong>deploy</strong> — confirms classification, triggers <code>workflow_dispatch</code>, polls run status, runs VPS health check if applicable.</p>
+      <p><strong>create</strong> — generates workflow YAML from template, writes to <code>.github/workflows/</code>, updates config. <strong>release</strong> — probe project tooling → bump → changelog → commit → tag → push → optional post-release script → verify. <strong>deploy</strong> — confirms classification, triggers <code>workflow_dispatch</code>, polls run status, runs VPS health check if applicable.</p>
     </div>
   </li>
   <li>
@@ -99,6 +99,31 @@ import { Card, CardGrid, Callout, Steps, UpdateNotice } from '../../../../compon
     </div>
   </li>
 </Steps>
+
+## Release mode knows nothing about your repo until it looks
+
+<Callout type="note">
+`release` runs a **Step 0 probe** before anything else. It lists `.claude/scripts/*.sh`, `scripts/`, the `scripts` block of `package.json` and `Makefile`, and records three values — each defaulting to `none`:
+
+| Value | What it holds |
+|-------|---------------|
+| `BUMP_SCRIPT` | a bump/version script, or `none` |
+| `POST_SCRIPT` | a post-release/publish script, or `none` |
+| `CHANGELOG` | `CHANGELOG.md`, `RELEASE-NOTES.md`, or `none` |
+
+**`none` is not a failure.** It means that step is skipped or done by hand, and the report says so.
+</Callout>
+
+Nothing in the release path is hardcoded to a particular repo layout:
+
+| Step | Behavior |
+|------|----------|
+| Bump | `BUMP_SCRIPT` found → run it. `none` + version files obvious → edit every version file the repo actually has (`package.json`, `pyproject.toml`, `gradle.properties`, `Cargo.toml`, ...) to the same X.Y.Z. `none` + unclear → ask which files carry the version |
+| Changelog | Written into the `CHANGELOG` file from Step 0, matching the heading style already in that file. `none` → the summary goes into the tag/release body instead |
+| Post-release | Runs only if `POST_SCRIPT` was found; otherwise skipped and reported as "no post-release script" |
+| Verify | Checks whichever artifact the project actually publishes — container image, npm/PyPI package, a live `/version` endpoint, a plugin cache entry. Nothing published → "no external artifact to verify", not a failure |
+
+The multi-package flow with its own bump script, plugin-cache verification and doc links lives in `references/release-best-practices.md` as a clearly labelled worked EXAMPLE — a pattern to adapt, not commands to run.
 
 ## Delegation
 

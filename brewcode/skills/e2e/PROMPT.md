@@ -43,7 +43,7 @@ description: "TODO: <= 120 символов (optimal ~100), single line, что 
 
 | Режим | Вызов | Описание |
 |-------|-------|----------|
-| `setup` (default) | `/brewcode:e2e [prompt]` или `/brewcode:e2e setup [prompt]` | Анализ → создание агентов → правила → документация |
+| `install` (default) | `/brewcode:e2e [prompt]` или `/brewcode:e2e install [prompt]` | Анализ → создание агентов → правила → документация |
 | `create` | `/brewcode:e2e create [prompt]` | Создание сценариев и тестов по описанию flow |
 | `update` | `/brewcode:e2e update [prompt]` | Улучшение существующих сценариев/тестов |
 | `review` | `/brewcode:e2e review [prompt]` | Мультиагентное ревью (3 ревьюера, quorum 2/3) |
@@ -76,7 +76,7 @@ description: "TODO: <= 120 символов (optimal ~100), single line, что 
 
 ### Шаблон агентов
 
-Источник: `brewcode/skills/teams/references/agent-template.md` — скопировать и адаптировать под E2E.
+Источник: `brewcode/skills/teams-setup/references/agent-template.md` — скопировать и адаптировать под E2E.
 
 Обязательные элементы: Mission / Domain / Character / Last Updated | Immutable Traits (Name, Base Role) | Task Acceptance Protocol | Domain Instructions | Colleagues (таблица E2E-команды)
 
@@ -90,7 +90,7 @@ description: "TODO: <= 120 символов (optimal ~100), single line, что 
 
 ## 3. Правила E2E (references/e2e-rules.md)
 
-**При setup:** WebSearch лучших практик → структурировать полный набор. Правила: короткие, конкретные, actionable.
+**При install:** WebSearch лучших практик → структурировать полный набор. Правила: короткие, конкретные, actionable.
 **При режиме `rules`:** обновить по опыту проекта, перепроверить все источники.
 
 #### Сценарии
@@ -193,7 +193,7 @@ description: "TODO: <= 120 символов (optimal ~100), single line, что 
 
 ## 5. Детализация режимов
 
-### 5.1 setup
+### 5.1 install
 
 **Цель:** подготовить проект — создать агентов, правила, документацию.
 **Промт:** уточняет scope. Примеры: `"focus on payment domain"`, `"only API tests"`, `"use Playwright + Jest"`.
@@ -276,13 +276,13 @@ description: "TODO: <= 120 символов (optimal ~100), single line, что 
 **Создание агентов:**
 - Через `Task(subagent_type="brewcode:agent-creator")` — не вручную
 - Батчами по 3-4 (параллельно)
-- После создания — оптимизация через `Skill(skill="brewtools:text-optimize")`
-- Шаблон из `brewcode/skills/teams/references/agent-template.md`
+- После создания — оптимизация через `Task(subagent_type="brewtools:text-optimizer", prompt="Optimize .claude/agents/{agent-name}.md. Output report with metrics.")`; brewtools не установлен — шаг пропускается
+- Шаблон из `brewcode/skills/teams-setup/references/agent-template.md`
 
 **Создание скилла:**
 - Через `Task(subagent_type="brewcode:skill-creator")`
 - Паттерны: Progressive Disclosure, Reference Splitting, Mode Switcher (detect-mode.sh)
-- `${CLAUDE_SKILL_DIR}` в SKILL.md, `$BC_PLUGIN_ROOT` в промтах агентов
+- `${CLAUDE_SKILL_DIR}` в SKILL.md (подставляется только там); в промтах агентов — развёрнутый абсолютный путь, а для файлов проекта — путь относительно корня репозитория. `$BC_PLUGIN_ROOT` мёртв (хук удалён в v4.0.0), в сгенерированных агентах `${CLAUDE_PLUGIN_ROOT}` тоже не подставляется
 - Маркер `**EXECUTE** using Bash tool:` + `&& echo "OK" || echo "FAILED"`
 
 **Правила и документация:**

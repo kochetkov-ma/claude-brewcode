@@ -1,0 +1,16 @@
+{
+  "mcpServers": {},
+  "projects": {
+    "__PROJECT_ROOT__": {
+      "mcpServers": {
+        "semble_code": {
+          "type": "stdio",
+          "command": "uvx",
+          "args": ["--from", "semble[mcp]==0.5.2", "semble", "--content", "code", "docs", "config"],
+          "env": { "SEMBLE_CACHE_LOCATION": "__CACHE_ROOT_CODE__" },
+          "alwaysLoad": true
+        }
+      }
+    }
+  }
+}

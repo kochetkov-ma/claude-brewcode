@@ -52,7 +52,9 @@ fi
 
 # Check secrets
 echo "=== Secrets ==="
-SECRETS_COUNT=$(gh secret list 2>/dev/null | wc -l | tr -d ' ')
+# Listing secrets needs admin. Non-admin -> gh exits non-zero, pipefail propagates it and
+# errexit would kill the script before the GHCR block. Degrade to 0 instead.
+SECRETS_COUNT=$({ gh secret list 2>/dev/null || true; } | wc -l | tr -d ' ')
 echo "SECRETS_COUNT=$SECRETS_COUNT"
 
 # Check GHCR access

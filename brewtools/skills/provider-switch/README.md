@@ -17,7 +17,7 @@ Switch Claude Code from Anthropic Max to a pay-per-token API provider — **Deep
 /brewtools:provider-switch glm
 
 # Set up all providers in one run
-/brewtools:provider-switch setup
+/brewtools:provider-switch install
 
 # See how switching works
 /brewtools:provider-switch help
@@ -29,16 +29,24 @@ Switch Claude Code from Anthropic Max to a pay-per-token API provider — **Deep
 /brewtools:provider-switch model-check
 ```
 
-After setup, run `claudeglm` — it sets env vars and starts Claude in one command. To return to Anthropic, open a new terminal.
+After install, run `claudeglm` — it sets env vars and starts Claude in one command. To return to Anthropic, open a new terminal.
 
 ## Features
 
 - Interactive language selection (English / Russian) at session start
 - Reads current `~/.zshrc` state before any write — shows what is already configured
-- Auto-starts setup when no provider is configured yet
+- Auto-starts install when no provider is configured yet
 - OpenRouter: pick one model for all roles, with validated custom ID input
 - All writes go into a clearly marked section in `~/.zshrc`; backup created before first write
 - Error reporting with `SCRIPT_ERROR / PHASE / ACTION / SUGGESTION` block on any failure
+
+## Credential handling
+
+| Rule | Why |
+|------|-----|
+| The API key is piped to `write-alias.sh set-key` on **stdin**, never as an argument | argv is visible to `ps` for the lifetime of the process and lands verbatim in the session transcript. `set-key` rejects a key passed as an argument |
+| The `~/.zshrc.bak` snapshot is created under `umask 077`, `chmod 600`, and deleted on success | The backup contains whatever keys were already in `~/.zshrc`; a world-readable copy that nothing cleans up is a second leak |
+| Line edits use `awk` + temp file + `mv`, not `sed -i ''` | `sed -i ''` is BSD-only — on Linux it silently consumed the next argument and broke `set-key`, `set-alias`, `remove-key`, `remove-alias` |
 
 ## Providers
 
@@ -54,8 +62,8 @@ After setup, run `claudeglm` — it sets env vars and starts Claude in one comma
 
 | Argument | Mode | What it does |
 |----------|------|-------------|
-| (none) | status | Shows provider table; auto-starts setup if nothing is configured |
-| `setup` | setup | Interactive selection of one or more providers to configure |
+| (none) | status | Shows provider table; auto-starts install if nothing is configured |
+| `install` | install | Interactive selection of one or more providers to configure |
 | `deepseek` / `ds` / `dpsk` | provider-deepseek | Configure DeepSeek V4 only (priority default) |
 | `glm` / `zai` / `z.ai` | provider-glm | Configure Z.ai/GLM only |
 | `qwen` / `dashscope` | provider-qwen | Configure Qwen/DashScope only |

@@ -1,9 +1,10 @@
 ---
 name: brewcode:convention
 description: "Extracts etalon classes, patterns, architecture into convention docs. Triggers: extract conventions, etalon classes."
+user-invocable: true
 disable-model-invocation: true
 argument-hint: "[full|conventions|rules|paths <p1,p2>]"
-allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion, Skill
+allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion, Skill]
 model: opus
 ---
 
@@ -16,7 +17,7 @@ model: opus
 | Mode | Invocation | Phases | Prerequisites |
 |------|-----------|--------|---------------|
 | `full` (default) | `/brewcode:convention` | P0-P8 | None |
-| `conventions` | `/brewcode:convention conventions` | P0-P7 | None |
+| `conventions` | `/brewcode:convention conventions` | P0-P6 | None |
 | `rules` | `/brewcode:convention rules` | P0, P7, P7.5, P8 | `.claude/convention/` exists |
 | `paths` | `/brewcode:convention paths src/a,src/b` | P0-P7 scoped | None |
 
@@ -232,9 +233,9 @@ IF `text-optimizer` agent is available (brewtools installed):
 Spawn 3 text-optimizer agents in ONE message (medium mode):
 
 ```
-Task(subagent_type="text-optimizer", prompt="FIRST: Read $BT_PLUGIN_ROOT/skills/text-optimize/references/rules-review.md. THEN optimize .claude/convention/reference-patterns.md using medium mode. Output report with metrics.")
-Task(subagent_type="text-optimizer", prompt="FIRST: Read $BT_PLUGIN_ROOT/skills/text-optimize/references/rules-review.md. THEN optimize .claude/convention/testing-conventions.md using medium mode. Output report with metrics.")
-Task(subagent_type="text-optimizer", prompt="FIRST: Read $BT_PLUGIN_ROOT/skills/text-optimize/references/rules-review.md. THEN optimize .claude/convention/project-architecture.md using medium mode. Output report with metrics.")
+Task(subagent_type="brewtools:text-optimizer", prompt="Optimize .claude/convention/reference-patterns.md using medium mode. Output report with metrics.")
+Task(subagent_type="brewtools:text-optimizer", prompt="Optimize .claude/convention/testing-conventions.md using medium mode. Output report with metrics.")
+Task(subagent_type="brewtools:text-optimizer", prompt="Optimize .claude/convention/project-architecture.md using medium mode. Output report with metrics.")
 ```
 
 ELSE (brewtools not installed -- fallback):
@@ -265,6 +266,8 @@ AskUserQuestion options:
 ---
 
 ## P7: Rules Organization
+
+> SKIP in `conventions` mode — it exists to leave `.claude/rules/` untouched. Go straight to P8.
 
 Read `references/rules-guide.md` for interactive flow.
 

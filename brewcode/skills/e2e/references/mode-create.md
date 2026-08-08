@@ -4,7 +4,7 @@ Create BDD scenarios and E2E autotests for a target area.
 
 ## C0: Prerequisite Check
 
-Check `.claude/agents/e2e-*.md` count. If <3 → "Run `/brewcode:e2e setup` first." STOP.
+Check `.claude/agents/e2e-*.md` count. If <3 → "Run `/brewcode:e2e install` first." STOP.
 Read `.claude/e2e/config.json` for stack, framework, paths.
 
 ## C1: Scope Definition
@@ -39,7 +39,7 @@ ROLE: you own the BDD scenarios for {SCOPE}. Do NOT write test code, do NOT edit
       do NOT touch other domains' scenarios.
 SCOPE: write to `{config.scenarioDir}/{domain}/` (e.g. `.claude/e2e/scenarios/checkout/`).
        Out of bounds: {config.testSourceDir} and everything else.
-CONTEXT: setup already fixed the stack, framework and the e2e-* roster -- do not re-decide them.
+CONTEXT: install already fixed the stack, framework and the e2e-* roster -- do not re-decide them.
       Input: analysis from C2 (code, existing tests, API contracts, data model, integrations),
       scope from C1, rules from config.rulesPath -- the analysis is done, do not re-explore.
       Existing tests found in C2 are the baseline: extend coverage, do not duplicate it.
@@ -135,10 +135,10 @@ GOAL: this project is getting an E2E suite; this task delivers the autotests for
 ROLE: you own the test files for {SCOPE} only. Do NOT edit the scenarios, page objects owned by
       other agents, CI config, or production code.
 SCOPE: write to `{config.testSourceDir}/{domain}/`. Out of bounds: everything else.
-CONTEXT: setup already fixed the stack {config.stack}, framework {config.testFramework} and the
+CONTEXT: install already fixed the stack {config.stack}, framework {config.testFramework} and the
       e2e-* roster -- do not re-decide them. The C5 scenarios are user-approved and frozen: cover
       them as written, and report a gap instead of inventing a scenario. Input: approved
-      scenarios, architecture from `$BC_PLUGIN_ROOT/skills/e2e/references/e2e-architecture.md`,
+      scenarios, architecture from `${CLAUDE_SKILL_DIR}/references/e2e-architecture.md`,
       rules from {config.rulesPath}, config. You MUST load the rules and architecture refs before
       writing code. Follow the layered architecture: Test -> Steps -> Verification -> Data ->
       Support -> Config. Sibling agents may write other domains in parallel and own the shared

@@ -1,6 +1,15 @@
 # Release Best Practices
 
-> Release flow, semver rules, changelog conventions for this project.
+> Semver rules below are **general** — they apply anywhere.
+>
+> Everything from "Release Flow" down is a **WORKED EXAMPLE** taken from one specific repo
+> (`claude-brewcode`, a 4-plugin Claude Code marketplace). Its script names, file paths, URLs
+> and heading names are that repo's, **not yours**. Read it for the SHAPE — probe-then-run,
+> every version file in lockstep, verify the published artifact, gate on a version check —
+> and translate each step to whatever the current project actually has.
+>
+> **Do not execute any command from the example blocks in another repo.** `/brewtools:deploy`
+> P4 Step 0 probes for the real tooling first.
 
 ## Semver Rules
 
@@ -10,7 +19,7 @@
 | **minor** (0.X.0) | New features, new skills, new agents | Add deploy skill, add image-gen |
 | **major** (X.0.0) | Breaking changes, incompatible API | Restructure plugins, rename skills |
 
-## Release Flow (this project)
+## EXAMPLE — Release Flow (claude-brewcode repo)
 
 ```
 1. bump-version.sh X.Y.Z     → Updates ALL 6 version files
@@ -23,7 +32,7 @@
 8. Verify cache               → grep matcher in hooks.json
 ```
 
-## Version Files (CRITICAL — ALL must match)
+## EXAMPLE — Version Files (claude-brewcode repo; CRITICAL — ALL must match)
 
 | File | Path |
 |------|------|
@@ -34,9 +43,10 @@
 | brewtools plugin.json | `brewtools/.claude-plugin/plugin.json` |
 | brewtools marketplace.json | `brewtools/.claude-plugin/marketplace.json` |
 
-> NEVER edit versions manually. ALWAYS use `bash .claude/scripts/bump-version.sh X.Y.Z`
+> In THAT repo: never edit versions manually, always `bash .claude/scripts/bump-version.sh X.Y.Z`.
+> In YOUR repo: use whatever P4 Step 0 discovered — the equivalent script, or every version file by hand.
 
-## RELEASE-NOTES.md Format
+## EXAMPLE — RELEASE-NOTES.md Format (claude-brewcode repo)
 
 ```markdown
 ## vX.Y.Z (YYYY-MM-DD)
@@ -84,9 +94,10 @@ git log --oneline $(git describe --tags --abbrev=0)..HEAD
 | `docs:` | Changed (docs) |
 | `test:` | Usually skip unless significant |
 
-### Plugin Detection
+### EXAMPLE — Component Detection (claude-brewcode repo)
 
-Detect which plugin is affected from file paths:
+Map changed file paths to the component they belong to. Derive the equivalent table for the
+current repo from its top-level layout:
 
 | Path prefix | Plugin |
 |-------------|--------|
@@ -96,14 +107,14 @@ Detect which plugin is affected from file paths:
 | `brewui/` | brewui |
 | `.claude/`, `.github/` | infrastructure (under brewcode) |
 
-## Tag Conventions
+## EXAMPLE — Tag + CI Conventions (claude-brewcode repo)
 
 | Pattern | Meaning |
 |---------|---------|
 | `vX.Y.Z` | Release tag (triggers CI) |
 | No pre-release tags | This project uses simple semver only |
 
-## CI Triggers
+### CI Triggers
 
 | Event | Workflows triggered |
 |-------|-------------------|
@@ -112,6 +123,11 @@ Detect which plugin is affected from file paths:
 | Branch push (non-main) | Docs (GHCR build, branch tag) |
 
 ## Post-Release Verification
+
+General rule: verify the ARTIFACT, not just the run. Gate on both a health check AND a version
+check (the live thing reports X.Y.Z). Pick the checks that match what this repo publishes.
+
+### EXAMPLE — checks for the claude-brewcode repo
 
 | Check | Command | Expected |
 |-------|---------|----------|

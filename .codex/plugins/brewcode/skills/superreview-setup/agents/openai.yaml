@@ -1,0 +1,6 @@
+interface:
+  display_name: "Superreview Setup"
+  short_description: "Generates a project-tailored deep-review skill: domain-expert ro"
+  default_prompt: "Use $brewcode:superreview-setup for this task."
+policy:
+  allow_implicit_invocation: true

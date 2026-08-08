@@ -4,7 +4,7 @@ Multi-agent quorum review of E2E scenarios and tests.
 
 ## R0: Prerequisite Check
 
-Check `.claude/agents/e2e-*.md` count. If <3 → "Run `/brewcode:e2e setup` first." STOP.
+Check `.claude/agents/e2e-*.md` count. If <3 → "Run `/brewcode:e2e install` first." STOP.
 Read `.claude/e2e/config.json` for stack, framework, paths.
 
 ## R1: Scope Definition

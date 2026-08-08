@@ -1,0 +1,220 @@
+---
+title: "setup-status"
+description: "Read-only dashboard over every setup skill in the brewcode suite: what is installed, stale, partial or missing here, plus the exact command for each row."
+order: 1118
+---
+
+import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+
+<Badge text="sonnet" />
+<Badge text="read-only" />
+<Badge text="cross-plugin" />
+
+## Quick reference
+
+| Field | Value |
+|-------|-------|
+| Command | `/brewcode:setup-status [<plugin>\|<skill>]` |
+| Arguments | empty = full report; a plugin name filters to its rows; a skill name prints one row with its detection rule spelled out |
+| Model | sonnet |
+| Tools | `Read`, `Bash`, `Glob`, `Grep` — **no `Write`, no `Edit`, no `Agent`** |
+| Covers | 10 setup skills across brewcode, brewtools and brewdoc |
+| Writes | nothing, ever |
+
+## What it does
+
+You open an unfamiliar repo and want one answer: what of the brewcode suite is already wired in here, what drifted since the last plugin update, and what was never installed. `setup-status` probes the project and hands back one table plus an ordered run-list.
+
+Every probe is an existence check, a `cmp` against the installed plugin asset, or a one-line grep. Nothing is created, edited or deleted — that is a **capability**, not a policy: `allowed-tools` carries no `Write`, no `Edit` and no `Agent`, so the skill physically cannot mutate your project or spawn a subagent that could.
+
+Staleness is decided honestly or not at all. Four signals and nothing else — no mtime heuristics, no guessing. Where a setup leaves no signal, the report says `installed (version unknown)` and means it.
+
+A setup you switched off on purpose is reported `disabled`, not broken: the state is evaluated before `partial` and `stale`, its command column offers `enable`, and it never enters the run-list.
+
+## Why it refuses to run the setups
+
+<Callout type="caution" title="There is no --run and no --fix, by design">
+Every setup skill is an interactive generator: it fans out subagents, analyses the repo and asks you real questions. Run two back-to-back in one session and both degrade — the context fills with the first one's analysis, and the second one's questions get answered against stale findings. So this skill reports and stops, and **you** run each setup by hand, ideally one per fresh session.
+</Callout>
+
+Ask it to "install everything" or "fix them all" and it refuses once, plainly, then prints the run-list instead. The flag does not exist because of the failure mode above, not because nobody got around to adding it.
+
+## When to use
+
+| Situation | Command |
+|-----------|---------|
+| New repo, no idea what is wired in | `/brewcode:setup-status` |
+| Just updated the plugins, what drifted? | `/brewcode:setup-status` |
+| Only care about one plugin's rows | `/brewcode:setup-status brewtools` |
+| One row, with its detection rule in full | `/brewcode:setup-status semble-setup` |
+| Free text, RU or EN — answers in your language | `/brewcode:setup-status что установлено` |
+
+## Example
+
+```
+/brewcode:setup-status
+```
+
+```
+roster: 10/10 in sync
+
+| Skill                        | State                      | Found                                            | Command
+| /brewtools:task-board-setup  | stale                      | board.md + tracker present, .claude/skills/task-spec/ absent | /brewtools:task-board-setup upgrade "retrofit the spec + design layer onto the deployed board, keep every task id"
+| /brewcode:semble-setup       | stale                      | rule + 3 hooks present; semble-reminder.mjs DIFFERS vs brewcode 4.10.1 | /brewcode:semble-setup upgrade "re-copy the hooks, the reminder hook drifted from the 4.10.1 asset"
+| /brewcode:teams-setup        | installed (version unknown) | team.md + trace.jsonl + trace-ops.sh; no version stamp exists for this setup | /brewcode:teams-setup status
+| /brewtools:think-short-setup | disabled                   | 4 hooks wired, prompt renamed to think-short-prompt.md.disabled | /brewtools:think-short-setup enable
+| /brewdoc:docsync-setup       | missing                    | nothing under .claude/docsync/                   | /brewdoc:docsync-setup install
+| /brewtools:manager-setup     | n/a                        | brewtools not installed                          | claude plugin install brewtools@claude-brewcode
+
+Run in this order, ONE PER SESSION:
+  1. /brewtools:task-board-setup upgrade "..."   <- broken/partial first
+  2. /brewcode:semble-setup upgrade "..."        <- stale next
+  3. /brewdoc:docsync-setup install              <- new installs last
+
+Each of these spawns several subagents and will ask you questions. Running two in one
+session degrades both. Start a fresh session per command.
+```
+
+The **Command** column is ready to paste. For `stale` and `partial` it always carries a concrete fine-tune prompt naming what to refresh — a bare `upgrade` with no prompt is not acceptable output. Only canonical verbs appear there (`status` · `install` · `upgrade` · `enable` · `disable` · `uninstall` · `purge`), plus the extras two setups genuinely add after them: `reindex | optimize | resume` for [`semble-setup`](/brewcode/skills/semble-setup/), and `level <...>` for `agent-router-setup` and `manager-setup`.
+
+## Workflow
+
+<Steps>
+  <li class="step step-primary">
+    <div>
+      <strong>Resolve plugin roots</strong>
+      <p>Finds the newest cached version of each of the four plugins under <code>~/.claude/plugins/cache/claude-brewcode/</code>. A plugin that is not installed makes all of its rows <code>n/a</code>, never <code>missing</code>. All four absent = stop and say so, rather than printing an all-missing table.</p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>Probe artifacts</strong>
+      <p>One generic block fed from the roster: an existence check per anchor and secondary path, plus <code>settings.json</code> wiring greps and the global <code>~/.claude</code> twins for the two setups that install to either scope. Textual grep counts prove a key is mentioned, not that the entry is well-formed — the report says so.</p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>Read the disable switches</strong>
+      <p>Five setups leave a real off-switch on disk, and each is probed directly rather than inferred: <code>.claude/semble/state.json</code> <code>.enabled</code>, a <code>think-short-prompt.md.disabled</code> rename in the hooks dir, <code>.claude/brewtools/manager/state.json</code> <code>.hard</code>, <code>.claude/agent-deadline.json</code> <code>.enabled</code>, <code>.claude/brewtools/agent-router.json</code> <code>.enabled</code>. The other five setups have no switch and can never be <code>disabled</code>.</p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>Version signals</strong>
+      <p>Only for rows whose anchor exists and whose roster cell defines a signal. <code>cmp</code> the project copy against the plugin asset, read the provenance stamp, or diff the pristine template baseline. A missing plugin asset reports <code>version unknown (plugin asset missing)</code>, never <code>stale</code>.</p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>Classify</strong>
+      <p>Exactly one state per row, evaluated in a fixed order: <code>n/a</code>, then <code>missing</code>, then <code>disabled</code>, then <code>partial</code>, then <code>stale</code>, then <code>installed</code>, then <code>installed (version unknown)</code>. The two orderings that stop false alarms: anchor MISS wins outright, and <code>disabled</code> outranks both <code>partial</code> and <code>stale</code>.</p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>Output</strong>
+      <p>One table in roster order, then the ordered run-list: <code>partial</code> (broken installs) first, then <code>stale</code>, then <code>missing</code>. <code>disabled</code>, <code>installed</code> and <code>n/a</code> rows stay out of it; a disabled row is mentioned once below the list with its <code>enable</code> command. Answers in the language you wrote in — the prose is translated, never the paths or the commands.</p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>Roster self-check</strong>
+      <p>Lists the <code>*-setup</code> directories actually present in the installed plugins and compares them against the roster. A setup it does not know about produces a warning <strong>above</strong> the table, never a silent edit. Match prints one line: <code>roster: 10/10 in sync</code>.</p>
+    </div>
+  </li>
+</Steps>
+
+## Technical details
+
+### The 10 setups it covers
+
+| Setup | Anchor artifact |
+|-------|-----------------|
+| [`/brewcode:teams-setup`](/brewcode/skills/teams-setup/) | `.claude/teams/*/team.md` |
+| [`/brewcode:semble-setup`](/brewcode/skills/semble-setup/) | `.claude/rules/semble-first.md` |
+| [`/brewcode:superreview-setup`](/brewcode/skills/superreview-setup/) | `.claude/skills/superreview/SKILL.md` |
+| `/brewtools:task-board-setup` | `.claude/features/board.md` |
+| `/brewtools:think-short-setup` | `.claude/hooks/think-short-session.mjs` (or the `~/.claude` twin) |
+| `/brewtools:agent-deadline-setup` | `.claude/hooks/agent-deadline-guard.mjs` (or the twin) |
+| `/brewtools:agent-router-setup` | `.claude/hooks/agent-router.mjs` |
+| `/brewtools:manager-setup` | `.claude/brewtools/manager/state.json` |
+| `/brewdoc:memory-sync-setup` | `.claude/skills/memory-sync/SKILL.md` |
+| `/brewdoc:docsync-setup` | `.claude/docsync/config.json` |
+
+Recurring tools never appear in the report — they have no installed state and are correct to run repeatedly: `brewcode:agents`, `skills`, `rules`, `convention`, `e2e`; `brewtools:text-optimize`, `text-human`, `secrets-scan`, `ssh`, `deploy`, `plugin-update`, `provider-switch`; `brewdoc:md-to-pdf`, `my-claude`, `publish`.
+
+### States
+
+| State | Means |
+|-------|-------|
+| `missing` | the anchor is absent — never installed here. The anchor is decisive: a shared file the project happens to contain is not evidence |
+| `disabled` | every file is in place but the mechanism is switched off on purpose. Reported as inactive, never as broken; command column offers `enable` |
+| `partial` | anchor present with a secondary missing, or a secondary present with no anchor — a broken or half-removed install |
+| `installed` | everything present and byte-identical to the installed plugin version |
+| `installed (version unknown)` | everything present, but this setup leaves no version signal to check |
+| `stale` | a tracked file drifted from the plugin asset, the provenance stamp is behind, or a documented upgrade path was never run |
+| `n/a` | that plugin is not installed |
+
+### Two rules that stop false alarms
+
+**Anchor MISS is decisive, and every secondary must be exclusive.** The anchor is the artifact only that setup writes. A shared file — any hand-written `.claude/agents/*.md`, or `intent-guard.md`, which both `superreview-setup` and `teams-setup` can emit — is not evidence that this setup ran, and listing one as a secondary made `teams-setup` report a broken `partial` install (and jump to the top of the run-list) in every project that merely had an agent file. So `teams-setup`'s secondaries are now `.claude/teams/*/trace.jsonl` and `.claude/teams/*/trace-ops.sh`, `superreview-setup` no longer claims `intent-guard.md`, and a setup with no exclusive secondary is decided by its anchor alone.
+
+**`disabled` is evaluated before `partial` and `stale`,** because both readings are wrong on a deliberately switched-off setup. `think-short-setup disable` renames its prompt file away, so the roster secondary legitimately MISSes — calling that `partial` tells you to repair something you turned off. Inversely, semble at `enabled: false` or a manager wall at `hard: false` has every file in place and byte-identical, and reporting it `installed` would hide that the mechanism is inert.
+
+| Setup | Off-switch probed | Disabled when |
+|-------|-------------------|---------------|
+| `semble-setup` | `.claude/semble/state.json` | `.enabled` is `false` — every file stays in place |
+| `think-short-setup` | the hooks dir (project or `~/.claude`) | `think-short-prompt.md.disabled` present, `think-short-prompt.md` absent — hooks stay wired and no-op |
+| `manager-setup` | `.claude/brewtools/manager/state.json` | `.hard` is not `true` — the wall is disarmed, not broken |
+| `agent-deadline-setup` | `.claude/agent-deadline.json` (or the `~/.claude` twin) | `"enabled": false` |
+| `agent-router-setup` | `.claude/brewtools/agent-router.json` | `"enabled": false` |
+
+The other five setups leave no switch and can never be reported `disabled`.
+
+### How staleness is decided
+
+| Signal | Used by | How |
+|--------|---------|-----|
+| **Checksum** | semble-setup, think-short-setup, agent-deadline-setup, agent-router-setup, manager-setup, docsync-setup | Those setups `cp` their hook files verbatim, so `cmp` against the plugin asset is exact |
+| **Provenance stamp** | memory-sync-setup | The emitted skill's last line carries `<!-- memory-sync template vX.Y.Z`, compared against `VERSION=` in the plugin's `generate.sh` |
+| **Template baseline** | superreview-setup | `install` saves pristine templates to `.template-baseline/`; the new plugin template is diffed against those, so the delta is the template's and never your tailoring |
+| **Absence** | task-board-setup, teams-setup | A deployed board with no `.claude/skills/task-spec/` predates the spec + design layer. An otherwise complete team with no `.claude/teams/*/trace-ops.sh` is a pre-5.0 install whose agents cannot trace at all — `stale`, fixed by one `upgrade` |
+| **none** | teams-setup, task-board-setup (otherwise) | Files are AI-authored per project with no stamp. Reported as `version unknown` — deliberately, not as an oversight |
+
+### Two things that look like staleness and are not
+
+| Looks like | Actually |
+|------------|----------|
+| `manager-setup`'s guard `DIFFERS` | Only means the wall was not re-armed since the last brewtools update. It still works. Reported `stale`, with that clause attached — a different finding from `hard: false`, which is `disabled` and outranks it |
+| A hook under `~/.claude` while the project also has one | A **scope** answer, not a conflict. `think-short-setup` and `agent-deadline-setup` are legitimately global |
+
+### Edge cases
+
+| Condition | Response |
+|-----------|----------|
+| No `.claude/` in the project | Every row `missing`; the table and the install run-list print anyway |
+| All four plugin roots absent | "no brewcode plugins installed" plus the `claude plugin install` lines — not an all-missing table |
+| Running with `--plugin-dir` (dev mode) | No cache root to compare against. Says so; a repo checkout is not a substitute |
+| A `cmp` source path is missing from the cache | `version unknown (plugin asset missing)`, never `stale` |
+| A `*-setup` on disk the roster does not know | `WARNING` above the table naming it, and the note that its state was **not** checked |
+
+### Roster as single source of truth
+
+Every fact the skill knows lives in ONE table in its `SKILL.md`. Adding a future setup is one row — no script, no second list, no code change, because every probe is a generic inline block fed from that table.
+
+<CardGrid>
+  <Card title="brewcode overview" icon="rocket" href="/brewcode/overview/">
+    Full plugin overview — all skills, agents, and hooks in one place.
+  </Card>
+  <Card title="semble-setup" icon="search" href="/brewcode/skills/semble-setup/">
+    One of the ten rows: its three hooks and rule are `cmp`d verbatim against the plugin assets.
+  </Card>
+  <Card title="superreview-setup" icon="check" href="/brewcode/skills/superreview-setup/">
+    Another row: staleness comes from its `.template-baseline/` diff, so your tailoring never counts as drift.
+  </Card>
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/setup-status">
+    SKILL.md — the roster table, the probe blocks, and the output contract.
+  </Card>
+</CardGrid>
+
+<UpdateNotice />

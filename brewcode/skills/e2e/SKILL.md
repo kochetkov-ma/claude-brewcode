@@ -3,7 +3,7 @@ name: brewcode:e2e
 description: "Orchestrates e2e testing: BDD scenarios, Playwright autotests. Triggers: e2e tests, BDD scenarios, write autotest."
 user-invocable: true
 disable-model-invocation: true
-argument-hint: "[setup|create|update|review|rules|status] [prompt]"
+argument-hint: "[status|install|create|update|review|rules] [prompt]"
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion, Skill, WebSearch, WebFetch]
 model: opus
 ---
@@ -12,7 +12,7 @@ model: opus
 
 # E2E Testing
 
-Full-cycle E2E testing orchestration: setup agents, create BDD scenarios, write autotests, quorum review.
+Full-cycle E2E testing orchestration: install agents, create BDD scenarios, write autotests, quorum review.
 
 **Arguments:** `$ARGUMENTS`
 
@@ -27,7 +27,8 @@ bash "${CLAUDE_SKILL_DIR}/scripts/detect-mode.sh" "$ARGUMENTS" && echo "OK" || e
 
 Output: `MODE:xxx` and optionally `PROMPT:xxx`. Store both.
 
-> **STOP if FAILED** -- fix detect-mode.sh before continuing.
+> **STOP if FAILED** -- if the output starts with `ERROR:` (an unsupported verb such as `uninstall`
+> or `purge`), report that line verbatim and stop. Never fall back to INSTALL.
 
 ---
 
@@ -47,7 +48,7 @@ Read the mode-specific reference file:
 
 | MODE | Reference File |
 |------|---------------|
-| setup | `${CLAUDE_SKILL_DIR}/references/mode-setup.md` |
+| install | `${CLAUDE_SKILL_DIR}/references/mode-install.md` |
 | create | `${CLAUDE_SKILL_DIR}/references/mode-create.md` |
 | update | `${CLAUDE_SKILL_DIR}/references/mode-update.md` |
 | review | `${CLAUDE_SKILL_DIR}/references/mode-review.md` |
@@ -55,10 +56,16 @@ Read the mode-specific reference file:
 | status | `${CLAUDE_SKILL_DIR}/references/mode-status.md` |
 
 Also load core references (always):
-- `${CLAUDE_SKILL_DIR}/references/e2e-rules.md` -- rules for all agents
+- `${CLAUDE_SKILL_DIR}/references/e2e-rules.md` -- baseline rules. `install` merges these with the
+  project findings into `.claude/e2e/e2e-rules.md` (= `config.rulesPath`), and THAT copy is what the
+  generated agents read -- they cannot resolve any plugin path.
 - `${CLAUDE_SKILL_DIR}/references/e2e-architecture.md` -- architecture reference
 
 > **STOP if mode reference not found** -- report missing file.
+
+> `${CLAUDE_SKILL_DIR}` is substituted in THIS file only. Reference files you Read carry the literal
+> string — expand it to that same resolved path yourself before pasting a spawn prompt, since a
+> subagent cannot resolve it. Paths under `.claude/` are project-relative and need no expansion.
 
 ---
 
@@ -68,8 +75,8 @@ Follow the loaded mode reference step by step. Pass PROMPT as context where indi
 
 **Common patterns across all modes:**
 
-### Prerequisite Check (all modes except setup and status)
-`.claude/agents/e2e-*.md` count must be >=3. If not -> "Run `/brewcode:e2e setup` first." STOP.
+### Prerequisite Check (all modes except install and status)
+`.claude/agents/e2e-*.md` count must be >=3. If not -> "Run `/brewcode:e2e install` first." STOP.
 Status mode reports missing infrastructure instead of blocking.
 
 ### Review Cycle (create, update modes)
@@ -101,7 +108,7 @@ GOAL: the project is getting a Playwright e2e suite; this task delivers the auto
 ROLE: you own the test files for {FEATURE} only. Do NOT touch page objects owned by other
       agents, CI config, or production code.
 SCOPE: {TEST_DIR}/{feature}/**. Out of bounds: everything else.
-CONTEXT: setup already landed the framework, the e2e-* agent roster and e2e-rules.md — follow
+CONTEXT: install already landed the framework, the e2e-* agent roster and e2e-rules.md — follow
       them, do not re-decide. BDD scenarios {SCENARIO_PATHS} are approved; architecture
       decisions already made: {DECISIONS}. Sibling e2e agents write the other features'
       tests in parallel and own the shared page objects — reuse, never redefine. Before
@@ -124,8 +131,8 @@ AskUserQuestion at every key decision point. PROMPT is initial context, not a re
 | Condition | Action |
 |-----------|--------|
 | Rules file missing | "E2E rules not found at `${CLAUDE_SKILL_DIR}/references/`. Re-install plugin." STOP |
-| Agents missing (non-setup/status mode) | "Run `/brewcode:e2e setup` first." STOP |
-| Config missing (non-setup mode) | "Run `/brewcode:e2e setup` first." STOP |
+| Agents missing (non-install/status mode) | "Run `/brewcode:e2e install` first." STOP |
+| Config missing (non-install mode) | "Run `/brewcode:e2e install` first." STOP |
 | Review cycle limit (3) reached | AskUserQuestion with remaining issues |
 | Compilation fails after fix | Report to user, suggest manual intervention |
 | Agent refuses task | Re-assign to suggested colleague, max 2 retries |

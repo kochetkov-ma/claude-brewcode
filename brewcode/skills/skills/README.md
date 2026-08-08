@@ -67,7 +67,7 @@ Verdicts: `STALE`, `DEAD`, `DUPLICATE`, `OBVIOUS`, `DRIFT`, `MISSING`.
 
 Report table: `File | Lines before -> after | Fixed | Deleted | Added | Key change`, plus corrected facts, additions with source, skipped files, and total delta.
 
-Targets: `.claude/skills/*/SKILL.md`, `*/skills/*/SKILL.md` and each skill's `references/*.md` (repo-local only). Disabled skills (`_SKILL.md`) are skipped and reported. `/brewdoc:memory-sync-init` emits a project-local `/memory-sync` skill that applies the same non-growth sync to CLAUDE.md, rules, conventions, agents and skills together — use this skill when you want a roster on its own.
+Targets: `.claude/skills/*/SKILL.md`, `*/skills/*/SKILL.md` and each skill's `references/*.md` (repo-local only). Disabled skills (`_SKILL.md`) are skipped and reported. `/brewdoc:memory-sync-setup` emits a project-local `/memory-sync` skill that applies the same non-growth sync to CLAUDE.md, rules, conventions, agents and skills together — use this skill when you want a roster on its own.
 
 ## Create / Improve Parameters
 
@@ -79,7 +79,7 @@ Before spawning `skill-creator`, the orchestrating skill itself asks up to four 
 | Testing depth | Quick (recommended) / Standard / Deep | Drives the scope of Phase 5 E2E evaluation |
 | Review type | Simple / Quorum | Quorum available only at Standard or Deep testing depth |
 
-**Description budget:** the generated `description:` field must be ≤ 120 characters (trigger keywords count toward the budget).
+**Description budget:** the generated `description:` field must be ≤ 120 characters, single line, trigger keywords included. One number in both places -- the authoring rule in `SKILL.md` and the review checklist in `references/review-prompt.md` -- so a skill written to spec passes its own review. Empirical: 16 of the 26 shipped skills sit in a 97-119 character cluster.
 
 The full creation pipeline includes Phase 0 Discovery (parallel Explore agents), Phase 4 Review (Simple or 3-reviewer Quorum with DoubleCheck + fix loop), and Phase 5 E2E. This machinery is only reachable via `create` or `improve` mode.
 
@@ -119,7 +119,7 @@ The full creation pipeline includes Phase 0 Discovery (parallel Explore agents),
 Depends on mode:
 
 - **status** — rich inventory table of all skills grouped by location (global `~/.claude/skills/`, project `.claude/skills/`, plugins), with description and trigger keywords for each.
-- **list** — plain file listing from `list-skills.sh`.
+- **list** — plain file listing from `list-skills.sh`. The script self-locates from its own path, so it enumerates plugin skills in both the dev checkout and the installed cache alongside global and project scopes. Every plugin that ships a `skills/` dir and a `.claude-plugin/plugin.json` is scanned, not just brewcode.
 - **create** — a new skill directory containing `SKILL.md` and `README.md`, placed in `.claude/skills/` (project) or `~/.claude/skills/` (global).
 - **improve** — the target `SKILL.md` rewritten with optimized description, trigger keywords, imperative voice, and best practices.
 - **review** — a structured audit report with issues found and recommended fixes applied.

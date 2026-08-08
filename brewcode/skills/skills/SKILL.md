@@ -213,13 +213,13 @@ Replace `TARGET_HERE` with the resolved target name/path from Step 4.
 Spawn 2-3 Explore agents in parallel (single message).
 
 **create** — spawn in ONE message:
-1. `Explore`: Research skill patterns in `$BC_PLUGIN_ROOT/skills/` and `~/.claude/skills/` — structure, naming, frontmatter, references, scripts.
+1. `Explore`: Research skill patterns in `${CLAUDE_PLUGIN_ROOT}/skills/` and `~/.claude/skills/` — structure, naming, frontmatter, references, scripts.
 2. `Explore`: Analyze target project structure for `{TOPIC}` — code, APIs, configs, tooling.
 3. (Optional) `general-purpose`: Web research for `{TOPIC}` — best practices, similar tools. Use WebSearch/WebFetch.
 
 **improve** — spawn in ONE message:
 1. `Explore`: Analyze skill at `{SKILL_PATH}` — SKILL.md, references/, scripts/, tests/, README.md. Report quality and gaps.
-2. `Explore`: Compare `{SKILL_PATH}` against patterns in `$BC_PLUGIN_ROOT/skills/`. Output improvement recommendations.
+2. `Explore`: Compare `{SKILL_PATH}` against patterns in `${CLAUDE_PLUGIN_ROOT}/skills/`. Output improvement recommendations.
 
 ### Phase 1: User Interaction
 

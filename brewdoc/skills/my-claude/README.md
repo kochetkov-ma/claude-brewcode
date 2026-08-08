@@ -46,7 +46,7 @@ Generates documentation about your Claude Code installation and environment. Sup
 ```
 # Wrong: using research mode for a code implementation task
 /brewdoc:my-claude r implement a new hook for my project
-# Research mode generates documentation, not code. Use /brewcode:start for implementation.
+# Research mode generates documentation, not code. Delegate implementation to a project agent.
 
 # Wrong: using ext when you want to document YOUR setup
 /brewdoc:my-claude ext
@@ -57,9 +57,17 @@ Generates documentation about your Claude Code installation and environment. Sup
 # The prefix must be "r " or "research " (with a trailing space).
 ```
 
+## Validation
+
+Before the document is written, an independent agent re-checks it so that no file name or path in the output is invented. Internal mode uses `Explore` -- the check is read-only path existence. External and research modes use `general-purpose`, which has the `WebFetch` / `WebSearch` access needed to re-open the cited sources.
+
+Both are built-in agents that are always available. Earlier versions named a `reviewer` agent here, which exists in no plugin and in no built-in set, so the validation step silently failed to spawn -- the one step that guaranteed no invented file names.
+
 ## Output Location
 
-All generated files are saved to `.claude/brewdoc/my-claude/` inside your current project. This is required because Claude Code's protected-path policy blocks writes to `~/.claude/*` in headless sessions (including `bypassPermissions` mode). `${BD_PLUGIN_DATA}/my-claude/` is an optional fallback for interactive sessions only.
+All generated files are saved to `.claude/brewdoc/my-claude/` inside your current project. This is required because Claude Code's protected-path policy blocks writes to `~/.claude/*` in headless sessions (including `bypassPermissions` mode). There is no alternative output location.
+
+Earlier versions also offered a plugin-data directory. Nothing has set that variable since v4.0.0, so a run taking that branch created a directory named after the unexpanded variable and wrote into it. That branch is gone.
 
 | Mode | Output path |
 |------|-------------|

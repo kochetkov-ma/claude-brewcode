@@ -13,10 +13,13 @@ MODE=""
 
 if [[ -z "$ARGS_LOWER" ]]; then
   MODE="status"
+elif [[ "$ARGS_LOWER" =~ (model-check|model.check|модель|identify|идентиф) ]]; then
+  # MUST precede `status` — `status|check` matches as a substring of "model-check"
+  MODE="model-check"
 elif [[ "$ARGS_LOWER" =~ (status|check|текущий) ]]; then
   MODE="status"
-elif [[ "$ARGS_LOWER" =~ (setup|configure|настрой|добавь) ]]; then
-  MODE="setup"
+elif [[ "$ARGS_LOWER" =~ (install|configure|настрой|добавь) ]]; then
+  MODE="install"
 elif [[ "$ARGS_LOWER" =~ (help|how|как|помощь) ]]; then
   MODE="help"
 elif [[ "$ARGS_LOWER" =~ (deepseek|deep-seek|dpsk|дипсик|(^| )ds( |$)) ]]; then
@@ -31,8 +34,6 @@ elif [[ "$ARGS_LOWER" =~ (openrouter|router|open-router) ]]; then
   MODE="provider-openrouter"
 elif [[ "$ARGS_LOWER" =~ (verify|test|проверь|тест|токен) ]]; then
   MODE="verify"
-elif [[ "$ARGS_LOWER" =~ (model-check|model.check|модель|identify|идентиф) ]]; then
-  MODE="model-check"
 elif [[ "$ARGS_LOWER" =~ (update|refresh|обнови|sync) ]]; then
   MODE="update"
 else
@@ -41,8 +42,8 @@ else
     MODE="model-check"
   elif [[ "$ARGS_LOWER" =~ (status|statu|stat|чек|текущ) ]]; then
     MODE="status"
-  elif [[ "$ARGS_LOWER" =~ (setup|set.*up|setuo|config|настрой|добавь) ]]; then
-    MODE="setup"
+  elif [[ "$ARGS_LOWER" =~ (install|inst.*all|instal|config|настрой|добавь) ]]; then
+    MODE="install"
   elif [[ "$ARGS_LOWER" =~ (help|hlpe|how|помощь|хелп) ]]; then
     MODE="help"
   elif [[ "$ARGS_LOWER" =~ (deepseek|deep-seek|dpsk|дипсик|(^| )ds( |$)) ]]; then

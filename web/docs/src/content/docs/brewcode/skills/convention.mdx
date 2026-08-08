@@ -36,11 +36,13 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | Mode | Command | Phases | Prerequisites |
 |------|---------|--------|---------------|
 | `full` (default) | `/brewcode:convention` | P0–P8 | None |
-| `conventions` | `/brewcode:convention conventions` | P0–P7 | None |
+| `conventions` | `/brewcode:convention conventions` | P0–P6 | None |
 | `rules` | `/brewcode:convention rules` | P0, P7, P7.5, P8 | `.claude/convention/` exists |
 | `paths` | `/brewcode:convention paths src/a,src/b` | P0–P7 scoped | None |
 
 `rules` mode skips analysis entirely — it reads existing convention docs and runs the interactive rules extraction flow. Use it to refresh `.claude/rules/` without re-scanning the whole project.
+
+`conventions` mode stops at P6. P7 is Rules Organization, the phase that writes `.claude/rules/`, so "skip rules extraction" means the run must end one phase earlier — a skip gate at the P7 header enforces it. Only `conventions` mode leaves `.claude/rules/` untouched; `full` and `paths` both reach P7.
 
 ## Examples
 

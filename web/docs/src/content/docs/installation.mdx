@@ -92,8 +92,18 @@ import { Card, CardGrid, Callout, Steps, Tabs, TabItem, InstallPrompt } from '..
     <div>
       <strong>Set up the task board</strong>
       <p>Inside a Claude Code session, run:</p>
-      <pre><a href="/brewtools/skills/task-board-init/"><code>/brewtools:task-board-init</code></a></pre>
-      <p>It analyzes the repo and deploys a file-based Kanban plus a generated <code>/task-spec</code> skill for per-task specs. Follow it with <a href="/brewcode/skills/superreview/"><code>/brewcode:superreview</code></a> to generate a project-tailored deep-review skill.</p>
+      <pre><code>/brewtools:task-board-setup install . "one lane per service"</code></pre>
+      <p>It analyzes the repo and deploys a file-based Kanban plus a generated <code>/task-spec</code> skill for per-task specs. In a <em>separate</em> session, follow it with <a href="/brewcode/skills/superreview-setup/"><code>/brewcode:superreview-setup</code></a> to generate a project-tailored deep-review skill. See <a href="/brewtools/skills/task-board-setup/">the skill page</a> for the full argument list.</p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>See what else this project needs</strong>
+      <p>Run the read-only dashboard, then work through the list it gives you, one setup per session:</p>
+      <pre><code>/brewcode:setup-status</code></pre>
+      <p>It writes nothing and runs nothing — it reports every setup as installed, stale, disabled,
+      partial or missing, and prints the exact command for each row. The full ordered run list is on
+      the <a href="/full-setup/">Full Setup</a> page.</p>
     </div>
   </li>
 </Steps>
@@ -144,10 +154,13 @@ claude plugin update brewui@claude-brewcode
 
 <CardGrid>
   <Card title="Quick Start" icon="rocket" href="/quickstart/">
-    Get started in 15 minutes: [conventions](/brewcode/skills/convention/), [task board](/brewtools/skills/task-board-init/), [deep review](/brewcode/skills/superreview/).
+    Get started in 15 minutes: [conventions](/brewcode/skills/convention/), [task board](/brewtools/skills/task-board-setup/), [deep review](/brewcode/skills/superreview-setup/).
+  </Card>
+  <Card title="Full Setup" icon="list" href="/full-setup/">
+    The 10 <code>-setup</code> skills in recommended order, what each installs, and the mode vocabulary.
   </Card>
   <Card title="Brewcode Overview" icon="building" href="/brewcode/overview/">
-    Architecture, concepts, all 8 brewcode skills, 5 agents, and 2 hooks.
+    Architecture, concepts, all 9 brewcode skills, 5 agents, and 2 hooks.
   </Card>
 </CardGrid>
 

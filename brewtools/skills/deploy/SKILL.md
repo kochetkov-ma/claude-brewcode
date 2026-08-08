@@ -1,13 +1,14 @@
 ---
 name: brewtools:deploy
 description: "GitHub Actions deployment: workflows, releases, GHCR, CI/CD with safety gates. Triggers: deploy, release, workflow."
-argument-hint: "<prompt describing what to do>"
-allowed-tools: Read, Write, Edit, Bash, Agent, AskUserQuestion, Glob, Grep
-model: opus
 user-invocable: true
+disable-model-invocation: true
+argument-hint: "<prompt describing what to do>"
+allowed-tools: [Read, Write, Edit, Bash, Agent, AskUserQuestion, Glob, Grep]
+model: opus
 ---
 
-[DICT: P=Phase, EXEC=EXECUTE using Bash tool, AUQ=AskUserQuestion, WF=workflow, CFG=config, REF=references, GH=gh CLI, TPL=template, LOPS=deploy-local-ops.sh]
+[DICT: P=Phase, EXEC=EXECUTE using Bash tool, AUQ=AskUserQuestion, WF=workflow, CFG=config, REF=references, GH=gh CLI, TPL=template]
 
 # GitHub Actions Deployment
 
@@ -51,7 +52,7 @@ user-invocable: true
 | detect-mode.sh | parse $ARGUMENTS (keyword match) |
 | gh-env-check.sh | `gh auth status`, `gh repo view --json name`, `gh secret list` |
 | workflow-discover.sh | `ls .github/workflows/`, `gh workflow list`, `gh run list -L 5` |
-| LOPS | Read/Edit CLAUDE.local.md directly |
+| deploy-local-ops.sh | Read/Edit CLAUDE.local.md directly |
 
 ### Error Reporting (MANDATORY)
 On ANY failure — before stopping or AUQ:
@@ -117,7 +118,7 @@ Parse key=value: GH CLI version, auth status, repo info, secrets count.
 ### Load Existing CFG
 EXEC:
 ```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/${LOPS}" list 2>/dev/null || echo "NO_CONFIG"
+bash "${CLAUDE_SKILL_DIR}/scripts/deploy-local-ops.sh" list 2>/dev/null || echo "NO_CONFIG"
 ```
 Read CLAUDE.local.md — check `## GitHub Config` + `## Workflows:` sections.
 
@@ -170,12 +171,12 @@ bash "${CLAUDE_SKILL_DIR}/scripts/workflow-discover.sh" && echo "OK discovery" |
 ### Step 6: Persist CFG
 EXEC:
 ```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/${LOPS}" add-github "OWNER" "REPO" "ghcr.io" && echo "OK add-github" || echo "FAILED add-github"
+bash "${CLAUDE_SKILL_DIR}/scripts/deploy-local-ops.sh" add-github "OWNER" "REPO" "ghcr.io" && echo "OK add-github" || echo "FAILED add-github"
 ```
 Replace OWNER + REPO with values from Step 2.
 EXEC:
 ```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/${LOPS}" add-workflows && echo "OK add-workflows" || echo "FAILED add-workflows"
+bash "${CLAUDE_SKILL_DIR}/scripts/deploy-local-ops.sh" add-workflows && echo "OK add-workflows" || echo "FAILED add-workflows"
 ```
 
 ### Step 7: Gitignore
@@ -221,14 +222,29 @@ Write WF file via Write tool.
 ### Step 4: Update CFG
 EXEC:
 ```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/${LOPS}" update-workflows && echo "OK update" || echo "FAILED update"
+bash "${CLAUDE_SKILL_DIR}/scripts/deploy-local-ops.sh" update-workflows && echo "OK update" || echo "FAILED update"
 ```
 
 ---
 
 ## P4: Release (CRITICAL)
 
-Read `REF/safety-rules.md` + `REF/release-best-practices.md` first.
+Read `REF/safety-rules.md` first. `REF/release-best-practices.md` is a WORKED EXAMPLE from one
+multi-package repo — a pattern to adapt, !=commands to run in the current project.
+
+### Step 0: Probe Project Release Tooling (MANDATORY before Steps 2/7/9)
+
+This skill ships to arbitrary repos. It knows NOTHING about the current project's release
+scripts until it looks.
+
+EXEC:
+```bash
+ls .claude/scripts/*.sh 2>/dev/null; ls scripts/ 2>/dev/null | head -20; jq -r '.scripts // {} | keys[]' package.json 2>/dev/null; ls Makefile 2>/dev/null
+```
+Record: BUMP_SCRIPT (a bump/version script, or `none`) | POST_SCRIPT (a post-release/publish
+script, or `none`) | CHANGELOG (`CHANGELOG.md` / `RELEASE-NOTES.md` / `none`).
+
+> A `none` is NOT a failure. It means the step is skipped or done by hand — say so in the report.
 
 ### Step 1: Determine Version
 EXEC:
@@ -242,26 +258,31 @@ git log --oneline $(git describe --tags --abbrev=0 2>/dev/null || echo "HEAD~10"
 Suggest semver bump (patch/minor/major) based on commits.
 
 ### Step 2: Bump Version
-EXEC:
-```bash
-bash .claude/scripts/bump-version.sh X.Y.Z && echo "OK bump" || echo "FAILED bump"
-```
+
+| BUMP_SCRIPT (Step 0) | Action |
+|----------------------|--------|
+| found | `bash <BUMP_SCRIPT> X.Y.Z && echo "OK bump" \|\| echo "FAILED bump"` |
+| `none`, version files obvious | Edit every version file the repo has (`package.json`, `pyproject.toml`, `gradle.properties`, `*/plugin.json`, `Cargo.toml`, ...) to the SAME X.Y.Z |
+| `none`, unclear | AUQ: "No bump script found. Which files carry the version?" |
+
+> Never invent a script path. `bash .claude/scripts/bump-version.sh` exists in SOME repos, not this one by default.
 
 ### Step 3: Auto-generate Changelog
 Analyze commits since last tag. Group by type (Added/Changed/Fixed).
 
-### Step 4: Update RELEASE-NOTES.md
-Add at top:
+### Step 4: Update Changelog
+Write to CHANGELOG from Step 0, matching the heading style already in that file. If CHANGELOG
+is `none` — skip this step, put the summary in the tag/release body instead.
+
+Fallback shape when the file is new/empty:
 ```markdown
 ## vX.Y.Z (YYYY-MM-DD)
-> Docs: [page](https://doc-claude.brewcode.app/plugin/path/) | [page2](...)
-### brewcode
 #### Added / Changed / Fixed
 - **category:** description
 ```
 
 ### Step 5: Confirmation Gate
-AUQ: "Ready to release vX.Y.Z:\n\n[changelog preview]\n\nThis will:\n1. Commit version bump + changelog\n2. Create tag vX.Y.Z\n3. Push to remote (triggers CI)\n4. Run update-plugin.sh\n\nProceed?"
+AUQ: "Ready to release vX.Y.Z:\n\n[changelog preview]\n\nThis will:\n1. Commit version bump + changelog\n2. Create tag vX.Y.Z\n3. Push to remote (triggers CI)\n4. [POST_SCRIPT from Step 0, or 'no post-release script']\n\nProceed?"
 Options: "Yes, release" | "Edit changelog first" | "Cancel"
 
 ### Step 6: Commit + Tag + Push
@@ -279,9 +300,10 @@ git push && git push --tags && echo "OK push" || echo "FAILED push"
 ```
 
 ### Step 7: Post-Release
+Only if POST_SCRIPT was found in Step 0. Otherwise SKIP and report "no post-release script".
 EXEC:
 ```bash
-bash .claude/scripts/update-plugin.sh && echo "OK update-plugin" || echo "FAILED update-plugin"
+bash <POST_SCRIPT> && echo "OK post-release" || echo "FAILED post-release"
 ```
 
 ### Step 8: Monitor CI
@@ -296,10 +318,16 @@ EXEC:
 ```bash
 gh release view vX.Y.Z --json tagName,name,isDraft,createdAt 2>/dev/null && echo "OK release" || echo "FAILED release"
 ```
-EXEC:
-```bash
-grep '"matcher"' ~/.claude/plugins/cache/claude-brewcode/brewcode/X.Y.Z/hooks/hooks.json 2>/dev/null && echo "OK cache" || echo "FAILED cache"
-```
+Then verify whatever THIS project actually publishes — pick what applies, skip the rest:
+
+| Artifact | Check |
+|----------|-------|
+| Container image | `docker manifest inspect <registry>/<image>:vX.Y.Z >/dev/null && echo "OK image" \|\| echo "FAILED image"` |
+| npm / PyPI package | `npm view <pkg>@X.Y.Z version` / `curl -sf https://pypi.org/pypi/<pkg>/X.Y.Z/json >/dev/null` |
+| Live service | `curl -sf <base>/version` — MUST equal `X.Y.Z` (version gate, not just health) |
+| Claude Code plugin | `grep '"version"' ~/.claude/plugins/cache/<marketplace>/<plugin>/X.Y.Z/.claude-plugin/plugin.json` |
+
+> Nothing published → report "no external artifact to verify", !=FAILED.
 
 ---
 
@@ -372,7 +400,7 @@ Replace RUN_ID with failed run's databaseId.
 ### Step 5: Update CFG
 EXEC:
 ```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/${LOPS}" update-workflows && echo "OK update" || echo "FAILED update"
+bash "${CLAUDE_SKILL_DIR}/scripts/deploy-local-ops.sh" update-workflows && echo "OK update" || echo "FAILED update"
 ```
 
 ---
@@ -390,13 +418,13 @@ bash "${CLAUDE_SKILL_DIR}/scripts/workflow-discover.sh" && echo "OK discovery" |
 ### Step 2: Update CFG
 EXEC:
 ```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/${LOPS}" update-workflows && echo "OK update" || echo "FAILED update"
+bash "${CLAUDE_SKILL_DIR}/scripts/deploy-local-ops.sh" update-workflows && echo "OK update" || echo "FAILED update"
 ```
 
 ### Step 3: Re-read CFG
 EXEC:
 ```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/${LOPS}" read-github 2>/dev/null
+bash "${CLAUDE_SKILL_DIR}/scripts/deploy-local-ops.sh" read-github 2>/dev/null
 ```
 
 ### Step 4: Regenerate Agent

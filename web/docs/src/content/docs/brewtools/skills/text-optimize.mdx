@@ -69,7 +69,7 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 /brewtools:text-optimize -d agents/
 ```
 
-Natural language also works: `"compress this for context"` → deep mode. `"slim down the README"` → standard mode.
+Natural language works **as arguments after the command** — the skill is user-invoked only and never fires on its own: `/brewtools:text-optimize compress this for context` → deep mode, `/brewtools:text-optimize slim down the README` → standard mode.
 
 ## Flow
 

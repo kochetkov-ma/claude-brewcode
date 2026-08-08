@@ -1,0 +1,303 @@
+---
+title: "Full Setup"
+description: "The ten -setup skills in recommended order: what each installs, the shared mode vocabulary, and why you run them one at a time."
+order: 4
+---
+
+import { Card, CardGrid, Callout, Steps, Badge } from '../../components/mdx';
+
+# Full Setup
+
+You installed the plugins. Nothing has touched your project yet — the plugins ship skills, and ten of
+those skills are **installers**. Each one analyses this repo and writes real artifacts into it:
+agents, hooks, generated skills, a task board, project rules.
+
+That is the whole meaning of the `-setup` suffix. A skill ending in `-setup` installs a mechanism you
+use afterwards **instead of** the skill; a skill without the suffix is a recurring tool that is correct
+to run over and over (`/brewcode:convention`, `/brewtools:text-optimize`, `/brewdoc:publish`).
+
+<Callout type="warning" title="One setup per session, run by hand. This is the most important line on this page.">
+  Every `-setup` skill is an **interactive generator**. Three properties make it unsuitable for
+  automation, and all three hold for every one of them:
+
+  - **It asks you real questions.** Which domains your team should cover, which model each agent
+    gets, whether an existing artifact is replaced or kept. Those answers cannot be guessed from the
+    repo, which is why there is no unattended flag anywhere in this suite.
+  - **It spawns many subagents.** A single `install` fans out a dozen readers across your codebase.
+    Two setups in one session compete for the same context window: the second one's questions get
+    answered against the first one's stale findings.
+  - **It creates a lot.** Agents, hooks, generated skills, rules, config and state — real files in
+    your repo, which you want to read and commit deliberately, not discover later in a diff.
+
+  So run them **one at a time, each in its own fresh session**, and always by typing the command
+  yourself. Batching is not faster; it produces worse artifacts that you then have to `upgrade` by
+  hand.
+
+  This is also why all 26 skills in the suite carry `user-invocable: true` **and**
+  `disable-model-invocation: true`. The model never sees their descriptions and can never reach for
+  one on its own — a setup runs only when you type `/plugin:skill`.
+</Callout>
+
+## Start here: the dashboard
+
+<Badge variant="primary" text="/brewcode:setup-status" /> is read-only. It probes this project for the
+anchor artifact of every setup and prints the exact command for the rows that need one.
+
+```bash
+/brewcode:setup-status
+```
+
+It writes nothing, spawns nothing, and has no `--run` mode by design — see the warning above. Treat it
+as the entry point: run it first, then work the list it hands you, top to bottom, one per session.
+
+Filter it to one plugin or one row when you only care about a slice:
+
+```bash
+/brewcode:setup-status brewtools
+/brewcode:setup-status semble-setup
+```
+
+Six verdicts, and the order between them matters:
+
+| Verdict | Meaning |
+|---------|---------|
+| `installed` | anchor and every secondary present, version signal matches |
+| `installed (version unknown)` | all present, but this setup ships no version signal to compare — AI-authored files have no stamp. The honest answer, not a defect |
+| `stale` | all present, but a version signal differs from the plugin's, or an absence signal fires (a team without `trace-ops.sh`, a board without the `task-spec` skill) |
+| `disabled` | you turned it off on purpose. Five setups leave a probeable off-switch: `.enabled:false`, `hard:false`, or think-short's `think-short-prompt.md.disabled` rename |
+| `partial` | anchor missing but some secondary present, or anchor present with a secondary missing — an interrupted install |
+| `missing` | anchor and every secondary absent |
+
+`disabled` outranks `partial` and `stale`, and that ordering is the point. `think-short-setup disable`
+renames its prompt file away, so the secondary legitimately goes missing; calling that `partial` would
+send you to re-install a mechanism that is working exactly as you configured it. Equally, a disabled
+row is never reported as `installed` — the files are there but the mechanism is inert, so the row's
+command column offers `enable`.
+
+A plugin you have not installed makes all of its rows `n/a`, never `missing`.
+
+## The ten setups
+
+| Skill | Plugin | What it installs |
+|-------|--------|------------------|
+| [`teams-setup`](/brewcode/skills/teams-setup/) | brewcode | `.claude/teams/*/team.md` plus 5-20 project agents in `.claude/agents/*.md`, and `.claude/agents/intent-guard.md` |
+| [`semble-setup`](/brewcode/skills/semble-setup/) | brewcode | the `semble_code` MCP server (user scope), `.claude/rules/semble-first.md`, three hooks in `.claude/hooks/` (`semble-session`, `semble-reminder`, `semble-explore`), `.claude/semble/state.json` |
+| [`superreview-setup`](/brewcode/skills/superreview-setup/) | brewcode | a project `/superreview` skill at `.claude/skills/superreview/` with its `references/` and a `.template-baseline/` copy, plus `.claude/agents/intent-guard.md` |
+| [`task-board-setup`](/brewtools/skills/task-board-setup/) | brewtools | `.claude/features/board.md` and the board tree, `.claude/agents/task-tracker.md`, the `task-board` and `task-spec` skills under `.claude/skills/`, `.claude/rules/tasks.md`, `.claude/features/PROGRESS.md` |
+| [`think-short-setup`](/brewtools/skills/think-short-setup/) | brewtools | terse-mode hooks in `.claude/hooks/` (or `~/.claude/hooks/` for global scope): `think-short-session`, `think-short-prompt-counter`, `think-short-task`, `think-short-prompt.md` |
+| [`agent-deadline-setup`](/brewtools/skills/agent-deadline-setup/) | brewtools | `.claude/hooks/agent-deadline-guard.mjs` + `agent-deadline-cleanup.mjs`, budget config at `.claude/agent-deadline.json` |
+| [`agent-router-setup`](/brewtools/skills/agent-router-setup/) | brewtools | `.claude/hooks/agent-router.mjs`, config at `.claude/brewtools/agent-router.json` |
+| [`manager-setup`](/brewtools/skills/manager-setup/) | brewtools | the hard-wall guard `.claude/brewtools/manager/hardmode-guard.mjs`, its `state.json`, and a `PreToolUse` registration in `.claude/settings.local.json`. The `++m` / `++a` / `++rr` / `++r` codeword layer is a plugin hook and needs no install |
+| [`memory-sync-setup`](/brewdoc/skills/memory-sync-setup/) | brewdoc | a project `/memory-sync` skill at `.claude/skills/memory-sync/` with `references/memory-guide.md`, `agent-audit.md`, `hard-sync.md` |
+| [`docsync-setup`](/brewdoc/skills/docsync-setup/) | brewdoc | doc-staleness hooks `docsync-track.mjs`, `docsync-watch.mjs`, `docsync-gate.mjs` in `.claude/hooks/`, plus `.claude/docsync/config.json` and `state.json` |
+
+<Callout type="note" title="Scope">
+  All ten write into the project, not your home directory — with two deliberate exceptions.
+  `think-short-setup` and `agent-deadline-setup` accept a `global` argument that installs into
+  `~/.claude/` instead. `semble-setup` registers its MCP server at user scope and may ask to run a
+  machine-level `brew install` for `uv`, which is exactly why it never installs without being asked.
+</Callout>
+
+## Recommended order
+
+The order below is derived from what reads what. Every setup after the first inventories artifacts the
+earlier ones produced, so running them backwards means the later analysis sees an empty project.
+
+<Steps>
+  <li class="step step-primary">
+    <div>
+      <strong>semble-setup</strong> <Badge variant="primary" text="first" />
+      <p>Semantic code search over the whole repo. Every setup that follows fans out subagents to read
+      your codebase, and they all get faster and more accurate once semantic search is wired. It is
+      also the only one that may touch the machine, so get its question out of the way first.</p>
+      <pre><code>/brewcode:semble-setup install</code></pre>
+      <p>Bare <code>/brewcode:semble-setup</code> reports status and installs nothing — the word
+      <code>install</code> is what consents to the machine-level step.</p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>teams-setup</strong>
+      <p>Produces the agent roster in <code>.claude/agents/</code>. Three later setups read that roster:
+      <code>task-board-setup</code> inventories it to build the domain table for its board,
+      <code>agent-router-setup</code> routes generic spawns to the experts in it, and
+      <code>memory-sync-setup</code> audits it. An empty roster makes all three degrade quietly.</p>
+      <pre><code>/brewcode:teams-setup install backend "Kotlin + Spring services, Postgres, Testcontainers integration tests — one agent per bounded context"</code></pre>
+      <p>The team name and the free-text brief are both optional, and both are worth giving: the brief
+      is what the analysis phase reconciles against your actual code before it proposes a roster. To
+      drop a team later, name it — <code>/brewcode:teams-setup uninstall backend</code>, or
+      <code>purge backend</code> to take the archive and trace files with it.</p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>task-board-setup</strong>
+      <p>Deploys the board, the <code>task-tracker</code> agent, and the generated
+      <code>/task-spec</code> skill. <code>superreview-setup</code> then uses the board as its intent
+      source and prefers <code>task-tracker</code> as its scope agent, so the board must exist first.</p>
+      <pre><code>/brewtools:task-board-setup install . "one lane per service, keep the existing docs/roadmap.md as the backlog source"</code></pre>
+      <p>The path argument targets another repo when you need it; <code>.</code> or nothing means the
+      current one. The trailing directive steers the module split.</p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>convention and rules</strong> <Badge variant="secondary" text="not setups — recurring tools" />
+      <p>Optional but strongly recommended before the next step.
+      <a href="/brewcode/skills/convention/"><code>/brewcode:convention</code></a> writes
+      <code>.claude/convention/</code> and <a href="/brewcode/skills/rules/"><code>/brewcode:rules</code></a>
+      writes <code>.claude/rules/</code>. <code>superreview-setup</code> builds its rule-pointer table
+      from exactly those two directories; without them the generated review skill degrades to a
+      <code>CLAUDE.md</code>-only preflight.</p>
+      <pre><code>/brewcode:convention full
+/brewcode:rules "derive rules from the last 200 commits, one file per domain, no duplicates of CLAUDE.md"</code></pre>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>superreview-setup</strong>
+      <p>The heaviest reader of the lot: rules, conventions, the agent roster, the board, and your
+      project invariants all feed the generated <code>/superreview</code> skill. Run it once everything
+      above exists, and it produces a review skill that actually knows this project.</p>
+      <pre><code>/brewcode:superreview-setup install "EXTENDED depth — add domain-expert fan-out and adversarial validation; gate on the Gradle build and Detekt"</code></pre>
+      <p>The prompt is where depth is chosen: say <code>EXTENDED</code> for the domain-expert fan-out,
+      or leave it out for the default <code>QUICK</code>.</p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>memory-sync-setup, then docsync-setup</strong>
+      <p><code>/memory-sync</code> keeps everything auto-loaded into context honest — nested
+      <code>CLAUDE.md</code> files, rules, conventions, agents, skills. It wants the full surface to be
+      present, which it now is. <code>docsync-setup</code> then tracks staleness of the docs
+      themselves. Two separate sessions — each asks its own questions.</p>
+      <pre><code>/brewdoc:memory-sync-setup install "treat docs/ as out of scope; audit the agents in .claude/agents on every run"</code></pre>
+      <pre><code>/brewdoc:docsync-setup install "track README.md, docs/**/*.md and .claude/rules/**; stale after 30 days"</code></pre>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>The hook layer, in any order</strong> <Badge variant="secondary" text="cheap, opt-in" />
+      <p><code>manager-setup</code>, <code>agent-router-setup</code>, <code>agent-deadline-setup</code>,
+      <code>think-short-setup</code>. These copy a hook and register it — no repo analysis, no long
+      question chain, nothing downstream depends on them. Pick the behaviours you want.
+      <code>agent-router-setup</code> is the one exception to "any order": it names the experts it
+      redirects to, so it is worth more after <code>teams-setup</code>.</p>
+      <pre><code>/brewtools:manager-setup install level balanced
+/brewtools:agent-router-setup install level fast
+/brewtools:agent-deadline-setup install project 20
+/brewtools:think-short-setup install project</code></pre>
+      <p>Each extra argument is the decision worth making up front: the wall's strictness, the
+      router's tier (<code>fast</code> is deterministic Node and free; <code>strict</code> adds an LLM
+      judge), the subagent budget in minutes, and whether terse mode is scoped to this project or to
+      <code>&#126;/.claude</code> for every project you open.</p>
+    </div>
+  </li>
+</Steps>
+
+## Mode vocabulary
+
+Every setup speaks the same seven verbs, in this order of escalation:
+
+| Mode | What it does |
+|------|--------------|
+| `status` | read-only report: what is installed, what drifted from the plugin templates. Writes nothing |
+| `install` | full generation — the interactive path with subagents and questions |
+| `upgrade` | re-sync an existing install against the current plugin version, keeping your customizations |
+| `enable` | re-arm an installed-but-off mechanism |
+| `disable` | turn it off, leave the files in place |
+| `uninstall` | remove the artifacts and the registration |
+| `purge` | `uninstall` plus the state, config, and any local overrides |
+
+**No argument** resolves to `status` when the mechanism is already installed and `install` when it is
+not, so a bare invocation on a fresh repo sets things up and a bare invocation on a configured repo
+just reports.
+
+<Callout type="warning" title="The one deliberate exception">
+  <a href="/brewcode/skills/semble-setup/"><code>/brewcode:semble-setup</code></a> **always** defaults
+  to `status`, installed or not. It is the only setup whose `install` can reach outside the project
+  and write to the machine (`brew install uv`), and a bare invocation must never trigger that. To
+  install it, say so: `/brewcode:semble-setup install`.
+</Callout>
+
+Not every setup implements all seven — the ones with no on/off state skip `enable` and `disable`, and
+say so instead of guessing. `/brewcode:teams-setup enable` exits with an error rather than falling back
+to `install`; a team is either present in `.claude/teams/` or it is not, there is no armed/disarmed
+state to flip.
+
+| Skill | Modes it accepts |
+|-------|------------------|
+| `semble-setup` | all seven, plus `reindex`, `optimize`, `resume` |
+| `think-short-setup` | all seven, plus `project` / `global` scope |
+| `agent-deadline-setup` | all seven, plus `project` / `global` and a minutes budget |
+| `agent-router-setup` | all seven, plus `level fast` / `level strict` |
+| `manager-setup` | all seven, plus `level strict` / `level balanced` and `edit` |
+| `task-board-setup` | `status`, `install`, `upgrade`, `uninstall`, `purge` |
+| `docsync-setup` | `status`, `install`, `upgrade`, `uninstall`, `purge`, plus `sync`, `reread`, `frontmatter` |
+| `teams-setup` | `status`, `install`, `upgrade`, `uninstall`, `purge` — each taking an optional team `[name]` |
+| `memory-sync-setup` | `status`, `install`, `upgrade`, `uninstall` |
+| `superreview-setup` | `status`, `install`, `upgrade` |
+
+## Getting back out of the manager wall
+
+`manager-setup`'s HARD wall is the one setup that can block the command you would normally use to turn
+it off. While armed, it denies `Write`, `Edit` and `Bash` in the main session — and the obvious
+disarm command is itself a `Bash` call. Before v5.0.0 that made the wall a trap: the documented exit
+was blocked by the thing it was meant to exit.
+
+The wall now exempts exactly one command shape, and `install` / `upgrade` copy the helper into your
+project so the path needs no resolution:
+
+```bash
+node /abs/path/to/project/.claude/brewtools/manager/manager-state.mjs set hard=false
+```
+
+`/brewtools:manager-setup disable` runs exactly that for you.
+
+<Callout type="warning" title="Existing installs must run upgrade once">
+  A project set up before v5.0.0 has no `manager-state.mjs` in it, so the disarm command fails with
+  `Cannot find module`. Run `/brewtools:manager-setup upgrade` once after updating brewtools — it
+  backfills the helper, re-registers the guard, and leaves `hard` and `level` exactly as they were,
+  so an armed wall stays armed and a disarmed one stays disarmed.
+
+  If the wall is already armed and blocking you, delegate it: subagents are never walled, so
+  `Task` a subagent to run `/brewtools:manager-setup upgrade` in this project.
+</Callout>
+
+The exemption is deliberately narrow. It applies only when the command starts with `node `, the first
+argument is that exact helper path, and the rest is the helper's own CLI. Any shell operator, any `$`
+expansion, any `node` eval flag turns it off — so no `BT_ROOT=` prelude, no `&& echo`, no `|| echo`,
+no `test -f`. That narrowness is the fix for the second half of the problem: the old exemption matched
+loosely enough to be a code-execution hole.
+
+## After the setups
+
+Re-run `/brewcode:setup-status` any time. It also catches **drift**: when you update the plugins, the
+hooks and templates a setup copied into your project fall behind the new versions. The dashboard
+reports those rows as stale and hands you the `upgrade` command for each.
+
+Drift is worth taking seriously, because a stale hook can fail silently rather than loudly.
+`think-short-setup` spent several releases quietly injecting nothing in any project that had also
+installed `agent-router-setup` or `agent-deadline-setup`, while its own status block still read
+`3/3 enabled`. `setup-status` plus a periodic `upgrade` is what catches that class of failure.
+
+<CardGrid>
+  <Card title="setup-status" icon="eye" href="/brewcode/skills/setup-status/">
+    The read-only dashboard in full: what it probes per row, how it decides stale vs partial.
+  </Card>
+  <Card title="Quick Start" icon="play" href="/quickstart/">
+    The 15-minute path if you only want the board, conventions, and a deep-review skill.
+  </Card>
+  <Card title="Installation" icon="package" href="/installation/">
+    Marketplace commands, requirements, updating, and troubleshooting.
+  </Card>
+</CardGrid>
+
+<CardGrid>
+  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
+    Download, changelog, and installation instructions.
+  </Card>
+  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode">
+    Source code, README, and configuration files.
+  </Card>
+</CardGrid>

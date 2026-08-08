@@ -43,7 +43,7 @@ On resume: read that file first, continue from the last hook listed.
 InstructionsLoaded -> SS -> UserPromptSubmit -> PR -> PTU -> [Tool] -> POT/PostToolUseFailure
   -> Notification -> Stop -> StopFailure -> PreCompact -> PCD -> SessionEnd
 Background: CwdChanged, FileChanged, ConfigChange
-Subagent: PTU:Task -> TaskCreated -> SubagentStart -> [work] -> SubagentStop -> POT:Task
+Subagent: PTU:Agent -> TaskCreated -> SubagentStart -> [work] -> SubagentStop -> POT:Agent
 Teams: TeammateIdle (exit 0=stop, 1=continue) | TaskCompleted (exit 0=accept, 1=redo)
 ```
 
@@ -479,14 +479,14 @@ main();
 
 | Event | Matcher type | Examples |
 |-------|-------------|----------|
-| PTU | tool name (regex) | `Bash`, `Write\|Edit`, `Task`, `mcp__.*` |
-| POT | tool name (regex) | `Bash`, `Read`, `Task` |
+| PTU | tool name (regex) | `Bash`, `Write\|Edit`, `Task\|Agent`, `mcp__.*` |
+| POT | tool name (regex) | `Bash`, `Read`, `Task\|Agent` |
 | PostToolUseFailure | tool name (regex) | `Bash` |
 | PR | tool name (regex) | `Bash`, `Write` |
 | SS | source string | `startup`,`resume`,`clear`,`compact` |
 | SessionEnd | reason string | `clear`,`resume`,`logout`,`prompt_input_exit`,`other` |
-| SubagentStart | agent type | `developer`,`Explore`,`my-agent` |
-| SubagentStop | agent type | `developer`,`reviewer` |
+| SubagentStart | agent type | `Explore`,`general-purpose`,`my-agent` |
+| SubagentStop | agent type | `Plan`,`general-purpose` |
 | PreCompact/PCD | trigger | `manual`,`auto` |
 | Notification | type string | `permission_prompt`,`idle_prompt`,`auth_success`,`elicitation_dialog` |
 | ConfigChange | source string | `user_settings`,`project_settings`,`local_settings`,`policy_settings`,`skills` |
@@ -503,7 +503,7 @@ main();
 
 | Pattern | matcher | hooks[0] | Mechanism |
 |---------|---------|----------|-----------|
-| Inject context into all SAs | `PreToolUse` / `Task` | `{"type":"command","command":"node inject-context.mjs"}` | modifies `tool_input.prompt` via `UI` |
+| Inject context into all SAs | `PreToolUse` / `Task\|Agent` | `{"type":"command","command":"node inject-context.mjs"}` | modifies `tool_input.prompt` via `UI` |
 | Gate dangerous tools | `PreToolUse` / `Bash` | `{"type":"command","command":"bash validate-bash.sh"}` | checks `tool_input.command`, `permissionDecision:"deny"` if dangerous |
 | Block stop until task complete | `Stop` / none | `{"type":"command","command":"node check-task.mjs"}` | `decision:"block"`+`reason` while incomplete |
 | Log all tool calls | `PostToolUse` / none | `{"type":"command","command":"node logger.mjs","async":true}` | fire-and-forget, no output needed |

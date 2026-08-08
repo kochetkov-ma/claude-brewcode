@@ -16,7 +16,8 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | Command | `/brewcode:skills` |
 | Input | free-form prompt, mode keyword, or empty |
 | Specialist | `brewcode:skill-creator` agent |
-| List source | `list-skills.sh` |
+| List source | `list-skills.sh` — global, project and every installed plugin |
+| Description budget | `<= 120` chars, single line |
 | Model | opus |
 
 ## When to use
@@ -56,7 +57,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | Mode | Trigger | Source / agent |
 |------|---------|----------------|
 | status (default) | any "show me" / "статус" / health intent | inline scan, no external script |
-| list | explicit "list" / "список" / "перечисли" only | `list-skills.sh` |
+| list | explicit "list" / "список" / "перечисли" only | `list-skills.sh` — self-locating, so plugin skills are found in both the dev checkout and the installed cache |
 | create | "create" / "создай" / "new" / "добавь" / "scaffold" | `brewcode:skill-creator` |
 | improve | "improve" / "улучши" / "refactor" / "fix", or a bare existing name or path | `brewcode:skill-creator` |
 | review | "review" / "ревью" / "validate" / "проверь корректность" | single reviewer: project's `.claude/agents/`, else `general-purpose` — two-phase (review, double-check) |
@@ -101,7 +102,7 @@ Reachable ONLY via create/improve modes.
 - Phase 4 Review: Simple = one reviewer + one verify agent. Quorum = three reviewers in parallel, 2/3 consensus threshold, DoubleCheck pass, Skill Creator fixes verified findings.
 - Phase 5 E2E: Deep depth only. Isolated temp project, `claude -p` execution, up to 2 retries per failed scenario.
 
-**Description budget:** &lt;=120 chars enforced — trigger keywords must fit within this limit.
+**Description budget:** `<= 120` chars, single line, trigger keywords included. One number, enforced in both places — the authoring rule in `SKILL.md` and the review checklist in `references/review-prompt.md` — so a skill written to spec passes its own review. The bound is empirical: 16 of the 26 shipped skills land in a 97-119 character cluster.
 
 **Specialist:** `brewcode:skill-creator` agent.
 
@@ -145,7 +146,7 @@ Announced as `Sync scope: &lt;scope&gt; — &lt;evidence&gt; | targets: &lt;N&gt
   <Card title="agents" icon="settings" href="/brewcode/skills/agents/">Sibling: manage agents</Card>
   <Card title="rules" icon="list" href="/brewcode/skills/rules/">Sibling: manage rules</Card>
   <Card title="brewcode" icon="rocket" href="/brewcode/overview/">Plugin overview</Card>
-  <Card title="memory-sync-init" icon="sync" href="/brewdoc/skills/memory-sync-init/">Sibling: generates a project-local sync for memory files, CLAUDE.md, rules</Card>
+  <Card title="memory-sync-setup" icon="sync" href="/brewdoc/skills/memory-sync-setup/">Sibling: generates a project-local sync for memory files, CLAUDE.md, rules</Card>
   <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/skills/SKILL.md">SKILL.md</Card>
 </CardGrid>
 

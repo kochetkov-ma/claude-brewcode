@@ -1,9 +1,11 @@
 ---
 name: brewtools:text-human
 description: "Humanizes code, docs, articles, reddit/chat, javadoc -- strips AI artifacts, fixes unicode, fits register. Triggers: humanize, ai artifacts, unicode fix, article, reddit, javadoc."
-argument-hint: "[path|commit|folder|text] [custom instructions]"
 user-invocable: true
+disable-model-invocation: true
+argument-hint: "[path|commit|folder|text] [custom instructions]"
 allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Agent, AskUserQuestion]
+model: sonnet
 ---
 
 # Text Humanizer

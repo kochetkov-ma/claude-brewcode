@@ -22,8 +22,11 @@ Tasks from other skills/contexts -- refuse with explanation.
 ## Rules Loading Protocol
 
 Before starting ANY task:
-1. Read rules: `$BC_PLUGIN_ROOT/skills/e2e/references/e2e-rules.md`
-2. If file not found -- STOP immediately, report: "E2E rules not found at expected path"
+1. Read rules: `.claude/e2e/e2e-rules.md` (project-local, relative to the project root — this file
+   lives in `.claude/agents/`, which is not plugin-owned, so no plugin path or `*_PLUGIN_ROOT`
+   variable resolves here)
+2. If file not found -- STOP immediately, report: "E2E rules not found at .claude/e2e/e2e-rules.md --
+   run `/brewcode:e2e install` or `/brewcode:e2e rules`"
 3. Keep rules in context throughout task execution
 
 ## Task Acceptance Protocol

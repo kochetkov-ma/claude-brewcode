@@ -4,18 +4,27 @@ description: Detailed description of all brewdoc plugin commands
 
 # Brewdoc Plugin Commands
 
-> **Version:** 4.10.0 | **Author:** Maksim Kochetkov | **License:** MIT
+> **Version:** 5.0.0 | **Author:** Maksim Kochetkov | **License:** MIT
 
 ## Quick Reference
+
+All 5 brewdoc skills are documented below, one section each.
 
 | # | Command | Purpose | Model | Args |
 |---|---------|---------|-------|------|
 | 1 | `/brewdoc:my-claude` | Generate docs about Claude Code installation and environment | opus | `[ext [context]] \| [r <query>]` |
-| 2 | `/brewdoc:memory-sync-init` | Generate a project-tailored `/memory-sync` skill into the target repo | opus | `[status\|init\|upgrade] [fine-tune-prompt]` |
-| 3 | `/brewdoc:docsync` | Install project-local doc-staleness tracking hooks; report/force sync | sonnet | `[status] \| [sync [--all]] \| [reread] \| [frontmatter] \| [uninstall] \| free-text` |
-| 4 | `/brewdoc:guide` | Interactive tutorial for the brewcode/brewdoc/brewtools/brewui plugin suite | haiku | `[topic]` (no args = menu) |
-| 5 | `/brewdoc:md-to-pdf` | Convert Markdown to PDF via reportlab or weasyprint | sonnet | `<file.md> [--engine name] ["prompt"] \| styles \| test` |
-| 6 | `/brewdoc:publish` | Publish text/markdown/file/site to brewpage.app, returns URL | haiku | `<text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename]` |
+| 2 | `/brewdoc:memory-sync-setup` | Generate a project-tailored `/memory-sync` skill into the target repo | opus | `[status\|install\|upgrade\|uninstall] [fine-tune-prompt]` |
+| 3 | `/brewdoc:docsync-setup` | Install project-local doc-staleness tracking hooks; report/force sync | sonnet | `[status\|install\|upgrade\|uninstall\|purge] [sync [--all]\|reread\|frontmatter] \| free-text` |
+| 4 | `/brewdoc:md-to-pdf` | Convert Markdown to PDF via reportlab or weasyprint | sonnet | `<file.md> [--engine name] ["prompt"] \| styles \| test` |
+| 5 | `/brewdoc:publish` | Publish text/markdown/file/site to brewpage.app, returns URL | haiku | `<text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename]` |
+
+### Naming and modes
+
+A `-setup` suffix marks a skill that installs a mechanism -- afterwards you use the installed hooks or the generated skill, not the setup skill. Recurring tools keep bare names.
+
+Setup skills share one verb vocabulary, in this order: `status | install | upgrade | enable | disable | uninstall | purge`. No argument = `status` if installed, `install` if not. Skill-specific extras come after the canonical verb. v5.0.0 dropped the aliases `init`, `on`, `off`, `setup`, `remove` and `reset` with no back-compat shims. Neither brewdoc setup skill implements `enable`/`disable`, and `memory-sync-setup` has no `purge` -- the per-command Args column is authoritative.
+
+Every brewdoc skill carries `disable-model-invocation: true`: Claude never fires any of them on its own, you type the command. `/brewcode:setup-status` reports what is installed, stale or missing across all plugins.
 
 ---
 
@@ -137,24 +146,26 @@ If an existing entry for the same mode exists, the skill offers to update (versi
 
 ---
 
-## 2. `/brewdoc:memory-sync-init`
+## 2. `/brewdoc:memory-sync-setup`
 
 **Purpose:** GENERATOR. It analyzes the target project and writes a self-contained, project-local `.claude/skills/memory-sync/` into that repo -- it never syncs memory itself. The emitted skill keeps everything that gets AUTO-LOADED into context truthful against the code; documentation is explicitly out of scope.
 
 | Parameter | Value |
 |-----------|-------|
-| **Arguments** | `[status\|init\|upgrade] [fine-tune-prompt]` |
+| **Arguments** | `[status\|install\|upgrade\|uninstall] [fine-tune-prompt]` |
 | **Model** | `opus` |
 | **Dependencies** | None |
 | **Allowed tools** | `Read`, `Edit`, `Glob`, `Grep`, `Bash`, `Agent`, `AskUserQuestion` |
+| **Model invocation** | `disable-model-invocation: true` -- user-invoked only |
 
 ### Modes
 
 | Mode | Writes | Runs |
 |------|--------|------|
-| `status` | nothing | Is `memory-sync` installed, its provenance stamp, how stale its surface tables are vs the live repo. Verdict `IN SYNC` / `STALE (n drifts)` / `NOT INSTALLED` |
-| `init` (**default**) | the 4 emitted files (`SKILL.md` + `references/memory-guide.md`, `agent-audit.md`, `hard-sync.md`) | Full analysis + emit. Refuses an existing installation |
+| `status` (**default when installed**) | nothing | Is `memory-sync` installed, its provenance stamp, how stale its surface tables are vs the live repo. Verdict `IN SYNC` / `STALE (n drifts)` / `NOT INSTALLED` |
+| `install` (**default when not installed**) | the 4 emitted files (`SKILL.md` + `references/memory-guide.md`, `agent-audit.md`, `hard-sync.md`) | Full analysis + emit. Refuses an existing installation |
 | `upgrade` | targeted edits | Re-scan and refresh an existing installation; hand-edits preserved, never blind-overwritten |
+| `uninstall` | deletes `<target>/.claude/skills/memory-sync/` | Removes the emitted skill after confirmation. Nothing this generator ever wrote lives outside that dir, so there is no separate `purge` |
 
 ### Emitted surface (every run of `/memory-sync`)
 
@@ -182,7 +193,7 @@ Excluded with reasons: `docs/**` (a separate doc flow owns it), all source code 
 ### Output
 
 ```markdown
-## memory-sync-init [status|init|upgrade]
+## memory-sync-setup [status|install|upgrade|uninstall]
 
 ### Surface / Batches / Exclusions
 | Batch | Files | Paths |
@@ -193,37 +204,46 @@ Excluded with reasons: `docs/**` (a separate doc flow owns it), all source code 
 ### Examples
 
 ```
-/brewdoc:memory-sync-init
-/brewdoc:memory-sync-init "weight stale-fact removal over compression"
-/brewdoc:memory-sync-init status
-/brewdoc:memory-sync-init upgrade
+/brewdoc:memory-sync-setup
+/brewdoc:memory-sync-setup install "weight stale-fact removal over compression"
+/brewdoc:memory-sync-setup status
+/brewdoc:memory-sync-setup upgrade
+/brewdoc:memory-sync-setup uninstall
 ```
 
 Then, inside that project: `/memory-sync`, `/memory-sync branch`, `/memory-sync all hard "only rules"`.
 
 ---
 
-## 3. `/brewdoc:docsync`
+## 3. `/brewdoc:docsync-setup`
 
 **Purpose:** Installs three project-local hooks that watch which `.md` docs are touched, then nag once per turn when a touched doc is stale by date. Source of truth is each doc's own frontmatter (`last_updated`) -- date only, local time, no hash, no deps. Runs in the main conversation (uses `AskUserQuestion`), no `context: fork`.
 
 | Parameter | Value |
 |-----------|-------|
-| **Arguments** | `[status] \| [sync [--all]] \| [reread] \| [frontmatter] \| [uninstall] \| free-text` |
+| **Arguments** | `[status\|install\|upgrade\|uninstall\|purge] [sync [--all]\|reread\|frontmatter] \| free-text` |
 | **Model** | `sonnet` |
 | **Dependencies** | None |
 | **Allowed tools** | `Read`, `Write`, `Edit`, `Bash`, `Glob`, `Grep`, `AskUserQuestion` |
+| **Model invocation** | `disable-model-invocation: true` -- user-invoked only |
 
 ### Modes
 
 | Mode | Writes | Description |
 |------|--------|-------------|
-| `init` (empty + not installed) | hooks + `.claude/docsync/{config,state}.json` | Ask threshold (7/14/30/other days) + exclude globs; copy `docsync-{track,watch,gate}.mjs` into `.claude/hooks/`; merge `settings.json` (never clobbers foreign hooks, `.bak` backup first) |
-| `status` (empty + installed) | nothing | Report tracked docs, staleness, current session touched-set |
+| `status` (**default when installed**) | nothing | Report tracked docs, staleness, current session touched-set |
+| `install` (**default when not installed**) | hooks + `.claude/docsync/{config,state}.json` | Ask threshold (7/14/30/other days) + exclude globs; copy `docsync-{track,watch,gate}.mjs` into `.claude/hooks/`; merge `settings.json` (never clobbers foreign hooks, `.bak` backup first) |
+| `upgrade` | hook files + settings entries | Re-copy the 3 hooks from the current plugin version and re-register any that went missing; `config.json` threshold and excludes are preserved verbatim |
+| `uninstall` | removes hooks + settings.json entries | Inverse-merge removes only the 3 docsync hook entries; foreign hooks preserved; `.claude/docsync/` config and state are KEPT |
+| `purge` | `uninstall` + deletes `.claude/docsync/` | The destructive one: hooks, registration, config and state all go |
+
+**Extras** -- run after install, no canonical verb needed:
+
+| Extra | Writes | Description |
+|-------|--------|-------------|
 | `sync [--all]` | frontmatter `last_updated` | Refresh stale docs (or every in-scope doc with `--all`) WITH confirmation; follows each doc's `sync_procedure` if present; compression by `doc_type` (`llm` = deep, `user` = light) |
 | `reread` | nothing | Force re-read of tracked docs to refresh in-context understanding |
-| `frontmatter` | frontmatter block | Opt-in retro-add of `doc_type`/`last_updated` to docs missing it; never runs automatically at `init` |
-| `uninstall` | removes hooks + settings.json entries | Inverse-merge removes only the 3 docsync hook entries; asks whether to also delete `.claude/docsync/` |
+| `frontmatter` | frontmatter block | Opt-in retro-add of `doc_type`/`last_updated` to docs missing it; never runs automatically at `install` |
 
 ### Frontmatter schema
 
@@ -238,59 +258,19 @@ sync_procedure:"what to check / where to look when syncing"   # optional, prose
 `doc_type: skip` excludes a file from tracking entirely. Staleness: `today - last_updated > threshold_days`.
 
 ```
-/brewdoc:docsync
-/brewdoc:docsync status
-/brewdoc:docsync sync --all
-/brewdoc:docsync frontmatter
-/brewdoc:docsync uninstall
+/brewdoc:docsync-setup
+/brewdoc:docsync-setup install
+/brewdoc:docsync-setup status
+/brewdoc:docsync-setup upgrade
+/brewdoc:docsync-setup sync --all
+/brewdoc:docsync-setup frontmatter
+/brewdoc:docsync-setup uninstall
+/brewdoc:docsync-setup purge
 ```
 
 ---
 
-## 4. `/brewdoc:guide`
-
-**Purpose:** Read-only interactive tutorial for the brewcode/brewdoc/brewtools/brewui plugin suite. Tracks per-user progress across 9 topics, offers language selection (English/Русский/Português), checks plugin freshness before starting, and never modifies project files -- only its own progress JSON.
-
-| Parameter | Value |
-|-----------|-------|
-| **Arguments** | `[topic]` -- no args = interactive menu |
-| **Model** | `haiku` |
-| **Dependencies** | None |
-| **Allowed tools** | `Read`, `Glob`, `Grep`, `Bash`, `WebSearch`, `AskUserQuestion` |
-| **Model invocation** | `disable-model-invocation: true` -- user-invoked only |
-
-### Topic Map
-
-| ID | Topic |
-|----|-------|
-| `overview` | Four Plugins Overview |
-| `installation` | Installation & Updates |
-| `killer-flow` | Board -> Spec -> Review |
-| `teams` | Dynamic Teams |
-| `skills-catalog` | All Skills Catalog |
-| `agents-catalog` | All Agents Catalog |
-| `customization` | Build Your Own |
-| `integration` | Project Configuration |
-| `advanced` | Power Features |
-
-### Workflow
-
-1. Validate environment (`scripts/validate.sh`); skip silently if unavailable
-2. Check plugin freshness via `brewtools:plugin-update`; offer update if stale
-3. Load progress (`scripts/progress.sh read`); ask language on first run
-4. Route: exact/fuzzy topic match from `$ARGUMENTS`, else show menu with recommended next topic
-5. Deliver topic section-by-section (translated per `$PROGRESS.lang`), offering continue/example/go-deeper/skip/exit at each step
-6. Mark topic complete (`scripts/progress.sh complete`), recommend the next incomplete topic
-
-```
-/brewdoc:guide
-/brewdoc:guide killer-flow
-/brewdoc:guide agents-catalog
-```
-
----
-
-## 5. `/brewdoc:md-to-pdf`
+## 4. `/brewdoc:md-to-pdf`
 
 **Purpose:** Converts a Markdown file to PDF using one of two rendering engines. Detects missing dependencies and offers to install them; saves the chosen engine/style as project or global config; supports optional LLM preprocessing of the source Markdown before conversion.
 
@@ -330,7 +310,7 @@ sync_procedure:"what to check / where to look when syncing"   # optional, prose
 
 ---
 
-## 6. `/brewdoc:publish`
+## 5. `/brewdoc:publish`
 
 **Purpose:** Publishes text, Markdown, a file, a directory, or a ZIP to brewpage.app, returning a URL. No sign-up required. Auto-detects content type, asks for namespace (public/private) and optional password, then publishes and saves the owner token to `.claude/brewpage-history.md`.
 
@@ -373,11 +353,12 @@ Namespace: `public` (listed in gallery, indexed) or an auto-suggested/custom pri
 
 | Error | Applies To | Action |
 |-------|-----------|--------|
-| `memory-sync` already installed | memory-sync-init | `init` refuses; use `upgrade` (or `MEMORY_SYNC_FORCE=1` to destroy hand-edits) |
-| Surviving `{PLACEHOLDER}` after emit | memory-sync-init | `generate.sh validate` fails; fill the slot before reporting |
-| Emitted agent name does not resolve | memory-sync-init | Fall back to `general-purpose`, report the substitution |
+| `memory-sync` already installed | memory-sync-setup | `install` refuses; use `upgrade` (or `MEMORY_SYNC_FORCE=1` to destroy hand-edits) |
+| Surviving `{PLACEHOLDER}` after emit | memory-sync-setup | `generate.sh validate` fails; fill the slot before reporting |
+| Emitted agent name does not resolve | memory-sync-setup | Fall back to `general-purpose`, report the substitution |
+| `upgrade` but nothing installed | memory-sync-setup, docsync-setup | Stop; point at `install` |
 | File not found | my-claude | Skip, add to errors |
-| `settings.json` invalid JSON | docsync | Abort merge/clean, restore `.bak`, report |
+| `settings.json` invalid JSON | docsync-setup | Abort merge/clean, restore `.bak`, report |
 | No `.md` in target directory (SITE) | publish | Fail with explicit error, never guess an entry file |
 | Dependency install fails | md-to-pdf | Report `INSTALL_FAILED` and stop |
 | Conversion fails | md-to-pdf | Read error, attempt one fix + retry, else report error |

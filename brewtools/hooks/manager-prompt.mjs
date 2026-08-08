@@ -1,4 +1,4 @@
-// brewtools:manager — UserPromptSubmit hook.
+// brewtools:manager-setup — UserPromptSubmit hook.
 // Injects Manager/Architecture/Review mode block(s) via additionalContext. Triggers:
 //   1. Codeword in prompt (always, regardless of state). FOUR codewords in THREE
 //      INDEPENDENT groups; a prompt may activate one from each:

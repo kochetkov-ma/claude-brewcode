@@ -160,19 +160,23 @@ If brewcode is installed too, its `forced-eval.mjs` (UserPromptSubmit) adds thre
 
 That reminder fires on slash commands as well, and is skipped only for empty prompts and meta-replies (`yes`, `ok`, a bare number, a single letter). See [Brewcode hooks](/brewcode/hooks/).
 
-The prompt text is editable and update-proof. Use `/brewtools:manager edit` to copy the plugin default into a writable project or global override, and `/brewtools:manager reset` to revert to the plugin default.
+The prompt text is editable and update-proof. Use `/brewtools:manager-setup edit` to copy the plugin default into a writable project or global override, and `/brewtools:manager-setup purge` to drop the override and revert to the plugin default.
 
 ## Where this is used
 
-The `/brewtools:manager` skill is the control plane for the entire mechanism. It lets you inspect the current effective prompt source (`status`), customize the Manager text (`edit`/`reset`), arm the HARD delegation wall (`on`/`off`), and run one-shot manager tasks (`inline-run`, `hard-one-shot`, `manager-run`).
+The `/brewtools:manager-setup` skill is the control plane for the entire mechanism. It lets you inspect the current effective prompt source (`status`), customize the Manager text (`edit`/`purge`), install and arm the HARD delegation wall (`install`/`enable`/`disable`/`uninstall`), and run one-shot manager tasks (`inline-run`, `hard-one-shot`, `manager-run`).
 
-The codeword hook itself (`manager-prompt.mjs`) is always on -- it cannot be toggled by the skill. The skill manages text and state; the hook fires unconditionally on every turn.
+The codeword hook itself (`manager-prompt.mjs`) is always on -- it cannot be toggled by the skill, and renaming the skill to `manager-setup` did not change that. The four codewords fire regardless of whether the wall is installed. The skill manages text and state; the hook fires unconditionally on every turn.
 
-The closest-counterpart rule injected by `++m` and `++a` is not unique to this hook -- `/brewcode:teams` and `/brewcode:agents` inject the same rule into generated agents whose domain writes code, scripts, SQL, schemas, or infra. See [Teams](/brewcode/skills/teams/) and [Agents](/brewcode/skills/agents/).
+<Callout type="note">
+The hook and helper filenames stayed as they are through the v5.0.0 rename: `manager-prompt.mjs`, `hardmode-guard.mjs`, `lib/manager-state.mjs`, `lib/manager-prompts.mjs`. The guard's self-exemption requires the script `node` actually executes to match `(.claude/brewtools/manager|hooks/lib)/manager-state.mjs$`, so renaming or relocating that helper would silently break the wall's off-switch.
+</Callout>
+
+The closest-counterpart rule injected by `++m` and `++a` is not unique to this hook -- `/brewcode:teams-setup` and `/brewcode:agents` inject the same rule into generated agents whose domain writes code, scripts, SQL, schemas, or infra. See [Teams](/brewcode/skills/teams-setup/) and [Agents](/brewcode/skills/agents/).
 
 <CardGrid>
-  <Card title="Manager skill" icon="settings" href="/brewtools/skills/manager/">
-    The control plane for these prompts -- customize text, arm the HARD wall, check status, and run manager-mode tasks.
+  <Card title="Manager Setup" icon="settings" href="/brewtools/skills/manager-setup/">
+    The control plane for these prompts -- customize text, install and arm the HARD wall, check status, and run manager-mode tasks.
   </Card>
   <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">
     All brewtools skills and agents in one place.

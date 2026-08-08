@@ -1,0 +1,6 @@
+interface:
+  display_name: "Task Board Setup"
+  short_description: "Codex task-board setup; user invoked"
+  default_prompt: "Use $brewtools:task-board-setup only when the user explicitly requests board setup."
+policy:
+  allow_implicit_invocation: false

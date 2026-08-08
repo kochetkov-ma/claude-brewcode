@@ -4,9 +4,10 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 4.2.4 |
+| Version | 5.0.0 |
 | Skills | 12 |
 | Agents | 3 |
+| Hooks | 2 |
 
 ## Install
 
@@ -76,22 +77,44 @@ claude --plugin-dir ./brewtools
 /brewtools:plugin-update check                  # Status table only
 ```
 
+Setup skills all speak the same verbs:
+
+```bash
+/brewtools:manager-setup                        # No verb = status if installed, install if not
+/brewtools:manager-setup install                # Install the HARD delegation wall into this project
+/brewtools:manager-setup disable                # Disarm it, keep the files
+/brewtools:think-short-setup install global     # Terse-mode hooks, global scope
+/brewtools:agent-deadline-setup install project 20   # 20-minute subagent budget
+/brewtools:task-board-setup install ~/repos/api      # Kanban into another repo
+/brewcode:setup-status                          # What is installed / stale / missing, everywhere
+```
+
 ## Skills
+
+> **Naming rule.** A `-setup` suffix marks a skill that *installs a mechanism* -- after running it you use the installed hooks, guard or generated skill, not the setup skill itself. Recurring tools you invoke every time (`text-optimize`, `secrets-scan`, `ssh`, ...) keep bare names.
+
+> **Canonical modes.** Every `-setup` skill answers the same verbs, in this order: `status | install | upgrade | enable | disable | uninstall | purge`. No argument = `status` if installed, `install` if not. Skill-specific extras (scope, level, minutes, path) come *after* the canonical verb. The v4 aliases `init`, `on`, `off`, `setup`, `remove` and `reset` are gone -- v5.0.0 is a deliberate breaking change with no back-compat. Not every skill implements all seven; the Arguments column below is authoritative per skill.
+
+> **Run `upgrade` in every project that already has one of these installed.** A `-setup` skill copies files INTO the project; a plugin update does not reach those copies. Two of them matter right now:
+> - `/brewtools:manager-setup upgrade` — backfills `manager-state.mjs` (the wall's off-switch CLI) into projects installed before it existed. Without it the documented disarm command has no script to run.
+> - `/brewtools:think-short-setup upgrade` — installs the `think-short-task.mjs` that actually detects a foreign `Task`/`Agent` hook. Older copies report `injects=unknown` in `status`.
+
+> Run [`/brewcode:setup-status`](../brewcode/skills/setup-status/README.md) to see which setup skills are installed, stale or missing in the current project, with the exact command to run for each.
 
 | Skill | Purpose | Model | Arguments |
 |-------|---------|-------|-----------|
-| [`/brewtools:text-optimize`](skills/text-optimize/README.md) | Optimize text for LLM token efficiency | sonnet | `[-l\|-s\|-d\|-x] [file\|folder\|path1,path2]` |
+| [`/brewtools:text-optimize`](skills/text-optimize/README.md) | Optimize text for LLM token efficiency | sonnet | `[-l\|-s\|-d\|-x\|--max] [file\|folder\|path1,path2]` |
 | [`/brewtools:text-human`](skills/text-human/README.md) | Humanizes code, docs, articles, reddit/chat, javadoc -- strips AI artifacts, fixes unicode, fits register | sonnet | `[path\|commit\|folder\|text] [custom instructions]` |
 | [`/brewtools:secrets-scan`](skills/secrets-scan/README.md) | Scan for leaked secrets and credentials | sonnet | `[--fix]` |
-| [`/brewtools:ssh`](skills/ssh/SKILL.md) | SSH server management and configuration | opus | `[connect\|deploy\|configure\|...]` |
-| [`/brewtools:deploy`](skills/deploy/SKILL.md) | GitHub Actions deployment with safety gates | opus | `[release\|workflow\|...]` |
-| [`/brewtools:manager`](skills/manager/README.md) | Manager mode: installs a hard delegation wall into this project -- on, off, uninstall, status, level, edit, reset -- and explains/customizes codewords `++m` (delegate-everything, plan-aware), `++a` (architecture-first), `++rr` (anti-regression review), `++r` (two-phase double-check). Codewords are hook-driven and always fire; the wall is opt-in, per-project, and blocks main-session writes while subagents stay free | sonnet | `[on\|off\|uninstall\|status\|level <strict\|balanced>\|edit\|reset] \| <task в хард режиме> \| <task от роли менеджера> \| <prompt>` |
+| [`/brewtools:ssh`](skills/ssh/SKILL.md) | SSH server management and configuration | opus | `<prompt describing what to do>` |
+| [`/brewtools:deploy`](skills/deploy/SKILL.md) | GitHub Actions deployment with safety gates | opus | `<prompt describing what to do>` |
+| [`/brewtools:manager-setup`](skills/manager-setup/README.md) | Manager mode: installs a hard delegation wall into this project and explains/customizes codewords `++m` (delegate-everything, plan-aware), `++a` (architecture-first), `++rr` (anti-regression review), `++r` (two-phase double-check). The codewords are hook-driven and fire whether or not the wall is installed; the wall itself is opt-in, per-project, and blocks main-session writes while subagents stay free | sonnet | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [level strict\|balanced] [edit] \| <task в хард режиме> \| <task от роли менеджера> \| <prompt>` |
 | [`/brewtools:plugin-update`](skills/plugin-update/README.md) | Check/install/update brewcode plugins | sonnet | `[check\|update\|all]` |
-| [`/brewtools:provider-switch`](skills/provider-switch/README.md) | Configure alt API providers: DeepSeek, Z.ai/GLM, Qwen, MiniMax, OpenRouter | opus | `[status\|setup\|verify\|model-check\|help\|<provider-name>]` -- no args = interactive status check |
-| [`/brewtools:think-short`](skills/think-short/README.md) | Install/remove terse-mode hooks (SessionStart + every-10th UserPromptSubmit + subagent Task) that inject brevity directives; project or global | sonnet | `[<free-text prompt>] [Project\|Global]` |
-| [`/brewtools:agent-deadline`](skills/agent-deadline/SKILL.md) | Install/remove a soft wall-clock budget for subagents: 80% -- non-blocking "wrap up" warning, 100% -- deny all tools except the finalization set; project or global, opt-in | sonnet | `[status\|install\|disable\|enable\|uninstall\|purge] [project\|global] [minutes] \| free-text intent` |
-| [`/brewtools:agent-router`](skills/agent-router/SKILL.md) | EXPERIMENTAL. Install/remove a PreToolUse hook that denies a generic subagent spawn in favor of the real project/plugin expert, or nudges when the fit is only uncertain; tier 1 free and deterministic, tier 2 opt-in LLM judge not yet behaviorally verified; project scope only | sonnet | `[status\|install\|level fast\|level strict\|disable\|enable\|uninstall\|purge] \| free-text intent` |
-| [`/brewtools:task-board-init`](skills/task-board-init/README.md) | Generator: deploys a file-based Kanban into any repo via multi-agent analysis, with an optional spec + design layer (`task-spec` skill) and an `upgrade` mode to retrofit it onto an existing board, plus an optional gated CLAUDE.md-optimization pass | opus | `[target repo path \| empty = cwd] [upgrade] [free-text directive, e.g. 'also dedupe rules', 'skip module split']` |
+| [`/brewtools:provider-switch`](skills/provider-switch/README.md) | Configure alt API providers: DeepSeek, Z.ai/GLM, Qwen, MiniMax, OpenRouter | opus | `[status\|install\|verify\|model-check\|help\|<provider-name>]` -- no args = interactive status check |
+| [`/brewtools:think-short-setup`](skills/think-short-setup/README.md) | Install/remove terse-mode hooks (SessionStart + every-10th UserPromptSubmit + subagent Task) that inject brevity directives; project or global. `disable` flips a flag and leaves the files in place; `purge` deletes files and state | sonnet | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [project\|global] \| free-text intent` |
+| [`/brewtools:agent-deadline-setup`](skills/agent-deadline-setup/README.md) | Install/remove a soft wall-clock budget for subagents: 80% -- non-blocking "wrap up" warning, 100% -- deny all tools except the finalization set; project or global, opt-in | sonnet | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [project\|global] [minutes] \| free-text intent` |
+| [`/brewtools:agent-router-setup`](skills/agent-router-setup/README.md) | EXPERIMENTAL. Install/remove a PreToolUse hook that denies a generic subagent spawn in favor of the real project/plugin expert, or nudges when the fit is only uncertain; tier 1 free and deterministic, tier 2 opt-in LLM judge not yet behaviorally verified; project scope only | sonnet | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [level fast\|strict] \| free-text intent` |
+| [`/brewtools:task-board-setup`](skills/task-board-setup/README.md) | Generator: deploys a file-based Kanban into any repo via multi-agent analysis, with an optional spec + design layer (`task-spec` skill) and an `upgrade` mode to retrofit it onto an existing board, plus an optional gated CLAUDE.md-optimization pass | opus | `[status\|install\|upgrade\|uninstall\|purge] [target repo path \| empty = cwd] [free-text directive, e.g. 'also dedupe rules', 'skip module split']` |
 
 ## Agents
 
@@ -112,6 +135,7 @@ brewtools/
 |   +-- hooks.json                    # Hook registry
 |   +-- session-start.mjs            # Manager HARD-wall awareness
 |   +-- manager-prompt.mjs           # ++m / ++a / ++rr / ++r codeword injection
+|   +-- hardmode-guard.mjs            # HARD-wall guard template (not registered; copied per project by manager-setup)
 |   +-- lib/utils.mjs                 # I/O utilities
 +-- skills/
 |   +-- text-optimize/                # Token optimization
@@ -121,11 +145,11 @@ brewtools/
 |   +-- deploy/                       # GitHub Actions deployment
 |   +-- plugin-update/                # Plugin check / install / update
 |   +-- provider-switch/               # Alternative API provider management
-|   +-- think-short/                   # Terse-mode hooks install/remove
-|   +-- agent-deadline/                # Subagent soft wall-clock budget hooks install/remove
-|   +-- agent-router/                  # EXPERIMENTAL: route generic subagent spawns to the real expert
-|   +-- manager/                       # Codeword-triggered Manager mode + HARD delegation wall
-|   +-- task-board-init/                # File-based Kanban generator (multi-agent)
+|   +-- think-short-setup/             # Terse-mode hooks install/remove
+|   +-- agent-deadline-setup/          # Subagent soft wall-clock budget hooks install/remove
+|   +-- agent-router-setup/            # EXPERIMENTAL: route generic subagent spawns to the real expert
+|   +-- manager-setup/                 # Codeword-triggered Manager mode + HARD delegation wall
+|   +-- task-board-setup/              # File-based Kanban generator (multi-agent)
 +-- agents/
     +-- text-optimizer.md             # Text optimization agent
     +-- ssh-admin.md                  # SSH and server administration
@@ -152,12 +176,14 @@ Full docs: [doc-claude.brewcode.app/brewtools/overview](https://doc-claude.brewc
 | Secrets Scan | [secrets-scan](https://doc-claude.brewcode.app/brewtools/skills/secrets-scan/) |
 | SSH | [ssh](https://doc-claude.brewcode.app/brewtools/skills/ssh/) |
 | Deploy | [deploy](https://doc-claude.brewcode.app/brewtools/skills/deploy/) |
-| Manager | [manager](https://doc-claude.brewcode.app/brewtools/skills/manager/) |
+| Manager Setup | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) |
 | Plugin Update | [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) |
 | Provider Switch | [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/) |
-| Think Short | [think-short](https://doc-claude.brewcode.app/brewtools/skills/think-short/) |
-| Agent Deadline | [agent-deadline](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline/) |
-| Agent Router | [agent-router](https://doc-claude.brewcode.app/brewtools/skills/agent-router/) |
+| Think Short Setup | [think-short-setup](https://doc-claude.brewcode.app/brewtools/skills/think-short-setup/) |
+| Agent Deadline Setup | [agent-deadline-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline-setup/) |
+| Agent Router Setup | [agent-router-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-router-setup/) |
+| Task Board Setup | [task-board-setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) |
+| Setup Status (brewcode) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) |
 | Text Optimizer (agent) | [text-optimizer](https://doc-claude.brewcode.app/brewtools/agents/text-optimizer/) |
 | SSH Admin (agent) | [ssh-admin](https://doc-claude.brewcode.app/brewtools/agents/ssh-admin/) |
 | Deploy Admin (agent) | [deploy-admin](https://doc-claude.brewcode.app/brewtools/agents/deploy-admin/) |

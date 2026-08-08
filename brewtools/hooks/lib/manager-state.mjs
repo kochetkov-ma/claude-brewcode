@@ -1,4 +1,4 @@
-// brewtools:manager — Manager mode state resolver/writer.
+// brewtools:manager-setup — Manager mode state resolver/writer.
 // State shape: { hard:boolean, level:'strict'|'balanced', mode:'full' }.
 //   hard  — HARD wall toggle (PreToolUse guard physically denies main-session tools)
 //   level — HARD wall strictness: 'strict' (deny all non-read) | 'balanced' (allow read-only bash/search)
@@ -12,10 +12,15 @@
 //   wall in projects lacking their own state.json); mode resolves project -> global -> default.
 // Atomic write: lockfile O_CREAT|O_EXCL + stale detection, tmp + rename.
 
+// CLI (see bottom of file): `node manager-state.mjs get|set hard=false|level=strict [--cwd DIR]`.
+// This entrypoint is the ONLY Bash command the HARD wall guard self-exempts, so it must stay
+// argument-strict: unknown keys/values/flags exit non-zero without writing anything.
+
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { pathToFileURL } from 'node:url';
 
 const DEFAULT_STATE = { hard: false, level: 'balanced', mode: 'full' };
 const VALID_SCOPES = new Set(['project', 'global']);
@@ -167,4 +172,79 @@ export async function writeState(scope, partial, cwd = process.cwd()) {
   } finally {
     releaseLock(lockPath, token);
   }
+}
+
+// ---- CLI ---------------------------------------------------------------------
+// `node <path>/manager-state.mjs set hard=false` is the documented off-switch for the
+// HARD wall and the single Bash shape the guard self-exempts. Keep parsing strict.
+
+const CLI_USAGE = 'usage: node manager-state.mjs get [--cwd DIR] | set hard=<true|false> level=<strict|balanced> [--cwd DIR]';
+
+const SETTABLE = {
+  hard: v => (v === 'true' ? true : v === 'false' ? false : undefined),
+  level: v => (v === 'strict' || v === 'balanced' ? v : undefined)
+};
+
+/**
+ * Parse strict CLI argv (everything after the script path).
+ * @param {string[]} argv
+ * @returns {{command:'get'|'set', patch:object, cwd:string}}
+ */
+export function parseCliArgs(argv) {
+  const command = argv[0];
+  if (command !== 'get' && command !== 'set') throw new Error(`unknown command '${command ?? ''}'`);
+
+  const patch = {};
+  let cwd = process.cwd();
+
+  for (let i = 1; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === '--cwd') {
+      const next = argv[++i];
+      if (!next) throw new Error('--cwd requires a directory');
+      cwd = path.resolve(resolveHome(next));
+      continue;
+    }
+    if (arg.startsWith('-')) throw new Error(`unknown flag '${arg}'`);
+    if (command !== 'set') throw new Error(`'get' takes no key=value pairs (got '${arg}')`);
+
+    const eq = arg.indexOf('=');
+    if (eq < 1) throw new Error(`expected key=value, got '${arg}'`);
+    const key = arg.slice(0, eq);
+    const raw = arg.slice(eq + 1);
+    if (!Object.hasOwn(SETTABLE, key)) throw new Error(`unknown key '${key}' — settable: ${Object.keys(SETTABLE).join(', ')}`);
+    const value = SETTABLE[key](raw);
+    if (value === undefined) throw new Error(`invalid value '${raw}' for '${key}'`);
+    patch[key] = value;
+  }
+
+  if (command === 'set' && Object.keys(patch).length === 0) throw new Error('set requires at least one key=value');
+  return { command, patch, cwd };
+}
+
+async function runCli(argv) {
+  let parsed;
+  try {
+    parsed = parseCliArgs(argv);
+  } catch (e) {
+    process.stderr.write(`manager-state: ${e.message}\n${CLI_USAGE}\n`);
+    process.exitCode = 2;
+    return;
+  }
+  try {
+    if (parsed.command === 'get') {
+      process.stdout.write(JSON.stringify(resolveState(parsed.cwd)) + '\n');
+      return;
+    }
+    // `hard`/`level` are PROJECT-scope only — there is no global wall.
+    const r = await writeState('project', parsed.patch, parsed.cwd);
+    process.stdout.write(JSON.stringify(r) + '\n');
+  } catch (e) {
+    process.stderr.write(`manager-state: ${e.message}\n`);
+    process.exitCode = 1;
+  }
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  await runCli(process.argv.slice(2));
 }

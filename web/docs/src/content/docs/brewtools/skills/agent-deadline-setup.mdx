@@ -1,0 +1,131 @@
+---
+title: "Agent Deadline Setup"
+description: "Install a soft wall-clock budget for subagents - warns at 80%, blocks non-finalizing tools past 100%, so agents finish their report instead of losing it."
+order: 3128
+---
+import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+
+# Agent Deadline Setup — soft budget for subagents
+
+<Badge variant="primary" text="sonnet" /> <Badge variant="accent" text="status / install / upgrade / enable / disable / uninstall / purge" /> <Badge variant="secondary" text="project | global" /> <Badge variant="accent" text="opt-in" /> <Badge variant="accent" text="user-invoked" />
+
+## What it does
+
+Claude Code has no wall-clock timeout for subagents, and `maxTurns` — when it fires — kills the agent outright and discards its final report. `/brewtools:agent-deadline-setup` installs two hooks that impose a **soft** budget instead: at 80% of the allotted minutes the agent gets one non-blocking "wrap up" directive; past 100% every tool outside a finalization set is denied, so the agent is forced to write its report rather than lose it.
+
+Run the skill with no arguments and it reports status first — installed scopes, wired hooks, current config — before doing anything else. Every other mode in the canonical set (`install`, `upgrade`, `enable`, `disable`, `uninstall`, `purge`) states its plan, asks only what is still unknown, then delegates the actual file and settings work to the `brewcode:hook-creator` agent. The extras `[project|global]` and `[minutes]` come after the mode word.
+
+The feature is **opt-in**. Installing the `brewtools` plugin does not turn this on — these hooks are not registered in `brewtools/hooks/hooks.json`. Nothing runs until you invoke this skill and confirm install.
+
+## When to use
+
+| Situation | Suggested invocation |
+|-----------|----------------------|
+| Long autonomous subagent runs where a lost final report is costly | `/brewtools:agent-deadline-setup install` |
+| Want the same budget everywhere on this machine | `/brewtools:agent-deadline-setup install global 30` |
+| Pick up a new hook version after a brewtools update, same budget | `/brewtools:agent-deadline-setup upgrade` |
+| Check what is currently installed without changing anything | `/brewtools:agent-deadline-setup` |
+| Temporarily stop enforcing without removing files | `/brewtools:agent-deadline-setup disable` |
+| Fully remove hooks, settings entries and config | `/brewtools:agent-deadline-setup purge` |
+
+## Example
+
+```
+/brewtools:agent-deadline-setup install project 20
+```
+
+Expected flow: the skill prints the current status table, states the plan ("copy 2 hook files into `.claude/hooks/`, write `.claude/agent-deadline.json` with `defaultMinutes: 20`, merge 2 settings.json entries"), asks only for confirmation since scope and minutes are already given, then delegates to `brewcode:hook-creator` and re-prints the status table showing `guard=yes cleanup=yes settings_refs=2 enabled=true`.
+
+## Workflow
+
+<Steps>
+  <li><div><strong>Status first, always</strong><p>Before any mode runs, the skill checks both project and global scope for hook files, <code>settings.json</code> wiring and existing config, and prints a state table. Nothing is installed or removed blind.</p></div></li>
+  <li><div><strong>Mode decided from free text</strong><p>No arguments defaults to <code>status</code>. Otherwise the skill reads intent — <code>install</code>, <code>upgrade</code>, <code>enable</code>, <code>disable</code>, <code>uninstall</code>, <code>purge</code> — including RU triggers like "поставь" or "убери совсем". Ambiguity between install and a removal verb triggers <code>AskUserQuestion</code> instead of a guess.</p></div></li>
+  <li><div><strong>Plan stated before any question</strong><p>The skill writes out, in plain text, exactly what will change: which files, which paths, which <code>settings.json</code> entries — before asking anything.</p></div></li>
+  <li><div><strong>Only missing answers are asked</strong><p>Scope (Project / Global / Both) and budget (default 20 min) are asked via <code>AskUserQuestion</code> only if not already given in the arguments. Choosing Global surfaces the per-call cost in the question itself, not buried in a final report.</p></div></li>
+  <li><div><strong>File work delegated to hook-creator</strong><p>A single <code>brewcode:hook-creator</code> spawn per mode-and-scope combination copies the 2 hook files, merges or strips <code>settings.json</code> entries, and writes or edits <code>agent-deadline.json</code>. Both scopes at once means two spawns in one message.</p></div></li>
+  <li><div><strong>Refreshed status printed</strong><p>The status block re-runs and the skill states whether a new session is needed — hook <em>wiring</em> changes (install/upgrade/uninstall/purge) need one; config <em>value</em> changes (enabled, minutes, overrides, hard-stop ratio) are read live, no restart.</p></div></li>
+</Steps>
+
+## Технические детали
+
+### Modes
+
+| Mode | Effect | Hook files | settings.json | Config | State |
+|------|--------|-----------|----------------|--------|-------|
+| `status` (default, no args) | report only | — | — | — | — |
+| `install` | wire + configure | copied | entries merged | written | — |
+| `upgrade` | re-emit from the current plugin version, budget preserved | re-copied | entries re-merged | values preserved | kept |
+| `enable` | resume enforcement | kept | kept | `enabled: true` | kept |
+| `disable` | pause enforcement | kept | kept | `enabled: false` | kept |
+| `uninstall` | unwire | deleted | entries stripped | **kept** | kept |
+| `purge` | full wipe | deleted | entries stripped | deleted | deleted |
+
+Canonical order, shared by every `-setup` skill: `status | install | upgrade | enable | disable | uninstall | purge`. `upgrade` asks nothing — it reads `defaultMinutes`, `byAgentType` and `hardStopRatio` back out of the existing config and replays the install for that scope, so a plugin update finally reaches the project with the same budget. A disabled setup stays disabled; a scope with nothing installed is routed to `install`.
+
+### The two hooks
+
+| Hook | Event | Behavior |
+|------|-------|----------|
+| `agent-deadline-guard.mjs` | `PreToolUse` on `.*` | Tracks elapsed time per `agent_id`. At 80% of budget, adds a non-blocking `additionalContext` warning. Past 100%, denies every tool outside the advertised finalization set: `Read, Write, Edit, MultiEdit, NotebookEdit, TodoWrite, TaskUpdate`. Past `hardStopRatio` x budget, the allowance shrinks further to `Write, Edit` only, with deny reason `AGENT DEADLINE HARD STOP`. |
+| `agent-deadline-cleanup.mjs` | `SubagentStop` | Deletes the finished agent's state file. |
+
+Actually allowed past 100% is 3 tools wider than what's advertised to the agent — `TaskCreate`, `BashOutput`, `TaskOutput` are permitted but not named in the directive. This is deliberate: naming `BashOutput` invites a poll loop, while an agent that genuinely needs to harvest an already-running job still gets through. `AskUserQuestion` is denied outright past the deadline — a subagent parked on a human answer is exactly the unbounded wall-clock time this guard exists to stop.
+
+### Installation targets
+
+| Scope | Hooks dir | settings.json | Config |
+|-------|-----------|----------------|--------|
+| Project | `<repo>/.claude/hooks/` | `<repo>/.claude/settings.json` | `<repo>/.claude/agent-deadline.json` |
+| Global | `~/.claude/hooks/` | `~/.claude/settings.json` | `~/.claude/agent-deadline.json` |
+
+Project config wins over global; a malformed project config is skipped and global is used instead. Global writes go through Bash only — `~/.claude/*` is a protected path, blocked for `Write`/`Edit` in every permission mode.
+
+### Config shape
+
+```json
+{
+  "enabled": true,
+  "defaultMinutes": 20,
+  "byAgentType": {},
+  "hardStopRatio": 2
+}
+```
+
+| Key | Meaning |
+|-----|---------|
+| `enabled` | must be exactly `true`; anything else turns enforcement off |
+| `defaultMinutes` | budget applied to every agent type; default `20` |
+| `byAgentType` | per-type overrides, e.g. `{"Explore": 10}`; empty object = one uniform limit |
+| `hardStopRatio` | optional, default `2`, must be `> 1` — multiple of the budget past which the allowance drops to `Write, Edit` only |
+
+Budget resolves as `byAgentType[agent_type] ?? defaultMinutes`, read fresh on every hook call.
+
+<Callout type="warning">
+**Honest limits — read before relying on this.**
+
+- **Not a timeout.** Elapsed time is sampled only at tool-call boundaries. An agent stuck inside one 25-minute `Bash` call is not observed until its next call — cap long commands separately with `BASH_MAX_TIMEOUT_MS`.
+- **`agent_type` for plugin agents is unverified.** Whether the payload reports `brewcode:skill-creator` or `skill-creator` for a plugin agent has not been confirmed against a live payload. A `byAgentType` key that doesn't match silently falls back to `defaultMinutes` — no error, no warning.
+- **Fail-open.** Any error inside the hook lets the call through; the session never breaks because of it.
+- **The matcher is `.*` — every tool call pays the cost, not only subagent ones.** Measured on Apple M-series, Node v24.1.0, 30 runs: median **58.3 ms**, p90 **62.5 ms** per call, including the main-session no-op path. A **global** install therefore taxes every tool call in every repo and every session, whether or not that session ever spawns a subagent. Numbers are from one machine and one Node version — re-measure before trusting them as a budget line item.
+- **The declared finalization set is narrower than what's actually allowed.** `TaskCreate`, `BashOutput`, `TaskOutput` pass through past 100% but are intentionally left out of the directive text shown to the agent — by design, not an oversight.
+</Callout>
+
+## Связанное
+
+<CardGrid>
+  <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">
+    All brewtools skills and agents in one place.
+  </Card>
+  <Card title="Manager Setup" icon="settings" href="/brewtools/skills/manager-setup/">
+    Installs a HARD wall that blocks main-session edits and forces subagent delegation — pairs well with a per-agent deadline.
+  </Card>
+  <Card title="Setup Status" icon="clipboard" href="/brewcode/skills/setup-status/">
+    Read-only dashboard across every `-setup` skill -- installed, stale or missing, with the hand-run command for each.
+  </Card>
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/agent-deadline-setup">
+    SKILL.md, the install runbook, and both hook scripts.
+  </Card>
+</CardGrid>
+
+<UpdateNotice />

@@ -11,6 +11,12 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 **Your content stays local until you explicitly run this skill.** The skill asks for namespace and password interactively — nothing is uploaded until you confirm both prompts. Owner tokens (needed for deletion) are stored only in `.claude/brewpage-history.md` and never printed to conversation.
 </Callout>
 
+<Callout type="warning" title="Password protection did not work before v5.0.0">
+Every upload block referenced a `PASS_H` array built from a `$PASSWORD` variable that nothing ever assigned. The password was resolved in conversation and each Bash call is a fresh shell, so the header expanded to nothing: the page was published **unprotected** while the skill still reported a password. Nothing surfaced the mismatch except opening the link logged out.
+
+The blocks now carry a `{password_header}` placeholder the model substitutes before running, and the skill states the rule as mandatory: substitute `-H "X-Password: <pass>"` or delete the line, and never report a password you did not substitute. **If you published a protected page with an earlier version, treat it as public** — delete it with its owner token and publish again.
+</Callout>
+
 <Callout type="tip">
 **brewpage.app** is free instant hosting: HTML pages, JSON documents, files, and multi-file sites. Default TTL is 15 days — override with `--ttl N`. For the public gallery, visit [brewpage.app](https://brewpage.app).
 </Callout>
@@ -36,7 +42,9 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 | Command | `/brewdoc:publish <text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename]` |
 | Arguments | Inline text, a file path, a directory, or a `.zip` archive. `--ttl N` = days (default 15), `--entry filename` = entry file for site uploads |
 | Model | haiku |
+| Invocation | user-only (`disable-model-invocation: true`) |
 | Tools | Read, Bash, AskUserQuestion, Glob |
+| Requires | `jq` on `PATH`; `zip` as well for directory uploads |
 
 ## When to use
 
@@ -107,19 +115,19 @@ Entry file detection for sites: `--entry` flag → `index.html` if present → f
   <li>
     <div>
       <strong>Ask password</strong>
-      <p>Choose: no password, a generated 6-char random password, or your own (min 4 chars). Password-protected pages are hidden from the gallery.</p>
+      <p>Choose: no password, a generated 6-char random password, or your own (min 4 chars). Password-protected pages are hidden from the gallery. The answer is then substituted into the <code>&#123;password_header&#125;</code> placeholder of the upload block — substituting it is a mandatory step, not an optional one.</p>
     </div>
   </li>
   <li>
     <div>
       <strong>Upload via API</strong>
-      <p>Calls the appropriate endpoint. For sites, zips the directory to a temp file, POSTs the archive, then removes the temp file. The owner token returned by the API is never printed — only appended to <code>.claude/brewpage-history.md</code>.</p>
+      <p>Every block first gates on <code>command -v jq</code> (plus <code>command -v zip</code> on the directory path) and aborts with <code>FAILED: jq required</code> rather than half-publishing. For sites, zips the directory to a temp file, POSTs the archive, then removes the temp file. The owner token returned by the API is never printed — only appended to <code>.claude/brewpage-history.md</code>.</p>
     </div>
   </li>
   <li>
     <div>
       <strong>Return result</strong>
-      <p>Prints the public URL (and file count for sites). On error, prints <code>Publish failed.</code> — check <code>.claude/brewpage-history.md</code> for context.</p>
+      <p>Prints the public URL (and file count for sites). On error, prints <code>Publish failed.</code> and nothing else — the failure branch deliberately withholds the response body, which can carry an <code>ownerToken</code>.</p>
     </div>
   </li>
 </Steps>
@@ -127,7 +135,9 @@ Entry file detection for sites: `--entry` flag → `index.html` if present → f
 <details>
 <summary>Internals</summary>
 
-**Security — owner token:** The `ownerToken` field from the API response is captured inside the Bash block and written directly to `.claude/brewpage-history.md`. The LLM only sees `OK {url}` or `FAILED: ...` — never the token value.
+**Security — owner token:** The `ownerToken` field from the API response is captured inside the Bash block and written directly to `.claude/brewpage-history.md`. The LLM only sees `OK {url}` or `FAILED: ...` — never the token value, and never the raw response body on failure.
+
+**Security — password header:** `{password_header}` is a placeholder in the same class as `{content}`, `{ns}` and `{days}` — the model rewrites it before the block runs. There is no `$PASSWORD` shell variable and never was one that got assigned; that is exactly what made the pre-5.0.0 version publish unprotected pages. Substituting is mandatory: `-H "X-Password: <pass>"` when a password was chosen, the whole line deleted when it was not.
 
 **History file format** — each upload block creates `.claude/brewpage-history.md` with this header if it does not exist yet, then appends one row:
 

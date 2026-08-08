@@ -4,8 +4,8 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 4.10.1 |
-| Skills | 8 |
+| Version | 5.0.0 |
+| Skills | 9 |
 | Agents | 5 |
 | Hooks | 2 |
 | Model | opus |
@@ -45,7 +45,7 @@ Update anytime with `/brewtools:plugin-update`.
 
 Brewcode turns single Claude Code sessions into an infinite task pipeline. Claude Code's native auto-compaction preserves the working context, and brewcode hooks re-inject plugin state on each session so the task runs to completion regardless of how many compaction cycles occur.
 
-Skills cover semantic code search, multi-agent review, convention analysis, e2e orchestration, project rules, and meta-tooling for skills, agents and teams. The shipped agents are specialists only -- implementation, testing, review and architecture roles are generated per project by `/brewcode:teams`.
+Skills cover semantic code search, multi-agent review, convention analysis, e2e orchestration, project rules, and meta-tooling for skills, agents and teams. The shipped agents are specialists only -- implementation, testing, review and architecture roles are generated per project by `/brewcode:teams-setup`.
 
 ## Installation
 
@@ -65,23 +65,49 @@ claude --plugin-dir ./brewcode
 ## Quick Start
 
 ```bash
-/brewcode:superreview   # Generate a project-tailored deep-review skill
+/brewcode:setup-status        # What is installed in this project, and what to run next
+/brewcode:superreview-setup   # Generate a project-tailored deep-review skill
 ```
 
 ## Skills
 
+A `-setup` suffix marks a skill that **installs a mechanism you use afterwards instead of the skill** --
+`/brewcode:superreview-setup` emits a project-local `/superreview`, `/brewcode:teams-setup` writes agents you
+then delegate to. Recurring tools you invoke over and over (`agents`, `rules`, `skills`, `convention`, `e2e`)
+keep bare names.
+
+Setup skills draw their modes from one vocabulary, in this order:
+
+```
+status | install | upgrade | enable | disable | uninstall | purge
+```
+
+No arguments = `status` when the mechanism is installed, `install` when it is not. The one exception is
+`/brewcode:semble-setup`, which **always** defaults to `status`, so a bare invocation can never start a
+machine-level package install.
+
+Each skill implements the modes that mean something for it and rejects the rest with an error instead of
+guessing: `/brewcode:teams-setup` covers `status | install | upgrade | uninstall | purge` and rejects
+`enable` / `disable`, since a team either exists or it does not. Skill-specific extras come after the
+canonical set, never in place of it (`semble-setup`: `reindex | optimize | resume`).
+
 | Skill | Purpose |
 |-------|---------|
-| [`/brewcode:superreview`](skills/superreview/README.md) | Generate a project-tailored deep-review skill: `QUICK` (default, `intent-guard` + mechanical gates) or `EXTENDED` (adds domain-expert fan-out, scope discipline, adversarial validation) depth, read from your prompt |
-| [`/brewcode:teams`](skills/teams/README.md) | Dynamic agent team creation, management, and performance tracking -- every team also gets a fixed review-only `intent-guard` member (not counted in team size) |
+| [`/brewcode:setup-status`](skills/setup-status/README.md) | Read-only cross-plugin dashboard: which setup skills are installed, stale, partial or missing here, with the exact command to run for each. Runs no setup itself |
+| [`/brewcode:superreview-setup`](skills/superreview-setup/README.md) | Generate a project-tailored deep-review skill: `QUICK` (default, `intent-guard` + mechanical gates) or `EXTENDED` (adds domain-expert fan-out, scope discipline, adversarial validation) depth, read from your prompt |
+| [`/brewcode:teams-setup`](skills/teams-setup/README.md) | Dynamic agent team creation, management, and performance tracking -- every team also gets a fixed review-only `intent-guard` member (not counted in team size) |
+| [`/brewcode:semble-setup`](skills/semble-setup/README.md) | Semantic code search setup: installs the pinned semble_code MCP, isolated cache, semble-first rule + hooks, agent migration |
 | [`/brewcode:convention`](skills/convention/README.md) | Extract etalon classes, patterns, architecture into convention docs and rules |
 | [`/brewcode:rules`](skills/rules/README.md) | Prompt-driven rules management: status, create, improve, review |
 | [`/brewcode:skills`](skills/skills/README.md) | Prompt-driven skill management: status, create, improve, sync, review |
 | [`/brewcode:agents`](skills/agents/README.md) | Prompt-driven agent management: status, create, improve, sync, review |
-| [`/brewcode:e2e`](skills/e2e/README.md) | E2E testing orchestration with BDD scenarios and quorum review |
-| [`/brewcode:semble`](skills/semble/README.md) | Semantic code search setup: installs the pinned semble_code MCP, isolated cache, semble-first rule + hooks, agent migration |
+| [`/brewcode:e2e`](skills/e2e/README.md) | E2E testing orchestration with BDD scenarios and quorum review. `install` writes the project's rules to `.claude/e2e/e2e-rules.md`; modes are `status \| install \| create \| update \| review \| rules` |
 
-> **Note:** `/brewcode:superreview` emits a self-contained, project-local deep-review skill tailored to your stack.
+> **Run setups one at a time.** Each one is an interactive generator that fans out subagents and asks real
+> questions; two in a session degrade each other. `/brewcode:setup-status` tells you what is missing and prints
+> the command -- you run it yourself, ideally in a fresh session.
+
+> **Note:** `/brewcode:superreview-setup` emits a self-contained, project-local deep-review skill tailored to your stack.
 > It always makes sure the project HAS domain experts (creating the missing ones via `agent-creator`), always emits
 > `.claude/agents/intent-guard.md`, then wires the emitted skill to the project's real gates, rules and scope
 > baseline (task + issue + recorded decisions). The EMITTED skill then resolves depth per run from your prompt:
@@ -98,7 +124,7 @@ claude --plugin-dir ./brewcode
 | [bash-expert](agents/bash-expert.md) | inherit | Creates sh/bash scripts for Mac/Linux |
 | bc-rules-organizer | haiku | Internal: spawned by /brewcode:rules |
 
-> **No generic agents:** brewcode ships specialists only. Implementation, testing, review and architecture work goes to project-specific agents in `.claude/agents/` — generate them with `/brewcode:teams create` (5-20 domain agents with self-selection protocol and performance tracking, plus one fixed review-only `intent-guard`).
+> **No generic agents:** brewcode ships specialists only. Implementation, testing, review and architecture work goes to project-specific agents in `.claude/agents/` — generate them with `/brewcode:teams-setup install` (5-20 domain agents with self-selection protocol and performance tracking, plus one fixed review-only `intent-guard`).
 
 > **Scope guard:** every agent carries a `## Scope guard` -- if a task exceeds one bounded unit (one deliverable, ~5 files), the agent stops and proposes a split instead of running for an hour.
 
@@ -113,7 +139,7 @@ brewcode/
 |   +-- hooks.json                     # Event bindings
 |   +-- lib/utils.mjs                  # Shared utilities
 +-- agents/                            # 5 agents
-+-- skills/                            # 8 skills
++-- skills/                            # 9 skills
 +-- templates/                         # Rule templates
 ```
 

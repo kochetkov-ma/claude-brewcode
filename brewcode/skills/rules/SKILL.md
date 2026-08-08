@@ -146,14 +146,13 @@ dedup baseline, and no sibling agent touches those files; CONSUMER: Claude Code 
 `.claude/rules/*.md` into every session, so entries must be table rows, not prose, and the Step 6
 report needs the per-file added/merged/skipped counts; SCOPE + DONE per the template below:
   - Update PROJECT .claude/rules/ — NEVER ~/.claude/rules/
-  - Plugin templates: $BC_PLUGIN_ROOT/templates/rules/
-  - Validate: bash "$BC_PLUGIN_ROOT/skills/rules/scripts/rules.sh" validate
-  - Create missing: bash "$BC_PLUGIN_ROOT/skills/rules/scripts/rules.sh" create
+  - Plugin templates: ${CLAUDE_PLUGIN_ROOT}/templates/rules/
+  - Validate: bash "${CLAUDE_SKILL_DIR}/scripts/rules.sh" validate
+  - Create missing: bash "${CLAUDE_SKILL_DIR}/scripts/rules.sh" create
   - Targets: avoid.md, best-practice.md, {prefix}-avoid.md, {prefix}-best-practice.md
   - DEDUP 3-Check: within-file (>70% skip, 40-70% merge); cross-file antonym
     (avoid<->best-practice keep avoid only); CLAUDE.md duplicate (skip; "CLAUDE.md"
     forbidden as Source).
-  - BC_PLUGIN_ROOT injected by pre-task.mjs hook.
 Fallback if agent unavailable: error "bc-rules-organizer not available — install brewcode plugin".
 
 </instructions>

@@ -41,7 +41,8 @@ fi
 check ok "SKILL.md exists"
 
 # 3. Frontmatter delimiters (opening and closing ---)
-FM_COUNT=$(grep -c '^---$' "$SKILL_FILE" 2>/dev/null || echo 0)
+# `|| true`, not `|| echo 0`: grep -c already prints 0 on no-match, it just exits 1
+FM_COUNT=$(grep -c '^---$' "$SKILL_FILE" 2>/dev/null || true); FM_COUNT=${FM_COUNT:-0}
 if [ "$FM_COUNT" -ge 2 ]; then
     check ok "Frontmatter has opening and closing --- delimiters"
 else
