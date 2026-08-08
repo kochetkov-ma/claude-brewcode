@@ -1,0 +1,123 @@
+---
+title: "Memory Sync Init"
+description: "Generator skill — analyzes a target project and writes a project-tailored memory-sync skill: batches, fact catalogue, non-growth sync, independent verify."
+order: 27
+---
+import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+
+# memory-sync-init — generate a project-tailored memory sync
+
+<Callout type="caution">
+**Generic memory sync produces generic results.** A one-size sweep cannot tell an intentional Russian trigger alias from a language violation, cannot tell a stale lint-rule claim from a correct one, and cannot prove a removed fact is gone from the codebase rather than merely deleted from a doc.
+</Callout>
+
+<Callout type="tip">
+**This skill does not sync memory — it writes the skill that does.** `/brewdoc:memory-sync-init` analyzes the target repo once, then emits a self-contained `.claude/skills/memory-sync/` that already knows this repo's batches, invariants, fact-verification commands, agent roster and language policy. Replaces the old `brewdoc:memory`.
+</Callout>
+
+## Quick reference
+
+| Field | Value |
+|-------|-------|
+| Command | `/brewdoc:memory-sync-init [status\|init\|upgrade] [fine-tune-prompt]` |
+| Arguments | mode token `status` \| `init` (default) \| `upgrade`, followed by an optional free-form fine-tune prompt |
+| Model | opus |
+| Tools | Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion |
+
+## What it does
+
+`/brewdoc:memory-sync-init` is a **generator**, in the same family as `brewcode:superreview` and `brewtools:task-board-init`: it produces a working artifact instead of doing the work itself. It scans the target project — memory surface, exclusions, default branch, git visibility, language policy, agent and skill rosters — then emits three files into `<target>/.claude/skills/memory-sync/`.
+
+The emitted `/memory-sync` skill is a long-running multi-agent coordinator. It sweeps the whole memory surface every run, splits it into disjoint batches (one bounded agent per batch, all spawned in one message), verifies every change with an independent checker that never wrote it, and enforces non-growth — every file ends at or below its original line count. It re-checks and updates itself between runs.
+
+Free-form focus text only steers emphasis. It never narrows the sweep, and facts always come before dedup and compression.
+
+## When to use
+
+| Scenario | Command |
+|----------|---------|
+| First time wiring memory sync into a repo | `/brewdoc:memory-sync-init` |
+| Bias the emitted skill toward a specific concern | `/brewdoc:memory-sync-init init "weight stale-fact removal over compression"` |
+| Check whether an installed memory-sync is still true to the repo | `/brewdoc:memory-sync-init status` |
+| Repo gained a new agent, rule, or CLAUDE.md since install | `/brewdoc:memory-sync-init upgrade` |
+| Actually sync memory in a repo that already has it installed | `/memory-sync` (the emitted skill, not this one) |
+
+## Example
+
+```bash
+/brewdoc:memory-sync-init
+```
+
+```
+[memory-sync-init] MODE: init - no mode token -> default init
+Target:   /Users/you/project
+Emphasis: none
+```
+
+The skill scans the project, asks about ambiguous scoping (convention files, memory dir, VERIFY-ONLY surfaces) via `AskUserQuestion`, then reports:
+
+```
+memory-sync generated -> .claude/skills/memory-sync/
+
+Surface:    68 files: 5 root, 15 rules, 3 conventions, 26 agents, 18 skills, 1 local
+Batches:    6  (root:5, rules:15, conventions:3, agents:26, skills:18, local:1, disjoint)
+Excluded:   docs/** (separate doc flow), source code, secrets, .claude/features/**
+
+Run it:  /memory-sync                       -> scope session (default), whole surface
+         /memory-sync all "only rules"      -> re-verify every fact, emphasis on rules
+```
+
+## Workflow
+
+<Steps>
+  <li><div><strong>Mode gate</strong><p>First token of the argument, lowercased: <code>status</code>, <code>init</code> (default when no token matches), or <code>upgrade</code>. Everything else is fine-tune text for <code>{'{FOCUS_EMPHASIS}'}</code>.</p></div></li>
+  <li><div><strong>Phase 0 — read emit material</strong><p>Reads its own <code>references/SKILL.md.template</code>, <code>memory-guide.md</code>, <code>agent-audit.md</code>. Missing material is a hard stop — never improvised.</p></div></li>
+  <li><div><strong>Phase 1 — analyze the target</strong><p>Runs <code>generate.sh scan</code>, then determines the memory surface (root + every nested <code>CLAUDE.md</code>, rules, conventions, <code>AGENTS.md</code> family, agents, skills, memory dir), VERIFY-ONLY files, exclusions, default branch (derived, never hardcoded), git visibility, language policy, and a checkable-fact catalogue — one real shell command per claim.</p></div></li>
+  <li><div><strong>Phase 1.5 — clarify</strong><p><code>AskUserQuestion</code> only for what cannot be reliably inferred: which convention files count as memory, whether the memory dir is in scope, VERIFY-ONLY list, default branch, intentional non-English trigger aliases, batch splits.</p></div></li>
+  <li><div><strong>Phase 2 — emit</strong><p>Exports scalar placeholders and runs <code>generate.sh emit</code>: sed-substitutes them into the template, copies the reference files, stamps provenance (generator name, date, surface counts). Refuses to overwrite an existing installation — that is what <code>upgrade</code> is for.</p></div></li>
+  <li><div><strong>Phase 3 — fill block placeholders</strong><p>Multi-row tables and multi-line bash go through <code>Edit</code>, not sed: batch table, exclusions, invariants, fact catalogue, enumeration bash, agent/skill checks, roster, proposal precedents, verify-extra assertions.</p></div></li>
+  <li><div><strong>Phase 4 — validate</strong><p><code>generate.sh validate</code> fails on any surviving <code>{'{PLACEHOLDER}'}</code>, a missing emitted asset, or a cited reference that does not exist. Then every emitted <code>subagent_type</code> is asserted to resolve to a real project agent or a built-in.</p></div></li>
+  <li><div><strong>Phase 5 — report</strong><p>Prints surface counts, batches, exclusions, fact/invariant counts, and how to run the emitted skill — plus how to check on it later with <code>status</code> or refresh it with <code>upgrade</code>.</p></div></li>
+</Steps>
+
+## Technical details
+
+**Modes**
+
+| Mode | Reads | Writes | Does |
+|------|-------|--------|------|
+| `status` | target + emitted skill | nothing | Reports provenance stamp and drift: baked-in file counts vs enumerated now, dead batch paths, memory layers gained since install. Verdict: `IN SYNC` / `STALE (n drifts)` / `NOT INSTALLED` |
+| `init` (default) | target | 3 emitted files | Full Phase 0-5 analysis and emit. Refuses if `.claude/skills/memory-sync/` already exists |
+| `upgrade` | target + emitted skill | edits the emitted skill | Re-scans and refreshes surface/batch/fact/invariant tables, adds sections for new memory layers, preserves hand-edits — the emitted skill is expected to have self-modified via its own SELF-SYNC phase |
+
+**What gets emitted** — `<target>/.claude/skills/memory-sync/`: `SKILL.md` (scalars substituted, blocks filled), `references/memory-guide.md`, `references/agent-audit.md`. Nothing else — no agent, no rule, no hook.
+
+**Emitted-skill behavior** (what this generator bakes in, not what it runs itself):
+
+| Axis | Emitted behavior |
+|------|-------------------|
+| Scopes | `session` (default, no gather agent), `branch` (diff vs derived default branch), `commit <sha>` / `commit <a>..<b>`, `recent[:N]` (default 10), `all` (no diff, every fact re-verified) |
+| Phases | GATHER (parallel read-only) -> SYNC (one bounded agent per disjoint batch, one message) -> VERIFY (independent checker per batch, never the writer) -> SELF-SYNC (re-checks itself) -> PROPOSE (new agent/skill proposed, never auto-created) |
+| Non-growth | Every file ends `<=` its original line count; total delta `<= 0` |
+| Agents | Re-audited against current best practice every sweep, not just fact-checked |
+
+**Error handling highlights** — `init` on an existing install stops and points to `upgrade`; `upgrade` with nothing installed stops and points to `init`; a fact with no runnable verification command is left out of the catalogue rather than invented; an `AGENTS.md` symlink or vendor-marked file becomes VERIFY-ONLY, never an edit target.
+
+**Frontmatter omissions** — no `cli` (the command already equals the skill name) and no `version` (behavior lives entirely in the skill dir, whose hash already changes with it).
+
+<CardGrid>
+  <Card title="Memory" icon="brain" href="/brewdoc/skills/memory/">
+    The older in-plugin generic sync this generator's output replaces.
+  </Card>
+  <Card title="Docsync" icon="sync" href="/brewdoc/skills/docsync/">
+    Sibling brewdoc generator-adjacent tracker — doc staleness by date instead of memory drift.
+  </Card>
+  <Card title="Brewdoc overview" icon="rocket" href="/brewdoc/overview/">
+    All brewdoc skills in one place.
+  </Card>
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewdoc/skills/memory-sync-init">
+    Source code, emit templates, and full SKILL.md for memory-sync-init.
+  </Card>
+</CardGrid>
+
+<UpdateNotice />

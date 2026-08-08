@@ -190,8 +190,8 @@ Every spawn prompt carries six fields:
 | Skill | Purpose |
 |-------|---------|
 | `/brewcode:spec` | Research codebase + user dialog -> SPEC.md |
-| `/brewcode:superreview` | Generate a project-tailored deep-review skill: domain-expert routing + scope discipline + mechanical gates + adversarial validation |
-| `/brewcode:teams` | Create and manage dynamic teams of domain-specific agents |
+| `/brewcode:superreview` | Generate a project-tailored deep-review skill: `QUICK` (default, `intent-guard` + mechanical gates) or `EXTENDED` (adds domain-expert fan-out, scope discipline, adversarial validation) depth, read from your prompt |
+| `/brewcode:teams` | Create and manage dynamic teams of domain-specific agents -- every team also gets a fixed review-only `intent-guard` member (not counted in team size) |
 | `/brewcode:convention` | Extract etalon classes, patterns, architecture into convention docs |
 | `/brewcode:rules` | Prompt-driven rules management: status, create, improve, review |
 | `/brewcode:skills` | Prompt-driven skill management: status, create, improve, sync, review |
@@ -225,7 +225,7 @@ Every spawn prompt carries six fields:
 | `/brewtools:plugin-update` | Install and update the full plugin suite |
 | `/brewtools:provider-switch` | Configure alternative API providers (DeepSeek, Z.ai/GLM, Qwen, MiniMax, OpenRouter) |
 | `/brewtools:manager` | Manager mode -- hook-driven codewords `++m` (delegate-everything, plan-aware), `++a` (architecture-first), `++rr` (anti-regression review), `++r` (two-phase double-check); the opt-in HARD wall (`on`/`off`/`uninstall`/`status`/`level`/`edit`/`reset`) installs a project PreToolUse guard that blocks main-session writes while subagents stay free |
-| `/brewtools:task-board-init` | Deploy a file-based Kanban into ANY repo via multi-agent analysis -- task-tracker agent, task-board skill, tasks rule, .claude/features |
+| `/brewtools:task-board-init` | Deploy a file-based Kanban into ANY repo via multi-agent analysis -- task-tracker agent, task-board skill, tasks rule, .claude/features, plus an optional spec + design layer (`task-spec`) and an `upgrade` mode for existing boards |
 
 ### Brewui (0 skills)
 

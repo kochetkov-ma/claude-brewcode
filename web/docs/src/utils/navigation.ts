@@ -105,6 +105,7 @@ export const navigation: NavSection[] = [
           { title: 'docsync', slug: 'brewdoc/skills/docsync' },
           { title: 'my-claude', slug: 'brewdoc/skills/my-claude' },
           { title: 'memory', slug: 'brewdoc/skills/memory' },
+          { title: 'memory-sync-init', slug: 'brewdoc/skills/memory-sync-init' },
           { title: 'md-to-pdf', slug: 'brewdoc/skills/md-to-pdf' },
           { title: 'publish', slug: 'brewdoc/skills/publish' },
           { title: 'guide', slug: 'brewdoc/skills/guide' },

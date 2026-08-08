@@ -1,9 +1,9 @@
 ---
 title: "Teams"
-description: "Build a domain-specific agent team (5-20 agents) from your codebase. Quorum review, trace log, self-updating via performance data."
+description: "Build a domain-specific agent team (5-20 domain agents + fixed review-only intent-guard member). Quorum review, trace log, self-updating via performance data."
 order: 1109
 ---
-import { Card, CardGrid, Callout, Steps, Badge, UpdateNotice } from '../../../../components/mdx';
+import { Card, CardGrid, Callout, Steps, UpdateNotice } from '../../../../components/mdx';
 
 # teams — set up agent batch
 
@@ -12,7 +12,7 @@ import { Card, CardGrid, Callout, Steps, Badge, UpdateNotice } from '../../../..
 </Callout>
 
 <Callout type="tip">
-**`/brewcode:teams create`** analyzes your codebase, proposes agent variants (Minimal / Balanced / Maximum), creates each agent via quorum-reviewed scaffolding, and sets up a `trace.jsonl` log so the team self-improves via `/brewcode:teams update`.
+**`/brewcode:teams create`** analyzes your codebase, proposes agent variants (Minimal / Balanced / Maximum), creates each agent via quorum-reviewed scaffolding, and sets up a `trace.jsonl` log so the team self-improves via `/brewcode:teams update`. Every team also gets a fixed review-only `intent-guard` member — see [Intent guard](#intent-guard) below.
 </Callout>
 
 ## Quick reference
@@ -54,7 +54,7 @@ import { Card, CardGrid, Callout, Steps, Badge, UpdateNotice } from '../../../..
 
 | Mode | Command | What it does |
 |------|---------|--------------|
-| `create` | `/brewcode:teams create <name> [prompt]` | Analyze codebase → propose team → create agents → quorum review → framework setup |
+| `create` | `/brewcode:teams create <name> [prompt]` | Analyze codebase → propose team (+ fixed `intent-guard`) → create agents → quorum review → framework setup |
 | `update` | `/brewcode:teams update <name>` | Read trace data → classify agents → tune or replace underperformers |
 | `status` | `/brewcode:teams status <name>` | Read-only health report: success rates, open issues, insights, recommendations |
 | `cleanup` | `/brewcode:teams cleanup <name>` | Archive trace entries, remove inactive agents, reset cursor |
@@ -77,13 +77,19 @@ import { Card, CardGrid, Callout, Steps, Badge, UpdateNotice } from '../../../..
   <li>
     <div>
       <strong>Team proposal + model selection</strong>
-      <p>Three variants presented: Minimal (5 agents), Balanced (10–12, recommended), Maximum (15–20). User selects variant and default model (Opus / Sonnet / Haiku / Mixed). Final agent list confirmed before creation.</p>
+      <p>Three variants presented, domain agents only: Minimal (5), Balanced (10–12, recommended), Maximum (15–20); <code>intent-guard</code> is a fixed non-domain addition to every variant (see [Intent guard](#intent-guard)). User selects variant and default model (Opus / Sonnet / Haiku / Mixed) for domain agents; <code>intent-guard</code> keeps the fixed <code>model: sonnet</code> its template ships with. Final agent list confirmed before creation.</p>
     </div>
   </li>
   <li>
     <div>
       <strong>Agent creation</strong>
       <p>ONE agent file per spawn — never "create the whole team" in one task. Batches of 3–4 <code>agent-creator</code> spawns run in parallel, each carrying the full six-field brief (see Delegation below). After each batch, <code>/brewtools:text-optimize</code> compresses agent instructions.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>intent-guard (C3-IG)</strong>
+      <p>Exactly once, always — outside the batches above. Creates or reuses <code>.claude/agents/intent-guard.md</code> via the writer shared with <code>/brewcode:superreview</code> (<code>generate.sh emit-agent</code>); see [Intent guard](#intent-guard) for the full write/reuse contract.</p>
     </div>
   </li>
   <li>
@@ -127,16 +133,45 @@ Every spawn prompt carries six fields. A bare one-line task is never enough:
 
 In C3 that means each `agent-creator` owns exactly `.claude/agents/{name}.md`, is told which colleagues its batch-mates are building (stay off their domains, do not duplicate their triggers), and knows its description line lands in the `team.md` roster row. In C8 the fixer is told the finding is already verified by 2/3 reviewers plus the C7 double-check — do not re-litigate it — and that C9 will re-verify the same file for regressions.
 
+## Intent guard
+
+<Callout type="tip">
+Every team gets a fixed review-only `intent-guard` member outside the domain-agent count — Minimal (5), Balanced (10-12), Maximum (15-20) all mean domain agents; picking "Custom" cannot drop it. A model can follow an approved plan for hours and still drift from what was actually asked — intent-guard is the check for that, not a code reviewer and not a smoke test.
+</Callout>
+
+| Property | Value |
+|----------|-------|
+| Counted in the roster size? | No — outside 5 / 10-12 / 15-20, cannot be dropped |
+| Compares | What was **ASKED** (tracker ticket, Slack thread, quoted requirements, the user's verbatim words, or the chat request itself) against what was **DELIVERED** |
+| Source hierarchy | Five tiers; tier 1 (external/original) always wins and is labeled in the report. An absent tier 1 is normal — the chat request becomes the top source. Sources are never invented |
+| Evidence | Cheap only: session transcript, file/directory names, `git diff --stat`, dependency manifests, doc headings — never full-file code reads, builds, tests, or linters |
+| Drift it hunts | Building something other than asked, over-engineering for an unplanned scale, interface/factory bloat where a direct implementation was requested, file explosion, test bloat against a minimal-tests policy, an unnecessary dependency, architecture substitution, ignored CLAUDE.md/rules instructions, silent skips, over-claimed completion, unrequested artifacts — open-ended examples, not a closed checklist |
+| Tools | Read-only. Invoked explicitly by name at review time only — never competes for auto-activation with the team's development agents |
+
+**One writer, shared with superreview.** `teams` does not author `intent-guard.md`. It runs `generate.sh emit-agent` from the sibling `/brewcode:superreview` skill, which creates-or-reuses the file and prints `INTENT_GUARD: CREATED` or `INTENT_GUARD: REUSE`. A USABLE existing agent is reused untouched — usable meaning non-empty, carrying `name: intent-guard` frontmatter, and free of unresolved placeholders. An empty, truncated or placeholder-laden file is treated as absent and recreated. `agent-creator` is spawned only on `CREATED`, to replace three seeded generic blocks (project invariants, drift examples, evidence commands) with project-specific content; it never authors the file.
+
+**Excluded from:**
+
+| Flow | Why |
+|------|-----|
+| Quorum reviewer role (C5/C7/C9) | Not a general reviewer — no code domain to judge others by |
+| Implementation ownership | Never accepts a build/fix task |
+| `cleanup` inactive-agent sweep | Emits no trace records by design; zero activity is normal, not grounds for deletion |
+| `text-optimize` post-processing | Would reword its deliberately short, review-only description into a normal domain description |
+
+**Legacy teams.** `verify-team.sh` does not hard-fail a team created before this change: missing `team.md` row → WARN with a runnable remediation command, still passes. Row listed but `.claude/agents/intent-guard.md` missing → real FAIL.
+
 ## Guardrails in every team agent
 
-The agent template carries two blocks, so every member of the team inherits them:
+The agent template carries two blocks, so every DOMAIN member of the team inherits them (`intent-guard` comes from a different template — see the third row):
 
 | Guardrail | Applies to | What it says |
 |-----------|-----------|--------------|
 | **Output discipline** | Every team agent, unconditionally | On completion, spend one step on what the MAIN SESSION needs and return only that: verdict / result + `file:line` pointers. Bulk material — long logs, full diffs, dumps, long reports — is written under `.claude/reports/<YYYYMMDD-HHMMSS>_<name>/` and only the path is returned. Agents that dump everything burn the main session's context. |
 | **Scope Fit** | Only agents whose domain writes code, scripts, SQL, schemas or infra | Build for the actual scale and the problems that exist today, not imagined load or speculative abstraction — a 10-user app does not need hardening against DB lock contention. After finishing, one pass: can this be simpler — fewer files, less config, less indirection? |
+| **Anti-drift review** | `intent-guard` only — not built from these two blocks | Compares ASKED vs DELIVERED at review time, explicit invocation only — see [Intent guard](#intent-guard) above |
 
-`agent-creator` deletes the Scope Fit block for research, docs, and review-only members; output discipline stays in all of them. This matters most on a 12-agent roster, where a single verbose member can cost more context than the rest of the batch combined.
+`agent-creator` deletes the Scope Fit block for research, docs, and review-only domain members; output discipline stays in all team agents, including `intent-guard`, which carries it via its own template rather than this one. This matters most on a 12-agent roster, where a single verbose member can cost more context than the rest of the batch combined.
 
 <details>
 <summary>Internals</summary>

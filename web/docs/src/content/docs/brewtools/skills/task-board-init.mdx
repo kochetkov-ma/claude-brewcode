@@ -1,6 +1,6 @@
 ---
 title: "Task Board Init"
-description: "Multi-agent generator that deploys a file-based Kanban into any repo: board, curator agent, dashboard skill, rule, plus a gated CLAUDE.md pass."
+description: "Multi-agent generator that deploys a file-based Kanban into any repo: board, curator agent, dashboard skill, rule, optional spec/design layer, upgrade mode."
 order: 3125
 ---
 import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
@@ -18,10 +18,12 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | Item | Value |
 |------|-------|
 | Skill command | `/brewtools:task-board-init` |
-| Arguments | `[target repo path \| empty = cwd] [free-text directive]` — e.g. `'also dedupe rules'`, `'skip module split'` |
+| Arguments | `[target repo path \| empty = cwd] [upgrade] [free-text directive]` — e.g. `upgrade`, `'also dedupe rules'`, `'skip module split'` |
 | Emits | `.claude/agents/task-tracker.md`, `.claude/skills/task-board/SKILL.md`, `.claude/rules/tasks.md`, `.claude/features/**` |
-| Spawns | Parallel analysis subagents (architect + Explore) + multi-agent doc sweep — one bounded unit each |
-| Optional | Gated `CLAUDE.md` optimization pass — propose-only, opt-in during confirmation |
+| Emits (SPEC_MODE) | `.claude/skills/task-spec/SKILL.md`, `.claude/features/specs/{SPEC_TEMPLATE,DESIGN_TEMPLATE}.md` |
+| Spawns | Parallel analysis subagents (architect + Explore + domain-agent inventory) + multi-agent doc sweep — one bounded unit each |
+| Optional | Spec + system-design layer (`SPEC_MODE`), confirmed during Step 1; gated `CLAUDE.md` optimization pass — propose-only, opt-in during confirmation |
+| Upgrade | `upgrade` directive retrofits `SPEC_MODE` onto an already-deployed board, additive-only |
 | Model | opus |
 | Commits? | Never — committing is a user / manager action |
 
@@ -32,6 +34,8 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | New repo needs file-based task tracking | `/brewtools:task-board-init` |
 | Standardize an existing Kanban convention across repos | `/brewtools:task-board-init /path/to/repo` |
 | Migrate scattered TODO / backlog docs into a structured board | `/brewtools:task-board-init` — sweep subagents migrate legacy docs automatically |
+| A task needs an architecture pass before code | Turn on `SPEC_MODE` at confirmation, then run the emitted `/task-spec <ID>` |
+| An already-deployed board needs the spec + design layer | `/brewtools:task-board-init /path/to/repo upgrade` |
 
 ## Example
 
@@ -44,6 +48,9 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 
 # Deploy, then steer the optional CLAUDE.md pass with a free-text directive
 /brewtools:task-board-init /path/to/some-repo also dedupe rules, skip module split
+
+# Retrofit the spec + design layer onto a repo that already has a board
+/brewtools:task-board-init /path/to/some-repo upgrade
 ```
 
 After completion the repo gains `/task-board` (view/add/move tasks) and the `task-tracker` agent auto-runs at the start of every task.
@@ -54,7 +61,7 @@ After completion the repo gains `/task-board` (view/add/move tasks) and the `tas
   <li>
     <div>
       <strong>Multi-agent repo analysis</strong>
-      <p>Parallel subagents (<code>architect</code> + <code>Explore</code>) derive: domain id-segments, source-dir exclusions the curator must never touch, release style (<code>vX.Y.Z</code> tag / commit SHA / none), doc language, and an inventory of existing task docs. Findings are confirmed via <code>AskUserQuestion</code> — generation does not start until the user approves. If analysis yields no domains, the skill asks the user to name at least one (falls back to a single <code>CORE</code> domain).</p>
+      <p>Three parallel subagents (<code>Plan</code> for domains + release style, <code>Explore</code> for exclusions + doc inventory, <code>Explore</code> for the domain-agent inventory) derive: domain id-segments, source-dir exclusions the curator must never touch, release style (<code>vX.Y.Z</code> tag / commit SHA / none), doc language, an inventory of existing task docs, and the repo's own <code>.claude/agents/**</code> mapped to domains. Findings — plus whether to turn on the optional spec + design layer (<code>SPEC_MODE</code>) — are confirmed via <code>AskUserQuestion</code>; generation does not start until the user approves. If analysis yields no domains, the skill asks the user to name at least one (falls back to a single <code>CORE</code> domain).</p>
     </div>
   </li>
   <li>
@@ -71,8 +78,14 @@ After completion the repo gains `/task-board` (view/add/move tasks) and the `tas
   </li>
   <li>
     <div>
+      <strong>Generate <code>task-spec</code> skill (optional, <code>SPEC_MODE</code>)</strong>
+      <p>Runs only if <code>SPEC_MODE</code> was confirmed on in Step 1. Writes <code>.claude/skills/task-spec/SKILL.md</code> — the spec + design authoring flow, parametrized with the repo's own domain-agent roster. When <code>SPEC_MODE</code> is off this step is skipped silently and every other artifact stays byte-identical to the pre-spec-layer generator.</p>
+    </div>
+  </li>
+  <li>
+    <div>
       <strong>Generate rule + scaffold + doc sweep</strong>
-      <p>Writes <code>.claude/rules/tasks.md</code> (paths-scoped to <code>.claude/features/**</code>) — lifecycle rules, id convention, required frontmatter, grooming cadence, and the run-at-task-start rule that spawns <code>task-tracker</code> as an isolated subagent at the beginning of every task. This rule lives <em>only</em> in <code>tasks.md</code> — board generation never edits the target's <code>CLAUDE.md</code>. Then scaffolds the folder tree and launches parallel sweep subagents over the discovered doc inventory to migrate legacy backlog / feature docs into the board (dedup, move done items into <code>closed/</code>, author initial <code>board.md</code> counts). If no legacy docs were found, the sweep is skipped entirely.</p>
+      <p>Writes <code>.claude/rules/tasks.md</code> (paths-scoped to <code>.claude/features/**</code>) — lifecycle rules, id convention, required frontmatter, grooming cadence, and the run-at-task-start rule that spawns <code>task-tracker</code> as an isolated subagent at the beginning of every task. This rule lives <em>only</em> in <code>tasks.md</code> — board generation never edits the target's <code>CLAUDE.md</code>. Then scaffolds the folder tree and launches parallel sweep subagents over the discovered doc inventory to migrate legacy backlog / feature docs into the board (dedup, move done items into <code>closed/</code>, author initial <code>board.md</code> counts). If no legacy docs were found, the sweep is skipped entirely. Under <code>SPEC_MODE</code> the same scaffold pass also writes <code>.claude/features/specs/{'{SPEC_TEMPLATE,DESIGN_TEMPLATE}'}.md</code>; off leaves <code>specs/</code> empty, exactly as before.</p>
     </div>
   </li>
   <li>
@@ -116,6 +129,59 @@ The same six-field brief ships into your repo. The generated `.claude/skills/tas
 | Board file | `.claude/features/board.md` | The Kanban board — counts and task table, authored by the doc sweep. |
 | Control files | `.claude/features/{TRACKER,TASK_TEMPLATE,INDEX}.md` + `backlog/README.md` | Tracker log, task template, index, backlog guide. |
 | Folders | `.claude/features/{backlog,todo,progress,closed,specs}/` | Status folders — folder name = task status. |
+| Spec skill (`SPEC_MODE`) | `.claude/skills/task-spec/SKILL.md` | On-demand `/task-spec <ID>` — authors the product + design spec via a domain-architect fan-out. |
+| Spec templates (`SPEC_MODE`) | `.claude/features/specs/{SPEC_TEMPLATE,DESIGN_TEMPLATE}.md` | Fixed section skeletons for the two spec documents. |
+
+## Spec + design layer (`SPEC_MODE`)
+
+<Callout type="tip">
+Optional, confirmed in the same Step 1 `AskUserQuestion` as the rest of the findings. `SPEC_MODE=off` is the default-compatible path — nothing below is emitted and every other artifact stays byte-identical to the pre-spec-layer generator.
+</Callout>
+
+With `SPEC_MODE=on`, a non-trivial task becomes three documents instead of one:
+
+| Doc | Path | Owns |
+|-----|------|------|
+| Task | `.claude/features/{backlog,todo,progress,closed}/<ID>.md` | WHAT + WHY — context, links, the ask, and a `## Scope` table of blocks `S1..Sn` |
+| Product spec | `.claude/features/specs/<ID>-spec.md` | HOW — decisions `D1..Dn`, resolved + open questions `Q1..Qn`, scope-coverage matrix |
+| Design spec | `.claude/features/specs/<ID>-design.md` | Architecture — components, data flow, interfaces, failure modes, complexity budget, non-goals |
+
+Every task's frontmatter gains `spec: none | pending | full | design-only` — "no spec" is a recorded decision, never an omission. A task needs a spec if it touches more than one domain, more than ~5 files, adds an integration or dependency, changes a schema / API / contract, is ambiguous, or the user asked for a design.
+
+### The generated `task-spec` skill
+
+Three ways in, all supported by the emitted skill:
+
+| Path | Form |
+|------|------|
+| Explicit | `/task-spec <ID>` (default `full`), `/task-spec <ID> design`, `/task-spec <ID> refresh` |
+| Plain prose | model-invoked — "architect this task", "write the spec", "продумай архитектуру". No skill name needed |
+| Redirect | `task-tracker` ends its report with `NEXT: run /task-spec <ID> (spec required: <reason>)` when a task needs a spec and has none — an agent cannot call a skill for the main session, so it hands the call back to the user |
+
+Design docs are never written by a single generalist: for every domain the task touches, `task-spec` spawns at least one agent — the repo's own domain agent first, then any architecture-capable project agent, then the built-in `Plan` — all in one message, naming which one was used per domain in the design's `## Evidence`. Domains with no owning agent are reported as gaps at install time and again in the design.
+
+| Gate | Rule |
+|------|------|
+| Coverage | every `in`-scope id must appear as `covered` in both coverage tables; any `partial`/`uncovered` keeps the spec at `status: draft` |
+| Close | `progress -> closed` is blocked while any open question is `blocking: yes` — override only with an explicit `SPEC WAIVER: <reason>` line in the task's `## Notes` |
+| Sync | editing the task's `## Scope` invalidates both specs back to `draft`; run `/task-spec <ID> refresh` |
+
+## Upgrading an existing board
+
+`/brewtools:task-board-init <path> upgrade` retrofits `SPEC_MODE` onto a repo that already has `.claude/features/board.md` — a fresh init refuses that repo outright and points here instead.
+
+```bash
+/brewtools:task-board-init /path/to/repo upgrade
+```
+
+Upgrade is additive-only:
+
+- New files (the `task-spec` skill, the two spec templates) are written outright.
+- Every edit to an existing file is shown as a diff and gated behind `AskUserQuestion`, file by file. Declined means no edit.
+- Task ids, scope ids and board rows are never renumbered, reordered or deleted. The one allowed `board.md` row edit is appending a `spec` cell (`--` until `task-spec` fills it) to each existing progress/todo row.
+- Backfilling `spec:` on existing tasks is opt-in and off by default; when accepted the value is `pending` or `none` — never `full`.
+- Recovers domains / exclusions / language from the already-deployed artifacts instead of re-running analysis, and re-runs only the domain-agent inventory.
+- Re-running `upgrade` on an already-upgraded repo is a no-op: `upgrade: no-op, spec layer already installed`.
 
 ## Output discipline in the generated curator
 
@@ -160,6 +226,9 @@ Task IDs follow `UPPER-KEBAB`: `<PREFIX>-<DOMAIN>-<SLUG>`.
 | `05-features-templates.md` | `.claude/features/**` file templates |
 | `06-doc-sweep.md` | Multi-agent doc-sweep procedure |
 | `07-claude-md-optimize.md` | Optional gated CLAUDE.md optimization procedure (P5.5) |
+| `08-task-spec-skill.md` | `task-spec` skill template (`SPEC_MODE`) |
+| `09-spec-templates.md` | `SPEC_TEMPLATE.md` + `DESIGN_TEMPLATE.md` (`SPEC_MODE`) |
+| `10-upgrade.md` | `upgrade` mode — retrofits the spec layer onto an already-deployed board |
 
 </details>
 
@@ -171,7 +240,7 @@ Task IDs follow `UPPER-KEBAB`: `<PREFIX>-<DOMAIN>-<SLUG>`.
     All brewtools skills — text-optimize, secrets-scan, deploy, provider-switch, and more.
   </Card>
   <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/task-board-init">
-    Source files — SKILL.md and all six reference templates.
+    Source files — SKILL.md and all ten reference templates.
   </Card>
 </CardGrid>
 

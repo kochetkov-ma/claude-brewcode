@@ -20,6 +20,18 @@ leaving it empty is correct there.
 
 {BASELINE_RESOLUTION_BASH}
 
+**Scope ids (only when the matched task file HAS them).** A task file may carry a `## Scope` table whose rows are
+`| id | block | in/out | status |` — ids `S1..Sn`, task-local, cited globally as `<TASK-ID>#S1`, never renumbered;
+`status` is exactly `not-started` | `in-progress` | `done`, and an `out` row carries `--`. When that section exists,
+the resolution block ALSO records every row into `{SCOPE_BASELINE}`: the `in` ids with their claimed status (the
+delivery surface pass B scores, section 3b) and the `out` ids (explicitly excluded — touching one is shape 2).
+**No `## Scope` section, no task file, no board at all -> record NOTHING and move on. Silent no-op: no WARN, no cap,
+no report line, no finding.** Most repos have no such board; their scope axis works exactly as before.
+
+> `## Scope` statuses are EXECUTION state. The `## Scope coverage` table in a spec doc
+> (`covered` | `partial` | `uncovered`) is SPEC COVERAGE, a different axis: `covered` != `done`, `done` != `covered`.
+> !=conflate them, !=derive one from the other.
+
 {SANCTION_PRECEDENCE_TABLE}
 
 **Degradation (never invent a baseline):**
@@ -88,7 +100,27 @@ blocker is RECORDED and NAMED (task notes / issue comment). Under-delivery outra
 | `scope#D2` | criterion partially met, or met only by fixture/stub where the done-when says real | `critical` / **P1** |
 | `scope#D3` | criterion met but not provable — no test, no evidence cited | `major` / P2 |
 | `scope#D4` | scope reduced with NO recorded blocker — title `unrecorded scope reduction` | `blocker` / **P0** |
+| `scope#D5` | a `## Scope` row's claimed `status` disagrees with what landed — code for the id is in the corpus while the row still says `not-started`/`in-progress` (stale bookkeeping) | `minor` / P3 (P2 when the stale row is the task's only delivery record) |
 | — | scope reduced WITH the blocker recorded + named | NOT a finding — report as an **accepted reduction**, citing where it is recorded |
+
+### Scope ids as the delivery keys (only when section 1 recorded a `## Scope` table)
+
+Walk EVERY `in` id and score it — the id list is the delivery checklist, alongside the acceptance criteria:
+
+| Claimed status | Reality in the corpus | Outcome |
+|----------------|-----------------------|---------|
+| `done` | the block is there | not a finding — count it toward the covered tally |
+| `done` | nothing implements it | **`scope#D1`** (or `D2` when only a stub/fixture exists), citing `<TASK-ID>#S<n>` and the false `done`. Full PROOF OF ABSENCE below still applies — a `done` claim is not proof either way |
+| `not-started` / `in-progress` | the block IS implemented | **`scope#D5`** — the code is fine, the record is stale |
+| `not-started` / `in-progress` | nothing implements it | not a finding — the task is honestly unfinished. Say so in the tally, never as a D1 |
+| `--` (`out` row) | the block was implemented anyway | NOT a delivery row — it is an explicitly excluded surface: shape **2** (`unsanctioned-feature`), section 3 |
+
+Every scope-id finding cites the id as `<TASK-ID>#S<n>` in `description`. `S<n>` is a scope-id CITATION, never a
+rule id: there is no `scope#S*` rule — the emittable spaces stay `scope#1`..`scope#6` (pass A) and `scope#D*` /
+`scope#C*` (pass B), so no domain owner can invent one.
+
+**Task file with no `## Scope` table -> this whole subsection is a silent no-op:** score the acceptance criteria as
+before, report no id tally, raise nothing. An absent board is the `PR: none` case (section 4b) — SKIP, invent nothing.
 
 ### PROOF OF ABSENCE — mandatory for D1 and D4 (the only P0s built on a negative)
 
@@ -150,7 +182,7 @@ criterion and no cited search must be asked about before it can weigh as a P0).
 | Batch | ONE `AskUserQuestion` call, one question per distinct expansion, max 4 (merge the rest into the largest) |
 | Question | name the FILES + the surface + who else owns it + the baseline checked; ask whether it is sanctioned. For a `deliveryProofMissing` row: quote the criterion and ask whether it was delivered (possibly under another name) |
 | Options | `Sanctioned — decision exists` (-> demote to P3 "record the decision") / `Not sanctioned — report as {P0\|P1}` (recommended, first) / `Intentional — accept for now` (-> P2, marked `accepted-scope`) |
-| Never ask | shapes 3, 4, 6, every `scope#C*` row, and any `scope#D*` row whose proof IS present — report those directly |
+| Never ask | shapes 3, 4, 6, every `scope#C*` row, every `scope#D5` stale-status row, and any `scope#D*` row whose proof IS present — report those directly |
 | **Baseline UNKNOWN** | the P2 cap set in section 1 SURVIVES this gate. `Not sanctioned` restores the mapped P0/P1 **only when the baseline was known** — the user confirmed the expansion, not the baseline |
 | Non-interactive | gate unavailable -> report at the priority the finding ENTERED with (full severity when the baseline was known, the P2 cap when it was `UNKNOWN`), flagged `unconfirmed-sanction`. Never silently downgrade, never silently upgrade past a cap |
 | Record | the question and the user's answer go into the report VERBATIM, and into the chat summary |

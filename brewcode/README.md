@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 4.8.1 |
+| Version | 4.9.0 |
 | Skills | 9 |
 | Agents | 10 |
 | Hooks | 2 |
@@ -73,8 +73,8 @@ claude --plugin-dir ./brewcode
 | Skill | Purpose |
 |-------|---------|
 | [`/brewcode:spec`](skills/spec/README.md) | Research codebase + user dialog -> SPEC.md |
-| [`/brewcode:superreview`](skills/superreview/README.md) | Generate a project-tailored deep-review skill: domain-expert routing + scope discipline + mechanical gates + adversarial validation |
-| [`/brewcode:teams`](skills/teams/README.md) | Dynamic agent team creation, management, and performance tracking |
+| [`/brewcode:superreview`](skills/superreview/README.md) | Generate a project-tailored deep-review skill: `QUICK` (default, `intent-guard` + mechanical gates) or `EXTENDED` (adds domain-expert fan-out, scope discipline, adversarial validation) depth, read from your prompt |
+| [`/brewcode:teams`](skills/teams/README.md) | Dynamic agent team creation, management, and performance tracking -- every team also gets a fixed review-only `intent-guard` member (not counted in team size) |
 | [`/brewcode:convention`](skills/convention/README.md) | Extract etalon classes, patterns, architecture into convention docs and rules |
 | [`/brewcode:rules`](skills/rules/README.md) | Prompt-driven rules management: status, create, improve, review |
 | [`/brewcode:skills`](skills/skills/README.md) | Prompt-driven skill management: status, create, improve, sync, review |
@@ -83,8 +83,11 @@ claude --plugin-dir ./brewcode
 | [`/brewcode:semble`](skills/semble/README.md) | Semantic code search setup: installs the pinned semble_code MCP, isolated cache, semble-first rule + hooks, agent migration |
 
 > **Note:** `/brewcode:superreview` emits a self-contained, project-local deep-review skill tailored to your stack.
-> It first makes sure the project HAS domain experts (creating the missing ones via `agent-creator`), then wires the
-> emitted skill to the project's real gates, rules and scope baseline (task + issue + recorded decisions).
+> It always makes sure the project HAS domain experts (creating the missing ones via `agent-creator`), always emits
+> `.claude/agents/intent-guard.md`, then wires the emitted skill to the project's real gates, rules and scope
+> baseline (task + issue + recorded decisions). The EMITTED skill then resolves depth per run from your prompt:
+> `QUICK` (default) = intent-guard + mechanical gates; `EXTENDED` = the full domain-expert fan-out, scope passes
+> and adversarial validation.
 
 ## Agents
 
@@ -96,7 +99,7 @@ claude --plugin-dir ./brewcode
 | [bash-expert](agents/bash-expert.md) | inherit | Creates sh/bash scripts for Mac/Linux |
 | bc-rules-organizer | haiku | Internal: spawned by /brewcode:rules |
 
-> **No generic agents:** brewcode ships specialists only. Implementation, testing, review and architecture work goes to project-specific agents in `.claude/agents/` — generate them with `/brewcode:teams create` (5-20 agents with self-selection protocol and performance tracking).
+> **No generic agents:** brewcode ships specialists only. Implementation, testing, review and architecture work goes to project-specific agents in `.claude/agents/` — generate them with `/brewcode:teams create` (5-20 domain agents with self-selection protocol and performance tracking, plus one fixed review-only `intent-guard`).
 
 > **Scope guard:** every agent carries a `## Scope guard` -- if a task exceeds one bounded unit (one deliverable, ~5 files), the agent stops and proposes a split instead of running for an hour.
 

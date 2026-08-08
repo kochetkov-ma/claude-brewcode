@@ -5,7 +5,7 @@
 | Field | Value |
 |-------|-------|
 | Version | 4.2.4 |
-| Skills | 6 |
+| Skills | 7 |
 | Agents | 0 |
 | Hooks | 0 |
 
@@ -82,6 +82,7 @@ claude --plugin-dir ./brewdoc
 | [`/brewdoc:docsync`](skills/docsync/README.md) | Installs project-local doc-staleness tracking (hooks) and reports/forces doc sync | sonnet | `[status] \| [sync [--all]] \| [reread] \| [frontmatter] \| [uninstall] \| free-text` |
 | [`/brewdoc:my-claude`](skills/my-claude/README.md) | Document your Claude Code installation -- setup, architecture, web research | opus | `[ext [context]] \| [r <query>]` -- no args = internal installation docs |
 | [`/brewdoc:memory`](skills/memory/README.md) | Syncs and shrinks Claude memory -- CLAUDE.md (incl. nested), rules, conventions, memory files; `full` also syncs agent + skill rosters | opus | `<free-form prompt: emphasis only; empty = sync whole memory surface; 'full' adds agent+skill rosters>` |
+| [`/brewdoc:memory-sync-init`](skills/memory-sync-init/README.md) | Generator -- analyzes a target project and emits a project-tailored `.claude/skills/memory-sync/` (batches, fact catalogue, non-growth sync, independent verify) | opus | `[status\|init\|upgrade] [fine-tune-prompt]` |
 | [`/brewdoc:md-to-pdf`](skills/md-to-pdf/README.md) | Convert Markdown to PDF via reportlab or weasyprint engines | sonnet | `<file.md> [--engine name] ["prompt"] \| styles \| test` |
 | [`/brewdoc:publish`](skills/publish/README.md) | Publish text/markdown/file/site to brewpage.app, returns URL | haiku | `<text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename]` |
 | [`/brewdoc:guide`](skills/guide/README.md) | Interactive tutorial for the plugin suite | haiku | `[topic]` |

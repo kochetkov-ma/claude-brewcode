@@ -72,7 +72,14 @@ echo "✅ Archived" || echo "❌ FAILED"
 
 ## Step 3: Agents Review
 
-Show inactive/problematic agents:
+> **`intent-guard` is EXCLUDED from this step — never list it, never offer it, never delete it.**
+> It is the team's fixed review-only member, shared with `/brewcode:superreview`. It writes no trace
+> entries by design, so 0 tasks and "no activity" are its NORMAL state, not inactivity. Filter it out
+> of the inactive table BEFORE showing it, so "Delete all inactive" cannot reach it. If the user asks
+> for it by name anyway, refuse: answer that removing it breaks `verify-team.sh` for this team, and
+> keep the file. Its `team.md` row (`Kind` = `review-only`) also stays.
+
+Show inactive/problematic agents (domain agents only):
 
 ```
 AskUserQuestion:
@@ -98,6 +105,7 @@ AskUserQuestion:
 
 On delete:
 
+0. If `{name}` is `intent-guard` -> **STOP, do not delete.** Report it as protected and move on.
 1. Remove `.claude/agents/{name}.md`
 2. Update team.md: set status to `removed`
 3. Record via trace-ops.sh: `bash "$BC_PLUGIN_ROOT/skills/teams/scripts/trace-ops.sh" add ".claude/teams/{TEAM}" "$SID" "system" "track" "completed" "removed {name}: cleanup"`

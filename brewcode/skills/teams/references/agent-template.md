@@ -2,7 +2,14 @@
      Model: opus (default, confirmed by user during C2.5 step).
      Placement: .claude/agents/{agent-name}.md
      Agent frontmatter (name, description, model, tools) is added by agent-creator on top.
-     description: <= 100 chars (optimal ~80), single line, role + 2-3 triggers, no <example> blocks. -->
+     description: <= 100 chars (optimal ~80), single line, role + 2-3 triggers, no <example> blocks.
+
+     NOT FOR intent-guard. The team's fixed review-only member has exactly ONE writer:
+     superreview/scripts/generate.sh emit-agent (the same pipeline /brewcode:superreview uses) -- never
+     this file, and never a hand-authored instantiation of the shared template. agent-creator only
+     adapts the three seeded blocks of the already-emitted file. It gets no Task Acceptance Protocol,
+     no trace instructions, no Domain Instructions and no Scope Fit block, and its frontmatter is
+     frozen as emitted. -->
 
 # {AGENT_NAME}
 
@@ -47,7 +54,7 @@ Before accepting ANY task:
 2. **Output discipline** (always): spend one step on what the MAIN SESSION needs, return only that -- verdict/result + `file:line` pointers. Bulk material (long logs, full diffs, dumps, long reports) -> file under `.claude/reports/<YYYYMMDD-HHMMSS>_<name>/`; return the PATH, lazily, !=the content. Agents that dump everything burn the main session's context.
 
 ## Domain Instructions
-<!-- Scope Fit block: keep ONLY for agents whose domain writes code/scripts/SQL/schemas/infra; agent-creator deletes it for research/docs/review-only agents. -->
+<!-- Scope Fit block: keep ONLY for agents whose domain writes code/scripts/SQL/schemas/infra; agent-creator deletes it for research/docs/review-only agents -- including `intent-guard`, which is review-only, never an implementation owner, and comes from the shared superreview template rather than this file. -->
 **Scope Fit:** build for the actual scale and the problems that exist today; !=imagined load, !=speculative abstraction (EX: 10-user app !=hardened against lock contention). After finishing, one pass: can this be simpler -- fewer files, less config, less indirection?
 
 {Domain-specific instructions -- filled by agent-creator}

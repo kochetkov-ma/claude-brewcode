@@ -1,6 +1,6 @@
 ---
 title: "superreview"
-description: "Generates a project-tailored deep-review skill: domain-expert routing, scope discipline (blast radius, delivery, closeout), and mechanical gates."
+description: "Generates a project-tailored deep-review skill: an anti-drift intent pass at every depth, plus domain-expert routing, scope discipline and mechanical gates at EXTENDED depth."
 order: 1108
 ---
 
@@ -13,8 +13,9 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 <Callout type="note">
   **Generator skill.** `/brewcode:superreview` does not review code itself. It analyzes the
   target project and writes a self-contained `.claude/skills/superreview/` into it. The emitted
-  skill does the reviewing, built on two mandatory axes: **domain experts** and **scope
-  discipline**.
+  skill is built on three axes: the **intent pass** (`intent-guard`, runs at every depth and is
+  the whole `QUICK` review), plus **domain experts** and **scope discipline**, which the
+  generator always wires in and which the emitted skill runs at `EXTENDED` depth.
 </Callout>
 
 ## Quick reference
@@ -25,7 +26,8 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | Arguments | `<fine-tune-prompt>` — free-text emphasis that reorders the emitted skill's Focus table; optional `[scope]` hint passed through |
 | Model | opus |
 | Tools | Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion |
-| Output | `.claude/skills/superreview/` in the target project |
+| Depth (emitted skill) | `QUICK` (default) or `EXTENDED` — inferred from the emitted skill's own prompt at run time, in any language; no flag on either skill |
+| Output | `.claude/skills/superreview/` plus `.claude/agents/intent-guard.md` in the target project |
 
 ## What it does
 
@@ -33,11 +35,13 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 directories, tech stack, tracker — then writes a self-contained review skill wired to that
 project's actual structure. No plugin dependency remains after generation.
 
-Two axes decide whether the emitted review is worth running: **domain experts** (routing to
-generic agents produces generic findings) and **scope discipline** (was the change sanctioned,
-was all of it delivered, what else did it touch). The generator treats both as mandatory — Phase
-1.6 creates missing domain experts before it will emit, and every emitted skill ships a dedicated
-`references/scope.md`.
+Three axes decide whether the emitted review is worth running: the **intent pass** (`intent-guard`,
+runs at every depth and is the whole `QUICK` review), **domain experts** (routing to generic
+agents produces generic findings), and **scope discipline** (was the change sanctioned, was all
+of it delivered, what else did it touch). The generator always wires in the intent pass and
+treats domain experts as mandatory — Phase 1.6 creates missing ones before it will emit — while
+the emitted skill runs the domain-expert and scope-discipline axes only at `EXTENDED` depth; every
+emitted skill still ships a dedicated `references/scope.md`.
 
 The emitted skill fuses two earlier passes: the `review` engine (mechanical gates first,
 two-phase find-then-validate, one merged P0-P3 report) and `standards-review` (reuse/duplication
@@ -68,6 +72,7 @@ superreview generated -> .claude/skills/superreview/
 Stack:            Node/TypeScript  (reference: typescript-react.md)
 Domain experts:   3 wired (developer, tester, architect)
 General agents:   reviewer, architect (arbiter + validator)
+intent-guard:     CREATED .claude/agents/intent-guard.md
 Scope baseline:   .claude/features board + GitHub issues; passes A=task-tracker / B=Explore
 Shared surfaces:  4 listed in references/scope.md
 Mechanical gates: npm run lint, npm run typecheck, npm test
@@ -75,6 +80,7 @@ Rule pointers:    5 files referenced (not restated inline)
 File groups:      4  (src/developer, tests/tester, infra/architect, docs/general)
 Focus:            1 reuse  2 correctness  3 architecture  4 version-pins  5 business-reqs
                   fine-tune: "focus on reuse and duplicate-detection"
+Depth:            QUICK (default) — EXTENDED spawns the full expert + scope fan-out
 
 Files written:
   .claude/skills/superreview/SKILL.md
@@ -82,6 +88,7 @@ Files written:
   .claude/skills/superreview/references/scope.md
   .claude/skills/superreview/references/report-template.md
   .claude/skills/superreview/references/typescript-react.md
+  .claude/agents/intent-guard.md
 
 Run it:  /superreview "<focus>" [scope: commit|branch|folder]
 ```
@@ -101,7 +108,7 @@ token the mode falls back to the working-tree diff, or to the last commits on a 
   <li>
     <div>
       <strong>Phase 0 — Load templates</strong>
-      <p>Reads the emit templates bundled with the skill: <code>SKILL.md.template</code>, <code>agent-prompt.md</code>, <code>scope.md.template</code>, <code>report-template.md</code>, and the per-stack reference files.</p>
+      <p>Reads the emit templates bundled with the skill: <code>SKILL.md.template</code>, <code>agent-prompt.md</code>, <code>scope.md.template</code>, <code>report-template.md</code>, <code>intent-guard.md.template</code>, and the per-stack reference files.</p>
     </div>
   </li>
   <li>
@@ -119,13 +126,13 @@ token the mode falls back to the working-tree diff, or to the last commits on a 
   <li>
     <div>
       <strong>Phase 1.6 — Domain experts (mandatory)</strong>
-      <p>Classifies the live agent roster, excludes read-only recon agents, and finds source groups with no owner. For every gap it offers to spawn <code>brewcode:agent-creator</code> — one agent per missing domain, all in one message — then re-scans. Declining leaves the group DEGRADED and requires <code>SUPERREVIEW_ALLOW_NO_EXPERTS=1</code> at validate.</p>
+      <p>Classifies the live agent roster, excludes read-only recon agents, and finds source groups with no owner. For every gap it offers to spawn <code>brewcode:agent-creator</code> — one agent per missing domain, all in one message — then re-scans. Declining leaves the group DEGRADED and requires <code>SUPERREVIEW_ALLOW_NO_EXPERTS=1</code> at validate. Sub-step 1.6b flags whether <code>.claude/agents/intent-guard.md</code> already exists — unconditionally, no gate, no question — but the actual create-or-reuse write happens inside Phase 2's <code>generate.sh emit</code> call.</p>
     </div>
   </li>
   <li>
     <div>
       <strong>Phase 2 — Scalar substitution</strong>
-      <p>Calls <code>generate.sh emit</code> to fill deterministic placeholders (agent names, rule paths, file groups, stack reference) via sed. Writes SKILL.md, agent-prompt.md, scope.md, report-template.md, and the chosen stack reference into <code>.claude/skills/superreview/</code>.</p>
+      <p>Calls <code>generate.sh emit</code> to fill deterministic placeholders (agent names, rule paths, file groups, stack reference) via sed. Writes SKILL.md, agent-prompt.md, scope.md, report-template.md, and the chosen stack reference into <code>.claude/skills/superreview/</code>, and creates-or-reuses <code>.claude/agents/intent-guard.md</code> via the shared writer.</p>
     </div>
   </li>
   <li>
@@ -143,7 +150,7 @@ token the mode falls back to the working-tree diff, or to the last commits on a 
   <li>
     <div>
       <strong>Phase 5 — Report</strong>
-      <p>Prints a summary: stack, domain experts, general agents, scope baseline, shared surfaces, mechanical gates, rule pointers, file groups, focus ordering, and the files written.</p>
+      <p>Prints a summary: stack, domain experts, general agents, the <code>intent-guard</code> status (created or reused), scope baseline, shared surfaces, mechanical gates, rule pointers, file groups, focus ordering, the depth axis (QUICK default, EXTENDED on request), and the files written.</p>
     </div>
   </li>
 </Steps>
@@ -193,6 +200,34 @@ Mode is resolved deterministically, not by scanning for keywords:
 Corpus rule applied to every mode: git-ignored files are OUT; tracked-or-will-be-tracked files
 are IN (`git ls-files --others --exclude-standard` catches new, unignored files).
 
+### Depth — QUICK vs EXTENDED
+
+Depth is resolved the same way as mode: read out of the prompt's own words, in any language. There
+is no `--fast`/`--deep` flag and none is planned — asking for depth in prose is the interface.
+
+| | `QUICK` (default) | `EXTENDED` |
+|---|---|---|
+| Triggered by | anything else, or a speed word ("quick", "fast", "быстро") | a depth/completeness/expertise word ("deep", "thorough", "full review", "глубоко", "детально") |
+| Spawns | 1 (`intent-guard`) | `intent-guard` + domain experts + scope pass A + scope pass B + `{0,1,2}` general |
+| Mechanical gates | yes | yes |
+| Intent / drift pass (`intent-guard`) | yes | yes |
+| Domain-expert findings | no | yes |
+| Scope baseline + scope gate | no | yes |
+| Adversarial validation | no — pool is self-verdicted | yes, per finding |
+| Interrupts on &gt;50 files | no | yes |
+| `INCOMPLETE` possible | only if the intent pass itself fails to run | yes (on `UNVALIDATED`, or a failed intent pass) |
+
+```
+/superreview "the auth refactor"                 -> QUICK    (English, implicit)
+/superreview "быстрая проверка авторизации"       -> QUICK    (Russian, explicit)
+/superreview "deep review of the auth refactor"   -> EXTENDED (English, explicit)
+/superreview "детальная проверка авторизации"     -> EXTENDED (Russian, explicit)
+```
+
+Mode and depth are independent axes, both announced before any review starts: mode picks the file
+set (`FULL_PROJECT` / `EXPLICIT` / `UNCOMMITTED` / `LAST_COMMITS`), depth picks how much effort goes
+into reviewing it.
+
 ### Emitted skill — execution shape
 
 - **Mechanical gates run first.** The project's real build/lint/type/test commands execute
@@ -216,6 +251,71 @@ are IN (`git ls-files --others --exclude-standard` catches new, unignored files)
   Discipline / Blast Radius section, a Mechanical Gate Results section, a verdict column on
   every finding row, and stats for scope-creep / confirmed-by-execution / UNVALIDATED counts.
   READ-ONLY by design — it recommends `/simplify`, never edits code.
+
+### Emitted skill — intent-guard agent
+
+Every emitted skill ships one more artifact outside its own folder: a project agent at
+`.claude/agents/intent-guard.md`. It runs at both depths and is the entire `QUICK` review.
+
+Not a code reviewer, not a sanity or smoke test. It compares what was **asked** against what was
+**delivered** and nothing else.
+
+Source hierarchy — tier 1 always wins:
+
+| Tier | Source | Absent case |
+|------|--------|--------------|
+| 1 | External/original — tracker ticket, Slack thread, quoted requirements, the user's verbatim words | Normal, not a defect: the chat request itself becomes tier 1 |
+| 2 | Local spec / design doc | `none` |
+| 3 | Local plan / task board / task graph | `none` |
+| 4 | Project policy — root + nested `CLAUDE.md`, rules, conventions | `none` |
+| 5 | Session transcript — what the user said mid-flight | always available |
+
+A contradiction between tiers is itself a finding; the higher tier wins and is labeled as such in the
+report. Sources are never invented.
+
+Evidence is deliberately cheap: session transcript, file and directory names, `git diff --stat`,
+dependency-manifest diff, doc headings — never a whole-file read, a build, a test run, or a linter.
+
+Drift classes it hunts (open-ended examples, not a closed checklist):
+
+- building something other than asked (scope drift)
+- over-engineering for a scale nobody planned
+- interface/factory bloat where a direct implementation was requested
+- file explosion
+- test bloat against a stated minimal-tests policy, or missing tests where required
+- an unnecessary dependency
+- architecture substitution
+- an ignored `CLAUDE.md`/rules instruction
+- a silent skip or over-claimed completion
+- unrequested artifacts
+- naming or placement that contradicts stated conventions
+- a lower-tier source followed over a higher-tier one (tier conflict)
+
+12 named classes in the current template — genuinely open-ended, since one drift can span more than
+one class at once.
+
+It is **read-only** — no write tools — and emits findings tagged `category: "intent"`. Its output
+leads with a verdict line plus a source-tier line:
+
+```
+VERDICT: ALIGNED | MINOR DRIFT | MAJOR DRIFT — <one clause of why>
+Sources: T1 <label|none> / T2 <label|none> / T3 <label|none> / T4 <label|none> / T5 transcript
+```
+
+The merged report's own closing `## VERDICT` section restates this as a `DRIFT:` line.
+
+`scripts/generate.sh` is the single writer of this file, via one shared implementation behind two
+subcommands: `emit` (what this generator runs in Phase 2) and `emit-agent` (agent only, no
+superreview skill required — what `/brewcode:teams` calls). Both honor the same env overrides
+(`PROJECT_NAME` / `TRACKER_LABEL` / `SPEC_LOCATION` / `PLAN_LOCATION` / `POLICY_LOCATION`) and print
+exactly one status line on stdout: `INTENT_GUARD: CREATED <path>` or `INTENT_GUARD: REUSE <path>`. A
+USABLE existing agent is never overwritten — usable meaning non-empty, carrying `name: intent-guard`
+frontmatter, and free of unresolved placeholders. An empty, truncated or placeholder-laden file is
+treated as absent and recreated.
+
+The generator seeds three project-specific blocks with generic defaults — project invariants, drift
+examples, evidence commands — which Phase 3 then adapts. Until adapted, `generate.sh validate` warns
+`INTENT_GUARD: UNTAILORED`.
 
 ### Scope taxonomy
 
@@ -297,6 +397,8 @@ Regenerate the emitted skill when any of the following change in the target proj
     scope.md                        # baseline, ownership, taxonomy, delivery, closeout
     report-template.md              # merged P0-P3 report template
     {stack}.md                      # java-kotlin | typescript-react | python | go (dominant only)
+.claude/agents/
+  intent-guard.md                   # anti-drift agent, create-or-reuse, shared with /brewcode:teams
 ```
 
 <CardGrid>

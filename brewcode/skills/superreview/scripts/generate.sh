@@ -5,9 +5,19 @@
 # {PLACEHOLDER} remains. Multi-row BLOCK placeholders are filled by the AI via Edit (see SKILL.md Phase 3).
 #
 # Usage: generate.sh <mode>
-#   scan      - Report target tech stack, agents, rules, source/test dirs (Phase 1)
-#   emit      - Copy + scalar-substitute templates into <cwd>/.claude/skills/superreview/ (Phase 2)
-#   validate  - Fail if any unresolved setup-time {PLACEHOLDER} remains (Phase 4)
+#   scan        - Report target tech stack, agents, rules, source/test dirs (Phase 1)
+#   emit        - Copy + scalar-substitute templates into <cwd>/.claude/skills/superreview/ (Phase 2)
+#                 AND create-or-reuse <cwd>/.claude/agents/intent-guard.md
+#   emit-agent  - Create-or-reuse <cwd>/.claude/agents/intent-guard.md ONLY. No superreview skill is
+#                 written, read or required. Used by /brewcode:teams, which must not author its own copy.
+#                 Prints exactly one `INTENT_GUARD:` line on STDOUT: `INTENT_GUARD: CREATED <path>` |
+#                 `INTENT_GUARD: REUSE <path>`. Diagnostics go to stderr and never break that contract.
+#   validate    - Fail if any unresolved setup-time {PLACEHOLDER} remains (Phase 4)
+#
+# Env overrides (honored by BOTH emit and emit-agent):
+#   PROJECT_NAME, TRACKER_LABEL, SPEC_LOCATION, PLAN_LOCATION, POLICY_LOCATION
+#   (emit also honors STACK_LABEL, STACK_REF, SOURCE_GLOB, PATHSPEC_GLOBS, ARBITER_AGENT,
+#    VALIDATOR_AGENT, SCOPE_AGENT_A, SCOPE_AGENT_B)
 
 set -euo pipefail
 
@@ -22,8 +32,18 @@ REFS="$SKILL_DIR/references"
 TARGET=".claude/skills/superreview"
 TARGET_REFS="$TARGET/references"
 
+# The one agent file this script owns, and the provenance stamp that proves a file came out of this pipeline.
+IG_PATH=".claude/agents/intent-guard.md"
+IG_STAMP_PREFIX="<!-- intent-guard template v"   # tail anchor + provenance; survives the header strip
+IG_SEED_MARK="<!-- SEEDED-DEFAULT:"              # one per generic BLOCK default; removed by Phase 3 adaptation
+
+# Every temp dir goes through $_bd; the trap makes leaks impossible on any exit path.
+_bd=""
+trap '[ -n "$_bd" ] && rm -rf "$_bd"' EXIT
+
 validate_templates() {
-  for t in "$REFS/SKILL.md.template" "$REFS/scope.md.template" "$REFS/agent-prompt.md" "$REFS/report-template.md"; do
+  for t in "$REFS/SKILL.md.template" "$REFS/scope.md.template" "$REFS/agent-prompt.md" \
+           "$REFS/report-template.md" "$REFS/intent-guard.md.template"; do
     if [ ! -f "$t" ]; then
       echo "❌ Emit template not found: $t"
       exit 1
@@ -97,15 +117,29 @@ scan_target() {
   echo ""
   echo "--- CLAUDE.md ---"
   test -f ./CLAUDE.md && echo "✅ CLAUDE.md" || echo "⚠️ no CLAUDE.md"
+
+  echo ""
+  echo "--- intent-guard: tier sources + existing agent ---"
+  if _ig_usable; then
+    echo "✅ $IG_PATH EXISTS and is usable — emit will REUSE it, never overwrite"
+  elif [ -e "$IG_PATH" ]; then
+    echo "⚠️ $IG_PATH exists but is empty / has no 'name: intent-guard' frontmatter / still carries unresolved {PLACEHOLDER} tokens — emit will RECREATE it"
+  else
+    echo "— no $IG_PATH — emit will CREATE it from the template"
+  fi
+  echo "Tier 2 (SPEC_LOCATION candidates):"
+  _list 'find .claude/specs .claude/spec docs/specs doc/specs -maxdepth 2 -type f -name "*.md" | sort | head -20' "(none — SPEC_LOCATION=none)"
+  echo "Tier 3 (PLAN_LOCATION candidates):"
+  _list 'find .claude/features .claude/tasks -maxdepth 2 \( -type f -o -type d \) | sort | head -20' "(none — PLAN_LOCATION=none)"
+  echo "Tier 4 (POLICY_LOCATION candidates):"
+  _list 'find . -maxdepth 3 -name "CLAUDE.md" -not -path "./node_modules/*" | sort' "(no CLAUDE.md)"
+  _list 'find .claude/rules .claude/convention -type f -name "*.md" | sort' "(no rules/convention)"
+  echo "Planned scale / testing / dependency policy: read the files above — they fill {PROJECT_INVARIANTS_TABLE}"
 }
 
-# ── emit: copy + scalar-substitute templates into the target ────────────────────
-emit_skill() {
-  echo "=== superreview: emit ==="
-  validate_templates
-
-  mkdir -p "$TARGET_REFS"
-
+# ── shared: scalar resolution + substitution (used by emit AND emit-agent) ──────
+resolve_scalars() {
+  [ "${_SCALARS_READY:-0}" = "1" ] && return 0
   # Scalar values (single-line ONLY — sed processes line-by-line; a newline truncates the substitution).
   PROJECT_NAME="${PROJECT_NAME:-this project}"
   STACK_LABEL="${STACK_LABEL:-the project stack}"
@@ -117,6 +151,10 @@ emit_skill() {
   SCOPE_AGENT_A="${SCOPE_AGENT_A:-Explore}"
   SCOPE_AGENT_B="${SCOPE_AGENT_B:-Explore}"
   TRACKER_LABEL="${TRACKER_LABEL:-local task board + issue tracker (read-only)}"
+  # intent-guard tier sources (Tier 2/3/4). `none` is a legitimate value — an absent source is REPORTED, never invented.
+  SPEC_LOCATION="${SPEC_LOCATION:-.claude/specs/**}"
+  PLAN_LOCATION="${PLAN_LOCATION:-.claude/features/**}"
+  POLICY_LOCATION="${POLICY_LOCATION:-\`CLAUDE.md\`, \`.claude/rules/**\`}"
   GENERATED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
   _sep=$'\x01'
@@ -124,12 +162,14 @@ emit_skill() {
   # Sanitize every scalar before it lands on a sed RHS: escape backslash FIRST, then ampersand
   # (& is the whole-match backreference in sed replacements). Order matters.
   for _var in PROJECT_NAME STACK_LABEL STACK_REF SOURCE_GLOB PATHSPEC_GLOBS ARBITER_AGENT VALIDATOR_AGENT \
-              SCOPE_AGENT_A SCOPE_AGENT_B TRACKER_LABEL GENERATED_AT; do
+              SCOPE_AGENT_A SCOPE_AGENT_B TRACKER_LABEL SPEC_LOCATION PLAN_LOCATION POLICY_LOCATION GENERATED_AT; do
     v="${!_var}"; v="${v//\\/\\\\}"; v="${v//&/\\&}"; printf -v "$_var" '%s' "$v"
   done
+  _SCALARS_READY=1
+}
 
-  _subst() {
-    # $1 = source template, $2 = destination
+_subst_raw() {
+    # $1 = source template -> substituted text on STDOUT
     sed \
       -e "s${_sep}{PROJECT_NAME}${_sep}${PROJECT_NAME}${_sep}g" \
       -e "s${_sep}{STACK_LABEL}${_sep}${STACK_LABEL}${_sep}g" \
@@ -141,9 +181,128 @@ emit_skill() {
       -e "s${_sep}{SCOPE_AGENT_A}${_sep}${SCOPE_AGENT_A}${_sep}g" \
       -e "s${_sep}{SCOPE_AGENT_B}${_sep}${SCOPE_AGENT_B}${_sep}g" \
       -e "s${_sep}{TRACKER_LABEL}${_sep}${TRACKER_LABEL}${_sep}g" \
+      -e "s${_sep}{SPEC_LOCATION}${_sep}${SPEC_LOCATION}${_sep}g" \
+      -e "s${_sep}{PLAN_LOCATION}${_sep}${PLAN_LOCATION}${_sep}g" \
+      -e "s${_sep}{POLICY_LOCATION}${_sep}${POLICY_LOCATION}${_sep}g" \
       -e "s${_sep}{GENERATED_AT}${_sep}${GENERATED_AT}${_sep}g" \
-      "$1" > "$2"
-  }
+      "$1"
+}
+
+_subst() { _subst_raw "$1" > "$2"; }
+
+# ── shared: the ONE writer of .claude/agents/intent-guard.md ────────────────────
+# Called by BOTH `emit` and `emit-agent`. Never a second implementation, never a hand-written copy.
+# CREATE-OR-REUSE: a USABLE existing file is the project's own tuned version and is NEVER overwritten.
+# "Usable" = non-empty AND carrying `name: intent-guard` frontmatter AND free of unresolved {UPPER_SNAKE}
+# tokens — a 0-byte, truncated or placeholder-laden file is treated as ABSENT and recreated, because the
+# emitted skill spawns this agent at BOTH depths. The placeholder test is deliberately independent of the
+# template stamp: a stamp-less hand-written agent is still never judged by template rules (see validate c2),
+# but raw {UPPER_SNAKE} tokens make a file broken whoever wrote it.
+_ig_usable() {
+  [ -s "$IG_PATH" ] \
+    && grep -q '^name:[[:space:]]*intent-guard[[:space:]]*$' "$IG_PATH" \
+    && ! grep -qE '\{[A-Z_]{2,}\}' "$IG_PATH"
+}
+
+write_intent_guard() {
+  if [ ! -f "$REFS/intent-guard.md.template" ]; then
+    echo "❌ Emit template not found: $REFS/intent-guard.md.template"
+    return 1
+  fi
+  resolve_scalars
+  mkdir -p .claude/agents
+
+  if _ig_usable; then
+    echo "INTENT_GUARD: REUSE $IG_PATH"
+    return 0
+  fi
+  # Diagnostic only — STDERR, so stdout keeps carrying exactly one `INTENT_GUARD:` status line.
+  if [ -e "$IG_PATH" ]; then
+    echo "⚠️ $IG_PATH exists but is empty, has no 'name: intent-guard' frontmatter, or still carries unresolved {PLACEHOLDER} tokens — recreating from template" >&2
+  fi
+
+  # The agent must be RUNNABLE straight out of emit — the emitted skill spawns it at BOTH depths, so a
+  # half-filled agent file breaks a QUICK run entirely. The three BLOCKs therefore get stack-generic
+  # DEFAULTS here, each tagged with a SEEDED-DEFAULT marker; Phase 3 REPLACES block + marker with project
+  # specifics. A surviving marker is what makes a skipped adaptation visible to `validate`.
+  _bd="$(mktemp -d)"
+  cat > "$_bd/evidence" <<IG_EVIDENCE
+\`\`\`bash
+git diff --stat HEAD~1..HEAD          # size of what was delivered
+git log --oneline -10                 # what the commits claim
+git status --porcelain                # uncommitted spill
+git diff --name-only --diff-filter=A  # files ADDED (file explosion, unrequested artifacts)
+git diff -- '*package.json' '*requirements*.txt' '*pom.xml' '*build.gradle*' '*go.mod' '*Cargo.toml'
+\`\`\`
+${IG_SEED_MARK} evidence-commands - generic floor, replace with this repo's real commands -->
+IG_EVIDENCE
+  cat > "$_bd/invariants" <<IG_INVARIANTS
+| Invariant | Value | Drift it makes checkable |
+|---|---|---|
+| Planned scale | not recorded — read it out of the request before flagging | \`intent#scale\` |
+| Testing policy | the project's own convention (rules / CLAUDE.md) wins over any default | \`intent#tests\` |
+| Dependency policy | a new runtime dependency needs an explicit request or a recorded decision | \`intent#deps\` |
+| File-layout policy | follow the existing tree; a new top-level dir needs a stated reason | \`intent#files\`, \`intent#naming\` |
+| Architecture stance | keep the pattern already in the repo unless the request replaces it | \`intent#arch\`, \`intent#indirection\` |
+
+> These are the generic floor. Re-read the project's \`CLAUDE.md\`, rules and conventions each run and treat
+> the concrete values found there as the real invariants.
+${IG_SEED_MARK} project-invariants - generic floor, replace with facts read from this repo -->
+IG_INVARIANTS
+  cat > "$_bd/examples" <<IG_EXAMPLES
+| Asked | Delivered | Class |
+|---|---|---|
+| "fix this one function" | the function fixed plus a refactor of its two callers | \`intent#scope\` |
+| "add a small helper" | a new package with an interface, a factory and an impl | \`intent#indirection\` |
+| "one script" | a directory of scripts plus a README nobody asked for | \`intent#files\`, \`intent#artifacts\` |
+| "do A and B" | A done, B silently dropped, report says done | \`intent#skip\` |
+
+> Replace these with real instances from this repo's own history — the closer the wording, the higher the hit rate.
+${IG_SEED_MARK} drift-examples - generic floor, replace with real instances from this repo -->
+IG_EXAMPLES
+
+  # The template header comment carries generator instructions; it MUST NOT ship in the emitted agent.
+  _subst_raw "$REFS/intent-guard.md.template" \
+    | sed '/^<!-- TEMPLATE HEADER/,/-->[[:space:]]*$/d' \
+    | cat -s > "$_bd/agent.md"
+
+  # POST-STRIP POST-CONDITION. The strip is a sed RANGE: if its end pattern ever fails to match, sed deletes
+  # to EOF and the result is a plausible-looking file with no tokens and no header — i.e. it passes validate.
+  # Both anchors below sit OUTSIDE the header block, so their loss proves the strip ran away.
+  if ! grep -q '^name:[[:space:]]*intent-guard[[:space:]]*$' "$_bd/agent.md"; then
+    echo "❌ emit aborted: header strip removed the frontmatter of intent-guard.md.template"
+    return 1
+  fi
+  if ! grep -qF "$IG_STAMP_PREFIX" "$_bd/agent.md"; then
+    echo "❌ emit aborted: header strip removed the template stamp (tail anchor) of intent-guard.md.template"
+    return 1
+  fi
+
+  for _pair in "{EVIDENCE_COMMANDS_BASH}:evidence" "{PROJECT_INVARIANTS_TABLE}:invariants" "{DRIFT_EXAMPLES_TABLE}:examples"; do
+    _tok="${_pair%%:*}"; _file="$_bd/${_pair##*:}"
+    awk -v tok="$_tok" -v cf="$_file" '
+      $0 == tok { while ((getline line < cf) > 0) print line; close(cf); next }
+      { print }
+    ' "$_bd/agent.md" > "$_bd/agent.next" && mv "$_bd/agent.next" "$_bd/agent.md"
+  done
+
+  mv "$_bd/agent.md" "$IG_PATH"
+  rm -rf "$_bd"; _bd=""
+  echo "INTENT_GUARD: CREATED $IG_PATH"
+}
+
+# ── emit-agent: intent-guard ONLY (no superreview skill involved) ───────────────
+emit_agent_only() {
+  write_intent_guard
+}
+
+# ── emit: copy + scalar-substitute templates into the target ────────────────────
+emit_skill() {
+  echo "=== superreview: emit ==="
+  validate_templates
+  resolve_scalars
+
+  mkdir -p "$TARGET_REFS"
 
   _subst "$REFS/SKILL.md.template" "$TARGET/SKILL.md"
   echo "✅ $TARGET/SKILL.md"
@@ -164,8 +323,14 @@ emit_skill() {
     echo "⚠️ stack reference not found: $REFS/$STACK_REF (emitted without per-stack doc)"
   fi
 
+  # intent-guard — the anti-drift agent the emitted skill spawns at BOTH depths.
+  # Written by the SHARED writer above (the same one `emit-agent` calls): one implementation, one status line.
+  write_intent_guard
+
   echo ""
-  echo "Next: AI fills BLOCK placeholders via Edit (SKILL.md Phase 3), then run: generate.sh validate"
+  echo "Next: AI fills BLOCK placeholders via Edit (SKILL.md Phase 3) in the emitted SKILL.md, and REPLACES the"
+  echo "      SEEDED-DEFAULT blocks in $IG_PATH when this run CREATED it (skip on REUSE)"
+  echo "      — then run: generate.sh validate"
 }
 
 # ── validate: no setup-time {PLACEHOLDER} may remain ────────────────────────────
@@ -178,7 +343,7 @@ validate_emit() {
   fi
 
   # Runtime tokens the emitted skill legitimately keeps (resolved at REVIEW time, not GENERATION time).
-  _runtime='MODE|BRANCH|SCOPE|FILES|COUNT|TIMESTAMP|FOCUS|FILE_LIST|AGENT_LIST|CANDIDATES|MERGED|PATHSPEC|MAIN|SHA|FOLDER|GROUP|AGENT|N|OC|SC|K|U|D|ROOT|TOK|RANGE|REPORT_DIR|SCOPE_BASELINE|OWNERSHIP|GATE_RESULTS|PR_ISSUE_JSON'
+  _runtime='MODE|DEPTH|BRANCH|SCOPE|FILES|COUNT|TIMESTAMP|FOCUS|FILE_LIST|AGENT_LIST|CANDIDATES|MERGED|PATHSPEC|MAIN|SHA|FOLDER|GROUP|AGENT|N|OC|SC|K|U|D|ROOT|TOK|RANGE|REPORT_DIR|SCOPE_BASELINE|OWNERSHIP|GATE_RESULTS|PR_ISSUE_JSON|INTENT_VERDICT|USER_REQUEST'
 
   _errors=0
   for f in "$TARGET/SKILL.md" "$TARGET_REFS/agent-prompt.md" "$TARGET_REFS/report-template.md" \
@@ -234,18 +399,78 @@ EOF
   done
 
   # (c) required emitted assets — a missing one silently guts a phase of the emitted skill.
+  # .claude/agents/intent-guard.md is EXECUTED by the emitted skill at BOTH depths: without it, QUICK is empty.
   for _req in "$TARGET_REFS/agent-prompt.md" "$TARGET_REFS/report-template.md" "$TARGET_REFS/scope.md"; do
     if [ ! -f "$_req" ]; then
       echo "❌ missing emitted asset: $_req"
       _errors=$((_errors+1))
     fi
   done
+  # intent-guard is EXECUTED at both depths: an empty or frontmatter-less file is as broken as a missing one.
+  if ! _ig_usable; then
+    if [ -e "$IG_PATH" ]; then
+      echo "❌ unusable emitted asset: $IG_PATH (empty, no 'name: intent-guard' frontmatter, or unresolved {PLACEHOLDER} tokens) — re-run 'generate.sh emit-agent'"
+    else
+      echo "❌ missing emitted asset: $IG_PATH"
+    fi
+    _errors=$((_errors+1))
+  fi
+
+  # (c2) TEMPLATE-DERIVED agents only. A file carrying the template stamp came out of this pipeline, so every
+  # {PLACEHOLDER} in it must be resolved (scalars by emit, the three BLOCKs by AI Edit in SKILL.md Phase 3).
+  # A REUSED hand-written intent-guard is byte-untouchable by contract — it is not judged by template rules.
+  if _ig_usable && grep -qF "$IG_STAMP_PREFIX" "$IG_PATH"; then
+    _ig_unresolved=$(grep -oE '\{[A-Z_]+\}' "$IG_PATH" | sort -u || true)
+    if [ -n "$_ig_unresolved" ]; then
+      echo "❌ unresolved placeholders in $IG_PATH (no token is runtime here):"
+      echo "$_ig_unresolved"
+      _errors=$((_errors+1))
+    fi
+    if grep -q '^<!-- TEMPLATE HEADER' "$IG_PATH"; then
+      echo "❌ $IG_PATH still carries the TEMPLATE HEADER comment — emit must strip it"
+      _errors=$((_errors+1))
+    fi
+    # (c3) TAILORING. Seeded BLOCK defaults are a runnable floor, not the target: a run that skipped the
+    # Phase 3 adaptation ships boilerplate and would otherwise pass every gate silently. WARN, not fail —
+    # `emit-agent` is a legitimate standalone path whose adaptation happens in the caller's own flow.
+    _ig_seeded=$(grep -cF "$IG_SEED_MARK" "$IG_PATH" || true)
+    if [ "${_ig_seeded:-0}" -gt 0 ]; then
+      echo "⚠️ UNTAILORED: $IG_PATH still carries $_ig_seeded seeded generic BLOCK default(s)"
+      grep -nF "$IG_SEED_MARK" "$IG_PATH" || true
+      echo "   INTENT_GUARD: UNTAILORED $IG_PATH ($_ig_seeded seeded block(s)) — run SKILL.md Phase 3 and replace each block + its marker"
+    fi
+  elif _ig_usable; then
+    echo "ℹ️ $IG_PATH carries no template stamp — treated as the project's own hand-written agent, not checked against the template"
+  fi
 
   # (d) DOMAIN EXPERTS — a review routed only to generic agents is a degraded review.
   # Override with SUPERREVIEW_ALLOW_NO_EXPERTS=1 when the target genuinely has no domain agents.
+  # intent-guard is wired into EVERY emitted skill and is NOT a domain expert — excluded, or this check
+  # would pass on a project that has no expert at all.
+  # The match must prove ROUTING, not mere mention. A substring grep over the whole file credits any agent
+  # whose name occurs in the emitted PROSE ("the guard SKIPS the gates" credits an unwired `guard.md`;
+  # `plan.md`, `scope.md` behave the same). Two wired forms count, nothing else:
+  #   - a whole CELL of a markdown table row ({DOMAIN_AGENTS_TABLE} / {FILE_GROUP_MAP} rows), backticks and
+  #     emphasis stripped, comma lists split;
+  #   - an explicit `subagent_type=NAME`.
+  # Matching is exact-line (`grep -xF`), so a name is either the routed value or it is not wired.
+  _wired=$( { awk -F'|' '
+      /^[[:space:]]*\|/ {
+        for (i = 1; i <= NF; i++) {
+          n = split($i, parts, ",")
+          for (j = 1; j <= n; j++) {
+            c = parts[j]
+            gsub(/[`*[:space:]]/, "", c)
+            if (c != "") print c
+          }
+        }
+      }' "$TARGET/SKILL.md"
+    grep -oE 'subagent_type=("?)[A-Za-z0-9_-]+' "$TARGET/SKILL.md" | sed -E 's/^subagent_type=("?)//'
+  } | sort -u || true)
   _experts=0
   for _name in $_local_agents; do
-    grep -qF "$_name" "$TARGET/SKILL.md" && _experts=$((_experts+1))
+    [ "$_name" = "intent-guard" ] && continue
+    printf '%s\n' "$_wired" | grep -qxF "$_name" && _experts=$((_experts+1))
   done
   if [ "$_experts" -eq 0 ]; then
     if [ "${SUPERREVIEW_ALLOW_NO_EXPERTS:-0}" = "1" ]; then
@@ -268,9 +493,12 @@ EOF
 case "$MODE" in
   scan) scan_target ;;
   emit) emit_skill ;;
+  emit-agent) emit_agent_only ;;
   validate) validate_emit ;;
   *)
-    echo "Usage: generate.sh <scan|emit|validate>"
+    echo "Usage: generate.sh <scan|emit|emit-agent|validate>"
+    echo "  emit-agent  create-or-reuse <cwd>/.claude/agents/intent-guard.md ONLY (no superreview skill needed);"
+    echo "              prints 'INTENT_GUARD: CREATED <path>' or 'INTENT_GUARD: REUSE <path>'"
     exit 1
     ;;
 esac

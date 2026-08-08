@@ -2,6 +2,39 @@
 
 ---
 
+## v4.9.0 (2026-08-08)
+
+> Docs: [superreview](https://doc-claude.brewcode.app/brewcode/skills/superreview/) | [teams](https://doc-claude.brewcode.app/brewcode/skills/teams/) | [task-board-init](https://doc-claude.brewcode.app/brewtools/skills/task-board-init/) | [memory-sync-init](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-init/)
+
+### brewcode
+
+#### Added
+- **`intent-guard`:** a new generated agent, an anti-drift review pass comparing what was ASKED against what was DELIVERED. Read-only, invoked explicitly at review time only, never during development. Sources are ranked in a five-tier hierarchy — external/original sources (tracker ticket, Slack thread, quoted requirements, the user's own words) outrank a local spec, a plan/task board, project policy (`CLAUDE.md`, rules) and the session transcript, in that order, with each finding labelled by its tier. Evidence is deliberately cheap: session transcript, file/directory names, `git diff --stat`, `git log`, manifest diffs — never a full source-file read. Twelve named drift classes (`intent#scope`, `intent#scale`, `intent#indirection`, `intent#files`, `intent#tests`, `intent#deps`, `intent#arch`, `intent#policy`, `intent#skip`, `intent#artifacts`, `intent#naming`, `intent#conflict`) are open-ended examples, not a closed checklist. Its `description` is deliberately short so it never competes for auto-activation. It is generated into the user's own project — it does not ship inside the plugin bundle
+- **`superreview` DEPTH axis:** every emitted skill now resolves `QUICK` (default) vs `EXTENDED` semantically from the user's prompt — no flag, no CLI token. `QUICK` runs `intent-guard` plus the mechanical gates in a single spawn; `EXTENDED` adds the full domain-expert fan-out, scope passes and adversarial validation. `intent-guard` runs at both depths. New `generate.sh emit-agent` subcommand is the single writer of `.claude/agents/intent-guard.md` (shared with `teams`), create-or-reuse, printing exactly one `INTENT_GUARD: CREATED <path>` / `INTENT_GUARD: REUSE <path>` line on stdout. Seeded blocks carry an `UNTAILORED` marker until adapted to the project
+- **`teams` + intent-guard:** every generated team gets `intent-guard` as a fixed review-only member, outside the Minimal/Balanced/Maximum agent counts (those count domain agents only). An existing agent is reused rather than recreated; `teams` calls superreview's `emit-agent` rather than authoring its own copy. `intent-guard` is excluded from the reviewer role, from implementation ownership and from the cleanup sweep. `verify-team.sh` warns instead of failing on teams created before this change
+
+#### Fixed
+- **expert-count / routing gate:** now matches a whole markdown-table cell or an explicit `subagent_type=NAME`, not a bare substring anywhere in the file — a substring match was crediting agents that were merely mentioned, not actually routed to
+- **`intent-guard.md` self-healing:** a corrupt or placeholder-laden `.claude/agents/intent-guard.md` (empty, missing `name: intent-guard` frontmatter, or unresolved `{PLACEHOLDER}` tokens) is now recreated from the template instead of silently reused as-is
+
+### brewtools
+
+#### Added
+- **`task-board-init` `SPEC_MODE`:** optional per-task product spec + design spec layer. Non-trivial tasks additionally get `specs/<ID>-spec.md` + `specs/<ID>-design.md`, a `spec:` frontmatter field, and a generated `task-spec` skill with a mandatory domain-architect fan-out, a coverage gate and a blocking open-questions close gate before a task can start. A new Step-1 domain-agent inventory pass feeds the fan-out. A new `upgrade` directive retrofits the spec layer onto an already-deployed board — strictly additive, gated per file, never renumbers or rewrites existing rows. `SPEC_MODE=off` (the default question's other answer) stays byte-identical to the pre-spec generator
+
+### brewdoc
+
+#### Added
+- **`memory-sync-init`:** a new generator skill. It analyzes a target project and writes a self-contained, project-local `.claude/skills/memory-sync/` — the skill that keeps instruction memory (`CLAUDE.md`, rules, conventions, agent and skill rosters) truthful against the code, rather than syncing memory itself. The emitted skill diffs memory against `session` (default), a branch, a commit range, recent N commits, or the whole tree; repairs facts first, then dedup, then compression, under a non-growth rule (every file ends `<=` its original line count); runs disjoint batches in parallel, one bounded agent per batch, all spawned in one message; independently re-verifies every added/fixed/removed fact against the code, never via the agent that wrote it; and re-audits agents against current best practice on every run, not just fact-checks them
+
+### docs
+
+#### Changed
+- **superreview, teams, task-board-init pages:** updated for the `intent-guard` agent, the `QUICK`/`EXTENDED` depth axis, and `SPEC_MODE`
+- **memory-sync-init page:** new
+
+---
+
 ## v4.8.1 (2026-08-07)
 
 > Docs: [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/)

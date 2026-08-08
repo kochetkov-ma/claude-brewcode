@@ -10,11 +10,11 @@ fi
 TEAM_DIR=".claude/teams/$TEAM_NAME"
 FAIL=0
 
-check() {
-  label="$1"
-  path="$2"
-  printf "CHECK: %s ... " "$label"
-  if [ -e "$path" ]; then
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+
+check_dir() {
+  printf "CHECK: %s ... " "$1"
+  if [ -d "$2" ]; then
     echo "OK"
   else
     echo "MISSING"
@@ -22,9 +22,19 @@ check() {
   fi
 }
 
-check "teams dir" "$TEAM_DIR"
-check "team.md" "$TEAM_DIR/team.md"
-check "trace.jsonl" "$TEAM_DIR/trace.jsonl"
+check_file() {
+  printf "CHECK: %s ... " "$1"
+  if [ -f "$2" ]; then
+    echo "OK"
+  else
+    echo "MISSING"
+    FAIL=1
+  fi
+}
+
+check_dir "teams dir" "$TEAM_DIR"
+check_file "team.md" "$TEAM_DIR/team.md"
+check_file "trace.jsonl" "$TEAM_DIR/trace.jsonl"
 
 if [ ! -f "$TEAM_DIR/trace.jsonl" ]; then
   for old_file in tracking.md issues.md insights.md; do
@@ -39,6 +49,7 @@ if [ -f "$TEAM_DIR/team.md" ]; then
   in_agents=0
   past_header=0
   found_agents=0
+  found_intent_guard=0
   while IFS= read -r line; do
     case "$line" in
       "## Agents"*) in_agents=1; past_header=0; continue ;;
@@ -52,6 +63,7 @@ if [ -f "$TEAM_DIR/team.md" ]; then
         found_agents=1
         agent=$(printf '%s' "$line" | cut -d'|' -f2 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | sed 's/`//g')
         [ -z "$agent" ] && continue
+        [ "$agent" = "intent-guard" ] && found_intent_guard=1
         printf "CHECK: agent %s ... " "$agent"
         if [ -f ".claude/agents/${agent}.md" ]; then
           echo "OK"
@@ -67,6 +79,14 @@ if [ -f "$TEAM_DIR/team.md" ]; then
   fi
   if [ "$in_agents" -eq 0 ]; then
     echo "WARN: no ## Agents section in team.md"
+  fi
+  # intent-guard is a fixed review-only member of every team, outside the domain-agent count.
+  # Teams created before it existed simply lack the row -- warn with the fix, never fail them.
+  # Teams that DO list it are covered by the per-agent -f check above.
+  if [ "$found_intent_guard" -eq 0 ]; then
+    echo "WARN: team.md has no intent-guard row (team predates it). Fix:"
+    echo "      bash \"$SCRIPT_DIR/../../superreview/scripts/generate.sh\" emit-agent"
+    echo "      then add to the ## Agents table: | intent-guard | -- | Anti-drift check: what was ASKED vs what was DELIVERED | active | <date> | review-only |"
   fi
 fi
 
