@@ -46,7 +46,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
   <li><div><strong>Input gate</strong><p>The whole argument is treated as ONE free-form sentence — no keyword grammar, no argument parser. A non-empty prompt goes to mode selection; no input triggers the no-prompt menu.</p></div></li>
   <li><div><strong>Auto-mode select</strong><p>Announces `Mode: &lt;mode&gt; (skills) — chosen because &lt;evidence&gt;` so you always know which branch executed and why the classifier picked it.</p></div></li>
   <li><div><strong>No-prompt menu</strong><p>When invoked with no argument, presents a single AskUserQuestion with options (in order): Status (skills) — recommended, Status (all: agents+rules+skills), Create, Improve, Review, Sync skills (memory sync), List (plain), Cancel.</p></div></li>
-  <li><div><strong>Dispatch</strong><p>Routes to the appropriate handler: `list-skills.sh` for list mode, `brewcode:skill-creator` agent for create/improve, parallel agents for batch, `references/mode-sync.md` for sync. Review mode spawns a single reviewer — the project's agent from `.claude/agents/`, else `general-purpose` — two-phase: review, then double-check findings, then report.</p></div></li>
+  <li><div><strong>Dispatch</strong><p>Routes to the appropriate handler: `list-skills.sh` for list mode, `brewcode:skill-creator` agent for create/improve, parallel agents for batch, `references/mode-sync.md` for sync. Review mode spawns a single reviewer — the project's agent from `.claude/agents/`, else `general-purpose` — two-phase: review, then double-check findings, then report. After create/improve returns, the coordinator re-runs `mode-sync.md` itself, scoped to only the file just written — no second `skill-creator` spawn — and applies every verdict directly with targeted edits.</p></div></li>
   <li><div><strong>Real status</strong><p>Four blocks, never a flat list: inventory by scope (plugin / project / global — counts, names, load path), state (enabled or disabled via the <code>_SKILL.md</code> toggle marker, model), overlaps and conflicts (same name shadowed across scopes, duplicate triggers or descriptions), and health flags (missing README or frontmatter, weak description triggers).</p></div></li>
   <li><div><strong>Final output</strong><p>Structured report: mode executed, skills affected, findings, paths written or changed, and suggested next invocation if follow-up is warranted.</p></div></li>
 </Steps>
@@ -124,6 +124,8 @@ Announced as `Sync scope: &lt;scope&gt; — &lt;evidence&gt; | targets: &lt;N&gt
 
 **Non-growth directive:** each file ends &lt;= its original line count, total delta &lt;= 0 (a positive delta needs per-line justification, never buried). Order: DELETE first, FIX, ADD last.
 
+**Auto-dispatch after create/improve:** once a `create` or `improve` completes, the same engine runs again scoped to only the file just written (its `SKILL.md` + `references/`) — ground truth (S3) through verdicts (S5), folded into one row of the Step 6 report. No second `skill-creator` spawn: the coordinator applies every verdict itself with targeted `Edit` calls, since the S4 fan-out step is skipped for this scoped pass. A clean file reports one line: `sync: no drift`.
+
 **Verdicts (S5):**
 
 | Verdict | Action |
@@ -143,7 +145,7 @@ Announced as `Sync scope: &lt;scope&gt; — &lt;evidence&gt; | targets: &lt;N&gt
   <Card title="agents" icon="settings" href="/brewcode/skills/agents/">Sibling: manage agents</Card>
   <Card title="rules" icon="list" href="/brewcode/skills/rules/">Sibling: manage rules</Card>
   <Card title="brewcode" icon="rocket" href="/brewcode/overview/">Plugin overview</Card>
-  <Card title="memory" icon="sync" href="/brewdoc/skills/memory/">Sibling: syncs memory files, CLAUDE.md, rules</Card>
+  <Card title="memory-sync-init" icon="sync" href="/brewdoc/skills/memory-sync-init/">Sibling: generates a project-local sync for memory files, CLAUDE.md, rules</Card>
   <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/skills/SKILL.md">SKILL.md</Card>
 </CardGrid>
 

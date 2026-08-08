@@ -104,7 +104,9 @@ SCOPE: {TEST_DIR}/{feature}/**. Out of bounds: everything else.
 CONTEXT: setup already landed the framework, the e2e-* agent roster and e2e-rules.md — follow
       them, do not re-decide. BDD scenarios {SCENARIO_PATHS} are approved; architecture
       decisions already made: {DECISIONS}. Sibling e2e agents write the other features'
-      tests in parallel and own the shared page objects — reuse, never redefine.
+      tests in parallel and own the shared page objects — reuse, never redefine. Before
+      writing a test, find the closest well-built existing one and take its principles —
+      IN ADDITION to the rules above, never instead.
 CONSUMER: the reviewer in the Review Cycle validates your tests (max 3 cycles) and the whole
       suite must run green in CI as one run — so no feature-local test runner tweaks, and
       report blockers instead of skipping or quarantining a test.

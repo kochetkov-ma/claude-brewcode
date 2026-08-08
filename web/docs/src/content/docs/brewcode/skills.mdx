@@ -22,8 +22,8 @@ On top of those there is a **dynamic ninth skill**: it is not shipped with the p
 | 2 | [convention](/brewcode/skills/convention/) | [`/brewcode:convention`](/brewcode/skills/convention/) | opus | Extracts etalon classes, patterns, architecture into convention docs |
 | 3 | [e2e](/brewcode/skills/e2e/) | [`/brewcode:e2e`](/brewcode/skills/e2e/) | opus | Orchestrates e2e testing: BDD scenarios, Playwright autotests |
 | 4 | [rules](/brewcode/skills/rules/) | [`/brewcode:rules`](/brewcode/skills/rules/) | sonnet | Syncs KNOWLEDGE.jsonl or session learnings to project rules |
-| 5 | [skills](/brewcode/skills/skills/) | [`/brewcode:skills`](/brewcode/skills/skills/) | opus | Lists, improves, creates, syncs Claude Code skills |
-| 6 | [spec](/brewcode/skills/spec/) | [`/brewcode:spec`](/brewcode/skills/spec/) | opus | Creates SPEC.md task spec via research + interaction |
+| 5 | [semble](/brewcode/skills/semble/) | [`/brewcode:semble`](/brewcode/skills/semble/) | opus | Installs, audits and maintains the semble_code semantic code-search MCP |
+| 6 | [skills](/brewcode/skills/skills/) | [`/brewcode:skills`](/brewcode/skills/skills/) | opus | Lists, improves, creates, syncs Claude Code skills |
 | 7 | [superreview](/brewcode/skills/superreview/) | [`/brewcode:superreview`](/brewcode/skills/superreview/) | opus | Generates a project-tailored deep-review skill: domain-expert routing + scope discipline + mechanical gates + adversarial validation |
 | 8 | [teams](/brewcode/skills/teams/) | [`/brewcode:teams`](/brewcode/skills/teams/) | opus | Creates and manages dynamic teams of domain agents |
 | ★ | [superreview (emitted)](/brewcode/skills/review/) | `/superreview` | opus | **Per-project** deep review — written into your repo by `/brewcode:superreview` |
@@ -41,11 +41,11 @@ On top of those there is a **dynamic ninth skill**: it is not shipped with the p
   <Card title="rules" icon="shield" href="/brewcode/skills/rules/">
     Knowledge-to-rules synchronization
   </Card>
+  <Card title="semble" icon="search" href="/brewcode/skills/semble/">
+    Semantic code-search MCP: setup, audit, reindex, removal
+  </Card>
   <Card title="skills" icon="puzzle" href="/brewcode/skills/skills/">
     Skill management and sync
-  </Card>
-  <Card title="spec" icon="document" href="/brewcode/skills/spec/">
-    Specification creation through research
   </Card>
   <Card title="superreview" icon="check" href="/brewcode/skills/superreview/">
     Generate a project-tailored deep-review skill (review + standards merged)
@@ -66,7 +66,7 @@ Every skill here fans work out to subagents, and all of them follow the same siz
   A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target.
 </Callout>
 
-One subagent = **ONE bounded unit**: one deliverable, roughly 5 files, roughly 10 steps. Anything bigger is split into N tasks and spawned in **ONE message**, in parallel. That is why `convention` runs 10 layer agents instead of one, `spec` partitions research into 5-10 areas, and `teams` creates agents one file per spawn.
+One subagent = **ONE bounded unit**: one deliverable, roughly 5 files, roughly 10 steps. Anything bigger is split into N tasks and spawned in **ONE message**, in parallel. That is why `convention` runs 10 layer agents instead of one, `e2e` partitions scenarios across parallel agents, and `teams` creates agents one file per spawn.
 
 Every spawn prompt carries six fields — a bare one-line task is never enough:
 
@@ -79,19 +79,13 @@ Every spawn prompt carries six fields — a bare one-line task is never enough:
 | CONSUMER | who or what uses the result next, and the shape it must fit |
 | DONE | acceptance criteria + the exact report shape you want back |
 
-The same brief lives in the runtime templates these skills read — the `e2e` mode references, `convention`'s rules guide, `spec`'s SPEC-creation reference, and `superreview`'s emitted skill template — so a fan-out three levels deep still gets a full brief.
+The same brief lives in the runtime templates these skills read — the `e2e` mode references, `convention`'s rules guide, `teams`'s roster template, and `superreview`'s emitted skill template — so a fan-out three levels deep still gets a full brief.
 
 ## Lifecycle
 
 The recommended skill execution order for a standard project cycle:
 
 <Steps>
-  <li>
-    <div>
-      <strong>Spec</strong>
-      <p>Create specification through research and user interaction. <a href="/brewcode/skills/spec/">spec</a></p>
-    </div>
-  </li>
   <li>
     <div>
       <strong>Superreview</strong>

@@ -26,8 +26,8 @@ skills and agents. The name is a nod to brewing: skills (recipes) define what to
     No hook injection, no shared runtime state.
   </Card>
   <Card title="8 skills (recipes)" icon="terminal">
-    From specification (<a href="/brewcode/skills/spec/">/brewcode:spec</a>) to convention analysis (<a href="/brewcode/skills/convention/">/brewcode:convention</a>)
-    and multi-agent review (<a href="/brewcode/skills/superreview/">/brewcode:superreview</a>).
+    From convention analysis (<a href="/brewcode/skills/convention/">/brewcode:convention</a>) and agent teams
+    (<a href="/brewcode/skills/teams/">/brewcode:teams</a>) to multi-agent review (<a href="/brewcode/skills/superreview/">/brewcode:superreview</a>).
   </Card>
   <Card title="5 agents (brewers)" icon="users">
     Specialists only: [skill-creator](/brewcode/agents/skill-creator/), [agent-creator](/brewcode/agents/agent-creator/),
@@ -62,7 +62,7 @@ all context is managed through built-in Claude Code events.
   │                                                          │
   │   Skills (recipes)            Agents (brewers)           │
   │   ┌──────────────┐          ┌──────────────────┐         │
-  │   │ spec, e2e    │          │ skill/agent/hook  │         │
+  │   │ semble, e2e  │          │ skill/agent/hook  │         │
   │   │ superreview  │ ──────>  │ creator, bash     │         │
   │   │ convention,. │          │ + project teams   │         │
   │   └──────────────┘          └──────────────────┘         │
@@ -70,7 +70,7 @@ all context is managed through built-in Claude Code events.
   │          v                          v                     │
   │   Hooks (processes)           Templates + Knowledge      │
   │   ┌──────────────┐          ┌──────────────────┐         │
-  │   │ session-start│          │ SPEC.md.template  │         │
+  │   │ session-start│          │ rules templates   │         │
   │   │ forced-eval  │ <──────> │ artifacts/        │         │
   │   │              │          │                   │         │
   │   │              │          │                   │         │
@@ -98,7 +98,7 @@ brewcode/
 │   ├── bash-expert.md                 # Bash scripts (opus)
 │   └── bc-rules-organizer.md          # Rules organizer (haiku)
 ├── skills/                            # 8 skills
-│   ├── spec/                          # Specification creation
+│   ├── semble/                        # Semantic code search setup
 │   ├── convention/                    # Convention analysis
 │   ├── rules/                         # Rule extraction
 │   ├── superreview/                   # Multi-agent quorum review
@@ -114,12 +114,12 @@ brewcode/
 
 <Tabs>
   <TabItem label="Skills">
-    8 skills (recipes) cover spec, review, conventions, and meta-tooling.
+    8 skills (recipes) cover search, review, conventions, and meta-tooling.
     See [Skills](/brewcode/skills/) for details.
 
     | Group | Skills | Purpose |
     |-------|--------|---------|
-    | Spec | spec | Specification authoring via research + interaction |
+    | Search | semble | Semantic code-search MCP setup and maintenance |
     | Quality | superreview, convention, rules | Multi-agent review, conventions, rule extraction |
     | Dynamic | teams | Agent team creation and management |
     | Testing | e2e | E2E testing orchestration with BDD scenarios |
@@ -134,7 +134,6 @@ brewcode/
     |------|--------|-------|
     | Creation | skill-creator, agent-creator, hook-creator | inherit |
     | Scripting | bash-expert | inherit |
-    | Internal | bc-rules-organizer | haiku |
     | Internal | bc-rules-organizer | haiku |
 
     + dynamic project agents created by [`/brewcode:teams`](/brewcode/skills/teams/)
@@ -155,8 +154,8 @@ brewcode/
 <Steps>
   <li class="step step-primary">
     <div>
-      <strong>Specification</strong> <Badge variant="primary" text="/brewcode:spec" />
-      <p>Parallel codebase research and user refinement loop. Generates SPEC.md scoped to the project.</p>
+      <strong>Conventions</strong> <Badge variant="primary" text="/brewcode:convention" />
+      <p>Parallel per-layer analysis. Writes etalon classes and recurring patterns into <code>.claude/convention/</code>.</p>
     </div>
   </li>
   <li class="step step-primary">

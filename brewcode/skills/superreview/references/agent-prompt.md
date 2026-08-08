@@ -144,6 +144,9 @@ candidate (per the Focus ordering; security only as P0).
 
 The enum lists `intent` for completeness only — `category: \"intent\"` and `rule: \"intent#<class>\"` are RESERVED
 for the intent-guard pass and you may NOT emit them. Drift you notice in your own files is a `scope-creep` finding.
+`rule: \"scope#S<n>\"` is RESERVED as well and emittable by NOBODY: `S<n>` is a scope-id CITATION that belongs in
+\"description\". The emittable rule spaces are `scope#1`..`scope#6` plus `scope#D*` / `scope#C*` (the two dedicated
+scope passes only).
 
 **Severity guide:**
 - blocker: prod outage / security breach / data loss / boundary violation in a critical path / an UNSANCTIONED

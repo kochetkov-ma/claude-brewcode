@@ -6,7 +6,7 @@ The `board.md` here is the EMPTY skeleton (counts 0). The Step-4c doc sweep fill
 
 ## Spec-mode placeholders (gate: `SPEC_MODE=on`)
 
-Every placeholder below shares ONE gate: `SPEC_MODE`. Exactly TWO kinds -- `line` and `inline`. When `SPEC_MODE=off`, the emitted control files MUST be byte-identical to the pre-spec-layer originals:
+Every placeholder below shares ONE gate: `SPEC_MODE`. Exactly TWO kinds -- `line` and `inline`. When `SPEC_MODE=off`, the emitted control files MUST be byte-identical to the pre-spec-layer originals PLUS this file's UNGATED session-progress sites (`PROGRESS.md` itself, `TRACKER.md` section 2's layout line, `TRACKER.md` section 8 step 4, the `INDEX.md` Control-files row) -- baseline in BOTH modes, never removed:
 
 - **Line placeholders** (`{{SPEC_FEATURE_TABLE_HEAD_ON}}`, `{{SPEC_FEATURE_TABLE_HEAD_OFF}}`, `{{SPEC_FM_LINE}}`, `{{SPEC_SCOPE_BLOCK}}`, `{{SPEC_BOARD_COL_NOTE}}`, `{{SPEC_TRACKER_SECTION}}`, `{{SPEC_INDEX_ROWS}}`) occupy a line of their own. When off, REMOVE the entire line -- !=leave it blank.
 - `{{SPEC_FEATURE_TABLE_HEAD_ON}}` / `{{SPEC_FEATURE_TABLE_HEAD_OFF}}` are the two ARMS of that same gate, both `line` kind: on -> expand `_ON`, remove the `_OFF` line; off -> expand `_OFF`, remove the `_ON` line. Exactly one arm survives every run. !=a third kind.
@@ -119,6 +119,27 @@ The `specs` count on the **Counts** line keeps its meaning in both modes: number
 
 ---
 
+## `PROGRESS.md`
+
+Ungated -- written in BOTH `SPEC_MODE` states, at init, before any task exists.
+
+```markdown
+# Session progress -- {{REPO_NAME}}
+
+> [`board.md`](board.md) owns the task LIST + status. THIS file owns what the SESSION did about it.
+> !=a second board: no task table, no per-task detail (that is the task's `## Notes`).
+> Five fields, overwritten in place -- one snapshot, never an append-only log. {{LANG}} only.
+> Kept current by the main session; rewritten by the `task-tracker` agent on every run.
+
+- **Updated:** {{TODAY}}
+- **In flight:** -- (task ids being worked right now)
+- **Moved since last update:** -- (`<ID>: todo -> progress`, one line each)
+- **Blocked:** -- (`<ID>: what blocks it / who unblocks it`)
+- **Next:** -- (the single next action for this session)
+```
+
+---
+
 ## `TRACKER.md`
 
 ```markdown
@@ -138,9 +159,10 @@ project. There is NO root `TODO.md` -- never create one.
 
 ## 2. Layout
 
-```
+\`\`\`
 .claude/features/
   board.md            <- DASHBOARD: overall status + index table of EVERY task (canonical list)
+  PROGRESS.md         <- SESSION progress snapshot (5 fields, overwritten in place); !=a second board
   TRACKER.md          <- this procedure
   TASK_TEMPLATE.md    <- copy this to create a new task file
   INDEX.md            <- maps the control files
@@ -149,13 +171,13 @@ project. There is NO root `TODO.md` -- never create one.
   progress/           <- WIP; a task file is MANDATORY here
   closed/             <- done/shipped (file optional; keep notable ones)
   specs/              <- per-task implementation specs (linked from task links:)
-```
+\`\`\`
 
 Folder name == task status. A task file always lives in the folder matching its status.
 
 ## 3. Lifecycle (state machine)
 
-```
+\`\`\`
             groom (promote)        pick up            ship
  backlog  ------------------>  todo --------> progress --------> closed
    |  \                          ^               |
@@ -163,7 +185,7 @@ Folder name == task status. A task file always lives in the folder matching its 
    |    -----> [deleted]         +---------------+
    |
    +--> groom (merge into existing task)
-```
+\`\`\`
 
 | Transition | Action |
 |------------|--------|
@@ -180,7 +202,7 @@ Always update `board.md` in the SAME change as any transition. The board lags re
 
 Copy `TASK_TEMPLATE.md`. Frontmatter is required; body sections recommended. {{LANG}} only.
 
-```markdown
+\`\`\`markdown
 ---
 id: T-{{FIRST_DOMAIN}}-SLUG
 title: One-line task title
@@ -203,7 +225,7 @@ Why this exists, what problem it solves.
 
 ## Notes
 Running log: decisions, blockers, links to PRs/commits/reports.
-```
+\`\`\`
 
 Invariants:
 - `status` frontmatter MUST equal the folder. On any move, change both.
@@ -257,7 +279,7 @@ The `task-tracker` agent and the `task-board` skill both know this loop -- invok
 1. Open `board.md` -> read overall status + progress table.
 2. (Optional) groom `backlog/` per section 7.
 3. Pick a `todo` task (respect priority). Move it to `progress/`, set owner, update board.
-4. Do the work. Keep `## Notes` current.
+4. Do the work. Keep `## Notes` current, and refresh `PROGRESS.md` whenever something moves.
 5. On done: ship, move the file to `closed/`, record {{CLOSE_MARKER_SHORT}}, update board counts + focus.
 6. If new work surfaces mid-task, drop it in `backlog/` (do not derail).
 
@@ -322,6 +344,7 @@ Otherwise `spec: none`. Whichever branch is taken, `spec:` is ALWAYS written -- 
 | G2 close | `progress -> closed` is BLOCKED while an open question with `blocking: yes` stands in EITHER doc: `<ID>-spec.md` `## Open questions` (ids `Q1..Qn`) or `<ID>-design.md` `## Open architectural questions` (ids `AQ1..AQn`). Both are scanned -- in `design-only` mode there is no spec file, so a spec-only check is unenforceable. Override ONLY by an explicit line in the task's `## Notes`: `SPEC WAIVER: <reason>` -- a deliberate, recorded act. No waiver line = no close |
 | G3 sync | changing the task's `## Scope` invalidates BOTH specs -> set spec `status: draft` and run `/task-spec <ID> refresh`. Editing ONLY a `status` cell !=a scope change -- it never trips G3 |
 | G4 no solo design | the design doc is NEVER authored by a single generalist agent. See 10.3 |
+| G5 staleness | REPORT-ONLY, fired at close on the two docs G2 already opened -- no extra reads. Spec FM `status:` still `draft`, or an `in` id just marked `done` that is `uncovered`/`partial` in `## Scope coverage` -> `SPEC STALE: <ID> ...` + ONE `NEXT: run /task-spec <ID> refresh`. It NEVER blocks the close (G2 is the only blocker), never writes a spec doc, never touches `## Scope coverage`, never renumbers an id |
 
 ### 10.3 The design is never authored solo
 
@@ -387,6 +410,7 @@ Running log: decisions, blockers, PR/commit/report links.
 | File | Role |
 |------|------|
 | [`board.md`](board.md) | Canonical task LIST + status (dashboard: overall status, progress/todo/backlog/closed/specs tables). Every task = a board row. |
+| [`PROGRESS.md`](PROGRESS.md) | SESSION progress against the board: in flight / moved / blocked / next. Five fields, overwritten in place. !=a second board -- rules in `.claude/rules/tasks.md`. |
 | [`TRACKER.md`](TRACKER.md) | The procedure: layout, lifecycle state machine, task-file format, id convention, grooming loop. |
 | [`TASK_TEMPLATE.md`](TASK_TEMPLATE.md) | Copy this to create a new task file. |
 | [`INDEX.md`](INDEX.md) | This file. |

@@ -35,8 +35,9 @@ Brewdoc contains 6 skills, each handling a separate documentation task.
     Three modes: internal (local configuration), external (hooks and context architecture),
     research (search across forums, GitHub, marketplaces).
   </Card>
-  <Card title="Memory" icon="brain" href="/brewdoc/skills/memory/">
-    One sweep re-verifies memory files, root and every nested CLAUDE.md, rules, and conventions against the codebase — delete first, total line delta at or below zero. `full` also syncs the agent and skill rosters.
+  <Card title="Memory-Sync-Init" icon="brain" href="/brewdoc/skills/memory-sync-init/">
+    Generator: analyzes the target repo, then writes a project-local `/memory-sync` skill into it — repo-specific batches, checkable-fact catalogue, non-growth sync, independent verify.
+    Modes: status, init, upgrade.
   </Card>
   <Card title="md-to-pdf" icon="file" href="/brewdoc/skills/md-to-pdf/">
     Convert Markdown to professional PDF.
@@ -59,7 +60,7 @@ Brewdoc contains 6 skills, each handling a separate documentation task.
 |---------|---------|-------|-----------|
 | [`/brewdoc:docsync`](/brewdoc/skills/docsync/) | Track and fix stale project docs via hooks | sonnet | `[status] \| [sync [--all]] \| [reread] \| [frontmatter] \| [uninstall]` |
 | [`/brewdoc:my-claude`](/brewdoc/skills/my-claude/) | Generate documentation about Claude Code installation | opus | `[ext [context]] \| [r <query>]` — no args = internal installation docs |
-| [`/brewdoc:memory`](/brewdoc/skills/memory/) | Sync memory, CLAUDE.md (incl. nested), rules, conventions — delete-first; `full` adds agent+skill rosters | opus | `free-form prompt (emphasis only); "full" adds rosters` |
+| [`/brewdoc:memory-sync-init`](/brewdoc/skills/memory-sync-init/) | Generate a project-tailored `/memory-sync` skill into the target repo | opus | `[status \| init \| upgrade] [fine-tune-prompt]` — no args = `init` |
 | [`/brewdoc:md-to-pdf`](/brewdoc/skills/md-to-pdf/) | Convert Markdown to PDF | sonnet | `<file.md> [--engine name] ["prompt"] \| styles \| test \| no args = help` |
 | [`/brewdoc:publish`](/brewdoc/skills/publish/) | Publish to brewpage.app — returns public URL | haiku | `<text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename]` |
 | [`/brewdoc:guide`](/brewdoc/skills/guide/) | Interactive tutorial for the plugin suite | haiku | `[topic]` |
@@ -77,7 +78,7 @@ brewdoc/
 └── skills/
     ├── docsync/                  # Doc-staleness tracker
     ├── my-claude/                # Installation documentation
-    ├── memory/                   # Memory sync (references/: mode-sync, mode-sync-full, memory-guide)
+    ├── memory-sync-init/         # Memory-sync generator (references/: SKILL.md.template, memory-guide, agent-audit, hard-sync)
     ├── md-to-pdf/                # PDF conversion
     ├── publish/                  # brewpage.app publishing
     └── guide/                    # Interactive tutorial
@@ -91,7 +92,7 @@ conversation use `${CLAUDE_SKILL_DIR}` to access their own files.
   **Brewdoc** is a set of documentation utilities: sync, memory sync, PDF export.
   Each skill is self-contained and independent of the others.
 
-  **Brewcode** is a task execution engine with infinite context, 9 lifecycle hooks,
+  **Brewcode** is a task execution engine with infinite context, 2 lifecycle hooks,
   KNOWLEDGE.jsonl, and a session handoff mechanism.
 
   Both plugins install from the same `claude-brewcode` marketplace but operate independently.

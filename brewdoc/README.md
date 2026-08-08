@@ -1,11 +1,11 @@
 # Brewdoc
 
-> Documentation toolkit plugin for Claude Code -- sync, generation, memory sync, PDF conversion, publishing.
+> Documentation toolkit plugin for Claude Code -- sync, generation, memory-sync generation, PDF conversion, publishing.
 
 | Field | Value |
 |-------|-------|
-| Version | 4.2.4 |
-| Skills | 7 |
+| Version | 4.10.0 |
+| Skills | 6 |
 | Agents | 0 |
 | Hooks | 0 |
 
@@ -68,8 +68,8 @@ claude --plugin-dir ./brewdoc
 /brewdoc:my-claude                    # Document your local Claude setup
 /brewdoc:my-claude ext                # Document Claude Code architecture
 /brewdoc:my-claude r "how do hooks work"  # Research any Claude topic
-/brewdoc:memory                       # Sync whole surface: memory, nested CLAUDE.md, rules, conventions
-/brewdoc:memory "full"                # + agent roster + skill roster, synced in-place
+/brewdoc:memory-sync-init             # Emit a project-tailored /memory-sync skill into this repo
+/brewdoc:memory-sync-init status      # Is it installed, and how stale are its surface tables
 /brewdoc:md-to-pdf README.md          # Convert markdown to PDF
 /brewdoc:publish "Hello world"        # Publish to brewpage.app -- returns URL
 /brewdoc:guide                        # Interactive tutorial for the suite
@@ -81,7 +81,6 @@ claude --plugin-dir ./brewdoc
 |-------|---------|-------|-----------|
 | [`/brewdoc:docsync`](skills/docsync/README.md) | Installs project-local doc-staleness tracking (hooks) and reports/forces doc sync | sonnet | `[status] \| [sync [--all]] \| [reread] \| [frontmatter] \| [uninstall] \| free-text` |
 | [`/brewdoc:my-claude`](skills/my-claude/README.md) | Document your Claude Code installation -- setup, architecture, web research | opus | `[ext [context]] \| [r <query>]` -- no args = internal installation docs |
-| [`/brewdoc:memory`](skills/memory/README.md) | Syncs and shrinks Claude memory -- CLAUDE.md (incl. nested), rules, conventions, memory files; `full` also syncs agent + skill rosters | opus | `<free-form prompt: emphasis only; empty = sync whole memory surface; 'full' adds agent+skill rosters>` |
 | [`/brewdoc:memory-sync-init`](skills/memory-sync-init/README.md) | Generator -- analyzes a target project and emits a project-tailored `.claude/skills/memory-sync/` (batches, fact catalogue, non-growth sync, independent verify) | opus | `[status\|init\|upgrade] [fine-tune-prompt]` |
 | [`/brewdoc:md-to-pdf`](skills/md-to-pdf/README.md) | Convert Markdown to PDF via reportlab or weasyprint engines | sonnet | `<file.md> [--engine name] ["prompt"] \| styles \| test` |
 | [`/brewdoc:publish`](skills/publish/README.md) | Publish text/markdown/file/site to brewpage.app, returns URL | haiku | `<text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename]` |
@@ -99,7 +98,7 @@ brewdoc/
 +-- skills/
     +-- docsync/                      # Doc-staleness tracker
     +-- my-claude/                    # Installation documentation
-    +-- memory/                       # Memory sync (references/: mode-sync, mode-sync-full, memory-guide)
+    +-- memory-sync-init/             # Memory-sync generator (references/: SKILL.md.template, memory-guide, agent-audit, hard-sync)
     +-- md-to-pdf/                    # PDF conversion
     +-- publish/                      # brewpage.app publishing
     +-- guide/                        # Interactive tutorial
@@ -115,7 +114,7 @@ Full docs: [doc-claude.brewcode.app/brewdoc/overview](https://doc-claude.brewcod
 |----------|------|
 | Docsync | [Docsync](https://doc-claude.brewcode.app/brewdoc/skills/docsync/) |
 | My-Claude | [My-Claude](https://doc-claude.brewcode.app/brewdoc/skills/my-claude/) |
-| Memory | [Memory](https://doc-claude.brewcode.app/brewdoc/skills/memory/) |
+| Memory-Sync-Init | [Memory-Sync-Init](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-init/) |
 | Release Notes | [RELEASE-NOTES.md](../RELEASE-NOTES.md) |
 
 Author: Maksim Kochetkov | License: MIT

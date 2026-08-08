@@ -214,12 +214,17 @@ export POLICY_LOCATION="<e.g. 'CLAUDE.md, .claude/rules/**, .claude/convention/*
 bash "${CLAUDE_SKILL_DIR}/scripts/generate.sh" emit && echo "✅ emit" || echo "❌ emit FAILED"
 ```
 
-> **STOP if ❌** — verify `${CLAUDE_SKILL_DIR}/references/SKILL.md.template` exists and the target `.claude/` is writable.
+> **STOP if ❌ — UNLESS the message is `already installed`.** That refusal is the EXPECTED path on a live
+> installation: it exits 1 by design, prints no `INTENT_GUARD:` line at all, and means **go to Phase 2b** (run
+> `upgrade`), not stop. Any other ❌ is a real failure: verify
+> `${CLAUDE_SKILL_DIR}/references/SKILL.md.template` exists and the target `.claude/` is writable.
 
 This writes `<target>/.claude/skills/superreview/SKILL.md` (scalars substituted), copies `agent-prompt.md`,
 `report-template.md` and `scope.md` (scalar-substituted), copies the chosen `${STACK_REF}` into the emitted
-`references/`, and **creates-or-reuses `<target>/.claude/agents/intent-guard.md`** (template header stripped,
-provenance stamp kept). Key off the ONE machine-readable status line the writer prints:
+`references/`, saves the pristine templates to `.claude/skills/superreview/.template-baseline/` (what `upgrade`
+later diffs against), and **creates-or-reuses `<target>/.claude/agents/intent-guard.md`** (template header
+stripped, provenance stamp kept). Key off the ONE machine-readable status line the writer prints — the
+`already installed` refusal path prints NO status line, because nothing was written:
 
 | Status line | Meaning |
 |-------------|---------|
@@ -229,6 +234,38 @@ provenance stamp kept). Key off the ONE machine-readable status line the writer 
 > The same writer is available standalone as `generate.sh emit-agent` (agent only, no superreview skill required,
 > same env overrides `PROJECT_NAME` / `TRACKER_LABEL` / `SPEC_LOCATION` / `PLAN_LOCATION` / `POLICY_LOCATION`,
 > same two status lines). `/brewcode:teams` uses it; this generator does not need it, `emit` covers it.
+
+### Phase 2b — Already installed? `upgrade`, never re-emit
+
+The emitted skill **self-modifies**: its Phase 4b SELF-SYNC corrects its own routing table, dead gates, scope
+baseline and shared surfaces in place on every `EXTENDED` run. A blind re-emit erases all of it, so `emit`
+REFUSES on a live installation. When it does:
+
+**EXECUTE** using Bash tool:
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/generate.sh" upgrade && echo "✅ upgrade" || echo "❌ upgrade FAILED"
+```
+
+It writes NO live file. It stages a fresh emit at `.claude/skills/superreview/.upgrade-staging/` (with the raw new
+templates under `.upgrade-staging/.template/`) and compares the NEW TEMPLATE against the pristine copies `emit`
+saved in `.claude/skills/superreview/.template-baseline/` — **never the live file against a template**, because a
+live file legitimately carries Phase 3 tailoring and Phase 4b self-sync edits that no template ever knew about.
+One line per asset:
+
+| Line | Meaning | What you do |
+|------|---------|-------------|
+| `IDENTICAL (template unchanged since install)` | no template delta | nothing |
+| `DIFFERS (<n> template line(s))` | the TEMPLATE really changed | run the printed `diff <baseline> <new template>`, then port ONLY those changes into the LIVE file with targeted **Edit** calls, keeping every tailored + self-synced line |
+| `MISSING -> restored (NEEDS PHASE 3)` | a deleted asset was restored from the RAW template | **go to Phase 3 for that file** and fill its BLOCK placeholders — it is un-tailored, and Phase 4 `validate` fails on it otherwise |
+| `NO BASELINE - full diff, tailoring included` | install predates the baseline | the count is NOT a template delta; review the staged copy by hand and port only genuine template changes |
+
+Then, once the delta is applied (and any restored file has been through Phase 3), promote the new templates to the
+baseline and clean up with the command the script printed:
+`rm -rf <baseline> && mv <staging>/.template <baseline> && rm -rf <staging>` — after which go to Phase 4. Both
+directories carry a `.gitignore` of `*`, so they never enter the user's commits.
+
+> `SUPERREVIEW_FORCE=1 ... emit` overwrites and **destroys** those corrections — use it only when the user asks
+> for a clean regeneration. `emit-agent` is unaffected: it is already create-or-reuse.
 
 ### Phase 3 — Adapt the BLOCK placeholders (AI Edit)
 
@@ -334,6 +371,7 @@ Files written:
 - .claude/skills/superreview/references/scope.md
 - .claude/skills/superreview/references/report-template.md
 - .claude/skills/superreview/references/{STACK_REF}
+- .claude/skills/superreview/.template-baseline/  (pristine templates for `upgrade`; git-ignored)
 - .claude/agents/intent-guard.md          {created | REUSED, not written}
 
 Run it:  /superreview "<focus>" [scope]              -> QUICK: intent + gates, 1 agent
@@ -360,6 +398,7 @@ Recap of the canonical shape the emitted SKILL.md implements (full text in `refe
 | Fan-out | ONE parallel message. `QUICK`: `intent-guard` alone. `EXTENDED`: `intent-guard` + domain experts + scope pass A (diff side, shapes 1-6) + scope pass B (baseline side, delivery D1-D5 + closeout C1-C4); shared JSON finding contract; search-first before flagging reuse/duplication |
 | Validation | `EXTENDED` only. A NON-OWNING validator reverse-validates EVERY verdictless candidate (adversarial, per-finding gate, batched <=40), merges + de-dups + prioritizes P0-P3; unvalidatable -> `UNVALIDATED` and the run is `INCOMPLETE`. At `QUICK` the pool is entirely self-verdicted, so the coordinator merges + ranks in-session and the run is NOT `INCOMPLETE` |
 | Scope gate | `EXTENDED` only. `AskUserQuestion` on unsanctioned expansion / unproven absence; rewrites priorities only, never adds findings, never lifts the UNKNOWN cap. Intent rows never enter it |
+| **Self-sync** | `EXTENDED` only, coordinator only, after the report: Phase 4b corrects the emitted SKILL.md + `references/scope.md` IN PLACE from data already in context — routing table vs the live roster, a gate that reported `not run` because the command does not exist, an `UNKNOWN`/mismatched scope baseline, a shared surface a scope finding named. Line delta `<= 0`, facts only; DECISIONS, missing experts and `intent-guard.md` are PROPOSALS printed in the summary, never writes |
 | Report | ONE merged report at `.claude/reports/{TIMESTAMP}_superreview/REPORT.md`, sorted P0->P3, every row carrying its verdict, with a Scope Discipline / Blast Radius section; READ-ONLY; recommends `/simplify` + a Manager-mode fix session; never edits code |
 
 ---
@@ -370,7 +409,9 @@ Recap of the canonical shape the emitted SKILL.md implements (full text in `refe
 |---------|---------|-------------|
 | Emit target | `<cwd>/.claude/skills/superreview/` | Where the generated skill is written |
 | Emit templates | `${CLAUDE_SKILL_DIR}/references/` | Source templates for the generation |
-| Generation script | `${CLAUDE_SKILL_DIR}/scripts/generate.sh` | `scan` \| `emit` \| `emit-agent` \| `validate`. `emit-agent` writes ONLY `.claude/agents/intent-guard.md` (shared writer, no superreview skill required) — that is the entry point `/brewcode:teams` calls |
+| Generation script | `${CLAUDE_SKILL_DIR}/scripts/generate.sh` | `scan` \| `emit` \| `emit-agent` \| `upgrade` \| `validate`. `emit-agent` writes ONLY `.claude/agents/intent-guard.md` (shared writer, no superreview skill required) — that is the entry point `/brewcode:teams` calls |
+| Re-generation | `upgrade` (Phase 2b) | `emit` refuses on a live installation because the emitted skill self-syncs; `upgrade` stages the new templates and never writes a live file. `SUPERREVIEW_FORCE=1` overwrites and destroys self-synced edits |
+| Template baseline | `<target>/.claude/skills/superreview/.template-baseline/` | Pristine copies of the templates `emit` generated from (git-ignored via its own `.gitignore`). `upgrade` diffs the NEW template against them, so the reported delta is the TEMPLATE's change and never the Phase 3 tailoring the live files carry. Absent (pre-baseline install) -> `upgrade` reports `NO BASELINE` and falls back to a live-vs-template diff |
 | Stack reference | one of `python.md \| java-kotlin.md \| typescript-react.md \| go.md` | Emitted per the dominant detected stack |
 | Domain experts | MANDATORY (Phase 1.6) | gaps are filled via `brewcode:agent-creator`; `validate` fails with zero experts unless `SUPERREVIEW_ALLOW_NO_EXPERTS=1`. `intent-guard` never counts as one |
 | Review depth | `QUICK` (emitted default) | Resolved SEMANTICALLY per run by the emitted skill from the user's prompt. `EXTENDED` on a depth request. No flag exists and none may be added |
@@ -401,6 +442,10 @@ Recap of the canonical shape the emitted SKILL.md implements (full text in `refe
 | Target has no writable `.claude/agents/` | `emit` does `mkdir -p .claude/agents` first; a failure there is the same STOP as an unwritable `.claude/` |
 | Asked to add a `--fast`/`--deep` flag | Refuse — depth is inferred from the prompt by design. A flag would freeze the axis the emitted skill must read semantically |
 | Unresolved `{PLACEHOLDER}` after Phase 3 | `validate` fails listing them (including any left in the emitted `intent-guard.md`); fix via Edit, re-run validate |
+| `emit` refuses — superreview already installed | Expected, not an error: the live skill carries Phase 4b self-sync corrections, and the refusal prints NO `INTENT_GUARD:` line. Go to Phase 2b and run `upgrade`. Only `SUPERREVIEW_FORCE=1` overwrites, and only on an explicit request for a clean regeneration |
+| `upgrade` says `DIFFERS` on a file the user hand-edited | `DIFFERS` counts TEMPLATE lines (new template vs `.template-baseline/`), never the user's tailoring. Port that template change onto the live file with Edit; never replace the file with the staged copy. Conflicting section -> ask before replacing it |
+| `upgrade` says `NO BASELINE` | The install predates `.template-baseline/`, so the printed count is a live-vs-template diff that INCLUDES Phase 3 tailoring — do not treat it as a template delta. Review the staged copy by hand, port only what the template really changed, then promote `.upgrade-staging/.template` to the baseline (command printed by the script) |
+| `upgrade` says `MISSING -> restored (NEEDS PHASE 3)` | The restored file is a RAW template with unresolved BLOCK placeholders. Run Phase 3 on it BEFORE Phase 4 — going straight to `validate` fails on those placeholders |
 | Target `.claude/` not writable | STOP — ask the user to run from the repo root |
 
 ---
@@ -413,8 +458,10 @@ Recap of the canonical shape the emitted SKILL.md implements (full text in `refe
 - `references/intent-guard.md.template` — the anti-drift agent (asked vs delivered), emitted to `.claude/agents/intent-guard.md` create-or-reuse.
 - `references/report-template.md` — emitted merged-report layout.
 - `references/{python,java-kotlin,typescript-react,go}.md` — per-stack reference docs (one is emitted).
-- `scripts/generate.sh` — `scan` / `emit` / `emit-agent` / `validate` (validate also enforces the domain-expert
-  requirement; `emit-agent` is the shared intent-guard writer used standalone by `/brewcode:teams`).
+- `scripts/generate.sh` — `scan` / `emit` / `emit-agent` / `upgrade` / `validate` (validate also enforces the
+  domain-expert requirement; `emit-agent` is the shared intent-guard writer used standalone by `/brewcode:teams`;
+  `upgrade` refreshes a live installation without destroying its self-synced edits, diffing the NEW template
+  against the pristine `.template-baseline/` copies `emit` saved).
 
 <!--
 SKILL METADATA — brewcode:superreview (GENERATOR)
@@ -432,11 +479,9 @@ The emitted skill carries TWO orthogonal axes: MODE = what to review (FULL_PROJE
 LAST_COMMITS), DEPTH = how hard (QUICK default = intent + gates, 1 spawn | EXTENDED = the full expert fan-out).
 DEPTH is inferred semantically from the user's prompt — there is deliberately NO flag and no CLI token.
 
-Re-run triggers:
-- New/renamed agent in target .claude/agents/  -> re-emit to refresh routing
-- New rule/convention file                      -> re-emit to refresh pointers
-- Stack change / new source group               -> re-emit
-- Tracker / branch convention changed           -> re-emit to refresh the scope baseline block
-- Task files gain/lose the `## Scope` id+status -> re-emit to refresh the baseline block (D5 + the id walk)
-- New always-shared surface                     -> re-emit (or Edit references/scope.md section 2)
+Re-run triggers (an INSTALLED skill is refreshed with `upgrade`, never re-emitted — its Phase 4b SELF-SYNC already
+corrects the roster, dead gates, the scope baseline and shared surfaces in place on every EXTENDED run):
+- New rule/convention file, stack change, new source group -> upgrade (pointers, PATHSPEC, group map)
+- Tracker / branch convention changed, task files gain or lose the `## Scope` id+status -> upgrade (baseline block)
+- Template itself moved (this generator was updated)       -> upgrade (ports the delta, keeps self-synced edits)
 -->

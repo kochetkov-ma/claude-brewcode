@@ -347,6 +347,7 @@ description: |
 ```markdown
 ## Scope Fit   <!-- code-writing AGs only -->
 Build for the actual scale and the problems that exist today; !=imagined load, !=speculative abstraction (EX: 10-user app !=hardened against lock contention). After finishing, one pass: can this be simpler -- fewer files, less config, less indirection?
+Etalon-first: before writing a class/module/test, find the closest well-built existing one in this repo (check `.claude/convention/*` first) and take its principles. ADDITIVE to conventions/rules/docs, !=a replacement.
 
 ## Output Discipline
 Before returning, spend one step on what the MAIN SESSION needs, and return only that: verdict/result + `file:line` pointers. Bulk material (long logs, full diffs, dumps, long reports) -> file under `.claude/reports/<YYYYMMDD-HHMMSS>_<name>/`; return the PATH, lazily, !=the content. AGs that dump everything burn the main session's context.
@@ -442,7 +443,7 @@ No `Context:` line, no `assistant:` response -- `<commentary>` is the selection 
 - [ ] Project-specific knowledge included (stack, conventions, cmds)
 - [ ] Checklist (DoD) present at end of SP
 - [ ] `## Output Discipline` block present (every AG)
-- [ ] `## Scope Fit` block present iff the AG writes code/scripts/SQL/schemas/infra
+- [ ] `## Scope Fit` block present iff the AG writes code/scripts/SQL/schemas/infra — incl. its etalon-first line
 - [ ] READ-ONLY AGs have no Write/Edit TLs
 - [ ] No CD rules duplicated in AG body (already injected)
 - [ ] Unique name in scope (no conflict with existing AGs)

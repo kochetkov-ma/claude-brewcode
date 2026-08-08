@@ -65,6 +65,9 @@ Every spawn prompt MUST carry, explicitly:
   CONSUMER - who or what uses the result next, and the shape it must fit.
   DONE     - acceptance criteria + the exact report shape you want back.
 A bare one-line task is never enough.
+Every code/test brief MUST make the agent find the closest well-built counterpart
+in the repo and follow its principles - IN ADDITION to conventions/rules/docs,
+never instead.
 
 Scan ALL available agents; summon only genuine experts - one best-match per task.
 Autonomy: finish the job, don't stop halfway, don't ask where you can decide.
@@ -81,7 +84,7 @@ Your single line becomes: the full Manager contract (above) + your original requ
 
 <Steps>
   <li><div><strong>Bounded units, not one giant agent</strong><p>One subagent = one deliverable, roughly 5 files and 10 steps. Anything bigger is split into N tasks fanned out in ONE message. A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target.</p></div></li>
-  <li><div><strong>Six-field brief on every spawn</strong><p>Each spawn prompt carries GOAL, ROLE, SCOPE, CONTEXT, CONSUMER, DONE. CONTEXT is trimmed per agent -- never dump everything. A bare one-line task is never enough.</p></div></li>
+  <li><div><strong>Six-field brief on every spawn</strong><p>Each spawn prompt carries GOAL, ROLE, SCOPE, CONTEXT, CONSUMER, DONE. CONTEXT is trimmed per agent -- never dump everything. A bare one-line task is never enough. Every code/test brief must also send the agent to find the closest well-built counterpart in the repo and follow its principles -- additive to conventions/rules/docs, never instead.</p></div></li>
   <li><div><strong>One simplification task at the end</strong><p>Once ALL code is written -- not per piece -- the Manager files one recommended final task: simplify the whole written code and strip over-engineering. It is delegated like any other task, never done by hand.</p></div></li>
 </Steps>
 
@@ -100,14 +103,16 @@ Your single line becomes: the full Manager contract (above) + your original requ
 
 | Codeword | Means | What it does |
 |----------|-------|-------------|
-| `++m` | Manager | Manager + delegation for the current task -- Claude orchestrates, never codes by hand; splits work into bounded units and briefs every spawn with GOAL / ROLE / SCOPE / CONTEXT / CONSUMER / DONE |
+| `++m` | Manager | Manager + delegation for the current task -- Claude orchestrates, never codes by hand; splits work into bounded units and briefs every spawn with GOAL / ROLE / SCOPE / CONTEXT / CONSUMER / DONE; every code/test brief also orders the agent to find the closest well-built counterpart in the repo and follow its principles -- additive to conventions/rules/docs, never instead |
 | `++rr` | Regression Review | Regression review with double-check -- after each significant phase, run a review focused on no regression + project standard + correctness; before the review proper the code goes through a simplification pass (over-engineered? simpler?); two-phase (review → double-check → fix); mandatory final cross-review at task end |
 | `++r` | Review | Review with double-check -- after each significant change, run a two-phase multi-agent review (review → double-check → fix), preceded by a simplification pass over the code; codeword-only, no ambient injection or wall state change |
-| `++a` | Architecture | Architecture-first pass before coding -- delegate a design that fits the existing project architecture, patterns and rules; robust, scalable, and simple (no over-engineering); reuse existing patterns first, keep clean seams. Independent group, combines with `++m`/`++rr`/`++r`; same block in normal and plan mode (in plan mode it is written into the plan). |
+| `++a` | Architecture | Architecture-first pass before coding -- delegate a design that fits the existing project architecture, patterns and rules; robust, scalable, and simple (no over-engineering); find the closest well-built counterpart in the repo, take its principles, reuse its patterns/classes -- additive to conventions/rules/docs, never instead; keep clean seams. Independent group, combines with `++m`/`++rr`/`++r`; same block in normal and plan mode (in plan mode it is written into the plan). |
 
 Detection order: within the review group, `++rr` is tested before `++r` (longest-prefix first). `++m` is matched as a standalone token; in plan mode it auto-adds the plan addon. `++a` is its own independent group and can combine with either.
 
 Put the codeword anywhere: start, middle, or end of your message. Everything else is passed through unchanged.
+
+The same find-the-closest-counterpart rule is also injected into generated agents by `/brewcode:teams` and `/brewcode:agents`, gated to agents whose domain writes code, scripts, SQL, schemas, or infra -- see [Teams](/brewcode/skills/teams/) and [Agents](/brewcode/skills/agents/).
 
 ---
 

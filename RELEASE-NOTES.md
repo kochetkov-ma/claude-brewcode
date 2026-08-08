@@ -2,6 +2,53 @@
 
 ---
 
+## v4.10.0 (2026-08-08)
+
+> Docs: [superreview](https://doc-claude.brewcode.app/brewcode/skills/superreview/) | [teams](https://doc-claude.brewcode.app/brewcode/skills/teams/) | [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [agents](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [task-board-init](https://doc-claude.brewcode.app/brewtools/skills/task-board-init/) | [manager](https://doc-claude.brewcode.app/brewtools/skills/manager/) | [prompt-injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/) | [memory-sync-init](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-init/)
+
+### brewcode
+
+#### Removed
+- **`/brewcode:spec` deleted.** The plugin-level spec skill is gone; the project-generated `/task-spec` emitted by `/brewtools:task-board-init` replaces it and is strictly better — it knows the board, the task ids and the domain agent roster. Everything worth keeping was ported (see brewtools below). `brewcode/docs/flow.md` went with it — the file documented nothing else
+
+#### Added
+- **`superreview upgrade`:** a preserve-hand-edits re-generation path. `emit` now refuses on a live install (exit 1, `already installed`) instead of silently overwriting; `SUPERREVIEW_FORCE=1` is the destructive override. `upgrade` stages a fresh emit into `.claude/skills/superreview/.upgrade-staging/`, writes no live file, and reports per asset `IDENTICAL | DIFFERS (n template line(s)) | MISSING -> restored (NEEDS PHASE 3)`. `emit` now also saves pristine templates to `.claude/skills/superreview/.template-baseline/`, so `upgrade` diffs the genuine old->new **template** delta rather than flagging normal project tailoring as a difference; an install predating the baseline reports `NO BASELINE - full diff, tailoring included`. Both directories carry a `.gitignore` containing `*` and produce no git noise
+- **`superreview` emitted `Phase 4b - SELF-SYNC`:** after a review completes, the emitted skill corrects itself from data it already has in context — routing-table roster refresh, gate repair, scope baseline, shared-surface append. `EXTENDED` depth only, coordinator only, never inside a subagent. Gate repair fires only when a gate reported `not run` **and** a `command -v` re-test proves the binary is genuinely absent, so a missing toolchain no longer gets misfiled as a missing gate. Non-growth is measured, not asserted: before/after `wc -l` with a printed delta. A carve-out separates facts (correctable) from scope decisions (never rewritten without user instruction). Re-tailoring domain experts and adding drift rows to `intent-guard.md` are printed proposals, never auto-writes
+- **Etalon-first in generated agents:** `/brewcode:teams` and `/brewcode:e2e` agents whose domain writes code, scripts, SQL, schemas or infra now carry — before writing a class, module or test, find the closest well-built existing one in the repo (checking `.claude/convention/*` first) and take its principles, **ADDITIVE to conventions/rules/docs, never a replacement**. Gated exactly like the Scope Fit block, so review-only and docs-only agents do not receive it. `brewcode:agent-creator` emits the same line under the same condition
+- **`/brewcode:skills` and `/brewcode:agents` auto-sync:** after a `create` or `improve` completes, the existing `sync` engine is dispatched scoped to the newly written artifact only — no full-roster sweep, no second specialist spawn. The coordinator applies the verdicts itself; the non-growth prime directive still holds. Reports `sync: no drift` when clean
+
+### brewtools
+
+#### Added
+- **`task-board-init` session progress:** `.claude/features/PROGRESS.md` is created at init in both `SPEC_MODE` states — `Updated`, `In flight`, `Moved since last update`, `Blocked`, `Next`. It tracks the **session's** progress against the board, not the tasks themselves. The injection mechanism is the auto-loaded `.claude/rules/tasks.md` (scoped to `.claude/features/**`), not a hook: in plan mode any plan touching a task must carry an explicit final step to update it. The `task-tracker` agent no longer only creates tasks — it rewrites the five fields from the board on every run, recreating the file if absent
+- **`task-board-init` gate `G5`, close-time spec staleness:** when a task closes, the tracker reuses the two spec documents gate `G2` already has open and reconciles the task's `## Scope` `in` ids against the spec's `## Scope coverage`. A `draft` status or an uncovered/partial id emits `SPEC STALE: <ID> …` plus `NEXT: run /task-spec <ID> refresh`. Report-only: it never spawns, never writes a spec document, never touches `## Scope coverage`, never blocks the close. When the board's `progress` count reaches zero it emits `NEXT: run /brewtools:task-board-init <path> upgrade` — only on boards that already carry the spec layer, since `upgrade` forces `SPEC_MODE=on`
+- **Generated `/task-spec`, everything worth keeping from the deleted `/brewcode:spec`:** a clarify pass **before** research with a fixed Scope / Constraints / Edge-cases question table, whose answers are injected into every architect spawn as already-settled context; a size advisory that proposes splitting but defers the split to `task-tracker`, which owns the board; a `-n` / `--noask` non-interactive flag suppressing exactly three interactive points (clarify pass, open-questions batch, review escalation) and explicitly **not** the ambiguous-task-id or missing-`## Scope` stops, which fail loud; a bounded self-review fix loop — find, independently verify, then fix-and-re-review while blockers or majors remain, capped at 3 iterations then escalated to the user; a structured final report block replacing the old prose summary; a four-link agent-resolution chain (team > project > plugin > system) reading `.claude/teams/team.md`, with re-delegation on refusal capped at 2 retries; and `Original requirements` (verbatim) plus `User Q&A` sections in the emitted spec template
+- **Etalon-first in `++m`, plan-mode `++m` and `++a`:** every spawn brief that writes code or tests must make the agent find the closest well-built counterpart in the repo and follow its principles — **in addition to conventions/rules/docs, never instead**. The three copies of the sentence are byte-identical by construction
+
+#### Fixed
+- **`task-board-init upgrade` no longer double-inserts:** the spec layer and the session-progress layer are now two independent MARK/insert sets. Previously a board that already had the spec layer but lacked `PROGRESS.md` failed the combined marker check and re-inserted every already-present spec block. A fresh init and an upgrade now converge on the same final state, verified for all three starting states
+- **`--noask` scope was overstated:** it claimed to suppress every question while two blocking stops still asked
+- **`think-short` prompt lost a rule:** the etalon rewrite had dropped "check existing **libraries** for the needed functionality", so third-party reuse stopped being prompted. Restored at zero net lines. `think-short` also now states that the prompt is copied at install time, so an existing install needs a re-run to pick up prompt changes
+- **`++a` had no additive clause** — the architect directive stated the etalon rule without "additive to conventions/rules/docs", the exact misreading the rule exists to prevent
+
+### brewdoc
+
+#### Removed
+- **`/brewdoc:memory` deleted,** superseded by `/brewdoc:memory-sync-init`, which generates a project-local `memory-sync` skill instead of syncing memory from inside the plugin
+
+#### Fixed
+- **`brewdoc/docs/commands.md` documented 2 of 6 skills** — `docsync`, `guide`, `md-to-pdf` and `publish` were missing entirely
+
+### docs
+
+#### Fixed
+- **A skill that no longer exists was still fully documented:** the `/brewdoc:memory` page, its navigation entry, its rows in the brewdoc skills table and overview, and four cross-reference cards pointing at it
+- **Wrong counts across the suite:** brewcode was published as 9 skills / 10 agents / 9 hooks (actual 8 / 5 / 2), brewtools as 11 skills (actual 12), brewdoc as 7 skills at version 4.2.4 (actual 6 at the current version). Corrected in the root README, all four plugin READMEs, `CLAUDE.md`, `brewcode/docs/file-tree.md`, and the getting-started, quickstart, faq, overview and per-plugin skills pages
+- **Two skills were missing from their own rosters:** `brewcode:semble` from four lists, `brewtools:agent-router` from the brewtools skills table (which claimed 12 rows and had 11)
+- **`brewdoc:guide` killer-flow topic** still taught `spec -> /brewcode:plan -> /brewcode:start`; `plan` and `start` were removed long ago. Rewritten around the real flow
+
+---
+
 ## v4.9.0 (2026-08-08)
 
 > Docs: [superreview](https://doc-claude.brewcode.app/brewcode/skills/superreview/) | [teams](https://doc-claude.brewcode.app/brewcode/skills/teams/) | [task-board-init](https://doc-claude.brewcode.app/brewtools/skills/task-board-init/) | [memory-sync-init](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-init/)

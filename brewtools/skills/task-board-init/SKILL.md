@@ -21,18 +21,22 @@ Generator. Run from the MAIN conversation in (or pointed at) a TARGET repo. Depl
 | Curator agent | `.claude/agents/task-tracker.md` | brewpage `task-tracker.md` |
 | Dashboard skill | `.claude/skills/task-board/SKILL.md` | yasna `task-board` SKILL |
 | Paths-scoped rule | `.claude/rules/tasks.md` | brewpage `tasks.md` |
-| Board + control files | `.claude/features/{board,TRACKER,TASK_TEMPLATE,INDEX}.md` + `{backlog,todo,progress,closed,specs}/` | brewpage `.claude/features/**` |
+| Board + control files | `.claude/features/{board,PROGRESS,TRACKER,TASK_TEMPLATE,INDEX}.md` + `{backlog,todo,progress,closed,specs}/` | brewpage `.claude/features/**` |
 | Spec skill (SPEC_MODE only) | `.claude/skills/task-spec/SKILL.md` | `references/08-task-spec-skill.md` |
 | Spec template (SPEC_MODE only) | `.claude/features/specs/SPEC_TEMPLATE.md` | `references/09-spec-templates.md` |
 | Design template (SPEC_MODE only) | `.claude/features/specs/DESIGN_TEMPLATE.md` | `references/09-spec-templates.md` |
 
 > **SPEC_MODE** (confirmed in P1) gates the three rows above AND every spec-related addition inside the other emitted artifacts. `SPEC_MODE=off` -> nothing spec-related is emitted and every artifact is byte-identical to the pre-spec-layer generator.
 
+> **`PROGRESS.md` is UNGATED** -- the session-progress artifact and every site that references it belong to BOTH modes' baseline. `SPEC_MODE` never removes them; byte-identity above means identical to the pre-spec-layer generator *plus* those sites. Each reference's own header enumerates its ungated sites (`02`, `03`, `04`, `05`) -- read it there, !=count from here.
+
 This skill ORCHESTRATES. It does not hand-do the bulk analysis or the doc sweep -- it spawns subagents (Task) for those passes and integrates their output. All emitted artifacts are PARAMETRIZED from Step 1 findings; templates live in `references/`.
 
 > **Spawn from MAIN only.** This skill is inline (no `context`), so its Task spawns are first-level. Do not nest.
 
 > **Read reference templates** with the `Read` tool using `${CLAUDE_SKILL_DIR}/references/<file>` to load them into context.
+
+> **Fence rule -- GLOBAL, every emit on every path (P2, P3, P3.5, P4a-b, and `PU`'s U3/U4 drift-ADD).** When writing any generated file, unescape its inner code fences (`\`\`\`` -> ```` ``` ````) so the emitted file has valid fences. Stated once here; the reference templates !=repeat it.
 
 ## Delegation
 
@@ -261,7 +265,7 @@ Two `_ON`/`_OFF` pairs exist: `{{SPEC_BRD_FEATURES_*}}` (02, board section-6 lin
 > `{{SPEC_INVARIANTS}}` lives in `03` ONLY -- the `02` copy was cut. Names are FILE-SCOPED: resolve every gated token against its owner's header, never across files.
 > Refs 01, 06, 07, 08, 09, 10 declare NO gated placeholders. `08` and `09` are gated at WHOLE-FILE granularity (emitted only when `SPEC_MODE=on`); the file is the gate, not a token. A `{{TOKEN}}` in `10` is prose, not a placeholder.
 
-> Gated surfaces by reference: `02` spec triage + checklist + description triggers + board cols/section-6; `03` SPECS view + add/move steps + invariant + description triggers + add-row col; `04` spec rules 13-20 + `spec:` FM field; `05` TRACKER section 10 + `spec:` FM line + `## Scope` block + board `spec` column + Feature-specs header + INDEX rows + lifecycle close gate.
+> Gated surfaces by reference: `02` spec triage + checklist + description triggers + board cols/section-6; `03` SPECS view + add/move steps + invariant + description triggers + add-row col; `04` spec rules 13-22 + `spec:` FM field; `05` TRACKER section 10 + `spec:` FM line + `## Scope` block + board `spec` column + Feature-specs header + INDEX rows + lifecycle close gate.
 
 ---
 
@@ -285,8 +289,6 @@ Read file: `${CLAUDE_SKILL_DIR}/references/03-task-board-skill.md`
 
 Substitute placeholders, then `Write` to `TARGET/.claude/skills/task-board/SKILL.md`. The template mirrors the yasna etalon: on-demand dashboard with flows view / add / move / backlog / groom, delegating non-trivial / bulk passes to the `task-tracker` agent.
 
-> When writing the generated file, unescape any inner code fences (`\`\`\`` -> ```` ``` ````) so the emitted file has valid fences.
-
 ---
 
 ## P3.5: Generate `task-spec` skill  (SPEC_MODE only)
@@ -298,8 +300,6 @@ Load the skill template:
 Read file: `${CLAUDE_SKILL_DIR}/references/08-task-spec-skill.md`
 
 Substitute placeholders (`{{DOMAIN_AGENTS}}`, `{{ARCHITECT_AGENT}}`, `{{DOMAINS}}`, `{{LANG}}`, `{{REPO_NAME}}`, plus whatever the reference header declares), then `Write` to `TARGET/.claude/skills/task-spec/SKILL.md`.
-
-> When writing the generated file, unescape any inner code fences (`\`\`\`` -> ```` ``` ````) so the emitted file has valid fences.
 
 The emitted skill is the spec + design authoring flow: resolve id -> read task + existing specs -> parallel domain research -> **parallel domain-architect design fan-out** -> synthesize design -> synthesize spec -> AskUserQuestion on open questions -> parallel domain-expert review -> coverage gate -> write docs + update task FM and the board row.
 
@@ -335,7 +335,7 @@ F="$TARGET/.claude/features"
 mkdir -p "$F"/{backlog,todo,progress,closed,specs} && echo "OK scaffold" || echo "FAIL scaffold"
 ```
 
-Then `Write` each control file from `05-features-templates.md` (placeholders substituted): `board.md`, `TRACKER.md`, `TASK_TEMPLATE.md`, `INDEX.md`, `backlog/README.md`.
+Then `Write` each control file from `05-features-templates.md` (placeholders substituted): `board.md`, `PROGRESS.md`, `TRACKER.md`, `TASK_TEMPLATE.md`, `INDEX.md`, `backlog/README.md`. `PROGRESS.md` is UNGATED -- written in both `SPEC_MODE` states, at init, so the session has a progress surface before the first task exists.
 
 **If `SPEC_MODE=on`**, additionally load:
 
@@ -347,8 +347,6 @@ Substitute placeholders and `Write` both documents into the `specs/` dir already
 |-----------------------------|----------|
 | `SPEC_TEMPLATE` | `TARGET/.claude/features/specs/SPEC_TEMPLATE.md` |
 | `DESIGN_TEMPLATE` | `TARGET/.claude/features/specs/DESIGN_TEMPLATE.md` |
-
-> Same fence rule as P3/P3.5: unescape inner code fences on write.
 
 > If `SPEC_MODE=off`, write neither. `specs/` stays an empty dir, exactly as before.
 
@@ -373,8 +371,8 @@ Follow it to spawn sweep subagents IN PARALLEL over the `DOCS` inventory from St
 TARGET="<absolute path resolved in P0>"
 test -n "$TARGET" && test -d "$TARGET" || { echo "MISS TARGET unresolved -- re-resolve per P0"; exit 1; }
 for p in .claude/agents/task-tracker.md .claude/skills/task-board/SKILL.md .claude/rules/tasks.md \
-  .claude/features/board.md .claude/features/TRACKER.md .claude/features/TASK_TEMPLATE.md \
-  .claude/features/INDEX.md .claude/features/backlog/README.md; do
+  .claude/features/board.md .claude/features/PROGRESS.md .claude/features/TRACKER.md \
+  .claude/features/TASK_TEMPLATE.md .claude/features/INDEX.md .claude/features/backlog/README.md; do
   test -f "$TARGET/$p" && echo "OK  $p" || echo "MISS $p"
 done
 for d in backlog todo progress closed specs; do
@@ -408,7 +406,7 @@ test -z "$LEFT" && echo "OK  no leftover placeholders" || { echo "MISS leftover 
 > Any `MISS` -> re-emit the missing artifact (or re-substitute the leftover placeholder) before finishing.
 
 Report to the user:
-- the 8 paths created (+ 5 folders); `SPEC_MODE=on` adds 3 more
+- the 9 paths created (+ 5 folders); `SPEC_MODE=on` adds 3 more
 - DOMAINS, EXCLUSIONS, REL_STYLE, LANG used
 - **`SPEC_MODE`** (`on`/`off`) and, when `on`, the `{{DOMAIN_AGENTS}}` table actually baked into the emitted `task-spec` skill (agent | domains | specialty) plus `ARCHITECT_AGENT`
 - **`AGENT_GAPS`** -- every domain with NO owning agent, which therefore falls back to the built-in `Plan`. Always print this, even when empty (`AGENT_GAPS: none`). A hidden gap is a silently weaker design phase. Non-empty -> suggest `/brewcode:agents` to author the missing domain agents, then re-run `/brewtools:task-board-init <path> upgrade`

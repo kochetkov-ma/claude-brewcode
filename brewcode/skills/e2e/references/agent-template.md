@@ -45,6 +45,8 @@ Before returning results:
 4. Include "Self-Check: PASS" or list of self-corrections in output
 
 ## Domain Instructions
+**Etalon-first:** before writing a test/page object, find the closest well-built existing one in this repo and take its principles. ADDITIVE to e2e-rules.md and project conventions, !=a replacement.
+
 {Domain-specific instructions -- filled by agent-creator}
 
 ## Colleagues

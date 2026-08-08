@@ -4,9 +4,9 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 4.9.0 |
-| Skills | 9 |
-| Agents | 10 |
+| Version | 4.10.0 |
+| Skills | 8 |
+| Agents | 5 |
 | Hooks | 2 |
 | Model | opus |
 
@@ -45,7 +45,7 @@ Update anytime with `/brewtools:plugin-update`.
 
 Brewcode turns single Claude Code sessions into an infinite task pipeline. Claude Code's native auto-compaction preserves the working context, and brewcode hooks re-inject plugin state on each session so the task runs to completion regardless of how many compaction cycles occur.
 
-Skills cover project analysis, specification creation through parallel research agents, code review, convention analysis, and project rules management. Specialized agents handle implementation, testing, review, architecture, and coordination.
+Skills cover semantic code search, multi-agent review, convention analysis, e2e orchestration, project rules, and meta-tooling for skills, agents and teams. The shipped agents are specialists only -- implementation, testing, review and architecture roles are generated per project by `/brewcode:teams`.
 
 ## Installation
 
@@ -65,14 +65,13 @@ claude --plugin-dir ./brewcode
 ## Quick Start
 
 ```bash
-/brewcode:spec "Implement JWT authorization"  # Research + specification
+/brewcode:superreview   # Generate a project-tailored deep-review skill
 ```
 
 ## Skills
 
 | Skill | Purpose |
 |-------|---------|
-| [`/brewcode:spec`](skills/spec/README.md) | Research codebase + user dialog -> SPEC.md |
 | [`/brewcode:superreview`](skills/superreview/README.md) | Generate a project-tailored deep-review skill: `QUICK` (default, `intent-guard` + mechanical gates) or `EXTENDED` (adds domain-expert fan-out, scope discipline, adversarial validation) depth, read from your prompt |
 | [`/brewcode:teams`](skills/teams/README.md) | Dynamic agent team creation, management, and performance tracking -- every team also gets a fixed review-only `intent-guard` member (not counted in team size) |
 | [`/brewcode:convention`](skills/convention/README.md) | Extract etalon classes, patterns, architecture into convention docs and rules |
@@ -114,7 +113,7 @@ brewcode/
 |   +-- hooks.json                     # Event bindings
 |   +-- lib/utils.mjs                  # Shared utilities
 +-- agents/                            # 5 agents
-+-- skills/                            # 9 skills
++-- skills/                            # 8 skills
 +-- templates/                         # Rule templates
 ```
 
@@ -123,13 +122,13 @@ brewcode/
 | Hook | Event | Purpose |
 |------|-------|---------|
 | session-start | SessionStart | Version-check, plan-symlink, permission_mode tag |
-| forced-eval | UserPromptSubmit | Manager-role + split-discipline reminder, 2 lines via additionalContext (9K bound) |
+| forced-eval | UserPromptSubmit | Manager-role + split-discipline + branch reminder, 3 lines via additionalContext (9K bound) |
 
 ## Task Structure
 
 ```
 .claude/tasks/{TS}_{NAME}_task/
-  SPEC.md             # Specification (research results from /brewcode:spec)
+  SPEC.md             # Specification (research results from the project /task-spec skill)
 ```
 
 ## Documentation

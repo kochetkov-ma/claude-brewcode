@@ -116,8 +116,17 @@ Walk EVERY `in` id and score it — the id list is the delivery checklist, along
 | `--` (`out` row) | the block was implemented anyway | NOT a delivery row — it is an explicitly excluded surface: shape **2** (`unsanctioned-feature`), section 3 |
 
 Every scope-id finding cites the id as `<TASK-ID>#S<n>` in `description`. `S<n>` is a scope-id CITATION, never a
-rule id: there is no `scope#S*` rule — the emittable spaces stay `scope#1`..`scope#6` (pass A) and `scope#D*` /
-`scope#C*` (pass B), so no domain owner can invent one.
+rule id: **`scope#S*` is RESERVED and emittable by NOBODY** — the emittable spaces stay `scope#1`..`scope#6`
+(pass A) and `scope#D*` / `scope#C*` (pass B). The reservation is stated in every prompt that carries a `rule`
+field, so an agent reading its own contract will not invent one; nothing rejects it mechanically, so the Phase 3
+validator drops a `scope#S*` row on sight.
+
+**Where a `scope#D5` finding is ANCHORED.** `file` + `lineStart`/`lineEnd` are MANDATORY on every finding, and the
+task board is INPUT, never a review subject — it may NOT be a finding location. So a D5 anchors on the
+**IMPLEMENTING code** for the id: the hunk that proves the block landed (the most representative one when several).
+The stale row is cited in the finding TEXT — `<TASK-ID>#S<n>` plus the `status` cell verbatim — never in `file`.
+A `done` id with NOTHING implementing it has no such anchor and is not a D5 at all: it is D1/D2, whose PROOF OF
+ABSENCE rules below govern both its evidence and where it points. !=guess a location, !=point at the board.
 
 **Task file with no `## Scope` table -> this whole subsection is a silent no-op:** score the acceptance criteria as
 before, report no id tally, raise nothing. An absent board is the `PR: none` case (section 4b) — SKIP, invent nothing.

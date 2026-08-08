@@ -79,6 +79,7 @@ Every spawn prompt MUST carry:
 | DONE | acceptance criteria + the exact report shape you want back |
 
 A bare one-line task is never enough. See C8 for the canonical spawn shape.
+Every code/test brief MUST make the agent find the closest well-built counterpart in the repo and follow its principles - IN ADDITION to conventions/rules/docs, never instead.
 
 ---
 

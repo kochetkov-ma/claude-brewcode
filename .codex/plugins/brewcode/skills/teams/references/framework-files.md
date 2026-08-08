@@ -20,11 +20,19 @@ team.md uses apply_patch. trace.jsonl is **append-only** via Bash (`trace-ops.sh
 
 ## Agents
 
-| Agent | Domain | Mission | Status | Updated |
-|-------|--------|---------|--------|---------|
+| Agent | Domain | Mission | Status | Updated | Kind |
+|-------|--------|---------|--------|---------|------|
+| intent-guard | -- | Anti-drift check: what was ASKED vs what was DELIVERED | active | {DATE} | review-only |
 ```
 
+> The `Agent` column MUST stay first (`verify-team.sh` reads it as field 2 of the row). `Kind` is a
+> trailing column -- append any future column at the END, never before `Agent`.
+
 Status values: `active`, `inactive`, `updating`, `removed`
+Kind values: `domain` (default, may be left blank), `review-only`
+
+`intent-guard` is a mandatory row in EVERY team: review-only, shared with `$brewcode:superreview`,
+outside the `Agents | {N}` domain count, and never removed by UPDATE/CLEANUP.
 
 ---
 

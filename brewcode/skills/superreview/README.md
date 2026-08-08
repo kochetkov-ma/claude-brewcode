@@ -133,7 +133,8 @@ After generation, run the emitted skill in that project. Depth comes from how yo
 | 1.5 | AskUserQuestion for genuinely ambiguous params (scope baseline + tracker, shared surfaces, arbiter agent, domain mapping, dominant stack, gate commands) |
 | 1.6 | **Domain experts (mandatory)** — classify the roster, find uncovered groups, create the missing experts via `brewcode:agent-creator`, re-scan |
 | 1.6b | **`intent-guard` (create-or-reuse)** — no gate, no question: the shared writer creates `.claude/agents/intent-guard.md` when absent (or unusable), REUSES it untouched when present |
-| 2 | Export scalar placeholders -> `generate.sh emit` (sed substitution, copies templates + chosen stack ref + `scope.md` + the intent agent) |
+| 2 | Export scalar placeholders -> `generate.sh emit` (sed substitution, copies templates + chosen stack ref + `scope.md` + the intent agent, and saves the pristine templates to `.template-baseline/`). **Refuses on a live installation** — see [Re-generation](#re-generation-upgrade-not-re-emit) |
+| 2b | Already installed -> `generate.sh upgrade` instead: no live file is written, the template delta is reported and ported by hand |
 | 3 | AI fills BLOCK placeholders (agent table, rule pointers, file-group map, gate commands, focus table; scope baseline block, precedence table, ownership probe, shared surfaces; the intent agent's project-specific blocks — skipped on REUSE) via Edit |
 | 4 | `generate.sh validate` — fails on a leftover setup-time `{PLACEHOLDER}` (including inside the emitted intent agent), an unresolved template header, an unknown agent name, a missing or unusable emitted asset, or **zero wired domain experts** (an agent counts only when it appears in a routing row). Warns `UNTAILORED` while the intent agent still carries seeded generic blocks |
 | 5 | Report what was written |
@@ -143,7 +144,7 @@ After generation, run the emitted skill in that project. Depth comes from how yo
 | File | Role |
 |------|------|
 | `SKILL.md` | The generator orchestrator |
-| `scripts/generate.sh` | `scan` / `emit` / `emit-agent` / `validate` |
+| `scripts/generate.sh` | `scan` / `emit` / `emit-agent` / `upgrade` / `validate` |
 | `references/SKILL.md.template` | The emitted SKILL.md (placeholder slots) |
 | `references/agent-prompt.md` | Emitted runtime expert-selection procedure + domain-owner prompt contract |
 | `references/scope.md.template` | Emitted scope-discipline reference (baseline, ownership, taxonomy, delivery, closeout, gate) |
@@ -151,11 +152,27 @@ After generation, run the emitted skill in that project. Depth comes from how yo
 | `references/report-template.md` | Emitted merged-report layout |
 | `references/python.md` · `java-kotlin.md` · `typescript-react.md` · `go.md` | Per-stack reference docs (one emitted) |
 
+## Re-generation: `upgrade`, not re-emit
+
+The emitted skill **self-modifies** — its Phase 4b SELF-SYNC corrects its own routing table, dead gates, scope
+baseline and shared surfaces in place on every `EXTENDED` run, on top of the Phase 3 tailoring it was born with.
+So `emit` **refuses** on a live installation (exit 1, `❌ superreview is already installed`), and that refusal is
+the expected path, not a failure: it writes nothing and prints no `INTENT_GUARD:` status line.
+
+| Command | Effect |
+|---------|--------|
+| `generate.sh upgrade` | The supported refresh. Writes NO live file. Stages a fresh emit under `.upgrade-staging/` and reports, per asset, the **new template vs the pristine `.template-baseline/` copy `emit` saved** — so `DIFFERS (<n> template line(s))` counts real template changes and never your tailoring. A deleted asset is restored RAW and labelled `MISSING -> restored (NEEDS PHASE 3)`. The generator ports each delta into the live file with targeted `Edit` calls, then promotes `.upgrade-staging/.template` to the new baseline |
+| `SUPERREVIEW_FORCE=1 generate.sh emit` | Conscious destructive override: overwrites the live installation and **loses** every tailored + self-synced edit. Only on an explicit request for a clean regeneration |
+
+`.template-baseline/` and `.upgrade-staging/` each carry a `.gitignore` of `*`, so neither shows up in your
+commits. An installation emitted before baselines existed reports `NO BASELINE - full diff, tailoring included`
+and falls back to a live-vs-template diff, which must be reviewed by hand.
+
 ## Re-run triggers
 
-Regenerate when: a project agent is added/renamed, a rule/convention file changes, the stack changes, a new source
-group is added, the tracker or branch convention changes, a spec/plan/policy location moves, or a new always-shared
-surface appears. Re-running re-wires the emitted skill to the current project shape — and leaves an existing
+Run `upgrade` when: a project agent is added/renamed, a rule/convention file changes, the stack changes, a new
+source group is added, the tracker or branch convention changes, a spec/plan/policy location moves, or a new
+always-shared surface appears. It re-wires the emitted skill to the current project shape — and leaves an existing
 `intent-guard.md` alone.
 
 ## Notes

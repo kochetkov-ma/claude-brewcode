@@ -32,6 +32,15 @@ const MANUAL_NATIVE_SKILLS = new Set([
   'brewtools/think-short'
 ]);
 
+// Etalon-first wording mirrored into the Codex variants. Sources of truth:
+// brewcode/skills/teams/references/agent-template.md and
+// brewtools/skills/manager/references/architect.md. Edit here only, never at the call sites.
+const ETALON_ADDITIVE = 'in addition to conventions, rules, and documentation, never instead of them';
+const ETALON_SENTENCE = `before writing a class, module, or test, find the closest well-built existing one in this repository and take its principles, ${ETALON_ADDITIVE}`;
+const ETALON_BRIEF = `find the closest well-built counterpart in the repository and follow its principles, ${ETALON_ADDITIVE}`;
+const ETALON_ARCHITECT = 'Find the closest well-built existing counterpart in the repository, take its principles, and reuse its patterns; add a new pattern only when nothing fits. This is additive to conventions, rules, and documentation, never a replacement.';
+const ETALON_TERSE = 'find the closest well-built counterpart in the repo and take its principles, in addition to conventions and docs, never instead';
+
 function readFrontmatter(source) {
   const match = source.match(/^---\n([\s\S]*?)\n---\n?/);
   if (!match) throw new Error('SKILL.md is missing YAML frontmatter');
@@ -493,14 +502,6 @@ Extracts evidence-backed project conventions from representative code and tests.
 `);
   }
 
-  if (plugin === 'brewcode' && skill === 'teams') {
-    const readme = path.join(targetDir, 'README.md');
-    const value = fs.readFileSync(readme, 'utf8')
-      .replace('When other skills (spec, convention, superreview, e2e) spawn agents', 'When other skills (convention, superreview, e2e) spawn agents')
-      .replace(/^\| \`\$brewcode:spec\` \|.*\n/gm, '');
-    fs.writeFileSync(readme, value, 'utf8');
-  }
-
   if (plugin === 'brewdoc' && skill === 'md-to-pdf') {
     writeFile(path.join(targetDir, 'scripts', 'check_deps.sh'), `#!/usr/bin/env bash
 set -euo pipefail
@@ -600,7 +601,7 @@ The user's ++M codeword authorizes foreground delegation for this task. Orchestr
 2. Use update_plan for the session execution plan. If the project requires a durable board, synchronize it through its task-tracker workflow before implementation and again at completion.
 3. Map dependencies and split only independent, bounded workstreams. One agent = one bounded unit (one deliverable, ~5 files, ~10 steps); anything larger is split into N tasks and fanned out. A big task handed to one agent is an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target. Parallelize useful read-only or non-overlapping work; keep dependent work sequential. Widest fan-out: a dependency must be a REAL data handoff, else parallel. Size a unit to ~<=20 min of agent work; longer -> split again.
 4. When delegation is useful, select the matching project expert from .codex/agents before built-in or global agents. If the collaboration surface cannot select a custom type, name the expert explicitly and include its developer instructions in the brief without claiming the type was instantiated.
-5. Use spawn_agent, send_message, followup_task, and wait_agent for foreground collaboration. Give each agent the goal it serves, concrete scope with explicit out-of-bounds, the context it needs (what is already done and what runs in parallel, trimmed to that agent), who consumes its result and in what shape, expected evidence, allowed mutation surface, and validation duties.
+5. Use spawn_agent, send_message, followup_task, and wait_agent for foreground collaboration. Give each agent the goal it serves, concrete scope with explicit out-of-bounds, the context it needs (what is already done and what runs in parallel, trimmed to that agent), who consumes its result and in what shape, expected evidence, allowed mutation surface, and validation duties. Every code or test brief must make the agent ${ETALON_BRIEF}.
 6. Review every delegated result before using it. Reconcile conflicts against authoritative project files and run validation proportional to risk.
 7. Once ALL code is written (not per-piece), file one recommended final task: simplify the whole written code and strip over-engineering. Delegate it like any other task.
 8. Lead the final handoff with the outcome, changed surfaces, exact validation, and any genuine remaining risk.
@@ -618,7 +619,7 @@ The future implementation prompt must begin with Step 0: re-assume [ROLE: MANAGE
     const prompts = {
       'full.md': managerFull,
       'planmode.md': managerPlan,
-      'architect.md': 'Start from system boundaries, data flow, ownership, failure modes, and compatibility constraints before choosing an implementation.',
+      'architect.md': `Start from system boundaries, data flow, ownership, failure modes, and compatibility constraints before choosing an implementation. ${ETALON_ARCHITECT}`,
       'review-regression.md': 'Before the review proper, pass the code for simplification: over-engineered? simpler? Then review for behavioral regressions first. Compare old and new contracts, exercise negative paths, and require evidence for compatibility claims.',
       'review-double.md': 'Before the review proper, pass the code for simplification: over-engineered? simpler? Then perform two passes: first correctness and safety, then maintainability, clarity, and missing validation. Keep findings evidence-based.'
     };
@@ -640,7 +641,7 @@ The future implementation prompt must begin with Step 0: re-assume [ROLE: MANAGE
 Be terse. Lead with results. Use ASCII unless the requested artifact requires other text.
 Think short: keep internal reasoning minimal and do not narrate exploration.
 Search before opening large files. Prefer focused edits and parallel read-only checks.
-Plan the complete edit set, then execute it. Reuse existing code before adding new abstractions.
+Plan the complete edit set, then execute it. Before writing anything new, ${ETALON_TERSE}.
 After writing code, make one pass for simplification: if it can be simpler, simplify it.
 Keep comments only for non-obvious decisions and public contracts.
 `);
@@ -810,7 +811,7 @@ Create a TOML file under \`.codex/agents/\` with \`name\`, \`description\`, and 
 
 Every generated agent states output discipline: return only what the main session needs, a verdict or result plus \`file:line\` pointers; write bulk material such as long logs, full diffs, or long reports to a file under \`.codex/reports/<YYYYMMDD-HHMMSS>_<name>/\` and return the path instead of the content.
 
-Agents whose domain writes code, scripts, SQL, schemas, infrastructure, or configuration also state scope fit: build for the scale and problems that exist today, not imagined load or speculative abstraction, and make one simplification pass after finishing. Omit that paragraph for research, documentation, and review-only agents.
+Agents whose domain writes code, scripts, SQL, schemas, infrastructure, or configuration also state scope fit: build for the scale and problems that exist today, not imagined load or speculative abstraction, and make one simplification pass after finishing. Those agents also state etalon-first: ${ETALON_SENTENCE}. Omit those paragraphs for research, documentation, and review-only agents.
 `);
   }
 
@@ -886,7 +887,7 @@ function generateAgent(plugin, agentName) {
   const { values, body } = readFrontmatter(source);
   const description = transformText(values.description || `${agentName} specialist.`, { agent: true });
   const nativeInstructions = {
-    'agent-creator': `Create or improve Codex custom-agent TOMLs. Use one standalone file per agent under project .codex/agents/ or personal ~/.codex/agents/. Require name, description, and developer_instructions. Use only supported optional configuration keys. Validate TOML with Python tomllib and keep the role narrow. Emit an output-discipline paragraph into every generated agent (return a verdict plus file:line pointers; write bulk material to a file and return its path), and a scope-fit paragraph only for agents that write code, scripts, SQL, schemas, infrastructure, or configuration. Report agent paths and a validation verdict, not full agent bodies.`,
+    'agent-creator': `Create or improve Codex custom-agent TOMLs. Use one standalone file per agent under project .codex/agents/ or personal ~/.codex/agents/. Require name, description, and developer_instructions. Use only supported optional configuration keys. Validate TOML with Python tomllib and keep the role narrow. Emit an output-discipline paragraph into every generated agent (return a verdict plus file:line pointers; write bulk material to a file and return its path), and, only for agents that write code, scripts, SQL, schemas, infrastructure, or configuration, a scope-fit paragraph plus an etalon-first line (${ETALON_SENTENCE}). Report agent paths and a validation verdict, not full agent bodies.`,
     'bash-expert': `Write and review portable shell automation. Default to strict mode, quote expansions, avoid destructive operations, keep output deterministic, and make failure states explicit. Validate syntax with bash -n and use shellcheck when available. Never expose secrets or mutate systems outside the requested scope.`,
     'hook-creator': `Create or improve Codex hooks using current official schemas. Use hooks.json or config.toml at an active .codex layer. Command handlers use one command string, timeout in seconds, and JSON stdin and stdout. Respect matcher limitations, test malformed input and timeout behavior, and explain review through /hooks after definitions change.`,
     'skill-creator': `Create or improve Codex skills. SKILL.md frontmatter contains only name and description and uses lowercase hyphen-case folders. Keep instructions concise, add agents/openai.yaml when appropriate, and colocate reusable scripts, references, and assets. Run the Codex skill quick validator and forward-test without production side effects.`,

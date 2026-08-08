@@ -67,7 +67,7 @@ Verdicts: `STALE`, `DEAD`, `DUPLICATE`, `OBVIOUS`, `DRIFT`, `MISSING`.
 
 Report table: `File | Lines before -> after | Fixed | Deleted | Added | Key change`, plus corrected facts, additions with source, skipped files, and total delta.
 
-Targets: `.claude/skills/*/SKILL.md`, `*/skills/*/SKILL.md` and each skill's `references/*.md` (repo-local only). Disabled skills (`_SKILL.md`) are skipped and reported. `/brewdoc:memory` applies the same non-growth sync to memory files, CLAUDE.md, rules and conventions; its `full` mode also syncs the agent and skill rosters in-place — use this skill when you want a roster on its own.
+Targets: `.claude/skills/*/SKILL.md`, `*/skills/*/SKILL.md` and each skill's `references/*.md` (repo-local only). Disabled skills (`_SKILL.md`) are skipped and reported. `/brewdoc:memory-sync-init` emits a project-local `/memory-sync` skill that applies the same non-growth sync to CLAUDE.md, rules, conventions, agents and skills together — use this skill when you want a roster on its own.
 
 ## Create / Improve Parameters
 

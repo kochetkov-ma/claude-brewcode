@@ -1,97 +1,85 @@
-# Topic 3: The Killer Flow — Spec, Plan, Start
+# Topic 3: The Killer Flow — Board, Spec, Review
 
 Domain: Core Workflow
 
 ## Section 1: The Pipeline
 
-The core workflow chains 3 skills into one continuous pipeline:
+The core workflow is not a single skill — it is a generated, project-local toolchain:
 
-1. `/brewcode:spec "description"` — Creates SPEC.md through research + user Q&A
-2. `/brewcode:plan` — Creates PLAN.md with phases, dependencies, agent assignments
-3. `/brewcode:start` — Executes with infinite context handoff
+1. `/brewtools:task-board-init` — analyzes the repo and deploys a file-based Kanban into
+   `.claude/features/`, plus a `task-tracker` agent, a `/task-board` skill, and (when the spec
+   layer is enabled) a project-tailored `/task-spec` skill.
+2. `/task-spec <ID>` — the generated skill. Researches the codebase, fans out to domain
+   architects for system design, asks the open questions, and writes
+   `specs/<ID>-spec.md` + `specs/<ID>-design.md`.
+3. Implementation — delegated to project agents, one bounded unit per subagent.
+4. `/superreview` — the project-local deep-review skill written by `/brewcode:superreview`.
 
 ```
 User describes task
-  -> /brewcode:spec analyzes codebase, asks clarifying questions
-    -> Produces SPEC.md in .claude/tasks/{ts}_{name}_task/
-      -> /brewcode:plan reads SPEC, creates phases
-        -> Produces PLAN.md + phases/*.md
-          -> /brewcode:start executes phase by phase
-            -> Automatic handoff when context fills
-              -> Continues from where it left off
+  -> /brewtools:task-board-init deploys the board (once per repo)
+    -> task lands in .claude/features/{backlog,todo}/
+      -> /task-spec <ID> researches, designs, asks, writes the spec + design
+        -> project agents implement, board row moves to progress/
+          -> /superreview runs the quorum review
+            -> task-tracker closes the task and updates board.md
 ```
-
-Each skill feeds the next. SPEC defines WHAT. PLAN defines HOW. START does the work.
 
 Reference `Diagram: Killer Flow Pipeline` from ascii-diagrams.md.
 
-## Section 2: Infinite Context — How Handoff Works
+Everything after step 1 is generated INTO your repo. It is yours: editable, committed, and
+tailored to your stack and your agents.
 
-The "infinite" part: tasks survive context window limits automatically.
+## Section 2: Why It Survives Context Limits
+
+The board is files on disk, not conversation state. That is the whole trick.
 
 | Step | What happens |
 |------|-------------|
-| 1 | Agent executes phases from PLAN.md |
-| 2 | Context window fills (~80% capacity) |
-| 3 | PreCompact hook triggers automatically |
-| 4 | KNOWLEDGE.jsonl saved, handoff notes written |
-| 5 | Auto-compact clears context |
-| 6 | Agent re-reads PLAN.md + KNOWLEDGE |
-| 7 | Execution resumes from where it left off |
+| 1 | `task-tracker` runs in isolation at the start of any task and reports the board state |
+| 2 | Work is split into bounded units, each spawned as its own subagent |
+| 3 | A subagent's context is its own — it never inherits the main session's history |
+| 4 | Results land in the task file and the board row, not in the transcript |
+| 5 | Context compaction loses the conversation, never the board |
+| 6 | The next session re-reads `.claude/features/board.md` and continues |
 
-No user intervention needed. The hook chain drives it all:
+The `forced-eval` hook re-states the manager role and the split rule on every prompt, so the
+main session keeps delegating instead of drifting into one long unobservable run.
 
-```
-session-start -> forced-eval
-```
+## Section 3: The Rule File
 
-Pre-compact writes handoff state. Session-start reads it back. The loop is seamless.
+`/brewtools:task-board-init` writes `.claude/rules/tasks.md`, scoped by frontmatter to
+`.claude/features/**`. Rules load automatically when a matching file is in context — no
+`@`-import, no CLAUDE.md edit.
 
-## Section 3: Knowledge Persistence
-
-KNOWLEDGE.jsonl stores learnings across sessions and compactions. It never gets lost.
-
-Format:
-```jsonl
-{"ts":"2026-01-26T14:00:00","t":"❌","txt":"Avoid SELECT *","src":"sql_expert"}
-{"ts":"2026-01-26T14:05:00","t":"✅","txt":"Use parameterized queries","src":"db_agent"}
-{"ts":"2026-01-26T14:10:00","t":"ℹ️","txt":"DB uses PostgreSQL 16","src":"setup"}
-```
-
-Priority levels (highest to lowest):
-
-| Marker | Meaning | Example |
-|--------|---------|---------|
-| ❌ | Avoid this pattern | "Never use raw SQL concatenation" |
-| ✅ | Do this instead | "Always use ORM query builder" |
-| ℹ️ | Informational fact | "Project uses Spring Boot 3.2" |
-
-Knowledge persists across sessions. Agents learn from previous sessions without re-discovering.
+Its key rule: **at the START of any task, run the `task-tracker` agent in isolation** — a
+spawned subagent, never inlined. That keeps the board read cheap and the main context clean.
 
 ## Section 4: Task Directory Structure
 
-Every task gets its own directory under `.claude/tasks/`:
+Everything lives under `.claude/features/`:
 
 ```
-.claude/tasks/{ts}_{name}_task/
-  SPEC.md              # What to build
-  PLAN.md              # How to build it
-  KNOWLEDGE.jsonl      # Learnings
-  phases/              # Phase instructions
-    P1_setup.md
-    P1V_verify.md
-    ...
-  artifacts/           # Agent outputs
-    FINAL.md
-    {P}-{N}{T}/
-  backup/              # Pre-execution backups
-  .lock                # Execution lock
+.claude/features/
+  board.md              # the Kanban: counts, task rows, feature specs
+  TRACKER.md            # conventions the task-tracker agent follows
+  TASK_TEMPLATE.md      # id convention + frontmatter shape
+  INDEX.md              # domain / scope index
+  backlog/              # not yet scheduled
+  todo/                 # scheduled, not started
+  progress/             # in flight
+  closed/               # done
+  specs/
+    SPEC_TEMPLATE.md
+    DESIGN_TEMPLATE.md
+    <ID>-spec.md        # what to build (from /task-spec)
+    <ID>-design.md      # how to build it (domain-architect fan-out)
 ```
 
 Reference `Diagram: Project Directory` from ascii-diagrams.md.
 
 Key files:
-- **SPEC.md** — Created by `/brewcode:spec`, never modified after
-- **PLAN.md** — Created by `/brewcode:plan`, tracks phase status
-- **KNOWLEDGE.jsonl** — Grows during execution, compacted at handoff
-- **.lock** — Prevents concurrent execution of the same task
+- **board.md** — single source of truth for status; rows are never reordered, ids never reused
+- **`<ID>`-spec.md** — written by `/task-spec`, the WHAT
+- **`<ID>`-design.md** — written by the domain-architect fan-out, the HOW
+- **`.claude/rules/tasks.md`** — path-scoped rule that wires the whole thing together

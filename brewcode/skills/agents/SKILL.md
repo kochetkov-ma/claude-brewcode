@@ -105,6 +105,12 @@ A bare one-line task is never enough.
   (two-phase: review -> double-check findings -> report).
 - `sync` -> read `SYNC_REF` and follow it end to end (S1 scope -> S6 report).
   It replaces Steps 5-6 for this mode.
+- **After `create` / `improve` returns** -> run that same `SYNC_REF` SCOPED TO THE WRITTEN AGENT FILE ONLY:
+  S3 ground truth -> S5 verdicts -> S6 row folded into the Step 6 output. Never a full-roster sweep, never a
+  second `SPECIALIST` spawn — **YOU, the coordinator, apply every S5 verdict yourself with targeted `Edit` calls**
+  (S4's fan-out is the only step that edits, and it is skipped here, so without this nothing would be corrected).
+  Non-growth holds — the new file ends `<=` where the specialist left it.
+  Nothing to correct -> say `sync: no drift` in one line.
 
 ## Step 5 — Real status (NOT a flat list)
 

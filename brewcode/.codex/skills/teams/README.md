@@ -1,6 +1,6 @@
 # Teams
 
-Create and manage dynamic teams of domain-specific agents with a tracking framework. Analyzes your project, proposes 5-20 specialized agents, creates them, and sets up performance tracking.
+Create and manage dynamic teams of domain-specific agents with a tracking framework. Analyzes your project, proposes 5-20 specialized agents, creates them, and sets up performance tracking. Every team also gets one fixed review-only member, `intent-guard`.
 
 ## Quick Start
 
@@ -61,8 +61,9 @@ After `$brewcode:teams create my-team`:
 ```
 .codex/
   agents/
-    agent-one.md          # Created agents (5-20 depending on variant)
+    agent-one.md          # Domain agents (5-20 depending on variant)
     agent-two.md
+    intent-guard.md       # Fixed review-only member, every team, not counted
   teams/
     my-team/
       team.md             # Roster: agent list, domains, missions, status
@@ -91,12 +92,16 @@ $brewcode:teams create my-project
     |
     v
 [C2] Team Proposal ------ 3 variants + user confirmation
+                          (+ intent-guard, fixed, not counted)
     |
     v
-[C2.5] Model Selection -- high-reasoning model / balanced model / fast model / mixed
+[C2.5] Model Selection -- high-reasoning model / balanced model / fast model / mixed (domain agents only)
     |
     v
 [C3] Agent Creation ----- agent-creator x N (batches of 3-4)
+    |
+    v
+[C3-IG] intent-guard ---- generate.sh emit-agent (create or reuse), then adapt if created
     |
     v
 [C4] Framework Setup ---- team.md + trace.jsonl + verification
@@ -133,6 +138,35 @@ After agent creation, a quality pipeline validates the team:
 
 > Skip with `--skip-review`. Run separately: `$brewcode:teams update <name> --review`
 
+> `intent-guard` is never used as a reviewer in this pipeline, and it is judged by different criteria than domain agents: placeholders resolved, template header stripped, frontmatter untouched (short review-only description, read-only tools). "Missing domain sections" is a false positive for it.
+
+## intent-guard (always in the team)
+
+Every team gets `intent-guard` in addition to its domain agents. It is an **anti-drift check**: it compares what was **ASKED** (the original request, ticket, spec, plan, project policy) against what was **DELIVERED**, and reports the delta.
+
+| Property | Value |
+|----------|-------|
+| Counted in the 5 / 10-12 / 15-20 roster? | No -- it is outside the domain-agent count and cannot be dropped |
+| Tools | Read-only (`Read`, `Glob`, `Grep`, `Bash`). Never edits, builds, or runs tests |
+| Model | `balanced model`, fixed by its template -- not affected by the C2.5 model choice |
+| Invocation | Explicit, by name, during review only -- never during development, never an implementation owner |
+| Source | Emitted by `skills/superreview/scripts/generate.sh emit-agent` from the shared template -- the single writer of this file, used by both skills |
+| Output | Verdict `ALIGNED` / `MINOR DRIFT` / `MAJOR DRIFT` plus <=10 findings, each with ASKED / SOURCE+tier / DELIVERED evidence / severity / minimal correction |
+
+**Single writer (idempotent):** `teams` never authors this file. It runs
+`superreview/scripts/generate.sh emit-agent`, which creates it from the shared template or reuses an
+existing one and prints `INTENT_GUARD: CREATED|REUSE <path>`. On `REUSE` -- typically because
+`$brewcode:superreview` ran first -- the file is left exactly as is and only the `team.md` roster row is
+added. On `CREATE`, one `agent-creator` pass tailors the three seeded generic blocks (project
+invariants, drift examples, evidence commands) and touches nothing else -- frontmatter and header stay
+as emitted. Both skills therefore converge on one shared file produced by one pipeline, never two
+variants.
+
+`intent-guard` is also excluded from `update` and `cleanup` agent pruning (enforced in the cleanup flow
+itself, Step 3, including a refusal if it is named explicitly): it does not write trace entries, so zero
+activity is its normal state, not a reason to delete it. Teams created before `intent-guard` existed are
+not broken by this -- `verify-team.sh` only WARNs, with the command to add it.
+
 ## sub-agent task Acceptance Protocol
 
 Each agent follows a 3-step self-selection before accepting a task:
@@ -159,6 +193,8 @@ When other skills (convention, superreview, e2e) spawn agents, they check for te
 | 4 | System agent | `Explore`, `Plan`, `general-purpose` |
 
 > If a team agent refuses a task (sub-agent task Acceptance Protocol), the skill re-delegates to the next priority level. Max 2 retries before falling back to system agents.
+
+> `intent-guard` is outside this resolution chain -- it is never selected as an implementation or review owner by domain fit. It runs only when a review flow invokes it explicitly by name.
 
 ## Related Skills
 

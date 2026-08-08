@@ -133,6 +133,8 @@ Every spawn prompt carries six fields. A bare one-line task is never enough:
 
 In C3 that means each `agent-creator` owns exactly `.claude/agents/{name}.md`, is told which colleagues its batch-mates are building (stay off their domains, do not duplicate their triggers), and knows its description line lands in the `team.md` roster row. In C8 the fixer is told the finding is already verified by 2/3 reviewers plus the C7 double-check — do not re-litigate it — and that C9 will re-verify the same file for regressions.
 
+Every code/test spawn brief in this skill also carries the etalon-first instruction verbatim: find the closest well-built counterpart in the repo and follow its principles, in addition to conventions, rules and docs — never instead of them.
+
 ## Intent guard
 
 <Callout type="tip">
@@ -169,9 +171,10 @@ The agent template carries two blocks, so every DOMAIN member of the team inheri
 |-----------|-----------|--------------|
 | **Output discipline** | Every team agent, unconditionally | On completion, spend one step on what the MAIN SESSION needs and return only that: verdict / result + `file:line` pointers. Bulk material — long logs, full diffs, dumps, long reports — is written under `.claude/reports/<YYYYMMDD-HHMMSS>_<name>/` and only the path is returned. Agents that dump everything burn the main session's context. |
 | **Scope Fit** | Only agents whose domain writes code, scripts, SQL, schemas or infra | Build for the actual scale and the problems that exist today, not imagined load or speculative abstraction — a 10-user app does not need hardening against DB lock contention. After finishing, one pass: can this be simpler — fewer files, less config, less indirection? |
+| **Etalon-first** | Same gating as Scope Fit — code/script/SQL/schema/infra domains only | Before writing a class, module or test, find the closest well-built existing one in this repo (`.claude/convention/*` checked first) and take its principles — additive to conventions, rules and docs, never a replacement |
 | **Anti-drift review** | `intent-guard` only — not built from these two blocks | Compares ASKED vs DELIVERED at review time, explicit invocation only — see [Intent guard](#intent-guard) above |
 
-`agent-creator` deletes the Scope Fit block for research, docs, and review-only domain members; output discipline stays in all team agents, including `intent-guard`, which carries it via its own template rather than this one. This matters most on a 12-agent roster, where a single verbose member can cost more context than the rest of the batch combined.
+`agent-creator` deletes the Scope Fit and Etalon-first pair together for research, docs, and review-only domain members; output discipline stays in all team agents, including `intent-guard`, which carries it via its own template rather than this one. This matters most on a 12-agent roster, where a single verbose member can cost more context than the rest of the batch combined.
 
 <details>
 <summary>Internals</summary>
@@ -211,7 +214,7 @@ Every generated agent contains a self-selection protocol. When a task arrives, t
 
 **Integration with core skills**
 
-Team agents are preferred by `/brewcode:spec` when matching domains are found. Priority: team agent → project agent → plugin agent.
+Team agents are preferred by any skill that spawns domain work when matching domains are found. Priority: team agent → project agent → plugin agent.
 
 </details>
 

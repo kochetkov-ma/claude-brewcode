@@ -127,10 +127,40 @@ The same six-field brief ships into your repo. The generated `.claude/skills/tas
 | Dashboard skill | `.claude/skills/task-board/SKILL.md` | On-demand `/task-board` — view / add / move / backlog / groom; delegates bulk to the agent. |
 | Paths-scoped rule | `.claude/rules/tasks.md` | Lifecycle, id convention, required FM, grooming — plus "run `task-tracker` at the start of any task". Auto-loads on `.claude/features/**`. |
 | Board file | `.claude/features/board.md` | The Kanban board — counts and task table, authored by the doc sweep. |
+| Session progress | `.claude/features/PROGRESS.md` | SESSION progress against the board — five fields, overwritten in place. Ungated: written in both `SPEC_MODE` states, before any task exists. |
 | Control files | `.claude/features/{TRACKER,TASK_TEMPLATE,INDEX}.md` + `backlog/README.md` | Tracker log, task template, index, backlog guide. |
 | Folders | `.claude/features/{backlog,todo,progress,closed,specs}/` | Status folders — folder name = task status. |
 | Spec skill (`SPEC_MODE`) | `.claude/skills/task-spec/SKILL.md` | On-demand `/task-spec <ID>` — authors the product + design spec via a domain-architect fan-out. |
 | Spec templates (`SPEC_MODE`) | `.claude/features/specs/{SPEC_TEMPLATE,DESIGN_TEMPLATE}.md` | Fixed section skeletons for the two spec documents. |
+
+## Session progress (`PROGRESS.md`)
+
+<Callout type="tip">
+Ungated — written in both `SPEC_MODE` states, at init, before any task exists. `board.md` owns the task LIST + status; `PROGRESS.md` owns what the SESSION did about it. It is not a second board — no task table, no per-task detail (that stays in the task's `## Notes`).
+</Callout>
+
+Five fields, overwritten in place, never appended:
+
+| Field | Holds |
+|-------|-------|
+| `Updated` | ISO date of the last rewrite |
+| `In flight` | task ids being worked right now |
+| `Moved since last update` | `<ID>: todo -> progress`, one line each |
+| `Blocked` | `<ID>: what blocks it / who unblocks it` |
+| `Next` | the single next action for this session |
+
+The injection mechanism is a rule, not a hook: `.claude/rules/tasks.md` carries `paths: [".claude/features/**"]` frontmatter, and `PROGRESS.md` lives under that same glob — the rule auto-loads whenever a task touches the board, and rule 8 forces exactly that at the start of every task. `task-board-init` installs no hooks for this.
+
+Four rules bind it, in `.claude/rules/tasks.md` under "Session progress":
+
+| # | Rule |
+|---|------|
+| P1 | Always exists — created at board init. Missing → recreate it from `board.md` before anything else. |
+| P2 | The main session keeps it current: refresh it in the same change as any transition. |
+| P3 | **Plan mode:** a plan touching any task must carry an explicit final step — `update .claude/features/PROGRESS.md`. An otherwise-complete plan without that step is incomplete. |
+| P4 | `task-tracker` watches it: every run rewrites the five fields from `board.md` + the task files, and reports staleness in one line. It cannot run a skill for you — act on its `NEXT:` line yourself. |
+
+**Board drain.** When the `progress` count on the board reaches zero, `task-tracker` appends `NEXT: run /brewtools:task-board-init <path> upgrade` — but only when this repo has no `.claude/skills/task-spec/` yet. A board that already has the spec layer stays silent, because `upgrade` forces `SPEC_MODE=on` and would otherwise push the spec layer onto a repo that deliberately declined it.
 
 ## Spec + design layer (`SPEC_MODE`)
 
@@ -158,13 +188,58 @@ Three ways in, all supported by the emitted skill:
 | Plain prose | model-invoked — "architect this task", "write the spec", "продумай архитектуру". No skill name needed |
 | Redirect | `task-tracker` ends its report with `NEXT: run /task-spec <ID> (spec required: <reason>)` when a task needs a spec and has none — an agent cannot call a skill for the main session, so it hands the call back to the user |
 
-Design docs are never written by a single generalist: for every domain the task touches, `task-spec` spawns at least one agent — the repo's own domain agent first, then any architecture-capable project agent, then the built-in `Plan` — all in one message, naming which one was used per domain in the design's `## Evidence`. Domains with no owning agent are reported as gaps at install time and again in the design.
+**Agent-resolution chain.** Design docs are never written by a single generalist. For every domain the task touches, `task-spec` walks a 4-link chain, all spawned in one message: team agent (`.claude/teams/team.md` roster, if present) → the repo's own project domain agent → any architecture-capable project agent → the built-in `Plan`. Whichever was used is named per domain in the design's `## Evidence`; domains with no owning agent are reported as gaps at install time and again in the design. An agent that refuses the task re-delegates to the colleague it names, capped at 2 retries.
 
 | Gate | Rule |
 |------|------|
-| Coverage | every `in`-scope id must appear as `covered` in both coverage tables; any `partial`/`uncovered` keeps the spec at `status: draft` |
-| Close | `progress -> closed` is blocked while any open question is `blocking: yes` — override only with an explicit `SPEC WAIVER: <reason>` line in the task's `## Notes` |
-| Sync | editing the task's `## Scope` invalidates both specs back to `draft`; run `/task-spec <ID> refresh` |
+| Coverage (G1) | every `in`-scope id must appear as `covered` in both coverage tables; any `partial`/`uncovered` keeps the spec at `status: draft` |
+| Close (G2) | `progress -> closed` is blocked while any open question is `blocking: yes` — override only with an explicit `SPEC WAIVER: <reason>` line in the task's `## Notes` |
+| Sync (G3) | editing the task's `## Scope` invalidates both specs back to `draft`; run `/task-spec <ID> refresh` |
+| Staleness (G5, close-time) | REPORT-ONLY — reuses the same two docs G2 already opened, zero extra reads. Frontmatter `status:` still `draft`, or an `in` scope id just marked `done` that is `uncovered`/`partial` in `## Scope coverage`, emits `SPEC STALE: <ID> ...` plus one `NEXT: run /task-spec <ID> refresh`. Never blocks the close, never writes a spec doc, never touches `## Scope coverage`. |
+
+### Clarify before research
+
+Before the domain-architect fan-out, `task-spec` runs one `AskUserQuestion` pass (3-5 questions, max 4 per call) over a fixed three-category table, then treats every answer as settled input for every later architect spawn:
+
+| # | Category | Asks about |
+|---|----------|-------------|
+| 1 | Scope | what is in/out, which modules are affected |
+| 2 | Constraints | required libraries, backward compat, API contracts |
+| 3 | Edge cases | concurrent access, empty/null inputs, error recovery |
+
+Answers land verbatim in the spec's new `## Original requirements` (the task's ask, unedited) and `## User Q&A` (this exchange) — never re-opened later.
+
+### Size advisory
+
+More than 3 touched domains, or more than 12 `in` scope ids, makes the final report propose a split — addressed to `task-tracker`, not acted on here. `task-spec` never splits, creates or moves tasks itself; the board owns that.
+
+### `-n` / `--noask` — non-interactive mode
+
+Suppresses exactly three interactive points, each recording `Skipped (--noask mode)`:
+
+| Suppressed | Phase |
+|------------|-------|
+| Clarify pass | P0.7 |
+| Open-questions batch | P5 |
+| Review escalation | P6-C |
+
+Blocking questions stay `blocking: yes` regardless. `--noask` does **not** suppress the two ground-truth stops — an ambiguous task id (several WIP candidates) and a missing `## Scope` still `AskUserQuestion` and fail loud rather than guess.
+
+### Bounded self-review fix loop
+
+After both docs are drafted:
+
+| Phase | Does |
+|-------|------|
+| A — find | one adversarial reviewer per touched domain, all in one message; reports findings only, no edits |
+| B — verify | every finding re-checked against docs and code: confirmed / rejected / duplicate |
+| C — fix | while a confirmed blocker or major remains: apply fixes, re-run A for the affected domains, re-verify per B — capped at 3 iterations |
+
+Survivors after 3 rounds go to the user via `AskUserQuestion` (accept as-is, or convert to a blocking `Q#`/`AQ#`); under `--noask` every survivor converts to a blocking question automatically.
+
+### Structured final report
+
+P7 replaces the old prose summary with a fixed block: mode, touched domains → agent used per domain, docs written + `spec:` value, decisions / open-questions counts, G1 coverage verdict, review counts (findings / confirmed / rejected / fix iterations / survivors), size advisory, and what synced in the same change.
 
 ## Upgrading an existing board
 
@@ -174,14 +249,21 @@ Design docs are never written by a single generalist: for every domain the task 
 /brewtools:task-board-init /path/to/repo upgrade
 ```
 
-Upgrade is additive-only:
+Upgrade installs two INDEPENDENT layers, gated file by file — not one all-or-nothing pass:
 
-- New files (the `task-spec` skill, the two spec templates) are written outright.
+| Layer | Gate | Adds |
+|-------|------|------|
+| Spec layer | `SPEC_MODE`, forced `on` by `upgrade` | `task-spec` skill, `SPEC_TEMPLATE.md`, `DESIGN_TEMPLATE.md`, the spec-related sites inside existing files |
+| Session-progress layer | ungated | `PROGRESS.md` + every site that references it (rule section, `TRACKER.md`, `task-board` skill, `INDEX.md`) |
+
+A repo that already has the spec layer but predates `PROGRESS.md` (an older run of this generator) gains only the session-progress layer on `upgrade` — no duplicate spec-layer insertion. A fresh init and an `upgrade` on that same repo converge on the identical final state either way.
+
+- New files (the `task-spec` skill, the two spec templates, `PROGRESS.md`) are written outright.
 - Every edit to an existing file is shown as a diff and gated behind `AskUserQuestion`, file by file. Declined means no edit.
 - Task ids, scope ids and board rows are never renumbered, reordered or deleted. The one allowed `board.md` row edit is appending a `spec` cell (`--` until `task-spec` fills it) to each existing progress/todo row.
 - Backfilling `spec:` on existing tasks is opt-in and off by default; when accepted the value is `pending` or `none` — never `full`.
 - Recovers domains / exclusions / language from the already-deployed artifacts instead of re-running analysis, and re-runs only the domain-agent inventory.
-- Re-running `upgrade` on an already-upgraded repo is a no-op: `upgrade: no-op, spec layer already installed`.
+- Re-running `upgrade` on a repo where both layers are already installed is a no-op: `upgrade: no-op, spec layer already installed`.
 
 ## Output discipline in the generated curator
 

@@ -10,7 +10,7 @@
 
 **Claude Code plugin suite** -- four plugins for development, documentation, text utility, and visual workflows.
 
-A regular Claude Code session hands a big task to one agent and loses sight of it. Brewcode splits work into bounded units, gives every spawn a six-field brief, and re-states the delegation rule on every prompt. Four plugins. 27 skills. 8 agents. 4 lifecycle hooks.
+A regular Claude Code session hands a big task to one agent and loses sight of it. Brewcode splits work into bounded units, gives every spawn a six-field brief, and re-states the delegation rule on every prompt. Four plugins. 26 skills. 8 agents. 4 lifecycle hooks.
 
 [**Full Documentation**](https://doc-claude.brewcode.app/getting-started/)
 
@@ -56,8 +56,8 @@ After all commands succeed, run `/reload-plugins`. If `/reload-plugins` is unava
 
 | Plugin | Purpose | Skills | Install |
 |--------|---------|--------|---------|
-| [brewcode](brewcode/README.md) | Infinite task execution, quorum reviews, skill/agent creation, semantic search | 9 | `claude plugin install brewcode@claude-brewcode` |
-| [brewdoc](brewdoc/README.md) | Documentation tools: docsync, memory sync, PDF conversion, publishing | 6 | `claude plugin install brewdoc@claude-brewcode` |
+| [brewcode](brewcode/README.md) | Infinite task execution, quorum reviews, skill/agent creation, semantic search | 8 | `claude plugin install brewcode@claude-brewcode` |
+| [brewdoc](brewdoc/README.md) | Documentation tools: docsync, memory-sync generation, PDF conversion, publishing | 6 | `claude plugin install brewdoc@claude-brewcode` |
 | [brewtools](brewtools/README.md) | Universal text utilities: token optimization, humanization, secrets scanning, plugin updates | 12 | `claude plugin install brewtools@claude-brewcode` |
 | [brewui](brewui/README.md) | UI/visual/creative tools (placeholder, currently empty) | 0 | `claude plugin install brewui@claude-brewcode` |
 
@@ -121,8 +121,9 @@ claude --plugin-dir ./brewcode --plugin-dir ./brewdoc --plugin-dir ./brewtools -
 ### brewcode -- infinite task execution
 
 ```bash
-/brewcode:spec "Implement JWT authorization"  # 1. Research codebase + create specification
-/brewcode:superreview                         # 2. Generate a project-tailored deep-review skill
+/brewtools:task-board-init   # 1. Deploy the task board + a project-tailored /task-spec skill
+/task-spec "Implement JWT authorization"  # 2. Research codebase + write the task spec and design
+/brewcode:superreview        # 3. Generate a project-tailored deep-review skill
 ```
 
 Skills orchestrate, agents execute. Each spawn is a bounded unit with a six-field brief, and the `forced-eval` hook re-states the manager role and the split rule on every prompt, so work stays observable across compaction cycles.
@@ -132,7 +133,7 @@ Skills orchestrate, agents execute. Each spawn is a bounded unit with a six-fiel
 ```bash
 /brewdoc:docsync                      # Track and sync stale project docs
 /brewdoc:my-claude                    # Generate Claude Code installation docs
-/brewdoc:memory                       # Memory sync: memory + CLAUDE.md (incl. nested) + rules + conventions
+/brewdoc:memory-sync-init             # Generate a project-tailored /memory-sync skill into the repo
 /brewdoc:md-to-pdf ./docs/report.md   # Convert markdown to PDF
 /brewdoc:publish "Hello world"        # Publish to brewpage.app -- returns public URL
 /brewdoc:guide                        # Interactive tutorial for the plugin suite
@@ -154,7 +155,7 @@ Placeholder plugin, currently empty. No commands yet -- coming soon.
 ## How It Works
 
 ```
-  /brewcode:spec "..." --> 5-10 parallel research agents + user Q&A --> SPEC.md
+  /task-spec "..." --> parallel research agents + user Q&A --> per-task spec + design docs
         │
         v
   project agents from .claude/agents/ --> bounded units, fanned out in ONE message
@@ -185,11 +186,10 @@ Every spawn prompt carries six fields:
 
 ## Skills Reference
 
-### Brewcode (9 skills)
+### Brewcode (8 skills)
 
 | Skill | Purpose |
 |-------|---------|
-| `/brewcode:spec` | Research codebase + user dialog -> SPEC.md |
 | `/brewcode:superreview` | Generate a project-tailored deep-review skill: `QUICK` (default, `intent-guard` + mechanical gates) or `EXTENDED` (adds domain-expert fan-out, scope discipline, adversarial validation) depth, read from your prompt |
 | `/brewcode:teams` | Create and manage dynamic teams of domain-specific agents -- every team also gets a fixed review-only `intent-guard` member (not counted in team size) |
 | `/brewcode:convention` | Extract etalon classes, patterns, architecture into convention docs |
@@ -205,7 +205,7 @@ Every spawn prompt carries six fields:
 |-------|---------|
 | `/brewdoc:docsync` | Track & sync stale project docs via hooks |
 | `/brewdoc:my-claude` | Generate Claude Code installation docs |
-| `/brewdoc:memory` | Memory sync: memory + CLAUDE.md (incl. nested) + rules + conventions; `full` adds agent/skill rosters |
+| `/brewdoc:memory-sync-init` | Generate a project-tailored `/memory-sync` skill: syncs everything auto-loaded into context (root & nested CLAUDE.md, CLAUDE.local.md, rules, conventions, AGENTS.md family, agents, skills, memory dir) against the code -- docs excluded; scopes `session` (default), `branch`, `commit <sha>`, `recent[:N]`, `all`, plus a `hard` depth (rules `paths:` precision audit + obvious-knowledge purge); non-growth, agents re-audited every run |
 | `/brewdoc:md-to-pdf` | Convert markdown to professional PDF |
 | `/brewdoc:publish` | Publish to brewpage.app -- returns public URL |
 | `/brewdoc:guide` | Interactive tutorial for the plugin suite |

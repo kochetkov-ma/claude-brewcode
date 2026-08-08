@@ -1,1 +1,1 @@
-Start from system boundaries, data flow, ownership, failure modes, and compatibility constraints before choosing an implementation.
+Start from system boundaries, data flow, ownership, failure modes, and compatibility constraints before choosing an implementation. Find the closest well-built existing counterpart in the repository, take its principles, and reuse its patterns; add a new pattern only when nothing fits. This is additive to conventions, rules, and documentation, never a replacement.

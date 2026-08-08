@@ -8,7 +8,7 @@ import { Card, CardGrid, Callout } from '../../../components/mdx';
 
 # Skills
 
-Skills (recipes) are slash commands that define *what* to do. Brewdoc includes 6 skills focused on doc-staleness tracking, memory sync, Markdown → PDF conversion, content publishing, and an interactive suite guide -- each works independently with no prior setup required.
+Skills (recipes) are slash commands that define *what* to do. Brewdoc includes 6 skills focused on doc-staleness tracking, memory-sync generation, Markdown → PDF conversion, content publishing, and an interactive suite guide -- each works independently with no prior setup required.
 
 ## Summary table
 
@@ -16,7 +16,7 @@ Skills (recipes) are slash commands that define *what* to do. Brewdoc includes 6
 |---|-------|---------|-------|---------|-----------|
 | 1 | docsync | [/brewdoc:docsync](/brewdoc/skills/docsync/) | sonnet | Track and fix stale project docs via hooks | `[status] \| [sync [--all]] \| [reread] \| [frontmatter] \| [uninstall] \| free-text` |
 | 2 | my-claude | [/brewdoc:my-claude](/brewdoc/skills/my-claude/) | opus | Generate documentation about Claude Code installation | `[ext [context]] \| [r <query>]` — no args = internal installation docs |
-| 3 | memory | [/brewdoc:memory](/brewdoc/skills/memory/) | opus | Memory sync: memory, root+nested CLAUDE.md, rules, conventions; `full` adds rosters | `<free-form prompt: emphasis only; empty = sync whole memory surface; 'full' adds agent+skill rosters>` |
+| 3 | memory-sync-init | [/brewdoc:memory-sync-init](/brewdoc/skills/memory-sync-init/) | opus | Generator: emits a project-tailored `/memory-sync` skill into the target repo — it never syncs memory itself | `[status \| init \| upgrade] [fine-tune-prompt]` — no args = `init` |
 | 4 | md-to-pdf | [/brewdoc:md-to-pdf](/brewdoc/skills/md-to-pdf/) | sonnet | Convert Markdown to PDF (reportlab / weasyprint) | `<file.md> [--engine name] ["prompt"] \| styles \| test` — no args = help |
 | 5 | publish | [/brewdoc:publish](/brewdoc/skills/publish/) | haiku | Publish text, files, or multi-file sites to brewpage.app — returns public URL | `<text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename]` |
 | 6 | guide | [/brewdoc:guide](/brewdoc/skills/guide/) | haiku | Interactive tutorial for the plugin suite | `[topic]` — no args = interactive menu |
@@ -28,8 +28,8 @@ Skills (recipes) are slash commands that define *what* to do. Brewdoc includes 6
   <Card title="my-claude" icon="clipboard" href="/brewdoc/skills/my-claude/">
     Generate Claude Code installation docs
   </Card>
-  <Card title="memory" icon="brain" href="/brewdoc/skills/memory/">
-    Syncs memory, nested CLAUDE.md, rules and conventions — delete-first, never grow; `full` also adds the agent and skill rosters.
+  <Card title="memory-sync-init" icon="brain" href="/brewdoc/skills/memory-sync-init/">
+    Generates a project-tailored `/memory-sync` skill: repo-specific batches, fact catalogue, non-growth sync, independent verify.
   </Card>
   <Card title="md-to-pdf" icon="file" href="/brewdoc/skills/md-to-pdf/">
     Markdown → PDF conversion

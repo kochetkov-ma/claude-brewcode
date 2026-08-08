@@ -9,7 +9,7 @@ Substitute `{{LANG}}`, `{{CLOSE_MARKER_SHORT}}`. Spec-layer placeholders (gated 
 
 ## Spec-layer placeholders (`SPEC_MODE` gate)
 
-When `SPEC_MODE=on`, substitute each placeholder with its expansion below. When `SPEC_MODE=off`, the emitted skill is byte-identical to the pre-spec-layer original (5 flows, 5 invariant bullets, `allowed-tools` unchanged either way):
+When `SPEC_MODE=on`, substitute each placeholder with its expansion below. When `SPEC_MODE=off`, the emitted skill is byte-identical to the pre-spec-layer original (5 flows, `allowed-tools` unchanged either way) PLUS this file's UNGATED `PROGRESS.md` sites -- the 6th invariant bullet, the layout line, VIEW steps 1-2, MOVE step 4 -- which are baseline in BOTH modes and never removed. Off-mode Invariants = 6 bullets, on-mode = 7:
 
 - **LINE kind** -- the placeholder owns its line: REMOVE the whole line, !=leave it blank.
 - **INLINE kind** -- the placeholder sits mid-line (`{{SPEC_DESC_TRIGGERS}}` inside `description:`, `{{SPEC_ADD_ROW_COL}}` inside the ADD-flow column list): delete the token itself and nothing else, no stray space. Both carry NO space before the token; the expansion supplies its own leading space.
@@ -25,7 +25,7 @@ Authoritative rules live in `TRACKER.md` section 10. These expansions mirror it;
 `{{SPEC_INVARIANTS}}` expands to 1 bullet appended to the Invariants block:
 
 ```markdown
-- **Scope change invalidates specs (G3).** Editing a task's `## Scope` -> spec `status: draft` + `/task-spec <ID> refresh`.
+- **Scope change invalidates specs (G3).** Editing a task's `## Scope` -> spec `status: draft` + `/task-spec <ID> refresh`. Editing ONLY a `status` cell !=a scope change -- it never trips G3.
 ```
 
 `{{SPEC_ADD_ROW_COL}}` expands to the board's 6th column cell:
@@ -45,7 +45,7 @@ Authoritative rules live in `TRACKER.md` section 10. These expansions mirror it;
 
 ```markdown
 5. On `todo -> progress`: set `spec:` by the ADD-flow heuristic if missing or stale. `spec: pending` -> report `NEXT: run /task-spec <ID> (spec required: <reason>)`; the move still happens. The same value goes in the board row's `spec` cell.
-6. On `-> closed`: enforce gate G2 BEFORE moving. Read BOTH docs -- `specs/<ID>-spec.md` `## Open questions` (ids `Q1..Qn`) and `specs/<ID>-design.md` `## Open architectural questions` (ids `AQ1..AQn`); a missing doc contributes nothing, it never waives the gate. If ANY row in EITHER table is `blocking: yes`, REFUSE the move and report the blocking ids (e.g. `Q1, AQ3`) instead. Move anyway ONLY if `## Notes` carries `SPEC WAIVER: <reason>`. Non-blocking questions warn, never block. Independently of G2: flip each `in` scope id's `status` to `in-progress` / `done` as that part lands, and on `-> closed` report LOUDLY every `in` id not `done` (list the ids) -- G2 is the only thing that refuses a close, status never is, and there is no waiver marker for it.
+6. On `-> closed`: enforce gate G2 BEFORE moving. Read BOTH docs -- `specs/<ID>-spec.md` `## Open questions` (ids `Q1..Qn`) and `specs/<ID>-design.md` `## Open architectural questions` (ids `AQ1..AQn`); a missing doc contributes nothing, it never waives the gate. If ANY row in EITHER table is `blocking: yes`, REFUSE the move and report the blocking ids (e.g. `Q1, AQ3`) instead. Move anyway ONLY if `## Notes` carries `SPEC WAIVER: <reason>`. Non-blocking questions warn, never block. Independently of G2: flip each `in` scope id's `status` to `in-progress` / `done` as that part lands, and on `-> closed` report LOUDLY every `in` id not `done` (list the ids) -- G2 is the only thing that refuses a close, status never is, and there is no waiver marker for it. G5, on the SAME two reads G2 just did: spec FM `status:` still `draft`, or an `in` id just marked `done` that is `uncovered`/`partial` in `## Scope coverage` -> report `SPEC STALE: <ID> ...` + ONE `NEXT: run /task-spec <ID> refresh`. Report-only -- !=write either doc, !=touch `## Scope coverage`, !=block the close.
 ```
 
 `{{SPEC_VIEW_FLOW}}` expands to a whole flow section placed after GROOM:
@@ -75,8 +75,6 @@ Authoritative rules live in `TRACKER.md` section 10. These expansions mirror it;
 4. This flow VIEWS and GATES only. Authoring or refreshing a spec routes to `/task-spec <ID>` (`design` | `refresh`). !=write spec or design content here.
 ```
 
-> When writing the generated file, unescape any inner code fences (`\`\`\`` -> ```` ``` ````) so the emitted file has valid fences.
-
 ---
 
 ```markdown
@@ -99,16 +97,17 @@ Authoritative procedure: `.claude/features/TRACKER.md`. This skill mirrors it --
 - **Ids never change.** UPPER-KEBAB, short, stable -- the filename stem and the board key.
 - **A task in `progress/` MUST have a file** (from `TASK_TEMPLATE.md`). In `todo/`/`backlog/` a file is optional (a board row alone is enough).
 - **{{LANG}} only.** Closing records {{CLOSE_MARKER_SHORT}} in `## Notes`.
+- **`PROGRESS.md` tracks the SESSION, not the tasks.** Refresh `.claude/features/PROGRESS.md` in the SAME change as any transition -- five fields: `Updated`, `In flight`, `Moved since last update`, `Blocked`, `Next`, overwritten in place. !=a second board; rules in `.claude/rules/tasks.md`.
 {{SPEC_INVARIANTS}}
 
-Layout: `board.md` (dashboard), `TRACKER.md` (procedure), `TASK_TEMPLATE.md`, `backlog/` (ungated inbox), `todo/`, `progress/`, `closed/`, `specs/`.
+Layout: `board.md` (dashboard), `PROGRESS.md` (session progress), `TRACKER.md` (procedure), `TASK_TEMPLATE.md`, `backlog/` (ungated inbox), `todo/`, `progress/`, `closed/`, `specs/`.
 
 ## Flows
 
 ### 1. VIEW
 
-1. Read `.claude/features/board.md`.
-2. Summarize: overall status (release line), counts (backlog | todo | progress | closed), current focus (1-3 lines), then the Progress (WIP) and Todo tables. Do not enumerate backlog noise.
+1. Read `.claude/features/board.md` + `PROGRESS.md`.
+2. Summarize: overall status (release line), counts (backlog | todo | progress | closed), current focus (1-3 lines), then the Progress (WIP) and Todo tables. Do not enumerate backlog noise. Close with `PROGRESS.md`'s `Blocked` / `Next` only -- `In flight` / `Moved` are already in the tables above; if its `Updated` predates the newest task `updated:`, say it is stale and rewrite it.
 
 ### 2. ADD task
 
@@ -125,7 +124,7 @@ Layout: `board.md` (dashboard), `TRACKER.md` (procedure), `TASK_TEMPLATE.md`, `b
 1. `git mv` the task file between folders. If moving `todo -> progress` and only a board row exists, author a file from `TASK_TEMPLATE.md` first (progress requires a file).
 2. Set `status:` to match the new folder; set `owner` (on pick-up); set `updated` to today.
 3. On `-> closed`: add a one-line outcome + {{CLOSE_MARKER_SHORT}} in `## Notes`.
-4. Update `board.md` in the SAME change: move the row between tables, refresh counts and current focus.
+4. Update `board.md` in the SAME change: move the row between tables, refresh counts and current focus. Refresh `PROGRESS.md`'s five fields too. On `-> closed` with the `progress` count now `0` AND no `.claude/skills/task-spec/` in this repo, add ONE line: `NEXT: run /brewtools:task-board-init <repo path> upgrade` (it retrofits the spec + design layer). Spec layer already present -> say nothing.
 {{SPEC_MOVE_STEPS}}
 
 ### 4. BACKLOG dump

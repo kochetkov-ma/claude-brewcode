@@ -183,7 +183,7 @@ Each agent follows a 3-step self-selection before accepting a task:
 
 ## Dynamic Agent Resolution
 
-When other skills (spec, convention, superreview, e2e) spawn agents, they check for team agents first:
+When other skills (convention, superreview, e2e) spawn agents, they check for team agents first:
 
 | Priority | Source | Example |
 |----------|--------|---------|
@@ -200,7 +200,6 @@ When other skills (spec, convention, superreview, e2e) spawn agents, they check 
 
 | Skill | Relationship |
 |-------|-------------|
-| `/brewcode:spec` | Create task specifications for agents to execute |
 | `/brewcode:superreview` | Generate a project-tailored deep-review skill |
 | `/brewcode:rules` | Extract team insights into project rules |
 

@@ -42,6 +42,9 @@ Every spawn prompt MUST carry, explicitly:
   CONSUMER - who or what uses the result next, and the shape it must fit.
   DONE     - acceptance criteria + the exact report shape you want back.
 A bare one-line task is never enough.
+Every code/test brief MUST make the agent find the closest well-built counterpart
+in the repo and follow its principles - IN ADDITION to conventions/rules/docs,
+never instead.
 
 Scan ALL available agents; summon only genuine experts - one best-match per task.
 Autonomy: finish the job, don't stop halfway, don't ask where you can decide.

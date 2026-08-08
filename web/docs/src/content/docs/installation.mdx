@@ -90,10 +90,10 @@ import { Card, CardGrid, Callout, Steps, Tabs, TabItem, InstallPrompt } from '..
   </li>
   <li class="step step-primary">
     <div>
-      <strong>Author a spec</strong>
+      <strong>Set up the task board</strong>
       <p>Inside a Claude Code session, run:</p>
-      <pre><a href="/brewcode/skills/spec/"><code>/brewcode:spec</code></a></pre>
-      <p>Spec runs parallel codebase research and a refinement loop to produce a SPEC.md. Follow it with <a href="/brewcode/skills/superreview/"><code>/brewcode:superreview</code></a> to generate a project-tailored deep-review skill.</p>
+      <pre><a href="/brewtools/skills/task-board-init/"><code>/brewtools:task-board-init</code></a></pre>
+      <p>It analyzes the repo and deploys a file-based Kanban plus a generated <code>/task-spec</code> skill for per-task specs. Follow it with <a href="/brewcode/skills/superreview/"><code>/brewcode:superreview</code></a> to generate a project-tailored deep-review skill.</p>
     </div>
   </li>
 </Steps>
@@ -144,10 +144,10 @@ claude plugin update brewui@claude-brewcode
 
 <CardGrid>
   <Card title="Quick Start" icon="rocket" href="/quickstart/">
-    Get started in 15 minutes: [spec](/brewcode/skills/spec/), [conventions](/brewcode/skills/convention/), [deep review](/brewcode/skills/superreview/).
+    Get started in 15 minutes: [conventions](/brewcode/skills/convention/), [task board](/brewtools/skills/task-board-init/), [deep review](/brewcode/skills/superreview/).
   </Card>
   <Card title="Brewcode Overview" icon="building" href="/brewcode/overview/">
-    Architecture, concepts, all 26 skills, 8 agents, and 4 hooks.
+    Architecture, concepts, all 8 brewcode skills, 5 agents, and 2 hooks.
   </Card>
 </CardGrid>
 

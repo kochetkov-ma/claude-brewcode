@@ -27,7 +27,6 @@ export const navigation: NavSection[] = [
         title: 'Skills',
         slug: 'brewcode/skills',
         children: [
-          { title: 'spec', slug: 'brewcode/skills/spec' },
           { title: 'superreview', slug: 'brewcode/skills/superreview' },
           { title: 'teams', slug: 'brewcode/skills/teams' },
           { title: 'convention', slug: 'brewcode/skills/convention' },
@@ -104,7 +103,6 @@ export const navigation: NavSection[] = [
         children: [
           { title: 'docsync', slug: 'brewdoc/skills/docsync' },
           { title: 'my-claude', slug: 'brewdoc/skills/my-claude' },
-          { title: 'memory', slug: 'brewdoc/skills/memory' },
           { title: 'memory-sync-init', slug: 'brewdoc/skills/memory-sync-init' },
           { title: 'md-to-pdf', slug: 'brewdoc/skills/md-to-pdf' },
           { title: 'publish', slug: 'brewdoc/skills/publish' },

@@ -51,10 +51,11 @@ Mint UPPER-KEBAB ids: <PREFIX>-<DOMAIN>-<SLUG>, domain from the allowed list. En
 After all sweep subagents return their manifests:
 
 1. `Glob` `TARGET/.codex/features/{todo,progress,closed,specs}/*.md` to get the true file set (do not trust manifests blindly -- verify on disk).
-2. Read each file's FM (`id`, `title`, `priority`, `owner`, `status`) -- delegate this read to a single `Explore` subagent if there are many files.
+2. Read each file's FM (`id`, `title`, `priority`, `owner`, `status`, `spec`) -- delegate this read to a single `Explore` subagent if there are many files. `spec` is absent in off-mode; when it is absent the cell that consumes it is the literal `--`.
 3. Rewrite `TARGET/.codex/features/board.md` (Edit/Write) from the 4b skeleton:
    - Counts: real `backlog | todo | progress | closed | specs`.
-   - Progress / Todo / Closed (recent) tables: one row per file (`id | title | prio | owner | file`).
+   - Progress / Todo tables: one row per file (`id | title | prio | owner | file`, + a 6th `spec` cell when `SPEC_MODE=on`, holding the file's `spec:` FM value or `--` when absent).
+   - Closed (recent) table: one row per file (`id | title | closed in | file`) -- 4 cells in BOTH modes, !=a `spec` cell.
    - Current focus: top 1-3 P1 items in progress/todo.
    - Backlog count: number of ungroomed `backlog/*.md` (minus `README.md`).
 4. Sanity: every file under a status folder appears as a board row; folder == its FM `status`.

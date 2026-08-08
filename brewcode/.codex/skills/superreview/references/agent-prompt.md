@@ -42,6 +42,14 @@ Selection procedure per changed-file group:
    project is missing a domain expert for that surface, which is worth fixing before the next run.
 5. Record the derived map in the report's `Agents run` line so the routing is auditable.
 
+> **`intent-guard` is OUTSIDE this procedure.** It is not a domain expert, owns no file group, and is never the
+> answer to steps 2-4 — do not pick it for a group, do not count it as an owner, and do not mark a group covered
+> because it exists. `SKILL.md` spawns it unconditionally at BOTH depths (`QUICK` and `EXTENDED`) alongside
+> whatever this procedure selects. Exclude it from the roster output before you match anything.
+
+> **Depth:** this whole procedure runs at `EXTENDED` only. At `QUICK` no domain expert is selected or spawned —
+> the run is `intent-guard` plus the mechanical gates.
+
 > Route every file to EXACTLY ONE exclusive group. Tie-breaks: `tests` wins over any path group; a row naming an
 > explicit file wins over a row with a glob. A cross-cutting arbiter is an OVERLAY (an extra pass), not a group —
 > it never takes files away from their owner.
@@ -122,7 +130,7 @@ candidate (per the Focus ordering; security only as P0).
     \"file\": \"path/to/file{SOURCE_GLOB}\",
     \"lineStart\": 42,
     \"lineEnd\": 45,
-    \"category\": \"boundary|architecture|scope-creep|reuse|over-complexity|security|logic|persistence|test-quality|pins|style\",
+    \"category\": \"boundary|architecture|scope-creep|intent|reuse|over-complexity|security|logic|persistence|test-quality|pins|style\",
     \"severity\": \"blocker|critical|major|minor\",
     \"rule\": \"avoid#N|best-practices#N|architecture#N|containers#N|scope#<shape>|... (project rule namespace, or null)\",
     \"title\": \"Short summary (<=80 chars)\",
@@ -133,6 +141,12 @@ candidate (per the Focus ordering; security only as P0).
     \"confidence\": 0.85
   }]
 }
+
+The enum lists `intent` for completeness only — `category: \"intent\"` and `rule: \"intent#<class>\"` are RESERVED
+for the intent-guard pass and you may NOT emit them. Drift you notice in your own files is a `scope-creep` finding.
+`rule: \"scope#S<n>\"` is RESERVED as well and emittable by NOBODY: `S<n>` is a scope-id CITATION that belongs in
+\"description\". The emittable rule spaces are `scope#1`..`scope#6` plus `scope#D*` / `scope#C*` (the two dedicated
+scope passes only).
 
 **Severity guide:**
 - blocker: prod outage / security breach / data loss / boundary violation in a critical path / an UNSANCTIONED

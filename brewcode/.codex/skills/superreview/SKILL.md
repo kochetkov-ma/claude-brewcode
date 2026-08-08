@@ -18,18 +18,28 @@ Follow every phase below. When a phase delegates work, use Codex collaboration w
 project-local `.codex/skills/superreview/` into that project — the merged deep-review skill (`review` + `standards-review`
 folded into one). It does NOT review code itself; it EMITS the skill that does.
 
-**OUTPUT:** A project-local skill at `<target>/.codex/skills/superreview/` (SKILL.md + references) modeled exactly on
-the canonical shape: deterministic MODE resolution -> MECHANICAL GATES -> ANNOUNCE -> route changed files to project
-DOMAIN-EXPERT agents selected at RUNTIME -> resolve the SANCTIONED SCOPE baseline -> reference (not restate) the
-project's `.codex/rules` + convention files -> ONE targeted parallel fan-out (domain experts + 2 scope passes) ->
-per-finding adversarial VALIDATION gate -> scope gate (request_user_input) -> ONE merged P0-P3 report at
+**OUTPUT:** A project-local skill at `<target>/.codex/skills/superreview/` (SKILL.md + references) PLUS a project
+agent at `<target>/.codex/agents/intent-guard.toml`, modeled exactly on the canonical shape: deterministic MODE
+resolution + semantic DEPTH resolution -> MECHANICAL GATES -> ANNOUNCE -> the INTENT pass (`intent-guard`, both
+depths) -> [EXTENDED only:] route changed files to project DOMAIN-EXPERT agents selected at RUNTIME -> resolve the
+SANCTIONED SCOPE baseline -> reference (not restate) the project's `.codex/rules` + convention files -> ONE
+targeted parallel fan-out (domain experts + 2 scope passes + intent) -> per-finding adversarial VALIDATION gate ->
+scope gate (request_user_input) -> ONE merged P0-P3 report at
 `.codex/reports/{TIMESTAMP}_superreview/REPORT.md`, READ-ONLY (recommends `/simplify`, never edits).
 
-> **Two things make or break the emitted skill:**
+> **Three things make or break the emitted skill:**
 > **(1) DOMAIN EXPERTS** — a review routed to generic agents finds generic issues. Phase 1.6 below is mandatory:
 > discover the experts, and CREATE the missing ones before emitting.
 > **(2) SCOPE DISCIPLINE** — the emitted skill measures every change against the SANCTIONED baseline (task + issue
 > + recorded decisions): creep, blast radius, under-delivery, closeout. Phase 1.5 wires it to the target's tracker.
+> **(3) THE INTENT PASS** — `intent-guard` answers "was the DELIVERED thing the ASKED thing?". It runs at BOTH
+> depths and is the whole review at `QUICK`. Phase 1.6 + Phase 3 wire it to this project's real invariants.
+
+> **The emitted skill has TWO orthogonal axes.** `{MODE}` selects SCOPE (`FULL_PROJECT` / `EXPLICIT` /
+> `UNCOMMITTED` / `LAST_COMMITS`). `{DEPTH}` selects EFFORT: **`QUICK`** (the DEFAULT and common case — mechanical
+> gates + the intent pass, ONE spawn, no domain experts) or **`EXTENDED`** (the full fan-out + validation + scope
+> gate, plus the intent pass). Depth is inferred SEMANTICALLY from the user's prompt, exactly like the `{MODE}`
+> whole-project rule — **there is no `--fast`, no flag and no CLI token, and you must not add one.**
 
 > The emitted skill is generic-capable (Java/Kotlin, Node/TS, Python, Go) and self-contained — NO plugin dependency,
 > NO sibling-skill orchestration once generated.
@@ -46,7 +56,7 @@ plus optional `[scope]` hint. The fine-tune prompt is woven into the emitted ski
 | `review` engine | Canonical STRUCTURE: deterministic mode, two-phase **find -> validate**, single merged P0-P3 report, agent prompt contract, report scaffolding |
 | `standards-review` | The **reuse/duplication** focus (rank 3: search-first 90/70/50% reuse matrix), tech-stack detection, file-grouping-by-type, per-stack reviewer guidelines, `/simplify` hand-off |
 | `setup` Phase 3.5 | Tech-specific check tables (Java/Node/Python/Go) folded into the per-stack reference docs; the placeholder -> concrete generation mechanism |
-| Scope discipline | `references/scope.md.template`: sanctioned-baseline resolution + precedence, ownership map + always-shared surfaces, the 6-shape creep taxonomy, the delivery map D1-D4 with PROOF OF ABSENCE, the closeout map C1-C4, the NOT-creep exclusion list, the Phase 3b user gate |
+| Scope discipline | `references/scope.md.template`: sanctioned-baseline resolution + precedence, ownership map + always-shared surfaces, the 6-shape creep taxonomy, the delivery map D1-D5 with PROOF OF ABSENCE, the closeout map C1-C4, the NOT-creep exclusion list, the Phase 3b user gate |
 | Runtime expertise | `references/agent-prompt.md`: live-roster expert selection, recon-agent exclusion, DEGRADED marking when a surface has no owner |
 | Execution ground truth | Mechanical gates -> `CONFIRMED-BY-EXECUTION`, the only non-adversarial verdict; `UNVALIDATED` -> the run is `INCOMPLETE` |
 
@@ -86,6 +96,9 @@ single agent that owns half the repo.
    - `references/SKILL.md.template` — the emitted SKILL.md (with `{PLACEHOLDER}` slots)
    - `references/agent-prompt.md` — runtime expert selection + domain-owner prompt contract (emitted, substituted)
    - `references/scope.md.template` — scope-discipline reference (emitted as the target's `references/scope.md`)
+   - `references/intent-guard.md.template` — the anti-drift agent (emitted as `<target>/.codex/agents/intent-guard.toml`;
+     READ it before Phase 3 — you fill three BLOCKs in it). Its own header comment documents every placeholder;
+     `generate.sh` STRIPS that header on emit
    - `references/report-template.md` — emitted report layout
    - `references/{python,java-kotlin,typescript-react,go}.md` — per-stack reference docs (one is emitted)
 2. Confirm the TARGET project is the current working directory (the repo to be reviewed). All emitted paths are
@@ -116,6 +129,10 @@ From it (plus your own reads) determine:
 | **Shared surfaces** | public API/contract dirs, DB migrations, schema/registry files, CI workflows, dependency manifests, design tokens | `SHARED_SURFACES_TABLE`, `OWNERSHIP_SIGNALS_BASH` |
 | Team parallelism | contributors in `git shortlog -sn --since=3.months`, owner columns on the board | `TEAM_NOTE` |
 | DB / test stack | testcontainers, JPA/JOOQ, pytest, jest, etc. | folded into the per-stack reference note |
+| **Intent tier sources** | Tier 2 = spec/design-doc dirs (`.codex/specs/**`, `docs/specs/**`, an ADR dir); Tier 3 = plan / task board / task graph (`.codex/features/**`, `TASKS.md`); Tier 4 = policy (root + nested `AGENTS.md`, `.codex/rules/**`, `.codex/convention/**`). Tier 1 is `TRACKER_LABEL`, already detected. Absent -> the literal string `none` | `SPEC_LOCATION`, `PLAN_LOCATION`, `POLICY_LOCATION` |
+| **Project invariants** | READ them, do not guess: PLANNED SCALE (users/RPS/data volume stated in README/AGENTS.md/specs — "personal tool" and "10k RPS" produce opposite drift verdicts); TESTING POLICY (the project's own testing rule: few scenario tests vs full-coverage); DEPENDENCY POLICY (pinning rule, "reuse before adding", vendored/allowed sets); FILE-LAYOUT POLICY (one-file-per-what, module boundaries, naming conventions); ARCHITECTURE STANCE (the pattern the project actually committed to, and what it explicitly rejected) | `PROJECT_INVARIANTS_TABLE` |
+| **Known drift instances** | past over-engineering in this repo's history + what its rules explicitly FORBID (an `avoid.md` row IS a drift class someone already hit) + the vocabulary this team uses for it | `DRIFT_EXAMPLES_TABLE` |
+| **Cheap evidence commands** | this repo's real one-liners: `git diff --stat` on the resolved range, the dependency-manifest diff for THIS manifest (`package.json` / `pom.xml` / `pyproject.toml` / `go.mod`), new-file listing, test-file count under the real test dirs | `EVIDENCE_COMMANDS_BASH` |
 
 **Multi-stack repos:** if more than one stack is detected, pick the DOMINANT one for the emitted `STACK_REF`, and note
 the secondary stack(s) in `DOMAIN_AGENTS_TABLE` / `FILE_GROUP_MAP`. (One stack reference doc is emitted; the rule
@@ -162,6 +179,19 @@ in `FILE_GROUP_MAP` has a real owner:
 > `task-tracker` agent from `$brewtools:task-board-init`), else `Explore`. `SCOPE_AGENT_B` = a read-only searcher —
 > `Explore` is the correct default, since pass B's job is proving an ABSENCE across the corpus.
 
+#### 1.6b — `intent-guard` (create-or-reuse; ONE writer, no gate)
+
+`intent-guard` is NOT a domain expert and is NOT part of the roster-gap procedure above. It is spawned
+unconditionally by the emitted skill at BOTH depths, so the emitted skill is broken without it.
+
+| Rule | Detail |
+|------|--------|
+| **Single writer** | `scripts/generate.sh` is the ONLY writer of `.codex/agents/intent-guard.toml`, via ONE shared implementation exposed as two subcommands: `emit` (full generation, Phase 2) and `emit-agent` (the agent alone, no superreview skill involved — this is what `$brewcode:teams` calls instead of authoring its own copy). **Never hand-write the file.** `brewcode:agent-creator` may only ADAPT the seeded BLOCKs of an already-written file; it may never author it |
+| **Reuse wins** | a USABLE file already exists -> the writer prints `INTENT_GUARD: REUSE <path>` and leaves it BYTE-UNTOUCHED. An existing intent-guard is the project's own tuned version (or a sibling generator's) and outranks this template. Do not "refresh" it, do not diff-merge it, do not fill BLOCKs in it. "Usable" = non-empty AND carrying `name: intent-guard` frontmatter AND free of unresolved `{UPPER_SNAKE}` tokens; an empty, truncated or placeholder-laden file is treated as ABSENT and recreated |
+| **No request_user_input** | creation is not gated. Do not ask whether to create it; it is part of the emitted artifact, like `references/scope.md` |
+| **Roster scan** | note in Phase 1 whether the file is present (`generate.sh scan` reports it) so the Phase 5 summary can say CREATED vs REUSED |
+| **Not an expert** | never count it toward the domain-expert requirement, never put it in `DOMAIN_AGENTS_TABLE` / `FILE_GROUP_MAP` / `SIMPLIFY_AGENTS`, never make it `VALIDATOR_AGENT` or a scope-pass owner. `generate.sh validate` excludes it from the expert count for exactly this reason |
+
 ### Phase 2 — Resolve placeholders + emit (scalar substitution)
 
 Export the SCALAR placeholder values, then run the emit step (mirrors `setup.sh copy_review_skill()` — sed with a
@@ -178,6 +208,10 @@ export VALIDATOR_AGENT="<project arbiter agent | general-purpose>"
 export SCOPE_AGENT_A="<task-board/tracker agent | Explore>"
 export SCOPE_AGENT_B="<read-only searcher | Explore>"
 export TRACKER_LABEL="<e.g. '.codex/features board + GitHub issues (read-only)' | 'GitHub issues only' | 'none'>"
+# intent-guard tier sources — `none` is a legitimate value; an absent source is REPORTED, never invented
+export SPEC_LOCATION="<e.g. '.codex/specs/**' | 'docs/adr/*.md' | 'none'>"
+export PLAN_LOCATION="<e.g. '.codex/features/**' | 'TASKS.md' | 'none'>"
+export POLICY_LOCATION="<e.g. 'AGENTS.md, .codex/rules/**, .codex/convention/**' | 'AGENTS.md' | 'none'>"
 ```
 
 **EXECUTE** using shell:
@@ -185,11 +219,58 @@ export TRACKER_LABEL="<e.g. '.codex/features board + GitHub issues (read-only)' 
 bash "<skill-directory>/scripts/generate.sh" emit && echo "✅ emit" || echo "❌ emit FAILED"
 ```
 
-> **STOP if ❌** — verify `<skill-directory>/references/SKILL.md.template` exists and the target `.codex/` is writable.
+> **STOP if ❌ — UNLESS the message is `already installed`.** That refusal is the EXPECTED path on a live
+> installation: it exits 1 by design, prints no `INTENT_GUARD:` line at all, and means **go to Phase 2b** (run
+> `upgrade`), not stop. Any other ❌ is a real failure: verify
+> `<skill-directory>/references/SKILL.md.template` exists and the target `.codex/` is writable.
 
 This writes `<target>/.codex/skills/superreview/SKILL.md` (scalars substituted), copies `agent-prompt.md`,
-`report-template.md` and `scope.md` (scalar-substituted), and copies the chosen `${STACK_REF}` into the emitted
-`references/`.
+`report-template.md` and `scope.md` (scalar-substituted), copies the chosen `${STACK_REF}` into the emitted
+`references/`, saves the pristine templates to `.codex/skills/superreview/.template-baseline/` (what `upgrade`
+later diffs against), and **creates-or-reuses `<target>/.codex/agents/intent-guard.toml`** (template header
+stripped, provenance stamp kept). Key off the ONE machine-readable status line the writer prints — the
+`already installed` refusal path prints NO status line, because nothing was written:
+
+| Status line | Meaning |
+|-------------|---------|
+| `INTENT_GUARD: CREATED .codex/agents/intent-guard.toml` | written from the template with SEEDED-DEFAULT BLOCKs — you MUST adapt all three in Phase 3 |
+| `INTENT_GUARD: REUSE .codex/agents/intent-guard.toml` | the file is the project's own — touch NOTHING in it, skip its Phase 3 table |
+
+> The same writer is available standalone as `generate.sh emit-agent` (agent only, no superreview skill required,
+> same env overrides `PROJECT_NAME` / `TRACKER_LABEL` / `SPEC_LOCATION` / `PLAN_LOCATION` / `POLICY_LOCATION`,
+> same two status lines). `$brewcode:teams` uses it; this generator does not need it, `emit` covers it.
+
+### Phase 2b — Already installed? `upgrade`, never re-emit
+
+The emitted skill **self-modifies**: its Phase 4b SELF-SYNC corrects its own routing table, dead gates, scope
+baseline and shared surfaces in place on every `EXTENDED` run. A blind re-emit erases all of it, so `emit`
+REFUSES on a live installation. When it does:
+
+**EXECUTE** using shell:
+```bash
+bash "<skill-directory>/scripts/generate.sh" upgrade && echo "✅ upgrade" || echo "❌ upgrade FAILED"
+```
+
+It writes NO live file. It stages a fresh emit at `.codex/skills/superreview/.upgrade-staging/` (with the raw new
+templates under `.upgrade-staging/.template/`) and compares the NEW TEMPLATE against the pristine copies `emit`
+saved in `.codex/skills/superreview/.template-baseline/` — **never the live file against a template**, because a
+live file legitimately carries Phase 3 tailoring and Phase 4b self-sync edits that no template ever knew about.
+One line per asset:
+
+| Line | Meaning | What you do |
+|------|---------|-------------|
+| `IDENTICAL (template unchanged since install)` | no template delta | nothing |
+| `DIFFERS (<n> template line(s))` | the TEMPLATE really changed | run the printed `diff <baseline> <new template>`, then port ONLY those changes into the LIVE file with targeted **Edit** calls, keeping every tailored + self-synced line |
+| `MISSING -> restored (NEEDS PHASE 3)` | a deleted asset was restored from the RAW template | **go to Phase 3 for that file** and fill its BLOCK placeholders — it is un-tailored, and Phase 4 `validate` fails on it otherwise |
+| `NO BASELINE - full diff, tailoring included` | install predates the baseline | the count is NOT a template delta; review the staged copy by hand and port only genuine template changes |
+
+Then, once the delta is applied (and any restored file has been through Phase 3), promote the new templates to the
+baseline and clean up with the command the script printed:
+`rm -rf <baseline> && mv <staging>/.template <baseline> && rm -rf <staging>` — after which go to Phase 4. Both
+directories carry a `.gitignore` of `*`, so they never enter the user's commits.
+
+> `SUPERREVIEW_FORCE=1 ... emit` overwrites and **destroys** those corrections — use it only when the user asks
+> for a clean regeneration. `emit-agent` is unaffected: it is already create-or-reuse.
 
 ### Phase 3 — Adapt the BLOCK placeholders (AI Edit)
 
@@ -215,10 +296,28 @@ placeholder in the EMITTED files with content you build from Phase 1 analysis.
 | Block placeholder | Replace with |
 |-------------------|--------------|
 | `{TEAM_NOTE}` | one line on why blast radius matters HERE — e.g. "N people work this repo in parallel" (from `git shortlog -sn --since=3.months`), or "the shared surfaces below are consumed by other services" for a solo repo |
-| `{BASELINE_RESOLUTION_BASH}` | the REAL resolution block: derive the issue id from the branch with an ANCHORED pattern (`^[a-z]+/([0-9]+)(-.*)?$`, never a bare digit run), read the task file / board, read the issue + its declared neighbours READ-ONLY, read the PR, read the decisions log, and read commit intent from `$RANGE` (report "not read" when unset). Degrade to `UNKNOWN` instead of inventing |
+| `{BASELINE_RESOLUTION_BASH}` | the REAL resolution block: derive the issue id from the branch with an ANCHORED pattern (`^[a-z]+/([0-9]+)(-.*)?$`, never a bare digit run), read the task file / board, read the issue + its declared neighbours READ-ONLY, read the PR, read the decisions log, and read commit intent from `$RANGE` (report "not read" when unset). ALSO parse the matched task file's `## Scope` table when it has one (`id \| block \| in/out \| status`, ids `S1..Sn`, status `not-started\|in-progress\|done`) into the baseline — that is pass B's delivery checklist. The parse must be a SILENT no-op when the section, the task file or the whole board is absent: no `WARN`, no cap, no output line. Degrade to `UNKNOWN` instead of inventing |
 | `{SANCTION_PRECEDENCE_TABLE}` | the precedence table for THIS project: user directive (1) > recorded decision / issue comment (2) > issue body + task acceptance (3) > docs decision log (4) > PR body / commit message (5, sanctions NOTHING — it is the artefact under review) |
 | `{OWNERSHIP_SIGNALS_BASH}` | the runtime ownership probe: recent authors (`git log -5 --format='%an' -- "$f"`) + any other task claiming the file, with a declared truncation bound |
 | `{SHARED_SURFACES_TABLE}` | the concrete always-shared surfaces of THIS repo (public API/contract dirs, migrations, schema/registry files, CI workflows, dependency manifests, design tokens) |
+
+**In `<target>/.codex/agents/intent-guard.toml` — ONLY when the writer printed `INTENT_GUARD: CREATED`. On
+`INTENT_GUARD: REUSE`, SKIP this table entirely and edit nothing in that file.**
+
+> **The three BLOCK placeholders are already gone by now** — emit replaced each with a runnable GENERIC DEFAULT
+> block that ends in its own marker line. Key every Edit on the marker, not on the old `{TOKEN}`: your
+> `old_string` is the seeded block PLUS its marker line, and your `new_string` is the project-specific
+> replacement WITHOUT any marker (a surviving marker makes `validate` report the agent `UNTAILORED`).
+
+| Seeded block (find by its marker line) | Replace the block AND the marker with |
+|-------------------|--------------|
+| `<!-- SEEDED-DEFAULT: project-invariants ... -->` | a `\| Invariant \| This project \| Drift signal \|` table with ONE row each for: **planned scale** (the real user/RPS/data figure or "personal tool, single user" — this is what makes `intent#scale` checkable), **testing policy** (the project's own rule, cited by file), **dependency policy** (pinning + reuse-before-adding, cited), **file-layout policy** (module boundaries, one-file-per-what, naming), **architecture stance** (the pattern committed to, and the one explicitly rejected). Every cell is a FACT read from the repo with its source file named — never a plausible-sounding guess. Unknown -> write `not stated in this project` and say what would make it checkable |
+| `<!-- SEEDED-DEFAULT: drift-examples ... -->` | 3-6 rows, `\| Rule \| Looks like HERE \|`, each mapping one `intent#<class>` onto this repo's real vocabulary and paths (e.g. `intent#deps \| a new HTTP client when the project already ships <the one it uses>`). Mine them from the repo's own `avoid`/rules files (a forbidden practice IS a drift class someone already hit) and from its history. Concrete paths and real library names only — a generic row teaches nothing |
+| `<!-- SEEDED-DEFAULT: evidence-commands ... -->` | ONE fenced bash block of this repo's cheap evidence commands, runnable as-written: `git diff --stat` over the resolved range, `git log --oneline`, the manifest diff for THIS project's real manifest, the new-file listing, the test-file count under the REAL test dirs. Read-only, no build, no test run, each a single line. Never emit a command for a manifest or a directory this repo does not have |
+
+> These three make the generic drift classes checkable HERE. A project whose planned scale is "one user, local
+> script" and one serving 10k RPS produce OPPOSITE verdicts on the same caching layer — that fact belongs in the
+> invariants table or the intent pass is guessing.
 
 > Keep every emitted row pointing at a REAL agent (`.codex/agents/` or built-in `Explore`/`Plan`/`general-purpose`), a
 > REAL rule file, a REAL path and a REAL command. Do NOT invent agents, rules or gate scripts. Built-in `Explore` is
@@ -231,10 +330,25 @@ placeholder in the EMITTED files with content you build from Phase 1 analysis.
 bash "<skill-directory>/scripts/generate.sh" validate && echo "✅ validate" || echo "❌ validate FAILED"
 ```
 
-> **STOP if ❌** — validate reports three classes of failure: an unresolved setup-time `{PLACEHOLDER}` (runtime
-> tokens like `{MODE}`, `{COUNT}`, `{FILE_LIST}`, `{SCOPE_BASELINE}` are allow-listed and expected to remain), an
-> agent name that resolves to nothing, and **no project domain expert wired at all**. Fix via Edit (or go back to
-> Phase 1.6 and create the experts), then re-run validate.
+> **STOP if ❌** — validate reports these classes of failure: an unresolved setup-time `{PLACEHOLDER}` (runtime
+> tokens like `{MODE}`, `{DEPTH}`, `{COUNT}`, `{FILE_LIST}`, `{SCOPE_BASELINE}` are allow-listed and expected to
+> remain), an agent name that resolves to nothing, a missing OR unusable emitted asset (`.codex/agents/intent-guard.toml`
+> counts as unusable when empty or missing its `name: intent-guard` frontmatter), an unresolved placeholder or a
+> surviving TEMPLATE HEADER in that agent file (it has NO runtime tokens — every `{...}` in it must be gone), and
+> **no project domain expert wired at all** (`intent-guard` is excluded from that count — it is not an expert; the
+> count only credits an agent that appears in a ROUTING row — the group/agent tables or a `task_role=`). Fix
+> via Edit (or go back to Phase 1.6 and create the experts), then re-run validate.
+
+> The template checks above run ONLY against an agent file carrying the template stamp. A REUSED hand-written
+> intent-guard is byte-untouchable by contract, so validate says so and does not judge it by template rules.
+
+> **`⚠️ UNTAILORED` is a WARNING, not a failure** (exit code unaffected): the agent still carries seeded generic
+> BLOCK defaults, i.e. the Phase 3 adaptation was skipped or incomplete. Go back to Phase 3, replace each named
+> block AND its marker, and re-run — never ship an UNTAILORED agent silently.
+
+> Ordering matters: `emit` writes `.codex/agents/intent-guard.toml` BEFORE `validate` runs, which is what lets the
+> `subagent_type` allowlist accept `intent-guard` — it is a real project agent by then. Never run `validate` on a
+> target that was never emitted.
 
 ### Phase 5 — Report
 
@@ -246,6 +360,9 @@ superreview generated -> <target>/.codex/skills/superreview/
 Stack:          {STACK_LABEL}  (reference: {STACK_REF})
 Domain experts: {N} wired ({list}){; created this run: <list>}{; DEGRADED groups: <list>}
 General agents: {reviewer?}, {ARBITER_AGENT} (arbiter + validator)
+Intent guard:   {CREATED from template | REUSED (already existed — left untouched)}
+                tiers: T1={TRACKER_LABEL} / T2={SPEC_LOCATION} / T3={PLAN_LOCATION} / T4={POLICY_LOCATION}
+Depth axis:     QUICK (default — intent + gates, 1 spawn) | EXTENDED (full fan-out), inferred from the prompt
 Scope baseline: {TRACKER_LABEL}; passes A={SCOPE_AGENT_A} / B={SCOPE_AGENT_B}
 Shared surfaces: {N} listed in references/scope.md
 Mechanical gates: {list of commands}
@@ -259,9 +376,15 @@ Files written:
 - .codex/skills/superreview/references/scope.md
 - .codex/skills/superreview/references/report-template.md
 - .codex/skills/superreview/references/{STACK_REF}
+- .codex/skills/superreview/.template-baseline/  (pristine templates for `upgrade`; git-ignored)
+- .codex/agents/intent-guard.toml          {created | REUSED, not written}
 
-Run it:  /superreview "<focus>" [scope]   (in the target project)
+Run it:  /superreview "<focus>" [scope]              -> QUICK: intent + gates, 1 agent
+         /superreview "deep review of <focus>"       -> EXTENDED: full expert fan-out + validation
 ```
+
+> Say the depth axis out loud in the summary: users who expect the old always-full behaviour must learn that a
+> plain `/superreview` is now the cheap intent run and that a depth word escalates it. There is no flag to mention.
 
 ---
 
@@ -271,13 +394,16 @@ Recap of the canonical shape the emitted SKILL.md implements (full text in `refe
 
 | Phase | Behavior |
 |-------|----------|
-| Mode detection | Deterministic `FULL_PROJECT \| EXPLICIT \| UNCOMMITTED \| LAST_COMMITS`, COMPUTED not guessed; corpus = git-tracked-or-will-be (ignored = OUT); then ANNOUNCE mode+branch+scope+count+focus+gates+baseline+experts BEFORE any review |
-| Mechanical gates | Real build/lint/type/test run FIRST; their output is `CONFIRMED-BY-EXECUTION` (the only non-adversarial verdict), passed to every agent so nobody re-runs them |
-| Scope baseline | sub-agent task + issue + recorded decisions resolved read-only; no baseline -> `UNKNOWN` and a PERMANENT P2 cap on scope findings |
-| Routing | Experts selected at RUNTIME from the live roster; enable ONLY non-empty groups; recon agents excluded; no owner -> `Explore` + DEGRADED marker; add `{0,1,2}` general agents by judgement |
-| Fan-out | ONE parallel message: domain experts + scope pass A (diff side, shapes 1-6) + scope pass B (baseline side, delivery D1-D4 + closeout C1-C4); shared JSON finding contract; search-first before flagging reuse/duplication |
-| Validation | A NON-OWNING validator reverse-validates EVERY candidate (adversarial, per-finding gate, batched <=40), merges + de-dups + prioritizes P0-P3; unvalidatable -> `UNVALIDATED` and the run is `INCOMPLETE` |
-| Scope gate | `request_user_input` on unsanctioned expansion / unproven absence; rewrites priorities only, never adds findings, never lifts the UNKNOWN cap |
+| Mode detection | Deterministic `FULL_PROJECT \| EXPLICIT \| UNCOMMITTED \| LAST_COMMITS`, COMPUTED not guessed; corpus = git-tracked-or-will-be (ignored = OUT) |
+| **Depth detection** | SEMANTIC, from the prompt, right after the mode: `QUICK` (DEFAULT — depth words absent, or a speed word present) \| `EXTENDED` (the prompt asks for depth/completeness/expertise, any language). **No flag, no CLI token.** Depth words are consumed here and stripped before the rest becomes `{FOCUS}`. Orthogonal to mode; both ANNOUNCEd, along with how to escalate |
+| Mechanical gates | Real build/lint/type/test run FIRST (BOTH depths); their output is `CONFIRMED-BY-EXECUTION`, passed to every agent so nobody re-runs them |
+| **Intent pass** | `intent-guard` spawned at BOTH depths, unconditionally, never via the roster procedure. Rows carry `CONFIRMED-BY-EVIDENCE` (verbatim ASKED quote + source tier + delivered path/count) and BYPASS the adversarial validator by design; category `intent`, rules `intent#<class>`. At `QUICK` it is the entire review |
+| Scope baseline | `EXTENDED` only. sub-agent task + issue + recorded decisions resolved read-only; no baseline -> `UNKNOWN` and a PERMANENT P2 cap on scope findings. At `QUICK` it is skipped — intent-guard resolves its own tiers |
+| Routing | `EXTENDED` only. Experts selected at RUNTIME from the live roster; enable ONLY non-empty groups; recon agents excluded; no owner -> `Explore` + DEGRADED marker; add `{0,1,2}` general agents by judgement |
+| Fan-out | ONE parallel message. `QUICK`: `intent-guard` alone. `EXTENDED`: `intent-guard` + domain experts + scope pass A (diff side, shapes 1-6) + scope pass B (baseline side, delivery D1-D5 + closeout C1-C4); shared JSON finding contract; search-first before flagging reuse/duplication |
+| Validation | `EXTENDED` only. A NON-OWNING validator reverse-validates EVERY verdictless candidate (adversarial, per-finding gate, batched <=40), merges + de-dups + prioritizes P0-P3; unvalidatable -> `UNVALIDATED` and the run is `INCOMPLETE`. At `QUICK` the pool is entirely self-verdicted, so the coordinator merges + ranks in-session and the run is NOT `INCOMPLETE` |
+| Scope gate | `EXTENDED` only. `request_user_input` on unsanctioned expansion / unproven absence; rewrites priorities only, never adds findings, never lifts the UNKNOWN cap. Intent rows never enter it |
+| **Self-sync** | `EXTENDED` only, coordinator only, after the report: Phase 4b corrects the emitted SKILL.md + `references/scope.md` IN PLACE from data already in context — routing table vs the live roster, a gate that reported `not run` because the command does not exist, an `UNKNOWN`/mismatched scope baseline, a shared surface a scope finding named. Line delta `<= 0`, facts only; DECISIONS, missing experts and `intent-guard.md` are PROPOSALS printed in the summary, never writes |
 | Report | ONE merged report at `.codex/reports/{TIMESTAMP}_superreview/REPORT.md`, sorted P0->P3, every row carrying its verdict, with a Scope Discipline / Blast Radius section; READ-ONLY; recommends `/simplify` + a Manager-mode fix session; never edits code |
 
 ---
@@ -288,9 +414,14 @@ Recap of the canonical shape the emitted SKILL.md implements (full text in `refe
 |---------|---------|-------------|
 | Emit target | `<cwd>/.codex/skills/superreview/` | Where the generated skill is written |
 | Emit templates | `<skill-directory>/references/` | Source templates for the generation |
-| Generation script | `<skill-directory>/scripts/generate.sh` | `scan` \| `emit` \| `validate` |
+| Generation script | `<skill-directory>/scripts/generate.sh` | `scan` \| `emit` \| `emit-agent` \| `upgrade` \| `validate`. `emit-agent` writes ONLY `.codex/agents/intent-guard.toml` (shared writer, no superreview skill required) — that is the entry point `$brewcode:teams` calls |
+| Re-generation | `upgrade` (Phase 2b) | `emit` refuses on a live installation because the emitted skill self-syncs; `upgrade` stages the new templates and never writes a live file. `SUPERREVIEW_FORCE=1` overwrites and destroys self-synced edits |
+| Template baseline | `<target>/.codex/skills/superreview/.template-baseline/` | Pristine copies of the templates `emit` generated from (git-ignored via its own `.gitignore`). `upgrade` diffs the NEW template against them, so the reported delta is the TEMPLATE's change and never the Phase 3 tailoring the live files carry. Absent (pre-baseline install) -> `upgrade` reports `NO BASELINE` and falls back to a live-vs-template diff |
 | Stack reference | one of `python.md \| java-kotlin.md \| typescript-react.md \| go.md` | Emitted per the dominant detected stack |
-| Domain experts | MANDATORY (Phase 1.6) | gaps are filled via `brewcode:agent-creator`; `validate` fails with zero experts unless `SUPERREVIEW_ALLOW_NO_EXPERTS=1` |
+| Domain experts | MANDATORY (Phase 1.6) | gaps are filled via `brewcode:agent-creator`; `validate` fails with zero experts unless `SUPERREVIEW_ALLOW_NO_EXPERTS=1`. `intent-guard` never counts as one |
+| Review depth | `QUICK` (emitted default) | Resolved SEMANTICALLY per run by the emitted skill from the user's prompt. `EXTENDED` on a depth request. No flag exists and none may be added |
+| `intent-guard` | created-or-reused at emit (Phase 1.6b) | `scripts/generate.sh` (`emit` \| `emit-agent`, one shared implementation) is the ONLY writer of `.codex/agents/intent-guard.toml`; a usable existing file is REUSED byte-untouched. Runs at BOTH depths |
+| Intent tier sources | `TRACKER_LABEL` / `SPEC_LOCATION` / `PLAN_LOCATION` / `POLICY_LOCATION` | T1/T2/T3/T4 scalars baked into the agent; T5 (session transcript) is runtime-only. Defaults `.codex/specs/**`, `.codex/features/**`, `` `AGENTS.md`, `.codex/rules/**` `` |
 | Scope reference | `references/scope.md` (always emitted) | baseline + ownership + taxonomy + delivery + closeout + gate |
 | Scope agents | `SCOPE_AGENT_A` tracker owner, `SCOPE_AGENT_B` read-only searcher | default `Explore` for both |
 | Block placeholders | AI-filled (Edit) | Tables + bash blocks that cannot go through sed; validated post-emit |
@@ -309,7 +440,17 @@ Recap of the canonical shape the emitted SKILL.md implements (full text in `refe
 | No `.codex/rules/`/`.codex/convention/` | Emit a minimal rule-pointer table (`AGENTS.md` only); WARN; the emitted skill degrades gracefully (preflight WARN) |
 | Unknown / unsupported stack | Emit with the closest per-stack ref + project rules only; warn |
 | Multi-stack repo | Pick dominant stack for `STACK_REF`; note secondaries in the agent/group tables |
-| Unresolved `{PLACEHOLDER}` after Phase 3 | `validate` fails listing them; fix via Edit, re-run validate |
+| `.codex/agents/intent-guard.toml` already exists | REUSE it — the writer prints `INTENT_GUARD: REUSE <path>` and does not write the file. Never overwrite, never diff it into shape, never ask. Skip the Phase 3 BLOCK adaptation for it |
+| `.codex/agents/intent-guard.toml` exists but is EMPTY / has no `name: intent-guard` frontmatter | Not a reusable file — the writer says so and RECREATES it from the template. Then the Phase 3 adaptation applies as for any CREATED file |
+| `validate` prints `⚠️ UNTAILORED` | The Phase 3 BLOCK adaptation was skipped or partial (seeded markers survive). Warning, not a failure: go back to Phase 3, replace each seeded block + marker, re-run validate |
+| No tracker AND no spec/plan/policy dirs | Emit anyway with the defaults; the agent falls back to T5 (the session transcript) and reports its tier in every finding. Do NOT invent paths and do NOT skip the agent |
+| Target has no writable `.codex/agents/` | `emit` does `mkdir -p .codex/agents` first; a failure there is the same STOP as an unwritable `.codex/` |
+| Asked to add a `--fast`/`--deep` flag | Refuse — depth is inferred from the prompt by design. A flag would freeze the axis the emitted skill must read semantically |
+| Unresolved `{PLACEHOLDER}` after Phase 3 | `validate` fails listing them (including any left in the emitted `intent-guard.md`); fix via Edit, re-run validate |
+| `emit` refuses — superreview already installed | Expected, not an error: the live skill carries Phase 4b self-sync corrections, and the refusal prints NO `INTENT_GUARD:` line. Go to Phase 2b and run `upgrade`. Only `SUPERREVIEW_FORCE=1` overwrites, and only on an explicit request for a clean regeneration |
+| `upgrade` says `DIFFERS` on a file the user hand-edited | `DIFFERS` counts TEMPLATE lines (new template vs `.template-baseline/`), never the user's tailoring. Port that template change onto the live file with Edit; never replace the file with the staged copy. Conflicting section -> ask before replacing it |
+| `upgrade` says `NO BASELINE` | The install predates `.template-baseline/`, so the printed count is a live-vs-template diff that INCLUDES Phase 3 tailoring — do not treat it as a template delta. Review the staged copy by hand, port only what the template really changed, then promote `.upgrade-staging/.template` to the baseline (command printed by the script) |
+| `upgrade` says `MISSING -> restored (NEEDS PHASE 3)` | The restored file is a RAW template with unresolved BLOCK placeholders. Run Phase 3 on it BEFORE Phase 4 — going straight to `validate` fails on those placeholders |
 | Target `.codex/` not writable | STOP — ask the user to run from the repo root |
 
 ---
@@ -319,9 +460,13 @@ Recap of the canonical shape the emitted SKILL.md implements (full text in `refe
 - `references/SKILL.md.template` — the emitted SKILL.md (placeholder slots).
 - `references/agent-prompt.md` — runtime expert-selection procedure + domain-owner prompt contract (emitted).
 - `references/scope.md.template` — scope discipline: baseline, ownership, taxonomy, delivery, closeout, gate (emitted).
+- `references/intent-guard.md.template` — the anti-drift agent (asked vs delivered), emitted to `.codex/agents/intent-guard.toml` create-or-reuse.
 - `references/report-template.md` — emitted merged-report layout.
 - `references/{python,java-kotlin,typescript-react,go}.md` — per-stack reference docs (one is emitted).
-- `scripts/generate.sh` — `scan` / `emit` / `validate` (validate also enforces the domain-expert requirement).
+- `scripts/generate.sh` — `scan` / `emit` / `emit-agent` / `upgrade` / `validate` (validate also enforces the
+  domain-expert requirement; `emit-agent` is the shared intent-guard writer used standalone by `$brewcode:teams`;
+  `upgrade` refreshes a live installation without destroying its self-synced edits, diffing the NEW template
+  against the pristine `.template-baseline/` copies `emit` saved).
 
 <!--
 SKILL METADATA — brewcode:superreview (GENERATOR)
@@ -330,15 +475,19 @@ HUMAN-invoked generator. Analyzes a target project and emits a self-contained pr
 (review + standards-review merged) on the canonical shape. Stack-generic (Java/Kotlin, Node/TS, Python, Go).
 The EMITTED skill is the one that reviews code; this skill only writes it.
 
-Two non-negotiables: DOMAIN EXPERTS (Phase 1.6 discovers gaps and creates the missing agents; validate enforces
->=1 wired expert) and SCOPE DISCIPLINE (references/scope.md.template — baseline, ownership, 6-shape taxonomy,
-delivery D1-D4 with proof-of-absence, closeout C1-C4, Phase 3b gate).
+Three non-negotiables: DOMAIN EXPERTS (Phase 1.6 discovers gaps and creates the missing agents; validate enforces
+>=1 wired expert), SCOPE DISCIPLINE (references/scope.md.template — baseline, ownership, 6-shape taxonomy,
+delivery D1-D5 with proof-of-absence, closeout C1-C4, Phase 3b gate), and the INTENT PASS (Phase 1.6b emits
+.codex/agents/intent-guard.toml create-or-reuse; the emitted skill spawns it at BOTH depths, unconditionally).
 
-Re-run triggers:
-- New/renamed agent in target .codex/agents/  -> re-emit to refresh routing
-- New rule/convention file                      -> re-emit to refresh pointers
-- Stack change / new source group               -> re-emit
-- Tracker / branch convention changed           -> re-emit to refresh the scope baseline block
-- New always-shared surface                     -> re-emit (or Edit references/scope.md section 2)
+The emitted skill carries TWO orthogonal axes: MODE = what to review (FULL_PROJECT | EXPLICIT | UNCOMMITTED |
+LAST_COMMITS), DEPTH = how hard (QUICK default = intent + gates, 1 spawn | EXTENDED = the full expert fan-out).
+DEPTH is inferred semantically from the user's prompt — there is deliberately NO flag and no CLI token.
+
+Re-run triggers (an INSTALLED skill is refreshed with `upgrade`, never re-emitted — its Phase 4b SELF-SYNC already
+corrects the roster, dead gates, the scope baseline and shared surfaces in place on every EXTENDED run):
+- New rule/convention file, stack change, new source group -> upgrade (pointers, PATHSPEC, group map)
+- Tracker / branch convention changed, task files gain or lose the `## Scope` id+status -> upgrade (baseline block)
+- Template itself moved (this generator was updated)       -> upgrade (ports the delta, keeps self-synced edits)
 -->
 

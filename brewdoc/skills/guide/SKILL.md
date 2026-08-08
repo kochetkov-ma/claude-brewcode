@@ -20,7 +20,7 @@ Interactive teaching skill for the brewcode/brewdoc/brewtools/brewui plugin suit
 |----|-------|----------------|
 | `overview` | Four Plugins Overview | `topic-overview.md` |
 | `installation` | Installation & Updates | `topic-installation.md` |
-| `killer-flow` | Spec → Plan → Start | `topic-killer-flow.md` |
+| `killer-flow` | Board → Spec → Review | `topic-killer-flow.md` |
 | `teams` | Dynamic Teams | `topic-teams.md` |
 | `skills-catalog` | All Skills Catalog | `topic-skills-catalog.md` |
 | `agents-catalog` | All Agents Catalog | `topic-agents-catalog.md` |
@@ -252,7 +252,7 @@ bash "${CLAUDE_SKILL_DIR}/scripts/progress.sh" complete "{TOPIC_ID}"
    Useful next steps:
    - Extract your project conventions with /brewcode:convention
    - Create a team with /brewcode:teams create
-   - Start a task with /brewcode:spec "your task description"
+   - Deploy a task board with /brewtools:task-board-init, then /task-spec <ID>
    ```
    Stop.
 

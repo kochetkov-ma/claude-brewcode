@@ -4,11 +4,10 @@ Domain: Core Workflow
 
 ## Section 1: Brewcode Skills (8)
 
-The main plugin. Spec authoring, deep review, code quality.
+The main plugin. Semantic search, deep review, conventions, agent teams, code quality.
 
 | Skill | Purpose |
 |-------|---------|
-| `/brewcode:spec "desc"` | Create SPEC through research + user interaction |
 | `/brewcode:superreview` | Deep multi-perspective quorum code review |
 | `/brewcode:convention` | Extract code conventions, patterns, architecture |
 | `/brewcode:rules` | Prompt-driven rules management: status, create, improve, review |
@@ -16,8 +15,9 @@ The main plugin. Spec authoring, deep review, code quality.
 | `/brewcode:e2e` | Full-cycle E2E test orchestration |
 | `/brewcode:skills` | Prompt-driven skill management: status, create, improve, review, sync |
 | `/brewcode:agents` | Prompt-driven agent management: status, create, improve, review, sync |
+| `/brewcode:semble` | Semantic code-search MCP: install, audit, reindex, remove |
 
-Typical flow: `spec` -> implement -> `superreview`
+Typical flow: `convention` -> `/task-spec` (from `/brewtools:task-board-init`) -> implement -> `superreview`
 
 ## Section 2: Brewdoc Skills (6)
 
@@ -27,7 +27,7 @@ Documentation tools. Sync, generate, optimize, export, publish.
 |-------|---------|
 | `/brewdoc:docsync` | Track & sync stale project docs via session hooks |
 | `/brewdoc:my-claude` | Generate docs about your Claude Code setup |
-| `/brewdoc:memory` | Sync memory, CLAUDE.md, and rules; `full` also syncs rosters |
+| `/brewdoc:memory-sync-init` | Generate a project-local `/memory-sync` skill: keeps CLAUDE.md, rules, agents, skills true to the code |
 | `/brewdoc:md-to-pdf` | Convert markdown to PDF (reportlab/weasyprint) |
 | `/brewdoc:guide` | Interactive teaching for the plugin suite (this guide) |
 | `/brewdoc:publish` | Publish content to brewpage.app — text, markdown, or files |
@@ -61,7 +61,7 @@ Brewui currently ships no skills -- placeholder for future UI/visual/creative to
 
 **Arguments:** Most skills accept inline arguments.
 ```
-/brewcode:spec "add user authentication with OAuth2"
+/task-spec TASK-42 full
 /brewcode:teams create backend-team
 /brewcode:convention extract
 /brewcode:superreview
@@ -72,7 +72,7 @@ Brewui currently ships no skills -- placeholder for future UI/visual/creative to
 | Step | Skill | Why |
 |------|-------|-----|
 | 1 | `/brewcode:convention` | Learn existing patterns |
-| 2 | `/brewcode:spec "task"` | Define what to build |
+| 2 | `/brewtools:task-board-init` then `/task-spec` | Track tasks and define what to build |
 | 3 | `/brewcode:superreview` | Review the result |
 | 4 | `/brewcode:rules` | Save learnings as rules |
 

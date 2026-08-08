@@ -1,7 +1,7 @@
 {
   "name": "brewdoc",
-  "version": "4.9.0",
-  "description": "Brewdoc - Claude Code documentation tools: my-claude installation docs, memory sync",
+  "version": "4.10.0",
+  "description": "Brewdoc - Claude Code documentation tools: my-claude installation docs, memory-sync generator",
   "author": {
     "name": "Maksim Kochetkov",
     "email": "apmatypa88@gmail.com",

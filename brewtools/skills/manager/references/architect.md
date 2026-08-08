@@ -13,8 +13,9 @@ Required of the design:
 - Fits the EXISTING project architecture, patterns, rules and conventions;
   breaks nothing that already works.
 - As SIMPLE as possible while staying scalable - no over-engineering.
-- Abstractions ONLY where they earn it. Reuse existing patterns/classes/code
-  first; add a new pattern only when nothing fits.
+- Abstractions ONLY where they earn it. Find the closest well-built existing
+  counterpart in the repo, take its principles, reuse its patterns/classes;
+  add a new pattern only when nothing fits. ADDITIVE to conventions/rules/docs, never instead.
 - Clean seams and boundaries so the code stays easy to modify later.
 
 Deliverable before coding: a short, concrete architecture plan - components,

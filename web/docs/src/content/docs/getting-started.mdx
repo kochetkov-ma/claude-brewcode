@@ -18,25 +18,25 @@ import { Card, CardGrid, Callout, InstallPrompt, Spoiler } from '../../component
 
 <CardGrid>
   <Card title="brewcode" icon="infinity" href="/brewcode/overview/">
-    The core: codebase exploration, quorum review, spec authoring, skill/agent/hook creation. 9 skills · 5 agents · 2 hooks.
+    The core: semantic code search, quorum review, conventions, skill/agent/hook creation. 8 skills · 5 agents · 2 hooks.
   </Card>
   <Card title="brewtools" icon="settings" href="/brewtools/overview/">
-    Universal utilities: prompt optimization, AI artifact removal, secrets scanning, SSH, deploy. 11 skills · 3 agents.
+    Universal utilities: prompt optimization, AI artifact removal, secrets scanning, SSH, deploy. 12 skills · 3 agents.
   </Card>
   <Card title="brewui" icon="image" href="/brewui/overview/">
     UI / visual / creative tools (placeholder, currently empty). 0 skills · 0 agents.
   </Card>
   <Card title="brewdoc" icon="file" href="/brewdoc/overview/">
-    Documentation tools: docsync doc-staleness tracking, memory sync, Markdown → PDF, interactive guide. 6 skills · 0 agents.
+    Documentation tools: docsync doc-staleness tracking, memory-sync generation, Markdown → PDF, interactive guide. 6 skills · 0 agents.
   </Card>
 </CardGrid>
 
 ## What makes it different
 
 <CardGrid>
-  <Card title="Spec authoring" icon="document" href="/brewcode/skills/spec/">
-    Writes a complete project specification via structured research and user interaction.
-    Outputs a SPEC.md with requirements, architecture decisions, and acceptance criteria.
+  <Card title="Task board with specs" icon="document" href="/brewtools/skills/task-board-init/">
+    Deploys a file-based Kanban into the repo, plus a generated <code>/task-spec</code> skill that
+    writes a per-task spec and system design before any code is written.
   </Card>
   <Card title="Quorum code review" icon="search" href="/brewcode/skills/superreview/">
     3 to 5 parallel reviewers work independently. Results are merged via a
@@ -47,7 +47,7 @@ import { Card, CardGrid, Callout, InstallPrompt, Spoiler } from '../../component
     then syncs the distilled rules into <code>.claude/rules/</code>.
   </Card>
   <Card title="Skills and agents" icon="settings" href="/brewcode/skills/">
-    25 skills and 8 specialized agents across 4 plugins. Built-in tools for
+    26 skills and 8 specialized agents across 4 plugins. Built-in tools for
     creating your own skills, agents, and hooks. Prompt optimization included.
   </Card>
 </CardGrid>
@@ -78,7 +78,7 @@ All four plugins install with a single marketplace and load automatically with e
     Set up Brewcode in 2 minutes. One command to add the marketplace, one to install.
   </Card>
   <Card title="Quick Start" icon="play" href="/quickstart/">
-    Get started in 15 minutes: [spec](/brewcode/skills/spec/), [conventions](/brewcode/skills/convention/), [deep review](/brewcode/skills/superreview/).
+    Get started in 15 minutes: [conventions](/brewcode/skills/convention/), [task board](/brewtools/skills/task-board-init/), [deep review](/brewcode/skills/superreview/).
   </Card>
 </CardGrid>
 

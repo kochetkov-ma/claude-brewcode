@@ -12,8 +12,6 @@ model: opus
 **ROLE:** Self-contained deep-review coordinator + final validator.
 **OUTPUT:** ONE merged, de-duplicated, severity-prioritized, validated report.
 
-The most thorough review in this repo, run INLINE — no sibling skills, no plugin dependency.
-
 | # | Step | QUICK | EXTENDED |
 |---|------|-------|----------|
 | 0 | Deterministically resolve ONE review MODE **and one DEPTH**; ANNOUNCE both (mode + depth + branch + concrete scope) before any review work — no interactive guessing | yes | yes |
@@ -25,18 +23,6 @@ The most thorough review in this repo, run INLINE — no sibling skills, no plug
 | 6 | Run ONE targeted parallel fan-out — only the agents the changed files actually need | **skipped** | yes |
 | 7 | VALIDATION: per-finding adversarial re-verification of EVERY candidate, then an AskUserQuestion gate on unsanctioned scope expansion, then merge + consistency check | adversarial part **skipped**; merge/rank/consistency run in-session | yes |
 | 8 | ONE merged report + chat summary, drift verdict first | yes (short) | yes |
-
-> **DEPTH is the effort axis, MODE is the scope axis — orthogonal, both resolved in Phase 0, both ANNOUNCED.**
-> `QUICK` (the DEFAULT and the common case) = gates + the intent pass, ONE spawn, no domain experts.
-> `EXTENDED` (opt-in, inferred from the prompt) = everything: the full domain-expert fan-out, the two scope
-> passes, adversarial validation and the scope gate — PLUS the same intent pass.
-> The intent pass runs at BOTH depths, always. At `QUICK` it IS the review.
-
-> Two-phase by design: **find -> validate**. Only findings that survive per-finding reverse-validation are reported
-> (`EXTENDED`). Intent findings are the documented exception — they carry their own evidence, see Phase 2.
-
-> **Domain experts are the point.** A review run by generic agents finds generic issues. Every non-empty file group
-> goes to the agent that OWNS that surface; the built-in `Explore` is a graceful fallback, never the plan.
 
 > **Bash-first:** some macOS builds ship no native `Grep`/`Glob` tool. Every command here is shell-based
 > (`git`, `rg`/`grep`); agents are told the same.
@@ -83,9 +69,9 @@ the same rule applies on `master`/`main` and on feature branches.
 | **IN** | everything git tracks OR will track. Commit status is irrelevant: staged, modified and untracked-but-not-ignored files are all IN |
 | Instrument | `git ls-files --others --exclude-standard` honours `.gitignore` AND `.git/info/exclude` in one call — **never drop that flag** to reach an ignored path |
 
-Consequence: an instruction file that is git-ignored (`.claude/**`, `CLAUDE.md`, task-board files where the project
-ignores them) is never a review TARGET — it is the AUTHORITY reviewers cite, and the task board is the scope
-BASELINE input. Tracked docs are reviewed normally. There is therefore no separate ignored-path sweep anywhere.
+Consequence: a git-ignored instruction file (`.claude/**`, `CLAUDE.md`, an ignored task board) is never a review
+TARGET — it is the AUTHORITY reviewers cite, and the board is the scope BASELINE input. Tracked docs are reviewed
+normally, and there is no separate ignored-path sweep anywhere.
 
 **Mode-resolution commands** (runnable as-written; `PATHSPEC` = the file globs every mode reviews):
 
@@ -153,29 +139,9 @@ mode can run at either depth.
 | 2 | The prompt asks for SPEED or a sanity check: "quick", "quick look", "fast", "just check", "sanity check", "did I do what was asked", "am I on track" — RU: "быстро", "по-быстрому", "просто проверь", "то ли я сделал" | `QUICK` |
 | 3 | Anything else — a focus directive, a bare scope token, an empty prompt, genuine ambiguity | `QUICK` (DEFAULT) |
 
-> **QUICK is the default and the common case.** When the signal is weak or mixed, resolve `QUICK` — a cheap run
-> the user can escalate beats an expensive run nobody asked for. `{MODE}` never forces a depth: a `FULL_PROJECT`
-> request with no depth signal stays `QUICK`; the ANNOUNCE line tells the user how to escalate.
-> Escalation is a re-run with a depth word in the prompt, e.g. `/superreview "deep review of this branch"`.
-
 > **Depth words are CONSUMED here.** Strip them from the prompt before treating the remainder as a `{FOCUS}`
 > directive — "deep review, focus on auth" resolves to `{DEPTH}=EXTENDED` + `{FOCUS}=auth`, never to a focus of
 > "deep review, focus on auth". A prompt that is ONLY depth words leaves `{FOCUS}` = the default ordering.
-
-### What each depth costs and covers
-
-| | `QUICK` (default) | `EXTENDED` (opt-in) |
-|---|---|---|
-| Spawns | **1** — `intent-guard` | non-empty domain groups + scope A + scope B + {0,1,2} general + `intent-guard`, then 1-4 validators |
-| Mechanical gates | run | run |
-| Scope baseline (Phase 0 step 5) | **skipped** — `intent-guard` resolves its own tier sources; `{SCOPE_BASELINE}` = `not resolved (QUICK)` | fully resolved |
-| Domain experts / focus ordering | **not used** | full |
-| Adversarial validation (Phase 3) | **skipped** — nothing in the pool needs it (see Phase 2) | every non-intent candidate |
-| Scope gate (Phase 3b) | **skipped** — no `scope-creep` rows exist | as specified |
-| Report | same file, Intent section + gates only | full |
-| Answers the question | "did we build what was asked?" | "…and is what we built any good?" |
-
----
 
 ## Focus (user directive, else default ordering)
 
@@ -218,18 +184,12 @@ disagreement between the table and the live roster, **the live roster wins**.
 | Auditability | record the DERIVED map in the report's `Agents run` line |
 | Model override | do NOT pass a `model` override — project agents define their own |
 
-> Every `subagent_type` below resolves to a real file in `.claude/agents/`, or a built-in (`Explore`/`Plan`/`general-purpose`).
-> NO external/plugin agent is referenced.
-
 {DOMAIN_AGENTS_TABLE}
 
 PLUS up to two GENERAL cross-cutting agents — they are NOT auto-spawned every time; **the model DECIDES** whether
 (and which) to include, by JUDGEMENT of the scope. Each, if included, runs ONCE over the full changed set:
 
 {GENERAL_AGENTS_TABLE}
-
-> For a SMALL, single-domain, low-risk change, the model MAY skip one or BOTH general agents and rely on the
-> domain owner alone. Do NOT spawn them reflexively — include only when the guidance above applies.
 
 ---
 
@@ -414,10 +374,6 @@ Group the `{FILE_LIST}` by path. **Enable ONLY the groups whose files actually c
 
 {FILE_GROUP_MAP}
 
-PLUS up to two GENERAL cross-cutting agents (see **Domain experts** above). They are NOT auto-spawned every time;
-**the model DECIDES** whether (and which) to include, by JUDGEMENT of the scope. Each, if included, runs ONCE over
-the full changed set (not per group).
-
 > **Total spawns, by depth:**
 > `QUICK` = **1** — `intent-guard`, and nothing else.
 > `EXTENDED` = `intent-guard` (always) + (NON-EMPTY domain groups) + the TWO scope passes (A diff-side,
@@ -493,35 +449,16 @@ Its rows enter `{CANDIDATES}` with `source: intent-guard` and verdict `CONFIRMED
 #### The rest of the fan-out — `EXTENDED` ONLY
 
 Spawn ALL selected agents (the non-empty domain owners + the two scope passes + whichever general agents the model
-chose in Phase 1) in the SAME message as the intent pass. Use the prompt contract in `references/agent-prompt.md` VERBATIM,
-substituting EVERY placeholder it contains — a template shipped with an unsubstituted placeholder sends the literal
-brace text to the agent: `{FILE_LIST}` (scoped to that
-group for domain owners; full set for any included general agent), the resolved `{FOCUS}`, `{GATE_RESULTS}`,
-`{SCOPE_BASELINE}` and `{OWNERSHIP}` (from Phase 0 step 5; `UNKNOWN` / `none` when unresolved — never leave the
-brace text in place), and the `references/{STACK_REF}` guidelines. Each prompt MUST instruct the agent to **apply `.claude/rules/*` +
-`.claude/convention/*` for its area and CITE the rule number it enforces** — the skill does NOT restate the rules; the
-agents read the canonical files. Each prompt MUST also embed the focus ordering verbatim so agents spend effort in
-priority order, and **report security findings ONLY when CRITICAL (P0)**. Each prompt MUST also include the
-**over-complexity / over-engineering** dimension: flag speculative abstractions, needless params/config/methods "just
-in case", premature generalization, KISS/YAGNI-removable indirection, and duplicated logic to collapse — `category:
-over-complexity`, citing the project best-practices + avoid rules. Every agent returns the SAME JSON shape:
+chose in Phase 1) in the SAME message as the intent pass. Use the prompt contract in `references/agent-prompt.md`
+VERBATIM — it already carries the focus ordering, the security-only-if-P0 rule, the over-complexity dimension, the
+rule-citation requirement and the output JSON, so restate NONE of them here. Substitute EVERY placeholder it
+contains, or the literal brace text reaches the agent: `{FILE_LIST}` (scoped to that group for domain owners; full
+set for any general agent), the resolved `{FOCUS}`, `{GATE_RESULTS}`, `{SCOPE_BASELINE}` and `{OWNERSHIP}` (from
+Phase 0 step 5; `UNKNOWN` / `none` when unresolved), and the `references/{STACK_REF}` guidelines.
 
-```
-{
-  "findings": [{
-    "file": "path/to/file{SOURCE_GLOB}", "lineStart": 42, "lineEnd": 45,
-    "category": "boundary|architecture|scope-creep|intent|reuse|over-complexity|security|logic|persistence|test-quality|pins|style",
-    "severity": "blocker|critical|major|minor",
-    "rule": "avoid#N|best-practices#N|architecture#N|containers#N|scope#<shape>|intent#<class>|... or null",
-    "title": "...", "description": "...", "suggestion": "...",
-    "existing": "path|null", "reuse": "REUSE|EXTEND|CONSIDER|KEEP_NEW|null",
-    "confidence": 0.85
-  }]
-}
-```
-
-> `category: "intent"` + `rule: "intent#<class>"` are RESERVED for `intent-guard`. No domain owner, general agent
-> or scope pass may emit them — a domain owner that spots drift reports it as `scope-creep` as before.
+> The finding JSON ("Output JSON ONLY"), the severity guide and the RESERVED rule namespaces (`intent#<class>`
+> for `intent-guard`, `scope#S<n>` for nobody) live ONCE in `references/agent-prompt.md` — every agent, including
+> both scope passes, returns exactly that shape. Never re-type it here.
 
 **PLUS TWO DEDICATED SCOPE passes** (spawn BOTH in the SAME message as the rest of the fan-out). They are split by
 EVIDENCE SOURCE, not by axis: **A walks the DIFF inward** against the sanctioned surface, **B reasons from the
@@ -602,8 +539,12 @@ id and score the claimed `status` against the corpus, per the status table in se
 implementing it is D1/D2 (the proof rules below still bind: a `done` claim is not evidence), an implemented block
 still marked `not-started`/`in-progress` is D5 (stale record, P3), an honestly unfinished id is NOT a finding, and
 an implemented `out` id belongs to pass A as shape 2 — mention it, do not score it. Cite each as `<TASK-ID>#S<n>`;
-`scope#S*` is not a rule id. **No `## Scope` table in the baseline -> skip this paragraph silently: no tally, no
-note, no finding.** Report the id tally (done-as-claimed / total `in`) for the report's scope section.
+`scope#S*` is RESERVED, never a rule id. ANCHOR a D5 on the IMPLEMENTING code — the hunk that proves the block
+landed; `file`/`lineStart` may NEVER be the board file (INPUT only, never a finding location), and the stale row
+lives in the finding TEXT. A `done` id with nothing implementing it has no such anchor: that is D1/D2 under PROOF
+OF ABSENCE, not D5. **No `## Scope` table in the baseline -> skip this paragraph silently: no tally, no
+note, no finding.** Report the id tally (done-as-claimed / total `in`, plus how many `in` ids are legitimately
+unfinished — those are NOT findings) for the report's scope section.
 D1 and D4 are ABSENCE claims. Every scope#D* finding MUST carry, in \"description\": (a) the criterion QUOTED
 VERBATIM from the task/issue, and (b) the exact search command you ran and its empty result. No quote or no cited
 search = you may not claim P0: report it at P2 with \"deliveryProofMissing\": true, for the Phase 3b gate.
@@ -627,15 +568,6 @@ verdict already, so Phase 3 only RANKS them. **Intent rows enter the same way** 
 `CONFIRMED-BY-EVIDENCE`, carrying their own quoted ASKED + tier + DELIVERED evidence, so Phase 3 only RANKS them
 too and MAY NOT re-litigate or reject them. Every OTHER candidate enters verdictless and may reach the report only
 via Phase 3.
-
-> **Why intent rows skip the adversarial validator — a decision, not an oversight.** The validator's job is to
-> read the cited code and try to disprove a claim ABOUT THAT CODE. An intent finding is not a claim about code: it
-> is a claim that a quoted requirement was not met, and it already ships its own proof (the verbatim quote, the
-> source tier, the path/count/command output that evidences what was delivered). A code-reading validator adds
-> nothing to that, and at `QUICK` it does not run at all. The bar is enforced at the SOURCE instead: no quote, no
-> tier, or no concrete evidence -> `intent-guard` drops the finding before emitting it. To pressure-test an intent
-> row, re-run at `EXTENDED`: the domain owners and the two scope passes then cover the same ground from the code
-> side, and a genuine drift shows up twice.
 
 ### Phase 3 — VALIDATION (per-finding adversarial reverse-check, the GATE)
 
@@ -672,11 +604,6 @@ sweep has many groups, and step 2's "merge and de-duplicate ACROSS agents" is im
 batch). Batch by descending severity so the worst findings are validated first. Each batch runs steps 1 and 3-4 on
 its own slice; **run step 2 (merge + de-duplicate) ONCE, in a final pass over the union of all batch outputs**.
 Sum `stats` from the final pass, never from the batches.
-
-> **Overflow past 4 batches — nothing may be silently dropped.** First RAISE the batch size (60-80 still validates
-> per-finding) so the whole pool fits in 4 spawns; a pool that big is usually duplicate-heavy, so de-duplicating
-> BEFORE batching often removes the overflow outright. Only if it still does not fit: validate the highest-severity
-> 4 batches and report every remaining candidate as `UNVALIDATED` — counted, named, forcing `INCOMPLETE`.
 
 ```
 Task(subagent_type="{VALIDATOR_AGENT}", prompt="
@@ -875,6 +802,39 @@ the sections that had no producer — Boundary & Architecture, Reuse, Over-Compl
 Validation — are written as `not run (QUICK depth)` rather than as empty tables: an empty table reads as "checked,
 nothing found", which would be a lie.
 
+### Phase 4b — SELF-SYNC (`EXTENDED` only, COORDINATOR only, BEFORE the Phase 5 summary)
+
+This skill was generated against a snapshot; this run already computed what that snapshot got wrong. Correct THIS
+file and `references/scope.md` from data ALREADY in context — no new spawn, no new read except the `wc -l` below.
+It runs AFTER Phase 4's report is written and BEFORE Phase 5 prints, so the summary's `Self-sync:` line reports a
+result that already happened.
+
+**SKIP entirely at `QUICK`** — one agent, no live roster, no baseline: rewriting those tables from absence would
+replace real data with nothing. **Never inside a spawned agent** — parallel agents editing one SKILL.md collide.
+Code, tests, docs and the report stay READ-ONLY here as everywhere: the ONLY writable paths are these two files.
+
+| Step | Do it when | Edit |
+|------|-----------|------|
+| Roster refresh | the Phase 1 LIVE roster differs from the emitted tables | rewrite the group -> agent rows: add the new agent, mark a vanished one `MISSING -> Explore` |
+| **Gate repair** | a Phase 0 step 4 gate reported `not run` **AND** a `command -v <bin>` re-test proves the binary is ABSENT. `not run` with the binary present is a toolchain/deps failure, NOT a dead gate — leave that row untouched | fix that row of the gate block to the real command, else annotate it `not available in this project`. Nothing else ever clears a dead gate — it reports `not run` forever |
+| Scope baseline | step 5 resolved `UNKNOWN`, or the tracker actually found disagrees with `{TRACKER_LABEL}` | correct `references/scope.md` section 1 to what was really resolvable |
+| Shared surface | a scope pass A finding named a surface absent from `references/scope.md` section 2 | append that row — the finding IS the evidence |
+
+> **Non-growth — MEASURED, never asserted.** Run `wc -l` on BOTH files before the first Edit and again after the
+> last one, and print `before -> after (delta)` in the Phase 5 `Self-sync:` line. The total delta MUST be `<= 0`:
+> delete the stale line before adding the true one, correct in place, never append a second version. A measured
+> positive delta means REVERT the additions you cannot pay for and print them as proposals instead — an unmeasured
+> "delta <= 0" claim is not a measurement.
+
+> **CARVE-OUT.** FACTS may be corrected. DECISIONS may NOT be rewritten without explicit user instruction: depth
+> semantics, the corpus rule, the permanent UNKNOWN-baseline P2 cap, focus ordering, the read-only invariant.
+
+**Never auto-written — PROPOSE in the Phase 5 summary instead:**
+- **DEGRADED groups / missing experts** -> print `DEGRADED: {groups}` + "re-run `/brewcode:superreview`". Creating
+  an expert is an `agent-creator` spawn that would change this review's own tooling mid-run.
+- **New drift examples for `.claude/agents/intent-guard.md`** -> print the proposed row only. That file is
+  byte-untouchable by contract, and an append per run grows it monotonically at every future review's expense.
+
 ### Phase 5 — Chat summary
 
 ```
@@ -904,6 +864,10 @@ Per-finding reverse-validation dropped {N} candidates (false-positive/already-fi
 Gate findings carry verdict CONFIRMED-BY-EXECUTION — validated by the run itself, command + output cited.
 Intent findings carry verdict CONFIRMED-BY-EVIDENCE — each quotes the requirement, its source tier and the
 delivered path/count.
+
+Self-sync: {N row(s) corrected in SKILL.md / references/scope.md; wc -l before -> after, delta {D} | no change | not run (QUICK)}
+       {DEGRADED: <groups> — re-run /brewcode:superreview to re-tailor the expert roster}
+       {intent-guard drift row PROPOSED (never auto-written): <row>}
 
 Report: .claude/reports/{TIMESTAMP}_superreview/REPORT.md
 
@@ -941,6 +905,7 @@ superreview does NOT run /simplify or any skill and does NOT edit code — these
 | Report dir | `<repo-root>/.claude/reports/{TIMESTAMP}_superreview/` | Merged report, findings sorted P0 -> P3 |
 | Max files | 50 (except `FULL_PROJECT`) | `EXTENDED` only — AskUserQuestion: narrow or proceed. Never asked at `QUICK` |
 | Search tool | Bash `rg`/`grep`/`git ls-files` | reuse-first search; note which in report |
+| Self-sync | Phase 4b, `EXTENDED` only, coordinator only | corrects THIS file + `references/scope.md` in place from in-context data; line delta `<= 0`, PROVEN by a before/after `wc -l`; facts only — decisions, missing experts and `intent-guard.md` are PROPOSALS |
 
 ---
 
@@ -973,6 +938,8 @@ superreview does NOT run /simplify or any skill and does NOT edit code — these
 | Agent timeout | Retry once, then mark that source unavailable + warn; the verdict inherits INCOMPLETE — a timed-out group was NOT reviewed |
 | Validation rejects everything, gates green | Report "No issues survived validation" — verdict APPROVED |
 | All sources clean | Report "No issues found across standards, architecture, scope and correctness" — verdict APPROVED |
+| Phase 4b self-sync would GROW the file (measured `wc -l`) | Do NOT write. Report `Self-sync: skipped (would grow +{N})` and name what it wanted to add — a correction that cannot be paid for is a proposal |
+| Phase 4b correction touches a DECISION | Do NOT write it. Print it as a proposal line; only the user changes decisions |
 
 ---
 
@@ -991,22 +958,15 @@ superreview does NOT run /simplify or any skill and does NOT edit code — these
 SKILL METADATA — generated {GENERATED_AT}
 
 Self-contained project-local deep-review skill for {PROJECT_NAME}. NO sibling-skill orchestration, never invokes
-another skill, NO plugin dependency. TWO AXES: MODE = scope (FULL_PROJECT|EXPLICIT|UNCOMMITTED|LAST_COMMITS),
-DEPTH = effort (QUICK default | EXTENDED, inferred semantically from the prompt, no flag).
-QUICK = mechanical gates + the intent-guard pass (1 spawn). EXTENDED = that plus the domain-EXPERT fan-out +
-2 scope passes (find) -> adversarial per-finding validation (gate) -> scope gate. Both write ONE merged report at
-.claude/reports/{TIMESTAMP}_superreview/REPORT.md. Agents: project-local (.claude/agents/) + built-in.
+another skill, NO plugin dependency. Two axes (MODE = scope, DEPTH = effort) and what each costs: see Configuration.
 
 Corpus rule: git-IGNORED is OUT, everything tracked-or-will-be-tracked is IN (commit status irrelevant). The
 instruction tree is AUTHORITY, never a subject; task-board files are the scope-baseline INPUT only.
 
-Re-adopt triggers:
-- New / renamed agent in .claude/agents/ (auto-picked at runtime; refresh the emitted routing table)
-- CLAUDE.md / .claude/rules invariants updated
-- New service group (path pattern) added -> extend PATHSPEC + the group map
-- New always-shared surface (dir / registry / workflow) -> add it to references/scope.md section 2
-- Task-tracker layout or branch->issue convention changed -> re-check references/scope.md section 1
-- Planned scale / testing / dependency / layout policy changed -> update .claude/agents/intent-guard.md sections
-  3-4 (the generator REUSES an existing intent-guard.md and never overwrites it, so that edit is yours to make)
-Regenerate with: /brewcode:superreview
+Re-adopt: Phase 4b SELF-SYNC corrects the routing table, dead gates, the scope baseline and shared surfaces in
+place on every EXTENDED run (facts only; decisions need you). Regenerate with /brewcode:superreview on a
+structural change — new stack, new service group / PATHSPEC, rules or CLAUDE.md invariants rewritten, DEGRADED
+groups needing new experts, and a NEW or RENAMED agent in .claude/agents/ (the routing table refreshes itself only
+on an EXTENDED run — a QUICK-only user never gets it). .claude/agents/intent-guard.md sections 3-4 stay yours: the generator REUSES an
+existing one and never overwrites it. `generate.sh upgrade` refreshes an installation without losing these edits.
 -->

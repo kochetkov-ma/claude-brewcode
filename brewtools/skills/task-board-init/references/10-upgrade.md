@@ -43,28 +43,34 @@ Enumerate what is present. Report the table BEFORE touching anything.
 TARGET="<absolute path resolved in P0>"
 test -n "$TARGET" && test -d "$TARGET" || { echo "MISS TARGET unset or not a dir -- probe did NOT run"; exit 1; }
 T="$TARGET"; F="$T/.claude/features"
-for p in .claude/skills/task-spec/SKILL.md \
+for p in .claude/skills/task-spec/SKILL.md .claude/features/PROGRESS.md \
   .claude/features/specs/SPEC_TEMPLATE.md .claude/features/specs/DESIGN_TEMPLATE.md; do
   test -f "$T/$p" && echo "PRESENT $p" || echo "ABSENT  $p"
 done
 test -d "$F/specs" && echo "PRESENT dir specs" || echo "ABSENT  dir specs"
 
-mark() { # mark <label> <file> <fixed-string> [<second fixed-string, also required>]
+mark() { # mark <label> <file> <fixed-string> [<2nd, also required>] [<3rd, also required>]
   test -f "$2" || { echo "ABSENT  $1"; return; }
   grep -qF "$3" "$2" && { test -z "$4" || grep -qF "$4" "$2"; } \
+    && { test -z "$5" || grep -qF "$5" "$2"; } \
     && echo "MARK-OK $1" || echo "PATCH   $1"
 }
-mark tt      "$T/.claude/agents/task-tracker.md"        '## Spec triage'
-mark tracker "$F/TRACKER.md"                            '## 10. Spec layer' '| in/out | status |'
-mark tb      "$T/.claude/skills/task-board/SKILL.md"    'SPECS view'
-mark rule    "$T/.claude/rules/tasks.md"                '`spec:` = REQ FM'
-mark index   "$F/INDEX.md"                              'specs/SPEC_TEMPLATE.md'
-mark board   "$F/board.md"                              '| owner | file | spec |'
+mark 1s "$T/.claude/agents/task-tracker.md"      '## Spec triage'
+mark 1p "$T/.claude/agents/task-tracker.md"      '## Session progress'
+mark 2s "$F/TRACKER.md"                          '## 10. Spec layer' '| in/out | status |'
+mark 2p "$F/TRACKER.md"                          'PROGRESS.md'
+mark 4s "$T/.claude/skills/task-board/SKILL.md"  'SPECS view'
+mark 4p "$T/.claude/skills/task-board/SKILL.md"  'PROGRESS.md'
+mark 5s "$T/.claude/rules/tasks.md"              '`spec:` = REQ FM'
+mark 5p "$T/.claude/rules/tasks.md"              '## Session progress'
+mark 6s "$F/INDEX.md"                            'specs/SPEC_TEMPLATE.md'
+mark 6p "$F/INDEX.md"                            'PROGRESS.md'
+mark 7  "$F/board.md"                            '| owner | file | spec |'
 if test -f "$F/TASK_TEMPLATE.md"; then
   if grep -qE '^spec:' "$F/TASK_TEMPLATE.md" && grep -qF '## Scope' "$F/TASK_TEMPLATE.md" \
      && grep -qF '| in/out | status |' "$F/TASK_TEMPLATE.md"; then
-    echo "MARK-OK tpl"; else echo "PATCH   tpl"; fi
-else echo "ABSENT  tpl"; fi
+    echo "MARK-OK 3"; else echo "PATCH   3"; fi
+else echo "ABSENT  3"; fi
 
 elig=(); nofm=()
 for f in "$F"/backlog/*.md "$F"/todo/*.md "$F"/progress/*.md; do
@@ -86,20 +92,21 @@ DETECT table:
 | Artifact | State | Action |
 |----------|-------|--------|
 | `.claude/skills/task-spec/SKILL.md` | absent \| present | ADD \| SKIP |
+| `.claude/features/PROGRESS.md` | absent \| present | ADD \| SKIP (ungated -- it is not part of the spec layer) |
 | `.claude/features/specs/` | absent \| present | MKDIR \| SKIP |
 | `.claude/features/specs/SPEC_TEMPLATE.md` | absent \| present | ADD \| SKIP |
 | `.claude/features/specs/DESIGN_TEMPLATE.md` | absent \| present | ADD \| SKIP |
-| `.claude/agents/task-tracker.md` | MARK-OK \| PATCH \| ABSENT | SKIP \| PATCH \| ADD (drift) |
-| `.claude/features/TRACKER.md` | MARK-OK \| PATCH \| ABSENT | SKIP \| PATCH \| ADD (drift) |
-| `.claude/features/TASK_TEMPLATE.md` | MARK-OK \| PATCH \| ABSENT | SKIP \| PATCH \| ADD (drift) |
-| `.claude/skills/task-board/SKILL.md` | MARK-OK \| PATCH \| ABSENT | SKIP \| PATCH \| ADD (drift) |
-| `.claude/rules/tasks.md` | MARK-OK \| PATCH \| ABSENT | SKIP \| PATCH \| ADD (drift) |
-| `.claude/features/INDEX.md` | MARK-OK \| PATCH \| ABSENT | SKIP \| PATCH \| ADD (drift) |
-| `.claude/features/board.md` | MARK-OK \| PATCH | SKIP \| PATCH (structural only, U4) |
+| `.claude/agents/task-tracker.md` | U4 rows `1s` + `1p`, each MARK-OK \| PATCH \| ABSENT | per row: SKIP \| PATCH; either ABSENT -> ADD (drift) |
+| `.claude/features/TRACKER.md` | U4 rows `2s` + `2p`, each MARK-OK \| PATCH \| ABSENT | per row: SKIP \| PATCH; either ABSENT -> ADD (drift) |
+| `.claude/features/TASK_TEMPLATE.md` | U4 row `3`: MARK-OK \| PATCH \| ABSENT | SKIP \| PATCH \| ADD (drift) |
+| `.claude/skills/task-board/SKILL.md` | U4 rows `4s` + `4p`, each MARK-OK \| PATCH \| ABSENT | per row: SKIP \| PATCH; either ABSENT -> ADD (drift) |
+| `.claude/rules/tasks.md` | U4 rows `5s` + `5p`, each MARK-OK \| PATCH \| ABSENT | per row: SKIP \| PATCH; either ABSENT -> ADD (drift) |
+| `.claude/features/INDEX.md` | U4 rows `6s` + `6p`, each MARK-OK \| PATCH \| ABSENT | per row: SKIP \| PATCH; either ABSENT -> ADD (drift) |
+| `.claude/features/board.md` | U4 row `7`: MARK-OK \| PATCH | SKIP \| PATCH (structural only, U4) |
 | task files missing `spec:` FM | `backfill-needed` | BACKFILL (gated) \| SKIP if 0 |
 | task files with no frontmatter | `skipped-no-frontmatter` | SKIP always, named in the report |
 
-If every row is SKIP and `backfill-needed=0` -> report `upgrade: no-op, spec layer already installed` and STOP. That is the rerun path.
+A file whose MARK is SPLIT (`<n>s` spec layer, `<n>p` session-progress layer) reports ONE probe line per row; the two are independent install units and a file can be SKIP for one and PATCH for the other. If every row is SKIP and `backfill-needed=0` -> report `upgrade: no-op, spec layer already installed` and STOP. That is the rerun path.
 
 > `ADD (drift)` = a PATCH target is missing entirely. Do not fail: emit the full file from its reference template and NOTE the drift in the report -- the deployment is incomplete, the user should know. A drift-ADD MUST resolve EVERY token that reference's header declares -- its `Substitute ...` line AND every gated placeholder declared elsewhere in that header (see U2), including `{{CLOSE_MARKER}}` / `{{CLOSE_MARKER_SHORT}}` and, for `task-tracker.md`, the two `CMD_DECOMPOSED` line placeholders.
 
@@ -152,12 +159,11 @@ mkdir -p "$TARGET/.claude/features/specs" && echo "OK specs dir" || echo "FAIL s
 | Emit | From | Substitute |
 |------|------|------------|
 | `TARGET/.claude/skills/task-spec/SKILL.md` | `references/08-task-spec-skill.md` | exactly the tokens in `08`'s own header `Substitute ...` line -- read it, !=re-enumerate here |
+| `TARGET/.claude/features/PROGRESS.md` | `references/05-features-templates.md`, `## PROGRESS.md` block | `{{REPO_NAME}}`, `{{LANG}}`, `{{TODAY}}`. Written EMPTY (all five fields `--`); the board's live state is never back-filled into it -- `task-tracker` rewrites it on its next run |
 | `TARGET/.claude/features/specs/SPEC_TEMPLATE.md` | `references/09-spec-templates.md` | exactly the tokens in `09`'s own header `Substitute ...` line |
 | `TARGET/.claude/features/specs/DESIGN_TEMPLATE.md` | `references/09-spec-templates.md` | same header line as above |
 
 Reading the reference's header is the ONLY authority on its token set -- a list copied here drifts the moment that file changes.
-
-Unescape inner code fences on write (`\`\`\`` -> ```` ``` ````), same as P3.
 
 > A PRESENT file in the ADD set is NEVER overwritten -- it becomes SKIP. If the user wants it regenerated they delete it and rerun.
 
@@ -165,21 +171,28 @@ Unescape inner code fences on write (`\`\`\`` -> ```` ``` ````), same as P3.
 
 ## U4. PATCH set (gated -- diff, then AskUserQuestion per FILE)
 
-Every patch: MARK present -> SKIP silently (idempotent). MARK absent -> build the exact insertion, show it as a diff-style block, get approval for THAT file, then `Edit` (never `Write`). Bottom-up by line number when a file takes more than one insertion.
+Every ROW below: its MARK present -> SKIP that row silently (idempotent). MARK absent -> build the exact insertion, show it as a diff-style block, get approval for that FILE, then `Edit` (never `Write`). Bottom-up by line number when a file takes more than one insertion.
 
-**ALL-OR-NOTHING per file.** A file's gated-site set = every `{{SPEC_*}}` placeholder its own reference assigns to that file (the reference's spec-mode header list is the authority -- read it, !=count from here). Install every one of them, or leave the file untouched. Installing a subset is what produces a rule with no enforcer.
+**Two independent LAYERS, one row each.** `<n>s` = the spec layer (`{{SPEC_*}}` sites, gated by `SPEC_MODE`); `<n>p` = the session-progress layer (UNGATED, baseline in both modes). They install and skip separately: a board that took the spec layer but predates `PROGRESS.md` is `1s`=SKIP, `1p`=PATCH. !=key one on the other -- a conjunction MARK re-inserts a block that is already there.
 
-| # | File | MARK (idempotency probe) | Gated sites from | Insert |
-|---|------|--------------------------|------------------|--------|
-| 1 | `.claude/agents/task-tracker.md` | `## Spec triage` | `02`'s spec-mode gate paragraph | every `{{SPEC_*}}` site 02 assigns to the agent body |
-| 2 | `.claude/features/TRACKER.md` | `## 10. Spec layer` AND `` `\| in/out \| status \|` `` (conjunction) | `05`'s spec-mode placeholder table, rows sited `TRACKER.md` | section 10 + every other TRACKER site |
-| 3 | `.claude/features/TASK_TEMPLATE.md` | `^spec:` AND `## Scope` AND `` `\| in/out \| status \|` `` (conjunction) | `05`, rows sited `TASK_TEMPLATE.md` | `spec:` FM line after `links:` + `## Scope` block BEFORE `## Acceptance` |
-| 4 | `.claude/skills/task-board/SKILL.md` | `SPECS view` | `03`'s header placeholder list | every `{{SPEC_*}}` site 03 defines |
-| 5 | `.claude/rules/tasks.md` | `` `spec:` = REQ FM `` | `04`'s header placeholder list | the spec FM field + the spec rule rows appended to the rule table |
-| 6 | `.claude/features/INDEX.md` | `specs/SPEC_TEMPLATE.md` | `05`, rows sited `INDEX.md` | the SPEC/DESIGN template rows in the Control files table |
-| 7 | `.claude/features/board.md` | `\| owner \| file \| spec \|` | `05`, rows sited `board.md` | STRUCTURAL ONLY -- see below |
+**ALL-OR-NOTHING per ROW.** Install every site in that row's Insert cell, or leave the file untouched for that layer. The named reference's own header is the authority on its site set -- read it, !=count from here. Installing a subset is what produces a rule with no enforcer.
 
-The MARK for row 3 is a CONJUNCTION: `^spec:` in FM AND a `## Scope` heading AND the 4-column header `| in/out | status |`. Any one missing = PATCH, so a half-patched template is repaired instead of reported SKIP forever. Row 2's MARK is a conjunction for the same reason: section 10's heading alone was the old marker, and a board upgraded before the execution-status axis carries it.
+| # | File | Layer | MARK (idempotency probe) | Insert (sites per the named reference's own header) |
+|---|------|-------|--------------------------|--------|
+| 1s | `.claude/agents/task-tracker.md` | spec | `## Spec triage` | every `{{SPEC_*}}` site `02` assigns to the agent body |
+| 1p | (same file) | progress | `## Session progress` | `02`'s `description:` amendment (the `PROGRESS.md`-in-sync clause + the `session progress` trigger), the `## Session progress` section, the `PROGRESS.md` layout line, invariant 4's `PROGRESS.md` clause, close step 5 (gated board-drain `NEXT:`) and the two checklist rows |
+| 2s | `.claude/features/TRACKER.md` | spec | `## 10. Spec layer` AND `` `\| in/out \| status \|` `` | section 10 + every other `05` row sited `TRACKER.md` |
+| 2p | (same file) | progress | `PROGRESS.md` | the section-2 `PROGRESS.md` layout line + section 8 step 4 |
+| 3 | `.claude/features/TASK_TEMPLATE.md` | spec | `^spec:` AND `## Scope` AND `` `\| in/out \| status \|` `` | `spec:` FM line after `links:` + `## Scope` block BEFORE `## Acceptance` (`05`, rows sited `TASK_TEMPLATE.md`) |
+| 4s | `.claude/skills/task-board/SKILL.md` | spec | `SPECS view` | every `{{SPEC_*}}` site `03` defines |
+| 4p | (same file) | progress | `PROGRESS.md` | the `PROGRESS.md` invariant bullet, the layout line, VIEW steps 1-2 and MOVE step 4 (incl. the gated board-drain `NEXT:`) |
+| 5s | `.claude/rules/tasks.md` | spec | `` `spec:` = REQ FM `` | the `spec:` FM field + spec rules 13-22 appended to the rule table |
+| 5p | (same file) | progress | `## Session progress` | the whole `## Session progress` section (rules P1-P4) below the table |
+| 6s | `.claude/features/INDEX.md` | spec | `specs/SPEC_TEMPLATE.md` | the SPEC/DESIGN template rows (`05` (G)) |
+| 6p | (same file) | progress | `PROGRESS.md` | the `PROGRESS.md` row in the Control files table |
+| 7 | `.claude/features/board.md` | spec | `\| owner \| file \| spec \|` | STRUCTURAL ONLY -- see below (`05`, rows sited `board.md`) |
+
+Rows `3` and `2s` carry a CONJUNCTION MARK -- legal because every conjunct belongs to the SAME layer: for `3`, `^spec:` in FM AND a `## Scope` heading AND the 4-column header `| in/out | status |`; for `2s`, section 10's heading alone was the old marker, and a board upgraded before the execution-status axis carries it. Any one conjunct missing = PATCH, so a half-patched template is repaired instead of reported SKIP forever.
 
 **STALE site -- 3-column `## Scope`.** A board deployed before the execution-status axis has `## Scope` tables with THREE columns (`id | block | in/out`); the current gated form is FOUR (`05` (D), `id | block | in/out | status`). In the two GENERATED control files -- `TASK_TEMPLATE.md`, and `TRACKER.md` section 4's example -- that table IS a gated site, so the widened header is part of the all-or-nothing set: widen the header + separator cells and append ONE `status` cell to each existing row (`not-started` for an `in` row, `--` for an `out` row). Additive, same shape as the `board.md` row append; !=rewrite any other cell. This is the site that must not be the one silently missed: a project that gets section 10's status enum but a template that never created the column leaves TT writing a cell that does not exist. Task files under `backlog/`, `todo/`, `progress/`, `closed/` are NOT touched here -- see the contract in U5.
 
@@ -194,7 +207,7 @@ The `## Feature specs` arm swap decides whether the patch can run at all:
 | header + separator only, NO data rows | reshape them `id \| title \| file` -> `task \| spec \| design` (the `_ON` arm). In scope, and REQUIRED -- skipping it installs a subset |
 | one or more data rows | the reshape would remap real cells -> DECLINE the WHOLE board.md patch (all-or-nothing), report under `manual`, tell the user which table needs a hand remap |
 
-One AskUserQuestion PER FILE (matches `SKILL.md`), showing that file's full diff:
+One AskUserQuestion PER FILE (matches `SKILL.md`) covering every PATCH row of that file, showing the full diff:
 
 > **`<file>` needs an additive patch** [+X lines]: `<one-line description of every gated site>`.
 > Nothing is overwritten; every insertion is a new block.
@@ -209,7 +222,7 @@ Hard limits for this step:
 | !=touch anything under `backlog/`, `todo/`, `progress/`, `closed/` in U4 | real tasks; only U5 may touch them, and only FM |
 | !=reorder `board.md` rows, !=change existing DATA-row cell content | BRD is canonical and hand-curated. Explicitly allowed: header + separator cells, appending a `spec` cell holding `--` to each Progress/Todo row, and the `## Feature specs` header reshape when that table has no data rows. Filling the real `spec` value is TT's job, later |
 | !=renumber existing TRACKER sections or rule-table rows | ids are cited elsewhere |
-| !=install a subset of one file's gated sites | a rule installed without its enforcer is worse than no rule |
+| !=install a subset of one ROW's sites | a rule installed without its enforcer is worse than no rule |
 | !=force an unapproved patch | declined = skipped, cleanly, recorded in the report |
 
 ### U4b. Cross-file coherence check (after the patch round)
@@ -218,11 +231,12 @@ Re-run the PROBE BLOCK and report every half-state -- a rule installed while its
 
 | Half-state | Missing enforcer |
 |------------|------------------|
-| `tasks.md` spec rules present, `task-tracker.md` MARK absent | nothing triages `spec:` or emits the `NEXT: run /task-spec <ID> (spec required: <reason>)` redirect |
-| `tasks.md` spec rules present, `task-board/SKILL.md` MARK absent | no SPECS view, no G2 close gate in the board flow |
-| `TRACKER.md` section 10 present, `TASK_TEMPLATE.md` MARK absent | new tasks are born without `spec:`, without `## Scope`, or with a 3-column `## Scope` -- TT is told to write a `status` cell the template never created |
-| `specs/` templates written, `INDEX.md` MARK absent | the index omits two files this run just wrote |
-| `board.md` `spec` column present, `TASK_TEMPLATE.md` MARK absent | a column nothing ever populates |
+| `5s` installed, `1s` absent | nothing triages `spec:` or emits the `NEXT: run /task-spec <ID> (spec required: <reason>)` redirect |
+| `5s` installed, `4s` absent | no SPECS view, no G2 close gate in the board flow |
+| `2s` installed, `3` absent | new tasks are born without `spec:`, without `## Scope`, or with a 3-column `## Scope` -- TT is told to write a `status` cell the template never created |
+| `specs/` templates written, `6s` absent | the index omits the files this run just wrote |
+| `PROGRESS.md` added, ANY session-progress row (`1p`, `2p`, `4p`, `5p`, `6p`) still PATCH | the file exists with nothing wired to it -- name every missing row: `5p` is the injection channel (nobody is told to keep it current), `1p` the watcher (it goes stale on the first transition), `4p` the read/refresh path, `2p`/`6p` the discoverability |
+| `7` installed, `3` absent | a column nothing ever populates |
 
 > **Half-state detected:** `<pair>`. The rule is installed but its enforcer is not.
 > - Complete it -- apply the missing patch now
@@ -266,7 +280,7 @@ Option 1 leaves the field absent on every existing task; that is a legal state f
 
 **Leftover-placeholder gate.** This block is self-contained and owned by THIS file (`PU` does not run P5). It scans the SAME path set the fresh path's P5 gate scans -- NOT just the ADD set. A drift-ADD writes whole files under `.claude/agents/`, `.claude/rules/` and `.claude/features/`, so an ADD-set-only scan would miss exactly the paths most likely to carry an unresolved token.
 
-Every Bash block in this file is SELF-CONTAINED: shell state does NOT survive between Bash tool calls. `$TARGET` is assigned in P0's block and is EMPTY in every later block, so `$T` / `$F` derived from it are empty too -- the gate then tests `/.claude/...`, finds nothing, and reports PASS. EVERY block in this file -- all four, read-only and mutating alike -- re-establishes `TARGET` literally on line 1 and asserts on line 2 that it is non-empty AND a directory, printing a MISS and exiting non-zero if not. No exceptions: a read-only block that skips the assert reports a false PASS, and a mutating one writes outside the repo. "Silence means PASS" holds only for a block that actually ran.
+Same self-contained rule as the header note: re-establish `TARGET` literally, assert it, then run.
 
 **EXECUTE** using Bash tool -- re-run the U1 PROBE BLOCK verbatim (it re-establishes its own `TARGET`/`T`/`F`), then, as a SEPARATE self-contained block:
 ```bash
@@ -284,8 +298,8 @@ Read the probe output as:
 
 | Probe line | Expected after a full-accept run |
 |------------|----------------------------------|
-| `PRESENT` x3 + `PRESENT dir specs` | ADD set landed |
-| `MARK-OK` x7 | every approved patch landed |
+| `PRESENT` x4 + `PRESENT dir specs` | ADD set landed (incl. `PROGRESS.md`) |
+| `MARK-OK` x11 (rows `1s`-`7`) | every approved patch landed |
 | `backfill-needed=0` | backfill accepted in full |
 
 > **A `PATCH`/`ABSENT`/non-zero line is a MISS only if the user did not decline it.** A declined patch or a declined backfill is expected: report it as `declined`, !=retry, !=re-emit.
@@ -320,6 +334,7 @@ Report the probe rows as these buckets:
 |-----------|----------|
 | `board.md` missing | Not an upgrade. STOP -- tell the user to run a fresh `/brewtools:task-board-init <path>` |
 | ADD target already present | SKIP it; !=overwrite. Report as skipped-already-present |
+| `PROGRESS.md` present (any content, hand-edited or stale) | NEVER rewritten by upgrade -- it is an ADD-set file, so present = SKIP. `task-tracker` refreshes it on its next run |
 | PATCH target file missing | ADD it whole from its reference template with every token resolved, and NOTE the drift in the report |
 | MARK already present in a PATCH target | SKIP silently -- idempotent, !=insert a second copy |
 | Only SOME of a file's gated sites would be installed | Forbidden. All of that file's sites, or none |

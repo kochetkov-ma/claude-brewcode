@@ -137,6 +137,8 @@ Every spawn prompt carries six fields. A bare one-line task is never enough:
 
 A feature agent is told that `setup` already landed the framework, the `e2e-*` roster and `e2e-rules.md` (follow them, do not re-decide), that the BDD scenarios are approved, and that siblings own the shared page objects — reuse, never redefine. Its CONSUMER is the review cycle plus a green CI run, so it reports blockers instead of quarantining a test. The same brief lives in every `references/mode-*.md` file, so each mode's own fan-out inherits it.
 
+Every spawn brief also tells the agent, verbatim, to find the closest well-built existing test before writing a new one and take its principles — additive to the rules above, never instead.
+
 <details>
 <summary>Internals</summary>
 
@@ -149,6 +151,8 @@ A feature agent is told that `setup` already landed the framework, the `e2e-*` r
 | `e2e-automation-tester` | opus | Converts approved scenarios to autotests |
 | `e2e-manual-tester` | sonnet | Verifies system via UI/API, finds exploratory bugs |
 | `e2e-reviewer` | opus | READ-ONLY: reviews quality, rule compliance, coverage |
+
+Every generated `e2e-*` agent carries a permanent Etalon-first line in its Domain Instructions: before writing a test or page object, find the closest well-built existing one in this repo and take its principles — additive to `e2e-rules.md` and project conventions, never a replacement.
 
 **Test architecture layers (stack-agnostic)**
 
@@ -190,7 +194,7 @@ A feature agent is told that `setup` already landed the framework, the `e2e-*` r
     SKILL.md, mode reference files, detect-mode.sh, and architecture reference.
   </Card>
   <Card title="brewcode overview" icon="rocket" href="/brewcode/overview/">
-    Full plugin overview — all 9 skills, agents, and hooks in one place.
+    Full plugin overview — all 8 skills, agents, and hooks in one place.
   </Card>
 </CardGrid>
 

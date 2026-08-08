@@ -6,28 +6,28 @@ description: Detailed description of all brewcode plugin commands
 
 # BC Plugin Commands
 
-> **ver:** 4.2.4 | **Author:** Maksim Kochetkov | **License:** MIT
+> **ver:** 4.10.0 | **Author:** Maksim Kochetkov | **License:** MIT
 
 ## Quick Reference
 
 | # | Command | Purpose | Context | Model | Deps |
 |---|---------|---------|---------|-------|------|
-| 1 | `/brewcode:spec` | Create task SP | session | opus | -- |
-| 2 | `/brewcode:superreview` | Generate project-tailored deep-review skill | fork | opus | -- |
-| 3 | `/brewcode:rules` | Sync KB/session learnings → project rules | session | sonnet | -- |
-| 4 | `/brewcode:skills` | SK status/list/create/improve/review/sync | session | opus | -- |
-| 5 | `/brewcode:agents` | AG status/list/create/improve/review/sync | session | opus | -- |
-| 6 | `/brewcode:convention` | Extract conventions/patterns/architecture → rules + docs | session | opus | -- |
-| 7 | `/brewcode:teams` | Create/manage specialized AG teams | session | opus | -- |
-| 8 | `/brewcode:e2e` | E2E testing: BDD scenarios, autotests, review | session | opus | -- |
-| ~~9~~ | ~~`/bc:secrets-scan`~~ | **moved to brewtools** | -- | -- | -- |
-| ~~10~~ | ~~`/bc:text-optimize`~~ | **moved to brewtools** | -- | -- | -- |
-| ~~11~~ | ~~`/bc:text-human`~~ | **moved to brewtools** | -- | -- | -- |
+| 1 | `/brewcode:superreview` | Generate project-tailored deep-review skill | fork | opus | -- |
+| 2 | `/brewcode:rules` | Sync KB/session learnings → project rules | session | sonnet | -- |
+| 3 | `/brewcode:skills` | SK status/list/create/improve/review/sync | session | opus | -- |
+| 4 | `/brewcode:agents` | AG status/list/create/improve/review/sync | session | opus | -- |
+| 5 | `/brewcode:convention` | Extract conventions/patterns/architecture → rules + docs | session | opus | -- |
+| 6 | `/brewcode:teams` | Create/manage specialized AG teams | session | opus | -- |
+| 7 | `/brewcode:e2e` | E2E testing: BDD scenarios, autotests, review | session | opus | -- |
+| 8 | `/brewcode:semble` | Semantic code-search MCP: install/audit/reindex/remove | session | opus | -- |
+| ~~8~~ | ~~`/bc:secrets-scan`~~ | **moved to brewtools** | -- | -- | -- |
+| ~~9~~ | ~~`/bc:text-optimize`~~ | **moved to brewtools** | -- | -- | -- |
+| ~~10~~ | ~~`/bc:text-human`~~ | **moved to brewtools** | -- | -- | -- |
 
 ## Execution Order
 
 ```
-spec --> superreview --> rules
+superreview --> convention --> rules
 ```
 
 ---
@@ -40,51 +40,7 @@ spec --> superreview --> rules
 
 ---
 
-## 1. `/brewcode:spec`
-
-Creates SPEC.md via parallel codebase research + interactive user clarification. Includes QR.
-
-| Param | Value |
-|-------|-------|
-| Args | `[-n] <description>` \| `<path-to-requirements>` |
-| Context | session |
-| Model | opus |
-| Deps | none |
-| Tools | Read, Write, Glob, Grep, Bash, Task, AskUserQuestion |
-
-`-n`/`--noask`: skip all user questions, auto-approve defaults, record "Skipped (--noask mode)" in SPEC.
-
-### Created Files
-
-| Path | Purpose |
-|------|---------|
-| `TD/` | TK dir |
-| `TD/SPEC.md` | TK specification |
-
-Agents (5-10 launched in parallel, one message): Plan(1) architecture, developer(2-3) services/controllers/configs, tester(1) test patterns, reviewer(1-2) quality + final SP review, Explore(1-2) docs/library search.
-
-### Workflow
-
-1. Check SPEC.md.template exists
-2. Parse flags + args, determine scope
-3. AskUserQuestion (3-5 Qs, 3 categories: Scope, Constraints, Edge cases) unless `-n`
-4. If >3 independent areas OR >12 phases estimated → suggest splitting
-5. Split into 5-10 research areas
-6. Parallel research (5-10 AGs in single message)
-7. Merge findings → SPEC.md
-8. Validation w/ user via AskUserQuestion unless `-n`
-9. QR w/ `reviewer`; MAX 3 iterations, then escalate to user
-
-Input: text → task desc; path → read file as task desc. Naming: `YYYYMMDD_HHMMSS` + lowercase slug, e.g. `20260208_143052_auth_feature`
-
-```
-/brewcode:spec "Implement authorization via JWT tokens"
-/brewcode:spec -n requirements/auth-feature.md
-```
-
----
-
-## 2. `/brewcode:superreview`
+## 1. `/brewcode:superreview`
 
 GENERATOR skill (human-invoked). Analyzes the TARGET project and WRITES a self-contained, project-local `.claude/skills/superreview/` — a merged deep-review skill (domain-expert routing + scope discipline + mechanical gates + adversarial validation). Does not review code itself; it emits the skill that does.
 
@@ -103,6 +59,11 @@ GENERATOR skill (human-invoked). Analyzes the TARGET project and WRITES a self-c
 | `<target>/.claude/skills/superreview/SKILL.md` | project-tailored review skill |
 | `references/{agent-prompt,scope,report-template}.md` | expert selection, scope discipline, report layout |
 | `references/{python\|java-kotlin\|typescript-react\|go}.md` | one per-stack checklist (dominant stack) |
+| `.template-baseline/` | pristine templates saved at emit time; git-ignored, `upgrade`'s diff source |
+
+### Subcommands
+
+`generate.sh <mode>` — `scan | emit | emit-agent | upgrade | validate`. `emit` refuses (exit 1, `already installed`, no `INTENT_GUARD:` line) on a live install; `upgrade` is the supported refresh.
 
 ### Workflow
 
@@ -110,12 +71,15 @@ GENERATOR skill (human-invoked). Analyzes the TARGET project and WRITES a self-c
 2. Analyze project: stack, agents, rules/convention, gate commands, scope tracker, shared surfaces
 3. AskUserQuestion for ambiguous params (scope baseline, shared surfaces, arbiter agent, gate commands)
 4. **Domain experts (mandatory):** classify live agent roster, fill gaps via `agent-creator` (or mark DEGRADED if declined)
-5. Scalar substitution emit (`generate.sh emit`)
-6. Block placeholders filled via Edit (tables, bash blocks)
-7. Validate — no `{PLACEHOLDER}` may remain, every agent name resolves (`generate.sh validate`)
-8. Print generation summary; run the emitted skill via `/superreview "<focus>" [scope]` in the target project
+5. Scalar substitution emit (`generate.sh emit`) — on refusal, go to 5b instead
+6. **5b. Already installed:** `generate.sh upgrade` — writes no live file; stages a fresh emit under `.upgrade-staging/`, diffs the new template against `.template-baseline/`, prints per-asset `IDENTICAL | DIFFERS (<n> template line(s)) | MISSING -> restored (NEEDS PHASE 3) | NO BASELINE`; port the delta by hand, then promote the new baseline. `SUPERREVIEW_FORCE=1 generate.sh emit` overwrites and discards tailored + self-synced edits
+7. Block placeholders filled via Edit (tables, bash blocks)
+8. Validate — no `{PLACEHOLDER}` may remain, every agent name resolves (`generate.sh validate`)
+9. Print generation summary; run the emitted skill via `/superreview "<focus>" [scope]` in the target project
 
 Two non-negotiables: domain experts (Phase 1.6, `validate` fails with zero) and scope discipline (`references/scope.md` — baseline, ownership, 6-shape creep taxonomy, delivery D1-D4, closeout C1-C4).
+
+The emitted skill self-modifies: at `EXTENDED` depth its own Phase 4b SELF-SYNC corrects its routing table, dead gates, scope baseline and shared surfaces in place before the report is printed (coordinator only, line delta `<= 0`, facts only — DECISIONS, missing experts and `intent-guard.md` stay proposals). That is why `emit` refuses on a live install instead of erasing those edits.
 
 ```
 /brewcode:superreview "weight security higher"
@@ -141,7 +105,7 @@ All three treat the ENTIRE `$ARGUMENTS` as ONE free-form prompt — no keyword g
 
 ---
 
-## 3. `/brewcode:rules`
+## 2. `/brewcode:rules`
 
 Manages `.claude/rules/*.md` from a free-form prompt (see shared pattern above, no `sync`). Syncs KB (`KNOWLEDGE.jsonl`) or session learnings into deduplicated, table-form rules. Project scope only — never `~/.claude/rules/`.
 
@@ -163,7 +127,7 @@ Manages `.claude/rules/*.md` from a free-form prompt (see shared pattern above, 
 
 ---
 
-## 4. `/brewcode:skills`
+## 3. `/brewcode:skills`
 
 Manages Claude Code skills from a free-form prompt (see shared pattern above, incl. `sync`).
 
@@ -187,7 +151,7 @@ Manages Claude Code skills from a free-form prompt (see shared pattern above, in
 
 ---
 
-## 5. `/brewcode:agents`
+## 4. `/brewcode:agents`
 
 Manages Claude Code subagents from a free-form prompt (see shared pattern above, incl. `sync`, same engine as `skills`).
 
@@ -213,7 +177,7 @@ Manages Claude Code subagents from a free-form prompt (see shared pattern above,
 
 ---
 
-## 6. `/brewcode:convention`
+## 5. `/brewcode:convention`
 
 Analyzes project to extract etalon classes, patterns, architecture by layer. Generates convention docs in `.claude/convention/` + organizes rules in `.claude/rules/`.
 
@@ -262,7 +226,7 @@ Analyzes project to extract etalon classes, patterns, architecture by layer. Gen
 
 ---
 
-## 7. `/brewcode:teams`
+## 6. `/brewcode:teams`
 
 Creates + manages dynamic teams of domain-specific AGs w/ tracking framework. Analyzes project, proposes team (5-20 AGs), creates w/ self-selection protocol + performance tracking + quorum review.
 
@@ -300,7 +264,7 @@ Creates + manages dynamic teams of domain-specific AGs w/ tracking framework. An
 
 ---
 
-## 8. `/brewcode:e2e`
+## 7. `/brewcode:e2e`
 
 Full-cycle E2E testing: setup testing AGs, create BDD scenarios, write autotests, QR. Stack-agnostic, layered test architecture.
 
@@ -334,6 +298,29 @@ Review cycle: MAX_CYCLES=3 — execute → reviewer validates → different AG r
 
 ---
 
+## 8. `/brewcode:semble`
+
+Installs, audits, repairs, updates, enables, reindexes or removes the `semble_code` semantic code-search MCP for a project.
+
+| Param | Value |
+|-------|-------|
+| Args | `[status\|setup\|enable\|disable\|reindex\|optimize\|update\|remove\|purge\|resume]` or free-text intent (RU/EN) |
+| Context | session |
+| Model | opus |
+| Deps | -- |
+| Tools | Read, Bash, AskUserQuestion |
+
+Setup pins the MCP version, isolates the cache, writes the `semble-first` rule plus session hooks, and migrates project AGs to search semantically first.
+
+```
+/brewcode:semble
+/brewcode:semble status
+/brewcode:semble reindex
+/brewcode:semble remove
+```
+
+---
+
 ## Hooks Architecture
 
 Hooks-only, no external runtime. Claude Code hooks provide ctx mgmt.
@@ -341,7 +328,7 @@ Hooks-only, no external runtime. Claude Code hooks provide ctx mgmt.
 | Hook | Event | Purpose |
 |------|-------|---------|
 | `session-start.mjs` | SessionStart | Session init: version-check, plan-symlink, permission tag |
-| `forced-eval.mjs` | UserPromptSubmit | Skill activation reminder ([SKILL?] injection) |
+| `forced-eval.mjs` | UserPromptSubmit | [ROLE] manager + [SPLIT] bounded units + [BRANCH] default-to-main |
 
 ## KB Format
 

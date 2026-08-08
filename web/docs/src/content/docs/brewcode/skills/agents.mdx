@@ -45,7 +45,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
   <li><div><strong>Input gate</strong><p>Reads <code>$ARGUMENTS</code>. An empty prompt skips analysis and jumps directly to the No-prompt menu; a non-empty prompt proceeds to mode selection.</p></div></li>
   <li><div><strong>Auto-mode select</strong><p>Announces <code>Mode: &lt;mode&gt; (agents) — chosen because ...</code> based on keywords, intent, and target presence in the prompt.</p></div></li>
   <li><div><strong>No-prompt menu</strong><p>Sends a single AskUserQuestion with options: <code>Status (agents)</code> (recommended), <code>Status (all: agents+rules+skills)</code>, <code>Create</code>, <code>Improve</code>, <code>Review</code>, <code>Sync agents (memory sync)</code>, <code>List (plain)</code>, <code>Cancel</code>. The skill continues with the chosen mode.</p></div></li>
-  <li><div><strong>Dispatch</strong><p>Routes to the appropriate handler. Create, improve and sync delegate to the <code>brewcode:agent-creator</code> specialist via Task tool, passing full context — description, scope, model, and improvement focus; review goes instead to the project's reviewer agent from <code>.claude/agents/</code> (falling back to <code>general-purpose</code>), two-phase. Sync mode reads the shared <code>mode-sync.md</code> reference (also used by <code>/brewcode:skills</code>) and fans out one <code>agent-creator</code> subagent per target file.</p></div></li>
+  <li><div><strong>Dispatch</strong><p>Routes to the appropriate handler. Create, improve and sync delegate to the <code>brewcode:agent-creator</code> specialist via Task tool, passing full context — description, scope, model, and improvement focus; review goes instead to the project's reviewer agent from <code>.claude/agents/</code> (falling back to <code>general-purpose</code>), two-phase. Sync mode reads the shared <code>mode-sync.md</code> reference (also used by <code>/brewcode:skills</code>) and fans out one <code>agent-creator</code> subagent per target file. After create/improve completes, the coordinator re-runs that same reference itself, scoped to only the file just written — no extra <code>agent-creator</code> spawn — and applies the verdicts directly with targeted edits.</p></div></li>
   <li><div><strong>Real status</strong><p>Four blocks, never a flat list: inventory by scope (plugin / project / global — counts, names, load path), state (enabled or disabled via the <code>_name.md</code> toggle marker, model), overlaps and conflicts (same name shadowed across scopes, duplicate triggers or descriptions), and health flags (missing README or frontmatter, agents missing <code>Bash</code> in <code>tools:</code>).</p></div></li>
   <li><div><strong>Final output</strong><p>Prints a detection + result table: mode chosen, target, file path, model, scope, and CLAUDE.md update status. Suggests next steps such as <code>/reload-plugins</code> and a test invocation phrase.</p></div></li>
 </Steps>
@@ -110,6 +110,8 @@ Announced as `Sync scope: <scope> — <evidence> | targets: <N> agents`. Impleme
 
 **Non-growth directive:** each synced file ends `<=` its original line count; total delta `<= 0`. Any positive delta needs per-line justification. Order: DELETE first, then FIX, then ADD last.
 
+**Auto-dispatch after create/improve:** once a `create` or `improve` completes, the same reference runs again scoped to only the file just written — S3 ground truth through S5 verdicts, folded into one row of the final report. No second `agent-creator` spawn: the coordinator applies every verdict itself with targeted `Edit` calls, since S4 fan-out is skipped for this scoped pass. A clean file reports one line: `sync: no drift`.
+
 | Verdict | Action |
 |---------|--------|
 | STALE | Fix to minimal true form |
@@ -126,7 +128,7 @@ Announced as `Sync scope: <scope> — <evidence> | targets: <N> agents`. Impleme
 <CardGrid>
   <Card title="rules" icon="list" href="/brewcode/skills/rules/">Sibling: manage project rules</Card>
   <Card title="skills" icon="pencil" href="/brewcode/skills/skills/">Sibling: manage skills</Card>
-  <Card title="memory" icon="sync" href="/brewdoc/skills/memory/">Sibling: same non-growth sync over memory files, CLAUDE.md, rules</Card>
+  <Card title="memory-sync-init" icon="sync" href="/brewdoc/skills/memory-sync-init/">Sibling: generates a project-local sync over memory files, CLAUDE.md, rules — same non-growth rule</Card>
   <Card title="brewcode" icon="rocket" href="/brewcode/overview/">Plugin overview</Card>
   <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/SKILL.md">SKILL.md</Card>
 </CardGrid>

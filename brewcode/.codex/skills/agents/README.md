@@ -65,7 +65,7 @@ Verdicts: `STALE`, `DEAD`, `DUPLICATE`, `OBVIOUS`, `DRIFT`, `MISSING`.
 
 Report table: `File | Lines before -> after | Fixed | Deleted | Added | Key change`, plus corrected facts, additions with source, skipped files, and total delta.
 
-Targets: `.codex/agents/*.toml`, `*/agents/*.md` (repo-local only). Disabled files (`_name.md`) are skipped and reported. `$brewdoc:memory` applies the same non-growth sync to memory files, AGENTS.md, rules and conventions; its `full` mode also syncs the agent and skill rosters in-place — use this skill when you want a roster on its own.
+Targets: `.codex/agents/*.toml`, `*/agents/*.md` (repo-local only). Disabled files (`_name.md`) are skipped and reported. `$brewdoc:memory-sync-init` emits a project-local `/memory-sync` skill that applies the same non-growth sync to AGENTS.md, rules, conventions, agents and skills together — use this skill when you want a roster on its own.
 
 ## Parameters for Create / Improve
 

@@ -39,13 +39,44 @@ A project-tailored `memory-sync` skill:
 9. **Agent re-audit** -- agents are checked against current best practice every sweep, not merely fact-checked.
 10. **Non-growth as the prime directive** -- facts first, then dedup, then compression; every file ends `<=` its
     original line count and the total delta is `<= 0`.
+11. **A `HARD` depth** -- two extra deletion passes for a surface that has grown dead weight. See below.
+
+## Depth: NORMAL vs HARD
+
+The emitted skill has two axes: **scope** picks which change facts drive the sweep, **depth** picks how hard the
+surface itself is cut. Depth is a property of the request -- the token `hard`, or the same intent in prose ("too
+much context", "aggressive", "почисти жёстко"). Nothing is regenerated to switch.
+
+| | `NORMAL` (default) | `HARD` |
+|---|---|---|
+| Fact sync + dedup + compression | yes | yes |
+| Pass A: rules `paths:` precision audit | no | yes |
+| Pass B: obvious-knowledge purge | no | yes |
+
+Reach for `HARD` when the auto-loaded context has become expensive: a long-running project accumulates dead weight
+across every rule and convention file, and neither kind of waste shows up in a diff.
+
+- **Pass A -- `paths:` precision.** A rule with a broad or missing glob is loaded into EVERY context and paid for
+  on every turn, so precision is a token-budget property, not a style preference: the glob must be the narrowest
+  pattern still covering the rule's real subject. Verdicts `OK` / `TOO_BROAD` / `TOO_NARROW` / `DANGLING` /
+  `MISSING` / `CORRECTLY_GLOBAL` -- a genuinely repo-wide subject legitimately carries no glob, and one is never
+  invented to look tidy.
+- **Pass B -- obvious-knowledge purge.** Anything a competent model already knows is deleted on sight, not
+  compressed: code-quality exhortations, how to use a mainstream language or framework feature, restated tool
+  docs, textbook pattern definitions. What survives is what the model cannot know -- decisions that invert a
+  default ("no unit tests here, integration only"), domain invariants, environment quirks, explicit prohibitions.
+  The discriminator, per line: "would a competent model with no access to this repo already do this?" -> delete;
+  "does this line only make sense because someone HERE decided it?" -> keep.
+
+Both passes may only SHRINK a file; at `HARD` depth a file that grew is a defect, not a judgement call. The
+generator calibrates them on real examples harvested from the target's own rules.
 
 ## Modes
 
 | Mode | Writes | What runs |
 |------|--------|-----------|
 | `status` | nothing | Is `memory-sync` installed, what is its provenance stamp, and how stale are its surface tables vs the live repo (baked counts vs enumerated now, dead paths, layers gained). Verdict: `IN SYNC` / `STALE (n drifts)` / `NOT INSTALLED` |
-| `init` (default) | the 3 emitted files | Full analysis + emit. Refuses an existing installation |
+| `init` (default) | the 4 emitted files | Full analysis + emit. Refuses an existing installation |
 | `upgrade` | targeted edits | Re-scan and refresh an existing installation: re-enumerate the surface, refresh the batch / fact / invariant tables, add sections for new memory layers. **Hand-edits are preserved** -- the emitted skill is expected to have self-modified. Never blind-overwrite |
 
 ## Usage
@@ -73,6 +104,7 @@ Then run the emitted skill in that project:
 /memory-sync all "only rules"   # re-verify every fact, emphasis on rules
 /memory-sync branch             # facts from the branch diff
 /memory-sync recent:20          # facts from the last 20 commits
+/memory-sync all hard           # + paths: precision audit + obvious-knowledge purge
 ```
 
 ## How it works (generator flow)
@@ -80,10 +112,10 @@ Then run the emitted skill in that project:
 | Phase | Action |
 |-------|--------|
 | 0 | Read the emit material this skill ships (`references/`) |
-| 1 | `generate.sh scan` + analysis: memory surface, VERIFY-ONLY files, exclusions, default branch, git visibility, language policy, frontmatter conventions, numbered ids, reacting hooks, the fact catalogue, the agent + skill rosters |
+| 1 | `generate.sh scan` + analysis: memory surface, VERIFY-ONLY files, exclusions, default branch, git visibility, language policy, frontmatter conventions, numbered ids, reacting hooks, the fact catalogue, the agent + skill rosters, each rule's `paths:` precision, real generic-vs-domain examples from the target's own rules |
 | 1.5 | AskUserQuestion for genuinely ambiguous params (which conventions count as memory, memory dir in scope, VERIFY-ONLY list, default branch, intentional non-English aliases, batch splits) |
 | 2 | Export scalar placeholders -> `generate.sh emit` (sed substitution + provenance stamp) |
-| 3 | AI fills the BLOCK placeholders via Edit -- batch map, exclusions, invariants, fact catalogue, enumeration bash, agent + skill checks, roster, proposal precedents, verify extras |
+| 3 | AI fills the TWELVE BLOCK placeholders via Edit -- ten in the emitted `SKILL.md` (batch map, exclusions, invariants, fact catalogue, enumeration bash, agent + skill checks, roster, proposal precedents, verify extras) and two in the emitted `references/hard-sync.md` (paths-precision table, obvious-vs-domain table) |
 | 4 | `generate.sh validate` -- fails on any surviving `{PLACEHOLDER}`, a missing asset or a cited reference that does not exist; then every emitted agent name is asserted to resolve |
 | 5 | Report the surface, batches, exclusions and how to run it |
 
@@ -96,12 +128,14 @@ Then run the emitted skill in that project:
 | `references/SKILL.md.template` | The emitted SKILL.md (placeholder slots) |
 | `references/memory-guide.md` | Emitted: where-does-it-belong decision tree, compression patterns, obvious vs domain facts |
 | `references/agent-audit.md` | Emitted: the agent + skill re-audit procedure run on every sweep |
+| `references/hard-sync.md` | Emitted: the two `HARD`-depth deletion passes (`paths:` precision audit, obvious-knowledge purge) + their reporting contract |
 
 ## Re-run triggers
 
 Run `upgrade` when: a nested `CLAUDE.md`, rule or convention file is added; an agent or skill is added or renamed;
-the stack changes, a layer is renamed, or a lint/CI gate appears (fact-catalogue commands go stale); the default
-branch or `.gitignore` changes; doc-flow ownership changes. Run `status` any time to see whether it is due.
+the stack changes, a layer is renamed, or a lint/CI gate appears (fact-catalogue commands go stale); a rule is
+re-scoped (the paths-precision table goes stale); the default branch or `.gitignore` changes; doc-flow ownership
+changes. Run `status` any time to see whether it is due.
 
 ## Notes
 

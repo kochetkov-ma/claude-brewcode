@@ -4,14 +4,18 @@ description: Detailed description of all brewdoc plugin commands
 
 # Brewdoc Plugin Commands
 
-> **Version:** 1.0.0 | **Author:** Maksim Kochetkov | **License:** MIT
+> **Version:** 4.10.0 | **Author:** Maksim Kochetkov | **License:** MIT
 
 ## Quick Reference
 
 | # | Command | Purpose | Model | Args |
 |---|---------|---------|-------|------|
 | 1 | `/brewdoc:my-claude` | Generate docs about Claude Code installation and environment | opus | `[ext [context]] \| [r <query>]` |
-| 2 | `/brewdoc:memory` | Sync and shrink Claude Code memory, rules, CLAUDE.md, conventions | opus | `<free-form prompt: emphasis only; empty = sync whole memory surface; 'full' adds agent+skill rosters>` |
+| 2 | `/brewdoc:memory-sync-init` | Generate a project-tailored `/memory-sync` skill into the target repo | opus | `[status\|init\|upgrade] [fine-tune-prompt]` |
+| 3 | `/brewdoc:docsync` | Install project-local doc-staleness tracking hooks; report/force sync | sonnet | `[status] \| [sync [--all]] \| [reread] \| [frontmatter] \| [uninstall] \| free-text` |
+| 4 | `/brewdoc:guide` | Interactive tutorial for the brewcode/brewdoc/brewtools/brewui plugin suite | haiku | `[topic]` (no args = menu) |
+| 5 | `/brewdoc:md-to-pdf` | Convert Markdown to PDF via reportlab or weasyprint | sonnet | `<file.md> [--engine name] ["prompt"] \| styles \| test` |
+| 6 | `/brewdoc:publish` | Publish text/markdown/file/site to brewpage.app, returns URL | haiku | `<text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename]` |
 
 ---
 
@@ -133,66 +137,235 @@ If an existing entry for the same mode exists, the skill offers to update (versi
 
 ---
 
-## 2. `/brewdoc:memory`
+## 2. `/brewdoc:memory-sync-init`
 
-**Purpose:** Re-verifies every piece of persistent memory against the code and shrinks it. `sync` (default) covers memory files + root/nested CLAUDE.md + rules + conventions; `full` adds the agent and skill rosters. A prompt is emphasis only, never a filter -- the whole surface is always checked.
+**Purpose:** GENERATOR. It analyzes the target project and writes a self-contained, project-local `.claude/skills/memory-sync/` into that repo -- it never syncs memory itself. The emitted skill keeps everything that gets AUTO-LOADED into context truthful against the code; documentation is explicitly out of scope.
 
 | Parameter | Value |
 |-----------|-------|
-| **Arguments** | `<free-form prompt: emphasis only; empty = sync whole memory surface; 'full' adds agent+skill rosters>` |
+| **Arguments** | `[status\|init\|upgrade] [fine-tune-prompt]` |
 | **Model** | `opus` |
 | **Dependencies** | None |
-| **Allowed tools** | `Read`, `Write`, `Edit`, `Glob`, `Grep`, `Bash`, `Task`, `AskUserQuestion` |
+| **Allowed tools** | `Read`, `Write`, `Edit`, `Glob`, `Grep`, `Bash`, `Agent`, `AskUserQuestion` |
 
 ### Modes
 
-| Mode | Chosen when | Runs |
-|------|-------------|------|
-| `sync` (**default**) | empty prompt, or any prompt without a `full` signal | `references/mode-sync.md` S0-S5 |
-| `full` | prompt says full / всё / names agents or skills | `references/mode-sync-full.md` F0-F4: `sync` + agent roster + skill roster + cross-layer dedup |
+| Mode | Writes | Runs |
+|------|--------|------|
+| `status` | nothing | Is `memory-sync` installed, its provenance stamp, how stale its surface tables are vs the live repo. Verdict `IN SYNC` / `STALE (n drifts)` / `NOT INSTALLED` |
+| `init` (**default**) | the 3 emitted files | Full analysis + emit. Refuses an existing installation |
+| `upgrade` | targeted edits | Re-scan and refresh an existing installation; hand-edits preserved, never blind-overwritten |
 
-### Surface (every run)
+### Emitted surface (every run of `/memory-sync`)
 
 | Layer | Path |
 |-------|------|
-| Memory files | `$MEMORY_DIR/*.md` (`autoMemoryDirectory`, else `~/.claude/projects/<hash>/memory/`) |
-| Root CLAUDE.md | `./CLAUDE.md`, `./.claude/CLAUDE.md` |
+| Root CLAUDE.md | `./CLAUDE.md`, `./.claude/CLAUDE.md`, `CLAUDE.local.md` |
 | Nested CLAUDE.md | every `**/CLAUDE.md` at any depth |
-| Global CLAUDE.md | `~/.claude/CLAUDE.md` (reference) |
-| Rules | `.claude/rules/*.md`, `~/.claude/rules/*.md` |
-| Conventions | `CONVENTIONS.md`, `CONTRIBUTING.md`, `AGENTS.md`, `docs/**/convention*.md`, `@path` imports |
+| Rules | `.claude/rules/*.md` |
+| Conventions | `CONVENTIONS.md`, `CONTRIBUTING.md`, `@path` imports |
+| AGENTS.md family | `AGENTS.md` at any depth |
+| Agents / Skills | `.claude/agents/*.md`, `.claude/skills/*/SKILL.md` + their `references/*.md` |
+| Memory dir | `$MEMORY_DIR/*.md` (`autoMemoryDirectory`, else `~/.claude/projects/<hash>/memory/`) |
 
-`full` additionally syncs `.claude/agents/*.md` + `*/agents/*.md` and `.claude/skills/*/SKILL.md` + `*/skills/*/SKILL.md` (with `brewcode:agent-creator`/`brewcode:skill-creator` when brewcode is installed) -- it never calls `/brewcode:agents` or `/brewcode:skills` directly (both `disable-model-invocation: true`, user-only).
+Excluded with reasons: `docs/**` (a separate doc flow owns it), all source code (read-only evidence), secrets, task-board state, build output.
 
-### Workflow
+### Emitted behaviour
 
-1. **Order:** DELETE -> COMPRESS -> MOVE -> ADD, per file, longest files first.
-2. **Verdicts:** DUPLICATE, OBVIOUS, STALE, OLD, EPHEMERAL, DRIFT, MISPLACED, MISSING. Adds must be non-obvious, domain-specific, source-verified, and their absence must cost a real failure.
-3. **Non-growth:** each file `<=` its original line count, total delta `<= 0`.
-4. **Fan-out:** one subagent per file, batches `<= 8`, `Edit`-only bottom-up; orchestrator runs a cross-file pass.
-5. **Gate:** one `AskUserQuestion` -- "Apply all" / "Apply deletions+compression only" / "Review each" / "Cancel".
-6. **`full` only:** agent + skill rosters synced in-place under the same rules, then cross-layer dedup.
+1. **Scopes:** `session` (default) / `branch` / `commit <sha>` / `recent[:N]` / `all`, plus a `hard` depth. Free-form focus text steers emphasis and never narrows the sweep.
+2. **`hard` depth:** two extra aggressive passes -- a rules `paths:` PRECISION audit (a broad glob loads the rule into every context and burns tokens everywhere) and an OBVIOUS-KNOWLEDGE PURGE (delete what a competent model already knows; keep only project decisions and domain facts).
+3. **GATHER -> SYNC -> VERIFY:** parallel read-only gather, one bounded agent per disjoint batch (all spawned in ONE message), then independent checkers, never the agent that wrote the batch.
+4. **Agent re-audit:** agents are re-audited against current best practice every run, not merely fact-checked.
+5. **Non-growth:** facts first, then dedup, then compression; each file `<=` its original line count, total delta `<= 0`.
+6. **SELF-SYNC:** the emitted skill refreshes its own surface tables and adds sections for memory layers the project gained.
 
 ### Output
 
 ```markdown
-## memory [sync|full]
+## memory-sync-init [status|init|upgrade]
 
-### Surface (per layer)
-| Layer | Files | Lines before | Lines after | Delta |
+### Surface / Batches / Exclusions
+| Batch | Files | Paths |
 
-### Longest files / Deleted / Stale facts corrected / Moved / Added / Skipped / Next Steps
+### Emitted files / Ambiguities resolved / How to run it
 ```
 
 ### Examples
 
 ```
-/brewdoc:memory
-/brewdoc:memory "focus on the CI facts"
-/brewdoc:memory "full"
+/brewdoc:memory-sync-init
+/brewdoc:memory-sync-init "weight stale-fact removal over compression"
+/brewdoc:memory-sync-init status
+/brewdoc:memory-sync-init upgrade
 ```
 
-Empty prompt and free-text prompt run the same `sync` sweep; only a `full` signal changes scope.
+Then, inside that project: `/memory-sync`, `/memory-sync branch`, `/memory-sync all hard "only rules"`.
+
+---
+
+## 3. `/brewdoc:docsync`
+
+**Purpose:** Installs three project-local hooks that watch which `.md` docs are touched, then nag once per turn when a touched doc is stale by date. Source of truth is each doc's own frontmatter (`last_updated`) -- date only, local time, no hash, no deps. Runs in the main conversation (uses `AskUserQuestion`), no `context: fork`.
+
+| Parameter | Value |
+|-----------|-------|
+| **Arguments** | `[status] \| [sync [--all]] \| [reread] \| [frontmatter] \| [uninstall] \| free-text` |
+| **Model** | `sonnet` |
+| **Dependencies** | None |
+| **Allowed tools** | `Read`, `Write`, `Edit`, `Bash`, `Glob`, `Grep`, `AskUserQuestion` |
+
+### Modes
+
+| Mode | Writes | Description |
+|------|--------|-------------|
+| `init` (empty + not installed) | hooks + `.claude/docsync/{config,state}.json` | Ask threshold (7/14/30/other days) + exclude globs; copy `docsync-{track,watch,gate}.mjs` into `.claude/hooks/`; merge `settings.json` (never clobbers foreign hooks, `.bak` backup first) |
+| `status` (empty + installed) | nothing | Report tracked docs, staleness, current session touched-set |
+| `sync [--all]` | frontmatter `last_updated` | Refresh stale docs (or every in-scope doc with `--all`) WITH confirmation; follows each doc's `sync_procedure` if present; compression by `doc_type` (`llm` = deep, `user` = light) |
+| `reread` | nothing | Force re-read of tracked docs to refresh in-context understanding |
+| `frontmatter` | frontmatter block | Opt-in retro-add of `doc_type`/`last_updated` to docs missing it; never runs automatically at `init` |
+| `uninstall` | removes hooks + settings.json entries | Inverse-merge removes only the 3 docsync hook entries; asks whether to also delete `.claude/docsync/` |
+
+### Frontmatter schema
+
+```yaml
+---
+doc_type:      llm            # optional; absent => user. values: llm | user | skip
+last_updated:  2026-07-19     # sole staleness input (YYYY-MM-DD)
+sync_procedure:"what to check / where to look when syncing"   # optional, prose
+---
+```
+
+`doc_type: skip` excludes a file from tracking entirely. Staleness: `today - last_updated > threshold_days`.
+
+```
+/brewdoc:docsync
+/brewdoc:docsync status
+/brewdoc:docsync sync --all
+/brewdoc:docsync frontmatter
+/brewdoc:docsync uninstall
+```
+
+---
+
+## 4. `/brewdoc:guide`
+
+**Purpose:** Read-only interactive tutorial for the brewcode/brewdoc/brewtools/brewui plugin suite. Tracks per-user progress across 9 topics, offers language selection (English/Русский/Português), checks plugin freshness before starting, and never modifies project files -- only its own progress JSON.
+
+| Parameter | Value |
+|-----------|-------|
+| **Arguments** | `[topic]` -- no args = interactive menu |
+| **Model** | `haiku` |
+| **Dependencies** | None |
+| **Allowed tools** | `Read`, `Glob`, `Grep`, `Bash`, `WebSearch`, `AskUserQuestion` |
+| **Model invocation** | `disable-model-invocation: true` -- user-invoked only |
+
+### Topic Map
+
+| ID | Topic |
+|----|-------|
+| `overview` | Four Plugins Overview |
+| `installation` | Installation & Updates |
+| `killer-flow` | Board -> Spec -> Review |
+| `teams` | Dynamic Teams |
+| `skills-catalog` | All Skills Catalog |
+| `agents-catalog` | All Agents Catalog |
+| `customization` | Build Your Own |
+| `integration` | Project Configuration |
+| `advanced` | Power Features |
+
+### Workflow
+
+1. Validate environment (`scripts/validate.sh`); skip silently if unavailable
+2. Check plugin freshness via `brewtools:plugin-update`; offer update if stale
+3. Load progress (`scripts/progress.sh read`); ask language on first run
+4. Route: exact/fuzzy topic match from `$ARGUMENTS`, else show menu with recommended next topic
+5. Deliver topic section-by-section (translated per `$PROGRESS.lang`), offering continue/example/go-deeper/skip/exit at each step
+6. Mark topic complete (`scripts/progress.sh complete`), recommend the next incomplete topic
+
+```
+/brewdoc:guide
+/brewdoc:guide killer-flow
+/brewdoc:guide agents-catalog
+```
+
+---
+
+## 5. `/brewdoc:md-to-pdf`
+
+**Purpose:** Converts a Markdown file to PDF using one of two rendering engines. Detects missing dependencies and offers to install them; saves the chosen engine/style as project or global config; supports optional LLM preprocessing of the source Markdown before conversion.
+
+| Parameter | Value |
+|-----------|-------|
+| **Arguments** | `<file.md> [--engine name] ["prompt"] \| styles \| test \| (no args = help)` |
+| **Model** | `sonnet` |
+| **Dependencies** | None |
+| **Allowed tools** | `Read`, `Write`, `Edit`, `Bash`, `Glob`, `Grep`, `AskUserQuestion` |
+
+### Modes
+
+| Mode | Trigger | Description |
+|------|---------|-------------|
+| HELP | empty or `help` | Print usage and exit |
+| STYLES | `styles` or `config` | Interactive `AskUserQuestion` config: page size, color scheme, code theme, footer format; saved to `.claude/md-to-pdf.config.json` |
+| TEST | `test` | Convert the bundled `test/test-all-elements.md` sample |
+| CONVERT | `<file.md>` | Convert with saved/flagged engine |
+| CONVERT+PROMPT | `<file.md> "prompt"` | Apply LLM transformations to a temp copy, then convert, then delete the temp file |
+
+### Engines
+
+| Feature | reportlab | weasyprint |
+|---------|-----------|------------|
+| Install | pip only | pip + brew |
+| Quality | Good | Excellent |
+| CSS Styling | No | Yes |
+| Code highlight | No | Yes (Pygments) |
+
+```
+/brewdoc:md-to-pdf report.md
+/brewdoc:md-to-pdf report.md --engine weasyprint
+/brewdoc:md-to-pdf report.md "remove section 3"
+/brewdoc:md-to-pdf styles
+/brewdoc:md-to-pdf test
+```
+
+---
+
+## 6. `/brewdoc:publish`
+
+**Purpose:** Publishes text, Markdown, a file, a directory, or a ZIP to brewpage.app, returning a URL. No sign-up required. Auto-detects content type, asks for namespace (public/private) and optional password, then publishes and saves the owner token to `.claude/brewpage-history.md`.
+
+| Parameter | Value |
+|-----------|-------|
+| **Arguments** | `<text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename]` |
+| **Model** | `haiku` |
+| **Dependencies** | None |
+| **Allowed tools** | `Read`, `Bash`, `AskUserQuestion`, `Glob` |
+
+### Content Type Detection
+
+| Input | Type | API |
+|-------|------|-----|
+| Directory | SITE | `POST /api/sites` (ZIP built from dir) |
+| `.zip` file | SITE | `POST /api/sites` (archive upload) |
+| `.md`/`.markdown` file | MARKDOWN | `POST /api/html?format=markdown` |
+| Any other existing file | FILE | `POST /api/files` (multipart) |
+| Starts with `{` or `[` | JSON | `POST /api/json` |
+| Anything else | HTML | `POST /api/html` (format=markdown) |
+
+### Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--ttl N` | `15` days | Time to live |
+| `--entry filename` | auto-detect | Entry file for SITE uploads: flag > `index.html` > first `.html` alphabetically |
+
+Namespace: `public` (listed in gallery, indexed) or an auto-suggested/custom private slug (unlisted, link-only). Password protection is optional and hides the page from the gallery.
+
+```
+/brewdoc:publish report.md
+/brewdoc:publish ./dist --entry index.html
+/brewdoc:publish "hello world" --ttl 30
+```
 
 ---
 
@@ -200,10 +373,14 @@ Empty prompt and free-text prompt run the same `sync` sweep; only a `full` signa
 
 | Error | Applies To | Action |
 |-------|-----------|--------|
-| Memory dir absent | memory | Report; sync the rest of the surface |
-| Total delta positive | memory | State per-line justification, never buried |
-| Confirmation cancelled | memory | Nothing written; `full` skips the roster pass |
+| `memory-sync` already installed | memory-sync-init | `init` refuses; use `upgrade` (or `MEMORY_SYNC_FORCE=1` to destroy hand-edits) |
+| Surviving `{PLACEHOLDER}` after emit | memory-sync-init | `generate.sh validate` fails; fill the slot before reporting |
+| Emitted agent name does not resolve | memory-sync-init | Fall back to `general-purpose`, report the substitution |
 | File not found | my-claude | Skip, add to errors |
+| `settings.json` invalid JSON | docsync | Abort merge/clean, restore `.bak`, report |
+| No `.md` in target directory (SITE) | publish | Fail with explicit error, never guess an entry file |
+| Dependency install fails | md-to-pdf | Report `INSTALL_FAILED` and stop |
+| Conversion fails | md-to-pdf | Read error, attempt one fix + retry, else report error |
 
 ## Plugin Variable
 

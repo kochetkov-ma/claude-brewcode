@@ -7,8 +7,6 @@ Emitted only when `{{SPEC_MODE}}` is `on`. Write each block below to its path un
 | `specs/SPEC_TEMPLATE.md` | `specs/<ID>-spec.md` | `/task-spec <ID>` phase P4 |
 | `specs/DESIGN_TEMPLATE.md` | `specs/<ID>-design.md` | `/task-spec <ID>` phase P3 |
 
-> When writing the generated file, unescape any inner code fences (`\`\`\`` -> ```` ``` ````) so the emitted file has valid fences.
-
 Rules for both templates:
 - Section list + headings are FIXED. !=add, !=rename, !=reorder. The coverage tables are read by the G1 gate, so their columns are a contract.
 - Every EXAMPLE row is illustrative filler -- the filling agent REPLACES it, !=leave it in a finished doc.
@@ -45,6 +43,21 @@ check in the existing request middleware, backed by the cache layer already in t
 Limits are config-driven, not hard-coded. Main risk: the cache layer is single-node today,
 so a limit is per-node until it is clustered.
 
+## Original requirements
+
+*The ask, VERBATIM from the task file / the user's own words. !=paraphrase, !=summarise, !=fix. It exists so nobody re-litigates what was asked.*
+
+EXAMPLE: "Rate-limit the public API per user. Limits config-driven. Response shapes must not change."
+
+## User Q&A
+
+*Clarifications asked BEFORE research (`/task-spec` P0.7), verbatim -- and ONLY those. Open questions answered while authoring (P5) belong to `## Resolved questions`, !=here. A `--noask` run records exactly one row: `Skipped (--noask mode)`.*
+
+| asked | answer |
+|-------|--------|
+| EXAMPLE: authenticated routes only? | No -- all public routes; admin routes exempt. |
+| EXAMPLE: may we add response headers? | Yes, `X-RateLimit-*`; the body must not change. |
+
 ## Decisions
 
 *One block per decision, ids `D1..Dn`. Each carries decision / rationale / alternatives rejected. Once minted an id is never reused or renumbered.*
@@ -57,12 +70,11 @@ so a limit is per-node until it is clustered.
 
 ## Resolved questions
 
-*Questions that WERE open and are now settled. question -> answer -> what settled it (agent, file, person, experiment). Keep them: they stop a later reader from re-litigating.*
+*Questions that WERE open and are now settled -- every `Q#` answered in `/task-spec` P5 lands HERE, not in `## User Q&A`. question -> answer -> what settled it (agent, file, person, experiment). Keep them: they stop a later reader from re-litigating.*
 
 | question | answer | settled by |
 |----------|--------|------------|
 | EXAMPLE: do we limit anonymous traffic too? | Yes, by client IP, at 1/6 of the user limit. | product owner, task `## Notes` 2026-02-11 |
-| EXAMPLE: is the cache layer safe on the hot path? | Yes, p99 read 0.4ms measured locally. | `bench/cache_read_test` run |
 
 ## Open questions
 
@@ -100,7 +112,6 @@ Status values: `covered` | `partial` | `uncovered`. Nothing else. This is the SP
 |--------|------|--------------|
 | EXAMPLE: `src/api/middleware.ts` | file | existing middleware chain; the insertion point |
 | EXAMPLE: `{{FIRST_DOMAIN}}-expert` | agent | confirmed the cache layer is single-node today |
-| EXAMPLE: task `## Notes` | task | product owner's answer on anonymous traffic |
 ```
 
 ---
@@ -147,11 +158,8 @@ updated: {{TODAY}}
 EXAMPLE:
 
 \`\`\`
-request -> RateLimitMiddleware
-        -> BucketStore.take(user_id, cost=1)
-            -> CacheClient.get(key) -> tokens, last_refill
-            <- CacheClient.set(key, tokens', now)   [TTL 2x window]
-        <- allow | deny
+request -> RateLimitMiddleware -> BucketStore.take(user_id, cost=1)
+             -> CacheClient.get/set(key)  [tokens, last_refill; TTL 2x window]
    allow -> next middleware -> handler -> response + X-RateLimit-* headers
    deny  -> 429 short-circuit, handler never runs
 \`\`\`
@@ -163,7 +171,6 @@ request -> RateLimitMiddleware
 | interface | shape | notes |
 |-----------|-------|-------|
 | EXAMPLE: `BucketStore.take(key, cost)` | `-> {allowed: bool, remaining: int, retry_after_s: int}` | pure over the cache client; !=throws on cache miss, treats it as a full bucket |
-| EXAMPLE: HTTP 429 response | `{error: "rate_limited", retry_after_s: n}` + `Retry-After` header | envelope unchanged, new error code |
 | EXAMPLE: config key `ratelimit.default` | `{capacity: int, refill_per_s: float}` | hot-reloaded; invalid values -> keep previous, log warn |
 
 ## Data model

@@ -4,9 +4,9 @@ Think short: minimal internal reasoning, no exploring aloud.
 Grep before Read. Edit over Write. Parallel calls in one message.
 Plan the full edit set, then execute.
 
-Keep code simple - do not over-engineer. Before writing anything new,
-check existing code and libraries for the needed functionality.
-Prefer extending or abstracting a similar class over adding a new one.
+Keep code simple - do not over-engineer. Before writing anything new, check
+existing code and libraries; find the closest well-built counterpart in the repo,
+take its principles, extend it - additive to conventions/rules/docs, never instead.
 After writing code, one pass: can this be simpler? If yes - simplify it.
 
 Comment like a human, not an AI. Write comments only where they earn it:

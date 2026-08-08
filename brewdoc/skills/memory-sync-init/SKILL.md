@@ -19,8 +19,8 @@ a stale lint-rule claim from a correct one, and cannot prove a removed fact is g
 merely deleted from a doc.
 
 **OUTPUT:** `<target>/.claude/skills/memory-sync/` -- `SKILL.md` + `references/memory-guide.md` +
-`references/agent-audit.md`. Nothing else is written; no agent is created, no rule is installed, no hook is
-registered.
+`references/agent-audit.md` + `references/hard-sync.md`. Nothing else is written; no agent is created, no rule is
+installed, no hook is registered.
 
 ## What the emitted skill does
 
@@ -28,11 +28,15 @@ The emitted `/memory-sync` is a long-running multi-agent coordinator that diffs 
 code for a SCOPE and repairs it -- facts FIRST, dedup second, compression third -- under a NON-GROWTH prime
 directive (every file ends `<=` its original line count, total delta `<= 0`). It sweeps the WHOLE memory surface
 every run; free-form focus text steers EMPHASIS only and never narrows the sweep. Its batches are disjoint by
-construction, so parallel edits never collide.
+construction, so parallel edits never collide. It carries TWO orthogonal axes: `{SCOPE}` selects WHICH change
+facts drive the sweep, `{DEPTH}` selects HOW HARD the surface itself is cut.
 
 | Axis | Emitted behaviour |
 |------|-------------------|
 | Scopes | `session` (DEFAULT -- facts from THIS conversation, no gather agent), `branch` (diff vs the derived default branch), `commit <sha>` / `commit <a>..<b>`, `recent[:N]` (default 10), `all` (no diff -- every checkable fact re-verified) |
+| Depth | `NORMAL` (DEFAULT -- fact sync + dedup + compression) or `HARD` (NORMAL plus the two passes in `references/hard-sync.md`), from the token `hard` or the same intent in prose ("too much context", "aggressive", "почисти жёстко") |
+| HARD pass A | rules `paths:` PRECISION audit -- a broad or missing glob loads the rule into EVERY context and is paid for on every turn, so the glob must be the narrowest pattern still covering the rule's real subject. Verdicts `OK` / `TOO_BROAD` / `TOO_NARROW` / `DANGLING` / `MISSING` / `CORRECTLY_GLOBAL`; a genuinely repo-wide subject legitimately carries none and one is never invented |
+| HARD pass B | OBVIOUS-KNOWLEDGE PURGE -- anything a competent model already knows is DELETED, not compressed. Keeps only what the model cannot know: decisions that invert a default, domain invariants, environment quirks, explicit prohibitions |
 | Focus | free text after the scope token: emphasis ordering only. Never a filter, never a batch skip |
 | Phase GATHER | parallel read-only agents: change-fact list + target inventory BY ENUMERATION (`{ENUMERATION_BASH}`), never a hardcoded file list |
 | Phase SYNC | ONE bounded agent per disjoint batch, ALL spawned in ONE message, each with its file list, the change facts and the house invariants |
@@ -56,7 +60,7 @@ and the mode is `init`.
 | Mode | Reads | Writes | Does |
 |------|-------|--------|------|
 | `status` | target + emitted skill | NOTHING | Report whether `<target>/.claude/skills/memory-sync/` exists, its provenance stamp (generator + date + surface counts), and how STALE its surface tables are vs the live repo: per-batch file count baked in vs enumerated now, batches whose paths no longer exist, memory layers the project gained since. Ends with a verdict `IN SYNC` / `STALE (n drifts)` / `NOT INSTALLED` |
-| `init` (**DEFAULT**) | target | emits the 3 files | Full Phase 0-5 analysis + emit. Refuses an existing installation (see Error Handling) |
+| `init` (**DEFAULT**) | target | emits the 4 files | Full Phase 0-5 analysis + emit. Refuses an existing installation (see Error Handling) |
 | `upgrade` | target + emitted skill | Edits the emitted skill | Re-scan, then REFRESH an existing installation: re-enumerate the surface, refresh the batch / fact / invariant tables, ADD sections for memory layers the project gained. PRESERVE hand-edits -- the emitted skill is EXPECTED to have self-modified (SELF-SYNC phase). Never blind-overwrite |
 
 ANNOUNCE before any work:
@@ -103,6 +107,8 @@ Read the emit material this generator ships, relative to `${CLAUDE_SKILL_DIR}`:
 - `references/SKILL.md.template` -- the emitted SKILL.md, with `{PLACEHOLDER}` slots
 - `references/memory-guide.md` -- where-does-it-belong decision tree, compression patterns, obvious-vs-domain facts
 - `references/agent-audit.md` -- the agent/skill re-audit procedure the emitted skill runs every sweep
+- `references/hard-sync.md` -- the two `HARD`-depth deletion passes (`paths:` precision audit + obvious-knowledge
+  purge) and their reporting contract; it holds TWO of the twelve BLOCK placeholders
 
 Confirm the TARGET project is the current working directory. All emitted paths are relative to that repo root.
 
@@ -129,6 +135,8 @@ scan plus your own reads, determine:
 | **Git visibility** | `git ls-files -- .claude '*CLAUDE.md' '*AGENTS.md'` and the `.gitignore` rules behind it. Git-IGNORED surface -> `git status`/`git diff` can NEVER account for a memory edit, so VERIFY must re-read files directly instead of trusting the diff | `{GIT_VISIBILITY}`, `{VERIFY_EXTRA}` |
 | **Language policy** | which files legitimately carry non-English trigger aliases (agent/skill `description:`, mode-routing tables, `CLAUDE.local.md`), and which surface is English-only. An intentional alias stripped as a "violation" is a regression | `{LANGUAGE_POLICY}` |
 | **Frontmatter conventions** | which of `last_updated`, `doc_type`, `paths:` globs, `[DICT: ...]` headers are in use, and WHERE each belongs | `{INVARIANTS_TABLE}` |
+| **`paths:` precision** | `scan` prints `path :: lines :: paths:` for EVERY `.claude/rules/*.md`. Per rule: name its real subject in one phrase, derive the narrowest glob covering it, compare with the declared one, and resolve the derived glob against the repo (`git ls-files -- '<glob>'`). Judge each now -- `OK` / `TOO_BROAD` / `TOO_NARROW` / `DANGLING` / `MISSING` / `CORRECTLY_GLOBAL` | `{PATHS_PRECISION_TABLE}` |
+| **Obvious vs domain** | HARVEST real pairs from the target's OWN rules and conventions: a line any competent model already knows (generic craft advice, restated tool docs, textbook pattern definitions) next to the domain fact in the same file that only makes sense because someone HERE decided it. Real quotes from this repo, never invented illustrations | `{OBVIOUS_VS_DOMAIN_TABLE}` |
 | **Stable numbered ids** | rule files whose rows carry stable numbers, and who cites them POSITIONALLY (a reorder silently repoints every citation). Count them per run, never trust a baked number | `{INVARIANTS_TABLE}` |
 | **Reacting hooks** | docsync or other hooks firing on memory edits (`.claude/settings.json`, `.claude/hooks/**`), their config and threshold. Edits WILL trigger them -- expected; hook files are never edited | `{INVARIANTS_TABLE}`, `{TRACKER_NOTE}` |
 | **Checkable-fact catalogue** | for THIS project, the CONCRETE claims memory makes and the EXACT shell command verifying each: layer paths, build-tool aliases, lint rule names, scripts, version pins, env-var NAMES (never values), routes/endpoints, migrations/tables, test tiers + gates, CI gates | `{FACT_CATALOGUE}` |
@@ -181,31 +189,42 @@ bash "${CLAUDE_SKILL_DIR}/scripts/generate.sh" emit && echo "✅ emit" || echo "
 > **STOP if ❌** -- verify `${CLAUDE_SKILL_DIR}/references/SKILL.md.template` exists and the target `.claude/` is
 > writable. On an existing installation `emit` refuses by design: use `upgrade`.
 
-This writes `<target>/.claude/skills/memory-sync/SKILL.md` with scalars substituted, copies `memory-guide.md` and
-`agent-audit.md` into the emitted `references/`, and stamps provenance at the end of the emitted SKILL.md
-(generator name + date + `{SURFACE_COUNTS}`) -- that stamp is what `status` and `upgrade` read.
+This writes the FOUR-file tree: `<target>/.claude/skills/memory-sync/SKILL.md` with scalars substituted, plus
+`references/memory-guide.md`, `references/agent-audit.md` and `references/hard-sync.md` copied into the emitted
+`references/`. It stamps provenance on the LAST line of the emitted SKILL.md (template version + date +
+`{SURFACE_COUNTS}`) -- that stamp is what `status` and `upgrade` read.
 
 ### Phase 3 -- Fill the BLOCK placeholders (AI Edit)
 
 Multi-row tables and multi-line bash cannot go through sed. Using the **Edit** tool, replace every block
-placeholder in the EMITTED files with content built from Phase 1 analysis. See the Placeholders section for the
-full contract; the substance rules:
+placeholder in the EMITTED files with content built from Phase 1 analysis. TWELVE blocks: the first ten live in
+the emitted `SKILL.md`, the last two in the emitted `references/hard-sync.md`. `validate` fails on every one of
+them, so a partial fill cannot pass. See the Placeholders section for the full contract; the substance rules:
 
-| Block | Must contain |
-|-------|--------------|
-| `{BATCH_TABLE}` | one row per DISJOINT batch: batch id, the concrete files, and which of them are VERIFY-ONLY with the reason. Disjointness is the collision guarantee -- overlapping batches are a defect |
-| `{EXCLUDED_TABLE}` | one row per exclusion WITH its reason. A reasonless exclusion gets re-litigated every run |
-| `{INVARIANTS_TABLE}` | frontmatter contract, `paths:` glob validation, language policy, doc style, stable numbered ids + their positional citers, reacting hooks. Every cell a FACT read from the repo, source named |
-| `{FACT_CATALOGUE}` | `\| claim \| how to verify \|` rows, each verification a real one-line command with today's expected answer where it is short |
-| `{ENUMERATION_BASH}` | ONE fenced bash block that re-derives the file list per batch (`ls`, `find ... -name '*.md' \| sort`, `git ls-files`). Counts rot; enumeration does not |
-| `{AGENT_CHECKS_TABLE}` | the agent-batch extra checks: `name:` vs filename, description + triggers, `tools:` minimality, ownership globs resolve, MCP prefixes name configured servers, handoff pointers name agents that EXIST |
-| `{SKILL_CHECKS_TABLE}` | the skill-batch extra checks: `name:` vs directory, one-line action-first `description:`, `allowed-tools:` matches actual use, `argument-hint:` matches implemented modes, every cited reference exists AND every existing reference is cited |
-| `{EXPERT_ROSTER_TABLE}` | the live roster: agent -> owned path group -> specialty, recon agents marked read-only. Drives batch ownership and the re-audit |
-| `{PROPOSAL_PRECEDENTS}` | `\| propose \| bar \| precedents \|` -- the bar a new agent/skill must clear HERE, with this repo's own precedents named |
-| `{VERIFY_EXTRA}` | the project-specific VERIFY assertions: the git-visibility assertion derived in Phase 1, the secret-value scan, the language scan with its allowed hits, the id-sequence diff |
+| Block | In | Must contain |
+|-------|----|--------------|
+| `{BATCH_TABLE}` | SKILL.md | one row per DISJOINT batch: batch id, the concrete files, and which of them are VERIFY-ONLY with the reason. Disjointness is the collision guarantee -- overlapping batches are a defect |
+| `{EXCLUDED_TABLE}` | SKILL.md | one row per exclusion WITH its reason. A reasonless exclusion gets re-litigated every run |
+| `{INVARIANTS_TABLE}` | SKILL.md | frontmatter contract, `paths:` glob validation, language policy, doc style, stable numbered ids + their positional citers, reacting hooks. Every cell a FACT read from the repo, source named |
+| `{FACT_CATALOGUE}` | SKILL.md | `\| claim \| how to verify \|` rows, each verification a real one-line command with today's expected answer where it is short |
+| `{ENUMERATION_BASH}` | SKILL.md | ONE fenced bash block that re-derives the file list per batch (`ls`, `find ... -name '*.md' \| sort`, `git ls-files`). Counts rot; enumeration does not |
+| `{AGENT_CHECKS_TABLE}` | SKILL.md | the agent-batch extra checks: `name:` vs filename, description + triggers, `tools:` minimality, ownership globs resolve, MCP prefixes name configured servers, handoff pointers name agents that EXIST |
+| `{SKILL_CHECKS_TABLE}` | SKILL.md | the skill-batch extra checks: `name:` vs directory, one-line action-first `description:`, `allowed-tools:` matches actual use, `argument-hint:` matches implemented modes, every cited reference exists AND every existing reference is cited |
+| `{EXPERT_ROSTER_TABLE}` | SKILL.md | the live roster: agent -> owned path group -> specialty, recon agents marked read-only. Drives batch ownership and the re-audit |
+| `{PROPOSAL_PRECEDENTS}` | SKILL.md | `\| propose \| bar \| precedents \|` -- the bar a new agent/skill must clear HERE, with this repo's own precedents named |
+| `{VERIFY_EXTRA}` | SKILL.md | the project-specific VERIFY assertions: the git-visibility assertion derived in Phase 1, the secret-value scan, the language scan with its allowed hits, the id-sequence diff |
+| `{PATHS_PRECISION_TABLE}` | hard-sync.md | ONE row per rule file: `\| rule file \| current paths: \| verdict \| narrowest correct glob \|`, from the Phase 1 precision judgement. Every derived glob must RESOLVE against the repo today; a repo-wide subject is `CORRECTLY_GLOBAL` with an empty glob cell, never an invented one |
+| `{OBVIOUS_VS_DOMAIN_TABLE}` | hard-sync.md | `\| generic knowledge (DELETE) \| domain fact worth keeping (KEEP) \|`, quoting REAL lines harvested from this target's own rules and conventions. Invented illustrations teach nothing -- the emitted purge calibrates on these pairs |
 
 > Keep every emitted row pointing at a REAL path, a REAL command and a REAL agent (`.claude/agents/` or a built-in
 > `Explore`/`Plan`/`general-purpose`). Do NOT invent agents, files or commands.
+
+**Then inject the target's own frontmatter convention keys** into the emitted `SKILL.md` via `Edit`. The template
+ships only the keys Claude Code itself reads, but the emitted body BUMPS `last_updated:` in every file it edits
+and its VERIFY phase ASSERTS the bump -- so if this project's memory files carry `last_updated:`, `doc_type:` or
+any other doc-convention key (detected in Phase 1, `{INVARIANTS_TABLE}`), add those keys to the emitted
+frontmatter now, with `last_updated:` set to today's emit date (`date +%F`, never hardcoded). Project has no such
+convention -> skip this step and leave the frontmatter as emitted.
 
 ### Phase 4 -- Validate
 
@@ -237,15 +256,19 @@ Branch:     {DEFAULT_BRANCH}   Git visibility: {GIT_VISIBILITY}
 Memory dir: {MEMORY_DIR}
 Language:   {LANGUAGE_POLICY}
 Emphasis:   {FOCUS_EMPHASIS}
+HARD depth: {N} rules audited for paths: precision ({N} TOO_BROAD / {N} DANGLING / ...), {N} obvious-vs-domain
+            pairs harvested from this repo
 
 Files written:
 - .claude/skills/memory-sync/SKILL.md
 - .claude/skills/memory-sync/references/memory-guide.md
 - .claude/skills/memory-sync/references/agent-audit.md
+- .claude/skills/memory-sync/references/hard-sync.md
 
-Run it:  /memory-sync                       -> scope session (default), whole surface
+Run it:  /memory-sync                       -> scope session (default), depth NORMAL, whole surface
          /memory-sync all "only rules"      -> re-verify every fact, emphasis on rules
          /memory-sync branch                -> facts from the branch diff vs {DEFAULT_BRANCH}
+         /memory-sync all hard              -> + paths: precision audit + obvious-knowledge purge
 
 Later:   /brewdoc:memory-sync-init status   -> is the emitted skill still true to the repo
          /brewdoc:memory-sync-init upgrade  -> refresh its tables, keep hand-edits
@@ -277,21 +300,28 @@ is a template token absent from this table.
 **BLOCKS** -- multi-row tables and multi-line bash, filled by the AI in Phase 3 via `Edit`. `generate.sh` never
 touches them.
 
-| Placeholder | Fills |
-|-------------|-------|
-| `{BATCH_TABLE}` | disjoint batches -> files, VERIFY-ONLY marks |
-| `{EXCLUDED_TABLE}` | hard exclusions with reasons |
-| `{INVARIANTS_TABLE}` | house invariants enforced in every batch |
-| `{FACT_CATALOGUE}` | claim -> verification command |
-| `{ENUMERATION_BASH}` | the per-run inventory commands |
-| `{AGENT_CHECKS_TABLE}` | agent-batch extra checks |
-| `{SKILL_CHECKS_TABLE}` | skill-batch extra checks |
-| `{EXPERT_ROSTER_TABLE}` | agent -> owned path group -> specialty |
-| `{PROPOSAL_PRECEDENTS}` | the bar for a new agent/skill + this repo's precedents |
-| `{VERIFY_EXTRA}` | project-specific VERIFY assertions |
+TWELVE blocks -- ten in the emitted `SKILL.md`, two in the emitted `references/hard-sync.md`. `validate` fails
+until every one is filled.
 
-> The emitted skill also uses RUNTIME tokens (`{SCOPE}`, `{FOCUS}`, `{BATCH}`, `{FILE_LIST}`, `{DATE}`, `{N}`).
-> Those are resolved per RUN by the emitted skill, are allow-listed by `validate`, and MUST remain in the file.
+| Placeholder | File | Fills |
+|-------------|------|-------|
+| `{BATCH_TABLE}` | SKILL.md | disjoint batches -> files, VERIFY-ONLY marks |
+| `{EXCLUDED_TABLE}` | SKILL.md | hard exclusions with reasons |
+| `{INVARIANTS_TABLE}` | SKILL.md | house invariants enforced in every batch |
+| `{FACT_CATALOGUE}` | SKILL.md | claim -> verification command |
+| `{ENUMERATION_BASH}` | SKILL.md | the per-run inventory commands |
+| `{AGENT_CHECKS_TABLE}` | SKILL.md | agent-batch extra checks |
+| `{SKILL_CHECKS_TABLE}` | SKILL.md | skill-batch extra checks |
+| `{EXPERT_ROSTER_TABLE}` | SKILL.md | agent -> owned path group -> specialty |
+| `{PROPOSAL_PRECEDENTS}` | SKILL.md | the bar for a new agent/skill + this repo's precedents |
+| `{VERIFY_EXTRA}` | SKILL.md | project-specific VERIFY assertions |
+| `{PATHS_PRECISION_TABLE}` | hard-sync.md | per rule file: current `paths:`, verdict, narrowest correct glob |
+| `{OBVIOUS_VS_DOMAIN_TABLE}` | hard-sync.md | real generic-vs-domain pairs harvested from this target's own rules |
+
+> The emitted skill also uses RUNTIME tokens -- `{SCOPE}`, `{FOCUS}`, `{DEPTH}`, `{BATCH}`, `{FILE_LIST}`,
+> `{FACTS}`, `{BROKEN_REFS}`, `{DATE}`, `{N}`, `{M}`, `{K}`. Those are resolved per RUN by the emitted skill, are
+> allow-listed by `validate` (`RUNTIME_ALLOW` in `generate.sh` -- the two lists must match exactly), and MUST
+> remain in the file.
 
 ---
 
@@ -300,7 +330,8 @@ touches them.
 | Setting | Default | Description |
 |---------|---------|-------------|
 | Emit target | `<cwd>/.claude/skills/memory-sync/` | Where the generated skill is written |
-| Emit material | `${CLAUDE_SKILL_DIR}/references/` | `SKILL.md.template`, `memory-guide.md`, `agent-audit.md` |
+| Emit material | `${CLAUDE_SKILL_DIR}/references/` | `SKILL.md.template`, `memory-guide.md`, `agent-audit.md`, `hard-sync.md` -- four files emitted |
+| Emitted default depth | `NORMAL` | `HARD` is per-run, from the emitted skill's own arguments; nothing is regenerated to switch |
 | Generation script | `${CLAUDE_SKILL_DIR}/scripts/generate.sh` | `scan` \| `emit` \| `validate` \| `status` |
 | Mode | `init` | `status` (read-only) \| `init` \| `upgrade` |
 | Overwrite | refused | `emit` never overwrites a live installation; `MEMORY_SYNC_FORCE=1` overrides and DESTROYS hand-edits |
@@ -340,14 +371,21 @@ touches them.
 - `references/SKILL.md.template` -- the emitted SKILL.md (placeholder slots).
 - `references/memory-guide.md` -- where-does-it-belong decision tree, compression patterns, obvious vs domain facts (emitted).
 - `references/agent-audit.md` -- the agent/skill re-audit procedure the emitted skill runs every sweep (emitted).
+- `references/hard-sync.md` -- the `HARD`-depth passes: `paths:` precision audit + obvious-knowledge purge, with
+  their verdict vocabulary and reporting contract (emitted; holds `{PATHS_PRECISION_TABLE}` +
+  `{OBVIOUS_VS_DOMAIN_TABLE}`).
 - `scripts/generate.sh` -- `scan` / `emit` / `validate` / `status`.
 
 <!--
 SKILL METADATA -- brewdoc:memory-sync-init (GENERATOR)
 
 Replaces the old brewdoc:memory (a generic in-plugin memory syncer). Analyzes a target project and emits a
-self-contained project-local .claude/skills/memory-sync/ (SKILL.md + memory-guide.md + agent-audit.md). The
-plugin never syncs memory itself.
+self-contained project-local .claude/skills/memory-sync/ (SKILL.md + memory-guide.md + agent-audit.md +
+hard-sync.md). The plugin never syncs memory itself.
+
+The emitted skill has TWO axes: {SCOPE} = which change facts drive the sweep (session default | branch | commit |
+recent[:N] | all), {DEPTH} = how hard the surface is cut (NORMAL default | HARD = + paths: precision audit +
+obvious-knowledge purge, per references/hard-sync.md).
 
 Modes: status (read-only drift report) | init (default, full analysis + emit) | upgrade (re-scan + refresh,
 hand-edits preserved -- the emitted skill is expected to have self-modified).
@@ -361,6 +399,7 @@ Re-run triggers:
 - New nested CLAUDE.md / rule / convention file  -> upgrade (surface gained a member)
 - New or renamed agent / skill                    -> upgrade (roster + batch tables)
 - Stack change, renamed layer, new lint/CI gate   -> upgrade (fact catalogue commands go stale)
+- Rule added, renamed or re-scoped                -> upgrade (paths-precision table in hard-sync.md)
 - Default branch or .gitignore change             -> upgrade (branch + git-visibility scalars)
 - Doc-flow ownership change                       -> upgrade (exclusions)
 -->

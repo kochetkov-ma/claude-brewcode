@@ -132,7 +132,13 @@ token the mode falls back to the working-tree diff, or to the last commits on a 
   <li>
     <div>
       <strong>Phase 2 — Scalar substitution</strong>
-      <p>Calls <code>generate.sh emit</code> to fill deterministic placeholders (agent names, rule paths, file groups, stack reference) via sed. Writes SKILL.md, agent-prompt.md, scope.md, report-template.md, and the chosen stack reference into <code>.claude/skills/superreview/</code>, and creates-or-reuses <code>.claude/agents/intent-guard.md</code> via the shared writer.</p>
+      <p>Calls <code>generate.sh emit</code> to fill deterministic placeholders (agent names, rule paths, file groups, stack reference) via sed. Writes SKILL.md, agent-prompt.md, scope.md, report-template.md, and the chosen stack reference into <code>.claude/skills/superreview/</code>, creates-or-reuses <code>.claude/agents/intent-guard.md</code> via the shared writer, and saves pristine copies of the templates to <code>.template-baseline/</code>. Refuses (exit 1, <code>already installed</code>) on a live installation and prints no <code>INTENT_GUARD:</code> line — go to Phase 2b instead.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Phase 2b — Already installed? Run upgrade</strong>
+      <p>The emitted skill self-modifies (its own Phase 4b SELF-SYNC), so a blind re-emit would erase those edits. When Phase 2 refuses, call <code>generate.sh upgrade</code> instead: it writes NO live file, stages a fresh emit under <code>.upgrade-staging/</code>, and prints one line per asset — <code>IDENTICAL</code>, <code>DIFFERS (&lt;n&gt; template line(s))</code>, <code>MISSING -&gt; restored (NEEDS PHASE 3)</code>, or <code>NO BASELINE - full diff, tailoring included</code> for a pre-baseline install. Port each real delta into the live file with targeted Edit calls, then promote the new templates to <code>.template-baseline/</code>.</p>
     </div>
   </li>
   <li>
@@ -216,6 +222,7 @@ is no `--fast`/`--deep` flag and none is planned — asking for depth in prose i
 | Adversarial validation | no — pool is self-verdicted | yes, per finding |
 | Interrupts on &gt;50 files | no | yes |
 | `INCOMPLETE` possible | only if the intent pass itself fails to run | yes (on `UNVALIDATED`, or a failed intent pass) |
+| Self-sync (Phase 4b) | no | yes, coordinator only, after the report |
 
 ```
 /superreview "the auth refactor"                 -> QUICK    (English, implicit)
@@ -251,6 +258,9 @@ into reviewing it.
   Discipline / Blast Radius section, a Mechanical Gate Results section, a verdict column on
   every finding row, and stats for scope-creep / confirmed-by-execution / UNVALIDATED counts.
   READ-ONLY by design — it recommends `/simplify`, never edits code.
+- **Self-sync.** `EXTENDED` only, coordinator only, after the report and before the chat
+  summary: Phase 4b corrects the emitted `SKILL.md` and `references/scope.md` in place from
+  data already in context. See [Emitted skill — self-sync](#emitted-skill--self-sync-phase-4b).
 
 ### Emitted skill — intent-guard agent
 
@@ -317,6 +327,34 @@ The generator seeds three project-specific blocks with generic defaults — proj
 examples, evidence commands — which Phase 3 then adapts. Until adapted, `generate.sh validate` warns
 `INTENT_GUARD: UNTAILORED`.
 
+### Emitted skill — self-sync (Phase 4b)
+
+`EXTENDED` only, coordinator only, never inside a spawned agent — parallel agents editing one SKILL.md
+collide. Runs after the report is written and before the Phase 5 chat summary, on data already in
+context; no new spawn. Skipped entirely at `QUICK` (one agent, no live roster, no baseline to sync from).
+The only writable paths are `SKILL.md` itself and `references/scope.md`.
+
+| Action | Fires when | Edit |
+|--------|-----------|------|
+| Roster refresh | The live `.claude/agents/*.md` roster differs from the emitted routing tables | Add the new agent's row; mark a vanished agent `MISSING -> Explore` |
+| Gate repair | A gate reported `not run` **and** a `command -v <bin>` re-test proves the binary is genuinely absent | Fix that gate row to the real command, or annotate `not available in this project`. A toolchain/deps failure with the binary present is left untouched — it is not a dead gate |
+| Scope baseline | The baseline resolved `UNKNOWN`, or the tracker found disagrees with the emitted `TRACKER_LABEL` | Correct `references/scope.md` section 1 to what was really resolvable |
+| Shared-surface append | A scope pass A finding named a surface absent from `references/scope.md` section 2 | Append that row — the finding is the evidence |
+
+Non-growth is **measured, never asserted**: `wc -l` runs on both files before the first edit and after
+the last one, and the Phase 5 `Self-sync:` line prints `before -> after (delta)`. The delta must be
+`<= 0` — a positive delta means the addition is reverted and printed as a proposal instead.
+
+A facts-vs-decisions carve-out limits what self-sync may touch: facts can be corrected in place, but
+depth semantics, the corpus rule, the permanent UNKNOWN-baseline P2 cap, focus ordering, and the
+read-only invariant are DECISIONS and stay untouched without explicit user instruction.
+
+Two things are never auto-written, only printed as proposals in the Phase 5 summary:
+
+- **DEGRADED groups / missing experts** — creating one is an `agent-creator` spawn that would change
+  the review's own tooling mid-run.
+- **New drift rows for `.claude/agents/intent-guard.md`** — that file is byte-untouchable by contract.
+
 ### Scope taxonomy
 
 | Creep shape | Meaning | Severity |
@@ -345,6 +383,31 @@ examples, evidence commands — which Phase 3 then adapts. Until adapted, `gener
 Overlap into a neighbour's surface is not automatically shape 1: correctness-driven and recorded
 is not a finding; correctness-driven and unrecorded is shape 6.
 
+### Generator script subcommands
+
+`generate.sh <mode>` — `scan | emit | emit-agent | upgrade | validate`:
+
+| Subcommand | Phase | Effect |
+|------------|-------|--------|
+| `scan` | 1 | Reports the target's tech stack, agent roster, rules/convention files, source/test dirs, gate candidates, tracker |
+| `emit` | 2 | Copies + scalar-substitutes templates into `.claude/skills/superreview/`, creates-or-reuses `intent-guard.md`, saves pristine templates to `.template-baseline/`. Refuses (exit 1, `already installed`) on a live install |
+| `upgrade` | 2b | Refreshes a live install without touching hand-edits: stages a fresh emit, diffs the new template against `.template-baseline/`, writes no live file |
+| `emit-agent` | — | Writes only `.claude/agents/intent-guard.md`; no superreview skill involved. Used by `/brewcode:teams` |
+| `validate` | 4 | Fails on a leftover `{PLACEHOLDER}`, an unknown agent name, a missing/unusable emitted asset, or zero wired domain experts |
+
+### Re-generation: `upgrade`, not re-emit
+
+The emitted skill self-modifies through Phase 4b SELF-SYNC, so `emit` refuses on a live installation
+instead of silently erasing those edits:
+
+| Command | Effect |
+|---------|--------|
+| `generate.sh upgrade` | The supported refresh. Writes no live file. Stages a fresh emit under `.upgrade-staging/` and reports, per asset, the new template vs the pristine `.template-baseline/` copy `emit` saved: `IDENTICAL`, `DIFFERS (<n> template line(s))`, `MISSING -> restored (NEEDS PHASE 3)`, or `NO BASELINE - full diff, tailoring included` for a pre-baseline install. Port each delta into the live file with targeted Edit calls, then promote `.upgrade-staging/.template` to the new baseline |
+| `SUPERREVIEW_FORCE=1 generate.sh emit` | Conscious destructive override — overwrites the live installation and **discards** every tailored and self-synced edit. Only on an explicit request for a clean regeneration |
+
+`.template-baseline/` and `.upgrade-staging/` each carry a `.gitignore` of `*`, so neither shows up in
+commits.
+
 ### Setup-time placeholders
 
 Scalar (Phase 2, sed substitution): `PROJECT_NAME`, `STACK_LABEL`, `STACK_REF`, `SOURCE_GLOB`,
@@ -365,7 +428,9 @@ allow-listed in `generate.sh validate` — they stay in the emitted SKILL.md and
 
 ### Re-run triggers
 
-Regenerate the emitted skill when any of the following change in the target project:
+Run `generate.sh upgrade` — never re-emit — when any of the following change in the target project;
+its own Phase 4b SELF-SYNC already keeps the routing table, dead gates, scope baseline and shared
+surfaces current between runs, so a trigger below is for a change SELF-SYNC cannot see itself:
 
 - Agent added, removed, or renamed
 - Rule or convention file added
@@ -373,6 +438,7 @@ Regenerate the emitted skill when any of the following change in the target proj
 - Tracker or branch-naming convention changes
 - A new always-shared surface appears
 - Source group boundaries shift (new top-level directory)
+- The generator's own templates moved (this generator was updated)
 
 ### Error handling
 
@@ -386,6 +452,10 @@ Regenerate the emitted skill when any of the following change in the target proj
 | Multi-stack project | ONE dominant-stack reference is emitted; secondaries are noted in the agent and file-group tables |
 | Unresolved placeholder after Phase 3 | Phase 4 blocks completion; re-run Phase 3 on the affected file |
 | Unwritable target path | Generator stops; check permissions on `.claude/skills/` |
+| `emit` refuses — already installed | Expected, not an error: the live skill carries Phase 4b self-sync edits. Go to Phase 2b and run `upgrade`; only `SUPERREVIEW_FORCE=1` overwrites |
+| `upgrade` says `DIFFERS` on a hand-edited file | Counts TEMPLATE lines only, never the tailoring — port the delta with Edit, never replace the live file with the staged copy |
+| `upgrade` says `NO BASELINE` | Install predates `.template-baseline/`; the count is a live-vs-template diff INCLUDING tailoring — review by hand, then promote the printed baseline command |
+| `upgrade` says `MISSING -> restored (NEEDS PHASE 3)` | The restored file is a raw template with unresolved BLOCK placeholders — run Phase 3 on it before Phase 4 |
 
 ### Emitted file structure
 
@@ -397,13 +467,15 @@ Regenerate the emitted skill when any of the following change in the target proj
     scope.md                        # baseline, ownership, taxonomy, delivery, closeout
     report-template.md              # merged P0-P3 report template
     {stack}.md                      # java-kotlin | typescript-react | python | go (dominant only)
+  .template-baseline/               # pristine templates from the last emit; git-ignored, upgrade's diff source
+  .upgrade-staging/                 # fresh emit staged by `upgrade` for comparison; git-ignored, removed after porting
 .claude/agents/
   intent-guard.md                   # anti-drift agent, create-or-reuse, shared with /brewcode:teams
 ```
 
 <CardGrid>
-  <Card title="spec skill" icon="document" href="/brewcode/skills/spec/">
-    Produces the project SPEC.md. Start with spec before generating a review skill for a new repo.
+  <Card title="task-board-init skill" icon="document" href="/brewtools/skills/task-board-init/">
+    Deploys the task board and the generated `/task-spec` skill. Write the task spec before running a review.
   </Card>
   <Card title="The emitted skill" icon="magic" href="/brewcode/skills/review/">
     What `/superreview` does once it lands in your repo: modes, gates, scope gate, merged report.

@@ -7,14 +7,24 @@
 # Usage: generate.sh <mode>
 #   scan        - Report target tech stack, agents, rules, source/test dirs (Phase 1)
 #   emit        - Copy + scalar-substitute templates into <cwd>/.claude/skills/superreview/ (Phase 2)
-#                 AND create-or-reuse <cwd>/.claude/agents/intent-guard.md
+#                 AND create-or-reuse <cwd>/.claude/agents/intent-guard.md.
+#                 Also saves PRISTINE copies of the templates it emitted from under .template-baseline/ — that
+#                 baseline is what makes `upgrade` able to tell a TEMPLATE change apart from Phase 3 tailoring.
+#                 REFUSES to overwrite a live installation (the emitted skill SELF-SYNCS — Phase 4b — so its
+#                 SKILL.md and references/scope.md carry edits no template knows about). SUPERREVIEW_FORCE=1
+#                 overrides and DESTROYS those edits.
+#   upgrade     - Refresh a LIVE installation without touching hand-edits (Phase 2b): stages a fresh emit next
+#                 to it and reports, per file, the NEW TEMPLATE vs the .template-baseline/ copy — IDENTICAL |
+#                 DIFFERS (real template delta) | MISSING -> restored (NEEDS PHASE 3) | NO BASELINE (pre-baseline
+#                 install: falls back to live-vs-template, tailoring included). Live files are never written;
+#                 the AI applies the template delta with targeted Edit calls.
 #   emit-agent  - Create-or-reuse <cwd>/.claude/agents/intent-guard.md ONLY. No superreview skill is
 #                 written, read or required. Used by /brewcode:teams, which must not author its own copy.
 #                 Prints exactly one `INTENT_GUARD:` line on STDOUT: `INTENT_GUARD: CREATED <path>` |
 #                 `INTENT_GUARD: REUSE <path>`. Diagnostics go to stderr and never break that contract.
 #   validate    - Fail if any unresolved setup-time {PLACEHOLDER} remains (Phase 4)
 #
-# Env overrides (honored by BOTH emit and emit-agent):
+# Env overrides (honored by BOTH emit and emit-agent; SUPERREVIEW_FORCE=1 lets emit overwrite a live install):
 #   PROJECT_NAME, TRACKER_LABEL, SPEC_LOCATION, PLAN_LOCATION, POLICY_LOCATION
 #   (emit also honors STACK_LABEL, STACK_REF, SOURCE_GLOB, PATHSPEC_GLOBS, ARBITER_AGENT,
 #    VALIDATOR_AGENT, SCOPE_AGENT_A, SCOPE_AGENT_B)
@@ -31,6 +41,11 @@ REFS="$SKILL_DIR/references"
 # Target is the current working directory (the repo being reviewed)
 TARGET=".claude/skills/superreview"
 TARGET_REFS="$TARGET/references"
+# Where `upgrade` stages a fresh emit for comparison. Dot-prefixed so the skill loader ignores it; removed by the caller.
+STAGING="$TARGET/.upgrade-staging"
+# Pristine copies of the templates the live install was emitted from. `upgrade` diffs the NEW template against
+# these, so Phase 3 tailoring in the live files can never be mistaken for a template change.
+BASELINE="$TARGET/.template-baseline"
 
 # The one agent file this script owns, and the provenance stamp that proves a file came out of this pipeline.
 IG_PATH=".claude/agents/intent-guard.md"
@@ -190,6 +205,21 @@ _subst_raw() {
 
 _subst() { _subst_raw "$1" > "$2"; }
 
+# Copy the RAW (unsubstituted) templates under $1, keyed by the path each one is EMITTED to. Raw on purpose:
+# comparing raw-vs-raw keeps per-run scalars (GENERATED_AT above all) out of the delta, so an unchanged template
+# always compares byte-identical. `*` in .gitignore keeps the whole dir — itself included — out of `git add -A`.
+copy_raw_templates() {
+  _dst="$1"
+  mkdir -p "$_dst/references"
+  printf '*\n' > "$_dst/.gitignore"
+  cp "$REFS/SKILL.md.template"  "$_dst/SKILL.md"
+  cp "$REFS/agent-prompt.md"    "$_dst/references/agent-prompt.md"
+  cp "$REFS/report-template.md" "$_dst/references/report-template.md"
+  cp "$REFS/scope.md.template"  "$_dst/references/scope.md"
+  # `|| true`: a missing per-stack ref must not abort the run under `set -e`.
+  { [ -f "$REFS/$STACK_REF" ] && cp "$REFS/$STACK_REF" "$_dst/references/$STACK_REF"; } || true
+}
+
 # ── shared: the ONE writer of .claude/agents/intent-guard.md ────────────────────
 # Called by BOTH `emit` and `emit-agent`. Never a second implementation, never a hand-written copy.
 # CREATE-OR-REUSE: a USABLE existing file is the project's own tuned version and is NEVER overwritten.
@@ -300,6 +330,17 @@ emit_agent_only() {
 emit_skill() {
   echo "=== superreview: emit ==="
   validate_templates
+
+  # The emitted skill SELF-SYNCS (its Phase 4b corrects its own routing table, gates, baseline and shared
+  # surfaces). A blind re-emit would silently erase every one of those corrections, so a live installation is
+  # never overwritten: `upgrade` refreshes it, and SUPERREVIEW_FORCE=1 is the conscious destructive override.
+  if [ -f "$TARGET/SKILL.md" ] && [ "${SUPERREVIEW_FORCE:-0}" != "1" ]; then
+    echo "❌ superreview is already installed at $TARGET/SKILL.md"
+    echo "   It SELF-SYNCS (Phase 4b) — overwriting it destroys those in-place corrections."
+    echo "   Use 'generate.sh upgrade' (live files preserved), or SUPERREVIEW_FORCE=1 to overwrite and LOSE them."
+    exit 1
+  fi
+
   resolve_scalars
 
   mkdir -p "$TARGET_REFS"
@@ -323,6 +364,12 @@ emit_skill() {
     echo "⚠️ stack reference not found: $REFS/$STACK_REF (emitted without per-stack doc)"
   fi
 
+  # Pristine template copies — the ONLY thing that lets a later `upgrade` separate a real template change from
+  # the Phase 3 tailoring these emitted files are about to receive.
+  rm -rf "$BASELINE"
+  copy_raw_templates "$BASELINE"
+  echo "✅ $BASELINE (pristine templates for 'upgrade'; git-ignored)"
+
   # intent-guard — the anti-drift agent the emitted skill spawns at BOTH depths.
   # Written by the SHARED writer above (the same one `emit-agent` calls): one implementation, one status line.
   write_intent_guard
@@ -331,6 +378,72 @@ emit_skill() {
   echo "Next: AI fills BLOCK placeholders via Edit (SKILL.md Phase 3) in the emitted SKILL.md, and REPLACES the"
   echo "      SEEDED-DEFAULT blocks in $IG_PATH when this run CREATED it (skip on REUSE)"
   echo "      — then run: generate.sh validate"
+}
+
+# ── upgrade: refresh a LIVE installation, hand-edits preserved ──────────────────
+# The emitted skill is EXPECTED to have self-modified (its Phase 4b SELF-SYNC) and to carry Phase 3 tailoring, so
+# no live file is ever written over AND no live file is ever the diff baseline: comparing a tailored install to a
+# raw template reports every tailored line as a "change". The real question is what the TEMPLATE changed, so the
+# comparison is NEW template vs the pristine .template-baseline/ copy saved at emit time. The live file is only
+# the place the delta gets ported INTO. Only an asset that is MISSING is restored in place — a file that does not
+# exist has no hand-edits to lose — and a restored file is RAW, so it still needs Phase 3.
+upgrade_skill() {
+  echo "=== superreview: upgrade ==="
+  validate_templates
+
+  if [ ! -f "$TARGET/SKILL.md" ]; then
+    echo "❌ nothing to upgrade: $TARGET/SKILL.md does not exist — run 'generate.sh emit' first"
+    exit 1
+  fi
+
+  resolve_scalars
+  rm -rf "$STAGING"
+  mkdir -p "$STAGING/references"
+  printf '*\n' > "$STAGING/.gitignore"   # never `git add -A` noise in the user's repo
+
+  _subst "$REFS/SKILL.md.template"    "$STAGING/SKILL.md"
+  _subst "$REFS/agent-prompt.md"      "$STAGING/references/agent-prompt.md"
+  _subst "$REFS/report-template.md"   "$STAGING/references/report-template.md"
+  _subst "$REFS/scope.md.template"    "$STAGING/references/scope.md"
+  # `|| true`: a missing per-stack ref must not abort the run under `set -e`.
+  { [ -f "$REFS/$STACK_REF" ] && cp "$REFS/$STACK_REF" "$STAGING/references/$STACK_REF"; } || true
+  # Raw NEW templates, in the same shape as the baseline — this pair is what the delta is computed from.
+  copy_raw_templates "$STAGING/.template"
+
+  echo "UPGRADE_STAGING=$STAGING"
+  echo "UPGRADE_BASELINE=$BASELINE"
+  _restored=0
+  for _rel in "SKILL.md" "references/agent-prompt.md" "references/report-template.md" \
+              "references/scope.md" "references/$STACK_REF"; do
+    [ -f "$STAGING/$_rel" ] || continue
+    if [ ! -f "$TARGET/$_rel" ]; then
+      cp "$STAGING/$_rel" "$TARGET/$_rel"
+      _restored=$((_restored+1))
+      echo "UPGRADE: $_rel MISSING -> restored (NEEDS PHASE 3)"
+    elif [ -f "$BASELINE/$_rel" ]; then
+      if cmp -s "$BASELINE/$_rel" "$STAGING/.template/$_rel"; then
+        echo "UPGRADE: $_rel IDENTICAL (template unchanged since install — live file untouched)"
+      else
+        # `|| true`: diff exits 1 on a difference and grep exits 1 on zero matches; under pipefail either
+        # would abort the assignment (repo rule avoid#7).
+        _d=$(diff "$BASELINE/$_rel" "$STAGING/.template/$_rel" | grep -c '^[<>]' || true)
+        echo "UPGRADE: $_rel DIFFERS ($_d template line(s)) — port into the LIVE file; see: diff \"$BASELINE/$_rel\" \"$STAGING/.template/$_rel\""
+      fi
+    else
+      _d=$(diff "$TARGET/$_rel" "$STAGING/$_rel" | grep -c '^[<>]' || true)
+      echo "UPGRADE: $_rel NO BASELINE - full diff, tailoring included ($_d line(s)) — install predates .template-baseline/; the count is NOT a template delta, review it by hand against $STAGING/$_rel"
+    fi
+  done
+
+  # Same create-or-reuse writer as emit: a usable intent-guard.md is REUSED byte-untouched.
+  write_intent_guard
+
+  echo ""
+  echo "No live file was overwritten. Apply the template delta with targeted Edit calls (SKILL.md Phase 2b),"
+  echo "keeping every self-synced correction."
+  [ "$_restored" -gt 0 ] && echo "$_restored restored file(s) are RAW templates — run Phase 3 on them BEFORE validate."
+  echo "Then promote the new templates to the baseline and clean up:"
+  echo "  rm -rf \"$BASELINE\" && mv \"$STAGING/.template\" \"$BASELINE\" && rm -rf \"$STAGING\" && generate.sh validate"
 }
 
 # ── validate: no setup-time {PLACEHOLDER} may remain ────────────────────────────
@@ -484,6 +597,13 @@ EOF
     echo "✅ domain experts wired: $_experts"
   fi
 
+  # Leftover upgrade staging: a stale second copy of the skill. Warning only — it changes no behaviour, and its
+  # own .gitignore keeps it out of the user's commits.
+  [ -d "$STAGING" ] && echo "⚠️ leftover upgrade staging at $STAGING — once the delta is applied: rm -rf \"$BASELINE\" && mv \"$STAGING/.template\" \"$BASELINE\" && rm -rf \"$STAGING\"" || true
+  # No baseline = every future `upgrade` falls back to a live-vs-template diff that cannot separate tailoring
+  # from a template change. Warning only: an install emitted before baselines existed is still valid.
+  [ -d "$BASELINE" ] || echo "⚠️ no $BASELINE — 'upgrade' will report NO BASELINE (full diff, tailoring included). Re-emit or promote a staged .template to fix it"
+
   if [ "$_errors" -eq 0 ]; then
     echo "✅ no unresolved setup-time placeholders"
   fi
@@ -494,11 +614,15 @@ case "$MODE" in
   scan) scan_target ;;
   emit) emit_skill ;;
   emit-agent) emit_agent_only ;;
+  upgrade) upgrade_skill ;;
   validate) validate_emit ;;
   *)
-    echo "Usage: generate.sh <scan|emit|emit-agent|validate>"
+    echo "Usage: generate.sh <scan|emit|emit-agent|upgrade|validate>"
+    echo "  emit        refuses to overwrite a live installation (SUPERREVIEW_FORCE=1 overrides, DESTROYS self-sync edits)"
     echo "  emit-agent  create-or-reuse <cwd>/.claude/agents/intent-guard.md ONLY (no superreview skill needed);"
     echo "              prints 'INTENT_GUARD: CREATED <path>' or 'INTENT_GUARD: REUSE <path>'"
+    echo "  upgrade     refresh a live installation; reports NEW template vs .template-baseline/ (the real template"
+    echo "              delta, tailoring excluded), restores missing assets RAW (NEEDS PHASE 3), never overwrites"
     exit 1
     ;;
 esac

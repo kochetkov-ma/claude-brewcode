@@ -30,15 +30,15 @@ claude plugin install brewcode@claude-brewcode</code></pre>
   </li>
   <li class="step step-primary">
     <div>
-      <strong>Write a specification</strong> <Badge variant="primary" text="/brewcode:spec" />
-      <p>Describe the task in plain text or point to a requirements file:</p>
-      <pre><code>/brewcode:spec "Implement JWT authorization with role-based access"</code></pre>
-      <p>Or from a file:</p>
-      <pre><code>/brewcode:spec ./docs/requirements/auth.md</code></pre>
-      <p><strong>What happens:</strong> the skill launches 5-10 research agents in parallel.
-      They analyze the codebase, locate related code, dependencies, and patterns,
-      then ask clarifying questions (use the <code>-n</code> flag for autonomous mode without questions).</p>
-      <p><strong>Result:</strong> a <code>SPEC.md</code> file — a structured specification with full project context.</p>
+      <strong>Set up the task board</strong> <Badge variant="primary" text="/brewtools:task-board-init" />
+      <p>Run it once per repo and accept the spec layer when asked:</p>
+      <pre><code>/brewtools:task-board-init</code></pre>
+      <p>Then write the spec for a task on the board:</p>
+      <pre><code>/task-spec "Implement JWT authorization with role-based access"</code></pre>
+      <p><strong>What happens:</strong> <code>task-board-init</code> analyzes the repo with parallel agents and
+      deploys a file-based Kanban plus a project-tailored <code>/task-spec</code> skill. <code>/task-spec</code>
+      researches the codebase, asks clarifying questions, and fans out to domain agents for system design.</p>
+      <p><strong>Result:</strong> a task on the board with its own spec and design docs under <code>.claude/features/</code>.</p>
     </div>
   </li>
   <li class="step step-primary">
@@ -97,18 +97,18 @@ claude plugin install brewcode@claude-brewcode</code></pre>
 
 <CardGrid>
   <Card title="brewcode" icon="building" href="/brewcode/overview/">
-    8 skills: spec, deep review, conventions, rules, teams, and more.
+    8 skills: semantic search, deep review, conventions, rules, teams, and more.
   </Card>
   <Card title="brewtools" icon="wrench" href="/brewtools/overview/">
-    11 skills for text utilities: prompt optimization, AI artifact removal,
+    12 skills for text utilities: prompt optimization, AI artifact removal,
     secrets scanning, SSH, deploy.
   </Card>
   <Card title="brewui" icon="image" href="/brewui/overview/">
     Placeholder for future UI/visual/creative tools (currently empty).
   </Card>
   <Card title="brewdoc" icon="document" href="/brewdoc/overview/">
-    6 skills for documentation: automatic sync with the codebase,
-    doc generation, memory sync, PDF conversion, publishing.
+    6 skills for documentation: doc-staleness tracking, doc generation,
+    memory-sync generation, PDF conversion, publishing.
   </Card>
   <Card title="All brewcode skills" icon="clipboard" href="/brewcode/skills/">
     Full list of 8 brewcode skills with commands, parameters, and dependencies.

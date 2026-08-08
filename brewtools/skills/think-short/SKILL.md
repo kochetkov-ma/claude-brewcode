@@ -20,6 +20,8 @@ disable-model-invocation: true
 | UserPromptSubmit | inject the full prompt every 10th user prompt (10/20/30…, not the 1st) |
 | PreToolUse:`Task\|Agent` | inject the full terse prompt into spawned subagents (coexistence-safe with other Task hooks) |
 
+> `think-short-prompt.md` is **copied** into the target at install — an existing install keeps its old text forever. After the prompt changes (incl. a brewtools update), **re-run install** on that target to pick it up.
+
 <instructions>
 
 ## BT_ROOT Resolver (use in EVERY bash block)

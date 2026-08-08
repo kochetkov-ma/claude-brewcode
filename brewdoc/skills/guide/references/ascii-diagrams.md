@@ -10,7 +10,7 @@ Pre-drawn diagrams for the guide skill. Reference by name from topic files.
 ├───────────────────┬────────────────┬──────────────────┤
 │     brewcode      │    brewdoc     │    brewtools     │
 │───────────────────┼────────────────┼──────────────────│
-│ spec, superreview │ docsync        │ text-optimize    │
+│ superreview       │ docsync        │ text-optimize    │
 │ convention, teams │ my-claude      │ text-human       │
 │ rules, skills     │ memory         │ secrets-scan     │
 │ agents, e2e       │ md-to-pdf      │ ssh, deploy      │
@@ -25,18 +25,18 @@ brewui: placeholder, no skills yet
 ## Diagram: Killer Flow Pipeline
 
 ```
-┌──────┐   ┌──────┐   ┌───────┐   ┌─────────┐   ┌───────┐
-│ spec │──>│ plan │──>│ start │──>│ handoff │──>│ start │──> ...
-└──────┘   └──────┘   └───┬───┘   └────┬────┘   └───┬───┘
-                          │            │             │
-                     ┌────┴────┐  ┌────┴────┐  ┌────┴────┐
-                     │ hooks   │  │ compact │  │ hooks   │
-                     │ inject  │  │ KNOW-   │  │ re-read │
-                     │ context │  │ LEDGE   │  │ state   │
-                     └─────────┘  └─────────┘  └─────────┘
-                                       │
-                          KNOWLEDGE.jsonl persists
-                          across all sessions
+┌──────────────┐   ┌───────────┐   ┌───────────┐   ┌──────────────┐
+│ task-board-  │──>│ /task-spec│──>│ implement │──>│ /superreview │──> ...
+│ init (once)  │   └─────┬─────┘   └─────┬─────┘   └──────┬───────┘
+└──────┬───────┘         │               │                │
+       │            ┌────┴────┐     ┌────┴────┐     ┌─────┴─────┐
+       │            │ domain  │     │ bounded │     │ quorum    │
+       │            │ arch.   │     │ units,  │     │ reviewers │
+       │            │ fan-out │     │ fanned  │     │ + gates   │
+       │            └─────────┘     └─────────┘     └───────────┘
+       │                                 │
+       └──────> .claude/features/board.md <──────
+                state lives on disk, not in context
 ```
 
 ## Diagram: Teams Architecture
@@ -83,15 +83,16 @@ SessionStart                      UserPromptSubmit
 ## Diagram: Project Directory
 
 ```
-.claude/tasks/
-└── {TS}_{NAME}_task/
-    ├── PLAN.md              # execution plan
-    ├── SPEC.md              # task specification
-    ├── KNOWLEDGE.jsonl      # persistent learnings
-    ├── .lock                # session lock
-    ├── artifacts/
-    │   ├── FINAL.md         # final summary
-    │   └── {P}-{N}{T}/     # phase artifacts
-    │       └── {AGENT}_output.md
-    └── backup/              # auto-backups
+.claude/features/
+├── board.md                 # the Kanban: counts, task rows, feature specs
+├── TRACKER.md               # conventions for the task-tracker agent
+├── TASK_TEMPLATE.md         # id convention + frontmatter shape
+├── INDEX.md                 # domain / scope index
+├── backlog/ todo/           # not scheduled / scheduled
+├── progress/ closed/        # in flight / done
+└── specs/
+    ├── SPEC_TEMPLATE.md
+    ├── DESIGN_TEMPLATE.md
+    ├── {ID}-spec.md         # WHAT  (from /task-spec)
+    └── {ID}-design.md       # HOW   (domain-architect fan-out)
 ```

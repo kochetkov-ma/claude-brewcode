@@ -54,9 +54,13 @@ the quote + tier + delivery evidence, so it does not pass through the adversaria
 
 **Baseline:** task {T-ID + file} | none — issue {id} "{title}" | not reached — decisions {ids} | none
 **Acceptance criteria covered:** {c}/{total} ({unmet ones listed as findings})
-**Scope ids done as claimed:** {c}/{total in} ({D1/D2: `done` with nothing built} / {D5: built but still marked not-started}) — OMIT this line entirely when the task file has no `## Scope` table
+**Scope ids done as claimed:** {c}/{total in} ({u} not started yet — honestly unfinished, NOT findings / {D1/D2: `done` with nothing built} / {D5: built but still marked not-started}) — OMIT this line entirely when the task file has no `## Scope` table
 **Files outside the sanctioned surface:** {K}/{COUNT}
-**Delivery (section 3b):** D1 {n} undelivered / D2 {n} partial-or-stubbed / D3 {n} unprovable / D5 {n} stale scope-id status — reductions: {none \| accepted, blocker recorded in {where} \| UNRECORDED -> D4}
+**Delivery (section 3b):** D1 {n} undelivered / D2 {n} partial-or-stubbed / D3 {n} unprovable{ / D5 {n} stale scope-id status} — reductions: {none \| accepted, blocker recorded in {where} \| UNRECORDED -> D4}
+
+> The `/ D5 {n}` term belongs to the Delivery line ONLY when the task file HAS a `## Scope` table. No table (the
+> usual case — most repos have no board) -> DROP that term, same silent no-op as the omitted line above. Never
+> print `D5 0`: a repo with no scope ids gets no scope-id text anywhere in the report.
 **Closeout (section 4b):** PR {id} — body {OK \| C1 gap \| too long \| too thin}; `Closes`/`Refs` {correct \| C2 {detail}}; issue comments {OK \| missing}; AI attribution {none \| C4 found in {artefact}} \| **PR: none — closeout skipped**
 
 | File:Line | Shape / rule | Sanctioned? | Who else is hit | Issue | Fix |
@@ -171,4 +175,5 @@ command; `CONFIRMED-BY-EVIDENCE` = intent-guard row, cite the ASKED quote + tier
   plus the intent pass). Resolved semantically from the prompt; there is no flag.
 - **Scope shapes:** 1 foreign-surface (P0) | 2 unsanctioned-feature (P1) | 3 drive-by (P2) | 4 opportunistic-dep
   (P2) | 5 silent-doc-mutation (P1) | 6 sanctioned-but-unrecorded (P2); delivery D1/D4 (P0, proof required),
-  D2 (P1), D3 (P2); closeout C2 (P1), C1/C3/C4 (P2).
+  D2 (P1), D3 (P2), D5 stale scope-id status (P3 — P2 only when that row is the task's only delivery record);
+  closeout C2 (P1), C1/C3/C4 (P2).
