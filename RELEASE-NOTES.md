@@ -2,6 +2,26 @@
 
 ---
 
+## v4.10.1 (2026-08-08)
+
+> Docs: [memory-sync-init](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-init/)
+
+### brewdoc
+
+#### Fixed
+- **`memory-sync-init` HARD depth no longer deletes a rule file.** A `paths:` entry pointing at a tree that no longer exists is now `DANGLING`: the dead entry is dropped from the frontmatter list and reported, and the rule file itself is never removed. Path resolution requires **both** probes to come back empty before a verdict is issued — `git ls-files -- ':(glob)<pattern>'` (the `:(glob)` magic stops git's `*` from crossing `/`, unlike a Claude Code `paths:` glob) and a filesystem `find`, so a git-ignored tree no longer reads as dead. Verdicts are per entry, not per file: `OK | TOO_BROAD | TOO_NARROW | DANGLING | MISSING | CORRECTLY_GLOBAL`, and an existing `paths:` key is never stripped
+- **PASS B precedence was ambiguous.** The Borderline table now explicitly **overrides** the obvious-knowledge discriminator, and the "inverts the project default" class is stated as a KEEP. The deletion unit is the whole rule — its numbered row plus every continuation line — not a single line. A file cut by more than half is reported with its `lines_before`/`lines_after` ratio
+- **Non-growth vs. PASS A frontmatter repair contradicted each other.** PASS A's shrink-only carve-out for repairing `paths:` is now stated at all four sites that assert non-growth, and the ordering check accepts Phase 2 appends and HARD drops while still requiring surviving numbered ids to keep their number and relative order
+- **`agent-audit` read every agent as dead** in any repo whose `.gitignore` hides `.claude/` — the ownership probe used `git ls-files`. It now probes the filesystem. Implied-but-unnamed tools and unverifiable command steps are reported, not silently stripped
+- **`generate.sh` emit was not atomic.** A mid-emit failure left a half install that every later emit refused, pushing the user toward the destructive `MEMORY_SYNC_FORCE=1`. Emit now stages into a `mktemp -d` inside `.claude/skills/` and lands with a single `rm -rf && mv`
+- **Command injection in `generate.sh`:** the skills counter passed a skill-directory name through `eval`; a directory named `x'$(...)'y` executed. Fixed by passing real arguments. Also: repo root resolves via `git rev-parse --show-toplevel` (or `MEMORY_SYNC_ROOT`), branch derivation walks `origin/HEAD` -> any remote HEAD -> a sole local branch -> `UNDERIVABLE`, `status` scans the reference files too and prints an identical key set whether or not the skill is installed, and scalars are flattened of newlines before substitution
+- **Emitted skill self-sync covered 2 of 3 references** — `memory-guide.md` was excluded. `memory-guide.md` itself claimed NARROW-to-BROAD ordering (it is BROAD-to-NARROW), and global user-level memory is now marked OUT OF SCOPE: reported, never edited
+
+#### Changed
+- **docs:** the `memory-sync-init` page was written against a 3-file draft. It now documents the four emitted files, the six phases (GATHER, SYNC, VERIFY, SELF-SYNC, PROPOSE, REPORT), the twelve AI-filled blocks, a generator tool list without `Write`, `status` actually running `generate.sh status`, and a new **Depth: NORMAL vs HARD** section
+
+---
+
 ## v4.10.0 (2026-08-08)
 
 > Docs: [superreview](https://doc-claude.brewcode.app/brewcode/skills/superreview/) | [teams](https://doc-claude.brewcode.app/brewcode/skills/teams/) | [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [agents](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [task-board-init](https://doc-claude.brewcode.app/brewtools/skills/task-board-init/) | [manager](https://doc-claude.brewcode.app/brewtools/skills/manager/) | [prompt-injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/) | [memory-sync-init](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-init/)

@@ -3,7 +3,7 @@ name: brewdoc:memory-sync-init
 description: "Generates a project-tailored memory-sync skill: memory surface batches, checkable-fact catalogue, non-growth sync, independent verify, self-sync, agent re-audit. Triggers: memory sync init, generate memory sync, sync memory skill, установи memory-sync, синхронизируй память"
 user-invocable: true
 argument-hint: "[status|init|upgrade] [fine-tune-prompt]"
-allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion
+allowed-tools: Read, Edit, Glob, Grep, Bash, Agent, AskUserQuestion
 model: opus
 ---
 
@@ -74,6 +74,16 @@ Emphasis: {fine-tune prompt interpretation | "none"}
 > `upgrade` NEVER runs `emit` over a live installation. `emit` refuses to overwrite (`MEMORY_SYNC_FORCE=1` is the
 > conscious override, and it DESTROYS hand-edits). Upgrade works through targeted `Edit` calls, section by section.
 
+FIRST step of `status`, and of `upgrade` before it decides what to refresh -- **EXECUTE** using Bash tool:
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/generate.sh" status
+```
+
+Its machine-greppable KEY=value block and closing verdict (`NOT INSTALLED` / `IN SYNC` / `STALE (<n> drifts)`) ARE
+the staleness answer: never re-derive them by hand. `status` reports that output enriched with your own reads and
+STOPS -- it writes nothing. `upgrade` takes the same drift list as its refresh worklist and continues to Phase 1;
+`NOT INSTALLED` there means STOP (see Error Handling).
+
 ---
 
 ## Execution
@@ -135,7 +145,7 @@ scan plus your own reads, determine:
 | **Git visibility** | `git ls-files -- .claude '*CLAUDE.md' '*AGENTS.md'` and the `.gitignore` rules behind it. Git-IGNORED surface -> `git status`/`git diff` can NEVER account for a memory edit, so VERIFY must re-read files directly instead of trusting the diff | `{GIT_VISIBILITY}`, `{VERIFY_EXTRA}` |
 | **Language policy** | which files legitimately carry non-English trigger aliases (agent/skill `description:`, mode-routing tables, `CLAUDE.local.md`), and which surface is English-only. An intentional alias stripped as a "violation" is a regression | `{LANGUAGE_POLICY}` |
 | **Frontmatter conventions** | which of `last_updated`, `doc_type`, `paths:` globs, `[DICT: ...]` headers are in use, and WHERE each belongs | `{INVARIANTS_TABLE}` |
-| **`paths:` precision** | `scan` prints `path :: lines :: paths:` for EVERY `.claude/rules/*.md`. Per rule: name its real subject in one phrase, derive the narrowest glob covering it, compare with the declared one, and resolve the derived glob against the repo (`git ls-files -- '<glob>'`). Judge each now -- `OK` / `TOO_BROAD` / `TOO_NARROW` / `DANGLING` / `MISSING` / `CORRECTLY_GLOBAL` | `{PATHS_PRECISION_TABLE}` |
+| **`paths:` precision** | `scan` prints `path :: lines :: paths:` for EVERY `.claude/rules/*.md`. Per rule: name its real subject in one phrase, derive the narrowest glob covering it, compare with the declared one, and resolve it against the repo with BOTH probes exactly as `references/hard-sync.md` prescribes -- `git ls-files -- ':(glob)<glob>'` (plain git `*` crosses `/`, so a broken glob still "matches") AND a filesystem `find` (`git ls-files` is blind to git-ignored trees: a `.gitignore`d `.claude/` returns 0 rows while the tree is full of files). `DANGLING` only when BOTH come back empty. Judge each now -- `OK` / `TOO_BROAD` / `TOO_NARROW` / `DANGLING` / `MISSING` / `CORRECTLY_GLOBAL` | `{PATHS_PRECISION_TABLE}` |
 | **Obvious vs domain** | HARVEST real pairs from the target's OWN rules and conventions: a line any competent model already knows (generic craft advice, restated tool docs, textbook pattern definitions) next to the domain fact in the same file that only makes sense because someone HERE decided it. Real quotes from this repo, never invented illustrations | `{OBVIOUS_VS_DOMAIN_TABLE}` |
 | **Stable numbered ids** | rule files whose rows carry stable numbers, and who cites them POSITIONALLY (a reorder silently repoints every citation). Count them per run, never trust a baked number | `{INVARIANTS_TABLE}` |
 | **Reacting hooks** | docsync or other hooks firing on memory edits (`.claude/settings.json`, `.claude/hooks/**`), their config and threshold. Edits WILL trigger them -- expected; hook files are never edited | `{INVARIANTS_TABLE}`, `{TRACKER_NOTE}` |
@@ -301,22 +311,8 @@ is a template token absent from this table.
 touches them.
 
 TWELVE blocks -- ten in the emitted `SKILL.md`, two in the emitted `references/hard-sync.md`. `validate` fails
-until every one is filled.
-
-| Placeholder | File | Fills |
-|-------------|------|-------|
-| `{BATCH_TABLE}` | SKILL.md | disjoint batches -> files, VERIFY-ONLY marks |
-| `{EXCLUDED_TABLE}` | SKILL.md | hard exclusions with reasons |
-| `{INVARIANTS_TABLE}` | SKILL.md | house invariants enforced in every batch |
-| `{FACT_CATALOGUE}` | SKILL.md | claim -> verification command |
-| `{ENUMERATION_BASH}` | SKILL.md | the per-run inventory commands |
-| `{AGENT_CHECKS_TABLE}` | SKILL.md | agent-batch extra checks |
-| `{SKILL_CHECKS_TABLE}` | SKILL.md | skill-batch extra checks |
-| `{EXPERT_ROSTER_TABLE}` | SKILL.md | agent -> owned path group -> specialty |
-| `{PROPOSAL_PRECEDENTS}` | SKILL.md | the bar for a new agent/skill + this repo's precedents |
-| `{VERIFY_EXTRA}` | SKILL.md | project-specific VERIFY assertions |
-| `{PATHS_PRECISION_TABLE}` | hard-sync.md | per rule file: current `paths:`, verdict, narrowest correct glob |
-| `{OBVIOUS_VS_DOMAIN_TABLE}` | hard-sync.md | real generic-vs-domain pairs harvested from this target's own rules |
+until every one is filled. The Phase 3 table above names all twelve with their file and substance contract; it is
+the single list -- do not restate it here.
 
 > The emitted skill also uses RUNTIME tokens -- `{SCOPE}`, `{FOCUS}`, `{DEPTH}`, `{BATCH}`, `{FILE_LIST}`,
 > `{FACTS}`, `{BROKEN_REFS}`, `{DATE}`, `{N}`, `{M}`, `{K}`. Those are resolved per RUN by the emitted skill, are

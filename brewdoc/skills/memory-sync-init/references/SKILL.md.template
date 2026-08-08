@@ -13,8 +13,7 @@ model: opus
 faster than CLAUDE.md / rules / conventions / agents / skills; this skill diffs memory against reality for a scope
 and repairs it - facts FIRST, dedup second, compression third - and never lets the surface grow.
 
-**Bash-first:** native macOS builds ship no `Grep`/`Glob` tool. Every discovery step here is a shell command
-(`find`, `grep -rn`, `git ls-files`, `ls`, `wc -l`); `Glob`/`Grep` stay in `allowed-tools` as optional fallbacks.
+**Bash-first:** native macOS builds ship no `Grep`/`Glob` tool - every discovery step here is a shell command (`find`, `grep -rn`, `git ls-files`, `ls`, `wc -l`); `Glob`/`Grep` stay in `allowed-tools` as optional fallbacks.
 
 **References** (paths relative to this skill's directory, `$CLAUDE_SKILL_DIR` = `.claude/skills/memory-sync/`;
 subagents get the repo-relative path, never pasted prose):
@@ -23,7 +22,7 @@ subagents get the repo-relative path, never pasted prose):
 |-----------|---------|
 | `references/memory-guide.md` | Phase 2 - where a fact BELONGS (layer decision tree), compression patterns, obvious-vs-domain gate |
 | `references/agent-audit.md` | Phase 2 agents + skills batches - the best-practice re-audit, run EVERY sweep |
-| `references/hard-sync.md` | Phase 2 at `{DEPTH}` = `HARD` only - `paths:` precision audit + obvious-knowledge purge |
+| `references/hard-sync.md` | Phases 2 and 3 at `{DEPTH}` = `HARD` only - `paths:` precision audit + obvious-knowledge purge, and the `hard` report contract Phase 3 checks |
 
 ---
 
@@ -177,8 +176,7 @@ The live owner map - who owns which surface, which agents are read-only recon an
 A big task handed to one agent = an agent gone for an hour: unobservable, uncorrectable, and it drifts. One
 subagent = ONE bounded unit - one deliverable (here: ONE batch), ~<=5 files, ~<=10 steps. Bigger MUST be split
 into N tasks, ALL spawned in ONE message. That is exactly why the surface is split into disjoint batches instead
-of handed whole to one agent. A batch over ~10 files is split into N spawns of <=5 files each, all in one message;
-the split preserves the batch table's disjointness.
+of handed whole to one agent. A batch over ~10 files is split into N spawns of <=5 files each, all in one message; the split preserves the batch table's disjointness.
 
 Every spawn prompt MUST carry:
 
@@ -254,7 +252,7 @@ Per file, in THIS priority order:
      ("canonical: <file> section"). Canonical home in ANOTHER batch -> REPORT it, do not edit a foreign file.
    - COMPRESS verbose passages into this repo's dense table/pointer style; meaning intact, lines down.
 
-NON-GROWTH (hard): every file ends <= the baseline given beside its path in SCOPE; delete before you add.
+NON-GROWTH (hard): every file ends <= the baseline given beside its path in SCOPE; delete before you add. The ONE authorized growth is the PASS A frontmatter `paths:` repair at HARD depth on a MISSING or TOO_NARROW verdict; nothing else may grow.
 
 HARD constraints:
 - SELF-SYNC CARVE-OUT: if this skill's own SKILL.md or references are in your batch, facts may be CORRECTED but
@@ -276,6 +274,7 @@ CONSUMER: an independent read-only checker re-verifies every claim you make, the
 DONE - return JSON, one entry per file, empty lists if clean:
 {"<path>": {"added": [...], "removed": [...], "fixed": [...], "dedup": [...], "compressed": N,
             "lines_before": N, "lines_after": N, "broken_refs": [...], "uncertain": [...]}}
+At {DEPTH} = HARD each entry ALSO carries a nested "hard": {...} object, shaped exactly as in references/hard-sync.md.
 ```
 
 At `{DEPTH}` = `HARD`, the batch prompt ADDITIONALLY carries, verbatim:
@@ -284,7 +283,8 @@ At `{DEPTH}` = `HARD`, the batch prompt ADDITIONALLY carries, verbatim:
 DEPTH = HARD. Also run the two passes in .claude/skills/memory-sync/references/hard-sync.md, in this order:
   1. `paths:` PRECISION audit  - every rule's glob must match reality and cover exactly its subject.
   2. OBVIOUS-KNOWLEDGE PURGE   - delete what any competent model already knows; keep only domain facts.
-Both are DELETION passes. They may only shrink the file.
+Both are DELETION passes. They may only shrink the file - the ONE authorized growth is the PASS A frontmatter
+`paths:` repair on a MISSING or TOO_NARROW verdict; nothing else may grow.
 ```
 
 Cross-batch dedup (canonical home lives in another batch's file) is REPORTED, never edited by the batch owner;
@@ -309,16 +309,20 @@ CONTEXT (already resolved - do NOT re-derive): the batch's returned JSON, the pe
       repo's git visibility. Sibling checkers verify the other batches in parallel.
 READ FIRST (paths, not pasted prose):
   .claude/skills/memory-sync/SKILL.md   - the checkable-fact catalogue (verification commands), the house invariants
+  .claude/skills/memory-sync/references/hard-sync.md   - {DEPTH} = HARD only: the two passes and the `hard` report contract you check
 
 Checks - ALL of them, per file:
 a. Re-verify every ADDED and FIXED fact against the ACTUAL code (run the catalogue command, read the file).
 b. Confirm every REMOVED fact is gone from REALITY - the code, the repo - not merely deleted from the doc.
-c. Confirm frontmatter is valid, `last_updated` bumped to today, `[DICT:]` headers intact, and NO numbered rule
-   file was renumbered or reordered (diff the id sequence).
-d. Confirm the non-growth budget held: per-file `wc -l` <= baseline, total delta <= 0.
+c. Confirm frontmatter is valid, `last_updated` bumped to today, `[DICT:]` headers intact, and every numbered rule file's ids obey:
+   surviving ids keep their OWN number and their relative order; a HARD run may DROP a row and Phase 2 may APPEND a new id AFTER the highest existing one - nothing is ever renumbered or reordered, and no id may appear before an id smaller than it.
+d. Confirm the non-growth budget held: per-file `wc -l` <= baseline, total delta <= 0 - the ONE authorized growth is the PASS A frontmatter `paths:` repair at HARD depth on a MISSING or TOO_NARROW verdict; nothing else may grow.
 e. Scan the FULL content of every edited file for anything resembling a secret VALUE.
 f. Scan for language-policy violations per {LANGUAGE_POLICY} - intentional trigger aliases are ALLOWED hits,
    explanatory prose outside them is not.
+g. `{DEPTH}` = HARD only: re-read every `hard.obvious_deleted` line and confirm it was GENERIC, not a domain fact;
+   re-resolve every `hard.globs_declared` entry against the working tree (both probes, tracked and untracked);
+   confirm every `hard.domain_kept` line still stands in the file and rule each `hard.discriminator_uncertain` line KEEP or DELETE.
 
 CONSUMER: the coordinator - a non-ok verdict routes a targeted fix back to the agent that wrote the file.
 DONE - return JSON per file, empty list when clean: {"ok": bool, "violations": [...]}
@@ -334,8 +338,7 @@ from the diff**. Verification is then by DIRECT RE-READ of each edited file, and
 that no source, docs, task-state or secrets file changed. When the surface is git-TRACKED, `git diff` DOES account
 for memory edits: assert every edited file appears in it and nothing else does.
 
-Violations -> the coordinator sends targeted fixes
-back to the responsible batch agent (or fixes a trivial pointer itself), then re-verifies ONLY the fixed files.
+Violations -> the coordinator sends targeted fixes back to the responsible batch agent (or fixes a trivial pointer itself), then re-verifies ONLY the fixed files.
 **The report may NOT be emitted until every verdict is ok, or the remaining violations are listed as unresolved.**
 
 ---
@@ -343,7 +346,7 @@ back to the responsible batch agent (or fixes a trivial pointer itself), then re
 ## Phase 4 - SELF-SYNC (the skill syncs ITSELF)
 
 This skill is part of the surface it sweeps. Every run, after Phase 3 - and spawn ONE additional read-only checker
-over the self-synced files (this SKILL.md plus both references), reported as its own row in the Phase-6 delta
+over the self-synced files (this SKILL.md plus ALL THREE references), reported as its own row in the Phase-6 delta
 table:
 
 | Step | Action |
@@ -352,7 +355,7 @@ table:
 | Refresh | Update the batch rows, the counts, and every fact-catalogue command that no longer matches reality |
 | Grow a batch | The project gained a memory layer this skill does not cover (a new nested `CLAUDE.md` tree, a new convention dir, a new skills tree) -> ADD the batch or the section - report it; self-sync lines are delta-exempt |
 | Drop a batch | A batch whose files are all gone -> remove the row and say so in the report |
-| Sibling refs | `references/agent-audit.md` and `references/hard-sync.md` are self-synced the SAME way - their rosters and checks go stale exactly like this file's tables |
+| Sibling refs | ALL THREE references - `memory-guide.md`, `agent-audit.md`, `hard-sync.md` - are self-synced the SAME way: their rosters, patterns and checks go stale exactly like this file's tables |
 
 > **CARVE-OUT - it binds BATCH AGENTS.** Facts inside this file may be CORRECTED. Its SCOPE DECISIONS may NOT be
 > rewritten without explicit user instruction: which surfaces are in scope, the EXCLUDED table, the docs
@@ -386,7 +389,6 @@ memory-sync complete - scope {SCOPE}, depth {DEPTH}. {N} files scanned, {M} edit
 
 | Layer | Lines before | Lines after | Delta |
 |-------|--------------|-------------|-------|
-| ...   |              |             |       |
 | TOTAL |              |             | -{N}  |
 
 Longest files: {path (before -> after), ...}   (top 5, what was cut)

@@ -22,11 +22,11 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 | Command | `/brewdoc:memory-sync-init [status\|init\|upgrade] [fine-tune-prompt]` |
 | Arguments | mode token `status` \| `init` (default) \| `upgrade`, followed by an optional free-form fine-tune prompt |
 | Model | opus |
-| Tools | Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion |
+| Tools | Read, Edit, Glob, Grep, Bash, Agent, AskUserQuestion |
 
 ## What it does
 
-`/brewdoc:memory-sync-init` is a **generator**, in the same family as `brewcode:superreview` and `brewtools:task-board-init`: it produces a working artifact instead of doing the work itself. It scans the target project — memory surface, exclusions, default branch, git visibility, language policy, agent and skill rosters — then emits three files into `<target>/.claude/skills/memory-sync/`.
+`/brewdoc:memory-sync-init` is a **generator**, in the same family as `brewcode:superreview` and `brewtools:task-board-init`: it produces a working artifact instead of doing the work itself. It scans the target project — memory surface, exclusions, default branch, git visibility, language policy, agent and skill rosters — then emits four files into `<target>/.claude/skills/memory-sync/`.
 
 The emitted `/memory-sync` skill is a long-running multi-agent coordinator. It sweeps the whole memory surface every run, splits it into disjoint batches (one bounded agent per batch, all spawned in one message), verifies every change with an independent checker that never wrote it, and enforces non-growth — every file ends at or below its original line count. It re-checks and updates itself between runs.
 
@@ -71,11 +71,11 @@ Run it:  /memory-sync                       -> scope session (default), whole su
 
 <Steps>
   <li><div><strong>Mode gate</strong><p>First token of the argument, lowercased: <code>status</code>, <code>init</code> (default when no token matches), or <code>upgrade</code>. Everything else is fine-tune text for <code>{'{FOCUS_EMPHASIS}'}</code>.</p></div></li>
-  <li><div><strong>Phase 0 — read emit material</strong><p>Reads its own <code>references/SKILL.md.template</code>, <code>memory-guide.md</code>, <code>agent-audit.md</code>. Missing material is a hard stop — never improvised.</p></div></li>
+  <li><div><strong>Phase 0 — read emit material</strong><p>Reads its own four reference files — <code>references/SKILL.md.template</code>, <code>memory-guide.md</code>, <code>agent-audit.md</code>, <code>hard-sync.md</code>. Missing material is a hard stop — never improvised.</p></div></li>
   <li><div><strong>Phase 1 — analyze the target</strong><p>Runs <code>generate.sh scan</code>, then determines the memory surface (root + every nested <code>CLAUDE.md</code>, rules, conventions, <code>AGENTS.md</code> family, agents, skills, memory dir), VERIFY-ONLY files, exclusions, default branch (derived, never hardcoded), git visibility, language policy, and a checkable-fact catalogue — one real shell command per claim.</p></div></li>
   <li><div><strong>Phase 1.5 — clarify</strong><p><code>AskUserQuestion</code> only for what cannot be reliably inferred: which convention files count as memory, whether the memory dir is in scope, VERIFY-ONLY list, default branch, intentional non-English trigger aliases, batch splits.</p></div></li>
-  <li><div><strong>Phase 2 — emit</strong><p>Exports scalar placeholders and runs <code>generate.sh emit</code>: sed-substitutes them into the template, copies the reference files, stamps provenance (generator name, date, surface counts). Refuses to overwrite an existing installation — that is what <code>upgrade</code> is for.</p></div></li>
-  <li><div><strong>Phase 3 — fill block placeholders</strong><p>Multi-row tables and multi-line bash go through <code>Edit</code>, not sed: batch table, exclusions, invariants, fact catalogue, enumeration bash, agent/skill checks, roster, proposal precedents, verify-extra assertions.</p></div></li>
+  <li><div><strong>Phase 2 — emit</strong><p>Exports scalar placeholders and runs <code>generate.sh emit</code>: sed-substitutes them into the template, copies the reference files, stamps provenance on the last line (template version, date, surface counts — what `status` and `upgrade` read back). Refuses to overwrite an existing installation — that is what <code>upgrade</code> is for.</p></div></li>
+  <li><div><strong>Phase 3 — fill block placeholders</strong><p>Multi-row tables and multi-line bash go through <code>Edit</code>, not sed — twelve blocks total: ten in the emitted <code>SKILL.md</code> (batch table, exclusions, invariants, fact catalogue, enumeration bash, agent checks, skill checks, roster, proposal precedents, verify-extra assertions) and two in the emitted <code>references/hard-sync.md</code> (paths-precision table, obvious-vs-domain table).</p></div></li>
   <li><div><strong>Phase 4 — validate</strong><p><code>generate.sh validate</code> fails on any surviving <code>{'{PLACEHOLDER}'}</code>, a missing emitted asset, or a cited reference that does not exist. Then every emitted <code>subagent_type</code> is asserted to resolve to a real project agent or a built-in.</p></div></li>
   <li><div><strong>Phase 5 — report</strong><p>Prints surface counts, batches, exclusions, fact/invariant counts, and how to run the emitted skill — plus how to check on it later with <code>status</code> or refresh it with <code>upgrade</code>.</p></div></li>
 </Steps>
@@ -86,20 +86,40 @@ Run it:  /memory-sync                       -> scope session (default), whole su
 
 | Mode | Reads | Writes | Does |
 |------|-------|--------|------|
-| `status` | target + emitted skill | nothing | Reports provenance stamp and drift: baked-in file counts vs enumerated now, dead batch paths, memory layers gained since install. Verdict: `IN SYNC` / `STALE (n drifts)` / `NOT INSTALLED` |
-| `init` (default) | target | 3 emitted files | Full Phase 0-5 analysis and emit. Refuses if `.claude/skills/memory-sync/` already exists |
-| `upgrade` | target + emitted skill | edits the emitted skill | Re-scans and refreshes surface/batch/fact/invariant tables, adds sections for new memory layers, preserves hand-edits — the emitted skill is expected to have self-modified via its own SELF-SYNC phase |
+| `status` | target + emitted skill | nothing | Runs `generate.sh status`, which prints a machine-greppable `KEY=value` block — provenance stamp, surface files stamped vs enumerated now, missing emitted files, unfilled placeholders — closed by a verdict: `IN SYNC` / `STALE (n drifts)` / `NOT INSTALLED`. The skill then enriches it with its own reads: dead batch paths, memory layers gained since install |
+| `init` (default) | target | 4 emitted files | Full Phase 0-5 analysis and emit. Refuses if `.claude/skills/memory-sync/` already exists |
+| `upgrade` | target + emitted skill | edits the emitted skill | Reads the same `generate.sh status` drift list as its refresh worklist, then re-scans and refreshes surface/batch/fact/invariant tables, adds sections for new memory layers, preserves hand-edits — the emitted skill is expected to have self-modified via its own SELF-SYNC phase |
 
-**What gets emitted** — `<target>/.claude/skills/memory-sync/`: `SKILL.md` (scalars substituted, blocks filled), `references/memory-guide.md`, `references/agent-audit.md`. Nothing else — no agent, no rule, no hook.
+**What gets emitted** — `<target>/.claude/skills/memory-sync/`: `SKILL.md` (scalars substituted, blocks filled), `references/memory-guide.md`, `references/agent-audit.md`, `references/hard-sync.md`. Nothing else — no agent, no rule, no hook.
 
 **Emitted-skill behavior** (what this generator bakes in, not what it runs itself):
 
 | Axis | Emitted behavior |
 |------|-------------------|
 | Scopes | `session` (default, no gather agent), `branch` (diff vs derived default branch), `commit <sha>` / `commit <a>..<b>`, `recent[:N]` (default 10), `all` (no diff, every fact re-verified) |
-| Phases | GATHER (parallel read-only) -> SYNC (one bounded agent per disjoint batch, one message) -> VERIFY (independent checker per batch, never the writer) -> SELF-SYNC (re-checks itself) -> PROPOSE (new agent/skill proposed, never auto-created) |
+| Depth | `NORMAL` (default, fact sync + dedup + compression) or `HARD` (adds the two deletion passes below) |
+| Phases | GATHER (parallel read-only) -> SYNC (one bounded agent per disjoint batch, one message) -> VERIFY (independent checker per batch, never the writer) -> SELF-SYNC (re-checks itself) -> PROPOSE (new agent/skill proposed, never auto-created) -> REPORT (chat only, no report file) |
 | Non-growth | Every file ends `<=` its original line count; total delta `<= 0` |
 | Agents | Re-audited against current best practice every sweep, not just fact-checked |
+
+### Depth: NORMAL vs HARD
+
+`{SCOPE}` picks which change facts drive the sweep; `{DEPTH}` picks how hard the surface itself is cut. Depth is a property of the request — the token `hard`, or the same intent in prose ("too much context", "aggressive", "почисти жёстко"). Nothing is regenerated to switch it.
+
+| | `NORMAL` (default) | `HARD` |
+|---|---|---|
+| Fact sync + dedup + compression | yes | yes |
+| Pass A — rules `paths:` precision audit | no | yes |
+| Pass B — obvious-knowledge purge | no | yes |
+
+A long-running repo accumulates dead weight across every auto-loaded file, not just `CLAUDE.md` — and neither kind of waste shows up in a diff. `HARD` targets both, sourced from the emitted `references/hard-sync.md`:
+
+- **Pass A — `paths:` precision.** `paths:` is a list; every entry gets its own verdict: `OK`, `TOO_BROAD`, `TOO_NARROW`, `DANGLING`, `MISSING`, `CORRECTLY_GLOBAL`. A rule that fires on every turn when it only concerns one module is pure waste — narrow its glob. A genuinely repo-wide subject is legitimately `CORRECTLY_GLOBAL`, and an explicitly declared repo-wide glob is never stripped. A `DANGLING` entry is dropped from the list and reported — the rule file itself is never deleted.
+- **Pass B — obvious-knowledge purge.** Delete what any competent model already knows — generic quality exhortations, mainstream-feature tutorials, restated tool docs. Keep the domain decisions that only make sense because someone in this repo decided them. The unit is a rule (a numbered row plus its continuation lines), never a line. Two brakes: a Borderline table overrides the discriminator (a line naming a concrete path, command, version or number is always kept), and a file cut by more than half is reported before the edit lands.
+
+```bash
+/memory-sync all hard
+```
 
 **Error handling highlights** — `init` on an existing install stops and points to `upgrade`; `upgrade` with nothing installed stops and points to `init`; a fact with no runnable verification command is left out of the catalogue rather than invented; an `AGENTS.md` symlink or vendor-marked file becomes VERIFY-ONLY, never an edit target.
 
@@ -107,7 +127,7 @@ Run it:  /memory-sync                       -> scope session (default), whole su
 
 <CardGrid>
   <Card title="Docsync" icon="sync" href="/brewdoc/skills/docsync/">
-    Sibling brewdoc generator-adjacent tracker — doc staleness by date instead of memory drift.
+    The other brewdoc tracker: staleness of `docs/**` by date. memory-sync-init covers instruction memory, which docsync leaves alone.
   </Card>
   <Card title="Brewdoc overview" icon="rocket" href="/brewdoc/overview/">
     All brewdoc skills in one place.

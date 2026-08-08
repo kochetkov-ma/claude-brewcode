@@ -146,14 +146,14 @@ If an existing entry for the same mode exists, the skill offers to update (versi
 | **Arguments** | `[status\|init\|upgrade] [fine-tune-prompt]` |
 | **Model** | `opus` |
 | **Dependencies** | None |
-| **Allowed tools** | `Read`, `Write`, `Edit`, `Glob`, `Grep`, `Bash`, `Agent`, `AskUserQuestion` |
+| **Allowed tools** | `Read`, `Edit`, `Glob`, `Grep`, `Bash`, `Agent`, `AskUserQuestion` |
 
 ### Modes
 
 | Mode | Writes | Runs |
 |------|--------|------|
 | `status` | nothing | Is `memory-sync` installed, its provenance stamp, how stale its surface tables are vs the live repo. Verdict `IN SYNC` / `STALE (n drifts)` / `NOT INSTALLED` |
-| `init` (**default**) | the 3 emitted files | Full analysis + emit. Refuses an existing installation |
+| `init` (**default**) | the 4 emitted files (`SKILL.md` + `references/memory-guide.md`, `agent-audit.md`, `hard-sync.md`) | Full analysis + emit. Refuses an existing installation |
 | `upgrade` | targeted edits | Re-scan and refresh an existing installation; hand-edits preserved, never blind-overwritten |
 
 ### Emitted surface (every run of `/memory-sync`)

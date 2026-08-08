@@ -1,41 +1,18 @@
 #!/bin/bash
 # brewdoc:memory-sync-init generator script
-# Analyzes the TARGET repo (= current working directory) and emits a self-contained project-local
-# .claude/skills/memory-sync/ into it, substituting SCALAR placeholders. Multi-row BLOCK placeholders
-# are filled by the AI via Edit (see SKILL.md Phase 3) and `validate` FAILS while any of them remain.
+# Resolves the TARGET repo ROOT (never a subdirectory) and emits a self-contained project-local
+# .claude/skills/memory-sync/ into it, substituting the 8 SCALAR placeholders. The 12 multi-row BLOCK
+# placeholders are filled by the AI via Edit (SKILL.md Phase 3); `validate` FAILS while any of them remain.
+# Modes are documented in the usage block at the bottom of this file.
 #
-# Usage: generate.sh <mode>        (mode defaults to `emit`)
-#   scan      - read-only report of the memory surface the emitted skill must be wired to:
-#               CLAUDE.md tree, AGENTS.md family (symlink / vendor-marked = VERIFY-ONLY), rules with
-#               line counts + `paths:`, conventions, agents, skills, memory dir, git visibility,
-#               default branch, tracker hint, per-batch counts, hooks reacting to memory edits.
-#               Prints GIT_VISIBILITY=, DEFAULT_BRANCH=, SURFACE_COUNTS=, TRACKER_NOTE= for pass-back.
-#   emit      - write <cwd>/.claude/skills/memory-sync/{SKILL.md,references/*.md}, substitute the 8
-#               scalars, append the provenance stamp. REFUSES to overwrite a live installation.
-#   validate  - fail (non-zero) on any unresolved {PLACEHOLDER}, missing emitted file, broken/unused
-#               references/*.md citation, or a missing provenance stamp. Reports file:line.
-#   status    - read-only, always exit 0. Machine-greppable KEY=value lines + a verdict
-#               NOT INSTALLED / IN SYNC / STALE (<n> drifts). This is what AI-driven `upgrade` consults.
-#
-# Env overrides (SCALARS - each has a documented fallback, none is ever left empty):
-#   PROJECT_NAME     basename of the target root
-#   DEFAULT_BRANCH   derived from `git symbolic-ref --short refs/remotes/origin/HEAD` (remote prefix
-#                    stripped), else `main`
-#   MEMORY_DIR       literal `none`
-#   GIT_VISIBILITY   derived: `git-ignored` when `git ls-files -- .claude '*CLAUDE.md' '*AGENTS.md'`
-#                    returns 0 rows, else `git-tracked`
-#   LANGUAGE_POLICY  short neutral default (English-only surface, aliases only in description:)
-#   FOCUS_EMPHASIS   short neutral default (facts > dedup > compression)
-#   SURFACE_COUNTS   derived from the live enumeration
-#   TRACKER_NOTE     literal `none`
-#
-# Other env:
-#   MEMORY_SYNC_FORCE=1   let `emit` overwrite a live installation (DESTROYS hand-edits)
+# SCALAR env overrides (each has a fallback in _scalar_default, none is ever left empty, newlines flattened):
+#   PROJECT_NAME DEFAULT_BRANCH MEMORY_DIR GIT_VISIBILITY LANGUAGE_POLICY FOCUS_EMPHASIS SURFACE_COUNTS TRACKER_NOTE
+# Other env: MEMORY_SYNC_ROOT=<abs path> explicit target root | MEMORY_SYNC_FORCE=1 emit over a live install
+# (DESTROYS hand-edits).
 
 set -euo pipefail
 
 VERSION="1.0.0"
-
 MODE="${1:-emit}"
 
 # Self-location: scripts/generate.sh -> skills/memory-sync-init/scripts -> skills/memory-sync-init
@@ -43,20 +20,18 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SKILL_DIR="$(dirname "$SCRIPT_DIR")"
 REFS="$SKILL_DIR/references"
 
-# Target is the current working directory (the repo getting the memory-sync skill)
+# Target paths are relative to the resolved ROOT (see resolve_root - every mode cd's there first).
 TARGET=".claude/skills/memory-sync"
 TARGET_REFS="$TARGET/references"
 EMITTED_REFS="memory-guide.md agent-audit.md hard-sync.md"
+EMITTED_N=3
 
 STAMP_PREFIX="<!-- memory-sync template v"
-
 # Runtime tokens the emitted skill resolves per RUN - allow-listed by validate, MUST survive emit.
 RUNTIME_ALLOW="SCOPE FOCUS DEPTH BATCH FILE_LIST FACTS BROKEN_REFS DATE N M K"
-
-# Every temp dir goes through $_bd; the trap makes leaks impossible on any exit path.
+# Every temp dir goes through $_bd; the trap makes leaks (and partial installs) impossible on any exit path.
 _bd=""
-trap '[ -n "$_bd" ] && rm -rf "$_bd"' EXIT
-
+trap '[ -n "$_bd" ] && rm -rf "$_bd" || true' EXIT
 # Shared find pruning - node_modules/.git/dist/build/.next/vendor are never memory.
 FIND_EXCL='-not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" -not -path "*/.next/*" -not -path "*/vendor/*"'
 
@@ -68,226 +43,272 @@ _list() { _out=$(eval "$1" 2>/dev/null || true); if [ -n "$_out" ]; then printf 
 # Count lines of an eval'd listing, 0 when empty. Same `|| true` contract.
 _count() { _o=$(eval "$1" 2>/dev/null || true); if [ -z "$_o" ]; then echo 0; else printf '%s\n' "$_o" | wc -l | tr -d ' '; fi; }
 
+# Count *.md under a dir - no eval, the path is a real ARGUMENT (a dir name may contain quotes/`$()`).
+_count_md() { { find "$1" -maxdepth "${2:-1}" -type f -name '*.md' 2>/dev/null || true; } | wc -l | tr -d ' '; }
+
 validate_templates() {
   for t in "$REFS/SKILL.md.template" "$REFS/memory-guide.md" "$REFS/agent-audit.md" "$REFS/hard-sync.md"; do
-    if [ ! -f "$t" ]; then
-      echo "❌ FAILED: emit template not found: $t - reinstall brewdoc"
-      exit 1
-    fi
+    [ -f "$t" ] || { echo "❌ FAILED: emit template not found: $t - reinstall brewdoc"; exit 1; }
   done
+}
+
+# ── target root ─────────────────────────────────────────────────────────────────
+# TARGET is relative, so running from a subdirectory would scan/emit/report the WRONG tree.
+# Resolve the repo root explicitly and cd there; a non-git tree whose ancestor looks like the real
+# root is a hard error rather than a silent second install.
+resolve_root() {
+  ROOT="${MEMORY_SYNC_ROOT:-}"
+  [ -n "$ROOT" ] || ROOT=$(git rev-parse --show-toplevel 2>/dev/null || true)
+  if [ -z "$ROOT" ]; then
+    ROOT="$(pwd)"; _up="$ROOT"
+    while [ "$_up" != "/" ]; do
+      _up=$(dirname "$_up")
+      [ -d "$_up/.claude" ] || [ -f "$_up/CLAUDE.md" ] || continue
+      echo "❌ FAILED: $(pwd) is not a repo root (no git, but $_up looks like one)."
+      echo "   Run from the project root, or set MEMORY_SYNC_ROOT=<abs path>."
+      exit 1
+    done
+  fi
+  [ -d "$ROOT" ] || { echo "❌ FAILED: target root does not exist: $ROOT"; exit 1; }
+  cd "$ROOT"
+  ROOT="$(pwd)"
 }
 
 # ── derivations shared by scan / emit / status ──────────────────────────────────
+# NEVER silently return `main`: SKILL.md's Error Handling requires the AI to ASK when the default
+# branch cannot be derived, and it can only ask if it can tell derivation failed.
 derive_branch() {
   _b=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || true)
-  if [ -n "$_b" ]; then
-    printf '%s\n' "${_b#*/}"
-  else
-    echo "main"
+  for _r in $( { [ -n "$_b" ] || git remote 2>/dev/null || true; } ); do
+    _b=$(git symbolic-ref --short "refs/remotes/$_r/HEAD" 2>/dev/null || true)
+    [ -n "$_b" ] && break
+  done
+  [ -z "$_b" ] || { printf '%s\n' "${_b#*/}"; return 0; }
+  # No remote HEAD: a repo with exactly one local branch derives unambiguously (e.g. `develop`).
+  _heads=$( { git for-each-ref --format='%(refname:short)' refs/heads 2>/dev/null || true; } )
+  if [ -n "$_heads" ] && [ "$(printf '%s\n' "$_heads" | wc -l | tr -d ' ')" -eq 1 ]
+  then printf '%s\n' "$_heads"
+  else echo "UNDERIVABLE"
   fi
 }
 
+# A non-git dir and a commit-less repo are NOT `git-ignored` - reporting them as such bakes a false
+# house fact into the emitted skill and breaks its `branch` scope.
 derive_git_visibility() {
+  git rev-parse --git-dir >/dev/null 2>&1 || { echo "not-a-git-repo"; return 0; }
   _rows=$( { git ls-files -- .claude '*CLAUDE.md' '*AGENTS.md' 2>/dev/null || true; } | wc -l | tr -d ' ')
-  if [ "$_rows" -eq 0 ]; then
-    echo "git-ignored"
-  else
-    echo "git-tracked"
-  fi
+  if [ "$_rows" -gt 0 ]; then echo "git-tracked"; return 0; fi
+  git rev-parse --verify HEAD >/dev/null 2>&1 || { echo "no-commits"; return 0; }
+  echo "git-ignored"
 }
 
+# Claude Code encodes a project dir as its absolute path with `/` (and `.`) replaced by `-`.
+# Only THAT dir may be reported - the old unfiltered glob returned a foreign project's memory.
 derive_memory_dir() {
   for _s in .claude/settings.json .claude/settings.local.json; do
     [ -f "$_s" ] || continue
-    _m=$(grep -o '"autoMemoryDirectory"[[:space:]]*:[[:space:]]*"[^"]*"' "$_s" 2>/dev/null | head -1 | sed -e 's/.*:[[:space:]]*"//' -e 's/"$//' || true)
-    if [ -n "$_m" ]; then printf '%s\n' "$_m"; return 0; fi
+    # jq first: grep+sed truncates an escaped quote and misses a pretty-printed file.
+    _m=""
+    command -v jq >/dev/null 2>&1 && _m=$(jq -r '.autoMemoryDirectory // empty' "$_s" 2>/dev/null || true)
+    [ -n "$_m" ] || _m=$(grep -o '"autoMemoryDirectory"[[:space:]]*:[[:space:]]*"[^"]*"' "$_s" 2>/dev/null | head -1 | sed -e 's/.*:[[:space:]]*"//' -e 's/"$//' || true)
+    [ -z "$_m" ] || { printf '%s\n' "$_m"; return 0; }
   done
-  for _d in "$HOME"/.claude/projects/*/memory; do
-    if [ -d "$_d" ]; then printf '%s\n' "$_d"; return 0; fi
+  _enc=$(printf '%s' "$ROOT" | tr '/' '-')
+  for _d in "$HOME/.claude/projects/$_enc/memory" "$HOME/.claude/projects/$(printf '%s' "$_enc" | tr '.' '-')/memory"; do
+    [ -d "$_d" ] || continue; printf '%s\n' "$_d"; return 0
   done
   echo "none"
 }
 
 derive_tracker_note() {
-  _t=""
-  [ -d .claude/features ] && _t=".claude/features/** is operational task state - owned by the task board, excluded"
-  if [ -z "$_t" ] && [ -d .github ]; then _t=".github/ issue tracker owns operational task state - excluded"; fi
-  if [ -n "$_t" ]; then printf '%s\n' "$_t"; else echo "none"; fi
+  if [ -d .claude/features ]; then echo ".claude/features/** is operational task state - owned by the task board, excluded"
+  elif [ -d .github ];        then echo ".github/ issue tracker owns operational task state - excluded"
+  else echo "none"; fi
 }
 
 # Per-batch counts. The emitted skill dir is excluded EVERYWHERE (scan, emit stamp, status) so all three
 # agree: it does not exist at analysis time, so counting it later would make every fresh install look
 # drifted. The emitted skill's Phase 4 subtracts its own files before comparing, for the same reason.
-count_root_md()    { _count "find . -maxdepth 1 -type f \\( -name 'CLAUDE.md' -o -name 'CLAUDE.local.md' -o -name 'CONVENTIONS.md' -o -name 'CONTRIBUTING.md' \\)"; }
-count_nested_md()  { _count "find . -mindepth 2 -type f -name 'CLAUDE.md' $FIND_EXCL"; }
-count_agents_md()  { _count "find . -type f -o -type l | grep -E '(^|/)AGENTS\\.md$' | grep -vE '/(node_modules|\\.git|dist|build|\\.next|vendor)/' || true"; }
-count_rules()      { _count "find .claude/rules -maxdepth 1 -type f -name '*.md'"; }
-count_conv()       { _count "find .claude/convention -maxdepth 1 -type f -name '*.md'"; }
-count_agents()     { _count "find .claude/agents -maxdepth 1 -type f -name '*.md'"; }
-count_skills()     { _count "find .claude/skills -type f -name '*.md' -not -path '*/memory-sync/*'"; }
+count_root_md()   { _count "find . -maxdepth 1 -type f \\( -name 'CLAUDE.md' -o -name 'CLAUDE.local.md' -o -name 'CONVENTIONS.md' -o -name 'CONTRIBUTING.md' \\)"; }
+count_nested_md() { _count "find . -mindepth 2 -type f -name 'CLAUDE.md' $FIND_EXCL"; }
+count_agents_md() { _count "find . \\( -type f -o -type l \\) -name 'AGENTS.md' $FIND_EXCL"; }
+count_skills()    { { find .claude/skills -type f -name '*.md' -not -path '*/memory-sync/*' 2>/dev/null || true; } | wc -l | tr -d ' '; }
 
 derive_surface_counts() {
-  _r=$(count_root_md); _n=$(count_nested_md); _a=$(count_agents_md); _u=$(count_rules)
-  _c=$(count_conv); _g=$(count_agents); _s=$(count_skills)
+  _r=$(count_root_md); _n=$(count_nested_md); _a=$(count_agents_md); _u=$(_count_md .claude/rules)
+  _c=$(_count_md .claude/convention); _g=$(_count_md .claude/agents); _s=$(count_skills)
   _tot=$((_r + _n + _a + _u + _c + _g + _s))
   echo "$_tot files: $_r root, $_n nested CLAUDE.md, $_a AGENTS.md, $_u rules, $_c conventions, $_g agents, $_s skill files"
 }
 
-surface_total() {
-  _r=$(count_root_md); _n=$(count_nested_md); _a=$(count_agents_md); _u=$(count_rules)
-  _c=$(count_conv); _g=$(count_agents); _s=$(count_skills)
-  echo $((_r + _n + _a + _u + _c + _g + _s))
+surface_total() { derive_surface_counts | cut -d' ' -f1; }
+
+# ── unresolved-token scan (ONE implementation - validate and status MUST agree) ──
+# Matches \{[A-Z_]+\}, IGNORES a `$`-prefixed occurrence (${CLAUDE_SKILL_DIR} is a shell expansion,
+# not a placeholder) and allow-lists the runtime tokens the emitted skill resolves per run.
+_emitted_files() { echo "$TARGET/SKILL.md"; for r in $EMITTED_REFS; do echo "$TARGET_REFS/$r"; done; }
+
+_open_tokens() {
+  _emitted_files | while IFS= read -r f; do
+    [ -f "$f" ] || continue
+    awk -v allow="$RUNTIME_ALLOW" '
+      BEGIN { n = split(allow, a, " "); for (i = 1; i <= n; i++) ok[a[i]] = 1 }
+      {
+        line = $0; pos = 1
+        while (match(substr(line, pos), /\{[A-Z_]+\}/)) {
+          s = pos + RSTART - 1; tok = substr(line, s, RLENGTH)
+          prev = (s > 1) ? substr(line, s - 1, 1) : ""; name = substr(tok, 2, length(tok) - 2)
+          if (prev != "$" && !(name in ok)) print FILENAME ":" FNR ": " tok
+          pos = s + RLENGTH
+        }
+      }
+    ' "$f" || true
+  done
 }
 
 # ── scan ────────────────────────────────────────────────────────────────────────
+# path :: name: :: description: for a set of frontmatter-carrying md files (agents and skills alike).
+_fm_field() { grep -m1 "^$2:" "$1" 2>/dev/null | sed "s/^$2:[[:space:]]*//" | cut -c1-200 || true; }
+_hdr() { printf '\n--- %s ---\n' "$1"; }
+
+_fm_list() {
+  _any=0
+  for f in "$@"; do
+    [ -f "$f" ] || continue
+    _any=1
+    printf '%s :: %s :: %s\n' "$f" "$(_fm_field "$f" name)" "$(_fm_field "$f" description)"
+  done
+  [ "$_any" -eq 0 ] && echo "(none)"
+  return 0
+}
+
 scan_target() {
   echo "=== memory-sync-init: target scan ==="
-  echo "Target: $(pwd)"
-  echo ""
-
-  echo "--- CLAUDE.md tree (root + nested, any depth) ---"
+  echo "Target: $ROOT"
+  _hdr "CLAUDE.md tree (root + nested, any depth)"
   _list "find . -type f \\( -name 'CLAUDE.md' -o -name 'CLAUDE.local.md' \\) $FIND_EXCL | sort"
 
-  echo ""
-  echo "--- AGENTS.md family (SYMLINK / vendor-marked = VERIFY-ONLY) ---"
-  _agents_md=$(eval "find . \\( -type f -o -type l \\) -name 'AGENTS.md' $FIND_EXCL | sort" 2>/dev/null || true)
-  if [ -z "$_agents_md" ]; then
-    echo "(none)"
-  else
-    printf '%s\n' "$_agents_md" | while IFS= read -r f; do
-      [ -n "$f" ] || continue
-      if [ -L "$f" ]; then
-        echo "$f :: SYMLINK -> $(readlink "$f" 2>/dev/null || echo '?') :: VERIFY-ONLY (another tool owns it)"
-        continue
-      fi
-      _first=$(grep -m1 -v '^[[:space:]]*$' "$f" 2>/dev/null || true)
-      _last=$(grep -v '^[[:space:]]*$' "$f" 2>/dev/null | tail -1 || true)
-      case "$_first" in
-        *"<!-- BEGIN"*)
-          case "$_last" in
-            *"END"*"-->"*) echo "$f :: VENDOR-MARKED (whole body inside BEGIN/END markers) :: VERIFY-ONLY" ;;
-            *)             echo "$f :: has a BEGIN marker but no closing END on the last line :: inspect before editing" ;;
-          esac
-          ;;
-        *) echo "$f :: plain file :: editable" ;;
-      esac
-    done
-  fi
+  _hdr "AGENTS.md family (SYMLINK / vendor-marked = VERIFY-ONLY)"
+  _list "find . \\( -type f -o -type l \\) -name 'AGENTS.md' $FIND_EXCL | sort" | while IFS= read -r f; do
+    [ -e "$f" ] || [ -L "$f" ] || { echo "$f"; continue; }   # the "(none)" fallback row
+    if [ -L "$f" ]; then echo "$f :: SYMLINK -> $(readlink "$f" 2>/dev/null || echo '?') :: VERIFY-ONLY (another tool owns it)"; continue; fi
+    _first=$(grep -m1 -v '^[[:space:]]*$' "$f" 2>/dev/null || true)
+    _last=$(grep -v '^[[:space:]]*$' "$f" 2>/dev/null | tail -1 || true)
+    case "$_first" in
+      *"<!-- BEGIN"*)
+        case "$_last" in
+          *"END"*"-->"*) echo "$f :: VENDOR-MARKED (whole body inside BEGIN/END markers) :: VERIFY-ONLY" ;;
+          *)             echo "$f :: BEGIN marker with no closing END on the last line :: inspect before editing" ;;
+        esac ;;
+      *) echo "$f :: plain file :: editable" ;;
+    esac
+  done
 
-  echo ""
-  echo "--- Rules (.claude/rules/) :: lines :: paths: ---"
-  if [ -d .claude/rules ]; then
-    _any=0
-    for f in .claude/rules/*.md; do
-      [ -f "$f" ] || continue
-      _any=1
-      _ln=$(wc -l < "$f" | tr -d ' ')
-      _paths=$(grep -m1 '^paths:' "$f" 2>/dev/null | sed 's/^paths:[[:space:]]*//' || true)
-      [ -n "$_paths" ] || _paths="(no paths:)"
-      printf '%s :: %s lines :: %s\n' "$f" "$_ln" "$_paths"
-    done
-    [ "$_any" -eq 0 ] && echo "(none)"
-  else
-    echo "(none)"
-  fi
+  _hdr "Rules (.claude/rules/) :: lines :: paths:"
+  _anyrule=0
+  for f in .claude/rules/*.md; do
+    [ -f "$f" ] || continue
+    _anyrule=1
+    # awk counts a final line with no trailing newline; `|| echo ?` keeps an unreadable file from aborting scan.
+    _ln=$(awk 'END { print NR }' "$f" 2>/dev/null || echo "?")
+    _paths=$(grep -m1 '^paths:' "$f" 2>/dev/null | sed 's/^paths:[[:space:]]*//' || true)
+    [ -n "$_paths" ] || _paths="(no paths:)"
+    printf '%s :: %s lines :: %s\n' "$f" "$_ln" "$_paths"
+  done
+  [ "$_anyrule" -eq 0 ] && echo "(none)"
 
-  echo ""
-  echo "--- Conventions ---"
+  _hdr "Conventions"
   _list "find .claude/convention -maxdepth 1 -type f -name '*.md' | sort"
   _list "find . -maxdepth 1 -type f \\( -name 'CONVENTIONS.md' -o -name 'CONTRIBUTING.md' \\) | sort" "(no root CONVENTIONS.md / CONTRIBUTING.md)"
 
-  echo ""
-  echo "--- Agents (.claude/agents/) ---"
-  if [ -d .claude/agents ]; then
-    for f in .claude/agents/*.md; do
-      [ -f "$f" ] || continue
-      printf '%s :: %s :: %s\n' "$f" \
-        "$(grep -m1 '^name:' "$f" 2>/dev/null | sed 's/^name:[[:space:]]*//' || true)" \
-        "$(grep -m1 '^description:' "$f" 2>/dev/null | sed 's/^description:[[:space:]]*//' | cut -c1-200 || true)"
-    done
-  fi
-  _na=$(count_agents)
+  _hdr "Agents (.claude/agents/) :: name :: description"
+  _fm_list .claude/agents/*.md
+  _na=$(_count_md .claude/agents)
   echo "agents=$_na"
   [ "$_na" -eq 0 ] && echo "⚠️ NO .claude/agents/ - the agent batch is dropped from {BATCH_TABLE} and the re-audit reduces to skills"
 
-  echo ""
-  echo "--- Skills (.claude/skills/) ---"
-  _anyskill=0
-  for d in .claude/skills/*/; do
-    [ -d "$d" ] || continue
-    _anyskill=1
-    _fc=$(_count "find '$d' -type f -name '*.md'")
-    printf '%s :: %s md files\n' "${d%/}" "$_fc"
-  done
-  [ "$_anyskill" -eq 0 ] && echo "(none)"
+  _hdr "Skills (.claude/skills/) :: name :: description"
+  _fm_list .claude/skills/*/SKILL.md
+  echo "skill_md_files=$(count_skills)"
 
-  echo ""
-  echo "--- Hooks reacting to memory edits (informational - NEVER edited) ---"
+  _hdr "Hooks reacting to memory edits (informational - NEVER edited)"
   _list "find .claude/hooks -maxdepth 1 -type f | sort" "(no .claude/hooks/)"
   _list "grep -n '\"\\(PreToolUse\\|PostToolUse\\|UserPromptSubmit\\|SessionStart\\|Stop\\|SubagentStop\\)\"' .claude/settings.json" "(no hook registrations in .claude/settings.json)"
 
-  echo ""
-  echo "--- Tracker ---"
+  _hdr "Tracker"
   test -d .claude/features && echo "✅ .claude/features/ present" || echo "- no .claude/features/"
   test -d .github && echo "✅ .github/ present" || echo "- no .github/"
 
-  echo ""
-  echo "--- Derived values (pass these back as env vars to emit) ---"
+  _hdr "Derived values (pass these back as env vars to emit)"
   echo "DEFAULT_BRANCH=$(derive_branch)"
   echo "GIT_VISIBILITY=$(derive_git_visibility)"
   echo "MEMORY_DIR=$(derive_memory_dir)"
   echo "TRACKER_NOTE=$(derive_tracker_note)"
   echo "SURFACE_COUNTS=$(derive_surface_counts)"
-  echo "PROJECT_NAME=$(basename "$(pwd)")"
+  echo "PROJECT_NAME=$(basename "$ROOT")"
 }
 
 # ── scalar resolution ───────────────────────────────────────────────────────────
-# Never let an empty env var blank a placeholder: every fallback that fires is logged.
-resolve_scalars() {
-  _fellback=""
-  _fb() { _fellback="$_fellback  - $1 -> $2
-"; }
-
-  if [ -z "${PROJECT_NAME:-}" ]; then PROJECT_NAME="$(basename "$(pwd)")"; _fb PROJECT_NAME "$PROJECT_NAME (basename of cwd)"; fi
-  if [ -z "${DEFAULT_BRANCH:-}" ]; then DEFAULT_BRANCH="$(derive_branch)"; _fb DEFAULT_BRANCH "$DEFAULT_BRANCH (derived)"; fi
-  if [ -z "${MEMORY_DIR:-}" ]; then MEMORY_DIR="none"; _fb MEMORY_DIR "none"; fi
-  if [ -z "${GIT_VISIBILITY:-}" ]; then GIT_VISIBILITY="$(derive_git_visibility)"; _fb GIT_VISIBILITY "$GIT_VISIBILITY (derived)"; fi
-  if [ -z "${LANGUAGE_POLICY:-}" ]; then
-    LANGUAGE_POLICY="English everywhere; non-English trigger aliases are legal ONLY inside agent/skill \`description:\` fields"
-    _fb LANGUAGE_POLICY "neutral default"
-  fi
-  if [ -z "${FOCUS_EMPHASIS:-}" ]; then FOCUS_EMPHASIS="default ordering: facts > dedup > compression"; _fb FOCUS_EMPHASIS "neutral default"; fi
-  if [ -z "${SURFACE_COUNTS:-}" ]; then SURFACE_COUNTS="$(derive_surface_counts)"; _fb SURFACE_COUNTS "$SURFACE_COUNTS (enumerated)"; fi
-  if [ -z "${TRACKER_NOTE:-}" ]; then TRACKER_NOTE="none"; _fb TRACKER_NOTE "none"; fi
-
-  export PROJECT_NAME DEFAULT_BRANCH MEMORY_DIR GIT_VISIBILITY LANGUAGE_POLICY FOCUS_EMPHASIS SURFACE_COUNTS TRACKER_NOTE
-}
-
-# Literal (non-regex, non-sed) substitution: awk reads values from ENVIRON, so `/`, `&`, `\` and
-# newlines inside a value are inserted verbatim - no escaping, no delimiter collisions.
 SCALAR_KEYS="PROJECT_NAME DEFAULT_BRANCH MEMORY_DIR GIT_VISIBILITY LANGUAGE_POLICY FOCUS_EMPHASIS SURFACE_COUNTS TRACKER_NOTE"
 
+_scalar_default() {
+  case "$1" in
+    PROJECT_NAME)    basename "$ROOT" ;;
+    DEFAULT_BRANCH)  derive_branch ;;
+    MEMORY_DIR)      echo "none" ;;
+    GIT_VISIBILITY)  derive_git_visibility ;;
+    LANGUAGE_POLICY) echo "English everywhere; non-English trigger aliases are legal ONLY inside agent/skill \`description:\` fields" ;;
+    FOCUS_EMPHASIS)  echo "default ordering: facts > dedup > compression" ;;
+    SURFACE_COUNTS)  derive_surface_counts ;;
+    TRACKER_NOTE)    echo "none" ;;
+  esac
+}
+
+# Never let an empty env var blank a placeholder: every fallback that fires is logged. A newline inside
+# a scalar would split the provenance stamp (and the emitted line it lands on), so it is flattened here.
+resolve_scalars() {
+  _fellback=""
+  for k in $SCALAR_KEYS; do
+    eval "_v=\${$k:-}"
+    [ -n "$_v" ] || { _v=$(_scalar_default "$k"); _fellback="$_fellback  - $k -> $_v
+"; }
+    _flat=$(printf '%s' "$_v" | tr '\n\r' '  ')
+    [ "$_flat" = "$_v" ] || { _v="$_flat"; echo "⚠️ $k contained a newline - flattened to a single line"; }
+    eval "$k=\$_v"
+    eval "export $k"
+  done
+}
+
+# Literal (non-regex, non-sed) substitution: awk reads values from ENVIRON, so `/`, `&` and `\` inside a
+# value are inserted verbatim. SINGLE PASS - each line is scanned once and the substituted value lands in
+# an output buffer that is never re-scanned, so a value containing `{OTHER_KEY}` is not re-expanded.
 _subst() {
   awk -v keys="$SCALAR_KEYS" '
-    BEGIN { nk = split(keys, k, " ") }
+    BEGIN { nk = split(keys, k, " "); for (i = 1; i <= nk; i++) have[k[i]] = 1 }
     {
-      line = $0
-      for (i = 1; i <= nk; i++) {
-        tok = "{" k[i] "}"
-        val = ENVIRON[k[i]]
-        out = ""; rest = line
-        while ((p = index(rest, tok)) > 0) {
-          out = out substr(rest, 1, p - 1) val
-          rest = substr(rest, p + length(tok))
-        }
-        line = out rest
+      line = $0; out = ""
+      while (match(line, /\{[A-Z_]+\}/)) {
+        tok = substr(line, RSTART, RLENGTH)
+        name = substr(tok, 2, RLENGTH - 2)
+        out = out substr(line, 1, RSTART - 1) ((name in have) ? ENVIRON[name] : tok)
+        line = substr(line, RSTART + RLENGTH)
       }
-      print line
+      print out line
     }
   ' "$1" > "$2"
 }
 
 # ── emit ────────────────────────────────────────────────────────────────────────
+# ATOMIC: the whole tree is built in a staging dir on the SAME filesystem and renamed into place last.
+# A failure half-way therefore leaves NO partial install - which matters because the refusal guard keys
+# on SKILL.md, and a stray one would push the user to MEMORY_SYNC_FORCE=1 (the flag that destroys edits).
+# Every write on the emit path routes its failure here: under `set -e` a bare `mktemp`/`cp`/redirect
+# failure would abort BEFORE the guard below and the user would never see the friendly message.
+_emit_abort() {
+  echo "❌ FAILED: cannot install into $TARGET (permissions?) - NOTHING was written, no partial install to force past"
+  exit 1
+}
+
 emit_skill() {
   echo "=== memory-sync-init: emit ==="
   validate_templates
@@ -300,32 +321,35 @@ emit_skill() {
   fi
 
   resolve_scalars
-  mkdir -p "$TARGET_REFS"
+  _parent=$(dirname "$TARGET")
+  mkdir -p "$_parent" || _emit_abort
+  _bd=$(mktemp -d "$ROOT/$_parent/.memory-sync-emit.XXXXXX" 2>/dev/null) || _emit_abort
+  _stage="$_bd/memory-sync"
+  mkdir -p "$_stage/references" || _emit_abort
 
-  _subst "$REFS/SKILL.md.template" "$TARGET/SKILL.md"
-
+  _subst "$REFS/SKILL.md.template" "$_stage/SKILL.md" || _emit_abort
   # Provenance stamp - LAST line of the emitted SKILL.md; `status` and `upgrade` read it.
   printf '\n%s%s emitted %s by brewdoc:memory-sync-init | surface: %s -->\n' \
-    "$STAMP_PREFIX" "$VERSION" "$(date +%F)" "$SURFACE_COUNTS" >> "$TARGET/SKILL.md"
-  echo "✅ $TARGET/SKILL.md ($(wc -l < "$TARGET/SKILL.md" | tr -d ' ') lines, stamped v$VERSION)"
+    "$STAMP_PREFIX" "$VERSION" "$(date +%F)" "$SURFACE_COUNTS" >> "$_stage/SKILL.md" || _emit_abort
+  for r in $EMITTED_REFS; do cp "$REFS/$r" "$_stage/references/$r" || _emit_abort; done
 
+  { rm -rf "$TARGET" && mv "$_stage" "$TARGET"; } || _emit_abort
+  rm -rf "$_bd"; _bd=""
+
+  echo "✅ $TARGET/SKILL.md ($(awk 'END { print NR }' "$TARGET/SKILL.md") lines, stamped v$VERSION)"
   for r in $EMITTED_REFS; do
-    cp "$REFS/$r" "$TARGET_REFS/$r"
-    echo "✅ $TARGET_REFS/$r ($(wc -l < "$TARGET_REFS/$r" | tr -d ' ') lines, verbatim)"
+    echo "✅ $TARGET_REFS/$r ($(awk 'END { print NR }' "$TARGET_REFS/$r") lines, verbatim)"
   done
 
   echo ""
   echo "Scalars applied:"
-  _v=""
   for k in $SCALAR_KEYS; do
     eval "_v=\${$k}"
     printf '  %s = %s\n' "$k" "$_v"
   done
-  if [ -n "$_fellback" ]; then
-    echo "Fallbacks that fired (env var unset or empty):"
-    printf '%s' "$_fellback"
-  else
-    echo "Fallbacks that fired: none (all 8 scalars came from the environment)"
+  if [ -n "$_fellback" ]
+  then echo "Fallbacks that fired (env var unset or empty):"; printf '%s' "$_fellback"
+  else echo "Fallbacks that fired: none (all 8 scalars came from the environment)"
   fi
 
   echo ""
@@ -335,70 +359,35 @@ emit_skill() {
 # ── validate ────────────────────────────────────────────────────────────────────
 validate_emit() {
   echo "=== memory-sync-init: validate ==="
-  validate_templates
   _errors=0
 
   # (1) every emitted file present
   _missing=0
-  if [ ! -f "$TARGET/SKILL.md" ]; then
-    echo "❌ FAILED: missing emitted file: $TARGET/SKILL.md - run 'generate.sh emit' first"
-    _missing=1; _errors=$((_errors+1))
-  fi
+  [ -f "$TARGET/SKILL.md" ] || { echo "❌ FAILED: missing emitted file: $TARGET/SKILL.md - run 'generate.sh emit' first"; _missing=1; _errors=$((_errors+1)); }
   for r in $EMITTED_REFS; do
     if [ ! -f "$TARGET_REFS/$r" ]; then echo "❌ FAILED: missing emitted file: $TARGET_REFS/$r"; _missing=1; _errors=$((_errors+1)); fi
   done
-  [ "$_missing" -eq 0 ] && echo "✅ all emitted files present (SKILL.md + $(echo $EMITTED_REFS | wc -w | tr -d ' ') references)"
+  [ "$_missing" -eq 0 ] && echo "✅ all emitted files present (SKILL.md + $EMITTED_N references)"
 
-  if [ ! -f "$TARGET/SKILL.md" ]; then
-    echo "❌ FAILED: $TARGET/SKILL.md absent - remaining checks skipped"
-    exit "$_errors"
-  fi
+  [ -f "$TARGET/SKILL.md" ] || { echo "❌ FAILED: $TARGET/SKILL.md absent - remaining checks skipped"; exit "$_errors"; }
 
-  # (2) unresolved {PLACEHOLDER}: matches \{[A-Z_]+\}, IGNORES a `$`-prefixed occurrence
-  # (${CLAUDE_SKILL_DIR} is a shell expansion, not a placeholder), allow-lists runtime tokens.
-  _unresolved=""
-  for f in "$TARGET/SKILL.md" $(for r in $EMITTED_REFS; do echo "$TARGET_REFS/$r"; done); do
-    [ -f "$f" ] || continue
-    _hits=$(awk -v allow="$RUNTIME_ALLOW" '
-      BEGIN { n = split(allow, a, " "); for (i = 1; i <= n; i++) ok[a[i]] = 1 }
-      {
-        line = $0; pos = 1
-        while (match(substr(line, pos), /\{[A-Z_]+\}/)) {
-          s = pos + RSTART - 1
-          tok = substr(line, s, RLENGTH)
-          prev = (s > 1) ? substr(line, s - 1, 1) : ""
-          name = substr(tok, 2, length(tok) - 2)
-          if (prev != "$" && !(name in ok)) print FILENAME ":" FNR ": " tok
-          pos = s + RLENGTH
-        }
-      }
-    ' "$f" || true)
-    [ -n "$_hits" ] && _unresolved="$_unresolved$_hits
-"
-  done
+  # (2) unresolved {PLACEHOLDER} across SKILL.md + every emitted reference
+  _unresolved=$(_open_tokens)
   if [ -n "$_unresolved" ]; then
     echo "❌ FAILED: unresolved setup-time placeholders (AI must fill the BLOCKs via Edit - SKILL.md Phase 3):"
-    printf '%s' "$_unresolved" | sed 's/^/   /'
-    _errors=$((_errors+1))
+    printf '%s\n' "$_unresolved" | sed 's/^/   /'; _errors=$((_errors+1))
   else
     echo "✅ no unresolved placeholders (runtime allow-list: $RUNTIME_ALLOW)"
   fi
 
   # (3) references, BOTH directions: every cited references/*.md exists, every emitted one is cited.
-  _cited=$(grep -oE 'references/[A-Za-z0-9._-]+\.md' "$TARGET/SKILL.md" | sort -u || true)
   _refbad=0
-  if [ -n "$_cited" ]; then
-    while IFS= read -r c; do
-      [ -n "$c" ] || continue
-      if [ ! -f "$TARGET/$c" ]; then
-        _ln=$(grep -nF "$c" "$TARGET/SKILL.md" | head -1 | cut -d: -f1 || true)
-        echo "❌ FAILED: $TARGET/SKILL.md:${_ln:-?}: cites $c which does not exist"
-        _refbad=1; _errors=$((_errors+1))
-      fi
-    done <<EOF
-$_cited
-EOF
-  fi
+  for c in $(grep -oE 'references/[A-Za-z0-9._-]+\.md' "$TARGET/SKILL.md" | sort -u || true); do
+    [ -f "$TARGET/$c" ] && continue
+    _ln=$(grep -nF "$c" "$TARGET/SKILL.md" | head -1 | cut -d: -f1 || true)
+    echo "❌ FAILED: $TARGET/SKILL.md:${_ln:-?}: cites $c which does not exist"
+    _refbad=1; _errors=$((_errors+1))
+  done
   for r in $EMITTED_REFS; do
     [ -f "$TARGET_REFS/$r" ] || continue
     if ! grep -qF "references/$r" "$TARGET/SKILL.md"; then
@@ -413,40 +402,31 @@ EOF
   case "$_lastline" in
     "$STAMP_PREFIX"*) echo "✅ provenance stamp present: $_lastline" ;;
     *)
-      if grep -qF "$STAMP_PREFIX" "$TARGET/SKILL.md"; then
-        echo "❌ FAILED: $TARGET/SKILL.md: provenance stamp is not the LAST line"
-      else
-        echo "❌ FAILED: $TARGET/SKILL.md: provenance stamp absent (expected a last line starting '$STAMP_PREFIX')"
+      if grep -qF "$STAMP_PREFIX" "$TARGET/SKILL.md"
+      then echo "❌ FAILED: $TARGET/SKILL.md: provenance stamp is not the LAST line"
+      else echo "❌ FAILED: $TARGET/SKILL.md: provenance stamp absent (expected a last line starting '$STAMP_PREFIX')"
       fi
-      _errors=$((_errors+1))
-      ;;
+      _errors=$((_errors+1)) ;;
   esac
 
-  if [ "$_errors" -eq 0 ]; then
-    echo "✅ validate PASSED"
-  else
-    echo "❌ FAILED: $_errors check(s) failed"
-  fi
+  if [ "$_errors" -eq 0 ]; then echo "✅ validate PASSED"; else echo "❌ FAILED: $_errors check(s) failed"; fi
   exit "$_errors"
 }
 
 # ── status ──────────────────────────────────────────────────────────────────────
-# Read-only, always exit 0. KEY=value lines so the AI-driven `upgrade` can grep them.
+# Read-only, always exit 0. PURE KEY=value (no banner, every key unique) so a naive parser keeps every row.
 status_report() {
-  echo "=== memory-sync-init: status ==="
-  echo "TARGET=$(pwd)"
-  echo "SKILL_PATH=$TARGET"
+  echo "TARGET=$ROOT"
+  echo "SKILL_PATH=$ROOT/$TARGET"
 
   if [ ! -f "$TARGET/SKILL.md" ]; then
-    echo "INSTALLED=no"
-    echo "STAMP_VERSION=none"
-    echo "STAMP_DATE=none"
-    echo "STAMP_SURFACE=none"
-    echo "SURFACE_FILES_NOW=$(surface_total)"
-    echo "SURFACE_FILES_STAMPED=unknown"
-    echo "MISSING_FILES=$(( 1 + $(echo $EMITTED_REFS | wc -w | tr -d ' ') ))"
-    echo "DRIFTS=0"
-    echo "VERDICT=NOT INSTALLED"
+    # Same KEY set as the installed branch - a parser keyed on any row must not go blind on a fresh target.
+    echo "INSTALLED=no"; echo "STAMP_VERSION=none"; echo "STAMP_DATE=none"; echo "STAMP_SURFACE=none"
+    echo "SURFACE_FILES_NOW=$(surface_total)"; echo "SURFACE_FILES_STAMPED=unknown"
+    echo "MISSING_FILES=$(( 1 + EMITTED_N ))"
+    echo "OPEN_PLACEHOLDERS=$( { _open_tokens || true; } | awk '{ print $NF }' | sort -u | wc -l | tr -d ' ')"
+    echo "DEFAULT_BRANCH=$(derive_branch)"; echo "GIT_VISIBILITY=$(derive_git_visibility)"
+    echo "DRIFTS=0"; echo "VERDICT=NOT INSTALLED"
     return 0
   fi
 
@@ -455,73 +435,52 @@ status_report() {
 
   _stamp=$(grep -F "$STAMP_PREFIX" "$TARGET/SKILL.md" | tail -1 || true)
   if [ -z "$_stamp" ]; then
-    echo "STAMP_VERSION=UNSTAMPED"
-    echo "STAMP_DATE=UNSTAMPED"
-    echo "STAMP_SURFACE=UNSTAMPED"
-    _stamped_n="unknown"
+    _sv=UNSTAMPED; _sd=UNSTAMPED; _ss=UNSTAMPED; _stamped_n=unknown
   else
     _sv=$(printf '%s\n' "$_stamp" | sed -e "s|^${STAMP_PREFIX}||" -e 's/ .*//')
     _sd=$(printf '%s\n' "$_stamp" | sed -e 's/.* emitted //' -e 's/ .*//')
     _ss=$(printf '%s\n' "$_stamp" | sed -e 's/.*| surface: //' -e 's/ -->$//')
-    echo "STAMP_VERSION=$_sv"
-    echo "STAMP_DATE=$_sd"
-    echo "STAMP_SURFACE=$_ss"
     _stamped_n=$(printf '%s\n' "$_ss" | grep -oE '^[0-9]+' || true)
-    [ -n "$_stamped_n" ] || _stamped_n="unknown"
-    [ "$_sv" = "$VERSION" ] || { echo "NOTE=template version moved $_sv -> $VERSION"; _drifts=$((_drifts+1)); }
+    [ -n "$_stamped_n" ] || _stamped_n=unknown
+    [ "$_sv" = "$VERSION" ] || { echo "NOTE_VERSION=template version moved $_sv -> $VERSION"; _drifts=$((_drifts+1)); }
   fi
+  echo "STAMP_VERSION=$_sv"; echo "STAMP_DATE=$_sd"; echo "STAMP_SURFACE=$_ss"
 
   _now=$(surface_total)
   echo "SURFACE_FILES_NOW=$_now"
   echo "SURFACE_FILES_STAMPED=$_stamped_n"
   if [ "$_stamped_n" != "unknown" ] && [ "$_stamped_n" -ne "$_now" ]; then
-    echo "NOTE=surface moved $_stamped_n -> $_now files"
-    _drifts=$((_drifts+1))
+    echo "NOTE_SURFACE=surface moved $_stamped_n -> $_now files"; _drifts=$((_drifts+1))
   fi
 
-  _miss=0
+  _miss=0; _misslist=""
   for r in $EMITTED_REFS; do
-    [ -f "$TARGET_REFS/$r" ] || { echo "NOTE=missing emitted reference: $TARGET_REFS/$r"; _miss=$((_miss+1)); }
+    [ -f "$TARGET_REFS/$r" ] || { _misslist="$_misslist${_misslist:+, }$TARGET_REFS/$r"; _miss=$((_miss+1)); }
   done
+  [ "$_miss" -eq 0 ] || echo "NOTE_MISSING=$_misslist"
   echo "MISSING_FILES=$_miss"
   _drifts=$((_drifts + _miss))
 
-  _open=$(awk -v allow="$RUNTIME_ALLOW" '
-    BEGIN { n = split(allow, a, " "); for (i = 1; i <= n; i++) ok[a[i]] = 1 }
-    {
-      line = $0; pos = 1
-      while (match(substr(line, pos), /\{[A-Z_]+\}/)) {
-        s = pos + RSTART - 1; tok = substr(line, s, RLENGTH)
-        prev = (s > 1) ? substr(line, s - 1, 1) : ""
-        name = substr(tok, 2, length(tok) - 2)
-        if (prev != "$" && !(name in ok)) print tok
-        pos = s + RLENGTH
-      }
-    }
-  ' "$TARGET/SKILL.md" | sort -u | wc -l | tr -d ' ')
+  # Same file list as validate - counting SKILL.md alone let 2 open blocks in hard-sync.md report IN SYNC.
+  _open=$( { _open_tokens || true; } | awk '{ print $NF }' | sort -u | wc -l | tr -d ' ')
   echo "OPEN_PLACEHOLDERS=$_open"
   [ "$_open" -gt 0 ] && _drifts=$((_drifts + _open))
 
-  echo "DEFAULT_BRANCH=$(derive_branch)"
-  echo "GIT_VISIBILITY=$(derive_git_visibility)"
-  echo "DRIFTS=$_drifts"
-  if [ "$_drifts" -eq 0 ]; then
-    echo "VERDICT=IN SYNC"
-  else
-    echo "VERDICT=STALE ($_drifts drifts)"
-  fi
+  echo "DEFAULT_BRANCH=$(derive_branch)"; echo "GIT_VISIBILITY=$(derive_git_visibility)"; echo "DRIFTS=$_drifts"
+  if [ "$_drifts" -eq 0 ]; then echo "VERDICT=IN SYNC"; else echo "VERDICT=STALE ($_drifts drifts)"; fi
   return 0
 }
 
 case "$MODE" in
-  scan)     scan_target ;;
-  emit)     emit_skill ;;
-  validate) validate_emit ;;
-  status)   status_report ;;
+  scan)     resolve_root; scan_target ;;
+  emit)     resolve_root; emit_skill ;;
+  validate) resolve_root; validate_emit ;;
+  status)   resolve_root; status_report ;;
   *)
     echo "Usage: generate.sh <scan|emit|validate|status>   (default: emit)"
-    echo "  scan      read-only surface report + derived DEFAULT_BRANCH= / GIT_VISIBILITY= / SURFACE_COUNTS="
-    echo "  emit      write $TARGET (refuses to overwrite; MEMORY_SYNC_FORCE=1 overrides)"
+    echo "  scan      read-only surface report + derived DEFAULT_BRANCH= / GIT_VISIBILITY= / MEMORY_DIR= /"
+    echo "            TRACKER_NOTE= / SURFACE_COUNTS= / PROJECT_NAME= for pass-back to emit"
+    echo "  emit      atomically write $TARGET (refuses to overwrite; MEMORY_SYNC_FORCE=1 overrides)"
     echo "  validate  fail on unresolved {PLACEHOLDER}, missing file, broken reference, missing stamp"
     echo "  status    machine-greppable KEY=value drift report, always exit 0"
     exit 1

@@ -56,17 +56,22 @@ much context", "aggressive", "почисти жёстко"). Nothing is regenera
 Reach for `HARD` when the auto-loaded context has become expensive: a long-running project accumulates dead weight
 across every rule and convention file, and neither kind of waste shows up in a diff.
 
-- **Pass A -- `paths:` precision.** A rule with a broad or missing glob is loaded into EVERY context and paid for
-  on every turn, so precision is a token-budget property, not a style preference: the glob must be the narrowest
-  pattern still covering the rule's real subject. Verdicts `OK` / `TOO_BROAD` / `TOO_NARROW` / `DANGLING` /
-  `MISSING` / `CORRECTLY_GLOBAL` -- a genuinely repo-wide subject legitimately carries no glob, and one is never
-  invented to look tidy.
-- **Pass B -- obvious-knowledge purge.** Anything a competent model already knows is deleted on sight, not
-  compressed: code-quality exhortations, how to use a mainstream language or framework feature, restated tool
-  docs, textbook pattern definitions. What survives is what the model cannot know -- decisions that invert a
-  default ("no unit tests here, integration only"), domain invariants, environment quirks, explicit prohibitions.
-  The discriminator, per line: "would a competent model with no access to this repo already do this?" -> delete;
-  "does this line only make sense because someone HERE decided it?" -> keep.
+- **Pass A -- `paths:` precision.** `paths:` is a LIST -- each entry gets its OWN verdict, never one verdict per
+  rule file: `OK` / `TOO_BROAD` / `TOO_NARROW` / `DANGLING` / `MISSING` / `CORRECTLY_GLOBAL`. A broad or missing
+  glob loads the rule into EVERY context and is paid for every turn, so the glob must be the narrowest pattern
+  still covering the rule's real subject; a genuinely repo-wide subject legitimately carries none, one is never
+  invented to look tidy, and an explicitly declared repo-wide glob is `CORRECTLY_GLOBAL` and never stripped.
+  `DANGLING` drops only that ENTRY and REPORTS it -- the rule FILE itself is never deleted, since a batch agent
+  may only edit files in its own scope.
+- **Pass B -- obvious-knowledge purge.** Anything a competent model already knows -- code-quality exhortations,
+  restated tool docs, textbook pattern definitions -- is deleted on sight, not compressed. What survives is what
+  the model cannot know: decisions that invert a default ("no unit tests here, integration only"), domain
+  invariants, environment quirks, explicit prohibitions. Discriminator, applied per RULE (a numbered row plus its
+  continuation lines), never per line: "would a competent model with no access to this repo already do this?" ->
+  delete; "does this line only make sense because someone HERE decided it?" -> keep. Two brakes: a Borderline
+  table OVERRIDES the discriminator -- a line naming a concrete path, command, version or number is KEPT, and a
+  genuinely uncertain call is KEPT and REPORTED, never guessed away; and a file cut by more than half is REPORTED
+  before the edit lands.
 
 Both passes may only SHRINK a file; at `HARD` depth a file that grew is a defect, not a judgement call. The
 generator calibrates them on real examples harvested from the target's own rules.

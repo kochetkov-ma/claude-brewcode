@@ -1,20 +1,15 @@
 # Hard Sync
 
-The two aggressive DELETION passes of `/memory-sync`. Cited by the emitted skill's Phase 2 batch prompt
-when `{DEPTH}` = `HARD`, and by nothing else. Both passes may only SHRINK a file.
+The two aggressive DELETION passes of `/memory-sync`. Cited by the emitted skill's Phase 2 batch prompt at
+`{DEPTH}` = `HARD`, by its Phase 3 VERIFY checkers, by its References table and by its Phase 4 self-sync. Both passes may only SHRINK a file -
+the ONE exception is the PASS A frontmatter repair that adds or widens a `paths:` key.
 
 ## The problem
 
-A long-running project accumulates dead weight in the AUTO-LOADED context - not only in the root CLAUDE.md but
-across every rule and convention file. Two kinds of waste dominate, and neither shows up in a diff:
-
-| Waste | Where it hides | Cost |
-|-------|----------------|------|
-| A rule loaded into contexts it does not govern | a broad or missing `paths:` glob | its full token cost on EVERY turn, forever |
-| A line stating what any competent model already knows | anywhere in the surface | pure token burn, plus it dilutes the lines that matter |
-
-Pass A removes the first, Pass B the second. Both are MECHANICAL: each has a decision procedure and a verdict, and
-neither is a matter of taste. Run A before B - narrowing a glob changes which files a later reader even loads.
+Two kinds of waste dominate the AUTO-LOADED surface and neither shows up in a diff: a rule loaded into contexts it
+does not govern (broad, missing or dangling `paths:` glob), and a line stating what any competent model already knows.
+PASS A removes the first, PASS B the second. Both are MECHANICAL - decision procedure, then verdict, never taste.
+Run A before B: narrowing a glob changes which files a later reader even loads.
 
 ---
 
@@ -31,7 +26,7 @@ relevance. Precision is a TOKEN-BUDGET property, not a style preference.
 | One module or service | only that module's path prefix |
 | One language | that language's source extensions, scoped to the source dirs (not config, not vendored trees) |
 | One tool's config | the config files that tool reads |
-| Genuinely repo-wide (git conventions, agent protocol, delegation) | NO `paths:` - do NOT invent one |
+| Genuinely repo-wide (git conventions, agent protocol, delegation) | NO `paths:` - do NOT invent one; an explicit `**/*` already declared is CORRECT, leave it |
 
 ### Procedure - per rule file
 
@@ -48,32 +43,33 @@ stops applying. Neither is the safe side.
 
 ### Verdict vocabulary
 
+`paths:` is a LIST. Audit EVERY entry separately and emit ONE verdict per ENTRY - a single dead entry never condemns the whole rule.
+
 | Verdict | Meaning | Action |
 |---------|---------|--------|
-| `OK` | declared glob == narrowest covering glob, resolves, no under-coverage | none |
-| `TOO_BROAD` | loads in contexts the subject does not reach | narrow to the derived glob |
-| `TOO_NARROW` | subject files exist that the glob misses | widen to exactly cover them, no further |
-| `DANGLING` | glob matches NOTHING in the repo today | repoint at the moved subject; subject gone -> the whole rule is dead, delete it and report |
+| `OK` | declared entry == narrowest covering glob, resolves, no under-coverage | none |
+| `TOO_BROAD` | loads in contexts the subject does not reach | narrow that entry to the derived glob |
+| `TOO_NARROW` | subject files exist that no entry matches | add the missing entries, covering exactly those files and no further |
+| `DANGLING` | entry matches NOTHING in the repo today | repoint at the moved subject; subject gone -> drop that ENTRY and REPORT it. NEVER delete the rule file - a batch agent may only EDIT files in its SCOPE |
 | `MISSING` | no `paths:` but the subject is scoped | add the derived glob |
-| `CORRECTLY_GLOBAL` | no `paths:` and the subject IS repo-wide | none - never invent a glob to look tidy |
+| `CORRECTLY_GLOBAL` | no `paths:`, or an explicit repo-wide glob (`**/*`), and the subject IS repo-wide | none - never invent a glob to look tidy, and REMOVING an existing `paths:` key is never a PASS A action |
 
 ### Resolution checks (read-only shell)
 
 ```bash
-git ls-files -- 'src/**/*.kt' | head -5                 # empty output -> DANGLING
-git ls-files -- 'src/**/*.kt' | wc -l                   # how many files the glob actually loads for
-find . -path ./.git -prune -o -path './src/test/*' -print | head -5   # untracked surface too
-comm -13 <(git ls-files -- 'GLOB' | sort) \
-         <(git ls-files -- 'SUBJECT_SCOPE' | sort) | head   # non-empty -> TOO_NARROW
+git ls-files -- ':(glob)src/**/*.kt' | wc -l    # :(glob) makes ** stop at '/' like a paths: glob; plain git '*' crosses '/', so a broken glob still "matches"
+find . -path ./.git -prune -o -path './src/*.kt' -print | head -5   # MANDATORY second probe - git ls-files is blind to git-ignored trees
+comm -13 <(git ls-files -- ':(glob)GLOB' | sort) \
+         <(git ls-files -- ':(glob)SUBJECT_SCOPE' | sort) | head   # non-empty -> TOO_NARROW
 ```
+
+`DANGLING` only when BOTH probes come back empty: `git ls-files` alone returns 0 for a git-ignored tree (a
+`.claude/` listed in `.gitignore` or `.git/info/exclude`) that is in fact full of files.
 
 <!-- BLOCK: one row per rule file in the target - | Rule file | Current paths: | Verdict | Narrowest correct glob | -->
 {PATHS_PRECISION_TABLE}
 
-**Other loading gates.** Where the project's convention uses further frontmatter to decide WHEN a file enters a
-context (an activation/trigger field, a scope or type marker, an include list in a tracker config), audit it the
-same way: narrowest value that still covers the real subject, verified to resolve, checked for under-coverage.
-Audit only the keys this project actually uses - never invent a key to justify a verdict.
+**Other loading gates.** Any OTHER frontmatter key this project already uses to gate loading (activation/trigger, scope or type marker, tracker include list) runs the SAME procedure - never invent a key to justify a verdict.
 
 ---
 
@@ -103,7 +99,7 @@ Audit only the keys this project actually uses - never invent a key to justify a
 | Failure history | what broke before, why, and the one line that prevents it |
 | Explicit PROHIBITIONS overriding a mainstream default | the highest-value lines in the whole surface - never trim these to save space |
 
-### The discriminator - apply per LINE
+### The discriminator - apply per RULE (a numbered row plus its continuation lines is ONE unit), never per line
 
 > **"Would a competent model, with no access to this repo, already do this?" YES -> DELETE.**
 > **"Does this line only make sense because someone HERE decided it?" YES -> KEEP.**
@@ -112,6 +108,8 @@ Both answers YES is impossible; both NO means the line states nothing - delete i
 A generic statement wrapped around a project-specific EXCEPTION keeps ONLY the exception; the generic framing goes.
 
 ### Borderline handling
+
+> **This table OVERRIDES the discriminator.** Where a row below applies, its ruling wins over the YES/NO answer.
 
 | Situation | Ruling |
 |-----------|--------|
@@ -150,33 +148,32 @@ After (2 lines):
 - Test DB resets per test CLASS, not per method - parallel tests share the schema.
 ```
 
-Deleted, with reason: "testing is important" / "write tests for new code" / "small focused tests" / "descriptive
-names" / "mock external dependencies" / "use parameterized tests" / "no failing or skipped tests" - all generic
-craft knowledge the model has. Kept: the inversion of the default (no unit tests) with its cause, and the reset
-granularity, which nothing outside this repo could imply. 10 lines -> 2.
-
 ---
 
 ## HARD reporting contract
 
-Each batch agent returns, IN ADDITION to its normal per-file JSON, one entry per file it touched:
+Each batch agent returns, IN ADDITION to its normal per-file JSON, a `"hard"` SUB-OBJECT under that file's existing
+`"<path>"` key - nested so it never collides with the normal entry's `lines_before` / `lines_after` / `uncertain`:
 
 ```
-"<path>": {
-  "paths_verdict": "OK|TOO_BROAD|TOO_NARROW|DANGLING|MISSING|CORRECTLY_GLOBAL",
-  "narrowed_to": "<the glob now declared, or null>",
-  "obvious_deleted": [ {"line": "<deleted text, trimmed>", "reason": "<which DELETE class>"} ],
+"<path>": { "hard": {
+  "paths_verdict": [ {"entry": "<glob as declared>", "verdict": "OK|TOO_BROAD|TOO_NARROW|DANGLING|MISSING|CORRECTLY_GLOBAL"} ],
+  "globs_declared": [ "<EVERY glob the file now declares, narrowed or not - empty for CORRECTLY_GLOBAL>" ],
+  "obvious_deleted": [ {"line_no": 0, "line": "<verbatim deleted line>", "reason": "<which DELETE class>"} ],
   "domain_kept": [ "<line kept that a shallow purge would have cut>" ],
-  "uncertain": [ "<line left in place because the discriminator was ambiguous>" ],
+  "discriminator_uncertain": [ "<line left in place because the discriminator was ambiguous>" ],
   "lines_before": 0,
   "lines_after": 0
-}
+} }
 ```
 
 | Consumer | Uses it for |
 |----------|-------------|
-| Phase 3 checkers | Re-read each `obvious_deleted` line and confirm it was GENERIC, not a domain fact; re-resolve every `narrowed_to` glob against the repo; confirm no `domain_kept` line was lost elsewhere in the same edit |
+| Phase 3 checkers | Re-read each `obvious_deleted` line and confirm it was GENERIC, not a domain fact; re-resolve every `globs_declared` entry against the repo (both probes); confirm no `domain_kept` line was lost elsewhere in the same edit; rule each `discriminator_uncertain` line KEEP or DELETE; re-read IN FULL any file cut below half |
 | Phase 6 report | Total the `lines_before` / `lines_after` delta and name the top files cut |
 
-Rules for the report itself: quote the deleted line, never summarise it - a checker cannot verify a summary.
-`lines_after` > `lines_before` at `HARD` depth is a defect, not a judgement call.
+Rules for the report itself: quote the deleted line VERBATIM with its line number, never summarise it - the memory
+surface is often git-IGNORED, so a checker cannot recover the context from a diff. `lines_after` > `lines_before`
+at `HARD` depth is a defect, not a judgement call - EXCEPT the PASS A frontmatter repair that adds or widens a
+`paths:` key, the one authorized growth. A file whose `lines_after` is under HALF its `lines_before` needs no extra
+field to be flagged - the ratio IS the flag: the Phase 3 checker re-reads such a file IN FULL and Phase 6 names it.
