@@ -212,6 +212,37 @@ function readerJson(p, args) {
     'a payload with no session_id still records, with sid ""');
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 2b. PostToolUseFailure is distinguishable on the open and search branches
+// ═══════════════════════════════════════════════════════════════════════════
+{
+  const p = newProject('failflag');
+  const rd = { tool_name: 'Read', tool_input: { file_path: join(p, 'src/a.ts') } };
+  const gr = { tool_name: 'Grep', tool_input: { pattern: 'foo' } };
+  fire(post({ cwd: p, session_id: 'sF', hook_event_name: 'PostToolUseFailure', ...rd }));
+  fire(post({ cwd: p, session_id: 'sF', hook_event_name: 'PostToolUseFailure', ...gr }));
+  fire(post({ cwd: p, session_id: 'sF', ...rd }));
+  fire(post({ cwd: p, session_id: 'sF', ...gr }));
+  const F = lines(p);
+  check('2b.count', F.length, 4, 'two failures and two successes produced exactly four lines');
+  check('2b.open.failed', shape(F[0]),
+    { ev: 'open', src: 'stats', f: 'src/a.ts', abs: join(p, 'src/a.ts'), fail: true, agent: 'main' },
+    'a Read that FAILED carries fail:true - it never opened the path and must not'
+    + ' count as a prefetch conversion');
+  check('2b.search.failed', shape(F[1]),
+    { ev: 'search', src: 'stats', tool: 'Grep', q: 'foo', fail: true, agent: 'main' },
+    'a Grep that FAILED is still a search, now attributable as a failed one');
+  check('2b.open.ok', shape(F[2]),
+    { ev: 'open', src: 'stats', f: 'src/a.ts', abs: join(p, 'src/a.ts'), agent: 'main' },
+    'a successful open OMITS the fail key entirely - old records stay byte-compatible');
+  check('2b.search.ok', shape(F[3]),
+    { ev: 'search', src: 'stats', tool: 'Grep', q: 'foo', agent: 'main' },
+    'a successful search OMITS the fail key entirely');
+  check('2b.fail.keys', F.map((r) => Object.prototype.hasOwnProperty.call(r, 'fail')),
+    [true, true, false, false],
+    'the fail key is present on exactly the two PostToolUseFailure records');
+}
+
 function fireAndLast(p, over) {
   fire({ cwd: p, ...over });
   const L = lines(p);

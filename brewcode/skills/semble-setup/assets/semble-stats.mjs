@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=5.2.2 generated_by=brewcode:semble-setup
+// brewcode-meta: version=5.2.3 generated_by=brewcode:semble-setup
 /**
  * brewcode:semble-setup — PostToolUse / PostToolUseFailure hook (self-contained,
  * installed into a project). PURE OBSERVER.
@@ -150,6 +150,16 @@ function queryOf(toolName, toolInput) {
   return pat.slice(0, QMAX);
 }
 
+/**
+ * `{fail:true}` on a PostToolUseFailure, `{}` otherwise - spread into the extras
+ * so a success record stays byte-identical to what earlier versions wrote. Without
+ * it an `open` emitted for a Read that FAILED is indistinguishable from a real
+ * open, and a failed Read of an injected path inflates prefetch conversion.
+ */
+function failFlag(ev) {
+  return ev === 'PostToolUseFailure' ? { fail: true } : {};
+}
+
 function record(input, cwd) {
   const ev = typeof input.hook_event_name === 'string' ? input.hook_event_name : '';
   if (ev !== 'PostToolUse' && ev !== 'PostToolUseFailure') return;
@@ -174,7 +184,9 @@ function record(input, cwd) {
     // semble's repo-relative `file_path`; Claude Code reads with an absolute path.
     // Storing both spares the reader a cwd it does not have at read time.
     const rel = p.indexOf(cwd + '/') === 0 ? p.slice(cwd.length + 1) : p;
-    telemetry(cwd, sid, 'open', { f: rel.slice(0, PATHMAX), abs: p.slice(0, PATHMAX), agent });
+    telemetry(cwd, sid, 'open', {
+      f: rel.slice(0, PATHMAX), abs: p.slice(0, PATHMAX), ...failFlag(ev), agent,
+    });
     return;
   }
   if (SEARCH_TOOLS.indexOf(tool) < 0) return;
@@ -183,7 +195,7 @@ function record(input, cwd) {
   // on PostToolUseFailure. Dropping those would gut the denominator.
   const q = queryOf(tool, input.tool_input);
   if (q === null) return;
-  telemetry(cwd, sid, 'search', { tool, q, agent });
+  telemetry(cwd, sid, 'search', { tool, q, ...failFlag(ev), agent });
 }
 
 async function main() {

@@ -5,7 +5,7 @@ model: inherit
 maxTurns: 80
 tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion, WebFetch, WebSearch
 doc_type: llm
-version: "5.2.2"
+version: "5.2.3"
 generated_by: "brewtools"
 last_updated: "2026-08-09"
 ---

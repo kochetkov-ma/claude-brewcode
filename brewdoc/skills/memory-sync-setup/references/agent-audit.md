@@ -1,4 +1,4 @@
-<!-- brewcode-meta: version=5.2.2 generated_by=brewdoc:memory-sync-setup -->
+<!-- brewcode-meta: version=5.2.3 generated_by=brewdoc:memory-sync-setup -->
 # Agent and Skill Re-Audit
 
 The standing best-practice audit `/memory-sync` runs on EVERY agent file and EVERY skill file, on EVERY run, at

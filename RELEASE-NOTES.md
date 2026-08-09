@@ -2,6 +2,19 @@
 
 ---
 
+## v5.2.3 (2026-08-09)
+
+> Docs: [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/)
+
+### brewcode
+
+#### Fixed
+
+- **semble-setup telemetry:** the `PostToolUseFailure` registration fired correctly but its records were byte-identical to `PostToolUse` ones. `semble-stats.mjs` read the event name, used it as a guard, then discarded it — only the semble-MCP `call` branch derived `ok` from it, while the `open` and `search` branches wrote nothing about success or failure. Both now carry `fail: true` on a failure; the key is omitted on success, so existing records stay byte-compatible and the log does not grow.
+- **semble-setup prefetch conversion metric:** a Read that FAILED still emitted an `open` record for a path it never opened. Since conversion is measured as "an injected path was subsequently opened", every failed Read of an injected path counted as a conversion and inflated the number. Failed opens are now marked and excludable.
+
+---
+
 ## v5.2.2 (2026-08-09)
 
 > Docs: [convention](https://doc-claude.brewcode.app/brewcode/skills/convention/) | [rules](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [teams-setup](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | [docsync-setup](https://doc-claude.brewcode.app/brewdoc/skills/docsync-setup/) | [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/)
