@@ -14,6 +14,14 @@
 - **`semble-project.sh` carried an invalid inline shellcheck directive at line 249** that aborted shellcheck's parse of the whole file — and of everything sourced through it. Removed; the file and its dependencies lint again
 - **Coverage:** `tests/suite-core.mjs` gains 6 assertions pinning the derived content set, 329 -> 335, all 7 suites green
 - **End-to-end hook delivery re-validated** against a 26-file fixture project on CC 2.1.226: 5 of the 6 registrations delivered at 100% — SessionStart 3/3, UserPromptSubmit 1/1, PreToolUse 1/1 (joined by `tool_use_id`), SubagentStart 2/2 (joined by `agent_id`), PostToolUse 18 records with no delivery by design. `PostToolUseFailure` had no failure to fire on in the window, so it is unproven rather than failed. Zero emitted-but-undelivered payloads
+- **Three scripts stamped a placeholder version instead of hard-failing.** `convention/scripts/convention.sh`, `rules/scripts/rules.sh` and `teams-setup/scripts/verify-team.sh` fell back to `unknown` (or a literal `X.Y.Z`) when the version could not be resolved from `plugin.json`, and stamped it unguarded — the exact failure their five sibling scripts carry a comment warning about, because `sort -V` then reports a confident `AHEAD unknown > X.Y.Z` and staleness detection inverts. All three now use the reference gate and hard-fail. `memory-sync-setup/scripts/generate.sh` is untouched: its `unknown` is a guarded sentinel, checked before use
+
+### brewdoc
+
+#### Fixed
+
+- **`hooks/lib/utils.mjs` was a dead, drifting copy** of `brewtools/hooks/lib/utils.mjs`. brewdoc registers no hooks (`hooks.json` is `{"hooks":{}}`) and nothing imported it — verified zero importers before removal. Deleted; a stale second copy of a logger can no longer be mistaken for the live one
+- **`README.md` claimed neither brewdoc setup skill implements `enable`/`disable`.** Both do, and have since v5.1.0 — `docs/commands.md:25` already said so. The sentence and both Arguments cells now match the skills' own `argument-hint`
 
 ---
 

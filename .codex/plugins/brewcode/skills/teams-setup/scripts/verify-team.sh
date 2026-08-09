@@ -13,19 +13,26 @@ DISABLED=0
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
-# Plugin version by self-location, only ever used to print a COPY-PASTEABLE repair row. A verifier must
-# not fail because a manifest is unreadable, so the documentation spelling X.Y.Z is the fallback here --
-# it is not a token, nothing substitutes it, and it never reaches an artifact.
+# Plugin version by self-location, used to print a COPY-PASTEABLE repair row.
+# `|| true` on both branches: under `set -e` a failing command substitution aborts the script.
 PLUGIN_JSON="$SCRIPT_DIR/../../../.codex-plugin/plugin.json"
-PV="X.Y.Z"
+PV=""
 if [ -f "$PLUGIN_JSON" ]; then
   if command -v jq >/dev/null 2>&1; then
-    _pv=$(jq -r '.version // empty' "$PLUGIN_JSON" 2>/dev/null || true)
+    PV=$(jq -r '.version // empty' "$PLUGIN_JSON" 2>/dev/null || true)
   else
-    _pv=$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$PLUGIN_JSON" 2>/dev/null | head -1 || true)
+    PV=$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$PLUGIN_JSON" 2>/dev/null | head -1 || true)
   fi
-  [ -n "${_pv:-}" ] && PV="$_pv"
 fi
+# HARD FAIL, never a placeholder value. The repair row this prints is meant to be pasted back into an
+# agent's frontmatter, so a documentation spelling like `X.Y.Z` reaches an artifact the moment anyone
+# follows the advice. It carries no `{}<>`, so setup-status's PLACEHLD test cannot catch it and
+# `sort -V` would print a confident `AHEAD X.Y.Z > 5.2.0`. The manifest ships with the plugin in the
+# dev checkout and in the cache alike, so an unreadable one is a broken install - stop here.
+case "$PV" in
+  [0-9]*.[0-9]*.[0-9]*) : ;;
+  *) printf 'ERROR:cannot resolve plugin version (X.Y.Z) from %s - refusing to emit a repair row with a fake version\n' "$PLUGIN_JSON"; exit 1 ;;
+esac
 TODAY=$(date +%F)
 
 # Artifact-metadata frontmatter gate for ONE generated agent. Same four keys, same D2 order and the same
