@@ -2,6 +2,27 @@
 
 ---
 
+## v5.2.4 (2026-08-09)
+
+> Docs: [agent-router-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-router-setup/) | [agent-deadline-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline-setup/) | [docsync-setup](https://doc-claude.brewcode.app/brewdoc/skills/docsync-setup/)
+
+> Three helper functions lived as copies in two hook assets each, and the copies had drifted apart — behaviour depended on which hook reached the code first. All three pairs reconciled onto the correct version.
+
+### brewtools
+
+#### Fixed
+
+- **`pruneStale()` in `agent-router.mjs` followed planted symlinks.** The `agent-deadline-guard.mjs` copy `lstat`s each entry and unlinks a non-directory outright; the router copy fell straight through to a recursive `rmSync`, which would delete *through* a symlink planted in the state directory. The defensive branch is now in both, and the owner check applies only to real directories
+- **`safeSegment()` in `agent-router.mjs` returned `null` for a numeric session id.** The `agent-deadline` copies coerce finite numbers to a string; the router did not, so a numeric id produced no segment at all. Coercion ported over — a numeric session id is a real input, not an edge case
+
+### brewdoc
+
+#### Fixed
+
+- **`recordTouched()` rewrote state on every touch for a consumer that never read it.** `docsync-track.mjs` re-wrote the entry each time while `docsync-watch.mjs` early-returned when the path was already recorded. The consumer settles it: `docsync-gate.mjs:128` iterates `st.touched` as bare path strings and re-reads freshness from the file itself at gate time (`docsync-gate.mjs:132-138`), so no touch timestamp is ever read — neither the first nor the latest. `track` now dedupes like `watch`, dropping an atomic state rewrite per touched file
+
+---
+
 ## v5.2.3 (2026-08-09)
 
 > Docs: [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/)

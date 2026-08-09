@@ -6,7 +6,7 @@ maxTurns: 80
 color: green
 tools: Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion
 doc_type: llm
-version: "5.2.3"
+version: "5.2.4"
 generated_by: "brewcode"
 last_updated: "2026-08-09"
 ---

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=5.2.3 generated_by=brewdoc:docsync-setup
+// brewcode-meta: version=5.2.4 generated_by=brewdoc:docsync-setup
 /**
  * docsync-track — PostToolUse:Write|Edit|MultiEdit hook (self-contained, project-local)
  *
@@ -53,7 +53,8 @@ function recordTouched(cwd, sessionId, rel) {
   const disk = readJson(statePath(cwd), null);
   const st = (!disk || disk.session_id !== sessionId) ? { session_id: sessionId, touched: [], asked: false } : disk;
   if (!Array.isArray(st.touched)) st.touched = [];
-  if (!st.touched.includes(rel)) st.touched.push(rel);
+  if (st.touched.includes(rel)) return; // already recorded, skip write
+  st.touched.push(rel);
   writeJsonAtomic(statePath(cwd), st);
 }
 

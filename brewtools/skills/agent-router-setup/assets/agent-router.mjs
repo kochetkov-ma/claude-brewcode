@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=5.2.3 generated_by=brewtools:agent-router-setup
+// brewcode-meta: version=5.2.4 generated_by=brewtools:agent-router-setup
 /**
  * agent-router - PreToolUse hook for the `Agent` tool (Node built-ins only, ESM).
  *
@@ -402,6 +402,10 @@ function pruneStale() {
     const p = path.join(STATE_ROOT, name);
     try {
       const st = lstatSync(p); // lstat, never stat: do not follow a planted symlink
+      if (!st.isDirectory()) {
+        if (st.mtimeMs < cutoff) rmSync(p, { force: true }); // unlink the link itself
+        continue;
+      }
       if (UID !== null && st.uid !== UID) continue;
       if (st.mtimeMs >= cutoff) continue;
       rmSync(p, { recursive: true, force: true });
@@ -412,8 +416,9 @@ function pruneStale() {
 }
 
 function safeSegment(s) {
-  if (typeof s !== 'string') return null;
-  const clean = s.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 128);
+  const raw = typeof s === 'number' && Number.isFinite(s) ? String(s) : s;
+  if (typeof raw !== 'string') return null;
+  const clean = raw.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 128);
   return clean && clean !== '.' && clean !== '..' ? clean : null;
 }
 
