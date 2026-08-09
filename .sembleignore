@@ -1,4 +1,4 @@
-# brewcode-meta: version=5.0.0 generated_by=brewcode:semble-setup
+# brewcode-meta: version=5.2.0 generated_by=brewcode:semble-setup
 # brewcode:semble — managed file. Regenerate with
 #   semble-guidance.sh install --part ignore --force
 # Edit it freely: any change makes it `user_modified`, and the installer then
@@ -196,7 +196,7 @@ packages.lock.json
 # the top-level directory; `skills/` would hit every `*/skills/` in the repo).
 
 # --- brewcode:semble measured candidates ---
-# Measured in THIS repo by `semble-project.sh candidates` (exact chunk counts, 3203 files scanned).
+# Measured in THIS repo by `semble-project.sh candidates` (exact chunk counts, 3207 files scanned).
 # PROPOSALS ONLY - every line below is commented out and excludes nothing.
 # Uncomment what you agree with; delete what you do not. A re-run only ever
 # adds paths it has never proposed, so your edits here survive.

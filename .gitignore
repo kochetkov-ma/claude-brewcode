@@ -38,4 +38,4 @@ brewtools/skills/think-short/tests/e2e/results/
 !.agents/plugins/marketplace.json
 
 # brewcode:semble
-.claude/semble/.prefetch-ts
+.claude/semble/
