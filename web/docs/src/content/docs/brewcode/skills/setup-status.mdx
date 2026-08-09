@@ -59,7 +59,7 @@ Ask it to "install everything" or "fix them all" and it refuses once, plainly, t
 4 of 10 setups are behind the installed plugin (2 stale by version, 1 legacy stamp, 1 stale by wiring).
 
 | Skill                           | State                   | Version         | Found                                                              | Command
-| /brewcode:semble-setup          | stale                   | A.B.C            | rule + all three live hook files current; semble-explore.mjs (RETIRED, not one of the three live hooks) is still on disk — wiring shows only 3 of the 4 settings.json entries the current version wants | /brewcode:semble-setup install "remove the retired hook file, re-wire all four settings entries"
+| /brewcode:semble-setup          | stale                   | A.B.C            | rule + all five live hook files current; semble-explore.mjs (RETIRED, superseded by semble-subagent.mjs) is still on disk — wiring shows only 5 of the 6 settings.json entries the current version wants | /brewcode:semble-setup install "remove the retired hook file, re-wire all six settings entries"
 | /brewtools:task-board-setup     | stale (X.Y.Z -> A.B.C)  | X.Y.Z -> A.B.C   | board.md + tracker present, .claude/skills/task-spec/ absent      | /brewtools:task-board-setup upgrade "retrofit the spec + design layer onto the deployed board, keep every task id"
 | /brewtools:agent-deadline-setup | stale (X.Y.Z -> A.B.C)  | X.Y.Z -> A.B.C   | guard + config present, JSON trio never restamped since an older release | /brewtools:agent-deadline-setup upgrade "restamp the config trio at the current budget"
 | /brewdoc:memory-sync-setup      | stale (legacy stamp)    | legacy -> A.B.C  | emitted SKILL.md has no frontmatter version: (the current carrier); the retired <!-- memory-sync template v1.0.0 --> tail survives only as the legacy detector | /brewdoc:memory-sync-setup upgrade "migrate the pre-5.0 tail stamp to provenance frontmatter"
@@ -217,7 +217,7 @@ Three signals, never mtime and never a guess. None answers another's question �
 |--------|----------|-----|
 | **version stamp** (headline) | which plugin version produced what is installed here? | frontmatter `version:`, a top-level JSON key, a `brewcode-meta:` comment after the shebang, or `team.md`'s `\| Version \|` header row — whichever carrier the roster names for that row |
 | **owner stamp** | did the setup that owns this path actually write it? | `generated_by` compared against the row's own `<plugin>:<skill>`. A mismatch is `partial`; a real `version` with no `generated_by` beside it is `stale (legacy stamp)` |
-| **`cmp` vs the plugin asset** (corroborating) | was this file actually re-copied after the plugin update? | byte equality on the copied files — semble's rule + all three live hook files (never `.sembleignore`; those three files wire as four `settings.json` registrations, since `semble-stats.mjs` fires on both `PostToolUse` and `PostToolUseFailure`), think-short's 4, agent-deadline's 2, agent-router's 1, the manager guard, docsync's 3, **two** of memory-sync's 3 references, and `trace-ops.sh` |
+| **`cmp` vs the plugin asset** (corroborating) | was this file actually re-copied after the plugin update? | byte equality on the copied files — semble's rule + all five live hook files (never `.sembleignore`; those five files wire as six `settings.json` registrations, since `semble-stats.mjs` fires on both `PostToolUse` and `PostToolUseFailure`), think-short's 4, agent-deadline's 2, agent-router's 1, the manager guard, docsync's 3, **two** of memory-sync's 3 references, and `trace-ops.sh` |
 
 `semble-setup` reads a fourth, independent signal: **wiring**. `.claude/settings.json` can list a hook that no longer exists, or omit one the current version wants, while every file on disk is already byte-current — `retired[]`, `staleEntries` and `wiredCount`/`wantCount` catch what a version-and-bytes check cannot see.
 
@@ -282,7 +282,7 @@ Every fact the skill knows lives in ONE table in its `SKILL.md`. Adding a future
     Full plugin overview — all skills, agents, and hooks in one place.
   </Card>
   <Card title="semble-setup" icon="search" href="/brewcode/skills/semble-setup/">
-    One of the ten rows: its three hooks and rule are `cmp`d verbatim against the plugin assets.
+    One of the ten rows: its five hooks and rule are `cmp`d verbatim against the plugin assets.
   </Card>
   <Card title="superreview-setup" icon="check" href="/brewcode/skills/superreview-setup/">
     Another row: staleness comes from its `.template-baseline/` diff, so your tailoring never counts as drift.

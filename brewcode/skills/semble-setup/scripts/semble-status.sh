@@ -120,11 +120,50 @@ const rep = {
     injectedSessions: 0, openedSessions: 0, sessionPct: null,
     pathsInjected: 0, pathsOpened: 0, pathPct: null,
   },
+  // `sessionsWithNudge`/`sessionsConverted`/`conversionPct` are the LUMPED figures:
+  // every nudge-emitting channel share one denominator. They are kept for schema
+  // compatibility and they are not a per-channel measurement — reading them as one
+  // is what produced the "0/18" claim that retired the reminder hook. The channel a
+  // number belongs to lives in `bySource`, keyed by the emitting hook's `src`.
+  //
+  // `converted` does NOT mean the same thing in every channel, so each entry names
+  // its own `measure`:
+  //   semble-call-after      a semble MCP call landed later in the same session
+  //   injected-path-opened   a path prefetch injected was later actually Read
+  // Attribution overlaps by design: one semble call can convert a session for the
+  // session channel AND the reminder channel. What must never happen is one
+  // channel's firings sitting in another channel's denominator.
   conversion: {
     sessionsWithNudge: 0, sessionsConverted: 0, conversionPct: null,
     callsAfterNudge: 0, callsWithoutNudge: 0,
+    bySource: {},
   },
 };
+
+// Every channel that can emit a nudge, listed so a channel that fired zero times
+// still reports 0/0 instead of vanishing from the output. `explore` is the retired
+// SubagentStart/Explore hook: it is NOT listed, so it appears only in a JSONL that
+// actually holds its records, and disappears once those age out of the window.
+const NUDGE_SOURCES = ["session", "reminder", "subagent", "prefetch"];
+const MEASURE = {
+  session: "semble-call-after",
+  reminder: "semble-call-after",
+  subagent: "semble-call-after",
+  explore: "semble-call-after",
+  prefetch: "injected-path-opened",
+};
+function srcSlot(src) {
+  if (!rep.conversion.bySource[src]) {
+    rep.conversion.bySource[src] = {
+      nudges: 0, sessions: 0, converted: 0, sessionPct: null,
+      callsAfter: 0, measure: MEASURE[src] || "semble-call-after",
+    };
+  }
+  return rep.conversion.bySource[src];
+}
+for (const s of NUDGE_SOURCES) srcSlot(s);
+rep.conversion.bySource.reminder.toolUses = 0;
+rep.conversion.bySource.subagent.agentTypes = {};
 
 // A truncated final line (the process died mid-append) and a record from a
 // future schema are both expected, not exceptional: count and move on.
@@ -148,9 +187,22 @@ function agentOf(r) {
 }
 
 // nudges/calls per session, for the conversion join
-const nudgeFirst = {};   // sid -> earliest nudge ts
+const nudgeFirst = {};   // sid -> earliest nudge ts        (all channels lumped)
 const nudgeTs = {};      // sid -> sorted-enough list of nudge ts
 const callsBySid = {};   // sid -> [ts]
+// The same two joins kept PER CHANNEL. Without this split a channel that fires
+// often lends its sessions to a channel that never fired, and the quotient stops
+// describing either of them.
+const srcFirst = {};     // src -> sid -> earliest nudge ts of THAT src
+const srcTs = {};        // src -> sid -> [ts]
+const reminderTuids = {};// tool_use_id -> 1, so a retried PreToolUse is not double counted
+function noteNudge(src, sid, ts) {
+  srcSlot(src).nudges++;
+  if (!srcFirst[src]) { srcFirst[src] = {}; srcTs[src] = {}; }
+  if (!srcTs[src][sid]) srcTs[src][sid] = [];
+  srcTs[src][sid].push(ts);
+  if (srcFirst[src][sid] === undefined || ts < srcFirst[src][sid]) srcFirst[src][sid] = ts;
+}
 // prefetch conversion join: sid -> [{p, ts}] injected, sid -> [{f, abs, ts}] opened
 const injected = {};
 const opened = {};
@@ -173,6 +225,11 @@ for (const r of recs) {
       if (!nudgeTs[sid]) nudgeTs[sid] = [];
       nudgeTs[sid].push(ts);
       if (nudgeFirst[sid] === undefined || ts < nudgeFirst[sid]) nudgeFirst[sid] = ts;
+      noteNudge(src, sid, ts);
+      const tuid = typeof r.tool_use_id === "string" ? r.tool_use_id : "";
+      if (src === "reminder" && tuid) reminderTuids[tuid] = 1;
+      const at = typeof r.agent_type === "string" && r.agent_type ? r.agent_type : "unknown";
+      if (src === "subagent") bump(rep.conversion.bySource.subagent.agentTypes, at);
       break;
     }
     case "call": {
@@ -193,6 +250,7 @@ for (const r of recs) {
       if (typeof r.ms === "number" && isFinite(r.ms) && r.ms >= 0) msSamples.push(r.ms);
       if (r.fired !== true) { rep.prefetch.suppressed++; break; }
       rep.prefetch.fired++;
+      noteNudge("prefetch", sid, ts);   // its own channel, its own denominator
       const paths = Array.isArray(r.paths) ? r.paths.filter(function (p) { return typeof p === "string" && p; }) : [];
       rep.prefetch.hits += (typeof r.n === "number" && isFinite(r.n)) ? r.n : paths.length;
       if (paths.length) rep.prefetch.injections++;
@@ -261,6 +319,34 @@ for (const sid of injSids) {
 const pc = rep.prefetchConversion;
 if (pc.injectedSessions) pc.sessionPct = Math.round((pc.openedSessions / pc.injectedSessions) * 1000) / 10;
 if (pc.pathsInjected) pc.pathPct = Math.round((pc.pathsOpened / pc.pathsInjected) * 1000) / 10;
+
+// Per-channel conversion. Each channel is joined against its OWN nudge timestamps,
+// so a channel that never fired reports 0/0 and contributes nothing to any other
+// channel's rate. The prefetch channel converts on a path being opened, not on a
+// later semble call - it already RAN the search, so "did they call semble after"
+// would answer a question nobody asked; its numbers come from prefetchConversion.
+for (const src of Object.keys(srcFirst)) {
+  const slot = srcSlot(src);
+  const sids = Object.keys(srcFirst[src]);
+  slot.sessions = sids.length;
+  slot.converted = sids.filter(function (sid) {
+    return (callsBySid[sid] || []).some(function (t) { return t > srcFirst[src][sid]; });
+  }).length;
+  for (const sid of Object.keys(callsBySid)) {
+    for (const t of callsBySid[sid]) {
+      if ((srcTs[src][sid] || []).some(function (n) { return n <= t; })) slot.callsAfter++;
+    }
+  }
+}
+rep.conversion.bySource.prefetch.converted = pc.openedSessions;
+rep.conversion.bySource.prefetch.sessions = pc.injectedSessions;
+rep.conversion.bySource.reminder.toolUses = Object.keys(reminderTuids).length;
+for (const src of Object.keys(rep.conversion.bySource)) {
+  const slot = rep.conversion.bySource[src];
+  slot.sessionPct = slot.sessions
+    ? Math.round((slot.converted / slot.sessions) * 1000) / 10
+    : null;
+}
 if (msSamples.length) {
   const s = msSamples.slice().sort(function (a, b) { return a - b; });
   rep.prefetch.msMedian = s[Math.floor((s.length - 1) / 2)];
@@ -299,7 +385,7 @@ L.push("opened:    " + pc.pathsOpened + "/" + pc.pathsInjected + " injected path
   + (pc.sessionPct === null ? "" : " (" + pc.sessionPct + "%)")
   + " | " + rep.open.total + " Read calls seen");
 L.push("nudge:     " + rep.nudge.total + " total (main " + rep.nudge.main + ", sub " + rep.nudge.sub
-  + (rep.nudge.unknown ? ", unknown " + rep.nudge.unknown : "") + ")  [retired hooks]");
+  + (rep.nudge.unknown ? ", unknown " + rep.nudge.unknown : "") + ")");
 L.push("call:      " + rep.call.total + " semble calls (main " + rep.call.main + ", sub " + rep.call.sub
   + (rep.call.unknown ? ", unknown " + rep.call.unknown : "") + ") | " + rep.call.failed + " failed");
 L.push("search:    " + rep.search.total + " search-shaped non-semble (main " + rep.search.main
@@ -307,7 +393,20 @@ L.push("search:    " + rep.search.total + " search-shaped non-semble (main " + r
 const c = rep.conversion;
 L.push("converted: " + c.sessionsConverted + "/" + c.sessionsWithNudge + " nudged sessions"
   + (c.conversionPct === null ? "" : " (" + c.conversionPct + "%)")
-  + " | " + c.callsAfterNudge + " calls after a nudge, " + c.callsWithoutNudge + " unprompted");
+  + " | " + c.callsAfterNudge + " calls after a nudge, " + c.callsWithoutNudge + " unprompted"
+  + "  [ALL channels lumped - per channel below]");
+// One line per channel. A channel that never fired prints 0/0, which is the
+// distinction the retirement decision missed: 0/0 is "never delivered", 0/N is
+// "delivered and ignored", and only the second is evidence about the advice.
+for (const src of Object.keys(c.bySource).sort()) {
+  const s = c.bySource[src];
+  L.push("  " + (src + "        ").slice(0, 9) + s.converted + "/" + s.sessions + " sessions"
+    + (s.sessionPct === null ? "" : " (" + s.sessionPct + "%)")
+    + " | " + s.nudges + " fired"
+    + (s.toolUses === undefined ? "" : ", " + s.toolUses + " distinct tool_use_id")
+    + (s.agentTypes === undefined ? "" : ", agents [" + pairs(s.agentTypes) + "]")
+    + " | " + s.measure);
+}
 const denom = rep.search.total + rep.call.total;
 L.push("share:     " + (denom ? Math.round((rep.call.total / denom) * 1000) / 10 : 0)
   + "% of search-shaped tool use went through semble");
@@ -523,6 +622,8 @@ if (guidRaw === null || isErr(guidRaw)) {
   const ses = (h.session && typeof h.session === "object") ? h.session : {};
   const pre = (h.prefetch && typeof h.prefetch === "object") ? h.prefetch : {};
   const sta = (h.stats && typeof h.stats === "object") ? h.stats : {};
+  const rem = (h.reminder && typeof h.reminder === "object") ? h.reminder : {};
+  const sub = (h.subagent && typeof h.subagent === "object") ? h.subagent : {};
   const rule = (guidRaw.rule && typeof guidRaw.rule === "object") ? guidRaw.rule : {};
   const ign = (guidRaw.ignore && typeof guidRaw.ignore === "object") ? guidRaw.ignore : {};
   const cmd = (guidRaw.claudeMd && typeof guidRaw.claudeMd === "object") ? guidRaw.claudeMd : {};
@@ -536,14 +637,17 @@ if (guidRaw === null || isErr(guidRaw)) {
       session: ses.file === "present" ? "present" : "missing",
       prefetch: pre.file === "present" ? "present" : "missing",
       stats: sta.file === "present" ? "present" : "missing",
+      reminder: rem.file === "present" ? "present" : "missing",
+      subagent: sub.file === "present" ? "present" : "missing",
     },
     // Retired hook files still on disk (v1 installs). Non-empty means the
     // migration has not run yet; `install`/`upgrade` deletes them.
     retired: Array.isArray(h.retired) ? h.retired : [],
     permissionsWired: perm.wired === true,
     // Read the authoritative sibling counts (SessionStart + UserPromptSubmit +
-    // PostToolUse + PostToolUseFailure). Never re-derive them from the `wired`
-    // booleans: stats spans two events, so a half-wired pair loses an entry.
+    // PostToolUse + PostToolUseFailure + PreToolUse + SubagentStart). Never
+    // re-derive them from the `wired` booleans: stats spans two events, so a
+    // half-wired pair loses an entry.
     wiredCount: typeof h.wiredCount === "number" ? h.wiredCount : 0,
     wantCount: typeof h.wantCount === "number" ? h.wantCount : 0,
     staleEntries: typeof h.staleEntries === "number" ? h.staleEntries : 0,

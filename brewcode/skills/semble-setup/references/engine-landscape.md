@@ -146,7 +146,16 @@ Recall при фиксированном token-бюджете:
 | `assets/semble-session.mjs` | `SessionStart`, без matcher | читает `<cwd>/.claude/semble/state.json`; при `phase === 'ready'` шлёт `systemMessage` + `additionalContext`. Никогда не блокирует |
 | `assets/semble-prefetch.mjs` | `UserPromptSubmit`, без matcher | gate v3 -> дистилляция промпта -> ОДИН `uvx … semble search` (жёсткий cap 3 s, SIGKILL) -> `additionalContext` с top-3 ПУТЯМИ без сниппетов. Троттл 30 s, cooldown 600 s по `<cwd>/.claude/semble/.prefetch-ts`. Fail-open: любая ошибка -> `{}` и exit 0 |
 | `assets/semble-stats.mjs` | `PostToolUse` + `PostToolUseFailure`, один pipe-matcher | чистый наблюдатель: JSONL в `<cwd>/.claude/semble/telemetry.jsonl`, всегда `{}` |
-| ~~`assets/semble-reminder.mjs`~~ / ~~`assets/semble-explore.mjs`~~ | ретайрены в 5.0.0 | обе эмитили только advisory `additionalContext`; конверсия 0/18 (main) и 0/11 (Explore) при доказанной доставке. `install`/`upgrade` удаляет файлы и снимает их строки |
+| `assets/semble-reminder.mjs` | `PreToolUse`, matcher `Bash\|Grep` | advisory `additionalContext` перед текстовым поиском, счётчик в `<cwd>/.claude/semble/reminder.json`. Никогда не блокирует |
+| `assets/semble-subagent.mjs` | `SubagentStart`, БЕЗ matcher (= любой `agent_type`) | advisory `additionalContext` в контекст порождённого сабагента; пишет `agent_type`/`agent_id` в телеметрию |
+| ~~`assets/semble-explore.mjs`~~ | ретайрен окончательно | был прибит к одному `agent_type === 'Explore'`; заменён `semble-subagent.mjs`. `install`/`upgrade` удаляет файл и ЗАМЕНЯЕТ его строку |
+
+> Ретайр-обоснование 5.0.0 («0/18 и 0/11 при доказанной доставке») отозвано.
+> Канал доставки не был сломан; `0/18` считало сессии, а не доставки - reminder
+> не сработал ни разу (гейт подавил 74/113, 37 `disabled`, 2 throttled;
+> за всё время 14/2718 = 0.52%). `0/11` - реальное измерение, но по одному типу
+> агента и по самоподрывающему тексту. Поканальная конверсия: reminder 2/10
+> сессий, explore 1/7. Конверсия восстановленных хуков ещё не измерена.
 | `.claude/rules/semble-first.md` | - | правило «semantic-first» |
 | маркерный блок в `CLAUDE.md` | - | инструкция для сессии |
 | `semble-agents.sh` | - | патчит frontmatter агентов, добавляя 2 MCP-тула в `tools:` |

@@ -466,7 +466,8 @@ cat "\${SEMBLE_STUB_GUIDANCE:?}"
     hooks: {
       settingsFile: join(PROJECT, '.claude', 'settings.json'),
       session: { file: 'present' }, prefetch: { file: 'present' }, stats: { file: 'present' },
-      retired: [], wiredCount: 4, wantCount: 4, staleEntries: 0,
+      reminder: { file: 'present' }, subagent: { file: 'present' },
+      retired: [], wiredCount: 6, wantCount: 6, staleEntries: 0,
     },
   };
   const withHooks = (patch) => {
@@ -491,21 +492,21 @@ cat "\${SEMBLE_STUB_GUIDANCE:?}"
 
   // This is the exact platfrom shape that used to report ready/none.
   const v1 = guidRun(withHooks({
-    retired: ['semble-reminder.mjs', 'semble-explore.mjs'],
-    prefetch: { file: 'missing' }, wiredCount: 1, wantCount: 4, staleEntries: 5,
+    retired: ['semble-explore.mjs'],
+    prefetch: { file: 'missing' }, wiredCount: 1, wantCount: 6, staleEntries: 5,
   }));
   check('34-v1-verdict', v1.verdict, 'partial',
-    'a v1-shaped repo (retired hooks + stale entries + 1/4 wired) must never report ready');
+    'a v1-shaped repo (retired hook + stale entries + 1/6 wired) must never report ready');
   check('34-v1-nextStep', v1.nextStep, 'Run /brewcode:semble-setup install',
     'and it must name the command that performs the migration');
   check('34-v1-reason', v1.__reason,
-    'retired hooks on disk: semble-reminder.mjs, semble-explore.mjs; 5 stale settings entries; hooks wired 1/4',
+    'retired hooks on disk: semble-explore.mjs; 5 stale settings entries; hooks wired 1/6',
     'the reason must name all three defects, so the user knows what install will repair');
 
-  const retiredOnly = guidRun(withHooks({ retired: ['semble-reminder.mjs'] }));
+  const retiredOnly = guidRun(withHooks({ retired: ['semble-explore.mjs'] }));
   check('35-retired-verdict', retiredOnly.verdict, 'partial',
     'a retired hook file still on disk is enough on its own');
-  check('35-retired-reason', retiredOnly.__reason, 'retired hooks on disk: semble-reminder.mjs',
+  check('35-retired-reason', retiredOnly.__reason, 'retired hooks on disk: semble-explore.mjs',
     'one retired file, one clause');
 
   const staleOnly = guidRun(withHooks({ staleEntries: 1 }));
@@ -514,10 +515,10 @@ cat "\${SEMBLE_STUB_GUIDANCE:?}"
   check('36-stale-reason', staleOnly.__reason, '1 stale settings entry',
     'the singular clause is singular');
 
-  const halfWired = guidRun(withHooks({ wiredCount: 3, wantCount: 4 }));
+  const halfWired = guidRun(withHooks({ wiredCount: 5, wantCount: 6 }));
   check('37-wiring-verdict', halfWired.verdict, 'partial',
     'a missing sibling hook registration is enough on its own');
-  check('37-wiring-reason', halfWired.__reason, 'hooks wired 3/4', 'the reason carries the counts');
+  check('37-wiring-reason', halfWired.__reason, 'hooks wired 5/6', 'the reason carries the counts');
 
   // An absent count is not a defect: a report that never collected the wiring
   // numbers must not be read as a half-wired repo.

@@ -53,7 +53,22 @@ function readFrontmatter(source) {
   return { values, body: source.slice(match[0].length) };
 }
 
-function transformText(value, { agent = false } = {}) {
+function isShellAsset(file) {
+  return /\.(?:sh|bash)$/.test(file);
+}
+
+// Codex invokes a skill as `$plugin:skill`, so every skill reference is rewritten to that sigil.
+// In a shell asset the sigil must stay LITERAL: mirrored scripts run under `set -eu`, and a
+// double-quoted "... $brewcode:teams-setup ..." aborts them with `brewcode: unbound variable`.
+// Emit `\$` there instead -- it prints as `$` from double-quoted, unquoted and unquoted-heredoc
+// text alike. Comment lines expand nothing, so they keep the bare form.
+function skillSigil(shell, text, offset) {
+  if (!shell) return '$';
+  const lineStart = text.lastIndexOf('\n', offset) + 1;
+  return /^\s*#/.test(text.slice(lineStart, offset)) ? '$' : '\\$';
+}
+
+function transformText(value, { agent = false, shell = false } = {}) {
   let text = value
     .replaceAll('${CLAUDE_SKILL_DIR}', '<skill-directory>')
     .replaceAll('$CLAUDE_SKILL_DIR', '<skill-directory>')
@@ -70,8 +85,8 @@ function transformText(value, { agent = false } = {}) {
     .replaceAll('~/.claude', '~/.codex')
     .replaceAll('.claude/', '.codex/')
     .replaceAll('.claude\\', '.codex\\')
-    .replace(/\/brew(code|doc|tools):([a-z0-9-]+)/g, (_, family, name) => `$brew${family}:${name}`)
-    .replace(/Skill\(skill="([^"]+)"\)/g, '$$$1')
+    .replace(/\/brew(code|doc|tools):([a-z0-9-]+)/g, (_, family, name, offset, full) => `${skillSigil(shell, full, offset)}brew${family}:${name}`)
+    .replace(/Skill\(skill="([^"]+)"\)/g, (_, name, offset, full) => `${skillSigil(shell, full, offset)}${name}`)
     .replace(/\bTask\(/g, 'spawn_agent(')
     .replace(/\bTask tool\b/gi, 'sub-agent collaboration tools')
     .replace(/\bTask calls?\b/gi, 'sub-agent calls')
@@ -149,6 +164,13 @@ function codexAgentExtension(text) {
   text = text.replace(/^.*\.codex\/agents\/.*$/gm, line => line
     .replace(/((?:<[A-Za-z0-9_-]+>|\{[A-Za-z0-9_-]+\}|\$\{[A-Za-z0-9_]+\}))\.md\b/g, '$1.toml')
     .replace(/\bagent (`?)\.md\1/g, 'agent $1.toml$1'));
+  // `find .codex/agents -maxdepth 1 -type f -name "*.md"`: the path rewrite lands on the
+  // directory, the glob keeps the Claude extension, so the mirrored count is always 0 and the
+  // script reports "no domain experts" with real `.toml` agents present. Anchored on a `find`
+  // name predicate on a line that also names the agents dir -- a `*.md` glob anywhere else,
+  // including a `find` over docs or references, is untouched.
+  text = text.replace(/^.*\.codex\/agents\b.*$/gm, line =>
+    /(?:^|[\s|(])find\s/.test(line) ? line.replace(/(-i?name\s+["']?\*)\.md\b/g, '$1.toml') : line);
   // Parking prose with no path on the line at all: "A roster member has neither `.md` nor
   // `.md.disabled`". A stem-less `.md.disabled` is ALWAYS an agent -- a parked skill is always
   // written with its stem, `SKILL.md.disabled` -- so that token is the anchor, and the bare
@@ -168,6 +190,7 @@ function codexAgentExtension(text) {
 }
 
 function nativeWorkflowText(value, options = {}) {
+  const shell = options.shell === true;
   return codexAgentExtension(transformText(value, options)
     .replaceAll('$code:', '$brewcode:')
     .replaceAll('$doc:', '$brewdoc:')
@@ -195,13 +218,13 @@ function nativeWorkflowText(value, options = {}) {
     .replace(/\bmodel\s*=/g, 'reasoning_tier=')
     .replace(/\bprompt\s*=/g, 'message=')
     .replace(/\brun_in_background\s*[:=]\s*(?:false|true)/g, 'execution=foreground')
-    .replace(/Skill\s*\(\s*skill\s*=\s*["']([^"']+)["']\s*,\s*args\s*=\s*["']([^"']*)["']\s*\)/g, (_, name, args) => `Invoke \`$${name}\` with arguments \`${args}\``)
+    .replace(/Skill\s*\(\s*skill\s*=\s*["']([^"']+)["']\s*,\s*args\s*=\s*["']([^"']*)["']\s*\)/g, (_, name, args, offset, full) => `Invoke \`${skillSigil(shell, full, offset)}${name}\` with arguments \`${args}\``)
     .replace(/\bclaude\s+-p\b/g, 'codex exec')
     .replace(/\bclaude\s+--version\b/g, 'codex --version')
     .replace(/\bcodex plugin install\b/g, 'codex plugin add')
     .replace(/\bcodex plugin marketplace update\b/g, 'codex plugin marketplace upgrade')
     .replace(/\bcodex plugin update\s+([a-z0-9-]+@[a-z0-9-]+)/g, 'codex plugin remove $1 && codex plugin add $1')
-    .replace(/Skill\s*\(\s*skill\s*=\s*["']([^"']+)["']\s*\)/g, (_, name) => `$${name}`);
+    .replace(/Skill\s*\(\s*skill\s*=\s*["']([^"']+)["']\s*\)/g, (_, name, offset, full) => `${skillSigil(shell, full, offset)}${name}`);
 }
 
 function writeFile(file, content, mode) {
@@ -228,7 +251,7 @@ function copyTransformedTree(sourceDir, targetDir) {
     if (data.includes(0)) {
       fs.writeFileSync(target, data);
     } else {
-      fs.writeFileSync(target, nativeWorkflowText(data.toString('utf8')), 'utf8');
+      fs.writeFileSync(target, nativeWorkflowText(data.toString('utf8'), { shell: isShellAsset(target) }), 'utf8');
     }
     fs.chmodSync(target, fs.statSync(source).mode & 0o777);
   }
@@ -545,7 +568,7 @@ function copySelected(source, target) {
   const data = fs.readFileSync(source);
   fs.mkdirSync(path.dirname(target), { recursive: true });
   if (data.includes(0)) fs.writeFileSync(target, data);
-  else fs.writeFileSync(target, nativeWorkflowText(data.toString('utf8')), 'utf8');
+  else fs.writeFileSync(target, nativeWorkflowText(data.toString('utf8'), { shell: isShellAsset(target) }), 'utf8');
   fs.chmodSync(target, fs.statSync(source).mode & 0o777);
 }
 

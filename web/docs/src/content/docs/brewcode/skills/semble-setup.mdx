@@ -54,7 +54,7 @@ Semble has no Homebrew formula of its own. The skill installs `uv` via `brew` (a
 /brewcode:semble-setup install
 ```
 
-`install` probes `uv`, asks once before the machine-level `brew install uv`, registers the MCP server, then wires everything that does not need a live server — the rule, `.sembleignore`, the `CLAUDE.md` block, the three hooks, permissions and agent migration — before stopping at the reload checkpoint:
+`install` probes `uv`, asks once before the machine-level `brew install uv`, registers the MCP server, then wires everything that does not need a live server — the rule, `.sembleignore`, the `CLAUDE.md` block, the five hooks, permissions and agent migration — before stopping at the reload checkpoint:
 
 ```text
 # Semble install
@@ -69,12 +69,12 @@ scope: user
 cli:      uv absent | uvx absent | semble pin 0.5.4 (uvx-ephemeral) | claude 2.1.226
 mcp:      absent @ user  [unknown]
 cache:    /Users/me/Library/Caches/semble-code | repo — | 0 B | absent | docs root reserved: no
-guidance: rule absent | CLAUDE.md absent | hooks 0/4 wired | permissions no
-agents:   4 total | 2 inherit | 0 patched | 2 conflict | 0 skipped
+guidance: rule absent | CLAUDE.md absent | hooks 0/6 wired | permissions no
+agents:   4 total | 2 inherit | 0 patched | 2 need patch | 0 conflict | 0 skipped
 state:    phase=absent enabled=null completed=[]
 
 ## Actions
-changed:   brew install uv, semble_code registered @ user, docs cache root reserved, rule installed, .sembleignore installed, CLAUDE.md block installed, 3 hooks wired, permissions merged, 2 agents patched
+changed:   brew install uv, semble_code registered @ user, docs cache root reserved, rule installed, .sembleignore installed, CLAUDE.md block installed, 5 hooks wired, permissions merged, 2 agents patched
 unchanged: none
 skipped:   none
 failed:    none
@@ -102,7 +102,7 @@ After a fresh session, `resume` re-checks status, runs the smoke query (the one 
 ```text
 ## Actions
 changed:   phase -> verifying, smoke query ok, phase -> ready
-unchanged: rule, .sembleignore, CLAUDE.md block, 3 hooks, permissions, 2 agents (already wired by install)
+unchanged: rule, .sembleignore, CLAUDE.md block, 5 hooks, permissions, 2 agents (already wired by install)
 skipped:   none
 failed:    none
 
@@ -155,7 +155,7 @@ Subsequent searches are sub-second and require the absolute repo path:
   <li class="step step-primary">
     <div>
       <strong>Install — register and wire</strong>
-      <p>Reserves the separate docs cache root, registers <code>semble_code</code> at user scope, then wires everything that does not need a live MCP server — the <code>semble-first</code> rule, <code>.sembleignore</code>, the <code>CLAUDE.md</code> block, the three hooks, permissions and project agent migration — before writing a reload checkpoint and stopping. Only the smoke query and <code>phase -&gt; ready</code> wait for the new session.</p>
+      <p>Reserves the separate docs cache root, registers <code>semble_code</code> at user scope, then wires everything that does not need a live MCP server — the <code>semble-first</code> rule, <code>.sembleignore</code>, the <code>CLAUDE.md</code> block, the five hooks, permissions and project agent migration — before writing a reload checkpoint and stopping. Only the smoke query and <code>phase -&gt; ready</code> wait for the new session.</p>
     </div>
   </li>
   <li class="step step-primary">
@@ -219,15 +219,50 @@ The first seven rows are the canonical vocabulary shared by every `-setup` skill
 | Rule | `<repo>/.claude/rules/semble-first.md` |
 | Ignore file | `<repo>/.sembleignore` — keeps generated/vendored trees out of the corpus; managed like the rule (user edits reported, never clobbered) and gets an appended, **commented-out** block of measured candidates (duplicate trees, disproportionately heavy directories) — nothing is excluded until the user uncomments a line |
 | CLAUDE.md | a marked `<!-- BEGIN brewcode:semble -->` block |
-| Hooks | three hook files copied into `.claude/hooks/` — `semble-session.mjs` (SessionStart — state + reload messaging), `semble-prefetch.mjs` (UserPromptSubmit — runs one semble search on the prompt, injects the top-3 result **paths**, no snippets), `semble-stats.mjs` (PostToolUse **and** PostToolUseFailure — two separate events, one script) — but **four** `settings.json` registrations, each `"timeout": 5` (seconds); status reports that as `hooks <n>/4 wired` — never 4 files. The earlier advisory pair (`semble-reminder.mjs`, `semble-explore.mjs`) is retired: measured 0/18 and 0/11 conversion with delivery independently confirmed, so `install`/`upgrade` deletes them and un-wires their rows |
+| Hooks | five files in `.claude/hooks/` — `semble-session.mjs` (SessionStart), `semble-prefetch.mjs` (UserPromptSubmit), `semble-stats.mjs` (PostToolUse + PostToolUseFailure, stats matcher), `semble-reminder.mjs` (PreToolUse `Bash\|Grep`), `semble-subagent.mjs` (SubagentStart, **no matcher key** — matches every agent type) — six `settings.json` registrations total, each `"timeout": 5` (seconds). Status reports `hooks <n>/6 wired` — never 6 files. `semble-explore.mjs` is retired for good, replaced by `semble-subagent.mjs`: `install`/`upgrade` deletes the file and replaces its settings row, never leaves both. See Retirement of the advisory pair and Reminder mechanic below |
 | Agents | project `.claude/agents/**/*.md` get the two tool names added to `tools:`; global agents are never touched |
+
+### Retirement of the advisory pair
+
+The old rationale for retiring the advisory pair — "0/18 and 0/11 conversion, delivery independently confirmed" — was wrong on the first number:
+
+| Claim | Fact |
+|-------|------|
+| Delivery channel was broken | Never was. On CC 2.1.226 PreToolUse and SubagentStart both accept `additionalContext` in the zod union and reach the model over the same unfiltered path |
+| `0/18` conversion | Measured nothing. The reminder hook fired zero times across those 18 sessions: its own gate (the then-current `isExactIntent`, biased to silence — any doubt returned `true`) suppressed 74 of 113 evaluations, 37 were `disabled`, 2 throttled. Lifetime rate was 14 nudges / 2718 evaluations = 0.52%. The denominator 18 counted trial sessions, not deliveries |
+| `0/11` conversion | Real — but of one agent type (`Explore`, the one `semble-explore.mjs` was pinned to via `agent_type === 'Explore'`) and of text that undercut itself with "this is a reminder, not a block". The replacement, `semble-subagent.mjs`, carries no matcher key at all — which is what matches every agent type — and was verified live on Explore, Plan and general-purpose |
+
+### Reminder mechanic
+
+The 600-second throttle is gone. `semble-reminder.mjs` fires on every Nth eligible search call — `N = 5` by default, configurable via `reminderEvery` in `.claude/semble/state.json`. The counter lives in `.claude/semble/reminder.json`, written atomically, reset on corruption; the old `.claude/semble/.reminder-ts` marker is retired for good.
+
+<Callout type="caution" title="The counter is project-global, not per-session">
+It survives across sessions. A fresh session inherits the residual phase — the reminder may land on the very first search of that session or only on the fifth. "Every fifth search" is a property of the project, not the session.
+</Callout>
+
+The gate kept only the strong suppressors — `-l`/`-L`/`-c`/`-o` and their long forms (`--files-with-matches`, `--files-without-match`, `--count`, `--only-matching`), `find`/`bfs` `-name`/`-iname`/`-path`/`-type`, a pattern containing `/`, a filename-shaped pattern, and — for the native `Grep` tool — `output_mode: files_with_matches|count` — and dropped suppression on regex metacharacters, `-F`/`-w`, piping into `wc`/`sort`, and short patterns. Replayed on the real historical stream of 2543 recorded search calls: the old gate let 229 through and fired 32; the new one lets 1023 through and fires 204.
+
+### Measured delivery and cost
+
+CC 2.1.226, 17 real sessions, joined on `tool_use_id` between the hook's own telemetry record and the `hook_additional_context` attachment in the transcript:
+
+| Channel | Delivery | Cost |
+|---------|----------|------|
+| Reminder (PreToolUse) | 20/20 = 100% | 188 tokens per injection |
+| Subagent (SubagentStart) | 4/4 — Explore, Plan and general-purpose all quoted the injected text back verbatim | 189 tokens per injection |
+
+188 tokens per reminder injection, 189 per subagent injection — PreToolUse context is **not** deduplicated, so every injection is paid in full.
+
+Parent and subagent contexts are disjoint: the `SubagentStart` context is visible only inside the subagent and is written only to `<session-id>/subagents/agent-<id>.jsonl`, never to the parent transcript.
+
+`semble-status.sh` reports conversion per source (session / reminder / subagent / prefetch), not one pooled denominator — pooling let 126 `SessionStart` firings drown every other channel. Each slot carries its own `measure` (`injected-path-opened` for prefetch, `semble-call-after` for the rest); a channel that never fired prints `0/0` rather than vanishing — `0/0` is "never delivered", `0/N` is "delivered and ignored", and only the second is evidence about the advice.
 
 ### Version tracking
 
 `status` compares the version stamped into the installed artifacts against the plugin running on this machine, folded into the same `guidance:` line:
 
 ```text
-guidance: rule managed | CLAUDE.md present | hooks 4/4 wired | permissions yes | version X.Y.Z (plugin A.B.C - run /brewcode:semble-setup upgrade)
+guidance: rule managed | CLAUDE.md present | hooks 6/6 wired | permissions yes | version X.Y.Z (plugin A.B.C - run /brewcode:semble-setup upgrade)
 ```
 
 The stamp lives in the frontmatter of `.claude/rules/semble-first.md` (`version:`) and on line 2 of each hook file (`// brewcode-meta: version=X.Y.Z generated_by=brewcode:semble-setup`). When the two disagree, the overall verdict drops from `ready` to `partial` and **Next Step** becomes `Run /brewcode:semble-setup upgrade`. Stamping never fabricates a value it cannot resolve — the resolver refuses to write rather than bake in a fake version.
@@ -280,7 +315,7 @@ Both `mcp__semble_code__search` and `mcp__semble_code__find_related` require an 
     Manages the project agent roster — the `install` step patches those same agents' `tools:` allowlists; `resume` re-applies it idempotently.
   </Card>
   <Card title="setup-status" icon="clipboard" href="/brewcode/skills/setup-status/">
-    Read-only dashboard: it `cmp`s the three semble hooks and the rule against the plugin assets to decide installed vs stale.
+    Read-only dashboard: it `cmp`s the five semble hooks and the rule against the plugin assets to decide installed vs stale.
   </Card>
   <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/semble-setup">
     SKILL.md, scripts, and the reference files behind every mode.

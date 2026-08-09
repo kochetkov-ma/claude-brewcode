@@ -60,7 +60,7 @@ Two signals, answering two different questions. No mtime heuristics, no guessing
 |--------|----------|-----|
 | **version stamp** (headline) | which plugin version produced what is installed here? | every artifact a setup writes carries `version` and `generated_by`, plus `last_updated` everywhere except `.mjs`/`.sh` stamps and `doc_type` in `.md` frontmatter only — never in JSON. The field contract lives in `references/artifact-metadata.md`. Carriers: YAML frontmatter for `.md`, top-level keys for `.json`, a `brewcode-meta:` comment after the shebang for `.mjs` / `.sh`, a `\| Version \|` header row for `team.md` |
 | **owner stamp** | did the setup that owns this path actually write it? | `generated_by` vs the row's own `<plugin>:<skill>`. A mismatch is `partial` and names both skills; a missing `generated_by` beside a real `version` is `stale (legacy stamp)` |
-| **`cmp` vs the plugin asset** (corroborating) | was this file actually re-copied after the plugin update? | byte equality on the copied files — semble's rule + its 3 hooks (**not** `.sembleignore`), think-short's 4, agent-deadline's 2, agent-router's 1, the manager guard, docsync's 3, **two** of memory-sync's 3 references, and `trace-ops.sh` |
+| **`cmp` vs the plugin asset** (corroborating) | was this file actually re-copied after the plugin update? | byte equality on the copied files — semble's rule + its 5 hooks (**not** `.sembleignore`), think-short's 4, agent-deadline's 2, agent-router's 1, the manager guard, docsync's 3, **two** of memory-sync's 3 references, and `trace-ops.sh` |
 
 Of the contract's four fields this skill reads exactly two. `last_updated` is not read: it is a date,
 and no state in the vocabulary below is defined by one — an old date on an old stamp is the `stale`

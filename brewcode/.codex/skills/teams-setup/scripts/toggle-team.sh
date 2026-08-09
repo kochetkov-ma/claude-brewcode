@@ -76,7 +76,7 @@ done < "$TEAM_MD"
 printf 'ACTION:%s\nTEAM:%s\nMOVED:%s\nSKIPPED:%s\nMISSING:%s\n' "$ACTION" "$TEAM_NAME" "$MOVED" "$SKIPPED" "$MISSING"
 
 if [ "$MISSING" -gt 0 ]; then
-  echo "❌ FAILED -- $MISSING roster member(s) have no file at all; run $brewcode:teams-setup status"
+  echo "❌ FAILED -- $MISSING roster member(s) have no file at all; run \$brewcode:teams-setup status"
   exit 1
 fi
 echo "✅ $ACTION"

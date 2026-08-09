@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=5.1.0 generated_by=brewtools:think-short-setup
+// brewcode-meta: version=5.2.0 generated_by=brewtools:think-short-setup
 /**
  * think-short — PreToolUse hook for Task|Agent (self-contained, no plugin-root deps).
  *
@@ -46,12 +46,12 @@ const FAMILY_PLUGINS = ['brewcode', 'brewtools', 'brewdoc'];
 // A STEM prefix set, not a file list: every family hook is named after the setup
 // skill that installs it, so a hook added, renamed or retired inside an existing
 // family is matched without editing this file. An exact list rotted exactly that
-// way — it still named `semble-reminder.mjs` / `semble-explore.mjs` after 5.0.0
-// retired them, and never learned `semble-prefetch.mjs` / `semble-stats.mjs`.
+// way — it named hooks semble had dropped and never learned the ones it added,
+// and semble has since retired one name and restored two others.
 // Adding a whole NEW family (a new setup skill with a new hook name stem) is the
 // only edit this still needs.
 const FAMILY_HOOK_STEMS = [
-  'semble',          // brewcode:semble-setup   — semble-session/-prefetch/-stats
+  'semble',          // brewcode:semble-setup   — semble-session/-prefetch/-stats/-reminder/-subagent
   'docsync',         // brewdoc:docsync-setup   — docsync-track/-watch/-gate
   'think-short',     // brewtools:think-short-setup
   'agent-deadline',  // brewtools:agent-deadline-setup

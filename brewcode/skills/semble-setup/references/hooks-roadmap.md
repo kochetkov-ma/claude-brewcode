@@ -1,13 +1,31 @@
 # hooks-roadmap - hook-поверхность semble и предложения к развитию. Проверено: 2026-08-08
 
-> **УСТАРЕЛО в части «что лежит на диске» (5.0.0).** Раздел 1 описывает hook-слой
-> ДО 5.0.0. `semble-reminder.mjs` (`PreToolUse` `Bash`/`Grep`) и `semble-explore.mjs`
-> (`SubagentStart` `Explore`) РЕТАЙРЕНЫ: обе выдавали только advisory
-> `additionalContext` и сконвертировали 0/18 и 0/11 при доказанной доставке. Их
-> заменил `semble-prefetch.mjs` (`UserPromptSubmit`, без matcher), который сам
-> выполняет поиск и отдаёт top-3 ПУТИ. Актуальная want-таблица - четыре строки:
-> `SessionStart`, `UserPromptSubmit`, `PostToolUse`, `PostToolUseFailure`.
-> Источник правды - `scripts/semble-guidance.sh` (`SG_WANT_TABLE`) и `assets/INSTALL.md`.
+> **АКТУАЛЬНОЕ СОСТОЯНИЕ.** Раздел 1 - историческая фиксация ДО 5.0.0;
+> ретайр-обоснование 5.0.0 отозвано. Advisory-хуки ВОССТАНОВЛЕНЫ:
+> `semble-reminder.mjs` (`PreToolUse` `Bash|Grep`) и `semble-subagent.mjs`
+> (`SubagentStart`, БЕЗ matcher - отсутствующий matcher совпадает с любым
+> `agent_type`). `semble-explore.mjs` ретайрен окончательно: он был прибит к
+> одному `Explore`.
+>
+> Почему обоснование 5.0.0 не выдержало проверки:
+> - канал доставки НИКОГДА не был сломан - `PreToolUse` и `SubagentStart` оба
+>   принимают и доставляют `additionalContext` (zod-union, путь потребления,
+>   живые сессии);
+> - `0/18` не измеряло ничего: reminder не сработал НИ РАЗУ в этих 18 сессиях
+>   (собственный гейт подавил 74/113, ещё 37 `disabled`, 2 throttled; за всё
+>   время 14/2718 = 0.52%). 18 - это счёт сессий, а не доставок;
+> - `0/11` - настоящее измерение, но по ОДНОМУ типу агента и по тексту, который
+>   сам себя подрывал в последнем предложении.
+>
+> Поканальная конверсия на накопленной телеметрии: reminder 2/10 сессий,
+> explore 1/7 - не ноль. Прежняя суммарная цифра 6/80 (7.5%) была лумпом, в
+> котором доминировали 126 `SessionStart`-нуджей. Конверсия ВОССТАНОВЛЕННЫХ
+> хуков пока НЕ измерена - гейт переписан, текст сабагента новый.
+>
+> Актуальная want-таблица - ШЕСТЬ строк: `SessionStart`, `UserPromptSubmit`,
+> `PostToolUse`, `PostToolUseFailure`, `PreToolUse`/`Bash|Grep`, `SubagentStart`
+> (без matcher). Источник правды - `scripts/semble-guidance.sh`
+> (`SG_WANT_TABLE`) и `assets/INSTALL.md`.
 > Раздел «Предложения» сохранён как есть: он про будущие события, а не про текущие.
 
 Документ фиксирует (a) что реально лежит на диске сегодня и (b) пять предложений,
@@ -24,16 +42,17 @@
 
 ## 1. Где какой хук был применён ДО 5.0.0 (историческая фиксация)
 
-Ассеты скилла (`assets/`) - то, что устанавливалось ДО 5.0.0. Актуальный набор - ТРИ файла
-(`semble-session.mjs`, `semble-prefetch.mjs`, `semble-stats.mjs`); см. баннер выше и
+Ассеты скилла (`assets/`) - то, что устанавливалось ДО 5.0.0. Актуальный набор - ПЯТЬ файлов
+(`semble-session.mjs`, `semble-prefetch.mjs`, `semble-stats.mjs`, `semble-reminder.mjs`,
+`semble-subagent.mjs`); см. баннер выше и
 `scripts/semble-guidance.sh` (`SG_LIVE` / `SG_WANT_TABLE`):
 
 | Событие | Matcher | Файл | Что эмитит | Блокирует? |
 |---------|---------|------|------------|------------|
 | `SessionStart` | нет (все) | `semble-session.mjs` | `systemMessage` + `hookSpecificOutput.additionalContext` (только при `phase === "ready"`) | нет |
-| `PreToolUse` | `Bash` | ~~`semble-reminder.mjs`~~ РЕТАЙРЕН 5.0.0 | `hookSpecificOutput.additionalContext`, не чаще 1 раза в 600 s | нет, по контракту |
-| `PreToolUse` | `Grep` | ~~`semble-reminder.mjs`~~ РЕТАЙРЕН 5.0.0 | то же (та же регистрация, второй matcher) | нет, по контракту |
-| `SubagentStart` | `Explore` | ~~`semble-explore.mjs`~~ РЕТАЙРЕН 5.0.0 | `hookSpecificOutput.additionalContext` в транскрипт ПОРОЖДЁННОГО сабагента | нет |
+| `PreToolUse` | `Bash` | `semble-reminder.mjs` (ДО 5.0.0 - две отдельные строки) | `hookSpecificOutput.additionalContext`, не чаще 1 раза в 600 s | нет, по контракту |
+| `PreToolUse` | `Grep` | то же | то же (та же регистрация, второй matcher) | нет, по контракту |
+| `SubagentStart` | `Explore` | ~~`semble-explore.mjs`~~ РЕТАЙРЕН ОКОНЧАТЕЛЬНО, заменён `semble-subagent.mjs` без matcher | `hookSpecificOutput.additionalContext` в транскрипт ПОРОЖДЁННОГО сабагента | нет |
 
 Общее для всех трёх: pure ESM, только Node built-ins, читают ровно один файл
 `<cwd>/.claude/semble/state.json`, не спавнят процессов, всегда печатают один JSON-объект
@@ -45,14 +64,14 @@
 | Файл | Факт |
 |------|------|
 | `semble-session.mjs` | `phase === "ready"` -> `systemMessage: "semble: ready \| cache " + repoHash.slice(0,8)` (или `"unknown"`), `additionalContext` = "ONE `mcp__semble_code__search` first (repo=<cwd>, top_k=5, max_snippet_lines=10), then open the hit at start_line". Ветки: `missing`/пустой -> `{}`; `corrupt` -> `"semble: state file is corrupt - run /brewcode:semble-setup status"`; `enabled===false` или `phase==="disabled"` -> `"semble: disabled for this project"`; `awaiting_reload` -> resume-nudge + `additionalContext`; `error` -> `"semble: error - ..."`; любая другая непустая `phase` -> `"semble: <phase>"` |
-| ~~`semble-reminder.mjs`~~ (РЕТАЙРЕН 5.0.0) | Header прямо запрещает `permissionDecision`, deny и `updatedInput`. `THROTTLE_MS = 600_000`. `SEARCH_RE = /(?:^\|[\|;&(]\|&&\|\|\|)\s*(?:command\s+)?(grep\|egrep\|fgrep\|ugrep\|rg\|ag\|ack\|find\|bfs)\b/`. Маркер троттла - mtime файла `<cwd>/.claude/semble/.reminder-ts`; `writeFileSync` в `touch()` - ЕДИНСТВЕННАЯ runtime-запись во всей hook-системе semble. `isExactIntent()` смещён в молчание: любое сомнение -> `true` (правила a-g). Для нативного `Grep`: `output_mode` `files_with_matches`/`count` -> молчание. Команда, содержащая `semble` (lowercase) -> молчание |
-| ~~`semble-explore.mjs`~~ (РЕТАЙРЕН 5.0.0) | `SubagentStart`, гейт `input.agent_type === 'Explore'`, никакого троттла, `additionalContext` про прямой вызов `mcp__semble_code__search` без ToolSearch |
+| `semble-reminder.mjs` (снимок ДО 5.0.0; восстановленная версия переписана - счётчик `.claude/semble/reminder.json`, каждый N-й вызов, `tool_use_id` в телеметрии) | Header прямо запрещает `permissionDecision`, deny и `updatedInput`. `THROTTLE_MS = 600_000`. `SEARCH_RE = /(?:^\|[\|;&(]\|&&\|\|\|)\s*(?:command\s+)?(grep\|egrep\|fgrep\|ugrep\|rg\|ag\|ack\|find\|bfs)\b/`. Маркер троттла - mtime файла `<cwd>/.claude/semble/.reminder-ts`; `writeFileSync` в `touch()` - ЕДИНСТВЕННАЯ runtime-запись во всей hook-системе semble. `isExactIntent()` смещён в молчание: любое сомнение -> `true` (правила a-g). Для нативного `Grep`: `output_mode` `files_with_matches`/`count` -> молчание. Команда, содержащая `semble` (lowercase) -> молчание |
+| ~~`semble-explore.mjs`~~ (РЕТАЙРЕН ОКОНЧАТЕЛЬНО) | `SubagentStart`, гейт `input.agent_type === 'Explore'`, никакого троттла, `additionalContext` про прямой вызов `mcp__semble_code__search` без ToolSearch. Замена - `semble-subagent.mjs`: без гейта по типу, пишет `agent_type`/`agent_id` в телеметрию |
 
 ### Блоб settings.json (`assets/INSTALL.md` section 4 и `merge_settings()` в `semble-guidance.sh`)
 
 Обе копии идентичны, `want`-таблица ДО 5.0.0 (актуальная - `SG_WANT_TABLE` в
 `scripts/semble-guidance.sh`: `SessionStart` / `UserPromptSubmit` / `PostToolUse` /
-`PostToolUseFailure`):
+`PostToolUseFailure` / `PreToolUse`+`Bash|Grep` / `SubagentStart` без matcher):
 
 ```
 ["SessionStart", null,      "semble-session.mjs",  5]
@@ -70,7 +89,7 @@
 |----------|--------------------|
 | Ключ дедупликации | `event + matcher + full path` (не путь один) - иначе регистрация `Grep` молча терялась бы, т.к. reminder законно встречается дважды |
 | Prune стальных путей | сравнение по ПОЛНОМУ пути с `wanted`; фильтрация внутри `entry.hooks[]`, entry удаляется только когда опустел; чужой hook рядом со стальным выживает |
-| Post-write assertion | перечитать файл и потребовать ровно 1 вхождение на каждую из 4 пар event+matcher+script и ровно 1 вхождение каждого tool в `permissions.allow`, иначе `exit 1` |
+| Post-write assertion | перечитать файл и потребовать ровно 1 вхождение на каждую из 6 троек event+matcher+script и ровно 1 вхождение каждого tool в `permissions.allow`, иначе `exit 1` |
 | Abort-гейт | `settings.json` не-JSON или не-объект -> ничего не пишется, `exit 1`; в скрипте это preflight ДО записи rule/CLAUDE.md/hooks |
 
 `state.json` не содержит ни одного числового/монотонного ключа

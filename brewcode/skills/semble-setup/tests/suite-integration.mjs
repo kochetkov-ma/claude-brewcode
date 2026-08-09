@@ -447,18 +447,21 @@ check('guidance: keys', keysOf(R.guidance),
     'settingsFile', 'staleEntries', 'version', 'wantCount', 'wiredCount'],
   'the §9.1 guidance shape plus the derived wiredCount/wantCount, the migration list, and the '
   + 'installed-vs-plugin stamp pair that carries the stale-artifacts signal');
-check('guidance: hooks sub-keys', keysOf(R.guidance.hooks), ['prefetch', 'session', 'stats'],
-  'hooks collapses to three file-presence strings, one per LIVE hook');
+check('guidance: hooks sub-keys', keysOf(R.guidance.hooks),
+  ['prefetch', 'reminder', 'session', 'stats', 'subagent'],
+  'hooks collapses to five file-presence strings, one per LIVE hook');
 check('guidance: flattened states',
   [R.guidance.rule, R.guidance.claudeMd, R.guidance.hooks.session, R.guidance.hooks.prefetch,
-    R.guidance.hooks.stats],
+    R.guidance.hooks.stats, R.guidance.hooks.reminder, R.guidance.hooks.subagent],
   [rawGuid.rule.state, rawGuid.claudeMd.state,
-    rawGuid.hooks.session.file, rawGuid.hooks.prefetch.file, rawGuid.hooks.stats.file],
+    rawGuid.hooks.session.file, rawGuid.hooks.prefetch.file, rawGuid.hooks.stats.file,
+    rawGuid.hooks.reminder.file, rawGuid.hooks.subagent.file],
   'each flattened field equals the sibling sub-object it was taken from');
 check('guidance: installed states', [R.guidance.rule, R.guidance.claudeMd,
-  R.guidance.hooks.session, R.guidance.hooks.prefetch, R.guidance.hooks.stats],
-['managed', 'present', 'present', 'present', 'present'],
-'after a real install: managed rule, marker block in CLAUDE.md, all three hook files copied');
+  R.guidance.hooks.session, R.guidance.hooks.prefetch, R.guidance.hooks.stats,
+  R.guidance.hooks.reminder, R.guidance.hooks.subagent],
+['managed', 'present', 'present', 'present', 'present', 'present', 'present'],
+'after a real install: managed rule, marker block in CLAUDE.md, all five hook files copied');
 check('guidance: nothing retired left over', [R.guidance.retired, rawGuid.hooks.retired], [[], []],
   'a fresh install has no v1 hook file to migrate away');
 check('guidance: settingsFile + staleEntries + permissionsWired',
@@ -467,12 +470,12 @@ check('guidance: settingsFile + staleEntries + permissionsWired',
   'project settings path, no stale entries, both tool permissions wired');
 check('guidance: wiredCount fully wired',
   [R.guidance.wiredCount, R.guidance.wantCount, rawGuid.hooks.wiredCount, rawGuid.hooks.wantCount],
-  [4, 4, 4, 4],
-  'all four entries (SessionStart + UserPromptSubmit/prefetch + PostToolUse/stats'
-  + ' + PostToolUseFailure/stats) are registered');
+  [6, 6, 6, 6],
+  'all six entries (SessionStart + UserPromptSubmit/prefetch + PostToolUse/stats'
+  + ' + PostToolUseFailure/stats + PreToolUse/reminder + SubagentStart/subagent) are registered');
 
 // Partial wiring: strip the UserPromptSubmit entry only. Independent truth is
-// 3 of 4 registered entries, which is also what semble-guidance.sh reports.
+// 5 of 6 registered entries, which is also what semble-guidance.sh reports.
 const P2 = join(WORLD, 'p-partial');
 const p2Env = { SEMBLE_PROJECT_ROOT: P2 };
 write(join(P2, 'src/app.py'), `def main():\n    return 1\n# ${PAD}\n`);
@@ -491,16 +494,17 @@ check('partial: exactly one prefetch entry existed to remove',
 
 const rawGuid2 = safeParse(run(GUIDANCE_SH, ['status', '--json'], p2Env).stdout);
 const R2 = safeParse(runStatus(['--section', 'guidance', '--json'], p2Env).stdout);
-check('partial: sibling counts 3 of 4 entries',
+check('partial: sibling counts 5 of 6 entries',
   [rawGuid2.hooks.session.wired, rawGuid2.hooks.prefetch.wired,
-    rawGuid2.hooks.stats.wired, rawGuid2.hooks.wiredCount, rawGuid2.hooks.wantCount],
-  [true, false, true, 3, 4],
-  'semble-guidance.sh counts registered entries: SessionStart + both stats rows = 3,'
-  + ' prefetch not wired');
+    rawGuid2.hooks.stats.wired, rawGuid2.hooks.reminder.wired, rawGuid2.hooks.subagent.wired,
+    rawGuid2.hooks.wiredCount, rawGuid2.hooks.wantCount],
+  [true, false, true, true, true, 5, 6],
+  'semble-guidance.sh counts registered entries: SessionStart + both stats rows + reminder'
+  + ' + subagent = 5, prefetch not wired');
 check('partial: guidance.wiredCount agrees with the sibling',
-  [R2.guidance.wiredCount, rawGuid2.hooks.wiredCount, R2.guidance.wantCount], [3, 3, 4],
+  [R2.guidance.wiredCount, rawGuid2.hooks.wiredCount, R2.guidance.wantCount], [5, 5, 6],
   'status reads guidance.hooks.wiredCount instead of re-deriving it, so a missing prefetch'
-  + ' row reports 3/4 on both sides');
+  + ' row reports 5/6 on both sides');
 check('partial: section filter emits guidance only', keysOf(R2),
   ['generatedAt', 'guidance', 'nextStep', 'pin', 'platform', 'projectRoot', 'schema', 'verdict'],
   '--section guidance adds exactly one section to the header + verdict');
@@ -523,11 +527,12 @@ write(join(P3, 'CLAUDE.md'), `# CLAUDE.md\n\n${PAD}\n`);
 const rawGuid3 = safeParse(run(GUIDANCE_SH, ['status', '--json'], p3Env).stdout);
 const R3 = safeParse(runStatus(['--section', 'all', '--json'], p3Env).stdout);
 check('bare: wiredCount zero both sides', [R3.guidance.wiredCount, rawGuid3.hooks.wiredCount], [0, 0],
-  'nothing installed => 0/4 on both sides');
+  'nothing installed => 0/6 on both sides');
 check('bare: guidance states', [R3.guidance.rule, R3.guidance.claudeMd,
   R3.guidance.hooks.session, R3.guidance.hooks.prefetch, R3.guidance.hooks.stats,
+  R3.guidance.hooks.reminder, R3.guidance.hooks.subagent,
   R3.guidance.permissionsWired],
-['absent', 'absent', 'missing', 'missing', 'missing', false],
+['absent', 'absent', 'missing', 'missing', 'missing', 'missing', 'missing', false],
 'an untouched project reports everything absent');
 check('bare: no section degraded to an error placeholder',
   SECTIONS.filter((k) => hasError(R3[k])), [],
@@ -720,8 +725,19 @@ check('lifecycle: guidance artefacts on disk',
   [existsSync(join(LIFE, '.claude/rules/semble-first.md')),
     existsSync(join(LIFE, '.claude/hooks/semble-session.mjs')),
     existsSync(join(LIFE, '.claude/hooks/semble-prefetch.mjs')),
-    existsSync(join(LIFE, '.claude/hooks/semble-stats.mjs'))],
-  [true, true, true, true], 'rule + all three hook assets landed in the project');
+    existsSync(join(LIFE, '.claude/hooks/semble-stats.mjs')),
+    existsSync(join(LIFE, '.claude/hooks/semble-reminder.mjs')),
+    existsSync(join(LIFE, '.claude/hooks/semble-subagent.mjs'))],
+  [true, true, true, true, true, true], 'rule + all five hook assets landed in the project');
+check('lifecycle: hooks dir holds exactly the five current assets',
+  readdirSync(join(LIFE, '.claude/hooks')).sort(),
+  ['semble-prefetch.mjs', 'semble-reminder.mjs', 'semble-session.mjs',
+    'semble-stats.mjs', 'semble-subagent.mjs'],
+  'install --part all writes the whole want-table file set and leaves no retired v1 hook behind');
+check('lifecycle: install wired the full want table',
+  (() => { const h = safeParse(run(GUIDANCE_SH, ['status', '--json'], lifeEnv).stdout).hooks;
+    return [h.wiredCount, h.wantCount]; })(),
+  [6, 6], 'six settings entries over five files: stats spans PostToolUse + PostToolUseFailure');
 
 // resume: a new session observes the live server, verifies, goes ready
 run(STATE_SH, ['phase', 'verifying'], lifeEnv);
@@ -773,8 +789,14 @@ check('lifecycle: guidance + state removed',
     existsSync(join(LIFE, '.claude/rules/semble-first.md')),
     existsSync(join(LIFE, '.claude/hooks/semble-session.mjs')),
     existsSync(join(LIFE, '.claude/hooks/semble-prefetch.mjs')),
-    existsSync(join(LIFE, '.claude/hooks/semble-stats.mjs'))],
-  [false, false, false, false, false], 'state dir, rule and all three hooks are gone');
+    existsSync(join(LIFE, '.claude/hooks/semble-stats.mjs')),
+    existsSync(join(LIFE, '.claude/hooks/semble-reminder.mjs')),
+    existsSync(join(LIFE, '.claude/hooks/semble-subagent.mjs'))],
+  [false, false, false, false, false, false, false],
+  'state dir, rule and all five hooks are gone');
+check('lifecycle: no semble hook file survives the removal',
+  readdirSync(join(LIFE, '.claude/hooks')).filter((f) => f.startsWith('semble-')).sort(), [],
+  'remove integration sweeps the hooks dir by name, not by the three-file v1 list');
 check('lifecycle: ~/.claude.json byte-identical', sha(LIFE_CJ), claudeJsonBefore,
   'remove integration leaves the MCP registration untouched');
 check('lifecycle: claude mcp remove was never called',

@@ -48,7 +48,7 @@ EOF
 #       reached `ready` first. `absent -> disabled` stays illegal: you cannot
 #       disable a setup that never happened.
 # NOT legal, deliberately: awaiting_reload -> ready. `verifying` is the only
-# gate in front of `ready`, and `ready` is what the three hooks read to decide
+# gate in front of `ready`, and `ready` is what the five hooks read to decide
 # whether to advertise the MCP tools. The resume path therefore writes
 # `verifying` before it starts verifying and `ready` only after (SKILL.md §4).
 # Identity transitions are legal so a re-run is idempotent.

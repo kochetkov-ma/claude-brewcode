@@ -14,11 +14,12 @@ wires nothing on its own.
 | `semble-session.mjs` | `<repo>/.claude/hooks/` | SessionStart | `systemMessage` + `additionalContext` |
 | `semble-prefetch.mjs` | `<repo>/.claude/hooks/` | UserPromptSubmit | `additionalContext` — top-3 candidate PATHS from a real search |
 | `semble-stats.mjs` | `<repo>/.claude/hooks/` | PostToolUse + PostToolUseFailure | **nothing** — appends JSONL telemetry, replies `{}` |
+| `semble-reminder.mjs` | `<repo>/.claude/hooks/` | PreToolUse `Bash\|Grep` | `additionalContext` — one throttled nudge before a text search |
+| `semble-subagent.mjs` | `<repo>/.claude/hooks/` | SubagentStart (no matcher — every agent type) | `additionalContext` — the semble-first brief inside the subagent's own context |
 
-> Retired in 5.0.0: `semble-reminder.mjs` (PreToolUse `Bash`/`Grep`) and
-> `semble-explore.mjs` (SubagentStart `Explore`). Both were pure advice and both
-> converted at zero; `semble-prefetch.mjs` replaces them. `install` and `upgrade`
-> DELETE the two files and un-wire their settings rows — see §4.
+> Retired for good: `semble-explore.mjs` (SubagentStart `Explore` only).
+> `semble-subagent.mjs` supersedes it and covers every agent type. `install` and
+> `upgrade` DELETE that file and replace its settings row — see §4.
 
 > Pure ESM, Node built-ins only, no plugin-root and no npm deps. Each reads
 > stdin, never throws, prints exactly one JSON object and exits 0. Only
@@ -36,7 +37,7 @@ scripts/semble-guidance.sh remove  [--part ...|all] [--force] [--json]
 ```
 
 `install --part all` does, in order: rule -> `.sembleignore` -> CLAUDE.md block
--> copy the three `.mjs` (deleting any retired one) -> `.gitignore` line
+-> copy the five `.mjs` (deleting any retired one) -> `.gitignore` line
 -> settings hooks + permissions
 merge. Every step is
 idempotent and re-runnable. `--json` prints one object
@@ -201,16 +202,39 @@ Reads exactly one file, `<cwd>/.claude/semble/state.json`.
 
 ### `semble-prefetch.mjs` — UserPromptSubmit, no matcher
 
-**It replaces the two advisory hooks that shipped before 5.0.0.** They emitted
-`additionalContext` telling the model to prefer semble, and converted at
-**zero**: 0/18 on the main channel (95% upper bound 15.4%), 0/11 on the
-Explore/subagent channel (upper bound 23.8%). Delivery was proven independently
-three ways — a transcript `hook_additional_context` attachment record, a canary
-session that quoted the injected sentence back verbatim, and 11/11 subagent
-initial contexts containing it. The model receives the advice and ignores it.
-This hook runs the search itself and hands over the **result** instead: measured
-5/6 sessions opened an injected path, 5/6 cited one, at fewer tool calls than
-control in 5/6 questions and ~15% lower mean cost.
+**It hands over a result, where the advisory hooks hand over advice.** It runs
+the search itself and injects paths: measured 5/6 sessions opened an injected
+path, 5/6 cited one, at fewer tool calls than control in 5/6 questions and ~15%
+lower mean cost. That is a different job from the advisory channel, not a
+replacement for it — both are installed.
+
+> **Correcting the 5.0.0 retirement rationale.** 5.0.0 deleted
+> `semble-reminder.mjs` and `semble-explore.mjs` citing "0/18 and 0/11 measured
+> conversion". Re-examined against the raw telemetry, that claim does not hold:
+>
+> - **The delivery channel was never broken.** `PreToolUse` and `SubagentStart`
+>   both accept `additionalContext` and both deliver it — confirmed in the zod
+>   union, in the consumption path, and in live sessions.
+> - **`0/18` measured nothing.** The reminder hook fired ZERO times across those
+>   18 sessions: its own gate suppressed 74 of 113 invocations, 37 more were
+>   `disabled`, 2 throttled. Lifetime fire rate was 14/2718 = 0.52%. The 18 is a
+>   count of sessions, not of deliveries — a rate with an empty numerator AND an
+>   empty denominator.
+> - **`0/11` was a real measurement**, but of one agent type (`Explore` was the
+>   only matcher) and of text that ended by undercutting its own instruction.
+>
+> Per-channel conversion on the accumulated telemetry, once the sources are no
+> longer lumped into one denominator: reminder 2/10 sessions, explore 1/7. The
+> lumped 6/80 (7.5%) that the old reader printed was dominated by the 126
+> SessionStart nudges in the same bucket.
+>
+> Both hooks are therefore restored — the reminder under its own name, the
+> subagent one as `semble-subagent.mjs` on every agent type. **What the restored
+> design has not yet measured is its own conversion**: the gate is rewritten and
+> the subagent text is new, so the honest statement today is that the channel
+> delivers and the old numbers were not evidence against it. Nothing here claims
+> the restored hooks convert well; `--section telemetry` now reports each channel
+> separately so the next release can say something measured.
 
 > **It buys turns and citation precision, not correctness.** All 18 answers were
 > correct in all three arms (control, snippet-framing, path-framing). Nothing in
@@ -249,8 +273,9 @@ ten minutes until the MCP server has warmed the same cache directory. A separate
 rate limiter — the gate already suppresses ~64% of prompts).
 
 Both live in ONE file, `<cwd>/.claude/semble/.prefetch-ts`, holding
-`{"t":<epoch-ms>,"cool":<epoch-ms>}`, so the install needs exactly one
-`.gitignore` line.
+`{"t":<epoch-ms>,"cool":<epoch-ms>}`. A search that ran and matched nothing
+arms the 30 s `t` throttle like any other completed search — only a search that
+could not be trusted (`null`) arms `cool`.
 
 #### Decision order
 
@@ -438,10 +463,12 @@ Every record carries `ts` (`new Date().toISOString()`), `ev`, `src`, and `sid`
 | `open` | `stats` | `f` (repo-relative path, ≤200 chars), `abs` (absolute path, ≤200 chars), `agent` — one per `Read` |
 | `call` | `stats` | `tool` (full MCP name), `ok` (bool), `ms` (int, **omitted** when the payload had no `duration_ms`), `agent` |
 | `search` | `stats` | `tool`, `q` (≤120 chars), `agent` |
+| `gate` | `reminder` | `fired` (bool), `why`, `phase`, `enabled`, `tool_use_id` — one per PreToolUse invocation, fired or not |
+| `nudge` | `reminder` | `matcher` (the tool name), `agent`, `tool_use_id`, `n`, `every`, `q` |
+| `nudge` | `subagent` | `agent_type`, `agent_id` — one per subagent start that was nudged |
 
-Retired in 5.0.0: `ev:"gate"` and `ev:"nudge"` with `src` `reminder`/`explore`.
-The reader still tolerates them in an old log and reports them under a
-`[retired hooks]` label; nothing writes them any more.
+`src:"explore"` appears only in logs written before 5.0.0. The reader still
+counts it as its own channel; nothing writes it any more.
 
 **The conversion join — computable from the log alone, no re-run.** For each
 `prefetch` record with `fired:true`, an injected path CONVERTED when some later
@@ -452,6 +479,24 @@ The reader still tolerates them in an old log and reports them under a
 post-release headline number is **sessionPct: the fraction of sessions where an
 injected candidate was subsequently opened** — the same quantity that measured
 5/6 in the pre-release trial.
+
+**Conversion is reported PER SOURCE, never lumped.** A nudge converts when a
+semble `call` in the same `sid` has a `ts` strictly greater than the earliest
+nudge *of that source* in that session. `conversion.bySource` carries one slot
+per channel — `session`, `reminder`, `subagent`, `prefetch`, plus any source
+seen only in an old log — each with `nudges` / `sessions` / `converted` /
+`sessionPct` / `callsAfter` and a `measure` field naming what conversion means
+there (`semble-call-after` for the three advisory channels;
+`injected-path-opened` for prefetch, which already ran the search, so "a semble
+call followed" would be meaningless). `reminder` additionally reports
+`toolUses` (distinct `tool_use_id`) and `subagent` reports `agentTypes` (a count
+per agent type).
+
+The top-level `sessionsWithNudge`/`sessionsConverted`/`conversionPct` fields are
+unchanged in shape and still lump every channel together — they are kept for
+compatibility, and they are the fields that produced the false "0/18" reading:
+126 SessionStart nudges shared a denominator with 30 firings from the two
+advisory hooks, so no channel's own rate was ever visible.
 
 Writer rules, binding on every hook that logs:
 
@@ -470,7 +515,7 @@ version are **counted and skipped**, never fatal.
 
 ## 4. settings.json entry shape
 
-`<absdir>` = absolute path of the hooks dir the three files were copied into
+`<absdir>` = absolute path of the hooks dir the five files were copied into
 (`<repo>/.claude/hooks`).
 
 ```json
@@ -487,6 +532,12 @@ version are **counted and skipped**, never fatal.
     ],
     "PostToolUseFailure": [
       { "matcher": "mcp__semble_code__search|mcp__semble_code__find_related|Bash|Grep|Glob|Read", "hooks": [ { "type": "command", "command": "node", "args": ["<absdir>/semble-stats.mjs"], "timeout": 5 } ] }
+    ],
+    "PreToolUse": [
+      { "matcher": "Bash|Grep", "hooks": [ { "type": "command", "command": "node", "args": ["<absdir>/semble-reminder.mjs"], "timeout": 5 } ] }
+    ],
+    "SubagentStart": [
+      { "hooks": [ { "type": "command", "command": "node", "args": ["<absdir>/semble-subagent.mjs"], "timeout": 5 } ] }
     ]
   },
   "permissions": {
@@ -499,16 +550,19 @@ version are **counted and skipped**, never fatal.
 Claude Code's 600 s default, so a hung `node` on `UserPromptSubmit` would stall
 every prompt for 10 minutes. 5 s is ~7x the measured p90 of the one hook that
 does real work (`semble-prefetch.mjs`, which caps its own child at 3 s) and
-~500x the runtime of the other two.
+~500x the runtime of the other four.
 
 The marker for all semble entries is `args` containing a path whose basename is
-one of the **five names this skill has ever owned** —
-`semble-session.mjs`, `semble-prefetch.mjs`, `semble-stats.mjs` and the retired
-`semble-reminder.mjs`, `semble-explore.mjs`. Ownership (`marks`) and desire
+one of the **six names this skill has ever owned** —
+`semble-session.mjs`, `semble-prefetch.mjs`, `semble-stats.mjs`,
+`semble-reminder.mjs`, `semble-subagent.mjs` and the retired
+`semble-explore.mjs`. Ownership (`marks`) and desire
 (`live`) are deliberately SEPARATE lists: `wanted` is built from `live` only, so
 a retired hook sitting at the CURRENT hooks dir is stale by construction and the
-step-2 purge removes it. Building `wanted` from `marks` — the pre-5.0.0 bug —
-made every retired row survive forever. A retired basename must never leave
+step-2 purge removes it — which is also what REPLACES a stale
+`SubagentStart`/`Explore` row with the unmatched `semble-subagent.mjs` row
+rather than leaving the two side by side. Building `wanted` from `marks` — the
+pre-5.0.0 bug — made every retired row survive forever. A retired basename must never leave
 `marks`, or an old install becomes unowned and unremovable. This is also exactly why the
 `{hooks:[{type,command:"node",args:[abs],timeout}]}` form is mandatory. An entry
 written as `command: "node /abs/x.mjs"` has no `args` and would be invisible to
@@ -550,16 +604,20 @@ both the stale-path purge and the uninstall.
 5. **Assert BEFORE the write, then re-read and assert again**: exactly 1
    `SessionStart` entry, exactly 1 `UserPromptSubmit` entry, exactly 1
    `PostToolUse`/`<stats matcher>`, exactly 1 `PostToolUseFailure`/`<stats
-   matcher>`, each carrying exactly one semble hook deep-equal to the desired
-   hook, and each tool name present exactly once in `permissions.allow`.
-   Anything else exits 1. The pre-write check is the load-bearing one: a
-   post-write-only assert reports the failure *after* it has already saved the
-   bad file.
-6. **Delete events the purge emptied.** `PreToolUse` and `SubagentStart` exist in
-   a v1-shaped settings file only to carry the retired hooks; once step 2 has
-   emptied them and they are not in the want table, the empty arrays are removed
-   rather than left as `[]` litter. An event that still holds a foreign hook is
-   left alone.
+   matcher>`, exactly 1 `PreToolUse`/`Bash|Grep`, exactly 1 unmatched
+   `SubagentStart`, each carrying exactly one semble hook deep-equal to the
+   desired hook, and each tool name present exactly once in
+   `permissions.allow`. Anything else exits 1. The pre-write check is the
+   load-bearing one: a post-write-only assert reports the failure *after* it has
+   already saved the bad file.
+6. **Delete events the purge emptied.** An event array left empty by step 2 and
+   absent from the want table is removed rather than left as `[]` litter. An
+   event that still holds a foreign hook is left alone. `PreToolUse` and
+   `SubagentStart` are want events again, so their arrays are never dropped —
+   a v1-shaped file's `PreToolUse`/`Bash` + `PreToolUse`/`Grep` pair collapses
+   into the single `Bash|Grep` row, and a stale `SubagentStart`/`Explore` row
+   pointing at the retired `semble-explore.mjs` is purged by step 2 and
+   **replaced** by the unmatched `semble-subagent.mjs` row in step 3.
 
 **EXECUTE** merge (project, Bash tool). `SETTINGS`/`HOOKS_DIR` are the only
 inputs; this is the canonical block — use it, not a hand `Edit`, because it is
@@ -572,15 +630,19 @@ const fs=require("fs"), path=require("path");
 const f=process.env.SETTINGS, dir=process.env.HOOKS_DIR;
 // EVERY basename this skill has ever owned - ownership, for isMine/purge/uninstall.
 const marks=["semble-session.mjs","semble-prefetch.mjs","semble-stats.mjs",
-             "semble-reminder.mjs","semble-explore.mjs"];   // last two retired in 5.0.0
+             "semble-reminder.mjs","semble-subagent.mjs",
+             "semble-explore.mjs"];                     // last one retired for good
 // What is wanted NOW. `wanted` is built from THIS list, not from marks - that is
 // what makes a retired hook at the current dir stale and purges it.
-const live=["semble-session.mjs","semble-prefetch.mjs","semble-stats.mjs"];
+const live=["semble-session.mjs","semble-prefetch.mjs","semble-stats.mjs",
+            "semble-reminder.mjs","semble-subagent.mjs"];
 const STATS="mcp__semble_code__search|mcp__semble_code__find_related|Bash|Grep|Glob|Read";
 const want=[["SessionStart",null,"semble-session.mjs",5],
             ["UserPromptSubmit",null,"semble-prefetch.mjs",5],
             ["PostToolUse",STATS,"semble-stats.mjs",5],
-            ["PostToolUseFailure",STATS,"semble-stats.mjs",5]];
+            ["PostToolUseFailure",STATS,"semble-stats.mjs",5],
+            ["PreToolUse","Bash|Grep","semble-reminder.mjs",5],
+            ["SubagentStart",null,"semble-subagent.mjs",5]];   // no matcher = every agent type
 const tools=["mcp__semble_code__search","mcp__semble_code__find_related"];
 let s={};
 if(fs.existsSync(f)){
@@ -684,22 +746,23 @@ console.log("OK merged "+f);
 ### Drift, and what `status` must report
 
 Presence is not health. `semble-guidance.sh status --json` compares every want row
-against the file field by field and reports the four rows as `wired` / `drifted` /
+against the file field by field and reports the six rows as `wired` / `drifted` /
 `duplicate` / `missing`:
 
 ```json
 "hooks": {
-  "wiredCount": 3, "wantCount": 4, "driftedCount": 1, "missingCount": 0, "duplicateCount": 0,
+  "wiredCount": 5, "wantCount": 6, "driftedCount": 1, "missingCount": 0, "duplicateCount": 0,
   "entries": [ { "event": "UserPromptSubmit", "matcher": null,
                  "script": "semble-prefetch.mjs", "count": 1, "state": "drifted" } ],
   "drift":   [ { "event": "UserPromptSubmit", "matcher": null,
                  "script": "semble-prefetch.mjs", "field": "timeout",
                  "expected": 5, "actual": 5000 } ],
-  "retired": ["semble-reminder.mjs"]
+  "retired": ["semble-explore.mjs"]
 }
 ```
 
-`hooks.session.wired` / `hooks.prefetch.wired` / `hooks.stats.wired` and
+`hooks.session.wired` / `hooks.prefetch.wired` / `hooks.stats.wired` /
+`hooks.reminder.wired` / `hooks.subagent.wired` and
 `hooks.wiredCount` mean **present AND conforming** — a row
 with `"timeout": 5000` is `drifted`, counted in `driftedCount`, and is **not**
 counted as wired. Reporting it as fully wired is what let two installs sit broken
@@ -717,7 +780,7 @@ naming `event`, `matcher`, `script`, `field`, `expected` and `actual`. A missing
 contributes no `drift[]` entries — its `entries[]` state is `missing`. The fix for
 any non-`wired` row is the same: re-run the merge above, which rewrites it in place.
 
-**EXECUTE** copy the three hook files first, and DELETE any retired one left by
+**EXECUTE** copy the five hook files first, and DELETE any retired one left by
 an older install — copying without deleting leaves a wired-then-unwired `.mjs`
 on disk and `status` reports it under `hooks.retired` forever (project, Bash
 tool; `SRC` = the directory holding THIS runbook, i.e. the skill's `assets/`):
@@ -726,10 +789,12 @@ tool; `SRC` = the directory holding THIS runbook, i.e. the skill's `assets/`):
 SRC="$(dirname "$RUNBOOK")"
 DST="$PWD/.claude/hooks"
 mkdir -p "$DST" && \
-cp "$SRC/semble-session.mjs" "$SRC/semble-prefetch.mjs" "$SRC/semble-stats.mjs" "$DST/" && \
-rm -f "$DST/semble-reminder.mjs" "$DST/semble-explore.mjs" && \
+cp "$SRC/semble-session.mjs" "$SRC/semble-prefetch.mjs" "$SRC/semble-stats.mjs" \
+   "$SRC/semble-reminder.mjs" "$SRC/semble-subagent.mjs" "$DST/" && \
+rm -f "$DST/semble-explore.mjs" && \
 node --check "$DST/semble-session.mjs" && node --check "$DST/semble-prefetch.mjs" && \
-node --check "$DST/semble-stats.mjs" && \
+node --check "$DST/semble-stats.mjs" && node --check "$DST/semble-reminder.mjs" && \
+node --check "$DST/semble-subagent.mjs" && \
 echo "✅ copied + verified in $DST" || echo "❌ FAILED"
 ```
 
@@ -753,15 +818,20 @@ override it.
 
 `semble-prefetch.mjs` writes `<repo>/.claude/semble/.prefetch-ts` next to the
 state file: ONE file holding `{"t":<epoch-ms>,"cool":<epoch-ms>}` — the 30 s
-throttle and the 600 s failure cooldown share it precisely so the install needs
-exactly ONE ignore line. Install appends
+throttle and the 600 s failure cooldown share it. It is not the only thing in
+that directory: `state.json` lives there, `semble-reminder.mjs` keeps its
+counter in `reminder.json`, and every hook appends
+`telemetry.jsonl`, which records verbatim shell commands and distilled prompt
+text and is trimmed at 2 MB. So the ignored unit is the DIRECTORY. Install
+appends
 
 ```
 # brewcode:semble
-.claude/semble/.prefetch-ts
+.claude/semble/
 ```
 
-and, migrating a v1 repo, drops the retired `.claude/semble/.reminder-ts` line.
+and drops the two lines it supersedes — the retired `.claude/semble/.reminder-ts`
+of a v1 repo and the per-marker `.claude/semble/.prefetch-ts` of a 5.1.0 one.
 
 to `<repo>/.gitignore`. The outcome is **verified by re-reading the file**, never
 inferred from the exit status of the write — a silent "unchanged" over a tracked
@@ -785,7 +855,8 @@ entries since).
 
 Do NOT unwire the hooks to mute them. Flip the project state instead:
 `enabled:false` (or `phase:"disabled"`) in `<repo>/.claude/semble/state.json`
-makes `semble-session.mjs` and `semble-prefetch.mjs` go quiet immediately
+makes `semble-session.mjs`, `semble-prefetch.mjs`, `semble-reminder.mjs` and
+`semble-subagent.mjs` go quiet immediately
 (`semble-stats.mjs` keeps measuring — it is state-independent by design, so a
 disabled period is still visible in the log). They read the state on every call,
 so no restart is needed. That is what `/brewcode:semble-setup disable` and `enable` do via
@@ -797,12 +868,12 @@ settings entries all stay in place.
 ## 6. UNINSTALL
 
 `scripts/semble-guidance.sh remove --part all` — or the equivalent by hand. It
-strips settings by all **five** owned basenames, retired ones included — **per
+strips settings by all **six** owned basenames, the retired one included — **per
 hook, inside `entry.hooks[]`**, so a
 foreign hook hand-merged into a semble entry survives and the entry is dropped only
 once its `hooks[]` is empty — deletes an event array that empties, the
 `hooks` object if it empties, only the two permission strings (and `allow` /
-`permissions` if they empty), then deletes all five `.mjs` files (the three live
+`permissions` if they empty), then deletes all six `.mjs` files (the five live
 ones and any retired leftover), the managed rule file and the CLAUDE.md marker
 range. Foreign hooks and every other
 settings key are never touched.
@@ -821,7 +892,7 @@ const f=process.env.SETTINGS;
 // Uninstall matches on OWNERSHIP, so the retired names stay - a v1 repo that
 // never ran the migrating install still has those rows to clean.
 const marks=["semble-session.mjs","semble-prefetch.mjs","semble-stats.mjs",
-             "semble-reminder.mjs","semble-explore.mjs"];
+             "semble-reminder.mjs","semble-subagent.mjs","semble-explore.mjs"];
 const tools=["mcp__semble_code__search","mcp__semble_code__find_related"];
 if(!fs.existsSync(f)){ console.log("no settings to clean: "+f); process.exit(0); }
 const raw=fs.readFileSync(f,"utf8");
@@ -859,10 +930,11 @@ const perm=((back.permissions&&back.permissions.allow)||[]).filter(x=>tools.incl
 if(left!==0||perm!==0){ console.error("ABORT: verification failed - "+left+" hook / "+perm+" permission entries still in "+f); process.exit(1); }
 console.log("OK cleaned "+f);
 ' && rm -f "$HOOKS_DIR/semble-session.mjs" "$HOOKS_DIR/semble-prefetch.mjs" \
-     "$HOOKS_DIR/semble-stats.mjs" "$HOOKS_DIR/semble-reminder.mjs" "$HOOKS_DIR/semble-explore.mjs" \
+     "$HOOKS_DIR/semble-stats.mjs" "$HOOKS_DIR/semble-reminder.mjs" \
+     "$HOOKS_DIR/semble-subagent.mjs" "$HOOKS_DIR/semble-explore.mjs" \
   && test ! -e "$HOOKS_DIR/semble-session.mjs" && test ! -e "$HOOKS_DIR/semble-prefetch.mjs" \
   && test ! -e "$HOOKS_DIR/semble-stats.mjs" && test ! -e "$HOOKS_DIR/semble-reminder.mjs" \
-  && test ! -e "$HOOKS_DIR/semble-explore.mjs" \
+  && test ! -e "$HOOKS_DIR/semble-subagent.mjs" && test ! -e "$HOOKS_DIR/semble-explore.mjs" \
   && echo "✅ uninstalled from $HOOKS_DIR" || echo "❌ FAILED"
 ```
 

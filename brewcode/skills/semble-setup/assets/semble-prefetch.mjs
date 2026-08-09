@@ -1,17 +1,25 @@
 #!/usr/bin/env node
-// brewcode-meta: version=5.1.0 generated_by=brewcode:semble-setup
+// brewcode-meta: version=5.2.0 generated_by=brewcode:semble-setup
 /**
  * brewcode:semble-setup — UserPromptSubmit hook (self-contained, installed into
- * a project). It replaces the two advisory hooks that shipped before it.
+ * a project). It runs alongside the advisory hooks, it does not replace them.
  *
- * WHY IT EXISTS. The advisory nudge (`semble-reminder.mjs` on PreToolUse,
- * `semble-explore.mjs` on SubagentStart) was measured at ZERO conversion: 0/18
- * on the main channel, 0/11 on the subagent channel, with delivery proven
- * independently (a transcript attachment record, a canary that quoted the
- * injected sentence back verbatim, 11/11 subagent initial contexts containing
- * it). The model receives the advice and ignores it. Prefetch — running the
- * search itself and handing over the RESULT — converted 5/6, and cost fewer
- * tool calls than control in 5/6 questions. Advice loses to evidence.
+ * WHY IT EXISTS. Prefetch runs the search itself and hands over the RESULT:
+ * measured 5/6 sessions opened an injected path, at fewer tool calls than
+ * control in 5/6 questions. That is a different mechanism from advice, aimed at
+ * the same goal.
+ *
+ * NOT A REPLACEMENT FOR THE ADVISORY HOOKS. 5.0.0 deleted `semble-reminder.mjs`
+ * and `semble-explore.mjs` citing "0/18 and 0/11 conversion". Both hooks are
+ * back, because that rationale did not survive review: the delivery channel was
+ * never broken (PreToolUse and SubagentStart both accept and deliver
+ * `additionalContext`), and `0/18` had an empty numerator AND an empty
+ * denominator — the reminder fired zero times in those 18 sessions (its own gate
+ * suppressed 74/113, 37 were `disabled`, 2 throttled; lifetime 14/2718 = 0.52%).
+ * The `0/11` figure was real but covered a single agent type on text that
+ * undercut itself. Per-channel conversion on the accumulated log is reminder
+ * 2/10 sessions and explore 1/7 — not zero. The restored hooks' own conversion
+ * is NOT yet measured.
  *
  * WHAT IT SHIPS: paths, never snippets. With 5 hits carrying path+lines+snippet
  * and no directive, conversion was 2/6 and in 2/6 sessions the model answered
@@ -435,7 +443,8 @@ function coolWindow(marker) {
  * `{hits, why}`. `hits === null` is the signal to park the mechanism, and `why`
  * says for how long: `search-timeout` (transient, one minute) or
  * `search-failed` (standing condition, ten minutes). `hits === []` — a search
- * that ran and found nothing — is not a failure and parks nothing.
+ * that ran and found nothing — is not a failure: it arms the ordinary 30 s
+ * throttle, never a cooldown.
  *
  * SEMBLE_CACHE_LOCATION is the load-bearing env entry: without it the child
  * silently uses semble's default root, which is NOT the root the MCP server was
@@ -446,8 +455,15 @@ function search(cwd, cacheRoot, query) {
   try {
     out = execFileSync(
       'uvx',
-      ['--from', PIN_SPEC, 'semble', 'search', query, cwd,
-        '--content', ...CONTENT_ARGS, '-k', String(TOP_K), '--max-snippet-lines', '0'],
+      // Options FIRST, then `--`, then the positionals. The distiller puts backticked
+      // text at the front, so a prompt like ``what does `-k` do`` distils to exactly
+      // `-k`, and argparse reads a lone leading-dash argv as an option: rc!=0 ->
+      // search-failed -> the ten-minute cooldown, for a well-formed question. `--`
+      // has to come after the flags — argparse stops parsing options at it too, so
+      // trailing flags would be swallowed as positionals.
+      ['--from', PIN_SPEC, 'semble', 'search',
+        '--content', ...CONTENT_ARGS, '-k', String(TOP_K), '--max-snippet-lines', '0',
+        '--', query, cwd],
       {
         cwd,
         encoding: 'utf8',
@@ -537,7 +553,13 @@ function decide(input, cwd) {
     });
     return skip(r.why, { q: query.slice(0, 120), ms });
   }
-  if (!hits.length) return skip('no-hits', { q: query.slice(0, 120), ms });
+  if (!hits.length) {
+    // The search ran, so the normal 30 s throttle applies — not the failure cooldown.
+    // Without it an empty result set armed nothing and the next prompt spawned another
+    // child immediately: the throttle only ever existed after a firing.
+    writeMarker(cwd, { t: Date.now() });
+    return skip('no-hits', { q: query.slice(0, 120), ms });
+  }
 
   writeMarker(cwd, { t: Date.now() });
   telemetry(cwd, sid, 'prefetch', {

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# semble-guidance.sh — rule file, CLAUDE.md marker block, the three hooks,
+# semble-guidance.sh — rule file, CLAUDE.md marker block, the five hooks,
 # settings.json wiring and permission entries for brewcode:semble-setup.
 # Contracts: DESIGN §9.8 and §10. All JSON goes through `node -e`, never jq.
 set -euo pipefail
@@ -12,29 +12,42 @@ IGNORE_TPL="$SRC/sembleignore.template"
 SESSION_MJS="semble-session.mjs"
 PREFETCH_MJS="semble-prefetch.mjs"
 STATS_MJS="semble-stats.mjs"
-HOOK_MJS="$SESSION_MJS $PREFETCH_MJS $STATS_MJS"
-# RETIRED, v5.0.0: the two advisory hooks. `semble-reminder.mjs` (PreToolUse
-# Bash|Grep) and `semble-explore.mjs` (SubagentStart Explore) both existed only to
-# emit an advisory `additionalContext`, measured at 0/18 and 0/11 conversion with
-# delivery proven independently. They are superseded by semble-prefetch.mjs, which
-# runs the search instead of recommending it.
+REMINDER_MJS="semble-reminder.mjs"
+SUBAGENT_MJS="semble-subagent.mjs"
+HOOK_MJS="$SESSION_MJS $PREFETCH_MJS $STATS_MJS $REMINDER_MJS $SUBAGENT_MJS"
+# RESTORED after v5.1.0. Both advisory hooks are live again, redesigned.
 #
-# They stay named here FOREVER, not deleted from the list: an existing install has
-# them wired into its project settings.json and copied into .claude/hooks/. The
-# ownership predicate (`SG_MARKS`) must keep recognising them so the merge's
-# stale-purge strips the entries, and `install`/`upgrade` must keep deleting the
-# files — merely no longer writing them would leave every existing user running a
-# dead hook on every Bash call forever.
-RETIRED_MJS="semble-reminder.mjs semble-explore.mjs"
+# v5.1.0 deleted them citing "measured conversion 0/18 and 0/11 with delivery proven
+# independently". Two thirds of that is wrong:
+#   - The channel was never broken. `PreToolUse` and `SubagentStart` both accept and
+#     deliver `additionalContext` on this build - confirmed in the schema union, in the
+#     consumption path, and live.
+#   - `0/18` measured NOTHING. The reminder hook fired zero times across those 18
+#     sessions: its own gate suppressed 74 of 113 invocations, `disabled` 37, throttle 2
+#     (lifetime fire rate 14/2718 = 0.52%). 18 is a count of sessions, not deliveries.
+#   - `0/11` WAS a real measurement, but only of `SubagentStart` matcher `Explore` - one
+#     agent type - on text that ended by undercutting its own advice.
+# `semble-reminder.mjs` returns under its own name; the Explore hook is replaced by
+# `semble-subagent.mjs` on a matcher-less row, so it covers EVERY agent type
+# (Claude Code keys a `SubagentStart` matcher on `agent_type`, and an absent matcher
+# matches all of them).
+#
+# RETIRED for good: `semble-explore.mjs`. The name never comes back. It stays listed
+# here because an existing install has it wired into settings.json and copied into
+# .claude/hooks/ — the ownership predicate (`SG_MARKS`) must keep recognising it so the
+# merge's stale-purge strips its row, and `install`/`upgrade` must keep deleting the
+# file, which no longer ships.
+RETIRED_MJS="semble-explore.mjs"
 ALL_MJS="$HOOK_MJS $RETIRED_MJS"
-# Marker files the retired hooks wrote. The migration drops their .gitignore line,
-# so leaving the file behind turns an invisible throttle marker into an untracked
-# file in the user's repo - a diff for a hook that no longer exists.
+# Marker files a retired hook wrote. `.reminder-ts` was the v1 reminder's throttle
+# stamp; the restored hook keeps its counter in `.claude/semble/reminder.json`
+# instead, which the `.claude/semble/` .gitignore line already covers. Leaving the
+# old dotfile behind turns an invisible marker into an untracked file in the repo.
 RETIRED_MARKERS=".claude/semble/.reminder-ts"
 # JSON array of every basename this skill has ever owned, live and retired.
-SG_MARKS='["semble-session.mjs","semble-prefetch.mjs","semble-stats.mjs","semble-reminder.mjs","semble-explore.mjs"]'
+SG_MARKS='["semble-session.mjs","semble-prefetch.mjs","semble-stats.mjs","semble-reminder.mjs","semble-subagent.mjs","semble-explore.mjs"]'
 # JSON array of the LIVE basenames only — what `wanted` is built from.
-SG_LIVE='["semble-session.mjs","semble-prefetch.mjs","semble-stats.mjs"]'
+SG_LIVE='["semble-session.mjs","semble-prefetch.mjs","semble-stats.mjs","semble-reminder.mjs","semble-subagent.mjs"]'
 
 # Canonical want-table: [event, matcher, script, timeout-in-SECONDS]. Single source
 # of truth for the merge AND for the status conformance check — mirrored verbatim in
@@ -53,8 +66,16 @@ SG_LIVE='["semble-session.mjs","semble-prefetch.mjs","semble-stats.mjs"]'
 # to know whether an injected candidate path was actually opened is to observe the
 # Read that opened it, and that observation is what turns "the hook fired" into a
 # conversion number computable from the JSONL alone, without a re-run.
+#
+# The reminder row shares the `|`-only exact-list form: `Bash|Grep` is the pair of
+# tools whose use is the moment a semantic search would have been the cheaper move.
+# The subagent row carries NO matcher on purpose. Claude Code resolves a
+# `SubagentStart` matcher against `agent_type`, and the filter is
+# `!matcher || matches(agent_type, matcher)` — so an absent matcher is the only form
+# that covers every agent type, present and future, including project-local ones this
+# skill has never heard of. `Explore` alone (the v1 row) covered exactly one.
 SG_STATS_MATCHER='mcp__semble_code__search|mcp__semble_code__find_related|Bash|Grep|Glob|Read'
-SG_WANT_TABLE='[["SessionStart",null,"semble-session.mjs",5],["UserPromptSubmit",null,"semble-prefetch.mjs",5],["PostToolUse","'"$SG_STATS_MATCHER"'","semble-stats.mjs",5],["PostToolUseFailure","'"$SG_STATS_MATCHER"'","semble-stats.mjs",5]]'
+SG_WANT_TABLE='[["SessionStart",null,"semble-session.mjs",5],["UserPromptSubmit",null,"semble-prefetch.mjs",5],["PostToolUse","'"$SG_STATS_MATCHER"'","semble-stats.mjs",5],["PostToolUseFailure","'"$SG_STATS_MATCHER"'","semble-stats.mjs",5],["PreToolUse","Bash|Grep","semble-reminder.mjs",5],["SubagentStart",null,"semble-subagent.mjs",5]]'
 
 MODE=""
 PART="all"
@@ -168,7 +189,8 @@ const out={schema:1,
   ignore:{state:"absent",path:process.env.SG_IGNORE},
   claudeMd:{state:"absent",path:cmd,malformed:false},
   hooks:{session:{file:"missing",wired:false},prefetch:{file:"missing",wired:false},
-         stats:{file:"missing",wired:false},retired:[],
+         stats:{file:"missing",wired:false},reminder:{file:"missing",wired:false},
+         subagent:{file:"missing",wired:false},retired:[],
          settingsFile:sf,settingsParsable:true,staleEntries:0,wiredCount:0,wantCount:0,
          driftedCount:0,missingCount:0,duplicateCount:0,entries:[],drift:[]},
   permissions:{allow:[],wired:false}};
@@ -234,6 +256,8 @@ if(cc!==null){ const b=cc.indexOf(BEGIN), e=cc.indexOf(END);
 out.hooks.session.file=fs.existsSync(path.join(dir,"semble-session.mjs"))?"present":"missing";
 out.hooks.prefetch.file=fs.existsSync(path.join(dir,"semble-prefetch.mjs"))?"present":"missing";
 out.hooks.stats.file=fs.existsSync(path.join(dir,"semble-stats.mjs"))?"present":"missing";
+out.hooks.reminder.file=fs.existsSync(path.join(dir,"semble-reminder.mjs"))?"present":"missing";
+out.hooks.subagent.file=fs.existsSync(path.join(dir,"semble-subagent.mjs"))?"present":"missing";
 // A retired .mjs still on disk is a half-migrated install: report it by name.
 out.hooks.retired=marks.filter(m=>live.indexOf(m)<0&&fs.existsSync(path.join(dir,m)));
 let s=null; const raw=readSafe(sf);
@@ -304,6 +328,8 @@ out.hooks.session.wired=ok("SessionStart/*/semble-session.mjs");
 out.hooks.prefetch.wired=ok("UserPromptSubmit/*/semble-prefetch.mjs");
 // stats spans two events; a half-wired pair is not wired.
 out.hooks.stats.wired=ok("PostToolUse/"+M+"/semble-stats.mjs")&&ok("PostToolUseFailure/"+M+"/semble-stats.mjs");
+out.hooks.reminder.wired=ok("PreToolUse/Bash|Grep/semble-reminder.mjs");
+out.hooks.subagent.wired=ok("SubagentStart/*/semble-subagent.mjs");
 const allow=(s&&s.permissions&&Array.isArray(s.permissions.allow))?s.permissions.allow:[];
 out.permissions.allow=tools.filter(t=>allow.includes(t));
 out.permissions.wired=tools.every(t=>allow.filter(x=>x===t).length===1);
@@ -325,7 +351,8 @@ if(j.ignore) console.log("ignore:    "+j.ignore.path);
 for(const d of (j.hooks.drift||[])) console.log("drift:     "+d.event+"/"+(d.matcher||"*")+"/"+d.script
   +" "+d.field+"="+JSON.stringify(d.actual)+" want "+JSON.stringify(d.expected));
 console.log("hooks:     "+j.hooks.session.file+" session, "+j.hooks.prefetch.file+" prefetch, "
-  +j.hooks.stats.file+" stats"
+  +j.hooks.stats.file+" stats, "+((j.hooks.reminder||{}).file||"missing")+" reminder, "
+  +((j.hooks.subagent||{}).file||"missing")+" subagent"
   +(j.hooks.staleEntries?" | "+j.hooks.staleEntries+" stale settings entr"+(j.hooks.staleEntries===1?"y":"ies"):""));
 if((j.backups||[]).length) console.log("backups:   "+j.backups.length+" .bak file"+(j.backups.length===1?"":"s")
   +" left by --force/remove (your content, delete when you no longer need it): "+j.backups.join(", "));
@@ -681,7 +708,7 @@ do_claudemd() {
 
 # ── hook files ──────────────────────────────────────────────────────────────
 install_hook_files() {
-  local f
+  local f stage
   for f in $HOOK_MJS; do
     [ -f "$SRC/$f" ] || { add_failed "hooks: asset missing at $SRC/$f"; return 0; }
   done
@@ -698,9 +725,10 @@ install_hook_files() {
     return 0
   fi
   mkdir -p "$HOOKS_DIR"
-  # Migration: delete the retired advisory hooks. An install that merely stops WRITING
-  # them leaves the file on disk next to a settings entry the merge is about to strip,
-  # and any hand-restored entry would resurrect a hook we measured at zero effect.
+  # Migration: delete `semble-explore.mjs`, which no longer ships under that name. An
+  # install that merely stops WRITING it leaves the file on disk next to a settings entry
+  # the merge is about to strip, and any hand-restored entry would resurrect a hook whose
+  # replacement (semble-subagent.mjs, all agent types) is already wired.
   for f in $RETIRED_MJS; do
     [ -e "$HOOKS_DIR/$f" ] || continue
     rm -f "$HOOKS_DIR/$f" \
@@ -718,12 +746,30 @@ install_hook_files() {
       add_unchanged "hooks: $f already current"
       continue
     fi
-    if cp "$SRC/$f" "$HOOKS_DIR/$f" && node --check "$HOOKS_DIR/$f"; then
+    # Staged, then moved into place only once `node --check` passes. Checking AFTER
+    # the copy left a broken asset installed and still wired: every prompt of the
+    # user's next session then ran a hook Claude Code cannot parse.
+    # The staged name still ends in .mjs: the assets are ESM, and `node --check` on a
+    # path with any other suffix parses them as CommonJS and rejects every `export`.
+    stage="$HOOKS_DIR/.semble-staging.$$.$f"
+    if cp "$SRC/$f" "$stage" && node --check "$stage" 2>/dev/null && mv -f "$stage" "$HOOKS_DIR/$f"; then
       add_changed "hooks: installed $HOOKS_DIR/$f"
     else
+      rm -f "$stage"
       add_failed "hooks: cannot install $HOOKS_DIR/$f"
     fi
   done
+}
+
+# A want row whose hook file is not on disk must not be wired: an entry pointing at a
+# missing file is a hook that fails on every prompt. A file that survived a failed
+# upgrade (the previous, valid copy) is still there and stays wired.
+prune_want_table() {
+  if [ "${SEMBLE_DRY_RUN:-}" = "1" ]; then return 0; fi
+  SG_WANT_TABLE="$(SG_WANT="$SG_WANT_TABLE" SG_HOOKS="$HOOKS_DIR" node -e '
+const fs=require("fs"), path=require("path"); const d=process.env.SG_HOOKS;
+process.stdout.write(JSON.stringify(
+  JSON.parse(process.env.SG_WANT).filter((r) => fs.existsSync(path.join(d, r[2])))));')"
 }
 
 remove_hook_files() {
@@ -736,9 +782,9 @@ remove_hook_files() {
       add_unchanged "hooks: $f already absent"
     fi
   done
-  # The throttle markers are ours too, live and retired alike: removal drops their
-  # .gitignore line, so a marker left behind surfaces as an untracked file.
-  for f in .claude/semble/.prefetch-ts $RETIRED_MARKERS; do
+  # The throttle markers and counters are ours too, live and retired alike: removal drops
+  # their .gitignore line, so anything left behind surfaces as an untracked file.
+  for f in .claude/semble/.prefetch-ts .claude/semble/reminder.json $RETIRED_MARKERS; do
     [ -e "$ROOT/$f" ] || continue
     if [ "${SEMBLE_DRY_RUN:-}" = "1" ]; then sc_dry "rm $ROOT/$f" >/dev/null; add_changed "hooks: would remove marker $ROOT/$f"; continue; fi
     rm -f "$ROOT/$f" && add_changed "hooks: removed marker $ROOT/$f" || add_failed "hooks: cannot remove marker $ROOT/$f"
@@ -770,12 +816,19 @@ const matcherOf=e=>(e&&typeof e.matcher==="string")?e.matcher:null;
 const isMine=a=>marks.some(m=>a===m||a.endsWith("/"+m)||a.endsWith("\\"+m));
 // MIGRATION, and the whole reason `live` exists separately from `marks`. `wanted` used to
 // be built from `marks`, which meant every basename this skill had ever owned survived the
-// purge below. It is now the want table itself, as (event, matcher, path) TRIPLES, which
-// buys two things at once: a RETIRED script at the current hooks dir is stripped like a
-// stale-path one (the v1 PreToolUse Bash|Grep reminder rows and the SubagentStart Explore
-// row), and so is a retired REGISTRATION of a LIVE script — semble-stats.mjs wired on the
-// pre-5.0.0 PostToolUse matcher would otherwise survive beside its replacement and fire
-// the hook twice on every Bash call, silently doubling the telemetry denominator.
+// purge below. It is now the want table itself, as (event, matcher, path) TRIPLES, and that
+// one change carries every shape migration this skill has:
+//   - a RETIRED script at the current hooks dir is stripped exactly like a stale-path one,
+//     so a v1 `SubagentStart`/`Explore` row pointing at semble-explore.mjs is REPLACED by
+//     the matcher-less semble-subagent.mjs row rather than left standing beside it;
+//   - a retired REGISTRATION of a LIVE script goes the same way — the v1 pair of
+//     `PreToolUse`/`Bash` + `PreToolUse`/`Grep` reminder rows collapses into the single
+//     `PreToolUse`/`Bash|Grep` row, and semble-stats.mjs wired on the pre-5.0.0 PostToolUse
+//     matcher would otherwise survive beside its replacement and fire the hook twice on
+//     every Bash call, silently doubling the telemetry denominator.
+// A v5.1.0-shaped file, where the reminder and subagent rows are simply absent, converges
+// through the same loop: nothing to purge, two rows appended. Both starting shapes and a
+// clean project therefore land on the identical six-row result.
 const wkey=(ev,m,a)=>JSON.stringify([ev,m,a]);
 const wanted=new Set(want.map(w=>wkey(w[0],w[1],path.join(dir,w[2]))));
 const desiredHook=(full,timeout)=>({type:"command",command:"node",args:[full],timeout});
@@ -945,12 +998,26 @@ run_settings() {
 # Outcome is VERIFIED by re-reading the file, never assumed from the exit status of
 # the write. When there is no .gitignore the line is created only inside a git repo;
 # outside one there is nothing to ignore, and that is reported as skipped, not "ok".
-GI_LINE='.claude/semble/.prefetch-ts'
-# Retired with semble-reminder.mjs. Stripped by install AND remove so a migrated repo does
-# not keep a .gitignore line for a marker file nothing writes any more.
-GI_RETIRED='.claude/semble/.reminder-ts'
+# The whole directory, not one marker: the install also puts state.json there and all
+# five hooks append telemetry.jsonl, which carries verbatim shell commands and distilled
+# prompt text and is trimmed at 2 MB. A per-marker line left the rest permanently
+# untracked-and-committable in any repo that does not already ignore `.claude/`.
+GI_LINE='.claude/semble/'
+# Superseded by the directory line and stripped by install AND remove: `.reminder-ts`
+# retired with semble-reminder.mjs, `.prefetch-ts` is now covered by GI_LINE. A migrated
+# repo must not keep either beside the new line.
+GI_RETIRED='.claude/semble/.reminder-ts .claude/semble/.prefetch-ts'
 gitignore_has_line() { grep -Fqx "$GI_LINE" "$GITIGNORE" 2>/dev/null; }
-gitignore_has_retired() { grep -Fqx "$GI_RETIRED" "$GITIGNORE" 2>/dev/null; }
+# Space-separated list of the retired lines actually present, so the report names what
+# it dropped instead of the whole catalogue.
+gitignore_retired_present() {
+  local l out=''
+  for l in $GI_RETIRED; do
+    if grep -Fqx "$l" "$GITIGNORE" 2>/dev/null; then out="$out $l"; fi
+  done
+  printf '%s' "${out# }"
+}
+gitignore_has_retired() { [ -n "$(gitignore_retired_present)" ]; }
 
 # Drops every line in $1 (space-separated) plus the `# brewcode:semble` header that
 # immediately precedes one of them.
@@ -983,11 +1050,12 @@ fs.writeFileSync(f,head+"# brewcode:semble\n"+process.env.SG_LINE+"\n");'
 # Migration, install side: silently retire the old marker line if it is there.
 gitignore_migrate() {
   [ -f "$GITIGNORE" ] || return 0
-  gitignore_has_retired || return 0
-  if [ "${SEMBLE_DRY_RUN:-}" = "1" ]; then sc_dry "drop $GI_RETIRED from $GITIGNORE" >/dev/null; add_changed "gitignore: would drop retired $GI_RETIRED"; return 0; fi
-  gitignore_drop "$GI_RETIRED" || { add_failed "gitignore: cannot rewrite $GITIGNORE"; return 0; }
-  if gitignore_has_retired; then add_failed "gitignore: $GI_RETIRED is still in $GITIGNORE"
-  else add_changed "gitignore: dropped retired $GI_RETIRED from $GITIGNORE"; fi
+  local present; present="$(gitignore_retired_present)"
+  [ -n "$present" ] || return 0
+  if [ "${SEMBLE_DRY_RUN:-}" = "1" ]; then sc_dry "drop $present from $GITIGNORE" >/dev/null; add_changed "gitignore: would drop retired $present"; return 0; fi
+  gitignore_drop "$present" || { add_failed "gitignore: cannot rewrite $GITIGNORE"; return 0; }
+  if gitignore_has_retired; then add_failed "gitignore: $present is still in $GITIGNORE"
+  else add_changed "gitignore: dropped retired $present from $GITIGNORE"; fi
 }
 gitignore_confirm() {   # $1 = past-tense verb for the report
   if gitignore_has_line; then add_changed "gitignore: $1 $GI_LINE in $GITIGNORE"
@@ -1037,6 +1105,7 @@ case "$MODE" in
     want_part claudemd   && do_claudemd install
     if want_part hooks; then
       install_hook_files
+      prune_want_table
       gitignore_migrate
       install_gitignore
     fi

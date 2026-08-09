@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 5.1.0 |
+| Version | 5.2.0 |
 | Skills | 9 |
 | Agents | 5 |
 | Hooks | 2 |
@@ -86,10 +86,9 @@ No arguments = `status` when the mechanism is installed, `install` when it is no
 `/brewcode:semble-setup`, which **always** defaults to `status`, so a bare invocation can never start a
 machine-level package install.
 
-Each skill implements the modes that mean something for it and rejects the rest with an error instead of
-guessing: `/brewcode:teams-setup` covers `status | install | upgrade | uninstall | purge` and rejects
-`enable` / `disable`, since a team either exists or it does not. Skill-specific extras come after the
-canonical set, never in place of it (`semble-setup`: `reindex | optimize | resume`).
+Every `-setup` skill implements the full canonical set: `status | install | upgrade | enable | disable |
+uninstall | purge`. Skill-specific extras come after it, never in place of it (`semble-setup`: `reindex |
+optimize | resume`; `/brewcode:teams-setup` keeps a `[name]` positional after the canonical modes).
 
 | Skill | Purpose |
 |-------|---------|

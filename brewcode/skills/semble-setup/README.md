@@ -39,7 +39,7 @@ The seven canonical modes every `-setup` skill shares, in order:
 | Mode | Effect | Mutates |
 |------|--------|---------|
 | `status` | full report: prereqs, MCP, cache, guidance, agents, coverage, state | no |
-| `install` | install `uv` (and, if you accept, `coreutils`), register `semble_code` at user scope, **wire the rule, the CLAUDE.md block, the three hooks, the permissions and the agent frontmatter**, checkpoint for reload | yes |
+| `install` | install `uv` (and, if you accept, `coreutils`), register `semble_code` at user scope, **wire the rule, the CLAUDE.md block, the five hooks, the permissions and the agent frontmatter**, checkpoint for reload | yes |
 | `upgrade` | compare the recorded pin with `0.5.4`, re-register if different | yes |
 | `enable` | back on: verify, warm, `phase=ready` | yes |
 | `disable` | `enabled=false` — hooks go silent, nothing is deleted | yes |
@@ -70,7 +70,7 @@ Plus three extras specific to a search index:
 | Rule | `<repo>/.claude/rules/semble-first.md` |
 | Ignore file | `<repo>/.sembleignore` — read per-directory by `semble/index/file_walker.py:_load_ignore_for_dir` (gitignore syntax via `pathspec`; `core.excludesFile` is NOT honoured). Keeps generated/vendored trees (`.claude/tmp/`, `.claude/reports/`, build output, minified bundles) out of the corpus; deliberately never excludes `.claude/{skills,agents,rules,commands,hooks}/`. Same managed-file policy as the rule: user edits are reported, not clobbered, and `--force` backs up first |
 | CLAUDE.md | a marked `<!-- BEGIN brewcode:semble -->` block |
-| Hooks | `<repo>/.claude/hooks/semble-session.mjs` (SessionStart — state and reload messaging) + `semble-prefetch.mjs` (UserPromptSubmit — runs one semble search on the prompt and injects the top-3 candidate **paths**, never snippets) + `semble-stats.mjs` (PostToolUse + PostToolUseFailure — pure observer, JSONL telemetry). The two advisory hooks of earlier versions (`semble-reminder.mjs`, `semble-explore.mjs`) are **retired in 5.0.0**: they converted at 0/18 and 0/11 with delivery proven, so `install`/`upgrade` deletes the files and un-wires their rows |
+| Hooks | `<repo>/.claude/hooks/semble-session.mjs` (SessionStart — state and reload messaging) + `semble-prefetch.mjs` (UserPromptSubmit — runs one semble search on the prompt and injects the top-3 candidate **paths**, never snippets) + `semble-stats.mjs` (PostToolUse + PostToolUseFailure — pure observer, JSONL telemetry) + `semble-reminder.mjs` (PreToolUse `Bash\|Grep` — fires every Nth eligible search, `N = state.reminderEvery`, DEF 5, counter in `.claude/semble/reminder.json`) + `semble-subagent.mjs` (SubagentStart, **no matcher, so every agent type** — the semble-first brief inside the subagent's own context). `semble-explore.mjs` is retired for good, superseded by `semble-subagent.mjs`; `install`/`upgrade` deletes that file and replaces its settings row. The 5.0.0 note claiming the two advisory hooks "converted at 0/18 and 0/11 with delivery proven" was wrong on the first number: the reminder hook fired zero times across those 18 sessions (gate suppressed 74/113, 37 `disabled`, 2 throttled), so `0/18` counted sessions, not deliveries. `0/11` was a real measurement, but of one agent type and of self-undercutting text. The channel itself always delivered. Per-channel conversion on the accumulated telemetry is reminder 2/10 sessions, explore 1/7 — the restored hooks' own numbers are not measured yet |
 | Permissions | `<repo>/.claude/settings.json` -> exactly `mcp__semble_code__search` and `mcp__semble_code__find_related`, never a wildcard |
 | Agents | `<repo>/.claude/agents/**/*.md` get the two tool names; agents with no `tools:` key inherit and are left untouched. Global agents are never touched by `install` |
 
@@ -159,8 +159,8 @@ Every script takes `--json` and uses the same exit codes: `0` ok · `1` hard fai
 | Every call errors offline | model pre-load cannot reach HuggingFace | run once online, or set `SEMBLE_NO_NETWORK=1` to skip warm steps |
 | `search` rejects the call | `repo` is missing — it is required | pass the absolute project root |
 | A `.json` / `.csv` / `.mdx` / `.txt` file is never found | not in this corpus by design (`.html`/`.htm` **is** indexed, in the docs bucket) | use `rg` |
-| Status says `partial` | half-wired — `hooks N/4 wired` counts only entries that are present **and** field-conforming; a hook whose `timeout`, `args` or `command` drifted is counted in `driftedCount`, not in `wiredCount` | `/brewcode:semble-setup install` re-runs idempotently and repairs each drifted field in place |
-| `hooks 4/4 wired` but a hook never fires | a duplicate entry for the same event/matcher/script — reported as `duplicateCount` with a `drift[]` row, never as `wired` | re-run `install`; the merge collapses duplicates |
+| Status says `partial` | half-wired — `hooks N/6 wired` counts only entries that are present **and** field-conforming; a hook whose `timeout`, `args` or `command` drifted is counted in `driftedCount`, not in `wiredCount` | `/brewcode:semble-setup install` re-runs idempotently and repairs each drifted field in place |
+| `hooks 6/6 wired` but a hook never fires | a duplicate entry for the same event/matcher/script — reported as `duplicateCount` with a `drift[]` row, never as `wired` | re-run `install`; the merge collapses duplicates |
 | `malformed` | `~/.claude.json` or `.mcp.json` is not valid JSON | the skill refuses to write; fix that file by hand, then re-run |
 
 ## Documentation

@@ -6,7 +6,7 @@ description: Detailed description of all brewcode plugin commands
 
 # BC Plugin Commands
 
-> **ver:** 5.1.0 | **Author:** Maksim Kochetkov | **License:** MIT
+> **ver:** 5.2.0 | **Author:** Maksim Kochetkov | **License:** MIT
 
 ## Naming
 
@@ -96,7 +96,7 @@ Each row gets exactly one state, evaluated in order: `n/a` -> `disabled` -> `mis
 | Signal | Used by | How |
 |--------|---------|-----|
 | Checksum | semble, think-short, agent-deadline, agent-router, manager, docsync | Those setups `cp` hook files verbatim -> `cmp` against the plugin asset is exact |
-| Frontmatter trio | memory-sync | `version`/`generated_by`/`last_updated` in the emitted `SKILL.md`'s YAML frontmatter vs the plugin's own version. A trailing `<!-- memory-sync template vX.Y.Z` comment is the pre-5.0 stamp; finding it yields `STALE-LEGACY` (install predates the frontmatter migration, run `upgrade`) |
+| Frontmatter trio | memory-sync | `version`/`generated_by`/`last_updated` in the emitted `SKILL.md`'s YAML frontmatter vs the plugin's own version. A trailing `<!-- memory-sync template vX.Y.Z` comment is the pre-5.0 stamp; finding it yields `LEGACY-FMT` (`stale (legacy stamp)`, install predates the frontmatter migration, run `upgrade`) |
 | Template baseline | superreview | New plugin template diffed against `.template-baseline/`, so the delta is never your tailoring |
 | Absence | task-board | A deployed board with no `.claude/skills/task-spec/` predates the spec+design layer |
 | Header-table row | teams | `team.md`'s `\| Version \| X.Y.Z \|` row of the `Field/Value` block, generated + substituted at install |

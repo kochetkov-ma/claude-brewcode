@@ -114,7 +114,7 @@ scan_target() {
         "$(grep -m1 '^name:' "$f" | sed 's/^name:[[:space:]]*//')" \
         "$(grep -m1 '^description:' "$f" | sed 's/^description:[[:space:]]*//' | cut -c1-220)"
     done
-    _n=$(find .codex/agents -maxdepth 1 -type f -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
+    _n=$(find .codex/agents -maxdepth 1 -type f -name "*.toml" 2>/dev/null | wc -l | tr -d ' ')
     echo "agents=$_n"
     [ "$_n" -eq 0 ] && echo "⚠️ NO domain experts — superreview routed to generic agents is a DEGRADED review"
   else
@@ -1062,7 +1062,7 @@ remove_skill() {
   fi
 
   if [ -f "$IG_PATH" ]; then
-    echo "KEPT:    $IG_PATH — shared with $brewcode:teams-setup, never deleted by either skill"
+    echo "KEPT:    $IG_PATH — shared with \$brewcode:teams-setup, never deleted by either skill"
   fi
 
   [ "$_found" = "1" ] || { echo "⚠️ nothing to $_label — superreview was not installed here"; exit 0; }

@@ -349,6 +349,15 @@ function fireAndLast(p, over) {
 //   sB: nudge(sub)  @00 -> no call ever     => NOT converted
 //   sC: no nudge         -> semble call @05 => unprompted
 //   plus 2 skipped gates and 4 search records.
+// Per-source conversion slots. Every live channel is reported even at zero, so a
+// channel that stopped firing reads as 0 instead of vanishing from the report.
+const zeroSlot = (measure) => ({
+  nudges: 0, sessions: 0, converted: 0, sessionPct: null, callsAfter: 0, measure,
+});
+const SLOT_SESSION = zeroSlot('semble-call-after');
+const SLOT_SUBAGENT = { ...zeroSlot('semble-call-after'), agentTypes: {} };
+const SLOT_PREFETCH = zeroSlot('injected-path-opened');
+
 const FIXTURE = [
   { ts: '2026-01-01T00:00:00.000Z', ev: 'gate', src: 'reminder', sid: 'sA', fired: true, why: 'ok', phase: 'ready', enabled: true },
   { ts: '2026-01-01T00:00:00.001Z', ev: 'nudge', src: 'reminder', sid: 'sA', matcher: 'Bash', agent: 'main', q: 'rg session persistence' },
@@ -383,9 +392,26 @@ const FIXTURE = [
   check('6.search', R.search, { total: 4, main: 2, sub: 2, unknown: 0 },
     'four search-shaped non-semble tool uses - the denominator');
   check('6.conversion', R.conversion,
-    { sessionsWithNudge: 2, sessionsConverted: 1, conversionPct: 50, callsAfterNudge: 2, callsWithoutNudge: 1 },
+    {
+      sessionsWithNudge: 2, sessionsConverted: 1, conversionPct: 50, callsAfterNudge: 2, callsWithoutNudge: 1,
+      bySource: {
+        session: SLOT_SESSION,
+        reminder: {
+          nudges: 1, sessions: 1, converted: 1, sessionPct: 100, callsAfter: 2,
+          measure: 'semble-call-after', toolUses: 0,
+        },
+        subagent: SLOT_SUBAGENT,
+        prefetch: SLOT_PREFETCH,
+        explore: {
+          nudges: 1, sessions: 1, converted: 0, sessionPct: 0, callsAfter: 0,
+          measure: 'semble-call-after',
+        },
+      },
+    },
     'sA nudged then called (converted), sB nudged and never called, sC called with no'
-    + ' preceding nudge => 1 of 2 sessions convert, 2 calls follow a nudge, 1 is unprompted');
+    + ' preceding nudge => 1 of 2 sessions convert, 2 calls follow a nudge, 1 is unprompted;'
+    + ' per source the reminder channel converts 1/1 and the retired explore channel 0/1,'
+    + ' neither inflating the other');
   check('6.window', R.window, { sid: null, last: null }, 'the default window is every record');
 
   const human = reader(p, ['--section', 'telemetry']);
@@ -404,8 +430,20 @@ const FIXTURE = [
   check('6.sid.window', [sidR.json.records, sidR.json.window.sid], [5, 'sA'],
     '--sid narrows to the five sA records');
   check('6.sid.conversion', sidR.json.conversion,
-    { sessionsWithNudge: 1, sessionsConverted: 1, conversionPct: 100, callsAfterNudge: 2, callsWithoutNudge: 0 },
-    'inside sA alone the nudge converted, both calls followed it');
+    {
+      sessionsWithNudge: 1, sessionsConverted: 1, conversionPct: 100, callsAfterNudge: 2, callsWithoutNudge: 0,
+      bySource: {
+        session: SLOT_SESSION,
+        reminder: {
+          nudges: 1, sessions: 1, converted: 1, sessionPct: 100, callsAfter: 2,
+          measure: 'semble-call-after', toolUses: 0,
+        },
+        subagent: SLOT_SUBAGENT,
+        prefetch: SLOT_PREFETCH,
+      },
+    },
+    'inside sA alone the nudge converted, both calls followed it; the sB explore nudge is'
+    + ' outside the window so that channel is absent, not zero');
   check('6.sid.unknown-session', readerJson(p, ['--sid', 'nope']).json.records, 0,
     'an unknown sid is an empty window, not an error');
 
@@ -474,7 +512,7 @@ const STATS_MATCHER = 'mcp__semble_code__search|mcp__semble_code__find_related|B
 // The 5.0.0 want table: SessionStart, UserPromptSubmit, and the stats pair.
 // PreToolUse/Bash, PreToolUse/Grep and SubagentStart/Explore were RETIRED with
 // the two advisory hooks; §10 proves a v1-shaped file loses them on install.
-const WANT_N = 4;
+const WANT_N = 6;
 
 function guidance(p, args) {
   const r = spawnSync('bash', [GUIDANCE, ...args], { cwd: p, encoding: 'utf8' });
@@ -513,7 +551,7 @@ function settingsOf(p) {
   check('8.status.counts',
     [st.json.hooks.wiredCount, st.json.hooks.wantCount, st.json.hooks.driftedCount,
       st.json.hooks.missingCount, st.json.hooks.duplicateCount, st.json.hooks.drift.length],
-    [WANT_N, WANT_N, 0, 0, 0, 0], 'all four want rows are wired, nothing drifted or duplicated');
+    [WANT_N, WANT_N, 0, 0, 0, 0], 'all six want rows are wired, nothing drifted or duplicated');
   check('8.status.stats-row', st.json.hooks.stats, { file: 'present', wired: true },
     'the stats hook reports its own file and wiring');
   check('8.status.rows',
@@ -521,11 +559,14 @@ function settingsOf(p) {
     [['SessionStart', null, 'semble-session.mjs', 'wired'],
       ['UserPromptSubmit', null, 'semble-prefetch.mjs', 'wired'],
       ['PostToolUse', STATS_MATCHER, 'semble-stats.mjs', 'wired'],
-      ['PostToolUseFailure', STATS_MATCHER, 'semble-stats.mjs', 'wired']],
+      ['PostToolUseFailure', STATS_MATCHER, 'semble-stats.mjs', 'wired'],
+      ['PreToolUse', 'Bash|Grep', 'semble-reminder.mjs', 'wired'],
+      ['SubagentStart', null, 'semble-subagent.mjs', 'wired']],
     'the want table, in order, all wired');
   check('8.status.no-retired-rows',
-    st.json.hooks.entries.some((e) => /reminder|explore/.test(e.script)), false,
-    'the retired scripts are not want rows any more - they are ownership marks only');
+    st.json.hooks.entries.some((e) => /explore/.test(e.script)), false,
+    'semble-explore.mjs is retired for good - it is an ownership mark, never a want row;'
+    + ' the reminder is a live row again and semble-subagent.mjs supersedes it on all agent types');
   check('8.status.human-denominator',
     guidance(p, ['status']).stdout.includes('hooks ' + WANT_N + '/' + WANT_N + ' wired'), true,
     'the human line prints wiredCount/wantCount, never a hard-coded number');
@@ -632,7 +673,18 @@ function settingsOf(p) {
     'the installed copy behaves exactly like the asset');
   const R = readerJson(p, []).json;
   check('9.e2e.conversion', R.conversion,
-    { sessionsWithNudge: 1, sessionsConverted: 1, conversionPct: 100, callsAfterNudge: 1, callsWithoutNudge: 0 },
+    {
+      sessionsWithNudge: 1, sessionsConverted: 1, conversionPct: 100, callsAfterNudge: 1, callsWithoutNudge: 0,
+      bySource: {
+        session: SLOT_SESSION,
+        reminder: {
+          nudges: 1, sessions: 1, converted: 1, sessionPct: 100, callsAfter: 1,
+          measure: 'semble-call-after', toolUses: 0,
+        },
+        subagent: SLOT_SUBAGENT,
+        prefetch: SLOT_PREFETCH,
+      },
+    },
     'a nudge followed by a real semble call in the same session is one converted session'
     + ' - this is the whole point of the mechanism');
   check('9.e2e.denominator', [R.search.total, R.call.total], [1, 1],

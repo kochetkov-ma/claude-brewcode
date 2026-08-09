@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 /**
  * suite-hooks.mjs — unit D: rule template, .sembleignore, CLAUDE.md marker
- * block, the three hooks (session, prefetch, stats) and the settings.json merge
- * performed by semble-guidance.sh — including the 5.0.0 migration that retires
- * the two advisory hooks.
+ * block, the five hooks (session, prefetch, stats, reminder, subagent) and the
+ * settings.json merge performed by semble-guidance.sh — including the migration
+ * that reverses v5.1.0: the reminder hook comes back under its own name, the
+ * SubagentStart row moves off `Explore` onto every agent type, and
+ * `semble-explore.mjs` stays retired for good.
  *
  * Self-contained: inlines its own check()/run() helpers, runs standalone
  * (`node tests/suite-hooks.mjs`), and never touches the real ~/.claude, the
@@ -31,6 +33,8 @@ const TEMPLATE_SRC = join(ASSETS, 'semble-first.md.template');
 const SESSION_SRC = join(ASSETS, 'semble-session.mjs');
 const PREFETCH_SRC = join(ASSETS, 'semble-prefetch.mjs');
 const STATS_SRC = join(ASSETS, 'semble-stats.mjs');
+const REMINDER_SRC = join(ASSETS, 'semble-reminder.mjs');
+const SUBAGENT_SRC = join(ASSETS, 'semble-subagent.mjs');
 
 const BASE = realpathSync(mkdtempSync(join(tmpdir(), 'semble-d-')));
 const HOME = join(BASE, 'home');
@@ -128,7 +132,8 @@ copyFileSync(join(SCRIPTS, 'semble-guidance.sh'), join(SKILL_COPY, 'scripts', 's
 copyFileSync(join(SCRIPTS, 'semble-project.sh'), join(SKILL_COPY, 'scripts', 'semble-project.sh'));
 chmodSync(join(SKILL_COPY, 'scripts', 'semble-project.sh'), 0o755);
 for (const f of ['semble-first.md.template', 'sembleignore.template',
-  'semble-session.mjs', 'semble-prefetch.mjs', 'semble-stats.mjs']) {
+  'semble-session.mjs', 'semble-prefetch.mjs', 'semble-stats.mjs',
+  'semble-reminder.mjs', 'semble-subagent.mjs']) {
   copyFileSync(join(ASSETS, f), join(SKILL_COPY, 'assets', f));
 }
 
@@ -262,19 +267,23 @@ function countEntry(s, ev, matcher, full) {
   return arr.filter((e) => matcherOf(e) === matcher && argsOf(e).includes(full)).length;
 }
 
-// The 5.0.0 want table: SessionStart, UserPromptSubmit and the stats pair.
-// PreToolUse/Bash, PreToolUse/Grep and SubagentStart/Explore were RETIRED with
-// the two advisory hooks; group M proves a v1-shaped file loses them on install.
-const WANT_N = 4;
+// The want table: SessionStart, UserPromptSubmit, the stats pair, the reminder
+// row on `Bash|Grep`, and the subagent row with NO matcher (a SubagentStart
+// matcher is keyed on agent_type, so absent == every agent type). The v1 shape -
+// PreToolUse/Bash + PreToolUse/Grep + SubagentStart/Explore - is REPLACED, not
+// kept beside these; group M proves it on a real v1-shaped file.
+const WANT_N = 6;
 const STATS_MATCHER = 'mcp__semble_code__search|mcp__semble_code__find_related|Bash|Grep|Glob|Read';
 /** One count per want row, in want-table order. */
 function wantCounts(proj, s) {
-  const { session, prefetch: pre, stats } = semblePaths(proj);
+  const { session, prefetch: pre, stats, reminder, subagent } = semblePaths(proj);
   return [
     countEntry(s, 'SessionStart', null, session),
     countEntry(s, 'UserPromptSubmit', null, pre),
     countEntry(s, 'PostToolUse', STATS_MATCHER, stats),
     countEntry(s, 'PostToolUseFailure', STATS_MATCHER, stats),
+    countEntry(s, 'PreToolUse', 'Bash|Grep', reminder),
+    countEntry(s, 'SubagentStart', null, subagent),
   ];
 }
 
@@ -284,9 +293,10 @@ function semblePaths(proj) {
     session: join(d, 'semble-session.mjs'),
     prefetch: join(d, 'semble-prefetch.mjs'),
     stats: join(d, 'semble-stats.mjs'),
-    // retired in 5.0.0 — still addressable, because the migration is asserted
-    // on the files it must DELETE.
     reminder: join(d, 'semble-reminder.mjs'),
+    subagent: join(d, 'semble-subagent.mjs'),
+    // retired for good, superseded by semble-subagent.mjs — still addressable,
+    // because the migration is asserted on the file it must DELETE.
     explore: join(d, 'semble-explore.mjs'),
   };
 }
@@ -326,23 +336,26 @@ const READY_STATE = (extra) =>
   check('A1.statusTrailingNewline', guidance(p, ['status', '--json']).stdout.endsWith('\n'), true,
     'status --json carries the same trailing newline');
   const s = readSettings(p);
-  const { session, prefetch: pre, stats, reminder: rem, explore: exp } = semblePaths(p);
+  const { session, prefetch: pre, stats, reminder: rem, subagent: sub, explore: exp } = semblePaths(p);
   check('A1.sessionEntry', s.hooks.SessionStart, [
     { hooks: [{ type: 'command', command: 'node', args: [session], timeout: 5 }] },
   ], 'SessionStart entry has the exact contract shape with an explicit 5 s timeout');
   check('A1.userPromptSubmit', s.hooks.UserPromptSubmit, [
     { hooks: [{ type: 'command', command: 'node', args: [pre], timeout: 5 }] },
   ], 'the prefetch hook is registered once on UserPromptSubmit with NO matcher - every prompt reaches it');
-  check('A1.noRetiredEvents',
-    [Object.prototype.hasOwnProperty.call(s.hooks, 'PreToolUse'),
-      Object.prototype.hasOwnProperty.call(s.hooks, 'SubagentStart')], [false, false],
-    'a fresh install registers neither of the events the two advisory hooks used');
+  check('A1.reminderEntry', s.hooks.PreToolUse, [
+    { matcher: 'Bash|Grep', hooks: [{ type: 'command', command: 'node', args: [rem], timeout: 5 }] },
+  ], 'the reminder hook is registered once on PreToolUse with the `|`-only exact tool list');
+  check('A1.subagentEntry', s.hooks.SubagentStart, [
+    { hooks: [{ type: 'command', command: 'node', args: [sub], timeout: 5 }] },
+  ], 'the subagent hook carries NO matcher, which is the only form that covers every agent type');
   check('A1.perm', s.permissions.allow, ['mcp__semble_code__search', 'mcp__semble_code__find_related'],
     'both MCP tool names land in permissions.allow');
-  check('A1.files', [existsSync(session), existsSync(pre), existsSync(stats)], [true, true, true],
-    'all three live .mjs assets were copied into .claude/hooks');
-  check('A1.noRetiredFiles', [existsSync(rem), existsSync(exp)], [false, false],
-    'and neither retired asset is written any more');
+  check('A1.files', [existsSync(session), existsSync(pre), existsSync(stats),
+    existsSync(rem), existsSync(sub)], [true, true, true, true, true],
+  'all five live .mjs assets were copied into .claude/hooks');
+  check('A1.noRetiredFiles', existsSync(exp), false,
+    'and the one retired asset is never written');
   const ruleText = readRaw(join(p, '.claude', 'rules', 'semble-first.md'));
   check('A1.rule', ruleText, TPL_TEXT,
     'the installed rule is byte-identical to the plugin template, so setup-status cmp reads SAME');
@@ -370,7 +383,7 @@ const READY_STATE = (extra) =>
   check('A2.bytes2', after2, after1, 'settings.json is byte-identical after run 2');
   check('A2.bytes3', after3, after1, 'settings.json is byte-identical after run 3');
   const s = readSettings(p);
-  check('A2.counts', wantCounts(p, s), [1, 1, 1, 1], 'exactly one entry per want row after three merges');
+  check('A2.counts', wantCounts(p, s), [1, 1, 1, 1, 1, 1], 'exactly one entry per want row after three merges');
   check('A2.permCounts', [
     s.permissions.allow.filter((x) => x === 'mcp__semble_code__search').length,
     s.permissions.allow.filter((x) => x === 'mcp__semble_code__find_related').length,
@@ -404,7 +417,7 @@ const FOREIGN = {
   check('A3.allow', s.permissions.allow,
     ['Bash(git *)', 'mcp__semble_code__search', 'mcp__semble_code__find_related'],
     'the two tool names are appended after the existing allow entries');
-  check('A3.counts', wantCounts(p, s), [1, 1, 1, 1],
+  check('A3.counts', wantCounts(p, s), [1, 1, 1, 1, 1, 1],
     'exactly one semble entry per want row alongside the foreign ones');
 }
 
@@ -440,16 +453,18 @@ const FOREIGN = {
   const flat = Object.values(s.hooks).flat();
   check('A5.staleGone', flat.filter((e) => argsOf(e).some((a) => a.startsWith(staleDir))).length, 0,
     'zero entries still point at the old hooks dir');
-  check('A5.counts', wantCounts(p, s), [1, 1, 1, 1], 'the new-dir entries were added exactly once each');
+  check('A5.counts', wantCounts(p, s), [1, 1, 1, 1, 1, 1], 'the new-dir entries were added exactly once each');
   check('A5.foreign', s.hooks.PreToolUse.filter((e) => argsOf(e).includes('/opt/foreign/other.mjs')).length, 1,
     'the foreign Write entry survived the stale-path purge');
+  check('A5.reminderMigrated', s.hooks.PreToolUse.map((e) => e.matcher).sort(), ['Bash|Grep', 'Write'],
+    'the v1 PreToolUse/Bash reminder row is REPLACED by the Bash|Grep row, not left beside it');
 }
 
 // A6 — uninstall leaves zero markers and prunes empty containers
 {
   const p = freshProject({});
   guidance(p, ['install', '--part', 'all', '--json']);
-  const { session, prefetch: pre, stats } = semblePaths(p);
+  const { session, prefetch: pre, stats, reminder: rem, subagent: sub } = semblePaths(p);
   const r = guidance(p, ['remove', '--part', 'all', '--json']);
   check('A6.exit', r.status, 0, 'remove --part all exits 0');
   const s = readSettings(p);
@@ -457,8 +472,9 @@ const FOREIGN = {
     'the hooks object is deleted once every event array empties');
   check('A6.permissionsKey', Object.prototype.hasOwnProperty.call(s, 'permissions'), false,
     'the permissions object is deleted once allow empties');
-  check('A6.files', [existsSync(session), existsSync(pre), existsSync(stats)], [false, false, false],
-    'all three .mjs files are deleted');
+  check('A6.files', [existsSync(session), existsSync(pre), existsSync(stats),
+    existsSync(rem), existsSync(sub)], [false, false, false, false, false],
+  'all five .mjs files are deleted');
   check('A6.rule', existsSync(join(p, '.claude', 'rules', 'semble-first.md')), false, 'the managed rule file is deleted');
 }
 
@@ -481,23 +497,26 @@ const FOREIGN = {
   const b = safeParse(before.stdout);
   check('A8.beforeRule', b.rule.state, 'absent', 'status reports an absent rule before install');
   check('A8.beforeWired',
-    [b.hooks.session.wired, b.hooks.prefetch.wired, b.hooks.stats.wired, b.permissions.wired],
-    [false, false, false, false], 'nothing is reported as wired before install');
+    [b.hooks.session.wired, b.hooks.prefetch.wired, b.hooks.stats.wired,
+      b.hooks.reminder.wired, b.hooks.subagent.wired, b.permissions.wired],
+    [false, false, false, false, false, false], 'nothing is reported as wired before install');
   guidance(p, ['install', '--part', 'all', '--json']);
   const after = guidance(p, ['status', '--json']);
   const a = safeParse(after.stdout);
   check('A8.afterRule', a.rule.state, 'managed', 'status reports the rule as managed after install');
   check('A8.afterClaudeMd', a.claudeMd.state, 'present', 'status reports the CLAUDE.md block as present');
   check('A8.afterWired',
-    [a.hooks.session.wired, a.hooks.prefetch.wired, a.hooks.stats.wired, a.permissions.wired],
-    [true, true, true, true],
-    'session hook, prefetch hook, stats (both post-tool events) and permissions all report wired');
-  check('A8.afterFiles', [a.hooks.session.file, a.hooks.prefetch.file, a.hooks.stats.file],
-    ['present', 'present', 'present'], 'status sees all three hook files on disk');
+    [a.hooks.session.wired, a.hooks.prefetch.wired, a.hooks.stats.wired,
+      a.hooks.reminder.wired, a.hooks.subagent.wired, a.permissions.wired],
+    [true, true, true, true, true, true],
+    'session, prefetch, stats (both post-tool events), reminder, subagent and permissions all report wired');
+  check('A8.afterFiles', [a.hooks.session.file, a.hooks.prefetch.file, a.hooks.stats.file,
+    a.hooks.reminder.file, a.hooks.subagent.file],
+  ['present', 'present', 'present', 'present', 'present'], 'status sees all five hook files on disk');
   check('A8.retired', a.hooks.retired, [], 'and no retired file is left behind');
   check('A8.stale', a.hooks.staleEntries, 0, 'no stale entries after a clean install');
   check('A8.wiredCount', [a.hooks.wiredCount, a.hooks.wantCount], [WANT_N, WANT_N],
-    'all 4 settings entries are counted as wired');
+    'all 6 settings entries are counted as wired');
   check('A8.exitReadOnly', before.status, 0, 'status exits 0');
 }
 
@@ -511,14 +530,14 @@ const FOREIGN = {
   writeFileSync(settingsPath(p), JSON.stringify(s, null, 2) + '\n');
   const a = safeParse(guidance(p, ['status', '--json']).stdout);
   check('A9.wiredCount', [a.hooks.wiredCount, a.hooks.wantCount], [WANT_N - 1, WANT_N],
-    'dropping the UserPromptSubmit entry reports 3 of 4, not "wired"');
+    'dropping the UserPromptSubmit entry reports 5 of 6, not "wired"');
   check('A9.prefetchWired', [a.hooks.session.wired, a.hooks.stats.wired, a.hooks.prefetch.wired],
     [true, true, false], 'only the prefetch entry is reported as unwired');
   check('A9.prefetchFileStillThere', [a.hooks.prefetch.file, existsSync(pre)], ['present', true],
     'the file is still on disk — file presence and wiring are reported separately');
   const human = guidance(p, ['status']).stdout;
-  check('A9.human', human.includes('hooks 3/4 wired'), true,
-    'the human line spells the partial count out as 3/4');
+  check('A9.human', human.includes('hooks 5/6 wired'), true,
+    'the human line spells the partial count out as 5/6');
 }
 
 // A10 — remove takes the prefetch registration with the file
@@ -1179,8 +1198,9 @@ const {
   const p = freshProject({ state: READY_STATE() });
   const r = prefetch(p, Q);
   check('P2.argv', r.argv, [
-    `--from semble[mcp]==0.5.4 semble search ${Q_DISTILLED} ${p} --content code docs config -k 3 --max-snippet-lines 0`,
-  ], 'the child is spawned exactly once, with the pinned spec, the distilled query and the frozen flags');
+    `--from semble[mcp]==0.5.4 semble search --content code docs config -k 3 --max-snippet-lines 0 -- ${Q_DISTILLED} ${p}`,
+  ], 'the child is spawned exactly once, with the pinned spec, the frozen flags, then `--` and the'
+    + ' distilled query — options before the separator, because argparse stops reading flags at it');
   const lib = readFileSync(REAL_LIB, 'utf8');
   check('P2.pinParity', PIN_SPEC, 'semble[mcp]==' + (/^SEMBLE_PIN_VERSION="\$\{SEMBLE_PIN_VERSION:-([^}"]+)\}"/m.exec(lib) || [])[1],
     'PIN_SPEC equals the pin the MCP registration uses');
@@ -1192,6 +1212,27 @@ const {
     'and the child is handed SEMBLE_CACHE_LOCATION — semble keys its cache dir by project path '
     + 'ALONE, so it cannot notice that the hook and the server disagree about the ROOT: each just '
     + 'builds its own 20 MB copy, and the hook\'s copy is always cold');
+}
+
+// P2c — a distilled query that STARTS WITH A DASH. The backtick rule puts backticked
+// text at the front of the query, so ``what does `-k` do…`` distils to exactly `-k`;
+// semble's argparse reads a lone leading-dash argv as an option, the child exits
+// non-zero, and a well-formed question buys a ten-minute cooldown. Verified against the
+// pinned 0.5.4 CLI: `-- <query> <path>` parses, `--` before the flags does not.
+{
+  const DASH_PROMPT = 'what does `-k` do to all of it and why so then';
+  check('P2c.distill', distill(DASH_PROMPT), '-k',
+    'the distiller really does produce a bare leading-dash token for this prompt');
+  check('P2c.gate', gateV3(DASH_PROMPT).fire, true,
+    'and the gate fires on it, so that token really reaches argv');
+  const p = freshProject({ state: READY_STATE() });
+  const r = prefetch(p, DASH_PROMPT);
+  check('P2c.argv', r.argv, [
+    `--from semble[mcp]==0.5.4 semble search --content code docs config -k 3 --max-snippet-lines 0 -- -k ${p}`,
+  ], 'the `-k` query sits AFTER the `--` separator, the one position argparse can only read as a positional');
+  check('P2c.fires', safeParse(r.stdout), PREFETCH_OK, 'the search runs and its hits are injected as normal');
+  check('P2c.noCooldown', Object.prototype.hasOwnProperty.call(markerOf(p) || {}, 'cool'), false,
+    'and NO cooldown is armed - ten minutes of silence was the entire cost of the defect');
 }
 
 // P2b — the cache root: which one, where it comes from, and what happens when
@@ -1470,14 +1511,22 @@ for (const [name, opts, msg] of SEARCH_FAIL) {
     'a nonsense window is clamped to the maximum, so a corrupt marker can never park the hook forever');
 }
 
-// A search that RAN and found nothing is not a failure and must not park it.
+// A search that RAN and found nothing is not a failure: it arms the ORDINARY throttle.
+// It used to arm nothing at all — the `no-hits` return sat above writeMarker — so every
+// following prompt paid another uvx child for the same empty answer.
 {
   const p = freshProject({ state: READY_STATE() });
   const r = prefetch(p, Q, { out: '{"results":[]}' });
   check('P6.noHits', [r.status, safeParse(r.stdout), tfield(p, 0, 'why')], [0, {}, 'no-hits'],
     'an empty result set is silence, recorded as no-hits');
-  check('P6.noHitsNoCooldown', markerOf(p), null,
-    'and it arms NOTHING — `[]` means the index answered, only `null` means it could not be trusted');
+  check('P6.noHitsNoCooldown', Object.prototype.hasOwnProperty.call(markerOf(p) || {}, 'cool'), false,
+    'and it arms NO cooldown — `[]` means the index answered, only `null` means it could not be trusted');
+  check('P6.noHitsThrottle', typeof (markerOf(p) || {}).t, 'number',
+    'but it DOES stamp the 30 s throttle: the search ran, and repeating it on the very next prompt buys nothing');
+  const second = prefetch(p, Q, { out: '{"results":[]}' });
+  check('P6.noHitsThrottleHolds', [safeParse(second.stdout), second.argv, tfield(p, 1, 'why')],
+    [{}, [], 'throttled'],
+    'so the next prompt spawns NO child and is recorded as throttled, not as a second no-hits');
 }
 
 // The cooldown really suppresses the next prompt, without spawning anything.
@@ -1579,19 +1628,365 @@ for (const [name, opts, msg] of SEARCH_FAIL) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// F. static guarantees of the three shipped hook files
+// R. PreToolUse reminder — every-Nth cadence and the widened gate
+//
+// Restored after the v5.0.0 removal with two changes that ARE the fix: the
+// 10-minute throttle became a counter over eligible searches, and the gate lost
+// its "any doubt returns true" bias. Replayed over the real historical stream
+// (2543 recorded search calls) the old gate let 229 through and fired 32; this
+// one lets 1023 through and fires 204.
+// ═══════════════════════════════════════════════════════════════════════════
+const counterFile = (p) => join(p, '.claude', 'semble', 'reminder.json');
+const counterOf = (p) => safeParse(existsSync(counterFile(p)) ? readFileSync(counterFile(p), 'utf8') : 'null');
+
+/** One PreToolUse call. `tool_input` is passed through verbatim so Grep cases work too. */
+function reminder(proj, toolInput, extra) {
+  return runNode(REMINDER_SRC, JSON.stringify({
+    session_id: 'R1',
+    cwd: proj,
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Bash',
+    tool_use_id: 'toolu_R1',
+    tool_input: toolInput,
+    ...(extra || {}),
+  }));
+}
+const remindOut = (p, command, extra) => safeParse(reminder(p, { command }, extra).stdout);
+const ctxOf = (out) => ((out || {}).hookSpecificOutput || {}).additionalContext || '';
+/** Fired-or-not per command, in order. A helper, not branching inside a test body. */
+const burst = (p, commands) => commands.map((c) => ctxOf(remindOut(p, c)) !== '');
+/** N distinct eligible searches: an intent question, no flag, no path, no filename. */
+const eligibleRun = (n) => Array.from({ length: n }, (_, i) => `rg "retry backoff policy ${i + 1}"`);
+const REMIND_TEXT = (p) =>
+  'semble: call mcp__semble_code__search FIRST for this — repo="' + p +
+  '", top_k=5, max_snippet_lines=10 — then open the hit at start_line. ' +
+  'Keep grep for exact identifiers, literal strings and exhaustive -l/-c enumeration.';
+const REMIND_OK = (p) => ({
+  hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: REMIND_TEXT(p) },
+});
+
+// R1 — the cadence itself: 15 eligible calls, N=5, exactly three injections.
+{
+  const p = freshProject({ state: READY_STATE() });
+  const seen = burst(p, eligibleRun(15));
+  check('R1.pattern', seen,
+    [false, false, false, false, true, false, false, false, false, true, false, false, false, false, true],
+    'across 15 eligible searches the nudge lands on exactly the 5th, 10th and 15th');
+  check('R1.count', seen.filter(Boolean).length, 3, 'three injections for fifteen eligible calls - one per five');
+  check('R1.counter', counterOf(p), { count: 15 }, 'the counter file holds every eligible call, not just the firing ones');
+}
+
+// R2 — a corrupt counter resets to 0 instead of throwing or freezing the cadence.
+{
+  const p = freshProject({ state: READY_STATE() });
+  burst(p, eligibleRun(3));
+  writeFileSync(counterFile(p), '{not json,,,');
+  const seen = burst(p, eligibleRun(5));
+  check('R2.recovered', seen, [false, false, false, false, true],
+    'a corrupt counter restarts the cadence from zero - the 5th call after it still fires');
+  check('R2.counter', counterOf(p), { count: 5 }, 'and the file is rewritten with a clean integer');
+}
+{
+  const p = freshProject({ state: READY_STATE() });
+  writeFileSync(counterFile(p), JSON.stringify({ count: -7 }));
+  check('R3.negative', burst(p, eligibleRun(5)), [false, false, false, false, true],
+    'a negative count is rejected the same way a corrupt file is');
+  check('R3.counterAfter', counterOf(p), { count: 5 }, 'and the counter is exactly the number of eligible calls since');
+}
+
+// R4 — ineligible calls must not advance the counter, or N would mean nothing.
+{
+  const p = freshProject({ state: READY_STATE() });
+  burst(p, eligibleRun(4));
+  const skipped = burst(p, ['rg -l "retry backoff policy X"', 'rg -c "handler"', 'grep -o "token" ']);
+  check('R4.skipped', skipped, [false, false, false], 'the three suppressed calls inject nothing');
+  check('R4.counterUnmoved', counterOf(p), { count: 4 }, 'and leave the counter exactly where the 4 eligible calls left it');
+  check('R4.fifth', burst(p, ['rg "retry backoff policy 5"']), [true],
+    'so the next ELIGIBLE call is number five and fires');
+}
+
+// R5 — N is configuration, read off state.json.
+{
+  const p = freshProject({ state: READY_STATE({ reminderEvery: 1 }) });
+  check('R5.every1', burst(p, eligibleRun(3)), [true, true, true], 'reminderEvery:1 nudges on every eligible search');
+}
+{
+  const p = freshProject({ state: READY_STATE({ reminderEvery: 3 }) });
+  check('R5.every3', burst(p, eligibleRun(6)), [false, false, true, false, false, true], 'reminderEvery:3 nudges on the 3rd and the 6th');
+}
+{
+  const p = freshProject({ state: READY_STATE({ reminderEvery: 0 }) });
+  check('R5.zeroIgnored', burst(p, eligibleRun(5)), [false, false, false, false, true],
+    'reminderEvery:0 is not a valid cadence and falls back to the default 5');
+}
+{
+  const p = freshProject({ state: READY_STATE({ reminderEvery: 'many' }) });
+  check('R5.stringIgnored', burst(p, eligibleRun(5)), [false, false, false, false, true],
+    'a non-integer reminderEvery falls back to the default 5 as well');
+}
+
+// R6 — the suppressors that survived. reminderEvery:1 removes the cadence from
+// the picture, so a `false` here is the GATE and nothing else.
+{
+  const p = freshProject({ state: READY_STATE({ reminderEvery: 1 }) });
+  const suppressed = [
+    'rg -l "session store"',
+    'rg --files-with-matches "session store"',
+    'grep -c "session store" ',
+    'rg --count "session store"',
+    'grep -o "session store" ',
+    'rg "src/store/session.ts"',
+    'rg "session.ts"',
+    'find . -name "session"',
+    'bfs . -iname "session"',
+    'rg "how does semble decide"',
+  ];
+  check('R6.suppressed', burst(p, suppressed), suppressed.map(() => false),
+    'enumeration flags, a path pattern, a filename-shaped pattern, a find-by-name and any mention of semble stay silent');
+  check('R6.counterUntouched', existsSync(counterFile(p)), false,
+    'and none of them ever created the counter file - suppression happens before the count');
+}
+
+// R7 — the shapes the old "any doubt returns true" gate suppressed and this one
+// allows. These ten are the 4.5x eligibility gain, one case per reason.
+{
+  const p = freshProject({ state: READY_STATE({ reminderEvery: 1 }) });
+  const allowed = [
+    'rg "handle.*event"',              // regex metacharacter
+    'rg "^export function"',           // anchor
+    'rg "(retry|backoff)"',            // alternation
+    'rg "queue\\[0\\]"',               // bracket
+    'rg -F "session expiry" ',         // literal flag, no longer a suppressor
+    'rg -w "dispatch" ',               // word flag, no longer a suppressor
+    'rg "id"',                         // two characters, no longer too short
+    'rg "session store" | sort',       // piped, no longer a suppressor
+    'cd /tmp && rg "session expiry"',  // search at a command boundary
+    'ugrep "how sessions persist"',    // a non-rg binary
+  ];
+  check('R7.allowed', burst(p, allowed), allowed.map(() => true),
+    'regexes, literal/word flags, short patterns and piped searches all reach the model now');
+}
+
+// R8 — state gating. Every row silent, and none of them counts.
+{
+  const rows = [
+    ['missing', undefined],
+    ['corrupt', '{,}'],
+    ['disabledFlag', READY_STATE({ enabled: false })],
+    ['disabledPhase', READY_STATE({ phase: 'disabled' })],
+    ['error', READY_STATE({ phase: 'error' })],
+    ['prereq', READY_STATE({ phase: 'prereq_ready' })],
+    ['noMcp', READY_STATE({ completed: [] })],
+  ];
+  const seen = rows.map(([, state]) => {
+    const p = freshProject(state === undefined ? {} : { state });
+    return [ctxOf(remindOut(p, 'rg "session expiry"')), existsSync(counterFile(p))];
+  });
+  check('R8.silent', seen, rows.map(() => ['', false]),
+    'no state, corrupt state, either disabled form, error, prereq_ready and a missing mcp checkpoint all inject nothing and count nothing');
+}
+{
+  // phase !== 'ready' still fires on purpose: semble builds its index lazily
+  // inside a tool call, so a ready-gate would deadlock. The wording says so.
+  const p = freshProject({ state: READY_STATE({ phase: 'awaiting_reload', reminderEvery: 1 }) });
+  check('R8.cold', safeParse(reminder(p, { command: 'rg "session expiry"' }).stdout), {
+    hookSpecificOutput: {
+      hookEventName: 'PreToolUse',
+      additionalContext: REMIND_TEXT(p) + ' Index not verified yet (phase=awaiting_reload); the first call builds it.',
+    },
+  }, 'a registered-but-unverified project still gets the nudge, with the cold-index clause appended');
+}
+
+// R9 — hostile input.
+{
+  const bad = runNode(REMINDER_SRC, 'not json at all');
+  const empty = runNode(REMINDER_SRC, '');
+  check('R9.badStdin', [bad.status, safeParse(bad.stdout)], [0, {}], 'reminder: malformed stdin -> {} exit 0');
+  check('R9.emptyStdin', [empty.status, safeParse(empty.stdout)], [0, {}], 'reminder: empty stdin -> {} exit 0');
+}
+{
+  const p = freshProject({ state: READY_STATE({ reminderEvery: 1 }) });
+  const other = safeParse(reminder(p, { command: 'rg "session expiry"' }, { tool_name: 'Write' }).stdout);
+  const noInput = safeParse(reminder(p, undefined).stdout);
+  const noCommand = safeParse(reminder(p, { description: 'no command key' }).stdout);
+  check('R9.wrongTool', [other, noInput, noCommand], [{}, {}, {}],
+    'a non-search tool, an absent tool_input and an absent command all produce the empty object');
+  check('R9.exit', reminder(p, { command: 'rg "session expiry"' }).status, 0, 'and the firing path exits 0 too');
+}
+
+// R10 — the native Grep tool path.
+{
+  const p = freshProject({ state: READY_STATE({ reminderEvery: 1 }) });
+  const g = safeParse(reminder(p, { pattern: 'how sessions persist' }, { tool_name: 'Grep' }).stdout);
+  check('R10.grepFires', g, REMIND_OK(p), 'the Grep tool gets the identical line');
+  check('R10.grepMatcher', trec(p, 1).matcher, 'Grep', 'and the nudge records Grep as the matcher');
+}
+{
+  const p = freshProject({ state: READY_STATE({ reminderEvery: 1 }) });
+  const modes = ['files_with_matches', 'count'].map((output_mode) =>
+    safeParse(reminder(p, { pattern: 'how sessions persist', output_mode }, { tool_name: 'Grep' }).stdout));
+  check('R10.grepEnumeration', modes, [{}, {}], 'Grep in files_with_matches or count mode is enumeration and stays silent');
+}
+
+// R11 — telemetry: the join key that makes delivery auditable, plus the cadence
+// fields. The old hook recorded neither, which is why 0/18 measured nothing.
+{
+  const p = freshProject({ state: READY_STATE({ reminderEvery: 2 }) });
+  reminder(p, { command: 'rg "session expiry"' }, { tool_use_id: 'toolu_AAA' });
+  reminder(p, { command: 'rg "queue drain"' }, { tool_use_id: 'toolu_BBB' });
+  check('R11.records', telemetry(p).map(dropTs), [
+    { ev: 'gate', src: 'reminder', sid: 'R1', fired: false, why: 'cadence', phase: 'ready', enabled: true, tool_use_id: 'toolu_AAA', n: 1, every: 2 },
+    { ev: 'gate', src: 'reminder', sid: 'R1', fired: true, why: 'ok', phase: 'ready', enabled: true, tool_use_id: 'toolu_BBB', n: 2, every: 2 },
+    { ev: 'nudge', src: 'reminder', sid: 'R1', matcher: 'Bash', agent: 'main', tool_use_id: 'toolu_BBB', n: 2, every: 2, q: 'rg "queue drain"' },
+  ], 'every record carries the PreToolUse tool_use_id, and the nudge names the exact call it was attached to');
+}
+{
+  const p = freshProject({ state: READY_STATE({ reminderEvery: 1 }) });
+  reminder(p, { command: 'rg "session expiry"' }, { agent_id: 'a1c5a07', agent_type: 'general-purpose' });
+  check('R11.subAttribution', trec(p, 1).agent, 'sub', 'a PreToolUse arriving from inside a subagent is attributed to sub, not main');
+}
+{
+  const p = freshProject({ state: READY_STATE() });
+  reminder(p, { command: 'rg "session expiry"' }, { tool_use_id: 12345 });
+  check('R11.nonStringTuid', trec(p, 0).tool_use_id, '', 'a non-string tool_use_id becomes the empty string, never undefined');
+}
+
+// R12 — static guarantees specific to the two restored files.
+{
+  const remSrc = readFileSync(REMINDER_SRC, 'utf8');
+  const subSrc = readFileSync(join(ASSETS, 'semble-subagent.mjs'), 'utf8');
+  const both = [remSrc, subSrc];
+  check('R12.shebang', both.map((s) => s.startsWith('#!/usr/bin/env node')), [true, true], 'both restored hooks carry a node shebang');
+  check('R12.nodeCheck',
+    [REMINDER_SRC, join(ASSETS, 'semble-subagent.mjs')].map((f) => spawnSync(process.execPath, ['--check', f]).status),
+    [0, 0], 'node --check passes on both');
+  check('R12.advisory', both.map((s) => s.includes('permissionDecision') || s.includes('updatedInput')), [false, false],
+    'neither can decide or rewrite anything - the word does not appear in either file');
+  check('R12.noProcess', both.map((s) => s.includes('child_process') || s.includes('spawn(')), [false, false],
+    'and neither spawns a process');
+  check('R12.retiredMarker', both.map((s) => s.includes('.reminder-ts')), [false, false],
+    'the retired throttle marker path is gone from both files');
+  check('R12.retiredName', remSrc.includes('semble-explore.mjs'), false,
+    'and the reminder never names the retired hook file');
+  check('R12.explorePastTense', subSrc.includes('semble-explore.mjs, was pinned'), true,
+    'the subagent hook names semble-explore.mjs exactly once, as a retired predecessor');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// S. SubagentStart — one line into EVERY spawned subagent
+//
+// The deleted semble-explore.mjs matched agent_type "Explore" alone. This one
+// registers with no matcher at all, which on CC 2.1.226 means every agent type
+// (verified live: a matcher-less SubagentStart entry fired for "Explore").
+// No throttle and no counter: a fresh subagent remembers no earlier injection.
+// ═══════════════════════════════════════════════════════════════════════════
+function subagent(proj, agentType, extra) {
+  return runNode(SUBAGENT_SRC, JSON.stringify({
+    session_id: 'S1',
+    cwd: proj,
+    hook_event_name: 'SubagentStart',
+    prompt_id: 'p1',
+    agent_id: 'a1c5a0755e38bab4a',
+    agent_type: agentType,
+    ...(extra || {}),
+  }));
+}
+const SUB_TEXT = (p) =>
+  'semble: mcp__semble_code__search is already available to you — no ToolSearch needed. ' +
+  'Start any "where/how/why does X work" question with ONE call: repo="' + p +
+  '", top_k=5, max_snippet_lines=10, then open the hit at start_line. ' +
+  'Use rg only for exact identifiers, literal strings and exhaustive enumeration.';
+const SUB_OK = (p) => ({
+  hookSpecificOutput: { hookEventName: 'SubagentStart', additionalContext: SUB_TEXT(p) },
+});
+
+// S1 — every agent type, not just Explore.
+{
+  const p = freshProject({ state: READY_STATE() });
+  const types = ['Explore', 'Plan', 'general-purpose', 'docs-writer', 'statusline-setup', 'brewcode:skill-creator'];
+  check('S1.allTypes', types.map((t) => safeParse(subagent(p, t).stdout)), types.map(() => SUB_OK(p)),
+    'six different agent types each receive the identical directive - the Explore-only matcher is gone');
+  check('S1.exact', safeParse(subagent(p, 'Explore').stdout), SUB_OK(p), 'and the injected string is exactly this');
+}
+
+// S2 — no throttle: repeated spawns each get their own line.
+{
+  const p = freshProject({ state: READY_STATE() });
+  const runs = [1, 2, 3].map(() => ctxOf(safeParse(subagent(p, 'general-purpose').stdout)));
+  check('S2.noThrottle', runs, [SUB_TEXT(p), SUB_TEXT(p), SUB_TEXT(p)],
+    'three consecutive spawns all fire - there is nothing for a fresh subagent to remember');
+  check('S2.noCounter', existsSync(counterFile(p)), false, 'and the subagent hook keeps no counter of its own');
+}
+
+// S3 — telemetry carries agent_type and agent_id, which makes per-agent-type
+// conversion computable and per-injection delivery auditable.
+{
+  const p = freshProject({ state: READY_STATE() });
+  subagent(p, 'docs-writer', { agent_id: 'a99' });
+  check('S3.records', telemetry(p).map(dropTs), [
+    { ev: 'gate', src: 'subagent', sid: 'S1', fired: true, why: 'ok', phase: 'ready', enabled: true, agent_type: 'docs-writer', agent_id: 'a99' },
+    { ev: 'nudge', src: 'subagent', sid: 'S1', matcher: 'SubagentStart', agent: 'sub', agent_type: 'docs-writer', agent_id: 'a99', q: '' },
+  ], 'one gate record and one nudge record, both naming the agent type and the agent id');
+}
+
+// S4 — state gating, same seven rows as the reminder.
+{
+  const rows = [
+    ['missing', undefined],
+    ['corrupt', '{,}'],
+    ['disabledFlag', READY_STATE({ enabled: false })],
+    ['disabledPhase', READY_STATE({ phase: 'disabled' })],
+    ['error', READY_STATE({ phase: 'error' })],
+    ['prereq', READY_STATE({ phase: 'prereq_ready' })],
+    ['noMcp', READY_STATE({ completed: [] })],
+  ];
+  const seen = rows.map(([, state]) => {
+    const p = freshProject(state === undefined ? {} : { state });
+    const r = subagent(p, 'Explore');
+    return [r.status, safeParse(r.stdout)];
+  });
+  check('S4.silent', seen, rows.map(() => [0, {}]),
+    'no state, corrupt state, either disabled form, error, prereq_ready and a missing mcp checkpoint all inject nothing');
+}
+{
+  const p = freshProject({ state: READY_STATE({ phase: 'verifying' }) });
+  check('S4.notReadyStillFires', safeParse(subagent(p, 'Explore').stdout), SUB_OK(p),
+    'a registered-but-unverified project still gets the line - the index is built inside the first call');
+}
+
+// S5 — hostile input. Without an agent_type there is nothing to talk to, and
+// cwd is a guess, so the hook writes nothing at all.
+{
+  const bad = runNode(SUBAGENT_SRC, 'not json at all');
+  const empty = runNode(SUBAGENT_SRC, '');
+  check('S5.badStdin', [bad.status, safeParse(bad.stdout)], [0, {}], 'subagent: malformed stdin -> {} exit 0');
+  check('S5.emptyStdin', [empty.status, safeParse(empty.stdout)], [0, {}], 'subagent: empty stdin -> {} exit 0');
+}
+{
+  const p = freshProject({ state: READY_STATE() });
+  const r = runNode(SUBAGENT_SRC, JSON.stringify({ session_id: 'S1', cwd: p, hook_event_name: 'SubagentStart' }));
+  check('S5.noAgentType', [r.status, safeParse(r.stdout), existsSync(telemetryFile(p))], [0, {}, false],
+    'a payload with no agent_type injects nothing and writes no telemetry');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F. static guarantees of the five shipped hook files
 // ═══════════════════════════════════════════════════════════════════════════
 {
   const sessionSrc = readFileSync(SESSION_SRC, 'utf8');
   const prefetchSrc = readFileSync(PREFETCH_SRC, 'utf8');
   const statsSrc = readFileSync(STATS_SRC, 'utf8');
-  const src = [sessionSrc, prefetchSrc, statsSrc];
-  // The passive pair must stay pure readers. Prefetch is the ONE hook allowed a
+  const reminderSrc = readFileSync(REMINDER_SRC, 'utf8');
+  const subagentSrc = readFileSync(SUBAGENT_SRC, 'utf8');
+  const src = [sessionSrc, prefetchSrc, statsSrc, reminderSrc, subagentSrc];
+  // The passive hooks must stay pure readers. Prefetch is the ONE hook allowed a
   // child, and only because handing over a result is the thing that converts.
-  const passive = sessionSrc + '\n' + statsSrc;
+  // The two advisory hooks are back on that same rule: they emit text, they never
+  // spawn - a PreToolUse hook that forks sits in front of every Bash call.
+  const passive = [sessionSrc, statsSrc, reminderSrc, subagentSrc].join('\n');
   check('F1.passiveNoChildProcess', passive.includes('child_process'), false,
-    'neither the session hook nor the stats observer imports child_process');
-  check('F2.passiveNoSpawn', passive.includes('spawn('), false, 'and neither spawns a process');
+    'no passive hook - session, stats, reminder, subagent - imports child_process');
+  check('F2.passiveNoSpawn', passive.includes('spawn('), false, 'and none of them spawns a process');
   check('F3.noPgrep', src.join('\n').includes('pgrep'), false, 'no hook probes for a daemon with pgrep');
   check('F4.prefetchExecFile', prefetchSrc.includes('execFileSync('), true,
     'the prefetch hook spawns with execFileSync - argv, so the distilled query can never be word-split');
@@ -1601,13 +1996,16 @@ for (const [name, opts, msg] of SEARCH_FAIL) {
     [prefetchSrc.includes('timeout: SEARCH_TIMEOUT_MS'), prefetchSrc.includes("killSignal: 'SIGKILL'")],
     [true, true], 'the child carries a hard cap and a kill signal, both inside the registered 5 s hook timeout');
   check('F7.shebang', src.every((s) => s.startsWith('#!/usr/bin/env node')), true, 'every hook carries a node shebang');
-  const checks = [SESSION_SRC, PREFETCH_SRC, STATS_SRC]
+  const checks = [SESSION_SRC, PREFETCH_SRC, STATS_SRC, REMINDER_SRC, SUBAGENT_SRC]
     .map((f) => spawnSync(process.execPath, ['--check', f]).status);
-  check('F8.nodeCheck', checks, [0, 0, 0], 'node --check passes on all three hook files');
-  check('F9.neverDecides', src.map((x) => x.includes('permissionDecision:')), [false, false, false],
+  check('F8.nodeCheck', checks, [0, 0, 0, 0, 0], 'node --check passes on all five hook files');
+  check('F9.neverDecides', src.map((x) => x.includes('permissionDecision:')),
+    [false, false, false, false, false],
     'no shipped hook emits a permissionDecision field - none of them can block a call');
-  check('F10.retiredGone', [existsSync(join(ASSETS, 'semble-reminder.mjs')), existsSync(join(ASSETS, 'semble-explore.mjs'))],
-    [false, false], 'the two advisory hooks are gone from assets/ - they are not shipped, only cleaned up');
+  check('F10.shipped', [existsSync(REMINDER_SRC), existsSync(SUBAGENT_SRC)], [true, true],
+    'both advisory hooks ship again - the channel they use was verified to deliver');
+  check('F10.retiredGone', existsSync(join(ASSETS, 'semble-explore.mjs')), false,
+    'and semble-explore.mjs is gone from assets/ for good - superseded, only ever cleaned up');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1731,11 +2129,14 @@ const FOREIGN_HOOK = { type: 'command', command: 'node', args: ['/opt/foreign/gu
   const pre = (s.hooks || {}).PreToolUse || [];
   check('H5.mixedEntry', pre[0] || null, { matcher: 'Bash', hooks: [FOREIGN_HOOK] },
     'the mixed entry keeps the foreign hook and loses only the stale semble hook');
+  check('H5.currentRow', pre[1] || null,
+    { matcher: 'Bash|Grep', hooks: [{ type: 'command', command: 'node', args: [semblePaths(p).reminder], timeout: 5 }] },
+    'and the current reminder row is appended beside it, on its own matcher');
   check('H5.staleGone', Object.values(s.hooks || {}).flat().filter((e) => argsOf(e).some((a) => a.startsWith(staleDir))).length, 0,
     'zero hooks still point at the old hooks dir');
-  check('H5.counts', wantCounts(p, s), [1, 1, 1, 1], 'exactly one current entry per want row');
-  check('H5.preToolUseSize', pre.length, 1,
-    'PreToolUse now holds the repaired foreign entry ALONE - 5.0.0 wants no row on that event');
+  check('H5.counts', wantCounts(p, s), [1, 1, 1, 1, 1, 1], 'exactly one current entry per want row');
+  check('H5.preToolUseSize', pre.length, 2,
+    'PreToolUse holds exactly the repaired foreign entry and the one current reminder row');
 }
 
 // H6 — unmerge: a hand-merged foreign hook in a semble entry survives
@@ -1802,7 +2203,7 @@ function driftTimeouts(p, value) {
   check('I1.exit', r.status, 0, 'a re-run over a drifted install exits 0');
   const t = readSettings(p);
   check('I1.timeouts', Object.values(t.hooks).flat().flatMap((e) => e.hooks.map((h) => h.timeout)),
-    [5, 5, 5, 5], 'every drifted timeout:5000 is rewritten to the contract value 5 seconds');
+    [5, 5, 5, 5, 5, 5], 'every drifted timeout:5000 is rewritten to the contract value 5 seconds');
   check('I1.bytes', readRaw(settingsPath(p)), clean,
     'the repaired file is byte-identical to a clean install - repair, not append');
   const j = safeParse(r.stdout);
@@ -1825,7 +2226,7 @@ function driftTimeouts(p, value) {
   const before = safeParse(guidance(p, ['status', '--json']).stdout);
   check('I2.statusBefore',
     [before.hooks.wiredCount, before.hooks.wantCount, before.hooks.driftedCount, before.hooks.missingCount],
-    [0, WANT_N, WANT_N - 1, 1], 'status calls the real broken shape 0/4 wired, 3 drifted, 1 missing');
+    [0, WANT_N, WANT_N - 1, 1], 'status calls the real broken shape 0/6 wired, 5 drifted, 1 missing');
   const r = guidance(p, ['install', '--part', 'hooks', '--json']);
   check('I2.exit', r.status, 0, 'the repair run exits 0');
   // Key ORDER differs by construction here and only here: UserPromptSubmit was
@@ -1843,7 +2244,7 @@ function driftTimeouts(p, value) {
   const after = safeParse(guidance(p, ['status', '--json']).stdout);
   check('I2.statusAfter',
     [after.hooks.wiredCount, after.hooks.driftedCount, after.hooks.missingCount, after.hooks.drift.length],
-    [WANT_N, 0, 0, 0], 'after the repair status reports 4/4 wired with an empty drift list');
+    [WANT_N, 0, 0, 0], 'after the repair status reports 6/6 wired with an empty drift list');
 }
 
 // I3 — a foreign hook sharing a drifted entry survives merge AND unmerge
@@ -1887,7 +2288,7 @@ function driftTimeouts(p, value) {
   check('I4.exit', r.status, 0, 'a duplicated entry is repaired, not a fatal ABORT');
   check('I4.noAbort', (r.stdout + r.stderr).includes('ABORT'), false, 'nothing reports ABORT');
   const t = readSettings(p);
-  check('I4.counts', wantCounts(p, t), [1, 1, 1, 1], 'exactly one entry per want row survives the de-duplication');
+  check('I4.counts', wantCounts(p, t), [1, 1, 1, 1, 1, 1], 'exactly one entry per want row survives the de-duplication');
   check('I4.foreignSurvived', t.hooks.PostToolUse.filter((e) => argsOf(e).includes('/opt/foreign/guard.mjs')),
     [{ matcher: STATS_MATCHER, hooks: [FOREIGN_HOOK] }],
     'the foreign hook riding on the duplicate outlives the duplicate');
@@ -1906,9 +2307,9 @@ function driftTimeouts(p, value) {
   check('I5.clean',
     [clean.hooks.wiredCount, clean.hooks.driftedCount, clean.hooks.missingCount,
       clean.hooks.duplicateCount, clean.hooks.drift.length],
-    [WANT_N, 0, 0, 0, 0], 'a correct install reports 4 wired and no drift');
+    [WANT_N, 0, 0, 0, 0], 'a correct install reports 6 wired and no drift');
   check('I5.cleanEntries', clean.hooks.entries.map((e) => e.state),
-    ['wired', 'wired', 'wired', 'wired'],
+    ['wired', 'wired', 'wired', 'wired', 'wired', 'wired'],
     'every want row is reported wired individually');
   const s = readSettings(p);
   s.hooks.UserPromptSubmit[0].hooks[0].timeout = 5000;
@@ -1923,9 +2324,9 @@ function driftTimeouts(p, value) {
   check('I5.prefetchWired', a.hooks.prefetch.wired, false,
     'wired means present AND conforming - the drifted prefetch row is not wired');
   check('I5.otherRows', a.hooks.entries.map((e) => e.state),
-    ['wired', 'drifted', 'wired', 'wired'], 'only the drifted row changes state');
-  check('I5.human', guidance(p, ['status']).stdout.includes('hooks 3/4 wired (1 drifted - re-run install to repair)'),
-    true, 'the human line spells the drift out instead of printing 4/4');
+    ['wired', 'drifted', 'wired', 'wired', 'wired', 'wired'], 'only the drifted row changes state');
+  check('I5.human', guidance(p, ['status']).stdout.includes('hooks 5/6 wired (1 drifted - re-run install to repair)'),
+    true, 'the human line spells the drift out instead of printing 6/6');
 }
 
 // I6 — field-level, not stringify-level: key order is not drift, a missing field is
@@ -1959,7 +2360,11 @@ function driftTimeouts(p, value) {
 
 // I7 — the .gitignore outcome is verified, and the absent case is decided out loud
 {
-  const GI = '.claude/semble/.prefetch-ts';
+  // The DIRECTORY, not the throttle marker. `.claude/semble/` also holds state.json and
+  // telemetry.jsonl — 1.25 MB / 5778 lines on this workspace, carrying verbatim shell
+  // commands and distilled prompt text. A per-marker line left all of that untracked and
+  // `git add .`-able in any repo that does not already ignore `.claude/`.
+  const GI = '.claude/semble/';
   const p1 = freshProject({});                             // .gitignore exists, no line
   writeFileSync(join(p1, '.gitignore'), 'node_modules/\n');
   const j1 = safeParse(guidance(p1, ['install', '--part', 'hooks', '--json']).stdout);
@@ -2029,23 +2434,100 @@ function driftTimeouts(p, value) {
   check('I7.migrateStable', readRaw(join(p4, '.gitignore')),
     `node_modules/\n\n# brewcode:semble\n${GI}\n`,
     'and a second install over the migrated file changes nothing');
+
+  // I7b — the 5.1.0 line is superseded, not kept beside the new one. An install that
+  // wrote `.claude/semble/.prefetch-ts` must converge on the directory line ALONE;
+  // leaving both would park a narrower duplicate in the user's repo forever.
+  const p5 = freshProject({});
+  writeFileSync(join(p5, '.gitignore'),
+    'node_modules/\n\n# brewcode:semble\n.claude/semble/.prefetch-ts\n');
+  guidance(p5, ['install', '--part', 'hooks', '--json']);
+  check('I7b.supersede', readRaw(join(p5, '.gitignore')),
+    `node_modules/\n\n# brewcode:semble\n${GI}\n`,
+    'the superseded .prefetch-ts line is dropped and the directory line takes its place - never both');
+  guidance(p5, ['remove', '--part', 'hooks', '--json']);
+  check('I7b.remove', readRaw(join(p5, '.gitignore')), 'node_modules/\n',
+    'remove strips exactly what install now writes, and nothing the user put there');
+  const cycle5 = [];
+  for (let i = 0; i < 2; i++) {
+    guidance(p5, ['install', '--part', 'hooks', '--json']);
+    cycle5.push(readRaw(join(p5, '.gitignore')));
+    guidance(p5, ['remove', '--part', 'hooks', '--json']);
+    cycle5.push(readRaw(join(p5, '.gitignore')));
+  }
+  check('I7b.cycleStable', cycle5,
+    [`node_modules/\n\n# brewcode:semble\n${GI}\n`, 'node_modules/\n',
+      `node_modules/\n\n# brewcode:semble\n${GI}\n`, 'node_modules/\n'],
+    'and two install/remove cycles over the migrated file produce exactly two byte-identical states');
+}
+
+// I8 — a corrupt hook asset never lands installed, and never lands wired.
+// `node --check` used to run AFTER the copy, so a broken asset was reported failed and
+// then left on disk AND registered in settings.json: every prompt of the user's next
+// session ran a hook Claude Code cannot parse. The check now runs on a staged copy.
+{
+  const STATS_ASSET = join(SKILL_COPY, 'assets', 'semble-stats.mjs');
+  const GOOD = readFileSync(STATS_ASSET, 'utf8');
+  const BROKEN = 'export function (\n';                      // a syntax error in ESM and CJS alike
+
+  const p = freshProject({});
+  writeFileSync(STATS_ASSET, BROKEN);
+  const j = safeParse(guidance(p, ['install', '--part', 'hooks', '--json']).stdout);
+  const { session, prefetch: pre, stats } = semblePaths(p);
+  check('I8.failed', j.failed.filter((l) => l.startsWith('hooks:')),
+    [`hooks: cannot install ${stats}`], 'the broken asset is reported failed exactly once, by full path');
+  check('I8.absent', existsSync(stats), false,
+    'and it is NOT on disk: the check runs on the staged copy, before the move into place');
+  check('I8.noStageLeft', readdirSync(hooksDirOf(p)).filter((f) => f.includes('semble-staging')), [],
+    'the rejected staging file is deleted, not left as litter beside the real hooks');
+  check('I8.siblings', [existsSync(session), existsSync(pre)], [true, true],
+    'the two valid hooks still install — one bad asset is not a whole-install failure');
+  check('I8.unwired', JSON.stringify(readSettings(p)).includes('semble-stats.mjs'), false,
+    'and NOTHING in settings.json points at the file that is not there');
+  check('I8.siblingsWired', Object.keys(readSettings(p).hooks).sort(),
+    ['PreToolUse', 'SessionStart', 'SubagentStart', 'UserPromptSubmit'],
+    'only the events whose hook file actually exists are wired - the two stats events are'
+    + ' the only ones missing, because semble-stats.mjs is the broken asset');
+
+  // A broken asset arriving OVER a good install: the working copy is kept byte for
+  // byte and stays wired. Rolling a user back to no hook is worse than no upgrade.
+  const q = freshProject({});
+  writeFileSync(STATS_ASSET, GOOD);
+  guidance(q, ['install', '--part', 'hooks', '--json']);
+  const beforeFile = readRaw(semblePaths(q).stats);
+  const beforeSettings = readRaw(settingsPath(q));
+  writeFileSync(STATS_ASSET, BROKEN);
+  const j2 = safeParse(guidance(q, ['install', '--part', 'hooks', '--json']).stdout);
+  check('I8.upgradeFailed', j2.failed.filter((l) => l.startsWith('hooks:')),
+    [`hooks: cannot install ${semblePaths(q).stats}`], 'the failed upgrade is reported the same way');
+  check('I8.upgradeKeepsFile', readRaw(semblePaths(q).stats), beforeFile,
+    'the previous, valid copy is left byte-identical');
+  check('I8.upgradeKeepsWiring', readRaw(settingsPath(q)), beforeSettings,
+    'and stays wired — a hook that is on disk and parses is not unwired by a bad release');
+  writeFileSync(STATS_ASSET, GOOD);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
 // M. migration off the v1 hook layer
 //
-// The single most breakable part of 5.0.0. A user upgrading from 4.x has a
-// settings.json full of rows for hooks that no longer exist, and two orphan
-// .mjs files on disk. `wanted` is built from SG_LIVE while ownership is decided
-// by SG_MARKS, so a retired basename is still recognised as ours (and purged)
-// without ever being re-added. Building `wanted` from the marks list was the
-// pre-5.0.0 bug that made retired rows immortal.
+// The single most breakable part of the installer. A user upgrading from 4.x has
+// a settings.json full of rows in shapes the want table no longer uses, and an
+// orphan .mjs on disk. `wanted` is built from the want table as (event, matcher,
+// path) TRIPLES while ownership is decided by SG_MARKS, so a retired basename or
+// a retired REGISTRATION is still recognised as ours (and purged) without ever
+// being re-added. Building `wanted` from the marks list was the pre-5.0.0 bug
+// that made retired rows immortal.
+//
+// The v1 rows do not merely disappear here: PreToolUse/Bash + PreToolUse/Grep
+// collapse into one PreToolUse/`Bash|Grep` row, and SubagentStart/`Explore`
+// becomes a matcher-less SubagentStart row on semble-subagent.mjs. Replaced,
+// never left standing beside the new one, never silently kept.
 // ═══════════════════════════════════════════════════════════════════════════
 {
   const p = freshProject({});
   const d = hooksDirOf(p);
   mkdirSync(d, { recursive: true });
-  const { session, stats, reminder: rem, explore: exp } = semblePaths(p);
+  const { session, stats, reminder: rem, subagent: sub, explore: exp } = semblePaths(p);
   const H = (f, t) => ({ type: 'command', command: 'node', args: [f], timeout: t === undefined ? 5 : t });
   // Exactly the shape 4.x left behind, down to the stats matcher predating `|Read`.
   const OLD_STATS = 'mcp__semble_code__search|mcp__semble_code__find_related|Bash|Grep|Glob';
@@ -2069,39 +2551,46 @@ function driftTimeouts(p, value) {
   writeFileSync(join(p, '.claude', 'semble', '.reminder-ts'), '{"t":1}');
 
   const before = safeParse(guidance(p, ['status', '--json']).stdout);
-  check('M1.retiredSeen', before.hooks.retired, ['semble-reminder.mjs', 'semble-explore.mjs'],
-    'status names the retired files it can see on disk, in want-table order');
+  check('M1.retiredSeen', before.hooks.retired, ['semble-explore.mjs'],
+    'status names the ONE retired file it can see on disk; semble-reminder.mjs is live again'
+    + ' and is reported as a live hook, not as a leftover');
   check('M1.wiredBefore', [before.hooks.wiredCount, before.hooks.wantCount], [1, WANT_N],
-    'only SessionStart carries over: prefetch did not exist, and both stats rows sit on the'
-    + ' pre-5.0.0 matcher, which is a different want row and not a drifted one');
+    'only SessionStart carries over: prefetch did not exist, both stats rows sit on the'
+    + ' pre-5.0.0 matcher, and the two v1 reminder rows and the Explore row are all on'
+    + ' matchers the want table does not use');
   check('M1.staleBefore', before.hooks.staleEntries, 5,
     'five owned entries are wired somewhere the want table does not want them - the two'
-    + ' reminder rows, the explore row, and BOTH stats rows on the retired matcher');
+    + ' v1 reminder rows, the Explore row, and BOTH stats rows on the retired matcher');
 
   const r = guidance(p, ['install', '--part', 'hooks', '--json']);
   check('M2.exit', r.status, 0, 'install over a v1-shaped settings file exits 0');
   const s = readSettings(p);
-  check('M2.counts', wantCounts(p, s), [1, 1, 1, 1], 'every current want row is wired exactly once');
-  check('M2.noRetiredPath', [JSON.stringify(s).includes('semble-reminder.mjs'),
-    JSON.stringify(s).includes('semble-explore.mjs')], [false, false],
-  'NEITHER retired basename survives anywhere in settings.json - the whole point of the migration');
-  check('M2.subagentStartGone', Object.prototype.hasOwnProperty.call(s.hooks, 'SubagentStart'), false,
-    'SubagentStart emptied and the now-meaningless key was deleted, not left as []');
-  check('M2.preToolUseKept', s.hooks.PreToolUse, [{ matcher: 'Write', hooks: [FOREIGN_HOOK] }],
-    'PreToolUse survives with the foreign entry ALONE - the purge is ours-only, per entry');
-  check('M2.filesGone', [existsSync(rem), existsSync(exp)], [false, false],
-    'both orphan .mjs files are deleted from .claude/hooks');
-  check('M2.filesKept', [existsSync(session), existsSync(semblePaths(p).prefetch), existsSync(stats)],
-    [true, true, true], 'and all three live hooks are on disk');
+  check('M2.counts', wantCounts(p, s), [1, 1, 1, 1, 1, 1], 'every current want row is wired exactly once');
+  check('M2.noRetiredPath', JSON.stringify(s).includes('semble-explore.mjs'), false,
+    'the retired basename survives nowhere in settings.json - the whole point of the migration');
+  check('M2.subagentStartRow', s.hooks.SubagentStart,
+    [{ hooks: [{ type: 'command', command: 'node', args: [sub], timeout: 5 }] }],
+    'the SubagentStart/Explore row is REPLACED by the matcher-less subagent row - one row,'
+    + ' not the old one plus the new one, and not an empty [] husk');
+  check('M2.preToolUseRows', s.hooks.PreToolUse,
+    [{ matcher: 'Write', hooks: [FOREIGN_HOOK] },
+      { matcher: 'Bash|Grep', hooks: [{ type: 'command', command: 'node', args: [rem], timeout: 5 }] }],
+    'the two v1 reminder rows collapse into ONE Bash|Grep row and the foreign Write entry is'
+    + ' untouched - the purge is ours-only, per entry');
+  check('M2.filesGone', existsSync(exp), false,
+    'the orphan semble-explore.mjs is deleted from .claude/hooks');
+  check('M2.filesKept', [existsSync(session), existsSync(semblePaths(p).prefetch), existsSync(stats),
+    existsSync(rem), existsSync(sub)], [true, true, true, true, true],
+  'and all five live hooks are on disk - the v1 reminder stub was overwritten by the shipped asset');
   check('M2.statsMatchers', s.hooks.PostToolUse.map((e) => e.matcher), [STATS_MATCHER],
     'ONE PostToolUse row, on the current matcher: a surviving pre-5.0.0 row would fire the'
     + ' observer a second time on every Bash and silently double the denominator');
   check('M2.statsFailureMatchers', s.hooks.PostToolUseFailure.map((e) => e.matcher), [STATS_MATCHER],
     'and the same on the failure event');
   const changed = (safeParse(r.stdout) || {}).changed || [];
-  check('M2.reported', [changed.includes('hooks: removed retired ' + rem),
-    changed.includes('hooks: removed retired ' + exp)], [true, true],
-  'install reports both deletions by full path instead of doing them silently');
+  check('M2.reported', [changed.includes('hooks: removed retired ' + exp),
+    changed.includes('hooks: installed ' + rem)], [true, true],
+  'install reports the deletion AND the reinstatement by full path, never silently');
 
   const a = safeParse(guidance(p, ['status', '--json']).stdout);
   check('M3.after', [a.hooks.wiredCount, a.hooks.wantCount, a.hooks.driftedCount,
@@ -2109,11 +2598,12 @@ function driftTimeouts(p, value) {
   [WANT_N, WANT_N, 0, 0, 0, 0], 'the migrated project is indistinguishable from a fresh install');
   check('M3.retiredEmpty', a.hooks.retired, [], 'nothing retired is left to report');
   check('M3.retiredMarkerGone', existsSync(join(p, '.claude', 'semble', '.reminder-ts')), false,
-    'the retired hook\'s marker file goes with it: the migration drops its .gitignore line, so a '
-    + 'marker left behind turns an invisible throttle file into an untracked diff in the user\'s repo');
+    'the v1 throttle marker goes even though the reminder hook is back: the restored hook counts in '
+    + '.claude/semble/reminder.json, and .reminder-ts has no writer left, so a file kept here would '
+    + 'be an untracked diff for nothing');
   check('M3.gitignore', readFileSync(join(p, '.gitignore'), 'utf8'),
-    'node_modules/\n\n# brewcode:semble\n.claude/semble/.prefetch-ts\n',
-    'the retired .reminder-ts line is DROPPED and the prefetch marker added - never both,'
+    'node_modules/\n\n# brewcode:semble\n.claude/semble/\n',
+    'the retired .reminder-ts line is DROPPED and the directory line added - never both,'
     + ' and never an orphan ignore line for a file nothing writes any more');
 
   const snap = readRaw(settingsPath(p));
@@ -2126,13 +2616,13 @@ function driftTimeouts(p, value) {
 {
   const p = freshProject({});
   guidance(p, ['install', '--part', 'all', '--json']);
-  const { reminder: rem } = semblePaths(p);
-  writeFileSync(rem, '// orphan\n');
+  const { explore: exp } = semblePaths(p);
+  writeFileSync(exp, '// orphan\n');
   const a = safeParse(guidance(p, ['status', '--json']).stdout);
-  check('M5.seen', [a.hooks.retired, a.hooks.wiredCount], [['semble-reminder.mjs'], WANT_N],
+  check('M5.seen', [a.hooks.retired, a.hooks.wiredCount], [['semble-explore.mjs'], WANT_N],
     'an orphan file is reported even when settings.json is already perfect');
   guidance(p, ['install', '--part', 'hooks', '--json']);
-  check('M5.swept', [existsSync(rem),
+  check('M5.swept', [existsSync(exp),
     safeParse(guidance(p, ['status', '--json']).stdout).hooks.retired], [false, []],
   'and install sweeps it - file cleanup does not depend on a matching settings row');
 }
@@ -2141,11 +2631,10 @@ function driftTimeouts(p, value) {
 {
   const p = freshProject({});
   guidance(p, ['install', '--part', 'all', '--json']);
-  const { session, prefetch: pre, stats, reminder: rem, explore: exp } = semblePaths(p);
+  const { session, prefetch: pre, stats, reminder: rem, subagent: sub, explore: exp } = semblePaths(p);
   const s = readSettings(p);
-  s.hooks.PreToolUse = [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'node', args: [rem], timeout: 5 }] }];
+  s.hooks.SubagentStart = [{ matcher: 'Explore', hooks: [{ type: 'command', command: 'node', args: [exp], timeout: 5 }] }];
   writeFileSync(settingsPath(p), JSON.stringify(s, null, 2) + '\n');
-  writeFileSync(rem, '// orphan\n');
   writeFileSync(exp, '// orphan\n');
   mkdirSync(join(p, '.claude', 'semble'), { recursive: true });
   for (const m of ['.prefetch-ts', '.reminder-ts']) {
@@ -2155,8 +2644,8 @@ function driftTimeouts(p, value) {
   const t = readSettings(p);
   check('M6.settings', JSON.stringify(t.hooks || {}), '{}',
     'unmerge reads the FULL ownership list, so a hand-restored retired row is removed too');
-  check('M6.files', [session, pre, stats, rem, exp].map((f) => existsSync(f)),
-    [false, false, false, false, false], 'and every owned .mjs goes, live or retired');
+  check('M6.files', [session, pre, stats, rem, sub, exp].map((f) => existsSync(f)),
+    [false, false, false, false, false, false], 'and every owned .mjs goes, live or retired');
   check('M6.markers', ['.prefetch-ts', '.reminder-ts']
     .map((f) => existsSync(join(p, '.claude', 'semble', f))), [false, false],
   'and so do both throttle markers - remove drops their .gitignore line, so anything left '
@@ -2218,15 +2707,14 @@ function driftTimeouts(p, value) {
   const p = freshProject({});
   guidance(p, ['install', '--part', 'all', '--json']);
   const rule = join(p, '.claude', 'rules', 'semble-first.md');
-  const { reminder: rem, explore: exp } = semblePaths(p);
+  const { explore: exp } = semblePaths(p);
   const verOf = (f) => (readFileSync(f, 'utf8').match(/^version: "([^"]+)"/m) || [])[1];
   const installed = verOf(rule);
   check('O1.installed', typeof installed === 'string' && /^\d+\.\d+\.\d+$/.test(installed), true,
     'the fresh install carries the template\'s baked X.Y.Z stamp');
 
-  // pre-5.0.0 install: both retired advisory hooks still on disk
-  writeFileSync(rem, '// legacy advisory hook, retired in v5.0.0\n');
-  writeFileSync(exp, '// legacy advisory hook, retired in v5.0.0\n');
+  // pre-5.0.0 install: the one retired advisory hook still on disk
+  writeFileSync(exp, '// legacy advisory hook, superseded by semble-subagent.mjs\n');
 
   // simulate the release: bump ONLY the baked stamp of the shipped template
   const tpl = join(SKILL_COPY, 'assets', 'semble-first.md.template');
@@ -2241,8 +2729,8 @@ function driftTimeouts(p, value) {
   check('O1.resync', safeParse(r.stdout).changed.filter((l) => l.startsWith('rule:')),
     [`rule: re-synced ${rule} (metadata only)`],
     'and it took the metadata-only re-sync branch, not a forced overwrite');
-  check('O1.retiredGone', [existsSync(rem), existsSync(exp)], [false, false],
-    'the same run deletes both v5.0.0-retired hooks');
+  check('O1.retiredGone', existsSync(exp), false,
+    'the same run deletes the retired hook');
   check('O1.byteIdentical', readFileSync(rule, 'utf8'), readFileSync(tpl, 'utf8'),
     'the restamped rule is byte-identical to the template, so setup-status cmp still reads SAME');
 
@@ -2315,8 +2803,8 @@ function driftTimeouts(p, value) {
     const named = (needle) => would.some((l) => l.includes(needle));
     check(`O4.${flavour}.plan`,
       ['.sembleignore', 'semble-session.mjs', 'semble-prefetch.mjs', 'semble-stats.mjs',
-        'semble-reminder.mjs', 'semble-explore.mjs'].map(named),
-      [true, true, true, true, true, true],
+        'semble-reminder.mjs', 'semble-subagent.mjs', 'semble-explore.mjs'].map(named),
+      [true, true, true, true, true, true, true],
       'the plan names every file the run really removes - a user confirms this list');
   }
 }
