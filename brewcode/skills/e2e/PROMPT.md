@@ -78,7 +78,7 @@ description: "TODO: <= 120 символов (optimal ~100), single line, что 
 
 Источник: `brewcode/skills/teams-setup/references/agent-template.md` — скопировать и адаптировать под E2E.
 
-Обязательные элементы: Mission / Domain / Character / Last Updated | Immutable Traits (Name, Base Role) | Task Acceptance Protocol | Domain Instructions | Colleagues (таблица E2E-команды)
+Обязательные элементы: Mission / Domain / Character | frontmatter `version` / `generated_by` / `last_updated` (как в шаблоне) | Immutable Traits (Name, Base Role) | Task Acceptance Protocol | Domain Instructions | Colleagues (таблица E2E-команды)
 
 Дополнительные требования:
 - **Самокритичность:** агент проверяет результат перед отдачей менеджеру.

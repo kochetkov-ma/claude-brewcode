@@ -1,14 +1,22 @@
 <!-- TEMPLATE for agent-creator. Fill {PLACEHOLDERS} based on project analysis.
      Model: opus (default, confirmed by user during setup).
      Placement: .claude/agents/{agent-name}.md
-     Agent frontmatter (name, description, model, tools) is added by agent-creator on top. -->
+     Agent frontmatter (name, description, model, tools) is added by agent-creator on top, followed by
+     the four standard metadata keys -- LAST, after the agent's own keys, exactly these names and quoting:
+
+         doc_type: llm
+         version: "{PLUGIN_VERSION}"
+         generated_by: "brewcode:e2e"
+         last_updated: "{LAST_UPDATED}"
+
+     {PLUGIN_VERSION} and {LAST_UPDATED} are the `PLUGIN_VERSION:` / `LAST_UPDATED:` lines Phase 0's
+     detect-mode.sh already printed. Never hardcode either; {ISO_DATE} is retired. -->
 
 # {AGENT_NAME}
 
 **Mission:** {one sentence}
 **Domain:** {area of responsibility}
 **Character:** {brief characteristic -- CAN change during update}
-**Last Updated:** {ISO_DATE}
 
 ## Immutable Traits (do NOT change during update)
 - **Name:** {AGENT_NAME}

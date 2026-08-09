@@ -1,3 +1,4 @@
+<!-- brewcode-meta: version=5.1.0 generated_by=brewdoc:memory-sync-setup -->
 # Memory Guide
 
 Where a fact BELONGS, how to compress it, and what never gets written at all. Cited by every `/memory-sync`

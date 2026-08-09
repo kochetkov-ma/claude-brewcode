@@ -3,6 +3,10 @@ name: intent-guard
 description: "Review-phase anti-drift check: asked-vs-delivered. Not for development, invoked explicitly by name."
 color: cyan
 maxTurns: 60
+doc_type: llm
+version: "{PLUGIN_VERSION}"
+generated_by: "{GENERATED_BY}"
+last_updated: "{LAST_UPDATED}"
 ---
 
 <!-- TEMPLATE HEADER — STRIPPED when emitting `.codex/agents/intent-guard.toml`. The ONE writer is
@@ -26,7 +30,9 @@ maxTurns: 60
      | {SPEC_LOCATION}           | scalar | Tier-2 spec/design-doc paths or globs, or `none` | new sed scalar in `generate.sh` (default `.codex/specs/**`) | `emit-agent` sed scalar, from the `SPEC_LOCATION` env teams exports |
      | {PLAN_LOCATION}           | scalar | Tier-3 plan / task-board / task-graph paths, or `none` | new sed scalar (default `.codex/features/**`) | `emit-agent` sed scalar, from the `PLAN_LOCATION` env teams exports |
      | {POLICY_LOCATION}         | scalar | Tier-4 policy paths (root + nested AGENTS.md, rules, conventions) | new sed scalar (default `AGENTS.md`, `.codex/rules/**`) | `emit-agent` sed scalar, from the `POLICY_LOCATION` env teams exports |
-     | {GENERATED_AT}            | scalar | UTC emit timestamp; appears in the TAIL STAMP, which survives this strip and is the file's only provenance | `generate.sh` sed scalar (already defined) | `emit-agent` |
+     | {PLUGIN_VERSION}          | scalar | Plugin version that produced this file, read from `.codex-plugin/plugin.json` by script self-location; appears in the frontmatter AND in the TAIL STAMP | `generate.sh` sed scalar | `emit-agent` (same writer) |
+     | {GENERATED_BY}            | scalar | `<plugin>:<skill>` that produced this file — always `brewcode:superreview-setup`, even when teams-setup triggers the emit | `generate.sh` sed scalar | `emit-agent` (same writer) |
+     | {LAST_UPDATED}            | scalar | `YYYY-MM-DD` (`date +%F`) the file was last written | `generate.sh` sed scalar | `emit-agent` (same writer) |
      | {PROJECT_INVARIANTS_TABLE}| BLOCK  | The concrete facts that make the generic drift classes checkable HERE: planned scale, testing policy, dependency policy, file-layout policy, architecture stance | `emit-agent` seeds a generic default; AI Edit adapts it, SKILL.md Phase 3 | `emit-agent` seeds a generic default; agent-creator ADAPTS that seeded BLOCK (block + marker) |
      | {DRIFT_EXAMPLES_TABLE}    | BLOCK  | 3-6 project-specific instances of the drift classes, in this repo's vocabulary | `emit-agent` seeds a generic default; AI Edit adapts it, SKILL.md Phase 3 | `emit-agent` seeds a generic default; agent-creator ADAPTS that seeded BLOCK (block + marker) |
      | {EVIDENCE_COMMANDS_BASH}  | BLOCK  | The cheap evidence commands for THIS repo (diffstat, manifest diff, test-file count, new-file list) | `emit-agent` seeds a generic default; AI Edit adapts it, SKILL.md Phase 3 | `emit-agent` seeds a generic default; agent-creator ADAPTS that seeded BLOCK (block + marker) |
@@ -183,7 +189,11 @@ which is what keeps your rows from being merged into someone else's scope-creep 
 - [ ] Verdict line first; JSON merge object emitted when spawned by superreview, `category: "intent"`
 - [ ] Nothing edited, nothing proposed as code; no mutating command run
 
-<!-- intent-guard template v2 - emitted {GENERATED_AT} - source: brewcode:superreview-setup references/intent-guard.md.template
-     This stamp is the provenance record AND the tail anchor `generate.sh` checks after stripping the template
-     header. A file WITHOUT it is treated as the project's own hand-written agent and is never template-checked. -->
+<!-- generated_by: brewcode:superreview-setup - source: references/intent-guard.md.template - version {PLUGIN_VERSION} - last_updated {LAST_UPDATED}
+     The four standard metadata fields live in the frontmatter above; this line is the TAIL ANCHOR and it stays.
+     The frontmatter sits BEFORE the stripped TEMPLATE HEADER, so only a marker AFTER that block can prove the
+     header strip (a sed RANGE) did not run away to EOF — `generate.sh` aborts the emit when it is gone. It is
+     also what separates a template-derived agent from a hand-written one: a file WITHOUT this line is the
+     project's own agent and is never judged by template rules. No template version is stamped anywhere: the
+     plugin version above replaces it. -->
 

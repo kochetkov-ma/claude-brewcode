@@ -19,6 +19,10 @@ description: "Authors the product spec and the system-design doc for a task on t
 argument-hint: "<TASK_ID> [full | design | refresh] [-n|--noask]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Agent, AskUserQuestion
 model: opus
+doc_type: llm
+version: "{PLUGIN_VERSION}"
+generated_by: "{GENERATED_BY}"
+last_updated: "{LAST_UPDATED}"
 ---
 
 # task-spec (spec + system design)

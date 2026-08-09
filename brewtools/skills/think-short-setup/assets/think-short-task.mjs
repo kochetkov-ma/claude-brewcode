@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// brewcode-meta: version=5.1.0 generated_by=brewtools:think-short-setup
 /**
  * think-short — PreToolUse hook for Task|Agent (self-contained, no plugin-root deps).
  *
@@ -41,24 +42,32 @@ const FAMILY_PLUGINS = ['brewcode', 'brewtools', 'brewdoc'];
 // PreToolUse entry is NOT a reason to yield. Matched by basename, because the
 // setup skills install project-local copies whose paths carry no plugin marker
 // (e.g. `<cwd>/.claude/hooks/agent-router.mjs`).
-// Keep in sync with the `.mjs` files under */hooks/ and */skills/*/assets/.
-const FAMILY_HOOK_FILES = [
-  'agent-router.mjs',
-  'agent-deadline-guard.mjs',
-  'agent-deadline-cleanup.mjs',
-  'hardmode-guard.mjs',
-  'manager-prompt.mjs',
-  'forced-eval.mjs',
-  'session-start.mjs',
-  'semble-reminder.mjs',
-  'semble-session.mjs',
-  'semble-explore.mjs',
-  'docsync-gate.mjs',
-  'docsync-track.mjs',
-  'docsync-watch.mjs',
-  'think-short-session.mjs',
-  'think-short-prompt-counter.mjs',
+//
+// A STEM prefix set, not a file list: every family hook is named after the setup
+// skill that installs it, so a hook added, renamed or retired inside an existing
+// family is matched without editing this file. An exact list rotted exactly that
+// way — it still named `semble-reminder.mjs` / `semble-explore.mjs` after 5.0.0
+// retired them, and never learned `semble-prefetch.mjs` / `semble-stats.mjs`.
+// Adding a whole NEW family (a new setup skill with a new hook name stem) is the
+// only edit this still needs.
+const FAMILY_HOOK_STEMS = [
+  'semble',          // brewcode:semble-setup   — semble-session/-prefetch/-stats
+  'docsync',         // brewdoc:docsync-setup   — docsync-track/-watch/-gate
+  'think-short',     // brewtools:think-short-setup
+  'agent-deadline',  // brewtools:agent-deadline-setup
+  'agent-router',    // brewtools:agent-router-setup
+  'manager-prompt',  // brewtools plugin hook
+  'manager-state',   // brewtools:manager-setup — copied beside the guard
+  'hardmode-guard',  // brewtools:manager-setup
+  'forced-eval',     // brewcode plugin hook
+  'session-start',   // brewcode + brewtools plugin hooks
 ];
+
+// Anchored on a path/quote/space boundary so `foo-semble-x.mjs` is not a match,
+// and applied to the JSON-serialised hook entry, where separators are `/` or `\\`.
+const FAMILY_HOOK_RE = new RegExp(
+  `(?:^|[^A-Za-z0-9_-])(?:${FAMILY_HOOK_STEMS.join('|')})[A-Za-z0-9-]*\\.mjs`
+);
 
 async function readStdin() {
   const chunks = [];
@@ -118,7 +127,7 @@ function classifyEntry(entry, sourcePath) {
   const ref = JSON.stringify((entry && entry.hooks) || []);
   if (ref.includes(SELF_BASENAME)) return 'self';
   // A shipped family hook file, wherever it was installed from.
-  if (FAMILY_HOOK_FILES.some(f => ref.includes(f))) return 'family';
+  if (FAMILY_HOOK_RE.test(ref)) return 'family';
   // Anything else coming out of a family plugin's own cache directory.
   for (const plugin of FAMILY_PLUGINS) {
     const marker = path.join('claude-brewcode', plugin);

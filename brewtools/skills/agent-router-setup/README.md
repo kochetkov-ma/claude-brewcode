@@ -64,7 +64,7 @@ The skill always reports status first, states its plan before asking anything, t
 |------|-----------|---------------|--------|-------------|
 | `status` | — | — | — | — |
 | `install` | copied | entry merged | written | — |
-| `upgrade` | re-copied | entries re-merged | values preserved | kept |
+| `upgrade` | re-copied | entries re-merged | behavior values preserved, metadata re-stamped | kept |
 | `enable` | kept | kept | `enabled:true` | kept |
 | `disable` | kept | kept | `enabled:false` | kept |
 | `uninstall` | deleted | entries stripped | **kept** | kept |
@@ -102,14 +102,18 @@ The tier-2 judge prompt is **inlined into `settings.json`**, not copied — re-r
   "genericTypes": ["general-purpose", "worker"],
   "neverFlag": ["Explore", "Plan", "statusline-setup", "output-style-setup", "brewcode:agent-creator", "brewcode:skill-creator", "brewcode:hook-creator", "brewcode:bash-expert"],
   "minScore": 3,
-  "margin": 2
+  "margin": 2,
+  "version": "{PLUGIN_VERSION}",
+  "generated_by": "brewtools:agent-router-setup",
+  "last_updated": "{LAST_UPDATED}"
 }
 ```
 
 | Key | Meaning |
 |-----|---------|
 | `enabled` | only exactly `false` turns it off. Any other value — and no config file at all — means ON with these defaults. A config that exists but does not PARSE is different: the feature goes fully silent |
-| `level` | `fast` / `strict` — a record of what is wired, ignored by tier 1 itself. Editing it by hand does NOT add or remove the tier-2 entry; run `level strict` / `level fast` |
+| `level` | `fast` / `strict` — a RECORD of what was wired at install time, ignored by tier 1 itself and enforced by nothing. Editing it by hand does NOT add or remove the tier-2 entry; run `level strict` / `level fast`. `status` prints it as `level (recorded)` next to the settings.json `tier2` count — that count, not this key, is what actually decides whether the judge fires |
+| `version` / `generated_by` / `last_updated` | provenance, written on every config write. No `doc_type` — that field is `.md` frontmatter only. `version` is the brewtools version that wrote the file; `status` compares it against the installed plugin so a shape change from a later version is visible. Inert at runtime — the hook ignores unlisted keys |
 | `genericTypes` | the types policed at all; anything else exits at step 5 |
 | `neverFlag` | never flagged whatever the task says; eight entries by default (four fixed + the four intent experts). Auto-unioned with every `intents[].expert` at load time — a custom `intents` table exempts its own experts without touching this key |
 | `minScore` | minimum roster score before a project agent can win |

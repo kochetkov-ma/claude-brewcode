@@ -66,6 +66,30 @@ bash "${CLAUDE_SKILL_DIR}/scripts/convention.sh" setup && echo "---SETUP-OK---" 
 
 > **STOP if FAILED** -- cannot proceed without output directory.
 
+Output: JSON `{"path":".claude/convention/","version":"...","generated_by":"brewcode:convention","last_updated":"YYYY-MM-DD"}`.
+Store `version` / `generated_by` / `last_updated` — P4 stamps them into every generated doc.
+
+> **Artifact metadata — the three docs this skill writes.** `.claude/convention/reference-patterns.md`,
+> `testing-conventions.md` and `project-architecture.md` each open with this frontmatter, filled from
+> the JSON above and from nowhere else — the script resolves the version from the plugin manifest by
+> self-location and the date from `date +%F`, so never hardcode either and never invent a second date
+> spelling:
+>
+> ```yaml
+> ---
+> doc_type: llm
+> version: "{PLUGIN_VERSION}"
+> generated_by: "brewcode:convention"
+> last_updated: "{LAST_UPDATED}"
+> ---
+> ```
+>
+> `{PLUGIN_VERSION}` is the JSON's `version`, `{LAST_UPDATED}` its `last_updated`. Substitute both
+> before writing — a token that reaches the file literally is reported `partial` by `setup-status`.
+> `doc_type` stays UNQUOTED; the other three are quoted.
+>
+> Re-running the skill over existing docs refreshes all three values in place.
+
 ### Step 0.4: Validate (rules mode only)
 
 **EXECUTE** using Bash tool:
@@ -74,6 +98,9 @@ bash "${CLAUDE_SKILL_DIR}/scripts/convention.sh" validate && echo "---VALID---" 
 ```
 
 > If `rules` mode + `INVALID` -- exit: "Run `/brewcode:convention conventions` first."
+> `validate` fails a doc that exists but carries no standard frontmatter (a pre-5.0 run wrote it):
+> the named key is printed on stderr. Re-run `/brewcode:convention conventions` to regenerate and
+> stamp it.
 
 ---
 
@@ -220,6 +247,15 @@ Etalon selection: {P3_ETALON_SUMMARY}
 Layer analyses: {RELEVANT_P2_OUTPUTS}
 Stack: {DETECTED_STACK}
 Write to: .claude/convention/{filename}.md
+Frontmatter (FIRST lines of the file, before the H1) — substitute the two tokens with the values
+copied verbatim from P0.3's setup JSON (`{PLUGIN_VERSION}` = its `version`, `{LAST_UPDATED}` = its
+`last_updated`), never hardcode and never re-derive them; no token may survive into the file:
+---
+doc_type: llm
+version: "{PLUGIN_VERSION}"
+generated_by: "brewcode:convention"
+last_updated: "{LAST_UPDATED}"
+---
 Structure: organized by layer -- each with Etalon Classes table, Patterns (5-15 lines each, max 3/layer), Anti-Patterns table, Quick Reference table at end.
 Target: ~{LINE_COUNT} lines.
 ```

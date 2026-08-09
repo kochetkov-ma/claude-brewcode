@@ -2,6 +2,7 @@
 # semble-status.sh - read-only status/doctor for the brewcode:semble-setup skill.
 #
 # Usage: semble-status.sh [--json] [--section SECTION] [--strict]
+#                         [--section telemetry [--sid ID] [--last N]]
 #
 # STRICTLY READ-ONLY. It creates, modifies and deletes nothing, anywhere -
 # not the state file, not the reminder throttle marker, not the cache dir.
@@ -21,10 +22,15 @@ usage() {
 semble-status.sh [--json] [--section SECTION] [--strict]
 
   --json             emit a single JSON object (schema: DESIGN 9.1)
-  --section SECTION  prereq|mcp|cache|guidance|agents|coverage|state|all
-                     (default: all)
+  --section SECTION  prereq|mcp|cache|guidance|agents|coverage|state|telemetry|all
+                     (default: all; `telemetry` is NOT part of `all`)
   --strict           exit 1 when verdict != ready
   -h, --help         this text
+
+  --section telemetry reads .claude/semble/telemetry.jsonl and reports what the
+  hooks actually did. Window flags, telemetry only:
+  --sid ID           only records from session ID (default: every session)
+  --last N           only the last N records (applied after --sid)
 
 Exit: 0 report produced | 1 strict failure or internal error | 2 bad usage
 Read-only: nothing is ever written.
@@ -34,6 +40,8 @@ EOF
 JSON_MODE=0
 SECTION="all"
 STRICT=0
+SID=""
+LAST=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -41,6 +49,10 @@ while [ $# -gt 0 ]; do
     --strict)      STRICT=1 ;;
     --section)     shift; SECTION="${1:-}" ;;
     --section=*)   SECTION="${1#--section=}" ;;
+    --sid)         shift; SID="${1:-}" ;;
+    --sid=*)       SID="${1#--sid=}" ;;
+    --last)        shift; LAST="${1:-}" ;;
+    --last=*)      LAST="${1#--last=}" ;;
     -h|--help)     usage; exit 0 ;;
     *)             sc_err "unknown argument: $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -48,13 +60,271 @@ while [ $# -gt 0 ]; do
 done
 
 case "$SECTION" in
-  prereq|mcp|cache|guidance|agents|coverage|state|all) ;;
+  prereq|mcp|cache|guidance|agents|coverage|state|telemetry|all) ;;
   *) sc_err "unknown section: ${SECTION:-(empty)}" >&2; usage >&2; exit 2 ;;
+esac
+if [ "$SECTION" != "telemetry" ] && { [ -n "$SID" ] || [ -n "$LAST" ]; }; then
+  sc_err "--sid/--last are only valid with --section telemetry" >&2; usage >&2; exit 2
+fi
+case "$LAST" in
+  ''|*[!0-9]*) [ -z "$LAST" ] || { sc_err "--last must be a non-negative integer: $LAST" >&2; exit 2; } ;;
 esac
 
 sc_require_node
 
 want() { [ "$SECTION" = "all" ] || [ "$SECTION" = "$1" ]; }
+
+# ── telemetry (--section telemetry): the reader for semble-stats.mjs ─────────
+# Deliberately NOT part of `all`: it answers a different question (did the hooks
+# do anything) from a different source (.claude/semble/telemetry.jsonl), and the
+# `all` report is an install-health report. Read-only like everything here.
+TELEMETRY_READER="$(cat <<'NODEJS'
+"use strict";
+const fs = require("fs");
+const E = process.env;
+const file = E.SC_TELEMETRY_FILE;
+const jsonMode = E.SC_JSONMODE === "1";
+const wantSid = E.SC_SID || "";
+const last = E.SC_LAST ? Number(E.SC_LAST) : 0;
+
+function out(s) { fs.writeSync(1, s); }
+
+let raw = null;
+try { raw = fs.readFileSync(file, "utf8"); } catch (e) { raw = null; }
+
+const rep = {
+  schema: 1,
+  file: file,
+  present: raw !== null,
+  window: { sid: wantSid || null, last: last || null },
+  records: 0,
+  malformed: 0,
+  unknownEv: {},
+  hooks: {},
+  gate: { fired: 0, skipped: 0, why: {} },
+  nudge: { total: 0, main: 0, sub: 0, unknown: 0 },
+  call: { total: 0, main: 0, sub: 0, unknown: 0, failed: 0 },
+  search: { total: 0, main: 0, sub: 0, unknown: 0 },
+  open: { total: 0 },
+  // The prefetch hook. `why` is the suppressing clause, so a low fire rate is
+  // always attributable; `hits` and `ms` are the cost side.
+  prefetch: {
+    fired: 0, suppressed: 0, why: {}, hits: 0, injections: 0,
+    msMedian: null, msMax: null,
+  },
+  // Post-release conversion, computable from this JSONL alone:
+  //   injectedSessions  - sessions where prefetch injected at least one candidate
+  //   openedSessions    - of those, sessions where an injected path was later OPENED
+  //   pathsOpened/pathsInjected - the same question per candidate path
+  prefetchConversion: {
+    injectedSessions: 0, openedSessions: 0, sessionPct: null,
+    pathsInjected: 0, pathsOpened: 0, pathPct: null,
+  },
+  conversion: {
+    sessionsWithNudge: 0, sessionsConverted: 0, conversionPct: null,
+    callsAfterNudge: 0, callsWithoutNudge: 0,
+  },
+};
+
+// A truncated final line (the process died mid-append) and a record from a
+// future schema are both expected, not exceptional: count and move on.
+let recs = [];
+if (raw !== null) {
+  for (const line of raw.split("\n")) {
+    if (!line.trim()) continue;
+    let r;
+    try { r = JSON.parse(line); } catch (e) { rep.malformed++; continue; }
+    if (r === null || typeof r !== "object" || Array.isArray(r)) { rep.malformed++; continue; }
+    recs.push(r);
+  }
+}
+if (wantSid) recs = recs.filter(function (r) { return r.sid === wantSid; });
+if (last > 0 && recs.length > last) recs = recs.slice(-last);
+rep.records = recs.length;
+
+function bump(o, k) { o[k] = (o[k] || 0) + 1; }
+function agentOf(r) {
+  return (r.agent === "main" || r.agent === "sub") ? r.agent : "unknown";
+}
+
+// nudges/calls per session, for the conversion join
+const nudgeFirst = {};   // sid -> earliest nudge ts
+const nudgeTs = {};      // sid -> sorted-enough list of nudge ts
+const callsBySid = {};   // sid -> [ts]
+// prefetch conversion join: sid -> [{p, ts}] injected, sid -> [{f, abs, ts}] opened
+const injected = {};
+const opened = {};
+const msSamples = [];
+
+for (const r of recs) {
+  const src = typeof r.src === "string" ? r.src : "unknown";
+  bump(rep.hooks, src);
+  const sid = typeof r.sid === "string" ? r.sid : "";
+  const ts = typeof r.ts === "string" ? r.ts : "";
+  switch (r.ev) {
+    case "gate": {
+      if (r.fired === true) rep.gate.fired++; else rep.gate.skipped++;
+      bump(rep.gate.why, typeof r.why === "string" && r.why ? r.why : "unknown");
+      break;
+    }
+    case "nudge": {
+      rep.nudge.total++;
+      rep.nudge[agentOf(r)]++;
+      if (!nudgeTs[sid]) nudgeTs[sid] = [];
+      nudgeTs[sid].push(ts);
+      if (nudgeFirst[sid] === undefined || ts < nudgeFirst[sid]) nudgeFirst[sid] = ts;
+      break;
+    }
+    case "call": {
+      rep.call.total++;
+      rep.call[agentOf(r)]++;
+      if (r.ok === false) rep.call.failed++;
+      if (!callsBySid[sid]) callsBySid[sid] = [];
+      callsBySid[sid].push(ts);
+      break;
+    }
+    case "search": {
+      rep.search.total++;
+      rep.search[agentOf(r)]++;
+      break;
+    }
+    case "prefetch": {
+      bump(rep.prefetch.why, typeof r.why === "string" && r.why ? r.why : "unknown");
+      if (typeof r.ms === "number" && isFinite(r.ms) && r.ms >= 0) msSamples.push(r.ms);
+      if (r.fired !== true) { rep.prefetch.suppressed++; break; }
+      rep.prefetch.fired++;
+      const paths = Array.isArray(r.paths) ? r.paths.filter(function (p) { return typeof p === "string" && p; }) : [];
+      rep.prefetch.hits += (typeof r.n === "number" && isFinite(r.n)) ? r.n : paths.length;
+      if (paths.length) rep.prefetch.injections++;
+      if (!injected[sid]) injected[sid] = [];
+      for (const p of paths) injected[sid].push({ p: p, ts: ts });
+      break;
+    }
+    case "open": {
+      rep.open.total++;
+      if (!opened[sid]) opened[sid] = [];
+      opened[sid].push({
+        f: typeof r.f === "string" ? r.f : "",
+        abs: typeof r.abs === "string" ? r.abs : "",
+        ts: ts,
+      });
+      break;
+    }
+    default:
+      bump(rep.unknownEv, String(r.ev));
+  }
+}
+
+// The metric that matters: a nudge only counts if a semble call came AFTER it,
+// in the same session. Equal timestamps do not count - same-millisecond means
+// the call cannot have been caused by the nudge.
+const nudgedSids = Object.keys(nudgeFirst);
+rep.conversion.sessionsWithNudge = nudgedSids.length;
+rep.conversion.sessionsConverted = nudgedSids.filter(function (sid) {
+  return (callsBySid[sid] || []).some(function (t) { return t > nudgeFirst[sid]; });
+}).length;
+if (nudgedSids.length) {
+  rep.conversion.conversionPct =
+    Math.round((rep.conversion.sessionsConverted / nudgedSids.length) * 1000) / 10;
+}
+for (const sid of Object.keys(callsBySid)) {
+  for (const t of callsBySid[sid]) {
+    const after = (nudgeTs[sid] || []).some(function (n) { return n <= t; });
+    if (after) rep.conversion.callsAfterNudge++;
+    else rep.conversion.callsWithoutNudge++;
+  }
+}
+
+// Prefetch conversion. An injected path converts when a LATER `open` in the SAME
+// session names it. semble reports repo-relative paths and Claude Code reads with
+// an absolute one, so a match is "either recorded form ends with the injected
+// path" - the stats hook records both forms precisely so this stays a suffix test
+// and never needs a cwd the reader does not have.
+const hit = function (sid, rec) {
+  return (opened[sid] || []).some(function (o) {
+    if (!(o.ts > rec.ts)) return false;
+    const cand = [o.f, o.abs];
+    return cand.some(function (c) { return c === rec.p || (c && c.endsWith("/" + rec.p)); });
+  });
+};
+const injSids = Object.keys(injected);
+rep.prefetchConversion.injectedSessions = injSids.length;
+rep.prefetchConversion.openedSessions = injSids.filter(function (sid) {
+  return injected[sid].some(function (rec) { return hit(sid, rec); });
+}).length;
+for (const sid of injSids) {
+  for (const rec of injected[sid]) {
+    rep.prefetchConversion.pathsInjected++;
+    if (hit(sid, rec)) rep.prefetchConversion.pathsOpened++;
+  }
+}
+const pc = rep.prefetchConversion;
+if (pc.injectedSessions) pc.sessionPct = Math.round((pc.openedSessions / pc.injectedSessions) * 1000) / 10;
+if (pc.pathsInjected) pc.pathPct = Math.round((pc.pathsOpened / pc.pathsInjected) * 1000) / 10;
+if (msSamples.length) {
+  const s = msSamples.slice().sort(function (a, b) { return a - b; });
+  rep.prefetch.msMedian = s[Math.floor((s.length - 1) / 2)];
+  rep.prefetch.msMax = s[s.length - 1];
+}
+
+if (jsonMode) { out(JSON.stringify(rep) + "\n"); process.exit(0); }
+
+if (!rep.present) {
+  out("no telemetry yet - " + file + "\n"
+    + "(the stats hook writes on the first tool call after `semble-guidance.sh install`)\n");
+  process.exit(0);
+}
+const L = [];
+const pairs = function (o) {
+  const k = Object.keys(o).sort();
+  return k.length ? k.map(function (x) { return x + "=" + o[x]; }).join(" ") : "-";
+};
+L.push("# Semble telemetry");
+L.push("");
+L.push("file:      " + file);
+L.push("window:    " + (wantSid ? "sid=" + wantSid : "all sessions")
+  + (last > 0 ? " | last " + last : "")
+  + " | " + rep.records + " records"
+  + (rep.malformed ? " | " + rep.malformed + " malformed (skipped)" : ""));
+L.push("hooks:     " + pairs(rep.hooks));
+L.push("gate:      " + rep.gate.fired + " fired / " + rep.gate.skipped + " skipped  [" + pairs(rep.gate.why) + "]");
+L.push("prefetch:  " + rep.prefetch.fired + " fired / " + rep.prefetch.suppressed + " suppressed"
+  + " | " + rep.prefetch.hits + " candidates"
+  + (rep.prefetch.msMedian === null ? "" : " | " + rep.prefetch.msMedian + " ms median, "
+    + rep.prefetch.msMax + " ms max")
+  + "  [" + pairs(rep.prefetch.why) + "]");
+L.push("opened:    " + pc.pathsOpened + "/" + pc.pathsInjected + " injected paths"
+  + (pc.pathPct === null ? "" : " (" + pc.pathPct + "%)")
+  + " | " + pc.openedSessions + "/" + pc.injectedSessions + " sessions"
+  + (pc.sessionPct === null ? "" : " (" + pc.sessionPct + "%)")
+  + " | " + rep.open.total + " Read calls seen");
+L.push("nudge:     " + rep.nudge.total + " total (main " + rep.nudge.main + ", sub " + rep.nudge.sub
+  + (rep.nudge.unknown ? ", unknown " + rep.nudge.unknown : "") + ")  [retired hooks]");
+L.push("call:      " + rep.call.total + " semble calls (main " + rep.call.main + ", sub " + rep.call.sub
+  + (rep.call.unknown ? ", unknown " + rep.call.unknown : "") + ") | " + rep.call.failed + " failed");
+L.push("search:    " + rep.search.total + " search-shaped non-semble (main " + rep.search.main
+  + ", sub " + rep.search.sub + (rep.search.unknown ? ", unknown " + rep.search.unknown : "") + ")");
+const c = rep.conversion;
+L.push("converted: " + c.sessionsConverted + "/" + c.sessionsWithNudge + " nudged sessions"
+  + (c.conversionPct === null ? "" : " (" + c.conversionPct + "%)")
+  + " | " + c.callsAfterNudge + " calls after a nudge, " + c.callsWithoutNudge + " unprompted");
+const denom = rep.search.total + rep.call.total;
+L.push("share:     " + (denom ? Math.round((rep.call.total / denom) * 1000) / 10 : 0)
+  + "% of search-shaped tool use went through semble");
+if (Object.keys(rep.unknownEv).length) {
+  L.push("unknown:   " + pairs(rep.unknownEv) + " (newer schema - skipped)");
+}
+out(L.join("\n") + "\n");
+process.exit(0);
+NODEJS
+)"
+
+if [ "$SECTION" = "telemetry" ]; then
+  SC_TELEMETRY_FILE="$(sc_project_root)/.claude/semble/telemetry.jsonl" \
+  SC_JSONMODE="$JSON_MODE" SC_SID="$SID" SC_LAST="$LAST" \
+    node -e "$TELEMETRY_READER"
+  exit 0
+fi
 
 # sibling REL ARGS... -> the sibling's JSON on stdout, or an {"error":...} object.
 # Never fails: an absent, crashing or silent sibling degrades to an error object.
@@ -175,10 +445,10 @@ const stateFile = E.SC_STATE_FILE || "";
 const stRead = readJson(stateFile);
 let stateSec;
 if (stRead.missing) {
-  stateSec = { present: false, phase: "absent", enabled: null, completed: [], updatedAt: null };
+  stateSec = { present: false, phase: "absent", enabled: null, completed: [], last_updated: null };
 } else if (stRead.bad) {
   stateSec = {
-    present: true, phase: "error", enabled: null, completed: [], updatedAt: null,
+    present: true, phase: "error", enabled: null, completed: [], last_updated: null,
     error: "state file is not valid JSON: " + stRead.bad,
   };
 } else {
@@ -188,7 +458,7 @@ if (stRead.missing) {
     phase: typeof s.phase === "string" ? s.phase : "absent",
     enabled: typeof s.enabled === "boolean" ? s.enabled : null,
     completed: Array.isArray(s.completed) ? s.completed : [],
-    updatedAt: typeof s.updatedAt === "string" ? s.updatedAt : null,
+    last_updated: typeof s.last_updated === "string" ? s.last_updated : null,
   };
 }
 
@@ -251,27 +521,39 @@ if (guidRaw === null || isErr(guidRaw)) {
 } else {
   const h = (guidRaw.hooks && typeof guidRaw.hooks === "object") ? guidRaw.hooks : {};
   const ses = (h.session && typeof h.session === "object") ? h.session : {};
-  const rem = (h.reminder && typeof h.reminder === "object") ? h.reminder : {};
-  const exp = (h.explore && typeof h.explore === "object") ? h.explore : {};
+  const pre = (h.prefetch && typeof h.prefetch === "object") ? h.prefetch : {};
+  const sta = (h.stats && typeof h.stats === "object") ? h.stats : {};
   const rule = (guidRaw.rule && typeof guidRaw.rule === "object") ? guidRaw.rule : {};
+  const ign = (guidRaw.ignore && typeof guidRaw.ignore === "object") ? guidRaw.ignore : {};
   const cmd = (guidRaw.claudeMd && typeof guidRaw.claudeMd === "object") ? guidRaw.claudeMd : {};
   const perm = (guidRaw.permissions && typeof guidRaw.permissions === "object") ? guidRaw.permissions : {};
   guidSec = {
     rule: typeof rule.state === "string" ? rule.state : "absent",
+    ignore: typeof ign.state === "string" ? ign.state : "absent",
     claudeMd: typeof cmd.state === "string" ? cmd.state : "absent",
     settingsFile: typeof h.settingsFile === "string" ? h.settingsFile : "",
     hooks: {
       session: ses.file === "present" ? "present" : "missing",
-      reminder: rem.file === "present" ? "present" : "missing",
-      explore: exp.file === "present" ? "present" : "missing",
+      prefetch: pre.file === "present" ? "present" : "missing",
+      stats: sta.file === "present" ? "present" : "missing",
     },
+    // Retired hook files still on disk (v1 installs). Non-empty means the
+    // migration has not run yet; `install`/`upgrade` deletes them.
+    retired: Array.isArray(h.retired) ? h.retired : [],
     permissionsWired: perm.wired === true,
-    // Read the authoritative sibling count (SessionStart + PreToolUse/Bash +
-    // PreToolUse/Grep + SubagentStart/Explore). Never re-derive it from the
-    // `wired` booleans: the reminder spans two matchers, so a half-wired
-    // reminder loses one entry.
+    // Read the authoritative sibling counts (SessionStart + UserPromptSubmit +
+    // PostToolUse + PostToolUseFailure). Never re-derive them from the `wired`
+    // booleans: stats spans two events, so a half-wired pair loses an entry.
     wiredCount: typeof h.wiredCount === "number" ? h.wiredCount : 0,
+    wantCount: typeof h.wantCount === "number" ? h.wantCount : 0,
     staleEntries: typeof h.staleEntries === "number" ? h.staleEntries : 0,
+    // The frontmatter `version:` of the installed rule, and the version the plugin
+    // on this machine would install. Staleness is otherwise visible only through
+    // /brewcode:setup-status, so a project running artifacts from an old release
+    // read `ready` in its own status with no prescription. One signal, one fix -
+    // the cross-plugin dashboard still owns the per-artifact breakdown.
+    version: typeof rule.version === "string" ? rule.version : "",
+    pluginVersion: typeof rule.templateVersion === "string" ? rule.templateVersion : "",
   };
 }
 
@@ -328,6 +610,36 @@ else if (mcpState === "absent" && (phase === "absent" || phase === "prereq_ready
 else if (mcpState === "correct" && phase === "ready") { verdict = "ready"; reason = "pinned server registered at user scope and verified"; }
 else { verdict = "partial"; reason = "mcp=" + mcpState + ", phase=" + phase; }
 
+// A v1-shaped repo satisfies mcp=correct + phase=ready and would report
+// `ready`/`none`, so nobody upgrading would ever be told to migrate. The
+// project half of the install is part of the verdict: retired hook files
+// still on disk, settings entries pointing at an older plugin version, or a
+// missing sibling registration each downgrade `ready` to `partial`.
+if (verdict === "ready" && guidSec && !isErr(guidSec)) {
+  const retired = Array.isArray(guidSec.retired) ? guidSec.retired : [];
+  const stale = typeof guidSec.staleEntries === "number" ? guidSec.staleEntries : 0;
+  const wired = typeof guidSec.wiredCount === "number" ? guidSec.wiredCount : 0;
+  const want = typeof guidSec.wantCount === "number" ? guidSec.wantCount : 0;
+  const why = [];
+  if (retired.length) { why.push("retired hooks on disk: " + retired.join(", ")); }
+  if (stale > 0) { why.push(stale + " stale settings " + (stale === 1 ? "entry" : "entries")); }
+  // want===0 means the wiring counts were not reported at all - never treat an
+  // absent count as a defect, or a trimmed report downgrades a healthy repo.
+  if (want > 0 && wired !== want) { why.push("hooks wired " + wired + "/" + want); }
+  if (why.length) { verdict = "partial"; reason = why.join("; "); }
+}
+
+// Stale artifacts: everything is wired and byte-managed, but at the version of an
+// older release. Both stamps must be present and readable - an unstamped pre-5.0
+// rule reports "" and must never be called stale on a missing value.
+let stampStale = false;
+if (verdict === "ready" && guidSec && !isErr(guidSec)
+    && guidSec.version && guidSec.pluginVersion && guidSec.version !== guidSec.pluginVersion) {
+  stampStale = true;
+  verdict = "partial";
+  reason = "artifacts at " + guidSec.version + ", plugin at " + guidSec.pluginVersion;
+}
+
 let nextStep;
 if (verdict === "ready") {
   nextStep = "none";
@@ -342,6 +654,8 @@ if (verdict === "ready") {
   nextStep = "Run /brewcode:semble-setup enable";
 } else if (verdict === "verifying") {
   nextStep = "Run /brewcode:semble-setup resume";
+} else if (stampStale) {
+  nextStep = "Run /brewcode:semble-setup upgrade";
 } else {
   nextStep = "Run /brewcode:semble-setup install";
 }
@@ -410,9 +724,13 @@ if (jsonMode) {
       L.push("guidance: error: " + report.guidance.error);
     } else {
       const g = report.guidance;
+      const ver = g.version
+        ? " | version " + g.version + (g.pluginVersion && g.pluginVersion !== g.version
+            ? " (plugin " + g.pluginVersion + " - run /brewcode:semble-setup upgrade)" : "")
+        : "";
       L.push("guidance: rule " + g.rule + " | CLAUDE.md " + g.claudeMd +
-        " | hooks " + g.wiredCount + "/4 wired" +
-        " | permissions " + (g.permissionsWired ? "yes" : "no"));
+        " | hooks " + g.wiredCount + "/" + (g.wantCount || 0) + " wired" +
+        " | permissions " + (g.permissionsWired ? "yes" : "no") + ver);
     }
   }
   if (report.agents) {

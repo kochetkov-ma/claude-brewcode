@@ -3,7 +3,7 @@
     "semble_code": {
       "type": "stdio",
       "command": "uvx",
-      "args": ["--from", "semble[mcp]==0.5.2", "semble", "--content", "code", "docs", "config"],
+      "args": ["--from", "semble[mcp]==0.5.4", "semble", "--content", "code", "docs", "config"],
       "env": { "SEMBLE_CACHE_LOCATION": "__CACHE_ROOT_CODE__" },
       "alwaysLoad": true
     }
@@ -14,7 +14,7 @@
         "semble_code": {
           "type": "stdio",
           "command": "uvx",
-          "args": ["--from", "semble[mcp]==0.5.2", "semble", "--content", "code", "docs", "config"],
+          "args": ["--from", "semble[mcp]==0.5.4", "semble", "--content", "code", "docs", "config"],
           "env": { "SEMBLE_CACHE_LOCATION": "__CACHE_ROOT_CODE__" },
           "alwaysLoad": true
         }

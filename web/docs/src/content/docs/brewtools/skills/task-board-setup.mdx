@@ -7,7 +7,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 
 # task-board-setup — file-based Kanban scaffolder
 
-<Badge variant="default" text="opus" /> <Badge variant="accent" text="status / install / upgrade / uninstall / purge" /> <Badge variant="accent" text="user-invoked" />
+<Badge variant="default" text="opus" /> <Badge variant="accent" text="status / install / upgrade / enable / disable / uninstall / purge" /> <Badge variant="accent" text="user-invoked" />
 
 <Callout type="tip">
 **One command, complete task system.** Point the skill at any repo and it spawns parallel analysis subagents, confirms the findings with you, then writes a fully parametrized file-based Kanban: curator agent, on-demand dashboard skill, lifecycle rule, and the complete `.claude/features/**` folder tree. After it runs, the repo is self-contained — no further dependency on this generator.
@@ -18,7 +18,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | Item | Value |
 |------|-------|
 | Skill command | `/brewtools:task-board-setup` |
-| Arguments | `[status \| install \| upgrade \| uninstall \| purge] [target repo path \| empty = cwd] [free-text directive]` — e.g. `install /path/to/repo`, `upgrade`, `'skip module split'` |
+| Arguments | `[status \| install \| upgrade \| enable \| disable \| uninstall \| purge] [target repo path \| empty = cwd] [free-text directive]` — e.g. `install /path/to/repo`, `upgrade`, `'skip module split'` |
 | No verb | Resolved from the target: a deployed board reports `status`, a fresh repo gets `install`. A bare path alone installs into that path |
 | Emits | `.claude/agents/task-tracker.md`, `.claude/skills/task-board/SKILL.md`, `.claude/rules/tasks.md`, `.claude/features/**` |
 | Emits (SPEC_MODE) | `.claude/skills/task-spec/SKILL.md`, `.claude/features/specs/{SPEC_TEMPLATE,DESIGN_TEMPLATE}.md` |
@@ -38,6 +38,8 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | Migrate scattered TODO / backlog docs into a structured board | `/brewtools:task-board-setup install` — sweep subagents migrate legacy docs automatically |
 | A task needs an architecture pass before code | Turn on `SPEC_MODE` at confirmation, then run the emitted `/task-spec <ID>` |
 | An already-deployed board needs the spec + design layer | `/brewtools:task-board-setup upgrade /path/to/repo` |
+| Pause the board machinery without deleting anything | `/brewtools:task-board-setup disable` |
+| Resume after a `disable` | `/brewtools:task-board-setup enable` |
 | Remove the generated machinery, keep every task you wrote | `/brewtools:task-board-setup uninstall` |
 | Remove the machinery and delete `.claude/features/**` too | `/brewtools:task-board-setup purge` |
 
@@ -257,10 +259,12 @@ Canonical order, shared by every `-setup` skill:
 | `status` | either state | Read-only inventory of the target: deployed or not, spec layer present, what to run next. Writes nothing, spawns nothing, asks nothing |
 | `install` | fresh repo | The full multi-agent deploy below. Refuses a repo that already has `.claude/features/board.md` |
 | `upgrade` | deployed board | Retrofits the spec + session-progress layers, additive-only |
+| `enable` | deployed board, parked | Restores the machinery parked by `disable` — renames each `.disabled` file back. No re-analysis, no subagents, no confirmation |
+| `disable` | deployed board | Parks the machinery — `task-tracker.md`, `task-board/SKILL.md`, `task-spec/SKILL.md` (if the spec layer is deployed) and `tasks.md` are each renamed to a `.disabled` twin. Claude Code stops discovering them; `.claude/features/**` and every task are untouched |
 | `uninstall` | deployed board | Removes the generated machinery (curator agent, dashboard skill, rule, spec skill) and KEEPS `.claude/features/**` |
 | `purge` | deployed board | `uninstall` plus deletion of `.claude/features/**` — every task you ever wrote |
 
-Only a standalone token counts as the verb; `"upgrade the rules wording"` inside a directive is prose, not a mode. `init`, `setup`, `remove` and `reset` are no longer commands — they are recognized as free-text synonyms and echoed back as the canonical verb. The uninstall/purge split is deliberate: the generated files are machinery, `.claude/features/**` is your data.
+Only a standalone token counts as the verb; `"upgrade the rules wording"` inside a directive is prose, not a mode. `init`, `setup`, `remove` and `reset` are no longer commands — they are recognized as free-text synonyms and echoed back as the canonical verb. `on`/`off` are recognized as synonyms of `enable`/`disable`. The uninstall/purge split is deliberate: the generated files are machinery, `.claude/features/**` is your data. `enable`/`disable` on a `FRESH` (undeployed) target fall back to `status` and report there is no machinery to toggle.
 
 ## Upgrading an existing board
 
@@ -302,6 +306,12 @@ Task IDs follow `UPPER-KEBAB`: `<PREFIX>-<DOMAIN>-<SLUG>`.
 | `EPIC-` | Umbrella over several tasks |
 
 `<DOMAIN>` is the per-repo first kebab id-segment, discovered and confirmed in Step 1 (e.g. a frontend project might use `UI`, `API`, `BUILD`).
+
+## Version and ownership
+
+Nine artifacts carry a four-key `.md` frontmatter: `doc_type: llm`, `version`, `generated_by: "brewtools:task-board-setup"`, `last_updated` — the `task-tracker` agent, the `task-board` and `task-spec` skills, `.claude/rules/tasks.md`, and the five `.claude/features/**` control files. Per-task cards under `backlog/`, `todo/`, `progress/`, `closed/` deliberately carry none of the four — they are your data, not generated machinery.
+
+`upgrade` restamps `version` / `generated_by` / `last_updated` on every run, even when every content row is already a no-op `SKIP`. That restamp is the only thing that clears the `stale` verdict `/brewcode:setup-status` reads off `board.md` — an `upgrade` that reports success without moving the stamp sends you round the same loop next session.
 
 <details>
 <summary>Internals: placeholder map + reference files</summary>

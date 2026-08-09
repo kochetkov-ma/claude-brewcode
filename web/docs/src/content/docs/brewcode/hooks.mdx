@@ -15,7 +15,7 @@ They inject context and manage session state. Brewcode registers 2 hooks in `hoo
 
 | # | Hook | Event | Matcher | Channel | Timeout | Purpose |
 |---|------|-------|---------|---------|---------|---------|
-| 1 | forced-eval | UserPromptSubmit | -- | additionalContext | 1s | Manager-role + split-discipline reminder |
+| 1 | forced-eval | UserPromptSubmit | -- | additionalContext | 2s | Manager-role + split-discipline reminder |
 | 2 | session-start | SessionStart | -- | additionalContext | 3s | Session init, permission_mode tag |
 
 ## Execution flow
@@ -67,7 +67,7 @@ There is no skill-activation nudge -- modern models pick skills on their own.
 |-----------|-------|
 | Event | UserPromptSubmit |
 | Channel | additionalContext |
-| Timeout | 1000 ms |
+| Timeout | 2000 ms |
 
 **Exact injected text:**
 

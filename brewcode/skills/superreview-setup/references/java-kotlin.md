@@ -1,3 +1,10 @@
+---
+doc_type: llm
+version: "{PLUGIN_VERSION}"
+generated_by: "{GENERATED_BY}"
+last_updated: "{LAST_UPDATED}"
+---
+
 # Java/Kotlin Standards Reference
 
 Standards for Java/Kotlin enterprise projects. The project's own rules in `.claude/rules/*` + `.claude/convention/*`

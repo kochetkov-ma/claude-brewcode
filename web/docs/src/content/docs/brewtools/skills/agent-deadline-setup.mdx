@@ -47,7 +47,7 @@ Expected flow: the skill prints the current status table, states the plan ("copy
   <li><div><strong>Refreshed status printed</strong><p>The status block re-runs and the skill states whether a new session is needed — hook <em>wiring</em> changes (install/upgrade/uninstall/purge) need one; config <em>value</em> changes (enabled, minutes, overrides, hard-stop ratio) are read live, no restart.</p></div></li>
 </Steps>
 
-## Технические детали
+## Technical details
 
 ### Modes
 
@@ -88,7 +88,10 @@ Project config wins over global; a malformed project config is skipped and globa
   "enabled": true,
   "defaultMinutes": 20,
   "byAgentType": {},
-  "hardStopRatio": 2
+  "hardStopRatio": 2,
+  "version": "X.Y.Z",
+  "generated_by": "brewtools:agent-deadline-setup",
+  "last_updated": "YYYY-MM-DD"
 }
 ```
 
@@ -98,8 +101,13 @@ Project config wins over global; a malformed project config is skipped and globa
 | `defaultMinutes` | budget applied to every agent type; default `20` |
 | `byAgentType` | per-type overrides, e.g. `{"Explore": 10}`; empty object = one uniform limit |
 | `hardStopRatio` | optional, default `2`, must be `> 1` — multiple of the budget past which the allowance drops to `Write, Edit` only |
+| `version` / `generated_by` / `last_updated` | stamped by `install`/`upgrade`; `/brewcode:setup-status` reads them to flag a stale install |
 
 Budget resolves as `byAgentType[agent_type] ?? defaultMinutes`, read fresh on every hook call.
+
+<Callout type="note">
+`enabled` here is opt-in polarity: absent or anything but `true` means OFF. That is the opposite of `agent-router-setup` (only an explicit `false` disables) and `brewdoc:docsync-setup` (an absent key means enabled) — the three do not behave alike.
+</Callout>
 
 <Callout type="warning">
 **Honest limits — read before relying on this.**
@@ -111,7 +119,11 @@ Budget resolves as `byAgentType[agent_type] ?? defaultMinutes`, read fresh on ev
 - **The declared finalization set is narrower than what's actually allowed.** `TaskCreate`, `BashOutput`, `TaskOutput` pass through past 100% but are intentionally left out of the directive text shown to the agent — by design, not an oversight.
 </Callout>
 
-## Связанное
+### Version and ownership
+
+`install`/`upgrade` write `agent-deadline.json`'s `version`, `generated_by: "brewtools:agent-deadline-setup"` and `last_updated` at top level, alongside the behavior keys. `agent-deadline-guard.mjs` and `agent-deadline-cleanup.mjs` each carry a matching `// brewcode-meta: version=X.Y.Z generated_by=brewtools:agent-deadline-setup` comment on line 2. `upgrade` re-stamps all three, `status` surfaces a stale install by comparing them against the installed plugin version.
+
+## Related
 
 <CardGrid>
   <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">
@@ -121,7 +133,7 @@ Budget resolves as `byAgentType[agent_type] ?? defaultMinutes`, read fresh on ev
     Installs a HARD wall that blocks main-session edits and forces subagent delegation — pairs well with a per-agent deadline.
   </Card>
   <Card title="Setup Status" icon="clipboard" href="/brewcode/skills/setup-status/">
-    Read-only dashboard across every `-setup` skill -- installed, stale or missing, with the hand-run command for each.
+    Read-only dashboard across every `-setup` skill — installed, stale or missing, with the hand-run command for each.
   </Card>
   <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/agent-deadline-setup">
     SKILL.md, the install runbook, and both hook scripts.

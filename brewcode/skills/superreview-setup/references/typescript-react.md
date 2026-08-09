@@ -1,3 +1,10 @@
+---
+doc_type: llm
+version: "{PLUGIN_VERSION}"
+generated_by: "{GENERATED_BY}"
+last_updated: "{LAST_UPDATED}"
+---
+
 # TypeScript / Node / React Standards Reference
 
 Standards for TypeScript, Node.js and React projects. The project's own rules in `.claude/rules/*` +

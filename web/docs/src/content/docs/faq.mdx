@@ -87,7 +87,7 @@ A `-setup` suffix marks a skill that installs a mechanism into the project — a
 
 There are ten `-setup` skills. They share one mode vocabulary — `status | install | upgrade | enable | disable | uninstall | purge` — and a bare invocation reports instead of installing once something is already there.
 
-Skill-specific verbs come after the canonical set, never in place of it. A setup with no on/off state rejects `enable` and `disable` with an error instead of quietly doing something else: `/brewcode:teams-setup enable` is an error, because a team either exists on disk or does not.
+Skill-specific verbs come after the canonical set, never in place of it. All ten setups implement all seven canonical verbs. Two mechanisms do the work: a live config flag that the reader re-checks on every invocation (semble, agent-deadline, agent-router, manager, docsync), or entry-file parking, where the filename discovery keys on is renamed `<name>.disabled` with the body left byte-identical (teams, superreview, task-board, think-short, memory-sync).
 
 <Callout type="warning" title="Run them one at a time">
   Each setup is an interactive generator: it fans out subagents, analyses the repo and asks you real questions. Two in one session degrade each other. Start with [`/brewcode:setup-status`](/brewcode/skills/setup-status/) and work its list, one setup per fresh session — full details on the [Full Setup](/full-setup/) page.

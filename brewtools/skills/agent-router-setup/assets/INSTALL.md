@@ -108,7 +108,10 @@ picks.
   "margin": 2,
   "intents": [
     { "match": "regex", "expert": "brewcode:skill-creator", "label": "skill authoring" }
-  ]
+  ],
+  "version": "X.Y.Z",
+  "generated_by": "brewtools:agent-router-setup",
+  "last_updated": "YYYY-MM-DD"
 }
 ```
 
@@ -121,6 +124,7 @@ picks.
 | `minScore` | minimum roster score (step 7) before a project agent can win |
 | `margin` | how far the winner must lead the runner-up; inside the margin it is a nudge, not a deny |
 | `intents` | OPTIONAL override of the step-6 routes; `{ "match": <regex source>, "expert": <agent type>, "label": <human label> }`. **Omit the key to keep the hook's built-in 4 routes** — see the warning below |
+| `version` / `generated_by` / `last_updated` | provenance, MANDATORY, re-stamped by every mode that writes this file (install, upgrade, enable, disable, level). Inert at runtime — the hook ignores unlisted keys. Never `doc_type`: that is a `.md`-frontmatter field |
 
 There is no nudge-threshold key. The nudge floor is DERIVED as
 `max(1, ceil(minScore / 2))`: a best score at or above it, without a clear win,
@@ -152,6 +156,8 @@ WIRING changes (install / level / uninstall / purge) need a new session.
 |-----|--------|---------|
 | `RUNBOOK` | skill | absolute path to THIS file (source dir = its dirname) |
 | `LEVEL` | skill (user's answer) | `fast` or `strict`; REQUIRED for install/level — empty aborts |
+| `PLUGIN_VERSION` | skill (optional) | `X.Y.Z` for the metadata stamp. OPTIONAL: unset/malformed falls back to `<SRC>/../../../.claude-plugin/plugin.json`, resolved by the block itself. Never a literal |
+| `LAST_UPDATED` | skill (optional) | `YYYY-MM-DD` for the stamp; unset falls back to the LOCAL date the block computes |
 
 These are read from `process.env` by the node blocks below — they must be REAL shell
 variables, exported before the block runs:
@@ -166,13 +172,32 @@ and the blocks ABORT loudly rather than writing a silent `fast` over the level t
 user picked. Each Bash call starts a fresh shell — re-export in EVERY call, or
 prefix the block.
 
+Every write of the config also stamps the three mandatory JSON metadata keys —
+`version`, `generated_by`, `last_updated` (never `doc_type`: that is a `.md`
+frontmatter field). `version` is resolved from `.claude-plugin/plugin.json`, never
+hardcoded; `last_updated` is the LOCAL date.
+
 **EXECUTE** config write (read-modify-write, Bash tool):
 
 ```
-CFG="$PWD/.claude/brewtools/agent-router.json" node -e '
+SRC="$(dirname "$RUNBOOK")"
+CFG="$PWD/.claude/brewtools/agent-router.json" PJSON="$SRC/../../../.claude-plugin/plugin.json" node -e '
 const fs=require("fs"), p=require("path");
 const f=process.env.CFG;
 const level=(process.env.LEVEL||"").trim();
+const GB="brewtools:agent-router-setup";
+function pluginVersion(){                       // env first, plugin.json fallback; NEVER a literal
+  const ev=(process.env.PLUGIN_VERSION||"").trim();
+  if(/^[0-9]+\.[0-9]+\.[0-9]+$/.test(ev)) return ev;
+  try{ const j=JSON.parse(fs.readFileSync(process.env.PJSON||"","utf8")); if(typeof j.version==="string"&&j.version.trim()) return j.version.trim(); }catch{}
+  return "";
+}
+function today(){                               // LOCAL date, like date +%F - never toISOString (UTC)
+  const ev=(process.env.LAST_UPDATED||"").trim();
+  if(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(ev)) return ev;
+  const d=new Date();
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
 if(level!=="fast"&&level!=="strict"){ console.error("ABORT: LEVEL must be fast|strict, got: "+JSON.stringify(level)+" - export it before this block"); process.exit(1); }
 let c={};
 if(fs.existsSync(f)){
@@ -190,10 +215,16 @@ if(!has("genericTypes")) c.genericTypes=["general-purpose","worker"];   // hand-
 if(!has("neverFlag")) c.neverFlag=["Explore","Plan","statusline-setup","output-style-setup","brewcode:agent-creator","brewcode:skill-creator","brewcode:hook-creator","brewcode:bash-expert"];
 if(!has("minScore")) c.minScore=3;
 if(!has("margin")) c.margin=2;
+const pv=pluginVersion();
+if(!pv){ console.error("ABORT: cannot resolve plugin version - export PLUGIN_VERSION=X.Y.Z or fix PJSON: "+process.env.PJSON); process.exit(1); }
+const lu=today();
+c.version=pv; c.generated_by=GB; c.last_updated=lu;   // the 3 mandatory JSON metadata keys, on EVERY write
+delete c.doc_type;                                    // frontmatter-only field; a JSON carrier never takes it
 fs.mkdirSync(p.dirname(f),{recursive:true});
 fs.writeFileSync(f,JSON.stringify(c,null,2)+"\n");
 const back=JSON.parse(fs.readFileSync(f,"utf8"));   // post-write verification
 if(back.level!==level){ console.error("ABORT: verification failed for "+f); process.exit(1); }
+if(back.version!==pv||back.generated_by!==GB||back.last_updated!==lu){ console.error("ABORT: metadata verification failed for "+f); process.exit(1); }
 console.log("OK wrote "+f+" "+JSON.stringify(back));
 if(back.enabled!==true) console.log("NOTE: enabled=false was preserved from the existing config - run ENABLE to switch it on");
 ' && echo "✅ config" || echo "❌ FAILED"
@@ -288,7 +319,8 @@ Run every block from the REPO ROOT (`$PWD` is used throughout) with `RUNBOOK` an
    `SRC="$(dirname "$RUNBOOK")"`. (Do not rely on any plugin env var — it is
    injected as prompt text and expands to empty in Bash.)
 3. Write `<repo>/.claude/brewtools/agent-router.json` — run the **EXECUTE config
-   write** block in the *Config* section above, unchanged.
+   write** block in the *Config* section above. It also stamps `version` /
+   `generated_by` / `last_updated`; do not strip those lines out of it.
 4. Merge the hook entries into `<repo>/.claude/settings.json` (create `{}` if
    absent), `<absdir>` = `<repo>/.claude/hooks` (**EXECUTE** merge, below).
 
@@ -398,7 +430,8 @@ process.stdout.write(lv);
 2. Re-run the **EXECUTE copy** block from *INSTALL* — it overwrites `agent-router.mjs`
    with the current one and `node --check`s it.
 3. Re-run the **EXECUTE config write** block from *Config* — with `LEVEL` unchanged it
-   only adds keys that a newer version introduced; `enabled`, `genericTypes`,
+   only adds keys that a newer version introduced and re-stamps `version` /
+   `generated_by` / `last_updated` to the current plugin; `enabled`, `genericTypes`,
    `neverFlag`, `minScore`, `margin` and `intents` are all preserved as-is.
 4. Re-run the **EXECUTE merge settings** block from *INSTALL* — it strips its own stale
    entries first, so a moved hooks dir converges and the tier-2 judge prompt is
@@ -431,11 +464,27 @@ tier-2 entry ALSO stays wired and keeps costing a model call per spawn: use
 `level fast` first if that is what you want stopped.
 
 **EXECUTE** using Bash tool. The block below DISABLES as written; to ENABLE, prefix
-the whole line with `ON=1 ` (i.e. `ON=1 CFG="$PWD/..." node -e '...'`). Any other
-value of `ON`, or no `ON` at all, disables. Re-running either direction is a no-op.
+the `CFG=...` line with `ON=1 ` (i.e. `ON=1 CFG="$PWD/..." PJSON="..." node -e '...'`).
+Any other value of `ON`, or no `ON` at all, disables. Re-running either direction is a
+no-op. `RUNBOOK` must be exported here too — this is a config WRITE, so it re-stamps the
+three metadata keys.
 ```
-CFG="$PWD/.claude/brewtools/agent-router.json" node -e '
+SRC="$(dirname "$RUNBOOK")"
+CFG="$PWD/.claude/brewtools/agent-router.json" PJSON="$SRC/../../../.claude-plugin/plugin.json" node -e '
 const fs=require("fs"), p=require("path"); const f=process.env.CFG;
+const GB="brewtools:agent-router-setup";
+function pluginVersion(){
+  const ev=(process.env.PLUGIN_VERSION||"").trim();
+  if(/^[0-9]+\.[0-9]+\.[0-9]+$/.test(ev)) return ev;
+  try{ const j=JSON.parse(fs.readFileSync(process.env.PJSON||"","utf8")); if(typeof j.version==="string"&&j.version.trim()) return j.version.trim(); }catch{}
+  return "";
+}
+function today(){                               // LOCAL date, like date +%F - never toISOString (UTC)
+  const ev=(process.env.LAST_UPDATED||"").trim();
+  if(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(ev)) return ev;
+  const d=new Date();
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
 let c={};
 if(fs.existsSync(f)){
   const raw=fs.readFileSync(f,"utf8");
@@ -446,10 +495,16 @@ if(fs.existsSync(f)){
   }
 }
 c.enabled = process.env.ON === "1";
+const pv=pluginVersion();
+if(!pv){ console.error("ABORT: cannot resolve plugin version - export PLUGIN_VERSION=X.Y.Z or fix PJSON: "+process.env.PJSON); process.exit(1); }
+const lu=today();
+c.version=pv; c.generated_by=GB; c.last_updated=lu;   // every write stamps the 3 mandatory keys
+delete c.doc_type;                                    // frontmatter-only field; a JSON carrier never takes it
 fs.mkdirSync(p.dirname(f),{recursive:true});
 fs.writeFileSync(f,JSON.stringify(c,null,2)+"\n");
 const back=JSON.parse(fs.readFileSync(f,"utf8"));
 if(back.enabled!==c.enabled){ console.error("ABORT: verification failed for "+f); process.exit(1); }
+if(back.version!==pv||back.generated_by!==GB||back.last_updated!==lu){ console.error("ABORT: metadata verification failed for "+f); process.exit(1); }
 console.log((back.enabled?"ENABLED ":"DISABLED ")+f);
 ' && echo "✅ toggled" || echo "❌ FAILED"
 ```

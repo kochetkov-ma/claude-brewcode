@@ -6,7 +6,7 @@ description: Detailed description of all brewcode plugin commands
 
 # BC Plugin Commands
 
-> **ver:** 5.0.0 | **Author:** Maksim Kochetkov | **License:** MIT
+> **ver:** 5.1.0 | **Author:** Maksim Kochetkov | **License:** MIT
 
 ## Naming
 
@@ -20,7 +20,7 @@ status | install | upgrade | enable | disable | uninstall | purge
 
 No arguments = `status` when installed, `install` when not -- except `/brewcode:semble-setup`, which always defaults to `status` so a bare invocation can never trigger a machine-level package install.
 
-Each skill implements the modes that mean something for it and rejects the rest with an `ERROR:` line and exit 1, instead of guessing. `/brewcode:teams-setup` covers `status | install | upgrade | uninstall | purge` and rejects `enable` / `disable`. Skill-specific extras come after the canonical set, never in place of it (`semble-setup`: `reindex | optimize | resume`).
+No setup rejects any of the seven canonical verbs -- all ten setup skills implement all seven, either via a live config flag (semble, agent-deadline, agent-router, manager, docsync) or entry-file parking (teams, superreview, task-board, think-short, memory-sync). Skill-specific extras come after the canonical set, never in place of it (`semble-setup`: `reindex | optimize | resume`).
 
 ## Quick Reference
 
@@ -85,21 +85,22 @@ Recurring tools with no installed state (`agents`, `rules`, `convention`, `e2e`,
 
 ### Classification
 
-Each row gets exactly one state, evaluated in order: `n/a` -> `missing` -> `disabled` -> `partial` -> `stale` -> `installed`.
+Each row gets exactly one state, evaluated in order: `n/a` -> `disabled` -> `missing` -> `partial` -> `stale` -> `installed`.
 
 **Anchor MISS is decisive.** The anchor is the artifact only that setup writes; without it the row is `missing`, whatever else the project contains. Secondaries must be EXCLUSIVE too -- `teams-setup` claims `.claude/teams/*/trace.jsonl` and `trace-ops.sh`, and `superreview-setup` no longer claims the shared `intent-guard.md`, because a shared file made every project with a hand-written agent report a broken `partial` install.
 
-**`disabled` outranks `partial` and `stale`.** Five setups leave a probeable off-switch: semble (`.claude/semble/state.json` `.enabled`), think-short (`think-short-prompt.md.disabled`), manager (`.claude/brewtools/manager/state.json` `.hard`), agent-deadline (`.claude/agent-deadline.json` `.enabled`), agent-router (`.claude/brewtools/agent-router.json` `.enabled`). A disabled row offers `enable` and never enters the run-list -- a switched-off mechanism is a choice, not a defect.
+**`disabled` outranks `missing`, `partial` and `stale`.** All ten setups leave a probeable off-switch, in one of two mechanisms: live config flag -- semble, agent-deadline, agent-router, manager, docsync; entry-file parking -- teams, superreview, task-board, think-short, memory-sync. A disabled row offers `enable` and never enters the run-list -- a switched-off mechanism is a choice, not a defect.
 
 ### Staleness signals
 
 | Signal | Used by | How |
 |--------|---------|-----|
 | Checksum | semble, think-short, agent-deadline, agent-router, manager, docsync | Those setups `cp` hook files verbatim -> `cmp` against the plugin asset is exact |
-| Provenance stamp | memory-sync | Emitted skill's trailing `<!-- memory-sync template vX.Y.Z` vs `VERSION=` in `generate.sh` |
+| Frontmatter trio | memory-sync | `version`/`generated_by`/`last_updated` in the emitted `SKILL.md`'s YAML frontmatter vs the plugin's own version. A trailing `<!-- memory-sync template vX.Y.Z` comment is the pre-5.0 stamp; finding it yields `STALE-LEGACY` (install predates the frontmatter migration, run `upgrade`) |
 | Template baseline | superreview | New plugin template diffed against `.template-baseline/`, so the delta is never your tailoring |
 | Absence | task-board | A deployed board with no `.claude/skills/task-spec/` predates the spec+design layer |
-| none | teams, task-board (otherwise) | AI-authored per project, no stamp -> reported `version unknown`, deliberately |
+| Header-table row | teams | `team.md`'s `\| Version \| X.Y.Z \|` row of the `Field/Value` block, generated + substituted at install |
+| Frontmatter | task-board | `version:` in `board.md`'s frontmatter, substituted at install |
 
 Output is one table plus an ordered run-list: `partial` first (broken installs), then `stale`, then `missing`. Commands use the canonical verbs only (`status` · `install` · `upgrade` · `enable` · `disable` · `uninstall` · `purge`) plus the live per-skill extras (`semble-setup`: `reindex | optimize | resume`; `agent-router-setup` / `manager-setup`: `level <...>`). A setup installed but absent from the roster produces a WARNING above the table, never a silent edit.
 
@@ -318,7 +319,7 @@ Creates + manages dynamic teams of domain-specific AGs w/ tracking framework. An
 
 | Param | Value |
 |-------|-------|
-| Args | `[status [name]\|install [name] [prompt]\|upgrade [name]\|uninstall [name]\|purge [name]]` |
+| Args | `[status [name]\|install [name] [prompt]\|upgrade [name]\|enable [name]\|disable [name]\|uninstall [name]\|purge [name]]` |
 | Context | session |
 | Model | opus |
 | Deps | none |
@@ -331,10 +332,12 @@ Creates + manages dynamic teams of domain-specific AGs w/ tracking framework. An
 | `status` | Read-only health report: per-AG stats, success rates, recommendations |
 | `install` | Analyze project, propose 3 variants (5/10-12/15-20 AGs), create w/ agent-creator, quorum review (3 reviewers, 2/3 consensus), fix loop |
 | `upgrade` | Self-reflection: analyze trace data, tune/replace underperformers. Re-copies `trace-ops.sh` (idempotent) |
+| `enable` | Un-parks a previously `disable`d team: `toggle-team.sh <name> enable` renames `<agent>.md.disabled` back to `<agent>.md`. Reversible, no generation, `intent-guard` untouched |
+| `disable` | Parks the team without deleting anything: `toggle-team.sh <name> disable` renames each member to `<agent>.md.disabled`. Trace history and archive survive; `enable` reverses it |
 | `uninstall` | Interactive: archive trace data, remove inactive AGs (`intent-guard` is never pruned) |
 | `purge` | Total removal after ONE explicit confirmation: every domain AG + `.claude/teams/{name}/` incl. `trace-archive.jsonl`. `intent-guard` survives -- shared with `superreview-setup` |
 
-`enable` / `disable` are not implemented: `detect-mode.sh` prints `ERROR:teams-setup has no <verb> state` and exits 1. That same guard is why `purge` is a mode and not a team name -- an unrecognised first word is still parsed as `TEAM_NAME`.
+`enable` and `disable` are two of the seven canonical verbs `detect-mode.sh` accepts (`status | install | upgrade | enable | disable | uninstall | purge`). Any other first word is parsed as `TEAM_NAME` instead of a verb -- `install enable` creates a team named `enable`, so a canonical verb always comes first.
 
 The `[name]` positional follows the verb. No arguments: `status` of the first existing team, or `install` of a team named `default` when none exists.
 

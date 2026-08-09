@@ -102,7 +102,7 @@ DOMAIN_AGENTS:
       |-------|-----------------|-----------|
       | <name> | <DOMAIN>, <DOMAIN> | <one line> |
   agent = the frontmatter `name` (plugin agents as `plugin:name`). domains covered = the repo areas the agent is competent in, as SHORT UPPER-KEBAB segments, comma-separated. specialty = one line from its description/body. The value is pasted verbatim into the emitted skill, so an incomplete table !=renders.
-- If TARGET has no .codex/agents/ (or it holds no agent .md), return this exact line instead of a table:
+- If TARGET has no .codex/agents/ (or it holds no agent .toml), return this exact line instead of a table:
   (none found -- fall back to the built-in Plan agent and say so in Evidence)
 
 ARCHITECT_AGENT:

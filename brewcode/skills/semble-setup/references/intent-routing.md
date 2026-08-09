@@ -119,7 +119,7 @@ Unique winner != permission to run. `purge` still needs `--yes` **and** `--confi
 | 3 | `upgrade`: `обнови` = 1. `reindex`'s `обнови индекс` is a **phrase** and does not match a bare `обнови` |
 | — | winner **`upgrade`**, unique |
 
-reason: `matched keyword: обнови`. Compares the recorded pin against the approved `0.5.2`; identical -> report `unchanged` and stop. State plainly in the report that `"обнови"` was read as *update the pinned version*, not *rebuild the index*, and offer `reindex` in **Next Step**.
+reason: `matched keyword: обнови`. Compares the recorded pin against the approved `0.5.4`; identical -> report `unchanged` and stop. State plainly in the report that `"обнови"` was read as *update the pinned version*, not *rebuild the index*, and offer `reindex` in **Next Step**.
 
 ### R3 — `"настрой semble"`
 

@@ -1,0 +1,143 @@
+---
+title: "Rules Organizer"
+description: "Internal agent that organizes .claude/rules/*.md with path-specific frontmatter and LLM-optimized tables. Spawned only by /brewcode:rules."
+order: 1210
+---
+import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+
+# Rules Organizer
+
+<Callout type="note">
+**Internal agent — no direct or automatic use.** `bc-rules-organizer` is spawned only by [`/brewcode:rules`](/brewcode/skills/rules/), never by you directly and never auto-selected by Claude for an unrelated prompt. It exists as a page here because it ships as one of brewcode's 5 agents and deserves the same reference treatment as the other 4.
+</Callout>
+
+## Quick reference
+
+| Field | Value |
+|-------|-------|
+| Model | `haiku` — pinned, cheap file reorganization |
+| Tools | Read, Write, Edit, Glob, Grep, Bash, Agent |
+| Write access | `.claude/rules/` directory only |
+| `maxTurns` | 60 — anti-loop stop, not a budget |
+| Invocation | Spawned by `/brewcode:rules` via the Task tool — not a slash command, no manual trigger |
+
+## Scope guard
+
+Rules Organizer never sizes or splits a brief itself — `/brewcode:rules` already batches and confirms the rule set before the single spawn, so scope is fixed to what it was handed.
+
+| Situation | What the agent does |
+|-----------|---------------------|
+| Brief matches the accepted rule batch | Writes only inside `.claude/rules/` — every other path is off-limits |
+| Request reaches beyond rule organization | Reports it back instead of expanding scope |
+| Brief omits CONTEXT (what the skill already did) or CONSUMER (who reads the rules next) | States the assumption in the report, or asks once — never invents scope |
+| `maxTurns: 60` is hit mid-run | Run aborts; rules already written survive, next run resumes from the last file logged in the report |
+
+## What it does
+
+Rules Organizer takes rules extracted from a source file (CLAUDE.md, docs, code) and turns them into `.claude/rules/*.md` files with correct `paths:` frontmatter — one file per logical scope, deduplicated against everything already there, formatted as numbered tables instead of prose.
+
+It owns two authoritative table formats (`| # | Avoid | Instead | Why |` and `| # | Practice | Context | Source |`), a 3-check dedup protocol that catches near-duplicates and avoid/best-practice antonym pairs, and a hard 20-row-per-file ceiling that forces a split into `{prefix}-avoid.md` / `{prefix}-best-practice.md` once a file grows past it.
+
+## Example
+
+```text
+/brewcode:rules "extract logging and SQL conventions from CLAUDE.md"
+```
+
+The skill reads the source, proposes rule candidates, asks you to accept/reject in batches, then spawns `bc-rules-organizer` once with the accepted set. Expected result: `.claude/rules/logging.md` and `.claude/rules/sql-best-practice.md` created or updated, each with `paths:` frontmatter, numbered tables, and a report listing files created/updated plus a rule count.
+
+## Workflow
+
+<Steps>
+  <li>
+    <div>
+      <strong>Analysis</strong>
+      <p>Reads the source file completely, identifies rule categories, maps each to a path pattern (or auto-detects from project structure), checks existing rules first.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Extraction</strong>
+      <p>Groups rules by logical scope (component, API, test, build, module) and classifies each as anti-pattern (avoid) or best practice.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Optimization and dedup</strong>
+      <p>Converts prose to tables, applies abbreviations, adds lazy links for detail. Runs the 3-Check Dedup Protocol: within-file similarity, cross-file avoid/best-practice antonym pairs, and a CLAUDE.md duplicate check — anything already in CLAUDE.md is skipped, never re-added.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>File creation</strong>
+      <p>Writes or updates files under <code>.claude/rules/</code> — global <code>avoid.md</code>/<code>best-practice.md</code> with no <code>paths:</code>, or <code>{'{prefix}'}-avoid.md</code> style files scoped with quoted glob patterns. Max 20 rows per table; splits into a new specialized file once exceeded.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Checkpoint per file</strong>
+      <p>Appends each finished file (path + what changed) to <code>.claude/reports/YYYYMMDD-HHMMSS_rules-organizer/report.md</code> right after writing it — not held to the end. If <code>maxTurns</code> is hit, written rules survive; the run resumes from the last file listed in that report.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Optimize and report</strong>
+      <p>Spawns <code>brewtools:text-optimizer</code> once per created/updated file, all in one message — skipped with a note if <code>brewtools</code> is not installed, never a blocker. Returns a final report: files created/updated table, rule counts, and next-step checklist.</p>
+    </div>
+  </li>
+</Steps>
+
+<details>
+<summary>Technical details — frontmatter, dedup protocol, file naming</summary>
+
+### `paths:` frontmatter — the only supported field
+
+Source: [code.claude.com/docs/en/memory](https://code.claude.com/docs/en/memory.md#path-specific-rules). Only `paths:` is a valid field — `globs`, `alwaysApply`, `description` are not.
+
+```yaml
+---
+paths:
+  - "src/components/**/*.tsx"
+  - "!src/components/**/*.test.tsx"
+---
+```
+
+Patterns must be quoted (`"**/*.tsx"`, not bare). Bug [#16299](https://github.com/anthropics/claude-code/issues/16299): all rules load at session start regardless of `paths:` — lazy loading is not actually working upstream, so the agent still scopes files correctly but the load-time benefit doesn't apply yet.
+
+Rules that fire before a file is in context — search policy, tool-choice policy, delegation policy — stay unscoped (no `paths:`), because `paths:` only matches files already in context.
+
+### 3-Check Dedup Protocol
+
+| Check | Scope | Action |
+|-------|-------|--------|
+| 1. Within-file | Same target file | >70% similarity skip; 40-70% merge |
+| 2. Cross-file antonym | Paired avoid/best-practice file | Same concept as opposite — keep the avoid entry, delete the best-practice one |
+| 3. CLAUDE.md duplicate | Project CLAUDE.md | Already documented there — skip entirely, `"CLAUDE.md"` is a forbidden Source value |
+
+### File naming
+
+| Pattern | Example | Content |
+|---------|---------|---------|
+| Global | `avoid.md`, `best-practice.md` | No `paths:` |
+| Path-scoped pair | `{'{prefix}'}-avoid.md`, `{'{prefix}'}-best-practice.md` | Common prefixes: test, sql, api, security, kotlin, java, react |
+| Domain-specific | `bq-core.md`, `logging.md` | Mixed avoid + best-practice tables under one `paths:` scope |
+
+### Version stamping (v5.1.0+)
+
+Its frontmatter `version`, `generated_by`, and `last_updated` are rewritten at release, never edited by hand.
+
+</details>
+
+<CardGrid>
+  <Card title="rules skill" icon="link" href="/brewcode/skills/rules/">
+    The only entry point that spawns this agent — interactive extraction and batching.
+  </Card>
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/agents/bc-rules-organizer.md">
+    Agent definition, table formats, and dedup protocol in full.
+  </Card>
+  <Card title="Brewcode overview" icon="document" href="/brewcode/overview/">
+    All brewcode skills and agents in one place.
+  </Card>
+</CardGrid>
+
+<UpdateNotice />

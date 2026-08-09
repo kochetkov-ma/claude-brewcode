@@ -13,7 +13,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 
 `/brewtools:agent-router-setup` installs one PreToolUse hook, matcher `Agent`, that checks whether the main loop picked the right agent for a spawn. When a project agent from `.claude/agents/` or a brewcode specialist clearly owns the task and the main loop reached for a generic type instead, the hook **denies** the spawn and names the real expert. When several agents look equally plausible, it only appends a nudge listing the top candidates — never a block. Everything else stays silent.
 
-The check runs at zero cost by default: a deterministic Node script, no model call, median **~69 ms** per invocation. An optional second tier adds an LLM judge for the cases tier 1 leaves as a nudge — but that tier is opt-in for a reason stated plainly below, not hidden in a footnote.
+The check runs at zero cost by default: a deterministic Node script, no model call, under **100 ms including node startup**. An optional second tier adds an LLM judge for the cases tier 1 leaves as a nudge — but that tier is opt-in for a reason stated plainly below, not hidden in a footnote.
 
 The skill itself never edits hook logic. It decides a **mode** from the canonical set `status | install | upgrade | enable | disable | uninstall | purge`, plus the extra `level fast|strict`, then delegates every file, `settings.json` and config change to the `brewcode:hook-creator` agent following a fixed runbook.
 
@@ -52,7 +52,7 @@ Expected flow: the skill prints the current status table (`hook_file=no tier1_re
   <li><div><strong>Refreshed status printed</strong><p>The status block re-runs. Wiring changes (install/upgrade/level/uninstall/purge) need a new Claude Code session; config value changes (<code>enabled</code>, <code>genericTypes</code>, <code>minScore</code>, <code>margin</code>, <code>intents</code>) are read live.</p></div></li>
 </Steps>
 
-## Технические детали
+## Technical details
 
 ### Tier 1 decision order
 
@@ -76,7 +76,7 @@ It allows as early as it can — an ambiguous case becomes a nudge, never a bloc
 
 | Tier | Wiring | Cost | Status |
 |------|--------|------|--------|
-| 1 — default (`level fast`) | `{"type":"command","command":"node",...}`, PreToolUse matcher `Agent` | deterministic, **zero tokens**, median ~69 ms per invocation | production |
+| 1 — default (`level fast`) | `{"type":"command","command":"node",...}`, PreToolUse matcher `Agent` | deterministic, **zero tokens**, under 100 ms including node startup | production |
 | 2 — opt-in (`level strict`) | `{"type":"agent",...}`, model `claude-haiku-4-5-20251001` | one model call on every `Agent` spawn | wired but **not yet behaviorally verified** — do not assume it catches anything until it has been tested against real payloads |
 
 <Callout type="warning">
@@ -110,7 +110,10 @@ Path: `<project>/.claude/brewtools/agent-router.json`.
   "genericTypes": ["general-purpose", "worker"],
   "neverFlag": ["Explore", "Plan", "statusline-setup", "output-style-setup"],
   "minScore": 3,
-  "margin": 2
+  "margin": 2,
+  "version": "X.Y.Z",
+  "generated_by": "brewtools:agent-router-setup",
+  "last_updated": "YYYY-MM-DD"
 }
 ```
 
@@ -123,12 +126,21 @@ Path: `<project>/.claude/brewtools/agent-router.json`.
 | `minScore` | minimum roster score before a project agent can win |
 | `margin` | how far the winner must lead the runner-up before it is a deny rather than a nudge |
 | `intents` | optional override of the built-in intent table — **REPLACES it wholesale, does not merge**. Adding one custom route silently drops the other three unless you copy `DEFAULT_INTENTS` out of `agent-router.mjs` first |
+| `version` / `generated_by` / `last_updated` | stamped by `install`/`upgrade`; `/brewcode:setup-status` reads them to flag a stale install |
+
+<Callout type="note">
+`enabled` defaults true and only an exact `false` disables it — the opposite polarity from `agent-deadline-setup` (absent or anything but `true` means OFF). Do not assume the two opt-in hooks behave alike.
+</Callout>
+
+### Version and ownership
+
+`install`/`upgrade` write `agent-router.json`'s `version`, `generated_by: "brewtools:agent-router-setup"` and `last_updated` at top level. `agent-router.mjs` carries the matching `// brewcode-meta: version=X.Y.Z generated_by=brewtools:agent-router-setup` comment on line 2. `upgrade` re-stamps both, which is how `/brewcode:setup-status` tells an install running an older brewtools apart from the currently installed plugin version.
 
 ### Fails open, everywhere
 
 Bad input, unparsable config, a missing roster, an unwritable tmp dir — every one of these lets the spawn through instead of blocking the session. A config that exists but fails to parse turns the whole feature off, not a fallback to defaults.
 
-## Связанное
+## Related
 
 <CardGrid>
   <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">
@@ -138,7 +150,7 @@ Bad input, unparsable config, a missing roster, an unwritable tmp dir — every 
     Another opt-in installer hook for subagents — soft wall-clock budget instead of routing.
   </Card>
   <Card title="Setup Status" icon="clipboard" href="/brewcode/skills/setup-status/">
-    Read-only dashboard across every `-setup` skill -- installed, stale or missing, with the hand-run command for each.
+    Read-only dashboard across every `-setup` skill — installed, stale or missing, with the hand-run command for each.
   </Card>
   <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/agent-router-setup">
     SKILL.md, the install runbook, the tier-1 hook and the tier-2 judge prompt.

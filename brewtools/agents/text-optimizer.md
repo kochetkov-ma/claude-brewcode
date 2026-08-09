@@ -6,6 +6,10 @@ maxTurns: 60
 color: magenta
 tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch, AskUserQuestion
 skills: brewtools:text-optimize
+doc_type: llm
+version: "5.1.0"
+generated_by: "brewtools"
+last_updated: "2026-08-09"
 ---
 
 # Text Optimizer Agent

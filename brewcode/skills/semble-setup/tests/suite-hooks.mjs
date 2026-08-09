@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 /**
- * suite-hooks.mjs — unit D: rule template, CLAUDE.md marker block, the three
- * hooks, and the settings.json merge performed by semble-guidance.sh.
+ * suite-hooks.mjs — unit D: rule template, .sembleignore, CLAUDE.md marker
+ * block, the three hooks (session, prefetch, stats) and the settings.json merge
+ * performed by semble-guidance.sh — including the 5.0.0 migration that retires
+ * the two advisory hooks.
  *
  * Self-contained: inlines its own check()/run() helpers, runs standalone
  * (`node tests/suite-hooks.mjs`), and never touches the real ~/.claude, the
@@ -12,13 +14,14 @@
  * description. No branching decides which asserts run.
  */
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
   mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, copyFileSync,
-  readdirSync, realpathSync, statSync, chmodSync,
+  readdirSync, realpathSync, statSync, chmodSync, appendFileSync, symlinkSync,
 } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = join(fileURLToPath(import.meta.url), '..');          // tests/
 const SKILL = join(HERE, '..');                                   // skills/semble-setup/
@@ -26,12 +29,27 @@ const ASSETS = join(SKILL, 'assets');
 const SCRIPTS = join(SKILL, 'scripts');
 const TEMPLATE_SRC = join(ASSETS, 'semble-first.md.template');
 const SESSION_SRC = join(ASSETS, 'semble-session.mjs');
-const REMINDER_SRC = join(ASSETS, 'semble-reminder.mjs');
-const EXPLORE_SRC = join(ASSETS, 'semble-explore.mjs');
+const PREFETCH_SRC = join(ASSETS, 'semble-prefetch.mjs');
+const STATS_SRC = join(ASSETS, 'semble-stats.mjs');
 
 const BASE = realpathSync(mkdtempSync(join(tmpdir(), 'semble-d-')));
 const HOME = join(BASE, 'home');
 mkdirSync(join(HOME, '.claude'), { recursive: true });
+
+// The registered cache root every fixture state points at, and the four files
+// semble writes into `<root>/<repoHash>/index`. The prefetch hook refuses to
+// spawn a search when they are not all there — a cold index cannot be built
+// inside its 3 s cap, so trying is pure loss — which makes a warm index part of
+// the baseline fixture and `{ cold: true }` the explicit way to remove it.
+const CACHE = join(BASE, 'cache');
+const REPO_HASH = 'abcdef0123456789'.repeat(4);
+const INDEX_FILE_NAMES = ['chunks.json', 'metadata.json', 'bm25_index', 'semantic_index'];
+function warmIndex(root, hash, only) {
+  const dir = join(root, hash, 'index');
+  mkdirSync(dir, { recursive: true });
+  for (const n of (only || INDEX_FILE_NAMES)) writeFileSync(join(dir, n), '{}');
+  return dir;
+}
 
 let passed = 0;
 let failed = 0;
@@ -90,11 +108,27 @@ function safeParse(str) {
 }
 
 // ── skill copy under the temp base (never runs from the repo tree) ──────────
-const SKILL_COPY = join(BASE, 'skill');
+// The copy reproduces the REAL plugin layout — <plugin>/skills/semble-setup/... —
+// because scripts/lib/semble-common.sh resolves the artifact version by walking
+// four levels up from its own location to <plugin>/.claude-plugin/plugin.json.
+// A flat copy sends that walk outside the temp tree and every installed artifact
+// gets stamped version "unknown".
+const PLUGIN_COPY = join(BASE, 'plugin');
+const SKILL_COPY = join(PLUGIN_COPY, 'skills', 'semble-setup');
+mkdirSync(join(PLUGIN_COPY, '.claude-plugin'), { recursive: true });
+copyFileSync(join(SKILL, '..', '..', '.claude-plugin', 'plugin.json'),
+  join(PLUGIN_COPY, '.claude-plugin', 'plugin.json'));
+const PLUGIN_VERSION = JSON.parse(
+  readFileSync(join(PLUGIN_COPY, '.claude-plugin', 'plugin.json'), 'utf8')).version;
 mkdirSync(join(SKILL_COPY, 'scripts', 'lib'), { recursive: true });
 mkdirSync(join(SKILL_COPY, 'assets'), { recursive: true });
 copyFileSync(join(SCRIPTS, 'semble-guidance.sh'), join(SKILL_COPY, 'scripts', 'semble-guidance.sh'));
-for (const f of ['semble-first.md.template', 'semble-session.mjs', 'semble-reminder.mjs', 'semble-explore.mjs']) {
+// The candidate scanner is a sibling of the guidance script: without it the
+// measured block is silently skipped, so J3 would prove nothing.
+copyFileSync(join(SCRIPTS, 'semble-project.sh'), join(SKILL_COPY, 'scripts', 'semble-project.sh'));
+chmodSync(join(SKILL_COPY, 'scripts', 'semble-project.sh'), 0o755);
+for (const f of ['semble-first.md.template', 'sembleignore.template',
+  'semble-session.mjs', 'semble-prefetch.mjs', 'semble-stats.mjs']) {
   copyFileSync(join(ASSETS, f), join(SKILL_COPY, 'assets', f));
 }
 
@@ -120,6 +154,9 @@ sc_rule_file()        { printf '%s\\n' "$(sc_project_root)/.claude/rules/semble-
 sc_hooks_dir()        { printf '%s\\n' "$(sc_project_root)/.claude/hooks"; }
 sc_require_node() { sc_have node || sc_die "node is required"; }
 sc_backup() { [ -f "$1" ] || return 0; local b="$1.bak.$(date +%s)"; cp "$1" "$b" && printf '%s\\n' "$b"; }
+SEMBLE_GENERATED_BY="brewcode:semble-setup"
+sc_plugin_version() { printf '%s' "${PLUGIN_VERSION}"; }
+sc_today() { date +%F; }
 `;
 const usedRealLib = existsSync(REAL_LIB);
 if (usedRealLib) copyFileSync(REAL_LIB, LIB_COPY);
@@ -127,7 +164,18 @@ else writeFileSync(LIB_COPY, LIB_STUB);
 const GUIDANCE = join(SKILL_COPY, 'scripts', 'semble-guidance.sh');
 const TPL_TEXT = readFileSync(TEMPLATE_SRC, 'utf8');
 
+// The rule is a mechanism-(a) byte copy: its stamp is baked into the plugin template by
+// bump-version.sh at release and copied verbatim, so the installed file must equal the
+// template byte for byte. `last_updated` is deliberately absent -- a date written at install
+// time would make setup-status's `cmp` read DIFFERS forever.
+const META_KEYS = ['doc_type', 'version', 'generated_by', 'last_updated'];
+const metaOf = (t) => Object.fromEntries(META_KEYS
+  .map((k) => [k, (new RegExp(`^${k}: (.*)$`, 'm').exec(t.split('\n---\n')[0] || '') || [])[1] ?? null]));
+
 let projSeq = 0;
+/** fixture project -> the cache root its state.json points at. */
+const projCache = new Map();
+const cacheOf = (p) => projCache.get(p) || '';
 function freshProject(seed) {
   projSeq++;
   const dir = join(BASE, `proj${projSeq}`);
@@ -137,7 +185,22 @@ function freshProject(seed) {
   }
   if (seed && seed.state !== undefined) {
     mkdirSync(join(dir, '.claude', 'semble'), { recursive: true });
-    writeFileSync(join(dir, '.claude', 'semble', 'state.json'), seed.state);
+    // Each fixture gets its OWN cache root. The repo hash is shared, so without
+    // this a project seeded `cold: true` would find the warm index another
+    // fixture had already built and the cold case would silently never run.
+    const st = safeParse(seed.state);
+    const own = st && st.cacheRoot === CACHE;
+    const text = own ? JSON.stringify({ ...st, cacheRoot: join(CACHE, `proj${projSeq}`) }) : seed.state;
+    writeFileSync(join(dir, '.claude', 'semble', 'state.json'), text);
+    const eff = safeParse(text);
+    if (eff && typeof eff.cacheRoot === 'string') projCache.set(dir, eff.cacheRoot);
+    // Warm under the hash the hook computes from the project path itself, NOT
+    // the one state.json carries - that field is deliberately ignored now, so
+    // seeding by it would warm a directory nothing ever looks in.
+    if (eff && seed.cold !== true && eff.cacheRoot) {
+      warmIndex(eff.cacheRoot, createHash('sha256').update(realpathSync(dir)).digest('hex'),
+        seed.indexOnly);
+    }
   }
   if (seed && seed.stateDir === true) {
     mkdirSync(join(dir, '.claude', 'semble', 'state.json'), { recursive: true });
@@ -148,7 +211,11 @@ function freshProject(seed) {
   return dir;
 }
 
-function guidance(proj, args) {
+// SEMBLE_NO_CANDIDATES=1 by default: the measured-candidates block is a
+// property of the repo being installed into, and letting it fire in every
+// fixture would make unrelated expectations depend on the fixture's file mix.
+// Section J3 turns it back on and tests it on purpose.
+function guidance(proj, args, extraEnv = {}) {
   const r = spawnSync('bash', [GUIDANCE, ...args], {
     encoding: 'utf8',
     env: {
@@ -156,6 +223,8 @@ function guidance(proj, args) {
       SEMBLE_PROJECT_ROOT: proj,
       SEMBLE_TEST_HOME: HOME,
       SEMBLE_NO_NETWORK: '1',
+      SEMBLE_NO_CANDIDATES: '1',
+      ...extraEnv,
     },
     timeout: 30000,
   });
@@ -193,10 +262,30 @@ function countEntry(s, ev, matcher, full) {
   return arr.filter((e) => matcherOf(e) === matcher && argsOf(e).includes(full)).length;
 }
 
+// The 5.0.0 want table: SessionStart, UserPromptSubmit and the stats pair.
+// PreToolUse/Bash, PreToolUse/Grep and SubagentStart/Explore were RETIRED with
+// the two advisory hooks; group M proves a v1-shaped file loses them on install.
+const WANT_N = 4;
+const STATS_MATCHER = 'mcp__semble_code__search|mcp__semble_code__find_related|Bash|Grep|Glob|Read';
+/** One count per want row, in want-table order. */
+function wantCounts(proj, s) {
+  const { session, prefetch: pre, stats } = semblePaths(proj);
+  return [
+    countEntry(s, 'SessionStart', null, session),
+    countEntry(s, 'UserPromptSubmit', null, pre),
+    countEntry(s, 'PostToolUse', STATS_MATCHER, stats),
+    countEntry(s, 'PostToolUseFailure', STATS_MATCHER, stats),
+  ];
+}
+
 function semblePaths(proj) {
   const d = hooksDirOf(proj);
   return {
     session: join(d, 'semble-session.mjs'),
+    prefetch: join(d, 'semble-prefetch.mjs'),
+    stats: join(d, 'semble-stats.mjs'),
+    // retired in 5.0.0 — still addressable, because the migration is asserted
+    // on the files it must DELETE.
     reminder: join(d, 'semble-reminder.mjs'),
     explore: join(d, 'semble-explore.mjs'),
   };
@@ -207,42 +296,20 @@ const READY_STATE = (extra) =>
     schema: 1,
     profile: 'code',
     projectRoot: '/x',
-    approvedVersion: '0.5.2',
+    approvedVersion: '0.5.4',
     phase: 'ready',
     enabled: true,
     scope: 'user',
-    cacheRoot: '/c',
-    repoHash: 'abcdef0123456789'.repeat(4),
-    completed: [],
+    cacheRoot: CACHE,
+    repoHash: REPO_HASH,
+    completed: ['mcp'],
     ...(extra || {}),
   });
 
-function reminderPayload(proj, toolName, toolInput) {
-  return JSON.stringify({
-    session_id: 'S1',
-    cwd: proj,
-    hook_event_name: 'PreToolUse',
-    tool_name: toolName,
-    tool_input: toolInput,
-  });
-}
-
-const allReminderOutputs = [];
-function reminder(proj, toolName, toolInput) {
-  const r = runNode(REMINDER_SRC, reminderPayload(proj, toolName, toolInput));
-  allReminderOutputs.push(r.stdout);
-  return r;
-}
-
-const EXPECTED_MSG = (cwd) =>
-  'semble: for intent/behavior questions try ONE mcp__semble_code__search first — repo="' +
-  cwd +
-  '", top_k=5, max_snippet_lines=10 — then open the hit at start_line. ' +
-  'This grep is fine for exact/exhaustive matching; this is a reminder, not a block.';
-
-const REMIND_OK = (cwd) => ({
-  hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: EXPECTED_MSG(cwd) },
-});
+// The prefetch gate is "semble is usable here", not "phase === ready": semble
+// builds its index lazily INSIDE a tool call, so a phase gate would deadlock.
+// `completed` holding "mcp" is the registration proxy, so it belongs in the
+// baseline fixture; the cases that drop it are explicit (P6).
 
 // ═══════════════════════════════════════════════════════════════════════════
 // A. settings.json merge
@@ -259,23 +326,34 @@ const REMIND_OK = (cwd) => ({
   check('A1.statusTrailingNewline', guidance(p, ['status', '--json']).stdout.endsWith('\n'), true,
     'status --json carries the same trailing newline');
   const s = readSettings(p);
-  const { session, reminder: rem, explore: exp } = semblePaths(p);
+  const { session, prefetch: pre, stats, reminder: rem, explore: exp } = semblePaths(p);
   check('A1.sessionEntry', s.hooks.SessionStart, [
     { hooks: [{ type: 'command', command: 'node', args: [session], timeout: 5 }] },
   ], 'SessionStart entry has the exact contract shape with an explicit 5 s timeout');
-  check('A1.preToolUse', s.hooks.PreToolUse, [
-    { hooks: [{ type: 'command', command: 'node', args: [rem], timeout: 5 }], matcher: 'Bash' },
-    { hooks: [{ type: 'command', command: 'node', args: [rem], timeout: 5 }], matcher: 'Grep' },
-  ], 'the reminder is registered once under Bash and once under Grep');
-  check('A1.subagentStart', s.hooks.SubagentStart, [
-    { hooks: [{ type: 'command', command: 'node', args: [exp], timeout: 5 }], matcher: 'Explore' },
-  ], 'the explore hook is registered once under SubagentStart with matcher Explore');
+  check('A1.userPromptSubmit', s.hooks.UserPromptSubmit, [
+    { hooks: [{ type: 'command', command: 'node', args: [pre], timeout: 5 }] },
+  ], 'the prefetch hook is registered once on UserPromptSubmit with NO matcher - every prompt reaches it');
+  check('A1.noRetiredEvents',
+    [Object.prototype.hasOwnProperty.call(s.hooks, 'PreToolUse'),
+      Object.prototype.hasOwnProperty.call(s.hooks, 'SubagentStart')], [false, false],
+    'a fresh install registers neither of the events the two advisory hooks used');
   check('A1.perm', s.permissions.allow, ['mcp__semble_code__search', 'mcp__semble_code__find_related'],
     'both MCP tool names land in permissions.allow');
-  check('A1.files', [existsSync(session), existsSync(rem), existsSync(exp)], [true, true, true],
-    'all three .mjs assets were copied into .claude/hooks');
-  check('A1.rule', readRaw(join(p, '.claude', 'rules', 'semble-first.md')), TPL_TEXT,
-    'the rule file is byte-identical to the template');
+  check('A1.files', [existsSync(session), existsSync(pre), existsSync(stats)], [true, true, true],
+    'all three live .mjs assets were copied into .claude/hooks');
+  check('A1.noRetiredFiles', [existsSync(rem), existsSync(exp)], [false, false],
+    'and neither retired asset is written any more');
+  const ruleText = readRaw(join(p, '.claude', 'rules', 'semble-first.md'));
+  check('A1.rule', ruleText, TPL_TEXT,
+    'the installed rule is byte-identical to the plugin template, so setup-status cmp reads SAME');
+  check('A1.ruleStamp', metaOf(ruleText), {
+    doc_type: 'llm',
+    version: `"${PLUGIN_VERSION}"`,
+    generated_by: '"brewcode:semble-setup"',
+    last_updated: null,
+  }, 'the rule carries the release-baked stamp and no install-time last_updated');
+  check('A1.ruleNoDupes', META_KEYS.map((k) => ruleText.split('\n').filter((l) => l.startsWith(`${k}:`)).length),
+    [1, 1, 1, 0], 'each baked key appears exactly once; last_updated is absent');
 }
 
 // A2 — repeat merge is a no-op (3 runs)
@@ -292,13 +370,7 @@ const REMIND_OK = (cwd) => ({
   check('A2.bytes2', after2, after1, 'settings.json is byte-identical after run 2');
   check('A2.bytes3', after3, after1, 'settings.json is byte-identical after run 3');
   const s = readSettings(p);
-  const { session, reminder: rem, explore: exp } = semblePaths(p);
-  check('A2.counts', [
-    countEntry(s, 'SessionStart', null, session),
-    countEntry(s, 'PreToolUse', 'Bash', rem),
-    countEntry(s, 'PreToolUse', 'Grep', rem),
-    countEntry(s, 'SubagentStart', 'Explore', exp),
-  ], [1, 1, 1, 1], 'exactly one entry per event+matcher after three merges');
+  check('A2.counts', wantCounts(p, s), [1, 1, 1, 1], 'exactly one entry per want row after three merges');
   check('A2.permCounts', [
     s.permissions.allow.filter((x) => x === 'mcp__semble_code__search').length,
     s.permissions.allow.filter((x) => x === 'mcp__semble_code__find_related').length,
@@ -332,13 +404,8 @@ const FOREIGN = {
   check('A3.allow', s.permissions.allow,
     ['Bash(git *)', 'mcp__semble_code__search', 'mcp__semble_code__find_related'],
     'the two tool names are appended after the existing allow entries');
-  const { session, reminder: rem, explore: exp } = semblePaths(p);
-  check('A3.counts', [
-    countEntry(s, 'SessionStart', null, session),
-    countEntry(s, 'PreToolUse', 'Bash', rem),
-    countEntry(s, 'PreToolUse', 'Grep', rem),
-    countEntry(s, 'SubagentStart', 'Explore', exp),
-  ], [1, 1, 1, 1], 'exactly one semble entry per event+matcher alongside the foreign ones');
+  check('A3.counts', wantCounts(p, s), [1, 1, 1, 1],
+    'exactly one semble entry per want row alongside the foreign ones');
 }
 
 // A4 — unparseable settings ABORTs and writes nothing
@@ -373,13 +440,7 @@ const FOREIGN = {
   const flat = Object.values(s.hooks).flat();
   check('A5.staleGone', flat.filter((e) => argsOf(e).some((a) => a.startsWith(staleDir))).length, 0,
     'zero entries still point at the old hooks dir');
-  const { session, reminder: rem, explore: exp } = semblePaths(p);
-  check('A5.counts', [
-    countEntry(s, 'SessionStart', null, session),
-    countEntry(s, 'PreToolUse', 'Bash', rem),
-    countEntry(s, 'PreToolUse', 'Grep', rem),
-    countEntry(s, 'SubagentStart', 'Explore', exp),
-  ], [1, 1, 1, 1], 'the new-dir entries were added exactly once each');
+  check('A5.counts', wantCounts(p, s), [1, 1, 1, 1], 'the new-dir entries were added exactly once each');
   check('A5.foreign', s.hooks.PreToolUse.filter((e) => argsOf(e).includes('/opt/foreign/other.mjs')).length, 1,
     'the foreign Write entry survived the stale-path purge');
 }
@@ -388,7 +449,7 @@ const FOREIGN = {
 {
   const p = freshProject({});
   guidance(p, ['install', '--part', 'all', '--json']);
-  const { session, reminder: rem, explore: exp } = semblePaths(p);
+  const { session, prefetch: pre, stats } = semblePaths(p);
   const r = guidance(p, ['remove', '--part', 'all', '--json']);
   check('A6.exit', r.status, 0, 'remove --part all exits 0');
   const s = readSettings(p);
@@ -396,7 +457,7 @@ const FOREIGN = {
     'the hooks object is deleted once every event array empties');
   check('A6.permissionsKey', Object.prototype.hasOwnProperty.call(s, 'permissions'), false,
     'the permissions object is deleted once allow empties');
-  check('A6.files', [existsSync(session), existsSync(rem), existsSync(exp)], [false, false, false],
+  check('A6.files', [existsSync(session), existsSync(pre), existsSync(stats)], [false, false, false],
     'all three .mjs files are deleted');
   check('A6.rule', existsSync(join(p, '.claude', 'rules', 'semble-first.md')), false, 'the managed rule file is deleted');
 }
@@ -420,7 +481,7 @@ const FOREIGN = {
   const b = safeParse(before.stdout);
   check('A8.beforeRule', b.rule.state, 'absent', 'status reports an absent rule before install');
   check('A8.beforeWired',
-    [b.hooks.session.wired, b.hooks.reminder.wired, b.hooks.explore.wired, b.permissions.wired],
+    [b.hooks.session.wired, b.hooks.prefetch.wired, b.hooks.stats.wired, b.permissions.wired],
     [false, false, false, false], 'nothing is reported as wired before install');
   guidance(p, ['install', '--part', 'all', '--json']);
   const after = guidance(p, ['status', '--json']);
@@ -428,13 +489,15 @@ const FOREIGN = {
   check('A8.afterRule', a.rule.state, 'managed', 'status reports the rule as managed after install');
   check('A8.afterClaudeMd', a.claudeMd.state, 'present', 'status reports the CLAUDE.md block as present');
   check('A8.afterWired',
-    [a.hooks.session.wired, a.hooks.reminder.wired, a.hooks.explore.wired, a.permissions.wired],
+    [a.hooks.session.wired, a.hooks.prefetch.wired, a.hooks.stats.wired, a.permissions.wired],
     [true, true, true, true],
-    'session hook, reminder (both matchers), explore hook and permissions all report wired');
-  check('A8.afterFiles', [a.hooks.session.file, a.hooks.reminder.file, a.hooks.explore.file],
+    'session hook, prefetch hook, stats (both post-tool events) and permissions all report wired');
+  check('A8.afterFiles', [a.hooks.session.file, a.hooks.prefetch.file, a.hooks.stats.file],
     ['present', 'present', 'present'], 'status sees all three hook files on disk');
+  check('A8.retired', a.hooks.retired, [], 'and no retired file is left behind');
   check('A8.stale', a.hooks.staleEntries, 0, 'no stale entries after a clean install');
-  check('A8.wiredCount', a.hooks.wiredCount, 4, 'all 4 settings entries are counted as wired');
+  check('A8.wiredCount', [a.hooks.wiredCount, a.hooks.wantCount], [WANT_N, WANT_N],
+    'all 4 settings entries are counted as wired');
   check('A8.exitReadOnly', before.status, 0, 'status exits 0');
 }
 
@@ -442,35 +505,35 @@ const FOREIGN = {
 {
   const p = freshProject({});
   guidance(p, ['install', '--part', 'all', '--json']);
-  const { explore: exp } = semblePaths(p);
+  const { prefetch: pre } = semblePaths(p);
   const s = readSettings(p);
-  delete s.hooks.SubagentStart;                       // the old two hooks stay wired
+  delete s.hooks.UserPromptSubmit;                    // the other rows stay wired
   writeFileSync(settingsPath(p), JSON.stringify(s, null, 2) + '\n');
   const a = safeParse(guidance(p, ['status', '--json']).stdout);
-  check('A9.wiredCount', a.hooks.wiredCount, 3,
-    'dropping the SubagentStart entry reports 3 of 4, not "wired"');
-  check('A9.exploreWired', [a.hooks.session.wired, a.hooks.reminder.wired, a.hooks.explore.wired],
-    [true, true, false], 'only the explore entry is reported as unwired');
-  check('A9.exploreFileStillThere', [a.hooks.explore.file, existsSync(exp)], ['present', true],
+  check('A9.wiredCount', [a.hooks.wiredCount, a.hooks.wantCount], [WANT_N - 1, WANT_N],
+    'dropping the UserPromptSubmit entry reports 3 of 4, not "wired"');
+  check('A9.prefetchWired', [a.hooks.session.wired, a.hooks.stats.wired, a.hooks.prefetch.wired],
+    [true, true, false], 'only the prefetch entry is reported as unwired');
+  check('A9.prefetchFileStillThere', [a.hooks.prefetch.file, existsSync(pre)], ['present', true],
     'the file is still on disk — file presence and wiring are reported separately');
   const human = guidance(p, ['status']).stdout;
   check('A9.human', human.includes('hooks 3/4 wired'), true,
     'the human line spells the partial count out as 3/4');
 }
 
-// A10 — remove takes the explore registration with the file
+// A10 — remove takes the prefetch registration with the file
 {
   const p = freshProject({});
   guidance(p, ['install', '--part', 'hooks', '--json']);
-  const { explore: exp } = semblePaths(p);
+  const { prefetch: pre } = semblePaths(p);
   const r = guidance(p, ['remove', '--part', 'hooks', '--json']);
   check('A10.exit', r.status, 0, 'remove --part hooks exits 0');
   const s = readSettings(p);
-  check('A10.registrationGone', Object.prototype.hasOwnProperty.call(s.hooks || {}, 'SubagentStart'), false,
-    'the SubagentStart array emptied and its key was pruned');
-  check('A10.fileGone', existsSync(exp), false, 'the explore .mjs is deleted too');
+  check('A10.registrationGone', Object.prototype.hasOwnProperty.call(s.hooks || {}, 'UserPromptSubmit'), false,
+    'the UserPromptSubmit array emptied and its key was pruned');
+  check('A10.fileGone', existsSync(pre), false, 'the prefetch .mjs is deleted too');
   check('A10.noDanglingPath',
-    JSON.stringify(s).includes('semble-explore.mjs'), false,
+    JSON.stringify(s).includes('semble-prefetch.mjs'), false,
     'no settings entry is left pointing at the deleted file');
 }
 
@@ -481,7 +544,14 @@ const FOREIGN = {
   const p = freshProject({});
   guidance(p, ['install', '--part', 'rule', '--json']);
   const rulePath = join(p, '.claude', 'rules', 'semble-first.md');
-  check('B1.created', readRaw(rulePath), TPL_TEXT, 'a fresh rule file is byte-identical to the template');
+  check('B1.created', readRaw(rulePath), TPL_TEXT,
+    'a fresh rule file is the plugin template, byte for byte');
+  check('B1.stamped', metaOf(readRaw(rulePath)),
+    {
+      doc_type: 'llm', version: `"${PLUGIN_VERSION}"`,
+      generated_by: '"brewcode:semble-setup"', last_updated: null,
+    },
+    'the stamp is the one baked at release; the installer writes nothing of its own');
 
   const edited = TPL_TEXT + '\n<!-- my own note -->\n';
   writeFileSync(rulePath, edited);
@@ -493,10 +563,59 @@ const FOREIGN = {
   check('B2.status', st.rule.state, 'user_modified', 'status reports user_modified');
 
   const rf = guidance(p, ['install', '--part', 'rule', '--force', '--json']);
-  check('B3.forced', readRaw(rulePath), TPL_TEXT, '--force restores the template');
+  check('B3.forced', readRaw(rulePath), TPL_TEXT, '--force restores the template byte for byte');
+  check('B3.stampKept', metaOf(readRaw(rulePath)).last_updated, null,
+    '--force writes no install-time last_updated; the copy stays byte-identical');
   check('B3.exit', rf.status, 0, 'the forced overwrite exits 0');
   const backups = readdirSync(join(p, '.claude', 'rules')).filter((f) => f.startsWith('semble-first.md.bak.'));
   check('B3.backup', backups.length, 1, 'the overwritten user version was backed up first');
+  check('B3.noTempLeft', readdirSync(join(p, '.claude', 'rules')).some((f) => f.includes('.rendered.')), false,
+    'the render temp file never survives an install');
+}
+
+// B5. --force restores the template byte for byte. The rule is a byte copy, so a locally
+// chosen doc_type and any extra frontmatter key go with the prose -- they survive only in the
+// backup. Preserving them would break the byte identity setup-status's `cmp` depends on.
+{
+  const p = freshProject({});
+  guidance(p, ['install', '--part', 'rule', '--json']);
+  const rulePath = join(p, '.claude', 'rules', 'semble-first.md');
+  const tailored = readRaw(rulePath)
+    .replace(/^doc_type: llm$/m, 'doc_type: user')
+    .replace(/^description: /m, 'owner: docs-team\ndescription: ') + '\n<!-- my own note -->\n';
+  writeFileSync(rulePath, tailored);
+  const st = safeParse(guidance(p, ['status', '--json']).stdout);
+  check('B5.userModified', st.rule.state, 'user_modified', 'the tailored rule is user_modified on prose, not on its stamp');
+  guidance(p, ['install', '--part', 'rule', '--force', '--json']);
+  const after = readRaw(rulePath);
+  check('B5.byteIdentical', after, TPL_TEXT, '--force restores the template byte for byte');
+  check('B5.docTypeReset', metaOf(after).doc_type, 'llm', 'a locally chosen doc_type is replaced, not carried across');
+  check('B5.unknownKeyDropped', /^owner: docs-team$/m.test(after), false,
+    'frontmatter keys the template does not define go with the rest of the file');
+  const bak = readdirSync(join(p, '.claude', 'rules')).filter((f) => f.startsWith('semble-first.md.bak.'));
+  check('B5.backup', bak.length, 1, 'the replaced file was backed up first');
+  check('B5.backupIsTheUserFile', readRaw(join(p, '.claude', 'rules', bak[0])), tailored,
+    'the backup holds the user version verbatim, local frontmatter included');
+}
+
+// B6. A rule installed by an older version of this skill carries an installer-written
+// `last_updated` and, after a release, an older `version`. The four metadata keys are stripped
+// from both sides before the managed verdict, and the file is re-synced to the plugin bytes
+// without --force and without a backup.
+{
+  const p = freshProject({});
+  guidance(p, ['install', '--part', 'rule', '--json']);
+  const rulePath = join(p, '.claude', 'rules', 'semble-first.md');
+  writeFileSync(rulePath, readRaw(rulePath)
+    .replace(/^version: .*$/m, 'version: "4.0.0"')
+    .replace(/^(generated_by: .*)$/m, '$1\nlast_updated: "2020-01-01"'));
+  const st = safeParse(guidance(p, ['status', '--json']).stdout);
+  check('B6.stillManaged', st.rule.state, 'managed', 'a legacy stamp on unchanged prose is still a managed rule');
+  const r = guidance(p, ['install', '--part', 'rule', '--json']);
+  check('B6.reSynced', readRaw(rulePath), TPL_TEXT, 'the legacy stamp is re-synced to the plugin bytes without --force');
+  check('B6.reportedChanged', safeParse(r.stdout).changed.length, 1, 'the re-sync is reported as a change, not as unchanged');
+  check('B6.noBackup', readdirSync(join(p, '.claude', 'rules')).filter((f) => f.startsWith('semble-first.md.bak.')).length, 0,
+    'a metadata-only re-sync takes no backup: nothing of the user\'s was overwritten');
 }
 
 // Template content — the three facts that make every generated call work
@@ -516,6 +635,253 @@ const FOREIGN = {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// J. .sembleignore — same managed-file policy as the rule, no frontmatter
+//
+// semble 0.5.4 (index/file_walker.py:_load_ignore_for_dir) reads exactly two
+// files per directory, ./.gitignore and ./.sembleignore, and nothing else — no
+// core.excludesFile, no ~/.gitignore_global, no call to git. A repo-root
+// .sembleignore is therefore the ONLY way to keep a globally-ignored tree such
+// as .claude/ out of the index. Measured on this repo: 871 -> 590 indexed files.
+// ═══════════════════════════════════════════════════════════════════════════
+const IGNORE_TPL_TEXT = readFileSync(join(ASSETS, 'sembleignore.template'), 'utf8');
+{
+  const p = freshProject({});
+  const ignorePath = join(p, '.sembleignore');
+  const r = guidance(p, ['install', '--part', 'ignore', '--json']);
+  check('J1.exit', r.status, 0, 'install --part ignore exits 0');
+  check('J1.created', readRaw(ignorePath), IGNORE_TPL_TEXT,
+    'the ignore file is byte-identical to the template — it carries no frontmatter to stamp');
+  check('J1.reported', safeParse(r.stdout).changed.length, 1, 'the creation is reported as exactly one change');
+  check('J1.status', safeParse(guidance(p, ['status', '--json']).stdout).ignore,
+    { state: 'managed', path: ignorePath }, 'status reports it managed, at the repo root');
+
+  const rr = guidance(p, ['install', '--part', 'ignore', '--json']);
+  check('J1.idempotent', [rr.status, safeParse(rr.stdout).changed.length, safeParse(rr.stdout).unchanged.length],
+    [0, 0, 1], 'a second install is an honest no-op, reported as unchanged');
+}
+{
+  const p = freshProject({});
+  guidance(p, ['install', '--part', 'ignore', '--json']);
+  const ignorePath = join(p, '.sembleignore');
+  const edited = IGNORE_TPL_TEXT + '\n# my own exclusion\nfixtures/\n';
+  writeFileSync(ignorePath, edited);
+  const r = guidance(p, ['install', '--part', 'ignore', '--json']);
+  check('J2.noClobber', readRaw(ignorePath), edited,
+    'a user-edited .sembleignore is never blind-overwritten — the user may have excluded something deliberately');
+  check('J2.exit', r.status, 0, 'the no-clobber path still exits 0');
+  check('J2.reported', safeParse(r.stdout).skipped.length, 1, 'and it is reported as skipped, not as unchanged');
+  check('J2.status', safeParse(guidance(p, ['status', '--json']).stdout).ignore.state, 'user_modified',
+    'status reports user_modified');
+
+  const rf = guidance(p, ['install', '--part', 'ignore', '--force', '--json']);
+  check('J3.forced', readRaw(ignorePath), IGNORE_TPL_TEXT, '--force regenerates the template');
+  check('J3.exit', rf.status, 0, 'the forced overwrite exits 0');
+  check('J3.backup', readdirSync(p).filter((f) => f.startsWith('.sembleignore.bak.')).length, 1,
+    'the overwritten user version was backed up first');
+}
+// ═══════════════════════════════════════════════════════════════════════════
+// J3. measured per-repo candidates
+//
+// The template's per-repo section ships EMPTY and no static pattern can fill
+// it: duplicate trees and corpus hogs are layout-specific. install measures the
+// repo and writes what it found - commented out. Excluding something the user
+// wanted indexed is the worse error, because it fails silently.
+// ═══════════════════════════════════════════════════════════════════════════
+{
+  const BEGIN = '# --- brewcode:semble measured candidates ---';
+  const END = '# --- end brewcode:semble measured candidates ---';
+  const ON = { SEMBLE_NO_CANDIDATES: '' };
+
+  // A repo with one honest source tree and one byte-identical mirror of it.
+  const p = freshProject({});
+  const ignorePath = join(p, '.sembleignore');
+  for (const d of ['src', '.mirror']) mkdirSync(join(p, d), { recursive: true });
+  for (let i = 0; i < 8; i++) {
+    const body = `export function f${i}() { return ${i}; }\n`.repeat(40);
+    writeFileSync(join(p, 'src', `m${i}.mjs`), body);
+    writeFileSync(join(p, '.mirror', `m${i}.mjs`), body);   // byte-identical copy
+  }
+  // And one prose file big enough to be a corpus hog on its own.
+  writeFileSync(join(p, 'CHANGELOG.md'), '- a release note line\n'.repeat(4000));
+
+  const r = guidance(p, ['install', '--part', 'ignore', '--json'], ON);
+  const text = readRaw(ignorePath);
+  const lines = text.split('\n');
+  const bi = lines.indexOf(BEGIN);
+  const ei = lines.indexOf(END);
+  const body = lines.slice(bi + 1, ei);
+  check('J3.exit', r.status, 0, 'the annotated install exits 0');
+  check('J3.blockPresent',
+    [lines.filter((l) => l === BEGIN || l === END), body.filter((l) => l.startsWith('# /')).length],
+    [[BEGIN, END], 2],
+    'exactly one BEGIN then one END delimit the block, with both measured proposals between them');
+  check('J3.mirror', body.some((l) => l.startsWith('# /.mirror/') && l.includes('duplicate-tree')), true,
+    'the byte-identical mirror tree is proposed, and named as a duplicate tree');
+  check('J3.notSrc', body.some((l) => l.startsWith('# /src/')), false,
+    'the ORIGINAL tree is never proposed - excluding it would delete the repo from the corpus');
+  check('J3.heavyFile', body.some((l) => l.startsWith('# /CHANGELOG.md') && l.includes('heavy-file')), true,
+    'the one prose file carrying a large share of the corpus is proposed too');
+  check('J3.allCommented', body.filter((l) => l.trim() && !l.startsWith('#')), [],
+    'EVERY proposal is commented out - the scan proposes, it never excludes');
+  check('J3.reported', safeParse(r.stdout).changed.some((l) => l.startsWith('candidates: 2 measured proposal')), true,
+    'the report says how many proposals were written, and that they are inert');
+  check('J3.evidence', body.filter((l) => l.startsWith('# /')).every((l) => /\d/.test(l)), true,
+    'every proposal carries its measurement, so the user can judge it instead of trusting it');
+
+  // The block must not make the file look user-modified, or no template update
+  // could ever reach an annotated install again.
+  check('J3.stillManaged', safeParse(guidance(p, ['status', '--json'], ON).stdout).ignore.state, 'managed',
+    'an annotated .sembleignore is still managed - the block is stripped before the comparison');
+
+  const r2 = guidance(p, ['install', '--part', 'ignore', '--json'], ON);
+  check('J3.idempotent', readRaw(ignorePath), text,
+    'a second install re-proposes nothing and rewrites nothing');
+  check('J3.idempotentReport', safeParse(r2.stdout).changed.filter((l) => l.startsWith('candidates:')), [],
+    'and it does not claim to have written proposals it did not write');
+
+  // A decision the user made inside the block survives, uncommented, forever.
+  const decided = readRaw(ignorePath).replace('# /.mirror/', '/.mirror/');
+  writeFileSync(ignorePath, decided);
+  const r3 = guidance(p, ['install', '--part', 'ignore', '--json'], ON);
+  check('J3.decisionKept', readRaw(ignorePath).includes('\n/.mirror/'), true,
+    'an uncommented decision inside the block is never re-commented or dropped');
+  check('J3.noDuplicate', (readRaw(ignorePath).match(/\/\.mirror\//g) || []).length, 1,
+    'and the path is never proposed a second time next to the decision the user already made');
+  check('J3.decidedManaged', safeParse(guidance(p, ['status', '--json'], ON).stdout).ignore.state, 'managed',
+    'a user decision inside the block still leaves the file managed');
+  check('J3.exit3', r3.status, 0, 'the run over a decided block exits 0');
+
+  // A user edit OUTSIDE the block is a real user_modified file: install skips it,
+  // and the annotator must not sneak a write in behind that skip.
+  const p2 = freshProject({});
+  guidance(p2, ['install', '--part', 'ignore', '--json'], ON);
+  const edited = `${readRaw(join(p2, '.sembleignore'))}\n# mine\nfixtures/\n`;
+  writeFileSync(join(p2, '.sembleignore'), edited);
+  const r4 = guidance(p2, ['install', '--part', 'ignore', '--json'], ON);
+  check('J3.noClobber', readRaw(join(p2, '.sembleignore')), edited,
+    'a user-modified .sembleignore is not annotated either - the skip means skip');
+  check('J3.noClobberExit', r4.status, 0, 'and that run still exits 0');
+
+  // A repo with nothing worth proposing gets no block at all.
+  const p3 = freshProject({});
+  writeFileSync(join(p3, 'only.mjs'), 'export const x = 1;\n');
+  guidance(p3, ['install', '--part', 'ignore', '--json'], ON);
+  check('J3.emptyNoBlock', readRaw(join(p3, '.sembleignore')).includes(BEGIN), false,
+    'a repo with no duplicate tree and no hog gets no block - an empty section is noise');
+  check('J3.emptyByteIdentical', readRaw(join(p3, '.sembleignore')), IGNORE_TPL_TEXT,
+    'and that file stays byte-identical to the template');
+}
+
+{
+  const p = freshProject({});
+  guidance(p, ['install', '--part', 'all', '--json']);
+  const ignorePath = join(p, '.sembleignore');
+  check('J4.installedByAll', existsSync(ignorePath), true, '--part all installs the ignore file too');
+  const r = guidance(p, ['remove', '--part', 'ignore', '--json']);
+  check('J4.removeExit', r.status, 0, 'remove --part ignore exits 0');
+  check('J4.gone', existsSync(ignorePath), false, 'and the file is really gone');
+  check('J4.status', safeParse(guidance(p, ['status', '--json']).stdout).ignore.state, 'absent',
+    'status agrees it is absent again');
+}
+{
+  const p = freshProject({});
+  guidance(p, ['install', '--part', 'all', '--json']);
+  const ignorePath = join(p, '.sembleignore');
+  writeFileSync(ignorePath, IGNORE_TPL_TEXT + '\n# mine\n');
+  const r = guidance(p, ['remove', '--part', 'all', '--json']);
+  // Same contract as the rule file: uninstall leaves nothing behind, but it
+  // never destroys an edit — the user's version is copied aside first.
+  check('J5.gone', existsSync(ignorePath), false, 'uninstall removes the ignore file even when it was edited');
+  check('J5.backup', readdirSync(p).filter((f) => f.startsWith('.sembleignore.bak.')).length, 1,
+    'the edited version was backed up before removal');
+  check('J5.reported', safeParse(r.stdout).changed.some((s) => s.startsWith('ignore: removed user-modified')), true,
+    'and the report says the removed file was user-modified, naming the backup');
+}
+// J6 — the template content is the fix, so assert what it actually excludes.
+{
+  const has = (line) => new RegExp('^' + line.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'm').test(IGNORE_TPL_TEXT);
+  check('J6.tmp', has('.claude/tmp/'), true,
+    '.claude/tmp/ is excluded — 214 of this repo\'s 871 indexed files were vendored upstream copies living there');
+  check('J6.reports', has('.claude/reports/'), true, '.claude/reports/ is excluded — generated agent output, not source');
+  check('J6.projectAuthoredKept',
+    ['.claude/skills/', '.claude/agents/', '.claude/rules/', '.claude/commands/', '.claude/hooks/'].map(has),
+    [false, false, false, false, false],
+    'nothing project-authored under .claude/ is excluded: hiding something the user wanted found is the worse error');
+  check('J6.noDefaults', ['node_modules/', '.venv/', 'dist/', '__pycache__/'].map(has), [false, false, false, false],
+    'semble\'s own _DEFAULT_IGNORED_DIRS are not repeated — only what it misses');
+  check('J6.mechanism', IGNORE_TPL_TEXT.includes('_load_ignore_for_dir'), true,
+    'the file names the exact upstream function that reads it, so the claim can be re-verified');
+}
+
+// J7 — the negation-bypass blocks.
+//
+// file_walker.py:_is_ignored sets `found = not ignored and Path(pat).suffix`,
+// and _walk yields on `found or suffix in extensions`. So a `!` un-ignore whose
+// text ends in an extension SKIPS the extension filter, and a suffix that
+// belongs to no content type gets indexed anyway. Verified against semble 0.5.4:
+// with `.gitignore` = `package-lock.json / !sub/package-lock.json / *.png /
+// !keep.png`, walk_files(root, get_extensions([CODE])) returned
+// ['a.py', 'keep.png', 'sub/package-lock.json'] — .png and .json are in NO
+// bucket. Measured cost on this repo: 552 chunks of lockfile (5.9% of the whole
+// index, and the only .json in it) plus 143 chunks of decoded PNG.
+//
+// The cure is a re-ignore here, and it works because _load_ignore_for_dir
+// concatenates .gitignore lines FIRST and .sembleignore lines SECOND into one
+// GitIgnoreSpec while _is_ignored keeps the LAST match. Re-verified: adding
+// `*.png` + `package-lock.json` to .sembleignore reduced the same walk to
+// ['a.py', 'w.yml'].
+{
+  const lines = IGNORE_TPL_TEXT.split('\n').map((l) => l.trim());
+  const active = lines.filter((l) => l !== '' && !l.startsWith('#'));
+  const has = (pat) => active.includes(pat);
+
+  check('J7.binaries', ['*.png', '*.jpg', '*.pdf', '*.woff2', '*.zip', '*.so', '*.sqlite'].map(has),
+    [true, true, true, true, true, true, true],
+    'binary suffixes are re-ignored: against a plain .gitignore this is a no-op, against a negation it is the only lever');
+  check('J7.lockfiles', ['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml', 'Cargo.lock', 'go.sum'].map(has),
+    [true, true, true, true, true],
+    'lockfiles are re-ignored — one of them was 5.9% of this workspace index');
+  check('J7.pnpmReason', has('pnpm-lock.yaml'), true,
+    'pnpm-lock.yaml especially: it is a .yaml, so unlike the others it reaches the config bucket with no bypass at all');
+
+  // A `!` line in OUR OWN template would re-open the exact hole the two blocks
+  // above close, and it would win, being last.
+  check('J7.noNegation', active.filter((l) => l.startsWith('!')), [],
+    'the template contains no `!` un-ignore: one would re-open the bypass and, being last, would beat every rule above it');
+
+  check('J7.explains', ['_is_ignored', 'found'].map((s) => IGNORE_TPL_TEXT.includes(s)), [true, true],
+    'the bypass is named in the file, not just worked around silently');
+}
+
+// J8 — the per-repo section ships EMPTY.
+//
+// Duplicate mirror trees (2202 chunks / 15 of 80 result slots here) and long
+// changelogs (503 chunks / 9 of 80) were the two biggest wins in the round-2
+// measurement, and neither is generic: the generic form of "this tree is a copy
+// of that tree" is content-hash dedup, not a filename, and a changelog is the
+// right answer to "when did X land". Shipping either pre-filled would exclude
+// something a user wanted indexed — the failure mode this template exists to
+// avoid, and a silent one. They are documented instead, as commented guidance.
+{
+  const active = IGNORE_TPL_TEXT.split('\n').map((l) => l.trim())
+    .filter((l) => l !== '' && !l.startsWith('#'));
+  check('J8.noRepoSpecific',
+    ['.codex/', '/skills/', 'RELEASE-NOTES.md', 'CHANGELOG.md', 'docs/'].filter((p) => active.includes(p)),
+    [],
+    'nothing layout-specific to any one repo is shipped active — .codex/ is another agent runtime\'s directory, exactly as authored as .claude/skills/');
+  check('J8.documented',
+    ['DUPLICATE TREES', 'LONG CHANGELOGS'].map((s) => IGNORE_TPL_TEXT.includes(s)),
+    [true, true],
+    'both are explained in the per-repo section instead, with the measured cost, so the user can opt in knowingly');
+  check('J8.recipe', IGNORE_TPL_TEXT.includes('semble-project.sh candidates'), true,
+    'and the section names the command that measures the user\'s own offenders, instead of a snippet they have to run by hand');
+  check('J8.proposalsOnly', IGNORE_TPL_TEXT.includes('COMMENTED OUT'), true,
+    'the section states outright that measured proposals exclude nothing until the user uncomments one');
+  check('J8.anchoring', IGNORE_TPL_TEXT.includes('/skills/` hits only'), true,
+    'root-anchoring is spelled out: `skills/` would match every */skills/ in the repo, which is the dangerous default');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // C. CLAUDE.md marker block
 // ═══════════════════════════════════════════════════════════════════════════
 const BEGIN = '<!-- BEGIN brewcode:semble -->';
@@ -529,8 +895,13 @@ const END = '<!-- END brewcode:semble -->';
   check('C1.begin', once.split(BEGIN).length - 1, 1, 'exactly one BEGIN marker after insert');
   check('C1.end', once.split(END).length - 1, 1, 'exactly one END marker after insert');
   check('C1.kept', once.startsWith(pre.replace(/\s*$/, '')), true, 'the pre-existing content is kept verbatim at the top');
-  check('C1.body', once.includes('> Not indexed: `.html`, `.json`/`.csv`. Details: `.claude/rules/semble-first.md`.'), true,
-    'the block carries the verbatim last line of the design body');
+  // `.html`/`.htm` ARE indexed — semble's files.py maps them to the docs bucket.
+  // The old line claimed otherwise and sent users to rg for a corpus semble
+  // already had. The rule template and assets/INSTALL.md carry the same fix.
+  check('C1.body', once.includes('> Not indexed: `.json`/`.csv`, `.mdx`/`.txt`. Details: `.claude/rules/semble-first.md`.'), true,
+    'the block carries the verbatim last line of the design body, with .html absent from the not-indexed list');
+  check('C1.htmlNotClaimedMissing', /Not indexed:[^\n]*\.html/.test(once), false,
+    'no variant of the line may still call .html unindexed');
 
   const r2 = guidance(p, ['install', '--part', 'claudemd', '--json']);
   const twice = readRaw(md);
@@ -591,9 +962,11 @@ function session(proj, extra) {
     hookSpecificOutput: {
       hookEventName: 'SessionStart',
       additionalContext:
-        'semble_code MCP was just registered; verification is pending. Run /brewcode:semble-setup resume before relying on semantic search.',
+        'semble_code MCP is registered but not verified yet. It is usable now — mcp__semble_code__search (repo=' +
+        p + ', top_k=5, max_snippet_lines=10); the first call rebuilds the index and may take minutes. ' +
+        'Run /brewcode:semble-setup resume to close the state out.',
     },
-  }, 'awaiting_reload -> resume nudge with additionalContext');
+  }, 'awaiting_reload -> the tool is advertised as usable now, plus the resume close-out');
 }
 {
   const p = freshProject({ state: READY_STATE({ phase: 'error' }) });
@@ -633,214 +1006,608 @@ function session(proj, extra) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// E. PreToolUse reminder — advisory only
+// P. UserPromptSubmit prefetch — the hook that replaced the two advisory ones
+//
+// The predecessors emitted `additionalContext` telling the model to prefer
+// semble. They converted at ZERO — 0/18 on the main channel, 0/11 on the
+// Explore/subagent channel — with delivery proven three independent ways. This
+// hook runs the search itself and hands over the RESULT instead: 5/6 sessions
+// opened an injected path, at fewer tool calls than control in 5/6 questions.
+//
+// FAIL-OPEN is the property under test above all others: this runs on every
+// prompt the user types, so it is tested by breaking things, not by asserting
+// the happy path. Every row below must end in `{}` on stdout and exit 0.
 // ═══════════════════════════════════════════════════════════════════════════
-{
-  const p = freshProject({});
-  const r = reminder(p, 'Bash', { command: 'rg "how does auth work"' });
-  check('E1.noState', safeParse(r.stdout), {}, 'no state file -> silence');
-  check('E1.exit', r.status, 0, 'exit 0 with no state file');
-}
-{
-  const p = freshProject({ state: READY_STATE() });
-  const r = reminder(p, 'Bash', { command: 'rg "how does auth work"' });
-  check('E2.emit', safeParse(r.stdout), REMIND_OK(p), 'a plain intent query gets the exact advisory string');
-  check('E2.exit', r.status, 0, 'the emitting path exits 0');
-  check('E2.marker', existsSync(join(p, '.claude', 'semble', '.reminder-ts')), true, 'the throttle marker is written on emit');
-  const again = reminder(p, 'Bash', { command: 'rg "where do we persist sessions"' });
-  check('E3.throttled', safeParse(again.stdout), {}, 'a second reminder inside the 600 s window is suppressed');
-}
 
-const SILENT_BASH = [
-  ['E4.filesWithMatches', 'rg -l foo', 'the -l enumeration flag'],
-  ['E5.regex', "rg 'foo.*bar'", 'a real regex pattern'],
-  ['E6.fixedStrings', 'grep -F literal .', 'the -F literal flag'],
-  ['E7.findName', "find . -name '*.ts'", 'a find -name filename search'],
-  ['E8.pipedWc', 'rg intent | wc -l', 'a pipeline into wc'],
-  ['E9.count', 'rg -c handler', 'the -c count flag'],
-  ['E10.wordRegexp', 'rg -w handler', 'the -w word-regexp flag'],
-  ['E11.onlyMatching', 'rg -o handler', 'the -o only-matching flag'],
-  ['E12.shortPattern', 'rg ab', 'a pattern shorter than 3 characters'],
-  ['E13.pathPattern', 'rg src/store/session', 'a path-like pattern'],
-  ['E14.fileName', 'rg session.ts', 'a filename-like pattern'],
-  ['E15.mentionsSemble', 'rg "semble cache layout"', 'a command that already mentions semble'],
-  ['E16.notASearch', 'npm run build', 'a command that is not a search at all'],
-  ['E17.midWord', 'echo ripgrep is nice', 'grep appearing mid-word, not at a command boundary'],
-  ['E18.sortPipe', 'rg handler | sort', 'a pipeline into sort'],
-];
-for (const [name, command, why] of SILENT_BASH) {
-  const p = freshProject({ state: READY_STATE() });
-  const r = reminder(p, 'Bash', { command });
-  check(name, safeParse(r.stdout), {}, `silent on \`${command}\` because of ${why}`);
-}
+// ── telemetry readers (shared with the session hook further down) ───────────
+const telemetryFile = (p) => join(p, '.claude', 'semble', 'telemetry.jsonl');
+const telemetry = (p) =>
+  (existsSync(telemetryFile(p)) ? readFileSync(telemetryFile(p), 'utf8') : '')
+    .split('\n').filter((l) => l).map((l) => JSON.parse(l));
+const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+const dropTs = (r) => { const { ts, ...rest } = r; return rest; };
+/** Same, minus the wall-clock `ms` — a duration cannot be asserted exactly. */
+const dropMs = (r) => { const { ms, ...rest } = dropTs(r); return rest; };
+/**
+ * Telemetry record #i without its ts — or, when the fixture stopped producing
+ * that record, a readable diagnostic INSTEAD of a TypeError. A throw here kills
+ * the whole runner before it prints a single result, so a stale fixture used to
+ * take every later assertion in the file down with it.
+ */
+const trec = (p, i) => {
+  const recs = telemetry(p);
+  if (i < recs.length) return dropTs(recs[i]);
+  return 'MISSING telemetry record #' + i + ' — the fixture produced '
+    + recs.length + ' record(s): ' + JSON.stringify(recs.map((r) => r.ev + (r.why ? ':' + r.why : '')));
+};
+/** Field `k` of telemetry record #i, or the same diagnostic string. */
+const tfield = (p, i, k) => { const r = trec(p, i); return typeof r === 'string' ? r : r[k]; };
 
-{
-  const p = freshProject({ state: READY_STATE({ phase: 'awaiting_reload' }) });
-  check('E19.mcpUnavailable', safeParse(reminder(p, 'Bash', { command: 'rg "how does auth work"' }).stdout), {},
-    'silent while the MCP is not verified yet (phase != ready)');
-}
-{
-  const p = freshProject({ state: READY_STATE({ enabled: false }) });
-  check('E20.disabled', safeParse(reminder(p, 'Bash', { command: 'rg "how does auth work"' }).stdout), {},
-    'silent when the project has semble disabled');
-}
-{
-  const p = freshProject({ state: READY_STATE() });
-  check('E21.otherTool', safeParse(reminder(p, 'Read', { file_path: '/x' }).stdout), {},
-    'silent for tools other than Bash and Grep');
-}
-{
-  const p = freshProject({ state: READY_STATE() });
-  const r = reminder(p, 'Grep', { pattern: 'how does auth work' });
-  check('E22.grepTool', safeParse(r.stdout), REMIND_OK(p), 'the native Grep tool gets the same advisory');
-}
-{
-  const p = freshProject({ state: READY_STATE() });
-  check('E23.grepEnum', safeParse(reminder(p, 'Grep', { pattern: 'how does auth work', output_mode: 'files_with_matches' }).stdout),
-    {}, 'the native Grep tool in files_with_matches mode is enumeration -> silent');
-}
-{
-  const p = freshProject({ state: READY_STATE() });
-  check('E24.emptyCommand', safeParse(reminder(p, 'Bash', {}).stdout), {}, 'silent when tool_input carries no command');
-}
-{
-  const p = freshProject({ stateDir: true });
-  const r = reminder(p, 'Bash', { command: 'rg "how does auth work"' });
-  check('E25.stateDir', [r.status, safeParse(r.stdout)], [0, {}], 'reminder: state.json as a directory -> {} exit 0');
-}
-{
-  const bad = runNode(REMINDER_SRC, '{ not json');
-  const empty = runNode(REMINDER_SRC, '');
-  allReminderOutputs.push(bad.stdout, empty.stdout);
-  check('E26.badStdin', [bad.status, safeParse(bad.stdout)], [0, {}], 'reminder: malformed stdin -> {} exit 0');
-  check('E27.emptyStdin', [empty.status, safeParse(empty.stdout)], [0, {}], 'reminder: empty stdin -> {} exit 0');
-}
+// ── a stub `uvx` — the only way to exercise the search without a real index ──
+// It records its argv (so the frozen flag set is observable), optionally
+// sleeps past the hook's 3 s child cap, then prints SEMBLE_STUB_OUT and exits
+// SEMBLE_STUB_RC.
+const STUB_BIN = join(BASE, 'stub-bin');
+mkdirSync(STUB_BIN, { recursive: true });
+const STUB_UVX = join(STUB_BIN, 'uvx');
+writeFileSync(STUB_UVX, [
+  '#!/usr/bin/env bash',
+  'printf "%s\\n" "$*" >> "$SEMBLE_STUB_LOG"',
+  // The env the child is handed, recorded separately from argv: the cache root
+  // is passed by environment, not by flag, and it is the one thing that has to
+  // agree with the MCP registration.
+  'printf "%s\\n" "${SEMBLE_CACHE_LOCATION-<unset>}" >> "$SEMBLE_STUB_ENVLOG"',
+  'if [ -n "${SEMBLE_STUB_SLEEP:-}" ]; then sleep "$SEMBLE_STUB_SLEEP"; fi',
+  'printf "%s" "${SEMBLE_STUB_OUT:-}"',
+  'exit "${SEMBLE_STUB_RC:-0}"',
+  '',
+].join('\n'));
+chmodSync(STUB_UVX, 0o755);
 
-// E28 — the reminder can never block, in any recorded output
-{
-  const joined = allReminderOutputs.join('\n');
-  check('E28.noDecision', joined.includes('permissionDecision'), false, 'no recorded output ever carries permissionDecision');
-  check('E28.noDeny', joined.includes('"deny"'), false, 'no recorded output ever carries a deny');
-  check('E28.noUpdatedInput', joined.includes('updatedInput'), false, 'no recorded output ever carries updatedInput');
-  check('E28.oneObject', allReminderOutputs.every((o) => o.trim().split('\n').length === 1), true,
-    'every reminder invocation printed exactly one line of JSON');
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// X. SubagentStart explore hook — matcher-gated, advisory only
-// ═══════════════════════════════════════════════════════════════════════════
-const allExploreOutputs = [];
-function explore(proj, agentType, extra) {
-  const payload = { session_id: 'S1', cwd: proj, hook_event_name: 'SubagentStart', ...(extra || {}) };
-  if (agentType !== undefined) payload.agent_type = agentType;
-  const r = runNode(EXPLORE_SRC, JSON.stringify(payload));
-  allExploreOutputs.push(r.stdout);
-  return r;
-}
-
-const EXPLORE_OK = (cwd) => ({
-  hookSpecificOutput: {
-    hookEventName: 'SubagentStart',
-    additionalContext:
-      'semble: call mcp__semble_code__search directly first (repo="' + cwd +
-      '", top_k=5) for intent/behavior questions — it is already available, no ' +
-      'ToolSearch needed. rg/Grep stay for exact/exhaustive matches.',
-  },
+// `content` is in the fixture on purpose: the hook asks for
+// --max-snippet-lines 0, but if a future semble ever returns a snippet anyway
+// it must still never reach the model.
+const HIT = (file_path, start_line) =>
+  ({ file_path, start_line, end_line: start_line + 8, score: 0.81, content: 'SNIPPET-MUST-NOT-SHIP' });
+const STUB_HITS = JSON.stringify({
+  query: 'q',
+  results: [HIT('src/store/session.ts', 41), HIT('src/hooks/prefetch.mjs', 12), HIT('docs/design.md', 3)],
 });
 
+// The measured framing, written out here in full ON PURPOSE: provenance, bare
+// paths, directive. Any edit to the hook's wording has to be made twice, and
+// the second time is this line — which is where the 5/6-conversion evidence is
+// recorded.
+const RENDERED = [
+  'Retrieval note (automatic, from a semantic index of THIS repository, built by semble over the working tree).',
+  'These candidate locations were ranked for the question above before you started:',
+  '  1. src/store/session.ts:41',
+  '  2. src/hooks/prefetch.mjs:12',
+  '  3. docs/design.md:3',
+  '',
+  'Open the candidates that look right BEFORE running any search of your own; they are already ranked.',
+  'If none of them answers the question, say so and search normally.',
+  'Name the file you actually used in your answer.',
+].join('\n');
+const PREFETCH_OK = {
+  hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: RENDERED },
+};
+
+/** A prompt that passes gate v3: INTENT (`how`) + DOMAIN (`hook`), no suppressor. */
+const Q = 'how does the session hook decide what to emit';
+/** and the distiller's deterministic output for it. */
+const Q_DISTILLED = 'session hook decide emit';
+
+const allPrefetchOutputs = [];
+let stubSeq = 0;
+/**
+ * @param opts {out, rc, sleep, path, stdin, extra} — every field is a way to
+ * break the hook. Returns the stub's recorded argv lines as `argv`, so
+ * "the search was never spawned" is a direct assertion, not an inference.
+ */
+function prefetch(proj, prompt, opts) {
+  const o = opts || {};
+  stubSeq++;
+  const log = join(BASE, `uvx-${stubSeq}.log`);
+  const envLog = join(BASE, `uvx-${stubSeq}.env`);
+  const payload = {
+    session_id: 'S1', cwd: proj, hook_event_name: 'UserPromptSubmit', prompt, ...(o.extra || {}),
+  };
+  const r = spawnSync(process.execPath, [PREFETCH_SRC], {
+    input: Object.prototype.hasOwnProperty.call(o, 'stdin') ? o.stdin : JSON.stringify(payload),
+    encoding: 'utf8',
+    cwd: BASE,
+    timeout: 20000,
+    env: {
+      ...process.env,
+      PATH: Object.prototype.hasOwnProperty.call(o, 'path') ? o.path : `${STUB_BIN}:${process.env.PATH}`,
+      SEMBLE_STUB_LOG: log,
+      SEMBLE_STUB_ENVLOG: envLog,
+      SEMBLE_STUB_OUT: Object.prototype.hasOwnProperty.call(o, 'out') ? o.out : STUB_HITS,
+      SEMBLE_STUB_RC: String(o.rc === undefined ? 0 : o.rc),
+      SEMBLE_STUB_SLEEP: o.sleep === undefined ? '' : String(o.sleep),
+    },
+  });
+  const out = {
+    stdout: r.stdout || '',
+    stderr: r.stderr || '',
+    status: r.status,
+    argv: existsSync(log) ? readFileSync(log, 'utf8').split('\n').filter((l) => l) : [],
+    cacheEnv: existsSync(envLog) ? readFileSync(envLog, 'utf8').split('\n').filter((l) => l) : [],
+  };
+  allPrefetchOutputs.push(out.stdout);
+  return out;
+}
+
+const markerOf = (p) => {
+  const f = join(p, '.claude', 'semble', '.prefetch-ts');
+  return existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : null;
+};
+
+const {
+  gateV3, distill, PIN_SPEC, CONTENT_ARGS, THROTTLE_MS, COOLDOWN_MS, TIMEOUT_COOLDOWN_MS,
+  INDEX_FILES, cacheRootOf, defaultCacheRoot, indexReady, repoHashOf,
+} = await import(pathToFileURL(PREFETCH_SRC).href);
+
+// P1 — the whole point of the release: a ranked list of paths, and nothing else.
 {
   const p = freshProject({ state: READY_STATE() });
-  const r = explore(p, 'Explore');
-  check('X1.ready', safeParse(r.stdout), EXPLORE_OK(p), 'Explore on a ready project gets the exact advisory string');
-  check('X1.exit', r.status, 0, 'the emitting path exits 0');
-  const again = explore(p, 'Explore');
-  check('X2.noThrottle', safeParse(again.stdout), EXPLORE_OK(p),
-    'a second spawn is advised again — this hook has no throttle');
-  check('X2.noMarker', existsSync(join(p, '.claude', 'semble', '.reminder-ts')), false,
-    'the explore hook never writes the reminder throttle marker');
+  const r = prefetch(p, Q);
+  check('P1.fires', safeParse(r.stdout), PREFETCH_OK,
+    'a gate-passing prompt on a ready project gets the exact provenance+paths+directive block');
+  check('P1.exit', r.status, 0, 'the emitting path exits 0');
+  check('P1.noSnippet', r.stdout.includes('SNIPPET-MUST-NOT-SHIP'), false,
+    'a snippet in the search result never reaches the model — 2/6 sessions answered off snippets with ZERO tool calls');
+  check('P1.marker', typeof (markerOf(p) || {}).t, 'number', 'a successful firing stamps the throttle marker');
+  check('P1.noCool', Object.prototype.hasOwnProperty.call(markerOf(p) || {}, 'cool'), false,
+    'and never the failure cooldown');
+  check('P1.telemetryKeys', telemetry(p).map((x) => Object.keys(x)),
+    [['ts', 'ev', 'src', 'sid', 'fired', 'why', 'q', 'n', 'ms', 'paths']],
+    'exactly one record, with exactly the contracted keys in order');
+  check('P1.record', dropMs(telemetry(p)[0]), {
+    ev: 'prefetch', src: 'prefetch', sid: 'S1', fired: true, why: 'behaviour-or-vocab',
+    q: Q_DISTILLED, n: 3, paths: ['src/store/session.ts', 'src/hooks/prefetch.mjs', 'docs/design.md'],
+  }, 'the record carries the injected PATHS — that array is the conversion denominator');
+  check('P1.ms', typeof telemetry(p)[0].ms, 'number', 'and a numeric duration');
+  check('P1.iso', ISO_RE.test(telemetry(p)[0].ts), true, 'the ts is an ISO-8601 instant');
 }
-const SILENT_AGENTS = [
-  ['X3.generalPurpose', 'general-purpose'],
-  ['X4.plan', 'Plan'],
-  ['X5.projectAgent', 'brewcode:bash-expert'],
-  ['X6.lowercase', 'explore'],
-  ['X7.emptyType', ''],
+
+// P2 — the frozen search invocation. semble keys its cache by project path
+// ALONE but rejects an index whose content-type set differs, so a mismatch here
+// makes the hook and the MCP server evict each other's index on every alternation.
+{
+  const p = freshProject({ state: READY_STATE() });
+  const r = prefetch(p, Q);
+  check('P2.argv', r.argv, [
+    `--from semble[mcp]==0.5.4 semble search ${Q_DISTILLED} ${p} --content code docs config -k 3 --max-snippet-lines 0`,
+  ], 'the child is spawned exactly once, with the pinned spec, the distilled query and the frozen flags');
+  const lib = readFileSync(REAL_LIB, 'utf8');
+  check('P2.pinParity', PIN_SPEC, 'semble[mcp]==' + (/^SEMBLE_PIN_VERSION="\$\{SEMBLE_PIN_VERSION:-([^}"]+)\}"/m.exec(lib) || [])[1],
+    'PIN_SPEC equals the pin the MCP registration uses');
+  check('P2.contentParity', CONTENT_ARGS.join(' '), (/^SEMBLE_CONTENT_ARGS="([^"]+)"/m.exec(lib) || [])[1],
+    'CONTENT_ARGS equals SEMBLE_CONTENT_ARGS byte for byte');
+  check('P2.snippetsOff', r.argv[0].includes('--max-snippet-lines 0'), true,
+    'snippets are switched off at the source, not filtered afterwards');
+  check('P2.cacheEnv', r.cacheEnv, [cacheOf(p)],
+    'and the child is handed SEMBLE_CACHE_LOCATION — semble keys its cache dir by project path '
+    + 'ALONE, so it cannot notice that the hook and the server disagree about the ROOT: each just '
+    + 'builds its own 20 MB copy, and the hook\'s copy is always cold');
+}
+
+// P2b — the cache root: which one, where it comes from, and what happens when
+// the index it names is not there. This is the pair of defects that produced
+// 0/8 firings in the first live round — a duplicate index under semble's
+// default root, built inside a 3 s cap it could never finish, whose timeout
+// then armed the ten-minute cooldown on the very first prompt of every session.
+{
+  check('P2b.rootFromState', cacheRootOf({ cacheRoot: '/somewhere/semble-code' }), '/somewhere/semble-code',
+    'the root comes from state.json, written by semble-mcp.sh from the same helper that registers the server');
+  check('P2b.rootFallback', [cacheRootOf({}), cacheRootOf(null), cacheRootOf({ cacheRoot: '' })],
+    [defaultCacheRoot(), defaultCacheRoot(), defaultCacheRoot()],
+    'a state with no usable cacheRoot falls back to sc_cache_root_code\'s answer for this platform');
+  check('P2b.rootIsCodeRoot', defaultCacheRoot().split('/').pop(), 'semble-code',
+    'which is `semble-code`, NOT semble\'s own default `semble` — that one character was 40 MB of duplicate index');
+  check('P2b.rootMatchesLib',
+    defaultCacheRoot() === spawnSync('bash', ['-c',
+      `. ${JSON.stringify(REAL_LIB)}; sc_cache_root_code`],
+    { encoding: 'utf8' }).stdout.trim(), true,
+    'and it is byte-equal to what the shell helper the MCP registration uses computes');
+  check('P2b.hashComputed', repoHashOf({}, '/x'),
+    createHash('sha256').update('/x').digest('hex'),
+    'the repo hash is sha256(project path) — byte-matching semble cache.py and sc_repo_hash');
+  check('P2b.hashIgnoresState', repoHashOf({ repoHash: REPO_HASH }, '/x'),
+    createHash('sha256').update('/x').digest('hex'),
+    'and is NEVER taken from state.json: a hash carried over from another checkout (copied .claude/, '
+    + 'moved repo, worktree, subdirectory) would vouch for a FOREIGN index and let the child spawn '
+    + 'against a genuinely cold path — the 3 s timeout the readiness check exists to prevent');
+  {
+    const real = mkdtempSync(join(tmpdir(), 'semble-hash-'));
+    const link = join(mkdtempSync(join(tmpdir(), 'semble-link-')), 'alias');
+    symlinkSync(real, link);
+    check('P2b.hashResolvesSymlink', repoHashOf({}, link), repoHashOf({}, realpathSync(real)),
+      'the path is resolved first, so a symlinked checkout keys the same index semble itself builds');
+  }
+  check('P2b.indexFiles', INDEX_FILES, ['chunks.json', 'metadata.json', 'bm25_index', 'semantic_index'],
+    'all four artefacts semble writes have to be there for the index to count as built');
+}
+{
+  const p = freshProject({ state: READY_STATE(), cold: true });
+  const r = prefetch(p, Q);
+  check('P2b.coldSilent', [r.status, safeParse(r.stdout)], [0, {}], 'no index -> silence, exit 0');
+  check('P2b.coldNoSpawn', r.argv, [],
+    'and NO child: a cold build takes minutes, so a 3 s child can only ever kill it half-done, '
+    + 'forever, at the price of the cap on every prompt');
+  check('P2b.coldWhy', tfield(p, 0, 'why'), 'cold-index',
+    'recorded as cold-index — its own token, so a fresh install is never mistaken for a broken one');
+  check('P2b.coldNoCooldown', markerOf(p), null,
+    'and it arms NOTHING: the prompt right after the MCP server builds the index must fire');
+}
+for (const missing of INDEX_FILES) {
+  const only = INDEX_FILES.filter((n) => n !== missing);
+  const p = freshProject({ state: READY_STATE(), indexOnly: only });
+  const r = prefetch(p, Q);
+  check(`P2b.partial.${missing}`, [safeParse(r.stdout), r.argv, tfield(p, 0, 'why')], [{}, [], 'cold-index'],
+    `an index missing ${missing} is a build that never finished, not an index`);
+}
+{
+  const p = freshProject({ state: READY_STATE(), cold: true });
+  prefetch(p, Q);
+  warmIndex(cacheOf(p), createHash('sha256').update(realpathSync(p)).digest('hex'));
+  const r = prefetch(p, Q);
+  check('P2b.warmsUp', safeParse(r.stdout), PREFETCH_OK,
+    'and the very next prompt after the index appears fires — the cold case parks nothing');
+  check('P2b.unitReady',
+    [indexReady(cacheOf(p), createHash('sha256').update(realpathSync(p)).digest('hex')),
+      indexReady(cacheOf(p), 'deadbeef'), indexReady('', REPO_HASH)],
+    [true, false, false], 'indexReady is total: an unknown hash or an empty root is "not ready", never a throw');
+}
+
+// P3 — throttle: an anti-storm guard, not a rate limiter.
+{
+  const p = freshProject({ state: READY_STATE() });
+  prefetch(p, Q);
+  const again = prefetch(p, 'where in this codebase does the installer merge settings');
+  check('P3.throttled', safeParse(again.stdout), {}, `a second firing inside the ${THROTTLE_MS} ms window is suppressed`);
+  check('P3.noSpawn', again.argv, [], 'and the search is never spawned — the throttle is checked before the gate');
+  check('P3.recorded', dropTs(telemetry(p)[1]), { ev: 'prefetch', src: 'prefetch', sid: 'S1', fired: false, why: 'throttled' },
+    'the suppression is attributable in the log');
+}
+
+// P4 — gate v3, unit-tested on the shapes the 61-prompt corpus is made of.
+// INTENT and (DOMAIN or REPOREF), minus four suppressors. Measured: fires 36%,
+// precision 55%, recall 71%, F1 0.62. 55% is the honest ceiling of lexical
+// rules — do not "improve" this without re-running the corpus.
+const GATE_ROWS = [
+  ['P4.empty', '', false, 'empty', 'nothing to search for'],
+  ['P4.slash', '/brewcode:semble-setup status and then show me the hooks', false, 'slash-command',
+    'a slash command is an instruction to the CLI, not a question about code'],
+  ['P4.codeword', '++m', false, 'codeword-only', 'a bare codeword carries no question'],
+  ['P4.meta', 'ok', false, 'meta-reply', 'a meta-reply continues a turn, it does not open one'],
+  ['P4.metaRu', 'да', false, 'meta-reply', 'the Russian half of the same list'],
+  ['P4.short', 'how does auth work', false, 'too-short', 'under 30 characters there is not enough to distill'],
+  ['P4.long', 'x'.repeat(2001), false, 'too-long', 'over 2000 characters is a pasted document, not a question'],
+  ['P4.url', 'https://example.com/some/quite/long/path/page', false, 'bare-url', 'a bare URL is a reference, not a query'],
+  ['P4.path', './scripts/lib/semble-common.sh', false, 'bare-path', 'a bare path is already the answer'],
+  ['P4.noIntent', 'the installer rewrites the managed rule file in place, byte for byte', false, 'no-intent',
+    'a statement is not a question'],
+  ['P4.noDomain', 'why did everything become so slow yesterday afternoon', false, 'no-domain-no-reporef',
+    'an intent with no code noun and no repo anchor is not about this repo'],
+  ['P4.self', 'что ты сделал с конфигом хука в прошлый раз', false, 'self-reference',
+    'the answer is in the transcript, not on disk'],
+  ['P4.taskref', 'в проекте где мы решили задачу #12 про хуки', false, 'task-reference',
+    'a tracker number is not a code identifier'],
+  ['P4.literal', 'where is scripts/semble-guidance.sh referenced from in this repo', false, 'exact-literal',
+    'an exact path is rg territory — rg won 2/2 there, 20x faster'],
+  ['P4.enum', 'list all the places where the hook writes telemetry in this repo', false, 'enumeration',
+    'exhaustive enumeration: rg won 5/5, semble 2/5'],
+  ['P4.behaviour', Q, true, 'behaviour-or-vocab', 'INTENT plus a code noun is the core firing case'],
+  ['P4.reporef', 'у нас всё стало медленно работать после последнего изменения — почему', true, 'behaviour-or-vocab',
+    'REPOREF alone readmits the vocabulary-mismatch class — this clause IS v3, and it is what lifted recall'],
+  ['P4.opinionExempt', 'как ты думаешь, где в этом плагине живёт логика кэша', true, 'behaviour-or-vocab',
+    '`как ты думаешь` solicits an opinion and is explicitly exempted from the self-reference suppressor'],
 ];
-for (const [name, agentType] of SILENT_AGENTS) {
-  const p = freshProject({ state: READY_STATE() });
-  check(name, safeParse(explore(p, agentType).stdout), {},
-    `silent for agent_type=\`${agentType}\` — only the exact string Explore is matched`);
+for (const [name, prompt, fire, why, msg] of GATE_ROWS) {
+  check(name, gateV3(prompt), { fire, why }, msg);
 }
+
+// P4b — the two load-bearing details, measured that way and easy to break.
 {
-  const p = freshProject({ state: READY_STATE() });
-  check('X8.missingType', safeParse(explore(p, undefined).stdout), {}, 'silent when agent_type is absent');
+  check('P4b.codewordBody', gateV3('++mmm how does the hook decide'), { fire: false, why: 'too-short' },
+    'INTENT/DOMAIN/REPOREF read the codeword-STRIPPED body: 30 raw characters minus `++mmm ` is too short');
+  check('P4b.codewordFires', gateV3('++m ' + Q), { fire: true, why: 'behaviour-or-vocab' },
+    'and a codeword prefix never suppresses a prompt that would otherwise fire');
+  check('P4b.suppressorWholePrompt', gateV3('++m что ты сделал с конфигом хука в прошлый раз'),
+    { fire: false, why: 'self-reference' },
+    'the four suppressors read the WHOLE prompt, codewords included — that is how the corpus was scored');
 }
+
+// P5 — the distiller. Measured against handing semble the raw prompt: hit@3
+// 11/16 vs 9/16, MRR 0.674 vs 0.398, paired 8 wins / 3 losses / 5 ties.
 {
-  const p = freshProject({ state: READY_STATE() });
-  check('X9.nonStringType', safeParse(explore(p, 42).stdout), {}, 'silent when agent_type is not a string');
-}
-{
-  const p = freshProject({});
-  const r = explore(p, 'Explore');
-  check('X10.noState', [r.status, safeParse(r.stdout)], [0, {}], 'no state file -> {} exit 0');
-}
-{
-  const p = freshProject({ state: '{,}' });
-  const r = explore(p, 'Explore');
-  check('X11.corrupt', [r.status, safeParse(r.stdout)], [0, {}],
-    'a corrupt state file -> {} exit 0 — the explore hook never reports state health');
-}
-{
-  const p = freshProject({ stateDir: true });
-  const r = explore(p, 'Explore');
-  check('X12.stateDir', [r.status, safeParse(r.stdout)], [0, {}], 'state.json as a directory -> {} exit 0');
-}
-{
-  const p = freshProject({ state: READY_STATE({ enabled: false }) });
-  check('X13.disabled', safeParse(explore(p, 'Explore').stdout), {}, 'silent when the project has semble disabled');
-}
-const SILENT_PHASES = ['awaiting_reload', 'verifying', 'disabled', 'error', 'prereq_ready'];
-for (const phase of SILENT_PHASES) {
-  const p = freshProject({ state: READY_STATE({ phase }) });
-  check(`X14.phase.${phase}`, safeParse(explore(p, 'Explore').stdout), {},
-    `silent while phase is \`${phase}\` — only phase=ready is advised`);
-}
-{
-  const bad = runNode(EXPLORE_SRC, '{ not json');
-  const empty = runNode(EXPLORE_SRC, '');
-  allExploreOutputs.push(bad.stdout, empty.stdout);
-  check('X15.badStdin', [bad.status, safeParse(bad.stdout)], [0, {}], 'explore: malformed stdin -> {} exit 0');
-  check('X16.emptyStdin', [empty.status, safeParse(empty.stdout)], [0, {}], 'explore: empty stdin -> {} exit 0');
-}
-{
-  const joined = allExploreOutputs.join('\n');
-  check('X17.noDecision', joined.includes('permissionDecision'), false, 'no recorded output ever carries permissionDecision');
-  check('X17.noDeny', joined.includes('"deny"'), false, 'no recorded output ever carries a deny');
-  check('X17.oneObject', allExploreOutputs.every((o) => o.trim().split('\n').length === 1), true,
-    'every explore invocation printed exactly one line of JSON');
+  check('P5.plain', distill(Q), Q_DISTILLED, 'stop-words are dropped and the code nouns survive in order');
+  check('P5.codeFirst', distill('why is `merge_settings` slow in semble-guidance.sh and prefetch'),
+    'merge_settings semble-guidance.sh semble-guidance merge settings slow semble guidance prefetch',
+    'code-shaped tokens rank ahead of content words: backticked span, then .ext filename, then kebab/snake');
+  check('P5.codeword', distill('++m ' + Q), Q_DISTILLED, 'a codeword prefix is stripped before distilling');
+  check('P5.fence', distill('what does ```const x = 1``` do in the parser'), 'parser',
+    'a fenced code block is removed outright — pasted code is not a query');
+  check('P5.cap', distill('where do we validate the incoming webhook payload signature'
+    + ' before the router dispatches it onto the queue worker').split(' ').length, 9,
+    'at most 9 keywords reach semble');
+  check('P5.empty', distill(''), '', 'an empty prompt distills to the empty string, which the caller treats as a skip');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// F. static guarantees of both hook files
+// P6. FAIL-OPEN. Every row breaks something; every row must print exactly {}
+// and exit 0. This is the highest-priority property in the skill: the hook
+// runs on every prompt the user types.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// State-shaped refusals, each recorded with its own reason token.
+const STATE_ROWS = [
+  ['P6.noState', undefined, 'no-state', '', false, 'an install whose state file was deleted'],
+  ['P6.corrupt', '{,}', 'corrupt', '', false, 'an unparseable state file'],
+  ['P6.empty', '', 'no-state', '', false, 'an empty state file'],
+  ['P6.disabledFlag', READY_STATE({ enabled: false }), 'disabled', 'ready', false, 'semble switched off for the project'],
+  ['P6.phaseDisabled', READY_STATE({ phase: 'disabled' }), 'disabled', 'disabled', true, 'phase disabled'],
+  ['P6.phaseError', READY_STATE({ phase: 'error' }), 'error', 'error', true, 'phase error'],
+  ['P6.prereqReady', READY_STATE({ phase: 'prereq_ready' }), 'not-registered', 'prereq_ready', true,
+    'the add-failed rollback state, which still carries completed[mcp]'],
+  ['P6.noMcp', READY_STATE({ completed: ['prereq'] }), 'no-mcp', 'ready', true, 'the MCP server was never registered'],
+  ['P6.completedMissing', JSON.stringify({ phase: 'ready', enabled: true }), 'no-mcp', 'ready', true,
+    'a state file with no completed array at all'],
+];
+for (const [name, state, why, phase, enabled, msg] of STATE_ROWS) {
+  const p = freshProject(state === undefined ? {} : { state });
+  // The state dir is the installer's, never the hook's. Seeding it for the
+  // no-state row is what makes the refusal RECORDABLE; the never-installed
+  // variant, where there is nowhere to write at all, is P6.noLitter below.
+  mkdirSync(join(p, '.claude', 'semble'), { recursive: true });
+  const r = prefetch(p, Q);
+  check(name, [r.status, safeParse(r.stdout), r.argv.length], [0, {}, 0], `silent, exit 0, no search spawned: ${msg}`);
+  check(`${name}.why`, telemetry(p).map(dropTs),
+    [{ ev: 'prefetch', src: 'prefetch', sid: 'S1', fired: false, why, phase, enabled }],
+    `and the refusal is recorded as why=${why}`);
+}
+{
+  const p = freshProject({ stateDir: true });
+  const r = prefetch(p, Q);
+  check('P6.stateDir', [r.status, safeParse(r.stdout)], [0, {}], 'state.json as a DIRECTORY -> {} exit 0');
+}
+{
+  const p = freshProject({});
+  prefetch(p, Q);
+  check('P6.noLitter', [existsSync(join(p, '.claude', 'semble')), existsSync(telemetryFile(p))], [false, false],
+    'a repo without semble gets no .claude/semble directory and no telemetry file from the hook');
+}
+
+// Broken stdin — the hook cannot even find out which project it is in.
+const STDIN_ROWS = [
+  ['P6.badStdin', '{ not json', 'malformed JSON'],
+  ['P6.emptyStdin', '', 'empty stdin'],
+  ['P6.arrayStdin', '[]', 'a JSON array where an object was contracted'],
+  ['P6.stringStdin', '"just a string"', 'a bare JSON string'],
+  ['P6.nullStdin', 'null', 'JSON null'],
+];
+for (const [name, stdin, msg] of STDIN_ROWS) {
+  const p = freshProject({ state: READY_STATE() });
+  const r = prefetch(p, Q, { stdin });
+  check(name, [r.status, safeParse(r.stdout)], [0, {}], `${msg} -> {} exit 0`);
+}
+{
+  const p = freshProject({ state: READY_STATE() });
+  const r = prefetch(p, undefined, { extra: { prompt: 42 } });
+  check('P6.nonStringPrompt', [r.status, safeParse(r.stdout), tfield(p, 0, 'why')], [0, {}, 'empty'],
+    'a non-string prompt is read as empty, never coerced');
+}
+
+// Search-side failures. A FAILURE is a standing condition — nothing about the
+// next prompt fixes a missing uvx — so it parks the mechanism for the full ten
+// minutes instead of paying the 3 s child cap on every following prompt.
+const SEARCH_FAIL = [
+  ['P6.noUvx', { path: '' }, 'uvx is not on PATH at all'],
+  ['P6.nonZero', { rc: 1 }, 'the search exits non-zero'],
+  ['P6.garbageOut', { out: 'not json' }, 'the search prints unparseable output'],
+  ['P6.wrongShape', { out: '{"results":"nope"}' }, 'results is not an array'],
+  ['P6.emptyOut', { out: '' }, 'the search prints nothing at all'],
+];
+for (const [name, opts, msg] of SEARCH_FAIL) {
+  const p = freshProject({ state: READY_STATE() });
+  const r = prefetch(p, Q, opts);
+  check(name, [r.status, safeParse(r.stdout)], [0, {}], `${msg} -> {} exit 0`);
+  check(`${name}.cooldown`, typeof (markerOf(p) || {}).cool, 'number',
+    `and the ${COOLDOWN_MS} ms cooldown is armed so the next prompt costs nothing`);
+  check(`${name}.coolMs`, (markerOf(p) || {}).coolMs, COOLDOWN_MS,
+    'for the FULL window — a failure is a standing condition, not a slow moment');
+  check(`${name}.why`, tfield(p, 0, 'why'), 'search-failed', 'recorded as search-failed');
+}
+
+// The timeout path, exercised for real: the child sleeps past the 3 s cap.
+// A timeout is NOT a failure: against a warm index a search is ~0.6 s, so the
+// cap means transient load and the penalty is a tenth of the failure penalty.
+{
+  const p = freshProject({ state: READY_STATE() });
+  const t0 = Date.now();
+  const r = prefetch(p, Q, { sleep: 10 });
+  const elapsed = Date.now() - t0;
+  check('P6.timeout', [r.status, safeParse(r.stdout)], [0, {}], 'a hanging search is SIGKILLed and the hook stays silent');
+  // The 3 s SEARCH_TIMEOUT_MS cap is the only thing that ends this call, so the
+  // window is centred on it: floor 1000 ms proves the cap was actually waited on
+  // rather than the search being skipped outright, ceiling 5000 ms is the
+  // registered hook timeout. The child sleeps 10 s, so a broken cap overshoots
+  // by 5 s and cannot squeeze inside the window.
+  check('P6.timeoutBudget', Math.abs(elapsed - 3000) <= 2000, true,
+    'it returns in 1000-5000 ms: the 3 s cap fired inside the registered 5 s hook timeout, not after the child would have finished');
+  check('P6.timeoutCooldown', typeof (markerOf(p) || {}).cool, 'number', 'the hang arms a cooldown too');
+  check('P6.timeoutWhy', tfield(p, 0, 'why'), 'search-timeout',
+    'recorded as search-timeout — a distinct event from search-failed, and attributable in telemetry');
+  check('P6.timeoutCoolMs', (markerOf(p) || {}).coolMs, TIMEOUT_COOLDOWN_MS,
+    `parked for ${TIMEOUT_COOLDOWN_MS} ms, not ${COOLDOWN_MS} ms`);
+}
+
+// The window written by whoever armed the cooldown is the window that is
+// honoured — and it is clamped, so no marker can park the hook past the max.
+{
+  const p = freshProject({ state: READY_STATE() });
+  writeFileSync(join(p, '.claude', 'semble', '.prefetch-ts'),
+    JSON.stringify({ cool: Date.now() - 90_000, coolMs: TIMEOUT_COOLDOWN_MS }));
+  check('P6.shortWindowExpires', safeParse(prefetch(p, Q).stdout), PREFETCH_OK,
+    'a 60 s park is over 90 s later and the hook fires again');
+}
+{
+  const p = freshProject({ state: READY_STATE() });
+  writeFileSync(join(p, '.claude', 'semble', '.prefetch-ts'),
+    JSON.stringify({ cool: Date.now() - 90_000, coolMs: COOLDOWN_MS }));
+  const r = prefetch(p, Q);
+  check('P6.longWindowHolds', [safeParse(r.stdout), r.argv], [{}, []],
+    'while a 600 s park at the same age is still in force and spawns nothing');
+}
+{
+  const p = freshProject({ state: READY_STATE() });
+  writeFileSync(join(p, '.claude', 'semble', '.prefetch-ts'),
+    JSON.stringify({ cool: Date.now() - COOLDOWN_MS - 1000, coolMs: 9e15 }));
+  check('P6.windowClamped', safeParse(prefetch(p, Q).stdout), PREFETCH_OK,
+    'a nonsense window is clamped to the maximum, so a corrupt marker can never park the hook forever');
+}
+
+// A search that RAN and found nothing is not a failure and must not park it.
+{
+  const p = freshProject({ state: READY_STATE() });
+  const r = prefetch(p, Q, { out: '{"results":[]}' });
+  check('P6.noHits', [r.status, safeParse(r.stdout), tfield(p, 0, 'why')], [0, {}, 'no-hits'],
+    'an empty result set is silence, recorded as no-hits');
+  check('P6.noHitsNoCooldown', markerOf(p), null,
+    'and it arms NOTHING — `[]` means the index answered, only `null` means it could not be trusted');
+}
+
+// The cooldown really suppresses the next prompt, without spawning anything.
+{
+  const p = freshProject({ state: READY_STATE() });
+  prefetch(p, Q, { rc: 1 });
+  const second = prefetch(p, Q);
+  check('P6.cooldownHolds', [safeParse(second.stdout), second.argv], [{}, []],
+    'the prompt after a failure is silent and spawns no child');
+  check('P6.cooldownWhy', tfield(p, 1, 'why'), 'cooldown', 'recorded as cooldown, distinct from throttled');
+}
+
+// A corrupt or unwritable marker must fail OPEN — the throttle is a guard, not a gate.
+{
+  const p = freshProject({ state: READY_STATE() });
+  writeFileSync(join(p, '.claude', 'semble', '.prefetch-ts'), '{,}');
+  check('P6.markerCorrupt', safeParse(prefetch(p, Q).stdout), PREFETCH_OK,
+    'a corrupt marker reads as no marker and the hook still fires');
+}
+{
+  const good = freshProject({ state: READY_STATE() });
+  const bad = freshProject({ state: READY_STATE() });
+  const expected = prefetch(good, Q);
+  chmodSync(join(bad, '.claude', 'semble'), 0o500);          // readable, not writable
+  const r = prefetch(bad, Q);
+  chmodSync(join(bad, '.claude', 'semble'), 0o700);
+  check('P6.unwritable', r.stdout, expected.stdout,
+    'an unwritable .claude/semble leaves the returned JSON byte-identical — marker and telemetry are both best-effort');
+  check('P6.unwritableExit', r.status, 0, 'and the hook still exits 0');
+  check('P6.unwritableNoFile', existsSync(telemetryFile(bad)), false, 'nothing was written');
+  check('P6.unwritableWarned', r.stderr.includes('[semble-prefetch] marker write failed'), true,
+    'the failure is reported on stderr, where it cannot corrupt the hook protocol on stdout');
+}
+
+// P7 — the hook can never block, in any recorded output.
+{
+  const joined = allPrefetchOutputs.join('\n');
+  check('P7.noDecision', joined.includes('permissionDecision'), false, 'no recorded output ever carries permissionDecision');
+  check('P7.noDeny', joined.includes('"deny"'), false, 'no recorded output ever carries a deny');
+  check('P7.noUpdatedInput', joined.includes('updatedInput'), false, 'no recorded output ever carries updatedInput');
+  check('P7.oneObject', allPrefetchOutputs.every((o) => o.trim().split('\n').length === 1), true,
+    'every invocation printed exactly one line of JSON');
+  const src = readFileSync(PREFETCH_SRC, 'utf8');
+  check('P7.sourceNeverDecides', src.includes('permissionDecision'), false,
+    'the source contains no permissionDecision field at all');
+  check('P7.mainGuarded', src.includes('import.meta.url === pathToFileURL(process.argv[1]).href'), true,
+    'main() runs only as the entry point — importing the file for the corpus replays must not consume stdin');
+  check('P7.noSnippetField', src.includes("'content'"), false,
+    'the renderer never touches a `content` field: paths convert 5/6, snippets 2/6');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Y. telemetry contract shared by the session hook and the log itself
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Y1 — session hook: a nudge record only when additionalContext was really returned.
+{
+  const p = freshProject({ state: READY_STATE() });
+  session(p);
+  check('Y1.ready', telemetry(p).map(dropTs),
+    [{ ev: 'nudge', src: 'session', sid: 'S1', matcher: 'SessionStart', agent: 'main', q: '' }],
+    'the ready session emits exactly one nudge record and no gate record');
+}
+{
+  const p = freshProject({ state: READY_STATE({ phase: 'error' }) });
+  session(p);
+  check('Y2.noContext', existsSync(telemetryFile(p)), false,
+    'a systemMessage without additionalContext is not a nudge and writes nothing');
+}
+
+// Y3 — sid attribution comes straight off the hook input, never invented.
+{
+  const p = freshProject({ state: READY_STATE() });
+  prefetch(p, Q, { extra: { session_id: 'S9' } });
+  check('Y3.sid', tfield(p, 0, 'sid'), 'S9', 'sid is the hook input session_id');
+}
+{
+  const p = freshProject({ state: READY_STATE() });
+  prefetch(p, Q, { stdin: JSON.stringify({ cwd: p, hook_event_name: 'UserPromptSubmit', prompt: Q }) });
+  check('Y3.emptySid', tfield(p, 0, 'sid'), '', 'a missing session_id becomes the empty string, never undefined');
+}
+
+// Y4 — the 2 MB size guard trims instead of growing without bound.
+{
+  const p = freshProject({ state: READY_STATE() });
+  // The fixture's size is fixed by its own construction, so it is asserted
+  // exactly: a 285-byte filler plus a newline, 11000 times = 3146000 bytes.
+  const filler = JSON.stringify({ ts: '2026-01-01T00:00:00.000Z', ev: 'prefetch', src: 'prefetch', sid: 'X', pad: 'y'.repeat(200) });
+  const KEPT = (filler + '\n').repeat(1000);
+  writeFileSync(telemetryFile(p), (filler + '\n').repeat(11000));
+  const before = statSync(telemetryFile(p)).size;
+  prefetch(p, Q);
+  const lines = telemetry(p);
+  check('Y4.oversize', before, 3_146_000, 'the fixture is exactly 3146000 bytes, over the 2 MB guard');
+  check('Y4.trimmed', lines.length, 1001, 'the last 1000 lines are kept, then the new record is appended');
+  check('Y4.tail', lines[lines.length - 1].fired, true, 'the new record is at the end');
+  check('Y4.smaller', readFileSync(telemetryFile(p), 'utf8').slice(0, KEPT.length), KEPT,
+    'the file shrank to byte-exactly the last 1000 filler lines, then the new record');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F. static guarantees of the three shipped hook files
 // ═══════════════════════════════════════════════════════════════════════════
 {
-  const src = [readFileSync(SESSION_SRC, 'utf8'), readFileSync(REMINDER_SRC, 'utf8'),
-    readFileSync(EXPLORE_SRC, 'utf8')];
-  const both = src.join('\n');
-  check('F1.noChildProcess', both.includes('child_process'), false, 'no hook imports child_process');
-  check('F2.noSpawn', both.includes('spawn('), false, 'no hook spawns a process');
-  check('F3.noPgrep', both.includes('pgrep'), false, 'no hook probes for a daemon with pgrep');
-  check('F4.noExecSync', both.includes('execSync'), false, 'no hook shells out');
-  check('F5.reminderNeverDecides', readFileSync(REMINDER_SRC, 'utf8').includes('permissionDecision:'), false,
-    'the reminder source contains no permissionDecision field');
-  check('F6.notABlock', readFileSync(REMINDER_SRC, 'utf8').includes('this is a reminder, not a block.'), true,
-    'the advisory text contains the words "reminder, not a block"');
+  const sessionSrc = readFileSync(SESSION_SRC, 'utf8');
+  const prefetchSrc = readFileSync(PREFETCH_SRC, 'utf8');
+  const statsSrc = readFileSync(STATS_SRC, 'utf8');
+  const src = [sessionSrc, prefetchSrc, statsSrc];
+  // The passive pair must stay pure readers. Prefetch is the ONE hook allowed a
+  // child, and only because handing over a result is the thing that converts.
+  const passive = sessionSrc + '\n' + statsSrc;
+  check('F1.passiveNoChildProcess', passive.includes('child_process'), false,
+    'neither the session hook nor the stats observer imports child_process');
+  check('F2.passiveNoSpawn', passive.includes('spawn('), false, 'and neither spawns a process');
+  check('F3.noPgrep', src.join('\n').includes('pgrep'), false, 'no hook probes for a daemon with pgrep');
+  check('F4.prefetchExecFile', prefetchSrc.includes('execFileSync('), true,
+    'the prefetch hook spawns with execFileSync - argv, so the distilled query can never be word-split');
+  check('F5.noShell', [prefetchSrc.includes('execSync('), prefetchSrc.includes('shell:')], [false, false],
+    'and never through a shell');
+  check('F6.hardCap',
+    [prefetchSrc.includes('timeout: SEARCH_TIMEOUT_MS'), prefetchSrc.includes("killSignal: 'SIGKILL'")],
+    [true, true], 'the child carries a hard cap and a kill signal, both inside the registered 5 s hook timeout');
   check('F7.shebang', src.every((s) => s.startsWith('#!/usr/bin/env node')), true, 'every hook carries a node shebang');
-  const checks = [SESSION_SRC, REMINDER_SRC, EXPLORE_SRC]
+  const checks = [SESSION_SRC, PREFETCH_SRC, STATS_SRC]
     .map((f) => spawnSync(process.execPath, ['--check', f]).status);
   check('F8.nodeCheck', checks, [0, 0, 0], 'node --check passes on all three hook files');
-  check('F9.exploreNeverDecides', readFileSync(EXPLORE_SRC, 'utf8').includes('permissionDecision'), false,
-    'the explore hook source contains no permissionDecision field');
+  check('F9.neverDecides', src.map((x) => x.includes('permissionDecision:')), [false, false, false],
+    'no shipped hook emits a permissionDecision field - none of them can block a call');
+  check('F10.retiredGone', [existsSync(join(ASSETS, 'semble-reminder.mjs')), existsSync(join(ASSETS, 'semble-explore.mjs'))],
+    [false, false], 'the two advisory hooks are gone from assets/ - they are not shipped, only cleaned up');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -879,14 +1646,14 @@ const PRE_MD = '# CLAUDE.md\n\n## Overview\n\nproject text\n';
 // H1 — install aborts on an unparseable settings.json BEFORE touching anything
 {
   const p = freshProject({ settings: BROKEN_SETTINGS, claudeMd: PRE_MD });
-  const { session, reminder: rem, explore: exp } = semblePaths(p);
+  const { session, prefetch: pre, stats } = semblePaths(p);
   const r = guidance(p, ['install', '--part', 'all', '--json']);
   check('H1.exit', r.status, 1, 'install --part all over unparseable settings exits 1');
   check('H1.abort', (r.stdout + r.stderr).includes('ABORT'), true, 'the failure names ABORT');
   check('H1.settings', readRaw(settingsPath(p)), BROKEN_SETTINGS, 'the unparseable settings file is byte-identical');
   check('H1.rule', existsSync(join(p, '.claude', 'rules', 'semble-first.md')), false, 'no rule file was written');
   check('H1.claudeMd', readRaw(join(p, 'CLAUDE.md')), PRE_MD, 'CLAUDE.md is byte-identical, no marker block');
-  check('H1.hookFiles', [existsSync(session), existsSync(rem), existsSync(exp)], [false, false, false],
+  check('H1.hookFiles', [existsSync(session), existsSync(pre), existsSync(stats)], [false, false, false],
     'no .mjs hook file was written');
   check('H1.hooksDir', existsSync(hooksDirOf(p)), false, 'the .claude/hooks directory was never created');
 }
@@ -897,10 +1664,10 @@ const PRE_MD = '# CLAUDE.md\n\n## Overview\n\nproject text\n';
   guidance(p, ['install', '--part', 'all', '--json']);
   const rulePath = join(p, '.claude', 'rules', 'semble-first.md');
   const mdPath = join(p, 'CLAUDE.md');
-  const { session, reminder: rem, explore: exp } = semblePaths(p);
+  const { session, prefetch: pre, stats } = semblePaths(p);
   const before = {
-    rule: readRaw(rulePath), md: readRaw(mdPath), session: readRaw(session), reminder: readRaw(rem),
-    explore: readRaw(exp),
+    rule: readRaw(rulePath), md: readRaw(mdPath), session: readRaw(session), prefetch: readRaw(pre),
+    stats: readRaw(stats),
   };
   writeFileSync(settingsPath(p), BROKEN_SETTINGS);
   const r = guidance(p, ['remove', '--part', 'all', '--json']);
@@ -909,8 +1676,8 @@ const PRE_MD = '# CLAUDE.md\n\n## Overview\n\nproject text\n';
   check('H2.settings', readRaw(settingsPath(p)), BROKEN_SETTINGS, 'the unparseable settings file is byte-identical');
   check('H2.rule', readRaw(rulePath), before.rule, 'the rule file is still there, byte-identical');
   check('H2.claudeMd', readRaw(mdPath), before.md, 'the CLAUDE.md marker block is still there, byte-identical');
-  check('H2.hookFiles', [readRaw(session), readRaw(rem), readRaw(exp)],
-    [before.session, before.reminder, before.explore],
+  check('H2.hookFiles', [readRaw(session), readRaw(pre), readRaw(stats)],
+    [before.session, before.prefetch, before.stats],
     'all three .mjs hook files are still there, byte-identical — settings.json may still reference them');
 }
 
@@ -962,19 +1729,13 @@ const FOREIGN_HOOK = { type: 'command', command: 'node', args: ['/opt/foreign/gu
   check('H5.exit', r.status, 0, 'merge over a mixed foreign+stale entry exits 0');
   const s = readSettings(p);
   const pre = (s.hooks || {}).PreToolUse || [];
-  const { session, reminder: rem, explore: exp } = semblePaths(p);
   check('H5.mixedEntry', pre[0] || null, { matcher: 'Bash', hooks: [FOREIGN_HOOK] },
     'the mixed entry keeps the foreign hook and loses only the stale semble hook');
   check('H5.staleGone', Object.values(s.hooks || {}).flat().filter((e) => argsOf(e).some((a) => a.startsWith(staleDir))).length, 0,
     'zero hooks still point at the old hooks dir');
-  check('H5.counts', [
-    countEntry(s, 'SessionStart', null, session),
-    countEntry(s, 'PreToolUse', 'Bash', rem),
-    countEntry(s, 'PreToolUse', 'Grep', rem),
-    countEntry(s, 'SubagentStart', 'Explore', exp),
-  ], [1, 1, 1, 1], 'exactly one current entry per event+matcher');
-  check('H5.preToolUseSize', pre.length, 3,
-    'the repaired foreign entry plus the two appended semble entries');
+  check('H5.counts', wantCounts(p, s), [1, 1, 1, 1], 'exactly one current entry per want row');
+  check('H5.preToolUseSize', pre.length, 1,
+    'PreToolUse now holds the repaired foreign entry ALONE - 5.0.0 wants no row on that event');
 }
 
 // H6 — unmerge: a hand-merged foreign hook in a semble entry survives
@@ -982,14 +1743,13 @@ const FOREIGN_HOOK = { type: 'command', command: 'node', args: ['/opt/foreign/gu
   const p = freshProject({});
   guidance(p, ['install', '--part', 'all', '--json']);
   const s = readSettings(p);
-  const idx = s.hooks.PreToolUse.findIndex((e) => matcherOf(e) === 'Bash');
-  s.hooks.PreToolUse[idx].hooks.unshift(FOREIGN_HOOK);
+  s.hooks.UserPromptSubmit[0].hooks.unshift(FOREIGN_HOOK);
   writeFileSync(settingsPath(p), JSON.stringify(s, null, 2) + '\n');
   const r = guidance(p, ['remove', '--part', 'hooks', '--json']);
   check('H6.exit', r.status, 0, 'unmerge over a hand-merged mixed entry exits 0');
   const t = readSettings(p);
   const left = t.hooks || {};
-  check('H6.foreignKept', left.PreToolUse || null, [{ matcher: 'Bash', hooks: [FOREIGN_HOOK] }],
+  check('H6.foreignKept', left.UserPromptSubmit || null, [{ hooks: [FOREIGN_HOOK] }],
     'the hand-merged foreign hook survives; only the semble hook is stripped');
   check('H6.sessionGone', Object.prototype.hasOwnProperty.call(left, 'SessionStart'), false,
     'the SessionStart array emptied and its key was pruned');
@@ -1053,52 +1813,59 @@ function driftTimeouts(p, value) {
   check('I1.idempotent', j2.changed, [], 'the run after the repair changes nothing');
 }
 
-// I2 — the real broken shape: 3 drifted rows + the missing SubagentStart row
+// I2 — the real broken shape: drifted rows plus one missing outright
 {
   const p = freshProject({});
   guidance(p, ['install', '--part', 'all', '--json']);
   const clean = readRaw(settingsPath(p));
   const s = readSettings(p);
-  delete s.hooks.SubagentStart;                            // installed before 4.7.0 shipped the row
+  delete s.hooks.UserPromptSubmit;                         // installed before 5.0.0 shipped the row
   writeFileSync(settingsPath(p), JSON.stringify(s, null, 2) + '\n');
   driftTimeouts(p, 5000);
   const before = safeParse(guidance(p, ['status', '--json']).stdout);
   check('I2.statusBefore',
-    [before.hooks.wiredCount, before.hooks.driftedCount, before.hooks.missingCount],
-    [0, 3, 1], 'status calls the real broken shape 0/4 wired, 3 drifted, 1 missing');
+    [before.hooks.wiredCount, before.hooks.wantCount, before.hooks.driftedCount, before.hooks.missingCount],
+    [0, WANT_N, WANT_N - 1, 1], 'status calls the real broken shape 0/4 wired, 3 drifted, 1 missing');
   const r = guidance(p, ['install', '--part', 'hooks', '--json']);
   check('I2.exit', r.status, 0, 'the repair run exits 0');
-  check('I2.bytes', readRaw(settingsPath(p)), clean,
-    'one re-run restores the file to exactly the clean-install bytes');
+  // Key ORDER differs by construction here and only here: UserPromptSubmit was
+  // deleted outright, so the merge re-appends it after the later want rows. Every value must
+  // still be identical to a clean install - repair, not append.
+  const canon = (raw) => {
+    const o = JSON.parse(raw);
+    if (o.hooks) o.hooks = Object.fromEntries(Object.entries(o.hooks).sort((a, b) => (a[0] < b[0] ? -1 : 1)));
+    return JSON.stringify(o, null, 2) + '\n';
+  };
+  check('I2.bytes', canon(readRaw(settingsPath(p))), canon(clean),
+    'one re-run restores the file to the clean-install content, event key order aside');
+  check('I2.keySet', Object.keys(readSettings(p).hooks).sort(), Object.keys(JSON.parse(clean).hooks).sort(),
+    'and to exactly the clean-install set of hook events');
   const after = safeParse(guidance(p, ['status', '--json']).stdout);
   check('I2.statusAfter',
     [after.hooks.wiredCount, after.hooks.driftedCount, after.hooks.missingCount, after.hooks.drift.length],
-    [4, 0, 0, 0], 'after the repair status reports 4/4 wired with an empty drift list');
+    [WANT_N, 0, 0, 0], 'after the repair status reports 4/4 wired with an empty drift list');
 }
 
 // I3 — a foreign hook sharing a drifted entry survives merge AND unmerge
 {
   const p = freshProject({});
   guidance(p, ['install', '--part', 'all', '--json']);
-  const { reminder: rem } = semblePaths(p);
+  const { prefetch: pre } = semblePaths(p);
   const s = readSettings(p);
-  const i = s.hooks.PreToolUse.findIndex((e) => matcherOf(e) === 'Bash');
-  s.hooks.PreToolUse[i].hooks.unshift(FOREIGN_HOOK);
-  s.hooks.PreToolUse[i].hooks[1].timeout = 5000;           // the semble hook next to it drifted
-  s.hooks.PreToolUse[i].note = 'hand-edited';              // a foreign entry-level key
+  s.hooks.UserPromptSubmit[0].hooks.unshift(FOREIGN_HOOK);
+  s.hooks.UserPromptSubmit[0].hooks[1].timeout = 5000;     // the semble hook next to it drifted
+  s.hooks.UserPromptSubmit[0].note = 'hand-edited';        // a foreign entry-level key
   writeFileSync(settingsPath(p), JSON.stringify(s, null, 2) + '\n');
   const r = guidance(p, ['install', '--part', 'hooks', '--json']);
   check('I3.exit', r.status, 0, 'merge over a mixed drifted entry exits 0');
-  const e = readSettings(p).hooks.PreToolUse.find((x) => matcherOf(x) === 'Bash');
-  check('I3.repaired', e, {
-    hooks: [FOREIGN_HOOK, { type: 'command', command: 'node', args: [rem], timeout: 5 }],
-    matcher: 'Bash',
+  check('I3.repaired', readSettings(p).hooks.UserPromptSubmit[0], {
+    hooks: [FOREIGN_HOOK, { type: 'command', command: 'node', args: [pre], timeout: 5 }],
     note: 'hand-edited',
   }, 'only the semble hook is rewritten - the foreign hook and the foreign entry key are untouched');
   const r2 = guidance(p, ['remove', '--part', 'hooks', '--json']);
   check('I3.unmergeExit', r2.status, 0, 'unmerge over the same entry exits 0');
-  check('I3.unmergeKept', readSettings(p).hooks.PreToolUse,
-    [{ hooks: [FOREIGN_HOOK], matcher: 'Bash', note: 'hand-edited' }],
+  check('I3.unmergeKept', readSettings(p).hooks.UserPromptSubmit,
+    [{ hooks: [FOREIGN_HOOK], note: 'hand-edited' }],
     'unmerge strips only the semble hook and keeps the entry alive for the foreign one');
 }
 
@@ -1106,31 +1873,28 @@ function driftTimeouts(p, value) {
 {
   const p = freshProject({});
   guidance(p, ['install', '--part', 'all', '--json']);
-  const { reminder: rem, session, explore: exp } = semblePaths(p);
+  const { prefetch: pre, stats } = semblePaths(p);
   const s = readSettings(p);
-  const dupe = JSON.parse(JSON.stringify(s.hooks.PreToolUse.find((e) => matcherOf(e) === 'Bash')));
+  const dupe = JSON.parse(JSON.stringify(s.hooks.UserPromptSubmit[0]));
   dupe.hooks[0].timeout = 5000;
-  s.hooks.PreToolUse.push(dupe);                           // plain duplicate
-  s.hooks.PreToolUse.push({                                // duplicate carrying a foreign hook
-    matcher: 'Grep',
-    hooks: [FOREIGN_HOOK, { type: 'command', command: 'node', args: [rem], timeout: 9 }],
+  s.hooks.UserPromptSubmit.push(dupe);                     // plain duplicate
+  s.hooks.PostToolUse.push({                               // duplicate carrying a foreign hook
+    matcher: STATS_MATCHER,
+    hooks: [FOREIGN_HOOK, { type: 'command', command: 'node', args: [stats], timeout: 9 }],
   });
   writeFileSync(settingsPath(p), JSON.stringify(s, null, 2) + '\n');
   const r = guidance(p, ['install', '--part', 'hooks', '--json']);
   check('I4.exit', r.status, 0, 'a duplicated entry is repaired, not a fatal ABORT');
   check('I4.noAbort', (r.stdout + r.stderr).includes('ABORT'), false, 'nothing reports ABORT');
   const t = readSettings(p);
-  check('I4.counts', [
-    countEntry(t, 'SessionStart', null, session),
-    countEntry(t, 'PreToolUse', 'Bash', rem),
-    countEntry(t, 'PreToolUse', 'Grep', rem),
-    countEntry(t, 'SubagentStart', 'Explore', exp),
-  ], [1, 1, 1, 1], 'exactly one entry per event+matcher survives the de-duplication');
-  check('I4.foreignSurvived', t.hooks.PreToolUse.filter((e) => argsOf(e).includes('/opt/foreign/guard.mjs')),
-    [{ matcher: 'Grep', hooks: [FOREIGN_HOOK] }],
+  check('I4.counts', wantCounts(p, t), [1, 1, 1, 1], 'exactly one entry per want row survives the de-duplication');
+  check('I4.foreignSurvived', t.hooks.PostToolUse.filter((e) => argsOf(e).includes('/opt/foreign/guard.mjs')),
+    [{ matcher: STATS_MATCHER, hooks: [FOREIGN_HOOK] }],
     'the foreign hook riding on the duplicate outlives the duplicate');
+  check('I4.unusedPrefetchPath', pre.endsWith('semble-prefetch.mjs'), true,
+    'the duplicated row is the prefetch one');
   const a = safeParse(guidance(p, ['status', '--json']).stdout);
-  check('I4.statusClean', [a.hooks.wiredCount, a.hooks.duplicateCount], [4, 0],
+  check('I4.statusClean', [a.hooks.wiredCount, a.hooks.duplicateCount], [WANT_N, 0],
     'status confirms the file is healthy afterwards');
 }
 
@@ -1142,21 +1906,22 @@ function driftTimeouts(p, value) {
   check('I5.clean',
     [clean.hooks.wiredCount, clean.hooks.driftedCount, clean.hooks.missingCount,
       clean.hooks.duplicateCount, clean.hooks.drift.length],
-    [4, 0, 0, 0, 0], 'a correct install reports 4 wired and no drift');
+    [WANT_N, 0, 0, 0, 0], 'a correct install reports 4 wired and no drift');
   check('I5.cleanEntries', clean.hooks.entries.map((e) => e.state),
-    ['wired', 'wired', 'wired', 'wired'], 'every want row is reported wired individually');
+    ['wired', 'wired', 'wired', 'wired'],
+    'every want row is reported wired individually');
   const s = readSettings(p);
-  s.hooks.PreToolUse.find((e) => matcherOf(e) === 'Bash').hooks[0].timeout = 5000;
+  s.hooks.UserPromptSubmit[0].hooks[0].timeout = 5000;
   writeFileSync(settingsPath(p), JSON.stringify(s, null, 2) + '\n');
   const a = safeParse(guidance(p, ['status', '--json']).stdout);
-  check('I5.driftCounts', [a.hooks.wiredCount, a.hooks.driftedCount, a.hooks.missingCount], [3, 1, 0],
+  check('I5.driftCounts', [a.hooks.wiredCount, a.hooks.driftedCount, a.hooks.missingCount], [WANT_N - 1, 1, 0],
     'a timeout:5000 entry is counted as drifted, never rounded up to wired');
   check('I5.driftDetail', a.hooks.drift, [{
-    event: 'PreToolUse', matcher: 'Bash', script: 'semble-reminder.mjs',
+    event: 'UserPromptSubmit', matcher: null, script: 'semble-prefetch.mjs',
     field: 'timeout', expected: 5, actual: 5000,
   }], 'the drift array names event, matcher, script and the exact field that differs');
-  check('I5.reminderWired', a.hooks.reminder.wired, false,
-    'wired means present AND conforming - the drifted reminder is not wired');
+  check('I5.prefetchWired', a.hooks.prefetch.wired, false,
+    'wired means present AND conforming - the drifted prefetch row is not wired');
   check('I5.otherRows', a.hooks.entries.map((e) => e.state),
     ['wired', 'drifted', 'wired', 'wired'], 'only the drifted row changes state');
   check('I5.human', guidance(p, ['status']).stdout.includes('hooks 3/4 wired (1 drifted - re-run install to repair)'),
@@ -1188,13 +1953,13 @@ function driftTimeouts(p, value) {
   check('I6.orderNoRewrite', readRaw(settingsPath(p)), reordered,
     'key order alone is not drift - the entry is left byte-identical');
   const a = safeParse(guidance(p, ['status', '--json']).stdout);
-  check('I6.orderStatus', [a.hooks.wiredCount, a.hooks.driftedCount], [4, 0],
+  check('I6.orderStatus', [a.hooks.wiredCount, a.hooks.driftedCount], [WANT_N, 0],
     'status agrees that a reordered but equal hook is wired');
 }
 
 // I7 — the .gitignore outcome is verified, and the absent case is decided out loud
 {
-  const GI = '.claude/semble/.reminder-ts';
+  const GI = '.claude/semble/.prefetch-ts';
   const p1 = freshProject({});                             // .gitignore exists, no line
   writeFileSync(join(p1, '.gitignore'), 'node_modules/\n');
   const j1 = safeParse(guidance(p1, ['install', '--part', 'hooks', '--json']).stdout);
@@ -1233,6 +1998,327 @@ function driftTimeouts(p, value) {
     'the marker line is really gone from the file');
   check('I7.removeKept', readRaw(join(p1, '.gitignore')).startsWith('node_modules/\n'), true,
     'the pre-existing .gitignore content is preserved');
+
+  // install -> remove -> install must be byte-idempotent. It was not: the drop
+  // left a trailing blank line and the append prepended another, so every cycle
+  // grew the file by one blank - a diff in the user's repo for doing nothing.
+  check('I7.removeRestores', readRaw(join(p1, '.gitignore')), 'node_modules/\n',
+    'removal restores the file byte for byte, with no blank line left behind');
+  const cycle = [];
+  for (let i = 0; i < 3; i++) {
+    guidance(p1, ['install', '--part', 'hooks', '--json']);
+    cycle.push(readRaw(join(p1, '.gitignore')));
+    guidance(p1, ['remove', '--part', 'hooks', '--json']);
+    cycle.push(readRaw(join(p1, '.gitignore')));
+  }
+  check('I7.cycleStable', cycle,
+    [`node_modules/\n\n# brewcode:semble\n${GI}\n`, 'node_modules/\n',
+      `node_modules/\n\n# brewcode:semble\n${GI}\n`, 'node_modules/\n',
+      `node_modules/\n\n# brewcode:semble\n${GI}\n`, 'node_modules/\n'],
+    'three install/remove cycles produce exactly two byte-identical states, never a growing blank run');
+
+  // The same must hold when the migration drops the retired v1 line first.
+  const p4 = freshProject({});
+  writeFileSync(join(p4, '.gitignore'),
+    `node_modules/\n\n# brewcode:semble\n.claude/semble/.reminder-ts\n`);
+  guidance(p4, ['install', '--part', 'hooks', '--json']);
+  check('I7.migrateFile', readRaw(join(p4, '.gitignore')),
+    `node_modules/\n\n# brewcode:semble\n${GI}\n`,
+    'migrating off the retired marker leaves one blank line, not two');
+  guidance(p4, ['install', '--part', 'hooks', '--json']);
+  check('I7.migrateStable', readRaw(join(p4, '.gitignore')),
+    `node_modules/\n\n# brewcode:semble\n${GI}\n`,
+    'and a second install over the migrated file changes nothing');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// M. migration off the v1 hook layer
+//
+// The single most breakable part of 5.0.0. A user upgrading from 4.x has a
+// settings.json full of rows for hooks that no longer exist, and two orphan
+// .mjs files on disk. `wanted` is built from SG_LIVE while ownership is decided
+// by SG_MARKS, so a retired basename is still recognised as ours (and purged)
+// without ever being re-added. Building `wanted` from the marks list was the
+// pre-5.0.0 bug that made retired rows immortal.
+// ═══════════════════════════════════════════════════════════════════════════
+{
+  const p = freshProject({});
+  const d = hooksDirOf(p);
+  mkdirSync(d, { recursive: true });
+  const { session, stats, reminder: rem, explore: exp } = semblePaths(p);
+  const H = (f, t) => ({ type: 'command', command: 'node', args: [f], timeout: t === undefined ? 5 : t });
+  // Exactly the shape 4.x left behind, down to the stats matcher predating `|Read`.
+  const OLD_STATS = 'mcp__semble_code__search|mcp__semble_code__find_related|Bash|Grep|Glob';
+  writeFileSync(settingsPath(p), JSON.stringify({
+    hooks: {
+      SessionStart: [{ hooks: [H(session)] }],
+      PreToolUse: [
+        { matcher: 'Write', hooks: [FOREIGN_HOOK] },
+        { matcher: 'Bash', hooks: [H(rem)] },
+        { matcher: 'Grep', hooks: [H(rem)] },
+      ],
+      SubagentStart: [{ matcher: 'Explore', hooks: [H(exp)] }],
+      PostToolUse: [{ matcher: OLD_STATS, hooks: [H(stats)] }],
+      PostToolUseFailure: [{ matcher: OLD_STATS, hooks: [H(stats)] }],
+    },
+    permissions: { allow: ['mcp__semble_code__search', 'mcp__semble_code__find_related'] },
+  }, null, 2) + '\n');
+  for (const f of [session, stats, rem, exp]) writeFileSync(f, '// v1 leftover\n');
+  writeFileSync(join(p, '.gitignore'), 'node_modules/\n.claude/semble/.reminder-ts\n');
+  mkdirSync(join(p, '.claude', 'semble'), { recursive: true });
+  writeFileSync(join(p, '.claude', 'semble', '.reminder-ts'), '{"t":1}');
+
+  const before = safeParse(guidance(p, ['status', '--json']).stdout);
+  check('M1.retiredSeen', before.hooks.retired, ['semble-reminder.mjs', 'semble-explore.mjs'],
+    'status names the retired files it can see on disk, in want-table order');
+  check('M1.wiredBefore', [before.hooks.wiredCount, before.hooks.wantCount], [1, WANT_N],
+    'only SessionStart carries over: prefetch did not exist, and both stats rows sit on the'
+    + ' pre-5.0.0 matcher, which is a different want row and not a drifted one');
+  check('M1.staleBefore', before.hooks.staleEntries, 5,
+    'five owned entries are wired somewhere the want table does not want them - the two'
+    + ' reminder rows, the explore row, and BOTH stats rows on the retired matcher');
+
+  const r = guidance(p, ['install', '--part', 'hooks', '--json']);
+  check('M2.exit', r.status, 0, 'install over a v1-shaped settings file exits 0');
+  const s = readSettings(p);
+  check('M2.counts', wantCounts(p, s), [1, 1, 1, 1], 'every current want row is wired exactly once');
+  check('M2.noRetiredPath', [JSON.stringify(s).includes('semble-reminder.mjs'),
+    JSON.stringify(s).includes('semble-explore.mjs')], [false, false],
+  'NEITHER retired basename survives anywhere in settings.json - the whole point of the migration');
+  check('M2.subagentStartGone', Object.prototype.hasOwnProperty.call(s.hooks, 'SubagentStart'), false,
+    'SubagentStart emptied and the now-meaningless key was deleted, not left as []');
+  check('M2.preToolUseKept', s.hooks.PreToolUse, [{ matcher: 'Write', hooks: [FOREIGN_HOOK] }],
+    'PreToolUse survives with the foreign entry ALONE - the purge is ours-only, per entry');
+  check('M2.filesGone', [existsSync(rem), existsSync(exp)], [false, false],
+    'both orphan .mjs files are deleted from .claude/hooks');
+  check('M2.filesKept', [existsSync(session), existsSync(semblePaths(p).prefetch), existsSync(stats)],
+    [true, true, true], 'and all three live hooks are on disk');
+  check('M2.statsMatchers', s.hooks.PostToolUse.map((e) => e.matcher), [STATS_MATCHER],
+    'ONE PostToolUse row, on the current matcher: a surviving pre-5.0.0 row would fire the'
+    + ' observer a second time on every Bash and silently double the denominator');
+  check('M2.statsFailureMatchers', s.hooks.PostToolUseFailure.map((e) => e.matcher), [STATS_MATCHER],
+    'and the same on the failure event');
+  const changed = (safeParse(r.stdout) || {}).changed || [];
+  check('M2.reported', [changed.includes('hooks: removed retired ' + rem),
+    changed.includes('hooks: removed retired ' + exp)], [true, true],
+  'install reports both deletions by full path instead of doing them silently');
+
+  const a = safeParse(guidance(p, ['status', '--json']).stdout);
+  check('M3.after', [a.hooks.wiredCount, a.hooks.wantCount, a.hooks.driftedCount,
+    a.hooks.missingCount, a.hooks.duplicateCount, a.hooks.staleEntries],
+  [WANT_N, WANT_N, 0, 0, 0, 0], 'the migrated project is indistinguishable from a fresh install');
+  check('M3.retiredEmpty', a.hooks.retired, [], 'nothing retired is left to report');
+  check('M3.retiredMarkerGone', existsSync(join(p, '.claude', 'semble', '.reminder-ts')), false,
+    'the retired hook\'s marker file goes with it: the migration drops its .gitignore line, so a '
+    + 'marker left behind turns an invisible throttle file into an untracked diff in the user\'s repo');
+  check('M3.gitignore', readFileSync(join(p, '.gitignore'), 'utf8'),
+    'node_modules/\n\n# brewcode:semble\n.claude/semble/.prefetch-ts\n',
+    'the retired .reminder-ts line is DROPPED and the prefetch marker added - never both,'
+    + ' and never an orphan ignore line for a file nothing writes any more');
+
+  const snap = readRaw(settingsPath(p));
+  guidance(p, ['install', '--part', 'hooks', '--json']);
+  check('M4.idempotent', readRaw(settingsPath(p)), snap,
+    'a second install over the migrated file is byte-identical - migration converges in one pass');
+}
+
+// M5 — a v1 install whose retired ROWS are gone but whose FILES linger
+{
+  const p = freshProject({});
+  guidance(p, ['install', '--part', 'all', '--json']);
+  const { reminder: rem } = semblePaths(p);
+  writeFileSync(rem, '// orphan\n');
+  const a = safeParse(guidance(p, ['status', '--json']).stdout);
+  check('M5.seen', [a.hooks.retired, a.hooks.wiredCount], [['semble-reminder.mjs'], WANT_N],
+    'an orphan file is reported even when settings.json is already perfect');
+  guidance(p, ['install', '--part', 'hooks', '--json']);
+  check('M5.swept', [existsSync(rem),
+    safeParse(guidance(p, ['status', '--json']).stdout).hooks.retired], [false, []],
+  'and install sweeps it - file cleanup does not depend on a matching settings row');
+}
+
+// M6 — remove/uninstall knows the retired names too
+{
+  const p = freshProject({});
+  guidance(p, ['install', '--part', 'all', '--json']);
+  const { session, prefetch: pre, stats, reminder: rem, explore: exp } = semblePaths(p);
+  const s = readSettings(p);
+  s.hooks.PreToolUse = [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'node', args: [rem], timeout: 5 }] }];
+  writeFileSync(settingsPath(p), JSON.stringify(s, null, 2) + '\n');
+  writeFileSync(rem, '// orphan\n');
+  writeFileSync(exp, '// orphan\n');
+  mkdirSync(join(p, '.claude', 'semble'), { recursive: true });
+  for (const m of ['.prefetch-ts', '.reminder-ts']) {
+    writeFileSync(join(p, '.claude', 'semble', m), '{"t":1}');
+  }
+  guidance(p, ['remove', '--part', 'all', '--json']);
+  const t = readSettings(p);
+  check('M6.settings', JSON.stringify(t.hooks || {}), '{}',
+    'unmerge reads the FULL ownership list, so a hand-restored retired row is removed too');
+  check('M6.files', [session, pre, stats, rem, exp].map((f) => existsSync(f)),
+    [false, false, false, false, false], 'and every owned .mjs goes, live or retired');
+  check('M6.markers', ['.prefetch-ts', '.reminder-ts']
+    .map((f) => existsSync(join(p, '.claude', 'semble', f))), [false, false],
+  'and so do both throttle markers - remove drops their .gitignore line, so anything left '
+    + 'behind resurfaces as an untracked file');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// N. a release must not look like a user edit  (defect b)
+//
+// bump-version.sh stamps `# brewcode-meta: version=X.Y.Z` into line 1 of
+// sembleignore.template. `install_ignore` used to compare with `cmp -s`, so
+// EVERY version bump flipped every installed .sembleignore to `user_modified`
+// and it silently stopped being updated. The compare now runs in `metaline`
+// mode: the meta comment is stripped from BOTH sides first.
+// ═══════════════════════════════════════════════════════════════════════════
+{
+  const p = freshProject({});
+  guidance(p, ['install', '--part', 'ignore', '--json']);
+  const f = join(p, '.sembleignore');
+  check('N1.managed', safeParse(guidance(p, ['status', '--json']).stdout).ignore.state, 'managed',
+    'a fresh install is managed');
+
+  // Simulate a release: rewrite ONLY the stamp line of the shipped template.
+  const tpl = join(SKILL_COPY, 'assets', 'sembleignore.template');
+  const orig = readFileSync(tpl, 'utf8');
+  const bumped = orig.replace(/^# brewcode-meta: version=[^\s]+/m, '# brewcode-meta: version=99.9.9');
+  check('N2.stampMoved', bumped !== orig, true, 'the fixture really did change line 1');
+  writeFileSync(tpl, bumped);
+  check('N2.stillManaged', safeParse(guidance(p, ['status', '--json']).stdout).ignore.state, 'managed',
+    'a version bump ALONE must never make an untouched .sembleignore look user-modified');
+
+  // A real edit still registers, bumped stamp or not.
+  appendFileSync(f, '\n# my own rule\nvendor/\n');
+  check('N3.userModified', safeParse(guidance(p, ['status', '--json']).stdout).ignore.state, 'user_modified',
+    'appending a real line is still detected as a user edit');
+
+  // And because it was never mistaken for one, the bumped template lands.
+  writeFileSync(f, readFileSync(f, 'utf8').replace('\n# my own rule\nvendor/\n', ''));
+  guidance(p, ['install', '--part', 'ignore', '--json']);
+  check('N4.updated', readFileSync(f, 'utf8'), bumped,
+    'install over the unmodified file writes the new template through, stamp included');
+  writeFileSync(tpl, orig);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// O. upgrade must be able to CLEAR staleness, and uninstall must not lie
+//
+// Four review waves checked that INSTALL stamps correctly and none checked that
+// a stamp can ever CHANGE. `setup-status` row 2 reads this install's version out
+// of the frontmatter of .claude/rules/semble-first.md, and semble-guidance.sh is
+// its only writer - so an `upgrade` that never calls the script reported success,
+// left the stamp where it was, and the next `status` printed `stale` forever.
+// Same omission kept the two v5.0.0-retired hooks on disk indefinitely.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// O1 — the release loop: bumped template + retired hooks -> ONE guidance install
+//      restamps the rule and deletes both retired files.
+{
+  const p = freshProject({});
+  guidance(p, ['install', '--part', 'all', '--json']);
+  const rule = join(p, '.claude', 'rules', 'semble-first.md');
+  const { reminder: rem, explore: exp } = semblePaths(p);
+  const verOf = (f) => (readFileSync(f, 'utf8').match(/^version: "([^"]+)"/m) || [])[1];
+  const installed = verOf(rule);
+  check('O1.installed', typeof installed === 'string' && /^\d+\.\d+\.\d+$/.test(installed), true,
+    'the fresh install carries the template\'s baked X.Y.Z stamp');
+
+  // pre-5.0.0 install: both retired advisory hooks still on disk
+  writeFileSync(rem, '// legacy advisory hook, retired in v5.0.0\n');
+  writeFileSync(exp, '// legacy advisory hook, retired in v5.0.0\n');
+
+  // simulate the release: bump ONLY the baked stamp of the shipped template
+  const tpl = join(SKILL_COPY, 'assets', 'semble-first.md.template');
+  const orig = readFileSync(tpl, 'utf8');
+  writeFileSync(tpl, orig.replace(/^version: "[^"]+"/m, 'version: "99.9.9"'));
+  check('O1.stale', verOf(rule), installed, 'before the upgrade the installed rule still reads the OLD version');
+
+  const r = guidance(p, ['install', '--part', 'all', '--json']);
+  check('O1.exit', r.status, 0, 'the upgrade run exits 0');
+  check('O1.restamped', verOf(rule), '99.9.9',
+    'the rule frontmatter now reads the NEW version - this is what clears `stale`');
+  check('O1.resync', safeParse(r.stdout).changed.filter((l) => l.startsWith('rule:')),
+    [`rule: re-synced ${rule} (metadata only)`],
+    'and it took the metadata-only re-sync branch, not a forced overwrite');
+  check('O1.retiredGone', [existsSync(rem), existsSync(exp)], [false, false],
+    'the same run deletes both v5.0.0-retired hooks');
+  check('O1.byteIdentical', readFileSync(rule, 'utf8'), readFileSync(tpl, 'utf8'),
+    'the restamped rule is byte-identical to the template, so setup-status cmp still reads SAME');
+
+  const second = guidance(p, ['install', '--part', 'all', '--json']);
+  check('O1.idempotent', safeParse(second.stdout).changed, [],
+    'a second upgrade at the same version changes nothing');
+  writeFileSync(tpl, orig);
+}
+
+// O2 — a hand-edited rule is NEVER restamped behind the user's back
+{
+  const p = freshProject({});
+  guidance(p, ['install', '--part', 'all', '--json']);
+  const rule = join(p, '.claude', 'rules', 'semble-first.md');
+  appendFileSync(rule, '\n## my own section\n');
+  const mine = readFileSync(rule, 'utf8');
+  const tpl = join(SKILL_COPY, 'assets', 'semble-first.md.template');
+  const orig = readFileSync(tpl, 'utf8');
+  writeFileSync(tpl, orig.replace(/^version: "[^"]+"/m, 'version: "99.9.9"'));
+  const r = guidance(p, ['install', '--part', 'all', '--json']);
+  check('O2.untouched', readFileSync(rule, 'utf8'), mine,
+    'the hand-edited rule survives the upgrade byte for byte');
+  check('O2.reported', safeParse(r.stdout).skipped.some((l) => l.startsWith('rule: user_modified')), true,
+    'and the run says so, instead of silently leaving a stale stamp');
+  writeFileSync(tpl, orig);
+}
+
+// O3 — the sibling-less fallback removal path leaves no registered hook behind.
+//      It deleted session + prefetch but not stats, so an uninstall left a wired
+//      semble-stats.mjs on disk.
+{
+  const p = freshProject({});
+  guidance(p, ['install', '--part', 'all', '--json']);
+  const { session, prefetch: pre, stats, reminder: rem, explore: exp } = semblePaths(p);
+  writeFileSync(rem, '// orphan\n');
+  writeFileSync(exp, '// orphan\n');
+
+  // A scripts dir holding semble-remove.sh and its lib but NO semble-guidance.sh.
+  const lone = join(BASE, 'lone-remove');
+  mkdirSync(join(lone, 'lib'), { recursive: true });
+  copyFileSync(REMOVE_COPY, join(lone, 'semble-remove.sh'));
+  copyFileSync(join(SKILL_COPY, 'scripts', 'lib', 'semble-common.sh'), join(lone, 'lib', 'semble-common.sh'));
+  const r = spawnSync('bash', [join(lone, 'semble-remove.sh'), 'integration', '--yes', '--json'], {
+    encoding: 'utf8',
+    env: { ...process.env, SEMBLE_PROJECT_ROOT: p, SEMBLE_TEST_HOME: HOME, SEMBLE_NO_NETWORK: '1' },
+    timeout: 30000,
+  });
+  check('O3.exit', r.status, 0, 'the fallback removal exits 0');
+  check('O3.files', [session, pre, stats, rem, exp].map((f) => existsSync(f)), [false, false, false, false, false],
+    'every owned hook file goes - semble-stats.mjs included, or uninstall orphans a REGISTERED hook');
+  check('O3.ignore', existsSync(join(p, '.sembleignore')), false,
+    'and the repo-root .sembleignore goes with them');
+}
+
+// O4 — the confirmation plan must not under-report what the run deletes
+{
+  const p = freshProject({});
+  guidance(p, ['install', '--part', 'all', '--json']);
+  const planOf = (flavour) => {
+    const r = spawnSync('bash', [REMOVE_COPY, flavour, '--json'], {
+      encoding: 'utf8',
+      env: { ...process.env, SEMBLE_PROJECT_ROOT: p, SEMBLE_TEST_HOME: HOME, SEMBLE_NO_NETWORK: '1' },
+      timeout: 30000,
+    });
+    return { status: r.status, would: safeParse(r.stdout || '{}').wouldDelete || [] };
+  };
+  for (const flavour of ['integration', 'purge']) {
+    const { status, would } = planOf(flavour);
+    check(`O4.${flavour}.exit`, status, 4, `${flavour} without confirmation exits 4 and deletes nothing`);
+    const named = (needle) => would.some((l) => l.includes(needle));
+    check(`O4.${flavour}.plan`,
+      ['.sembleignore', 'semble-session.mjs', 'semble-prefetch.mjs', 'semble-stats.mjs',
+        'semble-reminder.mjs', 'semble-explore.mjs'].map(named),
+      [true, true, true, true, true, true],
+      'the plan names every file the run really removes - a user confirms this list');
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

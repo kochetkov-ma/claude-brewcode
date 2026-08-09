@@ -1,3 +1,4 @@
+<!-- brewcode-meta: version=5.1.0 generated_by=brewdoc:memory-sync-setup -->
 # Agent and Skill Re-Audit
 
 The standing best-practice audit `/memory-sync` runs on EVERY agent file and EVERY skill file, on EVERY run, at
@@ -25,9 +26,9 @@ crosses `/` while a Claude Code glob does not - so a git probe cannot judge glob
 
 ```bash
 ls .claude/agents/*.md .claude/skills/*/SKILL.md .claude/skills/*/references/*.md 2>/dev/null || true  # roster
-grep -n '^tools:\|^allowed-tools:\|^name:\|^model:' <file>  # declared contract
-grep -oE 'mcp__[a-z0-9_]+__' <file> | sort -u               # MCP servers claimed
-ls -d <owned glob> 2>/dev/null | head -3                    # ownership glob resolves (filesystem, not git)
+grep -n '^tools:\|^allowed-tools:\|^name:\|^model:' "<file>"  # declared contract
+grep -oE 'mcp__[a-z0-9_]+__' "<file>" | sort -u               # MCP servers claimed
+ls -d "<owned glob>" 2>/dev/null | head -3                    # ownership glob resolves (filesystem, not git)
 ```
 
 ## AGENT files (`.claude/agents/*.md`)

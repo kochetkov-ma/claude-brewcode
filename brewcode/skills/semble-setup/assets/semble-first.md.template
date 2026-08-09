@@ -2,6 +2,9 @@
 paths:
   - "**/*"
 description: semble-first — one semantic search, then read the exact line; rg stays for exact matching
+doc_type: llm
+version: "5.1.0"
+generated_by: "brewcode:semble-setup"
 ---
 
 # semble-first
@@ -51,6 +54,23 @@ open the file at `start_line`.
 4. Need siblings of a confirmed location? `find_related` with that `file_path`/`start_line`.
 5. Never issue two equivalent searches across semble, `rg`, and Grep.
 
+## Which tool wins, measured
+
+Head-to-head on 16 questions written from the question's own vocabulary, not the
+answer's identifier. The split is not a matter of taste:
+
+| Question shape | Winner | Score |
+|----------------|--------|-------|
+| Behaviour / intent — "how does X work", "what decides Y" | **semble** | 8 of 9 |
+| Vocabulary mismatch — the question's words are not in the code | **semble** | (same 9) |
+| Exhaustive enumeration — "every place that…", "all N of them" | **rg** | semble lost 2 of 5 |
+| Exact identifier, literal string, exact path | **rg** | — |
+
+So: ask semble what something does; ask `rg` where every occurrence is. A top-k
+result set is a ranked sample, never a complete list — a question containing
+"every", "all", "how many" or "list the" is an `rg -l`/`-c` question, and semble
+cannot answer it even in principle.
+
 ## Keep using rg / Grep for
 
 exact identifiers, literal error strings, regexes, path and filename patterns,
@@ -69,6 +89,19 @@ NOT indexed at any setting, because semble maps no content type to them:
 - `.mdx`, `.txt` — the suffix is absent from semble's extension table entirely
 
 Use `rg` for those.
+
+**`.json` being absent is load-bearing, not a footnote.** Hook registrations,
+plugin and marketplace manifests, `package.json`, `tsconfig.json`, `settings.json`
+and every OpenAPI spec live in files semble has never read. A question whose
+answer is a JSON key — "which hook events are registered", "what is the declared
+version", "is this permission allowed" — will come back with prose *about* the
+JSON and never the JSON itself, and the top hits will look plausible. Go straight
+to `rg` for those; do not spend a semble call first.
+
+Duplicate trees are not deduplicated either: if the repo commits the same file
+at two or three paths, all of them compete for the same five slots. If your
+results look like the same text three times, that is what happened — check
+`.sembleignore`.
 
 Semble has no background watcher. The index is (re)built inside a tool call
 and cached; the first call on a cold cache is slow, later calls are fast.

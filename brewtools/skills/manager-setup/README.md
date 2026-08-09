@@ -86,7 +86,7 @@ The HARD wall is an **installed-into-the-project** `PreToolUse` guard, NOT a plu
 | Runtime kill-switch | `<cwd>/.claude/brewtools/manager/state.json` `{hard}` | `enable`/`disable` flip this only — never touch `settings.local.json` |
 
 `install` = copy guard + off-switch CLI + register (idempotent) + arm. `/reload` only on first install.
-`upgrade` = re-copy both files + re-register if missing, state untouched. Aborts when not installed. Also backfills the off-switch CLI into projects installed before it existed.
+`upgrade` = re-copy both files + re-register if missing + restamp `state.json`'s `version`/`generated_by`/`last_updated` (empty-partial `writeState`, so `hard`/`level` survive verbatim — that is what clears the `stale` verdict `setup-status` reads off the same key). Aborts when not installed. Also backfills the off-switch CLI into projects installed before it existed.
 `enable` / `disable` = flip `state.hard` only. Guard stays registered; while disabled it no-ops.
 `uninstall` = TWO Bash calls: the bare exempt disarm, then deregister + delete copies. Then `/reload`.
 `purge` = `uninstall` + delete `.claude/brewtools/manager/` (state + prompt overrides).

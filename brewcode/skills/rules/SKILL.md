@@ -149,10 +149,41 @@ report needs the per-file added/merged/skipped counts; SCOPE + DONE per the temp
   - Plugin templates: ${CLAUDE_PLUGIN_ROOT}/templates/rules/
   - Validate: bash "${CLAUDE_SKILL_DIR}/scripts/rules.sh" validate
   - Create missing: bash "${CLAUDE_SKILL_DIR}/scripts/rules.sh" create
+  - Create specialized: bash "${CLAUDE_SKILL_DIR}/scripts/rules.sh" create-specialized <prefix> '<paths>'
   - Targets: avoid.md, best-practice.md, {prefix}-avoid.md, {prefix}-best-practice.md
   - DEDUP 3-Check: within-file (>70% skip, 40-70% merge); cross-file antonym
     (avoid<->best-practice keep avoid only); CLAUDE.md duplicate (skip; "CLAUDE.md"
     forbidden as Source).
 Fallback if agent unavailable: error "bc-rules-organizer not available — install brewcode plugin".
+
+### Scope of a specialized rule file (ASK before creating one)
+
+A `{prefix}-avoid.md` / `{prefix}-best-practice.md` applies to ONE slice of the repo. Before
+running `create-specialized`, AskUserQuestion for that slice and pass it as the `paths` argument
+(a YAML flow list, e.g. `'["src/payment/**", "**/payment/**"]'`). Omitting the argument makes the
+script derive a glob from the prefix and print it with a confirm-me warning; passing `["**/*"]` is
+refused outright — a specialized rule that matches everything is auto-loaded into every request,
+which is exactly the drift `/brewdoc:memory-sync`'s HARD pass A had to keep cleaning up.
+
+### Artifact metadata — every rule file this skill writes
+
+The templates under `templates/rules/` carry the three placeholder tokens raw, and `rules.sh`
+substitutes them at creation time, so a created file already carries, after its `paths:` and
+`description:`:
+
+```yaml
+doc_type: llm
+version: "{PLUGIN_VERSION}"
+generated_by: "{GENERATED_BY}"
+last_updated: "{LAST_UPDATED}"
+```
+
+`{PLUGIN_VERSION}` resolves from `.claude-plugin/plugin.json` (script self-location),
+`{GENERATED_BY}` to `brewcode:rules`, `{LAST_UPDATED}` to `date +%F`. Never hardcode any of them.
+`doc_type` is the one UNQUOTED value — `validate` gates on `^doc_type: llm$` and hard-fails
+`doc_type: "llm"`; the other three must be quoted. When the organizer EDITS an existing rule file, it refreshes
+`last_updated` (and `version`, if the file was written by an older release) with those same two
+sources and leaves every other key alone. `rules.sh validate` fails the run when a key is missing,
+misspelled or misformatted, so run it after every write.
 
 </instructions>

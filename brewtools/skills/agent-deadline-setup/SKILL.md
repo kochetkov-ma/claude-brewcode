@@ -46,10 +46,12 @@ Actually allowed past 100%: those 7 **plus** `TaskCreate`, `BashOutput`, `TaskOu
 
 ## BT_ROOT Resolver (use in EVERY bash block)
 
-`$CLAUDE_PLUGIN_ROOT` is NOT inherited by the Bash tool in main-conversation slash invocations. Resolve dynamically:
+The plugin root is resolved from the skill's OWN directory (the `CLAUDE_SKILL_DIR` prompt substitution), never from `CLAUDE_PLUGIN_ROOT` -- that env var is not exported to a skill's Bash tool:
 
 ```bash
-BT_ROOT="${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::')}"
+SD="${CLAUDE_SKILL_DIR}"
+if [ -n "$SD" ] && [ -f "$SD/../../.claude-plugin/plugin.json" ]; then BT_ROOT=$(cd "$SD/../.." && pwd); else BT_ROOT=$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::'); fi
+[ -n "$BT_ROOT" ] || { echo "ERROR: cannot locate brewtools plugin root -- install/update brewtools first."; exit 1; }
 test -d "$BT_ROOT/skills/agent-deadline-setup/assets" || { echo "❌ FAILED — BT_ROOT invalid: $BT_ROOT"; exit 1; }
 ```
 
@@ -70,7 +72,9 @@ Run this before anything else, in EVERY mode. Never install, re-install or remov
 **EXECUTE** using Bash tool:
 
 ```bash
-BT_ROOT="${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::')}"
+SD="${CLAUDE_SKILL_DIR}"
+if [ -n "$SD" ] && [ -f "$SD/../../.claude-plugin/plugin.json" ]; then BT_ROOT=$(cd "$SD/../.." && pwd); else BT_ROOT=$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::'); fi
+[ -n "$BT_ROOT" ] || { echo "ERROR: cannot locate brewtools plugin root -- install/update brewtools first."; exit 1; }
 A="$BT_ROOT/skills/agent-deadline-setup/assets"
 test -f "$A/INSTALL.md" && test -f "$A/agent-deadline-guard.mjs" && test -f "$A/agent-deadline-cleanup.mjs" || { echo "❌ FAILED — assets incomplete under BT_ROOT=$BT_ROOT"; exit 1; }
 echo "ASSETS_DIR=$A"
@@ -82,8 +86,11 @@ for S in "$PWD/.claude:project" "$HOME/.claude:global"; do
   W=$({ grep -o 'agent-deadline-[a-z]*\.mjs' "$D/settings.json" 2>/dev/null || true; } | sort -u | wc -l | tr -d ' '); W=${W:-0}
   CFG=none; [ -s "$D/agent-deadline.json" ] && CFG=$(tr -d '\n ' < "$D/agent-deadline.json"); CFG=${CFG:-none}
   EN=n/a; case "$CFG" in *'"enabled":true'*) EN=true;; *'"enabled":false'*) EN=false;; esac
-  echo "$N: guard=$G cleanup=$C settings_refs=$W enabled=$EN config=$CFG"
+  CV=$({ jq -r '.version // empty' "$D/agent-deadline.json" 2>/dev/null || true; }); CV=${CV:-n/a}
+  echo "$N: guard=$G cleanup=$C settings_refs=$W enabled=$EN config_version=$CV config=$CFG"
 done
+PV=$({ jq -r '.version // empty' "$BT_ROOT/.claude-plugin/plugin.json" 2>/dev/null || true; }); PV=${PV:-n/a}
+echo "plugin_version=$PV"
 echo "✅ status"
 ```
 
@@ -96,14 +103,42 @@ Field meanings — do not paraphrase them into something stronger:
 | `guard` / `cleanup` | `yes`/`no` — hook FILE present in that scope's `hooks/` |
 | `settings_refs` | count of DISTINCT `agent-deadline-*.mjs` scripts referenced in that scope's `settings.json`; `0` = not wired, `2` = fully wired, `1` = half-wired → repair |
 | `enabled` | `true`/`false` parsed from the config; `n/a` = no config or no `enabled` key |
+| `config_version` | the config's `version` key vs `plugin_version` on the last line. Different = the config was written by an older brewtools and may predate a shape change -> offer `upgrade`. `n/a` on either side (pre-metadata config, or no config) = unknown, NOT "current" |
 | `config` | whitespace-stripped config contents, or literal `none` |
 
 `settings_refs` is a textual count, not a JSON validation — it does not prove the entries are well-formed or attached to the right events.
 
 Read the output into a state table and PRINT it to the user:
 
-| Scope | Hook files | settings.json wired | Config | Effective |
-|-------|-----------|---------------------|--------|-----------|
+| Scope | Hook files | settings.json wired | Config | Config ver | Stale | Effective |
+|-------|-----------|---------------------|--------|------------|-------|-----------|
+
+### Config metadata (the three standard JSON keys)
+
+Every mode that writes `agent-deadline.json` (`install`, `upgrade`, `enable`, `disable`) leaves these three keys in it alongside the behavior keys. `doc_type` is a `.md`-frontmatter field only and never appears in a JSON carrier:
+
+```json
+{ "version": "{PLUGIN_VERSION}", "generated_by": "brewtools:agent-deadline-setup", "last_updated": "{LAST_UPDATED}" }
+```
+
+Resolve `version` and `last_updated` — never hardcode either. **EXECUTE** using Bash tool:
+
+```bash
+SD="${CLAUDE_SKILL_DIR}"
+if [ -n "$SD" ] && [ -f "$SD/../../.claude-plugin/plugin.json" ]; then BT_ROOT=$(cd "$SD/../.." && pwd); else BT_ROOT=$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::'); fi
+[ -n "$BT_ROOT" ] || { echo "ERROR: cannot locate brewtools plugin root -- install/update brewtools first."; exit 1; }
+PV=$(jq -r '.version // empty' "$BT_ROOT/.claude-plugin/plugin.json" 2>/dev/null || true)
+PV=${PV:-$(basename "$BT_ROOT")}
+echo "PLUGIN_VERSION=$PV LAST_UPDATED=$(date +%F)"
+```
+
+> **Why the bare form.** `CLAUDE_SKILL_DIR` is a TEXT SUBSTITUTION on the skill prompt, not an env var: CC 2.1.226 rewrites only the EXACT dollar-brace literal `{CLAUDE_SKILL_DIR}` (`replace(/\$\{CLAUDE_SKILL_DIR\}/g, dirname(skillPath))` and a string-pattern `replaceAll`). A brace-modifier form such as `:-fallback` inside the braces is therefore NOT matched, reaches the shell verbatim, and its fallback ALWAYS wins. `CLAUDE_PLUGIN_ROOT` is a real env var but is exported only to hook processes and MCP servers -- never to a skill's Bash tool -- so it is ALWAYS empty here. The skill dir is correct in a cache install AND in a `--plugin-dir` dev run; the cache glob below it is a last-resort fallback only, and it would name the INSTALLED plugin.
+
+| Guarantee | Why it holds |
+|-----------|--------------|
+| The hooks ignore them | `loadConfig()` accepts any non-array JSON object and reads only `enabled`, `defaultMinutes`, `byAgentType`, `hardStopRatio`; unknown keys are inert |
+| `enabled` semantics unchanged | The gate stays `cfg.enabled !== true` -> off. Adding sibling keys touches nothing |
+| Cannot make a valid file unparseable | Written by the runbook's node block that re-serializes the whole object with `JSON.stringify` — never appended as raw text. An invalid project config is skipped and the GLOBAL one takes over, which is a silent behavior change, so a hand-appended line is a defect |
 
 Effective = `guard=yes cleanup=yes settings_refs=2 enabled=true`. Anything else is NOT effective — say so plainly instead of reporting a half-state as installed. Project config wins over global; a broken project config is skipped and global is used.
 
@@ -170,7 +205,7 @@ Every spawn prompt MUST carry:
 
 > **The budget only survives if it reaches the SHELL.** `MINUTES`/`OVERRIDES`/`RUNBOOK` written as prose in the prompt are just text — the runbook's node blocks read them from `process.env`, and an un-exported `MINUTES` now ABORTS the config write (no built-in `20` fallback) instead of silently losing the user's choice. The spawn prompt below therefore carries the literal `export` line the agent must run FIRST, in the same Bash invocation as every runbook block. Substitute the chosen values into that `export` line, not only into the CONTEXT table.
 
-Spawn (substitute `MODE`, `SCOPE`, `MINUTES`, `OVERRIDES`, `HARD_STOP_RATIO`, `RUNBOOK`, `ASSETS_DIR` from Steps 1-4 — into BOTH the CONTEXT block and the `export` line):
+Spawn (substitute `MODE`, `SCOPE`, `MINUTES`, `OVERRIDES`, `HARD_STOP_RATIO`, `RUNBOOK`, `ASSETS_DIR`, `PLUGIN_VERSION`, `LAST_UPDATED` from Steps 1-4 and the Config-metadata block — into BOTH the CONTEXT block and the `export` line):
 
 ```
 Task(subagent_type="brewcode:hook-creator", prompt="
@@ -198,9 +233,9 @@ CONTEXT:
   MANDATORY FIRST BASH COMMAND — the runbook's node blocks read these from the ENVIRONMENT,
   not from this prompt. Run this VERBATIM as the first line of EVERY Bash call that executes
   a runbook block (a new Bash call does NOT inherit exports from the previous one):
-    export RUNBOOK='RUNBOOK' MINUTES='MINUTES' OVERRIDES='OVERRIDES' HARD_STOP_RATIO='HARD_STOP_RATIO'
+    export RUNBOOK='RUNBOOK' MINUTES='MINUTES' OVERRIDES='OVERRIDES' HARD_STOP_RATIO='HARD_STOP_RATIO' PLUGIN_VERSION='PLUGIN_VERSION' LAST_UPDATED='LAST_UPDATED'
   Then verify before writing anything:
-    echo \"MINUTES=\$MINUTES OVERRIDES=\$OVERRIDES HARD_STOP_RATIO=\$HARD_STOP_RATIO RUNBOOK=\$RUNBOOK\"
+    echo \"MINUTES=\$MINUTES OVERRIDES=\$OVERRIDES HARD_STOP_RATIO=\$HARD_STOP_RATIO RUNBOOK=\$RUNBOOK PV=\$PLUGIN_VERSION LU=\$LAST_UPDATED\"
   If MINUTES prints empty, STOP and report — the config block ABORTS on an empty MINUTES
   by design; re-export it rather than hardcoding a number.
   Drop HARD_STOP_RATIO from the export line when the user did not set it.
@@ -212,13 +247,21 @@ CONTEXT:
   existing config, export them, then replay the copy + config + merge blocks for SCOPE.
   Uninstall = strip entries by those two basenames, drop empty event arrays, delete the 2
   files, KEEP the config. Purge = uninstall + delete config + tmp state.
+  METADATA: every mode that WRITES the config (install, upgrade, enable, disable) must leave
+  these three keys in agent-deadline.json: version=\$PLUGIN_VERSION,
+  generated_by=\"brewtools:agent-deadline-setup\", last_updated=\$LAST_UPDATED. No doc_type —
+  it is a .md-frontmatter field and never belongs in a JSON carrier. Set them INSIDE
+  the runbook's node block that re-serializes the object with JSON.stringify — never by
+  appending text to the file. An invalid project config is SKIPPED and the global one silently
+  takes over, so a hand-edited append is a defect, not a shortcut. Do NOT touch enabled while
+  doing it: the hooks require it to be exactly true.
 CONSUMER: Step 6 reports your result to the user; the settings.json you write is loaded by
   the NEXT Claude Code session, so a malformed merge breaks that session instead of failing
   here — report the exact paths you touched so they can be checked.
 DONE: report the settings.json path, the hooks dir, the config path with its final contents,
   and the runbook 'Verify' output if you ran it. The reported config MUST show
   defaultMinutes = MINUTES — a 20 where the user asked for something else is a FAILURE,
-  not a detail.
+  not a detail — and version = \$PLUGIN_VERSION. Prove the file still parses: jq . <config path>.
 ")
 ```
 
@@ -229,6 +272,7 @@ Re-run the Step 1 status block and print the refreshed table, plus:
 - what changed (files, settings.json, config values),
 - **a NEW session is required for hook WIRING changes** (install/upgrade/uninstall/purge) — `/reload-plugins` is not needed, these are plain settings.json hooks;
 - **config VALUE changes** (`enabled`, `defaultMinutes`, `byAgentType`, `hardStopRatio`) are read live — no restart;
+- the config `version` now written into the file, and whether it matches `plugin_version`;
 - the soft-deadline caveat: time is sampled at tool-call boundaries only; pair with `BASH_MAX_TIMEOUT_MS` for long single commands.
 
 ---
@@ -252,7 +296,7 @@ Re-run the Step 1 status block and print the refreshed table, plus:
 | Condition | Response |
 |-----------|----------|
 | `BT_ROOT` resolves but `$BT_ROOT/skills/agent-deadline-setup/assets` missing | ERROR: `agent-deadline: assets not found under $BT_ROOT — plugin cache incomplete.` STOP. |
-| Neither `$CLAUDE_PLUGIN_ROOT` set nor any cached plugin dir found | ERROR: `agent-deadline: cannot locate plugin root — install/update brewtools first.` STOP. |
+| Neither the skill dir nor any cached plugin dir yields `.claude-plugin/plugin.json` | ERROR: `agent-deadline: cannot locate plugin root — install/update brewtools first.` STOP. |
 | Status shows fully installed + vague intent | Print status, list available operations, STOP. Do not re-install. |
 | Scope unspecified | AskUserQuestion: Project / Global / Both. Never guess. |
 | Global scope chosen (or asked about) | BEFORE writing anything, state the cost: matcher is `.*`, so ~58 ms median (p90 62.5 ms) is added to EVERY tool call of EVERY session in EVERY repo, main sessions included. Say it in the question or the plan, never only in the final report. |
@@ -272,7 +316,9 @@ Verify the 3 assets exist and the hooks parse before delegating.
 **EXECUTE** using Bash tool:
 
 ```bash
-BT_ROOT="${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::')}"
+SD="${CLAUDE_SKILL_DIR}"
+if [ -n "$SD" ] && [ -f "$SD/../../.claude-plugin/plugin.json" ]; then BT_ROOT=$(cd "$SD/../.." && pwd); else BT_ROOT=$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::'); fi
+[ -n "$BT_ROOT" ] || { echo "ERROR: cannot locate brewtools plugin root -- install/update brewtools first."; exit 1; }
 A="$BT_ROOT/skills/agent-deadline-setup/assets"
 test -d "$A" || { echo "❌ smoke FAILED — assets dir missing: $A"; exit 1; }
 for f in agent-deadline-guard.mjs agent-deadline-cleanup.mjs INSTALL.md; do

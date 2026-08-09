@@ -17,14 +17,18 @@ Analyzes the project, proposes agent variants (minimal/balanced/maximum), create
 | Status | `/brewcode:teams-setup status <name>` | Read-only report: agent health, success rates, issues, insights |
 | Install | `/brewcode:teams-setup install <name> [prompt]` | Analyze project, propose team, create agents + tracking framework |
 | Upgrade | `/brewcode:teams-setup upgrade <name>` | Analyze performance, tune or replace underperformers |
+| Enable | `/brewcode:teams-setup enable <name>` | Restore a disabled team: every parked `<agent>.md.disabled` is renamed back to `<agent>.md` |
+| Disable | `/brewcode:teams-setup disable <name>` | Park the team without deleting it: each `<agent>.md` becomes `<agent>.md.disabled`, so Claude Code stops discovering it. `team.md`, `trace.jsonl` and the archive are untouched |
 | Uninstall | `/brewcode:teams-setup uninstall <name>` | Archive old tracking data, remove inactive agents |
 | Purge | `/brewcode:teams-setup purge <name>` | Total removal: every domain agent + `.claude/teams/<name>/` incl. the archive. Confirmed once, not recoverable |
 
 No arguments: `status` of the first existing team, or `install` of a team named `default` when none exists.
 
-`enable` / `disable` are rejected with an error — a team either exists or it does not. The same parser guard makes `purge` a mode instead of a team name: in earlier versions any unrecognised first word became a team name, so `/brewcode:teams-setup purge` installed a team called `purge`.
+The verb always comes first and the optional `<name>` after it. That parser guard is why `purge` is a mode instead of a team name: in earlier versions any unrecognised first word became a team name, so `/brewcode:teams-setup purge` installed a team called `purge`.
 
-`purge` keeps exactly one thing: `.claude/agents/intent-guard.md`, shared with `/brewcode:superreview-setup`.
+`disable` is a rename, not a deletion — the roster rows stay in `team.md` with `Status: disabled`, and `verify-team.sh` reports `DISABLED` per parked member and still exits PASS. `enable` puts it all back. Both take effect for the NEXT session: agent discovery is read at session start.
+
+`purge` keeps exactly one thing: `.claude/agents/intent-guard.md`, shared with `/brewcode:superreview-setup`. It removes both `<agent>.md` and `<agent>.md.disabled`, so purging a disabled team leaves nothing behind.
 
 ## Examples
 
@@ -40,6 +44,12 @@ No arguments: `status` of the first existing team, or `install` of a team named 
 
 # Tune agents based on tracking data
 /brewcode:teams-setup upgrade backend
+
+# Park the team without losing it -- agents leave the roster, history stays
+/brewcode:teams-setup disable backend
+
+# Put it back
+/brewcode:teams-setup enable backend
 
 # Clean up after a long project phase
 /brewcode:teams-setup uninstall backend
@@ -176,9 +186,10 @@ Every team gets `intent-guard` in addition to its domain agents. It is an **anti
 
 **Single writer (idempotent):** `teams` never authors this file. It runs
 `superreview-setup/scripts/generate.sh emit-agent`, which creates it from the shared template or reuses an
-existing one and prints `INTENT_GUARD: CREATED|REUSE <path>`. On `REUSE` -- typically because
+existing one and prints `INTENT_GUARD: CREATED|REUSE|MIGRATED <path>`. On `REUSE` -- typically because
 `/brewcode:superreview-setup` ran first -- the file is left exactly as is and only the `team.md` roster row is
-added. On `CREATE`, one `agent-creator` pass tailors the three seeded generic blocks (project
+added. `MIGRATED` means a pre-5.0 file of ours was restamped in place (metadata only, tailored body
+preserved); treat it like `REUSE` -- no adaptation pass. On `CREATE`, one `agent-creator` pass tailors the three seeded generic blocks (project
 invariants, drift examples, evidence commands) and touches nothing else -- frontmatter and header stay
 as emitted. Both skills therefore converge on one shared file produced by one pipeline, never two
 variants.

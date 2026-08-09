@@ -107,7 +107,14 @@ request_user_input:
 On delete:
 
 0. If `{name}` is `intent-guard` -> **STOP, do not delete.** Report it as protected and move on.
-1. Remove `.codex/agents/{name}.toml`
+1. Remove `.codex/agents/{name}.toml` **and** `.codex/agents/{name}.toml.disabled` — a member parked by
+   `$brewcode:teams-setup disable` lives under the second name, and deleting only the first would
+   silently leave the agent behind:
+
+```bash
+rm -f ".codex/agents/{name}.toml" ".codex/agents/{name}.toml.disabled"
+```
+
 2. Update team.md: set status to `removed`
 3. Record via trace-ops.sh: `bash "<skill-directory>/scripts/trace-ops.sh" add ".codex/teams/{TEAM}" "$SID" "system" "track" "completed" "removed {name}: cleanup"`
 
@@ -143,8 +150,11 @@ ls -la ".codex/teams/{TEAM}" 2>/dev/null; du -sh ".codex/teams/{TEAM}" 2>/dev/nu
    an unrelated install. Report it as kept.
 
 ```bash
-rm -f ".codex/agents/{name}.toml"
+rm -f ".codex/agents/{name}.toml" ".codex/agents/{name}.toml.disabled"
 ```
+
+> Both names, always. A team purged while DISABLED has every member sitting at `{name}.md.disabled`;
+> removing only `{name}.md` would report a successful purge and leave the whole roster on disk.
 
 3. Remove the framework dir, trace, archive, cursor and the copied tracer in one go:
 

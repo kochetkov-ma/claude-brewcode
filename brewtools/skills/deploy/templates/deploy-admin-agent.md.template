@@ -4,11 +4,13 @@ model: opus
 # description MUST be <=100 chars, single line
 description: "GitHub Actions and deployment agent with live workflow inventory."
 tools: Read, Write, Edit, Bash, Grep, Glob, AskUserQuestion
+doc_type: llm
+version: "{PLUGIN_VERSION}"
+generated_by: "brewtools:deploy"
+last_updated: "{LAST_UPDATED}"
 ---
 
 # Deploy Admin Agent
-
-> Last updated: {{LAST_UPDATED}}
 
 ## GitHub Config
 

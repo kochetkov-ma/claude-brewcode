@@ -8,12 +8,17 @@ state from `<cwd>/.claude/docsync/` at runtime.
 | File | Event | Matcher | Action |
 |------|-------|---------|--------|
 | `docsync-track.mjs` | PostToolUse | `Write\|Edit\|MultiEdit` | Records touched .md; nudges to add `last_updated` frontmatter when missing |
-| `docsync-watch.mjs` | PostToolUse | `Read` | Records touched .md (silent) |
-| `docsync-gate.mjs` | Stop | — | Blocks once if any touched .md is stale by date; instructs Claude to ask about syncing |
+| `docsync-watch.mjs` | PostToolUse | `Read` | Records touched .md. Silent by design — a Read fires constantly |
+| `docsync-gate.mjs` | Stop | — | Re-applies `exclude` + `doc_type: skip` to the touched set, then blocks AT MOST ONCE PER SESSION listing every stale AND every undated touched .md |
 
 > Scripts are pure ESM, Node built-ins only (`fs`, `path`), no plugin-root / npm
 > deps. Each reads stdin, never throws, exits 0 (gate may emit a `block` decision).
 > They write state atomically (temp file + rename).
+
+> Line 2 of each file is a `// brewcode-meta: version=<plugin version>
+> generated_by=brewdoc:docsync-setup` stamp, baked at release. The files are copied
+> BYTE-FOR-BYTE, so an installed copy that differs from the plugin's is out of date —
+> never edit an installed copy in place.
 
 > **Requires `node` on `PATH`** for the shell that runs hooks. Under nvm/asdf a
 > non-interactive shell may not have `node` — if hooks silently do nothing, ensure
@@ -33,8 +38,15 @@ state from `<cwd>/.claude/docsync/` at runtime.
 
 `<repo>/.claude/docsync/`:
 
-- `config.json` — `{ "threshold_days": 7, "exclude": ["node_modules/**", ...] }`
-- `state.json`  — `{ "session_id": "...", "touched": [], "asked": false }` (managed by hooks)
+- `config.json` — `{ "version": "{PLUGIN_VERSION}", "generated_by": "brewdoc:docsync-setup", "last_updated": "{LAST_UPDATED}", "enabled": true, "threshold_days": 7, "exclude": ["node_modules/**", ...] }`.
+  The hooks parse it with `JSON.parse` and read only `enabled`, `threshold_days` and
+  `exclude`, so the three provenance keys (and any other key) are inert to them.
+  `enabled: false` (written by `disable`) makes all three hooks return an empty result
+  immediately — registered, wired, inert. An absent `enabled` key counts as `true`, so
+  a config written before this key existed keeps working
+- `state.json`  — install writes `{ "session_id": null, "touched": [], "asked": false }`;
+  the hooks own it from then on, replacing `null` with the live session id and
+  resetting `touched`/`asked` on every session change
 
 ---
 

@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 5.0.0 |
+| Version | 5.1.0 |
 | Skills | 5 |
 | Agents | 0 |
 | Hooks | 0 |
@@ -122,6 +122,26 @@ brewdoc/
 ```
 
 > **Brewdoc vs Brewcode:** Brewdoc is a set of documentation utilities and each skill is self-contained. Brewcode covers the project's own engineering surface -- conventions, rules, agent teams, semantic search and deep review -- with 9 skills, 5 agents and 2 hooks. Both install from the same `claude-brewcode` marketplace and operate independently.
+
+## Artifact metadata
+
+Every artifact a `-setup` skill installs into your project carries the same four fields, so you can
+tell at a glance what wrote a file and which plugin version it was written at.
+
+| Field | Values | Where |
+|-------|--------|-------|
+| `doc_type` | `llm` \| `user` \| `skip` -- unquoted | `.md` frontmatter only, never JSON |
+| `version` | `"X.Y.Z"` -- plugin version at install time | all carriers |
+| `generated_by` | `"<plugin>:<skill>"` | all carriers |
+| `last_updated` | `"YYYY-MM-DD"` | all carriers except a byte-copied `.mjs`/`.sh`/`.md` |
+
+A byte-copied asset omits `last_updated`: the value would be the release date,
+identical in the plugin file and the copy, so rewriting it on every build would churn bytes and
+defeat the `cmp` drift check that mechanism exists for. The four keys always sit after the file's
+own keys, in that order. JSON artifacts carry the same three snake_case keys at top level (no
+`doc_type`) in every writing mode. `docsync-setup` and `memory-sync-setup` each stamp their own
+emitted files this way; versions always come from `.claude-plugin/plugin.json`, never hardcoded. `/brewcode:setup-status` reads these back to tell you
+when a setup here is running on an older version than the installed plugin.
 
 ## Documentation
 

@@ -22,9 +22,9 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 
 | Field | Value |
 |-------|-------|
-| Command | `/brewcode:superreview-setup [status\|install\|upgrade] "<fine-tune-prompt>" [scope]` |
-| Arguments | an optional leading mode verb, then `<fine-tune-prompt>` — free-text emphasis that reorders the emitted skill's Focus table; optional `[scope]` hint passed through |
-| No verb | same as `install`; the whole argument string is the fine-tune prompt |
+| Command | `/brewcode:superreview-setup [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] "<fine-tune-prompt>" [scope]` |
+| Arguments | an optional leading mode verb (canonical order `status \| install \| upgrade \| enable \| disable \| uninstall \| purge`), then `<fine-tune-prompt>` — free-text emphasis that reorders the emitted skill's Focus table; optional `[scope]` hint passed through |
+| No verb | `status` when `.claude/skills/superreview/` already exists, otherwise `install`; with a prompt but no verb, always `install` and the whole argument string is the fine-tune prompt |
 | Model | opus |
 | Tools | Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion |
 | Depth (emitted skill) | `QUICK` (default) or `EXTENDED` — inferred from the emitted skill's own prompt at run time, in any language; no flag on either skill |
@@ -51,14 +51,20 @@ reorders the emitted Focus table — scope discipline can be raised, never dropp
 
 ## Modes
 
-An explicit verb now routes in front of the fine-tune prompt. Leave it off and you get `install`, exactly as before.
+An explicit verb routes in front of the fine-tune prompt, in canonical order `status | install |
+upgrade | enable | disable | uninstall | purge`.
 
 | Mode | What runs | Writes |
 |------|-----------|--------|
-| `status` | Read-only: does `.claude/skills/superreview/` exist, is `intent-guard.md` present, is `.template-baseline/` there — then `generate.sh validate` and a report. **Stops there** | no |
+| `status` | Read-only: does `.claude/skills/superreview/` exist, is it enabled or parked (`SKILL.md` vs `SKILL.md.disabled`), is `intent-guard.md` present, is `.template-baseline/` there — then `generate.sh validate` and a report. **Stops there** | no |
 | `install` | The full generate flow, Phase 0 through Phase 4 | yes |
 | `upgrade` | Phase 2b only (`generate.sh upgrade`), then Phase 3 for any `MISSING -> restored` asset, then Phase 4 `validate`. **Stops there** | live files only, via targeted Edit |
-| *(no verb)* | Same as `install`; the whole argument string is the fine-tune prompt | yes |
+| `enable` | `generate.sh enable` — un-parks the installed skill by renaming `SKILL.md.disabled` back to `SKILL.md`. **Stops there** | one rename |
+| `disable` | `generate.sh disable` — parks the installed skill by renaming `SKILL.md` to `SKILL.md.disabled`, without deleting anything. **Stops there** | one rename |
+| `uninstall` | `generate.sh uninstall` — deletes the generated skill directory (`SKILL.md` + `references/` + `.template-baseline/`), but keeps the review reports under `.claude/reports/*_superreview/` and `.claude/agents/intent-guard.md`. Confirms once via `AskUserQuestion`, listing the real paths. **Stops there** | deletes the skill dir only |
+| `purge` | `generate.sh purge` — `uninstall` plus deletes every `.claude/reports/*_superreview/` directory. `intent-guard.md` still survives — it is shared with `/brewcode:teams-setup` and only `generate.sh emit`/`emit-agent` ever write it. Confirms once, naming the report count being destroyed. **Stops there** | deletes the skill dir and the review reports |
+| *(no args at all)* | `status` when `.claude/skills/superreview/` exists, otherwise `install` | status: no |
+| *(no verb, but a prompt)* | Same as `install`; the whole argument string is the fine-tune prompt | yes |
 
 <Callout type="tip" title="Why the -setup suffix">
 `superreview-setup` installs a mechanism: after it runs you use the emitted `/superreview` in your own repo, not this skill. Canonical vocabulary across every setup skill: `status`, `install`, `upgrade`, `enable`, `disable`, `uninstall`, `purge`. Recurring tools like [`/brewcode:convention`](/brewcode/skills/convention/) keep bare names.
@@ -418,6 +424,22 @@ is not a finding; correctness-driven and unrecorded is shape 6.
 The emitted skill self-modifies through Phase 4b SELF-SYNC, so `emit` refuses on a live installation
 instead of silently erasing those edits:
 
+<Callout type="caution" title="Ran upgrade before v5.1.0? Re-run it">
+  Two `upgrade` bugs are fixed in v5.1.0, and `validate` passed either way — neither was caught downstream.
+  **Stack derivation.** `upgrade` used to fall back to the default `STACK_REF` (`python.md`) instead of reading
+  which stack was actually installed, so on a non-Python project the real per-stack reference was skipped —
+  never staged, never restamped — and stayed at the old version forever, permanently `stale`. `upgrade` now
+  derives the stack from the installed tree (`_installed_stack_refs()` reads the decision back from
+  `references/` or `.template-baseline/references/`; `_stack_catalog()` builds the candidate list from
+  `references/*.md` instead of a hardcoded set), so one `upgrade` repairs an existing install retroactively.
+  An explicit `STACK_REF` in the environment still overrides.
+  **Restore source.** When `upgrade` found an artifact `MISSING`, it restored it from the SUBSTITUTED staging
+  copy — so the restored file silently carried the generator's own defaults (`this project`,
+  `general-purpose`) instead of the project's real values, and `validate` passed it anyway. Restoration now
+  copies from the RAW template under `.upgrade-staging/.template/`, so a restored file correctly needs Phase 3.
+  Anyone who ran `upgrade` before v5.1.0 should re-run it.
+</Callout>
+
 | Command | Effect |
 |---------|--------|
 | `generate.sh upgrade` | The supported refresh. Writes no live file. Stages a fresh emit under `.upgrade-staging/` and reports, per asset, the new template vs the pristine `.template-baseline/` copy `emit` saved: `IDENTICAL`, `DIFFERS (<n> template line(s))`, `MISSING -> restored (NEEDS PHASE 3)`, or `NO BASELINE - full diff, tailoring included` for a pre-baseline install. Port each delta into the live file with targeted Edit calls, then promote `.upgrade-staging/.template` to the new baseline |
@@ -443,6 +465,38 @@ Block, filled via Edit in `references/scope.md` (Phase 3): `TEAM_NOTE`,
 Runtime placeholders (`{MODE}`, `{COUNT}`, `{FILE_LIST}`, `{SCOPE_BASELINE}`, ...) are
 allow-listed in `generate.sh validate` — they stay in the emitted SKILL.md and resolve on every
 `/superreview` run in the target project.
+
+The placeholder scanner strips shell expansions before matching (v5.1.0 fix): the old pattern
+`{[A-Z_]+}` also matched the `{BASE}` substring inside `${BASE}`, which could misclassify a correctly
+tailored Phase 3 evidence command as carrying an unresolved placeholder. The scan now runs
+`sed 's/\${[A-Z_][A-Z_]*}//g'` first, then matches `\{[A-Z_]{2,}\}` on what remains — applied at all
+three call sites: `_ig_kind`'s BROKEN check, `validate`'s unresolved-token scan, and its CURRENT-agent
+recheck.
+
+### Version and ownership
+
+Every artifact this generator writes — `SKILL.md`, `references/agent-prompt.md`,
+`references/report-template.md`, `references/scope.md`, and `.claude/agents/intent-guard.md` — carries
+YAML frontmatter with four metadata keys, in this exact order after the file's own keys: `doc_type`
+(unquoted `llm`), `version` (quoted `"X.Y.Z"`), `generated_by` (quoted `"brewcode:superreview-setup"`),
+`last_updated` (quoted `"YYYY-MM-DD"`). `intent-guard.md` additionally carries a tail anchor comment,
+`<!-- generated_by: brewcode:superreview-setup`.
+
+`version` is resolved once, by `_plugin_version()`, out of the plugin's own `.claude-plugin/plugin.json`
+— never hardcoded, never a fallback string. When it cannot resolve a real `X.Y.Z`, the writer refuses to
+write at all:
+
+```
+❌ cannot resolve the plugin version (X.Y.Z) from <plugin.json path> — refusing to stamp an artifact with a fake version
+```
+
+and the caller exits 1 rather than shipping a file stamped `unknown`.
+[`/brewcode:setup-status`](/brewcode/skills/setup-status/) reads these stamps back across every installed
+`-setup` skill and reports a project that installed at an older plugin version as stale.
+
+`enable`/`disable` work by entry-file parking, not by rewriting anything:
+`.claude/skills/superreview/SKILL.md` renames to `SKILL.md.disabled` and back, body byte-identical,
+nothing deleted or regenerated — no version bump, no restamp.
 
 ### Re-run triggers
 

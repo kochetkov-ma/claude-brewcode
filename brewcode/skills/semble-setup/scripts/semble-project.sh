@@ -12,7 +12,7 @@ SP_SEARCH_TIMEOUT="${SP_SEARCH_TIMEOUT:-600}"
 # Never-walked directory names (semble/index/file_walker.py:14-33).
 SP_SKIP_DIRS=".git .hg .svn __pycache__ node_modules .venv venv .tox .mypy_cache .pytest_cache .ruff_cache .cache .semble .next dist build .eggs"
 
-# Suffix -> bucket tables, generated from semble 0.5.2
+# Suffix -> bucket tables, generated from semble 0.5.4
 # src/semble/index/files.py (_EXTENSION_TO_LANGUAGE minus _DOC/_CONFIG/_DATA_LANGUAGES).
 # Classification is by lowercased LAST suffix only; extensionless files never match.
 SP_EXT_CODE=".4th .ada .adb .ads .agda .al .as .asm .astro .awk .axi .axs .bash .bat .bb .bbappend .bbclass .bicep .blade .bq .brs .bsl .bzl .c .c3 .c3i .c3t .caddyfile .cairo .cbl .cc .cedar .cel .cfc .chatito .circom .cjs .ck .cl .clar .clj .cljc .cljs .cls .cmake .cmd .cob .cobol .conf .corn .cpp .cr .cs .cshtml .css .cst .cts .cu .cuda .cue .cxx .cylc .d .dart .dhall .dl .dockerfile .dot .dsp .eds .eex .el .elm .elv .enforce .eps .erb .erl .ex .exs .f .f03 .f08 .f90 .f95 .fc .fidl .filter .fir .fish .fnl .fs .fsd .fsi .fsx .fth .fun .g .gd .gdshader .gi .gleam .glsl .gn .gni .gnuplot .go .gotmpl .gp .gql .gradle .graphql .gren .groovy .gv .h .hack .hare .hbs .hcl .heex .hlsl .hoon .hpp .hrl .hs .http .hurl .hx .hxx .idr .inc .ino .ispc .j2 .jai .janet .java .jinja2 .jl .jq .js .jsonnet .jsx .just .k .kt .kts .lc .lds .lean .leex .less .libsonnet .liquid .lisp .ll .lua .luau .m .magik .makefile .matlab .meson .mjs .mk .ml .mli .mlir .mll .mojo .move .mts .nasm .ncl .nginx .nim .nims .ninja .nix .nqc .nu .nut .odin .p .pas .php .pkl .pl .plt .pm .pony .pp .prisma .pro .promql .prql .ps .ps1 .psd1 .psm1 .pug .purs .py .pyi .pyw .ql .qml .r .rasi .razor .rb .rbs .re .rego .res .resi .rkt .robot .roc .rs .s .scad .scala .scm .scss .sh .shtml .sig .slang .smali .smk .sml .sol .sp .sparql .sql .squirrel .st .stan .star .sv .svelte .svh .sw .swift .tact .tal .tape .tcl .td .templ .tera .tf .tfvars .tl .tla .trigger .ts .tsconfig .tsx .twig .typoscript .typst .v .vb .verilog .vhd .vhdl .vim .vrl .vue .w .wast .wat .wgsl .wl .yuck .zig .ziggy .zsh"
@@ -27,6 +27,7 @@ sp_usage() {
 semble-project.sh — project corpus audit, cache warm/smoke, enable/disable/reindex
 
   semble-project.sh audit   [--json]
+  semble-project.sh candidates [--json]
   semble-project.sh warm    [--query STR] [--json]
   semble-project.sh smoke   [--query STR] [--json]
   semble-project.sh enable  [--yes] [--json]
@@ -175,7 +176,7 @@ sp_state_json() {
   sc_require_node
   SP_F="$(sc_state_file)" node -e '
 const fs=require("fs");const f=process.env.SP_F;
-const out={present:false,phase:"absent",enabled:null,completed:[],updatedAt:null};
+const out={present:false,phase:"absent",enabled:null,completed:[],last_updated:null};
 if(fs.existsSync(f)){
   out.present=true;
   const raw=fs.readFileSync(f,"utf8");
@@ -183,7 +184,7 @@ if(fs.existsSync(f)){
     out.phase=s.phase||"absent";
     out.enabled=(typeof s.enabled==="boolean")?s.enabled:null;
     out.completed=Array.isArray(s.completed)?s.completed:[];
-    out.updatedAt=s.updatedAt||null;
+    out.last_updated=s.last_updated||null;
   }catch(e){out.phase="malformed";}
 }
 process.stdout.write(JSON.stringify(out));'
@@ -393,6 +394,179 @@ console.log(process.env.SP_DISC);'
   sc_ok "audit complete"
 }
 
+# ── candidates (§ per-repo .sembleignore proposals) ─────────────────────────
+# The shipped .sembleignore ships its per-repo section EMPTY, and no static
+# pattern can fill it: the two things that actually waste result slots are
+# layout-specific. This measures them in THIS repo.
+#
+#   duplicate-tree - a directory whose files are, near enough all of them,
+#                    byte-identical copies of files living somewhere else.
+#                    Semble does not dedup, so N copies means N chances to
+#                    spend one of five result slots on the same text.
+#   heavy-dir/file - a path carrying a disproportionate share of the corpus.
+#                    Exact chunk counts when an index exists (read straight out
+#                    of chunks.json), byte share as the fallback when it does not.
+#
+# Output is a PROPOSAL, never an exclusion: install writes it commented out.
+# Excluding something the user wanted indexed is the worse error - it fails
+# silently, and they would have no way to know the answer was never reachable.
+sp_mode_candidates() {
+  local json="$1" root cachedir out
+  root="$(sc_project_root)"
+  cachedir="$(sc_repo_cache_dir "$root" 2>/dev/null || true)"
+  out="$(SP_ROOT="$root" SP_CHUNKS="${cachedir:+$cachedir/index/chunks.json}" \
+    SP_C="$SP_EXT_CODE" SP_G="$SP_EXT_CONFIG" SP_D="$SP_EXT_DOCS" \
+    SP_SKIPD="$SP_SKIP_DIRS" node -e '
+const fs=require("fs"),path=require("path"),crypto=require("crypto");
+const set=s=>new Set(String(s||"").split(" ").filter(Boolean));
+const docsExt=set(process.env.SP_D);
+const ok=new Set([...set(process.env.SP_C),...set(process.env.SP_G),...docsExt]);
+const skipDirs=set(process.env.SP_SKIPD);
+const ROOT=process.env.SP_ROOT;
+const files=[];   // {rel, size, hash}
+function suffix(n){const i=n.lastIndexOf(".");return i<=0?"":n.slice(i).toLowerCase();}
+function walk(dir,depth){
+  let ents;try{ents=fs.readdirSync(dir,{withFileTypes:true});}catch(e){return;}
+  ents.sort((a,b)=>a.name<b.name?-1:1);
+  for(const en of ents){
+    const p=path.join(dir,en.name);
+    if(en.isSymbolicLink())continue;
+    if(en.isDirectory()){ if(!skipDirs.has(en.name)&&depth<64) walk(p,depth+1); continue; }
+    if(!en.isFile())continue;
+    if(!ok.has(suffix(en.name)))continue;
+    let st;try{st=fs.statSync(p);}catch(e){continue;}
+    if(st.size>1000000||st.size===0)continue;
+    let h="";
+    try{ h=crypto.createHash("sha1").update(fs.readFileSync(p)).digest("hex"); }catch(e){ continue; }
+    files.push({rel:path.relative(ROOT,p),size:st.size,hash:h,docs:docsExt.has(suffix(en.name))});
+  }
+}
+walk(ROOT,0);
+
+// Exact chunk counts when the index is on disk; byte share otherwise. Both are
+// reported so the proposal always says which number it is standing on.
+let chunks=null, source="filesystem";
+const cf=process.env.SP_CHUNKS;
+if(cf&&fs.existsSync(cf)){
+  try{
+    const raw=JSON.parse(fs.readFileSync(cf,"utf8"));
+    const arr=Array.isArray(raw)?raw:(Array.isArray(raw&&raw.chunks)?raw.chunks:null);
+    if(arr){ chunks=new Map();
+      for(const c of arr){ const k=c&&(c.file_path||c.path||c.file); if(!k)continue;
+        chunks.set(k,(chunks.get(k)||0)+1); }
+      source="index";
+    }
+  }catch(e){ chunks=null; }
+}
+const weightOf=f=>chunks?(chunks.get(f.rel)||0):f.size;
+const total=files.reduce((a,f)=>a+weightOf(f),0)||1;
+
+// ── A. duplicate trees ────────────────────────────────────────────────────
+const byHash=new Map();
+for(const f of files){ if(!byHash.has(f.hash))byHash.set(f.hash,[]); byHash.get(f.hash).push(f.rel); }
+const under=(rel,d)=>rel===d||rel.startsWith(d+path.sep);
+const dirs=new Map();   // dir -> {n, dup, weight, twins:Map<dir,count>}
+for(const f of files){
+  const parts=f.rel.split(path.sep); parts.pop();
+  const group=byHash.get(f.hash);
+  for(let i=1;i<=parts.length;i++){
+    const d=parts.slice(0,i).join(path.sep);
+    let e=dirs.get(d); if(!e){ e={n:0,dup:0,weight:0,twins:new Map()}; dirs.set(d,e); }
+    e.n++; e.weight+=weightOf(f);
+    const outside=group.filter(r=>!under(r,d));
+    if(outside.length){ e.dup++;
+      for(const o of outside){ const td=path.dirname(o).split(path.sep)[0]||"."; e.twins.set(td,(e.twins.get(td)||0)+1); } }
+  }
+}
+// The 1% floor keeps the proposal list worth reading: a duplicate tree that
+// costs nothing (often it is already excluded, so its chunk weight is zero) is
+// noise, and noise in a proposal list is how the list stops being read.
+const dupCand=[];
+for(const [d,e] of dirs){ if(e.n>=5&&e.dup/e.n>=0.9&&e.weight/total>=0.01) dupCand.push({dir:d,...e}); }
+dupCand.sort((a,b)=>a.dir.length-b.dir.length);
+const kept=[];
+for(const c of dupCand) if(!kept.some(k=>under(c.dir,k.dir))) kept.push(c);
+// A mirror pair qualifies from both ends. Propose the copy, not the original:
+// hidden directory first (a mirror for another runtime is nearly always dotted),
+// then the shallower-weighted side, then the later path so the choice is stable.
+const isHidden=d=>d.split(path.sep).some(s=>s.startsWith("."));
+const dropped=new Set();
+for(const a of kept) for(const b of kept){
+  if(a===b||dropped.has(a.dir)||dropped.has(b.dir))continue;
+  if(!(a.twins.get(b.dir.split(path.sep)[0])>0&&b.twins.get(a.dir.split(path.sep)[0])>0))continue;
+  const loser=(isHidden(a.dir)!==isHidden(b.dir))?(isHidden(a.dir)?b:a)
+    :(a.weight!==b.weight?(a.weight>b.weight?b:a):(a.dir<b.dir?a:b));
+  dropped.add(loser.dir);
+}
+const out=[];
+for(const c of kept){
+  if(dropped.has(c.dir))continue;
+  const twin=[...c.twins.entries()].sort((x,y)=>y[1]-x[1])[0];
+  out.push({path:"/"+c.dir+"/",base:c.dir,kind:"duplicate-tree",files:c.n,duplicates:c.dup,
+    weight:c.weight,share:+(c.weight/total).toFixed(4),
+    reason:c.dup+" of "+c.n+" files are byte-identical copies of files under "+(twin?twin[0]:"another path")});
+}
+
+// ── B. heavy directories and files ────────────────────────────────────────
+const covered=r=>out.some(o=>under(r,o.base));
+const tops=new Map();
+for(const f of files){ const d=f.rel.split(path.sep)[0];
+  if(d===f.rel)continue; tops.set(d,(tops.get(d)||0)+weightOf(f)); }
+// Only ever propose a PROSE-dominated directory. A source directory carrying
+// 40% of the corpus is the repository, not noise, and proposing to exclude it
+// would be wrong in every repo that has one - which is all of them.
+const proseShare=d=>{ const f=files.filter(x=>under(x.rel,d)); return f.length?f.filter(x=>x.docs).length/f.length:0; };
+for(let [d,w] of tops){
+  if(w/total<0.15||covered(d)||proseShare(d)<0.8)continue;
+  // Descend while one child still holds the overwhelming majority: naming
+  // `data/slack/` beats naming `data/` when the rest of data/ is wanted.
+  for(;;){
+    const kids=new Map();
+    for(const f of files){ if(!under(f.rel,d))continue;
+      const rest=f.rel.slice(d.length+1).split(path.sep);
+      if(rest.length<2)continue;
+      kids.set(d+path.sep+rest[0],(kids.get(d+path.sep+rest[0])||0)+weightOf(f)); }
+    const best=[...kids.entries()].sort((a,b)=>b[1]-a[1])[0];
+    if(!best||best[1]/w<0.8)break;
+    d=best[0]; w=best[1];
+  }
+  if(covered(d)||proseShare(d)<0.8)continue;
+  // Name the biggest single child too. The whole directory is rarely the right
+  // exclusion; one subtree inside it usually is, and the user can only pick the
+  // narrower path if the measurement hands it to them.
+  const sub=new Map();
+  for(const f of files){ if(!under(f.rel,d))continue;
+    const rest=f.rel.slice(d.length+1).split(path.sep);
+    if(rest.length<2)continue;
+    sub.set(d+path.sep+rest[0],(sub.get(d+path.sep+rest[0])||0)+weightOf(f)); }
+  const big=[...sub.entries()].sort((a,b)=>b[1]-a[1])[0];
+  const unit=source==="index"?"chunks":"bytes";
+  out.push({path:"/"+d+"/",base:d,kind:"heavy-dir",files:files.filter(f=>under(f.rel,d)).length,
+    weight:w,share:+(w/total).toFixed(4),
+    reason:Math.round(w/total*100)+"% of the corpus "+unit+" sits under this one directory"
+      +(big&&big[1]/w>=0.33?"; most of it is /"+big[0]+"/ at "+Math.round(big[1]/total*100)+"%":"")});
+}
+for(const f of files){
+  const w=weightOf(f);
+  if(w/total<0.03||!f.docs||covered(f.rel))continue;
+  out.push({path:"/"+f.rel,base:f.rel,kind:"heavy-file",files:1,weight:w,share:+(w/total).toFixed(4),
+    reason:"one file is "+Math.round(w/total*100)+"% of the corpus "+(source==="index"?"chunks":"bytes")});
+}
+out.sort((a,b)=>b.weight-a.weight);
+process.stdout.write(JSON.stringify({schema:1,mode:"candidates",projectRoot:ROOT,
+  source,scanned:files.length,total,candidates:out,status:"ok"},null,2)+"\n");')" || {
+    sc_err "candidates: scan failed"; return 1
+  }
+  if [ "$json" = "1" ]; then printf '%s\n' "$out"; return 0; fi
+  SP_OUT="$out" node -e '
+const j=JSON.parse(process.env.SP_OUT);
+console.log("candidates: "+j.candidates.length+" from "+j.scanned+" indexable files ("
+  +(j.source==="index"?"exact chunk counts":"byte share - no index on disk yet")+")");
+for(const c of j.candidates) console.log("  "+c.path+"  "+c.kind+"  "+Math.round(c.share*1000)/10+"%  "+c.reason);
+if(!j.candidates.length) console.log("  none - nothing in this repo is a duplicate tree or a corpus hog");'
+  sc_ok "candidates complete"
+}
+
 # Record `completed` steps only for a project that already has a state file.
 sp_complete() {
   if sp_require_state; then sc_state_patch "$1" >/dev/null || true; fi
@@ -425,7 +599,7 @@ sp_mode_smoke() {
   res="$(sp_run_search "$query")"
   status="$(sp_search_field "$res" status)"
   if [ "$status" = "ok" ]; then
-    sp_complete "{\"completed\":[\"warm\",\"smoke\"],\"lastVerifiedAt\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}"
+    sp_complete "{\"completed\":[\"warm\",\"smoke\"],\"last_verified_at\":\"$(sc_today)\"}"
   fi
   if [ "$json" = "1" ]; then
     printf '%s\n' "$res"
@@ -597,7 +771,7 @@ main() {
   mode="$1"; shift
   case "$mode" in
     -h|--help) sp_usage; return 0 ;;
-    audit|warm|smoke|enable|disable|reindex) ;;
+    audit|candidates|warm|smoke|enable|disable|reindex) ;;
     *) sc_err "unknown subcommand: $mode"; sp_usage; return 2 ;;
   esac
   while [ $# -gt 0 ]; do
@@ -614,6 +788,7 @@ main() {
   SP_JSON="$json"
   case "$mode" in
     audit)   sp_mode_audit "$json" ;;
+    candidates) sp_mode_candidates "$json" ;;
     warm)    sp_mode_warm "$json" "$query" ;;
     smoke)   sp_mode_smoke "$json" "$query" ;;
     enable)  sp_mode_enable "$json" "$yes" ;;

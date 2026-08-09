@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// brewcode-meta: version=5.1.0 generated_by=brewtools:agent-router-setup
 /**
  * agent-router - PreToolUse hook for the `Agent` tool (Node built-ins only, ESM).
  *
@@ -425,7 +426,7 @@ function claimDeny(sessionId, root, text) {
   if (!ensureStateRoot()) return false;
   const session = safeSegment(sessionId) || 'nosession';
   const dir = path.join(STATE_ROOT, session);
-  const marker = path.join(dir, sha1(`${root} ${normalizeText(text)}`).slice(0, 32));
+  const marker = path.join(dir, sha1(`${root}\0${normalizeText(text)}`).slice(0, 32));
   try {
     lstatSync(marker);
     return false; // already denied once

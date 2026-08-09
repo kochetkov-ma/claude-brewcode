@@ -40,7 +40,7 @@
 
 ### Тип
 
-Embedding-based семантический поиск по коду. MCP-сервер `semble_code`. Ставится как `semble[mcp]`, мы пиним `0.5.2`.
+Embedding-based семантический поиск по коду. MCP-сервер `semble_code`. Ставится как `semble[mcp]`, мы пиним `0.5.4`.
 
 ### Что делает
 
@@ -98,7 +98,7 @@ Embedding-based семантический поиск по коду. MCP-сер�
 | Последний GitHub release | `v0.5.3`, 2026-08-03 |
 | Тег `v0.5.4` | существует в `git/refs/tags`, но GitHub Release для него НЕ опубликован |
 | PyPI latest | `0.5.4`, upload 2026-08-06T07:00:12Z |
-| Наш пин | `0.5.2` (PyPI upload 2026-07-21T08:43:38Z) — дрейф 2 минорных патча / 16 дней |
+| Наш пин | `0.5.4` — дрейфа нет (поднят с `0.5.2` 2026-08-08) |
 
 > Поправка к исходной фактуре: `0.5.4` вышел на PyPI 2026-08-06, но GitHub Release на него отсутствует — тег есть, релиза нет. Формулировка «released 2026-08-06» верна только для PyPI.
 
@@ -144,14 +144,15 @@ Recall при фиксированном token-бюджете:
 | Артефакт | Событие / matcher | Поведение |
 |----------|-------------------|-----------|
 | `assets/semble-session.mjs` | `SessionStart`, без matcher | читает `<cwd>/.claude/semble/state.json`; при `phase === 'ready'` шлёт `systemMessage` + `additionalContext`. Никогда не блокирует |
-| `assets/semble-reminder.mjs` | `PreToolUse`, зарегистрирован ДВАЖДЫ: matcher `Bash` и matcher `Grep` | advisory-only, throttle 600 s по mtime `<cwd>/.claude/semble/.reminder-ts`. Явно никогда не `permissionDecision` / `deny` / `updatedInput` |
-| `assets/semble-explore.mjs` | `SubagentStart`, matcher `Explore` | срабатывает при `input.agent_type === 'Explore'` |
+| `assets/semble-prefetch.mjs` | `UserPromptSubmit`, без matcher | gate v3 -> дистилляция промпта -> ОДИН `uvx … semble search` (жёсткий cap 3 s, SIGKILL) -> `additionalContext` с top-3 ПУТЯМИ без сниппетов. Троттл 30 s, cooldown 600 s по `<cwd>/.claude/semble/.prefetch-ts`. Fail-open: любая ошибка -> `{}` и exit 0 |
+| `assets/semble-stats.mjs` | `PostToolUse` + `PostToolUseFailure`, один pipe-matcher | чистый наблюдатель: JSONL в `<cwd>/.claude/semble/telemetry.jsonl`, всегда `{}` |
+| ~~`assets/semble-reminder.mjs`~~ / ~~`assets/semble-explore.mjs`~~ | ретайрены в 5.0.0 | обе эмитили только advisory `additionalContext`; конверсия 0/18 (main) и 0/11 (Explore) при доказанной доставке. `install`/`upgrade` удаляет файлы и снимает их строки |
 | `.claude/rules/semble-first.md` | - | правило «semantic-first» |
 | маркерный блок в `CLAUDE.md` | - | инструкция для сессии |
 | `semble-agents.sh` | - | патчит frontmatter агентов, добавляя 2 MCP-тула в `tools:` |
 | permissions | - | allow-only |
 
-Телеметрии использования у нас нет: в `state.json` нет ни одного счётчика вызовов. Ключи — `schema` (константа 1), `phase`, `enabled`, `scope`, `cacheRoot`, `repoHash`, `completed[]`, `notes[]`, `updatedAt` (ISO-время последней записи, `sc_state_patch` в `scripts/lib/semble-common.sh:341`).
+Телеметрии использования у нас нет: в `state.json` нет ни одного счётчика вызовов. Ключи — `schema` (константа 1), `phase`, `enabled`, `scope`, `cacheRoot`, `repoHash`, `completed[]`, `notes[]`, `version`, `generated_by`, `last_updated` (дата последней записи, `YYYY-MM-DD`, `sc_state_patch` в `scripts/lib/semble-common.sh`).
 
 ---
 
@@ -631,7 +632,7 @@ Git-хуки (отдельно от CC): `graphify hook install|uninstall|status
 
 | # | Дефект | Где | Что не так | Проверено |
 |---|--------|-----|-----------|-----------|
-| 1 | Устаревший пин semble | наш пин `0.5.2` | upstream PyPI `0.5.4` (upload 2026-08-06); мы отстаём на 2 патча и 16 дней. GitHub Release для `0.5.4` не опубликован — есть только тег и пакет на PyPI | PyPI JSON API, GitHub releases/tags API |
+| 1 | ~~Устаревший пин semble~~ ЗАКРЫТ 2026-08-08 | пин `0.5.4` | Пин поднят `0.5.2` -> `0.5.4`. `src/semble/index/` и `src/semble/mcp.py` побайтово идентичны между двумя sdist, `cache_version` остался `1`, совместимость кэша двусторонняя (замерено). GitHub Release для `0.5.4` по-прежнему не опубликован — есть только тег и пакет на PyPI | `diff -rq` по двум sdist; PyPI JSON API, GitHub releases/tags API |
 | 2 | Неточная ремарка про README | `brewcode/skills/semble-setup/SKILL.md:28` | SKILL.md правильно пишет «There is no watcher and no daemon», но добавляет «(Its own README claims otherwise; the code does not.)». Upstream README ничего подобного не заявляет — в нём нет ни одного вхождения `watch`/`daemon`/`background`. Скобку надо снять | grep по upstream README + `src/semble/mcp.py:29,212` |
 
 Дополнительно к учёту (не дефекты, но расхождения с ранее зафиксированной фактурой):

@@ -3,7 +3,7 @@ name: brewdoc:memory-sync-setup
 description: "Generates a project-tailored memory-sync skill: memory surface batches, checkable-fact catalogue, non-growth sync, independent verify, self-sync, agent re-audit. Triggers: memory sync init, generate memory sync, sync memory skill, установи memory-sync, синхронизируй память"
 user-invocable: true
 disable-model-invocation: true
-argument-hint: "[status|install|upgrade|uninstall] [fine-tune-prompt]"
+argument-hint: "[status|install|upgrade|enable|disable|uninstall|purge] [fine-tune-prompt]"
 allowed-tools: [Read, Edit, Glob, Grep, Bash, Agent, AskUserQuestion]
 model: opus
 ---
@@ -47,7 +47,8 @@ facts drive the sweep, `{DEPTH}` selects HOW HARD the surface itself is cut.
 | Agents | ALWAYS re-audited against current best practice (`references/agent-audit.md`), not merely fact-checked |
 | Report | chat only, no report file; a run that touched only the root CLAUDE.md is an INCOMPLETE run |
 
-**Arguments:** `$ARGUMENTS` -- an optional MODE token (`status` | `install` | `upgrade` | `uninstall`) followed by an optional
+**Arguments:** `$ARGUMENTS` -- an optional MODE token (`status` | `install` | `upgrade` | `enable` | `disable` |
+`uninstall` | `purge`) followed by an optional
 free-form fine-tune prompt. The prompt is woven into the emitted skill's focus ordering and recorded in
 `{FOCUS_EMPHASIS}`.
 
@@ -55,64 +56,138 @@ free-form fine-tune prompt. The prompt is woven into the emitted skill's focus o
 
 ## Modes (deterministic -- resolve BEFORE any work)
 
-Canonical verbs, in order: `status | install | upgrade | uninstall`.
+Canonical verbs, in order: `status | install | upgrade | enable | disable | uninstall | purge`.
 
 The FIRST token of `$ARGUMENTS`, lowercased, is the mode when it matches exactly. Anything else is fine-tune text,
 and with no mode token the default is `status` when `<target>/.claude/skills/memory-sync/` exists and `install`
 when it does not.
 
-Removed aliases -- `init`, `setup`, `remove`, `reset` are no longer accepted. Map them onto the canonical set
-(`init`/`setup` -> `install`, `remove` -> `uninstall`) and say so in the ANNOUNCE line.
+Removed aliases -- `init`, `on`, `off`, `setup`, `remove`, `reset`, `create`, `update`, `cleanup` are no longer
+accepted. Map them onto the canonical set (`init`/`setup`/`create` -> `install`, `on` -> `enable`, `off` ->
+`disable`, `remove`/`reset`/`cleanup` -> `uninstall` or `purge` -- ASK which) and say so in the ANNOUNCE line.
+Never print a removed alias as a command.
 
 | Mode | Reads | Writes | Does |
 |------|-------|--------|------|
-| `status` (**DEFAULT when installed**) | target + emitted skill | NOTHING | Report whether `<target>/.claude/skills/memory-sync/` exists, its provenance stamp (generator + date + surface counts), and how STALE its surface tables are vs the live repo: per-batch file count baked in vs enumerated now, batches whose paths no longer exist, memory layers the project gained since. Ends with a verdict `IN SYNC` / `STALE (n drifts)` / `NOT INSTALLED` |
+| `status` (**DEFAULT when installed**) | target + emitted skill | NOTHING | Report whether `<target>/.claude/skills/memory-sync/` exists, its provenance frontmatter (`doc_type` / `version` / `generated_by` / `last_updated` / `surface_files`), and how STALE its surface tables are vs the live repo: `surface_files` count baked in vs enumerated now, batches whose paths no longer exist, memory layers the project gained since. Ends with a verdict `IN SYNC` / `STALE (n drifts)` / `STALE-LEGACY (n drifts)` (pre-5.0 tail stamp) / `NOT INSTALLED`, each prefixed `PARKED - ` when the install is disabled (`INSTALLED=parked`) -- parked and absent are never collapsed |
 | `install` (**DEFAULT when not installed**) | target | emits the 4 files | Full Phase 0-5 analysis + emit. Refuses an existing installation (see Error Handling) |
-| `upgrade` | target + emitted skill | Edits the emitted skill | Re-scan, then REFRESH an existing installation: re-enumerate the surface, refresh the batch / fact / invariant tables, ADD sections for memory layers the project gained. PRESERVE hand-edits -- the emitted skill is EXPECTED to have self-modified (SELF-SYNC phase). Never blind-overwrite |
-| `uninstall` | target | deletes the emitted skill dir | Removes `<target>/.claude/skills/memory-sync/` after confirmation. Nothing else the generator ever wrote exists outside that dir |
+| `upgrade` | target + emitted skill | Edits the emitted skill | Re-scan, then REFRESH an existing installation: re-enumerate the surface, refresh the batch / fact / invariant tables, ADD sections for memory layers the project gained, and ALWAYS finish with `generate.sh restamp` (see Mode: upgrade). PRESERVE hand-edits -- the emitted skill is EXPECTED to have self-modified (SELF-SYNC phase). Never blind-overwrite |
+| `enable` | target | one rename | `generate.sh enable`: `SKILL.md.disabled` -> `SKILL.md`, so `/memory-sync` is offered again. Regenerates nothing, so no provenance stamp and no hand-edit changes |
+| `disable` | target | one rename | `generate.sh disable`: `SKILL.md` -> `SKILL.md.disabled`. Claude Code discovers a project skill ONLY through `SKILL.md`, so this withdraws `/memory-sync` from the roster while the 3 references and every SELF-SYNC hand-edit stay byte-identical on disk. Reversible by `enable`; deletes nothing |
+| `uninstall` | target | deletes the emit manifest | `generate.sh uninstall`: removes exactly what `emit` wrote -- `SKILL.md` (or its parked form) plus the 3 references -- and nothing it did not. Files a user added to that dir are KEPT and listed. Confirmation first |
+| `purge` | target | deletes the whole dir | `generate.sh purge`: removes `<target>/.claude/skills/memory-sync/` outright, user-added files included, plus any `.memory-sync-emit.*` staging a crashed emit left under `.claude/skills/`. Confirmation first |
+
+> **Why `uninstall` and `purge` differ here.** `emit` writes a fixed manifest (`SKILL.md` + the 3 references), and
+> that manifest is also the removal manifest: `uninstall` is scoped to it, so a note or an extra reference the user
+> dropped into the skill dir is never destroyed by a removal they asked for. `purge` is the "I am done with this
+> entirely" verb and takes the directory. The generator registers no hooks, writes no settings and no config, so
+> these two paths ARE its whole footprint -- there is nothing else for `purge` to sweep.
 
 ANNOUNCE before any work:
 
 ```
-[memory-sync-setup] MODE: {status|install|upgrade|uninstall} - {matched token | "no mode token -> installed? status : install"}
+[memory-sync-setup] MODE: {status|install|upgrade|enable|disable|uninstall|purge} - {matched token | "no mode token -> installed? status : install"}
 Target:   {absolute repo root}
 Emphasis: {fine-tune prompt interpretation | "none"}
 ```
 
 > `upgrade` NEVER runs `emit` over a live installation. `emit` refuses to overwrite (`MEMORY_SYNC_FORCE=1` is the
-> conscious override, and it DESTROYS hand-edits). Upgrade works through targeted `Edit` calls, section by section.
+> conscious override, and it DESTROYS hand-edits). Upgrade works through targeted `Edit` calls, section by section,
+> plus the metadata-only `generate.sh restamp`. `MEMORY_SYNC_FORCE=1` is never the answer to a stale stamp.
 
 FIRST step of `status`, and of `upgrade` before it decides what to refresh -- **EXECUTE** using Bash tool:
 ```bash
 bash "${CLAUDE_SKILL_DIR}/scripts/generate.sh" status
 ```
 
-Its machine-greppable KEY=value block and closing verdict (`NOT INSTALLED` / `IN SYNC` / `STALE (<n> drifts)`) ARE
-the staleness answer: never re-derive them by hand. `status` reports that output enriched with your own reads and
-STOPS -- it writes nothing. `upgrade` takes the same drift list as its refresh worklist and continues to Phase 1;
-`NOT INSTALLED` there means STOP (see Error Handling).
+Its machine-greppable KEY=value block and closing verdict (`NOT INSTALLED` / `IN SYNC` / `STALE (<n> drifts)` /
+`STALE-LEGACY (<n> drifts)`) ARE the staleness answer: never re-derive them by hand. `status` reports that output
+enriched with your own reads and STOPS -- it writes nothing. `upgrade` takes the same drift list as its refresh
+worklist and continues to Phase 1; `NOT INSTALLED` there means STOP (see Error Handling).
 
-### Mode: uninstall
+> **`STAMP_FORMAT=legacy` is NOT a special path.** A pre-5.0 install stamps its provenance as a tail comment
+> (`<!-- memory-sync template vX.Y.Z emitted <date> by brewdoc:memory-sync-setup | surface: … -->`) instead of
+> frontmatter. `generate.sh restamp` -- the mandatory last step of EVERY `upgrade`, below -- migrates it in one
+> call: it writes the five frontmatter keys and DELETES the tail line. Report the migration explicitly when
+> `STAMP_FORMAT` came back `legacy`; after `restamp` it must read `frontmatter`. Never hand-`Edit` the stamp.
 
-The generator's ONLY footprint in the target is `<target>/.claude/skills/memory-sync/` -- it registers no hooks,
-writes no settings and touches no config. Uninstall therefore is exactly that one directory.
+### Mode: upgrade
 
-1. Run the `status` bash block above. `NOT INSTALLED` -> report "nothing to uninstall" and STOP.
-2. List what will be deleted -- **EXECUTE** using Bash tool:
+Refresh an existing installation against the current repo AND the current plugin version. Every hand-edit
+survives: `upgrade` never runs `emit`, never re-copies a file that carries content, and touches the stamp
+only through `restamp`, which is proven metadata-only.
+
+1. Run the `status` bash block above. `NOT INSTALLED` -> STOP (see Error Handling). `INSTALLED=parked` ->
+   the install is DISABLED, not broken: say so and offer `enable`; upgrading a parked install is a no-op the
+   user did not ask for.
+2. Take the `status` drift list as the refresh worklist and run Phase 1 (re-scan) -> Phase 3 (targeted
+   `Edit`s): re-enumerate the surface, refresh the batch / fact / invariant tables, ADD sections for memory
+   layers the project gained. PRESERVE every hand-edited section; `AskUserQuestion` before REPLACING one.
+3. **Restamp -- ALWAYS, whatever `STAMP_FORMAT` said, and never skipped because "the format is already
+   current".** An install in the current format that is merely a version behind has no other route to a
+   fresh stamp, and Phase 4 `validate` hard-fails on a stale one.
+
+   **EXECUTE** using Bash tool:
+   ```bash
+   bash "${CLAUDE_SKILL_DIR}/scripts/generate.sh" restamp && echo "✅ restamp" || echo "❌ restamp FAILED"
+   ```
+
+   > **STOP if ❌** -- it never half-writes: the body is compared before and after and the file is left
+   > untouched unless the ONLY change is the metadata block.
+
+   It rewrites `version` / `last_updated` / `surface_files` (and adds `doc_type` / `generated_by` when they
+   are missing), drops a surviving pre-5.0 tail stamp, and re-copies a `references/*.md` ONLY when that file's
+   sole difference from the plugin source is the release stamp line. Report its `RESTAMPED:` / `REF …` lines
+   verbatim. A `REF DIFFERS:` line is a decision for you, not a failure -- `hard-sync.md` always differs
+   because Phase 3 filled its two BLOCKs; diff it against the plugin source and port real prose changes by
+   hand, never by re-copying over the filled tables.
+4. Phase 4 `validate`, then the Phase 5 report.
+
+### Mode: enable / disable
+
+A rename, nothing more. Use `disable` to park a `/memory-sync` that should stop being offered for a while without
+losing a single hand-edit; use `uninstall` when it should really go.
+
+1. Run the `status` bash block above. `NOT INSTALLED` -> report "nothing to {enable|disable}" and STOP. Never emit
+   a fresh install as a "fix" for a toggle verb.
+2. **EXECUTE** using Bash tool (substitute the resolved verb):
+   ```bash
+   bash "${CLAUDE_SKILL_DIR}/scripts/generate.sh" MODE_HERE && echo "✅ MODE_HERE" || echo "❌ MODE_HERE FAILED"
+   ```
+3. Report the script's `MOVED:` / `KEPT:` lines verbatim. `✅ already {enabled|disabled}` is a clean no-op, not a
+   failure -- report it and STOP.
+4. Say that the change lands in the NEXT session: skills are discovered at session start.
+
+> `validate` FAILS on a disabled installation, because it looks for `SKILL.md` and finds `SKILL.md.disabled`.
+> That is the toggle working, not a broken install. Never re-`emit` to "repair" it -- `emit` would destroy the
+> SELF-SYNC hand-edits the parked file still carries. `enable` is the fix.
+
+### Mode: uninstall / purge
+
+The generator's ONLY footprint in the target is `<target>/.claude/skills/memory-sync/` (plus, after a crashed emit,
+a `.memory-sync-emit.*` staging dir beside it) -- it registers no hooks, writes no settings and touches no config.
+`uninstall` removes exactly the emit manifest; `purge` removes the directory outright.
+
+1. Run the `status` bash block above. `NOT INSTALLED` -> report "nothing to {uninstall|purge}" and STOP.
+2. List what is there -- **EXECUTE** using Bash tool:
    ```bash
    ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")}"
    find "$ROOT/.claude/skills/memory-sync" -type f | sort
    ```
-3. **ASK** via `AskUserQuestion`: "Delete `<target>/.claude/skills/memory-sync/` (N files)? Hand-edits are lost."
-   Options: **Yes, delete** / **Cancel**.
-4. On confirmation -- **EXECUTE** using Bash tool:
+3. **ASK** via `AskUserQuestion`, ONCE, naming the real count:
+   - `uninstall`: "Delete the 4 emitted files under `<target>/.claude/skills/memory-sync/` (N files present)?
+     Hand-edits to them are lost; anything you added yourself is kept."
+     Options: **Yes, uninstall** / **Purge instead (deletes the whole dir)** / **Cancel**.
+   - `purge`: "Delete `<target>/.claude/skills/memory-sync/` entirely (N files)? Nothing is recoverable."
+     Options: **Yes, purge** / **Uninstall instead (keeps files I added)** / **Cancel**.
+
+   Anything but the affirmative -> switch to the other verb or **STOP**. A declined confirmation deletes nothing.
+4. On confirmation -- **EXECUTE** using Bash tool (substitute the confirmed verb):
    ```bash
-   ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")}"
-   rm -rf "$ROOT/.claude/skills/memory-sync" \
-     && test ! -d "$ROOT/.claude/skills/memory-sync" \
-     && echo "✅ memory-sync removed" || { echo "❌ removal FAILED"; exit 1; }
+   bash "${CLAUDE_SKILL_DIR}/scripts/generate.sh" MODE_HERE && echo "✅ MODE_HERE" || echo "❌ MODE_HERE FAILED"
    ```
-5. Report the exact file list removed. `/memory-sync` disappears on the next session reload.
+5. Report the script's `REMOVED:` / `KEPT:` lines verbatim. After `uninstall`, any `KEPT:` list is the exact reason
+   to offer `purge`. `/memory-sync` disappears on the next session reload.
 
 ---
 
@@ -231,8 +306,22 @@ bash "${CLAUDE_SKILL_DIR}/scripts/generate.sh" emit && echo "✅ emit" || echo "
 
 This writes the FOUR-file tree: `<target>/.claude/skills/memory-sync/SKILL.md` with scalars substituted, plus
 `references/memory-guide.md`, `references/agent-audit.md` and `references/hard-sync.md` copied into the emitted
-`references/`. It stamps provenance on the LAST line of the emitted SKILL.md (template version + date +
-`{SURFACE_COUNTS}`) -- that stamp is what `status` and `upgrade` read.
+`references/`. It stamps provenance into the emitted SKILL.md's YAML FRONTMATTER, appended after the
+skill's own keys:
+
+```yaml
+doc_type: llm                                     # bare enum, never quoted
+version: "X.Y.Z"                                  # the brewdoc PLUGIN version, read from
+generated_by: "brewdoc:memory-sync-setup"         # brewdoc/.claude-plugin/plugin.json by
+last_updated: "YYYY-MM-DD"                        # script self-location -- never hardcoded
+surface_files: "38 files: 3 root, 5 nested CLAUDE.md, ..."   # skill-specific, AFTER the four
+```
+
+That frontmatter is what `status`, `validate` and `upgrade` read. `surface_files` is the drift input:
+`status` compares its leading integer against a live re-count. There is no private template version any
+more, and no tail-line stamp -- a pre-5.0 install still carrying
+`<!-- memory-sync template vX.Y.Z ... -->` on its last line is detected and reported as
+`VERDICT=STALE-LEGACY`, which means "run `upgrade` to migrate it".
 
 ### Phase 3 -- Fill the BLOCK placeholders (AI Edit)
 
@@ -274,7 +363,9 @@ bash "${CLAUDE_SKILL_DIR}/scripts/generate.sh" validate && echo "✅ validate" |
 ```
 
 > **STOP if ❌** -- `validate` fails on: any surviving `{PLACEHOLDER}` in an emitted file, a missing emitted asset,
-> or a cited `references/*.md` that does not exist. Fix via Edit and re-run.
+> a cited `references/*.md` that does not exist, or provenance frontmatter that is missing or a version behind.
+> Placeholder / reference failures are fixed via `Edit`; a stamp failure is fixed by `generate.sh restamp`, which
+> the failure message names -- never by `emit`, never by `MEMORY_SYNC_FORCE=1`. Re-run after the fix.
 
 Then assert by hand (validate cannot resolve agent names): **every agent name the emitted skill spawns resolves**
 to a real `<target>/.claude/agents/*.md` or a built-in (`Explore` / `Plan` / `general-purpose`). An invented
@@ -358,8 +449,10 @@ the single list -- do not restate it here.
 | Emit target | `<cwd>/.claude/skills/memory-sync/` | Where the generated skill is written |
 | Emit material | `${CLAUDE_SKILL_DIR}/references/` | `SKILL.md.template`, `memory-guide.md`, `agent-audit.md`, `hard-sync.md` -- four files emitted |
 | Emitted default depth | `NORMAL` | `HARD` is per-run, from the emitted skill's own arguments; nothing is regenerated to switch |
-| Generation script | `${CLAUDE_SKILL_DIR}/scripts/generate.sh` | `scan` \| `emit` \| `validate` \| `status` |
-| Mode | `status` when installed, else `install` | `status` (read-only) \| `install` \| `upgrade` \| `uninstall` |
+| Generation script | `${CLAUDE_SKILL_DIR}/scripts/generate.sh` | `scan` \| `emit` \| `validate` \| `restamp` \| `status` \| `enable` \| `disable` \| `uninstall` \| `purge` |
+| Provenance refresh | `generate.sh restamp` | Metadata-only, idempotent, mandatory tail of `upgrade`. Rewrites `version` / `last_updated` / `surface_files`, adds `doc_type` / `generated_by` when absent, deletes a pre-5.0 tail stamp, re-copies a reference ONLY when its sole difference from the plugin source is the release stamp. Aborts rather than write if anything outside the metadata block would move |
+| Mode | `status` when installed, else `install` | `status` (read-only) \| `install` \| `upgrade` \| `enable` \| `disable` \| `uninstall` \| `purge` |
+| Disabled marker | `<target>/.claude/skills/memory-sync/SKILL.md.disabled` | What `disable` renames `SKILL.md` to. Its presence IS the disabled state -- there is no config file to keep in sync |
 | Overwrite | refused | `emit` never overwrites a live installation; `MEMORY_SYNC_FORCE=1` overrides and DESTROYS hand-edits |
 | Emitted default scope | `session` | The emitted skill's own default; every scope sweeps the whole surface |
 | Non-growth | prime directive | Every emitted-skill run ends each file `<=` its original line count, total delta `<= 0` |
@@ -376,9 +469,18 @@ the single list -- do not restate it here.
 | Emit material missing under `${CLAUDE_SKILL_DIR}/references/` | ERROR "missing emit material: `<path>` -- reinstall brewdoc". STOP. Never improvise a template |
 | `install` but `<target>/.claude/skills/memory-sync/` already exists | STOP. "memory-sync already installed. Use `upgrade` to refresh it, or `status` to see its drift." Never overwrite |
 | `upgrade` but nothing installed | STOP. "Nothing to upgrade -- run `/brewdoc:memory-sync-setup install` to generate it first" |
-| `uninstall` but nothing installed | Report "nothing to uninstall". Never `rm -rf` a path that does not exist as if it did |
+| `uninstall`/`purge` but nothing installed | The script prints `⚠️ nothing to {uninstall\|purge}` and exits 0. Report it. Never `rm -rf` a path that does not exist as if it did |
+| `enable`/`disable` but nothing installed | The script exits 1 with `❌ FAILED: not installed`. Report it and STOP -- never emit a fresh install as a "fix" for a toggle verb |
+| `enable` on a live install, `disable` on a parked one | The script prints `✅ already {enabled\|disabled}` and exits 0. Report it and STOP; do not rename |
+| `validate` or `status` run against a DISABLED install | `status` reports `INSTALLED=parked` / `PARKED=yes` / `NOTE_PARKED=…` and prefixes its verdict `PARKED - ` (the staleness answer is still computed, read out of the parked file). `validate` FAILS -- it looks for `SKILL.md` and by design finds only `SKILL.md.disabled`. Say "disabled, not missing" and offer `enable`. Never re-`emit` -- it would destroy the SELF-SYNC hand-edits the parked file still holds |
+| `restamp` on a parked install | Refuses with `❌ FAILED: memory-sync is PARKED at …` and exits 1, writing nothing. `enable` first, then restamp. Never stamp a file the toggle owns |
+| `uninstall` leaves files behind (`KEPT:` list non-empty) | Correct, not a failure: those files were never written by `emit`. Show the list and offer `purge` if the user wants the directory gone |
 | `upgrade` finds hand-edited sections | PRESERVE them. Refresh enumerated tables and ADD new sections; show the diff and AskUserQuestion before REPLACING any section whose content diverges from the template baseline. Declined = no edit, continue cleanly |
-| No provenance stamp in the installed skill | Treat as hand-written: `status` reports `UNSTAMPED`, `upgrade` is additive-only and asks before every replacement |
+| No provenance frontmatter in the installed skill | Treat as hand-written: `status` reports `STAMP_FORMAT=none` + `META_*=UNSTAMPED`, `upgrade` is additive-only and asks before every replacement |
+| Installed skill carries the pre-5.0 TAIL stamp (`<!-- memory-sync template v… -->`) | `status` reports `STAMP_FORMAT=legacy`, `NOTE_LEGACY=…` and `VERDICT=STALE-LEGACY`; `validate` FAILS. `generate.sh restamp` migrates it in one call -- five frontmatter keys written, tail line deleted -- and it runs at the end of every `upgrade` anyway. Never crash on the old format, never treat it as in sync |
+| `validate` fails with `stamped version A != plugin version B` | The install is a plugin version behind. Run `generate.sh restamp` (metadata only, hand-edits untouched), then re-run `validate`. This is the failure the message names; `emit` / `MEMORY_SYNC_FORCE=1` are NOT the remedy and would destroy the SELF-SYNC edits |
+| `validate` reports a missing `references/*.md` while `SKILL.md` is present | `emit` cannot be the fix -- it refuses over a live install. Run `generate.sh restamp`: it re-copies a MISSING reference from the plugin (nothing local to lose) and reports `REF RESTORED:` |
+| `restamp` prints `REF DIFFERS:` for a reference | Not a failure. That file's content differs from the plugin source -- `hard-sync.md` ALWAYS does (Phase 3 filled its two BLOCKs), the other two only after a hand-edit or a plugin prose change. Nothing is overwritten: diff against `${CLAUDE_SKILL_DIR}/references/<name>` and port real changes by hand |
 | Target has no `.claude/agents/` | Emit anyway; `{EXPERT_ROSTER_TABLE}` says `none -- batches owned by general-purpose`, the agent batch is dropped from `{BATCH_TABLE}`, and the re-audit reduces to the skill roster |
 | Target has no `.claude/rules/` or conventions | Emit with the batches that DO exist; never emit a batch pointing at a nonexistent dir |
 | Only a root CLAUDE.md exists | Emit a single-batch skill and say so -- a one-file surface is a legitimate result, an invented batch is not |
@@ -401,7 +503,8 @@ the single list -- do not restate it here.
 - `references/hard-sync.md` -- the `HARD`-depth passes: `paths:` precision audit + obvious-knowledge purge, with
   their verdict vocabulary and reporting contract (emitted; holds `{PATHS_PRECISION_TABLE}` +
   `{OBVIOUS_VS_DOMAIN_TABLE}`).
-- `scripts/generate.sh` -- `scan` / `emit` / `validate` / `status`.
+- `scripts/generate.sh` -- `scan` / `emit` / `validate` / `restamp` / `status` / `enable` / `disable` /
+  `uninstall` / `purge`.
 
 <!--
 SKILL METADATA -- brewdoc:memory-sync-setup (GENERATOR)

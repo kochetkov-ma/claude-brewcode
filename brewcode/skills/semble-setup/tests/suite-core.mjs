@@ -28,7 +28,7 @@ const MCP_SH = join(SCRIPTS, 'semble-mcp.sh');
 const CACHE_SH = join(SCRIPTS, 'semble-cache.sh');
 const STATE_SH = join(SCRIPTS, 'semble-state.sh');
 
-const PIN = 'semble[mcp]==0.5.2';
+const PIN = 'semble[mcp]==0.5.4';
 
 // ── isolated base ───────────────────────────────────────────────────────────
 const BASE = realpathSync(mkdtempSync(join(tmpdir(), 'semble-b-')));
@@ -398,7 +398,7 @@ check('state.unknownkey.exit', okPatch.status, 0, 'patch succeeds');
 check('state.unknownkey.preserved', afterPatch.customKey, { a: 1 }, 'unknown top-level keys survive verbatim');
 check('state.unknownkey.phase', afterPatch.phase, 'prereq_ready', 'the patched key is applied');
 check('state.unknownkey.projectRoot', afterPatch.projectRoot, PROJ, 'projectRoot is rewritten from sc_project_root');
-check('state.unknownkey.version', afterPatch.approvedVersion, '0.5.2', 'approvedVersion is the pin');
+check('state.unknownkey.version', afterPatch.approvedVersion, '0.5.4', 'approvedVersion is the pin');
 
 // `disabled` is not healable from absent: nothing was ever set up to disable.
 resetProject();
@@ -556,8 +556,17 @@ const SCRIPT_TARGETS = [
 ];
 const CALLSITE_TARGETS = [...new Set([...SKILL_HOPS, ...SCRIPT_TARGETS])].sort();
 
+// Two hops in document order: the resume walk, and only that. The install-path
+// checkpoint on the `correct` branch used to be an EXECUTE block here, which
+// meant a project whose MCP an earlier project already registered kept no
+// state.json at all whenever the model skipped the block; semble-mcp.sh writes
+// it itself now (mcp_checkpoint / mcp_checkpoint_present), so the guarantee is
+// asserted against the SCRIPT below rather than against prose.
+const RESUME_HOPS = SKILL_HOPS;
 check('phase.callsites.skill', SKILL_HOPS, ['verifying', 'ready'],
-  'SKILL.md drives resume through the verifying hop and only then to ready');
+  'SKILL.md drives resume through verifying and only then to ready; the checkpoint is the script job');
+check('phase.callsites.checkpoint', MCP_SRC.includes('"$STATE_SH" phase awaiting_reload'), true,
+  'the awaiting_reload checkpoint is guaranteed by semble-mcp.sh, not by a SKILL.md block a model can skip');
 check('phase.callsites.union', CALLSITE_TARGETS,
   ['awaiting_reload', 'disabled', 'error', 'prereq_ready', 'ready', 'verifying'],
   'the call sites between them name all six settable phases');
@@ -573,7 +582,7 @@ function seedPhase(phase, extra = {}) {
     enabled: true,
     scope: 'user',
     projectRoot: PROJ,
-    approvedVersion: '0.5.2',
+    approvedVersion: '0.5.4',
     cacheRoot: CODE_ROOT,
     repoHash: '',
     completed: [],
@@ -657,7 +666,7 @@ check('phase.callsites.matrix', callsiteMatrix, {
 // The resume walk, end to end, over a state file shaped like the two real
 // installs that were stuck: awaiting_reload with mcp/warm/smoke already done.
 seedPhase('awaiting_reload', { completed: ['mcp', 'warm', 'smoke'] });
-const resumeExits = SKILL_HOPS.map((h) => run(STATE_SH, ['phase', h]).status);
+const resumeExits = RESUME_HOPS.map((h) => run(STATE_SH, ['phase', h]).status);
 const resumed = JSON.parse(readFileSync(STATE_FILE, 'utf8'));
 check('resume.walk.exits', resumeExits, [0, 0], 'both hops SKILL.md performs exit 0 from awaiting_reload');
 check('resume.walk.phase', resumed.phase, 'ready', 'the walk lands on ready');
@@ -698,7 +707,7 @@ for (const [label, args] of [
   check(`refresh.${label}.prompt`, after.resumePrompt, LIVE_PROMPT, 'resumePrompt is rewritten from the constant');
   check(`refresh.${label}.cacheRoot`, after.cacheRoot, CODE_ROOT, 'cacheRoot is recomputed from the environment');
   check(`refresh.${label}.repoHash`, after.repoHash, PROJ_HASH, 'repoHash is recomputed from the project root');
-  check(`refresh.${label}.version`, after.approvedVersion, '0.5.2', 'approvedVersion stays the pin');
+  check(`refresh.${label}.version`, after.approvedVersion, '0.5.4', 'approvedVersion stays the pin');
   check(`refresh.${label}.enabled`, after.enabled, true, 'enabled is NOT reset as a side effect');
   check(`refresh.${label}.completed`, after.completed,
     label === 'complete' ? ['mcp', 'warm', 'smoke', 'guidance'] : ['mcp', 'warm', 'smoke'],
@@ -728,9 +737,22 @@ check('refresh.refused.bytes', sha(STATE_FILE), shaStale,
 // caches still carry the pre-rename `skills/semble` (brewcode/4.10.1 on this
 // machine), so an unset CLAUDE_PLUGIN_ROOT resolved to nothing - silently in
 // bash, and as a hard `no matches found` in zsh.
-const SD_LINES = [...SKILL_MD.matchAll(/^SD="\$\{CLAUDE_SKILL_DIR:-.*\}"$/gm)].map((m) => m[0]);
-check('sd.count', SD_LINES.length, 18, 'every EXECUTE block re-resolves the skill dir');
-check('sd.identical', new Set(SD_LINES).size, 1, 'all of them are the same line, character for character');
+// D7: `${CLAUDE_SKILL_DIR}` is a text substitution on the skill prompt, not an
+// env var - getPromptForCommand does replace(/\$\{CLAUDE_SKILL_DIR\}/g, dir),
+// and that regex matches the BARE literal only. The old spelling
+// `SD="${CLAUDE_SKILL_DIR:-$(find ...)}"` was therefore never substituted: the
+// shell saw an unset name and the cache fallback won on every single run.
+const SD_LINES = [...SKILL_MD.matchAll(
+  /^SD="\$\{CLAUDE_SKILL_DIR\}"\n\[ -n "\$SD" \] \|\| SD="\$\(find [^\n]*\)"$/gm)].map((m) => m[0]);
+// 20 since `upgrade` gained its second half (the Step 3.3b guidance+agents block): it is the only
+// writer of the rule file whose frontmatter carries this install's version stamp, so without it
+// `upgrade` could never clear a `stale` verdict.
+check('sd.count', SD_LINES.length, 19, 'every EXECUTE block re-resolves the skill dir');
+check('sd.identical', new Set(SD_LINES).size, 1, 'all of them are the same block, character for character');
+// Prose may NAME the broken spelling (Step 0 explains why it is broken); no
+// assignment may USE it.
+check('sd.noBraceModifier', SKILL_MD.includes('="${CLAUDE_SKILL_DIR:-'), false,
+  'no assignment uses the brace-modifier spelling - the substitution regex would not match it and the fallback would always win');
 check('sd.noglob', SD_LINES[0].includes('ls -d'), false,
   'the fallback uses find, not a shell glob that zsh turns into a hard error');
 
@@ -763,6 +785,18 @@ check('sd.layout.version-order', sdResolve([`${CACHE}/4.9.0/skills/semble-setup`
 check('sd.layout.none', sdResolve([]), '', 'no cache at all yields an empty SD, which the Step 0 guard turns into ❌');
 check('sd.layout.decoy', sdResolve([`${CACHE}/4.11.0/skills/superreview`, `${CACHE}/4.11.0/agents/semble`]),
   '', 'neither a same-named agents dir nor a sibling skill is mistaken for the skill dir');
+// And the case the old spelling could never reach: the substitution DID happen,
+// so line 1 already holds a literal path and the cache must not be consulted.
+{
+  const h = mkdtempSync(join(BASE, 'sdsubst-'));
+  mkdirSync(join(h, `${CACHE}/9.9.9/skills/semble-setup`), { recursive: true });
+  const substituted = SD_LINES[0].replace('${CLAUDE_SKILL_DIR}', '/checkout/brewcode/skills/semble-setup');
+  const r = spawnSync('bash', ['-c', `${substituted}\nprintf '%s' "$SD"`], {
+    encoding: 'utf8', env: { ...process.env, HOME: h, CLAUDE_SKILL_DIR: '' }, timeout: 20000,
+  });
+  check('sd.substituted', r.stdout, '/checkout/brewcode/skills/semble-setup',
+    'once the literal is substituted the fallback is skipped, even with a newer version in the cache');
+}
 
 resetProject();
 
@@ -1040,22 +1074,69 @@ check('timeout.path.stub', sh('sc_timeout_path', { SEMBLE_TIMEOUT_BIN: TIMEOUT_S
   'the backing binary is reported by absolute path');
 
 // Delegation to a real binary keeps every argument its own argv element.
-const delegated = sh(`sc_timeout 42 printf '%s|%s\\n' 'semble[mcp]==0.5.2' two`,
+const delegated = sh(`sc_timeout 42 printf '%s|%s\\n' 'semble[mcp]==0.5.4' two`,
   { SEMBLE_TIMEOUT_BIN: TIMEOUT_STUB });
-check('timeout.delegate.stdout', delegated.out, 'semble[mcp]==0.5.2|two',
+check('timeout.delegate.stdout', delegated.out, 'semble[mcp]==0.5.4|two',
   'the wrapped command runs with its argv intact');
 check('timeout.delegate.log', readFileSync(TIMEOUT_LOG, 'utf8'),
-  "42 printf %s|%s\\n semble[mcp]==0.5.2 two\n",
+  "42 printf %s|%s\\n semble[mcp]==0.5.4 two\n",
   'the binary was invoked with the seconds first and the pin as one word');
 
+// Elapsed IS the property under test here — "the watchdog waited out its bound"
+// has no deterministic proxy — so the bound is asserted as a tolerance window,
+// `Math.abs(elapsed - centre) <= tol`, never as a bare inequality.
+//
+// How the window is chosen, because a hand-picked one has been wrong here before
+// (an earlier ceiling sat ~50 ms over the observed value and flaked):
+//   floor — pinned to the CONTRACTED bound (1000 ms for `sc_timeout 1`), i.e.
+//           tol is always centre minus the bound. A tol >= centre would admit
+//           elapsed = 0 and turn the assertion into a wildcard, which is worse
+//           than the inequality it replaced.
+//   centre — the value the algorithm predicts, not a measurement. sc_timeout_watch
+//           breaks on `SECONDS - t0 -gt secs`, and SECONDS counts WHOLE seconds
+//           since shell start, so the kill lands one whole second past the bound,
+//           plus the 0.1 s TERM->KILL grace: centre = (secs + 1) * 1000.
+//   ceiling — centre + tol, ~1 s of headroom over the measured spread (12 runs:
+//           `sc_timeout 1` 1963-2038 ms, `sc_timeout 2` 2790-3178 ms). Only a
+//           load stall of nearly a second can trip it.
+// The upper side is also pinned deterministically and independently of the clock:
+// the watched command needs 600 s and drops a marker only if it runs to
+// completion, so the marker's ABSENCE proves the watchdog cut it off at any
+// machine speed, with no tolerance to tune.
 {
+  const marker = join(BASE, 'watch-ran-to-completion');
   const t0 = Date.now();
-  const r = sh('sc_timeout 1 sleep 5', { SEMBLE_TIMEOUT_BIN: 'none' });
+  const r = sh(`sc_timeout 1 sh -c 'sleep 600; : > ${marker}'`, { SEMBLE_TIMEOUT_BIN: 'none' });
   const elapsed = Date.now() - t0;
   check('timeout.watch.code', r.status, 124, 'the watchdog reports 124, the GNU timeout convention');
-  // Bash startup + a 100 ms TERM->KILL grace sit on top of the 1 s bound.
-  check('timeout.watch.elapsed', Math.abs(elapsed - 1350) <= 700, true,
-    'it returns at ~1.35 s (+/-0.7), not after the full 5 s sleep');
+  check('timeout.watch.early', existsSync(marker), false,
+    'the 600 s command never completed — the watchdog cut it off instead of waiting it out');
+  check('timeout.watch.floor', Math.abs(elapsed - 2000) <= 1000, true,
+    'it waited out its full 1 s bound before killing (1000-3000 ms): a watchdog that fires early is worse than none');
+}
+{
+  // The bound is a parameter, not a constant: doubling it doubles the floor.
+  const marker = join(BASE, 'watch-ran-to-completion-2');
+  const t0 = Date.now();
+  const r = sh(`sc_timeout 2 sh -c 'sleep 600; : > ${marker}'`, { SEMBLE_TIMEOUT_BIN: 'none' });
+  const elapsed = Date.now() - t0;
+  check('timeout.watch.scale.code', r.status, 124, 'a 2 s bound reports 124 the same way');
+  check('timeout.watch.scale.early', existsSync(marker), false, 'and still cuts the command off');
+  check('timeout.watch.scale.floor', Math.abs(elapsed - 3000) <= 1000, true,
+    'a 2 s bound lands in 2000-4000 ms — the deadline tracks SECONDS, not a hardcoded interval');
+}
+{
+  // Regression guard for the drift bug: the deadline is wall clock, not the sum
+  // of the requested sleeps. Each poll forks /bin/sleep, so a slow fork used to
+  // stretch a nominal bound without limit. A 1 s bound around a command that
+  // sleeps 3 s must return well inside 3 s even though the poll backoff would
+  // have accumulated only a fraction of that in "intended" sleep time.
+  const t0 = Date.now();
+  const r = sh("sc_timeout 1 sleep 3", { SEMBLE_TIMEOUT_BIN: 'none' });
+  const elapsed = Date.now() - t0;
+  check('timeout.watch.wallclock.code', r.status, 124, 'the 3 s sleep was cut short, not awaited');
+  check('timeout.watch.wallclock.floor', Math.abs(elapsed - 2000) <= 1000, true,
+    'and the full 1 s bound was honoured first, then cut short well inside the 3 s sleep (1000-3000 ms)');
 }
 {
   const t0 = Date.now();
@@ -1082,6 +1163,27 @@ check('timeout.watch.stderr',
   check('timeout.watch.group.marker', existsSync(MARK), false,
     'the grandchild died with the group instead of surviving the timeout');
 }
+
+// ── probe argv gate ────────────────────────────────────────────────────────
+// `--version` reached semble's _CLI_DISPATCH_ARGS in 0.5.4. On an older pin it
+// is unrecognised argv, which starts the blocking stdio server — so the argv is
+// picked from the pin up front. A hang cannot be undone by a fallback, only by
+// never issuing it. Exact strings on purpose: a wildcard here would accept the
+// hanging argv on an old pin, which is the whole failure this gate prevents.
+check('probearg.pin', sh('printf %s "$SEMBLE_PIN_VERSION"').out, '0.5.4',
+  'the shipped pin is 0.5.4');
+check('probearg.default', sh('sc_semble_probe_arg').out, '--version',
+  'the shipped pin dispatches --version');
+for (const [v, want] of [
+  ['0.5.4', '--version'], ['0.5.5', '--version'], ['0.6.0', '--version'], ['1.0.0', '--version'],
+  ['0.5.3', '--help'], ['0.5.2', '--help'], ['0.4.9', '--help'], ['0.5.10', '--version'],
+  ['', '--help'], ['0.5', '--help'], ['garbage', '--help'], ['0.5.x', '--help'],
+]) {
+  check(`probearg.${v || 'empty'}`, sh(`sc_semble_probe_arg '${v}'`).out, want,
+    `pin ${v || '(empty)'} probes with ${want}`);
+}
+check('probearg.override', sh('sc_semble_probe_arg', { SEMBLE_PIN_VERSION: '0.5.2' }).out, '--help',
+  'a SEMBLE_PIN_VERSION override back to 0.5.2 must NOT issue the hanging --version');
 
 // ── report ─────────────────────────────────────────────────────────────────
 console.log('suite-core.mjs (unit B: lib + mcp + cache + state)');

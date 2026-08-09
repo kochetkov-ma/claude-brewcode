@@ -83,16 +83,33 @@ Check for saved config in order:
 
 If `--engine` flag was provided -- use it (skip config lookup).
 
-If no saved preference and no `--engine` flag -- use `request_user_input` with the engine comparison table from Step 1. Save the choice:
+If no saved preference and no `--engine` flag -- use `request_user_input` with the engine comparison table from Step 1. Save the choice to project config `.codex/md-to-pdf.config.json`:
 
 ```json
 {
   "engine": "reportlab",
-  "pygments_theme": "github"
+  "pygments_theme": "github",
+  "version": "{PLUGIN_VERSION}",
+  "generated_by": "brewdoc:md-to-pdf",
+  "last_updated": "{LAST_UPDATED}"
 }
 ```
 
-Write to project config `.codex/md-to-pdf.config.json` (create `.codex/` dir if needed).
+The three provenance keys are mandatory on every write of this file and are RESOLVED, never hardcoded.
+
+**EXECUTE** using shell (replace `ENGINE_VALUE` and `THEME_VALUE` with the chosen values):
+```bash
+ROOT="${<project-root>:-$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")}"
+PJ="<skill-directory>/../../.codex-plugin/plugin.json"
+PV=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1])).get('version',''))" "$PJ" 2>/dev/null || true)
+[ -n "$PV" ] || { echo "❌ cannot read version from $PJ -- reinstall brewdoc"; exit 1; }
+mkdir -p "$ROOT/.claude"
+printf '{\n  "engine": "ENGINE_VALUE",\n  "pygments_theme": "THEME_VALUE",\n  "version": "%s",\n  "generated_by": "brewdoc:md-to-pdf",\n  "last_updated": "%s"\n}\n' "$PV" "$(date +%F)" > "$ROOT/.codex/md-to-pdf.config.json" \
+  && python3 -c "import json,sys;json.load(open(sys.argv[1]))" "$ROOT/.codex/md-to-pdf.config.json" \
+  && echo "✅ config written (version $PV)" || { echo "❌ config invalid JSON"; exit 1; }
+```
+
+> **STOP if ❌** -- fix before continuing.
 
 ## Step 3: Mode Execution
 
@@ -165,7 +182,41 @@ Options: `github` (default), `monokai`, `friendly`, `solarized-dark`, `solarized
 **Question 4 -- Footer format:**
 Options: `Page {page} of {total}` (default), `{page}/{total}`, `Disabled`
 
-Build JSON config matching `styles/default.json` structure, overriding changed values. Write to `.codex/md-to-pdf.config.json`.
+Build JSON config matching `styles/default.json` structure, overriding changed values, and Write it to a temp file (e.g. `/tmp/md-to-pdf-styles.json`). The merge below then lands it in `.codex/md-to-pdf.config.json` with the three mandatory provenance keys, carrying over any `engine` / `pygments_theme` the file already held -- this writer replaces the whole file, and dropping those would silently reset the saved engine choice.
+
+**EXECUTE** using shell (replace `STYLE_JSON_PATH` with the temp file you wrote):
+```bash
+ROOT="${<project-root>:-$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")}"
+CFG="$ROOT/.codex/md-to-pdf.config.json"
+NEW="STYLE_JSON_PATH"
+PJ="<skill-directory>/../../.codex-plugin/plugin.json"
+mkdir -p "$ROOT/.claude"
+CFG="$CFG" NEW="$NEW" PJ="$PJ" TODAY="$(date +%F)" python3 - <<'PY'
+import json, os
+cfg_p, new_p = os.environ["CFG"], os.environ["NEW"]
+pv = json.load(open(os.environ["PJ"])).get("version")
+if not pv:
+    raise SystemExit("no version in " + os.environ["PJ"])
+old = json.load(open(cfg_p)) if os.path.exists(cfg_p) else {}
+data = json.load(open(new_p))
+for k in ("engine", "pygments_theme"):
+    if k in old and k not in data:
+        data[k] = old[k]
+data["version"] = pv
+data["generated_by"] = "brewdoc:md-to-pdf"
+data["last_updated"] = os.environ["TODAY"]
+with open(cfg_p, "w") as fh:
+    json.dump(data, fh, indent=2)
+    fh.write("\n")
+print("OK version=%s engine=%s" % (pv, data.get("engine", "(unset)")))
+PY
+[ $? -eq 0 ] && echo "✅ styles saved" || { echo "❌ styles save FAILED"; exit 1; }
+rm -f "$NEW"
+```
+
+> **STOP if ❌** -- fix before continuing.
+
+The three keys sit at the top level beside the style sections; `md_to_pdf.py`'s `load_config` deep-merges the file over `styles/default.json` and then reads only the sections it owns (`page`, `colors`, `typography`, `code`, `footer`), so extra top-level keys are inert.
 
 Report saved settings table and EXIT.
 

@@ -1,7 +1,14 @@
+// brewcode-meta: version=5.1.0 generated_by=brewtools:manager-setup
 // brewtools:manager-setup — Manager mode state resolver/writer.
-// State shape: { hard:boolean, level:'strict'|'balanced', mode:'full' }.
+// State shape: { hard:boolean, level:'strict'|'balanced', mode:'full' }
+//   + artifact metadata written by writeState: version/generated_by/last_updated.
 //   hard  — HARD wall toggle (PreToolUse guard physically denies main-session tools)
 //   level — HARD wall strictness: 'strict' (deny all non-read) | 'balanced' (allow read-only bash/search)
+//   metadata — stamped on WRITE only. DEFAULT_STATE deliberately carries no version:
+//           it is the answer for "no state file exists", and a version there would
+//           claim provenance for a file nothing ever stamped. Same reason a write that
+//           cannot resolve the version OMITS the key rather than stamping 'unknown' —
+//           see pluginVersion() and its call site in writeState.
 //   mode  — vestigial informational field, ALWAYS 'full'. No user action sets it;
 //           kept so status/readers of state.mode keep working. planmode is NOT a stored
 //           mode — ++m derives it at runtime from permission_mode === 'plan'; planmode
@@ -24,6 +31,54 @@ import { pathToFileURL } from 'node:url';
 
 const DEFAULT_STATE = { hard: false, level: 'balanced', mode: 'full' };
 const VALID_SCOPES = new Set(['project', 'global']);
+
+const GENERATED_BY = 'brewtools:manager-setup';
+
+/**
+ * Today's date in LOCAL time, `YYYY-MM-DD` — the spec mandates `date +%F`, which is local.
+ * `toISOString()` is UTC and would stamp tomorrow's (or yesterday's) date depending on the
+ * offset, and this value feeds staleness comparison.
+ * @returns {string}
+ */
+function localDate() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Version of the manager-setup that owns THIS copy of the module, by self-location.
+ * Plugin layout (hooks/lib/) -> ../../.claude-plugin/plugin.json.
+ * A copy installed into a project has no plugin.json above it, so it falls back to
+ * its own baked `brewcode-meta` stamp — which is the version it was copied at.
+ * Never a literal: the state file must record the version that actually wrote it.
+ *
+ * Returns `null`, NEVER the string 'unknown', when both carriers are unreadable.
+ * `unknown` is not a version — `sort -V` accepts it and the `PLACEHLD` character test
+ * does not catch it, so a consumer would report a confident verdict on a resolver
+ * failure. `null` is an internal sentinel that never leaves this module: `writeState`
+ * OMITS the `version` key instead of stamping it (see the call site).
+ *
+ * It returns rather than throws on purpose. This module is the HARD wall's off-switch
+ * (`set hard=false`) and the single Bash shape the guard self-exempts; a writer that
+ * aborted here would leave the user behind an armed wall with no exit. The other four
+ * writers in this repo abort because they are generators — nothing is armed when they
+ * refuse. Both hooks (`session-start.mjs`, `manager-prompt.mjs`) import only
+ * `resolveState`, so no hook path reaches this function at all.
+ * @returns {string|null} semver, or null when unresolvable
+ */
+function pluginVersion() {
+  const here = path.dirname(new URL(import.meta.url).pathname);
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(here, '..', '..', '.claude-plugin', 'plugin.json'), 'utf8'));
+    if (pkg && /^\d+\.\d+\.\d+/.test(pkg.version)) return pkg.version;
+  } catch {}
+  try {
+    const first = fs.readFileSync(new URL(import.meta.url), 'utf8').split('\n', 1)[0];
+    const m = /brewcode-meta: version=(\d+\.\d+\.\d+)/.exec(first);
+    if (m) return m[1];
+  } catch {}
+  return null;
+}
 
 function resolveHome(p) {
   if (!p) return p;
@@ -83,7 +138,14 @@ export function resolveState(cwd = process.cwd()) {
     const level = (project && project.level) ? project.level : DEFAULT_STATE.level;
     const mode  = (project && project.mode) ?? (global && global.mode) ?? DEFAULT_STATE.mode;
     const source = project ? 'project' : (global ? 'global' : 'default');
-    return clampLevel(clampMode({ hard, level, mode, source }));
+    // Unknown keys of the PROJECT file (version/generated_by/last_updated and anything
+    // a future release adds) pass through untouched. Nothing is invented: a file that
+    // carries no version resolves without one, so a stale state stays visibly stale.
+    const resolved = clampLevel(clampMode({ ...(project || {}), hard, level, mode, source }));
+    // Legacy `doc_type` from a pre-spec write is dropped on READ too, not only on write:
+    // otherwise every consumer sees it until the next write happens to occur.
+    delete resolved.doc_type;
+    return resolved;
   } catch {
     return { ...DEFAULT_STATE, source: 'default' };
   }
@@ -166,7 +228,30 @@ export async function writeState(scope, partial, cwd = process.cwd()) {
   if (!token) throw new Error('could not acquire lock');
   try {
     const existing = readJsonSafe(filePath) || {};
-    const merged = { ...existing, ...partial };
+    // Provenance is stamped by the WRITER, never by a reader/merge: the version is the
+    // one of the module doing this write, so setup-status reading the raw file sees the
+    // real age of the state. No `doc_type`: it is a frontmatter-only field, and JSON
+    // carriers never take it — state.json is machine state, not a doc, either way.
+    const version = pluginVersion();
+    const merged = {
+      ...existing,
+      ...partial,
+      generated_by: GENERATED_BY,
+      last_updated: localDate()
+    };
+    if (version) merged.version = version;
+    else {
+      // Unresolvable version: DROP the key rather than stamp a fake one. An absent
+      // `version` is a documented reader path — setup-status row 8 treats it as the
+      // `missing` signal and falls through to the copied guard's `brewcode-meta` line,
+      // and manager-setup `status` computes `stale: (stateVersion && pluginVersion) ?
+      // ... : null`, so it is never compared as if it were a real version. Deleting a
+      // stale inherited key matters: merging over an older state must not let this
+      // write keep claiming that older file's version as its own.
+      delete merged.version;
+      process.stderr.write('[manager-state] plugin version unresolvable — wrote state without a version key\n');
+    }
+    delete merged.doc_type; // legacy key from pre-spec writes; JSON carriers never take it
     writeAtomic(filePath, merged);
     return { file: filePath, action: 'written', state: merged };
   } finally {
@@ -245,6 +330,19 @@ async function runCli(argv) {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+// argv[1] must be realpath'd before comparing: Node resolves ESM specifiers through
+// symlinks, so on a path like /var/... -> /private/var/... the raw argv URL never matches
+// import.meta.url and the CLI silently no-ops with exit 0 — i.e. the documented HARD-wall
+// off-switch `set hard=false` would appear to succeed while writing nothing.
+function invokedDirectly() {
+  if (!process.argv[1]) return false;
+  try {
+    return import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href;
+  } catch {
+    return import.meta.url === pathToFileURL(process.argv[1]).href;
+  }
+}
+
+if (invokedDirectly()) {
   await runCli(process.argv.slice(2));
 }

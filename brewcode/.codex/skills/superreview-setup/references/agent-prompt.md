@@ -1,3 +1,10 @@
+---
+doc_type: llm
+version: "{PLUGIN_VERSION}"
+generated_by: "{GENERATED_BY}"
+last_updated: "{LAST_UPDATED}"
+---
+
 # Domain-Expert Agent Prompt Contract (superreview Phase 2 — {PROJECT_NAME})
 
 SINGLE home of: the runtime expert-selection procedure + roster command, the recon-exclusion list, the domain-owner

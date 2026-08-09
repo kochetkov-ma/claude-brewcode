@@ -12,13 +12,18 @@
 #             and never changes `all`'s exit code. Skipped when a timeout binary
 #             already exists. Needs --yes when invoked directly.
 #   semble    primes the pinned uvx environment with
-#             `uvx --from 'semble[mcp]==0.5.2' semble --help`.
-#             --tool additionally runs `uv tool install 'semble[mcp]==0.5.2'`.
+#             `uvx --from 'semble[mcp]==0.5.4' semble --version`.
+#             --tool additionally runs `uv tool install 'semble[mcp]==0.5.4'`.
 #   all       check -> uv -> coreutils -> semble.
 #
 # Default mode is uvx-ephemeral: no `uv tool install`, so no `semble` lands on
 # PATH (a bare `semble` invocation starts a blocking MCP server).
-# `--help` is the only safe semble probe: there is no --version/status/serve.
+# Safe probes are exactly those argv in semble's CLI dispatch set. `--version`
+# joined it in 0.5.4 (cli.py:25) and is preferred: same cost as `--help` but it
+# prints the resolved X.Y.Z, so the prime run also proves WHICH build uvx served.
+# The argv is picked from the pin by sc_semble_probe_arg, not tried and fallen
+# back from: on an older SEMBLE_PIN_VERSION override `--version` is unrecognised
+# argv and would start the blocking server, so those pins get `--help` instead.
 #
 # Exit: 0 ok | 1 failed | 2 bad usage | 3 precondition | 4 confirmation needed
 set -euo pipefail
@@ -39,7 +44,7 @@ semble-install.sh <check|uv|coreutils|semble|all> [--yes] [--json] [--tool]
 
   --yes    confirm the mutating steps
   --json   emit a single JSON object (schema: DESIGN 9.2)
-  --tool   also `uv tool install 'semble[mcp]==0.5.2'` (requires --yes)
+  --tool   also `uv tool install 'semble[mcp]==0.5.4'` (requires --yes)
   -h/--help
 
 Honours SEMBLE_DRY_RUN=1 (print DRY <cmd>, change nothing) and
@@ -216,7 +221,8 @@ do_semble() {
   before_tool="$(sc_semble_tool_version)"
   if [ -n "$before_tool" ]; then SEMBLE_TOOL_INSTALLED="true"; fi
 
-  record "uvx --from '$SEMBLE_PIN_SPEC' semble --help"
+  local probe_arg; probe_arg="$(sc_semble_probe_arg)"
+  record "uvx --from '$SEMBLE_PIN_SPEC' semble $probe_arg"
   if [ "$TOOL" = "1" ]; then record "uv tool install '$SEMBLE_PIN_SPEC'"; fi
 
   if [ -z "$(probe_uvx)" ]; then
@@ -228,7 +234,7 @@ do_semble() {
     return 0
   fi
   if [ "$DRY" = "1" ]; then
-    sc_dry "uvx --from '$SEMBLE_PIN_SPEC' semble --help" >&2
+    sc_dry "uvx --from '$SEMBLE_PIN_SPEC' semble $probe_arg" >&2
     if [ "$TOOL" = "1" ]; then sc_dry "uv tool install '$SEMBLE_PIN_SPEC'" >&2; fi
     return 0
   fi
@@ -236,10 +242,31 @@ do_semble() {
     raise precondition "SEMBLE_NO_NETWORK=1 - the pin was not resolved"
     return 0
   fi
-  if uvx --from "$SEMBLE_PIN_SPEC" semble --help >/dev/null 2>&1; then
+  # Deliberately UNBOUNDED, unlike sc_semble_probe: this is the priming run, and
+  # on a cold uv cache it downloads 52 packages (semble-grammars alone is 6.9 MiB).
+  # A 60 s bound would turn a slow but healthy first install into a hard failure.
+  # Safe to leave unbounded only because probe_arg is dispatch-set argv for THIS
+  # pin — see sc_semble_probe_arg; unrecognised argv would block forever here.
+  local got=""
+  if got="$(uvx --from "$SEMBLE_PIN_SPEC" semble "$probe_arg" 2>/dev/null)"; then
     SEMBLE_RESOLVABLE="true"
+    # Free extra check the old `--help` probe could not make: the prime run now
+    # reports which build uvx actually served.
+    if [ "$probe_arg" = "--version" ] && [ "$got" != "$SEMBLE_PIN_VERSION" ]; then
+      sc_warn "uvx resolved '$SEMBLE_PIN_SPEC' but semble reports '$got', not $SEMBLE_PIN_VERSION" >&2
+    fi
   else
-    raise failed "uvx could not resolve $SEMBLE_PIN_SPEC"
+    # semble 0.5.4 depends on semble-grammars, which ships WHEELS ONLY: macOS
+    # x86_64/arm64, manylinux2014 x86_64/aarch64, win amd64/arm64. No sdist and
+    # no musllinux wheel, so on Alpine there is nothing to install and nothing to
+    # build. Naming it here saves the user a hunt through a pip resolver dump.
+    local musl="" f
+    for f in /lib/ld-musl-*.so.1; do [ -e "$f" ] && musl=1 || true; done
+    if [ -n "$musl" ]; then
+      raise failed "uvx could not resolve $SEMBLE_PIN_SPEC - this host is musl (Alpine), and semble >= 0.5.3 depends on semble-grammars, which publishes no musllinux wheel and no sdist. Use a glibc image."
+    else
+      raise failed "uvx could not resolve $SEMBLE_PIN_SPEC"
+    fi
     return 0
   fi
   if [ "$TOOL" = "1" ]; then

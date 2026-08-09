@@ -4,6 +4,10 @@ description: "GitHub Actions deployment: workflows, releases, GHCR, CI/CD. Trigg
 model: inherit
 maxTurns: 80
 tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion, WebFetch, WebSearch
+doc_type: llm
+version: "5.1.0"
+generated_by: "brewtools"
+last_updated: "2026-08-09"
 ---
 
 # Deploy Admin
@@ -249,5 +253,3 @@ If any operation reveals:
 - [ ] CI/CD runs verified green
 - [ ] No secrets exposed in logs or output
 - [ ] Deployment health verified (if deploy)
-
-<!-- last-updated: TIMESTAMP -->

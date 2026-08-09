@@ -13,7 +13,7 @@ mode: <mode>  (reason: <matched keyword | default | checkpoint resume>)
 scope: <user|project|local>
 
 ## Before
-cli:      uv <ver|absent> | uvx <ver|absent> | semble pin 0.5.2 (<uvx-ephemeral|uv-tool ver>) | claude <ver>
+cli:      uv <ver|absent> | uvx <ver|absent> | semble pin 0.5.4 (<uvx-ephemeral|uv-tool ver>) | claude <ver>
 mcp:      <state> @ <scope>  [<connectivity>]
 cache:    <code root> | repo <hash8> | <size> | <staleness> | docs root reserved: <yes|no>
 guidance: rule <state> | CLAUDE.md <state> | hooks <n>/4 wired | permissions <yes|no>
@@ -29,8 +29,8 @@ failed:    <list or none>
 ## Verification
 commands: <each command actually run, one per line, verbatim>
 smoke:    <query> -> <n> results, top = <file_path>:<start_line>-<end_line> score <score>  | skipped (<reason>)
-corpus:   code config | repo <hash8> | <chunk/file counts or unknown>
-uncovered: .html/.htm (docs bucket), .json/.json5/.csv/.tsv/.psv (excluded from every content type) -> use rg
+corpus:   code docs config | repo <hash8> | <chunk/file counts or unknown>
+uncovered: .json/.json5/.csv/.tsv/.psv (no content type reaches them), .mdx/.txt (absent from _EXTENSION_TO_LANGUAGE) -> use rg
 
 ## Current Status
 <ready | reload required | verifying | partial | disabled | not installed | error> — <one clause of why>
@@ -71,7 +71,7 @@ Checkpoint: <abs>/.claude/semble/state.json
 | `commands` is verbatim and complete | Every command actually executed, one per line, exactly as run — including the ones that failed. Never a paraphrase, never a plan. Nothing that was not run may appear here. |
 | `scope` | Where `semble_code` is (or would be) registered. Default and expected value is `user`. |
 | `<hash8>` | First 8 hex chars of the repo's sha256 cache-dir name. Empty when unresolvable. |
-| `hooks <n>/4 wired` | 4 = SessionStart + PreToolUse(`Bash`) + PreToolUse(`Grep`) + SubagentStart(`Explore`). Anything below 4 is half-wired — say so, do not round up to "installed". |
+| `hooks <n>/4 wired` | 4 = SessionStart(`semble-session.mjs`) + UserPromptSubmit(`semble-prefetch.mjs`) + PostToolUse(`semble-stats.mjs`) + PostToolUseFailure(`semble-stats.mjs`) — the last two share the matcher `mcp__semble_code__search\|mcp__semble_code__find_related\|Bash\|Grep\|Glob\|Read`. Anything below 4 is half-wired — say so, do not round up to "installed". |
 | `staleness` | One of `absent | incomplete | mismatch | stale | fresh | unknown`. `stale` is reported as **likely stale** — the check approximates semble's own validation. |
 | `smoke` | `skipped (<reason>)` when `SEMBLE_NO_NETWORK=1`, when the MCP is not yet live, or when the mode never warms. Reasons are concrete, never "n/a". |
 | `uncovered` | Printed on every invocation, verbatim as in the template. It is a standing limit of the corpus, not a per-run finding. |
@@ -85,7 +85,7 @@ Checkpoint: <abs>/.claude/semble/state.json
 
 | Never write | Because |
 |-------------|---------|
-| anything about a watcher, daemon, background indexer, or service being "started"/"running"/"stopped" | semble 0.5.2 has none. Staleness is re-checked inside each tool call behind a `3x last-build-duration` cooldown. |
+| anything about a watcher, daemon, background indexer, or service being "started"/"running"/"stopped" | semble 0.5.4 has none. Staleness is re-checked inside each tool call behind a `3x last-build-duration` cooldown. |
 | `installed` when `hooks` < 4, or when the MCP is registered but never verified | Half-wired is a distinct state; report `partial`. |
 | `connected` from config alone | `connectivity` comes only from the exit status of `claude mcp get semble_code`; with no signal it stays `unknown`. |
 | `stale` as a certainty | The check approximates `get_validated_cache`; say `likely stale` and offer `reindex` rather than acting. |
@@ -107,7 +107,7 @@ mode: status  (reason: default)
 scope: user
 
 ## Before
-cli:      uv absent | uvx absent | semble pin 0.5.2 (uvx-ephemeral) | claude 2.1.223
+cli:      uv absent | uvx absent | semble pin 0.5.4 (uvx-ephemeral) | claude 2.1.223
 mcp:      absent @ user  [unknown]
 cache:    /Users/me/Library/Caches/semble-code | repo — | 0 B | absent | docs root reserved: no
 guidance: rule absent | CLAUDE.md absent | hooks 0/4 wired | permissions no
@@ -123,8 +123,8 @@ failed:    none
 ## Verification
 commands: bash scripts/semble-status.sh --section all --json
 smoke:    skipped (MCP not registered)
-corpus:   code config | repo — | unknown
-uncovered: .html/.htm (docs bucket), .json/.json5/.csv/.tsv/.psv (excluded from every content type) -> use rg
+corpus:   code docs config | repo — | unknown
+uncovered: .json/.json5/.csv/.tsv/.psv (no content type reaches them), .mdx/.txt (absent from _EXTENSION_TO_LANGUAGE) -> use rg
 
 ## Current Status
 not installed — uv/uvx missing and semble_code is not registered in any scope

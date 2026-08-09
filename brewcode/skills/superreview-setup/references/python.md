@@ -1,3 +1,10 @@
+---
+doc_type: llm
+version: "{PLUGIN_VERSION}"
+generated_by: "{GENERATED_BY}"
+last_updated: "{LAST_UPDATED}"
+---
+
 # Python Standards Reference
 
 GENERIC modern-Python guidance (type hints, docstrings, imports, exceptions, comprehensions, testing). The project's

@@ -24,7 +24,7 @@ const MCP_SH = join(SCRIPTS, 'semble-mcp.sh');
 const GUIDANCE_SH = join(SCRIPTS, 'semble-guidance.sh');
 const STATUS_SH = join(SCRIPTS, 'semble-status.sh');
 
-const PIN_SPEC = 'semble[mcp]==0.5.2';
+const PIN_SPEC = 'semble[mcp]==0.5.4';
 const SERVER = 'semble_code';
 
 // GIVEN: a fresh isolated temp base. realpathSync mirrors the `cd && pwd -P`
@@ -235,6 +235,64 @@ check('audit disclosure mdx', auditFull.disclosure.includes('.mdx'), true,
   'the disclosure names .mdx as unreachable — it is absent from semble\'s extension table');
 check('audit is read-only', existsSync(join(COV, '.claude')), false,
   'audit wrote nothing into the project');
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 1b. candidates — measured per-repo .sembleignore proposals
+//
+// The shipped template's per-repo section is empty because the two things that
+// actually waste result slots are layout-specific. This mode measures them.
+// Every assertion here is about what it must NOT propose as much as what it
+// must: a wrong exclusion fails silently, and silence is the worse error.
+// ═══════════════════════════════════════════════════════════════════════════
+const CAND = join(BASE, 'repo-cand');
+for (let i = 0; i < 10; i++) {
+  const body = `export function f${i}() {\n  return ${i};\n}\n${PAD}\n`;
+  write(join(CAND, 'src', `m${i}.ts`), body);
+  write(join(CAND, '.mirror', `m${i}.ts`), body);        // byte-identical mirror
+  write(join(CAND, 'lib', `u${i}.ts`), `${body}// unique ${i}\n`);
+}
+write(join(CAND, 'CHANGELOG.md'), '- one release note line\n'.repeat(6000));
+write(join(CAND, 'notes', 'a.md'), `# a\n${PAD}\n`);
+
+const candR = run(PROJECT_SH, ['candidates', '--json'], { SEMBLE_PROJECT_ROOT: CAND });
+const cand = safeParse(candR.stdout);
+const byPath = Object.fromEntries((cand.candidates || []).map((c) => [c.path, c]));
+check('candidates.exit', candR.status, 0, 'the scan exits 0');
+check('candidates.source', cand.source, 'filesystem',
+  'with no index on disk the scan says outright that it is standing on byte share');
+check('candidates.mirror', (byPath['/.mirror/'] || {}).kind, 'duplicate-tree',
+  'a tree whose every file is a byte-identical copy of a file elsewhere is proposed');
+check('candidates.mirrorCount', [(byPath['/.mirror/'] || {}).files, (byPath['/.mirror/'] || {}).duplicates],
+  [10, 10], 'the proposal carries the count it is based on, not an adjective');
+check('candidates.notSrc', Object.prototype.hasOwnProperty.call(byPath, '/src/'), false,
+  'the ORIGINAL of the mirrored pair is never proposed - excluding it would delete the repo from the corpus');
+check('candidates.notLib', Object.prototype.hasOwnProperty.call(byPath, '/lib/'), false,
+  'a tree of near-but-not-byte-identical files is not a duplicate tree and is left alone');
+check('candidates.changelog', (byPath['/CHANGELOG.md'] || {}).kind, 'heavy-file',
+  'one prose file carrying a large share of the corpus is proposed on its own');
+check('candidates.noCode', (cand.candidates || []).filter((c) => c.kind === 'heavy-dir' && c.path === '/lib/'), [],
+  'a SOURCE directory is never proposed as a corpus hog - a big source tree is the repo, not noise');
+check('candidates.evidence', (cand.candidates || []).every((c) => typeof c.reason === 'string' && /\d/.test(c.reason)), true,
+  'every proposal states its measurement so the user can judge it');
+check('candidates.shares',
+  (cand.candidates || []).filter((c) => !(c.share > 0 && c.share <= 1)).map((c) => [c.path, c.share]), [],
+  'every share is a real fraction of the corpus - any out-of-range one is named, not just counted');
+check('candidates.readOnly', existsSync(join(CAND, '.sembleignore')), false,
+  'the scan proposes and writes nothing - install owns the file');
+
+// A repo with no mirror and no hog must come back empty, or the block install
+// writes becomes noise and stops being read.
+const PLAIN = join(BASE, 'repo-plain');
+for (let i = 0; i < 6; i++) write(join(PLAIN, 'src', `p${i}.ts`), `export const p${i} = ${i};\n${PAD}\n`);
+const plain = safeParse(run(PROJECT_SH, ['candidates', '--json'], { SEMBLE_PROJECT_ROOT: PLAIN }).stdout);
+check('candidates.plainEmpty', plain.candidates, [],
+  'an ordinary repo yields no proposals at all');
+check('candidates.plainScanned', plain.scanned, 6, 'and the scan still reports what it looked at');
+
+const candHuman = run(PROJECT_SH, ['candidates'], { SEMBLE_PROJECT_ROOT: PLAIN });
+check('candidates.humanExit', candHuman.status, 0, 'the human form exits 0 too');
+check('candidates.humanEmpty', candHuman.stdout.includes('none - nothing in this repo'), true,
+  'and says so in words rather than printing an empty list');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 2. warm / smoke honour SEMBLE_NO_NETWORK
@@ -607,7 +665,7 @@ function forcePhase(root, phase) {
   if (phase === 'absent') return;
   write(join(dir, 'state.json'), `${JSON.stringify({
     schema: 1, profile: 'code', phase, enabled: true, scope: 'user',
-    projectRoot: root, approvedVersion: '0.5.2', completed: [],
+    projectRoot: root, approvedVersion: '0.5.4', completed: [],
   }, null, 2)}\n`);
 }
 

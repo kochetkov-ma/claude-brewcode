@@ -1,3 +1,4 @@
+<!-- brewcode-meta: version=5.1.0 generated_by=brewdoc:memory-sync-setup -->
 # Hard Sync
 
 The two aggressive DELETION passes of `/memory-sync`. Cited by the emitted skill's Phase 2 batch prompt at

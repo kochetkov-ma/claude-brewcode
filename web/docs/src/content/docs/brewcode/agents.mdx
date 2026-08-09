@@ -40,11 +40,14 @@ Purpose column = the agent's own `description` frontmatter, verbatim. That strin
   <Card title="bash-expert" icon="terminal" href="/brewcode/agents/bash-expert/">
     Bash/sh script creation
   </Card>
+  <Card title="bc-rules-organizer" icon="link" href="/brewcode/agents/bc-rules-organizer/">
+    Internal — rules file organization
+  </Card>
 </CardGrid>
 
-:::note[Internal agents]
-`bc-rules-organizer` is internal. It is spawned automatically by brewcode skills and hooks, is not user-invokable, and has no dedicated page.
-:::
+<Callout type="note" title="Internal agent">
+`bc-rules-organizer` is internal — spawned only by [`/brewcode:rules`](/brewcode/skills/rules/), never user-invokable directly.
+</Callout>
 
 ## Scope guard — shared by all 4 public agents
 
@@ -68,7 +71,7 @@ Agents deliver for the CONSUMER, not the literal wording: the result must be usa
 | Model | Agents | Meaning |
 |-------|--------|---------|
 | **inherit** | [skill-creator](/brewcode/agents/skill-creator/), [agent-creator](/brewcode/agents/agent-creator/), [hook-creator](/brewcode/agents/hook-creator/), [bash-expert](/brewcode/agents/bash-expert/) | Runs on the session's model — you control the tier |
-| **haiku** | bc-rules-organizer | Pinned: cheap file reorganization |
+| **haiku** | [bc-rules-organizer](/brewcode/agents/bc-rules-organizer/) | Pinned: cheap file reorganization |
 
 <Callout type="tip" title="Automatic selection">
   Agents are launched automatically by brewcode skills via the Task API.

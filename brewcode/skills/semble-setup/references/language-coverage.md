@@ -1,6 +1,6 @@
 # Language coverage — what `--content code docs config` actually indexes
 
-> Source of truth: semble 0.5.2, `src/semble/index/files.py` and `src/semble/index/file_walker.py`.
+> Source of truth: semble 0.5.4, `src/semble/index/files.py` and `src/semble/index/file_walker.py`.
 > The tables below are generated from that source, not from the README.
 
 ## The one rule that explains everything
@@ -14,6 +14,55 @@ Not by content, not by shebang, not by name. Three consequences:
 | Only the LAST suffix counts | `settings.gradle.kts` -> `.kts` (code). `schema.sql.j2` -> `.j2` (code). `data.tar.gz` -> `.gz` (nothing) |
 | The bucket is fixed per suffix | You cannot move `.html` into the code bucket. `--content` selects buckets, never suffixes |
 | An unmapped suffix is unreachable | `.mdx` and `.txt` are absent from `_EXTENSION_TO_LANGUAGE` altogether, so no content type — not even `all` — indexes them. `.mdx` is **not** an alias of `.md` |
+
+…with exactly one hole, which is big enough to have cost this workspace 7.5% of
+its index. See the next section before trusting "unreachable".
+
+## The negation bypass — the one way an unreachable suffix gets in
+
+`file_walker.py:_is_ignored` returns a pair, `(ignored, found)`. The second flag:
+
+```python
+found = not ignored and isinstance(pat, str) and bool(Path(pat.rstrip("/")).suffix)
+```
+
+and `_walk` yields on `found or item.suffix.lower() in extensions`. So when a
+`.gitignore` or `.sembleignore` pattern **un-ignores** a path (`!…`) and the
+pattern text ends in a file extension, `found` is `True` and **the extension
+filter is skipped entirely**. The file is indexed no matter which bucket — if
+any — its suffix belongs to.
+
+Reproduced against semble 0.5.4 with `--content code` alone:
+
+```text
+.gitignore:  package-lock.json / !sub/package-lock.json / *.png / !keep.png
+walk_files(root, get_extensions([CODE])) ->
+  ['a.py', 'keep.png', 'sub/package-lock.json']       # .png, .json: both in NO bucket
+plain.json (never negated)                            # correctly absent
+```
+
+Three consequences worth stating plainly:
+
+1. **The content set cannot fix it.** The bypass runs before the extension test,
+   so `--content code` pulls the same files in as `--content code docs config`.
+   Dropping a bucket to shed a lockfile does nothing.
+2. **It is how binaries enter the corpus.** `read_file_text` decodes with
+   `errors="replace"`, so a negated `.png` is indexed as mojibake. Measured on
+   `claude-brewcode`: `!web/docs/package-lock.json` -> **552 chunks, 5.9% of the
+   whole index, the only `.json` in it**; two negated `.png` -> **143 chunks**.
+3. **`.sembleignore` is the cure.** `_load_ignore_for_dir` concatenates the
+   directory's `.gitignore` lines first and its `.sembleignore` lines second into
+   one `GitIgnoreSpec`, and `_is_ignored` keeps the **last** matching pattern.
+   A re-ignore in `.sembleignore` therefore beats the `.gitignore` negation:
+
+```text
++ .sembleignore:  *.png / package-lock.json
+walk_files(...) -> ['a.py', 'w.yml']                  # both bypassers gone
+```
+
+That is why the shipped `sembleignore.template` carries a binary-suffix block and
+a lockfile block that look like no-ops. Against a plain `.gitignore` they are;
+against a negation they are the only lever.
 
 ## Buckets in this corpus
 
@@ -81,6 +130,32 @@ Sizing, measured on `claude-brewcode` with an isolated cache:
 |--------|---------------|-------|--------|------------|
 | `code config` | 278 | 0 | 0 | 8.4 MB |
 | `code docs config` | 868 | 585 | 0 | 31 MB |
+
+## Why `config` stays in the set
+
+`config` looks like the bucket to cut — it is 40 files and **53 of 9307 chunks,
+0.57%** of the corpus on this workspace. It stays, on two measurements:
+
+| Question | Answer |
+|----------|--------|
+| What is in it here? | All six `.github/workflows/*.yml` (19 chunks) and four `docker-compose*.yml`. That is the entire CI/CD and deployment surface of the repo |
+| What breaks without it? | Q12 "what does the docs deploy workflow do" and Q15 "how does the docs site get deployed" — both answered from `deploy-docs.yml`, which is `.yml`, which is `config`. Drop the bucket and both questions have no reachable answer at all |
+| Was it buying the lockfile? | **No.** That was the premise for cutting it and it is wrong: `package-lock.json` entered through the `.gitignore` negation bypass above, which runs *before* the extension filter. `--content code` alone indexes it just the same |
+
+0.57% of the index for the whole CI surface is the cheapest bucket in the set.
+The decision is: **keep `code docs config` unchanged.** `SEMBLE_CONTENT_ARGS` is
+not edited, so no cache anywhere is invalidated.
+
+## Known corpus limits, and what they cost
+
+These are not cosmetic. Each one has a question shape it silently fails:
+
+| Limit | The question it kills |
+|-------|-----------------------|
+| `.json` unreachable | "every hook event registered across all four plugins" — registrations live in `hooks/hooks.json`. Semble returns prose *about* hooks and never the registry. Structurally unanswerable, at any content setting, after any cleanup |
+| `.mdx`/`.txt` unmapped | Anything about an Astro/Docusaurus content page |
+| top-k is a sample | "every place that…", "all N of…" — a ranked list of 5 is not an enumeration. `rg -l`/`-c` owns this |
+| no dedup | A file committed at three paths gets three chances at the same five slots |
 
 ## Files that are skipped even when the suffix matches
 

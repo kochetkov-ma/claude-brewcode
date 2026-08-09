@@ -139,6 +139,18 @@ mkdir -p .claude/e2e && test -s .claude/e2e/e2e-rules.md && echo "OK" || echo "F
 ```
 > **STOP if FAILED** — every agent halts on a missing rules file by its own Rules Loading Protocol.
 
+The rules file gets the standard frontmatter, ABOVE its `# E2E Testing Rules` heading — fill the three
+values from the Phase 0 `PLUGIN_VERSION:` / `GENERATED_BY:` / `LAST_UPDATED:` lines:
+
+```yaml
+---
+doc_type: llm
+version: "{PLUGIN_VERSION}"
+generated_by: "brewcode:e2e"
+last_updated: "{LAST_UPDATED}"
+---
+```
+
 Then create `.claude/e2e/config.json`:
 
 ```json
@@ -149,11 +161,38 @@ Then create `.claude/e2e/config.json`:
   "scenarioDir": ".claude/e2e/scenarios",
   "agents": ["e2e-architect", "e2e-scenario-analyst", "e2e-automation-tester", "e2e-manual-tester", "e2e-reviewer"],
   "rulesPath": ".claude/e2e/e2e-rules.md",
-  "lastSetup": "{ISO_DATE}"
+  "version": "{PLUGIN_VERSION}",
+  "generated_by": "brewcode:e2e",
+  "last_updated": "{LAST_UPDATED}"
 }
 ```
 
-Optionally generate `.claude/rules/e2e-conventions.md` (~20-30 lines) with key rules.
+> `version` / `generated_by` / `last_updated` replace the old `lastSetup` key, whose format nothing ever
+> bound. `{PLUGIN_VERSION}` and `{LAST_UPDATED}` are the `PLUGIN_VERSION:` and `LAST_UPDATED:` lines
+> Phase 0's `detect-mode.sh` already printed — the ONE command that produces them, so the date is always
+> `date +%F` (`YYYY-MM-DD`) and the version always comes from `.claude-plugin/plugin.json`. Never
+> hardcode either. Migrating an older install: drop `lastSetup`, write the three keys.
+>
+> `{PLUGIN_VERSION}` is always a real `X.Y.Z` here: `detect-mode.sh` hard-fails when it cannot read
+> the manifest, so Phase 0 never hands this mode a placeholder. If you are ever holding something
+> that is not `X.Y.Z` — `unknown`, an empty string, an unsubstituted `{PLUGIN_VERSION}` — do NOT
+> write the file. Stop and report it.
+
+Optionally generate `.claude/rules/e2e-conventions.md` (~20-30 lines) with key rules. It is a rule file
+Claude Code auto-loads, so it carries `paths:` and `description:` plus the same four standard keys:
+
+```yaml
+---
+paths:
+  - "{config.testSourceDir}/**"
+description: e2e-conventions — condensed E2E rules export; full set in .claude/e2e/e2e-rules.md
+doc_type: llm
+version: "{PLUGIN_VERSION}"
+generated_by: "brewcode:e2e"
+last_updated: "{LAST_UPDATED}"
+---
+```
+
 AskUser: "Export key E2E rules to .claude/rules/?" Options: "Yes" / "No"
 
 ## S7: Final Summary

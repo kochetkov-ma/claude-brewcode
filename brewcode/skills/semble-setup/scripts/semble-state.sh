@@ -111,8 +111,9 @@ ST_RESUME_PROMPT="/brewcode:semble-setup resume"
 # Fields the INSTALLER owns: derived from the environment and the shipped
 # constants, never from whatever an older run happened to leave behind. They are
 # recomputed on every write, not only at file birth — `approvedVersion`,
-# `projectRoot` and `schema` already work that way inside sc_state_patch, and
-# these three were the ones that did not. No-op when the file does not exist yet
+# `projectRoot`, `schema` and the artifact-metadata trio `version` /
+# `generated_by` / `last_updated` already work that way inside sc_state_patch,
+# and these three were the ones that did not. No-op when the file does not exist yet
 # (creating it here would bypass the phase machine).
 # NEVER touched here: enabled, phase, completed, notes — user and progress
 # state. That is the whole distinction: a re-run refreshes what the installer
@@ -193,13 +194,13 @@ case "$SUB" in
     if [ "$JSON" = "1" ]; then
       SC_F="$FILE" node -e '
 const fs=require("fs");const f=process.env.SC_F;
-const out={schema:1,present:false,file:f,phase:"absent",enabled:null,completed:[],updatedAt:null,state:null};
+const out={schema:1,present:false,file:f,phase:"absent",enabled:null,completed:[],last_updated:null,state:null};
 if(fs.existsSync(f)){const raw=fs.readFileSync(f,"utf8");
   if(raw.trim()){ let s;try{s=JSON.parse(raw)}catch(e){console.error("ABORT: "+f+" is not valid JSON ("+e.message+")");process.exit(1)}
     out.present=true; out.state=s; out.phase=s.phase||"absent";
     out.enabled=(typeof s.enabled==="boolean")?s.enabled:null;
     out.completed=Array.isArray(s.completed)?s.completed:[];
-    out.updatedAt=s.updatedAt||null; } }
+    out.last_updated=s.last_updated||null; } }
 process.stdout.write(JSON.stringify(out));'
       printf '\n'
     else

@@ -12,13 +12,25 @@
 
 set -euo pipefail
 
-VERSION="1.0.0"
 MODE="${1:-emit}"
 
 # Self-location: scripts/generate.sh -> skills/memory-sync-setup/scripts -> skills/memory-sync-setup
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SKILL_DIR="$(dirname "$SCRIPT_DIR")"
 REFS="$SKILL_DIR/references"
+PLUGIN_JSON="$SKILL_DIR/../../.claude-plugin/plugin.json"
+
+# The artifact stamp carries the PLUGIN version - there is no private template version any more.
+# Resolved by self-location, never hardcoded; jq when present, grep+sed otherwise.
+resolve_plugin_version() {
+  [ -f "$PLUGIN_JSON" ] || { echo "unknown"; return 0; }
+  _v=""
+  command -v jq >/dev/null 2>&1 && _v=$(jq -r '.version // empty' "$PLUGIN_JSON" 2>/dev/null || true)
+  [ -n "$_v" ] || _v=$(grep -o '"version"[[:space:]]*:[[:space:]]*"[^"]*"' "$PLUGIN_JSON" 2>/dev/null | head -1 | sed -e 's/.*:[[:space:]]*"//' -e 's/"$//' || true)
+  [ -n "$_v" ] || _v="unknown"
+  printf '%s\n' "$_v"
+}
+VERSION=$(resolve_plugin_version)
 
 # Target paths are relative to the resolved ROOT (see resolve_root - every mode cd's there first).
 TARGET=".claude/skills/memory-sync"
@@ -26,7 +38,13 @@ TARGET_REFS="$TARGET/references"
 EMITTED_REFS="memory-guide.md agent-audit.md hard-sync.md"
 EMITTED_N=3
 
-STAMP_PREFIX="<!-- memory-sync template v"
+# Provenance lives in the emitted SKILL.md's YAML FRONTMATTER (the artifact-metadata standard):
+# doc_type / version / generated_by / last_updated, then the skill-specific surface_files.
+META_DOC_TYPE="llm"
+META_GENERATED_BY="brewdoc:memory-sync-setup"
+META_KEYS="doc_type version generated_by last_updated surface_files"
+# Pre-5.0 installs stamped a tail comment instead. Kept ONLY to recognise them and report stale-legacy.
+LEGACY_STAMP_PREFIX="<!-- memory-sync template v"
 # Runtime tokens the emitted skill resolves per RUN - allow-listed by validate, MUST survive emit.
 RUNTIME_ALLOW="SCOPE FOCUS DEPTH BATCH FILE_LIST FACTS BROKEN_REFS DATE N M K"
 # Every temp dir goes through $_bd; the trap makes leaks (and partial installs) impossible on any exit path.
@@ -50,6 +68,8 @@ validate_templates() {
   for t in "$REFS/SKILL.md.template" "$REFS/memory-guide.md" "$REFS/agent-audit.md" "$REFS/hard-sync.md"; do
     [ -f "$t" ] || { echo "❌ FAILED: emit template not found: $t - reinstall brewdoc"; exit 1; }
   done
+  # A stamp is only worth writing if it names a real plugin version.
+  [ "$VERSION" != "unknown" ] || { echo "❌ FAILED: cannot read .version from $PLUGIN_JSON - reinstall brewdoc"; exit 1; }
 }
 
 # ── target root ─────────────────────────────────────────────────────────────────
@@ -143,10 +163,55 @@ derive_surface_counts() {
 
 surface_total() { derive_surface_counts | cut -d' ' -f1; }
 
+# ── provenance frontmatter (emit writes it, validate + status read it) ──────────
+# The standard keys go AFTER the template's own frontmatter keys - i.e. immediately before the
+# closing `---`. Every value is QUOTED except `doc_type`: surface_files contains `: ` and would
+# otherwise be invalid YAML, and a bare date is typed as a Date by real YAML consumers, while
+# `doc_type` is an enum matched literally as `^doc_type: llm$` by brewcode's rules validator.
+_stamp_frontmatter() {
+  _sfile="$1"
+  _sfv=$(printf '%s' "${SURFACE_COUNTS:-unknown}" | tr -d '"' | tr '\n\r' '  ')
+  awk -v dt="$META_DOC_TYPE" -v ver="$VERSION" -v gb="$META_GENERATED_BY" \
+      -v lu="$(date +%F)" -v sf="$_sfv" '
+    BEGIN { n = 0; done = 0 }
+    NR == 1 && $0 != "---" { exit 3 }
+    /^---[[:space:]]*$/ {
+      n++
+      if (n == 2 && !done) {
+        printf "doc_type: %s\nversion: \"%s\"\ngenerated_by: \"%s\"\nlast_updated: \"%s\"\nsurface_files: \"%s\"\n", dt, ver, gb, lu, sf
+        done = 1
+      }
+    }
+    { print }
+    END { if (!done) exit 3 }
+  ' "$_sfile" > "$_sfile.stamped" && mv "$_sfile.stamped" "$_sfile"
+}
+
+# One frontmatter value, quotes stripped. Prints nothing when the key or the block is absent.
+_fm_meta() {
+  awk -v k="$2" '
+    NR == 1 && $0 != "---" { exit }
+    /^---[[:space:]]*$/ { n++; if (n == 2) exit; next }
+    index($0, k ":") == 1 { sub(/^[^:]*:[[:space:]]*/, ""); gsub(/^"|"$/, ""); print; exit }
+  ' "$1" 2>/dev/null || true
+}
+
+# Pre-5.0 tail stamp, if any. `|| true` covers grep's rc=1 under pipefail.
+_legacy_stamp() { grep -F "$LEGACY_STAMP_PREFIX" "$1" 2>/dev/null | tail -1 || true; }
+
 # ── unresolved-token scan (ONE implementation - validate and status MUST agree) ──
 # Matches \{[A-Z_]+\}, IGNORES a `$`-prefixed occurrence (${CLAUDE_SKILL_DIR} is a shell expansion,
 # not a placeholder) and allow-lists the runtime tokens the emitted skill resolves per run.
-_emitted_files() { echo "$TARGET/SKILL.md"; for r in $EMITTED_REFS; do echo "$TARGET_REFS/$r"; done; }
+# A PARKED install keeps its body (placeholders included) in SKILL.md.disabled, so `status` must scan
+# that file instead. `validate` never reaches here on a parked install - it exits on the missing
+# SKILL.md first, by design.
+_emitted_files() {
+  if [ ! -f "$TARGET/SKILL.md" ] && [ -f "$TARGET/SKILL.md.disabled" ]
+  then echo "$TARGET/SKILL.md.disabled"
+  else echo "$TARGET/SKILL.md"
+  fi
+  for r in $EMITTED_REFS; do echo "$TARGET_REFS/$r"; done
+}
 
 _open_tokens() {
   _emitted_files | while IFS= read -r f; do
@@ -328,9 +393,8 @@ emit_skill() {
   mkdir -p "$_stage/references" || _emit_abort
 
   _subst "$REFS/SKILL.md.template" "$_stage/SKILL.md" || _emit_abort
-  # Provenance stamp - LAST line of the emitted SKILL.md; `status` and `upgrade` read it.
-  printf '\n%s%s emitted %s by brewdoc:memory-sync-setup | surface: %s -->\n' \
-    "$STAMP_PREFIX" "$VERSION" "$(date +%F)" "$SURFACE_COUNTS" >> "$_stage/SKILL.md" || _emit_abort
+  # Provenance stamp - YAML frontmatter of the emitted SKILL.md; `status`, `validate` and `upgrade` read it.
+  _stamp_frontmatter "$_stage/SKILL.md" || _emit_abort
   for r in $EMITTED_REFS; do cp "$REFS/$r" "$_stage/references/$r" || _emit_abort; done
 
   { rm -rf "$TARGET" && mv "$_stage" "$TARGET"; } || _emit_abort
@@ -356,6 +420,118 @@ emit_skill() {
   echo "Next: AI fills the BLOCK placeholders via Edit (SKILL.md Phase 3) - validate FAILS until then."
 }
 
+# ── restamp ─────────────────────────────────────────────────────────────────────
+# The FINAL step of `upgrade`, ALWAYS run and never conditional on the stamp format. It refreshes the
+# provenance keys of an ALREADY INSTALLED SKILL.md - version / last_updated / surface_files, plus
+# doc_type and generated_by when absent - and drops a surviving pre-5.0 tail stamp. Nothing else moves:
+# the body, every SELF-SYNC hand-edit and every foreign frontmatter key are copied through verbatim,
+# and the copy is PROVEN byte-identical below before the new file is kept. Without this, an install
+# already in the current format but on an older plugin version had no path to a fresh stamp at all:
+# `upgrade` refreshed the tables, `validate` then hard-failed on the stale version, and the only escape
+# was MEMORY_SYNC_FORCE=1 emit - which destroys exactly the hand-edits `upgrade` exists to preserve.
+_meta_body() {
+  awk -v legacy="$LEGACY_STAMP_PREFIX" '
+    BEGIN { n = 0 }
+    n < 2 && /^---[[:space:]]*$/ { n++; next }
+    n < 2 { next }
+    index($0, legacy) > 0 { next }
+    { print }
+  ' "$1"
+}
+
+restamp_skill() {
+  echo "=== memory-sync-setup: restamp ==="
+  echo "TARGET=$ROOT"
+  _f="$TARGET/SKILL.md"
+  if [ ! -f "$_f" ]; then
+    if [ -f "$DISABLED_MARK" ]; then
+      echo "❌ FAILED: memory-sync is PARKED at $DISABLED_MARK - run 'generate.sh enable' first, then restamp"
+    else
+      echo "❌ FAILED: not installed - $ROOT/$_f does not exist. Run 'generate.sh emit' first."
+    fi
+    exit 1
+  fi
+
+  _was=$(_fm_meta "$_f" version); [ -n "$_was" ] || _was="(unstamped)"
+  _wasl=$(_legacy_stamp "$_f")
+  _dt=$(_fm_meta "$_f" doc_type)
+  case "$_dt" in llm|user|skip) ;; *) _dt="$META_DOC_TYPE" ;; esac
+  _sfv=$(printf '%s' "${SURFACE_COUNTS:-$(derive_surface_counts)}" | tr -d '"' | tr '\n\r' '  ')
+  _lu=$(date +%F)
+
+  _bd=$(mktemp -d "${TMPDIR:-/tmp}/memory-sync-restamp.XXXXXX") || { echo "❌ FAILED: cannot create a temp dir"; exit 1; }
+  cp "$_f" "$_bd/orig" || { echo "❌ FAILED: cannot read $_f"; exit 1; }
+  _meta_body "$_bd/orig" > "$_bd/pre"
+
+  if ! awk -v dt="$_dt" -v ver="$VERSION" -v gb="$META_GENERATED_BY" -v lu="$_lu" -v sf="$_sfv" \
+           -v legacy="$LEGACY_STAMP_PREFIX" '
+    BEGIN { n = 0; done = 0 }
+    NR == 1 && $0 != "---" { exit 3 }
+    /^---[[:space:]]*$/ {
+      n++
+      if (n == 2 && !done) {
+        printf "doc_type: %s\nversion: \"%s\"\ngenerated_by: \"%s\"\nlast_updated: \"%s\"\nsurface_files: \"%s\"\n", dt, ver, gb, lu, sf
+        done = 1
+      }
+      print; next
+    }
+    n == 1 && /^(doc_type|version|generated_by|last_updated|surface_files):/ { next }
+    n >= 2 && index($0, legacy) > 0 { next }
+    { print }
+    END { if (!done) exit 3 }
+  ' "$_bd/orig" > "$_bd/new"; then
+    echo "❌ FAILED: $_f has no YAML frontmatter block to stamp - nothing was written."
+    echo "   Add the skill's own frontmatter first, or re-install into a clean target."
+    exit 1
+  fi
+
+  _meta_body "$_bd/new" > "$_bd/post"
+  # (the temp dir stays alive for refresh_refs below - it is cleared at the end of this function)
+  if ! cmp -s "$_bd/pre" "$_bd/post"; then
+    echo "❌ FAILED: restamp would have changed more than the provenance keys - aborted, $_f untouched."
+    exit 1
+  fi
+  cp "$_bd/new" "$_f" || { echo "❌ FAILED: cannot write $_f"; exit 1; }
+
+  echo "RESTAMPED: $_f"
+  echo "  version:       $_was -> $VERSION"
+  echo "  last_updated:  -> $_lu"
+  echo "  generated_by:  -> $META_GENERATED_BY"
+  echo "  doc_type:      -> $_dt"
+  echo "  surface_files: -> $_sfv"
+  [ -z "$_wasl" ] || echo "REMOVED:   pre-5.0 tail stamp -> $_wasl"
+  refresh_refs
+  rm -rf "$_bd"; _bd=""
+  echo "✅ restamp (metadata keys only - body and every hand-edit verified byte-identical)"
+}
+
+# The 3 references are mechanism-`a` byte copies: their version stamp is BAKED at release into the
+# plugin's own file, so an installed copy only becomes current by being copied again. `upgrade` never
+# re-copied them, which left `setup-status`'s `cmp` reporting DIFFERS forever with no mode that could
+# clear it. Re-copy only where that is PROVABLY lossless - the sole difference is the release stamp
+# line. Anything else (a SELF-SYNC hand-edit, hard-sync.md's two filled BLOCKs, prose that moved in a
+# newer release) is reported and left alone: a re-copy there would destroy content.
+refresh_refs() {
+  for r in $EMITTED_REFS; do
+    _src="$REFS/$r"; _dst="$TARGET_REFS/$r"
+    # An ABSENT reference has nothing to preserve, and `emit` cannot restore it (it refuses while
+    # SKILL.md exists), so copying it here is the only non-destructive route back to a complete install.
+    if [ ! -f "$_dst" ]; then
+      mkdir -p "$TARGET_REFS" && cp "$_src" "$_dst" && echo "REF RESTORED: $_dst (was missing - copied from the plugin)"
+      continue
+    fi
+    if cmp -s "$_src" "$_dst"; then echo "REF OK:       $_dst (byte-identical to the plugin source)"; continue; fi
+    awk '!/brewcode-meta:/' "$_src" > "$_bd/rs"
+    awk '!/brewcode-meta:/' "$_dst" > "$_bd/rd"
+    if cmp -s "$_bd/rs" "$_bd/rd"; then
+      cp "$_src" "$_dst" && echo "REF RECOPIED: $_dst (differed ONLY in the release stamp - nothing to lose)"
+    else
+      echo "REF DIFFERS:  $_dst - content differs from $_src. NOT touched (hand-edit, filled BLOCKs, or"
+      echo "              prose that moved in a newer release). Diff the two and port changes by hand."
+    fi
+  done
+}
+
 # ── validate ────────────────────────────────────────────────────────────────────
 validate_emit() {
   echo "=== memory-sync-setup: validate ==="
@@ -365,7 +541,9 @@ validate_emit() {
   _missing=0
   [ -f "$TARGET/SKILL.md" ] || { echo "❌ FAILED: missing emitted file: $TARGET/SKILL.md - run 'generate.sh emit' first"; _missing=1; _errors=$((_errors+1)); }
   for r in $EMITTED_REFS; do
-    if [ ! -f "$TARGET_REFS/$r" ]; then echo "❌ FAILED: missing emitted file: $TARGET_REFS/$r"; _missing=1; _errors=$((_errors+1)); fi
+    # `emit` refuses while SKILL.md exists, so it can never be the remedy here - `restamp` re-copies a
+    # missing reference from the plugin, which is lossless because there is no local content to keep.
+    if [ ! -f "$TARGET_REFS/$r" ]; then echo "❌ FAILED: missing emitted file: $TARGET_REFS/$r - run 'generate.sh restamp' to restore it from the plugin"; _missing=1; _errors=$((_errors+1)); fi
   done
   [ "$_missing" -eq 0 ] && echo "✅ all emitted files present (SKILL.md + $EMITTED_N references)"
 
@@ -397,17 +575,39 @@ validate_emit() {
   done
   [ "$_refbad" -eq 0 ] && echo "✅ references consistent both ways (every citation resolves, every emitted reference is cited)"
 
-  # (4) provenance stamp, on the LAST line
-  _lastline=$(tail -1 "$TARGET/SKILL.md")
-  case "$_lastline" in
-    "$STAMP_PREFIX"*) echo "✅ provenance stamp present: $_lastline" ;;
-    *)
-      if grep -qF "$STAMP_PREFIX" "$TARGET/SKILL.md"
-      then echo "❌ FAILED: $TARGET/SKILL.md: provenance stamp is not the LAST line"
-      else echo "❌ FAILED: $TARGET/SKILL.md: provenance stamp absent (expected a last line starting '$STAMP_PREFIX')"
-      fi
-      _errors=$((_errors+1)) ;;
-  esac
+  # (4) provenance frontmatter - the four standard keys plus surface_files
+  _mv=$(_fm_meta "$TARGET/SKILL.md" version)
+  _mg=$(_fm_meta "$TARGET/SKILL.md" generated_by)
+  _ml=$(_fm_meta "$TARGET/SKILL.md" last_updated)
+  _md=$(_fm_meta "$TARGET/SKILL.md" doc_type)
+  _ms=$(_fm_meta "$TARGET/SKILL.md" surface_files)
+  _legacy=$(_legacy_stamp "$TARGET/SKILL.md")
+  if [ -z "$_mv" ] || [ -z "$_mg" ] || [ -z "$_ml" ] || [ -z "$_md" ] || [ -z "$_ms" ]; then
+    if [ -n "$_legacy" ]; then
+      echo "❌ FAILED: $TARGET/SKILL.md carries the pre-5.0 TAIL stamp, not provenance frontmatter:"
+      echo "   $_legacy"
+      echo "   -> run \`generate.sh restamp\`: it writes doc_type/version/generated_by/last_updated/surface_files"
+      echo "      and deletes the tail line, touching nothing else (this is also the last step of \`upgrade\`)"
+    else
+      _lack=""
+      for _k in $META_KEYS; do
+        [ -n "$(_fm_meta "$TARGET/SKILL.md" "$_k")" ] || _lack="$_lack${_lack:+, }$_k"
+      done
+      echo "❌ FAILED: $TARGET/SKILL.md: provenance frontmatter incomplete (missing: $_lack)"
+      echo "   -> run \`generate.sh restamp\` to write all five keys in place (hand-edits untouched)"
+    fi
+    _errors=$((_errors+1))
+  elif [ "$_mv" != "$VERSION" ]; then
+    # Never name `upgrade` here: `upgrade` is the mode whose tail runs this check, so pointing back at it
+    # was a closed loop with MEMORY_SYNC_FORCE=1 (hand-edit destroying) as the only documented escape.
+    echo "❌ FAILED: $TARGET/SKILL.md: stamped version $_mv != plugin version $VERSION"
+    echo "   -> run \`generate.sh restamp\`: it refreshes version/last_updated/surface_files in place,"
+    echo "      body and hand-edits untouched, and is the mandatory last step of \`upgrade\`"
+    _errors=$((_errors+1))
+  else
+    echo "✅ provenance frontmatter present: doc_type=$_md version=$_mv generated_by=$_mg last_updated=$_ml surface_files=\"$_ms\""
+    [ -z "$_legacy" ] || echo "⚠️ a pre-5.0 tail stamp also survives in this file - delete that line, the frontmatter supersedes it"
+  fi
 
   if [ "$_errors" -eq 0 ]; then echo "✅ validate PASSED"; else echo "❌ FAILED: $_errors check(s) failed"; fi
   exit "$_errors"
@@ -419,9 +619,19 @@ status_report() {
   echo "TARGET=$ROOT"
   echo "SKILL_PATH=$ROOT/$TARGET"
 
-  if [ ! -f "$TARGET/SKILL.md" ]; then
+  echo "PLUGIN_VERSION=$VERSION"
+
+  # PARKED (SKILL.md renamed to SKILL.md.disabled by `disable`) is a THIRD state, never collapsed into
+  # absent: the body, the 3 references and every SELF-SYNC hand-edit are still on disk, so the stamp is
+  # read out of the parked file and reported at its real version. Only `enable` brings it back.
+  _skf="$TARGET/SKILL.md"; _parked=no
+  if [ ! -f "$_skf" ] && [ -f "$DISABLED_MARK" ]; then _skf="$DISABLED_MARK"; _parked=yes; fi
+
+  if [ ! -f "$_skf" ]; then
     # Same KEY set as the installed branch - a parser keyed on any row must not go blind on a fresh target.
-    echo "INSTALLED=no"; echo "STAMP_VERSION=none"; echo "STAMP_DATE=none"; echo "STAMP_SURFACE=none"
+    echo "INSTALLED=no"; echo "PARKED=no"; echo "STAMP_FORMAT=none"
+    echo "META_DOC_TYPE=none"; echo "META_VERSION=none"; echo "META_GENERATED_BY=none"
+    echo "META_LAST_UPDATED=none"; echo "META_SURFACE=none"
     echo "SURFACE_FILES_NOW=$(surface_total)"; echo "SURFACE_FILES_STAMPED=unknown"
     echo "MISSING_FILES=$(( 1 + EMITTED_N ))"
     echo "OPEN_PLACEHOLDERS=$( { _open_tokens || true; } | awk '{ print $NF }' | sort -u | wc -l | tr -d ' ')"
@@ -430,21 +640,50 @@ status_report() {
     return 0
   fi
 
-  echo "INSTALLED=yes"
+  if [ "$_parked" = yes ]; then
+    echo "INSTALLED=parked"; echo "PARKED=yes"
+    echo "NOTE_PARKED=disabled, not missing - $DISABLED_MARK holds the body and every SELF-SYNC hand-edit; run \`enable\` to bring /memory-sync back"
+  else
+    echo "INSTALLED=yes"; echo "PARKED=no"
+  fi
   _drifts=0
 
-  _stamp=$(grep -F "$STAMP_PREFIX" "$TARGET/SKILL.md" | tail -1 || true)
-  if [ -z "$_stamp" ]; then
-    _sv=UNSTAMPED; _sd=UNSTAMPED; _ss=UNSTAMPED; _stamped_n=unknown
+  # Provenance: frontmatter (5.0+) | legacy tail stamp (pre-5.0) | none. Read from the live SKILL.md,
+  # or from the parked SKILL.md.disabled - both carry the same stamp.
+  _sv=$(_fm_meta "$_skf" version)
+  _sg=$(_fm_meta "$_skf" generated_by)
+  _sd=$(_fm_meta "$_skf" last_updated)
+  _st=$(_fm_meta "$_skf" doc_type)
+  _ss=$(_fm_meta "$_skf" surface_files)
+  _legacy=$(_legacy_stamp "$_skf")
+  _fmt=frontmatter
+  if [ -z "$_sv" ] && [ -n "$_legacy" ]; then
+    # Pre-5.0 install: parse what the old tail stamp holds, never crash on it, count it as drift.
+    _fmt=legacy
+    _sv=$(printf '%s\n' "$_legacy" | sed -e "s|^.*${LEGACY_STAMP_PREFIX}||" -e 's/ .*//')
+    _sd=$(printf '%s\n' "$_legacy" | sed -e 's/.* emitted //' -e 's/ .*//')
+    _ss=$(printf '%s\n' "$_legacy" | sed -e 's/.*| surface: //' -e 's/ -->$//')
+    _sg="brewdoc:memory-sync-setup"; _st=unknown
+    echo "NOTE_LEGACY=pre-5.0 tail stamp (template v$_sv) - no provenance frontmatter; \`generate.sh restamp\` migrates it (it is also the last step of \`upgrade\`)"
+    _drifts=$((_drifts+1))
+  elif [ -z "$_sv" ]; then
+    _fmt=none
+    _sv=UNSTAMPED; _sd=UNSTAMPED; _ss=UNSTAMPED; _sg=UNSTAMPED; _st=UNSTAMPED
+  fi
+  [ -n "$_sd" ] || _sd=unknown
+  [ -n "$_st" ] || _st=unknown
+  if [ "$_ss" = UNSTAMPED ] || [ -z "$_ss" ]; then
+    _stamped_n=unknown
   else
-    _sv=$(printf '%s\n' "$_stamp" | sed -e "s|^${STAMP_PREFIX}||" -e 's/ .*//')
-    _sd=$(printf '%s\n' "$_stamp" | sed -e 's/.* emitted //' -e 's/ .*//')
-    _ss=$(printf '%s\n' "$_stamp" | sed -e 's/.*| surface: //' -e 's/ -->$//')
     _stamped_n=$(printf '%s\n' "$_ss" | grep -oE '^[0-9]+' || true)
     [ -n "$_stamped_n" ] || _stamped_n=unknown
-    [ "$_sv" = "$VERSION" ] || { echo "NOTE_VERSION=template version moved $_sv -> $VERSION"; _drifts=$((_drifts+1)); }
   fi
-  echo "STAMP_VERSION=$_sv"; echo "STAMP_DATE=$_sd"; echo "STAMP_SURFACE=$_ss"
+  if [ "$_fmt" = frontmatter ] && [ "$_sv" != "$VERSION" ]; then
+    echo "NOTE_VERSION=plugin version moved $_sv -> $VERSION"; _drifts=$((_drifts+1))
+  fi
+  echo "STAMP_FORMAT=$_fmt"
+  echo "META_DOC_TYPE=$_st"; echo "META_VERSION=$_sv"; echo "META_GENERATED_BY=$_sg"
+  echo "META_LAST_UPDATED=$_sd"; echo "META_SURFACE=$_ss"
 
   _now=$(surface_total)
   echo "SURFACE_FILES_NOW=$_now"
@@ -467,22 +706,129 @@ status_report() {
   [ "$_open" -gt 0 ] && _drifts=$((_drifts + _open))
 
   echo "DEFAULT_BRANCH=$(derive_branch)"; echo "GIT_VISIBILITY=$(derive_git_visibility)"; echo "DRIFTS=$_drifts"
-  if [ "$_drifts" -eq 0 ]; then echo "VERDICT=IN SYNC"; else echo "VERDICT=STALE ($_drifts drifts)"; fi
+  if [ "$_fmt" = legacy ]; then _verdict="STALE-LEGACY ($_drifts drifts)"
+  elif [ "$_drifts" -eq 0 ]; then _verdict="IN SYNC"
+  else _verdict="STALE ($_drifts drifts)"
+  fi
+  # PARKED carries its staleness with it - the two answers are orthogonal and both are reported.
+  [ "$_parked" = no ] || _verdict="PARKED - $_verdict"
+  echo "VERDICT=$_verdict"
   return 0
 }
 
+# ── enable / disable ────────────────────────────────────────────────────────────
+# Claude Code discovers a project skill only through <dir>/SKILL.md. Parking that ONE file as
+# SKILL.md.disabled withdraws /memory-sync from the roster while the emitted references AND every
+# hand-edit the skill accumulated through its SELF-SYNC phase stay byte-identical on disk. Fully
+# reversible, nothing regenerated, no provenance stamp touched.
+DISABLED_MARK="$TARGET/SKILL.md.disabled"
+
+toggle_skill() {
+  _want="$1"   # enable | disable
+  if [ "$_want" = "disable" ]; then _from="$TARGET/SKILL.md"; _to="$DISABLED_MARK"
+  else _from="$DISABLED_MARK"; _to="$TARGET/SKILL.md"; fi
+
+  echo "=== memory-sync-setup: $_want ==="
+  echo "TARGET=$ROOT"
+  if [ ! -d "$TARGET" ]; then
+    echo "❌ FAILED: not installed - $ROOT/$TARGET does not exist. Run 'generate.sh emit' first."
+    exit 1
+  fi
+  if [ -f "$_to" ] && [ ! -f "$_from" ]; then
+    echo "✅ already ${_want}d - $_to is in place, nothing to move"
+    exit 0
+  fi
+  if [ ! -f "$_from" ]; then
+    echo "❌ FAILED: broken installation - neither $TARGET/SKILL.md nor $DISABLED_MARK exists"
+    exit 1
+  fi
+  mv "$_from" "$_to" || { echo "❌ FAILED: could not rename $_from"; exit 1; }
+  echo "MOVED: $_from -> $_to"
+  for r in $EMITTED_REFS; do [ -f "$TARGET_REFS/$r" ] && echo "KEPT:  $TARGET_REFS/$r"; done
+  echo "✅ $_want (takes effect in the NEXT session - skills are discovered at session start)"
+}
+
+# ── uninstall / purge ───────────────────────────────────────────────────────────
+# `emit` writes exactly SKILL.md + $EMITTED_REFS, so that manifest is also the removal manifest:
+#   uninstall  deletes precisely what this generator wrote, and NOTHING it did not. Anything else
+#              sitting in the dir came from the user, so it survives and is reported.
+#   purge      deletes the whole directory plus any crashed-emit staging left under .claude/skills/.
+# The generator has no hooks, no settings entries and no config file anywhere else in the target,
+# so these two paths are its entire footprint.
+remove_skill() {
+  _purge="$1"   # 0 = uninstall, 1 = purge
+  _label=$([ "$_purge" = "1" ] && echo purge || echo uninstall)
+  echo "=== memory-sync-setup: $_label ==="
+  echo "TARGET=$ROOT"
+
+  if [ ! -d "$TARGET" ]; then
+    echo "⚠️ nothing to $_label - memory-sync is not installed at $ROOT/$TARGET"
+    exit 0
+  fi
+
+  if [ "$_purge" = "1" ]; then
+    rm -rf "$TARGET"
+    echo "REMOVED: $TARGET/ (whole directory, user-added files included)"
+    _stale=$({ find "$(dirname "$TARGET")" -maxdepth 1 -type d -name '.memory-sync-emit.*' 2>/dev/null || true; } | sort)
+    if [ -n "$_stale" ]; then
+      printf '%s\n' "$_stale" | while IFS= read -r _d; do
+        [ -n "$_d" ] || continue
+        rm -rf "$_d"; echo "REMOVED: $_d/ (staging left by a crashed emit)"
+      done
+    else
+      echo "SKIP:    no .memory-sync-emit.* staging leftovers"
+    fi
+    echo "✅ purge"
+    return 0
+  fi
+
+  # uninstall: the emit manifest, and only the emit manifest.
+  for f in "$TARGET/SKILL.md" "$DISABLED_MARK"; do
+    [ -f "$f" ] && { rm -f "$f"; echo "REMOVED: $f"; }
+  done
+  for r in $EMITTED_REFS; do
+    [ -f "$TARGET_REFS/$r" ] && { rm -f "$TARGET_REFS/$r"; echo "REMOVED: $TARGET_REFS/$r"; }
+  done
+  rmdir "$TARGET_REFS" 2>/dev/null || true
+  rmdir "$TARGET" 2>/dev/null || true
+
+  if [ -d "$TARGET" ]; then
+    echo "KEPT:    $TARGET/ still holds files this generator never wrote -"
+    find "$TARGET" -type f | sort | sed 's/^/         /'
+    echo "         'purge' removes them too."
+  else
+    echo "REMOVED: $TARGET/ (empty after the manifest was removed)"
+  fi
+  echo "✅ uninstall"
+}
+
 case "$MODE" in
-  scan)     resolve_root; scan_target ;;
-  emit)     resolve_root; emit_skill ;;
-  validate) resolve_root; validate_emit ;;
-  status)   resolve_root; status_report ;;
+  scan)      resolve_root; scan_target ;;
+  emit)      resolve_root; emit_skill ;;
+  validate)  resolve_root; validate_emit ;;
+  restamp)   resolve_root; restamp_skill ;;
+  status)    resolve_root; status_report ;;
+  enable)    resolve_root; toggle_skill enable ;;
+  disable)   resolve_root; toggle_skill disable ;;
+  uninstall) resolve_root; remove_skill 0 ;;
+  purge)     resolve_root; remove_skill 1 ;;
   *)
-    echo "Usage: generate.sh <scan|emit|validate|status>   (default: emit)"
+    echo "Usage: generate.sh <scan|emit|validate|restamp|status|enable|disable|uninstall|purge>   (default: emit)"
     echo "  scan      read-only surface report + derived DEFAULT_BRANCH= / GIT_VISIBILITY= / MEMORY_DIR= /"
     echo "            TRACKER_NOTE= / SURFACE_COUNTS= / PROJECT_NAME= for pass-back to emit"
     echo "  emit      atomically write $TARGET (refuses to overwrite; MEMORY_SYNC_FORCE=1 overrides)"
-    echo "  validate  fail on unresolved {PLACEHOLDER}, missing file, broken reference, missing stamp"
-    echo "  status    machine-greppable KEY=value drift report, always exit 0"
+    echo "  validate  fail on unresolved {PLACEHOLDER}, missing file, broken reference, missing/stale provenance frontmatter"
+    echo "  restamp   refresh ONLY the provenance keys of an installed SKILL.md (version/last_updated/"
+    echo "            surface_files, + doc_type/generated_by when absent) and drop a pre-5.0 tail stamp."
+    echo "            Body and every hand-edit are verified byte-identical. Mandatory last step of \`upgrade\`"
+    echo "  status    machine-greppable KEY=value drift report, always exit 0. INSTALLED=yes|parked|no -"
+    echo "            a parked install (SKILL.md.disabled) is reported PARKED, never NOT INSTALLED"
+    echo "  enable    rename $TARGET/SKILL.md.disabled back to SKILL.md"
+    echo "  disable   rename $TARGET/SKILL.md to SKILL.md.disabled - /memory-sync stops being discovered;"
+    echo "            the references and every SELF-SYNC hand-edit stay on disk, reversible"
+    echo "  uninstall delete exactly what emit wrote (SKILL.md + $EMITTED_N references); user-added files in"
+    echo "            that dir are KEPT and listed"
+    echo "  purge     delete $TARGET/ outright + any .memory-sync-emit.* staging leftovers"
     exit 1
     ;;
 esac

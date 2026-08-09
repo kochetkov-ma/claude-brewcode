@@ -77,8 +77,10 @@ prose is the interface.
 with two entry points: `emit` (full generation) and `emit-agent` (the agent alone — no superreview skill needed, this
 is what `/brewcode:teams-setup` calls). It is never hand-written, never authored by `brewcode:agent-creator` (which may only
 ADAPT the seeded blocks), and never a domain expert. A usable existing file is **REUSED byte-untouched** — the writer
-prints one status line, `INTENT_GUARD: CREATED <path>` or `INTENT_GUARD: REUSE <path>` — so local edits survive every
-regeneration; an empty or frontmatter-less file counts as absent and is recreated. Its evidence tiers are baked in at
+prints one status line, `INTENT_GUARD: CREATED|REUSE|MIGRATED <path>` — so local edits survive every
+regeneration; an empty or frontmatter-less file counts as absent and is recreated. `MIGRATED` is the pre-5.0 case:
+a file carrying the retired `intent-guard template vN` stamp gets its metadata restamped in place (the four
+frontmatter keys + the tail anchor) with the tailored body preserved byte-for-byte. Its evidence tiers are baked in at
 emit time: `T1` tracker, `T2` specs, `T3` plans, `T4` policy files, `T5` the live session transcript.
 
 ## How review + standards-review are merged
@@ -100,14 +102,24 @@ matrix and report scaffolding baked into it; scope + expert selection make the e
 Run inside the repo you want to wire up:
 
 ```
-/brewcode:superreview-setup [status|install|upgrade] "<fine-tune-prompt>" [scope]
+/brewcode:superreview-setup [status|install|upgrade|enable|disable|uninstall|purge] "<fine-tune-prompt>" [scope]
 ```
 
 | Verb | Effect |
 |------|--------|
-| `status` | read-only: is the skill emitted, is `intent-guard.md` present, does `validate` pass |
-| `install` | full generation (Phase 0 -> 4). Also the no-verb default |
+| `status` | read-only: is the skill emitted, is it enabled or parked, is `intent-guard.md` present, does `validate` pass |
+| `install` | full generation (Phase 0 -> 4). Also the default when a fine-tune prompt is given with no verb |
 | `upgrade` | refresh a live install from the template baseline without erasing tailoring |
+| `enable` | rename `SKILL.md.disabled` back to `SKILL.md` — `/superreview` is offered again |
+| `disable` | rename `SKILL.md` to `SKILL.md.disabled` — `/superreview` stops being discovered. `references/`, `.template-baseline/` and every tailoring stay on disk; reversible, nothing regenerated |
+| `uninstall` | delete `.claude/skills/superreview/`. **Keeps** the review reports and `intent-guard.md` |
+| `purge` | uninstall + delete `.claude/reports/*_superreview/`. Still keeps `intent-guard.md` |
+
+No arguments at all: `status` when the skill is already emitted, `install` when it is not.
+
+`intent-guard.md` survives all seven verbs — it is shared with `/brewcode:teams-setup`, and that skill
+may be the one that put it there. `enable`/`disable` take effect in the NEXT session, since Claude Code
+discovers skills at session start.
 
 - `<fine-tune-prompt>` — what to emphasize in the emitted skill's focus ordering (e.g. "weight reuse highest",
   "always treat auth as P0"). Woven into the emitted Focus table + emphasis line. Scope discipline stays in rank 1
@@ -150,7 +162,7 @@ After generation, run the emitted skill in that project. Depth comes from how yo
 | File | Role |
 |------|------|
 | `SKILL.md` | The generator orchestrator |
-| `scripts/generate.sh` | `scan` / `emit` / `emit-agent` / `upgrade` / `validate` |
+| `scripts/generate.sh` | `scan` / `emit` / `emit-agent` / `upgrade` / `enable` / `disable` / `uninstall` / `purge` / `validate` |
 | `references/SKILL.md.template` | The emitted SKILL.md (placeholder slots) |
 | `references/agent-prompt.md` | Emitted runtime expert-selection procedure + domain-owner prompt contract |
 | `references/scope.md.template` | Emitted scope-discipline reference (baseline, ownership, taxonomy, delivery, closeout, gate) |
@@ -167,7 +179,7 @@ the expected path, not a failure: it writes nothing and prints no `INTENT_GUARD:
 
 | Command | Effect |
 |---------|--------|
-| `generate.sh upgrade` | The supported refresh. Writes NO live file. Stages a fresh emit under `.upgrade-staging/` and reports, per asset, the **new template vs the pristine `.template-baseline/` copy `emit` saved** — so `DIFFERS (<n> template line(s))` counts real template changes and never your tailoring. A deleted asset is restored RAW and labelled `MISSING -> restored (NEEDS PHASE 3)`. The generator ports each delta into the live file with targeted `Edit` calls, then promotes `.upgrade-staging/.template` to the new baseline |
+| `generate.sh upgrade` | The supported refresh. Writes NO live file. Stages a fresh emit under `.upgrade-staging/` and reports, per asset, the **new template vs the pristine `.template-baseline/` copy `emit` saved** — so `DIFFERS (<n> template line(s))` counts real template changes and never your tailoring. The per-stack reference is re-derived from the installed tree (`UPGRADE_STACK=`), never re-defaulted, so a TypeScript/Go/Java-Kotlin install gets its own reference restamped. A deleted asset is restored RAW — scalars included, deliberately unresolved — and labelled `MISSING -> restored RAW (NEEDS PHASE 3: scalar AND block placeholders)`. The generator ports each delta into the live file with targeted `Edit` calls, then promotes `.upgrade-staging/.template` to the new baseline |
 | `SUPERREVIEW_FORCE=1 generate.sh emit` | Conscious destructive override: overwrites the live installation and **loses** every tailored + self-synced edit. Only on an explicit request for a clean regeneration |
 
 `.template-baseline/` and `.upgrade-staging/` each carry a `.gitignore` of `*`, so neither shows up in your

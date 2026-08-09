@@ -4,7 +4,7 @@ description: Detailed description of all brewdoc plugin commands
 
 # Brewdoc Plugin Commands
 
-> **Version:** 5.0.0 | **Author:** Maksim Kochetkov | **License:** MIT
+> **Version:** 5.1.0 | **Author:** Maksim Kochetkov | **License:** MIT
 
 ## Quick Reference
 
@@ -13,8 +13,8 @@ All 5 brewdoc skills are documented below, one section each.
 | # | Command | Purpose | Model | Args |
 |---|---------|---------|-------|------|
 | 1 | `/brewdoc:my-claude` | Generate docs about Claude Code installation and environment | opus | `[ext [context]] \| [r <query>]` |
-| 2 | `/brewdoc:memory-sync-setup` | Generate a project-tailored `/memory-sync` skill into the target repo | opus | `[status\|install\|upgrade\|uninstall] [fine-tune-prompt]` |
-| 3 | `/brewdoc:docsync-setup` | Install project-local doc-staleness tracking hooks; report/force sync | sonnet | `[status\|install\|upgrade\|uninstall\|purge] [sync [--all]\|reread\|frontmatter] \| free-text` |
+| 2 | `/brewdoc:memory-sync-setup` | Generate a project-tailored `/memory-sync` skill into the target repo | opus | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [fine-tune-prompt]` |
+| 3 | `/brewdoc:docsync-setup` | Install project-local doc-staleness tracking hooks; report/force sync | sonnet | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [sync [--all]\|reread\|frontmatter] \| free-text` |
 | 4 | `/brewdoc:md-to-pdf` | Convert Markdown to PDF via reportlab or weasyprint | sonnet | `<file.md> [--engine name] ["prompt"] \| styles \| test` |
 | 5 | `/brewdoc:publish` | Publish text/markdown/file/site to brewpage.app, returns URL | haiku | `<text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename]` |
 
@@ -22,7 +22,7 @@ All 5 brewdoc skills are documented below, one section each.
 
 A `-setup` suffix marks a skill that installs a mechanism -- afterwards you use the installed hooks or the generated skill, not the setup skill. Recurring tools keep bare names.
 
-Setup skills share one verb vocabulary, in this order: `status | install | upgrade | enable | disable | uninstall | purge`. No argument = `status` if installed, `install` if not. Skill-specific extras come after the canonical verb. v5.0.0 dropped the aliases `init`, `on`, `off`, `setup`, `remove` and `reset` with no back-compat shims. Neither brewdoc setup skill implements `enable`/`disable`, and `memory-sync-setup` has no `purge` -- the per-command Args column is authoritative.
+Setup skills share one verb vocabulary, in this order: `status | install | upgrade | enable | disable | uninstall | purge`. No argument = `status` if installed, `install` if not. Skill-specific extras come after the canonical verb. v5.0.0 dropped the aliases `init`, `on`, `off`, `setup`, `remove` and `reset` with no back-compat shims. Both brewdoc setup skills implement `enable`/`disable` -- `docsync-setup` flips the `enabled` key in `.claude/docsync/config.json` (and refreshes its provenance stamp on that write), `memory-sync-setup` renames `SKILL.md` <-> `SKILL.md.disabled` -- and both implement `purge`; the per-command Args column is authoritative.
 
 Every brewdoc skill carries `disable-model-invocation: true`: Claude never fires any of them on its own, you type the command. `/brewcode:setup-status` reports what is installed, stale or missing across all plugins.
 
@@ -152,7 +152,7 @@ If an existing entry for the same mode exists, the skill offers to update (versi
 
 | Parameter | Value |
 |-----------|-------|
-| **Arguments** | `[status\|install\|upgrade\|uninstall] [fine-tune-prompt]` |
+| **Arguments** | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [fine-tune-prompt]` |
 | **Model** | `opus` |
 | **Dependencies** | None |
 | **Allowed tools** | `Read`, `Edit`, `Glob`, `Grep`, `Bash`, `Agent`, `AskUserQuestion` |
@@ -162,10 +162,13 @@ If an existing entry for the same mode exists, the skill offers to update (versi
 
 | Mode | Writes | Runs |
 |------|--------|------|
-| `status` (**default when installed**) | nothing | Is `memory-sync` installed, its provenance stamp, how stale its surface tables are vs the live repo. Verdict `IN SYNC` / `STALE (n drifts)` / `NOT INSTALLED` |
+| `status` (**default when installed**) | nothing | Is `memory-sync` installed, what its provenance frontmatter says (`doc_type`/`version`/`generated_by`/`last_updated`/`surface_files`), how stale its surface tables are vs the live repo. Verdict `IN SYNC` / `STALE (n drifts)` / `STALE-LEGACY (n drifts)` (pre-5.0 tail stamp -- run `upgrade`) / `NOT INSTALLED`, each prefixed `PARKED - ` when disabled |
 | `install` (**default when not installed**) | the 4 emitted files (`SKILL.md` + `references/memory-guide.md`, `agent-audit.md`, `hard-sync.md`) | Full analysis + emit. Refuses an existing installation |
-| `upgrade` | targeted edits | Re-scan and refresh an existing installation; hand-edits preserved, never blind-overwritten |
-| `uninstall` | deletes `<target>/.claude/skills/memory-sync/` | Removes the emitted skill after confirmation. Nothing this generator ever wrote lives outside that dir, so there is no separate `purge` |
+| `upgrade` | targeted edits + provenance restamp | Re-scan and refresh an existing installation; hand-edits preserved, never blind-overwritten |
+| `enable` | renames `SKILL.md.disabled` -> `SKILL.md` | Brings `/memory-sync` back; nothing regenerated |
+| `disable` | renames `SKILL.md` -> `SKILL.md.disabled` | Withdraws `/memory-sync` from the roster; the 3 references and every hand-edit stay byte-identical. Reversible by `enable` |
+| `uninstall` | deletes exactly what `emit` wrote (`SKILL.md`/parked form + the 3 references) | Removes the emitted skill after confirmation. Files the user added to that dir are kept and listed |
+| `purge` | deletes `<target>/.claude/skills/memory-sync/` outright | Removes everything including user-added files. Confirmation first |
 
 ### Emitted surface (every run of `/memory-sync`)
 
@@ -208,7 +211,10 @@ Excluded with reasons: `docs/**` (a separate doc flow owns it), all source code 
 /brewdoc:memory-sync-setup install "weight stale-fact removal over compression"
 /brewdoc:memory-sync-setup status
 /brewdoc:memory-sync-setup upgrade
+/brewdoc:memory-sync-setup disable
+/brewdoc:memory-sync-setup enable
 /brewdoc:memory-sync-setup uninstall
+/brewdoc:memory-sync-setup purge
 ```
 
 Then, inside that project: `/memory-sync`, `/memory-sync branch`, `/memory-sync all hard "only rules"`.
@@ -221,7 +227,7 @@ Then, inside that project: `/memory-sync`, `/memory-sync branch`, `/memory-sync 
 
 | Parameter | Value |
 |-----------|-------|
-| **Arguments** | `[status\|install\|upgrade\|uninstall\|purge] [sync [--all]\|reread\|frontmatter] \| free-text` |
+| **Arguments** | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [sync [--all]\|reread\|frontmatter] \| free-text` |
 | **Model** | `sonnet` |
 | **Dependencies** | None |
 | **Allowed tools** | `Read`, `Write`, `Edit`, `Bash`, `Glob`, `Grep`, `AskUserQuestion` |
@@ -232,36 +238,45 @@ Then, inside that project: `/memory-sync`, `/memory-sync branch`, `/memory-sync 
 | Mode | Writes | Description |
 |------|--------|-------------|
 | `status` (**default when installed**) | nothing | Report tracked docs, staleness, current session touched-set |
-| `install` (**default when not installed**) | hooks + `.claude/docsync/{config,state}.json` | Ask threshold (7/14/30/other days) + exclude globs; copy `docsync-{track,watch,gate}.mjs` into `.claude/hooks/`; merge `settings.json` (never clobbers foreign hooks, `.bak` backup first) |
-| `upgrade` | hook files + settings entries | Re-copy the 3 hooks from the current plugin version and re-register any that went missing; `config.json` threshold and excludes are preserved verbatim |
-| `uninstall` | removes hooks + settings.json entries | Inverse-merge removes only the 3 docsync hook entries; foreign hooks preserved; `.claude/docsync/` config and state are KEPT |
+| `install` (**default when not installed**) | hooks + `.claude/docsync/{config,state}.json` | Ask threshold (7/14/30/other days) + exclude globs; copy `docsync-{track,watch,gate}.mjs` into `.claude/hooks/`; write `config.json` with `version` (the plugin version, by skill self-location), `generated_by` (`brewdoc:docsync-setup`), `last_updated` (`date +%F`), `threshold_days` and `exclude`; merge `settings.json` (never clobbers foreign hooks, `.bak` backup first) |
+| `upgrade` | hook files + settings entries + `config.json` provenance keys | Re-copy the 3 hooks from the current plugin version, re-register any that went missing, and refresh ONLY `config.json`'s `version` / `generated_by` / `last_updated`; `threshold_days` and `exclude` are preserved verbatim |
+| `enable` | `config.json`: `enabled: true` + provenance refresh | Flips docsync back to live; hooks stay registered throughout, effective immediately, no session restart. Provenance keys are backfilled if missing or stale, not required to already match |
+| `disable` | `config.json`: `enabled: false` + provenance refresh | Flips docsync inert without unwiring it; hooks stay registered but all three no-op (absent `enabled` key still counts as `true`, so this is the only way to pause). Reversible by `enable` |
+| `uninstall` | removes hooks + settings.json entries | Inverse-merge removes only the 3 docsync hook entries; foreign hooks preserved; then ASKS whether to delete `.claude/docsync/` (config + state) -- Yes deletes it, Keep leaves it for a later `install` to reuse |
 | `purge` | `uninstall` + deletes `.claude/docsync/` | The destructive one: hooks, registration, config and state all go |
 
 **Extras** -- run after install, no canonical verb needed:
 
 | Extra | Writes | Description |
 |-------|--------|-------------|
-| `sync [--all]` | frontmatter `last_updated` | Refresh stale docs (or every in-scope doc with `--all`) WITH confirmation; follows each doc's `sync_procedure` if present; compression by `doc_type` (`llm` = deep, `user` = light) |
+| `sync [--all]` | frontmatter `last_updated` | Refresh stale docs (or every in-scope doc with `--all`) WITH confirmation; Claude reads each doc's `sync_procedure` and follows it (prose hint -- no hook parses it); compression by `doc_type` (`llm` = deep, `user` = light, absent = `user`) |
 | `reread` | nothing | Force re-read of tracked docs to refresh in-context understanding |
-| `frontmatter` | frontmatter block | Opt-in retro-add of `doc_type`/`last_updated` to docs missing it; never runs automatically at `install` |
+| `frontmatter` | frontmatter block | Opt-in retro-add of `doc_type`/`last_updated`/`sync_procedure` to docs missing them; never runs automatically at `install` |
 
 ### Frontmatter schema
 
 ```yaml
 ---
-doc_type:      llm            # optional; absent => user. values: llm | user | skip
-last_updated:  2026-07-19     # sole staleness input (YYYY-MM-DD)
-sync_procedure:"what to check / where to look when syncing"   # optional, prose
+doc_type: llm                  # optional, UNQUOTED; absent or unrecognized => user. values: llm | user | skip
+last_updated: "2026-07-19"     # sole staleness input (YYYY-MM-DD, LOCAL time)
+sync_procedure: "what to check / where to look when syncing"   # optional, prose
 ---
 ```
 
-`doc_type: skip` excludes a file from tracking entirely. Staleness: `today - last_updated > threshold_days`.
+`doc_type: skip` excludes a file from tracking entirely -- enforced by all three hooks, the Stop gate
+included. Absent or unrecognized `doc_type` is normalized to `user` in code, not just in docs.
+`sync_procedure` is a model-only hint: no hook reads it. `last_updated` and `sync_procedure` are quoted,
+`doc_type` is bare -- the hooks' parser strips quotes either way, but a real YAML consumer types an
+unquoted `2026-07-19` as a Date, and `doc_type` is an enum matched literally as `^doc_type: llm$`.
+Staleness: `today - last_updated > threshold_days`, whole days in LOCAL time.
 
 ```
 /brewdoc:docsync-setup
 /brewdoc:docsync-setup install
 /brewdoc:docsync-setup status
 /brewdoc:docsync-setup upgrade
+/brewdoc:docsync-setup disable
+/brewdoc:docsync-setup enable
 /brewdoc:docsync-setup sync --all
 /brewdoc:docsync-setup frontmatter
 /brewdoc:docsync-setup uninstall

@@ -3,11 +3,9 @@ name: brewtools:task-board-setup
 description: "Generator: deploys a file-based Kanban into any repo via multi-agent analysis, an optional spec + system-design layer (task-spec skill, per-task spec/design docs, domain-architect fan-out), and an optional gated CLAUDE.md-optimization pass. `upgrade` retrofits the spec layer onto an already-deployed board. Triggers: init task board, scaffold kanban, task tracker, upgrade task board, канбан-доска, спек-слой."
 user-invocable: true
 disable-model-invocation: true
-argument-hint: "[status|install|upgrade|uninstall|purge] [target repo path | empty = cwd] [free-text directive, e.g. 'also dedupe rules', 'skip module split']"
+argument-hint: "[status|install|upgrade|enable|disable|uninstall|purge] [target repo path | empty = cwd] [free-text directive, e.g. 'also dedupe rules', 'skip module split']"
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, Agent, AskUserQuestion]
 model: opus
-meta:
-  phases: [P0, PS, PU, PR, P1, P2, P3, P3.5, P4, P5, P5.5]
 ---
 
 [DICT: TT=task-tracker agent (generated), TB=task-board skill (generated), BRD=board.md, FEAT=.claude/features, EXCL=source-path exclusions, REL=release style (vX.Y.Z tag | commit SHA | no tag), DOM=domain id segment, FM=frontmatter, TS=task-spec skill (generated), SPEC_MODE=spec+design layer opt-in, PS=status phase, PU=upgrade phase, PR=uninstall/purge phase]
@@ -79,12 +77,12 @@ DONE: files written under closed/ + backlog/, and a manifest: docs migrated by s
 ## P0: Resolve verb + target repo + parse directive
 
 `$ARGUMENTS` carries THREE optional, order-independent things: (a) a MODE verb, (b) a target repo PATH, (c) a free-text DIRECTIVE that tunes the optional CLAUDE.md-optimization phase (e.g. "also dedupe rules", "skip module split", "report only"). Disambiguate:
-- A standalone token (case-insensitive) from the canonical set `status | install | upgrade | uninstall | purge` sets `MODE` and is CONSUMED -- it never reaches `DIR`. A word merely containing one of them inside a sentence (e.g. "upgrade the rules wording") is NOT the verb; only a standalone token is. Two conflicting verbs -> `AskUserQuestion`.
+- A standalone token (case-insensitive) from the canonical set `status | install | upgrade | enable | disable | uninstall | purge` sets `MODE` and is CONSUMED -- it never reaches `DIR`. A word merely containing one of them inside a sentence (e.g. "upgrade the rules wording") is NOT the verb; only a standalone token is. Two conflicting verbs -> `AskUserQuestion`.
 - A token that resolves to an existing directory (abs, or relative to cwd) = the PATH. Empty / unresolvable-as-dir = cwd.
 - Everything else (the remaining free text) = `DIR`, passed verbatim to P5.5. If no path-like token is present, the whole non-verb argument is `DIR` and `TARGET`=cwd.
 - If ambiguous (e.g. a bare word that is both a plausible relative dir and a directive verb), prefer PATH only if it resolves to an existing dir; else treat as DIR.
 
-> `init`, `on`, `off`, `setup`, `remove` and `reset` are NOT verbs any more. Recognize `init`/`setup` in free text as a synonym of `install` and `remove`/`reset` as a synonym of `uninstall`/`purge` (ask which), then always echo the canonical verb back. Never print a removed alias as a command.
+> `init`, `on`, `off`, `setup`, `remove`, `reset`, `create`, `update` and `cleanup` are NOT verbs any more. Recognize `init`/`setup`/`create` in free text as a synonym of `install`, `update` as a synonym of `upgrade`, `on`/`off` as synonyms of `enable`/`disable`, and `remove`/`reset`/`cleanup` as a synonym of `uninstall`/`purge` (ask which), then always echo the canonical verb back. Never print a removed alias as a command.
 
 **No verb given** -- resolve `MODE` from the board itself, after `TARGET` is known: a deployed board (`TARGET/.claude/features/board.md` exists) -> `status`; nothing deployed -> `install` into that `TARGET`. A bare path on a fresh repo therefore still installs, and a bare invocation on a repo that already has a board reports instead of touching anything.
 
@@ -98,17 +96,19 @@ test -n "$TARGET" && test -d "$TARGET" && echo "TARGET=$TARGET" && echo "OK" || 
 
 > **Shell state does NOT survive between Bash tool calls.** Every call is a fresh shell: a variable another block assigned is EMPTY here. So EVERY later block that consumes `TARGET` MUST open by re-establishing it literally -- `TARGET="<absolute path resolved in P0>"`, with the actual resolved path written in, !=the variable name, !=a re-derivation. Same for anything derived from it (`F`, `T`). This applies to all blocks below without exception.
 
-> **Gate blocks assert before they test.** A block whose SILENCE (or whose sole `OK` line) is read as PASS MUST first prove it ran, as its first statement:
-> ```bash
-> test -n "$TARGET" && test -d "$TARGET" || { echo "MISS TARGET unresolved -- re-resolve per P0"; exit 1; }
-> ```
+> **Gate blocks assert before they test.** A block whose SILENCE (or whose sole `OK` line) is read as PASS MUST first prove it ran, by opening with this exact statement:
+
+```bash
+test -n "$TARGET" && test -d "$TARGET" || { echo "MISS TARGET unresolved -- re-resolve per P0"; exit 1; }
+```
+
 > Without it an empty `TARGET` makes the test run against a nonexistent path, the error gets eaten by `2>/dev/null` / `|| true`, and the gate reports PASS having checked nothing. "No output == PASS" is true ONLY when the gate actually ran.
 
 > `{{ARGUMENTS_PATH_OR_DOT}}` is resolved inline in P0 (the parsed path-like token, or `.`), not a template-emit placeholder -- it is absent from the Placeholder map by design.
 
-Record `DIR` = the remaining free text (may be empty) and `MODE` (`status|install|upgrade|uninstall|purge`, or unset); hold both.
+Record `DIR` = the remaining free text (may be empty) and `MODE` (`status|install|upgrade|enable|disable|uninstall|purge`, or unset); hold both.
 
-**Branch on board presence.** An existing `TARGET/.claude/features/board.md` means the board is already deployed. `install` refuses it; `upgrade`, `uninstall` and `purge` EXPECT it.
+**Branch on board presence.** An existing `TARGET/.claude/features/board.md` means the board is already deployed. `install` refuses it; `upgrade`, `enable`, `disable`, `uninstall` and `purge` EXPECT it.
 
 **EXECUTE** using Bash tool:
 ```bash
@@ -126,6 +126,9 @@ Resolve an unset `MODE` here: `EXISTS` -> `status`, `FRESH` -> `install`. Then d
 | `install` | `EXISTS` | STOP. "Board already deployed. To retrofit the spec + design layer onto it, re-run as `/brewtools:task-board-setup upgrade <path>`. To operate the existing board, use `/task-board`." Do not overwrite |
 | `upgrade` | `EXISTS` | go to **PU** -- control transfers to `references/10-upgrade.md`. Skip P1-P5.5 entirely |
 | `upgrade` | `FRESH` | STOP. "Nothing to upgrade: no `.claude/features/board.md` in TARGET. Run `/brewtools:task-board-setup install <path>` to deploy a fresh board" |
+| `enable` | `EXISTS` | go to **PE** with `WANT=enable` |
+| `disable` | `EXISTS` | go to **PE** with `WANT=disable` |
+| `enable` / `disable` | `FRESH` | run **PS** instead and report that nothing is deployed. There is no machinery to toggle |
 | `uninstall` | `EXISTS` | go to **PR** with `KEEP_DATA=true` |
 | `purge` | `EXISTS` | go to **PR** with `KEEP_DATA=false` |
 | `uninstall` / `purge` | `FRESH` | run **PS** instead and report that nothing is deployed. Do not delete anything on a guess |
@@ -137,7 +140,8 @@ test -n "$TARGET" && test -d "$TARGET" || { echo "MISS TARGET unresolved -- re-r
 PARTIAL=""
 for p in .claude/agents/task-tracker.md .claude/skills/task-board/SKILL.md .claude/rules/tasks.md \
   .claude/skills/task-spec/SKILL.md; do
-  test -f "$TARGET/$p" && PARTIAL="$PARTIAL $p"
+  # A parked `.disabled` twin still occupies the slot -- an install over it would orphan it.
+  test -f "$TARGET/$p" -o -f "$TARGET/$p.disabled" && PARTIAL="$PARTIAL $p"
 done
 test -z "$PARTIAL" && echo "CLEAN" || echo "PARTIAL:$PARTIAL"
 ```
@@ -147,17 +151,20 @@ test -z "$PARTIAL" && echo "CLEAN" || echo "PARTIAL:$PARTIAL"
 
 ## PS: Status  (read-only inventory of the TARGET)
 
-Runs for `MODE=status` -- the default on an already-deployed board -- and as the fallback when `uninstall`/`purge` find nothing. **Writes nothing, spawns nothing, asks nothing.**
+Runs for `MODE=status` -- the default on an already-deployed board -- as the fallback when `enable`/`disable`/`uninstall`/`purge` find nothing, and as the proof block after **PE** and **PR**. **Writes nothing, spawns nothing, asks nothing.**
 
 **EXECUTE** using Bash tool:
 ```bash
 TARGET="<absolute path resolved in P0>"
 test -n "$TARGET" && test -d "$TARGET" || { echo "MISS TARGET unresolved -- re-resolve per P0"; exit 1; }
 C="$TARGET/.claude"; F="$C/features"
+# A `.disabled` twin is a PARKED artifact (see PE), not a missing one -- never report it as MISS.
 for p in agents/task-tracker.md skills/task-board/SKILL.md rules/tasks.md skills/task-spec/SKILL.md \
   features/board.md features/PROGRESS.md features/TRACKER.md features/TASK_TEMPLATE.md features/INDEX.md \
   features/specs/SPEC_TEMPLATE.md features/specs/DESIGN_TEMPLATE.md; do
-  test -f "$C/$p" && echo "  ok   $p" || echo "  MISS $p"
+  if test -f "$C/$p"; then echo "  ok   $p"
+  elif test -f "$C/$p.disabled"; then echo "  off  $p (parked as $(basename "$p").disabled)"
+  else echo "  MISS $p"; fi
 done
 for d in backlog todo progress closed specs; do
   n=$(ls -1 "$F/$d"/*.md 2>/dev/null | wc -l | tr -d ' ')
@@ -171,11 +178,12 @@ Report, in this shape:
 task-board-setup — status
 target:     <TARGET>
 deployed:   yes|no|partial            (board.md present / absent / some artifacts only)
-spec layer: on|off                    (.claude/skills/task-spec/SKILL.md present?)
+machinery:  enabled|DISABLED|mixed    (every artifact live / every one parked as .disabled / some of each)
+spec layer: on|off|parked             (.claude/skills/task-spec/SKILL.md present / absent / .disabled)
 tasks:      backlog=N todo=N progress=N closed=N specs=N
-next:       install | upgrade | nothing to do
+next:       install | upgrade | enable | nothing to do
 ```
-`partial` -> name the missing artifacts and say a fresh `install` refuses to overwrite; the user must clean them first. `deployed: yes` + no spec layer -> `next: upgrade`.
+`partial` -> name the missing artifacts and say a fresh `install` refuses to overwrite; the user must clean them first. `deployed: yes` + no spec layer -> `next: upgrade`. `machinery: DISABLED` -> `next: enable`, and say the tasks are all still there. `machinery: mixed` -> list which side each artifact is on and recommend re-running the verb that was interrupted.
 
 ---
 
@@ -201,9 +209,57 @@ Rules that bind the whole phase:
 
 - **Additive only.** New files (`task-spec` skill, `SPEC_TEMPLATE.md`, `DESIGN_TEMPLATE.md`) are written outright. No existing task file, board row, agent, skill or rule is rewritten wholesale.
 - **Every edit of an existing file is gated:** show the exact diff, then **AskUserQuestion** per file. Declined = no edit, continue cleanly.
+- **The metadata restamp (`10-upgrade.md` U5b) is UNGATED and always runs**, including when every content row is already SKIP. It rewrites `version` / `generated_by` / `last_updated` in the frontmatter of the nine stamped artifacts and nothing else -- that is the ONLY thing that clears the `stale` verdict `/brewcode:setup-status` reads off `board.md`. An `upgrade` that reports success without moving the stamp sends the user round the same loop next session.
 - **Never renumber, never delete.** Existing task ids, scope ids and closed tasks are untouchable. `board.md` rows are never REORDERED and existing cell content is never CHANGED -- the one allowed row edit is APPENDING the new `spec` cell holding `--` to each existing Progress/Todo row, per `10-upgrade.md` U4 (header + separator cells patch with it; a 6-column header over 5-cell rows is corruption, not caution). `spec:` FM backfill is opt-in and !=run by default -- the default writes nothing to task files. When the user accepts it, the value is `pending` or `none` per the needs-spec heuristic -- never `full`.
 
 > `PU` is a thin handoff: `10-upgrade.md` owns detect, verify and report. Do NOT reuse P5 here.
+
+---
+
+## PE: Enable / Disable  (park or restore the machinery, keep every task)
+
+Runs for `MODE=enable` / `MODE=disable` on a deployed board. Replaces P1-P5.5. Writes no content, deletes nothing, spawns nothing.
+
+Claude Code discovers a project agent only as `.claude/agents/<name>.md`, a project skill only as `<dir>/SKILL.md`, and auto-loads a rule only as `.claude/rules/*.md`. Withholding that one filename is therefore the whole switch:
+
+| Artifact | `disable` | `enable` |
+|----------|-----------|----------|
+| `.claude/agents/task-tracker.md` | -> `task-tracker.md.disabled` | back |
+| `.claude/skills/task-board/SKILL.md` | -> `SKILL.md.disabled` | back |
+| `.claude/skills/task-spec/SKILL.md` (when the spec layer is deployed) | -> `SKILL.md.disabled` | back |
+| `.claude/rules/tasks.md` | -> `tasks.md.disabled` | back |
+| `.claude/features/**` (board, control files, every task and spec) | **untouched** | untouched |
+
+`disable` leaves the board fully readable as plain markdown and every generated file byte-identical -- only the extension Claude Code keys on is withheld. Nothing is regenerated on `enable`: no re-analysis, no subagents, no confirmation of FINDINGS. This is the reversible pause; `uninstall` is the removal.
+
+Skill directories are parked at their `SKILL.md`, never by renaming the directory -- `references/` beside it must keep resolving for anyone reading the files by hand.
+
+**EXECUTE** using Bash tool (substitute `WANT`):
+```bash
+TARGET="<absolute path resolved in P0>"
+test -n "$TARGET" && test -d "$TARGET" || { echo "MISS TARGET unresolved -- re-resolve per P0"; exit 1; }
+C="$TARGET/.claude"
+WANT=WANT   # enable | disable
+MOVED=0; NOOP=0; MISSING=0
+for p in agents/task-tracker.md skills/task-board/SKILL.md skills/task-spec/SKILL.md rules/tasks.md; do
+  live="$C/$p"; parked="$C/$p.disabled"
+  if [ "$WANT" = "disable" ]; then from="$live"; to="$parked"; else from="$parked"; to="$live"; fi
+  if [ -f "$from" ]; then
+    mv "$from" "$to" && echo "  MOVED $p -> $(basename "$to")" && MOVED=$((MOVED + 1))
+  elif [ -f "$to" ]; then
+    echo "  NOOP  $p already $WANT""d"; NOOP=$((NOOP + 1))
+  else
+    echo "  ABSENT $p (not deployed)"; MISSING=$((MISSING + 1))
+  fi
+done
+echo "WANT=$WANT MOVED=$MOVED NOOP=$NOOP ABSENT=$MISSING"
+test "$MOVED" -gt 0 -o "$NOOP" -gt 0 && echo "OK" || echo "FAIL nothing to toggle"
+```
+> **STOP if FAIL** -- none of the four artifacts is present in either state; the deployment is broken, report it and offer `install` after a `purge`.
+
+`ABSENT skills/task-spec/SKILL.md` alone is EXPECTED on a board installed with `SPEC_MODE=off` -- it is not an error. `MOVED=0` with `NOOP>0` means the board was already in the requested state: say so, change nothing else.
+
+Then run the `PS` block again and print its report -- it is the proof, not the `OK` line. Close by naming the reversal verb and stating that `.claude/features/**` was not touched, so every task survived.
 
 ---
 
@@ -217,6 +273,7 @@ Runs for `MODE=uninstall` (`KEEP_DATA=true`) and `MODE=purge` (`KEEP_DATA=false`
 | `.claude/skills/task-board/` | yes | yes |
 | `.claude/skills/task-spec/` | yes | yes |
 | `.claude/rules/tasks.md` | yes | yes |
+| any `.disabled` twin of the four above (parked by `disable`) | yes | yes |
 | `.claude/features/**` (board, control files, every task and spec) | **KEPT** | yes |
 
 The split is deliberate: the generated agent/skills/rule are MACHINERY, `.claude/features/**` is the user's DATA -- every task they ever wrote. `uninstall` unwires the machinery and leaves the data readable; only `purge` deletes the tasks.
@@ -229,10 +286,13 @@ TARGET="<absolute path resolved in P0>"
 test -n "$TARGET" && test -d "$TARGET" || { echo "MISS TARGET unresolved -- re-resolve per P0"; exit 1; }
 C="$TARGET/.claude"
 KEEP_DATA=KEEP_DATA   # true for uninstall, false for purge
-rm -f  "$C/agents/task-tracker.md" "$C/rules/tasks.md"
+# The `.disabled` twins go too -- removing a DISABLED board would otherwise leave the parked files behind.
+rm -f  "$C/agents/task-tracker.md" "$C/agents/task-tracker.md.disabled" \
+       "$C/rules/tasks.md" "$C/rules/tasks.md.disabled"
 rm -rf "$C/skills/task-board" "$C/skills/task-spec"
 test "$KEEP_DATA" = "false" && rm -rf "$C/features"
-test ! -e "$C/agents/task-tracker.md" && test ! -e "$C/skills/task-board" && echo "OK removed" || echo "FAIL still present"
+test ! -e "$C/agents/task-tracker.md" && test ! -e "$C/agents/task-tracker.md.disabled" \
+  && test ! -e "$C/skills/task-board" && echo "OK removed" || echo "FAIL still present"
 ```
 
 Then run the `PS` block again and print its report -- it is the proof, not the `OK` line.
@@ -278,6 +338,8 @@ The reference templates carry these placeholders. Derive each from the confirmed
 
 > **Order is fixed, substitution is TWO-PASS.** Pass 1: expand the gated placeholders (inventory below). Pass 2: substitute the base placeholders in the table below over the WHOLE result. A gated expansion may itself contain a base token (`02`'s `{{SPEC_TRIGGERS}}` expansion contains `{{FIRST_DOMAIN}}`); the reverse never happens. Reversing the passes emits a literal `{{FIRST_DOMAIN}}`.
 
+> **Two brace spellings, on purpose.** This skill's own tokens are DOUBLE-brace (`{{DOMAINS}}`, `{{TODAY}}`, `{{SPEC_*}}` ...). The three metadata tokens are SINGLE-brace -- `{PLUGIN_VERSION}`, `{GENERATED_BY}`, `{LAST_UPDATED}` -- the repo-wide spelling fixed by `brewcode/skills/setup-status/references/artifact-metadata.md`. Substitute both sets in pass 2; a leftover `{PLUGIN_VERSION}` in an emitted file is as broken as a leftover `{{DOMAINS}}`.
+
 | Placeholder | Owner refs | Derivation |
 |-------------|-----------|------------|
 | `{{DOMAINS}}` | 01,02,04,05,08,10 | confirmed domain id-segment list, comma-separated (e.g. `HTML, KV, SITE`) |
@@ -286,12 +348,33 @@ The reference templates carry these placeholders. Derive each from the confirmed
 | `{{REPO_NAME}}` | 05,08,09,10 | basename of `TARGET` |
 | `{{LANG}}` | 02,03,04,05,08,09,10 | confirmed doc language |
 | `{{TODAY}}` | 05,08,09,10 | today's date, ISO (`YYYY-MM-DD`) |
+| `{PLUGIN_VERSION}` | 02,03,04,05,08,10 | brewtools plugin version, `X.Y.Z`. Resolved by the bash block below -- NEVER hardcoded, never guessed |
+| `{GENERATED_BY}` | 02,03,04,05,08,10 | the literal `brewtools:task-board-setup` |
+| `{LAST_UPDATED}` | 02,03,04,05,08,10 | same value as `{{TODAY}}`, quoted in YAML frontmatter. Metadata spelling of the date; `{{TODAY}}` stays the prose/card spelling |
 | `{{CLOSE_MARKER}}` | 02,10 | derived from `RELEASE_STYLE`: `vtag` -> `"vX.Y.Z tag + commit SHA"`; `sha` -> `"commit SHA"`; `none` -> `"date / no tag / superseded / cancelled"`. Exact per-ref wording maps live in `02` and `03` |
 | `{{CLOSE_MARKER_SHORT}}` | 03,04,05,10 | same enum, short form: `vtag` -> `"vX.Y.Z tag"`; `sha` -> `"commit SHA"`; `none` -> `"no tag"`. `04` and `05` reuse `03`'s map |
 | `{{DOMAIN_AGENTS}}` | 08,10 | a COMPLETE markdown table from Agent C's inventory of TARGET `.claude/agents/**` -- header row + `\|---\|` separator + one row per agent, columns exactly `agent \| domains covered \| specialty`. Consumers paste it bare, so a bodiless expansion renders as literal pipe text. Exception: no agents found -> the non-table literal line `(none found -- fall back to the built-in Plan agent and say so in Evidence)` |
 | `{{ARCHITECT_AGENT}}` | 08,10 | `ARCHITECT_AGENT` from Agent C: the best architecture-capable project agent name; none -> the literal `Plan` |
 | `{{RELEASE_STYLE}}` | 02 (header) | INPUT enum `vtag\|sha\|none`. Gate variable ONLY -- NOT a literal token in any emitted body; it picks the close-marker wording above |
 | `{{SPEC_MODE}}` | 03,04,09 (headers) | `on` \| `off`, as confirmed in P1. Gate variable ONLY -- like `{{RELEASE_STYLE}}` it is NOT a literal token in any template and is never substituted into an emitted body; it selects which gated blocks expand |
+
+### Resolving `{PLUGIN_VERSION}` / `{GENERATED_BY}` / `{LAST_UPDATED}`
+
+Run ONCE, before P2, and hold the three values for every emitted file. **EXECUTE** using Bash tool:
+```bash
+SD="${CLAUDE_SKILL_DIR}"
+if [ -n "$SD" ] && [ -f "$SD/../../.claude-plugin/plugin.json" ]; then BT_ROOT=$(cd "$SD/../.." && pwd); else BT_ROOT=$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::'); fi
+[ -n "$BT_ROOT" ] || { echo "ERROR: cannot locate brewtools plugin root -- install/update brewtools first."; exit 1; }
+PV=$(jq -r '.version // empty' "$BT_ROOT/.claude-plugin/plugin.json" 2>/dev/null || true)
+PV=${PV:-$(basename "$BT_ROOT")}
+echo "PLUGIN_VERSION=$PV"
+echo "GENERATED_BY=brewtools:task-board-setup"
+echo "LAST_UPDATED=$(date +%F)"
+```
+> **Why the bare form.** `CLAUDE_SKILL_DIR` is a TEXT SUBSTITUTION on the skill prompt, not an env var: CC 2.1.226 rewrites only the EXACT dollar-brace literal `{CLAUDE_SKILL_DIR}` (`replace(/\$\{CLAUDE_SKILL_DIR\}/g, dirname(skillPath))` and a string-pattern `replaceAll`). A brace-modifier form such as `:-fallback` inside the braces is therefore NOT matched, reaches the shell verbatim, and its fallback ALWAYS wins. `CLAUDE_PLUGIN_ROOT` is a real env var but is exported only to hook processes and MCP servers -- never to a skill's Bash tool -- so it is ALWAYS empty here. The skill dir is correct in a cache install AND in a `--plugin-dir` dev run; the cache glob below it is a last-resort fallback only, and it would name the INSTALLED plugin.
+> If `PLUGIN_VERSION` comes back empty or non-`X.Y.Z`, STOP and report -- do not emit a file with a guessed or literal-placeholder version.
+
+These three feed the four-key metadata frontmatter (`doc_type: llm`, `version`, `generated_by`, `last_updated`) on every emitted artifact: the `task-tracker` agent (02), the `task-board` (03) and `task-spec` (08) skills, the `tasks.md` rule (04), and the five `.claude/features/**` control files (05). `doc_type` is the literal `llm` -- no placeholder. Per-task CARD frontmatter (`id/title/status/priority/owner/created/updated/tags/links/spec`) is domain data and never carries these keys.
 
 ### Gated placeholders -- the convention
 
@@ -305,7 +388,7 @@ The spec layer adds gated blocks inside otherwise-unchanged templates, following
 | Kind `inline` | the token sits inside a line that exists in BOTH modes. Condition TRUE -> replace the TOKEN with the expansion. Condition FALSE -> delete the TOKEN only; the line stays |
 | inline whitespace | declared per site by its own reference file. BOTH forms are legal, do NOT unify them: some sites carry a single space BEFORE the token, deleted together with it (`02`); others carry no leading space and the expansion supplies its own (`03`, `05`). Follow the reference header, never a global rule |
 | `SPEC_MODE=off` result | the emitted artifact is byte-identical to the pre-spec-layer output. This holds only if every token was resolved against its OWN condition -- an `_OFF` arm dropped as if it were an `on` token breaks byte-identity |
-| Verification | after substitution, `grep -n '{{'` the written file -- any surviving `{{...}}` is an unresolved placeholder and a defect. P5 executes this over every emitted path |
+| Verification | after substitution, `grep -nE '\{\{\|\{(PLUGIN_VERSION\|GENERATED_BY\|LAST_UPDATED)\}'` the written file -- any surviving `{{...}}` OR single-brace metadata token is an unresolved placeholder and a defect. P5 executes this over every emitted path |
 
 #### Gated placeholder inventory (complete)
 
@@ -469,12 +552,13 @@ done
 ```
 > If `SPEC_MODE=off`, skip that loop -- and assert the inverse: none of those three paths may exist.
 
-**Leftover-placeholder gate.** No emitted body legitimately contains `{{`, so every hit is an unresolved placeholder. Runs in BOTH modes over every emitted path (the `SPEC_MODE=on` paths simply do not exist when `off`). `|| true` keeps a clean run's rc=1 from aborting the block -- which is exactly why the block MUST assert `TARGET` first: with `TARGET` empty the grep hits a nonexistent path, rc=2 is swallowed by `2>/dev/null` + `|| true`, and the gate prints `OK` having read nothing. **EXECUTE** using Bash tool:
+**Leftover-placeholder gate.** BOTH brace families, or it misses half the tokens: this skill's own tokens are DOUBLE-brace (`{{DOMAINS}}` ...) and the three metadata tokens are SINGLE-brace (`{PLUGIN_VERSION}`, `{GENERATED_BY}`, `{LAST_UPDATED}`). No emitted body legitimately contains either, so every hit is an unresolved placeholder. Runs in BOTH modes over every emitted path (the `SPEC_MODE=on` paths simply do not exist when `off`). `|| true` keeps a clean run's rc=1 from aborting the block -- which is exactly why the block MUST assert `TARGET` first: with `TARGET` empty the grep hits a nonexistent path, rc=2 is swallowed by `2>/dev/null` + `|| true`, and the gate prints `OK` having read nothing. **EXECUTE** using Bash tool:
 ```bash
 TARGET="<absolute path resolved in P0>"
 test -n "$TARGET" && test -d "$TARGET" || { echo "MISS TARGET unresolved -- re-resolve per P0"; exit 1; }
 test -d "$TARGET/.claude/features" || { echo "MISS nothing emitted -- gate did not run"; exit 1; }
-LEFT="$(grep -rn '{{' "$TARGET/.claude/features" "$TARGET/.claude/rules/tasks.md" \
+LEFT="$(grep -rnE '\{\{|\{(PLUGIN_VERSION|GENERATED_BY|LAST_UPDATED)\}' \
+  "$TARGET/.claude/features" "$TARGET/.claude/rules/tasks.md" \
   "$TARGET/.claude/agents/task-tracker.md" "$TARGET/.claude/skills/task-board" \
   "$TARGET/.claude/skills/task-spec" 2>/dev/null || true)"
 test -z "$LEFT" && echo "OK  no leftover placeholders" || { echo "MISS leftover placeholders:"; echo "$LEFT"; }
@@ -517,6 +601,9 @@ Pass it `TARGET`, `DIR` (the directive parsed in P0), and `EXCLUSIONS`/`MODULES`
 | Condition | Response |
 |-----------|----------|
 | `TARGET` not a dir | STOP, ask for valid path |
+| `upgrade` on a DISABLED board (`.claude/rules/tasks.md.disabled` present, `tasks.md` absent) | STOP. The recovered FINDINGS are read from the deployed artifacts and a parked file is not deployed. Report it and tell the user to run `enable` first, then `upgrade` |
+| `enable`/`disable` and every one of the four artifacts is absent in BOTH states | STOP -- the deployment is broken. Report it; do not create files, the toggle never generates |
+| `install` over a board whose artifacts are parked as `.disabled` | refused by the MAJOR-4 partial guard -- a `.disabled` twin still occupies the slot. Tell the user to `enable` (to resume) or `purge` (to start over) |
 | board.md `FRESH` but other primary artifacts present (partial prior run) | STOP -- report partial deployment; ask the user whether to clean and redo. Do NOT blindly overwrite. `upgrade` is not the fix (fresh-init path only; the upgrade path skips this guard) |
 | Reference template missing under `${CLAUDE_SKILL_DIR}/references` (incl. `08-task-spec-skill.md`, `09-spec-templates.md`, `10-upgrade.md` when `SPEC_MODE=on` or `upgrade`) | ERROR: reference not found -- reinstall brewtools. STOP. |
 | `SPEC_MODE=on` but `AGENT_GAPS` covers EVERY domain (no project agents at all) | ALLOWED -- proceed, `{{DOMAIN_AGENTS}}` becomes the literal `(none found ...)` line and every domain falls back to `Plan`. But SURFACE it loudly in the P5 report and suggest `/brewcode:agents` to author domain agents, then `upgrade` |

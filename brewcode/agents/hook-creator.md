@@ -5,6 +5,10 @@ model: inherit
 maxTurns: 80
 color: yellow
 tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch, WebSearch
+doc_type: llm
+version: "5.1.0"
+generated_by: "brewcode"
+last_updated: "2026-08-09"
 ---
 
 [DICT: AC=additionalContext, CC=Claude Code, HE=hook event, MD=MessageDisplay, PTU=PreToolUse, PCD=PostCompact, POT=PostToolUse, PR=PermissionRequest, SA=subagent, SS=SessionStart, UI=updatedInput]

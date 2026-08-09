@@ -52,7 +52,7 @@ config file and one shell script.
 | `malformed.json` | `malformed` (trailing comma - deliberately unparseable) |
 
 `correct.json`, `wrongscope.json` and `duplicate.json` hardcode the pin
-`0.5.2`, so a suite using them must **not** set `SEMBLE_PIN_VERSION`.
+`0.5.4`, so a suite using them must **not** set `SEMBLE_PIN_VERSION`.
 
 ### `settings/*.json`
 

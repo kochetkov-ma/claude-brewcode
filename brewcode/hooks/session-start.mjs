@@ -109,11 +109,14 @@ async function checkLatestVersion(pluginRoot, cwd, sessionId) {
     }
     log('debug', '[version]', `Local brewcode: ${local}`, cwd, sessionId);
 
-    // Check 24h TTL cache
+    // Check 24h TTL cache. `fetchedAtMs` is an epoch-ms runtime marker, deliberately NOT
+    // `checkedAt` / `last_updated`: `checkedAt` is a retired provenance spelling
+    // (setup-status/references/artifact-metadata.md §8) and this is ephemeral state, never
+    // artifact provenance (§9). An old cache carrying the former simply misses and refetches.
     const state = getState(cwd);
     const cache = state._versionCache?.brewcode;
-    if (cache?.remote && cache?.checkedAt) {
-      const age = Date.now() - new Date(cache.checkedAt).getTime();
+    if (cache?.remote && cache?.fetchedAtMs) {
+      const age = Date.now() - cache.fetchedAtMs;
       if (age < VERSION_CACHE_TTL_MS) {
         log('debug', '[version]', `Using cached brewcode remote=${cache.remote} (age=${Math.round(age / 60000)}m)`, cwd, sessionId);
         return { updateAvailable: isNewer(cache.remote, local), local, remote: cache.remote };
@@ -141,7 +144,7 @@ async function checkLatestVersion(pluginRoot, cwd, sessionId) {
     // Update cache
     const updatedState = getState(cwd);
     updatedState._versionCache = updatedState._versionCache || {};
-    updatedState._versionCache.brewcode = { remote, checkedAt: new Date().toISOString() };
+    updatedState._versionCache.brewcode = { remote, fetchedAtMs: Date.now() };
     saveState(cwd, updatedState);
 
     const result = { updateAvailable: isNewer(remote, local), local, remote };
@@ -173,8 +176,8 @@ async function checkClaudeCodeVersion(cwd, sessionId) {
     // Check 24h TTL cache
     const state = getState(cwd);
     const cache = state._versionCache?.claudeCode;
-    if (cache?.remote && cache?.checkedAt) {
-      const age = Date.now() - new Date(cache.checkedAt).getTime();
+    if (cache?.remote && cache?.fetchedAtMs) {
+      const age = Date.now() - cache.fetchedAtMs;
       if (age < VERSION_CACHE_TTL_MS) {
         log('debug', '[version]', `Using cached claude-code remote=${cache.remote} (age=${Math.round(age / 60000)}m)`, cwd, sessionId);
         return { updateAvailable: isNewer(cache.remote, local), local, remote: cache.remote };
@@ -196,7 +199,7 @@ async function checkClaudeCodeVersion(cwd, sessionId) {
     // Update cache
     const updatedState = getState(cwd);
     updatedState._versionCache = updatedState._versionCache || {};
-    updatedState._versionCache.claudeCode = { remote: data.version, checkedAt: new Date().toISOString() };
+    updatedState._versionCache.claudeCode = { remote: data.version, fetchedAtMs: Date.now() };
     saveState(cwd, updatedState);
 
     const result = { updateAvailable: isNewer(data.version, local), local, remote: data.version };

@@ -3,7 +3,7 @@
 # Bash 3.2 compatible. No jq: all JSON goes through `node -e`.
 # Callers do:  . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/semble-common.sh"
 
-SEMBLE_PIN_VERSION="${SEMBLE_PIN_VERSION:-0.5.2}"
+SEMBLE_PIN_VERSION="${SEMBLE_PIN_VERSION:-0.5.4}"
 SEMBLE_PIN_SPEC="semble[mcp]==${SEMBLE_PIN_VERSION}"
 SEMBLE_SERVER_NAME="semble_code"
 SEMBLE_UPSTREAM_NAME="semble"
@@ -112,9 +112,33 @@ sc_claude_bin()     { printf '%s\n' "${SEMBLE_CLAUDE_BIN:-claude}"; }
 sc_claude_version() { "$(sc_claude_bin)" --version 2>/dev/null | awk '{print $1}' || true; }
 
 # Version of a `uv tool install`ed semble, if any. Empty = uvx-ephemeral mode.
+#
+# `uv tool list` stays PRIMARY on purpose, even though semble 0.5.4 finally has
+# `semble --version`. The binary on PATH is of UNKNOWN version by definition —
+# that is what this function is asking — and on 0.5.3 and older `--version` is
+# not in _CLI_DISPATCH_ARGS, so it falls through to argv-starts-the-server and
+# BLOCKS. Asking `uv tool list` first is free and cannot hang.
+# `--version` is used only as a FALLBACK, for a semble that is on PATH but not
+# under `uv tool` (pipx, a venv, a manual install), which `uv tool list` reports
+# as absent and which we would otherwise mislabel `uvx-ephemeral`. Bounded by
+# sc_timeout, so an old build on that path costs one timeout, never a hang.
 sc_semble_tool_version() {
-  sc_have uv || return 0
-  { uv tool list 2>/dev/null | awk '$1=="semble"{print $2; exit}' | tr -d 'v'; } || true
+  local v=""
+  if sc_have uv; then
+    v="$(uv tool list 2>/dev/null | awk '$1=="semble"{print $2; exit}' | tr -d 'v')" || v=""
+    [ -n "$v" ] && { printf '%s\n' "$v"; return 0; }
+  fi
+  sc_have semble || return 0
+  [ "$(sc_semble_probe_arg)" = "--version" ] || return 0
+  # 5 s, not SEMBLE_PROBE_TIMEOUT: no network is involved, a semble that answers
+  # `--version` answers in well under a second, and the binary on PATH may still
+  # be older than the pin — in which case this argv starts the server and the
+  # bound is the only thing that ends the call.
+  v="$(sc_timeout 5 semble --version 2>/dev/null)" || return 0
+  case "$v" in
+    *[!0-9.]*|*' '*|'') return 0 ;;
+    *) printf '%s\n' "$v" ;;
+  esac
 }
 
 # Which binary backs sc_timeout: `timeout` (GNU/Linux) | `gtimeout` (coreutils
@@ -147,6 +171,24 @@ sc_timeout_path() {
 # is muted by swapping the SHELL's fd 2 — the child already holds the real one.
 # 124 is reported only when the deadline passed AND the child died of a signal,
 # so an unreaped child that finished on its own still yields its own status.
+#
+# The deadline is WALL CLOCK, read from bash's own $SECONDS. It used to be the
+# sum of the *requested* sleep durations, which is not the same number: every
+# poll forks /bin/sleep, and under load a fork costs far more than the interval
+# it was asked to wait. On a busy machine a nominal 1 s bound drifted to several
+# seconds — the bound silently stopped being a bound, and the suite's timing
+# assertion went red for the real reason rather than a fake one. $SECONDS has
+# 1 s granularity and `local t0=$SECONDS` needs no reset, so the enclosing
+# shell's own counter is left untouched.
+#
+# The test is `-gt`, not `-ge`, and that one character is the whole contract.
+# $SECONDS counts ticks since the SHELL started, so t0 is captured somewhere
+# inside a second, not on its edge: `SECONDS - t0 == secs` can come true as
+# little as a few ms after t0 and would kill a command that still had almost
+# its full budget left. `-gt` costs at most one extra second and buys the only
+# guarantee worth having — NEVER early. The bound therefore fires in
+# [secs, secs+1) plus one poll interval (<=250 ms) plus the 100 ms TERM->KILL
+# grace. Callers bound 15-60 s probes with it, where a second of slack is noise.
 sc_timeout_watch() {
   local secs="${1:?sc_timeout needs seconds}"; shift
   local had_m=0; case "$-" in *m*) had_m=1 ;; esac
@@ -154,9 +196,9 @@ sc_timeout_watch() {
   "$@" &
   local pid=$!
   [ "$had_m" = "1" ] || set +m
-  local slept=0 limit=$(( secs * 100 )) step=1 timedout=0 rc=0
+  local t0=$SECONDS slept=0 step=1 timedout=0 rc=0
   while kill -0 "$pid" 2>/dev/null; do
-    if [ "$slept" -ge "$limit" ]; then timedout=1; break; fi
+    if [ "$(( SECONDS - t0 ))" -gt "$secs" ]; then timedout=1; break; fi
     sleep "$(printf '0.%02d' "$step")" 2>/dev/null || sleep 1
     slept=$(( slept + step ))
     if   [ "$slept" -ge 100 ]; then step=25
@@ -193,16 +235,57 @@ sc_timeout() {
 # ok | no_network | no_uvx | timeout | failed. A timeout is NOT "the pin is
 # broken" — callers that report `resolvable: false` can name the real reason.
 SEMBLE_PROBE_REASON=""
+# The X.Y.Z the probe read back off the resolved package, or empty when the
+# `--help` fallback answered instead. Informational; nothing gates on it.
+SEMBLE_PROBE_VERSION=""
 
-# Resolvability probe. `--help` is in semble's CLI dispatch set, so it prints
-# help and exits 0 — it never starts the stdio server. Bounded: on a cold uv
-# cache this is an uncached network fetch, and status runs it in every mode.
-# Exit: 0 resolvable | 124 timed out | 1 anything else.
+# Which argv to probe the pin with. Only argv in semble's _CLI_DISPATCH_ARGS is
+# safe: anything else falls through to "start the stdio server" and BLOCKS.
+# `--help` has always been in that set; `--version` joined it in 0.5.4
+# (`cli.py:25`, `:215`). So the argv is chosen FROM THE PIN, never tried and
+# fallen back from — a hang cannot be recovered by a fallback, only by a bound.
+# Anything unparseable degrades to `--help`, which is safe at every version.
+sc_semble_probe_arg() {
+  local v="${1-$SEMBLE_PIN_VERSION}" maj min pat rest
+  case "$v" in *.*.*) ;; *) printf -- '--help\n'; return 0 ;; esac
+  maj="${v%%.*}"; rest="${v#*.}"; min="${rest%%.*}"; pat="${rest#*.}"; pat="${pat%%[!0-9]*}"
+  case "$maj" in ''|*[!0-9]*) printf -- '--help\n'; return 0 ;; esac
+  case "$min" in ''|*[!0-9]*) printf -- '--help\n'; return 0 ;; esac
+  case "$pat" in ''|*[!0-9]*) printf -- '--help\n'; return 0 ;; esac
+  if [ "$maj" -gt 0 ] || [ "$min" -gt 5 ] || { [ "$min" -eq 5 ] && [ "$pat" -ge 4 ]; }; then
+    printf -- '--version\n'
+  else
+    printf -- '--help\n'
+  fi
+}
+
+# Resolvability probe. Runs sc_semble_probe_arg's argv, so it prints and exits 0
+# and never starts the stdio server. On a >=0.5.4 pin that argv is `--version`:
+# measured 0.26 s warm (identical to `--help`) and 2.5 s cold including the
+# download, and it prints the resolved X.Y.Z — so the probe proves WHICH build
+# uvx handed us, not merely that something resolved. Unparseable stdout is not
+# treated as a broken pin: it retries `--help`, which is safe at every version.
+# Bounded: on a cold uv cache this is an uncached network fetch, and status runs
+# it in every mode. Exit: 0 resolvable | 124 timed out | 1 anything else.
 sc_semble_probe() {
   SEMBLE_PROBE_REASON=""
+  SEMBLE_PROBE_VERSION=""
   [ "${SEMBLE_NO_NETWORK:-}" = "1" ] && { SEMBLE_PROBE_REASON="no_network"; return 1; }
   sc_have uvx || { SEMBLE_PROBE_REASON="no_uvx"; return 1; }
-  local rc=0
+  local rc=0 out="" arg
+  arg="$(sc_semble_probe_arg)"
+  if [ "$arg" = "--version" ]; then
+    out="$(sc_timeout "$SEMBLE_PROBE_TIMEOUT" uvx --from "$SEMBLE_PIN_SPEC" semble --version 2>/dev/null)" || rc=$?
+    case "$rc" in
+      0)
+        case "$out" in
+          *[!0-9.]*|*' '*|'') : ;;
+          *) SEMBLE_PROBE_VERSION="$out"; SEMBLE_PROBE_REASON="ok"; return 0 ;;
+        esac ;;
+      124) SEMBLE_PROBE_REASON="timeout"; return 124 ;;
+    esac
+    rc=0
+  fi
   sc_timeout "$SEMBLE_PROBE_TIMEOUT" uvx --from "$SEMBLE_PIN_SPEC" semble --help >/dev/null 2>&1 || rc=$?
   case "$rc" in
     0)   SEMBLE_PROBE_REASON="ok";      return 0   ;;
@@ -218,6 +301,35 @@ sc_project_settings() { printf '%s\n' "$(sc_project_root)/.claude/settings.json"
 sc_state_file()       { printf '%s\n' "$(sc_project_root)/.claude/semble/state.json"; }
 sc_rule_file()        { printf '%s\n' "$(sc_project_root)/.claude/rules/semble-first.md"; }
 sc_hooks_dir()        { printf '%s\n' "$(sc_project_root)/.claude/hooks"; }
+
+# ── artifact metadata ───────────────────────────────────────────────────────
+# Manifest by SELF-LOCATION: scripts/lib -> scripts -> semble-setup -> skills -> <plugin root>.
+# Correct in the dev checkout AND in the installed cache. The version is NEVER hardcoded.
+SEMBLE_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SEMBLE_PLUGIN_JSON="$SEMBLE_LIB_DIR/../../../../.claude-plugin/plugin.json"
+SEMBLE_GENERATED_BY="brewcode:semble-setup"
+
+# HARD FAIL, never a placeholder value. The sole caller is sc_state_patch, which STAMPS
+# state.json - there is no soft-probe caller. A word like `unknown` carries none of `{}<>`, so
+# setup-status's PLACEHLD test cannot catch it: `sort -V` would compare it against the real
+# version and print a confident `AHEAD unknown > X.Y.Z`. The manifest ships with the plugin in
+# the dev checkout and in the cache alike, so an unreadable one is a broken install - stop
+# before anything is written. Same resolution as superreview-setup/scripts/generate.sh
+# `_plugin_version` and teams-setup/scripts/detect-mode.sh.
+sc_plugin_version() {
+  local v=""
+  if [ -f "$SEMBLE_PLUGIN_JSON" ]; then
+    v=$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$SEMBLE_PLUGIN_JSON" 2>/dev/null | head -1 || true)
+  fi
+  case "$v" in
+    [0-9]*.[0-9]*.[0-9]*) printf '%s' "$v"; return 0 ;;
+  esac
+  printf '❌ cannot resolve the plugin version (X.Y.Z) from %s - refusing to stamp an artifact with a fake version\n' "$SEMBLE_PLUGIN_JSON" >&2
+  return 1
+}
+
+# The ONE date spelling for every artifact this skill writes: `date +%F` = YYYY-MM-DD.
+sc_today() { date +%F; }
 
 # ── json ────────────────────────────────────────────────────────────────────
 sc_require_node() { sc_have node || sc_die "node is required by brewcode:semble-setup scripts"; }
@@ -345,11 +457,19 @@ process.stdout.write(typeof v==="object"?JSON.stringify(v):String(v));'
 }
 
 # sc_state_patch '<json object>' — read-modify-write, preserves unknown keys.
+# Installer-owned keys (schema, profile, projectRoot, approvedVersion, version, generated_by,
+# last_updated) are (re)written on every patch; `enabled`, `phase`, `completed` and `notes` are
+# only ever changed by an explicit patch, never by this preamble.
 sc_state_patch() {
   sc_require_node
   [ "${SEMBLE_DRY_RUN:-}" = "1" ] && { sc_dry "state patch $1"; return 0; }
+  # Hoisted out of the env-prefix on purpose: a `sc_plugin_version` failure inside `VAR="$(...)"`
+  # would only kill the substitution subshell and hand node an EMPTY version.
+  local _pv
+  _pv="$(sc_plugin_version)" || sc_die "ABORT: nothing was written to $(sc_state_file)"
   SC_F="$(sc_state_file)" SC_PATCH="${1:?}" SC_SCHEMA="$SEMBLE_STATE_SCHEMA" \
-  SC_ROOT="$(sc_project_root)" SC_VER="$SEMBLE_PIN_VERSION" node -e '
+  SC_ROOT="$(sc_project_root)" SC_VER="$SEMBLE_PIN_VERSION" \
+  SC_PLUGIN_VER="$_pv" SC_GENBY="$SEMBLE_GENERATED_BY" SC_TODAY="$(sc_today)" node -e '
 const fs=require("fs"),path=require("path");const f=process.env.SC_F;
 let s={};
 if(fs.existsSync(f)){const raw=fs.readFileSync(f,"utf8");
@@ -361,10 +481,16 @@ s.schema=Number(process.env.SC_SCHEMA);
 if(!s.profile) s.profile="code";
 s.projectRoot=process.env.SC_ROOT;
 s.approvedVersion=process.env.SC_VER;
+s.version=process.env.SC_PLUGIN_VER;
+s.generated_by=process.env.SC_GENBY;
 if(!Array.isArray(s.completed)) s.completed=[];
 if(Array.isArray(p.completed)){ for(const c of p.completed) if(s.completed.indexOf(c)<0) s.completed.push(c); delete p.completed; }
+// pre-5.0 spellings: two incompatible ISO precisions (ms from JS, seconds from `date -u`).
+// Both collapse to the standard YYYY-MM-DD names; the verify date is carried over, not dropped.
+if(s.lastVerifiedAt&&!s.last_verified_at) s.last_verified_at=String(s.lastVerifiedAt).slice(0,10);
+delete s.updatedAt; delete s.lastVerifiedAt;
 Object.assign(s,p);
-s.updatedAt=new Date().toISOString();
+s.last_updated=process.env.SC_TODAY;
 fs.mkdirSync(path.dirname(f),{recursive:true});
 fs.writeFileSync(f,JSON.stringify(s,null,2)+"\n");
 const back=JSON.parse(fs.readFileSync(f,"utf8"));

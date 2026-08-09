@@ -56,6 +56,29 @@ Create if not exists: `mkdir -p .claude/brewdoc/my-claude`
 
 This is the only supported target — there is no `~/.claude` or plugin-data fallback.
 
+### Provenance frontmatter (every generated doc, all three modes)
+
+Every `.md` this skill writes opens with this block, before the `#` heading. `doc_type` is BARE; the other three are QUOTED. Resolve the values — never hardcode them.
+
+**EXECUTE** using Bash tool before writing the document:
+```bash
+PJ="${CLAUDE_SKILL_DIR}/../../.claude-plugin/plugin.json"
+PV=$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(process.argv[1],'utf8')).version||'')" "$PJ" 2>/dev/null || true)
+[ -n "$PV" ] || { echo "❌ cannot read version from $PJ — reinstall brewdoc"; exit 1; }
+echo "PLUGIN_VERSION=$PV"; echo "LAST_UPDATED=$(date +%F)"
+```
+
+```yaml
+---
+doc_type: user
+version: "{PLUGIN_VERSION}"
+generated_by: "brewdoc:my-claude"
+last_updated: "{LAST_UPDATED}"
+---
+```
+
+Re-generating an existing doc REFRESHES all three quoted values and leaves a hand-edited `doc_type` (`llm` / `skip`) as the user set it.
+
 ## INDEX Tracking
 
 Append entry to `.claude/brewdoc/INDEX.jsonl`:

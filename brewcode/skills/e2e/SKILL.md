@@ -25,10 +25,21 @@ Full-cycle E2E testing orchestration: install agents, create BDD scenarios, writ
 bash "${CLAUDE_SKILL_DIR}/scripts/detect-mode.sh" "$ARGUMENTS" && echo "OK" || echo "FAILED"
 ```
 
-Output: `MODE:xxx` and optionally `PROMPT:xxx`. Store both.
+Output: `MODE:xxx`, optionally `PROMPT:xxx`, plus the artifact-metadata scalars `PLUGIN_VERSION:`,
+`GENERATED_BY:`, `LAST_UPDATED:`. Store all of them.
 
-> **STOP if FAILED** -- if the output starts with `ERROR:` (an unsupported verb such as `uninstall`
-> or `purge`), report that line verbatim and stop. Never fall back to INSTALL.
+> **Artifact metadata — every file this skill writes.** `.claude/e2e/config.json`,
+> `.claude/e2e/e2e-rules.md`, `.claude/agents/e2e-*.md` and `.claude/rules/e2e-conventions.md` all carry
+> `version` = `PLUGIN_VERSION:`, `generated_by` = `GENERATED_BY:` (`brewcode:e2e`),
+> `last_updated` = `LAST_UPDATED:`; the `.md` ones also carry `doc_type: llm`. Values come from the
+> output above — never hardcode a version, never invent a second date spelling. `last_updated` is
+> `YYYY-MM-DD` (`date +%F`) everywhere; `{ISO_DATE}` is retired.
+
+> **STOP if FAILED** -- if the output starts with `ERROR:`, report that line verbatim and stop.
+> Never fall back to INSTALL. Two causes: an unsupported verb (`uninstall`, `purge`, ...), or an
+> unresolvable plugin version. The second one is a broken install, not a degraded mode -- the script
+> refuses to emit a fake version rather than let `unknown` reach a `version:` stamp, so nothing is
+> written and even `status` stops (it would have no running version to compare a stamp against).
 
 ---
 

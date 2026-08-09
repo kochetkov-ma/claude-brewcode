@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 5.0.0 |
+| Version | 5.1.0 |
 | Skills | 12 |
 | Agents | 3 |
 | Hooks | 2 |
@@ -157,6 +157,28 @@ brewtools/
 ```
 
 > **Brewtools vs Brewcode:** Brewtools provides standalone text utilities with no lifecycle dependencies. Brewcode is a task execution engine with infinite context and session handoff. Both install from the same `claude-brewcode` marketplace but operate independently.
+
+## Artifact metadata
+
+Every artifact a `-setup` skill installs into your project carries the same four fields, so you can
+tell at a glance what wrote a file and which plugin version it was written at.
+
+| Field | Values | Where |
+|-------|--------|-------|
+| `doc_type` | `llm` \| `user` \| `skip` -- unquoted | `.md` frontmatter only, never JSON |
+| `version` | `"X.Y.Z"` -- plugin version at install time | all carriers |
+| `generated_by` | `"<plugin>:<skill>"` | all carriers |
+| `last_updated` | `"YYYY-MM-DD"` | all carriers except a byte-copied `.mjs`/`.sh`/`.md` |
+
+A byte-copied asset omits `last_updated`: the value would be the release date,
+identical in the plugin file and the copy, so rewriting it on every build would churn bytes and
+defeat the `cmp` drift check that mechanism exists for. The four keys always sit after the file's
+own keys, in that order. JSON artifacts carry the same three snake_case keys at top level (no
+`doc_type`) in every writing mode. Five carriers exist: JSON keys, `.md` frontmatter, a
+`// brewcode-meta:` / `# brewcode-meta:` one-liner on line 2 of a byte-copied `.mjs`/`.sh`, a header
+table in `team.md`, and `<!-- brewcode-meta: ... -->` on line 1 of a byte-copied `.md`. Versions
+always come from `.claude-plugin/plugin.json`, never hardcoded.
+`/brewcode:setup-status` reads these back across every setup skill installed here.
 
 ## Hooks
 

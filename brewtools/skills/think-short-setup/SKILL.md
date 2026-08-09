@@ -28,10 +28,12 @@ All three read `think-short-prompt.md` from their OWN directory and emit `{}` wh
 
 ## BT_ROOT Resolver (use in EVERY bash block)
 
-`$CLAUDE_PLUGIN_ROOT` is NOT inherited by the Bash tool in main-conversation slash invocations. Resolve dynamically:
+The plugin root is resolved from the skill's OWN directory (the `CLAUDE_SKILL_DIR` prompt substitution), never from `CLAUDE_PLUGIN_ROOT` -- that env var is not exported to a skill's Bash tool:
 
 ```bash
-BT_ROOT="${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::')}"
+SD="${CLAUDE_SKILL_DIR}"
+if [ -n "$SD" ] && [ -f "$SD/../../.claude-plugin/plugin.json" ]; then BT_ROOT=$(cd "$SD/../.." && pwd); else BT_ROOT=$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::'); fi
+[ -n "$BT_ROOT" ] || { echo "ERROR: cannot locate brewtools plugin root -- install/update brewtools first."; exit 1; }
 test -d "$BT_ROOT/skills/think-short-setup/assets" || { echo "❌ BT_ROOT invalid: $BT_ROOT"; exit 1; }
 ```
 
@@ -50,7 +52,9 @@ Run this before anything else, in EVERY mode. Never install, re-install or remov
 **EXECUTE** using Bash tool:
 
 ```bash
-BT_ROOT="${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::')}"
+SD="${CLAUDE_SKILL_DIR}"
+if [ -n "$SD" ] && [ -f "$SD/../../.claude-plugin/plugin.json" ]; then BT_ROOT=$(cd "$SD/../.." && pwd); else BT_ROOT=$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::'); fi
+[ -n "$BT_ROOT" ] || { echo "ERROR: cannot locate brewtools plugin root -- install/update brewtools first."; exit 1; }
 A="$BT_ROOT/skills/think-short-setup/assets"
 for f in INSTALL.md think-short-session.mjs think-short-prompt-counter.mjs think-short-task.mjs think-short-prompt.md; do
   test -f "$A/$f" || { echo "❌ FAILED — assets incomplete under BT_ROOT=$BT_ROOT (missing $f)"; exit 1; }
@@ -246,7 +250,7 @@ Re-install is a no-op. One target per run; "both" is two runs.
 | Condition | Response |
 |-----------|----------|
 | `BT_ROOT` resolves but `$BT_ROOT/skills/think-short-setup/assets` missing | ERROR: `think-short: assets not found under $BT_ROOT — plugin cache incomplete.` STOP. |
-| Neither `$CLAUDE_PLUGIN_ROOT` set nor any cached plugin dir found | ERROR: `think-short: cannot locate plugin root — install/update brewtools first.` STOP. |
+| Neither the skill dir nor any cached plugin dir yields `.claude-plugin/plugin.json` | ERROR: `think-short: cannot locate plugin root — install/update brewtools first.` STOP. |
 | Status shows installed + vague intent | Print status, list available operations, STOP. Do not re-install. |
 | Target unspecified | AskUserQuestion: Project / Global. Never guess. |
 | Mode ambiguous between install and removal | AskUserQuestion. Never guess a destructive mode. |
@@ -268,7 +272,9 @@ Verify the 5 assets exist and the scripts parse before delegating.
 **EXECUTE** using Bash tool:
 
 ```bash
-BT_ROOT="${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::')}"
+SD="${CLAUDE_SKILL_DIR}"
+if [ -n "$SD" ] && [ -f "$SD/../../.claude-plugin/plugin.json" ]; then BT_ROOT=$(cd "$SD/../.." && pwd); else BT_ROOT=$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::'); fi
+[ -n "$BT_ROOT" ] || { echo "ERROR: cannot locate brewtools plugin root -- install/update brewtools first."; exit 1; }
 A="$BT_ROOT/skills/think-short-setup/assets"
 test -d "$A" || { echo "❌ assets dir missing"; exit 1; }
 for f in think-short-session.mjs think-short-prompt-counter.mjs think-short-task.mjs think-short-prompt.md INSTALL.md; do

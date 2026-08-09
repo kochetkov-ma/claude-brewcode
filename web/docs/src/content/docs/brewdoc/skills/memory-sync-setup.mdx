@@ -15,12 +15,16 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 **This skill does not sync memory — it writes the skill that does.** `/brewdoc:memory-sync-setup` analyzes the target repo once, then emits a self-contained `.claude/skills/memory-sync/` that already knows this repo's batches, invariants, fact-verification commands, agent roster and language policy. Replaces the old `brewdoc:memory`.
 </Callout>
 
+<Callout type="note">
+**A remedy must be able to clear the verdict it follows.** Before this release the artifact was stamped once at install and the stamp could never change: `status` reported `stale`, prescribed `upgrade`, and `upgrade` had no way to clear it — the only documented escape (`MEMORY_SYNC_FORCE=1`) destroyed every hand-edit in the process. The loop now closes: install at version X, bump the plugin, `status` says `stale`, `upgrade` runs `generate.sh restamp` as its mandatory last step, and the verdict returns to `IN SYNC` with the body byte-identical — a second `upgrade` is a no-op.
+</Callout>
+
 ## Quick reference
 
 | Field | Value |
 |-------|-------|
-| Command | `/brewdoc:memory-sync-setup [status\|install\|upgrade\|uninstall] [fine-tune-prompt]` |
-| Canonical modes | `status` · `install` · `upgrade` · `uninstall` |
+| Command | `/brewdoc:memory-sync-setup [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [fine-tune-prompt]` |
+| Canonical modes | `status` · `install` · `upgrade` · `enable` · `disable` · `uninstall` · `purge` |
 | No argument | `status` when `.claude/skills/memory-sync/` exists, `install` when it does not |
 | Extras | an optional free-form fine-tune prompt after the mode token |
 | Invocation | user-invoked only — `disable-model-invocation: true` |
@@ -43,7 +47,10 @@ Free-form focus text only steers emphasis. It never narrows the sweep, and facts
 | Bias the emitted skill toward a specific concern | `/brewdoc:memory-sync-setup install "weight stale-fact removal over compression"` |
 | Check whether an installed memory-sync is still true to the repo | `/brewdoc:memory-sync-setup status` |
 | Repo gained a new agent, rule, or CLAUDE.md since install | `/brewdoc:memory-sync-setup upgrade` |
-| Drop the emitted skill from the repo | `/brewdoc:memory-sync-setup uninstall` |
+| Pause `/memory-sync` without losing hand-edits | `/brewdoc:memory-sync-setup disable` |
+| Bring a paused `/memory-sync` back | `/brewdoc:memory-sync-setup enable` |
+| Drop the emitted skill from the repo, keep user-added files | `/brewdoc:memory-sync-setup uninstall` |
+| Drop the whole `.claude/skills/memory-sync/` directory, no survivors | `/brewdoc:memory-sync-setup purge` |
 | Actually sync memory in a repo that already has it installed | `/memory-sync` (the emitted skill, not this one) |
 
 ## Example
@@ -74,11 +81,11 @@ Run it:  /memory-sync                       -> scope session (default), whole su
 ## Workflow
 
 <Steps>
-  <li><div><strong>Mode gate</strong><p>First token of the argument, lowercased: <code>status</code>, <code>install</code>, <code>upgrade</code> or <code>uninstall</code>. No token at all means <code>status</code> when the skill is already installed and <code>install</code> when it is not. The old aliases <code>init</code>/<code>setup</code> parse as <code>install</code> and <code>remove</code> as <code>uninstall</code>, and the skill echoes the canonical verb back. Everything else is fine-tune text for <code>{'{FOCUS_EMPHASIS}'}</code>.</p></div></li>
+  <li><div><strong>Mode gate</strong><p>First token of the argument, lowercased: <code>status</code>, <code>install</code>, <code>upgrade</code>, <code>enable</code>, <code>disable</code>, <code>uninstall</code> or <code>purge</code>. No token at all means <code>status</code> when the skill is already installed and <code>install</code> when it is not. The old aliases <code>init</code>/<code>setup</code> parse as <code>install</code>, <code>on</code>/<code>off</code> as <code>enable</code>/<code>disable</code>, and <code>remove</code>/<code>reset</code>/<code>cleanup</code> as <code>uninstall</code> or <code>purge</code> (asked which) — the skill echoes the canonical verb back. Everything else is fine-tune text for <code>{'{FOCUS_EMPHASIS}'}</code>.</p></div></li>
   <li><div><strong>Phase 0 — read emit material</strong><p>Reads its own four reference files — <code>references/SKILL.md.template</code>, <code>memory-guide.md</code>, <code>agent-audit.md</code>, <code>hard-sync.md</code>. Missing material is a hard stop — never improvised.</p></div></li>
   <li><div><strong>Phase 1 — analyze the target</strong><p>Runs <code>generate.sh scan</code>, then determines the memory surface (root + every nested <code>CLAUDE.md</code>, rules, conventions, <code>AGENTS.md</code> family, agents, skills, memory dir), VERIFY-ONLY files, exclusions, default branch (derived, never hardcoded), git visibility, language policy, and a checkable-fact catalogue — one real shell command per claim.</p></div></li>
   <li><div><strong>Phase 1.5 — clarify</strong><p><code>AskUserQuestion</code> only for what cannot be reliably inferred: which convention files count as memory, whether the memory dir is in scope, VERIFY-ONLY list, default branch, intentional non-English trigger aliases, batch splits.</p></div></li>
-  <li><div><strong>Phase 2 — emit</strong><p>Exports scalar placeholders and runs <code>generate.sh emit</code>: sed-substitutes them into the template, copies the reference files, stamps provenance on the last line (template version, date, surface counts — what `status` and `upgrade` read back). Refuses to overwrite an existing installation — that is what <code>upgrade</code> is for.</p></div></li>
+  <li><div><strong>Phase 2 — emit</strong><p>Exports scalar placeholders and runs <code>generate.sh emit</code>: awk-substitutes them into the template, copies the reference files, then stamps provenance into the emitted skill's YAML frontmatter — <code>doc_type</code>, <code>version</code> (the brewdoc plugin version, read from <code>plugin.json</code> by script self-location, never hardcoded), <code>generated_by</code>, <code>last_updated</code>, plus <code>surface_files</code> as the drift input, which is what <code>status</code>, <code>validate</code> and <code>upgrade</code> read back. Refuses to overwrite an existing installation — that is what <code>upgrade</code> is for.</p></div></li>
   <li><div><strong>Phase 3 — fill block placeholders</strong><p>Multi-row tables and multi-line bash go through <code>Edit</code>, not sed — twelve blocks total: ten in the emitted <code>SKILL.md</code> (batch table, exclusions, invariants, fact catalogue, enumeration bash, agent checks, skill checks, roster, proposal precedents, verify-extra assertions) and two in the emitted <code>references/hard-sync.md</code> (paths-precision table, obvious-vs-domain table).</p></div></li>
   <li><div><strong>Phase 4 — validate</strong><p><code>generate.sh validate</code> fails on any surviving <code>{'{PLACEHOLDER}'}</code>, a missing emitted asset, or a cited reference that does not exist. Then every emitted <code>subagent_type</code> is asserted to resolve to a real project agent or a built-in.</p></div></li>
   <li><div><strong>Phase 5 — report</strong><p>Prints surface counts, batches, exclusions, fact/invariant counts, and how to run the emitted skill — plus how to check on it later with <code>status</code> or refresh it with <code>upgrade</code>.</p></div></li>
@@ -90,12 +97,19 @@ Run it:  /memory-sync                       -> scope session (default), whole su
 
 | Mode | Reads | Writes | Does |
 |------|-------|--------|------|
-| `status` (default when installed) | target + emitted skill | nothing | Runs `generate.sh status`, which prints a machine-greppable `KEY=value` block — provenance stamp, surface files stamped vs enumerated now, missing emitted files, unfilled placeholders — closed by a verdict: `IN SYNC` / `STALE (n drifts)` / `NOT INSTALLED`. The skill then enriches it with its own reads: dead batch paths, memory layers gained since install |
+| `status` (default when installed) | target + emitted skill | nothing | Runs `generate.sh status`, which prints a machine-greppable `KEY=value` block — `PLUGIN_VERSION`, `STAMP_FORMAT`, the `META_*` provenance rows, surface files stamped vs enumerated now, missing emitted files, unfilled placeholders — closed by a verdict: `IN SYNC` / `STALE (n drifts)` / `STALE-LEGACY (n drifts)` (a pre-5.0 install still carrying the old tail-comment stamp — run `upgrade` to migrate it) / `NOT INSTALLED`, each prefixed `PARKED - ` when disabled. The skill then enriches it with its own reads: dead batch paths, memory layers gained since install |
 | `install` (default when nothing is installed) | target | 4 emitted files | Full Phase 0-5 analysis and emit. Refuses if `.claude/skills/memory-sync/` already exists |
-| `upgrade` | target + emitted skill | edits the emitted skill | Reads the same `generate.sh status` drift list as its refresh worklist, then re-scans and refreshes surface/batch/fact/invariant tables, adds sections for new memory layers, preserves hand-edits — the emitted skill is expected to have self-modified via its own SELF-SYNC phase |
-| `uninstall` | target | deletes the emitted skill dir | Removes `<target>/.claude/skills/memory-sync/` after confirmation. The generator registers no hook and writes no settings, so that one directory is the whole footprint. Nothing installed -> reports "nothing to uninstall" instead of deleting on a guess |
+| `upgrade` | target + emitted skill | edits the emitted skill | Reads the same `generate.sh status` drift list as its refresh worklist, then re-scans and refreshes surface/batch/fact/invariant tables, adds sections for new memory layers, preserves hand-edits — the emitted skill is expected to have self-modified via its own SELF-SYNC phase — and always finishes with `generate.sh restamp` |
+| `enable` | target | one rename | `SKILL.md.disabled` -> `SKILL.md`, so `/memory-sync` is offered again next session. Regenerates nothing — no provenance stamp, no hand-edit change |
+| `disable` | target | one rename | `SKILL.md` -> `SKILL.md.disabled`. Claude Code discovers a project skill only through `SKILL.md`, so this withdraws `/memory-sync` from the roster while the 3 references and every SELF-SYNC hand-edit stay byte-identical on disk. Reversible by `enable`; deletes nothing |
+| `uninstall` | target | deletes the emit manifest | Removes exactly what `emit` wrote — `SKILL.md` (or its parked form) plus the 3 references — after confirmation. Files a user added to that dir are kept and listed. Nothing installed -> reports "nothing to uninstall" instead of deleting on a guess |
+| `purge` | target | deletes the whole dir | Removes `<target>/.claude/skills/memory-sync/` outright, user-added files included, plus any `.memory-sync-emit.*` staging a crashed emit left behind. Confirmation first |
 
 **What gets emitted** — `<target>/.claude/skills/memory-sync/`: `SKILL.md` (scalars substituted, blocks filled), `references/memory-guide.md`, `references/agent-audit.md`, `references/hard-sync.md`. Nothing else — no agent, no rule, no hook.
+
+**Enable/disable is entry-file parking, not a flag.** `status` reports a parked install as `INSTALLED=parked`, never collapsed into `NOT INSTALLED`.
+
+**Version resolution never guesses.** `resolve_plugin_version()` reads `.version` out of the plugin's own `plugin.json` by self-location. The string `unknown` is an internal sentinel only — `emit` and `restamp` hard-fail before writing anything (`❌ FAILED: cannot read .version from plugin.json - reinstall brewdoc`) rather than ever stamping the literal `unknown` into an artifact.
 
 **Emitted-skill behavior** (what this generator bakes in, not what it runs itself):
 

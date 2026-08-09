@@ -1,4 +1,5 @@
 #!/bin/sh
+# brewcode-meta: version=5.1.0 generated_by=brewcode:teams-setup
 set -eu
 
 USAGE="Usage: trace-ops.sh <add|read|cursor|migrate> <team_dir> [args...]"

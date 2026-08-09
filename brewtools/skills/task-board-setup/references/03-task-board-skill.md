@@ -83,6 +83,10 @@ name: task-board
 description: "Views and updates this repo's file-based task board at .claude/features/. Triggers: show the board, task board, board status, what's in progress, add a task, create task, move task to progress, close task, dump to backlog, groom backlog.{{SPEC_DESC_TRIGGERS}}"
 argument-hint: "[view | add | move | backlog | groom]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Agent
+doc_type: llm
+version: "{PLUGIN_VERSION}"
+generated_by: "{GENERATED_BY}"
+last_updated: "{LAST_UPDATED}"
 ---
 
 # Task Board (dashboard)

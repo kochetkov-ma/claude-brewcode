@@ -149,6 +149,10 @@ description: "Owns the file-based task board under .claude/features/ -- create/m
 model: sonnet
 tools: Read, Write, Edit, Glob, Grep, Bash
 color: yellow
+doc_type: llm
+version: "{PLUGIN_VERSION}"
+generated_by: "{GENERATED_BY}"
+last_updated: "{LAST_UPDATED}"
 ---
 
 [DICT: BRD=board.md, BKL=backlog, TPL=TASK_TEMPLATE.md, FM=frontmatter, TRK=TRACKER.md]

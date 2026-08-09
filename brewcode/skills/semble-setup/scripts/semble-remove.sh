@@ -192,7 +192,12 @@ process.stdout.write(((j.changed||[]).length)+" "+((j.skipped||[]).length));')"
     return 0
   fi
   sr_rm_file "$root/.claude/rules/semble-first.md" "rule"
+  sr_rm_file "$root/.sembleignore" "ignore"
   sr_rm_file "$root/.claude/hooks/semble-session.mjs" "hook"
+  sr_rm_file "$root/.claude/hooks/semble-prefetch.mjs" "hook"
+  sr_rm_file "$root/.claude/hooks/semble-stats.mjs" "hook"
+  # Retired in v5.0.0. Still removed here: a repo that never ran the migrating
+  # install/upgrade still has these on disk, and uninstall must leave nothing.
   sr_rm_file "$root/.claude/hooks/semble-reminder.mjs" "hook"
   sr_rm_file "$root/.claude/hooks/semble-explore.mjs" "hook"
   sr_strip_claudemd
@@ -329,9 +334,12 @@ sr_plan() {
   case "$flavour" in
     integration)
       sr_would "$root/.claude/rules/semble-first.md"
+      sr_would "$root/.sembleignore"
       sr_would "$root/.claude/hooks/semble-session.mjs"
-      sr_would "$root/.claude/hooks/semble-reminder.mjs"
-      sr_would "$root/.claude/hooks/semble-explore.mjs"
+      sr_would "$root/.claude/hooks/semble-prefetch.mjs"
+      sr_would "$root/.claude/hooks/semble-stats.mjs"
+      sr_would "$root/.claude/hooks/semble-reminder.mjs  (retired v5.0.0)"
+      sr_would "$root/.claude/hooks/semble-explore.mjs   (retired v5.0.0)"
       sr_would "$root/CLAUDE.md marker block $SR_CLAUDEMD_BEGIN .. $SR_CLAUDEMD_END"
       sr_would "$root/.claude/semble/"
       ;;
@@ -339,9 +347,12 @@ sr_plan() {
     cli) sr_would "uv tool install of semble ($(sc_semble_tool_version 2>/dev/null || true))" ;;
     purge)
       sr_would "$root/.claude/rules/semble-first.md"
+      sr_would "$root/.sembleignore"
       sr_would "$root/.claude/hooks/semble-session.mjs"
-      sr_would "$root/.claude/hooks/semble-reminder.mjs"
-      sr_would "$root/.claude/hooks/semble-explore.mjs"
+      sr_would "$root/.claude/hooks/semble-prefetch.mjs"
+      sr_would "$root/.claude/hooks/semble-stats.mjs"
+      sr_would "$root/.claude/hooks/semble-reminder.mjs  (retired v5.0.0)"
+      sr_would "$root/.claude/hooks/semble-explore.mjs   (retired v5.0.0)"
       sr_would "$root/CLAUDE.md marker block $SR_CLAUDEMD_BEGIN .. $SR_CLAUDEMD_END"
       sr_would "$root/.claude/semble/"
       sr_would "$(sc_cache_root_code)  (ENTIRE code cache root — every repo index under it)"

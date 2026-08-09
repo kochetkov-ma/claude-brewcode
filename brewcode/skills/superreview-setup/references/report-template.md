@@ -1,3 +1,10 @@
+---
+doc_type: llm
+version: "{PLUGIN_VERSION}"
+generated_by: "{GENERATED_BY}"
+last_updated: "{LAST_UPDATED}"
+---
+
 # Merged Report Layout (superreview Phase 4 — {PROJECT_NAME})
 
 Output: `.claude/reports/{TIMESTAMP}_superreview/REPORT.md`. ONE consolidated, validated, P0->P3-sorted report.

@@ -5,6 +5,10 @@ user-invocable: true
 argument-hint: "<prompt-or-file-path> [scope: commit|branch|folder]"
 allowed-tools: Read, Glob, Grep, Agent, Bash, Write, AskUserQuestion
 model: opus
+doc_type: llm
+version: "{PLUGIN_VERSION}"
+generated_by: "{GENERATED_BY}"
+last_updated: "{LAST_UPDATED}"
 ---
 
 # Super Review ({PROJECT_NAME})
@@ -955,7 +959,7 @@ superreview does NOT run /simplify or any skill and does NOT edit code — these
   (spawned at BOTH depths; this skill passes it context only and restates nothing from it).
 
 <!--
-SKILL METADATA — generated {GENERATED_AT}
+SKILL NOTES — provenance lives in the frontmatter above (`version` / `generated_by` / `last_updated`).
 
 Self-contained project-local deep-review skill for {PROJECT_NAME}. NO sibling-skill orchestration, never invokes
 another skill, NO plugin dependency. Two axes (MODE = scope, DEPTH = effort) and what each costs: see Configuration.

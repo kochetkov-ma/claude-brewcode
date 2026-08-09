@@ -5,6 +5,10 @@ model: inherit
 maxTurns: 60
 color: green
 tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch
+doc_type: llm
+version: "5.1.0"
+generated_by: "brewcode"
+last_updated: "2026-08-09"
 ---
 
 # Bash Expert

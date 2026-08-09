@@ -4,7 +4,7 @@ description: Complete file tree of the brewcode plugin with descriptions
 
 # Brewcode Plugin - File Tree
 
-> Version: 5.0.0 | Files: 145 | Directories: 44 (excludes the generated `.codex/` mirror)
+> Version: 5.1.0 | Files: 149 | Directories: 44 (excludes the generated `.codex/` mirror; no dotfiles, `__pycache__`, or `node_modules` exist under `brewcode/`)
 
 ## Plugin Structure
 
@@ -12,7 +12,7 @@ description: Complete file tree of the brewcode plugin with descriptions
 brewcode/                                    # Plugin root directory
 │
 ├── .claude-plugin/                            # Claude Code plugin configuration
-│   └── plugin.json                            # Manifest (name, version 5.0.0, skills/ reference)
+│   └── plugin.json                            # Manifest (name, version 5.1.0, skills/ reference)
 │
 ├── hooks/                                     # Node.js scripts for Claude Code events
 │   ├── hooks.json                             # Binds 2 events (UserPromptSubmit, SessionStart)
@@ -56,14 +56,16 @@ brewcode/                                    # Plugin root directory
 │   │
 │   ├── semble-setup/                          # /brewcode:semble-setup - Semantic code-search MCP setup
 │   │   ├── SKILL.md                           # status(default)/install/upgrade/enable/disable/uninstall/purge + reindex/optimize/resume (opus)
-│   │   ├── assets/                            # INSTALL.md, semble-first rule template, session/reminder/explore hooks
+│   │   ├── assets/                            # INSTALL.md, semble-first + sembleignore templates, session/prefetch/stats hooks
 │   │   ├── references/                        # engine-landscape, hooks-roadmap, intent-routing, language-coverage, mcp-and-cache, output-contract, project-agent-migration
 │   │   ├── scripts/                           # 9 semble-*.sh + lib/semble-common.sh
-│   │   └── tests/                             # run.sh + 6 mjs suites + fixtures
+│   │   └── tests/                             # run.sh + 7 mjs suites + fixtures
 │   │
 │   ├── setup-status/                          # /brewcode:setup-status - Read-only cross-plugin setup dashboard
 │   │   ├── SKILL.md                           # Roster table + probes + classification; no Write/Edit/Agent, runs no setup (sonnet)
-│   │   └── README.md                          # States, staleness signals, roster self-check
+│   │   ├── README.md                          # States, staleness signals, roster self-check
+│   │   └── references/
+│   │       └── artifact-metadata.md           # doc_type/version/generated_by/last_updated contract for generated artifacts
 │   │
 │   ├── skills/                                # /brewcode:skills - Skill management
 │   │   ├── SKILL.md
@@ -79,10 +81,11 @@ brewcode/                                    # Plugin root directory
 │   │       └── generate.sh                    # Scaffold the project-local review skill
 │   │
 │   └── teams-setup/                           # /brewcode:teams-setup - Dynamic agent team creation/management
-│       ├── SKILL.md                           # status/install/upgrade/uninstall/purge, each with an optional [name]; enable/disable rejected (opus)
+│       ├── SKILL.md                           # status/install/upgrade/enable/disable/uninstall/purge, each with an optional [name] (opus)
 │       ├── references/                        # agent-template, cleanup-flow (incl. Step P: Purge), framework-files
 │       └── scripts/
-│           ├── detect-mode.sh                 # Canonical verbs only; unknown first word = team name, so enable/disable/purge are handled explicitly
+│           ├── detect-mode.sh                 # Canonical verbs only; unknown first word = team name, so purge is handled explicitly
+│           ├── toggle-team.sh                 # enable/disable: parks/unparks agent .md files as .md.disabled, reversible, intent-guard excluded
 │           ├── trace-ops.sh                   # Copied into .claude/teams/{name}/ at install - agents call the project copy
 │           └── verify-team.sh                 # WARNs (with a cp line) when the project copy of trace-ops.sh is missing
 │
@@ -98,7 +101,7 @@ brewcode/                                    # Plugin root directory
 │
 ├── README.md                                  # Components, commands, agents, hooks, architecture, flow diagrams
 ├── INSTALL.md                                 # Installation: plugin-dir, marketplace, embedding, troubleshooting
-└── package.json                               # npm: claude-plugin-brewcode@5.0.0, build/publish scripts
+└── package.json                               # npm: claude-plugin-brewcode@5.1.0, build/publish scripts
 ```
 
 ## Target Project Structure
@@ -143,7 +146,7 @@ Files created by the plugin in the user's project:
     │
     ├── e2e/                                   # From /brewcode:e2e install
     │   ├── e2e-rules.md                       # Merged base + [WEB]/[PROJECT] rules; = config.rulesPath
-    │   ├── config.json                        # stack, testFramework, agents, rulesPath, lastSetup
+    │   ├── config.json                        # stack, testFramework, agents, rulesPath + version/generated_by/last_updated
     │   └── scenarios/                         # BDD scenarios by domain (from /brewcode:e2e create)
     │
     └── rules/
@@ -160,7 +163,7 @@ Files created by the plugin in the user's project:
 | Hooks | 2 | forced-eval, session-start |
 | Agents | 5 | agent-creator, bash-expert, bc-rules-organizer, hook-creator, skill-creator |
 | Skills (SKILL.md) | 9 | agents, convention, e2e, rules, semble-setup, setup-status, skills, superreview-setup, teams-setup |
-| Bash scripts | 19 | semble-setup(10), teams-setup(3), skills(2), convention(1), e2e(1), rules(1), superreview-setup(1); setup-status ships none |
+| Bash scripts | 20 | semble-setup(10), teams-setup(4), skills(2), convention(1), e2e(1), rules(1), superreview-setup(1); setup-status ships none |
 | Templates | 2 | rules(2) |
 | Documentation | 4 | README, INSTALL, file-tree.md, commands.md |
 | npm | 1 | package.json |

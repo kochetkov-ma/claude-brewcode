@@ -49,7 +49,7 @@ The skill always reports status first, states its plan before asking anything, t
 |------|-----------|---------------|--------|-------|
 | `status` | — | — | — | — |
 | `install` | copied | entries merged | written | — |
-| `upgrade` | re-copied | entries re-merged | values preserved | kept |
+| `upgrade` | re-copied | entries re-merged | behavior values preserved, metadata re-stamped | kept |
 | `enable` | kept | kept | `enabled:true` | kept |
 | `disable` | kept | kept | `enabled:false` | kept |
 | `uninstall` | deleted | entries stripped | **kept** | kept |
@@ -85,13 +85,17 @@ Project config wins over global; a malformed project config is skipped and the g
   "enabled": true,
   "defaultMinutes": 20,
   "byAgentType": {},
-  "hardStopRatio": 2
+  "hardStopRatio": 2,
+  "version": "{PLUGIN_VERSION}",
+  "generated_by": "brewtools:agent-deadline-setup",
+  "last_updated": "{LAST_UPDATED}"
 }
 ```
 
 | Key | Meaning |
 |-----|---------|
 | `enabled` | must be exactly `true`; anything else = off |
+| `version` / `generated_by` / `last_updated` | provenance, written on every config write. No `doc_type` — that field is `.md` frontmatter only. `version` is the brewtools version that wrote the file; `status` compares it against the installed plugin so a shape change from a later version is visible. Inert at runtime — the hooks read only the four keys above |
 | `defaultMinutes` | budget for every agent type; default `20` |
 | `byAgentType` | per-type overrides, e.g. `{"Explore": 10}`; empty = one limit for all |
 | `hardStopRatio` | optional, default `2`, must be `>1` — multiple of the budget after which the allowance drops from the finalize set to `Write, Edit` |

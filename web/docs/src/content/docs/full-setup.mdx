@@ -61,27 +61,39 @@ Six verdicts, and the order between them matters:
 
 | Verdict | Meaning |
 |---------|---------|
-| `installed` | anchor and every secondary present, version signal matches |
-| `installed (version unknown)` | all present, but this setup ships no version signal to compare — AI-authored files have no stamp. The honest answer, not a defect |
-| `stale` | all present, but a version signal differs from the plugin's, or an absence signal fires (a team without `trace-ops.sh`, a board without the `task-spec` skill) |
-| `disabled` | you turned it off on purpose. Five setups leave a probeable off-switch: `.enabled:false`, `hard:false`, or think-short's `think-short-prompt.md.disabled` rename |
-| `partial` | anchor missing but some secondary present, or anchor present with a secondary missing — an interrupted install |
-| `missing` | anchor and every secondary absent |
+| `n/a` | the plugin that owns this row is not installed. Never `missing` |
+| `disabled` | you turned it off on purpose. All ten setups leave a probeable off-switch — a live config flag or an entry-file rename — see below |
+| `missing` | anchor and every secondary absent, in both the live and `.disabled` spelling |
+| `partial` | anchor missing but some secondary present (or the reverse), a toggle left half-applied, an unresolved `{PLUGIN_VERSION}` placeholder, or the wrong skill's `generated_by` wrote the file |
+| `stale` | all present, but a version signal disagrees, or an absence signal fires (a team without `trace-ops.sh`, a board without the `task-spec` skill), or semble's wiring signal fires. A version or byte signal takes one of four qualifiers: `(X -> Y)` — the stamp is behind or ahead of the plugin, `(legacy stamp)` — a retired stamp spelling survives, `(legacy, unstamped)` — no stamp in any carrier, `(bytes drifted)` — the stamp matches but a `cmp` pair differs. An absence signal or semble's wiring signal prints a bare `stale` and names the missing artifact in the Found column |
+| `installed` | anchor and every secondary present, version stamp matches the plugin, every `cmp` pair agrees |
 
-`disabled` outranks `partial` and `stale`, and that ordering is the point. `think-short-setup disable`
-renames its prompt file away, so the secondary legitimately goes missing; calling that `partial` would
-send you to re-install a mechanism that is working exactly as you configured it. Equally, a disabled
-row is never reported as `installed` — the files are there but the mechanism is inert, so the row's
-command column offers `enable`.
+`installed (version unknown)` is retired: every anchor in the roster now carries a real version stamp,
+including `teams-setup` and `task-board-setup`, which used to ship unstamped. What remains as an edge
+case, not a seventh state, is `version unknown (plugin asset missing)` — the plugin cache is missing
+the asset a `cmp` needs to compare against, so the byte check could not run at all. That is never
+reported as `stale`.
 
-A plugin you have not installed makes all of its rows `n/a`, never `missing`.
+`disabled` outranks `missing`, `partial` and `stale`, and that ordering is the point. Five setups
+disable by parking the anchor file itself — `superreview-setup disable` renames `SKILL.md` away, so
+checking presence first would report `missing` ("never installed") for something the user turned off
+on purpose. `think-short-setup disable` renames its prompt file away, so the secondary legitimately
+goes missing; calling that `partial` would send you to re-install a mechanism that is working exactly
+as you configured it. Equally, a disabled row is never reported as `installed` — the files are there
+but the mechanism is inert, so the row's command column offers `enable`.
+
+All ten setups leave a probeable off-switch, under exactly two mechanisms: a **live config flag**
+(`semble`, `agent-deadline`, `agent-router`, `manager`, `docsync` — the reader re-checks the key on
+every invocation) or **entry-file parking** (`teams`, `superreview`, `task-board`, `think-short`,
+`memory-sync` — the one filename discovery keys on is renamed `<name>.disabled` and back, body
+byte-identical, nothing deleted).
 
 ## The ten setups
 
 | Skill | Plugin | What it installs |
 |-------|--------|------------------|
 | [`teams-setup`](/brewcode/skills/teams-setup/) | brewcode | `.claude/teams/*/team.md` plus 5-20 project agents in `.claude/agents/*.md`, and `.claude/agents/intent-guard.md` |
-| [`semble-setup`](/brewcode/skills/semble-setup/) | brewcode | the `semble_code` MCP server (user scope), `.claude/rules/semble-first.md`, three hooks in `.claude/hooks/` (`semble-session`, `semble-reminder`, `semble-explore`), `.claude/semble/state.json` |
+| [`semble-setup`](/brewcode/skills/semble-setup/) | brewcode | the `semble_code` MCP server (user scope), `.claude/rules/semble-first.md`, three hook files in `.claude/hooks/` (`semble-session`, `semble-prefetch`, `semble-stats`) wired as four `settings.json` entries (`SessionStart`, `UserPromptSubmit`, `PostToolUse`, `PostToolUseFailure`, each `timeout: 5` seconds), `.claude/semble/state.json`, the repo-root `.sembleignore`, and the `&lt;!-- BEGIN brewcode:semble --&gt;` managed block in `CLAUDE.md` |
 | [`superreview-setup`](/brewcode/skills/superreview-setup/) | brewcode | a project `/superreview` skill at `.claude/skills/superreview/` with its `references/` and a `.template-baseline/` copy, plus `.claude/agents/intent-guard.md` |
 | [`task-board-setup`](/brewtools/skills/task-board-setup/) | brewtools | `.claude/features/board.md` and the board tree, `.claude/agents/task-tracker.md`, the `task-board` and `task-spec` skills under `.claude/skills/`, `.claude/rules/tasks.md`, `.claude/features/PROGRESS.md` |
 | [`think-short-setup`](/brewtools/skills/think-short-setup/) | brewtools | terse-mode hooks in `.claude/hooks/` (or `~/.claude/hooks/` for global scope): `think-short-session`, `think-short-prompt-counter`, `think-short-task`, `think-short-prompt.md` |
@@ -220,23 +232,23 @@ just reports.
   install it, say so: `/brewcode:semble-setup install`.
 </Callout>
 
-Not every setup implements all seven — the ones with no on/off state skip `enable` and `disable`, and
-say so instead of guessing. `/brewcode:teams-setup enable` exits with an error rather than falling back
-to `install`; a team is either present in `.claude/teams/` or it is not, there is no armed/disarmed
-state to flip.
+All ten implement the full seven verbs — the five setups that previously lacked `enable`/`disable`
+gained them in v5.1.0. The on/off state uses the same two mechanisms described above.
+`teams-setup enable`/`disable` is a real rename of every roster member to `<name>.md.disabled`,
+documented in its own SKILL.md.
 
 | Skill | Modes it accepts |
 |-------|------------------|
 | `semble-setup` | all seven, plus `reindex`, `optimize`, `resume` |
-| `think-short-setup` | all seven, plus `project` / `global` scope |
+| `superreview-setup` | all seven, plus a free-text fine-tune prompt and an optional scope |
+| `teams-setup` | all seven — each taking an optional team `[name]` |
+| `task-board-setup` | all seven, plus an optional target repo path and a free-text directive |
+| `think-short-setup` | all seven, plus `project` / `global` scope and a free-text intent |
 | `agent-deadline-setup` | all seven, plus `project` / `global` and a minutes budget |
 | `agent-router-setup` | all seven, plus `level fast` / `level strict` |
 | `manager-setup` | all seven, plus `level strict` / `level balanced` and `edit` |
-| `task-board-setup` | `status`, `install`, `upgrade`, `uninstall`, `purge` |
-| `docsync-setup` | `status`, `install`, `upgrade`, `uninstall`, `purge`, plus `sync`, `reread`, `frontmatter` |
-| `teams-setup` | `status`, `install`, `upgrade`, `uninstall`, `purge` — each taking an optional team `[name]` |
-| `memory-sync-setup` | `status`, `install`, `upgrade`, `uninstall` |
-| `superreview-setup` | `status`, `install`, `upgrade` |
+| `memory-sync-setup` | all seven, plus a free-text fine-tune prompt |
+| `docsync-setup` | all seven, plus `sync`, `reread`, `frontmatter` |
 
 ## Getting back out of the manager wall
 

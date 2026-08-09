@@ -1,12 +1,14 @@
 # 05 -- Step 4b: `.claude/features/**` file templates
 
-Write each block below to its path under `TARGET/.claude/features/`. Substitute `{{REPO_NAME}}`, `{{DOMAINS}}`, `{{FIRST_DOMAIN}}`, `{{LANG}}`, `{{CLOSE_MARKER_SHORT}}` (ref 03 map), `{{TODAY}}` (ISO date), plus the `{{SPEC_*}}` placeholders defined below (all gated by `SPEC_MODE`).
+Write each block below to its path under `TARGET/.claude/features/`. Substitute `{{REPO_NAME}}`, `{{DOMAINS}}`, `{{FIRST_DOMAIN}}`, `{{LANG}}`, `{{CLOSE_MARKER_SHORT}}` (ref 03 map), `{{TODAY}}` (ISO date), the metadata trio `{PLUGIN_VERSION}` / `{GENERATED_BY}` / `{LAST_UPDATED}` (SKILL.md Placeholder map), plus the `{{SPEC_*}}` placeholders defined below (all gated by `SPEC_MODE`).
+
+> **Metadata stamp.** `board.md`, `PROGRESS.md`, `TRACKER.md`, `INDEX.md` and `backlog/README.md` each open with the four-key frontmatter block (`doc_type, version, generated_by, last_updated`). It is UNGATED -- identical in both `SPEC_MODE` states -- and records WHO GENERATED the file and WHEN, so a later plugin version can detect an old-shape scaffold. It is provenance, not live state: nothing rewrites it after generation except `upgrade` (ref 10). `TASK_TEMPLATE.md` gets NO stamp -- its frontmatter is copied into every task card, where those keys would become card data.
 
 The `board.md` here is the EMPTY skeleton (counts 0). The Step-4c doc sweep fills it from the migrated docs.
 
 ## Spec-mode placeholders (gate: `SPEC_MODE=on`)
 
-Every placeholder below shares ONE gate: `SPEC_MODE`. Exactly TWO kinds -- `line` and `inline`. When `SPEC_MODE=off`, the emitted control files MUST be byte-identical to the pre-spec-layer originals PLUS this file's UNGATED session-progress sites (`PROGRESS.md` itself, `TRACKER.md` section 2's layout line, `TRACKER.md` section 8 step 4, the `INDEX.md` Control-files row) -- baseline in BOTH modes, never removed:
+Every placeholder below shares ONE gate: `SPEC_MODE`. Exactly TWO kinds -- `line` and `inline`. When `SPEC_MODE=off`, the emitted control files MUST be byte-identical to the pre-spec-layer originals PLUS this file's UNGATED session-progress sites (`PROGRESS.md` itself, `TRACKER.md` section 2's layout line, `TRACKER.md` section 8 step 4, the `INDEX.md` Control-files row) AND the four-key metadata frontmatter on the five control files -- baseline in BOTH modes, never removed:
 
 - **Line placeholders** (`{{SPEC_FEATURE_TABLE_HEAD_ON}}`, `{{SPEC_FEATURE_TABLE_HEAD_OFF}}`, `{{SPEC_FM_LINE}}`, `{{SPEC_SCOPE_BLOCK}}`, `{{SPEC_BOARD_COL_NOTE}}`, `{{SPEC_TRACKER_SECTION}}`, `{{SPEC_INDEX_ROWS}}`) occupy a line of their own. When off, REMOVE the entire line -- !=leave it blank.
 - `{{SPEC_FEATURE_TABLE_HEAD_ON}}` / `{{SPEC_FEATURE_TABLE_HEAD_OFF}}` are the two ARMS of that same gate, both `line` kind: on -> expand `_ON`, remove the `_OFF` line; off -> expand `_OFF`, remove the `_ON` line. Exactly one arm survives every run. !=a third kind.
@@ -77,6 +79,13 @@ CORRECTION to the column list above: Progress + Todo have SIX columns, `id | tit
 ## `board.md`
 
 ```markdown
+---
+doc_type: llm
+version: "{PLUGIN_VERSION}"
+generated_by: "{GENERATED_BY}"
+last_updated: "{LAST_UPDATED}"
+---
+
 # {{REPO_NAME}} Task Board
 
 > Canonical task list + status. Procedure: [`TRACKER.md`](TRACKER.md). New-task template:
@@ -124,12 +133,21 @@ The `specs` count on the **Counts** line keeps its meaning in both modes: number
 Ungated -- written in BOTH `SPEC_MODE` states, at init, before any task exists.
 
 ```markdown
+---
+doc_type: llm
+version: "{PLUGIN_VERSION}"
+generated_by: "{GENERATED_BY}"
+last_updated: "{LAST_UPDATED}"
+---
+
 # Session progress -- {{REPO_NAME}}
 
 > [`board.md`](board.md) owns the task LIST + status. THIS file owns what the SESSION did about it.
 > !=a second board: no task table, no per-task detail (that is the task's `## Notes`).
 > Five fields, overwritten in place -- one snapshot, never an append-only log. {{LANG}} only.
 > Kept current by the main session; rewritten by the `task-tracker` agent on every run.
+> The `Updated` field below is the SESSION snapshot date; frontmatter `last_updated` is generator
+> provenance and is NOT touched on a rewrite.
 
 - **Updated:** {{TODAY}}
 - **In flight:** -- (task ids being worked right now)
@@ -143,6 +161,13 @@ Ungated -- written in BOTH `SPEC_MODE` states, at init, before any task exists.
 ## `TRACKER.md`
 
 ```markdown
+---
+doc_type: llm
+version: "{PLUGIN_VERSION}"
+generated_by: "{GENERATED_BY}"
+last_updated: "{LAST_UPDATED}"
+---
+
 # TRACKER -- {{REPO_NAME}} task/feature tracker procedure
 
 > Canonical procedure for the `.claude/features/` task board. The board (`board.md`)
@@ -400,6 +425,13 @@ Running log: decisions, blockers, PR/commit/report links.
 ## `INDEX.md`
 
 ```markdown
+---
+doc_type: llm
+version: "{PLUGIN_VERSION}"
+generated_by: "{GENERATED_BY}"
+last_updated: "{LAST_UPDATED}"
+---
+
 # Features -- control-file index
 
 > `board.md` is the **canonical** task list + status. This index just maps the control
@@ -432,5 +464,12 @@ Running log: decisions, blockers, PR/commit/report links.
 ## `backlog/README.md`
 
 ```markdown
+---
+doc_type: llm
+version: "{PLUGIN_VERSION}"
+generated_by: "{GENERATED_BY}"
+last_updated: "{LAST_UPDATED}"
+---
+
 Ungroomed inbox. Drop raw ideas as *.md; task-tracker grooms into todo/ or trashes. See ../TRACKER.md.
 ```

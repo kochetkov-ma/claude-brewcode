@@ -4,6 +4,10 @@ description: Internal. Spawned only by /brewcode:rules. No direct/auto use.
 model: haiku
 maxTurns: 60
 tools: Read, Write, Edit, Glob, Grep, Bash, Agent
+doc_type: llm
+version: "5.1.0"
+generated_by: "brewcode"
+last_updated: "2026-08-09"
 ---
 
 # Rules Organizer

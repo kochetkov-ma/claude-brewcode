@@ -59,10 +59,12 @@ model: sonnet
 
 ### BT_ROOT Resolver
 
-`$CLAUDE_PLUGIN_ROOT` is NOT inherited by the Bash tool in main-conversation slash invocations. Every Bash block resolves `BT_ROOT` dynamically (no hardcoded version):
+The plugin root is resolved from the skill's OWN directory (the `CLAUDE_SKILL_DIR` prompt substitution), never from `CLAUDE_PLUGIN_ROOT` -- that env var is not exported to a skill's Bash tool. Every Bash block resolves `BT_ROOT` this way (no hardcoded version):
 
 ```bash
-BT_ROOT="${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::')}"
+SD="${CLAUDE_SKILL_DIR}"
+if [ -n "$SD" ] && [ -f "$SD/../../.claude-plugin/plugin.json" ]; then BT_ROOT=$(cd "$SD/../.." && pwd); else BT_ROOT=$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::'); fi
+[ -n "$BT_ROOT" ] || { echo "ERROR: cannot locate brewtools plugin root -- install/update brewtools first."; exit 1; }
 test -f "$BT_ROOT/hooks/lib/manager-state.mjs" || { echo "❌ BT_ROOT invalid: $BT_ROOT"; exit 1; }
 ```
 
@@ -144,7 +146,9 @@ If the action is ambiguous or signals conflict (e.g. enable + disable, a task th
 
 **EXECUTE** using Bash tool:
 ```bash
-BT_ROOT="${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::')}"
+SD="${CLAUDE_SKILL_DIR}"
+if [ -n "$SD" ] && [ -f "$SD/../../.claude-plugin/plugin.json" ]; then BT_ROOT=$(cd "$SD/../.." && pwd); else BT_ROOT=$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::'); fi
+[ -n "$BT_ROOT" ] || { echo "ERROR: cannot locate brewtools plugin root -- install/update brewtools first."; exit 1; }
 test -f "$BT_ROOT/hooks/hardmode-guard.mjs" || { echo "❌ BT_ROOT invalid: $BT_ROOT"; exit 1; }
 node --input-type=module -e "
 import {writeState} from '${BT_ROOT}/hooks/lib/manager-state.mjs';
@@ -190,18 +194,35 @@ After the block:
 
 > The command in the registered entry uses an ABSOLUTE path to the copied guard and a `# brewtools-manager-guard` tag comment so `uninstall` can find it. Scope is always `project` — there is no global wall, never pass `'global'`.
 
-### upgrade  (re-emit the guard from the current plugin version — arm state untouched)
+### upgrade  (re-emit the guard from the current plugin version — arm state kept, provenance restamped)
 
-`upgrade` replays the install against the CURRENT plugin version so a `claude plugin update` finally reaches an already-installed project: it re-copies `hardmode-guard.mjs` **and `manager-state.mjs`** and re-registers the entry if it went missing. A project installed before the off-switch CLI existed has no project copy of `manager-state.mjs`; `upgrade` is what backfills it, so run it once after updating brewtools. It **never calls `writeState`** — `hard` and `level` are preserved exactly, so a disarmed wall stays disarmed and an armed one stays armed. It asks nothing.
+`upgrade` replays the install against the CURRENT plugin version so a `claude plugin update` finally reaches an already-installed project: it re-copies `hardmode-guard.mjs` **and `manager-state.mjs`** and re-registers the entry if it went missing. A project installed before the off-switch CLI existed has no project copy of `manager-state.mjs`; `upgrade` is what backfills it, so run it once after updating brewtools. It asks nothing.
+
+> **It restamps `state.json`, and ONLY the metadata trio.** `setup-status` row 8 reads the
+> top-level `"version"` of `.claude/brewtools/manager/state.json` as the headline; the guard's
+> `brewcode-meta:` line is SECOND precedence, consulted only when that key is absent. So an
+> upgrade that re-copied the guard but left `state.json` alone reported the old version forever
+> and `status` printed `stale` after every `upgrade` — the staleness could never be cleared.
+> The fix is the docsync-setup shape (`brewdoc/skills/docsync-setup/SKILL.md` mode `upgrade`):
+> call `writeState('project', {}, cwd)` — an EMPTY partial. `writeState` merges
+> `{...existing, ...partial}` and then stamps `version` / `generated_by` / `last_updated`, so with
+> nothing in the partial it rewrites the trio and **nothing else**. `hard` and `level` are
+> preserved byte-for-byte out of the existing file: a disarmed wall stays disarmed, an armed one
+> stays armed, a customized `level` survives. That is what `stateUntouched` used to promise and it
+> still holds for the ARM state — the block now reports `armStatePreserved` + `stateRestamped` so
+> the two are not conflated.
 
 It ABORTS when the project has no wall installed. `upgrade` must never be a back door that arms a wall the user never asked for — an uninstalled project is told to run `install`.
 
 **EXECUTE** using Bash tool:
 ```bash
-BT_ROOT="${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::')}"
+SD="${CLAUDE_SKILL_DIR}"
+if [ -n "$SD" ] && [ -f "$SD/../../.claude-plugin/plugin.json" ]; then BT_ROOT=$(cd "$SD/../.." && pwd); else BT_ROOT=$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::'); fi
+[ -n "$BT_ROOT" ] || { echo "ERROR: cannot locate brewtools plugin root -- install/update brewtools first."; exit 1; }
 test -f "$BT_ROOT/hooks/hardmode-guard.mjs" || { echo "❌ BT_ROOT invalid: $BT_ROOT"; exit 1; }
 node --input-type=module -e "
 import fs from 'node:fs'; import path from 'node:path';
+import {writeState, resolveStatePath} from '${BT_ROOT}/hooks/lib/manager-state.mjs';
 const cwd = process.cwd();
 const src = '${BT_ROOT}/hooks/hardmode-guard.mjs';
 const dir = path.join(cwd, '.claude', 'brewtools', 'manager');
@@ -225,8 +246,16 @@ const tmp = settings + '.tmp';
 fs.mkdirSync(path.dirname(settings), {recursive:true});
 fs.writeFileSync(tmp, JSON.stringify(cfg, null, 2) + '\n', 'utf8');
 fs.renameSync(tmp, settings);
-console.log(JSON.stringify({guardReplaced:true, guard, newlyRegistered, stateUntouched:true}));
-" && echo "✅ wall upgraded (arm state preserved)" || echo "❌ FAILED upgrade"
+// Restamp the metadata trio ONLY — empty partial, so hard/level/mode and every
+// unknown key merge through from the existing file untouched.
+let before = null;
+try { before = JSON.parse(fs.readFileSync(resolveStatePath('project', cwd),'utf8')); } catch {}
+const w = await writeState('project', {}, cwd);
+const armStatePreserved = !before || (w.state.hard === before.hard && w.state.level === before.level);
+console.log(JSON.stringify({guardReplaced:true, guard, newlyRegistered,
+  stateRestamped:{version:w.state.version, generated_by:w.state.generated_by, last_updated:w.state.last_updated},
+  hard:w.state.hard, level:w.state.level, armStatePreserved}));
+" && echo "✅ wall upgraded (arm state preserved, state.json restamped)" || echo "❌ FAILED upgrade"
 ```
 
 Surface the `/reload` note only when `newlyRegistered:true`.
@@ -237,7 +266,9 @@ Surface the `/reload` note only when `newlyRegistered:true`.
 
 **EXECUTE** using Bash tool:
 ```bash
-BT_ROOT="${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::')}"
+SD="${CLAUDE_SKILL_DIR}"
+if [ -n "$SD" ] && [ -f "$SD/../../.claude-plugin/plugin.json" ]; then BT_ROOT=$(cd "$SD/../.." && pwd); else BT_ROOT=$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::'); fi
+[ -n "$BT_ROOT" ] || { echo "ERROR: cannot locate brewtools plugin root -- install/update brewtools first."; exit 1; }
 test -f "$BT_ROOT/hooks/lib/manager-state.mjs" || { echo "❌ BT_ROOT invalid: $BT_ROOT"; exit 1; }
 node --input-type=module -e "
 import {writeState} from '${BT_ROOT}/hooks/lib/manager-state.mjs';
@@ -289,7 +320,9 @@ node <ABS_CWD>/.claude/brewtools/manager/manager-state.mjs set hard=false
 
 **EXECUTE step 2** using Bash tool (only after step 1 printed its JSON):
 ```bash
-BT_ROOT="${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::')}"
+SD="${CLAUDE_SKILL_DIR}"
+if [ -n "$SD" ] && [ -f "$SD/../../.claude-plugin/plugin.json" ]; then BT_ROOT=$(cd "$SD/../.." && pwd); else BT_ROOT=$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::'); fi
+[ -n "$BT_ROOT" ] || { echo "ERROR: cannot locate brewtools plugin root -- install/update brewtools first."; exit 1; }
 test -f "$BT_ROOT/hooks/lib/manager-state.mjs" || { echo "❌ BT_ROOT invalid: $BT_ROOT"; exit 1; }
 node --input-type=module -e "
 import fs from 'node:fs'; import path from 'node:path';
@@ -332,7 +365,9 @@ This is the only destructive action. Say what will be deleted BEFORE running it,
 
 **EXECUTE** using Bash tool as a THIRD call, after both `uninstall` steps (step 1 disarms — without it this block is denied by the armed wall; step 2 deregisters). Substitute `SCOPE`:
 ```bash
-BT_ROOT="${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::')}"
+SD="${CLAUDE_SKILL_DIR}"
+if [ -n "$SD" ] && [ -f "$SD/../../.claude-plugin/plugin.json" ]; then BT_ROOT=$(cd "$SD/../.." && pwd); else BT_ROOT=$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::'); fi
+[ -n "$BT_ROOT" ] || { echo "ERROR: cannot locate brewtools plugin root -- install/update brewtools first."; exit 1; }
 test -f "$BT_ROOT/hooks/lib/manager-prompts.mjs" || { echo "❌ BT_ROOT invalid: $BT_ROOT"; exit 1; }
 node --input-type=module -e "
 import {resolvePromptPath} from '${BT_ROOT}/hooks/lib/manager-prompts.mjs';
@@ -367,7 +402,7 @@ Read merged state, resolve BOTH mode blocks, detect whether the guard is registe
 1. **How `++m` works** — ALWAYS, per-turn, hook-driven (`manager-prompt.mjs`), independent of this skill. `++m` is plan-aware: it injects the planmode block (full + plan addon) when `permission_mode === 'plan'`, else the plain full block — there is NO separate `++mp` codeword. Show BOTH resolved blocks (full + planmode) so the user sees each variant. Also state: when the HARD wall is armed, the Manager (full) block is ALSO ambient-injected every turn with no codeword needed (codewords and wall injection are independent). The session-start banner is the other read-only plugin layer.
 2. **The wall delivery model** — it is INSTALLED INTO this project, not a plugin hook: registered (once) in `<cwd>/.claude/settings.local.json` (personal, gitignored), gated at runtime by project `state.json {hard}`. Report BOTH: is it registered? is it armed (`hard`)?
 3. **Current WALL state for THIS project** — `hard` armed/disarmed, `level` strict/balanced, and a brief allowlist summary (what main session may/may not do).
-4. **How the verbs work** — `install` = install+arm (`/reload` only on FIRST install), `upgrade` = re-emit the guard with the arm state preserved, `enable` = arm an installed wall, `disable` = disarm only (registration kept), `uninstall` = deregister (state + prompt overrides kept), `purge` = uninstall + delete state and overrides, `level` = strictness.
+4. **How the verbs work** — `install` = install+arm (`/reload` only on FIRST install), `upgrade` = re-emit the guard with the arm state preserved and `state.json`'s metadata trio restamped to this plugin version, `enable` = arm an installed wall, `disable` = disarm only (registration kept), `uninstall` = deregister (state + prompt overrides kept), `purge` = uninstall + delete state and overrides, `level` = strictness.
 
 > **WHILE THE WALL IS ARMED, DO NOT RUN THE BASH BLOCK BELOW** — its `BT_ROOT=` prelude and `&& echo` tail are exactly what the guard denies. Build the same report with always-allowed tools instead:
 > - wall state → Bash, VERBATIM, nothing appended: `node <ABS_CWD>/.claude/brewtools/manager/manager-state.mjs get`
@@ -378,7 +413,9 @@ Read merged state, resolve BOTH mode blocks, detect whether the guard is registe
 
 **EXECUTE** using Bash tool:
 ```bash
-BT_ROOT="${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::')}"
+SD="${CLAUDE_SKILL_DIR}"
+if [ -n "$SD" ] && [ -f "$SD/../../.claude-plugin/plugin.json" ]; then BT_ROOT=$(cd "$SD/../.." && pwd); else BT_ROOT=$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::'); fi
+[ -n "$BT_ROOT" ] || { echo "ERROR: cannot locate brewtools plugin root -- install/update brewtools first."; exit 1; }
 test -f "$BT_ROOT/hooks/lib/manager-state.mjs" || { echo "❌ BT_ROOT invalid: $BT_ROOT"; exit 1; }
 node --input-type=module -e "
 import {resolveState} from '${BT_ROOT}/hooks/lib/manager-state.mjs';
@@ -396,14 +433,28 @@ try {
   const arr = cfg && cfg.hooks && Array.isArray(cfg.hooks.PreToolUse) ? cfg.hooks.PreToolUse : [];
   registered = arr.some(m => Array.isArray(m.hooks) && m.hooks.some(h => typeof h.command==='string' && (h.command.includes('brewtools-manager-guard') || h.command.includes('hardmode-guard.mjs'))));
 } catch {}
+// Version is read from the RAW project state file, never from resolveState(): a merge with
+// DEFAULT_STATE would hand an old file the current version and hide the staleness.
+let stateVersion = null;
+try {
+  const raw = JSON.parse(fs.readFileSync(path.join(cwd,'.claude','brewtools','manager','state.json'),'utf8'));
+  stateVersion = (raw && typeof raw.version === 'string') ? raw.version : null;
+} catch {}
+let pluginVersion = null;
+try { pluginVersion = JSON.parse(fs.readFileSync(path.join(root,'.claude-plugin','plugin.json'),'utf8')).version || null; } catch {}
 console.log(JSON.stringify({
   hard: st.hard, level: st.level, mode: st.mode, stateSource: st.source,
-  registered, settings,
+  registered, settings, stateVersion, pluginVersion,
+  stale: (stateVersion && pluginVersion) ? (stateVersion !== pluginVersion) : null,
   promptSource: { full: full.source, planmode: plan.source },
   blocks: { full: full.text, planmode: plan.text }
 }, null, 2));
 " && echo "✅ status" || echo "❌ FAILED status"
 ```
+
+> `stateVersion` is `null` on any state file written before the metadata keys existed, and on a project with no state file. `null` means UNKNOWN — never report it as up to date. `stale: true` -> recommend `upgrade`.
+>
+> **Dependency (owner of `brewtools/hooks/lib/manager-state.mjs`):** this reads `version` off `state.json` verbatim. It needs `DEFAULT_STATE` / `writeState` to persist `version` (plugin `X.Y.Z`), `generated_by: "brewtools:manager-setup"` and `last_updated` (`YYYY-MM-DD`) — the JSON trio, never `doc_type` — and `resolveState` to keep passing unknown keys through untouched. That has landed; on a state file written before the metadata keys existed `stateVersion` simply stays `null` — this block cannot break.
 
 Render using the canonical status block in `references/hard.md`, filling in `hard`, `level`, `stateSource`, prompt sources, and pasting both resolved blocks under their headers. Shape:
 ```
@@ -426,8 +477,9 @@ They fire on every prompt that contains them. This skill never turns them on or 
 Delivery: INSTALLED into this project (not a plugin hook). Registered once in .claude/settings.local.json (personal, gitignored), gated at runtime by .claude/brewtools/manager/state.json {hard}.
 When armed, the main session physically cannot Write/Edit/WebFetch — only delegate (Task/Agent), read (Read/Grep/Glob), and track (TodoWrite). For Bash: at level=strict ALL Bash is denied; at balanced only mutating Bash is denied — read-only inspection allowed.
 Allowlist summary: <one-line summary from hard.md for current level>
+State version: <stateVersion or "unknown (written before versioning)">  plugin: <pluginVersion>  <"— run upgrade" when stale>
 Install:   /brewtools:manager-setup install    (install+arm; /reload only on FIRST install)
-Upgrade:   /brewtools:manager-setup upgrade    (re-copy the guard from this plugin version; arm state kept)
+Upgrade:   /brewtools:manager-setup upgrade    (re-copy the guard + restamp state.json; arm state kept)
 Enable:    /brewtools:manager-setup enable     (arm an already-installed wall)
 Disable:   /brewtools:manager-setup disable    (disarm only — registration kept, guard no-ops)
 Uninstall: /brewtools:manager-setup uninstall  (deregister from settings.local.json, then /reload)
@@ -445,7 +497,9 @@ Operates on the Manager prompt text (internal mode `full`). If no project/global
 
 **EXECUTE** using Bash tool (substitute `SCOPE`):
 ```bash
-BT_ROOT="${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::')}"
+SD="${CLAUDE_SKILL_DIR}"
+if [ -n "$SD" ] && [ -f "$SD/../../.claude-plugin/plugin.json" ]; then BT_ROOT=$(cd "$SD/../.." && pwd); else BT_ROOT=$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::'); fi
+[ -n "$BT_ROOT" ] || { echo "ERROR: cannot locate brewtools plugin root -- install/update brewtools first."; exit 1; }
 test -f "$BT_ROOT/hooks/lib/manager-prompts.mjs" || { echo "❌ BT_ROOT invalid: $BT_ROOT"; exit 1; }
 node --input-type=module -e "
 import {resolvePromptPath, resolvePrompt} from '${BT_ROOT}/hooks/lib/manager-prompts.mjs';
@@ -520,7 +574,7 @@ This skill follows the same Manager rules it installs. For any real implementati
 | `install`/`upgrade` requested but `$BT_ROOT/hooks/hardmode-guard.mjs` missing | ERROR: `manager-setup: guard source not found under $BT_ROOT — reinstall brewtools.` STOP. |
 | `uninstall`/`purge` requested while `state.hard` is true | Run the bare exempt disarm command as its own FIRST Bash call, then the deregistration block — never edit settings under an armed wall, and never merge the two calls. |
 | Any Bash block here denied by the guard with `Manager HARD wall is ON` | You appended something to the exempt command, or the wall is armed and you used a `BT_ROOT=`/`&& echo` block. Re-issue the bare `node <ABS_CWD>/.claude/brewtools/manager/manager-state.mjs set hard=false`, or delegate the block to a subagent. |
-| Neither `$CLAUDE_PLUGIN_ROOT` set nor any cached plugin dir found | ERROR: `manager-setup: cannot locate plugin root — install/update brewtools first.` STOP. |
+| Neither the skill dir nor any cached plugin dir yields `.claude-plugin/plugin.json` | ERROR: `manager-setup: cannot locate plugin root — install/update brewtools first.` STOP. |
 | Intent ambiguous / conflicting (incl. hard-one-shot vs manager-run) | `AskUserQuestion` with candidate actions. |
 | `resolvePrompt` returns `source:'missing'` | ERROR: `manager-setup: no prompt found for <mode> — reinstall brewtools.` STOP. |
 | `--scope global` requested for `install`/`upgrade`/`enable`/`disable`/`uninstall`/`level` | Ignore the global scope, write `project`, and note: the wall is project-only. |

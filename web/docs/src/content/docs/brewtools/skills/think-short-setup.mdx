@@ -203,6 +203,10 @@ yielded_to=none
 
 The `3/3 3/3 enabled` line used to be the whole report, and it read as a healthy install. `injects=unknown` is the part that says otherwise.
 
+## Version and ownership
+
+`install`/`upgrade` stamp all four copied files with `generated_by: "brewtools:think-short-setup"`. Each of the three `.mjs` hooks carries `// brewcode-meta: version=X.Y.Z generated_by=brewtools:think-short-setup` on line 2; `think-short-prompt.md` carries `<!-- think-short brewcode-meta: version=X.Y.Z generated_by=brewtools:think-short-setup -->` on line 1. `/brewcode:setup-status` reads these lines to tell an install running an older brewtools apart from one on the current version — `upgrade` is what refreshes them.
+
 ## Removal
 
 `uninstall` deletes all four copied files (the three hook scripts and `think-short-prompt.md`) and strips the corresponding three entries from `settings.json`, keeping the tmp markers. `purge` does the same and deletes the marker directory too. Neither touches entries added by other skills or plugins.

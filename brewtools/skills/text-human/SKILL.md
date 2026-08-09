@@ -159,8 +159,8 @@ Files are edited in place. No backups -- use git to revert.
 /text-human src/main/java/OrderService.java          # code flow, single file
 /text-human 3be67487                                 # mixed flow, commit
 /text-human src/main/java/services/                  # mixed flow, folder
-/text-human review this reddit reply: <text>         # social flow, inline text
-/text-human humanize this blog post: <text>          # article flow
+/text-human review this reddit reply: "<text>"       # social flow, inline text
+/text-human humanize this blog post: "<text>"        # article flow
 /text-human clean the javadoc in PaymentApi.java     # code flow, CLEAN-ONLY
 /text-human 3be67487 also drop all @author tags      # mixed + custom rule
 /text-human src/ only strip AI artifacts, no inject   # custom prompt overrides

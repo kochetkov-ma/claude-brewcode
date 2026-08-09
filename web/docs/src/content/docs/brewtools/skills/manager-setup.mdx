@@ -256,7 +256,7 @@ The exemption is narrow on purpose. The guard lets the command through only when
 | 1 | The command starts with `node ` -- no env prefix, no other binary |
 | 2 | No shell operator outside quotes |
 | 3 | No `$` anywhere -- no variable or command expansion |
-| 4 | No evaluator flag: `-e`, `--eval`, `-p`, `--print`, `--input-type`, `--require`/`-r`, `--import`, `--loader` |
+| 4 | No evaluator flag: `-e`, `--eval`, `-p`, `--print`, `--input-type`, `--require`/`-r`, `--import`, `--loader`, `--experimental-loader` |
 | 5 | The script node actually executes matches `(.claude/brewtools/manager\|hooks/lib)/manager-state.mjs$` -- a `manager-state.mjs` substring elsewhere on the line counts for nothing |
 | 6 | The remaining tokens are the helper's own CLI: `get`, or `set` with `hard=<true\|false>` / `level=<strict\|balanced>` and an optional `--cwd DIR` |
 
@@ -272,6 +272,14 @@ Conditions 3-6 were added in v5.0.0 to close an arbitrary-code-execution hole: t
 <Callout type="caution">
 **Installed the wall before v5.0.0? Run `/brewtools:manager-setup upgrade` once.** The disarm command runs a project-local `manager-state.mjs`, and only `install`/`upgrade` copy it there. An older project has no such file, so the command fails with `Cannot find module` and the wall has no working off-switch. `upgrade` backfills it and leaves `hard`/`level` untouched. If the wall is already armed, delegate the `upgrade` to a subagent -- resolving the plugin root in the main session needs shell operators the wall denies.
 </Callout>
+
+### Version and ownership
+
+Every write to `state.json` stamps three keys: `version` (the plugin version that wrote it), `generated_by` (`"brewtools:manager-setup"`), and `last_updated`. `last_updated` is the LOCAL calendar date -- fixed from an earlier UTC stamp that dated the file wrong (yesterday's date) anywhere west of UTC after roughly 17:00 local time. `upgrade` now restamps this trio unconditionally, even when the guard file content did not change; before the fix `upgrade` left `state.json` untouched and `status` kept reporting `stale` forever after a plugin update.
+
+`hardmode-guard.mjs`, the copied guard, carries the same trio as a `// brewcode-meta: version=X.Y.Z generated_by=brewtools:manager-setup` comment on line 2. `/brewcode:setup-status` reads `state.json`'s `version` key first; only when that key is absent does it fall back to the guard's `brewcode-meta` line.
+
+One documented exception: `pluginVersion()` in `manager-state.mjs` returns `null` -- and `writeState` then DELETES the `version` key from `state.json` and warns on stderr -- when the plugin version cannot be resolved at all, instead of aborting like every other stamped-artifact writer in this repo. `state.json` is the HARD wall's own off-switch (`set hard=false`); a writer that aborted here would leave the user locked behind an armed wall with no way out. It is the sole licensed exception to "abort when the version can't be resolved."
 
 </details>
 
@@ -330,7 +338,7 @@ When `++m` is used while the session is in plan mode (`permission_mode === 'plan
 |--------|---------------------------|--------|
 | `status` | `/brewtools:manager-setup status` | Full explainer: codewords + wall state + effective prompt sources. Default with no argument |
 | `install` | `/brewtools:manager-setup install` | INSTALL guard + ARM the HARD wall (project). `/reload` on first install only |
-| `upgrade` | `/brewtools:manager-setup upgrade` | Re-copy the guard **and the off-switch CLI** + re-register from the current plugin version; `hard`/`level` preserved. Backfills `manager-state.mjs` into projects installed before it existed. Aborts if nothing is installed |
+| `upgrade` | `/brewtools:manager-setup upgrade` | Re-copy the guard **and the off-switch CLI** + re-register from the current plugin version; `hard`/`level` preserved; restamps `state.json`'s `version`/`generated_by`/`last_updated` trio unconditionally. Backfills `manager-state.mjs` into projects installed before it existed. Aborts if nothing is installed |
 | `enable` | `/brewtools:manager-setup enable` | ARM an already-installed wall (state flip only). Never installed -> routed to `install` |
 | `disable` | `/brewtools:manager-setup disable` | DISARM the wall (state flip only -- registration kept, guard no-ops) |
 | `uninstall` | `/brewtools:manager-setup uninstall` | Two Bash calls: the bare disarm first, then DEREGISTER guard from `settings.local.json` + delete the copied guard. Then `/reload`. State and prompt overrides kept |
@@ -361,8 +369,9 @@ Type `++a` anywhere   -> injects the Architecture-first contract for that one tu
 <planmode block text>
 
 ## HARD wall (this project) -- registered=no  armed=OFF  level=balanced  (state source: default)
+State version: <none>  plugin: <X.Y.Z>  (no version key until install/upgrade writes one)
 Install:   /brewtools:manager-setup install    (install+arm; /reload only on FIRST install)
-Upgrade:   /brewtools:manager-setup upgrade    (re-copy the guard; arm state preserved)
+Upgrade:   /brewtools:manager-setup upgrade    (re-copy the guard; arm state preserved; restamps version/generated_by/last_updated)
 Enable:    /brewtools:manager-setup enable     (arm an already-installed wall)
 Disable:   /brewtools:manager-setup disable    (disarm only -- registration kept, guard no-ops)
 Uninstall: /brewtools:manager-setup uninstall  (deregister from settings.local.json, then /reload)

@@ -141,6 +141,31 @@ mcp_checkpoint() { # phase -> awaiting_reload, ALWAYS before an add (DESIGN §9.
   "$STATE_SH" phase awaiting_reload >/dev/null
 }
 
+# The MCP server is USER-scoped, so on the second project of the same machine
+# `add` finds it already registered and returns without ever creating that
+# project's state.json - and the state file is born only inside an MCP mutation.
+# SKILL.md prescribed the checkpoint as a follow-up block the model had to
+# remember to run; a skipped block left the project with no state file at all.
+# The script guarantees it instead.
+#
+# Absent, prereq_ready or error -> the honest awaiting_reload checkpoint: the
+# server exists but this session still cannot see it. verifying, ready and
+# disabled -> an IDENTITY transition, which runs st_refresh_owned (cacheRoot,
+# repoHash, resumePrompt) without walking a verified project backwards out of
+# `ready` or silently re-enabling one the user disabled.
+mcp_checkpoint_present() {
+  local p
+  if [ "${SEMBLE_DRY_RUN:-}" = "1" ]; then
+    [ "$JSON" = "1" ] || sc_dry "state checkpoint: existing registration, refresh installer-owned fields"
+    return 0
+  fi
+  p="$(sc_state_get phase 2>/dev/null || true)"
+  case "$p" in
+    verifying|ready|disabled) "$STATE_SH" phase "$p" >/dev/null || true ;;
+    *) mcp_checkpoint ;;
+  esac
+}
+
 # Backs up every file an MCP mutation can rewrite (DESIGN §9.3). `.mcp.json` is
 # backed up whenever it exists, NOT when $SCOPE = project: `repair` forces
 # SCOPE=user yet removes every scope in `mcp_scopes`, so keying the backup off
@@ -247,7 +272,10 @@ process.stdout.write(JSON.stringify({schema:1,add:process.env.SC_A,addJson:proce
     if [ "$PRESENT" = "yes" ]; then
       case "$STATE" in
         correct|upstream_unpinned)
-          emit_result unchanged "$STATE" "$SEMBLE_SERVER_NAME is already registered as approved"
+          # `unchanged` is about the REGISTRATION. The per-project checkpoint is
+          # written here all the same - see mcp_checkpoint_present.
+          mcp_checkpoint_present
+          emit_result unchanged "$STATE" "$SEMBLE_SERVER_NAME is already registered as approved; project state checkpoint at phase=$(sc_state_get phase 2>/dev/null || printf 'absent')"
           exit 0 ;;
         *)
           emit_result precondition "$STATE" "registration exists but differs ($STATE); run: semble-mcp.sh repair --yes"

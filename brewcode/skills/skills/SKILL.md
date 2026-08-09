@@ -183,7 +183,7 @@ Claim one and any tooling keyed off these tokens sweeps unrelated history.
 
 Examples: a skill named `budget` invoked as `budget` omits the key; a skill named `fitness-nutrition` invoked as `fit` MUST declare `cli: fit`.
 
-`version` is NOT semver -- no ordering, decreasing is as valid as increasing, build no comparison logic on it. MANDATORY when the skill's behaviour lives OUTSIDE its own directory (a binary on PATH, a wrapper shipped in an image, a remote service): editing that behaviour leaves the directory byte-identical, so consumers watching it see nothing. `updated:` is a human-facing date with no mechanical role and is NOT a substitute; the two coexist.
+`version` is NOT semver -- no ordering, decreasing is as valid as increasing, build no comparison logic on it. MANDATORY when the skill's behaviour lives OUTSIDE its own directory (a binary on PATH, a wrapper shipped in an image, a remote service): editing that behaviour leaves the directory byte-identical, so consumers watching it see nothing. `last_updated:` is the human-facing date, has no mechanical role, and is NOT a substitute for `version`; the two coexist. Never spell it `updated`, `updatedAt` or `lastUpdated` -- see `brewcode/skills/setup-status/references/artifact-metadata.md` section 8.
 
 ### Prerequisite (improve only): Resolve Target
 

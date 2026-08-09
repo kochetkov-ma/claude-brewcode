@@ -3,6 +3,12 @@
 # Usage: convention.sh <detect-stack|scan|setup|validate>
 set -eu
 
+# Self-location: scripts/ -> convention/ -> skills/ -> PLUGIN_ROOT. Correct in the dev checkout
+# AND in the installed cache, so the version is read from the manifest and never hardcoded.
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+PLUGIN_JSON="$SCRIPT_DIR/../../../.claude-plugin/plugin.json"
+GENERATED_BY="brewcode:convention"
+
 usage() {
   echo "Usage: convention.sh <command>"
   echo ""
@@ -143,20 +149,46 @@ EOF
   fi
 }
 
+plugin_version() {
+  v=""
+  if [ -f "$PLUGIN_JSON" ]; then
+    if $HAS_JQ; then
+      v=$(jq -r '.version // empty' "$PLUGIN_JSON" 2>/dev/null || true)
+    else
+      v=$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$PLUGIN_JSON" 2>/dev/null | head -1 || true)
+    fi
+  fi
+  printf '%s' "${v:-unknown}"
+}
+
+# Creates the output dir AND hands back the artifact-metadata scalars P4 stamps into each of the
+# three generated docs. The old `created` key was an ISO-8601 timestamp nothing ever persisted.
 setup_convention() {
   mkdir -p .claude/convention
-  printf '{"created":"%s","path":".claude/convention/"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  printf '{"path":".claude/convention/","version":"%s","generated_by":"%s","last_updated":"%s"}\n' \
+    "$(plugin_version)" "$GENERATED_BY" "$(date +%F)"
+}
+
+# A convention doc counts as present only when it also carries the standard metadata: a doc with
+# no stamp cannot be aged against the running plugin, which is the whole point of `rules` mode.
+check_doc() {
+  [ -f "$1" ] || return 1
+  head -1 "$1" | grep -q '^---$' || { err "X $1 has no YAML frontmatter"; return 1; }
+  for k in doc_type version generated_by last_updated; do
+    grep -q "^${k}:" "$1" || { err "X $1 missing frontmatter key: $k"; return 1; }
+  done
+  return 0
 }
 
 validate_convention() {
   errors=0 f1=false f2=false f3=false
-  [ -f .claude/convention/reference-patterns.md ] && f1=true || errors=$((errors + 1))
-  [ -f .claude/convention/testing-conventions.md ] && f2=true || errors=$((errors + 1))
-  [ -f .claude/convention/project-architecture.md ] && f3=true || errors=$((errors + 1))
+  check_doc .claude/convention/reference-patterns.md && f1=true || errors=$((errors + 1))
+  check_doc .claude/convention/testing-conventions.md && f2=true || errors=$((errors + 1))
+  check_doc .claude/convention/project-architecture.md && f3=true || errors=$((errors + 1))
   valid=true; [ "$errors" -gt 0 ] && valid=false
 
-  if [ "$valid" = "true" ]; then err "All convention files present"
-  else err "Missing $errors convention file(s)"; fi
+  if [ "$valid" = "true" ]; then err "All convention files present and stamped"
+  else err "$errors convention file(s) missing or unstamped"; fi
 
   if $HAS_JQ; then
     printf '{"valid":%s,"files":{"reference-patterns.md":%s,"testing-conventions.md":%s,"project-architecture.md":%s}}' \

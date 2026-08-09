@@ -37,6 +37,10 @@ Authoritative rules: `TRACKER.md` section 10. These rows mirror it in one line e
 ---
 paths:
   - ".codex/features/**"
+doc_type: llm
+version: "{PLUGIN_VERSION}"
+generated_by: "{GENERATED_BY}"
+last_updated: "{LAST_UPDATED}"
 ---
 
 [DICT: GROOM=backlog triage, FM=frontmatter, TT=task-tracker agent]

@@ -3,7 +3,7 @@ name: brewcode:teams-setup
 description: "Creates and manages dynamic teams of domain agents. Triggers: create team, agent team, team status, cleanup team."
 user-invocable: true
 disable-model-invocation: true
-argument-hint: "[status [name]|install [name] [prompt]|upgrade [name]|uninstall [name]|purge [name]]"
+argument-hint: "[status [name]|install [name] [prompt]|upgrade [name]|enable [name]|disable [name]|uninstall [name]|purge [name]]"
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion, Skill]
 model: opus
 ---
@@ -25,11 +25,28 @@ Manage dynamic teams of domain-specific agents with tracking framework.
 bash "${CLAUDE_SKILL_DIR}/scripts/detect-mode.sh" "$ARGUMENTS" && echo "OK" || echo "FAILED"
 ```
 
-Output: `MODE:`, `TEAM_NAME:`, `PROMPT:` (optional). Store all three.
+Output: `MODE:`, `TEAM_NAME:`, `PROMPT:` (optional), plus the artifact-metadata scalars
+`PLUGIN_VERSION:`, `GENERATED_BY:`, `LAST_UPDATED:`. Store all of them.
 
-`MODE` is one of `status | install | upgrade | uninstall | purge`. The script prints `ERROR:...` and
-exits 1 for `enable` / `disable` — teams-setup has no enable/disable state. On any `ERROR:` line:
-report it verbatim and **STOP**. Never guess a mode, and never treat a canonical verb as a team name.
+> **Artifact metadata — every file this skill writes.** `team.md` and every generated domain agent carry
+> `version` = `PLUGIN_VERSION:`, `generated_by` = `GENERATED_BY:` (`brewcode:teams-setup`),
+> `last_updated` = `LAST_UPDATED:`, and `doc_type: llm` on the agents. Take the values from the output
+> above — never hardcode a version, never call `date` a second time with a different format, and never
+> stamp a "template version": the plugin version replaces it.
+> `.claude/agents/intent-guard.md` is the ONE exception: `generate.sh emit-agent` stamps it with
+> `generated_by: brewcode:superreview-setup`, and teams never touches those keys.
+
+`MODE` is one of the canonical seven, in this order: `status | install | upgrade | enable | disable |
+uninstall | purge`. On any `ERROR:` line: report it verbatim and **STOP**. Never guess a mode, and
+never treat a canonical verb as a team name — `install enable` creates a team NAMED `enable`, so the
+verb always comes first and the optional `[name]` positional after it.
+
+> **How a team is enabled or disabled.** Claude Code discovers a project agent only through
+> `.claude/agents/<name>.md`. `disable` renames each member to `<name>.md.disabled`; `enable` renames
+> it back. The file body, `team.md`, `trace.jsonl`, `trace-archive.jsonl` and the cursor are untouched
+> either way, so the toggle is fully reversible and loses no configuration and no history. It is NOT
+> an uninstall: nothing is deleted. `intent-guard` is never parked — it is shared with
+> `/brewcode:superreview-setup`, exactly as in UNINSTALL and PURGE.
 
 ---
 
@@ -172,6 +189,26 @@ If "Mixed" -- ask model per agent in C3. Store as `DEFAULT_MODEL` (default: opus
 
 1. Read `${CLAUDE_SKILL_DIR}/references/agent-template.md`
 2. For each agent, spawn `Task(subagent_type="brewcode:agent-creator")` — ONE agent file per spawn, never "create the whole team" in one task. Prompt carries GOAL (this roster is being built for {TEAM_NAME}; siblings own the other domains), ROLE (owns `.claude/agents/{name}.md` only), SCOPE (that file; out of bounds: other agents, team.md, project source), CONTEXT (mission + domain + project analysis from C1 are settled; model={DEFAULT_MODEL or per-agent} chosen in C2; the 3-4 sibling agent-creators in this batch own {COLLEAGUE_NAMES} — stay off their domains and do not duplicate their triggers), CONSUMER (C4 writes `.claude/teams/{TEAM_NAME}/team.md` from your path + description line, C5 quorum-reviews the file, and colleagues re-delegate to it by domain via the Task Acceptance Protocol), DONE (file written, `description` <= 100 chars (optimal ~80), single line, role + 2-3 triggers, no `<example>` blocks; report path + description line).
+
+   Every spawn prompt MUST also carry the template path and the four metadata lines, resolved — the
+   subagent cannot see Phase 1's output, so **replace `{PLUGIN_VERSION}` and `{LAST_UPDATED}` below with
+   the literal values from the Phase 1 `PLUGIN_VERSION:` / `LAST_UPDATED:` lines before you send the
+   prompt.** A token that reaches the subagent ships verbatim into the agent file, and `setup-status`
+   then reports that agent `partial` forever. Those two spellings are the only sanctioned ones — never an
+   angle form, never a double brace:
+
+   ```
+   CONTEXT (cont.): structure from ${CLAUDE_SKILL_DIR}/references/agent-template.md — read it first.
+   DONE (cont.): the frontmatter ends with exactly these four keys, in this order, AFTER the agent's
+     own keys (name, description, model, tools — leave those byte-untouched, `tools` above all):
+       doc_type: llm
+       version: "{PLUGIN_VERSION}"
+       generated_by: "brewcode:teams-setup"
+       last_updated: "{LAST_UPDATED}"
+   ```
+
+   `verify-team.sh` re-reads every generated agent's frontmatter and FAILS on a wrong order, a missing
+   key or wrong quoting, so a prompt that shipped a token does not pass C4.
 3. Batch 3-4 agents in parallel per message
 4. After each batch, optimize:
    ```
@@ -203,22 +240,27 @@ bash "${CLAUDE_SKILL_DIR}/../superreview-setup/scripts/generate.sh" emit-agent &
 ```
 
 It creates-or-reuses ONLY `.claude/agents/intent-guard.md` (superreview does not need to have run) and
-prints exactly one `INTENT_GUARD:` line on STDOUT: `INTENT_GUARD: CREATED <path>` or
-`INTENT_GUARD: REUSE <path>`. Diagnostics (e.g. "recreating from template") go to stderr and never
-add a second status line.
+prints exactly one `INTENT_GUARD:` line on STDOUT: `INTENT_GUARD: CREATED <path>`,
+`INTENT_GUARD: REUSE <path>` or `INTENT_GUARD: MIGRATED <path>` (a pre-standard file of ours, restamped
+in place — metadata only, tailored body preserved). Diagnostics (e.g. "recreating from template") go to
+stderr and never add a second status line.
 > **STOP if FAILED** -- report the script output; do not fall back to hand-authoring the file.
 
 **Step 2 — sanity-check the emitted file** (a pre-existing file may be empty, truncated or
-placeholder-laden; `-f` alone proves nothing):
+placeholder-laden; `-f` alone proves nothing). This runs on the REUSE path too, where `$f` is somebody's
+already-adapted agent whose evidence block legitimately holds shell expansions — so strip `${VAR}` FIRST
+and match bare tokens on what is left. Without the strip a `${BASE}` scores as an unresolved placeholder,
+and this step's remedy is `rm -f`: it would delete a tailored file.
 ```bash
 f=.claude/agents/intent-guard.md
-[ -s "$f" ] && grep -q '^name: intent-guard' "$f" && ! grep -q '{[A-Z_]\{2,\}}' "$f" && echo "SANE" || echo "CORRUPT"
+[ -s "$f" ] && grep -q '^name: intent-guard' "$f" \
+  && ! sed 's/\${[A-Z_][A-Z_]*}//g' "$f" | grep -q '{[A-Z_]\{2,\}}' && echo "SANE" || echo "CORRUPT"
 ```
 - `CORRUPT` -> `rm -f .claude/agents/intent-guard.md`, re-run Step 1 once (a fresh emit is now a
   `CREATED`), re-check. Still `CORRUPT` -> **STOP** and report; do not patch it by hand.
 
-**Step 3 — adapt the seeded BLOCKs.** Only on `INTENT_GUARD: CREATED`. On `REUSE` skip this step
-entirely: the existing file is already project-adapted and must not be rewritten or "refreshed".
+**Step 3 — adapt the seeded BLOCKs.** Only on `INTENT_GUARD: CREATED`. On `REUSE` or `MIGRATED` skip this
+step entirely: the existing file is already project-adapted and must not be rewritten or "refreshed".
 
 `emit-agent` seeds three BLOCKs with GENERIC marked defaults. Spawn ONE
 `Task(subagent_type="brewcode:agent-creator")`, alone (not batched with the domain agents), to replace
@@ -262,11 +304,22 @@ Task(subagent_type="brewcode:agent-creator", prompt="
 ")
 ```
 
-**Step 4 — verify:**
+**Step 4 — verify.** FOUR counts, one grep per line, in this order. Each pattern matches the ARTIFACT,
+never prose ABOUT it: the emitted agent legitimately keeps a tail comment that NAMES the stripped
+`TEMPLATE HEADER`, so an unanchored `grep -c 'TEMPLATE HEADER'` reports `1` on every healthy file and
+turns this gate into an unpassable loop. Match the header's opening line, not the phrase. Same reason the
+placeholder count strips `${VAR}` first: `{PROJECT_NAME}` is a token, `${CLAUDE_PLUGIN_ROOT}` in an adapted
+evidence command is not, and only a strip-then-match tells them apart — a `$`-guard inside the pattern
+mis-handles adjacent tokens. `|| true` on every line: zero matches is the happy path for three of the four
+counts (repo rule avoid#7), and a count must still PRINT under `set -o pipefail`, especially when it is the
+one going red.
+
 ```bash
 f=.claude/agents/intent-guard.md
-grep -c '{[A-Z_]\{2,\}}' "$f"; grep -c 'TEMPLATE HEADER' "$f"; grep -c '^name: intent-guard' "$f"
-grep -c 'SEEDED-DEFAULT' "$f"
+sed 's/\${[A-Z_][A-Z_]*}//g' "$f" | grep -c '{[A-Z_]\{2,\}}' || true   # 0 — unresolved placeholder
+grep -c '^<!-- TEMPLATE HEADER' "$f" || true    # 0 — header comment not stripped by emit
+grep -c '^name: intent-guard' "$f" || true      # 1 — frontmatter name key intact
+grep -cF '<!-- SEEDED-DEFAULT:' "$f" || true    # 0 — every seeded BLOCK marker consumed
 ```
 Must print `0`, `0`, `1`, `0`. A non-zero last count means an adaptation left its marker (or skipped
 the block) and `generate.sh validate` will report the agent `UNTAILORED`.
@@ -296,8 +349,20 @@ C4. Either way the file gets its `team.md` row.
    > UPGRADE misclassifies the whole roster as `Inactive`.
    > Re-copy it in UPGRADE too (`cp` is idempotent) so a team created by an older version gains it.
 
-   `team.md` MUST carry an `intent-guard` row (trailing `Kind` column = `review-only`), whether it was
-   created in C3-IG or reused. `Agents | {N}` counts DOMAIN agents; note intent-guard separately.
+   `team.md` MUST carry an `intent-guard` row (trailing `Kind` column = `review-only`, trailing
+   `Version` column = `PLUGIN_VERSION:`), whether it was created in C3-IG or reused. `Agents | {N}`
+   counts DOMAIN agents; note intent-guard separately.
+
+   The header table MUST carry these three rows, adjacent and in exactly this order, filled from the
+   Phase 1 `PLUGIN_VERSION:` / `GENERATED_BY:` / `LAST_UPDATED:` lines:
+
+   ```markdown
+   | Version | {PLUGIN_VERSION} |
+   | Generated by | brewcode:teams-setup |
+   | Last update | {LAST_UPDATED} |
+   ```
+   No placeholder token may survive into the written file — a literal `{PLUGIN_VERSION}` in `team.md`
+   means substitution never happened.
 
 3. Verify:
    ```bash
@@ -504,12 +569,80 @@ If "Let me choose" -> AskUserQuestion per agent. If "Show detailed" -> output fu
 
 Immutable traits (Name, Base Role) -> delete + create new. Mutable traits (Character, Instructions) -> update during tuning.
 
-Update `team.md` with current state and `Last update` date.
+Update `team.md` with current state: the header `Version` / `Generated by` / `Last update` rows (that
+order) from the Phase 1 `PLUGIN_VERSION:` / `GENERATED_BY:` / `LAST_UPDATED:` lines, and — for each agent row you actually touched — its
+`Updated` and `Version` cells. Rows left alone keep the version they were generated under.
+A pre-5.0 `team.md` has neither the `Version` / `Generated by` header rows nor the trailing `Version`
+column: ADD them here (append the column at the END of the roster table, never before `Agent`), do not
+treat their absence as an error.
+
+Each agent file you regenerate or tune gets its `version` / `last_updated` frontmatter keys refreshed
+to the same values; `generated_by` stays `brewcode:teams-setup`. `intent-guard.md` is byte-untouchable.
 
 Set cursor:
 ```bash
 bash "${CLAUDE_SKILL_DIR}/scripts/trace-ops.sh" cursor ".claude/teams/{TEAM_NAME}" set "$(date -u +%Y-%m-%dT%H:%M:%SZ)" && echo "✅" || echo "❌ FAILED"
 ```
+
+---
+
+## Mode: ENABLE
+
+Un-parks a team that was previously `disable`d. Nothing is generated, nothing is analyzed — this is a
+rename, and it is the exact inverse of DISABLE.
+
+1. Team not found -> report and **STOP**. Never "enable" a team that was never installed.
+2. Show what will move (no writes):
+   ```bash
+   bash "${CLAUDE_SKILL_DIR}/scripts/toggle-team.sh" "TEAM_NAME_HERE" enable --dry-run && echo "OK" || echo "FAILED"
+   ```
+3. Every member already live (`NOOP:` on all rows) -> say "team already enabled" and **STOP**. Do not
+   ask, do not rename.
+4. Apply:
+   ```bash
+   bash "${CLAUDE_SKILL_DIR}/scripts/toggle-team.sh" "TEAM_NAME_HERE" enable && echo "OK" || echo "FAILED"
+   ```
+5. `Edit` `team.md`: set each restored member's `Status` cell back to `active`, and refresh all THREE
+   header rows — `Version` / `Generated by` / `Last update`, that order — from `PLUGIN_VERSION:` /
+   `GENERATED_BY:` / `LAST_UPDATED:`. The trio always travels together: this mode rewrote `team.md`, so
+   the header records the version of THAT write. Do NOT touch the per-agent `Version` cells — no agent
+   body was rewritten, so no agent changed version.
+6. Re-verify and report:
+   ```bash
+   bash "${CLAUDE_SKILL_DIR}/scripts/verify-team.sh" "TEAM_NAME_HERE" && echo "PASS" || echo "FAIL"
+   ```
+   `DISABLED_AGENTS:0` is the success signal. Tell the user the roster is visible to the NEXT session —
+   agent discovery is read at session start, so a rename mid-session is not picked up until reload.
+
+---
+
+## Mode: DISABLE
+
+Takes the team out of the roster **without deleting anything**. Use it when a team should stop
+self-selecting work but its instructions, trace history and archive must survive intact — a paused
+team, not a removed one. `uninstall`/`purge` delete; `disable` does not.
+
+1. Team not found -> report and **STOP**.
+2. Show what will move (no writes):
+   ```bash
+   bash "${CLAUDE_SKILL_DIR}/scripts/toggle-team.sh" "TEAM_NAME_HERE" disable --dry-run && echo "OK" || echo "FAILED"
+   ```
+3. **ASK** using AskUserQuestion: "Disable team {TEAM_NAME}? {N} agent files are parked as
+   `.md.disabled` — nothing is deleted, `enable` restores them. `intent-guard` stays live."
+   Options: "Yes, disable" | "Uninstall instead (deletes agents, keeps archive)" | "Cancel"
+   - anything but "Yes, disable" -> switch to UNINSTALL or **STOP**
+4. Apply:
+   ```bash
+   bash "${CLAUDE_SKILL_DIR}/scripts/toggle-team.sh" "TEAM_NAME_HERE" disable && echo "OK" || echo "FAILED"
+   ```
+5. `Edit` `team.md`: set each parked member's `Status` cell to `disabled`, refresh all THREE header rows
+   (`Version` / `Generated by` / `Last update`, that order) from the Phase 1 lines — the trio travels
+   together on every mode that writes the file — and leave the per-agent `Version` cells alone.
+   The roster rows themselves are never removed — a disabled team still has a full roster,
+   which is what `enable` reads back.
+6. Re-verify and report: `verify-team.sh` prints `DISABLED` per parked member, `DISABLED_AGENTS:{N}`
+   and still exits PASS — a parked member is a state, not a missing file. Say the agents disappear from
+   the roster on the NEXT session.
 
 ---
 
@@ -554,8 +687,9 @@ Team not found -> report and **STOP**; do not "purge" a team that was never inst
 
 ### Step E1: Update CLAUDE.md (conditional)
 
-Only for modes that change team composition (INSTALL, UPGRADE with removals, UNINSTALL with agent
-removal, PURGE — which removes the `## Teams` section entirely):
+Only for modes that change what the roster actually offers (INSTALL, UPGRADE with removals, ENABLE,
+DISABLE — which flips the `Status:` line to `disabled` and leaves the table in place, UNINSTALL with
+agent removal, PURGE — which removes the `## Teams` section entirely):
 
 **ASK** using AskUserQuestion: "Update team info in CLAUDE.md?"
 Options: "Yes, in project CLAUDE.md" | "Yes, in .claude/CLAUDE.local.md" | "No, skip"
@@ -573,7 +707,7 @@ Team: {TEAM_NAME} | Domain agents: {N} (+ `intent-guard`, review-only) | Status:
 `/brewcode:superreview-setup`, invoked explicitly by name during review; never an implementation owner.
 
 Protocol: agents self-select tasks, trace in `.claude/teams/{TEAM_NAME}/trace.jsonl`.
-Manage: `/brewcode:teams-setup [status|upgrade|uninstall]`
+Manage: `/brewcode:teams-setup [status|install|upgrade|enable|disable|uninstall|purge] [name]`
 ```
 
 ### Step E2: Final Status
@@ -609,8 +743,11 @@ Exception: after PURGE there is no team left — output the purge summary instea
 
 | Condition | Action |
 |-----------|--------|
-| `detect-mode.sh` prints `ERROR:` (incl. `enable`/`disable`) | Report the line verbatim. **STOP** — never fall back to INSTALL |
-| Team not found (STATUS/UPGRADE/UNINSTALL/PURGE) | "Team '{TEAM_NAME}' not found. Run `/brewcode:teams-setup install {TEAM_NAME}`." **STOP** |
+| `detect-mode.sh` prints `ERROR:` | Report the line verbatim. **STOP** — never fall back to INSTALL |
+| Team not found (STATUS/UPGRADE/ENABLE/DISABLE/UNINSTALL/PURGE) | "Team '{TEAM_NAME}' not found. Run `/brewcode:teams-setup install {TEAM_NAME}`." **STOP** |
+| ENABLE on a live team / DISABLE on a parked team | `toggle-team.sh` prints `NOOP:` for every row. Report "already {enabled\|disabled}" and **STOP** — do not rename, do not ask |
+| `toggle-team.sh` prints `MISSING:` | A roster member has neither `.md` nor `.md.disabled`. **STOP** with the name — the team is broken, not disabled; run `upgrade` or re-create that agent |
+| `verify-team.sh` prints `DISABLED_AGENTS:{N>0}` | Expected on a disabled team, and it still exits PASS. Never report it as a failure and never "repair" it by regenerating the agents — `enable` is the fix |
 | Team already exists (INSTALL) | Show roster, AskUserQuestion: "Upgrade instead?" |
 | verify-team.sh FAIL | Show missing items, attempt fix, re-verify |
 | No agents created (C3 failure) | Retry failed agents once, then report |

@@ -48,6 +48,7 @@ export const navigation: NavSection[] = [
           { title: 'agent-creator', slug: 'brewcode/agents/agent-creator' },
           { title: 'hook-creator', slug: 'brewcode/agents/hook-creator' },
           { title: 'bash-expert', slug: 'brewcode/agents/bash-expert' },
+          { title: 'bc-rules-organizer', slug: 'brewcode/agents/bc-rules-organizer' },
         ],
       },
       { title: 'Hooks', slug: 'brewcode/hooks' },

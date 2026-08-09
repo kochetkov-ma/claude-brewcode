@@ -1,9 +1,13 @@
 ---
-paths:
-  - "**/*"
+paths: {PATHS}
+description: {DESCRIPTION}
+doc_type: llm
+version: "{PLUGIN_VERSION}"
+generated_by: "{GENERATED_BY}"
+last_updated: "{LAST_UPDATED}"
 ---
 
-# Avoid
+# {TITLE}
 
 | # | Avoid | Instead | Why |
 |---|-------|---------|-----|

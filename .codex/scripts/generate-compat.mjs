@@ -118,13 +118,62 @@ function transformText(value, { agent = false } = {}) {
   return text;
 }
 
+// Agent files this marketplace's setup skills write into a target repo's agents dir. Add a
+// name here whenever a skill starts installing another agent, or its prose keeps shipping the
+// Claude extension to Codex users.
+const SHIPPED_AGENT_FILES = ['intent-guard', 'task-tracker'];
+
+// A Codex agent file is `<name>.toml`; a Claude one is `<name>.md`. The two contiguous
+// `.codex/agents/<file>.md` rules in nativeWorkflowText only fire when the directory and
+// the extension sit in one literal token, which is exactly what the sources most often
+// do NOT do:
+//   1. shell scripts hoist the directory into a variable -- `AGENTS_DIR=".claude/agents"`
+//      then `"$AGENTS_DIR/${agent}.md"`. The path rewrite lands on the assignment, the
+//      extension never does, so the mirrored script hunts for `.md` files under
+//      `.codex/agents/` and matches nothing (teams-setup toggle-team.sh enable/disable).
+//   2. prose names the parked or literal form on its own -- ``.claude/agents/<name>.md`.
+//      `disable` renames each member to `<name>.md.disabled`` -- and the second half
+//      keeps the Claude extension while the first half is corrected.
+// Both are scoped so a skill, reference or doc `.md` can never be reached: (1) only
+// resolves variables literally assigned the agents dir, (2) only rewrites placeholder
+// basenames (`<name>`, `{name}`, `${agent}`) on lines that already mention the agents
+// dir, which leaves real filenames such as `references/intent-guard.md.template` alone.
+function codexAgentExtension(text) {
+  const agentDirVars = new Set();
+  for (const match of text.matchAll(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=["']?\.codex\/agents\/?["']?\s*$/gm)) {
+    agentDirVars.add(match[1]);
+  }
+  for (const name of agentDirVars) {
+    text = text.replace(new RegExp(`(\\$\\{?${name}\\}?/[^\\s"'\`]+?)\\.md\\b`, 'g'), '$1.toml');
+  }
+  text = text.replace(/^.*\.codex\/agents\/.*$/gm, line => line
+    .replace(/((?:<[A-Za-z0-9_-]+>|\{[A-Za-z0-9_-]+\}|\$\{[A-Za-z0-9_]+\}))\.md\b/g, '$1.toml')
+    .replace(/\bagent (`?)\.md\1/g, 'agent $1.toml$1'));
+  // Parking prose with no path on the line at all: "A roster member has neither `.md` nor
+  // `.md.disabled`". A stem-less `.md.disabled` is ALWAYS an agent -- a parked skill is always
+  // written with its stem, `SKILL.md.disabled` -- so that token is the anchor, and the bare
+  // `.md` beside it is rewritten only on a line already carrying it. That keeps genuine
+  // markdown talk (md-to-pdf's `.md` inputs, text-optimize's `.md` targets) untouched.
+  text = text.replace(/^.*`\.md\.disabled`.*$/gm, line =>
+    line.replace(/`\.md(\.disabled)?`/g, (_, suffix) => '`.toml' + (suffix || '') + '`'));
+  // Agents this marketplace itself installs. Their prose names them bare, far from any path
+  // (`Still keeps \`intent-guard.md\``, ``excluding \`task-tracker.md\```), so neither the
+  // contiguous nor the line-scoped rule reaches them, yet each ships as `<name>.toml`. The
+  // lookahead protects a plugin-internal source file of the same stem -- notably
+  // `references/intent-guard.md.template`, which is a template and stays `.md.template`.
+  for (const agent of SHIPPED_AGENT_FILES) {
+    text = text.replace(new RegExp(`\\b${agent}\\.md\\b(?!\\.template)`, 'g'), `${agent}.toml`);
+  }
+  return text;
+}
+
 function nativeWorkflowText(value, options = {}) {
-  return transformText(value, options)
+  return codexAgentExtension(transformText(value, options)
     .replaceAll('$code:', '$brewcode:')
     .replaceAll('$doc:', '$brewdoc:')
     .replaceAll('$tools:', '$brewtools:')
     .replace(/\.codex\/agents\/([^\s'"`]+)\.md\b/g, '.codex/agents/$1.toml')
-    .replace(/~\/\.codex\/agents\/([^\s'"`]+)\.md\b/g, '~/.codex/agents/$1.toml')
+    .replace(/~\/\.codex\/agents\/([^\s'"`]+)\.md\b/g, '~/.codex/agents/$1.toml'))
     .replace(/\b(?:BC|BD|BT)_PLUGIN_ROOT\b/g, '<plugin-root>')
     .replace(/\b(?:BC|BD|BT)_ROOT\b/g, '<plugin-root>')
     .replaceAll('CLAUDE_MD', 'AGENTS_FILE')
@@ -318,7 +367,21 @@ This skill configures ambient prompt guidance only. It does not create, claim, o
 
 ## Intent and scope
 
-Resolve \`status\`, \`on\`, \`off\`, \`level\`, \`edit\`, or \`reset\`, then choose project state at \`.codex/brewtools/manager/state.json\` or personal prompt overrides under \`~/.codex/manager/\`. Obtain confirmation before global writes.
+Resolve exactly one canonical mode -- \`status\`, \`install\`, \`upgrade\`, \`enable\`, \`disable\`, \`uninstall\`, \`purge\` -- plus the extras \`level\` and \`edit\`, then choose project state at \`.codex/brewtools/manager/state.json\` or personal prompt overrides under \`~/.codex/manager/\`. Obtain confirmation before global writes. With no mode given, resolve \`status\` when state already exists and \`install\` otherwise. \`on\`, \`off\`, \`setup\`, \`remove\`, \`reset\`, \`create\`, \`update\` and \`cleanup\` are not modes: read them as the canonical verb, echo the canonical name back, and never print a retired alias as a command.
+
+## Modes
+
+| Mode | Effect |
+|------|--------|
+| \`status\` | Show hook registration, state source, level, override paths, and the no-security-wall limitation. Writes nothing, asks nothing. |
+| \`install\` | Register the \`SessionStart\` and \`UserPromptSubmit\` handlers for this project and arm ambient prompt state. Idempotent: a second run leaves exactly one entry per event. |
+| \`upgrade\` | Re-register the handlers from the current plugin version and restamp the version recorded in state, keeping the armed flag, the level and every override verbatim. It asks nothing, and it is the only thing that clears a stale version report. |
+| \`enable\` | Arm ambient prompt state only. With nothing registered there is no handler to arm, so report not-installed and route the user to \`install\`. |
+| \`disable\` | Disarm ambient prompt state only. Never touches registration: the handlers stay registered and no-op while disarmed. |
+| \`uninstall\` | Deregister the handlers. State and prompt overrides are KEPT, so a later \`install\` returns to the same level and the same customized text. |
+| \`purge\` | \`uninstall\` plus deletion of \`.codex/brewtools/manager/\` and, in personal scope, the personal prompt override. The only destructive mode: state exactly what will be deleted before running it. |
+| \`level\` | Set balanced or strict prompt wording. State only; it does not change sandbox or authorization. |
+| \`edit\` | Update or remove prompt overrides after showing the diff. Changes injected text only, never registration or arm state. |
 
 ## Behavior
 
@@ -326,10 +389,8 @@ Resolve \`status\`, \`on\`, \`off\`, \`level\`, \`edit\`, or \`reset\`, then cho
 - \`++a\`: architecture-first guidance.
 - \`++rr\`: anti-regression review guidance.
 - \`++r\`: two-pass review guidance.
-- \`on\` / \`off\`: enable or disable ambient prompt state only.
-- \`level\`: set balanced or strict prompt wording; it does not change sandbox or authorization.
-- \`edit\` / \`reset\`: update or remove prompt overrides after showing the diff.
-- \`status\`: show hook registration, state source, level, override paths, and the no-security-wall limitation.
+
+The codewords are hook-driven: they fire on every prompt regardless of the mode state above. \`status\` explains them and \`edit\` customizes their text; no mode turns them off.
 
 The plugin uses \`SessionStart\` and \`UserPromptSubmit\` hooks. Preserve unrelated hook entries and review changed definitions with \`/hooks\`.`,
     'brewtools/plugin-update': `# Codex plugin maintenance
@@ -386,6 +447,22 @@ Inspect connection targets and the requested operation before connecting. Defaul
 
 Create exactly one Codex-owned file board; never create or mirror it under another assistant namespace.
 
+## Modes
+
+Resolve exactly one canonical mode from \`status\`, \`install\`, \`upgrade\`, \`enable\`, \`disable\`, \`uninstall\`, \`purge\` -- a standalone token only, never a word that merely appears inside a sentence. With no mode given, a deployed board (\`.codex/features/board.md\` exists) resolves to \`status\` and an empty target resolves to \`install\`. \`init\`, \`on\`, \`off\`, \`setup\`, \`remove\`, \`reset\`, \`create\`, \`update\` and \`cleanup\` are not modes: read them as the canonical verb, echo the canonical name back, and never print a retired alias as a command.
+
+| Mode | Effect |
+|------|--------|
+| \`status\` | Read-only inventory of the target board. Writes nothing, delegates nothing, asks nothing. A parked \`.disabled\` twin is reported as parked, never as missing. |
+| \`install\` | Run the phases below and deploy the board into the resolved target. |
+| \`upgrade\` | Retrofit onto an already deployed board instead of the fresh-init phases. Recover the existing findings from the deployed artifacts rather than re-deriving them, ask for anything unrecoverable, write new files outright, and gate every edit of an existing file behind its own diff and confirmation. Never renumber and never delete. The metadata restamp is ungated and always runs -- it is the only thing that clears a stale version report. |
+| \`enable\` | Restore parked machinery by renaming each \`.disabled\` twin back to the filename discovery keys on. Writes no content. |
+| \`disable\` | Park the machinery by renaming the task-tracker agent, the \`task-board\` and \`task-spec\` skills and the task rule to \`.disabled\`. Bodies are untouched and every task is kept. |
+| \`uninstall\` | Remove the generated agent, skills and rule plus any \`.disabled\` twin of them. \`.codex/features/**\` is KEPT: the generated pieces are machinery, the board is the user's data. |
+| \`purge\` | \`uninstall\` plus deletion of \`.codex/features/**\`. Confirm first, stating the task counts that will be destroyed, and offer \`uninstall\` as the alternative that keeps them. |
+
+\`status\`, \`enable\`, \`disable\`, \`uninstall\` and \`purge\` replace the phases below; run the \`status\` inventory afterwards as the proof. Optimization of \`AGENTS.md\` is never reverted by any mode -- say so in the report and point at version history.
+
 ## P0: resolve target and directive
 
 1. Resolve the target repository, language, release marker style, exclusions, and whether optional AGENTS.md optimization is requested.
@@ -420,17 +497,24 @@ Compress the requested text while preserving every load-bearing constraint, iden
 
 ## Resolve intent and target
 
-1. Resolve \`install\` or \`remove\`, then project or personal scope. Show the exact target before mutation.
+1. Resolve exactly one canonical mode from \`status\`, \`install\`, \`upgrade\`, \`enable\`, \`disable\`, \`uninstall\`, \`purge\`, then project or personal scope. Show the exact target before mutation. With no mode given, resolve \`status\` when the assets are already present and \`install\` otherwise. \`on\`, \`off\`, \`setup\`, \`remove\`, \`reset\`, \`create\`, \`update\` and \`cleanup\` are not modes: read them as the canonical verb and echo the canonical name back.
 
-## Install or remove
+## Modes
 
-2. For install, copy the two native scripts and prompt described by \`assets/INSTALL.md\`, merge \`SessionStart\` and \`UserPromptSubmit\` entries by exact command string, and preserve unrelated hooks.
-3. For removal, delete only matching command entries and the three copied assets; remove empty directories only when owned by this workflow.
+| Mode | Effect |
+|------|--------|
+| \`status\` | Report scope, registered entries, copied asset paths and their recorded version. Writes nothing. |
+| \`install\` | Copy the two native scripts and the prompt described by \`assets/INSTALL.md\`, merge \`SessionStart\` and \`UserPromptSubmit\` entries by exact command string, and preserve unrelated hooks. |
+| \`upgrade\` | Re-copy the same assets from the current plugin version and re-register any entry that went missing, restamping the recorded version. Keeps the parked-or-active state as it was. |
+| \`enable\` | Restore parked assets by renaming each \`.disabled\` twin back to the filename the handler resolves. |
+| \`disable\` | Park the copied assets by renaming them \`.disabled\`, leaving the bodies byte-identical, so the registered handlers no-op. |
+| \`uninstall\` | Delete only the matching command entries and the three copied assets, plus any \`.disabled\` twin of them; remove empty directories only when owned by this workflow. |
+| \`purge\` | \`uninstall\` plus removal of the workflow's own directory and any personal-scope override. State what will be deleted first. |
 
 ## Verify and report
 
-4. Validate JSON, run both hook scripts with valid and malformed fixtures, and confirm repeated install/remove is idempotent.
-5. Report the changed paths and require review through \`/hooks\`.
+2. Validate JSON, run both hook scripts with valid and malformed fixtures, and confirm a repeated \`install\`, \`upgrade\` or \`uninstall\` is idempotent.
+3. Report the changed paths and require review through \`/hooks\`.
 
 Handlers use one command string, timeout values in seconds, and no matcher for \`UserPromptSubmit\`. This Codex variant does not install a sub-agent prompt-rewrite hook.`
   };
@@ -634,7 +718,12 @@ The future implementation prompt must begin with Step 0: re-assume [ROLE: MANAGE
     }
     const counterPath = path.join(targetDir, 'assets', 'think-short-prompt-counter.mjs');
     fs.writeFileSync(counterPath, fs.readFileSync(counterPath, 'utf8').replace('const INTERVAL = 10;', 'const INTERVAL = 5;'), 'utf8');
-    writeFile(path.join(targetDir, 'assets', 'think-short-prompt.md'), `<!-- think-short -->
+    // The prompt body is rewritten by hand here, so carry the source's release stamp across
+    // or the mirror silently ships an unstamped copy of a stamped asset.
+    const promptMeta = fs.readFileSync(path.join(sourceDir, 'assets', 'think-short-prompt.md'), 'utf8')
+      .match(/brewcode-meta: version=[0-9]+\.[0-9]+\.[0-9]+ generated_by=\S+/);
+    const promptMarker = promptMeta ? `<!-- think-short ${promptMeta[0]} -->` : '<!-- think-short -->';
+    writeFile(path.join(targetDir, 'assets', 'think-short-prompt.md'), `${promptMarker}
 Be terse. Lead with results. Use ASCII unless the requested artifact requires other text.
 Think short: keep internal reasoning minimal and do not narrate exploration.
 Search before opening large files. Prefer focused edits and parallel read-only checks.

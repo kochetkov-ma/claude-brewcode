@@ -32,7 +32,7 @@ Brewdoc contains 5 skills, each handling a separate documentation task.
   <Card title="docsync-setup" icon="sync" href="/brewdoc/skills/docsync-setup/">
     Track doc staleness by frontmatter date, not INDEX files.
     Installs three project-local hooks that watch touched Markdown and nag once when a doc goes stale.
-    Modes: status, install, upgrade, uninstall, purge — plus the extras sync (`--all` forces every in-scope doc), reread, frontmatter.
+    Modes: status, install, upgrade, enable, disable, uninstall, purge — plus the extras sync (`--all` forces every in-scope doc), reread, frontmatter.
   </Card>
   <Card title="My-Claude" icon="clipboard" href="/brewdoc/skills/my-claude/">
     Generate documentation about your Claude Code installation.
@@ -41,7 +41,7 @@ Brewdoc contains 5 skills, each handling a separate documentation task.
   </Card>
   <Card title="memory-sync-setup" icon="brain" href="/brewdoc/skills/memory-sync-setup/">
     Generator: analyzes the target repo, then writes a project-local `/memory-sync` skill into it — repo-specific batches, checkable-fact catalogue, non-growth sync, independent verify.
-    Modes: status, install, upgrade, uninstall.
+    Modes: status, install, upgrade, enable, disable, uninstall, purge.
   </Card>
   <Card title="md-to-pdf" icon="file" href="/brewdoc/skills/md-to-pdf/">
     Convert Markdown to professional PDF.
@@ -58,9 +58,9 @@ Brewdoc contains 5 skills, each handling a separate documentation task.
 
 | Command | Purpose | Model | Arguments |
 |---------|---------|-------|-----------|
-| [`/brewdoc:docsync-setup`](/brewdoc/skills/docsync-setup/) | Track and fix stale project docs via hooks | sonnet | `[status\|install\|upgrade\|uninstall\|purge] [sync [--all]\|reread\|frontmatter]` |
+| [`/brewdoc:docsync-setup`](/brewdoc/skills/docsync-setup/) | Track and fix stale project docs via hooks | sonnet | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [sync [--all]\|reread\|frontmatter]` |
 | [`/brewdoc:my-claude`](/brewdoc/skills/my-claude/) | Generate documentation about Claude Code installation | opus | `[ext [context]] \| [r <query>]` — no args = internal installation docs |
-| [`/brewdoc:memory-sync-setup`](/brewdoc/skills/memory-sync-setup/) | Generate a project-tailored `/memory-sync` skill into the target repo | opus | `[status\|install\|upgrade\|uninstall] [fine-tune-prompt]` |
+| [`/brewdoc:memory-sync-setup`](/brewdoc/skills/memory-sync-setup/) | Generate a project-tailored `/memory-sync` skill into the target repo | opus | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [fine-tune-prompt]` |
 | [`/brewdoc:md-to-pdf`](/brewdoc/skills/md-to-pdf/) | Convert Markdown to PDF | sonnet | `<file.md> [--engine name] ["prompt"] \| styles \| test \| no args = help` |
 | [`/brewdoc:publish`](/brewdoc/skills/publish/) | Publish to brewpage.app — returns public URL | haiku | `<text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename]` |
 
@@ -95,6 +95,17 @@ conversation use `${CLAUDE_SKILL_DIR}` to access their own files.
 
   Both plugins install from the same `claude-brewcode` marketplace but operate independently.
 </Callout>
+
+## Artifact metadata
+
+Every artifact a brewdoc `-setup` skill installs now carries the same provenance fields, resolved from the plugin's own `.claude-plugin/plugin.json` and never hardcoded — never the literal `unknown`.
+
+| Surface | Fields, in order | Notes |
+|---------|-------------------|-------|
+| `.md` frontmatter | `doc_type` (`llm` \| `user` \| `skip`, unquoted), `version` ("X.Y.Z"), `generated_by` ("plugin:skill"), `last_updated` ("YYYY-MM-DD") | After the file's own keys. `doc_type` never appears in JSON |
+| JSON artifacts (`config.json`, etc.) | `version`, `generated_by`, `last_updated` | Same three snake_case keys at the top level, on every writing mode |
+
+`/brewcode:setup-status` reads these fields back across all ten `-setup` skills and reports a setup installed at an older plugin version as stale. `docsync-setup` is the reference implementation this canon was modelled on — see its [doc page](/brewdoc/skills/docsync-setup/) for the full mechanics.
 
 <CardGrid>
   <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">

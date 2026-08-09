@@ -20,9 +20,10 @@ import { Card, CardGrid, Callout, Steps, UpdateNotice } from '../../../../compon
 | Field | Value |
 |-------|-------|
 | Command | `/brewcode:teams-setup` |
-| Arguments | `[status [name] \| install [name] [prompt] \| upgrade [name] \| uninstall [name] \| purge [name]]` |
+| Arguments | `[status [name] \| install [name] [prompt] \| upgrade [name] \| enable [name] \| disable [name] \| uninstall [name] \| purge [name]]` |
 | No-arg default | `status` of the first existing team, `install` of a team named `default` when none exists |
-| Rejected verbs | `enable` / `disable` — exit 1 with an explanation; teams has no on/off state |
+| `enable` / `disable` | Park/unpark the roster's agent files (renamed to/from `<agent>.md.disabled`) — `intent-guard` is exempt |
+| Version stamping | `team.md` header + agent frontmatter carry the plugin version; write is refused if the version cannot be resolved |
 | Model | opus |
 | Tools | Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion, Skill |
 
@@ -48,6 +49,12 @@ import { Card, CardGrid, Callout, Steps, UpdateNotice } from '../../../../compon
 # Tune agents that are underperforming
 /brewcode:teams-setup upgrade my-team
 
+# Park the roster's agent files without deleting anything
+/brewcode:teams-setup disable my-team
+
+# Bring a parked team back
+/brewcode:teams-setup enable my-team
+
 # Archive trace data, remove inactive agents
 /brewcode:teams-setup uninstall my-team
 
@@ -62,17 +69,19 @@ import { Card, CardGrid, Callout, Steps, UpdateNotice } from '../../../../compon
 | `status` | `/brewcode:teams-setup status <name>` | Read-only health report: success rates, open issues, insights, recommendations |
 | `install` | `/brewcode:teams-setup install <name> [prompt]` | Analyze codebase → propose team (+ fixed `intent-guard`) → create agents → quorum review → framework setup |
 | `upgrade` | `/brewcode:teams-setup upgrade <name>` | Read trace data → classify agents → tune or replace underperformers |
+| `enable` | `/brewcode:teams-setup enable <name>` | Move each roster member's agent file from `<agent>.md.disabled` back to `<agent>.md` — reactivates without touching `team.md` or trace data |
+| `disable` | `/brewcode:teams-setup disable <name>` | Park each roster member's agent file as `<agent>.md.disabled` — Claude Code stops discovering it, nothing is deleted |
 | `uninstall` | `/brewcode:teams-setup uninstall <name>` | Archive trace entries, remove inactive agents, reset cursor |
 | `purge` | `/brewcode:teams-setup purge <name>` | Total removal, no menus and no archive: every domain agent from the `team.md` roster, then `.claude/teams/<name>/` including `trace-archive.jsonl`. One explicit confirmation, not recoverable |
 
-<Callout type="caution" title="teams has no enable/disable state">
-A team either exists or it does not, so `enable` and `disable` are rejected outright: `detect-mode.sh` prints `ERROR:teams-setup has no <verb> state` and exits 1, and the skill stops instead of falling back to `install`. The same guard is what keeps `purge` a mode rather than a team name — earlier versions treated any unknown first word as a team name, so `/brewcode:teams-setup purge` installed a team called `purge`.
+<Callout type="tip" title="enable / disable park the roster, not delete it">
+`disable` moves each roster member's `.claude/agents/<agent>.md` to `<agent>.md.disabled` — Claude Code stops discovering the agent as a project agent, but the file body is byte-identical either way, and `enable` moves it straight back. `intent-guard` is always skipped (`SKIP:intent-guard (shared with superreview-setup)`) because that file may belong to an install with nothing to do with this team. `team.md` and the trace log are untouched by either verb. The same keyword guard is what keeps `purge` a mode rather than a team name — earlier versions treated any unknown first word as a team name, so `/brewcode:teams-setup purge` installed a team called `purge`.
 </Callout>
 
 `purge` never deletes `.claude/agents/intent-guard.md`. That file is shared with [`/brewcode:superreview-setup`](/brewcode/skills/superreview-setup/) and may belong to an install that has nothing to do with this team; purge reports it as kept. A team name that does not exist stops the run — nothing is "purged" that was never installed.
 
 <Callout type="tip" title="Why the -setup suffix">
-`teams-setup` installs a mechanism — a roster of agents in `.claude/agents/` that you use afterwards *instead of* the skill. Recurring tools like [`/brewcode:agents`](/brewcode/skills/agents/) keep a bare name because you run them again and again. The canonical mode vocabulary across setup skills is `status`, `install`, `upgrade`, `enable`, `disable`, `uninstall`, `purge`; teams implements five of the seven and rejects the other two.
+`teams-setup` installs a mechanism — a roster of agents in `.claude/agents/` that you use afterwards *instead of* the skill. Recurring tools like [`/brewcode:agents`](/brewcode/skills/agents/) keep a bare name because you run them again and again. The canonical mode vocabulary across setup skills is `status`, `install`, `upgrade`, `enable`, `disable`, `uninstall`, `purge`; teams implements all seven.
 </Callout>
 
 ## Flow
@@ -168,6 +177,10 @@ Every team gets a fixed review-only `intent-guard` member outside the domain-age
 
 **One writer, shared with superreview.** `teams-setup` does not author `intent-guard.md`. It runs `generate.sh emit-agent` from the sibling `/brewcode:superreview-setup` skill, which creates-or-reuses the file and prints `INTENT_GUARD: CREATED` or `INTENT_GUARD: REUSE`. A USABLE existing agent is reused untouched — usable meaning non-empty, carrying `name: intent-guard` frontmatter, and free of unresolved placeholders. An empty, truncated or placeholder-laden file is treated as absent and recreated. `agent-creator` is spawned only on `CREATED`, to replace three seeded generic blocks (project invariants, drift examples, evidence commands) with project-specific content; it never authors the file.
 
+<Callout type="tip" title="Fixed in v5.1.0">
+The corruption check used to match `${BASE}`-style shell expansions inside an already-adapted evidence block as an unresolved placeholder, so a healthy reused agent could be wrongly deleted and re-emitted. The scan now strips `${VAR}` references before matching `{PLACEHOLDER}` tokens. Separately, the write verification used an unanchored count for the template-header marker, which also matched a tail comment that legitimately names it — every healthy install hit the same false-fail loop back into re-adaptation. Both counts are now anchored to the literal artifact line, not prose about it.
+</Callout>
+
 **Excluded from:**
 
 | Flow | Why |
@@ -217,6 +230,15 @@ The agent template carries two blocks, so every DOMAIN member of the team inheri
 | `.claude/teams/<name>/trace.jsonl` | JSONL log per session: tasks (took/refused/completed/failed), issues (by severity), insights (by category). Written via `trace-ops.sh add` — append-only, ~96% token savings vs full reads. |
 | `.claude/teams/<name>/trace-ops.sh` | The tracer itself, copied from the plugin at install (C4) and re-copied on every `upgrade`. The only tracing path a generated agent can resolve. Deleted by `purge`, kept by `uninstall`. |
 | `.claude/teams/<name>/trace-archive.jsonl` | Archived entries after `uninstall`. Cursor reset after archiving. `purge` deletes this file along with everything else. |
+
+**Version and ownership**
+
+| Field | Where | Value |
+|-------|-------|-------|
+| Header rows | `team.md`: `\| Version \|`, `\| Generated by \|`, `\| Last update \|` | Plugin version, `brewcode:teams-setup`, install/upgrade date |
+| Frontmatter | Each `.claude/agents/<member>.md` | `doc_type: llm`, `version: "X.Y.Z"`, `generated_by: "brewcode:teams-setup"`, `last_updated: "YYYY-MM-DD"` |
+| Source | `detect-mode.sh` reads `.claude-plugin/plugin.json` | Resolves before any write; if it cannot, the run exits 1 (`ERROR:cannot resolve plugin version`) instead of stamping a fake value |
+| Staleness check | `/brewcode:setup-status` | Reads the `\| Version \|` row and flags a team installed at an older plugin version than the one currently running |
 
 **Task Acceptance Protocol**
 

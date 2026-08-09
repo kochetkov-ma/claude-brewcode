@@ -6,7 +6,7 @@
 |-------|-------|
 | Command | `/brewtools:task-board-setup` |
 | Model | opus |
-| Arguments | `[status\|install\|upgrade\|uninstall\|purge]` (optional) `[target repo path]` (empty = current dir) `["free-text directive"]` (optional) |
+| Arguments | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge]` (optional) `[target repo path]` (empty = current dir) `["free-text directive"]` (optional) |
 
 ## Overview
 
@@ -78,6 +78,8 @@ A repo that already has `.claude/features/board.md` cannot be re-installed. Use 
 
 Upgrade is **additive only**: it writes the new `task-spec` skill and the spec templates outright, recovers the original findings from the deployed artifacts, and re-runs the domain-agent inventory. Every edit of an existing file is shown as a diff and gated behind AskUserQuestion. Existing task ids, scope ids and board rows are never renumbered or deleted; backfilled `spec:` values are `pending` or `none`, never `full`.
 
+It also **restamps** the nine stamped artifacts -- `version`, `generated_by`, `last_updated` in their frontmatter, nothing else. That step is ungated and runs even when the content layer is already complete, because the `version:` of `.claude/features/board.md` is what `/brewcode:setup-status` reads: without it, `status` would keep reporting `stale` after every successful `upgrade`.
+
 ## CLAUDE.md optimization (optional, gated)
 
 An opt-in phase that runs once the board is in place. It is strictly **propose-only** -- every change is behind AskUserQuestion, nothing is rewritten without your yes. It:
@@ -108,6 +110,12 @@ The free-text directive (argument 2) tunes this phase: toggle individual sub-ste
 # Retrofit the spec + design layer onto a repo that already has a board
 /brewtools:task-board-setup upgrade ../repo
 
+# Pause the board: park the agent/skills/rule, tasks and files all stay
+/brewtools:task-board-setup disable ../repo
+
+# Resume it -- nothing is regenerated
+/brewtools:task-board-setup enable ../repo
+
 # Remove the generated agent/skills/rule, KEEP every task under .claude/features/**
 /brewtools:task-board-setup uninstall ../repo
 
@@ -121,11 +129,15 @@ The free-text directive (argument 2) tunes this phase: toggle individual sub-ste
 |------|----------------------|------------------------|------|
 | `status` | — | — | never — read-only |
 | `install` | written | written | full P1 confirmation |
-| `upgrade` | spec layer added | additive edits only | per-file diff gate |
+| `upgrade` | spec layer added + metadata restamped | additive edits only + metadata restamped | per-file diff gate (the restamp is never asked) |
+| `disable` | renamed to `*.disabled` | untouched | never |
+| `enable` | renamed back | untouched | never |
 | `uninstall` | deleted | **kept** | one confirmation |
 | `purge` | deleted | deleted | one confirmation, task counts stated |
 
-No verb = `status` when a board is already deployed at the target, `install` when it is not. `init`, `setup`, `on`, `off`, `remove` and `reset` are no longer command words.
+Canonical order: `status | install | upgrade | enable | disable | uninstall | purge`. No verb = `status` when a board is already deployed at the target, `install` when it is not. `init`, `on`, `off`, `setup`, `remove`, `reset`, `create`, `update` and `cleanup` are no longer command words.
+
+`disable` is the reversible pause, not a removal. Claude Code discovers a project agent only as `.claude/agents/<name>.md`, a project skill only as `<dir>/SKILL.md`, and auto-loads a rule only as `.claude/rules/*.md` -- so renaming those four to `*.disabled` is the entire switch. Every byte survives, `.claude/features/**` is never touched, and `enable` moves them back without re-running a single analysis agent. `uninstall` and `purge` delete the parked twins along with the live files, so a DISABLED board leaves nothing orphaned.
 
 ## ID convention (deployed)
 

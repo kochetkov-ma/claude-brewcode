@@ -75,7 +75,10 @@ Global:  `~/.claude/agent-deadline.json` — fallback.
   "enabled": true,
   "defaultMinutes": 20,
   "byAgentType": {},
-  "hardStopRatio": 2
+  "hardStopRatio": 2,
+  "version": "X.Y.Z",
+  "generated_by": "brewtools:agent-deadline-setup",
+  "last_updated": "YYYY-MM-DD"
 }
 ```
 
@@ -85,6 +88,7 @@ Global:  `~/.claude/agent-deadline.json` — fallback.
 | `defaultMinutes` | budget for every agent type; default `20` if missing/invalid |
 | `byAgentType` | optional per-type overrides, e.g. `{"Explore": 10, "brewtools:text-optimizer": 45}`. Empty by default = one limit for all |
 | `hardStopRatio` | optional, default `2`, must be `> 1` — multiple of the budget past which the allow-list shrinks from the finalize set to `Write, Edit`. Anything `<= 1` or non-numeric falls back to `2`. Omit the key entirely to take the default |
+| `version` / `generated_by` / `last_updated` | provenance, MANDATORY, re-stamped by every mode that writes this file (install, upgrade, enable, disable). Inert at runtime — `loadConfig()` reads only the four keys above. Never `doc_type`: that is a `.md`-frontmatter field |
 
 Budget = `byAgentType[agent_type] ?? defaultMinutes`. `agent_type` is the value
 Claude Code puts in the payload — plain (`Explore`, `developer`) or
@@ -102,6 +106,8 @@ before adding an override; a typo silently falls back to `defaultMinutes`.
 | `MINUTES` | skill (user's answer) | `defaultMinutes` to write; REQUIRED, no default — empty aborts the config block |
 | `OVERRIDES` | skill (user's answer) | `byAgentType` JSON object; default `{}` |
 | `HARD_STOP_RATIO` | skill (optional) | `hardStopRatio` to write; leave UNSET to omit the key and take the hook default `2` |
+| `PLUGIN_VERSION` | skill (optional) | `X.Y.Z` for the metadata stamp. OPTIONAL: unset/malformed falls back to `<SRC>/../../../.claude-plugin/plugin.json`, resolved by the block itself. Never a literal |
+| `LAST_UPDATED` | skill (optional) | `YYYY-MM-DD` for the stamp; unset falls back to the LOCAL date the block computes |
 | `CFG` / `SETTINGS` / `HOOKS_DIR` | scope | project = `$PWD/.claude/...`, global = `$HOME/.claude/...` |
 
 These are read from `process.env` by the node blocks below — they must be REAL shell
@@ -120,14 +126,33 @@ prefix the block.
 NEVER hardcode the budget — the user picked it; `MINUTES`/`OVERRIDES` carry it.
 ONE scope per run: set the vars for THAT scope only and never touch the other.
 
+Every write of the config also stamps the three mandatory JSON metadata keys —
+`version`, `generated_by`, `last_updated` (never `doc_type`: that is a `.md`
+frontmatter field). `version` is resolved from `.claude-plugin/plugin.json`, never
+hardcoded; `last_updated` is the LOCAL date.
+
 **EXECUTE** config write (read-modify-write, Bash tool). Set `CFG` per scope:
 
 ```
 # project: CFG="$PWD/.claude/agent-deadline.json"
 # global:  CFG="$HOME/.claude/agent-deadline.json"   (Bash ONLY — protected path)
-CFG="$PWD/.claude/agent-deadline.json" OVERRIDES="${OVERRIDES:-}" HARD_STOP_RATIO="${HARD_STOP_RATIO:-}" node -e '
+SRC="$(dirname "$RUNBOOK")"
+CFG="$PWD/.claude/agent-deadline.json" PJSON="$SRC/../../../.claude-plugin/plugin.json" OVERRIDES="${OVERRIDES:-}" HARD_STOP_RATIO="${HARD_STOP_RATIO:-}" node -e '
 const fs=require("fs"), p=require("path");
 const f=process.env.CFG;
+const GB="brewtools:agent-deadline-setup";
+function pluginVersion(){                       // env first, plugin.json fallback; NEVER a literal
+  const ev=(process.env.PLUGIN_VERSION||"").trim();
+  if(/^[0-9]+\.[0-9]+\.[0-9]+$/.test(ev)) return ev;
+  try{ const j=JSON.parse(fs.readFileSync(process.env.PJSON||"","utf8")); if(typeof j.version==="string"&&j.version.trim()) return j.version.trim(); }catch{}
+  return "";
+}
+function today(){                               // LOCAL date, like date +%F - never toISOString (UTC)
+  const ev=(process.env.LAST_UPDATED||"").trim();
+  if(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(ev)) return ev;
+  const d=new Date();
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
 let c={};
 if(fs.existsSync(f)){
   const raw=fs.readFileSync(f,"utf8");
@@ -156,10 +181,16 @@ if(!hadEnabled) c.enabled=true;              // reinstall must NOT silently re-e
 c.defaultMinutes=m;
 c.byAgentType=Object.assign({},keep,ov);     // existing overrides survive a reinstall
 if(hsr!==undefined) c.hardStopRatio=hsr;     // absent env keeps whatever was there (or nothing)
+const pv=pluginVersion();
+if(!pv){ console.error("ABORT: cannot resolve plugin version - export PLUGIN_VERSION=X.Y.Z or fix PJSON: "+process.env.PJSON); process.exit(1); }
+const lu=today();
+c.version=pv; c.generated_by=GB; c.last_updated=lu;   // the 3 mandatory JSON metadata keys, on EVERY write
+delete c.doc_type;                                    // frontmatter-only field; a JSON carrier never takes it
 fs.mkdirSync(p.dirname(f),{recursive:true});
 fs.writeFileSync(f,JSON.stringify(c,null,2)+"\n");
 const back=JSON.parse(fs.readFileSync(f,"utf8"));   // post-write verification
 if(back.defaultMinutes!==m){ console.error("ABORT: verification failed for "+f); process.exit(1); }
+if(back.version!==pv||back.generated_by!==GB||back.last_updated!==lu){ console.error("ABORT: metadata verification failed for "+f); process.exit(1); }
 console.log("OK wrote "+f+" "+JSON.stringify(back));
 if(back.enabled!==true) console.log("NOTE: enabled=false was preserved from the existing config - run ENABLE to switch it on");
 ' && echo "✅ config" || echo "❌ FAILED"
@@ -422,7 +453,8 @@ process.stdout.write(String(m));
    — it overwrites both hook files with the current ones and `node --check`s them.
 3. Re-run the **Config** block for that scope with `MINUTES` exported above — `enabled`,
    `byAgentType` and `hardStopRatio` are all preserved, so a disabled setup stays disabled,
-   and only keys a newer version introduced are added.
+   only keys a newer version introduced are added, and `version` / `generated_by` /
+   `last_updated` are re-stamped to the current plugin.
 4. Re-run the **merge settings** block for that scope — it drops its own stale-path
    entries first, so a moved hooks dir converges.
 
@@ -437,12 +469,28 @@ Nothing is asked and nothing is deleted. Upgrade ONE scope per run; "both" is tw
 Flip `enabled` in the config. Hooks stay wired and become no-ops — they read the
 config on every call, so this takes effect immediately, no restart.
 
-**EXECUTE** using Bash tool — set `CFG` for the ONE scope you were asked about:
+**EXECUTE** using Bash tool — set `CFG` for the ONE scope you were asked about.
+`RUNBOOK` must be exported here too: this is a config WRITE, so it re-stamps the three
+metadata keys.
 ```
 # project: CFG="$PWD/.claude/agent-deadline.json"
 # global:  CFG="$HOME/.claude/agent-deadline.json"
-CFG="$PWD/.claude/agent-deadline.json" node -e '
+SRC="$(dirname "$RUNBOOK")"
+CFG="$PWD/.claude/agent-deadline.json" PJSON="$SRC/../../../.claude-plugin/plugin.json" node -e '
 const fs=require("fs"), p=require("path"); const f=process.env.CFG;
+const GB="brewtools:agent-deadline-setup";
+function pluginVersion(){
+  const ev=(process.env.PLUGIN_VERSION||"").trim();
+  if(/^[0-9]+\.[0-9]+\.[0-9]+$/.test(ev)) return ev;
+  try{ const j=JSON.parse(fs.readFileSync(process.env.PJSON||"","utf8")); if(typeof j.version==="string"&&j.version.trim()) return j.version.trim(); }catch{}
+  return "";
+}
+function today(){                               // LOCAL date, like date +%F - never toISOString (UTC)
+  const ev=(process.env.LAST_UPDATED||"").trim();
+  if(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(ev)) return ev;
+  const d=new Date();
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
 let c={defaultMinutes:20,byAgentType:{}};
 if(fs.existsSync(f)){
   const raw=fs.readFileSync(f,"utf8");
@@ -453,14 +501,20 @@ if(fs.existsSync(f)){
   }
 }
 c.enabled = process.env.ON === "1";
+const pv=pluginVersion();
+if(!pv){ console.error("ABORT: cannot resolve plugin version - export PLUGIN_VERSION=X.Y.Z or fix PJSON: "+process.env.PJSON); process.exit(1); }
+const lu=today();
+c.version=pv; c.generated_by=GB; c.last_updated=lu;   // every write stamps the 3 mandatory keys
+delete c.doc_type;                                    // frontmatter-only field; a JSON carrier never takes it
 fs.mkdirSync(p.dirname(f),{recursive:true});
 fs.writeFileSync(f,JSON.stringify(c,null,2)+"\n");
 const back=JSON.parse(fs.readFileSync(f,"utf8"));
 if(back.enabled!==c.enabled){ console.error("ABORT: verification failed for "+f); process.exit(1); }
+if(back.version!==pv||back.generated_by!==GB||back.last_updated!==lu){ console.error("ABORT: metadata verification failed for "+f); process.exit(1); }
 console.log((back.enabled?"ENABLED ":"DISABLED ")+f);
 ' && echo "✅ toggled" || echo "❌ FAILED"
 ```
-Prefix `ON=1` to enable, omit it (or `ON=0`) to disable.
+Prefix `ON=1` on the `CFG=...` line to enable, omit it (or `ON=0`) to disable.
 
 > **STOP if ❌** — fix before continuing.
 

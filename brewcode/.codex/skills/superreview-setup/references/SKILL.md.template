@@ -3,6 +3,10 @@ name: superreview
 description: "Deep {PROJECT_NAME} code review the MODEL or the USER can invoke: routes changed files to domain-expert agents, runs the mechanical gates, checks correctness + architecture + reuse + version pins + scope discipline (blast radius vs the sanctioned task/issue) against the project rules, reverse-validates every finding, writes one merged report. Triggers: review code, deep review, superreview, super review, validate changes, check architecture, check standards, check reuse, check scope, blast radius, scope creep, quick review, did I build what was asked, drift check."
 user-invocable: true
 argument-hint: "<prompt-or-file-path> [scope: commit|branch|folder]"
+doc_type: llm
+version: "{PLUGIN_VERSION}"
+generated_by: "{GENERATED_BY}"
+last_updated: "{LAST_UPDATED}"
 ---
 
 # Super Review ({PROJECT_NAME})
@@ -903,7 +907,7 @@ superreview does NOT run /simplify or any skill and does NOT edit code — these
 | Report dir | `<repo-root>/.codex/reports/{TIMESTAMP}_superreview/` | Merged report, findings sorted P0 -> P3 |
 | Max files | 50 (except `FULL_PROJECT`) | `EXTENDED` only — request_user_input: narrow or proceed. Never asked at `QUICK` |
 | Search tool | Bash `rg`/`grep`/`git ls-files` | reuse-first search; note which in report |
-| Self-sync | Phase 4b, `EXTENDED` only, coordinator only | corrects THIS file + `references/scope.md` in place from in-context data; line delta `<= 0`, PROVEN by a before/after `wc -l`; facts only — decisions, missing experts and `intent-guard.md` are PROPOSALS |
+| Self-sync | Phase 4b, `EXTENDED` only, coordinator only | corrects THIS file + `references/scope.md` in place from in-context data; line delta `<= 0`, PROVEN by a before/after `wc -l`; facts only — decisions, missing experts and `intent-guard.toml` are PROPOSALS |
 
 ---
 
@@ -953,7 +957,7 @@ superreview does NOT run /simplify or any skill and does NOT edit code — these
   (spawned at BOTH depths; this skill passes it context only and restates nothing from it).
 
 <!--
-SKILL METADATA — generated {GENERATED_AT}
+SKILL NOTES — provenance lives in the frontmatter above (`version` / `generated_by` / `last_updated`).
 
 Self-contained project-local deep-review skill for {PROJECT_NAME}. NO sibling-skill orchestration, never invokes
 another skill, NO plugin dependency. Two axes (MODE = scope, DEPTH = effort) and what each costs: see Configuration.

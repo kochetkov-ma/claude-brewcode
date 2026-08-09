@@ -90,7 +90,7 @@ Install the entire suite:
 | [`/brewtools:agent-deadline-setup`](/brewtools/skills/agent-deadline-setup/) | Install a soft wall-clock budget for subagents | sonnet | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [project\|global] [minutes]` |
 | [`/brewtools:agent-router-setup`](/brewtools/skills/agent-router-setup/) | Route a generic subagent spawn to the real expert (experimental) | sonnet | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [level fast\|strict]` |
 | [`/brewtools:manager-setup`](/brewtools/skills/manager-setup/) | Manager mode: hard delegation wall + codewords | sonnet | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [level strict\|balanced] [edit]` |
-| [`/brewtools:task-board-setup`](/brewtools/skills/task-board-setup/) | Deploy a file-based Kanban into any repo | opus | `[status\|install\|upgrade\|uninstall\|purge] [repo path] [free-text directive]` |
+| [`/brewtools:task-board-setup`](/brewtools/skills/task-board-setup/) | Deploy a file-based Kanban into any repo | opus | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [repo path] [free-text directive]` |
 | [`/brewtools:think-short-setup`](/brewtools/skills/think-short-setup/) | Install/remove think-short terse-mode hooks | sonnet | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [project\|global]` |
 
 ## Agent
@@ -101,11 +101,27 @@ Install the entire suite:
 | [ssh-admin](/brewtools/agents/ssh-admin/) | inherit | SSH server administration, configuration, deployment |
 | [deploy-admin](/brewtools/agents/deploy-admin/) | inherit | GitHub Actions, CI/CD, releases, GHCR management |
 
+## Artifact metadata
+
+Every `-setup` skill stamps what it writes with the plugin version that generated it and `generated_by` naming the skill. JSON artifacts carry these plus `last_updated` as top-level keys. The byte-copied `.mjs`/`.md` hook and prompt files carry only `version` and `generated_by` in a `// brewcode-meta:` comment line (or `.md` frontmatter) -- never `last_updated`, since the date would be the release date already present at the top of the file and rewriting it on every build would defeat the copy's own drift check.
+
+| Skill | Carrier |
+|-------|---------|
+| [manager-setup](/brewtools/skills/manager-setup/) | `state.json` top-level keys + the copied guard's `brewcode-meta` line |
+| [think-short-setup](/brewtools/skills/think-short-setup/) | `brewcode-meta` line in each of the three `.mjs` hooks + the prompt file |
+| [agent-deadline-setup](/brewtools/skills/agent-deadline-setup/) | `agent-deadline.json` top-level keys + both hooks' `brewcode-meta` line |
+| [agent-router-setup](/brewtools/skills/agent-router-setup/) | `agent-router.json` top-level keys + the hook's `brewcode-meta` line |
+| [task-board-setup](/brewtools/skills/task-board-setup/) | `.md` frontmatter (`doc_type: llm`, `version`, `generated_by`, `last_updated`) on nine generated artifacts |
+
+`/brewcode:setup-status` reads these stamps back across all ten `-setup` skills in this marketplace and tells you when an install is running on an older brewtools version than the plugin currently installed — the fix is always that skill's own `upgrade` mode.
+
 ## Plugin variable
 
-Plugin paths resolve natively via `${CLAUDE_PLUGIN_ROOT}` at Task spawn — no hook injection required.
-Skills in the main conversation use `${CLAUDE_SKILL_DIR}` to access their own files;
-subagents receive `${CLAUDE_PLUGIN_ROOT}` as a built-in variable from Claude Code.
+`${CLAUDE_PLUGIN_ROOT}` and `${CLAUDE_SKILL_DIR}` are text substitutions Claude Code performs
+on the prompt itself, not environment variables -- no hook injection required.
+Skills in the main conversation use `${CLAUDE_SKILL_DIR}` to access their own files.
+Subagent `.md` definitions get `${CLAUDE_PLUGIN_ROOT}` substituted into the prompt text at
+Task spawn; it is not readable as a shell variable inside a Bash call.
 
 ## Architecture
 
@@ -142,8 +158,9 @@ brewtools/
   **Brewtools** provides standalone text utilities: optimization, humanization, security scanning.
   Each skill works independently with no lifecycle dependencies.
 
-  **Brewcode** is a task execution engine with infinite context, lifecycle hooks,
-  KNOWLEDGE.jsonl, and session handoff.
+  **Brewcode** is the spec-and-search plugin -- agent and skill authoring, semantic code
+  search via the semble MCP, deep-review and team generators, plus the cross-plugin
+  setup dashboard.
 
   Both plugins install from the same `claude-brewcode` marketplace but operate independently.
 </Callout>

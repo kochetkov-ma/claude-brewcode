@@ -4,6 +4,30 @@ set -eu
 ARGS="${1:-}"
 TEAMS_DIR=".claude/teams"
 
+# Artifact-metadata standard. The plugin version that produces every artifact this run writes,
+# read from the manifest by SELF-LOCATION: scripts/ -> teams-setup/ -> skills/ -> <plugin root>.
+# Correct in the dev checkout AND in the installed cache. NEVER hardcoded, never a template version.
+# `|| true` on both branches: under `set -e` a failing command substitution aborts the script.
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+PLUGIN_JSON="$SCRIPT_DIR/../../../.claude-plugin/plugin.json"
+PLUGIN_VERSION=""
+if [ -f "$PLUGIN_JSON" ]; then
+  if command -v jq >/dev/null 2>&1; then
+    PLUGIN_VERSION=$(jq -r '.version // empty' "$PLUGIN_JSON" 2>/dev/null || true)
+  else
+    PLUGIN_VERSION=$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$PLUGIN_JSON" 2>/dev/null | head -1 || true)
+  fi
+fi
+# HARD FAIL, never a placeholder value. A word like `unknown` carries no `{}<>`, so setup-status's
+# PLACEHLD test cannot catch it: `sort -V` would compare it against the real version and print a
+# confident `AHEAD unknown > X.Y.Z`. The manifest ships with the plugin, so an unreadable one is a
+# broken install - stop before the skill writes team.md or a single agent. The skill already treats
+# any `ERROR:` line as STOP.
+case "$PLUGIN_VERSION" in
+  [0-9]*.[0-9]*.[0-9]*) : ;;
+  *) printf 'ERROR:cannot resolve plugin version (X.Y.Z) from %s - refusing to stamp artifacts with a fake version\n' "$PLUGIN_JSON"; exit 1 ;;
+esac
+
 validate_name() {
   case "$1" in
     *[!a-zA-Z0-9_-]*) printf 'ERROR:invalid team name (alphanumeric, dash, underscore only)\n'; exit 1 ;;
@@ -23,17 +47,7 @@ fi
 
 is_keyword() {
   case "$1" in
-    status|install|upgrade|uninstall|purge) return 0 ;;
-    *) return 1 ;;
-  esac
-}
-
-# Canonical verbs teams-setup does not implement. Must be rejected explicitly:
-# falling through to the team-name branch would start a full INSTALL of a team
-# literally named "enable"/"disable".
-is_unsupported_keyword() {
-  case "$1" in
-    enable|disable) return 0 ;;
+    status|install|upgrade|enable|disable|uninstall|purge) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -59,9 +73,6 @@ if [ -z "$FIRST" ]; then
     MODE="install"
     TEAM_NAME="default"
   fi
-elif is_unsupported_keyword "$FIRST"; then
-  printf 'ERROR:teams-setup has no %s state -- a team either exists or it does not. Use: status | install | upgrade | uninstall | purge\n' "$FIRST"
-  exit 1
 elif is_keyword "$FIRST"; then
   MODE="$FIRST"
   if [ -n "$REST" ]; then
@@ -89,5 +100,10 @@ fi
 printf 'MODE:%s\n' "$MODE"
 printf 'TEAM_NAME:%s\n' "$TEAM_NAME"
 [ -n "$PROMPT" ] && printf 'PROMPT:%s\n' "$PROMPT"
+# The three metadata scalars every artifact this run writes must carry. Emitted here so the skill
+# never has to guess a version or invent a date spelling.
+printf 'PLUGIN_VERSION:%s\n' "$PLUGIN_VERSION"
+printf 'GENERATED_BY:brewcode:teams-setup\n'
+printf 'LAST_UPDATED:%s\n' "$(date +%F)"
 
 exit 0

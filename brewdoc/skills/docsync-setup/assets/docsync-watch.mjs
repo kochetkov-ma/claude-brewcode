@@ -1,9 +1,12 @@
 #!/usr/bin/env node
+// brewcode-meta: version=5.1.0 generated_by=brewdoc:docsync-setup
 /**
  * docsync-watch — PostToolUse:Read hook (self-contained, project-local)
  *
- * When a tracked .md file is read: record it in the session touched-set. Silent —
- * no context injection mid-turn (the Stop gate decides whether to nag).
+ * When a tracked .md file is read: record it in the session touched-set. Silent
+ * BY DESIGN — a Read fires constantly and mid-turn context injection on every one
+ * would be noise. A read-only doc with no `last_updated` still produces a signal:
+ * the Stop gate reports undated touched docs alongside stale ones.
  *
  * SELF-CONTAINED: helpers inlined, Node built-ins only, pure ESM. Reads project
  * state from <cwd>/.claude/docsync/ at runtime. Never throws, always exits 0.
@@ -33,6 +36,9 @@ function statePath(cwd) { return join(cwd, '.claude', 'docsync', 'state.json'); 
 function loadConfig(cwd) {
   const c = readJson(join(cwd, '.claude', 'docsync', 'config.json'), {});
   return {
+    // `disable` flips this to false and leaves everything else in place. Absent = on,
+    // so a config written before the toggle existed keeps working.
+    enabled: c.enabled !== false,
     threshold_days: Number.isInteger(c.threshold_days) && c.threshold_days > 0 ? c.threshold_days : 7,
     exclude: Array.isArray(c.exclude) ? c.exclude : []
   };
@@ -85,12 +91,17 @@ function relOf(cwd, fp) {
   const abs = isAbsolute(fp) ? fp : join(cwd, fp);
   return relative(cwd, abs);
 }
+// doc_type default: absent or unrecognized => 'user'. Only 'skip' removes a file from scope.
+function docTypeOf(fields) {
+  const v = String(fields.doc_type || '').trim().toLowerCase();
+  return (v === 'llm' || v === 'user' || v === 'skip') ? v : 'user';
+}
 function isTracked(cwd, fp, cfg) {
   if (!fp || !fp.endsWith('.md')) return false;
   const rel = relOf(cwd, fp);
   if (!rel || rel.startsWith('..') || isAbsolute(rel)) return false;
   if (isExcluded(rel, cfg.exclude)) return false;
-  if ((parseFm(join(cwd, rel)).fields.doc_type || '') === 'skip') return false;
+  if (docTypeOf(parseFm(join(cwd, rel)).fields) === 'skip') return false;
   return true;
 }
 // ---------------------------------------------------------------------------
@@ -103,6 +114,7 @@ async function main() {
     const fp = input.tool_input && input.tool_input.file_path;
 
     const cfg = loadConfig(cwd);
+    if (!cfg.enabled) { output({}); return; } // `disable`: registered but inert
     if (isTracked(cwd, fp, cfg)) recordTouched(cwd, sessionId, relOf(cwd, fp));
     output({});
   } catch (err) {

@@ -13,14 +13,23 @@ Read `.claude/e2e/config.json`.
    agents actually load; it is the one this mode updates
 2. Read base rules: `${CLAUDE_SKILL_DIR}/references/e2e-rules.md` (upstream reference, for diffing)
 3. Read the condensed export (if exists): `.claude/rules/e2e-conventions.md`
-4. Check freshness: compare lastSetup date from config with current date
+4. Check freshness: compare the `version` stamped in `config.json` with the `PLUGIN_VERSION:` line
+   Phase 0's `detect-mode.sh` printed. Different (or absent) -> say so in the table below; L5
+   re-stamps every artifact either way, so this run always clears the staleness `status` reported
 5. Present current state:
 
-| Source | Rules Count | Last Updated |
-|--------|-------------|-------------|
-| Live (`{config.rulesPath}`) | {N} | {date} |
-| Base (plugin) | {N} | {date} |
-| Conventions export | {N or "none"} | {date or "N/A"} |
+| Source | Rules Count | Version | Last updated |
+|--------|-------------|---------|--------------|
+| Live (`{config.rulesPath}`) | {N} | its frontmatter `version` | its frontmatter `last_updated` |
+| Base (plugin `references/e2e-rules.md`) | {N} | `PLUGIN_VERSION:` | -- (ships with the plugin) |
+| Conventions export (`.claude/rules/e2e-conventions.md`) | {N or "none"} | its frontmatter `version` | its frontmatter `last_updated` |
+
+> Every cell above has exactly one source. The plugin baseline carries no per-file stamp and cannot:
+> it ships INSIDE the plugin, so its version IS `PLUGIN_VERSION` by definition and a stamp would only
+> be a second copy that can go stale. Its `Last updated` is therefore `--`, not a guess.
+> A row whose file has no frontmatter at all is a pre-standard artifact -> print
+> `stale (legacy, unstamped)`, never `unknown`: a word that sorts against real semver turns a failed
+> read into a confident verdict. L5 re-stamps it.
 
 > `{config.rulesPath}` missing -> "Run `/brewcode:e2e install` first." STOP. Never fall back to the
 > plugin copy: the agents cannot read it.
@@ -121,6 +130,24 @@ Options:
 > Never write back into the plugin's `references/e2e-rules.md`. It is the upstream baseline, it is
 > read-only for this skill, and a plugin update overwrites it.
 
-Update `config.json` lastSetup date.
+Re-stamp the artifact metadata on EVERY existing artifact below, from the Phase 0 `PLUGIN_VERSION:` /
+`GENERATED_BY:` / `LAST_UPDATED:` lines — one command, one date spelling (`date +%F`), no hardcoding:
 
-Summary: rules added/modified/removed, sources breakdown.
+| File | Keys |
+|------|------|
+| `.claude/e2e/config.json` | `version`, `generated_by`, `last_updated` (top level, snake_case). Drop a leftover `lastSetup` |
+| `{config.rulesPath}` | frontmatter `doc_type: llm`, `version`, `generated_by`, `last_updated` |
+| `.claude/rules/e2e-conventions.md` (if it exists) | same four, after its own `paths:` / `description:` |
+| `.claude/agents/e2e-*.md` (each) | same four, after the agent's own frontmatter keys |
+
+> **The re-stamp is UNCONDITIONAL — it is not gated on a rules change.** `rules` is the remedy
+> `status` prescribes for `config.version != PLUGIN_VERSION`, so a run that only re-stamps is a
+> legitimate and expected run. Gating it on "everything this run wrote" would make the loop
+> permanent: `status` says stale -> `rules` finds nothing to change -> `rules` reports success ->
+> `status` says stale again, forever. Cancelling at L4 skips the rules diff, not this step.
+
+> Re-stamping is METADATA-ONLY. Touch just the four keys in the first frontmatter block (and the
+> three JSON keys); leave every other key, the agents' Immutable Traits and all prose byte-identical.
+> An artifact whose body you did not change must differ by exactly those keys.
+
+Summary: rules added/modified/removed, sources breakdown, artifacts re-stamped (count + version).

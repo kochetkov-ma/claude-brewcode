@@ -3,6 +3,33 @@ set -eu
 
 ARGS="${1:-}"
 
+# Artifact-metadata standard. The plugin version that produces every artifact this run writes,
+# read from the manifest by SELF-LOCATION: scripts/ -> e2e/ -> skills/ -> <plugin root>.
+# Correct in the dev checkout AND in the installed cache. NEVER hardcoded, never a template version.
+# `|| true` on both branches: under `set -e` a failing command substitution aborts the script.
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+PLUGIN_JSON="$SCRIPT_DIR/../../../.claude-plugin/plugin.json"
+PLUGIN_VERSION=""
+if [ -f "$PLUGIN_JSON" ]; then
+  if command -v jq >/dev/null 2>&1; then
+    PLUGIN_VERSION=$(jq -r '.version // empty' "$PLUGIN_JSON" 2>/dev/null || true)
+  else
+    PLUGIN_VERSION=$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$PLUGIN_JSON" 2>/dev/null | head -1 || true)
+  fi
+fi
+# HARD FAIL, never a placeholder value. A word like `unknown` carries no `{}<>`, so setup-status's
+# PLACEHLD test cannot catch it: `sort -V` would compare it against the real version and print a
+# confident `AHEAD unknown > X.Y.Z`, and an artifact stamped that way can never clear its own
+# staleness. Emitting the raw `{PLUGIN_VERSION}` token instead would only defer the failure until
+# after the artifact is on disk. The manifest ships with the plugin, so an unreadable one is a broken
+# install - stop before install/rules writes config.json, the rules file or a single agent. Every
+# mode goes through this one script and the skill treats any `ERROR:` line as STOP, status included:
+# a status run that cannot name the running version has nothing to compare a stamp against.
+case "$PLUGIN_VERSION" in
+  [0-9]*.[0-9]*.[0-9]*) : ;;
+  *) printf 'ERROR:cannot resolve plugin version (X.Y.Z) from %s - refusing to stamp artifacts with a fake version\n' "$PLUGIN_JSON"; exit 1 ;;
+esac
+
 # Parse first word and remainder
 FIRST=""
 REST=""
@@ -54,5 +81,10 @@ fi
 
 printf 'MODE:%s\n' "$MODE"
 [ -n "$PROMPT" ] && printf 'PROMPT:%s\n' "$PROMPT"
+# The three metadata scalars every artifact this run writes must carry. Emitted here so the skill
+# never has to guess a version or invent a date spelling.
+printf 'PLUGIN_VERSION:%s\n' "$PLUGIN_VERSION"
+printf 'GENERATED_BY:brewcode:e2e\n'
+printf 'LAST_UPDATED:%s\n' "$(date +%F)"
 
 exit 0

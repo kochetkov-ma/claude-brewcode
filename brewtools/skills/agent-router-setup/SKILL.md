@@ -55,10 +55,12 @@ Config and roster are read from the **nearest ancestor of `cwd` holding a `.clau
 
 ## BT_ROOT Resolver (use in EVERY bash block)
 
-`$CLAUDE_PLUGIN_ROOT` is NOT inherited by the Bash tool in main-conversation slash invocations. Resolve dynamically:
+The plugin root is resolved from the skill's OWN directory (the `CLAUDE_SKILL_DIR` prompt substitution), never from `CLAUDE_PLUGIN_ROOT` -- that env var is not exported to a skill's Bash tool:
 
 ```bash
-BT_ROOT="${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::')}"
+SD="${CLAUDE_SKILL_DIR}"
+if [ -n "$SD" ] && [ -f "$SD/../../.claude-plugin/plugin.json" ]; then BT_ROOT=$(cd "$SD/../.." && pwd); else BT_ROOT=$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::'); fi
+[ -n "$BT_ROOT" ] || { echo "ERROR: cannot locate brewtools plugin root -- install/update brewtools first."; exit 1; }
 test -d "$BT_ROOT/skills/agent-router-setup/assets" || { echo "❌ FAILED — BT_ROOT invalid: $BT_ROOT"; exit 1; }
 ```
 
@@ -80,7 +82,9 @@ Run this before anything else, in EVERY mode. Never install, re-install or remov
 **EXECUTE** using Bash tool:
 
 ```bash
-BT_ROOT="${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::')}"
+SD="${CLAUDE_SKILL_DIR}"
+if [ -n "$SD" ] && [ -f "$SD/../../.claude-plugin/plugin.json" ]; then BT_ROOT=$(cd "$SD/../.." && pwd); else BT_ROOT=$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::'); fi
+[ -n "$BT_ROOT" ] || { echo "ERROR: cannot locate brewtools plugin root -- install/update brewtools first."; exit 1; }
 A="$BT_ROOT/skills/agent-router-setup/assets"
 test -f "$A/INSTALL.md" && test -f "$A/agent-router.mjs" && test -f "$A/judge-prompt.md" || { echo "❌ FAILED — assets incomplete under BT_ROOT=$BT_ROOT"; exit 1; }
 echo "ASSETS_DIR=$A"
@@ -92,8 +96,12 @@ T2=$({ grep -c 'agent-router: checking agent fit' "$D/settings.json" 2>/dev/null
 CFG=none; [ -s "$D/brewtools/agent-router.json" ] && CFG=$(tr -d '\n ' < "$D/brewtools/agent-router.json"); CFG=${CFG:-none}
 EN=n/a; case "$CFG" in *'"enabled":true'*) EN=true;; *'"enabled":false'*) EN=false;; esac
 LV=n/a; case "$CFG" in *'"level":"strict"'*) LV=strict;; *'"level":"fast"'*) LV=fast;; esac
+CV=$({ jq -r '.version // empty' "$D/brewtools/agent-router.json" 2>/dev/null || true; }); CV=${CV:-n/a}
+PV=$({ jq -r '.version // empty' "$BT_ROOT/.claude-plugin/plugin.json" 2>/dev/null || true; }); PV=${PV:-n/a}
+STALE=n/a; [ "$CV" != "n/a" ] && [ "$PV" != "n/a" ] && { [ "$CV" = "$PV" ] && STALE=no || STALE=yes; }
 R=$({ ls "$D/agents/"*.md 2>/dev/null || true; } | wc -l | tr -d ' ')
-echo "project: hook_file=$H tier1_refs=$T1 tier2_refs=$T2 enabled=$EN level=$LV roster=$R"
+echo "project: hook_file=$H tier1_refs=$T1 tier2_refs=$T2 enabled=$EN level_recorded=$LV roster=$R"
+echo "version: config=$CV plugin=$PV stale=$STALE"
 echo "config=$CFG"
 echo "✅ status"
 ```
@@ -107,17 +115,49 @@ Field meanings — do not paraphrase them into something stronger:
 | `hook_file` | `yes`/`no` — `agent-router.mjs` present in `<repo>/.claude/hooks/` |
 | `tier1_refs` | textual count of `agent-router.mjs` mentions in `settings.json`; `0` = not wired, `1` = wired, `>1` = duplicate -> repair |
 | `tier2_refs` | count of the tier-2 `statusMessage` marker; `0` = tier 2 off, `1` = tier 2 wired |
-| `enabled` / `level` | parsed from the config; `n/a` = no config or no such key |
+| `enabled` | parsed from the config; `n/a` = no config or no such key |
+| `level_recorded` | the `level` VALUE stored in the config. It is a RECORD of an install-time choice, **not** proof of what is wired — nothing keeps it honest. `tier2_refs` is the authority on whether the LLM judge actually fires |
+| `version` / `plugin` / `stale` | the config's `version` key vs the installed brewtools version. `stale=yes` = the config was written by an older plugin and may predate a shape change -> offer `upgrade`. `n/a` on either side (pre-metadata config, or no config) = unknown, NOT "current" |
 | `roster` | number of `.claude/agents/*.md` files — **`0` means the hook has nothing to route TO**; say so before installing |
 
 These are textual counts, not JSON validation — they do not prove the entries are well-formed or attached to the right event.
 
 Read the output into a state table and PRINT it to the user:
 
-| Hook file | tier1 wired | tier2 wired | enabled | level | roster |
-|-----------|-------------|-------------|---------|-------|--------|
+| Hook file | tier1 wired | tier2 wired | enabled | level (recorded) | tier2 actual | config ver | stale | roster |
+|-----------|-------------|-------------|---------|------------------|--------------|------------|-------|--------|
 
 Effective = `hook_file=yes tier1_refs=1 enabled=true`. Anything else is NOT effective — say so plainly instead of reporting a half-state as installed.
+
+> **Never print `level` alone as if it were the truth.** Put `tier2_refs` next to it: `level_recorded=strict` with `tier2_refs=0` means the judge is NOT wired, and the config is lying. Report that mismatch explicitly and offer `level strict` (or `level fast`) to reconcile — the config value alone adds and removes nothing.
+
+### Config metadata (the three standard JSON keys)
+
+Every mode that WRITES `agent-router.json` — `install`, `upgrade`, `enable`, `disable` and both `level` operations — writes these three keys alongside the behavior keys. `doc_type` is a `.md`-frontmatter field only and never appears in a JSON carrier:
+
+```json
+{ "version": "{PLUGIN_VERSION}", "generated_by": "brewtools:agent-router-setup", "last_updated": "{LAST_UPDATED}" }
+```
+
+Resolve `version` and `last_updated` — never hardcode either. **EXECUTE** using Bash tool:
+
+```bash
+SD="${CLAUDE_SKILL_DIR}"
+if [ -n "$SD" ] && [ -f "$SD/../../.claude-plugin/plugin.json" ]; then BT_ROOT=$(cd "$SD/../.." && pwd); else BT_ROOT=$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::'); fi
+[ -n "$BT_ROOT" ] || { echo "ERROR: cannot locate brewtools plugin root -- install/update brewtools first."; exit 1; }
+PV=$(jq -r '.version // empty' "$BT_ROOT/.claude-plugin/plugin.json" 2>/dev/null || true)
+PV=${PV:-$(basename "$BT_ROOT")}
+echo "PLUGIN_VERSION=$PV LAST_UPDATED=$(date +%F)"
+```
+
+> **Why the bare form.** `CLAUDE_SKILL_DIR` is a TEXT SUBSTITUTION on the skill prompt, not an env var: CC 2.1.226 rewrites only the EXACT dollar-brace literal `{CLAUDE_SKILL_DIR}` (`replace(/\$\{CLAUDE_SKILL_DIR\}/g, dirname(skillPath))` and a string-pattern `replaceAll`). A brace-modifier form such as `:-fallback` inside the braces is therefore NOT matched, reaches the shell verbatim, and its fallback ALWAYS wins. `CLAUDE_PLUGIN_ROOT` is a real env var but is exported only to hook processes and MCP servers -- never to a skill's Bash tool -- so it is ALWAYS empty here. The skill dir is correct in a cache install AND in a `--plugin-dir` dev run; the cache glob below it is a last-resort fallback only, and it would name the INSTALLED plugin.
+
+| Guarantee | Why it holds |
+|-----------|--------------|
+| The hook ignores them | Config keys the hook does not name are ignored (`INSTALL.md` Config: *"Any key not listed above is ignored"*), so metadata cannot change routing |
+| `enabled` semantics unchanged | Only exactly `false` disables; adding sibling keys touches nothing |
+| Cannot make a valid file unparseable | They are written by the runbook's node block that re-serializes the whole object with `JSON.stringify` — never appended as raw text. A hand-appended line could break the file, and an unparseable config silently disables the whole feature |
+| `disable`/`enable` refresh `last_updated` too | Any write to the config is a write; the stamp records when the file was last written, not when it was first installed |
 
 ### Early exit
 
@@ -181,7 +221,7 @@ Every spawn prompt MUST carry:
 
 > **The level only survives if it reaches the SHELL.** `LEVEL`/`RUNBOOK` written as prose in the prompt are just text — the runbook's node blocks read them from `process.env`, and an empty `LEVEL` ABORTS the config and merge blocks (no silent `fast` fallback) instead of losing the user's choice. The spawn prompt below therefore carries the literal `export` line the agent must run FIRST, in the same Bash invocation as every runbook block. Substitute the chosen values into that `export` line, not only into the CONTEXT table.
 
-Spawn (substitute `MODE`, `LEVEL`, `RUNBOOK`, `ASSETS_DIR` from Steps 1-4 — into BOTH the CONTEXT block and the `export` line):
+Spawn (substitute `MODE`, `LEVEL`, `RUNBOOK`, `ASSETS_DIR`, `PLUGIN_VERSION`, `LAST_UPDATED` from Steps 1-4 and the Config-metadata block — into BOTH the CONTEXT block and the `export` line):
 
 ```
 Task(subagent_type="brewcode:hook-creator", prompt="
@@ -209,9 +249,9 @@ CONTEXT:
   a runbook block (a new Bash call does NOT inherit exports from the previous one).
   MODE=upgrade runs the 'UPGRADE' section, which is the INSTALL blocks replayed with the
   level read back from the existing config — never a level the user did not pick:
-    export RUNBOOK='RUNBOOK' LEVEL='LEVEL'
+    export RUNBOOK='RUNBOOK' LEVEL='LEVEL' PLUGIN_VERSION='PLUGIN_VERSION' LAST_UPDATED='LAST_UPDATED'
   Then verify before writing anything:
-    echo \"LEVEL=\$LEVEL RUNBOOK=\$RUNBOOK\"
+    echo \"LEVEL=\$LEVEL RUNBOOK=\$RUNBOOK PV=\$PLUGIN_VERSION LU=\$LAST_UPDATED\"
   If LEVEL prints empty, STOP and report — the config and merge blocks ABORT on an empty
   LEVEL by design; re-export it rather than hardcoding a value.
   Follow the runbook at RUNBOOK exactly and use ITS commands — it self-locates its source via
@@ -222,12 +262,22 @@ CONTEXT:
   Uninstall = strip own entries (tier-1 by basename, tier-2 by statusMessage), drop empty event
   arrays, delete agent-router.mjs, KEEP the config. Purge = uninstall + delete the config +
   delete the tmp markers.
+  METADATA: every mode that WRITES the config (install, upgrade, enable, disable, level) must
+  leave these three keys in agent-router.json:
+  version=\$PLUGIN_VERSION, generated_by=\"brewtools:agent-router-setup\",
+  last_updated=\$LAST_UPDATED. No doc_type — it is a .md-frontmatter field and never belongs
+  in a JSON carrier. Set them INSIDE the runbook's node block that re-serializes the
+  object with JSON.stringify — never by appending text to the file. An unparseable config
+  silently disables the whole feature, so a hand-edited append is a defect, not a shortcut.
+  Do NOT touch enabled or level while doing it: enabled is off only when exactly false, and
+  level is a record of what is wired.
 CONSUMER: Step 6 reports your result to the user; the settings.json you write is loaded by
   the NEXT Claude Code session, so a malformed merge breaks that session instead of failing
   here — report the exact paths you touched so they can be checked.
 DONE: report the settings.json path, the hooks dir, the config path with its final contents,
   and the runbook 'Verify' output if you ran it. The reported config MUST show
-  level = LEVEL — a 'fast' where the user asked for 'strict' is a FAILURE, not a detail.
+  level = LEVEL — a 'fast' where the user asked for 'strict' is a FAILURE, not a detail —
+  and version = \$PLUGIN_VERSION. Prove the file still parses: jq . <config path>.
 ")
 ```
 
@@ -237,7 +287,8 @@ Re-run the Step 1 status block and print the refreshed table, plus:
 
 - what changed (file, settings.json, config values),
 - **a NEW session is required for hook WIRING changes** (install / upgrade / level / uninstall / purge — the tier-2 entry is part of the wiring) — `/reload-plugins` is not needed, this is a plain settings.json hook;
-- **config VALUE changes** (`enabled`, `genericTypes`, `neverFlag`, `minScore`, `margin`, `intents`) are read live — no restart. `level` in the config is only a record of what is wired; changing it by hand does NOT add or remove the tier-2 entry, run `level strict` / `level fast` for that;
+- **config VALUE changes** (`enabled`, `genericTypes`, `neverFlag`, `minScore`, `margin`, `intents`) are read live — no restart. `level` in the config is only a record of what is wired; changing it by hand does NOT add or remove the tier-2 entry, run `level strict` / `level fast` for that. Report it as `level (recorded)` next to `tier2_refs`, never as the wiring itself;
+- the config `version` now written into the file, and whether `stale` flipped to `no`;
 - the honest limits, at minimum: tier 2 costs a model call on every `Agent` spawn, tier 1 matches words not meaning, everything fails open.
 
 ---
@@ -248,7 +299,7 @@ Re-run the Step 1 status block and print the refreshed table, plus:
 |------|--------|-----------|---------------|--------|-------------|
 | `status` | report only | — | — | — | — |
 | `install` | wire tier 1 (+ tier 2 if `strict`) | copied | entry merged | written | — |
-| `upgrade` | re-emit from the current plugin version at the ALREADY-configured level | re-copied | entries re-merged | values preserved | kept |
+| `upgrade` | re-emit from the current plugin version at the ALREADY-configured level | re-copied | entries re-merged | behavior values preserved, metadata re-stamped | kept |
 | `enable` | `enabled:true` | kept | kept | edited | kept |
 | `disable` | `enabled:false` — hook stays wired, becomes a no-op | kept | kept | edited | kept |
 | `uninstall` | unwire | deleted | entries stripped | **kept** | kept |
@@ -265,7 +316,7 @@ Re-install is a no-op. Scope is PROJECT only — the roster is per-project, so t
 | Condition | Response |
 |-----------|----------|
 | `BT_ROOT` resolves but `$BT_ROOT/skills/agent-router-setup/assets` missing | ERROR: `agent-router: assets not found under $BT_ROOT — plugin cache incomplete.` STOP. |
-| Neither `$CLAUDE_PLUGIN_ROOT` set nor any cached plugin dir found | ERROR: `agent-router: cannot locate plugin root — install/update brewtools first.` STOP. |
+| Neither the skill dir nor any cached plugin dir yields `.claude-plugin/plugin.json` | ERROR: `agent-router: cannot locate plugin root — install/update brewtools first.` STOP. |
 | Status shows installed + vague intent | Print status, list available operations, STOP. Do not re-install. |
 | User asks for a global install | Refuse and explain: the roster is per-project, `~/.claude/*` is protected, and a global hook would route every repo against one repo's agents. Offer the project install. |
 | `strict` requested (or asked about) | BEFORE writing anything, state the cost: all matching hooks run in parallel and tier 1 cannot gate tier 2, so a haiku call fires on EVERY `Agent` spawn. Say it in the question or the plan, never only in the final report. |
@@ -286,7 +337,9 @@ Verify the 3 assets exist and the hook parses before delegating.
 **EXECUTE** using Bash tool:
 
 ```bash
-BT_ROOT="${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::')}"
+SD="${CLAUDE_SKILL_DIR}"
+if [ -n "$SD" ] && [ -f "$SD/../../.claude-plugin/plugin.json" ]; then BT_ROOT=$(cd "$SD/../.." && pwd); else BT_ROOT=$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::'); fi
+[ -n "$BT_ROOT" ] || { echo "ERROR: cannot locate brewtools plugin root -- install/update brewtools first."; exit 1; }
 A="$BT_ROOT/skills/agent-router-setup/assets"
 test -d "$A" || { echo "❌ smoke FAILED — assets dir missing: $A"; exit 1; }
 for f in agent-router.mjs judge-prompt.md INSTALL.md; do

@@ -1,6 +1,6 @@
 # Semble
 
-Lifecycle skill for **`semble_code`** — a semantic code-search MCP server ([semble](https://pypi.org/project/semble/), pinned to `0.5.2`) wired into any project: install, audit, configure, repair, upgrade, enable, disable, reindex, uninstall.
+Lifecycle skill for **`semble_code`** — a semantic code-search MCP server ([semble](https://pypi.org/project/semble/), pinned to `0.5.4`) wired into any project: install, audit, configure, repair, upgrade, enable, disable, reindex, uninstall.
 
 One command covers the whole lifecycle. It always reports the current state **before** it changes anything, and every mutation is delegated to a script — the skill itself only routes.
 
@@ -40,7 +40,7 @@ The seven canonical modes every `-setup` skill shares, in order:
 |------|--------|---------|
 | `status` | full report: prereqs, MCP, cache, guidance, agents, coverage, state | no |
 | `install` | install `uv` (and, if you accept, `coreutils`), register `semble_code` at user scope, **wire the rule, the CLAUDE.md block, the three hooks, the permissions and the agent frontmatter**, checkpoint for reload | yes |
-| `upgrade` | compare the recorded pin with `0.5.2`, re-register if different | yes |
+| `upgrade` | compare the recorded pin with `0.5.4`, re-register if different | yes |
 | `enable` | back on: verify, warm, `phase=ready` | yes |
 | `disable` | `enabled=false` — hooks go silent, nothing is deleted | yes |
 | `uninstall` | four flavours: `integration` / `mcp` / `cli` / `purge` | yes |
@@ -63,19 +63,20 @@ Plus three extras specific to a search index:
 | Surface | Location |
 |---------|----------|
 | MCP server | `~/.claude.json` `.mcpServers.semble_code`, **user scope** (`-s user` is mandatory — the CLI default is `local`), with `"alwaysLoad": true` so the two tools are never deferred behind `ToolSearch`. Only `claude mcp add-json` can write that key, so that is the form the skill uses |
-| Command | `uvx --from 'semble[mcp]==0.5.2' semble --content <SEMBLE_CONTENT_ARGS>` — the content set lives in `scripts/lib/semble-common.sh` as `SEMBLE_CONTENT_ARGS` and is deliberately not repeated here. Every consumer must pass exactly that set: semble keys its cache directory by project path alone but rejects a cached index whose stored content set differs, so two consumers with different sets evict each other on every call |
+| Command | `uvx --from 'semble[mcp]==0.5.4' semble --content <SEMBLE_CONTENT_ARGS>` — the content set lives in `scripts/lib/semble-common.sh` as `SEMBLE_CONTENT_ARGS` and is deliberately not repeated here. Every consumer must pass exactly that set: semble keys its cache directory by project path alone but rejects a cached index whose stored content set differs, so two consumers with different sets evict each other on every call |
 | Cache root | macOS `~/Library/Caches/semble-code` · Linux `${XDG_CACHE_HOME:-~/.cache}/semble-code` |
 | Reserved docs root | same path with a `semble-docs` leaf — created empty, never registered |
 | State | `<repo>/.claude/semble/state.json` |
 | Rule | `<repo>/.claude/rules/semble-first.md` |
+| Ignore file | `<repo>/.sembleignore` — read per-directory by `semble/index/file_walker.py:_load_ignore_for_dir` (gitignore syntax via `pathspec`; `core.excludesFile` is NOT honoured). Keeps generated/vendored trees (`.claude/tmp/`, `.claude/reports/`, build output, minified bundles) out of the corpus; deliberately never excludes `.claude/{skills,agents,rules,commands,hooks}/`. Same managed-file policy as the rule: user edits are reported, not clobbered, and `--force` backs up first |
 | CLAUDE.md | a marked `<!-- BEGIN brewcode:semble -->` block |
-| Hooks | `<repo>/.claude/hooks/semble-session.mjs` (SessionStart) + `semble-reminder.mjs` (PreToolUse, advisory only) + `semble-explore.mjs` (SubagentStart, matcher `Explore` — tells the spawned Explore subagent it can call `mcp__semble_code__search` without a `ToolSearch` first) |
+| Hooks | `<repo>/.claude/hooks/semble-session.mjs` (SessionStart — state and reload messaging) + `semble-prefetch.mjs` (UserPromptSubmit — runs one semble search on the prompt and injects the top-3 candidate **paths**, never snippets) + `semble-stats.mjs` (PostToolUse + PostToolUseFailure — pure observer, JSONL telemetry). The two advisory hooks of earlier versions (`semble-reminder.mjs`, `semble-explore.mjs`) are **retired in 5.0.0**: they converted at 0/18 and 0/11 with delivery proven, so `install`/`upgrade` deletes the files and un-wires their rows |
 | Permissions | `<repo>/.claude/settings.json` -> exactly `mcp__semble_code__search` and `mcp__semble_code__find_related`, never a wildcard |
 | Agents | `<repo>/.claude/agents/**/*.md` get the two tool names; agents with no `tools:` key inherit and are left untouched. Global agents are never touched by `install` |
 
 ### The state file and its phases
 
-`.claude/semble/state.json` is what the three hooks read, so its `phase` is a claim about reality and is guarded by a transition machine:
+`.claude/semble/state.json` is what `semble-session.mjs` and `semble-prefetch.mjs` read, so its `phase` is a claim about reality and is guarded by a transition machine:
 
 ```
 absent -> prereq_ready -> awaiting_reload -> verifying -> ready
@@ -85,7 +86,7 @@ absent -> prereq_ready -> awaiting_reload -> verifying -> ready
 
 `ready` is reachable **only** from `verifying` — there is no `awaiting_reload -> ready` shortcut. `resume` therefore enters `verifying` before it verifies anything and writes `ready` only after, so a run that dies half-way leaves an honest record rather than a phase that claims a verification nobody performed. Re-registration (`install` / `upgrade`) parks the phase back at `awaiting_reload` from any state where a setup exists, and `disable` reaches `disabled` from any of them too; only `absent -> disabled` stays illegal.
 
-Fields the installer owns — `resumePrompt`, `cacheRoot`, `repoHash`, `approvedVersion`, `projectRoot`, `schema` — are recomputed on **every** write, not just when the file is created, so a state file written by an older version stops advertising stale values. Fields you and the run own — `enabled`, `phase`, `completed`, `notes` — are never reset as a side effect.
+Fields the installer owns — `resumePrompt`, `cacheRoot`, `repoHash`, `approvedVersion`, `projectRoot`, `schema`, plus the artifact metadata `version` / `generated_by` / `last_updated` — are recomputed on **every** write, not just when the file is created, so a state file written by an older version stops advertising stale values. Fields you and the run own — `enabled`, `phase`, `completed`, `notes` — are never reset as a side effect.
 
 Installation is **uvx-ephemeral** by default: no `semble` on `PATH`. That is deliberate — any unrecognized argv makes `semble` start a *blocking* stdio server, so a stray bare invocation would hang. `uv tool install` is opt-in.
 
@@ -102,9 +103,12 @@ Installation is **uvx-ephemeral** by default: no `semble` on `PATH`. That is del
 
 | Fact | Consequence |
 |------|-------------|
-| **No watcher, no daemon.** semble 0.5.2 has no background thread or service (its README says otherwise; the code does not) | Nothing is ever started or stopped. Staleness is re-checked inside each tool call, behind a `3x last-build-duration` cooldown |
+| **No watcher, no daemon.** semble 0.5.4 has no background thread or service | Nothing is ever started or stopped. Staleness is re-checked inside each tool call, behind a `3x last-build-duration` cooldown |
 | The embedding model is pre-loaded at server start and calls block until it is ready | The **first query on a cold cache downloads hundreds of MB and is slow** — allow up to 600 s. Offline + cold HuggingFace cache = every call errors |
 | The corpus is exactly `SEMBLE_CONTENT_ARGS` | `.json`/`.json5`/`.csv`/`.tsv`/`.psv` are excluded from **every** content type — unreachable even with `--content all` — and `.mdx`/`.txt` belong to no bucket at all. Use `rg` for those. The per-suffix table is `references/language-coverage.md` |
+| One exception, and it is not configurable away | A `!` un-ignore pattern ending in a file extension skips the extension filter, so a negated `.json`/`.png` lands in the index at any `--content` setting — 5.9% of this workspace's index was one such lockfile, plus 143 chunks of decoded PNG. `.sembleignore` re-ignores win, because its lines are concatenated after `.gitignore`'s and the last match decides |
+| `--content config` is 0.57% of the corpus and stays | Those 53 chunks are all six `.github/workflows/*.yml` and four `docker-compose*.yml` — the whole CI/CD surface, and the only reachable answer to the deployment questions. It was never what pulled the lockfile in |
+| semble wins behaviour, `rg` wins enumeration — measured, 16 questions | Behaviour and vocabulary-mismatch: semble 8 of 9. Exhaustive enumeration: semble lost 2 of 5, and `hooks.json` questions are unanswerable in principle because `.json` is unreachable |
 | Adding docs to this corpus is not a fix | The per-repo cache dir is `sha256(repo path)` and does not encode the content type, so a docs index and a code index collide on one directory and invalidate each other on every call. Hence the separately reserved docs root |
 | A newly registered MCP server is invisible to the running session | `install` stops at a reload checkpoint; `/brewcode:semble-setup resume` finishes the job in the new session |
 | `semble clear index` wipes **every** index under the cache root | There is no per-repo rebuild CLI, so `reindex` deletes exactly one resolved `<code root>/<64-hex>` directory, guarded and confirmed |
@@ -154,7 +158,7 @@ Every script takes `--json` and uses the same exit codes: `0` ok · `1` hard fai
 | First search hangs for minutes | the embedding model is downloading | wait (up to 600 s); it happens once per model |
 | Every call errors offline | model pre-load cannot reach HuggingFace | run once online, or set `SEMBLE_NO_NETWORK=1` to skip warm steps |
 | `search` rejects the call | `repo` is missing — it is required | pass the absolute project root |
-| A `.html` / `.json` file is never found | not in this corpus by design | use `rg` |
+| A `.json` / `.csv` / `.mdx` / `.txt` file is never found | not in this corpus by design (`.html`/`.htm` **is** indexed, in the docs bucket) | use `rg` |
 | Status says `partial` | half-wired — `hooks N/4 wired` counts only entries that are present **and** field-conforming; a hook whose `timeout`, `args` or `command` drifted is counted in `driftedCount`, not in `wiredCount` | `/brewcode:semble-setup install` re-runs idempotently and repairs each drifted field in place |
 | `hooks 4/4 wired` but a hook never fires | a duplicate entry for the same event/matcher/script — reported as `duplicateCount` with a `drift[]` row, never as `wired` | re-run `install`; the merge collapses duplicates |
 | `malformed` | `~/.claude.json` or `.mcp.json` is not valid JSON | the skill refuses to write; fix that file by hand, then re-run |

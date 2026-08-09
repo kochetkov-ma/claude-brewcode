@@ -13,6 +13,9 @@ const EXPECTED_SKILLS = {
   brewdoc: ['md-to-pdf'],
   brewtools: ['manager-setup', 'task-board-setup', 'text-human', 'text-optimize', 'think-short-setup']
 };
+// Canonical setup-skill mode set, in the mandated order. A skill declares the subset it
+// supports in its source `argument-hint`; the Codex variant must document each one.
+const CANONICAL_MODES = ['status', 'install', 'upgrade', 'enable', 'disable', 'uninstall', 'purge'];
 const MANUAL_NATIVE_SKILLS = new Set([
   'brewcode/convention', 'brewcode/rules', 'brewtools/manager-setup', 'brewtools/task-board-setup',
   'brewtools/think-short-setup'
@@ -111,9 +114,24 @@ for (const [plugin, [skillCount, agentCount]] of Object.entries(EXPECTED)) {
     const openai = path.join(skillsRoot, entry.name, 'agents', 'openai.yaml');
     if (!fs.existsSync(openai)) fail(`${plugin}/${entry.name}: missing agents/openai.yaml`);
     const sourceSkill = path.join(pluginRoot, 'skills', entry.name, 'SKILL.md');
+    const sourceText = fs.readFileSync(sourceSkill, 'utf8');
     const manual = MANUAL_NATIVE_SKILLS.has(`${plugin}/${entry.name}`);
     if (manual && source.length < 900) fail(`${plugin}/${entry.name}: native workflow is too short to preserve source phases`);
-    if (!manual && source.length < fs.readFileSync(sourceSkill, 'utf8').length * 0.75) fail(`${plugin}/${entry.name}: transformed workflow lost substantive source content`);
+    if (!manual && source.length < sourceText.length * 0.75) fail(`${plugin}/${entry.name}: transformed workflow lost substantive source content`);
+
+    // Mode parity. A MANUAL_NATIVE variant is hand-authored and does NOT track source
+    // SKILL.md edits, so a mode added or renamed upstream reaches nobody here and
+    // regeneration will never notice. The source argument-hint is the contract: every
+    // canonical mode it declares must be documented in the Codex variant. Checked for
+    // every skill, not only the manual ones -- a transformed variant satisfies it for
+    // free, which is exactly why the manual ones are the only place it can rot.
+    const sourceHint = sourceText.match(/^argument-hint:\s*(.*)$/m)?.[1] ?? '';
+    for (const mode of CANONICAL_MODES) {
+      if (!new RegExp(`[[|]${mode}[\\]|]`).test(sourceHint)) continue;
+      if (!new RegExp('`' + mode + '`').test(source)) {
+        fail(`${plugin}/${entry.name}: Codex variant omits canonical mode \`${mode}\` declared by the source argument-hint`);
+      }
+    }
 
     const sourceRoot = path.join(pluginRoot, 'skills', entry.name);
     const targetRoot = path.join(skillsRoot, entry.name);
@@ -235,4 +253,10 @@ if (errors.length) {
   process.stderr.write(`${errors.map(error => `- ${error}`).join('\n')}\n`);
   process.exit(1);
 }
-process.stdout.write(`Codex compatibility validation passed: 3 plugins, 12 skills, 4 agents, ${retainedResources} mapped source resources.\n`);
+// Derived from EXPECTED, never hardcoded: a literal count silently goes stale the moment a
+// skill or agent is added or dropped, and the banner then lies about a run that did pass.
+const totals = Object.values(EXPECTED).reduce(
+  (acc, [skills, agents]) => ({ skills: acc.skills + skills, agents: acc.agents + agents }),
+  { skills: 0, agents: 0 }
+);
+process.stdout.write(`Codex compatibility validation passed: ${Object.keys(EXPECTED).length} plugins, ${totals.skills} skills, ${totals.agents} agents, ${retainedResources} mapped source resources.\n`);

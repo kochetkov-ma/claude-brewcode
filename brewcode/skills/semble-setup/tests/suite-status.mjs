@@ -297,7 +297,7 @@ function clearState() {
   check('10-platform', j.platform, process.platform === 'darwin' ? 'darwin' : 'linux',
     'platform must be the resolved uname family');
   check('10-projectRoot', j.projectRoot, PROJECT, 'projectRoot must be the injected SEMBLE_PROJECT_ROOT');
-  check('10-pin', j.pin, { approved: '0.5.2', spec: 'semble[mcp]==0.5.2' }, 'pin must be the approved 0.5.2 spec');
+  check('10-pin', j.pin, { approved: '0.5.4', spec: 'semble[mcp]==0.5.4' }, 'pin must be the approved 0.5.4 spec');
 
   for (const sec of ['mcp', 'cache', 'guidance', 'agents', 'coverage']) {
     check(`11-${sec}-error-type`, typeof (j[sec] || {}).error, 'string',
@@ -307,7 +307,7 @@ function clearState() {
   }
 
   check('12-state', j.state,
-    { present: false, phase: 'absent', enabled: null, completed: [], updatedAt: null },
+    { present: false, phase: 'absent', enabled: null, completed: [], last_updated: null },
     'a missing state file must read as phase=absent, present=false');
   check('13-verdict', j.verdict, 'partial',
     'no sibling can report -> mcp state unknown -> partial, never a false not_installed');
@@ -407,14 +407,14 @@ for (const [file, state, verdict, nextStep] of FIXTURE_STATES) {
   ];
 
   for (const [tag, st, verdict, nextStep] of cases) {
-    writeState({ schema: 1, profile: 'code', ...st, completed: ['prereq'], updatedAt: '2026-08-02T18:10:47.000Z' });
+    writeState({ schema: 1, profile: 'code', ...st, completed: ['prereq'], last_updated: '2026-08-02' });
     const r = runStatus(['--json'], { SEMBLE_STUB_DETECT: DETECT_FILE });
     const j = safeParse(r.stdout);
     check(`30-${tag}-exit`, r.status, 0, `phase=${st.phase} must exit 0 without --strict`);
     check(`30-${tag}-verdict`, j.verdict, verdict, `mcp=correct + phase=${st.phase} + enabled=${st.enabled} -> ${verdict}`);
     check(`30-${tag}-nextStep`, j.nextStep, nextStep, `phase=${st.phase} next step`);
     check(`30-${tag}-state`, j.state,
-      { present: true, phase: st.phase, enabled: st.enabled, completed: ['prereq'], updatedAt: '2026-08-02T18:10:47.000Z' },
+      { present: true, phase: st.phase, enabled: st.enabled, completed: ['prereq'], last_updated: '2026-08-02' },
       `phase=${st.phase} state section`);
   }
 
@@ -424,7 +424,7 @@ for (const [file, state, verdict, nextStep] of FIXTURE_STATES) {
     dump: { user: null, local: null, project: null, upstreamUser: null, upstreamLocal: null, malformed: [], projectEnabled: null },
     expected: {}, diff: [], connectivity: 'unknown',
   });
-  writeState({ schema: 1, phase: 'prereq_ready', enabled: true, completed: [], updatedAt: '2026-08-02T18:10:47.000Z' });
+  writeState({ schema: 1, phase: 'prereq_ready', enabled: true, completed: [], last_updated: '2026-08-02' });
   const notInstalled = safeParse(runStatus(['--json'], { SEMBLE_STUB_DETECT: DETECT_FILE }).stdout);
   check('31-not-installed', notInstalled.verdict, 'not_installed',
     'mcp=absent + phase=prereq_ready is not_installed, not partial');
@@ -440,6 +440,105 @@ for (const [file, state, verdict, nextStep] of FIXTURE_STATES) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 4b. A v1-shaped project half downgrades ready -> partial
+//
+// mcp=correct + phase=ready is not enough: the whole migration path is
+// unreachable if a repo still carrying the retired hooks, stale settings
+// entries or a half-wired hook set reports `ready`/`none`.
+// ═══════════════════════════════════════════════════════════════════════════
+{
+  const GUID_STUB = join(STAGE, 'semble-guidance.sh');
+  const GUID_FILE = join(BIN, 'guidance.json');
+  writeFileSync(GUID_STUB, `#!/usr/bin/env bash
+set -euo pipefail
+cat "\${SEMBLE_STUB_GUIDANCE:?}"
+`);
+  chmodSync(GUID_STUB, 0o755);
+
+  installClaudeJson('correct.json');
+  const dump = dumpFromClaudeJson('correct.json');
+  setDetect({ schema: 1, state: 'correct', dump, expected: {}, diff: [], connectivity: 'connected' });
+  writeState({ schema: 1, phase: 'ready', enabled: true, completed: ['prereq', 'mcp'], last_updated: '2026-08-02' });
+
+  const healthy = {
+    rule: { state: 'managed' }, ignore: { state: 'managed' }, claudeMd: { state: 'managed' },
+    permissions: { wired: true },
+    hooks: {
+      settingsFile: join(PROJECT, '.claude', 'settings.json'),
+      session: { file: 'present' }, prefetch: { file: 'present' }, stats: { file: 'present' },
+      retired: [], wiredCount: 4, wantCount: 4, staleEntries: 0,
+    },
+  };
+  const withHooks = (patch) => {
+    const g = JSON.parse(JSON.stringify(healthy));
+    Object.assign(g.hooks, patch);
+    return g;
+  };
+  const guidRun = (payload) => {
+    writeFileSync(GUID_FILE, JSON.stringify(payload));
+    const env = { SEMBLE_STUB_DETECT: DETECT_FILE, SEMBLE_STUB_GUIDANCE: GUID_FILE };
+    const j = safeParse(runStatus(['--json'], env).stdout);
+    // `reason` lives only in the human report - the JSON envelope is fixed.
+    const line = runStatus([], env).stdout.split('\n').find((l) => / (ready|partial|verifying|disabled|error|reload_required|not_installed) - /.test(l)) || '';
+    j.__reason = line.slice(line.indexOf(' - ') + 3);
+    return j;
+  };
+
+  const ok = guidRun(healthy);
+  check('33-healthy-verdict', ok.verdict, 'ready',
+    'a fully migrated project half must leave the ready verdict alone');
+  check('33-healthy-nextStep', ok.nextStep, 'none', 'ready means there is nothing to run');
+
+  // This is the exact platfrom shape that used to report ready/none.
+  const v1 = guidRun(withHooks({
+    retired: ['semble-reminder.mjs', 'semble-explore.mjs'],
+    prefetch: { file: 'missing' }, wiredCount: 1, wantCount: 4, staleEntries: 5,
+  }));
+  check('34-v1-verdict', v1.verdict, 'partial',
+    'a v1-shaped repo (retired hooks + stale entries + 1/4 wired) must never report ready');
+  check('34-v1-nextStep', v1.nextStep, 'Run /brewcode:semble-setup install',
+    'and it must name the command that performs the migration');
+  check('34-v1-reason', v1.__reason,
+    'retired hooks on disk: semble-reminder.mjs, semble-explore.mjs; 5 stale settings entries; hooks wired 1/4',
+    'the reason must name all three defects, so the user knows what install will repair');
+
+  const retiredOnly = guidRun(withHooks({ retired: ['semble-reminder.mjs'] }));
+  check('35-retired-verdict', retiredOnly.verdict, 'partial',
+    'a retired hook file still on disk is enough on its own');
+  check('35-retired-reason', retiredOnly.__reason, 'retired hooks on disk: semble-reminder.mjs',
+    'one retired file, one clause');
+
+  const staleOnly = guidRun(withHooks({ staleEntries: 1 }));
+  check('36-stale-verdict', staleOnly.verdict, 'partial',
+    'a settings entry pointing at an older plugin version is enough on its own');
+  check('36-stale-reason', staleOnly.__reason, '1 stale settings entry',
+    'the singular clause is singular');
+
+  const halfWired = guidRun(withHooks({ wiredCount: 3, wantCount: 4 }));
+  check('37-wiring-verdict', halfWired.verdict, 'partial',
+    'a missing sibling hook registration is enough on its own');
+  check('37-wiring-reason', halfWired.__reason, 'hooks wired 3/4', 'the reason carries the counts');
+
+  // An absent count is not a defect: a report that never collected the wiring
+  // numbers must not be read as a half-wired repo.
+  const noCounts = guidRun(withHooks({ wiredCount: 0, wantCount: 0 }));
+  check('38-nocounts-verdict', noCounts.verdict, 'ready',
+    'wantCount=0 means the counts were not reported - never downgrade on a missing measurement');
+
+  // The downgrade only ever applies to `ready`; it must not overwrite a
+  // stronger verdict that another signal already produced.
+  writeState({ schema: 1, phase: 'verifying', enabled: true, completed: [], last_updated: '2026-08-02' });
+  const stillVerifying = guidRun(withHooks({ retired: ['semble-reminder.mjs'], staleEntries: 2 }));
+  check('39-precedence-verdict', stillVerifying.verdict, 'verifying',
+    'a non-ready verdict outranks the guidance downgrade');
+  check('39-precedence-nextStep', stillVerifying.nextStep, 'Run /brewcode:semble-setup resume',
+    'and keeps its own next step');
+
+  rmSync(GUID_STUB, { force: true });
+  writeState({ schema: 1, phase: 'ready', enabled: true, completed: ['prereq', 'mcp'], last_updated: '2026-08-02' });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 5. --strict
 // ═══════════════════════════════════════════════════════════════════════════
 {
@@ -447,12 +546,12 @@ for (const [file, state, verdict, nextStep] of FIXTURE_STATES) {
   const dump = dumpFromClaudeJson('correct.json');
   setDetect({ schema: 1, state: 'correct', dump, expected: {}, diff: [], connectivity: 'connected' });
 
-  writeState({ schema: 1, phase: 'ready', enabled: true, completed: ['prereq', 'mcp'], updatedAt: '2026-08-02T18:10:47.000Z' });
+  writeState({ schema: 1, phase: 'ready', enabled: true, completed: ['prereq', 'mcp'], last_updated: '2026-08-02' });
   const ready = runStatus(['--json', '--strict'], { SEMBLE_STUB_DETECT: DETECT_FILE });
   check('40-strict-ready-exit', ready.status, 0, '--strict must exit 0 when verdict === ready');
   check('40-strict-ready-verdict', safeParse(ready.stdout).verdict, 'ready', 'the ready verdict itself');
 
-  writeState({ schema: 1, phase: 'verifying', enabled: true, completed: [], updatedAt: '2026-08-02T18:10:47.000Z' });
+  writeState({ schema: 1, phase: 'verifying', enabled: true, completed: [], last_updated: '2026-08-02' });
   const notReady = runStatus(['--json', '--strict'], { SEMBLE_STUB_DETECT: DETECT_FILE });
   check('41-strict-notready-exit', notReady.status, 1, '--strict must exit 1 when verdict !== ready');
   check('41-strict-notready-body', safeParse(notReady.stdout).verdict, 'verifying',
@@ -542,7 +641,7 @@ for (const [file, state, verdict, nextStep] of FIXTURE_STATES) {
   installClaudeJson('correct.json');
   const dump = dumpFromClaudeJson('correct.json');
   setDetect({ schema: 1, state: 'correct', dump, expected: {}, diff: [], connectivity: 'connected' });
-  writeState({ schema: 1, phase: 'ready', enabled: true, completed: ['prereq', 'mcp'], updatedAt: '2026-08-02T18:10:47.000Z' });
+  writeState({ schema: 1, phase: 'ready', enabled: true, completed: ['prereq', 'mcp'], last_updated: '2026-08-02' });
 
   const r = runStatus([], { SEMBLE_STUB_DETECT: DETECT_FILE });
   const lines = r.stdout.split('\n');
@@ -579,8 +678,8 @@ writeFileSync(BREW_LOG, '');
   check('83-check-status', cj.status, 'precondition', 'the status field must be precondition');
   check('83-check-schema', cj.schema, 1, 'install schema is exactly 1');
   check('83-check-uvx', cj.uvx, { present: false, version: '' }, 'uvx must be reported absent');
-  check('83-check-spec', cj.semble.spec, 'semble[mcp]==0.5.2', 'the pinned spec is never floating');
-  check('83-check-pin', cj.semble.pin, '0.5.2', 'the approved pin');
+  check('83-check-spec', cj.semble.spec, 'semble[mcp]==0.5.4', 'the pinned spec is never floating');
+  check('83-check-pin', cj.semble.pin, '0.5.4', 'the approved pin');
   check('83-check-commands', cj.commands, [], 'check runs nothing, so it records no commands');
   check('83-check-brewlog', readFileSync(BREW_LOG, 'utf8'), '', 'check must not invoke brew');
 
@@ -605,15 +704,15 @@ writeFileSync(BREW_LOG, '');
   const sj = safeParse(semNoUvx.stdout);
   check('86-semble-nouvx-exit', semNoUvx.status, 3, '`semble` without uvx must exit 3');
   check('86-semble-nouvx-commands', sj.commands,
-    ["uvx --from 'semble[mcp]==0.5.2' semble --help"],
-    'the probe command is single-quoted (zsh globs the brackets) and uses --help, never bare semble');
+    ["uvx --from 'semble[mcp]==0.5.4' semble --version"],
+    'the probe command is single-quoted (zsh globs the brackets) and uses --version (dispatch-set argv on the 0.5.4 pin), never bare semble');
   check('86-semble-resolvable', sj.semble.resolvable, false, 'nothing was resolved');
   check('86-semble-toolInstalled', sj.semble.toolInstalled, false, 'default mode is uvx-ephemeral');
 
   const semTool = runInstall(['semble', '--tool', '--json']);
   const stj = safeParse(semTool.stdout);
   check('87-tool-commands', stj.commands,
-    ["uvx --from 'semble[mcp]==0.5.2' semble --help", "uv tool install 'semble[mcp]==0.5.2'"],
+    ["uvx --from 'semble[mcp]==0.5.4' semble --version", "uv tool install 'semble[mcp]==0.5.4'"],
     '--tool adds exactly one extra command, still pinned and quoted');
 
   const all = runInstall(['all', '--json']);
@@ -747,7 +846,7 @@ writeFileSync(BREW_LOG, '');
   check('94f-all-dry-note', adj.note, 'uv/uvx not on PATH; uvx is not on PATH - install uv first',
     'the coreutils step adds nothing to the note when it is only skipped');
   check('94f-all-dry-order', adj.commands,
-    ['brew install uv', 'brew install coreutils', "uvx --from 'semble[mcp]==0.5.2' semble --help"],
+    ['brew install uv', 'brew install coreutils', "uvx --from 'semble[mcp]==0.5.4' semble --version"],
     'all runs check -> uv -> coreutils -> semble, in that order');
   check('94f-all-dry-step', adj.timeout.coreutils.status, 'skipped', 'the coreutils step is reported in `all`');
   check('94f-all-dry-brewlog', readFileSync(BREW_LOG, 'utf8'), '', 'a dry `all` installs nothing');
@@ -795,7 +894,7 @@ writeFileSync(BREW_LOG, '');
 
   const correctCfg = JSON.parse(fixtureText(join('claude-json', 'correct.json'))).mcpServers.semble_code;
   check('99-correct-args', correctCfg.args,
-    ['--from', 'semble[mcp]==0.5.2', 'semble', '--content', 'code', 'docs', 'config'],
+    ['--from', 'semble[mcp]==0.5.4', 'semble', '--content', 'code', 'docs', 'config'],
     'the correct fixture must carry the exact frozen argv');
   check('99-correct-env', correctCfg.env, { SEMBLE_CACHE_LOCATION: CACHE_CODE },
     'placeholder substitution must yield an absolute cache root');

@@ -1,14 +1,14 @@
 # MCP registration and cache layout
 
 > Ground truth for `semble_code`: what gets registered, how it is detected, where the index lives, and how a rebuild is guarded.
-> Verified against semble **0.5.2** (sdist) and Claude Code **2.1.223**. Owner: `scripts/semble-mcp.sh`, `scripts/semble-cache.sh`, `scripts/semble-state.sh`.
+> Verified against semble **0.5.4** (sdist) and Claude Code **2.1.223**. Owner: `scripts/semble-mcp.sh`, `scripts/semble-cache.sh`, `scripts/semble-state.sh`.
 
 ## Constants
 
 | Item | Value |
 |------|-------|
 | Server name | `semble_code` |
-| Pin | `'semble[mcp]==0.5.2'` — always single-quoted (zsh globs `[ ]`), never floating |
+| Pin | `'semble[mcp]==0.5.4'` — always single-quoted (zsh globs `[ ]`), never floating |
 | Scope | `user` (CLI default is `local`, so `-s user` is mandatory) |
 | Content set | `--content code docs config` (three argv tokens, this order). `docs` is what makes `.md` searchable — `files.py` puts `markdown` in `_DOC_LANGUAGES`, so a `code config` corpus indexes **zero** markdown. Single source of truth: `SEMBLE_CONTENT_ARGS` in `lib/semble-common.sh`; the MCP registration and every CLI invocation must pass it verbatim |
 | `alwaysLoad` | `true` — **mandatory**. Top-level optional boolean on the stdio server object (Claude Code 2.1.226 zod schema; `isDeferredTool()` returns false when set). With `ENABLE_TOOL_SEARCH=true` the MCP tool schemas are deferred, so without this key the model must run `ToolSearch` before it can call `mcp__semble_code__search` — every nudge points at a tool it cannot see. There is **no `claude mcp add` flag** for it; only `add-json` can write it |
@@ -27,7 +27,7 @@ Primary — what `semble-mcp.sh add` and `repair` run. `add-json` is the **only*
 form that can carry `alwaysLoad`, so it goes first:
 
 ```bash
-claude mcp add-json semble_code -s user '{"type":"stdio","command":"uvx","args":["--from","semble[mcp]==0.5.2","semble","--content","code","docs","config"],"env":{"SEMBLE_CACHE_LOCATION":"<ABSOLUTE CODE ROOT>"},"alwaysLoad":true}'
+claude mcp add-json semble_code -s user '{"type":"stdio","command":"uvx","args":["--from","semble[mcp]==0.5.4","semble","--content","code","docs","config"],"env":{"SEMBLE_CACHE_LOCATION":"<ABSOLUTE CODE ROOT>"},"alwaysLoad":true}'
 ```
 
 Degraded fallback, used only when `add-json` exits non-zero. It is what
@@ -37,7 +37,7 @@ Degraded fallback, used only when `add-json` exits non-zero. It is what
 ```bash
 claude mcp add semble_code -s user \
   -e SEMBLE_CACHE_LOCATION="$HOME/Library/Caches/semble-code" \
-  -- uvx --from 'semble[mcp]==0.5.2' semble --content code docs config
+  -- uvx --from 'semble[mcp]==0.5.4' semble --content code docs config
 ```
 
 `add-json` refuses to overwrite an existing entry ("MCP server semble_code
@@ -71,7 +71,7 @@ Non-negotiable notes:
 | State | Definition | Response |
 |-------|------------|----------|
 | `absent` | no `semble_code` in user/local/project | `install`: checkpoint -> `claude mcp add-json` -> `awaiting_reload`. `status`: "not registered", Next Step = install |
-| `correct` | user scope, `command=uvx`, args exactly `--from semble[mcp]==0.5.2 semble --content code docs config`, `env.SEMBLE_CACHE_LOCATION` == code root, `type` absent or `stdio`, **and `alwaysLoad === true`** | no MCP mutation; continue to verification |
+| `correct` | user scope, `command=uvx`, args exactly `--from semble[mcp]==0.5.4 semble --content code docs config`, `env.SEMBLE_CACHE_LOCATION` == code root, `type` absent or `stdio`, **and `alwaysLoad === true`** | no MCP mutation; continue to verification |
 | `stale_args` | present in exactly one scope, but command/args/env/type/`alwaysLoad` differ (old pin, floating spec, wrong content set, relative or wrong cache root, **missing `alwaysLoad`**) | show the exact before/after diff, confirm once, then `remove` + `add-json`, checkpoint, reload |
 | `wrong_scope` | args correct but scope is `local` or `project` | report; ask whether to migrate to `user` or keep. Migrate = add at user, remove from the other scope, checkpoint, reload |
 | `duplicate` | `semble_code` in more than one scope | ALWAYS ask which to keep; remove the others; back up `~/.claude.json` and `.mcp.json` first |
@@ -133,7 +133,7 @@ Evaluated in that order. This approximates `get_validated_cache`; report `stale`
 
 ## Per-repo rebuild
 
-There is **no CLI for it**: `semble clear index` wipes every index under the root (`cli.py:138-164`). The only correct rebuild is to delete one directory and let the next query rebuild it:
+There is **no CLI for it**: `semble clear index` wipes every index under the root (`_clear_indexes`, `cli.py:147-163`). `semble clear orphans` (new in 0.5.4, `_clear_orphans`, `cli.py:176-199`) is narrower but still not per-repo — it deletes only the indexes whose recorded `root_path` no longer exists. The only correct rebuild is to delete one directory and let the next query rebuild it:
 
 ```bash
 rm -rf "<code root>/<repo hash>"
@@ -203,7 +203,7 @@ semble-state.sh patch '<json object>'
 semble-state.sh clear --yes
 ```
 
-State lives in `<projectRoot>/.claude/semble/state.json` (schema 1). Every write goes through `sc_state_patch`: unknown top-level keys are preserved verbatim, `completed` is union-merged, `updatedAt` is refreshed, the file is re-read and every patched key asserted. Unparseable state or a `schema` other than `1` ABORTs with exit 1 and writes nothing.
+State lives in `<projectRoot>/.claude/semble/state.json` (schema 1). Every write goes through `sc_state_patch`: unknown top-level keys are preserved verbatim, `completed` is union-merged, the installer-owned artifact metadata (`version` from `.claude-plugin/plugin.json`, `generated_by`, `last_updated` = `date +%F`) is refreshed, the file is re-read and every patched key asserted. Unparseable state or a `schema` other than `1` ABORTs with exit 1 and writes nothing.
 
 Legal phase transitions (`absent` is the no-file state; `clear` returns to it):
 
@@ -219,7 +219,7 @@ Legal phase transitions (`absent` is the no-file state; `clear` returns to it):
 
 Identity transitions are legal (a re-run is idempotent). Anything else prints `⚠️ illegal phase transition <from> -> <to>; state left unchanged` and exits 1 without writing.
 
-**Self-heal from `absent`.** The state file is created only inside an MCP mutation, so a project that inherits an already-correct **user-scope** registration never gets one — `add` reports `unchanged` and the checkpoint is skipped. `phase awaiting_reload|verifying|ready` therefore initialises the file at `prereq_ready` and walks the forward chain `prereq_ready -> awaiting_reload -> verifying -> ready`, stopping at the requested phase; every hop is checked against the same table and written like any other patch. `--json` reports `"healed":true` with the `walked` array. `disabled` is **not** healable from `absent` (nothing was ever set up to disable) and `prereq_ready`/`error` need no heal — they are already legal from `absent`.
+**Self-heal from `absent`.** The state file is created only inside an MCP mutation. A project that inherits an already-correct **user-scope** registration takes no mutation, so `add` writes the checkpoint on that path explicitly (`unchanged` describes the registration, not the state file) — but the heal stays the safety net for every other way a project can reach a close-out with no state file. `phase awaiting_reload|verifying|ready` therefore initialises the file at `prereq_ready` and walks the forward chain `prereq_ready -> awaiting_reload -> verifying -> ready`, stopping at the requested phase; every hop is checked against the same table and written like any other patch. `--json` reports `"healed":true` with the `walked` array. `disabled` is **not** healable from `absent` (nothing was ever set up to disable) and `prereq_ready`/`error` need no heal — they are already legal from `absent`.
 
 `complete` takes one or more STEPs: separate arguments or a single whitespace-separated string. All tokens are validated first — an unknown one exits 2 naming that token and writes nothing — then the accepted set is union-merged in one patch.
 

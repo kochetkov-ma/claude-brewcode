@@ -4,6 +4,10 @@ description: "Linux server admin: SSH, Docker, systemd, Nginx, SSL. Triggers: ss
 model: inherit
 maxTurns: 80
 tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion, WebFetch, WebSearch
+doc_type: llm
+version: "5.1.0"
+generated_by: "brewtools"
+last_updated: "2026-08-09"
 ---
 
 # SSH Admin
@@ -175,5 +179,3 @@ systemctl --failed --no-pager
 - [ ] Services restarted after config changes
 - [ ] No hardcoded credentials in commands or files
 - [ ] Docker Compose uses `mem_limit`/`cpus` (never `deploy.resources.*`)
-
-<!-- last-updated: TIMESTAMP -->

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// brewcode-meta: version=5.1.0 generated_by=brewdoc:docsync-setup
 /**
  * docsync-track — PostToolUse:Write|Edit|MultiEdit hook (self-contained, project-local)
  *
@@ -39,6 +40,9 @@ function statePath(cwd) { return join(cwd, '.claude', 'docsync', 'state.json'); 
 function loadConfig(cwd) {
   const c = readJson(join(cwd, '.claude', 'docsync', 'config.json'), {});
   return {
+    // `disable` flips this to false and leaves everything else in place. Absent = on,
+    // so a config written before the toggle existed keeps working.
+    enabled: c.enabled !== false,
     threshold_days: Number.isInteger(c.threshold_days) && c.threshold_days > 0 ? c.threshold_days : 7,
     exclude: Array.isArray(c.exclude) ? c.exclude : []
   };
@@ -92,13 +96,18 @@ function relOf(cwd, fp) {
   const abs = isAbsolute(fp) ? fp : join(cwd, fp);
   return relative(cwd, abs);
 }
+// doc_type default: absent or unrecognized => 'user'. Only 'skip' removes a file from scope.
+function docTypeOf(fields) {
+  const v = String(fields.doc_type || '').trim().toLowerCase();
+  return (v === 'llm' || v === 'user' || v === 'skip') ? v : 'user';
+}
 // A path is tracked when it is an in-project .md, not excluded, not doc_type: skip.
 function isTracked(cwd, fp, cfg) {
   if (!fp || !fp.endsWith('.md')) return false;
   const rel = relOf(cwd, fp);
   if (!rel || rel.startsWith('..') || isAbsolute(rel)) return false;
   if (isExcluded(rel, cfg.exclude)) return false;
-  if ((parseFm(join(cwd, rel)).fields.doc_type || '') === 'skip') return false;
+  if (docTypeOf(parseFm(join(cwd, rel)).fields) === 'skip') return false;
   return true;
 }
 // ---------------------------------------------------------------------------
@@ -111,6 +120,7 @@ async function main() {
     const fp = input.tool_input && input.tool_input.file_path;
 
     const cfg = loadConfig(cwd);
+    if (!cfg.enabled) { output({}); return; } // `disable`: registered but inert
     if (!isTracked(cwd, fp, cfg)) { output({}); return; }
 
     const rel = relOf(cwd, fp);
@@ -121,7 +131,7 @@ async function main() {
       output({
         hookSpecificOutput: {
           hookEventName: 'PostToolUse',
-          additionalContext: `docsync: \`${rel}\` has no \`last_updated\` frontmatter. Add YAML frontmatter with \`last_updated: ${today()}\` (optionally \`doc_type: llm|user|skip\` and \`sync_procedure:\`) so staleness tracking works.`
+          additionalContext: `docsync: \`${rel}\` has no \`last_updated\` frontmatter. Add YAML frontmatter with \`last_updated: "${today()}"\` (quoted — unquoted a real YAML parser types it as a Date), optionally \`doc_type: llm|user|skip\` (bare, unquoted; absent = user) and \`sync_procedure: "..."\`, so staleness tracking works.`
         }
       });
       return;

@@ -1,4 +1,14 @@
-# hooks-roadmap - текущая hook-поверхность semble и предложения к развитию. Проверено: 2026-08-08
+# hooks-roadmap - hook-поверхность semble и предложения к развитию. Проверено: 2026-08-08
+
+> **УСТАРЕЛО в части «что лежит на диске» (5.0.0).** Раздел 1 описывает hook-слой
+> ДО 5.0.0. `semble-reminder.mjs` (`PreToolUse` `Bash`/`Grep`) и `semble-explore.mjs`
+> (`SubagentStart` `Explore`) РЕТАЙРЕНЫ: обе выдавали только advisory
+> `additionalContext` и сконвертировали 0/18 и 0/11 при доказанной доставке. Их
+> заменил `semble-prefetch.mjs` (`UserPromptSubmit`, без matcher), который сам
+> выполняет поиск и отдаёт top-3 ПУТИ. Актуальная want-таблица - четыре строки:
+> `SessionStart`, `UserPromptSubmit`, `PostToolUse`, `PostToolUseFailure`.
+> Источник правды - `scripts/semble-guidance.sh` (`SG_WANT_TABLE`) и `assets/INSTALL.md`.
+> Раздел «Предложения» сохранён как есть: он про будущие события, а не про текущие.
 
 Документ фиксирует (a) что реально лежит на диске сегодня и (b) пять предложений,
 каждое сверено с настоящим контрактом хуков Claude Code. Реализация по нему не
@@ -12,16 +22,18 @@
 
 ---
 
-## 1. Где какой хук уже применён
+## 1. Где какой хук был применён ДО 5.0.0 (историческая фиксация)
 
-Ассеты скилла (`assets/`) - то, что устанавливается:
+Ассеты скилла (`assets/`) - то, что устанавливалось ДО 5.0.0. Актуальный набор - ТРИ файла
+(`semble-session.mjs`, `semble-prefetch.mjs`, `semble-stats.mjs`); см. баннер выше и
+`scripts/semble-guidance.sh` (`SG_LIVE` / `SG_WANT_TABLE`):
 
 | Событие | Matcher | Файл | Что эмитит | Блокирует? |
 |---------|---------|------|------------|------------|
 | `SessionStart` | нет (все) | `semble-session.mjs` | `systemMessage` + `hookSpecificOutput.additionalContext` (только при `phase === "ready"`) | нет |
-| `PreToolUse` | `Bash` | `semble-reminder.mjs` | `hookSpecificOutput.additionalContext`, не чаще 1 раза в 600 s | нет, по контракту |
-| `PreToolUse` | `Grep` | `semble-reminder.mjs` | то же (та же регистрация, второй matcher) | нет, по контракту |
-| `SubagentStart` | `Explore` | `semble-explore.mjs` | `hookSpecificOutput.additionalContext` в транскрипт ПОРОЖДЁННОГО сабагента | нет |
+| `PreToolUse` | `Bash` | ~~`semble-reminder.mjs`~~ РЕТАЙРЕН 5.0.0 | `hookSpecificOutput.additionalContext`, не чаще 1 раза в 600 s | нет, по контракту |
+| `PreToolUse` | `Grep` | ~~`semble-reminder.mjs`~~ РЕТАЙРЕН 5.0.0 | то же (та же регистрация, второй matcher) | нет, по контракту |
+| `SubagentStart` | `Explore` | ~~`semble-explore.mjs`~~ РЕТАЙРЕН 5.0.0 | `hookSpecificOutput.additionalContext` в транскрипт ПОРОЖДЁННОГО сабагента | нет |
 
 Общее для всех трёх: pure ESM, только Node built-ins, читают ровно один файл
 `<cwd>/.claude/semble/state.json`, не спавнят процессов, всегда печатают один JSON-объект
@@ -33,12 +45,14 @@
 | Файл | Факт |
 |------|------|
 | `semble-session.mjs` | `phase === "ready"` -> `systemMessage: "semble: ready \| cache " + repoHash.slice(0,8)` (или `"unknown"`), `additionalContext` = "ONE `mcp__semble_code__search` first (repo=<cwd>, top_k=5, max_snippet_lines=10), then open the hit at start_line". Ветки: `missing`/пустой -> `{}`; `corrupt` -> `"semble: state file is corrupt - run /brewcode:semble-setup status"`; `enabled===false` или `phase==="disabled"` -> `"semble: disabled for this project"`; `awaiting_reload` -> resume-nudge + `additionalContext`; `error` -> `"semble: error - ..."`; любая другая непустая `phase` -> `"semble: <phase>"` |
-| `semble-reminder.mjs` | Header прямо запрещает `permissionDecision`, deny и `updatedInput`. `THROTTLE_MS = 600_000`. `SEARCH_RE = /(?:^\|[\|;&(]\|&&\|\|\|)\s*(?:command\s+)?(grep\|egrep\|fgrep\|ugrep\|rg\|ag\|ack\|find\|bfs)\b/`. Маркер троттла - mtime файла `<cwd>/.claude/semble/.reminder-ts`; `writeFileSync` в `touch()` - ЕДИНСТВЕННАЯ runtime-запись во всей hook-системе semble. `isExactIntent()` смещён в молчание: любое сомнение -> `true` (правила a-g). Для нативного `Grep`: `output_mode` `files_with_matches`/`count` -> молчание. Команда, содержащая `semble` (lowercase) -> молчание |
-| `semble-explore.mjs` | `SubagentStart`, гейт `input.agent_type === 'Explore'`, никакого троттла, `additionalContext` про прямой вызов `mcp__semble_code__search` без ToolSearch |
+| ~~`semble-reminder.mjs`~~ (РЕТАЙРЕН 5.0.0) | Header прямо запрещает `permissionDecision`, deny и `updatedInput`. `THROTTLE_MS = 600_000`. `SEARCH_RE = /(?:^\|[\|;&(]\|&&\|\|\|)\s*(?:command\s+)?(grep\|egrep\|fgrep\|ugrep\|rg\|ag\|ack\|find\|bfs)\b/`. Маркер троттла - mtime файла `<cwd>/.claude/semble/.reminder-ts`; `writeFileSync` в `touch()` - ЕДИНСТВЕННАЯ runtime-запись во всей hook-системе semble. `isExactIntent()` смещён в молчание: любое сомнение -> `true` (правила a-g). Для нативного `Grep`: `output_mode` `files_with_matches`/`count` -> молчание. Команда, содержащая `semble` (lowercase) -> молчание |
+| ~~`semble-explore.mjs`~~ (РЕТАЙРЕН 5.0.0) | `SubagentStart`, гейт `input.agent_type === 'Explore'`, никакого троттла, `additionalContext` про прямой вызов `mcp__semble_code__search` без ToolSearch |
 
 ### Блоб settings.json (`assets/INSTALL.md` section 4 и `merge_settings()` в `semble-guidance.sh`)
 
-Обе копии идентичны, `want`-таблица:
+Обе копии идентичны, `want`-таблица ДО 5.0.0 (актуальная - `SG_WANT_TABLE` в
+`scripts/semble-guidance.sh`: `SessionStart` / `UserPromptSubmit` / `PostToolUse` /
+`PostToolUseFailure`):
 
 ```
 ["SessionStart", null,      "semble-session.mjs",  5]
@@ -61,10 +75,11 @@
 
 `state.json` не содержит ни одного числового/монотонного ключа
 (`schema, profile, projectRoot, approvedVersion, completed[], phase, enabled, scope,
-cacheRoot, repoHash, notes[], resumePrompt, updatedAt, lastVerifiedAt`) -> телеметрии
+cacheRoot, repoHash, notes[], resumePrompt, version, generated_by, last_updated,
+last_verified_at`) -> телеметрии
 использования сегодня нет вообще.
 
-### РАСХОЖДЕНИЯ: установленный экземпляр в этом репозитории
+### РАСХОЖДЕНИЯ: установленный экземпляр в этом репозитории (снимок ДО 5.0.0)
 
 `/Users/maximus/IdeaProjects/claude-brewcode/.claude/` - установка устарела относительно ассетов:
 
@@ -102,14 +117,14 @@ cacheRoot, repoHash, notes[], resumePrompt, updatedAt, lastVerifiedAt`) -> те�
 
 ### Факты semble (перепроверены по установленному пакету)
 
-Пакет: `uvx --from semble[mcp]==0.5.2 semble --content code docs config`,
+Пакет: `uvx --from semble[mcp]==0.5.4 semble --content code docs config`,
 `SEMBLE_CACHE_LOCATION=~/Library/Caches/semble-code`, `alwaysLoad: true`.
 
 | # | Факт | Источник |
 |---|------|----------|
 | S1 | `_MIN_REVALIDATE_FACTOR = 3` - "Don't recheck staleness sooner than this many times the last build's duration". После сборки: `_revalidate_after[cache_key] = finished + (finished - start) * 3`. Внутри окна `_evict_if_stale` пропускается | `semble/mcp.py:29`, `:212` |
 | S2 | Watcher-а/демона нет; индекс строится ВНУТРИ tool-call. Значит первый вызов после истечения cooldown может занять секунды-минуты, и это происходит внутри одного `mcp__semble_code__search` | `semble/mcp.py` `_build_and_track`, `_evict_if_stale` |
-| S3 | Semble уже ведёт свой лог `<cacheRoot>/savings.jsonl`, файл на диске подтверждён 2026-08-08, строки ровно такие: `{"ts": 1785954621.091636, "call": "search", "results": 5, "snippet_chars": 2548, "file_chars": 27879}` (`ts` - float epoch-seconds, НЕ ISO); CLI-команды `semble savings` и `semble clear savings`. Это счётчик СОБСТВЕННЫХ вызовов semble, глобальный на cache-root, без знаменателя (grep-вызовов) и без разделения по проектам/сессиям | `~/Library/Caches/semble-code/savings.jsonl`, `semble/cli.py:158,201,229` |
+| S3 | Semble уже ведёт свой лог `<cacheRoot>/savings.jsonl`, файл на диске подтверждён 2026-08-08, строки ровно такие: `{"ts": 1785954621.091636, "call": "search", "results": 5, "snippet_chars": 2548, "file_chars": 27879}` (`ts` - float epoch-seconds, НЕ ISO); CLI-команды `semble savings` и `semble clear savings`. Это счётчик СОБСТВЕННЫХ вызовов semble, глобальный на cache-root, без знаменателя (grep-вызовов) и без разделения по проектам/сессиям | `~/Library/Caches/semble-code/savings.jsonl`, semble 0.5.4 `semble/cli.py:166` (`_clear_savings`), `:252` (subparser), `:280` (`savings`) |
 | S4 | Вне корпуса: `.html`/`.htm` (классифицируются как docs) и `.json`/`.json5`/`.csv`/`.tsv`/`.psv` | `assets/semble-first.md.template` -> `.claude/rules/semble-first.md` |
 
 ---
@@ -162,11 +177,11 @@ cacheRoot, repoHash, notes[], resumePrompt, updatedAt, lastVerifiedAt`) -> те�
 |------|----------|
 | Что | Сообщать модели, что индекс может быть холодным и первый вызов окажется медленным |
 | Зачем | S1/S2: watcher-а нет, ревалидация ленивая за `_MIN_REVALIDATE_FACTOR = 3`, пересборка происходит ВНУТРИ tool-call. Модель, получив многосекундный `mcp__semble_code__search`, склонна счесть инструмент сломанным и уйти в `rg` - ровно то поведение, которое вся обвязка пытается предотвратить |
-| Событие + matcher | `SessionStart` (без matcher, расширение существующего `semble-session.mjs`) - одна фраза в уже эмитируемый `additionalContext`, когда с `lastVerifiedAt` прошло много времени |
-| Механизм | Чистое чтение: сравнить `state.lastVerifiedAt` (уже есть в `state.json`) с текущим временем, и при превышении порога добавить в текст "первый вызов может строить индекс несколько секунд - это нормально, дождись его, не переключайся на rg". Никакого нового файла, никакого зонда, никакого спавна процесса - ограничение "хук не спавнит процессов" сохраняется |
+| Событие + matcher | `SessionStart` (без matcher, расширение существующего `semble-session.mjs`) - одна фраза в уже эмитируемый `additionalContext`, когда с `last_verified_at` прошло много времени |
+| Механизм | Чистое чтение: сравнить `state.last_verified_at` (уже есть в `state.json`, `YYYY-MM-DD`) с текущей датой, и при превышении порога добавить в текст "первый вызов может строить индекс несколько секунд - это нормально, дождись его, не переключайся на rg". Никакого нового файла, никакого зонда, никакого спавна процесса - ограничение "хук не спавнит процессов" сохраняется |
 | Почему не PreToolUse на MCP-вызове | Можно было бы вешать matcher `mcp__semble_code__search` (P5 - имя валидно как точная строка), но контекст, вставленный ПЕРЕД вызовом, модель прочитает уже после того, как вызов вернётся; предупреждать надо заранее, на старте сессии |
-| Риск | Порог - эвристика; слишком низкий порог даёт постоянное предупреждение-шум. `lastVerifiedAt` отражает время верификации setup-а, а не время последней сборки индекса, то есть это приблизительный прокси, а не точная свежесть |
-| ИЗБЫТОЧНОСТЬ | Установленный `.claude/rules/semble-first.md` УЖЕ несёт эту мысль дословно: "Semble has no background watcher. The index is (re)built inside a tool call and cached; the first call on a cold cache is slow, later calls are fast." Rule-файл автозагружается в тот же момент, что и `SessionStart`-хук, поэтому предложение НЕ добавляет новой позиции в контексте - оно дублирует уже присутствующий текст. Единственное, чего в rule нет, - "не переключайся на rg, дождись" как явная инструкция поведения. Правильный ход - ОДНА фраза в шаблон `semble-first.md.template`, без изменения хука вообще; вариант с хуком оправдан только если нужен порог по `lastVerifiedAt`, чего rule выразить не может |
+| Риск | Порог - эвристика; слишком низкий порог даёт постоянное предупреждение-шум. `last_verified_at` отражает дату верификации setup-а, а не время последней сборки индекса, то есть это приблизительный прокси, а не точная свежесть |
+| ИЗБЫТОЧНОСТЬ | Установленный `.claude/rules/semble-first.md` УЖЕ несёт эту мысль дословно: "Semble has no background watcher. The index is (re)built inside a tool call and cached; the first call on a cold cache is slow, later calls are fast." Rule-файл автозагружается в тот же момент, что и `SessionStart`-хук, поэтому предложение НЕ добавляет новой позиции в контексте - оно дублирует уже присутствующий текст. Единственное, чего в rule нет, - "не переключайся на rg, дождись" как явная инструкция поведения. Правильный ход - ОДНА фраза в шаблон `semble-first.md.template`, без изменения хука вообще; вариант с хуком оправдан только если нужен порог по `last_verified_at`, чего rule выразить не может |
 | Статус | **не реализовано; в текущем виде - в основном дубликат rule-файла** |
 
 ### 3.4 Coverage/completeness signal - статус: не реализовано

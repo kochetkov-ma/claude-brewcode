@@ -3,7 +3,7 @@ name: brewdoc:docsync-setup
 description: "Installs project-local doc-staleness tracking (hooks) and reports/forces doc sync. Triggers: docsync, track doc staleness, doc sync status, stale docs, doc frontmatter."
 user-invocable: true
 disable-model-invocation: true
-argument-hint: "[status|install|upgrade|uninstall|purge] [sync [--all]|reread|frontmatter] | free-text"
+argument-hint: "[status|install|upgrade|enable|disable|uninstall|purge] [sync [--all]|reread|frontmatter] | free-text"
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion]
 model: sonnet
 ---
@@ -44,15 +44,17 @@ Run in the main conversation (uses `AskUserQuestion`). No `context: fork`.
 Infer the mode from `$ARGUMENTS` (RU + EN). If a mode is named explicitly, honor
 it. Otherwise derive from intent. State the resolved mode and the reason.
 
-Canonical verbs, in order: `status | install | upgrade | uninstall | purge`.
+Canonical verbs, in order: `status | install | upgrade | enable | disable | uninstall | purge`.
 Skill-specific extras come after them: `sync [--all]`, `reread`, `frontmatter`.
 
 | Intent / keywords (EN + RU) | Mode |
 |-----------------------------|------|
 | status, что устарело, what is stale, check, показать | status |
-| install, установи, настрой, включи отслеживание | install |
+| install, установи, настрой | install |
 | upgrade, обнови хуки, refresh hooks, переустанови | upgrade |
-| uninstall, удали docsync, отключи отслеживание, снеси хуки | uninstall |
+| enable, включи, включи отслеживание, возобнови, turn back on | enable |
+| disable, выключи, приостанови, отключи отслеживание, pause, mute | disable |
+| uninstall, удали docsync, снеси хуки | uninstall |
 | purge, вычисти, снеси всё вместе с конфигом | purge |
 | sync, синхронизируй, обнови устаревшие, `--all`, sync all | sync |
 | reread, перечитай, refresh context, освежи | reread |
@@ -61,8 +63,15 @@ Skill-specific extras come after them: `sync [--all]`, `reread`, `frontmatter`.
 | (empty) AND hooks installed | status |
 | unrecognized text | pick the closest mode; if unclear, default to status |
 
-> Removed aliases — `init`, `setup`, `on`, `off`, `remove`, `reset` are no longer
-> accepted verbs. Map them to the canonical set above and say so in the output.
+> Removed aliases — `init`, `on`, `off`, `setup`, `remove`, `reset`, `create`,
+> `update`, `cleanup` are no longer accepted verbs. Map them to the canonical set
+> above (`on` -> `enable`, `off` -> `disable`) and say so in the output. Never print
+> a removed alias back to the user as a command.
+
+> `disable` is NOT `uninstall`. It flips one key in `config.json`; the hooks stay
+> registered in `settings.json`, the hook files stay on disk, `state.json` and every
+> `last_updated` you have written stay untouched. `enable` flips it back. Reach for
+> `uninstall` only when the hooks should stop existing.
 
 ### First-run detection
 
@@ -70,29 +79,65 @@ Skill-specific extras come after them: `sync [--all]`, `reread`, `frontmatter`.
 ```bash
 ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")}"
 if [ -f "$ROOT/.claude/hooks/docsync-gate.mjs" ] && grep -q 'docsync-gate.mjs' "$ROOT/.claude/settings.json" 2>/dev/null; then
-  echo "docsync: INSTALLED"
+  # `"enabled": false` means installed-but-inert, NOT missing. Absent key = enabled.
+  if grep -q '"enabled"[[:space:]]*:[[:space:]]*false' "$ROOT/.claude/docsync/config.json" 2>/dev/null; then
+    echo "docsync: INSTALLED (DISABLED)"
+  else
+    echo "docsync: INSTALLED"
+  fi
 else
   echo "docsync: NOT_INSTALLED"
 fi
 ```
 
 - `NOT_INSTALLED` + no explicit mode -> **install**.
-- `INSTALLED` + no explicit mode -> **status**.
+- `INSTALLED` (either state) + no explicit mode -> **status**.
+- A `DISABLED` install is still an install: `install` must refuse it and point at
+  `enable`; never reinstall over a deliberate pause.
 
 ## Frontmatter schema (this system's docs)
 
 ```yaml
 ---
-doc_type:      llm            # optional; absent => user. values: llm | user | skip
-last_updated:  2026-07-19     # sole staleness input (YYYY-MM-DD)
-sync_procedure:"what to check / where to look when syncing"   # optional, prose
+doc_type: llm                  # optional, UNQUOTED; absent or unrecognized => user. values: llm | user | skip
+last_updated: "2026-07-19"     # sole staleness input (YYYY-MM-DD, LOCAL time)
+sync_procedure: "what to check / where to look when syncing"   # optional, prose
 ---
 ```
 
+- **Quote `last_updated` and `sync_procedure`; leave `doc_type` bare.** The hooks'
+  frontmatter parser strips surrounding quotes and trailing comments
+  (`assets/docsync-gate.mjs:93`, `docsync-track.mjs:85`, `docsync-watch.mjs:80`),
+  so either form works for docsync — but a real YAML consumer types an unquoted
+  `2026-07-19` as a Date, while `doc_type` is an enum that other brewcode tooling
+  matches literally as `^doc_type: llm$`. Existing quoted docs keep working.
 - `doc_type` drives compress depth on sync: `llm` = deep, `user` = light.
-- `doc_type: skip` = file excluded from tracking entirely.
+  Absent or unrecognized is normalized to `user` in code (`docTypeOf()` in all
+  three hooks), not just in prose.
+- `doc_type: skip` = file excluded from tracking entirely — enforced by all
+  three hooks, including the Stop gate, which re-checks it at end of turn.
+- `sync_procedure` is a **model-only hint**: NO hook reads it. It is prose the
+  gate's block message and the `sync` mode tell Claude to follow after reading the
+  doc. Leaving it out costs nothing mechanical.
 - Staleness is DATE ONLY, in LOCAL time: `today - last_updated > threshold_days`.
   No hash, no deps.
+
+## The three hooks — exact behavior
+
+| File | Event | Matcher | Behavior |
+|------|-------|---------|----------|
+| `docsync-track.mjs` | PostToolUse | `Write\|Edit\|MultiEdit` | Records the touched `.md`; injects a nudge when it has no `last_updated` |
+| `docsync-watch.mjs` | PostToolUse | `Read` | Records the touched `.md`. SILENT by design — a Read fires constantly |
+| `docsync-gate.mjs` | Stop | — | Re-applies scope (`exclude` globs + `doc_type: skip`) to the touched set, then blocks AT MOST ONCE PER SESSION listing every stale AND every undated touched doc |
+
+- The gate's `asked` flag is a single per-session boolean. After the one block,
+  docs that go stale or get touched later in that session produce NO further
+  signal until the next session. This is deliberate (a Stop hook that blocks
+  repeatedly loops), not a bug — say so if a user asks why the nag stopped.
+- A doc that is only ever READ and carries no `last_updated` IS reported: the
+  gate lists it under `no last_updated`. Only `track` nudges mid-turn.
+- All three hooks apply `exclude` and `doc_type: skip`, so marking a doc `skip`
+  mid-session silences it at the gate too.
 
 ## Enumerate in-scope docs (status / sync --all / reread / frontmatter)
 
@@ -134,14 +179,21 @@ DST="$ROOT/.claude/hooks"
 DOCSYNC="$ROOT/.claude/docsync"
 SETTINGS="$ROOT/.claude/settings.json"
 
+# Plugin version by skill self-location — NEVER hardcode it. config.json is the anchor
+# artifact other tooling (e.g. /brewcode:setup-status) reads the installed version from.
+PLUGIN_JSON="${CLAUDE_SKILL_DIR}/../../.claude-plugin/plugin.json"
+PV=$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(process.argv[1],'utf8')).version||'')" "$PLUGIN_JSON" 2>/dev/null || true)
+[ -n "$PV" ] || { echo "❌ cannot read version from $PLUGIN_JSON — reinstall brewdoc"; exit 1; }
+
 mkdir -p "$DST" "$DOCSYNC" \
   && cp "$SRC/docsync-track.mjs" "$SRC/docsync-watch.mjs" "$SRC/docsync-gate.mjs" "$DST/" \
   && echo "✅ hooks copied to $DST" || { echo "❌ copy FAILED"; exit 1; }
 
-# config.json — replace the two placeholders below before running
-printf '%s\n' '{ "threshold_days": THRESHOLD_VALUE, "exclude": EXCLUDE_JSON }' > "$DOCSYNC/config.json" \
+# config.json — replace the two placeholders below before running.
+# The three provenance keys come first, in the standard order, then the skill-private ones.
+printf '{ "version": "%s", "generated_by": "brewdoc:docsync-setup", "last_updated": "%s", "enabled": true, "threshold_days": THRESHOLD_VALUE, "exclude": EXCLUDE_JSON }\n' "$PV" "$(date +%F)" > "$DOCSYNC/config.json" \
   && node -e "JSON.parse(require('fs').readFileSync('$DOCSYNC/config.json','utf8'))" \
-  && echo "✅ config.json written" || { echo "❌ config.json invalid JSON"; exit 1; }
+  && echo "✅ config.json written (version $PV)" || { echo "❌ config.json invalid JSON"; exit 1; }
 
 # fresh state.json (empty touched-set) — only if absent, never clobber a live one
 [ -f "$DOCSYNC/state.json" ] || printf '%s\n' '{ "session_id": null, "touched": [], "asked": false }' > "$DOCSYNC/state.json"
@@ -244,11 +296,36 @@ Refresh an EXISTING install to the current plugin version. Config and state surv
 1. Require `INSTALLED` from first-run detection. If `NOT_INSTALLED` -> say so and
    run `install` instead.
 2. Re-copy the three hook files from `${CLAUDE_SKILL_DIR}/assets` over
-   `$ROOT/.claude/hooks/` (same `cp` as install Step 2), leaving
-   `.claude/docsync/config.json` and `state.json` untouched.
-3. Re-run the settings merge from install Step 2 — it is idempotent, so it only
+   `$ROOT/.claude/hooks/` (same `cp` as install Step 2), leaving `state.json`
+   untouched.
+3. Refresh ONLY the three provenance keys in `.claude/docsync/config.json` —
+   `version`, `generated_by`, `last_updated`. `threshold_days`, `exclude` and
+   `enabled` are preserved verbatim: upgrading a DISABLED install must leave it
+   disabled.
+
+   **EXECUTE** using Bash tool:
+   ```bash
+   ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")}"
+   C="$ROOT/.claude/docsync/config.json"
+   PJ="${CLAUDE_SKILL_DIR}/../../.claude-plugin/plugin.json"
+   node -e '
+     const fs = require("fs");
+     const [c, pj, today] = process.argv.slice(1);
+     const v = JSON.parse(fs.readFileSync(pj, "utf8")).version;
+     if (!v) throw new Error("no version in " + pj);
+     const cfg = JSON.parse(fs.readFileSync(c, "utf8"));
+     const was = cfg.version || "(none)";
+     cfg.version = v;
+     cfg.generated_by = "brewdoc:docsync-setup";
+     cfg.last_updated = today;
+     fs.writeFileSync(c, JSON.stringify(cfg, null, 2) + "\n");
+     console.log(`config.json version ${was} -> ${v}; generated_by=${cfg.generated_by}, last_updated=${cfg.last_updated}; enabled=${cfg.enabled !== false}, threshold_days=${cfg.threshold_days}, exclude=${JSON.stringify(cfg.exclude)}`);
+   ' "$C" "$PJ" "$(date +%F)" && echo "✅ config provenance refreshed" || { echo "❌ config provenance refresh FAILED"; exit 1; }
+   ```
+4. Re-run the settings merge from install Step 2 — it is idempotent, so it only
    restores entries a user or another tool dropped.
-4. Run the install verification block and report per-check pass/fail.
+5. Run the install verification block and report per-check pass/fail, plus
+   `threshold_days` + `exclude` + `enabled` unchanged.
 
 ---
 
@@ -256,8 +333,10 @@ Refresh an EXISTING install to the current plugin version. Config and state surv
 
 Report tracked docs and staleness. No changes.
 
-1. Read `$ROOT/.claude/docsync/config.json` (threshold + excludes). If missing ->
-   "not installed; run install".
+1. Read `$ROOT/.claude/docsync/config.json` (threshold + excludes + `enabled`). If
+   missing -> "not installed; run install". If `enabled` is `false`, lead the report
+   with **DISABLED — hooks are wired but inert; `enable` resumes them**, then report
+   staleness anyway: the numbers stay meaningful while the tracker is paused.
 2. Enumerate in-scope docs via the Bash `find` block above; drop `exclude` matches
    and any with `doc_type: skip`.
 3. For each, read frontmatter `last_updated`; compute age in days (LOCAL time);
@@ -265,49 +344,66 @@ Report tracked docs and staleness. No changes.
 4. Read `$ROOT/.claude/docsync/state.json` and report the current session touched-set.
 5. Output the Status table (below).
 
-## Mode: sync `[--all]`
+## Mode: enable / disable
 
-Sync stale docs (or ALL in-scope docs with `--all`) WITH confirmation.
+Flip docsync between live and inert WITHOUT unwiring anything. One key,
+`"enabled"`, in `.claude/docsync/config.json`:
 
-1. Build the target set: default = stale docs (as in status); `--all` = every
-   in-scope doc (enumerate via the Bash `find` block).
-2. **ASK** via `AskUserQuestion`: confirm which docs to sync (list them). Never
-   sync without confirmation.
-3. For each confirmed doc: follow its `sync_procedure` (if present) to refresh
-   content. Apply compression by `doc_type`: `llm` = deep, `user` = light.
-   Preserve author intent.
-4. Set `last_updated:` to today (`Bash: date +%F`, LOCAL) in each synced doc's
-   frontmatter.
-5. Output the Sync summary table.
+| | hooks in `settings.json` | hook files | `config.json` | `state.json` | doc frontmatter |
+|---|---|---|---|---|---|
+| `disable` | kept | kept | `enabled: false` + provenance refreshed | kept | untouched |
+| `enable` | kept | kept | `enabled: true` + provenance refreshed | kept | untouched |
+| `uninstall` | removed | removed | kept | kept | untouched |
+| `purge` | removed | removed | deleted | deleted | untouched |
 
-## Mode: reread
+All three hooks read `enabled` on every invocation (`loadConfig`, absent = `true`),
+so the flip takes effect IMMEDIATELY — no session restart, unlike install/uninstall
+which change `settings.json`. Disabled means: no touched-set recording, no
+frontmatter nudge, and the Stop gate never blocks.
 
-Force a re-read of tracked docs to refresh in-context understanding (no writes).
-
-1. Determine scope: docs in the session touched-set, else all in-scope `.md`
-   (enumerate via the Bash `find` block).
-2. Read each with the Read tool.
-3. Output a short list of what was re-read. (The watch hook records these reads.)
-
-## Mode: frontmatter
-
-Opt-in retro-add of docsync frontmatter to in-scope docs. NEVER run automatically
-at install.
-
-1. Enumerate in-scope `.md` (via the Bash `find` block, minus excludes). For each,
-   detect whether it already has `last_updated`.
-2. Show the list of docs missing frontmatter and the fields to add.
-3. **ASK** via `AskUserQuestion`: "Add docsync frontmatter to N docs?" Options:
-   **Yes, all** / **Review each** / **Cancel**.
-4. For approved docs, prepend/merge a YAML frontmatter block:
-   ```yaml
-   ---
-   doc_type: user            # choose llm for machine-facing docs; skip to exclude
-   last_updated: <today>
-   ---
+1. Require `INSTALLED` (either state) from first-run detection. `NOT_INSTALLED` ->
+   say so and offer `install`; do not write a config for hooks that do not exist.
+2. Read the current value. Short-circuit ONLY when it already matches the requested
+   verb AND the three provenance keys are current (`version` == plugin version,
+   `generated_by` == `brewdoc:docsync-setup`, `last_updated` present) — report
+   `already enabled` / `already disabled` and stop, nothing written. A config whose
+   value already matches but whose provenance is missing or stale IS rewritten: every
+   mode that writes this file stamps it, so a pre-standard config gets backfilled here
+   instead of staying unstamped forever.
+3. **EXECUTE** using Bash tool (`WANT` = `true` for enable, `false` for disable):
+   ```bash
+   ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")}"
+   C="$ROOT/.claude/docsync/config.json"
+   PJ="${CLAUDE_SKILL_DIR}/../../.claude-plugin/plugin.json"
+   WANT=true   # <- set to false for `disable`
+   [ -f "$C" ] || { echo "❌ $C missing — docsync is not installed"; exit 1; }
+   cp "$C" "$C.bak"
+   C="$C" WANT="$WANT" PJ="$PJ" TODAY="$(date +%F)" node -e '
+     const fs = require("fs");
+     const c = process.env.C, want = process.env.WANT === "true";
+     const v = JSON.parse(fs.readFileSync(process.env.PJ, "utf8")).version;
+     if (!v) throw new Error("no version in " + process.env.PJ);
+     const cfg = JSON.parse(fs.readFileSync(c, "utf8"));
+     const was = cfg.enabled !== false;
+     const stamped = cfg.version === v && cfg.generated_by === "brewdoc:docsync-setup" && /^\d{4}-\d{2}-\d{2}$/.test(cfg.last_updated || "");
+     if (was === want && stamped) { console.log(`already ${want ? "enabled" : "disabled"}, provenance current — nothing written`); process.exit(0); }
+     cfg.enabled = want;
+     cfg.version = v;
+     cfg.generated_by = "brewdoc:docsync-setup";
+     cfg.last_updated = process.env.TODAY;
+     fs.writeFileSync(c, JSON.stringify(cfg, null, 2) + "\n");
+     console.log(`enabled: ${was} -> ${want}; version=${cfg.version}, generated_by=${cfg.generated_by}, last_updated=${cfg.last_updated}; threshold_days=${cfg.threshold_days}, exclude=${JSON.stringify(cfg.exclude)} (preserved)`);
+   ' && echo "✅ done" || { echo "❌ FAILED"; exit 1; }
    ```
-   Preserve any existing frontmatter keys. Use `date +%F` for `<today>`.
-5. Output the frontmatter summary table.
+   > **STOP if ❌** — fix before continuing.
+4. Verify: `config.json` is still valid JSON, `enabled` holds the requested value,
+   `threshold_days` + `exclude` are byte-unchanged, and the three provenance keys are
+   present and current (`version` == plugin version, `generated_by` ==
+   `brewdoc:docsync-setup`, `last_updated` == today).
+5. Report the new state and its reversal verb. After `disable`, say the hooks are
+   still registered and `enable` brings them back with zero re-analysis.
+
+---
 
 ## Mode: uninstall
 
@@ -408,6 +504,63 @@ remains. Removal takes effect next session.
 3. Report what was removed. The `settings.json` `.bak` backup is deliberately kept —
    purge never touches foreign settings or the backup.
 
+---
+
+> The three modes below are this skill's EXTRAS — they operate the installed
+> tracker rather than manage it, and so come after the whole canonical set.
+
+## Mode: sync `[--all]`
+
+Sync stale docs (or ALL in-scope docs with `--all`) WITH confirmation.
+
+1. Build the target set: default = stale docs (as in status); `--all` = every
+   in-scope doc (enumerate via the Bash `find` block).
+2. **ASK** via `AskUserQuestion`: confirm which docs to sync (list them). Never
+   sync without confirmation.
+3. For each confirmed doc: READ it, then follow its `sync_procedure` (if present —
+   no hook parses it, you do) to refresh content. Apply compression by `doc_type`:
+   `llm` = deep, `user` = light, absent = `user`. Preserve author intent.
+4. Set `last_updated: "{LAST_UPDATED}"` (quoted; `Bash: date +%F`, LOCAL) in each synced
+   doc's frontmatter. A doc that had no `last_updated` gains one here.
+5. Output the Sync summary table.
+
+## Mode: reread
+
+Force a re-read of tracked docs to refresh in-context understanding (no writes).
+
+1. Determine scope: docs in the session touched-set, else all in-scope `.md`
+   (enumerate via the Bash `find` block).
+2. Read each with the Read tool.
+3. Output a short list of what was re-read. (The watch hook records these reads.)
+
+## Mode: frontmatter
+
+Opt-in retro-add of docsync frontmatter to in-scope docs. NEVER run automatically
+at install.
+
+1. Enumerate in-scope `.md` (via the Bash `find` block, minus excludes). For each,
+   detect whether it already has `last_updated`.
+2. Show the list of docs missing frontmatter and the fields to add.
+3. **ASK** via `AskUserQuestion`: "Add docsync frontmatter to N docs?" Options:
+   **Yes, all** / **Review each** / **Cancel**.
+4. For approved docs, prepend/merge a YAML frontmatter block with ALL THREE schema
+   fields — `sync` mode reads `sync_procedure`, so omitting it here would emit docs
+   that `sync` cannot follow:
+   ```yaml
+   ---
+   doc_type: user                   # UNQUOTED; llm for machine-facing docs; skip to exclude
+   last_updated: "{LAST_UPDATED}"
+   sync_procedure: "<what to re-check for THIS doc, and where>"
+   ---
+   ```
+   Preserve any existing frontmatter keys and append these after them. Resolve
+   `{LAST_UPDATED}` with `date +%F`. `last_updated` and `sync_procedure` are
+   QUOTED, `doc_type` is bare (see Frontmatter schema). Write a
+   real one-line `sync_procedure` derived from what the doc actually documents; if
+   a doc genuinely has no procedure worth naming, omit the key rather than emit a
+   placeholder, and say which docs you omitted it for.
+5. Output the frontmatter summary table.
+
 </instructions>
 
 ## Verification (per mode)
@@ -416,12 +569,14 @@ Run these after acting and report pass/fail for each check.
 
 | Mode | Checks |
 |------|--------|
-| install | 3 hook files exist in `.claude/hooks/`; `node --check` each parses; `config.json` valid JSON; `settings.json` valid JSON and contains all 3 hook commands; `.bak` backup present |
-| upgrade | same checks as `install`, plus `config.json` content unchanged (threshold + excludes preserved) |
-| status | config exists; counts add up (tracked = stale + fresh + no-date) |
+| install | 3 hook files exist in `.claude/hooks/`; `node --check` each parses; `config.json` valid JSON carrying all three provenance keys (`version` == plugin version, `generated_by` == `brewdoc:docsync-setup`, `last_updated` a `YYYY-MM-DD` date); `settings.json` valid JSON and contains all 3 hook commands; `.bak` backup present |
+| upgrade | same checks as `install`, plus `threshold_days` + `exclude` unchanged and the three provenance keys refreshed |
+| enable | `config.json` valid JSON with `enabled: true`; hook commands still in `settings.json`; hook files still present; `threshold_days` + `exclude` unchanged; all three provenance keys present and current |
+| disable | `config.json` valid JSON with `enabled: false`; same preservation + provenance checks as `enable`; `state.json` still present |
+| status | config exists; counts add up (tracked = stale + fresh + no-date); the `enabled` state is stated |
 | sync | each synced doc's `last_updated` == today; frontmatter still valid |
 | reread | each targeted doc was actually read |
-| frontmatter | each approved doc now has valid frontmatter with `last_updated` |
+| frontmatter | each approved doc now has valid frontmatter with a BARE `doc_type` + a QUOTED `last_updated` (+ `sync_procedure` wherever one was written); pre-existing keys preserved |
 | uninstall | no `docsync-*.mjs` command remains in `settings.json`; foreign hooks preserved; hook files gone; `settings.json` still valid JSON |
 | purge | all `uninstall` checks, plus `.claude/docsync/` no longer exists |
 
@@ -432,7 +587,16 @@ DST="$ROOT/.claude/hooks"; D="$ROOT/.claude/docsync"; S="$ROOT/.claude/settings.
 for f in docsync-track docsync-watch docsync-gate; do
   node --check "$DST/$f.mjs" && echo "✅ $f parses" || { echo "❌ $f parse FAILED"; ok=0; }
 done
-node -e "JSON.parse(require('fs').readFileSync('$D/config.json','utf8'))" && echo "✅ config.json valid" || { echo "❌ config.json"; ok=0; }
+PJ="${CLAUDE_SKILL_DIR}/../../.claude-plugin/plugin.json"
+node -e "
+  const fs=require('fs');
+  const cfg=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
+  const v=JSON.parse(fs.readFileSync(process.argv[2],'utf8')).version;
+  if(cfg.version!==v) throw new Error('config version '+cfg.version+' != plugin '+v);
+  if(cfg.generated_by!=='brewdoc:docsync-setup') throw new Error('generated_by is '+cfg.generated_by);
+  if(!/^\d{4}-\d{2}-\d{2}\$/.test(cfg.last_updated||'')) throw new Error('last_updated not YYYY-MM-DD: '+cfg.last_updated);
+  if(!Number.isInteger(cfg.threshold_days)) throw new Error('threshold_days not an integer');
+" "$D/config.json" "$PJ" && echo "✅ config.json valid + provenance matches plugin" || { echo "❌ config.json"; ok=0; }
 node -e "const s=JSON.stringify(JSON.parse(require('fs').readFileSync('$S','utf8')));['docsync-track','docsync-watch','docsync-gate'].forEach(n=>{if(!s.includes(n))throw new Error('missing '+n)});" \
   && echo "✅ settings.json wired" || { echo "❌ settings.json missing entries"; ok=0; }
 [ -f "$S.bak" ] && echo "✅ backup present" || { echo "❌ no .bak backup"; ok=0; }
@@ -458,6 +622,8 @@ node -e "const s=JSON.stringify(JSON.parse(require('fs').readFileSync('$S','utf8
 - [action 2]
 
 ## Status
+tracking: enabled | DISABLED (hooks wired but inert — `enable` resumes)
+
 | Doc | doc_type | last_updated | age | state |
 |-----|----------|--------------|-----|-------|
 | ... | ...      | ...          | ..d | stale/fresh/no-date |

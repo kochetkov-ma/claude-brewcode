@@ -17,6 +17,10 @@ The `description:` triggers stay bilingual EN+RU regardless of `{{LANG}}` (model
 name: task-spec
 description: "Authors the product spec and the system-design doc for a task on this repo's board, fanning out to the repo's own domain architect agents -- never designed solo. Writes .codex/features/specs/<ID>-spec.md and <ID>-design.md, then syncs the task frontmatter and board.md. Triggers: system design, architect this, design doc, design document, write the spec, spec out, spec this task, plan this task, architecture for, technical design, design review, needs a spec, системный дизайн, спека, спеку, напиши спеку, архитектура задачи, спланируй задачу, продумай архитектуру, распиши решение, дизайн-документ, с помощью архитектора, привлеки архитекторов. <example> user: продумай архитектуру для T-{{FIRST_DOMAIN}}-SLUG <commentary>Plain prose, no skill named, but this is a design request for a board task -- run task-spec in design mode and fan out to the domain architects.</commentary> </example> <example> user: this one touches the API and the storage layer, write the spec before anyone codes <commentary>Multi-domain + explicit spec ask = the needs-spec heuristic; run task-spec full mode, one architect per touched domain.</commentary> </example> <example> user: scope changed on BUG-{{FIRST_DOMAIN}}-SLUG, the spec is stale now <commentary>Existing docs plus a changed task Scope -> task-spec refresh, preserving D#, Q# and AQ# ids and the Scope status cells.</commentary> </example>"
 argument-hint: "<TASK_ID> [full | design | refresh] [-n|--noask]"
+doc_type: llm
+version: "{PLUGIN_VERSION}"
+generated_by: "{GENERATED_BY}"
+last_updated: "{LAST_UPDATED}"
 ---
 
 # task-spec (spec + system design)

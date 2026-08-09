@@ -287,12 +287,33 @@ grep -q "CLAUDE.local.md" .gitignore 2>/dev/null && echo "EXISTS" || (echo "CLAU
 cat "${CLAUDE_SKILL_DIR}/templates/ssh-admin-agent.md.template"
 ```
 
+Resolve the metadata stamp (never hardcode a version). **EXECUTE** using Bash tool:
+```bash
+SD="${CLAUDE_SKILL_DIR}"
+if [ -n "$SD" ] && [ -f "$SD/../../.claude-plugin/plugin.json" ]; then BT_ROOT=$(cd "$SD/../.." && pwd); else BT_ROOT=$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::'); fi
+[ -n "$BT_ROOT" ] || { echo "ERROR: cannot locate brewtools plugin root -- install/update brewtools first."; exit 1; }
+PV=$(jq -r '.version // empty' "$BT_ROOT/.claude-plugin/plugin.json" 2>/dev/null || true)
+PV=${PV:-$(basename "$BT_ROOT")}
+echo "PLUGIN_VERSION=$PV LAST_UPDATED=$(date +%F)"
+```
+> **Why the bare form.** `CLAUDE_SKILL_DIR` is a TEXT SUBSTITUTION on the skill prompt, not an env var: CC 2.1.226 rewrites only the EXACT dollar-brace literal `{CLAUDE_SKILL_DIR}` (`replace(/\$\{CLAUDE_SKILL_DIR\}/g, dirname(skillPath))` and a string-pattern `replaceAll`). A brace-modifier form such as `:-fallback` inside the braces is therefore NOT matched, reaches the shell verbatim, and its fallback ALWAYS wins. `CLAUDE_PLUGIN_ROOT` is a real env var but is exported only to hook processes and MCP servers -- never to a skill's Bash tool -- so it is ALWAYS empty here. The skill dir is correct in a cache install AND in a `--plugin-dir` dev run; the cache glob below it is a last-resort fallback only, and it would name the INSTALLED plugin.
+
 Replace placeholders in template:
 - `{{SERVER_INVENTORY}}` -- server table from CLAUDE.local.md
 - `{{SERVER_DETAILS}}` -- discovered OS/Docker/disk info per server
-- `{{LAST_UPDATED}}` -- current ISO timestamp
+- `{PLUGIN_VERSION}` -- `PV` from the block above
+- `{LAST_UPDATED}` -- `date +%F` (`YYYY-MM-DD`), quoted in the frontmatter
 
 Write result to `.claude/agents/ssh-admin.md` using Write tool.
+
+Leftover-token gate -- BOTH brace families (this skill's `{{...}}` tokens and the single-brace metadata ones). **EXECUTE** using Bash tool:
+```bash
+F="$PWD/.claude/agents/ssh-admin.md"
+test -f "$F" || { echo "❌ FAILED -- $F not written"; exit 1; }
+LEFT="$(grep -nE '\{\{|\{(PLUGIN_VERSION|GENERATED_BY|LAST_UPDATED)\}' "$F" || true)"
+test -z "$LEFT" && echo "✅ no leftover placeholders" || { echo "❌ FAILED -- leftover placeholders:"; echo "$LEFT"; }
+```
+> **STOP if ❌** -- re-substitute before continuing.
 
 ### Step 4: Default Server
 
@@ -441,7 +462,7 @@ bash "${CLAUDE_SKILL_DIR}/scripts/server-discover.sh" "USER@HOST" PORT && echo "
 
 ### Step 3: Update Config & Agent
 
-Update CLAUDE.local.md with fresh data for each server. Regenerate `.claude/agents/ssh-admin.md` from template with updated inventory. Set `{{LAST_UPDATED}}` to current timestamp. Report what changed since last update.
+Update CLAUDE.local.md with fresh data for each server. Regenerate `.claude/agents/ssh-admin.md` from template with updated inventory. Re-resolve `{PLUGIN_VERSION}` and `{LAST_UPDATED}` exactly as in Install Step 3 -- a regeneration is a new write, so the stamp is refreshed, never carried over. Report what changed since last update.
 
 </instructions>
 

@@ -190,8 +190,28 @@ EXEC:
 ```bash
 cat "${CLAUDE_SKILL_DIR}/templates/deploy-admin-agent.md.template"
 ```
-Replace placeholders: `{{GITHUB_CONFIG}}`=GH CFG table | `{{WORKFLOW_INVENTORY}}`=WFs table | `{{SERVER_TARGETS}}`=SSH Servers (or "No SSH servers CFG") | `{{SECRETS_LIST}}`=secret names | `{{LAST_UPDATED}}`=current ISO timestamp.
+Resolve the metadata stamp (never hardcode a version). EXEC:
+```bash
+SD="${CLAUDE_SKILL_DIR}"
+if [ -n "$SD" ] && [ -f "$SD/../../.claude-plugin/plugin.json" ]; then BT_ROOT=$(cd "$SD/../.." && pwd); else BT_ROOT=$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::'); fi
+[ -n "$BT_ROOT" ] || { echo "ERROR: cannot locate brewtools plugin root -- install/update brewtools first."; exit 1; }
+PV=$(jq -r '.version // empty' "$BT_ROOT/.claude-plugin/plugin.json" 2>/dev/null || true)
+PV=${PV:-$(basename "$BT_ROOT")}
+echo "PLUGIN_VERSION=$PV LAST_UPDATED=$(date +%F)"
+```
+> **Why the bare form.** `CLAUDE_SKILL_DIR` is a TEXT SUBSTITUTION on the skill prompt, not an env var: CC 2.1.226 rewrites only the EXACT dollar-brace literal `{CLAUDE_SKILL_DIR}` (`replace(/\$\{CLAUDE_SKILL_DIR\}/g, dirname(skillPath))` and a string-pattern `replaceAll`). A brace-modifier form such as `:-fallback` inside the braces is therefore NOT matched, reaches the shell verbatim, and its fallback ALWAYS wins. `CLAUDE_PLUGIN_ROOT` is a real env var but is exported only to hook processes and MCP servers -- never to a skill's Bash tool -- so it is ALWAYS empty here. The skill dir is correct in a cache install AND in a `--plugin-dir` dev run; the cache glob below it is a last-resort fallback only, and it would name the INSTALLED plugin.
+
+Replace placeholders: `{{GITHUB_CONFIG}}`=GH CFG table | `{{WORKFLOW_INVENTORY}}`=WFs table | `{{SERVER_TARGETS}}`=SSH Servers (or "No SSH servers CFG") | `{{SECRETS_LIST}}`=secret names | `{PLUGIN_VERSION}`=`PV` above | `{LAST_UPDATED}`=`date +%F` (`YYYY-MM-DD`, quoted in the frontmatter).
 Write to `.claude/agents/deploy-admin.md`.
+
+Leftover-token gate -- BOTH brace families (this skill's `{{...}}` tokens and the single-brace metadata ones). **EXECUTE** using Bash tool:
+```bash
+F="$PWD/.claude/agents/deploy-admin.md"
+test -f "$F" || { echo "❌ FAILED -- $F not written"; exit 1; }
+LEFT="$(grep -nE '\{\{|\{(PLUGIN_VERSION|GENERATED_BY|LAST_UPDATED)\}' "$F" || true)"
+test -z "$LEFT" && echo "✅ no leftover placeholders" || { echo "❌ FAILED -- leftover placeholders:"; echo "$LEFT"; }
+```
+> **STOP if ❌** -- re-substitute before continuing.
 
 ---
 
@@ -303,7 +323,8 @@ git push && git push --tags && echo "OK push" || echo "FAILED push"
 Only if POST_SCRIPT was found in Step 0. Otherwise SKIP and report "no post-release script".
 EXEC:
 ```bash
-bash <POST_SCRIPT> && echo "OK post-release" || echo "FAILED post-release"
+POST_SCRIPT="<absolute path to the post-release script recorded in Step 0>"
+bash "$POST_SCRIPT" && echo "OK post-release" || echo "FAILED post-release"
 ```
 
 ### Step 8: Monitor CI
@@ -429,7 +450,7 @@ bash "${CLAUDE_SKILL_DIR}/scripts/deploy-local-ops.sh" read-github 2>/dev/null
 
 ### Step 4: Regenerate Agent
 Read TPL, replace placeholders with fresh data, write to `.claude/agents/deploy-admin.md`.
-Set `{{LAST_UPDATED}}` = current timestamp. Report what changed.
+Re-resolve `{PLUGIN_VERSION}` + `{LAST_UPDATED}` exactly as in P2 Step 8 -- a regeneration is a new write, so the stamp is refreshed, never carried over. Report what changed.
 
 </instructions>
 

@@ -80,19 +80,28 @@ generator calibrates them on real examples harvested from the target's own rules
 
 | Mode | Writes | What runs |
 |------|--------|-----------|
-| `status` (default when installed) | nothing | Is `memory-sync` installed, what is its provenance stamp, and how stale are its surface tables vs the live repo (baked counts vs enumerated now, dead paths, layers gained). Verdict: `IN SYNC` / `STALE (n drifts)` / `NOT INSTALLED` |
+| `status` (default when installed) | nothing | Is `memory-sync` installed, what does its provenance frontmatter say (`doc_type` / `version` / `generated_by` / `last_updated` / `surface_files`), and how stale are its surface tables vs the live repo (baked `surface_files` count vs enumerated now, dead paths, layers gained). Verdict: `IN SYNC` / `STALE (n drifts)` / `STALE-LEGACY (n drifts)` / `NOT INSTALLED`, prefixed `PARKED - ` when the install is disabled -- parked is never reported as missing |
 | `install` (default when not installed) | the 4 emitted files | Full analysis + emit. Refuses an existing installation |
-| `upgrade` | targeted edits | Re-scan and refresh an existing installation: re-enumerate the surface, refresh the batch / fact / invariant tables, add sections for new memory layers. **Hand-edits are preserved** -- the emitted skill is expected to have self-modified. Never blind-overwrite |
-| `uninstall` | deletes `.claude/skills/memory-sync/` | Lists the files, asks for confirmation, removes the emitted skill dir. That dir is the generator's only footprint |
+| `upgrade` | targeted edits | Re-scan and refresh an existing installation: re-enumerate the surface, refresh the batch / fact / invariant tables, add sections for new memory layers, then ALWAYS finish with `generate.sh restamp` so the provenance stamp reaches the current plugin version. **Hand-edits are preserved** -- the emitted skill is expected to have self-modified. Never blind-overwrite |
+| `enable` | renames one file | Restores a parked install: `SKILL.md.disabled` -> `SKILL.md`. Claude Code discovers a project skill only through an exact `SKILL.md`, so the rename is the whole switch |
+| `disable` | renames one file | Parks the install: `SKILL.md` -> `SKILL.md.disabled`. `/memory-sync` stops resolving in the NEXT session; the references, the provenance frontmatter and every hand-edit stay byte-identical, ready for `enable` |
+| `uninstall` | deletes the emitted files | Removes exactly what the generator emitted -- `SKILL.md` (or `SKILL.md.disabled`) plus the 3 files in `references/`. Anything you added to that dir yourself is KEPT and listed. The dir is removed only if it ends up empty |
+| `purge` | deletes `.claude/skills/memory-sync/` | The whole dir, hand-added files included, plus any `.memory-sync-emit.*` staging left by a crashed emit |
 
-Removed aliases: `init`, `setup`, `remove`, `reset`.
+Canonical order: `status | install | upgrade | enable | disable | uninstall | purge`. No argument = `status` when
+installed, `install` when not.
+
+Removed aliases: `init`, `on`, `off`, `setup`, `remove`, `reset`, `create`, `update`, `cleanup`.
+
+`uninstall` vs `purge`: `uninstall` is manifest-driven and never destroys work you did not get from the generator;
+`purge` is the unconditional wipe. On a stock install the two leave the same empty result.
 
 ## Usage
 
 Run inside the repo you want to wire up:
 
 ```
-/brewdoc:memory-sync-setup [status|install|upgrade|uninstall] [fine-tune-prompt]
+/brewdoc:memory-sync-setup [status|install|upgrade|enable|disable|uninstall|purge] [fine-tune-prompt]
 ```
 
 The fine-tune prompt steers the emitted skill's focus ordering. Facts stay ahead of dedup and compression whatever
@@ -103,7 +112,10 @@ the emphasis -- the order may be sharpened, never inverted.
 /brewdoc:memory-sync-setup "weight stale-fact removal over compression"
 /brewdoc:memory-sync-setup status
 /brewdoc:memory-sync-setup upgrade
+/brewdoc:memory-sync-setup disable
+/brewdoc:memory-sync-setup enable
 /brewdoc:memory-sync-setup uninstall
+/brewdoc:memory-sync-setup purge
 ```
 
 Then run the emitted skill in that project:
@@ -123,9 +135,9 @@ Then run the emitted skill in that project:
 | 0 | Read the emit material this skill ships (`references/`) |
 | 1 | `generate.sh scan` + analysis: memory surface, VERIFY-ONLY files, exclusions, default branch, git visibility, language policy, frontmatter conventions, numbered ids, reacting hooks, the fact catalogue, the agent + skill rosters, each rule's `paths:` precision, real generic-vs-domain examples from the target's own rules |
 | 1.5 | AskUserQuestion for genuinely ambiguous params (which conventions count as memory, memory dir in scope, VERIFY-ONLY list, default branch, intentional non-English aliases, batch splits) |
-| 2 | Export scalar placeholders -> `generate.sh emit` (sed substitution + provenance stamp) |
+| 2 | Export scalar placeholders -> `generate.sh emit` (awk substitution + provenance frontmatter stamped into the emitted `SKILL.md`) |
 | 3 | AI fills the TWELVE BLOCK placeholders via Edit -- ten in the emitted `SKILL.md` (batch map, exclusions, invariants, fact catalogue, enumeration bash, agent + skill checks, roster, proposal precedents, verify extras) and two in the emitted `references/hard-sync.md` (paths-precision table, obvious-vs-domain table) |
-| 4 | `generate.sh validate` -- fails on any surviving `{PLACEHOLDER}`, a missing asset or a cited reference that does not exist; then every emitted agent name is asserted to resolve |
+| 4 | `generate.sh validate` -- fails on any surviving `{PLACEHOLDER}`, a missing asset, a cited reference that does not exist, or provenance frontmatter that is missing or a version behind (remedy: `generate.sh restamp`); then every emitted agent name is asserted to resolve |
 | 5 | Report the surface, batches, exclusions and how to run it |
 
 ## Files
@@ -133,7 +145,7 @@ Then run the emitted skill in that project:
 | File | Role |
 |------|------|
 | `SKILL.md` | The generator orchestrator |
-| `scripts/generate.sh` | `scan` / `emit` / `validate` / `status` |
+| `scripts/generate.sh` | `scan` / `emit` / `validate` / `restamp` / `status` / `enable` / `disable` / `uninstall` / `purge` |
 | `references/SKILL.md.template` | The emitted SKILL.md (placeholder slots) |
 | `references/memory-guide.md` | Emitted: where-does-it-belong decision tree, compression patterns, obvious vs domain facts |
 | `references/agent-audit.md` | Emitted: the agent + skill re-audit procedure run on every sweep |
@@ -152,6 +164,8 @@ changes. Run `status` any time to see whether it is due.
   (`.claude/agents/`) and built-ins (`Explore` / `Plan` / `general-purpose`).
 - `emit` never overwrites a live installation. `MEMORY_SYNC_FORCE=1` is the conscious override and it destroys
   hand-edits; `upgrade` is the safe path.
+- A stale provenance stamp is NEVER a reason to re-emit. `generate.sh restamp` rewrites the metadata keys in
+  place -- it compares the body before and after and refuses to write if anything outside them would move.
 - The generator NEVER syncs memory itself, and the emitted skill never edits source code, `docs/**`, secrets or
   task-board state -- it reads them as evidence.
 - A run of the emitted skill that touched only the root `CLAUDE.md` is an incomplete run.
