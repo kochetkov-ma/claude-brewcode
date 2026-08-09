@@ -806,7 +806,11 @@ check('cache.resolve.hash', res.hash, hashA.out, 'resolve prints the repo hash')
 check('cache.resolve.dir', res.repoDir, join(CODE_ROOT, hashA.out), 'repoDir is <code root>/<hash>');
 check('cache.resolve.index', res.indexDir, join(CODE_ROOT, hashA.out, 'index'), 'indexDir is <repo dir>/index');
 
-function makeIndex(repo, { contentType = ['code', 'config'], version = 1, files = {}, complete = true } = {}) {
+// The set as semble persists it: sorted, comma-joined. Verified against a live
+// metadata.json, whose content_type is ["code","docs","config"] -> "code,config,docs".
+const CONTENT_CSV = 'code,config,docs';
+
+function makeIndex(repo, { contentType = ['code', 'docs', 'config'], version = 1, files = {}, complete = true } = {}) {
   const h = sh(`sc_repo_hash "${repo}"`).out;
   const idx = join(CODE_ROOT, h, 'index');
   rmSync(join(CODE_ROOT, h), { recursive: true, force: true });
@@ -835,8 +839,30 @@ makeIndex(REPO_C);
 check('cache.info.nonet', json(run(CACHE_SH, ['info', '--repo', REPO_C, '--json'])).staleness, 'unknown', 'SEMBLE_NO_NETWORK=1 -> unknown');
 check('cache.info.fresh', json(run(CACHE_SH, ['info', '--repo', REPO_C, '--json'], { SEMBLE_NO_NETWORK: undefined })).staleness, 'fresh', 'complete + matching metadata -> fresh');
 
+// Regression (v5.2.0): both staleness readers hardcoded "code,config" while the
+// corpus was already `code docs config`, so every real cache reported mismatch
+// and the freshness loop behind it never ran. The expected set now comes from
+// SEMBLE_CONTENT_ARGS, so the literal below is the only place it is spelled out.
+check('content.csv.helper', sh('sc_content_set_csv').out, CONTENT_CSV,
+  'sc_content_set_csv sorts SEMBLE_CONTENT_ARGS into the shape metadata.content_type carries');
+check('content.csv.source', sh('printf %s "$SEMBLE_CONTENT_ARGS"').out, 'code docs config',
+  'SEMBLE_CONTENT_ARGS is the argv order, unsorted');
+check('content.csv.no-literal', [CACHE_SH, join(SCRIPTS, 'semble-project.sh')]
+  .map((f) => readFileSync(f, 'utf8').split('"code,config"').length - 1), [0, 0],
+  'neither staleness reader spells a content set out; both take it from SEMBLE_CONTENT_ARGS');
+
+makeIndex(REPO_C, { contentType: ['code', 'docs', 'config'] });
+check('cache.info.live-set.fresh', json(run(CACHE_SH, ['info', '--repo', REPO_C, '--json'], { SEMBLE_NO_NETWORK: undefined })).staleness, 'fresh',
+  'the live set ["code","docs","config"] (sorted code,config,docs) is NOT a mismatch');
+check('cache.info.live-set.metadata', json(run(CACHE_SH, ['info', '--repo', REPO_C, '--json'], { SEMBLE_NO_NETWORK: undefined })).metadata.content_type, ['code', 'docs', 'config'],
+  'the metadata is echoed back unsorted, exactly as written');
+
+makeIndex(REPO_C, { contentType: ['code', 'config'] });
+check('cache.info.oldset.mismatch', json(run(CACHE_SH, ['info', '--repo', REPO_C, '--json'], { SEMBLE_NO_NETWORK: undefined })).staleness, 'mismatch',
+  'the pre-docs set {code,config} is genuine drift -> mismatch');
+
 makeIndex(REPO_C, { contentType: ['code'] });
-check('cache.info.mismatch', json(run(CACHE_SH, ['info', '--repo', REPO_C, '--json'], { SEMBLE_NO_NETWORK: undefined })).staleness, 'mismatch', 'content_type != {code,config} -> mismatch');
+check('cache.info.mismatch', json(run(CACHE_SH, ['info', '--repo', REPO_C, '--json'], { SEMBLE_NO_NETWORK: undefined })).staleness, 'mismatch', 'content_type != {code,docs,config} -> mismatch');
 
 makeIndex(REPO_C, { version: 2 });
 check('cache.info.version', json(run(CACHE_SH, ['info', '--repo', REPO_C, '--json'], { SEMBLE_NO_NETWORK: undefined })).staleness, 'mismatch', 'cache_version != 1 -> mismatch');

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=5.2.0 generated_by=brewcode:semble-setup
+// brewcode-meta: version=5.2.1 generated_by=brewcode:semble-setup
 /**
  * brewcode:semble-setup — PostToolUse / PostToolUseFailure hook (self-contained,
  * installed into a project). PURE OBSERVER.

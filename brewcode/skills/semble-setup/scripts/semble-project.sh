@@ -134,7 +134,8 @@ sp_cache_info_fallback() {
   dir=""
   [ -n "$hash" ] && dir="$(sc_cache_root_code)/$hash"
   SP_CODEROOT="$(sc_cache_root_code)" SP_DOCSROOT="$(sc_cache_root_docs)" \
-  SP_HASH="$hash" SP_DIR="$dir" SP_NONET="${SEMBLE_NO_NETWORK:-}" node -e '
+  SP_HASH="$hash" SP_DIR="$dir" SP_WANT_CT="$(sc_content_set_csv)" \
+  SP_NONET="${SEMBLE_NO_NETWORK:-}" node -e '
 const fs=require("fs"),path=require("path");
 const dir=process.env.SP_DIR,idx=dir?path.join(dir,"index"):"";
 const out={codeRoot:process.env.SP_CODEROOT,docsRoot:process.env.SP_DOCSROOT,
@@ -156,7 +157,7 @@ try{md=JSON.parse(fs.readFileSync(path.join(idx,"metadata.json"),"utf8"));}catch
 out.metadata=md;
 if(md===null||process.env.SP_NONET==="1"){out.staleness="unknown";process.stdout.write(JSON.stringify(out));process.exit(0);}
 const ct=Array.isArray(md.content_type)?md.content_type.slice().sort().join(","):"";
-if(ct!=="code,config"||md.cache_version!==1){out.staleness="mismatch";process.stdout.write(JSON.stringify(out));process.exit(0);}
+if(ct!==process.env.SP_WANT_CT||md.cache_version!==1){out.staleness="mismatch";process.stdout.write(JSON.stringify(out));process.exit(0);}
 let stale=false;
 const files=(md.files&&typeof md.files==="object")?md.files:{};
 const t=Number(md.time)||0;
@@ -245,7 +246,8 @@ sp_run_search() {
   # shell function (bash watchdog), not a binary a var prefix would apply to.
   start="$(date +%s)"
   set +e
-  # shellcheck disable=SC2086 -- deliberate word split; must match the MCP's --content
+  # Deliberate word split; must match the MCP's --content.
+  # shellcheck disable=SC2086
   out="$(sc_timeout "$SP_SEARCH_TIMEOUT" env SEMBLE_CACHE_LOCATION="$cache" \
         uvx --from "$SEMBLE_PIN_SPEC" semble search \
         "$query" "$root" --content $SEMBLE_CONTENT_ARGS -k 5 --max-snippet-lines 10 2>/dev/null)"

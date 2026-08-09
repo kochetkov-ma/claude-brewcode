@@ -4,7 +4,7 @@ description: Complete file tree of the brewcode plugin with descriptions
 
 # Brewcode Plugin - File Tree
 
-> Version: 5.2.0 | Files: 149 | Directories: 44 (excludes the generated `.codex/` mirror; no dotfiles, `__pycache__`, or `node_modules` exist under `brewcode/`)
+> Version: 5.2.1 | Files: 149 | Directories: 44 (excludes the generated `.codex/` mirror; no dotfiles, `__pycache__`, or `node_modules` exist under `brewcode/`)
 
 ## Plugin Structure
 
@@ -12,7 +12,7 @@ description: Complete file tree of the brewcode plugin with descriptions
 brewcode/                                    # Plugin root directory
 │
 ├── .claude-plugin/                            # Claude Code plugin configuration
-│   └── plugin.json                            # Manifest (name, version 5.2.0, skills/ reference)
+│   └── plugin.json                            # Manifest (name, version 5.2.1, skills/ reference)
 │
 ├── hooks/                                     # Node.js scripts for Claude Code events
 │   ├── hooks.json                             # Binds 2 events (UserPromptSubmit, SessionStart)
@@ -101,7 +101,7 @@ brewcode/                                    # Plugin root directory
 │
 ├── README.md                                  # Components, commands, agents, hooks, architecture, flow diagrams
 ├── INSTALL.md                                 # Installation: plugin-dir, marketplace, embedding, troubleshooting
-└── package.json                               # npm: claude-plugin-brewcode@5.2.0, build/publish scripts
+└── package.json                               # npm: claude-plugin-brewcode@5.2.1, build/publish scripts
 ```
 
 ## Target Project Structure

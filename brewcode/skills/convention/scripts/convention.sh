@@ -158,15 +158,24 @@ plugin_version() {
       v=$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$PLUGIN_JSON" 2>/dev/null | head -1 || true)
     fi
   fi
-  printf '%s' "${v:-unknown}"
+  case "$v" in
+    [0-9]*.[0-9]*.[0-9]*) printf '%s' "$v"; return 0 ;;
+  esac
+  # HARD FAIL, never a placeholder value. A word like `unknown` carries no `{}<>`, so setup-status's
+  # PLACEHLD test cannot catch it: `sort -V` would compare it against the real version and print a
+  # confident `AHEAD unknown > X.Y.Z`. The manifest ships with the plugin in the dev checkout and in
+  # the cache alike, so an unreadable one is a broken install - stop before anything is stamped.
+  err "❌ cannot resolve the plugin version (X.Y.Z) from $PLUGIN_JSON - refusing to stamp an artifact with a fake version"
+  return 1
 }
 
 # Creates the output dir AND hands back the artifact-metadata scalars P4 stamps into each of the
 # three generated docs. The old `created` key was an ISO-8601 timestamp nothing ever persisted.
 setup_convention() {
+  _pv=$(plugin_version) || exit 1
   mkdir -p .claude/convention
   printf '{"path":".claude/convention/","version":"%s","generated_by":"%s","last_updated":"%s"}\n' \
-    "$(plugin_version)" "$GENERATED_BY" "$(date +%F)"
+    "$_pv" "$GENERATED_BY" "$(date +%F)"
 }
 
 # A convention doc counts as present only when it also carries the standard metadata: a doc with

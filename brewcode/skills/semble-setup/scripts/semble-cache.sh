@@ -61,6 +61,7 @@ REPO_DIR=""
 # ── shared node walker: size/entries/staleness/otherRepos ───────────────────
 cache_info_json() {
   SC_CODE="$CODE_ROOT" SC_DOCS="$DOCS_ROOT" SC_HASH="$HASH" SC_REPO="$REPO_ABS" \
+  SC_WANT_CT="$(sc_content_set_csv)" \
   SC_NONET="${SEMBLE_NO_NETWORK:-}" node -e '
 const fs=require("fs"),path=require("path");
 const code=process.env.SC_CODE, docs=process.env.SC_DOCS, hash=process.env.SC_HASH;
@@ -86,7 +87,7 @@ function staleness(dir,m){
   if(process.env.SC_NONET==="1") return "unknown";
   if(!m) return "unknown";
   const ct=Array.isArray(m.content_type)?m.content_type.slice().sort().join(","):"";
-  if(ct!=="code,config") return "mismatch";
+  if(ct!==process.env.SC_WANT_CT) return "mismatch";
   if(Number(m.cache_version)!==1) return "mismatch";
   const t=Number(m.time);
   if(!isFinite(t)) return "unknown";

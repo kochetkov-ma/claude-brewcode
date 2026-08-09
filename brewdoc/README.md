@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 5.2.0 |
+| Version | 5.2.1 |
 | Skills | 5 |
 | Agents | 0 |
 | Hooks | 0 |
@@ -79,15 +79,15 @@ claude --plugin-dir ./brewdoc
 
 > **Naming rule.** A `-setup` suffix marks a skill that *installs a mechanism* -- after running it you use the installed hooks or the generated skill, not the setup skill itself. Recurring tools you invoke every time (`my-claude`, `md-to-pdf`, `publish`) keep bare names.
 
-> **Canonical modes.** Setup skills answer the same verbs, in this order: `status | install | upgrade | enable | disable | uninstall | purge`. No argument = `status` if installed, `install` if not. Extras (`sync`, `reread`, `frontmatter`, a fine-tune prompt) come *after* the canonical verb. The v4 aliases `init`, `on`, `off`, `setup`, `remove` and `reset` are gone -- v5.0.0 is a deliberate breaking change with no back-compat. Neither brewdoc setup skill implements `enable`/`disable`; the Arguments column below is authoritative.
+> **Canonical modes.** Setup skills answer the same verbs, in this order: `status | install | upgrade | enable | disable | uninstall | purge`. No argument = `status` if installed, `install` if not. Extras (`sync`, `reread`, `frontmatter`, a fine-tune prompt) come *after* the canonical verb. The v4 aliases `init`, `on`, `off`, `setup`, `remove` and `reset` are gone -- v5.0.0 is a deliberate breaking change with no back-compat. Both brewdoc setup skills implement `enable`/`disable` -- `docsync-setup` flips the `enabled` key in `.claude/docsync/config.json`, `memory-sync-setup` renames `SKILL.md` <-> `SKILL.md.disabled` -- and both implement `purge`; the Arguments column below is authoritative.
 
 > Every brewdoc skill is `user-invocable: true` **and** `disable-model-invocation: true` -- and so is every one of the 26 skills across the suite. Claude never sees their descriptions and never fires one on its own; you type the command. That is a deliberate trade: 26 model-visible descriptions would cost tokens in every request forever, and none of these skills wants to be auto-triggered. Run [`/brewcode:setup-status`](../brewcode/skills/setup-status/README.md) to see what is installed, stale, disabled or missing across every plugin.
 
 | Skill | Purpose | Model | Arguments |
 |-------|---------|-------|-----------|
-| [`/brewdoc:docsync-setup`](skills/docsync-setup/README.md) | Installs project-local doc-staleness tracking (hooks) and reports/forces doc sync | sonnet | `[status\|install\|upgrade\|uninstall\|purge] [sync [--all]\|reread\|frontmatter] \| free-text` |
+| [`/brewdoc:docsync-setup`](skills/docsync-setup/README.md) | Installs project-local doc-staleness tracking (hooks) and reports/forces doc sync | sonnet | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [sync [--all]\|reread\|frontmatter] \| free-text` |
 | [`/brewdoc:my-claude`](skills/my-claude/README.md) | Document your Claude Code installation -- setup, architecture, web research | opus | `[ext [context]] \| [r <query>]` -- no args = internal installation docs |
-| [`/brewdoc:memory-sync-setup`](skills/memory-sync-setup/README.md) | Generator -- analyzes a target project and emits a project-tailored `.claude/skills/memory-sync/` (batches, fact catalogue, non-growth sync, independent verify) | opus | `[status\|install\|upgrade\|uninstall] [fine-tune-prompt]` |
+| [`/brewdoc:memory-sync-setup`](skills/memory-sync-setup/README.md) | Generator -- analyzes a target project and emits a project-tailored `.claude/skills/memory-sync/` (batches, fact catalogue, non-growth sync, independent verify) | opus | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [fine-tune-prompt]` |
 | [`/brewdoc:md-to-pdf`](skills/md-to-pdf/README.md) | Convert Markdown to PDF via reportlab or weasyprint engines | sonnet | `<file.md> [--engine name] ["prompt"] \| styles \| test` |
 | [`/brewdoc:publish`](skills/publish/README.md) | Publish text/markdown/file/site to brewpage.app, returns URL | haiku | `<text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename]` |
 

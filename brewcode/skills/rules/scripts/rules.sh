@@ -35,10 +35,18 @@ plugin_version() {
       v=$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$PLUGIN_JSON" 2>/dev/null | head -1 || true)
     fi
   fi
-  printf '%s' "${v:-unknown}"
+  case "$v" in
+    [0-9]*.[0-9]*.[0-9]*) printf '%s' "$v"; return 0 ;;
+  esac
+  # HARD FAIL, never a placeholder value. A word like `unknown` carries no `{}<>`, so setup-status's
+  # PLACEHLD test cannot catch it: `sort -V` would compare it against the real version and print a
+  # confident `AHEAD unknown > X.Y.Z`. The manifest ships with the plugin in the dev checkout and in
+  # the cache alike, so an unreadable one is a broken install - stop before a rule file is written.
+  echo "❌ cannot resolve the plugin version (X.Y.Z) from $PLUGIN_JSON - refusing to stamp an artifact with a fake version" >&2
+  return 1
 }
 
-PLUGIN_VERSION="$(plugin_version)"
+PLUGIN_VERSION="$(plugin_version)" || exit 1
 GENERATED_BY="brewcode:rules"
 LAST_UPDATED="$(date +%F)"
 

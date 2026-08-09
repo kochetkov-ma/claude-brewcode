@@ -2,6 +2,21 @@
 
 ---
 
+## v5.2.1 (2026-08-09)
+
+> Docs: [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/)
+
+### brewcode
+
+#### Fixed
+
+- **The cache-staleness check was lying on every project.** Both readers compared `metadata.content_type` against a hardcoded `"code,config"` — a literal left over from before the corpus gained `docs`, while the server actually runs `--content code docs config` (sorted: `code,config,docs`). Every project therefore reported `cache: ... | mismatch`, and since that check returns early, the file-mtime freshness loop behind it never ran: `fresh`/`stale` was dead code in practice. The expected set now derives from `SEMBLE_CONTENT_ARGS` in `scripts/lib/semble-common.sh` through a new `sc_content_set_csv()` helper, so the two can no longer drift. Live proof: the status line went from `mismatch` to a genuine `stale`
+- **`semble-project.sh` carried an invalid inline shellcheck directive at line 249** that aborted shellcheck's parse of the whole file — and of everything sourced through it. Removed; the file and its dependencies lint again
+- **Coverage:** `tests/suite-core.mjs` gains 6 assertions pinning the derived content set, 329 -> 335, all 7 suites green
+- **End-to-end hook delivery re-validated** against a 26-file fixture project on CC 2.1.226: 5 of the 6 registrations delivered at 100% — SessionStart 3/3, UserPromptSubmit 1/1, PreToolUse 1/1 (joined by `tool_use_id`), SubagentStart 2/2 (joined by `agent_id`), PostToolUse 18 records with no delivery by design. `PostToolUseFailure` had no failure to fire on in the window, so it is unproven rather than failed. Zero emitted-but-undelivered payloads
+
+---
+
 ## v5.2.0 (2026-08-09)
 
 > Docs: [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) | [full-setup](https://doc-claude.brewcode.app/full-setup/)

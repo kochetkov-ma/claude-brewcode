@@ -23,6 +23,16 @@ SEMBLE_CONTENT_ARGS="code docs config"
 # top-level optional boolean on the stdio server object and isDeferredTool()
 # returns false for it. There is no `claude mcp add` flag — only add-json.
 SEMBLE_ALWAYS_LOAD=true
+# The same set in the shape semble persists it: metadata.content_type sorted and
+# comma-joined. Every staleness reader compares against THIS, never a literal —
+# the corpus grew from `code config` to `code docs config` and the two hardcoded
+# copies did not follow, so every cache reported `mismatch` and the freshness
+# loop behind it never ran.
+sc_content_set_csv() {
+  # Deliberate word split: one token per line.
+  # shellcheck disable=SC2086
+  printf '%s\n' $SEMBLE_CONTENT_ARGS | sort | paste -sd, -
+}
 SEMBLE_TOOL_SEARCH="mcp__semble_code__search"
 SEMBLE_TOOL_RELATED="mcp__semble_code__find_related"
 SEMBLE_STATE_SCHEMA=1
