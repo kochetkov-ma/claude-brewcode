@@ -21,7 +21,7 @@ import {
   mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, copyFileSync,
   readdirSync, realpathSync, statSync, chmodSync, appendFileSync, symlinkSync,
 } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -926,7 +926,8 @@ const END = '<!-- END brewcode:semble -->';
   const twice = readRaw(md);
   check('C2.idempotent', twice, once, 're-insert replaces the marked range in place, byte-identical');
   check('C2.begin', twice.split(BEGIN).length - 1, 1, 'still exactly one BEGIN after re-insert');
-  check('C2.unchanged', safeParse(r2.stdout).unchanged.length, 1, 're-insert reports unchanged');
+  check('C2.unchanged', safeParse(r2.stdout).unchanged.length, 2,
+    're-insert reports two unchanged lines: the marker block, and the competing-doctrine scan that found nothing');
 
   guidance(p, ['remove', '--part', 'claudemd', '--json']);
   check('C3.restored', readRaw(md), pre, 'remove restores the pre-insert bytes exactly');
@@ -940,6 +941,131 @@ const END = '<!-- END brewcode:semble -->';
   check('C4.bytes', readRaw(join(p, 'CLAUDE.md')), bad, 'a half-marked CLAUDE.md is left byte-identical');
   check('C4.exit', r.status, 0, 'the malformed-marker path is non-fatal');
   check('C4.skipped', safeParse(r.stdout).skipped.length, 1, 'the malformed marker block is reported as skipped');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// C5-C10. Competing search doctrine in CLAUDE.md
+//
+// Writing the rule is not the same as it being obeyed: guidance reached the
+// model on 100% of prompts and converted 2 of 7, because the project's own
+// CLAUDE.md said "Search via the **Bash** tool" and that outranks a
+// `.claude/rules/` file. `install --part claudemd` now reconciles the doctrine.
+//
+// Every case below compares the WHOLE file against `withBlock(<expected pre>)`,
+// which is exactly what `claudemd_node`'s install branch produces, so nothing
+// but the intended lines can move without the check noticing.
+// ═══════════════════════════════════════════════════════════════════════════
+const BLOCK_TEXT = (() => {
+  const p = freshProject({ claudeMd: '# CLAUDE.md\n' });
+  guidance(p, ['install', '--part', 'claudemd', '--json']);
+  const t = readRaw(join(p, 'CLAUDE.md'));
+  return t.slice(t.indexOf(BEGIN), t.indexOf(END) + END.length);
+})();
+const withBlock = (pre) => `${pre.replace(/\s*$/, '')}\n\n${BLOCK_TEXT}\n`;
+
+// The confirmed instance, verbatim, em-dash and all.
+const CONFLICT_LINE = '> Search via the **Bash** tool — shadow functions reroute `grep`->ugrep, `find`->bfs, `rg`->rg. Native `Grep`/`Glob` are no-ops on this macOS build.';
+// The complementary sentence. rg IS the right tool for these and the skill's own
+// rule says so, so this one must survive every pass untouched.
+const KEEP_LINE = 'Use `rg` for exact identifiers, literal strings and exhaustive enumeration.';
+
+const HEAD_PRE = '# CLAUDE.md\n\n## Overview\n\nproject text\n';
+const TAIL_PRE = `## Conventions\n\n${KEEP_LINE}\n`;
+
+// C5 — the contradiction goes, the orphaned heading goes with it, and the
+// complementary sentence two sections down does not move a byte.
+{
+  const dirty = `${HEAD_PRE}\n## Code Search\n\n${CONFLICT_LINE}\n\n${TAIL_PRE}`;
+  const clean = `${HEAD_PRE}\n${TAIL_PRE}`;
+  const p = freshProject({ claudeMd: dirty });
+  const r = guidance(p, ['install', '--part', 'claudemd', '--json']);
+  const j = safeParse(r.stdout);
+  check('C5.file', readRaw(join(p, 'CLAUDE.md')), withBlock(clean),
+    'the whole file equals the same file written without the competing section - the directive and its emptied heading are gone, everything else is byte-identical');
+  check('C5.keptLine', readRaw(join(p, 'CLAUDE.md')).includes(KEEP_LINE), true,
+    'the complementary rg-for-enumeration sentence survives verbatim');
+  check('C5.exit', r.status, 0, 'stripping a contradiction is a success, not a failure');
+  check('C5.changed', j.changed.length, 4,
+    'four report lines: the marker block, the strip summary, the emptied heading, the directive itself');
+  check('C5.heading', j.changed[2], 'CLAUDE.md: removed L7: ## Code Search (heading left empty by the removal)',
+    'the heading is reported separately and is NOT counted as a second contradiction');
+  check('C5.directive', j.changed[3], `CLAUDE.md: removed L9: ${CONFLICT_LINE}`,
+    'the removed directive is echoed verbatim with its original line number');
+  check('C5.count', j.changed[1].startsWith('CLAUDE.md: removed 1 competing search directive(s) from '), true,
+    'the summary counts one directive, not two');
+  check('C5.skipped', j.skipped.length, 0, 'an unambiguous contradiction is handled, never merely reported');
+}
+
+// C6 — recovery. The whole pre-strip file goes to one timestamped .bak, which is
+// how the TRUE half of that sentence (the grep->ugrep / find->bfs shadowing) is
+// recoverable after a whole-line cut.
+{
+  const dirty = `${HEAD_PRE}\n## Code Search\n\n${CONFLICT_LINE}\n\n${TAIL_PRE}`;
+  const p = freshProject({ claudeMd: dirty });
+  guidance(p, ['install', '--part', 'claudemd', '--json']);
+  const baks = readdirSync(p).filter((n) => n.startsWith('CLAUDE.md.bak.'));
+  check('C6.count', baks.length, 1, 'exactly one backup is taken, by sc_backup, the same recovery install_managed --force uses');
+  check('C6.bytes', readRaw(join(p, baks[0] || 'CLAUDE.md.bak.absent')), withBlock(dirty),
+    'the backup is the entire pre-strip file, so the true shadow-function fact removed with the line is recoverable verbatim');
+}
+
+// C7 — the complementary sentence on its own, under a heading that DOES match
+// the search-heading test. Nothing may be touched, and the heading must stay
+// because its body survived.
+{
+  const pre = `# CLAUDE.md\n\n## Code Search\n\n${KEEP_LINE}\n`;
+  const p = freshProject({ claudeMd: pre });
+  const r = guidance(p, ['install', '--part', 'claudemd', '--json']);
+  const j = safeParse(r.stdout);
+  check('C7.file', readRaw(join(p, 'CLAUDE.md')), withBlock(pre),
+    'a scoped rg sentence is complementary, not competing: file, heading and sentence are all byte-identical');
+  check('C7.changed', j.changed.length, 1, 'only the marker block is reported as changed');
+  check('C7.unchanged', j.unchanged.includes('CLAUDE.md: no competing search directive'), true,
+    'and the detector says so explicitly rather than staying silent');
+  check('C7.skipped', j.skipped.length, 0, 'it is not even reported for review - it is correct guidance');
+}
+
+// C8 — a CLAUDE.md with no search guidance at all.
+{
+  const pre = '# CLAUDE.md\n\n## Build\n\nrun make\n';
+  const p = freshProject({ claudeMd: pre });
+  const r = guidance(p, ['install', '--part', 'claudemd', '--json']);
+  const j = safeParse(r.stdout);
+  check('C8.file', readRaw(join(p, 'CLAUDE.md')), withBlock(pre), 'nothing to reconcile leaves the file byte-identical');
+  check('C8.baks', readdirSync(p).filter((n) => n.startsWith('CLAUDE.md.bak.')).length, 0,
+    'and takes no backup - a backup with nothing to recover is litter');
+  check('C8.changed', j.changed.length, 1, 'only the marker block is reported as changed');
+}
+
+// C9 — idempotence, compared as whole files.
+{
+  const dirty = `${HEAD_PRE}\n## Code Search\n\n${CONFLICT_LINE}\n\n${TAIL_PRE}`;
+  const p = freshProject({ claudeMd: dirty });
+  guidance(p, ['install', '--part', 'claudemd', '--json']);
+  const first = readRaw(join(p, 'CLAUDE.md'));
+  const r2 = guidance(p, ['install', '--part', 'claudemd', '--json']);
+  const j2 = safeParse(r2.stdout);
+  check('C9.same', readRaw(join(p, 'CLAUDE.md')), first, 'run 2 leaves the file byte-identical to run 1');
+  check('C9.changed', j2.changed.length, 0, 'run 2 changes nothing: the match is on the text, so there is nothing left to match');
+  check('C9.baks', readdirSync(p).filter((n) => n.startsWith('CLAUDE.md.bak.')).length, 1,
+    'and takes no second backup');
+  check('C9.unchanged', j2.unchanged.length, 2, 'run 2 reports the marker block and the doctrine as already correct');
+}
+
+// C10 — report-only tier. A line that merely mentions a search tool is named
+// with its line number and left alone: a false positive here silently deletes a
+// user's instructions, so recall is given up on purpose.
+{
+  const pre = '# CLAUDE.md\n\n## Notes\n\nMost search still flows through **Bash** on this build.\n';
+  const p = freshProject({ claudeMd: pre });
+  const r = guidance(p, ['install', '--part', 'claudemd', '--json']);
+  const j = safeParse(r.stdout);
+  check('C10.file', readRaw(join(p, 'CLAUDE.md')), withBlock(pre), 'an ambiguous line is left byte-identical');
+  check('C10.skipped', j.skipped, ['CLAUDE.md: L5 mentions a search tool but is not an unambiguous contradiction - left untouched, review by hand: Most search still flows through **Bash** on this build.'],
+    'it is reported verbatim with its line number so the user can decide');
+  check('C10.changed', j.changed.length, 1, 'and nothing beyond the marker block is written');
+  check('C10.baks', readdirSync(p).filter((n) => n.startsWith('CLAUDE.md.bak.')).length, 0,
+    'report-only never takes a backup because it never writes');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1628,13 +1754,16 @@ for (const [name, opts, msg] of SEARCH_FAIL) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// R. PreToolUse reminder — every-Nth cadence and the widened gate
+// R. PreToolUse reminder — nudge EVERY eligible search, and make "eligible" mean
+// something.
 //
-// Restored after the v5.0.0 removal with two changes that ARE the fix: the
-// 10-minute throttle became a counter over eligible searches, and the gate lost
-// its "any doubt returns true" bias. Replayed over the real historical stream
-// (2543 recorded search calls) the old gate let 229 through and fired 32; this
-// one lets 1023 through and fires 204.
+// The wide 5.2.x gate was measured on the real historical stream (2543 recorded
+// search calls): it let 1023 through and fired 204, and only 1 of those 204 was
+// a call semble could actually have answered better. The nudge was not
+// under-firing, it was mis-firing. So the cadence default drops to 1 and the
+// gate is re-tightened around a single idea: what survives is a multi-word
+// plain-language description of behaviour. Same replay, same input: this gate
+// lets 8 through and fires 8.
 // ═══════════════════════════════════════════════════════════════════════════
 const counterFile = (p) => join(p, '.claude', 'semble', 'reminder.json');
 const counterOf = (p) => safeParse(existsSync(counterFile(p)) ? readFileSync(counterFile(p), 'utf8') : 'null');
@@ -1657,28 +1786,32 @@ const ctxOf = (out) => ((out || {}).hookSpecificOutput || {}).additionalContext 
 const burst = (p, commands) => commands.map((c) => ctxOf(remindOut(p, c)) !== '');
 /** N distinct eligible searches: an intent question, no flag, no path, no filename. */
 const eligibleRun = (n) => Array.from({ length: n }, (_, i) => `rg "retry backoff policy ${i + 1}"`);
-const REMIND_TEXT = (p) =>
-  'semble: call mcp__semble_code__search FIRST for this — repo="' + p +
-  '", top_k=5, max_snippet_lines=10 — then open the hit at start_line. ' +
-  'Keep grep for exact identifiers, literal strings and exhaustive -l/-c enumeration.';
+const REMIND_TEXT = (p) => 'semble: wrong tool. mcp__semble_code__search repo="' + p + '" first.';
 const REMIND_OK = (p) => ({
   hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: REMIND_TEXT(p) },
 });
 
-// R1 — the cadence itself: 15 eligible calls, N=5, exactly three injections.
+// R1 — the shipped default: every eligible search is nudged, none is skipped.
 {
   const p = freshProject({ state: READY_STATE() });
   const seen = burst(p, eligibleRun(15));
-  check('R1.pattern', seen,
-    [false, false, false, false, true, false, false, false, false, true, false, false, false, false, true],
-    'across 15 eligible searches the nudge lands on exactly the 5th, 10th and 15th');
-  check('R1.count', seen.filter(Boolean).length, 3, 'three injections for fifteen eligible calls - one per five');
-  check('R1.counter', counterOf(p), { count: 15 }, 'the counter file holds every eligible call, not just the firing ones');
+  check('R1.pattern', seen, eligibleRun(15).map(() => true),
+    'at the shipped default all fifteen eligible searches are nudged - no phase, no gap');
+  check('R1.count', seen.filter(Boolean).length, 15, 'fifteen injections for fifteen eligible calls');
+  check('R1.counter', counterOf(p), { count: 15 }, 'the counter file holds every eligible call');
+}
+{
+  // The case the A/B exposed: an opener followed by a second search in the same
+  // session. Under N=5 the follow-up was silent; it is the follow-ups that were
+  // falling through to Bash, so this pair is the whole behavioural change.
+  const p = freshProject({ state: READY_STATE() });
+  check('R1.consecutive', burst(p, ['rg "how sessions persist"', 'rg "where retries are scheduled"']), [true, true],
+    'two consecutive eligible calls BOTH fire at the new default cadence');
 }
 
 // R2 — a corrupt counter resets to 0 instead of throwing or freezing the cadence.
 {
-  const p = freshProject({ state: READY_STATE() });
+  const p = freshProject({ state: READY_STATE({ reminderEvery: 5 }) });
   burst(p, eligibleRun(3));
   writeFileSync(counterFile(p), '{not json,,,');
   const seen = burst(p, eligibleRun(5));
@@ -1687,7 +1820,7 @@ const REMIND_OK = (p) => ({
   check('R2.counter', counterOf(p), { count: 5 }, 'and the file is rewritten with a clean integer');
 }
 {
-  const p = freshProject({ state: READY_STATE() });
+  const p = freshProject({ state: READY_STATE({ reminderEvery: 5 }) });
   writeFileSync(counterFile(p), JSON.stringify({ count: -7 }));
   check('R3.negative', burst(p, eligibleRun(5)), [false, false, false, false, true],
     'a negative count is rejected the same way a corrupt file is');
@@ -1696,7 +1829,7 @@ const REMIND_OK = (p) => ({
 
 // R4 — ineligible calls must not advance the counter, or N would mean nothing.
 {
-  const p = freshProject({ state: READY_STATE() });
+  const p = freshProject({ state: READY_STATE({ reminderEvery: 5 }) });
   burst(p, eligibleRun(4));
   const skipped = burst(p, ['rg -l "retry backoff policy X"', 'rg -c "handler"', 'grep -o "token" ']);
   check('R4.skipped', skipped, [false, false, false], 'the three suppressed calls inject nothing');
@@ -1705,7 +1838,8 @@ const REMIND_OK = (p) => ({
     'so the next ELIGIBLE call is number five and fires');
 }
 
-// R5 — N is configuration, read off state.json.
+// R5 — N is configuration, read off state.json. The default is 1; a larger N is
+// still honoured for anyone who wants the channel quieter.
 {
   const p = freshProject({ state: READY_STATE({ reminderEvery: 1 }) });
   check('R5.every1', burst(p, eligibleRun(3)), [true, true, true], 'reminderEvery:1 nudges on every eligible search');
@@ -1715,56 +1849,88 @@ const REMIND_OK = (p) => ({
   check('R5.every3', burst(p, eligibleRun(6)), [false, false, true, false, false, true], 'reminderEvery:3 nudges on the 3rd and the 6th');
 }
 {
+  const p = freshProject({ state: READY_STATE({ reminderEvery: 5 }) });
+  check('R5.every5', burst(p, eligibleRun(10)),
+    [false, false, false, false, true, false, false, false, false, true],
+    'reminderEvery:5 still throttles exactly as it did before the default changed');
+}
+{
   const p = freshProject({ state: READY_STATE({ reminderEvery: 0 }) });
-  check('R5.zeroIgnored', burst(p, eligibleRun(5)), [false, false, false, false, true],
-    'reminderEvery:0 is not a valid cadence and falls back to the default 5');
+  check('R5.zeroIgnored', burst(p, eligibleRun(3)), [true, true, true],
+    'reminderEvery:0 is not a valid cadence and falls back to the default 1');
 }
 {
   const p = freshProject({ state: READY_STATE({ reminderEvery: 'many' }) });
-  check('R5.stringIgnored', burst(p, eligibleRun(5)), [false, false, false, false, true],
-    'a non-integer reminderEvery falls back to the default 5 as well');
+  check('R5.stringIgnored', burst(p, eligibleRun(3)), [true, true, true],
+    'a non-integer reminderEvery falls back to the default 1 as well');
 }
 
-// R6 — the suppressors that survived. reminderEvery:1 removes the cadence from
-// the picture, so a `false` here is the GATE and nothing else.
+// R6 — the gate, one command per suppressor. The cadence is 1 here (and by
+// default), so a `false` in this block is the GATE and nothing else.
 {
   const p = freshProject({ state: READY_STATE({ reminderEvery: 1 }) });
   const suppressed = [
-    'rg -l "session store"',
-    'rg --files-with-matches "session store"',
-    'grep -c "session store" ',
-    'rg --count "session store"',
-    'grep -o "session store" ',
-    'rg "src/store/session.ts"',
-    'rg "session.ts"',
-    'find . -name "session"',
-    'bfs . -iname "session"',
-    'rg "how does semble decide"',
+    'rg -l "session store"',                       // enumeration: file list
+    'rg --files-with-matches "session store"',     // same, long form
+    'grep -c "session store" ',                    // enumeration: count
+    'rg --count "session store"',                  // same, long form
+    'grep -o "session store" ',                    // enumeration: match list
+    'rg --files',                                  // enumeration: no pattern at all
+    'rg -F "session store" ',                      // literal-match flag
+    'rg -w "session store" ',                      // word-match flag
+    'rg "sessionStore"',                           // ONE word: an identifier lookup
+    'rg "a b"',                                    // shorter than a description of behaviour
+    'rg "handle.*event"',                          // regex metacharacter
+    'rg "^export function"',                       // anchor
+    'rg "(retry|backoff)"',                        // alternation
+    'rg "src/store/session.ts"',                   // a path
+    'rg "session.ts"',                             // a filename
+    'rg "generate.sh emit"',                       // a filename inside a phrase
+    'find . -name "session"',                      // find: filename enumeration
+    'bfs . -iname "session"',                      // bfs: the same
+    'find . -type f',                              // find with no pattern at all
+    'strings ./bin/app | grep "session expiry"',   // grep reading a pipe, not the repo
+    'ps aux | grep "node server"',                 // the same, on process output
+    'rg "session expiry" | wc',                    // piped into an aggregator
+    'rg "session expiry" | sort',                  // the same
+    'rg "every session store"',                    // enumeration in words
+    'rg "all session stores"',                     // the same
+    'rg "how many retries happen"',                // the same
+    'rg "list the session stores"',                // the same
+    'rg "brewcode-meta: version"',                 // markup punctuation: a verbatim string
+    'rg "SKILL METADATA"',                         // an ALL-CAPS banner string
+    'rg "lastUpdated docType"',                    // ALL identifiers, camelCase
+    'rg "max_retries min_delay"',                  // ALL identifiers, snake_case
+    'rg "intent-guard doc-type"',                  // ALL identifiers, hyphen slugs
+    'rg "how does semble decide"',                 // any mention of semble
+    'npm run build',                               // not a search at all
+    'git commit -m "fix retry backoff policy"',    // the same
+    'mv src/session.ts src/store/session.ts',      // the same
   ];
   check('R6.suppressed', burst(p, suppressed), suppressed.map(() => false),
-    'enumeration flags, a path pattern, a filename-shaped pattern, a find-by-name and any mention of semble stay silent');
+    'enumeration, literal and identifier lookups, paths, filenames, find, stream filters, aggregator pipes, '
+    + 'enumeration words, verbatim code strings and non-search commands all stay silent');
   check('R6.counterUntouched', existsSync(counterFile(p)), false,
     'and none of them ever created the counter file - suppression happens before the count');
 }
 
-// R7 — the shapes the old "any doubt returns true" gate suppressed and this one
-// allows. These ten are the 4.5x eligibility gain, one case per reason.
+// R7 — what a nudge is FOR: a multi-word plain-language description of
+// behaviour, the one shape semble answers better than grep.
 {
   const p = freshProject({ state: READY_STATE({ reminderEvery: 1 }) });
   const allowed = [
-    'rg "handle.*event"',              // regex metacharacter
-    'rg "^export function"',           // anchor
-    'rg "(retry|backoff)"',            // alternation
-    'rg "queue\\[0\\]"',               // bracket
-    'rg -F "session expiry" ',         // literal flag, no longer a suppressor
-    'rg -w "dispatch" ',               // word flag, no longer a suppressor
-    'rg "id"',                         // two characters, no longer too short
-    'rg "session store" | sort',       // piped, no longer a suppressor
-    'cd /tmp && rg "session expiry"',  // search at a command boundary
-    'ugrep "how sessions persist"',    // a non-rg binary
+    'rg "how sessions persist"',                   // a behaviour question
+    'ugrep "where retries are scheduled"',         // a non-rg binary
+    'grep -rn "what decides the cadence" .',       // recursive grep, still a question
+    'cd /tmp && rg "session expiry policy"',       // a search at a command boundary
+    'rg -i "queue drain behaviour"',               // case-insensitive is not enumeration
+    'rg "session expiry policy" | head -20',       // head caps output, it does not enumerate
+    'rg "rateLimit config"',                       // camelCase beside a plain word: a question
+    'rg "max_retries setting"',                    // snake_case beside a plain word: the same
+    'rg "intent-guard template"',                  // a hyphen slug beside a plain word
   ];
   check('R7.allowed', burst(p, allowed), allowed.map(() => true),
-    'regexes, literal/word flags, short patterns and piped searches all reach the model now');
+    'behaviour questions fire wherever they appear - after a boundary, under -i, and with the output capped by head');
 }
 
 // R8 — state gating. Every row silent, and none of them counts.
@@ -1792,7 +1958,7 @@ const REMIND_OK = (p) => ({
   check('R8.cold', safeParse(reminder(p, { command: 'rg "session expiry"' }).stdout), {
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',
-      additionalContext: REMIND_TEXT(p) + ' Index not verified yet (phase=awaiting_reload); the first call builds it.',
+      additionalContext: REMIND_TEXT(p) + ' (first call builds the index)',
     },
   }, 'a registered-but-unverified project still gets the nudge, with the cold-index clause appended');
 }
@@ -1844,6 +2010,17 @@ const REMIND_OK = (p) => ({
   const p = freshProject({ state: READY_STATE({ reminderEvery: 1 }) });
   reminder(p, { command: 'rg "session expiry"' }, { agent_id: 'a1c5a07', agent_type: 'general-purpose' });
   check('R11.subAttribution', trec(p, 1).agent, 'sub', 'a PreToolUse arriving from inside a subagent is attributed to sub, not main');
+}
+{
+  // ~89% of search-shaped tool use happens inside subagents, so the gate must
+  // decide identically there. It reads no agent field at all — this proves it.
+  const main = freshProject({ state: READY_STATE() });
+  const sub = freshProject({ state: READY_STATE() });
+  const seenMain = burst(main, ['rg "how sessions persist"', 'rg -l "how sessions persist"']);
+  const seenSub = ['rg "how sessions persist"', 'rg -l "how sessions persist"'].map((command) =>
+    ctxOf(safeParse(reminder(sub, { command }, { agent_id: 'a1c5a07', agent_type: 'Explore' }).stdout)) !== '');
+  check('R11.subParity', [seenMain, seenSub], [[true, false], [true, false]],
+    'the same eligible call fires and the same enumeration is suppressed whether the caller is the main session or a subagent');
 }
 {
   const p = freshProject({ state: READY_STATE() });

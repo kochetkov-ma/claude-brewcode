@@ -14,7 +14,7 @@ wires nothing on its own.
 | `semble-session.mjs` | `<repo>/.claude/hooks/` | SessionStart | `systemMessage` + `additionalContext` |
 | `semble-prefetch.mjs` | `<repo>/.claude/hooks/` | UserPromptSubmit | `additionalContext` — top-3 candidate PATHS from a real search |
 | `semble-stats.mjs` | `<repo>/.claude/hooks/` | PostToolUse + PostToolUseFailure | **nothing** — appends JSONL telemetry, replies `{}` |
-| `semble-reminder.mjs` | `<repo>/.claude/hooks/` | PreToolUse `Bash\|Grep` | `additionalContext` — one throttled nudge before a text search |
+| `semble-reminder.mjs` | `<repo>/.claude/hooks/` | PreToolUse `Bash\|Grep` | `additionalContext` — fires on every eligible search (`reminderEvery` default 1, counter in `.claude/semble/reminder.json`), 29 tokens (down from 65) |
 | `semble-subagent.mjs` | `<repo>/.claude/hooks/` | SubagentStart (no matcher — every agent type) | `additionalContext` — the semble-first brief inside the subagent's own context |
 
 > Retired for good: `semble-explore.mjs` (SubagentStart `Explore` only).
@@ -182,6 +182,35 @@ the exact marker strings, never a regex over the whole file. **BEGIN without END
 (or the reverse) reports `malformed marker block` and changes nothing** — fix it
 by hand, then re-run.
 
+### 2a. CLAUDE.md doctrine-reconcile scan (`--part claudemd`)
+
+Runs immediately after the marker block above lands, gated by the same
+`want_part claudemd` that `--part all` also satisfies — so a plain `install`
+with `claudemd` in scope runs this too (`do_claudemd_conflicts`, called right
+after the block write, so the scan excludes the doctrine it just wrote). It
+can DELETE whole lines from the project's root CLAUDE.md; read this before
+running it unattended.
+
+- Root `<repo>/CLAUDE.md` only — never a nested `CLAUDE.md`.
+- Backs up the whole file first: `<repo>/CLAUDE.md.bak.<epoch>`, before any
+  write.
+- Removes whole lines only, never a clause within a line.
+- `SEMBLE_DRY_RUN=1` prints what it would remove and writes nothing.
+- Reports three buckets: `changed` (lines removed, echoed verbatim),
+  `skipped` (lines flagged for manual review), `unchanged` (no competing
+  directive found).
+
+| Line matches | Action |
+|---|---|
+| denies semble/semantic/MCP search outright ("is broken/unreliable/disabled", "never use semble"), or declares grep/glob "removed/no-op/disabled/gone" | removed, echoed verbatim in the report — even if the same line also names exact/literal/regex/path scoping |
+| routes search through grep/bash/rg/ugrep/ripgrep/find/glob first ("TOOL-first", "search via grep", "all code search through rg") and is NOT scoped to exact identifiers / regexes / paths / filenames / exhaustive enumeration / verify / count | removed, echoed verbatim in the report (incl. a search-titled heading the removal leaves empty) |
+| merely mentions a search tool, matching neither test above | reported as skipped, left untouched |
+| a "TOOL-first" style line that IS scoped to exact identifiers / regexes / paths / filenames / exhaustive enumeration / verify / count | never touched, not even reported |
+
+The exact/literal/regex/path/exhaustive scoping only shields the second
+(primacy-claim) row — an outright denial in row one is always removed, scoped
+wording or not.
+
 ---
 
 ## 3. Hook contracts
@@ -223,18 +252,33 @@ replacement for it — both are installed.
 > - **`0/11` was a real measurement**, but of one agent type (`Explore` was the
 >   only matcher) and of text that ended by undercutting its own instruction.
 >
-> Per-channel conversion on the accumulated telemetry, once the sources are no
-> longer lumped into one denominator: reminder 2/10 sessions, explore 1/7. The
-> lumped 6/80 (7.5%) that the old reader printed was dominated by the 126
-> SessionStart nudges in the same bucket.
+> The lumped 6/80 (7.5%) that the old reader printed was dominated by the 126
+> SessionStart nudges in the same bucket. Per-channel numbers for the reminder
+> are not reportable at all — see the measured result below.
 >
 > Both hooks are therefore restored — the reminder under its own name, the
-> subagent one as `semble-subagent.mjs` on every agent type. **What the restored
-> design has not yet measured is its own conversion**: the gate is rewritten and
-> the subagent text is new, so the honest statement today is that the channel
-> delivers and the old numbers were not evidence against it. Nothing here claims
-> the restored hooks convert well; `--section telemetry` now reports each channel
-> separately so the next release can say something measured.
+> subagent one as `semble-subagent.mjs` on every agent type. The follow-up
+> measurement now exists:
+>
+> - **Reminder conversion is undefined, not zero.** Across 59 evaluated search
+>   calls over 7 sessions on a code-heavy TypeScript fixture, the reminder
+>   fired 0 times — so its conversion is 0/0, and no release may print a
+>   conversion percentage for it. Control (no nudge) converted 8/59. Rule of
+>   three puts the 95% upper bound on the fire rate at 5.1%; banking enough
+>   fires for a real conversion test needs roughly 680 evaluated searches
+>   (~80 sessions).
+> - **Delivery inside a subagent is proven, not assumed.** An agent captured
+>   its own `SubagentStart` injection in-band, joined by `tool_use_id`,
+>   telemetry `agent:"sub"`. Subagent transcripts store only `SubagentStart`
+>   attachments (82 across 436 files, zero `PreToolUse`) — a storage gap, not
+>   a delivery gap.
+> - **The channel that actually works is `SubagentStart`.** 8 of 8 subagents
+>   opened with `mcp__semble_code__search` as their first tool. With that
+>   registration removed, semble still ran about twice per session from the
+>   auto-loaded `semble-first.md` rule, but never as tool 0. The routing win
+>   comes from the subagent briefing and the rule file; the `PreToolUse`
+>   reminder is low-cost insurance against a bad grep, not the adoption
+>   mechanism.
 
 > **It buys turns and citation precision, not correctness.** All 18 answers were
 > correct in all three arms (control, snippet-framing, path-framing). Nothing in

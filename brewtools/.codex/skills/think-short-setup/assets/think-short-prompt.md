@@ -1,4 +1,4 @@
-<!-- think-short brewcode-meta: version=5.2.4 generated_by=brewtools:think-short-setup -->
+<!-- think-short brewcode-meta: version=5.3.0 generated_by=brewtools:think-short-setup -->
 Be terse. Lead with results. Use ASCII unless the requested artifact requires other text.
 Think short: keep internal reasoning minimal and do not narrate exploration.
 Search before opening large files. Prefer focused edits and parallel read-only checks.

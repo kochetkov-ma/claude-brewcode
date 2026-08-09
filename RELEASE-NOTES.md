@@ -2,6 +2,44 @@
 
 ---
 
+## v5.3.0 (2026-08-09)
+
+> Docs: [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/)
+
+> This release is mostly measurement, and two of the measurements came back negative. The reminder hook was retuned from "fires often, advises badly" to "fires rarely, advises correctly" — and then measured firing **zero** times in 59 evaluated searches. The hypothesis that a contradicting `CLAUDE.md` suppresses semble adoption was A/B tested and **refuted**. What was proven is separated below from what was merely built.
+
+### brewcode
+
+#### Measured
+
+- **Delivery inside a subagent is PROVEN, not assumed.** Every prior release described `PreToolUse` delivery inside a subagent as unobservable. It is not: an agent captured its own injection in-band, joined to the hook's telemetry record by `tool_use_id`, `agent:"sub"`. Subagent transcripts store only `SubagentStart` attachments — 82 across 436 files, zero `PreToolUse` — which is a **storage** gap, not a delivery gap. Every doc claiming otherwise has been corrected
+- **90.6% of search traffic is subagent traffic** — 3084 subagent searches against 321 in the main session. Any search-routing mechanism that only reaches the main session addresses 9% of the problem
+- **The channel that actually works is `SubagentStart`.** 8 of 8 subagents opened with `mcp__semble_code__search` as their **first** tool. With that registration removed, semble still ran roughly twice per session out of the auto-loaded `semble-first.md` rule, but never as tool 0. The routing win comes from the subagent briefing and the rule file. The `PreToolUse` reminder is now correctly described as low-cost insurance against a bad grep, not as the mechanism that drives adoption
+- **Gate precision, 80 real commands hand-labelled independently.** Of the 40 the 5.2.3 gate fired on and the new gate suppresses, **37 are genuinely exact or exhaustive lookups where grep is the right tool** (1 behavioural, 2 ambiguous) — so roughly 95% of the old gate's injections were wrong advice. Of the 40 commands both gates suppress, **zero** were behavioural: no false negatives are hiding in the suppressed set
+
+#### Negative results
+
+- **The documentation-conflict hypothesis is REFUTED.** The theory was that a root `CLAUDE.md` contradicting the semble-first rule suppresses adoption, since a root `CLAUDE.md` outranks a `.claude/rules/` file. A/B: with the contradiction present, 5 semble calls / 14 searches = 36%; with it removed, 4 / 18 = 22%. Fisher exact two-sided **p = 0.45, n = 32** — and the "clean" arm was nominally **worse**. The conflict detector shipped in this release therefore has **no measured justification** as a conversion fix; it is kept only because removing a false statement is correct on its own merits. Every doc that sold it as a conversion fix has been rewritten
+- **The retuned reminder fired 0 times in 59 evaluated search calls** across 7 sessions on a code-heavy TypeScript fixture. Conversion after a nudge is therefore **undefined (0/0)** — no release may print a conversion percentage for this channel. Control conversion without a nudge was 8/59. Rule of three puts the 95% upper bound on the fire rate at **5.1%**; banking enough nudges for a conversion test needs roughly 680 evaluated searches, about 80 sessions
+
+#### Changed
+
+- **`semble-reminder.mjs` default `reminderEvery` 5 -> 1.** It now fires on every eligible search rather than every fifth. Still configurable in `.claude/semble/state.json`; the counter at `.claude/semble/reminder.json` stays project-global and survives sessions, it simply throttles nothing until a user raises N
+- **The injected text shrank from 65 tokens to 29** — `semble: wrong tool. mcp__semble_code__search repo="<cwd>" first.`, plus ` (first call builds the index)` while the index is not ready. A correction, not an explanation: the parameters the `semble-first` rule and the subagent brief already carry are no longer repeated
+- **The gate is now high-specificity.** Suppressors: a single-word pattern, a pattern under 8 characters, `-l`/`-c`/`-o`/`--files`, `-F`/`-w`, any `find`/`bfs`, a pattern containing `/`, a filename-shaped token (checked per token, not on the whole pattern), regex metacharacters, ALL-CAPS, the phrases "every/all/how many/list the", a binary reading a pipe, `| wc/sort/uniq/cut/awk`, and any mention of `semble`. Code-literal shapes split in two: `#:=<>`, backtick, `~@%` suppress unconditionally, while snake_case, an intra-word hyphen and camelCase suppress **only** when no token is a plain lowercase word — so `rateLimit config` and `max_retries setting` still fire on a TypeScript codebase
+- **Replayed on identical historical input** — 2543 recorded search calls: the pre-5.2.3 gate let 230 through and fired 32; the 5.2.3 gate 1024 / 204; this one **14 / 14**
+
+#### Added
+
+- **Installer conflict detector** — `sg_conflict_scan()` + `do_claudemd_conflicts()` in `semble-guidance.sh`, wired into `install` after `do_claudemd`. It scans the **root** `CLAUDE.md` only, outside the semble markers, for directives that contradict semble-first. A line that **denies** semantic search is removed even when it also scopes the tool; a line that merely puts grep/Bash/rg **first** is removed unless the same line scopes the tool to exact identifiers / regexes / paths / exhaustive enumeration, which is the skill's own correct guidance and is never touched or even reported; a line that merely mentions a search tool is reported and left. Whole lines only, never a clause — the confirmed instance mixes a true fact with a false one in one sentence. The whole file is backed up to a timestamped `.bak` first and every cut is echoed verbatim, so re-adding a true half is a paste. `SEMBLE_DRY_RUN=1` prints without writing. See the negative result above: this feature has no measured effect on tool choice
+
+#### Fixed
+
+- **Docs reconciled against the code.** `semble-setup.mdx` carried `N = 5`, an "every fifth search" callout, the superseded 5.2.3 gate replay numbers, and a cost table (188 tokens per injection, 189 per subagent injection, 20/20 and 4/4 delivery) that no longer describes anything shipped. `README.md` carried a stale per-channel conversion table (reminder 2/10 sessions, explore 1/7). `assets/INSTALL.md` still called the reminder "throttled", documented no cadence at all, said nothing about a scan that can delete lines from a user's `CLAUDE.md`, and closed on "not yet measured" for a measurement that now exists. All corrected
+- **This repo's own `CLAUDE.md` lost a duplicated `## Code Search` section** asserting that native `Grep`/`Glob` are no-ops on this macOS build. They are gated, not removed — naming them in `--allowedTools`, a permission rule or an agent's `tools:` frontmatter re-arms them
+
+---
+
 ## v5.2.4 (2026-08-09)
 
 > Docs: [agent-router-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-router-setup/) | [agent-deadline-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline-setup/) | [docsync-setup](https://doc-claude.brewcode.app/brewdoc/skills/docsync-setup/)

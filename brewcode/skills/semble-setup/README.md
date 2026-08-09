@@ -69,10 +69,37 @@ Plus three extras specific to a search index:
 | State | `<repo>/.claude/semble/state.json` |
 | Rule | `<repo>/.claude/rules/semble-first.md` |
 | Ignore file | `<repo>/.sembleignore` — read per-directory by `semble/index/file_walker.py:_load_ignore_for_dir` (gitignore syntax via `pathspec`; `core.excludesFile` is NOT honoured). Keeps generated/vendored trees (`.claude/tmp/`, `.claude/reports/`, build output, minified bundles) out of the corpus; deliberately never excludes `.claude/{skills,agents,rules,commands,hooks}/`. Same managed-file policy as the rule: user edits are reported, not clobbered, and `--force` backs up first |
-| CLAUDE.md | a marked `<!-- BEGIN brewcode:semble -->` block |
-| Hooks | `<repo>/.claude/hooks/semble-session.mjs` (SessionStart — state and reload messaging) + `semble-prefetch.mjs` (UserPromptSubmit — runs one semble search on the prompt and injects the top-3 candidate **paths**, never snippets) + `semble-stats.mjs` (PostToolUse + PostToolUseFailure — pure observer, JSONL telemetry) + `semble-reminder.mjs` (PreToolUse `Bash\|Grep` — fires every Nth eligible search, `N = state.reminderEvery`, DEF 5, counter in `.claude/semble/reminder.json`) + `semble-subagent.mjs` (SubagentStart, **no matcher, so every agent type** — the semble-first brief inside the subagent's own context). `semble-explore.mjs` is retired for good, superseded by `semble-subagent.mjs`; `install`/`upgrade` deletes that file and replaces its settings row. The 5.0.0 note claiming the two advisory hooks "converted at 0/18 and 0/11 with delivery proven" was wrong on the first number: the reminder hook fired zero times across those 18 sessions (gate suppressed 74/113, 37 `disabled`, 2 throttled), so `0/18` counted sessions, not deliveries. `0/11` was a real measurement, but of one agent type and of self-undercutting text. The channel itself always delivered. Per-channel conversion on the accumulated telemetry is reminder 2/10 sessions, explore 1/7 — the restored hooks' own numbers are not measured yet |
+| CLAUDE.md | a marked `<!-- BEGIN brewcode:semble -->` block — **plus a reconcile of the competing doctrine around it.** `install --part claudemd` scans the root CLAUDE.md **outside** the semble markers, backs the whole file up to a timestamped `.bak` first, and reconciles it to one doctrine. Kept on honest ground even though the A/B below found no adoption effect: a false statement in CLAUDE.md is worth removing because it is false, not because removing it converts anyone |
+| Hooks | `<repo>/.claude/hooks/semble-session.mjs` (SessionStart — state and reload messaging) + `semble-prefetch.mjs` (UserPromptSubmit — runs one semble search on the prompt and injects the top-3 candidate **paths**, never snippets) + `semble-stats.mjs` (PostToolUse + PostToolUseFailure — pure observer, JSONL telemetry) + `semble-reminder.mjs` (PreToolUse `Bash\|Grep` — fires on every eligible search, `N = state.reminderEvery`, DEF 1, counter in `.claude/semble/reminder.json` — project-global and persisted across sessions, so at N = 1 it throttles nothing) + `semble-subagent.mjs` (SubagentStart, no matcher, so every agent type). `semble-explore.mjs` is retired for good, superseded by `semble-subagent.mjs`; `install`/`upgrade` deletes that file and replaces its settings row |
 | Permissions | `<repo>/.claude/settings.json` -> exactly `mcp__semble_code__search` and `mcp__semble_code__find_related`, never a wildcard |
 | Agents | `<repo>/.claude/agents/**/*.md` get the two tool names; agents with no `tools:` key inherit and are left untouched. Global agents are never touched by `install` |
+
+### CLAUDE.md reconcile — what gets touched
+
+| Line matches | Action |
+|---|---|
+| **denies** semantic search outright (`Grep/Glob are no-ops`, `semantic search is broken`, `never use semble`) | removed **even when the line also scopes the tool** — a denial is false regardless of what else it says |
+| puts grep/Bash/rg **first** (`search via the Bash tool`, `grep-first`, `use rg for all searches`) | removed, **unless** the same line scopes the tool (see the row below) |
+| a search-titled heading the removal leaves empty | removed with it |
+| merely mentions a search tool | reported and left untouched |
+| scopes the tool to exact identifiers / regexes / paths / exhaustive enumeration (the skill's own correct guidance) | never touched, not even reported — this exemption shields the **first**-tier match only, never a denial |
+
+Removal is whole lines only, echoed verbatim in the report, and the whole file is backed up to a timestamped `.bak` first.
+
+An A/B on the hypothesis that a contradicting CLAUDE.md line suppresses semble adoption came back negative: with the contradicting directive present, 5 semble calls / 14 searches = 36%; with it removed, 4/18 = 22%; Fisher exact two-sided p = 0.45, n = 32, and the "clean" arm was nominally worse. The scan is kept anyway — the line is worth removing because it is false, not because removing it converts anyone.
+
+### Hooks — measured evidence
+
+| Finding | Number |
+|---|---|
+| Reminder injection cost | 29 tokens, was 65 |
+| Search traffic inside a subagent | 90.6% (3084 sub / 321 main) |
+| Subagents opening with semble as first tool | 8 of 8 |
+| Gate replay, 2543 recorded calls | old 230 eligible / 32 fired; 5.2.3 1024 / 204; current 14 / 14 |
+| Gate precision, 80 hand-labelled commands | of 40 the 5.2.3 gate fired on and the new one suppresses, 37 are exact/exhaustive lookups where grep is right, 1 behavioural, 2 ambiguous; of 40 both suppress, zero behavioural |
+| Reminder fire rate, 7 sessions / 59 evaluated calls | 0 nudges - conversion after a nudge is undefined (0/0); control conversion 8/59; rule of three puts the 95% upper bound on the fire rate at 5.1% |
+
+Delivery inside a subagent is **proven**, not merely assumed: in-band capture joined by `tool_use_id`, telemetry `agent:"sub"`; the 82-attachments-across-436-files figure is a storage gap, not a delivery gap. The channel that actually works is `SubagentStart` — the routing win comes from the subagent briefing and the auto-loaded `semble-first.md` rule, not from the PreToolUse reminder, which is low-cost insurance against a bad grep. Never report a conversion percentage for the reminder.
 
 ### The state file and its phases
 
@@ -139,7 +166,7 @@ Installation is **uvx-ephemeral** by default: no `semble` on `PATH`. That is del
 | `scripts/semble-state.sh` | `.claude/semble/state.json` read-modify-write |
 | `scripts/semble-project.sh` | audit, warm, smoke, enable, disable, reindex |
 | `scripts/semble-remove.sh` | the four removal flavours |
-| `scripts/semble-guidance.sh` | rule, CLAUDE.md block, hooks, settings + permissions merge |
+| `scripts/semble-guidance.sh` | rule, CLAUDE.md block + competing-doctrine reconcile, hooks, settings + permissions merge |
 | `scripts/semble-agents.sh` | project agent frontmatter migration |
 | `references/intent-routing.md` | routing table + 5-step resolution + 12 worked examples |
 | `references/output-contract.md` | the report template every invocation ends with |

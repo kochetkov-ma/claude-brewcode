@@ -93,6 +93,8 @@ Reload Claude Code (new session), then run: /brewcode:semble-setup resume
 Checkpoint: /abs/project/root/.claude/semble/state.json
 ```
 
+The `/6` in `guidance:` counts settings registrations, not hook files - five files wire six rows, so `5 hooks wired` under Actions and `hooks 0/6 wired` under Before both describe the same install correctly.
+
 After a fresh session, `resume` re-checks status, runs the smoke query (the one step that actually needed a live server), and re-applies the same wiring idempotently so any drift self-repairs:
 
 ```
@@ -222,6 +224,27 @@ The first seven rows are the canonical vocabulary shared by every `-setup` skill
 | Hooks | five files in `.claude/hooks/` — `semble-session.mjs` (SessionStart), `semble-prefetch.mjs` (UserPromptSubmit), `semble-stats.mjs` (PostToolUse + PostToolUseFailure, stats matcher), `semble-reminder.mjs` (PreToolUse `Bash\|Grep`), `semble-subagent.mjs` (SubagentStart, **no matcher key** — matches every agent type) — six `settings.json` registrations total, each `"timeout": 5` (seconds). Status reports `hooks <n>/6 wired` — never 6 files. `semble-explore.mjs` is retired for good, replaced by `semble-subagent.mjs`: `install`/`upgrade` deletes the file and replaces its settings row, never leaves both. See Retirement of the advisory pair and Reminder mechanic below |
 | Agents | project `.claude/agents/**/*.md` get the two tool names added to `tools:`; global agents are never touched |
 
+### CLAUDE.md conflict scan
+
+`install` reconciles the root `CLAUDE.md` (`--part claudemd`) right after it installs the `<!-- BEGIN brewcode:semble -->` block. It scans the rest of the file (the skill's own marked block is never a candidate) for lines that assert a competing search doctrine, against a two-tier pattern set:
+
+| Tier | Match | Result |
+|------|-------|--------|
+| DENY | explicit contradiction - grep/glob called a no-op/removed/unavailable, semble/semantic search called broken/unreliable/disabled, or "never/dont use semble" | line removed |
+| FIRST | competing claim - "search via `<tool>`", "always use `<tool>` for all/any/every/code", "`<tool>`-first", "`<tool>` before semble", or "all searches through `<tool>`" | line removed, unless KEEP-exempt |
+| KEEP (exempt) | scopes the tool to exact/literal/identifier/regex/path/filename/exhaustive/enumeration/verify/count - the skill's own correct guidance | never touched, not even reported |
+| neither | mentions a search tool without matching DENY or FIRST | left untouched, reported `skipped` for manual review |
+
+The KEEP exemption applies only to the FIRST tier — a DENY match is always removed regardless of scoping words in the same line.
+
+The scan reads the root `CLAUDE.md` only and never walks into a nested one, and a search-titled heading that a removal leaves empty is removed along with it.
+
+Finding a contradiction: backs up the whole file (`sc_backup`), strips the offending lines, reports `changed` with the exact line numbers and text removed. `SEMBLE_DRY_RUN=1` prints what it would remove without touching the file. No contradiction found: reports `unchanged`.
+
+<Callout type="caution" title="Built on a hypothesis the data refuted">
+The motivating idea was that a contradicting CLAUDE.md line suppresses conversion to semble. A controlled A/B tested it directly: sessions with the contradiction present converted 5/14 = 36%, sessions with it removed converted 4/18 = 22% — the "clean" arm was nominally *worse* (Fisher exact two-sided p = 0.45, n = 32). Removing false statements about the toolchain is still correct on its own merits, but it is not shown to change tool choice — treat this as documentation hygiene, not a conversion fix.
+</Callout>
+
 ### Retirement of the advisory pair
 
 The old rationale for retiring the advisory pair — "0/18 and 0/11 conversion, delivery independently confirmed" — was wrong on the first number:
@@ -234,24 +257,62 @@ The old rationale for retiring the advisory pair — "0/18 and 0/11 conversion, 
 
 ### Reminder mechanic
 
-The 600-second throttle is gone. `semble-reminder.mjs` fires on every Nth eligible search call — `N = 5` by default, configurable via `reminderEvery` in `.claude/semble/state.json`. The counter lives in `.claude/semble/reminder.json`, written atomically, reset on corruption; the old `.claude/semble/.reminder-ts` marker is retired for good.
+The 600-second throttle is gone. `semble-reminder.mjs` fires on every Nth eligible search call — `N = 1` by default (was 5), configurable via `reminderEvery` in `.claude/semble/state.json`. The counter lives in `.claude/semble/reminder.json`, written atomically, reset on corruption; the old `.claude/semble/.reminder-ts` marker is retired for good.
 
 <Callout type="caution" title="The counter is project-global, not per-session">
-It survives across sessions. A fresh session inherits the residual phase — the reminder may land on the very first search of that session or only on the fifth. "Every fifth search" is a property of the project, not the session.
+It still survives across sessions — but at the new default `N = 1` it cannot suppress anything, every eligible call fires. The counter only matters once a user raises `reminderEvery` above 1; at that point "every Nth search" is a property of the project, not the session, and a fresh session inherits whatever phase is left over.
 </Callout>
 
-The gate kept only the strong suppressors — `-l`/`-L`/`-c`/`-o` and their long forms (`--files-with-matches`, `--files-without-match`, `--count`, `--only-matching`), `find`/`bfs` `-name`/`-iname`/`-path`/`-type`, a pattern containing `/`, a filename-shaped pattern, and — for the native `Grep` tool — `output_mode: files_with_matches|count` — and dropped suppression on regex metacharacters, `-F`/`-w`, piping into `wc`/`sort`, and short patterns. Replayed on the real historical stream of 2543 recorded search calls: the old gate let 229 through and fired 32; the new one lets 1023 through and fires 204.
+The injected text shrank alongside the cadence change — `semble: wrong tool. mcp__semble_code__search repo="<cwd>" first.` plus ` (first call builds the index)` while the index is not ready (`phase !== 'ready'`) — **29 tokens** (cl100k_base), down from 65, by dropping the params the `semble-first` rule and the subagent brief already carry.
+
+The gate itself moved from "let most things through" to high-specificity — it now suppresses far more than the 5.2.3 gate did:
+
+| Suppressor | Detail |
+|------------|--------|
+| Single-word pattern | one token = an identifier lookup, `rg` is right |
+| Short pattern | under 8 characters |
+| Enumeration/literal flags | `-l`/`-c`/`-o`/`--files`, `-F`/`-w` |
+| Filename tools | any `find`/`bfs` invocation |
+| Path-shaped | pattern containing `/` |
+| Filename-shaped token | checked per token, not just the whole pattern |
+| Regex metacharacters | any of `^ $ * + ? ( ) [ ] { }` or a backslash/pipe |
+| ALL-CAPS | a shout/banner string |
+| Enumeration words | "every", "all", "how many", "list the" |
+| Piped binary | a binary reading another command's output, e.g. `strings x` piped into `grep y` |
+| Aggregator pipe | pipes into `wc`/`sort`/`uniq`/`cut`/`awk` |
+| `semble` mentioned | the command already names the tool |
+| Code-literal punctuation | `#` `:` `=` `<` `>` backtick `~` `@` `%` suppress unconditionally |
+| Identifier shapes | snake_case, intra-word hyphen, camelCase suppress ONLY when no token is a plain lowercase word — `rateLimit config` and `max_retries setting` still fire |
+
+Replayed on the same historical stream of 2543 recorded search calls, three gates side by side:
+
+| Gate | Eligible | Fired |
+|------|----------|-------|
+| Old (pre-5.2.3) | 230 | 32 |
+| 5.2.3 | 1024 | 204 |
+| Current | 14 | 14 |
 
 ### Measured delivery and cost
 
-CC 2.1.226, 17 real sessions, joined on `tool_use_id` between the hook's own telemetry record and the `hook_additional_context` attachment in the transcript:
+CC 2.1.226, real headless sessions, joined on `tool_use_id` between the hook's own telemetry record and the `hook_additional_context` transcript attachment.
 
-| Channel | Delivery | Cost |
-|---------|----------|------|
-| Reminder (PreToolUse) | 20/20 = 100% | 188 tokens per injection |
-| Subagent (SubagentStart) | 4/4 — Explore, Plan and general-purpose all quoted the injected text back verbatim | 189 tokens per injection |
+<Callout type="note" title="Subagent delivery: proven, not merely inferred">
+A subagent caught its own injection in-band and reported it back — joined by `tool_use_id`, telemetry tagged `agent:"sub"`. Subagent transcripts on disk store only `SubagentStart` attachments (82 across 436 files, zero `PreToolUse`) — that is a storage gap in what gets written to `<session-id>/subagents/agent-<id>.jsonl`, not a delivery gap. Any earlier claim that PreToolUse injection inside a subagent is unobservable is now known wrong.
+</Callout>
 
-188 tokens per reminder injection, 189 per subagent injection — PreToolUse context is **not** deduplicated, so every injection is paid in full.
+| Finding | Number |
+|---------|--------|
+| Search traffic that runs inside a subagent | 90.6% (3084 sub / 321 main) |
+| Gate precision (hand-labelled, 80 real commands) | of the 40 the 5.2.3 gate fired on but the current gate suppresses: 37 exact/exhaustive (rg is right), 1 behavioural, 2 ambiguous — ~95% of the old gate's injections were wrong advice |
+| False negatives in the stricter gate | 0 of the 40 commands both gates suppress were behavioural |
+| Reminder fire rate, 7 sessions, TypeScript fixture | 0 nudges / 59 evaluated search calls |
+| Reminder injection cost | 29 tokens (was 65) — PreToolUse context is not deduplicated, every injection paid in full |
+
+Conversion after a nudge is undefined (0/0) — with zero fires there is nothing to report. Control conversion without a nudge over the same 59 calls: 8/59. The rule of three puts the 95% upper bound on the true fire rate at 5.1%; closing that would take roughly 680 evaluated searches (~80 sessions) worth of nudges.
+
+<Callout type="caution" title="The channel that drives adoption is SubagentStart, not the reminder">
+8 of 8 subagents opened with `mcp__semble_code__search` as their first tool. With that registration removed, semble still ran about twice per session via the auto-loaded `semble-first.md` rule — but never as tool 0. The routing win comes from the subagent briefing and the rule file. Treat the reminder as low-cost insurance against a bad `rg` call already in flight, not as the mechanism that drives adoption.
+</Callout>
 
 Parent and subagent contexts are disjoint: the `SubagentStart` context is visible only inside the subagent and is written only to `<session-id>/subagents/agent-<id>.jsonl`, never to the parent transcript.
 

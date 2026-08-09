@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=5.2.4 generated_by=brewtools:think-short-setup
+// brewcode-meta: version=5.3.0 generated_by=brewtools:think-short-setup
 /**
  * think-short — PreToolUse hook for Task|Agent (self-contained, no plugin-root deps).
  *

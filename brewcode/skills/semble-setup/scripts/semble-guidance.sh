@@ -706,6 +706,195 @@ do_claudemd() {
   esac
 }
 
+# ── competing search doctrine in CLAUDE.md ──────────────────────────────────
+# Writing the rule is not the same as it being followed. Measured on this
+# workspace: guidance reached the model on 100% of prompts and converted 2 of 7,
+# and in the one session where two channels fired at once the model still went to
+# grep. The confirmed cause is not delivery — it is that the project's OWN
+# CLAUDE.md carried a competing directive ("Search via the **Bash** tool"), which
+# outranks a `.claude/rules/` file by proximity and by the user's own authority.
+# Installing a rule into a project that contradicts it is a wasted install, so
+# install reconciles the doctrine instead of adding a second one.
+#
+# Two tiers, and the boundary is deliberate because a false positive silently
+# deletes a user's instructions:
+#   confident (removed) — the line PUTS grep/Bash/rg first ("search via the bash
+#     tool", "grep-first", "use rg for all searches", "grep before semble") or
+#     DENIES the other side ("Grep/Glob are no-ops", "semantic search is
+#     broken"). A line that also SCOPES the tool ("exact identifiers", "regexes",
+#     "paths", "exhaustive enumeration") is exempt from the primacy patterns —
+#     that sentence is in the skill's own rule and is correct.
+#   report-only (untouched) — the line merely mentions a search tool near the
+#     word "search". Named with its line number and left exactly as written.
+# Everything else is invisible to this pass. Recall is deliberately given up.
+#
+# Whole LINES only, never a clause. The confirmed instance mixes a TRUE fact
+# (`grep`->ugrep/`find`->bfs shadowing) with a FALSE one (`Grep`/`Glob` "no-ops"
+# — they are gated, not removed, and re-arm via `--allowedTools` or an agent's
+# `tools:`) inside one sentence, and splitting a sentence on a regex is exactly
+# the guess that constraint would forbid. The true half is not lost: the whole
+# pre-edit file goes to a timestamped `.bak` via sc_backup — the same recovery
+# the `--force` path of install_managed uses — and the removed text is echoed
+# verbatim in the report, so re-adding it without the directive is a paste.
+#
+# Root CLAUDE.md only. Nothing in this skill has ever walked nested CLAUDE.md
+# files (`CLAUDEMD="$ROOT/CLAUDE.md"`, one path), and inventing a tree walk here
+# would put deletions in files no other part of the installer reads.
+#
+# Idempotent by construction: the match is on the text, so run 2 finds nothing
+# and writes nothing. No annotation is appended, so there is nothing to stack.
+sg_conflict_scan() {
+  SG_CLAUDEMD="$CLAUDEMD" SG_APPLY="$1" node -e '
+const fs=require("fs");
+const f=process.env.SG_CLAUDEMD, apply=process.env.SG_APPLY==="1";
+const BEGIN="<!-- BEGIN brewcode:semble -->", END="<!-- END brewcode:semble -->";
+if(!fs.existsSync(f)) process.exit(0);
+let raw="";
+try{ raw=fs.readFileSync(f,"utf8"); }catch(e){ console.error("cannot read "+f); process.exit(1); }
+const lines=raw.split("\n");
+// Lines inside the skill own markers are never candidates: that block IS the
+// semble doctrine and matches the primacy patterns by construction.
+const own=[]; let inB=false;
+for(const l of lines){
+  if(l.indexOf(BEGIN)>=0){ inB=true; own.push(true); continue; }
+  if(l.indexOf(END)>=0){ inB=false; own.push(true); continue; }
+  own.push(inB);
+}
+const norm=s=>s.replace(/^[\s>*+|-]+/,"").replace(/[`*_]/g,"").replace(/\s+/g," ").trim().toLowerCase();
+const TOOL="(bash|grep|ugrep|ripgrep|rg|glob|find)";
+const DENY=[
+  new RegExp("\\b(grep|glob)\\b[^.]{0,60}\\b(are|is)\\s+(no-?ops?|removed|gone|dead|disabled|unavailable|not available)\\b"),
+  new RegExp("\\b(semantic|semble|mcp)\\s+search\\b[^.]{0,60}\\b(is|are)\\s+(broken|unavailable|unreliable|disabled|useless|off|not available)\\b"),
+  new RegExp("\\b(do not|dont|never|avoid)\\s+use\\s+(semble|semantic search|mcp__semble)")
+];
+const FIRST=[
+  new RegExp("\\bsearch(es|ing)?\\b[^.]{0,40}\\bvia\\s+(the\\s+)?"+TOOL+"\\b"),
+  new RegExp("\\b(use|prefer|always use|default to|route)\\s+(the\\s+)?"+TOOL+"\\b[^.]{0,40}\\b(for|to)\\s+(all|any|every|code)\\b"),
+  new RegExp("\\b"+TOOL+"[- ]?first\\b"),
+  new RegExp("\\b"+TOOL+"\\b[^.]{0,40}\\bbefore\\b[^.]{0,40}\\b(semble|semantic)\\b"),
+  new RegExp("\\b(all|any|every)\\s+(code\\s+)?search(es|ing)?\\b[^.]{0,60}\\b(through|via|with)\\s+(the\\s+)?"+TOOL+"\\b")
+];
+// The complementary sentence. rg IS the right tool for these, the skill own rule
+// says so, and a line that scopes itself this way is not a competing doctrine.
+const KEEP=/\b(exact|literal|identifier|identifiers|regex|regexes|path|paths|filename|filenames|exhaustive|enumerat\w*|verify|verifying|count|counts)\b/;
+const HEAD=/^(#{1,6})\s+(.*)$/;
+const ANYTOOL=new RegExp("\\b"+TOOL+"\\b");
+const drop=new Set(), weak=[];
+for(let i=0;i<lines.length;i++){
+  if(own[i]) continue;
+  const t=lines[i];
+  if(t.trim()==="") continue;
+  if(HEAD.test(t)) continue;
+  const n=norm(t);
+  if(!n) continue;
+  const keep=KEEP.test(n);
+  if(DENY.some(r=>r.test(n)) || (FIRST.some(r=>r.test(n)) && !keep)){ drop.add(i); continue; }
+  if(!keep && /\bsearch/.test(n) && ANYTOOL.test(n)) weak.push(i);
+}
+// A search-titled heading whose whole body just went is an orphan, so it goes
+// too. Only search-titled headings, and only when nothing survives under them.
+for(let i=0;i<lines.length;i++){
+  if(own[i]||drop.has(i)) continue;
+  const m=HEAD.exec(lines[i]); if(!m) continue;
+  if(!/\bsearch\b/i.test(m[2])) continue;
+  const lvl=m[1].length; let empty=true;
+  for(let j=i+1;j<lines.length;j++){
+    if(drop.has(j)) continue;
+    const t=lines[j];
+    if(t.trim()==="") continue;
+    if(t.indexOf(BEGIN)>=0) break;
+    const h=HEAD.exec(t);
+    if(h&&h[1].length<=lvl) break;
+    empty=false; break;
+  }
+  if(empty) drop.add(i);
+}
+// Absorb the blank line a removal would otherwise double up. Local to the cut:
+// blank runs elsewhere in the file are never reflowed.
+let grew=true;
+while(grew){ grew=false;
+  for(let i=0;i<lines.length;i++){
+    if(!drop.has(i)) continue;
+    const nx=i+1;
+    if(nx>=lines.length||drop.has(nx)||lines[nx].trim()!=="") continue;
+    let p=i-1; while(p>=0&&drop.has(p)) p--;
+    if(p<0||lines[p].trim()===""){ drop.add(nx); grew=true; }
+  }
+}
+const removed=[...drop].sort((a,b)=>a-b).filter(i=>lines[i].trim()!=="");
+if(apply&&drop.size){
+  const next=lines.filter((_,i)=>!drop.has(i)).join("\n");
+  fs.writeFileSync(f,next.endsWith("\n")?next:next+"\n");
+  // Re-read and prove the cut landed. The comparison is against the lines the
+  // skill does NOT own: the marker block legitimately repeats `## Code Search`,
+  // and matching that would abort every successful run on this exact file.
+  const back=fs.readFileSync(f,"utf8"), bl=back.split("\n");
+  const outside=[]; let bIn=false;
+  for(const l of bl){
+    if(l.indexOf(BEGIN)>=0){ bIn=true; continue; }
+    if(l.indexOf(END)>=0){ bIn=false; continue; }
+    if(!bIn) outside.push(l);
+  }
+  for(const i of removed){
+    if(outside.indexOf(lines[i])>=0){ console.error("ABORT: "+f+" still carries a removed directive"); process.exit(1); }
+  }
+  if(back.split(BEGIN).length!==raw.split(BEGIN).length||back.split(END).length!==raw.split(END).length){
+    console.error("ABORT: marker count changed in "+f); process.exit(1);
+  }
+}
+const cut=s=>{const x=s.replace(/\t/g," ").trim();return x.length>200?x.slice(0,197)+"...":x;};
+const rec=[];
+// `H` = a heading the removal emptied, counted separately: it is a casualty of
+// the cut, not a second contradiction, and folding it into the count inflates it.
+for(const i of removed) rec.push((HEAD.test(lines[i])?"H":"R")+"\t"+(i+1)+"\t"+cut(lines[i]));
+for(const i of weak)    rec.push("W\t"+(i+1)+"\t"+cut(lines[i]));
+process.stdout.write(rec.length?rec.join("\n")+"\n":"");
+'
+}
+
+do_claudemd_conflicts() {
+  [ -f "$CLAUDEMD" ] || return 0
+  local recs rc kind no txt nrem=0 b
+  set +e; recs="$(sg_conflict_scan 0 2>&1)"; rc=$?; set -e
+  if [ "$rc" != "0" ]; then add_failed "CLAUDE.md: search-doctrine scan failed - $recs"; return 0; fi
+  while IFS=$'\t' read -r kind no txt; do
+    [ "$kind" = "R" ] && nrem=$((nrem+1))
+    [ "$kind" = "W" ] || continue
+    add_skipped "CLAUDE.md: L$no mentions a search tool but is not an unambiguous contradiction - left untouched, review by hand: $txt"
+  done <<EOF
+$recs
+EOF
+  if [ "$nrem" = "0" ]; then add_unchanged "CLAUDE.md: no competing search directive"; return 0; fi
+  if [ "${SEMBLE_DRY_RUN:-}" = "1" ]; then
+    sc_dry "strip $nrem competing search directive(s) from $CLAUDEMD" >/dev/null
+    add_changed "CLAUDE.md: would remove $nrem competing search directive(s) from $CLAUDEMD (the whole file is backed up first)"
+    while IFS=$'\t' read -r kind no txt; do
+      case "$kind" in
+        R) add_changed "CLAUDE.md: would remove L$no: $txt" ;;
+        H) add_changed "CLAUDE.md: would remove L$no: $txt (heading left empty by the removal)" ;;
+      esac
+    done <<EOF
+$recs
+EOF
+    return 0
+  fi
+  b="$(sc_backup "$CLAUDEMD")"
+  local err
+  set +e; err="$(sg_conflict_scan 1 2>&1 >/dev/null)"; rc=$?; set -e
+  if [ "$rc" != "0" ]; then
+    add_failed "CLAUDE.md: cannot strip the competing search directive - $err (backup $b)"; return 0
+  fi
+  add_changed "CLAUDE.md: removed $nrem competing search directive(s) from $CLAUDEMD, semble-first is now the only search doctrine (backup $b)"
+  while IFS=$'\t' read -r kind no txt; do
+    case "$kind" in
+      R) add_changed "CLAUDE.md: removed L$no: $txt" ;;
+      H) add_changed "CLAUDE.md: removed L$no: $txt (heading left empty by the removal)" ;;
+    esac
+  done <<EOF
+$recs
+EOF
+}
+
 # ── hook files ──────────────────────────────────────────────────────────────
 install_hook_files() {
   local f stage
@@ -1103,6 +1292,8 @@ case "$MODE" in
     want_part rule       && install_rule
     want_part ignore     && install_ignore
     want_part claudemd   && do_claudemd install
+    # After the block lands, so the scan can exclude the doctrine it just wrote.
+    want_part claudemd   && do_claudemd_conflicts
     if want_part hooks; then
       install_hook_files
       prune_want_table
