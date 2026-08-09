@@ -28,6 +28,10 @@ d2c-output/
 .playwright-mcp/
 brewtools/skills/think-short/tests/e2e/results/
 
+# Python bytecode
+__pycache__/
+*.pyc
+
 # Codex-native plugin source is tracked in this repository.
 !.codex/
 !.codex/**
