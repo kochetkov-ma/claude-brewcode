@@ -14,7 +14,7 @@ wires nothing on its own.
 | `semble-session.mjs` | `<repo>/.claude/hooks/` | SessionStart | `systemMessage` + `additionalContext` |
 | `semble-prefetch.mjs` | `<repo>/.claude/hooks/` | UserPromptSubmit | `additionalContext` — top-3 candidate PATHS from a real search |
 | `semble-stats.mjs` | `<repo>/.claude/hooks/` | PostToolUse + PostToolUseFailure | **nothing** — appends JSONL telemetry, replies `{}` |
-| `semble-reminder.mjs` | `<repo>/.claude/hooks/` | PreToolUse `Bash\|Grep` | `additionalContext` — fires on every eligible search (`reminderEvery` default 1, counter in `.claude/semble/reminder.json`), 29 tokens (down from 65) |
+| `semble-reminder.mjs` | `<repo>/.claude/hooks/` | PreToolUse `Bash\|Grep` | `additionalContext` — fires on every eligible search (`reminderEvery` default 1, counter in `.claude/semble/reminder.json`), 36 tokens (down from 65; 42 while the index is cold) |
 | `semble-subagent.mjs` | `<repo>/.claude/hooks/` | SubagentStart (no matcher — every agent type) | `additionalContext` — the semble-first brief inside the subagent's own context |
 
 > Retired for good: `semble-explore.mjs` (SubagentStart `Explore` only).
@@ -260,25 +260,36 @@ replacement for it — both are installed.
 > subagent one as `semble-subagent.mjs` on every agent type. The follow-up
 > measurement now exists:
 >
-> - **Reminder conversion is undefined, not zero.** Across 59 evaluated search
->   calls over 7 sessions on a code-heavy TypeScript fixture, the reminder
->   fired 0 times — so its conversion is 0/0, and no release may print a
->   conversion percentage for it. Control (no nudge) converted 8/59. Rule of
->   three puts the 95% upper bound on the fire rate at 5.1%; banking enough
->   fires for a real conversion test needs roughly 680 evaluated searches
->   (~80 sessions).
+> - **Reminder conversion is undefined, not zero.** Across 7 sessions on a
+>   code-heavy TypeScript fixture the reminder fired 0 times — so its
+>   conversion is 0/0, and no release may print a conversion percentage for
+>   it. The denominator is 59 **Bash tool calls**, not 59 judged searches: the
+>   matcher is `Bash|Grep`, so a gate row is written for every Bash call
+>   whatever it holds. 13 carried no search binary, 13 were `find`, 33 were
+>   `rg`/`grep` on a single-token identifier, and **zero** were the multi-word
+>   behaviour phrase the gate fires on — "0 fires" is evidence neither of a
+>   broken hook nor of a valuable one. Rule of three puts the 95% upper bound
+>   on the fire rate over that traffic mix at 5.1%; a real conversion test
+>   needs roughly 680 comparable calls (~80 sessions).
+> - **WITHDRAWN: "control (no nudge) converted 8/59".** Unreproducible. The
+>   scoring script's own rule — a semble call within the next 3 tool uses
+>   after a non-fired gate — yields 0/32 and 0/27. The 8 was the arm-A count
+>   of `mcp__semble_code__search` calls over a denominator it never shared.
+>   Nothing replaces it: no arm of the design lacked a semble instruction, so
+>   it supports no control claim at all.
 > - **Delivery inside a subagent is proven, not assumed.** An agent captured
 >   its own `SubagentStart` injection in-band, joined by `tool_use_id`,
 >   telemetry `agent:"sub"`. Subagent transcripts store only `SubagentStart`
->   attachments (82 across 436 files, zero `PreToolUse`) — a storage gap, not
+>   attachments (92 across 852 files, zero `PreToolUse`) — a storage gap, not
 >   a delivery gap.
-> - **The channel that actually works is `SubagentStart`.** 8 of 8 subagents
->   opened with `mcp__semble_code__search` as their first tool. With that
->   registration removed, semble still ran about twice per session from the
->   auto-loaded `semble-first.md` rule, but never as tool 0. The routing win
->   comes from the subagent briefing and the rule file; the `PreToolUse`
->   reminder is low-cost insurance against a bad grep, not the adoption
->   mechanism.
+> - **`SubagentStart` is proven to DELIVER, not to route.** Its text reached
+>   8 of 8 subagents with the registration installed and 0 of 6 with it
+>   removed — a clean negative control, corroborated 36/36 over 6 agent types
+>   in a 525-transcript corpus. It is not proven to change tool choice: every
+>   spawn prompt in both arms already ordered the subagent to open with
+>   `mcp__semble_code__search`, first-tool semble was 14/14 either way, and
+>   the brief's causal effect is UNTESTED. The `PreToolUse` reminder remains
+>   low-cost insurance against a bad grep, with no measured adoption effect.
 
 > **It buys turns and citation precision, not correctness.** All 18 answers were
 > correct in all three arms (control, snippet-framing, path-framing). Nothing in

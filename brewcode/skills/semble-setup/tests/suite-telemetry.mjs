@@ -185,7 +185,7 @@ function readerJson(p, args) {
     { ev: 'call', src: 'stats', tool: 'mcp__semble_code__search', ok: true, ms: 812, agent: 'main' },
     'a successful main-session semble call, with duration_ms carried through as ms');
   check('2.call.sub.no-duration', shape(L[1]),
-    { ev: 'call', src: 'stats', tool: 'mcp__semble_code__find_related', ok: true, agent: 'sub' },
+    { ev: 'call', src: 'stats', tool: 'mcp__semble_code__find_related', ok: true, agent: 'sub', aid: 'ag_7' },
     'no duration_ms in the payload => the ms key is OMITTED, never invented as 0');
   check('2.call.failed.shape', shape(L[2]),
     { ev: 'call', src: 'stats', tool: 'mcp__semble_code__search', ok: false, ms: 40, agent: 'main' },
@@ -194,7 +194,7 @@ function readerJson(p, args) {
     { ev: 'search', src: 'stats', tool: 'Bash', q: "rg -n 'session persistence' src/", agent: 'main' },
     'the denominator record carries the command verbatim and no ms');
   check('2.search.glob.shape', shape(L[4]),
-    { ev: 'search', src: 'stats', tool: 'Glob', q: '**/*.ts', agent: 'sub' },
+    { ev: 'search', src: 'stats', tool: 'Glob', q: '**/*.ts', agent: 'sub', aid: 'ag_9' },
     'Glob is a search tool by definition; agent_id alone marks it as a subagent call');
   check('2.sid', L.map((r) => r.sid), ['sA', 'sA', 'sB', 'sA', 'sB'],
     'sid is the payload session_id, verbatim');
@@ -241,6 +241,49 @@ function readerJson(p, args) {
   check('2b.fail.keys', F.map((r) => Object.prototype.hasOwnProperty.call(r, 'fail')),
     [true, true, false, false],
     'the fail key is present on exactly the two PostToolUseFailure records');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 2c. main vs sub is decided on agent_id ALONE
+//
+// CC 2.1.226 sets `agent_type` on the main thread of an `--agent` session as
+// well as inside a subagent, and says so in its own schema: "Use this field
+// (not agent_type) to distinguish subagent calls from main-thread calls."
+// Testing agent_type stamped every main-thread call in such a session `sub`.
+// ═══════════════════════════════════════════════════════════════════════════
+{
+  const p = newProject('discriminator');
+  const gr = { tool_name: 'Grep', tool_input: { pattern: 'foo' } };
+  // main thread of an `--agent` session: agent_type present, agent_id absent
+  fire(post({ cwd: p, session_id: 'sD', ...gr, agent_type: 'brewcode:bash-expert' }));
+  // inside a subagent: both keys, agent_id is the one that decides
+  fire(post({ cwd: p, session_id: 'sD', ...gr, agent_type: 'Explore', agent_id: 'ag_42' }));
+  // ordinary main thread: neither key survives JSON serialisation
+  fire(post({ cwd: p, session_id: 'sD', ...gr }));
+  // agent_id present but empty is not an identity, and never marks a subagent
+  fire(post({ cwd: p, session_id: 'sD', ...gr, agent_id: '' }));
+  const D = lines(p);
+  check('2c.count', D.length, 4, 'four payloads produced exactly four lines');
+  check('2c.agent-type-only.main', shape(D[0]),
+    { ev: 'search', src: 'stats', tool: 'Grep', q: 'foo', agent: 'main' },
+    'agent_type WITHOUT agent_id is the main thread of an --agent session:'
+    + ' agent:"main" and no aid stamp');
+  check('2c.agent-id.sub', shape(D[1]),
+    { ev: 'search', src: 'stats', tool: 'Grep', q: 'foo', agent: 'sub', aid: 'ag_42' },
+    'agent_id present => agent:"sub", stamped with the id that decided it');
+  check('2c.neither.main', shape(D[2]),
+    { ev: 'search', src: 'stats', tool: 'Grep', q: 'foo', agent: 'main' },
+    'no discriminator at all is an ordinary main-thread call');
+  check('2c.empty-agent-id.main', shape(D[3]),
+    { ev: 'search', src: 'stats', tool: 'Grep', q: 'foo', agent: 'main' },
+    'an empty agent_id names no subagent and must not be read as one');
+  check('2c.aid.keys', D.map((r) => Object.prototype.hasOwnProperty.call(r, 'aid')),
+    [false, true, false, false],
+    'aid is stamped on exactly the one record whose agent_id decided the label');
+  const long = fireAndLast(newProject('discriminator-long'), {
+    hook_event_name: 'PostToolUse', ...gr, agent_id: 'a'.repeat(200),
+  });
+  check('2c.aid.truncation', long.aid.length, 64, 'aid is truncated to 64 characters');
 }
 
 function fireAndLast(p, over) {
@@ -487,6 +530,46 @@ const FIXTURE = [
     '--last larger than the log is the whole log');
   check('6.sid+last', readerJson(p, ['--sid', 'sB', '--last', '2']).json.records, 2,
     '--last is applied after --sid');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 6b. The reader quarantines pre-fix `sub` records instead of averaging them in
+//
+// A `sub` record written by the fixed stats hook always carries the `aid` that
+// decided it. One without `aid` can only come from the version that also tested
+// `agent_type`, so the split it contributes to is an upper bound on `sub`.
+// Records from other writers are never counted here: only stats stamps `aid`.
+// ═══════════════════════════════════════════════════════════════════════════
+{
+  const p = newProject('legacy-agent');
+  const LEG = [
+    { ts: '2026-01-01T00:00:00.000Z', ev: 'search', src: 'stats', sid: 'sL', tool: 'Grep', q: 'a', agent: 'sub' },
+    { ts: '2026-01-01T00:00:01.000Z', ev: 'search', src: 'stats', sid: 'sL', tool: 'Grep', q: 'b', agent: 'sub', aid: 'ag_1' },
+    { ts: '2026-01-01T00:00:02.000Z', ev: 'search', src: 'stats', sid: 'sL', tool: 'Grep', q: 'c', agent: 'main' },
+    { ts: '2026-01-01T00:00:03.000Z', ev: 'nudge', src: 'reminder', sid: 'sL', matcher: 'Bash', agent: 'sub', q: 'd' },
+  ];
+  writeFileSync(telFile(p), LEG.map((r) => JSON.stringify(r)).join('\n') + '\n');
+  const { json: R } = readerJson(p, []);
+  check('6b.legacyAgent', R.legacyAgent, 1,
+    'exactly the one stats sub record with no aid is quarantined; the aid-stamped one,'
+    + ' the main one and the reminder nudge are not');
+  check('6b.split.unchanged', [R.search, R.nudge],
+    [{ total: 3, main: 1, sub: 2, unknown: 0 }, { total: 1, main: 0, sub: 1, unknown: 0 }],
+    'the counts themselves are still reported verbatim - quarantining flags them, it'
+    + ' does not silently drop records from the denominator');
+  const human = reader(p, ['--section', 'telemetry']);
+  check('6b.human.line',
+    human.stdout.split('\n').filter((l) => l.startsWith('suspect:')).length, 1,
+    'the human report carries exactly one suspect: line naming the untrustworthy split');
+  const clean = newProject('legacy-agent-clean');
+  writeFileSync(telFile(clean), LEG.filter((r) => r.aid || r.agent !== 'sub' || r.src !== 'stats')
+    .map((r) => JSON.stringify(r)).join('\n') + '\n');
+  check('6b.clean.legacyAgent', readerJson(clean, []).json.legacyAgent, 0,
+    'a log written entirely by the fixed hook quarantines nothing');
+  check('6b.clean.no-line',
+    reader(clean, ['--section', 'telemetry']).stdout.split('\n')
+      .filter((l) => l.startsWith('suspect:')).length, 0,
+    'and prints no suspect: line at all - the caveat clears itself as history rolls off');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

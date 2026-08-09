@@ -1786,7 +1786,11 @@ const ctxOf = (out) => ((out || {}).hookSpecificOutput || {}).additionalContext 
 const burst = (p, commands) => commands.map((c) => ctxOf(remindOut(p, c)) !== '');
 /** N distinct eligible searches: an intent question, no flag, no path, no filename. */
 const eligibleRun = (n) => Array.from({ length: n }, (_, i) => `rg "retry backoff policy ${i + 1}"`);
-const REMIND_TEXT = (p) => 'semble: wrong tool. mcp__semble_code__search repo="' + p + '" first.';
+/** phase === 'ready': the correction plus the four-word grep escape hatch. */
+const REMIND_TEXT = (p) => 'semble: wrong tool. mcp__semble_code__search repo="' + p + '" first. (exact/-l stays rg)';
+/** Any other phase: the cold-index clause shares the SAME parenthetical. */
+const REMIND_COLD = (p) =>
+  'semble: wrong tool. mcp__semble_code__search repo="' + p + '" first. (first call builds the index; exact/-l stays rg)';
 const REMIND_OK = (p) => ({
   hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: REMIND_TEXT(p) },
 });
@@ -1958,7 +1962,7 @@ const REMIND_OK = (p) => ({
   check('R8.cold', safeParse(reminder(p, { command: 'rg "session expiry"' }).stdout), {
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',
-      additionalContext: REMIND_TEXT(p) + ' (first call builds the index)',
+      additionalContext: REMIND_COLD(p),
     },
   }, 'a registered-but-unverified project still gets the nudge, with the cold-index clause appended');
 }
@@ -2007,9 +2011,37 @@ const REMIND_OK = (p) => ({
   ], 'every record carries the PreToolUse tool_use_id, and the nudge names the exact call it was attached to');
 }
 {
+  // `agent_id` ALONE decides. `agent_type` also appears on the MAIN thread of an
+  // `--agent` session, so the old presence-of-either test filed those calls under
+  // `sub`. Each row is one payload -> the whole nudge record it produces; `aid`
+  // is the stored evidence, present exactly when the label is `sub`.
+  const NUDGE = (extra) => ({
+    ev: 'nudge', src: 'reminder', sid: 'R1', matcher: 'Bash', ...extra,
+    tool_use_id: 'toolu_R1', n: 1, every: 1, q: 'rg "session expiry"',
+  });
+  const attribution = [
+    { agent_type: 'general-purpose' },
+    { agent_id: 'a1c5a07', agent_type: 'general-purpose' },
+    {},
+    { agent_id: '', agent_type: 'Explore' },
+  ].map((extra) => {
+    const p = freshProject({ state: READY_STATE({ reminderEvery: 1 }) });
+    reminder(p, { command: 'rg "session expiry"' }, extra);
+    return trec(p, 1);
+  });
+  check('R11.attribution', attribution, [
+    NUDGE({ agent: 'main' }),
+    NUDGE({ agent: 'sub', aid: 'a1c5a07' }),
+    NUDGE({ agent: 'main' }),
+    NUDGE({ agent: 'main' }),
+  ], 'agent_id alone decides sub: agent_type without it is an --agent main thread, an empty id is no id, and every sub record carries its aid');
+}
+{
+  // The aid is a join key to the SubagentStart hook's agent_id, so it is stored
+  // raw — bounded, never hashed or truncated to uselessness.
   const p = freshProject({ state: READY_STATE({ reminderEvery: 1 }) });
-  reminder(p, { command: 'rg "session expiry"' }, { agent_id: 'a1c5a07', agent_type: 'general-purpose' });
-  check('R11.subAttribution', trec(p, 1).agent, 'sub', 'a PreToolUse arriving from inside a subagent is attributed to sub, not main');
+  reminder(p, { command: 'rg "session expiry"' }, { agent_id: 'z'.repeat(200) });
+  check('R11.aidCap', tfield(p, 1, 'aid'), 'z'.repeat(64), 'an oversized agent_id is stored capped at 64 chars');
 }
 {
   // ~89% of search-shaped tool use happens inside subagents, so the gate must

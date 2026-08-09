@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=5.3.0 generated_by=brewcode:semble-setup
+// brewcode-meta: version=5.3.1 generated_by=brewcode:semble-setup
 /**
  * brewcode:semble-setup — PostToolUse / PostToolUseFailure hook (self-contained,
  * installed into a project). PURE OBSERVER.
@@ -105,19 +105,38 @@ const SEARCH_RE = /(?:^|[|;&(]|&&|\|\|)\s*(?:command\s+)?(grep|egrep|fgrep|ugrep
 const QMAX = 120;
 
 /**
- * `main` | `sub`. On 2.1.226 the post-tool payload carries `agent_id` ONLY from
- * inside a subagent, and `agent_type` from inside a subagent or on the main
- * thread of a `--agent` session. Both keys are tested, matching
- * semble-prefetch.mjs exactly: the conversion metric joins a `prefetch` to a
- * later `open` on this field, so the two writers being consistently wrong about
- * `--agent` sessions is strictly better than them disagreeing.
+ * `main` | `sub`, decided on `agent_id` ALONE. CC 2.1.226 documents the two
+ * fields verbatim:
+ *   agent_id   - "Present only when the hook fires from within a subagent.
+ *                 Absent for the main thread, even in --agent sessions. Use
+ *                 this field (not agent_type) to distinguish subagent calls
+ *                 from main-thread calls."
+ *   agent_type - "Present when the hook fires from within a subagent
+ *                 (alongside agent_id), OR on the main thread of a session
+ *                 started with --agent (without agent_id)."
+ * The payload builder confirms it: `agent_type` falls back to the session-wide
+ * `mainThreadAgentType`, so testing it labelled every main-thread call in an
+ * `--agent` session as `sub`. Undefined values are dropped by the JSON
+ * serialisation, so a plain key test on the parsed input is exact.
  */
 function agentOf(input) {
   if (!input || typeof input !== 'object') return 'unknown';
-  const sub =
-    Object.prototype.hasOwnProperty.call(input, 'agent_id') ||
-    Object.prototype.hasOwnProperty.call(input, 'agent_type');
-  return sub ? 'sub' : 'main';
+  return typeof input.agent_id === 'string' && input.agent_id ? 'sub' : 'main';
+}
+
+/** Max stored length of the raw agent_id. Real ones are 36-char UUIDs. */
+const AIDMAX = 64;
+
+/**
+ * The evidence behind `agent:"sub"`, stored so the label is checkable rather
+ * than trusted. A `sub` record WITHOUT `aid` can only have been written by the
+ * pre-fix `agentOf`, which is what lets a reader quarantine mislabelled history
+ * instead of silently averaging over it. It is also the join key to the
+ * `agent_id` the SubagentStart hook already logs.
+ */
+function aidOf(input) {
+  const id = input && input.agent_id;
+  return typeof id === 'string' && id ? { aid: id.slice(0, AIDMAX) } : {};
 }
 
 /** Non-negative integer milliseconds, or null when the payload had none. */
@@ -169,11 +188,12 @@ function record(input, cwd) {
 
   const sid = typeof input.session_id === 'string' ? input.session_id : '';
   const agent = agentOf(input);
+  const aid = aidOf(input);
   const ms = msOf(input);
 
   if (SEMBLE_TOOLS.indexOf(tool) >= 0) {
     const ok = ev === 'PostToolUse' && !responseFailed(input.tool_response);
-    telemetry(cwd, sid, 'call', { tool, ok, ...(ms === null ? {} : { ms }), agent });
+    telemetry(cwd, sid, 'call', { tool, ok, ...(ms === null ? {} : { ms }), agent, ...aid });
     return;
   }
   if (OPEN_TOOLS.indexOf(tool) >= 0) {
@@ -185,7 +205,7 @@ function record(input, cwd) {
     // Storing both spares the reader a cwd it does not have at read time.
     const rel = p.indexOf(cwd + '/') === 0 ? p.slice(cwd.length + 1) : p;
     telemetry(cwd, sid, 'open', {
-      f: rel.slice(0, PATHMAX), abs: p.slice(0, PATHMAX), ...failFlag(ev), agent,
+      f: rel.slice(0, PATHMAX), abs: p.slice(0, PATHMAX), ...failFlag(ev), agent, ...aid,
     });
     return;
   }
@@ -195,7 +215,7 @@ function record(input, cwd) {
   // on PostToolUseFailure. Dropping those would gut the denominator.
   const q = queryOf(tool, input.tool_input);
   if (q === null) return;
-  telemetry(cwd, sid, 'search', { tool, q, ...failFlag(ev), agent });
+  telemetry(cwd, sid, 'search', { tool, q, ...failFlag(ev), agent, ...aid });
 }
 
 async function main() {

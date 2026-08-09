@@ -2,30 +2,70 @@
 
 ---
 
+## v5.3.1 (2026-08-09)
+
+> Docs: [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/)
+
+> One field decided whether a telemetry record said `main` or `sub`, and it was the wrong field. Both hooks now read `agent_id`, the one CC documents for the purpose, and every record they label `sub` carries the id that decided it — so the label is checkable rather than trusted. Pre-fix records are quarantined and counted, not deleted.
+
+### brewcode
+
+#### Fixed
+
+- **`agentOf()` reads `agent_id`, not `agent_type` — in `semble-stats.mjs` AND `semble-reminder.mjs`.** CC 2.1.226 sets `agent_type` on the main thread of an `--agent` session as well as inside a subagent; `agent_id` is present **only** inside a subagent. Testing `agent_type` therefore filed every main-thread call of an `--agent` session under `sub`. The reminder carried the same defect as the stats hook and is fixed the same way
+- **`sub` records now stamp the deciding `aid`** (raw `agent_id`, capped at 64 chars). It doubles as the join key to the `agent_id` the `SubagentStart` hook already logs, which is what makes a delivery claim joinable instead of asserted
+- **Pre-fix telemetry is quarantined, not dropped.** `semble-status.sh` counts stats records labelled `sub` with no `aid` into `report.legacyAgent` and prints a `suspect:` line when it is non-zero, so every main/sub number reads as an upper bound on `sub`. The records stay in every denominator
+
+#### Changed
+
+- **The reminder's injected text regained its scope hint** — `semble: wrong tool. mcp__semble_code__search repo="<cwd>" first. (exact/-l stays rg)`, 36 tokens ready and 42 cold, up from 29/36. The gate is a heuristic and was caught mis-tuned once (camelCase suppression silenced plain TypeScript phrase queries); four words of escape hatch are cheap insurance against a misfire pushing the model off a grep that was right
+- **Storage-gap figure re-measured and reconciled across the docs.** Recounted against `~/.claude/projects/**/subagents/*.jsonl`: **92 `hook_additional_context` attachments, all of them `SubagentStart`, across 852 subagent files, zero `PreToolUse`** — superseding the two stale snapshots ("82 across 436 files" and "52 of 52 across 451 files") that were measured earlier and had drifted apart. Still a storage gap, not a delivery gap
+- **The `agentOf()` defect is described precisely** — it mislabels *the main thread of an `--agent` session*, not main-thread records in general. Narrowed in `README.md`, `assets/INSTALL.md` and the docs site
+
+---
+
 ## v5.3.0 (2026-08-09)
 
 > Docs: [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/)
 
-> This release is mostly measurement, and two of the measurements came back negative. The reminder hook was retuned from "fires often, advises badly" to "fires rarely, advises correctly" — and then measured firing **zero** times in 59 evaluated searches. The hypothesis that a contradicting `CLAUDE.md` suppresses semble adoption was A/B tested and **refuted**. What was proven is separated below from what was merely built.
+> This release is mostly measurement, and an adversarial re-audit of that measurement retracted part of it. The reminder hook was retuned from "fires often, advises badly" to "fires rarely, advises correctly" — and then fired **zero** times across 59 Bash calls, none of which had the shape it fires on. The hypothesis that a contradicting `CLAUDE.md` suppresses semble adoption was A/B tested and **refuted**. What was proven is separated below from what was merely built; four published numbers are withdrawn or restated under **Corrections**.
 
 ### brewcode
+
+#### Corrections
+
+> Four numbers first published in this section do not survive an adversarial re-audit. They are withdrawn here rather than quietly adjusted, and the bullets that carried them have been rewritten in place.
+
+- **WITHDRAWN — "control conversion without a nudge was 8/59".** Unreproducible. Re-derived with the scoring script's own rule — a semble call within the next 3 tool uses after a non-fired gate — the value is **0 in arm A (0/32) and 0 in arm B (0/27)**. The published 8 was the count of `mcp__semble_code__search` calls in arm A, the very same 8 as the first-tool figure, over a denominator it never shared. Nothing replaces it: the design contains no arm without a semble instruction, so it cannot support a control claim at all
+- **WITHDRAWN as evidence — "8 of 8 subagents opened with semble as their first tool … never as tool 0 … the routing win comes from the subagent briefing and the rule file".** The 8/8 is a tautology and the sentence after it is false. Every spawn prompt the main agent wrote, in **both** arms, carried the literal instruction `Method: start with ONE mcp__semble_code__search (repo = that absolute root, top_k=5, max_snippet_lines=10)`. The hook-free arm B scored **6 of 6** first-tool semble — 14/14 combined, identical with and without the hook. The count stands as a count; the causal claim does not. The brief's effect on tool choice is **UNTESTED**
+- **RESTATED — "fired 0 times in 59 evaluated search calls".** 59 is every **Bash tool call** across both arms: the matcher is `Bash|Grep`, so a gate row is written for every Bash call regardless of content. Composition: **13** contained no search binary at all (`cd`, `ls -R`, `cat -n`, `sed -n`, `wc`), **13** were `find` (filename enumeration, suppressed by design), **33** were `rg`/`grep` with a single-token identifier pattern (suppressed by design), and **0** were the multi-word behaviour phrase the gate fires on. "0 fires" is arithmetically true and is evidence neither of a broken hook nor of a valuable one
+- **WITHDRAWN — "90.6% of search traffic is subagent traffic (3084 sub / 321 main)".** Computed from a telemetry field that is broken: `agentOf()` in `semble-stats.mjs` mislabels main-thread records as `sub` — in a fresh 7-session run **all 126** stats records came out `sub`, including known main-thread calls. Historical telemetry cannot be corrected retroactively, so there is no adjusted percentage to print
+
+**The A/B had no clean arm.** Arm B removed 1 of 8 semble channels. Still live in it: the fixture's `CLAUDE.md` semble block, the fixture's concept-to-directory map (which on its own defeats the vocabulary-mismatch premise), the SessionStart hook, the UserPromptSubmit prefetch (it injects the answer's ranked `file:line` into context and fired in 4 of 7 sessions), the MCP server description, `semble-first.md`, and the spawn prompt. **3 of the 4 prompts also leaked the answer's exact identifier** (`ceiling` — verbatim the identifier on the planted-defect line; `flush`; `allowance`/`standing`/`withdrawn`), so a plain `rg` lands on the answer.
+
+**What survives is delivery**, verified per registration on 7 real sessions plus a 525-transcript live corpus:
+
+- `SessionStart` — delivers, 4/4 arm A and 3/3 arm B
+- `UserPromptSubmit` prefetch — delivers, 2/2 and 2/2 of the prompts where its gate fired; correctly silent on the 3 it declined
+- `SubagentStart` — delivers, 8/8 arm A and **0/6 arm B**, a clean negative control proving the registration is what puts the text there; corroborated 36/36 across the live corpus over 6 agent types
+- `PostToolUse` / `PostToolUseFailure` — inject nothing by design, accounting only: **unobservable**, never scored as a failure
+- `PreToolUse` reminder — 0 fires in these runs. In the live corpus, 26 historical fires (8 main, 18 sub); the single main-session fire **is** recorded in the transcript, while the 12 sub fires carrying a `tool_use_id` join to **0 of 12** transcript records. Subagent transcript files persist `SubagentStart` hook records only — 52 of 52 `hook_additional_context` across 451 subagent files, zero `PreToolUse` of any kind. That is a **storage** gap; delivery into a subagent was proven separately in-band, and the two are not the same finding
 
 #### Measured
 
 - **Delivery inside a subagent is PROVEN, not assumed.** Every prior release described `PreToolUse` delivery inside a subagent as unobservable. It is not: an agent captured its own injection in-band, joined to the hook's telemetry record by `tool_use_id`, `agent:"sub"`. Subagent transcripts store only `SubagentStart` attachments — 82 across 436 files, zero `PreToolUse` — which is a **storage** gap, not a delivery gap. Every doc claiming otherwise has been corrected
-- **90.6% of search traffic is subagent traffic** — 3084 subagent searches against 321 in the main session. Any search-routing mechanism that only reaches the main session addresses 9% of the problem
-- **The channel that actually works is `SubagentStart`.** 8 of 8 subagents opened with `mcp__semble_code__search` as their **first** tool. With that registration removed, semble still ran roughly twice per session out of the auto-loaded `semble-first.md` rule, but never as tool 0. The routing win comes from the subagent briefing and the rule file. The `PreToolUse` reminder is now correctly described as low-cost insurance against a bad grep, not as the mechanism that drives adoption
+- **The channel proven to DELIVER is `SubagentStart`.** Its text reached 8 of 8 subagents with the registration installed and **0 of 6** with it removed — a clean negative control that the registration, and nothing else, is what puts the text into a subagent's context; corroborated 36/36 across a 525-transcript live corpus over 6 agent types. This is a delivery result and not a routing result: both arms' spawn prompts told the subagent to open with semble, so first-tool behaviour was 14/14 either way and the brief's effect on tool choice is untested
 - **Gate precision, 80 real commands hand-labelled independently.** Of the 40 the 5.2.3 gate fired on and the new gate suppresses, **37 are genuinely exact or exhaustive lookups where grep is the right tool** (1 behavioural, 2 ambiguous) — so roughly 95% of the old gate's injections were wrong advice. Of the 40 commands both gates suppress, **zero** were behavioural: no false negatives are hiding in the suppressed set
 
 #### Negative results
 
 - **The documentation-conflict hypothesis is REFUTED.** The theory was that a root `CLAUDE.md` contradicting the semble-first rule suppresses adoption, since a root `CLAUDE.md` outranks a `.claude/rules/` file. A/B: with the contradiction present, 5 semble calls / 14 searches = 36%; with it removed, 4 / 18 = 22%. Fisher exact two-sided **p = 0.45, n = 32** — and the "clean" arm was nominally **worse**. The conflict detector shipped in this release therefore has **no measured justification** as a conversion fix; it is kept only because removing a false statement is correct on its own merits. Every doc that sold it as a conversion fix has been rewritten
-- **The retuned reminder fired 0 times in 59 evaluated search calls** across 7 sessions on a code-heavy TypeScript fixture. Conversion after a nudge is therefore **undefined (0/0)** — no release may print a conversion percentage for this channel. Control conversion without a nudge was 8/59. Rule of three puts the 95% upper bound on the fire rate at **5.1%**; banking enough nudges for a conversion test needs roughly 680 evaluated searches, about 80 sessions
+- **The retuned reminder fired 0 times in 59 Bash calls** across 7 sessions on a code-heavy TypeScript fixture — and none of those 59 was the multi-word behaviour phrase the gate fires on (13 no search binary, 13 `find`, 33 single-token `rg`/`grep`). Conversion after a nudge is therefore **undefined (0/0)** — no release may print a conversion percentage for this channel, and there is no control figure either. Rule of three puts the 95% upper bound on the fire rate over that traffic mix at **5.1%**; banking enough nudges for a conversion test needs roughly 680 comparable calls, about 80 sessions
 
 #### Changed
 
 - **`semble-reminder.mjs` default `reminderEvery` 5 -> 1.** It now fires on every eligible search rather than every fifth. Still configurable in `.claude/semble/state.json`; the counter at `.claude/semble/reminder.json` stays project-global and survives sessions, it simply throttles nothing until a user raises N
-- **The injected text shrank from 65 tokens to 29** — `semble: wrong tool. mcp__semble_code__search repo="<cwd>" first.`, plus ` (first call builds the index)` while the index is not ready. A correction, not an explanation: the parameters the `semble-first` rule and the subagent brief already carry are no longer repeated
+- **The injected text shrank from 65 tokens to 36** (42 while the index is cold) — `semble: wrong tool. mcp__semble_code__search repo="<cwd>" first. (exact/-l stays rg)`, with `first call builds the index; ` prepended inside the same parenthetical until the index is ready. A correction, not an explanation: the parameters the `semble-first` rule and the subagent brief already carry are no longer repeated, and the scope clause is kept so a heuristic misfire cannot push the model off a grep that was right
 - **The gate is now high-specificity.** Suppressors: a single-word pattern, a pattern under 8 characters, `-l`/`-c`/`-o`/`--files`, `-F`/`-w`, any `find`/`bfs`, a pattern containing `/`, a filename-shaped token (checked per token, not on the whole pattern), regex metacharacters, ALL-CAPS, the phrases "every/all/how many/list the", a binary reading a pipe, `| wc/sort/uniq/cut/awk`, and any mention of `semble`. Code-literal shapes split in two: `#:=<>`, backtick, `~@%` suppress unconditionally, while snake_case, an intra-word hyphen and camelCase suppress **only** when no token is a plain lowercase word — so `rateLimit config` and `max_retries setting` still fire on a TypeScript codebase
 - **Replayed on identical historical input** — 2543 recorded search calls: the pre-5.2.3 gate let 230 through and fired 32; the 5.2.3 gate 1024 / 204; this one **14 / 14**
 

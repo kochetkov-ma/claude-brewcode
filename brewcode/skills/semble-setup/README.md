@@ -92,14 +92,17 @@ An A/B on the hypothesis that a contradicting CLAUDE.md line suppresses semble a
 
 | Finding | Number |
 |---|---|
-| Reminder injection cost | 29 tokens, was 65 |
-| Search traffic inside a subagent | 90.6% (3084 sub / 321 main) |
-| Subagents opening with semble as first tool | 8 of 8 |
+| Reminder injection cost | 36 tokens, was 65 (42 while the index is cold) |
+| `SubagentStart` delivery | 8/8 with the registration installed, **0/6** with it removed — a negative control; 36/36 over 6 agent types in a 525-transcript corpus |
 | Gate replay, 2543 recorded calls | old 230 eligible / 32 fired; 5.2.3 1024 / 204; current 14 / 14 |
 | Gate precision, 80 hand-labelled commands | of 40 the 5.2.3 gate fired on and the new one suppresses, 37 are exact/exhaustive lookups where grep is right, 1 behavioural, 2 ambiguous; of 40 both suppress, zero behavioural |
-| Reminder fire rate, 7 sessions / 59 evaluated calls | 0 nudges - conversion after a nudge is undefined (0/0); control conversion 8/59; rule of three puts the 95% upper bound on the fire rate at 5.1% |
+| Reminder fire rate, 7 sessions / 59 Bash calls | 0 nudges - conversion after a nudge is undefined (0/0); no control figure exists; rule of three puts the 95% upper bound on the fire rate over that traffic mix at 5.1% |
 
-Delivery inside a subagent is **proven**, not merely assumed: in-band capture joined by `tool_use_id`, telemetry `agent:"sub"`; the 82-attachments-across-436-files figure is a storage gap, not a delivery gap. The channel that actually works is `SubagentStart` — the routing win comes from the subagent briefing and the auto-loaded `semble-first.md` rule, not from the PreToolUse reminder, which is low-cost insurance against a bad grep. Never report a conversion percentage for the reminder.
+The 59 is every **Bash** call, not 59 searches the gate judged: the matcher is `Bash|Grep`, so a row is written per Bash call whatever it contains. 13 held no search binary, 13 were `find`, 33 were `rg`/`grep` on a single-token identifier, and **zero** were the multi-word behaviour phrase the gate fires on. "0 fires" is therefore evidence neither of a broken hook nor of a valuable one.
+
+Delivery inside a subagent is **proven**, not merely assumed: in-band capture joined by `tool_use_id`, telemetry `agent:"sub"`; the 92-attachments-across-852-files figure is a storage gap, not a delivery gap. What `SubagentStart` is proven to do is **deliver its text**, 8/8 installed against 0/6 removed. It is not proven to change tool choice: every spawn prompt in both arms already ordered the subagent to open with semble, first-tool semble was 14/14 either way, and the brief's causal effect is untested. Never report a conversion percentage for the reminder.
+
+Two figures published in v5.3.0 are **withdrawn**: a control conversion of "8/59" (unreproducible — the scoring script's own rule yields 0/32 and 0/27, and the design has no arm without a semble instruction), and "90.6% of search traffic is subagent traffic" (computed from `agentOf()` in `semble-stats.mjs`, which mislabels the main thread of an `--agent` session as `sub`; there is no corrected percentage).
 
 ### The state file and its phases
 

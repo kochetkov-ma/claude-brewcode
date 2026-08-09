@@ -319,21 +319,48 @@ function gate(read) {
  * A correction, not an explanation: "wrong tool" plus the call to make instead.
  * PreToolUse context is NOT deduplicated, so every injection is paid in full,
  * and at a cadence of 1 the length is multiplied by every eligible search — the
- * old 65-token line became 29 (cl100k_base) by dropping the params the
- * semble-first rule and the subagent brief already carry, and by dropping the
- * "keep grep for..." clause, which the gate now enforces instead of asking.
+ * old 65-token line became 36 (cl100k_base) by dropping the params the
+ * semble-first rule and the subagent brief already carry. What is kept is a
+ * four-word escape hatch: the gate is a heuristic, and on an unfamiliar corpus
+ * a bare "wrong tool" would push the model off grep where grep was right.
+ * Both clauses share ONE parenthetical — two adjacent ones read as a stutter.
  */
 function message(cwd, phase) {
-  const cold = phase === 'ready' ? '' : ' (first call builds the index)';
-  return 'semble: wrong tool. mcp__semble_code__search repo="' + cwd + '" first.' + cold;
+  const cold = phase === 'ready' ? '' : 'first call builds the index; ';
+  return 'semble: wrong tool. mcp__semble_code__search repo="' + cwd + '" first. (' + cold + 'exact/-l stays rg)';
 }
 
-/** PreToolUse stdin carries agent_id/agent_type inside a subagent only. */
+/**
+ * `main` | `sub`, decided on `agent_id` ALONE. CC 2.1.226 documents the two
+ * fields verbatim:
+ *   agent_id   - "Present only when the hook fires from within a subagent.
+ *                 Absent for the main thread, even in --agent sessions. Use
+ *                 this field (not agent_type) to distinguish subagent calls
+ *                 from main-thread calls."
+ *   agent_type - "Present when the hook fires from within a subagent
+ *                 (alongside agent_id), OR on the main thread of a session
+ *                 started with --agent (without agent_id)."
+ * Testing `agent_type` therefore labelled every main-thread call in an
+ * `--agent` session as `sub`. Undefined values are dropped by the JSON
+ * serialisation, so a plain key test on the parsed input is exact.
+ */
 function agentOf(input) {
-  const sub =
-    Object.prototype.hasOwnProperty.call(input, 'agent_id') ||
-    Object.prototype.hasOwnProperty.call(input, 'agent_type');
-  return sub ? 'sub' : 'main';
+  return typeof input.agent_id === 'string' && input.agent_id ? 'sub' : 'main';
+}
+
+/** Max stored length of the raw agent_id. Real ones are 36-char UUIDs. */
+const AIDMAX = 64;
+
+/**
+ * The evidence behind `agent:"sub"`, stored so the label is checkable rather
+ * than trusted. A `sub` record WITHOUT `aid` can only have been written by the
+ * pre-fix `agentOf`, which is what lets a reader quarantine mislabelled history
+ * instead of silently averaging over it. It is also the join key to the
+ * `agent_id` the SubagentStart hook already logs.
+ */
+function aidOf(input) {
+  const id = input && input.agent_id;
+  return typeof id === 'string' && id ? { aid: id.slice(0, AIDMAX) } : {};
 }
 
 function decide(input, cwd) {
@@ -404,6 +431,7 @@ function decide(input, cwd) {
   telemetry(cwd, sid, 'nudge', {
     matcher: toolName,
     agent: agentOf(input),
+    ...aidOf(input),
     tool_use_id: tuid,
     n,
     every,

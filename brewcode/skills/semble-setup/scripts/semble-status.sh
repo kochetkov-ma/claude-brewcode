@@ -106,6 +106,12 @@ const rep = {
   call: { total: 0, main: 0, sub: 0, unknown: 0, failed: 0 },
   search: { total: 0, main: 0, sub: 0, unknown: 0 },
   open: { total: 0 },
+  // Records the main/sub split cannot be trusted on. Until the agent_id fix the
+  // stats hook decided main-vs-sub on `agent_type` too, which CC also sets on the
+  // MAIN thread of an `--agent` session — every such call was stamped `sub`. The
+  // fixed writer stores the deciding `agent_id` as `aid`, so a `sub` record with
+  // no `aid` is exactly a pre-fix record. Counted, never silently averaged in.
+  legacyAgent: 0,
   // The prefetch hook. `why` is the suppressing clause, so a low fire rate is
   // always attributable; `hits` and `ms` are the cost side.
   prefetch: {
@@ -211,6 +217,8 @@ const msSamples = [];
 for (const r of recs) {
   const src = typeof r.src === "string" ? r.src : "unknown";
   bump(rep.hooks, src);
+  // Only the stats writer stamps `aid`, so only its records can be audited this way.
+  if (src === "stats" && r.agent === "sub" && typeof r.aid !== "string") rep.legacyAgent++;
   const sid = typeof r.sid === "string" ? r.sid : "";
   const ts = typeof r.ts === "string" ? r.ts : "";
   switch (r.ev) {
@@ -406,6 +414,10 @@ for (const src of Object.keys(c.bySource).sort()) {
     + (s.toolUses === undefined ? "" : ", " + s.toolUses + " distinct tool_use_id")
     + (s.agentTypes === undefined ? "" : ", agents [" + pairs(s.agentTypes) + "]")
     + " | " + s.measure);
+}
+if (rep.legacyAgent) {
+  L.push("suspect:   " + rep.legacyAgent + " stats records stamped sub before the agent_id fix"
+    + " - treat every main/sub number above as an upper bound on sub");
 }
 const denom = rep.search.total + rep.call.total;
 L.push("share:     " + (denom ? Math.round((rep.call.total / denom) * 1000) / 10 : 0)
