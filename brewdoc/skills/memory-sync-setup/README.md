@@ -162,6 +162,9 @@ changes. Run `status` any time to see whether it is due.
 
 - The emitted skill is **self-contained** -- no plugin dependency. It uses only project-local agents
   (`.claude/agents/`) and built-ins (`Explore` / `Plan` / `general-purpose`).
+- The emitted skill is **model-invocable** -- it carries no `disable-model-invocation`, so Claude can fire
+  `/memory-sync` mid-plan and prose triggers work. That flag is for distributed `-setup` skills only;
+  `restamp` deletes it from a pre-5.5.1 install and `validate` fails if it is present.
 - `emit` never overwrites a live installation. `MEMORY_SYNC_FORCE=1` is the conscious override and it destroys
   hand-edits; `upgrade` is the safe path.
 - A stale provenance stamp is NEVER a reason to re-emit. `generate.sh restamp` rewrites the metadata keys in

@@ -454,6 +454,9 @@ restamp_skill() {
 
   _was=$(_fm_meta "$_f" version); [ -n "$_was" ] || _was="(unstamped)"
   _wasl=$(_legacy_stamp "$_f")
+  # Legacy installs (emitted while the template still baked it) are user-only; the emitted skill must be
+  # model-invocable, so the key is dropped here - the only mode that can reach an installed SKILL.md.
+  _wasdmi=$(_fm_meta "$_f" disable-model-invocation)
   _dt=$(_fm_meta "$_f" doc_type)
   case "$_dt" in llm|user|skip) ;; *) _dt="$META_DOC_TYPE" ;; esac
   _sfv=$(printf '%s' "${SURFACE_COUNTS:-$(derive_surface_counts)}" | tr -d '"' | tr '\n\r' '  ')
@@ -476,6 +479,7 @@ restamp_skill() {
       print; next
     }
     n == 1 && /^(doc_type|version|generated_by|last_updated|surface_files):/ { next }
+    n == 1 && /^disable-model-invocation:/ { next }
     n >= 2 && index($0, legacy) > 0 { next }
     { print }
     END { if (!done) exit 3 }
@@ -500,6 +504,7 @@ restamp_skill() {
   echo "  doc_type:      -> $_dt"
   echo "  surface_files: -> $_sfv"
   [ -z "$_wasl" ] || echo "REMOVED:   pre-5.0 tail stamp -> $_wasl"
+  [ -z "$_wasdmi" ] || echo "REMOVED:   disable-model-invocation: $_wasdmi -> /memory-sync is model-invocable again"
   refresh_refs
   rm -rf "$_bd"; _bd=""
   echo "✅ restamp (metadata keys only - body and every hand-edit verified byte-identical)"
@@ -607,6 +612,16 @@ validate_emit() {
   else
     echo "✅ provenance frontmatter present: doc_type=$_md version=$_mv generated_by=$_mg last_updated=$_ml surface_files=\"$_ms\""
     [ -z "$_legacy" ] || echo "⚠️ a pre-5.0 tail stamp also survives in this file - delete that line, the frontmatter supersedes it"
+  fi
+
+  # (5) the emitted skill stays model-invocable - plain prose must reach it, not only `/memory-sync`
+  _dmi=$(_fm_meta "$TARGET/SKILL.md" disable-model-invocation)
+  if [ -n "$_dmi" ]; then
+    echo "❌ FAILED: $TARGET/SKILL.md: frontmatter sets disable-model-invocation: $_dmi - the emitted skill must stay model-invocable"
+    echo "   -> run \`generate.sh restamp\`: it deletes the key in place, body and hand-edits untouched"
+    _errors=$((_errors+1))
+  else
+    echo "✅ model-invocable (no disable-model-invocation key - prose invocation works alongside /memory-sync)"
   fi
 
   if [ "$_errors" -eq 0 ]; then echo "✅ validate PASSED"; else echo "❌ FAILED: $_errors check(s) failed"; fi

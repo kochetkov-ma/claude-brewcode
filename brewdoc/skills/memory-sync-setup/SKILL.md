@@ -342,7 +342,13 @@ bash "${CLAUDE_SKILL_DIR}/scripts/generate.sh" emit && echo "✅ emit" || echo "
 
 This writes the FOUR-file tree: `<target>/.claude/skills/memory-sync/SKILL.md` with scalars substituted, plus
 `references/memory-guide.md`, `references/agent-audit.md` and `references/hard-sync.md` copied into the emitted
-`references/`. It stamps provenance into the emitted SKILL.md's YAML FRONTMATTER, appended after the
+`references/`.
+
+> `disable-model-invocation` MUST NOT be set on the emitted skill: plain-prose invocation ("память устарела",
+> "sync memory") is a first-class path, alongside `/memory-sync [scope]`. Legacy installs that still carry the key
+> are stripped by `generate.sh restamp`; `validate` fails on a survivor.
+
+It stamps provenance into the emitted SKILL.md's YAML FRONTMATTER, appended after the
 skill's own keys:
 
 ```yaml
@@ -486,7 +492,7 @@ the single list -- do not restate it here.
 | Emit material | `${CLAUDE_SKILL_DIR}/references/` | `SKILL.md.template`, `memory-guide.md`, `agent-audit.md`, `hard-sync.md` -- four files emitted |
 | Emitted default depth | `NORMAL` | `HARD` is per-run, from the emitted skill's own arguments; nothing is regenerated to switch |
 | Generation script | `${CLAUDE_SKILL_DIR}/scripts/generate.sh` | `scan` \| `emit` \| `validate` \| `restamp` \| `status` \| `enable` \| `disable` \| `uninstall` \| `purge` |
-| Provenance refresh | `generate.sh restamp` | Metadata-only, idempotent, mandatory tail of `upgrade`. Rewrites `version` / `last_updated` / `surface_files`, adds `doc_type` / `generated_by` when absent, deletes a pre-5.0 tail stamp, re-copies a reference ONLY when its sole difference from the plugin source is the release stamp. Aborts rather than write if anything outside the metadata block would move |
+| Provenance refresh | `generate.sh restamp` | Metadata-only, idempotent, mandatory tail of `upgrade`. Rewrites `version` / `last_updated` / `surface_files`, adds `doc_type` / `generated_by` when absent, deletes a pre-5.0 tail stamp and a legacy `disable-model-invocation`, re-copies a reference ONLY when its sole difference from the plugin source is the release stamp. Aborts rather than write if anything outside the metadata block would move |
 | Mode | `status` when installed, else `install` | `status` (read-only) \| `install` \| `upgrade` \| `enable` \| `disable` \| `uninstall` \| `purge` |
 | Disabled marker | `<target>/.claude/skills/memory-sync/SKILL.md.disabled` | What `disable` renames `SKILL.md` to. Its presence IS the disabled state -- there is no config file to keep in sync |
 | Overwrite | refused | `emit` never overwrites a live installation; `MEMORY_SYNC_FORCE=1` overrides and DESTROYS hand-edits |

@@ -2,7 +2,6 @@
 name: memory-sync
 description: "Syncs {PROJECT_NAME} instruction memory (CLAUDE.md at any depth, rules, conventions, agents, skills) against real code: verifies facts, deletes stale, dedups, compresses, re-audits agents; never grows. Excludes docs. Triggers: sync memory, memory sync, memory drift, sync agents, audit agents, обнови CLAUDE.md, синхронизируй память, память устарела"
 user-invocable: true
-disable-model-invocation: true
 argument-hint: "[prompt] [session|branch|commit <sha>[..<sha>]|recent[:N]|all] [hard] [free-form focus]"
 allowed-tools: Read, Edit, Glob, Grep, Bash, Agent
 model: opus

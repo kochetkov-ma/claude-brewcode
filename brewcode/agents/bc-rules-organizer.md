@@ -5,7 +5,7 @@ model: haiku
 maxTurns: 60
 tools: Read, Write, Edit, Glob, Grep, Bash, Agent
 doc_type: llm
-version: "5.5.0"
+version: "5.5.1"
 generated_by: "brewcode"
 last_updated: "2026-08-10"
 ---

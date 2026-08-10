@@ -2,6 +2,38 @@
 
 ---
 
+## v5.5.1 (2026-08-10)
+
+> Docs: [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/) | [superreview-setup](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [task-board-setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/)
+
+> `disable-model-invocation: true` is the right answer for the 27 distributed skills — 27 model-visible descriptions would be a permanent token tax. It is the wrong answer for a skill a generator writes into your repo: that skill exists to be reached, and `/memory-sync` was the one emit still carrying the flag, invisible to the model that was supposed to call it. The flag now belongs to distributed `-setup` skills only, and the generator enforces that on every install, upgrade and validate.
+
+### brewdoc
+
+#### Fixed
+
+- **The emitted `/memory-sync` is model-invocable.** `references/SKILL.md.template` no longer bakes `disable-model-invocation: true`, so Claude can fire the skill mid-plan and prose triggers ("sync memory", "обнови память") resolve. The `-setup` skill itself is unchanged — still `user-invocable: true` **and** `disable-model-invocation: true`, still typed by hand
+
+#### Changed
+
+- **`upgrade` migrates a legacy install without a re-emit.** `generate.sh restamp` — the mandatory last step of `upgrade` — now DELETES a surviving `disable-model-invocation` key from an already-installed `SKILL.md` and prints a `REMOVED:` line. Nothing else in the body moves; hand-edits and SELF-SYNC changes survive
+- **`generate.sh validate` check (5)** hard-fails when the emitted frontmatter carries `disable-model-invocation`, so a hand-edit or a stale template can never quietly hide the skill again
+
+### brewcode
+
+#### Changed
+
+- **`superreview-setup`** carries a normative guard: `disable-model-invocation` MUST NOT be set on the emitted `superreview` skill. Behavior is unchanged — that emit was already model-invocable; the rule is now written down where the generator can be read
+- **`setup-status`**: the `.md` frontmatter example in `references/artifact-metadata.md` no longer shows the key, and a normative sentence states that a generated artifact stays model-invocable and that the flag belongs only to distributed `-setup` skills
+
+### brewtools
+
+#### Changed
+
+- **`task-board-setup`**: the same guard on the emitted `task-board` skill, matching the one `task-spec` already carried. Both emits were already model-invocable; nothing about the deployed board changes
+
+---
+
 ## v5.5.0 (2026-08-10)
 
 > Docs: [agent-return-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-return-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) | [teams-setup](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | [superreview-setup](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [think-short-setup](https://doc-claude.brewcode.app/brewtools/skills/think-short-setup/) | [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [bash-expert](https://doc-claude.brewcode.app/brewcode/agents/bash-expert/) | [bc-rules-organizer](https://doc-claude.brewcode.app/brewcode/agents/bc-rules-organizer/) | [text-optimizer](https://doc-claude.brewcode.app/brewtools/agents/text-optimizer/) | [ssh-admin](https://doc-claude.brewcode.app/brewtools/agents/ssh-admin/) | [deploy-admin](https://doc-claude.brewcode.app/brewtools/agents/deploy-admin/)

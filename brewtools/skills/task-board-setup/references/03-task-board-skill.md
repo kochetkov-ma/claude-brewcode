@@ -2,6 +2,8 @@
 
 Substitute `{{LANG}}`, `{{CLOSE_MARKER_SHORT}}`. Spec-layer placeholders (gated by `{{SPEC_MODE}}`) -- LINE kind: `{{SPEC_INVARIANTS}}`, `{{SPEC_ADD_STEP}}`, `{{SPEC_MOVE_STEPS}}`, `{{SPEC_VIEW_FLOW}}`; INLINE kind: `{{SPEC_DESC_TRIGGERS}}`, `{{SPEC_ADD_ROW_COL}}`. Write the body below to `TARGET/.claude/skills/task-board/SKILL.md`.
 
+> `disable-model-invocation` MUST NOT be set on the emitted skill: plain-prose invocation is a first-class path, alongside `/task-board [view|add|move|backlog|groom]`.
+
 `{{CLOSE_MARKER_SHORT}}` map by RELEASE_STYLE:
 - `vtag` → `the closing version/commit (vX.Y.Z tag or SHA)`
 - `sha`  → `the closing commit SHA`

@@ -338,6 +338,9 @@ stripped, provenance stamp kept). Every emitted artifact is stamped with the fou
 you export NOTHING for them. `version` is read out of the plugin's own `.claude-plugin/plugin.json` by script
 self-location and `last_updated` is `date +%F`. Both stay `{PLUGIN_VERSION}` / `{LAST_UPDATED}` in the raw
 `.template-baseline/` copies, so a plain version bump makes `upgrade` report IDENTICAL, never a diff.
+> `disable-model-invocation` MUST NOT be set on the emitted skill: the model invoking it mid-plan is a
+> first-class path, alongside the user typing `/superreview`.
+
 Key off the ONE machine-readable status line the writer prints — the
 `already installed` refusal path prints NO status line, because nothing was written:
 

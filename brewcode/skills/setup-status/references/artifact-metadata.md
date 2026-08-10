@@ -1,6 +1,6 @@
 ---
 doc_type: llm
-version: "5.5.0"
+version: "5.5.1"
 generated_by: "brewcode"
 last_updated: "2026-08-10"
 ---
@@ -142,13 +142,16 @@ must not report the version that `install` left. Six implementations, all four c
 name: superreview
 description: "Deep project-tailored review."
 user-invocable: true
-disable-model-invocation: true
 doc_type: llm
 version: "X.Y.Z"
 generated_by: "brewcode:superreview-setup"
 last_updated: "YYYY-MM-DD"
 ---
 ```
+
+**A GENERATED artifact stays model-invocable - `disable-model-invocation: true` belongs ONLY to the
+distributed `-setup` skills.** The generator is user-only so it never fires by itself; what it emits
+must be reachable mid-plan without the user typing the slash command.
 
 Every example in this document uses `X.Y.Z` / `YYYY-MM-DD` on purpose. A literal
 version in a normative document goes stale at the next bump and then teaches the
