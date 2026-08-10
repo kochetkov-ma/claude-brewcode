@@ -3,7 +3,7 @@ name: docsync-setup
 description: "Installs project-local doc-staleness tracking (hooks) and reports/forces doc sync. Triggers: docsync, track doc staleness, doc sync status, stale docs, doc frontmatter."
 user-invocable: true
 disable-model-invocation: true
-argument-hint: "[status|install|upgrade|enable|disable|uninstall|purge] [sync [--all]|reread|frontmatter] | free-text"
+argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge] [sync [--all]|reread|frontmatter]"
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion]
 model: sonnet
 ---
@@ -17,10 +17,37 @@ model: sonnet
 
 <instructions>
 
+## Prompt contract
+
+Position 1 of `$ARGUMENTS` is a **free-form prompt** (RU/EN) — modes and flags are optional and may
+follow in any order. Nobody types keys: resolve mode + scope FROM the prompt.
+
+1. Strip flags. An explicit mode token anywhere wins outright, no scoring.
+2. Else score modes by distinct whole-word keyword hits (table below). Highest unique score wins.
+   Tie with a destructive mode -> `AskUserQuestion`; tie with `status` -> `status`; tie of two
+   mutating modes -> the keyword appearing first; all zero -> `status` if installed, else `install`.
+3. Empty arguments -> `status` if installed, else `install`; ask ONE scoping `AskUserQuestion` only
+   when the answer changes what gets written. A read-only run asks nothing.
+4. Outcome-changing ambiguity -> ONE `AskUserQuestion` (max 4 questions) BEFORE any work.
+5. Prose that is not a mode/id/path is still input: extract the id, path or target from it.
+
+Then print this block ONCE, before the first action:
+
+```
+PLAN — brewdoc:docsync-setup
+INPUT:  <arguments verbatim, or "(empty)">
+MODE:   <resolved> — <explicit | matched keyword: X | default>
+SCOPE:  <resolved paths / target / level / flags>
+DO:     <2-5 imperative bullets>
+RESULT: <what the user ends up holding>
+```
+
+Labels are literal; values follow the conversation language.
+
 ## Standard flow (every run)
 
 1. **Resolve mode** from the free-text prompt (`$ARGUMENTS`) — state which mode and WHY.
-2. **State the plan** — what this mode will do, before acting.
+2. **Print the PLAN block** (see Prompt contract above) — once, before acting.
 3. **Execute** the mode.
 4. **Output block** — the standard formatted summary (see Output Format below).
 5. **Verification (MANDATORY)** — run the checks for the mode and report pass/fail
@@ -47,21 +74,24 @@ it. Otherwise derive from intent. State the resolved mode and the reason.
 Canonical verbs, in order: `status | install | upgrade | enable | disable | uninstall | purge`.
 Skill-specific extras come after them: `sync [--all]`, `reread`, `frontmatter`.
 
-| Intent / keywords (EN + RU) | Mode |
-|-----------------------------|------|
-| status, что устарело, what is stale, check, показать | status |
-| install, установи, настрой | install |
-| upgrade, обнови хуки, refresh hooks, переустанови | upgrade |
-| enable, включи, включи отслеживание, возобнови, turn back on | enable |
-| disable, выключи, приостанови, отключи отслеживание, pause, mute | disable |
-| uninstall, удали docsync, снеси хуки | uninstall |
-| purge, вычисти, снеси всё вместе с конфигом | purge |
-| sync, синхронизируй, обнови устаревшие, `--all`, sync all | sync |
-| reread, перечитай, refresh context, освежи | reread |
-| frontmatter, проставь frontmatter, add frontmatter, ретро-разметка | frontmatter |
-| (empty) AND hooks NOT installed | install |
-| (empty) AND hooks installed | status |
-| unrecognized text | pick the closest mode; if unclear, default to status |
+| Mode | EN keywords | RU keywords | Mutates? |
+|------|-------------|-------------|----------|
+| `status` | *(empty)*, status, check, show, what is stale | что устарело, показать, статус | no |
+| `install` | install | установи, настрой | yes |
+| `upgrade` | upgrade, refresh hooks | обнови хуки, переустанови | yes |
+| `enable` | enable, turn back on | включи, включи отслеживание, возобнови | yes |
+| `disable` | disable, pause, mute | выключи, приостанови, отключи отслеживание | yes |
+| `uninstall` | uninstall | удали docsync, снеси хуки | yes |
+| `purge` | purge | вычисти, снеси всё вместе с конфигом | yes, destructive |
+| `sync` | sync, sync all, `--all` | синхронизируй, обнови устаревшие | yes |
+| `reread` | reread, refresh context | перечитай, освежи | no |
+| `frontmatter` | frontmatter, add frontmatter | проставь frontmatter, ретро-разметка | yes |
+
+- `(empty)` AND hooks NOT installed -> `install`. `(empty)` AND hooks installed -> `status`.
+- Unrecognized text -> pick the closest mode; if unclear, default to `status`.
+- Prose that names no mode/id/path is still input: extract the id/path/target from the sentence,
+  never treat its first word as a positional id.
+- A missing PLAN block, or one printed after work started, is a defect.
 
 > Removed aliases — `init`, `on`, `off`, `setup`, `remove`, `reset`, `create`,
 > `update`, `cleanup` are no longer accepted verbs. Map them to the canonical set

@@ -3,7 +3,7 @@ name: plugin-update
 description: Checks, installs, updates Claude Code plugins. Triggers - update plugins, check versions, обнови плагины.
 user-invocable: true
 disable-model-invocation: true
-argument-hint: "[check|update|all] — no args = interactive. check = status only, update = prompt to update, all = everything non-interactive"
+argument-hint: "[prompt] [check|update|all]"
 allowed-tools: [Read, Bash, AskUserQuestion, Write, WebFetch]
 model: sonnet
 ---
@@ -12,16 +12,43 @@ model: sonnet
 
 > Check, install, and update the brewcode plugin suite (brewcode, brewdoc, brewtools, brewui). Execute all commands in the current session — never give "you should run" instructions.
 
+## Prompt contract
+
+Position 1 of `$ARGUMENTS` is a **free-form prompt** (RU/EN) — the mode is optional and may
+follow in any order. Nobody types keys: resolve the mode FROM the prompt.
+
+1. Strip flags. An explicit mode token anywhere wins outright, no scoring.
+2. Else score modes by distinct whole-word keyword hits (table below). Highest unique score wins.
+   All zero -> `interactive`.
+3. Empty arguments -> `interactive`; `check` asks nothing (read-only). `interactive` asks its
+   own per-phase `AskUserQuestion` gates — that IS the mode, not an extra clarifying question.
+4. Outcome-changing ambiguity between `update` and `all` -> ONE `AskUserQuestion` BEFORE any work.
+5. Prose that is not a mode is still input: read it for which plugins/scope it names.
+
+Then print this block ONCE, before Phase 3 (the first phase that can mutate). `check` prints it
+immediately before its Phase 2 report instead:
+
+```
+PLAN — brewtools:plugin-update
+INPUT:  <arguments verbatim, or "(empty)">
+MODE:   <resolved> — <explicit | matched keyword: X | default>
+SCOPE:  <resolved plugins / flags>
+DO:     <2-5 imperative bullets>
+RESULT: <what the user ends up holding>
+```
+
+Labels are literal; values follow the conversation language.
+
 ## Argument Handling
 
 **Skill arguments received:** `$ARGUMENTS`
 
-| Arg | Behavior |
-|-----|----------|
-| (empty) | Interactive — all 6 phases with AskUserQuestion gates |
-| `check` | Phases 0-2 only (status table), no prompts |
-| `update` | Phases 0-4, non-interactive "Update all" |
-| `all` | Phases 0-6 non-interactive |
+| Mode | EN keywords | RU keywords | Mutates? | Behavior |
+|------|-------------|--------------|----------|----------|
+| `interactive` | *(empty)* | *(empty)* | yes (asks first) | all 6 phases with AskUserQuestion gates |
+| `check` | `check`, `status` | `проверь`, `статус` | no | Phases 0-2 only (status table), no prompts |
+| `update` | `update`, `upgrade` | `обнови`, `обновление` | yes | Phases 0-4, non-interactive "Update all" |
+| `all` | `all`, `everything`, `full` | `всё`, `полностью` | yes | Phases 0-6 non-interactive |
 
 Parse first token of `$ARGUMENTS`. Unknown or empty → interactive.
 
@@ -80,7 +107,8 @@ Status legend: ✅ current, ⬇️ update available, ❌ missing, ❓ unknown.
 
 Also list `other` plugins below with their versions (informational).
 
-**If arg = `check`** → STOP here. Skip to Phase 6.
+**If arg = `check`** → print the `## Prompt contract` PLAN block (`DO:` reduced to "read
+installed + latest versions, render status"), then STOP here. Skip to Phase 6.
 
 ## Phase 2b — Token-Cost Table (Optional)
 
@@ -105,6 +133,9 @@ Adapt column names to actual output fields. Missing field → `—`. Command fai
 Phase is informational only; do not block on errors.
 
 ## Phase 3 — Install Missing
+
+Print the `## Prompt contract` PLAN block here — this is the first phase that can mutate — with
+SCOPE naming the missing/outdated plugins found in Phases 0-2, before asking or installing.
 
 For each missing suite plugin, ask via AskUserQuestion (unless arg ∈ {`update`, `all`} — `all` auto-installs, `update` skips install).
 

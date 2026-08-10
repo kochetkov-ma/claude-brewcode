@@ -3,7 +3,7 @@ name: setup-status
 description: "Reports which brewcode setup skills are installed, stale, partial or missing in this project, compares the version each installed artifact was generated under against the installed plugin, and prints the exact command to run for each. Triggers: setup status, what is installed, what version is installed, что установлено."
 user-invocable: true
 disable-model-invocation: true
-argument-hint: "[<plugin>|<skill>] - no args = full cross-plugin report"
+argument-hint: "[prompt] [<plugin>|<skill>] - no args = full cross-plugin report"
 allowed-tools: [Read, Bash, Glob, Grep]
 model: sonnet
 ---
@@ -18,6 +18,35 @@ exact command to run for each row.
 
 **This skill writes nothing.** No file is created, edited or deleted; `allowed-tools` carries no
 `Write`, no `Edit`, no `Agent`. Every probe is an existence check, a `cmp`, or a one-line grep.
+
+## Prompt contract
+
+Position 1 of `$ARGUMENTS` is a **free-form prompt** (RU/EN). This skill has no modes to select —
+report is the only behavior — so the prompt carries exactly one optional decision: which plugin or
+skill to filter to.
+
+1. There are no flags and no destructive path — nothing to strip.
+2. Extract a plugin name (`brewcode`, `brewtools`, `brewdoc`) or a skill name (`semble-setup`,
+   `docsync`, `task board`, ...) from the prompt if one is present; that becomes the filter. Prose
+   naming neither is unrecognised text, not an error -> full report.
+3. Empty arguments -> full cross-plugin report. Read-only; asks nothing.
+4. This skill never calls `AskUserQuestion` — there is no outcome-changing choice to make.
+5. Prose that is not a plugin/skill name is still input: extract the name from it, never treat the
+   first word as a positional filter.
+
+Then print this block ONCE, right before the report (Phase 4) — there is no mutation to place it
+before:
+
+```
+PLAN — brewcode:setup-status
+INPUT:  <arguments verbatim, or "(empty)">
+MODE:   report — <full cross-plugin | filtered: <plugin/skill>>
+SCOPE:  <resolved plugin(s)/skill(s) in scope>
+DO:     <2-5 imperative bullets: resolve plugin roots, probe artifacts, read stamps, classify>
+RESULT: <the report the user ends up holding>
+```
+
+Labels are literal; values follow the conversation language.
 
 ## Why it does not run the setups
 
@@ -784,7 +813,8 @@ Two facts that look like staleness and are not:
 
 ## Phase 4 — Output
 
-Lead with ONE line, before anything else — how many rows are behind the installed plugin:
+Print the PLAN block (Prompt contract above) first, then lead with ONE line, before anything else —
+how many rows are behind the installed plugin:
 
 ```
 4 of 10 setups are behind the installed plugin (2 stale by version, 1 legacy stamp, 1 drifted bytes).

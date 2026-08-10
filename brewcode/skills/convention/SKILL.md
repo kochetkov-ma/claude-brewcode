@@ -3,23 +3,53 @@ name: convention
 description: "Extracts etalon classes, patterns, architecture into convention docs. Triggers: extract conventions, etalon classes."
 user-invocable: true
 disable-model-invocation: true
-argument-hint: "[full|conventions|rules|paths <p1,p2>]"
+argument-hint: "[prompt] [full|conventions|rules|paths <p1,p2>]"
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion, Skill]
 model: opus
 ---
 
 <instructions>
 
+## Prompt contract
+
+Position 1 of `$ARGUMENTS` is a **free-form prompt** (RU/EN) — modes and flags are optional and may
+follow in any order. Nobody types keys: resolve mode + scope FROM the prompt.
+
+1. Strip flags. An explicit mode token anywhere wins outright, no scoring.
+2. Else score modes by distinct whole-word keyword hits (table below). Highest unique score wins.
+   Tie with a destructive mode -> `AskUserQuestion`; tie with `status` -> `status`;
+   tie of two mutating modes -> the keyword appearing first; all zero -> `full`.
+3. Empty arguments -> `full`; ask ONE scoping `AskUserQuestion` only when the answer
+   changes what gets written. A read-only run asks nothing.
+4. Outcome-changing ambiguity -> ONE `AskUserQuestion` (max 4 questions) BEFORE any work.
+5. Prose that is not a mode/id/path is still input: extract the id, path or target from it.
+
+Then print this block ONCE, before the first action:
+
+```
+PLAN — brewcode:convention
+INPUT:  <arguments verbatim, or "(empty)">
+MODE:   <resolved> — <explicit | matched keyword: X | default>
+SCOPE:  <resolved paths / target / level / flags>
+DO:     <2-5 imperative bullets>
+RESULT: <what the user ends up holding>
+```
+
+Labels are literal; values follow the conversation language.
+
 ## Mode Detection
 
 **Arguments:** `$ARGUMENTS`
 
-| Mode | Invocation | Phases | Prerequisites |
-|------|-----------|--------|---------------|
-| `full` (default) | `/brewcode:convention` | P0-P8 | None |
-| `conventions` | `/brewcode:convention conventions` | P0-P6 | None |
-| `rules` | `/brewcode:convention rules` | P0, P7, P7.5, P8 | `.claude/convention/` exists |
-| `paths` | `/brewcode:convention paths src/a,src/b` | P0-P7 scoped | None |
+| Mode | Invocation | Phases | Prerequisites | EN keywords | RU keywords | Mutates? |
+|------|-----------|--------|---------------|--------------|--------------|----------|
+| `full` (default) | `/brewcode:convention` | P0-P8 | None | *(empty)*, `full`, `all`, `everything`, `complete` | `полностью`, `всё`, `весь` | yes |
+| `conventions` | `/brewcode:convention conventions` | P0-P6 | None | `conventions`, `patterns`, `etalons`, `extract` | `конвенции`, `паттерны`, `эталоны`, `извлеки` | yes |
+| `rules` | `/brewcode:convention rules` | P0, P7, P7.5, P8 | `.claude/convention/` exists | `rules`, `extract rules` | `правила`, `извлеки правила` | yes |
+| `paths` | `/brewcode:convention paths src/a,src/b` | P0-P7 scoped | None | `paths`, `scope`, `subset` | `пути`, `путям`, `часть проекта` | yes |
+
+`paths` also needs its comma-separated path list extracted from the prose (rule 3.5) whenever the
+user names files/dirs instead of typing the literal `paths` token.
 
 ---
 
@@ -56,6 +86,20 @@ bash "${CLAUDE_SKILL_DIR}/scripts/convention.sh" scan && echo "---SCAN-OK---" ||
 Output: JSON with `source_dirs`, `file_counts`, `modules`, `total_files`.
 
 > If `total_files` > 1000: warn user, suggest `paths` mode.
+
+### Step 0.2b: Print PLAN
+
+Mode and stack are now resolved (0.1) and scope is scanned (0.2). Print the PLAN block from the
+Prompt contract above, MANDATORY before Step 0.3 runs its first mutation:
+
+```
+PLAN — brewcode:convention
+INPUT:  <arguments verbatim, or "(empty)">
+MODE:   <mode> — matched keyword: <evidence> | default
+SCOPE:  stack=<primary>, paths=<source_dirs or scoped paths>, total_files=<N>
+DO:     <2-5 imperative bullets for P0.3 onward>
+RESULT: <the convention docs / rules the user ends up holding>
+```
 
 ### Step 0.3: Setup Convention Directory
 
@@ -412,5 +456,7 @@ Next Steps: Review `.claude/convention/` | `/brewcode:convention rules` to re-ex
 | Unknown stack | Continue with generic analysis (no stack-specific layers) |
 | Agent timeout | Log warning, continue with available results |
 | Convention doc generation fails | Retry once, then present partial results |
+| Prose argument not matching a mode keyword (e.g. "extract testing patterns") | score against the EN/RU keywords in the Mode Detection table; extract paths/target from the prose — never treat the first word as a positional mode |
+| PLAN block missing, or printed after Step 0.3 already ran | defect — file it, do not ship |
 
 </instructions>

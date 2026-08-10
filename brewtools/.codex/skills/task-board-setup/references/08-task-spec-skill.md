@@ -16,7 +16,7 @@ The `description:` triggers stay bilingual EN+RU regardless of `{{LANG}}` (model
 ---
 name: task-spec
 description: "Authors the product spec and the system-design doc for a task on this repo's board, fanning out to the repo's own domain architect agents -- never designed solo. Writes .codex/features/specs/<ID>-spec.md and <ID>-design.md, then syncs the task frontmatter and board.md. Triggers: system design, architect this, design doc, design document, write the spec, spec out, spec this task, plan this task, architecture for, technical design, design review, needs a spec, системный дизайн, спека, спеку, напиши спеку, архитектура задачи, спланируй задачу, продумай архитектуру, распиши решение, дизайн-документ, с помощью архитектора, привлеки архитекторов. <example> user: продумай архитектуру для T-{{FIRST_DOMAIN}}-SLUG <commentary>Plain prose, no skill named, but this is a design request for a board task -- run task-spec in design mode and fan out to the domain architects.</commentary> </example> <example> user: this one touches the API and the storage layer, write the spec before anyone codes <commentary>Multi-domain + explicit spec ask = the needs-spec heuristic; run task-spec full mode, one architect per touched domain.</commentary> </example> <example> user: scope changed on BUG-{{FIRST_DOMAIN}}-SLUG, the spec is stale now <commentary>Existing docs plus a changed task Scope -> task-spec refresh, preserving D#, Q# and AQ# ids and the Scope status cells.</commentary> </example>"
-argument-hint: "<TASK_ID> [full | design | refresh] [-n|--noask]"
+argument-hint: "[prompt] [<TASK_ID>] [full|design|refresh] [-n|--noask]"
 doc_type: llm
 version: "{PLUGIN_VERSION}"
 generated_by: "{GENERATED_BY}"
@@ -31,6 +31,46 @@ Authoritative procedure: `.codex/features/TRACKER.md` section 10. This skill mir
 Three-document model: the task file owns WHAT + WHY (context, links, `## Scope` with `S#` ids);
 `specs/<ID>-spec.md` owns HOW (decisions, questions, coverage); `specs/<ID>-design.md` owns the
 system design (components, data flow, contracts, reliability, complexity budget).
+
+## Prompt contract
+
+Position 1 of `<arguments>` is a **free-form prompt** (RU/EN) -- `<TASK_ID>`, mode and `-n`/`--noask`
+are optional and may follow in any order. Nobody types keys: resolve the task id and the mode FROM
+the prompt (P0.1 below).
+
+| Mode | EN keywords | RU keywords | Mutates? |
+|------|-------------|-------------|----------|
+| `full` (default) | write the spec, spec out, spec this task, plan this task, needs a spec | спека, спеку, напиши спеку, спланируй задачу | yes |
+| `design` | system design, architect this, design doc, design document, architecture for, technical design, design review, with the architects | системный дизайн, архитектура задачи, продумай архитектуру, дизайн-документ, с помощью архитектора, привлеки архитекторов | yes |
+| `refresh` | stale, scope changed, out of date, re-sync the spec | устарела, скоуп поменялся, обнови спеку | yes |
+
+1. Strip `-n`/`--noask` first -- a flag, never a mode or an id. An explicit mode token anywhere in
+   the remaining arguments wins outright, no scoring.
+2. Else score modes by distinct whole-word keyword hits (table above); highest unique score wins. A
+   tie between two of these mutating modes falls to the keyword appearing first in the prompt --
+   none of the three is read-only, so a tie never needs `request_user_input` by itself.
+3. All zero, or empty arguments -> `full` (the documented default).
+4. Prose that does not parse as a mode is still input, never an error: P0.1 extracts `<TASK_ID>`
+   from it by id pattern or title/slug match -- the first word of a sentence is never guessed as
+   the id.
+5. Outcome-changing ambiguity (P0.4 missing `## Scope`, P0.7 architecture questions) still gets ONE
+   `request_user_input` before work starts, per the existing rules in P0 and P5/P6-C below. `-n`/
+   `--noask` suppresses those three asks only; P0.1's several-candidates STOP and P0.4's no-`## Scope`
+   STOP are ground truth and are never suppressed.
+
+Then print this block once, after P0 resolves the id, the mode and the touched domains (and any
+P0.7 clarify), before P1 starts:
+
+\`\`\`
+PLAN — task-spec
+INPUT:  <arguments verbatim, or "(empty)">
+MODE:   <resolved> -- <explicit | matched keyword: X | default>
+SCOPE:  <ID> -- touched domains <d1, d2, ...>; architects: <domain -> agent, ...>
+DO:     <2-5 imperative bullets>
+RESULT: specs/<ID>-spec.md, specs/<ID>-design.md (per mode)
+\`\`\`
+
+Labels are literal ASCII; values follow {{LANG}}.
 
 ## Invariants
 
@@ -93,7 +133,17 @@ spawns. All spawns of a phase go in ONE message. A bare one-line prompt is never
 
 ### P0 -- resolve the task, read the ground truth
 
-1. Strip `-n` / `--noask` from the arguments FIRST. Then `<TASK_ID>` = first remaining argument; mode = second, default `full`. No id given: `Glob` `.codex/features/progress/*.md` then `todo/*.md`; one WIP task -> use it; several -> `request_user_input` with the candidate ids. Never guess -- under `--noask` this ask is NOT skipped: STOP and report the candidates.
+1. Strip `-n` / `--noask` first -- a flag, never a mode or an id. Resolve MODE per `## Prompt
+   contract` above (explicit token wins; else keyword score; else `full`). Resolve `<TASK_ID>`: an
+   argument matching the id pattern (`[A-Z]+(-[A-Z]+)*-[A-Za-z0-9]+`, e.g. `T-HTML-SLUG`,
+   `BUG-KV-42`) IS the id, taken literally. Anything else is PROSE, not a positional id: extract an
+   id-shaped token from inside the sentence, else match a quoted or bare title/slug fragment against
+   the `id`/`title` frontmatter of every `.codex/features/{backlog,todo,progress,closed}/*.md`
+   (exact match on id, case-insensitive substring on title). No id recoverable (including empty
+   arguments): `Glob` `.codex/features/progress/*.md` then `todo/*.md`; one WIP task -> use it;
+   several -> `request_user_input` with the candidate ids; `--noask` -> this ask is NOT skipped: STOP
+   and report the candidates instead. Never guess -- treating the first word of a sentence as
+   `<TASK_ID>` is a defect.
 2. Locate the file: `Glob` `.codex/features/{backlog,todo,progress,closed}/<ID>.md`. Not found -> STOP, report "task <ID> not found".
 3. Read, in this order: the task file, `.codex/features/TRACKER.md` (section 10), `specs/SPEC_TEMPLATE.md`, `specs/DESIGN_TEMPLATE.md`, and any existing `specs/<ID>-spec.md` / `specs/<ID>-design.md`.
 4. Extract `## Scope` rows. No `## Scope` section -> derive `S1..Sn` from the task body, show the proposed table via `request_user_input`, and write it into the task file in P7. Never proceed on an unstated scope -- under `--noask` this ask is NOT skipped either: STOP and report the derived `S#` rows for confirmation.
@@ -251,6 +301,8 @@ Then, as ONE change:
 | -- | `D#` / `Q#` / `AQ#` / `S#` renumbered on refresh, or a `## Scope` `status` cell changed or dropped | invalid -- ids are permanent and `status` belongs to `task-tracker` / `/task-board`; restore them |
 | -- | a subagent tries to spawn another subagent | forbidden; orchestrate from this session only |
 | -- | the final report emitted as prose instead of the P7.4 block | re-emit the block; it is this skill's contract with the caller |
+| -- | an argument that does not match the id pattern, and has no title/slug match, is nonetheless read as `<TASK_ID>` | defect -- re-run P0.1: it is PROSE, extract the id from it or fall through to no-id discovery |
+| -- | the `PLAN` block is missing, or is printed after `.codex/features/**` is first written | defect -- print it once, right after P0 resolves id/mode/domains, before P1 |
 
 ## References
 

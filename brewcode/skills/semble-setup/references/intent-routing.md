@@ -39,6 +39,11 @@ This file is normative. The router in `SKILL.md` follows it literally.
 > Step 2 is checked **before** scoring. A checkpointed `install` that is waiting for a new session
 > takes precedence over a vague prompt — that is how the interrupted flow resumes by itself.
 
+> **Resolution's output is the PLAN block** (`SKILL.md` `## Prompt contract`, prompt-contract.md §4):
+> `INPUT`/`MODE`/`SCOPE`/`DO`/`RESULT`, printed once, before Step 1's `status` report and before any
+> mutation. `MODE` carries the reason from this algorithm verbatim (`explicit`, `matched keyword: X`,
+> `default`, `checkpoint resume`).
+
 ---
 
 ## Worked examples — EN (6)
@@ -71,6 +76,18 @@ reason: `no keyword matched (score 0) -> status`. Next Step lists `install` (if 
 | — | winner **`install`**, unique |
 
 reason: `matched keyword: set up`. Mutating -> status first, then the `install` chain, then the reload checkpoint.
+
+```
+PLAN — brewcode:semble-setup
+INPUT:  set up semantic search for this repo
+MODE:   install — matched keyword: set up
+SCOPE:  this project root, user-scope MCP registration, default corpus (SEMBLE_CONTENT_ARGS)
+DO:     - probe prerequisites (uv, coreutils)
+        - register semble_code MCP at user scope
+        - reserve docs cache root, wire rule/hooks/agents
+        - write reload checkpoint
+RESULT: registered MCP pending a new-session reload, plus the resume command
+```
 
 ### E4 — `"rebuild the index"`
 

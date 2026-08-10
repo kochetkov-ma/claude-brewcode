@@ -3,7 +3,7 @@ name: publish
 description: "Publish text/markdown/file/site to brewpage.app, returns URL. Triggers: publish, share link, brewpage, опубликуй."
 user-invocable: true
 disable-model-invocation: true
-argument-hint: "<text|file_path|directory_path|zip_path> [--ttl N] [--entry filename]"
+argument-hint: "[prompt] <text|file_path|directory_path|zip_path> [--ttl N] [--entry filename]"
 allowed-tools: [Read, Bash, AskUserQuestion, Glob]
 model: haiku
 ---
@@ -12,6 +12,35 @@ model: haiku
 
 Publish content to **brewpage.app** — free instant hosting for HTML pages, JSON documents, files, and multi-file sites. No sign-up required.
 
+## Prompt contract
+
+Position 1 of `$ARGUMENTS` is a **free-form prompt** (RU/EN) — the content (text, file/dir/zip path), `--ttl`
+and `--entry` are optional and may follow in any order. Nobody types keys: resolve WHAT to publish FROM the
+prompt.
+
+1. Strip `--ttl N` and `--entry <filename>` flags.
+2. Extract the content to publish (rule 3 below) — this doubles as the content-type detection in Step 2, scored
+   by the keyword table there.
+3. **Prose resolution (mandatory):** a sentence naming a file/dir resolves to that file/dir (e.g. "publish my
+   report.md" -> `content_arg = report.md`, resolved against cwd); a sentence with no path and no inline
+   text/JSON has nothing to publish -> ONE `AskUserQuestion` asking what to publish. Never guess, never
+   silently fall back to an empty HTML page.
+4. Outcome-changing ambiguity (namespace, password) -> the two dedicated `AskUserQuestion` calls in Steps 4-5;
+   nothing else asks.
+
+Then print this block ONCE, before Step 6 (the publish call):
+
+```
+PLAN — brewdoc:publish
+INPUT:  <arguments verbatim, or "(empty)">
+MODE:   <detected type — SITE|MARKDOWN|FILE|JSON|HTML> — <matched extension/shape | prose-resolved path>
+SCOPE:  namespace=<ns>; ttl=<days>; password=<set|none>
+DO:     <2-5 imperative bullets>
+RESULT: <published URL>
+```
+
+Labels are literal; values follow the conversation language.
+
 ## Workflow
 
 ### Step 1: Parse Arguments
@@ -19,18 +48,18 @@ Publish content to **brewpage.app** — free instant hosting for HTML pages, JSO
 Extract from `$ARGUMENTS`:
 - `--ttl N` → TTL in days (default: `15`)
 - `--entry <filename>` → entry file for SITE uploads (default: auto-detect)
-- Remaining text → `content_arg`
+- Remaining text → `content_arg` — extract per the prose-resolution rule above; not resolvable -> `AskUserQuestion`
 
 ### Step 2: Detect Content Type
 
-| Input | Type | API |
-|-------|------|-----|
-| `content_arg` is a directory (`test -d`) | SITE | `POST /api/sites` (ZIP created from dir) |
-| `content_arg` ends with `.zip` AND file exists (`test -f`) | SITE | `POST /api/sites` (archive upload) |
-| `content_arg` is a `.md`/`.markdown` file AND exists (`test -f`) | MARKDOWN | `POST /api/html` (format=markdown, content read from the file — renders styled, NOT a raw download) |
-| `content_arg` is a file path AND file exists (`test -f`) | FILE | `POST /api/files` (multipart) |
-| `content_arg` starts with `{` or `[` | JSON | `POST /api/json` |
-| Anything else | HTML | `POST /api/html` (format=markdown) |
+| Input | Type | API | EN keywords | RU keywords | Mutates? |
+|-------|------|-----|--------------|--------------|----------|
+| `content_arg` is a directory (`test -d`) | SITE | `POST /api/sites` (ZIP created from dir) | publish site, publish folder/directory | опубликуй сайт, опубликуй папку | yes |
+| `content_arg` ends with `.zip` AND file exists (`test -f`) | SITE | `POST /api/sites` (archive upload) | publish zip, publish archive | опубликуй архив, опубликуй zip | yes |
+| `content_arg` is a `.md`/`.markdown` file AND exists (`test -f`) | MARKDOWN | `POST /api/html` (format=markdown, content read from the file — renders styled, NOT a raw download) | publish markdown, share this .md | опубликуй markdown, поделись .md | yes |
+| `content_arg` is a file path AND file exists (`test -f`) | FILE | `POST /api/files` (multipart) | publish file, share this file | опубликуй файл, поделись файлом | yes |
+| `content_arg` starts with `{` or `[` | JSON | `POST /api/json` | publish json, share this json | опубликуй json | yes |
+| Anything else | HTML | `POST /api/html` (format=markdown) | publish text, share link, publish this | опубликуй текст, поделись ссылкой | yes |
 
 Stats per type — SITE (dir): HTML count, total size, entry file. SITE (ZIP): file size, entry override. FILE: size + MIME via `file --mime-type -b`. TEXT/JSON: char count.
 

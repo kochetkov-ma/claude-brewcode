@@ -3,7 +3,7 @@ name: manager-setup
 description: "Manager mode: installs a hard delegation wall into this project — status, install, upgrade, enable, disable, uninstall, purge, level, edit — and explains/customizes codewords ++m, ++a, ++rr, ++r. Triggers: manager, менеджер, hard mode, хард режим, delegate."
 user-invocable: true
 disable-model-invocation: true
-argument-hint: "[status|install|upgrade|enable|disable|uninstall|purge] [level strict|balanced] [edit] | <task в хард режиме> | <task от роли менеджера> | <prompt>"
+argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge] [level strict|balanced] [edit]"
 allowed-tools: [Read, Bash, AskUserQuestion]
 model: sonnet
 ---
@@ -30,6 +30,41 @@ model: sonnet
 > node <ABS project root>/.claude/brewtools/manager/manager-state.mjs set hard=false
 > ```
 > The guard exempts it only when ALL of these hold: the command starts with `node `, the FIRST argument after `node` is that helper path (a `manager-state.mjs` substring anywhere else does not count), there is no shell operator outside quotes, no `$` expansion, no eval flag (`-e`/`--eval`/`-p`/`--print`/`--input-type`/`--require`/`--import`/`--loader`), and the remaining arguments are the helper's own CLI (`get` | `set hard=<true|false> level=<strict|balanced> [--cwd DIR]`). **No `BT_ROOT=` prelude, no `&& echo`, no `|| echo`, no `test -f` — every one of those is a shell operator and turns the exemption OFF.** `install`/`upgrade` copy the helper into the project precisely so this command needs no path resolution.
+
+## Prompt contract
+
+Position 1 of `$ARGUMENTS` is a **free-form prompt** (RU/EN) — modes and flags are optional and may
+follow in any order. Nobody types keys: resolve the action + scope FROM the prompt via
+`references/intent-routing.md` (P0 table below is the same routing, EN/RU keyword split).
+
+1. Strip flags. An explicit action token anywhere wins outright, no scoring.
+2. Else score actions by distinct whole-word keyword hits (P0 table). Highest unique score wins.
+   Tie with a destructive action (`purge`) -> `AskUserQuestion`; tie with `status` -> `status`;
+   tie of two mutating actions -> the keyword appearing first; all zero -> `status`.
+3. Empty arguments -> `status`; ask ONE scoping `AskUserQuestion` only when the answer changes
+   what gets written or armed. `status` asks nothing.
+4. Outcome-changing ambiguity (incl. `hard-one-shot` vs `manager-run`, enable vs disable) -> ONE
+   `AskUserQuestion` (max 4 questions) BEFORE any work — this is P1.
+5. Prose that is not an action/id/path is still input: extract the task from `<task> в хард
+   режиме` / `<task> от роли менеджера` rather than treating the first word as a positional id.
+
+Then print this block ONCE, after P1 and before the first action (P2). A read-only `status`
+prints it immediately before its report:
+
+```
+PLAN — brewtools:manager-setup
+INPUT:  <arguments verbatim, or "(empty)">
+MODE:   <resolved action> — <explicit | matched keyword: X | default>
+SCOPE:  <resolved paths / level / task> — LAYER: <codewords (soft, always-on, hook-driven) |
+        HARD wall (opt-in, this project, PreToolUse guard)> — name which layer this action touches
+DO:     <2-5 imperative bullets>
+RESULT: <what the user ends up holding>
+```
+
+Labels are literal; values follow the conversation language. `install`/`upgrade`/`enable`/
+`disable`/`uninstall`/`purge`/`level` touch the HARD-wall layer; `edit` touches the codewords
+layer (prompt text only); `hard-one-shot` touches BOTH (arms/disarms the wall AND runs the task
+under the codewords contract); `manager-run`/`inline-run` touch only the codewords layer.
 
 <instructions>
 
@@ -98,21 +133,21 @@ Parse `$ARGUMENTS` (or the user's NL prompt, RU+EN) into `{ action, scope, mode,
 
 Actions, canonical order: `status`, `install`, `upgrade`, `enable`, `disable`, `uninstall`, `purge`, plus the extras `level <strict|balanced>`, `edit`, and the run actions `hard-one-shot`, `manager-run`, `inline-run`.
 
-| Signal | Resolves |
-|--------|----------|
-| `status` / `статус` / `что сейчас` / no argument at all | `action=status` — the main explainer, and the default |
-| `install` / `установи` / `поставь стену` (no task) | `action=install` — INSTALL + ARM the HARD wall for this project |
-| `upgrade` / `обнови` / `перекопируй гард` | `action=upgrade` — re-copy the guard + re-register from the CURRENT plugin version; `hard`/`level` preserved |
-| `enable` / `on` / `вкл` / `включи` / `arm` (no task) | `action=enable` — ARM an installed wall (state flip only). NOT registered yet → treat as `install` |
-| `disable` / `off` / `выкл` / `выключи` / `стена выкл` / `стену выключи` / `disarm` | `action=disable` — DISARM the wall (state only; registration stays) |
-| `uninstall` / `teardown` / `снеси стену` / `удали хук` / `деинсталлируй` / `remove hook` | `action=uninstall` — DEREGISTER the wall from `settings.local.json` + delete the copied guard (auto-disarms first). State and prompt overrides are KEPT |
-| `purge` / `вычисти` / `снеси всё` / `верни дефолт` / `сброс` | `action=purge` — uninstall + delete `state.json` AND the prompt-text override(s) |
-| `level strict` / `режим строгий` | `action=level, level=strict` |
-| `level balanced` / `режим сбалансированный` | `action=level, level=balanced` |
-| `edit` / `поправь промт` | `action=edit` — prompt-text only (Manager prompt text) |
-| `<task> в хард режиме` / `<task> in hard mode` | `action=hard-one-shot` — has a REAL task + hard marker |
-| `<task> от роли менеджера` / `<task> as manager` | `action=manager-run` — run task in manager role, wall untouched |
-| bare task, no control verb, no marker | `action=inline-run` |
+| Action | EN keywords | RU keywords | Mutates? | Resolves |
+|--------|-------------|--------------|----------|----------|
+| `status` | *(empty)*, `status` | `статус`, `что сейчас` | no | the main explainer, and the default |
+| `install` | `install` (no task) | `установи`, `поставь стену` | yes | INSTALL + ARM the HARD wall for this project |
+| `upgrade` | `upgrade` | `обнови`, `перекопируй гард` | yes | re-copy the guard + re-register from the CURRENT plugin version; `hard`/`level` preserved |
+| `enable` | `enable`, `on`, `arm` (no task) | `вкл`, `включи` | yes | ARM an installed wall (state flip only). NOT registered yet → treat as `install` |
+| `disable` | `disable`, `off`, `disarm` | `выкл`, `выключи`, `стена выкл`, `стену выключи` | yes | DISARM the wall (state only; registration stays) |
+| `uninstall` | `uninstall`, `teardown`, `remove hook` | `снеси стену`, `удали хук`, `деинсталлируй` | yes | DEREGISTER the wall from `settings.local.json` + delete the copied guard (auto-disarms first). State and prompt overrides are KEPT |
+| `purge` | `purge` | `вычисти`, `снеси всё`, `верни дефолт`, `сброс` | yes, destructive | uninstall + delete `state.json` AND the prompt-text override(s) |
+| `level strict` | `level strict` | `режим строгий` | yes | wall strictness = strict |
+| `level balanced` | `level balanced` | `режим сбалансированный` | yes | wall strictness = balanced |
+| `edit` | `edit` | `поправь промт` | yes (prompt-text only) | prompt-text only (Manager prompt text) |
+| `hard-one-shot` | `<task> in hard mode` | `<task> в хард режиме` | yes (arms, auto-reverts) | has a REAL task + hard marker |
+| `manager-run` | `<task> as manager` | `<task> от роли менеджера` | no (wall untouched) | run task in manager role, wall untouched |
+| `inline-run` | bare task, no control verb, no marker | — | no (wall untouched) | gentle default for a bare task |
 
 > `on` / `off` / `reset` / `setup` / `remove` are REMOVED as command words. `on` and `off` survive only as free-text synonyms routed to `enable` / `disable` above; `reset` routes to `purge`. Never print them as commands.
 
@@ -133,6 +168,10 @@ If the action is ambiguous or signals conflict (e.g. enable + disable, a task th
 ---
 
 ## P2: Execute
+
+Print the `## Prompt contract` PLAN block first — INPUT/MODE from P0, SCOPE naming which layer
+(codewords vs HARD wall, or both for `hard-one-shot`) — before running the mapped section below.
+`status` prints the same block immediately before its report instead of before a mutation.
 
 > Sections below map 1:1 to `action`: `install`, `upgrade`, `enable`, `disable`, `uninstall`, `purge`, `level`, `status`, `edit`, and the three run actions.
 

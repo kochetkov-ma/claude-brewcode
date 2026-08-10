@@ -81,7 +81,7 @@ Authoritative rules live in `TRACKER.md` section 10. These expansions mirror it;
 ---
 name: task-board
 description: "Views and updates this repo's file-based task board at .claude/features/. Triggers: show the board, task board, board status, what's in progress, add a task, create task, move task to progress, close task, dump to backlog, groom backlog.{{SPEC_DESC_TRIGGERS}}"
-argument-hint: "[view | add | move | backlog | groom]"
+argument-hint: "[prompt] [view | add | move | backlog | groom]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Agent
 doc_type: llm
 version: "{PLUGIN_VERSION}"
@@ -93,6 +93,42 @@ last_updated: "{LAST_UPDATED}"
 
 On-demand entry point for the file-based Kanban under `.claude/features/`.
 Authoritative procedure: `.claude/features/TRACKER.md`. This skill mirrors it -- do not invent rules.
+
+## Prompt contract
+
+Position 1 of `$ARGUMENTS` is a **free-form prompt** ({{LANG}}) -- `view`/`add`/`move`/`backlog`/
+`groom` and any flags are optional and may follow in any order. Nobody types keys: resolve the flow
+FROM the prompt.
+
+| Mode | EN keywords | RU keywords | Mutates? |
+|------|-------------|-------------|----------|
+| `view` (default) | *(empty)*, show the board, task board, board status, what's in progress | покажи доску, статус доски, что в работе | no |
+| `add` | add a task, create task, new task | добавь задачу, создай задачу, новая задача | yes |
+| `move` | move task to progress, close task, pick up, ship it | перемести в работу, возьми в работу, закрой задачу | yes |
+| `backlog` | dump to backlog, backlog it, look into later | закинь в бэклог, в бэклог | yes |
+| `groom` | groom backlog, groom the backlog, triage backlog | разбери бэклог, приведи бэклог в порядок | yes |
+
+1. Strip flags. An explicit mode token anywhere wins outright, no scoring.
+2. Else score modes by distinct whole-word keyword hits (table above). Highest unique score wins;
+   a tie against `view` picks `view` (read-only); a tie of two mutating modes falls to the keyword
+   appearing first in the prompt.
+3. Empty arguments -> `view` (the documented default); a read-only run asks nothing.
+4. Prose that is not a mode is still input: extract the task id, folder or row it names before
+   entering the flow (VIEW/ADD/MOVE/BACKLOG/GROOM below) -- never guess the first word as a mode.
+5. Outcome-changing ambiguity (which task, which folder) -> ONE `AskUserQuestion` before any write.
+
+Then print this block once, before the first action:
+
+\`\`\`
+PLAN — task-board
+INPUT:  <arguments verbatim, or "(empty)">
+MODE:   <resolved> -- <explicit | matched keyword: X | default>
+SCOPE:  <task id / row / folder touched, or "read-only view">
+DO:     <2-5 imperative bullets>
+RESULT: <board.md row, task file, or the view/report the user ends up holding>
+\`\`\`
+
+Labels are literal ASCII; values follow {{LANG}}.
 
 ## Invariants (always hold)
 
@@ -178,6 +214,13 @@ DONE: every backlog file handled (promoted / merged / trashed — none left behi
   ids | trashed slugs, plus the new counts.
 ")
 \`\`\`
+
+## Guards
+
+| Condition | Response |
+|-----------|----------|
+| an argument that matches no mode keyword and names no task/row/folder is still read as a mode | defect -- it is prose: extract the target from it or ask, never guess |
+| the `PLAN` block is missing, or is printed after the first file write | defect -- print it once, right after mode resolution, before entering the flow |
 
 ## References
 

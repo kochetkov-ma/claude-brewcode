@@ -3,7 +3,7 @@ name: agent-router-setup
 description: "Installs, configures or removes the agent-router hook (routes a generic Agent spawn to the real project/plugin expert). Triggers: agent-router, wrong agent, route to expert, роутер агентов, не тот агент."
 user-invocable: true
 disable-model-invocation: true
-argument-hint: "[status|install|upgrade|enable|disable|uninstall|purge] [level fast|strict] | free-text intent"
+argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge] [level fast|strict]"
 allowed-tools: [Read, Bash, AskUserQuestion, Agent]
 model: sonnet
 ---
@@ -13,6 +13,33 @@ model: sonnet
 > **EXPERIMENTAL.** Installer/configurator skill. It wires ONE self-contained PreToolUse hook (matcher `Agent`) that checks whether the main loop picked the RIGHT agent for a spawn and redirects it to the real expert — a project agent from `.claude/agents/`, or a brewcode specialist — when it reached for a generic one. All runtime behavior lives in the hook file and in a JSON config; this skill only decides **mode** and **level**, then delegates the file work to the `brewcode:hook-creator` agent following the runbook.
 
 The main loop picks `general-purpose` out of habit while the repo carries a hand-written domain expert that would have done it properly. Tier 1 catches that deterministically, for zero tokens. A deny is returned to the model as a tool error it can act on: the human is never prompted, the turn is not interrupted, and a retry always gets through.
+
+## Prompt contract
+
+Position 1 of `$ARGUMENTS` is a **free-form prompt** (RU/EN) — modes and flags are optional and may
+follow in any order. Nobody types keys: resolve mode + scope FROM the prompt.
+
+1. Strip flags. An explicit mode token anywhere wins outright, no scoring.
+2. Else score modes by distinct whole-word keyword hits (table in Step 2). Highest unique score
+   wins. Tie with a destructive mode (`purge`) -> `AskUserQuestion`; tie with `status` -> `status`;
+   tie of two mutating modes -> the keyword appearing first; all zero -> `status`.
+3. Empty arguments -> `status`; ask ONE scoping `AskUserQuestion` only when the answer changes
+   what gets written. A read-only run asks nothing.
+4. Outcome-changing ambiguity -> ONE `AskUserQuestion` (max 4 questions) BEFORE any work.
+5. Prose that is not a mode/id/path is still input: extract the id, path or target from it.
+
+Then print this block ONCE, before the first action:
+
+```
+PLAN — brewtools:agent-router-setup
+INPUT:  <arguments verbatim, or "(empty)">
+MODE:   <resolved> — <explicit | matched keyword: X | default>
+SCOPE:  <resolved paths / target / level / flags>
+DO:     <2-5 imperative bullets>
+RESULT: <what the user ends up holding>
+```
+
+Labels are literal; values follow the conversation language.
 
 ## What the hook does (informational — skill does NOT implement)
 
@@ -167,16 +194,16 @@ If it is already installed the way the user could want it and **the intent is no
 
 Read `$ARGUMENTS`. Default when there are NO arguments at all = **status**.
 
-| Mode | Trigger words |
-|------|---------------|
-| `status` | no args; `status`, `статус`, `проверь`, `что стоит` |
-| `install` | `install`, `set up`, `поставь`, `установи`, `включи роутер` |
-| `upgrade` | `upgrade`, `update`, `refresh`, `обнови`, `перевыстави`, `после обновления плагина` |
-| `enable` | `enable`, `включи обратно`, `верни` |
-| `disable` | `disable`, `выключи`, `отключи`, `паузу` |
-| `uninstall` | `uninstall`, `убери`, `сними`, `удали хук` |
-| `purge` | `purge`, `wipe`, `вычисти всё`, `удали полностью`, `снеси`, `remove everything` |
-| `level fast` \| `level strict` (extra) | `level`, `fast`, `strict`, `дешёвый`, `строгий`, `с LLM`, `без LLM` |
+| Mode | EN keywords | RU keywords | Mutates? |
+|------|-------------|--------------|----------|
+| `status` | *(empty)*, `status` | `статус`, `проверь`, `что стоит` | no |
+| `install` | `install`, `set up` | `поставь`, `установи`, `включи роутер` | yes |
+| `upgrade` | `upgrade`, `update`, `refresh` | `обнови`, `перевыстави`, `после обновления плагина` | yes |
+| `enable` | `enable` | `включи обратно`, `верни` | yes |
+| `disable` | `disable` | `выключи`, `отключи`, `паузу` | yes |
+| `uninstall` | `uninstall` | `убери`, `сними`, `удали хук` | yes |
+| `purge` | `purge`, `wipe`, `remove everything` | `вычисти всё`, `удали полностью`, `снеси` | yes, destructive |
+| `level fast` \| `level strict` (extra) | `level`, `fast`, `strict` | `дешёвый`, `строгий`, `с LLM`, `без LLM` | yes |
 
 Ambiguous between install and a removal verb → `AskUserQuestion`. Use `AskUserQuestion` ONLY for genuinely destructive ambiguity — never to guess a mode, and never to ask about scope (there is only one).
 
@@ -200,9 +227,12 @@ The `strict` option description MUST carry the cost verbatim: *Claude Code runs 
 
 No scope question. No other questions. `disable`/`enable`/`uninstall`/`purge` ask nothing.
 
-## Step 5 — State the FINAL plan, then act
+## Step 5 — Print the PLAN block, then act
 
-Restate concretely what will be written and where — exact paths, exact `level`, the exact settings.json entry — then proceed. For `uninstall`/`purge` list exactly which files are deleted and confirm once.
+Print the `## Prompt contract` PLAN block, filled with the resolved MODE/SCOPE (exact paths,
+exact `level`, the exact settings.json entry) — then proceed. For `uninstall`/`purge` list
+exactly which files are deleted and confirm once. Status (early exit or explicit `status` mode)
+prints the SAME block, `DO:` reduced to "read state, report", immediately before the table.
 
 ### Delegation
 

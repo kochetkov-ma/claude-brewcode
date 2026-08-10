@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=5.3.2 generated_by=brewtools:manager-setup
+// brewcode-meta: version=5.4.0 generated_by=brewtools:manager-setup
 // brewtools:manager-setup — HARD wall guard (PreToolUse, matcher "*").
 //
 // SELF-CONTAINED — copied into <project>/.claude/brewtools/manager/ by

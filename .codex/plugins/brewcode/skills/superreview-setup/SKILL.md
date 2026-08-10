@@ -49,6 +49,38 @@ plus optional `[scope]` hint. The fine-tune prompt is woven into the emitted ski
 
 ---
 
+## Prompt contract
+
+Position 1 of `<arguments>` is a **free-form prompt** (RU/EN) — verbs and flags are optional and may
+follow in any order. Nobody types keys: resolve the verb + fine-tune focus FROM the prompt.
+
+1. Strip flags. An explicit verb token anywhere wins outright, no scoring — the seven canonical verbs
+   are in the Verb routing table below.
+2. Else score verbs by distinct whole-word keyword hits (Verb routing table below). Highest unique
+   score wins. Tie involving `purge` (destructive) -> `request_user_input`; tie with `status` ->
+   `status`; tie of two mutating verbs -> the keyword appearing first; all zero -> `status` if
+   `.codex/skills/superreview/SKILL.md` or its `.disabled` twin exists, else `install`.
+3. Empty arguments -> the default above; ask ONE scoping `request_user_input` only when the answer
+   changes what gets written. `status` asks nothing.
+4. Outcome-changing ambiguity -> ONE `request_user_input` (max 4 questions) BEFORE any work.
+5. Prose that names no verb is the fine-tune prompt, not an error — it is woven into the emitted
+   skill's Focus ordering (Phase 1.5), never treated as the verb by its first word.
+
+Then print this block ONCE, before the resolved verb runs:
+
+```
+PLAN — brewcode:superreview-setup
+INPUT:  <arguments verbatim, or "(empty)">
+MODE:   <resolved verb> — <explicit | matched keyword: X | default>
+SCOPE:  <target repo, fine-tune focus, scope hint>
+DO:     <2-5 imperative bullets>
+RESULT: <what the user ends up holding>
+```
+
+Labels are literal; values follow the conversation language.
+
+---
+
 ## What the emitted skill merges (review + standards-review)
 
 | Source | What it contributes to the emitted skill |
@@ -77,17 +109,19 @@ prompt and takes the free-form path. Strip the verb before using the rest as the
 Removed aliases that must never be accepted or printed: `init`, `on`, `off`, `setup`, `remove`,
 `reset`, `create`, `update`, `cleanup`. Recognize them in free text, echo the canonical verb back.
 
-| Verb | What runs | Writes? |
-|------|-----------|---------|
-| `status` | read-only: is `.codex/skills/superreview/` there, is it ENABLED or parked, is `.codex/agents/intent-guard.toml` present, is `.template-baseline/` there? Then `generate.sh validate` and report. **STOP** — no phases run | no |
-| `install` | the full generate flow, Phase 0 -> Phase 4 below | yes |
-| `upgrade` | Phase 2b only (`generate.sh upgrade`), then Phase 3 for any `MISSING -> restored` asset, then Phase 4 `validate`. **STOP** | live files only via targeted Edit |
-| `enable` | `generate.sh enable` — un-parks the installed skill. **STOP** | one rename |
-| `disable` | `generate.sh disable` — parks the installed skill without deleting anything. **STOP** | one rename |
-| `uninstall` | `generate.sh uninstall` — deletes the generated skill dir, KEEPS the reports and `intent-guard.toml`. Confirm once. **STOP** | deletes |
-| `purge` | `generate.sh purge` — uninstall + deletes `.codex/reports/*_superreview/`. Still keeps `intent-guard.toml`. Confirm once, naming the report count. **STOP** | deletes |
-| *(no args at all)* | `status` when `.codex/skills/superreview/` exists, otherwise `install` | status: no |
-| *(no verb, but a prompt)* | same as `install`; the whole `<arguments>` is the fine-tune prompt | yes |
+| Verb | EN keywords | RU keywords | What runs | Mutates? |
+|------|-------------|-------------|-----------|----------|
+| `status` | *(empty)*, `status`, `check`, `show` | `статус`, `проверь`, `покажи` | read-only: is `.codex/skills/superreview/` there, is it ENABLED or parked, is `.codex/agents/intent-guard.toml` present, is `.template-baseline/` there? Then `generate.sh validate` and report. **STOP** — no phases run | no |
+| `install` | `install`, `setup`, `generate`, `set up`, `create` | `настрой`, `установи`, `сгенерируй` | the full generate flow, Phase 0 -> Phase 4 below | yes |
+| `upgrade` | `upgrade`, `update`, `refresh templates` | `обнови`, `апгрейд` | Phase 2b only (`generate.sh upgrade`), then Phase 3 for any `MISSING -> restored` asset, then Phase 4 `validate`. **STOP** | live files only via targeted Edit |
+| `enable` | `enable`, `on`, `turn on`, `activate` | `включи`, `активируй` | `generate.sh enable` — un-parks the installed skill. **STOP** | one rename |
+| `disable` | `disable`, `off`, `turn off`, `pause` | `выключи`, `отключи`, `пауза` | `generate.sh disable` — parks the installed skill without deleting anything. **STOP** | one rename |
+| `uninstall` | `uninstall`, `remove`, `delete skill` | `удали`, `убери` | `generate.sh uninstall` — deletes the generated skill dir, KEEPS the reports and `intent-guard.toml`. Confirm once. **STOP** | deletes |
+| `purge` | `purge`, `wipe`, `remove everything`, `nuke` | `вычисти`, `удали полностью` | `generate.sh purge` — uninstall + deletes `.codex/reports/*_superreview/`. Still keeps `intent-guard.toml`. Confirm once, naming the report count. **STOP** | deletes, destructive |
+| *(no args at all)* | — | — | `status` when `.codex/skills/superreview/` exists, otherwise `install` | status: no |
+| *(no verb, but a prompt)* | — | — | same as `install`; the whole `<arguments>` is the fine-tune prompt | yes |
+
+Print the PLAN block (Prompt contract above) now, before running the resolved verb.
 
 **EXECUTE** using shell (`status` only):
 ```bash
@@ -572,6 +606,8 @@ Recap of the canonical shape the emitted SKILL.md implements (full text in `refe
 | `upgrade` says `MISSING -> restored RAW` | The restored file is a RAW template: BOTH its BLOCK placeholders AND its scalars (`{PROJECT_NAME}`, `{STACK_LABEL}`, `{SOURCE_GLOB}`, the agent names) are unresolved, on purpose — `upgrade` has no environment to resolve them from and re-defaulting them would bake `this project` / `general-purpose` into a live file that `validate` then passes. Run Phase 3 on it BEFORE Phase 4; `validate` names every token |
 | `upgrade` prints `UPGRADE_STACK=none — ❌ NO per-stack reference found` | The install carries none of `python.md` / `typescript-react.md` / `go.md` / `java-kotlin.md` (emitted without one, or it was deleted). The other four artifacts are still restamped; nothing is guessed. Re-run as `STACK_REF=<name>.md generate.sh upgrade` to restore the right one — it then reports `MISSING -> restored RAW` |
 | Target `.codex/` not writable | STOP — ask the user to run from the repo root |
+| Arguments are prose, not a verb | Extract the target/scope from the prose; never treat the first word as the verb |
+| PLAN block missing, or printed after Phase 0 started | Defect — reprint it before continuing |
 
 ---
 

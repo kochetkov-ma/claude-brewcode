@@ -3,7 +3,7 @@ name: my-claude
 description: Document your Claude Code installation - setup, architecture, web research. Triggers - my claude, installation docs.
 user-invocable: true
 disable-model-invocation: true
-argument-hint: "[ext [context]] | [r <query>] — no args = internal installation docs"
+argument-hint: "[prompt] [ext [context]] | [r <query>] — no args = internal installation docs"
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Agent, Task, WebFetch, WebSearch, AskUserQuestion]
 model: opus
 ---
@@ -12,9 +12,41 @@ model: opus
 
 Generates documentation about your Claude Code installation and environment.
 
+## Prompt contract
+
+Position 1 of `$ARGUMENTS` is a **free-form prompt** (RU/EN) — the mode prefixes below are optional and still
+work standalone. Nobody types keys: resolve mode + query FROM the prompt.
+
+1. An explicit prefix (`ext`, `external`, `r `, `research `) anywhere wins outright, no scoring — see the
+   literal-syntax table below.
+2. Else score modes by distinct whole-word keyword hits (table below). Highest unique score wins; tie ->
+   `AskUserQuestion`; all zero -> `internal` (documented default).
+3. Empty arguments -> `internal`. Read-only inventory + write to `.claude/brewdoc/my-claude/` — asks nothing.
+4. Outcome-changing ambiguity (e.g. an existing INDEX entry for the same mode) -> ONE `AskUserQuestion`.
+5. Prose that is not a mode/query is still input: extract the topic/query from it.
+
+Then print this block ONCE, before the first action:
+
+```
+PLAN — brewdoc:my-claude
+INPUT:  <arguments verbatim, or "(empty)">
+MODE:   <resolved> — <explicit prefix | matched keyword: X | default>
+SCOPE:  <sources to analyze | research query>
+DO:     <2-5 imperative bullets>
+RESULT: <doc path(s) written under .claude/brewdoc/my-claude/>
+```
+
+Labels are literal; values follow the conversation language.
+
 ## Mode Detection
 
-Detect mode from `$ARGUMENTS`:
+| Mode | EN keywords | RU keywords | Mutates? |
+|------|-------------|-------------|----------|
+| `internal` (DEFAULT) | *(empty)*, internal, my setup, my installation, document my claude | внутренний, мой setup, документируй мой claude | yes |
+| `external` | ext, external, architecture, hook/context schema | внешний, архитектура, схема контекста | yes |
+| `research` | r, research, look up, find out about | research, исследуй, найди информацию | yes |
+
+Literal prefix syntax (still accepted, wins outright over scoring):
 
 | `$ARGUMENTS` value | Mode | Sub-mode |
 |---|---|---|

@@ -3,7 +3,7 @@ name: provider-switch
 description: "Configure alt API providers: DeepSeek, Z.ai/GLM, Qwen, MiniMax, OpenRouter. Triggers: switch provider, openrouter."
 user-invocable: true
 disable-model-invocation: true
-argument-hint: "[status|install|verify|model-check|help|<provider-name>] — no args = interactive status check"
+argument-hint: "[prompt] [status|install|verify|model-check|help|<provider-name>] — no args/empty prompt = interactive status check"
 allowed-tools: [Read, Write, Edit, Bash, Agent, AskUserQuestion, Glob, Grep]
 model: opus
 ---
@@ -14,6 +14,33 @@ model: opus
 
 > Configure + switch between Claude Code alt API providers — DeepSeek (priority), Z.ai/GLM, Qwen/DashScope, MiniMax, OpenRouter. Creates isolated ALIAS in ~/.zshrc.
 > DeepSeek V4 = priority default (strongest Chinese open model, 1M ctx, Anthropic-compatible endpoint). Recommend first.
+
+## Prompt contract
+
+Position 1 of `$ARGUMENTS` is a **free-form prompt** (RU/EN) — modes and flags are optional and may
+follow in any order. Nobody types keys: resolve mode + scope FROM the prompt.
+
+1. Strip flags. An explicit mode token anywhere wins outright, no scoring.
+2. Else score modes by distinct whole-word keyword hits (mode table in P1 below). Highest unique
+   score wins. Tie with a destructive mode -> `AskUserQuestion`; tie with `status` -> `status`;
+   tie of two mutating modes -> the keyword appearing first; all zero -> `status`.
+3. Empty arguments -> `status`; ask ONE scoping `AskUserQuestion` only when the answer changes
+   what gets written. `status` itself is read-only and asks nothing.
+4. Outcome-changing ambiguity -> ONE `AskUserQuestion` (max 4 questions) BEFORE any work.
+5. Prose that is not a mode/provider name is still input: extract the provider or scope from it.
+
+Then print this block ONCE, before the first action:
+
+```
+PLAN — brewtools:provider-switch
+INPUT:  <arguments verbatim, or "(empty)">
+MODE:   <resolved> — <explicit | matched keyword: X | default>
+SCOPE:  <resolved paths / target / level / flags>
+DO:     <2-5 imperative bullets>
+RESULT: <what the user ends up holding>
+```
+
+Labels are literal; values follow the conversation language.
 
 <instructions>
 
@@ -69,20 +96,25 @@ bash "${CLAUDE_SKILL_DIR}/scripts/detect-mode.sh" "$ARGUMENTS" && echo "OK detec
 
 Output: `ARGS: [...] MODE: [...]`
 
-| Keyword | MODE |
-|---------|------|
-| status, check | status |
-| install, configure | install |
-| help, how | help |
-| deepseek, ds, dpsk | provider-deepseek |
-| glm, zai, z.ai | provider-glm |
-| qwen, dashscope | provider-qwen |
-| minimax, mini | provider-minimax |
-| openrouter, router | provider-openrouter |
-| verify, test, token | verify |
-| model-check, identify | model-check |
-| typos (model-cehck, cehck, hlpe, instal) | fuzzy-match to correct |
-| (empty) | status |
+| Mode | EN keywords | RU keywords | Mutates? |
+|------|-------------|-------------|----------|
+| `status` | *(empty)*, status, check | статус, проверь | no |
+| `install` | install, configure | настрой, установи, поставь | yes |
+| `help` | help, how | помощь, как | no |
+| `provider-deepseek` | deepseek, ds, dpsk | дипсик | yes |
+| `provider-glm` | glm, zai, z.ai | глм, зай | yes |
+| `provider-qwen` | qwen, dashscope | квен, дашскоуп | yes |
+| `provider-minimax` | minimax, mini | минимакс | yes |
+| `provider-openrouter` | openrouter, router | опенроутер, роутер | yes |
+| `verify` | verify, test, token | проверка, тест, токен | no |
+| `model-check` | model-check, identify | проверь модель, идентифицируй | no |
+
+Typos (`model-cehck`, `cehck`, `hlpe`, `instal`, ...) fuzzy-match to the closest row above.
+
+Prompt contract PLAN block: read-only modes (`status`, `help`, `verify`, `model-check`) print it
+right before their report (P2/P6/P7/P8). `install` prints it once P3 provider selection is
+finalized; `provider-<name>` prints it immediately (scope already known) — both before P4 Step 2's
+first write.
 
 ---
 
@@ -99,6 +131,8 @@ Parse key=value output. Status per PRV:
 - `partial` = ALIAS true, KEY false
 - `not configured` = ALIAS false
 - `active` = ACTIVE_PROVIDER matches
+
+If MODE=status: print the Prompt contract PLAN block now, before the table below.
 
 Render status table:
 ```
@@ -134,6 +168,9 @@ If MODE=install (no specific PRV): AUQ options:
 - "All providers"
 
 If MODE=provider-\<name\> → skip to P4 for that PRV only.
+
+Print the Prompt contract PLAN block now — scope (selected PRV(s)) is finalized either way,
+before P4 Step 2's first write.
 
 ---
 
@@ -240,6 +277,8 @@ Return to Anthropic: new terminal → `claude`. Env vars persist current shell o
 
 ## P6: Help Mode
 
+Print the Prompt contract PLAN block now, before explaining.
+
 Read `REF/common.md`. Explain:
 
 | Topic | Detail |
@@ -255,6 +294,8 @@ Read `REF/common.md`. Explain:
 ---
 
 ## P7: Verify Mode
+
+Print the Prompt contract PLAN block now, before the report below.
 
 EXEC:
 ```bash
@@ -282,6 +323,8 @@ Troubleshooting:
 ---
 
 ## P8: Model Check Mode
+
+Print the Prompt contract PLAN block now, before the verdict below.
 
 Identify which model responds in current Claude Code session. Runs INSIDE session launched via PRV ALIAS. Asks 5 diagnostic questions to model — no curl/scripts.
 

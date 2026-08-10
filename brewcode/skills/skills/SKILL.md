@@ -3,7 +3,7 @@ name: skills
 description: "Lists, improves, creates, syncs Claude Code skills. Triggers: create skill, improve skill, sync skills, memory sync."
 user-invocable: true
 disable-model-invocation: true
-argument-hint: "<free-form prompt: what to do with skills>"
+argument-hint: "[prompt] [status|list|create|improve|review|sync]"
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Agent, WebSearch, WebFetch, AskUserQuestion, Skill]
 model: opus
 ---
@@ -13,6 +13,33 @@ model: opus
 > **Skill Management:** status, list, create, improve, review skills via one free-form prompt.
 
 <instructions>
+
+## Prompt contract
+
+Position 1 of `$ARGUMENTS` is a **free-form prompt** (RU/EN) — modes and flags are optional and may
+follow in any order. Nobody types keys: resolve mode + scope FROM the prompt.
+
+1. Strip flags. An explicit mode token anywhere wins outright, no scoring.
+2. Else score modes by distinct whole-word keyword hits (table below). Highest unique score wins.
+   Tie with a destructive mode -> `AskUserQuestion`; tie with `status` -> `status`;
+   tie of two mutating modes -> the keyword appearing first; all zero -> `status`.
+3. Empty arguments -> `status`; ask ONE scoping `AskUserQuestion` only when the answer
+   changes what gets written. A read-only run asks nothing.
+4. Outcome-changing ambiguity -> ONE `AskUserQuestion` (max 4 questions) BEFORE any work.
+5. Prose that is not a mode/id/path is still input: extract the id, path or target from it.
+
+Then print this block ONCE, before the first action:
+
+```
+PLAN — brewcode:skills
+INPUT:  <arguments verbatim, or "(empty)">
+MODE:   <resolved> — <explicit | matched keyword: X | default>
+SCOPE:  <resolved paths / target / level / flags>
+DO:     <2-5 imperative bullets>
+RESULT: <what the user ends up holding>
+```
+
+Labels are literal; values follow the conversation language.
 
 ## Constants
 
@@ -33,21 +60,29 @@ Treat the **entire** user input (`$ARGUMENTS`) as ONE free-form natural-language
 
 Classify the prompt + recent conversation context into exactly ONE mode:
 
-| Mode | Chosen when prompt signals |
-|------|----------------------------|
-| `status` | "статус", "что есть", "состояние", health / overview / "show me" (DEFAULT for any "show me" intent) |
-| `list` | explicit "список" / "list" / "перечисли" ONLY |
-| `create` | "создай" / "create" / "new" / "добавь" / "scaffold" |
-| `improve` | "улучши" / "improve" / "refactor" / "fix" / "почини", OR a bare existing name/path |
-| `review` | "ревью" / "review" / "validate" / "проверь корректность" |
-| `sync` | "sync" / "синк" / "memory sync" / "меморисинк" / "актуализируй" / "обнови знания" / "приведи в соответствие с кодом" — alone or with a scope word |
+| Mode | EN keywords | RU keywords | Mutates? |
+|------|-------------|-------------|----------|
+| `status` | *(empty)*, `status`, `show me`, `health`, `overview` | `статус`, `что есть`, `состояние` | no |
+| `list` | `list` | `список`, `перечисли` | no |
+| `create` | `create`, `new`, `scaffold`, `add` | `создай`, `добавь` | yes |
+| `improve` | `improve`, `refactor`, `fix` | `улучши`, `почини` | yes |
+| `review` | `review`, `validate` | `ревью`, `проверь корректность` | no |
+| `sync` | `sync`, `memory sync` | `синк`, `меморисинк`, `актуализируй`, `обнови знания`, `приведи в соответствие с кодом` | yes |
+
+`improve` also matches a bare existing skill name/path with no keyword at all — that is rule 3.5's
+prose-extraction case, not a keyword hit.
 
 **Batch flag:** plural form, "все" / "all", or multiple names/paths -> fan-out (one specialist spawn per item).
 
-Then **ANNOUNCE the chosen mode (MANDATORY, before any work):**
+Then **print the PLAN block (MANDATORY, before any work)** per the Prompt contract above:
 
 ```
-Mode: <mode> (skills) — chosen because <evidence quoted from the prompt>
+PLAN — brewcode:skills
+INPUT:  <prompt verbatim, or "(empty)">
+MODE:   <mode> — matched keyword: <evidence quoted from the prompt> | default
+SCOPE:  <targets/paths resolved this step>
+DO:     <2-5 imperative bullets for what Step 4 is about to run>
+RESULT: <what the user ends up holding>
 ```
 
 Proceed to **Step 4**.
@@ -70,7 +105,8 @@ After the choice:
 - `Nothing / cancel` -> stop.
 - `create` or `improve` -> ask ONE follow-up AskUserQuestion for the target/description
   plus the artifact-specific params (see "Artifact-specific params" below).
-- Then ANNOUNCE the mode using the Step 2 format and proceed to **Step 4**.
+- Then print the PLAN block using the Step 2 format (`MODE` reason = `default` or `explicit`
+  depending on the menu choice) and proceed to **Step 4**.
 
 ## Delegation (applies to EVERY Task spawn in this skill)
 
@@ -142,6 +178,13 @@ For the `Status (all)` menu option: run the SAME collector for agents + rules + 
 
 For `status` mode the report **is** the Step 5 status table.
 
+## Edge cases
+
+| Situation | Resolution |
+|-----------|------------|
+| Prose that isn't a mode/id/path (e.g. "fix the docs skill") | extract the id/path/target from the prose — never treat the first word as a positional id |
+| PLAN block missing, or printed after work started | defect — file it, do not ship |
+
 ## Artifact-specific params (create / improve only)
 
 Keep the existing Phase 0 (Discovery: 2-3 parallel Explore agents) and Phase 4 (Review:
@@ -184,6 +227,15 @@ Claim one and any tooling keyed off these tokens sweeps unrelated history.
 Examples: a skill named `budget` invoked as `budget` omits the key; a skill named `fitness-nutrition` invoked as `fit` MUST declare `cli: fit`.
 
 `version` is NOT semver -- no ordering, decreasing is as valid as increasing, build no comparison logic on it. MANDATORY when the skill's behaviour lives OUTSIDE its own directory (a binary on PATH, a wrapper shipped in an image, a remote service): editing that behaviour leaves the directory byte-identical, so consumers watching it see nothing. `last_updated:` is the human-facing date, has no mechanical role, and is NOT a substitute for `version`; the two coexist. Never spell it `updated`, `updatedAt` or `lastUpdated` -- see `brewcode/skills/setup-status/references/artifact-metadata.md` section 8.
+
+### Prompt contract (mandatory, create + improve + review)
+
+Every SK this skill creates, improves or reviews must satisfy `references/prompt-contract.md`:
+prompt-first `argument-hint` (`[prompt] [...]`), a `## Prompt contract` body section, a `PLAN --`
+block with all 5 labels, and — when 2+ modes exist — a keyword table with a `Mutates?` column and
+at least one Cyrillic keyword. Sole exemption: the ref's section 5 table (pure reference/lookup
+SKs). `${CLAUDE_PLUGIN_ROOT}/skills/skills/scripts/validate-skill.sh` enforces this; a SK failing
+it is not done, review or create.
 
 ### Prerequisite (improve only): Resolve Target
 
@@ -305,6 +357,9 @@ Task(subagent_type="brewcode:skill-creator", model="opus", prompt="
       spelled like the skill name (tokens /^[\w.-]{1,42}$/, none from the denylist, never
       inferred from allowed-tools); `version:` present AND bumped whenever the skill's
       behaviour lives outside its own directory
+    - prompt-contract.md satisfied (prompt-first argument-hint, `## Prompt contract` section,
+      PLAN block, mode table w/ Mutates?+RU when 2+ modes) unless the SK is on the ref's
+      section 5 exemption list
     - unit tests for scripts/ (Step 5.7), README.md (Step 5.8)
     - report back: files written | description line | validation output | open questions
 ")

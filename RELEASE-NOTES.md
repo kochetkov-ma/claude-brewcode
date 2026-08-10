@@ -2,6 +2,52 @@
 
 ---
 
+## v5.4.0 (2026-08-10)
+
+> Docs: [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [superreview-setup](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [teams-setup](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) | [task-board-setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [deploy](https://doc-claude.brewcode.app/brewtools/skills/deploy/) | [ssh](https://doc-claude.brewcode.app/brewtools/skills/ssh/) | [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/) | [docsync-setup](https://doc-claude.brewcode.app/brewdoc/skills/docsync-setup/)
+
+> Nobody types keys. Skills whose arguments were positional (`/task-spec AUTH-4 design`) were unusable in practice — the user writes a sentence, and the skill answered with a usage error or guessed silently. Every skill in all four plugins, plus every skill a `-setup` generator emits, now takes a free-form RU/EN prompt in position 1, resolves its mode and scope from that prompt by one documented algorithm, asks at most one clarifying question, and prints a fixed 5-field PLAN block before it touches anything.
+
+### brewcode
+
+#### Added
+
+- **Prompt contract — one normative spec, `skills/skills/references/prompt-contract.md`.** Six sections: the hint shape (`argument-hint: "[prompt] [<mode1>|<mode2>|...] [<extras>]"`, prompt always optional, strictly additive to hints that already worked), the required mode keyword table (`Mode | EN keywords | RU keywords | Mutates?`), the 6-step resolution algorithm, the PLAN block, the exemption list, and paste-in boilerplate. Shared by `/brewcode:skills`, `brewcode:skill-creator` and every generator template
+- **Resolution is deterministic, not vibes.** Strip flags -> an explicit mode token anywhere wins outright -> otherwise score modes by distinct whole-word EN/RU keyword hits -> tie-breaks in fixed order (destructive tie asks, read-only beats mutating, else first keyword in the prompt, all-zero -> the documented default). Empty arguments take the default and ask nothing when the run is read-only. Prose that parses as neither mode nor id nor path is input to mine, never an error
+- **`PLAN — <plugin>:<skill>` block, 5 literal labels (`INPUT / MODE / SCOPE / DO / RESULT`), printed once before the first action.** `MODE` always carries why it was chosen, `SCOPE` names real paths and real targets. A missing block, or one printed after work began, is a defect the validator reports
+- **`validate-skill.sh` checks 7-10** — hint present and prompt-first (applies to exempt skills too), `## Prompt contract` section present, PLAN header plus all five labels, and mode table carrying `Mutates?` and at least one Cyrillic keyword whenever the hint declares 2+ modes. Sweep result: 32/32 skills pass
+
+#### Fixed
+
+- **Body extraction in `validate-skill.sh` dropped whole chunks.** A range-negation `sed` paired later `---` horizontal rules with each other, so `e2e`, `teams-setup` and `superreview-setup` failed the new body checks against a mutilated body. Extraction now starts one line after the frontmatter's closing delimiter
+- **The mode-table detector audited the wrong table.** Anchoring on "mode"+"keyword" matched ordinary prose rows (`ssh`'s "keyword matching is simple"); it now anchors on a header carrying both `keyword` and `mutates`, and searches the skill's own `references/*.md` as well — `semble-setup` keeps its routing table there by design
+- **Hint mode-detection false positives** on target and flag alternation (`[<plugin>|<skill>]`, `<text|file_path>`, `[-q|--quorum [G-]N-M]`) — those are targets and flags, not modes, and no longer demand a table
+- **`superreview-setup`** verb table said `Writes?` where the contract fixes `Mutates?`; **`semble-setup`** described the plan output but never showed the literal block; **`claude-plugin-guide`** (the sole exemption) had no `argument-hint` at all — it now declares `[prompt]` and skips only the table and PLAN checks
+- **PLAN header drift:** three workspace skills emitted a wrong namespace (`PLAN — brewcode:docs` for a project-local skill) and the task-board family emitted `PLAN --` instead of an em dash. Both normalized, including the generator's own gate
+- **`.codex` mirror:** the hand-authored `brewcode/rules` body declared no modes, so mode parity against the new prompt-first hint failed the whole `bump-version.sh` run; the embedded body now documents prompt-first resolution. Unused `body` binding in `generateAgent()` removed
+
+#### Changed
+
+- **All 26 distributed skills + 6 workspace skills** carry a prompt-first `argument-hint` and an inlined `## Prompt contract` section. Inlined rather than cross-referenced on purpose: a brewtools or brewdoc skill cannot reliably read a path inside the brewcode plugin
+- **`skill-creator`, `/brewcode:skills` (create / improve / review / sync) and `review-prompt.md` checks 25-28** now require the contract of every new or reviewed skill
+- **Root `CLAUDE.md`** gained the normative Prompt-contract block with its re-verify one-liner
+
+### brewtools
+
+#### Fixed
+
+- **`task-spec` — the defect that started this.** Its hint was `<TASK_ID> [full|design|refresh]`, so a sentence became a task id. An argument is now taken as an id only when it matches the id pattern; otherwise the prose is mined for an id-shaped token, then matched against task titles and slugs, then falls through to the existing in-progress/todo WIP discovery. Mode comes from bilingual keywords, and the PLAN block prints after id, mode and domains resolve. Ground-truth STOPs stay unsuppressed under `-n`
+- **`task-board`** takes a prompt ahead of `view | add | move | backlog | groom`, with a keyword table and a `## Guards` section
+- **`task-board-setup` phase P5 gates its own output** — a bash check asserting each emitted skill's hint starts with `[prompt]` and its body contains the PLAN header
+
+### brewdoc
+
+#### Changed
+
+- **`memory-sync-setup` template** emits the contract into the project-local `/memory-sync` skill, `{{LANG}}`-parameterised: labels stay literal ASCII, values follow the project language
+
+---
+
 ## v5.3.2 (2026-08-10)
 
 > Docs: [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/)

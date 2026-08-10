@@ -3,7 +3,7 @@ name: agent-deadline-setup
 description: "Installs, configures or removes the agent-deadline hooks (soft wall-clock budget for subagents). Triggers: agent-deadline, subagent timeout, agent time limit, дедлайн агента, таймаут саб-агента."
 user-invocable: true
 disable-model-invocation: true
-argument-hint: "[status|install|upgrade|enable|disable|uninstall|purge] [project|global] [minutes] | free-text intent"
+argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge] [project|global] [minutes]"
 allowed-tools: [Read, Bash, AskUserQuestion, Agent]
 model: sonnet
 ---
@@ -13,6 +13,33 @@ model: sonnet
 > Installer/configurator skill. It wires two self-contained hooks (PreToolUse guard + SubagentStop cleanup) that put a SOFT wall-clock budget on every subagent — or configures/removes them. All runtime behavior lives in the hook files and in a JSON config; this skill only decides **mode**, **scope** and **budget**, then delegates the file work to the `brewcode:hook-creator` agent following the runbook.
 
 Claude Code has NO wall-clock timeout for subagents, and `maxTurns` kills the agent and discards its final report. These hooks kill nothing — at 80% of the budget the agent gets one non-blocking "wrap up" directive, and past 100% every tool except the finalization set is denied, so the agent is FORCED to write its report instead of losing it.
+
+## Prompt contract
+
+Position 1 of `$ARGUMENTS` is a **free-form prompt** (RU/EN) — modes and flags are optional and may
+follow in any order. Nobody types keys: resolve mode + scope FROM the prompt.
+
+1. Strip flags. An explicit mode token anywhere wins outright, no scoring.
+2. Else score modes by distinct whole-word keyword hits (table in Step 2). Highest unique score
+   wins. Tie with a destructive mode (`purge`) -> `AskUserQuestion`; tie with `status` -> `status`;
+   tie of two mutating modes -> the keyword appearing first; all zero -> `status`.
+3. Empty arguments -> `status`; ask ONE scoping `AskUserQuestion` only when the answer changes
+   what gets written. A read-only run asks nothing.
+4. Outcome-changing ambiguity -> ONE `AskUserQuestion` (max 4 questions) BEFORE any work.
+5. Prose that is not a mode/id/path is still input: extract the id, path or target from it.
+
+Then print this block ONCE, before the first action:
+
+```
+PLAN — brewtools:agent-deadline-setup
+INPUT:  <arguments verbatim, or "(empty)">
+MODE:   <resolved> — <explicit | matched keyword: X | default>
+SCOPE:  <resolved paths / target / level / flags>
+DO:     <2-5 imperative bullets>
+RESULT: <what the user ends up holding>
+```
+
+Labels are literal; values follow the conversation language.
 
 ## What the hooks do (informational — skill does NOT implement)
 
@@ -150,15 +177,15 @@ If everything the user could want is already installed and **the intent is not e
 
 Read `$ARGUMENTS`. Default when there are NO arguments at all = **status**.
 
-| Mode | Trigger words |
-|------|---------------|
-| `status` | no args; `status`, `статус`, `проверь`, `что стоит` |
-| `install` | `install`, `set up`, `поставь`, `установи`, `включи дедлайн`, or a bare number of minutes |
-| `upgrade` | `upgrade`, `update`, `refresh`, `обнови`, `перевыстави`, `после обновления плагина` |
-| `enable` | `enable`, `включи обратно`, `верни` |
-| `disable` | `disable`, `выключи`, `отключи`, `паузу` |
-| `uninstall` | `uninstall`, `убери`, `сними`, `удали хук` |
-| `purge` | `purge`, `wipe`, `вычисти всё`, `удали полностью`, `убери совсем`, `снеси`, `remove everything` |
+| Mode | EN keywords | RU keywords | Mutates? |
+|------|-------------|--------------|----------|
+| `status` | *(empty)*, `status` | `статус`, `проверь`, `что стоит` | no |
+| `install` | `install`, `set up`, bare number of minutes | `поставь`, `установи`, `включи дедлайн` | yes |
+| `upgrade` | `upgrade`, `update`, `refresh` | `обнови`, `перевыстави`, `после обновления плагина` | yes |
+| `enable` | `enable` | `включи обратно`, `верни` | yes |
+| `disable` | `disable` | `выключи`, `отключи`, `паузу` | yes |
+| `uninstall` | `uninstall` | `убери`, `сними`, `удали хук` | yes |
+| `purge` | `purge`, `wipe`, `remove everything` | `вычисти всё`, `удали полностью`, `убери совсем`, `снеси` | yes, destructive |
 
 Ambiguous between install and a removal verb → `AskUserQuestion`. Never guess a destructive mode.
 
@@ -184,9 +211,12 @@ Question 3 is asked ONLY if the user brought up per-type limits themselves; othe
 
 For `disable`/`enable`/`uninstall`/`purge` only question 1 applies, and only when the status table shows the feature present in more than one scope.
 
-## Step 5 — State the FINAL plan, then act
+## Step 5 — Print the PLAN block, then act
 
-Restate concretely what will be written and where — exact paths, exact `defaultMinutes`, exact settings.json entries — then proceed. For `uninstall`/`purge` list exactly which files are deleted and confirm once.
+Print the `## Prompt contract` PLAN block, filled with the resolved MODE/SCOPE (exact paths,
+exact `defaultMinutes`, exact settings.json entries) — then proceed. For `uninstall`/`purge`
+list exactly which files are deleted and confirm once. Status (early exit or explicit `status`
+mode) prints the SAME block, `DO:` reduced to "read state, report", immediately before the table.
 
 ### Delegation
 

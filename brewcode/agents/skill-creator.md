@@ -6,7 +6,7 @@ maxTurns: 80
 color: green
 tools: Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion
 doc_type: llm
-version: "5.3.2"
+version: "5.4.0"
 generated_by: "brewcode"
 last_updated: "2026-08-10"
 ---
@@ -31,6 +31,17 @@ Deliver for the CONSUMER, not the literal wording: the result must be usable as-
 by whoever takes it next, with the whole briefed scope covered.
 
 > Skills replace Commands. `.claude/commands/format.md` and `.claude/skills/format/SKILL.md` both create `/format`. Commands are legacy -- create Skills.
+
+## Prompt Contract (mandatory, every SK you create or improve)
+
+Full text: `${CLAUDE_PLUGIN_ROOT}/skills/skills/references/prompt-contract.md` -- read it before
+writing FM or body. Summary: `argument-hint` starts `[prompt]` (position 1 is a free-form
+RU/EN prompt); 2+ modes -> EN+RU keyword table with a `Mutates?` column; body opens with a
+`## Prompt contract` section (boilerplate in the ref's section 6); before the first action,
+print a `PLAN -- <plugin>:<skill>` block with `INPUT:`/`MODE:`/`SCOPE:`/`DO:`/`RESULT:`. Sole
+exemption: a pure reference/lookup SK with no modes and no writes (ref's section 5 table) --
+still keeps `[prompt]` in `argument-hint`. `validate-skill.sh` enforces all of this; a SK that
+fails it is not done.
 
 ## Checkpointing
 
@@ -597,6 +608,8 @@ bash "${CLAUDE_PLUGIN_ROOT}/skills/skills/scripts/validate-skill.sh" path/to/ski
 | `description` | Per FM Reference caps, third-person, what+when + 3-5 distinct triggers, no filler |
 | `cli` | Decided, not skipped. Cmd != SK name -> `cli:` declared, tokens match `/^[\w.-]{1,42}$/`, NONE from the denylist. !=copied from `AT` |
 | `version` | Decided, not skipped. Behaviour lives outside the SK dir (binary on PATH, wrapper in an image, remote svc) -> `version:` present AND bumped on this change. `updated:` != substitute |
+| `argument-hint` | Prompt-first: starts `[prompt]`. Exempt SKs (prompt-contract.md section 5) still keep it |
+| Prompt contract | Body has `## Prompt contract` section + a `PLAN --` block with all 5 labels (`INPUT:`/`MODE:`/`SCOPE:`/`DO:`/`RESULT:`); 2+ modes -> keyword table has `Mutates?` col + >=1 Cyrillic keyword. Exempt SKs skip this row -- see prompt-contract.md section 5 |
 | Body | <500 lines, imperative form |
 | `context` | `fork` if standalone |
 | `agent` | Appropriate type |
@@ -708,6 +721,9 @@ the common script once in `scripts/` and REF it from SKILL.md.
 | `cli:` inferred from `AT` / claims a denylisted cmd | List only cmds the SK OWNS; never a generic one (`sh`, `ls`, `curl`, `git`, ...) |
 | Behaviour changed outside the SK dir, `version:` untouched | Bump `version:` -- the dir stays byte-identical otherwise and consumers see nothing |
 | Treating `version:` as semver / comparing it | Free-form string, no ordering; only the hash change matters |
+| `argument-hint` starts with a mode token, not `[prompt]` | Prompt is always position 1 -- `[prompt] [mode1\|mode2]`, never `<mode1\|mode2>` alone |
+| No `## Prompt contract` section / no `PLAN --` block before the first action | Paste the boilerplate from prompt-contract.md section 6, substitute `<plugin>:<skill>` and `<DEFAULT_MODE>` |
+| Mode table with EN keywords only, no RU column / no `Mutates?` col | Every mode row needs EN + RU keywords and a `Mutates?` value -- copy the shape from `semble-setup/references/intent-routing.md` |
 
 ## ACT Mistakes (cause 20% rate)
 

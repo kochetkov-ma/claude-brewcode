@@ -14,6 +14,41 @@ Follow every phase below. When a phase delegates work, use Codex collaboration w
 
 # Text & File Optimizer
 
+## Prompt contract
+
+Position 1 of `<arguments>` is a **free-form prompt** (RU/EN) -- depth flags and paths are optional
+and may follow in any order. Nobody types keys: resolve the depth (mode) + scope FROM the prompt.
+The depth flags (`-l`/`-s`/`-d`/`-x`) ARE this skill's modes -- see the keyword-annotated Modes
+table below.
+
+1. Strip flags (`-l`, `-s`, `-d`, `-x`, `--light`, `--standard`, `--deep`, `--max`). An explicit
+   flag anywhere wins outright, no scoring.
+2. Else score depths by distinct whole-word keyword hits (Modes table below / Context Hints
+   table). Highest unique score wins; tie -> the keyword appearing first; all zero -> `medium`
+   (Smart Auto-Detection then still applies file-type heuristics on top).
+3. Empty arguments -> `medium`, or Smart Auto-Detection's per-file-type candidate when the input
+   is an LLM-only or user-facing doc path; ask ONE scoping `request_user_input` only when
+   auto-detection is ambiguous (already Smart Auto-Detection step 4).
+4. `--max` is opt-in only -- never auto-selected without an explicit `-x`/`--max` flag or an
+   explicit maximum/extreme compress hint (unchanged rule, restated here for the contract).
+5. Prose that is not a flag/depth keyword is still input: extract the target path(s) from it,
+   never treat the first word of a sentence as a positional path.
+
+Then print this block ONCE, before the first action:
+
+```
+PLAN — brewtools:text-optimize
+INPUT:  <arguments verbatim, or "(empty)">
+MODE:   <resolved depth> — <explicit flag | matched keyword: X | auto-detected | default>
+SCOPE:  <resolved target paths, resolved depth>
+DO:     <2-5 imperative bullets>
+RESULT: <what the user ends up holding>
+```
+
+Labels are literal; values follow the conversation language. SCOPE MUST name the resolved
+target paths and the resolved depth. Print it once mode + target files are resolved (end of
+Input Parsing below), before Phase 1 Analysis spawns.
+
 ## Step 0: Load Rules
 
 > **REQUIRED:** Read `references/rules-review.md` before ANY optimization.
@@ -23,13 +58,13 @@ Follow every phase below. When a phase delegates work, use Codex collaboration w
 
 Parse `<arguments>`: `-l`/`--light` | `-s`/`--standard` | `-d`/`--deep` | `-x`/`--max` | no flag -> medium (default) or auto-detect.
 
-| Mode | Flag | Target | Compression | Human-readable | Verification |
-|------|------|--------|-------------|----------------|--------------|
-| Light | `-l`, `--light` | Any | Minimal | Yes | None |
-| Medium | _(default)_ | Any | Moderate | Yes | Self-check (fact inventory) |
-| Standard | `-s`, `--standard` | Docs, README | 30-50% | Yes | 1 round (>=98%) |
-| Deep | `-d`, `--deep` | AGENTS.md, system prompts, agent/skill defs, KNOWLEDGE | 2-3x | No (LLM-only) | 1-2 rounds (>=95%) |
-| Max | `-x`, `--max` | AGENTS.md, system prompts, KNOWLEDGE | 3-4x | No (LLM-only) | 2 mandatory (>=95% + 100% sub-gate) |
+| Mode | Flag / EN keywords | RU keywords | Target | Compression | Human-readable | Verification | Mutates? |
+|------|---------------------|--------------|--------|-------------|-----------------|---------------|----------|
+| Light | `-l`, `--light`, light, quick clean | лёгкая, лёгкий, почисти текст | Any | Minimal | Yes | None | yes |
+| Medium | _(default)_, medium, balanced | средняя, сбалансируй | Any | Moderate | Yes | Self-check (fact inventory) | yes |
+| Standard | `-s`, `--standard`, compress, slim, tighten, safe compress, human readable | стандарт, сожми, для людей | Docs, README | 30-50% | Yes | 1 round (>=98%) | yes |
+| Deep | `-d`, `--deep`, compress for AGENTS.md, for context, for prompt, for LLM, deep compress, super compress, maximum | глубокая, для контекста, максимально | AGENTS.md, system prompts, agent/skill defs, KNOWLEDGE | 2-3x | No (LLM-only) | 1-2 rounds (>=95%) | yes |
+| Max | `-x`, `--max`, max compress, extreme, maximum density, atomic | максимум, предельно, атомарно | AGENTS.md, system prompts, KNOWLEDGE | 3-4x | No (LLM-only) | 2 mandatory (>=95% + 100% sub-gate) | yes |
 
 ## Loss Budget per Mode
 
@@ -133,6 +168,9 @@ Runs during analysis, BEFORE compression:
 | No args | Optimize ALL: `AGENTS.md`, `.codex/agents/*.toml`, `.codex/skills/**/SKILL.md` |
 | Single path | Process directly |
 | `path1, path2` | Parallel processing |
+
+Once the target files and depth are resolved above, print the Prompt contract PLAN block now
+(SCOPE names the resolved paths + resolved depth), before Phase 1 Analysis spawns below.
 
 ### 2-Phase Execution
 

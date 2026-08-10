@@ -36,6 +36,10 @@ Read the entire skill directory: SKILL.md, references/, scripts/, tests/, README
 | 22 | Security: injection | No unescaped user input in bash blocks, no `eval` on external data |
 | 23 | Frontmatter `cli` | Command not spelled like the skill name -> `cli:` declared (string or list, each token `/^[\w.-]{1,42}$/`). No token from the denylist: `sh bash zsh ls cat stat mv rm cp mkdir df du curl wget python python3 node npm git echo grep sed awk find head tail chmod chown`. Never inferred from `allowed-tools` |
 | 24 | Frontmatter `version` | Skill's behaviour lives outside its own directory (binary on PATH, wrapper in an image, remote service) -> `version:` present. Free-form string, not semver, no ordering. `updated:` is not a substitute |
+| 25 | Prompt contract: argument-hint | `argument-hint` present and starts with `[prompt]` (prompt is position 1, always optional). Applies even to exempt skills (`prompt-contract.md` section 5) |
+| 26 | Prompt contract: body section | Not exempt -> body has a `## Prompt contract` section (boilerplate from `prompt-contract.md` section 6), summarizing the resolution algorithm |
+| 27 | Prompt contract: PLAN block | Not exempt -> a `PLAN --` block is printed once, before the first action (read-only modes too, immediately before their report), with all 5 literal labels `INPUT:`, `MODE:`, `SCOPE:`, `DO:`, `RESULT:` |
+| 28 | Prompt contract: mode table | Not exempt AND 2+ modes -> the mode keyword table has a `Mutates?` column and at least one Cyrillic (RU) keyword per mode row |
 
 ---
 

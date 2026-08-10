@@ -3,7 +3,7 @@ name: text-human
 description: "Humanizes code, docs, articles, reddit/chat, javadoc -- strips AI artifacts, fixes unicode, fits register. Triggers: humanize, ai artifacts, unicode fix, article, reddit, javadoc."
 user-invocable: true
 disable-model-invocation: true
-argument-hint: "[path|commit|folder|text] [custom instructions]"
+argument-hint: "[prompt] [path|commit|folder|text] [custom instructions]"
 allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Agent, AskUserQuestion]
 model: sonnet
 ---
@@ -13,6 +13,39 @@ model: sonnet
 Universal, context-aware humanizer. Works on source code, comments, docstrings, technical docs, commits/PRs, published articles, and reddit/chat text. It picks ONE flow from context, lazy-loads only that flow plus the relevant pattern sections, and runs a two-pass model: STRIP validated AI tells, then a gated INJECT of human style fit for the domain.
 
 Position: removes AI surface artifacts and fits register -- it does NOT claim to detect authorship.
+
+## Prompt contract
+
+Position 1 of `$ARGUMENTS` is a **free-form prompt** (RU/EN) -- modes ("flows") and flags are
+optional and may follow in any order. Nobody types keys: resolve the flow + scope FROM the
+prompt. Phase 0 below IS this skill's resolution algorithm (explicit keyword -> path/extension
+-> content sniff); the Flow table there carries EN/RU keywords and `Mutates?` per flow.
+
+1. Strip nothing -- there are no mode flags, only the flow keywords in the table below.
+2. Explicit intent keyword (table below) wins outright, no scoring; unresolved cases fall
+   through Phase 0's own priority order (keyword -> extension -> content sniff).
+3. Empty arguments -> no assumed flow: Phase 0 Step 4's existing `AskUserQuestion` ("What to
+   humanize?") is the ONE scoping question this contract requires -- do not skip it and do not
+   guess a flow.
+4. Outcome-changing ambiguity beyond the flow itself (e.g. destructive edits) -> ONE
+   `AskUserQuestion` BEFORE any work.
+5. Prose that is not a flow keyword is still input: `customPrompt` (Phase 0 Argument parsing)
+   extracts it and both selects/overrides the flow and adds custom rules.
+
+Then print this block ONCE, before the first action:
+
+```
+PLAN — brewtools:text-human
+INPUT:  <arguments verbatim, or "(empty)">
+MODE:   <resolved flow> — <explicit | matched keyword: X | content-sniff | AskUserQuestion>
+SCOPE:  <resolved target paths (file/commit/folder/text), custom instructions if any>
+DO:     <2-5 imperative bullets>
+RESULT: <what the user ends up holding>
+```
+
+Labels are literal; values follow the conversation language. Print it right after Phase 0
+announces `Flow: <name> -- <reason>`, before Phase 1 touches any file. SCOPE names the resolved
+target paths -- for `mixed`, the resolved block list.
 
 ## Two-pass model (applies to every flow)
 
@@ -55,13 +88,13 @@ Accept all of: path, commit hash, folder, free-text prompt, path+prompt, no args
    - imperative + code blocks -> docs
 
 ### Flow -> file
-| Flow | Load | Domain |
-|------|------|--------|
-| code | `@reference/flows/code.md` | source, comments, docstrings, JavaDoc/JSDoc/KDoc (inject OFF) |
-| docs | `@reference/flows/docs.md` | README, docs, guides, PR/commit (inject restrained) |
-| social | `@reference/flows/social.md` | reddit, forum, slack, discord, chat |
-| article | `@reference/flows/article.md` | formal essay, published blog, long-form |
-| mixed | `@reference/flows/mixed.md` | commit / folder dispatcher -> routes each file to its flow |
+| Flow | EN keywords | RU keywords | Mutates? | Load | Domain |
+|------|-------------|-------------|----------|------|--------|
+| code | `.java/.kt/.py/.ts/...` ext, javadoc, jsdoc, kdoc, docstring, "api doc" | джавадок, апи док | yes (CLEAN-ONLY, inject OFF) | `@reference/flows/code.md` | source, comments, docstrings, JavaDoc/JSDoc/KDoc |
+| docs | pr, pull request, commit, changelog, readme, docs, guide | коммит, документация, гайд | yes | `@reference/flows/docs.md` | README, docs, guides, PR/commit (inject restrained) |
+| social | reddit, forum, slack, discord, chat | чат, форум | yes (file) / no (inline text -- prints result) | `@reference/flows/social.md` | reddit, forum, slack, discord, chat |
+| article | article, blog, essay, post | статья, эссе | yes (file) / no (inline text -- prints result) | `@reference/flows/article.md` | formal essay, published blog, long-form |
+| mixed | 7+ hex git hash, folder of mixed files | *(same -- hash/folder pattern is language-neutral)* | yes | `@reference/flows/mixed.md` | commit / folder dispatcher -> routes each file to its flow |
 
 Pattern files (load the sections the flow needs): `@reference/ai-patterns.md`, `@reference/human-patterns.md`.
 

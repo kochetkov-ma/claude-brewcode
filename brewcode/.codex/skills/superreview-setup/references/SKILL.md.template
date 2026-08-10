@@ -2,7 +2,7 @@
 name: superreview
 description: "Deep {PROJECT_NAME} code review the MODEL or the USER can invoke: routes changed files to domain-expert agents, runs the mechanical gates, checks correctness + architecture + reuse + version pins + scope discipline (blast radius vs the sanctioned task/issue) against the project rules, reverse-validates every finding, writes one merged report. Triggers: review code, deep review, superreview, super review, validate changes, check architecture, check standards, check reuse, check scope, blast radius, scope creep, quick review, did I build what was asked, drift check."
 user-invocable: true
-argument-hint: "<prompt-or-file-path> [scope: commit|branch|folder]"
+argument-hint: "[prompt] [scope: commit|branch|folder]"
 doc_type: llm
 version: "{PLUGIN_VERSION}"
 generated_by: "{GENERATED_BY}"
@@ -13,6 +13,42 @@ last_updated: "{LAST_UPDATED}"
 
 **ROLE:** Self-contained deep-review coordinator + final validator.
 **OUTPUT:** ONE merged, de-duplicated, severity-prioritized, validated report.
+
+---
+
+## Prompt contract
+
+Position 1 of `<arguments>` is a **free-form prompt** (RU/EN). Two orthogonal axes resolve from it: `{MODE}`
+(WHAT is reviewed — deterministic, resolved by git state + explicit scope tokens, see Mode Detection below,
+never keyword-scored) and `{DEPTH}` (HOW THOROUGH — semantic, resolved from the keywords below).
+
+| Depth | EN keywords | RU keywords | Mutates? |
+|-------|-------------|-------------|----------|
+| `EXTENDED` | `deep`, `go deep`, `thorough`, `properly`, `full review`, `full audit`, `audit`, `expert review`, `review everything`, `all the experts`, `before release`, `before merge`, `pre-merge review`, `serious review` | `глубоко`, `глубокий`, `по полной`, `тщательно`, `полный ревью`, `аудит`, `перед релизом` | no (read-only review) |
+| `QUICK` | `quick`, `quick look`, `fast`, `just check`, `sanity check`, `did I do what was asked`, `am I on track` | `быстро`, `по-быстрому`, `просто проверь`, `то ли я сделал` | no (read-only review) |
+
+1. `{MODE}` resolves first, deterministically, per Mode Detection below — never from these keywords.
+2. `{DEPTH}` then scores by distinct whole-word keyword hits in the remaining prompt (table above); depth
+   words are CONSUMED and stripped before the remainder becomes `{FOCUS}`. No match -> `QUICK` (the default).
+3. Neither axis is ever asked about via `request_user_input` — both are computed per Mode/Depth Detection below;
+   this skill never guesses interactively.
+4. Empty arguments -> `{MODE}` per rule 3a/3b (git state) below, `{DEPTH} = QUICK`.
+5. Prose that is not a mode/scope token is still input: it becomes `{FOCUS}` after depth words are stripped.
+
+Then print the PLAN block ONCE, before any review work (Phase 0 step 7, ANNOUNCE, below):
+
+```
+PLAN — {PROJECT_NAME} superreview
+INPUT:  <arguments verbatim, or "(empty)">
+MODE:   <resolved MODE> — <which rule>; Depth <resolved DEPTH> — <which signal>
+SCOPE:  <branch, commit range/folder, focus, file count>
+DO:     <gates, intent pass, and — EXTENDED only — expert fan-out, scope passes, validation>
+RESULT: <the merged report + chat summary>
+```
+
+Labels are literal; values follow the conversation language.
+
+---
 
 | # | Step | QUICK | EXTENDED |
 |---|------|-------|----------|
@@ -335,19 +371,22 @@ TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
    truncated); include any `WARN missing` lines:
 
 ```
-superreview MODE = {MODE} ({which rule resolved it: whole-project request | explicit token | dirty tree | clean tree})
-Depth: {DEPTH} ({which signal resolved it: depth request in the prompt | speed request | default})
-       {if QUICK: "intent + gates only, 1 agent — say 'deep review' to run the full expert fan-out"}
-       {if EXTENDED: "full fan-out: domain experts + scope passes + validation, plus the intent pass"}
-Branch: {BRANCH}
-Scope: {commit range | branch-vs-main | folder | working-tree diff vs HEAD | full project}
-Files: {COUNT} ({displayed list — may be truncated; COUNT stays exact})
-Focus: {resolved focus — user directive with depth words stripped, else default ordering | n/a (QUICK)}
-Gates: {gate name} {OK|FAIL|not run} / ...
-Intent pass: intent-guard {will run | NOT RUN — agent file missing}
-Scope baseline: task {T-ID} | none  /  issue {id} ({title}) | not reached | none  /  {K} of {COUNT} files outside the sanctioned surface  |  not resolved (QUICK)
-Experts (derived from live roster): {group -> agent, ...}{, DEGRADED: <group> -> generic} | none (QUICK)
-Preflight: {OK | "WARN missing: <files>"}
+PLAN — {PROJECT_NAME} superreview
+INPUT:  {USER_REQUEST, or "(empty)"}
+MODE:   {MODE} — {which rule resolved it: whole-project request | explicit token | dirty tree | clean tree}
+        Depth: {DEPTH} ({which signal resolved it: depth request in the prompt | speed request | default})
+        {if QUICK: "intent + gates only, 1 agent — say 'deep review' to run the full expert fan-out"}
+        {if EXTENDED: "full fan-out: domain experts + scope passes + validation, plus the intent pass"}
+SCOPE:  Branch: {BRANCH}
+        Scope: {commit range | branch-vs-main | folder | working-tree diff vs HEAD | full project}
+        Files: {COUNT} ({displayed list — may be truncated; COUNT stays exact})
+        Focus: {resolved focus — user directive with depth words stripped, else default ordering | n/a (QUICK)}
+DO:     Gates: {gate name} {OK|FAIL|not run} / ...
+        Intent pass: intent-guard {will run | NOT RUN — agent file missing}
+        Scope baseline: task {T-ID} | none  /  issue {id} ({title}) | not reached | none  /  {K} of {COUNT} files outside the sanctioned surface  |  not resolved (QUICK)
+        Experts (derived from live roster): {group -> agent, ...}{, DEGRADED: <group> -> generic} | none (QUICK)
+        Preflight: {OK | "WARN missing: <files>"}
+RESULT: one merged, validated report + chat summary
 ```
 
 8. **READ** `references/{STACK_REF}` — {STACK_LABEL} stack guidelines (`EXTENDED` only; `QUICK` spawns no agent
@@ -942,6 +981,8 @@ superreview does NOT run /simplify or any skill and does NOT edit code — these
 | All sources clean | Report "No issues found across standards, architecture, scope and correctness" — verdict APPROVED |
 | Phase 4b self-sync would GROW the file (measured `wc -l`) | Do NOT write. Report `Self-sync: skipped (would grow +{N})` and name what it wanted to add — a correction that cannot be paid for is a proposal |
 | Phase 4b correction touches a DECISION | Do NOT write it. Print it as a proposal line; only the user changes decisions |
+| Arguments are prose, not a scope token | Extract the commit/branch/folder/focus from the prose; never treat the first word as the scope |
+| PLAN block missing, or printed after Phase 0 started | Defect — reprint it before continuing |
 
 ---
 

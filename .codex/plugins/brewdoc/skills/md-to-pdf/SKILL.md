@@ -16,25 +16,53 @@ Follow every phase below. When a phase delegates work, use Codex collaboration w
 
 Converts Markdown files to professional PDF using one of two rendering engines.
 
+## Prompt contract
+
+Position 1 of `<arguments>` is a **free-form prompt** (RU/EN) — the file path, `--engine` flag, `styles`/`test`
+tokens and the quoted LLM-preprocessing prompt are all optional and may follow in any order. Nobody types keys:
+resolve mode + file FROM the prompt.
+
+1. Strip `--engine <name>`. A literal mode token (`styles`, `config`, `test`, `help`) anywhere wins outright.
+2. Else score modes by distinct whole-word keyword hits (table below). Highest unique score wins.
+3. Empty arguments -> `help` (documented default). Read-only — asks nothing.
+4. **Prose resolution (mandatory):** `<arguments>` may be a full sentence, not just tokens. Extract `md_file` from
+   any path-shaped token or a filename explicitly named in prose (e.g. "convert my notes.md to pdf" ->
+   `md_file = notes.md`, resolved against cwd). If the sentence implies CONVERT but no file is resolvable -> ONE
+   `request_user_input` for the file path. Never guess a file and never silently fall through to HELP.
+5. Outcome-changing ambiguity (missing engine deps, no saved engine preference) -> ONE `request_user_input`.
+
+Then print this block ONCE, before Step 1:
+
+```
+PLAN — brewdoc:md-to-pdf
+INPUT:  <arguments verbatim, or "(empty)">
+MODE:   <resolved> — <explicit | matched keyword: X | default | prose-resolved file: path>
+SCOPE:  <md_file | engine | style question, as applicable>
+DO:     <2-5 imperative bullets>
+RESULT: <PDF path, or the help/styles/test output>
+```
+
+Labels are literal; values follow the conversation language.
+
 ## Step 0: Parse Arguments
 
 Parse `<arguments>` to determine mode and components.
 
 | Component | Required | Description |
 |-----------|:--------:|-------------|
-| `md_file` | per mode | Path to `.md` file |
+| `md_file` | per mode | Path to `.md` file — literal token or extracted from prose (rule 4 above) |
 | `--engine` | No | `reportlab` or `weasyprint` (overrides saved config) |
 | `custom_prompt` | No | Last argument in double quotes = LLM preprocessing instructions |
 
 **Mode detection rules:**
 
-| Condition | Mode |
-|-----------|------|
-| Empty or `help` | HELP |
-| `styles` or `config` | STYLES |
-| `test` | TEST |
-| Path to `.md` file + quoted string at end | CONVERT+PROMPT |
-| Path to `.md` file (no quoted string) | CONVERT |
+| Mode | Condition | EN keywords | RU keywords | Mutates? |
+|------|-----------|-------------|-------------|----------|
+| HELP | Empty or `help` | *(empty)*, help | помощь | no |
+| STYLES | `styles` or `config` | styles, config, configure, page size, color scheme | стили, настрой стиль, конфиг | yes |
+| TEST | `test` | test, sample, demo, bundled test file | тест, пример, демо | no (writes only to `/tmp/`) |
+| CONVERT+PROMPT | Path to `.md` file + quoted string at end | convert with instructions, pdf and rewrite/strip section | сконвертируй с изменениями | yes |
+| CONVERT | Path to `.md` file (no quoted string) | convert, pdf, generate pdf, turn into pdf, `.md` file named in prose | конвертируй, сделай pdf, преврати в pdf | yes |
 
 Extract `--engine <name>` from anywhere in arguments if present. Remove it before further parsing.
 

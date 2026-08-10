@@ -3,12 +3,45 @@ name: secrets-scan
 description: Scans git-tracked files for leaked secrets. Triggers - secrets scan, find credentials, leaked keys, security audit.
 user-invocable: true
 disable-model-invocation: true
-argument-hint: "[--fix] — no args = scan only, --fix = interactive remediation"
+argument-hint: "[prompt] [--fix] — no args = scan only, --fix = interactive remediation"
 allowed-tools: [Read, Agent, Write, Bash, AskUserQuestion]
 model: sonnet
 ---
 
 # Secrets Scan
+
+## Prompt contract
+
+Position 1 of `$ARGUMENTS` is a **free-form prompt** (RU/EN) — modes and flags are optional and may
+follow in any order. Nobody types keys: resolve mode + scope FROM the prompt.
+
+| Mode | EN keywords | RU keywords | Mutates? |
+|------|-------------|-------------|----------|
+| `scan` | *(empty)*, scan, check, audit, find | скан, проверь, аудит, найди | no |
+| `fix` | fix, remediate, clean up, `--fix` | почини, исправь, зафикси | yes |
+
+1. Strip flags (`--fix` is a flag, not free text). An explicit mode token anywhere wins outright.
+2. Else score modes by distinct whole-word keyword hits (table above). Highest unique score wins;
+   tie -> `scan` (read-only wins). All zero -> `scan`.
+3. Empty arguments -> `scan`; it is read-only and asks nothing.
+4. `fix` is also auto-offered (not auto-run) whenever CRITICAL/HIGH findings exist, per Phase 6 —
+   that offer is the outcome-changing `AskUserQuestion`, not a second resolution pass.
+5. Prose that is not a mode/flag is still input: treat it as scope narrowing (e.g. "scan the api
+   folder") if the skill supports it, otherwise ignore for routing and scan the full repo.
+
+Then print this block ONCE, before the first action:
+
+```
+PLAN — brewtools:secrets-scan
+INPUT:  <arguments verbatim, or "(empty)">
+MODE:   <resolved> — <explicit | matched keyword: X | default>
+SCOPE:  <resolved paths / target / level / flags>
+DO:     <2-5 imperative bullets>
+RESULT: <what the user ends up holding>
+```
+
+Labels are literal; values follow the conversation language. Print it at the end of Phase 1,
+once the file list is known, before Phase 2 spawns the scan agents.
 
 <phase name="1-setup">
 

@@ -3,7 +3,7 @@ name: memory-sync
 description: "Syncs {PROJECT_NAME} instruction memory (CLAUDE.md at any depth, rules, conventions, agents, skills) against real code: verifies facts, deletes stale, dedups, compresses, re-audits agents; never grows. Excludes docs. Triggers: sync memory, memory sync, memory drift, sync agents, audit agents, обнови CLAUDE.md, синхронизируй память, память устарела"
 user-invocable: true
 disable-model-invocation: true
-argument-hint: "[session|branch|commit <sha>[..<sha>]|recent[:N]|all] [hard] [free-form focus]"
+argument-hint: "[prompt] [session|branch|commit <sha>[..<sha>]|recent[:N]|all] [hard] [free-form focus]"
 allowed-tools: Read, Edit, Glob, Grep, Bash, Agent
 model: opus
 ---
@@ -27,6 +27,34 @@ subagents get the repo-relative path, never pasted prose):
 
 ---
 
+## Prompt contract
+
+Position 1 of `$ARGUMENTS` is a **free-form prompt** (RU/EN) - the scope token, `hard` and any focus text are
+optional and may follow in any order. Nobody types keys: resolve scope + depth + focus FROM the prompt.
+
+1. Strip flags. An explicit scope token anywhere wins outright, no scoring.
+2. Else score scopes by distinct whole-word keyword hits (table below). Highest unique score wins. Tie -> the
+   keyword appearing first in the prompt.
+3. Empty arguments -> `session` (default scope), `NORMAL` (default depth); this run asks nothing.
+4. Outcome-changing ambiguity (e.g. an unresolvable batch split) -> ONE `AskUserQuestion` (max 4 questions)
+   BEFORE any work.
+5. Prose that is not a scope/id/path is still input: it becomes `{FOCUS}` - emphasis ordering only, never a filter.
+
+Then print this block ONCE, before the first action:
+
+```
+PLAN — memory-sync
+INPUT:  <arguments verbatim, or "(empty)">
+MODE:   <SCOPE> — <explicit | matched keyword: X | default>
+SCOPE:  depth=<DEPTH>; focus=<FOCUS interpretation | "standing emphasis">; batches=<batch: N files, ...>
+DO:     <2-5 imperative bullets — gather -> sync -> verify -> self-sync -> report>
+RESULT: <what the user ends up holding>
+```
+
+Labels are literal; values follow the conversation language.
+
+---
+
 ## Input resolution - TWO ORTHOGONAL AXES
 
 Parse `$ARGUMENTS`. The first token matching a scope keyword sets `{SCOPE}` (default `session`). The token `hard`
@@ -34,13 +62,13 @@ anywhere - or the same intent in prose - sets `{DEPTH}` = `HARD`. Everything els
 
 **`{SCOPE}` selects WHICH CHANGES drive the sync:**
 
-| `{SCOPE}` | Change-fact source |
-|-----------|--------------------|
-| `session` (DEFAULT) | What THIS conversation did: new modules, renames, removals, env vars, migrations, commands, behaviour changes. The COORDINATOR writes the change-fact list from its own context - no gather agent for it |
-| `branch` | `git diff $(git merge-base HEAD "$MAIN")..HEAD`, where `$MAIN` is DERIVED (`git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null` -> `origin/<name>`, else the bare `{DEFAULT_BRANCH}`; both are valid revisions). NEVER hardcode `main` |
-| `commit <sha>` / `commit <a>..<b>` | `git show <sha>` / `git diff <a>..<b>` |
-| `recent[:N]` | `git diff HEAD~N..HEAD`, default N=10 |
-| `all` | NO diff - EVERY checkable fact in every memory file is re-verified against current code |
+| `{SCOPE}` | Change-fact source | EN keywords | RU keywords | Mutates? |
+|-----------|--------------------|-------------|-------------|----------|
+| `session` (DEFAULT) | What THIS conversation did: new modules, renames, removals, env vars, migrations, commands, behaviour changes. The COORDINATOR writes the change-fact list from its own context - no gather agent for it | *(empty)*, session, this conversation | сессия, эта беседа | yes |
+| `branch` | `git diff $(git merge-base HEAD "$MAIN")..HEAD`, where `$MAIN` is DERIVED (`git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null` -> `origin/<name>`, else the bare `{DEFAULT_BRANCH}`; both are valid revisions). NEVER hardcode `main` | branch, diff vs main | ветка, диф с main | yes |
+| `commit <sha>` / `commit <a>..<b>` | `git show <sha>` / `git diff <a>..<b>` | commit, sha | коммит | yes |
+| `recent[:N]` | `git diff HEAD~N..HEAD`, default N=10 | recent, last N commits | последние | yes |
+| `all` | NO diff - EVERY checkable fact in every memory file is re-verified against current code | all, everything, re-verify all | всё, все факты | yes |
 
 **`{DEPTH}` selects HOW HARD:**
 
@@ -60,15 +88,16 @@ alone*. A run that touched only one layer because the user named that layer is a
 > Facts stay ahead of dedup, and dedup ahead of compression, whatever the emphasis. The order may be SHARPENED,
 > never inverted.
 
-**ANNOUNCE - print this PLAN block before any work:**
+Print the PLAN block from the Prompt contract section above, once, before any work. Fold the fan-out numbers into
+its `DO:` bullets:
 
 ```
-[memory-sync] PLAN
-Scope:   {SCOPE} - {matched token | "default (no scope token)"}
-Depth:   {DEPTH} - {matched signal | "default NORMAL"}
-Focus:   {FOCUS interpretation | "standing emphasis"} (emphasis only - full surface still swept)
-Batches: {batch: N files, ...}   (re-enumerated this run)
-Fan-out: {N} gather (Explore) + {M} sync (one per non-empty batch) + {K} verify (Explore, one per EDITED batch) agents intended
+PLAN — memory-sync
+INPUT:  {ARGUMENTS verbatim, or "(empty)"}
+MODE:   {SCOPE} — {matched token | "default (no scope token)"}
+SCOPE:  depth={DEPTH} — {matched signal | "default NORMAL"}; focus={FOCUS interpretation | "standing emphasis"} (emphasis only - full surface still swept); batches={batch: N files, ...} (re-enumerated this run)
+DO:     gather ({N} Explore) -> sync ({M} agents, one per non-empty batch) -> verify ({K} Explore, one per EDITED batch) -> self-sync -> report
+RESULT: memory-sync report + edited files listed in Phase 6
 ```
 
 **PHASE STATUS - print ONE chat line at every phase boundary:**

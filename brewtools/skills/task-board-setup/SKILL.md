@@ -3,7 +3,7 @@ name: task-board-setup
 description: "Generator: deploys a file-based Kanban into any repo via multi-agent analysis, an optional spec + system-design layer (task-spec skill, per-task spec/design docs, domain-architect fan-out), and an optional gated CLAUDE.md-optimization pass. `upgrade` retrofits the spec layer onto an already-deployed board. Triggers: init task board, scaffold kanban, task tracker, upgrade task board, канбан-доска, спек-слой."
 user-invocable: true
 disable-model-invocation: true
-argument-hint: "[status|install|upgrade|enable|disable|uninstall|purge] [target repo path | empty = cwd] [free-text directive, e.g. 'also dedupe rules', 'skip module split']"
+argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge] [target repo path | empty = cwd] [free-text directive, e.g. 'also dedupe rules', 'skip module split']"
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, Agent, AskUserQuestion]
 model: opus
 ---
@@ -35,6 +35,47 @@ This skill ORCHESTRATES. It does not hand-do the bulk analysis or the doc sweep 
 > **Read reference templates** with the `Read` tool using `${CLAUDE_SKILL_DIR}/references/<file>` to load them into context.
 
 > **Fence rule -- GLOBAL, every emit on every path (P2, P3, P3.5, P4a-b, and `PU`'s U3/U4 drift-ADD).** When writing any generated file, unescape its inner code fences (`\`\`\`` -> ```` ``` ````) so the emitted file has valid fences. Stated once here; the reference templates !=repeat it.
+
+## Prompt contract
+
+Position 1 of `$ARGUMENTS` is a **free-form prompt** -- the verb, the target path and the optional
+directive (P0 below) may all follow it in any order, exactly as P0 already parses them. Nobody types
+keys: a plain sentence resolves the verb.
+
+| Mode | EN keywords | RU keywords | Mutates? |
+|------|-------------|-------------|----------|
+| `status` | *(empty)*, status, check, show, what's deployed | статус, проверь, покажи, что стоит | no |
+| `install` | install, setup, deploy, scaffold, init, create board | установи, разверни, создай доску, настрой | yes |
+| `upgrade` | upgrade, retrofit, add spec layer, update | обнови, добавь спек-слой, апгрейд | yes |
+| `enable` | enable, turn on, resume, unpause | включи, возобнови, сними паузу | yes |
+| `disable` | disable, turn off, pause, mute | выключи, поставь на паузу, приглуши | yes |
+| `uninstall` | uninstall, remove, unwire | удали, убери, деинсталлируй | yes |
+| `purge` | purge, wipe, delete everything, nuke | вычисти, снеси, удали всё | yes, destructive |
+
+The verb-detection rule already in P0 (a standalone canonical token wins outright; a word merely
+containing one inside a sentence does not) IS this contract's steps 1-2 -- no reordering needed, P0
+already scores correctly. Empty / no verb -> the documented default: `status` on a deployed board,
+else `install` into the resolved `TARGET` (P0's "No verb given" rule). A destructive tie (`uninstall`
+vs `purge`) still goes to `AskUserQuestion`; that already happens in P0's two-verb-conflict rule.
+Prose that names no canonical verb is DIR (the free-text directive), never guessed as a verb or path.
+
+Immediately after P0 finalizes `MODE` and `TARGET` -- before dispatching into `PS`/`PU`/`PE`/`PR`/P1
+-- print this block once:
+
+```
+PLAN — brewtools:task-board-setup
+INPUT:  <arguments verbatim, or "(empty)">
+MODE:   <resolved> -- <explicit | matched keyword: X | default>
+SCOPE:  <TARGET>; SPEC_MODE <on|off|n/a>; touching <files this run will write, or "read-only">
+DO:     <2-5 imperative bullets>
+RESULT: <artifacts the user ends up holding -- board.md + control files, or the status report>
+```
+
+Labels are literal ASCII; values follow the conversation language.
+
+Every skill this generator emits (`task-board`, and `task-spec` when `SPEC_MODE=on`) carries this
+same contract baked into its own template -- prompt-first hint, its own keyword table, its own PLAN
+block. P5's prompt-contract gate below verifies both.
 
 ## Delegation
 
@@ -132,6 +173,9 @@ Resolve an unset `MODE` here: `EXISTS` -> `status`, `FRESH` -> `install`. Then d
 | `uninstall` | `EXISTS` | go to **PR** with `KEEP_DATA=true` |
 | `purge` | `EXISTS` | go to **PR** with `KEEP_DATA=false` |
 | `uninstall` / `purge` | `FRESH` | run **PS** instead and report that nothing is deployed. Do not delete anything on a guess |
+
+> Print the `## Prompt contract` PLAN block once here -- `MODE` and `TARGET` are both resolved --
+> before continuing into the dispatched phase.
 
 **MAJOR 4 -- idempotency guard.** `install` path ONLY (`MODE=install` and board.md `FRESH`); `upgrade`, `uninstall` and `purge` skip it, since pre-existing artifacts are exactly what they operate on. A `FRESH` board.md does not prove a clean slate: a prior run may have left other artifacts. After the board.md check, **EXECUTE** using Bash tool:
 ```bash
@@ -565,7 +609,21 @@ test -z "$LEFT" && echo "OK  no leftover placeholders" || { echo "MISS leftover 
 ```
 > A clean run PRINTS `OK  no leftover placeholders`. No output at all = the block did not run, !=PASS -- fix the block and re-run.
 
-> Any `MISS` -> re-emit the missing artifact (or re-substitute the leftover placeholder) before finishing.
+**Prompt-contract gate.** Every emitted skill must carry the workspace prompt contract: the
+`argument-hint` starts with `[prompt]` and the body contains a `PLAN — ` block. **EXECUTE** using Bash tool:
+```bash
+TARGET="<absolute path resolved in P0>"
+test -n "$TARGET" && test -d "$TARGET" || { echo "MISS TARGET unresolved -- re-resolve per P0"; exit 1; }
+FAIL=0
+for f in "$TARGET/.claude/skills/task-board/SKILL.md" "$TARGET/.claude/skills/task-spec/SKILL.md"; do
+  test -f "$f" || continue
+  grep -qE '^argument-hint: "\[prompt\]' "$f" && echo "OK  hint $f" || { echo "MISS hint $f"; FAIL=1; }
+  grep -q '^PLAN — ' "$f" && echo "OK  PLAN $f" || { echo "MISS PLAN block $f"; FAIL=1; }
+done
+test "$FAIL" -eq 0 && echo "OK prompt contract" || echo "FAIL prompt contract"
+```
+
+> Any `MISS` (from any gate above -- existence, leftover-placeholder, prompt-contract) -> re-emit the missing artifact, re-substitute the leftover placeholder, or fix the offending hint/PLAN block, before finishing.
 
 Report to the user:
 - the 9 paths created (+ 5 folders); `SPEC_MODE=on` adds 3 more
@@ -616,3 +674,5 @@ Pass it `TARGET`, `DIR` (the directive parsed in P0), and `EXCLUSIONS`/`MODULES`
 | `OPTIN` true but no root CLAUDE.md in target | report "no CLAUDE.md to optimize"; skip P5.5; do NOT create a root CLAUDE.md |
 | P5.5 proposal declined by user | make NO edit; continue/finish cleanly (never force) |
 | Secret detected in committed CLAUDE.md | mask value in output; on move, warn gitignore != history purge; never echo full secret |
+| An argument names no canonical verb and no resolvable path, yet is read as one anyway | defect -- P0's own rule: only a standalone canonical token is a verb, only a resolvable dir is a path; everything else is `DIR` (prose), never guessed |
+| PLAN block missing, or printed after `MODE`/`TARGET` dispatch has already started writing | defect -- print it once right after P0 resolves `MODE` + `TARGET`, before `PS`/`PU`/`PE`/`PR`/P1 |

@@ -3,7 +3,7 @@ name: e2e
 description: "Orchestrates e2e testing: BDD scenarios, Playwright autotests. Triggers: e2e tests, BDD scenarios, write autotest."
 user-invocable: true
 disable-model-invocation: true
-argument-hint: "[status|install|create|update|review|rules] [prompt]"
+argument-hint: "[prompt] [status|install|create|update|review|rules]"
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion, Skill, WebSearch, WebFetch]
 model: opus
 ---
@@ -15,6 +15,45 @@ model: opus
 Full-cycle E2E testing orchestration: install agents, create BDD scenarios, write autotests, quorum review.
 
 **Arguments:** `$ARGUMENTS`
+
+---
+
+## Prompt contract
+
+Position 1 of `$ARGUMENTS` is a **free-form prompt** (RU/EN) — modes and flags are optional and may
+follow in any order. Nobody types keys: resolve mode + scope FROM the prompt.
+
+| Mode | EN keywords | RU keywords | Mutates? |
+|------|-------------|-------------|----------|
+| `status` | *(empty)*, `status`, `check`, `show` | `статус`, `проверь`, `покажи` | no |
+| `install` | `install`, `setup`, `set up`, `init` | `настрой`, `установи`, `поставь` | yes |
+| `create` | `create`, `write`, `add tests`, `new scenario` | `создай`, `напиши`, `добавь тесты` | yes |
+| `update` | `update`, `refresh`, `sync tests` | `обнови`, `актуализируй` | yes |
+| `review` | `review`, `quorum`, `validate` | `ревью`, `провалидируй` | yes |
+| `rules` | `rules`, `conventions`, `e2e rules` | `правила`, `конвенции` | yes |
+
+1. Strip flags. An explicit mode token anywhere wins outright, no scoring.
+2. Else score modes by distinct whole-word keyword hits (table above). Highest unique score wins.
+   Tie with a destructive mode -> `AskUserQuestion`; tie with `status` -> `status`; tie of two
+   mutating modes -> the keyword appearing first; all zero -> `status` if the e2e agent roster is
+   installed (`.claude/agents/e2e-*.md` count >= 3), else `install`.
+3. Empty arguments -> the default above; ask ONE scoping `AskUserQuestion` only when the answer
+   changes what gets written. A read-only run asks nothing.
+4. Outcome-changing ambiguity -> ONE `AskUserQuestion` (max 4 questions) BEFORE any work.
+5. Prose that is not a mode/id/path is still input: extract the id, path or target from it.
+
+Then print this block ONCE, before the first action:
+
+```
+PLAN — brewcode:e2e
+INPUT:  <arguments verbatim, or "(empty)">
+MODE:   <resolved> — <explicit | matched keyword: X | default>
+SCOPE:  <resolved paths / target / level / flags>
+DO:     <2-5 imperative bullets>
+RESULT: <what the user ends up holding>
+```
+
+Labels are literal; values follow the conversation language.
 
 ---
 
@@ -45,10 +84,15 @@ Output: `MODE:xxx`, optionally `PROMPT:xxx`, plus the artifact-metadata scalars 
 
 ## Phase 1: Display Detection
 
-Output detection result:
+Print the PLAN block (Prompt contract above) once, before Phase 2 begins — this is the resolved-mode
+announcement, not a repeat of it:
 ```
-Mode: {MODE}
-Prompt: {PROMPT or "none"}
+PLAN — brewcode:e2e
+INPUT:  {raw $ARGUMENTS, or "(empty)"}
+MODE:   {MODE} — {explicit | matched keyword: X | default}
+SCOPE:  {PROMPT or "none"}
+DO:     <2-5 imperative bullets for the resolved mode's phases>
+RESULT: <artifacts this run produces>
 ```
 
 ---
@@ -147,6 +191,8 @@ AskUserQuestion at every key decision point. PROMPT is initial context, not a re
 | Review cycle limit (3) reached | AskUserQuestion with remaining issues |
 | Compilation fails after fix | Report to user, suggest manual intervention |
 | Agent refuses task | Re-assign to suggested colleague, max 2 retries |
+| Arguments are prose, not a mode/id | Extract the feature/path/target from the prose; never treat the first word as the mode |
+| PLAN block missing, or printed after Phase 2 started | Defect — reprint it before continuing |
 
 ---
 

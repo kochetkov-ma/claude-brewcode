@@ -18,6 +18,33 @@ Follow every phase below. When a phase delegates work, use Codex collaboration w
 
 <instructions>
 
+## Prompt contract
+
+Position 1 of `<arguments>` is a **free-form prompt** (RU/EN) — modes and flags are optional and may
+follow in any order. Nobody types keys: resolve mode + scope FROM the prompt.
+
+1. Strip flags. An explicit mode token anywhere wins outright, no scoring.
+2. Else score modes by distinct whole-word keyword hits (table below). Highest unique score wins.
+   Tie with a destructive mode -> `request_user_input`; tie with `status` -> `status`;
+   tie of two mutating modes -> the keyword appearing first; all zero -> `status`.
+3. Empty arguments -> `status`; ask ONE scoping `request_user_input` only when the answer
+   changes what gets written. A read-only run asks nothing.
+4. Outcome-changing ambiguity -> ONE `request_user_input` (max 4 questions) BEFORE any work.
+5. Prose that is not a mode/id/path is still input: extract the id, path or target from it.
+
+Then print this block ONCE, before the first action:
+
+```
+PLAN — brewcode:agents
+INPUT:  <arguments verbatim, or "(empty)">
+MODE:   <resolved> — <explicit | matched keyword: X | default>
+SCOPE:  <resolved paths / target / level / flags>
+DO:     <2-5 imperative bullets>
+RESULT: <what the user ends up holding>
+```
+
+Labels are literal; values follow the conversation language.
+
 ## Constants
 
 | Const | Value |
@@ -38,21 +65,29 @@ Treat the **entire** user input (`<arguments>`) as ONE free-form natural-languag
 
 Classify the prompt + recent conversation context into exactly ONE mode:
 
-| Mode | Chosen when prompt signals |
-|------|----------------------------|
-| `status` | "статус", "что есть", "состояние", health / overview / "show me" (DEFAULT for any "show me" intent) |
-| `list` | explicit "список" / "list" / "перечисли" ONLY |
-| `create` | "создай" / "create" / "new" / "добавь" / "scaffold" |
-| `improve` | "улучши" / "improve" / "refactor" / "fix" / "почини", OR a bare existing name/path |
-| `review` | "ревью" / "review" / "validate" / "проверь корректность" |
-| `sync` | "sync" / "синк" / "memory sync" / "меморисинк" / "актуализируй" / "обнови знания" / "приведи в соответствие с кодом" — alone or with a scope word |
+| Mode | EN keywords | RU keywords | Mutates? |
+|------|-------------|-------------|----------|
+| `status` | *(empty)*, `status`, `show me`, `health`, `overview` | `статус`, `что есть`, `состояние` | no |
+| `list` | `list` | `список`, `перечисли` | no |
+| `create` | `create`, `new`, `scaffold`, `add` | `создай`, `добавь` | yes |
+| `improve` | `improve`, `refactor`, `fix` | `улучши`, `почини` | yes |
+| `review` | `review`, `validate` | `ревью`, `проверь корректность` | no |
+| `sync` | `sync`, `memory sync` | `синк`, `меморисинк`, `актуализируй`, `обнови знания`, `приведи в соответствие с кодом` | yes |
+
+`improve` also matches a bare existing agent name/path with no keyword at all — that is rule 3.5's
+prose-extraction case, not a keyword hit.
 
 **Batch flag:** plural form, "все" / "all", or multiple names/paths -> fan-out (one specialist spawn per item).
 
-Then **ANNOUNCE the chosen mode (MANDATORY, before any work):**
+Then **print the PLAN block (MANDATORY, before any work)** per the Prompt contract above:
 
 ```
-Mode: <mode> (agents) — chosen because <evidence quoted from the prompt>
+PLAN — brewcode:agents
+INPUT:  <prompt verbatim, or "(empty)">
+MODE:   <mode> — matched keyword: <evidence quoted from the prompt> | default
+SCOPE:  <targets/paths resolved this step>
+DO:     <2-5 imperative bullets for what Step 4 is about to run>
+RESULT: <what the user ends up holding>
 ```
 
 Proceed to **Step 4**.
@@ -75,7 +110,8 @@ After the choice:
 - `Nothing / cancel` -> stop.
 - `create` or `improve` -> ask ONE follow-up request_user_input for the target/description
   plus the artifact-specific params (see "Artifact-specific params" below).
-- Then ANNOUNCE the mode using the Step 2 format and proceed to **Step 4**.
+- Then print the PLAN block using the Step 2 format (`MODE` reason = `default` or `explicit`
+  depending on the menu choice) and proceed to **Step 4**.
 
 ## Delegation (applies to EVERY sub-agent task spawn in this skill)
 
@@ -146,6 +182,13 @@ For the `Status (all)` menu option: run the SAME collector for agents + rules + 
 ```
 
 For `status` mode the report **is** the Step 5 status table.
+
+## Edge cases
+
+| Situation | Resolution |
+|-----------|------------|
+| Prose that isn't a mode/id/path (e.g. "fix the memory sync agent") | extract the id/path/target from the prose — never treat the first word as a positional id |
+| PLAN block missing, or printed after work started | defect — file it, do not ship |
 
 ## Artifact-specific params (create / improve only)
 

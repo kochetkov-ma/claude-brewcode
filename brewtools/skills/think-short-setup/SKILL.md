@@ -3,7 +3,7 @@ name: think-short-setup
 description: "Installs or removes the think-short terse-mode hooks. Triggers: think-short, be terse, terse mode, инжект терс-режим."
 user-invocable: true
 disable-model-invocation: true
-argument-hint: "[status|install|upgrade|enable|disable|uninstall|purge] [project|global] | free-text intent"
+argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge] [project|global]"
 allowed-tools: [Read, Bash, AskUserQuestion, Agent]
 model: sonnet
 ---
@@ -23,6 +23,40 @@ model: sonnet
 All three read `think-short-prompt.md` from their OWN directory and emit `{}` when it cannot be read. There is no `enabled` flag and no config file to add one to — so **`disable` renames the copied prompt to `think-short-prompt.md.disabled`**: the hooks stay wired, find no prompt, and every event becomes a genuine no-op. `enable` renames it back. This is the hooks' existing fail-open path, not new machinery.
 
 > `think-short-prompt.md` is **copied** into the target at install — an existing install keeps its old text forever. After the prompt changes (incl. a brewtools update), run **`upgrade`** on that target to pick it up.
+
+## Prompt contract
+
+Position 1 of `$ARGUMENTS` is a **free-form prompt** (RU/EN) — modes and the project/global target
+are optional and may follow in any order. Nobody types keys: resolve mode + target FROM the
+prompt.
+
+1. Strip nothing beyond mode/target words themselves — no other flags exist. An explicit mode
+   token anywhere wins outright, no scoring.
+2. Else score modes by distinct whole-word keyword hits (Step 2 table below). Highest unique
+   score wins. Tie between install and a removal verb -> `AskUserQuestion`; never guess
+   destructive. All zero -> the documented default: `status` if anything is installed, else
+   `install`.
+3. Empty arguments -> the same documented default; Step 1's STATUS FIRST always runs before
+   anything else, so the answer is never guessed blind.
+4. Outcome-changing ambiguity (target unspecified, mode ambiguous between install/removal) ->
+   ONE `AskUserQuestion` BEFORE any work — this is already Steps 2-3's own gate.
+5. Prose that is not a mode/target keyword is still input: extract intent from it (e.g. "подхвати
+   новый промпт" -> `upgrade`), never treat the first word as a positional id.
+
+Then print this block ONCE, before the first action:
+
+```
+PLAN — brewtools:think-short-setup
+INPUT:  <arguments verbatim, or "(empty)">
+MODE:   <resolved> — <explicit | matched keyword: X | default>
+SCOPE:  <resolved target: project|global, resolved paths>
+DO:     <2-5 imperative bullets>
+RESULT: <what the user ends up holding>
+```
+
+Labels are literal; values follow the conversation language. `status` (read-only) prints it at
+the end of Step 1, right before its state table. Every mutating mode prints it in Step 4, once
+target is resolved, before the hook-creator delegation.
 
 <instructions>
 
@@ -102,7 +136,8 @@ Field meanings — do not paraphrase them into something stronger:
 
 `injects` covers ONLY `think-short-task.mjs` (the subagent injection). SessionStart and the every-10th-prompt injection never yield and are not measured by it — `injects=no` means subagents get nothing while the main session still gets the directive.
 
-Read the output into a state table and PRINT it to the user:
+Read the output into a state table. If MODE resolves to `status`, print the Prompt contract PLAN
+block now, right before this table. Then PRINT the table to the user:
 
 | Scope | Hook files | settings.json wired | Prompt | Injects | Effective |
 |-------|-----------|---------------------|--------|---------|-----------|
@@ -129,15 +164,15 @@ If it is already installed the way the user could want it and **the intent is no
 
 Read `$ARGUMENTS`. Default when there are NO arguments at all = **status** if anything is installed, **install** if nothing is.
 
-| Mode | Trigger words |
-|------|---------------|
-| `status` | no args + installed; `status`, `статус`, `проверь`, `что стоит` |
-| `install` | no args + nothing installed; `install`, `set up`, `поставь`, `установи` |
-| `upgrade` | `upgrade`, `update`, `refresh`, `обнови`, `перевыстави`, `подхвати новый промпт`, `после обновления плагина` |
-| `enable` | `enable`, `включи обратно`, `верни` |
-| `disable` | `disable`, `выключи`, `отключи`, `паузу` |
-| `uninstall` | `uninstall`, `убери`, `сними`, `удали хуки` |
-| `purge` | `purge`, `wipe`, `вычисти всё`, `удали полностью`, `снеси`, `remove everything` |
+| Mode | EN keywords | RU keywords | Mutates? |
+|------|-------------|-------------|----------|
+| `status` | *(no args + installed)*, status | статус, проверь, что стоит | no |
+| `install` | *(no args + nothing installed)*, install, set up | поставь, установи | yes |
+| `upgrade` | upgrade, update, refresh, after plugin update | обнови, перевыстави, подхвати новый промпт, после обновления плагина | yes |
+| `enable` | enable | включи обратно, верни | yes |
+| `disable` | disable | выключи, отключи, паузу | yes |
+| `uninstall` | uninstall | убери, сними, удали хуки | yes |
+| `purge` | purge, wipe, remove everything | вычисти всё, удали полностью, снеси | yes, destructive |
 
 Ambiguous between install and a removal verb → `AskUserQuestion`. Use `AskUserQuestion` ONLY for genuinely destructive ambiguity, never to guess a mode.
 
@@ -152,7 +187,8 @@ For `uninstall`/`purge` with an unspecified target, ask the same Project/Global 
 
 ## Step 4 — State the plan, then delegate
 
-Tell the user plainly what will happen, e.g.:
+For every mutating mode, print the Prompt contract PLAN block now — target is resolved (Step 3)
+— before the delegation below. Tell the user plainly what will happen, e.g.:
 
 > Installing think-short hooks (SessionStart + UserPromptSubmit + PreToolUse:Task) into `<repo>/.claude/` and merging `<repo>/.claude/settings.json`.
 

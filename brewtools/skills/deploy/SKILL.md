@@ -3,7 +3,7 @@ name: deploy
 description: "GitHub Actions deployment: workflows, releases, GHCR, CI/CD with safety gates. Triggers: deploy, release, workflow."
 user-invocable: true
 disable-model-invocation: true
-argument-hint: "<prompt describing what to do>"
+argument-hint: "[prompt] [setup|create|release|deploy|monitor|update-agent]"
 allowed-tools: [Read, Write, Edit, Bash, Agent, AskUserQuestion, Glob, Grep]
 model: opus
 ---
@@ -13,6 +13,34 @@ model: opus
 # GitHub Actions Deployment
 
 > Manage GitHub Actions — WFs, releases, GHCR, CI/CD with safety gates + persistent CFG.
+
+## Prompt contract
+
+Position 1 of `$ARGUMENTS` is a **free-form prompt** (RU/EN) — modes and flags are optional and may
+follow in any order. Nobody types keys: resolve mode + scope FROM the prompt.
+
+1. Strip flags. An explicit mode token anywhere wins outright, no scoring.
+2. Else score modes by distinct whole-word keyword hits (table in P0). Highest unique score wins.
+   All zero -> `setup` (no GH CFG) or `monitor` (GH CFG exists).
+3. Empty arguments -> `setup`/`monitor` per the rule above; ask ONE scoping `AskUserQuestion` only
+   when the answer changes what gets written. `monitor`/`check` ask nothing.
+4. Outcome-changing ambiguity (e.g. `release` vs `deploy`) -> ONE `AskUserQuestion` (max 4
+   questions) BEFORE any work — P4/P5 confirmation gates cover the destructive cases separately.
+5. Prose that is not a mode/id/path is still input: extract the id, path or target from it.
+
+Then print this block ONCE, before the first mutation (P0 is its home for mutating modes;
+`monitor` prints it immediately before its P6 report):
+
+```
+PLAN — brewtools:deploy
+INPUT:  <arguments verbatim, or "(empty)">
+MODE:   <resolved> — <explicit | matched keyword: X | default>
+SCOPE:  <resolved paths / target / level / flags>
+DO:     <2-5 imperative bullets>
+RESULT: <what the user ends up holding>
+```
+
+Labels are literal; values follow the conversation language.
 
 <instructions>
 
@@ -92,16 +120,17 @@ bash "${CLAUDE_SKILL_DIR}/scripts/detect-mode.sh" "$ARGUMENTS"
 ```
 Output: `ARGS: [...] MODE: [...]`
 
-| Keyword | MODE |
-|---------|------|
-| setup, check, prerequisites, init | setup |
-| create, new workflow, add workflow | create |
-| release, bump, version, tag, publish | release |
-| deploy, trigger, dispatch, run workflow | deploy |
-| monitor, watch, status, check runs, logs | monitor |
-| update agent, refresh, rescan | update-agent |
-| (empty, no GH CFG) | setup |
-| (empty, GH CFG exists) | monitor |
+| Mode | EN keywords | RU keywords | Mutates? |
+|------|-------------|--------------|----------|
+| `setup` | *(empty, no GH CFG)*, `setup`, `check`, `prerequisites`, `init` | `настройка`, `подготовь`, `проверь настройку` | yes |
+| `create` | `create`, `new workflow`, `add workflow` | `создай workflow`, `новый workflow`, `добавь workflow` | yes |
+| `release` | `release`, `bump`, `version`, `tag`, `publish` | `релиз`, `версия`, `тег`, `опубликуй` | yes |
+| `deploy` | `deploy`, `trigger`, `dispatch`, `run workflow` | `деплой`, `разверни`, `запусти workflow` | yes |
+| `monitor` | *(empty, GH CFG exists)*, `monitor`, `watch`, `status`, `check runs`, `logs` | `статус`, `мониторь`, `посмотри логи` | no |
+| `update-agent` | `update agent`, `refresh`, `rescan` | `обнови агента`, `пересканируй` | yes |
+
+Print the PLAN block from `## Prompt contract` here (`monitor` prints it before its report
+instead), then proceed to P1.
 
 ---
 

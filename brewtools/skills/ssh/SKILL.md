@@ -3,7 +3,7 @@ name: ssh
 description: "SSH server management — connect, configure, deploy, administer Linux servers with safety gates."
 user-invocable: true
 disable-model-invocation: true
-argument-hint: "<prompt describing what to do>"
+argument-hint: "[prompt] [setup|connect|configure|update-agent] — free-form description of what to do"
 allowed-tools: [Read, Write, Edit, Bash, Agent, AskUserQuestion, Glob, Grep]
 model: opus
 ---
@@ -11,6 +11,39 @@ model: opus
 # SSH Server Management
 
 > Manage remote Linux servers — connect, configure, deploy, administer with safety gates and persistent config.
+
+## Prompt contract
+
+Position 1 of `$ARGUMENTS` is a **free-form prompt** (RU/EN) — modes are optional and may follow
+in any order. Nobody types keys: resolve mode + scope FROM the prompt. This skill has no
+mutate-vs-read-only flags — every mode can end up running commands, gated by Phase 5 Step 3's
+own MODIFY/SERVICE/DELETE/PRIVILEGE confirmation.
+
+1. An explicit mode token anywhere wins outright, no scoring (see the operations table in
+   Phase 0 below).
+2. Else score modes by distinct whole-word keyword hits. Highest unique score wins; all zero ->
+   fall through to `execute`, letting Phase 5's own command classification gate any mutation.
+3. Empty arguments -> `setup` if no servers are configured, else `execute` (Phase 1 asks which
+   server). Never a hardcoded default independent of that check.
+4. Outcome-changing ambiguity (which server, DELETE/PRIVILEGE commands) -> `AskUserQuestion`
+   BEFORE any work — this is already Phase 1/5's own gate, not a new one.
+5. Prose that is not a mode keyword is still input: extract the host, server alias or command
+   intent from it; never treat the first word of a sentence as a positional id.
+
+Then print this block ONCE, before the first action:
+
+```
+PLAN — brewtools:ssh
+INPUT:  <arguments verbatim, or "(empty)">
+MODE:   <resolved> — <explicit | matched keyword: X | default>
+SCOPE:  <resolved paths / target / level / flags>
+DO:     <2-5 imperative bullets>
+RESULT: <what the user ends up holding>
+```
+
+Labels are literal; values follow the conversation language. Print it at the end of Phase 1,
+once mode AND server (default/asked/newly-set-up) are both resolved, before branching into
+Phase 2/3/5.
 
 <instructions>
 
@@ -90,15 +123,16 @@ MODE: [detected mode]
 
 Use the MODE value and GOTO that mode section below.
 
-| Keyword in args | MODE |
-|-----------------|------|
-| setup, new server, add server | setup |
-| connect to, ssh to, login | connect |
-| configure, config, harden | configure |
-| update agent, refresh agent, refresh | update-agent |
-| (any other text) | execute |
-| (empty, no servers configured) | setup |
-| (empty, servers configured) | execute (prompt user) |
+| Mode | EN keywords | RU keywords | Mutates? |
+|------|-------------|-------------|----------|
+| `setup` | setup, new server, add server | настрой, добавь сервер, новый сервер | yes |
+| `connect` | connect to, ssh to, login | подключись, зайди по ssh, логин | no (routes to `execute`) |
+| `configure` | configure, config, harden | конфигурируй, укрепи, захардень | yes |
+| `update-agent` | update agent, refresh agent, refresh | обнови агента, обнови | yes |
+| `execute` | *(any other text)* | *(любой другой текст)* | depends — Phase 5 Step 2 classifies each command |
+
+Empty arguments are special-cased, not keyword-scored: no servers configured -> `setup`;
+servers configured -> `execute` (Phase 1 asks which server).
 
 ---
 
