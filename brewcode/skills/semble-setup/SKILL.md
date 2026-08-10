@@ -361,6 +361,16 @@ bash "$SD/scripts/semble-guidance.sh" install --part rule --force --json
 >
 > The managed/user_modified verdict still ignores the four metadata keys on both sides, so a rule installed by an older version of this skill — which did stamp `last_updated` — is not mistaken for a user edit. Such a rule is **re-synced to the plugin bytes without `--force` and without a backup** and reported as `rule: re-synced <path> (metadata only)` — record it in **Actions** as a re-sync, not an overwrite.
 
+> **Size budget — HARD, enforced by test J9.** The rule carries `paths: ["**/*"]`, so it is auto-loaded into
+> every request of every session in the installed repo forever: a word here is not a word, it is a per-prompt
+> tax. Cap: **≤ 45 lines and ≤ 2000 bytes** including frontmatter (it stood at 111 lines / 4634 bytes until
+> 5.5.1, ~3x over). Facts only, and each fact in its shortest correct form — a table row, not a paragraph;
+> no worked examples beyond the single `search` JSON; no rationale, no measurement narrative, no
+> justification of the doctrine. Prose that explains *why* the split is what it is belongs in
+> `references/engine-landscape.md`, not in the rule. Adding a fact means **displacing** one, not appending:
+> if the budget is exceeded the answer is to cut, never to raise the cap. The same budget governs any
+> hand-compression of an already-installed rule.
+
 ### 3.4 Reload checkpoint — `install` STOPS here
 
 The server does not exist for this session. Do not attempt a smoke query, do not claim success, do not continue. Print the **Next Step** exactly as `references/output-contract.md` requires:

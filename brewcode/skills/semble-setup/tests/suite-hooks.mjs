@@ -637,19 +637,28 @@ const FOREIGN = {
     'a metadata-only re-sync takes no backup: nothing of the user\'s was overwritten');
 }
 
-// Template content — the three facts that make every generated call work
+// Template content — the facts that make every generated call work.
+//
+// Matched on FACTS, not on sentences: the rule lives under a hard size budget
+// (J9), so every compression pass rewrites its wording. Pinning exact prose here
+// only ever produced a red suite that a rephrase had to appease, which is the
+// opposite of what these checks are for.
 {
-  check('B4.repoRequired', TPL_TEXT.includes('`repo` is REQUIRED on both tools'), true,
+  const has = (...alts) => alts.some((s) => TPL_TEXT.includes(s));
+  check('B4.repoRequired', has('`repo` REQUIRED on both', '`repo` is REQUIRED on both'), true,
     'the rule teaches that repo is required on both tools');
-  check('B4.absolute', TPL_TEXT.includes('**absolute path of the project root**'), true,
+  check('B4.absolute', has('absolute project root', 'absolute path of the project root'), true,
     'the rule teaches that repo is an absolute project-root path');
-  check('B4.startEnd', TPL_TEXT.includes('There is no `line` field —'), true,
-    'the rule states there is no line field on a result');
-  check('B4.fields', TPL_TEXT.includes('`file_path`, `start_line`, `end_line`, `score`'), true,
-    'the rule lists the exact result fields');
-  check('B4.rgKept', TPL_TEXT.includes('## Keep using rg / Grep for'), true,
+  check('B4.neverInferred', TPL_TEXT.includes('never inferred'), true,
+    'and that it is never inferred from the session cwd');
+  check('B4.startEnd', has('no `line` field') && TPL_TEXT.includes('`start_line`'), true,
+    'the rule states there is no line field on a result and names what to open instead');
+  check('B4.fields', has('file_path,start_line,end_line,score,content',
+    '`file_path`, `start_line`, `end_line`, `score`'), true,
+  'the rule lists the exact result fields');
+  check('B4.rgKept', has('`rg -l`/`-c`') && TPL_TEXT.includes('regex'), true,
     'the rule preserves exact rg/Grep usage');
-  check('B4.noWatcher', TPL_TEXT.includes('Semble has no background watcher.'), true,
+  check('B4.noWatcher', TPL_TEXT.includes('no watcher'), true,
     'the rule denies the non-existent watcher');
 }
 
@@ -898,6 +907,23 @@ const IGNORE_TPL_TEXT = readFileSync(join(ASSETS, 'sembleignore.template'), 'utf
     'the section states outright that measured proposals exclude nothing until the user uncomments one');
   check('J8.anchoring', IGNORE_TPL_TEXT.includes('/skills/` hits only'), true,
     'root-anchoring is spelled out: `skills/` would match every */skills/ in the repo, which is the dangerous default');
+}
+
+// J9 — the rule's size budget (SKILL.md 3.3b). `paths: ["**/*"]` means this file
+// is auto-loaded into EVERY request of every session in the installed repo, so
+// its length is a permanent per-prompt tax, not a one-off cost. It reached 111
+// lines / 4634 bytes by accretion before 5.5.1. The cap is a ratchet: a new fact
+// displaces an old one, it never raises the ceiling. Rationale and measurement
+// narrative belong in references/engine-landscape.md.
+{
+  const lines = TPL_TEXT.split('\n').length;
+  check('J9.lines', lines <= 45, true,
+    `the shipped rule is ${lines} lines, within the 45-line budget`);
+  check('J9.bytes', Buffer.byteLength(TPL_TEXT, 'utf8') <= 2000, true,
+    `the shipped rule is ${Buffer.byteLength(TPL_TEXT, 'utf8')} bytes, within the 2000-byte budget`);
+  check('J9.facts', ['mcp__semble_code__search', 'mcp__semble_code__find_related', 'repo',
+    'start_line', 'max_snippet_lines', '.json', '.mdx', '.sembleignore', '--content'].filter((s) => !TPL_TEXT.includes(s)),
+    [], 'and compression dropped no load-bearing fact: both tool names, the mandatory repo, the start_line/max_snippet_lines contract, the unindexed suffixes, .sembleignore and the --content cache trap all survive');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

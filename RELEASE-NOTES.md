@@ -2,6 +2,22 @@
 
 ---
 
+## v5.5.2 (2026-08-10)
+
+> Docs: [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/)
+
+> The `semble-first` rule carries `paths: ["**/*"]`, so it is auto-loaded into every request of every session in the repo it is installed in — its length is a per-prompt tax, not a one-off cost. It had grown to 111 lines / 4634 bytes by accretion. It ships at 39 lines / 1727 bytes now, with a hard budget and a test that holds it there.
+
+### brewcode
+
+#### Changed
+
+- **`semble-first` rule compressed ~3x** — 111 lines / 4634 B -> 39 lines / 1727 B (711 -> 232 words). Every load-bearing fact survives: both tool names, `repo` mandatory on both (absolute project root or `https://` URL, never inferred), the result fields with "no `line` field — open at `start_line`", the `find_related` param shape, the one-search workflow and `max_snippet_lines=null`, the semble-vs-`rg` split with its 8/9 and 2/5 scores, the never-indexed suffixes with `.json` called out as load-bearing, and the dedup / no-watcher / `--content` cache-thrash traps. What went is section headings, the second JSON example and the paragraphs that argued the doctrine instead of stating it
+- **The rule now has a size budget, enforced by test.** `SKILL.md` §3.3b sets a hard ≤45 lines / ≤2000 B cap and makes it a ratchet — a new fact displaces an old one, exceeding the cap means cutting, never raising it. Rationale and measurement narrative belong in `references/engine-landscape.md`. New `suite-hooks` check **J9** asserts lines, bytes and a no-fact-lost list, so the file cannot regrow by accretion again
+- **`suite-hooks` check B4 matches facts, not sentences.** It pinned exact prose (`'## Keep using rg / Grep for'`, `'Semble has no background watcher.'`), so every rewording of a file that lives under a compression budget turned it red for no defect
+
+---
+
 ## v5.5.1 (2026-08-10)
 
 > Docs: [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/) | [superreview-setup](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [task-board-setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/)

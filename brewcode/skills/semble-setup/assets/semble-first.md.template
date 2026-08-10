@@ -3,109 +3,37 @@ paths:
   - "**/*"
 description: semble-first — one semantic search, then read the exact line; rg stays for exact matching
 doc_type: llm
-version: "5.5.1"
+version: "5.5.2"
 generated_by: "brewcode:semble-setup"
 ---
 
 # semble-first
 
-Semantic code search runs through the `semble_code` MCP server. Code is authoritative.
+Semantic search = the `semble_code` MCP. Code is authoritative.
 
-## The two tools
+| Ask | Tool |
+|-----|------|
+| behaviour/intent, or wording absent from the code | `mcp__semble_code__search` (8/9) |
+| neighbours of a KNOWN hit | `mcp__semble_code__find_related` |
+| "every/all/how many", identifier, literal, regex, path, verifying a hit | `rg -l`/`-c` (semble lost 2/5) |
 
-| Tool | Purpose |
-|------|---------|
-| `mcp__semble_code__search` | find code by intent/behavior/name |
-| `mcp__semble_code__find_related` | neighbors of a KNOWN location, after a useful seed |
-
-## `repo` is REQUIRED on both tools
-
-Both tools take a mandatory `repo` parameter: the **absolute path of the project root**
-(or an explicit `https://` git URL). It is not optional and it is never inferred.
+top-k is a ranked sample, not a list: "every/all" is unanswerable in principle.
 
 ```json
-{"query": "how sessions are persisted", "repo": "/abs/project/root", "top_k": 5, "max_snippet_lines": 10}
+{"query":"how sessions are persisted","repo":"/abs/root","top_k":5,"max_snippet_lines":10}
 ```
 
-```json
-{"file_path": "src/store/session.ts", "line": 42, "repo": "/abs/project/root", "top_k": 5}
-```
+`repo` REQUIRED on both — absolute project root or `https://` URL, never inferred. Hits carry
+`file_path,start_line,end_line,score,content`; no `line` field — open at `start_line`, and pass it to
+`find_related` as `{file_path, line, repo}` (repo-relative, 1-indexed).
 
-`find_related` takes `file_path` + `line` exactly as they came back from a search result
-(`file_path` is repo-relative; `line` is 1-indexed).
+ONE search per question, then read the file; full chunk = re-call with `max_snippet_lines=null`.
+!=re-running an equivalent query through `rg`/Grep.
 
-## What a result looks like
+Indexed (`--content code docs config`): source, config, prose (`.md .rst .adoc .org .tex .html`).
+NEVER indexed: `.json .json5 .csv .tsv .psv .mdx .txt` -> `rg`. `.json` matters most — hook registrations,
+manifests, `package.json`, `settings.json`, OpenAPI: semble returns prose *about* them, never them.
 
-```json
-{"query":"...","results":[
-  {"file_path":"src/store/session.ts","start_line":41,"end_line":58,"score":0.83,"content":"..."}
-]}
-```
-
-Fields are `file_path`, `start_line`, `end_line`, `score`, and `content`
-(`content` is omitted when `max_snippet_lines` is 0). There is no `line` field —
-open the file at `start_line`.
-
-## Workflow
-
-1. ONE focused `mcp__semble_code__search` with `top_k=5`, `max_snippet_lines=10`.
-2. Open the top hit at `start_line` and read it. Do not re-run the same query with `rg`.
-3. Need more context on one hit? Re-call with `max_snippet_lines=null` for the full chunk.
-4. Need siblings of a confirmed location? `find_related` with that `file_path`/`start_line`.
-5. Never issue two equivalent searches across semble, `rg`, and Grep.
-
-## Which tool wins, measured
-
-Head-to-head on 16 questions written from the question's own vocabulary, not the
-answer's identifier. The split is not a matter of taste:
-
-| Question shape | Winner | Score |
-|----------------|--------|-------|
-| Behaviour / intent — "how does X work", "what decides Y" | **semble** | 8 of 9 |
-| Vocabulary mismatch — the question's words are not in the code | **semble** | (same 9) |
-| Exhaustive enumeration — "every place that…", "all N of them" | **rg** | semble lost 2 of 5 |
-| Exact identifier, literal string, exact path | **rg** | — |
-
-So: ask semble what something does; ask `rg` where every occurrence is. A top-k
-result set is a ranked sample, never a complete list — a question containing
-"every", "all", "how many" or "list the" is an `rg -l`/`-c` question, and semble
-cannot answer it even in principle.
-
-## Keep using rg / Grep for
-
-exact identifiers, literal error strings, regexes, path and filename patterns,
-exhaustive enumeration (`-l`, `-c`), and verifying a semble hit.
-
-## What is in this corpus
-
-The server indexes `--content code docs config` — source, configuration AND
-prose. `.md`, `.markdown`, `.rst`, `.adoc`, `.org`, `.tex`, `.html`/`.htm` are
-all searchable, so ask semble about design notes and READMEs too, not only code.
-
-NOT indexed at any setting, because semble maps no content type to them:
-
-- `.json`, `.json5`, `.csv`, `.tsv`, `.psv` — semble's data bucket belongs to
-  no content type
-- `.mdx`, `.txt` — the suffix is absent from semble's extension table entirely
-
-Use `rg` for those.
-
-**`.json` being absent is load-bearing, not a footnote.** Hook registrations,
-plugin and marketplace manifests, `package.json`, `tsconfig.json`, `settings.json`
-and every OpenAPI spec live in files semble has never read. A question whose
-answer is a JSON key — "which hook events are registered", "what is the declared
-version", "is this permission allowed" — will come back with prose *about* the
-JSON and never the JSON itself, and the top hits will look plausible. Go straight
-to `rg` for those; do not spend a semble call first.
-
-Duplicate trees are not deduplicated either: if the repo commits the same file
-at two or three paths, all of them compete for the same five slots. If your
-results look like the same text three times, that is what happened — check
-`.sembleignore`.
-
-Semble has no background watcher. The index is (re)built inside a tool call
-and cached; the first call on a cold cache is slow, later calls are fast.
-
-Do not run `semble search` from the shell with a different `--content` set than
-the server's. The cache directory is keyed by the project path alone, so a
-mismatched set makes each consumer discard the other's index and rebuild.
+Duplicate trees are not deduplicated (same text 3x -> `.sembleignore`); no watcher, index built in-call and
+cached; !=shell `semble search` with another `--content` set — cache keyed by path alone, consumers rebuild
+over each other.
