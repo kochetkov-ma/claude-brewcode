@@ -1,5 +1,5 @@
 ---
-name: brewtools:agent-router-setup
+name: agent-router-setup
 description: "Installs, configures or removes the agent-router hook (routes a generic Agent spawn to the real project/plugin expert). Triggers: agent-router, wrong agent, route to expert, роутер агентов, не тот агент."
 user-invocable: true
 disable-model-invocation: true

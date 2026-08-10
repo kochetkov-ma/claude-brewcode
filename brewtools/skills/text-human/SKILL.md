@@ -1,5 +1,5 @@
 ---
-name: brewtools:text-human
+name: text-human
 description: "Humanizes code, docs, articles, reddit/chat, javadoc -- strips AI artifacts, fixes unicode, fits register. Triggers: humanize, ai artifacts, unicode fix, article, reddit, javadoc."
 user-invocable: true
 disable-model-invocation: true

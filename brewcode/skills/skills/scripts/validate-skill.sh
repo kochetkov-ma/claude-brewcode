@@ -52,14 +52,21 @@ fi
 # Extract frontmatter block (between first two --- lines)
 FRONTMATTER=$(sed -n '/^---$/,/^---$/{ /^---$/d; p; }' "$SKILL_FILE" 2>/dev/null || true)
 
-# 4. name field: present, kebab-case (with optional prefix:), max 64 chars
+# 4. name field: present, bare kebab-case, max 64 chars, equal to the directory name.
+# A `plugin:` prefix here is a defect: Claude Code prepends the plugin name itself, so
+# `name: brewcode:e2e` in brewcode/skills/e2e renders as `/brewcode:brewcode:e2e`.
 NAME=$(echo "$FRONTMATTER" | grep -E '^name:' | head -1 | sed 's/^name:[[:space:]]*//' | tr -d '"' | tr -d "'" || true)
+DIR_NAME=$(basename "$(cd "$SKILL_DIR" 2>/dev/null && pwd || echo "$SKILL_DIR")")
 if [ -z "$NAME" ]; then
     check fail "name field missing in frontmatter"
 elif [ ${#NAME} -gt 64 ]; then
     check fail "name too long (${#NAME} chars, max 64)"
-elif ! echo "$NAME" | grep -qE '^[a-z0-9][a-z0-9-]*(:[a-z0-9][a-z0-9-]*)?$'; then
-    check fail "name '$NAME' is not valid kebab-case (or prefix:kebab-case)"
+elif echo "$NAME" | grep -qE '^[a-z0-9][a-z0-9-]*:'; then
+    check fail "name '$NAME' carries a plugin prefix — Claude Code adds it, use bare '${NAME#*:}'"
+elif ! echo "$NAME" | grep -qE '^[a-z0-9][a-z0-9-]*$'; then
+    check fail "name '$NAME' is not valid kebab-case"
+elif [ "$NAME" != "$DIR_NAME" ]; then
+    check fail "name '$NAME' does not match directory '$DIR_NAME'"
 else
     check ok "name: '$NAME' (${#NAME} chars)"
 fi

@@ -1,5 +1,5 @@
 ---
-name: brewcode:semble-setup
+name: semble-setup
 description: "Installs, audits, repairs, updates, enables, reindexes or removes the semble_code semantic code-search MCP for a project. Triggers: semble, semantic code search, semble status, настрой semble, статус semble, переиндексируй, удали semble."
 user-invocable: true
 disable-model-invocation: true

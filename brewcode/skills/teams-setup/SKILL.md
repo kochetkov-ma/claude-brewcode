@@ -1,5 +1,5 @@
 ---
-name: brewcode:teams-setup
+name: teams-setup
 description: "Creates and manages dynamic teams of domain agents. Triggers: create team, agent team, team status, cleanup team."
 user-invocable: true
 disable-model-invocation: true

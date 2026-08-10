@@ -1,5 +1,5 @@
 ---
-name: brewtools:deploy
+name: deploy
 description: "GitHub Actions deployment: workflows, releases, GHCR, CI/CD with safety gates. Triggers: deploy, release, workflow."
 user-invocable: true
 disable-model-invocation: true

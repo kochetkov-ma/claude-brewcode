@@ -2,6 +2,26 @@
 
 ---
 
+## v5.3.2 (2026-08-10)
+
+> Docs: [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/)
+
+> Every skill in all four plugins showed up twice-namespaced in the picker — `/brewcode:brewcode:e2e`. The prefix was baked into frontmatter back in the v2.x era; Claude Code prepends the plugin name on its own, so the two stacked. All 26 names are now bare and equal to their directory, and the validator refuses to let the prefix come back.
+
+### brewcode
+
+#### Fixed
+
+- **Skill frontmatter `name` is bare again — all 26 skills across brewcode, brewdoc, brewtools.** Each `SKILL.md` carried `name: <plugin>:<skill>`, and CC prefixes the plugin name itself, so the skill picker rendered `/brewcode:brewcode:e2e`, `/brewtools:brewtools:ssh` and so on for every skill in the marketplace. Agents never had the defect (`name: agent-creator` -> `brewcode:agent-creator`); only skills did, since v2.0.73. Names now match their directory exactly — invocation paths (`/brewcode:e2e`) are unchanged from what the docs always claimed
+- **`validate-skill.sh` enforces it.** The name check accepted `prefix:kebab-case` by design; it now hard-fails on any `plugin:` prefix (naming the bare replacement), on a non-kebab name, and on a name that differs from the directory it lives in. Directory resolution goes through `cd && pwd`, so validating `.` from inside a skill dir no longer reports a false mismatch
+- **`.claude/skills/brewcode-review`** frontmatter said `brewcode:review` while the directory said `brewcode-review` — the workspace-local skill now matches its directory too
+
+#### Changed
+
+- **Naming rule documented where skills are authored:** `skill-creator` frontmatter reference and checklist, `skills/references/review-prompt.md` check #3, and the root `CLAUDE.md` Skills invariant block, which now carries the one-line re-verify loop over all 26 files
+
+---
+
 ## v5.3.1 (2026-08-09)
 
 > Docs: [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/)

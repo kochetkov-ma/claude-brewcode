@@ -14,7 +14,7 @@ Read the entire skill directory: SKILL.md, references/, scripts/, tests/, README
 |---|----------|---------------|
 | 1 | Description | Single line, quoted, <= 120 chars (optimal ~100), starts with action verb, no multiline `\|` pipe |
 | 2 | Description (LLM) | If `disable-model-invocation` is NOT true: has `Triggers -` line with 3-5 keyword phrases |
-| 3 | Frontmatter | Valid YAML, `name` is lowercase-hyphens and <=64 chars |
+| 3 | Frontmatter | Valid YAML, `name` is bare lowercase-hyphens, <=64 chars, equal to the dir name -- a `<plugin>:` prefix is a defect (CC adds it) |
 | 4 | Frontmatter flags | `user-invocable`, `disable-model-invocation`, `allowed-tools`, `model` all present and correct |
 | 5 | Body size | <500 lines total in SKILL.md |
 | 6 | Body tone | Imperative form ("Read the file", not "You should read the file") |

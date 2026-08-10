@@ -1,5 +1,5 @@
 ---
-name: brewdoc:my-claude
+name: my-claude
 description: Document your Claude Code installation - setup, architecture, web research. Triggers - my claude, installation docs.
 user-invocable: true
 disable-model-invocation: true

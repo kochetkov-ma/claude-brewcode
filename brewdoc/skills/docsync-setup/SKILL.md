@@ -1,5 +1,5 @@
 ---
-name: brewdoc:docsync-setup
+name: docsync-setup
 description: "Installs project-local doc-staleness tracking (hooks) and reports/forces doc sync. Triggers: docsync, track doc staleness, doc sync status, stale docs, doc frontmatter."
 user-invocable: true
 disable-model-invocation: true

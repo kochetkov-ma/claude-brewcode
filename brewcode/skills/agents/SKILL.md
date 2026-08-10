@@ -1,5 +1,5 @@
 ---
-name: brewcode:agents
+name: agents
 description: "Creates, improves, syncs Claude Code subagents. Triggers: create agent, improve agent, sync agents, memory sync."
 user-invocable: true
 disable-model-invocation: true

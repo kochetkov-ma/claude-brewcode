@@ -1,5 +1,5 @@
 ---
-name: brewcode:convention
+name: convention
 description: "Extracts etalon classes, patterns, architecture into convention docs. Triggers: extract conventions, etalon classes."
 user-invocable: true
 disable-model-invocation: true

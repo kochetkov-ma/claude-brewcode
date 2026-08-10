@@ -1,5 +1,5 @@
 ---
-name: brewcode:setup-status
+name: setup-status
 description: "Reports which brewcode setup skills are installed, stale, partial or missing in this project, compares the version each installed artifact was generated under against the installed plugin, and prints the exact command to run for each. Triggers: setup status, what is installed, what version is installed, что установлено."
 user-invocable: true
 disable-model-invocation: true

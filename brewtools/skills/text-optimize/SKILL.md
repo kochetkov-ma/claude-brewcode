@@ -1,5 +1,5 @@
 ---
-name: brewtools:text-optimize
+name: text-optimize
 description: Optimizes text/docs for LLM token efficiency. Triggers - optimize, reduce tokens, compress, deep compress.
 user-invocable: true
 disable-model-invocation: true

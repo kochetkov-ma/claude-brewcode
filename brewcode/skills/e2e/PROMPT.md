@@ -31,7 +31,7 @@ brewcode/skills/e2e/
 
 ```yaml
 ---
-name: brewcode:e2e
+name: e2e
 description: "TODO: <= 120 символов (optimal ~100), single line, что + 3-5 trigger keywords"
 # model, context, allowed-tools, argument-hint — определить при планировании
 ---

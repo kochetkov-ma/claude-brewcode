@@ -6,9 +6,9 @@ maxTurns: 80
 color: green
 tools: Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion
 doc_type: llm
-version: "5.3.1"
+version: "5.3.2"
 generated_by: "brewcode"
-last_updated: "2026-08-09"
+last_updated: "2026-08-10"
 ---
 
 [DICT: ACT=activation, AT=allowed-tools, BPR=${CLAUDE_PLUGIN_ROOT}, CC=Claude Code, CSD=${CLAUDE_SKILL_DIR}, CTX=context, DESC=description, DMI=disable-model-invocation, FM=frontmatter, FORK=context:fork, GP=general-purpose, PLG=plugin, REF=reference, SA=subagent, SK=skill, UI-F=user-invocable]
@@ -126,7 +126,7 @@ Use when: SK-coordinator + 2+ roles + CTX isolation needed + prompts are impl de
 
 ```yaml
 ---
-name: my-skill                               # max 64 chars, lowercase-hyphens
+name: my-skill                               # max 64 chars, lowercase-hyphens, == dir name, NO `plg:` prefix
 description: "Apply X guidelines for Y"     # ALWAYS quoted -- prevents YAML parse failure
 cli: fit                                     # OPT -- REQUIRED when the cmd != the SK name
 version: "3"                                 # OPT -- REQUIRED when behaviour lives outside this dir
@@ -150,7 +150,7 @@ Imperative form: "Do X" (not "You should do X").
 
 | Field | Limits | Description |
 |-------|--------|-------------|
-| `name` | 64 chars | lowercase/numbers/hyphens. Uses dir name if omitted |
+| `name` | 64 chars | lowercase/numbers/hyphens, BARE. Uses dir name if omitted. !=`<plg>:<name>` -- CC prepends the PLG name itself, a baked prefix renders `/brewcode:brewcode:e2e` |
 | `description` | spec hard cap **1024** chars; listing-display cap **1536** chars (`description`+`when_to_use` combined, raised ~v2.1.107-108); brewcode DEFAULT target <=400 chars -- see DESC Budget | What + when + 3-5 distinct triggers. No filler/examples. Front-load keywords |
 
 > !=`description:` without quotes -- em dashes (`--`), colons (`:`), special chars break YAML parsing silently. SK exists on disk but skills.sh fails to parse.
@@ -593,7 +593,7 @@ bash "${CLAUDE_PLUGIN_ROOT}/skills/skills/scripts/validate-skill.sh" path/to/ski
 | Check | Details |
 |-------|---------|
 | Structure | SKILL.md with valid YAML FM |
-| `name` | <=64 chars, lowercase-hyphens |
+| `name` | <=64 chars, lowercase-hyphens, == dir name, no `<plg>:` prefix |
 | `description` | Per FM Reference caps, third-person, what+when + 3-5 distinct triggers, no filler |
 | `cli` | Decided, not skipped. Cmd != SK name -> `cli:` declared, tokens match `/^[\w.-]{1,42}$/`, NONE from the denylist. !=copied from `AT` |
 | `version` | Decided, not skipped. Behaviour lives outside the SK dir (binary on PATH, wrapper in an image, remote svc) -> `version:` present AND bumped on this change. `updated:` != substitute |

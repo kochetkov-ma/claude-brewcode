@@ -1,5 +1,5 @@
 ---
-name: brewcode:superreview-setup
+name: superreview-setup
 description: "Generates a project-tailored deep-review skill: domain-expert routing + scope discipline (blast radius, delivery, closeout) + mechanical gates + adversarial validation. Triggers: superreview, generate review skill, deep review skill, scope discipline review"
 user-invocable: true
 disable-model-invocation: true

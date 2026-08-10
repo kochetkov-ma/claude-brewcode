@@ -1,5 +1,5 @@
 ---
-name: brewtools:secrets-scan
+name: secrets-scan
 description: Scans git-tracked files for leaked secrets. Triggers - secrets scan, find credentials, leaked keys, security audit.
 user-invocable: true
 disable-model-invocation: true

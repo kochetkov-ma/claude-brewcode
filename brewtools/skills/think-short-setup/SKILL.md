@@ -1,5 +1,5 @@
 ---
-name: brewtools:think-short-setup
+name: think-short-setup
 description: "Installs or removes the think-short terse-mode hooks. Triggers: think-short, be terse, terse mode, инжект терс-режим."
 user-invocable: true
 disable-model-invocation: true

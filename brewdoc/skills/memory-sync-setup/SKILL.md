@@ -1,5 +1,5 @@
 ---
-name: brewdoc:memory-sync-setup
+name: memory-sync-setup
 description: "Generates a project-tailored memory-sync skill: memory surface batches, checkable-fact catalogue, non-growth sync, independent verify, self-sync, agent re-audit. Triggers: memory sync init, generate memory sync, sync memory skill, установи memory-sync, синхронизируй память"
 user-invocable: true
 disable-model-invocation: true

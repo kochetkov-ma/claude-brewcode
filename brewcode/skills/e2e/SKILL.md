@@ -1,5 +1,5 @@
 ---
-name: brewcode:e2e
+name: e2e
 description: "Orchestrates e2e testing: BDD scenarios, Playwright autotests. Triggers: e2e tests, BDD scenarios, write autotest."
 user-invocable: true
 disable-model-invocation: true

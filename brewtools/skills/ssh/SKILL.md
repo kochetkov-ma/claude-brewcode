@@ -1,5 +1,5 @@
 ---
-name: brewtools:ssh
+name: ssh
 description: "SSH server management — connect, configure, deploy, administer Linux servers with safety gates."
 user-invocable: true
 disable-model-invocation: true

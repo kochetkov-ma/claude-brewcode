@@ -1,5 +1,5 @@
 ---
-name: brewtools:agent-deadline-setup
+name: agent-deadline-setup
 description: "Installs, configures or removes the agent-deadline hooks (soft wall-clock budget for subagents). Triggers: agent-deadline, subagent timeout, agent time limit, дедлайн агента, таймаут саб-агента."
 user-invocable: true
 disable-model-invocation: true

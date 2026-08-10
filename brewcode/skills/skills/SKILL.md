@@ -1,5 +1,5 @@
 ---
-name: brewcode:skills
+name: skills
 description: "Lists, improves, creates, syncs Claude Code skills. Triggers: create skill, improve skill, sync skills, memory sync."
 user-invocable: true
 disable-model-invocation: true

@@ -82,7 +82,7 @@ Skill Creator sizes the task before starting. One bounded unit = one deliverable
   <li>
     <div>
       <strong>Validate structure and run tests</strong>
-      <p>Runs <code>validate-skill.sh</code> from the brewcode plugin. Checks: valid YAML frontmatter, <code>name</code> ≤ 64 chars, <code>description</code> ≤ 250 chars single-line, body under 500 lines, bash blocks have <code>EXECUTE</code> keyword, no hardcoded secrets. Then spawns 3–5 realistic test prompts to verify activation and output quality.</p>
+      <p>Runs <code>validate-skill.sh</code> from the brewcode plugin. Checks: valid YAML frontmatter, <code>name</code> ≤ 64 chars, bare with no <code>plugin:</code> prefix and matching the directory name, <code>description</code> ≤ 250 chars single-line, body under 500 lines, bash blocks have <code>EXECUTE</code> keyword, no hardcoded secrets. Then spawns 3–5 realistic test prompts to verify activation and output quality.</p>
     </div>
   </li>
   <li>
@@ -156,7 +156,7 @@ Common mistakes: multiline `|` (truncated at 250 chars since v2.1.84), missing `
 
 | Field | Limits | Notes |
 |---|---|---|
-| `name` | ≤64 chars, lowercase-hyphens | Use directory name if omitted |
+| `name` | ≤64 chars, bare lowercase-hyphens, must equal directory name | No `plugin:` prefix — Claude Code adds the plugin name itself; a baked prefix renders `/brewcode:brewcode:e2e`. Directory name used if omitted |
 | `description` | ≤250 chars, single line, always quoted | ALWAYS in double quotes — em dashes, colons break YAML silently |
 | `disable-model-invocation` | true/false | `true` = 100% reliable, slash-only |
 | `user-invocable` | true/false | `false` = hide from menu, Claude-only |

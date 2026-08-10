@@ -1,5 +1,5 @@
 ---
-name: brewdoc:publish
+name: publish
 description: "Publish text/markdown/file/site to brewpage.app, returns URL. Triggers: publish, share link, brewpage, опубликуй."
 user-invocable: true
 disable-model-invocation: true

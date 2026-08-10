@@ -1,5 +1,5 @@
 ---
-name: brewtools:plugin-update
+name: plugin-update
 description: Checks, installs, updates Claude Code plugins. Triggers - update plugins, check versions, обнови плагины.
 user-invocable: true
 disable-model-invocation: true

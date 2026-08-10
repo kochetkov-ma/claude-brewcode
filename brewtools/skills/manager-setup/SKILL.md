@@ -1,5 +1,5 @@
 ---
-name: brewtools:manager-setup
+name: manager-setup
 description: "Manager mode: installs a hard delegation wall into this project — status, install, upgrade, enable, disable, uninstall, purge, level, edit — and explains/customizes codewords ++m, ++a, ++rr, ++r. Triggers: manager, менеджер, hard mode, хард режим, delegate."
 user-invocable: true
 disable-model-invocation: true

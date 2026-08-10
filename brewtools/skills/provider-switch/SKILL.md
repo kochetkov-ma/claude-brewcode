@@ -1,5 +1,5 @@
 ---
-name: brewtools:provider-switch
+name: provider-switch
 description: "Configure alt API providers: DeepSeek, Z.ai/GLM, Qwen, MiniMax, OpenRouter. Triggers: switch provider, openrouter."
 user-invocable: true
 disable-model-invocation: true

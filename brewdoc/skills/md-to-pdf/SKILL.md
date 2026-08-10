@@ -1,5 +1,5 @@
 ---
-name: brewdoc:md-to-pdf
+name: md-to-pdf
 description: Convert Markdown to PDF via reportlab or weasyprint engines. Triggers - pdf, md to pdf, markdown to pdf, generate pdf.
 user-invocable: true
 disable-model-invocation: true
