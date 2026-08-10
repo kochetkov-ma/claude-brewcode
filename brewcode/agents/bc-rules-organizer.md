@@ -5,7 +5,7 @@ model: haiku
 maxTurns: 60
 tools: Read, Write, Edit, Glob, Grep, Bash, Agent
 doc_type: llm
-version: "5.4.0"
+version: "5.5.0"
 generated_by: "brewcode"
 last_updated: "2026-08-10"
 ---
@@ -280,31 +280,21 @@ Task(subagent_type="brewtools:text-optimizer", prompt="Optimize path/to/created-
 > `brewtools` not installed (`text-optimizer` unavailable) — skip this step and say so in the report.
 > The rule files are already written; optimization is a bonus pass, never a blocker.
 
-## Output Format
+## Return Contract
 
-**Return this report as your final response.**
+Verdict first, <=30 lines, `path:line`. !=rule-file bodies, !=pasted tables, !=extraction notes, !=preamble. This holds whether or not a return guard is installed. Return one row per file plus the counts:
 
 ```markdown
-## Rules Organization Complete
-
-### Created/Updated Files
 | File | Paths | Change |
 |------|-------|--------|
-| `components.md` | `src/components/**/*` | New |
-| `testing.md` | `**/*.test.*` | Updated |
+| `.claude/rules/components.md` | `src/components/**/*` | new, 6 rules |
+| `.claude/rules/testing.md` | `**/*.test.*` | updated, +3 rules |
 
-### Stats
-| Metric | Value |
-|--------|-------|
-| Files created | 2 |
-| Files updated | 1 |
-| Total rules | 18 |
-
-### Next Steps
-- [ ] Review created files
-- [ ] Test with matching files
-- [ ] Update main CLAUDE.md with refs
+2 new / 1 updated | 18 rules | dedup: 4 skipped, 2 merged | text-optimizer: run (or skipped -- brewtools absent)
 ```
+
+Dedup ledger, per-rule rationale, source excerpts -> `.claude/reports/YYYYMMDD-HHMMSS_rules-organizer/` (the checkpoint file is already there), return the path.
+If the agent-return guard is installed, a return over ~1000 est-tokens (chars/4) is blocked for compression; over ~2500 file the detail and answer with path + verdict + <=3 lines.
 
 ## Sources
 

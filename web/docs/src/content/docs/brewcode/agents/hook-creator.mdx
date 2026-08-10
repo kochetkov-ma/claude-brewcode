@@ -189,6 +189,12 @@ A **post-session lifecycle hook** runs after a session ends and before the works
 
 </details>
 
+## Return Contract
+
+Verdict first, `<=30 lines`, `path:line`. No hook bodies, no stdin/stdout payload dumps, no <code>CLAUDE_DEBUG</code> transcripts, no preamble — one block per hook (file, event, matcher, purpose, routing, config location, test-fire result). The verification checklist above is the gate, not something to transcribe into the return; debug logs, full payloads, and failing runs go to <code>.claude/reports/&lt;YYYYMMDD-HHMMSS&gt;_hook-creator/</code>, path only.
+
+[`/brewtools:agent-return-setup`](/brewtools/skills/agent-return-setup/) enforces this at ~1000 / ~2500 est-tokens when installed; the contract itself ships unconditionally.
+
 <CardGrid>
   <Card title="Brewcode overview" icon="document" href="/brewcode/overview/">
     All brewcode agents and skills — hooks live here in the plugin's hooks/ directory.

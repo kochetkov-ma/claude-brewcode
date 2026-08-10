@@ -59,6 +59,10 @@ Install the entire suite:
     Soft wall-clock budget for subagents -- warns at 80% of the budget,
     blocks non-finalizing tools past 100% so the report survives.
   </Card>
+  <Card title="agent-return-setup" icon="package" href="/brewtools/skills/agent-return-setup/">
+    Size budget on every subagent's final return message -- blocks once past
+    threshold with a compress or write-to-report order.
+  </Card>
   <Card title="agent-router-setup" icon="target" href="/brewtools/skills/agent-router-setup/">
     EXPERIMENTAL. Denies a generic subagent spawn when a real project or plugin
     expert owns the task, and names that expert.
@@ -88,6 +92,7 @@ Install the entire suite:
 | [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/) | Check and update the full brewcode plugin suite | sonnet | `[check\|update\|all]` |
 | [`/brewtools:provider-switch`](/brewtools/skills/provider-switch/) | Configure alternative API providers | opus | `[status\|install\|verify\|model-check\|help\|<provider>]` |
 | [`/brewtools:agent-deadline-setup`](/brewtools/skills/agent-deadline-setup/) | Install a soft wall-clock budget for subagents | sonnet | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [project\|global] [minutes]` |
+| [`/brewtools:agent-return-setup`](/brewtools/skills/agent-return-setup/) | Cap the size of every subagent's final return message | sonnet | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [project\|global] [pass] [file]` |
 | [`/brewtools:agent-router-setup`](/brewtools/skills/agent-router-setup/) | Route a generic subagent spawn to the real expert (experimental) | sonnet | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [level fast\|strict]` |
 | [`/brewtools:manager-setup`](/brewtools/skills/manager-setup/) | Manager mode: hard delegation wall + codewords | sonnet | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [level strict\|balanced] [edit]` |
 | [`/brewtools:task-board-setup`](/brewtools/skills/task-board-setup/) | Deploy a file-based Kanban into any repo | opus | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [repo path] [free-text directive]` |
@@ -110,10 +115,11 @@ Every `-setup` skill stamps what it writes with the plugin version that generate
 | [manager-setup](/brewtools/skills/manager-setup/) | `state.json` top-level keys + the copied guard's `brewcode-meta` line |
 | [think-short-setup](/brewtools/skills/think-short-setup/) | `brewcode-meta` line in each of the three `.mjs` hooks + the prompt file |
 | [agent-deadline-setup](/brewtools/skills/agent-deadline-setup/) | `agent-deadline.json` top-level keys + both hooks' `brewcode-meta` line |
+| [agent-return-setup](/brewtools/skills/agent-return-setup/) | `agent-return.json` top-level keys + the `brewcode-meta` line in all three `.mjs` |
 | [agent-router-setup](/brewtools/skills/agent-router-setup/) | `agent-router.json` top-level keys + the hook's `brewcode-meta` line |
 | [task-board-setup](/brewtools/skills/task-board-setup/) | `.md` frontmatter (`doc_type: llm`, `version`, `generated_by`, `last_updated`) on nine generated artifacts |
 
-`/brewcode:setup-status` reads these stamps back across all ten `-setup` skills in this marketplace and tells you when an install is running on an older brewtools version than the plugin currently installed — the fix is always that skill's own `upgrade` mode.
+`/brewcode:setup-status` reads these stamps back across all eleven `-setup` skills in this marketplace and tells you when an install is running on an older brewtools version than the plugin currently installed — the fix is always that skill's own `upgrade` mode.
 
 ## Plugin variable
 
@@ -144,6 +150,7 @@ brewtools/
 │   ├── plugin-update/           # Check, install, and update plugin suite
 │   ├── provider-switch/         # Alternative API provider management
 │   ├── agent-deadline-setup/    # Soft wall-clock budget for subagents
+│   ├── agent-return-setup/      # Size budget on every subagent's final return
 │   ├── agent-router-setup/      # Generic-spawn router (experimental)
 │   ├── manager-setup/           # Hard delegation wall + codewords
 │   ├── task-board-setup/        # File-based Kanban generator

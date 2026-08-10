@@ -18,7 +18,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | Arguments | empty = full report; a plugin name filters to its rows; a skill name prints one row with its detection rule spelled out |
 | Model | sonnet |
 | Tools | `Read`, `Bash`, `Glob`, `Grep` — **no `Write`, no `Edit`, no `Agent`** |
-| Covers | 10 setup skills across brewcode, brewtools and brewdoc |
+| Covers | 11 setup skills across brewcode, brewtools and brewdoc |
 | Writes | nothing, ever |
 
 ## What it does
@@ -56,7 +56,7 @@ Ask it to "install everything" or "fix them all" and it refuses once, plainly, t
 ```
 
 ```
-4 of 10 setups are behind the installed plugin (2 stale by version, 1 legacy stamp, 1 stale by wiring).
+4 of 11 setups are behind the installed plugin (2 stale by version, 1 legacy stamp, 1 stale by wiring).
 
 | Skill                           | State                   | Version         | Found                                                              | Command
 | /brewcode:semble-setup          | stale                   | A.B.C            | rule + all five live hook files current; semble-explore.mjs (RETIRED, superseded by semble-subagent.mjs) is still on disk — wiring shows only 5 of the 6 settings.json entries the current version wants | /brewcode:semble-setup install "remove the retired hook file, re-wire all six settings entries"
@@ -80,7 +80,7 @@ session degrades both. Start a fresh session per command.
 
 think-short-setup is disabled on purpose — enable with /brewtools:think-short-setup enable.
 
-roster: 10/10 in sync
+roster: 11/11 in sync
 ```
 
 `A.B.C` stands for the installed plugin version and `X.Y.Z` for an artifact's own, older stamp in the samples above — the real report always prints real numbers, never these placeholders.
@@ -107,7 +107,7 @@ The **Command** column is ready to paste. For `stale` and `partial` it always ca
   <li class="step step-primary">
     <div>
       <strong>Read the disable switches</strong>
-      <p>All ten setups leave a real off-switch on disk, probed directly rather than inferred — the two mechanisms are detailed in <a href="#two-rules-that-stop-false-alarms">Two rules that stop false alarms</a> below. An absent key means OFF on the opt-in <code>agent-deadline</code> row, but ON on the opt-out <code>agent-router</code> and <code>docsync</code> rows — the two defaults ship side by side.</p>
+      <p>All eleven setups leave a real off-switch on disk, probed directly rather than inferred — the two mechanisms are detailed in <a href="#two-rules-that-stop-false-alarms">Two rules that stop false alarms</a> below. An absent key means OFF on the opt-in <code>agent-deadline</code> and <code>agent-return</code> rows, but ON on the opt-out <code>agent-router</code> and <code>docsync</code> rows — the two defaults ship side by side.</p>
     </div>
   </li>
   <li class="step step-primary">
@@ -131,7 +131,7 @@ The **Command** column is ready to paste. For `stale` and `partial` it always ca
   <li class="step step-primary">
     <div>
       <strong>Roster self-check</strong>
-      <p>Lists the <code>*-setup</code> directories actually present in the installed plugins and compares them against the roster. A setup it does not know about produces a warning <strong>above</strong> the table, never a silent edit. Match prints one line: <code>roster: 10/10 in sync</code>.</p>
+      <p>Lists the <code>*-setup</code> directories actually present in the installed plugins and compares them against the roster. A setup it does not know about produces a warning <strong>above</strong> the table, never a silent edit. Match prints one line: <code>roster: 11/11 in sync</code>.</p>
     </div>
   </li>
 </Steps>
@@ -139,10 +139,10 @@ The **Command** column is ready to paste. For `stale` and `partial` it always ca
 ## Technical details
 
 <Callout type="tip" title="A remedy must be able to clear the verdict it follows">
-Every earlier release verified that an artifact was stamped at install; none verified the stamp could ever move. `upgrade` used to refresh content and leave the version stamp untouched — `status` reported `stale`, `upgrade` reported success, the next `status` reported `stale` again, forever. All ten setups now close that loop: install at an old version, bump the plugin, `status` reports `stale`, `upgrade` restamps it, `status` reports `installed`, and a second `upgrade` is a no-op with the artifact body byte-identical. A handful of findings genuinely have no clearing mode — a `.template-baseline/` diff on `superreview-setup`, a hand-edited `memory-sync` reference, a hand-edited `semble-first.md` — and this skill reports those as a diff to port by hand, never dressed up as a command that would do nothing.
+Every earlier release verified that an artifact was stamped at install; none verified the stamp could ever move. `upgrade` used to refresh content and leave the version stamp untouched — `status` reported `stale`, `upgrade` reported success, the next `status` reported `stale` again, forever. All eleven setups now close that loop: install at an old version, bump the plugin, `status` reports `stale`, `upgrade` restamps it, `status` reports `installed`, and a second `upgrade` is a no-op with the artifact body byte-identical. A handful of findings genuinely have no clearing mode — a `.template-baseline/` diff on `superreview-setup`, a hand-edited `memory-sync` reference, a hand-edited `semble-first.md` — and this skill reports those as a diff to port by hand, never dressed up as a command that would do nothing.
 </Callout>
 
-### The 10 setups it covers
+### The 11 setups it covers
 
 | Setup | Anchor artifact |
 |-------|-----------------|
@@ -154,6 +154,7 @@ Every earlier release verified that an artifact was stamped at install; none ver
 | `/brewtools:agent-deadline-setup` | `.claude/hooks/agent-deadline-guard.mjs` (or the twin) |
 | `/brewtools:agent-router-setup` | `.claude/hooks/agent-router.mjs` |
 | `/brewtools:manager-setup` | `.claude/brewtools/manager/state.json` |
+| [`/brewtools:agent-return-setup`](/brewtools/skills/agent-return-setup/) | `.claude/hooks/agent-return-guard.mjs` (or the twin) |
 | `/brewdoc:memory-sync-setup` | `.claude/skills/memory-sync/SKILL.md` |
 | `/brewdoc:docsync-setup` | `.claude/docsync/config.json` |
 
@@ -192,7 +193,7 @@ One case survives outside this vocabulary: a `cmp` source missing from the plugi
 
 **`disabled` is evaluated before `missing`, `partial` and `stale`,** because all three readings are wrong on a deliberately switched-off setup. Five setups disable by parking the anchor file itself — `superreview-setup disable` renames `SKILL.md` away, so checking presence first would report `missing` ("never installed") for something the user turned off on purpose. `think-short-setup disable` renames its prompt file away, so the roster secondary legitimately MISSes — calling that `partial` tells you to repair something you turned off. Inversely, semble at `enabled: false` or a manager wall at `hard: false` has every file in place and byte-identical, and reporting it `installed` would hide that the mechanism is inert.
 
-All **ten** setups leave a real off-switch on disk, under two mechanisms: a **live config flag** the reader re-checks on every invocation, or **entry-file parking**, where the one filename Claude Code discovers is renamed to `<name>.disabled` with the body left byte-identical.
+All **eleven** setups leave a real off-switch on disk, under two mechanisms: a **live config flag** the reader re-checks on every invocation, or **entry-file parking**, where the one filename Claude Code discovers is renamed to `<name>.disabled` with the body left byte-identical.
 
 | Setup | Mechanism | Off-switch | Disabled when |
 |-------|-----------|-----------|---------------|
@@ -204,10 +205,11 @@ All **ten** setups leave a real off-switch on disk, under two mechanisms: a **li
 | `agent-deadline-setup` | config flag | `.claude/agent-deadline.json` (or the `~/.claude` twin) | `"enabled": false` **or the key absent** — opt-in, so a key-less config is inert |
 | `agent-router-setup` | config flag | `.claude/brewtools/agent-router.json` | `"enabled": false`. **An absent key means enabled** — opt-out, the hook defaults `enabled: true` |
 | `manager-setup` | config flag | `.claude/brewtools/manager/state.json` | `.hard` is not `true` — the wall is disarmed, not broken |
+| `agent-return-setup` | config flag | `.claude/agent-return.json` (or the `~/.claude` twin) | `"enabled": false` **or the key absent** — opt-in, so a key-less config is inert |
 | `memory-sync-setup` | entry-file parking | `.claude/skills/memory-sync/SKILL.md.disabled` | present, `SKILL.md` gone. The 3 references and every self-synced hand-edit stay |
 | `docsync-setup` | config flag | `.claude/docsync/config.json` | `"enabled": false`. **An absent key means enabled** — opt-out, for back-compat installs written before the key existed |
 
-Three rows read an absent key differently, and conflating them inverts a row: `agent-deadline` is opt-in (`cfg.enabled !== true`), so no key means OFF. `agent-router` and `docsync` are opt-out (`c.enabled !== false`), so no key means ON.
+Four rows read an absent key differently, and conflating them inverts a row: `agent-deadline` and `agent-return` are opt-in (`cfg.enabled !== true`), so no key means OFF. `agent-router` and `docsync` are opt-out (`c.enabled !== false`), so no key means ON.
 
 ### How staleness is decided
 
@@ -225,7 +227,7 @@ Per-row notes worth knowing before reading a row: `memory-sync-setup`'s version 
 
 ### The version-comparison heredoc
 
-Every stamp read in the table above comes from one heredoc — `plugin|path|expected-owner` — seventeen lines covering the roster's ten rows:
+Every stamp read in the table above comes from one heredoc — `plugin|path|expected-owner` — twenty-one lines covering the roster's eleven rows:
 
 ```
 brewcode|.claude/teams/*/team.md|brewcode:teams-setup
@@ -242,12 +244,16 @@ brewtools|.claude/hooks/agent-router.mjs|brewtools:agent-router-setup
 brewtools|.claude/brewtools/agent-router.json|brewtools:agent-router-setup
 brewtools|.claude/brewtools/manager/state.json|brewtools:manager-setup
 brewtools|.claude/brewtools/manager/hardmode-guard.mjs|brewtools:manager-setup
+brewtools|.claude/hooks/agent-return-guard.mjs|brewtools:agent-return-setup
+brewtools|~/.claude/hooks/agent-return-guard.mjs|brewtools:agent-return-setup
+brewtools|.claude/agent-return.json|brewtools:agent-return-setup
+brewtools|~/.claude/agent-return.json|brewtools:agent-return-setup
 brewdoc|.claude/skills/memory-sync/SKILL.md|brewdoc:memory-sync-setup
 brewdoc|.claude/docsync/config.json|brewdoc:docsync-setup
 brewdoc|.claude/hooks/docsync-track.mjs|brewdoc:docsync-setup
 ```
 
-Seventeen lines over ten rows, because several rows contribute more than one carrier: `think-short-setup` and `agent-router-setup` two each (project scope plus global, or hook plus config), `agent-deadline-setup` four (guard and config, project and global scope), `manager-setup` two (`state.json` primary, the copied guard as a documented fallback). Two assertions guard the set against silent drift, both a hard `exit 1` rather than a warning: `TOTAL` must equal 17 — a line deleted anywhere aborts the run, even in a plugin group this pass is not scanning — and `SEEN` must equal the group's own `WANT` (brewcode 3, brewtools 11, brewdoc 3).
+Twenty-one lines over eleven rows, because several rows contribute more than one carrier: `think-short-setup` and `agent-router-setup` two each (project scope plus global, or hook plus config), `agent-deadline-setup` and [`agent-return-setup`](/brewtools/skills/agent-return-setup/) four each (guard and config, project and global scope), `manager-setup` two (`state.json` primary, the copied guard as a documented fallback). Two assertions guard the set against silent drift, both a hard `exit 1` rather than a warning: `TOTAL` must equal 21 — a line deleted anywhere aborts the run, even in a plugin group this pass is not scanning — and `SEEN` must equal the group's own `WANT` (brewcode 3, brewtools 15, brewdoc 3).
 
 Reading a stamp also compares its `generated_by` against the line's expected owner. A different name reports `OWNER-WRONG` — some other setup wrote this path — and a real `version` with no `generated_by` beside it reports `OWNER-NONE`, treated as `stale (legacy stamp)`.
 
@@ -282,7 +288,7 @@ Every fact the skill knows lives in ONE table in its `SKILL.md`. Adding a future
     Full plugin overview — all skills, agents, and hooks in one place.
   </Card>
   <Card title="semble-setup" icon="search" href="/brewcode/skills/semble-setup/">
-    One of the ten rows: its five hooks and rule are `cmp`d verbatim against the plugin assets.
+    One of the eleven rows: its five hooks and rule are `cmp`d verbatim against the plugin assets.
   </Card>
   <Card title="superreview-setup" icon="check" href="/brewcode/skills/superreview-setup/">
     Another row: staleness comes from its `.template-baseline/` diff, so your tailoring never counts as drift.

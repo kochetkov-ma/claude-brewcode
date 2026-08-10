@@ -42,14 +42,14 @@ Agent Creator sizes the task before starting. One bounded unit = one deliverable
 
 ## Guardrails in every generated agent
 
-Two blocks land in the body of every agent Agent Creator writes. They are part of the output contract, not advice.
+Two blocks land in the body of every agent Agent Creator writes. They are part of the output contract, not advice. One of them is also called Return Contract — a separate thing from Agent Creator's own return contract described later on this page: this one is what a generated agent hands back, that one is what Agent Creator itself hands back.
 
 | Guardrail | Applies to | What it says |
 |-----------|-----------|--------------|
-| **Output Discipline** | Every generated agent, unconditionally | Before returning, spend one step on what the MAIN SESSION actually needs, and return only that: verdict / result + `file:line` pointers. Bulk material — long logs, full diffs, dumps, long reports — goes into a file under `.claude/reports/<YYYYMMDD-HHMMSS>_<name>/`, and only the PATH comes back. Agents that dump everything burn the main session's context. |
+| **Return Contract** | Every generated agent, unconditionally | Verdict first, `<=30 lines`, `path:line`. !=bodies/output/log/preamble. Unconditional — spend one step on what the MAIN SESSION needs and return only that. Bulk material — long logs, full diffs, dumps, long reports — goes into a file under `.claude/reports/<YYYYMMDD-HHMMSS>_<name>/`, and only the PATH comes back. Agents that dump everything burn the main session's context. If the agent-return guard is installed, a return over ~1000 est-tokens (chars/4) is blocked for compression; over `<=2500` it must file the detail and answer with path + verdict + `<=3 lines`. |
 | **Scope Fit** | Only agents whose domain writes code, scripts, SQL, schemas, infra or config | Build for the actual scale and the problems that exist today, not imagined load or speculative abstraction — a 10-user app does not need hardening against DB lock contention. After finishing, one pass: can this be simpler — fewer files, less config, less indirection? |
 
-Scope Fit is dropped for research, docs, and review-only agents; Output Discipline never is. Both are validation-checklist items, so an agent missing the Output Discipline block does not pass. Agent Creator applies Output Discipline to itself: its report is agent paths plus a frontmatter / validation verdict, never the full agent bodies.
+Scope Fit is dropped for research, docs, and review-only agents; Return Contract never is. Both are validation-checklist items, so an agent missing the Return Contract block does not pass. Agent Creator applies Return Contract to itself: its report is agent paths plus a frontmatter / validation verdict, never the full agent bodies.
 
 ## When to use
 
@@ -104,7 +104,7 @@ Scope Fit is dropped for research, docs, and review-only agents; Output Discipli
   <li>
     <div>
       <strong>Validate</strong>
-      <p>Checks name format (<code>[a-z0-9-]+</code>), description keyword density, tool minimality (least privilege), no duplicated CLAUDE.md rules in body, unique name in scope, the <code>Output Discipline</code> block present, and <code>Scope Fit</code> present exactly when the agent writes code.</p>
+      <p>Checks name format (<code>[a-z0-9-]+</code>), description keyword density, tool minimality (least privilege), no duplicated CLAUDE.md rules in body, unique name in scope, the <code>Return Contract</code> block present, and <code>Scope Fit</code> present exactly when the agent writes code.</p>
     </div>
   </li>
   <li>
@@ -220,6 +220,12 @@ Calibrated against real subagent transcripts (`.claude/projects/*/subagents/agen
 | `SendMessage` | Resume a stopped subagent with context intact |
 
 </details>
+
+## Return Contract
+
+Verdict first, `<=30 lines`, `path:line`. No agent bodies, no pasted frontmatter, no analysis transcripts, no preamble. Per generated agent: file path, one-line role, <code>model</code>/<code>maxTurns</code>/<code>tools</code> on one line, validation verdict (pass, or the failing checklist item), text-optimizer run or skipped, and any assumption made about the brief. Longer material — analysis notes, generated bodies, full validation runs — goes to <code>.claude/reports/&lt;YYYYMMDD-HHMMSS&gt;_agent-creator/</code>; only the path comes back.
+
+This is the same discipline Agent Creator bakes into every generated agent — see the Return Contract row in the Guardrails table above, a separate contract from this one. [`/brewtools:agent-return-setup`](/brewtools/skills/agent-return-setup/) enforces this at ~1000 / ~2500 est-tokens when installed; the contract itself ships unconditionally.
 
 <CardGrid>
   <Card title="Skill Creator" icon="puzzle" href="/brewcode/agents/skill-creator/">

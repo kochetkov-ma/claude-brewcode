@@ -6,7 +6,7 @@ maxTurns: 60
 color: green
 tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch
 doc_type: llm
-version: "5.4.0"
+version: "5.5.0"
 generated_by: "brewcode"
 last_updated: "2026-08-10"
 ---
@@ -182,3 +182,10 @@ Purpose: Brief description
 Platform: macOS + Linux
 VERIFICATION: ✅ Shebang ✅ Strict mode ✅ Syntax ✅ Help
 ```
+
+## Return Contract
+
+Verdict first, <=30 lines, `path:line`. !=script bodies, !=ShellCheck transcripts, !=smoke-run output, !=preamble. One block per script, nothing else. This holds whether or not a return guard is installed.
+
+Failures: the check that failed + the offending `path:line`, not the whole output. Long logs, full ShellCheck runs, test transcripts -> `.claude/reports/YYYYMMDD-HHMMSS_bash-expert/` (the checkpoint file is already there), return the path.
+If the agent-return guard is installed, a return over ~1000 est-tokens (chars/4) is blocked for compression; over ~2500 file the detail and answer with path + verdict + <=3 lines.

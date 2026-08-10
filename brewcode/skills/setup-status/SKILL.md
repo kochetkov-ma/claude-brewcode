@@ -118,6 +118,7 @@ ONE row. Nothing else in this file, and no script, encodes the roster.
 | 8 | `/brewtools:manager-setup` | brewtools | `.claude/brewtools/manager/state.json` | `.claude/brewtools/manager/hardmode-guard.mjs`, a `hardmode-guard.mjs` PreToolUse entry in `.claude/settings.local.json` | top-level `"version"` in the RAW `state.json` — read the file, never `resolveState`'s merged view, or a defaulted key would let an old state file inherit the current version and hide the staleness. Stamped by `writeState()` in `$BT/hooks/lib/manager-state.mjs`, which resolves the version from `brewtools/.claude-plugin/plugin.json` and falls back to that module's OWN baked `brewcode-meta` line (`pluginVersion()`, `:69-81`), never a literal. `DEFAULT_STATE` deliberately carries no version — it is the answer to "no state file exists", and a version there would be a fake stamp; a project with no state file therefore resolves with no version key at all, which is the `missing` signal, not a version. Second precedence, only when the key is absent: the `// brewcode-meta:` line of the copied `hardmode-guard.mjs`. **The precedence holds because the primary carrier now MOVES:** `upgrade` calls `writeState('project', {}, cwd)` with an EMPTY partial, and `writeState` (`manager-state.mjs:222-253`) stamps `version`/`generated_by`/`last_updated` on every write while `hard`, `level`, `mode` and every unknown key merge through from the existing file. Reading the guard's meta line first would answer a question the state file already answers more precisely. **A second, rarer way the key goes absent, and the reason the fallback is load-bearing rather than historical:** when `pluginVersion()` cannot resolve, `writeState` DELETES `version` rather than stamping `unknown` (`:242-252`) — including a `version` inherited from the older file it is merging over. So an absent key on a freshly written state file is a resolver failure on a current install, NOT a legacy one; the guard's line beneath it is the answer, and re-running `enable`/`disable`/`upgrade` will not put it back. `references/artifact-metadata.md` records why this one writer omits instead of aborting | the copied guard vs `$BT/hooks/hardmode-guard.mjs` — `install` AND `upgrade` both overwrite it every run, so `DIFFERS` means exactly "neither was re-run since the plugin update", and `upgrade` clears it together with the stamp |
 | 9 | `/brewdoc:memory-sync-setup` | brewdoc | `.claude/skills/memory-sync/SKILL.md` | `references/memory-guide.md`, `references/agent-audit.md`, `references/hard-sync.md` under it | frontmatter `version:` of the emitted `SKILL.md` (quoted), carrying the **brewdoc plugin version** that `generate.sh` resolves by script self-location from `brewdoc/.claude-plugin/plugin.json`. Empty `version:` + a last line starting `<!-- memory-sync template v` = a **legacy stamp**; empty with no tail stamp = **unstamped**. `generate.sh` still has a `VERSION=` variable and it is what writes the stamp — but it is now `VERSION=$(resolve_plugin_version)`, reading `brewdoc/.claude-plugin/plugin.json`. What was retired is the hardcoded per-template counter (`VERSION=1.0.0`), not the variable; a literal there would be the defect. A skill-specific `surface_files:` key TRAILS the four standard ones; ignore it | **the anchor is generated and has no `cmp` partner; TWO of the three references have one and `hard-sync.md` does NOT.** `generate.sh:398` `cp`s all three verbatim (`EMITTED_REFS`, `:38`) and they are mechanism-`a` byte copies stamped at release with a line-1 HTML-comment `brewcode-meta:`, so exactly two pair up: `.claude/skills/memory-sync/references/memory-guide.md` and `agent-audit.md` vs `$BD/skills/memory-sync-setup/references/<same name>`. `DIFFERS` there = a SELF-SYNC hand-edit or references never re-copied after the plugin update. **`hard-sync.md` is byte-copied but never byte-STABLE — carved out of the `cmp` set and out of the `STAMPS` heredoc alike**; see the carve-out note below. For a deeper diff of the generated anchor, OFFER (never run) `generate.sh status`, see below |
 | 10 | `/brewdoc:docsync-setup` | brewdoc | `.claude/docsync/config.json` | `.claude/docsync/state.json`, `.claude/hooks/docsync-track.mjs`, `docsync-watch.mjs`, `docsync-gate.mjs`, `docsync` in `.claude/settings.json` | top-level `"version"` of `.claude/docsync/config.json`, substituted at install from the brewdoc `plugin.json` the skill resolves — the install writes the JSON trio (`version`, `generated_by`, `last_updated`) alongside `threshold_days` and `exclude`; `upgrade` refreshes all three provenance keys — `version`, `generated_by` AND `last_updated` — and leaves `threshold_days`/`exclude` verbatim. **`config.json` present but carrying no `version` key = a pre-standard install = `stale (legacy, unstamped)`**, never `missing`. Corroborating only: the `// brewcode-meta:` line of `.claude/hooks/docsync-track.mjs` (baked at release), which catches a hook set that was never re-copied. `state.json` is runtime state and never carries a stamp | the 3 hooks vs `$BD/skills/docsync-setup/assets/` |
+| 11 | `/brewtools:agent-return-setup` | brewtools | `.claude/hooks/agent-return-guard.mjs` (or the `~/.claude` twin) | `agent-return-contract.mjs` and `agent-return-budget.mjs` beside it, `.claude/agent-return.json`, `agent-return` in `settings.json` | the `// brewcode-meta:` line of `agent-return-guard.mjs` (baked at release) is the headline. `.claude/agent-return.json` carries the JSON trio (`version`, `generated_by`, `last_updated`) written by every mode that touches it (`install`, `upgrade`, `enable`, `disable` — `INSTALL.md:208`, `:536`), so it is the only stamp that moves on an `enable`/`disable`. **Only TWO of the three `.mjs` are ever registered** — `agent-return-budget.mjs` is a shared module imported by both hooks, so it is a file-presence check and must NEVER appear in `settings.json`; a settings ref to it is a defect. `1/3` or `2/3` hook files is `partial`, not `stale`: ESM resolution precedes evaluation, so a missing sibling makes BOTH hooks exit 1 with a hook-error banner on every subagent spawn and return. **Remedy check:** `upgrade` (`INSTALL.md:455-486`) reads `passTokens`/`fileTokens` back out of the config and replays the install for that scope — all three files re-copied, both settings entries re-merged, the JSON trio re-stamped; a disabled setup stays disabled | all THREE `.mjs` vs `$BT/skills/agent-return-setup/assets/` |
 
 `$BC` / `$BT` / `$BD` = the resolved plugin roots from Phase 0.
 
@@ -302,20 +303,21 @@ well-formed or attached to the right event:
 ```bash
 for f in .claude/settings.json .claude/settings.local.json; do
   [ -f "$f" ] || { echo "$f absent"; continue; }
-  for k in think-short agent-deadline agent-router hardmode-guard docsync; do
+  for k in think-short agent-deadline agent-return agent-router hardmode-guard docsync; do
     echo "$f $k=$({ grep -c "$k" "$f" 2>/dev/null || true; } | tr -d ' ')"
   done
 done
 echo "OK"
 ```
 
-Global-scope twins for rows 5 and 6 (`think-short-setup` and `agent-deadline-setup` install to
-project **or** `~/.claude`) — read-only, never written:
+Global-scope twins for rows 5, 6 and 11 (`think-short-setup`, `agent-deadline-setup` and
+`agent-return-setup` install to project **or** `~/.claude`) — read-only, never written:
 
 **EXECUTE** using Bash tool:
 
 ```bash
-for f in "$HOME/.claude/hooks/think-short-session.mjs" "$HOME/.claude/hooks/agent-deadline-guard.mjs" "$HOME/.claude/agent-deadline.json"; do
+for f in "$HOME/.claude/hooks/think-short-session.mjs" "$HOME/.claude/hooks/agent-deadline-guard.mjs" "$HOME/.claude/agent-deadline.json" \
+         "$HOME/.claude/hooks/agent-return-guard.mjs" "$HOME/.claude/hooks/agent-return-contract.mjs" "$HOME/.claude/hooks/agent-return-budget.mjs" "$HOME/.claude/agent-return.json"; do
   [ -f "$f" ] && echo "FILE $f" || echo "MISS $f"
 done
 echo "OK"
@@ -323,7 +325,7 @@ echo "OK"
 
 ### Phase 1b — Disable switches
 
-`disable` is a canonical verb on **all ten** setups, and a deliberately disabled setup is neither
+`disable` is a canonical verb on **all eleven** setups, and a deliberately disabled setup is neither
 broken nor stale. Every row therefore leaves a probeable off-switch, in one of two mechanisms:
 
 | Mechanism | What `disable` does | Why it is probeable |
@@ -343,6 +345,7 @@ broken nor stale. Every row therefore leaves a probeable off-switch, in one of t
 | 8 | manager wall | config flag | `.claude/brewtools/manager/state.json` | `.hard` is not `true` — registration stays, the guard no-ops. This is the disarmed wall, not a broken one |
 | 9 | memory-sync | parking | `.claude/skills/memory-sync/SKILL.md.disabled` | present and `SKILL.md` absent. The 3 `references/` and every SELF-SYNC hand-edit stay byte-identical |
 | 10 | docsync | config flag | `.claude/docsync/config.json` | `"enabled": false`. **An ABSENT `enabled` key means ENABLED** — all three hooks read `c.enabled !== false` (`docsync-track.mjs:45`, `docsync-watch.mjs:41`, `docsync-gate.mjs:50`), so back-compat installs written before the key existed are live. Never read a missing key as off |
+| 11 | agent-return | config flag | `.claude/agent-return.json` (or the `~/.claude` twin) | `"enabled": false` **or the key absent**. The shared module gates on `CONFIG.enabled === true` (`agent-return-budget.mjs:111`), so an unparsable, absent or key-less config is INERT — the contract is never injected and the return is never sized. Same polarity as row 6, the INVERSE of rows 7 and 10. Project config wins; a MALFORMED project config is skipped and the GLOBAL one takes over, so read both scopes before deciding |
 
 > **An absent `enabled` key does NOT mean the same thing on every row — read the writer, never the
 > key name.** Two opposite defaults ship side by side, and conflating them inverts a whole row:
@@ -352,8 +355,9 @@ broken nor stale. Every row therefore leaves a probeable off-switch, in one of t
 > | 6 agent-deadline | `cfg.enabled !== true` -> return (`agent-deadline-guard.mjs:354`) | **INERT** | a key-less config is `disabled`, never `installed` — reporting it live claims a deadline is enforced when none is |
 > | 7 agent-router | default `enabled: true`, flipped only on `raw.enabled === false` (`agent-router.mjs:117`, `:228`, `:535`) | **ENABLED** | a key-less config is live; reporting it off would tell the user to `enable` an already-armed hook |
 > | 10 docsync | `c.enabled !== false` in all three hooks (`docsync-track.mjs:45`, `docsync-watch.mjs:41`, `docsync-gate.mjs:50`) | **ENABLED** | same as row 7 — back-compat installs predating the key are live |
+> | 11 agent-return | `CONFIG.enabled === true` -> on, anything else off (`agent-return-budget.mjs:111`) | **INERT** | same as row 6 — a key-less config is `disabled`, and reporting it live claims a return budget that is never applied |
 >
-> Rows 7 and 10 are opt-out, row 6 is opt-in. The probe below therefore emits a THIRD token,
+> Rows 7 and 10 are opt-out, rows 6 and 11 are opt-in. The probe below therefore emits a THIRD token,
 > `no-key`, instead of guessing — and Phase 3 rule 2 maps it per row, not globally.
 
 **EXECUTE** using Bash tool — config flags. Every arm prints a line: a row that produces no output at
@@ -366,6 +370,11 @@ for d in "$PWD/.claude" "$HOME/.claude"; do
     e=$({ tr -d ' \n' < "$j" | grep -o '"enabled":[a-z]*' || true; } | head -1)
     echo "agent-deadline $j: ${e:-no-key} (absent/no-key = INERT)"
   else echo "agent-deadline ABSENT $j"; fi
+  r="$d/agent-return.json"
+  if [ -f "$r" ]; then
+    e=$({ tr -d ' \n' < "$r" | grep -o '"enabled":[a-z]*' || true; } | head -1)
+    echo "agent-return $r: ${e:-no-key} (absent/no-key = INERT)"
+  else echo "agent-return ABSENT $r"; fi
 done
 for f in .claude/semble/state.json .claude/brewtools/agent-router.json .claude/brewtools/manager/state.json; do
   if [ -f "$f" ]; then
@@ -382,8 +391,8 @@ else echo "docsync ABSENT $c"; fi
 echo "OK"
 ```
 
-| Row 6 output | Reading |
-|--------------|---------|
+| Rows 6 and 11 output | Reading |
+|----------------------|---------|
 | `"enabled":true` | live — fall through to the rest of Phase 3 |
 | `"enabled":false` | `disabled` |
 | `no-key` | `disabled` — the guard returns before doing anything. Say *config carries no `enabled` key, the guard treats that as off* in *found*; the fix is `enable`, not `upgrade` |
@@ -440,17 +449,17 @@ Reading the two multi-artifact rows (1 and 4), where a toggle can land halfway:
 
 ## Phase 2a — Read the version stamps (the headline)
 
-ONE generic block for all ten rows: it dispatches on file extension, so the roster's carrier column
+ONE generic block for all eleven rows: it dispatches on file extension, so the roster's carrier column
 is the only thing that decides which path goes in. Paste into `PLUGIN_ROOT` the `ROOT=` Phase 0
 printed for the plugin whose rows you are scanning and set `PLUGIN` to that plugin's name — **run it
 three times, once per plugin**, since brewcode / brewtools / brewdoc can sit at different versions.
 Nothing else changes between the three runs.
 
-**The heredoc is the complete set, enumerated — never a sample to expand.** It carries all seventeen
-carrier lines for all ten rows on every run and filters by the `PLUGIN` tag, so a row cannot be
+**The heredoc is the complete set, enumerated — never a sample to expand.** It carries all twenty-one
+carrier lines for all eleven rows on every run and filters by the `PLUGIN` tag, so a row cannot be
 silently dropped by an operator who expands two exemplars and stops. Two assertions make drift LOUD
-rather than silent: `TOTAL` must be 17 (a line deleted anywhere aborts, even in a plugin group this
-run is not scanning) and `SEEN` must equal the group's `WANT` (3 / 11 / 3). Both are `exit 1`, not a
+rather than silent: `TOTAL` must be 21 (a line deleted anywhere aborts, even in a plugin group this
+run is not scanning) and `SEEN` must equal the group's `WANT` (3 / 15 / 3). Both are `exit 1`, not a
 warning. **Adding a roster row means adding its carrier lines here AND raising both counts in the
 same edit** — that is the whole cost, and the assertion is what charges it.
 
@@ -555,19 +564,23 @@ brewtools|.claude/hooks/agent-router.mjs|brewtools:agent-router-setup
 brewtools|.claude/brewtools/agent-router.json|brewtools:agent-router-setup
 brewtools|.claude/brewtools/manager/state.json|brewtools:manager-setup
 brewtools|.claude/brewtools/manager/hardmode-guard.mjs|brewtools:manager-setup
+brewtools|.claude/hooks/agent-return-guard.mjs|brewtools:agent-return-setup
+brewtools|~/.claude/hooks/agent-return-guard.mjs|brewtools:agent-return-setup
+brewtools|.claude/agent-return.json|brewtools:agent-return-setup
+brewtools|~/.claude/agent-return.json|brewtools:agent-return-setup
 brewdoc|.claude/skills/memory-sync/SKILL.md|brewdoc:memory-sync-setup
 brewdoc|.claude/docsync/config.json|brewdoc:docsync-setup
 brewdoc|.claude/hooks/docsync-track.mjs|brewdoc:docsync-setup
 STAMPS
 case "$PLUGIN" in
   brewcode)  WANT=3 ;;
-  brewtools) WANT=11 ;;
+  brewtools) WANT=15 ;;
   brewdoc)   WANT=3 ;;
   *)         echo "ABORT: PLUGIN must be brewcode, brewtools or brewdoc (got '$PLUGIN')"; exit 1 ;;
 esac
-[ "$TOTAL" = 17 ] || { echo "ABORT: STAMPS holds $TOTAL carrier lines, the roster's ten rows need 17 - the set drifted from the roster"; exit 1; }
+[ "$TOTAL" = 21 ] || { echo "ABORT: STAMPS holds $TOTAL carrier lines, the roster's eleven rows need 21 - the set drifted from the roster"; exit 1; }
 [ "$SEEN" = "$WANT" ] || { echo "ABORT: $SEEN of $WANT $PLUGIN carrier lines reached the loop"; exit 1; }
-echo "ROWS $SEEN/$WANT for $PLUGIN (17 carrier lines over 10 roster rows)"
+echo "ROWS $SEEN/$WANT for $PLUGIN (21 carrier lines over 11 roster rows)"
 echo "OK"
 ```
 
@@ -575,16 +588,17 @@ Each heredoc line is `plugin|path|expected-owner`. The owner is the row's own `<
 the roster's Skill column with the leading `/` dropped — so it needs no new roster column and cannot
 drift from it. Leave the trailing `|owner` off a line to skip the owner check for that file.
 
-How the seventeen lines map onto the ten rows — the mapping the two assertions enforce:
+How the twenty-one lines map onto the eleven rows — the mapping the two assertions enforce:
 
 | Rows | Lines | Carriers |
 |------|-------|----------|
 | 1, 2, 3 (`PLUGIN=brewcode`, `WANT=3`) | 3 | `team.md` (glob, see below), `semble-first.md`, the EMITTED `superreview/SKILL.md` |
-| 4 (`PLUGIN=brewtools`, `WANT=11`) | 1 | `board.md` |
+| 4 (`PLUGIN=brewtools`, `WANT=15`) | 1 | `board.md` |
 | 5 | 2 | `think-short-session.mjs` in BOTH scopes |
 | 6 | 4 | `agent-deadline-guard.mjs` + `agent-deadline.json`, in BOTH scopes |
 | 7 | 2 | `agent-router.mjs` + `agent-router.json` (project-only setup, one scope) |
 | 8 | 2 | `state.json` (primary) + the copied `hardmode-guard.mjs` (documented fallback) |
+| 11 | 4 | `agent-return-guard.mjs` + `agent-return.json`, in BOTH scopes |
 | 9, 10 (`PLUGIN=brewdoc`, `WANT=3`) | 3 | the emitted `memory-sync/SKILL.md`, `docsync/config.json`, `docsync-track.mjs` |
 
 Three things the enumeration made the block responsible for, rather than the operator:
@@ -592,11 +606,11 @@ Three things the enumeration made the block responsible for, rather than the ope
 - **Row 1's glob is expanded by the block**, one verdict per team, so a repo with several teams at
   several versions prints them all. A glob that matches nothing prints one `MISSING` for the pattern.
   Never hand-resolve it — hand-resolution is how a second team goes unread.
-- **`~/` is expanded against `$HOME`** so the global-scope twins of rows 5 and 6 are real paths. Both
+- **`~/` is expanded against `$HOME`** so the global-scope twins of rows 5, 6 and 11 are real paths. Both
   scopes are always scanned and **`MISSING` on the scope that is not installed is not a finding** —
   the same rule Phase 1b states for row 5. Only the scope Phase 1 found is the answer.
-- **Rows 6, 7, 8 and 10 print two lines each, and the roster's precedence decides which is the
-  headline** — the JSON first on 6, 7 and 10; on row 8 the `state.json` first and the guard's
+- **Rows 6, 7, 8, 10 and 11 print two lines each per installed scope, and the roster's precedence
+  decides which is the headline** — the JSON first on 6, 7, 10 and 11; on row 8 the `state.json` first and the guard's
   `brewcode-meta` line only when `state.json` carries no `version` key. The second line is never a
   contradiction to reconcile; it is the fallback answering.
 
@@ -778,11 +792,12 @@ Rules 2 and 3 are the two that stop false alarms:
   wall at `hard:false` or a docsync at `enabled:false` has every file in place and must NOT be
   reported `installed`: the mechanism is inert. A `disabled` row's Command column offers `enable`,
   never `upgrade`, and it never enters the run-list.
-- **A missing `enabled` key is resolved per row, from the reader, never by a house default.** Row 6
-  (agent-deadline) is opt-in — `cfg.enabled !== true` — so `no-key` is `disabled`. Rows 7 and 10 are
-  opt-out, so a missing key is live and never reaches this rule. Applying one default to all three
-  inverts one of them, and an inverted row 6 is the worst of the two directions: it reports a
-  deadline as enforced when the guard returns on its first line.
+- **A missing `enabled` key is resolved per row, from the reader, never by a house default.** Rows 6
+  (agent-deadline) and 11 (agent-return) are opt-in — `cfg.enabled !== true` / `CONFIG.enabled === true`
+  — so `no-key` is `disabled`. Rows 7 and 10 are opt-out, so a missing key is live and never reaches
+  this rule. Applying one default to all four inverts two of them, and an inverted row 6 or 11 is the
+  worst of the two directions: it reports a deadline as enforced, or a return budget as applied, when
+  the guard returns on its first line.
 - **Anchor MISS is decisive — but a `.disabled` twin is not a MISS.** The anchor is the artifact only
   that setup writes. No anchor in EITHER spelling = not installed, whatever else the project happens
   to contain. Never call a row `partial` on the strength of a shared file (see the exclusivity note
@@ -809,7 +824,7 @@ Two facts that look like staleness and are not:
   last brewtools update — the wall still works. Report `stale`, and say that in one clause. That is
   a different finding from `hard: false`, which is rule 3's `disabled` and outranks it.
 - A hook copied under `~/.claude` while the project also has one is a **scope** answer, not a
-  conflict. Report the scope; row 5 and 6 are legitimately global.
+  conflict. Report the scope; rows 5, 6 and 11 are legitimately global.
 
 ## Phase 4 — Output
 
@@ -817,12 +832,12 @@ Print the PLAN block (Prompt contract above) first, then lead with ONE line, bef
 how many rows are behind the installed plugin:
 
 ```
-4 of 10 setups are behind the installed plugin (2 stale by version, 1 legacy stamp, 1 drifted bytes).
+4 of 11 setups are behind the installed plugin (2 stale by version, 1 legacy stamp, 1 drifted bytes).
 ```
 
 Count only rows whose stamp is not `CURRENT` plus `stale (bytes drifted)`. `missing`, `disabled` and
 `n/a` are not "behind" — they are not installed, switched off, or not applicable. If the number is 0,
-say `all 10 setups are at <the resolved plugin version>` and still print the table.
+say `all 11 setups are at <the resolved plugin version>` and still print the table.
 
 Then ONE table, rows in roster order, filtered by `$ARGUMENTS`. Answer in the language the user wrote
 in (RU or EN) — translate the prose, never the paths or the commands.
@@ -919,13 +934,13 @@ done
 echo "OK"
 ```
 
-Compare that list against the roster's 10 commands.
+Compare that list against the roster's 11 commands.
 
 | Finding | Report |
 |---------|--------|
 | A `*-setup` skill on disk that the roster does not know | `WARNING: <plugin>:<name> is installed but not in this skill's roster — its state was NOT checked. Add a row to setup-status/SKILL.md.` |
 | A roster row whose skill dir is gone from an installed plugin | `WARNING: <row> is in the roster but no longer ships in <plugin> <version> — the row may be obsolete.` |
-| Match | one line: `roster: 10/10 in sync` |
+| Match | one line: `roster: 11/11 in sync` |
 
 Print warnings **above** the table so they are not lost under it. Never edit the roster to fix a
 warning — that is the user's call, in this repo, in a separate change.
@@ -952,6 +967,8 @@ warning — that is the user's call, in this repo, in a separate change.
 | An artifact exists only as `<name>.disabled` | PARKED, never missing and never a `partial` trigger. The body is byte-identical, so read its stamp (Phase 2a retries `$f.disabled`) and report the row `disabled` at that version. |
 | `.claude/docsync/config.json` carries no `enabled` key | ENABLED. All three docsync hooks read `c.enabled !== false`, so back-compat installs written before the key existed are live. A missing key is never `disabled` and never `partial`. Same for `.claude/brewtools/agent-router.json`. |
 | `.claude/agent-deadline.json` carries no `enabled` key | **INERT — the opposite answer to docsync's.** `agent-deadline-guard.mjs:354` reads `cfg.enabled !== true`, so a key-less (or unparsable) config makes the guard return before touching anything. Report `disabled` and offer `enable`. Never carry docsync's default across to this row. |
+| `.claude/agent-return.json` carries no `enabled` key | **INERT — same polarity as agent-deadline, the opposite of docsync.** `agent-return-budget.mjs:111` computes `ENABLED = !!CONFIG && CONFIG.enabled === true`, so an absent, key-less or unparsable config injects no contract and sizes no return. Report `disabled` and offer `enable`. A malformed PROJECT config is skipped in favour of the global one — read both scopes before calling the row off. |
+| Only 1 or 2 of row 11's three `.mjs` are present | `partial`, never `stale`. ESM resolves imports before evaluating, so a missing `agent-return-budget.mjs` makes BOTH registered hooks exit 1 with a hook-error banner on every subagent spawn and return. Offer `install` for that scope. A `settings.json` entry pointing at `agent-return-budget.mjs` is a separate defect — that file is a shared module and is never registered. |
 | Phase 2a printed `OWNER-WRONG` on a file that is otherwise `CURRENT` | `partial`. The right version and the right bytes prove nothing about who wrote the file. Name both skills in *found* and offer the OWNING setup's `install`; warn that the other generator may claim the path again. |
 | Phase 2a printed `OWNER-NONE` beside a real version | `stale (legacy stamp)` — an incomplete stamp, not a variant. §1 requires `generated_by` in every artifact and every carrier. One `upgrade` restamps it. |
 | An artifact's `last_updated` or `doc_type` differs from the plugin's | Not a finding, and not read. `last_updated` is a date and no state is defined by one; `doc_type` is user-owned and deliberately preserved across re-installs. Report neither. |

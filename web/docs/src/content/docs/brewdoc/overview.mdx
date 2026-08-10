@@ -13,7 +13,7 @@ It keeps documentation in sync with the codebase, optimizes content for LLM cons
 and exports documents to ready-made formats.
 
 <Callout type="note" title="The -setup naming rule">
-  A `-setup` suffix marks a skill that **installs a mechanism you afterwards use instead of the skill** -- project-local hooks, or a generated `/memory-sync` command. Recurring tools you run again and again keep bare names (`md-to-pdf`, `publish`, `my-claude`). Every `-setup` skill shares one canonical mode set, in this order: `status | install | upgrade | enable | disable | uninstall | purge`. No argument means `status` when it is installed and `install` when it is not. **Every** brewdoc skill -- `-setup` and bare tool alike -- is **user-invoked only**: `user-invocable: true` plus `disable-model-invocation: true`, so the model never fires any of them on its own and none of their descriptions occupy its context. That holds for all 26 skills in the suite, and it is a deliberate trade about context cost rather than an oversight -- see the [FAQ](/faq/#auto-invoke).
+  A `-setup` suffix marks a skill that **installs a mechanism you afterwards use instead of the skill** -- project-local hooks, or a generated `/memory-sync` command. Recurring tools you run again and again keep bare names (`md-to-pdf`, `publish`, `my-claude`). Every `-setup` skill shares one canonical mode set, in this order: `status | install | upgrade | enable | disable | uninstall | purge`. No argument means `status` when it is installed and `install` when it is not. **Every** brewdoc skill -- `-setup` and bare tool alike -- is **user-invoked only**: `user-invocable: true` plus `disable-model-invocation: true`, so the model never fires any of them on its own and none of their descriptions occupy its context. That holds for all 27 skills in the suite, and it is a deliberate trade about context cost rather than an oversight -- see the [FAQ](/faq/#auto-invoke).
 </Callout>
 
 ## Installation
@@ -105,7 +105,7 @@ Every artifact a brewdoc `-setup` skill installs now carries the same provenance
 | `.md` frontmatter | `doc_type` (`llm` \| `user` \| `skip`, unquoted), `version` ("X.Y.Z"), `generated_by` ("plugin:skill"), `last_updated` ("YYYY-MM-DD") | After the file's own keys. `doc_type` never appears in JSON |
 | JSON artifacts (`config.json`, etc.) | `version`, `generated_by`, `last_updated` | Same three snake_case keys at the top level, on every writing mode |
 
-`/brewcode:setup-status` reads these fields back across all ten `-setup` skills and reports a setup installed at an older plugin version as stale. `docsync-setup` is the reference implementation this canon was modelled on — see its [doc page](/brewdoc/skills/docsync-setup/) for the full mechanics.
+`/brewcode:setup-status` reads these fields back across all eleven `-setup` skills and reports a setup installed at an older plugin version as stale. `docsync-setup` is the reference implementation this canon was modelled on — see its [doc page](/brewdoc/skills/docsync-setup/) for the full mechanics.
 
 <CardGrid>
   <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">

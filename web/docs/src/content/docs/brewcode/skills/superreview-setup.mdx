@@ -338,6 +338,18 @@ Sources: T1 <label|none> / T2 <label|none> / T3 <label|none> / T4 <label|none> /
 
 The merged report's own closing `## VERDICT` section restates this as a `DRIFT:` line.
 
+Every freshly emitted `## 5. Output` section also carries a Return Contract clause — verdict
+first, &lt;=30 lines, `path:line`, no file bodies / command output / logs / preamble — the same
+shape [`/brewtools:agent-return-setup`](/brewtools/skills/agent-return-setup/) enforces at the
+token level when that guard is installed.
+
+<Callout type="warning" title="Known limitation: an existing intent-guard.md does not pick this up on its own">
+`intent-guard.md` is reused byte-untouched by contract, so a pre-existing agent never gains the new
+clause mechanically — there is no `upgrade` path that rewrites its body. `generate.sh validate` WARNs
+on a CURRENT-stamped file missing the marker and tells you to copy the three paragraphs after the
+cap line of `references/intent-guard.md.template` into the live `## 5. Output` section by hand.
+</Callout>
+
 `scripts/generate.sh` is the single writer of this file, via one shared implementation behind two
 subcommands: `emit` (what this generator runs in Phase 2) and `emit-agent` (agent only, no
 superreview skill required — what `/brewcode:teams-setup` calls). Both honor the same env overrides

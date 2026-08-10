@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 5.4.0 |
+| Version | 5.5.0 |
 | Skills | 9 |
 | Agents | 5 |
 | Hooks | 2 |
@@ -175,7 +175,7 @@ own keys, in that order. JSON artifacts carry the same three snake_case keys at 
 `doc_type`) in every writing mode. Five carriers exist: JSON keys, `.md` frontmatter, a
 `// brewcode-meta:` / `# brewcode-meta:` one-liner on line 2 of a byte-copied `.mjs`/`.sh`, a header
 table in `team.md`, and `<!-- brewcode-meta: ... -->` on line 1 of a byte-copied `.md`. Versions
-always come from `.claude-plugin/plugin.json`, never hardcoded, never `unknown`. `/brewcode:setup-status` reads these back across all ten `-setup` skills and flags any
+always come from `.claude-plugin/plugin.json`, never hardcoded, never `unknown`. `/brewcode:setup-status` reads these back across all eleven `-setup` skills and flags any
 artifact running on an older version than the installed plugin.
 
 ## Documentation

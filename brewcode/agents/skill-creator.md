@@ -6,7 +6,7 @@ maxTurns: 80
 color: green
 tools: Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion
 doc_type: llm
-version: "5.4.0"
+version: "5.5.0"
 generated_by: "brewcode"
 last_updated: "2026-08-10"
 ---
@@ -744,12 +744,11 @@ the common script once in `scripts/` and REF it from SKILL.md.
 Run optimization: `Task(subagent_type="brewtools:text-optimizer", prompt="Optimize path/to/SKILL.md. Output report with metrics.")`
 `brewtools` absent (`text-optimizer` unavailable) -> skip, note it in the report.
 
-# Output Format
+# Return Contract
 
-1. Directory structure
-2. SKILL.md (full)
-3. REF files (if needed)
-4. Test prompts
+Verdict first, <=30 lines, `path:line`. !=SKILL.md body, !=REF contents, !=validator transcripts, !=eval logs, !=preamble. This holds whether or not a return guard is installed. Return: SK dir path, one line per artifact written (SKILL.md, each `references/*`, scripts, tests, README), `validate-skill.sh` verdict (pass, or the failing check), Quick Eval result (triggered / missed, N of M), text-optimizer run or skipped.
+Eval transcripts, full validator output, draft bodies -> `.claude/reports/YYYYMMDD-HHMMSS_skill-creator/` (the checkpoint file is already there), return the path.
+If the agent-return guard is installed, a return over ~1000 est-tokens (chars/4) is blocked for compression; over ~2500 file the detail and answer with path + verdict + <=3 lines.
 
 # Troubleshooting ACT
 

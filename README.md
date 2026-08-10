@@ -10,7 +10,7 @@
 
 **Claude Code plugin suite** -- four plugins for development, documentation, text utility, and visual workflows.
 
-A regular Claude Code session hands a big task to one agent and loses sight of it. Brewcode splits work into bounded units, gives every spawn a six-field brief, and re-states the delegation rule on every prompt. Four plugins. 26 skills. 8 agents. 4 lifecycle hooks.
+A regular Claude Code session hands a big task to one agent and loses sight of it. Brewcode splits work into bounded units, gives every spawn a six-field brief, and re-states the delegation rule on every prompt. Four plugins. 27 skills. 8 agents. 4 lifecycle hooks.
 
 [**Full Documentation**](https://doc-claude.brewcode.app/getting-started/)
 
@@ -58,7 +58,7 @@ After all commands succeed, run `/reload-plugins`. If `/reload-plugins` is unava
 |--------|---------|--------|---------|
 | [brewcode](brewcode/README.md) | Infinite task execution, quorum reviews, skill/agent creation, semantic search | 9 | `claude plugin install brewcode@claude-brewcode` |
 | [brewdoc](brewdoc/README.md) | Documentation tools: docsync, memory-sync generation, PDF conversion, publishing | 5 | `claude plugin install brewdoc@claude-brewcode` |
-| [brewtools](brewtools/README.md) | Universal text utilities: token optimization, humanization, secrets scanning, plugin updates | 12 | `claude plugin install brewtools@claude-brewcode` |
+| [brewtools](brewtools/README.md) | Universal text utilities: token optimization, humanization, secrets scanning, plugin updates | 13 | `claude plugin install brewtools@claude-brewcode` |
 | [brewui](brewui/README.md) | UI/visual/creative tools (placeholder, currently empty) | 0 | `claude plugin install brewui@claude-brewcode` |
 
 ## Installation
@@ -186,9 +186,9 @@ Every spawn prompt carries six fields:
 
 ## Skills Reference
 
-> **The `-setup` suffix** marks a skill you run once to install a mechanism -- afterwards you use what it produced (a generated skill, a hook, an MCP server), not the skill itself. Recurring tools you invoke every day keep bare names. Every `-setup` skill shares one mode vocabulary: `status | install | upgrade | enable | disable | uninstall | purge`, and no argument means `status` when installed, `install` when not. The one exception is `/brewcode:semble-setup`, which always defaults to `status` so a bare invocation never triggers a machine-level package install. All ten setups implement all seven verbs, via one of two mechanisms: a live config flag re-checked each invocation (semble, agent-deadline, agent-router, manager, docsync), or entry-file parking, where the filename discovery keys on is renamed `<name>.disabled` with the body byte-identical (teams, superreview, task-board, think-short, memory-sync).
+> **The `-setup` suffix** marks a skill you run once to install a mechanism -- afterwards you use what it produced (a generated skill, a hook, an MCP server), not the skill itself. Recurring tools you invoke every day keep bare names. Every `-setup` skill shares one mode vocabulary: `status | install | upgrade | enable | disable | uninstall | purge`, and no argument means `status` when installed, `install` when not. The one exception is `/brewcode:semble-setup`, which always defaults to `status` so a bare invocation never triggers a machine-level package install. All eleven setups implement all seven verbs, via one of two mechanisms: a live config flag re-checked each invocation (semble, agent-deadline, agent-return, agent-router, manager, docsync), or entry-file parking, where the filename discovery keys on is renamed `<name>.disabled` with the body byte-identical (teams, superreview, task-board, think-short, memory-sync).
 
-> **All 26 skills are user-invoked only.** Every one carries `user-invocable: true` **and** `disable-model-invocation: true` in its frontmatter: the model never sees their descriptions and never auto-activates one. You type `/plugin:skill`, or nothing runs. This is a deliberate trade about context cost -- 26 model-visible descriptions would be a permanent tax on every request -- and these skills do not want auto-activation anyway: ten of them write real files into your repo after asking you real questions, and the rest are tools you point at a scope you choose.
+> **All 27 skills are user-invoked only.** Every one carries `user-invocable: true` **and** `disable-model-invocation: true` in its frontmatter: the model never sees their descriptions and never auto-activates one. You type `/plugin:skill`, or nothing runs. This is a deliberate trade about context cost -- 27 model-visible descriptions would be a permanent tax on every request -- and these skills do not want auto-activation anyway: eleven of them write real files into your repo after asking you real questions, and the rest are tools you point at a scope you choose.
 
 ### Brewcode (9 skills)
 
@@ -214,7 +214,7 @@ Every spawn prompt carries six fields:
 | `/brewdoc:md-to-pdf` | Convert markdown to professional PDF |
 | `/brewdoc:publish` | Publish to brewpage.app -- returns public URL |
 
-### Brewtools (12 skills)
+### Brewtools (13 skills)
 
 | Skill | Purpose |
 |-------|---------|
@@ -222,6 +222,7 @@ Every spawn prompt carries six fields:
 | `/brewtools:text-human` | Remove AI artifacts, humanize code |
 | `/brewtools:think-short-setup` | Install/remove terse-mode hooks (SessionStart + every-10th UserPromptSubmit + subagent Task) that inject brevity directives; project or global |
 | `/brewtools:agent-deadline-setup` | Install/remove a soft wall-clock budget for subagents -- 80% warns "wrap up", 100% blocks all but finalization tools; project or global, opt-in |
+| `/brewtools:agent-return-setup` | Install/remove a size budget on every subagent's final return -- a SubagentStart hook states the budget, a SubagentStop hook sizes the return (`chars/4`) and blocks at most once, ordering a compress above `passTokens` (default 1000) or a write-to-file above `fileTokens` (default 2500); project or global, opt-in |
 | `/brewtools:agent-router-setup` | EXPERIMENTAL -- install/remove a PreToolUse hook that denies a generic subagent spawn in favor of the real project/plugin expert, or nudges when the fit is only uncertain; project scope only, opt-in |
 | `/brewtools:secrets-scan` | Scan git-tracked files for leaked secrets |
 | `/brewtools:ssh` | SSH server management -- connect, configure, deploy |

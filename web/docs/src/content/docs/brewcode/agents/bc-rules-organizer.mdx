@@ -128,6 +128,12 @@ Its frontmatter `version`, `generated_by`, and `last_updated` are rewritten at r
 
 </details>
 
+## Return Contract
+
+Verdict first, `<=30 lines`, `path:line`. No rule-file bodies, no pasted tables, no extraction notes, no preamble. Returns one row per file (path, matched <code>paths:</code>, change) plus totals: new/updated counts, rule counts, dedup skipped/merged, and whether text-optimizer ran. Dedup ledger, per-rule rationale, and source excerpts go to the same <code>.claude/reports/&lt;YYYYMMDD-HHMMSS&gt;_rules-organizer/</code> checkpoint file — only the path comes back.
+
+[`/brewtools:agent-return-setup`](/brewtools/skills/agent-return-setup/) enforces this at ~1000 / ~2500 est-tokens when installed; the contract itself ships unconditionally.
+
 <CardGrid>
   <Card title="rules skill" icon="link" href="/brewcode/skills/rules/">
     The only entry point that spawns this agent — interactive extraction and batching.

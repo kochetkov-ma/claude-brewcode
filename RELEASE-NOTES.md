@@ -2,6 +2,37 @@
 
 ---
 
+## v5.5.0 (2026-08-10)
+
+> Docs: [agent-return-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-return-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) | [teams-setup](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | [superreview-setup](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [think-short-setup](https://doc-claude.brewcode.app/brewtools/skills/think-short-setup/) | [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [bash-expert](https://doc-claude.brewcode.app/brewcode/agents/bash-expert/) | [bc-rules-organizer](https://doc-claude.brewcode.app/brewcode/agents/bc-rules-organizer/) | [text-optimizer](https://doc-claude.brewcode.app/brewtools/agents/text-optimizer/) | [ssh-admin](https://doc-claude.brewcode.app/brewtools/agents/ssh-admin/) | [deploy-admin](https://doc-claude.brewcode.app/brewtools/agents/deploy-admin/)
+
+> A subagent's last message is the only thing its caller ever reads, and nothing sized it. Agents returned whole files, whole diffs, whole transcripts — the caller paid for all of it and used three lines. This release gives the return a budget: a new opt-in setup enforces one at runtime, and every shipped agent, every generated agent and every agent template now carries a single Return Contract section that says what the last message is for.
+
+### brewtools
+
+#### Added
+
+- **`/brewtools:agent-return-setup` — a size budget on every subagent's final return.** Two registered hooks and one shared module, installed to the project or to `~/.claude`: a `SubagentStart` contract hook injects the budget as `additionalContext` before the agent starts, and a `SubagentStop` guard sizes the finished return and can send it back once. Canonical modes `status | install | upgrade | enable | disable | uninstall | purge`, plus `[pass] [file]` thresholds. Opt-in — not registered in `brewtools/hooks/hooks.json`, nothing changes until you install it
+- **Three tiers, two numbers.** Return `<= passTokens` (default 1000) passes; `passTokens < t <= fileTokens` (default 2500) comes back with an order to compress; `> fileTokens` comes back with an order to write the content to a file and return the path. Size is `chars / 4`, so it costs nothing to compute
+- **Blocked AT MOST ONCE per agent.** `stop_hook_active` is checked before anything else, so a second oversized return is allowed through rather than looped on — a budget that can deadlock an agent is worse than no budget
+- **Config `<scope>/.claude/agent-return.json`, opt-in polarity.** `ENABLED = !!CONFIG && CONFIG.enabled === true` — an absent, key-less or unparsable config injects no contract and sizes no return. Project config wins; a malformed project config falls back to the global one. Ships with a 136-case verification suite and an `INSTALL.md` runbook whose config block hard-fails on `passTokens >= fileTokens` and verifies every write by reading it back
+
+#### Changed
+
+- **`text-optimizer`, `ssh-admin` and `deploy-admin`** each replaced their own output rules with one Return Contract section: what the last message is for, what never goes in it, and where a large artifact goes instead
+- **`think-short-setup`'s family-hook stem set** gained `agent-return`, so the new hooks are recognized as family and think-short keeps rewriting the subagent prompt instead of yielding to what looks like a foreign `PreToolUse` hook
+
+### brewcode
+
+#### Changed
+
+- **`agent-creator`, `skill-creator`, `hook-creator`, `bash-expert` and `bc-rules-organizer`** carry the same Return Contract section, and `agent-creator`'s generated-agent template now emits it — every agent it writes is born with the contract
+- **`teams-setup`**: generated domain agents are born with the contract, and `verify-team.sh` WARNs on a roster member that predates it, pointing at `/brewcode:teams-setup upgrade`
+- **`superreview-setup`**: the `intent-guard` template carries the contract, and `validate_emit` warns on a pre-existing install whose `intent-guard.md` predates it
+- **`setup-status` probes the new setup as roster row 11** — three `.mjs` present (only two are ever registered; `agent-return-budget.mjs` is a shared module and a settings ref to it is a defect), both settings entries, and `agent-return.json`'s `enabled` + stamp trio, in both scopes. Every hardcoded count moved with it: 10 setups -> 11, 17 stamp carrier lines -> 21, the brewtools group 11 -> 15. `1/3` or `2/3` hook files is `partial`, not `stale` — ESM resolves imports before evaluating, so one missing sibling makes both hooks exit 1 on every spawn
+
+---
+
 ## v5.4.0 (2026-08-10)
 
 > Docs: [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [superreview-setup](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [teams-setup](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) | [task-board-setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [deploy](https://doc-claude.brewcode.app/brewtools/skills/deploy/) | [ssh](https://doc-claude.brewcode.app/brewtools/skills/ssh/) | [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/) | [docsync-setup](https://doc-claude.brewcode.app/brewdoc/skills/docsync-setup/)

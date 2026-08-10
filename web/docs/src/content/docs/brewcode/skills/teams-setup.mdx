@@ -212,12 +212,16 @@ The agent template carries two blocks, so every DOMAIN member of the team inheri
 
 | Guardrail | Applies to | What it says |
 |-----------|-----------|--------------|
-| **Output discipline** | Every team agent, unconditionally | On completion, spend one step on what the MAIN SESSION needs and return only that: verdict / result + `file:line` pointers. Bulk material — long logs, full diffs, dumps, long reports — is written under `.claude/reports/<YYYYMMDD-HHMMSS>_<name>/` and only the path is returned. Agents that dump everything burn the main session's context. |
+| **Return Contract** | Every team agent, unconditionally | A named `## Return Contract` section: verdict first, &lt;=30 lines, <code>path:line</code>, no file bodies / command output / logs / preamble. Bulk material goes to `.claude/reports/<YYYYMMDD-HHMMSS>_<name>/` and only the path returns. When [`/brewtools:agent-return-setup`](/brewtools/skills/agent-return-setup/) is installed, the same guard enforces it at the token level (~1000 est-tokens blocks for compression, ~2500 routes the detail to a report). |
 | **Scope Fit** | Only agents whose domain writes code, scripts, SQL, schemas or infra | Build for the actual scale and the problems that exist today, not imagined load or speculative abstraction — a 10-user app does not need hardening against DB lock contention. After finishing, one pass: can this be simpler — fewer files, less config, less indirection? |
 | **Etalon-first** | Same gating as Scope Fit — code/script/SQL/schema/infra domains only | Before writing a class, module or test, find the closest well-built existing one in this repo (`.claude/convention/*` checked first) and take its principles — additive to conventions, rules and docs, never a replacement |
 | **Anti-drift review** | `intent-guard` only — not built from these two blocks | Compares ASKED vs DELIVERED at review time, explicit invocation only — see [Intent guard](#intent-guard) above |
 
-`agent-creator` deletes the Scope Fit and Etalon-first pair together for research, docs, and review-only domain members; output discipline stays in all team agents, including `intent-guard`, which carries it via its own template rather than this one. This matters most on a 12-agent roster, where a single verbose member can cost more context than the rest of the batch combined.
+`agent-creator` deletes the Scope Fit and Etalon-first pair together for research, docs, and review-only domain members; the Return Contract stays in all team agents, including `intent-guard`, which carries it via its own `## Output` section rather than this one. This matters most on a 12-agent roster, where a single verbose member can cost more context than the rest of the batch combined.
+
+<Callout type="tip" title="Legacy team missing the Return Contract">
+`verify-team.sh` checks every roster agent (`intent-guard` exempt — it comes from the superreview template, not this one) for the contract's opening line (`Verdict first, <=30 lines`) and WARNs, never fails, when a pre-existing team predates it. Fix: `/brewcode:teams-setup upgrade &lt;name&gt;`, which re-adds `## Return Contract` from `references/agent-template.md`.
+</Callout>
 
 <details>
 <summary>Internals</summary>

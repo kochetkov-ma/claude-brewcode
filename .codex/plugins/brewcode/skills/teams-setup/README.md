@@ -95,6 +95,8 @@ After `$brewcode:teams-setup install my-team`:
 
 Created agents follow the **sub-agent task Acceptance Protocol** -- they self-select tasks based on domain fit, record acceptance/refusal in `trace.jsonl`, and log issues and insights as they work.
 
+Every generated domain agent is also born with a **Return Contract**: verdict first, <=30 lines, `path:line`, no file bodies, no command output, no logs, no preamble -- bulk material goes to `.codex/reports/` and only the path comes back. It holds whether or not `$brewtools:agent-return-setup` is installed; the guard only adds mechanical thresholds. `verify-team.sh` warns on an older agent that lacks the section, and `upgrade` re-adds it.
+
 They write through the project-local copy of the tracer:
 
 ```bash

@@ -79,7 +79,7 @@ Before spawning `skill-creator`, the orchestrating skill itself asks up to four 
 | Testing depth | Quick (recommended) / Standard / Deep | Drives the scope of Phase 5 E2E evaluation |
 | Review type | Simple / Quorum | Quorum available only at Standard or Deep testing depth |
 
-**Description budget:** the generated `description:` field must be ≤ 120 characters, single line, trigger keywords included. One number in both places -- the authoring rule in `SKILL.md` and the review checklist in `references/review-prompt.md` -- so a skill written to spec passes its own review. Empirical: 16 of the 26 shipped skills sit in a 97-119 character cluster.
+**Description budget:** the generated `description:` field must be ≤ 120 characters, single line, trigger keywords included. One number in both places -- the authoring rule in `SKILL.md` and the review checklist in `references/review-prompt.md` -- so a skill written to spec passes its own review. Empirical: 16 of the 27 shipped skills sit at or under 120 characters (95-118); the rest run long, up to 410.
 
 The full creation pipeline includes Phase 0 Discovery (parallel Explore agents), Phase 4 Review (Simple or 3-reviewer Quorum with DoubleCheck + fix loop), and Phase 5 E2E. This machinery is only reachable via `create` or `improve` mode.
 

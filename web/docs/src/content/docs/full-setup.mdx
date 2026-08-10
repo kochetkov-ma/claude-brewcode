@@ -1,6 +1,6 @@
 ---
 title: "Full Setup"
-description: "The ten -setup skills in recommended order: what each installs, the shared mode vocabulary, and why you run them one at a time."
+description: "The eleven -setup skills in recommended order: what each installs, the shared mode vocabulary, and why you run them one at a time."
 order: 4
 ---
 
@@ -8,8 +8,8 @@ import { Card, CardGrid, Callout, Steps, Badge } from '../../components/mdx';
 
 # Full Setup
 
-You installed the plugins. Nothing has touched your project yet — the plugins ship skills, and ten of
-those skills are **installers**. Each one analyses this repo and writes real artifacts into it:
+You installed the plugins. Nothing has touched your project yet — the plugins ship skills, and eleven
+of those skills are **installers**. Each one analyses this repo and writes real artifacts into it:
 agents, hooks, generated skills, a task board, project rules.
 
 That is the whole meaning of the `-setup` suffix. A skill ending in `-setup` installs a mechanism you
@@ -33,7 +33,7 @@ to run over and over (`/brewcode:convention`, `/brewtools:text-optimize`, `/brew
   yourself. Batching is not faster; it produces worse artifacts that you then have to `upgrade` by
   hand.
 
-  This is also why all 26 skills in the suite carry `user-invocable: true` **and**
+  This is also why all 27 skills in the suite carry `user-invocable: true` **and**
   `disable-model-invocation: true`. The model never sees their descriptions and can never reach for
   one on its own — a setup runs only when you type `/plugin:skill`.
 </Callout>
@@ -62,7 +62,7 @@ Six verdicts, and the order between them matters:
 | Verdict | Meaning |
 |---------|---------|
 | `n/a` | the plugin that owns this row is not installed. Never `missing` |
-| `disabled` | you turned it off on purpose. All ten setups leave a probeable off-switch — a live config flag or an entry-file rename — see below |
+| `disabled` | you turned it off on purpose. All eleven setups leave a probeable off-switch — a live config flag or an entry-file rename — see below |
 | `missing` | anchor and every secondary absent, in both the live and `.disabled` spelling |
 | `partial` | anchor missing but some secondary present (or the reverse), a toggle left half-applied, an unresolved `{PLUGIN_VERSION}` placeholder, or the wrong skill's `generated_by` wrote the file |
 | `stale` | all present, but a version signal disagrees, or an absence signal fires (a team without `trace-ops.sh`, a board without the `task-spec` skill), or semble's wiring signal fires. A version or byte signal takes one of four qualifiers: `(X -> Y)` — the stamp is behind or ahead of the plugin, `(legacy stamp)` — a retired stamp spelling survives, `(legacy, unstamped)` — no stamp in any carrier, `(bytes drifted)` — the stamp matches but a `cmp` pair differs. An absence signal or semble's wiring signal prints a bare `stale` and names the missing artifact in the Found column |
@@ -82,13 +82,13 @@ goes missing; calling that `partial` would send you to re-install a mechanism th
 as you configured it. Equally, a disabled row is never reported as `installed` — the files are there
 but the mechanism is inert, so the row's command column offers `enable`.
 
-All ten setups leave a probeable off-switch, under exactly two mechanisms: a **live config flag**
-(`semble`, `agent-deadline`, `agent-router`, `manager`, `docsync` — the reader re-checks the key on
-every invocation) or **entry-file parking** (`teams`, `superreview`, `task-board`, `think-short`,
-`memory-sync` — the one filename discovery keys on is renamed `<name>.disabled` and back, body
-byte-identical, nothing deleted).
+All eleven setups leave a probeable off-switch, under exactly two mechanisms: a **live config flag**
+(`semble`, `agent-deadline`, `agent-return`, `agent-router`, `manager`, `docsync` — the reader
+re-checks the key on every invocation) or **entry-file parking** (`teams`, `superreview`,
+`task-board`, `think-short`, `memory-sync` — the one filename discovery keys on is renamed
+`<name>.disabled` and back, body byte-identical, nothing deleted).
 
-## The ten setups
+## The eleven setups
 
 | Skill | Plugin | What it installs |
 |-------|--------|------------------|
@@ -98,16 +98,18 @@ byte-identical, nothing deleted).
 | [`task-board-setup`](/brewtools/skills/task-board-setup/) | brewtools | `.claude/features/board.md` and the board tree, `.claude/agents/task-tracker.md`, the `task-board` and `task-spec` skills under `.claude/skills/`, `.claude/rules/tasks.md`, `.claude/features/PROGRESS.md` |
 | [`think-short-setup`](/brewtools/skills/think-short-setup/) | brewtools | terse-mode hooks in `.claude/hooks/` (or `~/.claude/hooks/` for global scope): `think-short-session`, `think-short-prompt-counter`, `think-short-task`, `think-short-prompt.md` |
 | [`agent-deadline-setup`](/brewtools/skills/agent-deadline-setup/) | brewtools | `.claude/hooks/agent-deadline-guard.mjs` + `agent-deadline-cleanup.mjs`, budget config at `.claude/agent-deadline.json` |
+| [`agent-return-setup`](/brewtools/skills/agent-return-setup/) | brewtools | `.claude/hooks/agent-return-contract.mjs` + `agent-return-guard.mjs` + `agent-return-budget.mjs`, threshold config at `.claude/agent-return.json` |
 | [`agent-router-setup`](/brewtools/skills/agent-router-setup/) | brewtools | `.claude/hooks/agent-router.mjs`, config at `.claude/brewtools/agent-router.json` |
 | [`manager-setup`](/brewtools/skills/manager-setup/) | brewtools | the hard-wall guard `.claude/brewtools/manager/hardmode-guard.mjs`, its `state.json`, and a `PreToolUse` registration in `.claude/settings.local.json`. The `++m` / `++a` / `++rr` / `++r` codeword layer is a plugin hook and needs no install |
 | [`memory-sync-setup`](/brewdoc/skills/memory-sync-setup/) | brewdoc | a project `/memory-sync` skill at `.claude/skills/memory-sync/` with `references/memory-guide.md`, `agent-audit.md`, `hard-sync.md` |
 | [`docsync-setup`](/brewdoc/skills/docsync-setup/) | brewdoc | doc-staleness hooks `docsync-track.mjs`, `docsync-watch.mjs`, `docsync-gate.mjs` in `.claude/hooks/`, plus `.claude/docsync/config.json` and `state.json` |
 
 <Callout type="note" title="Scope">
-  All ten write into the project, not your home directory — with two deliberate exceptions.
-  `think-short-setup` and `agent-deadline-setup` accept a `global` argument that installs into
-  `~/.claude/` instead. `semble-setup` registers its MCP server at user scope and may ask to run a
-  machine-level `brew install` for `uv`, which is exactly why it never installs without being asked.
+  All eleven write into the project, not your home directory — with three deliberate exceptions.
+  `think-short-setup`, `agent-deadline-setup` and `agent-return-setup` accept a `global` argument
+  that installs into `~/.claude/` instead. `semble-setup` registers its MCP server at user scope and
+  may ask to run a machine-level `brew install` for `uv`, which is exactly why it never installs
+  without being asked.
 </Callout>
 
 ## Recommended order
@@ -191,17 +193,19 @@ earlier ones produced, so running them backwards means the later analysis sees a
     <div>
       <strong>The hook layer, in any order</strong> <Badge variant="secondary" text="cheap, opt-in" />
       <p><code>manager-setup</code>, <code>agent-router-setup</code>, <code>agent-deadline-setup</code>,
-      <code>think-short-setup</code>. These copy a hook and register it — no repo analysis, no long
-      question chain, nothing downstream depends on them. Pick the behaviours you want.
-      <code>agent-router-setup</code> is the one exception to "any order": it names the experts it
-      redirects to, so it is worth more after <code>teams-setup</code>.</p>
+      <code>agent-return-setup</code>, <code>think-short-setup</code>. These copy a hook and register
+      it — no repo analysis, no long question chain, nothing downstream depends on them. Pick the
+      behaviours you want. <code>agent-router-setup</code> is the one exception to "any order": it
+      names the experts it redirects to, so it is worth more after <code>teams-setup</code>.</p>
       <pre><code>/brewtools:manager-setup install level balanced
 /brewtools:agent-router-setup install level fast
 /brewtools:agent-deadline-setup install project 20
+/brewtools:agent-return-setup install project 1000 2500
 /brewtools:think-short-setup install project</code></pre>
       <p>Each extra argument is the decision worth making up front: the wall's strictness, the
       router's tier (<code>fast</code> is deterministic Node and free; <code>strict</code> adds an LLM
-      judge), the subagent budget in minutes, and whether terse mode is scoped to this project or to
+      judge), the subagent deadline budget in minutes, the return-size pass/file thresholds in
+      est-tokens, and whether terse mode is scoped to this project or to
       <code>&#126;/.claude</code> for every project you open.</p>
     </div>
   </li>
@@ -232,7 +236,7 @@ just reports.
   install it, say so: `/brewcode:semble-setup install`.
 </Callout>
 
-All ten implement the full seven verbs — the five setups that previously lacked `enable`/`disable`
+All eleven implement the full seven verbs — the five setups that previously lacked `enable`/`disable`
 gained them in v5.1.0. The on/off state uses the same two mechanisms described above.
 `teams-setup enable`/`disable` is a real rename of every roster member to `<name>.md.disabled`,
 documented in its own SKILL.md.
@@ -245,6 +249,7 @@ documented in its own SKILL.md.
 | `task-board-setup` | all seven, plus an optional target repo path and a free-text directive |
 | `think-short-setup` | all seven, plus `project` / `global` scope and a free-text intent |
 | `agent-deadline-setup` | all seven, plus `project` / `global` and a minutes budget |
+| `agent-return-setup` | all seven, plus `project` / `global` and a pass/file threshold pair |
 | `agent-router-setup` | all seven, plus `level fast` / `level strict` |
 | `manager-setup` | all seven, plus `level strict` / `level balanced` and `edit` |
 | `memory-sync-setup` | all seven, plus a free-text fine-tune prompt |

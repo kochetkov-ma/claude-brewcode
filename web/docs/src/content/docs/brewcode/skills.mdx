@@ -26,7 +26,7 @@ Setup skills draw their verbs from one vocabulary, in this order:
 
 A bare invocation means `status` when the mechanism is installed and `install` when it is not — with one deliberate exception: [`semble-setup`](/brewcode/skills/semble-setup/) always defaults to `status`, because its `install` reaches outside the project to run `brew install uv`.
 
-All ten `-setup` skills implement all seven verbs, via one of two mechanisms: a live config flag the reader re-checks on every invocation, or entry-file parking, where the filename discovery keys on is renamed `<name>.disabled` with the body left byte-identical. [`teams-setup`](/brewcode/skills/teams-setup/) uses parking: `enable`/`disable` move each roster member's agent file between `<agent>.md` and `<agent>.md.disabled`. Skill-specific extras come after the canonical set, never in place of it: `reindex`, `optimize` and `resume` on `semble-setup`.
+All eleven `-setup` skills implement all seven verbs, via one of two mechanisms: a live config flag the reader re-checks on every invocation, or entry-file parking, where the filename discovery keys on is renamed `<name>.disabled` with the body left byte-identical. [`teams-setup`](/brewcode/skills/teams-setup/) uses parking: `enable`/`disable` move each roster member's agent file between `<agent>.md` and `<agent>.md.disabled`. Skill-specific extras come after the canonical set, never in place of it: `reindex`, `optimize` and `resume` on `semble-setup`.
 
 ## Summary table
 

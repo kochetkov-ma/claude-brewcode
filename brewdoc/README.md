@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 5.4.0 |
+| Version | 5.5.0 |
 | Skills | 5 |
 | Agents | 0 |
 | Hooks | 0 |
@@ -81,7 +81,7 @@ claude --plugin-dir ./brewdoc
 
 > **Canonical modes.** Setup skills answer the same verbs, in this order: `status | install | upgrade | enable | disable | uninstall | purge`. No argument = `status` if installed, `install` if not. Extras (`sync`, `reread`, `frontmatter`, a fine-tune prompt) come *after* the canonical verb. The v4 aliases `init`, `on`, `off`, `setup`, `remove` and `reset` are gone -- v5.0.0 is a deliberate breaking change with no back-compat. Both brewdoc setup skills implement `enable`/`disable` -- `docsync-setup` flips the `enabled` key in `.claude/docsync/config.json`, `memory-sync-setup` renames `SKILL.md` <-> `SKILL.md.disabled` -- and both implement `purge`; the Arguments column below is authoritative.
 
-> Every brewdoc skill is `user-invocable: true` **and** `disable-model-invocation: true` -- and so is every one of the 26 skills across the suite. Claude never sees their descriptions and never fires one on its own; you type the command. That is a deliberate trade: 26 model-visible descriptions would cost tokens in every request forever, and none of these skills wants to be auto-triggered. Run [`/brewcode:setup-status`](../brewcode/skills/setup-status/README.md) to see what is installed, stale, disabled or missing across every plugin.
+> Every brewdoc skill is `user-invocable: true` **and** `disable-model-invocation: true` -- and so is every one of the 27 skills across the suite. Claude never sees their descriptions and never fires one on its own; you type the command. That is a deliberate trade: 27 model-visible descriptions would cost tokens in every request forever, and none of these skills wants to be auto-triggered. Run [`/brewcode:setup-status`](../brewcode/skills/setup-status/README.md) to see what is installed, stale, disabled or missing across every plugin.
 
 | Skill | Purpose | Model | Arguments |
 |-------|---------|-------|-----------|

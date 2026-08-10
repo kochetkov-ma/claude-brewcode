@@ -934,6 +934,14 @@ EOF
       grep -nF "$IG_SEED_MARK" "$IG_PATH" || true
       echo "   INTENT_GUARD: UNTAILORED $IG_PATH ($_ig_seeded seeded block(s)) — run SKILL.md Phase 3 and replace each block + its marker"
     fi
+    # (c4) RETURN CONTRACT. The `## 5. Output` rule every freshly emitted intent-guard is born with. An
+    # install predating it keeps a CURRENT stamp and `upgrade` REUSEs it byte-untouched by contract, so the
+    # clause can only arrive by hand — WARN with the source line, never fail an otherwise working agent.
+    if ! grep -qF 'Verdict first, <=30 lines' "$IG_PATH"; then
+      echo "⚠️ $IG_PATH has no return-length rule in '## 5. Output' (agent predates it)."
+      echo "   Fix: copy the three paragraphs after the cap line of references/intent-guard.md.template into"
+      echo "   the live '## 5. Output' section — the body is byte-untouchable, so no script writes it for you"
+    fi
   elif [ "$_ig_state" = "FOREIGN" ]; then
     echo "ℹ️ $IG_PATH carries no template stamp of any generation — treated as the project's own hand-written agent, not checked against the template"
   fi

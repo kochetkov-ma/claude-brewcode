@@ -176,6 +176,14 @@ if [ -f "$TEAM_DIR/team.md" ]; then
             2) echo "OK (no artifact metadata -- agent predates the standard; /brewcode:teams-setup upgrade restamps it)" ;;
             *) echo "FAIL"; printf '%s\n' "$meta_out"; FAIL=1 ;;
           esac
+          # Return Contract body gate: the section every generated domain agent is born with.
+          # Absent = the agent predates it -> WARN + the upgrade fix, never fail an old roster.
+          # intent-guard is exempt: one writer (superreview emit-agent), own verdict-first ## Output.
+          if [ "$agent" != "intent-guard" ] \
+             && ! grep -qF 'Verdict first, <=30 lines' ".claude/agents/${agent}.md"; then
+            echo "  WARN: no Return Contract section (agent predates it). Fix: /brewcode:teams-setup upgrade,"
+            echo "        which re-adds '## Return Contract' from references/agent-template.md"
+          fi
         elif [ -f ".claude/agents/${agent}.md.disabled" ]; then
           # Parked by `disable`: the body is intact, only the .md extension that
           # Claude Code discovers on is withheld. A reversible state, not a defect.

@@ -234,7 +234,7 @@ If "Mixed" -- ask model per agent in C3. Store as `DEFAULT_MODEL` (default: opus
 ### C3: Agent Creation (agent-creator x N)
 
 1. Read `${CLAUDE_SKILL_DIR}/references/agent-template.md`
-2. For each agent, spawn `Task(subagent_type="brewcode:agent-creator")` — ONE agent file per spawn, never "create the whole team" in one task. Prompt carries GOAL (this roster is being built for {TEAM_NAME}; siblings own the other domains), ROLE (owns `.claude/agents/{name}.md` only), SCOPE (that file; out of bounds: other agents, team.md, project source), CONTEXT (mission + domain + project analysis from C1 are settled; model={DEFAULT_MODEL or per-agent} chosen in C2; the 3-4 sibling agent-creators in this batch own {COLLEAGUE_NAMES} — stay off their domains and do not duplicate their triggers), CONSUMER (C4 writes `.claude/teams/{TEAM_NAME}/team.md` from your path + description line, C5 quorum-reviews the file, and colleagues re-delegate to it by domain via the Task Acceptance Protocol), DONE (file written, `description` <= 100 chars (optimal ~80), single line, role + 2-3 triggers, no `<example>` blocks; report path + description line).
+2. For each agent, spawn `Task(subagent_type="brewcode:agent-creator")` — ONE agent file per spawn, never "create the whole team" in one task. Prompt carries GOAL (this roster is being built for {TEAM_NAME}; siblings own the other domains), ROLE (owns `.claude/agents/{name}.md` only), SCOPE (that file; out of bounds: other agents, team.md, project source), CONTEXT (mission + domain + project analysis from C1 are settled; model={DEFAULT_MODEL or per-agent} chosen in C2; the 3-4 sibling agent-creators in this batch own {COLLEAGUE_NAMES} — stay off their domains and do not duplicate their triggers), CONSUMER (C4 writes `.claude/teams/{TEAM_NAME}/team.md` from your path + description line, C5 quorum-reviews the file, and colleagues re-delegate to it by domain via the Task Acceptance Protocol), DONE (file written, `description` <= 100 chars (optimal ~80), single line, role + 2-3 triggers, no `<example>` blocks; the body carries the template's `## Return Contract` section — first clause and threshold sentence VERBATIM, only the middle paragraph adapted to the domain, `{AGENT_NAME}` substituted — and carries NO second output/reporting rule anywhere; report path + description line).
 
    Every spawn prompt MUST also carry the template path and the four metadata lines, resolved — the
    subagent cannot see Phase 1's output, so **replace `{PLUGIN_VERSION}` and `{LAST_UPDATED}` below with
@@ -429,7 +429,7 @@ project's reviewer agent from `.claude/agents/`, else `general-purpose`.
 
 | # | Focus |
 |---|-------|
-| 1 | Instruction quality: clarity, imperative form, completeness, word budget |
+| 1 | Instruction quality: clarity, imperative form, completeness, word budget, and **exactly one** `## Return Contract` — first clause `Verdict first, <=30 lines, \`path:line\`. !=bodies/output/log/preamble.` intact, threshold sentence intact, no competing output/reporting rule elsewhere in the file |
 | 2 | Domain accuracy: correct scope, tool selection, model fit, description triggers |
 | 3 | Architecture: consistency across agents, no domain overlaps, proper Task Acceptance Protocol |
 
@@ -624,6 +624,10 @@ treat their absence as an error.
 
 Each agent file you regenerate or tune gets its `version` / `last_updated` frontmatter keys refreshed
 to the same values; `generated_by` stays `brewcode:teams-setup`. `intent-guard.md` is byte-untouchable.
+
+Every agent file you touch here also ends up with the template's `## Return Contract` section and no
+second output/reporting rule — add it if `verify-team.sh` warned it is missing, replacing whatever
+older output guidance the agent carried. Untouched agents keep their bodies; the warning is the record.
 
 Set cursor:
 ```bash

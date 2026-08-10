@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=5.4.0 generated_by=brewtools:agent-deadline-setup
+// brewcode-meta: version=5.5.0 generated_by=brewtools:agent-deadline-setup
 /**
  * agent-deadline — PreToolUse hook (self-contained, Node built-ins only).
  *

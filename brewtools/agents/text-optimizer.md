@@ -7,7 +7,7 @@ color: magenta
 tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch, AskUserQuestion
 skills: brewtools:text-optimize
 doc_type: llm
-version: "5.4.0"
+version: "5.5.0"
 generated_by: "brewtools"
 last_updated: "2026-08-10"
 ---
@@ -119,13 +119,11 @@ Build numbered atomic-fact inventory -> flag repeats (exact, reworded, cross-for
 
 > A.1 fused / A.3 paraphrased facts count as kept/merged. A.4 elisions labeled `elided-known` — count as loss against the 95% gate. A.2 drops are ledgered but gate-neutral: if a drop degrades a fact's meaning, label that fact `distorted`.
 
-### Step 6: Report
+## Return Contract
 
-Output: `## Optimization Report: [filename]` with:
-- Metrics table: Lines/Chars/Words/~Tokens — before, after, change%, compression ratio
-- Semantic match % (standard/deep/max)
-- Transformations applied (rule IDs)
-- Issues fixed
-- Verification result (pass/fail, any losses)
-- Dedup summary: N merged (ledger), N emphasis repeats capped
-- Loss ledger (deep/max): every A.2/A.4 drop (dropped -> reason)
+Verdict first, <=30 lines, `path:line`. !=optimized text, !=before/after excerpts, !=full ledgers, !=preamble — an optimizer that pastes back what it just compressed cancels its own saving. This holds whether or not a return guard is installed.
+
+One line per file: `path` — lines/chars/words/~tokens before → after, change %, ratio | semantic match % | rule IDs applied | verification pass/fail | dedup N merged, N emphasis capped. A failed gate returns the match % and the lost facts, !=the inventory.
+
+Dedup ledger, loss ledger (every A.2/A.4 drop → reason), fact inventories, and any run over ~3 files -> `.claude/reports/YYYYMMDD-HHMMSS_text-optimize/report.md` (the checkpoint file is already there); return that path plus the headline numbers.
+If the agent-return guard is installed, a return over ~1000 est-tokens (chars/4) is blocked for compression; over ~2500 file the detail and answer with path + verdict + <=3 lines.

@@ -23,7 +23,7 @@ capability. There is no `--run`, no `--fix`, no auto mode.
 
 ## What it covers
 
-Ten setups. Everything else in the suite (`text-optimize`, `secrets-scan`, `agents`, `rules`,
+Eleven setups. Everything else in the suite (`text-optimize`, `secrets-scan`, `agents`, `rules`,
 `md-to-pdf`, …) is a recurring tool with no installed state and never appears in the report.
 
 | Setup | Anchor it looks for | Where its version stamp lives |
@@ -38,6 +38,7 @@ Ten setups. Everything else in the suite (`text-optimize`, `secrets-scan`, `agen
 | `/brewtools:manager-setup` | `.claude/brewtools/manager/state.json` | top-level `"version"`, falling back to the copied guard's meta line |
 | `/brewdoc:memory-sync-setup` | `.claude/skills/memory-sync/SKILL.md` | frontmatter `version:` of the emitted skill |
 | `/brewdoc:docsync-setup` | `.claude/docsync/config.json` | top-level `"version"` |
+| `/brewtools:agent-return-setup` | `.claude/hooks/agent-return-guard.mjs` (or the twin) | `// brewcode-meta:` line after the shebang, with `.claude/agent-return.json`'s `"version"` as the stamp that moves on `enable`/`disable` |
 
 ## States
 
@@ -60,7 +61,7 @@ Two signals, answering two different questions. No mtime heuristics, no guessing
 |--------|----------|-----|
 | **version stamp** (headline) | which plugin version produced what is installed here? | every artifact a setup writes carries `version` and `generated_by`, plus `last_updated` everywhere except `.mjs`/`.sh` stamps and `doc_type` in `.md` frontmatter only — never in JSON. The field contract lives in `references/artifact-metadata.md`. Carriers: YAML frontmatter for `.md`, top-level keys for `.json`, a `brewcode-meta:` comment after the shebang for `.mjs` / `.sh`, a `\| Version \|` header row for `team.md` |
 | **owner stamp** | did the setup that owns this path actually write it? | `generated_by` vs the row's own `<plugin>:<skill>`. A mismatch is `partial` and names both skills; a missing `generated_by` beside a real `version` is `stale (legacy stamp)` |
-| **`cmp` vs the plugin asset** (corroborating) | was this file actually re-copied after the plugin update? | byte equality on the copied files — semble's rule + its 5 hooks (**not** `.sembleignore`), think-short's 4, agent-deadline's 2, agent-router's 1, the manager guard, docsync's 3, **two** of memory-sync's 3 references, and `trace-ops.sh` |
+| **`cmp` vs the plugin asset** (corroborating) | was this file actually re-copied after the plugin update? | byte equality on the copied files — semble's rule + its 5 hooks (**not** `.sembleignore`), think-short's 4, agent-deadline's 2, agent-return's 3, agent-router's 1, the manager guard, docsync's 3, **two** of memory-sync's 3 references, and `trace-ops.sh` |
 
 Of the contract's four fields this skill reads exactly two. `last_updated` is not read: it is a date,
 and no state in the vocabulary below is defined by one — an old date on an old stamp is the `stale`
@@ -107,7 +108,7 @@ run-list. `teams-setup` therefore claims `.claude/teams/*/trace.jsonl` and `trac
 `superreview-setup` claims none of the shared agent. A setup with no exclusive secondary is decided
 by its anchor alone.
 
-**`disabled` is evaluated first — ahead of `missing`, `partial` and `stale`.** All ten setups leave a
+**`disabled` is evaluated first — ahead of `missing`, `partial` and `stale`.** All eleven setups leave a
 real off-switch on disk, each probed directly, in one of two mechanisms:
 
 | Setup | Mechanism | Off-switch | Disabled when |
@@ -119,6 +120,7 @@ real off-switch on disk, each probed directly, in one of two mechanisms:
 | think-short | entry-file parking | hooks dir (project or `~/.claude`) | `think-short-prompt.md.disabled` present, `think-short-prompt.md` gone |
 | manager | config flag | `.claude/brewtools/manager/state.json` | `.hard` is not `true` — disarmed wall, not a broken one |
 | agent-deadline | config flag | `.claude/agent-deadline.json` (or the `~/.claude` twin) | `"enabled": false` **or the key absent** — the guard reads `cfg.enabled !== true`, so a key-less config is inert. Opt-in, the inverse of the two rows below |
+| agent-return | config flag | `.claude/agent-return.json` (or the `~/.claude` twin) | `"enabled": false` **or the key absent** — the shared module gates on `CONFIG.enabled === true`, so an absent, key-less or unparsable config injects no contract and sizes no return. Opt-in, same polarity as agent-deadline. A malformed project config falls back to the global one |
 | agent-router | config flag | `.claude/brewtools/agent-router.json` | `"enabled": false`. An **absent** key means enabled — the hook defaults `enabled: true` and only a literal `false` flips it |
 | memory-sync | entry-file parking | `.claude/skills/memory-sync/SKILL.md.disabled` | present, `SKILL.md` gone. The 3 references and every self-synced hand-edit stay |
 | docsync | config flag | `.claude/docsync/config.json` | `"enabled": false`. An **absent** key means enabled — all three hooks read `c.enabled !== false`, for back-compat |
@@ -144,7 +146,7 @@ say `enable` first.
 A headline count first — how many setups are behind the installed plugin:
 
 ```
-4 of 10 setups are behind the installed plugin (2 stale by version, 1 legacy stamp, 1 drifted bytes).
+4 of 11 setups are behind the installed plugin (2 stale by version, 1 legacy stamp, 1 drifted bytes).
 ```
 
 Then one table (skill, state, version, what was found, command), then an ordered run-list. Writing
@@ -198,9 +200,9 @@ never needs a code change. The stamp reader dispatches on file extension, so a n
 existing type costs nothing either.
 
 The one thing a new row DOES cost is two literals. The stamp reader's `STAMPS` heredoc enumerates
-all 17 carrier lines for all ten rows — it is never a sample the model expands, because an expansion
+all 21 carrier lines for all eleven rows — it is never a sample the model expands, because an expansion
 that stops short reports nothing about the rows it skipped and cannot go red. Two `exit 1` assertions
-hold it to the roster: total lines must be 17, and the scanned plugin's group must be 3 / 11 / 3.
+hold it to the roster: total lines must be 21, and the scanned plugin's group must be 3 / 15 / 3.
 Adding a row means adding its lines and raising both counts in the same edit.
 
 ## Documentation

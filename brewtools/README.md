@@ -4,8 +4,8 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 5.4.0 |
-| Skills | 12 |
+| Version | 5.5.0 |
+| Skills | 13 |
 | Agents | 3 |
 | Hooks | 2 |
 
@@ -85,6 +85,7 @@ Setup skills all speak the same verbs:
 /brewtools:manager-setup disable                # Disarm it, keep the files
 /brewtools:think-short-setup install global     # Terse-mode hooks, global scope
 /brewtools:agent-deadline-setup install project 20   # 20-minute subagent budget
+/brewtools:agent-return-setup install global 800 2000  # size budget on subagent returns
 /brewtools:task-board-setup install ~/repos/api      # Kanban into another repo
 /brewcode:setup-status                          # What is installed / stale / missing, everywhere
 ```
@@ -113,6 +114,7 @@ Setup skills all speak the same verbs:
 | [`/brewtools:provider-switch`](skills/provider-switch/README.md) | Configure alt API providers: DeepSeek, Z.ai/GLM, Qwen, MiniMax, OpenRouter | opus | `[status\|install\|verify\|model-check\|help\|<provider-name>]` -- no args = interactive status check |
 | [`/brewtools:think-short-setup`](skills/think-short-setup/README.md) | Install/remove terse-mode hooks (SessionStart + every-10th UserPromptSubmit + subagent Task) that inject brevity directives; project or global. `disable` flips a flag and leaves the files in place; `purge` deletes files and state | sonnet | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [project\|global] \| free-text intent` |
 | [`/brewtools:agent-deadline-setup`](skills/agent-deadline-setup/README.md) | Install/remove a soft wall-clock budget for subagents: 80% -- non-blocking "wrap up" warning, 100% -- deny all tools except the finalization set; project or global, opt-in | sonnet | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [project\|global] [minutes] \| free-text intent` |
+| [`/brewtools:agent-return-setup`](skills/agent-return-setup/README.md) | Install/remove a size budget on every subagent's final return message: a SubagentStart hook injects the contract, a SubagentStop hook sizes the return (`chars/4`) and blocks at most once -- above `passTokens` (default 1000) it orders a compress, above `fileTokens` (default 2500) a write-to-file plus the path. No LLM judge; project or global, opt-in | sonnet | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [project\|global] [pass] [file] \| free-text intent` |
 | [`/brewtools:agent-router-setup`](skills/agent-router-setup/README.md) | EXPERIMENTAL. Install/remove a PreToolUse hook that denies a generic subagent spawn in favor of the real project/plugin expert, or nudges when the fit is only uncertain; tier 1 free and deterministic, tier 2 opt-in LLM judge not yet behaviorally verified; project scope only | sonnet | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [level fast\|strict] \| free-text intent` |
 | [`/brewtools:task-board-setup`](skills/task-board-setup/README.md) | Generator: deploys a file-based Kanban into any repo via multi-agent analysis, with an optional spec + design layer (`task-spec` skill) and an `upgrade` mode to retrofit it onto an existing board, plus an optional gated CLAUDE.md-optimization pass | opus | `[status\|install\|upgrade\|uninstall\|purge] [target repo path \| empty = cwd] [free-text directive, e.g. 'also dedupe rules', 'skip module split']` |
 
@@ -147,6 +149,7 @@ brewtools/
 |   +-- provider-switch/               # Alternative API provider management
 |   +-- think-short-setup/             # Terse-mode hooks install/remove
 |   +-- agent-deadline-setup/          # Subagent soft wall-clock budget hooks install/remove
+|   +-- agent-return-setup/            # Size budget on subagent return messages (SubagentStart + SubagentStop)
 |   +-- agent-router-setup/            # EXPERIMENTAL: route generic subagent spawns to the real expert
 |   +-- manager-setup/                 # Codeword-triggered Manager mode + HARD delegation wall
 |   +-- task-board-setup/              # File-based Kanban generator (multi-agent)
@@ -203,6 +206,7 @@ Full docs: [doc-claude.brewcode.app/brewtools/overview](https://doc-claude.brewc
 | Provider Switch | [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/) |
 | Think Short Setup | [think-short-setup](https://doc-claude.brewcode.app/brewtools/skills/think-short-setup/) |
 | Agent Deadline Setup | [agent-deadline-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline-setup/) |
+| Agent Return Setup | [agent-return-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-return-setup/) |
 | Agent Router Setup | [agent-router-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-router-setup/) |
 | Task Board Setup | [task-board-setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) |
 | Setup Status (brewcode) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) |

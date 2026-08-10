@@ -185,6 +185,12 @@ systemctl --failed --no-pager
 
 </details>
 
+## Return Contract
+
+Verdict first, `<=30 lines`, `path:line` — never raw command output, `journalctl`/`docker logs` dumps, or config file bodies pasted into the reply. Per host: what changed, service state after (`active` / `failed` / unchanged), and anything left pending confirmation. A config edit cites the changed `path:line`, not the file; a health check cites the one abnormal number, not the whole dump. Full logs and health output go to `.claude/reports/YYYYMMDD-HHMMSS_ssh-admin/`, returned as a path.
+
+[`/brewtools:agent-return-setup`](/brewtools/skills/agent-return-setup/) enforces this at ~1000 / ~2500 est-tokens when installed; the contract itself ships unconditionally.
+
 <CardGrid>
   <Card title="SSH Skill" icon="terminal" href="/brewtools/skills/ssh/">
     Configure server inventory and SSH connections before spawning ssh-admin.

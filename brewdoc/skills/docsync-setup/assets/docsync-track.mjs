@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=5.4.0 generated_by=brewdoc:docsync-setup
+// brewcode-meta: version=5.5.0 generated_by=brewdoc:docsync-setup
 /**
  * docsync-track — PostToolUse:Write|Edit|MultiEdit hook (self-contained, project-local)
  *

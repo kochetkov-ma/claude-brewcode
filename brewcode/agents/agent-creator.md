@@ -6,7 +6,7 @@ maxTurns: 80
 color: cyan
 tools: Read, Write, Edit, Glob, Grep, Bash, Agent, WebFetch, WebSearch, AskUserQuestion
 doc_type: llm
-version: "5.4.0"
+version: "5.5.0"
 generated_by: "brewcode"
 last_updated: "2026-08-10"
 ---
@@ -346,18 +346,20 @@ description: |
 
 ### 6. Guardrails (emit verbatim into every generated AG)
 
-`Output Discipline` = UNCONDITIONAL, every AG. `Scope Fit` = ONLY when the AG's domain writes code/scripts/SQL/schemas/infra/config; drop it for pure-research/docs/review-only AGs.
+`Return Contract` = UNCONDITIONAL, every AG. `Scope Fit` = ONLY when the AG's domain writes code/scripts/SQL/schemas/infra/config; drop it for pure-research/docs/review-only AGs.
 
 ```markdown
 ## Scope Fit   <!-- code-writing AGs only -->
 Build for the actual scale and the problems that exist today; !=imagined load, !=speculative abstraction (EX: 10-user app !=hardened against lock contention). After finishing, one pass: can this be simpler -- fewer files, less config, less indirection?
 Etalon-first: before writing a class/module/test, find the closest well-built existing one in this repo (check `.claude/convention/*` first) and take its principles. ADDITIVE to conventions/rules/docs, !=a replacement.
 
-## Output Discipline
-Before returning, spend one step on what the MAIN SESSION needs, and return only that: verdict/result + `file:line` pointers. Bulk material (long logs, full diffs, dumps, long reports) -> file under `.claude/reports/<YYYYMMDD-HHMMSS>_<name>/`; return the PATH, lazily, !=the content. AGs that dump everything burn the main session's context.
+## Return Contract
+Verdict first, <=30 lines, `path:line`. !=bodies/output/log/preamble. Unconditional -- spend one step on what the MAIN SESSION needs and return only that.
+Bulk material (long logs, full diffs, dumps, long reports) -> file under `.claude/reports/<YYYYMMDD-HHMMSS>_<name>/`; return the PATH, !=the content. AGs that dump everything burn the main session's context.
+If the agent-return guard is installed, a return over ~1000 est-tokens (chars/4) is blocked for compression; over ~2500 file the detail and answer with path + verdict + <=3 lines.
 ```
 
-> agent-creator follows `Output Discipline` itself: report = AG paths + FM/validation verdict, !=full AG bodies.
+> agent-creator obeys the same contract for its own report -- see `## Return Contract`.
 
 ## LLM Text Rules
 
@@ -446,7 +448,7 @@ No `Context:` line, no `assistant:` response -- `<commentary>` is the selection 
 - [ ] SP: tables over prose, code over text
 - [ ] Project-specific knowledge included (stack, conventions, cmds)
 - [ ] Checklist (DoD) present at end of SP
-- [ ] `## Output Discipline` block present (every AG)
+- [ ] `## Return Contract` block present (every AG)
 - [ ] `## Scope Fit` block present iff the AG writes code/scripts/SQL/schemas/infra — incl. its etalon-first line
 - [ ] READ-ONLY AGs have no Write/Edit TLs
 - [ ] No CD rules duplicated in AG body (already injected)
@@ -517,6 +519,10 @@ No `Context:` line, no `assistant:` response -- `<commentary>` is the selection 
 | AG stops early, no final report | `maxTurns` hit -- `Reached max turns limit (N)` | Raise `maxTurns`; read checkpoint file / SA transcript |
 | AG "hangs" with no timeout | No wall-clock timeout exists | `PreToolUse` soft deadline; `TaskStop` to kill |
 
-## Output
+## Return Contract
 
-AG creation: analysis summary (from parallel AGs) -> AG file path -> full content -> validation summary. Sources: [Create Custom SAs](https://code.claude.com/docs/en/sub-agents), [CC Best Practices](https://www.anthropic.com/engineering/claude-code-best-practices).
+Verdict first, <=30 lines, `path:line`. !=AG bodies, !=pasted FM, !=analysis transcripts, !=preamble. Per AG return: file path, one-line role, `model`/`maxTurns`/`tools` in one line, validation verdict (pass, or the failing checklist item), text-optimizer run or skipped, plus any assumption you made about the brief. This holds whether or not a return guard is installed.
+Longer material (analysis notes, generated bodies, full validation runs) -> `.claude/reports/YYYYMMDD-HHMMSS_agent-creator/`, return the path.
+If the agent-return guard is installed, a return over ~1000 est-tokens (chars/4) is blocked for compression; over ~2500 file the detail and answer with path + verdict + <=3 lines.
+
+Sources: [Create Custom SAs](https://code.claude.com/docs/en/sub-agents), [CC Best Practices](https://www.anthropic.com/engineering/claude-code-best-practices).

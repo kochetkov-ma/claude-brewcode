@@ -102,7 +102,7 @@ Reachable ONLY via create/improve modes.
 - Phase 4 Review: Simple = one reviewer + one verify agent. Quorum = three reviewers in parallel, 2/3 consensus threshold, DoubleCheck pass, Skill Creator fixes verified findings.
 - Phase 5 E2E: Deep depth only. Isolated temp project, `claude -p` execution, up to 2 retries per failed scenario.
 
-**Description budget:** `<= 120` chars, single line, trigger keywords included. One number, enforced in both places — the authoring rule in `SKILL.md` and the review checklist in `references/review-prompt.md` — so a skill written to spec passes its own review. The bound is empirical: 16 of the 26 shipped skills land in a 97-119 character cluster.
+**Description budget:** `<= 120` chars, single line, trigger keywords included. One number, enforced in both places — the authoring rule in `SKILL.md` and the review checklist in `references/review-prompt.md` — so a skill written to spec passes its own review. The bound is empirical: 16 of the 27 shipped skills sit at or under 120 characters (95-118); the rest run long, up to 410.
 
 **Specialist:** `brewcode:skill-creator` agent.
 

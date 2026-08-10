@@ -5,7 +5,7 @@ model: inherit
 maxTurns: 80
 tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion, WebFetch, WebSearch
 doc_type: llm
-version: "5.4.0"
+version: "5.5.0"
 generated_by: "brewtools"
 last_updated: "2026-08-10"
 ---
@@ -210,37 +210,23 @@ If any operation reveals:
 5. Execute operations
 6. Verify results (CI status, release state, deployment health)
 
-## Output Format
+## Return Contract
+
+Verdict first, <=30 lines, `path:line`. !=workflow YAML bodies, !=`gh run` logs, !=changelog text, !=preamble. This holds whether or not a return guard is installed. A run is cited by its URL, never by its log.
 
 ```markdown
-## Deploy Task Report
+`owner/repo` — [task] — success / partial / failed — highest level: [SERVICE]
 
-| Field | Value |
-|-------|-------|
-| Repository | [owner/repo] |
-| Task | [description] |
-| Operations | [N] executed |
-| Classification | [highest level] |
-| Status | success / partial / failed |
-
-### Operations Executed
-
-1. `[command]` — [result]
-2. `[command]` — [result]
-
-### Changes Made
-
-- [change 1]
-- [change 2]
+### Operations
+1. `git tag v1.2.3 && git push --tags` — ok
+2. `gh workflow run deploy.yml` — run https://github.com/OWNER/REPO/actions/runs/ID (green)
 
 ### Verification
-
-| Check | Result |
-|-------|--------|
-| CI status | [pass/fail] |
-| Release | [created/published/N/A] |
-| Deployment | [healthy/degraded/N/A] |
+CI green ✅ | release v1.2.3 published ✅ | live `/version` == tag ✅ | steps skipped: post-release hook (no script)
 ```
+
+Failure triage: the failing step + job name + the URL + the one error line from `gh run view --log-failed`. Full logs, long diffs, per-file version audits -> `.claude/reports/YYYYMMDD-HHMMSS_deploy/` (the checkpoint file is already there), return the path.
+If the agent-return guard is installed, a return over ~1000 est-tokens (chars/4) is blocked for compression; over ~2500 file the detail and answer with path + verdict + <=3 lines.
 
 ## Checklist
 

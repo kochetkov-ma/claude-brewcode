@@ -6,7 +6,7 @@ description: Detailed description of all brewcode plugin commands
 
 # BC Plugin Commands
 
-> **ver:** 5.4.0 | **Author:** Maksim Kochetkov | **License:** MIT
+> **ver:** 5.5.0 | **Author:** Maksim Kochetkov | **License:** MIT
 
 ## Naming
 
@@ -20,7 +20,7 @@ status | install | upgrade | enable | disable | uninstall | purge
 
 No arguments = `status` when installed, `install` when not -- except `/brewcode:semble-setup`, which always defaults to `status` so a bare invocation can never trigger a machine-level package install.
 
-No setup rejects any of the seven canonical verbs -- all ten setup skills implement all seven, either via a live config flag (semble, agent-deadline, agent-router, manager, docsync) or entry-file parking (teams, superreview, task-board, think-short, memory-sync). Skill-specific extras come after the canonical set, never in place of it (`semble-setup`: `reindex | optimize | resume`).
+No setup rejects any of the seven canonical verbs -- all eleven setup skills implement all seven, either via a live config flag (semble, agent-deadline, agent-return, agent-router, manager, docsync) or entry-file parking (teams, superreview, task-board, think-short, memory-sync). Skill-specific extras come after the canonical set, never in place of it (`semble-setup`: `reindex | optimize | resume`).
 
 ## Quick Reference
 
@@ -78,7 +78,7 @@ Read-only dashboard over every setup skill in the suite (BC + BT + BD). Probes t
 | Plugin | Setups |
 |--------|--------|
 | brewcode | `teams-setup`, `semble-setup`, `superreview-setup` |
-| brewtools | `task-board-setup`, `think-short-setup`, `agent-deadline-setup`, `agent-router-setup`, `manager-setup` |
+| brewtools | `task-board-setup`, `think-short-setup`, `agent-deadline-setup`, `agent-return-setup`, `agent-router-setup`, `manager-setup` |
 | brewdoc | `memory-sync-setup`, `docsync-setup` |
 
 Recurring tools with no installed state (`agents`, `rules`, `convention`, `e2e`, `text-optimize`, `secrets-scan`, `md-to-pdf`, …) never appear in the report.
@@ -89,13 +89,13 @@ Each row gets exactly one state, evaluated in order: `n/a` -> `disabled` -> `mis
 
 **Anchor MISS is decisive.** The anchor is the artifact only that setup writes; without it the row is `missing`, whatever else the project contains. Secondaries must be EXCLUSIVE too -- `teams-setup` claims `.claude/teams/*/trace.jsonl` and `trace-ops.sh`, and `superreview-setup` no longer claims the shared `intent-guard.md`, because a shared file made every project with a hand-written agent report a broken `partial` install.
 
-**`disabled` outranks `missing`, `partial` and `stale`.** All ten setups leave a probeable off-switch, in one of two mechanisms: live config flag -- semble, agent-deadline, agent-router, manager, docsync; entry-file parking -- teams, superreview, task-board, think-short, memory-sync. A disabled row offers `enable` and never enters the run-list -- a switched-off mechanism is a choice, not a defect.
+**`disabled` outranks `missing`, `partial` and `stale`.** All eleven setups leave a probeable off-switch, in one of two mechanisms: live config flag -- semble, agent-deadline, agent-return, agent-router, manager, docsync; entry-file parking -- teams, superreview, task-board, think-short, memory-sync. A disabled row offers `enable` and never enters the run-list -- a switched-off mechanism is a choice, not a defect.
 
 ### Staleness signals
 
 | Signal | Used by | How |
 |--------|---------|-----|
-| Checksum | semble, think-short, agent-deadline, agent-router, manager, docsync | Those setups `cp` hook files verbatim -> `cmp` against the plugin asset is exact |
+| Checksum | semble, think-short, agent-deadline, agent-return, agent-router, manager, docsync | Those setups `cp` hook files verbatim -> `cmp` against the plugin asset is exact |
 | Frontmatter trio | memory-sync | `version`/`generated_by`/`last_updated` in the emitted `SKILL.md`'s YAML frontmatter vs the plugin's own version. A trailing `<!-- memory-sync template vX.Y.Z` comment is the pre-5.0 stamp; finding it yields `LEGACY-FMT` (`stale (legacy stamp)`, install predates the frontmatter migration, run `upgrade`) |
 | Template baseline | superreview | New plugin template diffed against `.template-baseline/`, so the delta is never your tailoring |
 | Absence | task-board | A deployed board with no `.claude/skills/task-spec/` predates the spec+design layer |

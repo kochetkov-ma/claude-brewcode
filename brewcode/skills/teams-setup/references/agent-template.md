@@ -17,7 +17,8 @@
      superreview-setup/scripts/generate.sh emit-agent (the same pipeline /brewcode:superreview-setup uses) -- never
      this file, and never a hand-authored instantiation of the shared template. agent-creator only
      adapts the three seeded blocks of the already-emitted file. It gets no Task Acceptance Protocol,
-     no trace instructions, no Domain Instructions and no Scope Fit block, and its frontmatter is
+     no trace instructions, no Domain Instructions, no Scope Fit block and no Return Contract from
+     this file -- its own `## Output` section is its return rule -- and its frontmatter is
      frozen as emitted. -->
 
 # {AGENT_NAME}
@@ -61,7 +62,15 @@ Before accepting ANY task:
 
 ### On Completion:
 1. Trace (optional): `bash ".claude/teams/{TEAM}/trace-ops.sh" add ".claude/teams/{TEAM}" "$SID" "{AGENT_NAME}" "track" "completed" "<result>"` (or "failed")
-2. **Output discipline** (always): spend one step on what the MAIN SESSION needs, return only that -- verdict/result + `file:line` pointers. Bulk material (long logs, full diffs, dumps, long reports) -> file under `.claude/reports/<YYYYMMDD-HHMMSS>_<name>/`; return the PATH, lazily, !=the content. Agents that dump everything burn the main session's context.
+2. **Return** per `## Return Contract` below -- verdict first, never a dump.
+
+## Return Contract
+
+Verdict first, <=30 lines, `path:line`. !=bodies/output/log/preamble. This holds whether or not a return guard is installed.
+
+Return the changed `path:line` plus the verdict of whatever proves it -- tests, build, check: pass, or the one failing name. Bulk material (full diffs, logs, dumps, long reports) -> `.claude/reports/YYYYMMDD-HHMMSS_{AGENT_NAME}/`; return the path, !=the content.
+
+If the agent-return guard is installed, a return over ~1000 est-tokens (chars/4) is blocked for compression; over ~2500 the detail goes to `.claude/reports/YYYYMMDD-HHMMSS_{AGENT_NAME}/` and the answer is that path + verdict + <=3 lines.
 
 ## Domain Instructions
 <!-- Scope Fit + Etalon-first block (both lines below): keep ONLY for agents whose domain writes code/scripts/SQL/schemas/infra; agent-creator deletes it for research/docs/review-only agents -- including `intent-guard`, which is review-only, never an implementation owner, and comes from the shared superreview template rather than this file. -->

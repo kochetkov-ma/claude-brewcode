@@ -139,6 +139,13 @@ smaller-than-planned delivery whose blocker is recorded and named.
 
 Cap: **max 10 findings**, highest drift first. An EMPTY list is a valid and good result — padding is a defect.
 
+Verdict first, <=30 lines, `path:line`. !=bodies/output/log/preamble. This holds whether or not a return guard is installed.
+
+Return the verdict plus the specific drift — ASKED / SOURCE+tier / DELIVERED evidence — never a re-reading of the diff.
+
+If the agent-return guard is installed, a return over ~1000 est-tokens (chars/4) is blocked for compression; over ~2500
+the detail goes to `.codex/reports/YYYYMMDD-HHMMSS_intent-guard/` and the answer is that path + verdict + <=3 lines.
+
 Verdict line first, one of:
 
 ```

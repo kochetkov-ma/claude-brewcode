@@ -6,7 +6,7 @@ maxTurns: 80
 color: yellow
 tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch, WebSearch
 doc_type: llm
-version: "5.4.0"
+version: "5.5.0"
 generated_by: "brewcode"
 last_updated: "2026-08-10"
 ---
@@ -553,13 +553,7 @@ Event: PreToolUse | Matcher: Bash
 Purpose: Brief description
 Routing: additionalContext -> Claude sees as <system-reminder>
 Config: .claude/settings.json (or specify location)
-
-VERIFICATION:
-- Shebang/hashbang present
-- Fail-safe error handling
-- stop_hook_active check (if Stop/SubagentStop)
-- Output schema matches event type
-- Syntax valid
+Test fire: exit 0, `{}` on malformed stdin, decision landed ✅
 ```
 
 ## 17. Version History
@@ -617,6 +611,13 @@ VERIFICATION:
 | current | `async`, `asyncRewake`, `shell` command-hook fields | new fields |
 | current | `disableAllHooks`, `allowedHttpHookUrls`, `allowManagedHooksOnly` managed settings keys | new settings |
 | current | Managed/enterprise confirmed HIGHEST precedence (not lowest) | clarification |
+
+## Return Contract
+
+Verdict first, <=30 lines, `path:line`. !=hook bodies, !=stdin/stdout payload dumps, !=`CLAUDE_DEBUG` transcripts, !=preamble. One block per hook, nothing else. This holds whether or not a return guard is installed.
+
+Checklist §15 is the gate, !=something to transcribe into the return. Debug logs, full payloads, failing runs -> `.claude/reports/YYYYMMDD-HHMMSS_hook-creator/` (the checkpoint file is already there), return the path.
+If the agent-return guard is installed, a return over ~1000 est-tokens (chars/4) is blocked for compression; over ~2500 file the detail and answer with path + verdict + <=3 lines.
 
 ## Sources
 

@@ -5,7 +5,7 @@ model: inherit
 maxTurns: 80
 tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion, WebFetch, WebSearch
 doc_type: llm
-version: "5.4.0"
+version: "5.5.0"
 generated_by: "brewtools"
 last_updated: "2026-08-10"
 ---
@@ -169,6 +169,15 @@ systemctl --failed --no-pager
 3. Gather server state (health check, Docker status, disk)
 4. Execute requested task with safety classifications
 5. Verify changes: re-check affected services/config
+
+## Return Contract
+
+Verdict first, <=30 lines, `path:line`. !=command output, !=`journalctl`/`docker logs` dumps, !=config file bodies, !=preamble. This holds whether or not a return guard is installed.
+
+Per host return: host, what changed, service state after (`active` / `failed` / unchanged), and anything left pending user confirmation. A config edit returns `path:line` of the changed lines, not the file. A health check returns the one abnormal number, not the whole dump.
+
+Full logs, health output, long diffs -> `.claude/reports/YYYYMMDD-HHMMSS_ssh-admin/` (the checkpoint file is already there), return the path.
+If the agent-return guard is installed, a return over ~1000 est-tokens (chars/4) is blocked for compression; over ~2500 file the detail and answer with path + verdict + <=3 lines.
 
 ## Checklist
 

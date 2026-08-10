@@ -218,6 +218,12 @@ CC allows nested subagent spawning, but prefer spawning from the main conversati
 
 </details>
 
+## Return Contract
+
+Verdict first, `<=30 lines`, `path:line`. No SKILL.md body, no reference contents, no validator transcripts, no eval logs, no preamble. Returns: skill dir path, one line per artifact written (SKILL.md, each <code>references/*</code>, scripts, tests, README), <code>validate-skill.sh</code> verdict (pass, or the failing check), Quick Eval result (triggered / missed, N of M), and whether text-optimizer ran. Eval transcripts, full validator output, and draft bodies go to <code>.claude/reports/&lt;YYYYMMDD-HHMMSS&gt;_skill-creator/</code>, path only.
+
+[`/brewtools:agent-return-setup`](/brewtools/skills/agent-return-setup/) enforces this at ~1000 / ~2500 est-tokens when installed; the contract itself ships unconditionally.
+
 <CardGrid>
   <Card title="Agent Creator" icon="robot" href="/brewcode/agents/agent-creator/">
     Same workflow for creating agents instead of skills.

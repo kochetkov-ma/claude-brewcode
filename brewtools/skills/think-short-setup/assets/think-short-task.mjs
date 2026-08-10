@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=5.4.0 generated_by=brewtools:think-short-setup
+// brewcode-meta: version=5.5.0 generated_by=brewtools:think-short-setup
 /**
  * think-short — PreToolUse hook for Task|Agent (self-contained, no plugin-root deps).
  *
@@ -55,6 +55,7 @@ const FAMILY_HOOK_STEMS = [
   'docsync',         // brewdoc:docsync-setup   — docsync-track/-watch/-gate
   'think-short',     // brewtools:think-short-setup
   'agent-deadline',  // brewtools:agent-deadline-setup
+  'agent-return',    // brewtools:agent-return-setup — agent-return-contract/-guard/-budget
   'agent-router',    // brewtools:agent-router-setup
   'manager-prompt',  // brewtools plugin hook
   'manager-state',   // brewtools:manager-setup — copied beside the guard
