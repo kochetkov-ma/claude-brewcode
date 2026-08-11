@@ -6,9 +6,9 @@ maxTurns: 60
 color: green
 tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch
 doc_type: llm
-version: "5.5.2"
+version: "5.5.3"
 generated_by: "brewcode"
-last_updated: "2026-08-10"
+last_updated: "2026-08-11"
 ---
 
 # Bash Expert

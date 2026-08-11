@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=5.5.2 generated_by=brewcode:semble-setup
+// brewcode-meta: version=5.5.3 generated_by=brewcode:semble-setup
 /**
  * brewcode:semble-setup — SessionStart hook (self-contained, installed into a project).
  *

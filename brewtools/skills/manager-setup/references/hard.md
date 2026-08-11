@@ -121,16 +121,23 @@ must go to a subagent. Use when you want a zero-leak wall.
 
 The wall must block the MAIN session but leave SUBAGENTS free, otherwise
 delegation itself would be impossible. The discriminator in the `PreToolUse`
-payload is the `agent_id` / `agent_type` field:
+payload is the `agent_id` field, and ONLY that field:
 
-- **Subagent-internal tool calls** carry `agent_id` (and `agent_type`) →
+- **Subagent-internal tool calls** carry `agent_id` →
   the guard ALLOWS them (subagents do the real work).
 - **Main session** tool calls (and the spawning `Task`/`Agent` call itself) have
-  NO `agent_id` → the guard applies the wall.
+  NO `agent_id` → the guard applies the wall. This includes a session started
+  with `claude --agent <name>`: its main thread is walled like any other.
+
+> `agent_type` is NOT a discriminator. CC 2.1.228 sets it on the main thread of a
+> `--agent` session too (without `agent_id`), so accepting it as proof of a subagent
+> silently disarms the wall for those sessions.
 
 > This is an UNDOCUMENTED field (verified live on CC 2.1.177, 2026-06-14;
 > `session_id`/`transcript_path` are identical for main and subagent, only
-> `agent_id` discriminates). Re-verify on every Claude Code upgrade — if the
+> `agent_id` discriminates). The 2.1.228 binary's own schema text says the same:
+> `agent_id` is absent for the main thread "even in --agent sessions", and is the
+> field to use "not agent_type". Re-verify on every Claude Code upgrade — if the
 > field name or presence changes, the wall could either leak (block subagents)
 > or fail open (allow main). Treat a missing-but-expected `agent_id` as main.
 

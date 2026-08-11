@@ -2,6 +2,21 @@
 
 ---
 
+## v5.5.3 (2026-08-11)
+
+> Docs: [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/)
+
+> The hard wall told main-session Write/Edit/Bash apart from subagent calls by `agent_id || agent_type`. On Claude Code 2.1.228 the main thread of a `claude --agent <name>` session carries `agent_type` but no `agent_id`, so that OR read the main thread as a subagent and let everything through.
+
+### brewtools
+
+#### Fixed
+
+- **hard wall: `claude --agent <name>` sessions are no longer exempt.** `hardmode-guard.mjs` now decides main-vs-subagent on `agent_id` alone. With the wall armed, a session started as `claude --agent <name>` used to bypass it entirely — every Write, Edit and Bash from its main thread ran undenied. Its main thread is now walled like any other main session. Genuine subagents always carry `agent_id` and keep running unrestricted, as before. The header contract and the provenance note in the hook, and `references/hard.md`, state the new rule
+- **first tests for the guard.** `brewtools/skills/manager-setup/tests/suite.mjs` — 8 cases covering main-thread deny, subagent pass-through, the `agent_type`-only regression, a disarmed wall, a missing state file and malformed stdin. Run with `node brewtools/skills/manager-setup/tests/suite.mjs`
+
+---
+
 ## v5.5.2 (2026-08-10)
 
 > Docs: [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/)

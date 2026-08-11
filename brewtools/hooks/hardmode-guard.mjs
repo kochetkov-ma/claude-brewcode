@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=5.5.2 generated_by=brewtools:manager-setup
+// brewcode-meta: version=5.5.3 generated_by=brewtools:manager-setup
 // brewtools:manager-setup — HARD wall guard (PreToolUse, matcher "*").
 //
 // SELF-CONTAINED — copied into <project>/.claude/brewtools/manager/ by
@@ -10,12 +10,13 @@
 // leaving only delegation (Task/Agent/Skill), reading, and task tracking.
 // Subagents stay fully free.
 //
-// LINCHPIN (verified live CC 2.1.177, last empirical re-check 2.1.195; NOT yet
-// re-run on 2.1.223 - flagged for empirical retest, doc-unverifiable): this
-// PreToolUse hook fires inside subagents too, but subagent tool-call stdin
-// carries `agent_id`/`agent_type` keys; the MAIN
-// session stdin does NOT. session_id is identical for both. => Discriminator: DENY
-// only when `agent_id`/`agent_type` are ABSENT (main session). Present -> pass-through.
+// LINCHPIN: this PreToolUse hook fires inside subagents too, and subagent
+// tool-call stdin carries `agent_id`; the MAIN session stdin does NOT.
+// session_id is identical for both. => Discriminator is `agent_id` ALONE: DENY
+// whenever it is ABSENT (main session), pass through when present.
+// `agent_type` is NOT a discriminator — CC 2.1.228 sets it on the MAIN thread of
+// a `claude --agent <name>` session too (without `agent_id`), so treating it as
+// one disarms the wall for every such session. A `--agent` main session IS walled.
 //
 // Strictness levels:
 //   strict   — deny all non-read tools (no bash, no web).
@@ -24,16 +25,17 @@
 // Fail-open: ANY thrown error / unreadable state -> output({}) so a guard bug never
 // bricks the session.
 //
-// PreToolUse stdin fields used: tool_name, tool_input.command, cwd, agent_id, agent_type.
+// PreToolUse stdin fields used: tool_name, tool_input.command, cwd, agent_id.
 //
-// Re-verified 2026-06-27 on CC 2.1.195: agent_id/agent_type presence still
-// discriminates main-session (absent) vs subagent (present); linchpin HOLDS.
-// Not empirically re-run on 2.1.223 (2026-08-06 pass) - behavior assumed
-// unchanged, no CHANGELOG entry touches these fields; re-verify live if
-// PreToolUse stdin shape ever looks off.
-// These keys are NOT-IN-DOC (HOOKS-REFERENCE.md lists only subagent_type/subagent_id);
-// kept intentionally. The undocumented `effort` payload key (used by other brewtools
-// hooks) is irrelevant here and intentionally NOT read by this guard. No logic change.
+// Provenance: NOT-IN-DOC (HOOKS-REFERENCE.md lists only subagent_type/subagent_id),
+// but the CC 2.1.228 binary's own schema text states it outright — agent_id is
+// "Present only when the hook fires from within a subagent... Absent for the main
+// thread, even in --agent sessions. Use this field (not agent_type) to distinguish
+// subagent calls from main-thread calls." Established 2026-08-11 by reading the
+// 2.1.228 binary, NOT by a live probe; earlier live checks (2.1.177, 2.1.195)
+// covered agent_id only. Re-verify live if PreToolUse stdin shape ever looks off.
+// The undocumented `effort` payload key (used by other brewtools hooks) is
+// irrelevant here and intentionally NOT read by this guard.
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -287,9 +289,10 @@ function isReadonlyCommand(cmd) {
     const state = readProjectState(cwd);
     if (state.hard !== true) { output({}); return; }
 
-    // (b) LINCHPIN: subagent tool calls carry agent_id/agent_type -> pass through.
-    if (Object.prototype.hasOwnProperty.call(input, 'agent_id') ||
-        Object.prototype.hasOwnProperty.call(input, 'agent_type')) {
+    // (b) LINCHPIN: only agent_id marks a subagent -> pass through. agent_type is NOT a
+    // discriminator: CC 2.1.228 sets it on the MAIN thread of a `claude --agent <name>`
+    // session too (without agent_id), so an OR here disarms the wall for those sessions.
+    if (Object.prototype.hasOwnProperty.call(input, 'agent_id')) {
       output({});
       return;
     }
