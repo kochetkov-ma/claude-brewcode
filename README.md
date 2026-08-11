@@ -14,6 +14,8 @@ A regular Claude Code session hands a big task to one agent and loses sight of i
 
 [**Full Documentation**](https://doc-claude.brewcode.app/getting-started/)
 
+[**Approaches**](APPROACHES.md) -- every hook, agent and injection the suite installs, and who installs what.
+
 > **Security:** Code is scanned on every commit. No personal data is collected or transmitted.
 >
 > [![Gitleaks](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/gitleaks.yml/badge.svg)](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/gitleaks.yml?query=branch%3Amain)
