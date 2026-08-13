@@ -7,6 +7,7 @@ argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge]
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, Agent, AskUserQuestion]
 model: opus
 ---
+<!-- brewcode-meta: version=5.6.0 content_version=5.6.0 generated_by=brewtools:task-board-setup -->
 
 [DICT: TT=task-tracker agent (generated), TB=task-board skill (generated), BRD=board.md, FEAT=.claude/features, EXCL=source-path exclusions, REL=release style (vX.Y.Z tag | commit SHA | no tag), DOM=domain id segment, FM=frontmatter, TS=task-spec skill (generated), SPEC_MODE=spec+design layer opt-in, PS=status phase, PU=upgrade phase, PR=uninstall/purge phase]
 
@@ -382,7 +383,7 @@ The reference templates carry these placeholders. Derive each from the confirmed
 
 > **Order is fixed, substitution is TWO-PASS.** Pass 1: expand the gated placeholders (inventory below). Pass 2: substitute the base placeholders in the table below over the WHOLE result. A gated expansion may itself contain a base token (`02`'s `{{SPEC_TRIGGERS}}` expansion contains `{{FIRST_DOMAIN}}`); the reverse never happens. Reversing the passes emits a literal `{{FIRST_DOMAIN}}`.
 
-> **Two brace spellings, on purpose.** This skill's own tokens are DOUBLE-brace (`{{DOMAINS}}`, `{{TODAY}}`, `{{SPEC_*}}` ...). The three metadata tokens are SINGLE-brace -- `{PLUGIN_VERSION}`, `{GENERATED_BY}`, `{LAST_UPDATED}` -- the repo-wide spelling fixed by `brewcode/skills/setup-status/references/artifact-metadata.md`. Substitute both sets in pass 2; a leftover `{PLUGIN_VERSION}` in an emitted file is as broken as a leftover `{{DOMAINS}}`.
+> **Two brace spellings, on purpose.** This skill's own tokens are DOUBLE-brace (`{{DOMAINS}}`, `{{TODAY}}`, `{{SPEC_*}}` ...). The four metadata tokens are SINGLE-brace -- `{PLUGIN_VERSION}`, `{CONTENT_VERSION}`, `{GENERATED_BY}`, `{LAST_UPDATED}` -- the repo-wide spelling fixed by `brewcode/skills/setup-status/references/artifact-metadata.md`. Substitute both sets in pass 2; a leftover `{PLUGIN_VERSION}` in an emitted file is as broken as a leftover `{{DOMAINS}}`.
 
 | Placeholder | Owner refs | Derivation |
 |-------------|-----------|------------|
@@ -393,6 +394,7 @@ The reference templates carry these placeholders. Derive each from the confirmed
 | `{{LANG}}` | 02,03,04,05,08,09,10 | confirmed doc language |
 | `{{TODAY}}` | 05,08,09,10 | today's date, ISO (`YYYY-MM-DD`) |
 | `{PLUGIN_VERSION}` | 02,03,04,05,08,10 | brewtools plugin version, `X.Y.Z`. Resolved by the bash block below -- NEVER hardcoded, never guessed |
+| `{CONTENT_VERSION}` | 02,03,04,05,08,10 | this SKILL.md's own `content_version`, read from its line-1 `brewcode-meta:` marker (below the frontmatter) -- self-located, same as `{PLUGIN_VERSION}`, never a copy of it |
 | `{GENERATED_BY}` | 02,03,04,05,08,10 | the literal `brewtools:task-board-setup` |
 | `{LAST_UPDATED}` | 02,03,04,05,08,10 | same value as `{{TODAY}}`, quoted in YAML frontmatter. Metadata spelling of the date; `{{TODAY}}` stays the prose/card spelling |
 | `{{CLOSE_MARKER}}` | 02,10 | derived from `RELEASE_STYLE`: `vtag` -> `"vX.Y.Z tag + commit SHA"`; `sha` -> `"commit SHA"`; `none` -> `"date / no tag / superseded / cancelled"`. Exact per-ref wording maps live in `02` and `03` |
@@ -402,16 +404,21 @@ The reference templates carry these placeholders. Derive each from the confirmed
 | `{{RELEASE_STYLE}}` | 02 (header) | INPUT enum `vtag\|sha\|none`. Gate variable ONLY -- NOT a literal token in any emitted body; it picks the close-marker wording above |
 | `{{SPEC_MODE}}` | 03,04,09 (headers) | `on` \| `off`, as confirmed in P1. Gate variable ONLY -- like `{{RELEASE_STYLE}}` it is NOT a literal token in any template and is never substituted into an emitted body; it selects which gated blocks expand |
 
-### Resolving `{PLUGIN_VERSION}` / `{GENERATED_BY}` / `{LAST_UPDATED}`
+### Resolving `{PLUGIN_VERSION}` / `{CONTENT_VERSION}` / `{GENERATED_BY}` / `{LAST_UPDATED}`
 
-Run ONCE, before P2, and hold the three values for every emitted file. **EXECUTE** using Bash tool:
+Run ONCE, before P2, and hold the four values for every emitted file. **EXECUTE** using Bash tool:
 ```bash
 SD="${CLAUDE_SKILL_DIR}"
 if [ -n "$SD" ] && [ -f "$SD/../../.claude-plugin/plugin.json" ]; then BT_ROOT=$(cd "$SD/../.." && pwd); else BT_ROOT=$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::'); fi
 [ -n "$BT_ROOT" ] || { echo "ERROR: cannot locate brewtools plugin root -- install/update brewtools first."; exit 1; }
 PV=$(jq -r '.version // empty' "$BT_ROOT/.claude-plugin/plugin.json" 2>/dev/null || true)
 PV=${PV:-$(basename "$BT_ROOT")}
+# content_version -- this SKILL.md's own header marker, self-located the same way PV is.
+SKILL_MD="$BT_ROOT/skills/task-board-setup/SKILL.md"
+CV=$(grep -m1 'brewcode-meta:' "$SKILL_MD" | sed -n 's/.*content_version=\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/p')
+[ -n "$CV" ] || { echo "ERROR: cannot read content_version from $SKILL_MD -- reinstall brewtools."; exit 1; }
 echo "PLUGIN_VERSION=$PV"
+echo "CONTENT_VERSION=$CV"
 echo "GENERATED_BY=brewtools:task-board-setup"
 echo "LAST_UPDATED=$(date +%F)"
 ```
@@ -432,7 +439,7 @@ The spec layer adds gated blocks inside otherwise-unchanged templates, following
 | Kind `inline` | the token sits inside a line that exists in BOTH modes. Condition TRUE -> replace the TOKEN with the expansion. Condition FALSE -> delete the TOKEN only; the line stays |
 | inline whitespace | declared per site by its own reference file. BOTH forms are legal, do NOT unify them: some sites carry a single space BEFORE the token, deleted together with it (`02`); others carry no leading space and the expansion supplies its own (`03`, `05`). Follow the reference header, never a global rule |
 | `SPEC_MODE=off` result | the emitted artifact is byte-identical to the pre-spec-layer output. This holds only if every token was resolved against its OWN condition -- an `_OFF` arm dropped as if it were an `on` token breaks byte-identity |
-| Verification | after substitution, `grep -nE '\{\{\|\{(PLUGIN_VERSION\|GENERATED_BY\|LAST_UPDATED)\}'` the written file -- any surviving `{{...}}` OR single-brace metadata token is an unresolved placeholder and a defect. P5 executes this over every emitted path |
+| Verification | after substitution, `grep -nE '\{\{\|\{(PLUGIN_VERSION\|CONTENT_VERSION\|GENERATED_BY\|LAST_UPDATED)\}'` the written file -- any surviving `{{...}}` OR single-brace metadata token is an unresolved placeholder and a defect. P5 executes this over every emitted path |
 
 #### Gated placeholder inventory (complete)
 
@@ -596,12 +603,12 @@ done
 ```
 > If `SPEC_MODE=off`, skip that loop -- and assert the inverse: none of those three paths may exist.
 
-**Leftover-placeholder gate.** BOTH brace families, or it misses half the tokens: this skill's own tokens are DOUBLE-brace (`{{DOMAINS}}` ...) and the three metadata tokens are SINGLE-brace (`{PLUGIN_VERSION}`, `{GENERATED_BY}`, `{LAST_UPDATED}`). No emitted body legitimately contains either, so every hit is an unresolved placeholder. Runs in BOTH modes over every emitted path (the `SPEC_MODE=on` paths simply do not exist when `off`). `|| true` keeps a clean run's rc=1 from aborting the block -- which is exactly why the block MUST assert `TARGET` first: with `TARGET` empty the grep hits a nonexistent path, rc=2 is swallowed by `2>/dev/null` + `|| true`, and the gate prints `OK` having read nothing. **EXECUTE** using Bash tool:
+**Leftover-placeholder gate.** BOTH brace families, or it misses half the tokens: this skill's own tokens are DOUBLE-brace (`{{DOMAINS}}` ...) and the four metadata tokens are SINGLE-brace (`{PLUGIN_VERSION}`, `{CONTENT_VERSION}`, `{GENERATED_BY}`, `{LAST_UPDATED}`). No emitted body legitimately contains either, so every hit is an unresolved placeholder. Runs in BOTH modes over every emitted path (the `SPEC_MODE=on` paths simply do not exist when `off`). `|| true` keeps a clean run's rc=1 from aborting the block -- which is exactly why the block MUST assert `TARGET` first: with `TARGET` empty the grep hits a nonexistent path, rc=2 is swallowed by `2>/dev/null` + `|| true`, and the gate prints `OK` having read nothing. **EXECUTE** using Bash tool:
 ```bash
 TARGET="<absolute path resolved in P0>"
 test -n "$TARGET" && test -d "$TARGET" || { echo "MISS TARGET unresolved -- re-resolve per P0"; exit 1; }
 test -d "$TARGET/.claude/features" || { echo "MISS nothing emitted -- gate did not run"; exit 1; }
-LEFT="$(grep -rnE '\{\{|\{(PLUGIN_VERSION|GENERATED_BY|LAST_UPDATED)\}' \
+LEFT="$(grep -rnE '\{\{|\{(PLUGIN_VERSION|CONTENT_VERSION|GENERATED_BY|LAST_UPDATED)\}' \
   "$TARGET/.claude/features" "$TARGET/.claude/rules/tasks.md" \
   "$TARGET/.claude/agents/task-tracker.md" "$TARGET/.claude/skills/task-board" \
   "$TARGET/.claude/skills/task-spec" 2>/dev/null || true)"

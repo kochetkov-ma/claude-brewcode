@@ -199,7 +199,7 @@ const out={schema:1,
 // verdict, because a pre-fix install carries an installer-written `last_updated:` and possibly
 // an older `version:` -- that is a stale stamp, not a user edit. `stamp` records whether the
 // installed rule carries the three baked keys at all; a pre-5.0 rule carries none of them.
-const OWNED=["doc_type","version","generated_by","last_updated"];
+const OWNED=["doc_type","version","content_version","generated_by","last_updated"];
 const STAMPED=["doc_type","version","generated_by"];
 const stripMeta=t=>{
   if(t===null||!t.startsWith("---\n")) return t;
@@ -211,13 +211,19 @@ const stripMeta=t=>{
 // rule the stamp source for the whole skill (references row 2), and semble-status
 // compares it against the running plugin to decide whether to prescribe `upgrade` -
 // a project on stale artifacts otherwise reads perfectly healthy in its own status.
-const stampVer=t=>{ if(t===null||!t.startsWith("---\n")) return "";
+const stampField=(t,key)=>{ if(t===null||!t.startsWith("---\n")) return "";
   const end=t.indexOf("\n---\n",3); if(end<0) return "";
-  const m=t.slice(4,end+1).split("\n").find(l=>/^version:/.test(l));
-  return m?m.slice(8).trim().replace(/^"|"$/g,""):""; };
+  const m=t.slice(4,end+1).split("\n").find(l=>new RegExp("^"+key+":").test(l));
+  return m?m.slice(key.length+1).trim().replace(/^"|"$/g,""):""; };
+const stampVer=t=>stampField(t,"version");
 const rr=readSafe(rule), tt=readSafe(tpl);
 out.rule.version=stampVer(rr);
 out.rule.templateVersion=stampVer(tt);
+// content_version is the PRIMARY staleness signal (last release that actually changed the
+// rule content); `version` above is secondary/informational (last release that installed
+// it). Read from the same rr/tt already loaded for `version` -- no extra file I/O.
+out.rule.content_version=stampField(rr,"content_version");
+out.rule.templateContentVersion=stampField(tt,"content_version");
 if(rr!==null){
   out.rule.state=(tt!==null&&stripMeta(rr)===stripMeta(tt))?"managed":"user_modified";
   out.rule.stamp=STAMPED.every(k=>new RegExp("^"+k+":","m").test(rr.split("\n---\n")[0]||""));
@@ -346,7 +352,9 @@ console.log("guidance: rule "+j.rule.state+" | .sembleignore "+((j.ignore&&j.ign
   +" | CLAUDE.md "+(j.claudeMd.malformed?"malformed":j.claudeMd.state)
   +" | hooks "+j.hooks.wiredCount+"/"+total+" wired"+(bad?" ("+bad+" drifted - re-run install to repair)":"")
   +" | permissions "+(j.permissions.wired?"yes":"no"));
-console.log("rule:      "+j.rule.path);
+console.log("rule:      "+j.rule.path
+  +(j.rule.content_version||j.rule.templateContentVersion?
+    " (content_version "+(j.rule.content_version||"none")+", plugin "+(j.rule.templateContentVersion||"none")+")":""));
 if(j.ignore) console.log("ignore:    "+j.ignore.path);
 for(const d of (j.hooks.drift||[])) console.log("drift:     "+d.event+"/"+(d.matcher||"*")+"/"+d.script
   +" "+d.field+"="+JSON.stringify(d.actual)+" want "+JSON.stringify(d.expected));
@@ -407,7 +415,7 @@ process.stdout.write(JSON.stringify({schema:1,mode:process.env.SG_MODE,part:proc
 # crashing strip would make sg_same_content compare "" to "" and call every file identical.
 sg_strip_meta() {
   SG_F="$1" node -e '
-const fs=require("fs");const OWNED=["doc_type","version","generated_by","last_updated"];
+const fs=require("fs");const OWNED=["doc_type","version","content_version","generated_by","last_updated"];
 const t=fs.readFileSync(process.env.SG_F,"utf8");
 const end=t.startsWith("---\n")?t.indexOf("\n---\n",3):-1;
 process.stdout.write(end<0?t:

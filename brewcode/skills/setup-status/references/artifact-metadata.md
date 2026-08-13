@@ -1,17 +1,18 @@
 ---
 doc_type: llm
-version: "5.5.3"
+version: "5.6.0"
+content_version: "5.6.0"
 generated_by: "brewcode"
-last_updated: "2026-08-11"
+last_updated: "2026-08-13"
 ---
 
 # Artifact metadata and versioning
 
 Normative. Every artifact any brewcode/brewdoc/brewtools/brewui skill writes into a
-project draws its metadata from ONE vocabulary of four fields, spelled the same way and
-resolved the same way. WHICH of the four an artifact must carry is decided by its
+project draws its metadata from ONE vocabulary of five fields, spelled the same way and
+resolved the same way. WHICH of the five an artifact must carry is decided by its
 mechanism (section 3), not by its file extension - see "Which fields are required".
-One number - the plugin version - answers "is this install current?".
+One number - the content version - answers "is this install current?".
 
 Audience: skill authors, generator authors, `setup-status`.
 
@@ -19,24 +20,30 @@ Audience: skill authors, generator authors, `setup-status`.
 
 ## 1. Fields
 
-Exactly these four names. No synonyms, no extra provenance key, no reordering. The
+Exactly these five names. No synonyms, no extra provenance key, no reordering. The
 "Required where" column is a summary; the mechanism table below is the authority.
 
 | Key | Type | Format | Example | Required where |
 |-----|------|--------|---------|----------------|
 | `version` | string | `X.Y.Z` semver, QUOTED in YAML/JSON | `"X.Y.Z"` | every artifact, every carrier |
+| `content_version` | string | `X.Y.Z` semver, QUOTED in YAML/JSON | `"X.Y.Z"` | every artifact, every carrier |
 | `generated_by` | string | `<plugin>:<skill>`, QUOTED | `"brewdoc:docsync-setup"` | every artifact, every carrier |
 | `last_updated` | string | `YYYY-MM-DD`, QUOTED, from `date +%F` | `"YYYY-MM-DD"` | every artifact EXCEPT a mechanism-`a` byte-copied one - see "Which fields are required" below |
 | `doc_type` | enum | `llm` \| `user` \| `skip`, **UNQUOTED** | `llm` | `.md` frontmatter ONLY - docsync's field. NEVER in JSON. Generated artifacts are `llm` |
 
 `version` is the version of the **plugin that produced the artifact**, never a
-per-template counter. `generated_by` is the producing skill, not the consuming one -
+per-template counter. `content_version` is that per-template/per-artifact counter
+`version` explicitly is not: it is the last release in which THIS artifact's tracked
+content actually changed, and stays put across releases where the content (metadata
+stripped) is byte-identical to what shipped before - computed by `bump-version.sh` via
+git-diff against the tag matching the artifact's previous `content_version`.
+`generated_by` is the producing skill, not the consuming one -
 except on hand-maintained SHIPPED artifacts (the plugin's own agents, this spec doc),
 where no skill produced the file and the value is the BARE plugin name (`"brewcode"`).
 
 **`doc_type` is the one unquoted value, and that is load-bearing.**
 `brewcode/skills/rules/scripts/rules.sh:144` gates on `^doc_type: llm$` and HARD-FAILS
-`doc_type: "llm"`. Quote the other three; never quote this one.
+`doc_type: "llm"`. Quote the other four; never quote this one.
 
 **`doc_type` is plugin-owned on a mechanism-`a` artifact, not user-owned.** A re-install
 RESTORES it. Under mechanism `a` the installed file is byte-identical to the plugin's,
@@ -56,12 +63,12 @@ that makes the file `user_modified`, which IS preserved (and backed up before an
 
 ### Key order
 
-`doc_type, version, generated_by, last_updated`, appended AFTER the file's own
-frontmatter keys - i.e. immediately before the closing `---`, never at the top. An
-artifact whose mechanism omits `last_updated` simply ends one key earlier; the order of
-what remains never changes.
+`doc_type, version, content_version, generated_by, last_updated`, appended AFTER the
+file's own frontmatter keys - i.e. immediately before the closing `---`, never at the
+top. An artifact whose mechanism omits `last_updated` simply ends one key earlier; the
+order of what remains never changes.
 
-A skill MAY add its own extra keys, and they MUST TRAIL the four. `memory-sync` writes
+A skill MAY add its own extra keys, and they MUST TRAIL the five. `memory-sync` writes
 `surface_files` last, after `last_updated`; that is the sanctioned shape. A reader of
 this spec ignores any key it does not own - an unknown trailing key is never a defect
 and never a staleness signal.
@@ -70,9 +77,9 @@ and never a staleness signal.
 
 | Artifact | Fields |
 |----------|--------|
-| mechanism `a`, byte-copied into the project | `version` + `generated_by`, and `doc_type` when the carrier is `.md` frontmatter. **NEVER `last_updated`** |
-| mechanism `a`, hand-maintained SHIPPED file that is NOT copied anywhere (the 8 plugin agents, this spec doc) | all four - the date legitimately means "shipped in the release of that day" |
-| mechanism `b` (substituted at install) and mechanism `c` (written by the model) | all applicable fields, `last_updated` included |
+| mechanism `a`, byte-copied into the project | `version` + `content_version` + `generated_by`, and `doc_type` when the carrier is `.md` frontmatter. **NEVER `last_updated`** |
+| mechanism `a`, hand-maintained SHIPPED file that is NOT copied anywhere (the 8 plugin agents, this spec doc) | all five - the date legitimately means "shipped in the release of that day" |
+| mechanism `b` (substituted at install) and mechanism `c` (written by the model) | all applicable fields, `content_version` and `last_updated` included |
 
 A byte-copied asset omits `last_updated` because the value would be the RELEASE date,
 which is identical in the plugin file and in the copy and therefore says nothing, while
@@ -83,13 +90,13 @@ KINDS (`bump-version.sh:41-47`, `stamp_rewrite` at `:211-229`):
 
 | Kind | Writes | Used for |
 |------|--------|----------|
-| `fm` | `version`, `generated_by` | byte-copied `.md`-frontmatter assets |
-| `fmd` | `version`, `generated_by`, **`last_updated`** | hand-maintained shipped `.md` (8 agents + this doc) |
-| `mjs` / `sh` / `md` / `marker` | `version`, `generated_by` inside a `brewcode-meta:` fragment | byte-copied scripts and `.md` |
+| `fm` | `version`, `content_version`, `generated_by` | byte-copied `.md`-frontmatter assets |
+| `fmd` | `version`, `content_version`, `generated_by`, **`last_updated`** | hand-maintained shipped `.md` (8 agents + this doc) |
+| `mjs` / `sh` / `md` / `marker` | `version`, `content_version`, `generated_by` inside a `brewcode-meta:` fragment | byte-copied scripts and `.md` |
 
 `brewcode/skills/semble-setup/assets/semble-first.md.template` is the worked example:
-kind `fm`, so its frontmatter carries `doc_type`, `version`, `generated_by` and no
-`last_updated` - and `.claude/rules/semble-first.md` in this repo is the installed copy,
+kind `fm`, so its frontmatter carries `doc_type`, `version`, `content_version`,
+`generated_by` and no `last_updated` - and `.claude/rules/semble-first.md` in this repo is the installed copy,
 landing exactly that way.
 
 **Known contradiction, stated so nobody "fixes" the wrong side.**
@@ -112,13 +119,13 @@ asset to satisfy a validator.
 
 | Carrier | Placement | Key order |
 |---------|-----------|-----------|
-| `.md` with YAML frontmatter | appended after the file's own keys, before the closing `---` | `doc_type, version, generated_by, last_updated` (+ skill-private keys trailing). Drop `last_updated` when the file is byte-copied (mechanism `a`, stamp kind `fm`) |
-| `.json` | top level, snake_case | `version, generated_by, last_updated` - all three MANDATORY, `doc_type` FORBIDDEN |
-| `.mjs` / `.sh` copied byte-for-byte | ONE comment line, immediately after the shebang if present, else line 1 | `version`, `generated_by` only - never `last_updated` |
-| `.md` copied byte-for-byte, whose BODY is consumed verbatim | ONE line-1 HTML comment `<!-- brewcode-meta: ... -->` | `version`, `generated_by` only - never `last_updated` |
-| markdown header table (`team.md` style) | three rows in the header table, in this order | `Version`, `Generated by`, `Last update` |
+| `.md` with YAML frontmatter | appended after the file's own keys, before the closing `---` | `doc_type, version, content_version, generated_by, last_updated` (+ skill-private keys trailing). Drop `last_updated` when the file is byte-copied (mechanism `a`, stamp kind `fm`) |
+| `.json` | top level, snake_case | `version, content_version, generated_by, last_updated` - all four MANDATORY, `doc_type` FORBIDDEN |
+| `.mjs` / `.sh` copied byte-for-byte | ONE comment line, immediately after the shebang if present, else line 1 | `version`, `content_version`, `generated_by` only - never `last_updated` |
+| `.md` copied byte-for-byte, whose BODY is consumed verbatim | ONE line-1 HTML comment `<!-- brewcode-meta: ... -->` | `version`, `content_version`, `generated_by` only - never `last_updated` |
+| markdown header table (`team.md` style) | four rows in the header table, in this order | `Version`, `Content version`, `Generated by`, `Last update` |
 
-**A JSON artifact carrying only `version` is INCOMPLETE, not a variant.** All three keys
+**A JSON artifact carrying only `version` is INCOMPLETE, not a variant.** All four keys
 travel together in every JSON carrier, written on every mode that writes the file at all
 (`install`, `upgrade`, `enable`, `disable`, `level`). And `doc_type` never appears in
 JSON - it is docsync's `.md` field, and a JSON config is not a doc.
@@ -144,6 +151,7 @@ description: "Deep project-tailored review."
 user-invocable: true
 doc_type: llm
 version: "X.Y.Z"
+content_version: "X.Y.Z"
 generated_by: "brewcode:superreview-setup"
 last_updated: "YYYY-MM-DD"
 ---
@@ -165,26 +173,27 @@ its examples.
   "docs": ["docs/**/*.md"],
   "exclude": ["node_modules/**"],
   "version": "X.Y.Z",
+  "content_version": "X.Y.Z",
   "generated_by": "brewdoc:docsync-setup",
   "last_updated": "YYYY-MM-DD"
 }
 ```
 
-All three keys, always. `{"version": "X.Y.Z", "threshold_days": 30}` is a non-conforming
+All four keys, always. `{"version": "X.Y.Z", "threshold_days": 30}` is a non-conforming
 artifact, and `setup-status` can only report its version, never who wrote it or when.
 
 ### `.mjs`
 
 ```javascript
 #!/usr/bin/env node
-// brewcode-meta: version=X.Y.Z generated_by=brewdoc:docsync-setup
+// brewcode-meta: version=X.Y.Z content_version=X.Y.Z generated_by=brewdoc:docsync-setup
 ```
 
 ### `.sh`
 
 ```bash
 #!/usr/bin/env sh
-# brewcode-meta: version=X.Y.Z generated_by=brewcode:teams-setup
+# brewcode-meta: version=X.Y.Z content_version=X.Y.Z generated_by=brewcode:teams-setup
 ```
 
 ### `.md` HTML comment - the fifth carrier
@@ -194,7 +203,7 @@ keys would leak into whatever consumes the body. It carries the same `brewcode-m
 fragment inside a line-1 HTML comment instead.
 
 ```markdown
-<!-- brewcode-meta: version=X.Y.Z generated_by=brewdoc:memory-sync-setup -->
+<!-- brewcode-meta: version=X.Y.Z content_version=X.Y.Z generated_by=brewdoc:memory-sync-setup -->
 ```
 
 Four files in production: `brewtools/skills/think-short-setup/assets/think-short-prompt.md`
@@ -206,7 +215,7 @@ its third `.md` fallback - frontmatter `version:` in the first 40 lines, then a
 (`brewcode/skills/setup-status/SKILL.md:514`).
 
 **Quirk: `think-short-prompt.md:1` is the only stamp in the repo with a word BEFORE the
-anchor** - `<!-- think-short brewcode-meta: version=X.Y.Z generated_by=... -->`. That is
+anchor** - `<!-- think-short brewcode-meta: version=X.Y.Z content_version=X.Y.Z generated_by=... -->`. That is
 legal, and legal by construction rather than by luck: `stamp_rewrite`'s non-frontmatter
 branch is an UNANCHORED global substitution on the `brewcode-meta: version=... generated_by=...`
 fragment (`bump-version.sh:225-226`), and every reader greps for the fragment, never for
@@ -226,12 +235,13 @@ one.
 |-------|-------|
 | Team | backend |
 | Version | X.Y.Z |
+| Content version | X.Y.Z |
 | Generated by | brewcode:teams-setup |
 | Last update | YYYY-MM-DD |
 ```
 
-The three rows travel together, in that order - `Version`, then `Generated by`, then
-`Last update` - after whatever rows the file itself owns. Values are BARE here; the
+The four rows travel together, in that order - `Version`, then `Content version`, then
+`Generated by`, then `Last update` - after whatever rows the file itself owns. Values are BARE here; the
 markdown cell is not YAML and nothing parses it as a scalar. A lone date row is a
 retired signal (section 8).
 
@@ -255,7 +265,7 @@ version other than the new one. The anchoring is deliberate: these pages also co
 historical prose ("dropped in vX.Y.Z") that must never move.
 
 **So a lone `| Version |` row in a `| Field | Value |` table is compliant HERE and only
-here.** The three-row rule above governs an installed artifact such as `team.md`, whose
+here.** The four-row rule above governs an installed artifact such as `team.md`, whose
 version is a staleness signal a reader compares against the plugin. A plugin README's
 version is a fact about the page. Do not add `| Generated by |` / `| Last update |` rows
 to these seven, and do not report them non-compliant. The two lists are disjoint by
@@ -552,9 +562,9 @@ timestamp type. Every YAML 1.1 parser does. Quoting is therefore mandatory for
 cross-parser stability, and mandatory for `version` because a two-segment value would
 become a number.
 
-**Rule: quote `version`, `generated_by` and `last_updated` in every YAML frontmatter
-and every JSON value. Always. Leave `doc_type` UNQUOTED - it is an enum consumed by a
-`^doc_type: llm$` grep, not a scalar anything types.**
+**Rule: quote `version`, `content_version`, `generated_by` and `last_updated` in every
+YAML frontmatter and every JSON value. Always. Leave `doc_type` UNQUOTED - it is an enum
+consumed by a `^doc_type: llm$` grep, not a scalar anything types.**
 
 ### Why quoting is safe for docsync
 
@@ -571,11 +581,16 @@ still not a staleness signal - report the version, not the quoting.
 
 ## 6. What `setup-status` does with the values
 
+`content_version` is the staleness driver, not `version`. `version` stays displayed on
+every verdict - still required, still useful for naming which plugin release produced
+the install - but it is demoted to provenance-only and never decides `installed` vs
+`stale`.
+
 | Stamp read | Verdict |
 |------------|---------|
-| `version` == installed plugin version | `installed` |
-| `version` != installed plugin version (older or newer) | `stale` - name the two versions in the *found* column |
-| no stamp at all | `stale (legacy, unstamped)` |
+| `content_version` == plugin's current content_version for that artifact | `installed` |
+| `content_version` != plugin's current content_version (older or newer) | `stale` - name the two content_versions in the *found* column |
+| no `content_version` stamp at all | `stale (legacy, unstamped)` |
 | an old-format stamp from section 8 | `stale (legacy stamp)` |
 | the value still holds a placeholder - any `{`, `}`, `<` or `>` | `partial`, never a version verdict: substitution never finished |
 | stamp present but the plugin asset is missing from the cache | `version unknown (plugin asset missing)`, never `stale` |
@@ -584,15 +599,15 @@ An artifact carrying a retired-format stamp is reported stale so the user re-run
 `upgrade`. That is the intended migration, not a bug.
 
 `cmp` keeps its separate job: byte drift of a mechanism-`a` asset. `cmp` says
-`DIFFERS` -> `stale`; the stamp says which version the project is on. Neither replaces
-the other.
+`DIFFERS` -> `stale`; the stamp says which content_version the project is on. Neither
+replaces the other.
 
-Reading a stamp is a one-line grep, so it stays inside `setup-status`'s read-only
-budget:
+Reading a stamp is still a one-line grep pair - `content_version` drives the verdict,
+`version` rides along for display, so it stays inside `setup-status`'s read-only budget:
 
 ```bash
-grep -m1 -oE 'brewcode-meta: version=[0-9]+\.[0-9]+\.[0-9]+' "$f"
-grep -m1 -E '^version:' "$f" | tr -d '"'"'"' '
+grep -m1 -oE 'brewcode-meta: content_version=[0-9]+\.[0-9]+\.[0-9]+' "$f"
+grep -m1 -E '^content_version:' "$f" | tr -d '"'"'"' '
 ```
 
 ---
@@ -627,10 +642,10 @@ translate it in place unless you are the skill that owns the artifact.
 | `checkedAt` | `last_updated` |
 | `<!-- last-updated: ... -->` | `last_updated:` in frontmatter |
 | `**Last Updated:**` (prose line) | `last_updated:` in frontmatter |
-| `\| Last update \|` alone, used as the version signal | the three-row block: `\| Version \|` + `\| Generated by \|` + `\| Last update \|` |
+| `\| Last update \|` alone, used as the version signal | the four-row block: `\| Version \|` + `\| Content version \|` + `\| Generated by \|` + `\| Last update \|` |
 | `memory-sync template vX.Y.Z` | `version: "X.Y.Z"` (plugin version) |
 | `intent-guard template v2` | `version: "X.Y.Z"` (plugin version) |
-| `SKILL METADATA - generated <ts>` | the four fields of section 1 |
+| `SKILL METADATA - generated <ts>` | the five fields of section 1 |
 | `VERSION=1.0.0` or any literal per-template counter in a generator | resolve the plugin version from `.claude-plugin/plugin.json` (section 4). The VARIABLE is fine; the LITERAL is the defect |
 
 Retired PLACEHOLDER spellings - a template still carrying one emits an artifact

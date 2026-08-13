@@ -663,11 +663,16 @@ if (guidRaw === null || isErr(guidRaw)) {
     wiredCount: typeof h.wiredCount === "number" ? h.wiredCount : 0,
     wantCount: typeof h.wantCount === "number" ? h.wantCount : 0,
     staleEntries: typeof h.staleEntries === "number" ? h.staleEntries : 0,
-    // The frontmatter `version:` of the installed rule, and the version the plugin
-    // on this machine would install. Staleness is otherwise visible only through
-    // /brewcode:setup-status, so a project running artifacts from an old release
-    // read `ready` in its own status with no prescription. One signal, one fix -
-    // the cross-plugin dashboard still owns the per-artifact breakdown.
+    // content_version is the PRIMARY staleness signal (last release that actually
+    // changed the rule content, per artifact-metadata.md section 6); `version` is
+    // secondary/informational - it names which plugin release last installed the
+    // file, and can bump on every release while content_version stays put.
+    // Staleness is otherwise visible only through /brewcode:setup-status, so a
+    // project running artifacts from an old release read `ready` in its own status
+    // with no prescription. One signal, one fix - the cross-plugin dashboard still
+    // owns the per-artifact breakdown.
+    content_version: typeof rule.content_version === "string" ? rule.content_version : "",
+    templateContentVersion: typeof rule.templateContentVersion === "string" ? rule.templateContentVersion : "",
     version: typeof rule.version === "string" ? rule.version : "",
     pluginVersion: typeof rule.templateVersion === "string" ? rule.templateVersion : "",
   };
@@ -745,15 +750,22 @@ if (verdict === "ready" && guidSec && !isErr(guidSec)) {
   if (why.length) { verdict = "partial"; reason = why.join("; "); }
 }
 
-// Stale artifacts: everything is wired and byte-managed, but at the version of an
-// older release. Both stamps must be present and readable - an unstamped pre-5.0
-// rule reports "" and must never be called stale on a missing value.
+// Stale artifacts: everything is wired and byte-managed, but the rule content
+// last changed in an earlier release than the plugin current template - per
+// artifact-metadata.md section 6, content_version drives this verdict; `version` rides
+// along informational-only and never decides it (a plain version bump with
+// unchanged content_version is NOT stale). Both content_version stamps must be
+// present and readable - an unstamped pre-5.5 rule reports "" and must never be
+// called stale on a missing value.
 let stampStale = false;
 if (verdict === "ready" && guidSec && !isErr(guidSec)
-    && guidSec.version && guidSec.pluginVersion && guidSec.version !== guidSec.pluginVersion) {
+    && guidSec.content_version && guidSec.templateContentVersion
+    && guidSec.content_version !== guidSec.templateContentVersion) {
   stampStale = true;
   verdict = "partial";
-  reason = "artifacts at " + guidSec.version + ", plugin at " + guidSec.pluginVersion;
+  reason = "artifacts at content_version " + guidSec.content_version +
+    ", plugin at " + guidSec.templateContentVersion +
+    (guidSec.version ? " (version " + guidSec.version + ")" : "");
 }
 
 let nextStep;
@@ -840,10 +852,11 @@ if (jsonMode) {
       L.push("guidance: error: " + report.guidance.error);
     } else {
       const g = report.guidance;
-      const ver = g.version
-        ? " | version " + g.version + (g.pluginVersion && g.pluginVersion !== g.version
-            ? " (plugin " + g.pluginVersion + " - run /brewcode:semble-setup upgrade)" : "")
-        : "";
+      const ver = g.content_version
+        ? " | content_version " + g.content_version + (g.templateContentVersion && g.templateContentVersion !== g.content_version
+            ? " (plugin " + g.templateContentVersion + " - run /brewcode:semble-setup upgrade)" : "")
+            + (g.version ? " [version " + g.version + "]" : "")
+        : (g.version ? " | version " + g.version : "");
       L.push("guidance: rule " + g.rule + " | CLAUDE.md " + g.claudeMd +
         " | hooks " + g.wiredCount + "/" + (g.wantCount || 0) + " wired" +
         " | permissions " + (g.permissionsWired ? "yes" : "no") + ver);

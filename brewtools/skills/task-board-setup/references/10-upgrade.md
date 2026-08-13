@@ -1,6 +1,6 @@
 # 10 -- upgrade mode: retrofit the spec layer onto a deployed board
 
-Placeholders used: `{{DOMAIN_AGENTS}}`, `{{ARCHITECT_AGENT}}`, `{{DOMAINS}}`, `{{FIRST_DOMAIN}}`, `{{LANG}}`, `{{EXCLUSIONS}}`, `{{TODAY}}`, `{{REPO_NAME}}`, `{{CLOSE_MARKER}}`, `{{CLOSE_MARKER_SHORT}}`, `{PLUGIN_VERSION}`, `{GENERATED_BY}`, `{LAST_UPDATED}`.
+Placeholders used: `{{DOMAIN_AGENTS}}`, `{{ARCHITECT_AGENT}}`, `{{DOMAINS}}`, `{{FIRST_DOMAIN}}`, `{{LANG}}`, `{{EXCLUSIONS}}`, `{{TODAY}}`, `{{REPO_NAME}}`, `{{CLOSE_MARKER}}`, `{{CLOSE_MARKER_SHORT}}`, `{PLUGIN_VERSION}`, `{CONTENT_VERSION}`, `{GENERATED_BY}`, `{LAST_UPDATED}`.
 `SPEC_MODE` and `CMD_DECOMPOSED` are GATE variables, never tokens in an emitted body. In upgrade mode `SPEC_MODE` is FORCED `on` and `CMD_DECOMPOSED` is FORCED `false` (upgrade never runs P5.5) -- see U2.
 
 [DICT: TT=task-tracker agent (installed), TB=task-board skill (installed), BRD=board.md, FEAT=.claude/features, FM=frontmatter, ADD=write a file that does not exist, PATCH=insert a block into an existing file, MARK=idempotency marker text]
@@ -108,7 +108,7 @@ DETECT table:
 
 A file whose MARK is SPLIT (`<n>s` spec layer, `<n>p` session-progress layer) reports ONE probe line per row; the two are independent install units and a file can be SKIP for one and PATCH for the other. If every row is SKIP and `backfill-needed=0` -> the CONTENT layer is already installed: skip U2's AskUserQuestion, skip U3-U5, **still run U5b**, then report `upgrade: content already installed, metadata restamped to <PV>` and stop.
 
-> **U5b is NOT part of that no-op.** This is the single commonest upgrade: the user ran `claude plugin update`, every content row is already SKIP, and the ONLY thing out of date is the version stamp — which is exactly what `setup-status` reads and exactly what it told the user to fix by running `upgrade`. An early STOP here reinstates the bug this file was changed to remove: `status` says `stale`, `upgrade` says `no-op`, forever. U5b needs only `{PLUGIN_VERSION}`/`{GENERATED_BY}`/`{LAST_UPDATED}`, which are re-resolved fresh and never recovered, so it runs with nothing from U2's recovery table.
+> **U5b is NOT part of that no-op.** This is the single commonest upgrade: the user ran `claude plugin update`, every content row is already SKIP, and the ONLY thing out of date is the version stamp — which is exactly what `setup-status` reads and exactly what it told the user to fix by running `upgrade`. An early STOP here reinstates the bug this file was changed to remove: `status` says `stale`, `upgrade` says `no-op`, forever. U5b needs only `{PLUGIN_VERSION}`/`{CONTENT_VERSION}`/`{GENERATED_BY}`/`{LAST_UPDATED}`, which are re-resolved fresh and never recovered, so it runs with nothing from U2's recovery table.
 
 > `ADD (drift)` = a PATCH target is missing entirely. Do not fail: emit the full file from its reference template and NOTE the drift in the report -- the deployment is incomplete, the user should know. A drift-ADD MUST resolve EVERY token that reference's header declares -- its `Substitute ...` line AND every gated placeholder declared elsewhere in that header (see U2), including `{{CLOSE_MARKER}}` / `{{CLOSE_MARKER_SHORT}}` and, for `task-tracker.md`, the two `CMD_DECOMPOSED` line placeholders.
 
@@ -131,7 +131,7 @@ Values already baked into the installed artifacts are RECOVERED by reading, !=re
 | `{{ARCHITECT_AGENT}}` | NEW -- from Agent C | best architecture-capable project agent name, else `Plan` |
 | `AGENT_GAPS` | NEW -- from Agent C | REPORT-ONLY, !=a token in any emitted body. Every `{{DOMAINS}}` entry with no owning agent in the `{{DOMAIN_AGENTS}}` table -- those domains fall back to the built-in `Plan` in `/task-spec`'s design fan-out. Empty -> `none`. Carry it to the U6 report, never drop it |
 | `{{REPO_NAME}}` / `{{TODAY}}` | trivial | basename of TARGET / ISO date |
-| `{PLUGIN_VERSION}` / `{GENERATED_BY}` / `{LAST_UPDATED}` | NEVER recovered | re-resolve fresh per the SKILL.md "Resolving `{PLUGIN_VERSION}`..." bash block. An upgrade is a NEW write by a NEW plugin version -- an old stamp recovered off the installed file would be a lie |
+| `{PLUGIN_VERSION}` / `{CONTENT_VERSION}` / `{GENERATED_BY}` / `{LAST_UPDATED}` | NEVER recovered | re-resolve fresh per the SKILL.md "Resolving `{PLUGIN_VERSION}`..." bash block. An upgrade is a NEW write by a NEW plugin version -- an old stamp recovered off the installed file would be a lie |
 
 Recovery conflicts (e.g. `tasks.md` and `task-tracker.md` disagree on DOMAINS) -> surface both, let the user pick via AskUserQuestion. A value that cannot be recovered at all -> ask, !=guess.
 
@@ -162,7 +162,7 @@ mkdir -p "$TARGET/.claude/features/specs" && echo "OK specs dir" || echo "FAIL s
 | Emit | From | Substitute |
 |------|------|------------|
 | `TARGET/.claude/skills/task-spec/SKILL.md` | `references/08-task-spec-skill.md` | exactly the tokens in `08`'s own header `Substitute ...` line -- read it, !=re-enumerate here |
-| `TARGET/.claude/features/PROGRESS.md` | `references/05-features-templates.md`, `## PROGRESS.md` block | `{{REPO_NAME}}`, `{{LANG}}`, `{{TODAY}}`, plus the metadata trio. Written EMPTY (all five fields `--`); the board's live state is never back-filled into it -- `task-tracker` rewrites it on its next run |
+| `TARGET/.claude/features/PROGRESS.md` | `references/05-features-templates.md`, `## PROGRESS.md` block | `{{REPO_NAME}}`, `{{LANG}}`, `{{TODAY}}`, plus the metadata quartet. Written EMPTY (all five fields `--`); the board's live state is never back-filled into it -- `task-tracker` rewrites it on its next run |
 | `TARGET/.claude/features/specs/SPEC_TEMPLATE.md` | `references/09-spec-templates.md` | exactly the tokens in `09`'s own header `Substitute ...` line |
 | `TARGET/.claude/features/specs/DESIGN_TEMPLATE.md` | `references/09-spec-templates.md` | same header line as above |
 
@@ -279,7 +279,7 @@ Option 1 leaves the field absent on every existing task; that is a legal state f
 
 ---
 
-## U5b. RESTAMP the metadata trio (ALWAYS runs, never gated, never asked)
+## U5b. RESTAMP the metadata quartet (ALWAYS runs, never gated, never asked)
 
 **This is the step that lets `upgrade` clear its own staleness.** `setup-status` row 4 reads the
 frontmatter `version:` of the anchor `.claude/features/board.md`. `board.md` is in the U4 PATCH
@@ -309,22 +309,23 @@ deliberately UNSTAMPED (its frontmatter is copied into every task card), and tas
 Ordering: run AFTER U3/U4/U5, before U6. A file this run ADDed is already correct and the restamp
 is a no-op on it — that is the point, one code path for both.
 
-**Scope — the trio and nothing else.** Only `version`, `generated_by` and `last_updated`, only
-inside the file's OWN first frontmatter block, only when line 1 is `---`. `doc_type` is left
-exactly as found (a user who set `user`/`skip` keeps it: these are mechanism-`b` artifacts, not
-byte-copies, so nothing restores it). Body, tables, hand-edits, task content: untouched. A legacy
-install whose frontmatter predates the trio gets the three keys INSERTED immediately before the
-closing `---`, which is how `stale (legacy, unstamped)` clears.
+**Scope — the quartet and nothing else.** Only `version`, `content_version`, `generated_by` and
+`last_updated`, only inside the file's OWN first frontmatter block, only when line 1 is `---`.
+`doc_type` is left exactly as found (a user who set `user`/`skip` keeps it: these are
+mechanism-`b` artifacts, not byte-copies, so nothing restores it). Body, tables, hand-edits, task
+content: untouched. A legacy install whose frontmatter predates the quartet gets the four keys
+INSERTED immediately before the closing `---`, which is how `stale (legacy, unstamped)` clears.
 
-First re-resolve the three values — SKILL.md "Resolving `{PLUGIN_VERSION}` / `{GENERATED_BY}` /
-`{LAST_UPDATED}`", run verbatim. Fresh values only; an old stamp read off the installed file
-would be a lie (U2). Then, **EXECUTE** using Bash tool:
+First re-resolve the four values — SKILL.md "Resolving `{PLUGIN_VERSION}` / `{CONTENT_VERSION}` /
+`{GENERATED_BY}` / `{LAST_UPDATED}`", run verbatim. Fresh values only; an old stamp read off the
+installed file would be a lie (U2). Then, **EXECUTE** using Bash tool:
 
 ```bash
 TARGET="<absolute path resolved in P0>"
 test -n "$TARGET" && test -d "$TARGET" || { echo "MISS TARGET unset or not a dir -- restamp did NOT run"; exit 1; }
-PV="<PLUGIN_VERSION from the SKILL.md block>"; GB="brewtools:task-board-setup"; LU="<LAST_UPDATED from the same block>"
+PV="<PLUGIN_VERSION from the SKILL.md block>"; CV="<CONTENT_VERSION from the same block>"; GB="brewtools:task-board-setup"; LU="<LAST_UPDATED from the same block>"
 case "$PV" in [0-9]*.[0-9]*.[0-9]*) ;; *) echo "MISS PLUGIN_VERSION='$PV' is not X.Y.Z -- restamp did NOT run"; exit 1 ;; esac
+case "$CV" in [0-9]*.[0-9]*.[0-9]*) ;; *) echo "MISS CONTENT_VERSION='$CV' is not X.Y.Z -- restamp did NOT run"; exit 1 ;; esac
 case "$LU" in [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;; *) echo "MISS LAST_UPDATED='$LU' is not YYYY-MM-DD -- restamp did NOT run"; exit 1 ;; esac
 ok=0; miss=0; skip=0
 for rel in .claude/features/board.md .claude/features/TRACKER.md .claude/features/INDEX.md \
@@ -334,22 +335,24 @@ for rel in .claude/features/board.md .claude/features/TRACKER.md .claude/feature
   f="$TARGET/$rel"
   test -f "$f" || { echo "ABSENT $rel"; skip=$((skip+1)); continue; }
   test "$(head -n 1 "$f")" = "---" || { echo "SKIP   $rel (no frontmatter -- never synthesized)"; skip=$((skip+1)); continue; }
-  awk -v pv="$PV" -v gb="$GB" -v lu="$LU" '
+  awk -v pv="$PV" -v cv="$CV" -v gb="$GB" -v lu="$LU" '
     NR == 1 { print; next }
     !done && /^---[ \t]*$/ {
       if (!sv) print "version: \"" pv "\""
+      if (!sc) print "content_version: \"" cv "\""
       if (!sg) print "generated_by: \"" gb "\""
       if (!sl) print "last_updated: \"" lu "\""
       done = 1; print; next
     }
-    !done && /^version:/      { print "version: \"" pv "\"";      sv = 1; next }
-    !done && /^generated_by:/ { print "generated_by: \"" gb "\""; sg = 1; next }
-    !done && /^last_updated:/ { print "last_updated: \"" lu "\""; sl = 1; next }
+    !done && /^version:/         { print "version: \"" pv "\"";         sv = 1; next }
+    !done && /^content_version:/ { print "content_version: \"" cv "\""; sc = 1; next }
+    !done && /^generated_by:/    { print "generated_by: \"" gb "\"";    sg = 1; next }
+    !done && /^last_updated:/    { print "last_updated: \"" lu "\"";    sl = 1; next }
     { print }
   ' "$f" > "$f.restamp.tmp" && mv "$f.restamp.tmp" "$f" \
     || { rm -f "$f.restamp.tmp"; echo "MISS   $rel rewrite failed"; miss=$((miss+1)); continue; }
-  if grep -qxF "version: \"$PV\"" "$f" && grep -qxF "generated_by: \"$GB\"" "$f" \
-     && grep -qxF "last_updated: \"$LU\"" "$f"; then
+  if grep -qxF "version: \"$PV\"" "$f" && grep -qxF "content_version: \"$CV\"" "$f" \
+     && grep -qxF "generated_by: \"$GB\"" "$f" && grep -qxF "last_updated: \"$LU\"" "$f"; then
     echo "STAMP  $rel"; ok=$((ok+1))
   else
     echo "MISS   $rel stamp not applied (no closing --- ?)"; miss=$((miss+1))
@@ -375,7 +378,7 @@ guard), so `enable` first, then `upgrade`.
 
 ## U6. Verify + report
 
-**Leftover-placeholder gate.** This block is self-contained and owned by THIS file (`PU` does not run P5). It scans the SAME path set the fresh path's P5 gate scans -- NOT just the ADD set. A drift-ADD writes whole files under `.claude/agents/`, `.claude/rules/` and `.claude/features/`, so an ADD-set-only scan would miss exactly the paths most likely to carry an unresolved token. It catches BOTH brace families: this skill's own DOUBLE-brace tokens and the SINGLE-brace metadata tokens `{PLUGIN_VERSION}` / `{GENERATED_BY}` / `{LAST_UPDATED}`.
+**Leftover-placeholder gate.** This block is self-contained and owned by THIS file (`PU` does not run P5). It scans the SAME path set the fresh path's P5 gate scans -- NOT just the ADD set. A drift-ADD writes whole files under `.claude/agents/`, `.claude/rules/` and `.claude/features/`, so an ADD-set-only scan would miss exactly the paths most likely to carry an unresolved token. It catches BOTH brace families: this skill's own DOUBLE-brace tokens and the SINGLE-brace metadata tokens `{PLUGIN_VERSION}` / `{CONTENT_VERSION}` / `{GENERATED_BY}` / `{LAST_UPDATED}`.
 
 Same self-contained rule as the header note: re-establish `TARGET` literally, assert it, then run.
 
@@ -384,7 +387,7 @@ Same self-contained rule as the header note: re-establish `TARGET` literally, as
 TARGET="<absolute path resolved in P0>"
 test -n "$TARGET" && test -d "$TARGET" || { echo "MISS TARGET unset or not a dir -- gate did NOT run"; exit 1; }
 T="$TARGET"; F="$T/.claude/features"
-LEFT="$(grep -rnE '\{\{|\{(PLUGIN_VERSION|GENERATED_BY|LAST_UPDATED)\}' \
+LEFT="$(grep -rnE '\{\{|\{(PLUGIN_VERSION|CONTENT_VERSION|GENERATED_BY|LAST_UPDATED)\}' \
   "$F" "$T/.claude/rules/tasks.md" "$T/.claude/agents/task-tracker.md" \
   "$T/.claude/skills/task-board" "$T/.claude/skills/task-spec" 2>/dev/null || true)"
 test -z "$LEFT" && echo "OK  no leftover placeholders" \
@@ -406,7 +409,7 @@ Read the probe output as:
 ```bash
 TARGET="<absolute path resolved in P0>"
 test -n "$TARGET" && test -d "$TARGET" || { echo "MISS TARGET unset or not a dir -- stamp gate did NOT run"; exit 1; }
-PV="<PLUGIN_VERSION from the SKILL.md block>"
+PV="<PLUGIN_VERSION from the SKILL.md block>"; CV="<CONTENT_VERSION from the same block>"
 bad=0
 for rel in .claude/features/board.md .claude/features/TRACKER.md .claude/features/INDEX.md \
            .claude/features/PROGRESS.md .claude/features/backlog/README.md \
@@ -416,8 +419,9 @@ for rel in .claude/features/board.md .claude/features/TRACKER.md .claude/feature
   # SAME skip rule as U5b, or the gate fails a file U5b correctly refused to touch.
   test "$(head -n 1 "$f")" = "---" || { echo "SKIP $rel (no frontmatter -- U5b never stamps it)"; continue; }
   grep -qxF "version: \"$PV\"" "$f" || { echo "MISS stale stamp: $rel -> $(grep -m1 '^version:' "$f" || echo '(none)')"; bad=$((bad+1)); }
+  grep -qxF "content_version: \"$CV\"" "$f" || { echo "MISS stale content_version: $rel -> $(grep -m1 '^content_version:' "$f" || echo '(none)')"; bad=$((bad+1)); }
 done
-test "$bad" -eq 0 && echo "OK  every frontmatter-carrying artifact stamped $PV" || echo "❌ $bad artifact(s) still stale -- re-run U5b"
+test "$bad" -eq 0 && echo "OK  every frontmatter-carrying artifact stamped $PV / $CV" || echo "❌ $bad artifact(s) still stale -- re-run U5b"
 ```
 A clean run prints `OK  every frontmatter-carrying artifact stamped <PV>` -- silence means the block did not run, !=PASS. A `SKIP` line is not a failure: it is a file whose line 1 is not `---`, which U5b refuses to touch by the same rule that protects a hand-authored task file.
 
@@ -452,9 +456,9 @@ Report the probe rows as these buckets:
 |-----------|----------|
 | `board.md` missing | Not an upgrade. STOP -- tell the user to run a fresh `/brewtools:task-board-setup install <path>` |
 | Every U4 row SKIP and `backfill-needed=0` | NOT a reason to stop before U5b. Skip U2's question and U3-U5, run U5b, report `content already installed, metadata restamped`. An `upgrade` that reports success without moving the stamp leaves `setup-status` printing `stale` forever |
-| A stamped artifact is present but its frontmatter has no `version:` (pre-standard install) | U5b INSERTS the trio before the closing `---`. That is how `stale (legacy, unstamped)` clears -- !=report it and move on |
+| A stamped artifact is present but its frontmatter has no `version:` (pre-standard install) | U5b INSERTS the quartet before the closing `---`. That is how `stale (legacy, unstamped)` clears -- !=report it and move on |
 | A stamped artifact's line 1 is not `---` | SKIP it, never synthesize frontmatter (same rule as a task file). Name it in the `restamped` bucket |
-| `doc_type` in a restamped file | Left exactly as found. These are mechanism-`b` artifacts, not byte-copies -- a locally chosen `user`/`skip` is the user's, and U5b owns only the trio |
+| `doc_type` in a restamped file | Left exactly as found. These are mechanism-`b` artifacts, not byte-copies -- a locally chosen `user`/`skip` is the user's, and U5b owns only the quartet |
 | ADD target already present | SKIP it; !=overwrite. Report as skipped-already-present |
 | `PROGRESS.md` present (any content, hand-edited or stale) | NEVER rewritten by upgrade -- it is an ADD-set file, so present = SKIP. `task-tracker` refreshes it on its next run |
 | PATCH target file missing | ADD it whole from its reference template with every token resolved, and NOTE the drift in the report |

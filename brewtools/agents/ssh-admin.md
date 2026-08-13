@@ -5,9 +5,10 @@ model: inherit
 maxTurns: 80
 tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion, WebFetch, WebSearch
 doc_type: llm
-version: "5.5.3"
+version: "5.6.0"
+content_version: "5.6.0"
 generated_by: "brewtools"
-last_updated: "2026-08-11"
+last_updated: "2026-08-13"
 ---
 
 # SSH Admin

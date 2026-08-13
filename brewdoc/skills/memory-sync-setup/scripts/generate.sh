@@ -32,6 +32,17 @@ resolve_plugin_version() {
 }
 VERSION=$(resolve_plugin_version)
 
+# content_version has no plugin.json field - it is this GENERATOR's own last-changed release,
+# self-located from the brewcode-meta marker bump-version.sh stamps into this SKILL.md
+# (STAMPED_FILES, kind marker) - same pattern as docsync-setup's INSTALL.md config block.
+resolve_content_version() {
+  [ -f "$SKILL_DIR/SKILL.md" ] || { echo "unknown"; return 0; }
+  _cv=$(grep -m1 'brewcode-meta:' "$SKILL_DIR/SKILL.md" 2>/dev/null | sed -n 's/.*content_version=\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/p')
+  [ -n "$_cv" ] || _cv="unknown"
+  printf '%s\n' "$_cv"
+}
+CONTENT_VERSION=$(resolve_content_version)
+
 # Target paths are relative to the resolved ROOT (see resolve_root - every mode cd's there first).
 TARGET=".claude/skills/memory-sync"
 TARGET_REFS="$TARGET/references"
@@ -39,10 +50,10 @@ EMITTED_REFS="memory-guide.md agent-audit.md hard-sync.md"
 EMITTED_N=3
 
 # Provenance lives in the emitted SKILL.md's YAML FRONTMATTER (the artifact-metadata standard):
-# doc_type / version / generated_by / last_updated, then the skill-specific surface_files.
+# doc_type / version / content_version / generated_by / last_updated, then the skill-specific surface_files.
 META_DOC_TYPE="llm"
 META_GENERATED_BY="brewdoc:memory-sync-setup"
-META_KEYS="doc_type version generated_by last_updated surface_files"
+META_KEYS="doc_type version content_version generated_by last_updated surface_files"
 # Pre-5.0 installs stamped a tail comment instead. Kept ONLY to recognise them and report stale-legacy.
 LEGACY_STAMP_PREFIX="<!-- memory-sync template v"
 # Runtime tokens the emitted skill resolves per RUN - allow-listed by validate, MUST survive emit.
@@ -70,6 +81,7 @@ validate_templates() {
   done
   # A stamp is only worth writing if it names a real plugin version.
   [ "$VERSION" != "unknown" ] || { echo "❌ FAILED: cannot read .version from $PLUGIN_JSON - reinstall brewdoc"; exit 1; }
+  [ "$CONTENT_VERSION" != "unknown" ] || { echo "❌ FAILED: cannot read content_version from $SKILL_DIR/SKILL.md - reinstall brewdoc"; exit 1; }
 }
 
 # ── target root ─────────────────────────────────────────────────────────────────
@@ -171,14 +183,14 @@ surface_total() { derive_surface_counts | cut -d' ' -f1; }
 _stamp_frontmatter() {
   _sfile="$1"
   _sfv=$(printf '%s' "${SURFACE_COUNTS:-unknown}" | tr -d '"' | tr '\n\r' '  ')
-  awk -v dt="$META_DOC_TYPE" -v ver="$VERSION" -v gb="$META_GENERATED_BY" \
+  awk -v dt="$META_DOC_TYPE" -v ver="$VERSION" -v cv="$CONTENT_VERSION" -v gb="$META_GENERATED_BY" \
       -v lu="$(date +%F)" -v sf="$_sfv" '
     BEGIN { n = 0; done = 0 }
     NR == 1 && $0 != "---" { exit 3 }
     /^---[[:space:]]*$/ {
       n++
       if (n == 2 && !done) {
-        printf "doc_type: %s\nversion: \"%s\"\ngenerated_by: \"%s\"\nlast_updated: \"%s\"\nsurface_files: \"%s\"\n", dt, ver, gb, lu, sf
+        printf "doc_type: %s\nversion: \"%s\"\ncontent_version: \"%s\"\ngenerated_by: \"%s\"\nlast_updated: \"%s\"\nsurface_files: \"%s\"\n", dt, ver, cv, gb, lu, sf
         done = 1
       }
     }
@@ -453,6 +465,7 @@ restamp_skill() {
   fi
 
   _was=$(_fm_meta "$_f" version); [ -n "$_was" ] || _was="(unstamped)"
+  _wascv=$(_fm_meta "$_f" content_version); [ -n "$_wascv" ] || _wascv="(unstamped)"
   _wasl=$(_legacy_stamp "$_f")
   # Legacy installs (emitted while the template still baked it) are user-only; the emitted skill must be
   # model-invocable, so the key is dropped here - the only mode that can reach an installed SKILL.md.
@@ -466,19 +479,19 @@ restamp_skill() {
   cp "$_f" "$_bd/orig" || { echo "❌ FAILED: cannot read $_f"; exit 1; }
   _meta_body "$_bd/orig" > "$_bd/pre"
 
-  if ! awk -v dt="$_dt" -v ver="$VERSION" -v gb="$META_GENERATED_BY" -v lu="$_lu" -v sf="$_sfv" \
+  if ! awk -v dt="$_dt" -v ver="$VERSION" -v cv="$CONTENT_VERSION" -v gb="$META_GENERATED_BY" -v lu="$_lu" -v sf="$_sfv" \
            -v legacy="$LEGACY_STAMP_PREFIX" '
     BEGIN { n = 0; done = 0 }
     NR == 1 && $0 != "---" { exit 3 }
     /^---[[:space:]]*$/ {
       n++
       if (n == 2 && !done) {
-        printf "doc_type: %s\nversion: \"%s\"\ngenerated_by: \"%s\"\nlast_updated: \"%s\"\nsurface_files: \"%s\"\n", dt, ver, gb, lu, sf
+        printf "doc_type: %s\nversion: \"%s\"\ncontent_version: \"%s\"\ngenerated_by: \"%s\"\nlast_updated: \"%s\"\nsurface_files: \"%s\"\n", dt, ver, cv, gb, lu, sf
         done = 1
       }
       print; next
     }
-    n == 1 && /^(doc_type|version|generated_by|last_updated|surface_files):/ { next }
+    n == 1 && /^(doc_type|version|content_version|generated_by|last_updated|surface_files):/ { next }
     n == 1 && /^disable-model-invocation:/ { next }
     n >= 2 && index($0, legacy) > 0 { next }
     { print }
@@ -498,7 +511,8 @@ restamp_skill() {
   cp "$_bd/new" "$_f" || { echo "❌ FAILED: cannot write $_f"; exit 1; }
 
   echo "RESTAMPED: $_f"
-  echo "  version:       $_was -> $VERSION"
+  echo "  version:         $_was -> $VERSION"
+  echo "  content_version: $_wascv -> $CONTENT_VERSION"
   echo "  last_updated:  -> $_lu"
   echo "  generated_by:  -> $META_GENERATED_BY"
   echo "  doc_type:      -> $_dt"
@@ -580,18 +594,19 @@ validate_emit() {
   done
   [ "$_refbad" -eq 0 ] && echo "✅ references consistent both ways (every citation resolves, every emitted reference is cited)"
 
-  # (4) provenance frontmatter - the four standard keys plus surface_files
+  # (4) provenance frontmatter - the five standard keys plus surface_files
   _mv=$(_fm_meta "$TARGET/SKILL.md" version)
+  _mc=$(_fm_meta "$TARGET/SKILL.md" content_version)
   _mg=$(_fm_meta "$TARGET/SKILL.md" generated_by)
   _ml=$(_fm_meta "$TARGET/SKILL.md" last_updated)
   _md=$(_fm_meta "$TARGET/SKILL.md" doc_type)
   _ms=$(_fm_meta "$TARGET/SKILL.md" surface_files)
   _legacy=$(_legacy_stamp "$TARGET/SKILL.md")
-  if [ -z "$_mv" ] || [ -z "$_mg" ] || [ -z "$_ml" ] || [ -z "$_md" ] || [ -z "$_ms" ]; then
+  if [ -z "$_mv" ] || [ -z "$_mc" ] || [ -z "$_mg" ] || [ -z "$_ml" ] || [ -z "$_md" ] || [ -z "$_ms" ]; then
     if [ -n "$_legacy" ]; then
       echo "❌ FAILED: $TARGET/SKILL.md carries the pre-5.0 TAIL stamp, not provenance frontmatter:"
       echo "   $_legacy"
-      echo "   -> run \`generate.sh restamp\`: it writes doc_type/version/generated_by/last_updated/surface_files"
+      echo "   -> run \`generate.sh restamp\`: it writes doc_type/version/content_version/generated_by/last_updated/surface_files"
       echo "      and deletes the tail line, touching nothing else (this is also the last step of \`upgrade\`)"
     else
       _lack=""
@@ -599,18 +614,18 @@ validate_emit() {
         [ -n "$(_fm_meta "$TARGET/SKILL.md" "$_k")" ] || _lack="$_lack${_lack:+, }$_k"
       done
       echo "❌ FAILED: $TARGET/SKILL.md: provenance frontmatter incomplete (missing: $_lack)"
-      echo "   -> run \`generate.sh restamp\` to write all five keys in place (hand-edits untouched)"
+      echo "   -> run \`generate.sh restamp\` to write all six keys in place (hand-edits untouched)"
     fi
     _errors=$((_errors+1))
-  elif [ "$_mv" != "$VERSION" ]; then
+  elif [ "$_mv" != "$VERSION" ] || [ "$_mc" != "$CONTENT_VERSION" ]; then
     # Never name `upgrade` here: `upgrade` is the mode whose tail runs this check, so pointing back at it
     # was a closed loop with MEMORY_SYNC_FORCE=1 (hand-edit destroying) as the only documented escape.
-    echo "❌ FAILED: $TARGET/SKILL.md: stamped version $_mv != plugin version $VERSION"
-    echo "   -> run \`generate.sh restamp\`: it refreshes version/last_updated/surface_files in place,"
+    echo "❌ FAILED: $TARGET/SKILL.md: stamped version $_mv/$_mc != plugin version $VERSION/$CONTENT_VERSION"
+    echo "   -> run \`generate.sh restamp\`: it refreshes version/content_version/last_updated/surface_files in place,"
     echo "      body and hand-edits untouched, and is the mandatory last step of \`upgrade\`"
     _errors=$((_errors+1))
   else
-    echo "✅ provenance frontmatter present: doc_type=$_md version=$_mv generated_by=$_mg last_updated=$_ml surface_files=\"$_ms\""
+    echo "✅ provenance frontmatter present: doc_type=$_md version=$_mv content_version=$_mc generated_by=$_mg last_updated=$_ml surface_files=\"$_ms\""
     [ -z "$_legacy" ] || echo "⚠️ a pre-5.0 tail stamp also survives in this file - delete that line, the frontmatter supersedes it"
   fi
 
@@ -645,7 +660,7 @@ status_report() {
   if [ ! -f "$_skf" ]; then
     # Same KEY set as the installed branch - a parser keyed on any row must not go blind on a fresh target.
     echo "INSTALLED=no"; echo "PARKED=no"; echo "STAMP_FORMAT=none"
-    echo "META_DOC_TYPE=none"; echo "META_VERSION=none"; echo "META_GENERATED_BY=none"
+    echo "META_DOC_TYPE=none"; echo "META_VERSION=none"; echo "META_CONTENT_VERSION=none"; echo "META_GENERATED_BY=none"
     echo "META_LAST_UPDATED=none"; echo "META_SURFACE=none"
     echo "SURFACE_FILES_NOW=$(surface_total)"; echo "SURFACE_FILES_STAMPED=unknown"
     echo "MISSING_FILES=$(( 1 + EMITTED_N ))"
@@ -666,6 +681,7 @@ status_report() {
   # Provenance: frontmatter (5.0+) | legacy tail stamp (pre-5.0) | none. Read from the live SKILL.md,
   # or from the parked SKILL.md.disabled - both carry the same stamp.
   _sv=$(_fm_meta "$_skf" version)
+  _sc=$(_fm_meta "$_skf" content_version)
   _sg=$(_fm_meta "$_skf" generated_by)
   _sd=$(_fm_meta "$_skf" last_updated)
   _st=$(_fm_meta "$_skf" doc_type)
@@ -678,15 +694,16 @@ status_report() {
     _sv=$(printf '%s\n' "$_legacy" | sed -e "s|^.*${LEGACY_STAMP_PREFIX}||" -e 's/ .*//')
     _sd=$(printf '%s\n' "$_legacy" | sed -e 's/.* emitted //' -e 's/ .*//')
     _ss=$(printf '%s\n' "$_legacy" | sed -e 's/.*| surface: //' -e 's/ -->$//')
-    _sg="brewdoc:memory-sync-setup"; _st=unknown
+    _sg="brewdoc:memory-sync-setup"; _st=unknown; _sc=unknown
     echo "NOTE_LEGACY=pre-5.0 tail stamp (template v$_sv) - no provenance frontmatter; \`generate.sh restamp\` migrates it (it is also the last step of \`upgrade\`)"
     _drifts=$((_drifts+1))
   elif [ -z "$_sv" ]; then
     _fmt=none
-    _sv=UNSTAMPED; _sd=UNSTAMPED; _ss=UNSTAMPED; _sg=UNSTAMPED; _st=UNSTAMPED
+    _sv=UNSTAMPED; _sd=UNSTAMPED; _ss=UNSTAMPED; _sg=UNSTAMPED; _st=UNSTAMPED; _sc=UNSTAMPED
   fi
   [ -n "$_sd" ] || _sd=unknown
   [ -n "$_st" ] || _st=unknown
+  [ -n "$_sc" ] || _sc=unknown
   if [ "$_ss" = UNSTAMPED ] || [ -z "$_ss" ]; then
     _stamped_n=unknown
   else
@@ -696,8 +713,11 @@ status_report() {
   if [ "$_fmt" = frontmatter ] && [ "$_sv" != "$VERSION" ]; then
     echo "NOTE_VERSION=plugin version moved $_sv -> $VERSION"; _drifts=$((_drifts+1))
   fi
+  if [ "$_fmt" = frontmatter ] && [ "$_sc" != "$CONTENT_VERSION" ]; then
+    echo "NOTE_CONTENT_VERSION=content_version moved $_sc -> $CONTENT_VERSION"; _drifts=$((_drifts+1))
+  fi
   echo "STAMP_FORMAT=$_fmt"
-  echo "META_DOC_TYPE=$_st"; echo "META_VERSION=$_sv"; echo "META_GENERATED_BY=$_sg"
+  echo "META_DOC_TYPE=$_st"; echo "META_VERSION=$_sv"; echo "META_CONTENT_VERSION=$_sc"; echo "META_GENERATED_BY=$_sg"
   echo "META_LAST_UPDATED=$_sd"; echo "META_SURFACE=$_ss"
 
   _now=$(surface_total)

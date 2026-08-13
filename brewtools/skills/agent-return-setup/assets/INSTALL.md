@@ -1,3 +1,4 @@
+<!-- brewcode-meta: version=5.6.0 content_version=5.6.0 generated_by=brewtools:agent-return-setup -->
 # agent-return hooks — install / configure / remove runbook
 
 Self-contained hook assets. The `/brewtools:agent-return-setup` skill copies these into a
@@ -82,6 +83,7 @@ Global:  `~/.claude/agent-return.json` — fallback.
   "passTokens": 1000,
   "fileTokens": 2500,
   "version": "X.Y.Z",
+  "content_version": "X.Y.Z",
   "generated_by": "brewtools:agent-return-setup",
   "last_updated": "YYYY-MM-DD"
 }
@@ -92,7 +94,7 @@ Global:  `~/.claude/agent-return.json` — fallback.
 | `enabled` | must be exactly `true`; anything else (or no file) = feature off, both hooks no-op |
 | `passTokens` | pass ceiling, the number quoted as `budget` in BOTH orders; positive integer; default `1000` |
 | `fileTokens` | compress/file tier boundary; positive integer; default `2500` |
-| `version` / `generated_by` / `last_updated` | provenance, MANDATORY, re-stamped by every mode that writes this file (install, upgrade, enable, disable). Inert at runtime — the module reads only the three keys above. Never `doc_type`: that is a `.md`-frontmatter field |
+| `version` / `content_version` / `generated_by` / `last_updated` | provenance, MANDATORY, re-stamped by every mode that writes this file (install, upgrade, enable, disable). `version` = the plugin release that produced THIS write; `content_version` = the release in which this INSTALL.md's generator logic last changed, read from this runbook's own header marker. Inert at runtime — the module reads only the threshold keys above. Never `doc_type`: that is a `.md`-frontmatter field |
 
 **Threshold precedence, per threshold, first hit wins:**
 
@@ -179,6 +181,14 @@ function today(){                               // LOCAL date, like date +%F - n
   const d=new Date();
   return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
 }
+function contentVersion(){                      // own-header only; no plugin.json field for this
+  try{
+    const first=fs.readFileSync(process.env.RUNBOOK||"","utf8").split("\n",1)[0];
+    const m=/content_version=([0-9]+\.[0-9]+\.[0-9]+)/.exec(first);
+    if(m) return m[1];
+  }catch{}
+  return "";
+}
 function reqInt(name){                          // NO default: an empty value means the export did not arrive
   const raw=(process.env[name]||"").trim();
   if(!raw){ console.error("ABORT: "+name+" is empty - export it before this block (the skill always has a value; defaulting here would hide a lost export)"); process.exit(1); }
@@ -204,14 +214,17 @@ c.passTokens=pass;
 c.fileTokens=file;
 const pv=pluginVersion();
 if(!pv){ console.error("ABORT: cannot resolve plugin version - export PLUGIN_VERSION=X.Y.Z or fix PJSON: "+process.env.PJSON); process.exit(1); }
+const cv=contentVersion();
+if(!cv){ console.error("ABORT: cannot resolve content_version - own header marker unreadable/missing at "+process.env.RUNBOOK); process.exit(1); }
 const lu=today();
-c.version=pv; c.generated_by=GB; c.last_updated=lu;   // the 3 mandatory JSON metadata keys, on EVERY write
+delete c.version; delete c.content_version; delete c.generated_by; delete c.last_updated;
+c.version=pv; c.content_version=cv; c.generated_by=GB; c.last_updated=lu;   // the 4 mandatory JSON metadata keys, on EVERY write, in fixed order
 delete c.doc_type;                                    // frontmatter-only field; a JSON carrier never takes it
 fs.mkdirSync(p.dirname(f),{recursive:true});
 fs.writeFileSync(f,JSON.stringify(c,null,2)+"\n");
 const back=JSON.parse(fs.readFileSync(f,"utf8"));   // post-write verification
 if(back.passTokens!==pass||back.fileTokens!==file){ console.error("ABORT: verification failed for "+f); process.exit(1); }
-if(back.version!==pv||back.generated_by!==GB||back.last_updated!==lu){ console.error("ABORT: metadata verification failed for "+f); process.exit(1); }
+if(back.version!==pv||back.content_version!==cv||back.generated_by!==GB||back.last_updated!==lu){ console.error("ABORT: metadata verification failed for "+f); process.exit(1); }
 console.log("OK wrote "+f+" "+JSON.stringify(back));
 if(back.enabled!==true) console.log("NOTE: enabled=false was preserved from the existing config - run ENABLE to switch it on");
 ' && echo "✅ config" || echo "❌ FAILED"
@@ -520,6 +533,14 @@ function today(){                               // LOCAL date, like date +%F - n
   const d=new Date();
   return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
 }
+function contentVersion(){                      // own-header only; no plugin.json field for this
+  try{
+    const first=fs.readFileSync(process.env.RUNBOOK||"","utf8").split("\n",1)[0];
+    const m=/content_version=([0-9]+\.[0-9]+\.[0-9]+)/.exec(first);
+    if(m) return m[1];
+  }catch{}
+  return "";
+}
 let c={passTokens:1000,fileTokens:2500};
 if(fs.existsSync(f)){
   const raw=fs.readFileSync(f,"utf8");
@@ -532,14 +553,17 @@ if(fs.existsSync(f)){
 c.enabled = process.env.ON === "1";
 const pv=pluginVersion();
 if(!pv){ console.error("ABORT: cannot resolve plugin version - export PLUGIN_VERSION=X.Y.Z or fix PJSON: "+process.env.PJSON); process.exit(1); }
+const cv=contentVersion();
+if(!cv){ console.error("ABORT: cannot resolve content_version - own header marker unreadable/missing at "+process.env.RUNBOOK); process.exit(1); }
 const lu=today();
-c.version=pv; c.generated_by=GB; c.last_updated=lu;   // every write stamps the 3 mandatory keys
+delete c.version; delete c.content_version; delete c.generated_by; delete c.last_updated;
+c.version=pv; c.content_version=cv; c.generated_by=GB; c.last_updated=lu;   // every write stamps the 4 mandatory keys, in fixed order
 delete c.doc_type;                                    // frontmatter-only field; a JSON carrier never takes it
 fs.mkdirSync(p.dirname(f),{recursive:true});
 fs.writeFileSync(f,JSON.stringify(c,null,2)+"\n");
 const back=JSON.parse(fs.readFileSync(f,"utf8"));
 if(back.enabled!==c.enabled){ console.error("ABORT: verification failed for "+f); process.exit(1); }
-if(back.version!==pv||back.generated_by!==GB||back.last_updated!==lu){ console.error("ABORT: metadata verification failed for "+f); process.exit(1); }
+if(back.version!==pv||back.content_version!==cv||back.generated_by!==GB||back.last_updated!==lu){ console.error("ABORT: metadata verification failed for "+f); process.exit(1); }
 console.log((back.enabled?"ENABLED ":"DISABLED ")+f);
 ' && echo "✅ toggled" || echo "❌ FAILED"
 ```

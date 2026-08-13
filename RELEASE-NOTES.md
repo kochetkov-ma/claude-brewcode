@@ -2,6 +2,38 @@
 
 ---
 
+## v5.6.0 (2026-08-13)
+
+> Docs: [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) | [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [teams-setup](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | [superreview-setup](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [agent-deadline-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline-setup/) | [agent-return-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-return-setup/) | [agent-router-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-router-setup/) | [task-board-setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) | [docsync-setup](https://doc-claude.brewcode.app/brewdoc/skills/docsync-setup/) | [md-to-pdf](https://doc-claude.brewcode.app/brewdoc/skills/md-to-pdf/) | [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/)
+
+> `setup-status` reported every installed setup "stale/needs re-verification" on every plugin version bump, even when that setup's actual generator logic hadn't changed — `version` alone can't distinguish a real content change from a release that only touched unrelated files. A second field, `content_version`, now rides alongside it on every stamped artifact: `version` is provenance (which release touched this install), `content_version` is the last release in which the artifact's tracked content actually changed. `bump-version.sh` computes it automatically per artifact by diffing against the git tag matching its previous `content_version`, metadata stripped, byte-for-byte.
+
+### brewcode
+
+#### Added
+
+- **`content_version` field** on every baked artifact stamp (byte-copied assets, hand-maintained shipped agents, `artifact-metadata.md` itself) — computed by `bump-version.sh`'s new `strip_meta_for_diff()`/`content_version_for()`, preserved across a release when the artifact's body is unchanged, advanced to the new version otherwise
+- `setup-status/references/artifact-metadata.md` rewritten as the canonical five-field spec (`doc_type, version, content_version, generated_by, last_updated`), key order and required-fields-by-mechanism table
+- `semble-setup`, `teams-setup`, `superreview-setup`, `e2e` generator scripts and status checks now read and report `content_version` alongside `version`
+
+#### Fixed
+
+- **`setup-status` false-staleness signal.** A setup whose generator/content logic hadn't actually changed since it was installed no longer flags "needs re-verification" on every unrelated plugin release
+
+### brewdoc
+
+#### Added
+
+- `docsync-setup`, `memory-sync-setup`, `md-to-pdf` emitted artifacts and generators now stamp and check `content_version` the same way as brewcode's setups
+
+### brewtools
+
+#### Added
+
+- `manager-setup`'s `writeState()` (`hooks/lib/manager-state.mjs`), `agent-deadline-setup`, `agent-return-setup`, `agent-router-setup`, `task-board-setup` now stamp and check `content_version` on their installed artifacts, following the same contract
+
+---
+
 ## v5.5.3 (2026-08-11)
 
 > Docs: [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/)

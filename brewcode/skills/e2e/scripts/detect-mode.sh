@@ -30,6 +30,19 @@ case "$PLUGIN_VERSION" in
   *) printf 'ERROR:cannot resolve plugin version (X.Y.Z) from %s - refusing to stamp artifacts with a fake version\n' "$PLUGIN_JSON"; exit 1 ;;
 esac
 
+# content_version - self-located from this skill's own SKILL.md brewcode-meta marker, the same
+# way docsync-setup and agent-deadline-setup resolve it. Stamped by bump-version.sh at release;
+# never the running PLUGIN_VERSION, which would defeat the whole point of a separate counter.
+SKILL_MD="$SCRIPT_DIR/../SKILL.md"
+CONTENT_VERSION=""
+if [ -f "$SKILL_MD" ]; then
+  CONTENT_VERSION=$(grep -m1 'brewcode-meta:' "$SKILL_MD" 2>/dev/null | sed -n 's/.*content_version=\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/p' || true)
+fi
+case "$CONTENT_VERSION" in
+  [0-9]*.[0-9]*.[0-9]*) : ;;
+  *) printf 'ERROR:cannot resolve content_version (X.Y.Z) from %s - refusing to stamp artifacts with a fake version\n' "$SKILL_MD"; exit 1 ;;
+esac
+
 # Parse first word and remainder
 FIRST=""
 REST=""
@@ -84,6 +97,7 @@ printf 'MODE:%s\n' "$MODE"
 # The three metadata scalars every artifact this run writes must carry. Emitted here so the skill
 # never has to guess a version or invent a date spelling.
 printf 'PLUGIN_VERSION:%s\n' "$PLUGIN_VERSION"
+printf 'CONTENT_VERSION:%s\n' "$CONTENT_VERSION"
 printf 'GENERATED_BY:brewcode:e2e\n'
 printf 'LAST_UPDATED:%s\n' "$(date +%F)"
 

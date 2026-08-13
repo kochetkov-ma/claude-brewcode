@@ -139,13 +139,14 @@ mkdir -p .claude/e2e && test -s .claude/e2e/e2e-rules.md && echo "OK" || echo "F
 ```
 > **STOP if FAILED** — every agent halts on a missing rules file by its own Rules Loading Protocol.
 
-The rules file gets the standard frontmatter, ABOVE its `# E2E Testing Rules` heading — fill the three
-values from the Phase 0 `PLUGIN_VERSION:` / `GENERATED_BY:` / `LAST_UPDATED:` lines:
+The rules file gets the standard frontmatter, ABOVE its `# E2E Testing Rules` heading — fill the four
+values from the Phase 0 `PLUGIN_VERSION:` / `CONTENT_VERSION:` / `GENERATED_BY:` / `LAST_UPDATED:` lines:
 
 ```yaml
 ---
 doc_type: llm
 version: "{PLUGIN_VERSION}"
+content_version: "{CONTENT_VERSION}"
 generated_by: "brewcode:e2e"
 last_updated: "{LAST_UPDATED}"
 ---
@@ -162,24 +163,27 @@ Then create `.claude/e2e/config.json`:
   "agents": ["e2e-architect", "e2e-scenario-analyst", "e2e-automation-tester", "e2e-manual-tester", "e2e-reviewer"],
   "rulesPath": ".claude/e2e/e2e-rules.md",
   "version": "{PLUGIN_VERSION}",
+  "content_version": "{CONTENT_VERSION}",
   "generated_by": "brewcode:e2e",
   "last_updated": "{LAST_UPDATED}"
 }
 ```
 
-> `version` / `generated_by` / `last_updated` replace the old `lastSetup` key, whose format nothing ever
-> bound. `{PLUGIN_VERSION}` and `{LAST_UPDATED}` are the `PLUGIN_VERSION:` and `LAST_UPDATED:` lines
-> Phase 0's `detect-mode.sh` already printed — the ONE command that produces them, so the date is always
-> `date +%F` (`YYYY-MM-DD`) and the version always comes from `.claude-plugin/plugin.json`. Never
-> hardcode either. Migrating an older install: drop `lastSetup`, write the three keys.
+> `version` / `content_version` / `generated_by` / `last_updated` replace the old `lastSetup` key,
+> whose format nothing ever bound. `{PLUGIN_VERSION}`, `{CONTENT_VERSION}` and `{LAST_UPDATED}` are the
+> `PLUGIN_VERSION:`, `CONTENT_VERSION:` and `LAST_UPDATED:` lines Phase 0's `detect-mode.sh` already
+> printed — the ONE command that produces them, so the date is always `date +%F` (`YYYY-MM-DD`), the
+> plugin version always comes from `.claude-plugin/plugin.json`, and `content_version` is self-located
+> from this SKILL.md's own `brewcode-meta:` marker (`bump-version.sh` stamps it at release). Never
+> hardcode any of them. Migrating an older install: drop `lastSetup`, write the four keys.
 >
-> `{PLUGIN_VERSION}` is always a real `X.Y.Z` here: `detect-mode.sh` hard-fails when it cannot read
-> the manifest, so Phase 0 never hands this mode a placeholder. If you are ever holding something
-> that is not `X.Y.Z` — `unknown`, an empty string, an unsubstituted `{PLUGIN_VERSION}` — do NOT
-> write the file. Stop and report it.
+> `{PLUGIN_VERSION}` and `{CONTENT_VERSION}` are always real `X.Y.Z` here: `detect-mode.sh` hard-fails
+> when it cannot read the manifest or the marker, so Phase 0 never hands this mode a placeholder. If
+> you are ever holding something that is not `X.Y.Z` — `unknown`, an empty string, an unsubstituted
+> `{PLUGIN_VERSION}`/`{CONTENT_VERSION}` — do NOT write the file. Stop and report it.
 
 Optionally generate `.claude/rules/e2e-conventions.md` (~20-30 lines) with key rules. It is a rule file
-Claude Code auto-loads, so it carries `paths:` and `description:` plus the same four standard keys:
+Claude Code auto-loads, so it carries `paths:` and `description:` plus the same five standard keys:
 
 ```yaml
 ---
@@ -188,6 +192,7 @@ paths:
 description: e2e-conventions — condensed E2E rules export; full set in .claude/e2e/e2e-rules.md
 doc_type: llm
 version: "{PLUGIN_VERSION}"
+content_version: "{CONTENT_VERSION}"
 generated_by: "brewcode:e2e"
 last_updated: "{LAST_UPDATED}"
 ---

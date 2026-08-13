@@ -7,6 +7,7 @@ argument-hint: "[prompt] <file.md> [--engine name] [\"llm prompt\"] | styles | t
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion]
 model: sonnet
 ---
+<!-- brewcode-meta: version=5.6.0 content_version=5.6.0 generated_by=brewdoc:md-to-pdf -->
 
 # MD to PDF
 
@@ -114,12 +115,13 @@ If no saved preference and no `--engine` flag -- use `AskUserQuestion` with the 
   "engine": "reportlab",
   "pygments_theme": "github",
   "version": "{PLUGIN_VERSION}",
+  "content_version": "{CONTENT_VERSION}",
   "generated_by": "brewdoc:md-to-pdf",
   "last_updated": "{LAST_UPDATED}"
 }
 ```
 
-The three provenance keys are mandatory on every write of this file and are RESOLVED, never hardcoded.
+The four provenance keys are mandatory on every write of this file and are RESOLVED, never hardcoded.
 
 **EXECUTE** using Bash tool (replace `ENGINE_VALUE` and `THEME_VALUE` with the chosen values):
 ```bash
@@ -127,10 +129,21 @@ ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || echo 
 PJ="${CLAUDE_SKILL_DIR}/../../.claude-plugin/plugin.json"
 PV=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1])).get('version',''))" "$PJ" 2>/dev/null || true)
 [ -n "$PV" ] || { echo "❌ cannot read version from $PJ -- reinstall brewdoc"; exit 1; }
+SKILL_MD="${CLAUDE_SKILL_DIR}/SKILL.md"
+CV=$(python3 -c "
+import re,sys
+for line in open(sys.argv[1]):
+    if 'brewcode-meta:' in line:
+        m = re.search(r'content_version=(\d+\.\d+\.\d+)', line)
+        if m:
+            print(m.group(1))
+        break
+" "$SKILL_MD" 2>/dev/null || true)
+[ -n "$CV" ] || { echo "❌ cannot read content_version from $SKILL_MD -- reinstall brewdoc"; exit 1; }
 mkdir -p "$ROOT/.claude"
-printf '{\n  "engine": "ENGINE_VALUE",\n  "pygments_theme": "THEME_VALUE",\n  "version": "%s",\n  "generated_by": "brewdoc:md-to-pdf",\n  "last_updated": "%s"\n}\n' "$PV" "$(date +%F)" > "$ROOT/.claude/md-to-pdf.config.json" \
+printf '{\n  "engine": "ENGINE_VALUE",\n  "pygments_theme": "THEME_VALUE",\n  "version": "%s",\n  "content_version": "%s",\n  "generated_by": "brewdoc:md-to-pdf",\n  "last_updated": "%s"\n}\n' "$PV" "$CV" "$(date +%F)" > "$ROOT/.claude/md-to-pdf.config.json" \
   && python3 -c "import json,sys;json.load(open(sys.argv[1]))" "$ROOT/.claude/md-to-pdf.config.json" \
-  && echo "✅ config written (version $PV)" || { echo "❌ config invalid JSON"; exit 1; }
+  && echo "✅ config written (version $PV, content_version $CV)" || { echo "❌ config invalid JSON"; exit 1; }
 ```
 
 > **STOP if ❌** -- fix before continuing.
@@ -206,7 +219,7 @@ Options: `github` (default), `monokai`, `friendly`, `solarized-dark`, `solarized
 **Question 4 -- Footer format:**
 Options: `Page {page} of {total}` (default), `{page}/{total}`, `Disabled`
 
-Build JSON config matching `styles/default.json` structure, overriding changed values, and Write it to a temp file (e.g. `/tmp/md-to-pdf-styles.json`). The merge below then lands it in `.claude/md-to-pdf.config.json` with the three mandatory provenance keys, carrying over any `engine` / `pygments_theme` the file already held -- this writer replaces the whole file, and dropping those would silently reset the saved engine choice.
+Build JSON config matching `styles/default.json` structure, overriding changed values, and Write it to a temp file (e.g. `/tmp/md-to-pdf-styles.json`). The merge below then lands it in `.claude/md-to-pdf.config.json` with the four mandatory provenance keys, carrying over any `engine` / `pygments_theme` the file already held -- this writer replaces the whole file, and dropping those would silently reset the saved engine choice.
 
 **EXECUTE** using Bash tool (replace `STYLE_JSON_PATH` with the temp file you wrote):
 ```bash
@@ -214,25 +227,36 @@ ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || echo 
 CFG="$ROOT/.claude/md-to-pdf.config.json"
 NEW="STYLE_JSON_PATH"
 PJ="${CLAUDE_SKILL_DIR}/../../.claude-plugin/plugin.json"
+SKILL_MD="${CLAUDE_SKILL_DIR}/SKILL.md"
 mkdir -p "$ROOT/.claude"
-CFG="$CFG" NEW="$NEW" PJ="$PJ" TODAY="$(date +%F)" python3 - <<'PY'
-import json, os
+CFG="$CFG" NEW="$NEW" PJ="$PJ" SKILL_MD="$SKILL_MD" TODAY="$(date +%F)" python3 - <<'PY'
+import json, os, re
 cfg_p, new_p = os.environ["CFG"], os.environ["NEW"]
 pv = json.load(open(os.environ["PJ"])).get("version")
 if not pv:
     raise SystemExit("no version in " + os.environ["PJ"])
+cv = None
+for line in open(os.environ["SKILL_MD"]):
+    if "brewcode-meta:" in line:
+        m = re.search(r"content_version=(\d+\.\d+\.\d+)", line)
+        if m:
+            cv = m.group(1)
+        break
+if not cv:
+    raise SystemExit("no content_version in " + os.environ["SKILL_MD"])
 old = json.load(open(cfg_p)) if os.path.exists(cfg_p) else {}
 data = json.load(open(new_p))
 for k in ("engine", "pygments_theme"):
     if k in old and k not in data:
         data[k] = old[k]
 data["version"] = pv
+data["content_version"] = cv
 data["generated_by"] = "brewdoc:md-to-pdf"
 data["last_updated"] = os.environ["TODAY"]
 with open(cfg_p, "w") as fh:
     json.dump(data, fh, indent=2)
     fh.write("\n")
-print("OK version=%s engine=%s" % (pv, data.get("engine", "(unset)")))
+print("OK version=%s content_version=%s engine=%s" % (pv, cv, data.get("engine", "(unset)")))
 PY
 [ $? -eq 0 ] && echo "✅ styles saved" || { echo "❌ styles save FAILED"; exit 1; }
 rm -f "$NEW"
@@ -240,7 +264,7 @@ rm -f "$NEW"
 
 > **STOP if ❌** -- fix before continuing.
 
-The three keys sit at the top level beside the style sections; `md_to_pdf.py`'s `load_config` deep-merges the file over `styles/default.json` and then reads only the sections it owns (`page`, `colors`, `typography`, `code`, `footer`), so extra top-level keys are inert.
+The four keys sit at the top level beside the style sections; `md_to_pdf.py`'s `load_config` deep-merges the file over `styles/default.json` and then reads only the sections it owns (`page`, `colors`, `typography`, `code`, `footer`), so extra top-level keys are inert.
 
 Report saved settings table and EXIT.
 

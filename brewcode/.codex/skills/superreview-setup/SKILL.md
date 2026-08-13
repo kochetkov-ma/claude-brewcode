@@ -11,6 +11,7 @@ Inspect repository instructions, architecture, tests, and recent changes, then c
 
 Follow every phase below. When a phase delegates work, use Codex collaboration with only `task_name` and `message`; treat each "Codex delegation brief" block as role and message content, not executable syntax. Use `request_user_input` for the documented user gates. Resolve `<skill-directory>`, `<plugin-root>`, `<project-root>`, and `<arguments>` before running commands.
 
+<!-- brewcode-meta: version=5.6.0 content_version=5.6.0 generated_by=brewcode:superreview-setup -->
 
 # Super Review Generator (brewcode:superreview-setup)
 

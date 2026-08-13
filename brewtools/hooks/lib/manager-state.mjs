@@ -1,4 +1,4 @@
-// brewcode-meta: version=5.5.3 generated_by=brewtools:manager-setup
+// brewcode-meta: version=5.6.0 content_version=5.6.0 generated_by=brewtools:manager-setup
 // brewtools:manager-setup — Manager mode state resolver/writer.
 // State shape: { hard:boolean, level:'strict'|'balanced', mode:'full' }
 //   + artifact metadata written by writeState: version/generated_by/last_updated.
@@ -75,6 +75,24 @@ function pluginVersion() {
   try {
     const first = fs.readFileSync(new URL(import.meta.url), 'utf8').split('\n', 1)[0];
     const m = /brewcode-meta: version=(\d+\.\d+\.\d+)/.exec(first);
+    if (m) return m[1];
+  } catch {}
+  return null;
+}
+
+/**
+ * content_version of THIS module — the last release in which its generator/writer logic
+ * actually changed, by self-location. Unlike pluginVersion(), there is no plugin.json
+ * field for this: the own-header `brewcode-meta` stamp is the only carrier, so this
+ * skips the plugin.json attempt entirely and reads straight from the file's own first line.
+ * Returns `null`, NEVER 'unknown', when the header carries no `content_version=` token —
+ * writeState OMITS the key on null, mirroring pluginVersion()'s call site.
+ * @returns {string|null} semver, or null when unresolvable
+ */
+function resolveContentVersion() {
+  try {
+    const first = fs.readFileSync(new URL(import.meta.url), 'utf8').split('\n', 1)[0];
+    const m = /content_version=(\d+\.\d+\.\d+)/.exec(first);
     if (m) return m[1];
   } catch {}
   return null;
@@ -233,6 +251,7 @@ export async function writeState(scope, partial, cwd = process.cwd()) {
     // real age of the state. No `doc_type`: it is a frontmatter-only field, and JSON
     // carriers never take it — state.json is machine state, not a doc, either way.
     const version = pluginVersion();
+    const contentVersion = resolveContentVersion();
     const merged = {
       ...existing,
       ...partial,
@@ -250,6 +269,14 @@ export async function writeState(scope, partial, cwd = process.cwd()) {
       // write keep claiming that older file's version as its own.
       delete merged.version;
       process.stderr.write('[manager-state] plugin version unresolvable — wrote state without a version key\n');
+    }
+    if (contentVersion) merged.content_version = contentVersion;
+    else {
+      // Same drop-not-fake rule as version above, for the same reason: the own-header
+      // stamp is the only carrier, and until a release run adds `content_version=` to
+      // this file's header, resolution legitimately fails — omit rather than invent.
+      delete merged.content_version;
+      process.stderr.write('[manager-state] content_version unresolvable — wrote state without a content_version key\n');
     }
     delete merged.doc_type; // legacy key from pre-spec writes; JSON carriers never take it
     writeAtomic(filePath, merged);

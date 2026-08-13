@@ -3045,6 +3045,133 @@ function driftTimeouts(p, value) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Q. content_version — the git-diff-computed sibling of `version` in
+// bump-version.sh. `version` bumps every release; content_version stays put
+// unless a file's BODY (meta line stripped) actually changed since the release
+// that last moved it — this is what lets setup-status stop reporting "stale"
+// on a version-only churn. Tested by extracting content_version_for and
+// strip_meta_for_diff verbatim out of the real script (brace-balanced, never
+// retyped) and running them against disposable git fixtures. Never touches
+// the real claude-brewcode repo or its tags.
+// ═══════════════════════════════════════════════════════════════════════════
+const BUMP_SCRIPT = join(SKILL, '..', '..', '..', '.claude', 'scripts', 'bump-version.sh');
+const BUMP_SRC = readFileSync(BUMP_SCRIPT, 'utf8');
+
+/** Pulls one `name() { ... }` POSIX function out of the script by brace counting,
+ * so the test runs the SAME code as the release script instead of a re-typed copy. */
+function extractShFn(src, name) {
+  const marker = `${name}() {`;
+  const start = src.indexOf(marker);
+  if (start === -1) throw new Error(`${name} not found in bump-version.sh`);
+  const open = src.indexOf('{', start);
+  let depth = 0;
+  let end = -1;
+  for (let i = open; i < src.length; i++) {
+    if (src[i] === '{') depth++;
+    else if (src[i] === '}') {
+      depth--;
+      if (depth === 0) { end = i; break; }
+    }
+  }
+  if (end === -1) throw new Error(`${name}: unbalanced braces`);
+  return src.slice(start, end + 1);
+}
+const STRIP_META_FN = extractShFn(BUMP_SRC, 'strip_meta_for_diff');
+const CONTENT_VERSION_FN = extractShFn(BUMP_SRC, 'content_version_for');
+
+const CV_HARNESS = join(BASE, 'content-version-harness.sh');
+writeFileSync(CV_HARNESS,
+  `#!/usr/bin/env sh\nset -eu\nNEW="$CV_TEST_NEW"\n${STRIP_META_FN}\n${CONTENT_VERSION_FN}\ncontent_version_for "$1" "$2"\n`);
+
+function gitRun(cwd, args) {
+  const r = spawnSync('git', args, { cwd, encoding: 'utf8' });
+  if (r.status !== 0) throw new Error(`git ${args.join(' ')} in ${cwd} failed: ${r.stderr}`);
+  return r.stdout;
+}
+function gitFixture(name) {
+  const dir = join(BASE, `cv-${name}`);
+  mkdirSync(dir, { recursive: true });
+  gitRun(dir, ['init', '-q']);
+  gitRun(dir, ['config', 'user.email', 'test@example.com']);
+  gitRun(dir, ['config', 'user.name', 'test']);
+  return dir;
+}
+function commitTag(dir, tag) {
+  gitRun(dir, ['add', '-A']);
+  gitRun(dir, ['commit', '-q', '-m', tag]);
+  gitRun(dir, ['tag', tag]);
+}
+/** Runs the real content_version_for(file, kind) with $NEW = newVersion, cwd pinned
+ * to the fixture repo root so bump-version.sh's own repo-root-relative `git show
+ * v$old:$path` resolves exactly like it does for a real release. */
+function contentVersionFor(dir, file, kind, newVersion) {
+  const r = spawnSync('sh', [CV_HARNESS, file, kind], {
+    cwd: dir, encoding: 'utf8', env: { ...process.env, CV_TEST_NEW: newVersion },
+  });
+  if (r.status !== 0) throw new Error(`content_version_for(${file}) failed: ${r.stderr}`);
+  return r.stdout.trim();
+}
+
+// Q1 — unchanged body keeps the OLD content_version across a version bump.
+{
+  const dir = gitFixture('q1-unchanged');
+  const body = '// header\n// brewcode-meta: version=1.0.0 content_version=1.0.0 generated_by=test:test\nconsole.log("x");\n';
+  writeFileSync(join(dir, 'asset.mjs'), body);
+  commitTag(dir, 'v1.0.0');
+  check('Q1.unchangedKeepsOldCv', contentVersionFor(dir, 'asset.mjs', 'mjs', '2.0.0'), '1.0.0',
+    'a body byte-identical to its v1.0.0 tag keeps content_version 1.0.0 while version bumps to 2.0.0');
+}
+
+// Q2 — a real body change bumps content_version to match the new release.
+{
+  const dir = gitFixture('q2-changed');
+  const body = '// header\n// brewcode-meta: version=1.0.0 content_version=1.0.0 generated_by=test:test\nconsole.log("x");\n';
+  writeFileSync(join(dir, 'asset.mjs'), body);
+  commitTag(dir, 'v1.0.0');
+  writeFileSync(join(dir, 'asset.mjs'), body + 'console.log("new behavior");\n');
+  check('Q2.changedBumpsToNew', contentVersionFor(dir, 'asset.mjs', 'mjs', '2.0.0'), '2.0.0',
+    'a body that differs from its v1.0.0 tag gets content_version bumped to the new release 2.0.0');
+}
+
+// Q3 — no usable prior content_version: absent field, or a tag that never existed.
+{
+  const dir = gitFixture('q3a-no-prior-cv');
+  const body = '// header\n// brewcode-meta: version=1.0.0 generated_by=test:test\nconsole.log("x");\n';
+  writeFileSync(join(dir, 'asset.mjs'), body);
+  commitTag(dir, 'v1.0.0');
+  check('Q3a.noPriorCvGetsNew', contentVersionFor(dir, 'asset.mjs', 'mjs', '2.0.0'), '2.0.0',
+    'a file with no prior content_version field is stamped with the new release 2.0.0');
+}
+{
+  const dir = gitFixture('q3b-missing-tag');
+  const body = '// header\n// brewcode-meta: version=1.0.0 content_version=5.5.5 generated_by=test:test\nconsole.log("x");\n';
+  writeFileSync(join(dir, 'asset.mjs'), body);
+  commitTag(dir, 'v1.0.0');   // v5.5.5 was never tagged
+  check('Q3b.missingTagGetsNew', contentVersionFor(dir, 'asset.mjs', 'mjs', '2.0.0'), '2.0.0',
+    'a content_version whose git tag does not exist falls back to the new release 2.0.0');
+}
+
+// Q4/Q5 — the fm branch (YAML frontmatter, e.g. semble-first.md.template) runs a
+// different sed program than the comment-line branch above; same contract either way.
+{
+  const dir = gitFixture('q4-fm-unchanged');
+  const body = '---\ndoc_type: llm\nversion: "1.0.0"\ncontent_version: "1.0.0"\ngenerated_by: "test:test"\n---\n# Body\nunchanged text\n';
+  writeFileSync(join(dir, 'rule.md'), body);
+  commitTag(dir, 'v1.0.0');
+  check('Q4.fmUnchangedKeepsOldCv', contentVersionFor(dir, 'rule.md', 'fm', '2.0.0'), '1.0.0',
+    'the fm branch also preserves content_version 1.0.0 when the frontmatter-stripped body is unchanged');
+}
+{
+  const dir = gitFixture('q5-fm-changed');
+  const body = '---\ndoc_type: llm\nversion: "1.0.0"\ncontent_version: "1.0.0"\ngenerated_by: "test:test"\n---\n# Body\nunchanged text\n';
+  writeFileSync(join(dir, 'rule.md'), body);
+  commitTag(dir, 'v1.0.0');
+  writeFileSync(join(dir, 'rule.md'), body.replace('unchanged text', 'different text'));
+  check('Q5.fmChangedBumpsToNew', contentVersionFor(dir, 'rule.md', 'fm', '2.0.0'), '2.0.0',
+    'the fm branch bumps content_version to the new release 2.0.0 when the frontmatter-stripped body changed');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 console.log('\nsuite-hooks (unit D)');
 console.log(`  base: ${BASE}`);
 console.log(`  semble-common.sh: ${usedRealLib ? 'real (unit B)' : 'local stub (unit B has not landed)'}`);

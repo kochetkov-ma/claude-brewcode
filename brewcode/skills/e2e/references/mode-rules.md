@@ -13,9 +13,11 @@ Read `.claude/e2e/config.json`.
    agents actually load; it is the one this mode updates
 2. Read base rules: `${CLAUDE_SKILL_DIR}/references/e2e-rules.md` (upstream reference, for diffing)
 3. Read the condensed export (if exists): `.claude/rules/e2e-conventions.md`
-4. Check freshness: compare the `version` stamped in `config.json` with the `PLUGIN_VERSION:` line
-   Phase 0's `detect-mode.sh` printed. Different (or absent) -> say so in the table below; L5
-   re-stamps every artifact either way, so this run always clears the staleness `status` reported
+4. Check freshness: compare the `content_version` stamped in `config.json` with the
+   `CONTENT_VERSION:` line Phase 0's `detect-mode.sh` printed (fall back to `version` vs
+   `PLUGIN_VERSION:` on a pre-`content_version` config — a confirmed gap, not a broken install).
+   Different (or absent) -> say so in the table below; L5 re-stamps every artifact either way, so
+   this run always clears the staleness `status` reported
 5. Present current state:
 
 | Source | Rules Count | Version | Last updated |

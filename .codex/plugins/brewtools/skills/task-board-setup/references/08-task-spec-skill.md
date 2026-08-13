@@ -19,6 +19,7 @@ description: "Authors the product spec and the system-design doc for a task on t
 argument-hint: "[prompt] [<TASK_ID>] [full|design|refresh] [-n|--noask]"
 doc_type: llm
 version: "{PLUGIN_VERSION}"
+content_version: "{CONTENT_VERSION}"
 generated_by: "{GENERATED_BY}"
 last_updated: "{LAST_UPDATED}"
 ---

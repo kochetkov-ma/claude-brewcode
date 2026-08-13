@@ -87,6 +87,7 @@ argument-hint: "[prompt] [view | add | move | backlog | groom]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Agent
 doc_type: llm
 version: "{PLUGIN_VERSION}"
+content_version: "{CONTENT_VERSION}"
 generated_by: "{GENERATED_BY}"
 last_updated: "{LAST_UPDATED}"
 ---

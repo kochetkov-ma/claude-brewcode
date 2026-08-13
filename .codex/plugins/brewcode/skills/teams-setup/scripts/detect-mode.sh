@@ -28,6 +28,18 @@ case "$PLUGIN_VERSION" in
   *) printf 'ERROR:cannot resolve plugin version (X.Y.Z) from %s - refusing to stamp artifacts with a fake version\n' "$PLUGIN_JSON"; exit 1 ;;
 esac
 
+# content_version self-location: this skill's OWN marker in SKILL.md -- the artifact whose
+# stamp bump-version.sh moves via git-diff. NEVER copied from PLUGIN_VERSION, never invented.
+SKILL_MD="$SCRIPT_DIR/../SKILL.md"
+CONTENT_VERSION=""
+if [ -f "$SKILL_MD" ]; then
+  CONTENT_VERSION=$(grep -aoE 'content_version=[0-9]+\.[0-9]+\.[0-9]+' "$SKILL_MD" 2>/dev/null | head -1 | sed 's/^content_version=//' || true)
+fi
+case "$CONTENT_VERSION" in
+  [0-9]*.[0-9]*.[0-9]*) : ;;
+  *) printf 'ERROR:cannot resolve content_version from %s - refusing to stamp artifacts with a fake content_version\n' "$SKILL_MD"; exit 1 ;;
+esac
+
 validate_name() {
   case "$1" in
     *[!a-zA-Z0-9_-]*) printf 'ERROR:invalid team name (alphanumeric, dash, underscore only)\n'; exit 1 ;;
@@ -103,6 +115,7 @@ printf 'TEAM_NAME:%s\n' "$TEAM_NAME"
 # The three metadata scalars every artifact this run writes must carry. Emitted here so the skill
 # never has to guess a version or invent a date spelling.
 printf 'PLUGIN_VERSION:%s\n' "$PLUGIN_VERSION"
+printf 'CONTENT_VERSION:%s\n' "$CONTENT_VERSION"
 printf 'GENERATED_BY:brewcode:teams-setup\n'
 printf 'LAST_UPDATED:%s\n' "$(date +%F)"
 

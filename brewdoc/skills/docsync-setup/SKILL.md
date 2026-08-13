@@ -7,6 +7,7 @@ argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge]
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion]
 model: sonnet
 ---
+<!-- brewcode-meta: version=5.6.0 content_version=5.6.0 generated_by=brewdoc:docsync-setup -->
 
 # docsync-setup
 
@@ -215,15 +216,20 @@ PLUGIN_JSON="${CLAUDE_SKILL_DIR}/../../.claude-plugin/plugin.json"
 PV=$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(process.argv[1],'utf8')).version||'')" "$PLUGIN_JSON" 2>/dev/null || true)
 [ -n "$PV" ] || { echo "❌ cannot read version from $PLUGIN_JSON — reinstall brewdoc"; exit 1; }
 
+# content_version — this SKILL.md's own header marker, self-located the same way PV is.
+SKILL_MD="${CLAUDE_SKILL_DIR}/SKILL.md"
+CV=$(grep -m1 'brewcode-meta:' "$SKILL_MD" | sed -n 's/.*content_version=\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/p')
+[ -n "$CV" ] || { echo "❌ cannot read content_version from $SKILL_MD — reinstall brewdoc"; exit 1; }
+
 mkdir -p "$DST" "$DOCSYNC" \
   && cp "$SRC/docsync-track.mjs" "$SRC/docsync-watch.mjs" "$SRC/docsync-gate.mjs" "$DST/" \
   && echo "✅ hooks copied to $DST" || { echo "❌ copy FAILED"; exit 1; }
 
 # config.json — replace the two placeholders below before running.
-# The three provenance keys come first, in the standard order, then the skill-private ones.
-printf '{ "version": "%s", "generated_by": "brewdoc:docsync-setup", "last_updated": "%s", "enabled": true, "threshold_days": THRESHOLD_VALUE, "exclude": EXCLUDE_JSON }\n' "$PV" "$(date +%F)" > "$DOCSYNC/config.json" \
+# The four provenance keys come first, in the standard order, then the skill-private ones.
+printf '{ "version": "%s", "content_version": "%s", "generated_by": "brewdoc:docsync-setup", "last_updated": "%s", "enabled": true, "threshold_days": THRESHOLD_VALUE, "exclude": EXCLUDE_JSON }\n' "$PV" "$CV" "$(date +%F)" > "$DOCSYNC/config.json" \
   && node -e "JSON.parse(require('fs').readFileSync('$DOCSYNC/config.json','utf8'))" \
-  && echo "✅ config.json written (version $PV)" || { echo "❌ config.json invalid JSON"; exit 1; }
+  && echo "✅ config.json written (version $PV, content_version $CV)" || { echo "❌ config.json invalid JSON"; exit 1; }
 
 # fresh state.json (empty touched-set) — only if absent, never clobber a live one
 [ -f "$DOCSYNC/state.json" ] || printf '%s\n' '{ "session_id": null, "touched": [], "asked": false }' > "$DOCSYNC/state.json"
@@ -338,19 +344,23 @@ Refresh an EXISTING install to the current plugin version. Config and state surv
    ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")}"
    C="$ROOT/.claude/docsync/config.json"
    PJ="${CLAUDE_SKILL_DIR}/../../.claude-plugin/plugin.json"
+   SKILL_MD="${CLAUDE_SKILL_DIR}/SKILL.md"
    node -e '
      const fs = require("fs");
-     const [c, pj, today] = process.argv.slice(1);
+     const [c, pj, today, skillMd] = process.argv.slice(1);
      const v = JSON.parse(fs.readFileSync(pj, "utf8")).version;
      if (!v) throw new Error("no version in " + pj);
+     const header = fs.readFileSync(skillMd, "utf8").split("\n").find(l => l.includes("brewcode-meta:")) || "";
+     const cvm = /content_version=([0-9]+\.[0-9]+\.[0-9]+)/.exec(header);
+     if (!cvm) throw new Error("no content_version in " + skillMd);
+     const cv = cvm[1];
      const cfg = JSON.parse(fs.readFileSync(c, "utf8"));
      const was = cfg.version || "(none)";
-     cfg.version = v;
-     cfg.generated_by = "brewdoc:docsync-setup";
-     cfg.last_updated = today;
-     fs.writeFileSync(c, JSON.stringify(cfg, null, 2) + "\n");
-     console.log(`config.json version ${was} -> ${v}; generated_by=${cfg.generated_by}, last_updated=${cfg.last_updated}; enabled=${cfg.enabled !== false}, threshold_days=${cfg.threshold_days}, exclude=${JSON.stringify(cfg.exclude)}`);
-   ' "$C" "$PJ" "$(date +%F)" && echo "✅ config provenance refreshed" || { echo "❌ config provenance refresh FAILED"; exit 1; }
+     const { version, content_version, generated_by, last_updated, ...rest } = cfg;
+     const next = { version: v, content_version: cv, generated_by: "brewdoc:docsync-setup", last_updated: today, ...rest };
+     fs.writeFileSync(c, JSON.stringify(next, null, 2) + "\n");
+     console.log(`config.json version ${was} -> ${v}; content_version=${next.content_version}, generated_by=${next.generated_by}, last_updated=${next.last_updated}; enabled=${next.enabled !== false}, threshold_days=${next.threshold_days}, exclude=${JSON.stringify(next.exclude)}`);
+   ' "$C" "$PJ" "$(date +%F)" "$SKILL_MD" && echo "✅ config provenance refreshed" || { echo "❌ config provenance refresh FAILED"; exit 1; }
    ```
 4. Re-run the settings merge from install Step 2 — it is idempotent, so it only
    restores entries a user or another tool dropped.
@@ -405,24 +415,28 @@ frontmatter nudge, and the Stop gate never blocks.
    ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")}"
    C="$ROOT/.claude/docsync/config.json"
    PJ="${CLAUDE_SKILL_DIR}/../../.claude-plugin/plugin.json"
+   SKILL_MD="${CLAUDE_SKILL_DIR}/SKILL.md"
    WANT=true   # <- set to false for `disable`
    [ -f "$C" ] || { echo "❌ $C missing — docsync is not installed"; exit 1; }
    cp "$C" "$C.bak"
-   C="$C" WANT="$WANT" PJ="$PJ" TODAY="$(date +%F)" node -e '
+   C="$C" WANT="$WANT" PJ="$PJ" SKILL_MD="$SKILL_MD" TODAY="$(date +%F)" node -e '
      const fs = require("fs");
      const c = process.env.C, want = process.env.WANT === "true";
      const v = JSON.parse(fs.readFileSync(process.env.PJ, "utf8")).version;
      if (!v) throw new Error("no version in " + process.env.PJ);
+     const header = fs.readFileSync(process.env.SKILL_MD, "utf8").split("\n").find(l => l.includes("brewcode-meta:")) || "";
+     const cvm = /content_version=([0-9]+\.[0-9]+\.[0-9]+)/.exec(header);
+     if (!cvm) throw new Error("no content_version in " + process.env.SKILL_MD);
+     const cv = cvm[1];
      const cfg = JSON.parse(fs.readFileSync(c, "utf8"));
      const was = cfg.enabled !== false;
-     const stamped = cfg.version === v && cfg.generated_by === "brewdoc:docsync-setup" && /^\d{4}-\d{2}-\d{2}$/.test(cfg.last_updated || "");
+     const stamped = cfg.version === v && cfg.content_version === cv && cfg.generated_by === "brewdoc:docsync-setup" && /^\d{4}-\d{2}-\d{2}$/.test(cfg.last_updated || "");
      if (was === want && stamped) { console.log(`already ${want ? "enabled" : "disabled"}, provenance current — nothing written`); process.exit(0); }
      cfg.enabled = want;
-     cfg.version = v;
-     cfg.generated_by = "brewdoc:docsync-setup";
-     cfg.last_updated = process.env.TODAY;
-     fs.writeFileSync(c, JSON.stringify(cfg, null, 2) + "\n");
-     console.log(`enabled: ${was} -> ${want}; version=${cfg.version}, generated_by=${cfg.generated_by}, last_updated=${cfg.last_updated}; threshold_days=${cfg.threshold_days}, exclude=${JSON.stringify(cfg.exclude)} (preserved)`);
+     const { version, content_version, generated_by, last_updated, ...rest } = cfg;
+     const next = { version: v, content_version: cv, generated_by: "brewdoc:docsync-setup", last_updated: process.env.TODAY, ...rest };
+     fs.writeFileSync(c, JSON.stringify(next, null, 2) + "\n");
+     console.log(`enabled: ${was} -> ${want}; version=${next.version}, content_version=${next.content_version}, generated_by=${next.generated_by}, last_updated=${next.last_updated}; threshold_days=${next.threshold_days}, exclude=${JSON.stringify(next.exclude)} (preserved)`);
    ' && echo "✅ done" || { echo "❌ FAILED"; exit 1; }
    ```
    > **STOP if ❌** — fix before continuing.

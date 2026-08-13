@@ -1,8 +1,8 @@
 # 05 -- Step 4b: `.claude/features/**` file templates
 
-Write each block below to its path under `TARGET/.claude/features/`. Substitute `{{REPO_NAME}}`, `{{DOMAINS}}`, `{{FIRST_DOMAIN}}`, `{{LANG}}`, `{{CLOSE_MARKER_SHORT}}` (ref 03 map), `{{TODAY}}` (ISO date), the metadata trio `{PLUGIN_VERSION}` / `{GENERATED_BY}` / `{LAST_UPDATED}` (SKILL.md Placeholder map), plus the `{{SPEC_*}}` placeholders defined below (all gated by `SPEC_MODE`).
+Write each block below to its path under `TARGET/.claude/features/`. Substitute `{{REPO_NAME}}`, `{{DOMAINS}}`, `{{FIRST_DOMAIN}}`, `{{LANG}}`, `{{CLOSE_MARKER_SHORT}}` (ref 03 map), `{{TODAY}}` (ISO date), the metadata quartet `{PLUGIN_VERSION}` / `{CONTENT_VERSION}` / `{GENERATED_BY}` / `{LAST_UPDATED}` (SKILL.md Placeholder map), plus the `{{SPEC_*}}` placeholders defined below (all gated by `SPEC_MODE`).
 
-> **Metadata stamp.** `board.md`, `PROGRESS.md`, `TRACKER.md`, `INDEX.md` and `backlog/README.md` each open with the four-key frontmatter block (`doc_type, version, generated_by, last_updated`). It is UNGATED -- identical in both `SPEC_MODE` states -- and records WHO GENERATED the file and WHEN, so a later plugin version can detect an old-shape scaffold. It is provenance, not live state: nothing rewrites it after generation except `upgrade` (ref 10). `TASK_TEMPLATE.md` gets NO stamp -- its frontmatter is copied into every task card, where those keys would become card data.
+> **Metadata stamp.** `board.md`, `PROGRESS.md`, `TRACKER.md`, `INDEX.md` and `backlog/README.md` each open with the five-key frontmatter block (`doc_type, version, content_version, generated_by, last_updated`). It is UNGATED -- identical in both `SPEC_MODE` states -- and records WHO GENERATED the file and WHEN, so a later plugin version can detect an old-shape scaffold. It is provenance, not live state: nothing rewrites it after generation except `upgrade` (ref 10). `TASK_TEMPLATE.md` gets NO stamp -- its frontmatter is copied into every task card, where those keys would become card data.
 
 The `board.md` here is the EMPTY skeleton (counts 0). The Step-4c doc sweep fills it from the migrated docs.
 
@@ -82,6 +82,7 @@ CORRECTION to the column list above: Progress + Todo have SIX columns, `id | tit
 ---
 doc_type: llm
 version: "{PLUGIN_VERSION}"
+content_version: "{CONTENT_VERSION}"
 generated_by: "{GENERATED_BY}"
 last_updated: "{LAST_UPDATED}"
 ---
@@ -136,6 +137,7 @@ Ungated -- written in BOTH `SPEC_MODE` states, at init, before any task exists.
 ---
 doc_type: llm
 version: "{PLUGIN_VERSION}"
+content_version: "{CONTENT_VERSION}"
 generated_by: "{GENERATED_BY}"
 last_updated: "{LAST_UPDATED}"
 ---
@@ -164,6 +166,7 @@ last_updated: "{LAST_UPDATED}"
 ---
 doc_type: llm
 version: "{PLUGIN_VERSION}"
+content_version: "{CONTENT_VERSION}"
 generated_by: "{GENERATED_BY}"
 last_updated: "{LAST_UPDATED}"
 ---
@@ -428,6 +431,7 @@ Running log: decisions, blockers, PR/commit/report links.
 ---
 doc_type: llm
 version: "{PLUGIN_VERSION}"
+content_version: "{CONTENT_VERSION}"
 generated_by: "{GENERATED_BY}"
 last_updated: "{LAST_UPDATED}"
 ---
@@ -467,6 +471,7 @@ last_updated: "{LAST_UPDATED}"
 ---
 doc_type: llm
 version: "{PLUGIN_VERSION}"
+content_version: "{CONTENT_VERSION}"
 generated_by: "{GENERATED_BY}"
 last_updated: "{LAST_UPDATED}"
 ---

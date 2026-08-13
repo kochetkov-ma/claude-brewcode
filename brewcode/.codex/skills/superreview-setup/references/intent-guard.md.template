@@ -5,6 +5,7 @@ color: cyan
 maxTurns: 60
 doc_type: llm
 version: "{PLUGIN_VERSION}"
+content_version: "{CONTENT_VERSION}"
 generated_by: "{GENERATED_BY}"
 last_updated: "{LAST_UPDATED}"
 ---
@@ -31,6 +32,7 @@ last_updated: "{LAST_UPDATED}"
      | {PLAN_LOCATION}           | scalar | Tier-3 plan / task-board / task-graph paths, or `none` | new sed scalar (default `.codex/features/**`) | `emit-agent` sed scalar, from the `PLAN_LOCATION` env teams exports |
      | {POLICY_LOCATION}         | scalar | Tier-4 policy paths (root + nested AGENTS.md, rules, conventions) | new sed scalar (default `AGENTS.md`, `.codex/rules/**`) | `emit-agent` sed scalar, from the `POLICY_LOCATION` env teams exports |
      | {PLUGIN_VERSION}          | scalar | Plugin version that produced this file, read from `.codex-plugin/plugin.json` by script self-location; appears in the frontmatter AND in the TAIL STAMP | `generate.sh` sed scalar | `emit-agent` (same writer) |
+     | {CONTENT_VERSION}         | scalar | Last release this artifact's generator content actually changed, read from `superreview-setup/SKILL.md`'s own `brewcode-meta:` marker by script self-location | `generate.sh` sed scalar | `emit-agent` (same writer) |
      | {GENERATED_BY}            | scalar | `<plugin>:<skill>` that produced this file — always `brewcode:superreview-setup`, even when teams-setup triggers the emit | `generate.sh` sed scalar | `emit-agent` (same writer) |
      | {LAST_UPDATED}            | scalar | `YYYY-MM-DD` (`date +%F`) the file was last written | `generate.sh` sed scalar | `emit-agent` (same writer) |
      | {PROJECT_INVARIANTS_TABLE}| BLOCK  | The concrete facts that make the generic drift classes checkable HERE: planned scale, testing policy, dependency policy, file-layout policy, architecture stance | `emit-agent` seeds a generic default; AI Edit adapts it, SKILL.md Phase 3 | `emit-agent` seeds a generic default; agent-creator ADAPTS that seeded BLOCK (block + marker) |
@@ -196,7 +198,7 @@ which is what keeps your rows from being merged into someone else's scope-creep 
 - [ ] Verdict line first; JSON merge object emitted when spawned by superreview, `category: "intent"`
 - [ ] Nothing edited, nothing proposed as code; no mutating command run
 
-<!-- generated_by: brewcode:superreview-setup - source: references/intent-guard.md.template - version {PLUGIN_VERSION} - last_updated {LAST_UPDATED}
+<!-- generated_by: brewcode:superreview-setup - source: references/intent-guard.md.template - version {PLUGIN_VERSION} - content_version {CONTENT_VERSION} - last_updated {LAST_UPDATED}
      The four standard metadata fields live in the frontmatter above; this line is the TAIL ANCHOR and it stays.
      The frontmatter sits BEFORE the stripped TEMPLATE HEADER, so only a marker AFTER that block can prove the
      header strip (a sed RANGE) did not run away to EOF — `generate.sh` aborts the emit when it is gone. It is

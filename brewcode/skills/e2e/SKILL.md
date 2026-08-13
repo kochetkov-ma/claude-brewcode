@@ -7,6 +7,7 @@ argument-hint: "[prompt] [status|install|create|update|review|rules]"
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion, Skill, WebSearch, WebFetch]
 model: opus
 ---
+<!-- brewcode-meta: version=5.6.0 content_version=5.6.0 generated_by=brewcode:e2e -->
 
 <instructions>
 
@@ -65,13 +66,15 @@ bash "${CLAUDE_SKILL_DIR}/scripts/detect-mode.sh" "$ARGUMENTS" && echo "OK" || e
 ```
 
 Output: `MODE:xxx`, optionally `PROMPT:xxx`, plus the artifact-metadata scalars `PLUGIN_VERSION:`,
-`GENERATED_BY:`, `LAST_UPDATED:`. Store all of them.
+`CONTENT_VERSION:`, `GENERATED_BY:`, `LAST_UPDATED:`. Store all of them.
 
 > **Artifact metadata — every file this skill writes.** `.claude/e2e/config.json`,
 > `.claude/e2e/e2e-rules.md`, `.claude/agents/e2e-*.md` and `.claude/rules/e2e-conventions.md` all carry
-> `version` = `PLUGIN_VERSION:`, `generated_by` = `GENERATED_BY:` (`brewcode:e2e`),
-> `last_updated` = `LAST_UPDATED:`; the `.md` ones also carry `doc_type: llm`. Values come from the
-> output above — never hardcode a version, never invent a second date spelling. `last_updated` is
+> `version` = `PLUGIN_VERSION:`, `content_version` = `CONTENT_VERSION:`, `generated_by` = `GENERATED_BY:`
+> (`brewcode:e2e`), `last_updated` = `LAST_UPDATED:`; the `.md` ones also carry `doc_type: llm`. Values
+> come from the output above — never hardcode a version, never invent a second date spelling.
+> `content_version` is self-located from this SKILL.md's own `brewcode-meta:` marker (line 10),
+> stamped by `bump-version.sh` at release, never the running `PLUGIN_VERSION`. `last_updated` is
 > `YYYY-MM-DD` (`date +%F`) everywhere; `{ISO_DATE}` is retired.
 
 > **STOP if FAILED** -- if the output starts with `ERROR:`, report that line verbatim and stop.

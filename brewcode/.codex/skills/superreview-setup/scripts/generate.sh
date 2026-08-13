@@ -200,6 +200,23 @@ _plugin_version() {
   return 1
 }
 
+# content_version out of THIS generator skill's OWN `brewcode-meta:` marker — self-located the same way
+# _plugin_version() self-locates, but from a different file: plugin.json carries no content_version field,
+# so the source is superreview-setup/SKILL.md's own line-1 marker (stamped by bump-version.sh at release).
+# Same HARD-FAIL rule as _plugin_version(): never emit a placeholder-shaped value.
+_content_version() {
+  _cv=""
+  _skill_md="$SKILL_DIR/SKILL.md"
+  if [ -f "$_skill_md" ]; then
+    _cv=$(grep -m1 'brewcode-meta:' "$_skill_md" | sed -n 's/.*content_version=\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/p')
+  fi
+  case "$_cv" in
+    [0-9]*.[0-9]*.[0-9]*) printf '%s' "$_cv"; return 0 ;;
+  esac
+  echo "❌ cannot resolve content_version from $_skill_md brewcode-meta marker — refusing to stamp an artifact with a fake value" >&2
+  return 1
+}
+
 resolve_scalars() {
   [ "${_SCALARS_READY:-0}" = "1" ] && return 0
   # Scalar values (single-line ONLY — sed processes line-by-line; a newline truncates the substitution).
@@ -226,6 +243,7 @@ resolve_scalars() {
   # pipeline (teams-setup calls `emit-agent` rather than authoring its own copy), and the intent-guard tail
   # anchor `IG_STAMP_PREFIX` is a literal that must keep matching what the template emits.
   PLUGIN_VERSION="$(_plugin_version)" || exit 1
+  CONTENT_VERSION="$(_content_version)" || exit 1
   GENERATED_BY="brewcode:superreview-setup"
   LAST_UPDATED="$(date +%F)"
 
@@ -235,7 +253,7 @@ resolve_scalars() {
   # (& is the whole-match backreference in sed replacements). Order matters.
   for _var in PROJECT_NAME STACK_LABEL STACK_REF SOURCE_GLOB PATHSPEC_GLOBS ARBITER_AGENT VALIDATOR_AGENT \
               SCOPE_AGENT_A SCOPE_AGENT_B TRACKER_LABEL SPEC_LOCATION PLAN_LOCATION POLICY_LOCATION \
-              PLUGIN_VERSION GENERATED_BY LAST_UPDATED; do
+              PLUGIN_VERSION CONTENT_VERSION GENERATED_BY LAST_UPDATED; do
     v="${!_var}"; v="${v//\\/\\\\}"; v="${v//&/\\&}"; printf -v "$_var" '%s' "$v"
   done
   _SCALARS_READY=1
@@ -258,6 +276,7 @@ _subst_raw() {
       -e "s${_sep}{PLAN_LOCATION}${_sep}${PLAN_LOCATION}${_sep}g" \
       -e "s${_sep}{POLICY_LOCATION}${_sep}${POLICY_LOCATION}${_sep}g" \
       -e "s${_sep}{PLUGIN_VERSION}${_sep}${PLUGIN_VERSION}${_sep}g" \
+      -e "s${_sep}{CONTENT_VERSION}${_sep}${CONTENT_VERSION}${_sep}g" \
       -e "s${_sep}{GENERATED_BY}${_sep}${GENERATED_BY}${_sep}g" \
       -e "s${_sep}{LAST_UPDATED}${_sep}${LAST_UPDATED}${_sep}g" \
       "$1"
@@ -403,7 +422,7 @@ _ig_migrate() {
   # Scoped to the FRONTMATTER block, exactly as `_restamp_meta` does it — one dialect. Grepping the whole file
   # would also collect any `version:` / `last_updated:` line the BODY happens to carry (a YAML example inside a
   # fence is the obvious way that arrives) and inject it into the frontmatter as a duplicate key.
-  _fm_block "$_bd/tpl" | grep -E '^(doc_type|version|generated_by|last_updated):' > "$_bd/meta" || true
+  _fm_block "$_bd/tpl" | grep -E '^(doc_type|version|content_version|generated_by|last_updated):' > "$_bd/meta" || true
   awk -v anchor="$IG_STAMP_PREFIX" 'f || index($0, anchor) { f = 1; print }' "$_bd/tpl" > "$_bd/tail"
   if [ ! -s "$_bd/meta" ] || [ ! -s "$_bd/tail" ]; then
     echo "❌ migration aborted: intent-guard.md.template carries no metadata frontmatter or no tail anchor" >&2
@@ -417,7 +436,7 @@ _ig_migrate() {
       while ((getline l < metaf) > 0) print l
       close(metaf); fm = 2; print; next
     }
-    fm == 1 && /^(doc_type|version|generated_by|last_updated):[[:space:]]/ { next }
+    fm == 1 && /^(doc_type|version|content_version|generated_by|last_updated):[[:space:]]/ { next }
     { print }
   ' "$IG_PATH" > "$_bd/agent.md"
 
@@ -433,7 +452,7 @@ _ig_migrate() {
 
   # POST-CONDITIONS. Both edits are pattern-driven; a silent miss would ship a half-migrated agent that
   # still reads as legacy to `setup-status`.
-  for _k in doc_type version generated_by last_updated; do
+  for _k in doc_type version content_version generated_by last_updated; do
     grep -q "^${_k}:" "$_bd/agent.md" || { echo "❌ migration aborted: $_k missing after restamp" >&2; return 1; }
   done
   grep -qF "$IG_STAMP_PREFIX" "$_bd/agent.md" || { echo "❌ migration aborted: current tail anchor not written" >&2; return 1; }
@@ -612,12 +631,12 @@ _fm_block() { awk 'NR == 1 && $0 == "---" { f = 1; next } f && $0 == "---" { exi
 # Everything AFTER that block -> stdout. Used as the did-not-touch-the-body proof.
 _fm_body()  { awk 'NR == 1 && $0 == "---" { f = 1; next } f == 1 && $0 == "---" { f = 2; next } f == 2 { print }' "$1"; }
 
-# Refresh ONLY `version` / `generated_by` / `last_updated` in a LIVE file's own frontmatter, in place.
-# $1 = live file, $2 = its freshly substituted staging counterpart — the single source for the spelling of the
-# three values, exactly as `_ig_migrate` takes them from the substituted template. `doc_type` is PRESERVED when
-# present (§1 of the artifact-metadata spec: it is user-owned) and seeded as `llm` only when the file has none.
-# The body is copied through untouched and then compared byte-for-byte; a mismatch aborts rather than shipping a
-# file whose Phase 3 tailoring or Phase 4b self-sync edits were silently mangled.
+# Refresh ONLY `version` / `content_version` / `generated_by` / `last_updated` in a LIVE file's own frontmatter,
+# in place. $1 = live file, $2 = its freshly substituted staging counterpart — the single source for the
+# spelling of the four values, exactly as `_ig_migrate` takes them from the substituted template. `doc_type` is
+# PRESERVED when present (§1 of the artifact-metadata spec: it is user-owned) and seeded as `llm` only when the
+# file has none. The body is copied through untouched and then compared byte-for-byte; a mismatch aborts rather
+# than shipping a file whose Phase 3 tailoring or Phase 4b self-sync edits were silently mangled.
 _restamp_meta() {
   _live="$1"; _src="$2"
   if [ "$(head -1 "$_live")" != "---" ]; then
@@ -625,9 +644,9 @@ _restamp_meta() {
     return 0
   fi
   _bd="$(mktemp -d)"
-  _fm_block "$_src" | grep -E '^(version|generated_by|last_updated):[[:space:]]' > "$_bd/meta" || true
-  if [ "$(grep -c . "$_bd/meta" || true)" -ne 3 ]; then
-    echo "❌ restamp aborted: $_src frontmatter carries no version/generated_by/last_updated trio" >&2
+  _fm_block "$_src" | grep -E '^(version|content_version|generated_by|last_updated):[[:space:]]' > "$_bd/meta" || true
+  if [ "$(grep -c . "$_bd/meta" || true)" -ne 4 ]; then
+    echo "❌ restamp aborted: $_src frontmatter carries no version/content_version/generated_by/last_updated quartet" >&2
     return 1
   fi
   # Materialise the live frontmatter once: a `grep -q` / `head -1` on a live pipe can SIGPIPE the awk
@@ -644,7 +663,7 @@ _restamp_meta() {
       while ((getline l < metaf) > 0) print l
       close(metaf); fm = 2; print; next
     }
-    fm == 1 && /^(version|generated_by|last_updated):[[:space:]]/ { next }
+    fm == 1 && /^(version|content_version|generated_by|last_updated):[[:space:]]/ { next }
     { print }
   ' "$_live" > "$_bd/next"
 
@@ -658,7 +677,7 @@ _restamp_meta() {
 
   mv "$_bd/next" "$_live"
   rm -rf "$_bd"; _bd=""
-  echo "RESTAMP: $_live version ${_was:-(none)} -> \"$PLUGIN_VERSION\", generated_by/last_updated refreshed (body untouched)"
+  echo "RESTAMP: $_live version ${_was:-(none)} -> \"$PLUGIN_VERSION\", content_version -> \"$CONTENT_VERSION\", generated_by/last_updated refreshed (body untouched)"
 }
 
 # ── upgrade: refresh a LIVE installation, hand-edits preserved ──────────────────
@@ -797,20 +816,22 @@ upgrade_skill() {
 _check_meta_frontmatter() {
   _f="$1"; _bad=0
   _fm=$(awk 'NR == 1 && $0 == "---" { f = 1; next } f && $0 == "---" { exit } f { print }' "$_f")
-  for _k in doc_type version generated_by last_updated; do
+  for _k in doc_type version content_version generated_by last_updated; do
     printf '%s\n' "$_fm" | grep -q "^${_k}:" || { echo "❌ $_f frontmatter missing metadata key: $_k"; _bad=1; }
   done
   printf '%s\n' "$_fm" | grep -q '^doc_type: llm$' \
     || { echo "❌ $_f doc_type must be exactly 'llm', UNQUOTED"; _bad=1; }
   printf '%s\n' "$_fm" | grep -Eq '^version: "[0-9]+\.[0-9]+\.[0-9]+"$' \
     || { echo "❌ $_f version must be a QUOTED X.Y.Z"; _bad=1; }
+  printf '%s\n' "$_fm" | grep -Eq '^content_version: "[0-9]+\.[0-9]+\.[0-9]+"$' \
+    || { echo "❌ $_f content_version must be a QUOTED X.Y.Z"; _bad=1; }
   printf '%s\n' "$_fm" | grep -Eq '^generated_by: "[^"]+"$' \
     || { echo "❌ $_f generated_by must be a QUOTED <plugin>:<skill>"; _bad=1; }
   printf '%s\n' "$_fm" | grep -Eq '^last_updated: "[0-9]{4}-[0-9]{2}-[0-9]{2}"$' \
     || { echo "❌ $_f last_updated must be a QUOTED YYYY-MM-DD"; _bad=1; }
-  _order=$(printf '%s\n' "$_fm" | grep -oE '^(doc_type|version|generated_by|last_updated)' | tr '\n' ' ' || true)
-  [ "$_order" = "doc_type version generated_by last_updated " ] \
-    || { echo "❌ $_f metadata keys out of order [$_order] — must be doc_type, version, generated_by, last_updated"; _bad=1; }
+  _order=$(printf '%s\n' "$_fm" | grep -oE '^(doc_type|version|content_version|generated_by|last_updated)' | tr '\n' ' ' || true)
+  [ "$_order" = "doc_type version content_version generated_by last_updated " ] \
+    || { echo "❌ $_f metadata keys out of order [$_order] — must be doc_type, version, content_version, generated_by, last_updated"; _bad=1; }
   return "$_bad"
 }
 
