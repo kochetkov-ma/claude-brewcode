@@ -11,7 +11,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 
 ## What it does
 
-`/brewtools:think-short-setup` installs (or removes) a small set of hooks that inject a fixed brevity directive into the Claude Code session. Run the skill with a free-text intent — "make responses shorter", "stop the preamble" — and it asks via `AskUserQuestion` whether to apply to the current **Project** or **Globally**. It then copies four files into the target hooks directory — three hook scripts and `think-short-prompt.md` (the directive body) — and registers three hook entries in the appropriate `settings.json`. The task hook injects the directive by prepending it to the subagent prompt: `${injection}\n\n${tool_input.prompt}`.
+`/brewtools:think-short-setup` installs (or removes) a small set of hooks that inject a fixed brevity directive into the Claude Code session. Run the skill with a free-text intent — "make responses shorter", "stop the preamble" — and it asks via `AskUserQuestion` whether to apply to the current **Project** or **Globally**. It then copies four files into the target hooks directory — three hook scripts and `think-short-prompt.md` (the directive body) — and registers three hook entries in the appropriate `settings.json`. The subagent hook injects the directive on `SubagentStart` via `hookSpecificOutput.additionalContext`.
 
 The `-setup` suffix is literal: this skill installs a mechanism you then use instead of the skill. After `install` you never type the skill again unless you want to change or remove the wiring.
 
@@ -46,7 +46,7 @@ Two of those lines are the simplicity discipline: the model thinks short instead
 | Long automated runs where preamble accumulates across many subagent turns | `/brewtools:think-short-setup install project` |
 | Consistent brevity across all projects on this machine | `/brewtools:think-short-setup install global` |
 | Pick up a new directive text after a brewtools update | `/brewtools:think-short-setup upgrade` |
-| Status says `injects=unknown` — the installed copy is older than the yield diagnostic | `/brewtools:think-short-setup upgrade` |
+| Status says `injects=unknown` — the installed copy is older than the `--check` diagnostic | `/brewtools:think-short-setup upgrade` |
 | Pause terseness for a few sessions without deleting anything | `/brewtools:think-short-setup disable` |
 | Turn it back on | `/brewtools:think-short-setup enable` |
 | Unwire the hooks, keep the tmp markers | `/brewtools:think-short-setup uninstall` |
@@ -78,7 +78,7 @@ Every mode starts with the same status block, and the skill calls `AskUserQuesti
   <li>
     <div>
       <strong>Status first, always</strong>
-      <p>Every mode opens with the same status block: how many of the 3 hook scripts are present per scope, how many <code>settings.json</code> entries reference them, whether the prompt file is <code>enabled</code>, <code>disabled</code> or <code>none</code>, and — via <code>--check</code> on the installed task hook — whether subagent injection actually fires (<code>injects</code>) and what suppresses it (<code>yielded_to</code>). Half-installed and yielding states are reported as such, never as installed.</p>
+      <p>Every mode opens with the same status block: how many of the 3 hook scripts are present per scope, how many <code>settings.json</code> entries reference them, whether the prompt file is <code>enabled</code>, <code>disabled</code> or <code>none</code>, and — via <code>--check</code> on the installed subagent hook — whether subagent injection actually fires (<code>injects</code>). Half-installed states are reported as such, never as installed.</p>
     </div>
   </li>
   <li>
@@ -96,7 +96,7 @@ Every mode starts with the same status block, and the skill calls `AskUserQuesti
   <li>
     <div>
       <strong>Hook files copied to target directory</strong>
-      <p>Four files are copied: three hook scripts (<code>think-short-session.mjs</code>, <code>think-short-prompt-counter.mjs</code>, <code>think-short-task.mjs</code>) and <code>think-short-prompt.md</code> (the directive body text each hook reads at runtime). For global scope, writes go via Bash (the <code>Write</code> tool is blocked on <code>&#126;/.claude/*</code> in all permission modes).</p>
+      <p>Four files are copied: three hook scripts (<code>think-short-session.mjs</code>, <code>think-short-prompt-counter.mjs</code>, <code>think-short-subagent.mjs</code>) and <code>think-short-prompt.md</code> (the directive body text each hook reads at runtime). For global scope, writes go via Bash (the <code>Write</code> tool is blocked on <code>&#126;/.claude/*</code> in all permission modes).</p>
     </div>
   </li>
   <li>
@@ -154,7 +154,7 @@ Three hooks are installed, each targeting a different injection point:
 |------|-------|----------|
 | `think-short-session.mjs` | SessionStart | Injects the full directive; resets the per-session prompt counter in `$TMPDIR`; prunes stale counters from prior sessions |
 | `think-short-prompt-counter.mjs` | UserPromptSubmit | Injects the directive on every 10th user prompt (turns 10, 20, 30 — never turn 1, which is covered by SessionStart) |
-| `think-short-task.mjs` | PreToolUse:Task\|Agent | Injects the full directive into every spawned subagent — unless it yields to a foreign `Task`/`Agent` hook (see below) |
+| `think-short-subagent.mjs` | SubagentStart | Injects the full directive into every spawned subagent via `additionalContext` |
 
 The counter hook keeps injection periodic, not per-turn. Turns 2–9 run without re-injection; at turn 10 the hook fires again to reinforce brevity after context drift.
 
@@ -167,38 +167,30 @@ The counter hook keeps injection periodic, not per-turn. Turns 2–9 run without
 
 Global installs use the `Bash` tool for all file operations because `~/.claude/*` is a protected path — the `Write` and `Edit` tools are blocked there in every permission mode, including `bypassPermissions`.
 
-## Task hook injection — and when it yields
+## Subagent hook injection
 
-`think-short-task.mjs` fires on `PreToolUse:Task|Agent` and prepends the directive to the subagent prompt: `${injection}\n\n${tool_input.prompt}`. It does that through `updatedInput`, which rewrites a field another hook may also want to rewrite.
+`think-short-subagent.mjs` fires on `SubagentStart` and delivers the directive via `hookSpecificOutput.additionalContext`. That channel accumulates across hooks — every registered `SubagentStart` hook's context is appended and delivered into the subagent's own message list, so any number of injectors coexist with no clobbering and nothing to yield to.
 
-<Callout type="caution">
-**If a foreign `PreToolUse` hook is registered on a matcher that also hits `Task` or `Agent`, think-short yields** — it emits `{}` and injects nothing into subagents, because it cannot know what the other hook does to the same prompt field. Brewcode-family hooks (`agent-router.mjs`, `agent-deadline-guard.mjs`, `manager-prompt.mjs`, the other think-short hooks, ...) are recognised and coexisted with; anything else wins.
+<Callout type="note">
+This replaces an earlier `PreToolUse:Task|Agent` design that rewrote the spawn prompt via `updatedInput`. That channel is single-writer/last-wins — every `PreToolUse` hook on the same event receives the same original input, and the runner keeps only the last hook's `updatedInput`, so two hooks editing it would clobber each other. `SubagentStart` + `additionalContext` has no such conflict.
 </Callout>
 
-The yield is deliberate, and it is announced rather than silent: the hook emits a `systemMessage` once per session naming the foreign hook, and `status` reports it directly.
-
-`status` runs `node <that scope's hooks>/think-short-task.mjs --check "$PWD"` and adds two fields:
+`status` runs `node <that scope's hooks>/think-short-subagent.mjs --check "$PWD"` and adds one field:
 
 | Field | Value | Meaning |
 |-------|-------|---------|
 | `injects` | `yes` | subagents really receive the directive |
-| | `no` | wired and enabled, but yielding — a foreign hook owns `Task`/`Agent` |
-| | `n/a` | no task hook installed in that scope |
+| | `no` | wired and enabled, but the prompt file is missing or empty — a broken install |
+| | `n/a` | no subagent hook installed in that scope |
 | | `unknown` | the installed copy predates the `--check` diagnostic — run `upgrade` on that scope |
-| `yielded_to` | path list | the settings or plugin `hooks.json` files registering the foreign hook, or `none` |
 
-`injects` measures the subagent hook only. SessionStart and the every-10th-prompt injection never yield, so `injects=no` means subagents get nothing while the main session still gets the directive.
-
-<Callout type="note">
-`install` and `upgrade` do NOT fix a yield. The fix is on the other side: remove the foreign hook, or narrow its matcher so it no longer matches `Task`/`Agent`.
-</Callout>
+`injects` measures the subagent hook only. SessionStart and the every-10th-prompt injection are separate paths.
 
 Example status output on a machine whose global install predates the diagnostic:
 
 ```
 project: hook_files=0/3 settings_refs=0/3 prompt=none injects=n/a
 global: hook_files=3/3 settings_refs=3/3 prompt=enabled injects=unknown
-yielded_to=none
 ```
 
 The `3/3 3/3 enabled` line used to be the whole report, and it read as a healthy install. `injects=unknown` is the part that says otherwise.
@@ -222,7 +214,7 @@ The `3/3 3/3 enabled` line used to be the whole report, and it read as a healthy
     All brewtools skills and agents in one place.
   </Card>
   <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/think-short-setup">
-    Hook scripts, install/remove logic, and coexistence implementation.
+    Hook scripts and install/remove logic.
   </Card>
 </CardGrid>
 

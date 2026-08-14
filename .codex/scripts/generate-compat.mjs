@@ -739,7 +739,7 @@ The future implementation prompt must begin with Step 0: re-assume [ROLE: MANAGE
   }
 
   if (plugin === 'brewtools' && skill === 'think-short-setup') {
-    fs.rmSync(path.join(targetDir, 'assets', 'think-short-task.mjs'), { force: true });
+    fs.rmSync(path.join(targetDir, 'assets', 'think-short-subagent.mjs'), { force: true });
     fs.rmSync(path.join(targetDir, 'tests'), { recursive: true, force: true });
     writeFile(path.join(targetDir, 'README.md'), '# Think-short for Codex\n\nInstalls or removes the native SessionStart and UserPromptSubmit terse-mode hooks described in assets/INSTALL.md.\n');
     for (const name of ['think-short-session.mjs', 'think-short-prompt-counter.mjs']) {

@@ -7,7 +7,7 @@ target hooks dir and wires `settings.json`. All 4 files travel together:
 |------|-------|---------|
 | `think-short-session.mjs` | SessionStart | `additionalContext` (full prompt) + resets per-session counter to 0 |
 | `think-short-prompt-counter.mjs` | UserPromptSubmit | `additionalContext` (full prompt) every 10th prompt (10,20,30,...) |
-| `think-short-task.mjs` | PreToolUse `Task\|Agent` | `updatedInput.prompt` (FULL prompt body minus the `<!-- think-short -->` comment line, prepended to subagent) — coexistence-safe: yields to unknown foreign Task hooks (see note below) |
+| `think-short-subagent.mjs` | SubagentStart | `additionalContext` (FULL prompt body minus the `<!-- think-short -->` comment line) — SubagentStart contexts ACCUMULATE across hooks, so no coexistence/yield logic is needed |
 | `think-short-prompt.md` | (data) | prompt text, read by the 3 scripts from their OWN dir via `import.meta.url` |
 
 > Scripts are pure ESM, Node built-ins only, no plugin-root / npm deps. They read
@@ -26,16 +26,15 @@ Marker files: `<os.tmpdir()>/brewtools-think-short/<session_id>.think-short-coun
 prunes prior-session markers older than ~1 day; tmp dir is disposable, no project
 pollution.
 
-> **Coexistence (PreToolUse `Task|Agent`).** On CC 2.1.195, two PreToolUse hooks
-> that both match the same tool and both return `updatedInput` run IN PARALLEL
-> with LAST-WINS (a non-deterministic race) — edits do NOT chain/merge; one hook
-> randomly clobbers the others. `think-short-task.mjs` guards against destroying a
-> payload it cannot reconstruct: it DETECTS other `Task|Agent` PreToolUse hooks
-> (project + user `settings.json`, plus plugin `hooks/hooks.json` under the plugin
-> cache), excluding itself and sibling brewcode-family hooks, then decides:
-> - no foreign Task hook present -> FIRE: emit `thinkShortBody + original`;
-> - any UNKNOWN/foreign Task hook present -> YIELD (no `updatedInput`) so a
->   third-party hook whose payload we cannot reconstruct is never clobbered.
+> **Why SubagentStart, not PreToolUse `Task|Agent`.** Verified in the CC 2.1.232
+> bundle: `updatedInput` is a single-writer channel — every PreToolUse hook
+> receives the SAME original `tool_input` and the runner ASSIGNS the result
+> (`v = oe.updatedInput`), so two hooks editing a Task prompt clobber each other
+> non-deterministically. The old `think-short-task.mjs` carried a foreign-hook
+> detector that YIELDED whenever an unrecognized Task hook was present — which is
+> why think-short frequently never reached subagents in practice. SubagentStart
+> `additionalContext` composes instead (`sr.push(...Wt.additionalContexts)`), so
+> `think-short-subagent.mjs` always fires; no detection, no yield.
 
 ---
 
@@ -53,19 +52,19 @@ pollution.
     "UserPromptSubmit": [
       { "hooks": [ { "type": "command", "command": "node", "args": ["<absdir>/think-short-prompt-counter.mjs"] } ] }
     ],
-    "PreToolUse": [
-      { "matcher": "Task|Agent", "hooks": [ { "type": "command", "command": "node", "args": ["<absdir>/think-short-task.mjs"] } ] }
+    "SubagentStart": [
+      { "hooks": [ { "type": "command", "command": "node", "args": ["<absdir>/think-short-subagent.mjs"] } ] }
     ]
   }
 }
 ```
 
 Merge rule: APPEND into the existing `SessionStart` / `UserPromptSubmit` /
-`PreToolUse` arrays — never overwrite. Dedupe by the think-short script path:
+`SubagentStart` arrays — never overwrite. Dedupe by the think-short script path:
 if an entry already references the same `think-short-*.mjs` path, skip (idempotent
 re-install). Recognizable marker for all think-short entries = any hook whose
 `args` contains a path ending in `think-short-session.mjs`,
-`think-short-prompt-counter.mjs`, or `think-short-task.mjs`.
+`think-short-prompt-counter.mjs`, or `think-short-subagent.mjs`.
 
 ---
 
@@ -91,7 +90,7 @@ SRC="$(dirname "$RUNBOOK")"
 DST="$PWD/.claude/hooks"
 mkdir -p "$DST" && \
 cp "$SRC/think-short-session.mjs" "$SRC/think-short-prompt-counter.mjs" \
-   "$SRC/think-short-task.mjs" "$SRC/think-short-prompt.md" "$DST/" && \
+   "$SRC/think-short-subagent.mjs" "$SRC/think-short-prompt.md" "$DST/" && \
 echo "OK copied to $DST" || echo "FAILED"
 ```
 Then edit `<repo>/.claude/settings.json` to merge the 3 entries (absdir = `$DST`).
@@ -117,7 +116,7 @@ SRC="$(dirname "$RUNBOOK")"
 DST="$HOME/.claude/hooks"
 mkdir -p "$DST" && \
 cp "$SRC/think-short-session.mjs" "$SRC/think-short-prompt-counter.mjs" \
-   "$SRC/think-short-task.mjs" "$SRC/think-short-prompt.md" "$DST/" && \
+   "$SRC/think-short-subagent.mjs" "$SRC/think-short-prompt.md" "$DST/" && \
 echo "OK copied to $DST" || echo "FAILED"
 ```
 
@@ -146,12 +145,15 @@ s.hooks=s.hooks||{};
 const want=[
   ["SessionStart",null,"think-short-session.mjs"],
   ["UserPromptSubmit",null,"think-short-prompt-counter.mjs"],
-  ["PreToolUse","Task|Agent","think-short-task.mjs"],
+  ["SubagentStart",null,"think-short-subagent.mjs"],
 ];
-const marks=["think-short-session.mjs","think-short-prompt-counter.mjs","think-short-task.mjs"];
+// "marks" is the DETECTION list — it keeps the retired think-short-task.mjs so a
+// stale PreToolUse entry from an older install is recognized and dropped below,
+// even though it is no longer in "want" and never gets recreated.
+const marks=["think-short-session.mjs","think-short-prompt-counter.mjs","think-short-subagent.mjs","think-short-task.mjs"];
 const argsOf=e=>((e&&e.hooks)||[]).flatMap(h=>(h&&h.args)||[]).filter(a=>typeof a==="string");
 const isTS=a=>marks.some(m=>a===m||a.endsWith("/"+m)||a.endsWith("\\"+m));
-const wanted=new Set(marks.map(m=>path.join(dir,m)));
+const wanted=new Set(want.map(([,,m])=>path.join(dir,m)));
 for(const ev of Object.keys(s.hooks)){                 // drop stale-path think-short entries, keep foreign ones
   if(!Array.isArray(s.hooks[ev])) continue;
   s.hooks[ev]=s.hooks[ev].filter(e=>{
@@ -211,20 +213,29 @@ else
   PROMPT_DST="$HOOKS_DIR/think-short-prompt.md"; STATE=enabled
 fi
 cp "$SRC/think-short-session.mjs" "$SRC/think-short-prompt-counter.mjs" \
-   "$SRC/think-short-task.mjs" "$HOOKS_DIR/" && \
+   "$SRC/think-short-subagent.mjs" "$HOOKS_DIR/" && \
 cp "$SRC/think-short-prompt.md" "$PROMPT_DST" && \
+rm -f "$HOOKS_DIR/think-short-task.mjs" && \
 node --check "$HOOKS_DIR/think-short-session.mjs" && \
 node --check "$HOOKS_DIR/think-short-prompt-counter.mjs" && \
-node --check "$HOOKS_DIR/think-short-task.mjs" && \
+node --check "$HOOKS_DIR/think-short-subagent.mjs" && \
 echo "✅ upgraded $HOOKS_DIR (prompt state kept: $STATE)" || echo "❌ FAILED"
 ```
 
 > **STOP if ❌** — a target with no `think-short-session.mjs` is not installed: run
 > INSTALL instead. Never let upgrade become a silent first install.
 
+The `rm -f` above deletes a pre-existing `think-short-task.mjs` — the retired
+PreToolUse-based hook. It is mandatory: leaving that file in place would not
+re-fire it (nothing in `HOOKS_DIR` triggers execution by presence alone), but its
+stale `PreToolUse` `settings.json` entry would still reference and run it every
+Task spawn until the merge step below removes that entry too.
+
 Then re-run the `node -e` **merge** block for that target (the one under *GLOBAL
 target*, with `f`/`dir` pointed at the right scope). It drops its own stale-path
-entries first, so a hooks dir that moved converges, and it is idempotent otherwise.
+entries first (including the retired `PreToolUse`/`Task|Agent` entry pointing at
+`think-short-task.mjs`), so a hooks dir that moved converges, and it is
+idempotent otherwise.
 
 > Wiring may have changed -> a NEW session is required.
 
@@ -268,15 +279,18 @@ fi
 
 ## UNINSTALL  (project and/or global)
 
-Marker = the 3 think-short script basenames. The skill AskUserQuestion's the
-target if ambiguous; check BOTH `<repo>/.claude/` and `~/.claude/` when unsure.
+Marker = the think-short script basenames, current AND retired (an upgrade from
+<=5.5.3 may still have `think-short-task.mjs` on disk). The skill
+AskUserQuestion's the target if ambiguous; check BOTH `<repo>/.claude/` and
+`~/.claude/` when unsure.
 
 For each target:
 1. Strip from `settings.json` every hook entry whose `args` reference any of
    `think-short-session.mjs`, `think-short-prompt-counter.mjs`,
-   `think-short-task.mjs`. Drop now-empty event arrays. Leave all other hooks
-   untouched.
-2. Delete the 4 copied files from the hooks dir (including a `.disabled` prompt).
+   `think-short-subagent.mjs`, `think-short-task.mjs`. Drop now-empty event
+   arrays. Leave all other hooks untouched.
+2. Delete the copied files from the hooks dir (including a `.disabled` prompt
+   and any leftover `think-short-task.mjs`).
 
 The tmp counter markers are KEPT — they are ephemeral and self-pruning. `PURGE`
 removes them.
@@ -288,7 +302,7 @@ EXECUTE uninstall (works for both; set HOOKS_DIR + SETTINGS):
 node -e '
 const fs=require("fs");
 const f=process.env.SETTINGS, dir=process.env.HOOKS_DIR;
-const marks=["think-short-session.mjs","think-short-prompt-counter.mjs","think-short-task.mjs"];
+const marks=["think-short-session.mjs","think-short-prompt-counter.mjs","think-short-subagent.mjs","think-short-task.mjs"];
 let s={};
 if(!fs.existsSync(f)){ console.log("no settings to clean: "+f); process.exit(0); }
 const raw=fs.readFileSync(f,"utf8");
@@ -313,9 +327,11 @@ if(s&&s.hooks&&typeof s.hooks==="object"){
 ' && \
 rm -f "$HOOKS_DIR/think-short-session.mjs" \
       "$HOOKS_DIR/think-short-prompt-counter.mjs" \
+      "$HOOKS_DIR/think-short-subagent.mjs" \
       "$HOOKS_DIR/think-short-task.mjs" \
       "$HOOKS_DIR/think-short-prompt.md" \
       "$HOOKS_DIR/think-short-prompt.md.disabled" && \
+test ! -e "$HOOKS_DIR/think-short-subagent.mjs" && \
 test ! -e "$HOOKS_DIR/think-short-task.mjs" && \
 echo "✅ removed files from $HOOKS_DIR" || echo "❌ FAILED"
 ```

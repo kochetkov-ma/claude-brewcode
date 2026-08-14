@@ -2,6 +2,27 @@
 
 ---
 
+## v5.6.1 (2026-08-14)
+
+> Docs: [think-short-setup](https://doc-claude.brewcode.app/brewtools/skills/think-short-setup/) | [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/)
+
+> `think-short`'s subagent style injection never reached a single subagent. It ran on `PreToolUse` (matcher `Task|Agent`) and wrote `hookSpecificOutput.updatedInput.prompt` — a single-writer/last-wins channel: parallel hooks all receive the ORIGINAL `tool_input` and the consumer is a plain assignment, so the last hook to return silently overwrites every other. To avoid clobbering someone else's Task hook the asset shipped a "foreign Task hook detected -> yield" gate, and in practice it yielded and injected nothing.
+
+### brewtools
+
+#### Fixed
+
+- **think-short subagent injection now actually fires.** Moved from `PreToolUse:Task|Agent` to `SubagentStart`, emitting `additionalContext` — a channel the bundle ACCUMULATES across hooks, so several injectors coexist without overwriting each other. The whole coexistence/yield machinery is gone: 283 -> 70 lines
+- Asset renamed `assets/think-short-task.mjs` -> `assets/think-short-subagent.mjs`; `upgrade` removes the stale `PreToolUse` hook and its `settings.json` entry before installing the new one
+
+### brewcode
+
+#### Changed
+
+- `hook-creator` now advises `additionalContext` over `updatedInput` for instruction injection — `updatedInput` is last-wins between parallel hooks, `additionalContext` accumulates
+
+---
+
 ## v5.6.0 (2026-08-13)
 
 > Docs: [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) | [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [teams-setup](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | [superreview-setup](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [agent-deadline-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline-setup/) | [agent-return-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-return-setup/) | [agent-router-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-router-setup/) | [task-board-setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) | [docsync-setup](https://doc-claude.brewcode.app/brewdoc/skills/docsync-setup/) | [md-to-pdf](https://doc-claude.brewcode.app/brewdoc/skills/md-to-pdf/) | [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/)

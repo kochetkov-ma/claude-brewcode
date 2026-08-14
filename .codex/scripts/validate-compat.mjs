@@ -58,7 +58,7 @@ function checkHookCommand(plugin, distRoot, hook) {
 function resourceTarget(plugin, skill, relative) {
   if (relative === 'SKILL.md' || relative.startsWith('.claude/') || relative.includes('/__pycache__/') || relative.endsWith('.pyc')) return null;
   if (plugin === 'brewtools' && skill === 'manager-setup' && ['references/hard.md', 'references/intent-routing.md'].includes(relative)) return null;
-  if (plugin === 'brewtools' && skill === 'think-short-setup' && (relative === 'assets/think-short-task.mjs' || relative.startsWith('tests/'))) return null;
+  if (plugin === 'brewtools' && skill === 'think-short-setup' && (relative === 'assets/think-short-subagent.mjs' || relative.startsWith('tests/'))) return null;
   return relative.replaceAll('claude-md', 'agents-md').replaceAll('claude-local', 'codex-local');
 }
 

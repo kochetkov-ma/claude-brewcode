@@ -8,30 +8,22 @@ Installer skill that wires, toggles or removes three self-contained hooks inject
 |------|----------|
 | SessionStart | injects the full terse prompt + resets the per-session counter |
 | UserPromptSubmit | injects the full prompt every 10th user prompt (10/20/30…, not the 1st) |
-| PreToolUse:`Task\|Agent` | injects the full terse prompt into spawned subagents — unless it yields (below) |
+| SubagentStart | injects the full terse prompt into spawned subagents via `additionalContext` |
 
 The terse prompt cuts preamble, AI phrasings, and filler, and enforces tool discipline.
 
-## Subagent injection can yield
+## Subagent injection
 
-`think-short-task.mjs` rewrites the subagent prompt through `updatedInput`. If ANOTHER `PreToolUse` hook is registered on a matcher that also hits `Task`/`Agent`, and it is not a brewcode-family hook, think-short cannot know what that hook does to the same field — so it emits `{}` and lets the other hook win. Deliberate, not a bug.
-
-Two things make a yield visible instead of silent:
-
-- the hook emits a `systemMessage` once per session naming the foreign hook,
-- `status` runs `node <hooks>/think-short-task.mjs --check "$PWD"` and prints `injects=` and `yielded_to=`.
+`think-short-subagent.mjs` delivers the prompt on `SubagentStart` via `hookSpecificOutput.additionalContext`. That channel accumulates across hooks — every registered `SubagentStart` hook's context is appended and delivered to the subagent, so there is no clobbering and nothing to coexist with. `status` runs `node <hooks>/think-short-subagent.mjs --check "$PWD"` and prints `injects=`.
 
 | Field | Meaning |
 |-------|---------|
 | `injects=yes` | subagents really get the directive |
-| `injects=no` | wired + prompt present, but yielding — see `yielded_to` |
-| `injects=n/a` | no task hook in that scope |
+| `injects=no` | wired, but the prompt file is missing/empty (broken install) |
+| `injects=n/a` | no subagent hook in that scope |
 | `injects=unknown` | installed copy predates `--check` → run `upgrade` on that scope |
-| `yielded_to` | the settings/hooks files registering the foreign `Task`/`Agent` hook, or `none` |
 
-`injects` measures only the subagent hook. SessionStart and the every-10th-prompt injection never yield.
-
-`install`/`upgrade` cannot fix a yield — only removing the foreign hook or narrowing its matcher will.
+`injects` measures only the subagent hook. SessionStart and the every-10th-prompt injection are separate paths.
 
 ## Usage
 

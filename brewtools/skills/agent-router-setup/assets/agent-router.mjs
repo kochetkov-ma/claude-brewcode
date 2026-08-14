@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=5.6.0 content_version=5.6.0 generated_by=brewtools:agent-router-setup
+// brewcode-meta: version=5.6.1 content_version=5.6.0 generated_by=brewtools:agent-router-setup
 /**
  * agent-router - PreToolUse hook for the `Agent` tool (Node built-ins only, ESM).
  *

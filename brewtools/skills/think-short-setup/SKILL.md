@@ -10,7 +10,7 @@ model: sonnet
 
 # Think-Short
 
-> Installer/configurator skill. It wires three self-contained hooks (SessionStart, UserPromptSubmit, PreToolUse:Task) that inject a terse-output prompt — or configures/removes them. No profiles and no project-level config: the only state is the copied `think-short-prompt.md` plus an ephemeral per-session counter in the OS temp dir (`os.tmpdir()/brewtools-think-short/<session_id>.think-short-counter`), auto-pruned. The hooks own all runtime behavior. This skill only decides **mode** and **project vs global**, then delegates the file work to the `brewcode:hook-creator` agent following the runbook.
+> Installer/configurator skill. It wires three self-contained hooks (SessionStart, UserPromptSubmit, SubagentStart) that inject a terse-output prompt — or configures/removes them. No profiles and no project-level config: the only state is the copied `think-short-prompt.md` plus an ephemeral per-session counter in the OS temp dir (`os.tmpdir()/brewtools-think-short/<session_id>.think-short-counter`), auto-pruned. The hooks own all runtime behavior. This skill only decides **mode** and **project vs global**, then delegates the file work to the `brewcode:hook-creator` agent following the runbook.
 
 ## What the hooks do (informational — skill does NOT implement)
 
@@ -18,7 +18,7 @@ model: sonnet
 |------|----------|
 | SessionStart | inject the full terse prompt + reset the per-session counter |
 | UserPromptSubmit | inject the full prompt every 10th user prompt (10/20/30…, not the 1st) |
-| PreToolUse:`Task\|Agent` | inject the full terse prompt into spawned subagents (coexistence-safe with other Task hooks) |
+| SubagentStart | inject the full terse prompt into spawned subagents (`additionalContext` accumulates across hooks — no coexistence/yield logic needed) |
 
 All three read `think-short-prompt.md` from their OWN directory and emit `{}` when it cannot be read. There is no `enabled` flag and no config file to add one to — so **`disable` renames the copied prompt to `think-short-prompt.md.disabled`**: the hooks stay wired, find no prompt, and every event becomes a genuine no-op. `enable` renames it back. This is the hooks' existing fail-open path, not new machinery.
 
@@ -73,7 +73,7 @@ test -d "$BT_ROOT/skills/think-short-setup/assets" || { echo "❌ BT_ROOT invali
 
 Asset paths (all under `$BT_ROOT/skills/think-short-setup/assets/`):
 - `INSTALL.md` — the runbook: install project/global, upgrade, disable/enable, uninstall, purge. **Single source of truth — follow it, never re-derive its commands here.**
-- `think-short-session.mjs`, `think-short-prompt-counter.mjs`, `think-short-task.mjs`, `think-short-prompt.md` — the hook files that travel together
+- `think-short-session.mjs`, `think-short-prompt-counter.mjs`, `think-short-subagent.mjs`, `think-short-prompt.md` — the hook files that travel together
 
 > Never use `Write`/`Edit` on `~/.claude/*` — protected path, blocked in ALL modes. Global operations run through the Bash tool only (`cp` + `node` + `mv` + `rm`). The hook-creator agent handles this per the runbook.
 
@@ -90,7 +90,7 @@ SD="${CLAUDE_SKILL_DIR}"
 if [ -n "$SD" ] && [ -f "$SD/../../.claude-plugin/plugin.json" ]; then BT_ROOT=$(cd "$SD/../.." && pwd); else BT_ROOT=$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::'); fi
 [ -n "$BT_ROOT" ] || { echo "ERROR: cannot locate brewtools plugin root -- install/update brewtools first."; exit 1; }
 A="$BT_ROOT/skills/think-short-setup/assets"
-for f in INSTALL.md think-short-session.mjs think-short-prompt-counter.mjs think-short-task.mjs think-short-prompt.md; do
+for f in INSTALL.md think-short-session.mjs think-short-prompt-counter.mjs think-short-subagent.mjs think-short-prompt.md; do
   test -f "$A/$f" || { echo "❌ FAILED — assets incomplete under BT_ROOT=$BT_ROOT (missing $f)"; exit 1; }
 done
 echo "ASSETS_DIR=$A"
@@ -98,7 +98,7 @@ echo "RUNBOOK=$A/INSTALL.md"
 for S in "$PWD/.claude:project" "$HOME/.claude:global"; do
   D="${S%%:*}"; N="${S##*:}"
   F=0
-  for f in think-short-session.mjs think-short-prompt-counter.mjs think-short-task.mjs; do
+  for f in think-short-session.mjs think-short-prompt-counter.mjs think-short-subagent.mjs; do
     [ -f "$D/hooks/$f" ] && F=$((F+1))
   done
   W=$({ grep -o 'think-short-[a-z-]*\.mjs' "$D/settings.json" 2>/dev/null || true; } | sort -u | wc -l | tr -d ' '); W=${W:-0}
@@ -106,14 +106,12 @@ for S in "$PWD/.claude:project" "$HOME/.claude:global"; do
   [ -f "$D/hooks/think-short-prompt.md.disabled" ] && P=disabled
   [ -f "$D/hooks/think-short-prompt.md" ] && P=enabled
   I=n/a
-  if [ -f "$D/hooks/think-short-task.mjs" ]; then
-    C=$(node "$D/hooks/think-short-task.mjs" --check "$PWD" </dev/null 2>/dev/null || true)
+  if [ -f "$D/hooks/think-short-subagent.mjs" ]; then
+    C=$(node "$D/hooks/think-short-subagent.mjs" --check "$PWD" </dev/null 2>/dev/null || true)
     case "$C" in *'"injects":true'*) I=yes ;; *'"injects":false'*) I=no ;; *) I=unknown ;; esac
   fi
   echo "$N: hook_files=$F/3 settings_refs=$W/3 prompt=$P injects=$I"
 done
-Y=$({ node "$A/think-short-task.mjs" --check "$PWD" </dev/null 2>/dev/null || true; } | grep -o '"source":"[^"]*"' | sed 's/"source":"//;s/"$//' | paste -sd';' -)
-echo "yielded_to=${Y:-none}"
 M="${TMPDIR:-/tmp}/brewtools-think-short"
 echo "markers=$({ ls "$M" 2>/dev/null || true; } | wc -l | tr -d ' ') dir=$M"
 echo "✅ status"
@@ -128,13 +126,12 @@ Field meanings — do not paraphrase them into something stronger:
 | `hook_files` | how many of the 3 scripts are present in that scope's `hooks/`; `3/3` = complete, `1/3`-`2/3` = half-installed → repair |
 | `settings_refs` | count of DISTINCT `think-short-*.mjs` scripts referenced in that scope's `settings.json`; `0/3` = not wired, `3/3` = fully wired |
 | `prompt` | `enabled` = `think-short-prompt.md` present, `disabled` = only the `.disabled` rename is there, `none` = neither (the hooks would no-op even though they are wired) |
-| `injects` | `node <that scope's copy>/think-short-task.mjs --check "$PWD"` → `injects`. `yes` = the subagent hook would really prepend the directive. `no` = it is wired and has a prompt but YIELDS. `n/a` = no task hook in that scope. `unknown` = the installed copy answered nothing parseable — it predates `--check`, so run `upgrade` on that scope |
-| `yielded_to` | the `yielded_to[].source` paths from the same `--check`, `;`-separated, or `none`. Each is a settings/hooks file registering a FOREIGN `PreToolUse` `Task`/`Agent` hook. Scope-independent — the probe scans project settings, user settings and every plugin `hooks.json` at once |
+| `injects` | `node <that scope's copy>/think-short-subagent.mjs --check "$PWD"` → `injects`. `yes` = the prompt file is present and readable, so the `SubagentStart` hook really delivers it. `no` = wired but the prompt is missing/empty — a broken install, not a yield: `additionalContext` accumulates across hooks, so nothing here ever loses to another hook. `n/a` = no subagent hook in that scope. `unknown` = the installed copy answered nothing parseable — it predates `--check`, so run `upgrade` on that scope |
 | `markers` | number of tmp counter files; state only, never affects behavior |
 
 `settings_refs` is a textual count, not a JSON validation — it does not prove the entries are well-formed or attached to the right events.
 
-`injects` covers ONLY `think-short-task.mjs` (the subagent injection). SessionStart and the every-10th-prompt injection never yield and are not measured by it — `injects=no` means subagents get nothing while the main session still gets the directive.
+`injects` covers ONLY `think-short-subagent.mjs` (the subagent injection). SessionStart and the every-10th-prompt injection are separate paths and are not measured by it — `injects=no` means subagents get nothing while the main session still gets the directive.
 
 Read the output into a state table. If MODE resolves to `status`, print the Prompt contract PLAN
 block now, right before this table. Then PRINT the table to the user:
@@ -142,19 +139,7 @@ block now, right before this table. Then PRINT the table to the user:
 | Scope | Hook files | settings.json wired | Prompt | Injects | Effective |
 |-------|-----------|---------------------|--------|---------|-----------|
 
-Effective = `hook_files=3/3 settings_refs=3/3 prompt=enabled injects=yes`. Anything else is NOT effective — say so plainly instead of reporting a half-state as installed. In particular: `prompt=enabled injects=no` is a **yielding install** — fully wired, injecting nothing into subagents. Name the file(s) from `yielded_to` and offer the options below; do not report it as installed.
-
-### Yield — what to say when `injects=no`
-
-`think-short-task.mjs` rewrites the subagent prompt via `updatedInput`. When ANOTHER `PreToolUse` hook is registered on a matcher that also hits `Task`/`Agent`, and it is not a brewcode-family hook, think-short cannot know what that hook does to the same field — so it emits `{}` and lets the other hook win. This is deliberate, not a bug, and it is announced once per session as a `systemMessage`.
-
-Common causes and the honest answer:
-
-| `yielded_to` names | Say |
-|--------------------|-----|
-| a project/global `settings.json` | that hook owns `Task`/`Agent`; think-short will not inject into subagents while it is registered. Remove/re-matcher it, or accept subagent injection is off |
-| any brewcode/brewtools/brewdoc hook | should NOT happen — family hooks are recognized and coexisted with. Report it as a bug in the family-hook list |
-| `none` but `injects=no` | the prompt file is missing or empty in that scope → `upgrade` |
+Effective = `hook_files=3/3 settings_refs=3/3 prompt=enabled injects=yes`. Anything else is NOT effective — say so plainly instead of reporting a half-state as installed. In particular: `prompt=enabled injects=no` means the prompt file is empty or corrupt — fully wired but injecting nothing into subagents. Offer `upgrade` to re-copy it; do not report it as installed.
 
 ### Early exit
 
@@ -190,7 +175,7 @@ For `uninstall`/`purge` with an unspecified target, ask the same Project/Global 
 For every mutating mode, print the Prompt contract PLAN block now — target is resolved (Step 3)
 — before the delegation below. Tell the user plainly what will happen, e.g.:
 
-> Installing think-short hooks (SessionStart + UserPromptSubmit + PreToolUse:Task) into `<repo>/.claude/` and merging `<repo>/.claude/settings.json`.
+> Installing think-short hooks (SessionStart + UserPromptSubmit + SubagentStart) into `<repo>/.claude/` and merging `<repo>/.claude/settings.json`.
 
 For `uninstall`/`purge` list exactly which files are deleted and confirm once.
 
@@ -218,7 +203,7 @@ Spawn the agent (substitute `MODE`, `TARGET`, `RUNBOOK`, `ASSETS_DIR` from Steps
 ```
 Task(subagent_type="brewcode:hook-creator", prompt="
 GOAL: the user wants think-short terse-mode hooks MODE-ed for TARGET. Three hooks
-(SessionStart, UserPromptSubmit, PreToolUse:Task) inject a terse-output prompt; runtime
+(SessionStart, UserPromptSubmit, SubagentStart) inject a terse-output prompt; runtime
 behavior lives entirely in the hook files, so this task is pure file + settings wiring.
 ROLE: you own the file copy/rename/strip and the settings.json merge. Do NOT edit hook
 logic, do NOT touch unrelated hooks or settings keys, do NOT act on the other target.
@@ -263,7 +248,7 @@ Re-run the Step 1 status block and print the refreshed table, plus:
 - **a NEW session is required for hook WIRING changes** (install / upgrade / uninstall / purge) — `/reload-plugins` is NOT needed, these are plain settings.json hooks; SessionStart fires on the next `claude` start / `--resume`;
 - **`enable`/`disable` take effect immediately** — the hooks re-read the prompt file on every call, no restart;
 - for `upgrade`: that the prompt text is what actually changed, since the 3 scripts are usually identical between versions,
-- `injects` for the touched scope — if it is still `no`, say plainly that the wiring succeeded and the subagent injection is still yielding to the hook(s) in `yielded_to`.
+- `injects` for the touched scope — if it is still `no`, say plainly that the wiring succeeded but the prompt file is missing/empty, and offer `upgrade`.
 
 ---
 
@@ -293,8 +278,8 @@ Re-install is a no-op. One target per run; "both" is two runs.
 | Global target | Hook-creator MUST use Bash only (`cp`/`node`/`mv`/`rm`) — `~/.claude/*` is protected. |
 | `enable` asked for but no `.disabled` file exists | Not disabled — say so and stop. If `prompt=none` the install is BROKEN, not disabled: offer `upgrade` to re-copy the prompt. |
 | `disable` asked for but `hook_files` is not `3/3` | Nothing effective to disable; report the half-state and offer `upgrade` or `uninstall`. |
-| Status shows `injects=no` | Yielding install — wired and enabled, but subagents get nothing. Name every `yielded_to` source and stop; `install`/`upgrade` will NOT fix it, only removing/re-matchering the foreign hook will. |
-| Status shows `injects=unknown` | The installed `think-short-task.mjs` is older than the `--check` diagnostic. Offer `upgrade` for that scope, then re-run `status`. |
+| Status shows `injects=no` | Wired and enabled, but the prompt file is missing/empty (broken install) — subagents get nothing. Offer `upgrade` for that scope. |
+| Status shows `injects=unknown` | The installed `think-short-subagent.mjs` is older than the `--check` diagnostic. Offer `upgrade` for that scope, then re-run `status`. |
 | User expects `disable` to stop the hooks from RUNNING | It does not: the 3 processes still spawn per event and exit with `{}`. It removes the injection, not the ~50 ms. Say this; offer `uninstall` if the cost is the complaint. |
 | `uninstall`/`purge` requested | Restate exactly what gets deleted, confirm once, then delegate. |
 | `settings.json` exists but is malformed JSON | Report it: every runbook block ABORTS rather than overwriting it blind, and the `rm` is skipped too so files and settings stay consistent. Offer to fix. |
@@ -313,13 +298,13 @@ if [ -n "$SD" ] && [ -f "$SD/../../.claude-plugin/plugin.json" ]; then BT_ROOT=$
 [ -n "$BT_ROOT" ] || { echo "ERROR: cannot locate brewtools plugin root -- install/update brewtools first."; exit 1; }
 A="$BT_ROOT/skills/think-short-setup/assets"
 test -d "$A" || { echo "❌ assets dir missing"; exit 1; }
-for f in think-short-session.mjs think-short-prompt-counter.mjs think-short-task.mjs think-short-prompt.md INSTALL.md; do
+for f in think-short-session.mjs think-short-prompt-counter.mjs think-short-subagent.mjs think-short-prompt.md INSTALL.md; do
   test -f "$A/$f" || { echo "❌ missing $f"; exit 1; }
 done
 test -s "$A/think-short-prompt.md" || { echo "❌ smoke FAILED — think-short-prompt.md is empty (all 3 hooks would no-op)"; exit 1; }
 node --check "$A/think-short-session.mjs" && \
 node --check "$A/think-short-prompt-counter.mjs" && \
-node --check "$A/think-short-task.mjs" && \
+node --check "$A/think-short-subagent.mjs" && \
 echo "✅ smoke" || echo "❌ smoke FAILED"
 ```
 

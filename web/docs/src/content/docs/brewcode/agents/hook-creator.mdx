@@ -109,7 +109,7 @@ Hook Creator sizes the task before starting. One bounded unit = one deliverable,
 | Goal | Channel | Event |
 |------|---------|-------|
 | Inject context for Claude | `additionalContext` | SessionStart, PreToolUse, UserPromptSubmit |
-| Inject into subagent prompt | `updatedInput.prompt` | PreToolUse (matcher: Task) |
+| Inject into subagent prompt | `additionalContext` | SubagentStart |
 | Block tool execution | `permissionDecision:"deny"` | PreToolUse |
 | Block session stop | `decision:"block"` + `reason` | Stop |
 | Give Claude feedback at stop (keep turn going) | `hookSpecificOutput.additionalContext` | Stop, SubagentStop |
@@ -120,6 +120,12 @@ Hook Creator sizes the task before starting. One bounded unit = one deliverable,
 | Control teammates | `{continue, stopReason}` JSON | TeammateIdle, TaskCompleted, TaskCreated |
 | Re-scan skill dirs on startup | `reloadSkills: true` | SessionStart (CC 2.1.152) |
 | Set session title on startup/resume | `hookSpecificOutput.sessionTitle` | SessionStart (CC 2.1.152) |
+
+`additionalContext` accumulates across every hook registered on the same event. `updatedInput` (and
+`updatedToolOutput` on PostToolUse) is single-writer/last-wins — all hooks on the event see the same
+original input and the runner keeps only the last one's edit, so two hooks writing it clobber each
+other. Prefer `additionalContext` for instruction injection; reserve `updatedInput` for a single
+owning hook.
 
 ### All 27 events
 

@@ -199,7 +199,7 @@ sequenceDiagram
     PH--xMS: router names the real expert
     PH->>MS: haiku judge, strict level only
     MS->>SA: Task spawn
-    PH->>SA: think-short prepended to the prompt
+    PH->>SA: think-short tone directive
     PH->>SA: return contract announced
     PH->>SA: semble subagent nudge
   end
@@ -246,6 +246,14 @@ Notes for this section:
 - Both `UserPromptSubmit` hooks use `hookSpecificOutput.additionalContext`, never `updatedInput`, which is
   silently dropped on that event in CC 2.1.x. Both cap injected text at 9000 chars, below a 10K disk-spill
   threshold noted for CC 2.1.174.
+- Channel semantics, verified against the CC 2.1.232 bundle: `updatedInput` (`PreToolUse`) and
+  `updatedToolOutput` (`PostToolUse`) are single-writer/last-wins - every hook on the event receives the
+  same original value and the runner keeps only the last hook's edit, so two hooks writing either one
+  clobber each other; both are schema-validated, and a malformed value denies the tool call rather than
+  being ignored. `additionalContext` accumulates across every hook registered on the same event - no
+  clobbering, any number of hooks compose. `PreToolUse` `additionalContext` reaches only the parent
+  session, never a subagent; `SubagentStart` `additionalContext` reaches the subagent and supports an
+  `agent_type` matcher. This is why think-short's subagent injection (below) moved off `updatedInput`.
 - brewcode's `SessionStart` sends nothing to the model - only a `systemMessage` for the human.
 - Installing brewtools does **not** arm the wall. Only `/brewtools:manager-setup install` does.
 - Nothing in the suite registers `SessionEnd` or `PreCompact`. Zero hits across all three `hooks.json`,
@@ -305,7 +313,7 @@ repeated here.
 |---|---|---|---|---|---|---|---|---|---|
 | think-short at session open | `/brewtools:think-short-setup install` | choice: project or global, one target per run | `SessionStart` | Every session start or resume; also resets the per-session counter and prunes markers older than ~1 day | `Be terse. Results first, no preamble/filler/sycophancy. ASCII only. ... Grep before Read. Edit over Write. Parallel calls in one message.` ... `Keep code simple - do not over-engineer. ... find the closest well-built counterpart in the repo` | `disable` renames `think-short-prompt.md` to `.disabled`; hooks stay wired and no-op | Set output style and coding taste for the whole session | Verbose, sycophantic, over-commented output; serial tool calls | no |
 | think-short reminder every 10th prompt | same | same | `UserPromptSubmit` | Prompts 10, 20, 30 ... of a session. `const INTERVAL = 10`, never the first | The same text, re-injected verbatim | same rename switch | Re-anchor terseness after the opening directive is buried | Terseness decays as the session grows | no |
-| think-short into every subagent | same | same | `PreToolUse` matcher `Task\|Agent` | Every subagent spawn. Prepends the directive to the subagent's own prompt via `updatedInput.prompt` | The same body plus `\n\n` and the original spawn prompt | same rename switch; also self-suppresses if any foreign `PreToolUse` Task/Agent hook is registered, announced once per session | Give subagents the same output contract | A subagent inherits no parent context and returns a wall of prose | no |
+| think-short into every subagent | same | same | `SubagentStart` | Every subagent spawn. Delivers the directive as `hookSpecificOutput.additionalContext` | The same body, unmodified | same rename switch; `additionalContext` accumulates across hooks, so no coexistence/yield logic is needed | Give subagents the same output contract | A subagent inherits no parent context and returns a wall of prose | no |
 | Pinned semantic-search MCP | `/brewcode:semble-setup install` | MCP at **user** scope (`semble[mcp]==0.5.4`, `alwaysLoad: true`); everything else project | user runs the skill | The MCP is registered once, into `~/.claude.json`, and is then available in every project on the machine - but only from a NEW session. A fresh registration is invisible to the session that made it, so install stops at a reload checkpoint and finishes via `resume` | Exposes `mcp__semble_code__search` and `mcp__semble_code__find_related` | `disable` sets `state.enabled=false`; nothing is deleted, all hooks read the flag | Make semantic search available before a grep habit forms | Grep fails on behaviour and intent questions where the wording is absent from the code | yes for project state; the MCP is machine-wide |
 | semble-first rule and CLAUDE.md block | same | project | context auto-load | Every request, as part of the always-loaded instructions. Two files: the full table lives in `.claude/rules/semble-first.md`, and a 6-line summary is written into `<repo>/CLAUDE.md` between the literal markers `<!-- BEGIN brewcode:semble -->` and `<!-- END brewcode:semble -->`. Re-install replaces the marked range in place and never appends a second block; a BEGIN without its END reports `malformed marker block` and changes nothing | `Semantic search first: ONE mcp__semble_code__search with repo = absolute project root, top_k=5, max_snippet_lines=10 - then open the hit at start_line. rg/Grep stays for exact identifiers, regexes, paths and exhaustive enumeration.` plus `top-k is a ranked sample, not a list: "every/all" is unanswerable in principle.` | `uninstall`/`purge` remove the text; `disable` leaves it and only silences the hooks | Teach the tool split once, in the always-loaded layer | The same question searched twice - semble then an equivalent `rg` - and semble used for enumeration it cannot do | yes, text is generic |
 | semble session directive | same | project | `SessionStart`, timeout 5 s | Session start, only when `.claude/semble/state.json` phase is `ready` or `awaiting_reload` | `semble: use ONE mcp__semble_code__search first (repo=<cwd>, top_k=5, max_snippet_lines=10), then open the hit at start_line.` | `enabled` flag | Restate the contract with the real repo path filled in | The model calls the MCP without `repo`, which is required and never inferred | yes |
@@ -634,24 +642,29 @@ any other main session.
 
 ### F. A subagent spawn
 
-**What happens:** the session calls `Task`. Two moments fire. First `PreToolUse` on `Task|Agent`, where
-think-short rewrites the spawn prompt itself (`think-short-task.mjs:250`) - the one place `updatedInput` is
-used. The rest of `tool_input` is passed through unchanged:
+**What happens:** the session calls `Task`. One moment fires for all three injectors below: `SubagentStart`,
+once the agent exists. That channel accumulates - every registered `SubagentStart` hook's
+`additionalContext` is appended and delivered into the subagent's own message list, so none of the three can
+clobber another. First, think-short delivers the same tone directive that opened the session
+(`think-short-subagent.mjs:64`):
 
 ```json
 {
   "hookSpecificOutput": {
-    "hookEventName": "PreToolUse",
-    "permissionDecision": "allow",
-    "updatedInput": {
-      "prompt": "Be terse. Results first, no preamble/filler/sycophancy. ASCII only.\n...\n\n<your original spawn prompt>"
-    }
+    "hookEventName": "SubagentStart",
+    "additionalContext": "Be terse. Results first, no preamble/filler/sycophancy. ASCII only.\n..."
   }
 }
 ```
 
-Then `SubagentStart`, once the agent exists. The return contract announces the numbers the agent will be
-judged by (`agent-return-budget.mjs:122`):
+This replaced an earlier `PreToolUse` on `Task|Agent` design that rewrote the spawn prompt via
+`updatedInput.prompt` - the one hook in the suite that used `updatedInput` for injection. That channel is
+single-writer/last-wins (every `PreToolUse` hook on the event sees the same original input, and the runner
+keeps only the last hook's edit), so a second hook doing the same thing would have clobbered it; the retired
+design carried a self-suppression check for exactly that case. `SubagentStart` + `additionalContext` has no
+such conflict, so the check is gone.
+
+The return contract announces the numbers the agent will be judged by (`agent-return-budget.mjs:122`):
 
 ```json
 {
@@ -662,8 +675,8 @@ judged by (`agent-return-budget.mjs:122`):
 }
 ```
 
-**What the subagent sees:** the tone directive prepended to its own task text, then the return contract, then
-semble's one-liner (`semble-subagent.mjs:133`):
+**What the subagent sees:** the tone directive, then the return contract, then semble's one-liner
+(`semble-subagent.mjs:133`):
 
 ```text
 semble: mcp__semble_code__search is already available to you — no ToolSearch needed. Start any "where/how/why does X work" question with ONE call: repo="/Users/you/proj", top_k=5, ...
@@ -707,8 +720,8 @@ Word counts are eyeballed from the source strings, not measured by a script.
 | Ranked candidates | `UserPromptSubmit` | semble prefetch | ~60 plus 3 paths | only on a question-shaped prompt, 30 s throttle |
 | Main-session tool call | `PreToolUse` | hard wall | ~60, as a deny | only when armed, and only on a blocked tool |
 | Search-shaped shell call | `PreToolUse` | semble reminder | ~25 | only when the command looks like a behaviour question |
-| Subagent spawn | `PreToolUse` `Task\|Agent` | think-short task, agent-router | ~120 prepended; router ~40 only on a redirect | every spawn, when installed |
-| Subagent starts | `SubagentStart` | agent-return contract, semble subagent | ~50 each | every subagent, when installed |
+| Subagent spawn | `PreToolUse` `Task\|Agent` | agent-router | ~40, only on a redirect | every spawn, when installed |
+| Subagent starts | `SubagentStart` | think-short subagent, agent-return contract, semble subagent | ~120 + ~50 + ~50 | every subagent, when installed |
 | Subagent tool call | `PreToolUse` | agent-deadline | ~60 warn, ~80 deny | past 80% of the budget, re-stated at most once per 10% of it |
 | Subagent returns | `SubagentStop` | agent-return guard | ~60 | only over budget, at most once per agent |
 | End of turn | `Stop` | docsync gate | ~50 | at most once per session, only when a doc is stale |
@@ -724,7 +737,7 @@ Word counts are eyeballed from the source strings, not measured by a script.
 | `hardmode-guard.mjs` copy | `/brewtools:manager-setup install` | `<repo>/.claude/brewtools/manager/`, registered in `.claude/settings.local.json` as `PreToolUse "*"` | `/brewtools:manager-setup disable`, or `uninstall` to unwire |
 | `manager-state.mjs` + `state.json` | `/brewtools:manager-setup install` | `<repo>/.claude/brewtools/manager/` | `node <ABS>/.claude/brewtools/manager/manager-state.mjs set hard=false`; `purge` deletes it |
 | Codeword text overrides | `/brewtools:manager-setup edit` (mode `full` only) | `<repo>/.claude/brewtools/manager/prompts/` or `~/.claude/manager/prompts/` | `purge` restores plugin defaults |
-| think-short hooks: `think-short-session.mjs`, `-prompt-counter.mjs`, `-task.mjs`, `think-short-prompt.md` | `/brewtools:think-short-setup install` | project `<repo>/.claude/hooks/` or global `~/.claude/hooks/`, 3 entries in that scope's `settings.json` | `/brewtools:think-short-setup disable` renames the prompt file |
+| think-short hooks: `think-short-session.mjs`, `-prompt-counter.mjs`, `-subagent.mjs`, `think-short-prompt.md` | `/brewtools:think-short-setup install` | project `<repo>/.claude/hooks/` or global `~/.claude/hooks/`, 3 entries in that scope's `settings.json` | `/brewtools:think-short-setup disable` renames the prompt file |
 | `semble_code` MCP entry | `/brewcode:semble-setup install` | `~/.claude.json`, user scope, pinned `semble[mcp]==0.5.4` | `/brewcode:semble-setup disable` (flag), `uninstall` to remove |
 | `.claude/rules/semble-first.md` + the CLAUDE.md marker block | `/brewcode:semble-setup install` | project | `uninstall` or `purge`; `disable` leaves the text and silences the hooks |
 | semble hooks: `semble-session.mjs`, `-reminder.mjs`, `-subagent.mjs`, `-prefetch.mjs`, `-stats.mjs` | `/brewcode:semble-setup install` | `<repo>/.claude/hooks/`. 5 files, but 6 entries in `.claude/settings.json`: `SessionStart`, `UserPromptSubmit`, `PreToolUse` on `Bash\|Grep`, `SubagentStart` with no matcher, and `semble-stats.mjs` registered **twice** - once on `PostToolUse` and once on `PostToolUseFailure`, which is the sixth entry (`semble-setup/SKILL.md:443`) | `state.enabled=false` via `disable` |

@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 /**
- * E2E suite for think-short hooks.
- * Injection model: ${injection}\n\n${tool_input.prompt}
+ * E2E suite for think-short hooks: SessionStart, UserPromptSubmit-counter and
+ * SubagentStart. The subagent hook composes `hookSpecificOutput.additionalContext`
+ * (no prompt rewriting, no yield logic — see think-short-subagent.mjs header).
  * Runs in isolated TEMP HOME + TMPDIR. Never touches real ~/.claude or repo state.
  * Each test emits one PASS/FAIL line.
  */
 import { spawnSync, execFileSync } from 'node:child_process';
 import {
   mkdtempSync, mkdirSync, writeFileSync, readFileSync,
-  existsSync, utimesSync, readdirSync, unlinkSync, rmSync,
+  existsSync, utimesSync, rmSync,
 } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -16,14 +17,10 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = join(fileURLToPath(import.meta.url), '..'); // tests/
 const ASSETS = join(HERE, '..', 'assets');               // assets/
-const REPO   = join(HERE, '..', '..', '..', '..'); // repo root
-const HOOKS_BC = join(REPO, 'brewcode', 'hooks');
-const HOOKS_BT = join(REPO, 'brewtools', 'hooks');
-const HOOKS_BD = join(REPO, 'brewdoc', 'hooks');
 
 const COUNTER_MJS  = join(ASSETS, 'think-short-prompt-counter.mjs');
 const SESSION_MJS  = join(ASSETS, 'think-short-session.mjs');
-const TASK_MJS     = join(ASSETS, 'think-short-task.mjs');
+const SUBAGENT_MJS = join(ASSETS, 'think-short-subagent.mjs');
 const PROMPT_PATH  = join(ASSETS, 'think-short-prompt.md');
 
 // GIVEN: a fresh isolated temp base
@@ -41,8 +38,8 @@ function fail(name, detail) {
   results.push(`  FAIL  ${name}  (${detail})`);
 }
 
-function run(script, stdinStr, env) {
-  const r = spawnSync(process.execPath, [script], {
+function run(script, stdinStr, env, args) {
+  const r = spawnSync(process.execPath, [script, ...(args || [])], {
     input: stdinStr,
     encoding: 'utf8',
     env: { ...process.env, ...env },
@@ -51,16 +48,37 @@ function run(script, stdinStr, env) {
   return { stdout: r.stdout || '', stderr: r.stderr || '', status: r.status };
 }
 
-function mkCachePlugin(home, plugin, version) {
-  const dir = join(home, '.claude', 'plugins', 'cache', 'claude-brewcode', plugin, version);
-  mkdirSync(dir, { recursive: true });
-  return dir;
+// Exact-equality helper for the SubagentStart hook's output object (mirrors
+// agent-return-setup/tests/suite.mjs deepEqual).
+function deepEqual(a, b) {
+  if (a === b) return true;
+  if (typeof a !== 'object' || a === null || typeof b !== 'object' || b === null) return false;
+  const ak = Object.keys(a);
+  const bk = Object.keys(b);
+  if (ak.length !== bk.length) return false;
+  for (const k of ak) {
+    if (!Object.prototype.hasOwnProperty.call(b, k)) return false;
+    if (!deepEqual(a[k], b[k])) return false;
+  }
+  return true;
 }
 
-function mkDataPlugin(home, plugin) {
-  const dir = join(home, '.claude', 'plugins', 'data', `${plugin}-claude-brewcode`);
+// Copies the subagent hook + optionally the prompt file into an isolated dir,
+// so tests can remove/rename the prompt without touching the real assets.
+function mkSubagentHookDir(base, withPrompt) {
+  const dir = join(base, 'hooks');
   mkdirSync(dir, { recursive: true });
-  return dir;
+  const script = join(dir, 'think-short-subagent.mjs');
+  writeFileSync(script, readFileSync(SUBAGENT_MJS));
+  if (withPrompt) writeFileSync(join(dir, 'think-short-prompt.md'), readFileSync(PROMPT_PATH));
+  return script;
+}
+
+// Body the hook injects: prompt.md minus its leading `<!-- think-short -->` line.
+function subagentBody(promptFile) {
+  const lines = readFileSync(promptFile, 'utf8').split('\n');
+  if (lines.length && /^\s*<!--/.test(lines[0])) lines.shift();
+  return lines.join('\n').trim();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -159,131 +177,130 @@ function mkDataPlugin(home, plugin) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Test 3a: think-short-task — only family hooks present -> FIRES
-// GIVEN: no foreign hooks anywhere; HOME with family cache dirs
-// WHEN: run think-short-task.mjs with tool_input.prompt
-// THEN: output starts with injection, contains prompt body, no `<!-- think-short -->`
+// Test 3a: think-short-subagent — SubagentStart, prompt present -> exact object
+// GIVEN: hook copied next to a live think-short-prompt.md
+// WHEN: run with a normal SubagentStart payload (stdin is documented as unread)
+// THEN: stdout deep-equals {hookSpecificOutput:{hookEventName:'SubagentStart',
+//       additionalContext: <prompt body minus its leading comment line>}}
 // ─────────────────────────────────────────────────────────────────────────────
 {
-  const home = join(BASE, 't3a-home');
-  mkdirSync(home, { recursive: true });
-  const tmp = join(BASE, 't3a-tmp');
-  mkdirSync(tmp, { recursive: true });
-  mkCachePlugin(home, 'brewtools', '3.19.5');
-  // GIVEN: no project or user settings with foreign hooks
-  mkdirSync(join(home, 'proj', '.claude'), { recursive: true });
-  writeFileSync(join(home, 'proj', '.claude', 'settings.json'), JSON.stringify({}));
-  writeFileSync(join(home, '.claude', 'settings.json'), JSON.stringify({}));
-
-  const ORIGINAL = 'TASK_ORIGINAL';
-  const stdin = JSON.stringify({ cwd: join(home, 'proj'), tool_input: { prompt: ORIGINAL } });
-  const r = run(TASK_MJS, stdin, { HOME: home, TMPDIR: tmp });
-  let t3aok = r.status === 0;
-  let detail3a = '';
-  if (t3aok) {
-    let out;
-    try { out = JSON.parse(r.stdout); } catch { t3aok = false; detail3a = 'parse fail'; }
-    if (t3aok) {
-      const np = out?.hookSpecificOutput?.updatedInput?.prompt;
-      const firstLine = np ? np.split('\n')[0] : '';
-      const hasBody   = np && np.includes('Be terse');
-      const noComment = np && !np.includes('<!-- think-short -->');
-      const hasOrig   = np && np.endsWith(ORIGINAL);
-      if (!np)         { t3aok = false; detail3a = 'no updatedInput.prompt'; }
-      else if (!hasBody)   { t3aok = false; detail3a = `body missing "Be terse": first80="${np.slice(0,80)}"`; }
-      else if (!noComment) { t3aok = false; detail3a = '<!-- think-short --> leaked into output'; }
-      else if (!hasOrig)   { t3aok = false; detail3a = `original not at end: "${np.slice(-40)}"`; }
-      else detail3a = `fires ok; starts="${firstLine}"`;
-    }
-  }
-  if (t3aok) pass('3a-task-only-family-fires', detail3a);
-  else        fail('3a-task-only-family-fires', detail3a);
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Test 3b: think-short-task — foreign hook in project settings.json -> YIELDS {}
-// GIVEN: project .claude/settings.json has a PreToolUse entry matching Task
-//        that is NOT a family hook (unknown command path)
-// WHEN: run think-short-task.mjs
-// THEN: output == {}
-// ─────────────────────────────────────────────────────────────────────────────
-{
-  const home = join(BASE, 't3b-home');
-  mkdirSync(home, { recursive: true });
-  const tmp = join(BASE, 't3b-tmp');
-  mkdirSync(tmp, { recursive: true });
-  mkCachePlugin(home, 'brewtools', '3.19.5');
-  mkdirSync(join(home, 'proj', '.claude'), { recursive: true });
-
-  // GIVEN: foreign hook that matches Task
-  const foreignSettings = {
-    hooks: {
-      PreToolUse: [
-        {
-          matcher: 'Task',
-          hooks: [{ type: 'command', command: '/some/foreign/hook.sh' }],
-        },
-      ],
+  const dir = join(BASE, 't3a-hooks');
+  mkdirSync(dir, { recursive: true });
+  const script = mkSubagentHookDir(dir, true);
+  const expected = {
+    hookSpecificOutput: {
+      hookEventName: 'SubagentStart',
+      additionalContext: subagentBody(join(dir, 'hooks', 'think-short-prompt.md')),
     },
   };
-  writeFileSync(join(home, 'proj', '.claude', 'settings.json'), JSON.stringify(foreignSettings));
-  writeFileSync(join(home, '.claude', 'settings.json'), JSON.stringify({}));
 
-  const stdin = JSON.stringify({ cwd: join(home, 'proj'), tool_input: { prompt: 'TASK_PROMPT' } });
-  const r = run(TASK_MJS, stdin, { HOME: home, TMPDIR: tmp });
-  let t3bok = r.status === 0;
-  let detail3b = '';
-  if (t3bok) {
+  const stdin = JSON.stringify({
+    hook_event_name: 'SubagentStart', session_id: 'S1', agent_id: 'A1',
+    agent_type: 'general-purpose', cwd: dir, prompt: 'do the thing',
+  });
+  const r = run(script, stdin, {});
+  let ok = r.status === 0;
+  let detail = '';
+  if (ok) {
     let out;
-    try { out = JSON.parse(r.stdout); } catch { t3bok = false; detail3b = 'parse fail'; }
-    if (t3bok) {
-      // No prompt edit, ever. A one-per-session `systemMessage` announcing the
-      // yield is expected — a silent no-op that looks installed was the bug.
-      const keys = Object.keys(out);
-      const injected = out.hookSpecificOutput && out.hookSpecificOutput.updatedInput;
-      const extra = keys.filter(k => k !== 'systemMessage');
-      if (!injected && extra.length === 0) detail3b = `no injection (keys=[${keys}])`;
-      else { t3bok = false; detail3b = `expected no updatedInput, got keys=[${keys}]`; }
+    try { out = JSON.parse(r.stdout); } catch { ok = false; detail = 'parse fail'; }
+    if (ok) {
+      ok = deepEqual(out, expected);
+      detail = ok
+        ? `exact match, additionalContext len=${expected.hookSpecificOutput.additionalContext.length}`
+        : `mismatch actual=${JSON.stringify(out).slice(0, 200)}`;
     }
+  } else {
+    detail = `exit=${r.status}`;
   }
-  if (t3bok) pass('3b-task-foreign-hook-yields', detail3b);
-  else        fail('3b-task-foreign-hook-yields', detail3b);
+  if (ok) pass('3a-subagent-fires-exact-object', detail);
+  else     fail('3a-subagent-fires-exact-object', detail);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Test 3c: think-short-task — no other Task hook at all -> FIRES
-// GIVEN: HOME with no plugin cache, no settings
-// WHEN: run think-short-task.mjs
-// THEN: updatedInput.prompt set (not empty)
+// Test 3b: think-short-subagent — exact key set, no extras
+// THEN: top-level keys == ['hookSpecificOutput']; hookSpecificOutput keys ==
+//       ['hookEventName','additionalContext'] — nothing else leaks in
 // ─────────────────────────────────────────────────────────────────────────────
 {
-  const home = join(BASE, 't3c-home');
-  mkdirSync(home, { recursive: true });
-  const tmp = join(BASE, 't3c-tmp');
-  mkdirSync(tmp, { recursive: true });
-  // GIVEN: no cache dirs; minimal settings
-  mkdirSync(join(home, '.claude'), { recursive: true });
-  writeFileSync(join(home, '.claude', 'settings.json'), JSON.stringify({}));
-  mkdirSync(join(home, 'proj', '.claude'), { recursive: true });
-  writeFileSync(join(home, 'proj', '.claude', 'settings.json'), JSON.stringify({}));
+  const dir = join(BASE, 't3b-hooks');
+  mkdirSync(dir, { recursive: true });
+  const script = mkSubagentHookDir(dir, true);
 
-  const ORIGINAL = 'TASK_ORIGINAL_3C';
-  const stdin = JSON.stringify({ cwd: join(home, 'proj'), tool_input: { prompt: ORIGINAL } });
-  const r = run(TASK_MJS, stdin, { HOME: home, TMPDIR: tmp });
-  let t3cok = r.status === 0;
-  let detail3c = '';
-  if (t3cok) {
+  const r = run(script, JSON.stringify({ hook_event_name: 'SubagentStart' }), {});
+  let ok = r.status === 0;
+  let detail = '';
+  if (ok) {
     let out;
-    try { out = JSON.parse(r.stdout); } catch { t3cok = false; detail3c = 'parse fail'; }
-    if (t3cok) {
-      const np = out?.hookSpecificOutput?.updatedInput?.prompt;
-      if (!np)                   { t3cok = false; detail3c = 'no updatedInput.prompt'; }
-      else if (!np.endsWith(ORIGINAL)) { t3cok = false; detail3c = `original not at end`; }
-      else detail3c = `fires ok; len=${np.length}`;
+    try { out = JSON.parse(r.stdout); } catch { ok = false; detail = 'parse fail'; }
+    if (ok) {
+      const topKeys = Object.keys(out);
+      const hsoKeys = Object.keys(out.hookSpecificOutput || {});
+      const topOk = deepEqual(topKeys, ['hookSpecificOutput']);
+      const hsoOk = deepEqual(hsoKeys, ['hookEventName', 'additionalContext']);
+      ok = topOk && hsoOk;
+      detail = ok ? `keys=[${topKeys}] hso-keys=[${hsoKeys}]`
+        : `top=[${topKeys}] hso=[${hsoKeys}]`;
     }
+  } else {
+    detail = `exit=${r.status}`;
   }
-  if (t3cok) pass('3c-task-no-hooks-fires', detail3c);
-  else        fail('3c-task-no-hooks-fires', detail3c);
+  if (ok) pass('3b-subagent-exact-key-set', detail);
+  else     fail('3b-subagent-exact-key-set', detail);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Test 3c: think-short-subagent — prompt.md absent -> {}
+// GIVEN: hook copied but think-short-prompt.md never written next to it
+// THEN: stdout is exactly {}
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const dir = join(BASE, 't3c-hooks');
+  mkdirSync(dir, { recursive: true });
+  const script = mkSubagentHookDir(dir, false);
+
+  const r = run(script, JSON.stringify({ hook_event_name: 'SubagentStart' }), {});
+  let ok = r.status === 0;
+  let detail = '';
+  if (ok) {
+    let out;
+    try { out = JSON.parse(r.stdout); } catch { ok = false; detail = 'parse fail'; }
+    if (ok) {
+      ok = deepEqual(out, {});
+      detail = ok ? 'output={}' : `expected {} got ${JSON.stringify(out)}`;
+    }
+  } else {
+    detail = `exit=${r.status}`;
+  }
+  if (ok) pass('3c-subagent-missing-prompt-noop', detail);
+  else     fail('3c-subagent-missing-prompt-noop', detail);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Test 3d: think-short-subagent --check — documented diagnostic shape
+// THEN: {prompt_file:true, injects:true, yielded_to:[]} — additionalContext
+//       composes, so nothing is ever yielded to
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const dir = join(BASE, 't3d-hooks');
+  mkdirSync(dir, { recursive: true });
+  const script = mkSubagentHookDir(dir, true);
+
+  const r = run(script, '', {}, ['--check']);
+  let ok = r.status === 0;
+  let detail = '';
+  if (ok) {
+    let out;
+    try { out = JSON.parse(r.stdout.trim()); } catch { ok = false; detail = 'parse fail'; }
+    if (ok) {
+      ok = deepEqual(out, { prompt_file: true, injects: true, yielded_to: [] });
+      detail = ok ? JSON.stringify(out) : `mismatch: ${JSON.stringify(out)}`;
+    }
+  } else {
+    detail = `exit=${r.status}`;
+  }
+  if (ok) pass('3d-subagent-check-shape', detail);
+  else     fail('3d-subagent-check-shape', detail);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -300,15 +317,13 @@ function mkDataPlugin(home, plugin) {
     { name: 'empty-stdin',           script: COUNTER_MJS,  stdin: '' },
     { name: 'malformed-json',        script: COUNTER_MJS,  stdin: '{not json' },
     { name: 'missing-session_id',    script: COUNTER_MJS,  stdin: '{}' },
-    { name: 'missing-tool_input',    script: TASK_MJS,     stdin: JSON.stringify({ cwd: join(home, 'proj') }) },
-    { name: 'missing-prompt-field',  script: TASK_MJS,     stdin: JSON.stringify({ tool_input: {} }) },
     { name: 'session-empty-stdin',   script: SESSION_MJS,  stdin: '' },
     { name: 'session-malformed',     script: SESSION_MJS,  stdin: '{bad' },
   ];
 
   for (const c of cases) {
     // SessionStart always emits additionalContext (even on empty stdin, best-effort).
-    // Counter/Task should emit {}.
+    // Counter should emit {}.
     const r = run(c.script, c.stdin, env);
     let ok = r.status === 0;
     let detail = '';
@@ -350,7 +365,7 @@ function mkDataPlugin(home, plugin) {
   writeFileSync(join(home, '.claude', 'settings.json'), JSON.stringify({}));
   const env = { HOME: home, TMPDIR: tmp };
 
-  const SCRIPTS = ['think-short-session.mjs', 'think-short-prompt-counter.mjs', 'think-short-task.mjs'];
+  const SCRIPTS = ['think-short-session.mjs', 'think-short-prompt-counter.mjs', 'think-short-subagent.mjs'];
   for (const s of SCRIPTS) writeFileSync(join(hooks, s), readFileSync(join(ASSETS, s)));
   const promptLive = join(hooks, 'think-short-prompt.md');
   const promptOff  = join(hooks, 'think-short-prompt.md.disabled');
@@ -370,31 +385,30 @@ function mkDataPlugin(home, plugin) {
   };
   const runSession = () => run(join(hooks, 'think-short-session.mjs'),
     JSON.stringify({ session_id: sid }), env);
-  const runTask = () => run(join(hooks, 'think-short-task.mjs'),
-    JSON.stringify({ cwd: join(home, 'proj'), tool_input: { prompt: 'ORIGINAL_5' } }), env);
+  const runSubagent = () => run(join(hooks, 'think-short-subagent.mjs'),
+    JSON.stringify({ hook_event_name: 'SubagentStart', agent_type: 'general-purpose' }), env);
   const injects = (r) => {
     if (r.status !== 0) return null;
     let out;
     try { out = JSON.parse(r.stdout); } catch { return null; }
-    const hso = out?.hookSpecificOutput;
-    return Boolean(hso?.additionalContext || hso?.updatedInput?.prompt);
+    return Boolean(out?.hookSpecificOutput?.additionalContext);
   };
 
   // GIVEN: enabled -> all three inject
   const onSession = injects(runSession());
   const onCounter = injects(driveCounter());
-  const onTask = injects(runTask());
-  if (onSession === true && onCounter === true && onTask === true) {
-    pass('5-enabled-all-three-inject', 'session+counter+task inject with the prompt in place');
+  const onSubagent = injects(runSubagent());
+  if (onSession === true && onCounter === true && onSubagent === true) {
+    pass('5-enabled-all-three-inject', 'session+counter+subagent inject with the prompt in place');
   } else {
-    fail('5-enabled-all-three-inject', `session=${onSession} counter=${onCounter} task=${onTask}`);
+    fail('5-enabled-all-three-inject', `session=${onSession} counter=${onCounter} subagent=${onSubagent}`);
   }
 
   // WHEN: disable == rename the prompt away
   execFileSync('mv', [promptLive, promptOff]);
   const offSession = run(join(hooks, 'think-short-session.mjs'), JSON.stringify({ session_id: sid }), env);
   const offCounter = driveCounter();
-  const offTask = runTask();
+  const offSubagent = runSubagent();
   const isNoop = (r) => {
     if (r.status !== 0) return `exit=${r.status}`;
     let out;
@@ -404,7 +418,7 @@ function mkDataPlugin(home, plugin) {
   const bad = [
     ['session', isNoop(offSession)],
     ['counter', isNoop(offCounter)],
-    ['task', isNoop(offTask)],
+    ['subagent', isNoop(offSubagent)],
   ].filter(([, v]) => v !== null);
   if (bad.length === 0 && existsSync(promptOff) && !existsSync(promptLive)) {
     pass('5-disabled-all-three-noop', 'all 3 exit 0 with {} while wired');
@@ -416,11 +430,11 @@ function mkDataPlugin(home, plugin) {
   execFileSync('mv', [promptOff, promptLive]);
   const backSession = injects(runSession());
   const backCounter = injects(driveCounter());
-  const backTask = injects(runTask());
-  if (backSession === true && backCounter === true && backTask === true) {
+  const backSubagent = injects(runSubagent());
+  if (backSession === true && backCounter === true && backSubagent === true) {
     pass('5-re-enabled-all-three-inject', 'injection restored by renaming back');
   } else {
-    fail('5-re-enabled-all-three-inject', `session=${backSession} counter=${backCounter} task=${backTask}`);
+    fail('5-re-enabled-all-three-inject', `session=${backSession} counter=${backCounter} subagent=${backSubagent}`);
   }
 }
 

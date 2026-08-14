@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 5.6.0 |
+| Version | 5.6.1 |
 | Skills | 13 |
 | Agents | 3 |
 | Hooks | 2 |
@@ -98,7 +98,7 @@ Setup skills all speak the same verbs:
 
 > **Run `upgrade` in every project that already has one of these installed.** A `-setup` skill copies files INTO the project; a plugin update does not reach those copies. Two of them matter right now:
 > - `/brewtools:manager-setup upgrade` — backfills `manager-state.mjs` (the wall's off-switch CLI) into projects installed before it existed. Without it the documented disarm command has no script to run.
-> - `/brewtools:think-short-setup upgrade` — installs the `think-short-task.mjs` that actually detects a foreign `Task`/`Agent` hook. Older copies report `injects=unknown` in `status`.
+> - `/brewtools:think-short-setup upgrade` — installs the `think-short-subagent.mjs` `SubagentStart` hook (replaces the old `think-short-task.mjs` `PreToolUse` hook, whose `updatedInput` write silently never landed). Older copies report `injects=unknown` in `status`.
 
 > Run [`/brewcode:setup-status`](../brewcode/skills/setup-status/README.md) to see which setup skills are installed, stale or missing in the current project, with the exact command to run for each.
 

@@ -6,10 +6,10 @@ maxTurns: 80
 color: yellow
 tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch, WebSearch
 doc_type: llm
-version: "5.6.0"
-content_version: "5.6.0"
+version: "5.6.1"
+content_version: "5.6.1"
 generated_by: "brewcode"
-last_updated: "2026-08-13"
+last_updated: "2026-08-14"
 ---
 
 [DICT: AC=additionalContext, CC=Claude Code, HE=hook event, MD=MessageDisplay, PTU=PreToolUse, PCD=PostCompact, POT=PostToolUse, PR=PermissionRequest, SA=subagent, SS=SessionStart, UI=updatedInput]
@@ -107,7 +107,7 @@ Goes to user UI only -- Claude does NOT see it. Exception: async hooks deliver o
 
 ### UI (PTU only)
 
-Silently modifies tool params. Claude unaware of change. Most reliable injection for SA prompts via `UI.prompt`. `UI` also rewrites on PR.
+Silently modifies tool params. Claude unaware of change. `UI` also rewrites on PR. `UI` is single-writer/last-wins -- every hook on the event sees the same original input, runner keeps only the last edit -- reserve for ONE owning hook; for SA prompt injection prefer SubagentStart `AC` instead (accumulates across hooks, no clobbering).
 
 ## 2. All 31 Hook Events
 
@@ -508,7 +508,7 @@ main();
 
 | Pattern | matcher | hooks[0] | Mechanism |
 |---------|---------|----------|-----------|
-| Inject context into all SAs | `PreToolUse` / `Task\|Agent` | `{"type":"command","command":"node inject-context.mjs"}` | modifies `tool_input.prompt` via `UI` |
+| Inject context into all SAs | `SubagentStart` / none | `{"type":"command","command":"node inject-context.mjs"}` | returns `AC`, accumulates across hooks -- prefer over `UI` on PTU `Task\|Agent` (single-writer/last-wins) |
 | Gate dangerous tools | `PreToolUse` / `Bash` | `{"type":"command","command":"bash validate-bash.sh"}` | checks `tool_input.command`, `permissionDecision:"deny"` if dangerous |
 | Block stop until task complete | `Stop` / none | `{"type":"command","command":"node check-task.mjs"}` | `decision:"block"`+`reason` while incomplete |
 | Log all tool calls | `PostToolUse` / none | `{"type":"command","command":"node logger.mjs","async":true}` | fire-and-forget, no output needed |
