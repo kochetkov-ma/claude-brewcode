@@ -9,33 +9,16 @@
  * Cap:     9000 chars, under the 2.1.174 10K disk-spill threshold.
  */
 
-import { readStdin, output } from './lib/utils.mjs';
-
-// Cap text channels under the 2.1.174 10K disk-spill threshold (headroom 9000).
-const TEXT_CHANNEL_CAP = 9000;
-function capText(s, max = TEXT_CHANNEL_CAP) {
-  return (typeof s === 'string' && s.length > max) ? s.slice(0, max) + '\n...[truncated]' : s;
-}
-
-// --- Delegation reminder ---
-
-// MANAGER_ROLE trigger is expert match, not task size — "heavy" wording let domain
-// tasks (ssh, deploy) bypass delegation even when a project expert existed.
-// SPLIT covers what models still get wrong: subagent sizing + context handoff.
-// No skill-activation nudge: modern models pick skills on their own.
-const MANAGER_ROLE = '[ROLE] Manager: scan agents (project .claude/agents/ first) - expert for this domain exists -> delegate regardless of size; no expert or trivial one-off -> self.';
-const SPLIT = '[SPLIT] One agent for an hour = drift you cannot observe: split into bounded units (1 deliverable, ~5 files, ~20 min), fan out in ONE message; a dependency must be a REAL data handoff, else parallel; every spawn prompt carries goal + scope + what is already done + who consumes the result + acceptance.';
-// BRANCH: sessions default to main and inherit the whole workspace - a branch/PR
-// is opt-in, stated by the user, never inferred.
-const BRANCH = '[BRANCH] Stay on the current branch; none chosen -> main. No explicit branch/PR instruction -> work on main and take over ALL workspace changes, incl. from other sessions.';
-const REMINDER_TEXT = `${MANAGER_ROLE}\n${SPLIT}\n${BRANCH}`;
+import { readStdin, output, capText } from './lib/utils.mjs';
+// Shared with role-recall.mjs (SessionStart/compact) — one normative copy.
+import { REMINDER_TEXT } from './lib/reminder.mjs';
 
 // --- Main ---
 
 async function main() {
   try {
     const input = await readStdin();
-    const { prompt, session_id, cwd, hook_event_name } = input;
+    const { prompt, hook_event_name } = input;
 
     // Validate event type
     if (hook_event_name !== 'UserPromptSubmit') {

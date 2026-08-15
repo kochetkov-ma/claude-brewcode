@@ -1,6 +1,6 @@
 ---
 title: "Hooks"
-description: "Both Brewcode hooks: events, channels, logic"
+description: "Brewcode's four hooks: session start, prompt-submit delegation reminder, and the two post-compaction recall hooks for role and plan/task state."
 order: 13
 ---
 
@@ -9,7 +9,8 @@ import { Card, CardGrid, Badge } from '../../../components/mdx';
 # Hooks
 
 Hooks are Node.js scripts attached to Claude Code lifecycle events.
-They inject context and manage session state. Brewcode registers 2 hooks in `hooks.json`.
+They inject context and manage session state. Brewcode registers 4 hooks in `hooks.json`,
+plus a shared `lib/` that holds the reminder text and I/O helpers they import.
 
 ## Summary table
 
@@ -17,15 +18,21 @@ They inject context and manage session state. Brewcode registers 2 hooks in `hoo
 |---|------|-------|---------|---------|---------|---------|
 | 1 | forced-eval | UserPromptSubmit | -- | additionalContext | 2s | Manager-role + split-discipline reminder |
 | 2 | session-start | SessionStart | -- | additionalContext | 3s | Session init, permission_mode tag |
+| 3 | role-recall | SessionStart | compact | additionalContext | 2s | Re-inject [ROLE]/[SPLIT]/[BRANCH] after a compaction |
+| 4 | compact-recall | SessionStart | compact | additionalContext | 2s | Re-anchor plan, intent and task graph after a compaction |
 
 ## Execution flow
 
 ```
 UserPromptSubmit
-  └── forced-eval.mjs          [ROLE] delegate-to-expert + [SPLIT] bounded units
+  └── forced-eval.mjs          [ROLE] delegate-to-expert + [SPLIT] bounded units + [BRANCH] default-to-main
 
 SessionStart
   └── session-start.mjs        Version check, plan-symlink, permission_mode tag
+
+SessionStart (matcher: compact)
+  ├── role-recall.mjs          Same [ROLE]/[SPLIT]/[BRANCH] text, unconditional
+  └── compact-recall.mjs       [PLAN] or [INTENT], plus [TASKS] when a task graph exists
 ```
 
 ## Hook files
@@ -34,9 +41,12 @@ SessionStart
 brewcode/hooks/
   forced-eval.mjs              UserPromptSubmit handler
   session-start.mjs            SessionStart handler
+  role-recall.mjs              SessionStart handler, matcher "compact"
+  compact-recall.mjs           SessionStart handler, matcher "compact"
   hooks.json                   Hook registry (event bindings)
   lib/
     utils.mjs                  Shared I/O, configuration, logging
+    reminder.mjs                REMINDER_TEXT: [ROLE] + [SPLIT] + [BRANCH]
 ```
 
 ## I/O protocol
@@ -44,12 +54,13 @@ brewcode/hooks/
 All hooks follow a unified protocol:
 
 1. Read JSON from stdin (via `readStdin()`)
-2. Receive fields: `session_id`, `cwd`, `source` (SessionStart), `permission_mode` (all events)
+2. Receive fields: `session_id`, `cwd`, `source` (SessionStart), `permission_mode` (all events), `transcript_path` (compact-recall only)
 3. Output JSON to stdout (via `output()`)
 4. Write logs to stderr
 
 **Shared utilities:**
 - `hooks/lib/utils.mjs` -- I/O, configuration, logging
+- `hooks/lib/reminder.mjs` -- the one normative copy of `[ROLE]`/`[SPLIT]`/`[BRANCH]`, imported by `forced-eval.mjs` and `role-recall.mjs` so the two hooks cannot drift apart
 
 ---
 
@@ -60,7 +71,7 @@ All hooks follow a unified protocol:
 <Badge variant="primary" text="UserPromptSubmit" /> <Badge variant="secondary" text="additionalContext" />
 
 Keeps delegation discipline in front of the model. Intercepts every user prompt
-and appends two short lines: the Manager role rule and the split rule.
+and appends three short lines: the Manager role rule, the split rule, and the branch-default rule.
 There is no skill-activation nudge -- modern models pick skills on their own.
 
 | Parameter | Value |
@@ -69,16 +80,17 @@ There is no skill-activation nudge -- modern models pick skills on their own.
 | Channel | additionalContext |
 | Timeout | 2000 ms |
 
-**Exact injected text:**
+**Exact injected text** (`REMINDER_TEXT`, from `hooks/lib/reminder.mjs` -- the same text `role-recall.mjs` re-injects after a compaction):
 
 ```text
 [ROLE] Manager: scan agents (project .claude/agents/ first) - expert for this domain exists -> delegate regardless of size; no expert or trivial one-off -> self.
-[SPLIT] One agent for an hour = drift you cannot observe: split into bounded units (1 deliverable, ~5 files), fan out in ONE message; every spawn prompt carries goal + scope + what is already done + who consumes the result + acceptance.
+[SPLIT] One agent for an hour = drift you cannot observe: split into bounded units (1 deliverable, ~5 files, ~20 min), fan out in ONE message; a dependency must be a REAL data handoff, else parallel; every spawn prompt carries goal + scope + what is already done + who consumes the result + acceptance.
+[BRANCH] Stay on the current branch; none chosen -> main. No explicit branch/PR instruction -> work on main and take over ALL workspace changes, incl. from other sessions.
 ```
 
 **What it does:**
 - Receives the user prompt
-- Injects both lines via `additionalContext` -- UserPromptSubmit cannot rewrite the prompt (`updatedInput` is silently dropped in CC 2.1.x)
+- Injects `REMINDER_TEXT` via `additionalContext` -- UserPromptSubmit cannot rewrite the prompt (`updatedInput` is silently dropped in CC 2.1.x)
 - Output is capped at 9000 chars (10K disk-spill safety, CC 2.1.174+)
 
 **When it fires:** On every user input, including slash commands. Skipped only for
@@ -113,6 +125,70 @@ The hook reads `permission_mode` from the hook payload and appends it to `system
 1. Checks `~/.claude/plans/` for `.md` files
 2. Picks the newest one (by mtime)
 3. If the file is less than 60 seconds old -- creates `.claude/plans/LATEST.md` -> `~/.claude/plans/<newest>.md`
+
+---
+
+### 3. role-recall.mjs
+
+<Badge variant="primary" text="SessionStart / compact" /> <Badge variant="secondary" text="additionalContext" />
+
+Re-injects the same `[ROLE]`/`[SPLIT]`/`[BRANCH]` frame as `forced-eval.mjs`, unconditionally, the moment a session starts
+back up after a compaction -- the one point where the summary has just collapsed every earlier copy of it.
+
+| Parameter | Value |
+|-----------|-------|
+| Event | SessionStart |
+| Matcher | compact |
+| Channel | additionalContext |
+| Timeout | 2000 ms |
+
+**Why it exists:** an auto-compaction has no prompt, so `forced-eval.mjs` never fires for it. Without this hook the
+session quietly stops delegating after a few compactions.
+
+**What it does:**
+- Fires only when `input.source === 'compact'`; any other source (`startup`, `resume`, `clear`, `fork`) returns `{}` -- those already carry the frame
+- Injects `REMINDER_TEXT` from `hooks/lib/reminder.mjs`, capped at 9000 chars -- the same import `forced-eval.mjs` uses, so the two cannot drift
+- Stateless: compactions can chain, and it fires again on every one
+
+---
+
+### 4. compact-recall.mjs
+
+<Badge variant="primary" text="SessionStart / compact" /> <Badge variant="secondary" text="additionalContext" />
+
+Re-anchors plan, original intent and task graph after a compaction, so the session does not start a brand-new task
+graph on top of the one it already had. `additionalContext` on `SessionStart` is the only channel that reaches the
+model here -- PostCompact stdout is UI-only, and `UserPromptSubmit` never fires on an auto-compaction because there
+is no prompt.
+
+| Parameter | Value |
+|-----------|-------|
+| Event | SessionStart |
+| Matcher | compact |
+| Channel | additionalContext |
+| Timeout | 2000 ms |
+
+It reads only this session's `transcript_path` -- one `readFileSync`, guarded by a `statSync` check (must be a
+regular file, at most 64 MB) -- then scans the raw buffer for a handful of markers, no JSONL parsing. Measured on
+an 8.13 MB transcript: the scan itself (one buffer read plus five substring scans) is ~6 ms; the full process
+wall clock is ~30 ms standalone and ~55 ms spawned from a node parent, where node startup dominates.
+
+**Decision ladder, first match wins:**
+
+| Branch | Condition | Injects |
+|--------|-----------|---------|
+| `plan-file` | last recorded plan path still exists on disk | `[PLAN]` -- read that file before any other action |
+| `plan-missing` | plan path recorded, but the file is gone (`~/.claude/plans` gets pruned) | `[PLAN]` -- rebuild from the compact summary plus TaskList |
+| `plan-in-summary` | plan mode ran, no plan file was ever recorded | `[PLAN]` -- follow a plan if the summary holds one, else fall back to intent |
+| `intent` | none of the above | `[INTENT]` -- re-read the user's original task from the compact summary |
+
+`[TASKS]` is appended whenever the transcript contains a `TaskCreate` call, and is ordered before the plan is acted
+on -- the built-in task reminder can lag several turns and show empty, so `TaskList` is the authority.
+
+**Guarantee:** on `source === 'compact'` it always injects something -- every failure path degrades to `[INTENT]`,
+never to silence, and it never names a plan from outside this session's own transcript.
+
+**Trade-off:** two plans in one session -- the LAST recorded plan path wins.
 
 ---
 

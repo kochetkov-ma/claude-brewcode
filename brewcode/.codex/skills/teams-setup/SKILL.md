@@ -11,7 +11,7 @@ Use collaboration agents only when the user or project instructions explicitly r
 
 Follow every phase below. When a phase delegates work, use Codex collaboration with only `task_name` and `message`; treat each "Codex delegation brief" block as role and message content, not executable syntax. Use `request_user_input` for the documented user gates. Resolve `<skill-directory>`, `<plugin-root>`, `<project-root>`, and `<arguments>` before running commands.
 
-<!-- brewcode-meta: version=5.6.1 content_version=5.6.0 generated_by=brewcode:teams-setup -->
+<!-- brewcode-meta: version=5.7.0 content_version=5.6.0 generated_by=brewcode:teams-setup -->
 
 <instructions>
 

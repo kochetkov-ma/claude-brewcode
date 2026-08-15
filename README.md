@@ -10,7 +10,7 @@
 
 **Claude Code plugin suite** -- four plugins for development, documentation, text utility, and visual workflows.
 
-A regular Claude Code session hands a big task to one agent and loses sight of it. Brewcode splits work into bounded units, gives every spawn a six-field brief, and re-states the delegation rule on every prompt. Four plugins. 27 skills. 8 agents. 4 lifecycle hooks.
+A regular Claude Code session hands a big task to one agent and loses sight of it. Brewcode splits work into bounded units, gives every spawn a six-field brief, and re-states the delegation rule on every prompt. Four plugins. 27 skills. 8 agents. 6 lifecycle hooks.
 
 [**Full Documentation**](https://doc-claude.brewcode.app/getting-started/)
 
@@ -129,7 +129,7 @@ claude --plugin-dir ./brewcode --plugin-dir ./brewdoc --plugin-dir ./brewtools -
 /brewcode:setup-status       # anytime: what is installed, stale or missing in this project
 ```
 
-Skills orchestrate, agents execute. Each spawn is a bounded unit with a six-field brief, and the `forced-eval` hook re-states the manager role and the split rule on every prompt, so work stays observable across compaction cycles.
+Skills orchestrate, agents execute. Each spawn is a bounded unit with a six-field brief; the `forced-eval` hook re-states the manager role and the split rule on every prompt, and a `role-recall`/`compact-recall` pair re-anchors the same role plus the plan and task graph after a compaction, so work stays observable across compaction cycles.
 
 ### brewdoc -- documentation tools
 
@@ -169,6 +169,10 @@ Placeholder plugin, currently empty. No commands yet -- coming soon.
     [ROLE]   scan agents, project .claude/agents/ first; domain expert exists -> delegate
     [SPLIT]  one agent for an hour = drift you cannot observe -> split and fan out
     [BRANCH] no branch chosen -> main; no explicit branch/PR -> take over the whole workspace
+
+  after a compaction: role-recall + compact-recall (SessionStart, matcher compact) re-inject
+    the same 3 lines plus plan/intent and task graph -- forced-eval never fires there, since
+    an auto-compaction has no prompt to hook into
 ```
 
 ### Delegation contract

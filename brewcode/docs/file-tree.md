@@ -4,7 +4,7 @@ description: Complete file tree of the brewcode plugin with descriptions
 
 # Brewcode Plugin - File Tree
 
-> Version: 5.6.1 | Files: 149 | Directories: 44 (excludes the generated `.codex/` mirror; no dotfiles, `__pycache__`, or `node_modules` exist under `brewcode/`)
+> Version: 5.7.0 | Files: 155 | Directories: 44 (excludes the generated `.codex/` mirror; no dotfiles, `__pycache__`, or `node_modules` exist under `brewcode/`)
 
 ## Plugin Structure
 
@@ -12,13 +12,16 @@ description: Complete file tree of the brewcode plugin with descriptions
 brewcode/                                    # Plugin root directory
 │
 ├── .claude-plugin/                            # Claude Code plugin configuration
-│   └── plugin.json                            # Manifest (name, version 5.6.1, skills/ reference)
+│   └── plugin.json                            # Manifest (name, version 5.7.0, skills/ reference)
 │
-├── hooks/                                     # Node.js scripts for Claude Code events
-│   ├── hooks.json                             # Binds 2 events (UserPromptSubmit, SessionStart)
+├── hooks/                                     # Node.js scripts for Claude Code events (4 hooks)
+│   ├── hooks.json                             # Binds 2 events (UserPromptSubmit, SessionStart); SessionStart has 2 groups: unmatched + matcher "compact"
 │   ├── lib/
-│   │   └── utils.mjs                          # readStdin, output, log, lock files, config, state, task parsing
+│   │   ├── reminder.mjs                       # [ROLE]/[SPLIT]/[BRANCH] text, one normative copy shared by forced-eval.mjs and role-recall.mjs
+│   │   └── utils.mjs                          # readStdin, output, capText, log, lock files, config, state, task parsing
 │   ├── session-start.mjs                      # SessionStart: version-check, plan-symlink, permission_mode tag
+│   ├── role-recall.mjs                        # SessionStart (compact): re-injects the [ROLE]/[SPLIT]/[BRANCH] reminder after auto-compaction
+│   ├── compact-recall.mjs                     # SessionStart (compact): re-anchors plan/intent + task graph from this session's transcript
 │   └── forced-eval.mjs                        # UserPromptSubmit: [ROLE]/[SPLIT]/[BRANCH] reminder (~9K additionalContext bound)
 │
 ├── agents/                                    # Plugin agents (system prompts in Markdown, 5 total)
@@ -101,7 +104,7 @@ brewcode/                                    # Plugin root directory
 │
 ├── README.md                                  # Components, commands, agents, hooks, architecture, flow diagrams
 ├── INSTALL.md                                 # Installation: plugin-dir, marketplace, embedding, troubleshooting
-└── package.json                               # npm: claude-plugin-brewcode@5.6.1, build/publish scripts
+└── package.json                               # npm: claude-plugin-brewcode@5.7.0, build/publish scripts
 ```
 
 ## Target Project Structure
@@ -160,7 +163,8 @@ Files created by the plugin in the user's project:
 | Category | Count | Items |
 |----------|-------|-------|
 | Plugin configuration | 2 | plugin.json, hooks.json |
-| Hooks | 2 | forced-eval, session-start |
+| Hooks | 4 | compact-recall, forced-eval, role-recall, session-start |
+| Hook libraries | 2 | reminder, utils |
 | Agents | 5 | agent-creator, bash-expert, bc-rules-organizer, hook-creator, skill-creator |
 | Skills (SKILL.md) | 9 | agents, convention, e2e, rules, semble-setup, setup-status, skills, superreview-setup, teams-setup |
 | Bash scripts | 20 | semble-setup(10), teams-setup(4), skills(2), convention(1), e2e(1), rules(1), superreview-setup(1); setup-status ships none |
@@ -174,6 +178,8 @@ Files created by the plugin in the user's project:
 |-------|-------|---------|---------|
 | UserPromptSubmit | forced-eval.mjs | 2s | [ROLE] manager + [SPLIT] bounded units + [BRANCH] default-to-main (~9K additionalContext bound) |
 | SessionStart | session-start.mjs | 3s | Version-check, plan-symlink, permission_mode tag |
+| SessionStart (matcher `compact`) | role-recall.mjs | 2s | Re-injects the same [ROLE]/[SPLIT]/[BRANCH] reminder after auto-compaction, which has no prompt for forced-eval.mjs to fire on |
+| SessionStart (matcher `compact`) | compact-recall.mjs | 2s | Re-anchors plan/intent + task graph: scans this session's transcript only, ladder plan-file -> plan-missing -> plan-in-summary -> intent, appends [TASKS] when the transcript shows a TaskCreate |
 
 ## Agent Models
 

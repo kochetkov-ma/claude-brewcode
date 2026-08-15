@@ -4,10 +4,10 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 5.6.1 |
+| Version | 5.7.0 |
 | Skills | 9 |
 | Agents | 5 |
-| Hooks | 2 |
+| Hooks | 4 |
 | Model | opus |
 
 ## Install
@@ -132,10 +132,13 @@ optimize | resume`; `/brewcode:teams-setup` keeps a `[name]` positional after th
 ```
 brewcode/
 +-- .claude-plugin/plugin.json          # Plugin manifest
-+-- hooks/                              # 2 lifecycle hooks
++-- hooks/                              # 4 lifecycle hooks
 |   +-- session-start.mjs              # SessionStart: version-check, plan-symlink, permission_mode
+|   +-- role-recall.mjs                # SessionStart (compact): re-inject [ROLE]/[SPLIT]/[BRANCH] after compaction
+|   +-- compact-recall.mjs             # SessionStart (compact): re-anchor plan/intent + task graph
 |   +-- forced-eval.mjs                # UserPromptSubmit: manager-role + split-discipline reminder
 |   +-- hooks.json                     # Event bindings
+|   +-- lib/reminder.mjs               # Shared [ROLE]/[SPLIT]/[BRANCH] text (forced-eval + role-recall)
 |   +-- lib/utils.mjs                  # Shared utilities
 +-- agents/                            # 5 agents
 +-- skills/                            # 9 skills
@@ -147,6 +150,8 @@ brewcode/
 | Hook | Event | Purpose |
 |------|-------|---------|
 | session-start | SessionStart | Version-check, plan-symlink, permission_mode tag |
+| role-recall | SessionStart (matcher `compact`) | Re-injects the same [ROLE]/[SPLIT]/[BRANCH] reminder after auto-compaction, which has no prompt for forced-eval to fire on |
+| compact-recall | SessionStart (matcher `compact`) | Re-anchors plan/intent + task graph from this session's transcript only; ladder plan-file -> plan-missing -> plan-in-summary -> intent, appends [TASKS] when a TaskCreate is found |
 | forced-eval | UserPromptSubmit | Manager-role + split-discipline + branch reminder, 3 lines via additionalContext (9K bound) |
 
 ## Task Structure

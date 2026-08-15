@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=5.6.1 content_version=5.6.0 generated_by=brewtools:agent-router-setup
+// brewcode-meta: version=5.7.0 content_version=5.7.0 generated_by=brewtools:agent-router-setup
 /**
  * agent-router - PreToolUse hook for the `Agent` tool (Node built-ins only, ESM).
  *
@@ -13,7 +13,8 @@
  *   2. agent_id present (subagent-issued call)   -> allow  (only the main loop is policed)
  *   3. config enabled:false / config unparsable  -> allow
  *   4. subagent_type is a project agent          -> allow  (an expert was already picked)
- *   5. subagent_type not generic / in neverFlag  -> allow
+ *      (an omitted subagent_type normalizes to general-purpose before steps 4-5)
+ *   5. subagent_type not generic / in neverFlag  -> allow  (config owns the generic list)
  *   6. intent rule fires + picked is generic     -> DENY, naming the expert
  *      (a project agent covering the same intent outranks the plugin specialist)
  *   7. roster scoring: one clear winner          -> DENY, naming it
@@ -540,8 +541,9 @@ function main() {
   if (cfg === CONFIG_BROKEN || cfg.enabled === false) return;
 
   const ti = input.tool_input && typeof input.tool_input === 'object' ? input.tool_input : {};
-  const picked = typeof ti.subagent_type === 'string' ? ti.subagent_type.trim() : '';
-  if (!picked) return;
+  // an omitted subagent_type IS general-purpose per the Agent tool contract.
+  const picked =
+    (typeof ti.subagent_type === 'string' ? ti.subagent_type.trim() : '') || 'general-purpose';
 
   const roster = loadRoster(root);
   // 4 - the model already picked a project expert.

@@ -136,6 +136,17 @@ function payload({
   return JSON.stringify(p);
 }
 
+// Same shape as payload() but with the subagent_type key absent entirely.
+function noTypePayload(cwd, description, session = 'S1') {
+  return JSON.stringify({
+    session_id: session,
+    cwd,
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Agent',
+    tool_input: { description, prompt: '' },
+  });
+}
+
 // ── message builders, mirrored verbatim from assets/agent-router.mjs ─────────
 const TAIL = '(Deliberate? retry once and it passes.)';
 
@@ -727,24 +738,71 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 31 - no subagent_type / empty task text
-// GIVEN: a payload with no subagent_type, and one with a generic type but no text
+// 31 - omitted subagent_type is a general-purpose spawn / empty task text
+// GIVEN: a payload with no subagent_type key at all, and one with a type but no text
 // WHEN: the hook runs
-// THEN: stdout empty for both
+// THEN: the omitted type is policed as general-purpose; no text stays silent
 // ─────────────────────────────────────────────────────────────────────────────
 {
   const { proj, env } = newRoot('t31');
   standardRoster(proj);
-  const noType = JSON.stringify({
-    session_id: 'S1',
-    cwd: proj,
-    hook_event_name: 'PreToolUse',
-    tool_name: 'Agent',
-    tool_input: { description: INTENT_SKILL, prompt: '' },
-  });
-  check('31-no-subagent-type', run(noType, env).stdout, '', 'no subagent_type must allow silently');
+  const r = run(noTypePayload(proj, INTENT_SKILL), env);
+  check(
+    '31-omitted-subagent-type-intent',
+    safeParse(r.stdout),
+    denyOut(intentPluginDeny('skill authoring', 'brewcode:skill-creator', 'general-purpose')),
+    'an omitted subagent_type is general-purpose per the Agent tool contract',
+  );
   const rEmptyText = run(payload({ cwd: proj }), env);
   check('31-empty-task-text', rEmptyText.stdout, '', 'no task text must allow silently');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 31b - omitted subagent_type falls through to roster scoring
+// GIVEN: no subagent_type key and text squarely inside a project agent's triggers
+// WHEN: the hook runs
+// THEN: deny naming that project agent, reason built with 'general-purpose'
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const { proj, env } = newRoot('t31b');
+  standardRoster(proj);
+  const text = 'Wire pending approval into the plan lifecycle and the approval matrix';
+  const r = run(noTypePayload(proj, text), env);
+  check(
+    '31b-omitted-type-roster-deny',
+    safeParse(r.stdout),
+    denyOut(rosterDeny('conductor-dev', '.claude/agents/conductor-dev.md', 'general-purpose')),
+    'an omitted type reaches roster scoring like an explicit general-purpose',
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 31c - omitted subagent_type with general-purpose off the generic list
+// GIVEN: genericTypes ["worker"] and no subagent_type key, on text that denies on
+//        BOTH deny paths when general-purpose IS generic (intent rule + roster win)
+// WHEN: the hook runs
+// THEN: stdout empty on both - the normalized type still has to clear the generic
+//       gate; hardcoding general-purpose past that gate makes this fail
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const { proj, env } = newRoot('t31c');
+  standardRoster(proj);
+  writeConfig(proj, { enabled: true, genericTypes: ['worker'] });
+  const rIntent = run(noTypePayload(proj, INTENT_SKILL), env);
+  check(
+    '31c-omitted-type-not-generic-intent',
+    rIntent.stdout,
+    '',
+    'intent rule must not fire when the config disowns general-purpose (31 denies on the same text)',
+  );
+  const rosterText = 'Wire pending approval into the plan lifecycle and the approval matrix';
+  const rRoster = run(noTypePayload(proj, rosterText, 'S2'), env);
+  check(
+    '31c-omitted-type-not-generic-roster',
+    rRoster.stdout,
+    '',
+    'roster scoring must not fire either (31b denies on the same text)',
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

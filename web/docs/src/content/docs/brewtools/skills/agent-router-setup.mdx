@@ -64,7 +64,7 @@ It allows as early as it can — an ambiguous case becomes a nudge, never a bloc
 | 2 | `agent_id` present — a subagent issued the spawn | allow; only the main loop is policed |
 | 3 | `enabled:false`, or a config that exists but does not parse | allow |
 | 4 | picked type is already a project agent | allow |
-| 5 | picked type is a specialist/built-in not on `genericTypes` | allow |
+| 5 | picked type is not on `genericTypes` — a specialist/built-in | allow. An omitted `subagent_type` is normalized to `general-purpose` first and policed like one |
 | 6 | intent regex over the task text (skill/agent/hook authoring, bash scripts) | deny, naming the expert — a project agent covering the same intent outranks the plugin specialist |
 | 7 | score the task against `.claude/agents/*.md` frontmatter | one clear winner -> deny naming it; several plausible -> nudge with top 3; nothing -> silent allow |
 | 8 | anti-loop guard | the same task is denied at most once per session |
@@ -112,6 +112,7 @@ Path: `<project>/.claude/brewtools/agent-router.json`.
   "minScore": 3,
   "margin": 2,
   "version": "X.Y.Z",
+  "content_version": "X.Y.Z",
   "generated_by": "brewtools:agent-router-setup",
   "last_updated": "YYYY-MM-DD"
 }
@@ -126,7 +127,8 @@ Path: `<project>/.claude/brewtools/agent-router.json`.
 | `minScore` | minimum roster score before a project agent can win |
 | `margin` | how far the winner must lead the runner-up before it is a deny rather than a nudge |
 | `intents` | optional override of the built-in intent table — **REPLACES it wholesale, does not merge**. Adding one custom route silently drops the other three unless you copy `DEFAULT_INTENTS` out of `agent-router.mjs` first |
-| `version` / `generated_by` / `last_updated` | stamped by `install`/`upgrade`; `/brewcode:setup-status` reads them to flag a stale install |
+| `content_version` | the PRIMARY staleness signal — the release whose generator logic produced this config. `status` compares it against `assets/INSTALL.md`'s own header, and separately compares the installed hook file's header against the plugin's asset copy; a mismatch on either pair means `stale=yes` |
+| `version` / `generated_by` / `last_updated` | `version` is INFORMATIONAL only — it names the release that last wrote the file, bumps on every release even with no shape change, and gets re-stamped by `enable`/`disable` without touching the hook file. Never read it as a staleness signal |
 
 <Callout type="note">
 `enabled` defaults true and only an exact `false` disables it — the opposite polarity from `agent-deadline-setup` (absent or anything but `true` means OFF). Do not assume the two opt-in hooks behave alike.
@@ -134,7 +136,9 @@ Path: `<project>/.claude/brewtools/agent-router.json`.
 
 ### Version and ownership
 
-`install`/`upgrade` write `agent-router.json`'s `version`, `generated_by: "brewtools:agent-router-setup"` and `last_updated` at top level. `agent-router.mjs` carries the matching `// brewcode-meta: version=X.Y.Z generated_by=brewtools:agent-router-setup` comment on line 2. `upgrade` re-stamps both, which is how `/brewcode:setup-status` tells an install running an older brewtools apart from the currently installed plugin version.
+`install`/`upgrade`/`enable`/`disable`/both `level` operations write `agent-router.json`'s `version`, `content_version`, `generated_by: "brewtools:agent-router-setup"` and `last_updated` at top level. `agent-router.mjs` and `assets/INSTALL.md` carry a matching `brewcode-meta: content_version=X.Y.Z` header.
+
+Staleness is judged on `content_version`, never on `version`: `status` diffs the installed hook file's header against the plugin's asset copy, and the config's `content_version` against the `INSTALL.md` header, and reports `stale=yes` on either mismatch. `version` alone proves nothing — a plain `enable`/`disable` re-stamps it to the current plugin while the hook file on disk stays untouched. Only a re-copy (`install` or `upgrade`) clears staleness.
 
 ### Fails open, everywhere
 

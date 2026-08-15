@@ -2,6 +2,36 @@
 
 ---
 
+## v5.7.0 (2026-08-15)
+
+> Docs: [brewcode hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | [brewcode overview](https://doc-claude.brewcode.app/brewcode/overview/) | [agent-router-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-router-setup/)
+
+> After a compaction the main session drifts: the role frame, the plan reference and the task graph are all gone from context, so it stops delegating and starts a NEW task graph over work that already had one. `forced-eval.mjs` cannot cover this — it fires on `UserPromptSubmit`, and an auto-compaction mid-turn has no prompt. The only channel that reaches the model after a compact is a `SessionStart` hook with `matcher: "compact"` writing `hookSpecificOutput.additionalContext` (`PostCompact` stdout is UI-only). Two hooks now use it, and SessionStart results accumulate across hooks rather than overwriting each other.
+
+### brewcode
+
+#### Added
+
+- **`hooks/role-recall.mjs`** (`SessionStart`, matcher `compact`) — re-injects the manager-role frame that the summary collapsed. Unconditional, stateless, 3 lines; shares the exact `forced-eval` text so the two can never drift
+- **`hooks/compact-recall.mjs`** (`SessionStart`, matcher `compact`) — re-anchors plan, original intent and the EXISTING task graph. Scans only this session's transcript with `Buffer.lastIndexOf` (no JSONL parsing): ~6 ms scan on an 8.13 MB transcript, ~30 ms full process wall clock. Four-branch degradation ladder — `plan-file` (plan exists on disk -> read it) -> `plan-missing` (path recorded but the file was pruned) -> `plan-in-summary` (plan mode ran, no file; never claims the plan was approved, since plan-mode markers are stamped on ENTERING plan mode) -> `intent` (re-read the user's original task from the summary). On `source === "compact"` it ALWAYS injects; every failure path degrades to the intent fragment, never to silence and never to another session's plan. When the transcript holds a `TaskCreate`, a `[TASKS]` fragment orders `TaskList` and forbids creating a new graph — the built-in task reminder lags several turns and can show empty
+- **`hooks/lib/reminder.mjs`** — the single normative copy of the manager-role / split / branch reminder text, imported by both `forced-eval.mjs` and `role-recall.mjs`
+- `hooks/lib/utils.mjs`: `capText()` + `TEXT_CHANNEL_CAP` — shared cap for injected text channels
+
+#### Changed
+
+- `forced-eval.mjs` now imports its reminder text from `hooks/lib/reminder.mjs` and `capText` from `hooks/lib/utils.mjs`. Injected bytes are unchanged (verified byte-identical), only the source of truth moved
+- Docs updated across every level for the six-file / four-registered-hook reality: brewcode hooks page, brewcode overview, plugin README, `docs/file-tree.md`, `docs/commands.md`, repo README, `brewdoc/docs/hooks.md` comparison table (dropped the removed `BC_PLUGIN_ROOT` injection row and the stale "skill activation" label), and `APPROACHES.md`
+
+### brewtools
+
+#### Fixed
+
+- **`agent-router-setup` staleness detection now uses `content_version`.** Status compares the INSTALLED hook's header against the plugin template, and the config's `content_version` against the `assets/INSTALL.md` header — so a plugin release that did not touch the router no longer reports the install stale. `version` is demoted to informational provenance
+- "Effective" redefined and documented: a missing config file means ON with defaults, and `stale=yes` is still effective. Re-install is idempotent but not inert
+- An omitted `subagent_type` on an `Agent` call is normalized to `general-purpose` instead of falling through unrouted
+
+---
+
 ## v5.6.1 (2026-08-14)
 
 > Docs: [think-short-setup](https://doc-claude.brewcode.app/brewtools/skills/think-short-setup/) | [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/)

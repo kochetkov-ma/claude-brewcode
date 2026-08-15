@@ -38,8 +38,8 @@ skills and agents. The name is a nod to brewing: skills (recipes) define what to
     [hook-creator](/brewcode/agents/hook-creator/), [bash-expert](/brewcode/agents/bash-expert/), and the internal bc-rules-organizer.
     Generic roles are generated per project into .claude/agents/.
   </Card>
-  <Card title="2 hooks (processes)" icon="settings">
-    Prompt-time delegation reminder and session-start version-check.
+  <Card title="4 hooks (processes)" icon="settings">
+    Prompt-time delegation reminder, session-start version-check, and post-compaction recovery of role, plan and task graph.
   </Card>
   <Card title="E2E testing" icon="check">
     BDD scenario authoring and Playwright autotest orchestration
@@ -76,8 +76,8 @@ all context is managed through built-in Claude Code events.
   │   ┌──────────────┐          ┌──────────────────┐         │
   │   │ session-start│          │ rules templates   │         │
   │   │ forced-eval  │ <──────> │ artifacts/        │         │
-  │   │              │          │                   │         │
-  │   │              │          │                   │         │
+  │   │ role-recall  │          │                   │         │
+  │   │compact-recall│          │                   │         │
   │   └──────────────┘          └──────────────────┘         │
   │                                                          │
   └──────────────────────────────────────────────────────────┘
@@ -90,11 +90,14 @@ brewcode/
 ├── .claude-plugin/
 │   └── plugin.json                    # Plugin manifest
 ├── hooks/
-│   ├── hooks.json                     # 2 hooks (SessionStart, UserPromptSubmit)
+│   ├── hooks.json                     # 4 hooks (SessionStart x3, UserPromptSubmit)
 │   ├── session-start.mjs              # Version-check, plan-symlink, permission tag
 │   ├── forced-eval.mjs                # [ROLE] delegate + [SPLIT] bounded units + [BRANCH] default-to-main
+│   ├── role-recall.mjs                # SessionStart/compact: re-inject the same [ROLE]/[SPLIT]/[BRANCH]
+│   ├── compact-recall.mjs             # SessionStart/compact: re-anchor plan, intent, task graph
 │   └── lib/
-│       └── utils.mjs                  # I/O, version cache, configuration
+│       ├── utils.mjs                  # I/O, version cache, configuration
+│       └── reminder.mjs               # REMINDER_TEXT, shared by forced-eval.mjs and role-recall.mjs
 ├── agents/                            # 5 agents
 │   ├── skill-creator.md               # Skill creation (opus)
 │   ├── agent-creator.md               # Agent creation (opus)
@@ -181,13 +184,15 @@ full version of this contract.
     + dynamic project agents created by [`/brewcode:teams-setup`](/brewcode/skills/teams-setup/)
   </TabItem>
   <TabItem label="Hooks">
-    2 hooks manage prompt-time injection and session start.
+    4 hooks manage prompt-time injection, session start, and post-compaction recovery.
     See the [Hooks](/brewcode/hooks/) section for details.
 
     | Event | Hook | Purpose |
     |-------|------|---------|
     | SessionStart | session-start | Initialization, version-check |
     | UserPromptSubmit | forced-eval | Manager-role + split-discipline reminder |
+    | SessionStart (compact) | role-recall | Re-inject [ROLE]/[SPLIT]/[BRANCH] after a compaction |
+    | SessionStart (compact) | compact-recall | Re-anchor plan, intent and task graph after a compaction |
   </TabItem>
 </Tabs>
 

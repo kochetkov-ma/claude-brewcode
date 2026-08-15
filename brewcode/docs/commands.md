@@ -6,7 +6,7 @@ description: Detailed description of all brewcode plugin commands
 
 # BC Plugin Commands
 
-> **ver:** 5.6.1 | **Author:** Maksim Kochetkov | **License:** MIT
+> **ver:** 5.7.0 | **Author:** Maksim Kochetkov | **License:** MIT
 
 ## Naming
 
@@ -438,6 +438,8 @@ Hooks-only, no external runtime. Claude Code hooks provide ctx mgmt.
 | Hook | Event | Purpose |
 |------|-------|---------|
 | `session-start.mjs` | SessionStart | Session init: version-check, plan-symlink, permission tag |
+| `role-recall.mjs` | SessionStart (`compact`) | Re-injects [ROLE]/[SPLIT]/[BRANCH] after auto-compaction -- no prompt exists there for forced-eval to fire on. Text lives once in `lib/reminder.mjs`, shared with forced-eval.mjs |
+| `compact-recall.mjs` | SessionStart (`compact`) | Re-anchors plan/intent + task graph from this session's transcript only (64 MB cap); ladder plan-file -> plan-missing -> plan-in-summary -> intent, appends [TASKS] when a TaskCreate is found |
 | `forced-eval.mjs` | UserPromptSubmit | [ROLE] manager + [SPLIT] bounded units + [BRANCH] default-to-main |
 
 ## KB Format

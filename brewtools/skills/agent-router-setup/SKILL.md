@@ -56,7 +56,7 @@ Tier 1 decision order — it allows as early as it can:
 | 2 | `agent_id` present — a SUBAGENT issued this spawn | allow; only the main loop is policed |
 | 3 | `enabled:false`, or a config file that exists but does not parse | allow |
 | 4 | the picked type IS a project agent (`.claude/agents/*.md`) | allow |
-| 5 | the picked type is a specialist / built-in not on `genericTypes` | allow |
+| 5 | the picked type is not on `genericTypes` — a specialist or a built-in | allow. An OMITTED `subagent_type` is first normalized to `general-purpose` (the Agent-tool default), so a type-less spawn IS policed; it escapes here only when `general-purpose` was taken off `genericTypes` |
 | 6 | intent rules — deterministic regex over the task text: skill authoring -> `brewcode:skill-creator`, agent authoring -> `brewcode:agent-creator`, hooks -> `brewcode:hook-creator`, bash/sh scripts -> `brewcode:bash-expert` | deny, naming the expert. A **project agent covering the same intent OUTRANKS** the plugin specialist |
 | 7 | score the task against every `.claude/agents/*.md` frontmatter (`name` + `Triggers:`) | one clear winner (`minScore` + `margin`) -> deny naming it; several plausible -> **no deny**, just an `additionalContext` nudge listing the top 3; nothing -> silent allow |
 | 8 | anti-loop guard | the same task in the same project is denied at most ONCE per session; a retry passes |
@@ -125,10 +125,18 @@ EN=n/a; case "$CFG" in *'"enabled":true'*) EN=true;; *'"enabled":false'*) EN=fal
 LV=n/a; case "$CFG" in *'"level":"strict"'*) LV=strict;; *'"level":"fast"'*) LV=fast;; esac
 CV=$({ jq -r '.version // empty' "$D/brewtools/agent-router.json" 2>/dev/null || true; }); CV=${CV:-n/a}
 PV=$({ jq -r '.version // empty' "$BT_ROOT/.claude-plugin/plugin.json" 2>/dev/null || true; }); PV=${PV:-n/a}
-STALE=n/a; [ "$CV" != "n/a" ] && [ "$PV" != "n/a" ] && { [ "$CV" = "$PV" ] && STALE=no || STALE=yes; }
+cv_of(){ { sed -n '1,3p' "$1" 2>/dev/null || true; } | sed -n 's/.*content_version=\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/p' | head -1; }
+HCV=$(cv_of "$D/hooks/agent-router.mjs"); HCV=${HCV:-n/a}          # INSTALLED hook body
+TCV=$(cv_of "$A/agent-router.mjs"); TCV=${TCV:-n/a}                # template it was copied from
+GCV=$({ jq -r '.content_version // empty' "$D/brewtools/agent-router.json" 2>/dev/null || true; }); GCV=${GCV:-n/a}
+RCV=$(cv_of "$A/INSTALL.md"); RCV=${RCV:-n/a}                      # generator logic behind the config
+STALE=n/a
+if [ "$HCV" != n/a ] && [ "$TCV" != n/a ]; then [ "$HCV" = "$TCV" ] && STALE=no || STALE=yes; fi
+if [ "$STALE" != yes ] && [ "$GCV" != n/a ] && [ "$RCV" != n/a ] && [ "$GCV" != "$RCV" ]; then STALE=yes; fi
 R=$({ ls "$D/agents/"*.md 2>/dev/null || true; } | wc -l | tr -d ' ')
 echo "project: hook_file=$H tier1_refs=$T1 tier2_refs=$T2 enabled=$EN level_recorded=$LV roster=$R"
-echo "version: config=$CV plugin=$PV stale=$STALE"
+echo "content_version: hook=$HCV template=$TCV config=$GCV runbook=$RCV stale=$STALE"
+echo "version: config=$CV plugin=$PV"
 echo "config=$CFG"
 echo "✅ status"
 ```
@@ -144,29 +152,30 @@ Field meanings — do not paraphrase them into something stronger:
 | `tier2_refs` | count of the tier-2 `statusMessage` marker; `0` = tier 2 off, `1` = tier 2 wired |
 | `enabled` | parsed from the config; `n/a` = no config or no such key |
 | `level_recorded` | the `level` VALUE stored in the config. It is a RECORD of an install-time choice, **not** proof of what is wired — nothing keeps it honest. `tier2_refs` is the authority on whether the LLM judge actually fires |
-| `version` / `plugin` / `stale` | the config's `version` key vs the installed brewtools version. `stale=yes` = the config was written by an older plugin and may predate a shape change -> offer `upgrade`. `n/a` on either side (pre-metadata config, or no config) = unknown, NOT "current" |
+| `content_version` (`hook` / `template` / `config` / `runbook`) | the PRIMARY staleness signal, read from the artifacts themselves: `hook` = the `brewcode-meta:` header of the INSTALLED `.claude/hooks/agent-router.mjs`, `template` = the same header in the plugin's asset copy, `config` = the config's `content_version` key, `runbook` = the header of `assets/INSTALL.md` (the generator behind that config). A difference on either pair -> `stale=yes` -> offer `upgrade`. `n/a` on a side (pre-5.6 artifact, or not installed) = unknown, NOT "current" |
+| `version` / `plugin` | the config's `version` key vs the installed brewtools version. INFORMATIONAL only — it names the release that last WROTE the config, bumps on every release even when nothing changed, and any config write (`enable`/`disable` included) re-stamps it to the current plugin while the hook file on disk stays old. Never decide staleness from it |
 | `roster` | number of `.claude/agents/*.md` files — **`0` means the hook has nothing to route TO**; say so before installing |
 
 These are textual counts, not JSON validation — they do not prove the entries are well-formed or attached to the right event.
 
 Read the output into a state table and PRINT it to the user:
 
-| Hook file | tier1 wired | tier2 wired | enabled | level (recorded) | tier2 actual | config ver | stale | roster |
-|-----------|-------------|-------------|---------|------------------|--------------|------------|-------|--------|
+| Hook file | tier1 wired | tier2 wired | enabled | level (recorded) | tier2 actual | hook cv | template cv | stale | roster |
+|-----------|-------------|-------------|---------|------------------|--------------|---------|-------------|-------|--------|
 
-Effective = `hook_file=yes tier1_refs=1 enabled=true`. Anything else is NOT effective — say so plainly instead of reporting a half-state as installed.
+Effective = `hook_file=yes tier1_refs=1` and `enabled` is anything but `false` — a MISSING config leaves the hook ON with the built-in defaults (`enabled=n/a` is therefore effective, not broken), only exactly `false` turns it off. Anything else is NOT effective — say so plainly instead of reporting a half-state as installed. `stale=yes` is still effective, just running OLD logic: say "installed, stale — run `upgrade`".
 
 > **Never print `level` alone as if it were the truth.** Put `tier2_refs` next to it: `level_recorded=strict` with `tier2_refs=0` means the judge is NOT wired, and the config is lying. Report that mismatch explicitly and offer `level strict` (or `level fast`) to reconcile — the config value alone adds and removes nothing.
 
-### Config metadata (the three standard JSON keys)
+### Config metadata (the four standard JSON keys)
 
-Every mode that WRITES `agent-router.json` — `install`, `upgrade`, `enable`, `disable` and both `level` operations — writes these three keys alongside the behavior keys. `doc_type` is a `.md`-frontmatter field only and never appears in a JSON carrier:
+Every mode that WRITES `agent-router.json` — `install`, `upgrade`, `enable`, `disable` and both `level` operations — writes these four keys alongside the behavior keys. `doc_type` is a `.md`-frontmatter field only and never appears in a JSON carrier:
 
 ```json
-{ "version": "{PLUGIN_VERSION}", "generated_by": "brewtools:agent-router-setup", "last_updated": "{LAST_UPDATED}" }
+{ "version": "{PLUGIN_VERSION}", "content_version": "<INSTALL.md header>", "generated_by": "brewtools:agent-router-setup", "last_updated": "{LAST_UPDATED}" }
 ```
 
-Resolve `version` and `last_updated` — never hardcode either. **EXECUTE** using Bash tool:
+`content_version` is NOT passed in: the runbook's own node blocks read it from the `brewcode-meta:` header of `INSTALL.md` (via `$RUNBOOK`) and ABORT if it is unreadable. Resolve only `version` and `last_updated` here — never hardcode either. **EXECUTE** using Bash tool:
 
 ```bash
 SD="${CLAUDE_SKILL_DIR}"
@@ -184,7 +193,7 @@ echo "PLUGIN_VERSION=$PV LAST_UPDATED=$(date +%F)"
 | The hook ignores them | Config keys the hook does not name are ignored (`INSTALL.md` Config: *"Any key not listed above is ignored"*), so metadata cannot change routing |
 | `enabled` semantics unchanged | Only exactly `false` disables; adding sibling keys touches nothing |
 | Cannot make a valid file unparseable | They are written by the runbook's node block that re-serializes the whole object with `JSON.stringify` — never appended as raw text. A hand-appended line could break the file, and an unparseable config silently disables the whole feature |
-| `disable`/`enable` refresh `last_updated` too | Any write to the config is a write; the stamp records when the file was last written, not when it was first installed |
+| `disable`/`enable` refresh `last_updated` too | Any write to the config is a write; the stamp records when the file was last written, not when it was first installed. It also re-stamps `version` to the CURRENT plugin while copying no files — which is exactly why staleness is judged on the hook file's `content_version`, never on the config's `version` |
 
 ### Early exit
 
@@ -293,8 +302,9 @@ CONTEXT:
   arrays, delete agent-router.mjs, KEEP the config. Purge = uninstall + delete the config +
   delete the tmp markers.
   METADATA: every mode that WRITES the config (install, upgrade, enable, disable, level) must
-  leave these three keys in agent-router.json:
-  version=\$PLUGIN_VERSION, generated_by=\"brewtools:agent-router-setup\",
+  leave these four keys in agent-router.json:
+  version=\$PLUGIN_VERSION, content_version=<read by the runbook block from the brewcode-meta
+  header of \$RUNBOOK — never passed in, never hardcoded>, generated_by=\"brewtools:agent-router-setup\",
   last_updated=\$LAST_UPDATED. No doc_type — it is a .md-frontmatter field and never belongs
   in a JSON carrier. Set them INSIDE the runbook's node block that re-serializes the
   object with JSON.stringify — never by appending text to the file. An unparseable config
@@ -307,7 +317,10 @@ CONSUMER: Step 6 reports your result to the user; the settings.json you write is
 DONE: report the settings.json path, the hooks dir, the config path with its final contents,
   and the runbook 'Verify' output if you ran it. The reported config MUST show
   level = LEVEL — a 'fast' where the user asked for 'strict' is a FAILURE, not a detail —
-  and version = \$PLUGIN_VERSION. Prove the file still parses: jq . <config path>.
+  and version = \$PLUGIN_VERSION plus a non-empty content_version. For install/upgrade also
+  report the content_version of the hook file you COPIED (head -2 of the installed
+  .claude/hooks/agent-router.mjs) — status keys staleness on it. Prove the config still
+  parses: jq . <config path>.
 ")
 ```
 
@@ -318,7 +331,7 @@ Re-run the Step 1 status block and print the refreshed table, plus:
 - what changed (file, settings.json, config values),
 - **a NEW session is required for hook WIRING changes** (install / upgrade / level / uninstall / purge — the tier-2 entry is part of the wiring) — `/reload-plugins` is not needed, this is a plain settings.json hook;
 - **config VALUE changes** (`enabled`, `genericTypes`, `neverFlag`, `minScore`, `margin`, `intents`) are read live — no restart. `level` in the config is only a record of what is wired; changing it by hand does NOT add or remove the tier-2 entry, run `level strict` / `level fast` for that. Report it as `level (recorded)` next to `tier2_refs`, never as the wiring itself;
-- the config `version` now written into the file, and whether `stale` flipped to `no`;
+- the `content_version` now on the INSTALLED hook file and in the config, and whether `stale` flipped to `no` — a `version` bump alone proves nothing, only a re-copied hook file clears staleness;
 - the honest limits, at minimum: tier 2 costs a model call on every `Agent` spawn, tier 1 matches words not meaning, everything fails open.
 
 ---
@@ -339,7 +352,7 @@ Re-run the Step 1 status block and print the refreshed table, plus:
 
 `upgrade` never asks a question and never changes a setting: it reads `level` out of the existing config and replays the install so a plugin update reaches the project (fresh `agent-router.mjs`, freshly inlined judge prompt). Not installed -> it is an `install`, so ask the level question.
 
-Re-install is a no-op. Scope is PROJECT only — the roster is per-project, so there is nothing to install globally and no scope question to ask.
+Re-install is idempotent, NOT inert: the settings.json merge converges to the same single entry, but the copy runs unconditionally and overwrites `agent-router.mjs` with the current asset — that copy is precisely what repairs a `stale=yes` install, so never talk a user out of it. Scope is PROJECT only — the roster is per-project, so there is nothing to install globally and no scope question to ask.
 
 ## Guards
 
@@ -348,6 +361,7 @@ Re-install is a no-op. Scope is PROJECT only — the roster is per-project, so t
 | `BT_ROOT` resolves but `$BT_ROOT/skills/agent-router-setup/assets` missing | ERROR: `agent-router: assets not found under $BT_ROOT — plugin cache incomplete.` STOP. |
 | Neither the skill dir nor any cached plugin dir yields `.claude-plugin/plugin.json` | ERROR: `agent-router: cannot locate plugin root — install/update brewtools first.` STOP. |
 | Status shows installed + vague intent | Print status, list available operations, STOP. Do not re-install. |
+| `stale=yes` (hook `content_version` != template, or config != runbook) | Report it in the SAME breath as "installed": the project is running an OLD hook body. Recommend `upgrade` — it re-copies the file and re-stamps the config. Do NOT read the config's `version` as reassurance; an `enable`/`disable` after a plugin update sets it to the current release without touching the hook file. |
 | User asks for a global install | Refuse and explain: the roster is per-project, `~/.claude/*` is protected, and a global hook would route every repo against one repo's agents. Offer the project install. |
 | `strict` requested (or asked about) | BEFORE writing anything, state the cost: all matching hooks run in parallel and tier 1 cannot gate tier 2, so a haiku call fires on EVERY `Agent` spawn. Say it in the question or the plan, never only in the final report. |
 | `roster=0` (no `.claude/agents/*.md`) | Say it before installing: only the 4 intent rules can ever fire; the scoring step has nothing to score. Offer to stop. |

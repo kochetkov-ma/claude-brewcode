@@ -36,6 +36,19 @@ export function output(response) {
   }
 }
 
+/** Cap for text channels (additionalContext etc.), under the 2.1.174 10K disk-spill threshold */
+export const TEXT_CHANNEL_CAP = 9000;
+
+/**
+ * Truncate a text-channel payload to stay under the disk-spill threshold
+ * @param {string} s - Text to cap
+ * @param {number} max - Max chars
+ * @returns {string} Original or truncated text
+ */
+export function capText(s, max = TEXT_CHANNEL_CAP) {
+  return (typeof s === 'string' && s.length > max) ? s.slice(0, max) + '\n...[truncated]' : s;
+}
+
 /** Default configuration */
 const DEFAULT_CONFIG = {
   logging: {

@@ -25,7 +25,9 @@ Two more conventions used across the suite:
 - **Fail-open.** Every hook returns `{}` when anything goes wrong, which means "do nothing, carry on". So a
   broken discipline layer costs you a good habit, never the ability to keep working. Only five hooks ever
   block on purpose: the hard wall, the agent router, the deadline guard, the return guard and the docsync
-  gate.
+  gate. One hook fails open *loudly* rather than silently: `compact-recall.mjs` degrades every error path,
+  including its outer `catch`, to its `[INTENT]` fragment, because after a compaction saying nothing is
+  itself the failure.
 - **Say it at the moment it applies.** Contracts are injected at session open, at prompt submit, at subagent
   spawn or at tool call - never left to be remembered from earlier in the context.
 
@@ -47,6 +49,9 @@ classDiagram
   class S1["1 - Always-on hooks"] {
     hook forced-eval.mjs - ROLE SPLIT BRANCH
     hook brewcode session-start.mjs - banner and plan link
+    hook role-recall.mjs - same frame after a compaction
+    hook compact-recall.mjs - plan intent and task graph
+    lib reminder.mjs - the one copy of that text
     hook brewtools session-start.mjs - wall notice
     hook manager-prompt.mjs - codewords ++m ++a ++rr ++r
     hook hardmode-guard.mjs - ships inert
@@ -155,7 +160,9 @@ classDiagram
 
 **One turn in time.** A blue band is a moment in the main session, a violet band a moment inside a subagent;
 the band note names the hook event. A solid arrow injects text or passes control. A crossed arrow marks a
-mechanism that can deny the call or block the return - everything else fails open and stays silent.
+mechanism that can deny the call or block the return - everything else fails open and stays silent. One band
+is not part of the turn sequence: the compaction band fires whenever the context is squeezed, mid-turn
+included, and it can fire several times in one session.
 
 ```mermaid
 sequenceDiagram
@@ -175,6 +182,13 @@ sequenceDiagram
     PH->>MS: think-short tone directive
     PH->>MS: semble repo directive
     PH->>MS: semble-first rule, always loaded
+  end
+
+  rect rgba(31,111,235,0.14)
+    Note over BC,MS: SessionStart matcher compact, after each compaction
+    BC->>MS: role-recall, same ROLE SPLIT BRANCH text
+    BC->>MS: compact-recall, PLAN from this transcript
+    BC->>MS: compact-recall, TASKS call TaskList first
   end
 
   rect rgba(31,111,235,0.14)
@@ -232,20 +246,26 @@ These run the moment the plugin is installed. No setup skill, no config file, no
 
 | Approach | File | Scope | Trigger | Fires when | Excerpt | Purpose | Problem solved | Project-specific |
 |---|---|---|---|---|---|---|---|---|
-| Delegation reminder on every prompt | `brewcode/hooks/forced-eval.mjs` | plugin-shipped | `UserPromptSubmit`, timeout 2 s | Every prompt, slash commands included. Skipped only for one-word replies: `yes`, `no`, `ok`, `continue`, a bare number, a single letter | `[ROLE] Manager: scan agents ... expert for this domain exists -> delegate regardless of size; ... [SPLIT] One agent for an hour = drift you cannot observe ... [BRANCH] Stay on the current branch; none chosen -> main.` | Re-state role, subagent sizing and branch default every turn | The model does domain work itself while a project expert agent exists; one giant agent runs for an hour; a feature branch nobody asked for | no |
+| Delegation reminder on every prompt | `brewcode/hooks/forced-eval.mjs` | plugin-shipped | `UserPromptSubmit`, timeout 2 s | Every prompt, slash commands included. Skipped only for one-word replies: `yes`, `no`, `ok`, `continue`, a bare number, a single letter | `[ROLE] Manager: scan agents ... expert for this domain exists -> delegate regardless of size; ... [SPLIT] One agent for an hour = drift you cannot observe ... [BRANCH] Stay on the current branch; none chosen -> main.` - the text itself is not in this file: it is `REMINDER_TEXT` from `brewcode/hooks/lib/reminder.mjs`, shared with `role-recall.mjs` | Re-state role, subagent sizing and branch default every turn | The model does domain work itself while a project expert agent exists; one giant agent runs for an hour; a feature branch nobody asked for | no |
 | Session banner, update check, plan symlink | `brewcode/hooks/session-start.mjs` | plugin-shipped | `SessionStart`, timeout 3 s | Every session start. The symlink part runs only when `source === 'clear'`, and only if the newest `.md` in `~/.claude/plans/` is under 60 s old (`PLAN_FRESHNESS_MS`, `:31`); it then points `<repo>/.claude/plans/LATEST.md` at that global file. The whole output is a `systemMessage` for the human - the model is sent nothing | `brewcode: <root> \| session: <id> \| perm: <mode>` and, when out of date, `UPDATE brewcode <installed> -> <released>: <link to the releases page>`; the link step logs `Linked: .claude/plans/LATEST.md -> <plan name>` | Show the live build and permission mode; keep the just-written plan reachable from the project | Running an old build silently; losing the plan file when Plan Mode clears the session | no |
+| Role frame re-injected after a compaction | `brewcode/hooks/role-recall.mjs` | plugin-shipped | `SessionStart` with `"matcher": "compact"`, timeout 2 s | Only after a compaction, auto or `/compact`. Belt-and-braces on top of the matcher: anything but `input.source === 'compact'` returns `{}`, so `startup`, `resume`, `clear` and `fork` are silent - they still carry the frame. Unconditional otherwise, and compactions chain | The same three lines as `forced-eval.mjs`, byte-for-byte: both import `REMINDER_TEXT` from `brewcode/hooks/lib/reminder.mjs`, which exists so `[ROLE]` / `[SPLIT]` / `[BRANCH]` cannot drift between two hooks on two different events | Put the manager role back in front of the model at the one moment the summary has just collapsed every earlier copy of it | An auto-compaction has no prompt, so `forced-eval.mjs` never fires; after a few compactions the session quietly stops delegating | no |
+| Plan, intent and task graph re-anchored after a compaction | `brewcode/hooks/compact-recall.mjs` | plugin-shipped | `SessionStart` with `"matcher": "compact"`, timeout 2 s | Same moment, same `source === 'compact'` guard, and it ALWAYS injects there. It scans this session's `transcript_path` only - `statSync` must report a regular file (a FIFO reports size 0 and then blocks `readFileSync` forever) of at most `MAX_TRANSCRIPT_BYTES`, `64 * 1024 * 1024`; then `Buffer.lastIndexOf` / `includes`, no JSONL parsing, ~6 ms scan (one buffer read plus five substring scans) on an 8.13 MB transcript, ~30 ms full process wall clock standalone / ~55 ms spawned from a node parent (node startup dominates). Ladder, first match wins: `plan-file` -> `plan-missing` -> `plan-in-summary` -> `intent`. `[TASKS]` is appended only when the transcript contains `"name":"TaskCreate"` | `[PLAN] Read <path> with the Read tool before doing any work. It holds the role model and the delegation split for this session ...`, or `[PLAN] The plan file for this session is gone or unreadable at <path>. Rebuild the frame from the compact summary plus TaskList, not from scratch.`, or `[PLAN] This session ran in plan mode; no plan file is available. ...`, or `[INTENT] Re-read the user ORIGINAL task and intent from the compact summary and keep executing THAT. Do not continue from the most recently remembered fragment, and do not re-scope the work.` Plus, when a graph exists: `[TASKS] Then call TaskList: a task graph created before the compact ALREADY EXISTS in this session. ... The built-in reminder lags several turns and may show empty, so TaskList is the authority. Then resume the work.` | Say what we were doing, from this session's own record, before the model decides for itself | The session loses the user's original task and starts a brand-new task graph on top of the old one | no |
 | Hard-wall awareness at session open | `brewtools/hooks/session-start.mjs` | plugin-shipped, reads project state | `SessionStart`, timeout 2 s | Every session start, but speaks only when `.claude/brewtools/manager/state.json` has `hard: true` in this project | `Manager HARD wall active (project, level=...): main session is orchestration-only - delegate in bounded units ... /brewtools:manager-setup disable to exit.` | Tell the model at turn zero that its own tools are blocked, and how to leave | A whole session of denied tool calls with no explanation | yes |
 | Codeword injection, plus an automatic block while the wall is on | `brewtools/hooks/manager-prompt.mjs` | plugin-shipped; text resolves project -> global -> plugin default | `UserPromptSubmit`, timeout 3 s | Every prompt. Matches `++m`, `++a`, `++rr`, `++r` as standalone tokens, so `++rr` never matches as `++r`. With no codeword it still injects the manager block when `state.hard === true` | `User typed \`++m\` - Manager mode is active for this turn:` then the block resolved from `manager-setup/references/full.md`, which opens `[ROLE: MANAGER] ... You are a Manager, not an executor. Your only actions: think, plan, build the TaskGraph, delegate, observe, integrate.` Several blocks join with `---`. The five block texts are quoted row by row in section 2 | Switch on a heavy behaviour rule for one turn by typing two characters | Standing instructions cost tokens every turn; typed by hand they drift out of use | yes, text is overridable |
 | Physical main-session tool wall, shipped but not registered | `brewtools/hooks/hardmode-guard.mjs` | project, and only after install. The file ships inert: it is **not** listed in `brewtools/hooks/hooks.json` | `PreToolUse` matcher `*` | Before every tool call, but three conditions must all hold. (1) `/brewtools:manager-setup install` has copied the file into the project and registered it in `.claude/settings.local.json` - the shipped copy is never registered. (2) The project `state.json` has `hard: true`; anything else and the guard returns `{}`. (3) The stdin payload carries `agent_id` (`hardmode-guard.mjs:295-298`) - that key is present only inside a real subagent, which always passes through. `agent_type` alone is not enough: a main session started with `claude --agent <name>` carries it too, so it stays walled. Neither key present also means walled | `Hard wall: Write is blocked in the main session - delegate to a subagent. ... To exit run \`/brewtools:manager-setup disable\`` | Make the manager role a machine rule, not advice | The model reads "delegate everything" and edits a file anyway | yes |
 | No hooks at all | `brewdoc/hooks/hooks.json` | plugin-shipped | none | Never. The file is `{"hooks":{}}` | - | brewdoc is a pure skill plugin, zero runtime cost | A hook process on every prompt for a plugin with nothing to inject | no |
 | No hooks and no `hooks.json` | `brewui/` | plugin-shipped | none | Never. There is no `brewui/hooks/` directory at all, and `brewui/skills/` holds only `.gitkeep` | - | A registered placeholder plugin that costs a session nothing | Assuming from the three tables above that every plugin in the suite has a hook layer | no |
-| One shared stdin/stdout/logging helper per plugin | `brewcode/hooks/lib/utils.mjs` (214 lines), `brewtools/hooks/lib/utils.mjs` and `brewdoc/hooks/lib/utils.mjs` (91 lines each) | plugin-shipped | none | Never on its own. Imported by the entry hooks for `readStdin`, `output`, `log`, `loadConfig`, `getState`, `saveState`. The three copies are not identical, and brewdoc's is an orphan - brewdoc registers no hooks, so nothing imports it | `export async function readStdin()` ... `export function output(response)` | One place per plugin for the fail-open stdin/stdout shape every hook repeats | Each hook re-implementing stdin parsing and the empty-`{}` reply, each with its own bug | no |
+| One shared stdin/stdout/logging helper per plugin | `brewcode/hooks/lib/utils.mjs` (227 lines), `brewtools/hooks/lib/utils.mjs` and `brewdoc/hooks/lib/utils.mjs` (91 lines each) | plugin-shipped | none | Never on its own. Imported by the entry hooks for `readStdin`, `output`, `capText`, `log`, `loadConfig`, `getState`, `saveState`. `capText` and `TEXT_CHANNEL_CAP` live here rather than in one hook for the same reason `lib/reminder.mjs` exists: three brewcode hooks cap the same way and a copy would drift. The three copies are not identical, and brewdoc's is an orphan - brewdoc registers no hooks, so nothing imports it | `export async function readStdin()` ... `export function output(response)` | One place per plugin for the fail-open stdin/stdout shape every hook repeats | Each hook re-implementing stdin parsing and the empty-`{}` reply, each with its own bug | no |
 
 Notes for this section:
 
-- Both `UserPromptSubmit` hooks use `hookSpecificOutput.additionalContext`, never `updatedInput`, which is
-  silently dropped on that event in CC 2.1.x. Both cap injected text at 9000 chars, below a 10K disk-spill
-  threshold noted for CC 2.1.174.
+- All four text-injecting hooks in this section use `hookSpecificOutput.additionalContext`, never
+  `updatedInput`, which is silently dropped on `UserPromptSubmit` in CC 2.1.x: the two on that event
+  (`forced-eval.mjs`, `manager-prompt.mjs`) and the two on `SessionStart` matcher `compact`
+  (`role-recall.mjs`, `compact-recall.mjs`). All four cap injected text at 9000 chars, below a 10K
+  disk-spill threshold noted for CC 2.1.174 - the three brewcode ones through the shared
+  `capText` / `TEXT_CHANNEL_CAP` in `brewcode/hooks/lib/utils.mjs:40`, `:48`, brewtools' through its own
+  local `capText(s, max = 9000)` (`manager-prompt.mjs:34`).
 - Channel semantics, verified against the CC 2.1.232 bundle: `updatedInput` (`PreToolUse`) and
   `updatedToolOutput` (`PostToolUse`) are single-writer/last-wins - every hook on the event receives the
   same original value and the runner keeps only the last hook's edit, so two hooks writing either one
@@ -254,12 +274,19 @@ Notes for this section:
   clobbering, any number of hooks compose. `PreToolUse` `additionalContext` reaches only the parent
   session, never a subagent; `SubagentStart` `additionalContext` reaches the subagent and supports an
   `agent_type` matcher. This is why think-short's subagent injection (below) moved off `updatedInput`.
-- brewcode's `SessionStart` sends nothing to the model - only a `systemMessage` for the human.
+- brewcode registers three hooks on `SessionStart`, and they split cleanly. `session-start.mjs` runs on every
+  start and sends the model nothing - its whole output is a `systemMessage` for the human. The other two,
+  `role-recall.mjs` and `compact-recall.mjs`, sit in a `"matcher": "compact"` group, run only after a
+  compaction, and speak *only* to the model through `additionalContext`, with no `systemMessage` at all.
+  So "brewcode's SessionStart is human-only" holds for the unmatched hook and is false for the compact pair.
 - Installing brewtools does **not** arm the wall. Only `/brewtools:manager-setup install` does.
-- Nothing in the suite registers `SessionEnd` or `PreCompact`. Zero hits across all three `hooks.json`,
-  every generated `assets/INSTALL.md` and this repo's own `.claude/settings.json`. That silence is
-  deliberate, not a hole: the suite speaks at the start of a session and at the moment a rule applies,
-  and it has nothing to say once a session is over or a context is about to be squeezed.
+- Nothing in the suite registers `SessionEnd`, `PreCompact` or `PostCompact`. Zero hits across all three
+  `hooks.json`, every generated `assets/INSTALL.md` and this repo's own `.claude/settings.json`. It still has
+  nothing to say once a session is over. Compaction is a different case: the suite does speak there, but it
+  speaks *after* the squeeze, on `SessionStart` matcher `compact`, because that is the only channel that
+  reaches the model - `PostCompact` output lands in the UI as `userDisplayMessage`, which the model never
+  sees (`compact-recall.mjs:6-7`), and anything injected before a compaction is exactly what the compaction
+  then collapses.
 
 ## 2. Delegation and manager discipline
 
@@ -297,7 +324,7 @@ never asks for a decision.
 | Return size budget enforced at return | same skill; all 3 files install as one unit | same | `hooks/agent-return-guard.mjs` | `SubagentStop`, timeout 5 s | When a subagent produces its final answer, just before it reaches the manager session | `RETURN TOO LARGE (~N tokens, budget 1000). ... Re-send the SAME answer, compressed: keep the verdict line and every \`path:line\` ref, drop preamble, file bodies, command output, logs` | `t = ceil(len/4)`. `<=1000` pass, `1000..2500` block for compression, `>2500` block and order a report file. No LLM judge, two integer comparisons | Same flag; blocks at most once via `stop_hook_active` | Cap the single biggest context cost in a manager session | Ten subagents each dump their full output into the main session, context fills and compacts. Measured over 80 real returns: p50 1404 est-tokens, max 7931, 58% of the total is overflow above 800 |
 | Soft wall-clock deadline | `/brewtools:agent-deadline-setup` | choice: project, global or both. Global costs ~58 ms per tool call everywhere | `hooks/agent-deadline-guard.mjs` | `PreToolUse` matcher `.*`, timeout 5 s | Every tool call, but acts only when the payload carries both `agent_id` and a non-empty `agent_type`. The clock starts at the agent's first tool call | 80%: `N of your 20 minute time budget are used. Start wrapping up NOW`. 100%: `AGENT DEADLINE EXCEEDED ... The tool "X" is blocked and retrying it will fail again. Stop investigating` | `.claude/agent-deadline.json`: `defaultMinutes` 20, `byAgentType` `{}`, `hardStopRatio` 2. Not configurable: warn at 0.8 of the budget, repeat a notice at most once per 10% of the budget, prune state older than 24 h. Past 100% only the 7 advertised finalize tools plus `TaskCreate`, `BashOutput`, `TaskOutput` are allowed; `AskUserQuestion` is denied on purpose. Past `hardStopRatio` (2x the budget) the list shrinks to `Write` and `Edit` only | Live config flag: `enabled !== true` = OFF | Force a runaway agent to finalize instead of killing it | An agent runs an hour, unobservable and drifting. `maxTurns` would kill it and throw away the report. Time is sampled only at tool-call boundaries, so one 25-min `Bash` call is invisible |
 | Deadline state cleanup | same skill, installed together | same | `hooks/agent-deadline-cleanup.mjs` | `SubagentStop`, timeout 3 s | When a subagent finishes for any reason | No text. Deletes `<tmpdir>/brewtools-agent-deadline/<session>/<agent>.json`, prunes dirs older than ~24 h, always returns `{}` | State only: `{ start, warned, expired }`, mode 0700, never under `~/.claude` | None - unconditional bookkeeping, harmless when the guard is off | Keep the tmp state tree self-cleaning | A stale `start` carries a used-up budget into a new agent id |
-| Route a generic spawn to the real expert, tier 1 | `/brewtools:agent-router-setup` | **project only** - the roster is per project, no scope question | `.claude/hooks/agent-router.mjs` | `PreToolUse` matcher `Agent`, timeout 5 s | Every main-loop agent spawn. Exits instantly if `agent_id` is present, if the picked type is a project agent, is in `neverFlag`, or is not in `genericTypes` | `agent-router: this looks like skill authoring - 'brewcode:skill-creator' is the expert for it, not general-purpose - retry with subagent_type: brewcode:skill-creator. (Deliberate? retry once and it passes.)` | `.claude/brewtools/agent-router.json`: `level` fast, `genericTypes` `["general-purpose","worker"]`, `neverFlag` 8 entries, `minScore` 3, `margin` 2, 4 built-in intents. Anti-loop: one deny per session+root+task | Live flag, **inverted**: only `enabled === false` disables. Missing file = ON with defaults; unparsable file = fully OFF | Stop the main loop reaching for `general-purpose` when a hand-written expert exists | The repo ships a domain expert and the manager spawns `general-purpose` out of habit. The deny reaches the model as a tool error, so a retry always passes |
+| Route a generic spawn to the real expert, tier 1 | `/brewtools:agent-router-setup` | **project only** - the roster is per project, no scope question | `.claude/hooks/agent-router.mjs` | `PreToolUse` matcher `Agent`, timeout 5 s | Every main-loop agent spawn; an omitted `subagent_type` is normalized to `general-purpose` before the project-agent and generic checks run, so it is policed too, per the Agent tool contract. Exits instantly if `agent_id` is present, if the picked type is a project agent, is in `neverFlag`, or is not in `genericTypes` | `agent-router: this looks like skill authoring - 'brewcode:skill-creator' is the expert for it, not general-purpose - retry with subagent_type: brewcode:skill-creator. (Deliberate? retry once and it passes.)` | `.claude/brewtools/agent-router.json`: `level` fast, `genericTypes` `["general-purpose","worker"]`, `neverFlag` 8 entries, `minScore` 3, `margin` 2, 4 built-in intents. Anti-loop: one deny per session+root+task. `status` staleness is `content_version`-based: it compares the installed hook's header against the plugin template, and the config's `content_version` against `assets/INSTALL.md`'s header - `version`/`plugin` fields are informational provenance only, never deciding staleness | Live flag, **inverted**: only `enabled === false` disables. Missing file = ON with defaults and still **effective**; `stale=yes` stays effective too, just running old logic. Re-install is idempotent but not inert: it re-copies `agent-router.mjs`, which is what repairs a stale hook body | Stop the main loop reaching for `general-purpose` when a hand-written expert exists | The repo ships a domain expert and the manager spawns `general-purpose` out of habit. The deny reaches the model as a tool error, so a retry always passes |
 | LLM judge for ambiguous spawns, tier 2 | `/brewtools:agent-router-setup level strict` | project only; the judge prompt is inlined into `settings.json`, never copied | a second `.claude/settings.json` entry | `PreToolUse` matcher `Agent`, timeout 30 s | Every `Agent` spawn once installed. Hooks run in parallel, so tier 1 cannot gate it | `Bias to {"ok": true} on ANY doubt. A wrong redirect costs the user a full wasted agent run against an ill-fitting expert; a missed redirect costs nothing` | Wired as `type: "agent"`, model `claude-haiku-4-5-20251001`, `timeout: 30` - Claude Code hook timeouts are in seconds, so that is 30 s, not 30 ms (`agent-router-setup/assets/INSTALL.md:264`, `:296`, `:386`). `level` in the config is only a record of what was wired; editing it by hand changes nothing | Re-run at `level fast`. Setting `enabled:false` does NOT stop tier 2 costing a model call | Catch domain fits too indirect for a regex | Tier 1 matches trigger words, not meaning |
 
 Known limits: tier 2 is wired but never verified end to end; the return guard blocks at most once, so a
@@ -502,7 +529,8 @@ rules above rather than with the agent-body conventions of section 7. Same colum
 
 | Rule | Enforced by | What it looks like | Purpose | Problem solved |
 |---|---|---|---|---|
-| Baked stamp and install-time token are mutually exclusive per file | `bump-version.sh` `STAMPED_FILES`, 33 entries, each re-checked by `stamp_verify` | baked: `brewcode-meta: version=5.5.2 generated_by=brewcode:semble-setup` in the asset itself. Substituted: `{PLUGIN_VERSION}` / `{GENERATED_BY}` / `{LAST_UPDATED}` resolved when a skill writes the file. Kind `fmd` adds `last_updated:` and is used only for the 9 hand-maintained shipped artefacts, `Never for byte-copied assets: a date there would churn every build` | `setup-status` compares an installed copy against the plugin asset with `cmp -s`, so a copied asset must already carry its number | `an install-time stamp would make every install report DIFFERS forever`; the reverse mistake, a baked literal in a template, made the superreview references differ on every release |
+| Baked stamp and install-time token are mutually exclusive per file | `bump-version.sh` `STAMPED_FILES`, 44 entries, each re-checked by `stamp_verify` | baked: `brewcode-meta: version=5.5.2 generated_by=brewcode:semble-setup` in the asset itself. Substituted: `{PLUGIN_VERSION}` / `{GENERATED_BY}` / `{LAST_UPDATED}` resolved when a skill writes the file. Kind `fmd` adds `last_updated:` and is used only for the 9 hand-maintained shipped artefacts, `Never for byte-copied assets: a date there would churn every build` | `setup-status` compares an installed copy against the plugin asset with `cmp -s`, so a copied asset must already carry its number | `an install-time stamp would make every install report DIFFERS forever`; the reverse mistake, a baked literal in a template, made the superreview references differ on every release |
+| `version` and `content_version` are two separate stamps | `bump-version.sh` `content_version_for()`, called per `STAMPED_FILES` entry before `stamp_rewrite` | `brewcode-meta: version=5.5.2 content_version=5.4.0 generated_by=brewcode:semble-setup`; `version` = "the plugin release that produced this file (bumped every run)", `content_version` = "the release in which this file's BODY last actually changed" | `content_version_for` diffs the on-disk file's stripped body against the copy at its old `content_version`'s git tag - "Identical -> preserve the old value ... Anything else ... is treated as CHANGED -> $NEW" | `setup-status` reporting every install stale on every unrelated version bump, when only `version` moved and the body did not |
 | Version carriers in docs are anchored, never global | `doc_rewrite` over the 7 `VERSIONED_DOCS`, then `doc_verify` | `DOC_VER_GREP` matches six one-line headers only: `\| Version \| X.Y.Z \|`, `**ver:**`, `**Version:**`, `^> Version:`, `version X.Y.Z, skills/`, `claude-plugin-brewcode@X.Y.Z` | Bump the header, leave the prose | `these files also contain historical prose ("dropped in v5.0.0", "broken before v5.0.0") that must never move`. A renamed header stops being bumped, so `doc_verify` hard-fails on a file with no recognised carrier |
 | Frontmatter rewrites scoped to the leading block | the `sed` range `2,/^---$/` in `stamp_rewrite` | `2,/^---$/s\|^version: "..."$\|version: "$NEW"\|` | Only the file's own frontmatter moves | A doc that documents frontmatter getting the YAML inside its fenced example silently bumped |
 | The Codex mirror is regenerated in the same transaction as the version | `bump-version.sh` runs `.codex/scripts/generate-compat.mjs` then `validate-compat.mjs`, `die` if either is missing or fails | per-plugin `brew*/.codex/**` plus the marketplace layout `.codex/plugins/**`: 8 hook `.mjs` (2 entry + 2 lib for brewcode, same for brewtools), 3 `hooks.json`, 4 agent `.toml`, and 11 mirrored skills each with an `agents/openai.yaml` | The second distribution target cannot fall behind the first | `the documented step is exactly what let the mirror rot a full major version behind (4.0.6 vs 5.0.0)` |
@@ -520,7 +548,8 @@ Long strings are cut with `...`; everything quoted is copied from the source fil
 
 **What happens:** you start or resume Claude Code. Every registered `SessionStart` hook runs.
 
-brewcode's writes one field, and it is not a model field (`brewcode/hooks/session-start.mjs:263`):
+brewcode's `session-start.mjs` - the unmatched one, which runs on every start - writes one field, and it is
+not a model field (`brewcode/hooks/session-start.mjs:268`, with the reason stated in the comment at `:264`):
 
 ```json
 {
@@ -558,7 +587,8 @@ The human gets the version banner; the model gets tone and search rules, and not
 
 **You type:** `add a retry to the upload client`
 
-`brewcode/hooks/forced-eval.mjs:72` returns the same three lines every turn, capped at 9000 chars:
+`brewcode/hooks/forced-eval.mjs:55` returns the same three lines every turn - `REMINDER_TEXT` from
+`lib/reminder.mjs`, capped at 9000 chars:
 
 ```json
 {
@@ -571,8 +601,9 @@ The human gets the version banner; the model gets tone and search rules, and not
 
 The model sees those three lines appended after your prompt, about 90 words, every single turn. The channel
 is `additionalContext`, never `updatedInput` - that field is silently dropped on `UserPromptSubmit` in
-CC 2.1.x. Type a bare `ok` instead and `forced-eval.mjs:65` matches its skip list and writes `{}`: nothing is
-added, which is the normal quiet case, not an error.
+CC 2.1.x. Type a bare `ok` instead and `forced-eval.mjs:48` matches its skip list (`:41-46`) and writes `{}`:
+nothing is added, which is the normal quiet case, not an error. The same three lines come back after a
+compaction, from the same constant, through a different hook - example H.
 
 ### C. A codeword turn: `++m`
 
@@ -703,6 +734,86 @@ The agent rewrites once and returns. It is blocked at most once ever: `agent-ret
 docsync gate blocks on the same event style once per session and says so in its own text: `This is the only
 docsync block this session.` (`docsync-gate.mjs:150`).
 
+### H. A compaction lands
+
+**What happens:** the context fills and Claude Code compacts it, on its own mid-turn or because you typed
+`/compact`. The conversation is replaced by a summary and the session continues. `SessionStart` fires with
+`source: "compact"`, and `brewcode/hooks/hooks.json` has a second `SessionStart` group carrying
+`"matcher": "compact"` with two hooks in it, both `timeout: 2`. `session-start.mjs` sits in the first,
+unmatched group and runs on this event too, but it still writes only a `systemMessage`.
+
+This is the one moment `UserPromptSubmit` cannot cover: an auto-compaction has no prompt, so `forced-eval.mjs`
+never fires, and the summary has already collapsed every earlier copy of the role frame. `role-recall.mjs`
+re-states it, unconditionally, from the same `lib/reminder.mjs` constant `forced-eval.mjs` uses - so the two
+are byte-identical by construction, not by discipline:
+
+```json
+{
+  "hookSpecificOutput": {
+    "hookEventName": "SessionStart",
+    "additionalContext": "[ROLE] Manager: scan agents (project .claude/agents/ first) - expert for this domain exists -> delegate regardless of size; ...\n[SPLIT] One agent for an hour = drift you cannot observe: ...\n[BRANCH] Stay on the current branch; none chosen -> main. ..."
+  }
+}
+```
+
+`compact-recall.mjs` then answers the other half: what were we doing. It reads `input.transcript_path` - this
+session's transcript and nothing else - with one `readFileSync` behind a `statSync` guard: not a regular file
+or over `MAX_TRANSCRIPT_BYTES` (`64 * 1024 * 1024`) and it logs a warning and scans nothing. No JSONL
+parsing at all: `Buffer.lastIndexOf` for `"planFilePath":"`, `buf.includes` for `"name":"TaskCreate"` and for
+the three plan-mode markers. measured on an 8.13 MB transcript: the scan itself ~6 ms, full process wall clock ~30 ms standalone / ~55 ms spawned from a node parent (node startup dominates).
+
+Every one of those keys is matched *with* its JSON quotes, and that is a fix, not a style choice: prose that
+merely names a key arrives in the transcript escaped (`\"`), so a quoted key cannot match a transcript's own
+text about itself. A bare `plan_mode_reentry` matched this repo's own design discussion of this very hook and
+claimed a plan that never existed.
+
+Four outcomes, a ladder, first match wins. The common one is the second: Claude Code prunes
+`~/.claude/plans/` on its own cleanup period, so a transcript's recorded plan path routinely outlives
+the plan file itself - which is exactly why `plan-missing` is the branch seen most often:
+
+```json
+{
+  "hookSpecificOutput": {
+    "hookEventName": "SessionStart",
+    "additionalContext": "[PLAN] The plan file for this session is gone or unreadable at /Users/you/.claude/plans/2026-08-14-refactor.md.\nRebuild the frame from the compact summary plus TaskList, not from scratch.\n[TASKS] Then call TaskList: a task graph created before the compact ALREADY EXISTS in this session.\nRe-read it, do NOT create a new graph. The built-in reminder lags several turns and may show empty, so TaskList is the authority. Then resume the work."
+  }
+}
+```
+
+The four branches, in order: a `planFilePath` that still `isFile()` -> `[PLAN] Read <path> with the Read tool
+before doing any work.`; a path recorded but gone -> the `plan-missing` text above; no path but a plan-mode
+marker -> `[PLAN] This session ran in plan mode; no plan file is available.` and then both halves in one
+fragment, `A plan in the compact summary -> follow it and its delegation split, do not re-derive them.` /
+`No plan there -> re-read the user ORIGINAL task and intent from the summary and keep executing THAT.`;
+nothing at all -> `[INTENT] Re-read the user ORIGINAL task and intent from the compact summary and keep
+executing THAT.`
+
+**What the model sees**, once, next to the fresh summary - `additionalContext` accumulates across hooks on
+one event, so both hooks land and neither clobbers the other:
+
+```text
+[ROLE] Manager: scan agents (project .claude/agents/ first) - expert for this domain exists -> delegate regardless of size; no expert or trivial one-off -> self.
+[SPLIT] One agent for an hour = drift you cannot observe: split into bounded units ...
+[BRANCH] Stay on the current branch; none chosen -> main. ...
+[PLAN] The plan file for this session is gone or unreadable at /Users/you/.claude/plans/2026-08-14-refactor.md.
+Rebuild the frame from the compact summary plus TaskList, not from scratch.
+[TASKS] Then call TaskList: a task graph created before the compact ALREADY EXISTS in this session.
+Re-read it, do NOT create a new graph. ...
+```
+
+Three things about this block are deliberate. It is never silent: on `source === 'compact'` every failure
+path, including the outer `catch`, degrades to the `[INTENT]` fragment rather than `{}` - the one place in
+the suite where fail-open still speaks. It never quotes a plan from outside this session's transcript.
+And `[TASKS]` orders `TaskList` before anything else because the built-in `task_reminder` lags several turns
+after a compaction and can arrive empty, which is exactly what makes a session start a second graph.
+
+Two trade-offs, recorded as trade-offs. Two plans in one session: the LAST `planFilePath` in the transcript
+wins, so a session that planned once and later re-planned outside plan mode is pointed at the older plan.
+And the plan-mode markers (`"type":"plan_mode"`, `"type":"plan_mode_reentry"`, `"permissionMode":"plan"`) are
+stamped on *entering* plan mode, strictly before any approval - measured in one real transcript as the first
+`permissionMode:plan` on line 1166 against the first `planFilePath` on line 1178 - which is why that branch
+claims only that the session ran in plan mode, and folds the intent fallback into the same fragment.
+
 ### What is injected at each moment
 
 Word counts are eyeballed from the source strings, not measured by a script.
@@ -713,7 +824,9 @@ Word counts are eyeballed from the source strings, not measured by a script.
 | Session opens, tone | `SessionStart` | think-short | ~120 | once per session, only when installed |
 | Session opens, search rule | `SessionStart` | semble | ~35 | once per session, only when state is `ready` |
 | Session opens, wall notice | `SessionStart` | brewtools `session-start.mjs` | ~60 | once per session, only while the wall is armed |
-| Every prompt | `UserPromptSubmit` | brewcode `forced-eval.mjs` | ~90 | every turn, except one-word replies |
+| After a compaction, role frame | `SessionStart` matcher `compact` | brewcode `role-recall.mjs` | 108 words / 636 chars - the same `REMINDER_TEXT` as every prompt | once per compaction, and compactions chain |
+| After a compaction, plan and tasks | `SessionStart` matcher `compact` | brewcode `compact-recall.mjs` | exactly one plan fragment, 25-47 words: `plan-file` 29 / `plan-missing` 25 / `plan-in-summary` 47 / `intent` 31 (146-257 chars, plus the plan path where one is quoted); plus 43 words / 251 chars of `[TASKS]` when the transcript holds a `TaskCreate` | once per compaction, and compactions chain. Always something on `source === 'compact'`, never `{}` |
+| Every prompt | `UserPromptSubmit` | brewcode `forced-eval.mjs` | 108 words / 636 chars, counted from `lib/reminder.mjs` | every turn, except one-word replies |
 | Codeword turn | `UserPromptSubmit` | brewtools `manager-prompt.mjs` | 300-700 per block | only on the turn you type `++m` / `++a` / `++rr` / `++r` |
 | Wall armed, no codeword | `UserPromptSubmit` | brewtools `manager-prompt.mjs` | ~400 | every turn while `state.hard === true` |
 | Tone refresh | `UserPromptSubmit` | think-short counter | ~120 | every 10th turn |
@@ -732,6 +845,9 @@ Word counts are eyeballed from the source strings, not measured by a script.
 |---|---|---|---|
 | `forced-eval.mjs` | ships with brewcode | `brewcode/hooks/`, registered in `brewcode/hooks/hooks.json` | uninstall the plugin |
 | brewcode `session-start.mjs` | ships with brewcode | `brewcode/hooks/` | uninstall the plugin |
+| `role-recall.mjs` | ships with brewcode | `brewcode/hooks/`, registered in `brewcode/hooks/hooks.json` under the `SessionStart` group with `"matcher": "compact"` | uninstall the plugin; there is no flag and no config file |
+| `compact-recall.mjs` | ships with brewcode | `brewcode/hooks/`, second entry in that same `"matcher": "compact"` group | uninstall the plugin; there is no flag and no config file |
+| `lib/reminder.mjs` - the one normative copy of `[ROLE]`/`[SPLIT]`/`[BRANCH]` | ships with brewcode | `brewcode/hooks/lib/`, imported by `forced-eval.mjs` and `role-recall.mjs` | nothing to turn off - it is text, not a hook |
 | brewtools `session-start.mjs` | ships with brewtools | `brewtools/hooks/` | uninstall the plugin, or disable the wall so it goes silent |
 | `manager-prompt.mjs` | ships with brewtools | `brewtools/hooks/` | uninstall the plugin; codewords cannot be disabled |
 | `hardmode-guard.mjs` copy | `/brewtools:manager-setup install` | `<repo>/.claude/brewtools/manager/`, registered in `.claude/settings.local.json` as `PreToolUse "*"` | `/brewtools:manager-setup disable`, or `uninstall` to unwire |
@@ -745,7 +861,7 @@ Word counts are eyeballed from the source strings, not measured by a script.
 | `agent-return.json` | same | `<repo>/.claude/` or `~/.claude/` | delete it - absent file means OFF |
 | `agent-deadline-guard.mjs`, `agent-deadline-cleanup.mjs` | `/brewtools:agent-deadline-setup install` | project and/or global `hooks/`, `PreToolUse .*` and `SubagentStop` | `agent-deadline.json` `enabled: false` |
 | `agent-deadline.json` | same | `<repo>/.claude/` or `~/.claude/` | delete it - absent file means OFF |
-| `agent-router.mjs` | `/brewtools:agent-router-setup install` | `<repo>/.claude/hooks/`, `PreToolUse` matcher `Agent` | `agent-router.json` `enabled: false` - **absent file means ON** |
+| `agent-router.mjs` | `/brewtools:agent-router-setup install` | `<repo>/.claude/hooks/`, `PreToolUse` matcher `Agent` | `agent-router.json` `enabled: false` - **absent file means ON and effective**; re-install is idempotent but not inert - it re-copies the hook file, which repairs a stale install |
 | `agent-router.json` | same | `<repo>/.claude/brewtools/` | set `enabled: false`; deleting the file re-enables defaults |
 | Tier-2 judge entry | `/brewtools:agent-router-setup level strict` | inlined into `<repo>/.claude/settings.json`, `type: "agent"`, haiku | re-run at `level fast`; the config flag does not stop it |
 | `/superreview` skill | `/brewcode:superreview-setup` | `<repo>/.claude/skills/superreview/` + `references/` | delete the skill dir; there is no global variant |

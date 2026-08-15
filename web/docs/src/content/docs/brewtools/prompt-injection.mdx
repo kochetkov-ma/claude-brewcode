@@ -158,7 +158,7 @@ If brewcode is installed too, its `forced-eval.mjs` (UserPromptSubmit) adds thre
 [BRANCH] Stay on the current branch; none chosen -> main. No explicit branch/PR instruction -> work on main and take over ALL workspace changes, incl. from other sessions.
 ```
 
-That reminder fires on slash commands as well, and is skipped only for empty prompts and meta-replies (`yes`, `ok`, a bare number, a single letter). See [Brewcode hooks](/brewcode/hooks/).
+That reminder fires on slash commands as well, and is skipped only for empty prompts and meta-replies (`yes`, `ok`, a bare number, a single letter). It only fires on a prompt, so an auto-compaction mid-turn skips it -- brewcode covers that gap with a separate SessionStart pair that re-anchors the same role plus the plan and task graph. See [Brewcode hooks](/brewcode/hooks/) for detail.
 
 The prompt text is editable and update-proof. Use `/brewtools:manager-setup edit` to copy the plugin default into a writable project or global override, and `/brewtools:manager-setup purge` to drop the override and revert to the plugin default.
 

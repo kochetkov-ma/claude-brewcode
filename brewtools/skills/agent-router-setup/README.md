@@ -25,7 +25,7 @@ It allows as early as it can:
 | 2 | `agent_id` present — a subagent issued the spawn | allow; only the main loop is policed |
 | 3 | `enabled:false`, or a config file that exists but does not parse | allow |
 | 4 | the picked type IS a project agent | allow |
-| 5 | it is a specialist/built-in not on `genericTypes` | allow |
+| 5 | the picked type is not on `genericTypes` — a specialist/built-in | allow. An omitted `subagent_type` is normalized to `general-purpose` first and policed like one |
 | 6 | intent rules (regex over the task text) | deny, naming the expert |
 | 7 | score the task against the `.claude/agents/*.md` roster | clear winner -> deny naming it; several plausible -> nudge with the top 3, no deny; nothing -> silent allow |
 | 8 | anti-loop guard | a task in a given project is denied at most once per session |
@@ -72,7 +72,7 @@ The skill always reports status first, states its plan before asking anything, t
 | `level fast` (extra) | kept | tier-2 stripped | `level:"fast"` | kept |
 | `level strict` (extra) | kept | tier-2 appended | `level:"strict"` | kept |
 
-Re-install is a no-op. `upgrade` asks nothing: it reads `level` back out of the config and replays the install against the current assets, so a plugin update finally reaches the project (fresh hook file, freshly inlined judge prompt).
+Re-install is idempotent but not inert — it re-copies the hook file, which is what repairs a stale install. `upgrade` asks nothing: it reads `level` back out of the config and replays the install against the current assets, so a plugin update finally reaches the project (fresh hook file, freshly inlined judge prompt).
 
 ## Where it installs
 
@@ -104,6 +104,7 @@ The tier-2 judge prompt is **inlined into `settings.json`**, not copied — re-r
   "minScore": 3,
   "margin": 2,
   "version": "{PLUGIN_VERSION}",
+  "content_version": "{CONTENT_VERSION}",
   "generated_by": "brewtools:agent-router-setup",
   "last_updated": "{LAST_UPDATED}"
 }
@@ -113,7 +114,7 @@ The tier-2 judge prompt is **inlined into `settings.json`**, not copied — re-r
 |-----|---------|
 | `enabled` | only exactly `false` turns it off. Any other value — and no config file at all — means ON with these defaults. A config that exists but does not PARSE is different: the feature goes fully silent |
 | `level` | `fast` / `strict` — a RECORD of what was wired at install time, ignored by tier 1 itself and enforced by nothing. Editing it by hand does NOT add or remove the tier-2 entry; run `level strict` / `level fast`. `status` prints it as `level (recorded)` next to the settings.json `tier2` count — that count, not this key, is what actually decides whether the judge fires |
-| `version` / `generated_by` / `last_updated` | provenance, written on every config write. No `doc_type` — that field is `.md` frontmatter only. `version` is the brewtools version that wrote the file; `status` compares it against the installed plugin so a shape change from a later version is visible. Inert at runtime — the hook ignores unlisted keys |
+| `version` / `content_version` / `generated_by` / `last_updated` | provenance, written on every config write. No `doc_type` — that field is `.md` frontmatter only. `version` = the brewtools release that wrote the file, informational only (it bumps every release, and `enable`/`disable` re-stamps it without copying anything). `content_version` = the release whose generator logic produced it; `status` judges staleness on `content_version` — the installed hook file's header vs the plugin's asset, and this key vs `assets/INSTALL.md`. Inert at runtime — the hook ignores unlisted keys |
 | `genericTypes` | the types policed at all; anything else exits at step 5 |
 | `neverFlag` | never flagged whatever the task says; eight entries by default (four fixed + the four intent experts). Auto-unioned with every `intents[].expert` at load time — a custom `intents` table exempts its own experts without touching this key |
 | `minScore` | minimum roster score before a project agent can win |

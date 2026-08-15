@@ -1,4 +1,4 @@
-<!-- brewcode-meta: version=5.6.1 content_version=5.6.0 generated_by=brewtools:agent-router-setup -->
+<!-- brewcode-meta: version=5.7.0 content_version=5.7.0 generated_by=brewtools:agent-router-setup -->
 # agent-router hook — install / configure / remove runbook
 
 Self-contained hook asset. The `/brewtools:agent-router-setup` skill copies it into the
@@ -29,7 +29,7 @@ allowing as early as possible:
 | 2 | `agent_id` present (a SUBAGENT issued the spawn) | allow — only the main loop is policed |
 | 3 | `enabled` is `false`, or the config file exists but does not parse | allow |
 | 4 | the picked type IS a project agent | allow |
-| 5 | the picked type is a specialist / built-in not listed in `genericTypes` | allow |
+| 5 | the picked type is not listed in `genericTypes` — a specialist or built-in | allow. An OMITTED `subagent_type` is normalized to `general-purpose` first (the Agent-tool default) and policed like one; it escapes here only if `general-purpose` was removed from `genericTypes` |
 | 6 | intent rules — regex over the task text | deny, naming the expert; a project agent covering the same intent OUTRANKS the plugin specialist |
 | 7 | score the task against every `.claude/agents/*.md` frontmatter (`name` + `Triggers:`) | one clear winner (`minScore`, `margin`) -> deny naming it; several plausible -> `additionalContext` nudge with the top 3, NO deny; nothing -> silent allow |
 | 8 | anti-loop guard | a given task in a given project is denied at most ONCE per session (marker under `os.tmpdir()/brewtools-agent-router/`); a retry passes |
@@ -174,10 +174,17 @@ and the blocks ABORT loudly rather than writing a silent `fast` over the level t
 user picked. Each Bash call starts a fresh shell — re-export in EVERY call, or
 prefix the block.
 
-Every write of the config also stamps the three mandatory JSON metadata keys —
-`version`, `generated_by`, `last_updated` (never `doc_type`: that is a `.md`
-frontmatter field). `version` is resolved from `.claude-plugin/plugin.json`, never
-hardcoded; `last_updated` is the LOCAL date.
+Every write of the config also stamps the four mandatory JSON metadata keys —
+`version`, `content_version`, `generated_by`, `last_updated` (never `doc_type`: that
+is a `.md` frontmatter field). `version` is resolved from `.claude-plugin/plugin.json`,
+never hardcoded; `content_version` from THIS file's own `brewcode-meta:` header (via
+`$RUNBOOK`); `last_updated` is the LOCAL date.
+
+> `version` is not a staleness signal: it bumps on every release, and a config-only
+> write (DISABLE/ENABLE) re-stamps it to the current plugin while the installed
+> `agent-router.mjs` stays old. The skill's `status` therefore compares the
+> `content_version` in the INSTALLED hook's header against the asset it was copied
+> from, and the config's `content_version` against this runbook's header.
 
 **EXECUTE** config write (read-modify-write, Bash tool):
 
@@ -333,7 +340,7 @@ Run every block from the REPO ROOT (`$PWD` is used throughout) with `RUNBOOK` an
    injected as prompt text and expands to empty in Bash.)
 3. Write `<repo>/.claude/brewtools/agent-router.json` — run the **EXECUTE config
    write** block in the *Config* section above. It also stamps `version` /
-   `generated_by` / `last_updated`; do not strip those lines out of it.
+   `content_version` / `generated_by` / `last_updated`; do not strip those lines out of it.
 4. Merge the hook entries into `<repo>/.claude/settings.json` (create `{}` if
    absent), `<absdir>` = `<repo>/.claude/hooks` (**EXECUTE** merge, below).
 
@@ -412,7 +419,11 @@ console.log("OK merged "+f+" (level="+level+", tier1="+n1+", tier2="+n2+")");
 > **STOP if ❌** — fix before continuing. An ABORT means `settings.json` was left
 > EXACTLY as it was: every foreign hook and key intact.
 
-Re-install is a no-op: the same `LEVEL`, the same paths, the same one entry.
+Re-install converges rather than doing nothing: the same `LEVEL`, the same paths, the
+same ONE settings entry — but the copy block above runs unconditionally and overwrites
+`agent-router.mjs` with the current asset. That overwrite is the fix for a stale hook
+body, so re-running install (or UPGRADE, which is this with the level read back) is the
+prescribed repair, never a wasted step.
 
 ---
 
@@ -444,7 +455,7 @@ process.stdout.write(lv);
    with the current one and `node --check`s it.
 3. Re-run the **EXECUTE config write** block from *Config* — with `LEVEL` unchanged it
    only adds keys that a newer version introduced and re-stamps `version` /
-   `generated_by` / `last_updated` to the current plugin; `enabled`, `genericTypes`,
+   `content_version` / `generated_by` / `last_updated` to the current plugin; `enabled`, `genericTypes`,
    `neverFlag`, `minScore`, `margin` and `intents` are all preserved as-is.
 4. Re-run the **EXECUTE merge settings** block from *INSTALL* — it strips its own stale
    entries first, so a moved hooks dir converges and the tier-2 judge prompt is
@@ -480,7 +491,9 @@ tier-2 entry ALSO stays wired and keeps costing a model call per spawn: use
 the `CFG=...` line with `ON=1 ` (i.e. `ON=1 CFG="$PWD/..." PJSON="..." node -e '...'`).
 Any other value of `ON`, or no `ON` at all, disables. Re-running either direction is a
 no-op. `RUNBOOK` must be exported here too — this is a config WRITE, so it re-stamps the
-three metadata keys.
+four metadata keys, `content_version` included, and reads that one out of this file's own
+header. It copies NO files: a toggle run after a plugin update leaves an old
+`agent-router.mjs` in place while raising the config's `version`. Run `UPGRADE` for the file.
 ```
 SRC="$(dirname "$RUNBOOK")"
 CFG="$PWD/.claude/brewtools/agent-router.json" PJSON="$SRC/../../../.claude-plugin/plugin.json" node -e '

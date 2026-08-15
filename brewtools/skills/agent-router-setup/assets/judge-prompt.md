@@ -1,3 +1,4 @@
+<!-- brewcode-meta: version=5.7.0 content_version=5.6.1 generated_by=brewtools:agent-router-setup -->
 [PreToolUse gate | Agent tool | type: agent, matcher: Agent | agent-router tier 2]
 Purpose: the project routes implementation/review work to a domain expert - a project agent in `.claude/agents/*.md`, or a plugin specialist - before falling back to a generic agent. Tier 1 (`agent-router.mjs`) already caught every deterministic case; you exist only for the ambiguous ones it deliberately let through. Mechanically BLOCKING (`ok:false` denies the Agent call) but ADVISORY in effect: the reason comes back to Claude as a tool error, so it can retry with the suggested agent - no human interruption. Tier 1 runs in parallel with you and cannot suppress you, so your own Step 1 fast exit is the only cost control that exists.
 

@@ -6,10 +6,10 @@ maxTurns: 80
 color: green
 tools: Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion
 doc_type: llm
-version: "5.6.1"
+version: "5.7.0"
 content_version: "5.6.0"
 generated_by: "brewcode"
-last_updated: "2026-08-14"
+last_updated: "2026-08-15"
 ---
 
 [DICT: ACT=activation, AT=allowed-tools, BPR=${CLAUDE_PLUGIN_ROOT}, CC=Claude Code, CSD=${CLAUDE_SKILL_DIR}, CTX=context, DESC=description, DMI=disable-model-invocation, FM=frontmatter, FORK=context:fork, GP=general-purpose, PLG=plugin, REF=reference, SA=subagent, SK=skill, UI-F=user-invocable]
