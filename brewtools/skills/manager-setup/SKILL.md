@@ -29,7 +29,7 @@ model: sonnet
 > ```
 > node <ABS project root>/.claude/brewtools/manager/manager-state.mjs set hard=false
 > ```
-> The guard exempts it only when ALL of these hold: the command starts with `node `, the FIRST argument after `node` **resolves (realpath) to the helper this project actually installed** — `<root>/.claude/brewtools/manager/manager-state.mjs`, or the plugin's own `hooks/lib/manager-state.mjs` next to the guard — there is no shell operator outside quotes, no `$` expansion, no eval flag (`-e`/`--eval`/`-p`/`--print`/`--input-type`/`--require`/`--import`/`--loader`), and the remaining arguments are the helper's own CLI (`get` | `set hard=<true|false> level=<strict|balanced> [--cwd DIR]`). **No `BT_ROOT=` prelude, no `&& echo`, no `|| echo`, no `test -f` — every one of those is a shell operator and turns the exemption OFF.** A file merely *named* `manager-state.mjs` elsewhere on disk is NOT exempt: the anchor is the absolute installed path, not the filename or a path suffix. `install`/`upgrade` copy the helper into the project precisely so this command needs no path resolution.
+> The guard exempts it only when ALL of these hold: the command starts with `node `, the FIRST argument after `node` **resolves (realpath) to the helper this project actually installed** — `<root>/.claude/brewtools/manager/manager-state.mjs`, or the plugin's own `hooks/lib/manager-state.mjs` next to the guard — there is no shell operator outside quotes, no `$` expansion, no eval flag (`-e`/`--eval`/`-p`/`--print`/`--input-type`/`--require`/`--import`/`--loader`), and the remaining arguments are the helper's own CLI (`get` | `set hard=<true|false> level=<strict|balanced> mcpAllow=<mcp__srv__tool[,...]|> [--cwd DIR]`). **No `BT_ROOT=` prelude, no `&& echo`, no `|| echo`, no `test -f` — every one of those is a shell operator and turns the exemption OFF.** A file merely *named* `manager-state.mjs` elsewhere on disk is NOT exempt: the anchor is the absolute installed path, not the filename or a path suffix. `install`/`upgrade` copy the helper into the project precisely so this command needs no path resolution.
 
 ## What the guard actually enforces (read this before you need it)
 
@@ -40,12 +40,15 @@ model: sonnet
 | Fail-closed | An unparseable PreToolUse payload, an internal guard error, or an installed manager directory whose `state.json` is missing/corrupt all DENY the main session (at `strict` semantics) instead of passing through. Subagents still pass. |
 | `balanced` Bash | A strict allowlist of exact binaries (`ls cat pwd which head tail wc grep rg date whoami basename dirname realpath test [ jq echo find git gh node`) plus per-binary flag vetting: `rg --pre/--pre-glob/--search-zip`, `find -exec/-ok/-delete/-fprint*`, `git -c/--exec-path/--upload-pack/--ext-diff`, and `node` anything other than `--check` are DENIED. `env` is not on the list at all — it is a universal exec wrapper. Any `>`/`<` redirection, `$(...)` or backtick anywhere denies the whole command. |
 | `strict` Bash | Everything above is denied too; only the exempt state CLI runs. |
-| MCP | Classified on the tool segment after the second `__`, so a server named `search` cannot launder `mcp__search__destroy_all`. Unrecognised verb → denied. |
+| MCP | Classified on the tool segment after the second `__`, so a server named `search` cannot launder `mcp__search__destroy_all`. Default-deny per token: an unrecognised verb **or noun** → denied, and an ambiguous verb (`query`/`resolve`) reads ONLY inside a docs/reference name (`query-docs`, `resolve-library-id`), so `mcp__sqlite__query`, `mcp__sqlite__query_table` and `mcp__linear__resolve_issue` are all denied — those write on a DB server or tracker. `mcpAllow` is the escape hatch. |
+| `mcpAllow` | Optional state key, the escape hatch for a false MCP denial. Entries are an exact scoped name `mcp__server__tool` or a whole-server prefix `mcp__server__*`; consulted BEFORE the classifier and at **`balanced` ONLY** — `strict` denies all MCP, allowlisted or not. A malformed value allows nothing and never breaks state. |
 
 **Recovery, in order of preference.**
 1. `node <ABS root>/.claude/brewtools/manager/manager-state.mjs set hard=false` — works at every level, including when `state.json` is corrupt (it rewrites the file).
-2. Delegate: `Task` is always allowed and subagents are unwalled, so a subagent can run `/brewtools:manager-setup upgrade` or repair state for you.
-3. Two residual cases need action OUTSIDE the session, and there is no in-session workaround — do not go hunting for one:
+2. A genuinely read-only MCP tool denied by the classifier — allowlist it (`balanced` only), same self-exempt command shape, quote the value so the shell keeps `*`:
+   `node <ABS root>/.claude/brewtools/manager/manager-state.mjs set 'mcpAllow=mcp__semble_code__*,mcp__github__get_file'` — the list is replaced wholesale, one invalid entry writes nothing (exit 2), and `set 'mcpAllow='` clears it.
+3. Delegate: `Task` is always allowed and subagents are unwalled, so a subagent can run `/brewtools:manager-setup upgrade` or repair state for you.
+4. Two residual cases need action OUTSIDE the session, and there is no in-session workaround — do not go hunting for one:
    - Claude Code changes the PreToolUse payload shape so the guard cannot parse it. Every main-session mutation is then denied. Fix: quit and delete the `brewtools-manager-guard` entry from `.claude/settings.local.json` in an editor.
    - Deleting the whole `.claude/brewtools/` tree disarms the wall (no manager directory = never installed). That is the documented consequence of a manual `rm -rf`, not a way to disable the wall — use `disable` or `uninstall`, which keep settings and files consistent.
 
@@ -103,7 +106,7 @@ under the codewords contract); `manager-run`/`inline-run` touch only the codewor
 
 | Thing | Scope | Files |
 |-------|-------|-------|
-| **Wall state** `{hard, level}` (runtime kill-switch) | **PROJECT ONLY** | `<cwd>/.claude/brewtools/manager/state.json` |
+| **Wall state** `{hard, level}` + optional `mcpAllow` (runtime kill-switch) | **PROJECT ONLY** | `<cwd>/.claude/brewtools/manager/state.json` |
 | **Wall registration** (persistent plumbing) | **PROJECT ONLY** | `<cwd>/.claude/settings.local.json` (PreToolUse `*` entry) + copied guard `<cwd>/.claude/brewtools/manager/hardmode-guard.mjs` |
 | Soft default `mode` field (informational) | project state | same `state.json` |
 | **Prompt-text overrides** (`edit`/`purge`) | project **or** global (separate files) | project: `<cwd>/.claude/brewtools/manager/prompts/<mode>.md` · global: `~/.claude/manager/prompts/<mode>.md` |
@@ -122,7 +125,7 @@ test -f "$BT_ROOT/hooks/lib/manager-state.mjs" || { echo "❌ BT_ROOT invalid: $
 ```
 
 Paths (use `$BT_ROOT` literally in Bash):
-- State helper: `$BT_ROOT/hooks/lib/manager-state.mjs` — exports `resolveState`, `writeState`, `resolveStatePath`; also a CLI: `node <path>/manager-state.mjs get|set hard=<true|false> level=<strict|balanced> [--cwd DIR]`
+- State helper: `$BT_ROOT/hooks/lib/manager-state.mjs` — exports `resolveState`, `writeState`, `resolveStatePath`; also a CLI: `node <path>/manager-state.mjs get|set hard=<true|false> level=<strict|balanced> mcpAllow=<mcp__srv__tool[,...]|> [--cwd DIR]`
 - Prompt helper: `$BT_ROOT/hooks/lib/manager-prompts.mjs` — exports `resolvePrompt`, `resolvePromptPath`
 - **Guard source (shipped, self-contained, NOT in plugin `hooks.json`):** `$BT_ROOT/hooks/hardmode-guard.mjs` — `install`/`upgrade` copy this into the project
 - Plugin default blocks: `$BT_ROOT/skills/manager-setup/references/<mode>.md` (`full.md`, `planmode.md`)
@@ -138,7 +141,7 @@ Project install targets (resolved from `process.cwd()`):
 | What | project | → global | → default |
 |------|---------|----------|-----------|
 | State `mode` (informational) | `<cwd>/.claude/brewtools/manager/state.json` | `~/.claude/manager/state.json` | `mode:'full'` |
-| Wall flags `{hard, level}` | `<cwd>/.claude/brewtools/manager/state.json` | (no global — PROJECT-ONLY) | `{hard:false, level:'balanced'}` |
+| Wall flags `{hard, level, mcpAllow}` | `<cwd>/.claude/brewtools/manager/state.json` | (no global — PROJECT-ONLY) | `{hard:false, level:'balanced', mcpAllow:[]}` |
 | Prompt text `<mode>` | `<cwd>/.claude/brewtools/manager/prompts/<mode>.md` | `~/.claude/manager/prompts/<mode>.md` | `$BT_ROOT/skills/manager-setup/references/<mode>.md` |
 
 > The wall flags (`hard`/`level`) are resolved **PROJECT-ONLY in code** — the global `state.json` does NOT enable the wall. The skill writes them to **project** scope only. (The informational `mode` field may still resolve from global; `hard`/`level` do not.)

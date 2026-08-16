@@ -90,8 +90,19 @@ because it cannot mutate the workspace on its own.
 |--------|--------|--------------------|
 | `Bash` | Fully OFF — every command denied | Read-only classifier — allow inspection commands, deny mutation |
 | `WebSearch` | OFF | ON |
-| MCP-read | Only explicitly-allowed servers | Heuristic allow (read-shaped tool names) |
+| MCP-read | Denied — no MCP at all, `mcpAllow` is ignored here | Heuristic allow (read-shaped tool names), plus anything in `mcpAllow` |
 | MCP-write | Denied | Denied |
+
+### `mcpAllow` — the escape hatch for a false MCP denial
+
+| Fact | Detail |
+|------|--------|
+| Where | Optional `mcpAllow: string[]` in project `state.json`; consulted before the classifier, at `balanced` ONLY |
+| Entry forms | Exact scoped name `mcp__server__tool`, or whole-server prefix `mcp__server__*`. Nothing else — a bare `mcp__*` is NOT a form, and is dropped by both the helper CLI and the guard |
+| When you need it | The classifier is default-deny per token, so an unrecognised WRITE verb denies (intended) and so does an unrecognised domain NOUN (`mcp__x__get_widgets`) — the latter is the false-denial case this key exists for. An ambiguous verb (`query`/`resolve`) denies unless the rest of the name is purely docs/reference (`query-docs`, `resolve-library-id`), so `mcp__sqlite__query`, `mcp__sqlite__query_table` and `mcp__linear__resolve_issue` all deny on purpose: allowlist one only if that server's `query` really cannot write |
+| Set | `node <ABS root>/.claude/brewtools/manager/manager-state.mjs set 'mcpAllow=mcp__semble_code__*,mcp__github__get_file'` — quote it (the shell would eat `*`); self-exempt at every level |
+| Clear | same command with `set 'mcpAllow='` |
+| All-or-nothing | One invalid entry → exit 2, nothing written; a malformed stored value allows nothing and does not count as broken state |
 
 ### balanced — Bash read-only classifier
 
@@ -248,5 +259,5 @@ prompt source: full=<default|project|global>  planmode=<default|project|global>
 ```
 
 Allowlist one-liners:
-- `balanced`: read-only Bash (git status/log/diff, ls, cat, pwd, which, gh list/view), WebSearch ON, MCP-read heuristic, all mutation denied.
-- `strict`: no Bash at all, WebSearch OFF, MCP only explicit-allow, all mutation denied.
+- `balanced`: read-only Bash (git status/log/diff, ls, cat, pwd, which, gh list/view), WebSearch ON, MCP-read heuristic + `mcpAllow`, all mutation denied.
+- `strict`: no Bash at all, WebSearch OFF, no MCP at all (`mcpAllow` ignored), all mutation denied.

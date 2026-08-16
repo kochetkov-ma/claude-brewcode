@@ -621,6 +621,51 @@ IG_EXAMPLES
   echo "INTENT_GUARD: CREATED $IG_PATH"
 }
 
+# ── emit: sweep per-stack references left by an EARLIER emit ────────────────────
+# Emit writes only the SELECTED $STACK_REF and never replaces $TARGET wholesale (uninstall reports foreign
+# files in there as KEPT), so switching stacks — python.md then go.md — used to leave BOTH refs installed
+# forever, with the abandoned one restamped by every later upgrade as though it were current.
+# Ownership is read off the file, never off a historical name list: every emitted reference carries the
+# QUOTED `generated_by: "$GENERATED_BY"` as its OWN key line inside the LEADING `---` frontmatter block
+# (validate_emit enforces that spelling). The match is anchored to that structural position, because a user
+# file that merely MENTIONS the marker in its body is a user file - matching the string anywhere in a head
+# window deleted it. A file without the key is a user file and is left alone. Scope is $TARGET_REFS only —
+# SKILL.md and the parked SKILL.md.disabled are top-level and stay outside this sweep.
+# The file is read by redirect, never through a pipeline: a pipe would risk a pipefail/SIGPIPE abort.
+_ref_is_owned() {
+  _fm=0
+  while IFS= read -r _fl || [ -n "$_fl" ]; do
+    _fm=$((_fm + 1))
+    if [ "$_fm" = 1 ]; then
+      [ "$_fl" = "---" ] || return 1
+      continue
+    fi
+    case "$_fl" in
+      "---") return 1 ;;
+      "generated_by: \"$GENERATED_BY\""|"generated_by: \"$GENERATED_BY\" "*) return 0 ;;
+    esac
+    [ "$_fm" -lt 20 ] || return 1
+  done < "$1"
+  return 1
+}
+
+_sweep_stale_refs() {
+  [ -d "$TARGET_REFS" ] || return 0
+  _keep="$STACK_REF"
+  for _r in $(_emit_rels); do
+    case "$_r" in references/*) _keep="$_keep ${_r#references/}" ;; esac
+  done
+  for _sf in "$TARGET_REFS"/*; do
+    [ -f "$_sf" ] || continue
+    _sb="$(basename "$_sf")"
+    case " $_keep " in *" $_sb "*) continue ;; esac
+    if _ref_is_owned "$_sf"; then
+      rm -f "$_sf"
+      echo "🔄 removed stale per-stack reference from an earlier emit: $_sf"
+    fi
+  done
+}
+
 # ── emit-agent: intent-guard ONLY (no superreview skill involved) ───────────────
 emit_agent_only() {
   write_intent_guard
@@ -659,6 +704,8 @@ emit_skill() {
   else
     echo "⚠️ stack reference not found: $REFS/$STACK_REF (emitted without per-stack doc)"
   fi
+
+  _sweep_stale_refs
 
   # Pristine template copies — the ONLY thing that lets a later `upgrade` separate a real template change from
   # the Phase 3 tailoring these emitted files are about to receive.

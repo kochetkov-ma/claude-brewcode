@@ -36,19 +36,21 @@ export function getPluginVersion(): string {
   if (cachedVersion !== undefined) return cachedVersion;
 
   try {
-    const pluginJson = JSON.parse(
+    const pluginJson: { version?: string } = JSON.parse(
       readFileSync(resolve(process.cwd(), '../../brewcode/.claude-plugin/plugin.json'), 'utf-8'),
     );
-    cachedVersion = pluginJson.version;
-    return cachedVersion;
+    if (pluginJson.version) {
+      cachedVersion = pluginJson.version;
+      return pluginJson.version;
+    }
   } catch {
     // Docker builds cannot access the plugin directory outside the build context
   }
 
-  const envVersion = import.meta.env.PUBLIC_VERSION;
+  const envVersion: string | undefined = import.meta.env.PUBLIC_VERSION;
   if (envVersion) {
     cachedVersion = envVersion;
-    return cachedVersion;
+    return envVersion;
   }
 
   console.warn('Plugin version unavailable: filesystem read failed and PUBLIC_VERSION env var is not set');

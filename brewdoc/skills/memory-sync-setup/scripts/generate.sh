@@ -48,6 +48,26 @@ TARGET=".claude/skills/memory-sync"
 TARGET_REFS="$TARGET/references"
 EMITTED_REFS="memory-guide.md agent-audit.md hard-sync.md"
 EMITTED_N=3
+# The parked name of SKILL.md (see enable/disable). Declared here, next to the rest of the owned set,
+# because `emit`'s guard has to see it - a disabled install is still an install.
+DISABLED_MARK="$TARGET/SKILL.md.disabled"
+
+# Every artifact of an existing install that is present on disk, one rel path per line; empty output
+# means nothing is installed. This is the ONE question `emit` asks before writing. Keying that guard on
+# SKILL.md alone was the defect: a PARKED install (SKILL.md renamed to SKILL.md.disabled) looked absent,
+# so emit ran and its whole-dir replace destroyed the parked body with every SELF-SYNC hand-edit in it.
+_live_artifacts() {
+  for _rel in SKILL.md SKILL.md.disabled; do
+    [ -f "$TARGET/$_rel" ] && printf '%s\n' "$_rel"
+  done
+  for _r in $EMITTED_REFS; do
+    [ -f "$TARGET_REFS/$_r" ] && printf '%s\n' "references/$_r"
+  done
+  return 0
+}
+
+# The same set as one space-separated line, for messages and `[ -n ]` tests.
+_live_artifact_list() { _live_artifacts | tr '\n' ' ' | sed 's/[[:space:]]*$//'; }
 
 # Provenance lives in the emitted SKILL.md's YAML FRONTMATTER (the artifact-metadata standard):
 # doc_type / version / content_version / generated_by / last_updated, then the skill-specific surface_files.
@@ -392,9 +412,12 @@ _subst() {
 }
 
 # ── emit ────────────────────────────────────────────────────────────────────────
-# ATOMIC: the whole tree is built in a staging dir on the SAME filesystem and renamed into place last.
-# A failure half-way therefore leaves NO partial install - which matters because the refusal guard keys
-# on SKILL.md, and a stray one would push the user to MEMORY_SYNC_FORCE=1 (the flag that destroys edits).
+# STAGED: the whole tree is built in a staging dir on the SAME filesystem, and only once every file is
+# generated does anything move into the target - as individual renames of the 4 OWNED paths. A failure
+# half-way therefore leaves NO half-generated install, which matters because a stray one would push the
+# user to MEMORY_SYNC_FORCE=1 (the flag that destroys edits). What emit must NEVER do is replace the
+# directory wholesale: `uninstall` explicitly reports foreign files in it as KEPT, and a `rm -rf $TARGET`
+# on the next emit deleted exactly those.
 # Every write on the emit path routes its failure here: under `set -e` a bare `mktemp`/`cp`/redirect
 # failure would abort BEFORE the guard below and the user would never see the friendly message.
 _emit_abort() {
@@ -402,12 +425,49 @@ _emit_abort() {
   exit 1
 }
 
+# Selective placement removes only the CURRENT $EMITTED_REFS, so a reference an OLDER version emitted
+# under a different name would linger forever - the whole-directory `rm -rf $TARGET` used to sweep it.
+# Ownership is read off the file itself, never off a historical name list: every emitted reference carries
+# `generated_by=$META_GENERATED_BY` in its brewcode-meta provenance comment, which is ALWAYS line 1. The match
+# is anchored to that position and to the `<!-- brewcode-meta:` opener, because a user file that merely MENTIONS
+# the marker in its prose is a user file - matching the string anywhere in a head window deleted it. The trailing
+# space keeps `...-setup-x` from passing as `...-setup`. Scope is $TARGET_REFS only - SKILL.md and the parked
+# SKILL.md.disabled are top-level and already guarded by the park refusal above.
+# `head` is read into a variable with no pipeline on purpose: a pipe would risk a pipefail/SIGPIPE abort.
+_sweep_stale_refs() {
+  [ -d "$TARGET_REFS" ] || return 0
+  for _sf in "$TARGET_REFS"/*; do
+    [ -f "$_sf" ] || continue
+    _sb=$(basename "$_sf")
+    case " $EMITTED_REFS " in *" $_sb "*) continue ;; esac
+    _shead=$(head -1 "$_sf" 2>/dev/null) || continue
+    case "$_shead" in
+      "<!-- brewcode-meta:"*"generated_by=$META_GENERATED_BY "*)
+        rm -f "$_sf" || _emit_abort
+        echo "🔄 removed stale artifact from an older version: $_sf"
+        ;;
+    esac
+  done
+}
+
 emit_skill() {
   echo "=== memory-sync-setup: emit ==="
   validate_templates
 
-  if [ -f "$TARGET/SKILL.md" ] && [ "${MEMORY_SYNC_FORCE:-0}" != "1" ]; then
-    echo "❌ FAILED: memory-sync is already installed at $TARGET/SKILL.md"
+  # A PARKED install refuses UNCONDITIONALLY - MEMORY_SYNC_FORCE=1 means "overwrite the LIVE install",
+  # never "silently regenerate over a body the user deliberately took out of the roster". `enable` is one
+  # command away and makes the intent explicit.
+  if [ -f "$DISABLED_MARK" ]; then
+    echo "❌ FAILED: memory-sync is PARKED at $DISABLED_MARK - it is installed, just disabled"
+    echo "   $DISABLED_MARK holds the body and every SELF-SYNC hand-edit."
+    echo "   Run \`generate.sh enable\` to bring it back (then \`upgrade\`, or MEMORY_SYNC_FORCE=1 emit),"
+    echo "   or \`generate.sh uninstall\` / \`purge\` to remove it first. Nothing was written."
+    exit 1
+  fi
+
+  _installed="$(_live_artifact_list)"
+  if [ -n "$_installed" ] && [ "${MEMORY_SYNC_FORCE:-0}" != "1" ]; then
+    echo "❌ FAILED: memory-sync is already installed at $TARGET/ - live artifact(s): $_installed"
     echo "   Use the AI-driven \`upgrade\` mode to refresh it (hand-edits preserved), or"
     echo "   \`generate.sh status\` to see its drift. MEMORY_SYNC_FORCE=1 overwrites and DESTROYS hand-edits."
     exit 1
@@ -425,7 +485,14 @@ emit_skill() {
   _stamp_frontmatter "$_stage/SKILL.md" || _emit_abort
   for r in $EMITTED_REFS; do cp "$REFS/$r" "$_stage/references/$r" || _emit_abort; done
 
-  { rm -rf "$TARGET" && mv "$_stage" "$TARGET"; } || _emit_abort
+  # Selective placement: only the 4 paths this generator owns are removed and re-created. Anything else
+  # in $TARGET (user notes, a foreign reference, an unrelated subdir) is never touched.
+  mkdir -p "$TARGET_REFS" || _emit_abort
+  rm -f "$TARGET/SKILL.md" || _emit_abort
+  for r in $EMITTED_REFS; do rm -f "$TARGET_REFS/$r" || _emit_abort; done
+  mv "$_stage/SKILL.md" "$TARGET/SKILL.md" || _emit_abort
+  for r in $EMITTED_REFS; do mv "$_stage/references/$r" "$TARGET_REFS/$r" || _emit_abort; done
+  _sweep_stale_refs
   rm -rf "$_bd"; _bd=""
 
   echo "✅ $TARGET/SKILL.md ($(awk 'END { print NR }' "$TARGET/SKILL.md") lines, stamped v$VERSION)"
@@ -771,8 +838,8 @@ status_report() {
 # Claude Code discovers a project skill only through <dir>/SKILL.md. Parking that ONE file as
 # SKILL.md.disabled withdraws /memory-sync from the roster while the emitted references AND every
 # hand-edit the skill accumulated through its SELF-SYNC phase stay byte-identical on disk. Fully
-# reversible, nothing regenerated, no provenance stamp touched.
-DISABLED_MARK="$TARGET/SKILL.md.disabled"
+# reversible, nothing regenerated, no provenance stamp touched. ($DISABLED_MARK is declared at the top,
+# with the rest of the owned path set, because `emit`'s guard needs it too.)
 
 toggle_skill() {
   _want="$1"   # enable | disable
@@ -867,7 +934,9 @@ case "$MODE" in
     echo "Usage: generate.sh <scan|emit|validate|restamp|status|enable|disable|uninstall|purge>   (default: emit)"
     echo "  scan      read-only surface report + derived DEFAULT_BRANCH= / GIT_VISIBILITY= / MEMORY_DIR= /"
     echo "            TRACKER_NOTE= / SURFACE_COUNTS= / PROJECT_NAME= for pass-back to emit"
-    echo "  emit      atomically write $TARGET (refuses to overwrite; MEMORY_SYNC_FORCE=1 overrides)"
+    echo "  emit      write the 4 owned paths under $TARGET, staged (other files in that dir survive);"
+    echo "            refuses over a live install (MEMORY_SYNC_FORCE=1 overrides) and over a PARKED one"
+    echo "            (no override - run \`enable\`, \`uninstall\` or \`purge\` first)"
     echo "  validate  fail on unresolved {PLACEHOLDER}, missing file, broken reference, missing/stale provenance frontmatter"
     echo "  restamp   refresh ONLY the provenance keys of an installed SKILL.md (version/last_updated/"
     echo "            surface_files, + doc_type/generated_by when absent) and drop a pre-5.0 tail stamp."

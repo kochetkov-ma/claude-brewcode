@@ -1,0 +1,158 @@
+---
+title: "Context Slim"
+description: "Cuts the token weight of everything permanently loaded into Claude's context - CLAUDE.md, rules, agent bodies, memory - with lossless dedup and compression."
+order: 3131
+---
+import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+
+# context-slim — shrink the permanent context surface
+
+<Callout type="caution">
+**Everything that always loads costs tokens on every single turn.** Project and global `CLAUDE.md`, `rules/*.md`, `.claude/convention/*`, `AGENTS.md`, memory files, and agent `description:` fields sit at whatever weight the scan reports for this machine — plus a separate cost per subagent spawn for agent bodies and per invocation for skill bodies. That weight only grows as rules accumulate, and nothing in Claude Code trims it automatically; run `measure` for the live per-tier numbers on your own tree.
+</Callout>
+
+<Callout type="tip">
+**Three levers, one command, nothing lost silently.** `/brewtools:context-slim` cross-layer dedups repeated facts, strips default LLM knowledge that never needed stating, and runs deep per-file compression — while every exact value, path, version pin, and `!=` prohibition survives byte-exact or the whole run rolls back and reports FAILED.
+</Callout>
+
+## Quick reference
+
+| Field | Value |
+|-------|-------|
+| Command | `/brewtools:context-slim` |
+| Arguments | `[prompt] [measure\|preview\|slim\|hard\|bodies\|restore] [--target=N%] [--global] [--memory] [--noask] [ts]` |
+| Model | opus |
+| Context | session |
+| Tools | Read, Edit, Write, Bash, Grep, Glob, Agent, AskUserQuestion |
+
+## What it does
+
+The skill treats the entire permanent context surface as one object instead of editing files one at a time. It scans three tiers — always-on, per-spawn (agent bodies), per-invocation (skill bodies) — then applies the three levers above: cross-layer dedup, default-knowledge removal, deep per-file compression.
+
+A bare invocation only measures and reports — it never writes. Mutation happens only in `slim`, `hard`, and `bodies` modes, and only after a byte-exact snapshot exists and a clean git tree is confirmed for the project layer — that gate does not apply to the global layer. `restore` mutates too, but it IS the rollback path: it has no snapshot-then-verify pass of its own, it puts a prior snapshot back.
+
+Every mutating run ends in a hard verify: mechanical checksum plus an independent semantic checker re-reads every dropped fact against its survivor. A single miss anywhere rolls back the entire run, both layers, and the run is reported FAILED — never a partial keep.
+
+## When to use
+
+- **CLAUDE.md keeps growing** — measure first to see exactly which tier is heaviest before deciding to compress
+- **Onboarding a new machine or repo** — check what the always-on surface actually costs before adding more rules
+- **Rules duplicate across files** — cross-layer dedup finds facts repeated between project and global layers
+- **Skill or agent bodies feel bloated** — `bodies` mode extends scope to `SKILL.md` and `references/*.md`, which are normally excluded
+- **A prior slim pass wasn't aggressive enough** — an unmet `--target` triggers the same lossy-pass confirmation in any mutating mode; `hard` just lets that pass cut further once approved
+- **Something broke after a compression run** — `restore` reverts to the exact pre-edit snapshot
+
+## Modes
+
+| Mode | What it does | Mutates? |
+|------|---------------|----------|
+| `measure` | Scans and reports token weight per tier and file. Default when arguments are empty | no |
+| `preview` | Runs discovery through the dedup analysis and prints the projected plan and token delta | no |
+| `slim` | Full lossless compression: dedup, default-knowledge removal, per-file rewrite, verify | yes |
+| `hard` | Same as `slim`; when a `--target` isn't met losslessly, the escalation gate (which fires in any mutating mode) is allowed to cut further | yes, destructive |
+| `bodies` | Extends scope to `SKILL.md` and `references/*.md` (normally opt-in only). Combine with `preview`/`slim`/`hard`, or alone it means `bodies` + `slim` | yes |
+| `restore` | Reverts to a prior snapshot — `last`, a timestamp from `list`, or `--run-dir` | yes, destructive |
+
+## Examples
+
+```bash
+# Bare invocation — measure only, no writes, no questions asked
+/brewtools:context-slim
+
+# Russian-language prompt — resolved to slim mode from keywords
+/brewtools:context-slim сожми контекст, почисти дубли в правилах
+
+# Target ratio, including the global layer (asks for confirmation on the global write)
+/brewtools:context-slim slim --target=30% --global
+
+# Restore the most recent run across every layer it touched
+/brewtools:context-slim restore last
+```
+
+## Flow
+
+<Steps>
+  <li>
+    <div>
+      <strong>Phase 0 — resolve mode and scope</strong>
+      <p>Parses the free-form prompt for an explicit mode token or keyword score, applies flags (<code>--target</code>, <code>--global</code>, <code>--memory</code>, <code>--noask</code>), and asks at most one <code>AskUserQuestion</code> — only when the answer changes what gets written. <code>measure</code> and <code>--noask</code> skip this entirely; destructive-mode and global-write confirmations always fire regardless.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Phase 1 — discover and measure</strong>
+      <p>Runs <code>context-scan.sh</code> over the resolved scope, producing per-tier and per-file token counts. Prints the mandatory PLAN block with real paths and real counts. <code>measure</code> stops here.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Phase 2 — snapshot (fail-closed)</strong>
+      <p>Copies every target byte-exact into a timestamped run directory under <code>~/.claude/backups/</code>, one directory per layer. The project layer requires a clean git tree first — a dirty tracked target refuses the run and names the exact paths to commit or stash.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Phase 3 — cross-layer dedup analysis</strong>
+      <p>Orchestrator-only barrier: a mechanical prefilter over exact and near-duplicate content, followed by an LLM judgment pass on candidate pairs. Produces a per-file drop/keep decision list. <code>preview</code> stops here and prints the projected delta.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Phase 4 — per-file compression</strong>
+      <p>Spawns one <code>brewtools:text-optimizer</code> subagent per file, all in a single message, each carrying only its own file's decision rows. The skill's own directory is unconditionally excluded from every fan-out at every depth.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Phase 5 — verify (barrier)</strong>
+      <p>Mechanical checksum verify per layer, then an independent read-only checker subagent re-confirms every dropped fact is still present or provably merged into its survivor. Any miss anywhere rolls back the entire run, every layer, and the run reports FAILED.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Phase 6 — re-measure and escalation gate</strong>
+      <p>Re-scans the same scope and compares against phase 1. A met or absent <code>--target</code> moves straight to phase 7. An unmet target on a virgin surface reports the shortfall without asking; on a surface with prior ratchet state, it asks once whether to approve a lossy pass.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Phase 7 — ratchet state and report</strong>
+      <p>Writes <code>.claude/brewtools/context-slim/state.json</code> with before/after tokens, achieved ratio, and the drop ledger, then prints the full report: per-tier token table, drop ledger, contradictions found, advisory rows for untouched surfaces, and the escalation outcome.</p>
+    </div>
+  </li>
+</Steps>
+
+## Safety and rollback
+
+Every mutating run is snapshotted before a single byte is written. The project layer's snapshot is gated on a clean git tree over the target files — untracked or git-ignored files are still snapshotted (`SNAPSHOT-ONLY`, never refused) since git has no pre-state to fall back on for those. The global layer, when in scope, gets its own snapshot under `~/.claude/backups/<ts>-global_context-slim/`, separate from the project run directory, so a same-second collision across layers can't happen.
+
+Verification (see above) is what makes this rollback exact — same whole-run-or-nothing guarantee, both layers.
+
+To undo any run:
+
+```bash
+/brewtools:context-slim restore last
+```
+
+## What it never touches
+
+| Surface | Handling |
+|---------|----------|
+| MCP servers | Signal only — reported as advice in the final report, never mutated |
+| Plugin enablement | Signal only — reported as advice, never mutated |
+| `settings.json` | Signal only — reported as advice, never mutated |
+| `~/.claude/plugins/cache/**` | Read for signals, never written |
+
+<CardGrid>
+  <Card title="Text Optimize" icon="brain" href="/brewtools/skills/text-optimize/">
+    The per-file compression subagent context-slim fans out to in phase 4.
+  </Card>
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/context-slim">
+    Source code, scripts, and the full decision-rule reference set.
+  </Card>
+  <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">
+    All brewtools skills — text, secrets, SSH, deploy, plugin management.
+  </Card>
+</CardGrid>
+
+<UpdateNotice />

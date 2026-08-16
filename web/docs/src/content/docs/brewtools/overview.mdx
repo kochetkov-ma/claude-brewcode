@@ -59,6 +59,10 @@ Install the entire suite:
     Configure alternative API providers — DeepSeek V4 (priority), Z.ai/GLM, Qwen, MiniMax, OpenRouter.
     Shell aliases in &#126;/.zshrc, one-command switching, validated model selection.
   </Card>
+  <Card title="context-slim" icon="zap" href="/brewtools/skills/context-slim/">
+    Compresses everything that permanently enters the LLM context -- CLAUDE.md, rules, agent
+    descriptions, hooks, memory -- via cross-layer dedup and per-file compression.
+  </Card>
   <Card title="agent-deadline-setup" icon="clock" href="/brewtools/skills/agent-deadline-setup/">
     Soft wall-clock budget for subagents -- warns at 80% of the budget,
     blocks non-finalizing tools past 100% so the report survives.
@@ -95,6 +99,7 @@ Install the entire suite:
 | [`/brewtools:deploy`](/brewtools/skills/deploy/) | GitHub Actions deployment, CI/CD | opus | `<prompt describing what to do>` |
 | [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/) | Check and update the full brewcode plugin suite | sonnet | `[check\|update\|all]` |
 | [`/brewtools:provider-switch`](/brewtools/skills/provider-switch/) | Configure alternative API providers | opus | `[status\|install\|verify\|model-check\|help\|<provider>]` |
+| [`/brewtools:context-slim`](/brewtools/skills/context-slim/) | Compress everything that permanently enters the LLM context | opus | `[prompt] [measure\|preview\|slim\|hard\|bodies\|restore] [--target=N%] [--global] [--memory] [--noask] [ts]` |
 | [`/brewtools:agent-deadline-setup`](/brewtools/skills/agent-deadline-setup/) | Install a soft wall-clock budget for subagents | sonnet | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [project\|global] [minutes]` |
 | [`/brewtools:agent-return-setup`](/brewtools/skills/agent-return-setup/) | Cap the size of every subagent's final return message | sonnet | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [project\|global] [pass] [file]` |
 | [`/brewtools:agent-router-setup`](/brewtools/skills/agent-router-setup/) | Route a generic subagent spawn to the real expert (experimental) | sonnet | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [level fast\|strict]` |
@@ -153,6 +158,7 @@ brewtools/
 │   ├── deploy/                  # GitHub Actions deployment
 │   ├── plugin-update/           # Check, install, and update plugin suite
 │   ├── provider-switch/         # Alternative API provider management
+│   ├── context-slim/            # Permanent-context compression
 │   ├── agent-deadline-setup/    # Soft wall-clock budget for subagents
 │   ├── agent-return-setup/      # Size budget on every subagent's final return
 │   ├── agent-router-setup/      # Generic-spawn router (experimental)

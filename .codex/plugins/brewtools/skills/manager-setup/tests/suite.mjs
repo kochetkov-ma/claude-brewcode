@@ -12,6 +12,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, chmodS
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { parseCliArgs } from '../../../hooks/lib/manager-state.mjs';
 
 const HERE = join(fileURLToPath(import.meta.url), '..');
 const GUARD_MJS = join(HERE, '..', '..', '..', 'hooks', 'hardmode-guard.mjs');
@@ -97,7 +98,21 @@ const WRITE_DENIAL = denial('Hard wall: Write is blocked in the main session —
 const BASH_DENIAL = denial('Hard wall (balanced): only read-only Bash is allowed in the main session — delegate execution to a subagent.');
 const STRICT_BASH_DENIAL = denial('Hard wall (strict): Bash is blocked in the main session — delegate execution to a subagent.');
 const PARSE_DENIAL = denial('Hard wall: the guard could not parse its PreToolUse payload and denies by default.');
-const mcpDenial = (tool) => denial(`Hard wall: MCP tool ${tool} is blocked in the main session — delegate to a subagent.`);
+/**
+ * Reduce a guard response to its BEHAVIOUR: 'allow' | 'deny'. MCP checks assert this rather
+ * than the deny TEXT — a reworded message must never look like a regression, and (worse)
+ * must never be the only thing a "regression guard" was ever detecting. One dedicated check
+ * (67) still asserts what the deny message tells the user.
+ */
+function verdict(res) {
+  if (deepEqual(res, PASS_THROUGH)) return 'allow';
+  const d = res && res.hookSpecificOutput && res.hookSpecificOutput.permissionDecision;
+  return d === 'deny' ? 'deny' : `unexpected:${JSON.stringify(res)}`;
+}
+
+function denyReason(res) {
+  return (res && res.hookSpecificOutput && res.hookSpecificOutput.permissionDecisionReason) || '';
+}
 
 const ARMED = makeProject('armed', { hard: true, level: 'balanced' });
 const DISARMED = makeProject('disarmed', { hard: false, level: 'balanced' });
@@ -431,8 +446,8 @@ check(
 // `search` or `getops` laundered any operation into the read-only bucket.
 check(
   '36-vectorD-server-name-cannot-launder-verb',
-  runGuard(stdin(ARMED, { tool_name: 'mcp__search__destroy_all', tool_input: {} })),
-  mcpDenial('mcp__search__destroy_all'),
+  verdict(runGuard(stdin(ARMED, { tool_name: 'mcp__search__destroy_all', tool_input: {} }))),
+  'deny',
   'the server segment must never decide the classification',
 );
 
@@ -555,6 +570,230 @@ check(
   { code: r4.code, tagLeft: r4.tagLeft, guardOnDisk: r4.guardOnDisk, helperOnDisk: r4.helperOnDisk },
   { code: 1, tagLeft: true, guardOnDisk: true, helperOnDisk: true },
   'a failed delete must roll the settings entry back — never leave a half-guarded project',
+);
+
+// ---- BT-V2-H01 — MCP token classification is default-deny ------------------------------
+// REGRESSION: classification was a read-verb regex minus a write-verb denylist, both
+// unanchored. `search_and_replace` matched `search`, hit no denylisted word and was ALLOWED
+// at balanced. Every name below was reproduced as a pass-through through the real hook
+// before the fix. The rule is now per-token: an unknown token denies on its own.
+
+function mcp(tool, proj = ARMED) {
+  return verdict(runGuard(stdin(proj, { tool_name: tool, tool_input: {} })));
+}
+
+for (const [n, tool, why] of [
+  ['45', 'mcp__codeseeker__search_and_replace', 'a read verb must not launder the write half of a compound name'],
+  ['46', 'mcp__x__search_replace', 'the same compound without a connector token'],
+  ['47', 'mcp__x__list_and_rename', '`rename` is unknown to the safe set and therefore denied'],
+  ['48', 'mcp__x__get_and_apply_patch', '`apply`/`patch` are unknown and deny without being enumerated'],
+]) {
+  check(`${n}-compound-write-verb-is-denied`, mcp(tool), 'deny', why);
+}
+
+for (const [n, tool, why] of [
+  ['49', 'mcp__semble_code__search', 'the plain read verb must survive the tightened classifier'],
+  ['50', 'mcp__semble_code__find_related', 'a read verb plus a neutral noun stays allowed'],
+  ['51', 'mcp__plugin_context7_context7__query-docs', 'hyphen-split tokens of a plugin-scoped server'],
+  ['52', 'mcp__notion__notion-search', 'the server name repeated inside the tool segment is dropped, not judged'],
+  ['53', 'mcp__notion__notion-fetch', 'same, for the second real notion filesystem reader'],
+]) {
+  check(`${n}-readonly-mcp-allowed`, mcp(tool), 'allow', why);
+}
+
+check(
+  '54-strict-denies-readonly-mcp',
+  mcp('mcp__github__get_file', STRICT),
+  'deny',
+  'strict means no MCP at all, however read-only the name looks',
+);
+
+check(
+  '55-malformed-mcp-name-is-denied',
+  mcp('mcp__server'),
+  'deny',
+  'a name with no tool segment has nothing to classify and must deny',
+);
+
+// ---- the mcpAllow escape hatch ---------------------------------------------------------
+
+// The list deliberately carries a THIRD, malformed entry: `mcp__*` is not a scoped name and
+// is rejected by manager-state.mjs, but the guard's runtime filter used to be a bare
+// `startsWith('mcp__')` (BT-V2-M03) and honoured it as a global wildcard.
+const MCP_ALLOW = makeProject('mcp-allow', {
+  hard: true,
+  level: 'balanced',
+  mcpAllow: ['mcp__codeseeker__search_and_replace', 'mcp__trusted__*', 'mcp__*'],
+});
+const MCP_ALLOW_STRICT = makeProject('mcp-allow-strict', {
+  hard: true,
+  level: 'strict',
+  mcpAllow: ['mcp__trusted__*'],
+});
+
+// REGRESSION (was PASS pre-fix as an allow-only assertion, i.e. no guard at all): the exact
+// name must be honoured AND the bogus `mcp__*` sibling entry must launder nothing.
+check(
+  '56-mcpAllow-honours-exact-name-without-honouring-a-bogus-entry',
+  { exact: mcp('mcp__codeseeker__search_and_replace', MCP_ALLOW), viaBogusWildcard: mcp('mcp__anything__destroy_all', MCP_ALLOW) },
+  { exact: 'allow', viaBogusWildcard: 'deny' },
+  'an exact scoped name overrides the heuristic; a malformed `mcp__*` entry is dropped, not treated as allow-all',
+);
+
+check(
+  '57-mcpAllow-server-wildcard-is-allowed',
+  mcp('mcp__trusted__delete_everything', MCP_ALLOW),
+  'allow',
+  'a `mcp__server__*` prefix allows that whole server at balanced',
+);
+
+check(
+  '58-mcpAllow-does-not-apply-at-strict',
+  mcp('mcp__trusted__get_file', MCP_ALLOW_STRICT),
+  'deny',
+  'the escape hatch is balanced-only by design',
+);
+
+check(
+  '59-mcpAllow-unlisted-name-still-denied',
+  mcp('mcp__other__search_and_replace', MCP_ALLOW),
+  'deny',
+  'the list is exact — it must not widen to neighbouring servers',
+);
+
+// The key is optional and unknown to the older shape: reading it must not look like a
+// corrupt state, which would deny EVERY tool with the broken-state reason.
+check(
+  '60-mcpAllow-key-does-not-trip-broken-state',
+  runGuard(stdin(MCP_ALLOW, { tool_name: 'Bash', tool_input: { command: 'git status' } })),
+  PASS_THROUGH,
+  'a state carrying mcpAllow is a valid state — read-only Bash still passes at balanced',
+);
+
+check(
+  '61-malformed-mcpAllow-degrades-to-deny-not-broken',
+  mcp('mcp__x__write_file', makeProject('mcp-allow-bad', { hard: true, level: 'balanced', mcpAllow: 'mcp__x__*' })),
+  'deny',
+  'a non-array mcpAllow allows nothing, and still is not a broken state',
+);
+
+// ---- BT-V2-M01/M02 — ordinary read tools vs ambiguous verbs ----------------------------
+// REGRESSION (M01): default-deny classification denied every filesystem reader whose OBJECT noun was
+// not in the safe set — all seven below were allowed before the classifier landed and were
+// denied by it. Breaking ordinary reads is the one cost the design was meant to avoid.
+for (const [n, tool, why] of [
+  ['62a', 'mcp__github__list_issues', 'issue-tracker listing — read verb plus a domain noun'],
+  ['62b', 'mcp__github__get_pull_request', 'multi-noun read name'],
+  ['62c', 'mcp__k8s__get_pods', 'cluster read'],
+  ['62d', 'mcp__aws__describe_instances', '`describe` is the cloud-API read verb'],
+  ['62e', 'mcp__ide__getDiagnostics', 'camelCase hump split, no separators at all'],
+  ['62f', 'mcp__memory__read_graph', 'server token `memory` dropped, `read graph` left'],
+  ['62g', 'mcp__time__get_current_time', 'the server name repeats inside the tool segment'],
+]) {
+  check(`${n}-ordinary-read-tool-is-allowed`, mcp(tool), 'allow', why);
+}
+
+// REGRESSION (M02): `query`/`resolve` were unconditional read verbs, so `mcp__sqlite__query`
+// — arbitrary SQL — was ALLOWED. They now read only when another safe token qualifies them.
+for (const [n, tool, why] of [
+  ['63a', 'mcp__sqlite__query', 'bare `query` on a DB server executes arbitrary SQL'],
+  ['63b', 'mcp__mysql__query', 'same, second DB server'],
+  ['63c', 'mcp__postgres__query', 'same, third DB server'],
+  ['63d', 'mcp__linear__resolve', '`resolve` closes an issue on a tracker'],
+]) {
+  check(`${n}-ambiguous-verb-alone-is-denied`, mcp(tool), 'deny', why);
+}
+
+// REGRESSION (NEW-1): "qualified by ANY other safe token" was defeated by one ordinary noun —
+// all four below were reproduced as ALLOW against the pre-fix guard. Only a docs/reference
+// qualifier promotes an ambiguous verb now.
+for (const [n, tool, why] of [
+  ['63e', 'mcp__sqlite__query_table', '`table` is a neutral object noun, not a docs qualifier — this is arbitrary SQL'],
+  ['63f', 'mcp__postgres__query_rows', 'same bypass through `rows`'],
+  ['63g', 'mcp__linear__resolve_issue', '`resolve issue` closes the issue — the exact tracker write M02 targeted'],
+  ['63h', 'mcp__linear__resolve_all', '`all` must never qualify an ambiguous verb'],
+]) {
+  check(`${n}-ambiguous-verb-with-a-neutral-noun-is-denied`, mcp(tool), 'deny', why);
+}
+
+// REGRESSION (NEW-3): the docs-qualifier constraint used to be a FALLBACK branch, so any
+// unambiguous read verb in the name classified it as a read before the ambiguous verb was ever
+// examined. All eight below were reproduced as ALLOW against the pre-fix guard. The constraint
+// is now unconditional: one `query`/`resolve` token forces the docs-only remainder.
+for (const [n, tool, why] of [
+  ['63i', 'mcp__linear__list_and_resolve', '`list` must not re-qualify `resolve` — this closes issues'],
+  ['63j', 'mcp__linear__get_and_resolve_all', 'same bypass through `get`'],
+  ['63k', 'mcp__linear__search_resolve_all', 'same through `search`, no connector token'],
+  ['63l', 'mcp__linear__list_and_query_rows', 'read verb plus ambiguous verb plus a neutral noun'],
+  ['63m', 'mcp__x__get_query_docs', 'a real docs qualifier still does not license the extra read verb'],
+  ['63n', 'mcp__x__resolve_library_id_get', 'trailing read verb, otherwise the exact context7 name'],
+  ['63o', 'mcp__x__read_docs_query_table', 'read verb + qualifier + ambiguous verb + neutral noun'],
+  ['63p', 'mcp__x__query_list', 'two verbs, one ambiguous, no qualifier at all'],
+]) {
+  check(`${n}-read-verb-does-not-requalify-an-ambiguous-verb`, mcp(tool), 'deny', why);
+}
+
+check(
+  '64-ambiguous-verb-qualified-still-reads',
+  {
+    docs: mcp('mcp__x__query-docs'),
+    scopedDocs: mcp('mcp__plugin_context7_context7__query-docs'),
+    lib: mcp('mcp__plugin_context7_context7__resolve-library-id'),
+    // The whole residual surface: tokens drawn ONLY from {query,resolve} + the 5 qualifiers.
+    residual: mcp('mcp__x__resolve_query_docs'),
+  },
+  { docs: 'allow', scopedDocs: 'allow', lib: 'allow', residual: 'allow' },
+  'a docs/reference qualifier is the documentation read case the ambiguous verbs exist for',
+);
+
+// A docs qualifier must not launder a name that ALSO carries an ordinary noun, and a server
+// called `docs` must not qualify its own tool (server tokens are dropped before classifying).
+check(
+  '64b-docs-qualifier-does-not-launder-a-mixed-name',
+  {
+    mixed: mcp('mcp__sqlite__query_docs_table'),
+    viaServerName: mcp('mcp__docs__query'),
+    trailingWrite: mcp('mcp__x__resolve-library-id-delete'),
+  },
+  { mixed: 'deny', viaServerName: 'deny', trailingWrite: 'deny' },
+  'the qualifier set only reads when it is the whole remainder of the name',
+);
+
+// REGRESSION (M03): the guard's runtime mcpAllow filter and the helper CLI must speak ONE
+// grammar. Pre-fix the guard accepted `mcpAllow=mcp__*` (self-exempt Bash) and honoured a
+// `mcp__*` state entry, while manager-state.mjs rejected both.
+const helperAccepts = (pair) => { try { parseCliArgs(['set', pair]); return true; } catch { return false; } };
+const guardAccepts = (pair) => verdict(
+  runGuard(stdin(ARMED, { tool_name: 'Bash', tool_input: { command: `node ${ARMED_HELPER} set ${pair}` } }))
+) === 'allow';
+
+for (const [n, pair, expected, why] of [
+  ['65a', 'mcpAllow=mcp__srv__tool', true, 'a well-formed scoped name is settable through the self-exempt CLI'],
+  ['65b', 'mcpAllow=mcp__*', false, 'a global wildcard is not a scoped name and must be refused on both sides'],
+]) {
+  check(
+    `${n}-state-cli-grammar-matches-the-helper`,
+    { guard: guardAccepts(pair), helper: helperAccepts(pair) },
+    { guard: expected, helper: expected },
+    why,
+  );
+}
+
+check(
+  '66-global-wildcard-in-state-allows-nothing',
+  mcp('mcp__anything__destroy_all', makeProject('mcp-allow-star', { hard: true, level: 'balanced', mcpAllow: ['mcp__*'] })),
+  'deny',
+  '`{"mcpAllow":["mcp__*"]}` is malformed and must not become an allow-all',
+);
+
+// The residual cost of default-deny is an unknown domain NOUN, so the message must name
+// that cause and the remedy — otherwise the user reads "write verb" and gives up.
+const unknownNounDeny = denyReason(runGuard(stdin(ARMED, { tool_name: 'mcp__x__get_widgets', tool_input: {} })));
+check(
+  '67-deny-message-points-at-the-noun-and-at-mcpAllow',
+  { noun: /noun/.test(unknownNounDeny), hatch: unknownNounDeny.includes('mcpAllow') },
+  { noun: true, hatch: true },
+  'an unrecognised noun denies by design; the message must say so and name mcpAllow as the fix',
 );
 
 try { rmSync(BASE, { recursive: true, force: true }); } catch { /* ignore */ }

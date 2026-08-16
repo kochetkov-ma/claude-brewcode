@@ -4,8 +4,8 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 6.0.0 |
-| Skills | 13 |
+| Version | 6.1.0 |
+| Skills | 14 |
 | Agents | 3 |
 | Hooks | 2 |
 
@@ -75,6 +75,7 @@ claude --plugin-dir ./brewtools
 /brewtools:text-human src/ only strip AI artifacts, no inject  # custom prompt overrides defaults
 /brewtools:secrets-scan                         # Scan for leaked credentials
 /brewtools:secrets-scan --fix                   # Scan and fix interactively
+/brewtools:context-slim                         # Measure token weight of the permanent context surface
 /brewtools:plugin-update                        # Interactive check + update
 /brewtools:plugin-update check                  # Status table only
 ```
@@ -119,6 +120,7 @@ Setup skills all speak the same verbs:
 | [`/brewtools:agent-return-setup`](skills/agent-return-setup/README.md) | Install/remove a size budget on every subagent's final return message: a SubagentStart hook injects the contract, a SubagentStop hook sizes the return (`chars/4`) and blocks at most once -- above `passTokens` (default 1000) it orders a compress, above `fileTokens` (default 2500) a write-to-file plus the path. No LLM judge; project or global, opt-in | sonnet | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [project\|global] [pass] [file] \| free-text intent` |
 | [`/brewtools:agent-router-setup`](skills/agent-router-setup/README.md) | EXPERIMENTAL. Install/remove a PreToolUse hook that denies a generic subagent spawn in favor of the real project/plugin expert, or nudges when the fit is only uncertain; tier 1 free and deterministic, tier 2 opt-in LLM judge not yet behaviorally verified; project scope only | sonnet | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [level fast\|strict] \| free-text intent` |
 | [`/brewtools:task-board-setup`](skills/task-board-setup/README.md) | Generator: deploys a file-based Kanban into any repo via multi-agent analysis, with an optional spec + design layer (`task-spec` skill) and an `upgrade` mode to retrofit it onto an existing board, plus an optional gated CLAUDE.md-optimization pass | opus | `[status\|install\|upgrade\|uninstall\|purge] [target repo path \| empty = cwd] [free-text directive, e.g. 'also dedupe rules', 'skip module split']` |
+| [`/brewtools:context-slim`](skills/context-slim/README.md) | Compresses the permanent LLM-context surface (CLAUDE.md, rules, agent descriptions, hooks, memory) via cross-layer dedup, default-knowledge removal and per-file compression, lossless by default | opus | `[prompt] [measure\|preview\|slim\|hard\|bodies\|restore] [--target=N%] [--global] [--memory] [--noask] [ts]` |
 
 ## Agents
 
@@ -155,6 +157,7 @@ brewtools/
 |   +-- agent-router-setup/            # EXPERIMENTAL: route generic subagent spawns to the real expert
 |   +-- manager-setup/                 # Codeword-triggered Manager mode + HARD delegation wall
 |   +-- task-board-setup/              # File-based Kanban generator (multi-agent)
+|   +-- context-slim/                  # Permanent-context compression
 +-- agents/
     +-- text-optimizer.md             # Text optimization agent
     +-- ssh-admin.md                  # SSH and server administration
@@ -227,6 +230,7 @@ Full docs: [doc-claude.brewcode.app/brewtools/overview](https://doc-claude.brewc
 | Agent Return Setup | [agent-return-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-return-setup/) |
 | Agent Router Setup | [agent-router-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-router-setup/) |
 | Task Board Setup | [task-board-setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) |
+| Context Slim | [context-slim](https://doc-claude.brewcode.app/brewtools/skills/context-slim/) |
 | Setup Status (brewcode) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) |
 | Text Optimizer (agent) | [text-optimizer](https://doc-claude.brewcode.app/brewtools/agents/text-optimizer/) |
 | SSH Admin (agent) | [ssh-admin](https://doc-claude.brewcode.app/brewtools/agents/ssh-admin/) |

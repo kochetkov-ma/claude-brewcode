@@ -66,6 +66,7 @@ export const navigation: NavSection[] = [
           { title: 'agent-deadline-setup', slug: 'brewtools/skills/agent-deadline-setup' },
           { title: 'agent-return-setup', slug: 'brewtools/skills/agent-return-setup' },
           { title: 'agent-router-setup', slug: 'brewtools/skills/agent-router-setup' },
+          { title: 'context-slim', slug: 'brewtools/skills/context-slim' },
           { title: 'deploy', slug: 'brewtools/skills/deploy' },
           { title: 'manager-setup', slug: 'brewtools/skills/manager-setup' },
           { title: 'plugin-update', slug: 'brewtools/skills/plugin-update' },

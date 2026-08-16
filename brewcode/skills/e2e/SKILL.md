@@ -7,7 +7,7 @@ argument-hint: "[prompt] [status|install|create|update|review|rules]"
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion, Skill, WebSearch, WebFetch]
 model: opus
 ---
-<!-- brewcode-meta: version=6.0.0 content_version=5.6.0 generated_by=brewcode:e2e -->
+<!-- brewcode-meta: version=6.1.0 content_version=5.6.0 generated_by=brewcode:e2e -->
 
 <instructions>
 

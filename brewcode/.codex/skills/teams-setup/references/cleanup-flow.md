@@ -116,6 +116,21 @@ On delete:
 printf '%s' "{name}" | grep -qE '^[a-z0-9][a-z0-9-]*$' || { echo "SKIP:invalid agent id"; exit 1; }
 ```
 
+0c. **Check ownership BEFORE any `rm`.** Same shape as the `intent-guard` exemption above, generalised:
+   an agent listed by more than one team is SHARED, and this team's cleanup must not remove it.
+   Run from the project root:
+
+```bash
+bash "<skill-directory>/scripts/agent-owners.sh" "{name}"
+```
+
+   | Exit | stdout | Do |
+   |------|--------|----|
+   | 0, 1 line | this team | delete (step 1) |
+   | 0, >1 line | several teams | **SKIP** — report `kept: shared with {other teams}`, delete NOTHING |
+   | 2 | empty | orphan, no owner — delete (step 1) |
+   | 1 | empty, reason on stderr | owners UNKNOWN — **SKIP**, report the stderr reason, delete NOTHING |
+
 1. Remove `.codex/agents/{name}.toml` **and** `.codex/agents/{name}.toml.disabled` — a member parked by
    `$brewcode:teams-setup disable` lives under the second name, and deleting only the first would
    silently leave the agent behind:
@@ -158,12 +173,19 @@ ls -la ".codex/teams/{TEAM}" 2>/dev/null; du -sh ".codex/teams/{TEAM}" 2>/dev/nu
    **`intent-guard` is skipped** — shared with `$brewcode:superreview-setup`; deleting it would break
    an unrelated install. Report it as kept. **Every other `{name}` passes the Step 3 id guard first** —
    a roster value that is not `^[a-z0-9][a-z0-9-]*$` is a path, and purge would delete outside
-   `.codex/agents/`; report such a row as corrupt and delete nothing for it:
+   `.codex/agents/`; report such a row as corrupt and delete nothing for it. **Every `{name}` also passes
+   the Step 3 ownership check (step 0c)** — purge is not a licence to take another team's agent with it:
 
 ```bash
 printf '%s' "{name}" | grep -qE '^[a-z0-9][a-z0-9-]*$' || { echo "SKIP:invalid agent id"; exit 1; }
+owners=$(bash "<skill-directory>/scripts/agent-owners.sh" "{name}"); rc=$?
+[ "$rc" = 1 ] && { echo "SKIP:owners unknown"; exit 1; }
+[ "$(printf '%s\n' "$owners" | grep -c .)" -gt 1 ] && { echo "SKIP:shared agent"; exit 1; }
 rm -f ".codex/agents/{name}.toml" ".codex/agents/{name}.toml.disabled"
 ```
+
+> A skipped member is reported in the purge summary as `kept: shared` / `kept: owners unknown`; the team
+> dir still goes in step 3. Purge is total for THIS team's data, never for another team's roster.
 
 > Both names, always. A team purged while DISABLED has every member sitting at `{name}.md.disabled`;
 > removing only `{name}.md` would report a successful purge and leave the whole roster on disk.

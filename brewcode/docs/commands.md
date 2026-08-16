@@ -6,7 +6,7 @@ description: Detailed description of all brewcode plugin commands
 
 # BC Plugin Commands
 
-> **ver:** 6.0.0 | **Author:** Maksim Kochetkov | **License:** MIT
+> **ver:** 6.1.0 | **Author:** Maksim Kochetkov | **License:** MIT
 
 ## Naming
 

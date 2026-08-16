@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.0.0 content_version=6.0.0 generated_by=brewtools:manager-setup
+// brewcode-meta: version=6.1.0 content_version=6.1.0 generated_by=brewtools:manager-setup
 // brewtools:manager-setup — HARD wall guard (PreToolUse, matcher "*").
 //
 // SELF-CONTAINED — copied into <project>/.claude/brewtools/manager/ by
@@ -19,9 +19,13 @@
 // one disarms the wall for every such session. A `--agent` main session IS walled.
 //
 // Strictness levels:
-//   strict   — deny all non-read tools (no bash, no web).
-//   balanced — additionally allow read-only Bash (strict binary allowlist + per-binary
-//              flag vetting), WebSearch, and read-only MCP tools.
+//   strict   — deny all non-read tools: no Bash, no WebSearch, no MCP at all (state.mcpAllow
+//              is NOT consulted here).
+//   balanced — additionally allow read-only Bash (strict binary allowlist + per-binary flag
+//              vetting), WebSearch, and MCP tools whose tool segment tokenizes entirely into
+//              known-safe tokens with a read verb among them — an AMBIGUOUS verb (`query`,
+//              `resolve`) counting only when another safe token accompanies it (default-deny;
+//              see isReadOnlyMcpTool). state.mcpAllow lists names allowed regardless.
 //
 // FAIL-CLOSED (changed in v6 — BT-F01). This is a security guard: an unparseable
 // payload, an unreadable/corrupt state.json next to an installed manager dir, or any
@@ -91,15 +95,29 @@ function managerDirs(hookCwd) {
   return dirs;
 }
 
+// ---- mcpAllow grammar (single source of truth inside this file) --------------
+// One scoped MCP tool name, or a whole-server `mcp__server__*` prefix. Byte-for-byte the
+// same language as MCP_ALLOW_ENTRY in lib/manager-state.mjs — this guard is SELF-CONTAINED
+// (it is copied standalone into <project>/.claude/brewtools/manager/), so it cannot import
+// it. The duplication is deliberate and the suite asserts both sides accept/reject the same
+// values. BT-V2-M03: the runtime filter used to be a bare `startsWith('mcp__')`, so a
+// hand-written `{"mcpAllow":["mcp__*"]}` — which the helper CLI rejects — allowed EVERY MCP
+// tool. Both the state filter and the self-exempt CLI grammar now derive from this source.
+const MCP_ALLOW_ENTRY_SRC = 'mcp__[A-Za-z0-9_.-]+__(?:[A-Za-z0-9_.-]+|\\*)';
+const MCP_ALLOW_ENTRY = new RegExp(`^${MCP_ALLOW_ENTRY_SRC}$`);
+
 // ---- state read (fail-closed) -----------------------------------------------
 // No manager directory anywhere      -> not installed -> { hard:false } (pure no-op).
 // Directory present, state unreadable/corrupt -> { hard:true, level:'strict', broken }.
 // Global ~/.claude state is NEVER consulted: the wall is strictly project-scoped.
+// Unknown/optional keys never make a state "broken": only an unreadable or non-object file
+// does. `mcpAllow` is read leniently — a malformed value degrades to [] (deny), never to a
+// broken state that would black-hole every tool.
 function readProjectState(hookCwd) {
   for (const dir of managerDirs(hookCwd)) {
     if (!existsSync(dir)) continue;
     const p = join(dir, 'state.json');
-    const broken = { hard: true, level: 'strict', dir, broken: p };
+    const broken = { hard: true, level: 'strict', mcpAllow: [], dir, broken: p };
     let parsed;
     try {
       parsed = JSON.parse(readFileSync(p, 'utf8'));
@@ -110,11 +128,14 @@ function readProjectState(hookCwd) {
     return {
       hard: parsed.hard === true,
       level: parsed.level === 'strict' ? 'strict' : 'balanced',
+      mcpAllow: Array.isArray(parsed.mcpAllow)
+        ? parsed.mcpAllow.filter(e => typeof e === 'string' && MCP_ALLOW_ENTRY.test(e))
+        : [],
       dir,
       broken: null,
     };
   }
-  return { hard: false, level: 'balanced', dir: null, broken: null };
+  return { hard: false, level: 'balanced', mcpAllow: [], dir: null, broken: null };
 }
 
 // ---- guard tables -----------------------------------------------------------
@@ -147,11 +168,101 @@ const ALWAYS_ALLOW = new Set([
 // Tools never permitted in the main session under the hard wall (any level).
 const ALWAYS_BLOCK = new Set(['Write', 'Edit', 'NotebookEdit', 'WebFetch']);
 
-// MCP verb classification applies to the TOOL segment only (everything after the second
-// `__` in mcp__<server>__<tool>). Matching the whole name let a server called `search`
-// or `getops` launder any operation: `mcp__search__destroy_all` read as "read-only".
-const MCP_WRITE_VERB = /(write|create|update|delete|destroy|drop|wipe|remove|put|post|send|comment|merge|move|upload|publish|export|resize|duplicate|exec|run)/i;
-const MCP_READ_VERB = /(search|get|list|read|fetch|query|trace|status|describe)/i;
+// MCP classification applies to the TOOL segment only (everything after the second `__`
+// in mcp__<server>__<tool>). Matching the whole name let a server called `search` or
+// `getops` launder any operation: `mcp__search__destroy_all` read as "read-only".
+//
+// BT-V2-H01: the rule used to be an unanchored read-verb regex minus a write-verb DENYLIST,
+// so `search_and_replace` matched `search`, missed every denylisted word, and was ALLOWED.
+// A denylist can only ever enumerate the verbs someone already thought of. The rule is now
+// inverted to default-deny: EVERY token of the tool segment must be individually known-safe
+// and at least one must be a read verb, so an unknown token (`replace`, `rename`, `apply`)
+// denies without being enumerated anywhere.
+//
+// A token goes in only when it cannot name a mutation on its own.
+//
+// BT-V2-M01/M02: verbs are split by ambiguity. An UNAMBIGUOUS verb reads on every server
+// it can appear on. An AMBIGUOUS one reads on a docs server and WRITES on a database or
+// issue tracker (`mcp__sqlite__query` runs arbitrary SQL, `mcp__linear__resolve` closes an
+// issue), so it reads ONLY inside a documentation/reference name.
+const MCP_READ_VERB = new Set([
+  'search', 'find', 'get', 'list', 'read', 'fetch',
+  'view', 'show', 'describe', 'inspect', 'status',
+]);
+const MCP_AMBIGUOUS_VERB = new Set(['query', 'resolve']);
+// NEW-1: "qualified by any other safe token" was far too weak — the object nouns that make an
+// ambiguous verb dangerous are ordinary nouns, so `query_table`, `query_rows`, `resolve_issue`
+// and `resolve_all` all passed as reads. Only these docs/reference words may qualify an
+// ambiguous verb, and they must be the name's ONLY other tokens. Distinct from
+// MCP_NEUTRAL_TOKEN on purpose: that set stays wide for objects of an unambiguous read verb
+// (`list_issues`), this one stays tiny. The motivating real tools are `query-docs` and
+// `resolve-library-id`; the FULL residual allow surface is every name whose tokens are drawn
+// only from MCP_AMBIGUOUS_VERB + MCP_DOCS_QUALIFIER with at least one of each — e.g.
+// `docs_resolve`, `query_doc_library_id`. Nothing else with an ambiguous verb allows.
+//
+// NEW-3: that constraint is UNCONDITIONAL — an unambiguous read verb elsewhere in the name
+// does NOT exempt it. It used to be a fallback branch, so `list_and_resolve` classified as a
+// read on the read-verb branch and never reached it. Any `query`/`resolve` present now forces
+// the docs-only remainder, whatever else the name carries.
+const MCP_DOCS_QUALIFIER = new Set(['docs', 'doc', 'documentation', 'library', 'id']);
+// Neutral tokens: connectors and the OBJECT nouns read tools name. Safe by construction —
+// a mutation still needs a write VERB, and every write verb stays unknown to both sets, so
+// `list_and_rename` / `get_and_apply_patch` keep denying. Widen this set (never the verbs)
+// when an ordinary read tool is falsely denied.
+const MCP_NEUTRAL_TOKEN = new Set([
+  'and', 'related', 'docs', 'doc', 'library', 'id', 'file', 'files', 'info',
+  'snapshot', 'console', 'messages', 'message', 'content', 'contents', 'metadata',
+  'issue', 'issues', 'pull', 'request', 'requests', 'comment', 'comments',
+  'label', 'labels', 'repo', 'repos', 'repository', 'commit', 'commits',
+  'branch', 'branches', 'tag', 'tags', 'diff', 'tree', 'history',
+  'pod', 'pods', 'node', 'nodes', 'namespace', 'namespaces', 'service', 'services',
+  'deployment', 'deployments', 'instance', 'instances', 'cluster', 'clusters',
+  'diagnostic', 'diagnostics', 'graph', 'memory', 'entity', 'entities', 'relation', 'relations',
+  'current', 'time', 'date', 'zone', 'timezone',
+  'user', 'users', 'account', 'accounts', 'project', 'projects', 'page', 'pages',
+  'item', 'items', 'entry', 'entries', 'record', 'records', 'result', 'results',
+  'schema', 'table', 'tables', 'row', 'rows', 'column', 'columns',
+  'log', 'logs', 'event', 'events', 'job', 'jobs', 'task', 'tasks',
+  'config', 'settings', 'version', 'versions', 'state', 'stats', 'usage', 'detail', 'details',
+  'all', 'by', 'for', 'of', 'my',
+]);
+
+/** Tool/server name -> lowercase tokens, split on `_`, `-`, `.` and camelCase humps. */
+function mcpTokens(name) {
+  return String(name)
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .split(/[_\-.\s]+/)
+    .map(t => t.toLowerCase())
+    .filter(Boolean);
+}
+
+// Server-name tokens are dropped from the tool segment first: servers repeat their own name
+// in the tool (`mcp__notion__notion-search` -> [search]). Dropping can only ever REMOVE
+// evidence, never add any — a name reduced to nothing has no read verb left and is denied.
+function isReadOnlyMcpTool(server, toolSegment) {
+  const fromServer = new Set(mcpTokens(server));
+  const tokens = mcpTokens(toolSegment).filter(t => !fromServer.has(t));
+  if (tokens.length === 0) return false;
+  const safe = t => MCP_READ_VERB.has(t) || MCP_AMBIGUOUS_VERB.has(t)
+    || MCP_NEUTRAL_TOKEN.has(t) || MCP_DOCS_QUALIFIER.has(t);
+  if (!tokens.every(safe)) return false;
+  // Ambiguous verb present -> this is the ONLY gate that decides, checked before the read-verb
+  // branch so a read verb can never re-qualify it. Reads solely when every remaining token is a
+  // docs qualifier, and at least one is. Any other token — an ordinary noun (table, rows, all),
+  // a connector (`and`) or a read verb (`list`) — leaves the verb unqualified -> deny.
+  if (tokens.some(t => MCP_AMBIGUOUS_VERB.has(t))) {
+    return tokens.some(t => MCP_DOCS_QUALIFIER.has(t))
+      && tokens.every(t => MCP_AMBIGUOUS_VERB.has(t) || MCP_DOCS_QUALIFIER.has(t));
+  }
+  return tokens.some(t => MCP_READ_VERB.has(t));
+}
+
+// Escape hatch for a false denial: exact `mcp__server__tool` or a `mcp__server__*` prefix
+// from state.mcpAllow. Consulted BEFORE the heuristic and at `balanced` ONLY — `strict`
+// means no MCP at all, listed or not.
+function isMcpAllowListed(list, tool) {
+  return list.some(e => (e.endsWith('*') ? tool.startsWith(e.slice(0, -1)) : e === tool));
+}
 
 const EXIT_HINT = 'Manager HARD wall is ON — delegate via Task/Agent. To exit run `/brewtools:manager-setup disable`; the only Bash it needs — `node <project>/.claude/brewtools/manager/manager-state.mjs set hard=false` — is self-exempt at every level.';
 
@@ -227,6 +338,14 @@ const NODE_EVAL_FLAG = /^(-e|--eval|-p|--print|--input-type|--experimental-loade
 
 // The helper's own CLI grammar: get|set [key=value ...] [--cwd DIR]. Mirrors parseCliArgs
 // in lib/manager-state.mjs — the guard must never allow a shape the helper would not.
+// `mcpAllow` is a comma-separated list of MCP_ALLOW_ENTRY_SRC entries (empty value clears),
+// i.e. the SAME grammar the state filter and the helper's SETTABLE.mcpAllow use. It used to
+// be a looser `mcp__[\w.*-]+`, which accepted `mcpAllow=mcp__*` that the helper rejects.
+const STATE_CLI_PAIR = new RegExp(
+  `^(?:hard=(?:true|false)|level=(?:strict|balanced)`
+  + `|mcpAllow=(?:|${MCP_ALLOW_ENTRY_SRC}(?:,${MCP_ALLOW_ENTRY_SRC})*))$`
+);
+
 function isStateCliArgs(args) {
   if (args[0] !== 'get' && args[0] !== 'set') return false;
   for (let i = 1; i < args.length; i++) {
@@ -234,7 +353,7 @@ function isStateCliArgs(args) {
     if (a === '--cwd') { if (!args[++i]) return false; continue; }
     if (a.startsWith('-')) return false;
     if (args[0] !== 'set') return false;
-    if (!/^(hard=(true|false)|level=(strict|balanced))$/.test(a)) return false;
+    if (!STATE_CLI_PAIR.test(a)) return false;
   }
   return true;
 }
@@ -383,14 +502,18 @@ function isReadonlyCommand(cmd) {
       return;
     }
 
-    // (i) MCP: classify on the tool segment after the second `__`; unrecognised verb or
-    // malformed name is denied.
+    // (i) MCP: allow-listed name, else token classification of the segment after the second
+    // `__`. Any unknown token, an empty segment or a malformed name is denied.
     if (tool.startsWith('mcp__')) {
       const parts = tool.split('__');
-      const verb = parts.length >= 3 ? parts.slice(2).join('__') : '';
-      const readOnly = verb !== '' && MCP_READ_VERB.test(verb) && !MCP_WRITE_VERB.test(verb);
-      if (level === 'balanced' && readOnly) { output({}); return; }
-      deny(`Hard wall: MCP tool ${tool} is blocked in the main session — delegate to a subagent.`);
+      const server = parts[1] || '';
+      const segment = parts.length >= 3 ? parts.slice(2).join('__') : '';
+      if (level === 'balanced'
+        && (isMcpAllowListed(state.mcpAllow, tool) || isReadOnlyMcpTool(server, segment))) {
+        output({});
+        return;
+      }
+      deny(`Hard wall: MCP tool ${tool} is blocked in the main session — its name carries a token the read-only classifier does not recognise (a write verb, OR simply a domain noun it has never seen). Delegate to a subagent, or, if it is genuinely read-only, list it in "mcpAllow" in .claude/brewtools/manager/state.json (exact "mcp__server__tool" or "mcp__server__*").`);
       return;
     }
 

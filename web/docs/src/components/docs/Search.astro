@@ -49,14 +49,20 @@
         if (pagefindLoaded) return;
         pagefindLoaded = true;
         import('@pagefind/default-ui').then(({ PagefindUI }) => {
-          new PagefindUI({
+          // resetStyles/processTerm are real options of @pagefind/default-ui 1.4.0
+          // (ui-core.js), but the minimal declaration in src/env.d.ts omits them.
+          const options: ConstructorParameters<typeof PagefindUI>[0] & {
+            resetStyles?: boolean;
+            processTerm?: (term: string) => string;
+          } = {
             element: '#pagefind-search',
             showSubResults: true,
             showImages: false,
             autofocus: true,
             resetStyles: false,
             processTerm: (term: string) => normalizeQuery(term),
-          });
+          };
+          new PagefindUI(options);
         });
       };
 

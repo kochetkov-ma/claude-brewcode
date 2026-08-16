@@ -11,7 +11,7 @@ Use collaboration agents only when the user or project instructions explicitly r
 
 Follow every phase below. When a phase delegates work, use Codex collaboration with only `task_name` and `message`; treat each "Codex delegation brief" block as role and message content, not executable syntax. Use `request_user_input` for the documented user gates. Resolve `<skill-directory>`, `<plugin-root>`, `<project-root>`, and `<arguments>` before running commands.
 
-<!-- brewcode-meta: version=6.0.0 content_version=6.0.0 generated_by=brewcode:teams-setup -->
+<!-- brewcode-meta: version=6.1.0 content_version=6.1.0 generated_by=brewcode:teams-setup -->
 
 <instructions>
 
@@ -222,6 +222,27 @@ specifies. Final confirmation of agent list before proceeding.
 > label the fixed row `reuse (already present)` — C3-IG's `emit-agent` call will report `REUSE` and
 > leave the file untouched.
 
+**Agent names are globally unique across teams — REJECT a name another team already owns.** Two teams
+listing the same agent share one file: one team's `upgrade` rewrites the other's member, and the other's
+`uninstall`/`purge` is then blocked by the ownership check (`cleanup-flow.md` Step 3 step 0c), leaving
+an undeletable roster row. Before showing the variants, run from the project root for every proposed name
+(`intent-guard` excluded — it is shared BY DESIGN and exempt from this check):
+
+```bash
+for a in {PROPOSED_NAMES}; do
+  o=$(bash "<skill-directory>/scripts/agent-owners.sh" "$a") && echo "TAKEN $a <- $o"
+done; echo "OK"
+```
+
+- exit 0 (any owner printed) -> the name is **TAKEN**. Drop it from the variant and propose a distinct
+  one — a domain-qualified rename such as `{name}-{TEAM_NAME}` or a different domain word. Never reuse,
+  never "join" the other team's agent.
+- exit 2 (no owner) -> free, use it.
+- exit 1 (refusal, reason on stderr) -> treat the name as TAKEN until the reason is fixed; report the
+  stderr line, do not guess.
+
+Say which names were renamed and why in the confirmation before C3.
+
 ### C2.5: Model Selection (request_user_input)
 
 "Default model for domain agents: high-reasoning model (most reliable)."
@@ -242,6 +263,11 @@ If "Mixed" -- ask model per agent in C3. Store as `DEFAULT_MODEL` (default: high
 ### C3: Agent Creation (agent-creator x N)
 
 1. Read `<skill-directory>/references/agent-template.md`
+1b. **Re-run the C2 uniqueness check on the FINAL confirmed roster, immediately before the first spawn** —
+   the user may have typed names in the "Custom" branch that never passed it. Same script, same exit-code
+   reading. Any `TAKEN` name -> **do not spawn**; go back and rename it with the user first. Also refuse a
+   name whose `.codex/agents/{name}.toml.disabled` exists with no live file: that is another install's parked
+   agent, and writing the live path recreates the dual-copy state both `enable` and `disable` refuse.
 2. For each agent, spawn `Codex delegation brief (task_role="brewcode:agent-creator")` — ONE agent file per spawn, never "create the whole team" in one task. Prompt carries GOAL (this roster is being built for {TEAM_NAME}; siblings own the other domains), ROLE (owns `.codex/agents/{name}.toml` only), SCOPE (that file; out of bounds: other agents, team.md, project source), CONTEXT (mission + domain + project analysis from C1 are settled; reasoning_tier={DEFAULT_MODEL or per-agent} chosen in C2; the 3-4 sibling agent-creators in this batch own {COLLEAGUE_NAMES} — stay off their domains and do not duplicate their triggers), CONSUMER (C4 writes `.codex/teams/{TEAM_NAME}/team.md` from your path + description line, C5 quorum-reviews the file, and colleagues re-delegate to it by domain via the sub-agent task Acceptance Protocol), DONE (file written, `description` <= 100 chars (optimal ~80), single line, role + 2-3 triggers, no `<example>` blocks; the body carries the template's `## Return Contract` section — first clause and threshold sentence VERBATIM, only the middle paragraph adapted to the domain, `{AGENT_NAME}` substituted — and carries NO second output/reporting rule anywhere; report path + description line).
 
    Every spawn prompt MUST also carry the template path and the four metadata lines, resolved — the
@@ -597,6 +623,22 @@ bash "<skill-directory>/scripts/trace-ops.sh" read ".codex/teams/{TEAM_NAME}" --
 
 If cursor empty: all entries returned. If team not found -> **STOP**. If cursor exists and <10 post-cursor entries: expand to last 30 days.
 
+**Refuse to upgrade a PARKED member.** Every write in U4 targets `.codex/agents/{name}.toml`; writing that
+path while the member sits at `{name}.md.disabled` creates a live+parked dual copy — the state
+`toggle-team.sh` now REFUSES in BOTH directions (`CONFLICT:`) and `verify-team.sh` FAILS on. Probe every roster member
+before U2, from the project root:
+
+```bash
+for m in {AGENT_NAMES}; do
+  [ -f ".codex/agents/$m.toml" ] || { [ -f ".codex/agents/$m.toml.disabled" ] && echo "PARKED $m"; }
+done; echo "OK"
+```
+
+- any `PARKED` row -> **STOP the whole mode.** Do not tune, do not regenerate, do not delete, do not
+  touch `team.md`. Report the parked members and the single remedy: `$brewcode:teams-setup {TEAM_NAME} enable`,
+  then re-run `upgrade`. Never "upgrade the live ones only" — a half-upgraded roster is what the guards exist to prevent.
+- all members live -> continue.
+
 ### U2: Analyze Performance
 
 Filter post-cursor trace: `k=track` for task stats, `k=issue` for problems, `k=insight` for patterns.
@@ -627,6 +669,11 @@ If "Let me choose" -> request_user_input per agent. If "Show detailed" -> output
 | Underperforming (update) | Same as tuning |
 | Underperforming (replace) | Delete agent file + create new via agent-creator |
 | Inactive (delete) | Remove `.codex/agents/{name}.toml` + update team.md status to `removed` |
+
+> **Both delete rows run the ownership check first** — `cleanup-flow.md` Step 3 step 0c, same script,
+> same exit-code table: `bash "<skill-directory>/scripts/agent-owners.sh" "{name}"`. More than one owner
+> line, or exit 1 (owners unknown) -> **SKIP the delete**, keep the file, report it as shared/unknown and
+> leave the roster row alone. `intent-guard` is never a candidate here at all (U2 note).
 
 Immutable traits (Name, Base Role) -> delete + create new. Mutable traits (Character, Instructions) -> update during tuning.
 
@@ -817,6 +864,7 @@ Exception: after PURGE there is no team left — output the purge summary instea
 | ENABLE on a live team / DISABLE on a parked team | `toggle-team.sh` prints `NOOP:` for every row. Report "already {enabled\|disabled}" and **STOP** — do not rename, do not ask |
 | `toggle-team.sh` prints `MISSING:` | A roster member has neither `.toml` nor `.toml.disabled`. **STOP** with the name — the team is broken, not disabled; run `upgrade` or re-create that agent |
 | `toggle-team.sh` prints `SKIP:invalid agent id` / `INVALID:{N>0}` (or `verify-team.sh` FAILs the same row) | A roster value is not `^[a-z0-9][a-z0-9-]*$` — it is a path, and it would have been moved or deleted OUTSIDE `.codex/agents/`. The script touched nothing for that row and exits 1. **STOP**: show the row and have `team.md`'s `## Agents` table fixed by hand |
+| `toggle-team.sh` prints `CONFLICT:{agent}` / `CONFLICT:{N>0}` (or `verify-team.sh` reports `CONFLICT` and FAILs) | That member has BOTH `.codex/agents/{a}.toml` and `{a}.toml.disabled`. BOTH directions refuse identically — `enable` would overwrite the live file, `disable` the parked one — all-or-nothing before any `mv`, so nothing moved and both bodies are byte-intact. `CONFLICT:{N}` is printed on EVERY toggle run, either action; `{N>0}` exits 1. **STOP**: name every conflicting member, have the user keep one copy and delete/rename the other, then re-run the SAME action. Never delete either copy yourself, never `--force` around it |
 | `verify-team.sh` prints `DISABLED_AGENTS:{N>0}` | Expected on a disabled team, and it still exits PASS. Never report it as a failure and never "repair" it by regenerating the agents — `enable` is the fix |
 | Team already exists (INSTALL) | Show roster, request_user_input: "Upgrade instead?" |
 | verify-team.sh FAIL | Show missing items, attempt fix, re-verify |

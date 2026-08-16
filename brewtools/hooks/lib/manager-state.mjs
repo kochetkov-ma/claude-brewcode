@@ -1,9 +1,12 @@
-// brewcode-meta: version=6.0.0 content_version=5.6.0 generated_by=brewtools:manager-setup
+// brewcode-meta: version=6.1.0 content_version=6.1.0 generated_by=brewtools:manager-setup
 // brewtools:manager-setup — Manager mode state resolver/writer.
-// State shape: { hard:boolean, level:'strict'|'balanced', mode:'full' }
+// State shape: { hard:boolean, level:'strict'|'balanced', mode:'full', mcpAllow?:string[] }
 //   + artifact metadata written by writeState: version/generated_by/last_updated.
 //   hard  — HARD wall toggle (PreToolUse guard physically denies main-session tools)
 //   level — HARD wall strictness: 'strict' (deny all non-read) | 'balanced' (allow read-only bash/search)
+//   mcpAllow — optional escape hatch for the guard's default-deny MCP classifier: scoped
+//           tool names (`mcp__server__tool`) or a `mcp__server__*` prefix, allowed at
+//           'balanced' only. Absent/empty = heuristic alone decides.
 //   metadata — stamped on WRITE only. DEFAULT_STATE deliberately carries no version:
 //           it is the answer for "no state file exists", and a version there would
 //           claim provenance for a file nothing ever stamped. Same reason a write that
@@ -30,6 +33,10 @@ import crypto from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 
 const DEFAULT_STATE = { hard: false, level: 'balanced', mode: 'full' };
+// One scoped MCP tool name, or a whole-server `mcp__server__*` prefix. hardmode-guard.mjs
+// re-declares this same language (MCP_ALLOW_ENTRY_SRC) because it ships self-contained and
+// cannot import it; the two MUST stay in sync — the manager-setup suite asserts parity.
+const MCP_ALLOW_ENTRY = /^mcp__[A-Za-z0-9_.-]+__([A-Za-z0-9_.-]+|\*)$/;
 const VALID_SCOPES = new Set(['project', 'global']);
 
 const GENERATED_BY = 'brewtools:manager-setup';
@@ -131,6 +138,16 @@ function clampLevel(merged) {
   return merged;
 }
 
+// Optional key: keep only well-formed scoped names. A malformed value is DROPPED, never
+// repaired into something permissive — this list only ever widens what the guard allows.
+function clampMcpAllow(merged) {
+  if (!('mcpAllow' in merged)) return merged;
+  merged.mcpAllow = Array.isArray(merged.mcpAllow)
+    ? merged.mcpAllow.filter(e => typeof e === 'string' && MCP_ALLOW_ENTRY.test(e))
+    : [];
+  return merged;
+}
+
 function readJsonSafe(filePath) {
   try {
     const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
@@ -159,7 +176,7 @@ export function resolveState(cwd = process.cwd()) {
     // Unknown keys of the PROJECT file (version/generated_by/last_updated and anything
     // a future release adds) pass through untouched. Nothing is invented: a file that
     // carries no version resolves without one, so a stale state stays visibly stale.
-    const resolved = clampLevel(clampMode({ ...(project || {}), hard, level, mode, source }));
+    const resolved = clampMcpAllow(clampLevel(clampMode({ ...(project || {}), hard, level, mode, source })));
     // Legacy `doc_type` from a pre-spec write is dropped on READ too, not only on write:
     // otherwise every consumer sees it until the next write happens to occur.
     delete resolved.doc_type;
@@ -290,11 +307,18 @@ export async function writeState(scope, partial, cwd = process.cwd()) {
 // `node <path>/manager-state.mjs set hard=false` is the documented off-switch for the
 // HARD wall and the single Bash shape the guard self-exempts. Keep parsing strict.
 
-const CLI_USAGE = 'usage: node manager-state.mjs get [--cwd DIR] | set hard=<true|false> level=<strict|balanced> [--cwd DIR]';
+const CLI_USAGE = 'usage: node manager-state.mjs get [--cwd DIR] | set hard=<true|false> level=<strict|balanced> mcpAllow=<mcp__srv__tool[,...]|> [--cwd DIR]';
 
 const SETTABLE = {
   hard: v => (v === 'true' ? true : v === 'false' ? false : undefined),
-  level: v => (v === 'strict' || v === 'balanced' ? v : undefined)
+  level: v => (v === 'strict' || v === 'balanced' ? v : undefined),
+  // Comma-separated scoped names; the empty value clears the list. Any malformed entry
+  // rejects the whole argument — a half-applied allowlist is worse than none.
+  mcpAllow: v => {
+    if (v === '') return [];
+    const entries = v.split(',');
+    return entries.every(e => MCP_ALLOW_ENTRY.test(e)) ? entries : undefined;
+  }
 };
 
 /**

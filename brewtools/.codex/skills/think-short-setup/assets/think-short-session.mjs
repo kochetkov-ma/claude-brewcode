@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.0.0 content_version=6.0.0 generated_by=brewtools:think-short-setup
+// brewcode-meta: version=6.1.0 content_version=6.0.0 generated_by=brewtools:think-short-setup
 /**
  * think-short — SessionStart hook (self-contained, no plugin-root deps).
  *

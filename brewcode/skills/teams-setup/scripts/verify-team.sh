@@ -10,6 +10,10 @@ fi
 TEAM_DIR=".claude/teams/$TEAM_NAME"
 FAIL=0
 DISABLED=0
+# Per-member states are mutually exclusive and mirror toggle-team.sh's summary keys: DISABLED counts
+# members whose ONLY copy is parked, CONFLICT counts members carrying BOTH copies. A conflicted member
+# is in neither the healthy nor the parked state, so it is never folded into DISABLED.
+CONFLICT=0
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
@@ -212,7 +216,17 @@ if [ -f "$TEAM_DIR/team.md" ]; then
         fi
         [ "$agent" = "intent-guard" ] && found_intent_guard=1
         printf "CHECK: agent %s ... " "$agent"
-        if [ -f ".claude/agents/${agent}.md" ]; then
+        # BOTH copies present is checked FIRST: a live-first if/parked-elif chain reads a dual copy
+        # as a healthy live agent and hides the collision. `.claude/agents/` is project-global, so the
+        # live file may belong to someone else entirely and `enable` must not resolve it by guessing.
+        if [ -f ".claude/agents/${agent}.md" ] && [ -f ".claude/agents/${agent}.md.disabled" ]; then
+          echo "CONFLICT"
+          echo "  CONFLICT: both .claude/agents/${agent}.md and .claude/agents/${agent}.md.disabled exist."
+          echo "        The parked copy cannot be restored without overwriting the live one, and 'enable'"
+          echo "        refuses while both are there. Keep the copy you want, delete or rename the other."
+          CONFLICT=$((CONFLICT + 1))
+          FAIL=1
+        elif [ -f ".claude/agents/${agent}.md" ]; then
           # The roster row proves the file exists; the frontmatter proves the generator stamped it.
           # A generated agent with no metadata at all predates the standard -> WARN + the upgrade fix.
           # Metadata that IS there but malformed is a generator defect -> FAIL.
@@ -264,6 +278,7 @@ if [ -f "$TEAM_DIR/team.md" ]; then
 fi
 
 printf 'DISABLED_AGENTS:%s\n' "$DISABLED"
+printf 'CONFLICT_AGENTS:%s\n' "$CONFLICT"
 
 if [ "$FAIL" -eq 0 ]; then
   if [ "$DISABLED" -gt 0 ]; then

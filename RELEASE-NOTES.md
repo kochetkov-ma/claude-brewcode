@@ -2,6 +2,50 @@
 
 ---
 
+## v6.1.0 (2026-08-16)
+
+> Docs: [context-slim](https://doc-claude.brewcode.app/brewtools/skills/context-slim/) | [brewtools skills](https://doc-claude.brewcode.app/brewtools/skills/) | [brewtools overview](https://doc-claude.brewcode.app/brewtools/overview/) | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [teams-setup](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) | [superreview-setup](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/)
+
+> One new skill and a round of guard repairs. `context-slim` attacks the cost nobody sees on an invoice — the CLAUDE.md, rules, agent descriptions and hook text that are re-sent on every single request. The rest of the release closes states the toggle/install guards could reach but not describe: an agent owned by two teams, a member that is both live and parked, a parked install silently destroyed by a re-emit.
+
+### brewtools
+
+#### Added
+
+- **`/brewtools:context-slim` — compresses the permanent context surface.** Project and global `CLAUDE.md`, `.claude/rules/**`, agent descriptions, hook-injected text and memory files, cut by three levers: cross-layer dedup (the same fact stated in a rule, an agent and CLAUDE.md survives once, in the layer that owns it), removal of what the model already knows by default, and deep per-file compression. Nothing that carries information is allowed to move — exact values, keys, paths, version pins and prohibitions survive byte-exact or the run rolls back whole and reports FAILED
+- Modes `measure` (default, read-only — token weight per layer, no writes) | `preview` | `slim` | `hard` | `bodies` | `restore`, flags `--target=N%`, `--global`, `--memory`, `--noask`, plus a positional timestamp for `restore`. Every decision rule lives in `references/` (keep/drop catalogs, dedup arbitration, contradiction and language policy, measurement, MCP advice), with `scripts/context-scan.sh` measuring and `scripts/context-guard.sh` verifying that the protected values are still there
+
+#### Fixed
+
+- **HARD-wall MCP classification is default-deny.** The read-only test ran an unanchored read-verb regex minus a write-verb denylist, so `mcp__x__search_and_replace` matched `search`, missed the denylist and was allowed; a denylist only ever lists the verbs someone already thought of. Every token of the tool segment must now be individually known-safe with a read verb among them, so `replace`/`rename`/`apply` deny without being enumerated. Classification reads the TOOL segment only — a server named `search` could otherwise launder `mcp__search__destroy_all`
+- **Ambiguous verbs (`query`, `resolve`) read on a docs server and WRITE on a database or issue tracker** (`mcp__sqlite__query` runs arbitrary SQL, `mcp__linear__resolve` closes an issue). They now count as reads only when every other token is a documentation qualifier, so `query_table` and `resolve_issue` deny while `query-docs` and `resolve-library-id` pass
+- **A hand-written `{"mcpAllow":["mcp__*"]}` allowed every MCP tool.** The runtime filter was a bare `startsWith('mcp__')` while the helper CLI rejected the same value; both sides now derive from one grammar, and a malformed `mcpAllow` degrades to deny instead of to a broken state
+
+### brewcode
+
+#### Fixed
+
+- **`teams-setup` rejects an agent name another team already owns.** Two teams listing one name shared a single file: one team's `upgrade` rewrote the other's member, and the other's `uninstall` was then blocked by the ownership check, leaving an undeletable roster row. New `scripts/agent-owners.sh` is consulted at variant time and again on the final roster before the first spawn; `intent-guard` stays shared by design
+- **A member that is both live and parked (`{name}.md` + `{name}.md.disabled`) now refuses in BOTH directions.** `toggle-team.sh` probes the whole roster before it moves anything, so a collision on the last member can no longer leave a team half-toggled, and it prints `CONFLICT:` with both bodies byte-intact; `verify-team.sh` fails on the same state
+- **`upgrade` refuses a parked member** instead of writing the live path and creating the dual copy the guards exist to prevent
+- **`setup-status` reports `CONFLICT`** for that state — it previously read a live+parked member as plain `LIVE` — and the reading outranks every other teams row
+- **`superreview-setup` sweeps per-stack references left by an earlier emit.** Switching stacks kept both refs installed forever, with the abandoned one restamped by every later upgrade as though current. Ownership is read off the file's own frontmatter key, never a historical name list, so a user file that merely mentions the marker survives
+
+### brewdoc
+
+#### Fixed
+
+- **`memory-sync-setup` no longer destroys a parked install.** The emit guard keyed on `SKILL.md` alone, so an install parked as `SKILL.md.disabled` looked absent and the whole-dir replace overwrote the parked body together with every SELF-SYNC hand-edit in it
+
+### docs
+
+#### Fixed
+
+- **Skill counts corrected across the docs** — 28 skills in the suite, 14 in brewtools (both were stated one short)
+- Three TypeScript errors in the docs site: the `resetStyles`/`processTerm` Pagefind options missing from the minimal `env.d.ts` declaration, and two unchecked version reads in `github.ts`
+
+---
+
 ## v6.0.0 (2026-08-16)
 
 > Docs: [brewcode hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [bash-expert](https://doc-claude.brewcode.app/brewcode/agents/bash-expert/) | [bc-rules-organizer](https://doc-claude.brewcode.app/brewcode/agents/bc-rules-organizer/) | [brewcode:agents](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [brewcode:skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [convention](https://doc-claude.brewcode.app/brewcode/skills/convention/) | [rules](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) | [superreview-setup](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [teams-setup](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | [docsync-setup](https://doc-claude.brewcode.app/brewdoc/skills/docsync-setup/) | [md-to-pdf](https://doc-claude.brewcode.app/brewdoc/skills/md-to-pdf/) | [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/) | [my-claude](https://doc-claude.brewcode.app/brewdoc/skills/my-claude/) | [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/) | [deploy-admin](https://doc-claude.brewcode.app/brewtools/agents/deploy-admin/) | [ssh-admin](https://doc-claude.brewcode.app/brewtools/agents/ssh-admin/) | [text-optimizer](https://doc-claude.brewcode.app/brewtools/agents/text-optimizer/) | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [deploy](https://doc-claude.brewcode.app/brewtools/skills/deploy/) | [ssh](https://doc-claude.brewcode.app/brewtools/skills/ssh/) | [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/) | [secrets-scan](https://doc-claude.brewcode.app/brewtools/skills/secrets-scan/) | [text-optimize](https://doc-claude.brewcode.app/brewtools/skills/text-optimize/) | [text-human](https://doc-claude.brewcode.app/brewtools/skills/text-human/) | [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) | [task-board-setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) | [think-short-setup](https://doc-claude.brewcode.app/brewtools/skills/think-short-setup/) | [agent-deadline-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline-setup/) | [agent-return-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-return-setup/) | [agent-router-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-router-setup/)

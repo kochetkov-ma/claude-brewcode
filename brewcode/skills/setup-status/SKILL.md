@@ -445,9 +445,13 @@ for t in .claude/teams/*/team.md; do
   awk '/^## Agents/{a=1;next} a&&/^## /{exit} a&&/^\|/{split($0,c,"|");gsub(/[`[:space:]]/,"",c[2]);if(c[2]!=""&&c[2]!~/^-+$/&&c[2]!="Agent")print c[2]}' "$t" |
   while IFS= read -r m; do
     [ "$m" = "intent-guard" ] && continue
-    if   [ -f ".claude/agents/$m.md" ];          then echo "LIVE   team:$n $m"
-    elif [ -f ".claude/agents/$m.md.disabled" ]; then echo "PARKED team:$n $m"
-    else                                              echo "ABSENT team:$n $m"; fi
+    l=0; p=0
+    [ -f ".claude/agents/$m.md" ] && l=1
+    [ -f ".claude/agents/$m.md.disabled" ] && p=1
+    if   [ "$l$p" = "11" ]; then echo "CONFLICT team:$n $m"
+    elif [ "$l" = 1 ];      then echo "LIVE   team:$n $m"
+    elif [ "$p" = 1 ];      then echo "PARKED team:$n $m"
+    else                         echo "ABSENT team:$n $m"; fi
   done
 done
 echo "OK"
@@ -466,6 +470,7 @@ Reading the two multi-artifact rows (1 and 4), where a toggle can land halfway:
 | every deployed artifact `LIVE` | not disabled; fall through to the rest of Phase 3 |
 | some `LIVE`, some `PARKED` | `partial` — a `disable`/`enable` that did not finish. Name the halves; the fix is re-running the same verb, which is a documented no-op on the artifacts already in the requested state |
 | `ABSENT` on row 4's `task-spec` alone, everything else `LIVE` | not a disable signal at all — that is the roster's `SPEC_MODE=off` / pre-spec-layer absence signal, already handled as `stale` |
+| any `CONFLICT team:<t> <agent>` | `partial`, and it outranks every other teams reading. Both `.md` and `.md.disabled` exist for that member: `teams-setup enable` REFUSES the whole team (`CONFLICT:` line, nothing moved) and `verify-team.sh` FAILS. Name each member; the fix is manual — keep the copy you want, delete or rename the other, then re-run `/brewcode:teams-setup <team> enable` |
 
 ### Phase 1c — Environment prerequisites
 
