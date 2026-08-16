@@ -7,7 +7,7 @@ argument-hint: "[prompt] <file.md> [--engine name] [\"llm prompt\"] | styles | t
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion]
 model: sonnet
 ---
-<!-- brewcode-meta: version=6.1.1 content_version=6.0.0 generated_by=brewdoc:md-to-pdf -->
+<!-- brewcode-meta: version=6.1.2 content_version=6.0.0 generated_by=brewdoc:md-to-pdf -->
 
 # MD to PDF
 

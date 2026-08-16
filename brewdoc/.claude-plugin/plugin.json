@@ -1,6 +1,6 @@
 {
   "name": "brewdoc",
-  "version": "6.1.1",
+  "version": "6.1.2",
   "description": "Brewdoc - Claude Code documentation tools: my-claude installation docs, memory-sync generator",
   "author": {
     "name": "Maksim Kochetkov",

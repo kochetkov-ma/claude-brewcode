@@ -1,4 +1,4 @@
-# brewcode-meta: version=6.1.1 content_version=5.6.0 generated_by=brewcode:semble-setup
+# brewcode-meta: version=6.1.2 content_version=5.6.0 generated_by=brewcode:semble-setup
 # brewcode:semble — managed file. Regenerate with
 #   semble-guidance.sh install --part ignore --force
 # Edit it freely: any change makes it `user_modified`, and the installer then

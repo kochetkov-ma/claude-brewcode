@@ -7,7 +7,7 @@ argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge]
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion]
 model: sonnet
 ---
-<!-- brewcode-meta: version=6.1.1 content_version=6.0.0 generated_by=brewdoc:docsync-setup -->
+<!-- brewcode-meta: version=6.1.2 content_version=6.0.0 generated_by=brewdoc:docsync-setup -->
 
 # docsync-setup
 

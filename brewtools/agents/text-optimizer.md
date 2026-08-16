@@ -7,7 +7,7 @@ color: magenta
 tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch
 skills: brewtools:text-optimize
 doc_type: llm
-version: "6.1.1"
+version: "6.1.2"
 content_version: "6.0.0"
 generated_by: "brewtools"
 last_updated: "2026-08-16"

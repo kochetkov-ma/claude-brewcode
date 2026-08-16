@@ -1060,26 +1060,71 @@ Two setups add extra verbs AFTER the canonical set, and those are live: `semble-
 extra verb only when the roster row's finding is exactly what it fixes; otherwise the canonical verb
 plus a free-text prompt.
 
-Then the ordered run-list. **The closing paragraph is not optional** — it is the one place the user
-sees why this dashboard hands back commands instead of running them. Print it every time, even when
-the list has one entry:
+### The run-list — grouped by real dependency, not just tier
+
+A flat `partial -> stale -> missing` list hides one real dependency this suite has: several rows
+**consume** what `teams-setup` creates (agent names for routing/`byAgentType`, or the shared
+`intent-guard` it emits) or run faster once `semble-setup`'s code index exists, since every setup
+below fans out subagents that read this repo. Group the run-list into these SIX stages, fixed
+order; a row not in scope (`n/a`, `installed`, `disabled`, or filtered out by `$ARGUMENTS`) is
+skipped, never renumbered, and a stage with zero rows in scope prints no header at all:
+
+| Stage | Rows (roster #) | Why this stage, in one clause |
+|-------|------------------|--------------------------------|
+| 1 🔧 Fix global drift | 5 think-short, 11 agent-return | global-scope — a stale install here taxes EVERY session and EVERY subagent spawn in every stage below. Cheapest fix, biggest leverage |
+| 2 🔍 Search foundation | 2 semble-setup | every stage below fans out subagents that read this repo; they read it faster and more accurately with the index already built |
+| 3 👥 Agent root | 1 teams-setup | creates the project's own agents plus the shared `intent-guard`; stage 4's rows reference them by name and install into a vacuum without this |
+| 4 🔗 Agent consumers | 7 agent-router, 8 manager, 6 agent-deadline, 3 superreview | router dispatches `Task` calls to real agent names; deadline's `byAgentType` needs those names; manager's delegate-to-specialist model assumes agents already exist; superreview reuses `intent-guard` instead of re-emitting it |
+| 5 📋 Process layer | 4 task-board-setup | its board and `task-tracker` agent are what `manager-setup`'s hard wall and the TSK-graph instructions point at |
+| 6 📚 Docs last | 9 memory-sync, then 10 docsync | memory-sync snapshots the FINISHED config — run in stage 1 it would freeze an empty project as the baseline; docsync then tracks drift against docs that already exist |
+
+Within a stage, keep the existing tier order — `partial` (broken install) before `stale` before
+`missing`. `disabled`, `installed` and `n/a` rows never appear in the run-list — a switched-off
+mechanism is a choice, not a defect. Mention a `disabled` row once, below the list, tagged with the
+stage it would occupy if re-enabled, alongside its `enable` command.
+
+**The closing paragraph is not optional** — it is the one place the user sees why this dashboard
+hands back commands instead of running them. Print it every time, even when the list has one entry.
+Number rows CONTINUOUSLY across stages (1, 2, 3, … — never restart per stage), and keep every line
+copy-pasteable on its own:
 
 ```
 Run in this order, ONE PER SESSION:
-  1. /brewcode:superreview-setup install "..."   <- broken/partial first
-  2. /brewtools:task-board-setup upgrade "..."   <- stale next
-  3. /brewdoc:docsync-setup install              <- new installs last
 
-Nothing above was run for you, by design. Each of these is an interactive generator: it
-fans out several subagents, analyses the repo and asks you real questions. Two in one
-session degrade each other — the context fills with the first one's analysis and the
-second one's questions get answered against stale findings. Start a fresh session per
-command.
+  🔧 Stage 1 — fix global drift first (cheap, unlocks every stage below)
+    1. /brewtools:think-short-setup upgrade "..."
+    2. /brewtools:agent-return-setup upgrade "..."
+
+  🔍 Stage 2 — search foundation
+    3. /brewcode:semble-setup install
+
+  👥 Stage 3 — agent root
+    4. /brewcode:teams-setup install
+
+  🔗 Stage 4 — agent consumers (needs stage 3's agents)
+    5. /brewtools:agent-router-setup install
+    6. /brewtools:manager-setup install
+    7. /brewtools:agent-deadline-setup install
+    8. /brewcode:superreview-setup install
+
+  📋 Stage 5 — process layer
+    9. /brewtools:task-board-setup install
+
+  📚 Stage 6 — docs last (snapshots the finished config)
+    10. /brewdoc:memory-sync-setup install
+    11. /brewdoc:docsync-setup install
+
+⚠️  Nothing above was run for you, by design. Each of these is an interactive generator: it
+    fans out several subagents, analyses the repo and asks you real questions. Two in one
+    session degrade each other — the context fills with the first one's analysis and the
+    second one's questions get answered against stale findings. Start a fresh session per
+    command, one row at a time.
 ```
 
-Order: `partial` (broken install) -> `stale` -> `missing`. Within a tier, keep roster order.
-`disabled`, `installed` and `n/a` rows never appear in the run-list — a switched-off mechanism is a
-choice, not a defect. Mention a `disabled` row once, below the list, with its `enable` command.
+The sample above lists all eleven for illustration only — a real run prints ONLY the rows this
+report found out of scope (not `installed`/`disabled`/`n/a`), so most runs show 2–5 stages, several
+skipped entirely. A single out-of-scope row still gets the full closing paragraph, just a one-line
+list under its own stage header.
 
 ### The one offer — task-graph tools
 

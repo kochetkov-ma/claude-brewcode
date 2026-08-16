@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.1.1 content_version=6.0.0 generated_by=brewdoc:docsync-setup
+// brewcode-meta: version=6.1.2 content_version=6.0.0 generated_by=brewdoc:docsync-setup
 /**
  * docsync-gate — Stop hook (self-contained, project-local)
  *

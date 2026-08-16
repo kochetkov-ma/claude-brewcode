@@ -2,6 +2,18 @@
 
 ---
 
+## v6.1.2 (2026-08-16)
+
+> Docs: [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/)
+
+### brewcode
+
+#### Changed
+
+- **`setup-status`'s run-list is now grouped into 6 dependency-aware stages instead of a flat `partial -> stale -> missing` order.** `fix global drift -> search foundation -> agent root -> agent consumers -> process layer -> docs last`, each with an emoji header, reflecting that several setups consume what `teams-setup` creates or run better once `semble-setup`'s index exists
+
+---
+
 ## v6.1.1 (2026-08-16)
 
 > Docs: [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [brewtools skills](https://doc-claude.brewcode.app/brewtools/skills/) | [brewtools overview](https://doc-claude.brewcode.app/brewtools/overview/)
