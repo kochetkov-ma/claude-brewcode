@@ -1,4 +1,4 @@
-<!-- brewcode-meta: version=6.1.3 content_version=6.0.0 generated_by=brewtools:agent-router-setup -->
+<!-- brewcode-meta: version=6.1.4 content_version=6.1.4 generated_by=brewtools:agent-router-setup -->
 # agent-router hook — install / configure / remove runbook
 
 Self-contained hook asset. The `/brewtools:agent-router-setup` skill copies it into the
@@ -30,10 +30,12 @@ allowing as early as possible:
 | 3 | `enabled` is `false`, or the config file exists but does not parse | allow |
 | 4 | the picked type IS a project agent | allow |
 | 5 | the picked type is not listed in `genericTypes` — a specialist or built-in | allow. An OMITTED `subagent_type` is normalized to `general-purpose` first (the Agent-tool default) and policed like one; it escapes here only if `general-purpose` was removed from `genericTypes` |
-| 6 | intent rules — regex over the task text | deny, naming the expert; a project agent covering the same intent OUTRANKS the plugin specialist |
-| 7 | score the task against every `.claude/agents/*.md` frontmatter (`name` + `Triggers:`) | one clear winner (`minScore`, `margin`) -> deny naming it; several plausible -> `additionalContext` nudge with the top 3, NO deny; nothing -> silent allow |
-| 8 | anti-loop guard | a given task in a given project is denied at most ONCE per session (marker under `os.tmpdir()/brewtools-agent-router/`); a retry passes |
-| 9 | any error | fail OPEN |
+| 6 | `agent-router: override` (also `allow` / `skip`) in the description or prompt | allow, silently — the user's escape hatch, matched before any rule and on the UNTRUNCATED text |
+| 7 | STRONG intent rule — an authoring verb aimed at the artifact, not negated by `do not` / `never` / `how to` / `instead of` | deny, naming the expert: the first ranked project agent that scores AND **covers** the intent (its own frontmatter matches that rule's `domain` regex), else the plugin specialist. Coverage, not score: an agent that outranks everyone without covering the intent merely had its name in the prompt |
+| 8 | score the task against every `.claude/agents/*.md` frontmatter (`name` + `Triggers:`), each agent scored on the text with its OWN NAME struck out — kept only when the agent declares that name among its own `Triggers:` (a published keyword is earned evidence; a name quoted as a config value is not) | one clear winner (`minScore`, `margin` over the runner-up) -> deny naming it; several plausible -> `additionalContext` nudge with the top 3, NO deny; nothing -> silent allow. One ranking drives winner, margin and nudge list alike, so a quoted name can neither win nor pad the runner-up |
+| 9 | WEAK intent signal — a bare artifact mention (`SKILL.md`, `.claude/agents/`, `hooks.json`, an event name, a shebang) | NEVER denies. If step 8 also nudged, the two are merged into ONE message naming both the specialist and the project candidates; otherwise it nudges alone |
+| 10 | anti-loop guard | a given (session, project, task) is denied at most ONCE (marker under `os.tmpdir()/brewtools-agent-router/`); the retry gets a nudge instead. `task` = the spawn's DESCRIPTION, or the prompt's first 300 normalized chars when there is none — so a retry that rewrites the prompt passes. Trade-off: two descriptionless tasks sharing a boilerplate prompt header share one marker, and the guard errs toward allowing |
+| 11 | any error | fail OPEN |
 
 Scanned text = the spawn's `description` (first 500 chars) + `prompt` (first 2000).
 Both are re-read from the roster on EVERY call; there is no cache, so editing an agent
@@ -49,22 +51,29 @@ directory existence on purpose: a nested package or fixture carrying a bare `.cl
 used to mask the real root, which hid both the config and the roster and let a router
 disabled at the real root keep denying spawns from a nested cwd.
 
-**A missing `.claude/agents/` is an EMPTY roster, not a failure.** Steps 6 and 7 are
+**A missing `.claude/agents/` is an EMPTY roster, not a failure.** Steps 7 and 8 are
 independent: with no roster dir at all the intent rules STILL fire and still redirect
-to the plugin specialist (`brewcode:skill-creator` etc). Only the step-7 scoring goes
+to the plugin specialist (`brewcode:skill-creator` etc). Only the step-8 scoring goes
 silent, because it has nothing to score.
 
-Default intent routes (step 6):
+Default intent routes (step 7). Each carries a STRONG regex (an authoring verb aimed
+at the artifact — may deny), an optional WEAK one (a bare mention — nudge only, never
+a deny) and a `domain` regex used for coverage at step 7:
 
-| Intent | Expert |
-|--------|--------|
-| skill authoring | `brewcode:skill-creator` |
-| agent authoring | `brewcode:agent-creator` |
-| hooks | `brewcode:hook-creator` |
-| bash / sh scripts | `brewcode:bash-expert` |
+| Intent | Expert | STRONG (deny) | WEAK (nudge only) |
+|--------|--------|---------------|-------------------|
+| skill authoring | `brewcode:skill-creator` | create/fix/improve a skill or slash command | `SKILL.md`, "slash command" |
+| agent authoring | `brewcode:agent-creator` | create/fix a (sub)agent, agent definition/frontmatter | `.claude/agents/`, "agent roster/file" |
+| hooks | `brewcode:hook-creator` | create/debug/register a hook | an event name (`PreToolUse` …), `hookSpecificOutput`, `hooks.json` |
+| bash / sh scripts | `brewcode:bash-expert` | write/fix a shell script, `*.sh`, shellcheck | a `#!/bin/sh` shebang |
+
+A strong hit preceded by `do not` / `never` / `how to` / `instead of` / `without` is
+NOT a strong hit: that is talk about the artifact, not a request to author one.
 
 A deny is returned to the model as a tool error it can act on. The human is never
-prompted, the turn is not interrupted, and retrying once always gets through.
+prompted, the turn is not interrupted, and retrying once always gets through — the
+deny text says so and names the escape hatch: put `agent-router: override` (or
+`allow` / `skip`) in the description or prompt and the spawn passes untouched.
 
 Tier 2 — OPT-IN, wired only at `level strict`: a `type: "agent"` hook running
 `judge-prompt.md` on `claude-haiku-4-5-20251001`; an LLM adjudicates the ambiguous
@@ -82,7 +91,13 @@ picks.
   may lag. Tier 1 does not attempt it at all.
 - **Tier 1 matches trigger words, not meaning.** It deliberately errs toward
   allowing: an ambiguous case becomes a nudge, never a block. The intent regexes are
-  English trigger words.
+  English trigger words, split STRONG (authoring wording — may deny) vs WEAK (a bare
+  artifact mention — nudge only), and a strong hit sitting behind `do not` / `never` /
+  `how to` / `instead of` / `without` is suppressed as talk ABOUT the artifact.
+- **An explicit escape hatch always wins.** `agent-router: override` — also `allow`
+  or `skip` — anywhere in the spawn's description or prompt allows it silently,
+  checked before any rule and on the UNTRUNCATED text, not just the scan window.
+  Every deny message ends by naming it.
 - **Everything fails open** — bad config, unreadable roster, timeout, malformed
   output. The spawn goes through; the session never breaks. A config file that
   exists but does not parse turns the feature fully OFF (every spawn allowed
@@ -112,7 +127,7 @@ picks.
   "minScore": 3,
   "margin": 2,
   "intents": [
-    { "match": "regex", "expert": "brewcode:skill-creator", "label": "skill authoring" }
+    { "match": "strong regex", "expert": "brewcode:skill-creator", "label": "skill authoring", "weakMatch": "weak regex (optional)", "domain": "coverage regex (optional)" }
   ],
   "version": "X.Y.Z",
   "content_version": "X.Y.Z",
@@ -127,9 +142,9 @@ picks.
 | `level` | `fast` (tier 1 only) or `strict` (tier 1 + the LLM judge). A RECORD of what is wired — editing it by hand does not add or remove the tier-2 settings.json entry; run the `LEVEL` section for that. Tier 1 itself ignores this key |
 | `genericTypes` | the types that are policed at all. Anything else exits at step 5 |
 | `neverFlag` | never flagged, whatever the task says. EIGHT entries by default: `Explore`, `Plan`, `statusline-setup`, `output-style-setup` — `Explore` is the right tool for search, `Plan` for planning — plus the four built-in intent experts (`brewcode:agent-creator`, `brewcode:skill-creator`, `brewcode:hook-creator`, `brewcode:bash-expert`), since a redirect target can never be flagged. `normalizeConfig()` also auto-unions this list with every configured `intents[].expert`, so a custom `intents` table exempts its own experts without editing `neverFlag` by hand |
-| `minScore` | minimum roster score (step 7) before a project agent can win |
+| `minScore` | minimum roster score (step 8) before a project agent can win, and the floor a project agent must clear to outrank the specialist at step 7 |
 | `margin` | how far the winner must lead the runner-up; inside the margin it is a nudge, not a deny |
-| `intents` | OPTIONAL override of the step-6 routes; `{ "match": <regex source>, "expert": <agent type>, "label": <human label> }`. **Omit the key to keep the hook's built-in 4 routes** — see the warning below |
+| `intents` | OPTIONAL override of the step-7 routes; `{ "match": <STRONG regex source>, "expert": <agent type>, "label": <human label>, "weakMatch": <optional WEAK regex — nudge only>, "domain": <optional noun-only regex deciding which project agent COVERS the intent> }`. Omit `domain` and it falls back to `match`\|`weakMatch`; omit `weakMatch` and the rule has no weak side. **Omit the key entirely to keep the hook's built-in 4 routes** — see the warning below |
 | `version` / `content_version` / `generated_by` / `last_updated` | provenance, MANDATORY, re-stamped by every mode that writes this file (install, upgrade, enable, disable, level). `version` = the plugin release that produced THIS write; `content_version` = the release in which this INSTALL.md's generator logic last changed, read from this runbook's own header marker. Inert at runtime — the hook ignores unlisted keys. Never `doc_type`: that is a `.md`-frontmatter field |
 
 There is no nudge-threshold key. The nudge floor is DERIVED as
@@ -142,7 +157,8 @@ listed above is ignored.
 > authoring, shell scripting) with no warning from the hook. To add ONE route,
 > copy the built-in four out of `agent-router.mjs` (`DEFAULT_INTENTS`) and append to
 > them. Rules missing `match` or `expert` are dropped; a rule whose `match` does not
-> compile is skipped and the remaining rules still run.
+> compile is skipped ENTIRELY — its `weakMatch` side too — and the remaining rules
+> still run.
 
 Install deliberately does NOT write `intents`: the built-in routes stay
 authoritative and a half-written override cannot silently disable three of them.

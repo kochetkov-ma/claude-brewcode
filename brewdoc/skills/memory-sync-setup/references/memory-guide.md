@@ -1,4 +1,4 @@
-<!-- brewcode-meta: version=6.1.3 content_version=5.6.0 generated_by=brewdoc:memory-sync-setup -->
+<!-- brewcode-meta: version=6.1.4 content_version=5.6.0 generated_by=brewdoc:memory-sync-setup -->
 # Memory Guide
 
 Where a fact BELONGS, how to compress it, and what never gets written at all. Cited by every `/memory-sync`

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.1.3 content_version=6.0.0 generated_by=brewdoc:docsync-setup
+// brewcode-meta: version=6.1.4 content_version=6.0.0 generated_by=brewdoc:docsync-setup
 /**
  * docsync-watch — PostToolUse:Read hook (self-contained, project-local)
  *

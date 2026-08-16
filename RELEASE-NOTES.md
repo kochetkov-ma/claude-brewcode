@@ -2,6 +2,30 @@
 
 ---
 
+## v6.1.4 (2026-08-16)
+
+> Docs: [agent-router-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-router-setup/)
+
+> The router's `Agent` guard was denying spawns it had no business denying, and then denying the retry too. This patch makes a deny require evidence — that the named agent actually covers the intent, that the intent was actually stated rather than merely alluded to — and gives the caller a way out when it still gets it wrong.
+
+### brewtools
+
+#### Fixed
+
+- **A project agent outranks a plugin specialist only if it COVERS the intent.** `brewcode:skill-creator`, `agent-creator`, `hook-creator` and `bash-expert` used to lose the route to whatever scored highest, so an unrelated project agent with a few keyword hits hijacked skill authoring. Coverage is now tested per intent by a `domain` regex against the candidate's own frontmatter — score alone no longer wins
+- **Intent signals split into STRONG and WEAK; only STRONG may deny.** Real authoring wording denies; a bare mention of `SKILL.md`, `.claude/agents/`, `hooks.json`, an event name or a shebang is WEAK and nudges only — quoting a path is not a request to write one
+- **Authoring phrasings with a word between verb and noun are recognised again.** `Add a PreToolUse hook…`, `Create a slash command…` and `Create a new brewtools skill` were silently missed by the adjacency-only match and routed nowhere
+- **Roster scoring strikes each agent's own name out of the text before scoring it.** An agent quoted in a prompt as a config value scored on its own name — it could win the route outright, pad the runner-up's margin, or head the nudge list. The strike-out is skipped when the agent declares that name in its own `Triggers:`
+- **Strong intents behind a negation are suppressed.** `do not`, `never`, `how to` and `instead of` preceding the verb no longer read as a request to do it
+- **The anti-loop marker is keyed on the task DESCRIPTION, not the whole prompt body.** A retry that rewrote the prompt produced a new key and got denied a second time; keying on the description makes the retry pass as intended
+- **A weak signal coinciding with roster candidates emits ONE merged message.** Two separate messages for the same spawn were possible
+
+#### Added
+
+- **Explicit escape hatch: `agent-router: override` anywhere in the spawn text** (`allow` and `skip` accepted too). Matched on untruncated text and advertised in the deny message itself, so a false deny is self-recoverable without touching config
+
+---
+
 ## v6.1.3 (2026-08-16)
 
 > Docs: [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/)

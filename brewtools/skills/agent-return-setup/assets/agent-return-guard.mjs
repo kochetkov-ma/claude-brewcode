@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.1.3 content_version=6.0.0 generated_by=brewtools:agent-return-setup
+// brewcode-meta: version=6.1.4 content_version=6.0.0 generated_by=brewtools:agent-return-setup
 /**
  * agent-return-guard — SubagentStop hook (Node built-ins only, no I/O but stdin/stdout
  * plus the config read done by agent-return-budget.mjs).

@@ -148,7 +148,7 @@ function noTypePayload(cwd, description, session = 'S1') {
 }
 
 // ── message builders, mirrored verbatim from assets/agent-router.mjs ─────────
-const TAIL = '(Deliberate? retry once and it passes.)';
+const TAIL = '(Deliberate? retry as-is, or put "agent-router: override" in the prompt.)';
 
 function rosterDeny(name, rel, picked) {
   return (
@@ -176,6 +176,22 @@ function repeatCtx(expert, picked) {
     `agent-router: '${expert}' still looks like a better fit than ${picked} for this task,` +
     ' but this spawn is not being blocked (already flagged once, or the anti-loop marker' +
     ' could not be recorded) - proceeding as requested.'
+  );
+}
+
+function weakIntentCtx(label, expert, picked) {
+  return (
+    `agent-router: this task touches ${label} artifacts - '${expert}' is the expert` +
+    ` for it. Consider re-spawning with it; proceeding with ${picked}.`
+  );
+}
+
+function mergedNudgeCtx(label, expert, pairs, picked) {
+  const list = pairs.map(([n, r]) => `${n} (${r})`).join('; ');
+  return (
+    `agent-router: this task touches ${label} artifacts - '${expert}' is the expert` +
+    ` for it; project agents that may also fit better than ${picked}: ${list}.` +
+    ` Consider re-spawning with one of them; proceeding with ${picked}.`
   );
 }
 
@@ -1089,6 +1105,574 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
     'the identical retry is a notice, never a second block',
   );
   check('38b-exit', second.status, 0, 'hook must exit 0');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 39 - the incident: the retry rewrote the prompt and was denied a second time
+// GIVEN: the same session, same description, a REWRITTEN prompt on the retry
+// WHEN:  the hook runs twice
+// THEN:  deny, then the repeat notice - the anti-loop key is the description, not
+//        the prompt body the model reformulates on every retry
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const { proj, env } = newRoot('t39');
+  standardRoster(proj);
+  const desc = 'Create a new skill for the superreview flow';
+  const first = run(
+    payload({
+      cwd: proj,
+      session: 'REWRITE',
+      description: desc,
+      prompt: 'Run the generator and report its stdout.',
+    }),
+    env,
+  );
+  const second = run(
+    payload({
+      cwd: proj,
+      session: 'REWRITE',
+      description: desc,
+      prompt: 'Run the generator, then report the full stdout verbatim, nothing else.',
+    }),
+    env,
+  );
+  check(
+    '39a-rewritten-retry-first-denies',
+    safeParse(first.stdout),
+    denyOut(intentPluginDeny('skill authoring', 'brewcode:skill-creator', 'general-purpose')),
+    'first occurrence denies',
+  );
+  check(
+    '39b-rewritten-retry-passes',
+    safeParse(second.stdout),
+    ctxOut(repeatCtx('brewcode:skill-creator', 'general-purpose')),
+    'a reworded prompt on the same task must not mint a fresh marker',
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 40 - explicit override escape hatch
+// GIVEN: strong intent text plus "agent-router: override" in the prompt
+// WHEN:  the hook runs
+// THEN:  stdout empty, exit 0 - the user out-ranks every rule, silently
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const { proj, env } = newRoot('t40');
+  standardRoster(proj);
+  const r = run(
+    payload({
+      cwd: proj,
+      description: INTENT_SKILL,
+      prompt: 'agent-router: override - this runs a vendor generator, no authoring here.',
+    }),
+    env,
+  );
+  check('40-override-allows', r.stdout, '', 'an explicit override must allow silently');
+  check('40-override-exit', r.status, 0, 'hook must exit 0');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 41 - the plan-engine bug: the top-scored agent does NOT cover the intent
+// GIVEN: the skill intent fires; the only project agent scores solely because its
+//        name appears verbatim in the prompt as a config value
+// WHEN:  the hook runs
+// THEN:  deny names the PLUGIN specialist - a name in the prompt is not expertise
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const { proj, env } = newRoot('t41');
+  writeAgent(
+    proj,
+    'plan-engine',
+    'Owns plan engine + domain records. Triggers: pipeline stage, adaptation, compliance gate.',
+  );
+  const r = run(
+    payload({
+      cwd: proj,
+      description: 'Create a new skill for the superreview flow',
+      prompt: 'export ARBITER_AGENT="plan-engine"',
+    }),
+    env,
+  );
+  check(
+    '41-non-covering-top-agent',
+    safeParse(r.stdout),
+    denyOut(intentPluginDeny('skill authoring', 'brewcode:skill-creator', 'general-purpose')),
+    'a high-scoring agent that does not cover the intent must not be named',
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 42 - a lower-ranked project agent DOES cover the intent
+// GIVEN: the same fixture plus a skill-owning agent that scores less than plan-engine
+// WHEN:  the hook runs
+// THEN:  deny names the covering PROJECT agent, not the top-scored one
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const { proj, env } = newRoot('t42');
+  writeAgent(
+    proj,
+    'plan-engine',
+    'Owns plan engine + domain records. Triggers: pipeline stage, adaptation, compliance gate.',
+  );
+  writeAgent(
+    proj,
+    'skill-author',
+    'Project skill owner. Triggers: skill, superreview, skill activation',
+  );
+  const r = run(
+    payload({
+      cwd: proj,
+      description: 'Create a new skill for the superreview flow',
+      prompt: 'export ARBITER_AGENT="plan-engine"',
+    }),
+    env,
+  );
+  check(
+    '42-covering-agent-outranks-specialist',
+    safeParse(r.stdout),
+    denyOut(
+      intentProjectDeny(
+        'skill authoring',
+        'skill-author',
+        '.claude/agents/skill-author.md',
+        'general-purpose',
+      ),
+    ),
+    'the first RANKED agent that covers the intent wins, even below the top score',
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 43 - a bare artifact mention is a WEAK signal
+// GIVEN: a read-only grep over a generated SKILL.md, no authoring verb anywhere
+// WHEN:  the hook runs
+// THEN:  additionalContext naming the expert, never a deny
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const { proj, env } = newRoot('t43');
+  standardRoster(proj);
+  const r = run(
+    payload({
+      cwd: proj,
+      description: 'List the placeholders left in the generated files',
+      prompt: "grep -o '{[A-Z_]*}' .claude/skills/superreview/SKILL.md | sort -u",
+    }),
+    env,
+  );
+  check(
+    '43-weak-signal-nudges',
+    safeParse(r.stdout),
+    ctxOut(weakIntentCtx('skill authoring', 'brewcode:skill-creator', 'general-purpose')),
+    'a bare SKILL.md mention nudges, never denies',
+  );
+  check('43-weak-signal-exit', r.status, 0, 'hook must exit 0');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 44 - the real incident, replayed
+// GIVEN: the conductor roster verbatim and the "Emit superreview skill" spawn whose
+//        prompt is a vendor generator invocation (ARBITER_AGENT="plan-engine",
+//        a grep over SKILL.md, .claude/agents/intent-guard.md)
+// WHEN:  the hook runs
+// THEN:  exactly ONE merged nudge object - running a generator is not authoring,
+//        and plan-engine is only in the text as a config value
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const { proj, env } = newRoot('t44');
+  const conductor = [
+    ['admin-backoffice', 'Admin back-office CRUD + Airtable sync. Triggers: admin controller, admin CRUD screen, Airtable.'],
+    ['agronomy-data', 'SOP reference-data read layer. Triggers: crop/activity catalogue, nutrient band, fertilizer resolve.'],
+    ['crop-rotation', 'Crop rotation advisory (CRA) owner: rotation advice, pair scoring, justification.'],
+    ['economics-pricing', 'Owns lender-facing money - prices, P&L, cash flow. Triggers: pricing, revenue/opex, cash flow.'],
+    ['intent-guard', 'Review-phase anti-drift check: asked-vs-delivered. Not for development, invoked explicitly by name.'],
+    ['plan-engine', 'Owns plan engine + domain records. Triggers: pipeline stage, adaptation, compliance gate.'],
+    ['plan-workflow', 'Plan lifecycle owner - run/result/history, agronomist review, farmer execution and actuals capture.'],
+    ['platform-kernel', 'Notification outbox, i18n, web advices, photo storage, audit. Triggers: inbox, outbox, i18n.'],
+    ['plots-geo', 'Plots, soil samples and geo/climate-zone matching. Triggers: plot, soil sample, climate zone.'],
+    ['security-access', 'Owns Keycloak OIDC auth, role hierarchy, row-level scoping. Triggers: security, roles, access'],
+    ['sop-ingest', 'SOP ingest owner. Triggers: DOCX extract, staging proposal, Anthropic client.'],
+    ['weather-signals', 'Weather feed and signal owner. Triggers: forecast, weather refresh cron, weather signal.'],
+    ['web-templates', 'JTE/HTMX view layer owner. Triggers: .jte template, page or fragment, layout/i18n markup.'],
+  ];
+  for (const [name, description] of conductor) writeAgent(proj, name, description);
+  const incidentPrompt = [
+    'GOAL: generate the project-local `superreview` skill into /repo. This is the EMIT step',
+    'of brewcode:superreview-setup. The scalar placeholder values were already decided by me.',
+    '',
+    'ROLE: you run ONE bash command (exports + emit) and report its output.',
+    '',
+    'SCOPE - from cwd /repo, run EXACTLY this, as one bash invocation:',
+    '',
+    'export PROJECT_NAME="conductor"',
+    'export STACK_LABEL="Java/Kotlin"',
+    'export ARBITER_AGENT="plan-engine"',
+    'export VALIDATOR_AGENT="general-purpose"',
+    'export SCOPE_AGENT_A="Explore"',
+    'bash "/plugins/brewcode/skills/superreview-setup/scripts/generate.sh" emit && echo "EMIT_OK"',
+    '',
+    'Then, read-only, list what landed:',
+    'find .claude/skills/superreview -type f | sort',
+    "grep -o '{[A-Z_]*}' .claude/skills/superreview/SKILL.md | sort -u",
+    '',
+    'CONTEXT: recon is done. 12 project domain agents exist plus .claude/agents/intent-guard.md',
+    'which ALREADY exists with valid `name: intent-guard` frontmatter.',
+  ].join('\n');
+  const r = run(
+    payload({ cwd: proj, description: 'Emit superreview skill', prompt: incidentPrompt }),
+    env,
+  );
+  check(
+    '44-incident-never-denies',
+    safeParse(r.stdout),
+    ctxOut(weakIntentCtx('skill authoring', 'brewcode:skill-creator', 'general-purpose')),
+    'running a vendor generator must nudge, never deny, and never name the quoted agent',
+  );
+  check('44-incident-exit', r.status, 0, 'hook must exit 0');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 45 - a config-supplied weakMatch is honored on both sides
+// GIVEN: a custom intents table whose single rule carries match + weakMatch
+// WHEN:  the strong wording runs, then the weak one
+// THEN:  deny for the strong hit, nudge for the bare artifact mention
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const { proj, env } = newRoot('t45');
+  writeConfig(proj, {
+    intents: [
+      {
+        label: 'widget authoring',
+        expert: 'proj:widget-expert',
+        match: '\\bwidget\\s+authoring\\b',
+        weakMatch: '\\bwidget\\b',
+      },
+    ],
+  });
+  const strong = run(payload({ cwd: proj, description: 'Start the widget authoring pass' }), env);
+  const weak = run(payload({ cwd: proj, description: 'Rebuild the widget renderer' }), env);
+  check(
+    '45a-config-strong-denies',
+    safeParse(strong.stdout),
+    denyOut(intentPluginDeny('widget authoring', 'proj:widget-expert', 'general-purpose')),
+    'a configured match still denies',
+  );
+  check(
+    '45b-config-weak-nudges',
+    safeParse(weak.stdout),
+    ctxOut(weakIntentCtx('widget authoring', 'proj:widget-expert', 'general-purpose')),
+    'a configured weakMatch nudges instead of denying',
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 46 - the weak side of the agent, hook and bash rules
+// GIVEN: read-only tasks that merely mention .claude/agents/, hooks.json, a shebang
+// WHEN:  the hook runs (empty roster, so nothing else can speak)
+// THEN:  a nudge naming the expert - never a deny
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const weakCases = [
+    ['t46a', 'agent-mention', 'Summarise what lives under .claude/agents/ today', '', 'agent authoring', 'brewcode:agent-creator'],
+    ['t46b', 'hook-mention', 'Report which events are registered', 'cat hooks.json | jq .', 'hook authoring', 'brewcode:hook-creator'],
+    ['t46c', 'shebang-mention', 'Explain what this snippet prints', '#!/usr/bin/env bash\necho hi', 'shell scripting', 'brewcode:bash-expert'],
+  ];
+  for (const [tag, name, description, prompt, label, expert] of weakCases) {
+    const { proj, env } = newRoot(tag);
+    const r = run(payload({ cwd: proj, description, prompt }), env);
+    check(
+      `46-weak-${name}`,
+      safeParse(r.stdout),
+      ctxOut(weakIntentCtx(label, expert, 'general-purpose')),
+      'a bare artifact mention nudges, never denies',
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 47 - intentOwner stops at minScore
+// GIVEN: strong skill intent and ONE project agent that covers "skill" in its own
+//        words but scores below minScore
+// WHEN:  the hook runs
+// THEN:  the PLUGIN expert is named - a covering agent still has to earn the score
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const { proj, env } = newRoot('t47');
+  writeAgent(proj, 'skill-scribe', 'Owns the skill catalogue.');
+  const r = run(payload({ cwd: proj, description: 'Create a new skill for the superreview flow' }), env);
+  check(
+    '47-intent-owner-minscore-break',
+    safeParse(r.stdout),
+    denyOut(intentPluginDeny('skill authoring', 'brewcode:skill-creator', 'general-purpose')),
+    'a covering agent below minScore must not be named',
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 48 - the override token past the prompt scan window
+// GIVEN: strong intent in the description and the override token at char ~2100 of
+//        the prompt, well past PROMPT_SCAN_CHARS
+// WHEN:  the hook runs
+// THEN:  still silent - the override is matched on the untruncated text
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const { proj, env } = newRoot('t48');
+  standardRoster(proj);
+  const r = run(
+    payload({
+      cwd: proj,
+      description: INTENT_SKILL,
+      prompt: `${'filler line to push the token out of the window. '.repeat(60)}\nagent-router: override`,
+    }),
+    env,
+  );
+  check('48-override-past-window', r.stdout, '', 'the override is honored wherever it is written');
+  check('48-override-past-window-exit', r.status, 0, 'hook must exit 0');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 49 - a roster deny must survive the winner's own name being struck out
+// GIVEN: (a) an agent whose ONLY score comes from its name quoted as a config value
+//        (b) an agent that scores on its trigger vocabulary alone
+// WHEN:  the hook runs
+// THEN:  (a) nudge - the score was coincidence; (b) deny - the score was earned
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const a = newRoot('t49a');
+  writeAgent(
+    a.proj,
+    'plan-engine',
+    'Owns plan engine + domain records. Triggers: pipeline stage, adaptation, compliance gate.',
+  );
+  const coincidence = run(
+    payload({
+      cwd: a.proj,
+      description: 'Refresh the release checklist',
+      prompt: 'export ARBITER_AGENT="plan-engine"',
+    }),
+    a.env,
+  );
+  check(
+    '49a-name-only-score-silent',
+    coincidence.stdout,
+    '',
+    'a name quoted as a config value is not expertise - it scores nothing',
+  );
+
+  const b = newRoot('t49b');
+  writeAgent(
+    b.proj,
+    'payments-ledger',
+    'Owns billing money movement. Triggers: invoice, settlement, ledger entry',
+  );
+  const earned = run(
+    payload({
+      cwd: b.proj,
+      description: 'Reconcile the invoice settlement and the ledger entry',
+    }),
+    b.env,
+  );
+  check(
+    '49b-earned-score-denies',
+    safeParse(earned.stdout),
+    denyOut(
+      rosterDeny('payments-ledger', '.claude/agents/payments-ledger.md', 'general-purpose'),
+    ),
+    'a score earned on trigger vocabulary still denies',
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 50 - the strong phrasings the incident review named
+// GIVEN: authoring wordings with one or two words between the verb and the noun
+// WHEN:  the hook runs against an empty roster
+// THEN:  each names its plugin expert; `hooks.json` as a noun stays weak
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const phrasings = [
+    ['t50a', 'sessionstart-hook', 'Write a SessionStart hook that injects the roster', 'hook authoring', 'brewcode:hook-creator'],
+    ['t50b', 'posttooluse-hook', 'Debug my PostToolUse hook, it never fires', 'hook authoring', 'brewcode:hook-creator'],
+    ['t50c', 'slash-command', 'Create a slash command that lints the changelog', 'skill authoring', 'brewcode:skill-creator'],
+    ['t50d', 'brewtools-skill', 'Create a new brewtools skill', 'skill authoring', 'brewcode:skill-creator'],
+    ['t50e', 'project-agent', 'Write a project agent', 'agent authoring', 'brewcode:agent-creator'],
+    ['t50f', 'flaky-script', 'Fix the flaky deploy.sh', 'shell scripting', 'brewcode:bash-expert'],
+  ];
+  for (const [tag, name, description, label, expert] of phrasings) {
+    const { proj, env } = newRoot(tag);
+    const r = run(payload({ cwd: proj, description }), env);
+    check(
+      `50-strong-${name}`,
+      safeParse(r.stdout),
+      denyOut(intentPluginDeny(label, expert, 'general-purpose')),
+      'the loosened verb-to-noun window must still fire',
+    );
+  }
+  const { proj, env } = newRoot('t50g');
+  const r = run(
+    payload({ cwd: proj, description: 'Update the config, hooks.json lives at the repo root' }),
+    env,
+  );
+  check(
+    '50-hooks-json-stays-weak',
+    safeParse(r.stdout),
+    ctxOut(weakIntentCtx('hook authoring', 'brewcode:hook-creator', 'general-purpose')),
+    'a file name is not an authoring request',
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 51 - negation guard
+// GIVEN: text that talks ABOUT authoring instead of asking for it
+// WHEN:  the hook runs against an empty roster
+// THEN:  silence - a strong match preceded by a negation is not a request
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const negations = [
+    ['t51a', 'do-not-create', 'Do not create a new agent here; just summarise the roster.'],
+    ['t51b', 'explains-how', 'The README explains how to create a skill, but we only need a summary.'],
+  ];
+  for (const [tag, name, description] of negations) {
+    const { proj, env } = newRoot(tag);
+    const r = run(payload({ cwd: proj, description }), env);
+    check(`51-negation-${name}`, r.stdout, '', 'talk about authoring is not an authoring request');
+    check(`51-negation-${name}-exit`, r.status, 0, 'hook must exit 0');
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 52 - an agent whose vocabulary IS its own name
+// GIVEN: `sentry`, which declares its own name among its Triggers
+// WHEN:  a sentry triage task runs
+// THEN:  deny - a published name is real evidence, not a coincidence
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const { proj, env } = newRoot('t52');
+  writeAgent(proj, 'sentry', 'Error tracking owner. Triggers: sentry, sentry issue');
+  const r = run(
+    payload({
+      cwd: proj,
+      description: 'Sentry is throwing a new sentry issue group in production; triage it.',
+    }),
+    env,
+  );
+  check(
+    '52-eponymous-trigger-denies',
+    safeParse(r.stdout),
+    denyOut(rosterDeny('sentry', '.claude/agents/sentry.md', 'general-purpose')),
+    'an agent that publishes its name as a trigger keeps its name hits',
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 53 - a stray agent name must not inflate the RUNNER-UP either
+// GIVEN: payments-ledger + plan-engine, a ledger task, with and without the
+//        `export ARBITER_AGENT="plan-engine"` line in the prompt
+// WHEN:  the hook runs both ways
+// THEN:  deny naming payments-ledger in both - the margin is computed on the same
+//        name-struck ranking, so a quoted name cannot suppress a real winner
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const expected = denyOut(
+    rosterDeny('payments-ledger', '.claude/agents/payments-ledger.md', 'general-purpose'),
+  );
+  const ledgerCases = [
+    ['t53a', 'clean', 'Reconcile the invoice settlement against the ledger entry.'],
+    [
+      't53b',
+      'with-export',
+      'export ARBITER_AGENT="plan-engine"\nReconcile the invoice settlement against the ledger entry.',
+    ],
+  ];
+  for (const [tag, name, prompt] of ledgerCases) {
+    const { proj, env } = newRoot(tag);
+    writeAgent(
+      proj,
+      'payments-ledger',
+      'Owns billing money movement. Triggers: invoice, settlement, ledger entry',
+    );
+    writeAgent(
+      proj,
+      'plan-engine',
+      'Owns plan engine + domain records. Triggers: pipeline stage, adaptation, compliance gate.',
+    );
+    const r = run(payload({ cwd: proj, description: 'reconcile invoice', prompt }), env);
+    check(
+      `53-ledger-${name}-denies`,
+      safeParse(r.stdout),
+      expected,
+      'a quoted name must not inflate the runner-up and kill the margin',
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 54 - the nudge list is ordered on the same name-struck ranking
+// GIVEN: the incident fixture from case 41
+// WHEN:  the hook runs
+// THEN:  the unearned agent does not head the nudge list
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const { proj, env } = newRoot('t54');
+  writeAgent(
+    proj,
+    'plan-engine',
+    'Owns plan engine + domain records. Triggers: pipeline stage, adaptation, compliance gate.',
+  );
+  writeAgent(proj, 'release-notes', 'Release notes owner. Triggers: changelog');
+  writeAgent(proj, 'docs-index', 'Docs index owner. Triggers: changelog');
+  const r = run(
+    payload({
+      cwd: proj,
+      description: 'Refresh the changelog entry',
+      prompt: 'export ARBITER_AGENT="plan-engine"',
+    }),
+    env,
+  );
+  check(
+    '54-nudge-order',
+    safeParse(r.stdout),
+    ctxOut(
+      nudgeCtx(
+        [
+          ['docs-index', '.claude/agents/docs-index.md'],
+          ['release-notes', '.claude/agents/release-notes.md'],
+        ],
+        'general-purpose',
+      ),
+    ),
+    'an agent that scored only on its quoted name is not recommended at all',
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 55 - a weak intent and a scoring agent produce ONE merged message
+// GIVEN: a bare SKILL.md mention plus an agent that scores below minScore
+// WHEN:  the hook runs
+// THEN:  a single nudge naming both the specialist and the candidate
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const { proj, env } = newRoot('t55');
+  writeAgent(proj, 'template-scout', 'Template audit owner. Triggers: placeholders');
+  const r = run(
+    payload({
+      cwd: proj,
+      description: 'List the placeholders left in the generated files',
+      prompt: "grep -o '{[A-Z_]*}' .claude/skills/superreview/SKILL.md | sort -u",
+    }),
+    env,
+  );
+  check(
+    '55-merged-nudge',
+    safeParse(r.stdout),
+    ctxOut(
+      mergedNudgeCtx(
+        'skill authoring',
+        'brewcode:skill-creator',
+        [['template-scout', '.claude/agents/template-scout.md']],
+        'general-purpose',
+      ),
+    ),
+    'the weak signal and the roster nudge must never be two messages',
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

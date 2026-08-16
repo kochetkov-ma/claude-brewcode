@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.1.3 content_version=5.6.0 generated_by=brewtools:agent-return-setup
+// brewcode-meta: version=6.1.4 content_version=5.6.0 generated_by=brewtools:agent-return-setup
 /**
  * agent-return-contract — SubagentStart hook (Node built-ins only).
  *

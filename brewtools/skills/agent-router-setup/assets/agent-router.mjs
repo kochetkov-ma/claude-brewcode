@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.1.3 content_version=6.0.0 generated_by=brewtools:agent-router-setup
+// brewcode-meta: version=6.1.4 content_version=6.1.4 generated_by=brewtools:agent-router-setup
 /**
  * agent-router - PreToolUse hook for the `Agent` tool (Node built-ins only, ESM).
  *
@@ -15,15 +15,25 @@
  *   4. subagent_type is a project agent          -> allow  (an expert was already picked)
  *      (an omitted subagent_type normalizes to general-purpose before steps 4-5)
  *   5. subagent_type not generic / in neverFlag  -> allow  (config owns the generic list)
- *   6. intent rule fires + picked is generic     -> DENY, naming the expert
- *      (a project agent covering the same intent outranks the plugin specialist)
- *   7. roster scoring: one clear winner          -> DENY, naming it
+ *   6. "agent-router: override|allow|skip" in the task text -> allow (escape hatch)
+ *   7. STRONG intent rule fires + picked is generic -> DENY, naming the expert: the
+ *      first ranked project agent that scores AND whose own frontmatter matches the
+ *      same rule, else the plugin specialist. An agent that outranks everyone but
+ *      does not cover the intent is not the expert - it just had its name in the
+ *      prompt (the plan-engine incident).
+ *   8. roster scoring: one clear winner          -> DENY, naming it. Every agent is
+ *      scored on the text with its OWN NAME struck out, so a name quoted in the prompt
+ *      (a config value: ARBITER_AGENT="plan-engine") earns nothing; an agent that
+ *      declares its name among its `Triggers:` keeps those hits -> nudge
  *      several plausible / weak best             -> additionalContext nudge, allow
- *      nothing scores                            -> allow silently
- *   8. anti-loop: a given (session, task) is denied AT MOST ONCE; the retry is
- *      allowed with additionalContext instead. A deny returns to the model as a
- *      tool error; denying the retry too would loop forever.
- *   9. fail open, always: any throw / bad stdin / bad config / bad roster ->
+ *      nothing scores                            -> fall through
+ *   9. WEAK intent signal (a bare artifact mention: SKILL.md, hooks.json, a shebang):
+ *      never denies. If step 8 nudged, the two are MERGED into one message naming both
+ *      the specialist and the candidates; otherwise it nudges alone.
+ *  10. anti-loop: a given (session, root, task) is denied AT MOST ONCE; the retry is
+ *      allowed with additionalContext instead. A deny returns to the model as a tool
+ *      error; denying the retry too would loop forever.
+ *  11. fail open, always: any throw / bad stdin / bad config / bad roster ->
  *      exit 0, no stdout. Never breaks the user's tool call.
  *
  * Channels:
@@ -31,9 +41,16 @@
  *   nudge : hookSpecificOutput.additionalContext, NO permissionDecision (an `allow`
  *           here would bypass the user's own deny rules)
  *
- * State: <os.tmpdir()>/brewtools-agent-router/<session_id>/<sha1(root+task)[0..32]>
- *        one empty-ish marker file per (session, root, task) already denied once; nothing
- *        else lives there. Nothing is written under ~/.claude (harness-protected
+ * State: <os.tmpdir()>/brewtools-agent-router/<session_id>/<sha1(root+key)[0..32]>
+ *        one empty-ish marker file per (session, root, task) already denied once.
+ *        `key` is the DESCRIPTION (the prompt's first 300 normalized chars only when
+ *        there is no description) and deliberately ignores both the prompt body and the
+ *        expert named: the model rewrites the prompt when it retries and the second pass
+ *        can land on a different expert, and either one minted a fresh key - so the
+ *        retry was denied too. Accepted trade-off: two distinct descriptionless tasks
+ *        behind the same boilerplate prompt header share one marker; anti-loop errs
+ *        toward allowing. Nothing else lives there, and nothing is written under
+ *        ~/.claude (harness-protected
  *        path). If the state root is unusable (read-only, foreign-owned tmp) EVERY
  *        deny degrades to a nudge - without a marker we cannot guarantee the loop
  *        terminates.
@@ -59,6 +76,7 @@ const STALE_MS = 24 * 60 * 60 * 1000; // prune markers older than ~1 day
 const MAX_ROOT_CLIMB = 16;
 const PROMPT_SCAN_CHARS = 2000;
 const DESC_SCAN_CHARS = 500;
+const KEY_PROMPT_CHARS = 600; // raw slice behind the 300-char anti-loop key
 const DESC_WORD_CAP = 3; // description-word overlap is noisy; bound its contribution
 const UID = typeof process.getuid === 'function' ? process.getuid() : null;
 
@@ -67,39 +85,51 @@ const UID = typeof process.getuid === 'function' ? process.getuid() : null;
  * case-insensitive, run over the RAW task text), `expert` the agent to redirect to,
  * `label` the human phrase used in the deny reason. First match wins. A config
  * `intents` array REPLACES this table wholesale.
+ *
+ * `match` carries only STRONG signals - an authoring verb aimed at the artifact.
+ * `weakMatch` (optional) carries bare mentions: naming SKILL.md or hooks.json, or a
+ * shebang inside a pasted command, says the task TOUCHES the artifact, not that it
+ * authors one. A weak hit can only nudge; running a vendor generator must not be
+ * blocked because its output path ends in SKILL.md.
  */
 const DEFAULT_INTENTS = [
   {
     label: 'skill authoring',
     expert: 'brewcode:skill-creator',
     match:
-      '\\bSKILL\\.md\\b' +
-      '|\\bslash[ -]command\\b' +
-      '|\\bskill activation\\b' +
+      '\\bskill activation\\b' +
       '|\\b(?:creat|writ|author|scaffold|improv|refactor|fix|updat|debug|add)\\w*\\s+' +
-      '(?:a\\s+|an\\s+|the\\s+|new\\s+|our\\s+|this\\s+)*(?:claude(?:\\s+code)?\\s+)?skills?(?![\\w-])' +
+      '(?:a\\s+|an\\s+|the\\s+|new\\s+|our\\s+|this\\s+)*(?:[\\w:.-]+\\s+){0,2}?' +
+      '(?:claude(?:\\s+code)?\\s+)?(?:skills?|slash[ -]commands?)(?![\\w-])' +
       '|\\bskills?\\s+(?:creation|authoring|scaffold\\w*|definition)\\b',
+    weakMatch: '\\bSKILL\\.md\\b|\\bslash[ -]command\\b',
+    domain: '\\bskills?(?![\\w-])|\\bSKILL\\.md\\b|\\bslash[ -]commands?(?![\\w-])',
   },
   {
     label: 'agent authoring',
     expert: 'brewcode:agent-creator',
     match:
-      '\\.claude/agents/' +
-      '|\\bagent (?:definition|frontmatter|roster|file)\\b' +
+      '\\bagent (?:definition|frontmatter)\\b' +
       '|\\bsubagent definition\\b' +
       '|\\b(?:creat|writ|author|scaffold|improv|refactor|fix|updat|add)\\w*\\s+' +
-      '(?:a\\s+|an\\s+|the\\s+|new\\s+|our\\s+|this\\s+)*(?:sub[- ]?)?agents?(?![\\w-])',
+      '(?:a\\s+|an\\s+|the\\s+|new\\s+|our\\s+|this\\s+)*(?:[\\w:.-]+\\s+){0,2}?' +
+      '(?:sub[- ]?)?agents?(?![\\w-])',
+    weakMatch: '\\.claude/agents/|\\bagent (?:roster|file)\\b',
+    domain: '\\b(?:sub[- ]?)?agents?(?![\\w-])',
   },
   {
     label: 'hook authoring',
     expert: 'brewcode:hook-creator',
     match:
+      '\\b(?:creat|writ|author|debug|fix|improv|updat|instal|regist|add)\\w*\\s+' +
+      '(?:a\\s+|an\\s+|the\\s+|new\\s+|our\\s+|this\\s+)*(?:[\\w:.-]+\\s+){0,2}?' +
+      '(?:claude(?:\\s+code)?\\s+)?hooks?(?![\\w-]|\\.json)',
+    weakMatch:
       '\\bPreToolUse\\b|\\bPostToolUse\\b|\\bSessionStart\\b|\\bUserPromptSubmit\\b' +
       '|\\bSubagentStart\\b|\\bSubagentStop\\b|\\bhookSpecificOutput\\b|\\bhooks\\.json\\b' +
-      '|\\b(?:creat|writ|author|debug|fix|improv|updat|instal|regist|add)\\w*\\s+' +
-      '(?:a\\s+|an\\s+|the\\s+|new\\s+|our\\s+|this\\s+)*(?:claude(?:\\s+code)?\\s+)?hooks?(?![\\w-])' +
       '|\\bsettings\\.json\\b[^\\n]{0,40}\\bhooks?\\b' +
       '|\\bhooks?\\b[^\\n]{0,40}\\bsettings\\.json\\b',
+    domain: '\\bhooks?(?![\\w-])',
   },
   {
     label: 'shell scripting',
@@ -108,11 +138,23 @@ const DEFAULT_INTENTS = [
       '\\bshell\\s?script\\b' +
       '|\\b(?:bash|zsh|sh)\\s+script\\b' +
       '|\\bshellcheck\\b' +
-      '|#!/(?:usr/bin/env\\s+)?(?:ba|z)?sh\\b' +
       '|\\b(?:writ|creat|fix|debug|refactor|harden|port|updat)\\w*\\s+' +
-      '(?:a\\s+|an\\s+|the\\s+|new\\s+|our\\s+|this\\s+)*[\\w./-]*\\.(?:sh|bash|zsh)\\b',
+      '(?:a\\s+|an\\s+|the\\s+|new\\s+|our\\s+|this\\s+)*(?:[\\w:.-]+\\s+){0,2}?' +
+      '[\\w./-]*\\.(?:sh|bash|zsh)\\b',
+    weakMatch: '#!/(?:usr/bin/env\\s+)?(?:ba|z)?sh\\b',
+    domain: '\\b(?:bash|shell|zsh)(?![\\w-])|\\.(?:sh|bash|zsh)\\b',
   },
 ];
+
+/** Explicit user escape hatch, honored before any matching, on the UNTRUNCATED text. */
+const OVERRIDE = /\bagent-router\s*:\s*(?:override|allow|skip)\b/i;
+
+/**
+ * A strong hit right after one of these is talk ABOUT the artifact, not a request to
+ * author one ("do not create a new agent here", "explains how to create a skill").
+ */
+const NEGATION =
+  /\b(?:do(?:es)?\s+not|don.t|never|avoid|instead\s+of|rather\s+than|how\s+to|explains?\s+how|without)\b[^\n]{0,20}$/i;
 
 const DEFAULTS = {
   enabled: true,
@@ -142,7 +184,7 @@ const STOPWORDS = new Set([
   'only', 'also', 'more', 'most', 'each', 'per', 'about', 'after', 'before',
 ]);
 
-const TAIL = '(Deliberate? retry once and it passes.)';
+const TAIL = '(Deliberate? retry as-is, or put "agent-router: override" in the prompt.)';
 
 let stateRootOk;
 
@@ -263,9 +305,16 @@ function normalizeConfig(raw) {
   if (Number.isFinite(raw.minScore) && raw.minScore > 0) cfg.minScore = raw.minScore;
   if (Number.isFinite(raw.margin) && raw.margin >= 0) cfg.margin = raw.margin;
   if (Array.isArray(raw.intents)) {
-    cfg.intents = raw.intents.filter(
-      (r) => r && typeof r === 'object' && nonEmpty(r.match) && nonEmpty(r.expert),
-    );
+    cfg.intents = raw.intents
+      .filter((r) => r && typeof r === 'object' && nonEmpty(r.match) && nonEmpty(r.expert))
+      .map((r) => ({
+        label: r.label,
+        expert: r.expert,
+        match: r.match,
+        // optional; an entry without it behaves exactly as before
+        ...(nonEmpty(r.weakMatch) ? { weakMatch: r.weakMatch } : {}),
+        ...(nonEmpty(r.domain) ? { domain: r.domain } : {}),
+      }));
   }
   // An intent's redirect target is by definition already the right expert - it
   // can never be something this hook itself flags, built-in table or user override.
@@ -290,7 +339,11 @@ function taskText(toolInput) {
   return `${desc.slice(0, DESC_SCAN_CHARS)}\n${prompt.slice(0, PROMPT_SCAN_CHARS)}`;
 }
 
-/** Frontmatter `name` + `description`; anything malformed yields null (file skipped). */
+/**
+ * Frontmatter `name` + `description`; anything malformed yields null (file skipped).
+ * `self` is the agent's own words (name + full description incl. its triggers) - an
+ * intent rule is run against it to ask whether this agent actually covers the intent.
+ */
 function parseAgentFile(file, rel) {
   let raw;
   try {
@@ -322,7 +375,7 @@ function parseAgentFile(file, rel) {
       .split(' ')
       .filter((w) => w.length >= 4 && !STOPWORDS.has(w)),
   );
-  return { name, rel, triggers, words: [...words] };
+  return { name, rel, triggers, words: [...words], self: `${name} ${description}` };
 }
 
 function readRoster(dir) {
@@ -368,12 +421,23 @@ function scoreAgent(agent, textNorm, tokens) {
   return score;
 }
 
+/**
+ * Every agent is scored on the text with its OWN name struck out: a name quoted as a
+ * config value is not expertise (the plan-engine incident). Exception - an agent that
+ * publishes its name among its `Triggers:` has earned those hits as real evidence.
+ */
+function scoreOn(agent, textNorm) {
+  const nameNorm = normalizeText(agent.name);
+  const t =
+    nameNorm && !agent.triggers.includes(nameNorm) ? textNorm.split(nameNorm).join(' ') : textNorm;
+  return scoreAgent(agent, t, new Set(t.split(' ').filter(Boolean)));
+}
+
 /** Descending by score, then by name for a deterministic order. */
 function rankRoster(roster, text) {
   const textNorm = normalizeText(text);
-  const tokens = new Set(textNorm.split(' ').filter(Boolean));
   return roster
-    .map((a) => ({ agent: a, score: scoreAgent(a, textNorm, tokens) }))
+    .map((a) => ({ agent: a, score: scoreOn(a, textNorm) }))
     .sort((x, y) => y.score - x.score || x.agent.name.localeCompare(y.agent.name));
 }
 
@@ -454,15 +518,17 @@ function safeSegment(s) {
 }
 
 /**
- * True the FIRST time this (session, root, task) is seen; false afterwards, and false
- * whenever the marker cannot be persisted - a deny we cannot record is a deny that
- * could loop, so it degrades to a nudge instead.
+ * True the FIRST time this (session, root, keyText) is seen; false afterwards, and false
+ * whenever the marker cannot be persisted - a deny we cannot record is a deny that could
+ * loop, so it degrades to a nudge instead. `keyText` is the stable part of the decision
+ * (see the header): neither the prompt body nor the named expert is hashed, since the
+ * retry may reword the prompt and land on a different expert.
  */
-function claimDeny(sessionId, root, text) {
+function claimDeny(sessionId, root, keyText) {
   if (!ensureStateRoot()) return false;
   const session = safeSegment(sessionId) || 'nosession';
   const dir = path.join(STATE_ROOT, session);
-  const marker = path.join(dir, sha1(`${root}\0${normalizeText(text)}`).slice(0, 32));
+  const marker = path.join(dir, sha1(`${root}\0${keyText}`).slice(0, 32));
   try {
     lstatSync(marker);
     return false; // already denied once
@@ -510,6 +576,14 @@ function repeatContext(expert, picked) {
   );
 }
 
+/** Weak signal: the task only MENTIONS the artifact - name the expert, block nothing. */
+function weakIntentContext(intent, picked) {
+  return (
+    `agent-router: this task touches ${intent.label} artifacts - '${intent.expert}' is the expert` +
+    ` for it. Consider re-spawning with it; proceeding with ${picked}.`
+  );
+}
+
 function nudgeContext(candidates, picked) {
   const list = candidates.map((c) => `${c.agent.name} (${c.agent.rel})`).join('; ');
   return (
@@ -518,8 +592,18 @@ function nudgeContext(candidates, picked) {
   );
 }
 
-function emitDeny(reason, expert, picked, sessionId, root, text) {
-  if (claimDeny(sessionId, root, text)) {
+/** Both signals at once - the two nudge paths race otherwise and the specialist is lost. */
+function mergedNudgeContext(intent, candidates, picked) {
+  const list = candidates.map((c) => `${c.agent.name} (${c.agent.rel})`).join('; ');
+  return (
+    `agent-router: this task touches ${intent.label} artifacts - '${intent.expert}' is the expert` +
+    ` for it; project agents that may also fit better than ${picked}: ${list}.` +
+    ` Consider re-spawning with one of them; proceeding with ${picked}.`
+  );
+}
+
+function emitDeny(reason, expert, picked, sessionId, root, keyText) {
+  if (claimDeny(sessionId, root, keyText)) {
     output({
       hookSpecificOutput: {
         hookEventName: EVENT,
@@ -540,17 +624,55 @@ function emitContext(text) {
 
 // ── main ─────────────────────────────────────────────────────────────────────
 
+function compileIntent(source) {
+  try {
+    return new RegExp(source, 'i');
+  } catch {
+    return null; // a bad user regex must not disable the rest of the table
+  }
+}
+
+/** A strong match counts only when it is not negated by the words just before it. */
+function strongHit(re, text) {
+  if (!re) return false;
+  const m = re.exec(text);
+  return !!m && !NEGATION.test(text.slice(0, m.index));
+}
+
+/**
+ * First STRONG match wins and may deny; a weak-only match is remembered and, if nothing
+ * else speaks, becomes a nudge. The compiled strong regex travels with the result -
+ * step 7 reuses it per roster agent instead of recompiling inside that loop.
+ */
 function matchIntent(intents, text) {
+  let weak = null;
   for (const rule of intents) {
-    let re;
-    try {
-      re = new RegExp(rule.match, 'i');
-    } catch {
-      continue; // a bad user regex must not disable the rest of the table
-    }
-    if (re.test(text)) {
-      return { label: rule.label || 'specialist work', expert: rule.expert, match: rule.match };
-    }
+    const label = rule.label || 'specialist work';
+    const re = compileIntent(rule.match);
+    // Rosters describe OWNERSHIP, not authoring - a project owner never matches the
+    // authoring verb pattern. `domain` is the noun-only test used for coverage.
+    const coverRe = compileIntent(
+      nonEmpty(rule.domain)
+        ? rule.domain
+        : nonEmpty(rule.weakMatch)
+          ? `${rule.match}|${rule.weakMatch}`
+          : rule.match,
+    );
+    if (strongHit(re, text)) return { label, expert: rule.expert, re, coverRe, strong: true };
+    // an uncompilable `match` disables the whole rule, weak side included
+    if (weak || !re || !nonEmpty(rule.weakMatch)) continue;
+    const weakRe = compileIntent(rule.weakMatch);
+    if (weakRe && weakRe.test(text)) weak = { label, expert: rule.expert, re, coverRe, strong: false };
+  }
+  return weak;
+}
+
+/** First ranked agent that both scores and covers `intent` in its own words. */
+function intentOwner(ranked, intent, minScore) {
+  for (const c of ranked) {
+    if (c.score < minScore) break; // ranked descending
+    const cov = intent.coverRe || intent.re;
+    if (cov && cov.test(c.agent.self)) return c.agent;
   }
   return null;
 }
@@ -582,24 +704,35 @@ function main() {
   if (cfg.neverFlag.includes(picked)) return;
   if (!cfg.genericTypes.includes(picked)) return;
 
+  const desc = typeof ti.description === 'string' ? ti.description : '';
+  const prompt = typeof ti.prompt === 'string' ? ti.prompt : '';
   const text = taskText(ti);
   if (!text.trim()) return;
+  // 6 - the user said so explicitly; honored wherever they wrote it, scan window or not.
+  if (OVERRIDE.test(desc) || OVERRIDE.test(prompt)) return;
 
+  // Anti-loop key: the stable half of the decision, never the prompt body. Sliced raw
+  // first - an 8 MB prompt must not be normalized in full just to hash 300 chars.
+  const keyText =
+    normalizeText(desc.slice(0, DESC_SCAN_CHARS)) ||
+    normalizeText(prompt.slice(0, KEY_PROMPT_CHARS)).slice(0, 300);
   const ranked = rankRoster(roster, text);
   const best = ranked[0];
   const runnerUp = ranked[1];
-
-  // 6 - deterministic intent rules; a project agent covering the same intent wins.
   const intent = matchIntent(cfg.intents, text);
-  if (intent && intent.expert !== picked) {
-    if (best && best.score >= cfg.minScore) {
+  const weakSignal = !!intent && !intent.strong && intent.expert !== picked;
+
+  // 7 - strong intent signal; only an agent that COVERS it may outrank the specialist.
+  if (intent && intent.strong && intent.expert !== picked) {
+    const owner = intentOwner(ranked, intent, cfg.minScore);
+    if (owner) {
       emitDeny(
-        intentProjectDenyReason(intent, best.agent, picked),
-        best.agent.name,
+        intentProjectDenyReason(intent, owner, picked),
+        owner.name,
         picked,
         input.session_id,
         root,
-        text,
+        keyText,
       );
       return;
     }
@@ -609,34 +742,44 @@ function main() {
       picked,
       input.session_id,
       root,
-      text,
+      keyText,
     );
     return;
   }
 
-  // 7 - roster scoring.
-  if (!best || best.score <= 0) return;
-  const clearWinner =
-    best.score >= cfg.minScore && best.score - (runnerUp ? runnerUp.score : 0) >= cfg.margin;
-  if (clearWinner) {
-    emitDeny(
-      rosterDenyReason(best.agent, picked),
-      best.agent.name,
-      picked,
-      input.session_id,
-      root,
-      text,
-    );
-    return;
+  // 8 - roster scoring.
+  if (best && best.score > 0) {
+    const clearWinner =
+      best.score >= cfg.minScore && best.score - (runnerUp ? runnerUp.score : 0) >= cfg.margin;
+    if (clearWinner) {
+      emitDeny(
+        rosterDenyReason(best.agent, picked),
+        best.agent.name,
+        picked,
+        input.session_id,
+        root,
+        keyText,
+      );
+      return;
+    }
+    const nudgeFloor = Math.max(1, Math.ceil(cfg.minScore / 2));
+    if (best.score >= nudgeFloor) {
+      const candidates = ranked.filter((c) => c.score > 0).slice(0, 3);
+      emitContext(
+        weakSignal
+          ? mergedNudgeContext(intent, candidates, picked)
+          : nudgeContext(candidates, picked),
+      );
+      return;
+    }
   }
-  const nudgeFloor = Math.max(1, Math.ceil(cfg.minScore / 2));
-  if (best.score >= nudgeFloor) {
-    emitContext(nudgeContext(ranked.filter((c) => c.score > 0).slice(0, 3), picked));
-  }
+
+  // 9 - weak signal only, and nothing above spoke: one nudge, never a deny.
+  if (weakSignal) emitContext(weakIntentContext(intent, picked));
 }
 
 try {
   main();
 } catch {
-  // 9 - fail open: no stdout, no stack trace, exit 0.
+  // 11 - fail open: no stdout, no stack trace, exit 0.
 }

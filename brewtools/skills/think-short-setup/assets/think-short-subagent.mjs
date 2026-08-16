@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.1.3 content_version=5.6.1 generated_by=brewtools:think-short-setup
+// brewcode-meta: version=6.1.4 content_version=5.6.1 generated_by=brewtools:think-short-setup
 /**
  * think-short — SubagentStart hook (self-contained, no plugin-root deps).
  *
