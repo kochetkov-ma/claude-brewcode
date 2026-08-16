@@ -29,7 +29,7 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 
 | Situation | Command |
 |-----------|---------|
-| After an AI-assisted commit -- clean all touched files | `/brewtools:text-human 3be67487` |
+| After an AI-assisted commit -- clean all touched files (current worktree content at those paths, not the historical commit blob) | `/brewtools:text-human 3be67487` |
 | Before code review -- strip obvious AI markers so reviewers focus on logic | `/brewtools:text-human src/main/java/services/` |
 | JavaDoc / API docs -- remove trivial param restates, keep contracts | `/brewtools:text-human clean the javadoc in PaymentApi.java` |
 | README / guide -- fix metronomic prose, trim scaffolding phrases | `/brewtools:text-human docs/getting-started.md` |
@@ -83,8 +83,14 @@ No arguments? The skill asks: commit hash, file path, folder, or paste text.
   </li>
   <li>
     <div>
+      <strong>Clean-tree precondition</strong>
+      <p>Before the first edit on any writing flow, the skill runs <code>git status --porcelain</code> over the resolved target paths only -- there is no backup, so git is the only undo. Clean → proceeds. Dirty → one <code>AskUserQuestion</code> listing the dirty paths (proceed on them / process only the clean ones / abort); this replaces, not adds to, the flow-detection question. Not a git repo → the skill says so and requires an explicit go-ahead. Inline text and other non-file input skip this -- nothing on disk changes.</p>
+    </div>
+  </li>
+  <li>
+    <div>
       <strong>PASS 1 -- Strip</strong>
-      <p>Validated AI tells are removed per the tiered pattern catalog. HIGH-tier universals (chat scaffolding, self-attribution comments, unicode normalization, prompt residue) act on single hits. MED density-signals act only when several co-occur in a cluster. Behavior-changing items -- hallucinated refs, fabricated tickets, try/except-everywhere -- are surfaced for review, never auto-edited.</p>
+      <p>Validated AI tells are removed per the tiered pattern catalog. HIGH-tier universals (chat scaffolding, self-attribution comments, prompt residue, unicode normalization in prose and code comments) act on single hits. Unicode inside a string literal, regex, or identifier is never rewritten -- it is surfaced instead, since normalizing it could change program behavior. MED density-signals act only when several co-occur in a cluster. Behavior-changing items -- hallucinated refs, fabricated tickets, try/except-everywhere -- are surfaced for review, never auto-edited.</p>
     </div>
   </li>
   <li>
@@ -96,7 +102,7 @@ No arguments? The skill asks: commit hash, file path, folder, or paste text.
   <li>
     <div>
       <strong>Parallel execution (mixed flow)</strong>
-      <p>Commit or folder scope uses the mixed flow dispatcher: files split into blocks by complexity, classified as haiku (simple config/data/text) or sonnet (source with logic, tests, complex SQL). All <code>Task</code> calls fire in one message for true parallelism. Each sub-agent receives its block, the flow rules, and any custom instructions prepended at highest priority. The skill substitutes the <strong>resolved absolute path</strong> of the rules directory into every sub-agent prompt before spawning — subagents get no plugin-root variable of their own, so an unexpanded one would leave them humanizing against no rules at all.</p>
+      <p>Commit or folder scope uses the mixed flow dispatcher: files split into blocks by complexity, classified as haiku (simple config/data/text) or sonnet (source with logic, tests, complex SQL). All <code>Task</code> calls fire in one message for true parallelism. Each sub-agent receives its block, the flow rules, and any custom instructions prepended at highest priority. The skill substitutes the <strong>resolved absolute path</strong> of the rules directory into every sub-agent prompt before spawning — subagents get no plugin-root variable of their own, so an unexpanded one would leave them humanizing against no rules at all. Commit mode is current-worktree: the hash only selects which file names changed, then edits land on today's content at those paths, not the historical blob — the same clean-tree gate runs again here, scoped to the commit's paths, before any block agent spawns.</p>
     </div>
   </li>
   <li>
@@ -146,14 +152,14 @@ Two failure modes the brief prevents: a "helpful" edit outside the block collide
 | Chat scaffolding | "Certainly!", "I hope this helps", "Here's the rewritten..." | HIGH |
 | AI self-attribution | `// AI-generated`, `// Claude suggestion`, bot/co-author trailers | HIGH |
 | Prompt residue | `# Remember to paste...`, `// Replace with your...` placeholder narration | HIGH |
-| Unicode normalization | em-dash, smart quotes, arrows in code/text | HIGH |
+| Unicode normalization | em-dash, smart quotes, arrows -- prose and code comments/docstrings only, ASCII form | HIGH |
 | Promotional openers | "In today's fast-paced world", "plays a significant role" | HIGH/MED |
 | Trivial comment/docstring | `// Loop through users`, `@param userId The user ID` | MED density |
 | Excess-vocab cluster | delve, leverage, seamless, landscape (co-occurring set) | MED cluster only |
 
 **PASS 1 -- What gets surfaced (never auto-edited)**
 
-Hallucinated package/method/URL refs, fabricated tickets, try/except-everywhere, empty catch-all, placeholder TODO logic, duplicated abstraction layers, happy-path-only tests, CI gaming. These change meaning -- they are reported, not changed.
+Hallucinated package/method/URL refs, fabricated tickets, try/except-everywhere, empty catch-all, placeholder TODO logic, duplicated abstraction layers, happy-path-only tests, CI gaming, unicode inside a string literal or regex, mixed indentation in an indentation-sensitive file. These change meaning -- they are reported, not changed.
 
 **PASS 1 -- What gets kept**
 

@@ -732,21 +732,61 @@ else if (mcpState === "correct" && phase === "ready") { verdict = "ready"; reaso
 else { verdict = "partial"; reason = "mcp=" + mcpState + ", phase=" + phase; }
 
 // A v1-shaped repo satisfies mcp=correct + phase=ready and would report
-// `ready`/`none`, so nobody upgrading would ever be told to migrate. The
-// project half of the install is part of the verdict: retired hook files
-// still on disk, settings entries pointing at an older plugin version, or a
-// missing sibling registration each downgrade `ready` to `partial`.
-if (verdict === "ready" && guidSec && !isErr(guidSec)) {
-  const retired = Array.isArray(guidSec.retired) ? guidSec.retired : [];
-  const stale = typeof guidSec.staleEntries === "number" ? guidSec.staleEntries : 0;
-  const wired = typeof guidSec.wiredCount === "number" ? guidSec.wiredCount : 0;
-  const want = typeof guidSec.wantCount === "number" ? guidSec.wantCount : 0;
-  const why = [];
-  if (retired.length) { why.push("retired hooks on disk: " + retired.join(", ")); }
-  if (stale > 0) { why.push(stale + " stale settings " + (stale === 1 ? "entry" : "entries")); }
-  // want===0 means the wiring counts were not reported at all - never treat an
-  // absent count as a defect, or a trimmed report downgrades a healthy repo.
-  if (want > 0 && wired !== want) { why.push("hooks wired " + wired + "/" + want); }
+// `ready`/`none`, so nobody upgrading would ever be told to migrate, and an
+// install whose smoke query never ran reported the same. `ready` is therefore
+// every required check, not the phase alone: each unmet one is its own clause
+// and downgrades to `partial`. A section that could not be read never
+// downgrades anything - an absent measurement is not a defect (see want===0).
+const INSTALL_STEPS = ["prereq", "mcp", "permissions", "guidance", "agents"];
+// `verifyWhy` holds the warm/smoke clauses only: when they are the WHOLE reason,
+// `resume` closes the gap, otherwise `install` owns the repair.
+const why = [];
+const verifyWhy = [];
+if (verdict === "ready") {
+  if (guidSec && !isErr(guidSec)) {
+    const retired = Array.isArray(guidSec.retired) ? guidSec.retired : [];
+    const stale = typeof guidSec.staleEntries === "number" ? guidSec.staleEntries : 0;
+    const wired = typeof guidSec.wiredCount === "number" ? guidSec.wiredCount : 0;
+    const want = typeof guidSec.wantCount === "number" ? guidSec.wantCount : 0;
+    if (retired.length) { why.push("retired hooks on disk: " + retired.join(", ")); }
+    if (stale > 0) { why.push(stale + " stale settings " + (stale === 1 ? "entry" : "entries")); }
+    // want===0 means the wiring counts were not reported at all - never treat an
+    // absent count as a defect, or a trimmed report downgrades a healthy repo.
+    if (want > 0 && wired !== want) { why.push("hooks wired " + wired + "/" + want); }
+    // `user_modified` is a supported state (the user owns their edits); only a
+    // rule that is not on disk at all leaves the guidance half uninstalled.
+    if (guidSec.rule === "absent") { why.push("semble-first rule absent"); }
+    if (guidSec.permissionsWired !== true) { why.push("MCP tool permissions not wired"); }
+  } else if (isErr(guidSec)) {
+    // An unmeasurable half must never report as verified: the guidance probe is
+    // the only witness for the rule, the hooks and the permissions, so any
+    // errored answer leaves all three unproven - why it failed makes no
+    // difference to what is unknown. A NULL section is the one exception and
+    // needs no clause here: it means the section was not requested at all
+    // (--section mcp), an absent measurement like want===0. cacheSec/agentsSec
+    // stay lenient by design - each witnesses one optional fact, and the
+    // section itself carries its error for the reader (see test 55).
+    why.push("guidance probe failed: " + guidSec.error);
+  }
+  // The state file is always readable here (phase===ready proves it parsed), so
+  // the recorded steps are authoritative. warm/smoke are the verification pair:
+  // a skipped smoke verified nothing, which SKILL.md Step 4.3 records by leaving
+  // both out of `completed` - and this is the clause it promises the user.
+  const done = stateSec.completed;
+  const missVerify = ["warm", "smoke"].filter(function (s) { return done.indexOf(s) < 0; });
+  if (missVerify.length) {
+    verifyWhy.push(missVerify.join(" and ") + " not recorded in state.completed");
+  }
+  // pushed here, not appended at the end, to keep the fixed display order
+  why.push.apply(why, verifyWhy);
+  const missInstall = INSTALL_STEPS.filter(function (s) { return done.indexOf(s) < 0; });
+  if (missInstall.length) { why.push("install steps not recorded: " + missInstall.join(", ")); }
+  if (cacheSec && !isErr(cacheSec) && cacheSec.present === false) {
+    why.push("no index in the cache");
+  }
+  if (agentsSec && !isErr(agentsSec) && typeof agentsSec.needsPatch === "number" && agentsSec.needsPatch > 0) {
+    why.push(agentsSec.needsPatch + (agentsSec.needsPatch === 1 ? " agent needs" : " agents need") + " patching");
+  }
   if (why.length) { verdict = "partial"; reason = why.join("; "); }
 }
 
@@ -784,6 +824,10 @@ if (verdict === "ready") {
   nextStep = "Run /brewcode:semble-setup resume";
 } else if (stampStale) {
   nextStep = "Run /brewcode:semble-setup upgrade";
+} else if (verifyWhy.length && verifyWhy.length === why.length) {
+  // Everything is installed and wired; only the warm/smoke pair is unproven.
+  // `resume` re-runs exactly that, `install` would redo the whole thing.
+  nextStep = "Run /brewcode:semble-setup resume";
 } else {
   nextStep = "Run /brewcode:semble-setup install";
 }

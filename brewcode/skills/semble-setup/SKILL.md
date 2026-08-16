@@ -137,6 +137,8 @@ echo "RC=$RC"
 
 Read from the JSON: `.verdict`, `.state.phase`, `.state.enabled`, `.mcp.state`, `.mcp.scopes`, `.cache.staleness`, `.guidance`, `.agents.summary`, `.prereq`, `.nextStep`. A section that came back as `{"error": ...}` is reported as unknown for that section — it never suppresses the rest.
 
+> **An unmeasurable half must never report `ready` with `--strict` exiting 0.** An **errored** `guidance` probe therefore always downgrades the verdict to `partial` (`guidance probe failed: <error>`), whatever the cause — "unit not installed" included, because that leaves the rule, the hooks and the permissions exactly as unproven as a probe that crashed. A **null** measurement never downgrades anything: null means the section was not requested (`--section mcp`), and treating an absent measurement as a defect would fail `--strict` on a healthy repo. `cache` and `agents` stay lenient by design — each witnesses one optional fact and carries its own error for the reader.
+
 Print the **Detection** and **Before** blocks of `references/output-contract.md` now, from this JSON. `Before` is the pre-mutation snapshot and is never refreshed later.
 
 ---
@@ -417,12 +419,17 @@ The first run downloads the embedding model. Tell the user that **before** start
 ```bash
 SD="${CLAUDE_SKILL_DIR}"
 [ -n "$SD" ] || SD="$(find "$HOME/.claude/plugins/cache/claude-brewcode/brewcode" -maxdepth 3 -type d -path '*/skills/*' \( -name semble-setup -o -name semble \) 2>/dev/null | sort -V | tail -1)"
-bash "$SD/scripts/semble-project.sh" smoke --json; RC=$?
-echo "RC=$RC"
-[ "$RC" -eq 0 ] && echo "✅" || echo "❌ FAILED"
+OUT="$(bash "$SD/scripts/semble-project.sh" smoke --json)"; RC=$?
+printf '%s\n' "$OUT"
+STATUS="$(printf '%s' "$OUT" | grep -o '"status":"[a-z]*"' | head -1 | cut -d'"' -f4 || true)"
+echo "RC=$RC status=${STATUS:-unknown}   # 3 + skipped = verified nothing, not a failure"
+if [ "$RC" -eq 0 ]; then echo "✅"
+elif [ "$RC" -eq 3 ] && [ "$STATUS" = "skipped" ]; then echo "⏭️ SKIPPED"
+else echo "❌ FAILED"; fi
 ```
 
-> **STOP if ❌** — verification failed; the state stays at `error` with a note. Report the raw output. A `"status":"skipped"` with `SEMBLE_NO_NETWORK=1` is **not** a failure — report `skipped (no network)` and continue.
+> **STOP if ❌** — verification failed; the state stays at `error` with a note. Report the raw output.
+> **⏭️ SKIPPED is not ❌** — `RC=3` with `"status":"skipped"` (`SEMBLE_NO_NETWORK=1`, `SEMBLE_DRY_RUN=1`, no `uvx`) means the query never ran: nothing is broken and nothing is proven. Report `skipped (<reason>)`, set `SMOKE_OK=0` for Step 4.3 and continue.
 
 ### 4.2 Guidance, permissions and agents
 
@@ -484,7 +491,7 @@ echo "recorded: ${RECORDED:-NOTHING — no state file was written}"
 
 > **STOP if ❌** — an illegal phase transition, an unknown step name or an unparseable state file. Nothing was written; report the message verbatim and quote the `recorded:` line as it stands.
 > Report `recorded:` verbatim — it is the state file read back. Never restate `$STEPS` as if it were the outcome.
-> With `SMOKE_OK=0` the phase is still `ready` (the wiring is done) but **Current Status** says `partial — smoke skipped (<reason>)` and **Next Step** is a re-run of `/brewcode:semble-setup resume` once the reason is gone. Never claim a verification that did not run.
+> With `SMOKE_OK=0` the phase is still `ready` (the wiring is done) but **Current Status** says `partial - warm and smoke not recorded in state.completed` — `status` names exactly the members of the verification pair that `completed` is missing, so a run that recorded `warm` alone reads `partial - smoke not recorded in state.completed`. **Next Step** is a re-run of `/brewcode:semble-setup resume` once the reason is gone. Never claim a verification that did not run.
 
 ---
 
@@ -502,10 +509,17 @@ Each is one delegation. Run Step 1 first, state the plan, then the block.
 SD="${CLAUDE_SKILL_DIR}"
 [ -n "$SD" ] || SD="$(find "$HOME/.claude/plugins/cache/claude-brewcode/brewcode" -maxdepth 3 -type d -path '*/skills/*' \( -name semble-setup -o -name semble \) 2>/dev/null | sort -V | tail -1)"
 ACTION=disable   # or: enable
-bash "$SD/scripts/semble-project.sh" "$ACTION" --yes --json && echo "✅" || echo "❌ FAILED"
+OUT="$(bash "$SD/scripts/semble-project.sh" "$ACTION" --yes --json)"; RC=$?
+printf '%s\n' "$OUT"
+STATUS="$(printf '%s' "$OUT" | grep -o '"status":"[a-z]*"' | head -1 | cut -d'"' -f4 || true)"
+echo "RC=$RC status=${STATUS:-unknown}   # 3 + skipped = warm never ran, phase left at verifying"
+if [ "$RC" -eq 0 ]; then echo "✅"
+elif [ "$RC" -eq 3 ] && [ "$STATUS" = "skipped" ]; then echo "⏭️ SKIPPED"
+else echo "❌ FAILED"; fi
 ```
 
 > **STOP if ❌** — report the raw output; state is unchanged.
+> **⏭️ SKIPPED is not ❌** — `enable` with a skipped warm (offline, dry run, no `uvx`) exits `3` with `"status":"skipped"`: guidance, agents and permissions are done, but no successful search proves readiness, so the phase stops at `verifying` — deliberately neither `ready` nor `error`. Report the `skipped:` lines verbatim and tell the user to re-run `/brewcode:semble-setup resume` once the reason is gone. `status` reports the same gap as `partial - warm and smoke not recorded in state.completed`.
 
 ### `reindex`
 

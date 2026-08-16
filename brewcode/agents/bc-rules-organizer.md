@@ -5,10 +5,10 @@ model: haiku
 maxTurns: 60
 tools: Read, Write, Edit, Glob, Grep, Bash, Agent
 doc_type: llm
-version: "5.7.0"
-content_version: "5.6.0"
+version: "6.0.0"
+content_version: "6.0.0"
 generated_by: "brewcode"
-last_updated: "2026-08-15"
+last_updated: "2026-08-16"
 ---
 
 # Rules Organizer
@@ -32,7 +32,7 @@ On resume: read that file first, continue from the last file listed.
 | Capability | Description |
 |------------|-------------|
 | Path-Specific Rules | Use `paths:` frontmatter for conditional loading |
-| Rule Extraction | Extract rules from CLAUDE.md, docs, code -> distribute by path patterns |
+| Rule Extraction | Extract rules from docs/code -> distribute by path patterns; use CLAUDE.md as dedup baseline only |
 | Lazy Documentation | Link to detailed docs instead of inline content |
 | LLM Optimization | Delegate to the `text-optimizer` agent: tables, abbreviations, remove filler |
 | Priority Management | Rules load globally, prioritize for matching files |
@@ -77,7 +77,7 @@ On resume: read that file first, continue from the last file listed.
 |-------|-----|------|---------|
 | `paths` | No | Array of quoted strings | Scope rules to matching files |
 
-Only `paths:` supported. `globs`, `alwaysApply`, `description` are not valid fields.
+Only `paths:` supported; `globs`, `alwaysApply`, `description` !=valid fields.
 
 ### Syntax
 
@@ -165,8 +165,6 @@ Deduplication: apply 3-Check Dedup Protocol (below). Max 20 rows per file.
 | 3. CLAUDE.md duplicate | Project CLAUDE.md | Already documented -> skip entirely |
 
 **Antonym rule:** "don't do X" in avoid + "do not-X" in best-practice = one rule twice. Keep avoid entry; ensure "Instead" column captures the positive.
-
-**CLAUDE.md rule:** If concept exists in CLAUDE.md -> skip. Source value "CLAUDE.md" is forbidden.
 
 ### Phase 4: File Creation
 
@@ -262,13 +260,13 @@ paths:
 | Tech stack | `kotlin-style.md`, `java-patterns.md` |
 | Functionality | `testing.md`, `logging.md`, `error-handling.md` |
 
-Use avoid/best-practice naming for pure anti-pattern or practice collections. Use descriptive naming for domain-specific mixed rules.
+Avoid/best-practice naming for pure anti-pattern/practice collections; descriptive naming for domain-specific mixed rules.
 
 ## Quality Checklist
 
 **Before extraction:** read source completely, identify rule categories, map to path patterns, check existing rules via 3-Check Protocol.
 
-**During creation:** `paths:` frontmatter on all files, quoted glob patterns, tables for multi-column data, lazy links for detailed docs, `text-optimizer` agent applied.
+**During creation:** `paths:` frontmatter on specialized files only (main avoid/best-practice: omit `paths:`), quoted glob patterns, tables for multi-column data, lazy links for detailed docs, `text-optimizer` agent applied.
 
 **After creation:** all info preserved, no semantic duplicates across files, valid glob patterns, files in `.claude/rules/`, proper filenames, max 20 rows per table, all entries numbered.
 

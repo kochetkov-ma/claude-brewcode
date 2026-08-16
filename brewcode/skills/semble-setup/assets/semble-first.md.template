@@ -3,7 +3,7 @@ paths:
   - "**/*"
 description: semble-first — one semantic search, then read the exact line; rg stays for exact matching
 doc_type: llm
-version: "5.7.0"
+version: "6.0.0"
 content_version: "5.6.0"
 generated_by: "brewcode:semble-setup"
 ---

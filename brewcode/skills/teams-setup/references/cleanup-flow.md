@@ -107,6 +107,15 @@ AskUserQuestion:
 On delete:
 
 0. If `{name}` is `intent-guard` -> **STOP, do not delete.** Report it as protected and move on.
+0b. **Validate `{name}` as an agent id BEFORE any `rm`.** Roster values are interpolated into the delete
+   path, so a row like `../../../outside/README` deletes a file outside the project. Same guard
+   `toggle-team.sh`/`verify-team.sh` apply — run it, and on a non-zero exit report the row as a corrupt
+   roster entry and delete NOTHING:
+
+```bash
+printf '%s' "{name}" | grep -qE '^[a-z0-9][a-z0-9-]*$' || { echo "SKIP:invalid agent id"; exit 1; }
+```
+
 1. Remove `.claude/agents/{name}.md` **and** `.claude/agents/{name}.md.disabled` — a member parked by
    `/brewcode:teams-setup disable` lives under the second name, and deleting only the first would
    silently leave the agent behind:
@@ -147,9 +156,12 @@ ls -la ".claude/teams/{TEAM}" 2>/dev/null; du -sh ".claude/teams/{TEAM}" 2>/dev/
 
 2. Delete each domain agent listed in `team.md` (`## Agents` table, `Kind` != `review-only`).
    **`intent-guard` is skipped** — shared with `/brewcode:superreview-setup`; deleting it would break
-   an unrelated install. Report it as kept.
+   an unrelated install. Report it as kept. **Every other `{name}` passes the Step 3 id guard first** —
+   a roster value that is not `^[a-z0-9][a-z0-9-]*$` is a path, and purge would delete outside
+   `.claude/agents/`; report such a row as corrupt and delete nothing for it:
 
 ```bash
+printf '%s' "{name}" | grep -qE '^[a-z0-9][a-z0-9-]*$' || { echo "SKIP:invalid agent id"; exit 1; }
 rm -f ".claude/agents/{name}.md" ".claude/agents/{name}.md.disabled"
 ```
 

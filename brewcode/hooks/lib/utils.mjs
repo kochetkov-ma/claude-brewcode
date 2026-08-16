@@ -2,7 +2,30 @@
  * Shared utilities for brewcode hooks
  */
 import { readFileSync, existsSync, writeFileSync, mkdirSync, renameSync, appendFileSync } from 'fs';
-import { dirname, join } from 'path';
+import { dirname, join, resolve } from 'path';
+
+/**
+ * Project root: CLAUDE_PROJECT_DIR -> upward walk for a root marker -> hook cwd. Never throws.
+ * Hook `cwd` is "the working directory when the hook is invoked" and drifts mid-session
+ * (docs/hooks.md:717, CwdChanged), so it is never the root for config/state/log placement;
+ * keep it only for resolving relative paths out of `tool_input`.
+ * @param {string|null} hookCwd - `input.cwd` from the hook payload
+ * @returns {string} Absolute project root
+ */
+export function projectRoot(hookCwd) {
+  const env = process.env.CLAUDE_PROJECT_DIR;
+  if (env && existsSync(env)) return resolve(env);
+
+  const start = resolve(hookCwd || process.cwd());
+  let dir = start;
+  for (;;) {
+    if (existsSync(join(dir, '.git')) || existsSync(join(dir, '.claude'))) return dir;
+    const up = dirname(dir);
+    if (up === dir) break;
+    dir = up;
+  }
+  return start; // last resort: never guess, never throw in a hook
+}
 
 /**
  * Read JSON from stdin

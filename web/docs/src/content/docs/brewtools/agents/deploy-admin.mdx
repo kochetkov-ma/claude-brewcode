@@ -3,12 +3,12 @@ title: "deploy-admin"
 description: "GitHub Actions and deployment agent — workflows, releases, GHCR, CI/CD, semver, and VPS deployment tracking."
 order: 3213
 ---
-import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
 # Deploy Admin
 
 <Callout type="caution">
-**Deployment mistakes are irreversible.** Pushed tags, published releases, triggered workflows — none undo cleanly. `deploy-admin` classifies every operation by safety level and requires explicit confirmation before touching anything at SERVICE, DELETE, or PRIVILEGE tier.
+**Deployment mistakes are irreversible.** Pushed tags, published releases, triggered workflows — none undo cleanly. `deploy-admin` classifies every operation by safety level. A subagent cannot ask for confirmation mid-run — `AskUserQuestion` is stripped from every subagent at runtime — so MODIFY, SERVICE, DELETE, and PRIVILEGE operations come back as an `## APPROVAL REQUIRED` envelope instead of running.
 </Callout>
 
 <Callout type="caution">
@@ -25,25 +25,53 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 |-------|-------|
 | Agent name | `deploy-admin` |
 | Model | `inherit` — runs on the session's model |
-| Tools | Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion, WebFetch, WebSearch |
+| Tools | Read, Write, Edit, Bash, Glob, Grep, WebFetch, WebSearch |
 | Triggers | "deploy", "github actions", "workflow", "release", "ci cd", "version bump", "publish" |
-| Safety gate | Confirms before MODIFY / SERVICE / DELETE / PRIVILEGE operations |
+| Safety gate | Returns MODIFY / SERVICE / DELETE / PRIVILEGE operations as an `APPROVAL REQUIRED` envelope instead of running them |
 | Scope | One bounded unit per run; one agent per repo / environment / service |
 
 ## Where its facts come from
 
 The agent carries no baked-in inventory. On **every task start** it resolves four things by the same three-step chain — read `CLAUDE.local.md`, else probe, else ask. It never invents any of them.
 
-| Fact | Read | Probe | Ask |
-|------|------|-------|-----|
-| GitHub config | `## GitHub Config` (owner, repo, registry, default branch) | `gh repo view --json owner,name,defaultBranchRef` | Confirm via `AskUserQuestion` before any MODIFY-or-above operation |
-| Workflow inventory | `## Workflows:` | `ls .github/workflows/` + `gh workflow list` | Ask which workflow this task targets — never guess one to trigger |
-| Server targets | `## SSH Servers` (hosts, users, keys, ports) | — | Ask for connection details. Never invent a host |
+| Fact | Read | Probe | If still missing |
+|------|------|-------|-------------------|
+| GitHub config | `## GitHub Config` (owner, repo, registry, default branch) | `gh repo view --json owner,name,defaultBranchRef` | A derived value is never self-approved for a MODIFY+ operation — it carries into the envelope's `HOST:` field |
+| Workflow inventory | `## Workflows:` | `ls .github/workflows/` + `gh workflow list` | Stops and returns the list as `## NEEDS-INPUT` — never guesses a workflow to trigger |
+| Server targets | `## SSH Servers` (hosts, users, keys, ports) | — | Stops and returns a `## NEEDS-INPUT` block. Never invents a host |
 | Secret names | `CLAUDE.local.md` may record which secret each workflow expects | `gh secret list` (READ level — needs admin; if it fails, say so and continue without the list) | — |
 
 <Callout type="caution">
 **Names only.** The agent never reads, prints, or logs a secret value.
 </Callout>
+
+## Approval contract
+
+A subagent cannot ask, confirm, or wait for input mid-run — `AskUserQuestion` is stripped from every
+subagent at runtime, even when it's listed in the agent's `tools:`. `deploy-admin` therefore never
+executes a destructive operation on its own judgement:
+
+1. It performs all non-destructive work and gathers full evidence first.
+2. Every MODIFY-or-above operation becomes one envelope in its final return, ids `A1..AN`:
+
+```markdown
+## APPROVAL REQUIRED
+### A1
+COMMAND:      <exact command, one line>
+HOST:         <local | user@host>
+EFFECT:       <what changes, irreversibly or remotely>
+ROLLBACK:     <exact reverse command, or NONE>
+EVIDENCE:     <why this is the right command — file:line / run URL / probe output>
+PRECONDITION: <what must still hold at execution time>
+```
+
+3. It stops — nothing in that block runs. Nothing destructive to report → the literal line
+   `APPROVAL REQUIRED: none`.
+
+The caller (main session, which does have `AskUserQuestion`) reviews the envelope and either runs
+the command itself or re-spawns `deploy-admin` with `APPROVED: A1 A3` in the prompt. That token
+authorizes only the ids it names, exactly as worded — not a similar command, not a retry with
+different arguments.
 
 ## Scope guard
 
@@ -99,8 +127,8 @@ not one. Send them separately, or send the broad request and approve the split p
   </li>
   <li>
     <div>
-      <strong>Confirm before mutating</strong>
-      <p>MODIFY and above: describes exactly what will happen, then calls <code>AskUserQuestion</code>. No mutation runs without an affirmative answer. Emergency stop fires immediately if the wrong repo, branch, or secret exposure is detected.</p>
+      <strong>Emit approval envelope</strong>
+      <p>MODIFY and above: gathers evidence, then returns an <code>## APPROVAL REQUIRED</code> envelope in its final response instead of running the command — it has no way to call <code>AskUserQuestion</code>, that tool is stripped from every subagent. Nothing mutates until the caller re-spawns it with <code>APPROVED: &lt;ids&gt;</code>. Emergency stop fires immediately if the wrong repo, branch, or secret exposure is detected.</p>
     </div>
   </li>
   <li>
@@ -112,7 +140,7 @@ not one. Send them separately, or send the broad request and approve the split p
   <li>
     <div>
       <strong>Verify</strong>
-      <p>Checks CI run status (<code>gh run list -L 3</code>), release state, and deployment health via SSH. For plugin releases, also verifies the plugin cache updated correctly.</p>
+      <p>Resolves the CI run for the exact pushed SHA and watches it with <code>gh run watch --exit-status</code> — never the newest rows in <code>gh run list</code>, which can show an unrelated run as green. Also checks release state and deployment health via SSH. For plugin releases, also verifies the plugin cache updated correctly.</p>
     </div>
   </li>
   <li>
@@ -132,10 +160,10 @@ not one. Send them separately, or send the broad request and approve the split p
 |-------|------|---------|
 | READ | free | `gh run list/view`, `gh workflow list`, `gh release view`, `gh secret list` |
 | CREATE | free | Create workflow YAML, `gh release create --draft` |
-| MODIFY | confirm | Edit workflow, `gh secret set`, `git commit`, `git tag` |
-| SERVICE | confirm | `gh workflow run`, `gh run rerun`, `git push`, `git push --tags` |
-| DELETE | always confirm | `gh release delete`, `gh run cancel`, remove workflow file |
-| PRIVILEGE | always confirm | `gh secret delete`, branch protection changes, `gh workflow disable` |
+| MODIFY | envelope | Edit workflow, `gh secret set`, `git commit`, `git tag` |
+| SERVICE | envelope | `gh workflow run`, `gh run rerun`, `git push origin HEAD`, `git push origin refs/tags/vX.Y.Z` |
+| DELETE | always envelope | `gh release delete`, `gh run cancel`, remove workflow file |
+| PRIVILEGE | always envelope | `gh secret delete`, branch protection changes, `gh workflow disable` |
 
 Compound rules:
 
@@ -163,12 +191,14 @@ Secret names are listed, never their values — the agent will not read, print, 
 |------|---------|-------|
 | 1. Bump version | The project's own bump script if it ships one; otherwise edit every version file the repo has, all to the SAME X.Y.Z | MODIFY |
 | 2. Changelog | `git log --oneline vPREV..HEAD` → write into the project's changelog file, in its existing heading style | MODIFY |
-| 3. Commit | `git commit -m "vX.Y.Z: summary"` | MODIFY |
-| 4. Tag | `git tag vX.Y.Z` | MODIFY |
-| 5. Push | `git push && git push --tags` | SERVICE |
+| 3-5. Release transaction | Commit, tag, and both pushes staged as ONE envelope, run as a single `&&` chain once approved — never split across turns. `git push origin HEAD` + `git push origin refs/tags/vX.Y.Z`, never `git push --tags` (that publishes every unpushed local tag) | SERVICE |
 | 6. Post-release | The project's own post-release/publish script, if it has one | SERVICE |
-| 7. Verify CI | `gh run list -L 3` | READ |
+| 7. Verify CI | Resolve the run for this commit's SHA, then `gh run watch --exit-status` — never the newest rows in `gh run list` | READ |
 | 8. Verify artifact | Whatever this project publishes — container image, npm/PyPI package, a live `/version` endpoint. Nothing published is not a failure | READ |
+
+<Callout type="caution">
+**A pushed tag has no rollback.** `git reset --soft HEAD~1` and `git tag -d vX.Y.Z` only recover a failure *before* the first push. Once `git push origin refs/tags/vX.Y.Z` succeeds, deleting or force-moving that tag is irreversible for anyone who already fetched it — their clone keeps the old object while the tag name now points elsewhere. The non-destructive escape is always the next patch version.
+</Callout>
 
 <Callout type="note">
 No script path in that table is hardcoded. The agent reads `${CLAUDE_PLUGIN_ROOT}/skills/deploy/references/release-best-practices.md` as a *worked example* from one multi-package repo — the shape of the flow (probe, then run; every version file in lockstep; verify the published artifact), never as commands to execute in yours.
@@ -186,7 +216,7 @@ docker push ghcr.io/OWNER/IMAGE:TAG
 
 Deployed images pin an exact tag. `:latest` is convenience tagging only — never what a server pulls.
 Deleting a GHCR version (`gh api -X DELETE /user/packages/container/IMAGE/versions/VERSION_ID`) is
-DELETE level and always confirmed.
+DELETE level — always an `APPROVAL REQUIRED` envelope with `ROLLBACK: NONE`.
 
 ### SSH deploy
 

@@ -1,15 +1,23 @@
 # Canonical Update Command Chain
 
-> Run in this exact order. Show full output for each step.
+> Marketplace refresh first, then one command per plugin the user actually selected. Show full output for each step.
 
-## Full Chain
+## Chain
 
 ```
 claude plugin marketplace update claude-brewcode
-claude plugin update brewcode@claude-brewcode
-claude plugin update brewdoc@claude-brewcode
-claude plugin update brewtools@claude-brewcode
-claude plugin update brewui@claude-brewcode
+claude plugin update <id> --scope <scope>      # repeat per selected plugin
+```
+
+`<id>` and `<scope>` come from `claude plugin list --json` (Phase 0). `--scope` defaults to `user`,
+so it must be passed explicitly whenever the plugin is installed at `project`, `local` or `managed`.
+Full-suite example, all four at `user` scope:
+
+```
+claude plugin update brewcode@claude-brewcode --scope user
+claude plugin update brewdoc@claude-brewcode --scope user
+claude plugin update brewtools@claude-brewcode --scope user
+claude plugin update brewui@claude-brewcode --scope user
 ```
 
 ## Reload (MANDATORY after updates)
@@ -24,8 +32,10 @@ Fallback: type `exit`, then run `claude` again
 | `claude plugin list` | List installed plugins (CC 2.1.163+) |
 | `claude plugin list --json` | List installed plugins as JSON array (CC 2.1.163+) |
 | `claude plugin install <plugin>@<marketplace>` | Install |
-| `claude plugin update <plugin>@<marketplace>` | Update one plugin |
+| `claude plugin update <plugin>@<marketplace> --scope <scope>` | Update one plugin at its installed scope (`user`, `project`, `local`, `managed`; default `user`) |
 | `claude plugin uninstall <plugin>@<marketplace>` | Remove |
+| `claude plugin prune --dry-run --scope <scope>` | List orphaned auto-installed dependencies |
+| `claude plugin prune --scope <scope> -y` | Remove them; `-y` required outside a TTY |
 | `claude plugin marketplace add <url>` | Add marketplace |
 | `claude plugin marketplace update <name>` | Refresh marketplace metadata |
 | `claude plugin marketplace list` | List marketplaces |

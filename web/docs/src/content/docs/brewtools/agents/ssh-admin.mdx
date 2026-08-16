@@ -3,12 +3,12 @@ title: "SSH Admin"
 description: "Linux server administrator agent — SSH, Docker, firewalls, systemd, Caddy/Nginx, security hardening. Triggered by 'ssh admin', 'server management', 'deploy to server'."
 order: 3212
 ---
-import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
 # SSH Admin
 
 <Callout type="caution">
-**Every destructive command requires explicit confirmation.** MODIFY, DELETE, and PRIVILEGE operations pause and ask via `AskUserQuestion` before touching anything on the remote host. READ and non-destructive CREATE run freely.
+**Every destructive command needs sign-off before it runs.** A subagent has no way to pause and ask — `AskUserQuestion` is stripped from every subagent at runtime — so MODIFY, DELETE, and PRIVILEGE operations come back as an `## APPROVAL REQUIRED` envelope in the final return instead of touching the remote host. READ and non-destructive CREATE run freely.
 </Callout>
 
 <Callout type="caution">
@@ -16,7 +16,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 </Callout>
 
 <Callout type="tip">
-**Run `/brewtools:ssh` first** to configure server connections. The skill writes `CLAUDE.local.md` with your server inventory — ssh-admin reads it automatically on every task start. No inventory file? The agent asks for connection details before proceeding.
+**Run `/brewtools:ssh` first** to configure server connections. The skill writes `CLAUDE.local.md` with your server inventory — ssh-admin reads it automatically on every task start. No inventory file? The agent stops and returns the missing connection details as a `## NEEDS-INPUT` block — it never guesses a host.
 </Callout>
 
 ## Quick reference
@@ -24,11 +24,40 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | Field | Value |
 |-------|-------|
 | Model | `inherit` — runs on the session's model |
-| Tools | Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion, WebFetch, WebSearch |
+| Tools | Read, Write, Edit, Bash, Glob, Grep, WebFetch, WebSearch |
 | Triggers | "ssh admin", "server management", "deploy to server", "docker on server" |
 | Inventory | Reads `CLAUDE.local.md` in project root |
-| Permission | `default` — destructive ops require confirmation |
+| Permission | `default` — destructive ops return as an `APPROVAL REQUIRED` envelope |
 | Scope | One bounded unit per run; one agent per host |
+
+## Approval contract
+
+A subagent cannot ask, confirm, or wait for input mid-run — `AskUserQuestion` is stripped from every
+subagent at runtime, even when it's listed in the agent's `tools:`. `ssh-admin` therefore never runs a
+destructive command on its own judgement:
+
+1. It performs all non-destructive work and gathers full evidence first.
+2. Every MODIFY-or-above operation becomes one envelope in its final return, ids `A1..AN`:
+
+```
+## APPROVAL REQUIRED
+
+### A1
+COMMAND:      <exact command, copy-pasteable>
+HOST:         <server alias / user@host>
+EFFECT:       <what changes, incl. downtime>
+ROLLBACK:     <exact reverse command, or NONE>
+EVIDENCE:     <the read-only output that proves it is needed>
+PRECONDITION: <what must still hold at execution time>
+```
+
+3. It stops — nothing in that block runs. Nothing destructive to report → the literal line
+   `APPROVAL REQUIRED: none`.
+
+The caller (main session, which does have `AskUserQuestion`) reviews the envelope and either runs
+the command itself or re-spawns `ssh-admin` with `APPROVED: A1 A3` in the prompt. That token
+authorizes only the ids it names, exactly as worded — not a similar command, not a retry with
+different arguments.
 
 ## Scope guard
 
@@ -73,7 +102,7 @@ Writes a compose file, transfers it via `scp`, starts the service, verifies the 
 "Open port 443 and block all other inbound traffic on web-server"
 ```
 
-Reviews current UFW rules, proposes changes, asks for confirmation, applies, verifies with `ufw status verbose`.
+Reviews current UFW rules, proposes changes, returns them as an `APPROVAL REQUIRED` envelope, applies once approved, verifies with `ufw status verbose`.
 
 ## Flow
 
@@ -81,7 +110,7 @@ Reviews current UFW rules, proposes changes, asks for confirmation, applies, ver
   <li>
     <div>
       <strong>Load inventory</strong>
-      <p>Reads <code>CLAUDE.local.md</code> in the project root for host aliases, IP addresses, SSH users, and key paths. If the file is missing, asks for connection details via <code>AskUserQuestion</code>.</p>
+      <p>Reads <code>CLAUDE.local.md</code> in the project root for host aliases, IP addresses, SSH users, and key paths. If the file is missing, stops and returns the missing connection details as a <code>## NEEDS-INPUT</code> block — it never guesses a host.</p>
     </div>
   </li>
   <li>
@@ -98,8 +127,8 @@ Reviews current UFW rules, proposes changes, asks for confirmation, applies, ver
   </li>
   <li>
     <div>
-      <strong>Classify and confirm</strong>
-      <p>Every planned command is classified: READ (free), CREATE (free if non-destructive), MODIFY / SERVICE / DELETE / PRIVILEGE (pause + AskUserQuestion with a description of what will happen). Nothing executes until confirmed.</p>
+      <strong>Classify and envelope</strong>
+      <p>Every planned command is classified: READ (free), CREATE (free if non-destructive), MODIFY / SERVICE / DELETE / PRIVILEGE (returned as an <code>## APPROVAL REQUIRED</code> envelope in the final response — the agent cannot pause mid-run to ask). Nothing executes until the caller re-spawns it with an <code>APPROVED:</code> token.</p>
     </div>
   </li>
   <li>
@@ -125,13 +154,15 @@ Reviews current UFW rules, proposes changes, asks for confirmation, applies, ver
 |-------|----------|--------|
 | READ | `ls`, `cat`, `df`, `docker ps`, `systemctl status`, `ufw status` | Free |
 | CREATE | `mkdir`, `touch`, `docker pull` | Free if non-destructive |
-| MODIFY | `chmod`, `chown`, `sed`, config edits | AskUserQuestion |
-| SERVICE | `restart`, `reload`, `docker compose up` | AskUserQuestion |
-| DELETE | `rm`, `docker rm`, `docker volume rm`, `drop` | Always AskUserQuestion |
-| PRIVILEGE | `sudo`, `su`, firewall rules, user management | Always AskUserQuestion |
+| MODIFY | `chmod`, `chown`, `sed`, config edits | Envelope |
+| SERVICE | `restart`, `reload`, `docker compose up` | Envelope |
+| DELETE | `rm`, `docker rm`, `docker volume rm`, `drop` | Always envelope |
+| PRIVILEGE | `sudo`, `su`, firewall rules, user management | Always envelope |
 
-Before any MODIFY / SERVICE / DELETE / PRIVILEGE command on a remote server, the agent describes what
-will happen and asks for confirmation.
+Before any MODIFY / SERVICE / DELETE / PRIVILEGE command on a remote server, the agent returns an
+`## APPROVAL REQUIRED` envelope in its final response instead of running the command — it has no
+mid-run question channel. The caller reviews it and either runs the command or re-spawns the agent
+with `APPROVED: <ids>`.
 
 **Operational guards**
 

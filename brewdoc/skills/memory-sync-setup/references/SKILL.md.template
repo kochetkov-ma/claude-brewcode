@@ -107,8 +107,9 @@ spawned, files edited, lines delta, verdicts ok).
 
 ## The surface - everything AUTO-LOADED into an LLM context, nothing else
 
-In scope: root `CLAUDE.md`, EVERY nested `CLAUDE.md` at ANY depth, `CLAUDE.local.md`, `.claude/rules/**`,
-convention files, the `AGENTS.md` family, `.claude/agents/**`, `.claude/skills/**` (SKILL.md AND every
+In scope: root `CLAUDE.md`, EVERY nested `CLAUDE.md` at ANY depth, `CLAUDE.local.md`, `.claude/rules/*.md`
+(single level - CC loads rules non-recursively), convention files, the `AGENTS.md` family,
+`.claude/agents/**` at ANY depth (CC scans subfolders such as `agents/review/`), `.claude/skills/**` (SKILL.md AND every
 `references/*.md`), and the memory dir `{MEMORY_DIR}`. If a file can silently enter a model's context, it is
 memory; if it cannot, it is not.
 
@@ -360,12 +361,15 @@ DONE - return JSON per file, empty list when clean: {"ok": bool, "violations": [
 <!-- BLOCK: project-specific VERIFY assertions - git-visibility assertion, id-sequence diff, allowed language hits, anything else -->
 {VERIFY_EXTRA}
 
-**Git-visibility caveat - derive it EVERY run with `git ls-files -- .claude '*CLAUDE.md' '*AGENTS.md'` (0 rows =
-git-ignored); it changes when `.gitignore` does.** Visibility here: {GIT_VISIBILITY}. When the surface is
-git-IGNORED, `git status` / `git diff` can NEVER account for a memory edit: **never flag a memory file's absence
-from the diff**. Verification is then by DIRECT RE-READ of each edited file, and the diff check reduces to PROVING
-that no source, docs, task-state or secrets file changed. When the surface is git-TRACKED, `git diff` DOES account
-for memory edits: assert every edited file appears in it and nothing else does.
+**Git-visibility caveat - derive it EVERY run: compare `git ls-files -- .claude '*CLAUDE.md' '*AGENTS.md'` against
+the same surface ON DISK as a SET DIFFERENCE ON PATHS, never a count delta (0 tracked rows = git-ignored; any
+on-disk PATH absent from the tracked list = MIXED - the two listings prune differently, so equal totals prove
+nothing); it changes when `.gitignore` does.** Visibility here: {GIT_VISIBILITY}. When the surface is git-IGNORED, `git status` / `git diff`
+can NEVER account for a memory edit: **never flag a memory file's absence from the diff**. Verification is then by
+DIRECT RE-READ of each edited file, and the diff check reduces to PROVING that no source, docs, task-state or
+secrets file changed. **MIXED is handled as IGNORED** - the untracked part is invisible to the diff, so re-read
+every edited file directly and never flag an absence. Only when the surface is fully git-TRACKED does `git diff`
+account for memory edits: assert every edited file appears in it and nothing else does.
 
 Violations -> the coordinator sends targeted fixes back to the responsible batch agent (or fixes a trivial pointer itself), then re-verifies ONLY the fixed files.
 **The report may NOT be emitted until every verdict is ok, or the remaining violations are listed as unresolved.**

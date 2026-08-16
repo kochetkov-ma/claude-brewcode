@@ -7,7 +7,7 @@ argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge]
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion]
 model: sonnet
 ---
-<!-- brewcode-meta: version=5.7.0 content_version=5.6.0 generated_by=brewdoc:docsync-setup -->
+<!-- brewcode-meta: version=6.0.0 content_version=6.0.0 generated_by=brewdoc:docsync-setup -->
 
 # docsync-setup
 
@@ -56,11 +56,21 @@ Labels are literal; values follow the conversation language.
 
 Run in the main conversation (uses `AskUserQuestion`). No `context: fork`.
 
-> **Project root.** Resolve it ONCE and use it everywhere (install writes here;
-> hooks read from `input.cwd` = project root at runtime, so both must agree even
-> when the skill is invoked from a subdirectory):
+> **Project root.** Resolve it ONCE and use it everywhere. The hooks resolve it as
+> `CLAUDE_PROJECT_DIR` -> upward walk for `.git`/`.claude` -> hook `cwd`, with NO
+> `git rev-parse` rung: they root on the nearest `.git`/`.claude` marker, which for a
+> nested `.claude` is the tracker's own project, not the enclosing checkout. The snippet
+> below is the skill's own recipe and keeps a `git rev-parse --show-toplevel` rung
+> between the env var and the walk; the two agree on every layout except a nested
+> `.claude`, where the hooks are the authority for config/state placement.
+> `input.cwd` is NOT the project root: it drifts mid-session and the hooks use it for
+> one thing only, resolving a relative `tool_input` path. Write the BARE braced
+> `${CLAUDE_PROJECT_DIR}` — the `${VAR:-fallback}` form is never substituted and always
+> loses to its fallback:
 > ```bash
-> ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")}"
+> ROOT="${CLAUDE_PROJECT_DIR}"
+> [ -n "$ROOT" ] && [ -d "$ROOT" ] || ROOT=$(git rev-parse --show-toplevel 2>/dev/null || true)
+> [ -n "$ROOT" ] || { d=$PWD; until [ -d "$d/.git" ] || [ -d "$d/.claude" ] || [ "$d" = / ]; do d=$(dirname "$d"); done; [ "$d" = / ] && ROOT=$PWD || ROOT=$d; }
 > ```
 
 > **Enumerating docs.** Native `Glob`/`Grep` are no-ops on macOS Claude Code
@@ -100,7 +110,7 @@ Skill-specific extras come after them: `sync [--all]`, `reread`, `frontmatter`.
 > a removed alias back to the user as a command.
 
 > `disable` is NOT `uninstall`. It flips one key in `config.json`; the hooks stay
-> registered in `settings.json`, the hook files stay on disk, `state.json` and every
+> registered in `settings.json`, the hook files stay on disk, the session state files and every
 > `last_updated` you have written stay untouched. `enable` flips it back. Reach for
 > `uninstall` only when the hooks should stop existing.
 
@@ -108,7 +118,9 @@ Skill-specific extras come after them: `sync [--all]`, `reread`, `frontmatter`.
 
 **EXECUTE** using Bash tool:
 ```bash
-ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")}"
+ROOT="${CLAUDE_PROJECT_DIR}"
+[ -n "$ROOT" ] && [ -d "$ROOT" ] || ROOT=$(git rev-parse --show-toplevel 2>/dev/null || true)
+[ -n "$ROOT" ] || { d=$PWD; until [ -d "$d/.git" ] || [ -d "$d/.claude" ] || [ "$d" = / ]; do d=$(dirname "$d"); done; [ "$d" = / ] && ROOT=$PWD || ROOT=$d; }
 if [ -f "$ROOT/.claude/hooks/docsync-gate.mjs" ] && grep -q 'docsync-gate.mjs' "$ROOT/.claude/settings.json" 2>/dev/null; then
   # `"enabled": false` means installed-but-inert, NOT missing. Absent key = enabled.
   if grep -q '"enabled"[[:space:]]*:[[:space:]]*false' "$ROOT/.claude/docsync/config.json" 2>/dev/null; then
@@ -138,7 +150,7 @@ sync_procedure: "what to check / where to look when syncing"   # optional, prose
 
 - **Quote `last_updated` and `sync_procedure`; leave `doc_type` bare.** The hooks'
   frontmatter parser strips surrounding quotes and trailing comments
-  (`assets/docsync-gate.mjs:93`, `docsync-track.mjs:85`, `docsync-watch.mjs:80`),
+  (`assets/docsync-gate.mjs:136`, `docsync-track.mjs:114`, `docsync-watch.mjs:109`),
   so either form works for docsync — but a real YAML consumer types an unquoted
   `2026-07-19` as a Date, while `doc_type` is an enum that other brewcode tooling
   matches literally as `^doc_type: llm$`. Existing quoted docs keep working.
@@ -175,7 +187,9 @@ sync_procedure: "what to check / where to look when syncing"   # optional, prose
 **EXECUTE** using Bash tool (lists project `.md`, minus `.git`; apply `exclude`
 globs from config and any `doc_type: skip` in your own reasoning afterward):
 ```bash
-ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")}"
+ROOT="${CLAUDE_PROJECT_DIR}"
+[ -n "$ROOT" ] && [ -d "$ROOT" ] || ROOT=$(git rev-parse --show-toplevel 2>/dev/null || true)
+[ -n "$ROOT" ] || { d=$PWD; until [ -d "$d/.git" ] || [ -d "$d/.claude" ] || [ "$d" = / ]; do d=$(dirname "$d"); done; [ "$d" = / ] && ROOT=$PWD || ROOT=$d; }
 cd "$ROOT" && find . -type f -name '*.md' -not -path './.git/*' | sed 's#^\./##' | sort
 ```
 
@@ -204,7 +218,9 @@ Record `THRESHOLD` (integer, default 7) and `EXCLUDE` (comma-separated globs).
 (e.g. `["node_modules/**","**/CHANGELOG.md"]`, or `[]` for none).
 
 ```bash
-ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")}"
+ROOT="${CLAUDE_PROJECT_DIR}"
+[ -n "$ROOT" ] && [ -d "$ROOT" ] || ROOT=$(git rev-parse --show-toplevel 2>/dev/null || true)
+[ -n "$ROOT" ] || { d=$PWD; until [ -d "$d/.git" ] || [ -d "$d/.claude" ] || [ "$d" = / ]; do d=$(dirname "$d"); done; [ "$d" = / ] && ROOT=$PWD || ROOT=$d; }
 SRC="${CLAUDE_SKILL_DIR}/assets"
 DST="$ROOT/.claude/hooks"
 DOCSYNC="$ROOT/.claude/docsync"
@@ -221,9 +237,22 @@ SKILL_MD="${CLAUDE_SKILL_DIR}/SKILL.md"
 CV=$(grep -m1 'brewcode-meta:' "$SKILL_MD" | sed -n 's/.*content_version=\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/p')
 [ -n "$CV" ] || { echo "❌ cannot read content_version from $SKILL_MD — reinstall brewdoc"; exit 1; }
 
+# What existed BEFORE this run — a failed settings merge rolls back only what it created,
+# never a working install's files (install Step 2 is re-run verbatim by `upgrade`).
+HOOKS_EXISTED=1
+for f in docsync-track docsync-watch docsync-gate; do [ -f "$DST/$f.mjs" ] || HOOKS_EXISTED=0; done
+[ -f "$DOCSYNC/config.json" ] && CFG_EXISTED=1 || CFG_EXISTED=0
+
 mkdir -p "$DST" "$DOCSYNC" \
   && cp "$SRC/docsync-track.mjs" "$SRC/docsync-watch.mjs" "$SRC/docsync-gate.mjs" "$DST/" \
   && echo "✅ hooks copied to $DST" || { echo "❌ copy FAILED"; exit 1; }
+
+rollback() {
+  cp "$SETTINGS.bak" "$SETTINGS" 2>/dev/null
+  [ "$HOOKS_EXISTED" = 1 ] || rm -f "$DST/docsync-track.mjs" "$DST/docsync-watch.mjs" "$DST/docsync-gate.mjs"
+  [ "$CFG_EXISTED" = 1 ] || rm -f "$DOCSYNC/config.json"
+  echo "↩️ rolled back — settings restored, nothing half-installed left behind"
+}
 
 # config.json — replace the two placeholders below before running.
 # The four provenance keys come first, in the standard order, then the skill-private ones.
@@ -231,23 +260,26 @@ printf '{ "version": "%s", "content_version": "%s", "generated_by": "brewdoc:doc
   && node -e "JSON.parse(require('fs').readFileSync('$DOCSYNC/config.json','utf8'))" \
   && echo "✅ config.json written (version $PV, content_version $CV)" || { echo "❌ config.json invalid JSON"; exit 1; }
 
-# fresh state.json (empty touched-set) — only if absent, never clobber a live one
-[ -f "$DOCSYNC/state.json" ] || printf '%s\n' '{ "session_id": null, "touched": [], "asked": false }' > "$DOCSYNC/state.json"
-echo "✅ state.json ready"
-
+# State files are per session (`state-<session_id>.json`) and owned by the hooks —
+# install seeds nothing. A pre-6.0 `state.json` is left alone; the gate prunes it.
 mkdir -p "$(dirname "$SETTINGS")"
 [ -f "$SETTINGS" ] || echo '{}' > "$SETTINGS"
 # Backup BEFORE any write — merge must never lose foreign hooks/permissions/env.
 cp "$SETTINGS" "$SETTINGS.bak"
 
-# Portable command strings: $CLAUDE_PROJECT_DIR is substituted by Claude Code at
-# hook run time, so committed settings.json works on any machine / CI path.
-T_CMD='node "$CLAUDE_PROJECT_DIR/.claude/hooks/docsync-track.mjs"'
-W_CMD='node "$CLAUDE_PROJECT_DIR/.claude/hooks/docsync-watch.mjs"'
-G_CMD='node "$CLAUDE_PROJECT_DIR/.claude/hooks/docsync-gate.mjs"'
+# Exec form (upstream's stated preference for any hook referencing a path placeholder):
+# the placeholder is substituted per `args` element on every shell, whereas a shell-form
+# `$CLAUDE_PROJECT_DIR` resolves to $null under PowerShell and launches node on "/.claude/…".
+# The token is ASSEMBLED here on purpose — written literally it would be substituted into
+# this machine's absolute path by the skill loader and the committed settings.json would
+# stop being portable.
+D='$'; PD="${D}{CLAUDE_PROJECT_DIR}"
+T_ARG="$PD/.claude/hooks/docsync-track.mjs"
+W_ARG="$PD/.claude/hooks/docsync-watch.mjs"
+G_ARG="$PD/.claude/hooks/docsync-gate.mjs"
 
 if command -v python3 >/dev/null 2>&1; then
-  SETTINGS="$SETTINGS" T_CMD="$T_CMD" W_CMD="$W_CMD" G_CMD="$G_CMD" python3 - <<'PY'
+  SETTINGS="$SETTINGS" T_ARG="$T_ARG" W_ARG="$W_ARG" G_ARG="$G_ARG" python3 - <<'PY'
 import json, os, sys
 f = os.environ["SETTINGS"]
 raw = ""
@@ -263,51 +295,57 @@ if raw.strip():
 else:
     data = {}
 hooks = data.setdefault("hooks", {})
+# Idempotency scans command AND args — exec-form entries carry the path in args.
+def text(h):
+    return " ".join([h.get("command") or ""] + [str(a) for a in (h.get("args") or [])])
 def has(event, needle):
-    return any(needle in (h.get("command") or "") for g in hooks.get(event, []) for h in g.get("hooks", []))
-def add(event, matcher, cmd, needle):
+    return any(needle in text(h) for g in hooks.get(event, []) for h in g.get("hooks", []))
+def add(event, matcher, arg, needle):
     if has(event, needle): return
     groups = hooks.setdefault(event, [])
     if matcher:
         grp = next((g for g in groups if g.get("matcher") == matcher), None)
     else:
         grp = next((g for g in groups if not g.get("matcher")), None)
-    entry = {"type": "command", "command": cmd}
+    entry = {"type": "command", "command": "node", "args": [arg]}
     if grp is not None:
         grp.setdefault("hooks", []).append(entry)
     else:
         groups.append({"matcher": matcher, "hooks": [entry]} if matcher else {"hooks": [entry]})
-add("PostToolUse", "Write|Edit|MultiEdit", os.environ["T_CMD"], "docsync-track.mjs")
-add("PostToolUse", "Read", os.environ["W_CMD"], "docsync-watch.mjs")
-add("Stop", "", os.environ["G_CMD"], "docsync-gate.mjs")
+add("PostToolUse", "Write|Edit|MultiEdit", os.environ["T_ARG"], "docsync-track.mjs")
+add("PostToolUse", "Read", os.environ["W_ARG"], "docsync-watch.mjs")
+add("Stop", "", os.environ["G_ARG"], "docsync-gate.mjs")
 tmp = f + ".tmp"
 json.dump(data, open(tmp, "w"), indent=2)
 os.replace(tmp, f)
 print("OK")
 PY
-  [ $? -eq 0 ] && echo "✅ settings.json merged (python3)" || { echo "❌ merge FAILED — restoring backup"; cp "$SETTINGS.bak" "$SETTINGS"; }
+  [ $? -eq 0 ] && echo "✅ settings.json merged (python3)" || { echo "❌ merge FAILED"; rollback; exit 1; }
 elif command -v jq >/dev/null 2>&1; then
   TMP="$(mktemp)"
-  jq --arg t "$T_CMD" --arg w "$W_CMD" --arg g "$G_CMD" '
-    def has(ev; needle): (.hooks[ev] // []) | map(.hooks // [] | map(.command // "") | any(test(needle))) | any;
-    def add(ev; matcher; cmd; needle):
+  jq --arg t "$T_ARG" --arg w "$W_ARG" --arg g "$G_ARG" '
+    def text: [(.command // "")] + ((.args // []) | map(tostring)) | join(" ");
+    def has(ev; needle): (.hooks[ev] // []) | map(.hooks // [] | map(text) | any(test(needle))) | any;
+    def entry(arg): {"type":"command","command":"node","args":[arg]};
+    def add(ev; matcher; arg; needle):
       if has(ev; needle) then .
       else
         .hooks[ev] = (.hooks[ev] // [])
         | ( if matcher == "" then (.hooks[ev] | map((.matcher // "") == "") | index(true))
             else (.hooks[ev] | map((.matcher // "") == matcher) | index(true)) end) as $i
-        | if $i != null then .hooks[ev][$i].hooks += [{"type":"command","command":cmd}]
-          else .hooks[ev] += [ (if matcher == "" then {"hooks":[{"type":"command","command":cmd}]}
-                                else {"matcher":matcher,"hooks":[{"type":"command","command":cmd}]} end) ] end
+        | if $i != null then .hooks[ev][$i].hooks += [entry(arg)]
+          else .hooks[ev] += [ (if matcher == "" then {"hooks":[entry(arg)]}
+                                else {"matcher":matcher,"hooks":[entry(arg)]} end) ] end
       end;
     .hooks = (.hooks // {})
     | add("PostToolUse"; "Write|Edit|MultiEdit"; $t; "docsync-track\\.mjs")
     | add("PostToolUse"; "Read"; $w; "docsync-watch\\.mjs")
     | add("Stop"; ""; $g; "docsync-gate\\.mjs")
   ' "$SETTINGS" > "$TMP" && jq empty "$TMP" >/dev/null 2>&1 && mv "$TMP" "$SETTINGS" \
-    && echo "✅ settings.json merged (jq)" || { echo "❌ merge FAILED — backup at $SETTINGS.bak"; rm -f "$TMP"; }
+    && echo "✅ settings.json merged (jq)" || { echo "❌ merge FAILED"; rm -f "$TMP"; rollback; exit 1; }
 else
-  echo "❌ neither python3 nor jq — add the three entries from assets/INSTALL.md manually"
+  # Not a failure to roll back: the files must stay so the user can wire them by hand.
+  echo "❌ neither python3 nor jq — hooks + config KEPT; add the three entries from assets/INSTALL.md manually"
 fi
 ```
 
@@ -332,8 +370,8 @@ Refresh an EXISTING install to the current plugin version. Config and state surv
 1. Require `INSTALLED` from first-run detection. If `NOT_INSTALLED` -> say so and
    run `install` instead.
 2. Re-copy the three hook files from `${CLAUDE_SKILL_DIR}/assets` over
-   `$ROOT/.claude/hooks/` (same `cp` as install Step 2), leaving `state.json`
-   untouched.
+   `$ROOT/.claude/hooks/` (same `cp` as install Step 2), leaving the session state
+   files untouched.
 3. Refresh ONLY the three provenance keys in `.claude/docsync/config.json` —
    `version`, `generated_by`, `last_updated`. `threshold_days`, `exclude` and
    `enabled` are preserved verbatim: upgrading a DISABLED install must leave it
@@ -341,7 +379,9 @@ Refresh an EXISTING install to the current plugin version. Config and state surv
 
    **EXECUTE** using Bash tool:
    ```bash
-   ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")}"
+   ROOT="${CLAUDE_PROJECT_DIR}"
+   [ -n "$ROOT" ] && [ -d "$ROOT" ] || ROOT=$(git rev-parse --show-toplevel 2>/dev/null || true)
+   [ -n "$ROOT" ] || { d=$PWD; until [ -d "$d/.git" ] || [ -d "$d/.claude" ] || [ "$d" = / ]; do d=$(dirname "$d"); done; [ "$d" = / ] && ROOT=$PWD || ROOT=$d; }
    C="$ROOT/.claude/docsync/config.json"
    PJ="${CLAUDE_SKILL_DIR}/../../.claude-plugin/plugin.json"
    SKILL_MD="${CLAUDE_SKILL_DIR}/SKILL.md"
@@ -381,7 +421,9 @@ Report tracked docs and staleness. No changes.
    and any with `doc_type: skip`.
 3. For each, read frontmatter `last_updated`; compute age in days (LOCAL time);
    mark stale when `age > threshold_days`; mark `no-date` when missing.
-4. Read `$ROOT/.claude/docsync/state.json` and report the current session touched-set.
+4. Read `$ROOT/.claude/docsync/state-<session_id>.json` (one file per session; a
+   pre-6.0 install may still carry a shared `state.json`) and report the current
+   session touched-set.
 5. Output the Status table (below).
 
 ## Mode: enable / disable
@@ -389,7 +431,7 @@ Report tracked docs and staleness. No changes.
 Flip docsync between live and inert WITHOUT unwiring anything. One key,
 `"enabled"`, in `.claude/docsync/config.json`:
 
-| | hooks in `settings.json` | hook files | `config.json` | `state.json` | doc frontmatter |
+| | hooks in `settings.json` | hook files | `config.json` | session state | doc frontmatter |
 |---|---|---|---|---|---|
 | `disable` | kept | kept | `enabled: false` + provenance refreshed | kept | untouched |
 | `enable` | kept | kept | `enabled: true` + provenance refreshed | kept | untouched |
@@ -412,7 +454,9 @@ frontmatter nudge, and the Stop gate never blocks.
    instead of staying unstamped forever.
 3. **EXECUTE** using Bash tool (`WANT` = `true` for enable, `false` for disable):
    ```bash
-   ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")}"
+   ROOT="${CLAUDE_PROJECT_DIR}"
+   [ -n "$ROOT" ] && [ -d "$ROOT" ] || ROOT=$(git rev-parse --show-toplevel 2>/dev/null || true)
+   [ -n "$ROOT" ] || { d=$PWD; until [ -d "$d/.git" ] || [ -d "$d/.claude" ] || [ "$d" = / ]; do d=$(dirname "$d"); done; [ "$d" = / ] && ROOT=$PWD || ROOT=$d; }
    C="$ROOT/.claude/docsync/config.json"
    PJ="${CLAUDE_SKILL_DIR}/../../.claude-plugin/plugin.json"
    SKILL_MD="${CLAUDE_SKILL_DIR}/SKILL.md"
@@ -457,10 +501,17 @@ Remove docsync from THIS project without touching anything foreign.
 
 **EXECUTE** using Bash tool:
 ```bash
-ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")}"
+ROOT="${CLAUDE_PROJECT_DIR}"
+[ -n "$ROOT" ] && [ -d "$ROOT" ] || ROOT=$(git rev-parse --show-toplevel 2>/dev/null || true)
+[ -n "$ROOT" ] || { d=$PWD; until [ -d "$d/.git" ] || [ -d "$d/.claude" ] || [ "$d" = / ]; do d=$(dirname "$d"); done; [ "$d" = / ] && ROOT=$PWD || ROOT=$d; }
 DST="$ROOT/.claude/hooks"
 DOCSYNC="$ROOT/.claude/docsync"
 SETTINGS="$ROOT/.claude/settings.json"
+
+# Hook files are deleted ONLY after settings.json is verifiably clean — otherwise
+# live registrations would point at missing scripts and every Write/Edit/Read/Stop
+# would spawn `node <deleted path>`.
+CLEANED=0
 
 if [ -f "$SETTINGS" ]; then
   cp "$SETTINGS" "$SETTINGS.bak"
@@ -476,7 +527,8 @@ except Exception as e:
     sys.stderr.write("docsync: settings.json invalid JSON (%s) — ABORTING\n" % e); sys.exit(1)
 hooks = data.get("hooks")
 def isds(h):
-    c = h.get("command") or ""
+    # Exec-form entries carry the script path in args, shell-form in command — scan both.
+    c = " ".join([h.get("command") or ""] + [str(a) for a in (h.get("args") or [])])
     return any(n in c for n in ("docsync-track.mjs", "docsync-watch.mjs", "docsync-gate.mjs"))
 if isinstance(hooks, dict):
     for ev in list(hooks.keys()):
@@ -496,31 +548,36 @@ json.dump(data, open(tmp, "w"), indent=2)
 os.replace(tmp, f)
 print("OK")
 PY
-    [ $? -eq 0 ] && echo "✅ settings.json cleaned (python3)" || { echo "❌ clean FAILED — restoring"; cp "$SETTINGS.bak" "$SETTINGS"; }
+    [ $? -eq 0 ] && { echo "✅ settings.json cleaned (python3)"; CLEANED=1; } || { echo "❌ clean FAILED — restoring"; cp "$SETTINGS.bak" "$SETTINGS"; }
   elif command -v jq >/dev/null 2>&1; then
     TMP="$(mktemp)"
     jq '
-      def isds(c): (c // "") | test("docsync-(track|watch|gate)\\.mjs");
+      def isds: [(.command // "")] + ((.args // []) | map(tostring)) | join(" ")
+                | test("docsync-(track|watch|gate)\\.mjs");
       .hooks = (
         (.hooks // {})
         | to_entries
         | map(.value = (.value
-            | map(.hooks = ((.hooks // []) | map(select(isds(.command) | not))))
+            | map(.hooks = ((.hooks // []) | map(select(isds | not))))
             | map(select((.hooks // []) | length > 0))))
         | map(select((.value | length) > 0))
         | from_entries )
     ' "$SETTINGS" > "$TMP" && jq empty "$TMP" >/dev/null 2>&1 && mv "$TMP" "$SETTINGS" \
-      && echo "✅ settings.json cleaned (jq)" || { echo "❌ clean FAILED — backup at $SETTINGS.bak"; rm -f "$TMP"; }
+      && { echo "✅ settings.json cleaned (jq)"; CLEANED=1; } || { echo "❌ clean FAILED — backup at $SETTINGS.bak"; rm -f "$TMP"; }
   else
     echo "❌ neither python3 nor jq — remove the three docsync entries from $SETTINGS manually"
   fi
 else
   echo "⚠️ no settings.json — nothing to clean"
+  CLEANED=1
 fi
 
-# Remove the hook files
+[ "$CLEANED" = 1 ] || { echo "❌ settings not cleaned — hook files KEPT to avoid broken registrations"; exit 1; }
 rm -f "$DST/docsync-track.mjs" "$DST/docsync-watch.mjs" "$DST/docsync-gate.mjs" && echo "✅ hook files removed"
 ```
+
+> **STOP if ❌ "settings not cleaned"** — nothing was deleted, the install is intact.
+> Fix `settings.json` (or install `python3`/`jq`) and re-run `uninstall`.
 
 ### Step 2: Ask about state dir
 
@@ -539,10 +596,16 @@ remains. Removal takes effect next session.
 
 `uninstall` with no survivors — for when the project is done with docsync entirely.
 
-1. Run every step of `uninstall` Step 1 (settings inverse-merge + hook file removal).
+1. Run every step of `uninstall` Step 1 (settings inverse-merge + hook file removal),
+   INCLUDING its `CLEANED` guard. If Step 1 aborts with `❌ settings not cleaned`,
+   purge stops there — do NOT proceed to step 2. Deleting `.claude/docsync/` while
+   three registrations still point at the hooks is exactly the state the guard exists
+   to prevent.
 2. Skip the Step 2 question and **EXECUTE** unconditionally:
    ```bash
-   ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")}"
+   ROOT="${CLAUDE_PROJECT_DIR}"
+   [ -n "$ROOT" ] && [ -d "$ROOT" ] || ROOT=$(git rev-parse --show-toplevel 2>/dev/null || true)
+   [ -n "$ROOT" ] || { d=$PWD; until [ -d "$d/.git" ] || [ -d "$d/.claude" ] || [ "$d" = / ]; do d=$(dirname "$d"); done; [ "$d" = / ] && ROOT=$PWD || ROOT=$d; }
    rm -rf "$ROOT/.claude/docsync" && echo "✅ .claude/docsync removed"
    ```
 3. Report what was removed. The `settings.json` `.bak` backup is deliberately kept —
@@ -616,7 +679,7 @@ Run these after acting and report pass/fail for each check.
 | install | 3 hook files exist in `.claude/hooks/`; `node --check` each parses; `config.json` valid JSON carrying all three provenance keys (`version` == plugin version, `generated_by` == `brewdoc:docsync-setup`, `last_updated` a `YYYY-MM-DD` date); `settings.json` valid JSON and contains all 3 hook commands; `.bak` backup present |
 | upgrade | same checks as `install`, plus `threshold_days` + `exclude` unchanged and the three provenance keys refreshed |
 | enable | `config.json` valid JSON with `enabled: true`; hook commands still in `settings.json`; hook files still present; `threshold_days` + `exclude` unchanged; all three provenance keys present and current |
-| disable | `config.json` valid JSON with `enabled: false`; same preservation + provenance checks as `enable`; `state.json` still present |
+| disable | `config.json` valid JSON with `enabled: false`; same preservation + provenance checks as `enable`; the session state files still present |
 | status | config exists; counts add up (tracked = stale + fresh + no-date); the `enabled` state is stated |
 | sync | each synced doc's `last_updated` == today; frontmatter still valid |
 | reread | each targeted doc was actually read |
@@ -626,7 +689,9 @@ Run these after acting and report pass/fail for each check.
 
 **EXECUTE** (install/upgrade verification) using Bash tool:
 ```bash
-ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")}"
+ROOT="${CLAUDE_PROJECT_DIR}"
+[ -n "$ROOT" ] && [ -d "$ROOT" ] || ROOT=$(git rev-parse --show-toplevel 2>/dev/null || true)
+[ -n "$ROOT" ] || { d=$PWD; until [ -d "$d/.git" ] || [ -d "$d/.claude" ] || [ "$d" = / ]; do d=$(dirname "$d"); done; [ "$d" = / ] && ROOT=$PWD || ROOT=$d; }
 DST="$ROOT/.claude/hooks"; D="$ROOT/.claude/docsync"; S="$ROOT/.claude/settings.json"; ok=1
 for f in docsync-track docsync-watch docsync-gate; do
   node --check "$DST/$f.mjs" && echo "✅ $f parses" || { echo "❌ $f parse FAILED"; ok=0; }

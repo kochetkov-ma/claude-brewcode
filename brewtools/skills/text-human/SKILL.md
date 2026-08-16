@@ -27,8 +27,8 @@ prompt. Phase 0 below IS this skill's resolution algorithm (explicit keyword -> 
 3. Empty arguments -> no assumed flow: Phase 0 Step 4's existing `AskUserQuestion` ("What to
    humanize?") is the ONE scoping question this contract requires -- do not skip it and do not
    guess a flow.
-4. Outcome-changing ambiguity beyond the flow itself (e.g. destructive edits) -> ONE
-   `AskUserQuestion` BEFORE any work.
+4. Outcome-changing ambiguity beyond the flow itself -> ONE `AskUserQuestion` BEFORE any work.
+   Phase 0.5's dirty-path gate IS that question whenever it fires, and it outranks the scoping one.
 5. Prose that is not a flow keyword is still input: `customPrompt` (Phase 0 Argument parsing)
    extracts it and both selects/overrides the flow and adds custom rules.
 
@@ -99,6 +99,25 @@ Accept all of: path, commit hash, folder, free-text prompt, path+prompt, no args
 Pattern files (load the sections the flow needs): `@reference/ai-patterns.md`, `@reference/human-patterns.md`.
 
 ---
+
+## Phase 0.5 -- Clean-tree precondition (every flow that writes)
+
+This skill rewrites files in place and keeps no backup, so git IS the undo. Before the first edit,
+over the resolved target paths only:
+
+```bash
+git status --porcelain -- <resolved paths>
+```
+
+- Empty -> proceed.
+- Non-empty -> ONE `AskUserQuestion` listing the dirty paths: proceed on them / process only the
+  clean ones / abort. This is the skill's single clarifying question -- it replaces, not adds to,
+  the Phase 0 scoping question, and `mixed`'s commit-mode check is this same gate scoped to the
+  commit's paths.
+- Not a git repo (`git rev-parse --git-dir` fails) -> say so and require an explicit go-ahead;
+  there is nothing to revert to.
+
+Inline text and other non-file input skip this -- nothing on disk changes.
 
 ## Phase 1 -- Execute the flow
 
@@ -177,7 +196,8 @@ Flow: <name>
 | Unicode normalized | W |
 ```
 
-Files are edited in place. No backups -- use git to revert.
+Files are edited in place. No backups -- git is the only undo, which is why Phase 0.5 refuses to
+start over dirty paths without an explicit answer.
 
 ## Error handling
 | Error | Action |

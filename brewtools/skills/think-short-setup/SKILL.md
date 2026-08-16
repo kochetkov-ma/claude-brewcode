@@ -75,7 +75,31 @@ Asset paths (all under `$BT_ROOT/skills/think-short-setup/assets/`):
 - `INSTALL.md` — the runbook: install project/global, upgrade, disable/enable, uninstall, purge. **Single source of truth — follow it, never re-derive its commands here.**
 - `think-short-session.mjs`, `think-short-prompt-counter.mjs`, `think-short-subagent.mjs`, `think-short-prompt.md` — the hook files that travel together
 
-> Never use `Write`/`Edit` on `~/.claude/*` — protected path, blocked in ALL modes. Global operations run through the Bash tool only (`cp` + `node` + `mv` + `rm`). The hook-creator agent handles this per the runbook.
+> Never use `Write`/`Edit` on `~/.claude/*` — sensitive path: it prompts in `default`/`acceptEdits`, is auto-approved only under `bypassPermissions`, and FAILS headless. Global operations run through the Bash tool only (`cp` + `node` + `mv` + `rm`). The hook-creator agent handles this per the runbook.
+
+## Project root (use in EVERY bash block and pass it to the agent)
+
+The project scope is `$ROOT/.claude/`, never `$PWD/.claude/`: the shell cwd moves with `cd` and persists across calls, so `$PWD` can be a subdirectory and status would report the root install missing while install would build a second, nested `.claude/`.
+
+```bash
+# Project root: CLAUDE_PROJECT_DIR -> git toplevel -> upward walk -> PWD.
+claude_project_root() {
+  if [ -n "$CLAUDE_PROJECT_DIR" ] && [ -d "$CLAUDE_PROJECT_DIR" ]; then
+    printf '%s\n' "$CLAUDE_PROJECT_DIR"; return 0
+  fi
+  if r=$(git rev-parse --show-toplevel 2>/dev/null) && [ -n "$r" ]; then
+    printf '%s\n' "$r"; return 0
+  fi
+  d=$PWD
+  while [ "$d" != "/" ]; do
+    if [ -d "$d/.git" ] || [ -d "$d/.claude" ]; then printf '%s\n' "$d"; return 0; fi
+    d=$(dirname "$d")
+  done
+  printf '%s\n' "$PWD"; return 1   # nonzero: caller decides
+}
+```
+
+Status may report on the fallback root; a mutating mode may NOT — if the resolver returns non-zero, report what was looked for (`CLAUDE_PROJECT_DIR`, a git toplevel, a `.git`/`.claude` marker above `$PWD`) and stop instead of writing. `CLAUDE_PROJECT_DIR` is exported to hook child processes, not to this shell, so it is normally empty here and the git toplevel does the work.
 
 ---
 
@@ -95,7 +119,24 @@ for f in INSTALL.md think-short-session.mjs think-short-prompt-counter.mjs think
 done
 echo "ASSETS_DIR=$A"
 echo "RUNBOOK=$A/INSTALL.md"
-for S in "$PWD/.claude:project" "$HOME/.claude:global"; do
+claude_project_root() {
+  if [ -n "$CLAUDE_PROJECT_DIR" ] && [ -d "$CLAUDE_PROJECT_DIR" ]; then
+    printf '%s\n' "$CLAUDE_PROJECT_DIR"; return 0
+  fi
+  if r=$(git rev-parse --show-toplevel 2>/dev/null) && [ -n "$r" ]; then
+    printf '%s\n' "$r"; return 0
+  fi
+  d=$PWD
+  while [ "$d" != "/" ]; do
+    if [ -d "$d/.git" ] || [ -d "$d/.claude" ]; then printf '%s\n' "$d"; return 0; fi
+    d=$(dirname "$d")
+  done
+  printf '%s\n' "$PWD"; return 1
+}
+if ROOT=$(claude_project_root); then ROOT_OK=yes; else ROOT_OK=no; fi
+export ROOT
+echo "ROOT=$ROOT root_resolved=$ROOT_OK"
+for S in "$ROOT/.claude:project" "$HOME/.claude:global"; do
   D="${S%%:*}"; N="${S##*:}"
   F=0
   for f in think-short-session.mjs think-short-prompt-counter.mjs think-short-subagent.mjs; do
@@ -107,7 +148,7 @@ for S in "$PWD/.claude:project" "$HOME/.claude:global"; do
   [ -f "$D/hooks/think-short-prompt.md" ] && P=enabled
   I=n/a
   if [ -f "$D/hooks/think-short-subagent.mjs" ]; then
-    C=$(node "$D/hooks/think-short-subagent.mjs" --check "$PWD" </dev/null 2>/dev/null || true)
+    C=$(node "$D/hooks/think-short-subagent.mjs" --check "$ROOT" </dev/null 2>/dev/null || true)
     case "$C" in *'"injects":true'*) I=yes ;; *'"injects":false'*) I=no ;; *) I=unknown ;; esac
   fi
   echo "$N: hook_files=$F/3 settings_refs=$W/3 prompt=$P injects=$I"
@@ -128,6 +169,7 @@ Field meanings — do not paraphrase them into something stronger:
 | `prompt` | `enabled` = `think-short-prompt.md` present, `disabled` = only the `.disabled` rename is there, `none` = neither (the hooks would no-op even though they are wired) |
 | `injects` | `node <that scope's copy>/think-short-subagent.mjs --check "$PWD"` → `injects`. `yes` = the prompt file is present and readable, so the `SubagentStart` hook really delivers it. `no` = wired but the prompt is missing/empty — a broken install, not a yield: `additionalContext` accumulates across hooks, so nothing here ever loses to another hook. `n/a` = no subagent hook in that scope. `unknown` = the installed copy answered nothing parseable — it predates `--check`, so run `upgrade` on that scope |
 | `markers` | number of tmp counter files; state only, never affects behavior |
+| `root_resolved` | `yes` = `ROOT` came from `CLAUDE_PROJECT_DIR`, a git toplevel or a `.git`/`.claude` marker; `no` = it fell back to `$PWD`. On `no`, report `status` only and refuse every mutating mode |
 
 `settings_refs` is a textual count, not a JSON validation — it does not prove the entries are well-formed or attached to the right events.
 
@@ -208,21 +250,23 @@ behavior lives entirely in the hook files, so this task is pure file + settings 
 ROLE: you own the file copy/rename/strip and the settings.json merge. Do NOT edit hook
 logic, do NOT touch unrelated hooks or settings keys, do NOT act on the other target.
 SCOPE: in — the 4 assets under ASSETS_DIR, the target .claude/ dir, its settings.json.
-Out — everything else. Project target: Write/Edit settings.json freely. Global target
-(~/.claude/*): BASH ONLY (cp + node merge + mv + rm), never Write/Edit — protected path.
+Out — everything else. Project target: everything under ROOT/.claude, never a .claude
+under some other cwd. Global target (~/.claude/*): BASH ONLY (cp + node merge + mv + rm),
+never Write/Edit — a sensitive path that prompts and fails headless.
 CONTEXT:
   Step 1 already verified the plugin cache and resolved every path below; nothing has been
   copied or merged yet, and no sibling agent is running — you are the only writer.
   MODE = MODE (install|upgrade|enable|disable|uninstall|purge)
   TARGET = TARGET (project|global)
+  ROOT = ROOT (absolute project root, already resolved — never re-derive it from $PWD)
   RUNBOOK = RUNBOOK (absolute path to assets/INSTALL.md)
   ASSETS_DIR = ASSETS_DIR (absolute path to the assets source dir — copy the 4 hook files FROM here)
   MANDATORY FIRST BASH COMMAND — the runbook's blocks read this from the ENVIRONMENT,
   not from this prompt. Run this VERBATIM as the first line of EVERY Bash call that executes
   a runbook block (a new Bash call does NOT inherit exports from the previous one):
-    export RUNBOOK='RUNBOOK'
+    export RUNBOOK='RUNBOOK' ROOT='ROOT'
   Then verify before writing anything:
-    echo \"RUNBOOK=\$RUNBOOK\"
+    echo \"RUNBOOK=\$RUNBOOK ROOT=\$ROOT\"
   Follow the runbook at RUNBOOK exactly — it self-locates its source via SRC=\$(dirname \"\$RUNBOOK\").
   Sections map 1:1 to MODE: 'PROJECT target'/'GLOBAL target' for install, 'UPGRADE',
   'DISABLE / ENABLE', 'UNINSTALL', 'PURGE'.
@@ -275,7 +319,8 @@ Re-install is a no-op. One target per run; "both" is two runs.
 | Status shows installed + vague intent | Print status, list available operations, STOP. Do not re-install. |
 | Target unspecified | AskUserQuestion: Project / Global. Never guess. |
 | Mode ambiguous between install and removal | AskUserQuestion. Never guess a destructive mode. |
-| Global target | Hook-creator MUST use Bash only (`cp`/`node`/`mv`/`rm`) — `~/.claude/*` is protected. |
+| Global target | Hook-creator MUST use Bash only (`cp`/`node`/`mv`/`rm`) — `Write`/`Edit` on `~/.claude/*` prompts and fails headless. |
+| `root_resolved=no` in the status block | The project root fell back to `$PWD`. Report `status` and STOP: name `CLAUDE_PROJECT_DIR`, the git toplevel and the `.git`/`.claude` marker as what was looked for. Never install, upgrade, uninstall or purge a guessed root. |
 | `enable` asked for but no `.disabled` file exists | Not disabled — say so and stop. If `prompt=none` the install is BROKEN, not disabled: offer `upgrade` to re-copy the prompt. |
 | `disable` asked for but `hook_files` is not `3/3` | Nothing effective to disable; report the half-state and offer `upgrade` or `uninstall`. |
 | Status shows `injects=no` | Wired and enabled, but the prompt file is missing/empty (broken install) — subagents get nothing. Offer `upgrade` for that scope. |

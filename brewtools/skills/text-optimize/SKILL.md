@@ -4,7 +4,7 @@ description: Optimizes text/docs for LLM token efficiency. Triggers - optimize, 
 user-invocable: true
 disable-model-invocation: true
 argument-hint: "[prompt] [-l|-s|-d|-x|--max] [file|folder|path1,path2] — -l light, -s standard (30-50%), -d deep (LLM-only), -x|--max max (LLM-only, atomic fact-lines, 2-round verify), no flag = medium or auto-detect"
-allowed-tools: [Read, Write, Edit, Grep, Glob, Agent, AskUserQuestion]
+allowed-tools: [Read, Write, Edit, Bash, Grep, Glob, Agent, AskUserQuestion]
 model: sonnet
 ---
 
@@ -56,7 +56,7 @@ Parse `$ARGUMENTS`: `-l`/`--light` | `-s`/`--standard` | `-d`/`--deep` | `-x`/`-
 
 | Mode | Flag / EN keywords | RU keywords | Target | Compression | Human-readable | Verification | Mutates? |
 |------|---------------------|--------------|--------|-------------|-----------------|---------------|----------|
-| Light | `-l`, `--light`, light, quick clean | лёгкая, лёгкий, почисти текст | Any | Minimal | Yes | None | yes |
+| Light | `-l`, `--light`, light, quick clean | лёгкая, лёгкий, почисти текст | Any | Minimal | Yes | Phase 3 sub-gate only | yes |
 | Medium | _(default)_, medium, balanced | средняя, сбалансируй | Any | Moderate | Yes | Self-check (fact inventory) | yes |
 | Standard | `-s`, `--standard`, compress, slim, tighten, safe compress, human readable | стандарт, сожми, для людей | Docs, README | 30-50% | Yes | 1 round (>=98%) | yes |
 | Deep | `-d`, `--deep`, compress for CLAUDE.md, for context, for prompt, for LLM, deep compress, super compress, maximum | глубокая, для контекста, максимально | CLAUDE.md, system prompts, agent/skill defs, KNOWLEDGE | 2-3x | No (LLM-only) | 1-2 rounds (>=95%) | yes |
@@ -64,15 +64,20 @@ Parse `$ARGUMENTS`: `-l`/`--light` | `-s`/`--standard` | `-d`/`--deep` | `-x`/`-
 
 ## Loss Budget per Mode
 
-Content essence is untouchable at light/medium/standard; small deliberate loss is allowed only at deep/max — explicitly reported. Dedup-merged facts count as preserved, never as loss.
+Content essence is untouchable at light/medium/standard; small deliberate loss is allowed only at deep/max — explicitly reported. Dedup-merged facts count as preserved, never as loss. Every mode mutates in place, so every mode goes through Phase 0 snapshot and the Phase 3 sub-gate.
 
 | Mode | Semantic match target | Allowed loss |
 |------|----------------------|--------------|
 | Light | 100% | None — wording cleanup only |
 | Medium | 100% | None — restructure, zero fact loss (self-check) |
 | Standard | >= 98% | None intended; verification patches any slip |
-| Deep | >= 95% | Word-level drops (A.2, ledgered, gate-neutral) + generic known-facts (A.4, `elided-known`, consumes gate), listed in report |
+| Deep | >= 95% + 100% sub-gate (numbers/names/negations/scope) | Word-level drops (A.2, ledgered, gate-neutral) + generic known-facts (A.4, `elided-known`, consumes gate), listed in report |
 | Max | >= 95% + 100% sub-gate (numbers/names/negations/scope) | Small, explicit, user-reviewed loss list |
+
+> The 100% sub-gate is a REFUSAL, not a warning: a sub-gate failure restores the snapshot and
+> leaves the file at its pre-edit bytes (Phase 0/Phase 3 below). The `>= 95%` budget covers
+> ordinary wording loss; a lost number, path, version, name, negation or scope qualifier is never
+> inside that budget in any mode.
 
 ## Smart Auto-Detection
 
@@ -126,6 +131,22 @@ When no flag provided AND input suggests compression (not just optimization):
 
 > D.5 (cross-file dedup) applies in ANY mode when processing multiple files or a folder. D.6 wrong-merge guard is mandatory wherever D.2/D.3/D.5 run.
 
+### D.5 is decided by the orchestrator, never by a per-file agent
+
+A per-file agent sees one file, so two agents can each judge the same fact redundant "because the
+other file keeps it" and delete it from both — and both report it `merged`, which counts as
+preserved, so no per-file gate can see the loss. D.5 therefore belongs to the skill, which already
+merges every report:
+
+1. After Phase 1, the skill builds ONE cross-file duplicate list from the Explore findings: for each
+   fact appearing in 2+ targets, name the SINGLE owning file and the pointer text every other file
+   gets.
+2. That list ships inside each Phase 2 spawn brief as a **dedup decision list** — the agent EXECUTES
+   its own rows and makes no cross-file dedup judgement of its own.
+3. A row absent from the list means "keep the fact where it is". An agent that believes a fact is
+   cross-file redundant reports it to the skill and leaves the text alone.
+4. Apply D.6 while BUILDING the list: differing scope/numbers/conditions are different facts.
+
 ## Deduplication Pass (All Modes)
 
 Runs during analysis, BEFORE compression:
@@ -168,9 +189,32 @@ Runs during analysis, BEFORE compression:
 Once the target files and depth are resolved above, print the Prompt contract PLAN block now
 (SCOPE names the resolved paths + resolved depth), before Phase 1 Analysis spawns below.
 
-### 2-Phase Execution
+### Phased Execution
 
-> **Orchestration:** Phase 1+2 are executed by the SKILL in the main conversation (manager level). The text-optimizer agent handles single-file optimization only — it cannot spawn sub-agents.
+> **Orchestration:** Phase 0-3 are executed by the SKILL in the main conversation (manager level). The text-optimizer agent handles single-file optimization only — it cannot spawn sub-agents, so it is never the gate on its own work.
+
+**Phase 0: Preconditions + Snapshot (MANDATORY, before ANY edit)**
+
+Every mode rewrites files IN PLACE. Preservation must live on DISK, not in a context window a
+compaction can drop. Before the first Phase 2 spawn, **EXECUTE** using Bash tool:
+
+```bash
+bash "$CLAUDE_PLUGIN_ROOT/skills/text-optimize/scripts/text-guard.sh" snapshot <file>... \
+  && echo "✅" || echo "❌ FAILED"
+```
+
+> **STOP if ❌** — fix before continuing. Nothing is edited until this prints a `RUN_DIR`.
+
+| Guarantee | How |
+|-----------|-----|
+| Clean tree required | `git status --porcelain` over the targets must be empty; a dirty target or a non-git root exits 3 and names what it found. `--allow-dirty` is the user's explicit override, never the default |
+| Recoverable pre-state | Each target is copied byte-for-byte to `<RUN_DIR>/orig/<repo-relative-path>` |
+| Private by construction | The snapshot subtree is created under `umask 077` (dirs `0700`, files no group/other bits) |
+| Never committed | `.claude/reports/` is appended to the project `.gitignore` if absent (idempotent) |
+
+Capture the printed `RUN_DIR:` — Phase 3 needs it, and it is the same run directory the agents
+append their checkpoint report to. Exit codes: `0` ok, `2` usage/state error, `3` precondition
+refused (nothing written).
 
 ### Delegation
 
@@ -209,6 +253,11 @@ CONTEXT: mode={mode} is already chosen (loss budget per the mode table); Phase 1
   Sibling agents are optimizing the other {N-1} files of this run at the same time; rule and
   compression references come from your agent definition Step 0/Step 2 (${CLAUDE_PLUGIN_ROOT}
   is natively substituted at spawn).
+  A pre-edit snapshot of {file} is already on disk at {RUN_DIR}/orig/ — never read, write or
+  delete anything under {RUN_DIR}/orig/, and never re-run text-guard.sh yourself.
+  D.5 cross-file dedup is NOT yours to judge. Your dedup decision list is exactly:
+  {rows, or "none — keep every cross-file fact where it is"}. Execute those rows and nothing
+  more; a cross-file redundancy you spot goes into your report as a suggestion, not an edit.
 CONSUMER: the skill merges every agent's Optimization Report into one summary for the user;
   {file} itself is consumed by an LLM loading it as a prompt/doc, and other files still point
   at its headings — a heading you rename must stay resolvable or you break a sibling's file.
@@ -220,9 +269,59 @@ DONE: run the dedup pass (D.1-D.6) before compressing, apply transformations, ve
 
 > **Spawn parallel:** For multiple files, spawn ALL agents in ONE message for speed.
 
+**Phase 3: Independent Verify (MANDATORY, skill-owned, after EVERY Phase 2 return)**
+
+The agent that wrote the compression is never its own gate. Phase 3 runs in the skill, which has
+`Task`, and compares disk against disk — both sides survive a compaction.
+
+Step 1 — mechanical sub-gate. **EXECUTE** using Bash tool, once per run:
+
+```bash
+bash "$CLAUDE_PLUGIN_ROOT/skills/text-optimize/scripts/text-guard.sh" verify --run-dir <RUN_DIR> <file>...
+```
+
+Exit `0` = every number, version, path, `!=` prohibition and ALL-CAPS modal keyword in the original
+is still present, and the optimized file is kept. Exit `1` = at least one is gone: the script has
+ALREADY restored those files to their pre-edit bytes and printed the missing tokens. Restoration is
+the outcome, not a warning — report the missing tokens to the user and offer a re-run at a lighter
+mode. Exit `2` means no snapshot exists, i.e. Phase 0 was skipped: STOP, do not accept the result.
+
+Step 2 — semantic gate, one fresh agent per file that passed Step 1 (spawn all in ONE message):
+
+```
+Task(subagent_type: "general-purpose", prompt: "
+GOAL: independently gate a lossy rewrite before it is accepted; you did NOT write it.
+ROLE: verifier. Read only. Do NOT edit, patch or improve either file.
+SCOPE: in — ORIGINAL {RUN_DIR}/orig/{rel} and CURRENT {file}, both read from disk. Out —
+  every other path; do not read the optimizer's report, it is the thing under test.
+CONTEXT: mode={mode}, gate {>=98% standard | >=95% deep/max} plus a 100% sub-gate on numbers,
+  names, negations and scope qualifiers. Merged duplicates and A.1/A.3 rewrites count as kept;
+  A.4 `elided-known` counts as loss.
+CONSUMER: the skill, which restores the ORIGINAL over {file} on your FAIL.
+DONE: numbered atomic-fact inventory from ORIGINAL, each labelled kept/merged/lost/distorted,
+  match %, sub-gate PASS/FAIL with the exact list of missing critical facts, verdict PASS|FAIL.
+")
+```
+
+On a Step 2 FAIL, restore and report — never patch in place:
+
+```bash
+bash "$CLAUDE_PLUGIN_ROOT/skills/text-optimize/scripts/text-guard.sh" restore --run-dir <RUN_DIR> <file>
+```
+
+| Outcome | Result |
+|---------|--------|
+| Step 1 + Step 2 PASS | Optimized file accepted; report the metrics |
+| Either FAIL | File is at its original bytes; report match %, the missing facts and the suggested lighter mode |
+| No snapshot (exit 2) | Result NOT accepted — Phase 0 was skipped, re-run from Phase 0 |
+
+The snapshot stays in `<RUN_DIR>/orig/` after the run; name the directory in the final report so
+the user can diff or delete it.
+
 ## Quality Checklist
 
 ### Before
+- [ ] Phase 0 ran: clean tree confirmed, snapshot on disk, `RUN_DIR` captured
 - [ ] Read entire text
 - [ ] Identify type (prompt, docs, agent, skill)
 - [ ] Note critical info and cross-references
@@ -262,8 +361,8 @@ DONE: run the dedup pass (D.1-D.6) before compressing, apply transformations, ve
 - Apply existing rules (C, T, S, R, P) in addition to deep techniques
 
 ### Phase 2: Verify Round 1
-- Spawn verification agent with ORIGINAL + COMPRESSED text
-- Agent extracts numbered atomic-fact inventory from ORIGINAL, checks each in COMPRESSED, labels kept/merged/lost/distorted; match % = (kept + merged) / total; verifies no two distinct facts merged into one (D.6)
+- Self-check inside the optimizing agent (it has no `Agent`/`Task` tool — the INDEPENDENT gate is the skill's Phase 3, not this round)
+- Extract a numbered atomic-fact inventory from ORIGINAL, check each in COMPRESSED, label kept/merged/lost/distorted; match % = (kept + merged) / total; verify no two distinct facts merged into one (D.6)
 - A.1 fused / A.3 paraphrased facts count as kept/merged; A.4 elisions labeled `elided-known` in loss list and count as loss against the 95% gate
 - Calculate semantic match %
 - If >= 95% → done
@@ -271,8 +370,8 @@ DONE: run the dedup pass (D.1-D.6) before compressing, apply transformations, ve
 
 ### Phase 3: Patch + Verify Round 2
 - Apply patches for missing facts
-- Re-verify
-- If still < 95% → warn user with loss list
+- Re-verify, including the 100% sub-gate on numbers/names/negations/scope qualifiers
+- If still < 95%, or the sub-gate fails → the file is RESTORED from the snapshot by the skill's Phase 3 and the result is refused; report the loss list, never leave a lossy file in place
 - Output final result + statistics
 - Optional reconstruction probe: expand compressed back to prose, diff entities/numbers vs original (entities are lost first)
 
@@ -286,15 +385,15 @@ DONE: run the dedup pass (D.1-D.6) before compressing, apply transformations, ve
 - Chain-of-Density final pass (B4): fuse missing entities at fixed length
 
 ### Phase 2: Verify Round 1 — Claim Inventory
-- Spawn verification agent with ORIGINAL + COMPRESSED
-- Agent decomposes original into numbered atomic claims (one predicate per claim), labels each kept/merged/lost/distorted
+- Self-check inside the optimizing agent (the INDEPENDENT gate is the skill's Phase 3)
+- Decompose original into numbered atomic claims (one predicate per claim), label each kept/merged/lost/distorted
 - Semantic match % = (kept + merged) / total; merged (deduplicated) facts = preserved; A.1 fused / A.3 paraphrased facts = kept/merged; A.4 elisions labeled `elided-known` = loss against the 95% gate
 - Gate >= 95% -> proceed; < 95% -> return loss list
 
 ### Phase 3: Patch + Verify Round 2 — Self-QA Probe (MANDATORY)
 - Apply patches; Round 2 is mandatory, NEVER skip; use the INDEPENDENT method: generate 10-20 questions from original (entities, numbers, conditions, negations), answer from compressed only
 - Sub-gate: 100% of numbers, names, negations, scope qualifiers must survive
-- If still < 95% or sub-gate fails -> warn user with explicit loss list (lost/distorted/merged/elided-known labels)
+- If still < 95% or sub-gate fails -> the skill's Phase 3 RESTORES the snapshot over the file and refuses the result; report the explicit loss list (lost/distorted/merged/elided-known labels) plus the suggested lighter mode
 - Output final result + statistics
 
 ## Standard Mode Pipeline
@@ -311,12 +410,15 @@ DONE: run the dedup pass (D.1-D.6) before compressing, apply transformations, ve
 ### Phase 2: Verify
 - Extract atomic-fact inventory from original; check each fact in compressed
 - Gate: (kept + merged) / total >= 98% — list lost facts -> patch
+- 100% sub-gate on numbers/names/negations/scope qualifiers; a failure is a restore-and-refuse via the skill's Phase 3, not a warning
 - One round only
 
 ## Iron Rules (All Modes)
 
 | Rule | Detail |
 |------|--------|
+| Snapshot first | No edit without a Phase 0 snapshot on disk and a clean tree over the targets. `!=` editing straight from the prompt |
+| Refuse, don't warn | A failed sub-gate restores the original bytes. A lossy file is never left in place with a warning attached |
 | Preserve | Names, numbers, dates, URLs, file paths, versions, ports, sizes |
 | Preserve | Negative rule semantics (`!=` notation in deep mode) |
 | Preserve | At least one example per rule with examples |

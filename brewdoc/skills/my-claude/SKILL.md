@@ -21,7 +21,7 @@ work standalone. Nobody types keys: resolve mode + query FROM the prompt.
    literal-syntax table below.
 2. Else score modes by distinct whole-word keyword hits (table below). Highest unique score wins; tie ->
    `AskUserQuestion`; all zero -> `internal` (documented default).
-3. Empty arguments -> `internal`. Read-only inventory + write to `.claude/brewdoc/my-claude/` — asks nothing.
+3. Empty arguments -> `internal`. Read-only inventory + write to `${CLAUDE_PROJECT_DIR}/.claude/brewdoc/my-claude/` — asks nothing.
 4. Outcome-changing ambiguity (e.g. an existing INDEX entry for the same mode) -> ONE `AskUserQuestion`.
 5. Prose that is not a mode/query is still input: extract the topic/query from it.
 
@@ -33,7 +33,7 @@ INPUT:  <arguments verbatim, or "(empty)">
 MODE:   <resolved> — <explicit prefix | matched keyword: X | default>
 SCOPE:  <sources to analyze | research query>
 DO:     <2-5 imperative bullets>
-RESULT: <doc path(s) written under .claude/brewdoc/my-claude/>
+RESULT: <doc path(s) written under ${CLAUDE_PROJECT_DIR}/.claude/brewdoc/my-claude/>
 ```
 
 Labels are literal; values follow the conversation language.
@@ -60,9 +60,12 @@ After detection, load the appropriate reference file:
 - EXTERNAL: `references/external-mode.md`
 - RESEARCH: `references/research-mode.md`
 
+Reference files are read raw — no substitution runs on them. Where one prints `${CLAUDE_PROJECT_DIR}`, use the
+project root this skill's own markdown already resolved.
+
 ## vs built-in `/team-onboarding`
 
-Built-in `/team-onboarding` (CC 2.1.101+) is enough for a quick teammate handoff doc from local config. Use this skill instead when the job needs web research, EXTERNAL architecture synthesis, RESEARCH mode, or the persistent `.claude/brewdoc/INDEX.jsonl` with citations.
+Built-in `/team-onboarding` (CC 2.1.101+) is enough for a quick teammate handoff doc from local config. Use this skill instead when the job needs web research, EXTERNAL architecture synthesis, RESEARCH mode, or the persistent `${CLAUDE_PROJECT_DIR}/.claude/brewdoc/INDEX.jsonl` with citations.
 
 ## Delegation
 
@@ -83,10 +86,18 @@ A bare one-line task is never enough. Applies to every `Explore` / `general-purp
 
 ## Output Directory
 
-All generated docs go to `.claude/brewdoc/my-claude/` (project-relative — required because `~/.claude/*` is blocked by Claude Code's protected-path policy in headless sessions, even under `bypassPermissions`).
-Create if not exists: `mkdir -p .claude/brewdoc/my-claude`
+All generated docs go to `${CLAUDE_PROJECT_DIR}/.claude/brewdoc/my-claude/`. Use the token in EVERY output and
+index path, never a bare relative one: skill commands run in the session shell's cwd and that cwd moves with
+`cd`, so a bare path invoked from a nested package builds a second output tree and a second INDEX.
+Create if not exists: `mkdir -p "${CLAUDE_PROJECT_DIR}/.claude/brewdoc/my-claude"`
 
-This is the only supported target — there is no `~/.claude` or plugin-data fallback.
+Spell it BARE — `${CLAUDE_PROJECT_DIR}`. The token is a text substitution into this skill's markdown and its
+`allowed-tools` (CC 2.1.196+), not an env var; a modifier form like `${CLAUDE_PROJECT_DIR:-...}` is not matched,
+reaches the shell verbatim, and always falls through to its fallback.
+
+This is the only supported target — there is no `~/.claude` or plugin-data fallback. `~/.claude/**` is an
+ASK-classified path: it prompts in `default`/`acceptEdits`, is auto-approved under `bypassPermissions`, and a
+headless run without bypass fails on it.
 
 ### Provenance frontmatter (every generated doc, all three modes)
 
@@ -113,12 +124,13 @@ Re-generating an existing doc REFRESHES all three quoted values and leaves a han
 
 ## INDEX Tracking
 
-Append entry to `.claude/brewdoc/INDEX.jsonl`:
+Append entry to `${CLAUDE_PROJECT_DIR}/.claude/brewdoc/INDEX.jsonl`. The `path` field stays repo-relative — the
+token anchors the file you open, not the value you record:
 ```jsonl
 {"ts":"2026-02-28T10:00:00","mode":"internal","path":".claude/brewdoc/my-claude/20260228_my-claude-internal.md","title":"Internal Claude Setup Overview","version":"1.0"}
 ```
 
-**Legacy read-only merge** — if `~/.claude/brewdoc/INDEX.jsonl` exists AND the new project INDEX is empty, read the legacy file once, merge its entries into `.claude/brewdoc/INDEX.jsonl`, and print: `ℹ️ Migrated {N} entries from legacy ~/.claude/brewdoc/INDEX.jsonl (read-only; legacy file untouched)`. NEVER write back to the legacy path.
+**Legacy read-only merge** — if `~/.claude/brewdoc/INDEX.jsonl` exists AND the new project INDEX is empty, read the legacy file once, merge its entries into `${CLAUDE_PROJECT_DIR}/.claude/brewdoc/INDEX.jsonl`, and print: `ℹ️ Migrated {N} entries from legacy ~/.claude/brewdoc/INDEX.jsonl (read-only; legacy file untouched)`. NEVER write back to the legacy path.
 
 If an existing entry for the same mode exists: use AskUserQuestion — header: "INDEX", question: "Entry for this mode already exists (v{VERSION}). Update it?", options: "Yes, update (bump version)" / "No, create new entry".
 
@@ -146,7 +158,8 @@ If an existing entry for the same mode exists: use AskUserQuestion — header: "
      Out — project CLAUDE.md, .claude/**, memory files, source code.
    CONTEXT: nothing has been read yet — you are the first pass for this group. Two sibling
      agents scan project `.claude` config and memory files in parallel right now; the output
-     dir `.claude/brewdoc/my-claude/` and the INDEX entry are already resolved by the skill.
+     dir `${CLAUDE_PROJECT_DIR}/.claude/brewdoc/my-claude/` and the INDEX entry are already
+     resolved by the skill.
    CONSUMER: the aggregation step merges the three inventories into one INTERNAL-mode
      document, then an `Explore` agent re-checks that every path you name exists — absolute
      paths only, and flag a missing file instead of dropping its row.
@@ -155,7 +168,7 @@ If an existing entry for the same mode exists: use AskUserQuestion — header: "
    ")
    ```
 2. Aggregate findings into structured document
-3. Write to `.claude/brewdoc/my-claude/YYYYMMDD_my-claude-internal.md`
+3. Write to `${CLAUDE_PROJECT_DIR}/.claude/brewdoc/my-claude/YYYYMMDD_my-claude-internal.md`
 4. Spawn an independent `Explore` agent to validate facts (file paths exist, content accurate) — read-only check, no edits
 5. Apply the validation fixes if any
 6. Add INDEX entry
@@ -190,11 +203,11 @@ If an existing entry for the same mode exists: use AskUserQuestion — header: "
 1. Analyze local hook files for event model patterns
 2. WebSearch for recent Claude Code releases and CHANGELOG
 3. Spawn `general-purpose` agents for: official docs (code.claude.com), GitHub releases, community forums
-4. Generate `.claude/brewdoc/my-claude/YYYYMMDD_my-claude-external.md`
+4. Generate `${CLAUDE_PROJECT_DIR}/.claude/brewdoc/my-claude/YYYYMMDD_my-claude-external.md`
 
 **Sub-mode context-schema:**
 1. Focus specifically on context injection schema (additionalContext, updatedInput, etc.)
-2. Output: `.claude/brewdoc/my-claude/external/YYYYMMDD_context-schema.md`
+2. Output: `${CLAUDE_PROJECT_DIR}/.claude/brewdoc/my-claude/external/YYYYMMDD_context-schema.md`
 
 ## RESEARCH Mode
 
@@ -207,7 +220,7 @@ If an existing entry for the same mode exists: use AskUserQuestion — header: "
 2. Spawn `general-purpose` agents per source group in parallel
 3. Aggregate with citation tracking (source URL per fact)
 4. Spawn an independent `general-purpose` agent to validate facts and source reliability (needs WebFetch/WebSearch to re-check sources)
-5. Output: `.claude/brewdoc/my-claude/YYYYMMDD_research-{slug}.md`
+5. Output: `${CLAUDE_PROJECT_DIR}/.claude/brewdoc/my-claude/YYYYMMDD_research-{slug}.md`
 
 **Output structure:**
 ```markdown

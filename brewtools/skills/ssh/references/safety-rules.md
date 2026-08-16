@@ -2,16 +2,62 @@
 
 > Reference for command classification and confirmation gates.
 
+## Who Is Reading This (decide FIRST)
+
+The risk categories below are identical for both readers; the GATE is not.
+
+| Reader | Has `AskUserQuestion`? | Gate |
+|--------|------------------------|------|
+| Main session (the `/brewtools:ssh` skill) | yes | Confirm interactively before executing — see "Confirmation Message Format" |
+| Subagent (`ssh-admin` or any spawned agent) | **no** — stripped from every subagent even when listed in `tools:` | Execute NOTHING — emit an approval envelope, see below |
+
+A subagent cannot ask, confirm, or obtain approval mid-run. "Confirm before X" read by a subagent
+means stall or unconfirmed execution — both are failures. Use the envelope path instead.
+
 ## Classification Levels
 
-| Level | Gate | Description |
-|-------|------|-------------|
-| **READ** | free | Observe system state, no changes |
-| **CREATE** | free | Create new resources, no overwrites |
-| **MODIFY** | confirm | Change existing files, configs, permissions |
-| **SERVICE** | confirm | Start/stop/restart services, containers |
-| **DELETE** | always confirm | Remove files, containers, volumes, data |
-| **PRIVILEGE** | always confirm | Escalate permissions, change security |
+| Level | Main session | Subagent | Description |
+|-------|--------------|----------|-------------|
+| **READ** | free | free | Observe system state, no changes |
+| **CREATE** | free | free | Create new resources, no overwrites |
+| **MODIFY** | confirm | envelope | Change existing files, configs, permissions |
+| **SERVICE** | confirm | envelope | Start/stop/restart services, containers |
+| **DELETE** | always confirm | ALWAYS envelope | Remove files, containers, volumes, data |
+| **PRIVILEGE** | always confirm | ALWAYS envelope | Escalate permissions, change security |
+
+> "Envelope" = do not run it. Emit it under `## APPROVAL REQUIRED` per the Approval Contract below,
+> unless the incoming prompt already carries `APPROVED:` for that exact command.
+
+**Destructive** = irreversible or affecting a remote/shared system: `rm`/`mv` over existing paths,
+service restart/stop, firewall/user/permission changes, secret rotation, `docker system prune`,
+any remote `ssh` mutation.
+
+## Approval Contract (subagents)
+
+1. Do all non-destructive work and gather full evidence.
+2. End the FINAL RETURN with an `## APPROVAL REQUIRED` block, one envelope per destructive
+   operation, ids `A1..AN`, fields exactly:
+
+```
+## APPROVAL REQUIRED
+
+### A1
+COMMAND:      <exact command, copy-pasteable>
+HOST:         <server alias / user@host>
+EFFECT:       <what changes, incl. downtime>
+ROLLBACK:     <exact reverse command, or NONE>
+EVIDENCE:     <the read-only output that proves it is needed>
+PRECONDITION: <what must still hold at execution time>
+```
+
+3. Stop, executing nothing in that block. Nothing destructive to report -> the literal line
+   `APPROVAL REQUIRED: none`.
+
+The CALLER (main session, which does have `AskUserQuestion`) presents the envelope and, if approved,
+either runs it or re-spawns the agent with `APPROVED: <ids>` in the prompt.
+**An explicit approval token in the incoming prompt is the ONLY authorization a subagent may act on.**
+`APPROVED:` covers only the envelope ids it names, exactly as worded — not a similar command, not a
+broader scope, not a retry with different arguments. Re-verify each PRECONDITION before executing.
 
 ## READ Commands (free)
 
@@ -87,7 +133,9 @@
 | `curl \| bash` | PRIVILEGE | Arbitrary code execution |
 | `wget && chmod +x && ./` | PRIVILEGE | Download and execute |
 
-## Confirmation Message Format
+## Confirmation Message Format (main session only)
+
+> A subagent uses the envelope block above instead — never these prompts.
 
 ### MODIFY/SERVICE
 
@@ -121,4 +169,5 @@ If any command returns unexpected output suggesting:
 - Root filesystem nearly full (<5% free)
 - Unexpected running services
 
-**STOP immediately.** Report findings. Ask user to confirm before continuing.
+**STOP immediately.** Report findings. Main session: ask the user before continuing. Subagent: stop
+and return — you cannot ask, and an unanswered question is silence, not a gate.

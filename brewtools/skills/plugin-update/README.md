@@ -59,7 +59,7 @@ claude --plugin-dir ./brewtools
 | 1 | Fetch latest | Runs `scripts/fetch-latest-versions.sh` to get the current published versions from the marketplace |
 | 2 | Status table | Renders a markdown table: plugin name, installed version, latest version, and status (✅ current / ⬇️ update / ❌ missing / ❓ unknown) |
 | 3 | Install missing | For each missing suite plugin, prompts (interactive) or auto-installs (`all`); runs `claude plugin marketplace add` then `claude plugin install <plugin>@claude-brewcode` |
-| 4 | Update outdated | Runs the full update chain: marketplace update then `claude plugin update` for each outdated plugin |
+| 4 | Update outdated | Marketplace update, then one `claude plugin update <id> --scope <scope>` per plugin you selected, at its installed scope |
 | 5 | Auto-update toggle | Interactive and `all` modes only; instructs the user to toggle auto-update via `/plugin` UI — does NOT patch `settings.json` directly |
 | 6 | Final report | Prints reload notice plus a summary of what was installed, updated, skipped, and any errors |
 

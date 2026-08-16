@@ -1,4 +1,4 @@
-// brewcode-meta: version=5.7.0 content_version=5.6.0 generated_by=brewtools:manager-setup
+// brewcode-meta: version=6.0.0 content_version=5.6.0 generated_by=brewtools:manager-setup
 // brewtools:manager-setup — Manager mode state resolver/writer.
 // State shape: { hard:boolean, level:'strict'|'balanced', mode:'full' }
 //   + artifact metadata written by writeState: version/generated_by/last_updated.

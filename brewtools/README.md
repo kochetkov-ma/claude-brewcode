@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 5.7.0 |
+| Version | 6.0.0 |
 | Skills | 13 |
 | Agents | 3 |
 | Hooks | 2 |
@@ -43,6 +43,8 @@ Update anytime with `/brewtools:plugin-update`.
 ## Overview
 
 Brewtools provides standalone utilities: token-efficient optimization with 52 validated rules, universal AI-artifact removal with greedy flow detection across code/docs/articles/reddit/chat (five domain flows, two-pass strip+inject model), security scanning for leaked credentials, SSH server management, GitHub Actions deployment with safety gates, and plugin check/install/update. Each skill is self-contained and requires no prior setup.
+
+**v6 hardening.** The HARD delegation wall (`manager-setup`) moved from a denylist to a strict per-binary allowlist that fails closed on any unrecognized flag, and closed four further bypasses: `git diff --output=`, `git branch -D`, `gh issue comment --body`, `find -fprint0`. Every subagent lost `AskUserQuestion` (removed in Claude Code 2.1.233) -- destructive or privileged steps now return a `## APPROVAL REQUIRED` envelope to the caller instead. `ssh-admin` no longer places secrets on `curl` argv.
 
 ## Installation
 
@@ -189,6 +191,22 @@ always come from `.claude-plugin/plugin.json`, never hardcoded.
 |------|-------|---------|
 | `session-start.mjs` | SessionStart | Manager HARD-wall awareness -- injects guard tag plus the bounded-unit delegation brief (goal + scope + what is already done + who consumes the result + acceptance) into systemMessage and additionalContext |
 | `manager-prompt.mjs` | UserPromptSubmit | Injects `++m` (manager, plan-aware) / `++a` (architecture-first) / `++rr` / `++r` codeword blocks |
+
+## Regression suites
+
+v6 adds automated regression suites where several skills had none. Counts below are `TOTAL: X | PASS: X | FAIL: 0` from each skill's own `tests/run.sh` (or `tests/suite.mjs` for manager-setup), re-run before publishing this table -- never taken from a stale doc.
+
+| Skill | Checks |
+|-------|--------|
+| [agent-return-setup](skills/agent-return-setup/README.md) | 803 |
+| [agent-deadline-setup](skills/agent-deadline-setup/README.md) | 169 |
+| [agent-router-setup](skills/agent-router-setup/README.md) | 76 |
+| [deploy](skills/deploy/README.md) | 76 |
+| [ssh](skills/ssh/README.md) | 74 |
+| [secrets-scan](skills/secrets-scan/README.md) | 82 |
+| [text-optimize](skills/text-optimize/README.md) | 51 |
+| [manager-setup](skills/manager-setup/README.md) | 44 |
+| [think-short-setup](skills/think-short-setup/README.md) | 19 |
 
 ## Documentation
 

@@ -4,7 +4,12 @@ set -euo pipefail
 # No args needed — works from project root
 # Output: structured key=value pairs
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/deploy-common.sh
+. "$SCRIPT_DIR/lib/deploy-common.sh"
+
 echo "=== Workflow Discovery ==="
+echo "WATCHDOG=$(ght_backend)"
 
 # Count local workflow files
 WORKFLOW_DIR=".github/workflows"
@@ -39,20 +44,27 @@ for wf_file in "${WORKFLOW_FILES[@]}"; do
 done
 fi
 
-# Get workflow status from GitHub API
+# Get workflow status from GitHub API.
+# One bounded call, not a probe plus a real call: the probe doubled the cost and
+# its exit code was thrown away. ght_reason keeps "gh is missing" separate from
+# "the API said no" -- collapsing them was the whole BT-F30 misreport.
 echo "=== Workflow Status ==="
-if timeout 30 gh workflow list &>/dev/null; then
-    timeout 30 gh workflow list --json name,state 2>/dev/null | jq -r '.[] | "WF_STATUS_\(.name | gsub("[^a-zA-Z0-9]"; "_"))=\(.state)"' 2>/dev/null || echo "WF_STATUS=api_error"
+WF_RC=0
+WF_JSON=$(ght 30 gh workflow list --json name,state 2>/dev/null) || WF_RC=$?
+if [[ "$WF_RC" -eq 0 && -n "$WF_JSON" ]]; then
+    printf '%s' "$WF_JSON" | jq -r '.[] | "WF_STATUS_\(.name | gsub("[^a-zA-Z0-9]"; "_"))=\(.state)"' 2>/dev/null || echo "WF_STATUS=api_error"
 else
-    echo "WF_STATUS=api_unavailable"
+    echo "WF_STATUS=$(ght_reason "$WF_RC")"
 fi
 
 # Get recent runs
 echo "=== Recent Runs ==="
-if timeout 30 gh run list -L 5 &>/dev/null; then
-    timeout 30 gh run list -L 5 --json workflowName,status,conclusion,createdAt,headBranch 2>/dev/null | jq -r '.[] | "RUN: \(.workflowName) | \(.status)/\(.conclusion // "pending") | \(.headBranch) | \(.createdAt)"' 2>/dev/null || echo "RUNS=api_error"
+RUNS_RC=0
+RUNS_JSON=$(ght 30 gh run list -L 5 --json workflowName,status,conclusion,createdAt,headBranch 2>/dev/null) || RUNS_RC=$?
+if [[ "$RUNS_RC" -eq 0 && -n "$RUNS_JSON" ]]; then
+    printf '%s' "$RUNS_JSON" | jq -r '.[] | "RUN: \(.workflowName) | \(.status)/\(.conclusion // "pending") | \(.headBranch) | \(.createdAt)"' 2>/dev/null || echo "RUNS=api_error"
 else
-    echo "RUNS=api_unavailable"
+    echo "RUNS=$(ght_reason "$RUNS_RC")"
 fi
 
 echo "=== Discovery Complete ==="

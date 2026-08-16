@@ -54,6 +54,9 @@ Rules for assertion quality and strictness.
 | A2 | Concrete values | `isEqualTo(expectedValue)`, `hasSize(N)`, full object comparison | Does every assertion compare against a specific expected value? |
 | A3 | Description on every assertion | `.as("description")` or framework equivalent | Does every assertion have a descriptive message? |
 | A4 | No `if` in tests | Never `if (size > 1) { assert... }`. Assert precondition first, then unconditional check | Are there any conditional assertions (if/else around asserts)? |
+| A5 | Exact type, not duck typing | `isInstanceOf(C)` / `isinstance(x, C)` / `toBeInstanceOf(C)` — never infer type from probed fields | Is the expected type asserted explicitly? |
+| A6 | Explicit tolerance for non-deterministic values | `isCloseTo(v, within(e))` / `pytest.approx(v, rel=r)` / `toBeCloseTo(v, digits)`. Inequality is a last resort and needs an empirical bound | Does every timing/float/count-drift assertion state a tolerance instead of an inequality? |
+| A7 | The wait IS the assertion | Web-first assertion retries itself (`await expect(locator).toBeVisible()`). Never `waitForTimeout`/sleep/retry-loop/double-click/bumped timeout around an ACTION. For a response start the wait first: `const p = page.waitForResponse(...); await locator.click(); await p;` — no `await` on the promise line. Actionability != app-ready: it holds on pre-hydration DOM, so wait on the post-hydration marker/client state/that response; no hook exists -> report the gap, never sleep | Does any test wait by sleeping or retrying an action instead of asserting? |
 
 ---
 

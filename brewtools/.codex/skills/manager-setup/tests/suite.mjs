@@ -8,8 +8,8 @@
  * comparison with a description; no branching gates which asserts run.
  */
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, chmodSync, rmSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
@@ -54,11 +54,20 @@ function safeParse(str) {
   }
 }
 
-function runGuard(stdinStr) {
+/**
+ * Runs the guard with CODEX_PROJECT_DIR scrubbed unless a test sets it explicitly —
+ * otherwise the ambient value of whoever runs the suite would resolve the project root
+ * away from the temp fixture.
+ */
+function runGuard(stdinStr, projectDir) {
+  const env = { ...process.env };
+  delete env.CODEX_PROJECT_DIR;
+  if (projectDir) env.CODEX_PROJECT_DIR = projectDir;
   const r = spawnSync(process.execPath, [GUARD_MJS], {
     input: stdinStr,
     encoding: 'utf8',
     timeout: 8000,
+    env,
   });
   return safeParse(r.stdout || '');
 }
@@ -66,8 +75,8 @@ function runGuard(stdinStr) {
 /** Isolated project whose state.json arms/disarms the wall for one scenario. */
 function makeProject(name, state) {
   const proj = join(BASE, name);
-  mkdirSync(join(proj, '.claude', 'brewtools', 'manager'), { recursive: true });
-  writeFileSync(join(proj, '.claude', 'brewtools', 'manager', 'state.json'), JSON.stringify(state));
+  mkdirSync(join(proj, '.codex', 'brewtools', 'manager'), { recursive: true });
+  writeFileSync(join(proj, '.codex', 'brewtools', 'manager', 'state.json'), JSON.stringify(state));
   return proj;
 }
 
@@ -86,9 +95,36 @@ function denial(reason) {
 
 const WRITE_DENIAL = denial('Hard wall: Write is blocked in the main session — delegate to a subagent.');
 const BASH_DENIAL = denial('Hard wall (balanced): only read-only Bash is allowed in the main session — delegate execution to a subagent.');
+const STRICT_BASH_DENIAL = denial('Hard wall (strict): Bash is blocked in the main session — delegate execution to a subagent.');
+const PARSE_DENIAL = denial('Hard wall: the guard could not parse its PreToolUse payload and denies by default.');
+const mcpDenial = (tool) => denial(`Hard wall: MCP tool ${tool} is blocked in the main session — delegate to a subagent.`);
 
 const ARMED = makeProject('armed', { hard: true, level: 'balanced' });
 const DISARMED = makeProject('disarmed', { hard: false, level: 'balanced' });
+const STRICT = makeProject('strict', { hard: true, level: 'strict' });
+
+/** The real installed state CLI next to the state file — the only self-exempt script. */
+function installHelper(proj) {
+  const p = join(proj, '.codex', 'brewtools', 'manager', 'manager-state.mjs');
+  writeFileSync(p, '// genuine manager-state CLI stub\n');
+  return p;
+}
+const ARMED_HELPER = installHelper(ARMED);
+const STRICT_HELPER = installHelper(STRICT);
+
+/** A planted look-alike at the path shape the old tail-regex anchor accepted. */
+const EVIL_HELPER = join(BASE, 'evil', 'hooks', 'lib', 'manager-state.mjs');
+mkdirSync(dirname(EVIL_HELPER), { recursive: true });
+writeFileSync(EVIL_HELPER, 'console.error("PWNED");\n');
+
+/** Armed project whose state.json was removed while the manager dir stayed in place. */
+const BROKEN = makeProject('broken', { hard: true, level: 'balanced' });
+const BROKEN_STATE = join(BROKEN, '.codex', 'brewtools', 'manager', 'state.json');
+rmSync(BROKEN_STATE);
+
+/** Deep working directory inside the armed project — BT-F01 vector A. */
+const ARMED_NESTED = join(ARMED, 'nested', 'deep');
+mkdirSync(ARMED_NESTED, { recursive: true });
 
 function stdin(cwd, extra) {
   return JSON.stringify({
@@ -155,20 +191,370 @@ check(
   'hard=false must no-op regardless of agent keys',
 );
 
-// GIVEN no state file at all, WHEN a main session writes, THEN the guard treats the wall as off.
+// GIVEN no manager directory at all, WHEN a main session writes, THEN the wall is not
+// installed in that project and the guard no-ops. This is the ONE remaining pass-through
+// for an unreadable wall state — see 38/39 for the fail-closed case.
 check(
-  '07-missing-state-file-is-unarmed',
+  '07-manager-never-installed-is-unarmed',
   runGuard(stdin(join(BASE, 'no-such-project'), {})),
   PASS_THROUGH,
-  'an unreadable or absent state.json means hard=false',
+  'no .codex/brewtools/manager directory means the wall was never installed',
 );
 
-// GIVEN malformed stdin, WHEN the guard runs, THEN it fails open instead of crashing.
+// GIVEN malformed stdin, WHEN the guard runs, THEN it fails CLOSED.
+// REGRESSION (BT-F01): an unparseable payload leaves the agent_id discriminator unknown,
+// so allowing would open the wall on exactly the input the guard cannot reason about.
 check(
-  '08-malformed-stdin-fails-open',
+  '08-malformed-stdin-fails-closed',
   runGuard('{not json'),
+  PARSE_DENIAL,
+  'an unparseable PreToolUse payload must deny, not pass through',
+);
+
+// ---- BT-F01 vector A — state resolved from the project root, never raw cwd -------------
+
+// REGRESSION: with `join(cwd, '.codex/…')` the state file was invisible from any nested
+// directory, so EVERY tool passed at EVERY level. Pre-fix this returned {} (bypass).
+check(
+  '09-vectorA-nested-cwd-is-walled',
+  runGuard(stdin(ARMED_NESTED, {})),
+  WRITE_DENIAL,
+  'a nested cwd must resolve the same armed state as the project root',
+);
+
+check(
+  '10-vectorA-nested-cwd-strict-bash-is-walled',
+  runGuard(stdin(join(STRICT, 'nested'), { tool_name: 'Bash', tool_input: { command: 'rm -rf /' } })),
+  STRICT_BASH_DENIAL,
+  'vector A was level-independent: rm -rf / passed at strict from a nested cwd',
+);
+
+check(
+  '11-vectorA-claude-project-dir-wins-over-cwd',
+  runGuard(stdin('/', {}), ARMED),
+  WRITE_DENIAL,
+  'CODEX_PROJECT_DIR is the first step of the canonical root recipe',
+);
+
+// ---- BT-F01 vector B — self-exempt anchored on the ABSOLUTE installed helper ----------
+
+// REGRESSION: the anchor was a tail regex, so any planted */hooks/lib/manager-state.mjs was
+// exempt — and the check ran before the level branch, so it disarmed the wall at strict too.
+check(
+  '12-vectorB-planted-helper-is-not-exempt',
+  runGuard(stdin(STRICT, { tool_name: 'Bash', tool_input: { command: `node ${EVIL_HELPER} set hard=false` } })),
+  STRICT_BASH_DENIAL,
+  'only the helper shipped with this project may run the state CLI',
+);
+
+check(
+  '13-vectorB-installed-helper-stays-exempt',
+  runGuard(stdin(ARMED, { tool_name: 'Bash', tool_input: { command: `node ${ARMED_HELPER} set hard=false` } })),
   PASS_THROUGH,
-  'a guard bug or bad payload must never brick the session',
+  'the documented exit path must keep working at balanced',
+);
+
+check(
+  '14-vectorB-installed-helper-exempt-at-strict',
+  runGuard(stdin(STRICT, { tool_name: 'Bash', tool_input: { command: `node ${STRICT_HELPER} set hard=false` } })),
+  PASS_THROUGH,
+  'the documented exit path must keep working at strict',
+);
+
+// ---- BT-F01 vector C — strict binary allowlist + per-binary flag vetting ---------------
+
+// REGRESSION: `env` was both whitelisted and a universal exec wrapper, so `env <anything>`
+// ran; `rg --pre <script>` executed a script through an allowlisted binary. Both returned {}.
+check(
+  '15-vectorC-env-wrapper-is-denied',
+  runGuard(stdin(ARMED, { tool_name: 'Bash', tool_input: { command: 'env node /tmp/evil.js' } })),
+  BASH_DENIAL,
+  'no allowlisted binary may wrap another executable',
+);
+
+check(
+  '16-vectorC-rg-pre-flag-is-denied',
+  runGuard(stdin(ARMED, { tool_name: 'Bash', tool_input: { command: 'rg --pre /tmp/evil.sh pattern .' } })),
+  BASH_DENIAL,
+  'rg --pre executes an arbitrary preprocessor binary',
+);
+
+check(
+  '17-vectorC-git-c-flag-is-denied',
+  runGuard(stdin(ARMED, { tool_name: 'Bash', tool_input: { command: 'git -c core.pager=/tmp/evil.sh log' } })),
+  BASH_DENIAL,
+  'git -c can point a config hook at an arbitrary binary',
+);
+
+check(
+  '18-vectorC-readonly-chain-still-allowed',
+  runGuard(stdin(ARMED, { tool_name: 'Bash', tool_input: { command: 'git status && rg -n pattern .' } })),
+  PASS_THROUGH,
+  'the allowlist must not break genuinely read-only inspection at balanced',
+);
+
+// ---- vet-body coverage — the git/gh/find vetters, DENY side ---------------------------
+// REGRESSION: the vector-C cluster above tested the WRAPPER cases only and never entered a
+// vetter body, which is exactly how these three bypasses shipped. Each command line below was
+// reproduced as ALLOWED through the real hook before the fix.
+
+function bash(cmd) {
+  return runGuard(stdin(ARMED, { tool_name: 'Bash', tool_input: { command: cmd } }));
+}
+
+check(
+  '19-git-output-equals-flag-is-denied',
+  bash('git diff --output=/tmp/pwned HEAD~1'),
+  BASH_DENIAL,
+  'git --output= writes an arbitrary file through a read subcommand',
+);
+
+check(
+  '20-git-output-space-form-is-denied',
+  bash('git log --output /tmp/pwned'),
+  BASH_DENIAL,
+  'the space form of --output is a separate token and must be vetted the same',
+);
+
+check(
+  '21-git-textconv-is-denied',
+  bash('git show --textconv HEAD'),
+  BASH_DENIAL,
+  'git --textconv runs a configured filter binary',
+);
+
+check(
+  '22-git-branch-delete-is-denied',
+  bash('git branch -D main'),
+  BASH_DENIAL,
+  'git branch is not a read subcommand — -D destroys a branch',
+);
+
+check(
+  '23-git-branch-create-is-denied',
+  bash('git branch newbranch'),
+  BASH_DENIAL,
+  'a bare positional argument to git branch creates a branch',
+);
+
+check(
+  '24-git-branch-edit-description-is-denied',
+  bash('git branch --edit-description'),
+  BASH_DENIAL,
+  'git branch --edit-description spawns GIT_EDITOR, i.e. arbitrary exec',
+);
+
+check(
+  '25-gh-write-verb-laundered-by-value-is-denied',
+  bash('gh issue comment 1 --body list'),
+  BASH_DENIAL,
+  'a read verb appearing as an argument VALUE must not authorise `gh issue comment`',
+);
+
+check(
+  '26-gh-pr-close-laundered-by-value-is-denied',
+  bash('gh pr close 1 --comment list'),
+  BASH_DENIAL,
+  'the gh vet is positional: args[0]/args[1] only',
+);
+
+check(
+  '27-gh-api-delete-laundered-by-trailing-value-is-denied',
+  bash('gh api --method DELETE /repos/o/r list'),
+  BASH_DENIAL,
+  'a trailing `list` must not launder an HTTP DELETE through gh api',
+);
+
+check(
+  '28-find-fprint0-is-denied',
+  bash('find . -fprint0 /tmp/pwned'),
+  BASH_DENIAL,
+  'GNU find -fprint0 writes a file — absent on macOS, live in CI and containers',
+);
+
+// ---- vet-body coverage — the ALLOW side, equally load-bearing --------------------------
+// A guard that denies everything is not a guard. These are the legitimate reads that must
+// survive the tightened vetters.
+
+check(
+  '29-git-branch-list-still-allowed',
+  bash('git branch --list'),
+  PASS_THROUGH,
+  'git branch --list is a pure listing and allowed before the fix',
+);
+
+check(
+  '30-git-branch-show-current-still-allowed',
+  bash('git branch --show-current'),
+  PASS_THROUGH,
+  'git branch --show-current reads the checked-out branch name',
+);
+
+check(
+  '31-git-status-still-allowed',
+  bash('git status'),
+  PASS_THROUGH,
+  'the most common read subcommand must not regress',
+);
+
+check(
+  '32-gh-run-list-still-allowed',
+  bash('gh run list -L 5'),
+  PASS_THROUGH,
+  'gh <group> <read-verb> with flags is the normal CI inspection shape',
+);
+
+check(
+  '33-gh-pr-view-still-allowed',
+  bash('gh pr view 12'),
+  PASS_THROUGH,
+  'a positional id after a read verb must stay allowed',
+);
+
+check(
+  '34-gh-workflow-view-json-still-allowed',
+  bash('gh workflow view x --json state'),
+  PASS_THROUGH,
+  'flag values after a read verb must not affect the positional decision',
+);
+
+check(
+  '35-gh-auth-status-still-allowed',
+  bash('gh auth status'),
+  PASS_THROUGH,
+  'gh auth status is a read verb in args[1]',
+);
+
+// ---- BT-F01 vector D — MCP classified on the tool segment after the second `__` --------
+
+// REGRESSION: the verb regexes scanned the whole tool name, so a server literally named
+// `search` or `getops` laundered any operation into the read-only bucket.
+check(
+  '36-vectorD-server-name-cannot-launder-verb',
+  runGuard(stdin(ARMED, { tool_name: 'mcp__search__destroy_all', tool_input: {} })),
+  mcpDenial('mcp__search__destroy_all'),
+  'the server segment must never decide the classification',
+);
+
+check(
+  '37-vectorD-readonly-mcp-still-allowed',
+  runGuard(stdin(ARMED, { tool_name: 'mcp__github__get_file', tool_input: {} })),
+  PASS_THROUGH,
+  'a read-only verb in the tool segment stays allowed at balanced',
+);
+
+// ---- fail-closed state handling --------------------------------------------------------
+
+check(
+  '38-broken-state-denies-bash',
+  runGuard(stdin(BROKEN, { tool_name: 'Bash', tool_input: { command: 'ls' } })),
+  denial(`Hard wall: manager state at ${BROKEN_STATE} is missing or unreadable, so the guard denies by default.`),
+  'an installed manager with unreadable state must deny, not open the wall',
+);
+
+check(
+  '39-broken-state-denies-write',
+  runGuard(stdin(BROKEN, {})),
+  WRITE_DENIAL,
+  'a deleted state.json must not disarm the wall',
+);
+
+check(
+  '40-broken-state-keeps-subagents-free',
+  runGuard(stdin(BROKEN, { agent_id: 'sub-9' })),
+  PASS_THROUGH,
+  'fail-closed applies to the main session only; subagents stay free by design',
+);
+
+// ---- BT-F16 — uninstall ordering, run against the block SHIPPED in SKILL.md -------------
+// The step-2 node program is extracted verbatim from the skill, so a regression in the
+// documented block fails here instead of on a user's machine.
+
+const SKILL_MD = join(HERE, '..', 'SKILL.md');
+const NODE_E = 'node --input-type=module -e "';
+
+function uninstallScript() {
+  const md = readFileSync(SKILL_MD, 'utf8');
+  const from = md.indexOf(NODE_E, md.indexOf('**EXECUTE step 2**'));
+  const to = md.indexOf('\n"', from);
+  return md.slice(from + NODE_E.length, to);
+}
+
+/** A project that looks exactly like `install` left it: entry registered, both files copied. */
+function makeInstalledProject(name) {
+  const proj = join(BASE, name);
+  const mdir = join(proj, '.codex', 'brewtools', 'manager');
+  mkdirSync(mdir, { recursive: true });
+  writeFileSync(join(mdir, 'state.json'), JSON.stringify({ hard: false, level: 'balanced' }));
+  writeFileSync(join(mdir, 'hardmode-guard.mjs'), '// copied guard\n');
+  writeFileSync(join(mdir, 'manager-state.mjs'), '// copied helper\n');
+  writeFileSync(join(proj, '.codex', 'hooks.json'), JSON.stringify({
+    permissions: { allow: ['Read(**)'] },
+    hooks: {
+      PreToolUse: [{
+        matcher: '*',
+        hooks: [{ type: 'command', command: `node "${join(mdir, 'hardmode-guard.mjs')}" # brewtools-manager-guard`, timeout: 5 }],
+      }],
+    },
+  }, null, 2));
+  return proj;
+}
+
+function runUninstall(proj, tag) {
+  const file = join(BASE, `uninstall-${tag}.mjs`);
+  writeFileSync(file, uninstallScript().split("'${ROOT}'").join(JSON.stringify(proj)));
+  const r = spawnSync(process.execPath, [file], { encoding: 'utf8', timeout: 8000 });
+  const settings = join(proj, '.codex', 'hooks.json');
+  const raw = existsSync(settings) ? readFileSync(settings, 'utf8') : '';
+  return {
+    code: r.status,
+    out: safeParse(r.stdout || ''),
+    stderr: r.stderr || '',
+    tagLeft: raw.includes('brewtools-manager-guard'),
+    permissionsKept: raw.includes('Read(**)'),
+    guardOnDisk: existsSync(join(proj, '.codex', 'brewtools', 'manager', 'hardmode-guard.mjs')),
+    helperOnDisk: existsSync(join(proj, '.codex', 'brewtools', 'manager', 'manager-state.mjs')),
+  };
+}
+
+const U1 = makeInstalledProject('uninstall-happy');
+const r1 = runUninstall(U1, 'happy');
+check(
+  '41-uninstall-deregisters-then-deletes',
+  { code: r1.code, deregistered: r1.out.deregistered, guardDeleted: r1.out.guardDeleted, helperDeleted: r1.out.helperDeleted, tagLeft: r1.tagLeft, permissionsKept: r1.permissionsKept },
+  { code: 0, deregistered: true, guardDeleted: true, helperDeleted: true, tagLeft: false, permissionsKept: true },
+  'a clean uninstall removes the entry, then both files, and preserves unrelated settings',
+);
+
+const r2 = runUninstall(U1, 'idempotent');
+check(
+  '42-uninstall-is-idempotent',
+  { code: r2.code, deregistered: r2.out.deregistered, guardOnDisk: r2.guardOnDisk, helperOnDisk: r2.helperOnDisk },
+  { code: 0, deregistered: false, guardOnDisk: false, helperOnDisk: false },
+  'a second uninstall is a successful no-op, not an error and not a re-delete',
+);
+
+const U3 = makeInstalledProject('uninstall-corrupt');
+writeFileSync(join(U3, '.codex', 'hooks.json'), '{ this is not json');
+const r3 = runUninstall(U3, 'corrupt');
+check(
+  '43-uninstall-aborts-on-corrupt-settings-before-any-delete',
+  { code: r3.code, guardOnDisk: r3.guardOnDisk, helperOnDisk: r3.helperOnDisk, named: r3.stderr.includes('hooks.json') },
+  { code: 1, guardOnDisk: true, helperOnDisk: true, named: true },
+  'a malformed settings file must abort by path+reason with both files untouched',
+);
+
+// The brick case: files deleted while the entry survives. Deletion is made to fail by
+// stripping write permission from the manager directory.
+const U4 = makeInstalledProject('uninstall-delete-fails');
+chmodSync(join(U4, '.codex', 'brewtools', 'manager'), 0o500);
+const r4 = runUninstall(U4, 'delete-fails');
+chmodSync(join(U4, '.codex', 'brewtools', 'manager'), 0o700);
+check(
+  '44-uninstall-restores-registration-when-a-delete-fails',
+  { code: r4.code, tagLeft: r4.tagLeft, guardOnDisk: r4.guardOnDisk, helperOnDisk: r4.helperOnDisk },
+  { code: 1, tagLeft: true, guardOnDisk: true, helperOnDisk: true },
+  'a failed delete must roll the settings entry back — never leave a half-guarded project',
 );
 
 try { rmSync(BASE, { recursive: true, force: true }); } catch { /* ignore */ }

@@ -15,20 +15,22 @@ Read `.claude/e2e/config.json`.
 3. Read the condensed export (if exists): `.claude/rules/e2e-conventions.md`
 4. Check freshness: compare the `content_version` stamped in `config.json` with the
    `CONTENT_VERSION:` line Phase 0's `detect-mode.sh` printed (fall back to `version` vs
-   `PLUGIN_VERSION:` on a pre-`content_version` config — a confirmed gap, not a broken install).
+   `PLUGIN_VERSION:` only on a pre-`content_version` config, which has no other stamp).
    Different (or absent) -> say so in the table below; L5 re-stamps every artifact either way, so
    this run always clears the staleness `status` reported
 5. Present current state:
 
 | Source | Rules Count | Version | Last updated |
 |--------|-------------|---------|--------------|
-| Live (`{config.rulesPath}`) | {N} | its frontmatter `version` | its frontmatter `last_updated` |
-| Base (plugin `references/e2e-rules.md`) | {N} | `PLUGIN_VERSION:` | -- (ships with the plugin) |
-| Conventions export (`.claude/rules/e2e-conventions.md`) | {N or "none"} | its frontmatter `version` | its frontmatter `last_updated` |
+| Live (`{config.rulesPath}`) | {N} | its frontmatter `content_version` | its frontmatter `last_updated` |
+| Base (plugin `references/e2e-rules.md`) | {N} | `CONTENT_VERSION:` | -- (ships with the plugin) |
+| Conventions export (`.claude/rules/e2e-conventions.md`) | {N or "none"} | its frontmatter `content_version` | its frontmatter `last_updated` |
 
-> Every cell above has exactly one source. The plugin baseline carries no per-file stamp and cannot:
-> it ships INSIDE the plugin, so its version IS `PLUGIN_VERSION` by definition and a stamp would only
-> be a second copy that can go stale. Its `Last updated` is therefore `--`, not a guess.
+> Every cell above has exactly one source, and every version cell is a `content_version` — the
+> baseline and the generated copies are then directly comparable. The plugin baseline carries no
+> per-file stamp and cannot: it ships INSIDE the plugin, so its content version IS `CONTENT_VERSION:`
+> by definition and a stamp would only be a second copy that can go stale. Its `Last updated` is
+> therefore `--`, not a guess.
 > A row whose file has no frontmatter at all is a pre-standard artifact -> print
 > `stale (legacy, unstamped)`, never `unknown`: a word that sorts against real semver turns a failed
 > read into a confident verdict. L5 re-stamps it.
@@ -133,23 +135,28 @@ Options:
 > read-only for this skill, and a plugin update overwrites it.
 
 Re-stamp the artifact metadata on EVERY existing artifact below, from the Phase 0 `PLUGIN_VERSION:` /
-`GENERATED_BY:` / `LAST_UPDATED:` lines — one command, one date spelling (`date +%F`), no hardcoding:
+`CONTENT_VERSION:` / `GENERATED_BY:` / `LAST_UPDATED:` lines — one command, one date spelling
+(`date +%F`), no hardcoding:
 
 | File | Keys |
 |------|------|
-| `.claude/e2e/config.json` | `version`, `generated_by`, `last_updated` (top level, snake_case). Drop a leftover `lastSetup` |
-| `{config.rulesPath}` | frontmatter `doc_type: llm`, `version`, `generated_by`, `last_updated` |
-| `.claude/rules/e2e-conventions.md` (if it exists) | same four, after its own `paths:` / `description:` |
-| `.claude/agents/e2e-*.md` (each) | same four, after the agent's own frontmatter keys |
+| `.claude/e2e/config.json` | `version`, `content_version`, `generated_by`, `last_updated` (top level, snake_case). Drop a leftover `lastSetup` |
+| `{config.rulesPath}` | frontmatter `doc_type: llm`, `version`, `content_version`, `generated_by`, `last_updated` |
+| `.claude/rules/e2e-conventions.md` (if it exists) | same five, after its own `paths:` / `description:` |
+| `.claude/agents/e2e-*.md` (each) | same five, after the agent's own frontmatter keys |
+
+> **`content_version` is on every row on purpose.** It is the key `status` compares, so a re-stamp
+> that writes `version` alone leaves the flagged value untouched and `status` reports stale again on
+> the next run. An artifact missing the key gets it added here.
 
 > **The re-stamp is UNCONDITIONAL — it is not gated on a rules change.** `rules` is the remedy
-> `status` prescribes for `config.version != PLUGIN_VERSION`, so a run that only re-stamps is a
+> `status` prescribes for `config.content_version != CONTENT_VERSION`, so a run that only re-stamps is a
 > legitimate and expected run. Gating it on "everything this run wrote" would make the loop
 > permanent: `status` says stale -> `rules` finds nothing to change -> `rules` reports success ->
 > `status` says stale again, forever. Cancelling at L4 skips the rules diff, not this step.
 
-> Re-stamping is METADATA-ONLY. Touch just the four keys in the first frontmatter block (and the
-> three JSON keys); leave every other key, the agents' Immutable Traits and all prose byte-identical.
+> Re-stamping is METADATA-ONLY. Touch just the five keys in the first frontmatter block (and the
+> four JSON keys); leave every other key, the agents' Immutable Traits and all prose byte-identical.
 > An artifact whose body you did not change must differ by exactly those keys.
 
 Summary: rules added/modified/removed, sources breakdown, artifacts re-stamped (count + version).

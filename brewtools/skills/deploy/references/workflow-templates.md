@@ -2,6 +2,23 @@
 
 > Based on real workflows from this repository. Replace `{{PLACEHOLDERS}}` with project values.
 
+## Rules every template here obeys (copy them, not just the YAML)
+
+Consumers extend these files, so an unsafe idiom shipped once is re-typed for years.
+
+| # | Rule | Why |
+|---|------|-----|
+| 1 | **Never** put `${{ ... }}` inside a `run:` body or a `github-script` `script:` body. Pass it through `env:` and read `"$VAR"` / `process.env.VAR` | `${{ }}` is textually pasted into the source BEFORE the shell or JS parser sees it — a value containing `"; rm -rf /` is code, not data |
+| 2 | Quote every shell expansion: `"$VAR"`, never bare `$VAR` | word-splitting/globbing on attacker-shaped values |
+| 3 | Validate free-text `inputs.*` against an allowlist before use (`image_tag` -> `^[A-Za-z0-9._-]{1,128}$`), and parse ids as integers | a workflow input is untrusted text |
+| 4 | `permissions:` is declared explicitly and minimally at the top of every workflow | default token scope is far wider than any of these jobs needs |
+| 5 | `pull_request` is allowed (T4 uses it). `pull_request_target` combined with a checkout of the PR head is **forbidden** — it runs fork code with a write token | that pair is the standard fork-PR escalation |
+| 6 | Every `uses:` is pinned to an exact `@vX.Y.Z` (verified at the source repo). `@main`/`@master`/an unpinned branch is **forbidden**; every image tag is exact, never `:latest` | `~/.claude/rules/avoid.md` #4 — a floating ref changes what runs without a diff |
+| 7 | A health/verification step that did not pass ends in `echo "::error::…"; exit 1` — never `::warning::` | a warning leaves the step green, so `if: success()` posts a *successful* deployment for a broken site |
+
+> Action versions below were verified at the source repos on 2026-08-16. Re-verify before reuse:
+> `curl -s https://api.github.com/repos/<owner>/<repo>/releases/latest | jq -r .tag_name`
+
 ## Template 1: Build + Push to GHCR
 
 > Based on: `docs.yml` -- builds Docker image, pushes to GitHub Container Registry.
@@ -36,16 +53,17 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
 
       - name: Compute image tags
         id: meta
         run: |
+          set -euo pipefail
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             VERSION="${GITHUB_REF_NAME#v}"
-            echo "tags=${IMAGE}:${VERSION},${IMAGE}:latest" >> "$GITHUB_OUTPUT"
+            echo "tags=${IMAGE}:${VERSION}" >> "$GITHUB_OUTPUT"
             echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           else
             BRANCH="${GITHUB_REF_NAME}"
@@ -59,17 +77,17 @@ jobs:
           fi
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@v4.2.0
 
       - name: Log in to GHCR
-        uses: docker/login-action@v4
+        uses: docker/login-action@v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@v7.3.0
         with:
           context: {{DOCKER_CONTEXT}}
           platforms: linux/amd64
@@ -80,17 +98,26 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Summary
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          TAGS: ${{ steps.meta.outputs.tags }}
         run: |
-          echo "### Image pushed" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Version:** \`${{ steps.meta.outputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Tags:**" >> "$GITHUB_STEP_SUMMARY"
-          IFS=',' read -ra TAGS <<< "${{ steps.meta.outputs.tags }}"
-          for tag in "${TAGS[@]}"; do
-            echo "- \`${tag}\`" >> "$GITHUB_STEP_SUMMARY"
-          done
+          set -euo pipefail
+          {
+            echo "### Image pushed"
+            echo ""
+            echo "**Version:** \`${VERSION}\`"
+            echo ""
+            echo "**Tags:**"
+            IFS=',' read -ra TAG_LIST <<< "$TAGS"
+            for tag in "${TAG_LIST[@]}"; do
+              echo "- \`${tag}\`"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
 ```
+
+> Only the exact `${VERSION}` tag is pushed. A convenience `:latest` may be published from a
+> separate, clearly-labelled step, but nothing (server, Compose file, rollback) may ever *deploy* it.
 
 **Placeholders:**
 
@@ -121,9 +148,8 @@ on:
   workflow_dispatch:
     inputs:
       image_tag:
-        description: "Docker image tag to deploy"
+        description: "Exact Docker image tag to deploy (no floating tags)"
         required: true
-        default: "latest"
 
 concurrency:
   group: {{CONCURRENCY_GROUP}}
@@ -145,18 +171,29 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7.0.1
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 0
 
       - name: Compute image tag
         id: tag
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.image_tag }}
+          RUN_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "value=${{ inputs.image_tag }}" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            # Free-text workflow input: allowlist it before it reaches .env or docker.
+            if [[ ! "$INPUT_TAG" =~ ^[A-Za-z0-9._-]{1,128}$ ]]; then
+              echo "::error::image_tag must match ^[A-Za-z0-9._-]{1,128}\$"
+              exit 1
+            fi
+            echo "value=${INPUT_TAG}" >> "$GITHUB_OUTPUT"
           else
-            REF="${{ github.event.workflow_run.head_branch || github.ref_name }}"
+            REF="${RUN_BRANCH:-$REF_NAME}"
             if [[ "$REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
               echo "value=${REF#v}" >> "$GITHUB_OUTPUT"
             else
@@ -170,9 +207,12 @@ jobs:
 
       - name: Create deployment
         id: deployment
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9.0.0
+        env:
+          IMAGE_TAG: ${{ steps.tag.outputs.value }}
         with:
           script: |
+            const tag = process.env.IMAGE_TAG;
             const deployment = await github.rest.repos.createDeployment({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -180,7 +220,7 @@ jobs:
               environment: '{{ENVIRONMENT}}',
               auto_merge: false,
               required_contexts: [],
-              description: `Deploy {{SERVICE}} v${{ steps.tag.outputs.value }}`,
+              description: `Deploy {{SERVICE}} v${tag}`,
             });
             await github.rest.repos.createDeploymentStatus({
               owner: context.repo.owner,
@@ -192,7 +232,7 @@ jobs:
             return deployment.data.id;
 
       - name: Copy deploy files to VPS
-        uses: appleboy/scp-action@v1
+        uses: appleboy/scp-action@v1.0.0
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
@@ -202,7 +242,7 @@ jobs:
           strip_components: {{STRIP_COMPONENTS}}
 
       - name: Deploy service
-        uses: appleboy/ssh-action@v1
+        uses: appleboy/ssh-action@v1.2.5
         env:
           TAG: ${{ steps.tag.outputs.value }}
         with:
@@ -259,6 +299,7 @@ jobs:
 
       - name: Verify from runner
         run: |
+          set -uo pipefail
           for i in $(seq 1 5); do
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$HEALTH_URL" || true)
             if [[ "$STATUS" == "200" ]]; then
@@ -268,17 +309,28 @@ jobs:
             echo "Waiting... (attempt $i/5, HTTP $STATUS)"
             sleep 5
           done
-          echo "::warning::External health check did not return 200"
+          # A failed verification MUST fail the step. As a warning annotation
+          # this exited 0, the next step's `if: success()` fired, and GitHub
+          # recorded a successful deployment pointing at a broken site.
+          echo "::error::External health check did not return 200 after 5 attempts (last HTTP ${STATUS})"
+          exit 1
 
       - name: Update deployment (success)
         if: success()
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9.0.0
+        env:
+          DEPLOYMENT_ID: ${{ steps.deployment.outputs.result }}
         with:
           script: |
+            const id = Number.parseInt(process.env.DEPLOYMENT_ID || '', 10);
+            if (!Number.isInteger(id) || id <= 0) {
+              core.setFailed(`deployment_id is not a positive integer: ${process.env.DEPLOYMENT_ID}`);
+              return;
+            }
             await github.rest.repos.createDeploymentStatus({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              deployment_id: ${{ steps.deployment.outputs.result }},
+              deployment_id: id,
               state: 'success',
               environment_url: '{{PUBLIC_URL}}',
               log_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
@@ -286,11 +338,13 @@ jobs:
 
       - name: Update deployment (failure)
         if: failure()
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9.0.0
+        env:
+          DEPLOYMENT_ID: ${{ steps.deployment.outputs.result }}
         with:
           script: |
-            const id = ${{ steps.deployment.outputs.result || 0 }};
-            if (!id) return;
+            const id = Number.parseInt(process.env.DEPLOYMENT_ID || '', 10);
+            if (!Number.isInteger(id) || id <= 0) return;
             await github.rest.repos.createDeploymentStatus({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -301,11 +355,16 @@ jobs:
 
       - name: Summary
         if: always()
+        env:
+          IMAGE_TAG: ${{ steps.tag.outputs.value }}
         run: |
-          echo "### Deploy {{SERVICE}}" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Tag:** \`${{ steps.tag.outputs.value }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Health:** $HEALTH_URL" >> "$GITHUB_STEP_SUMMARY"
+          set -euo pipefail
+          {
+            echo "### Deploy {{SERVICE}}"
+            echo ""
+            echo "**Tag:** \`${IMAGE_TAG}\`"
+            echo "**Health:** $HEALTH_URL"
+          } >> "$GITHUB_STEP_SUMMARY"
 ```
 
 **Placeholders:**
@@ -353,13 +412,14 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7.0.1
         with:
           sparse-checkout: RELEASE-NOTES.md
 
       - name: Extract changelog for tag version
         id: changelog
         run: |
+          set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
           VERSION="${TAG#v}"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
@@ -395,7 +455,7 @@ jobs:
           printf '\n---\n\n## Quick Install\n\n```bash\n# Add marketplace\nclaude plugin marketplace add https://github.com/{{OWNER}}/{{REPO}}\n\n# Install plugins\n{{INSTALL_COMMANDS}}\n```\n\n## Already installed? Update\n\n```bash\nclaude plugin marketplace update {{REPO}}\n{{UPDATE_COMMANDS}}\n```\n' >> /tmp/release-body.md
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3.0.2
         with:
           tag_name: ${{ steps.changelog.outputs.tag }}
           name: ${{ steps.changelog.outputs.tag }}
@@ -422,6 +482,11 @@ jobs:
 **Trigger:** Push to main + PRs + weekly schedule.
 **Key steps:** Checkout, run scanner, upload SARIF, summary.
 
+> This is the one template with a **fork-reachable** trigger (`pull_request`), so it is also the one
+> that must never grow a `${{ }}`-in-`run:` sink. `pull_request` checks out the MERGE ref with a
+> read-only token — safe. Switching it to `pull_request_target` would run fork code with a write
+> token and is forbidden here. `permissions:` stays exactly `contents: read` + `security-events: write`.
+
 ```yaml
 name: Security Scan
 
@@ -447,7 +512,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7.0.1
 
       - name: Run {{SCANNER_NAME}}
         uses: {{SCANNER_ACTION}}
@@ -456,17 +521,22 @@ jobs:
 
       - name: Upload SARIF
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v3.37.7
         with:
           sarif_file: {{SARIF_PATH}}
 
       - name: Summary
         if: always()
+        env:
+          REF_NAME: ${{ github.ref_name }}
         run: |
-          echo "### Security Scan" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Scanner:** {{SCANNER_NAME}}" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Branch:** ${{ github.ref_name }}" >> "$GITHUB_STEP_SUMMARY"
+          set -euo pipefail
+          {
+            echo "### Security Scan"
+            echo ""
+            echo "**Scanner:** {{SCANNER_NAME}}"
+            echo "**Branch:** ${REF_NAME}"
+          } >> "$GITHUB_STEP_SUMMARY"
 ```
 
 **Placeholders:**
@@ -474,6 +544,6 @@ jobs:
 | Placeholder | Description | Example |
 |-------------|-------------|---------|
 | `{{SCANNER_NAME}}` | Scanner display name | `Trivy` |
-| `{{SCANNER_ACTION}}` | GitHub Action for scanner | `aquasecurity/trivy-action@master` |
+| `{{SCANNER_ACTION}}` | GitHub Action for scanner, exact tag only | `aquasecurity/trivy-action@v0.36.0` |
 | `{{SCANNER_INPUTS}}` | Action inputs block | `scan-type: 'fs'` |
 | `{{SARIF_PATH}}` | SARIF output path | `trivy-results.sarif` |

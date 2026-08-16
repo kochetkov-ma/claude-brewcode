@@ -21,7 +21,7 @@ Core rule: never act on a single MED/weak surface feature. Detectors hit 61% FP 
 | AI self-attribution comment: `// AI-generated`, `// Added by AI`, `# Codex suggestion`, `# TODO (AI)` | strip | code | Gatech |
 | Co-author/bot trailer, generator banner: `Co-Authored-By: <bot>` | strip | code/commit | Gatech |
 | Prompt/instruction residue as comment: `# Remember to paste...`, `// Replace with your...` placeholder narration | strip | code | Netcraft |
-| Unicode in code/text: em-dash, smart quotes, arrows in comments/strings | normalize-ASCII | all | Gatech |
+| Unicode in code/text: em-dash, smart quotes, arrows | normalize-ASCII in prose and in code COMMENTS/docstrings only -- inside a string literal, regex, or identifier: surface, never edit | all | Gatech |
 
 ## 2. Prose tells
 

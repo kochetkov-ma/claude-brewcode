@@ -84,6 +84,7 @@ bash "${CLAUDE_SKILL_DIR}/scripts/convention.sh" scan && echo "---SCAN-OK---" ||
 ```
 
 Output: JSON with `source_dirs`, `file_counts`, `modules`, `total_files`.
+`total_files` = every scanned file; `file_counts` = the top ten extensions only, so its values do not sum to `total_files`.
 
 > If `total_files` > 1000: warn user, suggest `paths` mode.
 

@@ -13,7 +13,7 @@
  * no branching decides which asserts run.
  */
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -23,7 +23,9 @@ const ASSETS = join(HERE, '..', 'assets');               // assets/
 const GUARD_MJS = join(ASSETS, 'agent-return-guard.mjs');
 const CONTRACT_MJS = join(ASSETS, 'agent-return-contract.mjs');
 
-const BASE = mkdtempSync(join(tmpdir(), 'ar-test-'));
+// realpath: process.cwd() in the child reports the resolved path, and the
+// guard's project root is compared against it byte for byte.
+const BASE = realpathSync(mkdtempSync(join(tmpdir(), 'ar-test-')));
 let passed = 0;
 let failed = 0;
 const results = [];
@@ -110,13 +112,26 @@ function envFor(home, extra) {
   return { ...e, ...(extra || {}) };
 }
 
-/** Isolated {home, proj} pair; `cfg`/`globalCfg` may be an object or raw text. */
-function newWs(name, cfg, globalCfg) {
+/**
+ * An ENABLED config, optional threshold overrides merged in.
+ *
+ * Only ever builds `enabled: true`. The hook's gate is `enabled !== true`, so an
+ * absent or non-boolean key means OFF — the gate-polarity cases (enabled:false,
+ * key absent, string "true", array config) therefore keep their literals below:
+ * routing them through a factory that supplies the flag would silently switch
+ * them on and they would pass for the wrong reason.
+ */
+function cfg(overrides) {
+  return { enabled: true, ...overrides };
+}
+
+/** Isolated {home, proj} pair; `projCfg`/`globalCfg` may be an object or raw text. */
+function newWs(name, projCfg, globalCfg) {
   const home = join(BASE, `${name}-home`);
   const proj = join(BASE, `${name}-proj`);
   mkdirSync(home, { recursive: true });
   mkdirSync(proj, { recursive: true });
-  if (cfg !== undefined) writeCfg(proj, cfg);
+  if (projCfg !== undefined) writeCfg(proj, projCfg);
   if (globalCfg !== undefined) writeCfg(home, globalCfg);
   return { home, proj, env: envFor(home) };
 }
@@ -178,17 +193,56 @@ function expectCompress(name, tokens, pass) {
   };
 }
 
-function expectFile(name, tokens, pass, file, expectedSlug) {
+const EMPTY_PATH = { root: '', date: '', time: '', slug: '', id: '' };
+
+/**
+ * `<root>/.claude/reports/YYYYMMDD-HHMMSS_<slug>-<id>/` split into its parts.
+ * The id never contains `-`, so the greedy slug group splits on the LAST dash.
+ */
+function parseReportPath(p) {
+  const m = p.match(/^(.+)\/\.claude\/reports\/(\d{8})-(\d{6})_([a-z0-9-]+)-([a-z0-9]+)\/$/);
+  return m ? { root: m[1], date: m[2], time: m[3], slug: m[4], id: m[5] } : EMPTY_PATH;
+}
+
+function reportPathOf(out) {
+  const reason = out && typeof out.reason === 'string' ? out.reason : '';
+  const m = reason.match(/write the detail to `([^`]+)`/);
+  return m ? m[1] : '';
+}
+
+/** Root / date / slug of the emitted path — shared by both file-tier builders. */
+function checkPathParts(name, parts, expectedRoot, expectedSlug, p) {
+  check(`${name}-path-root`, parts.root, expectedRoot,
+    `report base must be the resolved project root, not the hook cwd (actual "${p}")`);
+  check(`${name}-path-date`, parts.date, todayStamp(new Date()),
+    'the report-path stamp must carry today date, generated live');
+  check(`${name}-path-time-shape`, /^\d{6}$/.test(parts.time), true,
+    `the report-path stamp must carry a HHMMSS time (actual "${p}")`);
+  check(`${name}-path-slug`, parts.slug, expectedSlug,
+    `report dir must carry the agent slug "${expectedSlug}" (actual "${p}")`);
+}
+
+/** File tier with no agent_id/session_id in the payload -> random 8-hex id. */
+function expectFile(name, tokens, pass, file, expectedSlug, expectedRoot) {
   return (out) => {
-    const reason = out && typeof out.reason === 'string' ? out.reason : '';
-    const m = reason.match(/write the detail to `([^`]+)`/);
-    const p = m ? m[1] : '';
-    const re = new RegExp(`^\\.claude/reports/\\d{8}-\\d{6}_${expectedSlug}/$`);
-    check(`${name}-path-shape`, re.test(p), true,
-      `file order must carry .claude/reports/YYYYMMDD-HHMMSS_${expectedSlug}/ (actual "${p}")`);
-    const dm = p.match(/^\.claude\/reports\/(\d{8})-\d{6}_/);
-    check(`${name}-path-date`, dm ? dm[1] : '', todayStamp(new Date()),
-      'the report-path stamp must carry today date, generated live');
+    const p = reportPathOf(out);
+    const parts = parseReportPath(p);
+    checkPathParts(name, parts, expectedRoot, expectedSlug, p);
+    check(`${name}-path-id-hex`, /^[0-9a-f]{8}$/.test(parts.id), true,
+      `absent agent_id and session_id must yield a random 8-hex id (actual "${parts.id}")`);
+    check(`${name}-out`, out, { decision: 'block', reason: fileReason(tokens, pass, file, p) },
+      `~${tokens} tokens must block with the file order quoting budget ${pass} / threshold ${file}`);
+  };
+}
+
+/** File tier with a known id source -> that exact sanitized id. */
+function expectFileId(name, tokens, pass, file, expectedSlug, expectedRoot, expectedId) {
+  return (out) => {
+    const p = reportPathOf(out);
+    const parts = parseReportPath(p);
+    checkPathParts(name, parts, expectedRoot, expectedSlug, p);
+    check(`${name}-path-id`, parts.id, expectedId,
+      `report dir must end in the sanitized run id "${expectedId}" (actual "${p}")`);
     check(`${name}-out`, out, { decision: 'block', reason: fileReason(tokens, pass, file, p) },
       `~${tokens} tokens must block with the file order quoting budget ${pass} / threshold ${file}`);
   };
@@ -216,7 +270,7 @@ function expectContract(name, pass, file) {
 //        inclusive on the low side.
 // ═════════════════════════════════════════════════════════════════════════════
 {
-  const ws = newWs('tier', { enabled: true });
+  const ws = newWs('tier', cfg());
   const shot = (tokens) => ({
     stdin: JSON.stringify({
       hook_event_name: 'SubagentStop', agent_type: 'general-purpose', last_assistant_message: msg(tokens),
@@ -231,9 +285,9 @@ function expectContract(name, pass, file) {
   runCase('tier', 'tier-1002', GUARD_MJS, shot(1002), expectCompress('tier-1002', 1002, 1000));
   runCase('tier', 'tier-2499', GUARD_MJS, shot(2499), expectCompress('tier-2499', 2499, 1000));
   runCase('tier', 'tier-2500', GUARD_MJS, shot(2500), expectCompress('tier-2500', 2500, 1000));
-  runCase('tier', 'tier-2501', GUARD_MJS, shot(2501), expectFile('tier-2501', 2501, 1000, 2500, 'general-purpose'));
-  runCase('tier', 'tier-2502', GUARD_MJS, shot(2502), expectFile('tier-2502', 2502, 1000, 2500, 'general-purpose'));
-  runCase('tier', 'tier-50000', GUARD_MJS, shot(50000), expectFile('tier-50000', 50000, 1000, 2500, 'general-purpose'));
+  runCase('tier', 'tier-2501', GUARD_MJS, shot(2501), expectFile('tier-2501', 2501, 1000, 2500, 'general-purpose', ws.proj));
+  runCase('tier', 'tier-2502', GUARD_MJS, shot(2502), expectFile('tier-2502', 2502, 1000, 2500, 'general-purpose', ws.proj));
+  runCase('tier', 'tier-50000', GUARD_MJS, shot(50000), expectFile('tier-50000', 50000, 1000, 2500, 'general-purpose', ws.proj));
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -245,7 +299,7 @@ function expectContract(name, pass, file) {
 //        substring hatch was deleted upstream (SPEC §8a) and must stay deleted.
 // ═════════════════════════════════════════════════════════════════════════════
 {
-  const ws = newWs('hatch', { enabled: true });
+  const ws = newWs('hatch', cfg());
   const shot = (payload) => ({ stdin: JSON.stringify(payload), env: ws.env, cwd: ws.proj });
   const base = { hook_event_name: 'SubagentStop', agent_type: 'general-purpose' };
 
@@ -287,7 +341,7 @@ function expectContract(name, pass, file) {
   const tail = ' .claude/reports/foo/';
   runCase('escape-hatch', 'hatch-reports-file', GUARD_MJS,
     shot({ ...base, last_assistant_message: 'x'.repeat(4000 * 4 - tail.length) + tail }),
-    expectFile('hatch-reports-file', 4000, 1000, 2500, 'general-purpose'));
+    expectFile('hatch-reports-file', 4000, 1000, 2500, 'general-purpose', ws.proj));
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -297,7 +351,7 @@ function expectContract(name, pass, file) {
 // THEN:  always {} on stdout, exit 0, never exit 2
 // ═════════════════════════════════════════════════════════════════════════════
 {
-  const ws = newWs('failopen', { enabled: true });
+  const ws = newWs('failopen', cfg());
   const shot = (raw) => ({ stdin: raw, env: ws.env, cwd: ws.proj });
   const cases = [
     ['fo-malformed', '{"last_assistant_message":', 'truncated JSON'],
@@ -329,7 +383,7 @@ function expectContract(name, pass, file) {
 // THEN:  the tiers move to 500/800 and the announced contract moves with them
 // ═════════════════════════════════════════════════════════════════════════════
 {
-  const ws = newWs('envok', { enabled: true });
+  const ws = newWs('envok', cfg());
   const env = envFor(ws.home, { AGENT_RETURN_PASS: '500', AGENT_RETURN_FILE: '800' });
   const shot = (tokens) => ({
     stdin: JSON.stringify({ hook_event_name: 'SubagentStop', agent_type: 'tester', last_assistant_message: msg(tokens) }),
@@ -340,7 +394,7 @@ function expectContract(name, pass, file) {
   runCase('env-valid', 'envok-500', GUARD_MJS, shot(500), expectEmpty('envok-500', 'exactly the overridden PASS still passes'));
   runCase('env-valid', 'envok-501', GUARD_MJS, shot(501), expectCompress('envok-501', 501, 500));
   runCase('env-valid', 'envok-800', GUARD_MJS, shot(800), expectCompress('envok-800', 800, 500));
-  runCase('env-valid', 'envok-801', GUARD_MJS, shot(801), expectFile('envok-801', 801, 500, 800, 'tester'));
+  runCase('env-valid', 'envok-801', GUARD_MJS, shot(801), expectFile('envok-801', 801, 500, 800, 'tester', ws.proj));
   runCase('env-valid', 'envok-contract', CONTRACT_MJS, { stdin: '', env, cwd: ws.proj }, expectContract('envok-contract', 500, 800));
 }
 
@@ -352,7 +406,7 @@ function expectContract(name, pass, file) {
 //        the announced contract falls back in lockstep with the enforced tiers
 // ═════════════════════════════════════════════════════════════════════════════
 {
-  const ws = newWs('envbad', { enabled: true });
+  const ws = newWs('envbad', cfg());
   const BAD = ['1.7', 'abc', '12abc', '-5', '0', '', '   ', '1e400', 'NaN', 'Infinity', '2500.0000001'];
   for (const raw of BAD) {
     const tag = raw.trim() === '' ? `blank${raw.length}` : raw.replace(/[^A-Za-z0-9.]+/g, '_');
@@ -368,7 +422,7 @@ function expectContract(name, pass, file) {
     runCase('env-invalid', `envbad-${tag}-compress`, GUARD_MJS, shot(1001),
       expectCompress(`envbad-${tag}-compress`, 1001, 1000));
     runCase('env-invalid', `envbad-${tag}-file`, GUARD_MJS, shot(2501),
-      expectFile(`envbad-${tag}-file`, 2501, 1000, 2500, 'agent'));
+      expectFile(`envbad-${tag}-file`, 2501, 1000, 2500, 'agent', ws.proj));
     runCase('env-invalid', `envbad-${tag}-contract`, CONTRACT_MJS, { stdin: '', env, cwd: ws.proj },
       expectContract(`envbad-${tag}-contract`, 1000, 2500));
   }
@@ -382,7 +436,7 @@ function expectContract(name, pass, file) {
 //        leading/trailing dashes, and falls back to "agent"
 // ═════════════════════════════════════════════════════════════════════════════
 {
-  const ws = newWs('slug', { enabled: true });
+  const ws = newWs('slug', cfg());
   const body = msg(2501);
   const shot = (payload) => ({
     stdin: JSON.stringify({ hook_event_name: 'SubagentStop', last_assistant_message: body, ...payload }),
@@ -408,7 +462,7 @@ function expectContract(name, pass, file) {
     ['slug-truncate-dash', { agent_type: `${'b'.repeat(47)}-ccc` }, 'b'.repeat(47)],
   ];
   for (const [name, payload, expectedSlug] of cases) {
-    runCase('slug', name, GUARD_MJS, shot(payload), expectFile(name, 2501, 1000, 2500, expectedSlug));
+    runCase('slug', name, GUARD_MJS, shot(payload), expectFile(name, 2501, 1000, 2500, expectedSlug, ws.proj));
   }
 }
 
@@ -420,7 +474,7 @@ function expectContract(name, pass, file) {
 //        never read
 // ═════════════════════════════════════════════════════════════════════════════
 {
-  const ws = newWs('start', { enabled: true });
+  const ws = newWs('start', cfg());
   runCase('subagent-start', 'start-no-stdin', CONTRACT_MJS, { stdin: '', env: ws.env, cwd: ws.proj },
     expectContract('start-no-stdin', 1000, 2500));
   runCase('subagent-start', 'start-garbage', CONTRACT_MJS, { stdin: ' not json{{{', env: ws.env, cwd: ws.proj },
@@ -476,7 +530,7 @@ function expectContract(name, pass, file) {
   }, expectEmpty('cfg-flag-string', 'enabled:"true" (string) is not the boolean gate'));
 
   // 8.4 enabled:true with custom thresholds -> tiers move
-  const keys = newWs('cfg-keys', { enabled: true, passTokens: 500, fileTokens: 800 });
+  const keys = newWs('cfg-keys', cfg({ passTokens: 500, fileTokens: 800 }));
   runCase('config', 'cfg-keys-compress', GUARD_MJS, {
     stdin: JSON.stringify({ hook_event_name: 'SubagentStop', agent_type: 'tester', last_assistant_message: msg(501) }),
     env: keys.env, cwd: keys.proj,
@@ -484,7 +538,7 @@ function expectContract(name, pass, file) {
   runCase('config', 'cfg-keys-file', GUARD_MJS, {
     stdin: JSON.stringify({ hook_event_name: 'SubagentStop', agent_type: 'tester', last_assistant_message: msg(801) }),
     env: keys.env, cwd: keys.proj,
-  }, expectFile('cfg-keys-file', 801, 500, 800, 'tester'));
+  }, expectFile('cfg-keys-file', 801, 500, 800, 'tester', keys.proj));
 
   // 8.5 config key BEATS the env var
   runCase('config', 'cfg-beats-env', GUARD_MJS, {
@@ -494,36 +548,36 @@ function expectContract(name, pass, file) {
   }, expectCompress('cfg-beats-env', 501, 500));
 
   // 8.6 env applies per-threshold when the config key is absent
-  const halfKeys = newWs('cfg-half', { enabled: true, passTokens: 500 });
+  const halfKeys = newWs('cfg-half', cfg({ passTokens: 500 }));
   runCase('config', 'cfg-env-fills-gap', GUARD_MJS, {
     stdin: JSON.stringify({ hook_event_name: 'SubagentStop', agent_type: 'tester', last_assistant_message: msg(801) }),
     env: envFor(halfKeys.home, { AGENT_RETURN_FILE: '800' }),
     cwd: halfKeys.proj,
-  }, expectFile('cfg-env-fills-gap', 801, 500, 800, 'tester'));
+  }, expectFile('cfg-env-fills-gap', 801, 500, 800, 'tester', halfKeys.proj));
 
   // 8.7 malformed project config is skipped -> the global one takes over
-  const bad = newWs('cfg-bad', 'not json {{{', { enabled: true, passTokens: 500 });
+  const bad = newWs('cfg-bad', 'not json {{{', cfg({ passTokens: 500 }));
   runCase('config', 'cfg-malformed-falls-to-global', GUARD_MJS, {
     stdin: JSON.stringify({ hook_event_name: 'SubagentStop', last_assistant_message: msg(501) }),
     env: bad.env, cwd: bad.proj,
   }, expectCompress('cfg-malformed-falls-to-global', 501, 500));
 
   // 8.8 an ARRAY project config is not an object -> skipped, global takes over
-  const arr = newWs('cfg-array', '[{"enabled":true}]', { enabled: true, passTokens: 500 });
+  const arr = newWs('cfg-array', '[{"enabled":true}]', cfg({ passTokens: 500 }));
   runCase('config', 'cfg-array-falls-to-global', GUARD_MJS, {
     stdin: JSON.stringify({ hook_event_name: 'SubagentStop', last_assistant_message: msg(501) }),
     env: arr.env, cwd: arr.proj,
   }, expectCompress('cfg-array-falls-to-global', 501, 500));
 
   // 8.9 project config wins over global
-  const both = newWs('cfg-both', { enabled: true, passTokens: 500 }, { enabled: true, passTokens: 2000 });
+  const both = newWs('cfg-both', cfg({ passTokens: 500 }), cfg({ passTokens: 2000 }));
   runCase('config', 'cfg-project-wins', GUARD_MJS, {
     stdin: JSON.stringify({ hook_event_name: 'SubagentStop', last_assistant_message: msg(501) }),
     env: both.env, cwd: both.proj,
   }, expectCompress('cfg-project-wins', 501, 500));
 
   // 8.10 discovery walks up from a nested subdir
-  const nested = newWs('cfg-nested', { enabled: true, passTokens: 500 });
+  const nested = newWs('cfg-nested', cfg({ passTokens: 500 }));
   const deep = join(nested.proj, 'a', 'b', 'c');
   mkdirSync(deep, { recursive: true });
   runCase('config', 'cfg-nested-cwd', GUARD_MJS, {
@@ -531,9 +585,10 @@ function expectContract(name, pass, file) {
     env: nested.env, cwd: deep,
   }, expectCompress('cfg-nested-cwd', 501, 500));
 
-  // 8.11 climb depth: 15 levels up is still found, 16 is out of reach
+  // 8.11 depth: discovery starts at projectRoot(), so a `.claude`-marked root is
+  //      found at ANY depth — 15 and 16 levels down both resolve the same file.
   const chain = (name, depth) => {
-    const ws = newWs(name, { enabled: true, passTokens: 500 });
+    const ws = newWs(name, cfg({ passTokens: 500 }));
     let p = ws.proj;
     for (let i = 0; i < depth; i++) {
       p = join(p, `d${i}`);
@@ -546,14 +601,14 @@ function expectContract(name, pass, file) {
     stdin: JSON.stringify({ hook_event_name: 'SubagentStop', last_assistant_message: msg(501) }),
     env: inRange.ws.env, cwd: inRange.cwd,
   }, expectCompress('cfg-climb-15', 501, 500));
-  const outOfRange = chain('cfg-climb16', 16);
+  const deeper = chain('cfg-climb16', 16);
   runCase('config', 'cfg-climb-16', GUARD_MJS, {
-    stdin: JSON.stringify({ hook_event_name: 'SubagentStop', last_assistant_message: msg(50000) }),
-    env: outOfRange.ws.env, cwd: outOfRange.cwd,
-  }, expectEmpty('cfg-climb-16', '16 dirs up is past MAX_CONFIG_CLIMB, empty global -> feature off'));
+    stdin: JSON.stringify({ hook_event_name: 'SubagentStop', last_assistant_message: msg(501) }),
+    env: deeper.ws.env, cwd: deeper.cwd,
+  }, expectCompress('cfg-climb-16', 501, 500));
 
   // 8.12 a global-only config still enables the feature
-  const globalOnly = newWs('cfg-global', undefined, { enabled: true, passTokens: 500 });
+  const globalOnly = newWs('cfg-global', undefined, cfg({ passTokens: 500 }));
   runCase('config', 'cfg-global-only', GUARD_MJS, {
     stdin: JSON.stringify({ hook_event_name: 'SubagentStop', last_assistant_message: msg(501) }),
     env: globalOnly.env, cwd: globalOnly.proj,
@@ -572,10 +627,10 @@ function expectContract(name, pass, file) {
 // ═════════════════════════════════════════════════════════════════════════════
 {
   const SOURCES = [
-    { id: 'default', cfg: { enabled: true }, extra: {}, pass: 1000, file: 2500 },
-    { id: 'env', cfg: { enabled: true }, extra: { AGENT_RETURN_PASS: '500', AGENT_RETURN_FILE: '800' }, pass: 500, file: 800 },
-    { id: 'config', cfg: { enabled: true, passTokens: 700, fileTokens: 900 }, extra: {}, pass: 700, file: 900 },
-    { id: 'env-bad', cfg: { enabled: true }, extra: { AGENT_RETURN_PASS: 'abc', AGENT_RETURN_FILE: '-5' }, pass: 1000, file: 2500 },
+    { id: 'default', cfg: cfg(), extra: {}, pass: 1000, file: 2500 },
+    { id: 'env', cfg: cfg(), extra: { AGENT_RETURN_PASS: '500', AGENT_RETURN_FILE: '800' }, pass: 500, file: 800 },
+    { id: 'config', cfg: cfg({ passTokens: 700, fileTokens: 900 }), extra: {}, pass: 700, file: 900 },
+    { id: 'env-bad', cfg: cfg(), extra: { AGENT_RETURN_PASS: 'abc', AGENT_RETURN_FILE: '-5' }, pass: 1000, file: 2500 },
   ];
 
   for (const src of SOURCES) {
@@ -607,8 +662,149 @@ function expectContract(name, pass, file) {
     runCase('announced', `sync-${src.id}-over-pass`, GUARD_MJS, shot(announcedPass + 1),
       expectCompress(`sync-${src.id}-over-pass`, announcedPass + 1, announcedPass));
     runCase('announced', `sync-${src.id}-over-file`, GUARD_MJS, shot(announcedFile + 1),
-      expectFile(`sync-${src.id}-over-file`, announcedFile + 1, announcedPass, announcedFile, 'tester'));
+      expectFile(`sync-${src.id}-over-file`, announcedFile + 1, announcedPass, announcedFile, 'tester', ws.proj));
   }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Group 10 — report destination (BT-F23) (13 cases)
+// GIVEN: enabled config and a file-tier return
+// WHEN:  the hook runs from a nested cwd, with a payload cwd, with
+//        CLAUDE_PROJECT_DIR set, or with agent_id / session_id present
+// THEN:  the directive names <projectRoot>/.claude/reports/<stamp>_<slug>-<id>/
+//        — an absolute base that ignores cwd drift, plus a per-invocation id so
+//        two same-type agents stopping in the same second cannot collide
+// ═════════════════════════════════════════════════════════════════════════════
+{
+  const ws = newWs('dest', cfg());
+  const nested = join(ws.proj, 'a', 'b', 'c');
+  mkdirSync(nested, { recursive: true });
+  // A second, unrelated workspace: the child runs there (so the config is found
+  // from ITS cwd) while the payload cwd still points inside `ws`.
+  const away = newWs('dest-away', cfg());
+
+  const payload = (extra) => JSON.stringify({
+    hook_event_name: 'SubagentStop', agent_type: 'general-purpose',
+    last_assistant_message: msg(2501), ...extra,
+  });
+
+  // 10.1 run id sources: agent_id wins, session_id is the fallback, then random
+  const idCases = [
+    ['dest-id-agent', { agent_id: 'A1B2-c3d4-EFGH-5678' }, 'a1b2c3d4'],
+    ['dest-id-session', { session_id: 'sess-9f8e-7d6c' }, 'sess9f8e'],
+    ['dest-id-agent-wins', { agent_id: 'agent777', session_id: 'sess-9f8e' }, 'agent777'],
+    ['dest-id-short', { agent_id: 'A1' }, 'a1'],
+    ['dest-id-agent-unusable', { agent_id: '!!! ***', session_id: 'ZZ-99' }, 'zz99'],
+    ['dest-id-agent-nonstring', { agent_id: 42, session_id: 'ZZ-99' }, 'zz99'],
+  ];
+  for (const [name, extra, expectedId] of idCases) {
+    runCase('report-dest', name, GUARD_MJS, { stdin: payload(extra), env: ws.env, cwd: ws.proj },
+      expectFileId(name, 2501, 1000, 2500, 'general-purpose', ws.proj, expectedId));
+  }
+  runCase('report-dest', 'dest-id-both-unusable', GUARD_MJS,
+    { stdin: payload({ agent_id: '!!!', session_id: '###' }), env: ws.env, cwd: ws.proj },
+    expectFile('dest-id-both-unusable', 2501, 1000, 2500, 'general-purpose', ws.proj));
+
+  // 10.2 collision: same type, same second, two agents -> two distinct dirs
+  const dirsSeen = [];
+  const captureDir = (name, expectedId) => (out) => {
+    const p = reportPathOf(out);
+    dirsSeen.push(p);
+    expectFileId(name, 2501, 1000, 2500, 'general-purpose', ws.proj, expectedId)(out);
+  };
+  runCase('report-dest', 'dest-collide-a', GUARD_MJS,
+    { stdin: payload({ agent_id: 'aaaa1111' }), env: ws.env, cwd: ws.proj },
+    captureDir('dest-collide-a', 'aaaa1111'));
+  runCase('report-dest', 'dest-collide-b', GUARD_MJS,
+    { stdin: payload({ agent_id: 'bbbb2222' }), env: ws.env, cwd: ws.proj },
+    captureDir('dest-collide-b', 'bbbb2222'));
+  check('dest-collide-distinct', new Set(dirsSeen).size, 2,
+    'two same-type agents must never be handed the same report directory');
+
+  // 10.3 root resolution: nested cwd, payload cwd, CLAUDE_PROJECT_DIR
+  runCase('report-dest', 'dest-root-nested-cwd', GUARD_MJS,
+    { stdin: payload({ agent_id: 'nest0001' }), env: ws.env, cwd: nested },
+    expectFileId('dest-root-nested-cwd', 2501, 1000, 2500, 'general-purpose', ws.proj, 'nest0001'));
+  runCase('report-dest', 'dest-root-payload-cwd', GUARD_MJS,
+    { stdin: payload({ agent_id: 'nest0002', cwd: nested }), env: away.env, cwd: away.proj },
+    expectFileId('dest-root-payload-cwd', 2501, 1000, 2500, 'general-purpose', ws.proj, 'nest0002'));
+  runCase('report-dest', 'dest-root-env', GUARD_MJS, {
+    stdin: payload({ agent_id: 'nest0003', cwd: nested }),
+    env: envFor(ws.home, { CLAUDE_PROJECT_DIR: ws.proj }),
+    cwd: nested,
+  }, expectFileId('dest-root-env', 2501, 1000, 2500, 'general-purpose', ws.proj, 'nest0003'));
+
+  // 10.4 fail-safe: a non-string cwd degrades the path, never the budget
+  runCase('report-dest', 'dest-cwd-nonstring', GUARD_MJS,
+    { stdin: payload({ agent_id: 'badcwd11', cwd: 42 }), env: ws.env, cwd: ws.proj },
+    expectFileId('dest-cwd-nonstring', 2501, 1000, 2500, 'general-purpose', ws.proj, 'badcwd11'));
+
+  // 10.5 at-most-once survives the new path code: the brake still wins
+  runCase('report-dest', 'dest-brake-file-tier', GUARD_MJS, {
+    stdin: payload({ agent_id: 'aaaa1111', stop_hook_active: true }), env: ws.env, cwd: ws.proj,
+  }, expectEmpty('dest-brake-file-tier',
+    'stop_hook_active brakes before any path is built — the file tier blocks at most once'));
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Group 11 — config root (BT-N02) (6 cases)
+// GIVEN: three candidate configs, each with a UNIQUE passTokens, so the enforced
+//        number names exactly one file on disk:
+//          <root>/.claude/agent-return.json   500/800
+//          <away>/.claude/agent-return.json   700/1400
+//          <home>/.claude/agent-return.json  2000/9000
+// WHEN:  CLAUDE_PROJECT_DIR names the root while the hook runs elsewhere, or the
+//        hook runs 16 levels below the root
+// THEN:  the root file is the one read — by both hooks — and the guard's report
+//        base is that same root. A CLAUDE_PROJECT_DIR that does not exist is
+//        ignored, exactly as projectRoot() specifies.
+// ═════════════════════════════════════════════════════════════════════════════
+{
+  const root = newWs('cfgroot', cfg({ passTokens: 500, fileTokens: 800 }),
+    cfg({ passTokens: 2000, fileTokens: 9000 }));
+  const away = newWs('cfgroot-away', cfg({ passTokens: 700, fileTokens: 1400 }));
+  const ROOT_CFG = join(root.proj, '.claude', 'agent-return.json');
+  const AWAY_CFG = join(away.proj, '.claude', 'agent-return.json');
+  const envRoot = envFor(root.home, { CLAUDE_PROJECT_DIR: root.proj });
+
+  // 11.1 the hook runs in an unrelated repo; CLAUDE_PROJECT_DIR decides
+  runCase('config-root', 'cfgroot-env-compress', GUARD_MJS, {
+    stdin: JSON.stringify({ hook_event_name: 'SubagentStop', last_assistant_message: msg(501) }),
+    env: envRoot, cwd: away.proj,
+  }, expectCompress('cfgroot-env-compress', 501, 500));
+
+  // 11.2 same run at the file tier: config root and report root are ONE root
+  runCase('config-root', 'cfgroot-env-file', GUARD_MJS, {
+    stdin: JSON.stringify({
+      hook_event_name: 'SubagentStop', agent_type: 'tester', agent_id: 'root0001',
+      last_assistant_message: msg(801),
+    }),
+    env: envRoot, cwd: away.proj,
+  }, expectFileId('cfgroot-env-file', 801, 500, 800, 'tester', root.proj, 'root0001'));
+
+  // 11.3 the SubagentStart contract resolves the same file
+  runCase('config-root', 'cfgroot-env-contract', CONTRACT_MJS, { stdin: '', env: envRoot, cwd: away.proj },
+    expectContract('cfgroot-env-contract', 500, 800));
+
+  // 11.4 a CLAUDE_PROJECT_DIR that does not exist is ignored -> cwd's own config
+  runCase('config-root', 'cfgroot-env-missing-dir', GUARD_MJS, {
+    stdin: JSON.stringify({ hook_event_name: 'SubagentStop', last_assistant_message: msg(701) }),
+    env: envFor(away.home, { CLAUDE_PROJECT_DIR: join(BASE, 'no-such-dir') }), cwd: away.proj,
+  }, expectCompress('cfgroot-env-missing-dir', 701, 700));
+
+  // 11.5 no env var: the `.claude` marker walk finds the root config 16 levels down,
+  //      and it beats the global one (500, not 2000)
+  let deep = root.proj;
+  for (let i = 0; i < 16; i++) deep = join(deep, `d${i}`);
+  mkdirSync(deep, { recursive: true });
+  runCase('config-root', 'cfgroot-deep-cwd', GUARD_MJS, {
+    stdin: JSON.stringify({ hook_event_name: 'SubagentStop', last_assistant_message: msg(501) }),
+    env: root.env, cwd: deep,
+  }, expectCompress('cfgroot-deep-cwd', 501, 500));
+
+  // 11.6 the two candidate files are distinct paths — the numbers above identify one each
+  check('cfgroot-candidates-distinct', new Set([ROOT_CFG, AWAY_CFG]).size, 2,
+    `passTokens 500 identifies ${ROOT_CFG} and 700 identifies ${AWAY_CFG}`);
 }
 
 // ── cleanup ─────────────────────────────────────────────────────────────────

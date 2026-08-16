@@ -70,14 +70,20 @@ The first token is parsed as scope when it resolves to a path or a 7+ hex git ha
 | Chat scaffolding | "Certainly!", "I hope this helps", "Here's the rewritten..." | HIGH |
 | AI self-attribution | `// AI-generated`, `# Claude suggestion`, bot trailers | HIGH |
 | Prompt residue | `// Replace with your...` placeholder narration | HIGH |
-| Unicode in code/text | em-dash, arrows, smart quotes -> ASCII | HIGH |
+| Unicode in prose + code comments | em-dash, arrows, smart quotes -> ASCII (never inside a literal, regex or identifier) | HIGH |
 | Trivial doc/comment | `// Loop through users`, `@param userId The user ID` | density |
 | Excess-vocab cluster | delve, leverage, seamless, landscape (co-occurring) | MED cluster only |
 | Promotional/template prose | "In today's fast-paced world", "plays a significant role" | HIGH/MED |
 
 ## What it surfaces (never auto-edits)
 
-Hallucinated package/method/URL refs, fabricated tickets, try/except-everything, empty catch-all, placeholder TODO logic, duplicated abstractions, happy-path-only tests, CI gaming. These change meaning -- they are reported, not changed.
+Hallucinated package/method/URL refs, fabricated tickets, try/except-everything, empty catch-all, placeholder TODO logic, duplicated abstractions, happy-path-only tests, CI gaming, unicode inside a string literal or regex, mixed indentation in an indentation-sensitive file. These change meaning -- they are reported, not changed.
+
+## Before it writes
+
+Edits are in place with no backup, so the skill runs `git status --porcelain` over the target paths
+first and asks before touching a dirty one. Commit mode is explicitly current-worktree: the hash
+picks the file names, the edits land on today's content.
 
 ## What it keeps
 

@@ -9,7 +9,7 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync,
-  readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync,
+  readdirSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
@@ -112,6 +112,24 @@ function sha(p) {
   return createHash('sha256').update(readFileSync(p)).digest('hex');
 }
 
+function shaStr(s) {
+  return createHash('sha256').update(s).digest('hex');
+}
+
+// Byte total of every regular file under root — mirrors sp_dir_size.
+function dirSize(root) {
+  let n = 0;
+  const walk = (d) => {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      const p = join(d, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.isFile()) n += statSync(p).size;
+    }
+  };
+  walk(root);
+  return n;
+}
+
 // { "<relative path>": "<sha256>" } for every regular file under root, sorted.
 function snapshot(root) {
   const out = {};
@@ -134,6 +152,24 @@ function repoHash(p) {
 function stateOf(projectRoot) {
   const f = join(projectRoot, '.claude', 'semble', 'state.json');
   return existsSync(f) ? safeParse(readFileSync(f, 'utf8')) : { __ABSENT__: true };
+}
+
+// The §12.3 phase ladder every project fixture climbs: create the state file and
+// walk it to `upto` through the only legal chain. Each rung is returned so a
+// caller can still assert on the exact step it cares about. Same contract as
+// suite-integration.mjs's seedState, whose ladder starts from a real MCP
+// registration instead - move both to a shared test helper when one exists.
+function seedState(env, upto = 'ready') {
+  const rungs = { init: run(STATE_SH, ['init'], env) };
+  if (upto === 'init') return rungs;
+  rungs.prereq_ready = run(STATE_SH, ['phase', 'prereq_ready'], env);
+  if (upto === 'prereq_ready') return rungs;
+  rungs.awaiting_reload = run(STATE_SH, ['phase', 'awaiting_reload'], env);
+  if (upto === 'awaiting_reload') return rungs;
+  rungs.verifying = run(STATE_SH, ['phase', 'verifying'], env);
+  if (upto === 'verifying') return rungs;
+  rungs.ready = run(STATE_SH, ['phase', 'ready'], env);
+  return rungs;
 }
 
 // A `claude` stub: logs the exact argv line and emulates mcp add/add-json/remove
@@ -299,7 +335,8 @@ check('candidates.humanEmpty', candHuman.stdout.includes('none - nothing in this
 // ═══════════════════════════════════════════════════════════════════════════
 const warm = run(PROJECT_SH, ['warm', '--json'], { SEMBLE_PROJECT_ROOT: COV });
 const warmJson = safeParse(warm.stdout);
-check('warm exit', warm.status, 0, 'a deliberate skip is not a failure');
+check('warm exit', warm.status, 3,
+  'a skipped warm proves nothing was indexed: exit 3 = precondition unmet, never 0');
 check('warm status', warmJson.status, 'skipped', 'SEMBLE_NO_NETWORK=1 -> skipped');
 check('warm reason', warmJson.reason, 'SEMBLE_NO_NETWORK=1', 'the skip reason is explicit');
 check('warm query', warmJson.query, 'entry point main function', 'default warm query');
@@ -310,7 +347,7 @@ check('warm command', warmJson.command,
 
 const smoke = run(PROJECT_SH, ['smoke', '--query', 'auth handler', '--json'], { SEMBLE_PROJECT_ROOT: COV });
 const smokeJson = safeParse(smoke.stdout);
-check('smoke exit', smoke.status, 0, 'skipped smoke exits 0');
+check('smoke exit', smoke.status, 3, 'a skipped smoke is not a verification: exit 3, same predicate as warm');
 check('smoke status', smokeJson.status, 'skipped', 'SEMBLE_NO_NETWORK=1 -> skipped');
 check('smoke shape', Object.keys(smokeJson).sort(),
   ['command', 'durationMs', 'exit', 'firstResult', 'query', 'reason', 'resultCount', 'schema', 'status'],
@@ -433,11 +470,30 @@ check('reindex without --yes keeps the dir', existsSync(RIDX_DIR), true, 'nothin
 check('reindex without --yes plan', safeParse(noYes.stdout).wouldDelete, [RIDX_DIR],
   'it names the single directory it would delete');
 
+check('reindex without --yes command order', safeParse(noYes.stdout).commands.length, 2,
+  'the plan is two commands: the staged rebuild, then the delete');
+check('reindex without --yes rebuilds before deleting',
+  safeParse(noYes.stdout).commands[1], `rm -rf ${RIDX_DIR}`,
+  'the delete is the SECOND command — the rebuild runs first');
+
+// SS03: the live index survives a reindex whose warm cannot run. Before the
+// fix this deleted the index, printed `ok`, and left phase=ready.
+const ridxBefore = snapshot(RIDX_DIR);
+const ridxBytes = dirSize(RIDX_DIR);
 const yes = run(PROJECT_SH, ['reindex', '--yes', '--json'], { SEMBLE_PROJECT_ROOT: RIDX });
 const yesJson = safeParse(yes.stdout);
-check('reindex --yes exit', yes.status, 0, 'rebuild path exits 0 when the warm is skipped');
-check('reindex --yes removed the repo dir', existsSync(RIDX_DIR), false,
-  'exactly <code root>/<64-hex> is gone');
+check('reindex --yes exit', yes.status, 3,
+  'a rebuild that never rebuilt is exit 3, not 0');
+check('reindex --yes status', yesJson.status, 'skipped',
+  'the report says skipped, never ok');
+check('reindex --yes kept the repo dir', snapshot(RIDX_DIR), ridxBefore,
+  'the live <code root>/<64-hex> index is byte-identical — nothing was deleted');
+check('reindex --yes changed nothing', yesJson.changed, [],
+  'no change is claimed');
+check('reindex --yes says why the index was kept', yesJson.unchanged, [
+  `cache: ${RIDX_DIR} kept (${ridxBytes} bytes) — the staged rebuild never answered, so nothing was deleted`,
+  'state: phase and completed steps unchanged',
+], 'both the kept index and the untouched state are reported in words');
 check('reindex left the sibling repo dir', snapshot(SIBLING_DIR), siblingBefore,
   'a second repo index is byte-identical afterwards');
 check('reindex left non-hash entries', snapshot(NOT_A_HASH_DIR), { 'keep.txt': sha(NOT_A_HASH_DIR + '/keep.txt') },
@@ -445,6 +501,81 @@ check('reindex left non-hash entries', snapshot(NOT_A_HASH_DIR), { 'keep.txt': s
 check('reindex left savings.jsonl', existsSync(join(CACHE_CODE, 'savings.jsonl')), true,
   'the root-level savings file survives a per-repo rebuild');
 check('reindex warm skipped', yesJson.warm.status, 'skipped', 'warm is skipped under SEMBLE_NO_NETWORK=1');
+check('reindex left no staging dir',
+  readdirSync(CACHE_CODE).filter((n) => n.startsWith('.staging')), [],
+  'the staging cache root is removed on the way out');
+
+// ── 3b. the staged rebuild really replaces the index ────────────────────────
+// A uvx that builds a cache under $SEMBLE_CACHE_LOCATION exactly as semble
+// does — repo dir named sha256(project root) — and then answers the query.
+const BUILD_BIN = join(BASE, 'buildbin');
+writeExec(join(BUILD_BIN, 'uvx'), `#!/usr/bin/env bash
+root="$6"
+h=$(printf '%s' "$root" | shasum -a 256 | cut -d' ' -f1)
+d="\${SEMBLE_CACHE_LOCATION}/$h/index"
+mkdir -p "$d/bm25_index" "$d/semantic_index"
+printf '[]\\n' > "$d/chunks.json"
+printf '{"cache_version":1}\\n' > "$d/metadata.json"
+printf 'rebuilt\\n' > "$d/bm25_index/data"
+printf 'rebuilt\\n' > "$d/semantic_index/data"
+printf '%s' '{"results":[{"file_path":"src/main.py","start_line":1,"end_line":2,"score":0.9,"content":"x"}]}'
+`);
+
+const RIDX2 = join(BASE, 'repo-reindex-ok');
+write(join(RIDX2, 'src/main.py'), `def main():\n    return 1\n# ${PAD}\n`);
+const RIDX2_DIR = join(CACHE_CODE, repoHash(RIDX2));
+write(join(RIDX2_DIR, 'index/chunks.json'), '[]\n');
+write(join(RIDX2_DIR, 'index/stale-marker'), 'the index that must be replaced\n');
+const ridx2Env = { SEMBLE_PROJECT_ROOT: RIDX2 };
+seedState(ridx2Env);
+
+const built = run(PROJECT_SH, ['reindex', '--yes', '--json'], {
+  ...ridx2Env,
+  SEMBLE_NO_NETWORK: '',
+  SEMBLE_TIMEOUT_BIN: 'none',
+  SP_SEARCH_TIMEOUT: '30',
+  PATH: `${BUILD_BIN}:${BIN}:${process.env.PATH}`,
+});
+const builtJson = safeParse(built.stdout);
+check('reindex.built.exit', built.status, 0, 'a proven rebuild exits 0');
+check('reindex.built.status', builtJson.status, 'ok', 'and reports ok');
+check('reindex.built.warm', builtJson.warm.status, 'ok', 'because the staged warm answered');
+check('reindex.built.index', snapshot(RIDX2_DIR), {
+  'index/bm25_index/data': shaStr('rebuilt\n'),
+  'index/chunks.json': shaStr('[]\n'),
+  'index/metadata.json': shaStr('{"cache_version":1}\n'),
+  'index/semantic_index/data': shaStr('rebuilt\n'),
+}, 'the live dir now holds exactly the staged build — the stale-marker file is gone with the old index');
+check('reindex.built.phase', [builtJson.phase, stateOf(RIDX2).phase], ['ready', 'ready'],
+  'phase reaches ready only on a rebuild that happened');
+check('reindex.built.no staging residue',
+  readdirSync(CACHE_CODE).filter((n) => n.startsWith('.staging')), [],
+  'the staging root is gone once the swap is done');
+check('reindex.built.completed', stateOf(RIDX2).completed, ['warm'],
+  'only a real rebuild records the warm step');
+
+// WHEN: the search answers but writes no index (a stubbed/degraded semble) —
+// the live index is still not deleted.
+const RIDX3 = join(BASE, 'repo-reindex-noindex');
+write(join(RIDX3, 'src/main.py'), `def main():\n    return 1\n# ${PAD}\n`);
+const RIDX3_DIR = join(CACHE_CODE, repoHash(RIDX3));
+write(join(RIDX3_DIR, 'index/chunks.json'), '[]\n');
+const ridx3Before = snapshot(RIDX3_DIR);
+const noIdx = run(PROJECT_SH, ['reindex', '--yes', '--json'], {
+  SEMBLE_PROJECT_ROOT: RIDX3,
+  SEMBLE_NO_NETWORK: '',
+  SEMBLE_TIMEOUT_BIN: 'none',
+  SP_SEARCH_TIMEOUT: '30',
+  PATH: `${UVX_BIN}:${BIN}:${process.env.PATH}`,
+});
+const noIdxJson = safeParse(noIdx.stdout);
+check('reindex.noindex.exit', noIdx.status, 3, 'an answer without an index on disk is a failure');
+check('reindex.noindex.status', noIdxJson.status, 'failed', 'and is reported as failed');
+check('reindex.noindex.kept', snapshot(RIDX3_DIR), ridx3Before,
+  'the live index is byte-identical — an unproven staged build never earns a delete');
+check('reindex.noindex.no staging residue',
+  readdirSync(CACHE_CODE).filter((n) => n.startsWith('.staging')), [],
+  'the empty staging root is cleaned up too');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 4. disable — state only, nothing else moves
@@ -458,11 +589,7 @@ const DIS_CACHE = join(CACHE_CODE, repoHash(DIS));
 write(join(DIS_CACHE, 'index/chunks.json'), '[]\n');
 
 const disEnv = { SEMBLE_PROJECT_ROOT: DIS };
-run(STATE_SH, ['init'], disEnv);
-run(STATE_SH, ['phase', 'prereq_ready'], disEnv);
-run(STATE_SH, ['phase', 'awaiting_reload'], disEnv);
-run(STATE_SH, ['phase', 'verifying'], disEnv);
-run(STATE_SH, ['phase', 'ready'], disEnv);
+seedState(disEnv);
 const disGuidanceBefore = { rule: sha(RULE), hook: sha(HOOK), settings: sha(SETTINGS) };
 const disCacheBefore = snapshot(DIS_CACHE);
 
@@ -489,7 +616,7 @@ const REM_HOOK1 = write(join(REM, '.claude/hooks/semble-session.mjs'), 'process.
 const REM_HOOK2 = write(join(REM, '.claude/hooks/semble-reminder.mjs'), 'process.stdout.write("{}");\n');
 write(join(REM, 'CLAUDE.md'), '# CLAUDE.md\n\nproject notes\n\n<!-- BEGIN brewcode:semble -->\n## Code Search\nblock\n<!-- END brewcode:semble -->\n');
 const remEnv = { SEMBLE_PROJECT_ROOT: REM };
-run(STATE_SH, ['init'], remEnv);
+seedState(remEnv, 'init');
 const REM_CACHE = join(CACHE_CODE, repoHash(REM));
 write(join(REM_CACHE, 'index/chunks.json'), '[]\n');
 
@@ -556,7 +683,8 @@ write(join(LIFE, 'CLAUDE.md'), '# CLAUDE.md\n\nlifecycle project\n');
 write(join(HOME, '.claude.json'), JSON.stringify({ mcpServers: {} }, null, 2) + '\n');
 const lifeEnv = { SEMBLE_PROJECT_ROOT: LIFE };
 
-// setup: checkpoint + claude mcp add + guidance
+// setup: checkpoint + claude mcp add + guidance. Rungs stay inline here - the
+// assertions sit between them, which is exactly what seedState cannot express.
 const add = run(MCP_SH, ['add', '--scope', 'user', '--yes', '--json'], lifeEnv);
 check('setup: mcp add exit', add.status, 0, 'the stubbed registration succeeds');
 check('setup: phase', stateOf(LIFE).phase, 'awaiting_reload',
@@ -585,8 +713,14 @@ const toReady = run(STATE_SH, ['phase', 'ready'], lifeEnv);
 check('resume: phase', [toReady.status, stateOf(LIFE).phase], [0, 'ready'], 'verifying -> ready');
 
 const strict = run(STATUS_SH, ['--json', '--strict'], lifeEnv);
-check('resume: status --strict exit', strict.status, 0, 'the whole install verifies as ready');
-check('resume: status verdict', safeParse(strict.stdout).verdict, 'ready', 'verdict is ready');
+// `ready` is every required check, not phase alone: offline the warm/smoke pair
+// is never recorded, so the install stays unverified and strict fails.
+check('resume: status --strict exit', strict.status, 1,
+  'strict exits 1 on any verdict that is not ready');
+check('resume: status verdict',
+  [safeParse(strict.stdout).verdict, safeParse(strict.stdout).nextStep],
+  ['partial', 'Run /brewcode:semble-setup install'],
+  'phase=ready with the install steps and the warm/smoke pair unrecorded => partial');
 
 // disable
 const lifeDis = run(PROJECT_SH, ['disable', '--json'], lifeEnv);
@@ -599,11 +733,18 @@ check('lifecycle: disable kept the rule', existsSync(join(LIFE, '.claude/rules/s
 // enable
 const lifeEn = run(PROJECT_SH, ['enable', '--yes', '--json'], lifeEnv);
 const lifeEnJson = safeParse(lifeEn.stdout);
-check('lifecycle: enable exit', lifeEn.status, 0, 'enable succeeds with a skipped warm');
-check('lifecycle: enable phase', [stateOf(LIFE).phase, stateOf(LIFE).enabled], ['ready', true],
-  'disabled -> verifying -> ready, enabled=true');
+check('lifecycle: enable exit', lifeEn.status, 3,
+  'a skipped warm cannot prove readiness: exit 3, not 0');
+check('lifecycle: enable status', lifeEnJson.status, 'skipped', 'the report says skipped, never ok');
+check('lifecycle: enable phase', [stateOf(LIFE).phase, stateOf(LIFE).enabled], ['verifying', true],
+  'disabled -> verifying and it STOPS there; enabled=true, phase never reaches ready unverified');
 check('lifecycle: enable warm skipped', lifeEnJson.warm.status, 'skipped',
   'the warm inside enable is skipped offline');
+check('lifecycle: enable names the stalled phase', lifeEnJson.skipped, [
+  `guidance: gitignore: no ${LIFE}/.gitignore and ${LIFE} is not a git repo - .claude/semble/ not registered`,
+  'warm: SEMBLE_NO_NETWORK=1',
+  'state: phase left at verifying — no successful warm, so readiness is unproven',
+], 'the skip list relays guidance verbatim, then carries the warm cause and its consequence');
 
 // remove integration
 const claudeJsonLifeBefore = sha(join(HOME, '.claude.json'));
@@ -616,6 +757,33 @@ check('lifecycle: MCP config untouched', sha(join(HOME, '.claude.json')), claude
 check('lifecycle: no claude mcp remove was called',
   claudeCalls().filter((l) => l.startsWith('mcp remove')).length, 0,
   'integration never runs `claude mcp remove`');
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 6a. enable relays what guidance reported (SS08 half two)
+// The conflict scan preserves a conditional fallback line and reports it for
+// review. enable used to run guidance with >/dev/null 2>&1, so that report —
+// and every CLAUDE.md line guidance did cut — never reached the user.
+// ═══════════════════════════════════════════════════════════════════════════
+const REL = join(BASE, 'repo-relay');
+write(join(REL, 'src/main.py'), `def main():\n    return 1\n# ${PAD}\n`);
+write(join(REL, 'CLAUDE.md'),
+  '# CLAUDE.md\n\n## Search\n\n'
+  + 'When the semble MCP is offline or the index is cold, use rg for all code search.\n'
+  + 'Use grep for all code search.\n');
+const relEnv = { SEMBLE_PROJECT_ROOT: REL };
+seedState(relEnv, 'verifying');
+const rel = safeParse(run(PROJECT_SH, ['enable', '--yes', '--json'], relEnv).stdout);
+check('relay: the preserved conflict is named', rel.skipped.filter((l) => l.startsWith('guidance: CLAUDE.md: L5')),
+  ['guidance: CLAUDE.md: L5 mentions a search tool but is not an unambiguous contradiction'
+   + ' - left untouched, review by hand: When the semble MCP is offline or the index is cold,'
+   + ' use rg for all code search.'],
+  'the conditional fallback guidance kept is reported through enable, verbatim and by line number');
+check('relay: the cut line is named', rel.changed.filter((l) => /^guidance: CLAUDE\.md: removed L6/.test(l)),
+  ['guidance: CLAUDE.md: removed L6: Use grep for all code search.'],
+  'and so is every line guidance actually removed');
+check('relay: the CLAUDE.md prose', readFileSync(join(REL, 'CLAUDE.md'), 'utf8')
+  .includes('When the semble MCP is offline or the index is cold'), true,
+  'the preserved line is still in the file — enable relays, it does not re-decide');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 6b. preconditions, dry run, cli flavour

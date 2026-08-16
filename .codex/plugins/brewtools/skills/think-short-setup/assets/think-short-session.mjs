@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=5.7.0 content_version=5.6.0 generated_by=brewtools:think-short-setup
+// brewcode-meta: version=6.0.0 content_version=6.0.0 generated_by=brewtools:think-short-setup
 /**
  * think-short — SessionStart hook (self-contained, no plugin-root deps).
  *
@@ -8,10 +8,15 @@
  *   counter restarts each session).
  * - Prunes stale counter markers left by prior sessions (older than ~1 day) so
  *   the tmp marker dir stays self-cleaning.
+ * - Marker dir is private (0700, owned by us) and every entry is lstat-checked,
+ *   so a pre-planted symlink is rejected/unlinked, never written through.
  *
  * Fail-open: never throws, always exits 0. On any error -> emits `{}` (no-op).
  */
-import { readFile, mkdir, writeFile, readdir, stat, unlink } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
+import {
+  chmodSync, lstatSync, mkdirSync, readdirSync, renameSync, rmSync, writeFileSync,
+} from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -19,7 +24,10 @@ import { fileURLToPath } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PROMPT_PATH = path.join(HERE, 'think-short-prompt.md');
 const MARKER_DIR = path.join(os.tmpdir(), 'brewtools-think-short');
+const UID = typeof process.getuid === 'function' ? process.getuid() : null;
 const STALE_MS = 24 * 60 * 60 * 1000; // ~1 day
+
+let markerDirOk;
 
 async function readStdin() {
   const chunks = [];
@@ -37,25 +45,71 @@ function output(obj) {
   process.stdout.write(JSON.stringify(obj));
 }
 
-async function resetCounter(session_id) {
-  if (!session_id || typeof session_id !== 'string') return;
+/**
+ * os.tmpdir() is world-writable, so the root can be pre-created by another user as
+ * a symlink. Accept it only as a real directory we own with no group/world write.
+ */
+function ensureMarkerDir() {
+  if (markerDirOk !== undefined) return markerDirOk;
+  markerDirOk = false;
   try {
-    await mkdir(MARKER_DIR, { recursive: true });
-    const markerPath = path.join(MARKER_DIR, `${session_id}.think-short-counter`);
-    await writeFile(markerPath, '0', 'utf8');
+    mkdirSync(MARKER_DIR, { recursive: true, mode: 0o700 });
   } catch {
-    // ignore — counter just won't reset; not fatal
+    // may already exist; validated below either way
   }
+  try {
+    let st = lstatSync(MARKER_DIR);
+    if (!st.isDirectory() || (UID !== null && st.uid !== UID)) return markerDirOk;
+    if ((st.mode & 0o077) !== 0) {
+      chmodSync(MARKER_DIR, 0o700);
+      st = lstatSync(MARKER_DIR);
+    }
+    markerDirOk = (st.mode & 0o077) === 0;
+  } catch {
+    markerDirOk = false;
+  }
+  return markerDirOk;
+}
+
+/** Counter path for a session id, or null when the id cannot name a plain file. */
+function markerPathFor(session_id) {
+  if (!session_id || typeof session_id !== 'string') return null;
+  if (!/^[A-Za-z0-9._-]{1,128}$/.test(session_id) || session_id === '.' || session_id === '..') return null;
+  return path.join(MARKER_DIR, `${session_id}.think-short-counter`);
+}
+
+/** tmp + rename: concurrent sessions cannot interleave, and rename never follows a link. */
+function writeAtomic(file, data) {
+  const tmp = `${file}.${process.pid}.tmp`;
+  try {
+    writeFileSync(tmp, data, { mode: 0o600 });
+    renameSync(tmp, file);
+    return true;
+  } catch {
+    try {
+      rmSync(tmp, { force: true });
+    } catch {
+      // ignore
+    }
+    return false;
+  }
+}
+
+function resetCounter(session_id) {
+  const markerPath = markerPathFor(session_id);
+  if (!markerPath || !ensureMarkerDir()) return; // counter just won't reset; not fatal
+  writeAtomic(markerPath, '0');
 }
 
 // Best-effort: delete counter markers from prior sessions older than ~1 day.
 // Never throws; the active session's marker (just reset above) is fresh and so
 // is never old enough to be pruned.
-async function pruneStaleMarkers() {
+function pruneStaleMarkers() {
+  if (!ensureMarkerDir()) return;
   const cutoff = Date.now() - STALE_MS;
   let names;
   try {
-    names = await readdir(MARKER_DIR);
+    names = readdirSync(MARKER_DIR);
   } catch {
     return; // dir absent / unreadable -> nothing to prune
   }
@@ -63,8 +117,10 @@ async function pruneStaleMarkers() {
     if (!name.endsWith('.think-short-counter')) continue;
     const p = path.join(MARKER_DIR, name);
     try {
-      const st = await stat(p);
-      if (st.mtimeMs < cutoff) await unlink(p);
+      const st = lstatSync(p); // lstat, never stat: a planted symlink is unlinked, never followed
+      if (st.mtimeMs >= cutoff) continue;
+      if (!st.isSymbolicLink() && (!st.isFile() || (UID !== null && st.uid !== UID))) continue;
+      rmSync(p, { force: true });
     } catch {
       // ignore individual file errors
     }
@@ -76,8 +132,8 @@ async function main() {
     const input = await readStdin();
     const session_id = input.session_id;
 
-    await resetCounter(session_id);
-    await pruneStaleMarkers();
+    resetCounter(session_id);
+    pruneStaleMarkers();
 
     let promptText = '';
     try {

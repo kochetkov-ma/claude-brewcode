@@ -37,6 +37,20 @@ delete_lines() {
   chmod 600 "$ZSHRC"
 }
 
+# Insert a line immediately before the section end marker. Pure bash on purpose: `awk -v`
+# runs escape processing over the assigned value, which eats the backslash in '\'' quoting
+# and silently corrupts any key containing a single quote. It also keeps the value out of argv.
+insert_before_end() {
+  local line="$1" tmp l
+  tmp=$(mktemp)
+  while IFS= read -r l || [[ -n "$l" ]]; do
+    [[ "$l" == "$SECTION_END" ]] && printf '%s\n' "$line"
+    printf '%s\n' "$l"
+  done < "$ZSHRC" > "$tmp"
+  mv "$tmp" "$ZSHRC"
+  chmod 600 "$ZSHRC"
+}
+
 # Check if section exists
 section_exists() {
   [[ -f "$ZSHRC" ]] && grep -q "$SECTION_START" "$ZSHRC" 2>/dev/null
@@ -73,17 +87,16 @@ case "$ACTION" in
       exit 1
     fi
     backup_zshrc
-    EXPORT_LINE="export ${VAR}=\"${VALUE}\""
+    # Single quotes with each `'` rewritten as '\'' — double quotes would expand a `$` or
+    # backtick inside the key on every future shell start. The value goes to sed on stdin,
+    # so it never lands in argv. (Quoted ${v//p/r} is not portable to bash 3.2.)
+    ESCAPED=$(printf '%s' "$VALUE" | sed "s/'/'\\\\''/g")
+    EXPORT_LINE="export ${VAR}='${ESCAPED}'"
     # Check if key already exists in section
     if grep -q "^export ${VAR}=" "$ZSHRC" 2>/dev/null; then
       delete_lines "^export ${VAR}="
     fi
-    # Add before end marker using awk (safer than sed for values with special chars)
-    TMPFILE=$(mktemp)
-    awk -v line="$EXPORT_LINE" -v marker="$SECTION_END" '{
-      if ($0 == marker) print line;
-      print;
-    }' "$ZSHRC" > "$TMPFILE" && mv "$TMPFILE" "$ZSHRC"
+    insert_before_end "$EXPORT_LINE"
     echo "OK set-key"
     ;;
 
@@ -103,12 +116,7 @@ case "$ACTION" in
     if grep -q "^alias ${NAME}=" "$ZSHRC" 2>/dev/null; then
       delete_lines "^alias ${NAME}="
     fi
-    # Add before end marker using awk (safer than sed for complex strings)
-    TMPFILE=$(mktemp)
-    awk -v line="$ALIAS_LINE" -v marker="$SECTION_END" '{
-      if ($0 == marker) print line;
-      print;
-    }' "$ZSHRC" > "$TMPFILE" && mv "$TMPFILE" "$ZSHRC"
+    insert_before_end "$ALIAS_LINE"
     echo "OK set-alias"
     ;;
 

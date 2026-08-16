@@ -21,7 +21,7 @@ import {
   mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, copyFileSync,
   readdirSync, realpathSync, statSync, chmodSync, appendFileSync, symlinkSync,
 } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -92,11 +92,17 @@ function check(name, actual, expected, message) {
 // Unparseable stdin makes a hook fall back to process.cwd(); running from the
 // repo root let the developer machine's own .claude/semble/state.json decide the
 // answer. cwd is pinned to a state-less temp dir so the fixture is the only input.
-function runNode(script, stdinStr, cwd = BASE) {
+// A real hook always inherits CLAUDE_PROJECT_DIR and it now outranks the walk,
+// so the suite must NOT inherit it: on a developer machine it would point every
+// root lookup at this repo and answer for the fixture. Section SS01 sets it
+// explicitly in the one case where its precedence is what is under test.
+function runNode(script, stdinStr, cwd = BASE, extraEnv = {}) {
+  const env = { ...process.env, ...extraEnv };
+  if (!Object.prototype.hasOwnProperty.call(extraEnv, 'CLAUDE_PROJECT_DIR')) delete env.CLAUDE_PROJECT_DIR;
   const r = spawnSync(process.execPath, [script], {
     input: stdinStr,
     encoding: 'utf8',
-    env: { ...process.env },
+    env,
     cwd,
     timeout: 15000,
   });
@@ -1284,13 +1290,17 @@ function prefetch(proj, prompt, opts) {
   const payload = {
     session_id: 'S1', cwd: proj, hook_event_name: 'UserPromptSubmit', prompt, ...(o.extra || {}),
   };
+  // Same scrub as runNode(): an inherited CLAUDE_PROJECT_DIR outranks the walk
+  // and would answer every root lookup with the developer's own repo.
+  const env = { ...process.env };
+  delete env.CLAUDE_PROJECT_DIR;
   const r = spawnSync(process.execPath, [PREFETCH_SRC], {
     input: Object.prototype.hasOwnProperty.call(o, 'stdin') ? o.stdin : JSON.stringify(payload),
     encoding: 'utf8',
     cwd: BASE,
     timeout: 20000,
     env: {
-      ...process.env,
+      ...env,
       PATH: Object.prototype.hasOwnProperty.call(o, 'path') ? o.path : `${STUB_BIN}:${process.env.PATH}`,
       SEMBLE_STUB_LOG: log,
       SEMBLE_STUB_ENVLOG: envLog,
@@ -3169,6 +3179,116 @@ function contentVersionFor(dir, file, kind, newVersion) {
   writeFileSync(join(dir, 'rule.md'), body.replace('unchanged text', 'different text'));
   check('Q5.fmChangedBumpsToNew', contentVersionFor(dir, 'rule.md', 'fm', '2.0.0'), '2.0.0',
     'the fm branch bumps content_version to the new release 2.0.0 when the frontmatter-stripped body changed');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SS01 — canonical project root (D1 ruling Q5)
+//
+// `input.cwd` is the cwd at invocation time and drifts mid-session
+// (docs/hooks.md:717, CwdChanged). Every hook used to read it as the project
+// root, so from a nested package the state lookup pointed at a directory with
+// no .claude/semble and all three gated hooks fell silent — no error, no
+// telemetry, just nothing. Resolution order under test:
+// CLAUDE_PROJECT_DIR -> the hook file's own installed location -> upward walk
+// for a root marker -> the hook cwd.
+// ═══════════════════════════════════════════════════════════════════════════
+const deepDir = (p, ...parts) => { const d = join(p, ...parts); mkdirSync(d, { recursive: true }); return d; };
+const SESSION_OK = (p) => ({
+  systemMessage: 'semble: ready | cache abcdef01',
+  hookSpecificOutput: {
+    hookEventName: 'SessionStart',
+    additionalContext:
+      'semble: use ONE mcp__semble_code__search first (repo=' + p +
+      ', top_k=5, max_snippet_lines=10), then open the hit at start_line. rg stays for exact/exhaustive matching.',
+  },
+});
+
+// SS01.1 — the walk: three hooks, one nested cwd, three unchanged answers.
+{
+  const p = freshProject({ state: READY_STATE() });
+  const deep = deepDir(p, 'packages', 'app', 'src');
+  check('SS01.1session', safeParse(session(p, { cwd: deep }).stdout), SESSION_OK(p),
+    'SessionStart from a nested package walks up to the root and emits the root brief, not silence');
+  check('SS01.1subagent', safeParse(subagent(p, 'Explore', { cwd: deep }).stdout), SUB_OK(p),
+    'SubagentStart reads completed:["mcp"] from the root state even when the spawn cwd is a nested package');
+  check('SS01.1reminder', remindOut(p, 'rg "retry backoff policy"', { cwd: deep }), REMIND_OK(p),
+    'PreToolUse nudges with repo= the root, so the injected search is runnable from a nested cwd');
+}
+
+// SS01.2 — the walk stops at the FIRST marker: a nested package with its own
+// .claude is its own root for a hook invoked from source, which is exactly why
+// the installed copy needs SS01.3.
+{
+  const p = freshProject({ state: READY_STATE() });
+  const pkg = deepDir(p, 'packages', 'web');
+  mkdirSync(join(pkg, '.claude', 'semble'), { recursive: true });
+  writeFileSync(join(pkg, '.claude', 'semble', 'state.json'), READY_STATE());
+  check('SS01.2firstMarker', safeParse(session(p, { cwd: pkg }).stdout), SESSION_OK(pkg),
+    'the upward walk returns the nearest .claude - a nested package holding one is treated as its own root');
+}
+
+// SS01.3 — self-location beats the walk: the installer wires the hook at
+// <root>/.claude/hooks/<name>.mjs by absolute path, so the file's own location
+// IS the root, and it wins over a nested package that carries its own .claude.
+{
+  const p = freshProject({ state: READY_STATE() });
+  const pkg = deepDir(p, 'packages', 'web');
+  mkdirSync(join(pkg, '.claude', 'semble'), { recursive: true });
+  writeFileSync(join(pkg, '.claude', 'semble', 'state.json'), READY_STATE());
+  const installed = join(p, '.claude', 'hooks', 'semble-session.mjs');
+  mkdirSync(dirname(installed), { recursive: true });
+  copyFileSync(SESSION_SRC, installed);
+  const out = safeParse(runNode(installed, JSON.stringify({
+    session_id: 'S1', cwd: pkg, hook_event_name: 'SessionStart', source: 'startup',
+  })).stdout);
+  check('SS01.3selfRoot', out, SESSION_OK(p),
+    'the copy installed at <root>/.claude/hooks answers for the root even though the invoking package has its own .claude');
+}
+
+// SS01.4 — CLAUDE_PROJECT_DIR outranks everything: it is the value Claude Code
+// exports to every hook child process (docs/hooks.md:487) and it does not drift.
+{
+  const p = freshProject({ state: READY_STATE() });
+  const other = freshProject({ state: READY_STATE() });
+  check('SS01.4envWins', safeParse(session(other).stdout), SESSION_OK(other),
+    'without the env var the hook answers for the cwd project');
+  check('SS01.4envSet', safeParse(runNode(SESSION_SRC, JSON.stringify({
+    session_id: 'S1', cwd: other, hook_event_name: 'SessionStart', source: 'startup',
+  }), BASE, { CLAUDE_PROJECT_DIR: p }).stdout), SESSION_OK(p),
+    'with CLAUDE_PROJECT_DIR set it answers for that root and ignores a foreign cwd entirely');
+  check('SS01.4envMissingDir', safeParse(runNode(SESSION_SRC, JSON.stringify({
+    session_id: 'S1', cwd: other, hook_event_name: 'SessionStart', source: 'startup',
+  }), BASE, { CLAUDE_PROJECT_DIR: join(BASE, 'no-such-root') }).stdout), SESSION_OK(other),
+    'a CLAUDE_PROJECT_DIR pointing at a missing directory is ignored, not obeyed - the walk still answers');
+}
+
+// SS01.5 — the shell half: sc_project_root() was ${SEMBLE_PROJECT_ROOT:-$PWD},
+// so every script run from a subdirectory installed into that subdirectory.
+{
+  const p = freshProject({ state: READY_STATE() });
+  const deep = deepDir(p, 'packages', 'app', 'src');
+  const shRoot = (cwd, extra, fn) => {
+    const env = { ...process.env, ...(extra || {}) };
+    for (const k of ['SEMBLE_PROJECT_ROOT', 'CLAUDE_PROJECT_DIR']) {
+      if (!Object.prototype.hasOwnProperty.call(extra || {}, k)) delete env[k];
+    }
+    const r = spawnSync('bash', ['-c', `. "${LIB_COPY}"; ${fn || 'sc_project_root'}`], {
+      cwd, env, encoding: 'utf8', timeout: 15000,
+    });
+    return [(r.stdout || '').trim(), r.status];
+  };
+  check('SS01.5walk', shRoot(deep), [p, 0],
+    'sc_project_root from a nested subdirectory walks up to the marker instead of returning $PWD');
+  check('SS01.5override', shRoot(deep, { SEMBLE_PROJECT_ROOT: p }), [p, 0],
+    'SEMBLE_PROJECT_ROOT stays the top of the order - every existing suite pins the fixture with it');
+  check('SS01.5env', shRoot(deep, { CLAUDE_PROJECT_DIR: p }), [p, 0],
+    'CLAUDE_PROJECT_DIR is honoured when SEMBLE_PROJECT_ROOT is unset');
+  check('SS01.5badOverride', shRoot(deep, { SEMBLE_PROJECT_ROOT: join(BASE, 'no-such-root') }), [p, 0],
+    'an override naming a missing directory falls through to the walk rather than installing into nothing');
+  check('SS01.5candidateRc', shRoot(BASE, {}, 'sc_root_candidate'), [BASE, 1],
+    'sc_root_candidate signals "no marker found" with rc 1 while still printing $PWD, so a caller can refuse');
+  check('SS01.5rootTotal', shRoot(BASE), [BASE, 0],
+    'sc_project_root itself stays total: an errexit caller in "$(sc_project_root)" must never abort');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

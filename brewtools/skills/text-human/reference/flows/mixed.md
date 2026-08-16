@@ -10,8 +10,22 @@ Single file -> do NOT use mixed; pick the file's own flow and process directly.
 ## Phase 1 -- scope analysis
 
 ### Commit mode
-Process all text files from the commit. No extension filtering at listing time:
+**Commit mode is CURRENT-WORKTREE mode.** The hash selects file NAMES only; every edit lands on
+today's content at that path, not on the historical blob. State it in the `PLAN` block's SCOPE so
+the user reads it before the first edit. Read-only historical output is not offered here -- to
+inspect the old content, use `git show <hash>:<path>` by hand.
+
+List the names, no extension filtering at listing time:
 `git diff --name-only <hash>^..<hash>`
+
+Then, over exactly those paths, before ANY agent is spawned:
+`git status --porcelain -- <path>...`
+
+Non-empty output = the selected paths carry uncommitted work that "use git to revert" cannot
+recover. ONE `AskUserQuestion` listing every dirty path: proceed on them / skip them and process
+only the clean ones / abort. Never edit a dirty path without that explicit answer. A path that has
+changed since `<hash>` but is committed is fine -- it is still not the content the hash names, which
+is why the current-worktree semantic is announced up front.
 
 ### File inclusion
 | Include | Exclude |

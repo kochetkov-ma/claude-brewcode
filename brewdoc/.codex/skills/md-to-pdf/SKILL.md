@@ -11,7 +11,7 @@ Convert a local Markdown file with `scripts/md_to_pdf.py`. Check dependencies wi
 
 Follow every phase below. When a phase delegates work, use Codex collaboration with only `task_name` and `message`; treat each "Codex delegation brief" block as role and message content, not executable syntax. Use `request_user_input` for the documented user gates. Resolve `<skill-directory>`, `<plugin-root>`, `<project-root>`, and `<arguments>` before running commands.
 
-<!-- brewcode-meta: version=5.7.0 content_version=5.6.0 generated_by=brewdoc:md-to-pdf -->
+<!-- brewcode-meta: version=6.0.0 content_version=6.0.0 generated_by=brewdoc:md-to-pdf -->
 
 # MD to PDF
 
@@ -129,7 +129,7 @@ The four provenance keys are mandatory on every write of this file and are RESOL
 
 **EXECUTE** using shell (replace `ENGINE_VALUE` and `THEME_VALUE` with the chosen values):
 ```bash
-ROOT="${<project-root>:-$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")}"
+ROOT="${CODEX_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")}"
 PJ="<skill-directory>/../../.codex-plugin/plugin.json"
 PV=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1])).get('version',''))" "$PJ" 2>/dev/null || true)
 [ -n "$PV" ] || { echo "❌ cannot read version from $PJ -- reinstall brewdoc"; exit 1; }
@@ -170,7 +170,7 @@ Usage:
   $brewdoc:md-to-pdf help                            Show this help
 
 Engines:
-  reportlab    -- Pure Python, fast, no system deps (python3 -m pip install reportlab==4.4.10)
+  reportlab    -- Pure Python, fast, no system deps (check_deps.sh install reportlab)
   weasyprint   -- HTML/CSS pipeline, best quality (pip + brew deps)
 ```
 
@@ -184,7 +184,7 @@ EXIT after printing.
 
 **EXECUTE** using shell:
 ```bash
-python3 "<skill-directory>/scripts/md_to_pdf.py" "INPUT_PATH" "OUTPUT_PATH" --engine ENGINE --quiet 2>&1 && echo "---CONVERT_OK---" || echo "---CONVERT_FAILED---"
+python3 "<skill-directory>/scripts/md_to_pdf.py" "INPUT_PATH" "OUTPUT_PATH" --engine ENGINE 2>&1 && echo "---CONVERT_OK---" || echo "---CONVERT_FAILED---"
 ```
 Replace `INPUT_PATH`, `OUTPUT_PATH`, `ENGINE` with actual values. Add `--config CONFIG_PATH` if a style config JSON exists. Add `--pygments-theme THEME` for weasyprint if configured.
 
@@ -196,16 +196,29 @@ Replace `INPUT_PATH`, `OUTPUT_PATH`, `ENGINE` with actual values. Add `--config 
 
 1. Read the input MD file with filesystem reader.
 2. Apply LLM transformations per the `custom_prompt` instructions (delete sections, rewrite headings, restructure, etc.).
-3. Write modified content to temp file: `{original_dir}/.tmp_{original_name}.md`
-4. Run the converter on the temp file (same command as CONVERT mode, using temp file as input, original name for output).
-5. Delete the temp file.
+3. Write the transformed markdown, convert it and clean up in ONE Bash invocation. The temp name comes from
+   `mktemp` -- never composed from the source name -- and cleanup is trapped and constrained to a `.tmp_*`
+   basename, so a mis-substitution cannot name the source file.
 
-**EXECUTE** using shell:
+**EXECUTE** using shell (replace `ORIGINAL_DIR`, `TRANSFORMED_MARKDOWN`, `OUTPUT_PATH`, `ENGINE`; keep every other byte):
 ```bash
-rm -f "TEMP_FILE_PATH"
+set -euo pipefail
+SRC_DIR="ORIGINAL_DIR"
+TMP="$(mktemp "$SRC_DIR/.tmp_XXXXXX")"
+trap 'case "${TMP##*/}" in .tmp_??????) rm -f "$TMP" ;; esac' EXIT
+cat > "$TMP" <<'BREWDOC_MD_EOF'
+TRANSFORMED_MARKDOWN
+BREWDOC_MD_EOF
+python3 "<skill-directory>/scripts/md_to_pdf.py" "$TMP" "OUTPUT_PATH" --engine ENGINE 2>&1 && echo "---CONVERT_OK---" || echo "---CONVERT_FAILED---"
 ```
+`OUTPUT_PATH` is the ORIGINAL name with a `.pdf` extension. Add `--config` / `--pygments-theme` exactly as in CONVERT mode.
 
-6. Proceed to Step 4 with `preprocessing: true`.
+> Never write the transformed markdown with `Write`/`Edit` and never reuse a fixed `.tmp_<name>.md` path -- a
+> predictable name overwrites user files and collides with a concurrent conversion of the same source.
+
+> **STOP if CONVERT_FAILED** -- read error output, attempt fix, retry once. If still failing -- report error.
+
+4. Parse the structured result lines, then proceed to Step 4 with `preprocessing: true`.
 
 ### STYLES Mode
 
@@ -227,7 +240,7 @@ Build JSON config matching `styles/default.json` structure, overriding changed v
 
 **EXECUTE** using shell (replace `STYLE_JSON_PATH` with the temp file you wrote):
 ```bash
-ROOT="${<project-root>:-$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")}"
+ROOT="${CODEX_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")}"
 CFG="$ROOT/.codex/md-to-pdf.config.json"
 NEW="STYLE_JSON_PATH"
 PJ="<skill-directory>/../../.codex-plugin/plugin.json"

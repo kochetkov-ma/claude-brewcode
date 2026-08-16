@@ -1,4 +1,4 @@
-<!-- think-short brewcode-meta: version=5.7.0 content_version=5.6.0 generated_by=brewtools:think-short-setup -->
+<!-- think-short brewcode-meta: version=6.0.0 content_version=5.6.0 generated_by=brewtools:think-short-setup -->
 Be terse. Results first, no preamble/filler/sycophancy. ASCII only.
 Think short: minimal internal reasoning, no exploring aloud.
 Grep before Read. Edit over Write. Parallel calls in one message.

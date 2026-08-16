@@ -5,7 +5,7 @@
 | Source Group | Paths | Explore Agent Focus |
 |---|---|---|
 | Global config | `~/.claude/CLAUDE.md`, `~/.claude/rules/*.md`, `~/.claude/agents/*.md`, `~/.claude/skills/` | Count components, extract key rules |
-| Project config | `{cwd}/CLAUDE.md`, `{cwd}/.claude/rules/*.md`, `{cwd}/.claude/agents/*.md` | Project-specific instructions |
+| Project config | `${CLAUDE_PROJECT_DIR}/CLAUDE.md`, `${CLAUDE_PROJECT_DIR}/.claude/rules/*.md`, `${CLAUDE_PROJECT_DIR}/.claude/agents/*.md` | Project-specific instructions |
 | Memory | `~/.claude/projects/**/memory/MEMORY.md`, `~/.claude/projects/**/memory/*.md` | Active memories, topic files |
 
 ## Parallel Agent Split
@@ -40,7 +40,7 @@ Spawn 3 Explore agents in ONE message:
 |-------|---------|---------|
 
 ## Project Configuration
-**File:** `{cwd}/CLAUDE.md`
+**File:** `${CLAUDE_PROJECT_DIR}/CLAUDE.md`
 {project-specific instructions summary}
 
 ### Project Rules ({N} files)

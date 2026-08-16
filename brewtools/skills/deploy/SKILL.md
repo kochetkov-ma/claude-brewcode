@@ -62,12 +62,25 @@ Labels are literal; values follow the conversation language.
 | AUQ per phase | max 3 |
 | update-agent mode WFs per run | max 5 |
 
-### Timeouts
-| Op | Timeout | On timeout |
-|----|---------|------------|
-| GH CLI cmds | `timeout 30 gh ...` | report "gh timed out", stop |
-| `gh run watch` | `timeout 300 gh run watch ...` | switch to polling |
+### Timeouts — always via `ght`, never bare `timeout`
+
+GNU `timeout` is Homebrew-only on macOS, this skill's primary local platform. `timeout 30 gh ...`
+on a stock Mac exits **127 before gh ever runs**, which used to be reported as "API unavailable" or
+`FAILED trigger` for a dispatch that was never attempted. Every bounded call therefore sources the
+helper first — it enforces the bound with `timeout`, `gtimeout` or a built-in bash watchdog:
+
+```bash
+. "${CLAUDE_SKILL_DIR}/scripts/lib/deploy-common.sh"   # provides ght, ght_backend, ght_reason
+```
+
+| Op | Bound | On non-zero |
+|----|-------|-------------|
+| GH CLI cmds | `ght 30 gh ...` | classify with `ght_reason $?`: `timeout` / `no_tool` / `failed` — never one sentinel for all three |
+| `gh run watch` | `ght 900 gh run watch <id> --exit-status` | report the run URL + the last failing job |
 | Entire invocation | max 15 GH calls total | stop, report progress, suggest manual |
+
+> `ght_reason 127` = `no_tool` means **gh itself is missing** — say that, !=report a GitHub outage.
+> `ght_backend` prints which watchdog is in use; include it when a bound is what failed.
 
 ### Fallback Strategy
 1. Report exact error: script name, exit code, stderr
@@ -108,7 +121,30 @@ Every spawn prompt MUST carry:
 | CONSUMER | who or what uses the result next, and the shape it must fit |
 | DONE | acceptance criteria + the exact report shape you want back |
 
-A bare one-line task is never enough. Safety gates are NOT delegable: confirmation gates (P4 Step 5, P5 Step 4) stay in this skill, in the main conversation.
+A bare one-line task is never enough.
+
+**Safety gates are NOT delegable.** `AskUserQuestion` is REMOVED from every subagent at runtime —
+a spawned agent cannot confirm anything, even if its `tools:` lists it. So confirmation gates (P4
+Step 3, P5 Step 4) stay in THIS skill, in the main conversation, and a delegated agent that reaches
+a destructive step does NOT execute it. Instead it finishes all non-destructive work and ends its
+final return with:
+
+```markdown
+## APPROVAL REQUIRED
+### A1
+COMMAND:      <exact command, one line>
+HOST:         <local | user@host>
+EFFECT:       <what changes, irreversibly or remotely>
+ROLLBACK:     <exact reverse command, or NONE>
+EVIDENCE:     <why this is the right command — file:line / run URL / probe output>
+PRECONDITION: <what must still hold at execution time>
+```
+
+One envelope per destructive operation, executing none of them. This skill shows the envelopes to
+the user, and re-spawns with `APPROVED: A1 A3` in the prompt. **An explicit approval token in the
+incoming prompt is the only authorization a subagent may act on.** Destructive = irreversible or
+touching a remote/shared system: force-push, tag delete, deploy/rollback, service restart,
+`docker system prune`, remote `ssh` mutations, secret rotation.
 
 ---
 
@@ -306,47 +342,92 @@ git log --oneline $(git describe --tags --abbrev=0 2>/dev/null || echo "HEAD~10"
 ```
 Suggest semver bump (patch/minor/major) based on commits.
 
-### Step 2: Bump Version
+### Step 2: Build the Release PLAN — NO WRITES YET
 
-| BUMP_SCRIPT (Step 0) | Action |
-|----------------------|--------|
-| found | `bash <BUMP_SCRIPT> X.Y.Z && echo "OK bump" \|\| echo "FAILED bump"` |
-| `none`, version files obvious | Edit every version file the repo has (`package.json`, `pyproject.toml`, `gradle.properties`, `*/plugin.json`, `Cargo.toml`, ...) to the SAME X.Y.Z |
-| `none`, unclear | AUQ: "No bump script found. Which files carry the version?" |
+Nothing is edited before the gate. "Cancel" must leave the tree byte-identical to how it was found.
 
-> Never invent a script path. `bash .claude/scripts/bump-version.sh` exists in SOME repos, not this one by default.
+EXEC:
+```bash
+git status --porcelain; echo "--- local tags ---"; git tag --list 'v*' | tail -5; echo "--- unpushed ---"; git log --oneline @{u}..HEAD 2>/dev/null | head -10
+```
 
-### Step 3: Auto-generate Changelog
-Analyze commits since last tag. Group by type (Added/Changed/Fixed).
+Record, WITHOUT writing anything:
 
-### Step 4: Update Changelog
-Write to CHANGELOG from Step 0, matching the heading style already in that file. If CHANGELOG
-is `none` — skip this step, put the summary in the tag/release body instead.
+| Plan field | Content |
+|------------|---------|
+| VERSION | the exact `X.Y.Z` |
+| TAG | `vX.Y.Z` — MUST NOT already exist locally or on the remote |
+| OWNED_PATHS | the exact list of files THIS release will change (version files + changelog). Nothing else is ever staged |
+| PRE_EXISTING_DIRTY | files already modified before this run — they stay unstaged and unpushed |
+| PRE_EXISTING_TAGS | local tags not on the remote — they stay unpushed |
+| CHANGELOG_PREVIEW | the section text generated from `git log` since the last tag, grouped Added/Changed/Fixed |
 
-Fallback shape when the file is new/empty:
+Changelog preview shape when the file is new/empty (otherwise match the file's existing headings):
 ```markdown
 ## vX.Y.Z (YYYY-MM-DD)
 #### Added / Changed / Fixed
 - **category:** description
 ```
 
-### Step 5: Confirmation Gate
-AUQ: "Ready to release vX.Y.Z:\n\n[changelog preview]\n\nThis will:\n1. Commit version bump + changelog\n2. Create tag vX.Y.Z\n3. Push to remote (triggers CI)\n4. [POST_SCRIPT from Step 0, or 'no post-release script']\n\nProceed?"
-Options: "Yes, release" | "Edit changelog first" | "Cancel"
+> A dirty tree is NOT a blocker — it is a reason the plan must name OWNED_PATHS explicitly.
+> `git add -A` is banned in this skill: it publishes whatever the user happened to be editing.
 
-### Step 6: Commit + Tag + Push
+### Step 3: Confirmation Gate (BEFORE the first write)
+AUQ: "Ready to release vX.Y.Z:\n\n[CHANGELOG_PREVIEW]\n\nWill WRITE: [OWNED_PATHS]\nWill NOT touch: [PRE_EXISTING_DIRTY]\nWill push: HEAD + refs/tags/vX.Y.Z only (not [PRE_EXISTING_TAGS])\nThen: [POST_SCRIPT from Step 0, or 'no post-release script']\n\nProceed?"
+Options: "Yes, release" | "Change version/scope" | "Cancel"
+
+> **Cancel here costs nothing** — no file has been touched yet. Everything below runs only after "Yes".
+
+### Step 4: Bump Version (first write)
+
+| BUMP_SCRIPT (Step 0) | Action |
+|----------------------|--------|
+| found | `bash <BUMP_SCRIPT> X.Y.Z && echo "OK bump" \|\| echo "FAILED bump"` |
+| `none`, version files obvious | Edit every version file the repo has (`package.json`, `pyproject.toml`, `gradle.properties`, `*/plugin.json`, `Cargo.toml`, ...) to the SAME X.Y.Z |
+| `none`, unclear | Back to Step 2 — an unknown file set cannot be approved. AUQ: "Which files carry the version?" then re-run the gate |
+
+> Never invent a script path. `bash .claude/scripts/bump-version.sh` exists in SOME repos, not this one by default.
+> Every file written here MUST already be in OWNED_PATHS. A write outside that list voids the approval — stop and re-gate.
+
+### Step 5: Update Changelog
+Write to CHANGELOG from Step 0, matching the heading style already in that file. If CHANGELOG
+is `none` — skip this step, put the summary in the tag/release body instead.
+
+### Step 6: Release Transaction (ONE chain, stop-on-error)
+
+One `&&` chain: a failure stops it instead of leaving a half-published release. `|| echo "FAILED"`
+is banned here — it masks a non-zero exit and reports success to the caller.
+
 EXEC:
 ```bash
-git add -A && git commit -m "vX.Y.Z: <summary>" && echo "OK commit" || echo "FAILED commit"
+set -euo pipefail
+VER="X.Y.Z"                      # from the approved plan
+PATHS=(package.json CHANGELOG.md)  # EXACTLY the approved OWNED_PATHS, nothing else
+git rev-parse -q --verify "refs/tags/v${VER}" >/dev/null && { echo "ABORT: tag v${VER} already exists"; exit 1; }
+BEFORE=$(git tag --list | wc -l | tr -d ' ')
+git add -- "${PATHS[@]}" \
+  && git commit -m "v${VER}: <summary>" \
+  && git tag "v${VER}" \
+  && [ "$(git tag --list | wc -l | tr -d ' ')" -eq "$((BEFORE + 1))" ] \
+  && git push origin HEAD \
+  && git push origin "refs/tags/v${VER}"
+echo "RELEASED v${VER}"
 ```
-EXEC:
-```bash
-git tag vX.Y.Z && echo "OK tag" || echo "FAILED tag"
-```
-EXEC:
-```bash
-git push && git push --tags && echo "OK push" || echo "FAILED push"
-```
+
+| Banned | Required | Why |
+|--------|----------|-----|
+| `git add -A` | `git add -- <OWNED_PATHS>` | stages unrelated user work |
+| `git push --tags` | `git push origin refs/tags/vX.Y.Z` | publishes every unpushed local tag |
+| `... \|\| echo "FAILED"` | a real non-zero exit | a masked failure reads as success |
+| three separate EXEC blocks | one `&&` chain | a mid-sequence failure leaves partial remote state |
+
+> Non-zero exit → report which link failed and the recovery command (`git reset --soft HEAD~1`,
+> `git tag -d vX.Y.Z`). Both are DELETE-level: propose them, !=run them unasked.
+>
+> Both recover a LOCAL failure only. Once `git push origin refs/tags/vX.Y.Z` has succeeded, deleting
+> or force-moving that tag is irreversible for anyone who already fetched it — their clone keeps the
+> old object and the tag name then means two different commits. The non-destructive escape past that
+> point is always the next patch version.
 
 ### Step 7: Post-Release
 Only if POST_SCRIPT was found in Step 0. Otherwise SKIP and report "no post-release script".
@@ -356,17 +437,26 @@ POST_SCRIPT="<absolute path to the post-release script recorded in Step 0>"
 bash "$POST_SCRIPT" && echo "OK post-release" || echo "FAILED post-release"
 ```
 
-### Step 8: Monitor CI
-EXEC:
+### Step 8: Monitor CI — correlated to THIS release, never `gh run list -L 3`
+
+A bare `gh run list` shows whatever ran most recently. Correlate by the pushed SHA, then watch that
+run to a terminal state. EXEC:
 ```bash
-timeout 60 gh run list -L 3 --json workflowName,status,conclusion,createdAt 2>/dev/null && echo "OK runs" || echo "FAILED runs"
+. "${CLAUDE_SKILL_DIR}/scripts/lib/deploy-common.sh"
+SHA=$(git rev-parse HEAD)
+RUN_ID=$(ght 30 gh run list -L 20 --json databaseId,headSha,workflowName --jq "[.[] | select(.headSha == \"$SHA\")] | .[0].databaseId // empty")
+[ -n "$RUN_ID" ] || { echo "NO_RUN_FOR_SHA=$SHA (CI may not have registered yet — re-check, !=claim success)"; exit 1; }
+echo "RUN_URL=$(ght 30 gh run view "$RUN_ID" --json url --jq .url)"
+ght 900 gh run watch "$RUN_ID" --exit-status
+RC=$?; echo "CI_RESULT=$(ght_reason $RC)"
 ```
-Wait for runs triggered by tag push. Report status.
+`CI_RESULT` other than `ok` → the release is NOT verified. Report the run URL + `gh run view $RUN_ID --log-failed | tail -30`.
 
 ### Step 9: Verify Release
 EXEC:
 ```bash
-gh release view vX.Y.Z --json tagName,name,isDraft,createdAt 2>/dev/null && echo "OK release" || echo "FAILED release"
+. "${CLAUDE_SKILL_DIR}/scripts/lib/deploy-common.sh"
+ght 30 gh release view vX.Y.Z --json tagName,name,isDraft,createdAt 2>/dev/null && echo "OK release" || echo "FAILED release"
 ```
 Then verify whatever THIS project actually publishes — pick what applies, skip the rest:
 
@@ -389,7 +479,8 @@ Read `REF/safety-rules.md`.
 ### Step 2: List Deployable WFs
 EXEC:
 ```bash
-gh workflow list --json name,state,id --jq '.[] | select(.state == "active")' 2>/dev/null && echo "OK list" || echo "FAILED list"
+. "${CLAUDE_SKILL_DIR}/scripts/lib/deploy-common.sh"
+ght 30 gh workflow list --json name,state,id --jq '.[] | select(.state == "active")' 2>/dev/null && echo "OK list" || echo "FAILED list"
 ```
 
 ### Step 3: Select WF
@@ -399,51 +490,77 @@ If multiple: AUQ to select. If $ARGUMENTS specifies WF → use that.
 AUQ: "About to trigger WF:\n\n  WF: [name]\n  Branch: [branch]\n  Inputs: [if any]\n\nClassification: SERVICE\nProceed?"
 Options: "Yes, deploy" | "Cancel"
 
-### Step 5: Trigger
-EXEC:
+### Step 5: Trigger + Correlate the Dispatched Run
+Snapshot the newest run id BEFORE dispatching, so the run that is watched is provably the one just
+triggered — not a neighbouring run that happened to start. EXEC:
 ```bash
-timeout 30 gh workflow run "WORKFLOW_FILE" --ref BRANCH && echo "OK trigger" || echo "FAILED trigger"
+. "${CLAUDE_SKILL_DIR}/scripts/lib/deploy-common.sh"
+WF="WORKFLOW_FILE"; BR="BRANCH"
+BEFORE=$(ght 30 gh run list -w "$WF" -L 1 --json databaseId --jq '.[0].databaseId // 0')
+ght 30 gh workflow run "$WF" --ref "$BR"
+RC=$?; [ "$RC" -eq 0 ] || { echo "TRIGGER=$(ght_reason $RC)"; exit 1; }
+RUN_ID=""
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  RUN_ID=$(ght 30 gh run list -w "$WF" -L 10 --json databaseId,event --jq "[.[] | select(.event == \"workflow_dispatch\" and .databaseId > $BEFORE)] | .[0].databaseId // empty")
+  [ -n "$RUN_ID" ] && break
+  sleep 3
+done
+[ -n "$RUN_ID" ] || { echo "DISPATCH_NOT_OBSERVED (triggered, run id not found — check manually, !=claim success)"; exit 1; }
+echo "RUN_ID=$RUN_ID"
 ```
+> `TRIGGER=no_tool` means gh is not installed — !=report a failed deployment for a dispatch that
+> was never attempted.
 
-### Step 6: Watch Run
+### Step 6: Watch That Run to a Terminal State
 EXEC:
 ```bash
-sleep 5 && timeout 300 gh run list -w "WORKFLOW_FILE" -L 1 --json databaseId,status,conclusion --jq '.[0]' 2>/dev/null && echo "OK run" || echo "FAILED run"
+. "${CLAUDE_SKILL_DIR}/scripts/lib/deploy-common.sh"
+ght 900 gh run watch "$RUN_ID" --exit-status
+echo "RUN_RESULT=$(ght_reason $?)"
 ```
-Poll until complete or timeout.
+Only `RUN_RESULT=ok` is a green deployment. Anything else → report the run URL + `--log-failed`.
 
-### Step 7: VPS Health Check (if deploy target is VPS + CLAUDE.local.md has SSH CFG)
-EXEC:
+### Step 7: VPS Health + Version Gate (if deploy target is VPS + CLAUDE.local.md has SSH CFG)
+Health alone proves the box is up, not that the new build is live. EXEC:
 ```bash
-curl -sf -o /dev/null -w "%{http_code}" "HEALTH_URL" && echo "OK health" || echo "FAILED health"
+CODE=$(curl -sf -o /dev/null -w "%{http_code}" "HEALTH_URL" || true)
+LIVE=$(curl -sf "VERSION_URL" || true)
+[ "$CODE" = "200" ] && [ "$LIVE" = "EXPECTED_VERSION" ] && echo "OK health+version" || { echo "FAILED health=$CODE version=$LIVE"; exit 1; }
 ```
+> No `/version` endpoint → say "no version gate available", !=silently downgrade to health-only success.
 
 ---
 
 ## P6: Monitor
 
+All four steps share one sourced helper — `ght`, never bare `timeout` (see Robustness Rules).
+
 ### Step 1: WF Runs
 EXEC:
 ```bash
-timeout 30 gh run list -L 10 --json workflowName,status,conclusion,createdAt,headBranch,event 2>/dev/null && echo "OK runs" || echo "FAILED runs"
+. "${CLAUDE_SKILL_DIR}/scripts/lib/deploy-common.sh"
+ght 30 gh run list -L 10 --json workflowName,status,conclusion,createdAt,headBranch,event 2>/dev/null && echo "OK runs" || echo "FAILED runs (reason=$(ght_reason $?) watchdog=$(ght_backend))"
 ```
 
 ### Step 2: WF Status
 EXEC:
 ```bash
-timeout 30 gh workflow list --json name,state,id 2>/dev/null && echo "OK workflows" || echo "FAILED workflows"
+. "${CLAUDE_SKILL_DIR}/scripts/lib/deploy-common.sh"
+ght 30 gh workflow list --json name,state,id 2>/dev/null && echo "OK workflows" || echo "FAILED workflows"
 ```
 
 ### Step 3: Releases
 EXEC:
 ```bash
-timeout 30 gh release list -L 5 2>/dev/null && echo "OK releases" || echo "FAILED releases"
+. "${CLAUDE_SKILL_DIR}/scripts/lib/deploy-common.sh"
+ght 30 gh release list -L 5 2>/dev/null && echo "OK releases" || echo "FAILED releases"
 ```
 
 ### Step 4: Failed Run Logs (if conclusion=failure found)
 EXEC:
 ```bash
-timeout 30 gh run view RUN_ID --log-failed 2>/dev/null | tail -50 && echo "OK logs" || echo "FAILED logs"
+. "${CLAUDE_SKILL_DIR}/scripts/lib/deploy-common.sh"
+ght 30 gh run view RUN_ID --log-failed 2>/dev/null | tail -50 && echo "OK logs" || echo "FAILED logs"
 ```
 Replace RUN_ID with failed run's databaseId.
 

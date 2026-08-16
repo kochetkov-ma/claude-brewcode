@@ -125,6 +125,10 @@ Nothing in the release path is hardcoded to a particular repo layout:
 
 The multi-package flow with its own bump script, plugin-cache verification and doc links lives in `references/release-best-practices.md` as a clearly labelled worked EXAMPLE — a pattern to adapt, not commands to run.
 
+<Callout type="warning">
+**A pushed tag has no rollback.** `git tag -d` and `git push --delete` only undo a mistake made before anyone fetched it. Once `git push origin refs/tags/vX.Y.Z` succeeds, deleting or force-moving that tag is irreversible for anyone who already pulled it — their clone keeps the old object under the same name, so the tag now means two different commits to two different people. The escape past that point is always the next patch version, never a rewritten tag.
+</Callout>
+
 ## Delegation
 
 <Callout type="warning">
@@ -142,7 +146,7 @@ Every spawn prompt carries six fields. A bare one-line task is never enough:
 | CONSUMER | who or what uses the result next, and the shape it must fit |
 | DONE | acceptance criteria + the exact report shape expected back |
 
-**Safety gates are not delegable.** The confirmation gates on release (P4 Step 5) and deploy (P5 Step 4) stay in this skill, in the main conversation — an agent never approves its own push, tag, or dispatch.
+**Safety gates are not delegable.** `AskUserQuestion` is stripped from every subagent at runtime, so a spawned `deploy-admin` cannot confirm anything — the confirmation gates on release (P4 Step 3) and deploy (P5 Step 4) stay in this skill, in the main conversation. A delegated agent finishes all non-destructive work and ends its return with an `## APPROVAL REQUIRED` block instead — one envelope per destructive operation (`COMMAND` / `HOST` / `EFFECT` / `ROLLBACK` / `EVIDENCE` / `PRECONDITION`), or the literal `APPROVAL REQUIRED: none`. This skill shows the envelopes to the user, then re-spawns the agent with `APPROVED: A1 A3` in the prompt — the only authorization a subagent may act on.
 
 <details>
 <summary>Workflows, secrets, and internals</summary>
@@ -179,7 +183,7 @@ The skill reads SSH server inventory from `CLAUDE.local.md` (written by the [ssh
 
 ### Robustness rules
 
-Every Bash call uses `&& echo "OK" || echo "FAILED"` with fail-fast logic. Max 2 retries per operation, max 15 `gh` calls per invocation. On timeout (30 s for `gh` commands, 5 min for `gh run watch`) the skill reports and switches to polling or stops with a clear error.
+Every Bash call uses `&& echo "OK" || echo "FAILED"` with fail-fast logic. Max 2 retries per operation, max 15 `gh` calls per invocation. Every bounded call runs through a shared watchdog (real `timeout`/`gtimeout` when installed, a bash fallback otherwise — GNU `timeout` is Homebrew-only on macOS): 30 s for `gh` commands, 15 min for `gh run watch`. CI runs are correlated by the pushed commit's `headSha`, not by reading the newest rows of `gh run list` — a bare "latest run" can belong to a concurrent push. A run that can't be matched or times out is reported as such, never silently treated as success.
 
 ### Troubleshooting
 

@@ -161,7 +161,7 @@ scan_target() {
     CURRENT) echo "✅ $IG_PATH EXISTS, current format — emit will REUSE it, never overwrite" ;;
     FOREIGN) echo "✅ $IG_PATH EXISTS, no template stamp (the project's own agent) — emit will REUSE it, never overwrite" ;;
     LEGACY)  echo "⚠️ $IG_PATH carries the RETIRED 'intent-guard template vN' stamp — emit/upgrade will MIGRATE it (metadata restamped, tailored body preserved)" ;;
-    BROKEN)  echo "⚠️ $IG_PATH exists but is empty / has no 'name: intent-guard' frontmatter / still carries unresolved {PLACEHOLDER} tokens — emit will RECREATE it" ;;
+    BROKEN)  echo "⚠️ $IG_PATH is empty, or is ours and has no 'name: intent-guard' frontmatter / still carries unresolved {PLACEHOLDER} tokens — emit will back it up to .bak-<ts> and RECREATE it" ;;
     *)       echo "— no $IG_PATH — emit will CREATE it from the template" ;;
   esac
   echo "Tier 2 (SPEC_LOCATION candidates):"
@@ -284,6 +284,36 @@ _subst_raw() {
 
 _subst() { _subst_raw "$1" > "$2"; }
 
+# The stack-INdependent emit set, `<template under $REFS>|<path relative to the destination root>`.
+# ONE list for every writer: `emit` substitutes it into $TARGET, `upgrade` stages it, `copy_raw_templates`
+# freezes it raw, and upgrade's delta/restamp loops walk the same rel paths. Adding an artifact used to
+# mean editing four hand-kept copies of it in step, and a missed one silently drops the file from a mode.
+# The per-stack reference is NOT here: it is a per-install decision ($STACK_REFS), handled next to each caller.
+EMIT_SET='SKILL.md.template|SKILL.md
+agent-prompt.md|references/agent-prompt.md
+report-template.md|references/report-template.md
+scope.md.template|references/scope.md'
+
+# Those rel paths alone, one per line, in emit order.
+_emit_rels() { printf '%s\n' "$EMIT_SET" | cut -d'|' -f2; }
+
+# Write the set into $2. `raw` = byte copy of the template (baseline/`.template`), `subst` = scalars
+# resolved (staging), `emit` = scalars resolved plus the per-file ✅ line (the live install).
+write_emit_set() {
+  _how="$1"; _dst="$2"
+  mkdir -p "$_dst/references"
+  while IFS='|' read -r _t _r; do
+    [ -n "$_t" ] || continue
+    case "$_how" in
+      raw)   cp "$REFS/$_t" "$_dst/$_r" ;;
+      subst) _subst "$REFS/$_t" "$_dst/$_r" ;;
+      emit)  _subst "$REFS/$_t" "$_dst/$_r"; echo "✅ $_dst/$_r" ;;
+    esac
+  done <<EOF
+$EMIT_SET
+EOF
+}
+
 # Copy the RAW (unsubstituted) templates under $1, keyed by the path each one is EMITTED to. Raw on purpose:
 # comparing raw-vs-raw keeps per-run scalars ({LAST_UPDATED} and {PLUGIN_VERSION} above all) out of the delta —
 # a plain version bump therefore reports IDENTICAL, not a diff on every file — so an unchanged template
@@ -295,10 +325,7 @@ copy_raw_templates() {
   _dst="$1"
   mkdir -p "$_dst/references"
   printf '*\n' > "$_dst/.gitignore"
-  cp "$REFS/SKILL.md.template"  "$_dst/SKILL.md"
-  cp "$REFS/agent-prompt.md"    "$_dst/references/agent-prompt.md"
-  cp "$REFS/report-template.md" "$_dst/references/report-template.md"
-  cp "$REFS/scope.md.template"  "$_dst/references/scope.md"
+  write_emit_set raw "$_dst"
   # `|| true`: a missing per-stack ref must not abort the run under `set -e`.
   for _s in $STACK_REFS; do
     { [ -f "$REFS/$_s" ] && cp "$REFS/$_s" "$_dst/references/$_s"; } || true
@@ -383,11 +410,18 @@ _scan_tokens() { sed "$TOKEN_STRIP_SED" "$1" | grep -oE "$TOKEN_RE" || true; }
 # CREATE-OR-REUSE-OR-MIGRATE. The whole decision is `_ig_kind`, which prints exactly one word:
 #
 #   ABSENT  no file                                                       -> CREATE from the template
-#   BROKEN  empty / no `name: intent-guard` / unresolved {UPPER_SNAKE}     -> RECREATE (treated as absent)
+#   BROKEN  empty, or OURS (stamped) and unrunnable                       -> RECREATE, after a .bak-<ts> copy
 #   CURRENT OURS, current format: carries the tail anchor IG_STAMP_PREFIX  -> REUSE, byte-untouched
 #   LEGACY  OURS, pre-standard: carries a RETIRED `intent-guard template vN` stamp and no current anchor
 #                                                                         -> MIGRATE (restamp in place)
 #   FOREIGN no stamp of either generation                                 -> REUSE, byte-untouched
+#
+# PROVENANCE IS DECIDED FIRST, and that ordering is the whole point (BCOP09). The runnability tests
+# (`name:` frontmatter, unresolved {UPPER_SNAKE}) used to run BEFORE the stamp probes, which made FOREIGN
+# unreachable for any hand-written file that merely MENTIONED a `{TOKEN}`: such a file was classified
+# BROKEN and overwritten from the template, with no backup. A file we did not write is never judged by
+# template rules and never rewritten — its tokens are reported as a conflict and it is REUSED as-is.
+# Only an EMPTY file (nothing to lose) or one carrying our own stamp can be BROKEN.
 #
 # LEGACY is the case the reader (`setup-status`) reports as `stale (legacy stamp)` and promises "one
 # `upgrade` restamps it". Recreating it would destroy the project's Phase 3 tailoring, so the migration
@@ -398,14 +432,30 @@ _scan_tokens() { sed "$TOKEN_STRIP_SED" "$1" | grep -oE "$TOKEN_RE" || true; }
 # command holding `${HOME}` is shell, not a placeholder — misreading it here RECREATES a tailored agent.
 _ig_kind() {
   [ -e "$IG_PATH" ] || { echo ABSENT; return 0; }
-  if [ ! -s "$IG_PATH" ] \
-     || ! grep -q '^name:[[:space:]]*intent-guard[[:space:]]*$' "$IG_PATH" \
+  [ -s "$IG_PATH" ] || { echo BROKEN; return 0; }
+  # Provenance BEFORE runnability. Unstamped = not ours = FOREIGN, whatever its contents.
+  if grep -qF "$IG_STAMP_PREFIX" "$IG_PATH"; then
+    _kind=CURRENT
+  elif grep -qE "$IG_LEGACY_STAMP_RE" "$IG_PATH"; then
+    _kind=LEGACY
+  else
+    echo FOREIGN; return 0
+  fi
+  if ! grep -q '^name:[[:space:]]*intent-guard[[:space:]]*$' "$IG_PATH" \
      || [ -n "$(_scan_tokens "$IG_PATH")" ]; then
     echo BROKEN; return 0
   fi
-  grep -qF "$IG_STAMP_PREFIX" "$IG_PATH" && { echo CURRENT; return 0; }
-  grep -qE "$IG_LEGACY_STAMP_RE" "$IG_PATH" && { echo LEGACY; return 0; }
-  echo FOREIGN
+  echo "$_kind"
+}
+
+# A hand-written agent that mentions `{TOKENS}` is a CONFLICT to report, never a file to overwrite:
+# the tokens may be the project's own convention. Stderr only — stdout carries one status line.
+_ig_foreign_conflict() {
+  _tok="$(_scan_tokens "$IG_PATH" | sort -u || true)"
+  [ -n "$_tok" ] || return 0
+  echo "⚠️ $IG_PATH carries no stamp of ours and contains unresolved-looking token(s):" >&2
+  printf '%s\n' "$_tok" >&2
+  echo "   Treated as the project's own agent and REUSED byte-untouched. If these were meant to be template placeholders, delete the file by hand and re-run." >&2
 }
 
 # "Nothing to write" — the file is runnable AND its metadata is current. LEGACY is deliberately NOT usable:
@@ -473,7 +523,12 @@ write_intent_guard() {
   mkdir -p .codex/agents
 
   case "$(_ig_kind)" in
-    CURRENT|FOREIGN)
+    CURRENT)
+      echo "INTENT_GUARD: REUSE $IG_PATH"
+      return 0
+      ;;
+    FOREIGN)
+      _ig_foreign_conflict
       echo "INTENT_GUARD: REUSE $IG_PATH"
       return 0
       ;;
@@ -484,8 +539,15 @@ write_intent_guard() {
       return 0
       ;;
     BROKEN)
+      # Only ever OUR OWN stamped file or an empty one — see _ig_kind. Bytes still survive: a nonempty
+      # file is copied to <path>.bak-<ts> before the recreate, so no run of this script can lose content.
       # Diagnostic only — STDERR, so stdout keeps carrying exactly one `INTENT_GUARD:` status line.
-      echo "⚠️ $IG_PATH exists but is empty, has no 'name: intent-guard' frontmatter, or still carries unresolved {PLACEHOLDER} tokens — recreating from template" >&2
+      if [ -s "$IG_PATH" ]; then
+        _ig_bak="$IG_PATH.bak-$(date +%Y%m%d-%H%M%S)"
+        cp "$IG_PATH" "$_ig_bak"
+        echo "ℹ️ backed up $IG_PATH -> $_ig_bak before recreating" >&2
+      fi
+      echo "⚠️ $IG_PATH is ours (carries our stamp) but empty, without 'name: intent-guard' frontmatter, or still holding unresolved {PLACEHOLDER} tokens — recreating from template" >&2
       ;;
   esac
 
@@ -589,17 +651,7 @@ emit_skill() {
 
   mkdir -p "$TARGET_REFS"
 
-  _subst "$REFS/SKILL.md.template" "$TARGET/SKILL.md"
-  echo "✅ $TARGET/SKILL.md"
-
-  _subst "$REFS/agent-prompt.md" "$TARGET_REFS/agent-prompt.md"
-  echo "✅ $TARGET_REFS/agent-prompt.md"
-
-  _subst "$REFS/report-template.md" "$TARGET_REFS/report-template.md"
-  echo "✅ $TARGET_REFS/report-template.md"
-
-  _subst "$REFS/scope.md.template" "$TARGET_REFS/scope.md"
-  echo "✅ $TARGET_REFS/scope.md"
+  write_emit_set emit "$TARGET"
 
   if [ -f "$REFS/$STACK_REF" ]; then
     _subst "$REFS/$STACK_REF" "$TARGET_REFS/$STACK_REF"
@@ -743,10 +795,7 @@ upgrade_skill() {
   mkdir -p "$STAGING/references"
   printf '*\n' > "$STAGING/.gitignore"   # never `git add -A` noise in the user's repo
 
-  _subst "$REFS/SKILL.md.template"    "$STAGING/SKILL.md"
-  _subst "$REFS/agent-prompt.md"      "$STAGING/references/agent-prompt.md"
-  _subst "$REFS/report-template.md"   "$STAGING/references/report-template.md"
-  _subst "$REFS/scope.md.template"    "$STAGING/references/scope.md"
+  write_emit_set subst "$STAGING"
   # `|| true`: a missing per-stack ref must not abort the run under `set -e`.
   for _s in $STACK_REFS; do
     { [ -f "$REFS/$_s" ] && _subst "$REFS/$_s" "$STAGING/references/$_s"; } || true
@@ -756,8 +805,8 @@ upgrade_skill() {
 
   echo "UPGRADE_STAGING=$STAGING"
   echo "UPGRADE_BASELINE=$BASELINE"
-  # The live artifact set: four stack-independent files plus every per-stack reference this install carries.
-  _rels="SKILL.md references/agent-prompt.md references/report-template.md references/scope.md"
+  # The live artifact set: the stack-independent emit set plus every per-stack reference this install carries.
+  _rels="$(_emit_rels | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
   for _s in $STACK_REFS; do _rels="$_rels references/$_s"; done
 
   _restored=0
@@ -811,7 +860,7 @@ upgrade_skill() {
 }
 
 # Artifact-metadata frontmatter gate: the four keys, in D2 order, quoted exactly as
-# `brewcode/skills/rules/scripts/rules.sh:140-146` already requires — one dialect, not a second one.
+# `brewcode/skills/rules/scripts/rules.sh:165-167` already requires — one dialect, not a second one.
 # Prints one line per defect, returns 1 when any fired.
 _check_meta_frontmatter() {
   _f="$1"; _bad=0
@@ -918,7 +967,7 @@ EOF
   _ig_state="$(_ig_kind)"
   case "$_ig_state" in
     BROKEN)
-      echo "❌ unusable emitted asset: $IG_PATH (empty, no 'name: intent-guard' frontmatter, or unresolved {PLACEHOLDER} tokens) — re-run 'generate.sh emit-agent'"
+      echo "❌ unusable emitted asset: $IG_PATH (empty, or ours with no 'name: intent-guard' frontmatter / unresolved {PLACEHOLDER} tokens) — re-run 'generate.sh emit-agent'"
       _errors=$((_errors+1))
       ;;
     LEGACY)
@@ -965,6 +1014,12 @@ EOF
     fi
   elif [ "$_ig_state" = "FOREIGN" ]; then
     echo "ℹ️ $IG_PATH carries no template stamp of any generation — treated as the project's own hand-written agent, not checked against the template"
+    # Tokens in a foreign file are a CONFLICT to surface, never an error: it is not ours to judge.
+    _ig_foreign_tokens=$(_scan_tokens "$IG_PATH" | sort -u || true)
+    if [ -n "$_ig_foreign_tokens" ]; then
+      echo "⚠️ CONFLICT: it also contains token(s) that look unresolved — reported, never rewritten:"
+      echo "$_ig_foreign_tokens"
+    fi
   fi
 
   # (d) DOMAIN EXPERTS — a review routed only to generic agents is a degraded review.

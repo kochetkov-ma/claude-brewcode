@@ -4,7 +4,7 @@ description: Detailed description of all brewdoc plugin commands
 
 # Brewdoc Plugin Commands
 
-> **Version:** 5.7.0 | **Author:** Maksim Kochetkov | **License:** MIT
+> **Version:** 6.0.0 | **Author:** Maksim Kochetkov | **License:** MIT
 
 ## Quick Reference
 
@@ -37,7 +37,7 @@ Every brewdoc skill carries `disable-model-invocation: true`: Claude never fires
 | **Arguments** | `[ext [context]] \| [r <query>]` |
 | **Model** | `opus` |
 | **Dependencies** | None |
-| **Allowed tools** | `Read`, `Write`, `Edit`, `Glob`, `Grep`, `Bash`, `Task`, `WebFetch`, `WebSearch`, `Skill` |
+| **Allowed tools** | `Read`, `Write`, `Edit`, `Glob`, `Grep`, `Bash`, `Agent`, `Task`, `WebFetch`, `WebSearch`, `AskUserQuestion` |
 
 ### Arguments
 
@@ -334,7 +334,7 @@ Staleness: `today - last_updated > threshold_days`, whole days in LOCAL time.
 | **Arguments** | `<text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename]` |
 | **Model** | `haiku` |
 | **Dependencies** | None |
-| **Allowed tools** | `Read`, `Bash`, `AskUserQuestion`, `Glob` |
+| **Allowed tools** | `Read`, `Write`, `Bash`, `AskUserQuestion`, `Glob` |
 
 ### Content Type Detection
 

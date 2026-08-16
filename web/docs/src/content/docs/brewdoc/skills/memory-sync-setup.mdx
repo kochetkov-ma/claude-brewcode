@@ -33,7 +33,7 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 
 ## What it does
 
-`/brewdoc:memory-sync-setup` is a **generator**, in the same family as `brewcode:superreview-setup` and `brewtools:task-board-setup`: it produces a working artifact instead of doing the work itself. It scans the target project — memory surface, exclusions, default branch, git visibility, language policy, agent and skill rosters — then emits four files into `<target>/.claude/skills/memory-sync/`.
+`/brewdoc:memory-sync-setup` is a **generator**, in the same family as `brewcode:superreview-setup` and `brewtools:task-board-setup`: it produces a working artifact instead of doing the work itself. It scans the target project — memory surface (root and every nested `CLAUDE.md`, rules, conventions, the `AGENTS.md` family, agents, skills, the memory dir), exclusions, default branch, git visibility, language policy, agent and skill rosters — then emits four files into `<target>/.claude/skills/memory-sync/`. `docs/**` stays explicitly out of scope, owned by a separate doc flow (`/docs`, `docsync-setup`) — this skill covers instruction memory, not prose documentation.
 
 The emitted `/memory-sync` skill is a long-running multi-agent coordinator. It sweeps the whole memory surface every run, splits it into disjoint batches (one bounded agent per batch, all spawned in one message), verifies every change with an independent checker that never wrote it, and enforces non-growth — every file ends at or below its original line count. It re-checks and updates itself between runs.
 
@@ -110,6 +110,8 @@ Run it:  /memory-sync                       -> scope session (default), whole su
 **Enable/disable is entry-file parking, not a flag.** `status` reports a parked install as `INSTALLED=parked`, never collapsed into `NOT INSTALLED`.
 
 **Version resolution never guesses.** `resolve_plugin_version()` reads `.version` out of the plugin's own `plugin.json` by self-location. The string `unknown` is an internal sentinel only — `emit` and `restamp` hard-fail before writing anything (`❌ FAILED: cannot read .version from plugin.json - reinstall brewdoc`) rather than ever stamping the literal `unknown` into an artifact.
+
+**Git visibility is a real set difference, not a count delta.** `derive_git_visibility()` compares `git ls-files` against a parallel filesystem `find` with `comm -23`, so an untracked file is never cancelled out by an unrelated tracked-but-pruned one — a fix that changed the classification itself, not just its wording. The scalar now reads `git-tracked` / `git-ignored` / `no-commits` / `mixed (N tracked, M untracked)`, and a `mixed` or `git-ignored` verdict tells the emitted skill's VERIFY phase it can never trust a `git diff` alone and must re-read files directly.
 
 **Emitted-skill behavior** (what this generator bakes in, not what it runs itself):
 

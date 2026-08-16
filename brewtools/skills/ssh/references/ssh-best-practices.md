@@ -142,15 +142,33 @@ ssh-add ~/.ssh/id_ed25519_vps-main
 
 ## known_hosts Management
 
-### Initial Setup
+### Initial Setup — scan, VERIFY, then trust
+
+A key appended straight from `ssh-keyscan` is whatever the network handed back. On an intercepted
+network that pins a MITM as trusted forever, for every credential you send afterwards.
 
 ```bash
-# Scan and add host key
-ssh-keyscan -p PORT HOST >> ~/.ssh/known_hosts 2>/dev/null
+# 1. Scan to a temp file. No 2>/dev/null: a failed scan must be visible.
+KH_TMP=$(mktemp)
+ssh-keyscan -p PORT HOST > "$KH_TMP"
+
+# 2. Print SHA256 fingerprints and match them out-of-band
+ssh-keygen -lf "$KH_TMP"
+
+# 3. Only after a match, append and clean up
+umask 077 && cat "$KH_TMP" >> ~/.ssh/known_hosts && rm -f "$KH_TMP"
 
 # Hash known_hosts for privacy
 ssh-keygen -H -f ~/.ssh/known_hosts
 ```
+
+| Out-of-band source | How |
+|--------------------|-----|
+| Provider console | VPS panel host-key panel / first-boot console output |
+| cloud-init log | `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` in the serial console |
+| Existing trusted path | Same fingerprint seen from a second, already-trusted host |
+
+> No match, no trust: `rm -f "$KH_TMP"` and stop. Never `StrictHostKeyChecking=no`.
 
 ### Config Option
 
@@ -168,11 +186,15 @@ StrictHostKeyChecking accept-new
 
 ### Key Rotation
 
-When server key changes legitimately:
+A changed key is a MITM until proven otherwise — rotation is exactly when verification matters most,
+so the new key goes through the SAME scan -> fingerprint -> out-of-band match -> append sequence:
 
 ```bash
 ssh-keygen -R HOST
-ssh-keyscan -p PORT HOST >> ~/.ssh/known_hosts
+KH_TMP=$(mktemp)
+ssh-keyscan -p PORT HOST > "$KH_TMP"
+ssh-keygen -lf "$KH_TMP"          # match against the console BEFORE the next line
+umask 077 && cat "$KH_TMP" >> ~/.ssh/known_hosts && rm -f "$KH_TMP"
 ```
 
 ## File Permissions

@@ -16,7 +16,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | Command | `/brewcode:agents` |
 | Input | free-form prompt or empty |
 | Specialist | `brewcode:agent-creator` |
-| List source | `.claude/agents/`, `~/.claude/agents/`, plugin `agents/` |
+| List source | `.claude/agents/`, `~/.claude/agents/`, `${CLAUDE_PLUGIN_ROOT}/agents/` (shipped, read-only) |
 | Model | opus |
 
 ## When to use
@@ -46,7 +46,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
   <li><div><strong>Auto-mode select</strong><p>Announces <code>Mode: &lt;mode&gt; (agents) — chosen because ...</code> based on keywords, intent, and target presence in the prompt.</p></div></li>
   <li><div><strong>No-prompt menu</strong><p>Sends a single AskUserQuestion with options: <code>Status (agents)</code> (recommended), <code>Status (all: agents+rules+skills)</code>, <code>Create</code>, <code>Improve</code>, <code>Review</code>, <code>Sync agents (memory sync)</code>, <code>List (plain)</code>, <code>Cancel</code>. The skill continues with the chosen mode.</p></div></li>
   <li><div><strong>Dispatch</strong><p>Routes to the appropriate handler. Create, improve and sync delegate to the <code>brewcode:agent-creator</code> specialist via Task tool, passing full context — description, scope, model, and improvement focus; review goes instead to the project's reviewer agent from <code>.claude/agents/</code> (falling back to <code>general-purpose</code>), two-phase. Sync mode reads the shared <code>mode-sync.md</code> reference (also used by <code>/brewcode:skills</code>) and fans out one <code>agent-creator</code> subagent per target file. After create/improve completes, the coordinator re-runs that same reference itself, scoped to only the file just written — no extra <code>agent-creator</code> spawn — and applies the verdicts directly with targeted edits.</p></div></li>
-  <li><div><strong>Real status</strong><p>Four blocks, never a flat list: inventory by scope (plugin / project / global — counts, names, load path), state (enabled or disabled via the <code>_name.md</code> toggle marker, model), overlaps and conflicts (same name shadowed across scopes, duplicate triggers or descriptions), and health flags (missing README or frontmatter, agents missing <code>Bash</code> in <code>tools:</code>).</p></div></li>
+  <li><div><strong>Real status</strong><p>Four blocks, never a flat list: inventory by scope (shipped plugin, read-only / plugin source, workspace-only / project / global — counts, names, load path), state (enabled or disabled via the <code>_name.md</code> toggle marker, model), overlaps and conflicts (same name shadowed across scopes, duplicate triggers or descriptions), and health flags (missing README or frontmatter, agents missing <code>Bash</code> in <code>tools:</code>).</p></div></li>
   <li><div><strong>Final output</strong><p>Prints a detection + result table: mode chosen, target, file path, model, scope, and CLAUDE.md update status. Suggests next steps such as <code>/reload-plugins</code> and a test invocation phrase.</p></div></li>
 </Steps>
 
@@ -55,7 +55,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | Mode | Trigger | Action |
 |------|---------|--------|
 | status | default for any "show me" intent — "статус", "что есть", "состояние" | Inventory by scope, state, overlaps, health flags |
-| list | explicit only — "list" / "список" / "перечисли" | Globs `*.md` across ALL agent scopes (`.claude/agents/`, `~/.claude/agents/`, `brewcode/agents/`) |
+| list | explicit only — "list" / "список" / "перечисли" | Globs `*.md` across `.claude/agents/`, `~/.claude/agents/`, `${CLAUDE_PLUGIN_ROOT}/agents/` (shipped, read-only), plus `brewcode/agents/` only inside the plugin workspace (`test -d brewcode/.claude-plugin`) |
 | create | "создай" / "create" / "new" / "добавь" / "scaffold" | Scaffolds a new agent file via `agent-creator`; asks scope, model, CLAUDE.md update |
 | improve | "улучши" / "improve" / "refactor" / "fix" / "почини", or a bare existing `<name\|path>` | Tunes description triggers and system prompt quality |
 | review | "ревью" / "review" / "validate" / "проверь корректность" | Single reviewer — the project's agent from `.claude/agents/`, else `general-purpose` — two-phase: review, then double-check the findings |
@@ -88,12 +88,16 @@ For `create`, that means the specialist is told the scope and model were already
 
 | Parameter | Options | Notes |
 |-----------|---------|-------|
-| Scope | Project / Global / Plugin | Project → `.claude/agents/`; Global → `~/.claude/agents/`; Plugin → `brewcode/agents/` |
+| Scope | Project / Global / Plugin | Project → `.claude/agents/`; Global → `~/.claude/agents/`; Plugin → `brewcode/agents/`, offered only when `test -d brewcode/.claude-plugin` succeeds (the dev/plugin workspace) — elsewhere the option is dropped, since it would write a stray `<cwd>/brewcode/agents/` |
 | Model | sonnet (recommended) / opus or fable / haiku / inherit | `inherit` omits the `model:` field entirely, so the agent runs on the calling session's model |
 | CLAUDE.md update | yes / no | Adds or updates the agent row in the agents table; appends a new section if none exists |
 | Improve focus | triggers / system prompt / both / full review | Asked for improve mode only |
 | Description | free-form, aim ≤100 chars | Used as the agent `description` frontmatter — drives LLM auto-invocation |
-| Specialist | `brewcode:agent-creator` | Handles file scaffolding and prompt engineering |
+| Specialist | `brewcode:agent-creator` | Handles file scaffolding and prompt engineering; never writes under `${CLAUDE_PLUGIN_ROOT}` — the installed plugin copy is read-only |
+
+`improve` resolves the target across the writable scopes (project / global / plugin workspace) only.
+A name that only matches under the shipped, read-only `${CLAUDE_PLUGIN_ROOT}/agents/` is reported and
+the skill stops — it is never copied or edited.
 
 </details>
 

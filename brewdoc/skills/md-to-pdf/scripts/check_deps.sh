@@ -76,6 +76,42 @@ check_python() {
 # Pip package checks
 # ---------------------------------------------------------------------------
 
+# pip_spec <import-name>
+# Pinned install spec per package. Versions verified at PyPI 2026-08-16.
+pip_spec() {
+    case "$1" in
+        reportlab)  echo "reportlab==5.0.0" ;;
+        weasyprint) echo "weasyprint==69.0" ;;
+        markdown)   echo "markdown==3.10.3" ;;
+        pygments)   echo "pygments==2.20.0" ;;
+        *)          echo "$1" ;;
+    esac
+}
+
+# install_pip_packages <missing-csv> <pkg1> <pkg2> ...
+# Installs through the SAME interpreter conversion uses, then re-imports:
+# a bare `pip3` can succeed into a different interpreter and leave conversion broken.
+install_pip_packages() {
+    local missing="$1"
+    shift
+    local -a pkgs specs
+    IFS=',' read -ra pkgs <<< "$missing"
+    specs=()
+    for pkg in "${pkgs[@]}"; do
+        specs+=("$(pip_spec "$pkg")")
+    done
+    echo "Installing pip packages: ${specs[*]}" >&2
+    python3 -m pip install "${specs[@]}"
+
+    local still
+    still="$(check_pip_packages "$@")"
+    if [[ -n "$still" ]]; then
+        echo "INSTALL_INCOMPLETE|$still" >&2
+        echo "Installed into $(python3 -c 'import sys; print(sys.prefix)') but the import still fails." >&2
+        return 1
+    fi
+}
+
 # check_pip_packages <pkg1> <pkg2> ...
 # Prints comma-separated list of missing packages (empty if all present).
 check_pip_packages() {
@@ -199,9 +235,7 @@ cmd_install() {
                 echo "OK"
                 return
             fi
-            echo "Installing pip packages: $pip_missing" >&2
-            IFS=',' read -ra pkgs <<< "$pip_missing"
-            pip3 install "${pkgs[@]}"
+            install_pip_packages "$pip_missing" reportlab
             echo "OK"
             ;;
         weasyprint)
@@ -222,9 +256,7 @@ cmd_install() {
 
             pip_missing="$(check_pip_packages weasyprint markdown pygments)"
             if [[ -n "$pip_missing" ]]; then
-                echo "Installing pip packages: $pip_missing" >&2
-                IFS=',' read -ra pkgs <<< "$pip_missing"
-                pip3 install "${pkgs[@]}"
+                install_pip_packages "$pip_missing" weasyprint markdown pygments
             fi
             echo "OK"
             ;;

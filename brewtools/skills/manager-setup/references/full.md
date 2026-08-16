@@ -21,6 +21,12 @@ Protocol, always:
 6. ALL code written (not per-piece) -> file one recommended final task: simplify
    the whole written code, strip over-engineering. Delegate it like any other.
 
+No task tools in this session? Current models ship without TaskCreate/TaskUpdate/
+TodoWrite unless CLAUDE_CODE_ENABLE_TODO_TOOLS=1. The graph is still mandatory:
+keep the IDENTICAL graph as a numbered checklist - in the plan, or in
+.claude/features/<task>.md - and update that checklist everywhere this protocol
+says TaskCreate/TaskUpdate. Tool path preferred whenever the tools exist.
+
 Sizing before spawning: one subagent = ONE bounded unit - one deliverable,
 ~<=5 files, ~<=10 steps. Bigger MUST be split into N tasks, fanned out in ONE
 message. A big task handed to one agent = an agent gone for an hour: you cannot

@@ -3,7 +3,7 @@ title: "Plugin Update"
 description: "Check installed brewcode plugins, install missing ones, and update the full suite in one command — with version status table and reload prompt."
 order: 3119
 ---
-import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
 # plugin-update — manage plugin versions
 
@@ -98,13 +98,19 @@ Status legend: ✅ current · ⬇️ update available · ❌ missing · ❓ unkn
   <li>
     <div>
       <strong>Update outdated plugins</strong>
-      <p>Runs the full update chain in order: marketplace refresh, then each of the four plugins. Shows full CLI output for every command. In interactive mode, asks before proceeding. Any single failure is reported and the chain continues.</p>
+      <p>Asks which plugins to update ("Update all" incl. non-suite plugins / "Update suite only" / "Update selected" / "Skip") — <code>update</code> and <code>all</code> auto-pick "Update all" without asking. The update set is built from that answer, never from a fixed list. Runs a marketplace refresh once, then one <code>claude plugin update &lt;id&gt; --scope &lt;scope&gt;</code> per selected plugin, using each plugin's own installed scope from discovery. <code>--scope</code> is mandatory here — it defaults to <code>user</code>, so a plugin installed at project/local/managed scope would otherwise update the wrong instance. Shows full CLI output for every command; any single failure is reported and the run continues.</p>
     </div>
   </li>
   <li>
     <div>
       <strong>Auto-update toggle hint</strong>
       <p>Only in interactive and <code>all</code> modes. Explains how to enable per-marketplace auto-update via the <code>/plugin</code> UI (Marketplaces → claude-brewcode). The skill never patches <code>settings.json</code> directly — the exact key is unverified.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Prune stale plugin caches</strong>
+      <p>Skipped entirely for <code>check</code> (which stops after the status table). Otherwise previews orphaned auto-installed dependencies with <code>claude plugin prune --dry-run --scope &lt;scope&gt;</code>, once per distinct scope seen during discovery — plugins installed directly are never touched. Empty preview → nothing to remove. Non-empty preview asks once on the exact list, except <code>update</code> mode auto-resolves it to "Skip" (preview shown, nothing removed) and <code>all</code> auto-picks "Prune listed"; on a "Prune listed" answer it runs <code>claude plugin prune --scope &lt;scope&gt; -y</code>. The <code>-y</code> flag is mandatory: the Bash tool is not a TTY, and a bare <code>prune</code> hangs on its confirmation prompt. Non-fatal if the CLI lacks <code>prune</code> — prints a skip notice and continues.</p>
     </div>
   </li>
   <li>
@@ -124,21 +130,27 @@ Run `/reload-plugins` or restart the session after any install or update. Claude
 
 **Discovery** — primary: `claude plugin list --json` (available since CC 2.1.163). Returns objects with fields `id`, `version`, `scope`, `enabled`, `installPath`, `installedAt`, `lastUpdated`, and optionally `mcpServers`. The `version` field may be `"unknown"` for dev-mode plugins. When run inside a session, the Bash invocation is prefixed with `unset CLAUDECODE &&` to avoid the env-var conflict. Fallback: if the command errors, returns empty output, or returns invalid JSON (CC older than 2.1.163), the skill falls back to `discover-plugins.sh`, which parses `&#126;/.claude/settings.json` for marketplace registrations and walks `&#126;/.claude/plugins/cache/` for installed version directories.
 
-**Update chain** — runs in this fixed order:
+**Update chain** — marketplace refresh once, then one command per plugin actually selected, `--scope` mandatory and taken from that plugin's own discovery row:
 
 ```bash
 claude plugin marketplace update claude-brewcode
-claude plugin update brewcode@claude-brewcode
-claude plugin update brewdoc@claude-brewcode
-claude plugin update brewtools@claude-brewcode
-claude plugin update brewui@claude-brewcode
+claude plugin update <id> --scope <scope>      # repeat per selected plugin
 ```
 
-Each command runs via the Bash tool with full output shown. Failures are reported inline; remaining steps continue regardless.
+Full-suite example, all four at `user` scope:
+
+```bash
+claude plugin update brewcode@claude-brewcode --scope user
+claude plugin update brewdoc@claude-brewcode --scope user
+claude plugin update brewtools@claude-brewcode --scope user
+claude plugin update brewui@claude-brewcode --scope user
+```
+
+Each command runs via the Bash tool with full output shown. Failures are reported inline; remaining steps continue regardless. Omitting `--scope` silently updates the `user`-scoped instance even when the installed one is `project`/`local`/`managed` — this is why the skill always passes it explicitly.
 
 **No delegation** — this skill spawns nothing. `Task` is deliberately absent from its `allowed-tools`: discovery, the update chain, and the gates all run in the main conversation, where you can see every command and its output.
 
-**Interactive gates** — `AskUserQuestion` presents option lists only (no free-text). Three decision points: install missing, update outdated, enable auto-update. Explicit arguments (`check`, `update`, `all`) bypass all three.
+**Interactive gates** — `AskUserQuestion` presents option lists only (no free-text). Four decision points: install missing, update outdated, enable auto-update, prune stale caches. `check` stops before any of them. `update` auto-resolves update ("Update all") and prune ("Skip", preview shown but nothing removed) without asking, and skips the auto-update step entirely. `all` auto-installs, auto-updates everything, and auto-picks "Prune listed" — only the auto-update toggle still runs its own question in `all` mode.
 
 **Claude refuses to execute?** — if Claude summarizes instead of running commands, paste this coercive prompt: _"Execute every `claude plugin ...` command shown above using the Bash tool. Do not describe — run each command and show full output."_
 </details>

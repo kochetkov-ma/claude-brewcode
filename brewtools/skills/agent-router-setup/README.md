@@ -35,7 +35,7 @@ Intent routes (step 6): skill authoring -> `brewcode:skill-creator`, agent autho
 
 `neverFlag` holds eight entries by default — `Explore`, `Plan`, `statusline-setup`, `output-style-setup`, plus the four intent experts (`brewcode:agent-creator`, `brewcode:skill-creator`, `brewcode:hook-creator`, `brewcode:bash-expert`). `Explore` is the right tool for search, `Plan` for planning, and an intent's own redirect target can never be flagged by the router that redirects to it — a custom `intents` table exempts its own experts too, auto-unioned into `neverFlag` at load time.
 
-**"The project" = the nearest ancestor of `cwd` that has a `.claude` directory** (up to 16 levels up), not `cwd` itself — `claude` started in a subdirectory still resolves the repo root. Config and roster are both read from there, fresh on every call.
+**"The project" is resolved by ownership, not by `cwd`:** `CLAUDE_PROJECT_DIR` → nearest ancestor holding `.claude/brewtools/agent-router.json` → nearest ancestor holding `.git` → nearest ancestor holding a `.claude` directory → `cwd` (up to 16 levels per step). A nested package or fixture carrying a bare `.claude` therefore cannot mask the root that owns the router. Config and roster are both read from the resolved root, fresh on every call.
 
 **A missing `.claude/agents/` is an empty roster, not a failure**: the intent rules still fire and still redirect to the plugin specialist. Only the step-7 scoring goes silent.
 

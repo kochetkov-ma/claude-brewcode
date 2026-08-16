@@ -13,7 +13,7 @@ Verify and refresh provider reference data: models, pricing, endpoints, context 
 | Models | `https://open.bigmodel.cn/en/dev/api/normal-model/glm-5` | WebFetch |
 | Pricing | Same as above | WebFetch |
 | Endpoint | `https://api.z.ai/api/anthropic/v1/messages` (test call) | Bash curl |
-| Live test | `curl -s -X POST https://api.z.ai/api/anthropic/v1/messages -H "x-api-key: $ZAI_API_KEY" -H "content-type: application/json" -H "anthropic-version: 2023-06-01" -d '{"model":"glm-5.2","max_tokens":10,"messages":[{"role":"user","content":"ping"}]}'` | Bash |
+| Live test | see ## Live Test Template — the key goes in on stdin, never on argv | Bash |
 
 ### Qwen / DashScope
 | Check | Source | Method |
@@ -71,14 +71,17 @@ Verify and refresh provider reference data: models, pricing, endpoints, context 
 
 ## Live Test Template
 
-For each provider, verify endpoint still responds:
+For each provider, verify endpoint still responds. The auth header is fed to curl through a `-K` config
+on STDIN — argv is readable by every local process via `ps`. Same dialect as
+`scripts/verify-providers.sh`; the `sed` escapes `\` and `"` for curl's config parser:
 ```bash
-curl -s -o /dev/null -w "%{http_code}" -X POST "${ENDPOINT}/v1/messages" \
-  -H "x-api-key: ${API_KEY}" \
+printf 'header = "x-api-key: %s"\n' "$(printf '%s' "${API_KEY}" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')" \
+  | curl -s -K - -o /dev/null -w "%{http_code}" -X POST "${ENDPOINT}/v1/messages" \
   -H "content-type: application/json" \
   -H "anthropic-version: 2023-06-01" \
   -d '{"model":"MODEL_ID","max_tokens":5,"messages":[{"role":"user","content":"hi"}]}' \
   && echo " OK" || echo " FAILED"
 ```
 
-Adjust headers per provider (x-api-key for Z.ai, Authorization: Bearer for others).
+Adjust the header NAME per provider (`x-api-key` for Z.ai, `Authorization: Bearer <key>` for others) —
+it stays inside the stdin config either way. Never move it back to a `-H` argument.

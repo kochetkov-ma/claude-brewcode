@@ -977,6 +977,121 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// 37 - BT-F24: a nested bare `.claude` must not mask the owning project root
+// GIVEN: the real root carries the router config; a nested fixture dir carries an
+//        empty `.claude` and nothing else; the task text matches a DEFAULT intent
+//        (an intent prompt is mandatory here - the masked root yields an EMPTY
+//        roster, so roster scoring can never fire and would not reproduce)
+// WHEN:  the hook runs from the nested fixture cwd
+// THEN:  disabled at the real root -> silence; enabled at the real root -> the same
+//        deny the real root produces. Root ownership, not directory existence.
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const { proj, env } = newRoot('t37a');
+  standardRoster(proj);
+  writeConfig(proj, { enabled: false });
+  const fixture = join(proj, 'pkg', 'fixture');
+  mkdirSync(join(fixture, '.claude'), { recursive: true });
+  const r = run(payload({ cwd: fixture, description: INTENT_HOOK }), env);
+  check(
+    '37a-disabled-root-wins-from-nested-claude',
+    r.stdout,
+    '',
+    'enabled:false at the owning root must silence a nested-cwd intent spawn',
+  );
+  check('37a-exit', r.status, 0, 'hook must exit 0');
+}
+{
+  const { proj, env } = newRoot('t37b');
+  standardRoster(proj);
+  writeConfig(proj, { enabled: true });
+  const fixture = join(proj, 'pkg', 'fixture');
+  mkdirSync(join(fixture, '.claude'), { recursive: true });
+  const r = run(payload({ cwd: fixture, description: INTENT_HOOK }), env);
+  check(
+    '37b-enabled-root-found-from-nested-claude',
+    safeParse(r.stdout),
+    denyOut(intentPluginDeny('hook authoring', 'brewcode:hook-creator', 'general-purpose')),
+    'the owning root config is read from a nested cwd, not the masking .claude',
+  );
+}
+{
+  // no router config anywhere: `.git` at the real root outranks the nested `.claude`
+  const { proj, env } = newRoot('t37c');
+  standardRoster(proj);
+  mkdirSync(join(proj, '.git'), { recursive: true });
+  const fixture = join(proj, 'pkg', 'fixture');
+  mkdirSync(join(fixture, '.claude'), { recursive: true });
+  const r = run(payload({ cwd: fixture, description: 'Rework the conductor plan lifecycle gates' }), env);
+  check(
+    '37c-git-root-outranks-nested-claude',
+    safeParse(r.stdout),
+    denyOut(
+      rosterDeny('conductor-dev', '.claude/agents/conductor-dev.md', 'general-purpose'),
+    ),
+    'with no config marker the VCS root is preferred over a nested .claude',
+  );
+}
+{
+  // CLAUDE_PROJECT_DIR outranks every walk, per the canonical recipe
+  const { proj, env } = newRoot('t37d');
+  standardRoster(proj);
+  writeConfig(proj, { enabled: false });
+  const fixture = join(proj, 'pkg', 'fixture');
+  mkdirSync(join(fixture, '.claude', 'brewtools'), { recursive: true });
+  writeFileSync(
+    join(fixture, '.claude', 'brewtools', 'agent-router.json'),
+    JSON.stringify({ enabled: true }),
+  );
+  const r = run(payload({ cwd: fixture, description: INTENT_HOOK }), {
+    ...env,
+    CLAUDE_PROJECT_DIR: proj,
+  });
+  check(
+    '37d-env-var-outranks-marker-walk',
+    r.stdout,
+    '',
+    'CLAUDE_PROJECT_DIR wins over a nested config marker',
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 38 - BT-F25: the documented tier-1/tier-2 trade-off is what actually ships
+// GIVEN: strict level (tier 2 installed alongside tier 1) and a spawn tier 2 would
+//        exempt as skill-originated - tier 1 has no skill-origin signal at all
+// WHEN:  the hook runs twice on the identical (session, root, task)
+// THEN:  call 1 denies regardless of level - hooks run in parallel, an explicit deny
+//        wins, tier 1 cannot be gated by tier 2's {"ok": true}; call 2 passes as a
+//        non-blocking notice, so the model's retry always gets through
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const { proj, env } = newRoot('t38');
+  standardRoster(proj);
+  writeConfig(proj, { enabled: true, level: 'strict' });
+  const skillOriginated = payload({
+    session: 'S38',
+    cwd: proj,
+    description: INTENT_SKILL,
+    prompt: 'Invoked by the /brewtools:plugin-update skill as a fallback worker.',
+  });
+  const first = run(skillOriginated, env);
+  check(
+    '38a-strict-tier1-denies-skill-originated',
+    safeParse(first.stdout),
+    denyOut(intentPluginDeny('skill authoring', 'brewcode:skill-creator', 'general-purpose')),
+    'tier 1 has no skill-origin check and tier 2 cannot suppress its deny',
+  );
+  const second = run(skillOriginated, env);
+  check(
+    '38b-anti-loop-retry-passes',
+    safeParse(second.stdout),
+    ctxOut(repeatCtx('brewcode:skill-creator', 'general-purpose')),
+    'the identical retry is a notice, never a second block',
+  );
+  check('38b-exit', second.status, 0, 'hook must exit 0');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Cleanup
 // ─────────────────────────────────────────────────────────────────────────────
 try {

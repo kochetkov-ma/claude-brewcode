@@ -2,12 +2,32 @@
 
 > Reference for authenticating to container registries on remote servers.
 
+## Token sourcing (read this first)
+
+A registry token must never become model-visible text. There is no model-invisible input channel:
+`AskUserQuestion` answers, prompts and generated commands all land in the transcript. So the user
+prepares the value outside the conversation and the skill only ever pipes it to stdin.
+
+| Source | User prepares | Used as |
+|--------|---------------|---------|
+| env var | `read -rs GHCR_TOKEN && export GHCR_TOKEN` in the shell that launched Claude Code | `printf '%s' "$GHCR_TOKEN" \| ...` |
+| file | token written to `~/.config/brewtools/ghcr.token`, then `chmod 600` | `... --password-stdin < ~/.config/brewtools/ghcr.token` |
+
+| Never | Why |
+|-------|-----|
+| `AskUserQuestion` for a token | Answer is model-visible and transcript-persistent |
+| `docker login -p TOKEN` / any token in argv | Visible in `ps`, shell history, remote audit logs |
+| `echo $TOKEN` outside a pipe, `env`, `set`, `cat` on the token file | Leaks into transcript and logs |
+| Writing the token into a generated file, agent, or compose file | Persists the secret in the repo |
+
+Every login below is stdin-only. Surface `OK login <registry>` / `FAILED login <registry>` and nothing else.
+
 ## GHCR (GitHub Container Registry)
 
 ### Login
 
 ```bash
-echo "$GITHUB_TOKEN" | docker login ghcr.io -u USERNAME --password-stdin
+printf '%s' "$GITHUB_TOKEN" | docker login ghcr.io -u USERNAME --password-stdin
 ```
 
 | Parameter | Source | Notes |
@@ -40,7 +60,7 @@ docker pull ghcr.io/OWNER/IMAGE:TAG
 ### Login
 
 ```bash
-echo "$DOCKER_TOKEN" | docker login -u USERNAME --password-stdin
+printf '%s' "$DOCKER_TOKEN" | docker login -u USERNAME --password-stdin
 ```
 
 | Parameter | Source | Notes |
@@ -62,13 +82,13 @@ When server needs access to multiple registries:
 
 ```bash
 # GHCR
-echo "$GH_TOKEN" | docker login ghcr.io -u GH_USER --password-stdin
+printf '%s' "$GH_TOKEN" | docker login ghcr.io -u GH_USER --password-stdin
 
 # DockerHub
-echo "$DH_TOKEN" | docker login -u DH_USER --password-stdin
+printf '%s' "$DH_TOKEN" | docker login -u DH_USER --password-stdin
 
 # Custom registry
-echo "$REG_TOKEN" | docker login registry.example.com -u REG_USER --password-stdin
+printf '%s' "$REG_TOKEN" | docker login registry.example.com -u REG_USER --password-stdin
 ```
 
 All credentials stored in `~/.docker/config.json`:
@@ -101,7 +121,7 @@ For production servers, use credential helpers instead of plain config:
 ### Check if token is valid
 
 ```bash
-docker login ghcr.io -u USERNAME --password-stdin <<< "$TOKEN" 2>&1 | grep -q "Login Succeeded"
+printf '%s' "$GITHUB_TOKEN" | docker login ghcr.io -u USERNAME --password-stdin 2>&1 | grep -q "Login Succeeded"
 ```
 
 ### Automated refresh in CI/deploy scripts
@@ -109,14 +129,14 @@ docker login ghcr.io -u USERNAME --password-stdin <<< "$TOKEN" 2>&1 | grep -q "L
 ```bash
 # Check auth, re-login if expired
 docker pull ghcr.io/OWNER/IMAGE:TAG 2>&1 | grep -q "unauthorized" && \
-  echo "$FRESH_TOKEN" | docker login ghcr.io -u USERNAME --password-stdin
+  printf '%s' "$FRESH_TOKEN" | docker login ghcr.io -u USERNAME --password-stdin
 ```
 
 ## Security Rules
 
 | Rule | Details |
 |------|---------|
-| NEVER hardcode tokens | Use env vars, secrets manager, or AskUserQuestion |
+| NEVER hardcode tokens | Exported env var or `chmod 600` file, piped to `--password-stdin` -- never `AskUserQuestion`, never argv |
 | NEVER commit .docker/config.json | Contains base64 credentials |
 | Rotate tokens regularly | 90-day max for production |
 | Use read-only tokens for pull | Minimize blast radius |

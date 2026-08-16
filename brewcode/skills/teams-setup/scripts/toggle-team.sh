@@ -31,6 +31,33 @@ TEAM_MD="$TEAM_DIR/team.md"
 MOVED=0
 SKIPPED=0
 MISSING=0
+INVALID=0
+
+# Roster values are interpolated straight into move/probe/delete paths, so a row like
+# `| ../../../outside/README |` renamed a file OUTSIDE the project while the run printed a cheerful
+# `MOVED:`. An agent id is a bare `^[a-z0-9][a-z0-9-]*$` -- no slash, no dot, no traversal -- which is
+# also what keeps every path canonically inside `.claude/agents/`. Same guard in verify-team.sh and in
+# the cleanup-flow.md delete/purge steps: one rule, three consumers.
+valid_agent_id() {
+  case "$1" in
+    ''|*[![:lower:][:digit:]-]*|[![:lower:][:digit:]]*) return 1 ;;
+  esac
+  return 0
+}
+
+# Markdown separator row of the `## Agents` table. Only `|`, `-`, `:` and spaces, with a run of
+# dashes -- a formatter that pads the cells (`| ------ |`) writes a separator just as valid as
+# `|---|`, and matching only the unpadded spelling left past_header at 0, parsed zero rows, and
+# still printed `MOVED:0 ... ✅ disable` with every agent file live. Same rule in verify-team.sh.
+is_separator_row() {
+  case "$1" in
+    *[![:space:]|:-]*) return 1 ;;
+  esac
+  case "$1" in
+    "|"*"---"*) return 0 ;;
+  esac
+  return 1
+}
 
 # Roster parse: identical shape to verify-team.sh -- `Agent` is field 2 of each row
 # past the header separator of the `## Agents` table.
@@ -43,11 +70,16 @@ while IFS= read -r line; do
   esac
   [ "$in_agents" -eq 0 ] && continue
   case "$line" in
-    "|"*"---|"*) past_header=1; continue ;;
     "|"*)
+      if is_separator_row "$line"; then past_header=1; continue; fi
       [ "$past_header" -eq 0 ] && continue
       agent=$(printf '%s' "$line" | cut -d'|' -f2 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | sed 's/`//g')
       [ -z "$agent" ] && continue
+      if ! valid_agent_id "$agent"; then
+        echo "SKIP:invalid agent id '$agent' (not ^[a-z0-9][a-z0-9-]*$) -- nothing under $AGENTS_DIR touched"
+        INVALID=$((INVALID + 1))
+        continue
+      fi
       [ "$agent" = "intent-guard" ] && { echo "SKIP:intent-guard (shared with superreview-setup)"; SKIPPED=$((SKIPPED + 1)); continue; }
 
       LIVE="$AGENTS_DIR/${agent}.md"
@@ -73,8 +105,20 @@ while IFS= read -r line; do
   esac
 done < "$TEAM_MD"
 
-printf 'ACTION:%s\nTEAM:%s\nMOVED:%s\nSKIPPED:%s\nMISSING:%s\n' "$ACTION" "$TEAM_NAME" "$MOVED" "$SKIPPED" "$MISSING"
+printf 'ACTION:%s\nTEAM:%s\nMOVED:%s\nSKIPPED:%s\nMISSING:%s\nINVALID:%s\n' "$ACTION" "$TEAM_NAME" "$MOVED" "$SKIPPED" "$MISSING" "$INVALID"
 
+# A roster the parser could not read is NOT an empty roster. Reaching no data row means the
+# `## Agents` section or its header separator never matched, and reporting `MOVED:0` + `✅ disable`
+# there leaves every agent file live while claiming the team is off -- the one failure mode that
+# must never exit 0.
+if [ "$past_header" -eq 0 ]; then
+  echo "❌ FAILED -- parsed no ## Agents rows from $TEAM_MD (missing '## Agents' section, or its header separator row is malformed); nothing was touched"
+  exit 1
+fi
+if [ "$INVALID" -gt 0 ]; then
+  echo "❌ FAILED -- $INVALID roster row(s) carry a value that is not an agent id; fix team.md's ## Agents table"
+  exit 1
+fi
 if [ "$MISSING" -gt 0 ]; then
   echo "❌ FAILED -- $MISSING roster member(s) have no file at all; run /brewcode:teams-setup status"
   exit 1

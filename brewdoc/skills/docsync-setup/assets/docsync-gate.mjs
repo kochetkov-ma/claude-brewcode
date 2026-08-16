@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=5.7.0 content_version=5.6.0 generated_by=brewdoc:docsync-setup
+// brewcode-meta: version=6.0.0 content_version=6.0.0 generated_by=brewdoc:docsync-setup
 /**
  * docsync-gate — Stop hook (self-contained, project-local)
  *
@@ -13,10 +13,10 @@
  * session are not re-nagged. touched/asked reset per session.
  *
  * SELF-CONTAINED: helpers inlined, Node built-ins only, pure ESM. Reads project
- * state from <cwd>/.claude/docsync/ at runtime. Never throws.
+ * state from <projectRoot>/.claude/docsync/ at runtime. Never throws.
  */
-import { readFileSync, writeFileSync, mkdirSync, renameSync } from 'fs';
-import { join, dirname } from 'path';
+import { readFileSync, writeFileSync, mkdirSync, renameSync, existsSync, readdirSync, statSync, unlinkSync } from 'fs';
+import { join, dirname, resolve } from 'path';
 
 // --- inlined helpers -------------------------------------------------------
 async function readStdin() {
@@ -27,10 +27,33 @@ async function readStdin() {
 }
 function output(r) { try { console.log(JSON.stringify(r)); } catch { console.log('{}'); } }
 function readJson(p, fb) { try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return fb; } }
+/**
+ * Project root: CLAUDE_PROJECT_DIR -> upward walk for a root marker -> hook cwd. Never throws.
+ * Hook `cwd` is "the working directory when the hook is invoked" and drifts mid-session
+ * (docs/hooks.md:717, CwdChanged), so it is never the root for config/state/log placement;
+ * keep it only for resolving relative paths out of `tool_input`.
+ * @param {string|null} hookCwd - `input.cwd` from the hook payload
+ * @returns {string} Absolute project root
+ */
+function projectRoot(hookCwd) {
+  const env = process.env.CLAUDE_PROJECT_DIR;
+  if (env && existsSync(env)) return resolve(env);
+
+  let dir = resolve(hookCwd || process.cwd());
+  for (;;) {
+    if (existsSync(join(dir, '.git')) || existsSync(join(dir, '.claude'))) return dir;
+    const up = dirname(dir);
+    if (up === dir) break;
+    dir = up;
+  }
+  return resolve(hookCwd || process.cwd()); // last resort: never guess, never throw in a hook
+}
+// Atomic write: temp file + rename, so a crash never leaves a half-written state.
+// The temp name carries the pid — hooks run in parallel and used to share one `.tmp`.
 function writeJsonAtomic(p, o) {
   try {
     mkdirSync(dirname(p), { recursive: true });
-    const tmp = p + '.tmp';
+    const tmp = `${p}.${process.pid}.tmp`;
     writeFileSync(tmp, JSON.stringify(o, null, 2));
     renameSync(tmp, p);
   } catch {}
@@ -40,10 +63,15 @@ function today() {
   const d = new Date(), p = n => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
-function statePath(cwd) { return join(cwd, '.claude', 'docsync', 'state.json'); }
+// One state file per session — a shared state.json let two concurrent sessions
+// reset each other's touched-set. No session id (rare) falls back to state.json.
+function statePath(root, sessionId) {
+  const id = String(sessionId || '').replace(/[^A-Za-z0-9._-]/g, '_');
+  return join(root, '.claude', 'docsync', id ? `state-${id}.json` : 'state.json');
+}
 
-function loadConfig(cwd) {
-  const c = readJson(join(cwd, '.claude', 'docsync', 'config.json'), {});
+function loadConfig(root) {
+  const c = readJson(join(root, '.claude', 'docsync', 'config.json'), {});
   return {
     // `disable` flips this to false and leaves everything else in place. Absent = on,
     // so a config written before the toggle existed keeps working.
@@ -75,13 +103,28 @@ function docTypeOf(fields) {
   return (v === 'llm' || v === 'user' || v === 'skip') ? v : 'user';
 }
 // Load state, resetting touched/asked when the session id changes.
-function loadState(cwd, sessionId) {
-  const s = readJson(statePath(cwd), null);
+function loadState(root, sessionId) {
+  const s = readJson(statePath(root, sessionId), null);
   if (!s || s.session_id !== sessionId) return { session_id: sessionId, touched: [], asked: false };
   if (!Array.isArray(s.touched)) s.touched = [];
   return s;
 }
-function saveState(cwd, s) { writeJsonAtomic(statePath(cwd), s); }
+function saveState(root, s) { writeJsonAtomic(statePath(root, s.session_id), s); }
+// One file per session accumulates; the gate is the only once-per-turn hook, so it
+// sweeps. Anything older than PRUNE_DAYS goes, including stray `.tmp` leftovers.
+const PRUNE_DAYS = 14;
+function pruneOldSessions(root, keepPath) {
+  try {
+    const dir = join(root, '.claude', 'docsync');
+    const cutoff = Date.now() - PRUNE_DAYS * 86400000;
+    for (const name of readdirSync(dir)) {
+      if (!/^state(-.*)?\.json$/.test(name) && !name.endsWith('.tmp')) continue;
+      const p = join(dir, name);
+      if (p === keepPath) continue;
+      try { if (statSync(p).mtimeMs < cutoff) unlinkSync(p); } catch {}
+    }
+  } catch {}
+}
 function parseFm(abs) {
   try {
     const txt = readFileSync(abs, 'utf8').replace(/^﻿/, ''); // strip UTF-8 BOM
@@ -114,22 +157,23 @@ function ageDays(dateStr) {
 async function main() {
   try {
     const input = await readStdin();
-    const cwd = input.cwd || process.cwd();
+    const root = projectRoot(input.cwd); // config + state live here, never raw cwd
     const sessionId = input.session_id;
 
-    const cfg = loadConfig(cwd);
+    const cfg = loadConfig(root);
     if (!cfg.enabled) { output({}); return; } // `disable`: never block a Stop while off
-    const st = loadState(cwd, sessionId); // resets touched/asked on session change
+    const st = loadState(root, sessionId); // resets touched/asked on session change
+    pruneOldSessions(root, statePath(root, sessionId));
 
     // Already nagged this session -> allow stop (persist current session id).
-    if (st.asked) { saveState(cwd, st); output({}); return; }
+    if (st.asked) { saveState(root, st); output({}); return; }
 
     const stale = [], undated = [];
     for (const rel of st.touched) {
       // Re-apply scope at gate time: exclude globs and doc_type may have changed
       // AFTER the file was recorded (e.g. the doc was marked `skip` mid-session).
       if (isExcluded(rel, cfg.exclude)) continue;
-      const fm = parseFm(join(cwd, rel));
+      const fm = parseFm(join(root, rel));
       if (docTypeOf(fm.fields) === 'skip') continue;
       const lu = fm.fields.last_updated;
       if (!lu) { undated.push(rel); continue; }
@@ -138,10 +182,10 @@ async function main() {
       if (days > cfg.threshold_days) stale.push(`${rel} (${days}d)`);
     }
 
-    if (stale.length === 0 && undated.length === 0) { saveState(cwd, st); output({}); return; }
+    if (stale.length === 0 && undated.length === 0) { saveState(root, st); output({}); return; }
 
     st.asked = true;
-    saveState(cwd, st);
+    saveState(root, st);
     const parts = [];
     if (stale.length) parts.push(`stale (>${cfg.threshold_days}d): ${stale.join(', ')}`);
     if (undated.length) parts.push(`no last_updated: ${undated.join(', ')}`);

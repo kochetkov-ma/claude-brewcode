@@ -23,7 +23,7 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 | Arguments | `[-l\|-s\|-d\|-x\|--max] [file\|folder\|path1,path2]` |
 | Model | sonnet |
 | Context | session |
-| Tools | Read, Write, Edit, Grep, Glob, Task, AskUserQuestion |
+| Tools | Read, Write, Edit, Bash, Grep, Glob, Task, AskUserQuestion |
 
 ## When to use
 
@@ -36,13 +36,15 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 
 | Mode | Flag | Target | Compression | Human-readable | Verification |
 |------|------|--------|-------------|----------------|---------------|
-| Light | `-l` | Any file | Minimal | Yes | None |
+| Light | `-l` | Any file | Minimal | Yes | Sub-gate only |
 | Medium | _(default)_ | Any file | Moderate | Yes | Self-check (fact inventory) |
 | Standard | `-s` | Docs, README | 30-50% | Yes | 1 round (≥98% match) |
 | Deep | `-d` | CLAUDE.md, system prompts, agent/skill defs, KNOWLEDGE | 2-3x | No — LLM-only | 1-2 rounds (≥95% match) |
 | Max | `-x`/`--max` | CLAUDE.md, system prompts, KNOWLEDGE | 3-4x | No — LLM-only | 2 mandatory rounds (≥95% + 100% sub-gate) |
 
 **Auto-detection:** when no flag is given, the skill reads the file path and header. `CLAUDE.md`, `.claude/rules/*.md`, `KNOWLEDGE.*` → deep candidate. `README.md`, `docs/` → standard candidate. Ambiguous → asks via `AskUserQuestion`. **Max is never auto-selected** — requires an explicit `-x`/`--max` flag or an explicit max/extreme compress hint.
+
+**Every mode is guarded on disk.** Before any file is touched, the skill snapshots each target byte-for-byte into a private run directory under `.claude/reports/` — the git tree over the targets must be clean first, or the run refuses. After the optimization pass, a mechanical script diffs the snapshot against the result and checks that every number, version, file path, `!=` prohibition, and ALL-CAPS modal keyword (`NEVER`, `ALWAYS`, `MUST NOT`, `REQUIRED`, `MANDATORY`) is still present. A single miss restores the file to its pre-edit bytes and reports exactly what vanished — this applies to every mode, light included, not just standard/deep/max. Standard, deep, and max additionally run an independent semantic gate on top (see Verification in the flow below).
 
 ## Examples
 
@@ -88,6 +90,12 @@ Natural language works **as arguments after the command** — the skill is user-
   </li>
   <li>
     <div>
+      <strong>Snapshot before editing</strong>
+      <p>Requires a clean git tree over the target files, then <code>scripts/text-guard.sh snapshot</code> copies every target byte-for-byte into a private <code>RUN_DIR</code> under <code>.claude/reports/</code> (created with <code>umask 077</code>) before any edit happens. A dirty target or a non-git root refuses with an error — nothing is written until the snapshot exists. Every mode goes through this step, not just deep and max.</p>
+    </div>
+  </li>
+  <li>
+    <div>
       <strong>Analysis phase</strong>
       <p>Parallel <code>Explore</code> agents scan each file for structure, cross-references, and redundancies. Results feed the optimization context.</p>
     </div>
@@ -100,22 +108,25 @@ Natural language works **as arguments after the command** — the skill is user-
   </li>
   <li>
     <div>
-      <strong>Verification</strong>
-      <p>Loss budget scales with mode — any lost facts trigger a patch pass:</p>
+      <strong>Verification — restore, not warn</strong>
+      <p>Two gates run after every optimization pass, both comparing the on-disk snapshot against the on-disk result — never the agent's own account of what it changed:</p>
+      <p><strong>Sub-gate, every mode</strong> — <code>text-guard.sh verify</code> checks that every number, version, file path, <code>!=</code> prohibition, and ALL-CAPS modal keyword from the snapshot still appears in the result. Any miss restores the file to its pre-edit bytes immediately and prints the exact missing tokens — a refusal, not a warning attached to a bad file.</p>
+      <p><strong>Semantic gate, standard/deep/max</strong> — a fresh agent that did not write the compression reads both files from disk, builds a numbered fact inventory, and scores it against the mode's threshold:</p>
 
 | Mode | Rounds | Gate |
 |------|--------|------|
-| Light / Medium | 0 / self-check | 100% lossless |
+| Light / Medium | sub-gate only / self-check + sub-gate | 100% lossless |
 | Standard | 1 | ≥98% match |
-| Deep | 1-2 | ≥95% match |
-| Max | 2 mandatory | ≥95% + 100% sub-gate |
+| Deep | 1-2 | ≥95% match + 100% sub-gate on numbers/names/negations/scope |
+| Max | 2 mandatory | ≥95% + 100% sub-gate on numbers/names/negations/scope |
 
+      <p>A semantic FAIL restores the file the same way the sub-gate does. The run directory is never deleted automatically — it stays on disk so the diff or the loss list is available after the run.</p>
     </div>
   </li>
   <li>
     <div>
       <strong>Report</strong>
-      <p>Each file produces a report: lines/tokens before and after, rules applied by ID, issues found and fixed, cross-reference verification status. Files are modified in-place.</p>
+      <p>Each file produces a report: lines/tokens before and after, rules applied by ID, issues found and fixed, cross-reference verification status. Files are modified in-place; a restored file is reported as restored, with the missing tokens or the loss list and a suggested lighter mode.</p>
     </div>
   </li>
 </Steps>

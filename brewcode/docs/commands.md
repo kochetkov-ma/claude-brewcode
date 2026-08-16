@@ -6,7 +6,7 @@ description: Detailed description of all brewcode plugin commands
 
 # BC Plugin Commands
 
-> **ver:** 5.7.0 | **Author:** Maksim Kochetkov | **License:** MIT
+> **ver:** 6.0.0 | **Author:** Maksim Kochetkov | **License:** MIT
 
 ## Naming
 
@@ -21,6 +21,12 @@ status | install | upgrade | enable | disable | uninstall | purge
 No arguments = `status` when installed, `install` when not -- except `/brewcode:semble-setup`, which always defaults to `status` so a bare invocation can never trigger a machine-level package install.
 
 No setup rejects any of the seven canonical verbs -- all eleven setup skills implement all seven, either via a live config flag (semble, agent-deadline, agent-return, agent-router, manager, docsync) or entry-file parking (teams, superreview, task-board, think-short, memory-sync). Skill-specific extras come after the canonical set, never in place of it (`semble-setup`: `reindex | optimize | resume`).
+
+## Prompt contract
+
+Every skill takes a free-form RU/EN prompt in position 1 -- `argument-hint` is `[prompt] [mode1|mode2|...]`, never a bare mode. The mode is resolved FROM that prompt: an explicit mode token wins outright, otherwise EN+RU keyword hits are scored. Skill-specific positionals (`teams-setup`'s `[name]`, `superreview-setup`'s `[scope]`) follow the verb. At most ONE clarifying `AskUserQuestion` (max 4 questions), and only when the answer changes what gets written.
+
+Before the first action -- read-only modes included, right before their report -- every skill prints the 5-field block `PLAN — brewcode:<skill>` with `INPUT:`, `MODE:`, `SCOPE:`, `DO:`, `RESULT:`. Source of truth: `skills/skills/references/prompt-contract.md`, enforced by `skills/skills/scripts/validate-skill.sh`.
 
 ## Quick Reference
 
@@ -55,7 +61,13 @@ Run setup skills one at a time, ideally one per fresh session: each is an intera
 
 | AG | Model | Purpose |
 |----|-------|---------|
-| `bc-rules-organizer` | haiku | Create/optimize `.claude/rules/*.md` |
+| `agent-creator` | inherit | Create/improve AGs -- specialist for `/brewcode:agents` |
+| `skill-creator` | inherit | Create/improve SKs -- specialist for `/brewcode:skills` |
+| `hook-creator` | inherit | Create/debug Claude Code hooks |
+| `bash-expert` | inherit | Professional sh/bash scripts for Mac/Linux |
+| `bc-rules-organizer` | haiku | Create/optimize `.claude/rules/*.md` -- internal, spawned only by `/brewcode:rules` |
+
+The three creator AGs are pinned by `agents/tests/suite-creator-contract.mjs`: the CC 2.1.233 hook/sub-agent facts they teach are transcribed as fixtures, so upstream drift fails a test instead of shipping silently.
 
 ---
 
@@ -65,7 +77,7 @@ Read-only dashboard over every setup skill in the suite (BC + BT + BD). Probes t
 
 | Param | Value |
 |-------|-------|
-| Args | `[<plugin>\|<skill>]` -- no args = full cross-plugin report |
+| Args | `[prompt] [<plugin>\|<skill>]` -- no args = full cross-plugin report |
 | Context | session |
 | Model | sonnet |
 | Deps | none |
@@ -93,14 +105,16 @@ Each row gets exactly one state, evaluated in order: `n/a` -> `disabled` -> `mis
 
 ### Staleness signals
 
-| Signal | Used by | How |
-|--------|---------|-----|
-| Checksum | semble, think-short, agent-deadline, agent-return, agent-router, manager, docsync | Those setups `cp` hook files verbatim -> `cmp` against the plugin asset is exact |
-| Frontmatter trio | memory-sync | `version`/`generated_by`/`last_updated` in the emitted `SKILL.md`'s YAML frontmatter vs the plugin's own version. A trailing `<!-- memory-sync template vX.Y.Z` comment is the pre-5.0 stamp; finding it yields `LEGACY-FMT` (`stale (legacy stamp)`, install predates the frontmatter migration, run `upgrade`) |
-| Template baseline | superreview | New plugin template diffed against `.template-baseline/`, so the delta is never your tailoring |
+**`content_version` is the headline; `cmp` only corroborates.** `version` bumps on every plugin release whether or not an artifact changed, so it is provenance, never the stale/current decision. `content_version` moves only when that artifact's own content moved. The two counters are never compared across each other -- doing so flags every current install as stale and no `upgrade` can clear it.
+
+| Carrier | Used by | How |
+|---------|---------|-----|
+| Frontmatter `content_version:` | semble (`semble-first.md`), superreview + memory-sync (emitted `SKILL.md`), task-board (`board.md`) | Read the key out of the anchor's YAML frontmatter, compare against the plugin's `content_version` for that artifact |
+| `brewcode-meta:` line token | think-short, agent-deadline, agent-return, agent-router | `content_version=` in the `// brewcode-meta:` comment of the byte-copied hook, baked at release; `version=` rides beside it |
+| Top-level JSON key | manager (`state.json`), docsync (`config.json`) | `"content_version"` in the raw JSON. The byte-copied companion's `brewcode-meta:` line is the documented fallback -- read the JSON first, fall through silently, never report `LEGACY` when the fallback answered |
+| Header-table row | teams | `team.md`'s `\| Content Version \| X.Y.Z \|` row of the `Field/Value` block, beside `\| Version \|`. The Agents table's per-agent `Version` column stays `version` -- it shows which write touched each agent, !=content drift, so a roster may legitimately mix values |
+| `cmp` corroboration | every byte-copied asset | Exact only where the installed copy stays byte-identical. Three carve-outs are NOT `cmp` partners: `memory-sync`'s `references/hard-sync.md` (generator fills two BLOCK placeholders -> neither signal reaches it), `.sembleignore` (install appends a measured-candidates block -> stamp still valid, `cmp` never), and `.template-baseline/` (raw template, unresolved placeholders, never version-read) |
 | Absence | task-board | A deployed board with no `.claude/skills/task-spec/` predates the spec+design layer |
-| Header-table row | teams | `team.md`'s `\| Version \| X.Y.Z \|` row of the `Field/Value` block, generated + substituted at install |
-| Frontmatter | task-board | `version:` in `board.md`'s frontmatter, substituted at install |
 
 Output is one table plus an ordered run-list: `partial` first (broken installs), then `stale`, then `missing`. Commands use the canonical verbs only (`status` · `install` · `upgrade` · `enable` · `disable` · `uninstall` · `purge`) plus the live per-skill extras (`semble-setup`: `reindex | optimize | resume`; `agent-router-setup` / `manager-setup`: `level <...>`). A setup installed but absent from the roster produces a WARNING above the table, never a silent edit.
 
@@ -119,21 +133,25 @@ GENERATOR skill (human-invoked). Analyzes the TARGET project and WRITES a self-c
 
 | Param | Value |
 |-------|-------|
-| Args | `[status\|install\|upgrade] <fine-tune-prompt> [scope]` |
+| Args | `[prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [scope]` |
 | Context | fork |
 | Model | opus |
 | Deps | none |
-| Tools | Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion |
+| Tools | Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion |
 
 ### Verbs
 
-Since v5.0.0 an explicit verb routes in front of the free-form prompt:
+All seven canonical verbs, resolved from the free-form prompt:
 
 | Verb | Effect |
 |------|--------|
 | `status` | read-only: is the skill emitted, is `intent-guard.md` present, does `validate` pass. STOP, no phases run |
-| `install` | full generation (Phase 0 -> 4). Also the no-verb default |
+| `install` | full generation (Phase 0 -> 4). Also the no-verb default when nothing is installed |
 | `upgrade` | refresh a live install from the template baseline without erasing your tailoring |
+| `enable` | renames `.claude/skills/superreview/SKILL.md.disabled` back to `SKILL.md` |
+| `disable` | entry-file parking: renames `SKILL.md` to `SKILL.md.disabled`, so `/superreview` stops being discovered. `references/`, `.template-baseline/` and all tailoring untouched, reversible |
+| `uninstall` | removes the emitted skill, leaves `intent-guard.md` (shared with `teams-setup`) |
+| `purge` | total removal incl. `.template-baseline/` |
 
 The emitted skill keeps its own name: it is installed at `.claude/skills/superreview/` and invoked as `/superreview`.
 
@@ -148,7 +166,7 @@ The emitted skill keeps its own name: it is installed at `.claude/skills/superre
 
 ### Subcommands
 
-`generate.sh <mode>` — `scan | emit | emit-agent | upgrade | validate`. `emit` refuses (exit 1, `already installed`, no `INTENT_GUARD:` line) on a live install; `upgrade` is the supported refresh.
+`generate.sh <mode>` — `scan | emit | emit-agent | upgrade | enable | disable | uninstall | purge | validate`. `emit` refuses (exit 1, `already installed`, no `INTENT_GUARD:` line) on a live install; `upgrade` is the supported refresh. `emit-agent` is the ONE writer of `.claude/agents/intent-guard.md` and prints `INTENT_GUARD: CREATED|REUSE|MIGRATED <path>` — `/brewcode:teams-setup` Phase 3 calls it.
 
 ### Workflow
 
@@ -198,11 +216,11 @@ Manages `.claude/rules/*.md` from a free-form prompt (see shared pattern above, 
 
 | Param | Value |
 |-------|-------|
-| Args | `<free-form prompt: what to do with rules>` |
+| Args | `[prompt] [status\|list\|create\|improve\|review]` |
 | Context | session |
 | Model | sonnet |
 | Deps | none |
-| Tools | Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion, Skill |
+| Tools | Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion, Skill |
 | Specialist | `bc-rules-organizer` (haiku) — only agent for rules, no separate creator |
 
 `create`/`improve` knowledge source (AskUserQuestion): (a) `KNOWLEDGE.jsonl` path (`t:"❌"`→avoid, `t:"✅"`→practice), (b) inline prompt, (c) session learnings (top 5). Dedup 3-check: within-file (>70% skip, 40-70% merge), cross-file antonym (avoid<->best-practice keeps avoid), CLAUDE.md duplicate (skip).
@@ -220,11 +238,11 @@ Manages Claude Code skills from a free-form prompt (see shared pattern above, in
 
 | Param | Value |
 |-------|-------|
-| Args | `<free-form prompt: what to do with skills>` |
+| Args | `[prompt] [status\|list\|create\|improve\|review\|sync]` |
 | Context | session |
 | Model | opus |
 | Deps | none |
-| Tools | Read, Write, Edit, Glob, Grep, Bash, Task, WebSearch, WebFetch, AskUserQuestion, Skill |
+| Tools | Read, Write, Edit, Glob, Grep, Bash, Agent, WebSearch, WebFetch, AskUserQuestion, Skill |
 | Specialist | `brewcode:skill-creator` — create + improve |
 
 `sync` runs `references/mode-sync.md` (Steps S1-S6, shared engine with `agents`): scope `repo` (default) / `session` / `commit` → real inventory + `CLAUDE.md`/rules as ground truth → one subagent per skill file, parallel, ≤8/batch → verdicts `STALE`/`DEAD`/`DUPLICATE`/`OBVIOUS`/`DRIFT`/`MISSING` → **DELETE first, FIX, ADD last** → every file ends ≤ its original line count, total delta ≤ 0.
@@ -244,18 +262,20 @@ Manages Claude Code subagents from a free-form prompt (see shared pattern above,
 
 | Param | Value |
 |-------|-------|
-| Args | `<free-form prompt: what to do with agents>` |
+| Args | `[prompt] [status\|list\|create\|improve\|review\|sync]` |
 | Context | session |
 | Model | opus |
 | Deps | none |
-| Tools | Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion, Skill |
+| Tools | Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion, Skill |
 | Specialist | `brewcode:agent-creator` — create + improve |
 
 `sync` -- `SYNC_REF` = `${CLAUDE_SKILL_DIR}/../skills/references/mode-sync.md` (same S1-S6 engine as `/brewcode:skills sync`, scoped to `.claude/agents/*.md` + `*/agents/*.md`). Non-growth: every agent file ends ≤ its original line count.
 
 `create`: AskUserQuestion for scope (Project `.claude/agents/` / Global `~/.claude/agents/` / Plugin `brewcode/agents/`), model (sonnet recommended / opus / haiku / inherit), CLAUDE.md table update. Description budget ≤ 100 chars, 2-3 triggers.
 
-`improve`: resolve by name/path across the 3 scopes; AskUserQuestion for focus (triggers / system-prompt / both / full review) + CLAUDE.md update.
+> **The Plugin scope option is gated on `test -d brewcode/.claude-plugin`** — offered only inside this workspace. Elsewhere it would write a junk `<cwd>/brewcode/agents/<name>.md`, so the option is dropped. `${CLAUDE_PLUGIN_ROOT}/agents/` is the SHIPPED, read-only copy and is never written to. `LIST_CMD` inventories four scopes: shipped plugin (read-only), plugin source (workspace only), project, global.
+
+`improve`: resolve by name/path across the writable scopes (project / global / plugin workspace); AskUserQuestion for focus (triggers / system-prompt / both / full review) + CLAUDE.md update. A name that resolves ONLY under `${CLAUDE_PLUGIN_ROOT}/agents/` is read-only — report and stop, !=copy, !=edit.
 
 ```
 /brewcode:agents create backend validator
@@ -270,11 +290,11 @@ Analyzes project to extract etalon classes, patterns, architecture by layer. Gen
 
 | Param | Value |
 |-------|-------|
-| Args | `[full\|conventions\|rules\|paths <p1,p2>]` |
+| Args | `[prompt] [full\|conventions\|rules\|paths <p1,p2>]` |
 | Context | session |
 | Model | opus |
 | Deps | none |
-| Tools | Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion, Skill |
+| Tools | Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion, Skill |
 
 ### Modes
 
@@ -319,7 +339,7 @@ Creates + manages dynamic teams of domain-specific AGs w/ tracking framework. An
 
 | Param | Value |
 |-------|-------|
-| Args | `[status [name]\|install [name] [prompt]\|upgrade [name]\|enable [name]\|disable [name]\|uninstall [name]\|purge [name]]` |
+| Args | `[prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [name]` |
 | Context | session |
 | Model | opus |
 | Deps | none |
@@ -352,6 +372,12 @@ The `[name]` positional follows the verb. No arguments: `status` of the first ex
 
 > Teams created by an earlier version called a plugin path dead since 4.0.0 -> zero trace entries, `status` shows 0 tasks, `upgrade` marks the whole roster Inactive. One `upgrade` run restores tracking; `verify-team.sh` WARNs with the `cp` line.
 
+### Roster safety
+
+`team.md`'s `## Agents` values are interpolated into move/probe/delete paths, so both scripts validate every row against `^[a-z0-9][a-z0-9-]*$`. A row that is a path (`../../../outside/README`) yields `SKIP:invalid agent id` / `INVALID:{N>0}` from `toggle-team.sh` (matching FAIL from `verify-team.sh`), nothing is touched for that row, and the script exits 1 — fix the table by hand, the team is broken, !=disabled. Covered by `tests/suite-lifecycle.mjs` (BCOP08).
+
+Phase 3's `intent-guard.md` sanity check reads provenance before it deletes: a `CORRUPT` file stamped `<!-- generated_by: brewcode:superreview-setup` is `OURS` and may be removed and re-emitted; a `CORRUPT` + `FOREIGN` file is the project's own agent whose `{TOKENS}` may be its own convention — **STOP, never `rm`**, report path + tokens. `emit-agent` has already REUSED it byte-untouched. Covered by `tests/suite-intent-guard.mjs` (BCOP09).
+
 ```
 /brewcode:teams-setup status backend
 /brewcode:teams-setup install backend
@@ -369,11 +395,11 @@ Full-cycle E2E testing: install testing AGs, create BDD scenarios, write autotes
 
 | Param | Value |
 |-------|-------|
-| Args | `[status\|install\|create\|update\|review\|rules] [prompt]` |
+| Args | `[prompt] [status\|install\|create\|update\|review\|rules]` |
 | Context | session |
 | Model | opus |
 | Deps | `/brewcode:e2e install` (for every other mode: e2e AGs must exist) |
-| Tools | Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion, Skill, WebSearch, WebFetch |
+| Tools | Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion, Skill, WebSearch, WebFetch |
 
 ### Modes
 
@@ -409,7 +435,7 @@ Installs, audits, repairs, upgrades, enables, reindexes or uninstalls the `sembl
 
 | Param | Value |
 |-------|-------|
-| Args | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge\|reindex\|optimize\|resume]` or free-text intent (RU/EN) |
+| Args | `[prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge\|reindex\|optimize\|resume]` |
 | Context | session |
 | Model | opus |
 | Deps | -- |
@@ -420,6 +446,12 @@ Installs, audits, repairs, upgrades, enables, reindexes or uninstalls the `sembl
 Beyond the seven canonical modes it keeps three extras: `reindex` (drop this repo's cache dir, then warm), `optimize` (read-only audit fan-out), `resume` (post-reload verification).
 
 > **No-args is `status`, always** -- the one skill that does not fall back to `install` when nothing is installed, because `install` reaches machine-level package management (`uv`, `coreutils`).
+
+### Skipped is not failed
+
+A verification step that never ran is neither green nor broken. `semble-project.sh smoke` and `enable` exit `3` with `"status":"skipped"` when the query could not run at all (`SEMBLE_NO_NETWORK=1`, `SEMBLE_DRY_RUN=1`, no `uvx`) — report `skipped (<reason>)`, never `❌`. The wiring is done, so the phase stays `ready` after `install`/`resume` (`SMOKE_OK=0`) and stops at `verifying` after `enable` -- deliberately neither `ready` nor `error`. `status` then reads `partial - warm and smoke not recorded in state.completed`, naming exactly the missing members of the pair. Re-run `resume` once the reason is gone; never claim a verification that did not run.
+
+An **errored** `guidance` probe always downgrades the verdict to `partial` -- an unmeasurable half must never report `ready` with `--strict` exiting 0. A **null** measurement downgrades nothing: null means the section was not requested (`--section mcp`). `cache` and `agents` stay lenient by design.
 
 ```
 /brewcode:semble-setup

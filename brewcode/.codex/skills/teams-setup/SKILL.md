@@ -11,7 +11,7 @@ Use collaboration agents only when the user or project instructions explicitly r
 
 Follow every phase below. When a phase delegates work, use Codex collaboration with only `task_name` and `message`; treat each "Codex delegation brief" block as role and message content, not executable syntax. Use `request_user_input` for the documented user gates. Resolve `<skill-directory>`, `<plugin-root>`, `<project-root>`, and `<arguments>` before running commands.
 
-<!-- brewcode-meta: version=5.7.0 content_version=5.6.0 generated_by=brewcode:teams-setup -->
+<!-- brewcode-meta: version=6.0.0 content_version=6.0.0 generated_by=brewcode:teams-setup -->
 
 <instructions>
 
@@ -309,9 +309,15 @@ and this step's remedy is `rm -f`: it would delete a tailored file.
 f=.codex/agents/intent-guard.toml
 [ -s "$f" ] && grep -q '^name: intent-guard' "$f" \
   && ! sed 's/\${[A-Z_][A-Z_]*}//g' "$f" | grep -q '{[A-Z_]\{2,\}}' && echo "SANE" || echo "CORRUPT"
+grep -qF '<!-- generated_by: brewcode:superreview-setup' "$f" 2>/dev/null && echo "OURS" || echo "FOREIGN"
 ```
-- `CORRUPT` -> `rm -f .codex/agents/intent-guard.toml`, re-run Step 1 once (a fresh emit is now a
-  `CREATED`), re-check. Still `CORRUPT` -> **STOP** and report; do not patch it by hand.
+- `CORRUPT` + `OURS` -> the file came out of this pipeline, so `rm -f .codex/agents/intent-guard.toml`,
+  re-run Step 1 once (a fresh emit is now a `CREATED`), re-check. Still `CORRUPT` -> **STOP** and
+  report; do not patch it by hand.
+- `CORRUPT` + `FOREIGN` -> **STOP. Never `rm` it.** An unstamped file is the project's own agent and its
+  `{TOKENS}` may be its own convention; deleting it is the data loss this check exists to prevent
+  (`emit-agent` already REUSED it byte-untouched and printed the tokens as a conflict on stderr).
+  Report the path and the tokens and let the user decide.
 
 **Step 3 — adapt the seeded BLOCKs.** Only on `INTENT_GUARD: CREATED`. On `REUSE` or `MIGRATED` skip this
 step entirely: the existing file is already project-adapted and must not be rewritten or "refreshed".
@@ -810,6 +816,7 @@ Exception: after PURGE there is no team left — output the purge summary instea
 | Team not found (STATUS/UPGRADE/ENABLE/DISABLE/UNINSTALL/PURGE) | "Team '{TEAM_NAME}' not found. Run `$brewcode:teams-setup install {TEAM_NAME}`." **STOP** |
 | ENABLE on a live team / DISABLE on a parked team | `toggle-team.sh` prints `NOOP:` for every row. Report "already {enabled\|disabled}" and **STOP** — do not rename, do not ask |
 | `toggle-team.sh` prints `MISSING:` | A roster member has neither `.toml` nor `.toml.disabled`. **STOP** with the name — the team is broken, not disabled; run `upgrade` or re-create that agent |
+| `toggle-team.sh` prints `SKIP:invalid agent id` / `INVALID:{N>0}` (or `verify-team.sh` FAILs the same row) | A roster value is not `^[a-z0-9][a-z0-9-]*$` — it is a path, and it would have been moved or deleted OUTSIDE `.codex/agents/`. The script touched nothing for that row and exits 1. **STOP**: show the row and have `team.md`'s `## Agents` table fixed by hand |
 | `verify-team.sh` prints `DISABLED_AGENTS:{N>0}` | Expected on a disabled team, and it still exits PASS. Never report it as a failure and never "repair" it by regenerating the agents — `enable` is the fix |
 | Team already exists (INSTALL) | Show roster, request_user_input: "Upgrade instead?" |
 | verify-team.sh FAIL | Show missing items, attempt fix, re-verify |

@@ -121,7 +121,7 @@ Every spawn prompt carries six fields. A bare one-line task is never enough:
 | CONSUMER | who or what uses the result next, and the shape it must fit |
 | DONE | acceptance criteria + the exact report shape expected back |
 
-**The confirmation gates are not delegable.** DELETE and PRIVILEGE approval happens in Step 3, in the main conversation, *before* any spawn — a subagent never receives an unapproved destructive command.
+**The confirmation gates are not delegable.** `AskUserQuestion` is stripped from every subagent at runtime — DELETE and PRIVILEGE approval happens in Step 3, in the main conversation, *before* any spawn. A spawned `ssh-admin` does all non-destructive work and ends its return with an `## APPROVAL REQUIRED` block instead — one envelope per destructive operation (`COMMAND` / `HOST` / `EFFECT` / `ROLLBACK` / `EVIDENCE` / `PRECONDITION`), or the literal `APPROVAL REQUIRED: none`. The main session shows the envelopes to the user, then re-spawns the agent with `APPROVED: A1 A3` — the only authorization a subagent may act on.
 
 <details>
 <summary>Safety classification matrix & internals</summary>
@@ -147,6 +147,11 @@ Every spawn prompt carries six fields. A bare one-line task is never enough:
 | Total SSH calls per invocation | 15 max, then stop and report |
 | Key auth attempts (setup) | 3, then ask user |
 | AskUserQuestion per phase | 3 max, combined into one if more needed |
+
+Discovery bounds its own 30 s deadline inline — macOS has no GNU `timeout`, so the script re-execs
+itself under a portable watchdog rather than relying on a shared helper. Skills cannot source
+scripts across skill directories, so `ssh` keeps this logic self-contained instead of importing
+`deploy`'s watchdog module.
 
 **Server discovery collects:**
 

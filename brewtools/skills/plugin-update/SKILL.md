@@ -167,22 +167,25 @@ Reference: [references/install-prompt.md](references/install-prompt.md).
 Question: "Update brewcode plugin suite?"
 Options: "Update all" / "Update suite only" / "Update selected" / "Skip updates"
 
-**EXECUTE** full chain in order:
+If "Update selected" — ask per outdated plugin with options `["Update", "Skip"]`.
+
+Build the update set from that answer, never from a fixed list: "Update all" = every outdated
+plugin incl. `other`, "Update suite only" = outdated suite rows, "Update selected" = the rows
+answered `Update`, "Skip updates" = empty → go to Phase 5. Each row carries its Phase 0 `id` and
+`scope` (`user | project | local | managed`; missing → `user`).
+
+**EXECUTE** marketplace refresh first:
 ```bash
 claude plugin marketplace update claude-brewcode && echo "✅ marketplace update OK" || echo "❌ marketplace update FAILED"
 ```
+
+Then ONE command per row of the update set, substituting its `<id>` and discovered `<scope>`:
 ```bash
-claude plugin update brewcode@claude-brewcode && echo "✅ brewcode update OK" || echo "❌ brewcode update FAILED"
+claude plugin update <id> --scope <scope> && echo "✅ update <id> OK" || echo "❌ update <id> FAILED"
 ```
-```bash
-claude plugin update brewdoc@claude-brewcode && echo "✅ brewdoc update OK" || echo "❌ brewdoc update FAILED"
-```
-```bash
-claude plugin update brewtools@claude-brewcode && echo "✅ brewtools update OK" || echo "❌ brewtools update FAILED"
-```
-```bash
-claude plugin update brewui@claude-brewcode && echo "✅ brewui update OK" || echo "❌ brewui update FAILED"
-```
+
+`--scope` is mandatory — it defaults to `user`, so omitting it updates the user-scoped instance
+even when the installed one is project/local/managed.
 
 On failure: report exact error and continue. Reference: [references/update-commands.md](references/update-commands.md), [references/update-prompt.md](references/update-prompt.md).
 
@@ -201,10 +204,24 @@ Do NOT patch settings.json blindly. Instruct user to toggle via `/plugin` UI.
 
 ## Phase 5b — Prune Stale Plugin Caches
 
-**EXECUTE** using Bash tool:
+Prune removes only auto-installed dependencies no installed plugin still requires — plugins
+installed directly are never touched. Preview first, once per distinct `scope` seen in Phase 0.
+
+**EXECUTE** using Bash tool, substituting `<scope>`:
 ```bash
-claude plugin prune --help >/dev/null 2>&1 && claude plugin prune || echo "skipped: claude plugin prune unavailable"
+claude plugin prune --help >/dev/null 2>&1 && claude plugin prune --dry-run --scope <scope> || echo "skipped: claude plugin prune unavailable"
 ```
+
+Show the listed orphans. Empty list → nothing to remove, go to Phase 6. Otherwise ask ONCE on that
+exact list (AskUserQuestion, options `["Prune listed", "Skip"]`; `all` auto-picks "Prune listed",
+`update` skips), then:
+
+```bash
+claude plugin prune --scope <scope> -y && echo "✅ prune OK" || echo "❌ prune FAILED"
+```
+
+`-y` is mandatory here: it is required when stdin/stdout is not a TTY, and the Bash tool is not one —
+a bare `claude plugin prune` hangs on its confirmation prompt or fails.
 
 Non-fatal: if CLI lacks `prune`, prints skip notice and continues.
 

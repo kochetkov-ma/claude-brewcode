@@ -20,7 +20,7 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 | Field | Value |
 |-------|-------|
 | Model | sonnet |
-| Tools | Read, Write, Edit, Glob, Grep, Bash, WebFetch, AskUserQuestion |
+| Tools | Read, Write, Edit, Glob, Grep, Bash, WebFetch |
 | Skills | [text-optimize](/brewtools/skills/text-optimize/) |
 | Triggers | "optimize prompt", "reduce tokens", "compress" |
 | Modes | `light`, `medium` (default), `standard` (30–50%, human-readable), `deep` (2–3×, LLM-only with DICT+symbols), `max` (opt-in, 3–4×, `-x`/`--max`) |
@@ -35,7 +35,7 @@ The agent sizes the job before it starts compressing.
 | Task fits one bounded unit — one deliverable, ~5 files, ~10 steps | Runs it |
 | Bigger, or several independent deliverables | Stops **before starting**, returns a split proposal: 2-N bounded subtasks, each with scope and suggested owner |
 | Scope grows mid-flight | Stops at the next clean boundary, reports done / remaining / how to split |
-| Brief missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance | States the assumption in the report, or asks once. Never invents scope |
+| Brief missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance | States the assumption in the report. It cannot ask — a subagent has no question channel — so an open decision comes back to the caller as a named option plus a recommendation, never a guess. Never invents scope |
 
 "Optimize every file in `.claude/`" comes back as a split proposal, not as an hour of unsupervised
 rewriting. Point it at one file or one tight group and it runs straight through.
@@ -94,7 +94,7 @@ rewriting. Point it at one file or one tight group and it runs straight through.
       - Merge accidental dups into the most specific statement (D.1–D.3)
       - Cap intentional emphasis at 2 per document — full form early, short echo at the end (D.4)
       - Different scope, numbers, or conditions = different facts, never merged (D.6)
-      - Multi-file runs: one canonical location + pointer (D.5); deep/max log a dedup ledger
+      - Multi-file runs: D.5 is decided by the orchestrator, not this agent — it applies only the dedup rows named in its brief, each row a canonical location plus a pointer carrying a 1-line summary, never a bare pointer that loses the fact it replaces. Deep/max log a dedup ledger
     </div>
   </li>
   <li>

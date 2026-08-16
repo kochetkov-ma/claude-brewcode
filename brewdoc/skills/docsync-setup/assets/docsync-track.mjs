@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=5.7.0 content_version=5.6.0 generated_by=brewdoc:docsync-setup
+// brewcode-meta: version=6.0.0 content_version=6.0.0 generated_by=brewdoc:docsync-setup
 /**
  * docsync-track — PostToolUse:Write|Edit|MultiEdit hook (self-contained, project-local)
  *
@@ -7,10 +7,10 @@
  * and, if it lacks docsync frontmatter (`last_updated`), nudge Claude to add it.
  *
  * SELF-CONTAINED: helpers inlined, Node built-ins only, pure ESM. Reads project
- * state from <cwd>/.claude/docsync/ at runtime. Never throws, always exits 0.
+ * state from <projectRoot>/.claude/docsync/ at runtime. Never throws, always exits 0.
  */
-import { readFileSync, writeFileSync, mkdirSync, renameSync } from 'fs';
-import { join, relative, isAbsolute, dirname } from 'path';
+import { readFileSync, writeFileSync, mkdirSync, renameSync, existsSync } from 'fs';
+import { join, relative, isAbsolute, dirname, resolve } from 'path';
 
 // --- inlined helpers -------------------------------------------------------
 async function readStdin() {
@@ -21,11 +21,33 @@ async function readStdin() {
 }
 function output(r) { try { console.log(JSON.stringify(r)); } catch { console.log('{}'); } }
 function readJson(p, fb) { try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return fb; } }
+/**
+ * Project root: CLAUDE_PROJECT_DIR -> upward walk for a root marker -> hook cwd. Never throws.
+ * Hook `cwd` is "the working directory when the hook is invoked" and drifts mid-session
+ * (docs/hooks.md:717, CwdChanged), so it is never the root for config/state/log placement;
+ * keep it only for resolving relative paths out of `tool_input`.
+ * @param {string|null} hookCwd - `input.cwd` from the hook payload
+ * @returns {string} Absolute project root
+ */
+function projectRoot(hookCwd) {
+  const env = process.env.CLAUDE_PROJECT_DIR;
+  if (env && existsSync(env)) return resolve(env);
+
+  let dir = resolve(hookCwd || process.cwd());
+  for (;;) {
+    if (existsSync(join(dir, '.git')) || existsSync(join(dir, '.claude'))) return dir;
+    const up = dirname(dir);
+    if (up === dir) break;
+    dir = up;
+  }
+  return resolve(hookCwd || process.cwd()); // last resort: never guess, never throw in a hook
+}
 // Atomic write: temp file + rename, so a crash never leaves a half-written state.
+// The temp name carries the pid — hooks run in parallel and used to share one `.tmp`.
 function writeJsonAtomic(p, o) {
   try {
     mkdirSync(dirname(p), { recursive: true });
-    const tmp = p + '.tmp';
+    const tmp = `${p}.${process.pid}.tmp`;
     writeFileSync(tmp, JSON.stringify(o, null, 2));
     renameSync(tmp, p);
   } catch {}
@@ -35,10 +57,15 @@ function today() {
   const d = new Date(), p = n => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
-function statePath(cwd) { return join(cwd, '.claude', 'docsync', 'state.json'); }
+// One state file per session — a shared state.json let two concurrent sessions
+// reset each other's touched-set. No session id (rare) falls back to state.json.
+function statePath(root, sessionId) {
+  const id = String(sessionId || '').replace(/[^A-Za-z0-9._-]/g, '_');
+  return join(root, '.claude', 'docsync', id ? `state-${id}.json` : 'state.json');
+}
 
-function loadConfig(cwd) {
-  const c = readJson(join(cwd, '.claude', 'docsync', 'config.json'), {});
+function loadConfig(root) {
+  const c = readJson(join(root, '.claude', 'docsync', 'config.json'), {});
   return {
     // `disable` flips this to false and leaves everything else in place. Absent = on,
     // so a config written before the toggle existed keeps working.
@@ -49,13 +76,14 @@ function loadConfig(cwd) {
 }
 // Re-read from disk at write time and union, so concurrent track/watch calls never
 // drop each other's entries. Reset touched/asked when the session id changes.
-function recordTouched(cwd, sessionId, rel) {
-  const disk = readJson(statePath(cwd), null);
+function recordTouched(root, sessionId, rel) {
+  const p = statePath(root, sessionId);
+  const disk = readJson(p, null);
   const st = (!disk || disk.session_id !== sessionId) ? { session_id: sessionId, touched: [], asked: false } : disk;
   if (!Array.isArray(st.touched)) st.touched = [];
   if (st.touched.includes(rel)) return; // already recorded, skip write
   st.touched.push(rel);
-  writeJsonAtomic(statePath(cwd), st);
+  writeJsonAtomic(p, st);
 }
 
 // Minimal glob -> RegExp: supports **/ (any dir prefix), **, *, ?.
@@ -93,9 +121,11 @@ function parseFm(abs) {
     return { present: true, fields };
   } catch { return { present: false, fields: {} }; }
 }
-function relOf(cwd, fp) {
+// `cwd` resolves a relative tool_input path; the key itself is root-relative, so
+// the Stop gate resolves it the same way no matter where the session wandered.
+function relOf(cwd, root, fp) {
   const abs = isAbsolute(fp) ? fp : join(cwd, fp);
-  return relative(cwd, abs);
+  return relative(root, abs);
 }
 // doc_type default: absent or unrecognized => 'user'. Only 'skip' removes a file from scope.
 function docTypeOf(fields) {
@@ -103,12 +133,12 @@ function docTypeOf(fields) {
   return (v === 'llm' || v === 'user' || v === 'skip') ? v : 'user';
 }
 // A path is tracked when it is an in-project .md, not excluded, not doc_type: skip.
-function isTracked(cwd, fp, cfg) {
+function isTracked(cwd, root, fp, cfg) {
   if (!fp || !fp.endsWith('.md')) return false;
-  const rel = relOf(cwd, fp);
+  const rel = relOf(cwd, root, fp);
   if (!rel || rel.startsWith('..') || isAbsolute(rel)) return false;
   if (isExcluded(rel, cfg.exclude)) return false;
-  if (docTypeOf(parseFm(join(cwd, rel)).fields) === 'skip') return false;
+  if (docTypeOf(parseFm(join(root, rel)).fields) === 'skip') return false;
   return true;
 }
 // ---------------------------------------------------------------------------
@@ -116,18 +146,19 @@ function isTracked(cwd, fp, cfg) {
 async function main() {
   try {
     const input = await readStdin();
-    const cwd = input.cwd || process.cwd();
+    const cwd = input.cwd || process.cwd(); // relative tool_input paths ONLY
+    const root = projectRoot(input.cwd);    // config + state live here
     const sessionId = input.session_id;
     const fp = input.tool_input && input.tool_input.file_path;
 
-    const cfg = loadConfig(cwd);
+    const cfg = loadConfig(root);
     if (!cfg.enabled) { output({}); return; } // `disable`: registered but inert
-    if (!isTracked(cwd, fp, cfg)) { output({}); return; }
+    if (!isTracked(cwd, root, fp, cfg)) { output({}); return; }
 
-    const rel = relOf(cwd, fp);
-    recordTouched(cwd, sessionId, rel);
+    const rel = relOf(cwd, root, fp);
+    recordTouched(root, sessionId, rel);
 
-    const fm = parseFm(join(cwd, rel));
+    const fm = parseFm(join(root, rel));
     if (!fm.present || !fm.fields.last_updated) {
       output({
         hookSpecificOutput: {

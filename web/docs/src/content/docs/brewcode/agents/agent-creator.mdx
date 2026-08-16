@@ -21,7 +21,7 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 |-------|-------|
 | Triggers | "create agent", "improve agent", "scaffold agent" |
 | Model | `inherit` — runs on the session's model |
-| Tools | Read, Write, Edit, Glob, Grep, Bash, Task, Skill, WebFetch, WebSearch, AskUserQuestion |
+| Tools | Read, Write, Edit, Glob, Grep, Bash, Agent, WebFetch, WebSearch |
 
 ## Scope guard
 
@@ -123,15 +123,15 @@ Scope Fit is dropped for research, docs, and review-only agents; Return Contract
 name: agent-name              # REQ: lowercase-hyphens; no leading `-`, no `:` (reserved for plugin namespacing)
 description: "..."            # REQ: action verb + Triggers: keyword list
 model: sonnet                 # OPT: fable|opus|sonnet|haiku|inherit  (fable=claude-fable-5, Mythos-class, CC 2.1.170+)
-effort: high                  # OPT: low|medium|high|auto|integer
+effort: high                  # OPT: low|medium|high|xhigh|max (no auto, no bare integer)
 maxTurns: 20                  # OPT: integer, max turns before abort
 tools: Read, Glob, Grep       # OPT: omit = inherit all
 disallowedTools: Write, Edit  # OPT: explicit deny list
 skills: skill1, skill2        # OPT: full content injected into context at startup
-color: cyan                   # OPT: cyan|green|yellow|red|magenta
+color: cyan                   # OPT: 8 valid values -- magenta is NOT one
 memory: project               # OPT: user|project|local -- auto-adds Read/Write/Edit
-background: true              # OPT: run detached (default: false)
-isolation: worktree           # OPT: worktree|remote -- LOW PRIORITY, see below
+background: true              # OPT: true keeps it backgrounded even when Claude wants the result (DEF unset, no `false` switch)
+isolation: worktree           # OPT: FM accepts `worktree` only -- LOW PRIORITY, see below (`remote` is invocation-level, never FM)
 permissionMode: default       # OPT: LOCAL-ONLY -- ignored + warn in plugin agents
 mcpServers: [server1]         # OPT: LOCAL-ONLY -- ignored + warn in plugin agents
 initialPrompt: "..."          # OPT: LOCAL-ONLY -- first prompt sent on start
@@ -141,15 +141,15 @@ observeSubagents: false       # OPT: LOCAL-ONLY -- `false` disables observation
 ---
 ```
 
-**Scope — verified against the CC v2.1.220 binary (two separate parsers: local `.claude/agents/` and plugin `<plugin>/agents/**.md`):**
+**Scope — verified against CC 2.1.233 (two separate parsers: local `.claude/agents/` and plugin `<plugin>/agents/**.md`):**
 
 | Scope | Fields |
 |-------|--------|
-| Local + plugin — both parsers honor it | `model`, `effort`, `maxTurns`, `tools`, `disallowedTools`, `skills`, `color`, `memory`, `background`, `isolation: worktree` |
-| Local only — ignored, with a warning at load in plugin agents | `permissionMode`, `hooks`, `mcpServers` |
-| Local only — silently dropped in plugin agents, no warning | `initialPrompt`, `observer`, `observerMessage`, `observeSubagents`, `isolation: remote` |
+| Local + plugin — both parsers honor it | `model`, `effort`, `maxTurns`, `tools`, `disallowedTools`, `skills`, `color`, `memory`, `background`, `isolation: worktree`, `initialPrompt` |
+| Local only — ignored for plugin agents | `permissionMode`, `hooks`, `mcpServers` (exactly these three) |
+| Absent from the 2.1.233 field table — treat as internal/older, do not emit into a generated agent | `observer`, `observerMessage`, `observeSubagents` |
 
-Warning text emitted at load: `Plugin agent file <path> sets <key>, which is ignored for plugin agents. Use .claude/agents/ for this level of control.` Need one of the local-only fields? Move the agent to `.claude/agents/` — plugin agents cannot use them, no matter how the frontmatter is written.
+`initialPrompt` auto-submits as the first user turn only when this exact definition runs as the MAIN session (`--agent <name>` or the `agent` setting) — irrelevant on an ordinary subagent spawn, but honored for plugin agents too since origin isn't the boundary, execution context is. Need `permissionMode`/`hooks`/`mcpServers`? Move the agent to `.claude/agents/` — plugin agents ignore these three no matter how the frontmatter is written. `isolation: remote` is never a valid FM value anywhere — it is invocation-level only, reachable from an `Agent(...)` tool call.
 
 <Callout type="caution">
 **`isolation` is low priority — don't set it by default.** Every spawn with `isolation: worktree` costs a git worktree setup plus disk, and there's a known data-loss bug when it's combined with `permissionMode: bypassPermissions` ([#29110](https://github.com/anthropics/claude-code/issues/29110)). Use it only when several agents write to the same files concurrently.
@@ -202,11 +202,14 @@ Calibrated against real subagent transcripts (`.claude/projects/*/subagents/agen
 | `API_TIMEOUT_MS` | A single API call | 10 min |
 | `CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS` | Background-agent stall; resets on streaming | 10 min |
 | `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` | Concurrent subagents | 20 |
-| `CLAUDE_CODE_MAX_SUBAGENTS_PER_SESSION` | Total per session | 200 |
-| `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` | Subagent nesting depth (v2.1.219+) — verify the live cap, don't hardcode a number | unset |
+| `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` | Subagent nesting depth below main; `1` turns nesting off — verify the live cap, don't hardcode a number | 3 |
 | `CLAUDE_CODE_MAX_OUTPUT_TOKENS` | Output tokens per response | model max |
 | `MAX_MCP_OUTPUT_TOKENS` | MCP result size | 25k |
 | `BASH_DEFAULT_TIMEOUT_MS` / `BASH_MAX_TIMEOUT_MS` | Bash tool only | 120s / 600s |
+
+<Callout type="tip">
+**No total-per-session spawn cap exists.** `CLAUDE_CODE_MAX_SUBAGENTS_PER_SESSION` (default 200, added in 2.1.212) was removed in **2.1.224** — concurrency and nesting depth are the only live spawn limits now.
+</Callout>
 
 **Time-based control** is only reachable through `PreToolUse`, which fires inside the subagent loop and carries `agent_id` and `agent_type`: warn at 80% of the budget, deny non-Write tools at 100%. `SubagentStart` and `SubagentStop` fire in the MAIN session, not inside the agent. No timer hook exists.
 
@@ -215,7 +218,7 @@ Calibrated against real subagent transcripts (`.claude/projects/*/subagents/agen
 | Path / tool | Use |
 |-------------|-----|
 | `.claude/projects/{project}/{sessionId}/subagents/agent-{agentId}.jsonl` | Full subagent transcript (retention: `cleanupPeriodDays`) |
-| `run_in_background: true` + `TaskOutput` | Read partial output while it runs |
+| `run_in_background: true` + `TaskOutput` | Read partial output while it runs — from the MAIN session only; `TaskOutput` is filtered out of every subagent |
 | `TaskStop` | Kill a running subagent |
 | `SendMessage` | Resume a stopped subagent with context intact |
 

@@ -22,12 +22,16 @@ Column meanings are the same in every table below.
 
 Two more conventions used across the suite:
 
-- **Fail-open.** Every hook returns `{}` when anything goes wrong, which means "do nothing, carry on". So a
-  broken discipline layer costs you a good habit, never the ability to keep working. Only five hooks ever
-  block on purpose: the hard wall, the agent router, the deadline guard, the return guard and the docsync
-  gate. One hook fails open *loudly* rather than silently: `compact-recall.mjs` degrades every error path,
-  including its outer `catch`, to its `[INTENT]` fragment, because after a compaction saying nothing is
-  itself the failure.
+- **Fail-open, with one deliberate exception.** A discipline hook returns `{}` when anything goes wrong,
+  which means "do nothing, carry on". So a broken discipline layer costs you a good habit, never the
+  ability to keep working. Only five hooks ever block on purpose: the hard wall, the agent router, the
+  deadline guard, the return guard and the docsync gate. Two of those five depart from the rule.
+  `compact-recall.mjs` fails open *loudly* rather than silently: every error path, including its outer
+  `catch`, degrades to its `[INTENT]` fragment, because after a compaction saying nothing is itself the
+  failure. `hardmode-guard.mjs` fails **closed** (v6, BT-F01): it is a security guard, so an unparseable
+  payload, a corrupt `state.json` next to an installed manager dir, or any internal error DENIES
+  (`hardmode-guard.mjs:26-31`, `:326`, `:399-403`). The only pass-throughs left are "the manager was never
+  installed here" and the subagent discriminator, and the self-exempt exit CLI survives both.
 - **Say it at the moment it applies.** Contracts are injected at session open, at prompt submit, at subagent
   spawn or at tool call - never left to be remembered from earlier in the context.
 
@@ -54,8 +58,9 @@ classDiagram
     lib reminder.mjs - the one copy of that text
     hook brewtools session-start.mjs - wall notice
     hook manager-prompt.mjs - codewords ++m ++a ++rr ++r
-    hook hardmode-guard.mjs - ships inert
+    hook hardmode-guard.mjs - ships inert and fails closed
     config brewdoc hooks.json - empty on purpose
+    recipe project root - env then git then walk then PWD
   }
 
   class S2["2 - Delegation and manager discipline"] {
@@ -76,6 +81,7 @@ classDiagram
     hook agent-router.mjs - tier 1 deterministic
     agent haiku judge - tier 2 strict only
     config agent-return agent-deadline agent-router json
+    text APPROVAL REQUIRED envelope - no AskUserQuestion in a subagent
   }
 
   class S4["4 - Context economy"] {
@@ -109,6 +115,8 @@ classDiagram
     skill semble-setup - MCP at user scope
     skill agent-return agent-deadline agent-router setup
     skill setup-status - reports and writes nothing
+    template ssh and deploy admin - carry the approval envelope
+    rule generated hooks inline their own project root
   }
 
   class S7["7 - Agent authoring conventions"] {
@@ -118,7 +126,9 @@ classDiagram
     frontmatter maxTurns sized to the role
     frontmatter Bash declared in tools - 8 of 8
     path CLAUDE_PLUGIN_ROOT - 6 of 8
+    section Approval Contract - 2 of 8
     stamp four provenance keys
+    suite suite-creator-contract.mjs - 27 checks on the 2.1.233 facts
   }
 
   class S8["8 - Skill contract"] {
@@ -129,6 +139,7 @@ classDiagram
     table mode keywords EN and RU
     modes canonical 7 - enable and disable 11 of 11
     rule invocation invariant 27 of 27
+    suites 9 regression harnesses - 565 checks
   }
 
   class IG["intent-guard - one file two writers"] {
@@ -187,7 +198,7 @@ sequenceDiagram
   rect rgba(31,111,235,0.14)
     Note over BC,MS: SessionStart matcher compact, after each compaction
     BC->>MS: role-recall, same ROLE SPLIT BRANCH text
-    BC->>MS: compact-recall, PLAN from this transcript
+    BC->>MS: compact-recall, PLAN from this transcript or LATEST.md
     BC->>MS: compact-recall, TASKS call TaskList first
   end
 
@@ -216,6 +227,7 @@ sequenceDiagram
     PH->>SA: think-short tone directive
     PH->>SA: return contract announced
     PH->>SA: semble subagent nudge
+    Note over SA: no AskUserQuestion here - approvals leave as envelopes
   end
 
   rect rgba(130,80,223,0.16)
@@ -247,12 +259,12 @@ These run the moment the plugin is installed. No setup skill, no config file, no
 | Approach | File | Scope | Trigger | Fires when | Excerpt | Purpose | Problem solved | Project-specific |
 |---|---|---|---|---|---|---|---|---|
 | Delegation reminder on every prompt | `brewcode/hooks/forced-eval.mjs` | plugin-shipped | `UserPromptSubmit`, timeout 2 s | Every prompt, slash commands included. Skipped only for one-word replies: `yes`, `no`, `ok`, `continue`, a bare number, a single letter | `[ROLE] Manager: scan agents ... expert for this domain exists -> delegate regardless of size; ... [SPLIT] One agent for an hour = drift you cannot observe ... [BRANCH] Stay on the current branch; none chosen -> main.` - the text itself is not in this file: it is `REMINDER_TEXT` from `brewcode/hooks/lib/reminder.mjs`, shared with `role-recall.mjs` | Re-state role, subagent sizing and branch default every turn | The model does domain work itself while a project expert agent exists; one giant agent runs for an hour; a feature branch nobody asked for | no |
-| Session banner, update check, plan symlink | `brewcode/hooks/session-start.mjs` | plugin-shipped | `SessionStart`, timeout 3 s | Every session start. The symlink part runs only when `source === 'clear'`, and only if the newest `.md` in `~/.claude/plans/` is under 60 s old (`PLAN_FRESHNESS_MS`, `:31`); it then points `<repo>/.claude/plans/LATEST.md` at that global file. The whole output is a `systemMessage` for the human - the model is sent nothing | `brewcode: <root> \| session: <id> \| perm: <mode>` and, when out of date, `UPDATE brewcode <installed> -> <released>: <link to the releases page>`; the link step logs `Linked: .claude/plans/LATEST.md -> <plan name>` | Show the live build and permission mode; keep the just-written plan reachable from the project | Running an old build silently; losing the plan file when Plan Mode clears the session | no |
+| Session banner, update check, plan symlink | `brewcode/hooks/session-start.mjs` | plugin-shipped | `SessionStart`, timeout 3 s | Every session start. The symlink part runs only when `source === 'clear'`, and only if the newest `.md` in `~/.claude/plans/` is under 60 s old (`PLAN_FRESHNESS_MS`, `:35`); it then points `<repo>/.claude/plans/LATEST.md` at that global file. Two containment checks, both refusals: `<repo>/.claude/plans` that is itself a **symlink** is left alone and nothing is linked - `mkdirSync`/`symlinkSync` follow it and would write `LATEST.md` outside the project root (`:140-148`); and an existing `LATEST.md` is replaced only when it is a symlink whose target resolves inside the plans dir, so a hand-written file, a directory or a foreign symlink is preserved and logged as a conflict (`claimLatestLink`, `:74-107`). The whole output is a `systemMessage` for the human - the model is sent nothing | `brewcode: <root> \| session: <id> \| perm: <mode>` and, when out of date, `UPDATE brewcode <installed> -> <released>: <link to the releases page>`; the link step logs `Linked: .claude/plans/LATEST.md -> <plan name>` | Show the live build and permission mode; keep the just-written plan reachable from the project | Running an old build silently; losing the plan file when Plan Mode clears the session | no |
 | Role frame re-injected after a compaction | `brewcode/hooks/role-recall.mjs` | plugin-shipped | `SessionStart` with `"matcher": "compact"`, timeout 2 s | Only after a compaction, auto or `/compact`. Belt-and-braces on top of the matcher: anything but `input.source === 'compact'` returns `{}`, so `startup`, `resume`, `clear` and `fork` are silent - they still carry the frame. Unconditional otherwise, and compactions chain | The same three lines as `forced-eval.mjs`, byte-for-byte: both import `REMINDER_TEXT` from `brewcode/hooks/lib/reminder.mjs`, which exists so `[ROLE]` / `[SPLIT]` / `[BRANCH]` cannot drift between two hooks on two different events | Put the manager role back in front of the model at the one moment the summary has just collapsed every earlier copy of it | An auto-compaction has no prompt, so `forced-eval.mjs` never fires; after a few compactions the session quietly stops delegating | no |
-| Plan, intent and task graph re-anchored after a compaction | `brewcode/hooks/compact-recall.mjs` | plugin-shipped | `SessionStart` with `"matcher": "compact"`, timeout 2 s | Same moment, same `source === 'compact'` guard, and it ALWAYS injects there. It scans this session's `transcript_path` only - `statSync` must report a regular file (a FIFO reports size 0 and then blocks `readFileSync` forever) of at most `MAX_TRANSCRIPT_BYTES`, `64 * 1024 * 1024`; then `Buffer.lastIndexOf` / `includes`, no JSONL parsing, ~6 ms scan (one buffer read plus five substring scans) on an 8.13 MB transcript, ~30 ms full process wall clock standalone / ~55 ms spawned from a node parent (node startup dominates). Ladder, first match wins: `plan-file` -> `plan-missing` -> `plan-in-summary` -> `intent`. `[TASKS]` is appended only when the transcript contains `"name":"TaskCreate"` | `[PLAN] Read <path> with the Read tool before doing any work. It holds the role model and the delegation split for this session ...`, or `[PLAN] The plan file for this session is gone or unreadable at <path>. Rebuild the frame from the compact summary plus TaskList, not from scratch.`, or `[PLAN] This session ran in plan mode; no plan file is available. ...`, or `[INTENT] Re-read the user ORIGINAL task and intent from the compact summary and keep executing THAT. Do not continue from the most recently remembered fragment, and do not re-scope the work.` Plus, when a graph exists: `[TASKS] Then call TaskList: a task graph created before the compact ALREADY EXISTS in this session. ... The built-in reminder lags several turns and may show empty, so TaskList is the authority. Then resume the work.` | Say what we were doing, from this session's own record, before the model decides for itself | The session loses the user's original task and starts a brand-new task graph on top of the old one | no |
+| Plan, intent and task graph re-anchored after a compaction | `brewcode/hooks/compact-recall.mjs` | plugin-shipped | `SessionStart` with `"matcher": "compact"`, timeout 2 s | Same moment, same `source === 'compact'` guard, and it ALWAYS injects there. It scans this session's `transcript_path` only - `statSync` must report a regular file (a FIFO reports size 0 and then blocks `readFileSync` forever) of at most `MAX_TRANSCRIPT_BYTES`, `64 * 1024 * 1024`; then `Buffer.lastIndexOf` / `includes`, no JSONL parsing, ~6 ms scan (one buffer read plus five substring scans) on an 8.13 MB transcript, ~30 ms full process wall clock standalone / ~55 ms spawned from a node parent (node startup dominates). Ladder, first match wins, five rungs since v6: `plan-file` -> `plan-latest` -> `plan-missing` -> `plan-in-summary` -> `intent`. `plan-latest` reads `<root>/.claude/plans/LATEST.md` (`compact-recall.mjs:150-164`) and exists because a plan that PREDATES the transcript - `--resume`, or a session resumed after `/clear` - leaves no `planFilePath` to scan for; that link is hook-owned and project-scoped, so it can never be another repo's plan, and it sits above `plan-missing` because a real file beats a dead path. `[TASKS]` is appended only when the transcript contains `"name":"TaskCreate"` | `[PLAN] Read <path> with the Read tool before doing any work. It holds the role model and the delegation split for this session ...`, or `[PLAN] Read <root>/.claude/plans/LATEST.md ... It is this project's latest plan, carried over from before the compact ...`, or `[PLAN] The plan file for this session is gone or unreadable at <path>. Rebuild the frame from the compact summary plus TaskList, not from scratch.`, or `[PLAN] This session ran in plan mode; no plan file is available. ...`, or `[INTENT] Re-read the user ORIGINAL task and intent from the compact summary and keep executing THAT. Do not continue from the most recently remembered fragment, and do not re-scope the work.` Plus, when a graph exists: `[TASKS] Then call TaskList: a task graph created before the compact ALREADY EXISTS in this session. ... The built-in reminder lags several turns and may show empty, so TaskList is the authority. Then resume the work.` | Say what we were doing, from this session's own record, before the model decides for itself | The session loses the user's original task and starts a brand-new task graph on top of the old one | no |
 | Hard-wall awareness at session open | `brewtools/hooks/session-start.mjs` | plugin-shipped, reads project state | `SessionStart`, timeout 2 s | Every session start, but speaks only when `.claude/brewtools/manager/state.json` has `hard: true` in this project | `Manager HARD wall active (project, level=...): main session is orchestration-only - delegate in bounded units ... /brewtools:manager-setup disable to exit.` | Tell the model at turn zero that its own tools are blocked, and how to leave | A whole session of denied tool calls with no explanation | yes |
 | Codeword injection, plus an automatic block while the wall is on | `brewtools/hooks/manager-prompt.mjs` | plugin-shipped; text resolves project -> global -> plugin default | `UserPromptSubmit`, timeout 3 s | Every prompt. Matches `++m`, `++a`, `++rr`, `++r` as standalone tokens, so `++rr` never matches as `++r`. With no codeword it still injects the manager block when `state.hard === true` | `User typed \`++m\` - Manager mode is active for this turn:` then the block resolved from `manager-setup/references/full.md`, which opens `[ROLE: MANAGER] ... You are a Manager, not an executor. Your only actions: think, plan, build the TaskGraph, delegate, observe, integrate.` Several blocks join with `---`. The five block texts are quoted row by row in section 2 | Switch on a heavy behaviour rule for one turn by typing two characters | Standing instructions cost tokens every turn; typed by hand they drift out of use | yes, text is overridable |
-| Physical main-session tool wall, shipped but not registered | `brewtools/hooks/hardmode-guard.mjs` | project, and only after install. The file ships inert: it is **not** listed in `brewtools/hooks/hooks.json` | `PreToolUse` matcher `*` | Before every tool call, but three conditions must all hold. (1) `/brewtools:manager-setup install` has copied the file into the project and registered it in `.claude/settings.local.json` - the shipped copy is never registered. (2) The project `state.json` has `hard: true`; anything else and the guard returns `{}`. (3) The stdin payload carries `agent_id` (`hardmode-guard.mjs:295-298`) - that key is present only inside a real subagent, which always passes through. `agent_type` alone is not enough: a main session started with `claude --agent <name>` carries it too, so it stays walled. Neither key present also means walled | `Hard wall: Write is blocked in the main session - delegate to a subagent. ... To exit run \`/brewtools:manager-setup disable\`` | Make the manager role a machine rule, not advice | The model reads "delegate everything" and edits a file anyway | yes |
+| Physical main-session tool wall, shipped but not registered | `brewtools/hooks/hardmode-guard.mjs` | project, and only after install. The file ships inert: it is **not** listed in `brewtools/hooks/hooks.json` | `PreToolUse` matcher `*` | Before every tool call, but three conditions must all hold. (1) `/brewtools:manager-setup install` has copied the file into the project and registered it in `.claude/settings.local.json` - the shipped copy is never registered. (2) The project `state.json` has `hard: true`; a project with **no** manager dir at any candidate root returns `{}`, but a manager dir whose `state.json` is missing, unparseable or not an object resolves to `{ hard: true, level: 'strict' }` and denies (`readProjectState`, `:98-121`). (3) The stdin payload carries `agent_id` (`:339-342`) - that key is present only inside a real subagent, which always passes through. `agent_type` alone is not enough: a main session started with `claude --agent <name>` carries it too, so it stays walled. Neither key present also means walled | `Hard wall: Write is blocked in the main session - delegate to a subagent. ... To exit run \`/brewtools:manager-setup disable\`` | Make the manager role a machine rule, not advice | The model reads "delegate everything" and edits a file anyway | yes |
 | No hooks at all | `brewdoc/hooks/hooks.json` | plugin-shipped | none | Never. The file is `{"hooks":{}}` | - | brewdoc is a pure skill plugin, zero runtime cost | A hook process on every prompt for a plugin with nothing to inject | no |
 | No hooks and no `hooks.json` | `brewui/` | plugin-shipped | none | Never. There is no `brewui/hooks/` directory at all, and `brewui/skills/` holds only `.gitkeep` | - | A registered placeholder plugin that costs a session nothing | Assuming from the three tables above that every plugin in the suite has a hook layer | no |
 | One shared stdin/stdout/logging helper per plugin | `brewcode/hooks/lib/utils.mjs` (227 lines), `brewtools/hooks/lib/utils.mjs` and `brewdoc/hooks/lib/utils.mjs` (91 lines each) | plugin-shipped | none | Never on its own. Imported by the entry hooks for `readStdin`, `output`, `capText`, `log`, `loadConfig`, `getState`, `saveState`. `capText` and `TEXT_CHANNEL_CAP` live here rather than in one hook for the same reason `lib/reminder.mjs` exists: three brewcode hooks cap the same way and a copy would drift. The three copies are not identical, and brewdoc's is an orphan - brewdoc registers no hooks, so nothing imports it | `export async function readStdin()` ... `export function output(response)` | One place per plugin for the fail-open stdin/stdout shape every hook repeats | Each hook re-implementing stdin parsing and the empty-`{}` reply, each with its own bug | no |
@@ -279,6 +291,26 @@ Notes for this section:
   `role-recall.mjs` and `compact-recall.mjs`, sit in a `"matcher": "compact"` group, run only after a
   compaction, and speak *only* to the model through `additionalContext`, with no `systemMessage` at all.
   So "brewcode's SessionStart is human-only" holds for the unmatched hook and is false for the compact pair.
+- **One project-root recipe, copied on purpose.** Every hook and installer in the suite resolves the root
+  in this fixed order: `CLAUDE_PROJECT_DIR` -> git toplevel -> upward walk for `.git`/`.claude` -> `PWD`
+  (`brewcode/agents/hook-creator.md:373-423`, the JS form omitting the git step). `CLAUDE_PROJECT_DIR` is
+  exported unconditionally into every hook child process, both exec and shell form - it is empty in an
+  interactive or Bash-tool shell, and that is expected, not evidence it is unset for hooks - and it is
+  substituted inside skill markdown since 2.1.196. `input.cwd` has exactly one job, resolving relative
+  paths out of `tool_input`; it drifts mid-session (see `CwdChanged`) so it never keys config, state or
+  log placement. Plugin-shipped hooks import `projectRoot` from their plugin's `lib/utils.mjs`
+  (`brewcode/hooks/lib/utils.mjs:15`); every **generated** hook inlines a byte-identical copy instead, and
+  that duplication is deliberate, not debt - a generated hook lands alone in someone else's repo with no
+  plugin lib to import (`docsync-track.mjs:9`, `-watch.mjs:11`, `-gate.mjs:15`, all "SELF-CONTAINED:
+  helpers inlined, Node built-ins only"). Same reason `hardmode-guard.mjs:5-7` carries no imports at all.
+  A hook never exits non-zero because the root was ambiguous; an installer about to write does abort.
+- **`${CLAUDE_PLUGIN_DATA}` is official, persistent and writable.** `~/.claude/plugins/data/<plugin-id>/`,
+  survives plugin updates (2.1.78+). `~/.claude/**` is a sensitive path, so a `Write`/`Edit` **tool** call
+  there is routed to a permission ASK - not a block - and `plugins/` is not one of the carve-outs; a hook
+  or Bash subprocess writes there freely. So it is a fully supported persistent write target, just not
+  from a `Write`/`Edit` tool call in an unattended run, where `${CLAUDE_PROJECT_DIR}/.claude/<subdir>/` is
+  the right home (`hook-creator.md:351`, `:364-371`). Write the token bare: `${VAR:-fallback}` is never matched by
+  the substitution regex, reaches the shell verbatim, and the fallback then always wins silently.
 - Installing brewtools does **not** arm the wall. Only `/brewtools:manager-setup install` does.
 - Nothing in the suite registers `SessionEnd`, `PreCompact` or `PostCompact`. Zero hits across all three
   `hooks.json`, every generated `assets/INSTALL.md` and this repo's own `.claude/settings.json`. It still has
@@ -302,8 +334,9 @@ wall has to be installed first.
 | `++a` architecture first | `references/architect.md` | plugin-shipped | `UserPromptSubmit` | You type `++a`; combines with the other groups | `Before implementation, delegate an architecture pass ... do not design it inline. ... As SIMPLE as possible while staying scalable ... Find the closest well-built existing counterpart in the repo ... ADDITIVE to conventions/rules/docs, never instead.` | Design becomes a delegated, written step | Improvised inline design that ignores existing patterns | no |
 | `++rr` anti-regression review | `references/review-regression.md` | plugin-shipped | `UserPromptSubmit` | You type `++rr`. It beats `++r` | `ONE primary focus, three axes: 1. NO REGRESSION (primary) ... Review is two-phase, always ... b. Double-check - re-verify each finding before acting (no blind fixes).` | Regression-first, two-phase review after each phase | New code breaking what worked; reviewers fixing findings that were never real | no |
 | `++r` two-phase double check | `references/review-double.md` | plugin-shipped | `UserPromptSubmit` | You type `++r` and not `++rr` | `Before the review proper, pass the code for simplification ... 1. Review. 2. Double-check ... 3. Fix - only after confirmation. Never fix on first pass without the double-check step.` | Simplify, review, verify, then fix | Fixing hallucinated findings; shipping over-engineered code | no |
-| Hard wall, `level balanced` (default) | `/brewtools:manager-setup install` | project only, there is no global wall | `PreToolUse` matcher `*` | Every main-session tool call while `state.hard === true` | `Hard wall (balanced): only read-only Bash is allowed in the main session - delegate execution to a subagent.` and, for the flat denials, `Hard wall: ${tool} is blocked in the main session - delegate to a subagent.` (`hardmode-guard.mjs:328`, `:312`) | Remove the session's hands, keep inspection. The allowlist is closed: it permits `Read/Grep/Glob`, `Task/Agent/Skill`, plan tools, task tracking, `AskUserQuestion`, read-only Bash and read-verb MCP, and denies everything else - `Write`, `Edit`, `NotebookEdit`, `WebFetch`, `Artifact`, mutating MCP and any tool not on the list (`hardmode-guard.mjs:80-102`, `:321-342`) | "Faster if I just do it": the session implements everything itself with no observable trail | yes |
+| Hard wall, `level balanced` (default) | `/brewtools:manager-setup install` | project only, there is no global wall | `PreToolUse` matcher `*` | Every main-session tool call while `state.hard === true` | `Hard wall (balanced): only read-only Bash is allowed in the main session - delegate execution to a subagent.` and, for the flat denials, `Hard wall: ${tool} is blocked in the main session - delegate to a subagent.` (`hardmode-guard.mjs:375`, `:353`) | Remove the session's hands, keep inspection. Tool level: `ALWAYS_ALLOW` permits `Read/Grep/Glob/NotebookRead`, `Task/Agent/Skill/SlashCommand/ListAgents/SendMessage/Monitor`, the plan tools, `ToolSearch`, task tracking, `BashOutput/KillShell`, MCP resource introspection and `AskUserQuestion`; `ALWAYS_BLOCK` is `Write`, `Edit`, `NotebookEdit`, `WebFetch`; everything unlisted is default-denied, `Artifact` explicitly included (`:126-148`, `:349-403`). Bash level: an **allowlist**, not a denylist (v6, BT-F01 vector C) - one `READONLY` table, bare binary names only (so `/bin/ls`, `VAR=x ls` and `env ls` never match), each row carrying a per-binary flag vetter (`:294-306`). A wrapper denylist was rejected outright: `timeout`/`xargs`/`nice` were denied only incidentally, so every future "read-only" addition reopened the hole. `env` is gone - it is both a listed binary and a universal wrapper. Command substitution and any redirection are refused before tokenizing (`FORBIDDEN_META`, `:172`) | "Faster if I just do it": the session implements everything itself with no observable trail | yes |
 | Hard wall, `level strict` | `/brewtools:manager-setup level strict` | project | `PreToolUse` matcher `*` | Same, and additionally denies all Bash, WebSearch and every MCP tool | `Hard wall (strict): Bash is blocked in the main session - delegate execution to a subagent.` | Zero main-session execution | A "read-only" chain that quietly mutates via redirects, `git add`, `sed -i` | yes |
+| Per-binary flag vetting on the Bash allowlist | same install | project | `PreToolUse` matcher `*` | Every balanced-level Bash call. A listed binary still fails if any argument can make it exec or write | `git` rejects `-c`/`--config-env`/`--exec-path`/`--upload-pack`/`--receive-pack`/`--ext-diff`/`-C`/**`--output`**/`--textconv`, and `git branch` must be bare or all-listing-flags (`GIT_BRANCH_READ_FLAG`, `:269`) so **`git branch -D`** is denied; `rg`/`grep` reject `--pre`/`--pre-glob`/`--hostname-bin`/`--search-zip`/`-z`; `find` rejects `-exec`/`-execdir`/`-ok`/`-okdir`/`-delete`/**`-fprint`**/**`-fprint0`**/`-fprintf`/`-fls`; `node` passes only as `node --check <file>`; `gh` read verbs are POSITIONAL, `gh <group> <verb>` or `gh <verb>` only, because scanning the whole argv let a VALUE launder a write verb - **`gh issue comment 1 --body list`** used to pass (`vetGh`, `:283-288`) | Close the four bypasses a listed binary still had | A "read-only" allowlist that writes a file, deletes a branch or posts a comment | yes |
 | Self-exempt off-switch | same install | project | `PreToolUse` matcher `*` | One exact command shape passes at every level. No `&&`, no `$`, no env prefix, no `-e` | `node <ABS>/.claude/brewtools/manager/manager-state.mjs set hard=false` | You can always leave the wall | Being locked in with no exit; also an arbitrary-code-execution hole an earlier substring anchor allowed | yes |
 | Automatic manager injection while the wall is on | side effect of `state.hard === true` | project | `UserPromptSubmit` | Every turn while the wall is up, with no codeword typed | `Manager HARD wall is ON - operate as orchestrator (delegate everything):` plus the whole `++m` block | Keep the role text present while the wall is up | The wall denies tools while the model has no idea why | yes |
 | One state reader behind all three wall mechanisms | ships with brewtools as `brewtools/hooks/lib/manager-state.mjs` | project state, with a global twin for `mode` only | none of its own - imported | Whenever `session-start.mjs`, `manager-prompt.mjs` or the installed `hardmode-guard.mjs` needs the state. All three import `resolveState`, so the notice, the auto-injection and the denial can never disagree about whether the wall is up | `SECURITY: hard and level come ONLY from the PROJECT state.json - a global state.json must never enable the HARD wall in projects without their own state` (`manager-state.mjs:127-129`) | One resolver, one answer, and a wall that cannot be armed from `~/.claude` | Three hooks each re-reading the file with their own defaults; a global setting silently arming every repo you open | yes |
@@ -322,7 +355,7 @@ never asks for a decision.
 |---|---|---|---|---|---|---|---|---|---|---|
 | Return contract announced at spawn | `/brewtools:agent-return-setup` | choice: project, global or both | `hooks/agent-return-contract.mjs` + shared `hooks/agent-return-budget.mjs` | `SubagentStart`, timeout 5 s | The moment any subagent is spawned, before it does anything. Same text for every agent type | `RETURN CONTRACT ... Verdict first, <=30 lines, \`path:line\`. !=bodies/output/log/preamble. Over ~1000 tokens your return is blocked for compression; over ~2500 write the detail to ... and return that path + verdict + <=3 lines.` | `.claude/agent-return.json`, project wins over global, found by walking up at most 16 directories. Each threshold resolves in this order: config key, then env var (`AGENT_RETURN_PASS` / `AGENT_RETURN_FILE`), then the built-in `passTokens` 1000 / `fileTokens` 2500 (`agent-return-budget.mjs:113`, `:115`). The announced numbers are the resolved ones, so what is announced is what is enforced | Live config flag: `enabled === true` only; absent key or file = OFF | Put the return rule in front of the agent at the moment it applies | A prose rule in the preamble loses to whatever the agent just did |
 | Return size budget enforced at return | same skill; all 3 files install as one unit | same | `hooks/agent-return-guard.mjs` | `SubagentStop`, timeout 5 s | When a subagent produces its final answer, just before it reaches the manager session | `RETURN TOO LARGE (~N tokens, budget 1000). ... Re-send the SAME answer, compressed: keep the verdict line and every \`path:line\` ref, drop preamble, file bodies, command output, logs` | `t = ceil(len/4)`. `<=1000` pass, `1000..2500` block for compression, `>2500` block and order a report file. No LLM judge, two integer comparisons | Same flag; blocks at most once via `stop_hook_active` | Cap the single biggest context cost in a manager session | Ten subagents each dump their full output into the main session, context fills and compacts. Measured over 80 real returns: p50 1404 est-tokens, max 7931, 58% of the total is overflow above 800 |
-| Soft wall-clock deadline | `/brewtools:agent-deadline-setup` | choice: project, global or both. Global costs ~58 ms per tool call everywhere | `hooks/agent-deadline-guard.mjs` | `PreToolUse` matcher `.*`, timeout 5 s | Every tool call, but acts only when the payload carries both `agent_id` and a non-empty `agent_type`. The clock starts at the agent's first tool call | 80%: `N of your 20 minute time budget are used. Start wrapping up NOW`. 100%: `AGENT DEADLINE EXCEEDED ... The tool "X" is blocked and retrying it will fail again. Stop investigating` | `.claude/agent-deadline.json`: `defaultMinutes` 20, `byAgentType` `{}`, `hardStopRatio` 2. Not configurable: warn at 0.8 of the budget, repeat a notice at most once per 10% of the budget, prune state older than 24 h. Past 100% only the 7 advertised finalize tools plus `TaskCreate`, `BashOutput`, `TaskOutput` are allowed; `AskUserQuestion` is denied on purpose. Past `hardStopRatio` (2x the budget) the list shrinks to `Write` and `Edit` only | Live config flag: `enabled !== true` = OFF | Force a runaway agent to finalize instead of killing it | An agent runs an hour, unobservable and drifting. `maxTurns` would kill it and throw away the report. Time is sampled only at tool-call boundaries, so one 25-min `Bash` call is invisible |
+| Soft wall-clock deadline | `/brewtools:agent-deadline-setup` | choice: project, global or both. Global costs ~58 ms per tool call everywhere | `hooks/agent-deadline-guard.mjs` | `PreToolUse` matcher `.*`, timeout 5 s | Every tool call, but acts only when the payload carries both `agent_id` and a non-empty `agent_type`. The clock starts at the agent's first tool call | 80%: `N of your 20 minute time budget are used. Start wrapping up NOW`. 100%: `AGENT DEADLINE EXCEEDED ... The tool "X" is blocked and retrying it will fail again. Stop investigating` | `.claude/agent-deadline.json`: `defaultMinutes` 20, `byAgentType` `{}`, `hardStopRatio` 2. Not configurable: warn at 0.8 of the budget, repeat a notice at most once per 10% of the budget, prune state older than 24 h. Past 100% only the 7 advertised finalize tools plus `TaskCreate`, `BashOutput`, `TaskOutput` are allowed; `AskUserQuestion` is denied on purpose (`agent-deadline-guard.mjs:77-79` - a subagent parked on a human is unbounded wall-clock. Belt and braces since 2.1.233: the tool is stripped from every subagent anyway, so that branch can no longer fire). Past `hardStopRatio` (2x the budget) the list shrinks to `Write` and `Edit` only | Live config flag: `enabled !== true` = OFF | Force a runaway agent to finalize instead of killing it | An agent runs an hour, unobservable and drifting. `maxTurns` would kill it and throw away the report. Time is sampled only at tool-call boundaries, so one 25-min `Bash` call is invisible |
 | Deadline state cleanup | same skill, installed together | same | `hooks/agent-deadline-cleanup.mjs` | `SubagentStop`, timeout 3 s | When a subagent finishes for any reason | No text. Deletes `<tmpdir>/brewtools-agent-deadline/<session>/<agent>.json`, prunes dirs older than ~24 h, always returns `{}` | State only: `{ start, warned, expired }`, mode 0700, never under `~/.claude` | None - unconditional bookkeeping, harmless when the guard is off | Keep the tmp state tree self-cleaning | A stale `start` carries a used-up budget into a new agent id |
 | Route a generic spawn to the real expert, tier 1 | `/brewtools:agent-router-setup` | **project only** - the roster is per project, no scope question | `.claude/hooks/agent-router.mjs` | `PreToolUse` matcher `Agent`, timeout 5 s | Every main-loop agent spawn; an omitted `subagent_type` is normalized to `general-purpose` before the project-agent and generic checks run, so it is policed too, per the Agent tool contract. Exits instantly if `agent_id` is present, if the picked type is a project agent, is in `neverFlag`, or is not in `genericTypes` | `agent-router: this looks like skill authoring - 'brewcode:skill-creator' is the expert for it, not general-purpose - retry with subagent_type: brewcode:skill-creator. (Deliberate? retry once and it passes.)` | `.claude/brewtools/agent-router.json`: `level` fast, `genericTypes` `["general-purpose","worker"]`, `neverFlag` 8 entries, `minScore` 3, `margin` 2, 4 built-in intents. Anti-loop: one deny per session+root+task. `status` staleness is `content_version`-based: it compares the installed hook's header against the plugin template, and the config's `content_version` against `assets/INSTALL.md`'s header - `version`/`plugin` fields are informational provenance only, never deciding staleness | Live flag, **inverted**: only `enabled === false` disables. Missing file = ON with defaults and still **effective**; `stale=yes` stays effective too, just running old logic. Re-install is idempotent but not inert: it re-copies `agent-router.mjs`, which is what repairs a stale hook body | Stop the main loop reaching for `general-purpose` when a hand-written expert exists | The repo ships a domain expert and the manager spawns `general-purpose` out of habit. The deny reaches the model as a tool error, so a retry always passes |
 | LLM judge for ambiguous spawns, tier 2 | `/brewtools:agent-router-setup level strict` | project only; the judge prompt is inlined into `settings.json`, never copied | a second `.claude/settings.json` entry | `PreToolUse` matcher `Agent`, timeout 30 s | Every `Agent` spawn once installed. Hooks run in parallel, so tier 1 cannot gate it | `Bias to {"ok": true} on ANY doubt. A wrong redirect costs the user a full wasted agent run against an ill-fitting expert; a missed redirect costs nothing` | Wired as `type: "agent"`, model `claude-haiku-4-5-20251001`, `timeout: 30` - Claude Code hook timeouts are in seconds, so that is 30 s, not 30 ms (`agent-router-setup/assets/INSTALL.md:264`, `:296`, `:386`). `level` in the config is only a record of what was wired; editing it by hand changes nothing | Re-run at `level fast`. Setting `enabled:false` does NOT stop tier 2 costing a model call | Catch domain fits too indirect for a regex | Tier 1 matches trigger words, not meaning |
@@ -330,6 +363,32 @@ never asks for a decision.
 Known limits: tier 2 is wired but never verified end to end; the return guard blocks at most once, so a
 compressed second answer can land slightly over budget (observed 1417 -> 1026 against 1000); the deadline
 samples time only at tool-call boundaries.
+
+### A subagent cannot ask: the `## APPROVAL REQUIRED` envelope
+
+Under CC 2.1.233 `AskUserQuestion` is **removed from every subagent** by filter 1, even when the agent's
+`tools:` frontmatter lists it (`docs/sub-agents.md:337`, `:340`; forks are the sole exemption). Declaring
+it is therefore silent and inert, not an error - which is exactly what made it dangerous: an agent body
+saying "confirm with the user" would simply never confirm. A **skill** keeps the tool; only subagents lost
+it, so the prompt contract's own `AskUserQuestion` rules in section 8 stand unchanged.
+
+The replacement is text, not a hook: the agent finishes every non-destructive step, then ends its final
+return with an envelope the CALLER presents.
+
+| Rule | Where | What it looks like | Purpose | Problem solved |
+|---|---|---|---|---|
+| One envelope per destructive operation, ids `A1..AN` | `## APPROVAL REQUIRED` block, last section of the return | `COMMAND:` / `HOST:` / `EFFECT:` / `ROLLBACK:` / `EVIDENCE:` / `PRECONDITION:`, exactly those six fields (`brewtools/agents/ssh-admin.md:73-78`) | The caller can approve one operation without approving the run | A subagent that "helpfully" ran the migration it meant to ask about |
+| Nothing to approve is stated, never implied | same block | the literal line `APPROVAL REQUIRED: none` - "Silence is never a gate" (`deploy-admin-agent.md.template:52`) | An empty section is a claim, not an omission | A missing block read as "nothing dangerous happened" |
+| Approval arrives as a token in the next spawn | the caller re-spawns | `APPROVED: A1 A3` in the prompt; `An explicit approval token in the incoming prompt is the ONLY authorization this agent may act on`, covering only the ids it names, exactly as worded - not a similar command, not a broader scope, not a retry with different arguments (`ssh-admin.md:86-88`) | Approval is scoped to the exact bytes shown to the human | An approved `restart nginx` reused to authorize `restart everything` |
+| Destructive is enumerated, not judged | same contract | `rm`/`mv` over existing paths, force-push, tag delete, DB writes/migrations, service restart/stop, firewall/user/permission changes, secret rotation, deploy/rollback, `docker system prune`, any remote `ssh` mutation | The agent does not get to decide what counts | An agent classifying its own risky step as routine |
+| The gate is not delegable | `brewtools/skills/{ssh,deploy}/SKILL.md` | `Safety gates are NOT delegable ... So confirmation gates stay in THIS skill, in the main conversation` (`deploy/SKILL.md:126-129`) | The one context that still has `AskUserQuestion` owns the gate | A skill delegating its confirmation step into a subagent that cannot confirm |
+
+Byte-identical across seven surfaces, which is the point - the field set is the interoperability contract
+between whoever writes the envelope and whoever reads it: `brewtools/skills/ssh/SKILL.md:453`,
+`brewtools/skills/deploy/SKILL.md:133`, `ssh/templates/ssh-admin-agent.md.template:81`,
+`deploy/templates/deploy-admin-agent.md.template:42`, `ssh/references/safety-rules.md:42`,
+`brewtools/agents/ssh-admin.md:70`, `brewtools/agents/deploy-admin.md:87`. The one asymmetry is the
+`HOST:` value: `<server alias / user@host>` for ssh, `<local | user@host>` for deploy.
 
 ## 4. Context economy
 
@@ -431,6 +490,7 @@ The approaches living inside what they generate:
 | Scope re-applied at gate time | docsync | `docsync-gate.mjs` | Same Stop hook | `exclude globs and doc_type may have changed AFTER the file was recorded` | Mid-session exclusions take effect | Being blocked over a doc you just marked `skip` |
 | Date-only staleness | docsync | `config.json` `threshold_days` | Every gate evaluation | `Staleness is DATE ONLY, in LOCAL time: today - last_updated > threshold_days. No hash, no deps.` | One cheap, explainable rule | Hash and dependency graphs that go wrong quietly |
 | Settings merge that refuses to clobber | docsync | install step | Install and upgrade | python3 preferred, `jq` fallback, `.bak` first, abort rather than overwrite invalid JSON | Safe registration into a shared file | Destroying a hand-written `settings.json` |
+| Every generated hook inlines its own project root | docsync, agent-return, agent-router | `docsync-track.mjs:32`, `-watch.mjs:34`, `-gate.mjs:38`, `agent-return-budget.mjs:52`, `agent-router.mjs:214` | Every invocation, before any config or state read | the canonical recipe of `hook-creator.md:373-396`, byte-identical per file: `CLAUDE_PROJECT_DIR -> upward walk for a root marker -> hook cwd. Never throws.` | A generated hook lands alone in someone else's repo with no shared lib to import | A hook resolving config against a drifted cwd, or crashing because an import path did not survive the copy |
 | Sync auto-loaded context, not docs | memory-sync | emitted `SKILL.md` | Every `/memory-sync` | `Documentation (docs/**) \| Owned by a SEPARATE doc flow. Refs INTO docs are checked for RESOLUTION only; contents are never read-for-edit and NEVER edited` | Keep the memory layer true to the code | Two flows fighting over the same docs |
 | Non-growth prime directive | memory-sync | emitted `SKILL.md` | Every run | `After the sweep EVERY file is <= its original line count, and the TOTAL delta is <= 0. A positive delta must be stated FIRST in the report` | Memory files shrink or hold | CLAUDE.md growing every session until it eats the context window |
 | Scope ladder | memory-sync | emitted `argument-hint` | Per run | `[prompt] [session\|branch\|commit <sha>\|recent[:N]\|all] [hard] [free-form focus]` | Match the sweep to what changed | A full-repo re-audit for a two-file change |
@@ -448,6 +508,7 @@ The approaches living inside what they generate:
 | Refuse to write rather than stamp a fake version | e2e | `SKILL.md` Phase 0 and `mode-install.md` S6 | Before any file is written | `the script refuses to emit a fake version rather than let unknown reach a version: stamp`, and `If you are ever holding something that is not X.Y.Z -- unknown, an empty string, an unsubstituted {PLUGIN_VERSION} -- do NOT write the file. Stop and report it.` | A broken install fails loudly instead of writing a lie | Artefacts stamped `unknown`, which no staleness check can ever compare |
 | Leftover-token gate after every templated write | ssh, deploy | `SKILL.md` install step, immediately after the `Write` | Each agent generation and regeneration | one `grep -nE` over the written file for **both** brace families - the skill's own `{{SERVER_INVENTORY}}` style and the metadata `{PLUGIN_VERSION}` style - then `STOP if ❌ -- re-substitute before continuing.` | Verify the output, not just the input | A shipped agent whose inventory section is still a literal `{{SERVER_INVENTORY}}` |
 | A regeneration re-resolves the stamp | ssh, deploy | `ssh/SKILL.md:499`, deploy `P2` step 8 | `update-agent` | `Re-resolve {PLUGIN_VERSION} and {LAST_UPDATED} exactly as in Install Step 3 -- a regeneration is a new write, so the stamp is refreshed, never carried over.` | The date on the file means the last time it was actually written | An agent refreshed with new server data still claiming last year's version |
+| The generated agent carries the approval envelope, not an ask | ssh, deploy | `ssh-admin-agent.md.template:81-93`, `deploy-admin-agent.md.template:42-53` | Every destructive classification in the emitted agent | `Do not execute -- emit an envelope, unless the prompt carries APPROVED: <id>`, and `Nothing to approve -> the literal line APPROVAL REQUIRED: none. Silence is never a gate.` | The generated copy inherits the section-3 contract, not just the shipped one | A project agent that was told to confirm, could not, and restarted a service anyway |
 | The project copy shadows the shipped agent | ssh, deploy | `.claude/agents/ssh-admin.md` against `brewtools/agents/ssh-admin.md` | After `setup` | both declare the same bare `name: ssh-admin`; the project copy carries the filled-in inventory, the shipped one is generic and carries `maxTurns: 80` | One name, and in a configured repo it resolves to the copy that already knows your servers | A generic admin agent that re-discovers the whole inventory on every run |
 | Secrets land in a git-ignored file first | ssh, deploy | `CLAUDE.local.md` and `.gitignore` | Install, before the agent is written | `grep -q "CLAUDE.local.md" .gitignore 2>/dev/null && echo "EXISTS" \|\| (echo "CLAUDE.local.md" >> .gitignore && echo "ADDED")` | Hosts, users, ports, key paths and secret names never reach a commit | Server details pushed to a public repo |
 | The key is read from stdin, never argv | provider-switch | `scripts/write-alias.sh`, action `set-key` | Every key write | `Value comes from stdin, NEVER argv -- argv is visible to ps and is logged verbatim.` Call shape: `printf '%s' "$KEY" \| write-alias.sh set-key VAR_NAME` | The API key is invisible to other processes and to shell history | A provider key leaked through `ps` output or `~/.zsh_history` |
@@ -460,20 +521,23 @@ own checklist enforces them. Coverage is measured over the 8 shipped agents.
 
 | Convention | Where | Enforced by | Excerpt | Purpose | Problem solved | Coverage |
 |---|---|---|---|---|---|---|
-| `## Return Contract` | last section of the body | `agent-creator.md:349` plus checklist `:451` | `Verdict first, <=30 lines, path:line. !=bodies/output/log/preamble. Unconditional -- spend one step on what the MAIN SESSION needs and return only that.` | Cap what a subagent pushes back into the parent context | An agent that dumps its whole transcript burns the main context | 8/8 |
+| `## Return Contract` | last section of the body | guardrails block `agent-creator.md:388-403`, emitted verbatim, plus checklist `:495` | `Verdict first, <=30 lines, path:line. !=bodies/output/log/preamble. Unconditional -- spend one step on what the MAIN SESSION needs and return only that.` | Cap what a subagent pushes back into the parent context | An agent that dumps its whole transcript burns the main context | 8/8 |
 | Report path `.claude/reports/YYYYMMDD-HHMMSS_<agent>/` | inside Return Contract and Checkpointing | same checklist | `Bulk material (long logs, full diffs, dumps) -> file under .claude/reports/<YYYYMMDD-HHMMSS>_<name>/; return the PATH, !=the content.` | One predictable place for artefacts | Long output has nowhere to go except the reply | 8/8 |
 | Return-guard awareness line | last line of Return Contract | hand-carried per agent | `If the agent-return guard is installed, a return over ~1000 est-tokens (chars/4) is blocked for compression; over ~2500 file the detail` | The agent knows the runtime numbers before it is blocked | Writing a huge return, getting blocked, wasting a turn | 8/8 |
-| `## Scope guard` | right after the title | injected verbatim by `agent-creator` | `Exceeds one bounded unit (one deliverable, ~5 files, ~10 steps) ... STOP, do not start. Return a split proposal ... An hour of unsupervised work is a failure even when it succeeds.` | Force a split proposal instead of an unbounded run | One agent working unobserved for an hour drifts and nobody sees it | 7/8 |
+| `## Scope guard` | right after the title | hand-carried. The guardrails block (`agent-creator.md:388-403`) emits only `Scope Fit` and `Return Contract`, so this section is copied by the author, not injected; `agent-creator` carries its own at `:21` | `Exceeds one bounded unit (one deliverable, ~5 files, ~10 steps) ... STOP, do not start. Return a split proposal ... An hour of unsupervised work is a failure even when it succeeds.` | Force a split proposal instead of an unbounded run | One agent working unobserved for an hour drifts and nobody sees it | 7/8 |
 | Missing-brief rule inside Scope guard | Scope guard paragraph 2 | same block | `Brief missing GOAL, SCOPE, CONTEXT ... or acceptance -- state your assumption explicitly in the report, or ask once. Never invent scope.` | Make invented scope visible | The agent silently guesses what was wanted | 7/8 |
-| `## Checkpointing` | after Scope guard | `agent-creator.md:388-403` | `maxTurns: 60 = anti-loop stop, != budget. On hit the run aborts and the final report is lost; scripts already written survive. ... On resume: read that file first` | Survive an abort, make a resume cheap | Hitting `maxTurns` destroys the final report | 8/8 |
-| Explicit `maxTurns` sized to the role | frontmatter | `agent-creator.md:392-399` role table | the table reads: explorer 40, reviewer/architect/tester 60, docs/generator 80, developer/orchestrator 120. The 8 shipped agents use only two of those: five at 80, three at 60 | Anti-loop stop, deliberately generous | A tight cap aborts a healthy run and loses its report | 8/8 |
-| `## Scope Fit` for code-writing agents | body, conditional | `agent-creator.md:349` plus checklist `:452` | `Build for the actual scale and the problems that exist today ... Etalon-first: before writing a class/module/test, find the closest well-built existing one in this repo` | Keep generated code proportionate to the repo | Speculative abstraction; a new file that ignores repo idiom | 0/8 - none of the 8 writes product code |
+| `## Checkpointing` | after Scope guard | `agent-creator.md:429-444`, sized to risk - `an AG that runs long, writes files, or fans out gets the full checkpoint rule`, a short read-only agent gets none | `maxTurns: 60 = anti-loop stop, != budget. On hit the run aborts and the final report is lost; scripts already written survive. ... On resume: read that file first` | Survive an abort, make a resume cheap | Hitting `maxTurns` destroys the final report | 8/8 |
+| Explicit `maxTurns` sized to the role | frontmatter | `agent-creator.md:431-442` role table | the table reads: explorer 40, reviewer/architect/tester 60, docs/generator 80, developer/orchestrator 120. The 8 shipped agents use only two of those: five at 80, three at 60 | Anti-loop stop, deliberately generous | A tight cap aborts a healthy run and loses its report | 8/8 |
+| `## Scope Fit` for code-writing agents | body, conditional | guardrails block `agent-creator.md:393-396` plus checklist `:496` | `Build for the actual scale and the problems that exist today ... Etalon-first: before writing a class/module/test, find the closest well-built existing one in this repo` | Keep generated code proportionate to the repo | Speculative abstraction; a new file that ignores repo idiom | 0/8 - none of the 8 writes product code |
 | `Bash` declared in `tools:` | frontmatter | health flag in `brewcode/skills/agents/SKILL.md:158` | `tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch` | On macOS `Grep`/`Glob` are gated out of the default set and search runs through Bash | An agent without `Bash` cannot search at all on this platform | 8/8 |
 | `${CLAUDE_PLUGIN_ROOT}` for in-plugin paths | agent body | native substitution at spawn | `${CLAUDE_PLUGIN_ROOT}/skills/skills/references/prompt-contract.md` | Reference plugin files without knowing the cache version dir | A hard-coded `.../5.5.2/` path breaks on every release | 6/8 |
-| Bare kebab `name`, one-line `description` with `Triggers:` | frontmatter | checklist `agent-creator.md:442-443` | `description: "Creates and improves Claude Code agents. Triggers: create agent, improve agent, scaffold agent."` | Claude Code prepends the plugin name itself | `name: brewcode:x` renders `/brewcode:brewcode:x`; a `:` in `name` makes the file skipped since 2.1.218 | 8/8 |
+| Bare kebab `name`, one-line `description` with `Triggers:` | frontmatter | checklist `agent-creator.md:483-484` | `description: "Creates and improves Claude Code agents. Triggers: create agent, improve agent, scaffold agent."` | Claude Code prepends the plugin name itself | `name: brewcode:x` renders `/brewcode:brewcode:x`; a `:` in `name` makes the file skipped since 2.1.218 | 8/8 |
 | Stamp block `doc_type / version / generated_by / last_updated` | trailing frontmatter keys | `setup-status/references/artifact-metadata.md`; rewritten by `bump-version.sh` | `doc_type: llm` / `version: "5.5.2"` / `generated_by: "brewcode"` / `last_updated: "2026-08-10"` | One number answers "is this install current?" | Stale copies indistinguishable from fresh ones | 8/8 |
-| `[DICT: ...]` abbreviation header | line after frontmatter | LLM text rules `agent-creator.md:364-377` | `[DICT: AG=agent, BC=brewcode, CC=Claude Code, ...]` | Let the body use short tokens without ambiguity | Repeating "subagent" hundreds of times costs tokens | 3/8, the three long generators |
-| Final optimization pass delegated | creation process step 6 | `agent-creator.md:386` | `Task(subagent_type="brewtools:text-optimizer", ...)`. `brewtools` absent -> skip and note it | Compress the artefact after it is correct | Hand-written agent bodies grow verbose | 4/8 mention it |
+| `[DICT: ...]` abbreviation header | line after frontmatter | nothing scripted. The LLM text rules table (`agent-creator.md:406-418`) only says `Merge duplicates, abbreviate in tables`; the header itself is hand-carried, `agent-creator.md:15` | `[DICT: AG=agent, BC=brewcode, CC=Claude Code, ...]` | Let the body use short tokens without ambiguity | Repeating "subagent" hundreds of times costs tokens | 3/8, the three long generators |
+| Final optimization pass delegated | creation process step 6 | `agent-creator.md:427` plus checklist `:500` | `Task(subagent_type="brewtools:text-optimizer", ...)`. `brewtools` absent -> skip and note it | Compress the artefact after it is correct | Hand-written agent bodies grow verbose | 4/8 mention it |
+| No "ask the user" instruction anywhere in the body | whole body | checklist `agent-creator.md:487`, prose `:146` | `Body carries no "ask/confirm with the user" instruction -- a SA cannot prompt; it returns the decision request to its caller` | The body cannot promise a capability the runtime removed | An agent told to confirm before deleting, which silently deletes instead | 8/8 |
+| `tools:` survives the runtime filters | frontmatter | checklist `agent-creator.md:486` | `every entry survives the filters for the pool this AG runs in -- none of the nine filter-1 TLs` | A declared tool that is stripped is not a capability | `AskUserQuestion` in `tools:` reading as an approval mechanism that does not exist | 8/8 declare it; it is inert in all 8 |
+| `## Approval Contract` | after the safety rules, before the workflow | hand-carried per agent - `agent-creator` does not inject it | `This agent therefore NEVER executes a destructive operation on its own judgement`, then the six-field envelope and `APPROVED: <ids>` as the only authorization | Turn "cannot ask" into a protocol instead of a dead end | An agent that either stops uselessly or self-approves a destructive command | 2/8 - `brewtools/agents/ssh-admin.md:57-92`, `deploy-admin.md:75-110`; the other 6 write nothing destructive |
 
 The conventions above are measured over the shipped agents only. The generated families are a different
 story: most of them carry none of the three sections, and none declares `maxTurns`.
@@ -486,6 +550,29 @@ story: most of them carry none of the three sections, and none declares `maxTurn
 | `e2e-*`, 5 members | `/brewcode:e2e install` via `agent-creator`, from `e2e/references/agent-template.md` | `.claude/agents/e2e-*.md` | none of the three. The template body defines `## Scope Constraint`, `## Rules Loading Protocol`, `## Task Acceptance Protocol` and `## Self-Check Protocol` |
 | `ssh-admin`, `deploy-admin` project copies | `/brewtools:ssh setup`, `/brewtools:deploy setup`, from a `.template` | `.claude/agents/{ssh,deploy}-admin.md` | none of the three, and no `maxTurns` - unlike the shipped agents of the same name, which have `maxTurns: 80` |
 | `docs-writer` | hand-maintained, this repo only | `.claude/agents/docs-writer.md` | none of the three. It is not one of the 8 and is excluded from every count above |
+
+### What the creator agents teach, and the test that pins it
+
+`agent-creator`, `hook-creator` and `skill-creator` are not only authoring guides - they are this
+suite's copy of the Claude Code runtime contract, and every generated agent, hook and skill inherits
+whatever they claim. v6 re-verified all of it against a 2.1.233 source snapshot. A wrong fact here is
+not a doc bug: it is a wrong artefact in someone else's repo.
+
+| Fact, as of 2.1.233 | Taught at | Why it is load-bearing |
+|---|---|---|
+| 31 hook events, 5 handler types: `command`, `http`, `mcp_tool`, `prompt`, `agent` | `hook-creator.md:21`, per-event table `:132-161` | The roster is what a generated hook registers against; a missing event is a mechanism nobody knows exists |
+| `SessionStart` has five sources - `startup`, `resume`, `clear`, `compact`, `fork` (`fork` added 2.1.214) | `hook-creator.md:132`, `:648`, version history `:778` | `compact-recall.mjs` and `role-recall.mjs` both key on `source === 'compact'`; a hook that assumed four sources treats a fork as a resume |
+| `StopFailure` carries 10 error types, `Notification` 9 | `hook-creator.md:659`, `:653` | Both are matcher-free string discriminators; a truncated list silently drops a branch |
+| Matcher-free events include `PostToolBatch` | `hook-creator.md:661` | Writing a matcher for one of these produces a hook that never fires and never errors |
+| **No total-per-session subagent cap.** `CLAUDE_CODE_MAX_SUBAGENTS_PER_SESSION` (DEF 200) shipped in 2.1.212 and was **removed in 2.1.224** | `agent-creator.md:326`, `skill-creator.md:307-308` | Fan-out is bounded by concurrency (20) and depth (3) only. Planning around 200 is planning around a limit that no longer exists |
+| `AskUserQuestion` is removed from EVERY subagent, even when its `tools:` lists it; forks are the sole exemption | `skill-creator.md:310-313`, `:630`; `agent-creator.md:146`, checklist `:487` | This is what makes the `## APPROVAL REQUIRED` envelope of section 3 necessary rather than stylistic |
+
+`brewcode/agents/tests/suite-creator-contract.mjs` pins exactly these, 27 checks, all passing. Its own
+header states the policy: `unconditional exact-equality / exact-set checks with a description. No
+branching decides which asserts run.` The 31-event roster is a verbatim fixture (`EVENTS_31`), so a
+future edit that drops or renames an event fails a test instead of shipping. Five assertions were
+re-hardened after mutation testing showed the originals passing against a deliberately broken agent
+body.
 
 ## 8. Skill contract
 
@@ -505,7 +592,7 @@ hard-coded as `*/.claude/skills/claude-plugin-guide` in `validate-skill.sh:19`; 
 | Mode keyword table with EN and RU columns and `Mutates?` | `validate-skill.sh` check 10 - requires at least one Cyrillic keyword when 2+ modes | `\| Mode \| EN keywords \| RU keywords \| Mutates? \|` | Make mode resolution deterministic and mark destructive modes | A model guessing the mode differently each run |
 | Mode resolution algorithm, fixed order | `prompt-contract.md` sec. 3, documented not scriptable | `1. Strip flags. 2. explicit mode token anywhere wins outright - no scoring. 3. else score distinct whole-word keyword hits. 4. tie-break ... 5. empty -> default mode.` | One published order, reproducible outcome | Two runs on the same sentence choosing different modes |
 | Tie-breaks favour safety | `prompt-contract.md` sec. 3.4 | `tie involving a destructive mode -> AskUserQuestion. Never guess destructive. tie where one side is read-only (status) -> read-only wins.` | Never silently pick the destructive branch | An ambiguous prompt triggering `purge` |
-| At most ONE `AskUserQuestion`, max 4 questions | `prompt-contract.md` sec. 3.5-3.6 | asked before the work starts, and only when `the answer changes what gets written` | Bound the interrogation; read-only runs ask nothing | Skills interviewing the user across several rounds mid-run |
+| At most ONE `AskUserQuestion`, max 4 questions | `prompt-contract.md` sec. 3.5-3.6 | asked before the work starts, and only when `the answer changes what gets written` | Bound the interrogation; read-only runs ask nothing. A skill runs in the main session, so unlike a subagent it still HAS this tool - the removal of section 3 does not touch skills | Skills interviewing the user across several rounds mid-run |
 | `--noask` never suppresses a ground-truth STOP | `prompt-contract.md` sec. 3.6 | `records the literal Skipped (--noask); it never suppresses a ground-truth STOP (missing target, several candidates, destructive confirmation)` | Non-interactive runs stay possible without becoming unsafe | A flag used to bulldoze a missing-target error |
 | Mandatory 5-field `PLAN` block before the first action | `validate-skill.sh` check 9 | `PLAN - brewtools:deploy` with `INPUT:`, `MODE:`, `SCOPE:`, `DO:`, `RESULT:` | Show the resolved intent before acting | `No block, or a block printed after work started, is a defect` |
 | `## Prompt contract` boilerplate in every body | `validate-skill.sh` check 8 | the contract section pasted first, with `<plugin>:<skill>` and `<DEFAULT_MODE>` substituted | The rules travel with the skill, including into generated skills | A contract known only to the author, lost on the next edit |
@@ -519,6 +606,26 @@ hard-coded as `*/.claude/skills/claude-plugin-guide` in `validate-skill.sh:19`; 
 | `sync` mode is delete-first and non-growing | `skills/references/mode-sync.md`, shared by `/brewcode:agents` and `/brewcode:skills` | `DELETE first (dead / stale / obvious / duplicate) -> FIX -> ADD last`; `Total delta MUST be <= 0` | Re-verify every agent and skill against the code without inflating it | Docs-style sync that only appends until artefacts are mostly stale prose |
 | `sync` add gate and traceability | `mode-sync.md` prime directive | `a new fact enters only if ALL hold: non-obvious for a competent model + verified against a real source + its absence costs a real failure`; `Unverifiable -> delete it, !=reword it` | Only facts that earn their line survive | Agents accumulating restatements of what the model already knows |
 | `sync` fan-out, one subagent per file | `mode-sync.md` steps S3-S4 | ground truth collected once, then <=8 parallel spawns each owning ONE file, `HARD LIMIT: line count after <= line count before` | Parallel, bounded, reviewable diffs | One agent handed the whole roster rewrites everything from memory |
+
+### Regression harnesses
+
+Prose and a checklist say what an artefact should do. From v6 the load-bearing half is also pinned by a
+runnable suite, so a future edit that breaks a contract fails a test instead of shipping quietly. Nine
+harnesses were added or hardened in this release, 565 checks in total, all passing. Eight further suite
+dirs predate v6 (`semble-setup`, `docsync-setup`, `agent-deadline-setup`, `agent-return-setup`,
+`agent-router-setup`, `manager-setup`, `provider-switch`, `think-short-setup`).
+
+| Suite | Checks | What it pins |
+|---|---|---|
+| `brewcode/agents/tests/suite-creator-contract.mjs` | 27 | The 2.1.233 facts the three creator agents teach: the 31-event roster as a verbatim `EVENTS_31` fixture, the 5 handler types, the matcher-free set including `PostToolBatch`, `SessionStart` `fork`, `StopFailure` 10 / `Notification` 9, the absence of a per-session subagent cap, and `AskUserQuestion` being stripped from every subagent. Five assertions were re-hardened after mutation testing showed the originals passing against a deliberately broken body |
+| `brewcode/hooks/tests/` | 68 | BC-H01 the canonical project-root recipe; BC-H02 plan-link safety - a non-symlink or foreign-target `LATEST.md` is preserved, and a symlinked `.claude/plans` is refused rather than followed out of the project; the `plansDirectory` setting; BC-H03 the post-compact re-anchor ladder; and fail-open on malformed stdin for all four brewcode hooks |
+| `brewcode/skills/teams-setup/tests/` | 65 | BCOP08 roster path traversal in `toggle` and `verify`; BCOP09 provenance checked before runnability, so a member file of unknown origin is never executed on the strength of parsing correctly |
+| `brewdoc/skills/publish/tests/` | 108 | BD01 the publish allowlist, and BD-N03 produce-and-verify: the step that claims an artefact exists is not the step that wrote it |
+| `brewdoc/skills/md-to-pdf/tests/` | 14 | BD12 unique temp-file naming - two concurrent conversions cannot land on the same path |
+| `brewtools/skills/deploy/tests/` | 76 | BT-F09 no `${{ }}` expression interpolated into a shell or JS body; BT-F18 the health check's exit code is the gate, not its stdout; BT-F30 no reliance on a `timeout` binary that is absent from the runner PATH |
+| `brewtools/skills/ssh/tests/` | 74 | BT-F22/F12/F21 the credential and host-key contracts, and that every token shape is read from stdin rather than argv |
+| `brewtools/skills/secrets-scan/tests/` | 82 (26+16+16+24) | BT-F03 redaction - a scanner that reports a finding must never echo the secret it found |
+| `brewtools/skills/text-optimize/tests/` | 51 | BT-F15 the optimization snapshot, and BT-F29b the refusal to write when the result would not be an improvement |
 
 ### Release-time stamping and the Codex mirror
 
@@ -654,7 +761,7 @@ The same ~120 words that opened the session are re-stated once per ten turns, so
 ### E. A tool call that gets denied: the hard wall
 
 **What happens:** the main session calls `Write` while `.claude/brewtools/manager/state.json` has
-`hard: true`. `hardmode-guard.mjs:111` answers on `PreToolUse`:
+`hard: true`. `hardmode-guard.mjs:353` answers on `PreToolUse`:
 
 ```json
 {
@@ -667,9 +774,25 @@ The same ~120 words that opened the session are re-stated once per ten turns, so
 ```
 
 The model sees that reason come back as a tool error and the call never runs. The same call from inside a
-subagent passes untouched: subagent stdin carries `agent_id` and the guard returns `{}` for it. A main
-session started with `claude --agent <name>` carries `agent_type` but no `agent_id`, so it is walled like
-any other main session.
+subagent passes untouched: subagent stdin carries `agent_id` and the guard returns `{}` for it
+(`hardmode-guard.mjs:339-342`). A main session started with `claude --agent <name>` carries `agent_type`
+but no `agent_id`, so it is walled like any other main session.
+
+A `Bash` call is judged differently, and v6 changed how. At `strict` every `Bash` is denied outright
+(`:375`). At `balanced` the command must pass `isReadonlyCommand`, which since v6 is an **allowlist**:
+a `READONLY` table of 22 permitted binaries (`:294-306`), a `FORBIDDEN_META` reject on any of
+`$( ` ` > <` (`:172`), and then per-binary flag vetting for the ones whose read-only face hides a write.
+Four bypasses that a denylist could not see were closed this way: `git diff --output=` and `--textconv`
+(`GIT_EXEC_FLAG`, `:266`), `git branch -D` (`GIT_BRANCH_READ_FLAG`, `:269`), `find -fprint`/`-fprint0`
+alongside `-exec`/`-delete` (`FIND_EXEC_ACTION`, `:271`), and `gh issue comment --body`, where only the
+first positional is a subcommand so the vet reads position, not substring (`vetGh`, `:283-288`).
+Anything not on the list is denied rather than allowed - an unknown binary is now a deny, not a pass.
+
+The whole guard fails **closed**. Unparseable stdin denies (`:326`); a corrupt `state.json` sitting next
+to an installed manager dir resolves to `{ hard: true, level: 'strict' }` (`:98-121`); the outer `catch`
+denies (`:399-403`). The one deliberate hole is the documented exit: the state CLI is checked after tool
+classification and survives both `strict` and a broken state (`:359`), so you can always turn the wall
+off.
 
 ### F. A subagent spawn
 
@@ -767,9 +890,9 @@ merely names a key arrives in the transcript escaped (`\"`), so a quoted key can
 text about itself. A bare `plan_mode_reentry` matched this repo's own design discussion of this very hook and
 claimed a plan that never existed.
 
-Four outcomes, a ladder, first match wins. The common one is the second: Claude Code prunes
+Five outcomes since v6, a ladder, first match wins (`compact-recall.mjs:140-186`). Claude Code prunes
 `~/.claude/plans/` on its own cleanup period, so a transcript's recorded plan path routinely outlives
-the plan file itself - which is exactly why `plan-missing` is the branch seen most often:
+the plan file itself. That used to fall straight through to `plan-missing`, the branch seen most often:
 
 ```json
 {
@@ -780,8 +903,18 @@ the plan file itself - which is exactly why `plan-missing` is the branch seen mo
 }
 ```
 
-The four branches, in order: a `planFilePath` that still `isFile()` -> `[PLAN] Read <path> with the Read tool
-before doing any work.`; a path recorded but gone -> the `plan-missing` text above; no path but a plan-mode
+v6 inserted a rung above it. `plan-latest` (`compact-recall.mjs:155-164`) checks the project-local
+`.claude/plans/LATEST.md` that `session-start.mjs` maintains, and points at that instead: `[PLAN] Read
+<root>/.claude/plans/LATEST.md with the Read tool before doing any work.` / `It is this project's latest
+plan, carried over from before the compact: follow its role model and delegation split, do not re-derive
+them.` It sits above `plan-missing` on the stated rule that a real file beats a dead path, and it covers
+the case a transcript scan structurally cannot: a plan that PREDATES the transcript, after `--resume` or
+`/clear`, leaves no `planFilePath` to find at all. It cannot leak someone else's plan because the link is
+hook-owned and project-scoped - BC-H02 containment is what makes this rung safe to add.
+
+The five branches, in order: a `planFilePath` that still `isFile()` -> `[PLAN] Read <path> with the Read tool
+before doing any work.`; else a project-local `.claude/plans/LATEST.md` that exists -> the `plan-latest` text
+above; a path recorded but gone -> the `plan-missing` text above; no path but a plan-mode
 marker -> `[PLAN] This session ran in plan mode; no plan file is available.` and then both halves in one
 fragment, `A plan in the compact summary -> follow it and its delegation split, do not re-derive them.` /
 `No plan there -> re-read the user ORIGINAL task and intent from the summary and keep executing THAT.`;
@@ -825,7 +958,7 @@ Word counts are eyeballed from the source strings, not measured by a script.
 | Session opens, search rule | `SessionStart` | semble | ~35 | once per session, only when state is `ready` |
 | Session opens, wall notice | `SessionStart` | brewtools `session-start.mjs` | ~60 | once per session, only while the wall is armed |
 | After a compaction, role frame | `SessionStart` matcher `compact` | brewcode `role-recall.mjs` | 108 words / 636 chars - the same `REMINDER_TEXT` as every prompt | once per compaction, and compactions chain |
-| After a compaction, plan and tasks | `SessionStart` matcher `compact` | brewcode `compact-recall.mjs` | exactly one plan fragment, 25-47 words: `plan-file` 29 / `plan-missing` 25 / `plan-in-summary` 47 / `intent` 31 (146-257 chars, plus the plan path where one is quoted); plus 43 words / 251 chars of `[TASKS]` when the transcript holds a `TaskCreate` | once per compaction, and compactions chain. Always something on `source === 'compact'`, never `{}` |
+| After a compaction, plan and tasks | `SessionStart` matcher `compact` | brewcode `compact-recall.mjs` | exactly one plan fragment, 25-47 words: `plan-file` 29 / `plan-latest` 34 / `plan-missing` 25 / `plan-in-summary` 47 / `intent` 31 (146-257 chars, `plan-latest` 193, plus the plan path where one is quoted); plus 43 words / 251 chars of `[TASKS]` when the transcript holds a `TaskCreate` | once per compaction, and compactions chain. Always something on `source === 'compact'`, never `{}` |
 | Every prompt | `UserPromptSubmit` | brewcode `forced-eval.mjs` | 108 words / 636 chars, counted from `lib/reminder.mjs` | every turn, except one-word replies |
 | Codeword turn | `UserPromptSubmit` | brewtools `manager-prompt.mjs` | 300-700 per block | only on the turn you type `++m` / `++a` / `++rr` / `++r` |
 | Wall armed, no codeword | `UserPromptSubmit` | brewtools `manager-prompt.mjs` | ~400 | every turn while `state.hard === true` |
@@ -883,6 +1016,7 @@ Word counts are eyeballed from the source strings, not measured by a script.
 | `.claude/agents/deploy-admin.md` | `/brewtools:deploy` from `templates/deploy-admin-agent.md.template` (`SKILL.md:234`) | project | delete the file; a re-run regenerates it |
 | `.claude/rules/avoid.md`, `best-practice.md` and their `*-avoid.md` families | `/brewcode:rules` | project `.claude/rules/` only, never `~/.claude/rules/` (`rules/SKILL.md:13`) | delete the rows, or the file |
 | `.claude/convention/*.md` and the rule rows derived from them | `/brewcode:convention` (`SKILL.md:116`) | project | run mode `conventions`, which leaves `.claude/rules/` untouched (`:350`); or delete the dir |
+| Regression harnesses, 17 suite dirs | hand-maintained in this repo, never shipped to a consumer | `brewcode/{agents,hooks}/tests/` and `brew*/skills/<skill>/tests/` - 9 added or hardened in v6 (see section 8), 8 older ones under `semble-setup`, `docsync-setup`, `agent-deadline-setup`, `agent-return-setup`, `agent-router-setup`, `manager-setup`, `provider-switch`, `think-short-setup` | nothing to turn off - they are `node <suite>.mjs`, run by hand or in CI |
 | Provider alias block | `/brewtools:provider-switch` | `~/.zshrc` only - the skill writes secrets nowhere else (`SKILL.md:15`, `:54`) | delete the alias line |
 
 ## Keeping this page current
@@ -894,3 +1028,9 @@ page states current behaviour, nothing else. If the thing you added is a new inj
 hook event, or an old event answered at a new moment - also add a worked example: what happens, the JSON the
 hook writes, the text the model ends up seeing. Give it a row in "What is injected at each moment" too. When
 CLAUDE.md and the code disagree, the code wins and this page follows the code.
+
+Runtime facts - the hook-event roster, the subagent tool filters, the spawn limits - are not this page's to
+invent. They live in `brewcode/agents/{agent-creator,hook-creator,skill-creator}.md`, are pinned by
+`brewcode/agents/tests/suite-creator-contract.mjs`, and are stated here against a verified Claude Code
+version (2.1.233 as of v6.0.0). Change one of them here without changing it there and the test still passes
+while the page lies. Change it there and the version pin moves too.

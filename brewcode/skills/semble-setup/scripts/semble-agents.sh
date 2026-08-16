@@ -20,9 +20,12 @@ semble-agents.sh audit  [--scope project|global] [--json]
 semble-agents.sh apply  [--scope project|global] [--yes] [--revert] [--json]
 
   audit    read-only report of what would change. Always exits 0.
-  apply    writes the two semble tool names into every `tools:` allowlist.
+  apply    writes the two semble tool names into every `tools:` allowlist,
+           recording per file which of them the user already had.
            Requires --yes; without it the plan is printed and it exits 4.
-  --revert removes exactly the two names this skill added, nothing else.
+  --revert removes exactly the names this skill added, per the record `apply`
+           left in .claude/semble/state.json. A name the user authored before
+           install is kept; with no record for a file, nothing is removed.
   --scope  project (default) = <projectRoot>/.claude/agents/**/*.md
            global            = <home>/.claude/agents/**/*.md; apply --scope
                                global additionally requires --yes.
@@ -80,9 +83,19 @@ if [ "${SEMBLE_DRY_RUN:-}" = "1" ]; then DRY=1; fi
 WRITE=1
 if [ "$MODE" = "audit" ] || [ "$YES" -eq 0 ] || [ "$DRY" -eq 1 ]; then WRITE=0; fi
 
-CFG="$(printf '{"mode":%s,"scope":%s,"root":%s,"dir":%s,"write":%s,"revert":%s,"dry":%s,"json":%s,"search":%s,"related":%s}' \
+# The ownership record lives in state.json, so `remove`/`purge` clean it up with
+# everything else. Only a write-mode `apply` produces one; node fills this file
+# and the shell hands it to sc_state_patch, the one sanctioned state writer.
+LEDGER=""
+if [ "$WRITE" -eq 1 ] && [ "$REVERT" -eq 0 ]; then
+  LEDGER="$(mktemp "${TMPDIR:-/tmp}/semble-agents.XXXXXX")"
+  trap 'rm -f "$LEDGER"' EXIT
+fi
+
+CFG="$(printf '{"mode":%s,"scope":%s,"root":%s,"dir":%s,"write":%s,"revert":%s,"dry":%s,"json":%s,"search":%s,"related":%s,"state":%s,"ledger":%s}' \
   "$(sc_jstr "$MODE")" "$(sc_jstr "$SCOPE")" "$(sc_jstr "$ROOT")" "$(sc_jstr "$AGENTS_DIR")" \
-  "$WRITE" "$REVERT" "$DRY" "$JSON" "$(sc_jstr "$SEMBLE_TOOL_SEARCH")" "$(sc_jstr "$SEMBLE_TOOL_RELATED")")"
+  "$WRITE" "$REVERT" "$DRY" "$JSON" "$(sc_jstr "$SEMBLE_TOOL_SEARCH")" "$(sc_jstr "$SEMBLE_TOOL_RELATED")" \
+  "$(sc_jstr "$(sc_state_file)")" "$(sc_jstr "$LEDGER")")"
 
 PROG="$(cat <<'NODE_PROGRAM'
 'use strict';
@@ -94,6 +107,41 @@ const SEARCH = CFG.search, RELATED = CFG.related;
 const WANT = [SEARCH, RELATED];
 const WILDCARDS = ['*', 'mcp__*', 'mcp__semble_code__*'];
 const MAX_BYTES = 512 * 1024;
+
+// ── ownership record ────────────────────────────────────────────────────────
+// `--revert` may strip only the names THIS skill inserted. `apply` records, per
+// file, which of the two the user already had (`state.json:agentsPreExisting`,
+// keyed by scope, then by path relative to the root of that scope). The FIRST
+// observation wins, so a second `apply` never mistakes its own insertions for
+// user text. No record for a file -> revert declines instead of stripping blind.
+function stateAgentsMap() {
+  let s;
+  try { s = JSON.parse(fs.readFileSync(CFG.state, 'utf8')); } catch (e) { return {}; }
+  const all = s && typeof s === 'object' && !Array.isArray(s) ? s.agentsPreExisting : null;
+  return all && typeof all === 'object' && !Array.isArray(all) ? all : {};
+}
+const LEDGER_ALL = stateAgentsMap();
+const scoped = LEDGER_ALL[CFG.scope];
+const LEDGER = scoped && typeof scoped === 'object' && !Array.isArray(scoped) ? scoped : null;
+const ledgerNext = Object.assign({}, LEDGER);
+const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+
+function recordPre(p, a) {
+  if (!has(ledgerNext, p)) ledgerNext[p] = WANT.filter((n) => a.items.some((i) => i.name === n));
+}
+
+/** Names `--revert` is allowed to strip from `p`, or null when authorship is unknown. */
+function ownable(p) {
+  if (!LEDGER || !has(LEDGER, p)) return null;
+  const pre = Array.isArray(LEDGER[p]) ? LEDGER[p] : [];
+  return WANT.filter((n) => pre.indexOf(n) < 0);
+}
+
+function writeLedger() {
+  if (!CFG.ledger || CFG.revert || !Object.keys(ledgerNext).length) return;
+  LEDGER_ALL[CFG.scope] = ledgerNext;
+  try { fs.writeFileSync(CFG.ledger, JSON.stringify({ agentsPreExisting: LEDGER_ALL })); } catch (e) { /* the shell warns */ }
+}
 
 // ── line helpers: a "line" always carries its own ending, so offsets are exact
 const contentOf = (l) => l.replace(/\r?\n$/, '');
@@ -376,22 +424,30 @@ function planAdd(raw, a) {
   };
 }
 
-function planRemove(raw, a) {
+function planRemove(raw, a, own) {
+  if (!own) {
+    return {
+      action: 'unchanged', reason: 'not-owned', added: [], splices: [], insertedLines: 0,
+      note: 'no record of what this skill added here — nothing was removed',
+    };
+  }
+  const kept = WANT.filter((n) => own.indexOf(n) < 0 && a.items.some((i) => i.name === n));
+  const note = kept.length ? 'kept ' + kept.join(' ') + ' — authored before install' : undefined;
   const idx = [];
-  a.items.forEach((it, i) => { if (WANT.indexOf(it.name) >= 0) idx.push(i); });
+  a.items.forEach((it, i) => { if (own.indexOf(it.name) >= 0) idx.push(i); });
   if (!idx.length) {
-    return { action: 'unchanged', reason: 'not-present', added: [], splices: [], insertedLines: 0 };
+    return { action: 'unchanged', reason: 'not-present', added: [], splices: [], insertedLines: 0, note };
   }
   const removed = idx.map((i) => a.items[i].name);
 
   if (a.kind === 'block') {
     return {
-      action: 'changed', reason: 'removed', added: removed, insertedLines: -idx.length,
+      action: 'changed', reason: 'removed', added: removed, insertedLines: -idx.length, note,
       splices: idx.map((i) => ({ start: a.items[i].start, end: a.items[i].end, text: '' })),
     };
   }
   if (a.kind !== 'flow' && a.kind !== 'csv') {
-    return { action: 'unchanged', reason: 'not-present', added: [], splices: [], insertedLines: 0 };
+    return { action: 'unchanged', reason: 'not-present', added: [], splices: [], insertedLines: 0, note };
   }
   // contiguous runs, so that removing a tail block leaves no stray separator
   const runs = [];
@@ -407,7 +463,7 @@ function planRemove(raw, a) {
     if (j + 1 < n) return { start: a.items[0].start, end: a.items[j + 1].start, text: '' };
     return { start: a.items[0].start, end: a.items[n - 1].end, text: '' };
   });
-  return { action: 'changed', reason: 'removed', added: removed, insertedLines: 0, splices };
+  return { action: 'changed', reason: 'removed', added: removed, insertedLines: 0, note, splices };
 }
 
 // ── post-write verification ─────────────────────────────────────────────────
@@ -425,9 +481,12 @@ function verify(oldRaw, oldA, newRaw, plan) {
 
   const names = newA.items.map((i) => i.name);
   const wantPresent = WANT.every((n) => names.indexOf(n) >= 0);
-  const wantAbsent = WANT.every((n) => names.indexOf(n) < 0);
   if (plan.reason === 'added' && !wantPresent) return 'tool-missing-after-write';
-  if (plan.reason === 'removed' && !wantAbsent) return 'tool-present-after-revert';
+  // Only the names the plan claimed to remove must be gone: a user-authored one
+  // is kept on purpose and is not drift.
+  if (plan.reason === 'removed' && plan.added.some((n) => names.indexOf(n) >= 0)) {
+    return 'tool-present-after-revert';
+  }
 
   const dLf = countOf(newRaw, '\n') - countOf(oldRaw, '\n');
   const dCrLf = countOf(newRaw, '\r\n') - countOf(oldRaw, '\r\n');
@@ -492,7 +551,8 @@ for (const f of walk(CFG.dir, []).sort((x, y) => (rel(x.p) < rel(y.p) ? -1 : rel
     continue;
   }
 
-  const plan = CFG.revert ? planRemove(raw, a) : planAdd(raw, a);
+  if (!CFG.revert) recordPre(entry.path, a);
+  const plan = CFG.revert ? planRemove(raw, a, ownable(entry.path)) : planAdd(raw, a);
   entry.action = plan.action;
   entry.reason = plan.reason;
   entry.added = plan.added;
@@ -529,6 +589,8 @@ for (const f of walk(CFG.dir, []).sort((x, y) => (rel(x.p) < rel(y.p) ? -1 : rel
   }
   files.push(entry);
 }
+
+writeLedger();
 
 const summary = { changed: 0, unchanged: 0, conflict: 0, skipped: 0, failed: 0 };
 for (const f of files) summary[f.action]++;
@@ -574,4 +636,14 @@ set +e
 node -e "$PROG" "$CFG"
 RC=$?
 set -e
+
+# Persist the ownership record. A failure here costs a future `--revert` its
+# authorship knowledge (it will decline rather than strip), so it warns on
+# stderr — stdout must stay one JSON object — and never changes the exit code.
+if [ -n "$LEDGER" ] && [ -s "$LEDGER" ]; then
+  if ! ( sc_state_patch "$(cat "$LEDGER")" >/dev/null ); then
+    sc_warn "could not record tool ownership in $(sc_state_file) — --revert will decline to strip" >&2
+  fi
+fi
+
 exit "$RC"

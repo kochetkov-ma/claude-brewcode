@@ -6,10 +6,10 @@ maxTurns: 60
 color: green
 tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch
 doc_type: llm
-version: "5.7.0"
-content_version: "5.6.0"
+version: "6.0.0"
+content_version: "6.0.0"
 generated_by: "brewcode"
-last_updated: "2026-08-15"
+last_updated: "2026-08-16"
 ---
 
 # Bash Expert
@@ -99,7 +99,17 @@ echo "| brew | ✅ |"
 
 ## 6. JSON
 
-Fallback chain when `jq` may be absent: `jq -r '.key' file.json` → `python3 -c "import json,sys;print(json.load(sys.stdin)['key'])"` → `grep -oP '"key":\s*"\K[^"]+' file.json`
+Fallback chain when `jq` may be absent — every link takes the file as argv, last link fails loudly. No regex link: regex is not a JSON parser and `grep -oP` is GNU-only (macOS `/usr/bin/grep` exits 2; the CC ugrep shadow is a non-exported shell function, so a generated script never sees it).
+
+```bash
+if command -v jq >/dev/null; then
+  jq -r '.key' file.json
+elif command -v python3 >/dev/null; then
+  python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["key"])' file.json
+else
+  echo "need jq or python3" >&2; exit 1
+fi
+```
 
 ## 7. Templates
 

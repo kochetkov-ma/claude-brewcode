@@ -168,6 +168,13 @@ The `/brewtools:manager-setup` skill is the control plane for the entire mechani
 
 The codeword hook itself (`manager-prompt.mjs`) is always on -- it cannot be toggled by the skill, and renaming the skill to `manager-setup` did not change that. The four codewords fire regardless of whether the wall is installed. The skill manages text and state; the hook fires unconditionally on every turn.
 
+## Subagents can no longer ask a question mid-task
+
+<Callout type="note">
+As of Claude Code 2.1.233, `AskUserQuestion` is removed from every subagent -- only the main session keeps it. A subagent a `++m` Manager delegates work to can no longer pause and ask for approval partway through; if it used to, it now has nothing to call. The affected brewtools agents (`ssh-admin`, `deploy-admin`) were rewritten to emit an `## APPROVAL REQUIRED` envelope in their final return and stop there instead, leaving the decision with whoever reads the result -- the main session, or you. This is unrelated to the codeword injection mechanism on this page, but it changes what a delegated subagent can do once it starts running.
+</Callout>
+
+
 <Callout type="note">
 The hook and helper filenames stayed as they are through the v5.0.0 rename: `manager-prompt.mjs`, `hardmode-guard.mjs`, `lib/manager-state.mjs`, `lib/manager-prompts.mjs`. The guard's self-exemption requires the script `node` actually executes to match `(.claude/brewtools/manager|hooks/lib)/manager-state.mjs$`, so renaming or relocating that helper would silently break the wall's off-switch.
 </Callout>

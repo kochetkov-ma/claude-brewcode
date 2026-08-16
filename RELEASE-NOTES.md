@@ -2,6 +2,73 @@
 
 ---
 
+## v6.0.0 (2026-08-16)
+
+> Docs: [brewcode hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [bash-expert](https://doc-claude.brewcode.app/brewcode/agents/bash-expert/) | [bc-rules-organizer](https://doc-claude.brewcode.app/brewcode/agents/bc-rules-organizer/) | [brewcode:agents](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [brewcode:skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [convention](https://doc-claude.brewcode.app/brewcode/skills/convention/) | [rules](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) | [superreview-setup](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [teams-setup](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | [docsync-setup](https://doc-claude.brewcode.app/brewdoc/skills/docsync-setup/) | [md-to-pdf](https://doc-claude.brewcode.app/brewdoc/skills/md-to-pdf/) | [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/) | [my-claude](https://doc-claude.brewcode.app/brewdoc/skills/my-claude/) | [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/) | [deploy-admin](https://doc-claude.brewcode.app/brewtools/agents/deploy-admin/) | [ssh-admin](https://doc-claude.brewcode.app/brewtools/agents/ssh-admin/) | [text-optimizer](https://doc-claude.brewcode.app/brewtools/agents/text-optimizer/) | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [deploy](https://doc-claude.brewcode.app/brewtools/skills/deploy/) | [ssh](https://doc-claude.brewcode.app/brewtools/skills/ssh/) | [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/) | [secrets-scan](https://doc-claude.brewcode.app/brewtools/skills/secrets-scan/) | [text-optimize](https://doc-claude.brewcode.app/brewtools/skills/text-optimize/) | [text-human](https://doc-claude.brewcode.app/brewtools/skills/text-human/) | [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) | [task-board-setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) | [think-short-setup](https://doc-claude.brewcode.app/brewtools/skills/think-short-setup/) | [agent-deadline-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline-setup/) | [agent-return-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-return-setup/) | [agent-router-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-router-setup/)
+
+> A correctness release. An audit of all four plugins produced 122 findings; every one was re-verified against a Claude Code 2.1.233 source snapshot, fixed across four waves, reviewed, then re-checked by mutation testing and repaired again. The theme is that the guards, the secret handling and the agent instructions were all written against an older Claude Code and against the happy path -- a guard that could not parse its input let the command through, a provider test put an API key on the `curl` command line where `ps` shows it, and the creator agents taught hook and agent APIs that 2.1.233 no longer has. Nothing here changes how you invoke anything; a lot here changes what happens when something goes wrong. Test suites now cover the parts that had none.
+
+### brewtools
+
+#### Fixed
+
+- **`manager-setup` HARD wall is now an allowlist, not a blocklist.** The guard vets each command against a permitted set of binaries and, per binary, a permitted set of flags -- an unknown binary or an unrecognised flag is denied instead of falling through. Unparseable stdin now fails CLOSED: a hook that cannot read what it is guarding blocks rather than approves
+- **Four wall bypasses closed:** `git diff --output=<file>` (writes a file through a read verb), `git branch -D` (destructive under a read-shaped command), `gh issue comment --body` (writes to a remote), and `find -fprint0` (writes a file through a search binary)
+- **Secrets no longer appear in process arguments.** The `provider-switch` Z.ai connectivity test passed the API key as a `curl` argv element, visible to any `ps` on the machine; it now feeds the whole request config on stdin via `curl -s -K -`. The OpenRouter model list stopped sending a bearer token to a public, unauthenticated endpoint
+- **`deploy-admin` no longer reports on the wrong CI run.** It correlated a run by reading the newest rows of `gh run list`, which returns whatever ran most recently -- a concurrent workflow or a colleague's push could be reported as your deploy. It now correlates by `headSha` and follows the run with `gh run watch --exit-status`
+- **`deploy` safety rules state the rollback truth:** a pushed tag has NO rollback. The previous wording implied one existed
+- `md-to-pdf`, `text-optimize`, `secrets-scan`, `ssh` and `deploy` shell paths hardened against unquoted expansion, missing-dependency fall-through and partial-failure-reported-as-success
+
+#### Changed
+
+- **`AskUserQuestion` is gone from every subagent in 2.1.233**, so agents that asked for approval mid-run silently stalled. `ssh-admin`, `deploy-admin` and the generated `ssh`/`deploy` agent templates now emit an `## APPROVAL REQUIRED` envelope in their return and stop, leaving the decision with the caller
+- `agent-return-setup`, `agent-router-setup`, `think-short-setup` and `manager-setup` assets re-verified against 2.1.233 hook payloads
+
+#### Added
+
+- Test suites for `deploy`, `ssh`, `secrets-scan`, `provider-switch` and `text-optimize` (guard fixtures + lossless/lossy rule fixtures), plus shared libraries (`deploy/scripts/lib/deploy-common.sh`, `provider-switch/scripts/read-secret.sh`, `secrets-scan/scripts/`) that the suites exercise directly
+
+### brewcode
+
+#### Fixed
+
+- **Creator agents corrected against Claude Code 2.1.233.** `hook-creator`, `agent-creator` and `skill-creator` taught a hook-event roster, handler types, `SessionStart` sources (including `fork`), and `StopFailure`/`Notification` payload type lists that no longer matched the runtime. The **200-subagent cap was removed upstream in 2.1.224** and is no longer stated as a limit
+- **`semble-setup` reindex no longer destroys the index it just built.** When the final `mv` of the staged index failed, the staged copy was deleted and the project was left with nothing; it is now kept and its path printed so the move can be finished by hand
+- **`teams-setup`: `toggle-team.sh disable` no longer reports success while every agent stays live.** A failed park left the roster active and the exit code green
+- **`session-start.mjs` no longer follows a symlinked `.claude/plans` out of the project root** -- a symlink there could redirect hook writes to an arbitrary path
+- **`compact-recall.mjs` recovers a plan that predates the transcript.** A new `.claude/plans/LATEST.md` rung sits in the degradation ladder, so a plan written before the scanned window is still re-anchored after a compaction instead of degrading to intent-only
+
+#### Added
+
+- **`agents/tests/suite-creator-contract.mjs`** -- a 27-check contract suite pinning what the creator agents claim about the Claude Code API, so the next upstream change fails a test instead of silently teaching a stale API
+- `hooks/tests/` covering `session-start.mjs`, and `skills/teams-setup/tests/` covering the toggle/verify scripts
+
+### brewdoc
+
+#### Fixed
+
+- **`publish` site-from-directory actually publishes now.** It produced a 0-byte archive and uploaded it, so the returned URL served nothing
+- **The site archive no longer sweeps in secrets.** `.env` and `.git/config` were included in the uploaded bundle
+- **Concurrent `md-to-pdf` conversions no longer overwrite each other's temp files** -- two conversions in the same session could produce one corrupt PDF
+- The worktree/submodule `.gitignore` guard was fixed: it misread a worktree or submodule checkout and skipped the check
+- `--quiet` removed from `md_to_pdf.py` -- it was documented but had never done anything
+
+#### Added
+
+- `publish/scripts/` (`brewpage-lib.sh`, `publish.mjs`) extracted from the skill body, with `publish/tests/` covering archive building, inspection and the skill flow; test suites added for `md-to-pdf` and `docsync-setup`
+
+### codex
+
+#### Fixed
+
+- **`generate-compat.mjs` emitted mirrored files that could not parse.** After handling the `${...}`/`$...` forms it ran a blanket `CLAUDE_PROJECT_DIR` -> project-root substitution that also rewrote bare JS identifiers and object keys (`delete env.<project-root>;`) and produced an invalid shell parameter expansion (`${<project-root>:-}`). The substitution is now context-split: path-prefixed forms keep the project-root placeholder, a bare identifier is an env-var NAME and becomes `CODEX_PROJECT_DIR`, matching the existing `CLAUDE_CODE_SESSION_ID` -> `CODEX_SESSION_ID` precedent
+- **Mirrored `teams-setup` test suites crashed before their first assertion** -- `IG_REL` was rewritten to `.codex/agents/` but the `mkdirSync` above it was not
+- **Mirrored `text-optimize` suite asserted an agent Markdown file the mirror never ships** and expected a fixture under its pre-rename name
+- **`validate-compat.mjs` failed on build artifacts.** The resource walker now skips `__pycache__`, `node_modules`, `.DS_Store` and `*.pyc`; the differs-from-canonical comparison itself is unchanged
+- **`buildDistribution` did not copy `agents/`,** aborting the dist copy of one test script
+
+---
+
 ## v5.7.0 (2026-08-15)
 
 > Docs: [brewcode hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | [brewcode overview](https://doc-claude.brewcode.app/brewcode/overview/) | [agent-router-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-router-setup/)

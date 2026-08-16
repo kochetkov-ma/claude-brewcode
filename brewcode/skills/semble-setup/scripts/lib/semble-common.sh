@@ -63,11 +63,40 @@ sc_platform() {
   esac
 }
 
+# Canonical root resolution (D1 Q5), same order as the five hook assets:
+# test override -> CLAUDE_PROJECT_DIR -> git toplevel -> upward walk for a
+# .git/.claude marker -> PWD. $PWD alone was the whole rule, so every script run
+# from a subdirectory wrote its state, cache and rule into that subdirectory.
+sc_root_candidate() {
+  local d r
+  if [ -n "${SEMBLE_PROJECT_ROOT:-}" ] && [ -d "$SEMBLE_PROJECT_ROOT" ]; then
+    printf '%s\n' "$SEMBLE_PROJECT_ROOT"; return 0
+  fi
+  if [ -n "${CLAUDE_PROJECT_DIR:-}" ] && [ -d "$CLAUDE_PROJECT_DIR" ]; then
+    printf '%s\n' "$CLAUDE_PROJECT_DIR"; return 0
+  fi
+  if r="$(git rev-parse --show-toplevel 2>/dev/null)" && [ -n "$r" ]; then
+    printf '%s\n' "$r"; return 0
+  fi
+  d="$PWD"
+  while [ "$d" != "/" ] && [ -n "$d" ]; do
+    if [ -d "$d/.git" ] || [ -d "$d/.claude" ]; then printf '%s\n' "$d"; return 0; fi
+    d="$(dirname "$d")"
+  done
+  printf '%s\n' "$PWD"
+  return 1   # no marker anywhere: the caller decides whether that is fatal
+}
+
 # Resolved absolute project root. Mirrors Python Path(p).resolve() for an
 # existing directory: `cd` + `pwd -P` expands every symlink, drops any trailing
 # slash, and returns "/" unchanged — identical to pathlib on macOS and Linux.
+# Total on purpose: every caller reads it as `"$(sc_project_root)"` under errexit,
+# so a rootless run must still print PWD and exit 0 exactly as before. The
+# "no marker found" signal lives in sc_root_candidate's exit status, for a caller
+# that is about to WRITE and wants to refuse a guessed root.
 sc_project_root() {
-  local p="${SEMBLE_PROJECT_ROOT:-$PWD}"
+  local p
+  p="$(sc_root_candidate || true)"
   ( cd "$p" 2>/dev/null && pwd -P ) || { printf '%s\n' "$p"; return 1; }
 }
 

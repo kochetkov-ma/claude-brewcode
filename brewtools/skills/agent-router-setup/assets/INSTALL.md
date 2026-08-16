@@ -1,4 +1,4 @@
-<!-- brewcode-meta: version=5.7.0 content_version=5.7.0 generated_by=brewtools:agent-router-setup -->
+<!-- brewcode-meta: version=6.0.0 content_version=6.0.0 generated_by=brewtools:agent-router-setup -->
 # agent-router hook — install / configure / remove runbook
 
 Self-contained hook asset. The `/brewtools:agent-router-setup` skill copies it into the
@@ -39,11 +39,15 @@ Scanned text = the spawn's `description` (first 500 chars) + `prompt` (first 200
 Both are re-read from the roster on EVERY call; there is no cache, so editing an agent
 description takes effect on the very next spawn.
 
-**Where "the project" is.** The hook does NOT use `cwd` literally: it climbs from
-`cwd` to the NEAREST ANCESTOR that holds a `.claude` directory (at most 16 levels)
-and reads the config and the roster from there. `claude` started in a subdirectory
-therefore still resolves the repo root. If no ancestor has a `.claude` dir, `cwd`
-itself is used and both lookups simply find nothing.
+**Where "the project" is.** The hook does NOT use `cwd` literally. It resolves the
+root in this fixed order: `CLAUDE_PROJECT_DIR` -> nearest ancestor of `cwd` holding
+`.claude/brewtools/agent-router.json` (this router's OWN config = the ownership
+marker) -> nearest ancestor holding `.git` -> nearest ancestor holding a `.claude`
+directory -> `cwd` unchanged. At most 16 levels per step; the installer's
+`claude_project_root()` below is the shell form of this same ladder. Ownership beats mere
+directory existence on purpose: a nested package or fixture carrying a bare `.claude`
+used to mask the real root, which hid both the config and the roster and let a router
+disabled at the real root keep denying spawns from a nested cwd.
 
 **A missing `.claude/agents/` is an EMPTY roster, not a failure.** Steps 6 and 7 are
 independent: with no roster dir at all the intent rules STILL fire and still redirect
@@ -156,6 +160,7 @@ WIRING changes (install / level / uninstall / purge) need a new session.
 
 | Var | Set by | Meaning |
 |-----|--------|---------|
+| `ROOT` | the block below | absolute project root; every `.claude/...` path is built from it |
 | `RUNBOOK` | skill | absolute path to THIS file (source dir = its dirname) |
 | `LEVEL` | skill (user's answer) | `fast` or `strict`; REQUIRED for install/level — empty aborts |
 | `PLUGIN_VERSION` | skill (optional) | `X.Y.Z` for the metadata stamp. OPTIONAL: unset/malformed falls back to `<SRC>/../../../.claude-plugin/plugin.json`, resolved by the block itself. Never a literal |
@@ -171,8 +176,46 @@ echo "LEVEL=$LEVEL RUNBOOK=$RUNBOOK"
 
 A value that exists only as prose in a prompt reaches nothing: `LEVEL` stays empty
 and the blocks ABORT loudly rather than writing a silent `fast` over the level the
-user picked. Each Bash call starts a fresh shell — re-export in EVERY call, or
-prefix the block.
+user picked. Each Bash call starts a fresh shell — re-export `ROOT`, `RUNBOOK` and
+`LEVEL` in EVERY call, or prefix the block.
+
+### Project root
+
+Every path below is `$ROOT/.claude/...`, never `$PWD`. The shell cwd moves with `cd`
+and persists across calls, so `$PWD` can be a subdirectory — installing there builds a
+second, nested `.claude/` that the running Claude Code never reads. Resolve it once:
+
+```
+# Same ladder the hook uses at runtime, so installer and hook can never disagree:
+# CLAUDE_PROJECT_DIR -> ownership marker (.claude/brewtools/agent-router.json)
+# -> git toplevel (= nearest .git) -> upward .claude walk -> PWD.
+claude_project_root() {
+  if [ -n "$CLAUDE_PROJECT_DIR" ] && [ -d "$CLAUDE_PROJECT_DIR" ]; then
+    printf '%s\n' "$CLAUDE_PROJECT_DIR"; return 0
+  fi
+  d=$PWD
+  while [ "$d" != "/" ]; do
+    if [ -f "$d/.claude/brewtools/agent-router.json" ]; then printf '%s\n' "$d"; return 0; fi
+    d=$(dirname "$d")
+  done
+  if r=$(git rev-parse --show-toplevel 2>/dev/null) && [ -n "$r" ]; then
+    printf '%s\n' "$r"; return 0
+  fi
+  d=$PWD
+  while [ "$d" != "/" ]; do
+    if [ -d "$d/.claude" ]; then printf '%s\n' "$d"; return 0; fi
+    d=$(dirname "$d")
+  done
+  printf '%s\n' "$PWD"; return 1   # nonzero: caller decides
+}
+if ROOT=$(claude_project_root); then export ROOT; echo "✅ ROOT=$ROOT"; else
+  echo "❌ ABORT: no project root — CLAUDE_PROJECT_DIR unset, no agent-router.json marker, no git toplevel, no .claude above $PWD; run no block below"; fi
+```
+
+> **STOP if ❌** — an installer never writes into a guessed root. `CLAUDE_PROJECT_DIR`
+> is exported to hook child processes, not to this shell, so it is normally empty here;
+> on a first install the marker does not exist yet either, so the git toplevel does the
+> work, and on upgrade/uninstall the marker pins the root that already owns the router.
 
 Every write of the config also stamps the four mandatory JSON metadata keys —
 `version`, `content_version`, `generated_by`, `last_updated` (never `doc_type`: that
@@ -190,7 +233,7 @@ never hardcoded; `content_version` from THIS file's own `brewcode-meta:` header 
 
 ```
 SRC="$(dirname "$RUNBOOK")"
-CFG="$PWD/.claude/brewtools/agent-router.json" PJSON="$SRC/../../../.claude-plugin/plugin.json" node -e '
+CFG="$ROOT/.claude/brewtools/agent-router.json" PJSON="$SRC/../../../.claude-plugin/plugin.json" node -e '
 const fs=require("fs"), p=require("path");
 const f=process.env.CFG;
 const level=(process.env.LEVEL||"").trim();
@@ -329,8 +372,8 @@ seconds, not 5.
 
 ## INSTALL  (`<repo>/.claude/`)
 
-Run every block from the REPO ROOT (`$PWD` is used throughout) with `RUNBOOK` and
-`LEVEL` exported in the SAME Bash call.
+Run every block with `ROOT` (see *Project root*), `RUNBOOK` and `LEVEL` exported in
+the SAME Bash call. Nothing depends on where the shell happens to sit.
 
 1. Ensure `<repo>/.claude/hooks/`.
 2. Copy `agent-router.mjs` there (**EXECUTE** copy, below). Source dir = this
@@ -350,7 +393,7 @@ independent.
 **EXECUTE** copy (Bash tool; `RUNBOOK` = absolute path to this INSTALL.md):
 ```
 SRC="$(dirname "$RUNBOOK")"
-DST="$PWD/.claude/hooks"
+DST="$ROOT/.claude/hooks"
 mkdir -p "$DST" && \
 cp "$SRC/agent-router.mjs" "$DST/" && \
 test -f "$DST/agent-router.mjs" && \
@@ -365,13 +408,27 @@ path that aborts on a broken file and verifies afterwards. `JUDGE` is read only 
 `LEVEL=strict`:
 ```
 SRC="$(dirname "$RUNBOOK")"
-SETTINGS="$PWD/.claude/settings.json" HOOKS_DIR="$PWD/.claude/hooks" JUDGE="$SRC/judge-prompt.md" node -e '
+SETTINGS="$ROOT/.claude/settings.json" HOOKS_DIR="$ROOT/.claude/hooks" JUDGE="$SRC/judge-prompt.md" node -e '
 const fs=require("fs"), path=require("path");
 const f=process.env.SETTINGS, dir=process.env.HOOKS_DIR;
 const level=(process.env.LEVEL||"").trim();
 if(level!=="fast"&&level!=="strict"){ console.error("ABORT: LEVEL must be fast|strict, got: "+JSON.stringify(level)+" - export it before this block"); process.exit(1); }
 const MARK="agent-router.mjs", SM="agent-router: checking agent fit";
 const full=path.join(dir,MARK);
+function lock(f){                                      // O_EXCL dir lock; stale-break by mtime
+  const l=f+".lock", w=new Int32Array(new SharedArrayBuffer(4));
+  for(let i=0;i<100;i++){
+    try{ fs.mkdirSync(l); return ()=>{ try{ fs.rmdirSync(l); }catch{} }; }
+    catch(e){
+      if(e.code!=="EEXIST") throw e;
+      try{ if(Date.now()-fs.statSync(l).mtimeMs>30000) fs.rmdirSync(l); }catch{}
+      Atomics.wait(w,0,0,100);
+    }
+  }
+  console.error("ABORT: "+l+" is held by another installer; nothing was written"); process.exit(1);
+}
+fs.mkdirSync(path.dirname(f),{recursive:true});
+process.on("exit",lock(f));                            // acquire now, release on ANY exit - read+merge+write below is one critical section
 let s={};
 if(fs.existsSync(f)){
   const raw=fs.readFileSync(f,"utf8");
@@ -405,7 +462,6 @@ if(level==="strict"){
   if(!prompt.trim()){ console.error("ABORT: JUDGE prompt is empty: "+jf); process.exit(1); }
   s.hooks.PreToolUse.push({matcher:"Agent",hooks:[{type:"agent",prompt,model:"claude-haiku-4-5-20251001",timeout:30,statusMessage:SM}]});
 }
-fs.mkdirSync(path.dirname(f),{recursive:true});
 fs.writeFileSync(f,JSON.stringify(s,null,2)+"\n");
 const back=JSON.parse(fs.readFileSync(f,"utf8"));      // post-write verification
 const pre=(back.hooks&&back.hooks.PreToolUse)||[];
@@ -418,6 +474,11 @@ console.log("OK merged "+f+" (level="+level+", tier1="+n1+", tier2="+n2+")");
 
 > **STOP if ❌** — fix before continuing. An ABORT means `settings.json` was left
 > EXACTLY as it was: every foreign hook and key intact.
+
+> The block takes a `settings.json.lock` directory (`mkdir`, O_EXCL) around the whole
+> read-modify-write and releases it on any exit. Without it two setup skills merging
+> at once both read the OLD document and the second writer silently erases the
+> first's registration. A lock older than 30 s is treated as stale and broken.
 
 Re-install converges rather than doing nothing: the same `LEVEL`, the same paths, the
 same ONE settings entry — but the copy block above runs unconditionally and overwrites
@@ -437,7 +498,7 @@ inlined judge prompt — nothing about a plugin update reaches a project by itse
    `LEVEL`. **EXECUTE** (Bash tool):
 
 ```
-LEVEL=$(CFG="$PWD/.claude/brewtools/agent-router.json" node -e '
+LEVEL=$(CFG="$ROOT/.claude/brewtools/agent-router.json" node -e '
 const fs=require("fs"); const f=process.env.CFG;
 if(!fs.existsSync(f)){ console.error("ABORT: not installed - no config at "+f+"; run INSTALL instead"); process.exit(1); }
 let c; try{ c=JSON.parse(fs.readFileSync(f,"utf8")||"{}"); }
@@ -488,7 +549,7 @@ tier-2 entry ALSO stays wired and keeps costing a model call per spawn: use
 `level fast` first if that is what you want stopped.
 
 **EXECUTE** using Bash tool. The block below DISABLES as written; to ENABLE, prefix
-the `CFG=...` line with `ON=1 ` (i.e. `ON=1 CFG="$PWD/..." PJSON="..." node -e '...'`).
+the `CFG=...` line with `ON=1 ` (i.e. `ON=1 CFG="$ROOT/..." PJSON="..." node -e '...'`).
 Any other value of `ON`, or no `ON` at all, disables. Re-running either direction is a
 no-op. `RUNBOOK` must be exported here too — this is a config WRITE, so it re-stamps the
 four metadata keys, `content_version` included, and reads that one out of this file's own
@@ -496,7 +557,7 @@ header. It copies NO files: a toggle run after a plugin update leaves an old
 `agent-router.mjs` in place while raising the config's `version`. Run `UPGRADE` for the file.
 ```
 SRC="$(dirname "$RUNBOOK")"
-CFG="$PWD/.claude/brewtools/agent-router.json" PJSON="$SRC/../../../.claude-plugin/plugin.json" node -e '
+CFG="$ROOT/.claude/brewtools/agent-router.json" PJSON="$SRC/../../../.claude-plugin/plugin.json" node -e '
 const fs=require("fs"), p=require("path"); const f=process.env.CFG;
 const GB="brewtools:agent-router-setup";
 function pluginVersion(){
@@ -560,12 +621,25 @@ are never touched.
 
 **EXECUTE** using Bash tool:
 ```
-export HOOKS_DIR="$PWD/.claude/hooks" SETTINGS="$PWD/.claude/settings.json"
+export HOOKS_DIR="$ROOT/.claude/hooks" SETTINGS="$ROOT/.claude/settings.json"
 node -e '
 const fs=require("fs");
 const f=process.env.SETTINGS;
 const MARK="agent-router.mjs", SM="agent-router: checking agent fit";
+function lock(f){                                      // O_EXCL dir lock; stale-break by mtime
+  const l=f+".lock", w=new Int32Array(new SharedArrayBuffer(4));
+  for(let i=0;i<100;i++){
+    try{ fs.mkdirSync(l); return ()=>{ try{ fs.rmdirSync(l); }catch{} }; }
+    catch(e){
+      if(e.code!=="EEXIST") throw e;
+      try{ if(Date.now()-fs.statSync(l).mtimeMs>30000) fs.rmdirSync(l); }catch{}
+      Atomics.wait(w,0,0,100);
+    }
+  }
+  console.error("ABORT: "+l+" is held by another installer; nothing was written"); process.exit(1);
+}
 if(!fs.existsSync(f)){ console.log("no settings to clean: "+f); process.exit(0); }
+process.on("exit",lock(f));                            // re-read under the lock - a concurrent installer must not lose its merge
 const raw=fs.readFileSync(f,"utf8");
 if(!raw.trim()){ console.log("empty settings, nothing to clean: "+f); process.exit(0); }
 let s;
@@ -602,9 +676,9 @@ Run UNINSTALL first, then delete the config and the anti-loop markers.
 
 **EXECUTE** using Bash tool:
 ```
-CFG="$PWD/.claude/brewtools/agent-router.json"
+CFG="$ROOT/.claude/brewtools/agent-router.json"
 rm -f "$CFG" && test ! -e "$CFG" && echo "✅ removed $CFG" || echo "❌ FAILED"
-rmdir "$PWD/.claude/brewtools" 2>/dev/null || true
+rmdir "$ROOT/.claude/brewtools" 2>/dev/null || true
 node -e 'const fs=require("fs"),os=require("os"),p=require("path");
 const d=p.join(os.tmpdir(),"brewtools-agent-router");
 fs.rmSync(d,{recursive:true,force:true});console.log("OK purged "+d);' && echo "✅ markers" || echo "❌ FAILED"
@@ -621,13 +695,13 @@ is cheap to purge — unlike a deadline state, it carries nothing worth preservi
 
 ## Verify
 
-Synthetic payloads, no session needed. Run from the repo root, with
-`.claude/brewtools/agent-router.json` at `enabled:true`. Copy-paste as one block:
+Synthetic payloads, no session needed. Needs `ROOT` exported (see *Project root*) and
+`$ROOT/.claude/brewtools/agent-router.json` at `enabled:true`. Copy-paste as one block:
 
 ```
-H="$PWD/.claude/hooks/agent-router.mjs"
+H="$ROOT/.claude/hooks/agent-router.mjs"
 fire(){ echo "$2" | node "$H"; echo "   <- $1 exit=$?"; }
-P='"cwd":"'"$PWD"'","hook_event_name":"PreToolUse"'
+P='"cwd":"'"$ROOT"'","hook_event_name":"PreToolUse"'
 TI='"subagent_type":"general-purpose","description":"write a skill","prompt":"create a new SKILL.md for the repo"'
 
 # 1. not the Agent tool -> ALLOW (no stdout)

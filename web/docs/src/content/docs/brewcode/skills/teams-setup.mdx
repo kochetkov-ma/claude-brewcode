@@ -78,6 +78,10 @@ import { Card, CardGrid, Callout, Steps, UpdateNotice } from '../../../../compon
 `disable` moves each roster member's `.claude/agents/<agent>.md` to `<agent>.md.disabled` — Claude Code stops discovering the agent as a project agent, but the file body is byte-identical either way, and `enable` moves it straight back. `intent-guard` is always skipped (`SKIP:intent-guard (shared with superreview-setup)`) because that file may belong to an install with nothing to do with this team. `team.md` and the trace log are untouched by either verb. The same keyword guard is what keeps `purge` a mode rather than a team name — earlier versions treated any unknown first word as a team name, so `/brewcode:teams-setup purge` installed a team called `purge`.
 </Callout>
 
+<Callout type="tip" title="Fixed: disable no longer reports success on a roster it could not parse">
+`toggle-team.sh disable` used to print `MOVED:0` alongside a green `✅ disable` and exit 0 even when its `## Agents` table parser never found the header row — every agent file stayed live while the run claimed success. The parser now recognizes a padded separator row (`| ------ |`, not just `|---|`) and hard-fails instead of silently reporting zero moves when it never passes the header. Roster agent ids are also validated against `^[a-z0-9][a-z0-9-]*$` — uppercase and `_` are rejected — so a malformed `team.md` row is reported and skipped rather than interpolated into a file path.
+</Callout>
+
 `purge` never deletes `.claude/agents/intent-guard.md`. That file is shared with [`/brewcode:superreview-setup`](/brewcode/skills/superreview-setup/) and may belong to an install that has nothing to do with this team; purge reports it as kept. A team name that does not exist stops the run — nothing is "purged" that was never installed.
 
 <Callout type="tip" title="Why the -setup suffix">

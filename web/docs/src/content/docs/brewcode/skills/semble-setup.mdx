@@ -193,7 +193,7 @@ Subsequent searches are sub-second and require the absolute repo path:
 | `disable` | `enabled=false` — hooks go silent, nothing deleted | yes |
 | `uninstall` | four flavours: `integration` / `mcp` / `cli` / `purge` | yes |
 | `purge` | everything, including the code cache root — typed confirmation required | yes |
-| `reindex` | extra: delete exactly this repo's cache dir (confirmed), then warm | yes |
+| `reindex` | extra: stage a rebuild in a private cache root, verify it with a warm query, delete the live index only after the staged build proves itself, then swap the staged copy in | yes |
 | `optimize` | extra: read-only audit fan-out with concrete recommendations — reads current cache size, staleness and entry count via `semble-cache.sh info --json` (figures vary by machine/repo, no fixed number published) | no |
 | `resume` | extra: after reload — smoke query, then an idempotent self-repair re-run of the same wiring, `phase -> ready` | yes |
 | `warm` | free-text intent ("warm", "прогрей") — pre-builds the index, deletes nothing | yes (cache write only) |
@@ -213,16 +213,16 @@ The first seven rows are the canonical vocabulary shared by every `-setup` skill
 
 | Surface | Location |
 |---------|----------|
-| MCP server | `~/.claude.json` `.mcpServers.semble_code`, user scope — `-s user` is mandatory, the CLI default is `local` |
+| MCP server | `~/.claude.json` `.mcpServers.semble_code`, user scope — `-s user` is mandatory, the CLI default is `local`. Every mutation is rollback-safe: a failed `add`/`repair` restores the file it was about to overwrite instead of leaving it half-written |
 | Command | `uvx --from 'semble[mcp]==0.5.4' semble --content <SEMBLE_CONTENT_ARGS>` (Corpus below has the actual token list) |
 | Code cache root | absolute `SEMBLE_CACHE_LOCATION`: macOS `~/Library/Caches/semble-code` / Linux `${XDG_CACHE_HOME:-~/.cache}/semble-code` |
 | Docs cache root | same path with a `semble-docs` leaf — created empty, **reserved, never registered** |
-| State | `<repo>/.claude/semble/state.json` |
+| State | `<repo>/.claude/semble/state.json` — project root resolved by the canonical recipe: `CLAUDE_PROJECT_DIR` -> `git rev-parse --show-toplevel` -> an upward walk for `.git`/`.claude` -> `PWD` |
 | Rule | `<repo>/.claude/rules/semble-first.md` |
 | Ignore file | `<repo>/.sembleignore` — keeps generated/vendored trees out of the corpus; managed like the rule (user edits reported, never clobbered) and gets an appended, **commented-out** block of measured candidates (duplicate trees, disproportionately heavy directories) — nothing is excluded until the user uncomments a line |
 | CLAUDE.md | a marked `<!-- BEGIN brewcode:semble -->` block |
 | Hooks | five files in `.claude/hooks/` — `semble-session.mjs` (SessionStart), `semble-prefetch.mjs` (UserPromptSubmit), `semble-stats.mjs` (PostToolUse + PostToolUseFailure, stats matcher), `semble-reminder.mjs` (PreToolUse `Bash\|Grep`), `semble-subagent.mjs` (SubagentStart, **no matcher key** — matches every agent type) — six `settings.json` registrations total, each `"timeout": 5` (seconds). Status reports `hooks <n>/6 wired` — never 6 files. `semble-explore.mjs` is retired for good, replaced by `semble-subagent.mjs`: `install`/`upgrade` deletes the file and replaces its settings row, never leaves both. See Retirement of the advisory pair and Reminder mechanic below |
-| Agents | project `.claude/agents/**/*.md` get the two tool names added to `tools:`; global agents are never touched |
+| Agents | project `.claude/agents/**/*.md` get the two tool names added to `tools:`; global agents are never touched. `apply` records, per file, exactly which tool names it added; `--revert` strips only those recorded names and leaves any user-authored tool name in the same list untouched — a file with no record declines to revert rather than guessing |
 
 ### CLAUDE.md conflict scan
 
@@ -324,6 +324,12 @@ Parent and subagent contexts are disjoint: the `SubagentStart` context is visibl
 
 `semble-status.sh` reports conversion per source (session / reminder / subagent / prefetch), not one pooled denominator — pooling let 126 `SessionStart` firings drown every other channel. Each slot carries its own `measure` (`injected-path-opened` for prefetch, `semble-call-after` for the rest); a channel that never fired prints `0/0` rather than vanishing — `0/0` is "never delivered", `0/N` is "delivered and ignored", and only the second is evidence about the advice.
 
+### Skipped is not failed, and a partial verdict is honest
+
+A skipped operation exits **RC 3** with `"status":"skipped"` in its JSON — distinct from a real failure (RC 1). `SEMBLE_NO_NETWORK=1`, `SEMBLE_DRY_RUN=1` or a missing `uvx` skip the smoke query, `warm`, `enable` and `reindex`'s staged rebuild the same way: nothing broke, nothing was proven. `resume`/`enable` leave `phase` at `verifying` rather than `ready` on a skipped warm, and `status` reports the gap as `partial - warm and smoke not recorded in state.completed`, naming exactly the missing member(s) of the pair.
+
+The verdict logic itself follows one rule: a guidance section that **errored** always downgrades the overall verdict from `ready` to `partial`, whatever the cause — a missing unit, a crashed probe, a malformed file all count the same, because each leaves the rule, hooks and permissions exactly as unproven. A **null** measurement never downgrades anything — null means the section was not requested (`--section mcp`), and an absent measurement is not a defect. `cache` and `agents` stay lenient by design since each witnesses one optional fact.
+
 ### Version tracking
 
 `status` compares the version stamped into the installed artifacts against the plugin running on this machine, folded into the same `guidance:` line:
@@ -362,7 +368,7 @@ Both `mcp__semble_code__search` and `mcp__semble_code__find_related` require an 
 | Every shell-out is time-bounded, with or without `coreutils` | `sc_timeout` uses `timeout`/`gtimeout` when a binary is present and a pure-bash watchdog when none is — the report's `timeout.bounded` is always `true`. `coreutils` only upgrades which binary enforces the bound; it is never required and never a reason a run can fail. |
 | Cold cache = slow first query | The embedding model download can take up to 600s and fails offline with a cold HuggingFace cache. |
 | Docs corpus is reserved, not registered | The per-repo cache key does not encode content type — mixing code and docs in one cache dir would collide and invalidate on every call, so the docs root exists empty and untouched. |
-| `semble clear index` wipes everything under the cache root | There is no per-repo rebuild CLI; `reindex` deletes exactly one resolved `<code root>/<64-hex>` directory, guarded and confirmed. |
+| `semble clear index` wipes everything under the cache root | There is no per-repo rebuild CLI; `reindex` rebuilds into a private staging root first and only deletes the live `<code root>/<64-hex>` directory once the staged build has answered a real query — a failed or skipped staged warm leaves the live index untouched. If the final swap (`mv staged -> live`) itself fails, the staged index is kept on disk and its path is printed for manual recovery, never silently discarded. |
 | Windows is unsupported | The skill refuses every mutation on a non-macOS/Linux platform. |
 
 ### Removal flavours

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=5.7.0 content_version=5.7.0 generated_by=brewtools:agent-router-setup
+// brewcode-meta: version=6.0.0 content_version=6.0.0 generated_by=brewtools:agent-router-setup
 /**
  * agent-router - PreToolUse hook for the `Agent` tool (Node built-ins only, ESM).
  *
@@ -171,30 +171,60 @@ function sha1(s) {
 
 // ── project root / config ────────────────────────────────────────────────────
 
-/**
- * Nearest ancestor holding a `.claude` directory; `claude` started from a
- * subdirectory reports that subdirectory as cwd while Claude Code itself resolves
- * from the repo root. Falls back to cwd unchanged.
- */
-function findRoot(cwd) {
-  let dir = cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd();
+function isDir(p) {
   try {
-    dir = path.resolve(dir);
+    return statSync(p).isDirectory();
   } catch {
-    return null;
+    return false;
   }
-  let cur = dir;
+}
+
+function exists(p) {
+  try {
+    statSync(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Nearest ancestor of `from` (inclusive, <= MAX_ROOT_CLIMB levels) satisfying `hit`. */
+function climb(from, hit) {
+  let cur = from;
   for (let i = 0; i < MAX_ROOT_CLIMB; i++) {
-    try {
-      if (statSync(path.join(cur, '.claude')).isDirectory()) return cur;
-    } catch {
-      // keep climbing
-    }
+    if (hit(cur)) return cur;
     const parent = path.dirname(cur);
     if (parent === cur) break;
     cur = parent;
   }
-  return dir;
+  return null;
+}
+
+/**
+ * Project root, canonical recipe (D1 Q5) plus an ownership check:
+ * `CLAUDE_PROJECT_DIR` -> nearest ancestor carrying THIS router's config ->
+ * nearest ancestor with `.git` -> nearest ancestor with `.claude` -> cwd unchanged.
+ *
+ * Directory existence alone is not ownership. Stopping at the first `.claude` let any
+ * nested package/fixture directory mask the real root: config and roster both went
+ * missing, the built-in defaults applied, and a router the user had explicitly
+ * DISABLED at the real root kept denying spawns from a nested cwd (BT-F24).
+ */
+function findRoot(cwd) {
+  const env = process.env.CLAUDE_PROJECT_DIR;
+  if (env && isDir(env)) return path.resolve(env);
+  let dir;
+  try {
+    dir = path.resolve(cwd || process.cwd());
+  } catch {
+    return null;
+  }
+  return (
+    climb(dir, (d) => exists(path.join(d, '.claude', 'brewtools', 'agent-router.json'))) ||
+    climb(dir, (d) => exists(path.join(d, '.git'))) ||
+    climb(dir, (d) => isDir(path.join(d, '.claude'))) ||
+    dir
+  );
 }
 
 const CONFIG_BROKEN = Symbol('config-broken');

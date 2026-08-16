@@ -101,10 +101,16 @@ check_rules() {
 # Render a template: substitute the scope scalars + the four standard metadata keys.
 # `|` is the sed delimiter, so no substituted value may contain one -- all of them are
 # globs, titles and versions produced here, never user prose.
+# Empty paths: removes the `paths:` line entirely (for main files).
 render_template() {
   local tpl="$1" out="$2" title="$3" paths="$4" desc="$5"
-  sed -e "s|{TITLE}|$title|g" \
-      -e "s|{PATHS}|$paths|g" \
+  # The ONE frontmatter difference between a main and a specialized file: empty paths deletes the
+  # `paths:` line (repo-wide loading), a value substitutes it. Everything else is shared, so the
+  # scalar list exists once -- a key added to one branch and forgotten in the other was the risk.
+  local paths_expr='/^paths: {PATHS}$/d'
+  [ -n "$paths" ] && paths_expr="s|{PATHS}|$paths|g"
+  sed -e "$paths_expr" \
+      -e "s|{TITLE}|$title|g" \
       -e "s|{DESCRIPTION}|$desc|g" \
       -e "s|{PLUGIN_VERSION}|$PLUGIN_VERSION|g" \
       -e "s|{GENERATED_BY}|$GENERATED_BY|g" \
@@ -121,7 +127,7 @@ create_rules() {
 
   if [ ! -f .codex/rules/avoid.md ]; then
     render_template "$PLUGIN_TEMPLATES/rules/avoid.md.template" .codex/rules/avoid.md \
-      "Avoid" '["**/*"]' 'avoid - project-wide anti-patterns and the thing to do instead; one table row per rule'
+      "Avoid" '' 'avoid - project-wide anti-patterns and the thing to do instead; one table row per rule'
     echo "V Created: .codex/rules/avoid.md"
   else
     echo ">> Preserved: .codex/rules/avoid.md (exists)"
@@ -129,7 +135,7 @@ create_rules() {
 
   if [ ! -f .codex/rules/best-practice.md ]; then
     render_template "$PLUGIN_TEMPLATES/rules/best-practice.md.template" .codex/rules/best-practice.md \
-      "Best Practices" '["**/*"]' 'best-practice - project-wide practices worth repeating; one table row per rule'
+      "Best Practices" '' 'best-practice - project-wide practices worth repeating; one table row per rule'
     echo "V Created: .codex/rules/best-practice.md"
   else
     echo ">> Preserved: .codex/rules/best-practice.md (exists)"
@@ -137,7 +143,7 @@ create_rules() {
 }
 
 # Validate ONE rule file: frontmatter, the four standard metadata keys, table header.
-# $2 = "specialized" -> also reject repo-wide paths.
+# $2 = "specialized" -> require paths, reject repo-wide paths. Main files must NOT have paths.
 validate_file() {
   local f="$1" kind="${2:-main}"
   local name errs=0 k
@@ -145,18 +151,20 @@ validate_file() {
 
   head -1 "$f" | grep -q '^---$' || { echo "X $name no YAML frontmatter (line 1 must be ---)"; errs=$((errs+1)); }
 
-  for k in paths description doc_type version generated_by last_updated; do
+  for k in description doc_type version generated_by last_updated; do
     grep -q "^${k}:" "$f" || { echo "X $name missing frontmatter key: $k"; errs=$((errs+1)); }
   done
+
+  if [ "$kind" = "main" ]; then
+    grep -q "^paths:" "$f" && { echo "X $name is main but has paths -> remove paths for repo-wide loading"; errs=$((errs+1)); }
+  else
+    grep -q "^paths:" "$f" || { echo "X $name is specialized but missing paths"; errs=$((errs+1)); }
+    grep -q '"\*\*/\*"' "$f" && { echo "X $name is specialized but claims repo-wide paths -> it loads into every request"; errs=$((errs+1)); }
+  fi
 
   grep -q '^doc_type: llm$' "$f" || { echo "X $name doc_type must be exactly 'llm'"; errs=$((errs+1)); }
   grep -Eq '^version: "[0-9]+\.[0-9]+\.[0-9]+"$' "$f" || { echo "X $name version must be a quoted X.Y.Z"; errs=$((errs+1)); }
   grep -Eq '^last_updated: "[0-9]{4}-[0-9]{2}-[0-9]{2}"$' "$f" || { echo "X $name last_updated must be a quoted YYYY-MM-DD"; errs=$((errs+1)); }
-
-  if [ "$kind" = "specialized" ] && grep -q '"\*\*/\*"' "$f"; then
-    echo "X $name is specialized but claims repo-wide paths -> it loads into every request"
-    errs=$((errs+1))
-  fi
 
   grep -q "^| #" "$f" || { echo "X $name invalid structure (missing table header)"; errs=$((errs+1)); }
 
@@ -266,6 +274,11 @@ create_specialized() {
     echo "Usage: rules.sh create-specialized <prefix> [paths]"
     echo "Example: rules.sh create-specialized test"
     echo "Example: rules.sh create-specialized payment '[\"src/payment/**\"]'"
+    exit 1
+  fi
+
+  if ! printf '%s' "$prefix" | grep -Eq '^[a-z0-9][a-z0-9-]*$'; then
+    echo "X Invalid prefix: '$prefix' (must be lowercase alphanumeric + hyphens, start with alphanumeric)"
     exit 1
   fi
 

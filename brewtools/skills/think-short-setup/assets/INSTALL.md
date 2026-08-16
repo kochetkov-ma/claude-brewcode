@@ -68,6 +68,39 @@ re-install). Recognizable marker for all think-short entries = any hook whose
 
 ---
 
+## Project root
+
+Every project path below is `$ROOT/.claude/...`, never `$PWD`. The shell cwd moves
+with `cd` and persists across calls, so `$PWD` can be a subdirectory — installing
+there builds a second, nested `.claude/` that the running Claude Code never reads.
+Resolve it once, in the SAME Bash call as the block that uses it:
+
+```
+# Project root: CLAUDE_PROJECT_DIR -> git toplevel -> upward walk -> PWD.
+claude_project_root() {
+  if [ -n "$CLAUDE_PROJECT_DIR" ] && [ -d "$CLAUDE_PROJECT_DIR" ]; then
+    printf '%s\n' "$CLAUDE_PROJECT_DIR"; return 0
+  fi
+  if r=$(git rev-parse --show-toplevel 2>/dev/null) && [ -n "$r" ]; then
+    printf '%s\n' "$r"; return 0
+  fi
+  d=$PWD
+  while [ "$d" != "/" ]; do
+    if [ -d "$d/.git" ] || [ -d "$d/.claude" ]; then printf '%s\n' "$d"; return 0; fi
+    d=$(dirname "$d")
+  done
+  printf '%s\n' "$PWD"; return 1   # nonzero: caller decides
+}
+if ROOT=$(claude_project_root); then export ROOT; echo "✅ ROOT=$ROOT"; else
+  echo "❌ ABORT: no project root — CLAUDE_PROJECT_DIR unset, no git toplevel, no .git/.claude above $PWD; run no project block below"; fi
+```
+
+> **STOP if ❌** — an installer never writes into a guessed root. `CLAUDE_PROJECT_DIR`
+> is exported to hook child processes, not to this shell, so it is normally empty here
+> and the git toplevel does the work. The GLOBAL target ignores `ROOT` entirely.
+
+---
+
 ## PROJECT target  (`<repo>/.claude/`)
 
 Project paths are writable with normal tools (`Write`/`Edit`/`Bash` all fine).
@@ -81,34 +114,37 @@ Project paths are writable with normal tools (`Write`/`Edit`/`Bash` all fine).
      which is injected as prompt text and expands to empty in Bash.)
 3. Read `<repo>/.claude/settings.json` (create `{}` if absent).
 4. Merge the 3 hook entries above (append + dedupe) using `<absdir>` =
-   absolute path to `<repo>/.claude/hooks`. Use `Edit`/`Write` after computing
-   the merged JSON.
+   absolute path to `<repo>/.claude/hooks`. Run the **same node merge** as the
+   global target, prefixed with the project paths — a hand `Edit` takes no lock,
+   re-reads nothing and verifies nothing:
+   `SETTINGS="$ROOT/.claude/settings.json" HOOKS_DIR="$ROOT/.claude/hooks" node -e '...'`
 
 EXECUTE copy (project) using the Bash tool (`RUNBOOK` = absolute path to this INSTALL.md):
 ```
 SRC="$(dirname "$RUNBOOK")"
-DST="$PWD/.claude/hooks"
+DST="$ROOT/.claude/hooks"
 mkdir -p "$DST" && \
 cp "$SRC/think-short-session.mjs" "$SRC/think-short-prompt-counter.mjs" \
    "$SRC/think-short-subagent.mjs" "$SRC/think-short-prompt.md" "$DST/" && \
 echo "OK copied to $DST" || echo "FAILED"
 ```
-Then edit `<repo>/.claude/settings.json` to merge the 3 entries (absdir = `$DST`).
+Then run the node merge below with `SETTINGS="$ROOT/.claude/settings.json"
+HOOKS_DIR="$DST"` to merge the 3 entries.
 
 ---
 
 ## GLOBAL target  (`~/.claude/`)
 
-CRITICAL: `~/.claude/*` is a HARNESS-PROTECTED path. `Write` / `Edit` / `MultiEdit`
-tools are BLOCKED in ALL permission modes (incl. `bypassPermissions`, headless) —
-the check runs BEFORE hooks, so a hook cannot override it. Therefore the global
+CRITICAL: `~/.claude/*` is a SENSITIVE path. `Write` / `Edit` / `MultiEdit` there is
+an ASK — it prompts in `default`/`acceptEdits`, is auto-approved only under
+`bypassPermissions`, and FAILS outright headless without bypass. Therefore the global
 install MUST be done entirely through the **Bash tool** (`cp`, `node`, `cat`
-heredoc), never the file-editing tools.
+heredoc), the only route that works unattended.
 
 1. Copy the 4 files via `cp` (Bash).
 2. Merge `settings.json` via a `node` one-liner (Bash) that reads, merges
-   (append + dedupe), and writes back. Bash file writes to `~/.claude/*` are
-   currently allowed (only the Write/Edit/MultiEdit TOOLS are blocked).
+   (append + dedupe), and writes back. Bash writes to `~/.claude/*` carry no such
+   prompt — only the Write/Edit/MultiEdit TOOLS do.
 
 EXECUTE (global) using the Bash tool (`RUNBOOK` = absolute path to this INSTALL.md):
 ```
@@ -130,8 +166,22 @@ and every foreign hook over one stray comma:
 ```
 node -e '
 const fs=require("fs"), os=require("os"), path=require("path");
-const f=path.join(os.homedir(),".claude","settings.json");
-const dir=path.join(os.homedir(),".claude","hooks");
+const f=process.env.SETTINGS||path.join(os.homedir(),".claude","settings.json");     // unset = GLOBAL target
+const dir=process.env.HOOKS_DIR||path.join(os.homedir(),".claude","hooks");
+function lock(f){                                      // O_EXCL dir lock; stale-break by mtime
+  const l=f+".lock", w=new Int32Array(new SharedArrayBuffer(4));
+  for(let i=0;i<100;i++){
+    try{ fs.mkdirSync(l); return ()=>{ try{ fs.rmdirSync(l); }catch{} }; }
+    catch(e){
+      if(e.code!=="EEXIST") throw e;
+      try{ if(Date.now()-fs.statSync(l).mtimeMs>30000) fs.rmdirSync(l); }catch{}
+      Atomics.wait(w,0,0,100);
+    }
+  }
+  console.error("ABORT: "+l+" is held by another installer; nothing was written"); process.exit(1);
+}
+fs.mkdirSync(path.dirname(f),{recursive:true});
+process.on("exit",lock(f));                            // acquire now, release on ANY exit - read+merge+write below is one critical section
 let s={};
 if(fs.existsSync(f)){
   const raw=fs.readFileSync(f,"utf8");
@@ -169,7 +219,6 @@ for(const [ev,matcher,script] of want){
   if(matcher) entry.matcher=matcher;
   s.hooks[ev].push(entry);
 }
-fs.mkdirSync(path.dirname(f),{recursive:true});
 fs.writeFileSync(f,JSON.stringify(s,null,2)+"\n");
 const back=JSON.parse(fs.readFileSync(f,"utf8"));   // post-write verification
 for(const [ev,,script] of want){
@@ -183,9 +232,15 @@ console.log("OK merged "+f);
 > **STOP if ❌** — an ABORT leaves `settings.json` byte-for-byte unchanged. Fix
 > the JSON by hand, then re-run.
 
-> For PROJECT target the same `node -e` merge works — point `f` at
-> `<repo>/.claude/settings.json` and `dir` at `<repo>/.claude/hooks`. Or use the
-> `Edit` tool since project settings are not protected.
+> The block takes a `settings.json.lock` directory (`mkdir`, O_EXCL) around the whole
+> read-modify-write and releases it on any exit. Without it two setup skills merging
+> at once both read the OLD document and the second writer silently erases the
+> first's registration. A lock older than 30 s is treated as stale and broken.
+
+> For the PROJECT target run the SAME block with
+> `SETTINGS="$ROOT/.claude/settings.json" HOOKS_DIR="$ROOT/.claude/hooks"` — unset,
+> both default to `~/.claude`. Do not hand-`Edit` project settings instead: that path
+> takes no lock and verifies nothing.
 
 ---
 
@@ -203,7 +258,7 @@ fix lands too.
 EXECUTE upgrade (works for both; set HOOKS_DIR, and export `RUNBOOK`):
 ```
 # GLOBAL:  HOOKS_DIR="$HOME/.claude/hooks"
-# PROJECT: HOOKS_DIR="$PWD/.claude/hooks"
+# PROJECT: HOOKS_DIR="$ROOT/.claude/hooks"
 SRC="$(dirname "$RUNBOOK")"
 test -d "$HOOKS_DIR" || { echo "❌ FAILED — not installed in this target: $HOOKS_DIR"; exit 1; }
 test -f "$HOOKS_DIR/think-short-session.mjs" || { echo "❌ FAILED — not installed in this target (no think-short-session.mjs); run INSTALL instead"; exit 1; }
@@ -250,7 +305,7 @@ effect immediately — the prompt is re-read on every call, no restart.
 EXECUTE (works for both; set HOOKS_DIR):
 ```
 # GLOBAL:  HOOKS_DIR="$HOME/.claude/hooks"
-# PROJECT: HOOKS_DIR="$PWD/.claude/hooks"
+# PROJECT: HOOKS_DIR="$ROOT/.claude/hooks"
 # --- DISABLE ---
 if [ -f "$HOOKS_DIR/think-short-prompt.md" ]; then
   mv "$HOOKS_DIR/think-short-prompt.md" "$HOOKS_DIR/think-short-prompt.md.disabled" && echo "✅ disabled"
@@ -298,13 +353,26 @@ removes them.
 EXECUTE uninstall (works for both; set HOOKS_DIR + SETTINGS):
 ```
 # GLOBAL:  HOOKS_DIR="$HOME/.claude/hooks"; SETTINGS="$HOME/.claude/settings.json"
-# PROJECT: HOOKS_DIR="$PWD/.claude/hooks";  SETTINGS="$PWD/.claude/settings.json"
+# PROJECT: HOOKS_DIR="$ROOT/.claude/hooks";  SETTINGS="$ROOT/.claude/settings.json"
 node -e '
 const fs=require("fs");
 const f=process.env.SETTINGS, dir=process.env.HOOKS_DIR;
 const marks=["think-short-session.mjs","think-short-prompt-counter.mjs","think-short-subagent.mjs","think-short-task.mjs"];
+function lock(f){                                      // O_EXCL dir lock; stale-break by mtime
+  const l=f+".lock", w=new Int32Array(new SharedArrayBuffer(4));
+  for(let i=0;i<100;i++){
+    try{ fs.mkdirSync(l); return ()=>{ try{ fs.rmdirSync(l); }catch{} }; }
+    catch(e){
+      if(e.code!=="EEXIST") throw e;
+      try{ if(Date.now()-fs.statSync(l).mtimeMs>30000) fs.rmdirSync(l); }catch{}
+      Atomics.wait(w,0,0,100);
+    }
+  }
+  console.error("ABORT: "+l+" is held by another installer; nothing was written"); process.exit(1);
+}
 let s={};
 if(!fs.existsSync(f)){ console.log("no settings to clean: "+f); process.exit(0); }
+process.on("exit",lock(f));                            // re-read under the lock - a concurrent installer must not lose its merge
 const raw=fs.readFileSync(f,"utf8");
 if(!raw.trim()){ console.log("empty settings, nothing to clean: "+f); process.exit(0); }
 try{ s=JSON.parse(raw); }
@@ -339,9 +407,9 @@ echo "✅ removed files from $HOOKS_DIR" || echo "❌ FAILED"
 > **STOP if ❌** — an ABORT (unparseable `settings.json`) skips the `rm` too, so
 > settings and files stay consistent. Fix the JSON, then re-run.
 
-> Global removal: file-editing tools are blocked on `~/.claude/*`, so use the
-> Bash `node`/`rm` approach above (do NOT use Edit/Write). Project removal may use
-> Edit/Write freely.
+> Global removal: `Write`/`Edit` on `~/.claude/*` prompts and fails headless, so use
+> the Bash `node`/`rm` approach above. Project removal goes through the same block —
+> it is the only path that locks, verifies and keeps foreign hooks.
 
 ---
 

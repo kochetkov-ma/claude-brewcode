@@ -49,6 +49,10 @@ Purpose column = the agent's own `description` frontmatter, verbatim. That strin
 `bc-rules-organizer` is internal — spawned only by [`/brewcode:rules`](/brewcode/skills/rules/), never user-invokable directly.
 </Callout>
 
+<Callout type="tip" title="Creator contract suite">
+`agents/tests/suite-creator-contract.mjs` is a 27-check regression suite that pins what `hook-creator`, `agent-creator` and `skill-creator` teach about the Claude Code hook and subagent API, so the next upstream change fails a test instead of silently teaching a stale one.
+</Callout>
+
 ## Scope guard — shared by all 4 public agents
 
 Every public brewcode agent sizes the task before starting. One bounded unit = one deliverable, roughly 5 files, roughly 10 steps. Anything larger is refused up front.

@@ -51,7 +51,7 @@ Labels are literal; values follow the conversation language.
 |-------|-------|
 | ARTIFACT | `agents` |
 | SPECIALIST | `brewcode:agent-creator` |
-| LIST_CMD | Glob `*.md` over `.codex/agents/`, `~/.codex/agents/`, `brewcode/agents/` |
+| LIST_CMD | Glob `*.md` over `.codex/agents/`, `~/.codex/agents/`, `<plugin-root>/agents/` (shipped, READ-ONLY), and `brewcode/agents/` ONLY when `test -d brewcode/.codex-plugin` (plugin workspace) |
 | SYNC_REF | `<skill-directory>/../skills/references/mode-sync.md` (shared with `$brewcode:skills`) |
 
 ## Step 1 — Input gate
@@ -156,7 +156,8 @@ A bare one-line task is never enough.
 
 Delegate collection to ONE Explore/Bash subagent, then assemble a rich status (never a bare list):
 
-- **Inventory by scope:** plugin (BC) / project (`.codex/`) / global (`~/.codex/`) — counts + names + load path.
+- **Inventory by scope:** shipped plugin (`<plugin-root>/agents/`, read-only) / plugin source
+  (`brewcode/agents/`, only in this workspace) / project (`.codex/`) / global (`~/.codex/`) — counts + names + load path.
 - **State:** enabled/disabled (toggle markers `_SKILL.md` / `_<name>.md`), model.
 - **Overlaps / conflicts:** same-name across scopes (shadowing), duplicate triggers/descriptions, naming collisions.
 - **Health flags:** missing README/frontmatter; agents missing `Bash` in `tools:` (macOS search rule);
@@ -193,7 +194,10 @@ For `status` mode the report **is** the Step 5 status table.
 ## Artifact-specific params (create / improve only)
 
 For `create`: ONE request_user_input batch — (Q1) scope: Project `.codex/agents/` /
-Global `~/.codex/agents/` / Plugin `brewcode/agents/`; (Q2) model: balanced model (Recommended) /
+Global `~/.codex/agents/` / Plugin `brewcode/agents/` — offer Plugin ONLY when
+`test -d brewcode/.codex-plugin` succeeds; elsewhere it writes a junk `<cwd>/brewcode/agents/<name>.md`,
+so drop the option. Never write under `<plugin-root>` — the installed plugin is read-only;
+(Q2) model: balanced model (Recommended) /
 high-reasoning model / fast model / inherit (omit model: field); (Q3) update AGENTS.md agents table? yes/no.
 Frontmatter description budget: <= 100 chars, single line, role + 2-3 triggers, EN only.
 Spawn SPECIALIST (brewcode:agent-creator) using the Delegation shape, e.g.:
@@ -216,7 +220,9 @@ DONE: file exists, valid frontmatter, description <= 100 chars single line with 
 ```
 
 After creation, if user approved, update the AGENTS.md agents table via Edit (add/replace row).
-For `improve`: resolve agent by name/path across the 3 scopes; ONE request_user_input —
+For `improve`: resolve agent by name/path across the writable scopes (project / global / plugin
+workspace). A name that matches only under `<plugin-root>/agents/` is read-only — report it and
+stop, do not copy or edit it. ONE request_user_input —
 (Q1) focus: triggers / system-prompt / both (Recommended) / full review; (Q2) update AGENTS.md? yes/no.
 Spawn SPECIALIST to improve, then optional AGENTS.md row update.
 

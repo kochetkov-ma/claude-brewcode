@@ -24,11 +24,12 @@
 ```
 1. bump-version.sh X.Y.Z     → Updates ALL 6 version files
 2. Update RELEASE-NOTES.md    → Add changelog section
-3. git add + commit           → "vX.Y.Z: <summary>"
+3. git add -- <owned paths>   → explicit paths only; `git add -A` would commit unrelated work
 4. git tag vX.Y.Z             → Create tag
-5. git push && push --tags    → Push to remote (triggers CI)
+5. git push origin HEAD && git push origin refs/tags/vX.Y.Z
+                              → this tag only; `--tags` publishes every unpushed local tag
 6. update-plugin.sh           → Refresh local plugin cache
-7. Verify CI                  → gh run list -L 3 (all green)
+7. Verify CI                  → gh run watch <run id for THIS sha> --exit-status
 8. Verify cache               → grep matcher in hooks.json
 ```
 
@@ -131,7 +132,7 @@ check (the live thing reports X.Y.Z). Pick the checks that match what this repo 
 
 | Check | Command | Expected |
 |-------|---------|----------|
-| CI runs | `gh run list -L 3` | All green |
+| CI runs | `gh run watch "$(gh run list -L 20 --json databaseId,headSha --jq "[.[] \| select(.headSha == \"$(git rev-parse HEAD)\")] \| .[0].databaseId")" --exit-status` | Exit 0 — correlated to this commit, !=whatever ran last |
 | Release created | `gh release view vX.Y.Z` | Exists, not draft |
 | Plugin cache | `grep '"matcher"' ~/.claude/plugins/cache/claude-brewcode/brewcode/X.Y.Z/hooks/hooks.json` | Matchers present |
 | Docs deployed | `curl -sf https://doc-claude.brewcode.app/getting-started/` | HTTP 200 |

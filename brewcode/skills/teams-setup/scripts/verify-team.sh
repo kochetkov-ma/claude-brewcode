@@ -74,6 +74,30 @@ check_agent_meta() {
   return "$_bad"
 }
 
+# Roster values reach `-f` probes here and `mv`/`rm -f` in toggle-team.sh and cleanup-flow.md, so a row
+# like `| ../../../outside/README |` is a path, not a name. An agent id is a bare `^[a-z0-9][a-z0-9-]*$`,
+# which keeps every derived path canonically inside `.claude/agents/`. Byte-identical rule in
+# toggle-team.sh -- one guard, mirrored, never a second dialect.
+valid_agent_id() {
+  case "$1" in
+    ''|*[![:lower:][:digit:]-]*|[![:lower:][:digit:]]*) return 1 ;;
+  esac
+  return 0
+}
+
+# Markdown separator row of the `## Agents` table -- byte-identical rule to toggle-team.sh. Only
+# `|`, `-`, `:` and spaces, with a run of dashes: a padded `| ------ |` is as valid a separator as
+# `|---|`, and matching only the unpadded spelling made the whole roster invisible to the parser.
+is_separator_row() {
+  case "$1" in
+    *[![:space:]|:-]*) return 1 ;;
+  esac
+  case "$1" in
+    "|"*"---"*) return 0 ;;
+  esac
+  return 1
+}
+
 check_dir() {
   printf "CHECK: %s ... " "$1"
   if [ -d "$2" ]; then
@@ -173,12 +197,19 @@ if [ -f "$TEAM_DIR/team.md" ]; then
     esac
     [ "$in_agents" -eq 0 ] && continue
     case "$line" in
-      "|"*"---|"*) past_header=1; continue ;;
       "|"*)
+        if is_separator_row "$line"; then past_header=1; continue; fi
         [ "$past_header" -eq 0 ] && continue
         found_agents=1
         agent=$(printf '%s' "$line" | cut -d'|' -f2 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | sed 's/`//g')
         [ -z "$agent" ] && continue
+        if ! valid_agent_id "$agent"; then
+          echo "CHECK: agent '$agent' ... FAIL (not an agent id: must match ^[a-z0-9][a-z0-9-]*\$ --"
+          echo "      a roster value carrying '/', '..' or a leading '.' escapes .claude/agents/ and would be"
+          echo "      moved by 'disable' and deleted by 'cleanup'/'purge'. Fix team.md's ## Agents table)"
+          FAIL=1
+          continue
+        fi
         [ "$agent" = "intent-guard" ] && found_intent_guard=1
         printf "CHECK: agent %s ... " "$agent"
         if [ -f ".claude/agents/${agent}.md" ]; then

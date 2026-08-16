@@ -8,7 +8,7 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 # Skill Creator
 
 <Callout type="caution">
-**Skills auto-activate only 20–50% of the time.** Trigger keywords, description format, and invocation type (user vs. LLM) determine whether Claude ever picks up the skill. A wrong description silently kills auto-activation — and the bug is invisible until you test it.
+**Auto-activation is best-effort, never guaranteed — Claude Code publishes no activation rate.** Trigger keywords, description format, and invocation type (user vs. LLM) determine whether Claude ever picks up the skill; `/skill-name` is the only lever a user controls directly. A wrong description silently kills auto-activation — and the bug is invisible until you test it.
 </Callout>
 
 <Callout type="tip">
@@ -21,7 +21,7 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 |-------|-------|
 | Trigger | "create skill", "improve skill", "fix activation" |
 | Model | `inherit` — runs on the session's model |
-| Tools | Read, Write, Edit, Glob, Grep, Bash, Task, Skill, AskUserQuestion |
+| Tools | Read, Write, Edit, Glob, Grep, Bash, Agent |
 
 ## Scope guard
 
@@ -64,7 +64,7 @@ Skill Creator sizes the task before starting. One bounded unit = one deliverable
   <li>
     <div>
       <strong>Understand the request</strong>
-      <p>If the current conversation contains a workflow the user wants to capture, the agent extracts it from history first — tools used, steps taken, input/output formats, edge cases encountered. Then asks 2–3 clarifying questions: purpose, invocation type, trigger phrases. Pre-filled values from an orchestrator prompt skip the question.</p>
+      <p>If the current conversation contains a workflow the user wants to capture, the agent extracts it from history first — tools used, steps taken, input/output formats, edge cases encountered. It cannot ask the user anything — <code>AskUserQuestion</code> is removed from every subagent in CC 2.1.233. A missing purpose, invocation type, or trigger phrase gets the safest reading, stated explicitly in the report, with the open question handed back to the caller unanswered.</p>
     </div>
   </li>
   <li>
@@ -96,16 +96,18 @@ Skill Creator sizes the task before starting. One bounded unit = one deliverable
 <details>
 <summary>Full workflow internals — phase breakdown, frontmatter reference, patterns</summary>
 
-### Activation rates by configuration
+### Activation reliability by configuration
 
-| Configuration | Activation rate |
+Claude Code publishes no activation percentage — rank the methods, don't quote a rate.
+
+| Configuration | Reliability |
 |---|---|
-| Basic description, no triggers | 20% |
-| Optimized description + `Triggers:` line | 50–72% |
-| `/skill-name` explicit slash command | 100% |
+| Basic description, no triggers | Lowest |
+| Optimized description + `Triggers:` line | Higher |
+| `/skill-name` explicit slash command | Highest — the only lever the user controls directly |
 | `disable-model-invocation: true` (user-only) | n/a — LLM never invoked |
 
-**Critical bug:** Skills context lost after compaction ~55K tokens ([#13919](https://github.com/anthropics/claude-code/issues/13919)). Re-invoke `/skill-name` or use external state for long sessions.
+**Context reattachment after compaction:** skills reattach under a bounded budget — 5K tokens per skill, 25K combined — not an unbounded-loss bug. If a skill still gets evicted under load, re-invoke `/skill-name`.
 
 ### Invocation type decision
 
@@ -206,11 +208,10 @@ Root-level `SKILL.md`: a plugin with a `SKILL.md` at the plugin root (no `skills
 
 | Issue | Impact | Workaround |
 |---|---|---|
-| [#13919](https://github.com/anthropics/claude-code/issues/13919) | Skill context lost after ~55K tokens | Re-invoke `/name`, use external state |
 | [#22345](https://github.com/anthropics/claude-code/issues/22345) | Plugin skills ignore `disable-model-invocation` | Copy skill to `.claude/skills/` |
 | [#17688](https://github.com/anthropics/claude-code/issues/17688) | Skill-scoped hooks don't fire in plugins | Use plugin `hooks.json` |
 | [#17417](https://github.com/anthropics/claude-code/issues/17417) | `skill.md` (lowercase) silently ignored | Use `SKILL.md` (uppercase) |
-| [#10768](https://github.com/anthropics/claude-code/issues/10768) | Auto-activation 20–50% (NOT PLANNED) | Optimize description or use `/name` |
+| [#10768](https://github.com/anthropics/claude-code/issues/10768) / [#15136](https://github.com/anthropics/claude-code/issues/15136) | Auto-activation unreliable, sometimes skipped despite instructions (both closed NOT PLANNED) | Optimize description or use `/name` |
 
 ### Subagent spawn constraint
 

@@ -2,15 +2,18 @@
      Model: opus (default, confirmed by user during setup).
      Placement: .claude/agents/{agent-name}.md
      Agent frontmatter (name, description, model, tools) is added by agent-creator on top, followed by
-     the four standard metadata keys -- LAST, after the agent's own keys, exactly these names and quoting:
+     the five standard metadata keys -- LAST, after the agent's own keys, exactly these names and quoting:
 
          doc_type: llm
          version: "{PLUGIN_VERSION}"
+         content_version: "{CONTENT_VERSION}"
          generated_by: "brewcode:e2e"
          last_updated: "{LAST_UPDATED}"
 
-     {PLUGIN_VERSION} and {LAST_UPDATED} are the `PLUGIN_VERSION:` / `LAST_UPDATED:` lines Phase 0's
-     detect-mode.sh already printed. Never hardcode either; {ISO_DATE} is retired. -->
+     {PLUGIN_VERSION}, {CONTENT_VERSION} and {LAST_UPDATED} are the `PLUGIN_VERSION:` /
+     `CONTENT_VERSION:` / `LAST_UPDATED:` lines Phase 0's detect-mode.sh already printed. Never
+     hardcode any of them; {ISO_DATE} is retired. `content_version` is the key `status` compares --
+     omit it and the agent is permanently reported stale. -->
 
 # {AGENT_NAME}
 

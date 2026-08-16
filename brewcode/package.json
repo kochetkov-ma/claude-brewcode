@@ -1,6 +1,6 @@
 {
   "name": "claude-plugin-brewcode",
-  "version": "5.7.0",
+  "version": "6.0.0",
   "description": "Infinite task execution with automatic handoff for Claude Code",
   "keywords": [
     "claude-code",
@@ -16,7 +16,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/user/claude-brewcode.git",
+    "url": "https://github.com/kochetkov-ma/claude-brewcode.git",
     "directory": "brewcode"
   },
   "files": [
@@ -25,17 +25,11 @@
     "agents/",
     "hooks/",
     "templates/",
-    "runtime/dist/",
-    "runtime/package.json",
     "README.md",
     "INSTALL.md"
   ],
-  "scripts": {
-    "build": "cd runtime && npm install && npm run build",
-    "prepublishOnly": "npm run build"
-  },
   "claude-plugin": {
     "name": "brewcode",
-    "version": "5.7.0"
+    "version": "6.0.0"
   }
 }

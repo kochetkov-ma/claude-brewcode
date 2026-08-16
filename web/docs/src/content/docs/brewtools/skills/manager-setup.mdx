@@ -170,7 +170,7 @@ So Claude does the right thing -- it spawns a subagent, which has full access:
 | Run mutating commands | No -- delegate (read-only Bash allowed on the default level) |
 | Anything inside a subagent | Yes -- full freedom |
 
-This is what "delegate everything" means in practice -- the wall makes it physically true, not just a suggestion. For the deep mechanics (tool buckets, strict vs balanced, the agent_id linchpin) see the technical spoiler below.
+This is what "delegate everything" means in practice -- the wall makes it physically true, not just a suggestion. As of v6.0.0 the guard is a strict allowlist (not a denylist) with per-binary flag vetting, and it fails closed on a broken or unparseable state -- see the technical spoiler below for exactly which binaries and flags are vetted.
 
 ---
 
@@ -226,18 +226,53 @@ Re-verified on CC 2.1.195 (2026-06-27) -- the discriminator still holds. `agent_
 
 The plan-mode and discovery rows were self-defeating omissions before v5.0.0: a denied `ExitPlanMode` left a plan-mode session with no way out, and a denied `ToolSearch` hid the very task-tracking tools the Manager contract requires.
 
+### Fail-closed (v6.0.0)
+
+Before v6.0.0 three failure paths let a mutation through undenied: a `PreToolUse` payload the guard could not parse, an installed manager directory whose `state.json` was missing or corrupt, and an uncaught internal error. All three now DENY the main session instead of passing through:
+
+| Failure | New behaviour |
+|---------|---------------|
+| Unparseable stdin (malformed JSON) | Denied -- "the guard could not parse its PreToolUse payload and denies by default" |
+| Manager directory present, `state.json` missing or not valid JSON | Denied -- "manager state at `<path>` is missing or unreadable, so the guard denies by default" |
+| Uncaught error inside the guard itself | Denied, except the subagent discriminator -- checked first, so a genuine subagent call never sees a false deny |
+
+Only two pass-throughs remain, both by design: the manager was never installed in this project at all (no manager directory at any candidate root -- a no-op, not a security decision), and a genuine subagent call (`agent_id` present in the payload). Recovery from a broken `state.json` is still available because the self-exempt off-switch CLI is checked BEFORE the broken-state deny: `node <ABS root>/.claude/brewtools/manager/manager-state.mjs set hard=false` runs and rewrites the file even while `state.json` is corrupt.
+
 ### Strict vs balanced
+
+<Callout type="caution">
+**v6.0.0: the `balanced` Bash classifier changed shape, not just its contents.** It used to be a denylist -- anything not explicitly forbidden passed through, so a new dangerous flag on an already-listed binary opened a silent hole. It is now a strict allowlist: exactly the binaries below run at all, several with per-binary flag vetting on top. An unlisted binary, or a listed one used with a disallowed flag, is denied by default -- not because someone remembered to forbid it.
+</Callout>
 
 | Aspect | `strict` | `balanced` (default) |
 |--------|----------|----------------------|
-| `Bash` | Fully OFF -- every command denied | Read-only classifier -- allow inspection, deny mutation |
-| Allowed Bash (balanced) | -- | `git status/log/diff/show/branch`, `ls`, `cat`, `pwd`, `which`, `echo`, `head`, `tail`, `wc`, `gh ... list/view`, `grep`/`rg`, `find` (no `-delete`/`-exec`) |
-| Denied Bash (balanced) | -- | `>`, `>>`, `rm`, `mv`, `cp`, `git commit/push/reset`, `npm install`, `pnpm`, `yarn add`, `pip install`, `mkdir`, `touch`, `chmod`, `sed -i`, `tee`, `kill`, `$(...)`, `node -e` |
+| `Bash` | Fully OFF -- every command denied | Allowlist classifier -- allow inspection, deny everything else |
+| Allowed binaries (balanced) | -- | `ls cat pwd which head tail wc date whoami basename dirname realpath test [ jq echo grep rg find git gh node` -- bare names only, so `/bin/ls`, `VAR=x ls`, `env ls` never match |
 | `WebSearch` | OFF | ON |
 | MCP-read | Explicit-allow list only | Heuristic allow (read-shaped tool names) |
 | MCP-write | Denied | Denied |
 
-The balanced Bash classifier is an allowlist of known-safe read-only commands, NOT a shell evaluator. Command substitution `$(...)` and `node -e` / `--eval` are denied even in balanced mode.
+The allowlist is a single table, one binary per row, so a binary and its flag vetter cannot drift apart into "added to one, forgotten in the other." `env` is deliberately absent -- it looks like an inspection tool but is a universal exec wrapper (`env node evil.js` would launder any command through it). Any `>`, `<` redirection, `$(...)`, or a backtick anywhere in the command denies the WHOLE command, on any binary.
+
+#### Per-binary flag vetting
+
+| Binary | Vetted how |
+|--------|-----------|
+| `git` | `status`/`log`/`diff`/`show`/`rev-parse`/`describe` bare; `remote` only with `-v`; `tag` only with `-l`; `stash` only with `list`; `branch` bare or every argument a listing flag (`--list`, `-l`, `--show-current`, `-a`/`-r`/`--all`/`--remotes`, `-v`/`-vv`, `--contains`, `--merged`, `--no-merged`, `--format=...`). Any of `-c`, `--config-env`, `--exec-path`, `--upload-pack`, `--receive-pack`, `--ext-diff`, `-C`, `--output`, `--textconv` denies the command outright, on any subcommand |
+| `gh` | Read verbs are POSITIONAL only -- `gh <group> <verb>` or `gh <verb>` where the verb is `list`/`view`/`status`. A matching word elsewhere in the argument list does not count |
+| `grep` / `rg` | Denied on `--pre`, `--pre-glob`, `--hostname-bin`, `--search-zip`, `-z` |
+| `find` | Denied on any exec-class action: `-exec`, `-execdir`, `-ok`, `-okdir`, `-delete`, `-fprint`, `-fprint0`, `-fprintf`, `-fls` |
+| `node` | Only `node --check <file>` -- every other invocation counts as execution |
+| everything else on the list | No flags vetted -- `ls`, `cat`, `pwd`, `which`, `head`, `tail`, `wc`, `date`, `whoami`, `basename`, `dirname`, `realpath`, `test`/`[`, `jq`, `echo` cannot exec by design |
+
+**Four bypasses closed in v6.0.0** -- each one used to slip past the old denylist looking read-only, and each is now covered by a dedicated case in `tests/suite.mjs`:
+
+| Command | Before | Now | Why it was a hole |
+|---------|--------|-----|--------------------|
+| `git diff --output=/tmp/pwned HEAD~1` | Allowed | Denied | `--output` turns a read subcommand into a file write |
+| `git branch -D main` | Allowed | Denied | `branch` deletes/renames; only listing flags are read-shaped |
+| `gh issue comment 1 --body list` | Allowed | Denied | the read-verb word `list` showed up as a flag VALUE, not the actual verb -- position-blind matching let it launder a write |
+| `find . -fprint0 /tmp/pwned` | Allowed | Denied | GNU `find` writes a file through a search action that reads as inspection |
 
 ### Off-switch safety
 
@@ -247,20 +282,20 @@ Exactly ONE Bash shape survives an armed wall, at every level:
 node <ABS project root>/.claude/brewtools/manager/manager-state.mjs set hard=false
 ```
 
-`/brewtools:manager-setup disable` issues precisely that, as a single Bash call with nothing appended -- no `BT_ROOT=` prelude, no `&& echo`, no `|| echo`. `Skill` is in ALWAYS-ALLOW, so the skill can always start.
+`/brewtools:manager-setup disable` issues precisely that, as a single Bash call with nothing appended -- no `BT_ROOT=` prelude, no `&& echo`, no `|| echo`. `Skill` is in ALWAYS-ALLOW, so the skill can always start. The exemption check runs only for `tool_name === 'Bash'`, after every other tool has already been classified -- no other tool can inherit it.
 
 The exemption is narrow on purpose. The guard lets the command through only when ALL of these hold:
 
 | # | Condition |
 |---|-----------|
-| 1 | The command starts with `node ` -- no env prefix, no other binary |
-| 2 | No shell operator outside quotes |
-| 3 | No `$` anywhere -- no variable or command expansion |
-| 4 | No evaluator flag: `-e`, `--eval`, `-p`, `--print`, `--input-type`, `--require`/`-r`, `--import`, `--loader`, `--experimental-loader` |
-| 5 | The script node actually executes matches `(.claude/brewtools/manager\|hooks/lib)/manager-state.mjs$` -- a `manager-state.mjs` substring elsewhere on the line counts for nothing |
+| 1 | The command starts with `node ` -- no env prefix, no other binary -- and it is the ONLY segment: no `&&`, `\|\|`, `;`, `\|`, `&`, or newline chaining |
+| 2 | No forbidden metacharacter anywhere, quoted or not -- `$(`, a backtick, `>`, or `<` denies the whole command outright, before any of the rules below run |
+| 3 | No `$` anywhere in the raw command -- no variable or command expansion beyond what rule 2 already blocks |
+| 4 | No evaluator flag on the `node` invocation: `-e`, `--eval`, `-p`, `--print`, `--input-type`, `--require`/`-r`, `--import`, `--loader`, `--experimental-loader` |
+| 5 | The path `node` actually executes, resolved with `realpath`, must equal a helper file this project or the plugin genuinely shipped -- `<cwd>/.claude/brewtools/manager/manager-state.mjs` or the plugin's own `hooks/lib/manager-state.mjs` next to the guard. A file merely *named* `manager-state.mjs` elsewhere on disk, or a path that does not resolve at all, is NOT exempt |
 | 6 | The remaining tokens are the helper's own CLI: `get`, or `set` with `hard=<true\|false>` / `level=<strict\|balanced>` and an optional `--cwd DIR` |
 
-Conditions 3-6 were added in v5.0.0 to close an arbitrary-code-execution hole: the previous exemption matched the token `manager-state.mjs` anywhere on the line and skipped quoted text, so a crafted `node` invocation could run an arbitrary payload in a guarded main session at `level strict`. Do not relax it back to tolerate `&&`.
+Conditions 3-6 were introduced in v5.0.0 to close an arbitrary-code-execution hole: the original exemption matched the bare token `manager-state.mjs` anywhere on the line and skipped quoted text, so a crafted `node` invocation could run an arbitrary payload in a guarded main session at `level strict`. Condition 5 was tightened again for v6.0.0: it used to match a **tail regex** against the command string (`(.claude/brewtools/manager|hooks/lib)/manager-state.mjs$`), so a file merely *planted* at a matching path -- e.g. `/tmp/evil/hooks/lib/manager-state.mjs` -- passed too. The anchor is now the resolved absolute path of the file actually installed, checked with `realpath`, never a string pattern. Do not relax either fix back to tolerate `&&` or a path-suffix match.
 
 | Guarantee | Mechanism |
 |-----------|-----------|

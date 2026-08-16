@@ -49,7 +49,7 @@
 | Category | Commands | Risk |
 |----------|----------|------|
 | Workflows | `gh workflow run`, `gh run rerun` | Trigger CI execution |
-| Git | `git push`, `git push --tags` | Remote state changes |
+| Git | `git push origin HEAD`, `git push origin refs/tags/vX.Y.Z` | Remote state changes. `git push --tags` is banned — it publishes every unpushed local tag |
 | Releases | `gh release create` (non-draft), `gh release edit` | Public release |
 | Docker | `docker push`, GHCR operations | Registry changes |
 
@@ -77,8 +77,8 @@
 
 | Pattern | Classification | Why |
 |---------|----------------|-----|
-| `git commit && git push` | SERVICE (highest) | Push changes remote |
-| `git tag && git push --tags` | SERVICE | Triggers CI pipelines |
+| `git commit && git push origin HEAD` | SERVICE (highest) | Push changes remote |
+| `git tag vX.Y.Z && git push origin refs/tags/vX.Y.Z` | SERVICE | Triggers CI pipelines |
 | `gh release create && gh workflow run` | SERVICE | Multiple side effects |
 | `git push --force` | PRIVILEGE (overrides SERVICE) | History rewrite |
 | `bump-version.sh && git commit && git tag && git push` | SERVICE | Release chain |

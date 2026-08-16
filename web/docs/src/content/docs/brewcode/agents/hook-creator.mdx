@@ -8,11 +8,11 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 # Hook Creator
 
 <Callout type="caution">
-**Hooks fail silently when the wrong output channel is used.** On `Stop` and `SubagentStop`, use `hookSpecificOutput.additionalContext` to give Claude feedback and keep the turn going — plain `additionalContext` at the top level is not the correct channel for those events. `decision:"block"` on `PostToolUse` is not a valid field. Getting the event-to-channel mapping wrong means the hook runs and produces zero effect, with no error to debug.
+**Hooks fail silently when the wrong output channel is used.** On `Stop` and `SubagentStop`, use `hookSpecificOutput.additionalContext` to give Claude feedback and keep the turn going — plain `additionalContext` at the top level is not the correct channel for those events. `PostToolUse` runs after the tool has already executed, so its `decision:"block"` can never prevent the call — it only appends a `reason` next to the tool result. To rewrite what Claude actually sees, use `hookSpecificOutput.updatedToolOutput` instead. Getting the event-to-channel mapping wrong means the hook runs and produces zero effect, with no error to debug.
 </Callout>
 
 <Callout type="tip">
-**hook-creator knows all 27 events, 5 hook types, and the full routing matrix.** Describe what you want in plain language — it picks the right event, output channel, and schema, then delivers a working file with fail-safe error handling included.
+**hook-creator knows all 31 events, 5 hook types, and the full routing matrix.** Describe what you want in plain language — it picks the right event, output channel, and schema, then delivers a working file with fail-safe error handling included.
 </Callout>
 
 ## Quick reference
@@ -22,7 +22,7 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 | Trigger | "create hook", "PreToolUse hook", "debug hook" |
 | Model | `inherit` — runs on the session's model |
 | Tools | Read, Write, Edit, Glob, Grep, Bash, WebFetch, WebSearch |
-| Reference version | CC 2.1.195 — 27 events, 5 hook types |
+| Reference version | CC 2.1.233 — 31 events, 5 hook types |
 | Output | Hook file (`.sh` or `.mjs`) + config snippet + verification checklist |
 
 ## Scope guard
@@ -113,7 +113,8 @@ Hook Creator sizes the task before starting. One bounded unit = one deliverable,
 | Block tool execution | `permissionDecision:"deny"` | PreToolUse |
 | Block session stop | `decision:"block"` + `reason` | Stop |
 | Give Claude feedback at stop (keep turn going) | `hookSpecificOutput.additionalContext` | Stop, SubagentStop |
-| Post-tool feedback | `additionalContext` | PostToolUse |
+| Post-tool feedback (after the tool ran, cannot block it) | `additionalContext` | PostToolUse |
+| Replace what Claude sees after a tool ran | `hookSpecificOutput.updatedToolOutput` | PostToolUse |
 | Modify tool parameters | `updatedInput` | PreToolUse |
 | Show user warning (Claude does NOT see) | `systemMessage` | Any |
 | Auto-allow permission | `decision.behavior:"allow"` | PermissionRequest |
@@ -127,22 +128,22 @@ original input and the runner keeps only the last one's edit, so two hooks writi
 other. Prefer `additionalContext` for instruction injection; reserve `updatedInput` for a single
 owning hook.
 
-### All 27 events
+### All 31 events
 
 | Event | Blocking? | Key use |
 |-------|-----------|---------|
-| SessionStart | No | Context injection on start/resume; supports `reloadSkills` and `sessionTitle` outputs (CC 2.1.152) |
+| SessionStart | No | Context injection on start/resume; supports `reloadSkills` and `sessionTitle` outputs (CC 2.1.152); source `fork` for forked sessions (CC 2.1.214) |
 | UserPromptSubmit | Yes | Gate or modify user prompts |
 | PreToolUse | Yes | Allow / deny / modify tool calls |
 | PermissionRequest | Yes | Auto-allow or auto-deny permission dialogs |
-| PostToolUse | No | Feedback after tool completes |
+| PostToolUse | No | Feedback after tool completes — runs after the fact, `decision:"block"` adds a reason but cannot prevent the call, `updatedToolOutput` rewrites what Claude sees |
 | PostToolUseFailure | No | React to failed tool call |
 | SubagentStart | No | Inject into subagent context |
 | SubagentStop | Yes | Block subagent exit; supports `additionalContext` to give Claude feedback |
 | Stop | Yes | Block session exit until condition met; supports `additionalContext` to give Claude feedback (CC 2.1.163) |
 | PreCompact | No | Write handoff before auto-compact |
 | PostCompact | No | React after compact |
-| Notification | No | Log or react to notifications |
+| Notification | No | Log or react to notifications (9 notification types) |
 | TeammateIdle | Yes | Control agent team flow |
 | TaskCompleted | Yes | Accept or re-assign tasks |
 | TaskCreated | Yes | Intercept new tasks |
@@ -152,12 +153,16 @@ owning hook.
 | CwdChanged | No | React to directory changes |
 | WorktreeCreate | Yes | Intercept worktree creation |
 | WorktreeRemove | No | React to worktree removal |
-| StopFailure | No | React to rate-limit / API errors |
+| StopFailure | No | React to rate-limit / API errors (10 error types) |
 | Elicitation | Yes | Auto-fill MCP forms |
 | ElicitationResult | Yes | Post-elicitation hook |
 | SessionEnd | No | Cleanup on session close |
 | PermissionDenied | Yes | Retry after auto-mode denial (v2.1.89+) |
 | MessageDisplay | No | Transform or hide assistant message text as it is displayed to the user (CC 2.1.152) |
+| Setup | No | Fires only on `--init-only` / `-p --init` / `-p --maintenance`, never on normal startup — use SessionStart for per-session init |
+| UserPromptExpansion | Yes | Blocks a `/command` from expanding — the path PreToolUse cannot reach when the user types `/skillname` directly |
+| PostToolBatch | Yes | Fires once per batch of tool calls, before the next model call; stops the agentic loop on block |
+| DirectoryAdded | No | Fires after `--add-dir` / `/add-dir` completes; `continue` is discarded, the directory is already added |
 
 ### Hook types
 

@@ -285,6 +285,16 @@ process.stdout.write(JSON.stringify({schema:1,query:process.env.SP_Q,command:pro
  durationMs:Number(process.env.SP_MS)||0,status:process.env.SP_STATUS,reason:process.env.SP_REASON}));'
 }
 
+# `<bucket>\t<line>` for every entry of a sibling's --json report, so a caller
+# can relay what the sibling actually said instead of a one-line summary.
+sp_report_lines() { node -e '
+let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{
+  let j={};try{j=JSON.parse(d);}catch(e){process.stdout.write("");return;}
+  const out=[];
+  for(const b of ["changed","unchanged","skipped","failed"])
+    for(const l of (Array.isArray(j[b])?j[b]:[])) out.push(b+"\t"+String(l).replace(/[\t\n]+/g," "));
+  process.stdout.write(out.length?out.join("\n")+"\n":"");});'; }
+
 sp_search_field() { printf '%s' "$1" | SP_K="$2" node -e '
 let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{
   let j={};try{j=JSON.parse(d);}catch(e){}
@@ -297,6 +307,12 @@ let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{
   let j={};try{j=JSON.parse(d);}catch(e){}
   const f=j.firstResult;
   process.stdout.write(f?(f.file_path+":"+f.start_line+"-"+f.end_line+" score "+f.score):"none");});'; }
+
+# sp_status_ready STATUS — the ONE readiness predicate for a search result.
+# `ok` only: `skipped` (offline, dry run, no uvx) and `empty` prove nothing was
+# indexed, and accepting them is what let a reindex delete a live index and
+# still report `ready`.
+sp_status_ready() { [ "$1" = "ok" ]; }
 
 # ── reindex guard (§6.6) ────────────────────────────────────────────────────
 # The only correct per-repo rebuild is `rm -rf <code root>/<64-hex>`.
@@ -311,6 +327,20 @@ sp_guarded_rm_repo_dir() {
   [ ${#leaf} -eq 64 ] || sc_die "refusing to delete $dir — leaf is not exactly 64 chars"
   [ "$root" = "$(sc_cache_root_code)" ] || sc_die "refusing to delete $dir — not under $(sc_cache_root_code)"
   [ -d "$dir" ] || sc_die "refusing to delete $dir — not a directory"
+  rm -rf "$dir"
+}
+
+# The reindex staging root: `<code root>/.staging.<pid>`, this run's own and
+# nothing else. Never a repo dir, never the cache root itself.
+sp_rm_staging() {
+  local dir="$1" leaf root
+  leaf="$(basename "$dir")"
+  root="$(dirname "$dir")"
+  case "$leaf" in
+    .staging.*) ;;
+    *) sc_die "refusing to delete $dir — not a staging directory" ;;
+  esac
+  [ "$root" = "$(sc_cache_root_code)" ] || sc_die "refusing to delete $dir — not under $(sc_cache_root_code)"
   rm -rf "$dir"
 }
 
@@ -593,7 +623,8 @@ sp_mode_warm() {
     esac
     printf 'command: %s\n' "$(sp_search_field "$res" command)"
   fi
-  case "$status" in ok|skipped) return 0 ;; *) return 3 ;; esac
+  sp_status_ready "$status" || return 3
+  return 0
 }
 
 sp_mode_smoke() {
@@ -614,7 +645,8 @@ sp_mode_smoke() {
     esac
     printf 'command: %s\n' "$(sp_search_field "$res" command)"
   fi
-  case "$status" in ok|skipped) return 0 ;; *) return 3 ;; esac
+  sp_status_ready "$status" || return 3
+  return 0
 }
 
 # §8.1 — MCP retained, enabled=true, guidance installed, agents reconciled, warm, ready.
@@ -638,7 +670,23 @@ sp_mode_enable() {
   sib="$(sp_sibling semble-guidance.sh)"
   if [ -n "$sib" ]; then
     sp_command "$sib install --part all --json"
-    if "$sib" install --part all --json >/dev/null 2>&1; then
+    local gout grc bucket line
+    set +e; gout="$("$sib" install --part all --json 2>/dev/null)"; grc=$?; set -e
+    # Guidance's own report is the only place a CLAUDE.md line it cut — or kept
+    # as a possible conflict for review — is ever named. Discarding it here made
+    # the conflict scan's decisions invisible to the user running `enable`.
+    while IFS=$'\t' read -r bucket line; do
+      [ -n "$line" ] || continue
+      case "$bucket" in
+        changed)   sp_changed   "guidance: $line" ;;
+        unchanged) sp_unchanged "guidance: $line" ;;
+        skipped)   sp_skipped   "guidance: $line" ;;
+        failed)    sp_failed    "guidance: $line" ;;
+      esac
+    done <<EOF
+$(printf '%s' "$gout" | sp_report_lines)
+EOF
+    if [ "$grc" = "0" ]; then
       sp_changed "guidance: installed/refreshed (rule, CLAUDE.md, hooks, permissions)"
     else
       sp_failed "guidance: semble-guidance.sh install failed"
@@ -670,11 +718,18 @@ sp_mode_enable() {
     *) sp_failed "warm: $(sp_search_field "$res" reason)" ;;
   esac
 
+  # Readiness is the whole run, not the warm alone: a guidance or agents failure
+  # kept `final=ok` before. A skipped warm verifies nothing either, so the phase
+  # stays at `verifying` — neither ready nor error — and the report says why.
   local final
-  case "$status" in
-    ok|skipped) sp_set_phase ready || true; final=ok ;;
-    *) sp_set_phase error || true; final=failed ;;
-  esac
+  if [ -n "$SP_FAILED" ]; then
+    sp_set_phase error || true; final=failed
+  elif sp_status_ready "$status"; then
+    sp_set_phase ready || true; final=ok
+  else
+    sp_skipped "state: phase left at verifying — no successful warm, so readiness is unproven"
+    final=skipped
+  fi
   if [ "$json" = "1" ]; then sp_emit_mode_json enable "$final" "$res"; else sp_emit_mode_human enable "$final"; fi
   [ "$final" = "ok" ] || return 3
   return 0
@@ -701,9 +756,12 @@ sp_mode_disable() {
   return 0
 }
 
-# §8.3 — resolve exactly one <code root>/<64-hex>, confirm, rm -rf, warm, verify.
+# §8.3 — resolve exactly one <code root>/<64-hex>, confirm, build the
+# replacement in a staging cache root, and delete the live index ONLY once the
+# staged one has answered a real query. A skipped or failed warm leaves the
+# index, the phase and the completed steps exactly as they were.
 sp_mode_reindex() {
-  local json="$1" yes="$2" root hash dir size res status final
+  local json="$1" yes="$2" root hash dir size res status final stage staged stagecmd
   root="$(sc_project_root)"
   hash="$(sc_repo_hash "$root" 2>/dev/null)" || hash=""
   [ -n "$hash" ] || { sc_err "cannot resolve the repo hash for $root"; return 1; }
@@ -715,11 +773,11 @@ sp_mode_reindex() {
       SP_DIR="$dir" SP_SIZE="$size" SP_WARMCMD="$(sp_search_cmd_str "$SP_WARM_QUERY_DEFAULT")" node -e '
 process.stdout.write(JSON.stringify({schema:1,mode:"reindex",status:"needs_confirmation",
  wouldDelete:[process.env.SP_DIR],sizeBytes:Number(process.env.SP_SIZE)||0,
- commands:["rm -rf "+process.env.SP_DIR,process.env.SP_WARMCMD]},null,2)+"\n");'
+ commands:[process.env.SP_WARMCMD,"rm -rf "+process.env.SP_DIR]},null,2)+"\n");'
     else
       sc_warn "reindex needs --yes"
-      printf 'would delete: %s (%s bytes)\n' "$dir" "$size"
-      printf 'then re-warm: %s\n' "$(sp_search_cmd_str "$SP_WARM_QUERY_DEFAULT")"
+      printf 'would rebuild first: %s\n' "$(sp_search_cmd_str "$SP_WARM_QUERY_DEFAULT")"
+      printf 'then delete on success: %s (%s bytes)\n' "$dir" "$size"
     fi
     return 4
   fi
@@ -731,6 +789,45 @@ process.stdout.write(JSON.stringify({schema:1,mode:"reindex",status:"needs_confi
     return 0
   fi
 
+  # Stage: a private cache root, so the live index keeps serving until the
+  # replacement is proven. semble keys the repo directory on the project path
+  # alone, so the staged build lands at <stage>/<same 64-hex>.
+  stage="$(sc_cache_root_code)/.staging.$$"
+  staged="$stage/$hash"
+  sp_rm_staging "$stage"
+  mkdir -p "$stage"
+  stagecmd="$(SEMBLE_CACHE_ROOT_CODE="$stage" sp_search_cmd_str "$SP_WARM_QUERY_DEFAULT")"
+  sp_command "$stagecmd"
+  res="$(SEMBLE_CACHE_ROOT_CODE="$stage" sp_run_search "$SP_WARM_QUERY_DEFAULT")"
+  status="$(sp_search_field "$res" status)"
+
+  if ! sp_status_ready "$status"; then
+    sp_rm_staging "$stage"
+    if [ "$status" = "skipped" ]; then
+      sp_skipped "warm: $(sp_search_field "$res" reason)"
+      final=skipped
+    else
+      sp_failed "warm: $(sp_search_field "$res" reason)"
+      final=failed
+      if sp_require_state; then sp_set_phase error || true; fi
+    fi
+    sp_unchanged "cache: $dir kept ($size bytes) — the staged rebuild never answered, so nothing was deleted"
+    sp_unchanged "state: phase and completed steps unchanged"
+    if [ "$json" = "1" ]; then sp_emit_mode_json reindex "$final" "$res"; else sp_emit_mode_human reindex "$final"; fi
+    return 3
+  fi
+
+  if [ ! -d "$staged" ]; then
+    sp_rm_staging "$stage"
+    sp_failed "warm: the staged search answered but wrote no index at $staged"
+    sp_unchanged "cache: $dir kept ($size bytes) — nothing was deleted"
+    if sp_require_state; then sp_set_phase error || true; fi
+    if [ "$json" = "1" ]; then sp_emit_mode_json reindex failed "$res"; else sp_emit_mode_human reindex failed; fi
+    return 3
+  fi
+
+  if sp_require_state; then sp_set_phase verifying || true; fi
+
   if [ -d "$dir" ]; then
     local sib; sib="$(sp_sibling semble-cache.sh)"
     if [ -n "$sib" ]; then
@@ -740,29 +837,27 @@ process.stdout.write(JSON.stringify({schema:1,mode:"reindex",status:"needs_confi
       sp_command "rm -rf $dir"
       sp_guarded_rm_repo_dir "$dir"
     fi
-    if [ -d "$dir" ]; then sc_err "failed to delete $dir"; return 1; fi
+    if [ -d "$dir" ]; then sp_rm_staging "$stage"; sc_err "failed to delete $dir"; return 1; fi
     sp_changed "cache: deleted $dir ($size bytes)"
   else
     sp_unchanged "cache: $dir did not exist"
   fi
 
-  if sp_require_state; then sp_set_phase verifying || true; fi
+  sp_command "mv $staged $dir"
+  # The live index is already gone at this point, so the staged copy is the ONLY
+  # surviving one - keep it and print where it is instead of deleting both.
+  if ! mv "$staged" "$dir"; then
+    sc_err "failed to move the staged index $staged into $dir"
+    sc_err "the staged index was KEPT at $staged - move it to $dir by hand to recover"
+    return 1
+  fi
+  sp_rm_staging "$stage"
+  sp_changed "warm: index rebuilt — staged, verified, then swapped into $dir"
+  sp_complete '{"completed":["warm"]}'
 
-  sp_command "$(sp_search_cmd_str "$SP_WARM_QUERY_DEFAULT")"
-  res="$(sp_run_search "$SP_WARM_QUERY_DEFAULT")"
-  status="$(sp_search_field "$res" status)"
-  case "$status" in
-    ok) sp_changed "warm: index rebuilt"; sp_complete '{"completed":["warm"]}' ;;
-    skipped) sp_skipped "warm: $(sp_search_field "$res" reason)" ;;
-    *) sp_failed "warm: $(sp_search_field "$res" reason)" ;;
-  esac
-
-  case "$status" in
-    ok|skipped) final=ok; if sp_require_state; then sp_set_phase ready || true; fi ;;
-    *) final=failed; if sp_require_state; then sp_set_phase error || true; fi ;;
-  esac
+  final=ok
+  if sp_require_state; then sp_set_phase ready || true; fi
   if [ "$json" = "1" ]; then sp_emit_mode_json reindex "$final" "$res"; else sp_emit_mode_human reindex "$final"; fi
-  [ "$final" = "ok" ] || return 3
   return 0
 }
 

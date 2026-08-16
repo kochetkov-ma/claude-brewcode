@@ -125,13 +125,27 @@ derive_branch() {
 }
 
 # A non-git dir and a commit-less repo are NOT `git-ignored` - reporting them as such bakes a false
-# house fact into the emitted skill and breaks its `branch` scope.
+# house fact into the emitted skill and breaks its `branch` scope. Tracked rows are compared against
+# what is actually on disk: a SINGLE tracked row used to label the whole surface `git-tracked`, which
+# drops the "VERIFY must re-read files directly" guidance in exactly the mixed case that needs it.
 derive_git_visibility() {
   git rev-parse --git-dir >/dev/null 2>&1 || { echo "not-a-git-repo"; return 0; }
   _rows=$( { git ls-files -- .claude '*CLAUDE.md' '*AGENTS.md' 2>/dev/null || true; } | wc -l | tr -d ' ')
-  if [ "$_rows" -gt 0 ]; then echo "git-tracked"; return 0; fi
-  git rev-parse --verify HEAD >/dev/null 2>&1 || { echo "no-commits"; return 0; }
-  echo "git-ignored"
+  if [ "$_rows" -eq 0 ]; then
+    git rev-parse --verify HEAD >/dev/null 2>&1 || { echo "no-commits"; return 0; }
+    echo "git-ignored"; return 0
+  fi
+  # Same surface as the pathspec above (`*CLAUDE.md` matches at any depth in both git and find).
+  # SET DIFFERENCE on paths, never a count delta: the two enumerations differ (git pathspec vs a
+  # FIND_EXCL-pruned find), so subtracting the totals cancels a tracked-but-pruned row against a
+  # real untracked file and mislabels a mixed surface `git-tracked` - dropping the re-read guidance.
+  _disk=$(eval "find . \\( -type f -o -type l \\) \\( -path './.claude/*' -o -name '*CLAUDE.md' -o -name '*AGENTS.md' \\) $FIND_EXCL" 2>/dev/null || true)
+  # `grep -c .` exits 1 on zero matches - a legitimate outcome that `pipefail` would turn into an abort.
+  _untracked=$(printf '%s\n' "$_disk" | sed -e 's|^\./||' -e '/^$/d' | sort \
+    | comm -23 - <( { git ls-files -- .claude '*CLAUDE.md' '*AGENTS.md' 2>/dev/null || true; } | sort) \
+    | grep -c . || true)
+  if [ "$_untracked" -gt 0 ]; then echo "mixed ($_rows tracked, $_untracked untracked)"; return 0; fi
+  echo "git-tracked"
 }
 
 # Claude Code encodes a project dir as its absolute path with `/` (and `.`) replaced by `-`.
@@ -168,7 +182,7 @@ count_skills()    { { find .claude/skills -type f -name '*.md' -not -path '*/mem
 
 derive_surface_counts() {
   _r=$(count_root_md); _n=$(count_nested_md); _a=$(count_agents_md); _u=$(_count_md .claude/rules)
-  _c=$(_count_md .claude/convention); _g=$(_count_md .claude/agents); _s=$(count_skills)
+  _c=$(_count_md .claude/convention); _g=$(_count_md .claude/agents 99); _s=$(count_skills)
   _tot=$((_r + _n + _a + _u + _c + _g + _s))
   echo "$_tot files: $_r root, $_n nested CLAUDE.md, $_a AGENTS.md, $_u rules, $_c conventions, $_g agents, $_s skill files"
 }
@@ -248,9 +262,11 @@ _open_tokens() {
 _fm_field() { grep -m1 "^$2:" "$1" 2>/dev/null | sed "s/^$2:[[:space:]]*//" | cut -c1-200 || true; }
 _hdr() { printf '\n--- %s ---\n' "$1"; }
 
+# Paths arrive on STDIN, one per line - a recursive `find` feed reaches nested files no single-level
+# glob produces (CC discovers agents in subfolders such as `.claude/agents/review/`).
 _fm_list() {
   _any=0
-  for f in "$@"; do
+  while IFS= read -r f; do
     [ -f "$f" ] || continue
     _any=1
     printf '%s :: %s :: %s\n' "$f" "$(_fm_field "$f" name)" "$(_fm_field "$f" description)"
@@ -299,13 +315,13 @@ scan_target() {
   _list "find . -maxdepth 1 -type f \\( -name 'CONVENTIONS.md' -o -name 'CONTRIBUTING.md' \\) | sort" "(no root CONVENTIONS.md / CONTRIBUTING.md)"
 
   _hdr "Agents (.claude/agents/) :: name :: description"
-  _fm_list .claude/agents/*.md
-  _na=$(_count_md .claude/agents)
+  { find .claude/agents -type f -name '*.md' 2>/dev/null || true; } | sort | _fm_list
+  _na=$(_count_md .claude/agents 99)
   echo "agents=$_na"
   [ "$_na" -eq 0 ] && echo "⚠️ NO .claude/agents/ - the agent batch is dropped from {BATCH_TABLE} and the re-audit reduces to skills"
 
   _hdr "Skills (.claude/skills/) :: name :: description"
-  _fm_list .claude/skills/*/SKILL.md
+  printf '%s\n' .claude/skills/*/SKILL.md | _fm_list
   echo "skill_md_files=$(count_skills)"
 
   _hdr "Hooks reacting to memory edits (informational - NEVER edited)"

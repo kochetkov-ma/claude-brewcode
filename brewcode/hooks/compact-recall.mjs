@@ -18,7 +18,8 @@
  */
 
 import { statSync, readFileSync } from 'fs';
-import { readStdin, output, capText, log } from './lib/utils.mjs';
+import { join } from 'path';
+import { readStdin, output, capText, log, projectRoot } from './lib/utils.mjs';
 
 const MAX_TRANSCRIPT_BYTES = 64 * 1024 * 1024;
 const PLAN_KEY = '"planFilePath":"';
@@ -29,6 +30,8 @@ const TASK_KEY = '"name":"TaskCreate"';
 // A bare 'plan_mode_reentry' matched this repo's design discussion and claimed a
 // plan that never existed.
 const PLAN_MODE_KEYS = ['"type":"plan_mode"', '"type":"plan_mode_reentry"', '"permissionMode":"plan"'];
+// Project-local plan link maintained by session-start.mjs (must stay in sync).
+const LATEST_PLAN_NAME = 'LATEST.md';
 
 /**
  * Scan this session's transcript for plan + task signals.
@@ -38,7 +41,7 @@ const PLAN_MODE_KEYS = ['"type":"plan_mode"', '"type":"plan_mode_reentry"', '"pe
  * @param {string} path - transcript_path from stdin
  * @returns {{planPath: string|null, planMode: boolean, hadTasks: boolean}}
  */
-function scanTranscript(path, cwd, sessionId) {
+function scanTranscript(path, root, sessionId) {
   const signals = { planPath: null, planMode: false, hadTasks: false };
   if (typeof path !== 'string' || path === '') return signals; // non-string fs args warn on stderr
   let buf;
@@ -49,7 +52,7 @@ function scanTranscript(path, cwd, sessionId) {
     if (!st.isFile() || st.size > MAX_TRANSCRIPT_BYTES) {
       log('warn', '[compact-recall]',
         `Transcript skipped: ${st.isFile() ? `${st.size}B over the ${MAX_TRANSCRIPT_BYTES}B cap` : 'not a regular file'} (${path})`,
-        cwd, sessionId);
+        root, sessionId);
       return signals;
     }
     buf = readFileSync(path);
@@ -129,14 +132,33 @@ const INTENT_FRAGMENT = [
   'Do not continue from the most recently remembered fragment, and do not re-scope the work.'
 ].join('\n');
 
-/** @returns {{text: string, branch: string}} plan fragment; first match in the ladder wins */
-function planFragment({ planPath, planMode }) {
+/**
+ * @param {{planPath: string|null, planMode: boolean}} signals
+ * @param {string} root - project root, for the LATEST.md rung
+ * @returns {{text: string, branch: string}} plan fragment; first match in the ladder wins
+ */
+function planFragment({ planPath, planMode }, root) {
   if (planPath && isFile(planPath)) {
     return {
       branch: 'plan-file',
       text: [
         `[PLAN] Read ${planPath} with the Read tool before doing any work.`,
         'It holds the role model and the delegation split for this session: follow it, do not re-derive it.'
+      ].join('\n')
+    };
+  }
+  // A plan that PREDATES the transcript (--resume, post-/clear) leaves no
+  // planFilePath to scan for - the first occurrence is the compaction attachment
+  // this hook is reacting to. The project-local LATEST.md is hook-owned (BC-H02:
+  // symlink plus target containment) and project-scoped, so it can never be
+  // another repo's plan. Sits above plan-missing: a real file beats a dead path.
+  const latestPlan = join(root, '.claude', 'plans', LATEST_PLAN_NAME);
+  if (isFile(latestPlan)) {
+    return {
+      branch: 'plan-latest',
+      text: [
+        `[PLAN] Read ${latestPlan} with the Read tool before doing any work.`,
+        'It is this project\'s latest plan, carried over from before the compact: follow its role model and delegation split, do not re-derive them.'
       ].join('\n')
     };
   }
@@ -176,12 +198,12 @@ const TASK_FRAGMENT = [
 // --- Main ---
 
 async function main() {
-  let cwd, sessionId;
+  let root, sessionId;
   try {
     const input = await readStdin();
-    // log() joins cwd as a path: a non-string would throw and discard a fragment
-    // that was already computed.
-    cwd = typeof input.cwd === 'string' ? input.cwd : undefined;
+    // Stable project root for the log path: hook cwd drifts mid-session and a
+    // non-string would throw inside log(), discarding an already-computed fragment.
+    root = projectRoot(typeof input.cwd === 'string' ? input.cwd : undefined);
     sessionId = input.session_id;
 
     // Belt and braces on top of the "compact" matcher.
@@ -190,14 +212,14 @@ async function main() {
       return;
     }
 
-    const signals = scanTranscript(input.transcript_path, cwd, sessionId);
-    const plan = planFragment(signals);
+    const signals = scanTranscript(input.transcript_path, root, sessionId);
+    const plan = planFragment(signals, root);
     const fragments = [plan.text];
     if (signals.hadTasks) fragments.push(TASK_FRAGMENT);
 
     log('info', '[compact-recall]',
       `branch=${plan.branch} tasks=${signals.hadTasks}${signals.planPath ? ` plan=${signals.planPath}` : ''}`,
-      cwd, sessionId);
+      root, sessionId);
 
     output({
       hookSpecificOutput: {
@@ -208,7 +230,7 @@ async function main() {
 
   } catch (error) {
     // Never silent after a compact: degrade to the intent reminder.
-    log('warn', '[compact-recall]', `Error: ${error.message}`, cwd, sessionId);
+    log('warn', '[compact-recall]', `Error: ${error.message}`, root, sessionId);
     output({
       hookSpecificOutput: {
         hookEventName: 'SessionStart',

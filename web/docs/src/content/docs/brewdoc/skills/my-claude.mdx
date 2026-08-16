@@ -24,7 +24,7 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 | Model | opus |
 | Invocation | user-only (`disable-model-invocation: true`) |
 | Context | main conversation |
-| Tools | Read, Write, Edit, Glob, Grep, Bash, Task, WebFetch, WebSearch, Skill, AskUserQuestion |
+| Tools | Read, Write, Edit, Glob, Grep, Bash, Agent, Task, WebFetch, WebSearch, AskUserQuestion |
 
 ## When to use
 
@@ -127,6 +127,17 @@ A bare one-line task is never enough. INTERNAL mode uses this shape for its thre
 <summary>Internals — output paths, INDEX schema, document structures</summary>
 
 **Output directory:** `.claude/brewdoc/my-claude/` (project-relative) — the only supported target. `&#126;/.claude/*` is blocked by Claude Code's protected-path policy in headless sessions, even under `bypassPermissions`. Earlier versions also offered a plugin-data path; nothing has set that variable since v4.0.0, so a run taking that branch wrote into a literal directory named after the unexpanded variable. That branch is gone.
+
+**Every generated doc opens with provenance frontmatter**, before the `#` heading, in all three modes:
+```yaml
+---
+doc_type: user
+version: "{PLUGIN_VERSION}"
+generated_by: "brewdoc:my-claude"
+last_updated: "{LAST_UPDATED}"
+---
+```
+`{PLUGIN_VERSION}` is read from the brewdoc plugin's own `plugin.json` by self-location, never hardcoded; `{LAST_UPDATED}` is `date +%F`. Re-generating an existing doc refreshes all three quoted values and leaves a hand-edited `doc_type` (`llm` / `skip`) as the user set it.
 
 **INTERNAL sources analyzed:**
 - `&#126;/.claude/CLAUDE.md` — global instructions

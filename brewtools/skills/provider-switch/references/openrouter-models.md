@@ -32,11 +32,13 @@ User picks a single model during install — it is used everywhere.
 
 ## Model Validation
 
-When user enters a custom model ID, verify it exists on OpenRouter:
+When user enters a custom model ID, verify it exists on OpenRouter. The catalogue endpoint is public
+(verified 2026-08-16: HTTP 200 with a full body and no credentials), so send NO key — a key on argv is
+readable by any local process via `ps`, and here there is nothing to send:
 
 **EXECUTE** using Bash tool:
 ```bash
-curl -s "https://openrouter.ai/api/v1/models" -H "Authorization: Bearer $OPENROUTER_API_KEY" | python3 -c "
+curl -s "https://openrouter.ai/api/v1/models" | python3 -c "
 import json, sys
 data = json.load(sys.stdin)
 target = 'USER_MODEL_ID'

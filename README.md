@@ -226,7 +226,7 @@ Every spawn prompt carries six fields:
 |-------|---------|
 | `/brewtools:text-optimize` | LLM token efficiency optimization (52 rules, smart dedup + aggressive lossy) |
 | `/brewtools:text-human` | Remove AI artifacts, humanize code |
-| `/brewtools:think-short-setup` | Install/remove terse-mode hooks (SessionStart + every-10th UserPromptSubmit + subagent Task) that inject brevity directives; project or global |
+| `/brewtools:think-short-setup` | Install/remove terse-mode hooks (SessionStart + every-10th UserPromptSubmit + SubagentStart) that inject brevity directives; project or global |
 | `/brewtools:agent-deadline-setup` | Install/remove a soft wall-clock budget for subagents -- 80% warns "wrap up", 100% blocks all but finalization tools; project or global, opt-in |
 | `/brewtools:agent-return-setup` | Install/remove a size budget on every subagent's final return -- a SubagentStart hook states the budget, a SubagentStop hook sizes the return (`chars/4`) and blocks at most once, ordering a compress above `passTokens` (default 1000) or a write-to-file above `fileTokens` (default 2500); project or global, opt-in |
 | `/brewtools:agent-router-setup` | EXPERIMENTAL -- install/remove a PreToolUse hook that denies a generic subagent spawn in favor of the real project/plugin expert, or nudges when the fit is only uncertain; project scope only, opt-in |
@@ -235,7 +235,7 @@ Every spawn prompt carries six fields:
 | `/brewtools:deploy` | GitHub Actions deployment -- workflows, releases, GHCR, CI/CD |
 | `/brewtools:plugin-update` | Install and update the full plugin suite |
 | `/brewtools:provider-switch` | Configure alternative API providers (DeepSeek, Z.ai/GLM, Qwen, MiniMax, OpenRouter) |
-| `/brewtools:manager-setup` | Manager mode -- hook-driven codewords `++m` (delegate-everything, plan-aware), `++a` (architecture-first), `++rr` (anti-regression review), `++r` (two-phase double-check); the opt-in HARD wall (`status`/`install`/`upgrade`/`enable`/`disable`/`uninstall`/`purge`, plus `level strict\|balanced` and `edit`) installs a project PreToolUse guard that blocks main-session writes while subagents stay free |
+| `/brewtools:manager-setup` | Manager mode -- hook-driven codewords `++m` (delegate-everything, plan-aware), `++a` (architecture-first), `++rr` (anti-regression review), `++r` (two-phase double-check); the opt-in HARD wall (`status`/`install`/`upgrade`/`enable`/`disable`/`uninstall`/`purge`, plus `level strict\|balanced` and `edit`) installs a project PreToolUse guard that blocks main-session writes while subagents stay free -- an allowlist of permitted binaries and per-binary flags, failing closed when it cannot parse the command |
 | `/brewtools:task-board-setup` | Deploy a file-based Kanban into ANY repo via multi-agent analysis -- task-tracker agent, task-board skill, tasks rule, .claude/features, plus an optional spec + design layer (`task-spec`) and an `upgrade` mode for existing boards |
 
 ### Brewui (0 skills)

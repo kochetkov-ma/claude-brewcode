@@ -75,6 +75,10 @@ for flag in "\-l" "\-s" "\-d" "\-x"; do
 done
 
 check_contains "$SKILL_DIR/SKILL.md" "AskUserQuestion" "SKILL.md contains AskUserQuestion in allowed-tools"
+check_contains "$SKILL_DIR/SKILL.md" "text-guard.sh" "SKILL.md wires the Phase 0/3 preservation guard"
+check_file_exists "$SKILL_DIR/scripts/text-guard.sh" "Script: text-guard.sh exists"
+check_file_exists "$SKILL_DIR/tests/suite-guard.mjs" "Suite: suite-guard.mjs exists"
+check_file_exists "$SKILL_DIR/tests/run.sh" "Runner: tests/run.sh exists"
 
 check_contains "$SKILL_DIR/references/deep-compression.md" "DICT" "deep-compression.md contains DICT section"
 check_contains "$SKILL_DIR/references/deep-compression.md" "Symbol Substitution" "deep-compression.md contains Symbol Substitution section"
@@ -139,12 +143,14 @@ else
   fail "Agent still references '## Summary' instead of '## Sources'"
 fi
 
-# Check agent has AskUserQuestion in tools
+# AskUserQuestion is removed from every subagent upstream — declaring it is inert (D1 Q3)
 if grep -q 'AskUserQuestion' "$AGENT_FILE"; then
-  pass "Agent has AskUserQuestion in tools"
+  fail "Agent still declares AskUserQuestion — inert in a subagent, decisions must return to the caller"
 else
-  fail "Agent missing AskUserQuestion tool"
+  pass "Agent declares no AskUserQuestion (decisions return to the caller)"
 fi
+
+check_contains "$AGENT_FILE" "RUN_DIR" "Agent knows the skill-owned snapshot contract"
 
 # Check no duplicate abbreviation cfg vs config in deep-compression
 if ! grep -q "| config |" "$SKILL_DIR/references/deep-compression.md" 2>/dev/null; then

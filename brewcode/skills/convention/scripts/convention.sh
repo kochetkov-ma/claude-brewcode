@@ -115,18 +115,27 @@ scan_project() {
     [ -d "$d" ] && src_dirs="${src_dirs:+$src_dirs,}\"$d\""
   done
 
+  # One walk, two consumers: total_files counts the WHOLE stream, `head -10` truncates the
+  # histogram only. Summing the truncated histogram undercounts every extension past the tenth
+  # and can keep total_files under the scoped-mode threshold in a polyglot repo.
   file_counts="" total_files=0
-  counts_raw=$(find . -type f -not -path '*/\.*' -not -path '*/node_modules/*' \
+  scan_list=$(mktemp -t convention-scan.XXXXXX)
+  trap 'rm -f "$scan_list"' EXIT INT TERM
+  find . -type f -not -path '*/\.*' -not -path '*/node_modules/*' \
     -not -path '*/target/*' -not -path '*/build/*' -not -path '*/__pycache__/*' \
-    -not -path '*/dist/*' -not -path '*/vendor/*' 2>/dev/null \
-    | sed 's/.*\.//' | sort | uniq -c | sort -rn | head -10)
+    -not -path '*/dist/*' -not -path '*/vendor/*' >"$scan_list" 2>/dev/null || true
+
+  total_files=$(wc -l <"$scan_list" | tr -d '[:space:]')
+  counts_raw=$(sed 's/.*\.//' "$scan_list" | sort | uniq -c | sort -rn | head -10)
+  rm -f "$scan_list"
+  trap - EXIT INT TERM
+
   if [ -n "$counts_raw" ]; then
     while IFS= read -r line; do
       count=$(echo "$line" | awk '{print $1}')
       ext=$(echo "$line" | awk '{print $2}')
       case "$ext" in */*|"") continue ;; esac
       file_counts="${file_counts:+$file_counts,}\"$ext\":$count"
-      total_files=$((total_files + count))
     done <<EOF
 $counts_raw
 EOF

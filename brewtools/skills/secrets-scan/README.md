@@ -86,16 +86,27 @@ cd /tmp && /brewtools:secrets-scan
 
 ## Output
 
-Report location: `.claude/reports/{TIMESTAMP}_secrets-scan/report.md`
+Report location: `.claude/reports/{TIMESTAMP}_secrets-scan/report.md`, created mode `600` inside a
+mode `700` directory. Setup also appends `.claude/reports/` to `.gitignore` when nothing ignores it
+yet — a report that names where credentials live must never become committable.
 
 The report contains:
 
 | Section | Content |
 |---------|---------|
-| Summary | File counts, severity breakdown (CRITICAL / HIGH / MEDIUM / LOW) |
-| Findings | Per-severity tables with file path, line number, matched content, description |
-| Agent Stats | Per-agent breakdown of assigned, scanned, and finding counts |
+| Summary | Verdict (CLEAN / FINDINGS / INCOMPLETE), file counts, severity breakdown |
+| Findings | Per-severity tables with file path, line number, category, value length, `sha256[:12]` fingerprint, masked preview, description |
+| Agent Stats | Per-agent assigned / accounted / reconciled / finding counts |
+| Unscanned | Chunks that failed reconciliation twice — those paths were never read |
 | File Inventory | Complete list of scanned files and skipped files with skip reasons |
+
+**Secrets are redacted by construction.** The report never stores a matched value: findings carry a
+length, a `sha256[:12]` fingerprint and a preview revealing at most 4 leading characters. Two
+findings of the same credential are still recognisable by their fingerprint.
+
+**A dropped chunk cannot hide.** Each agent's response is reconciled against its assigned file list
+(`assigned == scanned + skipped`); a mismatched or malformed chunk is re-spawned once, and if it
+fails again the scan is reported `INCOMPLETE`, never clean.
 
 A console summary is also displayed at the end of the scan with the key metrics and the path to the full report.
 

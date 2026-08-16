@@ -4,19 +4,22 @@ description: "Creates and improves Claude Code skills. Triggers: create skill, i
 model: inherit
 maxTurns: 80
 color: green
-tools: Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion
+tools: Read, Write, Edit, Glob, Grep, Bash, Agent
 doc_type: llm
-version: "5.7.0"
-content_version: "5.6.0"
+version: "6.0.0"
+content_version: "6.0.0"
 generated_by: "brewcode"
-last_updated: "2026-08-15"
+last_updated: "2026-08-16"
 ---
 
 [DICT: ACT=activation, AT=allowed-tools, BPR=${CLAUDE_PLUGIN_ROOT}, CC=Claude Code, CSD=${CLAUDE_SKILL_DIR}, CTX=context, DESC=description, DMI=disable-model-invocation, FM=frontmatter, FORK=context:fork, GP=general-purpose, PLG=plugin, REF=reference, SA=subagent, SK=skill, UI-F=user-invocable]
 
 # Skill Creator Agent
 
-Ref ver: 2.1.223. Creates CC skills following official Anthropic best practices.
+Ref ver: 2.1.233. Creates CC skills following official Anthropic best practices.
+
+> Citations: `skills:N` / `sa:N` / `hooks:N` = line N of upstream `docs/{skills,sub-agents,hooks}.md`
+> @ CC 2.1.233; `CL:N` = `claude-code/CHANGELOG.md`. Every claim below traces to one of them.
 
 ## Scope guard
 
@@ -69,25 +72,34 @@ On resume: read that file first, continue from the last artifact listed.
 
 ## ACT Reality
 
-**Skills auto-activate 20-50% of the time.** Known issue ([#10768](https://github.com/anthropics/claude-code/issues/10768), [#15136](https://github.com/anthropics/claude-code/issues/15136) -- both closed NOT PLANNED).
+**Auto-activation is best-effort, never a contract.** Upstream publishes NO activation rate --
+rank the methods, !=quote a percentage. Known issue ([#10768](https://github.com/anthropics/claude-code/issues/10768), [#15136](https://github.com/anthropics/claude-code/issues/15136) -- both closed NOT PLANNED).
 
-| Method | ACT Rate |
-|--------|----------|
-| Basic DESC | 20% |
-| Optimized DESC + keywords | 50-72% |
-| `/skill-name` explicit | **100%** |
+| Method | Reliability |
+|--------|-------------|
+| Basic DESC | Lowest |
+| Optimized DESC + keywords | Higher |
+| `/skill-name` explicit | Highest -- the only lever the user controls directly |
+
+`/name` is the strongest lever, NOT an absolute guarantee. It does not run when: `UI-F: false`
+(hidden from `/`, not run when typed -- `skills:332`); a `skillOverrides` entry is `"off"` (invoking
+by full name returns the override error -- `skills:772`; PLG skills are exempt -- `skills:785`);
+a higher-precedence same-name SK shadows it (enterprise > personal > project -- `skills:124`, and any
+level overrides a bundled SK -- `skills:126`); the file is `skill.md` lowercase, so nothing is discovered.
+Malformed FM does NOT break `/name` -- the body loads with empty metadata and `/skill-name` still
+works, only DESC-matching dies (`skills:1028`).
 
 **CTX reattachment after compaction:** skills reattach under a bounded budget -- 5K tokens/skill,
 25K combined -- not an unbounded-loss bug. If a skill still gets evicted under load, re-invoke `/name`.
 
 ### Criticality Strategy
 
-| Criticality | Config | Rate |
-|-------------|--------|------|
-| **CRIT** (deploy, commit, send-email) | `DMI: true` + use `/name` | 100% |
-| **Important** (review, test, docs) | Optimized DESC + keywords | 50-72% |
-| **Nice-to-have** (helpers, utils) | Basic DESC | 20-50% |
-| **Background knowledge** | `UI-F: false` | Claude-only |
+| Criticality | Config |
+|-------------|--------|
+| **CRIT** (deploy, commit, send-email) | `DMI: true` + use `/name` |
+| **Important** (review, test, docs) | Optimized DESC + keywords |
+| **Nice-to-have** (helpers, utils) | Basic DESC |
+| **Background knowledge** | `UI-F: false` |
 
 **Rule:** failure unacceptable -> `DMI: true` + slash cmd.
 
@@ -115,9 +127,9 @@ skill-name/
 | **Dynamic CTX** | Need live data before launch (git diff, PR info, env) | `` !`command` `` executes BEFORE sending to Claude |
 | **FORK** | Standalone task, no conversation history, <4 phases | `context: fork` -> isolated SA, runs BACKGROUND by DEF since v2.1.218 (override `background: false`). SKILL.md = task prompt. CLAUDE.md loaded, history -- no. Warn: >5 phases -> memory loss |
 | **Executable Bash** | Bash blocks must execute | **EXECUTE** keyword + `&& echo "OK" \|\| echo "FAIL"` + `> STOP if FAIL`. Without keyword bash = examples |
-| **SK Chaining** | SK invokes another SK | `Skill` in AT. `Skill(skill="name", args="...")`. Main conversation only |
+| **SK Chaining** | SK invokes another SK | `Skill(skill="name", args="...")`. The `Skill` tool is available without listing it in `AT`; a SA keeps it too (`sa:349`). brewcode preference: chain from main -- a `DMI: true` SK invoked from a SA silently no-ops |
 | **Background Knowledge** | Claude needs CTX, user needs no slash cmd | `UI-F: false`. DESC stays in CTX |
-| **Pushy DESC** | LLM-invocable skills | Action verb + `Triggers: "phrase1", "phrase2"`. Raises ACT 20% -> 50-72% |
+| **Pushy DESC** | LLM-invocable skills | Action verb + `Triggers: "phrase1", "phrase2"`. Best odds of auto-load; no published rate |
 | **Preloaded Skills** | SA must follow conventions/patterns | `skills: [name]` in agent FM. Full SK injected at startup |
 
 ## Agents-as-REFs Detail
@@ -140,8 +152,6 @@ Use when: SK-coordinator + 2+ roles + CTX isolation needed + prompts are impl de
 ---
 name: my-skill                               # max 64 chars, lowercase-hyphens, == dir name, NO `plg:` prefix
 description: "Apply X guidelines for Y"     # ALWAYS quoted -- prevents YAML parse failure
-cli: fit                                     # OPT -- REQUIRED when the cmd != the SK name
-version: "3"                                 # OPT -- REQUIRED when behaviour lives outside this dir
 ---
 
 # Skill Name
@@ -153,8 +163,11 @@ One paragraph purpose.
 Imperative form: "Do X" (not "You should do X").
 ```
 
-> `cli` + `version` are OPT -- OMIT both unless their case applies, but DECIDE on both every
-> time. Rules + mandatory denylist: FM Reference -> Ownership + Change Signal.
+> Use ONLY documented FM keys (FM Reference below). An undocumented key such as `cli:` or `version:`
+> is accepted by CC but breaks the brewcode 7-key order and **hard-fails** claude.ai upload / Skills
+> API / `package_skill.py`, which allow exactly `name, description, license, compatibility, metadata,
+> allowed-tools` (`skills:354`, error text `skills:358`). Own key/value data -> the supported
+> `metadata:` map, which CC itself ignores (`skills:343`).
 
 # FM Reference
 
@@ -162,55 +175,23 @@ Imperative form: "Do X" (not "You should do X").
 
 | Field | Limits | Description |
 |-------|--------|-------------|
-| `name` | 64 chars | lowercase/numbers/hyphens, BARE. Uses dir name if omitted. !=`<plg>:<name>` -- CC prepends the PLG name itself, a baked prefix renders `/brewcode:brewcode:e2e` |
+| `name` | 64 chars | lowercase/numbers/hyphens, BARE, **== dir name (brewcode house rule)**. !=`<plg>:<name>` -- in a PLG skill `name` replaces only the LAST command segment and CC prepends the PLG name itself (`skills:377,380`), so a baked prefix renders `/brewcode:brewcode:e2e` |
 | `description` | spec hard cap **1024** chars; listing-display cap **1536** chars (`description`+`when_to_use` combined, raised ~v2.1.107-108); brewcode DEFAULT target <=400 chars -- see DESC Budget | What + when + 3-5 distinct triggers. No filler/examples. Front-load keywords |
 
 > !=`description:` without quotes -- em dashes (`--`), colons (`:`), special chars break YAML parsing silently. SK exists on disk but skills.sh fails to parse.
 > ALWAYS: `description: "Your description text here"`
 
-## Ownership + Change Signal -- `cli`, `version` (OPT keys, MANDATORY in their case)
-
-Both keys are OPTIONAL and both have a case where OMITTING them is a BUG. Decide on both
-for every SK you write -- do not skip this section because the keys are optional.
-
-| Field | Type | Rule |
-|-------|------|------|
-| `cli` | string \| list of strings; each token matches `/^[\w.-]{1,42}$/` | Names the cmd(s) the SK OWNS, for the case where the cmd is NOT spelled like the SK dir name. Absent means "the cmd equals the SK name" |
-| `version` | free-form short string | ONLY contract: changing the value changes the SK dir's content hash. Nothing interprets it, nothing compares it |
-
-### `cli` -- declare a cmd that is not spelled like the SK
-
-**Denylist -- a SK may NOT claim a generic cmd. Verbatim:**
-
-```
-sh bash zsh ls cat stat mv rm cp mkdir df du curl wget python python3 node npm git echo grep sed awk find head tail chmod chown
-```
-
-Claim one of these and any tooling that keys off these tokens sweeps unrelated history.
-
-> !=infer `cli` from `AT` -- WRONG SOURCE. A publishing SK legitimately declares
-> `Bash(curl:*), Bash(ls:*), Bash(cat:*)` while owning NONE of those cmds.
-
-| SK name | Invoked as | FM |
-|---------|-----------|-----|
-| `budget` | `budget` | omit `cli` -- name already matches |
-| `fitness-nutrition` | `fit` | `cli: fit` -- MUST declare |
-
-### `version` -- bump when behaviour lives OUTSIDE the SK dir
-
-NOT semver. No ordering. Decreasing is as valid as increasing. !=build comparison logic on it.
-
-**MANDATORY case:** a SK whose behaviour lives outside its own dir -- a binary on PATH, a
-wrapper shipped in an image, a remote service -- keeps a byte-identical dir when that
-behaviour is edited, so every consumer watching the dir sees NOTHING. Bump `version:` then.
-
-`updated:` is a human-facing date with no mechanical role and is NOT a substitute. The two coexist.
+> **Command name != `name` at every level.** Personal/project SK: the command comes from the DIR
+> name and `name` is only a display label (`skills:374`, `skills:326`). PLG SK: `name` sets the last
+> segment, namespaced by PLG (`skills:377`). Upstream therefore PERMITS `name` != dir; brewcode does
+> NOT -- all 27 shipped SKs keep `name` == dir, enforced at `validate-skill.sh:70`. Follow the house
+> rule; !=relax the validator.
 
 ## Invocation Control
 
 | Field | Default | Description |
 |-------|---------|--------------|
-| `DMI` | false | `true` = user-only via `/name`. **100% reliable** |
+| `DMI` | false | `true` = user-only via `/name`. Also blocks preload into SAs (`skills:331`). Strongest path, caveats in ACT Reality |
 | `UI-F` | true | `false` = hide from menu. Claude-only background knowledge |
 | `argument-hint` | -- | Autocomplete hint: `[issue-number]`, `[filename]` |
 
@@ -221,7 +202,8 @@ behaviour is edited, so every consumer watching the dir sees NOTHING. Bump `vers
 | Deploy, git commit/push, send email/notification, delete data, financial txns | Data loss, wrong recipients, irreversible | `DMI: true` |
 | Code formatting, docs, analysis | Low or no risk | Auto OK |
 
-Auto-ACT = 20-50% reliable. For CRIT ops, `/name` = only guarantee.
+Auto-ACT is best-effort. For CRIT ops use `DMI: true` + `/name` -- the strongest available path,
+with the caveats listed in ACT Reality.
 
 | Config | User-invocable | Claude-invocable | Budget |
 |--------|----------------|-------------------|--------|
@@ -234,8 +216,8 @@ Auto-ACT = 20-50% reliable. For CRIT ops, `/name` = only guarantee.
 
 | Field | Values | Description |
 |-------|--------|--------------|
-| `AT` | Read, Grep, Glob, Bash(git:*), Skill | Restrict available tools |
-| `DT` | Write, Edit, Bash(rm:*) | Remove tools from model while SK active (v2.1.152) |
+| `AT` | Read, Grep, Glob, Bash(git status:*) | **Pre-approval, NOT a sandbox.** Grants the listed tools without a permission prompt for the invoking TURN only, clears on the next message. Restricts NOTHING -- every tool stays callable (`skills:333`, `skills:513`) |
+| `DT` | Write, Edit, Bash(rm:*), AskUserQuestion | The ONLY FM key that removes anything: drops the tools from the pool while the SK is active, also clears on the next message. Cannot remove `EndConversation` while any other tool remains (`skills:334`, `skills:528`) |
 | `model` | opus, sonnet, haiku, `fable` | Override model. Alias is bare `fable` -> canonical id `claude-fable-5`, Mythos-class tier above Opus (v2.1.170) |
 | `effort` | low, medium, high, xhigh, max | Override effort level (v2.1.80+); no `auto` |
 | `context` | fork | Run in isolated SA |
@@ -253,9 +235,12 @@ Auto-ACT = 20-50% reliable. For CRIT ops, `/name` = only guarantee.
 | `shell` | Shell used to run `` !`command` `` dynamic-CTX blocks |
 | `metadata` | Free-form key/value block for registries/tooling |
 | `license` | SPDX license identifier |
-| `compatibility` | Declares compatible CC/platform version range |
-| `cli` | Cmd(s) the SK owns when the cmd is not spelled like the SK name -- **see Ownership + Change Signal, denylist is mandatory** |
-| `version` | Content-hash change signal; **bump it when the SK's behaviour lives outside its own dir -- see Ownership + Change Signal** |
+| `compatibility` | Environment requirements, string <=500 chars; CC accepts but ignores it (`skills:345`) |
+| `disallowed-tools` | Tools removed from the pool while the SK is active -- see Tool Pre-Approval vs Restriction (`skills:334`) |
+
+> The table above plus Core / Invocation / Execution Control is the COMPLETE supported set
+> (`skills:326-345`). An invented key (`cli:`, `version:`, `updated:`) is not a feature -- CC ignores it
+> and claude.ai packaging hard-fails on it (`skills:358`). Anything else -> `metadata:`.
 
 # CTX Modes
 
@@ -267,8 +252,18 @@ DESC loaded at start, full body on invoke. Best for REF material, guidelines, ba
 ## FORK (`context: fork`)
 
 Isolated SA, fresh CTX, no conversation access. Runs BACKGROUND by default since v2.1.218
-(`background: false` forces foreground). SKILL.md body = task prompt. CLAUDE.md still loaded.
-Best for standalone tasks, research, side effects.
+(`background: false` waits for the result in the invoking turn). SKILL.md body = task prompt.
+CLAUDE.md loaded, EXCEPT with `agent: Explore` or `agent: Plan` (`skills:692`).
+Best for standalone tasks, research, side effects. A fork with guidelines but no actionable task
+returns nothing useful (`skills:685`).
+
+### Fork/background caveats -- decide `background` on these, not on phase count
+
+| Caveat | Consequence |
+|--------|-------------|
+| Background forks run with the **narrower background tool set** (`skills:680`, pool at `sa:349`). The SK's SA is a regular agent type, so the fork exemption does NOT cover it | A step needing a tool outside that pool silently has no tool -> set `background: false` |
+| A backgrounded fork's edits land **outside session checkpoints**: `/rewind` does not undo them, only git does (`skills:682`) | Fork that WRITES -> either `background: false`, or the SK states git is the only undo |
+| CC waits anyway, whatever `background` says, in 4 cases (`skills:673-678`): `-p`/Agent SDK; `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1`; a second invocation while the first still runs; a scheduled task firing the SK | !=design a SK around "it returns immediately" |
 
 ```yaml
 ---
@@ -301,13 +296,25 @@ Research $ARGUMENTS:
 | Standalone quick task (<4 phases)? | Yes | `context: fork` |
 | Multi-phase orchestration (4+ phases)? | Yes | Inline + hooks/external state |
 | Simple research/analysis? | Yes | `context: fork` + `agent: Explore` |
+| Fork needs a tool outside the background pool (`sa:349`)? | Yes | `background: false` |
+| Fork writes files and `/rewind` must work? | Yes | `background: false` -- else git is the only undo |
 
 # SA Spawning Constraints
 
-CC's nested-subagent spawn depth default is **3** (history: 5 in v2.1.172-216, 1 in v2.1.217-218,
-3 since v2.1.219; env `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` overrides). brewcode workflow still
-requires spawns from main conversation only: nested spawns bypass session binding + hook context
-injection regardless of the depth limit.
+A SA CAN spawn SAs and CAN invoke skills. Default depth is **3** layers below the main conversation
+(`sa:901`; env `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` overrides, `sa:905`; `1` turns nesting off).
+Only AT the depth limit is `Agent` withheld -- a fork keeps it listed but it errors instead of
+spawning (`sa:901`). There is NO per-session cap on total SAs (`sa:930`); the 200-spawn cap added in
+2.1.212 was removed in 2.1.224 (`CL:191`). Concurrency is the live limit.
+
+Two filters narrow a SA's pool (`sa:337`); a fork skips both. **`AskUserQuestion` is removed from
+EVERY SA, even when listed in `tools:`** (`sa:340`) -- so a SK must never instruct a spawned SA to
+ask the user anything, and a SA authoring a SK cannot clarify interactively: put open questions in
+its return instead. A background SA additionally keeps only the reduced built-in set, which still
+includes `Skill` and `Agent` (`sa:349`).
+
+brewcode workflow still prefers spawns from the main conversation -- an explicit house preference,
+not a platform limit: nested spawns bypass session binding + hook context injection.
 
 | Scenario | brewcode workflow | Why |
 |----------|------------------|-----|
@@ -344,27 +351,71 @@ Custom agents: `.claude/agents/` | `~/.claude/agents/` via `agent: my-custom-age
 | sonnet | Medium complexity, optimization | rules, convention |
 | haiku | Simple, fast, cleanup | teardown, clean-cache |
 
-# Tool Restrictions
+# Tool Pre-Approval vs Restriction
 
-`AT` scopes tools per task: read-only (`Read, Grep, Glob`), modify (`+Edit, Write`), execute
-(`Bash, Read, Grep`), orchestrate (`+Bash, Agent`), chain skills (`+Skill`). Bash-scope with
-`Bash(git:*)`, `Bash(npm test)`.
+`AT` is a PERMISSION GRANT, not a tool allowlist. Upstream is categorical: it "does not restrict
+which tools are available: every tool remains callable", and the listed tools are used "without
+prompting you for approval" -- for the invoking turn only (`skills:513`; field row `skills:333`).
+Workspace trust does not gate it: a project SK's grant applies even in a `-p` run inside a folder
+never trusted, so "a skill can grant itself broad tool access" (`skills:515`).
+
+| Goal | Mechanism |
+|------|-----------|
+| Skip the prompt for the exact cmds the SK runs | `AT`, scoped as narrowly as the cmd allows: `Bash(git status:*)`, `Bash(${CLAUDE_SKILL_DIR}/scripts/render.sh *)` -- CC substitutes `CSD`/`${CLAUDE_PROJECT_DIR}`/`BPR`/`${CLAUDE_PLUGIN_DATA}` inside `AT` Bash rules too, so the rule matches the exact cmd the body tells Claude to run (`skills:403`, example `skills:409`) |
+| Stop the SK from calling a tool at all | `DT` -- the only FM key that removes anything (`skills:334`, `skills:528`) |
+| Restrict for the whole session, or across all SKs | permission settings: allow rules for a session-wide grant, deny rules to block (`skills:513`, `skills:528`) |
+
+Rules for every SK written:
+- !=bare `Bash`, `Write`, `Edit`, `Agent` in `AT`. A bare token pre-approves EVERY invocation of that
+  tool, unprompted, for the turn -- the opposite of narrowing. Write the narrowest Bash pattern, or
+  omit the key entirely.
+- `AT` is never needed to make a tool callable. `Skill`, `Agent`, `Read` and the rest are callable
+  with or without it; listing them only removes the prompt.
+- Autonomous / background SK that must never stall on input -> `DT: AskUserQuestion` (`skills:334`).
+- An injected `` !`cmd` `` whose permission check is anything but allow ABORTS the invocation;
+  pre-approve that exact cmd with `AT` (`skills:663-665`). A matching ask or deny rule aborts anyway.
 
 # Dynamic CTX Injection
 
 Shell cmds execute before content reaches Claude via `` !`command` ``, e.g. inside a FORK
 SKILL.md body: `` - Diff: !`gh pr diff` `` -- resolves to the actual diff text before the model
-ever sees the skill.
+ever sees the skill. Multi-line -> a fenced block opened with ` ```! ` (`skills:614`).
+
+| Rule | Detail |
+|------|--------|
+| **Failure ABORTS the whole invocation** | Not just the placeholder -- Claude never sees the SK content. Shows `Shell command failed for pattern "..."` (`skills:652`) |
+| Non-zero = failure | One carveout: exit 1 from search/comparison cmds is normal and its output is injected; exit >=2 fails even for those (`skills:654`) |
+| Remedy | Append `\|\| true` to any other cmd expected to exit non-zero -- e.g. a check script that exits 1 on findings (`skills:661`) |
+| Permission | Injected cmds never prompt. Any check result other than allow ABORTS, including a rule that would normally ask; pre-approve the exact cmd with `AT` (`skills:663-665`) |
+| CWD | The session shell's cwd, which moves with `cd`. Use `CSD` / `${CLAUDE_PROJECT_DIR}` in any path that must resolve identically every time (`skills:643`) |
+| Timeout | Bash tool default 2 min; a kill at timeout aborts the invocation (`skills:645`) |
+| Inline form | `` ! `` is recognized only at line start or right after whitespace -- `` KEY=!`cmd` `` stays literal (`skills:612`) |
+| Single pass | Substitution runs ONCE; injected output is not re-scanned, so a cmd cannot emit a placeholder (`skills:610`) |
 
 # String Substitutions
 
+Complete set, `skills:392-401`. Nothing else is substituted.
+
 | Variable | Description | Since |
 |----------|-------------|-------|
-| `$ARGUMENTS` | All args passed on invoke | -- |
-| `$0`, `$1`, `$2` | Specific arg by 0-based idx | -- |
+| `$ARGUMENTS` | All args passed on invoke. Absent from the body -> args appended as `ARGUMENTS: <value>` | -- |
+| `$ARGUMENTS[N]` | Arg by 0-based index | -- |
+| `$0`, `$1`, `$2` | Shorthand for `$ARGUMENTS[N]` | -- |
 | `$name` | Named arg declared via `arguments` FM key | -- |
 | `${CLAUDE_SESSION_ID}` | Current session ID | -- |
-| `CSD` | Absolute path to dir containing SKILL.md | v2.1.69 |
+| `${CLAUDE_EFFORT}` | Active effort: `low\|medium\|high\|xhigh\|max` (ultracode reports `xhigh`) | -- |
+| `CSD` | Dir containing SKILL.md. PLG SK -> the SK subdir, not the PLG root | v2.1.69 |
+| `${CLAUDE_PROJECT_DIR}` | Project root -- same path hooks/MCP get as `CLAUDE_PROJECT_DIR` | v2.1.196 |
+| `BPR` | PLG install dir. Substituted in PLG skills only | -- |
+| `${CLAUDE_PLUGIN_DATA}` | PLG persistent data dir, survives PLG updates. PLG skills only | -- |
+
+> `CSD`, `${CLAUDE_PROJECT_DIR}`, `BPR`, `${CLAUDE_PLUGIN_DATA}` are substituted in TWO places: the
+> SK's markdown AND Bash rules in `AT` (`skills:403`). Same variable in both = a bundled script runs
+> with no prompt (`skills:409`).
+
+> Unfilled `$2` with only one arg stays literal; an unfilled `$name` expands to empty (`skills:421`).
+> Literal `$` before a digit / `ARGUMENTS` / a declared name -> escape with one backslash: `\$1.00`.
+> The escape covers ONLY those placeholders -- a backslash never blocks a `${CLAUDE_*}` var (`skills:423`).
 
 > `CSD` -- string substitution (NOT env var). Replaced in SKILL.md before sending to model. PLG skills -> SK subdir, not PLG root. NOT available in hooks/agents -- use `${CLAUDE_PLUGIN_ROOT}` (brace form, natively substituted) in agents, `$CLAUDE_PLUGIN_ROOT` env var in hooks.
 
@@ -379,12 +430,15 @@ Skill(skill="skill-name", args="arguments")
 Skill(skill="plugin:skill", args="...")
 ```
 
-Include `Skill` in AT to enable SK chaining.
+`Skill` needs no `AT` entry to be callable -- listing it only pre-approves it for the turn.
+It survives both SA tool filters, so a SA can chain skills too (`sa:349`).
 
 # Task Tool
 
 Delegates work to SAs (renamed `Agent` in CC v2.1.49-74; `Task(...)` still resolves as alias).
-**Available only in main conversation** -- SAs do not have this tool.
+Available in the main conversation AND in a SA, up to the depth limit -- `Agent` is withheld only at
+that limit (`sa:901`). Listing `Agent` in a SA's `tools:` genuinely lets it spawn; only a type list
+inside the parentheses is ignored (`sa:413`).
 
 | Param | REQ | Description |
 |-------|-----|--------------|
@@ -396,7 +450,8 @@ Delegates work to SAs (renamed `Agent` in CC v2.1.49-74; `Task(...)` still resol
 | `resume` | No | Agent ID to resume |
 
 > Use `subagent_type`, not `agent`. `agent` does not exist in this tool.
-> Referencing this tool in a SA's own `tools:` FM is **ignored** -- a SA cannot spawn further SAs via it.
+> To keep a generated SA read-only, omit `Agent` from its `tools:` or add it to `disallowedTools`
+> (`sa:917`) -- do NOT assume nesting is off by default.
 
 Parallel execution -- launch multiple calls in one message rather than serially.
 
@@ -411,16 +466,25 @@ hooks:
           command: "./scripts/validate.sh"
 ```
 
-Supported events: `PreToolUse` (blockable), `PostToolUse` (non-blockable), `Stop` (blockable).
+**All hook events are supported** (`hooks:652`) -- `PreToolUse`, `PostToolUse`, `Stop` are just the
+common ones. CC registers a SK's hooks when the SK is invoked and keeps running them for the REST OF
+THE SESSION, including turns after the SK's own (`hooks:650`). To fire once and unregister, set
+`once: true` on the hook -- honored only in SK frontmatter, ignored in settings and agent FM
+(`hooks:424`).
+
+`PostToolUse` runs AFTER the tool, so it cannot prevent the call (`hooks:839`) -- but it is not inert:
+`decision: "block"` adds a `reason` next to the tool result, and `updatedToolOutput` replaces what Claude sees (`hooks:1923`).
+
+> PLG caveat: SK-frontmatter hooks do not fire for PLG skills ([#17688](https://github.com/anthropics/claude-code/issues/17688)) -- use the PLG `hooks.json`.
 
 # DESC Optimization
 
-Claude uses DESC to decide when to invoke. **DESC quality directly affects ACT rate** (20% -> 72%).
+Claude uses DESC to decide when to invoke. **DESC quality is the only lever on auto-load** -- upstream publishes no rate, so compare variants against your own eval set (Step 5.5).
 
 | Invocation | DESC style | Note |
 |------------|-----------|------|
 | User-only (`DMI: true`) | Simple one-liner, NO triggers needed | LLM never auto-invokes DMI skills |
-| LLM-invocable | Action verb + `Triggers:` line, third-person | Raises ACT 20% -> 50-72% |
+| LLM-invocable | Action verb + `Triggers:` line, third-person | Best odds of auto-load |
 
 Template: `description: "[Action verb sentence]. Triggers: [exact user phrases]."`
 
@@ -443,8 +507,10 @@ Listing budget = dynamic **1% of context window** (`skillListingBudgetFraction`,
 
 ### Trigger Eval Queries (OPT but REC)
 
-Generate 5 queries that SHOULD trigger and 5 tricky near-misses that should NOT (share
-keywords, need a different tool). Present via AskUserQuestion, iterate 2-3 times on misses.
+Only meaningful for a `DMI: false` SK -- a `DMI: true` SK is never model-invoked, so there is
+nothing to measure. Generate 5 queries that SHOULD trigger and 5 tricky near-misses that should
+NOT (share keywords, need a different tool), run them, iterate 2-3 times on misses, and report
+the hit rate. `AskUserQuestion` is unavailable in a SA (`sa:340`) -- report, do not poll.
 
 # Body Style
 
@@ -481,8 +547,8 @@ All criteria met -> split into `references/{mode}.md`.
 
 ## 3-Step Pattern
 
-DETECT mode from `$ARGUMENTS`/project analysis -> READ matching `references/{mode}.md` ->
-VALIDATE: not found -> ERROR "Missing REF for {mode}", STOP.
+DETECT mode from `$ARGUMENTS`/project analysis -> READ matching `${CLAUDE_SKILL_DIR}/references/{mode}.md`
+(read at runtime -> `CSD`) -> VALIDATE: not found -> ERROR "Missing REF for {mode}", STOP.
 
 ## Anti-Patterns
 
@@ -495,22 +561,28 @@ VALIDATE: not found -> ERROR "Missing REF for {mode}", STOP.
 
 # Resource Path Resolution
 
-Use `CSD` for bash cmds; relative paths for Read instructions.
+ONE rule, three cases -- no exceptions, no second prescription:
+
+| Case | Form | Why |
+|------|------|-----|
+| Prose pointer to a bundled doc ("see X for details") | Markdown link, relative: `[reference.md](reference.md)` | Upstream's own shape (`skills:451-457`); tells Claude what the file holds and when to load it |
+| Anything EXECUTED or Read at runtime -- scripts, templates, refs the SK opens | `${CLAUDE_SKILL_DIR}/...` | CWD is the session shell's, which moves with `cd` (`skills:643`); `CSD` resolves identically every time and is substituted in `AT` Bash rules too (`skills:403`) |
+| Resource in the PLG but OUTSIDE this SK's dir (shared across skills), or a path handed to an agent | `${CLAUDE_PLUGIN_ROOT}/...` | `CSD` is the SK subdir, not the PLG root (`skills:398`); an agent gets no `CSD` |
+
+Never a hardcoded absolute path -- it breaks on every other install.
 
 ```yaml
-# Bash -- use CSD (CWD = project root, not SK dir)
+# Executed -> CSD
 bash "${CLAUDE_SKILL_DIR}/scripts/validate.sh" $ARGUMENTS
 
-# Read -- relative paths work (Claude auto-resolves from SK base dir)
-Read `references/api-spec.md` for API details.
+# Read at runtime -> CSD
+Read `${CLAUDE_SKILL_DIR}/references/api-spec.md` before generating the client.
+
+# Prose pointer -> markdown link
+For complete API details, see [references/api-spec.md](references/api-spec.md).
 ```
 
-| !=NEVER | ALWAYS |
-|---------|--------|
-| `${CLAUDE_PLUGIN_ROOT}/skills/my-skill/scripts/foo.sh` | `${CLAUDE_SKILL_DIR}/scripts/foo.sh` |
-| `/absolute/hardcoded/path/to/assets/template.md` | `${CLAUDE_SKILL_DIR}/assets/template.md` |
-
-**Exception -- passing path to an agent:** use `BPR` (agent has no `CSD`):
+**Path handed to an agent:** `BPR` (the agent has no `CSD`):
 
 ```markdown
 Agent(subagent_type="general-purpose", prompt="Read ${CLAUDE_PLUGIN_ROOT}/skills/my-skill/references/rules.md then...")
@@ -526,7 +598,7 @@ label, then a fenced bash block ending `&& echo "OK" || echo "FAIL"`, then
 |------|--------|---------|
 | Label | ` ```bash` | `**EXECUTE**:` ` ```bash` |
 | Validate | `command` | `command && echo "OK" \|\| echo "FAIL"` |
-| Paths | `${CLAUDE_PLUGIN_ROOT}/skills/x/scripts/y.sh` | `scripts/y.sh` (relative!) |
+| Paths | `${CLAUDE_PLUGIN_ROOT}/skills/x/scripts/y.sh`, or a bare relative `scripts/y.sh` | `${CLAUDE_SKILL_DIR}/scripts/y.sh` -- executed, so `CSD` (see Resource Path Resolution) |
 
 # Location Priority
 
@@ -550,13 +622,19 @@ If conversation has a workflow the user wants captured ("turn this into a SK"), 
 tools used + sequence, steps + corrections, input/output formats, edge cases. Confirm the
 extracted workflow before proceeding.
 
-If invoked from main conversation (foreground), AskUserQuestion for max 2-3 clarifying
-questions: functionality, usage examples, trigger phrases. Skip any already provided by
-the orchestrator's spawn prompt -- ask only for missing values.
+Resolve from the spawn brief: functionality, usage examples, trigger phrases, and **scope** --
+personal (`~/.claude/skills/`), project (`.claude/skills/`), or PLG (`<plugin>/skills/`). Scope
+decides Step 3's target dir and whether `BPR` is even substituted; enterprise/managed is an admin
+deployment, never a local `mkdir`.
+
+> `AskUserQuestion` is stripped from EVERY SA even when listed in `tools:` (`sa:340`), and this
+> agent runs as a SA. Do NOT plan an interactive clarification round. Missing value -> state the
+> assumption explicitly and carry on, or return the question to the orchestrator unanswered.
 
 ### Invocation Type (CRIT)
 
-**If unclear who will invoke, ASK using AskUserQuestion:**
+**Unclear who will invoke -> state the assumption in the report and default to `DMI: true`
+(brewcode invariant: all 27 shipped SKs are `UI-F: true` + `DMI: true`):**
 
 | Invocation Type | Config | DESC Style |
 |-----------------|--------|------------|
@@ -573,7 +651,14 @@ policies (see REF Splitting Strategy for multi-mode skills). **Assets** -- templ
 
 ## Step 3: Create Structure
 
-`mkdir -p .claude/skills/skill-name/{references,scripts,assets}`
+Branch on the scope resolved in Step 1 (`skills:115-120`):
+
+| Scope | Target |
+|-------|--------|
+| Project | `mkdir -p .claude/skills/<name>/{references,scripts,assets}` |
+| Personal | `mkdir -p ~/.claude/skills/<name>/{references,scripts,assets}` -- one of the few `~/.claude/*` paths not protected-path blocked |
+| PLG | `mkdir -p <plugin>/skills/<name>/{references,scripts,assets}` -- the brewcode default; only here are `BPR`/`${CLAUDE_PLUGIN_DATA}` substituted (`skills:400-401`) |
+| Enterprise/managed | Not created here -- admin deployment via managed settings |
 
 ## Step 4: Configure
 
@@ -607,15 +692,15 @@ bash "${CLAUDE_PLUGIN_ROOT}/skills/skills/scripts/validate-skill.sh" path/to/ski
 | Structure | SKILL.md with valid YAML FM |
 | `name` | <=64 chars, lowercase-hyphens, == dir name, no `<plg>:` prefix |
 | `description` | Per FM Reference caps, third-person, what+when + 3-5 distinct triggers, no filler |
-| `cli` | Decided, not skipped. Cmd != SK name -> `cli:` declared, tokens match `/^[\w.-]{1,42}$/`, NONE from the denylist. !=copied from `AT` |
-| `version` | Decided, not skipped. Behaviour lives outside the SK dir (binary on PATH, wrapper in an image, remote svc) -> `version:` present AND bumped on this change. `updated:` != substitute |
+| FM keys | Every key is in the supported set (`skills:326-345`). No `cli:`/`version:`/`updated:` -- undocumented keys hard-fail claude.ai packaging (`skills:358`) |
 | `argument-hint` | Prompt-first: starts `[prompt]`. Exempt SKs (prompt-contract.md section 5) still keep it |
 | Prompt contract | Body has `## Prompt contract` section + a `PLAN --` block with all 5 labels (`INPUT:`/`MODE:`/`SCOPE:`/`DO:`/`RESULT:`); 2+ modes -> keyword table has `Mutates?` col + >=1 Cyrillic keyword. Exempt SKs skip this row -- see prompt-contract.md section 5 |
 | Body | <500 lines, imperative form |
 | `context` | `fork` if standalone |
 | `agent` | Appropriate type |
 | `model` | Based on complexity |
-| AT | Minimal set |
+| `AT` | Pre-approval only. No bare `Bash`/`Write`/`Edit`/`Agent`; narrowest Bash patterns, or key omitted |
+| `DT` | Present when the SK must never call a tool (autonomous SK -> `AskUserQuestion`) |
 | Examples | Working |
 | Secrets | None hardcoded |
 | Bash | EXECUTE keyword, `&& OK \|\| FAIL`, dynamic paths |
@@ -631,16 +716,28 @@ bash "${CLAUDE_PLUGIN_ROOT}/skills/skills/scripts/validate-skill.sh" path/to/ski
 | CRIT -> slash | `DMI: true` for risky ops |
 
 Test: say the trigger phrase (should auto-load), say "Use [skill-name] skill to..." (higher ACT),
-say `/skill-name` (must always work -- 100%). Test 1 fails but `/name` works -> optimize DESC or
+say `/skill-name` (works unless an ACT Reality caveat applies). Test 1 fails but `/name` works -> optimize DESC or
 switch to `DMI: true`.
 
 ## Step 5.5: Quick Eval
 
-After validation, create 3-5 realistic prompts a real user would say (file paths, casual
-speech, abbreviations -- not "Format this data" but "ok I have this csv in ~/Downloads/sales_q4.csv
-and need to add a profit margin column"). For each, spawn a SA with the SK and check: did it
-trigger (for LLM-invocable)? Did output match expectations? Wasted steps? All runs writing
-similar helper scripts -> bundle into `scripts/`. Issues found -> fix + re-run; all good -> Step 6.
+After validation, write 3-5 realistic prompts a real user would say (file paths, casual speech,
+abbreviations -- not "Format this data" but "ok I have this csv in ~/Downloads/sales_q4.csv and
+need to add a profit margin column").
+
+The check is a **paired baseline**: run each prompt in a FRESH session with the SK available and
+again with it disabled, then compare (`skills:791`). A fresh session matters -- leftover authoring
+context masks gaps in the written instructions. Two questions, measured separately, and which ones
+apply depends on `DMI`:
+
+| SK | Trigger question | Output question | How to run |
+|----|------------------|-----------------|------------|
+| `DMI: true` (every shipped brewcode SK) | **Skip** -- the model never auto-invokes it (`skills:331`), and it is not preloaded into SAs either | Measure | Fresh `claude -p` session invoking `/name` explicitly. !=spawn a SA "with the SK": a SA invoking a `DMI: true` SK silently no-ops, so a SA-based run measures nothing |
+| `DMI: false` | Measure -- did the prompt alone load it? | Measure | Fresh session per prompt; disable via `skillOverrides: "off"` for the baseline half (`skills:759`) |
+
+Wasted steps? All runs writing similar helper scripts -> bundle into `scripts/`. Issues found ->
+fix + re-run; all good -> Step 6. Heavyweight version of this loop (evals.json, per-case isolation,
+grading, A/B): `skill-creator@claude-plugins-official` (`skills:793-812`).
 
 ## Step 5.7: Unit Tests
 
@@ -718,15 +815,14 @@ the common script once in `scripts/` and REF it from SKILL.md.
 | `context: fork` with 5+ phases | Memory loss -- use inline + external state |
 | Reserved SK names (`anthropic`, `claude`) | SK won't load -- avoid these two reserved words |
 | DESC over spec/listing caps | May be truncated -- front-load keywords, cut filler |
-| Cmd differs from SK name, no `cli:` | Declare `cli: <cmd>` -- absent means "cmd == SK name" |
-| `cli:` inferred from `AT` / claims a denylisted cmd | List only cmds the SK OWNS; never a generic one (`sh`, `ls`, `curl`, `git`, ...) |
-| Behaviour changed outside the SK dir, `version:` untouched | Bump `version:` -- the dir stays byte-identical otherwise and consumers see nothing |
-| Treating `version:` as semver / comparing it | Free-form string, no ordering; only the hash change matters |
+| Invented FM key (`cli:`, `version:`, `updated:`) | Use a supported key or `metadata:` -- CC ignores the rest and claude.ai packaging hard-fails (`skills:358`) |
+| Bare `Bash`/`Write`/`Edit` in `AT` "to restrict" | `AT` pre-approves, never restricts (`skills:513`). Narrowest Bash pattern, or drop the key; restrict via `DT` |
+| Expecting `AT` to keep a tool out of the SK's reach | Every tool stays callable regardless (`skills:513`) -- use `DT` or a deny rule |
 | `argument-hint` starts with a mode token, not `[prompt]` | Prompt is always position 1 -- `[prompt] [mode1\|mode2]`, never `<mode1\|mode2>` alone |
 | No `## Prompt contract` section / no `PLAN --` block before the first action | Paste the boilerplate from prompt-contract.md section 6, substitute `<plugin>:<skill>` and `<DEFAULT_MODE>` |
 | Mode table with EN keywords only, no RU column / no `Mutates?` col | Every mode row needs EN + RU keywords and a `Mutates?` value -- copy the shape from `semble-setup/references/intent-routing.md` |
 
-## ACT Mistakes (cause 20% rate)
+## ACT Mistakes (kill auto-load)
 
 | Mistake | Fix |
 |---------|-----|
@@ -738,7 +834,7 @@ the common script once in `scripts/` and REF it from SKILL.md.
 | Second-person body | Imperative: "Do X" not "You should do X" |
 | CRIT without slash | `DMI: true` for CRIT ops |
 | Too many skills | Beyond the dynamic listing budget -> some invisible |
-| PLG skills: `DMI` ignored | PLG skills always in CTX ([#22345](https://github.com/anthropics/claude-code/issues/22345), unconfirmed against 2.1.223) -- copy to `.claude/skills/` if parity needed |
+| PLG skills: `DMI` ignored | PLG skills always in CTX ([#22345](https://github.com/anthropics/claude-code/issues/22345), unconfirmed against 2.1.233) -- copy to `.claude/skills/` if parity needed |
 
 # Final Step
 
@@ -768,20 +864,20 @@ If the agent-return guard is installed, a return over ~1000 est-tokens (chars/4)
 1. Ask "What skills do you have?" -- not listed -> budget exceeded
 2. Check thinking (if visible) for the SK name -- absent -> DESC not matching
 3. Test explicit `/skill-name` -- works -> ACT issue; fails -> SK broken
-4. Force test: "Use skill-name skill to do X" -- explicit mention -> ACT ~70%
+4. Force test: "Use skill-name skill to do X" -- naming the SK is the strongest hint short of `/name`
 
 # Known Bugs
 
 | # | Bug | Impact | Status | Workaround |
 |---|-----|--------|--------|------------|
 | [#39686](https://github.com/anthropics/claude-code/issues/39686) | claude.ai skills silently injected (~6000 tokens) | 37% of SK budget consumed; no opt-out | Open | No workaround |
-| [#22345](https://github.com/anthropics/claude-code/issues/22345) | PLG skills ignore `DMI` | PLG skills always in CTX (~4400 tokens) | Open, unconfirmed against 2.1.223 | No workaround |
+| [#22345](https://github.com/anthropics/claude-code/issues/22345) | PLG skills ignore `DMI` | PLG skills always in CTX (~4400 tokens) | Open, unconfirmed against 2.1.233 | No workaround |
 | [#17688](https://github.com/anthropics/claude-code/issues/17688) | SK-scoped hooks don't fire in PLGs | Hooks from SKILL.md FM not working for PLG skills | Open | Use PLG hooks.json |
 | [#35641](https://github.com/anthropics/claude-code/issues/35641) | `/reload-plugins` doesn't load skills from new PLGs | Skills emitter not called on reload | Open | `/reload-skills` (v2.1.152) re-scans SK dirs without restart |
 | [#33080](https://github.com/anthropics/claude-code/issues/33080) | Same-name skill resolution surprises users | A non-bundled (project/personal) skill overrides a same-name bundled skill, no notification | Open | Namespace prefix (e.g., `my-`) if collision unwanted |
 | [#17417](https://github.com/anthropics/claude-code/issues/17417) | `skill.md` (lowercase) silently ignored | SK not discovered | Open | Use `SKILL.md` (uppercase) |
-| [#36031](https://github.com/anthropics/claude-code/issues/36031) | User-level skills listed in Desktop autocomplete but not invoked | SKILL.md not loaded in Desktop app | Open, unconfirmed against 2.1.223 | Use CLI |
-| [#10768](https://github.com/anthropics/claude-code/issues/10768) / [#15136](https://github.com/anthropics/claude-code/issues/15136) | Auto-ACT unreliable (20-50%), sometimes skipped despite instructions | SK not invoked on relevant request | Closed (NOT PLANNED) | Optimize DESC (50-72%), `/name` (100%) |
+| [#36031](https://github.com/anthropics/claude-code/issues/36031) | User-level skills listed in Desktop autocomplete but not invoked | SKILL.md not loaded in Desktop app | Open, unconfirmed against 2.1.233 | Use CLI |
+| [#10768](https://github.com/anthropics/claude-code/issues/10768) / [#15136](https://github.com/anthropics/claude-code/issues/15136) | Auto-ACT unreliable, sometimes skipped despite instructions | SK not invoked on relevant request | Closed (NOT PLANNED) | Optimize DESC, then `/name` |
 
 # Version History (earlier fixes, no inline home)
 

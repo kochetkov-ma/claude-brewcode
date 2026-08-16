@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=5.7.0 content_version=5.6.0 generated_by=brewtools:agent-return-setup
+// brewcode-meta: version=6.0.0 content_version=6.0.0 generated_by=brewtools:agent-return-setup
 /**
  * agent-return-budget — shared config, thresholds and return contract
  * (Node built-ins only). Never invoked directly; imported by the pair.
@@ -31,12 +31,37 @@
  * the hook in) rather than the payload `cwd`, which the SubagentStart hook
  * never reads.
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
 const MAX_CONFIG_CLIMB = 16;
 const CONFIG_NAME = 'agent-return.json';
+
+/**
+ * Project root, canonical recipe (D1 Q5): CLAUDE_PROJECT_DIR -> upward walk for
+ * a `.git`/`.claude` marker -> hook cwd. Never throws. Exported so the guard
+ * resolves the report destination from the SAME root this module reads the
+ * config from — a guard that finds the config and a budget module that does not
+ * is worse than either being wrong consistently.
+ * `hookCwd` is the payload cwd where one exists; this module has no payload and
+ * calls it with nothing.
+ * @param {string} [hookCwd]
+ * @returns {string} absolute root
+ */
+export function projectRoot(hookCwd) {
+  const env = process.env.CLAUDE_PROJECT_DIR;
+  if (env && existsSync(env)) return path.resolve(env);
+
+  let dir = path.resolve(hookCwd || process.cwd());
+  for (;;) {
+    if (existsSync(path.join(dir, '.git')) || existsSync(path.join(dir, '.claude'))) return dir;
+    const up = path.dirname(dir);
+    if (up === dir) break;
+    dir = up;
+  }
+  return path.resolve(hookCwd || process.cwd());
+}
 
 /** ~4 chars per token. Deliberately crude; see the module note. */
 export function estimateTokens(text) {
@@ -65,24 +90,24 @@ function readJson(file) {
 
 /**
  * Nearest project config wins over global; absent/invalid config = feature off.
- * The walk up matters: `claude` started from a subdirectory reports that
- * subdirectory as cwd, while Claude Code itself resolves settings from the repo
- * root, so a root-level config used to be invisible. A malformed project file
- * is not an object and is skipped, so the global config takes over.
+ * Discovery STARTS at projectRoot(), not at the raw cwd: `claude` started from a
+ * subdirectory reports that subdirectory as cwd, so a root-level config was
+ * invisible past MAX_CONFIG_CLIMB levels — and `CLAUDE_PROJECT_DIR`, the only
+ * route to a root with no marker, was unreachable behind an always-truthy
+ * `process.cwd()`. The climb is kept for a root with neither `.git` nor
+ * `.claude`, where projectRoot() falls back to cwd. A malformed project file is
+ * not an object and is skipped, so the global config takes over.
  */
 function loadConfig() {
-  let dir = process.cwd() || process.env.CLAUDE_PROJECT_DIR;
-  if (dir) {
-    dir = path.resolve(dir);
-    for (let i = 0; i < MAX_CONFIG_CLIMB; i++) {
-      const cfg = readJson(path.join(dir, '.claude', CONFIG_NAME));
-      // An array is a JSON object to typeof; accepting one froze the walk on a file
-      // that can never carry `enabled`, silently disabling the feature.
-      if (cfg && typeof cfg === 'object' && !Array.isArray(cfg)) return cfg;
-      const parent = path.dirname(dir);
-      if (parent === dir) break;
-      dir = parent;
-    }
+  let dir = projectRoot();
+  for (let i = 0; i < MAX_CONFIG_CLIMB; i++) {
+    const cfg = readJson(path.join(dir, '.claude', CONFIG_NAME));
+    // An array is a JSON object to typeof; accepting one froze the walk on a file
+    // that can never carry `enabled`, silently disabling the feature.
+    if (cfg && typeof cfg === 'object' && !Array.isArray(cfg)) return cfg;
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
   }
   try {
     const cfg = readJson(path.join(os.homedir(), '.claude', CONFIG_NAME));

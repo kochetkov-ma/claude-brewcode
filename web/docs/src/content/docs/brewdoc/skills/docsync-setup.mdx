@@ -146,7 +146,9 @@ Before this release, `enable`/`disable` required the version/generated_by/last_u
 
 The gate's `asked` flag is one boolean per session: after that single block, docs that go stale or get touched later in the same session produce no further signal until the next session. That is deliberate — a `Stop` hook that blocks repeatedly loops. A doc that is only ever **read** and carries no `last_updated` still produces a signal: the gate lists it under `no last_updated`.
 
-Hooks are self-contained ESM (Node built-ins only), read state from `.claude/docsync/` at runtime, and take effect starting the next session. Line 2 of each carries a `// brewcode-meta: version=… generated_by=brewdoc:docsync-setup` stamp baked at release, so an installed copy can be compared byte-for-byte against the plugin's.
+**Project root resolution — the hooks resolve it themselves, at runtime.** Each hook tries `CLAUDE_PROJECT_DIR` first, then walks upward from the hook's own `cwd` for the nearest `.git` or `.claude` marker, then falls back to that same `cwd` — there is no `git rev-parse` rung inside the hooks. The skill's own install/upgrade/status Bash snippets add one extra rung, `git rev-parse --show-toplevel`, between the env var and the walk; the two agree on every layout except a nested `.claude`, where the hooks — not the skill's shell snippet — decide where config and state actually land. `input.cwd` is never treated as the root: it drifts mid-session, so it is used only to resolve a relative `tool_input` path.
+
+Hooks are self-contained ESM (Node built-ins only), read state from `.claude/docsync/` at runtime, and take effect starting the next session. Line 2 of each carries a `// brewcode-meta: version=… generated_by=brewdoc:docsync-setup` stamp baked at release, so an installed copy can be compared byte-for-byte against the plugin's. `tests/suite-hooks.mjs` exercises all three hooks directly — session isolation, exclude globs, the disabled-polarity fix, gate blocking at most once, a missing config file — 26 checks, all passing.
 
 **State / config** — `.claude/docsync/`:
 

@@ -72,12 +72,19 @@ function transformText(value, { agent = false, shell = false } = {}) {
   let text = value
     .replaceAll('${CLAUDE_SKILL_DIR}', '<skill-directory>')
     .replaceAll('$CLAUDE_SKILL_DIR', '<skill-directory>')
-    .replaceAll('${CLAUDE_PROJECT_DIR}', '<project-root>')
-    .replaceAll('$CLAUDE_PROJECT_DIR', '<project-root>')
+    // CLAUDE_PROJECT_DIR wears two hats. Heading a PATH it stands for the repository root, and
+    // `<project-root>` is the right rendering. Everywhere else it is an environment-variable NAME
+    // -- a bare identifier, an object key, a `${...:-}` default -- and a prose placeholder is not
+    // a name: the old blanket pass emitted `delete env.<project-root>` (SyntaxError) and
+    // `${<project-root>:-}` (shellcheck SC2296). Rename those to the Codex-native identifier
+    // instead, exactly as CLAUDE_CODE_SESSION_ID -> CODEX_SESSION_ID below. Path context is
+    // "immediately followed by a slash"; everything else keeps its sigil and stays valid code.
+    .replace(/\$\{CLAUDE_PROJECT_DIR\}(?=\/)/g, '<project-root>')
+    .replace(/\$CLAUDE_PROJECT_DIR(?=\/)/g, '<project-root>')
     .replaceAll('${CLAUDE_PLUGIN_ROOT}', agent ? '{{PLUGIN_ROOT}}' : '<plugin-root>')
     .replaceAll('$CLAUDE_PLUGIN_ROOT', agent ? '{{PLUGIN_ROOT}}' : '<plugin-root>')
     .replaceAll('CLAUDE_CODE_SESSION_ID', 'CODEX_SESSION_ID')
-    .replaceAll('CLAUDE_PROJECT_DIR', '<project-root>')
+    .replaceAll('CLAUDE_PROJECT_DIR', 'CODEX_PROJECT_DIR')
     .replaceAll('CLAUDE_SKILL_DIR', 'skill directory')
     .replaceAll('CLAUDE_PLUGIN_ROOT', agent ? '{{PLUGIN_ROOT}}' : 'plugin root')
     .replaceAll('CLAUDE.md', 'AGENTS.md')
@@ -85,6 +92,12 @@ function transformText(value, { agent = false, shell = false } = {}) {
     .replaceAll('~/.claude', '~/.codex')
     .replaceAll('.claude/', '.codex/')
     .replaceAll('.claude\\', '.codex\\')
+    // Code splits the same path across arguments -- `join(root, '.claude', 'agents')` -- so the
+    // separator-anchored rules above never see it. Left alone it decouples a rewritten sibling
+    // from its own mkdir: the teams-setup suites built `.claude/agents` and then wrote
+    // `.codex/agents/intent-guard.toml` into it (ENOENT before the first assertion). A quoted
+    // bare `.claude` is always the directory name, so rewriting it is safe.
+    .replace(/(['"`])\.claude\1/g, '$1.codex$1')
     .replace(/\/brew(code|doc|tools):([a-z0-9-]+)/g, (_, family, name, offset, full) => `${skillSigil(shell, full, offset)}brew${family}:${name}`)
     .replace(/Skill\(skill="([^"]+)"\)/g, (_, name, offset, full) => `${skillSigil(shell, full, offset)}${name}`)
     .replace(/\bTask\(/g, 'spawn_agent(')
@@ -136,7 +149,10 @@ function transformText(value, { agent = false, shell = false } = {}) {
 // Agent files this marketplace's setup skills write into a target repo's agents dir. Add a
 // name here whenever a skill starts installing another agent, or its prose keeps shipping the
 // Claude extension to Codex users.
-const SHIPPED_AGENT_FILES = ['intent-guard', 'task-tracker'];
+// `text-optimizer` is not installed into a target repo -- it is shipped by brewtools itself and
+// generated here as `.codex/agents/text-optimizer.toml`, so its bare `.md` mentions need the same
+// rewrite.
+const SHIPPED_AGENT_FILES = ['intent-guard', 'task-tracker', 'text-optimizer'];
 
 // A Codex agent file is `<name>.toml`; a Claude one is `<name>.md`. The two contiguous
 // `.codex/agents/<file>.md` rules in nativeWorkflowText only fire when the directory and
@@ -201,6 +217,10 @@ function nativeWorkflowText(value, options = {}) {
     .replace(/\b(?:BC|BD|BT)_ROOT\b/g, '<plugin-root>')
     .replaceAll('CLAUDE_MD', 'AGENTS_FILE')
     .replaceAll('claude_md', 'agents_md')
+    // Mirrors the `claude-md` -> `agents-md` FILENAME rename in copyTransformedTree. Without it a
+    // reference outlives the file it names: `input-claude-md.md` and `07-claude-md-optimize.md`
+    // are both shipped renamed and both still cited by their old name.
+    .replaceAll('claude-md', 'agents-md')
     .replaceAll('claude-local', 'codex-local')
     .replaceAll('.claude-plugin', '.codex-plugin')
     .replaceAll('~/.codex.json', '~/.codex/config.toml')
@@ -588,6 +608,21 @@ function walkFiles(dir) {
   return files;
 }
 
+// Pip pins parsed out of a skill's check_deps.sh `pip_spec` case arms.
+// The Codex variant of that script cannot be a verbatim copy (the source uses floating
+// `brew install` and an expanded `pip install "${specs[@]}"`, both rejected by
+// validate-compat.mjs), so the versions are read from source instead of retyped.
+function sourcePipPins(sourceDir, required) {
+  const source = fs.readFileSync(path.join(sourceDir, 'scripts', 'check_deps.sh'), 'utf8');
+  const pins = {};
+  for (const [, name, version] of source.matchAll(/^\s*([a-z0-9_-]+)\)\s*echo\s+"[a-z0-9_.-]+==([0-9][^"]*)"/gm)) {
+    pins[name] = version;
+  }
+  const missing = required.filter(name => !pins[name]);
+  if (missing.length) throw new Error(`check_deps.sh pip_spec is missing pins for: ${missing.join(', ')}`);
+  return pins;
+}
+
 function generateSpecialResources(plugin, skill, sourceDir, targetDir) {
   if (plugin === 'brewcode' && skill === 'rules') {
     writeFile(path.join(targetDir, 'README.md'), `# Rules for Codex
@@ -613,13 +648,14 @@ Extracts evidence-backed project conventions from representative code and tests.
   }
 
   if (plugin === 'brewdoc' && skill === 'md-to-pdf') {
+    const pins = sourcePipPins(sourceDir, ['reportlab', 'weasyprint', 'markdown', 'pygments']);
     writeFile(path.join(targetDir, 'scripts', 'check_deps.sh'), `#!/usr/bin/env bash
 set -euo pipefail
 
-REPORTLAB_VERSION=4.4.10
-WEASYPRINT_VERSION=68.1
-MARKDOWN_VERSION=3.10.2
-PYGMENTS_VERSION=2.19.2
+REPORTLAB_VERSION=${pins.reportlab}
+WEASYPRINT_VERSION=${pins.weasyprint}
+MARKDOWN_VERSION=${pins.markdown}
+PYGMENTS_VERSION=${pins.pygments}
 PANGO_VERSION=1.57.1
 CAIRO_VERSION=1.18.4
 GDK_PIXBUF_VERSION=2.44.6
@@ -685,11 +721,13 @@ case "$command" in
   *) usage >&2; exit 2 ;;
 esac
 `, 0o755);
+    const pinnedReportlab = `python3 -m pip install reportlab==${pins.reportlab}`;
+    const pinnedWeasyprint = `python3 -m pip install weasyprint==${pins.weasyprint} markdown==${pins.markdown} pygments==${pins.pygments}`;
     const replacements = new Map([
-      ['pip install reportlab', 'python3 -m pip install reportlab==4.4.10'],
-      ['pip install weasyprint markdown pygments', 'python3 -m pip install weasyprint==68.1 markdown==3.10.2 pygments==2.19.2'],
-      ['pip3 install reportlab', 'python3 -m pip install reportlab==4.4.10'],
-      ['pip3 install weasyprint markdown pygments', 'python3 -m pip install weasyprint==68.1 markdown==3.10.2 pygments==2.19.2']
+      ['pip install reportlab', pinnedReportlab],
+      ['pip install weasyprint markdown pygments', pinnedWeasyprint],
+      ['pip3 install reportlab', pinnedReportlab],
+      ['pip3 install weasyprint markdown pygments', pinnedWeasyprint]
     ]);
     for (const relative of ['SKILL.md', 'README.md', 'scripts/md_to_pdf.py']) {
       const file = path.join(targetDir, relative);
@@ -906,6 +944,26 @@ Agents whose domain writes code, scripts, SQL, schemas, infrastructure, or confi
 `);
   }
 
+  if (plugin === 'brewcode' && skill === 'teams-setup') {
+    // The suites drive the mirrored scripts, whose whole contract is `.codex/agents/<name>.toml`
+    // -- the fixtures they write, the directory listings they expect, and the parked
+    // (`.disabled`) and backup (`.bak-`) twins alike. Every one of those tokens reaches the
+    // generic rules as a JS fragment with no path on the line: a template literal `${f}.md`, a
+    // bare expectation array `['alpha-agent.md']`, an escaped regex `intent-guard\.md\.bak-`.
+    // Nothing path-anchored can see them, and a half-converted suite is worse than none: the
+    // fixture writes `.md`, the script parks `.toml`, and it dies before its first assertion.
+    // Inside these two files every `.md` IS an agent file except the two markdown artifacts the
+    // fixture itself writes, so flip the extension file-wide and name those exceptions.
+    const KEEP_MD = /^(?:team|README)$/;
+    for (const name of ['suite-intent-guard.mjs', 'suite-lifecycle.mjs']) {
+      const file = path.join(targetDir, 'tests', name);
+      writeFile(file, fs.readFileSync(file, 'utf8').replace(
+        /([A-Za-z0-9_${}-]+)(\\?)\.md\b/g,
+        (whole, stem, escape) => (KEEP_MD.test(stem) ? whole : `${stem}${escape}.toml`)
+      ));
+    }
+  }
+
   if (plugin === 'brewtools' && (skill === 'deploy' || skill === 'ssh')) {
     const sourceName = skill === 'deploy' ? 'deploy-admin-agent.md.template' : 'ssh-admin-agent.md.template';
     const targetName = skill === 'deploy' ? 'deploy-admin-agent.toml.template' : 'ssh-admin-agent.toml.template';
@@ -927,6 +985,23 @@ Substitute the generated inventory and target configuration here. Classify every
         .replaceAll('npm install -g tool-name', 'npm install -g tool-name@1.0.0');
       fs.writeFileSync(file, value, 'utf8');
     }
+
+    // The Codex agent is a compact TOML carrying fixed native instructions, so the Markdown
+    // agent's internal structure -- the compression reference filenames, `Dedup Pass`,
+    // `## Sources`, `RUN_DIR` -- is simply absent from it. Those assertions describe an artifact
+    // this mirror does not ship and fail on every run; drop them and assert the TOML contract the
+    // mirror actually guarantees instead.
+    const testFile = path.join(targetDir, 'scripts', 'test-optimize.sh');
+    const nativeAgentChecks = `check_file_exists "$AGENT_FILE" "Agent: text-optimizer.toml exists"
+for key in "name = " "description = " "developer_instructions = "; do
+  check_contains "$AGENT_FILE" "$key" "text-optimizer.toml declares $key"
+done
+`;
+    writeFile(testFile, fs.readFileSync(testFile, 'utf8')
+      .replace(/^check_(?:contains|file_exists) "\$AGENT_(?:DIR|FILE)\b.*\n/gm, '')
+      .replace(/^# Check agent references Sources[\s\S]*?^fi\n/m, '')
+      .replace(/^# request_user_input is removed[\s\S]*?^fi\n/m, '')
+      .replace(/^AGENT_FILE=.*\n/m, line => `${line}${nativeAgentChecks}`), 0o755);
   }
 }
 
@@ -995,6 +1070,10 @@ function buildDistribution() {
     fs.mkdirSync(path.join(dist, '.codex-plugin'), { recursive: true });
     fs.copyFileSync(path.join(canonical, 'package', 'plugin.json'), path.join(dist, '.codex-plugin', 'plugin.json'));
     fs.cpSync(path.join(canonical, 'skills'), path.join(dist, 'skills'), { recursive: true });
+    // Agents ship too: a skill's own assets resolve the roster relative to themselves
+    // (`$SKILL_DIR/../../agents`), so a dist tree without it makes those assets abort on an
+    // installed plugin while the canonical tree passes.
+    fs.cpSync(path.join(canonical, 'agents'), path.join(dist, 'agents'), { recursive: true });
     fs.cpSync(path.join(canonical, 'hooks'), path.join(dist, 'hooks'), { recursive: true });
     const hooksFile = path.join(dist, 'hooks', 'hooks.json');
     const hooks = fs.readFileSync(hooksFile, 'utf8').replaceAll('${PLUGIN_ROOT}/.codex/hooks/', '${PLUGIN_ROOT}/hooks/');

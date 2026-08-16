@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=5.7.0 content_version=5.6.0 generated_by=brewtools:agent-return-setup
+// brewcode-meta: version=6.0.0 content_version=6.0.0 generated_by=brewtools:agent-return-setup
 /**
  * agent-return-guard — SubagentStop hook (Node built-ins only, no I/O but stdin/stdout
  * plus the config read done by agent-return-budget.mjs).
@@ -15,6 +15,15 @@
  *   <= PASS          pass
  *   PASS..FILE       block -> compress and re-send
  *   > FILE           block -> persist detail under .claude/reports/, return path
+ *
+ * The file-tier directive names an ABSOLUTE directory: <projectRoot>/.claude/
+ * reports/<stamp>_<agent-slug>-<run-id>/. Both halves are deliberate. The base
+ * comes from projectRoot() in agent-return-budget.mjs — the same call that finds
+ * the config, so destination and config can never resolve to different roots —
+ * never from the raw hook cwd, which drifts mid-session and used to send the
+ * report into a nested `.claude/reports`. The run id (agent_id -> session_id ->
+ * random) separates two same-type agents that stop inside the same second, the
+ * stamp's resolution.
  *
  * Blocks AT MOST ONCE per agent: `stop_hook_active` is the loop brake and is
  * checked before anything else. A second pass is how a Stop hook wedges an agent.
@@ -32,9 +41,11 @@
  * blocks — so nothing wedges. The three files ship together.
  */
 import { readFileSync } from 'node:fs';
-import { ENABLED, estimateTokens, PASS, FILE } from './agent-return-budget.mjs';
+import { join } from 'node:path';
+import { randomBytes } from 'node:crypto';
+import { ENABLED, estimateTokens, PASS, FILE, projectRoot } from './agent-return-budget.mjs';
 
-const REPORTS_DIR = '.claude/reports/';
+const REPORTS_REL = join('.claude', 'reports');
 
 function output(obj) {
   process.stdout.write(JSON.stringify(obj));
@@ -68,6 +79,30 @@ function slug(agentType) {
   return clean || 'agent';
 }
 
+/**
+ * Absolute `.claude/reports` base. A root that cannot be resolved degrades to
+ * the relative path — the block still fires. Fail-safe here means "keep the
+ * budget, lose the absolute path", never "let an oversized return through".
+ */
+function reportBase(hookCwd) {
+  try {
+    return join(projectRoot(typeof hookCwd === 'string' ? hookCwd : ''), REPORTS_REL);
+  } catch {
+    return REPORTS_REL;
+  }
+}
+
+/**
+ * Per-invocation directory suffix: agent_id, else session_id, else random.
+ * 8 chars of [a-z0-9] — the stamp only resolves to the second, so without this
+ * two agents of the same type that stop together name the same directory.
+ */
+function runId(input) {
+  const clean = (v) =>
+    typeof v === 'string' ? v.toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 8) : '';
+  return clean(input.agent_id) || clean(input.session_id) || randomBytes(4).toString('hex');
+}
+
 function compressReason(tokens) {
   return (
     `RETURN TOO LARGE (~${tokens} tokens, budget ${PASS}). Directive from the agent-return guard, ` +
@@ -99,8 +134,8 @@ function decide(input) {
 
   if (tokens <= FILE) return { decision: 'block', reason: compressReason(tokens) };
 
-  const reportPath = `${REPORTS_DIR}${stamp(new Date())}_${slug(input.agent_type)}/`;
-  return { decision: 'block', reason: fileReason(tokens, reportPath) };
+  const dir = `${stamp(new Date())}_${slug(input.agent_type)}-${runId(input)}`;
+  return { decision: 'block', reason: fileReason(tokens, `${join(reportBase(input.cwd), dir)}/`) };
 }
 
 // A non-object payload (array, number, bare string) needs no separate guard:

@@ -17,6 +17,12 @@ Every upload block referenced a `PASS_H` array built from a `$PASSWORD` variable
 The blocks now carry a `{password_header}` placeholder the model substitutes before running, and the skill states the rule as mandatory: substitute `-H "X-Password: <pass>"` or delete the line, and never report a password you did not substitute. **If you published a protected page with an earlier version, treat it as public** — delete it with its owner token and publish again.
 </Callout>
 
+<Callout type="warning" title="Site publishing produced a fake success — fixed">
+Publishing a directory as a site built its archive with `mktemp`, which leaves a 0-byte placeholder file. Info-ZIP reads that as a corrupt target and exits with status 3 — an exit code the old block never checked. The empty archive was uploaded anyway and reported as a success.
+
+`scripts/publish.mjs` now owns the whole archive path: it starts from no file at all, checks `zip`'s exit status, verifies the archive with `unzip -t`, and requires a non-zero size before anything is handed to `curl`. Any failure prints `FAILED:` and stops — nothing is uploaded. The same script also **stopped sweeping secrets into the bundle**: `.env` and `.git/config` used to ride along inside published sites; the archive is now built from an allowlist of web-asset extensions, so dotfiles, `.env`, `.git/`, `node_modules/` and unknown extensions never make it in.
+</Callout>
+
 <Callout type="tip">
 **brewpage.app** is free instant hosting: HTML pages, JSON documents, files, and multi-file sites. Default TTL is 15 days — override with `--ttl N`. For the public gallery, visit [brewpage.app](https://brewpage.app).
 </Callout>
@@ -44,7 +50,7 @@ The blocks now carry a `{password_header}` placeholder the model substitutes bef
 | Model | haiku |
 | Invocation | user-only (`disable-model-invocation: true`) |
 | Tools | Read, Bash, AskUserQuestion, Glob |
-| Requires | `jq` on `PATH`; `zip` as well for directory uploads |
+| Requires | `jq` on `PATH`; `zip`/`unzip`/`node` as well for directory or zip site uploads |
 
 ## When to use
 
@@ -85,7 +91,7 @@ The blocks now carry a `{password_header}` placeholder the model substitutes bef
 | Plain text or markdown string | HTML | `POST /api/html?format=markdown` |
 | Starts with `{` or `[` | JSON | `POST /api/json` |
 | Existing local file path | FILE | `POST /api/files` (multipart) |
-| Directory or `.zip` file | SITE | `POST /api/sites` (archive upload) |
+| Directory or `.zip` file | SITE | `POST /api/sites` (archive built/verified by `publish.mjs`, then uploaded) |
 
 SITE is checked first — directories and `.zip` files would otherwise match the FILE branch.
 
@@ -121,7 +127,7 @@ Entry file detection for sites: `--entry` flag → `index.html` if present → f
   <li>
     <div>
       <strong>Upload via API</strong>
-      <p>Every block first gates on <code>command -v jq</code> (plus <code>command -v zip</code> on the directory path) and aborts with <code>FAILED: jq required</code> rather than half-publishing. For sites, zips the directory to a temp file, POSTs the archive, then removes the temp file. The owner token returned by the API is never printed — only appended to <code>.claude/brewpage-history.md</code>.</p>
+      <p>Every block first gates on <code>command -v jq</code> and aborts with <code>FAILED: jq required</code> rather than half-publishing. For a directory site, <code>scripts/publish.mjs pack</code> builds and verifies the archive before anything is POSTed; for a supplied <code>.zip</code>, <code>publish.mjs inspect</code> checks it and flags unexpected entries for one <code>AskUserQuestion</code> confirmation instead of uploading silently. The owner token returned by the API is never printed — only appended to <code>.claude/brewpage-history.md</code>.</p>
     </div>
   </li>
   <li>
@@ -168,7 +174,11 @@ To update a published site, `PUT` the new bundle to the same site URL with your 
 
 **Namespace rules:** lowercase alphanumeric + hyphens, 3–32 chars. Auto-suggestion is content-derived (`api-docs`, `report-q2`) — never a random string or truncated filename.
 
-**Site uploads:** directory → zipped to `mktemp /tmp/brewpage-site-XXXXXX.zip` → POSTed as `archive=@$TMPZIP` → temp file removed. `User-Agent: ClaudeCode/1.0` header included.
+**Site uploads:** directory → `scripts/publish.mjs pack --dir <dir> --out <archive.zip>` builds the archive, removing any stale target first (a `mktemp`-created 0-byte file is what made `zip` exit 3 before this fix), then checks `zip`'s exit status, verifies the result with `unzip -t`, and requires a non-zero size — any failure deletes the archive and exits without touching `curl`. The archive is POSTed as `archive=@$TMPZIP` and the temp file removed after. `User-Agent: ClaudeCode/1.0` header included.
+
+**Archive contents — allowlist, not denylist:** only known web-asset extensions (`.html .css .js .json .svg .png .woff2 .pdf .md` …) are packed; dotfiles, `.env`, `.git/`, `node_modules/` and symlinks are dropped before `zip` ever runs. A supplied `.zip` is inspected rather than rewritten — an entry matching a sensitive pattern (`.env`, `id_rsa`, `secret`, `credential`, `password`, `token`, `.pem`/`.key`/`.p12`/`.crt`/`.map`) blocks the upload until you confirm.
+
+**Tests:** `bash brewdoc/skills/publish/tests/run.sh` — 108 checks across 3 suites (archive build, zip inspection, and the SKILL.md prompt itself), no network, no real upload.
 
 </details>
 

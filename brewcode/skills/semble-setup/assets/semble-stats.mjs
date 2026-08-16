@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=5.7.0 content_version=5.6.0 generated_by=brewcode:semble-setup
+// brewcode-meta: version=6.0.0 content_version=6.0.0 generated_by=brewcode:semble-setup
 /**
  * brewcode:semble-setup — PostToolUse / PostToolUseFailure hook (self-contained,
  * installed into a project). PURE OBSERVER.
@@ -21,8 +21,9 @@
  * Pure ESM, Node built-ins only. Helpers are inlined on purpose: this file
  * travels alone into a user's .claude/hooks/ and must have no imports.
  */
-import { appendFileSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { appendFileSync, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { basename, dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 // --- inlined helpers -------------------------------------------------------
 async function readStdin() {
@@ -218,8 +219,39 @@ function record(input, cwd) {
   telemetry(cwd, sid, 'search', { tool, q, ...failFlag(ev), agent, ...aid });
 }
 
+// --- project root (canonical recipe, D1 Q5) --------------------------------
+// CLAUDE_PROJECT_DIR -> this file's own installed location -> upward walk for a
+// root marker -> hook cwd. Never throws, never exits nonzero.
+// `input.cwd` is the cwd at invocation time and drifts mid-session
+// (docs/hooks.md:717, CwdChanged), so it must key nothing but relative paths out
+// of tool_input: from a nested package it pointed every state lookup at a
+// directory with no .claude/semble, and all three gated hooks fell silent.
+// SELF_ROOT is exact rather than a guess — the installer wires this file at
+// <root>/.claude/hooks/<name>.mjs by absolute path, so its own location encodes
+// the root even when a nested package carries its own .claude.
+const SELF_ROOT = (() => {
+  const d = dirname(fileURLToPath(import.meta.url));
+  return basename(d) === 'hooks' && basename(dirname(d)) === '.claude' ? dirname(dirname(d)) : '';
+})();
+
+function projectRoot(hookCwd) {
+  const env = process.env.CLAUDE_PROJECT_DIR;
+  if (env && existsSync(env)) return resolve(env);
+  if (SELF_ROOT) return SELF_ROOT;
+
+  let dir = resolve(hookCwd || process.cwd());
+  for (;;) {
+    if (existsSync(join(dir, '.git')) || existsSync(join(dir, '.claude'))) return dir;
+    const up = dirname(dir);
+    if (up === dir) break;
+    dir = up;
+  }
+  return resolve(hookCwd || process.cwd()); // last resort: never guess, never throw in a hook
+}
+
+
 async function main() {
-  let cwd = process.cwd();
+  let root = projectRoot('');
   try {
     let input = {};
     try {
@@ -228,8 +260,8 @@ async function main() {
       input = {}; // malformed/empty stdin: record nothing, stay neutral
     }
     if (!input || typeof input !== 'object' || Array.isArray(input)) input = {};
-    if (typeof input.cwd === 'string' && input.cwd) cwd = input.cwd;
-    record(input, cwd);
+    root = projectRoot(typeof input.cwd === 'string' ? input.cwd : '');
+    record(input, root);
   } catch {
     /* an observer that throws is worse than an observer that misses a sample */
   }

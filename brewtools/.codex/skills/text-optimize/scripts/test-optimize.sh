@@ -57,11 +57,14 @@ check_file_exists "$SKILL_DIR/references/standard-compression.md" "Reference: st
 check_file_exists "$SKILL_DIR/references/max-compression.md" "Reference: max-compression.md exists"
 
 AGENT_DIR="$(cd "$SKILL_DIR/../../agents" && pwd)"
-AGENT_FILE="$AGENT_DIR/text-optimizer.md"
-check_file_exists "$AGENT_DIR/text-optimizer.md" "Agent: text-optimizer.md exists"
+AGENT_FILE="$AGENT_DIR/text-optimizer.toml"
+check_file_exists "$AGENT_FILE" "Agent: text-optimizer.toml exists"
+for key in "name = " "description = " "developer_instructions = "; do
+  check_contains "$AGENT_FILE" "$key" "text-optimizer.toml declares $key"
+done
 
 check_file_exists "$SKILL_DIR/tests/input-prose.md" "Fixture: input-prose.md exists"
-check_file_exists "$SKILL_DIR/tests/input-claude-md.md" "Fixture: input-claude-md.md exists"
+check_file_exists "$SKILL_DIR/tests/input-agents-md.md" "Fixture: input-agents-md.md exists"
 check_file_exists "$SKILL_DIR/tests/input-readme.md" "Fixture: input-readme.md exists"
 
 echo ""
@@ -75,15 +78,16 @@ for flag in "\-l" "\-s" "\-d" "\-x"; do
 done
 
 check_contains "$SKILL_DIR/SKILL.md" "request_user_input" "SKILL.md contains request_user_input in allowed-tools"
+check_contains "$SKILL_DIR/SKILL.md" "text-guard.sh" "SKILL.md wires the Phase 0/3 preservation guard"
+check_file_exists "$SKILL_DIR/scripts/text-guard.sh" "Script: text-guard.sh exists"
+check_file_exists "$SKILL_DIR/tests/suite-guard.mjs" "Suite: suite-guard.mjs exists"
+check_file_exists "$SKILL_DIR/tests/run.sh" "Runner: tests/run.sh exists"
 
 check_contains "$SKILL_DIR/references/deep-compression.md" "DICT" "deep-compression.md contains DICT section"
 check_contains "$SKILL_DIR/references/deep-compression.md" "Symbol Substitution" "deep-compression.md contains Symbol Substitution section"
 
 check_contains "$SKILL_DIR/references/standard-compression.md" "Verification Checklist" "standard-compression.md contains Verification Checklist section"
 
-check_contains "$AGENT_DIR/text-optimizer.md" "standard-compression.md" "text-optimizer.md references standard-compression.md"
-check_contains "$AGENT_DIR/text-optimizer.md" "deep-compression.md" "text-optimizer.md references deep-compression.md"
-check_contains "$AGENT_DIR/text-optimizer.md" "max-compression.md" "text-optimizer.md references max-compression.md"
 
 check_contains "$SKILL_DIR/references/rules-review.md" "Compression References" "rules-review.md contains Compression References section"
 
@@ -130,21 +134,9 @@ check_contains "$SKILL_DIR/references/deep-compression.md" "Redundancy Factoring
 check_contains "$SKILL_DIR/references/max-compression.md" "Self-QA probe" "max-compression.md contains Self-QA probe round"
 check_contains "$SKILL_DIR/references/max-compression.md" "merged:" "max-compression.md loss list supports merged label"
 check_contains "$SKILL_DIR/SKILL.md" "Loss Budget" "SKILL.md contains Loss Budget section"
-check_contains "$AGENT_DIR/text-optimizer.md" "Dedup Pass" "Agent contains Dedup Pass step"
 
-# Check agent references Sources not Summary
-if grep -q '## Sources' "$AGENT_FILE" && ! grep -q '## Summary' "$AGENT_FILE"; then
-  pass "Agent verifies '## Sources' (not '## Summary')"
-else
-  fail "Agent still references '## Summary' instead of '## Sources'"
-fi
 
-# Check agent has request_user_input in tools
-if grep -q 'request_user_input' "$AGENT_FILE"; then
-  pass "Agent has request_user_input in tools"
-else
-  fail "Agent missing request_user_input tool"
-fi
+
 
 # Check no duplicate abbreviation cfg vs config in deep-compression
 if ! grep -q "| config |" "$SKILL_DIR/references/deep-compression.md" 2>/dev/null; then

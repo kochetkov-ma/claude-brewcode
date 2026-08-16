@@ -8,7 +8,7 @@
 import { spawnSync } from 'node:child_process';
 import {
   mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync,
-  symlinkSync, rmSync, realpathSync, chmodSync,
+  symlinkSync, rmSync, realpathSync, chmodSync, existsSync,
 } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -113,6 +113,10 @@ const byPath = (files) => {
   for (const f of files) m[f.path] = f;
   return m;
 };
+
+// Ownership record written by `apply`: state.json -> agentsPreExisting[scope][relpath]
+const statePath = (root) => join(root, '.claude', 'semble', 'state.json');
+const ledgerOf = (root) => safeParse(readFileSync(statePath(root), 'utf8')).agentsPreExisting;
 
 const SEARCH = 'mcp__semble_code__search';
 const RELATED = 'mcp__semble_code__find_related';
@@ -331,6 +335,12 @@ const dry = run(['apply', '--yes'], { ...ENV, SEMBLE_DRY_RUN: '1' });
 check('dry.exit', dry.status, 0, 'SEMBLE_DRY_RUN=1 exits 0');
 check('dry.noWrite', snapshotMd(P), beforeTree, 'dry run wrote nothing');
 check('dry.prefix', dry.stdout.includes('DRY '), true, 'dry run prefixes mutations with DRY');
+check(
+  'readOnly.noState',
+  existsSync(statePath(P)),
+  false,
+  'neither audit nor a dry run creates state.json — only a real apply records ownership',
+);
 
 // ── apply ───────────────────────────────────────────────────────────────────
 const applyRes = run(['apply', '--yes', '--json'], ENV);
@@ -366,6 +376,36 @@ check(
   'tools: was an empty allowlist — this agent now has ONLY mcp__semble_code__search and mcp__semble_code__find_related',
   'the empty-allowlist narrowing is reported as a note',
 );
+
+// ── ownership record (SS04) ─────────────────────────────────────────────────
+// Whatever `apply` did NOT insert must survive `--revert`; the record is what
+// makes that decidable.
+const LEDGER1 = ledgerOf(P);
+const LEDGER_EXPECTED = {
+  '.claude/agents/b-flow.md': [],
+  '.claude/agents/c-block.md': [],
+  '.claude/agents/d-csv.md': [],
+  '.claude/agents/e-csv-quoted-comment.md': [],
+  '.claude/agents/f-empty-bare.md': [],
+  '.claude/agents/g-empty-flow.md': [],
+  '.claude/agents/h-wildcard.md': [],
+  '.claude/agents/h2-wildcard-mcp.md': [],
+  '.claude/agents/i-partial.md': [SEARCH],
+  '.claude/agents/i2-already.md': [SEARCH, RELATED],
+  '.claude/agents/j-crlf-flow.md': [],
+  '.claude/agents/k-crlf-block.md': [],
+  '.claude/agents/l-mcpservers.md': [],
+  '.claude/agents/p-bom.md': [],
+  '.claude/agents/sub/q-nested.md': [],
+  '.claude/agents/t-disallowed-unrelated.md': [],
+  '.claude/agents/u-no-final-newline.md': [],
+};
+// One full-object comparison: the scope key, all 17 recorded paths and the
+// pre-existing list of every one of them, in a single assertion.
+check('ledger.project', LEDGER1, { project: LEDGER_EXPECTED },
+  'apply records under exactly its own scope, exactly the 17 files with an editable tools list,'
+  + ' and for each the names that were already there - a wildcard is neither of the two names,'
+  + ' so it records as nothing pre-existing and revert may strip nothing the user authored');
 
 // ── no mcpServers key is ever introduced (§11.2) ────────────────────────────
 const mcpAdded = Object.keys(afterTree).filter(
@@ -422,6 +462,12 @@ check(
   0,
   'second apply creates no backups',
 );
+check(
+  'again.ledger',
+  ledgerOf(P),
+  LEDGER1,
+  'the second apply keeps the first observation — it never re-reads its own insertions as user-authored',
+);
 
 // ── revert ──────────────────────────────────────────────────────────────────
 const rev = run(['apply', '--yes', '--revert', '--json'], ENV);
@@ -430,13 +476,13 @@ check('revert.exit', rev.status, 0, 'revert exits 0');
 check(
   'revert.summary',
   rev2.summary,
-  { changed: 15, unchanged: 3, conflict: 0, skipped: 5, failed: 0 },
-  'revert strips both names wherever they appear, incl. the pre-existing ones',
+  { changed: 14, unchanged: 4, conflict: 0, skipped: 5, failed: 0 },
+  'revert changes exactly the 14 files apply changed; a file whose names were all user-authored is unchanged',
 );
 const revTree = snapshotMd(P);
-// Byte-exact restore is guaranteed for every file that carried neither name
-// before `apply`. The one documented exception is asserted separately.
-const REVERT_EXACT = CASES.filter((c) => c.action === 'changed' && !c.before.includes(SEARCH));
+// Byte-exact restore for EVERY changed file, pre-existing names included: the
+// ledger tells revert which names it may strip.
+const REVERT_EXACT = CASES.filter((c) => c.action === 'changed');
 for (const c of REVERT_EXACT) {
   check(`revert.bytes[${c.file}]`, revTree[c.file], c.before, 'revert restores the pre-apply bytes exactly');
 }
@@ -467,18 +513,75 @@ check(
 check(
   'revert.preExistingPartial',
   revTree['i-partial.md'],
-  '---\nname: i\ntools: [Read]\n---\nBody\n',
-  'revert also strips a name the user had authored — documented, it cannot tell authorship',
+  `---\nname: i\ntools: [Read, ${SEARCH}]\n---\nBody\n`,
+  'revert removes only find_related and keeps the search name the user authored before install',
 );
 check(
   'revert.preExistingBoth',
   revTree['i2-already.md'],
-  '---\nname: i2\ntools: [Read]\n---\nBody\n',
-  'a file that already had both names is stripped too — documented caveat',
+  `---\nname: i2\ntools: [Read, ${SEARCH}, ${RELATED}]\n---\nBody\n`,
+  'a file that already carried both names is left byte-identical — this skill added neither',
 );
-for (const c of CASES.filter((x) => x.action !== 'changed' && !x.before.includes(SEARCH))) {
+const RV = byPath(rev2.files);
+check(
+  'revert.preExistingPartial.reason',
+  [RV['.claude/agents/i-partial.md'].action, RV['.claude/agents/i-partial.md'].reason, RV['.claude/agents/i-partial.md'].added],
+  ['changed', 'removed', [RELATED]],
+  'the partial file reports exactly the one name this skill had added',
+);
+check(
+  'revert.preExistingPartial.note',
+  RV['.claude/agents/i-partial.md'].note,
+  `kept ${SEARCH} — authored before install`,
+  'the kept user-authored name is named in the note',
+);
+check(
+  'revert.preExistingBoth.reason',
+  [RV['.claude/agents/i2-already.md'].action, RV['.claude/agents/i2-already.md'].reason, RV['.claude/agents/i2-already.md'].added],
+  ['unchanged', 'not-present', []],
+  'a file this skill never wrote to is unchanged with an empty removal list',
+);
+check(
+  'revert.preExistingBoth.note',
+  RV['.claude/agents/i2-already.md'].note,
+  `kept ${SEARCH} ${RELATED} — authored before install`,
+  'both kept names are reported',
+);
+for (const c of CASES.filter((x) => x.action !== 'changed')) {
   check(`revert.untouched[${c.file}]`, revTree[c.file], c.before, 'revert leaves non-migrated files alone');
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// No record at all (revert without a preceding apply, or a state.json from an
+// older version): authorship is unknown, so nothing may be stripped.
+// ────────────────────────────────────────────────────────────────────────────
+const PN = join(BASE, 'norecord');
+const ENVN = { SEMBLE_PROJECT_ROOT: PN, SEMBLE_TEST_HOME: join(BASE, 'home') };
+writeAgent(PN, 'n1.md', `---\nname: n1\ntools: [Read, ${SEARCH}, ${RELATED}]\n---\nBody\n`);
+const nBefore = snapshotMd(PN);
+const nRev = run(['apply', '--yes', '--revert', '--json'], ENVN);
+const nJson = safeParse(nRev.stdout);
+check('noRecord.exit', nRev.status, 0, 'a revert with no record exits 0');
+check(
+  'noRecord.summary',
+  nJson.summary,
+  { changed: 0, unchanged: 1, conflict: 0, skipped: 0, failed: 0 },
+  'nothing is changed when the ownership record is missing',
+);
+check(
+  'noRecord.reason',
+  [nJson.files[0].action, nJson.files[0].reason, nJson.files[0].added],
+  ['unchanged', 'not-owned', []],
+  'the file is reported as not-owned rather than stripped blind',
+);
+check(
+  'noRecord.note',
+  nJson.files[0].note,
+  'no record of what this skill added here — nothing was removed',
+  'the reason for declining is stated',
+);
+check('noRecord.bytes', snapshotMd(PN), nBefore, 'a revert with no record leaves every byte in place');
+check('noRecord.noState', existsSync(statePath(PN)), false, 'revert never writes state.json');
 
 // ────────────────────────────────────────────────────────────────────────────
 // CONFLICT project: disallowedTools must never be silently overridden.
@@ -550,6 +653,20 @@ check(
   `---\nname: g\ntools: [Read, ${SEARCH}, ${RELATED}]\n---\nBody\n`,
   'global apply behind --yes writes the same transformation',
 );
+const LEDGER2 = ledgerOf(P);
+check(
+  'ledger.globalScope',
+  Object.keys(LEDGER2).sort(),
+  ['global', 'project'],
+  'a global apply records under its own scope key and leaves the project map alone',
+);
+check(
+  'ledger.globalPaths',
+  LEDGER2.global,
+  { '.claude/agents/g-global.md': [] },
+  'the global map is keyed relative to the global root',
+);
+check('ledger.projectIntact', LEDGER2.project, LEDGER1.project, 'the project map survives a global apply byte-for-byte');
 
 const empty = join(BASE, 'emptyproj');
 mkdirSync(empty, { recursive: true });

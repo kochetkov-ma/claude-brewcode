@@ -41,6 +41,11 @@ const PROJECT_SH = join(SCRIPTS, 'semble-project.sh');
 const REMOVE_SH = join(SCRIPTS, 'semble-remove.sh');
 const STATE_SH = join(SCRIPTS, 'semble-state.sh');
 
+// The rule template is the single source of the stamps status reports back.
+const RULE_TEMPLATE = readFileSync(join(SKILL, 'assets', 'semble-first.md.template'), 'utf8');
+const TPL_CONTENT_VERSION = (/^content_version: "([^"]+)"$/m.exec(RULE_TEMPLATE) || [])[1];
+const TPL_VERSION = (/^version: "([^"]+)"$/m.exec(RULE_TEMPLATE) || [])[1];
+
 const SERVER = 'semble_code';
 const PIN_SPEC = 'semble[mcp]==0.5.4';
 const TOOL_SEARCH = 'mcp__semble_code__search';
@@ -234,6 +239,23 @@ function runStatus(args, extraEnv = {}) {
   return r;
 }
 
+// The §12.3 setup ladder every project fixture climbs: register the server,
+// install guidance, then walk the phases with the real state machine. Each rung
+// is returned so a caller still asserts on the exact step it cares about, and
+// `upto` stops the climb where a caller needs to do its own work in between.
+// suite-project.mjs repeats the same ladder four more times - move this to a
+// shared test helper when that file is next touched.
+function seedState(env, upto = 'ready') {
+  const rungs = { add: run(MCP_SH, ['add', '--scope', 'user', '--yes', '--json'], env) };
+  if (upto === 'add') return rungs;
+  rungs.guid = run(GUIDANCE_SH, ['install', '--part', 'all', '--json'], env);
+  if (upto === 'guidance') return rungs;
+  rungs.verifying = run(STATE_SH, ['phase', 'verifying'], env);
+  if (upto === 'verifying') return rungs;
+  rungs.ready = run(STATE_SH, ['phase', 'ready'], env);
+  return rungs;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // 0. Isolation proofs - the tools the skill installs must be absent
 // ═══════════════════════════════════════════════════════════════════════════
@@ -326,17 +348,12 @@ const P1_CACHE_BYTES = Buffer.byteLength(CHUNKS) + Buffer.byteLength(META_TEXT)
 write(join(HOME_DIR, '.claude.json'), `${JSON.stringify({ mcpServers: {} }, null, 2)}\n`);
 
 // Real registration path: checkpoint -> stubbed `claude mcp add` -> detect.
-const p1Add = run(MCP_SH, ['add', '--scope', 'user', '--yes', '--json'], p1Env);
-check('wired: mcp add exit', p1Add.status, 0, 'the stubbed registration succeeds');
+const p1 = seedState(p1Env);
+check('wired: mcp add exit', p1.add.status, 0, 'the stubbed registration succeeds');
 check('wired: repo hash matches the cache dir name', P1_HASH.length, 64,
   'sha256 of the resolved project root is the cache leaf (64 hex chars)');
-
-const p1Guid = run(GUIDANCE_SH, ['install', '--part', 'all', '--json'], p1Env);
-check('wired: guidance install exit', p1Guid.status, 0, 'rule + CLAUDE.md + hooks + permissions land');
-
-run(STATE_SH, ['phase', 'verifying'], p1Env);
-const p1Ready = run(STATE_SH, ['phase', 'ready'], p1Env);
-check('wired: phase ready', [p1Ready.status, stateOf(P1).phase], [0, 'ready'],
+check('wired: guidance install exit', p1.guid.status, 0, 'rule + CLAUDE.md + hooks + permissions land');
+check('wired: phase ready', [p1.ready.status, stateOf(P1).phase], [0, 'ready'],
   'verifying -> ready via the real state machine');
 
 // The siblings, run directly - the independent truth every transform is checked against.
@@ -430,12 +447,18 @@ check('wired: state keys', keysOf(R.state), ['completed', 'enabled', 'last_updat
   'the §9.1 state shape');
 check('wired: state phase', [R.state.present, R.state.phase], [true, 'ready'],
   'the real state file drives the state section');
+check('wired: state completed', R.state.completed, ['mcp'],
+  'only `claude mcp add` recorded a step here: no install ran prereq/permissions/guidance/agents '
+  + 'and no warm/smoke was possible offline - this is what keeps the verdict below at partial');
 
-// verdict
-check('wired: verdict', [R.verdict, R.nextStep], ['ready', 'none'],
-  'mcp=correct + phase=ready => ready, with no next step');
+// verdict: `ready` is every required check, not the phase alone. This project
+// is wired and phase=ready, yet its state records one step out of seven, so the
+// verdict downgrades and names the gap.
+check('wired: verdict', [R.verdict, R.nextStep], ['partial', 'Run /brewcode:semble-setup install'],
+  'mcp=correct + phase=ready with unrecorded install steps => partial, and because more than the '
+  + 'warm/smoke pair is missing the prescription is a full install, not resume');
 const strict = runStatus(['--json', '--strict'], p1Env);
-check('wired: --strict exit', strict.status, 0, '--strict exits 0 exactly when the verdict is ready');
+check('wired: --strict exit', strict.status, 1, '--strict exits 1 on any verdict that is not ready');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 2. Unit A transforms vs what units C/D/E actually emit
@@ -443,10 +466,26 @@ check('wired: --strict exit', strict.status, 0, '--strict exits 0 exactly when t
 
 // ── 2a. guidance ────────────────────────────────────────────────────────────
 check('guidance: keys', keysOf(R.guidance),
-  ['claudeMd', 'hooks', 'ignore', 'permissionsWired', 'pluginVersion', 'retired', 'rule',
-    'settingsFile', 'staleEntries', 'version', 'wantCount', 'wiredCount'],
+  ['claudeMd', 'content_version', 'hooks', 'ignore', 'permissionsWired', 'pluginVersion',
+    'retired', 'rule', 'settingsFile', 'staleEntries', 'templateContentVersion', 'version',
+    'wantCount', 'wiredCount'],
   'the §9.1 guidance shape plus the derived wiredCount/wantCount, the migration list, and the '
   + 'installed-vs-plugin stamp pair that carries the stale-artifacts signal');
+// The stale-artifacts verdict is driven by content_version, with `version`
+// riding along informational-only. Both stamps are pinned to the shipped
+// template, so neither half of the pair can silently drop out of the report.
+check('guidance: stamp pair matches the shipped template',
+  [R.guidance.content_version, R.guidance.templateContentVersion,
+    R.guidance.version, R.guidance.pluginVersion],
+  [TPL_CONTENT_VERSION, TPL_CONTENT_VERSION, TPL_VERSION, TPL_VERSION],
+  'a fresh install copies assets/semble-first.md.template byte for byte, so installed and plugin '
+  + 'stamps are equal and both are the template frontmatter values');
+check('guidance: stamp pair is the sibling value verbatim',
+  [R.guidance.content_version, R.guidance.templateContentVersion,
+    R.guidance.version, R.guidance.pluginVersion],
+  [rawGuid.rule.content_version, rawGuid.rule.templateContentVersion,
+    rawGuid.rule.version, rawGuid.rule.templateVersion],
+  'status re-publishes the four semble-guidance.sh rule stamps without reinterpreting them');
 check('guidance: hooks sub-keys', keysOf(R.guidance.hooks),
   ['prefetch', 'reminder', 'session', 'stats', 'subagent'],
   'hooks collapses to five file-presence strings, one per LIVE hook');
@@ -664,6 +703,31 @@ for (const [sec, extra] of [['mcp', []], ['cache', []], ['guidance', []], ['agen
     `${sec} is identical whether requested alone or as part of all`);
 }
 
+// ── 2d-bis. the one state that verifies as ready ────────────────────────────
+// Runs LAST against p-wired, because it mutates it: agent frontmatter is
+// patched and the remaining install/verify steps are recorded. Without this the
+// suite would never exercise `ready`/`none` or a strict exit 0 at all.
+const p1Apply = run(AGENTS_SH, ['apply', '--scope', 'project', '--yes', '--json'], p1Env);
+check('ready: agents apply exit', p1Apply.status, 3,
+  'exit 3 is the conflict code, not a failure: c-needs is patched while d-conflict keeps its '
+  + 'disallowedTools and is handed back for a user decision');
+const p1Complete = safeParse(run(STATE_SH,
+  ['complete', 'prereq', 'mcp', 'permissions', 'guidance', 'agents', 'warm', 'smoke', '--json'],
+  p1Env).stdout);
+check('ready: completed steps', p1Complete.completed,
+  ['mcp', 'prereq', 'permissions', 'guidance', 'agents', 'warm', 'smoke'],
+  'the recorded set is the pre-existing `mcp` plus the six steps added here, in write order');
+const readyRep = safeParse(runStatus(['--json'], p1Env).stdout);
+check('ready: agents needsPatch cleared',
+  [readyRep.agents.needsPatch, readyRep.agents.conflict, readyRep.cache.present],
+  [0, 1, true],
+  'd-conflict stays a conflict (never a needsPatch) and the index is still on disk');
+check('ready: verdict', [readyRep.verdict, readyRep.nextStep], ['ready', 'none'],
+  'every required check satisfied - mcp correct, phase ready, all steps recorded, rule and '
+  + 'permissions wired, index present, agents reconciled, stamps level');
+check('ready: --strict exit', runStatus(['--json', '--strict'], p1Env).status, 0,
+  '--strict exits 0 exactly when the verdict is ready');
+
 // ── 2e. negative control: without the siblings the sections DO degrade ──────
 // Proves the "no error placeholder" assertions above are not vacuous.
 const LONELY = join(WORLD, 'lonely');
@@ -700,8 +764,8 @@ write(join(LIFE, 'src/main.py'), `def main():\n    return 1\n# ${PAD}\n`);
 write(join(LIFE, 'CLAUDE.md'), '# CLAUDE.md\n\nlifecycle project\n');
 
 const callsBefore = claudeCalls().length;
-const lifeAdd = run(MCP_SH, ['add', '--scope', 'user', '--yes', '--json'], lifeEnv);
-check('lifecycle: mcp add exit', lifeAdd.status, 0, 'the stubbed registration succeeds');
+const life = seedState(lifeEnv, 'guidance');
+check('lifecycle: mcp add exit', life.add.status, 0, 'the stubbed registration succeeds');
 check('lifecycle: phase after add', stateOf(LIFE).phase, 'awaiting_reload',
   'the checkpoint moved the project to awaiting_reload');
 const lifeCalls = claudeCalls().slice(callsBefore);
@@ -719,8 +783,7 @@ check('lifecycle: recorded claude command line',
   })}`],
   'the exact approved argv reached the claude binary exactly once, via add-json');
 
-const lifeGuid = run(GUIDANCE_SH, ['install', '--part', 'all', '--json'], lifeEnv);
-check('lifecycle: guidance install exit', lifeGuid.status, 0, 'guidance installed after the add');
+check('lifecycle: guidance install exit', life.guid.status, 0, 'guidance installed after the add');
 check('lifecycle: guidance artefacts on disk',
   [existsSync(join(LIFE, '.claude/rules/semble-first.md')),
     existsSync(join(LIFE, '.claude/hooks/semble-session.mjs')),
@@ -750,9 +813,15 @@ check('lifecycle: verifying -> ready', [lifeReady.status, stateOf(LIFE).phase], 
 
 const lifeStrict = runStatus(['--json', '--strict'], lifeEnv);
 const lifeReport = safeParse(lifeStrict.stdout);
-check('lifecycle: status --strict exit', lifeStrict.status, 0, 'the whole install verifies as ready');
-check('lifecycle: status verdict', [lifeReport.verdict, lifeReport.nextStep], ['ready', 'none'],
-  'verdict ready with no next step');
+check('lifecycle: status --strict exit', lifeStrict.status, 1,
+  'the install is wired but unverified, so strict fails');
+check('lifecycle: status completed', lifeReport.state.completed, ['mcp'],
+  'the offline lifecycle recorded only the MCP step: warm/smoke were skipped and the remaining '
+  + 'install steps are never recorded by the individual scripts');
+check('lifecycle: status verdict', [lifeReport.verdict, lifeReport.nextStep],
+  ['partial', 'Run /brewcode:semble-setup install'],
+  'phase=ready alone no longer buys `ready`: with four install steps and the warm/smoke pair '
+  + 'unrecorded the prescription is a full install');
 check('lifecycle: no status section degraded',
   SECTIONS.filter((k) => hasError(lifeReport[k])), [],
   'the ready-state report is composed entirely from real siblings');
@@ -773,12 +842,33 @@ check('lifecycle: disable deleted nothing', existsSync(join(LIFE, '.claude/rules
 
 const lifeEn = run(PROJECT_SH, ['enable', '--yes', '--json'], lifeEnv);
 const lifeEnJson = safeParse(lifeEn.stdout);
-check('lifecycle: enable exit', [lifeEn.status, lifeEn.stderr.slice(0, 300)], [0, ''],
-  'enable succeeds with a skipped warm and prints nothing on stderr');
-check('lifecycle: enabled state', [stateOf(LIFE).phase, stateOf(LIFE).enabled], ['ready', true],
-  'disabled -> verifying -> ready, enabled=true');
+// Exit 3 is the SKIP code, not a failure: offline the warm proves nothing, so
+// readiness stays unproven and the phase is deliberately parked at `verifying`.
+check('lifecycle: enable exit', [lifeEn.status, lifeEn.stderr.slice(0, 300)], [3, ''],
+  'enable skips (exit 3) on a warm that could not run, and still prints nothing on stderr');
+check('lifecycle: enabled state', [stateOf(LIFE).phase, stateOf(LIFE).enabled], ['verifying', true],
+  'disabled -> verifying, enabled=true; only a successful warm would carry it on to ready');
 check('lifecycle: enable warm skipped', (lifeEnJson.warm || {}).status, 'skipped',
   'the warm inside enable never touches the network');
+check('lifecycle: enable skip payload',
+  [lifeEnJson.mode, lifeEnJson.status, lifeEnJson.phase, lifeEnJson.enabled, lifeEnJson.failed,
+    lifeEnJson.warm.reason],
+  ['enable', 'skipped', 'verifying', true, [], 'SEMBLE_NO_NETWORK=1'],
+  'the skip is reported as skipped/verifying with an empty failed list and the exact warm reason');
+check('lifecycle: enable skipped reasons', lifeEnJson.skipped,
+  [`guidance: gitignore: no ${join(LIFE, '.gitignore')} and ${LIFE} is not a git repo`
+    + ' - .claude/semble/ not registered',
+  'warm: SEMBLE_NO_NETWORK=1',
+  'state: phase left at verifying — no successful warm, so readiness is unproven'],
+  'the guidance report is folded in verbatim under a `guidance: ` prefix, then enable adds its '
+  + 'own warm skip and the phase-parked explanation');
+check('lifecycle: enable folded the guidance report in',
+  [lifeEnJson.changed.filter((l) => l.startsWith('guidance: ')).length,
+    lifeEnJson.unchanged.filter((l) => l.startsWith('guidance: ')).length,
+    lifeEnJson.skipped.filter((l) => l.startsWith('guidance: ')).length],
+  [2, 9, 1],
+  'sp_report_lines routes every guidance bucket into the matching enable bucket: 2 changed '
+  + '(ignore re-sync + the install summary), 9 unchanged, 1 skipped');
 
 // remove integration
 const claudeJsonBefore = sha(LIFE_CJ);
@@ -810,7 +900,7 @@ check('lifecycle: post-removal verdict', [afterRem.verdict, afterRem.state.phase
 // ═══════════════════════════════════════════════════════════════════════════
 // 4. Read-only + external-world guarantees
 // ═══════════════════════════════════════════════════════════════════════════
-check('read-only: wrapped status runs', roRuns, 14,
+check('read-only: wrapped status runs', roRuns, 16,
   'every semble-status.sh invocation in this suite was snapshot-wrapped');
 check('read-only: violations', roViolations, 0,
   'not one semble-status.sh run created, modified or deleted anything under the temp tree');

@@ -3,7 +3,7 @@ name: provider-switch
 description: "Configure alt API providers: DeepSeek, Z.ai/GLM, Qwen, MiniMax, OpenRouter. Triggers: switch provider, openrouter."
 user-invocable: true
 disable-model-invocation: true
-argument-hint: "[prompt] [status|install|verify|model-check|help|<provider-name>] — no args/empty prompt = interactive status check"
+argument-hint: "[prompt] [status|install|verify|model-check|help|<provider-name>] — no args/empty prompt = read-only status, never an install"
 allowed-tools: [Read, Write, Edit, Bash, Agent, AskUserQuestion, Glob, Grep]
 model: opus
 ---
@@ -52,6 +52,7 @@ Labels are literal; values follow the conversation language.
 | On FAILED: stop phase, report error, !=retry blindly | ALL |
 | Max 3 AUQ per phase | ALL |
 | !=write secrets anywhere except ~/.zshrc | ALL |
+| !=ask for, receive, repeat or compose a key value — no AUQ, no prompt, no Bash line containing it. The user places it out of band, `scripts/read-secret.sh` moves it. CC 2.1.233 has NO masked runtime input | ALL |
 | !=commit ~/.zshrc changes | ALL |
 | ~/.zshrc comments: ENGLISH only | ALL writes |
 
@@ -151,7 +152,17 @@ Run `claudeds` — sets env vars + launches Claude (recommended default).
 Return to Anthropic: new terminal → `claude`.
 ```
 
-Auto-install logic (MODE=status only): zero CFG → auto-proceed to P3 ("No providers CFG yet. Starting install..."). >=1 CFG → STOP here.
+`status` is TERMINAL — it never writes and never falls through to install, whatever it finds.
+Zero CFG → render the table with every row `not configured`, then print exactly:
+
+```
+No providers configured yet. To configure one, run:
+  /brewtools:provider-switch install
+```
+
+and STOP. >=1 CFG → STOP here too. Installing takes an explicit `install` or `provider-<name>` mode,
+because an empty prompt and every unparseable prompt both resolve to `status` (see P1) and neither is
+a request to mutate ~/.zshrc.
 
 If MODE=help → GOTO P6.
 
@@ -189,23 +200,52 @@ bash "${CLAUDE_SKILL_DIR}/scripts/write-alias.sh" init && echo "OK init" || echo
 ```
 > STOP if FAILED — cannot write ~/.zshrc.
 
-### Step 3: API Key
+### Step 3: API Key — out of band, NEVER through the conversation
 Check if key set (from P2: KEY_DEEPSEEK, KEY_ZAI, KEY_DASHSCOPE, KEY_MINIMAX, KEY_OPENROUTER).
 If already `true` for this PRV → SKIP this step, !=re-ask, !=rewrite the key.
-If missing — AUQ: "Enter your <PRV> API key (from <dashboard-url>):"
 
-Qwen-specific: read `REF/qwen-dashscope.md` ## How to Get API Key before asking. Show step-by-step. Warn: key MUST be from Singapore region — other regions return 403. Valid fmt: `sk-...` (~40 chars). If starts with `sk-ws-` or >100 chars → warn wrong region, ask regenerate.
+If missing: **do NOT ask for it.** No AUQ, no "paste your key", no Bash line carrying the value.
+Claude Code 2.1.233 has no masked runtime input — `AskUserQuestion` returns plain text straight into
+the transcript, and plugin `userConfig` `sensitive: true` is enable-time only and is deliberately NOT
+substituted into skill content. Anything the user types at the model is a leaked credential.
 
-The key goes in on **stdin**, NEVER as an argument — argv is visible to `ps` for the whole
-process lifetime and is written verbatim into the session transcript (Robustness Rule:
-`!=write secrets anywhere except ~/.zshrc`).
+Print the two options VERBATIM, placeholder intact, and STOP until the user confirms the value is in
+place. !=substitute a real value into either line, !=run a command containing one:
 
-EXEC:
-```bash
-printf '%s' 'KEY_VALUE' | bash "${CLAUDE_SKILL_DIR}/scripts/write-alias.sh" set-key "KEY_VAR_NAME" && echo "OK set-key" || echo "FAILED set-key"
 ```
+Option A (recommended) — write it to a private file, then tell me "done":
+  umask 077; printf '%s' '<your-key>' > ~/.claude-PRV.key
+
+Option B — export it, then RESTART Claude Code from that same shell:
+  export KEY_VAR_NAME='<your-key>'
+  # then: exit Claude Code and relaunch it from this shell
+```
+
+Option A works immediately. Option B does NOT: every Bash tool call spawns a fresh shell from your
+profile, so an `export` typed in some other terminal — or in this one after Claude Code started — is
+invisible to it. The variable is only visible if it was exported BEFORE the session launched, which is
+why B requires a relaunch. Put it in `~/.zshrc` if you want it to survive. Prefer A when in doubt.
+
 KEY_VAR_NAME: `DEEPSEEK_API_KEY` | `ZAI_API_KEY` | `DASHSCOPE_API_KEY` | `MINIMAX_API_KEY` | `OPENROUTER_API_KEY`
-> STOP if FAILED.
+
+Qwen-specific: read `REF/qwen-dashscope.md` ## How to Get API Key first and show the steps. Warn: key
+MUST be from the Singapore region — other regions return 403. Valid fmt: `sk-...` (~40 chars). The
+model never sees the key, so it cannot validate the format itself — state the rule and let
+`read-secret.sh` report `BYTES` for a sanity check (`sk-ws-` prefix or >100 chars = wrong region).
+
+Then EXEC exactly one, matching the option the user chose — A first:
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/read-secret.sh" "file:$HOME/.claude-PRV.key" "KEY_VAR_NAME" && echo "OK set-key" || echo "FAILED set-key"
+```
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/read-secret.sh" "env:KEY_VAR_NAME" "KEY_VAR_NAME" && echo "OK set-key" || echo "FAILED set-key"
+```
+If the `env:` form reports the variable unset, the session predates the export: tell the user to
+relaunch Claude Code from that shell, or switch to Option A. !=ask them to paste the value.
+`read-secret.sh` reads the value, pipes it to `write-alias.sh set-key` on stdin and prints only
+`SOURCE=/DEST=/BYTES=/FINGERPRINT=` — the value itself never reaches stdout, stderr or your context.
+It refuses a file that is group/world readable and leaves `~/.zshrc` mode 600.
+> STOP if FAILED — report the script's own message; it is already secret-free.
 
 ### Step 4: Model Selection (OpenRouter only)
 Read `REF/openrouter-models.md`. AUQ options:
@@ -303,6 +343,15 @@ bash "${CLAUDE_SKILL_DIR}/scripts/verify-providers.sh" all && echo "OK verify" |
 ```
 Parse: KEY_SET, HTTP_CODE, RESPONSE, STATUS per PRV.
 
+`pass` requires BOTH: HTTP 200 AND a `.content[].type=="text"` block whose text contains a whole-word
+`OK`. A bare 200 is NOT a pass — an HTML error page, `{}` or a 200-wrapped provider error all return
+200. `jq` is required; without it every provider reports `fail` with `RESPONSE=jq not installed`.
+
+`MODEL=` reports the id the provider echoed. If it differs from the one requested the script emits a
+`WARNING=model mismatch: requested X, answered Y` and STILL passes — aggregators and providers that
+normalise model ids would otherwise fail a perfectly working key. Surface the warning in the table,
+never as a failure.
+
 Render:
 ```
 ## Token Verification
@@ -319,6 +368,8 @@ Troubleshooting:
 | 404 | wrong endpoint | check PRV REF for correct URL |
 | 429 | rate limited | wait + retry, check billing |
 | 500+ | server error | PRV may be down, retry later |
+| 200 + `no assistant text block` | proxy/HTML page or empty JSON, not a real completion | check BASE URL in the PRV REF file |
+| pass + `WARNING=model mismatch` | PRV normalised or substituted the model id — not a failure | confirm with `model-check`; update the REF file (P9) only if the PRV really changed the id |
 
 ---
 
@@ -460,9 +511,12 @@ Edit REF files per field-to-line mapping in `REF/update-protocol.md`. Also updat
 - `common.md` if env var patterns changed (rare)
 
 ### Step 6: Live Test (optional, if API keys in env)
-EXEC:
+The key goes to curl through a `-K` config on STDIN, exactly as `scripts/verify-providers.sh` does it —
+argv is world-readable via `ps`, stdin is not. `\` and `"` inside the value are escaped for curl's own
+config parser. EXEC:
 ```bash
-curl -s -o /dev/null -w "%{http_code}" -X POST "https://api.z.ai/api/anthropic/v1/messages" -H "x-api-key: ${ZAI_API_KEY:-missing}" -H "content-type: application/json" -H "anthropic-version: 2023-06-01" -d '{"model":"glm-5.2","max_tokens":5,"messages":[{"role":"user","content":"ping"}]}' && echo " OK" || echo " FAILED"
+printf 'header = "x-api-key: %s"\n' "$(printf '%s' "${ZAI_API_KEY:-missing}" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')" \
+  | curl -s -K - -o /dev/null -w "%{http_code}" -X POST "https://api.z.ai/api/anthropic/v1/messages" -H "content-type: application/json" -H "anthropic-version: 2023-06-01" -d '{"model":"glm-5.2","max_tokens":5,"messages":[{"role":"user","content":"ping"}]}' && echo " OK" || echo " FAILED"
 ```
 
 ### Step 7: Report

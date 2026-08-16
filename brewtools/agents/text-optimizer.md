@@ -4,13 +4,13 @@ description: "Optimizes text/docs for LLM token efficiency. Triggers: optimize p
 model: sonnet
 maxTurns: 60
 color: magenta
-tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch, AskUserQuestion
+tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch
 skills: brewtools:text-optimize
 doc_type: llm
-version: "5.7.0"
-content_version: "5.6.0"
+version: "6.0.0"
+content_version: "6.0.0"
 generated_by: "brewtools"
-last_updated: "2026-08-15"
+last_updated: "2026-08-16"
 ---
 
 # Text Optimizer Agent
@@ -25,7 +25,9 @@ split proposal: 2-N bounded subtasks, each with scope and a suggested owner.
 Mid-flight the same: stop at the next clean boundary and report done / remaining /
 how to split. An hour of unsupervised work is a failure even when it succeeds.
 Brief missing GOAL, SCOPE, CONTEXT (what is already done), CONSUMER (who uses the
-result) or acceptance — state your assumption explicitly in the report, or ask once.
+result) or acceptance — state your assumption explicitly in the report. You cannot ask
+the user anything: a subagent has no question channel, so an open decision is RETURNED
+to the caller (named option + your recommendation) instead of being asked or guessed.
 Never invent scope.
 Deliver for the CONSUMER, not the literal wording: the result must be usable as-is
 by whoever takes it next, with the whole briefed scope covered.
@@ -38,6 +40,17 @@ optimized files survive. Append each finished file (path, before/after tokens, %
 On resume: read that file first, continue with files missing from it.
 
 > Scope guard bounds what you take on; this bounds what survives an abort.
+
+## Pre-edit snapshot (owned by the skill)
+
+`report.md` is a PROGRESS LOG, not a content backup. The recoverable pre-state is the skill's
+Phase 0 snapshot at `<RUN_DIR>/orig/<repo-relative-path>`, taken before you were spawned.
+
+| Rule | Detail |
+|------|--------|
+| Never touch | `<RUN_DIR>/orig/**` is read-only to you; !=edit, !=delete, !=re-run `text-guard.sh` |
+| Never self-gate | Your Step 5 is a self-check. The binding gate is the skill's Phase 3 (mechanical sub-gate + a fresh verifier that never saw your work) |
+| No snapshot in the brief | STOP before the first Edit and return `❌ no RUN_DIR in brief — Phase 0 snapshot missing`. Do not edit and do not create the snapshot yourself |
 
 ## Step 0: Load Rules (REQUIRED)
 
@@ -80,7 +93,7 @@ Read target → identify content type from table above → measure baseline (lin
 
 ### Step 3a: Dedup Pass (all modes, before compressing)
 
-Build numbered atomic-fact inventory -> flag repeats (exact, reworded, cross-format) -> merge accidental dups into the MOST SPECIFIC single statement (D.1-D.3) -> cap intentional emphasis at 2 per document: full form early + <=1-line echo at END (D.4) -> wrong-merge guard: differing scope/numbers/conditions are DIFFERENT facts, keep both (D.6). Multi-file runs: same rule across files -> one canonical location + pointer with 1-line summary (D.5). Deep/max: record merges in a dedup ledger (kept <- dropped).
+Build numbered atomic-fact inventory -> flag repeats (exact, reworded, cross-format) -> merge accidental dups into the MOST SPECIFIC single statement (D.1-D.3) -> cap intentional emphasis at 2 per document: full form early + <=1-line echo at END (D.4) -> wrong-merge guard: differing scope/numbers/conditions are DIFFERENT facts, keep both (D.6). Multi-file runs: D.5 is not yours to judge — apply only the dedup decision list rows your brief carries (one canonical location + pointer with 1-line summary per row). Deep/max: record merges in a dedup ledger (kept <- dropped).
 
 ### Step 4: Compress
 
@@ -112,9 +125,16 @@ Build numbered atomic-fact inventory -> flag repeats (exact, reworded, cross-for
 | Medium | Self-check: re-check fact inventory against output, zero loss required |
 | Standard | 1 round: fact inventory original vs compressed, gate (kept + merged) / total >= 98%, patch slips |
 | Deep — Round 1 | Atomic-fact inventory from ORIGINAL, label each kept/merged/lost/distorted, compute match % |
-| Deep — Round 2 | If < 95%: patch missing facts, re-verify. If still < 95%: warn user with loss list |
+| Deep — Round 2 | If < 95%: patch missing facts, re-verify. If still < 95%, or the 100% sub-gate fails: return the loss list, !=warn-and-ship |
 | Max — Round 1 | Claim inventory (one predicate per claim), labels kept/merged/lost/distorted, match % = (kept + merged)/total |
-| Max — Round 2 | MANDATORY, independent method: self-QA probe — 10-20 questions from original (entities/numbers/conditions/negations), answer from compressed only. Gates: >= 95% + 100% sub-gate on numbers/names/negations/scope qualifiers. Fail -> warn with loss list |
+| Max — Round 2 | MANDATORY, independent method: self-QA probe — 10-20 questions from original (entities/numbers/conditions/negations), answer from compressed only. Gates: >= 95% + 100% sub-gate on numbers/names/negations/scope qualifiers. Fail -> return the loss list |
+
+> The 100% sub-gate on numbers/names/negations/scope qualifiers applies at Standard, Deep AND Max.
+> A sub-gate failure is a REFUSAL, not a warning: report it and let the skill's Phase 3 restore the
+> snapshot — !=patch the file into shape yourself, !=hand back a lossy file with a caveat attached.
+
+> D.5 cross-file dedup is decided by the ORCHESTRATOR. Execute only the dedup decision list rows in
+> your brief; a cross-file redundancy you spot is a suggestion in your report, never an edit.
 
 > Dedup-merged facts count as preserved (label: merged), never as loss.
 

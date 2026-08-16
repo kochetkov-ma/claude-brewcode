@@ -42,6 +42,11 @@ A brief missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance criteria is not inv
 states its assumption in the report or asks once. The result is delivered for the CONSUMER — whoever
 picks it up next — not for the literal wording of the request.
 
+**v6: `AskUserQuestion` removed.** Claude Code 2.1.233 dropped `AskUserQuestion` from every subagent.
+`ssh-admin` and `deploy-admin` no longer ask mid-task — a destructive or privileged step now returns
+a `## APPROVAL REQUIRED` envelope to the caller, or proceeds only if pre-approved in the prompt.
+`ssh-admin` also no longer places secrets on `curl` argv.
+
 | Rule | Applies to |
 |------|-----------|
 | One bounded unit per run, otherwise split proposal | text-optimizer, ssh-admin, deploy-admin |

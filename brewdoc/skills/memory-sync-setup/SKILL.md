@@ -7,7 +7,7 @@ argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge]
 allowed-tools: [Read, Edit, Glob, Grep, Bash, Agent, AskUserQuestion]
 model: opus
 ---
-<!-- brewcode-meta: version=5.7.0 content_version=5.6.0 generated_by=brewdoc:memory-sync-setup -->
+<!-- brewcode-meta: version=6.0.0 content_version=6.0.0 generated_by=brewdoc:memory-sync-setup -->
 
 # Memory Sync Generator (brewdoc:memory-sync-setup)
 
@@ -279,12 +279,12 @@ scan plus your own reads, determine:
 
 | Aspect | How to detect | Drives placeholder |
 |--------|---------------|--------------------|
-| **Memory surface** | everything auto-loaded into an LLM context: root `CLAUDE.md`, EVERY nested `**/CLAUDE.md` at ANY depth, `CLAUDE.local.md`, `.claude/rules/**`, conventions (`.claude/convention/**`, `CONVENTIONS.md`, `CONTRIBUTING.md`), the `AGENTS.md` family, `.claude/agents/**`, `.claude/skills/**`, and the memory dir | `{BATCH_TABLE}`, `{SURFACE_COUNTS}`, `{ENUMERATION_BASH}` |
+| **Memory surface** | everything auto-loaded into an LLM context: root `CLAUDE.md`, EVERY nested `**/CLAUDE.md` at ANY depth, `CLAUDE.local.md`, `.claude/rules/*.md` (single level -- CC loads rules non-recursively), conventions (`.claude/convention/**`, `CONVENTIONS.md`, `CONTRIBUTING.md`), the `AGENTS.md` family, `.claude/agents/**`, `.claude/skills/**`, and the memory dir | `{BATCH_TABLE}`, `{SURFACE_COUNTS}`, `{ENUMERATION_BASH}` |
 | **VERIFY-ONLY surfaces** | `AGENTS.md` that is a SYMLINK into a projection dir (`.codex/**`) or whose body sits inside vendor markers (`<!-- BEGIN:... -->`); any file whose content another tool owns. Flag them: refs are checked for RESOLUTION, content is NEVER edited | `{BATCH_TABLE}` (VERIFY-ONLY column) |
 | **Memory dir** | `autoMemoryDirectory` in `.claude/settings*.json`, else `~/.claude/projects/<hash>/memory/`. In scope only if the user confirms (Phase 1.5) | `{MEMORY_DIR}` |
 | **Exclusions** | `docs/**` (owned by a separate doc flow -- refs INTO docs are resolution-checked, contents never edited), ALL source code (read-only evidence), secrets dirs, task-board / operational state (`.claude/features/**`), build output, git-ignored scratch | `{EXCLUDED_TABLE}` |
 | **Default branch** | DERIVE: `git symbolic-ref --short refs/remotes/origin/HEAD`, else the branch CI checks out. NEVER hardcode `main` -- a repo can promote from `staging`/`develop` | `{DEFAULT_BRANCH}` |
-| **Git visibility** | `git ls-files -- .claude '*CLAUDE.md' '*AGENTS.md'` and the `.gitignore` rules behind it. Git-IGNORED surface -> `git status`/`git diff` can NEVER account for a memory edit, so VERIFY must re-read files directly instead of trusting the diff | `{GIT_VISIBILITY}`, `{VERIFY_EXTRA}` |
+| **Git visibility** | `git ls-files -- .claude '*CLAUDE.md' '*AGENTS.md'` compared against the same surface ON DISK, plus the `.gitignore` rules behind it. `git-ignored` OR `mixed` (some rows tracked, some not) -> `git status`/`git diff` can NEVER account for every memory edit, so VERIFY must re-read files directly instead of trusting the diff | `{GIT_VISIBILITY}`, `{VERIFY_EXTRA}` |
 | **Language policy** | which files legitimately carry non-English trigger aliases (agent/skill `description:`, mode-routing tables, `CLAUDE.local.md`), and which surface is English-only. An intentional alias stripped as a "violation" is a regression | `{LANGUAGE_POLICY}` |
 | **Frontmatter conventions** | which of `last_updated`, `doc_type`, `paths:` globs, `[DICT: ...]` headers are in use, and WHERE each belongs | `{INVARIANTS_TABLE}` |
 | **`paths:` precision** | `scan` prints `path :: lines :: paths:` for EVERY `.claude/rules/*.md`. Per rule: name its real subject in one phrase, derive the narrowest glob covering it, compare with the declared one, and resolve it against the repo with BOTH probes exactly as `references/hard-sync.md` prescribes -- `git ls-files -- ':(glob)<glob>'` (plain git `*` crosses `/`, so a broken glob still "matches") AND a filesystem `find` (`git ls-files` is blind to git-ignored trees: a `.gitignore`d `.claude/` returns 0 rows while the tree is full of files). `DANGLING` only when BOTH come back empty. Judge each now -- `OK` / `TOO_BROAD` / `TOO_NARROW` / `DANGLING` / `MISSING` / `CORRECTLY_GLOBAL` | `{PATHS_PRECISION_TABLE}` |
@@ -292,7 +292,7 @@ scan plus your own reads, determine:
 | **Stable numbered ids** | rule files whose rows carry stable numbers, and who cites them POSITIONALLY (a reorder silently repoints every citation). Count them per run, never trust a baked number | `{INVARIANTS_TABLE}` |
 | **Reacting hooks** | `docsync-*.mjs` (installed by `/brewdoc:docsync-setup`) or other hooks firing on memory edits (`.claude/settings.json`, `.claude/hooks/**`), their config and threshold. Edits WILL trigger them -- expected; hook files are never edited | `{INVARIANTS_TABLE}`, `{TRACKER_NOTE}` |
 | **Checkable-fact catalogue** | for THIS project, the CONCRETE claims memory makes and the EXACT shell command verifying each: layer paths, build-tool aliases, lint rule names, scripts, version pins, env-var NAMES (never values), routes/endpoints, migrations/tables, test tiers + gates, CI gates | `{FACT_CATALOGUE}` |
-| **Agent roster** | `.claude/agents/*.md` -- name, description, tools, the path group each owns; read-only recon agents flagged as non-builders | `{EXPERT_ROSTER_TABLE}`, `{AGENT_CHECKS_TABLE}` |
+| **Agent roster** | `.claude/agents/**/*.md` at ANY depth (CC scans subfolders such as `agents/review/`) -- name, description, tools, the path group each owns; read-only recon agents flagged as non-builders | `{EXPERT_ROSTER_TABLE}`, `{AGENT_CHECKS_TABLE}` |
 | **Skill roster** | `.claude/skills/**/*.md` -- SKILL.md + every `references/*.md`; which modes each body implements | `{SKILL_CHECKS_TABLE}` |
 | **Task tracker** | `.claude/features/**` board, an issue tracker, a task rule -- noted so the emitted skill EXCLUDES operational state and says who owns it | `{TRACKER_NOTE}` |
 | **Proposal precedents** | the agents and skills this repo already created and WHY -- the bar a new one must clear | `{PROPOSAL_PRECEDENTS}` |
@@ -326,7 +326,7 @@ Export the SCALAR placeholder values (single-line, sed-substituted), then run th
 export PROJECT_NAME="<repo name>"
 export DEFAULT_BRANCH="<derived default branch, e.g. staging>"
 export MEMORY_DIR="<resolved memory dir | none>"
-export GIT_VISIBILITY="<e.g. 'entire surface git-ignored (.gitignore:12-15) -- diffs never show memory edits' | 'tracked'>"
+export GIT_VISIBILITY="<e.g. 'entire surface git-ignored (.gitignore:12-15) -- diffs never show memory edits' | 'mixed (12 tracked, 4 untracked) -- re-read directly' | 'tracked'>"
 export LANGUAGE_POLICY="<e.g. 'English everywhere; RU trigger aliases legal in .claude/agents/** + .claude/skills/** + CLAUDE.local.md'>"
 export FOCUS_EMPHASIS="<fine-tune emphasis | 'default ordering: facts > dedup > compression'>"
 export SURFACE_COUNTS="<e.g. '68 files: 5 root, 15 rules, 3 conventions, 26 agents, 18 skills, 1 local'>"
@@ -465,7 +465,7 @@ is a template token absent from this table.
 | `{PROJECT_NAME}` | repo name (basename of the target root) |
 | `{DEFAULT_BRANCH}` | derived default branch -- never hardcoded `main` |
 | `{MEMORY_DIR}` | resolved memory dir, or the literal `none` when out of scope |
-| `{GIT_VISIBILITY}` | whether the memory surface is git-tracked or git-ignored, and what that implies for VERIFY |
+| `{GIT_VISIBILITY}` | whether the memory surface is git-tracked, git-ignored or mixed, and what that implies for VERIFY |
 | `{LANGUAGE_POLICY}` | English-only surface vs where non-English trigger aliases are intentional |
 | `{FOCUS_EMPHASIS}` | the fine-tune emphasis, or the default ordering |
 | `{SURFACE_COUNTS}` | total files + per-batch counts at generation time (a snapshot; the emitted skill re-enumerates) |

@@ -4,7 +4,26 @@ set -euo pipefail
 # Usage: claude-local-ops.sh <subcommand> [args...]
 # Subcommands: read, add, update, list, set-default
 
-LOCAL_FILE="CLAUDE.local.md"
+# Project root: CLAUDE_PROJECT_DIR -> git toplevel -> upward walk -> PWD.
+claude_project_root() {
+    local r d
+    if [[ -n "${CLAUDE_PROJECT_DIR:-}" ]] && [[ -d "$CLAUDE_PROJECT_DIR" ]]; then
+        printf '%s\n' "$CLAUDE_PROJECT_DIR"; return 0
+    fi
+    if r=$(git rev-parse --show-toplevel 2>/dev/null) && [[ -n "$r" ]]; then
+        printf '%s\n' "$r"; return 0
+    fi
+    d=$PWD
+    while [[ "$d" != "/" ]]; do
+        if [[ -d "$d/.git" ]] || [[ -d "$d/.claude" ]]; then printf '%s\n' "$d"; return 0; fi
+        d=$(dirname "$d")
+    done
+    printf '%s\n' "$PWD"; return 1
+}
+
+ROOT=$(claude_project_root) || echo "WARN: no project root marker found; using $ROOT" >&2
+LOCAL_FILE="$ROOT/CLAUDE.local.md"
+SSH_HEADING="## SSH Servers"
 SUBCMD="${1:?Usage: claude-local-ops.sh <read|add|update|list|set-default> [args...]}"
 shift
 
@@ -26,41 +45,39 @@ HEREDOC
     fi
 }
 
-# Check if line is a server data row (not header, not separator, not other tables)
-is_server_row() {
-    local line="$1"
-    [[ "$line" == "| "* ]] && \
-    [[ "$line" != "| Name "* ]] && \
-    [[ "$line" != "| -"* ]] && \
-    [[ "$line" != "| Property "* ]] && \
-    [[ "$line" != "|---"* ]] && \
-    [[ "$line" != "|-"* ]]
-}
-
 # Extract field from pipe-delimited row by position (1-based)
 get_field() {
     echo "$1" | awk -F'|' -v n="$2" '{gsub(/^[ \t]+|[ \t]+$/, "", $n); print $n}'
 }
 
-# Parse server rows only from SSH Servers section (between header and > Connect)
+# Data rows of the SSH Servers table only: anchored on the exact "## SSH Servers"
+# heading plus the "| Name |" header row, ending at the next "## " heading.
 get_server_rows() {
-    local in_table=false
+    local in_section=false in_table=false line
     while IFS= read -r line; do
-        if [[ "$line" == "| Name |"* ]]; then
+        if [[ "$line" == "## "* ]]; then
+            in_table=false
+            if [[ "$line" == "$SSH_HEADING" ]]; then in_section=true; else in_section=false; fi
+            continue
+        fi
+        if [[ "$in_section" == true ]] && [[ "$line" == "| Name |"* ]]; then
             in_table=true
             continue
         fi
         if [[ "$in_table" == true ]]; then
-            if [[ "$line" == "|---"* ]]; then
-                continue
-            fi
-            if [[ "$line" == "| "* ]]; then
-                echo "$line"
-            else
-                break
-            fi
+            if [[ "$line" == "|-"* ]] || [[ "$line" == "| -"* ]]; then continue; fi
+            if [[ "$line" == "| "* ]]; then echo "$line"; else in_table=false; fi
         fi
     done < "$LOCAL_FILE"
+}
+
+# True if NAME already has a row in the SSH Servers table (that table only)
+server_exists() {
+    local target="$1" row
+    while IFS= read -r row; do
+        if [[ "$(get_field "$row" 2)" == "$target" ]]; then return 0; fi
+    done < <(get_server_rows)
+    return 1
 }
 
 case "$SUBCMD" in
@@ -96,7 +113,7 @@ case "$SUBCMD" in
 
         init_file
 
-        if grep -q "| $NAME |" "$LOCAL_FILE" 2>/dev/null; then
+        if server_exists "$NAME"; then
             echo "ERROR: Server '$NAME' already exists. Use 'update' to modify."
             exit 1
         fi
@@ -112,32 +129,49 @@ case "$SUBCMD" in
 
         ROW="| $NAME | $HOST | $USER | $PORT | $KEY | $DEFAULT_FLAG |"
 
-        # Insert row after table separator, before "> Connect" line
+        # Append the row to the SSH Servers table only. Any other pipe table in the
+        # file (GitHub config, per-server Property tables) must stay untouched.
         TMPF=$(mktemp)
-        AFTER_SEPARATOR=false
+        IN_SECTION=false
+        IN_TABLE=false
         INSERTED=false
         while IFS= read -r line; do
-            # Detect table separator
-            if [[ "$line" == "|---"* ]] && [[ "$AFTER_SEPARATOR" == false ]]; then
-                echo "$line" >> "$TMPF"
-                AFTER_SEPARATOR=true
-                continue
-            fi
-            # Insert before "> Connect" or blank line AFTER separator
-            if [[ "$AFTER_SEPARATOR" == true ]] && [[ "$INSERTED" == false ]]; then
-                if [[ "$line" == "> Connect"* ]] || [[ -z "$line" ]]; then
+            if [[ "$line" == "## "* ]]; then
+                if [[ "$IN_TABLE" == true ]] && [[ "$INSERTED" == false ]]; then
                     echo "$ROW" >> "$TMPF"
                     INSERTED=true
-                    # Write the current line too
+                fi
+                IN_TABLE=false
+                if [[ "$line" == "$SSH_HEADING" ]]; then IN_SECTION=true; else IN_SECTION=false; fi
+                echo "$line" >> "$TMPF"
+                continue
+            fi
+            if [[ "$IN_SECTION" == true ]] && [[ "$line" == "| Name |"* ]]; then
+                IN_TABLE=true
+                echo "$line" >> "$TMPF"
+                continue
+            fi
+            if [[ "$IN_TABLE" == true ]] && [[ "$INSERTED" == false ]]; then
+                if [[ "$line" == "|"* ]]; then
                     echo "$line" >> "$TMPF"
                     continue
                 fi
+                echo "$ROW" >> "$TMPF"
+                INSERTED=true
+                IN_TABLE=false
             fi
             echo "$line" >> "$TMPF"
         done < "$LOCAL_FILE"
 
-        if [[ "$INSERTED" == false ]]; then
+        if [[ "$IN_TABLE" == true ]] && [[ "$INSERTED" == false ]]; then
             echo "$ROW" >> "$TMPF"
+            INSERTED=true
+        fi
+
+        if [[ "$INSERTED" == false ]]; then
+            rm -f "$TMPF"
+            echo "ERROR: '$SSH_HEADING' table not found in $LOCAL_FILE -- refusing to append blind."
+            exit 1
         fi
 
         mv "$TMPF" "$LOCAL_FILE"
@@ -232,21 +266,28 @@ HEREDOC
             exit 1
         fi
 
-        if ! grep -q "| $NAME |" "$LOCAL_FILE"; then
+        if ! server_exists "$NAME"; then
             echo "ERROR: Server '$NAME' not found"
             exit 1
         fi
 
         # Rewrite: clear defaults in SSH Servers table, set new one
         TMPF=$(mktemp)
+        IN_SECTION=false
         IN_TABLE=false
         while IFS= read -r line; do
-            if [[ "$line" == "| Name |"* ]]; then
+            if [[ "$line" == "## "* ]]; then
+                IN_TABLE=false
+                if [[ "$line" == "$SSH_HEADING" ]]; then IN_SECTION=true; else IN_SECTION=false; fi
+                echo "$line" >> "$TMPF"
+                continue
+            fi
+            if [[ "$IN_SECTION" == true ]] && [[ "$line" == "| Name |"* ]]; then
                 IN_TABLE=true
                 echo "$line" >> "$TMPF"
                 continue
             fi
-            if [[ "$IN_TABLE" == true ]] && [[ "$line" == "|---"* ]]; then
+            if [[ "$IN_TABLE" == true ]] && { [[ "$line" == "|-"* ]] || [[ "$line" == "| -"* ]]; }; then
                 echo "$line" >> "$TMPF"
                 continue
             fi

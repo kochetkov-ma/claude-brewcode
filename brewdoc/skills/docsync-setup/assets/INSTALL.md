@@ -3,7 +3,10 @@
 Self-contained hook assets. The `/brewdoc:docsync-setup` skill copies these into a
 target project's `.claude/hooks/` and wires `.claude/settings.json`. All three
 files are independent (no shared lib, no plugin-root deps) and read project
-state from `<cwd>/.claude/docsync/` at runtime.
+state from `<projectRoot>/.claude/docsync/` at runtime, where `projectRoot` is
+`CLAUDE_PROJECT_DIR` -> upward walk for `.git`/`.claude` -> the hook's `cwd`. The
+hook payload's `cwd` drifts mid-session and is used for one thing only: resolving a
+relative `tool_input` path.
 
 | File | Event | Matcher | Action |
 |------|-------|---------|--------|
@@ -44,33 +47,39 @@ state from `<cwd>/.claude/docsync/` at runtime.
   `enabled: false` (written by `disable`) makes all three hooks return an empty result
   immediately — registered, wired, inert. An absent `enabled` key counts as `true`, so
   a config written before this key existed keeps working
-- `state.json`  — install writes `{ "session_id": null, "touched": [], "asked": false }`;
-  the hooks own it from then on, replacing `null` with the live session id and
-  resetting `touched`/`asked` on every session change
+- `state-<session_id>.json` — one file PER SESSION, created and owned by the hooks;
+  install seeds nothing. Two concurrent sessions in one project no longer reset each
+  other's touched-set. Writes go through a pid-unique temp name (`<file>.<pid>.tmp`)
+  before the rename, so parallel PostToolUse hooks cannot race each other. The Stop
+  gate prunes `state-*.json` and stray `.tmp` files older than 14 days, which is also
+  how a pre-6.0 shared `state.json` eventually disappears
 
 ---
 
 ## settings.json hook entries
 
-Use the `$CLAUDE_PROJECT_DIR` substitution (Claude Code expands it at hook run
-time) so committed `settings.json` is path-portable across machines and CI:
+Exec form: `command` is the executable, `args` carries the path. Upstream prefers it
+for any hook that references a path placeholder, and `${CLAUDE_PROJECT_DIR}` is
+substituted per `args` element on every shell — a shell-form `$CLAUDE_PROJECT_DIR`
+resolves to `$null` under PowerShell and launches node on `/.claude/hooks/...`.
 
 ```json
 {
   "hooks": {
     "PostToolUse": [
-      { "matcher": "Write|Edit|MultiEdit", "hooks": [ { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/docsync-track.mjs\"" } ] },
-      { "matcher": "Read",                 "hooks": [ { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/docsync-watch.mjs\"" } ] }
+      { "matcher": "Write|Edit|MultiEdit", "hooks": [ { "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/docsync-track.mjs"] } ] },
+      { "matcher": "Read",                 "hooks": [ { "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/docsync-watch.mjs"] } ] }
     ],
     "Stop": [
-      { "hooks": [ { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/docsync-gate.mjs\"" } ] }
+      { "hooks": [ { "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/docsync-gate.mjs"] } ] }
     ]
   }
 }
 ```
 
-Merge is idempotent (entries keyed by hook basename, so re-running install never
-duplicates them) and non-destructive: install backs up `settings.json` to
+Merge is idempotent (entries keyed by hook basename, matched across `command` AND
+`args`, so re-running install never duplicates them and an older shell-form entry is
+still recognised) and non-destructive: install backs up `settings.json` to
 `settings.json.bak` before writing, aborts rather than clobber on a JSON parse
 error, and only ever adds the three docsync entries. If neither `python3` nor `jq`
 is available, add the entries above by hand.
@@ -85,7 +94,10 @@ is available, add the entries above by hand.
   entries whose command contains `docsync-track.mjs` / `docsync-watch.mjs` /
   `docsync-gate.mjs`, and prunes any now-empty matcher group / event array. All
   foreign hooks, permissions, and env are left untouched.
-- Deletes the three `.claude/hooks/docsync-*.mjs` files.
+- Deletes the three `.claude/hooks/docsync-*.mjs` files — but ONLY after the clean
+  verifiably succeeded. If neither `python3` nor `jq` is available, or the inverse
+  merge fails and the backup is restored, uninstall aborts with the hook files intact
+  rather than leave live registrations pointing at deleted scripts.
 - Asks whether to also delete `.claude/docsync/` (config + state).
 
 Takes effect on the next session.

@@ -1,4 +1,4 @@
-<!-- brewcode-meta: version=5.7.0 content_version=5.6.0 generated_by=brewtools:agent-deadline-setup -->
+<!-- brewcode-meta: version=6.0.0 content_version=6.0.0 generated_by=brewtools:agent-deadline-setup -->
 # agent-deadline hooks — install / configure / remove runbook
 
 Self-contained hook assets. The `/brewtools:agent-deadline-setup` skill copies these into a
@@ -110,7 +110,8 @@ before adding an override; a typo silently falls back to `defaultMinutes`.
 | `HARD_STOP_RATIO` | skill (optional) | `hardStopRatio` to write; leave UNSET to omit the key and take the hook default `2` |
 | `PLUGIN_VERSION` | skill (optional) | `X.Y.Z` for the metadata stamp. OPTIONAL: unset/malformed falls back to `<SRC>/../../../.claude-plugin/plugin.json`, resolved by the block itself. Never a literal |
 | `LAST_UPDATED` | skill (optional) | `YYYY-MM-DD` for the stamp; unset falls back to the LOCAL date the block computes |
-| `CFG` / `SETTINGS` / `HOOKS_DIR` | scope | project = `$PWD/.claude/...`, global = `$HOME/.claude/...` |
+| `ROOT` | the *Project root* block | absolute project root; every project-scope `.claude/...` path is built from it |
+| `CFG` / `SETTINGS` / `HOOKS_DIR` | scope | project = `$ROOT/.claude/...`, global = `$HOME/.claude/...` |
 
 These are read from `process.env` by the node blocks below — they must be REAL shell
 variables, exported before the block runs:
@@ -128,6 +129,37 @@ prefix the block.
 NEVER hardcode the budget — the user picked it; `MINUTES`/`OVERRIDES` carry it.
 ONE scope per run: set the vars for THAT scope only and never touch the other.
 
+### Project root
+
+Every project-scope path below is `$ROOT/.claude/...`, never `$PWD`. The shell cwd
+moves with `cd` and persists across calls, so `$PWD` can be a subdirectory —
+installing there builds a second, nested `.claude/` that the running Claude Code never
+reads. Resolve it once, in the SAME Bash call as the block that uses it:
+
+```
+# Project root: CLAUDE_PROJECT_DIR -> git toplevel -> upward walk -> PWD.
+claude_project_root() {
+  if [ -n "$CLAUDE_PROJECT_DIR" ] && [ -d "$CLAUDE_PROJECT_DIR" ]; then
+    printf '%s\n' "$CLAUDE_PROJECT_DIR"; return 0
+  fi
+  if r=$(git rev-parse --show-toplevel 2>/dev/null) && [ -n "$r" ]; then
+    printf '%s\n' "$r"; return 0
+  fi
+  d=$PWD
+  while [ "$d" != "/" ]; do
+    if [ -d "$d/.git" ] || [ -d "$d/.claude" ]; then printf '%s\n' "$d"; return 0; fi
+    d=$(dirname "$d")
+  done
+  printf '%s\n' "$PWD"; return 1   # nonzero: caller decides
+}
+if ROOT=$(claude_project_root); then export ROOT; echo "✅ ROOT=$ROOT"; else
+  echo "❌ ABORT: no project root — CLAUDE_PROJECT_DIR unset, no git toplevel, no .git/.claude above $PWD; run no project block below"; fi
+```
+
+> **STOP if ❌** — an installer never writes into a guessed root. `CLAUDE_PROJECT_DIR`
+> is exported to hook child processes, not to this shell, so it is normally empty here
+> and the git toplevel does the work. The GLOBAL scope ignores `ROOT` entirely.
+
 Every write of the config also stamps the three mandatory JSON metadata keys —
 `version`, `generated_by`, `last_updated` (never `doc_type`: that is a `.md`
 frontmatter field). `version` is resolved from `.claude-plugin/plugin.json`, never
@@ -136,10 +168,10 @@ hardcoded; `last_updated` is the LOCAL date.
 **EXECUTE** config write (read-modify-write, Bash tool). Set `CFG` per scope:
 
 ```
-# project: CFG="$PWD/.claude/agent-deadline.json"
+# project: CFG="$ROOT/.claude/agent-deadline.json"
 # global:  CFG="$HOME/.claude/agent-deadline.json"   (Bash ONLY — protected path)
 SRC="$(dirname "$RUNBOOK")"
-CFG="$PWD/.claude/agent-deadline.json" PJSON="$SRC/../../../.claude-plugin/plugin.json" OVERRIDES="${OVERRIDES:-}" HARD_STOP_RATIO="${HARD_STOP_RATIO:-}" node -e '
+CFG="$ROOT/.claude/agent-deadline.json" PJSON="$SRC/../../../.claude-plugin/plugin.json" OVERRIDES="${OVERRIDES:-}" HARD_STOP_RATIO="${HARD_STOP_RATIO:-}" node -e '
 const fs=require("fs"), p=require("path");
 const f=process.env.CFG;
 const GB="brewtools:agent-deadline-setup";
@@ -288,14 +320,14 @@ Project paths are writable with normal tools (`Write`/`Edit`/`Bash` all fine).
    (Do not rely on any plugin env var — it is injected as prompt text and
    expands to empty in Bash.)
 3. Write `<repo>/.claude/agent-deadline.json` — the **Config** block above with
-   `CFG="$PWD/.claude/agent-deadline.json"`, honouring `MINUTES`/`OVERRIDES`.
+   `CFG="$ROOT/.claude/agent-deadline.json"`, honouring `MINUTES`/`OVERRIDES`.
 4. Merge the 2 hook entries into `<repo>/.claude/settings.json`
    (create `{}` if absent), `<absdir>` = `<repo>/.claude/hooks`.
 
 **EXECUTE** copy (project, Bash tool; `RUNBOOK` = absolute path to this INSTALL.md):
 ```
 SRC="$(dirname "$RUNBOOK")"
-DST="$PWD/.claude/hooks"
+DST="$ROOT/.claude/hooks"
 mkdir -p "$DST" && \
 cp "$SRC/agent-deadline-guard.mjs" "$SRC/agent-deadline-cleanup.mjs" "$DST/" && \
 test -f "$DST/agent-deadline-guard.mjs" && test -f "$DST/agent-deadline-cleanup.mjs" && \
@@ -308,10 +340,24 @@ echo "✅ copied + verified in $DST" || echo "❌ FAILED"
 **EXECUTE** merge settings (project). Use this node merge, NOT a hand `Edit` —
 it is the only path that aborts on a broken file and verifies afterwards:
 ```
-SETTINGS="$PWD/.claude/settings.json" HOOKS_DIR="$PWD/.claude/hooks" node -e '
+SETTINGS="$ROOT/.claude/settings.json" HOOKS_DIR="$ROOT/.claude/hooks" node -e '
 const fs=require("fs"), path=require("path");
 const f=process.env.SETTINGS, dir=process.env.HOOKS_DIR;
 const marks=["agent-deadline-guard.mjs","agent-deadline-cleanup.mjs"];
+function lock(f){                                      // O_EXCL dir lock; stale-break by mtime
+  const l=f+".lock", w=new Int32Array(new SharedArrayBuffer(4));
+  for(let i=0;i<100;i++){
+    try{ fs.mkdirSync(l); return ()=>{ try{ fs.rmdirSync(l); }catch{} }; }
+    catch(e){
+      if(e.code!=="EEXIST") throw e;
+      try{ if(Date.now()-fs.statSync(l).mtimeMs>30000) fs.rmdirSync(l); }catch{}
+      Atomics.wait(w,0,0,100);
+    }
+  }
+  console.error("ABORT: "+l+" is held by another installer; nothing was written"); process.exit(1);
+}
+fs.mkdirSync(path.dirname(f),{recursive:true});
+process.on("exit",lock(f));                            // acquire now, release on ANY exit - read+merge+write below is one critical section
 let s={};
 if(fs.existsSync(f)){
   const raw=fs.readFileSync(f,"utf8");
@@ -341,7 +387,6 @@ for(const [ev,matcher,script,timeout] of want){
   if(matcher) entry.matcher=matcher;
   s.hooks[ev].push(entry);
 }
-fs.mkdirSync(path.dirname(f),{recursive:true});
 fs.writeFileSync(f,JSON.stringify(s,null,2)+"\n");
 const back=JSON.parse(fs.readFileSync(f,"utf8"));      // post-write verification
 for(const [ev,,script] of want){
@@ -354,14 +399,20 @@ console.log("OK merged "+f);
 
 > **STOP if ❌** — fix before continuing.
 
+> Both merge blocks take a `settings.json.lock` directory (`mkdir`, O_EXCL) around the
+> whole read-modify-write and release it on any exit. Without it two setup skills
+> merging at once both read the OLD document and the second writer silently erases the
+> first's registration. A lock older than 30 s is treated as stale and broken.
+
 ---
 
 ## GLOBAL target  (`~/.claude/`)
 
-CRITICAL: `~/.claude/*` is a HARNESS-PROTECTED path. `Write` / `Edit` /
-`MultiEdit` are BLOCKED in ALL permission modes (incl. `bypassPermissions`,
-headless) — the check runs BEFORE hooks, so no hook can override it. The global
-install MUST go entirely through the **Bash tool** (`cp`, `node`, `printf`).
+CRITICAL: `~/.claude/*` is a SENSITIVE path. `Write` / `Edit` / `MultiEdit` there is
+an ASK — it prompts in `default`/`acceptEdits`, is auto-approved only under
+`bypassPermissions`, and FAILS outright headless without bypass. The global install
+MUST go entirely through the **Bash tool** (`cp`, `node`, `printf`), the only route
+that works unattended.
 
 **EXECUTE** copy (global, Bash tool; `RUNBOOK` = absolute path to this INSTALL.md):
 ```
@@ -383,6 +434,20 @@ SETTINGS="$HOME/.claude/settings.json" HOOKS_DIR="$HOME/.claude/hooks" node -e '
 const fs=require("fs"), path=require("path");
 const f=process.env.SETTINGS, dir=process.env.HOOKS_DIR;
 const marks=["agent-deadline-guard.mjs","agent-deadline-cleanup.mjs"];
+function lock(f){                                      // O_EXCL dir lock; stale-break by mtime
+  const l=f+".lock", w=new Int32Array(new SharedArrayBuffer(4));
+  for(let i=0;i<100;i++){
+    try{ fs.mkdirSync(l); return ()=>{ try{ fs.rmdirSync(l); }catch{} }; }
+    catch(e){
+      if(e.code!=="EEXIST") throw e;
+      try{ if(Date.now()-fs.statSync(l).mtimeMs>30000) fs.rmdirSync(l); }catch{}
+      Atomics.wait(w,0,0,100);
+    }
+  }
+  console.error("ABORT: "+l+" is held by another installer; nothing was written"); process.exit(1);
+}
+fs.mkdirSync(path.dirname(f),{recursive:true});
+process.on("exit",lock(f));                            // acquire now, release on ANY exit - read+merge+write below is one critical section
 let s={};
 if(fs.existsSync(f)){
   const raw=fs.readFileSync(f,"utf8");
@@ -412,7 +477,6 @@ for(const [ev,matcher,script,timeout] of want){
   if(matcher) entry.matcher=matcher;
   s.hooks[ev].push(entry);
 }
-fs.mkdirSync(path.dirname(f),{recursive:true});
 fs.writeFileSync(f,JSON.stringify(s,null,2)+"\n");
 const back=JSON.parse(fs.readFileSync(f,"utf8"));
 for(const [ev,,script] of want){
@@ -446,9 +510,9 @@ ONE scope against the current assets, at the budget ALREADY configured.
    scope you were asked about:
 
 ```
-# project: CFG="$PWD/.claude/agent-deadline.json"
+# project: CFG="$ROOT/.claude/agent-deadline.json"
 # global:  CFG="$HOME/.claude/agent-deadline.json"
-MINUTES=$(CFG="$PWD/.claude/agent-deadline.json" node -e '
+MINUTES=$(CFG="$ROOT/.claude/agent-deadline.json" node -e '
 const fs=require("fs"); const f=process.env.CFG;
 if(!fs.existsSync(f)){ console.error("ABORT: not installed in this scope - no config at "+f+"; run INSTALL instead"); process.exit(1); }
 let c; try{ c=JSON.parse(fs.readFileSync(f,"utf8")||"{}"); }
@@ -486,10 +550,10 @@ config on every call, so this takes effect immediately, no restart.
 `RUNBOOK` must be exported here too: this is a config WRITE, so it re-stamps the three
 metadata keys.
 ```
-# project: CFG="$PWD/.claude/agent-deadline.json"
+# project: CFG="$ROOT/.claude/agent-deadline.json"
 # global:  CFG="$HOME/.claude/agent-deadline.json"
 SRC="$(dirname "$RUNBOOK")"
-CFG="$PWD/.claude/agent-deadline.json" PJSON="$SRC/../../../.claude-plugin/plugin.json" node -e '
+CFG="$ROOT/.claude/agent-deadline.json" PJSON="$SRC/../../../.claude-plugin/plugin.json" node -e '
 const fs=require("fs"), p=require("path"); const f=process.env.CFG;
 const GB="brewtools:agent-deadline-setup";
 function pluginVersion(){
@@ -555,13 +619,26 @@ asked about and leave the other alone. Foreign hook entries are never touched.
 **EXECUTE** using Bash tool — pick ONE pair of paths:
 ```
 # GLOBAL:  HOOKS_DIR="$HOME/.claude/hooks"; SETTINGS="$HOME/.claude/settings.json"
-# PROJECT: HOOKS_DIR="$PWD/.claude/hooks";  SETTINGS="$PWD/.claude/settings.json"
-export HOOKS_DIR="$PWD/.claude/hooks" SETTINGS="$PWD/.claude/settings.json"
+# PROJECT: HOOKS_DIR="$ROOT/.claude/hooks";  SETTINGS="$ROOT/.claude/settings.json"
+export HOOKS_DIR="$ROOT/.claude/hooks" SETTINGS="$ROOT/.claude/settings.json"
 node -e '
 const fs=require("fs");
 const f=process.env.SETTINGS;
 const marks=["agent-deadline-guard.mjs","agent-deadline-cleanup.mjs"];
+function lock(f){                                      // O_EXCL dir lock; stale-break by mtime
+  const l=f+".lock", w=new Int32Array(new SharedArrayBuffer(4));
+  for(let i=0;i<100;i++){
+    try{ fs.mkdirSync(l); return ()=>{ try{ fs.rmdirSync(l); }catch{} }; }
+    catch(e){
+      if(e.code!=="EEXIST") throw e;
+      try{ if(Date.now()-fs.statSync(l).mtimeMs>30000) fs.rmdirSync(l); }catch{}
+      Atomics.wait(w,0,0,100);
+    }
+  }
+  console.error("ABORT: "+l+" is held by another installer; nothing was written"); process.exit(1);
+}
 if(!fs.existsSync(f)){ console.log("no settings to clean: "+f); process.exit(0); }
+process.on("exit",lock(f));                            // re-read under the lock - a concurrent installer must not lose its merge
 const raw=fs.readFileSync(f,"utf8");
 if(!raw.trim()){ console.log("empty settings, nothing to clean: "+f); process.exit(0); }
 let s;
@@ -590,8 +667,9 @@ console.log("OK cleaned "+f);
 
 > **STOP if ❌** — fix before continuing.
 
-> Global uninstall: file-editing tools are blocked on `~/.claude/*` — use the
-> Bash `node`/`rm` form above, never Edit/Write. Project uninstall may use Edit.
+> Global uninstall: `Write`/`Edit` on `~/.claude/*` prompts and fails headless — use
+> the Bash `node`/`rm` form above. Project uninstall goes through the same block: it
+> is the only path that locks, verifies and keeps foreign hooks.
 
 ## PURGE  (uninstall + config, and only then state)
 
@@ -601,9 +679,9 @@ versa.
 
 **EXECUTE** using Bash tool:
 ```
-# project: CFG="$PWD/.claude/agent-deadline.json"
+# project: CFG="$ROOT/.claude/agent-deadline.json"
 # global:  CFG="$HOME/.claude/agent-deadline.json"
-CFG="$PWD/.claude/agent-deadline.json"
+CFG="$ROOT/.claude/agent-deadline.json"
 rm -f "$CFG" && test ! -e "$CFG" && echo "✅ removed $CFG" || echo "❌ FAILED"
 ```
 
@@ -617,7 +695,7 @@ is set explicitly. Otherwise leftovers self-prune after ~1 day.
 
 **EXECUTE** using Bash tool (optional):
 ```
-if [ -f "$PWD/.claude/agent-deadline.json" ] || [ -f "$HOME/.claude/agent-deadline.json" ]; then
+if [ -f "$ROOT/.claude/agent-deadline.json" ] || [ -f "$HOME/.claude/agent-deadline.json" ]; then
   echo "SKIP state wipe: agent-deadline is still configured in the other scope"
 elif [ "$PURGE_STATE" = "1" ]; then
   node -e 'const fs=require("fs"),os=require("os"),p=require("path");

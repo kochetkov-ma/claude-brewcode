@@ -29,9 +29,15 @@ function json(file) {
   catch (error) { fail(`${path.relative(ROOT, file)}: ${error.message}`); return null; }
 }
 
+// Build artifacts are gitignored, are never mirrored by the generator, and recur the moment
+// anyone compiles or installs -- a single stray `.pyc` under a skill's scripts/ made the
+// canonical/dist comparison report a differing resource and aborted the release.
+const IGNORED_ENTRIES = new Set(['__pycache__', 'node_modules', '.DS_Store']);
+
 function walk(dir) {
   const files = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+    if (IGNORED_ENTRIES.has(entry.name) || entry.name.endsWith('.pyc')) continue;
     const target = path.join(dir, entry.name);
     if (entry.isDirectory()) files.push(...walk(target));
     else files.push(target);

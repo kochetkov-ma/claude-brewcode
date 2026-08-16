@@ -227,35 +227,39 @@ Per-row notes worth knowing before reading a row: `memory-sync-setup`'s version 
 
 ### The version-comparison heredoc
 
-Every stamp read in the table above comes from one heredoc — `plugin|path|expected-owner` — twenty-one lines covering the roster's eleven rows:
+Every stamp read in the table above comes from one heredoc — `plugin|path|expected-owner|content_version-source` — twenty-one lines covering the roster's eleven rows. The fourth field names the plugin file that supplies that SAME artifact's own `content_version`, so each row is measured against its own history, never against the release-wide plugin version directly:
 
 ```
-brewcode|.claude/teams/*/team.md|brewcode:teams-setup
-brewcode|.claude/rules/semble-first.md|brewcode:semble-setup
-brewcode|.claude/skills/superreview/SKILL.md|brewcode:superreview-setup
-brewtools|.claude/features/board.md|brewtools:task-board-setup
-brewtools|.claude/hooks/think-short-session.mjs|brewtools:think-short-setup
-brewtools|~/.claude/hooks/think-short-session.mjs|brewtools:think-short-setup
-brewtools|.claude/hooks/agent-deadline-guard.mjs|brewtools:agent-deadline-setup
-brewtools|~/.claude/hooks/agent-deadline-guard.mjs|brewtools:agent-deadline-setup
-brewtools|.claude/agent-deadline.json|brewtools:agent-deadline-setup
-brewtools|~/.claude/agent-deadline.json|brewtools:agent-deadline-setup
-brewtools|.claude/hooks/agent-router.mjs|brewtools:agent-router-setup
-brewtools|.claude/brewtools/agent-router.json|brewtools:agent-router-setup
-brewtools|.claude/brewtools/manager/state.json|brewtools:manager-setup
-brewtools|.claude/brewtools/manager/hardmode-guard.mjs|brewtools:manager-setup
-brewtools|.claude/hooks/agent-return-guard.mjs|brewtools:agent-return-setup
-brewtools|~/.claude/hooks/agent-return-guard.mjs|brewtools:agent-return-setup
-brewtools|.claude/agent-return.json|brewtools:agent-return-setup
-brewtools|~/.claude/agent-return.json|brewtools:agent-return-setup
-brewdoc|.claude/skills/memory-sync/SKILL.md|brewdoc:memory-sync-setup
-brewdoc|.claude/docsync/config.json|brewdoc:docsync-setup
-brewdoc|.claude/hooks/docsync-track.mjs|brewdoc:docsync-setup
+brewcode|.claude/teams/*/team.md|brewcode:teams-setup|skills/teams-setup/SKILL.md
+brewcode|.claude/rules/semble-first.md|brewcode:semble-setup|skills/semble-setup/assets/semble-first.md.template
+brewcode|.claude/skills/superreview/SKILL.md|brewcode:superreview-setup|skills/superreview-setup/SKILL.md
+brewtools|.claude/features/board.md|brewtools:task-board-setup|skills/task-board-setup/SKILL.md
+brewtools|.claude/hooks/think-short-session.mjs|brewtools:think-short-setup|skills/think-short-setup/assets/think-short-session.mjs
+brewtools|~/.claude/hooks/think-short-session.mjs|brewtools:think-short-setup|skills/think-short-setup/assets/think-short-session.mjs
+brewtools|.claude/hooks/agent-deadline-guard.mjs|brewtools:agent-deadline-setup|skills/agent-deadline-setup/assets/agent-deadline-guard.mjs
+brewtools|~/.claude/hooks/agent-deadline-guard.mjs|brewtools:agent-deadline-setup|skills/agent-deadline-setup/assets/agent-deadline-guard.mjs
+brewtools|.claude/agent-deadline.json|brewtools:agent-deadline-setup|skills/agent-deadline-setup/assets/INSTALL.md
+brewtools|~/.claude/agent-deadline.json|brewtools:agent-deadline-setup|skills/agent-deadline-setup/assets/INSTALL.md
+brewtools|.claude/hooks/agent-router.mjs|brewtools:agent-router-setup|skills/agent-router-setup/assets/agent-router.mjs
+brewtools|.claude/brewtools/agent-router.json|brewtools:agent-router-setup|skills/agent-router-setup/assets/INSTALL.md
+brewtools|.claude/brewtools/manager/state.json|brewtools:manager-setup|hooks/lib/manager-state.mjs
+brewtools|.claude/brewtools/manager/hardmode-guard.mjs|brewtools:manager-setup|hooks/hardmode-guard.mjs
+brewtools|.claude/hooks/agent-return-guard.mjs|brewtools:agent-return-setup|skills/agent-return-setup/assets/agent-return-guard.mjs
+brewtools|~/.claude/hooks/agent-return-guard.mjs|brewtools:agent-return-setup|skills/agent-return-setup/assets/agent-return-guard.mjs
+brewtools|.claude/agent-return.json|brewtools:agent-return-setup|skills/agent-return-setup/assets/INSTALL.md
+brewtools|~/.claude/agent-return.json|brewtools:agent-return-setup|skills/agent-return-setup/assets/INSTALL.md
+brewdoc|.claude/skills/memory-sync/SKILL.md|brewdoc:memory-sync-setup|skills/memory-sync-setup/SKILL.md
+brewdoc|.claude/docsync/config.json|brewdoc:docsync-setup|skills/docsync-setup/SKILL.md
+brewdoc|.claude/hooks/docsync-track.mjs|brewdoc:docsync-setup|skills/docsync-setup/assets/docsync-track.mjs
 ```
 
 Twenty-one lines over eleven rows, because several rows contribute more than one carrier: `think-short-setup` and `agent-router-setup` two each (project scope plus global, or hook plus config), `agent-deadline-setup` and [`agent-return-setup`](/brewtools/skills/agent-return-setup/) four each (guard and config, project and global scope), `manager-setup` two (`state.json` primary, the copied guard as a documented fallback). Two assertions guard the set against silent drift, both a hard `exit 1` rather than a warning: `TOTAL` must equal 21 — a line deleted anywhere aborts the run, even in a plugin group this pass is not scanning — and `SEEN` must equal the group's own `WANT` (brewcode 3, brewtools 15, brewdoc 3).
 
 Reading a stamp also compares its `generated_by` against the line's expected owner. A different name reports `OWNER-WRONG` — some other setup wrote this path — and a real `version` with no `generated_by` beside it reports `OWNER-NONE`, treated as `stale (legacy stamp)`.
+
+<Callout type="tip" title="Fixed: no more false BEHIND on a missing cache source">
+An artifact's headline stamp is measured against its OWN `content_version-source` — the plugin file that supplies that same artifact's current `content_version` — never against the release-wide plugin version directly. When that source file is absent from the plugin cache, the skill used to fall back to comparing against the plugin version anyway, which could print a bogus regression like `stale (5.6.0 -> 5.7.0)` on an artifact that had not actually changed. It now reports the gap and stops: no source, no verdict, classified `unknown`, never `stale`.
+</Callout>
 
 ### Version resolution never guesses
 

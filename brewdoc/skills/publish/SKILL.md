@@ -4,7 +4,7 @@ description: "Publish text/markdown/file/site to brewpage.app, returns URL. Trig
 user-invocable: true
 disable-model-invocation: true
 argument-hint: "[prompt] <text|file_path|directory_path|zip_path> [--ttl N] [--entry filename]"
-allowed-tools: [Read, Bash, AskUserQuestion, Glob]
+allowed-tools: [Read, Write, Bash, AskUserQuestion, Glob]
 model: haiku
 ---
 
@@ -71,12 +71,14 @@ Content:  <type description> · <size> · <api endpoint>
 TTL:      <N> days
 ```
 
-For SITE: detect entry file using priority: 1) `--entry` flag, 2) `index.html` exists, 3) first `.html` alphabetically. If no .html in dir → fail with explicit error, do not guess.
+For SITE: entry priority is 1) `--entry` flag, 2) `index.html`, 3) first `.html` alphabetically. No `.html` → fail with an explicit error, do not guess.
 ```
 Content:  site · <N> files · <total_size> · POST /api/sites
 Entry:    <entry_file>
 TTL:      <N> days
 ```
+These are estimates from the source tree. The authoritative file set is the ARCHIVE MANIFEST that Step 6
+prints from the built archive, before any upload — report that one to the user, not this count.
 
 ### Step 4: Ask Namespace
 
@@ -128,199 +130,119 @@ LC_ALL=C tr -dc 'a-z0-9' < /dev/urandom | head -c6 2>/dev/null
 
 Resolution: `1`, `4`, or empty → no password | `2` → use generated random password | `3` or custom text → use as-is.
 
-> **MANDATORY substitution.** Every Bash block in Step 6 contains the literal placeholder `{password_header}`. Before running a block:
-> - password set → replace `{password_header}` with `-H "X-Password: <the resolved password>"`
-> - no password → delete the whole `  {password_header} \` line
->
-> Never leave `{password_header}` literal in the command, and never report a password to the user unless you actually substituted it in the block you ran. Skipping this publishes the page UNPROTECTED while the output still says `Published:`.
+> **A password is passed as a FILE, never as shell text.** If a password was chosen, `Write` it — the
+> password alone, no trailing prose — to `<PROJECT_ROOT>/.claude/tmp/brewpage-password.txt`. If no password
+> was chosen, write nothing: the Step 6 blocks add the `X-Password` header exactly when that file exists and
+> delete the file afterwards. Never report a password unless you actually wrote that file.
 
 ### Step 6: Publish and Save Token (secure)
 
 > **SECURITY:** The ownerToken MUST NEVER appear in conversation output. Bash blocks handle curl + token parsing + history save atomically; LLM sees only the URL. The failure branch prints no response body, so a token in an error payload never reaches the transcript.
->
-> **`{password_header}` is a placeholder you substitute before running the block** — exactly like `{content}`, `{ns}`, `{days}`. There is no `$PASSWORD` shell variable; each Bash call is a fresh shell and nothing assigns it. See the substitution rule in Step 5.
 
-Each block below self-initializes `.claude/brewpage-history.md` if absent.
+**Nothing prompt-derived is pasted into shell source.** Content, JSON, the password and the target path all
+travel as FILES; only `{ns}`, `{days}` and `{entry}` are substituted, inside SINGLE quotes, and only after you
+have validated them yourself:
 
-> For a MARKDOWN **file** (type MARKDOWN from Step 2), use the **HTML/Markdown text** block below but replace the `CONTENT=$(cat <<'BREWPAGE_EOF' ...)` heredoc with `CONTENT=$(cat "/abs/path/to/file.md")`. Everything else (the `?format=markdown` endpoint, token handling, history row) is identical — this renders the `.md` as styled markdown instead of a raw downloadable file.
+| Placeholder | Must match before you substitute it | Re-checked in the block by |
+|-------------|-------------------------------------|----------------------------|
+| `{ns}` | `^[A-Za-z0-9-]{3,32}$` | `bp_validate` |
+| `{days}` | positive integer | `bp_validate` |
+| `{entry}` | plain relative file name, no `..`; empty string when auto-detecting | `bp_validate` |
+
+A value that fails its pattern is a hard stop — re-ask, never "clean it up" and never substitute it anyway.
+
+**Before running a block, `Write` the inputs it reads** (absolute paths under `<PROJECT_ROOT>/.claude/tmp/`):
+
+| File | Written for | Contents |
+|------|-------------|----------|
+| `brewpage-content.md` | HTML / MARKDOWN text | the text to publish, verbatim |
+| `brewpage-payload.json` | JSON | the JSON document, verbatim |
+| `brewpage-target-path.txt` | FILE / SITE(dir) / SITE(zip) | the absolute source path, one line |
+| `brewpage-password.txt` | any type, only if a password was chosen | the password, one line |
+
+For a MARKDOWN **file** (type MARKDOWN from Step 2), `Read` it and `Write` its text into
+`brewpage-content.md`, then run the HTML/Markdown block — the `?format=markdown` endpoint renders it styled
+instead of serving a raw download.
+
+Every block starts with the same two lines: source `scripts/brewpage-lib.sh`, then `bp_begin` — it re-validates
+`{ns}`/`{days}`/`{entry}`, requires `jq`, resolves the PROJECT ROOT (`CLAUDE_PROJECT_DIR` →
+`git rev-parse --show-toplevel` → upward `.git`/`.claude` walk → `PWD`), creates `$HISTORY_FILE` there with
+mode `600`, and appends it plus `.claude/tmp/` to the project `.gitignore`. A nested cwd can no longer scatter
+a second token file below the project. The library also owns the parts every block used to repeat: `bp_post`
+(adds `X-Password` when Step 5 wrote the password file), `bp_finish` (URL, owner token → history, the single
+`OK`/`FAILED` line, `.fileCount` for `site`) and `bp_archive_gate` (the shared verdict on a `publish.mjs` run).
 
 **HTML/Markdown text** — **EXECUTE** using Bash tool:
 ```bash
-command -v jq >/dev/null || { echo "FAILED: jq required"; exit 1; }
-HISTORY_FILE=".claude/brewpage-history.md"
-if [ ! -f "$HISTORY_FILE" ]; then
-  mkdir -p "$(dirname "$HISTORY_FILE")"
-  cat > "$HISTORY_FILE" <<'HEADER'
-# brewpage.app — Published Pages
+. "${CLAUDE_SKILL_DIR}/scripts/brewpage-lib.sh" || { echo "FAILED: publish helper library not found"; exit 1; }
+bp_begin '{ns}' '{days}' '' || exit 1
 
-> Owner tokens allow delete and in-place republish (html/json/kv/sites all support PUT). Keep this file private.
-> Delete: `curl -s -X DELETE "https://brewpage.app/api/{ns}/{id}" -H "X-Owner-Token: TOKEN"`
-
-| Date | URL | Owner Token | TTL | Type |
-|------|-----|-------------|-----|------|
-HEADER
-fi
-
-CONTENT=$(cat <<'BREWPAGE_EOF'
-{content}
-BREWPAGE_EOF
-)
+CONTENT=$(cat "$BP_TMPDIR/brewpage-content.md") || { echo "FAILED: content file missing"; exit 1; }
 PAYLOAD=$(jq -n --arg c "$CONTENT" '{content: $c}')
-RESPONSE=$(curl -s -X POST "https://brewpage.app/api/html?ns={ns}&ttl={days}&format=markdown" \
-  -H "Content-Type: application/json" \
-  {password_header} \
-  -d "$PAYLOAD")
-
-URL=$(echo "$RESPONSE" | jq -r '.link // empty')
-TOKEN=$(echo "$RESPONSE" | jq -r '.ownerToken // empty')
-
-if [ -n "$URL" ]; then
-  [ -n "$TOKEN" ] && echo "| $(date '+%Y-%m-%d %H:%M') | [$URL]($URL) | \`$TOKEN\` | {ttl}d | html |" >> "$HISTORY_FILE"
-  echo "OK $URL"
-else
-  echo "FAILED: publish rejected (no .link in response)"
-fi
+RESPONSE=$(bp_post "https://brewpage.app/api/html?ns=$NS&ttl=$DAYS&format=markdown" \
+  -H "Content-Type: application/json" -d "$PAYLOAD")
+rm -f "$PWFILE" "$BP_TMPDIR/brewpage-content.md"
+bp_finish "$RESPONSE" "$DAYS" html
 ```
 
 **JSON** — **EXECUTE** using Bash tool:
 ```bash
-command -v jq >/dev/null || { echo "FAILED: jq required"; exit 1; }
-HISTORY_FILE=".claude/brewpage-history.md"
-if [ ! -f "$HISTORY_FILE" ]; then
-  mkdir -p "$(dirname "$HISTORY_FILE")"
-  cat > "$HISTORY_FILE" <<'HEADER'
-# brewpage.app — Published Pages
+. "${CLAUDE_SKILL_DIR}/scripts/brewpage-lib.sh" || { echo "FAILED: publish helper library not found"; exit 1; }
+bp_begin '{ns}' '{days}' '' || exit 1
 
-> Owner tokens allow delete and in-place republish (html/json/kv/sites all support PUT). Keep this file private.
-> Delete: `curl -s -X DELETE "https://brewpage.app/api/{ns}/{id}" -H "X-Owner-Token: TOKEN"`
-
-| Date | URL | Owner Token | TTL | Type |
-|------|-----|-------------|-----|------|
-HEADER
-fi
-
-RESPONSE=$(curl -s -X POST "https://brewpage.app/api/json?ns={ns}&ttl={days}" \
-  -H "Content-Type: application/json" \
-  {password_header} \
-  -d '{original_json}')
-
-URL=$(echo "$RESPONSE" | jq -r '.link // empty')
-TOKEN=$(echo "$RESPONSE" | jq -r '.ownerToken // empty')
-
-if [ -n "$URL" ]; then
-  [ -n "$TOKEN" ] && echo "| $(date '+%Y-%m-%d %H:%M') | [$URL]($URL) | \`$TOKEN\` | {ttl}d | json |" >> "$HISTORY_FILE"
-  echo "OK $URL"
-else
-  echo "FAILED: publish rejected (no .link in response)"
-fi
+PAYLOAD_FILE="$BP_TMPDIR/brewpage-payload.json"
+jq empty "$PAYLOAD_FILE" 2>/dev/null || { echo "FAILED: payload is not valid JSON"; exit 1; }
+RESPONSE=$(bp_post "https://brewpage.app/api/json?ns=$NS&ttl=$DAYS" \
+  -H "Content-Type: application/json" -d @"$PAYLOAD_FILE")
+rm -f "$PWFILE" "$PAYLOAD_FILE"
+bp_finish "$RESPONSE" "$DAYS" json
 ```
 
 **File** — **EXECUTE** using Bash tool:
 ```bash
-command -v jq >/dev/null || { echo "FAILED: jq required"; exit 1; }
-HISTORY_FILE=".claude/brewpage-history.md"
-if [ ! -f "$HISTORY_FILE" ]; then
-  mkdir -p "$(dirname "$HISTORY_FILE")"
-  cat > "$HISTORY_FILE" <<'HEADER'
-# brewpage.app — Published Pages
+. "${CLAUDE_SKILL_DIR}/scripts/brewpage-lib.sh" || { echo "FAILED: publish helper library not found"; exit 1; }
+bp_begin '{ns}' '{days}' '' || exit 1
 
-> Owner tokens allow delete and in-place republish (html/json/kv/sites all support PUT). Keep this file private.
-> Delete: `curl -s -X DELETE "https://brewpage.app/api/{ns}/{id}" -H "X-Owner-Token: TOKEN"`
-
-| Date | URL | Owner Token | TTL | Type |
-|------|-----|-------------|-----|------|
-HEADER
-fi
-
-RESPONSE=$(curl -s -X POST "https://brewpage.app/api/files?ns={ns}&ttl={days}" \
-  {password_header} \
-  -F "file=@/absolute/path/to/file")
-
-URL=$(echo "$RESPONSE" | jq -r '.link // empty')
-TOKEN=$(echo "$RESPONSE" | jq -r '.ownerToken // empty')
-
-if [ -n "$URL" ]; then
-  [ -n "$TOKEN" ] && echo "| $(date '+%Y-%m-%d %H:%M') | [$URL]($URL) | \`$TOKEN\` | {ttl}d | file |" >> "$HISTORY_FILE"
-  echo "OK $URL"
-else
-  echo "FAILED: publish rejected (no .link in response)"
-fi
+SRC=$(cat "$BP_TMPDIR/brewpage-target-path.txt") || { echo "FAILED: target path missing"; exit 1; }
+[ -f "$SRC" ] || { echo "FAILED: not a file: $SRC"; exit 1; }
+RESPONSE=$(bp_post "https://brewpage.app/api/files?ns=$NS&ttl=$DAYS" -F "file=@$SRC")
+rm -f "$PWFILE" "$BP_TMPDIR/brewpage-target-path.txt"
+bp_finish "$RESPONSE" "$DAYS" file
 ```
 
 **Site (directory)** — **EXECUTE** using Bash tool:
 ```bash
-command -v jq >/dev/null || { echo "FAILED: jq required"; exit 1; }
-HISTORY_FILE=".claude/brewpage-history.md"
-if [ ! -f "$HISTORY_FILE" ]; then
-  mkdir -p "$(dirname "$HISTORY_FILE")"
-  cat > "$HISTORY_FILE" <<'HEADER'
-# brewpage.app — Published Pages
+. "${CLAUDE_SKILL_DIR}/scripts/brewpage-lib.sh" || { echo "FAILED: publish helper library not found"; exit 1; }
+bp_begin '{ns}' '{days}' '{entry}' || exit 1
 
-> Owner tokens allow delete and in-place republish (html/json/kv/sites all support PUT). Keep this file private.
-> Delete: `curl -s -X DELETE "https://brewpage.app/api/sites/{ns}/{id}" -H "X-Owner-Token: TOKEN"`
-> Update site (keep same URL): `PUT /api/sites/{ns}/{id}` with `X-Owner-Token: TOKEN` + the new bundle — fully replaces the file set (adds new, removes absent, overwrites matching). The link never changes.
+SRC=$(cat "$BP_TMPDIR/brewpage-target-path.txt") || { echo "FAILED: target path missing"; exit 1; }
+TMPZIP="$BP_TMPDIR/brewpage-site-$$.zip"
+MANIFEST=$(node "${CLAUDE_SKILL_DIR}/scripts/publish.mjs" pack --dir "$SRC" --out "$TMPZIP" ${ENTRY:+--entry "$ENTRY"})
+RC=$?
+printf '%s\n' "$MANIFEST"
+bp_archive_gate "$RC" "$MANIFEST" "$TMPZIP" || exit $?
 
-| Date | URL | Owner Token | TTL | Type |
-|------|-----|-------------|-----|------|
-HEADER
-fi
-
-command -v zip >/dev/null || { echo "FAILED: zip required"; exit 1; }
-TMPZIP=$(mktemp /tmp/brewpage-site-XXXXXX.zip)
-(cd "{directory_path}" && zip -r "$TMPZIP" .)
-RESPONSE=$(curl -s -X POST "https://brewpage.app/api/sites?ns={ns}&ttl={days}&entry={entry}" \
-  -H "User-Agent: ClaudeCode/1.0" \
-  {password_header} \
-  -F "archive=@$TMPZIP")
-rm -f "$TMPZIP"
-
-URL=$(echo "$RESPONSE" | jq -r '.link // empty')
-URL="${URL%/}"  # strip any trailing slash — /public/<id>/ routes to brewpage landing
-TOKEN=$(echo "$RESPONSE" | jq -r '.ownerToken // empty')
-FCOUNT=$(echo "$RESPONSE" | jq -r '.fileCount // "?"')
-
-if [ -n "$URL" ]; then
-  [ -n "$TOKEN" ] && echo "| $(date '+%Y-%m-%d %H:%M') | [$URL]($URL) | \`$TOKEN\` | {ttl}d | site ($FCOUNT files) |" >> "$HISTORY_FILE"
-  echo "OK $URL | Files: $FCOUNT"
-else
-  echo "FAILED: publish rejected (no .link in response)"
-fi
+RESPONSE=$(bp_post "https://brewpage.app/api/sites?ns=$NS&ttl=$DAYS&entry=$ENTRY" \
+  -H "User-Agent: ClaudeCode/1.0" -F "archive=@$TMPZIP")
+rm -f "$TMPZIP" "$PWFILE" "$BP_TMPDIR/brewpage-target-path.txt"
+bp_finish "$RESPONSE" "$DAYS" site
 ```
 
 **Site (ZIP file)** — **EXECUTE** using Bash tool:
 ```bash
-command -v jq >/dev/null || { echo "FAILED: jq required"; exit 1; }
-HISTORY_FILE=".claude/brewpage-history.md"
-if [ ! -f "$HISTORY_FILE" ]; then
-  mkdir -p "$(dirname "$HISTORY_FILE")"
-  cat > "$HISTORY_FILE" <<'HEADER'
-# brewpage.app — Published Pages
+. "${CLAUDE_SKILL_DIR}/scripts/brewpage-lib.sh" || { echo "FAILED: publish helper library not found"; exit 1; }
+bp_begin '{ns}' '{days}' '{entry}' || exit 1
 
-> Owner tokens allow delete and in-place republish (html/json/kv/sites all support PUT). Keep this file private.
-> Delete: `curl -s -X DELETE "https://brewpage.app/api/sites/{ns}/{id}" -H "X-Owner-Token: TOKEN"`
-> Update site (keep same URL): `PUT /api/sites/{ns}/{id}` with `X-Owner-Token: TOKEN` + the new bundle — fully replaces the file set (adds new, removes absent, overwrites matching). The link never changes.
+SRC=$(cat "$BP_TMPDIR/brewpage-target-path.txt") || { echo "FAILED: target path missing"; exit 1; }
+MANIFEST=$(node "${CLAUDE_SKILL_DIR}/scripts/publish.mjs" inspect --zip "$SRC" ${ENTRY:+--entry "$ENTRY"})
+RC=$?
+printf '%s\n' "$MANIFEST"
+bp_archive_gate "$RC" "$MANIFEST" "" || exit $?
 
-| Date | URL | Owner Token | TTL | Type |
-|------|-----|-------------|-----|------|
-HEADER
-fi
-
-RESPONSE=$(curl -s -X POST "https://brewpage.app/api/sites?ns={ns}&ttl={days}&entry={entry}" \
-  -H "User-Agent: ClaudeCode/1.0" \
-  {password_header} \
-  -F "archive=@{zip_file_path}")
-
-URL=$(echo "$RESPONSE" | jq -r '.link // empty')
-URL="${URL%/}"  # strip any trailing slash — /public/<id>/ routes to brewpage landing
-TOKEN=$(echo "$RESPONSE" | jq -r '.ownerToken // empty')
-FCOUNT=$(echo "$RESPONSE" | jq -r '.fileCount // "?"')
-
-if [ -n "$URL" ]; then
-  [ -n "$TOKEN" ] && echo "| $(date '+%Y-%m-%d %H:%M') | [$URL]($URL) | \`$TOKEN\` | {ttl}d | site ($FCOUNT files) |" >> "$HISTORY_FILE"
-  echo "OK $URL | Files: $FCOUNT"
-else
-  echo "FAILED: publish rejected (no .link in response)"
-fi
+RESPONSE=$(bp_post "https://brewpage.app/api/sites?ns=$NS&ttl=$DAYS&entry=$ENTRY" \
+  -H "User-Agent: ClaudeCode/1.0" -F "archive=@$SRC")
+rm -f "$PWFILE" "$BP_TMPDIR/brewpage-target-path.txt"
+bp_finish "$RESPONSE" "$DAYS" site
 ```
 
 ### Step 7: Output Result
@@ -328,14 +250,14 @@ fi
 **Success** (bash printed `OK {url}`):
 ```
 Published: {url from bash output}
-Owner token saved to .claude/brewpage-history.md
+Owner token saved to <project-root>/.claude/brewpage-history.md (mode 600, git-ignored)
 ```
 
 **Success for SITE** (bash printed `OK {url} | Files: {count}`):
 ```
 Published site: {url from bash output}
 Entry: {entry_file} | Files: {count}
-Owner token saved to .claude/brewpage-history.md
+Owner token saved to <project-root>/.claude/brewpage-history.md (mode 600, git-ignored)
 
 ⚠ Share the URL exactly as printed — DO NOT append a trailing slash.
   brewpage.app routes "/public/<id>/" to its own landing page, and the
@@ -344,17 +266,23 @@ Owner token saved to .claude/brewpage-history.md
 
 For a private (non-`public`) namespace, append one short line after the link (skip if reply must stay ultra-brief): *Unlisted link — anyone who has it can open it, but it's not in the gallery or search. Want it discoverable? Publish to `public`.*
 
+**Needs confirmation** (bash printed `CONFIRM: ...`, exit 2): nothing was uploaded. Show the manifest lines
+the block printed, name the flagged entries, and use ONE `AskUserQuestion` — publish anyway / cancel. On
+"publish anyway", re-run the same block with `BREWPAGE_CONFIRMED=1` prefixed. On cancel, stop.
+
 **Error** (bash printed `FAILED: ...`):
 ```
-Publish failed.
+Publish failed: {the FAILED line, verbatim}
 ```
 
 ## Notes
 
 - Use `jq -n --arg c "$CONTENT" '{content: $c}'` to safely encode text content. **`format` is a query param**, not a body field — `/api/html` ignores any `format` key inside the JSON body and reads only `?format=` from the URL. Wrong location = server applies default `html` and stores markdown as raw text.
 - TTL default: `15` days. Namespace must be alphanumeric (3-32 chars).
-- To **delete** a published page, find the owner token in `.claude/brewpage-history.md` and use the delete command shown in that file's header.
+- Owner-token history lives at `<project-root>/.claude/brewpage-history.md` — project root resolved by `scripts/brewpage-lib.sh` (`CLAUDE_PROJECT_DIR` → git toplevel → upward `.git`/`.claude` walk → `PWD`), created mode `600`, and added to the project `.gitignore`. To **delete** a published page, find its owner token there and use the delete command in that file's header.
 - To **update a published site**, `PUT` the new bundle to the same site URL (`PUT /api/sites/{ns}/{id}`) with your `X-Owner-Token` — the uploaded bundle fully replaces the file set (adds new files, removes absent ones, overwrites matching) and the link never changes. No DELETE-then-POST needed.
-- Entry file detection: `--entry` override > `index.html` > first `.html` alphabetically.
+- Entry file detection: `--entry` override > `index.html` > first `.html` alphabetically — resolved inside `scripts/publish.mjs` against the archive that was actually built, and echoed as the manifest's `ENTRY:` line.
+- **SITE bundles are allowlisted, never denylisted.** `scripts/publish.mjs pack` keeps only known web-asset extensions and drops every dot-entry (`.env`, `.git/`, `.DS_Store`), `node_modules/`, symlinks and unknown types. It removes any pre-existing output file first (a `mktemp`-created 0-byte file made Info-ZIP exit 3), checks `zip`'s exit status, verifies the archive with `unzip -t`, requires a non-zero size, and compares the archived name set against the selected one. Any mismatch deletes the archive and exits 1, so `curl` is never reached. A supplied ZIP is not rewritten — `inspect` lists it and exits 2 when anything unexpected or sensitive is inside.
+- Tests: `bash brewdoc/skills/publish/tests/run.sh` — standalone `node`, no network, no real upload.
 - **SITE URL — NO trailing slash.** API returns `.link = "https://brewpage.app/public/<id>"` without trailing `/`. Appending `/` routes to brewpage.app's own landing page; the JS redirect that rescues the no-slash form does NOT fire for the slash-dir form → site becomes inaccessible.
 - **SITE verification cannot be done via `curl`.** The no-slash URL serves the BrewPage landing HTML with an inline JS redirect that only executes in a real browser. To verify: use Playwright / `browser_navigate`, or fetch `<url>/index.html` explicitly.

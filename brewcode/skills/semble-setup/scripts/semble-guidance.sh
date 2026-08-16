@@ -785,8 +785,19 @@ const FIRST=[
 // The complementary sentence. rg IS the right tool for these, the skill own rule
 // says so, and a line that scopes itself this way is not a competing doctrine.
 const KEEP=/\b(exact|literal|identifier|identifiers|regex|regexes|path|paths|filename|filenames|exhaustive|enumerat\w*|verify|verifying|count|counts)\b/;
+// A tool-first clause fenced behind a condition ("when semble is offline", "fallback:
+// if the index is cold, use rg for all code search") is a compatible offline fallback,
+// not a competing doctrine - and it is the only place that fallback is written down, so
+// deleting it loses unique guidance. The condition must stand BEFORE the matched clause:
+// a bare "semantic search is unavailable" still drops. Such a line goes to the existing
+// weak/W bucket - reported by line number, left exactly as written.
+const COND=new RegExp("\\b(when|whenever|if|unless|while|until|in case|in the absence of|fallback|falls? back|offline|cold|unavailable|unreachable|down|not (yet )?indexed|no index)\\b");
 const HEAD=/^(#{1,6})\s+(.*)$/;
 const ANYTOOL=new RegExp("\\b"+TOOL+"\\b");
+// Earliest start offset of any primacy/denial match, -1 when none matches.
+const firstHit=n=>{ let at=-1;
+  for(const r of DENY.concat(FIRST)){ const m=r.exec(n); if(m&&(at<0||m.index<at)) at=m.index; }
+  return at; };
 const drop=new Set(), weak=[];
 for(let i=0;i<lines.length;i++){
   if(own[i]) continue;
@@ -796,7 +807,11 @@ for(let i=0;i<lines.length;i++){
   const n=norm(t);
   if(!n) continue;
   const keep=KEEP.test(n);
-  if(DENY.some(r=>r.test(n)) || (FIRST.some(r=>r.test(n)) && !keep)){ drop.add(i); continue; }
+  if(DENY.some(r=>r.test(n)) || (FIRST.some(r=>r.test(n)) && !keep)){
+    const at=firstHit(n);
+    if(at>0&&COND.test(n.slice(0,at))) weak.push(i); else drop.add(i);
+    continue;
+  }
   if(!keep && /\bsearch/.test(n) && ANYTOOL.test(n)) weak.push(i);
 }
 // A search-titled heading whose whole body just went is an orphan, so it goes

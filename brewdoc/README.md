@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 5.7.0 |
+| Version | 6.0.0 |
 | Skills | 5 |
 | Agents | 0 |
 | Hooks | 0 |
@@ -100,6 +100,16 @@ claude --plugin-dir ./brewdoc
 | `publish` | `jq` on `PATH`; `zip` as well when publishing a directory as a site. Each upload block gates on both and aborts rather than half-publishing |
 | `md-to-pdf` | a Python engine -- `reportlab` or `weasyprint` |
 | `my-claude` | nothing extra; writes only to `.claude/brewdoc/my-claude/` in the current project |
+
+### Fixed in 6.0.0
+
+- **`publish` site-from-directory now actually publishes.** The archive step wrote its output to a `mktemp` path, which starts as a 0-byte file; Info-ZIP refused to write into it (exit 3), the exit code went unchecked, and the 0-byte archive was uploaded and reported as success. `pack` now removes any pre-existing output file first, checks `zip`'s exit status, and verifies the result with `unzip -t` before it ever reaches `curl`.
+- **The site archive no longer sweeps in secrets.** `.env` and `.git/config` were bundled into every directory upload; the bundler is now allowlisted to known web-asset extensions and drops every dot-entry, `node_modules/` and symlinks.
+- **Concurrent `md-to-pdf` conversions no longer collide.** Two conversions in the same session shared a temp filename derived from the source name; the temp file is now `mktemp`-generated and unique per invocation.
+- **`--quiet` removed from `md_to_pdf.py`.** It was documented but had never done anything; argparse now rejects it instead of silently ignoring it.
+- `docsync-setup`'s three hooks resolve the project root through the canonical `CLAUDE_PROJECT_DIR` -> git-toplevel -> upward-walk recipe, and a gate polarity bug (an absent `enabled` key must count as `true`, not `false`) is fixed.
+- `memory-sync-setup` derives tracked/untracked files from a real `comm -23` set difference instead of an approximation.
+- Regression suites added: `publish` 108 checks (40 archive + 20 inspect + 48 skill), `md-to-pdf` 14, `docsync-setup` 26 -- all green.
 
 ### Fixed in 5.0.0
 

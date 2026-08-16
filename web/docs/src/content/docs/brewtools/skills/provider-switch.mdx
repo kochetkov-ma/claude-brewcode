@@ -110,7 +110,7 @@ Each alias sets env vars and launches Claude Code automatically. To return to yo
   <li>
     <div>
       <strong>Run the skill</strong>
-      <p><code>/brewtools:provider-switch install</code> — paste your key when asked. Alias is written to <code>&#126;/.zshrc</code> automatically.</p>
+      <p><code>/brewtools:provider-switch install</code> — when it asks for a key, save it to a private file or export it in your shell. Never paste a key into the chat; the skill reads it out of band. Alias is written to <code>&#126;/.zshrc</code> automatically.</p>
     </div>
   </li>
   <li>
@@ -158,6 +158,9 @@ Env vars only persist in the current shell session. Opening a new terminal reset
 | Rule | Why |
 |------|-----|
 | The API key is piped to the writer script on **stdin**, never passed as an argument | argv is visible to `ps` for the life of the process and is written verbatim into the session transcript. The script rejects a key given as an argument |
+| The `verify` connectivity test sends the key through `curl -s -K -` (a config block on stdin), never an `Authorization` header on the command line — same rule for every provider, not only one | argv is world-readable via `ps` for the life of the process |
+| The OpenRouter model-list lookup (custom model validation) sends no auth header at all | The catalogue endpoint is public and unauthenticated — there is nothing to send |
+| There is no model-invisible channel for a runtime secret in Claude Code 2.1.233 | `AskUserQuestion` returns plain text straight into the transcript, and plugin `userConfig` `"sensitive": true` is enable-time only — never substituted into skill or agent text. So the skill reads the key from an environment variable already set in your shell, or a file you create yourself; it never asks you to type one into the conversation |
 | The `&#126;/.zshrc.bak` snapshot is created under `umask 077`, `chmod 600`, and deleted once the write succeeds | The backup holds whatever keys were already in `&#126;/.zshrc`; a world-readable copy nothing cleans up is a second leak |
 | Line edits go through `awk` + temp file + `mv` | `sed -i ''` is BSD-only, so `set-key` / `set-alias` / `remove-key` / `remove-alias` were broken on every Linux machine |
 | `DEEPSEEK_API_KEY` is part of the status key list | It was missing, so DeepSeek -- the priority default -- re-prompted for a key it already had on every run |

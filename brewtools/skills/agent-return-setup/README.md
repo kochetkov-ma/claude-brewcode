@@ -78,7 +78,7 @@ One question yields both numbers. A custom pair must satisfy `passTokens < fileT
 | Project | `<repo>/.claude/hooks/` | `<repo>/.claude/settings.json` | `<repo>/.claude/agent-return.json` |
 | Global | `~/.claude/hooks/` | `~/.claude/settings.json` | `~/.claude/agent-return.json` |
 
-Config discovery walks up from the hook process's cwd probing `<dir>/.claude/agent-return.json` (16 levels), then falls back to `~/.claude/agent-return.json`. Project wins; a malformed project config is skipped and the global one is used. Merge is drop-stale-paths, then append + dedupe by full script path (idempotent re-install), matcher-less, `timeout: 5` seconds. Global writes go through Bash only (`~/.claude/*` is a protected path).
+Config discovery starts at the resolved project root (`CLAUDE_PROJECT_DIR` -> upward walk for a `.git`/`.claude` marker -> cwd — the same call the guard uses for the report destination), then walks up probing `<dir>/.claude/agent-return.json` (16 levels) for a root with no marker, then falls back to `~/.claude/agent-return.json`. Project wins; a malformed project config is skipped and the global one is used. Merge is drop-stale-paths, then append + dedupe by full script path (idempotent re-install), matcher-less, `timeout: 5` seconds. Global writes go through Bash only (`~/.claude/*` is a protected path).
 
 ## Config
 

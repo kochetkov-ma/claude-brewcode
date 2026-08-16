@@ -24,7 +24,7 @@ Converts `docs/report.md` to `docs/report.pdf` using your saved engine preferenc
 
 | Feature | reportlab | weasyprint |
 |---------|-----------|------------|
-| Install | `pip install reportlab` | `pip` + `brew` system deps |
+| Install | `check_deps.sh install reportlab` | `check_deps.sh install weasyprint` (pip + `brew` system deps) |
 | Quality | Good | Excellent |
 | Speed | Fast | Moderate |
 | Images | Basic | Full |

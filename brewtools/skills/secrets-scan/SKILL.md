@@ -49,20 +49,27 @@ once the file list is known, before Phase 2 spawns the scan agents.
 
 **EXECUTE** using Bash tool:
 ```bash
-git rev-parse --is-inside-work-tree 2>/dev/null || { echo "ERROR: Not git repo"; exit 1; }
-REPO=$(git rev-parse --show-toplevel) && cd "$REPO"
-TS=$(date +%Y%m%d-%H%M%S)
-DIR="$REPO/.claude/reports/${TS}_secrets-scan" && mkdir -p "$DIR"
-git ls-files \
-  | grep -viE '\.(png|jpe?g|gif|bmp|ico|svgz|webp|tiff?|pdf|psd|ai|eot|ttf|otf|woff2?|mp[34]|m4a|wav|ogg|avi|mov|mkv|webm|zip|tar|t?gz|tgz|bz2|xz|7z|rar|jar|war|ear|class|pyc|pyo|so|dylib|dll|exe|bin|dat|db|sqlite3?|wasm|pack|idx|min\.js|min\.css|map)$' \
-  | grep -vE '(^|/)(node_modules|vendor|third_party|\.venv|venv|dist|build|target|out|coverage|__pycache__|\.next|\.nuxt|\.gradle|Pods|bower_components)/' \
-  | grep -vE '(^|/)(package-lock\.json|yarn\.lock|pnpm-lock\.yaml|poetry\.lock|Cargo\.lock|composer\.lock|Gemfile\.lock|go\.sum|Pipfile\.lock|gradle\.lockfile)$' \
-  > "$DIR/files.txt" || true
-echo "DIR=$DIR|REPO=$REPO|TS=$TS|TOTAL=$(wc -l < "$DIR/files.txt" | tr -d ' ')"
-cat "$DIR/files.txt"
+bash "${CLAUDE_SKILL_DIR}/scripts/scan-init.sh" && echo "OK init" || echo "FAILED init"
 ```
 
-> **STOP if ERROR** — must run in git repository.
+The script resolves the repo root, creates the report dir under `umask 077` + `chmod 700`, appends
+`.claude/reports/` to `.gitignore` when nothing already ignores it, and writes the git-tracked file
+list to `{DIR}/files.txt` (`chmod 600`). It prints one line:
+`DIR=..|REPO=..|TS=..|TOTAL=..|GITIGNORE=appended|already-ignored`.
+
+> **Why the `.gitignore` line.** The report names where credentials live. `.claude/` is ignored in
+> some repos only by a personal global excludes file — in a consumer repo `.claude/reports/` is
+> committable, so the scan would publish its own findings. Report the `GITIGNORE=` value to the user.
+
+Substitute the printed `DIR` value into every later command — the Bash tool starts a fresh shell
+each call, so nothing set by this script survives into the next block.
+
+**EXECUTE** using Bash tool to read the chunk source:
+```bash
+cat "{DIR}/files.txt"
+```
+
+> **STOP if `FAILED init`** — must run in a git repository.
 
 </phase>
 
@@ -105,14 +112,23 @@ SCOPE: in — exactly these files. Out — every other path in the repo, git his
 FILES: {FILES}
 
 CONTEXT: repo root {REPO}. The file list was already produced from git-tracked files and
-filtered in Phase 1 (binary/media extensions, vendor + build dirs, lock files and
-git-ignored paths already dropped) — do not re-discover or re-filter it.
+filtered in Phase 1 (binary/media extensions, vendor + build dirs, lock files dropped) — do
+not re-discover or re-filter it. `git ls-files` still returns files that are tracked AND
+`.gitignore`d, so treat every path in your chunk as live.
 Nine sibling agents are scanning chunks 1..10 of that same list in parallel right now.
 Patterns, criticality ladder and skip rules below are final — do not invent extra categories.
 
 CONSUMER: the skill merges the ten JSON objects into one Secrets Report the user triages
-before pushing. Malformed JSON, or any prose around it, drops your whole chunk from that
-report — a missed CRITICAL there is a credential shipped to a remote.
+before pushing. Every path in FILES must appear exactly once across `scanned[]` + `skipped[]`;
+the skill checks that invariant and re-spawns a chunk that fails it. Malformed JSON, or any
+prose around it, makes your chunk UNSCANNED and blocks the clean verdict for the whole repo.
+
+REDACTION (mandatory): never quote, echo, paste or summarise a matched secret value — not in
+the JSON, not in prose, not in a thought. For each hit run
+`node ${CLAUDE_SKILL_DIR}/scripts/redact.mjs <path> <line>` and copy its `match_len`, `sha256_12` and
+`preview` fields verbatim into your finding. `status:"SKIP_ENV_REF"` means it is an env
+reference — drop the finding. `status:"NO_MATCH"` means no pattern fired on that line — drop
+it too, and count the file as scanned.
 
 DONE: the JSON object specified under OUTPUT, nothing else. No prose, no markdown fence.
 
@@ -138,22 +154,39 @@ SKIP: env refs (`process.env.*`, `${VAR}`, `os.getenv()`), placeholders, docs/co
 
 OUTPUT (JSON):
 ```json
-{"agent":{N},"scanned":["f1","f2"],"skipped":[{"path":"x","reason":"binary"}],"findings":[{"path":"f","line":1,"content":"pwd=x","desc":"Hardcoded pwd","crit":"HIGH"}]}
+{"agent":{N},"scanned":["f1","f2"],"skipped":[{"path":"x","reason":"binary"}],"findings":[{"path":"f","line":1,"category":"Passwords","match_len":12,"sha256_12":"a1b2c3d4e5f6","preview":"hunt***","desc":"Hardcoded pwd","crit":"HIGH"}]}
 ```
-No findings: `"findings":[]`
+No findings: `"findings":[]`. There is no field for the raw value — a finding carrying one is a
+defect, not a better report.
 </agent-prompt>
 
 </phase>
 
-<phase name="3-merge">
+<phase name="3-reconcile">
 
-## Phase 3: Merge Results
+## Phase 3: Reconcile & Merge
 
-1. Collect 10 JSON responses
-2. Parse each (handle errors gracefully)
-3. Merge `scanned[]`, `skipped[]`, `findings[]`
-4. Dedupe by `path+line`
-5. Sort: CRITICAL → HIGH → MEDIUM → LOW
+Every chunk is accounted for before anything is merged. A chunk that silently vanishes is the
+failure this phase exists to prevent: the Summary would still print `Files: {TOTAL}` while ~10% of
+the repo was never read.
+
+1. Write each agent's raw JSON to `{DIR}/agent-{N}.json` and its assigned chunk to
+   `{DIR}/assigned-{N}.txt` (one path per line).
+2. **EXECUTE** using Bash tool, per agent:
+   ```bash
+   node "${CLAUDE_SKILL_DIR}/scripts/reconcile.mjs" "{DIR}/assigned-{N}.txt" "{DIR}/agent-{N}.json"; echo "rc=$?"
+   ```
+   `rc=0` `OK` → accept. `rc=1` `MISMATCH` (paths in `missing[]`/`extra[]`) or `rc=2` `MALFORMED`
+   (unparsable JSON, missing `scanned[]`/`skipped[]`) → step 3.
+3. Re-spawn that ONE chunk once, with the identical prompt. Reconcile the new response the same way.
+4. Still not `OK` after the re-spawn → record the chunk as `UNSCANNED` with its `missing[]` paths,
+   and **refuse the clean verdict** for the whole scan (Phase 4 + Phase 5).
+5. Merge `scanned[]`, `skipped[]`, `findings[]` from the reconciled chunks only.
+6. Dedupe by `path+line`
+7. Sort: CRITICAL → HIGH → MEDIUM → LOW
+
+> A scan with any `UNSCANNED` chunk is `INCOMPLETE`, never `clean` — regardless of how many
+> findings the reconciled chunks returned.
 
 </phase>
 
@@ -161,12 +194,21 @@ No findings: `"findings":[]`
 
 ## Phase 4: Generate Report
 
-Write `{DIR}/report.md`:
+Write `{DIR}/report.md`, then restrict it — the report is a map of where credentials live:
+
+**EXECUTE** using Bash tool:
+```bash
+chmod 600 "{DIR}/report.md" && echo "OK perms" || echo "FAILED perms"
+```
 
 <report-template>
 # Secrets Scan Report
 
 **Scan:** {TS} | **Repo:** {REPO} | **Files:** {TOTAL} | **Agents:** 10
+**Verdict:** {CLEAN | FINDINGS | INCOMPLETE}
+
+> Values are redacted by construction: `Fingerprint` is `sha256(value)[:12]`, `Preview` reveals at
+> most 4 leading characters, `Len` is the character count. The raw value is never stored here.
 
 ## Summary
 
@@ -174,6 +216,7 @@ Write `{DIR}/report.md`:
 |--------|-------|
 | Scanned | {N} |
 | Skipped | {N} |
+| Unscanned | {N} |
 | CRITICAL | {N} |
 | HIGH | {N} |
 | MEDIUM | {N} |
@@ -182,8 +225,8 @@ Write `{DIR}/report.md`:
 ## Findings
 
 ### CRITICAL ({N})
-| # | File | Line | Content | Description |
-|---|------|------|---------|-------------|
+| # | File | Line | Category | Len | Fingerprint | Preview | Description |
+|---|------|------|----------|-----|-------------|---------|-------------|
 {ROWS}
 
 ### HIGH / MEDIUM / LOW
@@ -191,10 +234,19 @@ Write `{DIR}/report.md`:
 
 ## Agent Stats
 
-| Agent | Assigned | Scanned | Findings |
-|-------|----------|---------|----------|
-| 1-10 | ... | ... | ... |
-| **Total** | {N} | {N} | {N} |
+| Agent | Assigned | Accounted | Reconciled | Findings |
+|-------|----------|-----------|------------|----------|
+| 1-10 | ... | ... | OK / UNSCANNED | ... |
+| **Total** | {N} | {N} | {N} | {N} |
+
+## Unscanned ({N})
+
+Present only when a chunk failed reconciliation twice. Every path here was NEVER read — the scan
+is INCOMPLETE and cannot be used as a pre-push clearance.
+
+| # | Path | Agent | Reason |
+|---|------|-------|--------|
+{UNSCANNED}
 
 ## File Inventory
 
@@ -216,18 +268,24 @@ Write `{DIR}/report.md`:
 ## Phase 5: Display Summary
 
 ```
-## Secrets Scan Complete
+## Secrets Scan Complete — {CLEAN | FINDINGS | INCOMPLETE}
 
 | Metric | Value |
 |--------|-------|
 | Files | {N} |
+| Unscanned | {N} |
 | CRITICAL | {N} |
 | HIGH | {N} |
 | MEDIUM | {N} |
 | LOW | {N} |
 
-Report: {DIR}/report.md
+Report: {DIR}/report.md (mode 600)
 ```
+
+Verdict rule: any UNSCANNED chunk → `INCOMPLETE`; else any finding → `FINDINGS`; else `CLEAN`.
+`CLEAN` means "no pattern matched in the current tracked worktree" — not that the repo is safe.
+Never report a scan with UNSCANNED chunks as clean, and never restate a redacted value in the chat
+summary either.
 
 </phase>
 

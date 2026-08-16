@@ -233,17 +233,26 @@ process.stdout.write(String((j.summary&&j.summary.changed)||0));')"
   fi
 }
 
+# $1 scope, $2 "1" when the caller typed --scope. Unqualified: hand the whole
+# decision to semble-mcp.sh, which enumerates every scope holding semble_code and
+# clears them all — passing the default `user` here made an unqualified purge
+# report success while a project- or local-scope registration kept serving.
 sr_remove_mcp() {
-  local scope="$1" sib
+  local scope="$1" explicit="$2" sib scope_args="" where="every scope holding it"
   sib="$(sr_sibling semble-mcp.sh)"
   if [ -z "$sib" ]; then
     sr_skipped "mcp: semble-mcp.sh unavailable — run: $(sc_claude_bin) mcp remove $SEMBLE_SERVER_NAME -s $scope"
     return 0
   fi
-  sr_command "$sib remove --scope $scope --yes --json"
-  if sr_dry; then sr_dry_say "$sib remove --scope $scope --yes"; return 0; fi
-  if "$sib" remove --scope "$scope" --yes --json >/dev/null 2>&1; then
-    sr_changed "mcp: $SEMBLE_SERVER_NAME removed from $scope scope"
+  if [ "$explicit" = "1" ]; then
+    scope_args="--scope $scope"
+    where="$scope scope"
+  fi
+  sr_command "$sib remove ${scope_args:+$scope_args }--yes --json"
+  if sr_dry; then sr_dry_say "$sib remove ${scope_args:+$scope_args }--yes"; return 0; fi
+  # shellcheck disable=SC2086
+  if "$sib" remove $scope_args --yes --json >/dev/null 2>&1; then
+    sr_changed "mcp: $SEMBLE_SERVER_NAME removed from $where"
   else
     sr_failed "mcp: semble-mcp.sh remove failed"
   fi
@@ -309,8 +318,8 @@ sr_flavour_integration() {
 }
 
 sr_flavour_mcp() {
-  local scope="$1"
-  sr_remove_mcp "$scope"
+  local scope="$1" explicit="$2"
+  sr_remove_mcp "$scope" "$explicit"
   sr_unchanged "rule, CLAUDE.md block, hooks, agents, cache, uv tool and state retained"
 }
 
@@ -320,10 +329,10 @@ sr_flavour_cli() {
 }
 
 sr_flavour_purge() {
-  local scope="$1"
+  local scope="$1" explicit="$2"
   sr_remove_guidance
   sr_remove_agent_entries
-  sr_remove_mcp "$scope"
+  sr_remove_mcp "$scope" "$explicit"
   sr_purge_cache
   sr_remove_cli
   sr_rm_state_dir
@@ -331,8 +340,10 @@ sr_flavour_purge() {
 
 # Directory list printed when confirmation is missing.
 sr_plan() {
-  local flavour="$1" root
+  local flavour="$1" scope="${2:-user}" explicit="${3:-0}" root where
   root="$(sc_project_root)"
+  where="every scope holding it"
+  if [ "$explicit" = "1" ]; then where="$scope scope only"; fi
   case "$flavour" in
     integration)
       sr_would "$root/.claude/rules/semble-first.md"
@@ -346,7 +357,7 @@ sr_plan() {
       sr_would "$root/CLAUDE.md marker block $SR_CLAUDEMD_BEGIN .. $SR_CLAUDEMD_END"
       sr_would "$root/.claude/semble/"
       ;;
-    mcp) sr_would "MCP server $SEMBLE_SERVER_NAME (config entry only, no files)" ;;
+    mcp) sr_would "MCP server $SEMBLE_SERVER_NAME — $where (config entry only, no files)" ;;
     cli) sr_would "uv tool install of semble ($(sc_semble_tool_version 2>/dev/null || true))" ;;
     purge)
       sr_would "$root/.claude/rules/semble-first.md"
@@ -361,13 +372,13 @@ sr_plan() {
       sr_would "$root/.claude/semble/"
       sr_would "$(sc_cache_root_code)  (ENTIRE code cache root — every repo index under it)"
       sr_would "$(sc_cache_root_docs)  (reserved docs root, only when it holds nothing but the marker)"
-      sr_would "MCP server $SEMBLE_SERVER_NAME"
+      sr_would "MCP server $SEMBLE_SERVER_NAME — $where"
       ;;
   esac
 }
 
 main() {
-  local flavour="" json=0 yes=0 confirm="" scope="user"
+  local flavour="" json=0 yes=0 confirm="" scope="user" scope_explicit=0
   [ $# -eq 0 ] && { sr_usage; return 2; }
   flavour="$1"; shift
   case "$flavour" in
@@ -380,7 +391,7 @@ main() {
       --json) json=1 ;;
       --yes) yes=1 ;;
       --confirm-text) shift; [ $# -gt 0 ] || { sc_err "--confirm-text needs a value"; return 2; }; confirm="$1" ;;
-      --scope) shift; [ $# -gt 0 ] || { sc_err "--scope needs a value"; return 2; }; scope="$1" ;;
+      --scope) shift; [ $# -gt 0 ] || { sc_err "--scope needs a value"; return 2; }; scope="$1"; scope_explicit=1 ;;
       -h|--help) sr_usage; return 0 ;;
       *) sc_err "unknown flag: $1"; return 2 ;;
     esac
@@ -391,13 +402,13 @@ main() {
   SR_JSON="$json"
 
   if [ "$yes" != "1" ]; then
-    sr_plan "$flavour"
+    sr_plan "$flavour" "$scope" "$scope_explicit"
     [ "$json" = "1" ] || sc_warn "nothing was deleted — re-run with --yes"
     sr_emit "$flavour" needs_confirmation
     return 4
   fi
   if [ "$flavour" = "purge" ] && [ "$confirm" != "$SR_PURGE_TEXT" ]; then
-    sr_plan purge
+    sr_plan purge "$scope" "$scope_explicit"
     [ "$json" = "1" ] || sc_warn "purge needs --confirm-text \"$SR_PURGE_TEXT\" — nothing was deleted"
     sr_emit purge needs_confirmation
     return 4
@@ -405,9 +416,9 @@ main() {
 
   case "$flavour" in
     integration) sr_flavour_integration ;;
-    mcp) sr_flavour_mcp "$scope" ;;
+    mcp) sr_flavour_mcp "$scope" "$scope_explicit" ;;
     cli) sr_flavour_cli ;;
-    purge) sr_flavour_purge "$scope" ;;
+    purge) sr_flavour_purge "$scope" "$scope_explicit" ;;
   esac
 
   local status=ok

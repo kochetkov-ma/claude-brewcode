@@ -9,6 +9,13 @@ SC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 JSON=0
 YES=0
 SCOPE=user
+# An explicit `--scope X` targets exactly X; an unqualified run targets every
+# scope that actually holds the server (DESIGN §8.4 lifecycle completeness).
+SCOPE_EXPLICIT=0
+# Scopes the current mutation touches, and the backups it can roll back to.
+MCP_TARGET_SCOPES=""
+MCP_BACKUPS=""
+MCP_BACKUP_PAIRS=""
 
 usage() {
   cat <<'EOF'
@@ -18,6 +25,7 @@ semble-mcp.sh — MCP registration for brewcode:semble-setup
   semble-mcp.sh add        [--scope user|project|local] [--yes] [--json]
   semble-mcp.sh repair     [--yes] [--json]
   semble-mcp.sh remove     [--scope user|project|local] [--yes] [--json]
+                           (without --scope: removes EVERY scope holding it)
   semble-mcp.sh checkpoint [--json]
   semble-mcp.sh print-cmd  [--json]
 
@@ -34,7 +42,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --json) JSON=1 ;;
     --yes|-y) YES=1 ;;
-    --scope) shift; SCOPE="${1:-}"; [ -n "$SCOPE" ] || { sc_err "--scope needs a value"; exit 2; } ;;
+    --scope) shift; SCOPE="${1:-}"; [ -n "$SCOPE" ] || { sc_err "--scope needs a value"; exit 2; }; SCOPE_EXPLICIT=1 ;;
     -h|--help) usage; exit 0 ;;
     *) sc_err "unexpected argument: $1"; exit 2 ;;
   esac
@@ -170,12 +178,45 @@ mcp_checkpoint_present() {
 # backed up whenever it exists, NOT when $SCOPE = project: `repair` forces
 # SCOPE=user yet removes every scope in `mcp_scopes`, so keying the backup off
 # $SCOPE left an un-backed-up project file holding unrelated servers.
+# Every taken backup is also RECORDED, as a "<original>\t<backup>" pair, so a
+# failed mutation can put the file back (mcp_rollback) and so the path reaches
+# the caller in --json mode too — every in-skill caller passes --json, and the
+# human-only echo used to hide the only recovery handle there is.
 mcp_backup_configs() {
-  local b
-  b="$(sc_backup "$(sc_claude_json)")" || true
-  [ -n "${b:-}" ] && [ "$JSON" = "0" ] && sc_ok "backup: $b"
-  b="$(sc_backup "$(sc_project_root)/.mcp.json")" || true
-  [ -n "${b:-}" ] && [ "$JSON" = "0" ] && sc_ok "backup: $b"
+  local f b
+  MCP_BACKUPS=""
+  MCP_BACKUP_PAIRS=""
+  for f in "$(sc_claude_json)" "$(sc_project_root)/.mcp.json"; do
+    b="$(sc_backup "$f")" || true
+    [ -n "${b:-}" ] || continue
+    MCP_BACKUPS="${MCP_BACKUPS}${b}"$'\n'
+    MCP_BACKUP_PAIRS="${MCP_BACKUP_PAIRS}${f}"$'\t'"${b}"$'\n'
+    if [ "$JSON" = "0" ]; then sc_ok "backup: $b"; fi
+  done
+  return 0
+}
+
+# Restores every file mcp_backup_configs copied. Called on EVERY non-success exit
+# of a mutation: `remove` clears several scopes and `repair` is remove-then-add,
+# so a step that fails midway would otherwise leave a half-removed registration
+# behind while the caller is told the operation failed and nothing else.
+mcp_rollback() {
+  [ -n "$MCP_BACKUP_PAIRS" ] || return 0
+  if [ "${SEMBLE_DRY_RUN:-}" = "1" ]; then
+    sc_dry "restore the MCP configs from their backups"
+    return 0
+  fi
+  local orig bak restored=0
+  while IFS="$(printf '\t')" read -r orig bak; do
+    [ -n "$orig" ] || continue
+    [ -f "$bak" ] || continue
+    cp "$bak" "$orig" && restored=$((restored + 1))
+  done <<EOF
+$MCP_BACKUP_PAIRS
+EOF
+  if [ "$JSON" = "0" ] && [ "$restored" != "0" ]; then
+    sc_warn "rolled back $restored config file(s) from backup"
+  fi
   return 0
 }
 
@@ -187,7 +228,8 @@ run_add() { # returns 0 on success
     sc_dry "$(sc_mcp_add_cmd)"
     return 0
   fi
-  # shellcheck disable=SC2086 -- $SEMBLE_CONTENT_ARGS is a deliberate word split
+  # $SEMBLE_CONTENT_ARGS is a deliberate word split into one argv word per corpus.
+  # shellcheck disable=SC2086
   "$CLAUDE_BIN" mcp add "$SEMBLE_SERVER_NAME" -s "$SCOPE" \
     -e "SEMBLE_CACHE_LOCATION=$CACHE_ROOT" \
     -- uvx --from "$SEMBLE_PIN_SPEC" semble --content $SEMBLE_CONTENT_ARGS >/dev/null 2>&1
@@ -210,10 +252,26 @@ run_remove() { # $1 scope
   "$CLAUDE_BIN" mcp remove "$SEMBLE_SERVER_NAME" -s "$1" >/dev/null 2>&1
 }
 
+# `scope` stays the single word every existing consumer reads; `scopes` is the
+# full set the operation actually targeted and `backups` the restore handles.
 result_json() { # $1 status, $2 state-after, $3 note
-  SC_S="$1" SC_ST="$2" SC_N="$3" SC_SC="$SCOPE" node -e '
+  SC_S="$1" SC_ST="$2" SC_N="$3" SC_SC="$SCOPE" \
+  SC_SCOPES="${MCP_TARGET_SCOPES:-$SCOPE}" SC_BAK="$MCP_BACKUPS" node -e '
 process.stdout.write(JSON.stringify({schema:1,status:process.env.SC_S,
-  state:process.env.SC_ST,scope:process.env.SC_SC,note:process.env.SC_N}));'
+  state:process.env.SC_ST,scope:process.env.SC_SC,
+  scopes:process.env.SC_SCOPES.split(" ").filter(Boolean),
+  backups:process.env.SC_BAK.split("\n").filter(Boolean),
+  note:process.env.SC_N}));'
+}
+
+# The ONLY writer of completed:["mcp"]. semble-reminder.mjs, semble-prefetch.mjs
+# and semble-subagent.mjs each refuse to emit anything until that entry exists,
+# so a `repair` that restores a working registration has to write it exactly the
+# way `add` does — otherwise the MCP works and three hooks stay silent forever.
+mcp_patch_completed() {
+  "$STATE_SH" patch "$(SC_C="$CACHE_ROOT" SC_SC="$SCOPE" node -e '
+process.stdout.write(JSON.stringify({scope:process.env.SC_SC,cacheRoot:process.env.SC_C,
+ completed:["mcp"]}))')" >/dev/null
 }
 
 emit_result() { # $1 status, $2 state, $3 note
@@ -305,7 +363,7 @@ process.stdout.write(JSON.stringify({schema:1,add:process.env.SC_A,addJson:proce
       exit 0
     fi
     AFTER="$(sc_mcp_state)"
-    "$STATE_SH" patch "$(SC_C="$CACHE_ROOT" SC_SC="$SCOPE" node -e 'process.stdout.write(JSON.stringify({scope:process.env.SC_SC,cacheRoot:process.env.SC_C,completed:["mcp"]}))')" >/dev/null
+    mcp_patch_completed
     emit_result ok "$AFTER" "registered via claude mcp $ADDED; restart Claude Code, then run: /brewcode:semble-setup resume"
     ;;
 
@@ -334,14 +392,16 @@ process.stdout.write(JSON.stringify({schema:1,add:process.env.SC_A,addJson:proce
       emit_result needs_confirmation "$STATE" "would remove [$(mcp_scopes "$DUMP")] and re-register at user scope"
       exit 4
     fi
+    MCP_TARGET_SCOPES="$(mcp_scopes "$DUMP")"
     mcp_backup_configs
-    for s in $(mcp_scopes "$DUMP"); do
+    for s in $MCP_TARGET_SCOPES; do
       run_remove "$s" || sc_warn "claude mcp remove -s $s reported a failure; continuing"
     done
     SCOPE=user
     mcp_checkpoint
     if ! run_add_json; then
-      emit_result failed "$(sc_mcp_state)" "claude mcp add-json failed during repair"
+      mcp_rollback
+      emit_result failed "$(sc_mcp_state)" "claude mcp add-json failed during repair; the MCP configs were restored from their backups"
       exit 1
     fi
     if [ "${SEMBLE_DRY_RUN:-}" = "1" ]; then
@@ -351,9 +411,11 @@ process.stdout.write(JSON.stringify({schema:1,add:process.env.SC_A,addJson:proce
     AFTER="$(sc_mcp_state)"
     case "$AFTER" in
       correct|upstream_unpinned)
-        emit_result ok "$AFTER" "repaired; restart Claude Code, then run: /brewcode:semble-setup resume" ;;
+        mcp_patch_completed
+        emit_result ok "$(sc_mcp_state)" "repaired; restart Claude Code, then run: /brewcode:semble-setup resume" ;;
       *)
-        emit_result failed "$AFTER" "repair finished but detection still reports '$AFTER'"
+        mcp_rollback
+        emit_result failed "$(sc_mcp_state)" "repair finished but detection still reports '$AFTER'; the MCP configs were restored from their backups"
         exit 1 ;;
     esac
     ;;
@@ -366,28 +428,42 @@ process.stdout.write(JSON.stringify({schema:1,add:process.env.SC_A,addJson:proce
       emit_result unchanged absent "$SEMBLE_SERVER_NAME is not registered in any scope"
       exit 0
     fi
+    # Unqualified removal is a lifecycle operation: it clears EVERY scope holding
+    # semble_code, because removing only the default scope while another one keeps
+    # serving reports `ok` + exit 0 over a registration that is still live.
+    # An explicit `--scope X` is a targeted request and stays single-scope.
+    if [ "$SCOPE_EXPLICIT" = "1" ]; then
+      MCP_TARGET_SCOPES="$SCOPE"
+    else
+      MCP_TARGET_SCOPES="$(mcp_scopes "$DUMP")"
+    fi
     if [ "$YES" != "1" ] && [ "${SEMBLE_DRY_RUN:-}" != "1" ]; then
-      emit_result needs_confirmation "$STATE" "would run: $CLAUDE_BIN mcp remove $SEMBLE_SERVER_NAME -s $SCOPE"
+      emit_result needs_confirmation "$STATE" "would remove $SEMBLE_SERVER_NAME from scope(s) [$MCP_TARGET_SCOPES]"
       exit 4
     fi
     mcp_backup_configs
-    if ! run_remove "$SCOPE"; then
-      emit_result failed "$(sc_mcp_state)" "claude mcp remove -s $SCOPE failed"
-      exit 1
-    fi
+    for s in $MCP_TARGET_SCOPES; do
+      if ! run_remove "$s"; then
+        mcp_rollback
+        emit_result failed "$(sc_mcp_state)" "claude mcp remove -s $s failed; the MCP configs were restored from their backups"
+        exit 1
+      fi
+    done
     if [ "${SEMBLE_DRY_RUN:-}" = "1" ]; then
       emit_result ok "$STATE" "DRY RUN: nothing was removed"
       exit 0
     fi
     AFTER_DUMP="$(sc_mcp_dump)"
-    AFTER="$(sc_mcp_state)"
-    STILL="$(SC_DUMP="$AFTER_DUMP" SC_S="$SCOPE" node -e '
-const d=JSON.parse(process.env.SC_DUMP);process.stdout.write(d[process.env.SC_S]?"yes":"no");')"
-    if [ "$STILL" = "yes" ]; then
-      emit_result failed "$AFTER" "$SEMBLE_SERVER_NAME is still present at scope $SCOPE after removal"
+    STILL="$(SC_DUMP="$AFTER_DUMP" SC_S="$MCP_TARGET_SCOPES" node -e '
+const d=JSON.parse(process.env.SC_DUMP);
+process.stdout.write(process.env.SC_S.split(" ").filter(s=>s&&d[s]).join(" "));')"
+    if [ -n "$STILL" ]; then
+      mcp_rollback
+      emit_result failed "$(sc_mcp_state)" "$SEMBLE_SERVER_NAME is still present at scope(s) [$STILL] after removal; the MCP configs were restored from their backups"
       exit 1
     fi
-    emit_result ok "$AFTER" "removed $SEMBLE_SERVER_NAME from scope $SCOPE"
+    AFTER="$(sc_mcp_state)"
+    emit_result ok "$AFTER" "removed $SEMBLE_SERVER_NAME from scope(s) [$MCP_TARGET_SCOPES]"
     ;;
 
   *) sc_err "unknown subcommand: $SUB"; usage; exit 2 ;;

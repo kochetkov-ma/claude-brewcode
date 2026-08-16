@@ -214,6 +214,30 @@ function installClaudeJson(name) {
   writeFileSync(join(HOME_DIR, '.claude.json'), fixtureText(join('claude-json', name)));
 }
 
+/**
+ * A guidance section that ERRORS is an unmeasurable half and downgrades `ready`
+ * to `partial`, so every block that wants a genuine `ready` has to stage the
+ * unit. Returns the env fragment that feeds the stub its payload.
+ */
+const GUID_HEALTHY = {
+  rule: { state: 'managed' }, ignore: { state: 'managed' }, claudeMd: { state: 'managed' },
+  permissions: { wired: true },
+  hooks: {
+    retired: [], wiredCount: 6, wantCount: 6, staleEntries: 0,
+  },
+};
+function stubGuidance(payload = GUID_HEALTHY) {
+  const stub = join(STAGE, 'semble-guidance.sh');
+  const file = join(BIN, 'guidance-shared.json');
+  writeFileSync(stub, '#!/usr/bin/env bash\nset -euo pipefail\ncat "${SEMBLE_STUB_GUIDANCE:?}"\n');
+  chmodSync(stub, 0o755);
+  writeFileSync(file, JSON.stringify(payload));
+  return { SEMBLE_STUB_GUIDANCE: file };
+}
+function unstubGuidance() {
+  rmSync(join(STAGE, 'semble-guidance.sh'), { force: true });
+}
+
 /** Mirror of sc_mcp_dump (DESIGN 6.3) - test-side data prep for the detect stub. */
 function dumpFromClaudeJson(name) {
   const cj = join(HOME_DIR, '.claude.json');
@@ -255,6 +279,11 @@ function setDetect(obj) {
 function removeDetectStub() {
   rmSync(MCP_STUB, { force: true });
 }
+
+// Every step semble-state.sh accepts. `ready` is now the whole required set,
+// not the phase alone (SS02), so any fixture that means "healthy" must record
+// all seven - a short list is exactly the partial install the verdict now names.
+const ALL_STEPS = ['prereq', 'mcp', 'permissions', 'guidance', 'agents', 'warm', 'smoke'];
 
 function writeState(obj) {
   mkdirSync(join(PROJECT, '.claude', 'semble'), { recursive: true });
@@ -394,6 +423,9 @@ for (const [file, state, verdict, nextStep] of FIXTURE_STATES) {
   const dump = dumpFromClaudeJson('correct.json');
   setDetect({ schema: 1, state: 'correct', dump, expected: {}, diff: [], connectivity: 'connected' });
   const stateFile = join(PROJECT, '.claude', 'semble', 'state.json');
+  // The matrix is about phase -> verdict, so the guidance half is staged healthy
+  // here: an unstaged one would downgrade every `ready` row to `partial`.
+  const guidEnv = stubGuidance();
 
   const cases = [
     ['ready', { phase: 'ready', enabled: true }, 'ready', 'none'],
@@ -407,14 +439,14 @@ for (const [file, state, verdict, nextStep] of FIXTURE_STATES) {
   ];
 
   for (const [tag, st, verdict, nextStep] of cases) {
-    writeState({ schema: 1, profile: 'code', ...st, completed: ['prereq'], last_updated: '2026-08-02' });
-    const r = runStatus(['--json'], { SEMBLE_STUB_DETECT: DETECT_FILE });
+    writeState({ schema: 1, profile: 'code', ...st, completed: ALL_STEPS, last_updated: '2026-08-02' });
+    const r = runStatus(['--json'], { SEMBLE_STUB_DETECT: DETECT_FILE, ...guidEnv });
     const j = safeParse(r.stdout);
     check(`30-${tag}-exit`, r.status, 0, `phase=${st.phase} must exit 0 without --strict`);
     check(`30-${tag}-verdict`, j.verdict, verdict, `mcp=correct + phase=${st.phase} + enabled=${st.enabled} -> ${verdict}`);
     check(`30-${tag}-nextStep`, j.nextStep, nextStep, `phase=${st.phase} next step`);
     check(`30-${tag}-state`, j.state,
-      { present: true, phase: st.phase, enabled: st.enabled, completed: ['prereq'], last_updated: '2026-08-02' },
+      { present: true, phase: st.phase, enabled: st.enabled, completed: ALL_STEPS, last_updated: '2026-08-02' },
       `phase=${st.phase} state section`);
   }
 
@@ -437,6 +469,7 @@ for (const [file, state, verdict, nextStep] of FIXTURE_STATES) {
   check('32-bad-state-exit', badState.status, 0, 'an unparseable state file must not crash status');
   check('32-bad-state-phase', bj.state.phase, 'error', 'an unparseable state file reads as phase=error');
   check('32-bad-state-verdict', bj.verdict, 'error', 'phase=error is verdict=error');
+  unstubGuidance();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -458,7 +491,7 @@ cat "\${SEMBLE_STUB_GUIDANCE:?}"
   installClaudeJson('correct.json');
   const dump = dumpFromClaudeJson('correct.json');
   setDetect({ schema: 1, state: 'correct', dump, expected: {}, diff: [], connectivity: 'connected' });
-  writeState({ schema: 1, phase: 'ready', enabled: true, completed: ['prereq', 'mcp'], last_updated: '2026-08-02' });
+  writeState({ schema: 1, phase: 'ready', enabled: true, completed: ALL_STEPS, last_updated: '2026-08-02' });
 
   const healthy = {
     rule: { state: 'managed' }, ignore: { state: 'managed' }, claudeMd: { state: 'managed' },
@@ -536,7 +569,178 @@ cat "\${SEMBLE_STUB_GUIDANCE:?}"
     'and keeps its own next step');
 
   rmSync(GUID_STUB, { force: true });
-  writeState({ schema: 1, phase: 'ready', enabled: true, completed: ['prereq', 'mcp'], last_updated: '2026-08-02' });
+  writeState({ schema: 1, phase: 'ready', enabled: true, completed: ALL_STEPS, last_updated: '2026-08-02' });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4c. SS02 - `ready` is the whole required set, not mcp + phase
+//
+// The verdict used to read only mcp.state and state.phase, so an install whose
+// smoke query never ran, whose rule was never written, whose permissions were
+// never wired, whose index was never built or whose agents were never patched
+// reported `ready`/`none` and passed --strict. Each required check now owns one
+// clause; a section that could not be read still downgrades nothing.
+// ═══════════════════════════════════════════════════════════════════════════
+{
+  const GUID_STUB = join(STAGE, 'semble-guidance.sh');
+  const CACHE_STUB = join(STAGE, 'semble-cache.sh');
+  const AGENTS_STUB = join(STAGE, 'semble-agents.sh');
+  const GUID_FILE = join(BIN, 'guidance-4c.json');
+  const CACHE_FILE = join(BIN, 'cache-4c.json');
+  const AGENTS_FILE = join(BIN, 'agents-4c.json');
+  for (const [stub, envVar] of [[GUID_STUB, 'SEMBLE_STUB_GUIDANCE'],
+    [CACHE_STUB, 'SEMBLE_STUB_CACHE'], [AGENTS_STUB, 'SEMBLE_STUB_AGENTS']]) {
+    writeFileSync(stub, `#!/usr/bin/env bash
+set -euo pipefail
+cat "\${${envVar}:?}"
+`);
+    chmodSync(stub, 0o755);
+  }
+
+  installClaudeJson('correct.json');
+  const dump = dumpFromClaudeJson('correct.json');
+  setDetect({ schema: 1, state: 'correct', dump, expected: {}, diff: [], connectivity: 'connected' });
+
+  const HEALTHY_GUID = {
+    rule: { state: 'managed' }, ignore: { state: 'managed' }, claudeMd: { state: 'managed' },
+    permissions: { wired: true },
+    hooks: {
+      settingsFile: join(PROJECT, '.claude', 'settings.json'),
+      session: { file: 'present' }, prefetch: { file: 'present' }, stats: { file: 'present' },
+      reminder: { file: 'present' }, subagent: { file: 'present' },
+      retired: [], wiredCount: 6, wantCount: 6, staleEntries: 0,
+    },
+  };
+  const HEALTHY_CACHE = {
+    schema: 1, codeRoot: CACHE_CODE, docsRoot: CACHE_DOCS, docsReserved: true,
+    repoHash: 'a'.repeat(64), repoDir: join(CACHE_CODE, 'a'.repeat(64)), present: true,
+    sizeBytes: 4096, entries: 3, metadata: null, staleness: 'fresh', otherRepos: [],
+  };
+  const HEALTHY_AGENTS = {
+    schema: 1, total: 2,
+    files: [{ action: 'unchanged', reason: 'inherits' }, { action: 'unchanged', reason: 'already-present' }],
+    summary: { changed: 0, conflict: 0, skipped: 0 },
+  };
+
+  // One run with everything overridable: state.completed plus the three
+  // sibling payloads. Returns the JSON envelope, the human `reason` clause and
+  // the exit code of the same inputs under --strict.
+  const run = ({ completed = ALL_STEPS, guid = HEALTHY_GUID, cache = HEALTHY_CACHE, agents = HEALTHY_AGENTS }) => {
+    writeState({ schema: 1, phase: 'ready', enabled: true, completed, last_updated: '2026-08-02' });
+    writeFileSync(GUID_FILE, JSON.stringify(guid));
+    writeFileSync(CACHE_FILE, JSON.stringify(cache));
+    writeFileSync(AGENTS_FILE, JSON.stringify(agents));
+    const env = {
+      SEMBLE_STUB_DETECT: DETECT_FILE,
+      SEMBLE_STUB_GUIDANCE: GUID_FILE,
+      SEMBLE_STUB_CACHE: CACHE_FILE,
+      SEMBLE_STUB_AGENTS: AGENTS_FILE,
+    };
+    const j = safeParse(runStatus(['--json'], env).stdout);
+    const line = runStatus([], env).stdout.split('\n').find((l) => / (ready|partial|verifying|disabled|error|reload_required|not_installed) - /.test(l)) || '';
+    j.__reason = line.slice(line.indexOf(' - ') + 3);
+    j.__strictExit = runStatus(['--json', '--strict'], env).status;
+    return j;
+  };
+
+  const healthy = run({});
+  check('42-healthy-verdict', healthy.verdict, 'ready',
+    'all seven steps recorded, rule managed, permissions wired, index present, no agent needs patching');
+  check('42-healthy-nextStep', healthy.nextStep, 'none', 'a fully verified install has nothing left to run');
+  check('42-healthy-strict-exit', healthy.__strictExit, 0, '--strict exits 0 on the complete required set');
+
+  // The offline install SKILL.md Step 4.3 produces: warm and smoke left out.
+  const offline = run({ completed: ['prereq', 'mcp', 'permissions', 'guidance', 'agents'] });
+  check('43-smoke-verdict', offline.verdict, 'partial',
+    'an install whose smoke query never ran is not ready, whatever the phase says');
+  check('43-smoke-reason', offline.__reason, 'warm and smoke not recorded in state.completed',
+    'the clause SKILL.md Step 4.3 promises the user, naming both halves of the verification pair');
+  check('43-smoke-nextStep', offline.nextStep, 'Run /brewcode:semble-setup resume',
+    'only the verification pair is missing, so resume is the fix, not a full install');
+  check('43-smoke-strict-exit', offline.__strictExit, 1, '--strict must fail an unverified install');
+
+  const smokeOnly = run({ completed: ['prereq', 'mcp', 'permissions', 'guidance', 'agents', 'warm'] });
+  check('44-smokeonly-reason', smokeOnly.__reason, 'smoke not recorded in state.completed',
+    'a warmed cache with no smoke names smoke alone');
+  check('44-smokeonly-nextStep', smokeOnly.nextStep, 'Run /brewcode:semble-setup resume',
+    'still the verification pair, still resume');
+
+  const warmOnly = run({ completed: ['prereq', 'mcp', 'permissions', 'guidance', 'agents', 'smoke'] });
+  check('45-warmonly-reason', warmOnly.__reason, 'warm not recorded in state.completed',
+    'a missing warm gets its own clause, never the smoke wording');
+
+  const noGuidanceStep = run({ completed: ['prereq', 'mcp', 'permissions', 'agents', 'warm', 'smoke'] });
+  check('46-steps-verdict', noGuidanceStep.verdict, 'partial', 'a missing install step is enough on its own');
+  check('46-steps-reason', noGuidanceStep.__reason, 'install steps not recorded: guidance',
+    'the clause names exactly the steps that are missing');
+  check('46-steps-nextStep', noGuidanceStep.nextStep, 'Run /brewcode:semble-setup install',
+    'a missing install step is repaired by install, not resume');
+
+  const noRule = run({ guid: { ...HEALTHY_GUID, rule: { state: undefined } } });
+  check('47-rule-verdict', noRule.verdict, 'partial', 'no semble-first rule on disk is not ready');
+  check('47-rule-reason', noRule.__reason, 'semble-first rule absent', 'one clause naming the rule');
+
+  const userRule = run({ guid: { ...HEALTHY_GUID, rule: { state: 'user_modified' } } });
+  check('48-usermod-verdict', userRule.verdict, 'ready',
+    'a hand-edited rule is a supported state, never a downgrade');
+
+  const noPerms = run({ guid: { ...HEALTHY_GUID, permissions: { wired: false } } });
+  check('49-perms-verdict', noPerms.verdict, 'partial', 'unwired tool permissions are not ready');
+  check('49-perms-reason', noPerms.__reason, 'MCP tool permissions not wired', 'one clause naming the permissions');
+
+  const noIndex = run({ cache: { ...HEALTHY_CACHE, present: false } });
+  check('50-index-verdict', noIndex.verdict, 'partial', 'no index in the cache is not ready');
+  check('50-index-reason', noIndex.__reason, 'no index in the cache', 'one clause naming the cache');
+
+  const needPatch = run({ agents: { ...HEALTHY_AGENTS, summary: { changed: 2, conflict: 0, skipped: 0 } } });
+  check('51-agents-verdict', needPatch.verdict, 'partial', 'agents still needing the two tool names are not ready');
+  check('51-agents-reason', needPatch.__reason, '2 agents need patching', 'the clause carries the exact count');
+
+  const oneAgent = run({ agents: { ...HEALTHY_AGENTS, summary: { changed: 1, conflict: 0, skipped: 0 } } });
+  check('52-agents-singular', oneAgent.__reason, '1 agent needs patching',
+    'the singular clause is singular');
+
+  const conflicted = run({ agents: { ...HEALTHY_AGENTS, summary: { changed: 0, conflict: 1, skipped: 1 } } });
+  check('53-agents-conflict-verdict', conflicted.verdict, 'ready',
+    'a reported conflict is an outcome, not a defect - apply exits 3 on it by design');
+
+  // Every clause at once, in the fixed display order: guidance-derived first
+  // (so the migration story reads the same as before SS02), then the recorded
+  // steps, then the index, then the agents.
+  const everything = run({
+    completed: ['prereq', 'mcp'],
+    guid: { ...HEALTHY_GUID, rule: { state: undefined }, permissions: { wired: false } },
+    cache: { ...HEALTHY_CACHE, present: false },
+    agents: { ...HEALTHY_AGENTS, summary: { changed: 3, conflict: 0, skipped: 0 } },
+  });
+  check('54-all-verdict', everything.verdict, 'partial', 'every unmet check together is still one partial');
+  check('54-all-reason', everything.__reason,
+    'semble-first rule absent; MCP tool permissions not wired; '
+    + 'warm and smoke not recorded in state.completed; '
+    + 'install steps not recorded: permissions, guidance, agents; '
+    + 'no index in the cache; 3 agents need patching',
+    'the six clauses, in the fixed display order');
+  check('54-all-nextStep', everything.nextStep, 'Run /brewcode:semble-setup install',
+    'more than the verification pair is missing, so install owns the repair');
+
+  // An unreadable section is an absent measurement, not a defect: the same
+  // rule that keeps wantCount=0 from downgrading a healthy repo.
+  {
+    rmSync(CACHE_STUB, { force: true });
+    rmSync(AGENTS_STUB, { force: true });
+    writeState({ schema: 1, phase: 'ready', enabled: true, completed: ALL_STEPS, last_updated: '2026-08-02' });
+    writeFileSync(GUID_FILE, JSON.stringify(HEALTHY_GUID));
+    const j = safeParse(runStatus(['--json'], {
+      SEMBLE_STUB_DETECT: DETECT_FILE, SEMBLE_STUB_GUIDANCE: GUID_FILE,
+    }).stdout);
+    check('55-unreadable-verdict', j.verdict, 'ready',
+      'cache and agents sections that could not be read must never downgrade');
+    check('55-unreadable-cache-keys', Object.keys(j.cache), ['error'], 'the cache section still reports its error');
+    check('55-unreadable-agents-keys', Object.keys(j.agents), ['error'], 'the agents section still reports its error');
+  }
+
+  rmSync(GUID_STUB, { force: true });
+  writeState({ schema: 1, phase: 'ready', enabled: true, completed: ALL_STEPS, last_updated: '2026-08-02' });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -547,16 +751,64 @@ cat "\${SEMBLE_STUB_GUIDANCE:?}"
   const dump = dumpFromClaudeJson('correct.json');
   setDetect({ schema: 1, state: 'correct', dump, expected: {}, diff: [], connectivity: 'connected' });
 
-  writeState({ schema: 1, phase: 'ready', enabled: true, completed: ['prereq', 'mcp'], last_updated: '2026-08-02' });
-  const ready = runStatus(['--json', '--strict'], { SEMBLE_STUB_DETECT: DETECT_FILE });
+  const guidEnv = stubGuidance();
+  writeState({ schema: 1, phase: 'ready', enabled: true, completed: ALL_STEPS, last_updated: '2026-08-02' });
+  const ready = runStatus(['--json', '--strict'], { SEMBLE_STUB_DETECT: DETECT_FILE, ...guidEnv });
   check('40-strict-ready-exit', ready.status, 0, '--strict must exit 0 when verdict === ready');
   check('40-strict-ready-verdict', safeParse(ready.stdout).verdict, 'ready', 'the ready verdict itself');
 
   writeState({ schema: 1, phase: 'verifying', enabled: true, completed: [], last_updated: '2026-08-02' });
-  const notReady = runStatus(['--json', '--strict'], { SEMBLE_STUB_DETECT: DETECT_FILE });
+  const notReady = runStatus(['--json', '--strict'], { SEMBLE_STUB_DETECT: DETECT_FILE, ...guidEnv });
   check('41-strict-notready-exit', notReady.status, 1, '--strict must exit 1 when verdict !== ready');
   check('41-strict-notready-body', safeParse(notReady.stdout).verdict, 'verifying',
     '--strict must still print the full report before failing');
+  unstubGuidance();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 5b. An ERRORED guidance section is an unmeasurable half
+//
+// The guidance probe is the sole witness for the rule, the hooks and the
+// permissions. Whether the unit is missing from disk or exits non-zero, all
+// three are unproven, so `ready` is not claimable and --strict must fail - the
+// cause of the failure changes nothing about what is unknown. A NULL section is
+// the opposite case: --section narrows the report, guidance is never probed,
+// and an absent measurement is not a defect (same rule as wantCount===0).
+// ═══════════════════════════════════════════════════════════════════════════
+{
+  installClaudeJson('correct.json');
+  const dump = dumpFromClaudeJson('correct.json');
+  setDetect({ schema: 1, state: 'correct', dump, expected: {}, diff: [], connectivity: 'connected' });
+  writeState({ schema: 1, phase: 'ready', enabled: true, completed: ALL_STEPS, last_updated: '2026-08-02' });
+  const env = { SEMBLE_STUB_DETECT: DETECT_FILE };
+
+  const absent = runStatus(['--json', '--strict'], env);
+  const aj = safeParse(absent.stdout);
+  check('41b-absent-verdict', aj.verdict, 'partial',
+    'a guidance unit that is not on disk leaves rule, hooks and permissions unproven');
+  check('41b-absent-reason', aj.guidance,
+    { error: 'semble-guidance.sh not found - that unit is not installed' },
+    'the section still carries the exact reason the probe could not answer');
+  check('41b-absent-strict-exit', absent.status, 1,
+    'an unmeasurable half must never pass --strict');
+
+  // Same verdict from an installed unit that fails: one rule per probe.
+  const failing = join(STAGE, 'semble-guidance.sh');
+  writeFileSync(failing, '#!/usr/bin/env bash\nexit 7\n');
+  chmodSync(failing, 0o755);
+  const broken = runStatus(['--json', '--strict'], env);
+  const bj = safeParse(broken.stdout);
+  check('41b-failing-verdict', bj.verdict, 'partial',
+    'an installed probe that exits non-zero is exactly as unmeasurable as an absent one');
+  check('41b-failing-strict-exit', broken.status, 1, 'and it fails --strict the same way');
+  rmSync(failing, { force: true });
+
+  // NULL: --section mcp never probes guidance, so there is nothing to downgrade.
+  const narrowed = runStatus(['--section', 'mcp', '--json', '--strict'], env);
+  check('41b-null-verdict', safeParse(narrowed.stdout).verdict, 'ready',
+    'a narrowed report makes no guidance measurement, and an absent one is not a defect');
+  check('41b-null-strict-exit', narrowed.status, 0,
+    '--section mcp --strict must stay green on a healthy repo');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -642,21 +894,29 @@ cat "\${SEMBLE_STUB_GUIDANCE:?}"
   installClaudeJson('correct.json');
   const dump = dumpFromClaudeJson('correct.json');
   setDetect({ schema: 1, state: 'correct', dump, expected: {}, diff: [], connectivity: 'connected' });
-  writeState({ schema: 1, phase: 'ready', enabled: true, completed: ['prereq', 'mcp'], last_updated: '2026-08-02' });
+  writeState({ schema: 1, phase: 'ready', enabled: true, completed: ALL_STEPS, last_updated: '2026-08-02' });
 
-  const r = runStatus([], { SEMBLE_STUB_DETECT: DETECT_FILE });
+  const guidEnv = stubGuidance();
+  const r = runStatus([], { SEMBLE_STUB_DETECT: DETECT_FILE, ...guidEnv });
   const lines = r.stdout.split('\n');
   check('70-human-exit', r.status, 0, 'the human form exits 0 like the JSON form');
   check('70-human-title', lines[0], '# Semble status', 'the report starts with the mode heading');
   check('70-human-mcp', lines.some((l) => l === 'mcp:      correct @ user  [connected]'), true,
     'the mcp line follows the DESIGN 13 Before layout');
-  check('70-human-state', lines.some((l) => l === 'state:    phase=ready enabled=true completed=[prereq,mcp]'), true,
+  check('70-human-state', lines.some((l) => l === `state:    phase=ready enabled=true completed=[${ALL_STEPS.join(',')}]`), true,
     'the state line follows the DESIGN 13 Before layout');
   check('70-human-verdict', lines.some((l) => l === '✅ ready - pinned server registered at user scope and verified'), true,
     'the verdict line carries the status symbol and one clause of why');
   check('70-human-next', lines.some((l) => l === 'Next Step: none'), true, 'ready has no next step');
   check('70-human-no-json', r.stdout.trim().startsWith('{'), false, 'the human form must not emit JSON');
+  unstubGuidance();
 }
+
+// Sections 3-8 are the only stub owners; pairing the install at section 3 with its
+// teardown here keeps the stub from leaking into the install/fixture sections below.
+removeDetectStub();
+check('71-detect-stub-removed', existsSync(MCP_STUB), false,
+  'the detect stub installed for sections 3-8 must be gone before section 9 runs');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 9. semble-install.sh

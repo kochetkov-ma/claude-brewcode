@@ -76,6 +76,12 @@ All eleven `-setup` skills implement all seven verbs, via one of two mechanisms:
   </Card>
 </CardGrid>
 
+## Test coverage
+
+<Callout type="note" title="Regression suites, not style linting">
+  `skills/teams-setup/tests/` runs 65 checks against the toggle/verify scripts, and `skills/semble-setup/tests/` runs 7 suites covering core, agents, hooks, integration, project, status and telemetry. Both are exact-equality assertion suites — a future upstream change fails a test instead of shipping silently.
+</Callout>
+
 ## Delegation — one contract, all nine skills
 
 Every skill here except read-only `setup-status` fans work out to subagents, and all of them follow the same sizing rule.

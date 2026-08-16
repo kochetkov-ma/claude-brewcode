@@ -74,7 +74,7 @@ Phase 2/3/5.
 | Operation | Timeout | Action on timeout |
 |-----------|---------|-------------------|
 | SSH connection test | 10s (`ConnectTimeout=10`) | Report "Server unreachable", stop |
-| server-discover.sh | 30s (`timeout 30 bash ...`) | Report partial results, continue |
+| server-discover.sh | 30s total, enforced inside the script (`SSH_DISCOVER_TIMEOUT`, default 30) | Exit `124` — report partial results, continue |
 | Any single SSH command | 60s (`timeout 60 ssh ...`) | Kill, report "Command timed out", ask user |
 | Entire skill invocation | 15 SSH calls total max | Stop, report progress, suggest manual continuation |
 
@@ -191,10 +191,31 @@ bash "${CLAUDE_SKILL_DIR}/scripts/ssh-env-check.sh" && echo "OK keys" || echo "F
 
 Parse available keys. Try connection with each key (ed25519 first, then rsa, then ecdsa):
 
-**EXECUTE** using Bash tool:
+#### Host key: scan, VERIFY, then trust
+
+Never append `ssh-keyscan` output straight into `known_hosts` — that trusts whatever the network
+returned. Scan to a temp file and print fingerprints. **EXECUTE** using Bash tool:
 ```bash
-ssh-keyscan -p PORT HOST >> ~/.ssh/known_hosts 2>/dev/null && echo "OK keyscan" || echo "FAILED keyscan"
+KH_TMP=$(mktemp) && ssh-keyscan -p PORT HOST > "$KH_TMP" && echo "OK keyscan $KH_TMP" || echo "FAILED keyscan"
+ssh-keygen -lf "$KH_TMP"
 ```
+> `2>/dev/null` is deliberately absent — a failed or partial scan must be visible, not silently empty.
+
+Show the SHA256 fingerprints and require an INDEPENDENT match before trusting them. Use AskUserQuestion:
+```
+header: "Host Key Verification"
+question: "SHA256 fingerprints scanned from HOST:PORT:\n\n[ssh-keygen -lf output]\n\nDo these match the provider console / out-of-band record (VPS panel, cloud-init log, or `ssh-keygen -lf /etc/ssh/ssh_host_*_key.pub` run on the server console)?"
+options:
+  - label: "Yes, fingerprints match"
+  - label: "No / cannot verify"
+```
+
+Only on an explicit match, add the key. **EXECUTE** using Bash tool:
+```bash
+umask 077 && mkdir -p ~/.ssh && cat "$KH_TMP" >> ~/.ssh/known_hosts && rm -f "$KH_TMP" && echo "OK known_hosts" || echo "FAILED known_hosts"
+```
+> **STOP on "No / cannot verify"** — `rm -f "$KH_TMP"`, report, and do not connect. An unverified
+> first key is a permanent MITM foothold for every later credential. Never `StrictHostKeyChecking=no`.
 
 **EXECUTE** using Bash tool:
 ```bash
@@ -277,10 +298,17 @@ ssh -o BatchMode=yes -o ConnectTimeout=10 SERVERNAME echo "OK connection" 2>/dev
 
 **EXECUTE** using Bash tool:
 ```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/server-discover.sh" "USER@HOST" PORT && echo "OK discovery" || echo "FAILED discovery"
+SSH_DISCOVER_TIMEOUT=30 bash "${CLAUDE_SKILL_DIR}/scripts/server-discover.sh" "USER@HOST" PORT && echo "OK discovery" || echo "FAILED discovery rc=$?"
 ```
 
-Replace USER@HOST and PORT with actual values (or SSH config alias).
+Replace USER@HOST and PORT with actual values (or SSH config alias). The script validates both
+operands itself and bounds its own total runtime — do NOT wrap it in `timeout` (absent on macOS).
+
+| Exit | Meaning | Action |
+|------|---------|--------|
+| `1` | Host unreachable / auth failure | Back to Phase 2, max 1 re-entry |
+| `2` | Invalid connection or port operand | Fix the value; NEVER pass free-form text as the port |
+| `124` | 30s deadline exceeded | Report partial results, continue |
 
 Parse output key=value pairs. Key fields:
 - `OS`, `KERNEL`, `ARCH`
@@ -412,6 +440,31 @@ For complex multi-step operations, delegate to the `ssh-admin` agent via Task to
 
 **Delegation.** A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target. One subagent = ONE bounded unit — one deliverable on ONE host, ~<=5 files/services, ~<=10 commands. Bigger MUST be split into N tasks (one per host, one deliverable each), all spawned in ONE message. The confirmation gates in Step 3 are NOT delegable: DELETE/PRIVILEGE approval stays here, in the main conversation, before any spawn.
 
+**A subagent cannot confirm anything.** `AskUserQuestion` is not available to subagents — declaring it
+is inert, and a spawned agent that "asks before the destructive step" simply never asks. So a spawned
+ssh agent does all non-destructive work, executes nothing destructive, and returns an approval
+envelope instead. Destructive = irreversible or touching a remote/shared system: `rm`/`mv` over an
+existing path, service restart/stop, firewall/user/permission change, secret rotation,
+`docker system prune`, any remote `ssh` mutation.
+
+Required shape in the agent's FINAL RETURN, one envelope per destructive operation:
+
+```
+## APPROVAL REQUIRED
+
+### A1
+COMMAND:      <exact command, copy-pasteable>
+HOST:         <server alias / user@host>
+EFFECT:       <what changes, incl. downtime>
+ROLLBACK:     <exact reverse command, or NONE>
+EVIDENCE:     <the read-only output that proves it is needed>
+PRECONDITION: <what must still hold at execution time>
+```
+
+You approve in the main conversation (Step 3 gate), then RE-SPAWN the same agent with
+`APPROVED: A1 A3` in the prompt. An explicit approval token in the incoming prompt is the ONLY
+authorization a subagent may act on — no envelope, no approval token, no destructive command.
+
 Every spawn prompt MUST carry:
 
 | Field | Content |
@@ -430,6 +483,9 @@ GOAL: bringing SERVERNAME up to the state the user asked for (<one line>); this 
   the <N>th of <M> bounded steps, the others are handled by sibling agents.
 ROLE: you own <this one deliverable> on SERVERNAME. Do NOT touch other servers, do NOT
   edit local repo files, do NOT run DELETE/PRIVILEGE commands — those were gated out.
+  You cannot ask questions: anything destructive goes into an '## APPROVAL REQUIRED'
+  envelope in your final return and is executed only after a re-spawn carrying
+  'APPROVED: <ids>'. This prompt carries: <APPROVED: ... | no approvals>.
 SCOPE: in — ssh SERVERNAME, these exact commands: <list>. Out — <explicit paths/services>.
 CONTEXT: host HOST, user USER, port PORT, key KEYPATH; Phase 3 already discovered
   OS/Docker/disk (below) — do not re-probe. The user already approved classification
@@ -439,7 +495,9 @@ CONSUMER: Phase 6 assembles every agent's rows into one Session Report for the u
   decides the next action from it — a command whose output you summarize instead of quoting
   cannot be verified, and a silent failure reads there as a success.
 DONE: per-command output + final state check, plus the Phase 6 Session Report table
-  (Server, Mode, Actions, Changes, Status). Report FAILED commands verbatim, never silently.
+  (Server, Mode, Actions, Changes, Status), plus an '## APPROVAL REQUIRED' section
+  (COMMAND/HOST/EFFECT/ROLLBACK/EVIDENCE/PRECONDITION per envelope) or the literal
+  'APPROVAL REQUIRED: none'. Report FAILED commands verbatim, never silently.
 ")
 ```
 
@@ -454,7 +512,33 @@ ssh SERVERNAME "COMMAND" && echo "OK" || echo "FAILED"
 
 If task involves Docker registry operations, read `references/docker-auth-flow.md` for auth patterns.
 
-Use AskUserQuestion for registry credentials -- NEVER hardcode tokens.
+**A registry token is never model-visible.** Do NOT collect it with AskUserQuestion, do not put it in
+a command line, do not echo it, do not write it into a file you generate. Ask the user to prepare ONE
+of these OUTSIDE the conversation, then read it only inside Bash:
+
+| Source | User prepares (outside the transcript) | Skill reads it as |
+|--------|---------------------------------------|-------------------|
+| file (recommended) | write the token to `~/.config/brewtools/ghcr.token`, then `chmod 600` that file | `< ~/.config/brewtools/ghcr.token` |
+| env var | `read -rs GHCR_TOKEN && export GHCR_TOKEN` in the shell that launched Claude Code, **before** launching it | `"$GHCR_TOKEN"` piped to stdin |
+
+The file path works immediately. The env var only works if the export happened BEFORE this session
+started: every Bash tool call spawns a fresh profile-initialised shell, so an export typed in another
+terminal — or in this one after launch — is invisible. If `$GHCR_TOKEN` is unset, say so and offer
+the file path or a relaunch; !=ask the user to paste the token.
+
+Log in with stdin only — the value never appears in argv, never in `ps`, never in shell history:
+
+**EXECUTE** using Bash tool:
+```bash
+printf '%s' "$GHCR_TOKEN" | ssh SERVERNAME "docker login ghcr.io -u USERNAME --password-stdin" >/dev/null 2>&1 && echo "OK login ghcr.io" || echo "FAILED login ghcr.io"
+```
+File variant:
+```bash
+ssh SERVERNAME "docker login ghcr.io -u USERNAME --password-stdin" < ~/.config/brewtools/ghcr.token >/dev/null 2>&1 && echo "OK login ghcr.io" || echo "FAILED login ghcr.io"
+```
+
+Report only `OK login` / `FAILED login`. If the variable is unset, say so and stop — never fall back
+to asking for the value in chat. Never run `env`, `set`, or `cat` on the token file.
 
 ---
 
@@ -491,8 +575,10 @@ bash "${CLAUDE_SKILL_DIR}/scripts/claude-local-ops.sh" list
 
 **EXECUTE** using Bash tool:
 ```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/server-discover.sh" "USER@HOST" PORT && echo "OK discovery" || echo "FAILED discovery"
+SSH_DISCOVER_TIMEOUT=30 bash "${CLAUDE_SKILL_DIR}/scripts/server-discover.sh" "USER@HOST" PORT && echo "OK discovery" || echo "FAILED discovery rc=$?"
 ```
+
+Same exit-code table as Phase 3. Never wrap in `timeout`.
 
 ### Step 3: Update Config & Agent
 

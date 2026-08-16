@@ -70,7 +70,7 @@ import { Card, CardGrid, Callout, Steps, UpdateNotice } from '../../../../compon
 | `update` | Locate existing artifacts → apply changes via the appropriate e2e agent → 3-round review cycle → summary with diff |
 | `review` | Split scope into parts → 3 parallel reviewers per part → quorum (2/3 consensus) → cross-agent re-check of confirmed findings → report with fix proposals |
 | `rules` | Load the live `.claude/e2e/e2e-rules.md` → WebSearch + `e2e-architect` analysis → `e2e-reviewer` validates the diff → rewrite that same file → optional condensed export to `.claude/rules/e2e-conventions.md` |
-| `status` | Read-only: count `e2e-*` agents, show config (stack, framework, paths), artifact counts, freshness dates |
+| `status` | Read-only: count `e2e-*` agents, show config (stack, framework, paths), artifact counts, freshness — compares the stamped `content_version` against the running skill's `CONTENT_VERSION` (falls back to `version` vs `PLUGIN_VERSION` on a pre-`content_version` install) |
 
 Those six are the entire mode set. `detect-mode.sh` rejects `uninstall`, `purge`, `upgrade`, `enable` and `disable` with `ERROR:e2e has no <verb> mode` and exits 1; any other first word is taken as a free-form prompt for `install`. To remove the setup, delete `.claude/agents/e2e-*.md` and `.claude/e2e/` by hand.
 
@@ -166,6 +166,8 @@ Every spawn brief also tells the agent, verbatim, to find the closest well-built
 | `e2e-reviewer` | opus | READ-ONLY: reviews quality, rule compliance, coverage |
 
 Each one opens with a Rules Loading Protocol: read `.claude/e2e/e2e-rules.md` (project-relative), stop immediately if it is not there. Each also carries a permanent Etalon-first line in its Domain Instructions: before writing a test or page object, find the closest well-built existing one in this repo and take its principles — additive to `e2e-rules.md` and project conventions, never a replacement.
+
+Every generated agent, plus `config.json` and `e2e-rules.md`, closes with a standard metadata stamp — `doc_type`, `version`, `content_version`, `generated_by`, `last_updated`. `content_version` is the field `status` and `rules` actually compare for staleness; earlier installs stamped `version` only, so a content change to this skill could never be detected as stale.
 
 **Test architecture layers (stack-agnostic)**
 

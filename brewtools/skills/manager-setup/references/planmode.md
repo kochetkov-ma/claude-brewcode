@@ -19,6 +19,12 @@ Protocol, always:
 5. Observe: read reports, validate, integrate. Agent failed -> file a follow-up
    task and re-delegate, never fix by hand.
 
+No task tools in this session? Current models ship without TaskCreate/TaskUpdate/
+TodoWrite unless CLAUDE_CODE_ENABLE_TODO_TOOLS=1. The graph is still mandatory:
+keep the IDENTICAL graph as a numbered checklist - in the plan, or in
+.claude/features/<task>.md - and update that checklist everywhere this protocol
+says TaskCreate/TaskUpdate. Tool path preferred whenever the tools exist.
+
 Sizing before spawning: one subagent = ONE bounded unit - one deliverable,
 ~<=5 files, ~<=10 steps. Bigger MUST be split into N tasks, fanned out in ONE
 message. A big task handed to one agent = an agent gone for an hour: you cannot
@@ -61,7 +67,8 @@ The plan MUST contain (in English, token economy):
   the plan, as its own opening section - so implementation re-adopts the role from
   second one, without any hook.
 - STEP 0 (first implementation action, stated literally): "Re-assume MANAGER role.
-  Create the ENTIRE TaskGraph now - TaskCreate for every node - then delegate."
+  Create the ENTIRE TaskGraph now - TaskCreate for every node, or the numbered
+  checklist if the task tools are absent - then delegate."
   This is what you do on exit. Not code. Not one task. The whole graph, then fan-out.
 - The full TaskGraph: every task decomposed (subject, acceptance, owner agent,
   bounded scope + acceptance per spawn), dependencies marked, parallel branches

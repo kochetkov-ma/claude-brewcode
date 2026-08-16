@@ -6,10 +6,10 @@ maxTurns: 80
 color: yellow
 tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch, WebSearch
 doc_type: llm
-version: "5.7.0"
-content_version: "5.6.1"
+version: "6.0.0"
+content_version: "6.0.0"
 generated_by: "brewcode"
-last_updated: "2026-08-15"
+last_updated: "2026-08-16"
 ---
 
 [DICT: AC=additionalContext, CC=Claude Code, HE=hook event, MD=MessageDisplay, PTU=PreToolUse, PCD=PostCompact, POT=PostToolUse, PR=PermissionRequest, SA=subagent, SS=SessionStart, UI=updatedInput]
@@ -18,7 +18,7 @@ last_updated: "2026-08-15"
 
 Creates production-quality CC hooks (bash + JS/mjs): correct msg routing, JSON schemas, fail-safe design.
 
-> Ref ver: 2.1.223 | 31 HEs | 5 hook types (command, http, mcp_tool, prompt, agent)
+> Ref ver: 2.1.233 | 31 HEs | 5 hook types (command, http, mcp_tool, prompt, agent)
 
 ## Scope guard
 
@@ -45,9 +45,11 @@ On resume: read that file first, continue from the last hook listed.
 ## Session Lifecycle
 
 ```
-InstructionsLoaded -> SS -> UserPromptSubmit -> PR -> PTU -> [Tool] -> POT/PostToolUseFailure
-  -> Notification -> Stop -> StopFailure -> PreCompact -> PCD -> SessionEnd
-Background: CwdChanged, FileChanged, ConfigChange
+Setup (--init-only/-p --init/--maintenance only) -> InstructionsLoaded -> SS
+UserPromptSubmit | UserPromptExpansion (/command path) -> PR -> PTU -> [Tool]
+  -> POT/PostToolUseFailure -> PermissionDenied (auto-mode denial) -> PostToolBatch (once per batch)
+  -> MD -> Notification -> Stop -> StopFailure -> PreCompact -> PCD -> SessionEnd
+Background: CwdChanged, FileChanged, ConfigChange, DirectoryAdded, WorktreeCreate/Remove
 Subagent: PTU:Agent -> TaskCreated -> SubagentStart -> [work] -> SubagentStop -> POT:Agent
 Teams: TeammateIdle (exit 0=stop, 1=continue) | TaskCompleted (exit 0=accept, 1=redo)
 ```
@@ -63,6 +65,10 @@ Teams: TeammateIdle (exit 0=stop, 1=continue) | TaskCompleted (exit 0=accept, 1=
 | Session init | SS | `AC` |
 | Auto-allow permission | PR | `decision:{behavior:"allow"}` |
 | Post-tool feedback | POT | `AC` |
+| Block after the tool ran | POT | `decision:"block"` + `reason` |
+| Replace what Claude sees | POT | `updatedToolOutput` |
+| Block a `/command` | UserPromptExpansion | `decision:"block"` + `reason` |
+| Veto compaction | PreCompact | exit 2 or `decision:"block"` |
 | Control teammates | TeammateIdle | `{continue:false, stopReason:"..."}` |
 | React to cfg/file change | ConfigChange, FileChanged | exit code or JSON |
 
@@ -75,16 +81,21 @@ Consult BEFORE choosing output -- wrong channel = silently ignored (no error). `
 | SS | YES, `<system-reminder>`, stable | -- | `UI` |
 | UserPromptSubmit | YES, appended; **cannot rewrite prompt** | `decision:"block"` -> UI only, Claude does NOT see reason | **`UI` -- IGNORED** (root cause of the `forced-eval.mjs` bug: emitted `UI.prompt` here, silently dropped) |
 | PTU | YES, stable | `permissionDecision`: allow/deny/ask/defer; `permissionDecisionReason` on deny; `"defer"` pauses headless, resume `-p --resume` (v2.1.89+) | `updatedToolOutput` |
-| POT | YES, stable (#15345) | feedback via `AC`, no decision field | `UI` |
+| POT | YES, stable (#15345) | **AFTER THE FACT** -- runs after the tool, cannot prevent the call: `decision:"block"`+`reason` appends the reason next to the tool result; `updatedToolOutput` replaces what Claude sees. Side effects stand | -- |
 | PostToolUseFailure | YES, limited data | -- | -- |
+| PostToolBatch | YES, injected once before the next model call | `decision:"block"` / `continue:false` stops the agentic loop | `UI` |
 | SubagentStart | YES, into SA (not parent) | -- | -- |
 | Notification | YES, stable | -- | -- |
 | Stop | YES, feedback + keeps turn going, not hook-error label (v2.1.163+); or `decision:"block"`+`reason` -> Claude continues, sees reason | -- | `AC` for blocking (use `decision` instead) |
 | SubagentStop | same as Stop, scoped to SA | -- | same |
-| PreCompact | N/A, not supported | -- | -- (use `systemMessage`) |
+| PreCompact | N/A, not supported | **BLOCKING**: exit 2 or `decision:"block"` blocks compaction | `systemMessage`, `continue` -- both discarded |
+| PostCompact | N/A, not supported | -- | `systemMessage`, `continue` -- both discarded |
 | SessionEnd | N/A, not supported | -- | -- (informational only) |
-| PR | N/A | `decision.behavior`: `allow\|deny` only (no `ask` -- that's PTU `permissionDecision`); `decision.message` on deny | -- |
-| PermissionDenied | via stderr | `{retry:true}` -> model retries; fires after auto-mode classifier denial (v2.1.89+) | -- |
+| Setup | YES, `AC` (plain stdout -> debug log only) | -- cannot block, any exit code continues | -- |
+| UserPromptExpansion | YES, alongside the expanded prompt | `decision:"block"` prevents the command from expanding; `reason` -> USER | -- |
+| DirectoryAdded | via `systemMessage` on the NEXT turn (matcher `slash_command` only) | -- cannot block, the dir is already added | `continue` -- discarded |
+| PR | N/A | `decision.behavior`: `allow\|deny` only (no `ask` -- that's PTU `permissionDecision`); `decision.message` on deny. **exit 2 is NOT honored** -- deny only through the `decision` object | exit 2 |
+| PermissionDenied | via `hookSpecificOutput` only | `{"hookSpecificOutput":{"hookEventName":"PermissionDenied","retry":true}}` -> model may retry; auto-mode denials only (v2.1.89+) | exit code, stderr, top-level `retry` |
 | TeammateIdle, TaskCompleted, TaskCreated | N/A | JSON `{continue, stopReason}` (v2.1.52+) | -- |
 
 ### stdout (exit 0, JSON)
@@ -102,8 +113,10 @@ Goes to user UI only -- Claude does NOT see it. Exception: async hooks deliver o
 
 | Type | Claude sees? | Events |
 |------|:---:|--------|
-| Blocking | YES | PTU, PR, PermissionDenied, UserPromptSubmit, Stop, SubagentStop, TeammateIdle, TaskCompleted, TaskCreated, ConfigChange, WorktreeCreate, Elicitation, ElicitationResult |
-| Non-blocking | NO (UI only) | SS, POT, PostToolUseFailure, PreCompact, PCD, Notification, SessionEnd, SubagentStart, InstructionsLoaded, StopFailure, CwdChanged, FileChanged, WorktreeRemove |
+| Blocking (exit 2 stops the action) | YES | PTU, UserPromptSubmit, UserPromptExpansion, Stop, SubagentStop, TeammateIdle, TaskCreated, TaskCompleted, ConfigChange (except `policy_settings`), PostToolBatch, **PreCompact**, Elicitation, ElicitationResult, WorktreeCreate (ANY non-zero aborts) |
+| Non-blocking, stderr still reaches Claude | YES | POT, PostToolUseFailure |
+| Non-blocking | NO (UI/debug log only) | SS, Setup, SubagentStart, PCD, Notification, SessionEnd, InstructionsLoaded, CwdChanged, FileChanged, DirectoryAdded (debug log), WorktreeRemove, MD |
+| exit 2 IGNORED entirely | NO | **PR** (use `decision`), **PermissionDenied** (use `hookSpecificOutput.retry`), StopFailure (except `terminalSequence`) |
 
 ### UI (PTU only)
 
@@ -116,17 +129,17 @@ Silently modifies tool params. Claude unaware of change. `UI` also rewrites on P
 
 | # | Event | Blocking? | Matcher | Key stdin fields | Ver |
 |---|-------|:---------:|---------|-----------------|-----|
-| 1 | SS | No | source: `startup`,`resume`,`clear`,`compact` | `source`,`model`,`agent_type` | -- |
-| 2 | UserPromptSubmit | Yes (exit 2/decision:block) | No | `user_prompt` | -- |
-| 3 | PTU | Yes (allow/deny/ask) | tool name regex | `tool_name`,`tool_input`,`tool_use_id` | -- |
-| 4 | PR | Yes (allow/deny) | tool name regex | `tool_name`,`tool_input`,`permission_suggestions` | -- |
-| 5 | POT | No | tool name regex | `tool_name`,`tool_input`,`tool_response`,`tool_use_id` | -- |
+| 1 | SS | No | source: `startup`,`resume`,`clear`,`compact`,`fork` | `source`,`model`,`agent_type`,`session_title` | `fork` 2.1.214 |
+| 2 | UserPromptSubmit | Yes (exit 2/decision:block) | No | `prompt` | -- |
+| 3 | PTU | Yes (allow/deny/ask/defer) | tool name regex | `tool_name`,`tool_input`,`tool_use_id` | -- |
+| 4 | PR | Yes via `decision` object ONLY -- exit 2 NOT honored | tool name regex | `tool_name`,`tool_input`,`permission_suggestions` | -- |
+| 5 | POT | After the fact -- cannot prevent the call; `decision:"block"` adds `reason`, exit 2 does not block (`hooks:839`) | tool name regex | `tool_name`,`tool_input`,`tool_response`,`tool_use_id`,`duration_ms` | -- |
 | 6 | PostToolUseFailure | No | tool name regex | `tool_name`,`tool_input`,`tool_use_id`,`error`,`is_interrupt` | -- |
-| 7 | Notification | No | `notification_type` | `message`,`title`,`notification_type` | -- |
+| 7 | Notification | No | `notification_type` (9 values, sec.11) | `message`,`title`,`notification_type` | -- |
 | 8 | SubagentStart | No | agent type | `agent_id`,`agent_type` | -- |
 | 9 | SubagentStop | Yes (decision:block) | agent type | `stop_hook_active`,`agent_id`,`agent_type`,`agent_transcript_path`,`last_assistant_message` | -- |
 | 10 | Stop | Yes (decision:block) | No | `stop_hook_active`,`last_assistant_message` | -- |
-| 11 | PreCompact | No | trigger: `manual`,`auto` | `transcript_path` | -- |
+| 11 | PreCompact | **Yes** (exit 2 / `decision:"block"`) -- blocks compaction | trigger: `manual`,`auto` | `trigger`,`custom_instructions` (manual only), `transcript_path` | -- |
 | 12 | PCD | No | trigger: `manual`,`auto` | `transcript_path` | 2.1.76 |
 | 13 | SessionEnd | No | reason: `clear`,`resume`,`logout`,`prompt_input_exit`,`bypass_permissions_disabled`,`other` | -- | -- |
 | 14 | TeammateIdle | Yes (exit 2 only) | No | `teammate_name`,`team_name` | -- |
@@ -137,18 +150,21 @@ Silently modifies tool params. Claude unaware of change. `UI` also rewrites on P
 | 19 | InstructionsLoaded | No | load_reason: `session_start`,`nested_traversal`,`path_glob_match`,`include`,`compact` | `file_path`,`memory_type`,`load_reason`,`globs`,`trigger_file_path`,`parent_file_path` | 2.1.69 |
 | 20 | Elicitation | Yes | MCP server name | MCP-specific fields | 2.1.76 |
 | 21 | ElicitationResult | Yes | MCP server name | MCP-specific fields | 2.1.76 |
-| 22 | StopFailure | No | error_type: `rate_limit`,`authentication_failed`,`billing_error`,`invalid_request`,`server_error`,`max_output_tokens`,`unknown` | `error`,`error_details`,`last_assistant_message` | 2.1.78 |
+| 22 | StopFailure | No -- output + exit code IGNORED except `terminalSequence` | error type (10): `rate_limit`,`overloaded`,`authentication_failed`,`oauth_org_not_allowed`,`billing_error`,`invalid_request`,`model_not_found`,`server_error`,`max_output_tokens`,`unknown` | `error`,`error_details`,`last_assistant_message` | 2.1.78 |
 | 23 | CwdChanged | No | No | -- | 2.1.83 |
 | 24 | FileChanged | No | filename (basename) | `file_path` | 2.1.83 |
 | 25 | TaskCreated | Yes | No | `task_id`,`task_subject`,`task_description`,`teammate_name`,`team_name` | 2.1.84 |
-| 26 | PermissionDenied | Yes | No | `tool_name`,`tool_input`,`denial_reason` | 2.1.89 |
+| 26 | PermissionDenied | No -- exit code + stderr IGNORED; `hookSpecificOutput.retry` only | **tool name regex** (same values as PTU) | `tool_name`,`tool_input`,`tool_use_id`,`reason` | 2.1.89 |
 | 27 | MD | No | No | assistant message text | 2.1.152 |
-| 28 | Setup | unverified | unverified | unverified | unverified |
-| 29 | UserPromptExpansion | unverified | unverified | unverified | unverified |
-| 30 | PostToolBatch | unverified | unverified | unverified | unverified |
-| 31 | DirectoryAdded | unverified | unverified | unverified | 2.1.219 |
+| 28 | Setup | No -- any exit code continues | trigger: `init`,`maintenance` | `trigger` | -- |
+| 29 | UserPromptExpansion | **Yes** (`decision:"block"` / exit 2) -- blocks the expansion | command name (`command_name`) | `expansion_type`,`command_name`,`command_args`,`command_source`,`prompt` | -- |
+| 30 | PostToolBatch | **Yes** -- stops the agentic loop before the next model call | None (unsupported) | `tool_calls[]` = `{tool_name,tool_input,tool_use_id,tool_response}` | -- |
+| 31 | DirectoryAdded | No -- fires AFTER the add, `continue` discarded | source: `slash_command`,`register_repo_root` | `directory`,`source` | 2.1.219 |
 
-> Rows 28-31: names confirmed via binary's 31-entry event array; per-field/blocking detail not fetched this pass (see `## STILL UNVERIFIED` note if extending).
+> Setup fires ONLY on `claude --init-only` / `-p --init` / `-p --maintenance`, never on normal startup -- use SS for per-session init. Setup supports `command` + `mcp_tool` types only, and has `CLAUDE_ENV_FILE`.
+> UserPromptExpansion covers the path PTU cannot: a PTU hook on the `Skill` tool never fires when the user types `/skillname` directly.
+> PostToolBatch `tool_response` is the serialized `tool_result` content the model sees; POT's `tool_response` is the tool's structured `Output` object (`{filePath,success}` for `Write`). Do NOT reuse a POT parser here.
+> DirectoryAdded does not fire for `--add-dir` at startup (SS covers those). Its `systemMessage` reaches Claude on the next turn under `slash_command`, and the debug log only under `register_repo_root`.
 
 ### Common stdin (ALL events)
 
@@ -170,21 +186,28 @@ Silently modifies tool params. Claude unaware of change. `UI` also rewrites on P
 | Stop | JSON processed | ignored | stderr -> Claude |
 | SubagentStop | JSON processed | ignored | stderr -> Claude |
 | SS | JSON processed | warning in UI | stderr -> UI |
-| PreCompact | JSON processed | compact continues | stderr -> UI |
+| PreCompact | JSON processed | compact continues | **blocks compaction**, stderr -> UI on manual `/compact` |
 | TeammateIdle | teammate terminates | teammate continues | stderr -> UI |
 | TaskCompleted | task accepted | task re-assigned | stderr -> UI |
-| POT | JSON processed | warning | stderr -> UI |
-| Setup, UserPromptExpansion, PostToolBatch, DirectoryAdded | unverified | unverified | unverified |
+| POT | JSON processed | warning | stderr -> Claude; tool already ran |
+| PR | JSON `decision` processed | non-blocking error | **IGNORED** -- permission flow proceeds unchanged |
+| PermissionDenied | `hookSpecificOutput.retry` processed | ignored | **IGNORED** -- the denial already happened |
+| Setup | JSON processed | JSON honored if schema-valid, else UI notice | stderr -> UI notice; session continues |
+| UserPromptExpansion | JSON processed | non-blocking error | **blocks the expansion**, stderr -> user as `reason` |
+| PostToolBatch | JSON processed | non-blocking error | **stops the agentic loop**, stderr -> Claude |
+| DirectoryAdded | JSON processed (`continue` dropped) | debug log | stderr -> debug log; the dir is already added |
+| WorktreeCreate | JSON processed | **creation FAILS** | **creation FAILS** (ANY non-zero) |
 | `http`/`mcp_tool` type (any event) | N/A -- no OS exit code | N/A | N/A |
 
-> Sample, not exhaustive (31 events total). `http`/`mcp_tool` convey success/failure via response JSON (`decision`/`AC`) or HTTP/tool-call failure, not exit code; empty body = pass-through. Rows 28-31 exit-code semantics unverified (see `## 2.` note).
+> Sample, not exhaustive (31 events total). Exit 1 is a NON-blocking error almost everywhere -- to enforce a policy use `exit 2` or JSON, never `exit 1`. Sole exception: `WorktreeCreate`, where any non-zero exit aborts.
+> `http`/`mcp_tool` convey success/failure via response JSON (`decision`/`AC`) or HTTP/tool-call failure, not exit code; 2xx + empty body = pass-through, 2xx + non-JSON body = non-blocking error.
 
 ## 3. Hook Types
 
 | Type | Description | Timeout | Use case |
 |------|-------------|---------|----------|
 | `command` | shell/node script, JSON via stdin/stdout | 600s | custom logic, file I/O, external tools |
-| `http` | POSTs FULL hook JSON payload to URL (axios), blocks for response, parses JSON body as hook output (decision / `AC`). Both directions. In the POSTed payload the user-prompt field is named `prompt` (v2.1.63+) | 600s | external API/webhook, remote delegation |
+| `http` | POSTs the FULL hook JSON payload to a URL, blocks for the response, parses a 2xx JSON body as hook output (decision / `AC`). Same payload as `command` stdin -- no field is renamed (v2.1.63+) | 600s | external API/webhook, remote delegation |
 | `mcp_tool` | invokes a tool on an already-configured MCP server and AWAITS it synchronously; returned text content parsed exactly like a `command` hook's stdout JSON (can return `decision:block` or `hookSpecificOutput.additionalContext`) | 600s | reuse an MCP tool as gate/injector |
 | `prompt` | inline-LLM allow/block GATE: evaluates the prompt, decides allow vs block, surfaces a reason on block. Its NL text is NOT added to the model's context | 30s | quick validation / policy gate |
 | `agent` | LLM-agent allow/block GATE, same semantics as `prompt` (evaluate condition -> allow or block+reason). NOT a general subagent whose output is injected. Experimental | 60s | complex condition gate |
@@ -195,25 +218,44 @@ Silently modifies tool params. Claude unaware of change. `UI` also rewrites on P
 
 | Field | Req | Description |
 |-------|:---:|-------------|
-| `server` | yes | name of a configured MCP server |
+| `server` | yes | name of a configured MCP server. A PLUGIN-bundled server takes the scoped form `plugin:<plugin-name>:<server-name>` -- the bare key never resolves |
 | `tool` | yes | tool name to invoke |
 | `input` | no | args object; string values support `${...}` interpolation from hook input JSON (e.g. `"${tool_input.file_path}"`) |
 | `if`,`timeout`,`statusMessage`,`once` | no | same as other types |
 
-### Common fields
+### Common fields (ALL five types)
 
-| Field | Description | Applies to |
-|-------|-------------|------------|
-| `type` | REQ: `"command"`,`"http"`,`"mcp_tool"`,`"prompt"`,`"agent"` | All |
-| `if` | conditional filter (permission rule syntax, v2.1.85+): `"Bash(git *)"`,`"Edit(*.ts)"` | tool events |
-| `timeout` | seconds before cancellation; DEF 600s. Floors: 30s (UserPromptSubmit/UserPromptExpansion event, or `prompt` type), 60s (`agent` type), 10s (MessageDisplay event) | All |
-| `statusMessage` | spinner text while hook runs | All |
-| `once` | `true` = run once per session (skills only) | Skills |
-| `async` | `true` = fire-and-forget, non-blocking (see sec.10) | command/http/mcp_tool |
-| `asyncRewake` | `true` = wakes the model on hook exit code 2 (async only) | command/http/mcp_tool |
-| `shell` | shell to run `command` in (overrides platform default) | `command` |
+| Field | Req | Description |
+|-------|:---:|-------------|
+| `type` | yes | `"command"`,`"http"`,`"mcp_tool"`,`"prompt"`,`"agent"` |
+| `if` | no | ONE permission rule (v2.1.85+): `"Bash(git *)"`,`"Edit(*.ts)"`. No `&&`/`\|\|`/list -- one rule per handler. Evaluated ONLY on PTU, POT, PostToolUseFailure, PR, PermissionDenied; on any other event a hook with `if` set NEVER runs. Best-effort/fails open -- !=a hard gate |
+| `timeout` | no | seconds before cancellation. DEF 600 (`command`/`http`/`mcp_tool`), 30 (`prompt`), 60 (`agent`). UserPromptSubmit lowers the 600 to 30, MessageDisplay to 10; SessionEnd hooks share a 1.5 s budget (raised to your `timeout`, max 60 s) |
+| `statusMessage` | no | spinner text while the hook runs |
+| `once` | no | `true` = run once per session then de-register. Honored ONLY in skill frontmatter; ignored in settings files and agent frontmatter |
 
-> BREAKING (v2.1.207): `${user_config.*}` interpolation rejected in shell-form `command`/monitors/`headersHelper` (shell-injection fix). Use non-shell forms or env vars instead.
+### `command`-only fields
+
+| Field | Req | Description |
+|-------|:---:|-------------|
+| `command` | yes | shell command; with `args`, the executable to spawn directly |
+| `args` | no | argument vector -> **exec form**: `command` resolves on `PATH` and spawns directly, NO shell. Each element is one argument verbatim -- no quoting, no `$`/backtick expansion. Use whenever the hook references a path placeholder |
+| `async` | no | `true` = fire-and-forget, non-blocking (see sec.10) |
+| `asyncRewake` | no | `true` = background + wakes Claude on exit code 2; implies `async`. The hook's stderr (or stdout when stderr is empty) is shown to Claude as a system reminder -- the only way a background hook reports a late failure |
+| `shell` | no | `"bash"` or `"powershell"` for shell form. IGNORED when `args` is set |
+
+> `async`/`asyncRewake`/`shell`/`args` are `command`-only -- setting them on `http`/`mcp_tool`/`prompt`/`agent` does nothing.
+
+Exec form (`args` present) -- the safe way to pass a placeholder path:
+```json
+{"type":"command","command":"node","args":["${CLAUDE_PLUGIN_ROOT}/scripts/format.js","--fix"]}
+```
+Shell form (`args` absent) -- needs its own quoting, use only for pipes/`&&`/globs:
+```json
+{"type":"command","command":"node \"${CLAUDE_PLUGIN_ROOT}\"/scripts/format.js --fix"}
+```
+Both forms export `CLAUDE_PROJECT_DIR`, `CLAUDE_PLUGIN_ROOT`, `CLAUDE_PLUGIN_DATA` into the spawned process.
+
+> BREAKING (v2.1.207): a shell-form PLUGIN hook whose `command` references `${user_config.*}` now FAILS instead of running. Two fixes: set `args` to switch the handler to exec form (where `${user_config.*}` still substitutes), or read `$CLAUDE_PLUGIN_OPTION_<KEY>` from the environment.
 
 HTTP hook example (v2.1.63+):
 ```json
@@ -233,12 +275,32 @@ on top, scoped to when their component is active -- not part of the override cha
 | 2 | CLI args | session | -- |
 | 3 | `.claude/settings.local.json` | project (gitignored) | -- |
 | 4 | `.claude/settings.json` | project (committable) | team-shared |
-| 5 | `~/.claude/settings.local.json` | global (gitignored) | personal global; local overrides non-local at same scope |
-| 6 | `~/.claude/settings.json` | global (committable) | user global |
-| 7 | plugin `hooks/hooks.json` | plugin-scoped | additive (merged, not overridden) |
-| 8 | agent/skill frontmatter YAML | component-scoped | while component active; workspace-trust dialog required first (v2.1.218+) |
+| 5 | `~/.claude/settings.json` | global | all your projects; not shareable |
+| 6 | plugin `hooks/hooks.json` | plugin-scoped | additive (merged, not overridden) |
+| 7 | skill frontmatter YAML | rest of the session once invoked | registers even in an untrusted folder under `-p`; `once: true` for single-fire |
+| 8 | subagent frontmatter YAML | while that SA runs | requires the workspace-trust dialog for the folder the agent file came from (v2.1.218+); a `-p` session does NOT count as accepting it. `Stop` is auto-converted to `SubagentStop` |
 
-Merge rule: hooks from diff sources merged (not overridden). For single event, ALL registered hooks execute in parallel.
+> There is no `~/.claude/settings.local.json` -- Claude Code never reads that path.
+
+Merge rule: hooks from diff sources merged (not overridden). For a single event, ALL registered hooks execute in parallel; the same handler defined in two settings files runs once, but a plugin's or skill's copy stays separate. **All hook events are supported in skill and subagent frontmatter.**
+
+### Workspace trust (settings-file hooks)
+
+| Session | Behaviour |
+|---------|-----------|
+| interactive | every settings file, incl. `~/.claude/settings.json`, is held back until you accept the trust dialog for the folder or a parent |
+| `-p` / SDK | never shows the dialog, treats the folder as trusted -- repo-committed `.claude/settings.json` hooks RUN in a folder you never trusted. Mitigate with `--bare` or `--settings '{"disableAllHooks":true}'` |
+
+### Live / reload / restart
+
+| Change | Takes effect |
+|--------|--------------|
+| a skill's `SKILL.md` body | immediately, same session |
+| plugin `hooks/`, `.mcp.json`, `agents/`, `output-styles/` | `/reload-plugins` or restart |
+| plugin monitors | session restart only |
+| settings-file `hooks` blocks | `/clear` or a new session |
+
+> A plugin that updates mid-session keeps serving hooks from the PREVIOUS version's `${CLAUDE_PLUGIN_ROOT}` until `/reload-plugins`.
 
 ### Managed-only settings keys
 
@@ -284,7 +346,7 @@ Format: `ToolName(pattern)` -- same syntax as permission rules.
 
 | Variable | Description | Available |
 |----------|-------------|-----------|
-| `$CLAUDE_PROJECT_DIR` | project root | all hooks |
+| `$CLAUDE_PROJECT_DIR` | project root; exported UNCONDITIONALLY into every hook child process (exec + shell form), and into stdio MCP / plugin LSP subprocesses. Empty in an interactive or Bash-tool shell -- that is expected, NOT evidence it is unset for hooks | all hooks |
 | `$CLAUDE_PLUGIN_ROOT` | plugin install dir | plugin hooks |
 | `$CLAUDE_PLUGIN_DATA` | persistent per-plugin data dir, survives updates (v2.1.78+); `~/.claude/plugins/data/<plugin-id>/` | plugin hooks |
 | `$CLAUDE_CODE_REMOTE` | `"true"` in remote env | all hooks |
@@ -297,7 +359,68 @@ Format: `ToolName(pattern)` -- same syntax as permission rules.
 | `CLAUDE_EFFORT` | reasoning-effort override propagated into hook env | v2.1.199+ |
 | `CLAUDE_CODE_BRIDGE_SESSION_ID` | bridge-session identifier | v2.1.199+ |
 
-> Protected-path (v3.4.70): Write/Edit to `~/.claude/*` (incl. `$CLAUDE_PLUGIN_DATA`) blocked in ALL modes (`bypassPermissions`, headless). Check runs BEFORE hooks -- whitelists dead. Exceptions: `commands|agents|skills|worktrees`. !=design skills with `$CLAUDE_PLUGIN_DATA` as Write target -> silent fail. Primary: project-relative `.claude/<subdir>/` + whitelist. `$CLAUDE_PLUGIN_DATA` = read-only/interactive-only/Bash-only (Bash redirect currently bypasses check, but brittle).
+> Sensitive-path prompt (2.1.233, verified in binary): a Write/Edit TOOL call under `~/.claude/**` is
+> classified sensitive and routed to a permission ASK -- not a block. Carve-outs under `.claude/`:
+> `skills`, `agents`, `commands`, `worktrees`, `scheduled_tasks.json`. `plugins/` is NOT carved out, so
+> `$CLAUDE_PLUGIN_DATA` writes ask. Mode behaviour: default/acceptEdits/plan -> prompt;
+> `bypassPermissions`/`--dangerously-skip-permissions` -> auto-approved (CHANGELOG 2.1.126); headless
+> `-p` without bypass -> FAILS ("tool requires user interaction; no prompt available in headless mode").
+> Consequence: `$CLAUDE_PLUGIN_DATA` is a fully supported persistent WRITE target (official
+> `project-artifact` skill Writes there), but only interactively or from a hook/Bash subprocess -- never
+> from a Write/Edit tool call in an unattended run. For unattended state prefer
+> `${CLAUDE_PROJECT_DIR}/.claude/<subdir>/`.
+
+### Canonical project-root resolution
+
+Every generated hook and installer uses this ONE recipe. Order is fixed and never silent:
+env var -> git toplevel -> upward walk for `.git`/`.claude` -> `PWD`.
+
+```js
+import { existsSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+
+/** Project root: CLAUDE_PROJECT_DIR -> upward walk for a root marker -> hook cwd. Never throws. */
+export function projectRoot(hookCwd) {
+  const env = process.env.CLAUDE_PROJECT_DIR;
+  if (env && existsSync(env)) return resolve(env);
+
+  let dir = resolve(hookCwd || process.cwd());
+  for (;;) {
+    if (existsSync(join(dir, '.git')) || existsSync(join(dir, '.claude'))) return dir;
+    const up = dirname(dir);
+    if (up === dir) break;
+    dir = up;
+  }
+  return resolve(hookCwd || process.cwd()); // last resort: never guess, never throw in a hook
+}
+```
+
+```sh
+# Project root: CLAUDE_PROJECT_DIR -> git toplevel -> upward walk -> PWD.
+claude_project_root() {
+  if [ -n "$CLAUDE_PROJECT_DIR" ] && [ -d "$CLAUDE_PROJECT_DIR" ]; then
+    printf '%s\n' "$CLAUDE_PROJECT_DIR"; return 0
+  fi
+  if r=$(git rev-parse --show-toplevel 2>/dev/null) && [ -n "$r" ]; then
+    printf '%s\n' "$r"; return 0
+  fi
+  d=$PWD
+  while [ "$d" != "/" ]; do
+    if [ -d "$d/.git" ] || [ -d "$d/.claude" ]; then printf '%s\n' "$d"; return 0; fi
+    d=$(dirname "$d")
+  done
+  printf '%s\n' "$PWD"; return 1   # nonzero: caller decides
+}
+
+ROOT=$(claude_project_root) || echo "WARN: no project root marker found; using $ROOT" >&2
+```
+
+| Rule | Detail |
+|------|--------|
+| both fail | a SCRIPT warns on stderr and continues with `PWD`; an INSTALLER about to WRITE aborts non-zero naming what it looked for. Never write to a guessed root |
+| hook exit code | a hook NEVER exits non-zero because the root was ambiguous -- root failure stays fail-open |
+| `input.cwd` | exactly one job: resolving RELATIVE paths inside `tool_input`. Never keys config lookup, state paths or gitignore edits -- `cwd` drifts mid-session (see `CwdChanged`), `CLAUDE_PROJECT_DIR` does not |
+| markers | `.git` OR `.claude`, in that order, never extended per-hook |
 
 ## 6. Output Schemas
 
@@ -312,26 +435,40 @@ Single-field schemas (compact):
 | SubagentStart -- inject into SA | `{"hookSpecificOutput":{"hookEventName":"SubagentStart","additionalContext":"Context injected into SUBAGENT (not parent)"}}` |
 | UserPromptSubmit -- block | `{"decision":"block","reason":"Reason shown to USER only (Claude does NOT see this)"}` |
 | POT -- feedback | `{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"Post-tool feedback for Claude"}}` |
+| POT -- block (feedback next to the result) | `{"decision":"block","reason":"Lint failed; fix before continuing."}` -- top-level, NOT `hookSpecificOutput` |
+| POT -- replace what Claude sees | `{"hookSpecificOutput":{"hookEventName":"PostToolUse","updatedToolOutput":{"stdout":"[redacted]","stderr":"","interrupted":false,"isImage":false}}}` -- value MUST match the tool's output shape or it is ignored |
+| PostToolBatch -- inject once | `{"hookSpecificOutput":{"hookEventName":"PostToolBatch","additionalContext":"..."}}`; `{"decision":"block","reason":"..."}` stops the agentic loop |
+| Setup -- context | `{"hookSpecificOutput":{"hookEventName":"Setup","additionalContext":"Dependencies installed"}}` |
+| UserPromptExpansion -- block | `{"decision":"block","reason":"Shown to the USER","hookSpecificOutput":{"hookEventName":"UserPromptExpansion","additionalContext":"..."}}` |
 | TeammateIdle/TaskCompleted/TaskCreated -- control (v2.1.52+) | `{"continue":false,"stopReason":"Task limit reached."}` |
-| PermissionDenied -- retry (v2.1.89+) | `{"retry":true}` -- model retries; fires after auto-mode classifier denial; not user-facing like PR |
+| PermissionDenied -- retry (v2.1.89+) | `{"hookSpecificOutput":{"hookEventName":"PermissionDenied","retry":true}}` -- top-level `retry` is NOT read. Tells the model it MAY retry; does not reverse the denial. Ignored for no-verdict denials |
 | WorktreeCreate -- return path (v2.1.84+, http hooks) | `{"hookSpecificOutput":{"hookEventName":"WorktreeCreate","worktreePath":"/path/to/worktree"}}` |
 | Empty pass-through | `{}` |
 
 ### PTU -- Modify input
+
+`updatedInput` REPLACES the entire `tool_input` object -- always spread the original, never send a partial:
 ```json
 {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","updatedInput":{"prompt":"Modified prompt text","other_field":"preserved"}}}
 ```
+```js
+output({hookSpecificOutput:{hookEventName:'PreToolUse',permissionDecision:'allow',
+  updatedInput:{...input.tool_input, prompt:'Modified prompt text'}}});
+```
 
 ### PTU -- Answer AskUserQuestion (v2.1.85+)
+
+Echo back the original `questions` array and add an `answers` object mapping question text -> chosen label:
 ```json
-{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","updatedInput":{"question":"Which database?","answer":"PostgreSQL"}}}
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","updatedInput":{"questions":[{"question":"Which database?","header":"DB","options":[{"label":"PostgreSQL"},{"label":"MySQL"}],"multiSelect":false}],"answers":{"Which database?":"PostgreSQL"}}}}
 ```
+> `"allow"` ALONE is not sufficient for `AskUserQuestion`/`ExitPlanMode` -- it must carry `updatedInput`. Multi-select labels join with commas. PTU precedence across hooks: `deny` > `defer` > `ask` > `allow`.
 
 ### SS -- Context injection
 ```json
 {"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"Injected context for Claude","sessionTitle":"My session title","reloadSkills":true},"systemMessage":"Status shown to user only"}
 ```
-> `reloadSkills:true` re-scans skill dirs; `sessionTitle` sets session title on startup + resume (v2.1.152+).
+> `reloadSkills:true` re-scans skill + command dirs after the SS hooks finish, so a skill the hook installed is usable in the SAME session. `sessionTitle` applies on `startup`/`resume`/`fork`, ignored on `clear`/`compact`. `initialUserMessage` creates the first turn in `-p` mode (`AC` only attaches to an existing one).
 
 ### PR -- Allow/Deny
 ```json
@@ -365,37 +502,48 @@ Single-field schemas (compact):
 
 ### Bash Hook Template
 
+Exactly ONE `printf` reaches stdout, on every path. Decide into `$DECISION`, emit once at the end --
+never `echo '{}'` before a decision, or the hook prints two objects and the decision is discarded.
+
 ```bash
 #!/bin/bash
 set -euo pipefail
-# Hook: <EventName> | Matcher: <matcher> | Purpose: <description>
+# Hook: PreToolUse | Matcher: Bash | Purpose: deny destructive commands
 INPUT=$(cat)
-SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
-CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
 EVENT=$(echo "$INPUT" | jq -r '.hook_event_name // empty')
-# TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty')
+COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
 
-# Infinite loop protection (Stop/SubagentStop):
-# STOP_ACTIVE=$(echo "$INPUT" | jq -r '.stop_hook_active // false')
-# if [ "$STOP_ACTIVE" = "true" ]; then echo '{}'; exit 0; fi
+# Stop/SubagentStop only -- prevents an infinite block loop.
+STOP_ACTIVE=$(echo "$INPUT" | jq -r '.stop_hook_active // false')
+if [ "$STOP_ACTIVE" = "true" ]; then printf '%s\n' '{}'; exit 0; fi
 
-echo '{}'
+DECISION='{}'                       # pass-through: hook renders no verdict
+if printf '%s' "$COMMAND" | grep -qE 'rm[[:space:]]+-rf'; then
+  DECISION=$(jq -n --arg reason "Destructive command blocked by hook" \
+    '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":$reason}}')
+fi
 
-# Inject context (PTU):
-# jq -n --arg ctx "Your context here" '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","additionalContext":$ctx}}'
-
-# Block stop:
-# jq -n --arg reason "Task incomplete" '{"decision":"block","reason":$reason}'
-
-# Deny tool:
-# jq -n --arg reason "Not allowed" '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":$reason}}'
+printf '%s\n' "$DECISION"           # the ONLY write to stdout
 ```
+
+Swap the `DECISION=$(jq -n ...)` line per event -- the shape changes, the single-emit structure does not:
+
+| Event | `DECISION=$(jq -n ...)` payload |
+|-------|--------------------------------|
+| PTU inject context | `'{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","additionalContext":$ctx}}'` |
+| Stop block | `'{"decision":"block","reason":$reason}'` |
+| POT block | `'{"decision":"block","reason":$reason}'` |
+| SS context | `'{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":$ctx}}'` |
+
+> A hook enforcing a hard invariant must not let a `jq`/parse failure become silent approval: `set -euo pipefail` aborts before the `printf`, which Claude Code reads as a non-blocking error and the action proceeds. Wrap the check so failure lands on the deny branch, not on an abort.
 
 ### JS/mjs Hook Template
 
+`output()` is called exactly once on every path, `decide()` is the only place that chooses a verdict.
+
 ```javascript
 #!/usr/bin/env node
-// Hook: <EventName> | Matcher: <matcher> | Purpose: <description>
+// Hook: PreToolUse | Matcher: Bash | Purpose: deny destructive commands
 
 async function readStdin() {
   const chunks = [];
@@ -404,32 +552,41 @@ async function readStdin() {
 }
 function output(response) { console.log(JSON.stringify(response)); }
 
+/** Returns the single JSON object this hook prints. `{}` = no verdict, not approval. */
+function decide(input) {
+  // Stop/SubagentStop only -- prevents an infinite block loop.
+  if (input.stop_hook_active) return {};
+
+  // per-event fields: see "Key stdin fields", ## 2. All 31 Hook Events.
+  // UserPromptSubmit -> input.prompt | POT -> input.tool_response | PostToolBatch -> input.tool_calls
+  const command = input.tool_input?.command ?? '';
+  if (/rm\s+-rf/.test(command)) {
+    return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny',
+      permissionDecisionReason: 'Destructive command blocked by hook' } };
+  }
+  return {};
+}
+
 async function main() {
   try {
-    const input = await readStdin();
-    const { session_id, cwd, hook_event_name } = input;
-    // per-event fields: see "Key stdin fields" column, ## 2. All 31 Hook Events
-
-    // if (input.stop_hook_active) { output({}); return; }
-
-    output({});
-
-    // Inject context (PTU):
-    // output({hookSpecificOutput:{hookEventName:'PreToolUse',permissionDecision:'allow',additionalContext:'Context for Claude'}});
-
-    // Modify tool input (PTU):
-    // output({hookSpecificOutput:{hookEventName:'PreToolUse',permissionDecision:'allow',updatedInput:{...input.tool_input,prompt:'Modified prompt'}}});
-
-    // Block stop:
-    // output({decision:'block',reason:'Task incomplete'});
-
+    output(decide(await readStdin()));
   } catch (error) {
-    console.error(`Hook error: ${error.message}`);
-    output({});
+    console.error(`Hook error: ${error.message}`);   // stderr never pollutes the JSON contract
+    output({});                                       // advisory hooks fail open; see ## 9 for gates
   }
 }
 main();
 ```
+
+Other verdicts are a different `decide()` return, never a second `output()`:
+
+| Event | `decide()` returns |
+|-------|--------------------|
+| PTU inject context | `{hookSpecificOutput:{hookEventName:'PreToolUse',permissionDecision:'allow',additionalContext:'...'}}` |
+| PTU modify input | `{hookSpecificOutput:{hookEventName:'PreToolUse',permissionDecision:'allow',updatedInput:{...input.tool_input,prompt:'...'}}}` |
+| Stop / SubagentStop block | `{decision:'block',reason:'Task incomplete'}` |
+| POT block | `{decision:'block',reason:'Lint failed'}` |
+| PermissionDenied retry | `{hookSpecificOutput:{hookEventName:'PermissionDenied',retry:true}}` |
 
 > Multi-hook plugin: extract `readStdin`/`output` into `lib/utils.mjs`, `import` into each hook file.
 
@@ -447,15 +604,17 @@ main();
 
 | Practice | Why |
 |----------|-----|
-| Always `output({})` on error | !=trap user in broken state |
-| Print exactly ONE JSON object to stdout | extra stdout lines corrupt parsing; CC reads single JSON |
+| Always `output({})` on error | !=trap user in broken state (advisory hooks -- see the fail-open/fail-closed row below) |
+| Print exactly ONE JSON object to stdout, on every path | extra stdout lines corrupt parsing; CC reads a single JSON object. Decide into a variable, emit once |
 | All logging/diagnostics to stderr (`console.error`) | stdout reserved for the JSON contract |
 | `stop_hook_active` check in Stop/SubagentStop | prevents infinite block loop |
 | try/catch around all logic | graceful degradation |
 | validate stdin before parsing | handle missing/malformed input |
-| DEF to allow/pass-through | hook failure = no effect |
+| keep every output string under 10,000 chars | `AC`, `systemMessage` and plain stdout are capped at 10,000; over that the value is written to a file and replaced by a preview + path, so a gate's reason can arrive truncated |
+| choose fail-open vs fail-closed from the invariant | fail-open (`{}`) is right for advisory/context hooks -- a broken hook then has no effect. A hook enforcing a HARD invariant must instead emit the deny/block with the exception text as its `reason`, because `{}` on an enforcement hook is silent approval |
 
-> Infinite loop protection (Stop/SubagentStop): check `stop_hook_active` and short-circuit to `{}` -- see commented block in Bash template, `if (input.stop_hook_active)` in JS template (## 7).
+> Infinite loop protection (Stop/SubagentStop): check `stop_hook_active` and short-circuit to `{}` -- see both templates in `## 7`.
+> `exit 1` is a non-blocking error nearly everywhere: the action proceeds. Enforce with `exit 2` or JSON, never `exit 1`. A mistyped script path exits 127 and leaves the gate silently disabled -- watch for the `<hook name> hook error` notice on a policy hook's first run.
 
 ## 10. Async Hooks
 
@@ -465,43 +624,46 @@ main();
 
 | Behavior | Details |
 |----------|---------|
-| execution | background, non-blocking |
+| execution | background, non-blocking. `command` type only |
 | `decision` fields | IGNORED |
 | `systemMessage` | delivered on NEXT turn |
 | `AC` | may not arrive before Claude processes |
-| blocking events | always synchronous (PTU, Stop, SubagentStop, UserPromptSubmit, PR) |
+| `asyncRewake:true` | implies `async`; exit 2 wakes Claude with the hook's stderr (or stdout when stderr is empty) as a system reminder -- the only channel a background hook has for a late failure |
+| blocking events | always synchronous (PTU, UserPromptSubmit, UserPromptExpansion, Stop, SubagentStop, PreCompact, PostToolBatch, ConfigChange) |
 | use case | logging, metrics, slow file ops |
 
 | Event | Sync/Async | Reason |
 |-------|-----------|--------|
 | SS | sync (waits) | context needed before first turn |
 | PTU | sync (blocks) | must decide allow/deny before exec |
-| POT | async OK | informational |
-| PreCompact | sync (waits) | must write handoff before compaction |
+| POT | async OK when advisory | sync if it blocks or rewrites `updatedToolOutput` |
+| PreCompact | sync (blocks) | can veto compaction; must write any handoff first |
 | Notification | async OK | informational |
 
 ## 11. Matcher Patterns
 
 | Event | Matcher type | Examples |
 |-------|-------------|----------|
-| PTU | tool name (regex) | `Bash`, `Write\|Edit`, `Task\|Agent`, `mcp__.*` |
-| POT | tool name (regex) | `Bash`, `Read`, `Task\|Agent` |
-| PostToolUseFailure | tool name (regex) | `Bash` |
-| PR | tool name (regex) | `Bash`, `Write` |
-| SS | source string | `startup`,`resume`,`clear`,`compact` |
-| SessionEnd | reason string | `clear`,`resume`,`logout`,`prompt_input_exit`,`other` |
-| SubagentStart | agent type | `Explore`,`general-purpose`,`my-agent` |
-| SubagentStop | agent type | `Plan`,`general-purpose` |
+| PTU, POT, PostToolUseFailure, PR, **PermissionDenied** | tool name | `Bash`, `Write\|Edit`, `Task\|Agent`, `mcp__.*` |
+| SS | source string | `startup`,`resume`,`clear`,`compact`,`fork` |
+| Setup | CLI flag | `init`,`maintenance` |
+| SessionEnd | reason string | `clear`,`resume`,`logout`,`prompt_input_exit`,`bypass_permissions_disabled`,`other` |
+| SubagentStart/SubagentStop | agent type | `Explore`,`Plan`,`general-purpose`,`my-agent`, plugin-scoped `^my-plugin:reviewer$` |
 | PreCompact/PCD | trigger | `manual`,`auto` |
-| Notification | type string | `permission_prompt`,`idle_prompt`,`auth_success`,`elicitation_dialog` |
+| Notification | type string (9) | `permission_prompt`,`idle_prompt`,`auth_success`,`elicitation_dialog`,`elicitation_url_dialog`,`elicitation_complete`,`elicitation_response`,`agent_needs_input`,`agent_completed` |
 | ConfigChange | source string | `user_settings`,`project_settings`,`local_settings`,`policy_settings`,`skills` |
 | InstructionsLoaded | load reason | `session_start`,`nested_traversal`,`path_glob_match`,`include`,`compact` |
-| FileChanged | filename (basename) | `.envrc`,`.env` |
-| StopFailure | error type | `rate_limit`,`authentication_failed`,`billing_error`,`invalid_request`,`server_error`,`max_output_tokens`,`unknown` |
+| DirectoryAdded | how it was added | `slash_command`,`register_repo_root` |
+| UserPromptExpansion | command name | your skill or command names |
+| FileChanged | filename (basename) | `.envrc\|.env` |
+| StopFailure | error type (10) | `rate_limit`,`overloaded`,`authentication_failed`,`oauth_org_not_allowed`,`billing_error`,`invalid_request`,`model_not_found`,`server_error`,`max_output_tokens`,`unknown` |
 | Elicitation/ElicitationResult | MCP server name | server name string |
-| Stop, UserPromptSubmit, TeammateIdle, TaskCompleted, TaskCreated, WorktreeCreate, WorktreeRemove, CwdChanged, PermissionDenied | No matcher | always fires |
+| Stop, UserPromptSubmit, **PostToolBatch**, TeammateIdle, TaskCompleted, TaskCreated, WorktreeCreate, WorktreeRemove, CwdChanged, MD | No matcher | always fires |
 
-> Omit `matcher` -> fires for ALL instances of that event.
+> Omit `matcher` (or `"*"`/`""`) -> fires for ALL instances of that event.
+> Evaluation: only letters/digits/`_`/`-`/space/`,`/`|` -> exact string or `|`,`,`-separated list of exact strings. ANY other character -> unanchored JS regex, so `Edit.*` also matches `NotebookEdit`; anchor as `^Edit$` for whole-string.
+> `FileChanged` and `StopFailure` use a NARROWER exact set (letters, digits, `_`, `|`): a hyphen, space or comma there stays on the regex path and only `|` separates.
+> MCP tools: the trailing `.*` is MANDATORY -- `mcp__memory` is exact-match and matches nothing; use `mcp__memory__.*`. A PLUGIN-bundled server is scoped: `mcp__plugin_<plugin-name>_<server-name>__<tool>`, so `mcp__plugin_my-plugin_db__.*`. A matcher on the bare server key never fires. Same scoped name in `if`.
 > Hyphenated matcher identifiers exact-match since v2.1.195 (was accidental substring match). Comma- and pipe-separated matcher lists equivalent since v2.1.191.
 
 ## 12. Common Hook Patterns
@@ -542,8 +704,12 @@ main();
 | 10 | performance <1s for blocking hooks |
 | 11 | check routing matrix for broken channels |
 | 12 | syntax check (`bash -n` or `node --check`) |
-| 13 | `if` field (v2.1.85+) to reduce overhead when applicable |
+| 13 | `if` field (v2.1.85+) to reduce overhead when applicable -- tool events only |
 | 14 | hook type (`command` deterministic, `http` API/remote, `mcp_tool` MCP tool, `prompt`/`agent` allow-block gate) |
+| 15 | exactly ONE JSON object on stdout on EVERY path -- test the pass-through path too, not just the decision path |
+| 16 | fail-open vs fail-closed matches the invariant; an enforcement hook never returns `{}` on error |
+| 17 | every output string under 10,000 chars |
+| 18 | `args` (exec form) whenever the command references a path placeholder |
 
 ## 16. Deliverable Format
 
@@ -559,7 +725,7 @@ Test fire: exit 0, `{}` on malformed stdin, decision landed ✅
 
 ## 17. Version History
 
-> Single merged table (event/feature additions + bug fixes) through 2.1.223. Facts marked "current" are confirmed-live but not version-pinpointed.
+> Single merged table (event/feature additions + bug fixes) through 2.1.233. Facts marked "current" are confirmed-live but not version-pinpointed.
 
 | Ver | Event/Feature | Type |
 |-----|--------------|------|
@@ -593,7 +759,7 @@ Test fire: exit 0, `{}` on malformed stdin, decision landed ✅
 | 2.1.86 | fix: plugin scripts "Permission denied" on macOS/Linux | bug fix |
 | 2.1.89 | `PermissionDenied` | new event |
 | 2.1.89 | PTU `"defer"` decision -- headless pause/resume | new feature |
-| 2.1.89 | hook output >50K chars saved to disk (path+preview in context) | enhancement |
+| 2.1.89 | hook output strings capped at 10,000 chars; over that saved to disk (path+preview in context) | enhancement |
 | 2.1.89 | fix: PTU/POT `file_path` is now absolute (Write/Edit/Read) | bug fix |
 | 2.1.152 | `MD` | new event |
 | 2.1.152 | SS `reloadSkills`, `hookSpecificOutput.sessionTitle` outputs | enhancement |
@@ -604,8 +770,12 @@ Test fire: exit 0, `{}` on malformed stdin, decision landed ✅
 | 2.1.195 | fix: hyphenated matcher identifiers exact-match (was accidental substring match) | bug fix |
 | 2.1.199 | fix: SS/Setup/SubagentStart stderr no longer silently hidden on exit 2 | bug fix |
 | 2.1.199 | `CLAUDE_EFFORT`, `CLAUDE_CODE_BRIDGE_SESSION_ID` | new env vars |
-| 2.1.207 | `${user_config.*}` rejected in shell-form `command`/monitors/`headersHelper` (shell-injection fix) | BREAKING |
+| 2.1.205 | PTU `ExitPlanMode` `allowedPrompts` deprecated -- accepted and ignored | deprecation |
+| 2.1.207 | `${user_config.*}` rejected in shell-form `command`/monitors/`headersHelper`; use `args` (exec form) or `$CLAUDE_PLUGIN_OPTION_<KEY>` | BREAKING |
+| 2.1.208 | SDK callback timeout on UserPromptSubmit BLOCKS the prompt (was: ended the turn with an execution error) | change |
+| 2.1.211 | PTU `"ask"` also forces a prompt in auto mode -- the classifier can deny but not silently approve | fix |
 | 2.1.214 | single-segment `dir/**` `if:` glob now matches only `<cwd>/dir` (use `**/dir/**` for any-depth) | BREAKING |
+| 2.1.214 | SS source `fork` (forked sessions previously reported `resume`) | new matcher |
 | 2.1.218 | agent/skill-frontmatter hooks require workspace-trust dialog before running | new gate |
 | 2.1.219 | `DirectoryAdded` (fires after `/add-dir`) | new event |
 | current | `mcp_tool` hook type (5 types total: command/http/mcp_tool/prompt/agent) | new type |

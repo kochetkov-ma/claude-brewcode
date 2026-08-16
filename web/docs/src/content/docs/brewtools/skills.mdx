@@ -23,7 +23,7 @@ focused on text processing, security scanning, SSH management, deployment, plugi
 | 2 | agent-return-setup | `/brewtools:agent-return-setup` | sonnet | Installs a size budget on every subagent's final return — blocks once past threshold, orders compress or write-to-report |
 | 3 | agent-router-setup | `/brewtools:agent-router-setup` | sonnet | EXPERIMENTAL. Denies a generic subagent spawn when a real project/plugin expert owns the task, naming it |
 | 4 | deploy | `/brewtools:deploy` | opus | GitHub Actions deployment: workflows, releases, GHCR, CI/CD with safety gates |
-| 5 | manager-setup | `/brewtools:manager-setup` | sonnet | Manager mode: installs a hard delegation wall into this project — status, install, upgrade, enable, disable, uninstall, purge, plus level and edit — and explains/customizes codewords `++m`, `++a`, `++rr`, `++r` |
+| 5 | manager-setup | `/brewtools:manager-setup` | sonnet | Manager mode: installs a hard delegation wall into this project (v6: strict per-binary allowlist, fails closed) — status, install, upgrade, enable, disable, uninstall, purge, plus level and edit — and explains/customizes codewords `++m`, `++a`, `++rr`, `++r` |
 | 6 | plugin-update | `/brewtools:plugin-update` | sonnet | Checks, installs, updates Claude Code plugins |
 | 7 | provider-switch | `/brewtools:provider-switch` | opus | Configure alt API providers: DeepSeek, Z.ai/GLM, Qwen, MiniMax, OpenRouter |
 | 8 | secrets-scan | `/brewtools:secrets-scan` | sonnet | Scans git-tracked files for leaked secrets |
@@ -47,7 +47,7 @@ focused on text processing, security scanning, SSH management, deployment, plugi
     GitHub Actions deployment: workflows, releases, GHCR, CI/CD with safety gates
   </Card>
   <Card title="manager-setup" icon="star" href="/brewtools/skills/manager-setup/">
-    Hard delegation wall for this project, plus the ++m / ++a / ++rr / ++r codewords
+    Hard delegation wall for this project -- strict allowlist, fails closed -- plus the ++m / ++a / ++rr / ++r codewords
   </Card>
   <Card title="plugin-update" icon="rocket" href="/brewtools/skills/plugin-update/">
     Checks, installs, updates Claude Code plugins
@@ -100,6 +100,26 @@ Every spawn prompt carries six fields — GOAL, ROLE, SCOPE, CONTEXT, CONSUMER, 
 | [think-short-setup](/brewtools/skills/think-short-setup/) | one install target — a wider request is one task per target |
 
 [plugin-update](/brewtools/skills/plugin-update/) and [manager-setup](/brewtools/skills/manager-setup/) spawn nothing — neither carries `Task` in its `allowed-tools`, so every command runs in front of you.
+
+<Callout type="warning" title="v6 hardening">
+  The `manager-setup` wall moved from a denylist to a strict per-binary allowlist that fails closed on any unrecognized flag, and closed four further bypasses: `git diff --output=`, `git branch -D`, `gh issue comment --body`, `find -fprint0`. Every spawned subagent lost `AskUserQuestion` (removed in Claude Code 2.1.233) -- a destructive or privileged step now returns a `## APPROVAL REQUIRED` envelope instead of asking directly.
+</Callout>
+
+## Regression suites
+
+v6 adds automated regression suites where several skills had none. Counts are `TOTAL: X | PASS: X | FAIL: 0` from each skill's own `tests/run.sh` (`tests/suite.mjs` for manager-setup), re-run before publishing this table.
+
+| Skill | Checks |
+|-------|--------|
+| [agent-return-setup](/brewtools/skills/agent-return-setup/) | 803 |
+| [agent-deadline-setup](/brewtools/skills/agent-deadline-setup/) | 169 |
+| [agent-router-setup](/brewtools/skills/agent-router-setup/) | 76 |
+| [deploy](/brewtools/skills/deploy/) | 76 |
+| [ssh](/brewtools/skills/ssh/) | 74 |
+| [secrets-scan](/brewtools/skills/secrets-scan/) | 82 |
+| [text-optimize](/brewtools/skills/text-optimize/) | 51 |
+| [manager-setup](/brewtools/skills/manager-setup/) | 44 |
+| [think-short-setup](/brewtools/skills/think-short-setup/) | 19 |
 
 <CardGrid>
   <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">

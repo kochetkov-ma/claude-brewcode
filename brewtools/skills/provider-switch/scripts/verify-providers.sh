@@ -3,13 +3,28 @@ set -uo pipefail
 # Usage: verify-providers.sh [deepseek|glm|qwen|minimax|openrouter|all]
 # Tests provider tokens by sending a minimal Anthropic API request.
 
-# Load API keys from ~/.zshrc without executing zsh-only syntax: grep exports
+# Load API keys from ~/.zshrc by PARSING the export lines — never `eval`, which would execute
+# whatever a crafted key expanded to. An env var already set out of band always wins.
 if [[ -f "$HOME/.zshrc" ]]; then
   while IFS= read -r line; do
-    # Strip "export " prefix and eval to set variable in this shell
-    eval "$line" 2>/dev/null || true
+    line="${line#export }"
+    name="${line%%=*}"
+    value="${line#*=}"
+    [[ "$name" =~ ^[A-Z][A-Z0-9_]*$ ]] || continue
+    [[ -n "${!name:-}" ]] && continue
+    if [[ "$value" == \'*\' ]]; then
+      value="${value:1:${#value}-2}"
+      # undo write-alias.sh's '\'' escaping
+      value=$(printf '%s' "$value" | sed "s/'\\\\''/'/g")
+    elif [[ "$value" == '"'*'"' ]]; then
+      value="${value:1:${#value}-2}"
+    fi
+    printf -v "$name" '%s' "$value"
   done < <(grep -E '^export (DEEPSEEK_API_KEY|ZAI_API_KEY|DASHSCOPE_API_KEY|MINIMAX_API_KEY|OPENROUTER_API_KEY)=' "$HOME/.zshrc" 2>/dev/null || true)
 fi
+
+HAVE_JQ=false
+command -v jq >/dev/null 2>&1 && HAVE_JQ=true
 
 TARGET="${1:-all}"
 TARGET_LOWER="$(echo "$TARGET" | tr '[:upper:]' '[:lower:]')"
@@ -34,9 +49,15 @@ verify_provider() {
 
   echo "KEY_SET=true"
 
+  # The Authorization header goes to curl through a -K config on STDIN, never on argv: argv is
+  # readable by any local process via `ps` for the whole request. Config values are double-quoted,
+  # so `\` and `"` inside the key must be escaped for curl's own parser.
+  local key_cfg
+  key_cfg=$(printf '%s' "$key" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')
+
   set +e
-  RAW=$(curl -s -w "\n%{http_code}" -m 15 -X POST "$endpoint" \
-    -H "Authorization: Bearer $key" \
+  RAW=$(printf 'header = "Authorization: Bearer %s"\n' "$key_cfg" \
+    | curl -s -K - -w "\n%{http_code}" -m 15 -X POST "$endpoint" \
     -H "content-type: application/json" \
     -H "anthropic-version: 2023-06-01" \
     -d "{\"model\":\"$model\",\"max_tokens\":20,\"messages\":[{\"role\":\"user\",\"content\":\"Reply with exactly: OK\"}]}")
@@ -56,18 +77,39 @@ verify_provider() {
 
   echo "HTTP_CODE=$HTTP_CODE"
 
-  if echo "$BODY" | grep -q '"text"' && echo "$BODY" | grep -qiw 'OK'; then
+  if [[ "$HAVE_JQ" != true ]]; then
+    echo "RESPONSE=jq not installed - response cannot be validated"
+    echo "STATUS=fail"
+    echo ""
+    return
+  fi
+
+  # A 200 alone proves nothing: an HTML error page, `{}`, or a 200-wrapped provider error all
+  # return 200. Pass requires a real assistant text block saying OK. The echoed model id is only
+  # a WARNING — aggregators and providers that normalise the id would otherwise fail a working key.
+  local text resp_model reason
+  text="$(printf '%s' "$BODY" | jq -er '[.content[]? | select(.type == "text") | .text] | join(" ")' 2>/dev/null || true)"
+  resp_model="$(printf '%s' "$BODY" | jq -er '.model // empty' 2>/dev/null || true)"
+
+  if [[ "$HTTP_CODE" == "200" ]] && printf '%s' "$text" | grep -qw 'OK'; then
+    echo "MODEL=${resp_model:-none}"
+    [[ "$resp_model" != "$model" ]] && echo "WARNING=model mismatch: requested $model, answered ${resp_model:-none}"
     echo "RESPONSE=OK"
     echo "STATUS=pass"
-  else
-    ERROR_MSG="$(echo "$BODY" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d.get('error',{}).get('message',d.get('error','unknown')))" 2>/dev/null || echo "$BODY" | head -c 200)"
-    echo "RESPONSE=$ERROR_MSG"
+    echo ""
+    return
+  fi
+
+  reason="$(printf '%s' "$BODY" | jq -er '.error.message // (.error | strings) // empty' 2>/dev/null || true)"
+  if [[ -z "$reason" ]]; then
     if [[ "$HTTP_CODE" == "200" ]]; then
-      echo "STATUS=pass"
+      reason="200 with no assistant text block"
     else
-      echo "STATUS=fail"
+      reason="$(printf '%s' "$BODY" | tr -d '\r\n' | head -c 200)"
     fi
   fi
+  echo "RESPONSE=${reason:-unknown}"
+  echo "STATUS=fail"
   echo ""
 }
 

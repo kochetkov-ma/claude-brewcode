@@ -1,4 +1,4 @@
-<!-- brewcode-meta: version=5.7.0 content_version=5.6.0 generated_by=brewtools:agent-return-setup -->
+<!-- brewcode-meta: version=6.0.0 content_version=6.0.0 generated_by=brewtools:agent-return-setup -->
 # agent-return hooks — install / configure / remove runbook
 
 Self-contained hook assets. The `/brewtools:agent-return-setup` skill copies these into a
@@ -36,7 +36,7 @@ number comparison.
 | `last_assistant_message` missing / not a non-empty string | no-op |
 | `t <= passTokens` | pass |
 | `passTokens < t <= fileTokens` | BLOCK — **compress**: re-send the same answer, keep the verdict and every `path:line`, drop preamble/bodies/output/logs/restated context, no new work |
-| `t > fileTokens` | BLOCK — **file**: write the detail to `.claude/reports/YYYYMMDD-HHMMSS_<agent-slug>/`, then answer with that path + verdict + <=3 lines |
+| `t > fileTokens` | BLOCK — **file**: write the detail to `<project-root>/.claude/reports/YYYYMMDD-HHMMSS_<agent-slug>-<run-id>/`, then answer with that path + verdict + <=3 lines. The base is the resolved project root (`CLAUDE_PROJECT_DIR` -> `.git`/`.claude` walk -> cwd), never the drifting hook cwd; `<run-id>` is 8 chars from `agent_id`, else `session_id`, else random, so two same-type agents stopping in the same second get different directories |
 
 `t = Math.ceil(last_assistant_message.length / 4)`. Both boundaries are inclusive on
 the low side: exactly `passTokens` passes, exactly `fileTokens` still compresses.
@@ -122,10 +122,14 @@ at return cannot drift.
 > A syntactically BROKEN project config is skipped and the GLOBAL config is used
 > instead. Fix or delete the project file rather than leaving it corrupt.
 
-> Config discovery walks up from the hook process's cwd, probing
-> `<dir>/.claude/agent-return.json` at up to 16 levels, then falls back to
-> `~/.claude/agent-return.json`. `claude` started from a subdirectory reports that
-> subdirectory as cwd, so the walk is what makes a repo-root config visible.
+> Config discovery starts at the resolved project root — `CLAUDE_PROJECT_DIR`, else
+> the nearest ancestor carrying `.git` or `.claude`, else cwd — and is the SAME
+> `projectRoot()` the guard uses for the report destination, so the config and the
+> report can never resolve to different roots. From there it probes
+> `<dir>/.claude/agent-return.json` upward at up to 16 levels (for a root with
+> neither marker), then falls back to `~/.claude/agent-return.json`. `claude`
+> started from a subdirectory reports that subdirectory as cwd, which is exactly
+> what the root resolution absorbs.
 
 ### Parameters — export these before running any block below
 
@@ -136,7 +140,8 @@ at return cannot drift.
 | `FILE_TOKENS` | skill (user's answer) | `fileTokens` to write; REQUIRED, no default — empty aborts the config block |
 | `PLUGIN_VERSION` | skill (optional) | `X.Y.Z` for the metadata stamp. OPTIONAL: unset/malformed falls back to `<SRC>/../../../.claude-plugin/plugin.json`, resolved by the block itself. Never a literal |
 | `LAST_UPDATED` | skill (optional) | `YYYY-MM-DD` for the stamp; unset falls back to the LOCAL date the block computes |
-| `CFG` / `SETTINGS` / `HOOKS_DIR` | scope | project = `$PWD/.claude/...`, global = `$HOME/.claude/...` |
+| `ROOT` | the *Project root* block | absolute project root; every project-scope `.claude/...` path is built from it |
+| `CFG` / `SETTINGS` / `HOOKS_DIR` | scope | project = `$ROOT/.claude/...`, global = `$HOME/.claude/...` |
 
 These are read from `process.env` by the node blocks below — they must be REAL shell
 variables, exported before the block runs:
@@ -154,6 +159,37 @@ prefix the block.
 NEVER hardcode the thresholds — the user picked them; `PASS_TOKENS`/`FILE_TOKENS` carry
 them. ONE scope per run: set the vars for THAT scope only and never touch the other.
 
+### Project root
+
+Every project-scope path below is `$ROOT/.claude/...`, never `$PWD`. The shell cwd
+moves with `cd` and persists across calls, so `$PWD` can be a subdirectory —
+installing there builds a second, nested `.claude/` that the running Claude Code never
+reads. Resolve it once, in the SAME Bash call as the block that uses it:
+
+```
+# Project root: CLAUDE_PROJECT_DIR -> git toplevel -> upward walk -> PWD.
+claude_project_root() {
+  if [ -n "$CLAUDE_PROJECT_DIR" ] && [ -d "$CLAUDE_PROJECT_DIR" ]; then
+    printf '%s\n' "$CLAUDE_PROJECT_DIR"; return 0
+  fi
+  if r=$(git rev-parse --show-toplevel 2>/dev/null) && [ -n "$r" ]; then
+    printf '%s\n' "$r"; return 0
+  fi
+  d=$PWD
+  while [ "$d" != "/" ]; do
+    if [ -d "$d/.git" ] || [ -d "$d/.claude" ]; then printf '%s\n' "$d"; return 0; fi
+    d=$(dirname "$d")
+  done
+  printf '%s\n' "$PWD"; return 1   # nonzero: caller decides
+}
+if ROOT=$(claude_project_root); then export ROOT; echo "✅ ROOT=$ROOT"; else
+  echo "❌ ABORT: no project root — CLAUDE_PROJECT_DIR unset, no git toplevel, no .git/.claude above $PWD; run no project block below"; fi
+```
+
+> **STOP if ❌** — an installer never writes into a guessed root. `CLAUDE_PROJECT_DIR`
+> is exported to hook child processes, not to this shell, so it is normally empty here
+> and the git toplevel does the work. The GLOBAL scope ignores `ROOT` entirely.
+
 Every write of the config also stamps the three mandatory JSON metadata keys —
 `version`, `generated_by`, `last_updated` (never `doc_type`: that is a `.md`
 frontmatter field). `version` is resolved from `.claude-plugin/plugin.json`, never
@@ -162,10 +198,10 @@ hardcoded; `last_updated` is the LOCAL date.
 **EXECUTE** config write (read-modify-write, Bash tool). Set `CFG` per scope:
 
 ```
-# project: CFG="$PWD/.claude/agent-return.json"
+# project: CFG="$ROOT/.claude/agent-return.json"
 # global:  CFG="$HOME/.claude/agent-return.json"   (Bash ONLY — protected path)
 SRC="$(dirname "$RUNBOOK")"
-CFG="$PWD/.claude/agent-return.json" PJSON="$SRC/../../../.claude-plugin/plugin.json" node -e '
+CFG="$ROOT/.claude/agent-return.json" PJSON="$SRC/../../../.claude-plugin/plugin.json" node -e '
 const fs=require("fs"), p=require("path");
 const f=process.env.CFG;
 const GB="brewtools:agent-return-setup";
@@ -319,14 +355,14 @@ Project paths are writable with normal tools (`Write`/`Edit`/`Bash` all fine).
    (Do not rely on any plugin env var — it is injected as prompt text and
    expands to empty in Bash.)
 3. Write `<repo>/.claude/agent-return.json` — the **Config** block above with
-   `CFG="$PWD/.claude/agent-return.json"`, honouring `PASS_TOKENS`/`FILE_TOKENS`.
+   `CFG="$ROOT/.claude/agent-return.json"`, honouring `PASS_TOKENS`/`FILE_TOKENS`.
 4. Merge the 2 hook entries into `<repo>/.claude/settings.json`
    (create `{}` if absent), `<absdir>` = `<repo>/.claude/hooks`.
 
 **EXECUTE** copy (project, Bash tool; `RUNBOOK` = absolute path to this INSTALL.md):
 ```
 SRC="$(dirname "$RUNBOOK")"
-DST="$PWD/.claude/hooks"
+DST="$ROOT/.claude/hooks"
 mkdir -p "$DST" && \
 cp "$SRC/agent-return-budget.mjs" "$SRC/agent-return-contract.mjs" "$SRC/agent-return-guard.mjs" "$DST/" && \
 test -f "$DST/agent-return-budget.mjs" && test -f "$DST/agent-return-contract.mjs" && test -f "$DST/agent-return-guard.mjs" && \
@@ -340,10 +376,24 @@ echo "✅ copied + verified in $DST" || echo "❌ FAILED"
 **EXECUTE** merge settings (project). Use this node merge, NOT a hand `Edit` —
 it is the only path that aborts on a broken file and verifies afterwards:
 ```
-SETTINGS="$PWD/.claude/settings.json" HOOKS_DIR="$PWD/.claude/hooks" node -e '
+SETTINGS="$ROOT/.claude/settings.json" HOOKS_DIR="$ROOT/.claude/hooks" node -e '
 const fs=require("fs"), path=require("path");
 const f=process.env.SETTINGS, dir=process.env.HOOKS_DIR;
 const marks=["agent-return-contract.mjs","agent-return-guard.mjs"];
+function lock(f){                                      // O_EXCL dir lock; stale-break by mtime
+  const l=f+".lock", w=new Int32Array(new SharedArrayBuffer(4));
+  for(let i=0;i<100;i++){
+    try{ fs.mkdirSync(l); return ()=>{ try{ fs.rmdirSync(l); }catch{} }; }
+    catch(e){
+      if(e.code!=="EEXIST") throw e;
+      try{ if(Date.now()-fs.statSync(l).mtimeMs>30000) fs.rmdirSync(l); }catch{}
+      Atomics.wait(w,0,0,100);
+    }
+  }
+  console.error("ABORT: "+l+" is held by another installer; nothing was written"); process.exit(1);
+}
+fs.mkdirSync(path.dirname(f),{recursive:true});
+process.on("exit",lock(f));                            // acquire now, release on ANY exit - read+merge+write below is one critical section
 let s={};
 if(fs.existsSync(f)){
   const raw=fs.readFileSync(f,"utf8");
@@ -373,7 +423,6 @@ for(const [ev,matcher,script,timeout] of want){
   if(matcher) entry.matcher=matcher;
   s.hooks[ev].push(entry);
 }
-fs.mkdirSync(path.dirname(f),{recursive:true});
 fs.writeFileSync(f,JSON.stringify(s,null,2)+"\n");
 const back=JSON.parse(fs.readFileSync(f,"utf8"));      // post-write verification
 for(const [ev,,script] of want){
@@ -386,14 +435,20 @@ console.log("OK merged "+f);
 
 > **STOP if ❌** — fix before continuing.
 
+> Both merge blocks take a `settings.json.lock` directory (`mkdir`, O_EXCL) around the
+> whole read-modify-write and release it on any exit. Without it two setup skills
+> merging at once both read the OLD document and the second writer silently erases the
+> first's registration. A lock older than 30 s is treated as stale and broken.
+
 ---
 
 ## GLOBAL target  (`~/.claude/`)
 
-CRITICAL: `~/.claude/*` is a HARNESS-PROTECTED path. `Write` / `Edit` /
-`MultiEdit` are BLOCKED in ALL permission modes (incl. `bypassPermissions`,
-headless) — the check runs BEFORE hooks, so no hook can override it. The global
-install MUST go entirely through the **Bash tool** (`cp`, `node`, `printf`).
+CRITICAL: `~/.claude/*` is a SENSITIVE path. `Write` / `Edit` / `MultiEdit` there is
+an ASK — it prompts in `default`/`acceptEdits`, is auto-approved only under
+`bypassPermissions`, and FAILS outright headless without bypass. The global install
+MUST go entirely through the **Bash tool** (`cp`, `node`, `printf`), the only route
+that works unattended.
 
 **EXECUTE** copy (global, Bash tool; `RUNBOOK` = absolute path to this INSTALL.md):
 ```
@@ -415,6 +470,20 @@ SETTINGS="$HOME/.claude/settings.json" HOOKS_DIR="$HOME/.claude/hooks" node -e '
 const fs=require("fs"), path=require("path");
 const f=process.env.SETTINGS, dir=process.env.HOOKS_DIR;
 const marks=["agent-return-contract.mjs","agent-return-guard.mjs"];
+function lock(f){                                      // O_EXCL dir lock; stale-break by mtime
+  const l=f+".lock", w=new Int32Array(new SharedArrayBuffer(4));
+  for(let i=0;i<100;i++){
+    try{ fs.mkdirSync(l); return ()=>{ try{ fs.rmdirSync(l); }catch{} }; }
+    catch(e){
+      if(e.code!=="EEXIST") throw e;
+      try{ if(Date.now()-fs.statSync(l).mtimeMs>30000) fs.rmdirSync(l); }catch{}
+      Atomics.wait(w,0,0,100);
+    }
+  }
+  console.error("ABORT: "+l+" is held by another installer; nothing was written"); process.exit(1);
+}
+fs.mkdirSync(path.dirname(f),{recursive:true});
+process.on("exit",lock(f));                            // acquire now, release on ANY exit - read+merge+write below is one critical section
 let s={};
 if(fs.existsSync(f)){
   const raw=fs.readFileSync(f,"utf8");
@@ -444,7 +513,6 @@ for(const [ev,matcher,script,timeout] of want){
   if(matcher) entry.matcher=matcher;
   s.hooks[ev].push(entry);
 }
-fs.mkdirSync(path.dirname(f),{recursive:true});
 fs.writeFileSync(f,JSON.stringify(s,null,2)+"\n");
 const back=JSON.parse(fs.readFileSync(f,"utf8"));
 for(const [ev,,script] of want){
@@ -475,9 +543,9 @@ ONE scope against the current assets, at the thresholds ALREADY configured.
    **EXECUTE** using Bash tool — set `CFG` for the ONE scope you were asked about:
 
 ```
-# project: CFG="$PWD/.claude/agent-return.json"
+# project: CFG="$ROOT/.claude/agent-return.json"
 # global:  CFG="$HOME/.claude/agent-return.json"
-PAIR=$(CFG="$PWD/.claude/agent-return.json" node -e '
+PAIR=$(CFG="$ROOT/.claude/agent-return.json" node -e '
 const fs=require("fs"); const f=process.env.CFG;
 if(!fs.existsSync(f)){ console.error("ABORT: not installed in this scope - no config at "+f+"; run INSTALL instead"); process.exit(1); }
 let c; try{ c=JSON.parse(fs.readFileSync(f,"utf8")||"{}"); }
@@ -515,10 +583,10 @@ config on every call, so this takes effect immediately, no restart.
 `RUNBOOK` must be exported here too: this is a config WRITE, so it re-stamps the three
 metadata keys.
 ```
-# project: CFG="$PWD/.claude/agent-return.json"
+# project: CFG="$ROOT/.claude/agent-return.json"
 # global:  CFG="$HOME/.claude/agent-return.json"
 SRC="$(dirname "$RUNBOOK")"
-CFG="$PWD/.claude/agent-return.json" PJSON="$SRC/../../../.claude-plugin/plugin.json" node -e '
+CFG="$ROOT/.claude/agent-return.json" PJSON="$SRC/../../../.claude-plugin/plugin.json" node -e '
 const fs=require("fs"), p=require("path"); const f=process.env.CFG;
 const GB="brewtools:agent-return-setup";
 function pluginVersion(){
@@ -586,13 +654,26 @@ were asked about and leave the other alone. Foreign hook entries, including
 **EXECUTE** using Bash tool — pick ONE pair of paths:
 ```
 # GLOBAL:  HOOKS_DIR="$HOME/.claude/hooks"; SETTINGS="$HOME/.claude/settings.json"
-# PROJECT: HOOKS_DIR="$PWD/.claude/hooks";  SETTINGS="$PWD/.claude/settings.json"
-export HOOKS_DIR="$PWD/.claude/hooks" SETTINGS="$PWD/.claude/settings.json"
+# PROJECT: HOOKS_DIR="$ROOT/.claude/hooks";  SETTINGS="$ROOT/.claude/settings.json"
+export HOOKS_DIR="$ROOT/.claude/hooks" SETTINGS="$ROOT/.claude/settings.json"
 node -e '
 const fs=require("fs");
 const f=process.env.SETTINGS;
 const marks=["agent-return-contract.mjs","agent-return-guard.mjs","agent-return-budget.mjs"];
+function lock(f){                                      // O_EXCL dir lock; stale-break by mtime
+  const l=f+".lock", w=new Int32Array(new SharedArrayBuffer(4));
+  for(let i=0;i<100;i++){
+    try{ fs.mkdirSync(l); return ()=>{ try{ fs.rmdirSync(l); }catch{} }; }
+    catch(e){
+      if(e.code!=="EEXIST") throw e;
+      try{ if(Date.now()-fs.statSync(l).mtimeMs>30000) fs.rmdirSync(l); }catch{}
+      Atomics.wait(w,0,0,100);
+    }
+  }
+  console.error("ABORT: "+l+" is held by another installer; nothing was written"); process.exit(1);
+}
 if(!fs.existsSync(f)){ console.log("no settings to clean: "+f); process.exit(0); }
+process.on("exit",lock(f));                            // re-read under the lock - a concurrent installer must not lose its merge
 const raw=fs.readFileSync(f,"utf8");
 if(!raw.trim()){ console.log("empty settings, nothing to clean: "+f); process.exit(0); }
 let s;
@@ -621,7 +702,7 @@ console.log("OK cleaned "+f);
 
 > **STOP if ❌** — fix before continuing.
 
-> Global uninstall: file-editing tools are blocked on `~/.claude/*` — use the
+> Global uninstall: `Write`/`Edit` on `~/.claude/*` prompts and fails headless — use the
 > Bash `node`/`rm` form above, never Edit/Write. Project uninstall may use Edit.
 
 ## PURGE  (uninstall + config)
@@ -632,9 +713,9 @@ versa. There is no state to wipe: neither hook ever writes one.
 
 **EXECUTE** using Bash tool:
 ```
-# project: CFG="$PWD/.claude/agent-return.json"
+# project: CFG="$ROOT/.claude/agent-return.json"
 # global:  CFG="$HOME/.claude/agent-return.json"
-CFG="$PWD/.claude/agent-return.json"
+CFG="$ROOT/.claude/agent-return.json"
 rm -f "$CFG" && test ! -e "$CFG" && echo "✅ removed $CFG" || echo "❌ FAILED"
 ```
 
@@ -660,7 +741,8 @@ node -e 'process.stdout.write(JSON.stringify({hook_event_name:"SubagentStop",age
   | node <absdir>/agent-return-guard.mjs; echo " exit=$?"
 
 # 3. file tier (10004 chars = 2501 tok) -> block, reason names
-#    `.claude/reports/YYYYMMDD-HHMMSS_general-purpose/` with today's date
+#    `<project-root>/.claude/reports/YYYYMMDD-HHMMSS_general-purpose-<run-id>/`
+#    — absolute, today's date, 8-char run id (random here, no agent_id supplied)
 node -e 'process.stdout.write(JSON.stringify({hook_event_name:"SubagentStop",agent_type:"general-purpose",last_assistant_message:"x".repeat(10004)}))' \
   | node <absdir>/agent-return-guard.mjs; echo " exit=$?"
 

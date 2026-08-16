@@ -6,10 +6,10 @@
  * Runs in isolated TEMP HOME + TMPDIR. Never touches real ~/.claude or repo state.
  * Each test emits one PASS/FAIL line.
  */
-import { spawnSync, execFileSync } from 'node:child_process';
+import { spawn, spawnSync, execFileSync } from 'node:child_process';
 import {
   mkdtempSync, mkdirSync, writeFileSync, readFileSync,
-  existsSync, utimesSync, rmSync,
+  existsSync, utimesSync, rmSync, symlinkSync, lstatSync, readdirSync,
 } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -436,6 +436,150 @@ function subagentBody(promptFile) {
   } else {
     fail('5-re-enabled-all-three-inject', `session=${backSession} counter=${backCounter} subagent=${backSubagent}`);
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Test 6: BT-F28 — planted symlinks in the shared tmp root are never followed
+// ─────────────────────────────────────────────────────────────────────────────
+
+// 6a: symlink AT the counter path -> victim untouched, hook still a clean no-op
+{
+  const tmp = join(BASE, 't6a-tmp');
+  const markerDir = join(tmp, 'brewtools-think-short');
+  const attack = join(BASE, 't6a-attack');
+  mkdirSync(markerDir, { recursive: true, mode: 0o700 });
+  mkdirSync(attack, { recursive: true });
+
+  const victim = join(attack, 'victim.txt');
+  const VICTIM_BODY = 'SECRET-PAYLOAD';
+  writeFileSync(victim, VICTIM_BODY);
+  const sid = 'session-symlink-6a';
+  symlinkSync(victim, join(markerDir, `${sid}.think-short-counter`));
+
+  const r = run(COUNTER_MJS, JSON.stringify({ session_id: sid, prompt: 'x' }), { HOME: join(BASE, 't6a-home'), TMPDIR: tmp });
+  const out = r.status === 0 ? JSON.parse(r.stdout) : null;
+  const body = readFileSync(victim, 'utf8');
+  const ok = r.status === 0 && deepEqual(out, {}) && body === VICTIM_BODY;
+  const detail = `exit=${r.status} out=${JSON.stringify(out)} victim="${body}"`;
+  if (ok) pass('6a-counter-symlink-target-untouched', detail);
+  else     fail('6a-counter-symlink-target-untouched', `expected exit=0 out={} victim="${VICTIM_BODY}" got ${detail}`);
+}
+
+// 6b: the whole marker ROOT pre-created as a symlink -> counting is skipped,
+//     the attacker directory gains exactly zero files
+{
+  const tmp = join(BASE, 't6b-tmp');
+  const attack = join(BASE, 't6b-attack');
+  mkdirSync(tmp, { recursive: true });
+  mkdirSync(attack, { recursive: true });
+  symlinkSync(attack, join(tmp, 'brewtools-think-short'));
+
+  const env = { HOME: join(BASE, 't6b-home'), TMPDIR: tmp };
+  const sid = 'session-symlink-6b';
+  const outs = [];
+  let exits = 0;
+  for (let i = 1; i <= 10; i++) {
+    const r = run(COUNTER_MJS, JSON.stringify({ session_id: sid, prompt: `m${i}` }), env);
+    if (r.status === 0) exits++;
+    outs.push(r.stdout);
+  }
+  const entries = readdirSync(attack);
+  const allEmpty = outs.filter((s) => s === '{}').length;
+  const ok = exits === 10 && allEmpty === 10 && entries.length === 0;
+  const detail = `exit0=${exits}/10 empty=${allEmpty}/10 attack-entries=[${entries}]`;
+  if (ok) pass('6b-counter-symlinked-root-no-write', detail);
+  else     fail('6b-counter-symlinked-root-no-write', `expected exit0=10/10 empty=10/10 attack-entries=[] got ${detail}`);
+}
+
+// 6c: symlinked marker root at SessionStart -> no reset write, no prune of the
+//     attacker's `*.think-short-counter`, prompt still injected, exit 0
+{
+  const tmp = join(BASE, 't6c-tmp');
+  const attack = join(BASE, 't6c-attack');
+  mkdirSync(tmp, { recursive: true });
+  mkdirSync(attack, { recursive: true });
+  symlinkSync(attack, join(tmp, 'brewtools-think-short'));
+
+  const staleVictim = join(attack, 'old-sess.think-short-counter');
+  const secrets = join(attack, 'secrets.txt');
+  writeFileSync(staleVictim, '5');
+  writeFileSync(secrets, 'KEY=abc');
+  const TWO_DAYS_AGO = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000 - 5000);
+  utimesSync(staleVictim, TWO_DAYS_AGO, TWO_DAYS_AGO);
+
+  const promptText = readFileSync(PROMPT_PATH, 'utf8').trimEnd();
+  const r = run(SESSION_MJS, JSON.stringify({ session_id: 'session-symlink-6c' }), { HOME: join(BASE, 't6c-home'), TMPDIR: tmp });
+  const out = r.status === 0 ? JSON.parse(r.stdout) : null;
+  const ctx = out?.hookSpecificOutput?.additionalContext;
+  const entries = readdirSync(attack).sort();
+  const ok = r.status === 0
+    && ctx === promptText
+    && deepEqual(entries, ['old-sess.think-short-counter', 'secrets.txt'])
+    && readFileSync(staleVictim, 'utf8') === '5'
+    && readFileSync(secrets, 'utf8') === 'KEY=abc';
+  const detail = `exit=${r.status} ctx=${ctx === promptText} entries=[${entries}] stale="${existsSync(staleVictim) ? readFileSync(staleVictim, 'utf8') : ''}"`;
+  if (ok) pass('6c-session-symlinked-root-no-prune', detail);
+  else     fail('6c-session-symlinked-root-no-prune', `expected exit=0 ctx=true entries=[old-sess.think-short-counter,secrets.txt] stale="5" got ${detail}`);
+}
+
+// 6d: a group/world-writable marker root is hardened to 0700 and counting works
+{
+  const tmp = join(BASE, 't6d-tmp');
+  const markerDir = join(tmp, 'brewtools-think-short');
+  mkdirSync(markerDir, { recursive: true });
+  rmSync(markerDir, { recursive: true, force: true });
+  mkdirSync(markerDir, { mode: 0o777 });
+
+  const env = { HOME: join(BASE, 't6d-home'), TMPDIR: tmp };
+  const sid = 'session-mode-6d';
+  const promptText = readFileSync(PROMPT_PATH, 'utf8').trimEnd();
+  let ctx;
+  const injectedAt = [];
+  for (let i = 1; i <= 10; i++) {
+    const r = run(COUNTER_MJS, JSON.stringify({ session_id: sid, prompt: `m${i}` }), env);
+    const o = r.status === 0 ? JSON.parse(r.stdout) : {};
+    if (o?.hookSpecificOutput?.additionalContext !== undefined) {
+      injectedAt.push(i);
+      ctx = o.hookSpecificOutput.additionalContext;
+    }
+  }
+  const mode = lstatSync(markerDir).mode & 0o777;
+  const fileMode = lstatSync(join(markerDir, `${sid}.think-short-counter`)).mode & 0o777;
+  const ok = mode === 0o700 && fileMode === 0o600 && deepEqual(injectedAt, [10]) && ctx === promptText;
+  const detail = `dir=0${mode.toString(8)} file=0${fileMode.toString(8)} injected=[${injectedAt}] ctx=${ctx === promptText}`;
+  if (ok) pass('6d-counter-hardens-mode-and-counts', detail);
+  else     fail('6d-counter-hardens-mode-and-counts', `expected dir=0700 file=0600 injected=[10] ctx=true got ${detail}`);
+}
+
+// 6e: concurrent bumps on one counter file leave it intact — a single integer,
+//     no temp files stranded in the marker dir
+{
+  const tmp = join(BASE, 't6e-tmp');
+  const markerDir = join(tmp, 'brewtools-think-short');
+  mkdirSync(markerDir, { recursive: true, mode: 0o700 });
+  const env = { ...process.env, HOME: join(BASE, 't6e-home'), TMPDIR: tmp };
+  const sid = 'session-race-6e';
+  const stdin = JSON.stringify({ session_id: sid, prompt: 'race' });
+
+  const kids = [];
+  for (let i = 0; i < 12; i++) {
+    kids.push(new Promise((resolve) => {
+      const cp = spawn(process.execPath, [COUNTER_MJS], { env, stdio: ['pipe', 'pipe', 'pipe'] });
+      let out = '';
+      cp.stdout.on('data', (d) => { out += d; });
+      cp.on('close', (code) => resolve({ code, out }));
+      cp.stdin.end(stdin);
+    }));
+  }
+  const settled = await Promise.all(kids);
+  const exits0 = settled.filter((s) => s.code === 0).length;
+  const parsed = settled.filter((s) => { try { JSON.parse(s.out); return true; } catch { return false; } }).length;
+  const body = readFileSync(join(markerDir, `${sid}.think-short-counter`), 'utf8');
+  const leftovers = readdirSync(markerDir).filter((n) => n.endsWith('.tmp'));
+  const ok = exits0 === 12 && parsed === 12 && /^[0-9]+$/.test(body) && leftovers.length === 0;
+  const detail = `exit0=${exits0}/12 json=${parsed}/12 counter="${body}" tmp-leftovers=[${leftovers}]`;
+  if (ok) pass('6e-counter-concurrent-writes-intact', detail);
+  else     fail('6e-counter-concurrent-writes-intact', `expected exit0=12/12 json=12/12 counter=/^[0-9]+$/ tmp-leftovers=[] got ${detail}`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

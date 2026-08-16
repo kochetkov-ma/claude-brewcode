@@ -1211,6 +1211,167 @@ for (const [v, want] of [
 check('probearg.override', sh('sc_semble_probe_arg', { SEMBLE_PIN_VERSION: '0.5.2' }).out, '--help',
   'a SEMBLE_PIN_VERSION override back to 0.5.2 must NOT issue the hanging --version');
 
+// ── 20-22 fixture: a `claude` stub that REALLY rewrites the config ─────────
+// The stub above records argv and changes nothing, which is enough for "was the
+// right command issued" but cannot express "the registration is gone" or "the
+// backup was put back". This one applies `mcp remove` / `mcp add-json` to the
+// same files sc_mcp_dump reads, and can be told to fail the add.
+const MUT = join(BASE, 'claude-mutating-stub');
+writeFileSync(MUT, `#!/usr/bin/env bash
+p=$(node -e 'const fs=require("fs");let s={};try{s=JSON.parse(fs.readFileSync(process.env.SEMBLE_STATE_PROBE,"utf8"))}catch(e){};process.stdout.write(String(s.phase||"none"))')
+printf '%s|phase=%s\\n' "$*" "$p" >> "\$SEMBLE_STUB_LOG"
+act="$2"; name="$3"; scope="$5"; payload="\${6:-}"
+case "$act" in
+  remove)
+    SC_N="$name" SC_S="$scope" node -e '
+const fs=require("fs"),path=require("path");
+const n=process.env.SC_N, s=process.env.SC_S, root=process.env.SEMBLE_PROJECT_ROOT;
+const f=s==="project"?path.join(root,".mcp.json"):path.join(process.env.SEMBLE_TEST_HOME,".claude.json");
+if(!fs.existsSync(f))process.exit(0);
+const j=JSON.parse(fs.readFileSync(f,"utf8"));
+if(s==="local"){const p=(j.projects||{})[root];if(p&&p.mcpServers)delete p.mcpServers[n];}
+else if(j.mcpServers)delete j.mcpServers[n];
+fs.writeFileSync(f,JSON.stringify(j,null,2)+"\\n");'
+    ;;
+  add-json)
+    [ "\${SEMBLE_STUB_ADD_RC:-0}" = "0" ] || exit "\${SEMBLE_STUB_ADD_RC}"
+    SC_N="$name" SC_P="$payload" node -e '
+const fs=require("fs"),path=require("path");
+const f=path.join(process.env.SEMBLE_TEST_HOME,".claude.json");
+const j=fs.existsSync(f)?JSON.parse(fs.readFileSync(f,"utf8")):{};
+j.mcpServers=j.mcpServers||{};
+j.mcpServers[process.env.SC_N]=JSON.parse(process.env.SC_P);
+fs.writeFileSync(f,JSON.stringify(j,null,2)+"\\n");'
+    ;;
+esac
+exit 0
+`);
+spawnSync('chmod', ['+x', MUT]);
+
+const PROJ_MCP = join(PROJ, '.mcp.json');
+function calls() {
+  return readFileSync(LOG, 'utf8').split('\n').filter(Boolean).map((l) => l.split('|')[0]);
+}
+function projectMcp(servers) {
+  writeFileSync(PROJ_MCP, `${JSON.stringify({ mcpServers: servers }, null, 2)}\n`);
+}
+function serversOf(file) {
+  return existsSync(file) ? Object.keys(JSON.parse(readFileSync(file, 'utf8')).mcpServers || {}).sort() : ['NO-FILE'];
+}
+function userClaudeJson() { return join(HOME, '.claude.json'); }
+function dropAllBackups() {
+  dropBackups(HOME, '.claude.json.bak.');
+  dropBackups(PROJ, '.mcp.json.bak.');
+}
+
+// ── 20. SS05: an unqualified remove clears EVERY scope holding semble_code ──
+// Before the fix `remove` removed only $SCOPE (default `user`) and re-verified
+// only that scope, so a project-scope registration survived while the caller was
+// told {"status":"ok"} with exit 0 and kept being served by the live server.
+dropAllBackups();
+writeClaudeJson(FIXTURES.absent);
+projectMcp({ semble_code: CORRECT_CFG, unrelated: UNRELATED_CFG });
+resetProject();
+resetLog();
+const rmProjOnly = run(MCP_SH, ['remove', '--yes', '--json'], { SEMBLE_CLAUDE_BIN: MUT });
+check('remove.unqualified.calls', calls(), ['mcp remove semble_code -s project'],
+  'the only scope holding it is the only one removed');
+check('remove.unqualified.exit', rmProjOnly.status, 0, 'a complete removal exits 0');
+check('remove.unqualified.status', json(rmProjOnly).status, 'ok', 'and reports ok');
+check('remove.unqualified.scopes', json(rmProjOnly).scopes, ['project'],
+  'the result names every scope the removal targeted');
+check('remove.unqualified.gone', serversOf(PROJ_MCP), ['unrelated'],
+  'semble_code is really gone from .mcp.json and the unrelated server is untouched');
+dropAllBackups();
+
+writeClaudeJson(FIXTURES.correct);
+projectMcp({ semble_code: CORRECT_CFG, unrelated: UNRELATED_CFG });
+resetLog();
+const rmBoth = run(MCP_SH, ['remove', '--yes', '--json'], { SEMBLE_CLAUDE_BIN: MUT });
+check('remove.bothscopes.calls', calls(),
+  ['mcp remove semble_code -s user', 'mcp remove semble_code -s project'],
+  'both holding scopes are removed, in mcp_scopes order');
+check('remove.bothscopes.exit', rmBoth.status, 0, 'exit 0 only once nothing is left');
+check('remove.bothscopes.scopes', json(rmBoth).scopes, ['user', 'project'], 'both are reported');
+check('remove.bothscopes.user', serversOf(userClaudeJson()), [], 'the user entry is gone');
+check('remove.bothscopes.project', serversOf(PROJ_MCP), ['unrelated'], 'the project entry is gone');
+dropAllBackups();
+
+// The narrowing: an explicit --scope is a targeted request and stays single-scope.
+writeClaudeJson(FIXTURES.correct);
+projectMcp({ semble_code: CORRECT_CFG, unrelated: UNRELATED_CFG });
+resetLog();
+const rmExplicit = run(MCP_SH, ['remove', '--scope', 'user', '--yes', '--json'], { SEMBLE_CLAUDE_BIN: MUT });
+check('remove.explicit.calls', calls(), ['mcp remove semble_code -s user'],
+  'an explicit --scope user removes exactly that scope');
+check('remove.explicit.scopes', json(rmExplicit).scopes, ['user'], 'and reports exactly that scope');
+check('remove.explicit.exit', rmExplicit.status, 0, 'the targeted removal succeeded');
+check('remove.explicit.project-kept', serversOf(PROJ_MCP), ['semble_code', 'unrelated'],
+  'the project scope is deliberately left alone');
+dropAllBackups();
+
+// The confirmation plan names the whole set before anything is deleted.
+writeClaudeJson(FIXTURES.correct);
+projectMcp({ semble_code: CORRECT_CFG, unrelated: UNRELATED_CFG });
+resetLog();
+const rmPlan = run(MCP_SH, ['remove', '--json'], { SEMBLE_CLAUDE_BIN: MUT });
+check('remove.plan.exit', rmPlan.status, 4, 'no --yes -> exit 4');
+check('remove.plan.note', json(rmPlan).note, 'would remove semble_code from scope(s) [user project]',
+  'the plan lists every scope that will be removed');
+check('remove.plan.scopes', json(rmPlan).scopes, ['user', 'project'], 'the same set in the JSON');
+check('remove.plan.nocall', readFileSync(LOG, 'utf8'), '', 'nothing was invoked');
+rmSync(PROJ_MCP, { force: true });
+dropAllBackups();
+
+// ── 21. SS06: a failed repair restores the configs instead of losing them ───
+// Before the fix a failing `add-json` exited 1 with the registration already
+// removed and no restore, and the backup path was printed in human mode only —
+// while every in-skill caller passes --json.
+const STALE_PLUS = `${JSON.stringify({
+  mcpServers: { semble_code: STALE_CFG, other: UNRELATED_CFG }, someUserKey: 'keep-me',
+}, null, 2)}\n`;
+writeClaudeJson(STALE_PLUS);
+resetProject();
+resetLog();
+const repairFail = run(MCP_SH, ['repair', '--yes', '--json'],
+  { SEMBLE_CLAUDE_BIN: MUT, SEMBLE_STUB_ADD_RC: '7' });
+check('repair.rollback.calls', calls(),
+  ['mcp remove semble_code -s user', `mcp add-json semble_code -s user ${JSON.stringify(CORRECT_CFG)}`],
+  'the stale entry was really removed and the re-add really failed');
+check('repair.rollback.exit', repairFail.status, 1, 'a failed repair exits 1');
+check('repair.rollback.status', json(repairFail).status, 'failed', 'and says failed');
+check('repair.rollback.bytes', readFileSync(userClaudeJson(), 'utf8'), STALE_PLUS,
+  'the pre-repair ~/.claude.json is byte-restored — a failed repair loses no registration');
+check('repair.rollback.state', sh('sc_mcp_state').out, 'stale_args',
+  'the restored registration is the stale one that was there before, not absent');
+const rollbackBaks = bakList(HOME, '.claude.json.bak.').map((n) => join(HOME, n));
+check('repair.rollback.backup.count', rollbackBaks.length, 1, 'exactly one backup was taken');
+check('repair.rollback.backup.json', json(repairFail).backups, rollbackBaks,
+  'the --json result names the backup files, which used to be echoed in human mode only');
+dropAllBackups();
+
+// ── 22. SS07: a successful repair writes completed:["mcp"] like `add` ───────
+// Before the fix `repair` wrote only the phase, so semble-reminder.mjs,
+// semble-prefetch.mjs and semble-subagent.mjs kept returning `{}` on a project
+// whose MCP had just been fixed — the three gates read `completed` and nothing
+// but `add` ever wrote it.
+writeClaudeJson(FIXTURES.stale);
+resetProject();
+resetLog();
+const repairOk = run(MCP_SH, ['repair', '--yes', '--json'], { SEMBLE_CLAUDE_BIN: MUT });
+check('repair.completed.exit', repairOk.status, 0, 'the repair succeeded');
+check('repair.completed.status', json(repairOk).status, 'ok', 'and reports ok');
+check('repair.completed.state', json(repairOk).state, 'correct',
+  'the state is re-read after the state patch, so `ok` is backed by a fresh detection');
+check('repair.completed.registration', JSON.parse(readFileSync(userClaudeJson(), 'utf8')).mcpServers.semble_code,
+  CORRECT_CFG, 'the approved entry is what landed on disk');
+const stAfterRepair = JSON.parse(readFileSync(STATE_FILE, 'utf8'));
+check('repair.completed.flag', stAfterRepair.completed, ['mcp'],
+  'the repair patched the SAME completed:["mcp"] entry `add` writes — the three hook gates read exactly this key');
+check('repair.completed.scope', stAfterRepair.scope, 'user', 'with the scope the repair re-registered at');
+check('repair.completed.cacheroot', stAfterRepair.cacheRoot, CODE_ROOT, 'and the cache root add records');
+dropAllBackups();
+
 // ── report ─────────────────────────────────────────────────────────────────
 console.log('suite-core.mjs (unit B: lib + mcp + cache + state)');
 for (const line of results) console.log(line);

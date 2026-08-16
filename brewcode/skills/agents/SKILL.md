@@ -47,7 +47,7 @@ Labels are literal; values follow the conversation language.
 |-------|-------|
 | ARTIFACT | `agents` |
 | SPECIALIST | `brewcode:agent-creator` |
-| LIST_CMD | Glob `*.md` over `.claude/agents/`, `~/.claude/agents/`, `brewcode/agents/` |
+| LIST_CMD | Glob `*.md` over `.claude/agents/`, `~/.claude/agents/`, `${CLAUDE_PLUGIN_ROOT}/agents/` (shipped, READ-ONLY), and `brewcode/agents/` ONLY when `test -d brewcode/.claude-plugin` (plugin workspace) |
 | SYNC_REF | `${CLAUDE_SKILL_DIR}/../skills/references/mode-sync.md` (shared with `/brewcode:skills`) |
 
 ## Step 1 — Input gate
@@ -152,7 +152,8 @@ A bare one-line task is never enough.
 
 Delegate collection to ONE Explore/Bash subagent, then assemble a rich status (never a bare list):
 
-- **Inventory by scope:** plugin (BC) / project (`.claude/`) / global (`~/.claude/`) — counts + names + load path.
+- **Inventory by scope:** shipped plugin (`${CLAUDE_PLUGIN_ROOT}/agents/`, read-only) / plugin source
+  (`brewcode/agents/`, only in this workspace) / project (`.claude/`) / global (`~/.claude/`) — counts + names + load path.
 - **State:** enabled/disabled (toggle markers `_SKILL.md` / `_<name>.md`), model.
 - **Overlaps / conflicts:** same-name across scopes (shadowing), duplicate triggers/descriptions, naming collisions.
 - **Health flags:** missing README/frontmatter; agents missing `Bash` in `tools:` (macOS search rule);
@@ -189,7 +190,10 @@ For `status` mode the report **is** the Step 5 status table.
 ## Artifact-specific params (create / improve only)
 
 For `create`: ONE AskUserQuestion batch — (Q1) scope: Project `.claude/agents/` /
-Global `~/.claude/agents/` / Plugin `brewcode/agents/`; (Q2) model: sonnet (Recommended) /
+Global `~/.claude/agents/` / Plugin `brewcode/agents/` — offer Plugin ONLY when
+`test -d brewcode/.claude-plugin` succeeds; elsewhere it writes a junk `<cwd>/brewcode/agents/<name>.md`,
+so drop the option. Never write under `${CLAUDE_PLUGIN_ROOT}` — the installed plugin is read-only;
+(Q2) model: sonnet (Recommended) /
 opus-or-fable / haiku / inherit (omit model: field); (Q3) update CLAUDE.md agents table? yes/no.
 Frontmatter description budget: <= 100 chars, single line, role + 2-3 triggers, EN only.
 Spawn SPECIALIST (brewcode:agent-creator) using the Delegation shape, e.g.:
@@ -212,7 +216,9 @@ DONE: file exists, valid frontmatter, description <= 100 chars single line with 
 ```
 
 After creation, if user approved, update the CLAUDE.md agents table via Edit (add/replace row).
-For `improve`: resolve agent by name/path across the 3 scopes; ONE AskUserQuestion —
+For `improve`: resolve agent by name/path across the writable scopes (project / global / plugin
+workspace). A name that matches only under `${CLAUDE_PLUGIN_ROOT}/agents/` is read-only — report it and
+stop, do not copy or edit it. ONE AskUserQuestion —
 (Q1) focus: triggers / system-prompt / both (Recommended) / full review; (Q2) update CLAUDE.md? yes/no.
 Spawn SPECIALIST to improve, then optional CLAUDE.md row update.
 

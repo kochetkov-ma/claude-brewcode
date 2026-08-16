@@ -1,16 +1,63 @@
 #!/bin/bash
 set -euo pipefail
 # Discover remote server: OS, disks, Docker, services, users
-# Usage: server-discover.sh "user@host" [port]
+# Usage: server-discover.sh "user@host|host|ssh-alias" [port]
+# Env:   SSH_DISCOVER_TIMEOUT - total wall-clock budget in seconds (default 30)
 # Output: structured key=value pairs
+# Exit:  0 ok | 1 unreachable | 2 invalid argument | 124 deadline exceeded
 
 CONNECTION="${1:?Usage: server-discover.sh user@host [port]}"
 PORT="${2:-22}"
+DEADLINE="${SSH_DISCOVER_TIMEOUT:-30}"
 
-SSH_OPTS="-o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -p $PORT"
+# user@host, bare host or ssh_config alias. Anything else (whitespace, "-o ...",
+# a second "@") would word-split into extra ssh options -- ProxyCommand is executed
+# by the user's shell, so an unvalidated operand is local command execution.
+case "$CONNECTION" in
+    ''|@*|*@|*@*@*|*[!A-Za-z0-9._@-]*)
+        echo "ERROR: invalid connection '$CONNECTION' (expected user@host, host or ssh alias)" >&2
+        exit 2 ;;
+esac
+
+case "$PORT" in
+    ''|*[!0-9]*|0*)
+        echo "ERROR: invalid port '$PORT' (expected integer 1..65535)" >&2
+        exit 2 ;;
+esac
+if [ "$PORT" -gt 65535 ]; then
+    echo "ERROR: invalid port '$PORT' (expected integer 1..65535)" >&2
+    exit 2
+fi
+
+case "$DEADLINE" in
+    ''|*[!0-9]*|0*)
+        echo "ERROR: invalid SSH_DISCOVER_TIMEOUT '$DEADLINE' (expected positive integer seconds)" >&2
+        exit 2 ;;
+esac
+
+# Portable outer deadline: macOS has no GNU `timeout`, so the script re-execs
+# itself once and a background killer bounds the WHOLE discovery, not each hop.
+if [ "${SSH_DISCOVER_WATCHDOG:-0}" != "1" ]; then
+    SSH_DISCOVER_WATCHDOG=1 bash "$0" "$@" &
+    child=$!
+    ( sleep "$DEADLINE"; kill -TERM "$child" 2>/dev/null ) &
+    killer=$!
+    rc=0
+    # braces + 2>/dev/null: bash prints "PID Terminated" job noise when reaping a signalled child
+    { wait "$child" || rc=$?; } 2>/dev/null
+    kill "$killer" 2>/dev/null || true
+    { wait "$killer" || true; } 2>/dev/null
+    if [ "$rc" -ge 128 ]; then
+        echo "ERROR: discovery exceeded ${DEADLINE}s deadline" >&2
+        exit 124
+    fi
+    exit "$rc"
+fi
+
+SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -p "$PORT")
 
 # Fail-fast: verify connectivity before full discovery
-if ! ssh $SSH_OPTS "$CONNECTION" true 2>/dev/null; then
+if ! ssh "${SSH_OPTS[@]}" "$CONNECTION" true 2>/dev/null; then
     echo "ERROR: Cannot connect to $CONNECTION:$PORT (timeout or auth failure)" >&2
     exit 1
 fi
@@ -22,7 +69,7 @@ ssh_cmd() {
     local cmd="$1"
     local fallback="${2:-n/a}"
     local result
-    result=$(ssh $SSH_OPTS "$CONNECTION" "$cmd" 2>/dev/null) || result="$fallback"
+    result=$(ssh "${SSH_OPTS[@]}" "$CONNECTION" "$cmd" 2>/dev/null) || result="$fallback"
     echo "$result"
 }
 

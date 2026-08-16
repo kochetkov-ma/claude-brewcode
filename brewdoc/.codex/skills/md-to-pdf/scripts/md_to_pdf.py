@@ -9,11 +9,11 @@ Engines:
 Usage:
     python3 md_to_pdf.py <input.md> [output.pdf] [options]
     python3 md_to_pdf.py input.md --engine weasyprint --style custom.css
-    python3 md_to_pdf.py input.md output.pdf --config my_config.json --quiet
+    python3 md_to_pdf.py input.md output.pdf --config my_config.json
 
-Dependencies:
-    reportlab engine:   python3 -m pip install reportlab==4.4.10
-    weasyprint engine:  python3 -m pip install weasyprint==68.1 markdown==3.10.2 pygments==2.19.2
+Dependencies (installed at pinned versions by scripts/check_deps.sh):
+    reportlab engine:   check_deps.sh install reportlab
+    weasyprint engine:  check_deps.sh install weasyprint
 """
 
 import json
@@ -23,6 +23,7 @@ import sys
 import argparse
 import platform
 from copy import deepcopy
+from importlib import import_module
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -45,7 +46,6 @@ def parse_args(argv=None):
     p.add_argument("--config", default=None, help="JSON style config overrides")
     p.add_argument("--style", default=None, help="CSS file (weasyprint only)")
     p.add_argument("--pygments-theme", default="github", help="Code theme (weasyprint only, default: github)")
-    p.add_argument("--quiet", action="store_true", help="Suppress progress output")
     args = p.parse_args(argv)
     if args.output is None:
         args.output = str(Path(args.input).with_suffix(".pdf"))
@@ -172,19 +172,18 @@ def register_detected_fonts(font_info: dict):
 # Structured output
 # ---------------------------------------------------------------------------
 
-def print_status(output_path: str, page_count: int, engine: str, quiet: bool):
+def print_status(output_path: str, page_count: int, engine: str):
+    """Emit the five result lines the skill parses. Never suppressed -- they are the contract."""
     size_bytes = Path(output_path).stat().st_size
     size_kb = f"{size_bytes / 1024:.0f}KB"
-    lines = [
-        f"STATUS=OK",
+    for ln in (
+        "STATUS=OK",
         f"OUTPUT={output_path}",
         f"PAGES={page_count}",
         f"SIZE={size_kb}",
         f"ENGINE={engine}",
-    ]
-    if not quiet:
-        for ln in lines:
-            print(ln)
+    ):
+        print(ln)
 
 
 def print_failure(message: str):
@@ -192,12 +191,61 @@ def print_failure(message: str):
     print(message, file=sys.stderr)
 
 
+def warn(message: str):
+    """Report degraded output (dropped content) on stderr."""
+    print(f"WARN={message}", file=sys.stderr)
+
+
 # ---------------------------------------------------------------------------
 # WeasyPrint engine
 # ---------------------------------------------------------------------------
 
+PAGE_SIZES = {"a4": "A4", "letter": "Letter", "legal": "Legal"}
+
+
+def _page_size_name(config: dict) -> str:
+    """Normalize `page.size` to one of A4 / Letter / Legal (A4 when unknown)."""
+    return PAGE_SIZES.get(str(config.get("page", {}).get("size", "A4")).strip().lower(), "A4")
+
+
+def _css_footer_content(fmt: str) -> str:
+    """Translate a `{page}`/`{total}` footer format into CSS `content:` parts."""
+    parts = []
+    for chunk in re.split(r"(\{page\}|\{total\})", fmt):
+        if chunk == "{page}":
+            parts.append("counter(page)")
+        elif chunk == "{total}":
+            parts.append("counter(pages)")
+        elif chunk:
+            parts.append('"%s"' % chunk.replace('\\', '\\\\').replace('"', '\\"'))
+    return " ".join(parts) or '""'
+
+
+def _weasyprint_override_css(config: dict) -> str:
+    """CSS block that applies the saved config on top of the base stylesheet."""
+    page = config.get("page", {})
+    m = page.get("margins", {})
+    c = config.get("colors", {})
+    footer = config.get("footer", {})
+    content = (_css_footer_content(footer.get("format", "Page {page} of {total}"))
+               if footer.get("enabled", True) else "normal")
+    return f"""
+@page {{
+  size: {_page_size_name(config)};
+  margin: {m.get("top", 25)}mm {m.get("right", 20)}mm {m.get("bottom", 25)}mm {m.get("left", 25)}mm;
+  @bottom-center {{ content: {content}; }}
+}}
+body {{ color: {c.get("text", "#1a1a1a")}; }}
+h1, h2 {{ color: {c.get("primary", "#1a3a5c")}; }}
+h3, h4 {{ color: {c.get("secondary", "#2c5282")}; }}
+blockquote {{ background: {c.get("quote_bg", "#f5f5f5")}; border-left-color: {c.get("border", "#3182ce")}; }}
+pre, code {{ background: {c.get("code_bg", "#f0f0f0")}; }}
+th {{ background-color: {c.get("header_bg", "#1a3a5c")}; color: {c.get("header_fg", "#ffffff")}; }}
+"""
+
+
 def convert_weasyprint(input_path: str, output_path: str, config: dict,
-                       css_path=None, pygments_theme="github", quiet=False):
+                       css_path=None, pygments_theme="github"):
     """Convert MD -> HTML -> CSS -> PDF via weasyprint."""
     try:
         import markdown
@@ -205,7 +253,7 @@ def convert_weasyprint(input_path: str, output_path: str, config: dict,
         from pygments.formatters import HtmlFormatter
     except ImportError as exc:
         print_failure(f"Missing dependency for weasyprint engine: {exc}\n"
-                      f"Install with: python3 -m pip install weasyprint==68.1 markdown==3.10.2 pygments==2.19.2")
+                      f"Install with: bash {SCRIPT_DIR}/check_deps.sh install weasyprint")
         sys.exit(1)
 
     md_text = Path(input_path).read_text(encoding="utf-8")
@@ -237,6 +285,7 @@ def convert_weasyprint(input_path: str, output_path: str, config: dict,
 <meta charset="utf-8">
 {css_link}
 <style>{pygments_css}</style>
+<style>{_weasyprint_override_css(config)}</style>
 </head><body>
 {html_body}
 </body></html>"""
@@ -245,7 +294,7 @@ def convert_weasyprint(input_path: str, output_path: str, config: dict,
     doc.write_pdf(output_path)
 
     page_count = len(doc.pages)
-    print_status(output_path, page_count, "weasyprint", quiet)
+    print_status(output_path, page_count, "weasyprint")
 
 
 # ---------------------------------------------------------------------------
@@ -362,7 +411,8 @@ def build_styles(font_info: dict, config: dict):
         name="Blockquote", fontName=f["italic"], fontSize=body_sz - 0.5,
         leading=11, textColor=clr["text"], leftIndent=14,
         spaceAfter=4, spaceBefore=2, backColor=clr["quote_bg"],
-        borderPadding=(4, 6, 4, 6),
+        # reportlab accepts a 4-tuple here at runtime; only its stub says float.
+        borderPadding=(4, 6, 4, 6),  # pyright: ignore[reportArgumentType]
     ))
     ss.add(ParagraphStyle(
         name="TableCell", fontName=f["body"], fontSize=8,
@@ -460,7 +510,7 @@ def build_table(rows: list, styles, font_info: dict, clr: dict, available_width:
 # Reportlab engine -- blockquote builder
 # ---------------------------------------------------------------------------
 
-def build_blockquote(text: str, styles, font_info: dict, clr: dict, available_width: float):
+def build_blockquote(text: str, styles, clr: dict, available_width: float):
     """Build a blockquote as a table with a left blue border."""
     from reportlab.platypus import Table, TableStyle, Paragraph
 
@@ -514,14 +564,24 @@ def build_code_block(text: str, styles, clr: dict, available_width: float):
 # Reportlab engine -- image support
 # ---------------------------------------------------------------------------
 
-def _try_build_image(alt: str, src: str, available_width: float):
-    """Attempt to build a reportlab Image flowable. Returns None if not possible."""
+def _try_build_image(alt: str, src: str, available_width: float, base_dir: Path):
+    """Attempt to build a reportlab Image flowable. Returns None if not possible.
+
+    Relative sources resolve against the document's directory (as weasyprint does),
+    falling back to the process cwd. A miss warns here rather than at the call site:
+    the alt text plus the reason is what tells the user WHICH image is missing.
+    """
     from reportlab.platypus import Image
 
+    label = f"{src} (alt: {alt})" if alt else src
     if src.startswith("http://") or src.startswith("https://"):
+        warn(f"image not rendered: {label} -- remote sources are not fetched")
         return None
     img_path = Path(src)
+    if not img_path.is_absolute() and not img_path.exists():
+        img_path = base_dir / src
     if not img_path.exists():
+        warn(f"image not rendered: {label} -- file not found")
         return None
     try:
         img = Image(str(img_path))
@@ -531,7 +591,8 @@ def _try_build_image(alt: str, src: str, available_width: float):
             img.drawWidth = available_width
             img.drawHeight = ih * ratio
         return img
-    except Exception:
+    except Exception as exc:
+        warn(f"image not rendered: {label} -- {exc}")
         return None
 
 
@@ -539,10 +600,9 @@ def _try_build_image(alt: str, src: str, available_width: float):
 # Reportlab engine -- numbered canvas
 # ---------------------------------------------------------------------------
 
-def _make_numbered_canvas_class(font_name: str, footer_fmt: str):
-    """Create a NumberedCanvas class bound to the given font and format string."""
+def _make_numbered_canvas_class(font_name: str, footer_fmt: str, page_width: float):
+    """Create a NumberedCanvas class bound to the given font, format string and page width."""
     from reportlab.lib import colors as rlc
-    from reportlab.lib.pagesizes import A4
     from reportlab.pdfgen.canvas import Canvas
 
     class NumberedCanvas(Canvas):
@@ -552,7 +612,8 @@ def _make_numbered_canvas_class(font_name: str, footer_fmt: str):
 
         def showPage(self):
             self._saved_page_states.append(dict(self.__dict__))
-            self._startPage()
+            # Private Canvas members, present at runtime but absent from the stub.
+            self._startPage()  # pyright: ignore[reportAttributeAccessIssue]
 
         def save(self):
             num_pages = len(self._saved_page_states)
@@ -567,8 +628,11 @@ def _make_numbered_canvas_class(font_name: str, footer_fmt: str):
             fn = font_name if font_name != "Helvetica" else "Helvetica"
             self.setFont(fn, 8)
             self.setFillColor(rlc.HexColor("#888888"))
-            text = footer_fmt.format(page=self._pageNumber, total=page_count)
-            self.drawCentredString(A4[0] / 2, 25, text)
+            text = footer_fmt.format(
+                page=self._pageNumber,  # pyright: ignore[reportAttributeAccessIssue] -- runtime-only Canvas member
+                total=page_count,
+            )
+            self.drawCentredString(page_width / 2, 25, text)
             self.restoreState()
 
     return NumberedCanvas
@@ -579,7 +643,7 @@ def _make_numbered_canvas_class(font_name: str, footer_fmt: str):
 # ---------------------------------------------------------------------------
 
 def md_to_story(md_text: str, styles, font_info: dict, clr: dict,
-                available_width: float) -> list:
+                available_width: float, base_dir: Path) -> list:
     """Parse markdown text and return a list of reportlab flowables."""
     from reportlab.lib import colors as rlc
     from reportlab.platypus import Paragraph, Spacer
@@ -615,7 +679,7 @@ def md_to_story(md_text: str, styles, font_info: dict, clr: dict,
         img_match = re.match(r"^!\[([^\]]*)\]\(([^)]+)\)$", stripped)
         if img_match:
             alt, src = img_match.group(1), img_match.group(2)
-            img = _try_build_image(alt, src, available_width)
+            img = _try_build_image(alt, src, available_width, base_dir)
             if img:
                 story.append(Spacer(1, 4))
                 story.append(img)
@@ -674,7 +738,7 @@ def md_to_story(md_text: str, styles, font_info: dict, clr: dict,
                 else:
                     break
                 i += 1
-            story.append(build_blockquote(" ".join(quote_lines), styles, font_info, clr, available_width))
+            story.append(build_blockquote(" ".join(quote_lines), styles, clr, available_width))
             story.append(Spacer(1, 4))
             continue
 
@@ -742,11 +806,12 @@ def md_to_story(md_text: str, styles, font_info: dict, clr: dict,
 # ---------------------------------------------------------------------------
 
 def build_document(output_path: str, config: dict):
-    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import pagesizes
     from reportlab.lib.units import mm
     from reportlab.platypus import BaseDocTemplate, Frame, PageTemplate
 
-    page_width, page_height = A4
+    page_size = getattr(pagesizes, _page_size_name(config).upper())
+    page_width, page_height = page_size
     margins = config.get("page", {}).get("margins", {})
     left = margins.get("left", 25) * mm
     right = margins.get("right", 20) * mm
@@ -754,7 +819,7 @@ def build_document(output_path: str, config: dict):
     bottom = margins.get("bottom", 25) * mm
 
     doc = BaseDocTemplate(
-        output_path, pagesize=A4,
+        output_path, pagesize=page_size,
         leftMargin=left, rightMargin=right,
         topMargin=top, bottomMargin=bottom,
     )
@@ -768,24 +833,26 @@ def build_document(output_path: str, config: dict):
 
     page_template = PageTemplate(
         id="main", frames=[frame],
-        onPage=lambda canvas, doc: None,
+        # reportlab calls onPage(canvas, doc); both parameters are mandatory even unused.
+        onPage=lambda canvas, doc: None,  # noqa: ARG005
     )
     doc.addPageTemplates([page_template])
 
     available_width = page_width - left - right
-    return doc, available_width
+    return doc, available_width, page_width
 
 
 # ---------------------------------------------------------------------------
 # Reportlab engine -- main conversion
 # ---------------------------------------------------------------------------
 
-def convert_reportlab(input_path: str, output_path: str, config: dict, quiet=False):
+def convert_reportlab(input_path: str, output_path: str, config: dict):
     """Convert MD -> PDF via reportlab."""
     try:
-        from reportlab.platypus import Paragraph  # noqa: verify import
+        import_module("reportlab.platypus")  # availability probe; the builders do their own imports
     except ImportError:
-        print_failure("reportlab is not installed.\nInstall with: python3 -m pip install reportlab==4.4.10")
+        print_failure(f"reportlab is not installed.\n"
+                      f"Install with: bash {SCRIPT_DIR}/check_deps.sh install reportlab")
         sys.exit(1)
 
     font_info = detect_fonts()
@@ -793,14 +860,15 @@ def convert_reportlab(input_path: str, output_path: str, config: dict, quiet=Fal
 
     clr = _rl_colors(config)
     styles = build_styles(font_info, config)
-    doc, available_width = build_document(output_path, config)
+    doc, available_width, page_width = build_document(output_path, config)
 
     md_text = Path(input_path).read_text(encoding="utf-8")
-    story = md_to_story(md_text, styles, font_info, clr, available_width)
+    story = md_to_story(md_text, styles, font_info, clr, available_width,
+                        Path(input_path).resolve().parent)
 
     footer_cfg = config.get("footer", {})
     footer_fmt = footer_cfg.get("format", "Page {page} of {total}")
-    canvas_cls = _make_numbered_canvas_class(font_info["body"], footer_fmt)
+    canvas_cls = _make_numbered_canvas_class(font_info["body"], footer_fmt, page_width)
 
     if footer_cfg.get("enabled", True):
         doc.build(story, canvasmaker=canvas_cls)
@@ -815,7 +883,7 @@ def convert_reportlab(input_path: str, output_path: str, config: dict, quiet=Fal
         except Exception:
             page_count = 0
 
-    print_status(output_path, page_count, "reportlab", quiet)
+    print_status(output_path, page_count, "reportlab")
 
 
 # ---------------------------------------------------------------------------
@@ -835,10 +903,9 @@ def main():
         if args.engine == "weasyprint":
             convert_weasyprint(args.input, args.output, config,
                                css_path=args.style,
-                               pygments_theme=args.pygments_theme,
-                               quiet=args.quiet)
+                               pygments_theme=args.pygments_theme)
         else:
-            convert_reportlab(args.input, args.output, config, quiet=args.quiet)
+            convert_reportlab(args.input, args.output, config)
     except Exception as exc:
         print_failure(str(exc))
         sys.exit(1)

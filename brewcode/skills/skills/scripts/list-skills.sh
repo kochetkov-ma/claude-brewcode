@@ -41,11 +41,31 @@ truncate() {
     fi
 }
 
+# Coerce a frontmatter value the way Claude Code does: an absent key falls back to that key's
+# documented default, otherwise only `1|true|yes|on` (case-insensitive, trimmed) is true — every
+# other spelling, recognised-falsy or not, is false.
+# Usage: yaml_bool "<raw value>" "<default when absent>"
+yaml_bool() {
+    local value="$1"
+    local default="$2"
+
+    [[ -z "$value" ]] && { echo "$default"; return 0; }
+    value=$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
+    case "$value" in
+        1|true|yes|on) echo "true" ;;
+        *)             echo "false" ;;
+    esac
+}
+
 # Determine invocation type from frontmatter values
 # Returns: "AI + user", "user-only", "AI-only"
 get_invocation_type() {
-    local user_invocable="$1"
-    local disable_model="$2"
+    local user_invocable
+    local disable_model
+
+    # Defaults per official skill frontmatter: user-invocable true, disable-model-invocation false
+    user_invocable=$(yaml_bool "$1" "true")
+    disable_model=$(yaml_bool "$2" "false")
 
     if [[ "$user_invocable" == "true" ]]; then
         if [[ "$disable_model" == "true" ]]; then

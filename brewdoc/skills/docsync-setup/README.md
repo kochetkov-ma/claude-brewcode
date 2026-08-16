@@ -39,9 +39,9 @@ Canonical verbs first, then the skill-specific extras.
 |------|---------|--------------|
 | status | `status` / installed + no args | Lists in-scope docs with `last_updated`, age, and stale/fresh/no-date state. No changes. |
 | install | `install` / not installed + no args | Asks threshold (default 7d) + exclude globs; copies 3 hooks into `.claude/hooks/`; writes `.claude/docsync/config.json`; idempotently + non-destructively merges `.claude/settings.json` (backs up to `.bak`). Never adds frontmatter to docs. |
-| upgrade | `upgrade` | Re-copies the 3 hooks and re-runs the settings merge; only the three provenance keys in `config.json` are refreshed — `enabled`, `threshold_days`, `exclude` and `state.json` are left untouched. |
+| upgrade | `upgrade` | Re-copies the 3 hooks and re-runs the settings merge; only the three provenance keys in `config.json` are refreshed — `enabled`, `threshold_days`, `exclude` and the session state files are left untouched. |
 | enable | `enable` / включи | Sets `enabled: true` in `config.json`. Nothing else moves. |
-| disable | `disable` / выключи | Sets `enabled: false`. The hooks stay registered in `settings.json` and on disk, `state.json` and every `last_updated` survive, and all three hooks no-op on their next invocation — effective immediately, no session restart. The reversible pause; `uninstall` is the removal. |
+| disable | `disable` / выключи | Sets `enabled: false`. The hooks stay registered in `settings.json` and on disk, the session state files and every `last_updated` survive, and all three hooks no-op on their next invocation — effective immediately, no session restart. The reversible pause; `uninstall` is the removal. |
 | uninstall | `uninstall` | Removes only docsync hook entries from `settings.json` (foreign entries preserved), deletes the 3 hook files, asks about dropping `.claude/docsync/`. |
 | purge | `purge` | `uninstall` plus unconditional removal of `.claude/docsync/`. |
 | sync | `sync [--all]` | Syncs stale docs (or all) after confirmation, per each doc's `sync_procedure` (prose Claude reads and follows — no hook parses it), then bumps `last_updated` to today. `doc_type` sets compress depth. |
@@ -113,9 +113,11 @@ an installed copy can be compared byte-for-byte with the plugin's.
   are what `/brewcode:setup-status` reads the installed version from. `enabled` is the
   `disable`/`enable` switch: `false` makes every hook a no-op on its next invocation
   (immediately, no session restart), absent counts as `true`
-- `state.json`  — install writes `{ "session_id": null, "touched": [], "asked": false }`;
-  the hooks replace `null` with the live session id on first touch and reset
-  `touched`/`asked` whenever the id changes
+- `state-<session_id>.json` — one file PER SESSION, created and owned by the hooks;
+  install seeds nothing, so two concurrent sessions in one project cannot reset each
+  other's touched-set. Writes land on a pid-unique temp name before the rename. The
+  Stop gate prunes state files older than 14 days, which is also how a pre-6.0 shared
+  `state.json` disappears
 
 No registry file — frontmatter is the source of truth.
 

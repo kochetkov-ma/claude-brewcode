@@ -20,6 +20,12 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
+// Both variables outrank the cwd walk when a script or hook resolves the project
+// root, so an ambient one would point every fixture at the caller's own repo and
+// even install into it. Scrub once here: every spawn below inherits process.env.
+delete process.env.CLAUDE_PROJECT_DIR;
+delete process.env.SEMBLE_PROJECT_ROOT;
+
 const HERE = join(fileURLToPath(import.meta.url), '..');
 const SKILL = join(HERE, '..');
 const SCRIPTS = join(SKILL, 'scripts');
@@ -628,6 +634,8 @@ const STATS_MATCHER = 'mcp__semble_code__search|mcp__semble_code__find_related|B
 // the two advisory hooks; §10 proves a v1-shaped file loses them on install.
 const WANT_N = 6;
 
+// process.env is already scrubbed of CLAUDE_PROJECT_DIR/SEMBLE_PROJECT_ROOT at
+// the top of the file, so the inherited env resolves the root by the cwd walk.
 function guidance(p, args) {
   const r = spawnSync('bash', [GUIDANCE, ...args], { cwd: p, encoding: 'utf8' });
   return { status: r.status, stdout: r.stdout, stderr: r.stderr };

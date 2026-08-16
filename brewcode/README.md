@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 5.7.0 |
+| Version | 6.0.0 |
 | Skills | 9 |
 | Agents | 5 |
 | Hooks | 4 |
@@ -182,6 +182,15 @@ own keys, in that order. JSON artifacts carry the same three snake_case keys at 
 table in `team.md`, and `<!-- brewcode-meta: ... -->` on line 1 of a byte-copied `.md`. Versions
 always come from `.claude-plugin/plugin.json`, never hardcoded, never `unknown`. `/brewcode:setup-status` reads these back across all eleven `-setup` skills and flags any
 artifact running on an older version than the installed plugin.
+
+## Test suites
+
+| Suite | Checks | Covers |
+|-------|--------|--------|
+| `agents/tests/suite-creator-contract.mjs` | 27 | Pins what `hook-creator`, `agent-creator` and `skill-creator` teach about the Claude Code hook/subagent API |
+| `hooks/tests/` | 68 | `session-start.mjs` |
+| `skills/teams-setup/tests/` | 65 | `toggle-team.sh` / `verify-team.sh` |
+| `skills/semble-setup/tests/` | 7 suites | core, agents, hooks, integration, project, status, telemetry |
 
 ## Documentation
 
