@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.1.0 content_version=6.1.0 generated_by=brewtools:manager-setup
+// brewcode-meta: version=6.1.1 content_version=6.1.1 generated_by=brewtools:manager-setup
 // brewtools:manager-setup — HARD wall guard (PreToolUse, matcher "*").
 //
 // SELF-CONTAINED — copied into <project>/.claude/brewtools/manager/ by
@@ -236,16 +236,40 @@ function mcpTokens(name) {
     .filter(Boolean);
 }
 
-// Server-name tokens are dropped from the tool segment first: servers repeat their own name
-// in the tool (`mcp__notion__notion-search` -> [search]). Dropping can only ever REMOVE
-// evidence, never add any — a name reduced to nothing has no read verb left and is denied.
+// NEW-4: named write verbs. Every one of these was ALREADY denied as an unknown token — the set
+// exists so the server-name subtraction below cannot erase one. Enumerated, never a denylist the
+// classifier falls back on: an unknown token still denies on its own. Deliberately excludes nouns
+// that read tools carry (`pull`, `commit`, `tag`, `comment`, `deployment`, `state`).
+const MCP_WRITE_VERB = new Set([
+  'send', 'delete', 'remove', 'destroy', 'drop', 'purge', 'truncate', 'clear', 'reset',
+  'create', 'add', 'insert', 'write', 'put', 'post', 'update', 'upsert', 'modify', 'edit',
+  'patch', 'rename', 'move', 'copy', 'replace', 'set', 'apply', 'merge', 'push', 'sync',
+  'deploy', 'release', 'publish', 'upload', 'install', 'uninstall', 'exec', 'execute',
+  'run', 'shell', 'spawn', 'kill', 'start', 'stop', 'restart', 'reboot', 'trigger',
+  'invoke', 'submit', 'approve', 'assign', 'grant', 'revoke', 'cancel', 'enable',
+  'disable', 'archive', 'restore', 'import', 'transfer',
+]);
+
+// NEW-4: ORDER IS THE CONTRACT. Servers repeat their own name inside the tool segment
+// (`mcp__notion__notion-search` -> [search]), and subtracting those tokens is the only reason
+// this filter exists. Subtraction used to run FIRST, and it removed the DENY evidence with
+// everything else: `mcp__delete__list_and_delete` and `mcp__deploy__deploy_status` subtracted
+// their own write verb and the residue read as a clean `list`/`status`. So the write-verb and
+// safe gates now run on the UNFILTERED tool segment: a write verb anywhere in the tool name
+// denies whatever the server happens to be called, and an unknown token denies unless it is a
+// verbatim repeat of a server token — an exception that can no longer smuggle a write verb past
+// a gate. Only then does subtraction run, over tokens that have already been judged.
 function isReadOnlyMcpTool(server, toolSegment) {
+  const raw = mcpTokens(toolSegment);
+  // `mcp____get` — empty server — is a malformed name, not a read.
+  if (!server || raw.length === 0) return false;
+  if (raw.some(t => MCP_WRITE_VERB.has(t))) return false;
   const fromServer = new Set(mcpTokens(server));
-  const tokens = mcpTokens(toolSegment).filter(t => !fromServer.has(t));
-  if (tokens.length === 0) return false;
   const safe = t => MCP_READ_VERB.has(t) || MCP_AMBIGUOUS_VERB.has(t)
     || MCP_NEUTRAL_TOKEN.has(t) || MCP_DOCS_QUALIFIER.has(t);
-  if (!tokens.every(safe)) return false;
+  if (!raw.every(t => safe(t) || fromServer.has(t))) return false;
+  const tokens = raw.filter(t => !fromServer.has(t));
+  if (tokens.length === 0) return false;
   // Ambiguous verb present -> this is the ONLY gate that decides, checked before the read-verb
   // branch so a read verb can never re-qualify it. Reads solely when every remaining token is a
   // docs qualifier, and at least one is. Any other token — an ordinary noun (table, rows, all),

@@ -11,7 +11,7 @@ Convert a local Markdown file with `scripts/md_to_pdf.py`. Check dependencies wi
 
 Follow every phase below. When a phase delegates work, use Codex collaboration with only `task_name` and `message`; treat each "Codex delegation brief" block as role and message content, not executable syntax. Use `request_user_input` for the documented user gates. Resolve `<skill-directory>`, `<plugin-root>`, `<project-root>`, and `<arguments>` before running commands.
 
-<!-- brewcode-meta: version=6.1.0 content_version=6.0.0 generated_by=brewdoc:md-to-pdf -->
+<!-- brewcode-meta: version=6.1.1 content_version=6.0.0 generated_by=brewdoc:md-to-pdf -->
 
 # MD to PDF
 

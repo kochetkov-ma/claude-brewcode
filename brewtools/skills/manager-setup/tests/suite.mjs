@@ -733,6 +733,57 @@ for (const [n, tool, why] of [
   check(`${n}-read-verb-does-not-requalify-an-ambiguous-verb`, mcp(tool), 'deny', why);
 }
 
+// REGRESSION (NEW-4): the server-name subtraction ran BEFORE classification, so an
+// action-named server erased the write verb from its own tool segment and the residue read as
+// a clean read. All eight below were reproduced as ALLOW against the pre-fix guard.
+for (const [n, tool, why] of [
+  ['63q', 'mcp__email-send__send_and_get_status', '`send` survives being half of the server name'],
+  ['63r', 'mcp__delete__list_and_delete', 'the server may not delete `delete` from its own tool name'],
+  ['63s', 'mcp__exec__get_and_exec', 'same for arbitrary execution'],
+  ['63t', 'mcp__deploy__deploy_status', 'the server name repeated as a prefix is still a write verb'],
+  ['63u', 'mcp__create__get_and_create_issue', 'creation on an issue tracker'],
+  ['63v', 'mcp__write__read_and_write_file', '`read` must not launder the `write` half'],
+  ['63w', 'mcp__run-shell__get_and_run_shell', 'both write tokens sit in the server name'],
+  ['63x', 'mcp__SEND__get_and_SEND', 'tokens are lowercased before the write gate, so case buys nothing'],
+]) {
+  check(`${n}-server-name-cannot-erase-its-own-write-verb`, mcp(tool), 'deny', why);
+}
+
+// Adversarial probes on the NEW-4 rule itself: more action-named servers, write verbs reachable
+// only through a camelCase hump or a hyphen, and degenerate segments.
+check(
+  '63y-write-verb-anywhere-in-the-tool-segment-denies',
+  {
+    push: mcp('mcp__push__get_and_push'),
+    sync: mcp('mcp__sync__list_and_sync'),
+    patch: mcp('mcp__patch__get_patch_status'),
+    drop: mcp('mcp__drop__list_and_drop_table'),
+    restart: mcp('mcp__restart__get_and_restart_service'),
+    camel: mcp('mcp__ide__getAndDeleteFile'),
+    hyphen: mcp('mcp__notion__notion-delete'),
+    dotted: mcp('mcp__set__get.set.config'),
+    docsQualified: mcp('mcp__delete__resolve-library-id-delete'),
+    wholeNameIsServer: mcp('mcp__deploy__deploy'),
+  },
+  {
+    push: 'deny', sync: 'deny', patch: 'deny', drop: 'deny', restart: 'deny',
+    camel: 'deny', hyphen: 'deny', dotted: 'deny', docsQualified: 'deny', wholeNameIsServer: 'deny',
+  },
+  'a named write verb denies regardless of where it appears or what the server is called',
+);
+
+check(
+  '63z-degenerate-mcp-segments-deny',
+  {
+    emptyTool: mcp('mcp__srv__'),
+    emptyServer: mcp('mcp____get'),
+    separatorsOnly: mcp('mcp__srv__--'),
+    serverOnlyResidue: mcp('mcp__search__search'),
+  },
+  { emptyTool: 'deny', emptyServer: 'deny', separatorsOnly: 'deny', serverOnlyResidue: 'deny' },
+  'an empty or fully-subtracted tool segment has nothing left to classify',
+);
+
 check(
   '64-ambiguous-verb-qualified-still-reads',
   {

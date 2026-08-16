@@ -2,6 +2,27 @@
 
 ---
 
+## v6.1.1 (2026-08-16)
+
+> Docs: [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [brewtools skills](https://doc-claude.brewcode.app/brewtools/skills/) | [brewtools overview](https://doc-claude.brewcode.app/brewtools/overview/)
+
+> Final round on the HARD-wall MCP classifier. v6.1.0 made it default-deny; this patch closes the ways a write tool could still read as a pure read — a compound name, an ambiguous verb on the wrong kind of server, and a write verb eaten by the server-name subtraction — and adds the escape hatch for the false denies that a default-deny rule inevitably produces.
+
+### brewtools
+
+#### Fixed
+
+- **MCP classification is fail-closed per token, not per substring.** The read test matched anywhere in the tool name, so a compound write name carried its own alibi: `search_and_replace`, `search_replace`, `list_and_rename` and `get_and_apply_patch` all matched a read verb and passed in `balanced`. Every token of the tool segment is now checked in isolation, so a compound name is only a read when all of its parts are
+- **Ambiguous verbs (`query`, `resolve`) count as reads only in a docs/reference name.** `query-docs` and `resolve-library-id` pass; `mcp__sqlite__query` (arbitrary SQL) and `mcp__linear__resolve_issue` (closes an issue) deny — the same verb is a read on a documentation server and a write on a database or an issue tracker
+- **The write-verb check runs BEFORE the server-name tokens are subtracted.** Subtracting first deleted the evidence: `mcp__email-send__send_and_get_status` lost `send` to the server name `email-send` and classified as a clean read
+- **New optional `mcpAllow` state key — the supported recovery path from a false deny.** Exact tool names or a `mcp__server__*` prefix, `balanced` only, accepted by one shared grammar in both `hooks/hardmode-guard.mjs` and `hooks/lib/manager-state.mjs`, so the runtime filter and the validator can no longer disagree
+
+#### Changed
+
+- **`manager-setup` test suite grown from 44 to 100 checks** — `brewtools/skills/manager-setup/tests/suite.mjs`, covering each compound-name case, both ambiguous verbs on both kinds of server, the subtraction-order regression and the `mcpAllow` grammar on both sides
+
+---
+
 ## v6.1.0 (2026-08-16)
 
 > Docs: [context-slim](https://doc-claude.brewcode.app/brewtools/skills/context-slim/) | [brewtools skills](https://doc-claude.brewcode.app/brewtools/skills/) | [brewtools overview](https://doc-claude.brewcode.app/brewtools/overview/) | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [teams-setup](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) | [superreview-setup](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/)

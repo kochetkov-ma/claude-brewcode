@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.1.0 content_version=6.0.0 generated_by=brewcode:semble-setup
+// brewcode-meta: version=6.1.1 content_version=6.0.0 generated_by=brewcode:semble-setup
 /**
  * brewcode:semble-setup — UserPromptSubmit hook (self-contained, installed into
  * a project). It runs alongside the advisory hooks, it does not replace them.
