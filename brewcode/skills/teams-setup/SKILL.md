@@ -7,7 +7,7 @@ argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge]
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion, Skill]
 model: opus
 ---
-<!-- brewcode-meta: version=6.1.2 content_version=6.1.0 generated_by=brewcode:teams-setup -->
+<!-- brewcode-meta: version=6.1.3 content_version=6.1.0 generated_by=brewcode:teams-setup -->
 
 <instructions>
 

@@ -1,4 +1,4 @@
-<!-- brewcode-meta: version=6.1.2 content_version=6.0.0 generated_by=brewtools:agent-return-setup -->
+<!-- brewcode-meta: version=6.1.3 content_version=6.0.0 generated_by=brewtools:agent-return-setup -->
 # agent-return hooks — install / configure / remove runbook
 
 Self-contained hook assets. The `/brewtools:agent-return-setup` skill copies these into a

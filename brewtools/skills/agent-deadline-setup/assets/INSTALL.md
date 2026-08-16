@@ -1,4 +1,4 @@
-<!-- brewcode-meta: version=6.1.2 content_version=6.0.0 generated_by=brewtools:agent-deadline-setup -->
+<!-- brewcode-meta: version=6.1.3 content_version=6.0.0 generated_by=brewtools:agent-deadline-setup -->
 # agent-deadline hooks — install / configure / remove runbook
 
 Self-contained hook assets. The `/brewtools:agent-deadline-setup` skill copies these into a

@@ -2,6 +2,18 @@
 
 ---
 
+## v6.1.3 (2026-08-16)
+
+> Docs: [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/)
+
+### brewtools
+
+#### Fixed
+
+- **`manager-setup` no longer arms the HARD delegation wall automatically on `install`/`enable`/`hard-one-shot`.** Arming now requires an explicit `AskUserQuestion` confirmation or the user's own prompt naming "hard wall"/"хард уолл" plus an enable/arm verb — plain `install` or autonomy phrasing ("decide for me") no longer sets `state.hard=true`. Declining `install` still installs the guard files disarmed; declining `enable`/`hard-one-shot` aborts with nothing changed
+
+---
+
 ## v6.1.2 (2026-08-16)
 
 > Docs: [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/)

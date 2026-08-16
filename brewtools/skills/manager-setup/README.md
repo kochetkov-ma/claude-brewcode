@@ -28,9 +28,9 @@ The block applies to that one turn only. When the HARD wall is armed, the Manage
 |---------|-------------|
 | `/brewtools:manager-setup` | No argument = `status`. |
 | `/brewtools:manager-setup status` | Print wall state (armed/disarmed, level, registered?), prompt sources, and both injected blocks |
-| `/brewtools:manager-setup install` | Install the HARD wall guard into this project + arm it. `/reload` only on FIRST install. |
+| `/brewtools:manager-setup install` | Install the HARD wall guard into this project. Asks to confirm before arming (`AskUserQuestion`) unless your prompt already said so explicitly (e.g. "enable the hard wall") — plain `install` or autonomy phrasing never counts; declining still installs and leaves `state.hard=false`. `/reload` only on FIRST install. |
 | `/brewtools:manager-setup upgrade` | Re-copy the guard from the current plugin version and re-register if missing. `hard`/`level` preserved; aborts if not installed. |
-| `/brewtools:manager-setup enable` | Arm an already-installed wall (state flip only). Not installed → routes you to `install`. |
+| `/brewtools:manager-setup enable` | Arm an already-installed wall (state flip only) — same confirm gate as `install`; declining aborts with nothing changed. Not installed → routes you to `install`. |
 | `/brewtools:manager-setup disable` | Disarm the HARD wall (state flip only; registration stays in `settings.local.json`). Guard no-ops until re-armed. |
 | `/brewtools:manager-setup uninstall` | Deregister the wall from `settings.local.json` + delete the copied guard. Auto-disarms first. State and prompt overrides KEPT. Run `/reload` after. |
 | `/brewtools:manager-setup purge [--scope global\|project]` | `uninstall` + delete `state.json` and the prompt override(s). The only destructive action. |
@@ -85,9 +85,9 @@ The HARD wall is an **installed-into-the-project** `PreToolUse` guard, NOT a plu
 | Registration | `<cwd>/.claude/settings.local.json` — `PreToolUse "*"` entry | Personal, gitignored. Persistent plumbing; harmless inert when wall is off. |
 | Runtime kill-switch | `<cwd>/.claude/brewtools/manager/state.json` `{hard}` | `enable`/`disable` flip this only — never touch `settings.local.json` |
 
-`install` = copy guard + off-switch CLI + register (idempotent) + arm. `/reload` only on first install.
+`install` = copy guard + off-switch CLI + register (idempotent), then arm ONLY on explicit confirmation (`AskUserQuestion` "Yes, arm it now", or explicit wording already in the prompt) — declining still installs but leaves `hard=false`. `/reload` only on first install.
 `upgrade` = re-copy both files + re-register if missing + restamp `state.json`'s `version`/`generated_by`/`last_updated` (empty-partial `writeState`, so `hard`/`level` survive verbatim — that is what clears the `stale` verdict `setup-status` reads off the same key). Aborts when not installed. Also backfills the off-switch CLI into projects installed before it existed.
-`enable` / `disable` = flip `state.hard` only. Guard stays registered; while disabled it no-ops.
+`enable` / `disable` = flip `state.hard` only. `enable` is gated by the same confirm step as `install` — declining aborts, nothing changes. Guard stays registered; while disabled it no-ops.
 `uninstall` = TWO Bash calls: the bare exempt disarm, then deregister + delete copies. Then `/reload`.
 `purge` = `uninstall` + delete `.claude/brewtools/manager/` (state + prompt overrides).
 
@@ -154,10 +154,11 @@ Universal fallback: delegate to a subagent — `Task`/`Agent` are always allowed
 # Architecture-first, combine with Manager delegation:
 ++m ++a implement the new caching layer
 
-# Hard wall — install and arm for this project
+# Hard wall — install for this project (arming requires confirmation)
 /brewtools:manager-setup install
-# → copies guard, registers in settings.local.json, arms state.hard=true
-# → if first install: "run /reload to activate"
+# → copies guard, registers in settings.local.json
+# → asks "Arm the HARD wall now?" unless your prompt already said so explicitly; Yes arms state.hard=true, No leaves it disarmed
+# → if newly registered: "run /reload to activate"
 
 # Tighten to strict (no Bash at all in main session)
 /brewtools:manager-setup level strict

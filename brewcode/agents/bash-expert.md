@@ -6,7 +6,7 @@ maxTurns: 60
 color: green
 tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch
 doc_type: llm
-version: "6.1.2"
+version: "6.1.3"
 content_version: "6.0.0"
 generated_by: "brewcode"
 last_updated: "2026-08-16"

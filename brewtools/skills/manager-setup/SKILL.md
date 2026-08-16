@@ -19,7 +19,7 @@ model: sonnet
 >     - `++rr` → Regression Review discipline (`review-regression`) — after each significant phase: no regression + project standard + correctness; two-phase review→double-check→fix; final cross-review at task end. Tested before `++r`.
 >     - `++r`  → Review discipline (`review-double`) — two-phase multi-agent review→double-check→fix after each significant change; codeword-only (no ambient/wall injection).
 >     - When the HARD wall is ON, the Manager (full) block is ALSO auto-injected on EVERY turn — no codeword needed. Codewords and wall injection are independent.
-> 2. **HARD wall — opt-in, this skill only, PER-PROJECT, INSTALLED-INTO-THE-PROJECT, persistent.** The wall is **NOT** a plugin hook. `install` does two things: it **installs** a self-contained `PreToolUse` guard into THIS project (copies the guard file + idempotently registers it in `<cwd>/.claude/settings.local.json`) and **arms** it by flipping `state.hard=true`. The registered guard then **physically denies** mutating tools (Write/Edit/Bash/WebFetch/...) in the **main session**, leaving only delegate/read/track. Subagents stay fully free (`agent_id` linchpin). `enable` re-arms an already-installed wall; `disable` only flips `state.hard=false` — registration stays, the guard no-ops. `uninstall` removes the registration and the copied guard; `purge` also deletes the state file and the prompt overrides. The wall lives in project state + project settings, defaults OFF, persists until `disable`/`uninstall`. There is **no codeword** for the wall.
+> 2. **HARD wall — opt-in, this skill only, PER-PROJECT, INSTALLED-INTO-THE-PROJECT, persistent.** The wall is **NOT** a plugin hook. `install` does two things: it **installs** a self-contained `PreToolUse` guard into THIS project (copies the guard file + idempotently registers it in `<cwd>/.claude/settings.local.json`) and, **only after the user has explicitly confirmed arming** (P1 arm-confirmation gate — an `AskUserQuestion` answered "Yes, arm it now", or explicit wording like "enable the hard wall"/"включи хард уолл" already in the user's own prompt; the bare verb `install`/`установи` and any autonomy phrasing like "decide everything yourself"/"автономно" NEVER count as confirmation), **arms** it by flipping `state.hard=true`. Declining still installs the guard, leaving `state.hard=false`. The registered guard then **physically denies** mutating tools (Write/Edit/Bash/WebFetch/...) in the **main session**, leaving only delegate/read/track. Subagents stay fully free (`agent_id` linchpin). `enable` re-arms an already-installed wall — same confirmation gate, decline aborts with nothing changed; `disable` only flips `state.hard=false` — registration stays, the guard no-ops. `uninstall` removes the registration and the copied guard; `purge` also deletes the state file and the prompt overrides. The wall lives in project state + project settings, defaults OFF, persists until `disable`/`uninstall`. There is **no codeword** for the wall.
 >
 > The two layers are orthogonal: the wall enforces delegation by removing hands; the codewords/prompt-text shape the Manager mindset. Either can be used alone.
 >
@@ -172,6 +172,11 @@ Actions, canonical order: `status`, `install`, `upgrade`, `enable`, `disable`, `
 
 > `on` / `off` / `reset` / `setup` / `remove` are REMOVED as command words. `on` and `off` survive only as free-text synonyms routed to `enable` / `disable` above; `reset` routes to `purge`. Never print them as commands.
 
+> **Arming is never automatic.** `install`, `enable`, and `hard-one-shot` are the only actions that can
+> write `state.hard=true`. Resolving the action (even from an explicit keyword like `install`, or
+> autonomy phrasing like "autonomous, decide everything yourself"/"автономно выбирай сам") is NOT
+> confirmation to arm — that confirmation is a separate, mandatory P1 gate. See P1 below.
+
 Prompt-text override scope (ONLY for `edit`/`purge`): default = `project`. `--scope global` OR `глобально` / `globally` → `global`. This scope does NOT apply to `install`/`upgrade`/`enable`/`disable`/`uninstall`/`level` (those are project-only).
 
 ---
@@ -186,6 +191,28 @@ If the action is ambiguous or signals conflict (e.g. enable + disable, a task th
 
 > Distinguish carefully: `hard-one-shot` (task + "в хард режиме"/"in hard mode") flips the wall and auto-reverts; `manager-run` (task + "от роли менеджера"/"as manager") never touches the wall, discipline by prompt only. If both/neither marker is present and a task exists, ask.
 
+**Arm-confirmation gate (unconditional — not only on ambiguity).** `install`, `enable`, and
+`hard-one-shot` are the only actions that can write `state.hard=true`. Before P2 runs any of them,
+check whether the user's OWN prompt already carries EXPLICIT confirming wording: the words "hard
+wall" / "хард уолл" / "стену" TOGETHER with an enable/arm verb ("enable"/"arm"/"включи"/"заarmи"),
+e.g. "enable the hard wall", "arm the wall", "включи Hard Wall", "включи хард уолл", "заarmи стену".
+The bare skill verb alone (`install`/`установи`/`enable`/`включи` with no "wall" wording) does
+**not** count, and no autonomy-permission phrasing ever counts ("autonomous, decide everything
+yourself", "автономно", "выбирай сам" — these NEVER satisfy the gate). If explicit wording is
+present, treat the arm as already confirmed and skip the question. Otherwise ask exactly ONE
+`AskUserQuestion` before P2:
+- `install`: "Arm the HARD wall in this project now? It will block Write/Edit/Bash in the MAIN
+  session (subagents stay free) until disabled." — options `Yes, arm it now` / `No, just install
+  (stay disarmed)`.
+- `enable` / `hard-one-shot`: the same question, options `Yes, arm it now` / `No, cancel`.
+
+Record the outcome as `ARM` (`true`/`false`) for P2:
+- `install` proceeds either way — it always copies the guard and registers the hook; `ARM` only
+  decides whether `state.hard` is written `true` or `false`. `ARM=false` → report "installed but
+  NOT armed — run `enable` (or confirm next time) to arm it."
+- `enable` / `hard-one-shot`: `ARM=false` aborts the whole action before running anything — do not
+  touch `state.hard`, report plainly that nothing changed.
+
 ---
 
 ## P2: Execute
@@ -198,8 +225,8 @@ Print the `## Prompt contract` PLAN block first — INPUT/MODE from P0, SCOPE na
 
 ### install  (INSTALL + ARM the HARD wall — project only)
 
-`install` is a five-step sequence: (1) arm state, (2) copy the guard into the project, (3) idempotently register it in `settings.local.json`, (4) turn the task-graph tools on in that same file, (5) report whether a `/reload` is needed. All five run in ONE node Bash block so the registration is atomic and self-contained. The block:
-- arms `state.hard=true` via `writeState('project', {hard:true})`,
+`install` is a five-step sequence: (1) set arm state per the P1 confirm gate (`ARM`), (2) copy the guard into the project, (3) idempotently register it in `settings.local.json`, (4) turn the task-graph tools on in that same file, (5) report whether a `/reload` is needed. All five run in ONE node Bash block so the registration is atomic and self-contained. **`ARM` (`true`/`false`) is resolved by the P1 arm-confirmation gate — substitute it into the block below before running, same as `LEVEL` in the `level` action.** The block:
+- sets `state.hard = (ARM === 'true')` via `writeState('project', {hard:arm})` — arms only when P1 confirmed,
 - copies `$BT_ROOT/hooks/hardmode-guard.mjs` → `<cwd>/.claude/brewtools/manager/hardmode-guard.mjs` **and** `$BT_ROOT/hooks/lib/manager-state.mjs` → `<cwd>/.claude/brewtools/manager/manager-state.mjs` (both overwritten on EVERY `install`, so plugin updates propagate; the second one is the off-switch CLI),
 - read-merge-atomic-writes `<cwd>/.claude/settings.local.json`, adding a `PreToolUse` matcher `"*"` entry that runs `node <ABS copied-guard path>` tagged `brewtools-manager-guard`, but ONLY if no entry already points at the manager guard (idempotent — running twice = ONE entry),
 - in that SAME merge sets `env.CLAUDE_CODE_ENABLE_TODO_TOOLS = "1"` when Claude Code is >= 2.1.233 — creating the `env` object if absent, preserving every other key. This is unconditional and never asks: from 2.1.233 `TaskCreate`/`TaskUpdate`/`TaskGet`/`TaskList` are gated OFF by default, and the manager framework has no task graph without them. Below 2.1.233 the var does nothing and the tools are on anyway, so the write is skipped and the block says so,
@@ -214,10 +241,12 @@ test -f "$BT_ROOT/hooks/hardmode-guard.mjs" || { echo "❌ BT_ROOT invalid: $BT_
 ROOT=$(if [ -n "$CLAUDE_PROJECT_DIR" ] && [ -d "$CLAUDE_PROJECT_DIR" ]; then printf %s "$CLAUDE_PROJECT_DIR"; elif r=$(git rev-parse --show-toplevel 2>/dev/null) && [ -n "$r" ]; then printf %s "$r"; else d=$PWD; while [ "$d" != "/" ]; do if [ -d "$d/.git" ] || [ -d "$d/.claude" ]; then printf %s "$d"; break; fi; d=$(dirname "$d"); done; fi)
 [ -n "$ROOT" ] || { echo "❌ cannot resolve project root — looked for CLAUDE_PROJECT_DIR, git toplevel, then .git/.claude above $PWD; nothing written"; exit 1; }
 CCVER=$(claude --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
+ARM=<true|false>
 node --input-type=module -e "
 import {writeState} from '${BT_ROOT}/hooks/lib/manager-state.mjs';
 import fs from 'node:fs'; import path from 'node:path';
 const cwd = '${ROOT}';
+const arm = '${ARM}' === 'true';
 const src = '${BT_ROOT}/hooks/hardmode-guard.mjs';
 const dir = path.join(cwd, '.claude', 'brewtools', 'manager');
 const guard = path.join(dir, 'hardmode-guard.mjs');
@@ -232,8 +261,8 @@ const todoToolsGated = geVersion(ccVer, [2,1,233]);
 const todoTools = todoToolsGated ? 'enabled (CC ' + ccVer + ')'
   : ccVer ? 'skipped — CC ' + ccVer + ' predates the 2.1.233 gate, task tools are on by default'
   : 'skipped — could not read the Claude Code version; on 2.1.233+ set env.CLAUDE_CODE_ENABLE_TODO_TOOLS=1 by hand';
-// 1. arm
-await writeState('project', {hard:true}, cwd);
+// 1. arm only if P1 confirmed
+await writeState('project', {hard:arm}, cwd);
 // 2. copy guard + off-switch CLI (overwrite each install)
 fs.mkdirSync(dir, {recursive:true});
 fs.copyFileSync(src, guard);
@@ -271,8 +300,8 @@ try {
   fs.writeFileSync(tmp, JSON.stringify(cfg, null, 2) + '\n', 'utf8');
   fs.renameSync(tmp, settings);
 } finally { fs.rmSync(lock, {recursive:true, force:true}); }
-console.log(JSON.stringify({armed:true, guard, helper, settings, newlyRegistered, todoTools, root:cwd}));
-" && echo "✅ wall installed + armed" || echo "❌ FAILED install wall"
+console.log(JSON.stringify({armed:arm, guard, helper, settings, newlyRegistered, todoTools, root:cwd}));
+" && echo "✅ wall install step done (see armed field above)" || echo "❌ FAILED install wall"
 ```
 
 > **Root, lock, backup — the three invariants every settings-writing block here shares.**
@@ -286,9 +315,10 @@ console.log(JSON.stringify({armed:true, guard, helper, settings, newlyRegistered
 > ABORTS before anything is staged — a malformed settings file is never "the file is empty".
 
 After the block:
-- Tell the user the exit command verbatim, with the real absolute path: `node <ABS project root>/.claude/brewtools/manager/manager-state.mjs set hard=false` — or just `/brewtools:manager-setup disable`, which runs exactly that.
+- If `armed:true` → tell the user the exit command verbatim, with the real absolute path: `node <ABS project root>/.claude/brewtools/manager/manager-state.mjs set hard=false` — or just `/brewtools:manager-setup disable`, which runs exactly that.
+- If `armed:false` → tell the user plainly: **installed but NOT armed** — the guard is in place but `state.hard=false`; run `/brewtools:manager-setup enable` (or answer "Yes, arm it now" next time) to arm it.
 - If `newlyRegistered:true` → tell the user verbatim: `Hook installed in .claude/settings.local.json — run /reload (or restart the session) for the wall to take effect.`
-- If `newlyRegistered:false` → the entry already existed; the state flip alone armed the wall — no reload needed.
+- If `newlyRegistered:false` → the entry already existed; a reload is only needed if `armed:true` just flipped a previously-disarmed state.
 - Report `todoTools` in one line: `enabled` → say `TaskCreate/TaskUpdate/TaskGet/TaskList enabled via env.CLAUDE_CODE_ENABLE_TODO_TOOLS in .claude/settings.local.json`; `skipped` → print the reason verbatim and move on.
 
 > The command in the registered entry uses an ABSOLUTE path to the copied guard and a `# brewtools-manager-guard` tag comment so `uninstall` can find it. Scope is always `project` — there is no global wall, never pass `'global'`.
@@ -386,6 +416,11 @@ console.log(JSON.stringify({guardReplaced:true, guard, newlyRegistered, todoTool
 Surface the `/reload` note only when `newlyRegistered:true`. Report `todoTools` in one line the same way `install` does — an old project that predates the key gets it backfilled here.
 
 ### enable  (ARM an installed wall — state flip only)
+
+**Gated by P1.** This block only runs if the P1 arm-confirmation gate resolved `ARM=true` (explicit
+wording in the user's prompt, or an `AskUserQuestion` answered "Yes, arm it now"). If P1 resolved
+`ARM=false`, do NOT run this block at all — report plainly that arming was declined and nothing
+changed, and stop.
 
 `enable` flips `state.hard=true` and nothing else. If the wall was never installed there is no guard to arm, so the block reports `notInstalled` instead of writing a state that no hook reads — route the user to `install`.
 
@@ -761,9 +796,13 @@ if (!fs.existsSync(dest)) {
 
 ### hard-one-shot  (`<task> в хард режиме` / `<task> in hard mode`)
 
-The user gave a REAL task plus a hard-mode marker. Run it once under the wall, then auto-revert:
+The user gave a REAL task plus a hard-mode marker. **Gated by P1**: this whole action only proceeds
+if the P1 arm-confirmation gate resolved `ARM=true` (explicit wording, or "Yes, arm it now"). If P1
+resolved `ARM=false`, abort the arm entirely — do not turn the wall on, do not run the task under
+it, report plainly that nothing changed (suggest `manager-run` if they want the task done without
+the wall). Otherwise, run it once under the wall, then auto-revert:
 
-1. **Turn the wall ON** — run the `install` block (it installs the guard + the off-switch CLI and arms), or the `enable` block if the wall is already installed.
+1. **Turn the wall ON** — run the `install` block with `ARM=true` (it installs the guard + the off-switch CLI and arms), or the `enable` block if the wall is already installed.
 2. **Act as Manager** for the task: resolve the `full` block, treat it as your operating contract, **build a TaskGraph** (`TaskCreate`/`TaskUpdate`) and **delegate** to the best-matching expert agent(s) in parallel where independent. **Never implement by hand** — and with the wall ON, mutating tools are denied anyway.
 3. **Auto-revert** — when the task is complete, **turn the wall back OFF** with the `disable` command, VERBATIM (the wall is armed at this point, so nothing else gets through): `node <ABS_CWD>/.claude/brewtools/manager/manager-state.mjs set hard=false`.
 

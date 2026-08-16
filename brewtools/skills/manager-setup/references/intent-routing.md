@@ -49,6 +49,11 @@ only in what they do to the wall:
 If a task is present but the marker is ambiguous (both or unclear), ask via
 AskUserQuestion: hard-one-shot vs manager-run.
 
+> Resolving `install`/`enable`/`hard-one-shot` here only picks the ACTION. None of them may write
+> `state.hard=true` without going through the separate P1 arm-confirmation gate in SKILL.md —
+> the bare verb (`install`/`enable`/`установи`/`включи`) and autonomy phrasing never confirm arming
+> on their own; see SKILL.md P1.
+
 ## Scope (prompt-text overrides ONLY)
 
 Flag `--scope global|project`, default `project`. Applies ONLY to `edit`/`purge`

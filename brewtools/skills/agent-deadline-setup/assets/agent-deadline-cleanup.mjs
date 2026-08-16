@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.1.2 content_version=5.6.0 generated_by=brewtools:agent-deadline-setup
+// brewcode-meta: version=6.1.3 content_version=5.6.0 generated_by=brewtools:agent-deadline-setup
 /**
  * agent-deadline — SubagentStop hook (self-contained, Node built-ins only).
  *
