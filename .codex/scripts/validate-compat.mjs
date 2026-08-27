@@ -17,7 +17,7 @@ const EXPECTED_SKILLS = {
 // supports in its source `argument-hint`; the Codex variant must document each one.
 const CANONICAL_MODES = ['status', 'install', 'upgrade', 'enable', 'disable', 'uninstall', 'purge'];
 const MANUAL_NATIVE_SKILLS = new Set([
-  'brewcode/convention', 'brewcode/rules', 'brewtools/manager-setup', 'brewtools/task-board-setup',
+  'brewcode/convention', 'brewcode/rules', 'brewcode/teams-setup', 'brewtools/manager-setup', 'brewtools/task-board-setup',
   'brewtools/think-short-setup'
 ]);
 const errors = [];

@@ -94,7 +94,7 @@ optimize | resume`; `/brewcode:teams-setup` keeps a `[name]` positional after th
 |-------|---------|
 | [`/brewcode:setup-status`](skills/setup-status/README.md) | Read-only cross-plugin dashboard: which setup skills are installed, stale, partial or missing here, with the exact command to run for each. Runs no setup itself |
 | [`/brewcode:superreview-setup`](skills/superreview-setup/README.md) | Generate a project-tailored deep-review skill: `QUICK` (default, `intent-guard` + mechanical gates) or `EXTENDED` (adds domain-expert fan-out, scope discipline, adversarial validation) depth, read from your prompt |
-| [`/brewcode:teams-setup`](skills/teams-setup/README.md) | Dynamic agent team creation, management, and performance tracking -- every team also gets a fixed review-only `intent-guard` member (not counted in team size) |
+| [`/brewcode:teams-setup`](skills/teams-setup/README.md) | Dynamic agent team creation, management, and tracking. New teams get one review-only `intent-guard`; upgrades preserve a legacy roster with none instead of adding it |
 | [`/brewcode:semble-setup`](skills/semble-setup/README.md) | Semantic code search setup: installs the pinned semble_code MCP, shared content-variant cache, semble-first rule + hooks, agent migration |
 | [`/brewcode:convention`](skills/convention/README.md) | Extract etalon classes, patterns, architecture into convention docs and rules |
 | [`/brewcode:rules`](skills/rules/README.md) | Prompt-driven rules management: status, create, improve, review |
@@ -123,9 +123,18 @@ optimize | resume`; `/brewcode:teams-setup` keeps a `[name]` positional after th
 | [bash-expert](agents/bash-expert.md) | inherit | Creates sh/bash scripts for Mac/Linux |
 | bc-rules-organizer | haiku | Internal: spawned by /brewcode:rules |
 
-> **No generic agents:** brewcode ships specialists only. Implementation, testing, review and architecture work goes to project-specific agents in `.claude/agents/` — generate them with `/brewcode:teams-setup install` (5-20 domain agents with self-selection protocol and performance tracking, plus one fixed review-only `intent-guard`).
+> **No generic agents:** brewcode ships specialists only. Implementation, testing, review and architecture
+> work goes to project-specific agents generated with `/brewcode:teams-setup install`. New teams add exactly
+> one review-only `intent-guard` outside the 5-20 domain count. Existing teams without that role retain an
+> explicit `intent_guard_policy=required|legacy-absent`: new teams use `required`, while upgrade preserves
+> `legacy-absent` and never adds the role.
 
-> **Scope guard:** every agent carries a `## Scope guard` -- if a task exceeds one bounded unit (one deliverable, ~5 files), the agent stops and proposes a split instead of running for an hour.
+> **Generated profiles:** shared acceptance, routing, tracing, return, scope-fit and colleague rules live
+> once in `team.md`. Each domain agent contains exactly six ordered sections: Mission, Owned surfaces,
+> Exclusions, Must-load references, Unique invariants and Unique verification. Claude Code discovers
+> `.claude/agents/*.md`; Codex uses native `.codex/agents/*.toml`, with no YAML-in-TOML guidance. Project
+> Dusk deliberately remains 13 members: `task-tracker` is not a team member and
+> `Intent guard: legacy-absent` means no `intent-guard` row or profile.
 
 ## Architecture
 

@@ -1,6 +1,6 @@
 # Teams
 
-Create and manage dynamic teams of domain-specific agents with a tracking framework. Analyzes your project, proposes 5-20 specialized agents, creates them, and sets up performance tracking. Every team also gets one fixed review-only member, `intent-guard`.
+Create and manage dynamic teams of domain-specific agents with a tracking framework. The skill analyzes your project, proposes 5-20 specialized agents, creates them, and sets up performance tracking. A new team also gets exactly one review-only `intent-guard`; an upgraded legacy team with none stays that way.
 
 ## Quick Start
 
@@ -28,7 +28,7 @@ The verb always comes first and the optional `<name>` after it. That parser guar
 
 `disable` is a rename, not a deletion — the roster rows stay in `team.md` with `Status: disabled`, and `verify-team.sh` reports `DISABLED` per parked member and still exits PASS. `enable` puts it all back. Both take effect for the NEXT session: agent discovery is read at session start.
 
-`purge` keeps exactly one thing: `.codex/agents/intent-guard.toml`, shared with `$brewcode:superreview-setup`. It removes both `<agent>.toml` and `<agent>.toml.disabled`, so purging a disabled team leaves nothing behind.
+`purge` removes both `<agent>.toml` and `<agent>.toml.disabled`, so purging a disabled team leaves no owned domain profile behind. When `Intent guard` is `required`, it keeps `.codex/agents/intent-guard.toml` because that file is shared with `$brewcode:superreview-setup`; `legacy-absent` has no guard to keep.
 
 ## Examples
 
@@ -83,7 +83,7 @@ After `$brewcode:teams-setup install my-team`:
   agents/
     agent-one.md          # Domain agents (5-20 depending on variant)
     agent-two.md
-    intent-guard.toml       # Fixed review-only member, every team, not counted
+    intent-guard.toml       # One review-only member for policy `required`; not counted
   teams/
     my-team/
       team.md             # Roster: agent list, domains, missions, status
@@ -91,11 +91,20 @@ After `$brewcode:teams-setup install my-team`:
       trace-ops.sh        # Tracer, copied from the plugin at install -- agents call THIS path
 ```
 
+`team.md` stores logical `intent_guard_policy=required|legacy-absent` in its `Intent guard` field.
+`required` means the roster contains exactly one `intent-guard` row. `legacy-absent` means it contains
+zero such rows; upgrade preserves that state and never creates the role. New installs default to
+`required`.
+
+Codex domain profiles are Markdown files under `.codex/agents/`. The Codex projection uses native
+TOML files under `.codex/agents/`; it carries no YAML-in-TOML guidance.
+
 ## How Agents Work
 
-Created agents follow the **sub-agent task Acceptance Protocol** -- they self-select tasks based on domain fit, record acceptance/refusal in `trace.jsonl`, and log issues and insights as they work.
-
-Every generated domain agent is also born with a **Return Contract**: verdict first, <=30 lines, `path:line`, no file bodies, no command output, no logs, no preamble -- bulk material goes to `.codex/reports/` and only the path comes back. It holds whether or not `$brewtools:agent-return-setup` is installed; the guard only adds mechanical thresholds. `verify-team.sh` warns on an older agent that lacks the section, and `upgrade` re-adds it.
+Created agents load `team.md`, whose single **Shared Agent Contract** owns acceptance, routing, tracing,
+return, scope-fit and colleague rules. Domain profiles do not repeat those contracts. Their bodies have
+exactly six ordered headings: `Mission`, `Owned surfaces`, `Exclusions`, `Must-load references`, `Unique
+invariants`, and `Unique verification`.
 
 They write through the project-local copy of the tracer:
 
@@ -125,7 +134,7 @@ $brewcode:teams-setup install my-project
     |
     v
 [C2] Team Proposal ------ 3 variants + user confirmation
-                          (+ intent-guard, fixed, not counted)
+                          (+ one intent-guard for new teams, not counted)
     |
     v
 [C2.5] Model Selection -- high-reasoning model / balanced model / fast model / mixed (domain agents only)
@@ -134,7 +143,7 @@ $brewcode:teams-setup install my-project
 [C3] Agent Creation ----- agent-creator x N (batches of 3-4)
     |
     v
-[C3-IG] intent-guard ---- generate.sh emit-agent (create or reuse), then adapt if created
+[C3-IG] intent-guard ---- required: emit/reuse; legacy-absent: do nothing
     |
     v
 [C4] Framework Setup ---- team.md + trace.jsonl + trace-ops.sh + verification
@@ -171,22 +180,32 @@ After agent creation, a quality pipeline validates the team:
 
 > Skip with `--skip-review`. Run separately: `$brewcode:teams-setup upgrade <name> --review`
 
-> `intent-guard` is never used as a reviewer in this pipeline, and it is judged by different criteria than domain agents: placeholders resolved, template header stripped, frontmatter untouched (short review-only description, read-only tools). "Missing domain sections" is a false positive for it.
+> When policy is `required`, `intent-guard` is not a reviewer in this pipeline and is judged by its own
+> review-only contract. The six-heading domain-profile gate does not apply to it. Under `legacy-absent`,
+> there is no guard to review.
 
-## intent-guard (always in the team)
+## intent-guard policy
 
-Every team gets `intent-guard` in addition to its domain agents. It is an **anti-drift check**: it compares what was **ASKED** (the original request, ticket, spec, plan, project policy) against what was **DELIVERED**, and reports the delta.
+`team.md` has exactly one `Intent guard` policy field:
+
+| Policy | Roster contract | Upgrade behavior |
+|--------|-----------------|------------------|
+| `required` | Exactly one review-only `intent-guard` row, outside the domain-agent count | Preserve the row; never duplicate it |
+| `legacy-absent` | Zero `intent-guard` rows | Preserve absence; never create the role |
+
+New installs use `required`. The role is an **anti-drift check**: it compares what was **ASKED** (the
+original request, ticket, spec, plan, project policy) against what was **DELIVERED**, and reports the delta.
 
 | Property | Value |
 |----------|-------|
-| Counted in the 5 / 10-12 / 15-20 roster? | No -- it is outside the domain-agent count and cannot be dropped |
+| Counted in the 5 / 10-12 / 15-20 roster? | No -- when required, it is outside the domain-agent count |
 | Tools | Read-only (`Read`, `Glob`, `Grep`, `Bash`). Never edits, builds, or runs tests |
 | Model | `balanced model`, fixed by its template -- not affected by the C2.5 model choice |
 | Invocation | Explicit, by name, during review only -- never during development, never an implementation owner |
 | Source | Emitted by `skills/superreview-setup/scripts/generate.sh emit-agent` from the shared template -- the single writer of this file, used by both skills |
 | Output | Verdict `ALIGNED` / `MINOR DRIFT` / `MAJOR DRIFT` plus <=10 findings, each with ASKED / SOURCE+tier / DELIVERED evidence / severity / minimal correction |
 
-**Single writer (idempotent):** `teams` never authors this file. It runs
+**Single writer (idempotent, `required` only):** `teams` never authors this file. It runs
 `superreview-setup/scripts/generate.sh emit-agent`, which creates it from the shared template or reuses an
 existing one and prints `INTENT_GUARD: CREATED|REUSE|MIGRATED <path>`. On `REUSE` -- typically because
 `$brewcode:superreview-setup` ran first -- the file is left exactly as is and only the `team.md` roster row is
@@ -196,14 +215,16 @@ invariants, drift examples, evidence commands) and touches nothing else -- front
 as emitted. Both skills therefore converge on one shared file produced by one pipeline, never two
 variants.
 
-`intent-guard` is also excluded from `upgrade` and `uninstall` agent pruning (enforced in the cleanup flow
-itself, Step 3, including a refusal if it is named explicitly): it does not write trace entries, so zero
-activity is its normal state, not a reason to delete it. Teams created before `intent-guard` existed are
-not broken by this -- `verify-team.sh` only WARNs, with the command to add it.
+When policy is `required`, `intent-guard` is excluded from `upgrade` and `uninstall` pruning. It does not
+write trace entries, so zero activity is normal. Teams created before the role existed can be upgraded
+without it: the migration writes `legacy-absent`, retains zero rows, and does not emit a profile.
+
+Project Dusk is the compatibility baseline for this path: its roster stays at 13 members;
+`task-tracker` remains a non-member owner, and `Intent guard: legacy-absent` keeps `intent-guard` absent.
 
 ## sub-agent task Acceptance Protocol
 
-Each agent follows a 3-step self-selection before accepting a task:
+The shared contract in `team.md` gives every domain agent the same 3-step self-selection before accepting a task:
 
 | # | Check | Question | If No |
 |---|-------|----------|-------|
@@ -228,7 +249,9 @@ When other skills (convention, superreview, e2e) spawn agents, they check for te
 
 > If a team agent refuses a task (sub-agent task Acceptance Protocol), the skill re-delegates to the next priority level. Max 2 retries before falling back to system agents.
 
-> `intent-guard` is outside this resolution chain -- it is never selected as an implementation or review owner by domain fit. It runs only when a review flow invokes it explicitly by name.
+> Under `required`, `intent-guard` is outside this resolution chain -- it is never selected as an
+> implementation or review owner by domain fit and runs only when a review flow invokes it explicitly.
+> Under `legacy-absent`, there is no role to resolve.
 
 ## Related Skills
 

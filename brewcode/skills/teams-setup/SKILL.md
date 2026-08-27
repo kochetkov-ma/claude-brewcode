@@ -85,6 +85,12 @@ Output: `MODE:`, `TEAM_NAME:`, `PROMPT:` (optional), plus the artifact-metadata 
 > `.claude/agents/intent-guard.md` is the ONE exception: `generate.sh emit-agent` stamps it with
 > `generated_by: brewcode:superreview-setup`, and teams never touches those keys.
 
+Resolve `INTENT_GUARD_POLICY` before a write: a new team defaults to `required`; an existing `team.md`
+with `|Intent guard|required|` or `|Intent guard|legacy-absent|` keeps that exact value. When the row
+predates this field, presence of an `intent-guard` roster member migrates to `required`; absence migrates
+to `legacy-absent`. These are the only values. `required` requires the fixed review-only row;
+`legacy-absent` forbids that row and MUST NOT add the role during upgrade.
+
 `MODE` is one of the canonical seven, in this order: `status | install | upgrade | enable | disable |
 uninstall | purge`. On any `ERROR:` line: report it verbatim and **STOP**. Never guess a mode, and
 never treat a canonical verb as a team name — `install enable` creates a team NAMED `enable`, so the
@@ -94,8 +100,9 @@ verb always comes first and the optional `[name]` positional after it.
 > `.claude/agents/<name>.md`. `disable` renames each member to `<name>.md.disabled`; `enable` renames
 > it back. The file body, `team.md`, `trace.jsonl`, `trace-archive.jsonl` and the cursor are untouched
 > either way, so the toggle is fully reversible and loses no configuration and no history. It is NOT
-> an uninstall: nothing is deleted. `intent-guard` is never parked — it is shared with
-> `/brewcode:superreview-setup`, exactly as in UNINSTALL and PURGE.
+> an uninstall: nothing is deleted. Under `required`, `intent-guard` is never parked — it is shared
+> with `/brewcode:superreview-setup`, exactly as in UNINSTALL and PURGE. Under `legacy-absent`, no
+> guard file or roster row is introduced.
 
 ---
 
@@ -170,7 +177,8 @@ Spawn 3-5 Explore agents in ONE message via Task tool:
 
 All via `Task(subagent_type="Explore")`. Consolidate into single analysis document.
 
-**Also harvest the intent-guard facts** (agent #1 and #4 cover most of these; add explicit asks to their prompts).
+**For the new team's default `required` policy, also harvest the intent-guard facts** (agent #1 and #4
+cover most of these; add explicit asks to their prompts).
 These fill the placeholders of the shared `intent-guard.md.template` in C3 — an unharvested fact must be recorded
 as `none` / `not present in this project`, never invented:
 
@@ -189,10 +197,9 @@ as `none` / `not present in this project`, never invented:
 
 Based on analysis + PROMPT (if provided), propose 3 variants via AskUserQuestion.
 
-**`intent-guard` is in EVERY team, always, and is NOT one of the counted slots.** It is a review-only
-anti-drift check (asked-vs-delivered), not a domain agent, so the 5 / 10-12 / 15-20 counts describe
-DOMAIN agents only. Show it as a fixed row in every variant table, never as an option the user picks
-and never as something the user can drop:
+New installs use `INTENT_GUARD_POLICY=required`: `intent-guard` is a fixed review-only anti-drift
+member (asked-vs-delivered), outside the domain-agent count. The 5 / 10-12 / 15-20 counts describe
+DOMAIN agents only. Show it as fixed in every new-install variant:
 
 ```
 Fixed member (every variant, not counted):
@@ -211,8 +218,9 @@ Maximum (15-20 domain agents + intent-guard):
 
 Options: "Minimal (5)" | "Balanced (recommended)" | "Maximum (15-20)" | "Custom -- I'll specify"
 
-If "Custom" -- second AskUserQuestion for free input; intent-guard stays regardless of what the user
-specifies. Final confirmation of agent list before proceeding.
+If "Custom" -- second AskUserQuestion for free input; the new-install `required` policy stays fixed.
+Final confirmation of agent list before proceeding. Existing `legacy-absent` teams are handled only by
+UPGRADE and retain their explicit policy without adding `intent-guard`.
 
 > If `.claude/agents/intent-guard.md` already exists (e.g. `/brewcode:superreview-setup` created it),
 > label the fixed row `reuse (already present)` — C3-IG's `emit-agent` call will report `REUSE` and
@@ -263,8 +271,9 @@ may leave a partial roster, but no discoverable compact profile may ever point a
 
 1. Create `.claude/teams/{TEAM_NAME}/`.
 2. Read `${CLAUDE_SKILL_DIR}/references/framework-files.md`; write `team.md` with substituted metadata,
-   the byte-faithful `## Shared Agent Contract`, the `## Agents` header, and only the fixed
-   `intent-guard` row. Do not add domain-agent rows yet; C4 finalizes the successfully created roster.
+   `INTENT_GUARD_POLICY=required`, the byte-faithful `## Shared Agent Contract`, the `## Agents` header,
+   and only the required fixed `intent-guard` row. Do not add domain-agent rows yet; C4 finalizes the
+   successfully created roster.
 3. Create empty `trace.jsonl`; copy the project-local `trace-ops.sh` and make it executable.
 4. Gate before C3: `team.md` exists, contains `## Shared Agent Contract`, the project-local tracer path,
    and `A task traced \`took\` ends with exactly one terminal track: \`completed\` or \`failed\`.`
@@ -318,7 +327,7 @@ strip shared rules from a profile until its target `team.md` passes the gate.
    > is deliberately short and review-only; an optimizer pass may reword, lengthen or reflow it into
    > a normal domain-agent description, which would make it compete for auto-activation. Excluded.
 
-#### C3-IG: intent-guard (always, exactly once)
+#### C3-IG: intent-guard (`required` policy, exactly once)
 
 `.claude/agents/intent-guard.md` has exactly ONE writer: `generate.sh emit-agent`, shared with
 `/brewcode:superreview-setup`. Never author this file from the template yourself, and never spawn an agent
@@ -431,7 +440,8 @@ the block) and `generate.sh validate` will report the agent `UNTAILORED`.
 > **STOP if not** -- re-spawn Step 3 once with the offending lines named.
 
 Report `intent-guard: created (adapted)` or `intent-guard: reused (already present)` and continue to
-C4. Either way the file gets its `team.md` row.
+C4. Either way a `required` team gets its `team.md` row. This phase is skipped for an existing
+`legacy-absent` team; never emit or adapt the agent merely to upgrade that team.
 
 ### C4: Roster Finalization + Verification
 
@@ -439,8 +449,9 @@ C4. Either way the file gets its `team.md` row.
    never finalize discoverable agents against an absent authority.
 
 2. Finalize `team.md` from `${CLAUDE_SKILL_DIR}/references/framework-files.md`: preserve the bootstrapped
-   Shared Agent Contract byte-faithful, add one domain row per successfully created agent, and retain the
-   fixed `intent-guard` row. Then `touch trace.jsonl`. No confirmed-but-unwritten agent enters the roster.
+   Shared Agent Contract byte-faithful, add one compact domain row per successfully created agent, and
+   apply the explicit intent policy (`required` retains the fixed row; `legacy-absent` has no row). Then
+   `touch trace.jsonl`. No confirmed-but-unwritten agent enters the roster.
 
    Then install the **project-local tracer** the generated agents call. A `.claude/agents/*.md` file
    is not plugin-owned, so `${CLAUDE_PLUGIN_ROOT}` is NOT substituted inside it and no
@@ -454,9 +465,10 @@ C4. Either way the file gets its `team.md` row.
    > UPGRADE misclassifies the whole roster as `Inactive`.
    > Re-copy it in UPGRADE too (`cp` is idempotent) so a team created by an older version gains it.
 
-   `team.md` MUST carry an `intent-guard` row (trailing `Kind` column = `review-only`, trailing
-   `Version` column = `PLUGIN_VERSION:`), whether it was created in C3-IG or reused. `Agents | {N}`
-   counts DOMAIN agents; note intent-guard separately.
+   `team.md` MUST carry `|Intent guard|required|` plus an `intent-guard` row (trailing `Kind` column =
+   `review-only`, trailing `Version` column = `PLUGIN_VERSION:`), whether C3-IG created or reused it.
+   Under `legacy-absent`, it MUST carry `|Intent guard|legacy-absent|` and no such row. `Agents | {N}`
+   counts DOMAIN agents only.
 
    The header table MUST carry these four rows, adjacent and in exactly this order, filled from the
    Phase 1 `PLUGIN_VERSION:` / `CONTENT_VERSION:` / `GENERATED_BY:` / `LAST_UPDATED:` lines:
@@ -469,6 +481,11 @@ C4. Either way the file gets its `team.md` row.
    ```
    No placeholder token may survive into the written file — a literal `{PLUGIN_VERSION}` in `team.md`
    means substitution never happened.
+
+   Keep roster `Domain`/`Mission` cells terse; agent profiles own detail. For up to 13 domain agents,
+   the complete written `team.md` (metadata + shared contract + every row) MUST be <=2800 characters,
+   i.e. `ceil(chars/4) <=700` estimated tokens. Measure the full substituted file, not the empty template;
+   if over, compress only roster wording without dropping members, columns, policy, or contract facts.
 
 3. Verify:
    ```bash
@@ -671,9 +688,11 @@ done; echo "OK"
 Before U2 analysis or any U4 agent write, read
 `${CLAUDE_SKILL_DIR}/references/framework-files.md` and upgrade `team.md` to the current shared contract.
 For a legacy file with no `## Shared Agent Contract`, insert the canonical block before `## Agents`,
-substituting `{TEAM_NAME}` only and preserving Created, roster rows, statuses, and history. If a shared
-block exists but is incomplete, replace that block from the canonical reference before proceeding.
-Re-copy `trace-ops.sh`, then run `verify-team.sh`.
+substituting `{TEAM_NAME}` only and preserving Created, roster rows, statuses, and history. Resolve and
+write the explicit `Intent guard` field first: an existing intent-guard roster row -> `required`; no row
+-> `legacy-absent`. Never synthesize the row on the latter path. If a shared block exists but is
+incomplete, replace that block from the canonical reference before proceeding. Re-copy `trace-ops.sh`,
+then run `verify-team.sh`.
 
 Legacy agent bodies remain byte-identical during this gate. **No agent may be tuned, regenerated, stripped,
 deleted, or spawned until the shared contract passes.** A legacy-profile warning is safe; a shared-contract
@@ -690,9 +709,10 @@ Filter post-cursor trace: `k=track` for task stats, `k=issue` for problems, `k=i
 | Underperforming | <30% success | AskUser: update or delete+create new |
 | Inactive | 0 records | AskUser: delete or keep |
 
-> `intent-guard` is EXCLUDED from this table. It does not trace and is invoked only during review, so
-> 0 records is its normal state, never grounds for deletion or tuning. UNINSTALL enforces the same
-> exclusion in `references/cleanup-flow.md` Step 3.
+> Under `required`, `intent-guard` is EXCLUDED from this table. It does not trace and is invoked only
+> during review, so 0 records is normal and never grounds for deletion or tuning. Under
+> `legacy-absent`, there is no member to analyze. UNINSTALL enforces the same exclusion in
+> `references/cleanup-flow.md` Step 3.
 
 ### U3: Present & Confirm
 
@@ -783,8 +803,9 @@ team, not a removed one. `uninstall`/`purge` delete; `disable` does not.
    ```bash
    bash "${CLAUDE_SKILL_DIR}/scripts/toggle-team.sh" "TEAM_NAME_HERE" disable --dry-run && echo "OK" || echo "FAILED"
    ```
-3. **ASK** using AskUserQuestion: "Disable team {TEAM_NAME}? {N} agent files are parked as
-   `.md.disabled` — nothing is deleted, `enable` restores them. `intent-guard` stays live."
+3. **ASK** using AskUserQuestion: "Disable team {TEAM_NAME}? {N} domain-agent files are parked as
+   `.md.disabled` — nothing is deleted, `enable` restores them. A required intent-guard stays live;
+   legacy-absent adds nothing."
    Options: "Yes, disable" | "Uninstall instead (deletes agents, keeps archive)" | "Cancel"
    - anything but "Yes, disable" -> switch to UNINSTALL or **STOP**
 4. Apply:
@@ -855,13 +876,14 @@ Format to write:
 ```markdown
 ## Teams
 
-Team: {TEAM_NAME} | Domain agents: {N} (+ `intent-guard`, review-only) | Status: active
+Team: {TEAM_NAME} | Domain agents: {N} | Intent guard: {required (review-only) | legacy-absent} | Status: active
 
 | Agent | Domain | Mission |
 |-------|--------|---------|
 
-`intent-guard` -- review-only anti-drift check (asked vs delivered). Shared with
-`/brewcode:superreview-setup`, invoked explicitly by name during review; never an implementation owner.
+When required, `intent-guard` is a review-only anti-drift check (asked vs delivered), shared with
+`/brewcode:superreview-setup`, invoked explicitly by name during review, and never an implementation
+owner. Under `legacy-absent`, do not add this paragraph or the role.
 
 Protocol: agents self-select tasks, trace in `.claude/teams/{TEAM_NAME}/trace.jsonl`.
 Manage: `/brewcode:teams-setup [status|install|upgrade|enable|disable|uninstall|purge] [name]`

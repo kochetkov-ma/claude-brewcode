@@ -73,12 +73,11 @@ echo "✅ Archived" || echo "❌ FAILED"
 
 ## Step 3: Agents Review
 
-> **`intent-guard` is EXCLUDED from this step — never list it, never offer it, never delete it.**
-> It is the team's fixed review-only member, shared with `/brewcode:superreview-setup`. It writes no trace
-> entries by design, so 0 tasks and "no activity" are its NORMAL state, not inactivity. Filter it out
-> of the inactive table BEFORE showing it, so "Delete all inactive" cannot reach it. If the user asks
-> for it by name anyway, refuse: answer that removing it breaks `verify-team.sh` for this team, and
-> keep the file. Its `team.md` row (`Kind` = `review-only`) also stays.
+Read logical `intent_guard_policy=required|legacy-absent` from the single `Intent guard` field in
+`team.md` before building the table. Under `required`,
+the roster has exactly one review-only `intent-guard`; exclude it from this step, never list/offer/delete
+it, and preserve its row. It writes no trace entries, so 0 tasks is normal. Under `legacy-absent`, the
+roster has zero such rows and cleanup must not create a profile or row. Upgrade never changes that policy.
 
 Show inactive/problematic agents (domain agents only):
 
@@ -106,7 +105,7 @@ AskUserQuestion:
 
 On delete:
 
-0. If `{name}` is `intent-guard` -> **STOP, do not delete.** Report it as protected and move on.
+0. If `{name}` is `intent-guard` under `required` -> **STOP, do not delete.** Report it as protected and move on. Under `legacy-absent`, seeing that name is a policy violation: delete nothing and report the inconsistent roster.
 0b. **Validate `{name}` as an agent id BEFORE any `rm`.** Roster values are interpolated into the delete
    path, so a row like `../../../outside/README` deletes a file outside the project. Same guard
    `toggle-team.sh`/`verify-team.sh` apply — run it, and on a non-zero exit report the row as a corrupt
@@ -169,9 +168,10 @@ Nothing is archived — the archive itself is part of what goes.
 ls -la ".claude/teams/{TEAM}" 2>/dev/null; du -sh ".claude/teams/{TEAM}" 2>/dev/null
 ```
 
-2. Delete each domain agent listed in `team.md` (`## Agents` table, `Kind` != `review-only`).
-   **`intent-guard` is skipped** — shared with `/brewcode:superreview-setup`; deleting it would break
-   an unrelated install. Report it as kept. **Every other `{name}` passes the Step 3 id guard first** —
+2. Delete each domain agent listed in `team.md` (`## Agents` table, `Kind` != `review-only`). Under
+   `required`, **`intent-guard` is skipped** because it is shared with `/brewcode:superreview-setup`;
+   report it as kept. Under `legacy-absent`, there is no row or profile to skip and purge must not add
+   one. **Every other `{name}` passes the Step 3 id guard first** —
    a roster value that is not `^[a-z0-9][a-z0-9-]*$` is a path, and purge would delete outside
    `.claude/agents/`; report such a row as corrupt and delete nothing for it. **Every `{name}` also passes
    the Step 3 ownership check (step 0c)** — purge is not a licence to take another team's agent with it:

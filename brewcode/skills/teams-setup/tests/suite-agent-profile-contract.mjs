@@ -31,6 +31,24 @@ const LEGACY_HEADINGS = [
 const SOURCE_CLIENT_DIR = ['.', 'claude'].join('');
 const SOURCE_TEAM_REF = `${SOURCE_CLIENT_DIR}/teams/{TEAM_NAME}/team.md`;
 const NATIVE_TEAM_REF = '.codex/teams/{TEAM_NAME}/team.md';
+const SOURCE_PLUGIN_ROOT = `${['CL', 'AUDE'].join('')}_PLUGIN_ROOT`;
+const SOURCE_PLUGIN_ROOT_NEGATION = `!=\`\${${SOURCE_PLUGIN_ROOT}}\` substitution`;
+const DUSK_ROSTER = [
+  ['game-designer', 'design', 'pillars'],
+  ['combat-dev', 'combat', 'loop'],
+  ['physics-dev', 'physics', 'Jolt'],
+  ['destruction-dev', 'destruct', 'fracture'],
+  ['scenario-dev', 'scenarios', 'lab'],
+  ['vfx-dev', 'VFX', 'impacts'],
+  ['texture-artist', 'materials', 'textures'],
+  ['modeller-3d', 'models', 'rigs'],
+  ['sound-designer', 'audio', 'SFX'],
+  ['feel-dev', 'feel', 'camera'],
+  ['qa-tester', 'QA', 'tests'],
+  ['docs-keeper', 'docs', 'sync'],
+  ['build-eng', 'build', 'toolchain'],
+];
+const DUSK_NON_MEMBERS = ['task-tracker', 'intent-guard'];
 
 let passed = 0;
 let failed = 0;
@@ -91,6 +109,37 @@ function section(text, start, end) {
   const a = text.indexOf(start);
   const b = text.indexOf(end, a + start.length);
   return text.slice(a, b < 0 ? text.length : b);
+}
+
+function rosterNames(team) {
+  return section(team, '## Agents', '\n## ')
+    .split('\n')
+    .filter((line) => /^\|[a-z0-9]/.test(line) && !line.startsWith('|Agent|'))
+    .map((line) => line.split('|')[1]);
+}
+
+function instantiateTeamTemplate(template, {
+  projectRoot,
+  roster,
+  policy,
+  version = '6.1.4',
+  contentVersion = '6.1.0',
+}) {
+  const intentRow = policy === 'required'
+    ? `|intent-guard|--|Anti-drift check: what was ASKED vs what was DELIVERED|active|2026-08-27|review-only|${version}|`
+    : '';
+  const domainRows = roster.map(([name, domain, mission]) =>
+    `|${name}|${domain}|${mission}|active|2026-08-27|domain|${version}|`).join('\n');
+  return `${template
+    .replaceAll('{TEAM_NAME}', 'dusk')
+    .replaceAll('{DATE}', '2026-08-27')
+    .replaceAll('{LAST_UPDATED}', '2026-08-27')
+    .replaceAll('{PLUGIN_VERSION}', version)
+    .replaceAll('{CONTENT_VERSION}', contentVersion)
+    .replaceAll('{N}', String(roster.length))
+    .replaceAll('{CWD}', projectRoot)
+    .replaceAll('{INTENT_GUARD_POLICY}', policy)
+    .replaceAll('{INTENT_GUARD_ROW}', [intentRow, domainRows].filter(Boolean).join('\n'))}\n`;
 }
 
 const repo = findRepoRoot(dirname(fileURLToPath(import.meta.url)));
@@ -182,6 +231,7 @@ const sharedSourceLiterals = [
   'no retry, Bash only',
   'versionless project-local',
   sourceTracePath,
+  SOURCE_PLUGIN_ROOT_NEGATION,
   'no `*_PLUGIN_ROOT` env',
   'plugin update/move/uninstall does not break it',
   '`took` / `refused` / `completed` / `failed`',
@@ -194,6 +244,7 @@ const sharedSourceLiterals = [
   '>~2500',
   '<=3 lines',
   '!=imagined load/speculative abstraction',
+  '10-user app !=lock-contention hardening',
   '!=replace them',
   '## Agents',
 ];
@@ -216,6 +267,60 @@ check(
   Math.ceil(canonicalTeam.length / 4) <= 700,
   true,
   'generated team.md fenced template is at most 700 estimated tokens',
+);
+check(
+  'shared.intentPolicyPlaceholder',
+  occurrences(canonicalTeam, '{INTENT_GUARD_POLICY}'),
+  1,
+  'team template carries exactly one explicit intent-guard policy field',
+);
+check(
+  'shared.intentRowPlaceholder',
+  occurrences(canonicalTeam, '{INTENT_GUARD_ROW}'),
+  1,
+  'team template carries exactly one policy-controlled intent-guard row slot',
+);
+
+const fullDuskTeam = instantiateTeamTemplate(canonicalTeam, {
+  projectRoot: '/Users/maximus/IdeaProjects/project-dusk',
+  roster: DUSK_ROSTER,
+  policy: 'legacy-absent',
+});
+check(
+  'shared.fullDuskRosterCount',
+  rosterNames(fullDuskTeam).length,
+  13,
+  'the representative full Dusk roster contains exactly 13 members',
+);
+check(
+  'shared.fullDuskRosterNames',
+  rosterNames(fullDuskTeam).join('|'),
+  DUSK_ROSTER.map(([name]) => name).join('|'),
+  'the full Dusk roster preserves the exact ordered member boundary',
+);
+check(
+  'shared.fullDuskNonMembers',
+  DUSK_NON_MEMBERS.filter((name) => rosterNames(fullDuskTeam).includes(name)).join('|'),
+  '',
+  'task-tracker and intent-guard stay outside the legacy-absent Dusk roster',
+);
+check(
+  'shared.fullDuskPolicy',
+  fullDuskTeam.includes('|Intent guard|legacy-absent|'),
+  true,
+  'the no-intent-guard roster carries an explicit legacy-absent policy',
+);
+check(
+  'shared.fullDuskCharsWithinCeiling',
+  fullDuskTeam.length <= 2800,
+  true,
+  'the complete 13-member Dusk team.md is at most 2800 characters',
+);
+check(
+  'shared.fullDuskTokensWithinCeiling',
+  Math.ceil(fullDuskTeam.length / 4) <= 700,
+  true,
+  'the complete 13-member Dusk team.md is at most 700 estimated tokens',
 );
 
 check(
@@ -263,7 +368,8 @@ check(
 
 for (const literal of sharedSourceLiterals) {
   const nativeLiteral = literal
-    .replaceAll(SOURCE_CLIENT_DIR, '.codex');
+    .replaceAll(SOURCE_CLIENT_DIR, '.codex')
+    .replaceAll(`\`\${${SOURCE_PLUGIN_ROOT}}\``, '`<plugin-root>`');
   check(
     `codex.sharedLiteral.${sharedSourceLiterals.indexOf(literal) + 1}`,
     projectedTeam.includes(nativeLiteral),
@@ -276,6 +382,23 @@ check(
   projectedTeam.length <= canonicalTeam.length,
   true,
   'Codex path projection does not grow the shared contract',
+);
+const fullNativeDuskTeam = instantiateTeamTemplate(projectedTeam, {
+  projectRoot: '/Users/maximus/IdeaProjects/project-dusk',
+  roster: DUSK_ROSTER,
+  policy: 'legacy-absent',
+});
+check(
+  'codex.fullDuskRosterNames',
+  rosterNames(fullNativeDuskTeam).join('|'),
+  DUSK_ROSTER.map(([name]) => name).join('|'),
+  'native Codex projection preserves the exact full Dusk member boundary',
+);
+check(
+  'codex.fullDuskTokensWithinCeiling',
+  Math.ceil(fullNativeDuskTeam.length / 4) <= 700,
+  true,
+  'native Codex full Dusk team remains at most 700 estimated tokens',
 );
 check(
   'codex.distributedTemplateParity',
@@ -332,6 +455,8 @@ check(
 const migration = section(canonicalSkill, '### U1b: Shared Contract Migration Gate', '### U2: Analyze Performance');
 for (const literal of [
   'insert the canonical block before `## Agents`',
+  'an existing intent-guard roster row -> `required`; no row',
+  '-> `legacy-absent`. Never synthesize the row on the latter path.',
   'Legacy agent bodies remain byte-identical during this gate.',
   '**No agent may be tuned, regenerated, stripped,',
   'until the shared contract passes.',
@@ -341,6 +466,20 @@ for (const literal of [
     migration.includes(literal),
     true,
     `legacy-upgrade ordering preserves ${JSON.stringify(literal)}`,
+  );
+}
+for (const literal of [
+  'a new team defaults to `required`',
+  'absence migrates\nto `legacy-absent`',
+  '`legacy-absent` forbids that row and MUST NOT add the role during upgrade',
+  'the complete written `team.md` (metadata + shared contract + every row) MUST be <=2800 characters',
+  '`ceil(chars/4) <=700` estimated tokens',
+]) {
+  check(
+    `policy.workflow.${literal.slice(0, 16)}`,
+    canonicalSkill.includes(literal),
+    true,
+    `generator workflow preserves ${JSON.stringify(literal)}`,
   );
 }
 
@@ -404,24 +543,19 @@ const pluginVersion = JSON.parse(readFileSync(
 )).version;
 const contentVersion = (/content_version=([0-9]+\.[0-9]+\.[0-9]+)/.exec(canonicalSkill) || [])[1];
 const today = '2026-08-27';
+const BUILD_ROSTER = [['build-eng', 'Build', 'deterministic builds']];
 
-function instantiateTeam(projectRoot) {
-  const intentRow = `| intent-guard | -- | Anti-drift check: what was ASKED vs what was DELIVERED | active | ${today} | review-only | ${pluginVersion} |`;
-  return `${canonicalTeam
-    .replaceAll('{TEAM_NAME}', 'dusk')
-    .replaceAll('{DATE}', today)
-    .replaceAll('{LAST_UPDATED}', today)
-    .replaceAll('{PLUGIN_VERSION}', pluginVersion)
-    .replaceAll('{CONTENT_VERSION}', contentVersion)
-    .replaceAll('{N}', '1')
-    .replaceAll('{CWD}', projectRoot)
-    .replace(intentRow, `${intentRow}\n| build-eng | Build | Own deterministic build surfaces | active | ${today} | domain | ${pluginVersion} |`)}\n`;
+function instantiateTeam(projectRoot, { policy = 'required', roster = BUILD_ROSTER } = {}) {
+  return instantiateTeamTemplate(canonicalTeam, {
+    projectRoot: '/Users/maximus/IdeaProjects/project-dusk', roster, policy, version: pluginVersion, contentVersion,
+  });
 }
 
-function agentFile({ body = representativeBody, frontmatterPadding = '' } = {}) {
+// BEGIN RUNTIME AGENT FIXTURES
+function agentFile({ name = 'build-eng', body = representativeBody, frontmatterPadding = '' } = {}) {
   return `---
-name: build-eng
-description: Build owner. Triggers: build, release, toolchain.
+name: ${name}
+description: Domain owner. Triggers: domain, review, verification.
 model: opus
 tools: Read, Bash
 ${frontmatterPadding}doc_type: llm
@@ -450,18 +584,28 @@ last_updated: "${today}"
 Review only.
 `;
 }
+// END RUNTIME AGENT FIXTURES
 
-function makeWorld({ teamText, agentText = agentFile(), intent = true } = {}) {
+function makeWorld({
+  teamText,
+  agentText,
+  policy = 'required',
+  roster = BUILD_ROSTER,
+  intent = policy === 'required',
+} = {}) {
   const world = mkdtempSync(join(tmpdir(), 'team-profile-contract-'));
   const teamDir = join(world, SOURCE_CLIENT_DIR, 'teams', 'dusk');
   const agentsDir = join(world, SOURCE_CLIENT_DIR, 'agents');
   mkdirSync(teamDir, { recursive: true });
   mkdirSync(agentsDir, { recursive: true });
-  writeFileSync(join(teamDir, 'team.md'), teamText ?? instantiateTeam(world));
+  writeFileSync(join(teamDir, 'team.md'), teamText ?? instantiateTeam(world, { policy, roster }));
   writeFileSync(join(teamDir, 'trace.jsonl'), '');
   writeFileSync(join(teamDir, 'trace-ops.sh'), '#!/bin/sh\nexit 0\n');
   chmodSync(join(teamDir, 'trace-ops.sh'), 0o755);
-  writeFileSync(join(agentsDir, 'build-eng.md'), agentText);
+  for (const [name] of roster) {
+    writeFileSync(join(agentsDir, `${name}.md`),
+      name === 'build-eng' && agentText ? agentText : agentFile({ name }));
+  }
   if (intent) writeFileSync(join(agentsDir, 'intent-guard.md'), intentGuardFile());
   return world;
 }
@@ -489,6 +633,117 @@ function removeWorld(world) {
 }
 
 {
+  const world = makeWorld({ policy: 'legacy-absent', roster: DUSK_ROSTER });
+  const result = runVerifier(world);
+  check('verifier.fullDuskLegacyAbsent.exit', result.status, 0,
+    'the full 13-member Dusk roster passes without adding intent-guard');
+  check('verifier.fullDuskLegacyAbsent.policy',
+    result.output.includes('CHECK: Intent guard policy (legacy-absent) ... OK'), true,
+    'the verifier accepts the explicit no-intent-guard policy');
+  check('verifier.fullDuskLegacyAbsent.memberChecks',
+    DUSK_ROSTER.every(([name]) => result.output.includes(`CHECK: agent ${name} ... OK`)), true,
+    'the verifier checks every exact Dusk member');
+  removeWorld(world);
+}
+
+{
+  const world = makeWorld({ policy: 'required', intent: false });
+  const teamPath = join(world, SOURCE_CLIENT_DIR, 'teams', 'dusk', 'team.md');
+  writeFileSync(teamPath, readFileSync(teamPath, 'utf8').replace(/^\|intent-guard\|.*\n/m, ''));
+  const result = runVerifier(world);
+  check('verifier.requiredMissing.exit', result.status, 1,
+    'required policy fails when the intent-guard row is absent');
+  check('verifier.requiredMissing.reason',
+    result.output.includes('policy required needs exactly one row; found 0'), true,
+    'required-policy failure names the missing row');
+  removeWorld(world);
+}
+
+{
+  const world = makeWorld({ policy: 'legacy-absent', intent: true });
+  const teamPath = join(world, SOURCE_CLIENT_DIR, 'teams', 'dusk', 'team.md');
+  const team = readFileSync(teamPath, 'utf8');
+  const forbiddenRow = `|intent-guard|--|Anti-drift check: what was ASKED vs what was DELIVERED|active|${today}|review-only|${pluginVersion}|`;
+  writeFileSync(teamPath, `${team.trim()}\n${forbiddenRow}\n`);
+  const result = runVerifier(world);
+  check('verifier.legacyAbsentRow.exit', result.status, 1,
+    'legacy-absent policy fails when an intent-guard row is introduced');
+  check('verifier.legacyAbsentRow.reason',
+    result.output.includes('policy legacy-absent requires zero rows; found 1'), true,
+    'legacy-absent failure names the forbidden roster expansion');
+  removeWorld(world);
+}
+
+{
+  const world = makeWorld();
+  const teamPath = join(world, SOURCE_CLIENT_DIR, 'teams', 'dusk', 'team.md');
+  writeFileSync(teamPath, readFileSync(teamPath, 'utf8').replace(
+    '|Intent guard|required|', '|Intent guard|optional|'));
+  const result = runVerifier(world);
+  check('verifier.invalidPolicy.exit', result.status, 1,
+    'an unsupported intent-guard policy fails');
+  check('verifier.invalidPolicy.reason',
+    result.output.includes("expected required or legacy-absent; found 'optional'"), true,
+    'the verifier enumerates the only valid policy values');
+  removeWorld(world);
+}
+
+{
+  const world = makeWorld();
+  const teamPath = join(world, SOURCE_CLIENT_DIR, 'teams', 'dusk', 'team.md');
+  writeFileSync(teamPath, `${readFileSync(teamPath, 'utf8')}${'x'.repeat(900)}\n`);
+  const result = runVerifier(world);
+  check('verifier.teamCeiling.exit', result.status, 1,
+    'an oversized fully substituted team.md fails');
+  check('verifier.teamCeiling.reason',
+    result.output.includes('maximum 2800 chars and 700 ceil(chars/4) tokens'), true,
+    'the runtime verifier names both complete-file ceilings');
+  removeWorld(world);
+}
+
+{
+  const world = makeWorld();
+  const teamPath = join(world, SOURCE_CLIENT_DIR, 'teams', 'dusk', 'team.md');
+  writeFileSync(teamPath, readFileSync(teamPath, 'utf8').replace('|Agents|1|', '|Agents|2|'));
+  const result = runVerifier(world);
+  check('verifier.agentCountMismatch.exit', result.status, 1,
+    'declared Agents count must equal unique domain rows');
+  check('verifier.agentCountMismatch.reason',
+    result.output.includes('declared 2, found 1 unique domain rows'), true,
+    'the mismatch reports declared and observed unique-domain counts');
+  removeWorld(world);
+}
+
+{
+  const world = makeWorld();
+  const teamPath = join(world, SOURCE_CLIENT_DIR, 'teams', 'dusk', 'team.md');
+  const duplicate = `|build-eng|Build|deterministic builds|active|${today}|domain|${pluginVersion}|\n`;
+  writeFileSync(teamPath, `${readFileSync(teamPath, 'utf8')}${duplicate}`);
+  const result = runVerifier(world);
+  check('verifier.duplicateDomain.exit', result.status, 1,
+    'duplicate domain roster names fail');
+  check('verifier.duplicateDomain.reason',
+    result.output.includes("duplicate roster name"), true,
+    'the verifier identifies duplicate roster identity');
+  removeWorld(world);
+}
+
+{
+  const world = makeWorld();
+  const teamPath = join(world, SOURCE_CLIENT_DIR, 'teams', 'dusk', 'team.md');
+  const duplicate = `|intent-guard|--|Anti-drift check: what was ASKED vs what was DELIVERED|active|${today}|review-only|${pluginVersion}|\n`;
+  writeFileSync(teamPath, `${readFileSync(teamPath, 'utf8')}${duplicate}`);
+  const result = runVerifier(world);
+  check('verifier.duplicateIntentGuard.exit', result.status, 1,
+    'required policy rejects duplicate intent-guard rows');
+  check('verifier.duplicateIntentGuard.reason',
+    result.output.includes('policy required needs exactly one row; found 2'), true,
+    'the verifier enforces exactly one review-only row');
+  removeWorld(world);
+}
+
+// BEGIN SOURCE FRONTMATTER BUDGET FIXTURE
+{
   const padding = `notes: "${'x'.repeat(5000)}"\n`;
   const world = makeWorld({ agentText: agentFile({ frontmatterPadding: padding }) });
   const result = runVerifier(world);
@@ -500,6 +755,7 @@ function removeWorld(world) {
     'the fixture proves the full file itself exceeds 3200 bytes');
   removeWorld(world);
 }
+// END SOURCE FRONTMATTER BUDGET FIXTURE
 
 {
   const oversized = `${representativeBody}\n${'x'.repeat(3300)}\n`;
@@ -535,6 +791,7 @@ for (const [index, literal] of instantiatedLosses.entries()) {
   removeWorld(world);
 }
 
+// BEGIN SOURCE LEGACY AGENT FIXTURE
 {
   const legacyTeam = `# Team: dusk
 
@@ -574,6 +831,7 @@ for (const [index, literal] of instantiatedLosses.entries()) {
     'the verifier directs repair of the shared authority before profile stripping');
   removeWorld(interrupted);
 }
+// END SOURCE LEGACY AGENT FIXTURE
 
 for (const [name, mutate, reason] of [
   ['firstReference', (text) => text.replace('.claude/teams/dusk/team.md', '.claude/teams/other/team.md'),
@@ -589,19 +847,24 @@ for (const [name, mutate, reason] of [
   removeWorld(world);
 }
 
-{
+for (const [name, mutate] of [
+  ['domain', (row) => row.replace('|--|', '|code|')],
+  ['mission', (row) => row.replace('Anti-drift check: what was ASKED vs what was DELIVERED', 'Implementation owner')],
+  ['status', (row) => row.replace('|active|', '|inactive|')],
+  ['updated', (row) => row.replace(`|${today}|review-only|`, '|2026-08-26|review-only|')],
+  ['kind', (row) => row.replace('|review-only|', '|domain|')],
+  ['version', (row) => row.replace(`|${pluginVersion}|`, '|0.0.0|')],
+]) {
   const world = makeWorld();
   const teamPath = join(world, SOURCE_CLIENT_DIR, 'teams', 'dusk', 'team.md');
-  const team = readFileSync(teamPath, 'utf8');
-  writeFileSync(teamPath, team.replace(
-    `| intent-guard | -- | Anti-drift check: what was ASKED vs what was DELIVERED | active | ${today} | review-only | ${pluginVersion} |`,
-    `| intent-guard | code | Implementation owner | active | ${today} | domain | ${pluginVersion} |`,
-  ));
+  const fixedRow = `|intent-guard|--|Anti-drift check: what was ASKED vs what was DELIVERED|active|${today}|review-only|${pluginVersion}|`;
+  writeFileSync(teamPath, readFileSync(teamPath, 'utf8').replace(fixedRow, mutate(fixedRow)));
   const result = runVerifier(world);
-  check('verifier.intentGuardScope.exit', result.status, 1,
-    'changing the fixed intent-guard scope/kind fails');
-  check('verifier.intentGuardScope.reason', result.output.includes('intent-guard roster contract ... FAIL'), true,
-    'the verifier protects the review-only exemption in the instantiated roster');
+  check(`verifier.intentGuardFixed.${name}.exit`, result.status, 1,
+    `changing fixed intent-guard ${name} fails`);
+  check(`verifier.intentGuardFixed.${name}.reason`,
+    result.output.includes('fixed cells require --, anti-drift mission, active, team Last update, review-only, and team Version'), true,
+    'the verifier protects every fixed review-only cell');
   removeWorld(world);
 }
 
