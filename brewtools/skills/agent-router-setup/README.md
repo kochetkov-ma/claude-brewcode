@@ -56,6 +56,8 @@ Intent routes (step 6): skill authoring -> `brewcode:skill-creator`, agent autho
 
 The skill always reports status first, states its plan before asking anything, then delegates the file work to the `brewcode:hook-creator` agent. It asks exactly one question — the level — and only when you did not already say.
 
+The status probe uses the same owning-root ladder as the runtime hook, so it reports the root installation even from a nested `cwd`. Tier 1 is effective only as one exact PreToolUse / `Agent` / command / `node` / sole portable arg / timeout `5` tuple. Tier 2 is accepted only when its inlined prompt is nonempty and byte-current with `judge-prompt.md`, its model is pinned to `claude-haiku-4-5-20251001`, timeout is `30`, and its status message is exact. Duplicates, malformed settings, and malformed owned handlers are non-effective.
+
 **Scope is project only.** The agent roster is inherently per-project, so there is no global install and no scope question.
 
 ## Modes
@@ -88,7 +90,7 @@ Nothing else is written to tmp — no roster cache, no logs — so `purge` (whic
 The tier-2 judge prompt is **inlined into `settings.json`**, not copied — re-running `level strict` refreshes it after a plugin update. Merge is strip-own + append, deduped on the exact `agent-router.mjs` path (idempotent re-install); foreign hook entries are never touched, and a `settings.json` that does not parse aborts the write instead of being rewritten.
 
 ```json
-{ "matcher": "Agent", "hooks": [ { "type": "command", "command": "node", "args": ["<abs>/.claude/hooks/agent-router.mjs"], "timeout": 5 } ] }
+{ "matcher": "Agent", "hooks": [ { "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/agent-router.mjs"], "timeout": 5 } ] }
 ```
 
 `timeout` is in seconds (Claude Code has no millisecond hook field); `5` replaces the 600 s command-hook default.

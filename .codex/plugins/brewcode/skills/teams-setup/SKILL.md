@@ -11,45 +11,66 @@ Use collaboration agents only when the user or project instructions explicitly r
 
 ## Native authority
 
-Manage persistent project teams under `.codex/teams/{TEAM_NAME}/` and domain agents under `.codex/agents/`. Agent files are real TOML parsed with Python `tomllib`; never rename Markdown/YAML agents to `.toml`. Each team agent has exactly three top-level string keys: `name`, `description`, `developer_instructions`.
+Manage persistent project teams under `.codex/teams/{TEAM_NAME}/` and agents under `.codex/agents/`. Domain agents are native TOML parsed with Python `tomllib`, never renamed Markdown. Each has exactly the three string keys `name`, `description`, and `developer_instructions`. Read applicable `AGENTS.md`, preserve unrelated files, use only adjacent scripts/references, and never edit installed caches.
 
-Resolve one mode: `status`, `install`, `upgrade`, `enable`, `disable`, `uninstall`, or `purge`. Read applicable `AGENTS.md`, inspect existing teams and agents, preserve unrelated files, and use only scripts/references shipped beside this skill. Never edit installed caches.
+## Invocation and approval
 
-### C2.6: Shared Contract Bootstrap
+Resolve exactly one mode in this order: `status`, `install`, `upgrade`, `enable`, `disable`, `uninstall`, `purge`. An explicit mode wins. With no mode, choose `status` when the named team exists; otherwise choose `install` and team name `default` only when no name was supplied. Invalid detector output stops the run.
 
-Bootstrap happens before any team-owned `.codex/agents/{name}.toml` is written: instantiate the fenced template from `references/framework-files.md` and write `team.md` at `.codex/teams/{TEAM_NAME}/team.md` with metadata, `## Shared Agent Contract`, explicit `Intent guard` policy, and zero domain rows. Do not add domain-agent rows yet. Copy the project-local tracer, initialize trace storage, substitute every placeholder, then run `scripts/verify-team.sh`. **STOP on any failure. Do not spawn or write an agent.**
+Before any action, print one `PLAN — brewcode:teams-setup` block with `INPUT`, resolved `MODE` and reason, `SCOPE` (team, roster, exact paths), `DO`, and `RESULT`. `status` asks nothing. Every mutating mode requires `request_user_input` approval after the plan and before the first write; changed scope requires a revised plan and approval. Destructive modes additionally name every deletion.
 
-### C3: Agent Creation
+Run `scripts/detect-mode.sh`, inventory `.codex/teams/` and `.codex/agents/`, read an existing roster/trace, and run `scripts/verify-team.sh {TEAM_NAME}` when the team exists. A missing team stops every mode except `install`; an existing team stops `install` unless the user approves routing to `upgrade`.
 
-Create each approved domain `.codex/agents/{name}.toml` from `references/agent-template.md`. Parse it structurally with `tomllib` and require only `name`, `description`, and `developer_instructions`. The `developer_instructions` value uses exactly these ordered headings and no others: `Mission`, `Owned surfaces`, `Exclusions`, `Must-load references`, `Unique invariants`, `Unique verification`. Its first must-load item is exactly `.codex/teams/{TEAM_NAME}/team.md`, occurring once. Enforce <=3200 UTF-8 bytes and `ceil(chars/4) <=800` over `developer_instructions` itself.
+## Mode: status
 
-`intent-guard` is exempt from the six-heading domain profile. Under `required`, run `<plugin-root>/skills/superreview-setup/scripts/emit-intent-guard.sh <project-root>`; that sole shared writer create-only copies its native authority, structurally validates it, and never overwrites an existing file. Never ask agent-creator to write it. Under `legacy-absent`, create no row and no role.
+Read `team.md` and `trace.jsonl` through `scripts/trace-ops.sh read`. Report domain-agent count, active/disabled/missing state, took/refused/completed/failed totals, success rate, issues by severity, insights, last activity, per-agent health, policy, verifier result, and actionable recommendations. Do not write, delegate, or request approval.
 
-### C4: Roster Finalization
+## Mode: install
 
-After all intended agents validate, write the final roster. Declared `Agents` equals the number of unique domain rows; duplicate names fail. a new team defaults to `required`. Policy `required` has exactly one `intent-guard` row with fixed cells `--`, `Anti-drift check: what was ASKED vs what was DELIVERED`, `active`, team `Last update`, `review-only`, team `Version`. Policy `legacy-absent` has zero rows. the complete written `team.md` (metadata + shared contract + every row) MUST be <=2800 characters; `ceil(chars/4) <=700` estimated tokens. Measure the full substituted file, not the empty template.
+### C1-C2: analysis and approved roster
 
-### C8: Fix
+Analyze current architecture, domains, stack, tests/CI, existing Codex agents, project guidance, and cross-team name ownership. Use bounded collaboration only because this invoked skill explicitly requests a team. Propose minimal, balanced, and maximum domain rosters plus fixed review-only `intent-guard`; show unique names, domains, missions, exclusions, and conflicts. The user must approve the final roster before any team or agent file is written. Recheck every approved name with `scripts/agent-owners.sh`; a taken, invalid, parked, or unknown owner stops creation.
 
-Repair only failed owned artifacts. Domain agents come from `<skill-directory>/references/agent-template.md`; repair the shared contract before an agent rewrite. Preserve foreign agents and unrelated work. Re-run structural TOML, roster, policy, size, and shared-contract checks.
+### C2.6: shared-contract bootstrap
 
-### C9: Re-verify
+Before any domain agent write, instantiate `references/framework-files.md` into `.codex/teams/{TEAM_NAME}/team.md` with metadata, `## Shared Agent Contract`, policy `required`, the fixed guard row, and zero domain rows. Initialize trace storage, copy the project-local tracer, and substitute every placeholder. Then call `<plugin-root>/skills/superreview-setup/scripts/emit-intent-guard.sh <project-root>` so the create-only emitter atomically creates the absent guard before the full `verify-team.sh` bootstrap check. A non-symlink regular file is reused only after exact normalized allowlist validation; invalid regular files, symlinks, and nonregular targets stop creation without mutation.
 
-Run `scripts/verify-team.sh {TEAM_NAME}`, both test runners, and compatibility validation. Hard-gate `developer_instructions` only: <=3200 bytes and `ceil(chars/4) <=800`; `Mission`, `Owned surfaces`, `Exclusions`, `Must-load references`, `Unique invariants`, `Unique verification` in order with no other headings. `intent-guard` is exempt from this six-heading gate, not structural TOML validation.
+### C3-C4: creation and roster finalization
 
-> To skip review pipeline is not an acceptance path; unresolved checks remain failures.
+Create one approved `.codex/agents/{name}.toml` per bounded owner from `references/agent-template.md`. Parse before and after writing. `developer_instructions` has only the ordered headings `Mission`, `Owned surfaces`, `Exclusions`, `Must-load references`, `Unique invariants`, `Unique verification`; the first must-load item is `.codex/teams/{TEAM_NAME}/team.md`, occurring once. Enforce <=3200 UTF-8 bytes and `ceil(chars/4) <=800`.
 
-### U1b: Shared Contract Migration Gate
+For policy `required`, the bootstrap already called the create-only intent-guard emitter: an approved existing non-symlink regular file was reused byte-identically, or an absent target was published atomically without replacement. Invalid, symlink, nonregular, or lost concurrent-create paths fail closed without mutation. Never author or overwrite the guard here. `legacy-absent` exists only on upgrades and gets no guard.
 
-On upgrade, insert the canonical block before `## Agents` and validate it before touching agents. Record an existing intent-guard roster row -> `required`; no row -> `legacy-absent`. Never synthesize the row on the latter path. Legacy agent bodies remain byte-identical during this gate. **No agent may be tuned, regenerated, stripped, or reformatted until the shared contract passes.** absence migrates
-to `legacy-absent`; `legacy-absent` forbids that row and MUST NOT add the role during upgrade.
+Finalize only successfully parsed agents. Domain names are unique; `Agents` counts domain rows only. `required` has exactly one fixed review-only guard row; `legacy-absent` has none. The complete substituted `team.md` must stay <=2800 characters and `ceil(chars/4) <=700`.
 
-### U2: Analyze Performance
+### C5-C7: independent review
 
-Use trace evidence only to decide whether a domain profile needs role-specific adjustment. Never duplicate the shared contract.
+C5: spawn three independent reviewers, distinct from creators and never `intent-guard`, to inspect all actual TOML plus `team.md`: one checks schema/headings/ceilings/shared-reference, one domain and trigger accuracy, one overlap/routing/shared-contract placement. C6: retain only same-file, same-area, same-category findings confirmed by at least 2/3; log one-off and minor items without fixing. C7: spawn a new verifier not used in C5 or creation to check each retained finding against the files and mark `VERIFIED` or `FALSE_POSITIVE`. Only verified important/critical issues reach repair.
 
-### U4: Apply Changes
+### C8-C9: repair and reverify
 
-Convert every touched Codex domain agent to the exact three-key TOML contract and six-heading `developer_instructions` shape. Parse before replacement, write atomically, parse again, and preserve untouched agents byte-identical.
+Repair one owned artifact per bounded task, preserve roster identity and foreign work, then use an independent verifier for the original issue and regression checks. Allow at most two repair cycles. Run `verify-team.sh` after every cycle; unresolved checks remain failures and review cannot be skipped.
 
-For `enable` and `disable`, use `scripts/toggle-team.sh`; it parks/restores domain `.toml` files byte-identically and never parks `intent-guard`. For `uninstall` and `purge`, follow the shipped cleanup flow and explicit confirmation gates. Every mode ends with `verify-team.sh` and reports exact paths, counts, and failures.
+## Mode: upgrade
+
+Reject parked or live-plus-parked members before writes. Migrate the shared contract first, recording an existing guard row as `required` and absence as `legacy-absent`; never synthesize the latter. Preserve legacy agent bytes until this gate passes. Analyze trace evidence, present per-agent keep/tune/replace/remove actions, and obtain approval for roster actions. Touch only approved domain agents, use atomic three-key TOML writes and the current six-heading contract, preserve untouched bytes, re-copy the tracer, update metadata/cursor, then run C5-C9 for touched artifacts.
+
+## Mode: enable
+
+Run `scripts/toggle-team.sh {TEAM_NAME} enable --dry-run`, stop on conflicts/missing members, then restore domain `.toml.disabled` files byte-identically. Never move `intent-guard`. Update roster status/metadata without changing per-agent versions and verify; an all-live team is a no-op.
+
+## Mode: disable
+
+Dry-run the same script, show every move, and after approval park domain `.toml` files as `.toml.disabled` byte-identically. Keep roster, trace, archive, and guard. Update roster status/metadata and verify; an all-parked team is a no-op.
+
+## Mode: uninstall
+
+Route to `references/cleanup-flow.md` interactive cleanup: inventory trace, let the user choose trace/archive and owned domain-agent removals, recheck identifier and cross-team ownership before each deletion, never delete `intent-guard`, preserve declined/foreign files, and report the archive/cursor/result.
+
+## Mode: purge
+
+Route only to `references/cleanup-flow.md` Step P. Enumerate exact domain files and team-directory bytes, request explicit irreversible-purge approval, recheck identifiers/ownership, delete both live and parked owned domain profiles, keep `intent-guard`, then delete only `.codex/teams/{TEAM_NAME}/`. A skipped shared/unknown agent is reported, never forced.
+
+## Completion
+
+After every mutation except a completed purge, run the full `status` control flow and `verify-team.sh`; after purge, prove the team directory is absent. Report exact changed paths, counts, policy, review verdicts, and failures. Agent discovery changes take effect in the next session.

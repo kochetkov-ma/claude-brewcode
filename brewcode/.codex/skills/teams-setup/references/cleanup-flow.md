@@ -187,8 +187,8 @@ rm -f ".codex/agents/{name}.toml" ".codex/agents/{name}.toml.disabled"
 > A skipped member is reported in the purge summary as `kept: shared` / `kept: owners unknown`; the team
 > dir still goes in step 3. Purge is total for THIS team's data, never for another team's roster.
 
-> Both names, always. A team purged while DISABLED has every member sitting at `{name}.md.disabled`;
-> removing only `{name}.md` would report a successful purge and leave the whole roster on disk.
+> Both names, always. A team purged while DISABLED has every member sitting at `{name}.toml.disabled`;
+> removing only `{name}.toml` would report a successful purge and leave the whole roster on disk.
 
 3. Remove the framework dir, trace, archive, cursor and the copied tracer in one go:
 

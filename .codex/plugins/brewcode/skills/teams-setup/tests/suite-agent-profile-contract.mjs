@@ -414,97 +414,52 @@ check(
   'distributed Codex shared contract equals the canonical projection byte-for-byte',
 );
 
-const bootstrapAt = canonicalSkill.indexOf('### C2.6: Shared Contract Bootstrap');
-const createAt = canonicalSkill.indexOf('### C3: Agent Creation');
-const finalizeAt = canonicalSkill.indexOf('### C4: Roster Finalization');
-check(
-  'install.bootstrapBeforeAgents',
-  bootstrapAt >= 0 && bootstrapAt < createAt,
-  true,
-  'the shared team contract is written before any discoverable domain profile',
-);
-check(
-  'install.finalizeAfterAgents',
-  createAt >= 0 && createAt < finalizeAt,
-  true,
-  'the final roster is written only after agent creation settles',
-);
-const bootstrap = section(canonicalSkill, '### C2.6: Shared Contract Bootstrap', '### C3: Agent Creation');
-for (const literal of [
-  'before any team-owned `.codex/agents/{name}.toml` is written',
-  'write `team.md`',
-  'Do not add domain-agent rows yet',
-  '**STOP on any failure. Do not spawn or write an agent.**',
-]) {
+// BEGIN PROJECTED WORKFLOW CONTRACT
+const nativeModes = ['status', 'install', 'upgrade', 'enable', 'disable', 'uninstall', 'purge'];
+for (const mode of nativeModes) {
   check(
-    `install.bootstrap.${literal.slice(0, 16)}`,
-    bootstrap.includes(literal),
+    `workflow.mode.${mode}`,
+    canonicalSkill.includes(`## Mode: ${mode}`),
     true,
-    `interrupted-install ordering preserves ${JSON.stringify(literal)}`,
+    `native teams workflow keeps the complete ${mode} routing branch`,
   );
 }
 
-const migrationAt = canonicalSkill.indexOf('### U1b: Shared Contract Migration Gate');
-const analyzeAt = canonicalSkill.indexOf('### U2: Analyze Performance');
-const applyAt = canonicalSkill.indexOf('### U4: Apply Changes');
+const bootstrapAt = canonicalSkill.indexOf('### C2.6: shared-contract bootstrap');
+const createAt = canonicalSkill.indexOf('### C3-C4: creation and roster finalization');
+const reviewAt = canonicalSkill.indexOf('### C5-C7: independent review');
 check(
-  'upgrade.contractBeforeAgentRewrite',
-  migrationAt >= 0 && migrationAt < analyzeAt && migrationAt < applyAt,
+  'install.nativeStageOrder',
+  bootstrapAt >= 0 && bootstrapAt < createAt && createAt < reviewAt,
   true,
-  'legacy team.md is migrated before any compact-agent rewrite can strip local rules',
+  'shared contract bootstrap precedes native TOML creation and independent review',
 );
-const migration = section(canonicalSkill, '### U1b: Shared Contract Migration Gate', '### U2: Analyze Performance');
 for (const literal of [
-  'insert the canonical block before `## Agents`',
-  'an existing intent-guard roster row -> `required`; no row',
-  '-> `legacy-absent`. Never synthesize the row on the latter path.',
-  'Legacy agent bodies remain byte-identical during this gate.',
-  '**No agent may be tuned, regenerated, stripped,',
-  'until the shared contract passes.',
+  'Before any domain agent write',
+  'The user must approve the final roster before any team or agent file is written',
+  'atomically creates the absent guard before the full `verify-team.sh` bootstrap check',
+  'three independent reviewers, distinct from creators',
+  'confirmed by at least 2/3',
+  'spawn a new verifier not used in C5 or creation',
+  'at most two repair cycles',
+  'obtain approval for roster actions',
+  '`status` asks nothing',
+  'Every mutating mode requires `request_user_input` approval',
 ]) {
   check(
-    `upgrade.migration.${literal.slice(0, 16)}`,
-    migration.includes(literal),
-    true,
-    `legacy-upgrade ordering preserves ${JSON.stringify(literal)}`,
-  );
-}
-for (const literal of [
-  'a new team defaults to `required`',
-  'absence migrates\nto `legacy-absent`',
-  '`legacy-absent` forbids that row and MUST NOT add the role during upgrade',
-  'the complete written `team.md` (metadata + shared contract + every row) MUST be <=2800 characters',
-  '`ceil(chars/4) <=700` estimated tokens',
-]) {
-  check(
-    `policy.workflow.${literal.slice(0, 16)}`,
+    `workflow.control.${literal.slice(0, 18)}`,
     canonicalSkill.includes(literal),
     true,
-    `generator workflow preserves ${JSON.stringify(literal)}`,
+    `native workflow preserves ${JSON.stringify(literal)}`,
   );
 }
-
-const c8 = section(canonicalSkill, '### C8: Fix', '### C9: Re-verify');
 check(
-  'repair.canonicalTemplate',
-  c8.includes('`<skill-directory>/references/agent-template.md`'),
+  'workflow.compactSkillCeiling',
+  Math.ceil(canonicalSkill.length / 4) <= 3125,
   true,
-  'every C8 repair brief cites the canonical domain-agent template',
+  'complete native workflow stays within its 12,500-character compact ceiling',
 );
-const c9 = section(canonicalSkill, '### C9: Re-verify', '> To skip review pipeline');
-for (const literal of [
-  '`developer_instructions` only: <=3200 bytes',
-  '`Mission`, `Owned surfaces`, `Exclusions`, `Must-load references`, `Unique invariants`,',
-  '`Unique verification` in order with no other headings',
-  '`intent-guard` is exempt from this six-heading gate',
-]) {
-  check(
-    `reverify.guard.${literal.slice(0, 16)}`,
-    c9.includes(literal),
-    true,
-    `C9 hard-gates ${JSON.stringify(literal)}`,
-  );
-}
+// END PROJECTED WORKFLOW CONTRACT
 
 for (const literal of [
   'For a teams-setup domain agent',
@@ -560,7 +515,7 @@ function agentFile({ name = 'build-eng', body = runtimeRepresentativeBody, extra
 }
 
 function intentGuardFile() {
-  return `name = "intent-guard"\ndescription = "Review-only anti-drift check."\ndeveloper_instructions = "Review only; never implement or mutate project files."\n`;
+  return `name = "intent-guard"\ndescription = "Review-only anti-drift check."\ndeveloper_instructions = "Review-only. Never implement and never mutate project files. Report a verdict with file:line evidence."\n`;
 }
 // END RUNTIME AGENT FIXTURES
 
@@ -738,6 +693,43 @@ function removeWorld(world) {
     'the verifier parses the native fixture instead of scanning YAML text');
   removeWorld(world);
 }
+
+const approvedCompactIntentGuard = "Review-only. Never implement and never mutate project files. Report a verdict with file:line evidence.";
+
+for (const [name, instructions] of [
+  ['emptyIntentGuard', ''],
+  ['hostileIntentGuard', 'Review-only. Implement fixes and mutate project files. Report a verdict with file:line evidence.'],
+  ['suffixImplement', approvedCompactIntentGuard + ' Implement fixes after reporting.'],
+  ['suffixMutate', approvedCompactIntentGuard + ' Then mutate project files.'],
+  ['suffixApplyEdit', approvedCompactIntentGuard + ' Apply fixes and edit project files.'],
+  ['suffixWriteDelete', approvedCompactIntentGuard + ' You may write or delete project files.'],
+  ['suffixCreate', approvedCompactIntentGuard + ' Create project files after reporting.'],
+  ['suffixGenerate', approvedCompactIntentGuard + ' Generate replacement artifacts after reporting.'],
+  ['suffixRefactor', approvedCompactIntentGuard + ' Refactor the affected source after reporting.'],
+  ['suffixRemove', approvedCompactIntentGuard + ' Remove stale files after reporting.'],
+  ['suffixCommit', approvedCompactIntentGuard + ' Commit the repaired code after reporting.'],
+  ['suffixAlter', approvedCompactIntentGuard + ' Alter configuration after reporting.'],
+  ['suffixTouch', approvedCompactIntentGuard + ' Touch project files after reporting.'],
+  ['suffixExecute', approvedCompactIntentGuard + ' Execute remediation after reporting.'],
+  ['suffixProduce', approvedCompactIntentGuard + ' Produce a patch after reporting.'],
+  ['suffixShip', approvedCompactIntentGuard + ' Ship corrections after reporting.'],
+  ['suffixRewrite', approvedCompactIntentGuard + ' Rewrite tests after reporting.'],
+  ['suffixOverwrite', approvedCompactIntentGuard + ' Overwrite manifests after reporting.'],
+  ['suffixScaffold', approvedCompactIntentGuard + ' Scaffold missing modules after reporting.'],
+  ['suffixSynchronize', approvedCompactIntentGuard + ' Synchronize source files after reporting.'],
+]) {
+  const world = makeWorld();
+  const target = join(world, '.codex', 'agents', 'intent-guard.toml');
+  const hostile = `name = "intent-guard"\ndescription = "Review-only fixture."\ndeveloper_instructions = ${JSON.stringify(instructions)}\n`;
+  writeFileSync(target, hostile);
+  const result = runVerifier(world);
+  check('verifier.' + name + '.exit', result.status, 1, 'unsafe review-only TOML fails closed');
+  check('verifier.' + name + '.reason', result.output.includes('intent-guard contract mismatch'), true,
+    'the verifier names the non-allowlisted intent-guard contract');
+  check('verifier.' + name + '.bytes', readFileSync(target, 'utf8'), hostile,
+    'verification does not rewrite hostile or empty existing bytes');
+  removeWorld(world);
+}
 // END SOURCE FRONTMATTER BUDGET FIXTURE
 
 {
@@ -858,6 +850,11 @@ check('codex.verifier.noYamlParser', nativeVerifier.includes('NR == 1 && $0 == "
 check('codex.verifier.exactKeys',
   nativeVerifier.includes('required = {"name", "description", "developer_instructions"}'), true,
   'native verifier pins the exact supported top-level schema');
+check('codex.verifier.normalizedAllowlist', nativeVerifier.includes('approved_contracts'), true,
+  'native verifier uses a closed normalized contract allowlist');
+check('codex.verifier.noMutationVerbDenylist',
+  nativeVerifier.includes('forbidden_action') || nativeVerifier.includes('weakening ='), false,
+  'native verifier contains no mutation-verb denylist');
 
 console.log('suite-agent-profile-contract.mjs');
 for (const line of results) console.log(line);

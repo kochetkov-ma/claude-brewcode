@@ -90,10 +90,20 @@ if data["name"] != expected_name:
 if "\n" in data["description"]:
     print("  FAIL: description must be one line")
     raise SystemExit(1)
+body = data["developer_instructions"]
 if kind == "review-only":
+    body = data["developer_instructions"]
+    def normalize_contract(value):
+        return " ".join(value.split()).casefold()
+    approved_contracts = {
+        normalize_contract("Review-only. Compare what was requested with what was delivered, report concrete drift with file:line evidence. Never implement and never mutate project files."),
+        normalize_contract("Review-only. Never implement and never mutate project files. Report a verdict with file:line evidence."),
+    }
+    if normalize_contract(body) not in approved_contracts:
+        print("intent-guard contract mismatch: developer_instructions must equal an approved normalized review-only contract", file=sys.stderr)
+        raise SystemExit(1)
     raise SystemExit(0)
 
-body = data["developer_instructions"]
 expected_headings = [
     "Mission", "Owned surfaces", "Exclusions", "Must-load references",
     "Unique invariants", "Unique verification",
@@ -466,7 +476,7 @@ printf 'CONFLICT_AGENTS:%s\n' "$CONFLICT"
 
 if [ "$FAIL" -eq 0 ]; then
   if [ "$DISABLED" -gt 0 ]; then
-    echo "VERIFY: PASS (team DISABLED -- $DISABLED agent file(s) parked as .md.disabled)"
+    echo "VERIFY: PASS (team DISABLED -- $DISABLED agent file(s) parked as .toml.disabled)"
   else
     echo "VERIFY: PASS"
   fi

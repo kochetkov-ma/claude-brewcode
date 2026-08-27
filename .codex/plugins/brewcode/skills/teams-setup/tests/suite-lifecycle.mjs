@@ -79,7 +79,7 @@ const linesStartingWith = (stdout, prefix) =>
 
 const DOMAIN_INSTRUCTIONS = '## Mission\nOwn fixture behavior.\n\n## Owned surfaces\nFixture files.\n\n## Exclusions\nNo neighboring work.\n\n## Must-load references\n- `.codex/teams/t1/team.md`\n\n## Unique invariants\nPreserve bytes.\n\n## Unique verification\nRun the fixture suite.\n';
 const AGENT_BODY = (name) => name === 'intent-guard'
-  ? `name = "intent-guard"\ndescription = "Review-only fixture."\ndeveloper_instructions = "Review only; never implement."\n`
+  ? `name = "intent-guard"\ndescription = "Review-only fixture."\ndeveloper_instructions = "Review-only. Never implement and never mutate project files. Report a verdict with file:line evidence."\n`
   : `name = ${JSON.stringify(name)}\ndescription = "Domain fixture agent."\ndeveloper_instructions = ${JSON.stringify(DOMAIN_INSTRUCTIONS)}\n`;
 
 /**
@@ -344,6 +344,12 @@ const TRAVERSAL = '../../../outside/README';
     ['DISABLED_AGENTS:1'],
     'the one domain member is reported as parked',
   );
+  check(
+    'a6.parkedExtension',
+    parked.stdout.includes('agent file(s) parked as .toml.disabled'),
+    true,
+    'the disabled summary names the Codex agent parking extension',
+  );
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -379,6 +385,12 @@ const TRAVERSAL = '../../../outside/README';
     linesStartingWith(v.stdout, 'DISABLED_AGENTS:'),
     ['DISABLED_AGENTS:2'],
     'verify counts both parked members instead of seeing an empty table',
+  );
+  check(
+    'a7.verifyExtension',
+    v.stdout.includes('agent file(s) parked as .toml.disabled'),
+    true,
+    'the disabled summary names the Codex agent parking extension',
   );
 }
 

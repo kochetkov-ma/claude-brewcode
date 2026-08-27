@@ -24,6 +24,56 @@ const errors = [];
 let retainedResources = 0;
 
 function fail(message) { errors.push(message); }
+const TEAM_MODE_REQUIREMENTS = {
+  status: ['## Mode: status', 'Do not write, delegate, or request approval.'],
+  install: ['## Mode: install', '### C1-C2: analysis and approved roster', 'The user must approve the final roster'],
+  upgrade: ['## Mode: upgrade', 'obtain approval for roster actions'],
+  enable: ['## Mode: enable', 'enable --dry-run'],
+  disable: ['## Mode: disable', '.toml.disabled'],
+  uninstall: ['## Mode: uninstall', 'Route to `references/cleanup-flow.md` interactive cleanup'],
+  purge: ['## Mode: purge', 'Route only to `references/cleanup-flow.md` Step P']
+};
+const TEAM_SHARED_REQUIREMENTS = [
+  '## Invocation and approval',
+  'With no mode, choose `status` when the named team exists; otherwise choose `install`',
+  'PLAN — brewcode:teams-setup',
+  'Every mutating mode requires `request_user_input` approval',
+  'so the create-only emitter atomically creates the absent guard before the full `verify-team.sh` bootstrap check',
+  '### C5-C7: independent review',
+  'confirmed by at least 2/3',
+  'spawn a new verifier not used in C5 or creation',
+  'After every mutation except a completed purge, run the full `status` control flow',
+];
+
+function nativeTeamContractErrors(source) {
+  const found = [];
+  for (const requirement of TEAM_SHARED_REQUIREMENTS) {
+    if (!source.includes(requirement)) found.push(`shared control flow missing ${JSON.stringify(requirement)}`);
+  }
+  for (const [mode, requirements] of Object.entries(TEAM_MODE_REQUIREMENTS)) {
+    for (const requirement of requirements) {
+      if (!source.includes(requirement)) found.push(`mode ${mode} missing ${JSON.stringify(requirement)}`);
+    }
+  }
+  if (source.length > 12500) found.push(`native teams workflow exceeds compact ceiling: ${source.length} chars > 12500`);
+  return found;
+}
+
+if (process.argv[2] === '--check-native-teams') {
+  const file = process.argv[3];
+  if (!file) {
+    process.stderr.write('usage: validate-compat.mjs --check-native-teams <SKILL.md>\n');
+    process.exit(2);
+  }
+  const found = nativeTeamContractErrors(fs.readFileSync(file, 'utf8'));
+  if (found.length) {
+    process.stderr.write(`${found.map(error => `- ${error}`).join('\n')}\n`);
+    process.exit(1);
+  }
+  process.stdout.write('Native teams projection contract passed.\n');
+  process.exit(0);
+}
+
 function json(file) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); }
   catch (error) { fail(`${path.relative(ROOT, file)}: ${error.message}`); return null; }
@@ -138,6 +188,9 @@ for (const [plugin, [skillCount, agentCount]] of Object.entries(EXPECTED)) {
         fail(`${plugin}/${entry.name}: Codex variant omits canonical mode \`${mode}\` declared by the source argument-hint`);
       }
     }
+    if (plugin === 'brewcode' && entry.name === 'teams-setup') {
+      for (const error of nativeTeamContractErrors(source)) fail(`brewcode/teams-setup: ${error}`);
+    }
 
     const sourceRoot = path.join(pluginRoot, 'skills', entry.name);
     const targetRoot = path.join(skillsRoot, entry.name);
@@ -227,6 +280,23 @@ if (!/allow_implicit_invocation: false/.test(rulesMetadata)) fail('rules must re
 
 const optimizerMetadata = fs.readFileSync(path.join(ROOT, 'brewtools', '.codex', 'skills', 'text-optimize', 'agents', 'openai.yaml'), 'utf8');
 if (!/allow_implicit_invocation: true/.test(optimizerMetadata)) fail('text-optimize must remain available for implicit invocation');
+
+const teamsDocsRoot = path.join(ROOT, 'brewcode', '.codex', 'skills', 'teams-setup');
+const teamsDocs = [
+  path.join(teamsDocsRoot, 'README.md'),
+  ...walk(path.join(teamsDocsRoot, 'references')).filter(file => file.endsWith('.md')),
+];
+const operationalMarkdownAgent = /(?:\.codex\/agents\/[^\s`"']+|<agent>|<name>|\{name\})\.md(?:\.disabled)?/;
+const claudeOnlyTeamDocClaim = /\b(?:AskUserQuestion|Explore|general-purpose|opus|sonnet|haiku)\b|Task\s*\(|generate\.sh|model (?:fit|selection)/i;
+for (const file of teamsDocs) {
+  const source = fs.readFileSync(file, 'utf8');
+  if (operationalMarkdownAgent.test(source)) fail(`${path.relative(ROOT, file)}: documents an operational Markdown agent instead of native TOML`);
+  if (claudeOnlyTeamDocClaim.test(source)) fail(`${path.relative(ROOT, file)}: contains a Claude-only tool, model, or generator claim`);
+}
+const teamsReadme = fs.readFileSync(path.join(teamsDocsRoot, 'README.md'), 'utf8');
+for (const literal of ['native TOML agents', 'domain-owner.toml', 'requires approval', 'independent review']) {
+  if (!teamsReadme.includes(literal)) fail(`teams native README missing ${JSON.stringify(literal)}`);
+}
 
 const installer = fs.readFileSync(path.join(ROOT, '.codex', 'scripts', 'install-update.mjs'), 'utf8');
 for (const literal of ["'migrate'", "REMOTE_VERSION = '4.0.5'", 'item.version', 'item.enabled', 'rollbackPlugins', 'CODEX_COMPAT_TEST_FAIL_STEP']) {

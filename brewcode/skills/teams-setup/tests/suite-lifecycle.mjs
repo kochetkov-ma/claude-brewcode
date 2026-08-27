@@ -343,6 +343,12 @@ const TRAVERSAL = '../../../outside/README';
     ['DISABLED_AGENTS:1'],
     'the one domain member is reported as parked',
   );
+  check(
+    'a6.parkedExtension',
+    parked.stdout.includes('agent file(s) parked as .md.disabled'),
+    true,
+    'the disabled summary names the Claude agent parking extension',
+  );
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -378,6 +384,12 @@ const TRAVERSAL = '../../../outside/README';
     linesStartingWith(v.stdout, 'DISABLED_AGENTS:'),
     ['DISABLED_AGENTS:2'],
     'verify counts both parked members instead of seeing an empty table',
+  );
+  check(
+    'a7.verifyExtension',
+    v.stdout.includes('agent file(s) parked as .md.disabled'),
+    true,
+    'the disabled summary names the Claude agent parking extension',
   );
 }
 

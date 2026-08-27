@@ -45,7 +45,7 @@ Labels are literal; values follow the conversation language.
 
 | Tier | Registration | Behavior |
 |------|--------------|----------|
-| **1 — always on** | `{"type":"command","command":"node","args":["<abs>/.claude/hooks/agent-router.mjs"],"timeout":5}` (SECONDS — Claude Code has no ms hook field), PreToolUse matcher `Agent` | deterministic, <100 ms incl. node startup, **zero tokens** |
+| **1 — always on** | `{"type":"command","command":"node","args":["${CLAUDE_PROJECT_DIR}/.claude/hooks/agent-router.mjs"],"timeout":5}` (SECONDS — Claude Code has no ms hook field), PreToolUse matcher `Agent` | deterministic, <100 ms incl. node startup, **zero tokens** |
 | **2 — OPT-IN (`level strict`)** | `{"type":"agent","prompt":"<inlined judge-prompt.md>","model":"claude-haiku-4-5-20251001","timeout":30,"statusMessage":"agent-router: checking agent fit"}` | an LLM adjudicates the ambiguous picks |
 
 Tier 1 decision order — it allows as early as it can:
@@ -118,10 +118,67 @@ A="$BT_ROOT/skills/agent-router-setup/assets"
 test -f "$A/INSTALL.md" && test -f "$A/agent-router.mjs" && test -f "$A/judge-prompt.md" || { echo "❌ FAILED — assets incomplete under BT_ROOT=$BT_ROOT"; exit 1; }
 echo "ASSETS_DIR=$A"
 echo "RUNBOOK=$A/INSTALL.md"
-D="$PWD/.claude"
+claude_project_root() {
+  if [ -n "$CLAUDE_PROJECT_DIR" ] && [ -d "$CLAUDE_PROJECT_DIR" ]; then
+    printf '%s\n' "$CLAUDE_PROJECT_DIR"; return 0
+  fi
+  d=$PWD
+  while [ "$d" != "/" ]; do
+    if [ -f "$d/.claude/brewtools/agent-router.json" ]; then printf '%s\n' "$d"; return 0; fi
+    d=$(dirname "$d")
+  done
+  if r=$(git rev-parse --show-toplevel 2>/dev/null) && [ -n "$r" ]; then
+    printf '%s\n' "$r"; return 0
+  fi
+  d=$PWD
+  while [ "$d" != "/" ]; do
+    if [ -d "$d/.claude" ]; then printf '%s\n' "$d"; return 0; fi
+    d=$(dirname "$d")
+  done
+  printf '%s\n' "$PWD"; return 1
+}
+if ROOT=$(claude_project_root); then ROOT_OK=yes; else ROOT_OK=no; fi
+echo "project_root=$ROOT root_resolved=$ROOT_OK"
+D="$ROOT/.claude"
 H=no; [ -f "$D/hooks/agent-router.mjs" ] && H=yes
-T1=$({ grep -c 'agent-router\.mjs' "$D/settings.json" 2>/dev/null || true; } | tr -d ' '); T1=${T1:-0}
-T2=$({ grep -c 'agent-router: checking agent fit' "$D/settings.json" 2>/dev/null || true; } | tr -d ' '); T2=${T2:-0}
+REFS=$(SETTINGS="$D/settings.json" JUDGE="$A/judge-prompt.md" node <<'NODE'
+const fs=require("fs");
+const f=process.env.SETTINGS, judge=process.env.JUDGE, portable="${CLAUDE_PROJECT_DIR}/.claude/hooks/agent-router.mjs";
+let s={};
+let settingsValid=true;
+try{
+  if(fs.existsSync(f)&&fs.readFileSync(f,"utf8").trim()) s=JSON.parse(fs.readFileSync(f,"utf8"));
+  if(s===null||typeof s!=="object"||Array.isArray(s)) settingsValid=false;
+}catch{ settingsValid=false; s={}; }
+const SM="agent-router: checking agent fit", MODEL="claude-haiku-4-5-20251001";
+const currentPrompt=fs.readFileSync(judge,"utf8");
+const argsOf=h=>Array.isArray(h&&h.args)?h.args.filter(a=>typeof a==="string"):[];
+const bodyOf=h=>{ try{return JSON.stringify(h)||"";}catch{return "";} };
+const ownsT1=h=>bodyOf(h&&h.args).includes("agent-router.mjs");
+const ownsT2=h=>h&&typeof h==="object"&&!Array.isArray(h)&&(h.statusMessage===SM||h.prompt===currentPrompt||(h.model===MODEL&&typeof h.statusMessage==="string"&&h.statusMessage.startsWith("agent-router:")));
+const keysAre=(h,keys)=>h&&typeof h==="object"&&!Array.isArray(h)&&Object.keys(h).sort().join(",")===keys;
+let tier1=0, legacy=0, tier2=0;
+for(const [event,entries] of Object.entries((s&&s.hooks)||{})){
+  if(!Array.isArray(entries)) continue;
+  for(const entry of entries){
+    if(!entry||typeof entry!=="object"||!Array.isArray(entry.hooks)) continue;
+    for(const handler of entry.hooks){
+      if(ownsT1(handler)){
+        const exact=settingsValid&&event==="PreToolUse"&&entry.matcher==="Agent"&&keysAre(handler,"args,command,timeout,type")&&handler.type==="command"&&handler.command==="node"&&argsOf(handler).length===1&&argsOf(handler)[0]===portable&&handler.timeout===5;
+        if(exact) tier1+=1; else legacy+=1;
+        continue;
+      }
+      if(ownsT2(handler)){
+        const exact=settingsValid&&event==="PreToolUse"&&entry.matcher==="Agent"&&keysAre(handler,"model,prompt,statusMessage,timeout,type")&&handler.type==="agent"&&typeof handler.prompt==="string"&&handler.prompt.trim().length>0&&handler.prompt===currentPrompt&&handler.model===MODEL&&handler.timeout===30&&handler.statusMessage===SM;
+        if(exact) tier2+=1; else legacy+=1;
+      }
+    }
+  }
+}
+console.log(tier1+"|"+legacy+"|"+tier2+"|"+(settingsValid?"yes":"no"));
+NODE
+)
+T1=${REFS%%|*}; REST=${REFS#*|}; LEGACY_T1=${REST%%|*}; REST=${REST#*|}; T2=${REST%%|*}; VALID=${REFS##*|}
 CFG=none; [ -s "$D/brewtools/agent-router.json" ] && CFG=$(tr -d '\n ' < "$D/brewtools/agent-router.json"); CFG=${CFG:-none}
 EN=n/a; case "$CFG" in *'"enabled":true'*) EN=true;; *'"enabled":false'*) EN=false;; esac
 LV=n/a; case "$CFG" in *'"level":"strict"'*) LV=strict;; *'"level":"fast"'*) LV=fast;; esac
@@ -136,7 +193,7 @@ STALE=n/a
 if [ "$HCV" != n/a ] && [ "$TCV" != n/a ]; then [ "$HCV" = "$TCV" ] && STALE=no || STALE=yes; fi
 if [ "$STALE" != yes ] && [ "$GCV" != n/a ] && [ "$RCV" != n/a ] && [ "$GCV" != "$RCV" ]; then STALE=yes; fi
 R=$({ ls "$D/agents/"*.md 2>/dev/null || true; } | wc -l | tr -d ' ')
-echo "project: hook_file=$H tier1_refs=$T1 tier2_refs=$T2 enabled=$EN level_recorded=$LV roster=$R"
+echo "project: hook_file=$H tier1_refs=$T1 legacy_refs=$LEGACY_T1 tier2_refs=$T2 settings_valid=$VALID enabled=$EN level_recorded=$LV roster=$R"
 echo "content_version: hook=$HCV template=$TCV config=$GCV runbook=$RCV stale=$STALE"
 echo "version: config=$CV plugin=$PV"
 echo "config=$CFG"
@@ -149,23 +206,26 @@ Field meanings — do not paraphrase them into something stronger:
 
 | Field | Value |
 |-------|-------|
+| `project_root` / `root_resolved` | status resolves `CLAUDE_PROJECT_DIR`, then the nearest router ownership marker, then git toplevel, then an owning `.claude` ancestor; `root_resolved=no` means read-only fallback to `$PWD` |
 | `hook_file` | `yes`/`no` — `agent-router.mjs` present in `<repo>/.claude/hooks/` |
-| `tier1_refs` | textual count of `agent-router.mjs` mentions in `settings.json`; `0` = not wired, `1` = wired, `>1` = duplicate -> repair |
-| `tier2_refs` | count of the tier-2 `statusMessage` marker; `0` = tier 2 off, `1` = tier 2 wired |
+| `tier1_refs` | exact `PreToolUse` / `Agent` / command / `node` / sole portable `${CLAUDE_PROJECT_DIR}/.claude/hooks/agent-router.mjs` arg / timeout `5` handler count; `1` = wired |
+| `legacy_refs` | owned tier-1 or tier-2 handlers that differ from a complete desired tuple, including absolute paths, wrong events/matchers/types/commands/timeouts, extra args/keys, a stale/empty tier-2 prompt, wrong model, or wrong status message; any nonzero value requires `install`/`upgrade` migration |
+| `tier2_refs` | exact `PreToolUse` / `Agent` / agent handler / current nonempty inlined `judge-prompt.md` / model `claude-haiku-4-5-20251001` / timeout `30` / exact status message count; `0` = tier 2 off, `1` = tier 2 wired |
+| `settings_valid` | `yes` only when settings are absent/empty or parse as a JSON object; malformed JSON/shape is non-effective |
 | `enabled` | parsed from the config; `n/a` = no config or no such key |
 | `level_recorded` | the `level` VALUE stored in the config. It is a RECORD of an install-time choice, **not** proof of what is wired — nothing keeps it honest. `tier2_refs` is the authority on whether the LLM judge actually fires |
 | `content_version` (`hook` / `template` / `config` / `runbook`) | the PRIMARY staleness signal, read from the artifacts themselves: `hook` = the `brewcode-meta:` header of the INSTALLED `.claude/hooks/agent-router.mjs`, `template` = the same header in the plugin's asset copy, `config` = the config's `content_version` key, `runbook` = the header of `assets/INSTALL.md` (the generator behind that config). A difference on either pair -> `stale=yes` -> offer `upgrade`. `n/a` on a side (pre-5.6 artifact, or not installed) = unknown, NOT "current" |
 | `version` / `plugin` | the config's `version` key vs the installed brewtools version. INFORMATIONAL only — it names the release that last WROTE the config, bumps on every release even when nothing changed, and any config write (`enable`/`disable` included) re-stamps it to the current plugin while the hook file on disk stays old. Never decide staleness from it |
 | `roster` | number of `.claude/agents/*.md` files — **`0` means the hook has nothing to route TO**; say so before installing |
 
-These are textual counts, not JSON validation — they do not prove the entries are well-formed or attached to the right event.
+The status probe parses JSON and validates both complete handler shapes. Exact duplicate tier-1 or tier-2 handlers remain visible as counts above `1`; malformed owned handlers increment `legacy_refs`. Both states are non-effective.
 
 Read the output into a state table and PRINT it to the user:
 
-| Hook file | tier1 wired | tier2 wired | enabled | level (recorded) | tier2 actual | hook cv | template cv | stale | roster |
-|-----------|-------------|-------------|---------|------------------|--------------|---------|-------------|-------|--------|
+| Hook file | portable tier1 | legacy refs | tier2 wired | settings valid | enabled | level (recorded) | hook cv | template cv | stale | roster |
+|-----------|----------------|-------------|-------------|----------------|---------|------------------|---------|-------------|-------|--------|
 
-Effective = `hook_file=yes tier1_refs=1` and `enabled` is anything but `false` — a MISSING config leaves the hook ON with the built-in defaults (`enabled=n/a` is therefore effective, not broken), only exactly `false` turns it off. Anything else is NOT effective — say so plainly instead of reporting a half-state as installed. `stale=yes` is still effective, just running OLD logic: say "installed, stale — run `upgrade`".
+Effective = `hook_file=yes tier1_refs=1 legacy_refs=0 settings_valid=yes tier2_refs=0|1` and `enabled` is anything but `false` — a MISSING config leaves tier 1 ON with the built-in defaults (`enabled=n/a` is therefore effective, not broken), only exactly `false` turns it off. A count above `1`, a malformed owned handler, or invalid settings is NOT effective. `stale=yes` is still effective, just running OLD logic: say "installed, stale — run `upgrade`".
 
 > **Never print `level` alone as if it were the truth.** Put `tier2_refs` next to it: `level_recorded=strict` with `tier2_refs=0` means the judge is NOT wired, and the config is lying. Report that mismatch explicitly and offer `level strict` (or `level fast`) to reconcile — the config value alone adds and removes nothing.
 
@@ -297,11 +357,12 @@ CONTEXT:
   LEVEL by design; re-export it rather than hardcoding a value.
   Follow the runbook at RUNBOOK exactly and use ITS commands — it self-locates its source via
   SRC=\$(dirname \"\$RUNBOOK\"). Sections map 1:1 to MODE: 'INSTALL', 'UPGRADE', 'LEVEL', 'DISABLE /
-  ENABLE', 'UNINSTALL', 'PURGE'. Merge = strip own stale/tier2 entries, then append; the tier-1
-  entry is added only if the exact <absdir>/agent-router.mjs path is absent (idempotent), and
+  ENABLE', 'UNINSTALL', 'PURGE'. Merge = strip owned handlers individually while preserving foreign
+  co-handlers, then append exactly one `${CLAUDE_PROJECT_DIR}/.claude/hooks/agent-router.mjs`
+  tier-1 handler (idempotent); legacy absolute checkout args are removed, and
   the tier-2 entry is re-derived from LEVEL by inlining ASSETS_DIR/judge-prompt.md.
-  Uninstall = strip own entries (tier-1 by basename, tier-2 by statusMessage), drop empty event
-  arrays, delete agent-router.mjs, KEEP the config. Purge = uninstall + delete the config +
+  Uninstall = strip owned handlers (tier-1 by basename, tier-2 by statusMessage), drop only empty
+  entries/event arrays, delete agent-router.mjs, KEEP the config. Purge = uninstall + delete the config +
   delete the tmp markers.
   METADATA: every mode that WRITES the config (install, upgrade, enable, disable, level) must
   leave these four keys in agent-router.json:

@@ -106,15 +106,72 @@ A="$BT_ROOT/skills/agent-deadline-setup/assets"
 test -f "$A/INSTALL.md" && test -f "$A/agent-deadline-guard.mjs" && test -f "$A/agent-deadline-cleanup.mjs" || { echo "❌ FAILED — assets incomplete under BT_ROOT=$BT_ROOT"; exit 1; }
 echo "ASSETS_DIR=$A"
 echo "RUNBOOK=$A/INSTALL.md"
-for S in "$PWD/.claude:project" "$HOME/.claude:global"; do
+claude_project_root() {
+  if [ -n "$CLAUDE_PROJECT_DIR" ] && [ -d "$CLAUDE_PROJECT_DIR" ]; then
+    printf '%s\n' "$CLAUDE_PROJECT_DIR"; return 0
+  fi
+  if r=$(git rev-parse --show-toplevel 2>/dev/null) && [ -n "$r" ]; then
+    printf '%s\n' "$r"; return 0
+  fi
+  d=$PWD
+  while [ "$d" != "/" ]; do
+    if [ -d "$d/.git" ] || [ -d "$d/.claude" ]; then printf '%s\n' "$d"; return 0; fi
+    d=$(dirname "$d")
+  done
+  printf '%s\n' "$PWD"; return 1
+}
+if ROOT=$(claude_project_root); then ROOT_OK=yes; else ROOT_OK=no; fi
+echo "project_root=$ROOT root_resolved=$ROOT_OK"
+for S in "$ROOT/.claude:project" "$HOME/.claude:global"; do
   D="${S%%:*}"; N="${S##*:}"
   G=no; [ -f "$D/hooks/agent-deadline-guard.mjs" ] && G=yes
   C=no; [ -f "$D/hooks/agent-deadline-cleanup.mjs" ] && C=yes
-  W=$({ grep -o 'agent-deadline-[a-z]*\.mjs' "$D/settings.json" 2>/dev/null || true; } | sort -u | wc -l | tr -d ' '); W=${W:-0}
+  REFS=$(SETTINGS="$D/settings.json" SCOPE="$N" HOOKS_DIR="$D/hooks" node <<'NODE'
+const fs=require("fs"), path=require("path");
+const f=process.env.SETTINGS, scope=process.env.SCOPE, dir=process.env.HOOKS_DIR;
+const marks=["agent-deadline-guard.mjs","agent-deadline-cleanup.mjs"];
+let s={};
+let settingsValid=true;
+try{
+  if(fs.existsSync(f)&&fs.readFileSync(f,"utf8").trim()) s=JSON.parse(fs.readFileSync(f,"utf8"));
+  if(s===null||typeof s!=="object"||Array.isArray(s)) settingsValid=false;
+}catch{ settingsValid=false; s={}; }
+const expected=marks.map(m=>scope==="project"?"${CLAUDE_PROJECT_DIR}/.claude/hooks/"+m:path.join(dir,m));
+const specs={
+  "agent-deadline-guard.mjs":{event:"PreToolUse",matcher:".*",arg:expected[0],timeout:5},
+  "agent-deadline-cleanup.mjs":{event:"SubagentStop",matcher:null,arg:expected[1],timeout:3},
+};
+const argsOf=h=>Array.isArray(h&&h.args)?h.args.filter(a=>typeof a==="string"):[];
+const ownedScript=h=>{
+  let body="";
+  try{ body=JSON.stringify(h); }catch{}
+  return marks.find(m=>body.includes(m));
+};
+const matcherIs=(entry,matcher)=>matcher===null?!Object.prototype.hasOwnProperty.call(entry,"matcher"):entry.matcher===matcher;
+const exactKeys=h=>h&&typeof h==="object"&&!Array.isArray(h)&&Object.keys(h).sort().join(",")==="args,command,timeout,type";
+const wired={"agent-deadline-guard.mjs":0,"agent-deadline-cleanup.mjs":0};
+let legacy=0;
+for(const [event,entries] of Object.entries((s&&s.hooks)||{})){
+  if(!Array.isArray(entries)) continue;
+  for(const entry of entries){
+    if(!entry||typeof entry!=="object"||!Array.isArray(entry.hooks)) continue;
+    for(const handler of entry.hooks){
+      const script=ownedScript(handler);
+      if(!script) continue;
+      const spec=specs[script];
+      const exact=settingsValid&&event===spec.event&&matcherIs(entry,spec.matcher)&&exactKeys(handler)&&handler.type==="command"&&handler.command==="node"&&argsOf(handler).length===1&&argsOf(handler)[0]===spec.arg&&handler.timeout===spec.timeout;
+      if(exact) wired[script]+=1; else legacy+=1;
+    }
+  }
+}
+console.log(wired[marks[0]]+"|"+wired[marks[1]]+"|"+legacy+"|"+(settingsValid?"yes":"no"));
+NODE
+  )
+  GR=${REFS%%|*}; REST=${REFS#*|}; CR=${REST%%|*}; REST=${REST#*|}; LEGACY=${REST%%|*}; VALID=${REFS##*|}
   CFG=none; [ -s "$D/agent-deadline.json" ] && CFG=$(tr -d '\n ' < "$D/agent-deadline.json"); CFG=${CFG:-none}
   EN=n/a; case "$CFG" in *'"enabled":true'*) EN=true;; *'"enabled":false'*) EN=false;; esac
   CV=$({ jq -r '.version // empty' "$D/agent-deadline.json" 2>/dev/null || true; }); CV=${CV:-n/a}
-  echo "$N: guard=$G cleanup=$C settings_refs=$W enabled=$EN config_version=$CV config=$CFG"
+  echo "$N: guard=$G cleanup=$C guard_refs=$GR cleanup_refs=$CR legacy_refs=$LEGACY settings_valid=$VALID enabled=$EN config_version=$CV config=$CFG"
 done
 PV=$({ jq -r '.version // empty' "$BT_ROOT/.claude-plugin/plugin.json" 2>/dev/null || true; }); PV=${PV:-n/a}
 echo "plugin_version=$PV"
@@ -127,18 +184,21 @@ Field meanings — do not paraphrase them into something stronger:
 
 | Field | Value |
 |-------|-------|
+| `project_root` / `root_resolved` | project status resolves `CLAUDE_PROJECT_DIR`, then git toplevel, then an owning `.git`/`.claude` ancestor; `root_resolved=no` means read-only fallback to `$PWD` |
 | `guard` / `cleanup` | `yes`/`no` — hook FILE present in that scope's `hooks/` |
-| `settings_refs` | count of DISTINCT `agent-deadline-*.mjs` scripts referenced in that scope's `settings.json`; `0` = not wired, `2` = fully wired, `1` = half-wired → repair |
+| `guard_refs` / `cleanup_refs` | separate exact desired handler counts. Guard = `PreToolUse` + `.*` + command/node/sole portable arg + timeout `5`; cleanup = `SubagentStop` + no matcher + command/node/sole portable arg + timeout `3`; global args use expanded `~/.claude/hooks/<script>`. Each must be exactly `1`; two guards never substitute for a missing cleanup |
+| `legacy_refs` | owned handlers that differ from a complete desired tuple, including absolute paths, swapped events, wrong matchers/types/commands/timeouts, extra args/keys, or malformed handler values; any nonzero value requires migration |
+| `settings_valid` | `yes` only when settings are absent/empty or parse as a JSON object; malformed JSON/shape is non-effective |
 | `enabled` | `true`/`false` parsed from the config; `n/a` = no config or no `enabled` key |
 | `config_version` | the config's `version` key vs `plugin_version` on the last line. Different = the config was written by an older brewtools and may predate a shape change -> offer `upgrade`. `n/a` on either side (pre-metadata config, or no config) = unknown, NOT "current" |
 | `config` | whitespace-stripped config contents, or literal `none` |
 
-`settings_refs` is a textual count, not a JSON validation — it does not prove the entries are well-formed or attached to the right events.
+The status probe parses JSON and validates each script separately against the exact event, matcher, handler keys, type, command, sole arg, and timeout tuple. Duplicates remain visible as counts above `1` and are non-effective.
 
 Read the output into a state table and PRINT it to the user:
 
-| Scope | Hook files | settings.json wired | Config | Config ver | Stale | Effective |
-|-------|-----------|---------------------|--------|------------|-------|-----------|
+| Scope | Hook files | guard refs | cleanup refs | legacy refs | settings valid | Config | Config ver | Stale | Effective |
+|-------|-----------|------------|--------------|-------------|----------------|--------|------------|-------|-----------|
 
 ### Config metadata (the three standard JSON keys)
 
@@ -167,7 +227,7 @@ echo "PLUGIN_VERSION=$PV LAST_UPDATED=$(date +%F)"
 | `enabled` semantics unchanged | The gate stays `cfg.enabled !== true` -> off. Adding sibling keys touches nothing |
 | Cannot make a valid file unparseable | Written by the runbook's node block that re-serializes the whole object with `JSON.stringify` — never appended as raw text. An invalid project config is skipped and the GLOBAL one takes over, which is a silent behavior change, so a hand-appended line is a defect |
 
-Effective = `guard=yes cleanup=yes settings_refs=2 enabled=true`. Anything else is NOT effective — say so plainly instead of reporting a half-state as installed. Project config wins over global; a broken project config is skipped and global is used.
+Effective = `guard=yes cleanup=yes guard_refs=1 cleanup_refs=1 legacy_refs=0 settings_valid=yes enabled=true`. Anything else, including duplicate-one/missing-other registrations or a malformed owned handler, is NOT effective — say so plainly instead of reporting a half-state as installed. Project config wins over global; a broken project config is skipped and global is used.
 
 ### Early exit
 
@@ -272,10 +332,13 @@ CONTEXT:
   Follow the runbook at RUNBOOK exactly and use ITS commands — it self-locates its source via
   SRC=\$(dirname \"\$RUNBOOK\"). Sections map 1:1
   to MODE: 'PROJECT target'/'GLOBAL target' for install, 'UPGRADE', 'DISABLE / ENABLE',
-  'UNINSTALL', 'PURGE'. Merge = append + dedupe by agent-deadline-*.mjs script path (idempotent).
+  'UNINSTALL', 'PURGE'. Merge strips owned handlers individually while preserving foreign
+  co-handlers, then appends exactly one handler per script. Project args use the literal
+  `${CLAUDE_PROJECT_DIR}/.claude/hooks/<script>` and migrate legacy absolute checkout args;
+  global args stay expanded absolute paths. Both paths are idempotent.
   Upgrade = the 'UPGRADE' section: read MINUTES/OVERRIDES/HARD_STOP_RATIO back out of the
   existing config, export them, then replay the copy + config + merge blocks for SCOPE.
-  Uninstall = strip entries by those two basenames, drop empty event arrays, delete the 2
+  Uninstall = strip handlers by those two basenames, drop empty entries/event arrays, delete the 2
   files, KEEP the config. Purge = uninstall + delete config + tmp state.
   METADATA: every mode that WRITES the config (install, upgrade, enable, disable) must leave
   these three keys in agent-deadline.json: version=\$PLUGIN_VERSION,

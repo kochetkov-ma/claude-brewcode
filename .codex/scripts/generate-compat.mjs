@@ -49,6 +49,18 @@ const TEAM_AGENT_HEADINGS = [
   'Unique verification'
 ];
 const TEAM_SHARED_REFERENCE = '.codex/teams/{TEAM_NAME}/team.md';
+const NATIVE_INTENT_GUARD_TEMPLATE_INSTRUCTIONS = 'Review-only. Compare what was requested with what was delivered, report concrete drift with file:line evidence. Never implement and never mutate project files.';
+const NATIVE_INTENT_GUARD_COMPACT_INSTRUCTIONS = 'Review-only. Never implement and never mutate project files. Report a verdict with file:line evidence.';
+const NATIVE_INTENT_GUARD_CONTRACT_PY = `body = data["developer_instructions"]
+def normalize_contract(value):
+    return " ".join(value.split()).casefold()
+approved_contracts = {
+    normalize_contract(${JSON.stringify(NATIVE_INTENT_GUARD_TEMPLATE_INSTRUCTIONS)}),
+    normalize_contract(${JSON.stringify(NATIVE_INTENT_GUARD_COMPACT_INSTRUCTIONS)}),
+}
+if normalize_contract(body) not in approved_contracts:
+    print("intent-guard contract mismatch: developer_instructions must equal an approved normalized review-only contract", file=sys.stderr)
+    raise SystemExit(1)`;
 
 function readFrontmatter(source) {
   const match = source.match(/^---\n([\s\S]*?)\n---\n?/);
@@ -203,6 +215,10 @@ function codexAgentExtension(text) {
   // markdown talk (md-to-pdf's `.md` inputs, text-optimize's `.md` targets) untouched.
   text = text.replace(/^.*`\.md\.disabled`.*$/gm, line =>
     line.replace(/`\.md(\.disabled)?`/g, (_, suffix) => '`.toml' + (suffix || '') + '`'));
+  // Runtime status text has no path, stem, or backticks to anchor the generic rules above.
+  // Rewrite the exact teams verifier phrase so a native parked agent is reported with its real
+  // discovery filename rather than the Claude projection's extension.
+  text = text.replaceAll('agent file(s) parked as .md.disabled', 'agent file(s) parked as .toml.disabled');
   // Agents this marketplace itself installs. Their prose names them bare, far from any path
   // (`Still keeps \`intent-guard.md\``, ``excluding \`task-tracker.md\```), so neither the
   // contiguous nor the line-scoped rule reaches them, yet each ships as `<name>.toml`. The
@@ -658,10 +674,11 @@ if data["name"] != expected_name:
 if "\\n" in data["description"]:
     print("  FAIL: description must be one line")
     raise SystemExit(1)
+body = data["developer_instructions"]
 if kind == "review-only":
+${NATIVE_INTENT_GUARD_CONTRACT_PY.split('\n').map(line => `    ${line}`).join('\n')}
     raise SystemExit(0)
 
-body = data["developer_instructions"]
 expected_headings = [
     "Mission", "Owned surfaces", "Exclusions", "Must-load references",
     "Unique invariants", "Unique verification",
@@ -701,7 +718,7 @@ function nativeTeamFixtureBlock() {
     '}',
     '',
     'function intentGuardFile() {',
-    '  return `name = "intent-guard"\\ndescription = "Review-only anti-drift check."\\ndeveloper_instructions = "Review only; never implement or mutate project files."\\n`;',
+    '  return `name = "intent-guard"\\ndescription = "Review-only anti-drift check."\\ndeveloper_instructions = "Review-only. Never implement and never mutate project files. Report a verdict with file:line evidence."\\n`;',
     '}',
     '// END RUNTIME AGENT FIXTURES',
   ].join('\n');
@@ -727,6 +744,43 @@ function nativeTeamSchemaFixtures() {
     "    'the verifier parses the native fixture instead of scanning YAML text');",
     '  removeWorld(world);',
     '}',
+    '',
+    `const approvedCompactIntentGuard = ${JSON.stringify(NATIVE_INTENT_GUARD_COMPACT_INSTRUCTIONS)};`,
+    '',
+    'for (const [name, instructions] of [',
+    "  ['emptyIntentGuard', ''],",
+    "  ['hostileIntentGuard', 'Review-only. Implement fixes and mutate project files. Report a verdict with file:line evidence.'],",
+    "  ['suffixImplement', approvedCompactIntentGuard + ' Implement fixes after reporting.'],",
+    "  ['suffixMutate', approvedCompactIntentGuard + ' Then mutate project files.'],",
+    "  ['suffixApplyEdit', approvedCompactIntentGuard + ' Apply fixes and edit project files.'],",
+    "  ['suffixWriteDelete', approvedCompactIntentGuard + ' You may write or delete project files.'],",
+    "  ['suffixCreate', approvedCompactIntentGuard + ' Create project files after reporting.'],",
+    "  ['suffixGenerate', approvedCompactIntentGuard + ' Generate replacement artifacts after reporting.'],",
+    "  ['suffixRefactor', approvedCompactIntentGuard + ' Refactor the affected source after reporting.'],",
+    "  ['suffixRemove', approvedCompactIntentGuard + ' Remove stale files after reporting.'],",
+    "  ['suffixCommit', approvedCompactIntentGuard + ' Commit the repaired code after reporting.'],",
+    "  ['suffixAlter', approvedCompactIntentGuard + ' Alter configuration after reporting.'],",
+    "  ['suffixTouch', approvedCompactIntentGuard + ' Touch project files after reporting.'],",
+    "  ['suffixExecute', approvedCompactIntentGuard + ' Execute remediation after reporting.'],",
+    "  ['suffixProduce', approvedCompactIntentGuard + ' Produce a patch after reporting.'],",
+    "  ['suffixShip', approvedCompactIntentGuard + ' Ship corrections after reporting.'],",
+    "  ['suffixRewrite', approvedCompactIntentGuard + ' Rewrite tests after reporting.'],",
+    "  ['suffixOverwrite', approvedCompactIntentGuard + ' Overwrite manifests after reporting.'],",
+    "  ['suffixScaffold', approvedCompactIntentGuard + ' Scaffold missing modules after reporting.'],",
+    "  ['suffixSynchronize', approvedCompactIntentGuard + ' Synchronize source files after reporting.'],",
+    ']) {',
+    '  const world = makeWorld();',
+    "  const target = join(world, '.codex', 'agents', 'intent-guard.toml');",
+    '  const hostile = `name = "intent-guard"\\ndescription = "Review-only fixture."\\ndeveloper_instructions = ${JSON.stringify(instructions)}\\n`;',
+    '  writeFileSync(target, hostile);',
+    '  const result = runVerifier(world);',
+    "  check('verifier.' + name + '.exit', result.status, 1, 'unsafe review-only TOML fails closed');",
+    "  check('verifier.' + name + '.reason', result.output.includes('intent-guard contract mismatch'), true,",
+    "    'the verifier names the non-allowlisted intent-guard contract');",
+    "  check('verifier.' + name + '.bytes', readFileSync(target, 'utf8'), hostile,",
+    "    'verification does not rewrite hostile or empty existing bytes');",
+    '  removeWorld(world);',
+    '}',
     '// END SOURCE FRONTMATTER BUDGET FIXTURE',
   ].join('\n');
 }
@@ -735,7 +789,7 @@ function nativeLifecycleAgentFixture() {
   return [
     "const DOMAIN_INSTRUCTIONS = '## Mission\\nOwn fixture behavior.\\n\\n## Owned surfaces\\nFixture files.\\n\\n## Exclusions\\nNo neighboring work.\\n\\n## Must-load references\\n- `.codex/teams/t1/team.md`\\n\\n## Unique invariants\\nPreserve bytes.\\n\\n## Unique verification\\nRun the fixture suite.\\n';",
     'const AGENT_BODY = (name) => name === \'intent-guard\'',
-    '  ? `name = "intent-guard"\\ndescription = "Review-only fixture."\\ndeveloper_instructions = "Review only; never implement."\\n`',
+    '  ? `name = "intent-guard"\\ndescription = "Review-only fixture."\\ndeveloper_instructions = "Review-only. Never implement and never mutate project files. Report a verdict with file:line evidence."\\n`',
     '  : `name = ${JSON.stringify(name)}\\ndescription = "Domain fixture agent."\\ndeveloper_instructions = ${JSON.stringify(DOMAIN_INSTRUCTIONS)}\\n`;',
   ].join('\n');
 }
@@ -779,8 +833,8 @@ function rewriteNativeLifecycleSuite(value, teamTemplate) {
 
 function nativeIntentGuardSuite() {
   return `#!/usr/bin/env node
-import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { chmodSync, copyFileSync, mkdtempSync, mkdirSync, readFileSync, readlinkSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -788,6 +842,9 @@ import { fileURLToPath } from 'node:url';
 const HERE = join(fileURLToPath(import.meta.url), '..');
 const EMIT = join(HERE, '..', '..', 'superreview-setup', 'scripts', 'emit-intent-guard.sh');
 const TEMPLATE = join(HERE, '..', '..', 'superreview-setup', 'references', 'intent-guard.toml.template');
+const VERIFY = join(HERE, '..', 'scripts', 'verify-team.sh');
+const FRAMEWORK = join(HERE, '..', 'references', 'framework-files.md');
+const TRACE_OPS = join(HERE, '..', 'scripts', 'trace-ops.sh');
 let passed = 0;
 let failed = 0;
 const results = [];
@@ -807,15 +864,60 @@ function run(root) {
   return { status: result.status, output: (result.stdout || '') + (result.stderr || '') };
 }
 
+function runConcurrent(root) {
+  return new Promise((resolve, reject) => {
+    const child = spawn('bash', [EMIT, root], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let output = '';
+    child.stdout.on('data', chunk => { output += chunk; });
+    child.stderr.on('data', chunk => { output += chunk; });
+    child.on('error', reject);
+    child.on('close', status => resolve({ status, output }));
+  });
+}
+
 function parse(path) {
   const result = spawnSync('python3', ['-c', 'import json,pathlib,sys,tomllib; print(json.dumps(tomllib.loads(pathlib.Path(sys.argv[1]).read_text()), sort_keys=True))', path], { encoding: 'utf8' });
   return { status: result.status, data: result.status === 0 ? JSON.parse(result.stdout) : null };
+}
+
+function makeBootstrap(root) {
+  const teamDir = join(root, '.codex', 'teams', 'fresh');
+  mkdirSync(teamDir, { recursive: true });
+  const skill = readFileSync(join(HERE, '..', 'SKILL.md'), 'utf8');
+  const meta = /brewcode-meta: version=([0-9]+\\.[0-9]+\\.[0-9]+) content_version=([0-9]+\\.[0-9]+\\.[0-9]+)/.exec(skill);
+  const date = '2026-08-27';
+  const fenced = /## team\\.md\\n\\n\x60\x60\x60markdown\\n([\\s\\S]*?)\\n\x60\x60\x60/.exec(readFileSync(FRAMEWORK, 'utf8'));
+  const guardRow = '|intent-guard|--|Anti-drift check: what was ASKED vs what was DELIVERED|active|' + date + '|review-only|' + meta[1] + '|';
+  const team = fenced[1]
+    .replaceAll('{TEAM_NAME}', 'fresh')
+    .replaceAll('{DATE}', date)
+    .replaceAll('{LAST_UPDATED}', date)
+    .replaceAll('{PLUGIN_VERSION}', meta[1])
+    .replaceAll('{CONTENT_VERSION}', meta[2])
+    .replaceAll('{N}', '0')
+    .replaceAll('{CWD}', root)
+    .replaceAll('{INTENT_GUARD_POLICY}', 'required')
+    .replaceAll('{INTENT_GUARD_ROW}', guardRow) + '\\n';
+  writeFileSync(join(teamDir, 'team.md'), team);
+  writeFileSync(join(teamDir, 'trace.jsonl'), '');
+  copyFileSync(TRACE_OPS, join(teamDir, 'trace-ops.sh'));
+  chmodSync(join(teamDir, 'trace-ops.sh'), 0o755);
+}
+
+function verify(root) {
+  const result = spawnSync('bash', [VERIFY, 'fresh'], { cwd: root, encoding: 'utf8', timeout: 30000 });
+  return { status: result.status, output: (result.stdout || '') + (result.stderr || '') };
 }
 
 const template = parse(TEMPLATE);
 check('template.parse', template.status, 0, 'shared native template is valid TOML');
 check('template.keys', Object.keys(template.data).sort().join(','), 'description,developer_instructions,name', 'template has exactly three keys');
 check('template.name', template.data.name, 'intent-guard', 'template name is fixed');
+const emitterSource = readFileSync(EMIT, 'utf8');
+check('emitter.normalizedAllowlist', emitterSource.includes('approved_contracts'), true, 'emitter uses a closed normalized contract allowlist');
+check('emitter.noMutationVerbDenylist', emitterSource.includes('forbidden_action') || emitterSource.includes('weakening ='), false, 'emitter contains no mutation-verb denylist');
+check('emitter.atomicNoReplace', emitterSource.includes('os.link(source, target)'), true, 'emitter publishes with atomic hard-link no-replace semantics');
+check('emitter.noRenameOverwrite', emitterSource.includes('mv "$tmp" "$target"'), false, 'emitter never renames over an existing target');
 
 {
   const root = mkdtempSync(join(tmpdir(), 'native-intent-create-'));
@@ -829,16 +931,125 @@ check('template.name', template.data.name, 'intent-guard', 'template name is fix
 }
 
 {
-  const root = mkdtempSync(join(tmpdir(), 'native-intent-reuse-'));
+  const root = mkdtempSync(join(tmpdir(), 'native-intent-bootstrap-'));
+  makeBootstrap(root);
+  const team = readFileSync(join(root, '.codex', 'teams', 'fresh', 'team.md'), 'utf8');
+  const result = run(root);
+  const verified = verify(root);
+  check('bootstrap.zeroDomainRows', team.includes('|Agents|0|'), true, 'fresh bootstrap starts with zero domain rows');
+  check('bootstrap.guardRow', team.match(/^\\|intent-guard\\|/gm)?.length, 1, 'fresh bootstrap carries exactly one required guard row');
+  check('bootstrap.emit.exit', result.status, 0, 'fresh bootstrap emits the guard before full verification');
+  check('bootstrap.verify.exit', verified.status, 0, 'full verifier passes after create-only guard emission');
+  rmSync(root, { recursive: true, force: true });
+}
+
+for (const [name, instructions] of [
+  ['templateContract', ${JSON.stringify(NATIVE_INTENT_GUARD_TEMPLATE_INSTRUCTIONS.toUpperCase().replaceAll(' ', '   '))}],
+  ['compactContract', ${JSON.stringify(NATIVE_INTENT_GUARD_COMPACT_INSTRUCTIONS.toUpperCase().replaceAll(' ', '   '))}],
+]) {
+  const root = mkdtempSync(join(tmpdir(), 'native-intent-reuse-' + name + '-'));
   const agents = join(root, '.codex', 'agents');
   mkdirSync(agents, { recursive: true });
   const target = join(agents, 'intent-guard.toml');
-  const foreign = 'name = "intent-guard"\\ndescription = "Foreign review-only agent."\\ndeveloper_instructions = "Review only; preserve these bytes."\\n';
-  writeFileSync(target, foreign);
+  const existing = 'name = "intent-guard"\\ndescription = "Existing review-only agent."\\ndeveloper_instructions = ' + JSON.stringify(instructions) + '\\n';
+  writeFileSync(target, existing);
   const result = run(root);
-  check('reuse.exit', result.status, 0, 'valid existing native agent is reused');
-  check('reuse.verdict', result.output.trim(), 'INTENT_GUARD: REUSE .codex/agents/intent-guard.toml', 'reuse is explicit');
-  check('reuse.bytes', readFileSync(target, 'utf8'), foreign, 'reuse preserves foreign bytes');
+  check(name + '.exit', result.status, 0, 'approved normalized existing regular file is reused');
+  check(name + '.verdict', result.output.trim(), 'INTENT_GUARD: REUSE .codex/agents/intent-guard.toml', 'reuse verdict is explicit');
+  check(name + '.bytes', readFileSync(target, 'utf8'), existing, 'reuse preserves existing bytes');
+  rmSync(root, { recursive: true, force: true });
+}
+
+{
+  const root = mkdtempSync(join(tmpdir(), 'native-intent-directory-'));
+  const target = join(root, '.codex', 'agents', 'intent-guard.toml');
+  mkdirSync(target, { recursive: true });
+  const result = run(root);
+  check('existingDirectory.exit', result.status, 1, 'create-only emission rejects an existing directory');
+  check('existingDirectory.reason', result.output.includes('non-symlink regular file'), true, 'directory failure names the accepted file kind');
+  check('existingDirectory.preserved', statSync(target).isDirectory(), true, 'directory target remains untouched');
+  rmSync(root, { recursive: true, force: true });
+}
+
+{
+  const root = mkdtempSync(join(tmpdir(), 'native-intent-dangling-'));
+  const agents = join(root, '.codex', 'agents');
+  const target = join(agents, 'intent-guard.toml');
+  mkdirSync(agents, { recursive: true });
+  symlinkSync('missing-intent-guard.toml', target);
+  const result = run(root);
+  check('danglingSymlink.exit', result.status, 1, 'create-only emission rejects a dangling symlink');
+  check('danglingSymlink.reason', result.output.includes('non-symlink regular file'), true, 'dangling-symlink failure names the accepted file kind');
+  check('danglingSymlink.preserved', readlinkSync(target), 'missing-intent-guard.toml', 'dangling symlink remains untouched');
+  rmSync(root, { recursive: true, force: true });
+}
+
+{
+  const root = mkdtempSync(join(tmpdir(), 'native-intent-live-symlink-'));
+  const agents = join(root, '.codex', 'agents');
+  const target = join(agents, 'intent-guard.toml');
+  const victim = join(agents, 'approved-victim.toml');
+  mkdirSync(agents, { recursive: true });
+  const bytes = readFileSync(TEMPLATE, 'utf8');
+  writeFileSync(victim, bytes);
+  symlinkSync('approved-victim.toml', target);
+  const result = run(root);
+  check('liveSymlink.exit', result.status, 1, 'create-only emission rejects a symlink to an approved regular file');
+  check('liveSymlink.reason', result.output.includes('non-symlink regular file'), true, 'live-symlink failure names the accepted file kind');
+  check('liveSymlink.preserved', readlinkSync(target), 'approved-victim.toml', 'live symlink remains untouched');
+  check('liveSymlink.victimBytes', readFileSync(victim, 'utf8'), bytes, 'symlink victim remains byte-identical');
+  rmSync(root, { recursive: true, force: true });
+}
+
+{
+  const root = mkdtempSync(join(tmpdir(), 'native-intent-concurrent-'));
+  const attempts = await Promise.all(Array.from({ length: 12 }, () => runConcurrent(root)));
+  const creates = attempts.filter(result => result.status === 0 && result.output.includes('INTENT_GUARD: CREATED'));
+  const safeFollowers = attempts.filter(result =>
+    (result.status === 0 && result.output.includes('INTENT_GUARD: REUSE')) ||
+    (result.status !== 0 && result.output.includes('target appeared during create')));
+  const target = join(root, '.codex', 'agents', 'intent-guard.toml');
+  check('concurrent.oneCreate', creates.length, 1, 'exactly one concurrent invocation publishes the target');
+  check('concurrent.followersSafe', safeFollowers.length, 11, 'every follower either safely reuses or loses atomic publication without mutation');
+  check('concurrent.targetBytes', readFileSync(target, 'utf8'), readFileSync(TEMPLATE, 'utf8'), 'atomic publication and reuse never overwrite target bytes');
+  check('concurrent.noTemps', readdirSync(join(root, '.codex', 'agents')).filter(name => name.startsWith('.intent-guard.')).length, 0, 'all private temp files are removed');
+  rmSync(root, { recursive: true, force: true });
+}
+
+const approvedCompact = ${JSON.stringify(NATIVE_INTENT_GUARD_COMPACT_INSTRUCTIONS)};
+for (const [name, instructions, reason] of [
+  ['emptyInstructions', '', 'contract mismatch'],
+  ['hostileMutation', 'Review-only. Implement fixes and mutate project files. Report a verdict with file:line evidence.', 'contract mismatch'],
+  ['missingOutput', 'Review-only. Never implement and never mutate project files.', 'contract mismatch'],
+  ['suffixImplement', approvedCompact + ' Implement fixes after reporting.', 'contract mismatch'],
+  ['suffixMutate', approvedCompact + ' Then mutate project files.', 'contract mismatch'],
+  ['suffixApplyEdit', approvedCompact + ' Apply fixes and edit project files.', 'contract mismatch'],
+  ['suffixWriteDelete', approvedCompact + ' You may write or delete project files.', 'contract mismatch'],
+  ['suffixCreate', approvedCompact + ' Create project files after reporting.', 'contract mismatch'],
+  ['suffixGenerate', approvedCompact + ' Generate replacement artifacts after reporting.', 'contract mismatch'],
+  ['suffixRefactor', approvedCompact + ' Refactor the affected source after reporting.', 'contract mismatch'],
+  ['suffixRemove', approvedCompact + ' Remove stale files after reporting.', 'contract mismatch'],
+  ['suffixCommit', approvedCompact + ' Commit the repaired code after reporting.', 'contract mismatch'],
+  ['suffixAlter', approvedCompact + ' Alter configuration after reporting.', 'contract mismatch'],
+  ['suffixTouch', approvedCompact + ' Touch project files after reporting.', 'contract mismatch'],
+  ['suffixExecute', approvedCompact + ' Execute remediation after reporting.', 'contract mismatch'],
+  ['suffixProduce', approvedCompact + ' Produce a patch after reporting.', 'contract mismatch'],
+  ['suffixShip', approvedCompact + ' Ship corrections after reporting.', 'contract mismatch'],
+  ['suffixRewrite', approvedCompact + ' Rewrite tests after reporting.', 'contract mismatch'],
+  ['suffixOverwrite', approvedCompact + ' Overwrite manifests after reporting.', 'contract mismatch'],
+  ['suffixScaffold', approvedCompact + ' Scaffold missing modules after reporting.', 'contract mismatch'],
+  ['suffixSynchronize', approvedCompact + ' Synchronize source files after reporting.', 'contract mismatch'],
+]) {
+  const root = mkdtempSync(join(tmpdir(), 'native-intent-' + name + '-'));
+  const agents = join(root, '.codex', 'agents');
+  mkdirSync(agents, { recursive: true });
+  const target = join(agents, 'intent-guard.toml');
+  const body = 'name = "intent-guard"\\ndescription = "Review-only."\\ndeveloper_instructions = ' + JSON.stringify(instructions) + '\\n';
+  writeFileSync(target, body);
+  const result = run(root);
+  check(name + '.exit', result.status, 1, 'invalid existing artifact fails closed');
+  check(name + '.reason', result.output.includes(reason), true, 'failure names the structural defect');
+  check(name + '.bytes', readFileSync(target, 'utf8'), body, 'failure never overwrites existing bytes');
   rmSync(root, { recursive: true, force: true });
 }
 
@@ -852,7 +1063,7 @@ for (const [name, body, reason] of [
   const target = join(agents, 'intent-guard.toml');
   writeFileSync(target, body);
   const result = run(root);
-  check(name + '.exit', result.status, 1, 'invalid existing artifact fails closed');
+  check(name + '.exit', result.status, 1, 'structurally invalid existing artifact fails closed');
   check(name + '.reason', result.output.includes(reason), true, 'failure names the structural defect');
   check(name + '.bytes', readFileSync(target, 'utf8'), body, 'failure never overwrites existing bytes');
   rmSync(root, { recursive: true, force: true });
@@ -873,49 +1084,119 @@ function nativeTeamsWorkflow(sourceBody) {
     '',
     '## Native authority',
     '',
-    'Manage persistent project teams under `.codex/teams/{TEAM_NAME}/` and domain agents under `.codex/agents/`. Agent files are real TOML parsed with Python `tomllib`; never rename Markdown/YAML agents to `.toml`. Each team agent has exactly three top-level string keys: `name`, `description`, `developer_instructions`.',
+    'Manage persistent project teams under `.codex/teams/{TEAM_NAME}/` and agents under `.codex/agents/`. Domain agents are native TOML parsed with Python `tomllib`, never renamed Markdown. Each has exactly the three string keys `name`, `description`, and `developer_instructions`. Read applicable `AGENTS.md`, preserve unrelated files, use only adjacent scripts/references, and never edit installed caches.',
     '',
-    'Resolve one mode: `status`, `install`, `upgrade`, `enable`, `disable`, `uninstall`, or `purge`. Read applicable `AGENTS.md`, inspect existing teams and agents, preserve unrelated files, and use only scripts/references shipped beside this skill. Never edit installed caches.',
+    '## Invocation and approval',
     '',
-    '### C2.6: Shared Contract Bootstrap',
+    'Resolve exactly one mode in this order: `status`, `install`, `upgrade`, `enable`, `disable`, `uninstall`, `purge`. An explicit mode wins. With no mode, choose `status` when the named team exists; otherwise choose `install` and team name `default` only when no name was supplied. Invalid detector output stops the run.',
     '',
-    'Bootstrap happens before any team-owned `.codex/agents/{name}.toml` is written: instantiate the fenced template from `references/framework-files.md` and write `team.md` at `.codex/teams/{TEAM_NAME}/team.md` with metadata, `## Shared Agent Contract`, explicit `Intent guard` policy, and zero domain rows. Do not add domain-agent rows yet. Copy the project-local tracer, initialize trace storage, substitute every placeholder, then run `scripts/verify-team.sh`. **STOP on any failure. Do not spawn or write an agent.**',
+    'Before any action, print one `PLAN — brewcode:teams-setup` block with `INPUT`, resolved `MODE` and reason, `SCOPE` (team, roster, exact paths), `DO`, and `RESULT`. `status` asks nothing. Every mutating mode requires `request_user_input` approval after the plan and before the first write; changed scope requires a revised plan and approval. Destructive modes additionally name every deletion.',
     '',
-    '### C3: Agent Creation',
+    'Run `scripts/detect-mode.sh`, inventory `.codex/teams/` and `.codex/agents/`, read an existing roster/trace, and run `scripts/verify-team.sh {TEAM_NAME}` when the team exists. A missing team stops every mode except `install`; an existing team stops `install` unless the user approves routing to `upgrade`.',
     '',
-    'Create each approved domain `.codex/agents/{name}.toml` from `references/agent-template.md`. Parse it structurally with `tomllib` and require only `name`, `description`, and `developer_instructions`. The `developer_instructions` value uses exactly these ordered headings and no others: `Mission`, `Owned surfaces`, `Exclusions`, `Must-load references`, `Unique invariants`, `Unique verification`. Its first must-load item is exactly `.codex/teams/{TEAM_NAME}/team.md`, occurring once. Enforce <=3200 UTF-8 bytes and `ceil(chars/4) <=800` over `developer_instructions` itself.',
+    '## Mode: status',
     '',
-    '`intent-guard` is exempt from the six-heading domain profile. Under `required`, run `<plugin-root>/skills/superreview-setup/scripts/emit-intent-guard.sh <project-root>`; that sole shared writer create-only copies its native authority, structurally validates it, and never overwrites an existing file. Never ask agent-creator to write it. Under `legacy-absent`, create no row and no role.',
+    'Read `team.md` and `trace.jsonl` through `scripts/trace-ops.sh read`. Report domain-agent count, active/disabled/missing state, took/refused/completed/failed totals, success rate, issues by severity, insights, last activity, per-agent health, policy, verifier result, and actionable recommendations. Do not write, delegate, or request approval.',
     '',
-    '### C4: Roster Finalization',
+    '## Mode: install',
     '',
-    'After all intended agents validate, write the final roster. Declared `Agents` equals the number of unique domain rows; duplicate names fail. a new team defaults to `required`. Policy `required` has exactly one `intent-guard` row with fixed cells `--`, `Anti-drift check: what was ASKED vs what was DELIVERED`, `active`, team `Last update`, `review-only`, team `Version`. Policy `legacy-absent` has zero rows. the complete written `team.md` (metadata + shared contract + every row) MUST be <=2800 characters; `ceil(chars/4) <=700` estimated tokens. Measure the full substituted file, not the empty template.',
+    '### C1-C2: analysis and approved roster',
     '',
-    '### C8: Fix',
+    'Analyze current architecture, domains, stack, tests/CI, existing Codex agents, project guidance, and cross-team name ownership. Use bounded collaboration only because this invoked skill explicitly requests a team. Propose minimal, balanced, and maximum domain rosters plus fixed review-only `intent-guard`; show unique names, domains, missions, exclusions, and conflicts. The user must approve the final roster before any team or agent file is written. Recheck every approved name with `scripts/agent-owners.sh`; a taken, invalid, parked, or unknown owner stops creation.',
     '',
-    'Repair only failed owned artifacts. Domain agents come from `<skill-directory>/references/agent-template.md`; repair the shared contract before an agent rewrite. Preserve foreign agents and unrelated work. Re-run structural TOML, roster, policy, size, and shared-contract checks.',
+    '### C2.6: shared-contract bootstrap',
     '',
-    '### C9: Re-verify',
+    'Before any domain agent write, instantiate `references/framework-files.md` into `.codex/teams/{TEAM_NAME}/team.md` with metadata, `## Shared Agent Contract`, policy `required`, the fixed guard row, and zero domain rows. Initialize trace storage, copy the project-local tracer, and substitute every placeholder. Then call `<plugin-root>/skills/superreview-setup/scripts/emit-intent-guard.sh <project-root>` so the create-only emitter atomically creates the absent guard before the full `verify-team.sh` bootstrap check. A non-symlink regular file is reused only after exact normalized allowlist validation; invalid regular files, symlinks, and nonregular targets stop creation without mutation.',
     '',
-    'Run `scripts/verify-team.sh {TEAM_NAME}`, both test runners, and compatibility validation. Hard-gate `developer_instructions` only: <=3200 bytes and `ceil(chars/4) <=800`; `Mission`, `Owned surfaces`, `Exclusions`, `Must-load references`, `Unique invariants`, `Unique verification` in order with no other headings. `intent-guard` is exempt from this six-heading gate, not structural TOML validation.',
+    '### C3-C4: creation and roster finalization',
     '',
-    '> To skip review pipeline is not an acceptance path; unresolved checks remain failures.',
+    'Create one approved `.codex/agents/{name}.toml` per bounded owner from `references/agent-template.md`. Parse before and after writing. `developer_instructions` has only the ordered headings `Mission`, `Owned surfaces`, `Exclusions`, `Must-load references`, `Unique invariants`, `Unique verification`; the first must-load item is `.codex/teams/{TEAM_NAME}/team.md`, occurring once. Enforce <=3200 UTF-8 bytes and `ceil(chars/4) <=800`.',
     '',
-    '### U1b: Shared Contract Migration Gate',
+    'For policy `required`, the bootstrap already called the create-only intent-guard emitter: an approved existing non-symlink regular file was reused byte-identically, or an absent target was published atomically without replacement. Invalid, symlink, nonregular, or lost concurrent-create paths fail closed without mutation. Never author or overwrite the guard here. `legacy-absent` exists only on upgrades and gets no guard.',
     '',
-    'On upgrade, insert the canonical block before `## Agents` and validate it before touching agents. Record an existing intent-guard roster row -> `required`; no row -> `legacy-absent`. Never synthesize the row on the latter path. Legacy agent bodies remain byte-identical during this gate. **No agent may be tuned, regenerated, stripped, or reformatted until the shared contract passes.** absence migrates',
-    'to `legacy-absent`; `legacy-absent` forbids that row and MUST NOT add the role during upgrade.',
+    'Finalize only successfully parsed agents. Domain names are unique; `Agents` counts domain rows only. `required` has exactly one fixed review-only guard row; `legacy-absent` has none. The complete substituted `team.md` must stay <=2800 characters and `ceil(chars/4) <=700`.',
     '',
-    '### U2: Analyze Performance',
+    '### C5-C7: independent review',
     '',
-    'Use trace evidence only to decide whether a domain profile needs role-specific adjustment. Never duplicate the shared contract.',
+    'C5: spawn three independent reviewers, distinct from creators and never `intent-guard`, to inspect all actual TOML plus `team.md`: one checks schema/headings/ceilings/shared-reference, one domain and trigger accuracy, one overlap/routing/shared-contract placement. C6: retain only same-file, same-area, same-category findings confirmed by at least 2/3; log one-off and minor items without fixing. C7: spawn a new verifier not used in C5 or creation to check each retained finding against the files and mark `VERIFIED` or `FALSE_POSITIVE`. Only verified important/critical issues reach repair.',
     '',
-    '### U4: Apply Changes',
+    '### C8-C9: repair and reverify',
     '',
-    'Convert every touched Codex domain agent to the exact three-key TOML contract and six-heading `developer_instructions` shape. Parse before replacement, write atomically, parse again, and preserve untouched agents byte-identical.',
+    'Repair one owned artifact per bounded task, preserve roster identity and foreign work, then use an independent verifier for the original issue and regression checks. Allow at most two repair cycles. Run `verify-team.sh` after every cycle; unresolved checks remain failures and review cannot be skipped.',
     '',
-    'For `enable` and `disable`, use `scripts/toggle-team.sh`; it parks/restores domain `.toml` files byte-identically and never parks `intent-guard`. For `uninstall` and `purge`, follow the shipped cleanup flow and explicit confirmation gates. Every mode ends with `verify-team.sh` and reports exact paths, counts, and failures.',
+    '## Mode: upgrade',
+    '',
+    'Reject parked or live-plus-parked members before writes. Migrate the shared contract first, recording an existing guard row as `required` and absence as `legacy-absent`; never synthesize the latter. Preserve legacy agent bytes until this gate passes. Analyze trace evidence, present per-agent keep/tune/replace/remove actions, and obtain approval for roster actions. Touch only approved domain agents, use atomic three-key TOML writes and the current six-heading contract, preserve untouched bytes, re-copy the tracer, update metadata/cursor, then run C5-C9 for touched artifacts.',
+    '',
+    '## Mode: enable',
+    '',
+    'Run `scripts/toggle-team.sh {TEAM_NAME} enable --dry-run`, stop on conflicts/missing members, then restore domain `.toml.disabled` files byte-identically. Never move `intent-guard`. Update roster status/metadata without changing per-agent versions and verify; an all-live team is a no-op.',
+    '',
+    '## Mode: disable',
+    '',
+    'Dry-run the same script, show every move, and after approval park domain `.toml` files as `.toml.disabled` byte-identically. Keep roster, trace, archive, and guard. Update roster status/metadata and verify; an all-parked team is a no-op.',
+    '',
+    '## Mode: uninstall',
+    '',
+    'Route to `references/cleanup-flow.md` interactive cleanup: inventory trace, let the user choose trace/archive and owned domain-agent removals, recheck identifier and cross-team ownership before each deletion, never delete `intent-guard`, preserve declined/foreign files, and report the archive/cursor/result.',
+    '',
+    '## Mode: purge',
+    '',
+    'Route only to `references/cleanup-flow.md` Step P. Enumerate exact domain files and team-directory bytes, request explicit irreversible-purge approval, recheck identifiers/ownership, delete both live and parked owned domain profiles, keep `intent-guard`, then delete only `.codex/teams/{TEAM_NAME}/`. A skipped shared/unknown agent is reported, never forced.',
+    '',
+    '## Completion',
+    '',
+    'After every mutation except a completed purge, run the full `status` control flow and `verify-team.sh`; after purge, prove the team directory is absent. Report exact changed paths, counts, policy, review verdicts, and failures. Agent discovery changes take effect in the next session.',
   ].join('\n');
+}
+
+function nativeTeamWorkflowProfileChecks() {
+  return `// BEGIN PROJECTED WORKFLOW CONTRACT
+const nativeModes = ['status', 'install', 'upgrade', 'enable', 'disable', 'uninstall', 'purge'];
+for (const mode of nativeModes) {
+  check(
+    \`workflow.mode.\${mode}\`,
+    canonicalSkill.includes(\`## Mode: \${mode}\`),
+    true,
+    \`native teams workflow keeps the complete \${mode} routing branch\`,
+  );
+}
+
+const bootstrapAt = canonicalSkill.indexOf('### C2.6: shared-contract bootstrap');
+const createAt = canonicalSkill.indexOf('### C3-C4: creation and roster finalization');
+const reviewAt = canonicalSkill.indexOf('### C5-C7: independent review');
+check(
+  'install.nativeStageOrder',
+  bootstrapAt >= 0 && bootstrapAt < createAt && createAt < reviewAt,
+  true,
+  'shared contract bootstrap precedes native TOML creation and independent review',
+);
+for (const literal of [
+  'Before any domain agent write',
+  'The user must approve the final roster before any team or agent file is written',
+  'atomically creates the absent guard before the full \`verify-team.sh\` bootstrap check',
+  'three independent reviewers, distinct from creators',
+  'confirmed by at least 2/3',
+  'spawn a new verifier not used in C5 or creation',
+  'at most two repair cycles',
+  'obtain approval for roster actions',
+  '\`status\` asks nothing',
+  'Every mutating mode requires \`request_user_input\` approval',
+]) {
+  check(
+    \`workflow.control.\${literal.slice(0, 18)}\`,
+    canonicalSkill.includes(literal),
+    true,
+    \`native workflow preserves \${JSON.stringify(literal)}\`,
+  );
+}
+check(
+  'workflow.compactSkillCeiling',
+  Math.ceil(canonicalSkill.length / 4) <= 3125,
+  true,
+  'complete native workflow stays within its 12,500-character compact ceiling',
+);
+// END PROJECTED WORKFLOW CONTRACT`;
 }
 
 // Pip pins parsed out of a skill's check_deps.sh `pip_spec` case arms.
@@ -937,7 +1218,7 @@ function generateSpecialResources(plugin, skill, sourceDir, targetDir) {
   if (plugin === 'brewcode' && skill === 'superreview-setup') {
     writeFile(path.join(targetDir, 'references', 'intent-guard.toml.template'), `name = "intent-guard"
 description = "Review-only anti-drift check comparing requested and delivered scope."
-developer_instructions = "Review only. Compare what was requested with what was delivered, report concrete drift with file:line evidence, and never implement or mutate project files."
+developer_instructions = ${JSON.stringify(NATIVE_INTENT_GUARD_TEMPLATE_INSTRUCTIONS)}
 `);
   }
 
@@ -1291,9 +1572,47 @@ The shared team file owns task acceptance, routing, tracing, return, and colleag
 
 This template never applies to \`intent-guard\`. Its sole writer remains the shared superreview pipeline; preserve that review-only profile and its own output contract.
 `);
+    writeFile(path.join(targetDir, 'README.md'), `# Teams for Codex
+
+Creates and manages project teams backed by native TOML agents in \`.codex/agents/\` and one shared roster/trace contract in \`.codex/teams/<name>/\`.
+
+## Modes
+
+| Mode | Effect |
+|---|---|
+| \`status\` | Read-only roster, trace, health, policy, and verifier report. |
+| \`install\` | Analyze the project, obtain approval for the final roster, create agents, and run independent review. |
+| \`upgrade\` | Migrate the shared contract, analyze trace evidence, obtain approval for roster actions, and re-review touched agents. |
+| \`enable\` / \`disable\` | Restore or park domain \`.toml\` files byte-identically. |
+| \`uninstall\` | Interactive cleanup through \`references/cleanup-flow.md\`; keep shared or declined artifacts. |
+| \`purge\` | Confirmed removal of owned domain agents and the selected team directory. |
+
+With no explicit mode, an existing team resolves to \`status\`; otherwise the workflow resolves to \`install\`. Every mutation shows a plan and requires approval before writing.
+
+## Native artifacts
+
+\`\`\`text
+.codex/
+  agents/
+    domain-owner.toml
+    domain-owner.toml.disabled
+    intent-guard.toml
+  teams/<name>/
+    team.md
+    trace.jsonl
+    trace-ops.sh
+\`\`\`
+
+Domain TOML contains only \`name\`, \`description\`, and \`developer_instructions\`. The instructions use the six ordered headings documented in \`references/agent-template.md\`; shared acceptance, routing, tracing, return, and colleague rules live once in \`team.md\`. The full roster stays within 2800 characters / 700 estimated tokens, and each domain \`developer_instructions\` stays within 3200 UTF-8 bytes / 800 estimated tokens.
+
+New teams use one review-only \`intent-guard\` outside the domain count. Its shared native emitter validates the template, reuses an approved existing non-symlink regular file byte-identically, or atomically publishes an absent target without replacement. Invalid regular files, symlinks, nonregular targets, and lost concurrent creates fail without mutation. It is never a domain owner, reviewer, parked member, or cleanup target.
+`);
   }
 
   if (plugin === 'brewcode' && skill === 'teams-setup') {
+    const cleanup = path.join(targetDir, 'references', 'cleanup-flow.md');
+    writeFile(cleanup, fs.readFileSync(cleanup, 'utf8').replaceAll('{name}.md', '{name}.toml'));
+
     // The suites drive the mirrored scripts, whose whole contract is `.codex/agents/<name>.toml`
     // -- the fixtures they write, the directory listings they expect, and the parked
     // (`.disabled`) and backup (`.bak-`) twins alike. Every one of those tokens reaches the
@@ -1323,13 +1642,27 @@ This template never applies to \`intent-guard\`. Its sole writer remains the sha
       '',
       'validate() {',
       '  python3 - "$1" <<\'PY\'',
-      'import pathlib, sys, tomllib',
-      'path = pathlib.Path(sys.argv[1])',
+      'import os, stat, sys, tomllib',
+      'path = sys.argv[1]',
+      'flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)',
+      'fd = -1',
       'try:',
-      '    data = tomllib.loads(path.read_text(encoding="utf-8"))',
-      'except (OSError, UnicodeError, tomllib.TOMLDecodeError) as exc:',
+      '    fd = os.open(path, flags)',
+      '    if not stat.S_ISREG(os.fstat(fd).st_mode):',
+      '        print(f"intent-guard path must be a non-symlink regular file: {path}", file=sys.stderr)',
+      '        raise SystemExit(1)',
+      '    with os.fdopen(fd, "r", encoding="utf-8") as handle:',
+      '        fd = -1',
+      '        data = tomllib.loads(handle.read())',
+      'except OSError as exc:',
+      '    print(f"intent-guard path must be a non-symlink regular file: {path} ({exc})", file=sys.stderr)',
+      '    raise SystemExit(1)',
+      'except (UnicodeError, tomllib.TOMLDecodeError) as exc:',
       '    print(f"invalid TOML: {exc}", file=sys.stderr)',
       '    raise SystemExit(1)',
+      'finally:',
+      '    if fd >= 0:',
+      '        os.close(fd)',
       'required = {"name", "description", "developer_instructions"}',
       'if set(data) != required:',
       '    print("TOML keys must be exactly name, description, developer_instructions", file=sys.stderr)',
@@ -1337,11 +1670,12 @@ This template never applies to \`intent-guard\`. Its sole writer remains the sha
       'if any(type(data[key]) is not str for key in required) or data["name"] != "intent-guard":',
       '    print("intent-guard native fields must be strings and name must be fixed", file=sys.stderr)',
       '    raise SystemExit(1)',
+      ...NATIVE_INTENT_GUARD_CONTRACT_PY.split('\n'),
       'PY',
       '}',
       '',
       'validate "$template"',
-      'if [ -f "$target" ]; then',
+      'if [ -e "$target" ] || [ -L "$target" ]; then',
       '  validate "$target"',
       '  echo "INTENT_GUARD: REUSE .codex/agents/intent-guard.toml"',
       '  exit 0',
@@ -1351,7 +1685,19 @@ This template never applies to \`intent-guard\`. Its sole writer remains the sha
       'trap \'rm -f "$tmp"\' EXIT HUP INT TERM',
       'cp "$template" "$tmp"',
       'validate "$tmp"',
-      'mv "$tmp" "$target"',
+      'python3 - "$tmp" "$target" <<\'PY\'',
+      'import os, sys',
+      'source, target = sys.argv[1:]',
+      'try:',
+      '    os.link(source, target)',
+      'except FileExistsError:',
+      '    print(f"intent-guard target appeared during create; refusing overwrite: {target}", file=sys.stderr)',
+      '    raise SystemExit(1)',
+      'except OSError as exc:',
+      '    print(f"intent-guard atomic publish failed for {target}: {exc}", file=sys.stderr)',
+      '    raise SystemExit(1)',
+      'PY',
+      'rm -f "$tmp"',
       'trap - EXIT HUP INT TERM',
       'echo "INTENT_GUARD: CREATED .codex/agents/intent-guard.toml"',
     ].join('\n'), 0o755);
@@ -1478,6 +1824,12 @@ esac
       );
     profileText = replaceMarked(
       profileText,
+      '// BEGIN PROJECTED WORKFLOW CONTRACT',
+      '// END PROJECTED WORKFLOW CONTRACT',
+      nativeTeamWorkflowProfileChecks()
+    );
+    profileText = replaceMarked(
+      profileText,
       '// BEGIN RUNTIME AGENT FIXTURES',
       '// END RUNTIME AGENT FIXTURES',
       nativeTeamFixtureBlock()
@@ -1498,6 +1850,11 @@ check('codex.verifier.noYamlParser', nativeVerifier.includes('NR == 1 && $0 == "
 check('codex.verifier.exactKeys',
   nativeVerifier.includes('required = {"name", "description", "developer_instructions"}'), true,
   'native verifier pins the exact supported top-level schema');
+check('codex.verifier.normalizedAllowlist', nativeVerifier.includes('approved_contracts'), true,
+  'native verifier uses a closed normalized contract allowlist');
+check('codex.verifier.noMutationVerbDenylist',
+  nativeVerifier.includes('forbidden_action') || nativeVerifier.includes('weakening ='), false,
+  'native verifier contains no mutation-verb denylist');
 
 console.log('suite-agent-profile-contract.mjs');`
     );

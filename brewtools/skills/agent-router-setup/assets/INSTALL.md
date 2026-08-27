@@ -333,13 +333,14 @@ nothing of the hook's survives it. Nothing is ever written under `~/.claude`
 
 ## settings.json hook entry shape
 
-`<absdir>` = `<repo>/.claude/hooks` (absolute).
+Tier 1 uses the runtime-portable literal `${CLAUDE_PROJECT_DIR}/.claude/hooks/agent-router.mjs`.
+Claude Code expands it for the active checkout or worktree.
 
 ```json
 {
   "hooks": {
     "PreToolUse": [
-      { "matcher": "Agent", "hooks": [ { "type": "command", "command": "node", "args": ["<absdir>/agent-router.mjs"], "timeout": 5 } ] },
+      { "matcher": "Agent", "hooks": [ { "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/agent-router.mjs"], "timeout": 5 } ] },
       { "matcher": "Agent", "hooks": [ { "type": "agent", "prompt": "<inlined judge-prompt.md>", "model": "claude-haiku-4-5-20251001", "timeout": 30, "statusMessage": "agent-router: checking agent fit" } ] }
     ]
   }
@@ -359,14 +360,13 @@ Merge rule, in order:
 
 1. ABORT if `settings.json` exists and is not valid JSON — never rewrite a file you
    could not parse (that turns one stray comma into total data loss).
-2. Drop own entries pointing at a DIFFERENT hooks dir (stale paths from an earlier
-   install elsewhere — Claude Code logs a hook failure on every matching tool call
-   for each of them). Match on the FULL path, not the basename. Entries with no
-   agent-router arg are foreign: never touched.
-3. Drop own tier-2 entries unconditionally — tier 2 is re-derived from `LEVEL` below,
+2. Remove tier-1 handlers individually, preserving every foreign co-handler and dropping a matcher
+   entry only when no handlers remain. This removes duplicates, miswired tuples, and legacy absolute
+   checkout paths without deleting foreign work.
+3. Remove own tier-2 handlers the same way — tier 2 is re-derived from `LEVEL` below,
    which also refreshes the inlined prompt after a plugin update.
-4. APPEND the tier-1 entry into `PreToolUse` — never overwrite — only if the exact
-   `<absdir>/agent-router.mjs` path is not already there (idempotent re-install).
+4. APPEND exactly one portable tier-1 handler into `PreToolUse` — never overwrite the arrays.
+   Re-running converges to the same bytes.
 5. APPEND the tier-2 entry only when `LEVEL=strict`, inlining `judge-prompt.md` from
    the assets dir.
 6. Re-read the written file and assert exactly one tier-1 entry and exactly
@@ -401,7 +401,7 @@ the SAME Bash call. Nothing depends on where the shell happens to sit.
    write** block in the *Config* section above. It also stamps `version` /
    `content_version` / `generated_by` / `last_updated`; do not strip those lines out of it.
 4. Merge the hook entries into `<repo>/.claude/settings.json` (create `{}` if
-   absent), `<absdir>` = `<repo>/.claude/hooks` (**EXECUTE** merge, below).
+   absent), with the project-portable arg above (**EXECUTE** merge, below).
 
 Order matters only in that the copy must precede the merge; the config write is
 independent.
@@ -430,7 +430,7 @@ const f=process.env.SETTINGS, dir=process.env.HOOKS_DIR;
 const level=(process.env.LEVEL||"").trim();
 if(level!=="fast"&&level!=="strict"){ console.error("ABORT: LEVEL must be fast|strict, got: "+JSON.stringify(level)+" - export it before this block"); process.exit(1); }
 const MARK="agent-router.mjs", SM="agent-router: checking agent fit";
-const full=path.join(dir,MARK);
+const full="${CLAUDE_PROJECT_DIR}/.claude/hooks/"+MARK;
 function lock(f){                                      // O_EXCL dir lock; stale-break by mtime
   const l=f+".lock", w=new Int32Array(new SharedArrayBuffer(4));
   for(let i=0;i<100;i++){
@@ -456,21 +456,21 @@ if(fs.existsSync(f)){
 }
 s.hooks=s.hooks||{};
 const hooksOf=e=>((e&&e.hooks)||[]);
-const argsOf=e=>hooksOf(e).flatMap(h=>(h&&h.args)||[]).filter(a=>typeof a==="string");
+const argsOf=h=>Array.isArray(h&&h.args)?h.args.filter(a=>typeof a==="string"):[];
 const isT1=a=>a===MARK||a.endsWith("/"+MARK)||a.endsWith("\\"+MARK);
-const isOwnT2=e=>hooksOf(e).some(h=>h&&h.type==="agent"&&h.statusMessage===SM);
-for(const ev of Object.keys(s.hooks)){                 // drop own tier2 + stale-path tier1, keep foreign entries
+const isOwn=h=>argsOf(h).some(isT1)||(h&&h.type==="agent"&&h.statusMessage===SM);
+const exactT1=(event,entry,h)=>event==="PreToolUse"&&entry.matcher==="Agent"&&h&&h.type==="command"&&h.command==="node"&&argsOf(h).length===1&&argsOf(h)[0]===full;
+const exactT2=(event,entry,h)=>event==="PreToolUse"&&entry.matcher==="Agent"&&h&&h.type==="agent"&&h.statusMessage===SM;
+for(const ev of Object.keys(s.hooks)){                 // remove owned handlers, preserving foreign co-handlers and entries
   if(!Array.isArray(s.hooks[ev])) continue;
-  s.hooks[ev]=s.hooks[ev].filter(e=>{
-    if(isOwnT2(e)) return false;
-    const own=argsOf(e).filter(isT1);
-    return own.length===0 || own.every(a=>a===full);
-  });
+  s.hooks[ev]=s.hooks[ev].map(e=>{
+    if(!e||typeof e!=="object"||!Array.isArray(e.hooks)) return e;
+    return {...e,hooks:e.hooks.filter(h=>!isOwn(h))};
+  }).filter(e=>!e||typeof e!=="object"||!Array.isArray(e.hooks)||e.hooks.length>0);
   if(s.hooks[ev].length===0) delete s.hooks[ev];
 }
 s.hooks.PreToolUse=s.hooks.PreToolUse||[];
-if(!s.hooks.PreToolUse.some(e=>argsOf(e).includes(full)))   // idempotent: exact path already there = nothing to do
-  s.hooks.PreToolUse.push({matcher:"Agent",hooks:[{type:"command",command:"node",args:[full],timeout:5}]});
+s.hooks.PreToolUse.push({matcher:"Agent",hooks:[{type:"command",command:"node",args:[full],timeout:5}]});
 if(level==="strict"){
   const jf=(process.env.JUDGE||"").trim();
   if(!jf||!fs.existsSync(jf)){ console.error("ABORT: JUDGE prompt not found: "+jf); process.exit(1); }
@@ -481,8 +481,8 @@ if(level==="strict"){
 fs.writeFileSync(f,JSON.stringify(s,null,2)+"\n");
 const back=JSON.parse(fs.readFileSync(f,"utf8"));      // post-write verification
 const pre=(back.hooks&&back.hooks.PreToolUse)||[];
-const n1=pre.filter(e=>argsOf(e).includes(full)).length;
-const n2=pre.filter(isOwnT2).length;
+const n1=pre.reduce((sum,e)=>sum+hooksOf(e).filter(h=>exactT1("PreToolUse",e,h)).length,0);
+const n2=pre.reduce((sum,e)=>sum+hooksOf(e).filter(h=>exactT2("PreToolUse",e,h)).length,0);
 if(n1!==1||n2!==(level==="strict"?1:0)){ console.error("ABORT: verification failed - tier1="+n1+" tier2="+n2+" in "+f); process.exit(1); }
 console.log("OK merged "+f+" (level="+level+", tier1="+n1+", tier2="+n2+")");
 ' && echo "✅ settings" || echo "❌ FAILED"
@@ -663,21 +663,24 @@ try{ s=JSON.parse(raw); }
 catch(e){ console.error("ABORT: "+f+" is not valid JSON ("+e.message+") - fix or delete it; nothing was written"); process.exit(1); }
 if(s===null||typeof s!=="object"||Array.isArray(s)){ console.error("ABORT: "+f+" is not a JSON object; nothing was written"); process.exit(1); }
 const hooksOf=e=>((e&&e.hooks)||[]);
-const argsOf=e=>hooksOf(e).flatMap(h=>(h&&h.args)||[]).filter(a=>typeof a==="string");
+const argsOf=h=>Array.isArray(h&&h.args)?h.args.filter(a=>typeof a==="string"):[];
 const isT1=a=>a===MARK||a.endsWith("/"+MARK)||a.endsWith("\\"+MARK);
-const isOwn=e=>argsOf(e).some(isT1)||hooksOf(e).some(h=>h&&h.type==="agent"&&h.statusMessage===SM);
+const isOwn=h=>argsOf(h).some(isT1)||(h&&h.type==="agent"&&h.statusMessage===SM);
 if(s.hooks&&typeof s.hooks==="object"){
   for(const ev of Object.keys(s.hooks)){
     if(!Array.isArray(s.hooks[ev])) continue;
-    s.hooks[ev]=s.hooks[ev].filter(e=>!isOwn(e));
+    s.hooks[ev]=s.hooks[ev].map(e=>{
+      if(!e||typeof e!=="object"||!Array.isArray(e.hooks)) return e;
+      return {...e,hooks:e.hooks.filter(h=>!isOwn(h))};
+    }).filter(e=>!e||typeof e!=="object"||!Array.isArray(e.hooks)||e.hooks.length>0);
     if(s.hooks[ev].length===0) delete s.hooks[ev];
   }
   if(Object.keys(s.hooks).length===0) delete s.hooks;
 }
 fs.writeFileSync(f,JSON.stringify(s,null,2)+"\n");
 const back=JSON.parse(fs.readFileSync(f,"utf8"));      // post-write verification
-const left=Object.values((back.hooks)||{}).flat().filter(isOwn).length;
-if(left!==0){ console.error("ABORT: verification failed - "+left+" agent-router entries still in "+f); process.exit(1); }
+const left=Object.values((back.hooks)||{}).flat().flatMap(hooksOf).filter(isOwn).length;
+if(left!==0){ console.error("ABORT: verification failed - "+left+" agent-router handlers still in "+f); process.exit(1); }
 console.log("OK cleaned "+f);
 ' && rm -f "$HOOKS_DIR/agent-router.mjs" && test ! -e "$HOOKS_DIR/agent-router.mjs" \
   && echo "✅ uninstalled from $HOOKS_DIR" || echo "❌ FAILED"

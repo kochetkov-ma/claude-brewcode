@@ -321,6 +321,12 @@ function makeCollision(label) {
     { DISABLED_AGENTS: '2', CONFLICT_AGENTS: '0' },
     'an ordinary parked team counts both members as DISABLED and none as CONFLICT',
   );
+  check(
+    'b7.verifyExtension',
+    has(v.stdout, 'agent file(s) parked as .md.disabled'),
+    true,
+    'the disabled summary names the Claude agent parking extension',
+  );
 }
 
 // ── report ──────────────────────────────────────────────────────────────────

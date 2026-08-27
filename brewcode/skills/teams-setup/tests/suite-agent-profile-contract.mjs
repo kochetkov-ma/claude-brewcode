@@ -413,6 +413,7 @@ check(
   'distributed Codex shared contract equals the canonical projection byte-for-byte',
 );
 
+// BEGIN PROJECTED WORKFLOW CONTRACT
 const bootstrapAt = canonicalSkill.indexOf('### C2.6: Shared Contract Bootstrap');
 const createAt = canonicalSkill.indexOf('### C3: Agent Creation');
 const finalizeAt = canonicalSkill.indexOf('### C4: Roster Finalization');
@@ -504,6 +505,7 @@ for (const literal of [
     `C9 hard-gates ${JSON.stringify(literal)}`,
   );
 }
+// END PROJECTED WORKFLOW CONTRACT
 
 for (const literal of [
   'For a teams-setup domain agent',

@@ -43,6 +43,8 @@ Opt-in: not registered in `brewtools/hooks/hooks.json` — installing the plugin
 
 The skill always reports status first, states its plan before asking anything, then delegates the file work to the `brewcode:hook-creator` agent.
 
+Project status resolves the owning root from `CLAUDE_PROJECT_DIR`, then git toplevel, then an ancestor carrying `.git` or `.claude`; a nested `cwd` never redirects the probe into a nested installation. Wiring is effective only with exactly one full guard tuple (PreToolUse / `.*` / command / `node` / sole portable arg / timeout `5`) and exactly one full cleanup tuple (SubagentStop / no matcher / command / `node` / sole portable arg / timeout `3`). Duplicates, malformed settings, or malformed owned handlers are reported as non-effective.
+
 ## Modes
 
 | Mode | Hook files | settings.json | Config | State |

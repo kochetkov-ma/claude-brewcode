@@ -257,17 +257,18 @@ Nothing is ever written under `~/.claude` (harness-protected path).
 
 ## settings.json hook entry shape
 
-`<absdir>` = absolute path of the hooks dir the 2 files were copied into
-(`<repo>/.claude/hooks` for project, `~/.claude/hooks` expanded for global).
+Project entries use the runtime-portable literal `${CLAUDE_PROJECT_DIR}/.claude/hooks/<script>`;
+Claude Code expands it for the active checkout or worktree. Global entries use the expanded absolute
+`~/.claude/hooks/<script>` path because they have no project root.
 
 ```json
 {
   "hooks": {
     "PreToolUse": [
-      { "matcher": ".*", "hooks": [ { "type": "command", "command": "node", "args": ["<absdir>/agent-deadline-guard.mjs"], "timeout": 5 } ] }
+      { "matcher": ".*", "hooks": [ { "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/agent-deadline-guard.mjs"], "timeout": 5 } ] }
     ],
     "SubagentStop": [
-      { "hooks": [ { "type": "command", "command": "node", "args": ["<absdir>/agent-deadline-cleanup.mjs"], "timeout": 3 } ] }
+      { "hooks": [ { "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/agent-deadline-cleanup.mjs"], "timeout": 3 } ] }
     ]
   }
 }
@@ -277,13 +278,12 @@ Merge rule, in order:
 
 1. ABORT if `settings.json` exists and is not valid JSON — never rewrite a file
    you could not parse (that turns one stray comma into total data loss).
-2. Drop agent-deadline entries pointing at a DIFFERENT hooks dir (stale paths
-   from an earlier install into another directory — Claude Code logs a hook
-   failure on every tool call for each of them). Match on the FULL path, not the
-   basename. Entries with no agent-deadline arg are foreign: never touched.
-3. APPEND into `PreToolUse` / `SubagentStop` — never overwrite — only if the
-   exact `<absdir>/<script>` path is not already there (idempotent re-install).
-4. Re-read the written file and assert exactly one entry per script.
+2. Remove agent-deadline handlers individually, preserving every foreign co-handler and dropping a
+   matcher entry only when no handlers remain. This removes duplicates, miswired tuples, and legacy
+   absolute project paths without deleting foreign work.
+3. APPEND exactly one desired handler into `PreToolUse` / `SubagentStop` — never overwrite the arrays.
+   Re-running converges to the same bytes.
+4. Re-read the written file and assert exactly one full event/matcher/type/command/arg tuple per script.
 
 Marker for all agent-deadline entries = any hook whose `args` contain a path
 ending in one of those two basenames.
@@ -322,7 +322,7 @@ Project paths are writable with normal tools (`Write`/`Edit`/`Bash` all fine).
 3. Write `<repo>/.claude/agent-deadline.json` — the **Config** block above with
    `CFG="$ROOT/.claude/agent-deadline.json"`, honouring `MINUTES`/`OVERRIDES`.
 4. Merge the 2 hook entries into `<repo>/.claude/settings.json`
-   (create `{}` if absent), `<absdir>` = `<repo>/.claude/hooks`.
+   (create `{}` if absent), using `${CLAUDE_PROJECT_DIR}/.claude/hooks/<script>` args.
 
 **EXECUTE** copy (project, Bash tool; `RUNBOOK` = absolute path to this INSTALL.md):
 ```
@@ -340,9 +340,10 @@ echo "✅ copied + verified in $DST" || echo "❌ FAILED"
 **EXECUTE** merge settings (project). Use this node merge, NOT a hand `Edit` —
 it is the only path that aborts on a broken file and verifies afterwards:
 ```
-SETTINGS="$ROOT/.claude/settings.json" HOOKS_DIR="$ROOT/.claude/hooks" node -e '
+SETTINGS="$ROOT/.claude/settings.json" HOOKS_DIR="$ROOT/.claude/hooks" HOOK_ARG_SCOPE=project node -e '
 const fs=require("fs"), path=require("path");
-const f=process.env.SETTINGS, dir=process.env.HOOKS_DIR;
+const f=process.env.SETTINGS, dir=process.env.HOOKS_DIR, scope=process.env.HOOK_ARG_SCOPE;
+const hookArg=script=>scope==="project"?"${CLAUDE_PROJECT_DIR}/.claude/hooks/"+script:path.join(dir,script);
 const marks=["agent-deadline-guard.mjs","agent-deadline-cleanup.mjs"];
 function lock(f){                                      // O_EXCL dir lock; stale-break by mtime
   const l=f+".lock", w=new Int32Array(new SharedArrayBuffer(4));
@@ -369,20 +370,21 @@ if(fs.existsSync(f)){
 }
 s.hooks=s.hooks||{};
 const want=[["PreToolUse",".*","agent-deadline-guard.mjs",5],["SubagentStop",null,"agent-deadline-cleanup.mjs",3]];
-const argsOf=e=>((e&&e.hooks)||[]).flatMap(h=>(h&&h.args)||[]).filter(a=>typeof a==="string");
+const argsOf=h=>Array.isArray(h&&h.args)?h.args.filter(a=>typeof a==="string"):[];
 const isAD=a=>marks.some(m=>a===m||a.endsWith("/"+m)||a.endsWith("\\"+m));
-const wanted=new Set(marks.map(m=>path.join(dir,m)));
-for(const ev of Object.keys(s.hooks)){                 // drop stale-path agent-deadline entries, keep foreign ones
+const matcherIs=(e,matcher)=>matcher===null?!Object.prototype.hasOwnProperty.call(e,"matcher"):e.matcher===matcher;
+const exact=(e,h,matcher,script)=>matcherIs(e,matcher)&&h&&h.type==="command"&&h.command==="node"&&argsOf(h).length===1&&argsOf(h)[0]===hookArg(script);
+for(const ev of Object.keys(s.hooks)){                 // remove owned handlers, preserving foreign co-handlers and entries
   if(!Array.isArray(s.hooks[ev])) continue;
-  s.hooks[ev]=s.hooks[ev].filter(e=>{
-    const ad=argsOf(e).filter(isAD);
-    return ad.length===0 || ad.every(a=>wanted.has(a));
-  });
+  s.hooks[ev]=s.hooks[ev].map(e=>{
+    if(!e||typeof e!=="object"||!Array.isArray(e.hooks)) return e;
+    return {...e,hooks:e.hooks.filter(h=>!argsOf(h).some(isAD))};
+  }).filter(e=>!e||typeof e!=="object"||!Array.isArray(e.hooks)||e.hooks.length>0);
+  if(s.hooks[ev].length===0) delete s.hooks[ev];
 }
 for(const [ev,matcher,script,timeout] of want){
   s.hooks[ev]=s.hooks[ev]||[];
-  const full=path.join(dir,script);
-  if(s.hooks[ev].some(e=>argsOf(e).includes(full))) continue;
+  const full=hookArg(script);
   const entry={hooks:[{type:"command",command:"node",args:[full],timeout}]};   // no timeout = CC default 60s per tool call
   if(matcher) entry.matcher=matcher;
   s.hooks[ev].push(entry);
@@ -390,7 +392,8 @@ for(const [ev,matcher,script,timeout] of want){
 fs.writeFileSync(f,JSON.stringify(s,null,2)+"\n");
 const back=JSON.parse(fs.readFileSync(f,"utf8"));      // post-write verification
 for(const [ev,,script] of want){
-  const n=(back.hooks&&back.hooks[ev]||[]).filter(e=>argsOf(e).includes(path.join(dir,script))).length;
+  const matcher=want.find(w=>w[0]===ev&&w[2]===script)[1];
+  const n=(back.hooks&&back.hooks[ev]||[]).reduce((sum,e)=>sum+((e&&e.hooks)||[]).filter(h=>exact(e,h,matcher,script)).length,0);
   if(n!==1){ console.error("ABORT: verification failed - "+ev+"/"+script+" present "+n+" times in "+f); process.exit(1); }
 }
 console.log("OK merged "+f);
@@ -430,9 +433,10 @@ echo "✅ copied + verified in $DST" || echo "❌ FAILED"
 **EXECUTE** merge settings (global — the SAME node script as the project block,
 only `SETTINGS`/`HOOKS_DIR` change; `~/.claude` is Bash-only):
 ```
-SETTINGS="$HOME/.claude/settings.json" HOOKS_DIR="$HOME/.claude/hooks" node -e '
+SETTINGS="$HOME/.claude/settings.json" HOOKS_DIR="$HOME/.claude/hooks" HOOK_ARG_SCOPE=global node -e '
 const fs=require("fs"), path=require("path");
-const f=process.env.SETTINGS, dir=process.env.HOOKS_DIR;
+const f=process.env.SETTINGS, dir=process.env.HOOKS_DIR, scope=process.env.HOOK_ARG_SCOPE;
+const hookArg=script=>scope==="project"?"${CLAUDE_PROJECT_DIR}/.claude/hooks/"+script:path.join(dir,script);
 const marks=["agent-deadline-guard.mjs","agent-deadline-cleanup.mjs"];
 function lock(f){                                      // O_EXCL dir lock; stale-break by mtime
   const l=f+".lock", w=new Int32Array(new SharedArrayBuffer(4));
@@ -459,20 +463,21 @@ if(fs.existsSync(f)){
 }
 s.hooks=s.hooks||{};
 const want=[["PreToolUse",".*","agent-deadline-guard.mjs",5],["SubagentStop",null,"agent-deadline-cleanup.mjs",3]];
-const argsOf=e=>((e&&e.hooks)||[]).flatMap(h=>(h&&h.args)||[]).filter(a=>typeof a==="string");
+const argsOf=h=>Array.isArray(h&&h.args)?h.args.filter(a=>typeof a==="string"):[];
 const isAD=a=>marks.some(m=>a===m||a.endsWith("/"+m)||a.endsWith("\\"+m));
-const wanted=new Set(marks.map(m=>path.join(dir,m)));
+const matcherIs=(e,matcher)=>matcher===null?!Object.prototype.hasOwnProperty.call(e,"matcher"):e.matcher===matcher;
+const exact=(e,h,matcher,script)=>matcherIs(e,matcher)&&h&&h.type==="command"&&h.command==="node"&&argsOf(h).length===1&&argsOf(h)[0]===hookArg(script);
 for(const ev of Object.keys(s.hooks)){
   if(!Array.isArray(s.hooks[ev])) continue;
-  s.hooks[ev]=s.hooks[ev].filter(e=>{
-    const ad=argsOf(e).filter(isAD);
-    return ad.length===0 || ad.every(a=>wanted.has(a));
-  });
+  s.hooks[ev]=s.hooks[ev].map(e=>{
+    if(!e||typeof e!=="object"||!Array.isArray(e.hooks)) return e;
+    return {...e,hooks:e.hooks.filter(h=>!argsOf(h).some(isAD))};
+  }).filter(e=>!e||typeof e!=="object"||!Array.isArray(e.hooks)||e.hooks.length>0);
+  if(s.hooks[ev].length===0) delete s.hooks[ev];
 }
 for(const [ev,matcher,script,timeout] of want){
   s.hooks[ev]=s.hooks[ev]||[];
-  const full=path.join(dir,script);
-  if(s.hooks[ev].some(e=>argsOf(e).includes(full))) continue;
+  const full=hookArg(script);
   const entry={hooks:[{type:"command",command:"node",args:[full],timeout}]};   // no timeout = CC default 60s per tool call
   if(matcher) entry.matcher=matcher;
   s.hooks[ev].push(entry);
@@ -480,7 +485,8 @@ for(const [ev,matcher,script,timeout] of want){
 fs.writeFileSync(f,JSON.stringify(s,null,2)+"\n");
 const back=JSON.parse(fs.readFileSync(f,"utf8"));
 for(const [ev,,script] of want){
-  const n=(back.hooks&&back.hooks[ev]||[]).filter(e=>argsOf(e).includes(path.join(dir,script))).length;
+  const matcher=want.find(w=>w[0]===ev&&w[2]===script)[1];
+  const n=(back.hooks&&back.hooks[ev]||[]).reduce((sum,e)=>sum+((e&&e.hooks)||[]).filter(h=>exact(e,h,matcher,script)).length,0);
   if(n!==1){ console.error("ABORT: verification failed - "+ev+"/"+script+" present "+n+" times in "+f); process.exit(1); }
 }
 console.log("OK merged "+f);
@@ -645,20 +651,23 @@ let s;
 try{ s=JSON.parse(raw); }
 catch(e){ console.error("ABORT: "+f+" is not valid JSON ("+e.message+") - fix or delete it; nothing was written"); process.exit(1); }
 if(s===null||typeof s!=="object"||Array.isArray(s)){ console.error("ABORT: "+f+" is not a JSON object; nothing was written"); process.exit(1); }
-const argsOf=e=>((e&&e.hooks)||[]).flatMap(h=>(h&&h.args)||[]).filter(a=>typeof a==="string");
+const argsOf=h=>Array.isArray(h&&h.args)?h.args.filter(a=>typeof a==="string"):[];
 const isAD=a=>marks.some(m=>a===m||a.endsWith("/"+m)||a.endsWith("\\"+m));
 if(s.hooks&&typeof s.hooks==="object"){
   for(const ev of Object.keys(s.hooks)){
     if(!Array.isArray(s.hooks[ev])) continue;
-    s.hooks[ev]=s.hooks[ev].filter(e=>!argsOf(e).some(isAD));
+    s.hooks[ev]=s.hooks[ev].map(e=>{
+      if(!e||typeof e!=="object"||!Array.isArray(e.hooks)) return e;
+      return {...e,hooks:e.hooks.filter(h=>!argsOf(h).some(isAD))};
+    }).filter(e=>!e||typeof e!=="object"||!Array.isArray(e.hooks)||e.hooks.length>0);
     if(s.hooks[ev].length===0) delete s.hooks[ev];
   }
   if(Object.keys(s.hooks).length===0) delete s.hooks;
 }
 fs.writeFileSync(f,JSON.stringify(s,null,2)+"\n");
 const back=JSON.parse(fs.readFileSync(f,"utf8"));      // post-write verification
-const left=Object.values((back.hooks)||{}).flat().filter(e=>argsOf(e).some(isAD)).length;
-if(left!==0){ console.error("ABORT: verification failed - "+left+" agent-deadline entries still in "+f); process.exit(1); }
+const left=Object.values((back.hooks)||{}).flat().flatMap(e=>(e&&e.hooks)||[]).filter(h=>argsOf(h).some(isAD)).length;
+if(left!==0){ console.error("ABORT: verification failed - "+left+" agent-deadline handlers still in "+f); process.exit(1); }
 console.log("OK cleaned "+f);
 ' && rm -f "$HOOKS_DIR/agent-deadline-guard.mjs" "$HOOKS_DIR/agent-deadline-cleanup.mjs" \
   && test ! -e "$HOOKS_DIR/agent-deadline-guard.mjs" && test ! -e "$HOOKS_DIR/agent-deadline-cleanup.mjs" \

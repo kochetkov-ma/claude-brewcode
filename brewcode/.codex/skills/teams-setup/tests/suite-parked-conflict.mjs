@@ -90,7 +90,7 @@ function verifyCounts(stdout) {
 
 const DOMAIN_INSTRUCTIONS = '## Mission\nOwn fixture behavior.\n\n## Owned surfaces\nFixture files.\n\n## Exclusions\nNo neighboring work.\n\n## Must-load references\n- `.codex/teams/t1/team.md`\n\n## Unique invariants\nPreserve bytes.\n\n## Unique verification\nRun the fixture suite.\n';
 const AGENT_BODY = (name) => name === 'intent-guard'
-  ? `name = "intent-guard"\ndescription = "Review-only fixture."\ndeveloper_instructions = "Review only; never implement."\n`
+  ? `name = "intent-guard"\ndescription = "Review-only fixture."\ndeveloper_instructions = "Review-only. Never implement and never mutate project files. Report a verdict with file:line evidence."\n`
   : `name = ${JSON.stringify(name)}\ndescription = "Domain fixture agent."\ndeveloper_instructions = ${JSON.stringify(DOMAIN_INSTRUCTIONS)}\n`;
 const FOREIGN_BODY = `name = "worker-one"\ndescription = "Foreign fixture."\ndeveloper_instructions = "Foreign bytes; not team-owned."\n`;
 const SEP = '|-------|--------|---------|--------|---------|------|---------|';
@@ -321,6 +321,12 @@ function makeCollision(label) {
     verifyCounts(v.stdout),
     { DISABLED_AGENTS: '2', CONFLICT_AGENTS: '0' },
     'an ordinary parked team counts both members as DISABLED and none as CONFLICT',
+  );
+  check(
+    'b7.verifyExtension',
+    has(v.stdout, 'agent file(s) parked as .toml.disabled'),
+    true,
+    'the disabled summary names the Codex agent parking extension',
   );
 }
 
