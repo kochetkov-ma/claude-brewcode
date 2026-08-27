@@ -47,7 +47,7 @@ const TPL_CONTENT_VERSION = (/^content_version: "([^"]+)"$/m.exec(RULE_TEMPLATE)
 const TPL_VERSION = (/^version: "([^"]+)"$/m.exec(RULE_TEMPLATE) || [])[1];
 
 const SERVER = 'semble_code';
-const PIN_SPEC = 'semble[mcp]==0.5.4';
+const PIN_SPEC = 'semble[mcp]==0.5.5';
 const TOOL_SEARCH = 'mcp__semble_code__search';
 const TOOL_RELATED = 'mcp__semble_code__find_related';
 
@@ -110,12 +110,11 @@ const HOME_DIR = join(WORLD, 'home');       // the installed world
 const HOME_BARE = join(WORLD, 'home-bare'); // a home where nothing was ever registered
 const HOME_LIFE = join(WORLD, 'home-life'); // §12.3 demands a fresh HOME for the lifecycle
 const CACHE_CODE = join(WORLD, 'cache', 'semble-code');
-const CACHE_DOCS = join(WORLD, 'cache', 'semble-docs');
 const CLAUDE_LOG = join(LOGS, 'claude-calls.log');
 const CLAUDE_STUB = join(BIN, 'claude');
 
 for (const d of [LOGS, BIN, HOME_DIR, join(HOME_DIR, '.claude'), HOME_BARE, HOME_LIFE,
-  CACHE_CODE, CACHE_DOCS]) {
+  CACHE_CODE]) {
   mkdirSync(d, { recursive: true });
 }
 writeFileSync(CLAUDE_LOG, '');
@@ -166,7 +165,6 @@ const ENV = {
   LOGF: CLAUDE_LOG,
   SEMBLE_TEST_HOME: HOME_DIR,
   SEMBLE_CACHE_ROOT_CODE: CACHE_CODE,
-  SEMBLE_CACHE_ROOT_DOCS: CACHE_DOCS,
   SEMBLE_CLAUDE_BIN: CLAUDE_STUB,
   SEMBLE_NO_NETWORK: '1',
 };
@@ -330,18 +328,19 @@ const BM25 = 'bm25\n';
 const SEMANTIC = 'semantic\n';
 const P1_HASH = createHash('sha256').update(P1).digest('hex');
 const P1_CACHE = join(CACHE_CODE, P1_HASH);
+const P1_INDEX = join(P1_CACHE, 'index-code-config-docs');
 const META = {
   cache_version: 1,
-  content_type: ['code', 'config'],
+  content_type: ['code', 'docs', 'config'],
   time: 1754150000,
   root_path: P1,
   files: {},
 };
 const META_TEXT = `${JSON.stringify(META)}\n`;
-write(join(P1_CACHE, 'index/chunks.json'), CHUNKS);
-write(join(P1_CACHE, 'index/metadata.json'), META_TEXT);
-write(join(P1_CACHE, 'index/bm25_index'), BM25);
-write(join(P1_CACHE, 'index/semantic_index'), SEMANTIC);
+write(join(P1_INDEX, 'chunks.json'), CHUNKS);
+write(join(P1_INDEX, 'metadata.json'), META_TEXT);
+write(join(P1_INDEX, 'bm25_index'), BM25);
+write(join(P1_INDEX, 'semantic_index'), SEMANTIC);
 const P1_CACHE_BYTES = Buffer.byteLength(CHUNKS) + Buffer.byteLength(META_TEXT)
   + Buffer.byteLength(BM25) + Buffer.byteLength(SEMANTIC);
 
@@ -373,7 +372,7 @@ check('wired: report top-level keys', keysOf(R),
   'every §9.1 section is present in --section all');
 check('wired: schema + platform + projectRoot', [R.schema, R.platform, R.projectRoot],
   [1, 'darwin', P1], 'header fields carry the resolved project root');
-check('wired: pin', R.pin, { approved: '0.5.4', spec: PIN_SPEC }, 'the approved pin is reported verbatim');
+check('wired: pin', R.pin, { approved: '0.5.5', spec: PIN_SPEC }, 'the approved pin is reported verbatim');
 
 // §SCOPE 1 - not a single section may be an {"error": ...} placeholder.
 const SECTIONS = ['prereq', 'mcp', 'cache', 'guidance', 'agents', 'coverage', 'state'];
@@ -425,22 +424,26 @@ check('wired: mcp permissions', R.mcp.permissions,
 
 // cache: pass-through of semble-cache.sh info
 check('wired: cache keys', keysOf(R.cache),
-  ['codeRoot', 'docsReserved', 'docsRoot', 'entries', 'metadata', 'otherRepos', 'present',
-    'repoDir', 'repoHash', 'sizeBytes', 'staleness'],
-  'the §9.1 cache shape plus the §9.4 otherRepos field');
+  ['codeRoot', 'entries', 'indexDir', 'indexLeaf', 'legacyIndexDir', 'legacyPresent', 'metadata',
+    'otherRepos', 'present', 'repoDir', 'repoHash', 'repoPresent', 'sizeBytes', 'staleness', 'variants'],
+  'the §9.1 cache shape includes exact variants and legacy migration state');
 check('wired: cache is the sibling object verbatim', R.cache, rawCache,
   'semble-cache.sh info --json is passed through unmodified');
 check('wired: cache index accounting',
-  [R.cache.present, R.cache.entries, R.cache.sizeBytes, R.cache.repoHash, R.cache.repoDir],
-  [true, 4, P1_CACHE_BYTES, P1_HASH, P1_CACHE],
+  [R.cache.present, R.cache.entries, R.cache.sizeBytes, R.cache.repoHash, R.cache.repoDir, R.cache.indexDir],
+  [true, 4, P1_CACHE_BYTES, P1_HASH, P1_CACHE, P1_INDEX],
   'exactly the 4 index files created above, with their exact byte total');
 check('wired: cache metadata is the file content', R.cache.metadata, META,
   'index/metadata.json is surfaced unmodified');
 check('wired: cache staleness offline', R.cache.staleness, 'unknown',
   'SEMBLE_NO_NETWORK=1 makes a complete index report staleness=unknown');
-check('wired: cache roots + docs reservation',
-  [R.cache.codeRoot, R.cache.docsRoot, R.cache.docsReserved, R.cache.otherRepos],
-  [CACHE_CODE, CACHE_DOCS, false, []], 'injected roots, no docs marker, no other repo indexed yet');
+check('wired: one shared cache root',
+  [R.cache.codeRoot, R.cache.indexLeaf, R.cache.legacyPresent, R.cache.otherRepos],
+  [CACHE_CODE, 'index-code-config-docs', false, []],
+  'one injected root holds the desired combined variant and no legacy/docs bucket');
+check('wired: cache variant', R.cache.variants.map((v) => [v.name, v.contentType, v.desired, v.state]),
+  [['index-code-config-docs', ['code', 'config', 'docs'], true, 'unknown']],
+  'the discovered combined variant is selected without flattening its content identity');
 
 // state
 check('wired: state keys', keysOf(R.state), ['completed', 'enabled', 'last_updated', 'phase', 'present'],

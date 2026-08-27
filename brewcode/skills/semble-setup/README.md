@@ -1,6 +1,6 @@
 # Semble
 
-Lifecycle skill for **`semble_code`** — a semantic code-search MCP server ([semble](https://pypi.org/project/semble/), pinned to `0.5.4`) wired into any project: install, audit, configure, repair, upgrade, enable, disable, reindex, uninstall.
+Lifecycle skill for **`semble_code`** — a semantic repository-search MCP server ([semble](https://pypi.org/project/semble/), pinned to exact `semble[mcp]==0.5.5`) wired into any project: install, audit, configure, repair, upgrade, enable, disable, reindex, uninstall.
 
 One command covers the whole lifecycle. It always reports the current state **before** it changes anything, and every mutation is delegated to a script — the skill itself only routes.
 
@@ -9,8 +9,8 @@ One command covers the whole lifecycle. It always reports the current state **be
 /brewcode:semble-setup install                  # prereqs -> register MCP -> reload checkpoint
 /brewcode:semble-setup resume                   # after the reload: verify + wire guidance
 /brewcode:semble-setup disable                  # go silent, delete nothing
-/brewcode:semble-setup переиндексируй            # free-text intent works (RU + EN)
-/brewcode:semble-setup снеси всё                 # -> purge, with a typed confirmation
+/brewcode:semble-setup reindex                  # stage and replace the selected variant
+/brewcode:semble-setup purge                    # typed confirmation required
 ```
 
 ## What it gives you
@@ -22,7 +22,7 @@ Two MCP tools, once wired:
 | `mcp__semble_code__search` | find code by intent / behavior / name |
 | `mcp__semble_code__find_related` | neighbors of a known location, after a useful seed |
 
-Both take a **required `repo`** parameter — the absolute project root or an explicit `https://` git URL. It is never inferred. Results carry `file_path`, `start_line`, `end_line`, `score` and optional `content`; there is **no `line` field**. Defaults: `top_k=5`, `max_snippet_lines=10`.
+Both take a **required `repo`** parameter — the absolute project root or an explicit `http://`/`https://` git URL. It is never inferred. Since 0.5.5 they also accept optional `content=code|docs|config|all`; omit it to search the server's registered combined `code docs config` corpus. Results carry `file_path`, `start_line`, `end_line`, `score` and optional result `content`; there is **no result `line` field**. Defaults: `top_k=5`, `max_snippet_lines=10`.
 
 ## Future alternative
 
@@ -40,21 +40,21 @@ The seven canonical modes every `-setup` skill shares, in order:
 |------|--------|---------|
 | `status` | full report: prereqs, MCP, cache, guidance, agents, coverage, state | no |
 | `install` | install `uv` (and, if you accept, `coreutils`), register `semble_code` at user scope, **wire the rule, the CLAUDE.md block, the five hooks, the permissions and the agent frontmatter**, checkpoint for reload | yes |
-| `upgrade` | compare the recorded pin with `0.5.4`, re-register if different | yes |
+| `upgrade` | compare the recorded pin with `0.5.5`, re-register if different | yes |
 | `enable` | back on: verify, warm, `phase=ready` | yes |
 | `disable` | `enabled=false` — hooks go silent, nothing is deleted | yes |
 | `uninstall` | four flavours: `integration` / `mcp` / `cli` / `purge` | yes |
-| `purge` | everything, incl. the code cache root — typed confirmation required | yes |
+| `purge` | everything, including the shared cache root — typed confirmation required | yes |
 
 Plus three extras specific to a search index:
 
 | Mode | Effect | Mutates |
 |------|--------|---------|
-| `reindex` | delete exactly this repo's cache dir (confirmed), then warm | yes |
+| `reindex` | stage and prove a replacement for this repo's `index-code-config-docs`, then swap only that variant | yes |
 | `optimize` | read-only audit fan-out with concrete recommendations | no |
-| `resume` | after the reload checkpoint: the smoke query that needs a live server, then a self-repairing re-run of the rule + hooks + permissions + agent migration, then `phase=ready` | yes |
+| `resume` | after the reload checkpoint: run the workflow-deferred pinned CLI smoke, then a self-repairing re-run of the rule + hooks + permissions + agent migration, then `phase=ready` | yes |
 
-`install` no longer leaves the hooks hostage to `resume`: everything that does not need a live MCP server is wired by `install` itself. `resume` stays fully idempotent — its merge is field-level and self-repairing, so running it after `install` re-checks the wiring instead of duplicating it. Only the smoke query and the final `ready` phase wait for the new session.
+`install` no longer leaves the hooks hostage to `resume`: everything that does not need a live MCP server is wired by `install` itself. `resume` stays fully idempotent — its merge is field-level and self-repairing, so running it after `install` re-checks the wiring instead of duplicating it. The new session is required for MCP tool visibility. The smoke uses the pinned CLI and is technically scriptable before reload, but the workflow deliberately defers it to `resume`; the final `ready` phase follows that verification.
 
 **Empty input is always `status`** — read-only, no questions, no mutation. This is the one setup skill that does not fall back to `install` when nothing is installed, because `install` reaches machine-level package management.
 
@@ -63,14 +63,13 @@ Plus three extras specific to a search index:
 | Surface | Location |
 |---------|----------|
 | MCP server | `~/.claude.json` `.mcpServers.semble_code`, **user scope** (`-s user` is mandatory — the CLI default is `local`), with `"alwaysLoad": true` so the two tools are never deferred behind `ToolSearch`. Only `claude mcp add-json` can write that key, so that is the form the skill uses |
-| Command | `uvx --from 'semble[mcp]==0.5.4' semble --content <SEMBLE_CONTENT_ARGS>` — the content set lives in `scripts/lib/semble-common.sh` as `SEMBLE_CONTENT_ARGS` and is deliberately not repeated here. Every consumer must pass exactly that set: semble keys its cache directory by project path alone but rejects a cached index whose stored content set differs, so two consumers with different sets evict each other on every call |
-| Cache root | macOS `~/Library/Caches/semble-code` · Linux `${XDG_CACHE_HOME:-~/.cache}/semble-code` |
-| Reserved docs root | same path with a `semble-docs` leaf — created empty, never registered |
+| Command | `uvx --from 'semble[mcp]==0.5.5' semble --content <SEMBLE_CONTENT_ARGS>` — the registered default content set lives only in `scripts/lib/semble-common.sh`. It selects the combined `index-code-config-docs` variant; `content=all` reuses that variant, while an explicit narrower per-call selection resolves its exact sibling |
+| Shared cache root | macOS `~/Library/Caches/semble-code` · Linux `${XDG_CACHE_HOME:-$HOME/.cache}/semble-code`. Each repository gets one hashed directory containing independent exact-content variants: code-only is `index`; other sorted selections are `index-<scope>` |
 | State | `<repo>/.claude/semble/state.json` |
 | Rule | `<repo>/.claude/rules/semble-first.md` |
 | Ignore file | `<repo>/.sembleignore` — read per-directory by `semble/index/file_walker.py:_load_ignore_for_dir` (gitignore syntax via `pathspec`; `core.excludesFile` is NOT honoured). Keeps generated/vendored trees (`.claude/tmp/`, `.claude/reports/`, build output, minified bundles) out of the corpus; deliberately never excludes `.claude/{skills,agents,rules,commands,hooks}/`. Same managed-file policy as the rule: user edits are reported, not clobbered, and `--force` backs up first |
 | CLAUDE.md | a marked `<!-- BEGIN brewcode:semble -->` block — **plus a reconcile of the competing doctrine around it.** `install --part claudemd` scans the root CLAUDE.md **outside** the semble markers, backs the whole file up to a timestamped `.bak` first, and reconciles it to one doctrine. Kept on honest ground even though the A/B below found no adoption effect: a false statement in CLAUDE.md is worth removing because it is false, not because removing it converts anyone |
-| Hooks | `<repo>/.claude/hooks/semble-session.mjs` (SessionStart — state and reload messaging) + `semble-prefetch.mjs` (UserPromptSubmit — runs one semble search on the prompt and injects the top-3 candidate **paths**, never snippets) + `semble-stats.mjs` (PostToolUse + PostToolUseFailure — pure observer, JSONL telemetry) + `semble-reminder.mjs` (PreToolUse `Bash\|Grep` — fires on every eligible search, `N = state.reminderEvery`, DEF 1, counter in `.claude/semble/reminder.json` — project-global and persisted across sessions, so at N = 1 it throttles nothing) + `semble-subagent.mjs` (SubagentStart, no matcher, so every agent type). `semble-explore.mjs` is retired for good, superseded by `semble-subagent.mjs`; `install`/`upgrade` deletes that file and replaces its settings row |
+| Hooks | `<repo>/.claude/hooks/semble-session.mjs` (SessionStart — state and reload messaging) + `semble-prefetch.mjs` (UserPromptSubmit — runs one semble search on the prompt and injects the top-3 candidate **paths**, never snippets) + `semble-stats.mjs` (PostToolUse + PostToolUseFailure — pure observer, JSONL telemetry) + `semble-reminder.mjs` (PreToolUse `Bash\|Grep` — fires on every eligible search, `N = state.reminderEvery`, DEF 1, counter in `.claude/semble/reminder.json` — project-global and persisted across sessions, so at N = 1 it throttles nothing) + `semble-subagent.mjs` (SubagentStart, no matcher, so every agent type). Prefetch declares the index ready only when the current `index-code-config-docs` variant is complete; it deliberately ignores a bare pre-0.5.5 combined `index`. `semble-explore.mjs` is retired for good, superseded by `semble-subagent.mjs`; `install`/`upgrade` deletes that file and replaces its settings row |
 | Permissions | `<repo>/.claude/settings.json` -> exactly `mcp__semble_code__search` and `mcp__semble_code__find_related`, never a wildcard |
 | Agents | `<repo>/.claude/agents/**/*.md` get the two tool names; agents with no `tools:` key inherit and are left untouched. Global agents are never touched by `install` |
 
@@ -133,15 +132,15 @@ Installation is **uvx-ephemeral** by default: no `semble` on `PATH`. That is del
 
 | Fact | Consequence |
 |------|-------------|
-| **No watcher, no daemon.** semble 0.5.4 has no background thread or service | Nothing is ever started or stopped. Staleness is re-checked inside each tool call, behind a `3x last-build-duration` cooldown |
+| **No watcher, no daemon.** semble 0.5.5 has no background thread or service | Nothing is ever started or stopped. Staleness is re-checked inside each tool call, behind a `3x last-build-duration` cooldown |
 | The embedding model is pre-loaded at server start and calls block until it is ready | The **first query on a cold cache downloads hundreds of MB and is slow** — allow up to 600 s. Offline + cold HuggingFace cache = every call errors |
 | The corpus is exactly `SEMBLE_CONTENT_ARGS` | `.json`/`.json5`/`.csv`/`.tsv`/`.psv` are excluded from **every** content type — unreachable even with `--content all` — and `.mdx`/`.txt` belong to no bucket at all. Use `rg` for those. The per-suffix table is `references/language-coverage.md` |
-| One exception, and it is not configurable away | A `!` un-ignore pattern ending in a file extension skips the extension filter, so a negated `.json`/`.png` lands in the index at any `--content` setting — 5.9% of this workspace's index was one such lockfile, plus 143 chunks of decoded PNG. `.sembleignore` re-ignores win, because its lines are concatenated after `.gitignore`'s and the last match decides |
-| `--content config` is 0.57% of the corpus and stays | Those 53 chunks are all six `.github/workflows/*.yml` and four `docker-compose*.yml` — the whole CI/CD surface, and the only reachable answer to the deployment questions. It was never what pulled the lockfile in |
-| semble wins behaviour, `rg` wins enumeration — measured, 16 questions | Behaviour and vocabulary-mismatch: semble 8 of 9. Exhaustive enumeration: semble lost 2 of 5, and `hooks.json` questions are unanswerable in principle because `.json` is unreachable |
-| Adding docs to this corpus is not a fix | The per-repo cache dir is `sha256(repo path)` and does not encode the content type, so a docs index and a code index collide on one directory and invalidate each other on every call. Hence the separately reserved docs root |
+| Negation bypass — Semble 0.5.4 measurement, 2026-08-08; behavior reverified on 0.5.5 | A `!` un-ignore pattern ending in a file extension skips the extension filter, so a negated `.json`/`.png` lands in the index at any `--content` setting. In the historical measurement, one lockfile contributed 5.9% and decoded PNGs contributed 143 chunks; those counts were not rerun on 0.5.5. `.sembleignore` re-ignores win, because its lines are concatenated after `.gitignore`'s and the last match decides |
+| `config` value — Semble 0.5.4 measurement, 2026-08-08 | The historical corpus contained 53 config chunks, 0.57% of the total: all six `.github/workflows/*.yml` and four `docker-compose*.yml`. These were the whole CI/CD surface and the only reachable answers to the deployment questions; the counts were not rerun on 0.5.5 |
+| Retrieval split — Semble 0.5.4 measurement, 2026-08-08; 16 questions | Behaviour and vocabulary-mismatch: semble won 8 of 9. Exhaustive enumeration: semble lost 2 of 5, and `hooks.json` questions were unanswerable because `.json` was unreachable. This benchmark was not rerun on 0.5.5 |
+| 0.5.5 keeps exact content selections side by side | Under one hashed repository directory, the registered combined corpus is `index-code-config-docs`, code-only is `index`, and explicit narrower `docs` or `config` searches use sibling variants. `content=all` resolves the same `code docs config` set and reuses `index-code-config-docs`; the variants do not evict one another |
 | A newly registered MCP server is invisible to the running session | `install` stops at a reload checkpoint; `/brewcode:semble-setup resume` finishes the job in the new session |
-| `semble clear index` wipes **every** index under the cache root | There is no per-repo rebuild CLI, so `reindex` deletes exactly one resolved `<code root>/<64-hex>` directory, guarded and confirmed |
+| `semble clear index` wipes **every** index under the shared cache root | There is no per-repo rebuild CLI, so `reindex` builds and proves a private staged `index-code-config-docs`, then replaces only that live variant. **Sibling content variants stay available throughout the swap.** A verified pre-0.5.5 combined corpus at bare `index` is removed only after its replacement is live |
 | Staleness detection approximates semble's own validation | It is reported as *likely stale* and always offers `reindex` rather than acting by itself |
 | An upstream server named `semble` (written by `semble install`) is unpinned and shares a single-corpus cache root | It is detected and reported as a conflict, **never removed automatically** — other tools may depend on it |
 | Windows is unsupported | The skill says so and refuses to mutate |
@@ -153,9 +152,11 @@ Installation is **uvx-ephemeral** by default: no `semble` on `PATH`. That is del
 | `integration` | removed | kept | semble entries removed | kept | kept |
 | `mcp` | kept | removed | kept | kept | kept |
 | `cli` | kept | kept | kept | kept | `uv tool uninstall semble` |
-| `purge` | removed | removed | removed | code root removed | confirmed |
+| `purge` | removed | removed | removed | shared root removed | confirmed |
 
 `purge` needs a typed confirmation naming every directory it deletes. `disable` is the reversible alternative: nothing is deleted, the hooks simply go quiet.
+
+Historical cleanup is deliberately narrower than current cache removal. Pre-0.5.5 installs could leave an unused `semble-docs` directory. `purge` removes it only when it is a real directory whose sole entry is the expected `RESERVED-FOR-DOCS.txt` ownership marker. Empty directories, symlinks, repurposed directories and directories with any additional content are preserved.
 
 ## Files
 
@@ -165,7 +166,7 @@ Installation is **uvx-ephemeral** by default: no `semble` on `PATH`. That is del
 | `scripts/semble-status.sh` | read-only full report (`--json`, `--section`, `--strict`) |
 | `scripts/semble-install.sh` | `check` \| `uv` \| `coreutils` \| `semble` \| `all` — `uv` via brew, optional `coreutils`, pin priming through `uvx` |
 | `scripts/semble-mcp.sh` | detect / add / repair / remove / checkpoint |
-| `scripts/semble-cache.sh` | resolve, inspect, reserve the docs root, guarded purge |
+| `scripts/semble-cache.sh` | resolve and inspect exact variants in the shared root; guarded repository/root purge |
 | `scripts/semble-state.sh` | `.claude/semble/state.json` read-modify-write |
 | `scripts/semble-project.sh` | audit, warm, smoke, enable, disable, reindex |
 | `scripts/semble-remove.sh` | the four removal flavours |
@@ -188,6 +189,7 @@ Every script takes `--json` and uses the same exit codes: `0` ok · `1` hard fai
 | First search hangs for minutes | the embedding model is downloading | wait (up to 600 s); it happens once per model |
 | Every call errors offline | model pre-load cannot reach HuggingFace | run once online, or set `SEMBLE_NO_NETWORK=1` to skip warm steps |
 | `search` rejects the call | `repo` is missing — it is required | pass the absolute project root |
+| Prefetch stays silent although a bare `index` exists | it may be a pre-0.5.5 combined corpus, not the current exact variant | run `resume` to build the current `index-code-config-docs`, or use confirmed `reindex` for a staged replacement |
 | A `.json` / `.csv` / `.mdx` / `.txt` file is never found | not in this corpus by design (`.html`/`.htm` **is** indexed, in the docs bucket) | use `rg` |
 | Status says `partial` | half-wired — `hooks N/6 wired` counts only entries that are present **and** field-conforming; a hook whose `timeout`, `args` or `command` drifted is counted in `driftedCount`, not in `wiredCount` | `/brewcode:semble-setup install` re-runs idempotently and repairs each drifted field in place |
 | `hooks 6/6 wired` but a hook never fires | a duplicate entry for the same event/matcher/script — reported as `duplicateCount` with a `drift[]` row, never as `wired` | re-run `install`; the merge collapses duplicates |

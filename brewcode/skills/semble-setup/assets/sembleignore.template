@@ -5,7 +5,7 @@
 # leaves it alone (a backup is taken before --force overwrites).
 #
 # WHY THIS FILE EXISTS
-# semble 0.5.4 builds its ignore set in index/file_walker.py:_load_ignore_for_dir
+# semble 0.5.5 builds its ignore set in index/file_walker.py:_load_ignore_for_dir
 # from exactly two files per directory — ./.gitignore and ./.sembleignore. It
 # never reads the user's global excludes file (core.excludesFile / ~/.gitignore*)
 # and never asks git. So a directory that is invisible to `git status` only

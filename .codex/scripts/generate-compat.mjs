@@ -40,6 +40,15 @@ const ETALON_SENTENCE = `before writing a class, module, or test, find the close
 const ETALON_BRIEF = `find the closest well-built counterpart in the repository and follow its principles, ${ETALON_ADDITIVE}`;
 const ETALON_ARCHITECT = 'Find the closest well-built existing counterpart in the repository, take its principles, and reuse its patterns; add a new pattern only when nothing fits. This is additive to conventions, rules, and documentation, never a replacement.';
 const ETALON_TERSE = 'find the closest well-built counterpart in the repo and take its principles, in addition to conventions and docs, never instead';
+const TEAM_AGENT_HEADINGS = [
+  'Mission',
+  'Owned surfaces',
+  'Exclusions',
+  'Must-load references',
+  'Unique invariants',
+  'Unique verification'
+];
+const TEAM_SHARED_REFERENCE = '.codex/teams/{TEAM_NAME}/team.md';
 
 function readFrontmatter(source) {
   const match = source.match(/^---\n([\s\S]*?)\n---\n?/);
@@ -933,7 +942,7 @@ Every transition moves or creates the task file, updates frontmatter, and synchr
     writeFile(path.join(targetDir, 'README.md'), '# My Codex\n\nCompatibility skill id for documenting a Codex installation in internal, external, or focused research mode. The workflow is read-only except for the requested local report.\n');
   }
 
-  if (plugin === 'brewcode' && (skill === 'e2e' || skill === 'teams-setup')) {
+  if (plugin === 'brewcode' && skill === 'e2e') {
     writeFile(path.join(targetDir, 'references', 'agent-template.md'), `# Native Codex agent template
 
 Create a TOML file under \`.codex/agents/\` with \`name\`, \`description\`, and \`developer_instructions\`. The instructions define mission, domain, scope, task acceptance, self-check, and colleague handoff. Delegate through Codex collaboration with \`task_name\` and \`message\` only. Do not add Markdown frontmatter, tool allowlists, or legacy model aliases.
@@ -945,6 +954,38 @@ Agents whose domain writes code, scripts, SQL, schemas, infrastructure, or confi
   }
 
   if (plugin === 'brewcode' && skill === 'teams-setup') {
+    writeFile(path.join(targetDir, 'references', 'agent-template.md'), `# Native Codex team-agent template
+
+Create one TOML file under \`.codex/agents/\` with only the supported \`name\`, \`description\`, and \`developer_instructions\` keys. Keep \`description\` to one role-and-trigger line. Use the following body shape exactly; its six headings are ordered and exhaustive:
+
+\`\`\`markdown
+## Mission
+{One sentence: purpose and current role.}
+
+## Owned surfaces
+{Repo-relative paths and responsibilities owned only by this role.}
+
+## Exclusions
+{Named neighboring domains and their owners; refuse or coordinate instead of absorbing them.}
+
+## Must-load references
+- \`${TEAM_SHARED_REFERENCE}\`
+- {Only role-specific rules, conventions, or contracts needed for this task.}
+
+## Unique invariants
+{Only role-specific facts and prohibitions not already in the shared team contract or must-load references.}
+
+## Unique verification
+{Exact role-specific checks and acceptance evidence.}
+\`\`\`
+
+The shared team file owns task acceptance, routing, tracing, return, and colleague contracts. Reference it exactly once and do not copy those contracts or their legacy headings into the agent. Delegate through Codex collaboration with \`task_name\` and \`message\` only. Do not add Markdown frontmatter, tool allowlists, legacy model aliases, or speculative instructions.
+
+This template never applies to \`intent-guard\`. Its sole writer remains the shared superreview pipeline; preserve that review-only profile and its own output contract.
+`);
+  }
+
+  if (plugin === 'brewcode' && skill === 'teams-setup') {
     // The suites drive the mirrored scripts, whose whole contract is `.codex/agents/<name>.toml`
     // -- the fixtures they write, the directory listings they expect, and the parked
     // (`.disabled`) and backup (`.bak-`) twins alike. Every one of those tokens reaches the
@@ -952,16 +993,76 @@ Agents whose domain writes code, scripts, SQL, schemas, infrastructure, or confi
     // bare expectation array `['alpha-agent.md']`, an escaped regex `intent-guard\.md\.bak-`.
     // Nothing path-anchored can see them, and a half-converted suite is worse than none: the
     // fixture writes `.md`, the script parks `.toml`, and it dies before its first assertion.
-    // Inside these two files every `.md` IS an agent file except the two markdown artifacts the
+    // Inside these three files every `.md` IS an agent file except the two markdown artifacts the
     // fixture itself writes, so flip the extension file-wide and name those exceptions.
     const KEEP_MD = /^(?:team|README)$/;
-    for (const name of ['suite-intent-guard.mjs', 'suite-lifecycle.mjs']) {
+    for (const name of ['suite-intent-guard.mjs', 'suite-lifecycle.mjs', 'suite-parked-conflict.mjs']) {
       const file = path.join(targetDir, 'tests', name);
       writeFile(file, fs.readFileSync(file, 'utf8').replace(
         /([A-Za-z0-9_${}-]+)(\\?)\.md\b/g,
         (whole, stem, escape) => (KEEP_MD.test(stem) ? whole : `${stem}${escape}.toml`)
       ));
     }
+
+    // The canonical Codex tree keeps its manifest at `.codex/package/plugin.json`, while the
+    // installed distribution exposes `.codex-plugin/plugin.json`. Make the verifier runnable in
+    // both layouts and keep its isolated regression suite anchored to the canonical manifest.
+    const verifier = path.join(targetDir, 'scripts', 'verify-team.sh');
+    writeFile(verifier, fs.readFileSync(verifier, 'utf8').replace(
+      'PLUGIN_JSON="$SCRIPT_DIR/../../../.codex-plugin/plugin.json"',
+      'PLUGIN_JSON="$SCRIPT_DIR/../../../.codex-plugin/plugin.json"\n[ -f "$PLUGIN_JSON" ] || PLUGIN_JSON="$SCRIPT_DIR/../../../package/plugin.json"'
+    ).replace(
+      'esac\nTODAY=$(date +%F)',
+      `esac
+PV=$(grep -aoE 'brewcode-meta: version=[0-9]+\\.[0-9]+\\.[0-9]+' "$SCRIPT_DIR/../SKILL.md" 2>/dev/null | head -1 | sed 's/.*version=//' || true)
+case "$PV" in
+  [0-9]*.[0-9]*.[0-9]*) : ;;
+  *) printf 'ERROR:cannot resolve source plugin version (X.Y.Z) from %s\\n' "$SCRIPT_DIR/../SKILL.md"; exit 1 ;;
+esac
+TODAY=$(date +%F)`
+    ), 0o755);
+    const detector = path.join(targetDir, 'scripts', 'detect-mode.sh');
+    writeFile(detector, fs.readFileSync(detector, 'utf8').replace(
+      'esac\n\n# content_version self-location:',
+      `esac
+PLUGIN_VERSION=$(grep -aoE 'brewcode-meta: version=[0-9]+\\.[0-9]+\\.[0-9]+' "$SCRIPT_DIR/../SKILL.md" 2>/dev/null | head -1 | sed 's/.*version=//' || true)
+case "$PLUGIN_VERSION" in
+  [0-9]*.[0-9]*.[0-9]*) : ;;
+  *) printf 'ERROR:cannot resolve source plugin version (X.Y.Z) from %s\\n' "$SCRIPT_DIR/../SKILL.md"; exit 1 ;;
+esac
+
+# content_version self-location:`
+    ), 0o755);
+    const profileSuite = path.join(targetDir, 'tests', 'suite-agent-profile-contract.mjs');
+    writeFile(profileSuite, fs.readFileSync(profileSuite, 'utf8')
+      .replace(
+        "const canonicalSkillPath = join(repo, 'brewcode', 'skills', 'teams-setup', 'SKILL.md');",
+        "const canonicalSkillPath = join(repo, 'brewcode', '.codex', 'skills', 'teams-setup', 'SKILL.md');"
+      )
+      .replace(
+        "const verifierPath = join(repo, 'brewcode', 'skills', 'teams-setup', 'scripts', 'verify-team.sh');",
+        "const verifierPath = join(repo, 'brewcode', '.codex', 'skills', 'teams-setup', 'scripts', 'verify-team.sh');"
+      )
+      .replace(
+        'const representativeBody = profileBody(representative);',
+        'const representativeBody = profileBody(representative);\nconst runtimeRepresentativeBody = profileBody(representativeProfile(projectedTemplate));'
+      )
+      .replace(
+        "join(repo, 'brewcode', '.codex-plugin', 'plugin.json')",
+        "join(repo, 'brewcode', '.codex', 'package', 'plugin.json')"
+      )
+      .replace(
+        `const pluginVersion = JSON.parse(readFileSync(
+  join(repo, 'brewcode', '.codex', 'package', 'plugin.json'), 'utf8',
+)).version;`,
+        "const pluginVersion = (/brewcode-meta: version=([0-9]+\\.[0-9]+\\.[0-9]+)/.exec(canonicalSkill) || [])[1];"
+      )
+      .replace('return `${canonicalTeam', 'return `${projectedTeam')
+      .replace('function agentFile({ body = representativeBody,', 'function agentFile({ body = runtimeRepresentativeBody,')
+      .replace('const oversized = `${representativeBody}', 'const oversized = `${runtimeRepresentativeBody}')
+      .replace('mutate(representativeBody)', 'mutate(runtimeRepresentativeBody)')
+      .replaceAll('join(world, SOURCE_CLIENT_DIR', "join(world, '.codex'")
+      .replaceAll("'build-eng.md'", "'build-eng.toml'"), 0o755);
   }
 
   if (plugin === 'brewtools' && (skill === 'deploy' || skill === 'ssh')) {
@@ -1044,7 +1145,7 @@ function generateAgent(plugin, agentName) {
   const { values } = readFrontmatter(source);
   const description = transformText(values.description || `${agentName} specialist.`, { agent: true });
   const nativeInstructions = {
-    'agent-creator': `Create or improve Codex custom-agent TOMLs. Use one standalone file per agent under project .codex/agents/ or personal ~/.codex/agents/. Require name, description, and developer_instructions. Use only supported optional configuration keys. Validate TOML with Python tomllib and keep the role narrow. Emit an output-discipline paragraph into every generated agent (return a verdict plus file:line pointers; write bulk material to a file and return its path), and, only for agents that write code, scripts, SQL, schemas, infrastructure, or configuration, a scope-fit paragraph plus an etalon-first line (${ETALON_SENTENCE}). Report agent paths and a validation verdict, not full agent bodies.`,
+    'agent-creator': `Create or improve Codex custom-agent TOMLs. Use one standalone file per agent under project .codex/agents/ or personal ~/.codex/agents/. Require name, description, and developer_instructions. Use only supported optional configuration keys. Validate TOML with Python tomllib and keep the role narrow. For a teams-setup domain agent, use exactly these six ordered developer_instructions headings: ${TEAM_AGENT_HEADINGS.map((heading) => `## ${heading}`).join(', ')}. Under Must-load references include exactly one \`${TEAM_SHARED_REFERENCE}\` entry; keep shared task acceptance, routing, tracing, return, and colleague contracts only in that file. Never apply the team profile to intent-guard, whose shared superreview pipeline remains its sole writer. For every non-team agent, retain the generic contract: emit output discipline (return a verdict plus file:line pointers; write bulk material to a file and return its path), and, only for agents that write code, scripts, SQL, schemas, infrastructure, or configuration, scope fit plus etalon-first (${ETALON_SENTENCE}). Report agent paths and a validation verdict, not full agent bodies.`,
     'bash-expert': `Write and review portable shell automation. Default to strict mode, quote expansions, avoid destructive operations, keep output deterministic, and make failure states explicit. Validate syntax with bash -n and use shellcheck when available. Never expose secrets or mutate systems outside the requested scope.`,
     'hook-creator': `Create or improve Codex hooks using current official schemas. Use hooks.json or config.toml at an active .codex layer. Command handlers use one command string, timeout in seconds, and JSON stdin and stdout. Respect matcher limitations, test malformed input and timeout behavior, and explain review through /hooks after definitions change.`,
     'skill-creator': `Create or improve Codex skills. SKILL.md frontmatter contains only name and description and uses lowercase hyphen-case folders. Keep instructions concise, add agents/openai.yaml when appropriate, and colocate reusable scripts, references, and assets. Run the Codex skill quick validator and forward-test without production side effects.`,

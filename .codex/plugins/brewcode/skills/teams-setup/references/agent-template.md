@@ -1,7 +1,28 @@
-# Native Codex agent template
+# Native Codex team-agent template
 
-Create a TOML file under `.codex/agents/` with `name`, `description`, and `developer_instructions`. The instructions define mission, domain, scope, task acceptance, self-check, and colleague handoff. Delegate through Codex collaboration with `task_name` and `message` only. Do not add Markdown frontmatter, tool allowlists, or legacy model aliases.
+Create one TOML file under `.codex/agents/` with only the supported `name`, `description`, and `developer_instructions` keys. Keep `description` to one role-and-trigger line. Use the following body shape exactly; its six headings are ordered and exhaustive:
 
-Every generated agent states output discipline: return only what the main session needs, a verdict or result plus `file:line` pointers; write bulk material such as long logs, full diffs, or long reports to a file under `.codex/reports/<YYYYMMDD-HHMMSS>_<name>/` and return the path instead of the content.
+```markdown
+## Mission
+{One sentence: purpose and current role.}
 
-Agents whose domain writes code, scripts, SQL, schemas, infrastructure, or configuration also state scope fit: build for the scale and problems that exist today, not imagined load or speculative abstraction, and make one simplification pass after finishing. Those agents also state etalon-first: before writing a class, module, or test, find the closest well-built existing one in this repository and take its principles, in addition to conventions, rules, and documentation, never instead of them. Omit those paragraphs for research, documentation, and review-only agents.
+## Owned surfaces
+{Repo-relative paths and responsibilities owned only by this role.}
+
+## Exclusions
+{Named neighboring domains and their owners; refuse or coordinate instead of absorbing them.}
+
+## Must-load references
+- `.codex/teams/{TEAM_NAME}/team.md`
+- {Only role-specific rules, conventions, or contracts needed for this task.}
+
+## Unique invariants
+{Only role-specific facts and prohibitions not already in the shared team contract or must-load references.}
+
+## Unique verification
+{Exact role-specific checks and acceptance evidence.}
+```
+
+The shared team file owns task acceptance, routing, tracing, return, and colleague contracts. Reference it exactly once and do not copy those contracts or their legacy headings into the agent. Delegate through Codex collaboration with `task_name` and `message` only. Do not add Markdown frontmatter, tool allowlists, legacy model aliases, or speculative instructions.
+
+This template never applies to `intent-guard`. Its sole writer remains the shared superreview pipeline; preserve that review-only profile and its own output contract.

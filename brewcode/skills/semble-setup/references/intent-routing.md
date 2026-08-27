@@ -34,7 +34,7 @@ This file is normative. The router in `SKILL.md` follows it literally.
    - Tie between two non-destructive modes where one is `status` -> pick `status` (safe, read-only).
    - Tie between two non-destructive *mutating* modes (e.g. `install` vs `upgrade`) -> pick the one whose keyword appeared **first** in the prompt.
    - Score 0 for every mode (no keyword matched) -> run `status` and, in the report's **Next Step**, offer the two most plausible modes. Do not ask.
-5. `AskUserQuestion` is used at most **once** per invocation, and only for: (a) a destructive tie, (b) an explicit removal request where the four removal flavours are distinguishable, (c) a scope conflict (MCP present in more than one scope), (d) confirming `reindex` deletion of a resolved cache dir, (e) the `install` prerequisite gate — **one** question covering the brew installs the probe reported: `brew install uv` when `semble-install.sh all --json` exits `4` (that same question also carries the optional `brew install coreutils` line when the probe listed it), or, when the probe exits `0`, the standalone `coreutils` offer of SKILL.md 3.1d — raised on `.timeout.coreutils.status == "needs_confirmation"` with `.brew.present == true`, and silently skipped otherwise. The two are mutually exclusive. Nothing else.
+5. `AskUserQuestion` is used at most **once** per invocation, and only for: (a) a destructive tie, (b) an explicit removal request where the four removal flavours are distinguishable, (c) a scope conflict (MCP present in more than one scope), (d) confirming `reindex` replacement of the resolved `index-code-config-docs` variant, (e) the `install` prerequisite gate — **one** question covering the brew installs the probe reported: `brew install uv` when `semble-install.sh all --json` exits `4` (that same question also carries the optional `brew install coreutils` line when the probe listed it), or, when the probe exits `0`, the standalone `coreutils` offer of SKILL.md 3.1d — raised on `.timeout.coreutils.status == "needs_confirmation"` with `.brew.present == true`, and silently skipped otherwise. The two are mutually exclusive. Nothing else.
 
 > Step 2 is checked **before** scoring. A checkpointed `install` that is waiting for a new session
 > takes precedence over a vague prompt — that is how the interrupted flow resumes by itself.
@@ -81,10 +81,10 @@ reason: `matched keyword: set up`. Mutating -> status first, then the `install` 
 PLAN — brewcode:semble-setup
 INPUT:  set up semantic search for this repo
 MODE:   install — matched keyword: set up
-SCOPE:  this project root, user-scope MCP registration, default corpus (SEMBLE_CONTENT_ARGS)
+SCOPE:  required repo=this project root, optional content omitted -> registered code+docs+config corpus
 DO:     - probe prerequisites (uv, coreutils)
         - register semble_code MCP at user scope
-        - reserve docs cache root, wire rule/hooks/agents
+        - wire rule/hooks/agents; prefetch targets index-code-config-docs
         - write reload checkpoint
 RESULT: registered MCP pending a new-session reload, plus the resume command
 ```
@@ -96,7 +96,7 @@ RESULT: registered MCP pending a new-session reload, plus the resume command
 | 3 | `reindex`: `rebuild` = 1. `reset index` does not match (phrase absent) |
 | — | winner **`reindex`**, unique |
 
-reason: `matched keyword: rebuild`. Rule 5d applies: one `AskUserQuestion` confirming deletion of the resolved `<code root>/<64-hex>` directory (printed with its size) before `semble-project.sh reindex --yes`.
+reason: `matched keyword: rebuild`. Rule 5d applies: one `AskUserQuestion` confirming staged replacement of the resolved `<shared root>/<64-hex>/index-code-config-docs` variant (printed with its size) before `semble-project.sh reindex --yes`. Sibling content variants are preserved.
 
 ### E5 — `"remove everything"`
 
@@ -136,7 +136,7 @@ Unique winner != permission to run. `purge` still needs `--yes` **and** `--confi
 | 3 | `upgrade`: `обнови` = 1. `reindex`'s `обнови индекс` is a **phrase** and does not match a bare `обнови` |
 | — | winner **`upgrade`**, unique |
 
-reason: `matched keyword: обнови`. Compares the recorded pin against the approved `0.5.4`; identical -> report `unchanged` and stop. State plainly in the report that `"обнови"` was read as *update the pinned version*, not *rebuild the index*, and offer `reindex` in **Next Step**.
+reason: `matched keyword: обнови`. Compares the recorded pin against the approved `0.5.5`; identical -> report `unchanged` and stop. State plainly in the report that `"обнови"` was read as *update the pinned version*, not *rebuild the index*, and offer `reindex` in **Next Step**.
 
 ### R3 — `"настрой semble"`
 

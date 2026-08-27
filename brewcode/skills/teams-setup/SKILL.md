@@ -256,15 +256,38 @@ If "Mixed" -- ask model per agent in C3. Store as `DEFAULT_MODEL` (default: opus
 > `DEFAULT_MODEL` applies to DOMAIN agents only. `intent-guard` keeps the `model: sonnet` its shared
 > template ships — do not ask about it, do not override it.
 
+### C2.6: Shared Contract Bootstrap (before agent discovery)
+
+This gate MUST finish before any team-owned `.claude/agents/{name}.md` is written. An interrupted install
+may leave a partial roster, but no discoverable compact profile may ever point at a missing shared contract.
+
+1. Create `.claude/teams/{TEAM_NAME}/`.
+2. Read `${CLAUDE_SKILL_DIR}/references/framework-files.md`; write `team.md` with substituted metadata,
+   the byte-faithful `## Shared Agent Contract`, the `## Agents` header, and only the fixed
+   `intent-guard` row. Do not add domain-agent rows yet; C4 finalizes the successfully created roster.
+3. Create empty `trace.jsonl`; copy the project-local `trace-ops.sh` and make it executable.
+4. Gate before C3: `team.md` exists, contains `## Shared Agent Contract`, the project-local tracer path,
+   and `A task traced \`took\` ends with exactly one terminal track: \`completed\` or \`failed\`.`
+
+**STOP on any failure. Do not spawn or write an agent.** Resume by repairing this bootstrap first; never
+strip shared rules from a profile until its target `team.md` passes the gate.
+
 ### C3: Agent Creation (agent-creator x N)
 
 1. Read `${CLAUDE_SKILL_DIR}/references/agent-template.md`
+1a. Confirm C2.6 completed. `.claude/teams/{TEAM_NAME}/team.md` is already written and gated; if missing
+   or incomplete, **STOP before the first spawn** and repair the bootstrap.
 1b. **Re-run the C2 uniqueness check on the FINAL confirmed roster, immediately before the first spawn** —
    the user may have typed names in the "Custom" branch that never passed it. Same script, same exit-code
    reading. Any `TAKEN` name -> **do not spawn**; go back and rename it with the user first. Also refuse a
    name whose `.claude/agents/{name}.md.disabled` exists with no live file: that is another install's parked
    agent, and writing the live path recreates the dual-copy state both `enable` and `disable` refuse.
-2. For each agent, spawn `Task(subagent_type="brewcode:agent-creator")` — ONE agent file per spawn, never "create the whole team" in one task. Prompt carries GOAL (this roster is being built for {TEAM_NAME}; siblings own the other domains), ROLE (owns `.claude/agents/{name}.md` only), SCOPE (that file; out of bounds: other agents, team.md, project source), CONTEXT (mission + domain + project analysis from C1 are settled; model={DEFAULT_MODEL or per-agent} chosen in C2; the 3-4 sibling agent-creators in this batch own {COLLEAGUE_NAMES} — stay off their domains and do not duplicate their triggers), CONSUMER (C4 writes `.claude/teams/{TEAM_NAME}/team.md` from your path + description line, C5 quorum-reviews the file, and colleagues re-delegate to it by domain via the Task Acceptance Protocol), DONE (file written, `description` <= 100 chars (optimal ~80), single line, role + 2-3 triggers, no `<example>` blocks; the body carries the template's `## Return Contract` section — first clause and threshold sentence VERBATIM, only the middle paragraph adapted to the domain, `{AGENT_NAME}` substituted — and carries NO second output/reporting rule anywhere; report path + description line).
+2. For each agent, spawn `Task(subagent_type="brewcode:agent-creator")` — ONE agent file per spawn, never a whole team. Prompt carries GOAL (build this one `{TEAM_NAME}` roster member; siblings own other domains), ROLE (owns `.claude/agents/{name}.md` only), SCOPE (that file; other agents, `team.md`, project source out), CONTEXT (settled mission/domain/project analysis, selected model, 3-4 sibling names; no trigger/domain overlap; the gated shared contract already exists), CONSUMER (C4 adds the final roster row; C5 reviews; the roster routes work), DONE:
+   - `description` <=100 chars (optimal ~80), single-line role + 2-3 triggers, no `<example>`;
+   - body <=3200 bytes (~800 est-tokens), with exactly these ordered headings and no others: `## Mission`, `## Owned surfaces`, `## Exclusions`, `## Must-load references`, `## Unique invariants`, `## Unique verification`;
+   - `## Must-load references` names `.claude/teams/{TEAM_NAME}/team.md` first;
+   - profile contains only domain-unique facts. `Task Acceptance Protocol`, `Return Contract`, `Trace Instructions`, `Colleagues`, `Scope Fit`, shared routing, and shared output rules stay only in `team.md`;
+   - placeholders substituted; return file path + description line.
 
    Every spawn prompt MUST also carry the template path and the four metadata lines, resolved — the
    subagent cannot see Phase 1's output, so **replace `{PLUGIN_VERSION}` and `{LAST_UPDATED}` below with
@@ -286,9 +309,9 @@ If "Mixed" -- ask model per agent in C3. Store as `DEFAULT_MODEL` (default: opus
    `verify-team.sh` re-reads every generated agent's frontmatter and FAILS on a wrong order, a missing
    key or wrong quoting, so a prompt that shipped a token does not pass C4.
 3. Batch 3-4 agents in parallel per message
-4. After each batch, optimize:
+4. After each batch, optimize without changing the six-heading contract:
    ```
-   Task(subagent_type="brewtools:text-optimizer", prompt="Optimize .claude/agents/{agent-name}.md using light mode (-l). Output report with metrics.")
+   Task(subagent_type="brewtools:text-optimizer", prompt="Light-optimize .claude/agents/{agent-name}.md; preserve its exact six ordered headings, team.md reference, names/numbers/negations/scope. Output metrics.")
    ```
    > `brewtools` not installed (`text-optimizer` unavailable) — skip the pass, agents stay as written.
    > **Never run the optimizer on `.claude/agents/intent-guard.md`.** Its frontmatter `description`
@@ -410,14 +433,14 @@ the block) and `generate.sh validate` will report the agent `UNTAILORED`.
 Report `intent-guard: created (adapted)` or `intent-guard: reused (already present)` and continue to
 C4. Either way the file gets its `team.md` row.
 
-### C4: Framework Setup + Verification
+### C4: Roster Finalization + Verification
 
-1. Create team directory:
-   ```bash
-   mkdir -p ".claude/teams/TEAM_NAME_HERE" && echo "OK" || echo "FAILED"
-   ```
+1. Re-check the C2.6 bootstrap before editing the roster. Missing/malformed shared contract -> **STOP**;
+   never finalize discoverable agents against an absent authority.
 
-2. Write from `${CLAUDE_SKILL_DIR}/references/framework-files.md` templates: `team.md` (fill with real agent data), `touch trace.jsonl`
+2. Finalize `team.md` from `${CLAUDE_SKILL_DIR}/references/framework-files.md`: preserve the bootstrapped
+   Shared Agent Contract byte-faithful, add one domain row per successfully created agent, and retain the
+   fixed `intent-guard` row. Then `touch trace.jsonl`. No confirmed-but-unwritten agent enters the roster.
 
    Then install the **project-local tracer** the generated agents call. A `.claude/agents/*.md` file
    is not plugin-owned, so `${CLAUDE_PLUGIN_ROOT}` is NOT substituted inside it and no
@@ -466,15 +489,15 @@ project's reviewer agent from `.claude/agents/`, else `general-purpose`.
 
 | # | Focus |
 |---|-------|
-| 1 | Instruction quality: clarity, imperative form, completeness, word budget, and **exactly one** `## Return Contract` — first clause `Verdict first, <=30 lines, \`path:line\`. !=bodies/output/log/preamble.` intact, threshold sentence intact, no competing output/reporting rule elsewhere in the file |
+| 1 | Profile contract: body only (frontmatter excluded) <=3200 bytes (~800 est-tokens); exactly six ordered body headings (`Mission`, `Owned surfaces`, `Exclusions`, `Must-load references`, `Unique invariants`, `Unique verification`); `.claude/teams/{TEAM_NAME}/team.md` loaded first; no repeated shared-contract heading/rule |
 | 2 | Domain accuracy: correct scope, tool selection, model fit, description triggers |
-| 3 | Architecture: consistency across agents, no domain overlaps, proper Task Acceptance Protocol |
+| 3 | Architecture: no domain overlaps; owned surfaces/exclusions/routing agree with the roster; acceptance/tracing/returns/colleagues/scope-fit exist once in `team.md` |
 
 `.claude/agents/intent-guard.md` is reviewed under DIFFERENT criteria — it is an instantiated shared
 template, not an authored domain agent. Judge only: placeholders all resolved, template header stripped,
 frontmatter identical to the template (short review-only description, `model: sonnet`, read-only tools),
-project facts accurate and not invented. Do NOT judge it on domain fit, domain scope, description
-triggers, Task Acceptance Protocol, Scope Fit or trace instructions — it has none by design, and
+project facts accurate and not invented. Do NOT judge it on the six-heading domain profile, domain fit/scope,
+description triggers, acceptance, scope-fit, shared return or tracing — it has none by design, and
 "add the missing sections" is a FALSE POSITIVE here. Never propose lengthening its description.
 
 Each reads ALL agent files in `.claude/agents/` and outputs:
@@ -523,13 +546,17 @@ Task(subagent_type="brewcode:agent-creator", prompt="
     verified (2/3 reviewers + C7 double-check) — do NOT re-litigate it. Up to 3 sibling
     agent-creators fix other agent files in this same batch; team.md already lists the final
     roster, so do not rename the agent or change its domain.
+    Read `${CLAUDE_SKILL_DIR}/references/agent-template.md` first; it is the canonical domain-profile
+    shape. For a domain agent, preserve exactly its six ordered body headings and shared-team reference.
     ISSUE: {description}
     FIX: {suggested_fix}
     SEVERITY: {severity}
   CONSUMER: C9 re-verifies your file for "issue resolved + no regression", and the team
     manifest .claude/teams/{TEAM_NAME}/team.md must stay accurate — keep name, domain and
     description shape intact so its roster row still matches.
-  DONE: fix applied and validated; report as: file | what changed | validation result.
+  DONE: fix applied and validated. Domain-agent body (frontmatter excluded) <=3200 bytes, exactly the
+    canonical six ordered headings, team.md loaded first, no shared contract duplicated. Report:
+    file | what changed | validation result.
 ")
 ```
 Batch: up to 3 parallel per message. Minor issues skipped.
@@ -546,6 +573,10 @@ Task(subagent_type=REVIEWER, prompt="
   1. Read the fixed agent file
   2. Check original issue is resolved
   3. Check no regression introduced
+  4. For every domain agent, hard-gate the body only (frontmatter excluded): <=3200 bytes; exactly
+     `Mission`, `Owned surfaces`, `Exclusions`, `Must-load references`, `Unique invariants`,
+     `Unique verification` in order with no other headings; team.md first; no shared rule duplicated.
+     `intent-guard` is exempt from this six-heading gate and keeps its frozen review-only contract.
   Mark: FIXED or REGRESSION
   {fixes_applied}
 ")
@@ -635,6 +666,19 @@ done; echo "OK"
   then re-run `upgrade`. Never "upgrade the live ones only" — a half-upgraded roster is what the guards exist to prevent.
 - all members live -> continue.
 
+### U1b: Shared Contract Migration Gate
+
+Before U2 analysis or any U4 agent write, read
+`${CLAUDE_SKILL_DIR}/references/framework-files.md` and upgrade `team.md` to the current shared contract.
+For a legacy file with no `## Shared Agent Contract`, insert the canonical block before `## Agents`,
+substituting `{TEAM_NAME}` only and preserving Created, roster rows, statuses, and history. If a shared
+block exists but is incomplete, replace that block from the canonical reference before proceeding.
+Re-copy `trace-ops.sh`, then run `verify-team.sh`.
+
+Legacy agent bodies remain byte-identical during this gate. **No agent may be tuned, regenerated, stripped,
+deleted, or spawned until the shared contract passes.** A legacy-profile warning is safe; a shared-contract
+failure stops the whole upgrade. Thus U4 can relocate repeated rules only after their destination exists.
+
 ### U2: Analyze Performance
 
 Filter post-cursor trace: `k=track` for task stats, `k=issue` for problems, `k=insight` for patterns.
@@ -684,9 +728,12 @@ treat their absence as an error.
 Each agent file you regenerate or tune gets its `version` / `last_updated` frontmatter keys refreshed
 to the same values; `generated_by` stays `brewcode:teams-setup`. `intent-guard.md` is byte-untouchable.
 
-Every agent file you touch here also ends up with the template's `## Return Contract` section and no
-second output/reporting rule — add it if `verify-team.sh` warned it is missing, replacing whatever
-older output guidance the agent carried. Untouched agents keep their bodies; the warning is the record.
+Every domain agent touched here migrates to the current compact template: body only (frontmatter excluded)
+<=3200 bytes (~800 est-tokens),
+exactly the six ordered headings, `.claude/teams/{TEAM_NAME}/team.md` first under `Must-load references`,
+and no repeated acceptance/tracing/routing/return/colleague/scope-fit contract. Preserve every unique
+fact while relocating shared rules to `team.md`. Untouched legacy agents keep their bodies; verifier
+warnings identify the next migration set. `intent-guard.md` remains byte-untouchable.
 
 Set cursor:
 ```bash

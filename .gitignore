@@ -43,3 +43,4 @@ __pycache__/
 
 # brewcode:semble
 .claude/semble/
+.claude/reports/

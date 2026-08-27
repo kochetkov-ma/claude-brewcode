@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # semble-cache.sh — inspect and (guardedly) delete semble cache directories
-# (DESIGN §6.5, §6.6, §9.4). The per-repo directory name is
-# sha256(str(Path(repo).expanduser().resolve())) — the content type is NOT part
-# of the hash, which is why the code and docs roots must stay separate.
+# (DESIGN §6.5, §6.6, §9.4). Semble 0.5.5 stores exact content variants as
+# `index` (code only) or `index-<sorted-content-set>` below the hashed repo dir.
 set -euo pipefail
 SC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SC_DIR/lib/semble-common.sh"
@@ -18,14 +17,13 @@ semble-cache.sh — cache inspection and guarded deletion for brewcode:semble-se
 
   semble-cache.sh info         [--repo PATH] [--json]
   semble-cache.sh resolve      [--repo PATH] [--json]
-  semble-cache.sh reserve-docs [--json]
   semble-cache.sh purge-repo   [--repo PATH] --yes [--json]
-  semble-cache.sh purge-root   [--which code|docs] --yes [--json]
+  semble-cache.sh purge-root   --yes [--json]
   semble-cache.sh list         [--json]
 
 --repo defaults to the resolved project root. Every rm -rf is guarded: a repo
-directory must have a 64-hex leaf under the code root, a root must have a
-`semble-code`/`semble-docs` leaf.
+directory must have a 64-hex leaf under the shared root; that root must have a
+`semble-code` leaf.
 
 Exit: 0 ok | 1 abort/guard refused | 2 usage | 4 confirmation required
 EOF
@@ -47,24 +45,31 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-case "$WHICH" in code|docs) ;; *) sc_err "unknown --which: $WHICH (code|docs)"; exit 2 ;; esac
+case "$WHICH" in code) ;; *) sc_err "unknown --which: $WHICH (only code is valid)"; exit 2 ;; esac
 
 sc_require_node
 CODE_ROOT="$(sc_cache_root_code)"
-DOCS_ROOT="$(sc_cache_root_docs)"
+INDEX_LEAF="$(sc_index_leaf)"
 [ -n "$REPO" ] || REPO="$(sc_project_root)"
 HASH="$(sc_repo_hash "$REPO" 2>/dev/null || true)"
 REPO_ABS="$( cd "$REPO" 2>/dev/null && pwd -P || printf '%s' "$REPO" )"
 REPO_DIR=""
 [ -n "$HASH" ] && REPO_DIR="$CODE_ROOT/$HASH"
+INDEX_DIR=""
+LEGACY_INDEX_DIR=""
+if [ -n "$REPO_DIR" ]; then
+  INDEX_DIR="$REPO_DIR/$INDEX_LEAF"
+  LEGACY_INDEX_DIR="$REPO_DIR/index"
+fi
 
 # ── shared node walker: size/entries/staleness/otherRepos ───────────────────
 cache_info_json() {
-  SC_CODE="$CODE_ROOT" SC_DOCS="$DOCS_ROOT" SC_HASH="$HASH" SC_REPO="$REPO_ABS" \
-  SC_WANT_CT="$(sc_content_set_csv)" \
+  SC_CODE="$CODE_ROOT" SC_HASH="$HASH" SC_REPO="$REPO_ABS" \
+  SC_WANT_CT="$(sc_content_set_csv)" SC_WANT_LEAF="$INDEX_LEAF" \
   SC_NONET="${SEMBLE_NO_NETWORK:-}" node -e '
 const fs=require("fs"),path=require("path");
-const code=process.env.SC_CODE, docs=process.env.SC_DOCS, hash=process.env.SC_HASH;
+const code=process.env.SC_CODE, hash=process.env.SC_HASH;
+const wantLeaf=process.env.SC_WANT_LEAF;
 const HEX=/^[0-9a-f]{64}$/;
 function walk(dir){ let size=0,count=0;
   let st; try{ st=fs.lstatSync(dir); }catch(e){ return {size:0,count:0}; }
@@ -76,12 +81,11 @@ function walk(dir){ let size=0,count=0;
     else { size+=s.size; count+=1; } }
   return {size,count};
 }
-function meta(dir){ const f=path.join(dir,"index","metadata.json");
+function metaAt(indexDir){ const f=path.join(indexDir,"metadata.json");
   if(!fs.existsSync(f)) return undefined;
   try{ return JSON.parse(fs.readFileSync(f,"utf8")); }catch(e){ return undefined; } }
-function staleness(dir,m){
-  if(!dir||!fs.existsSync(dir)||!fs.existsSync(path.join(dir,"index"))) return "absent";
-  const idx=path.join(dir,"index");
+function staleness(idx,m){
+  if(!idx||!fs.existsSync(idx)) return "absent";
   const need=["chunks.json","metadata.json","bm25_index","semantic_index"];
   for(const n of need) if(!fs.existsSync(path.join(idx,n))) return "incomplete";
   if(process.env.SC_NONET==="1") return "unknown";
@@ -100,25 +104,44 @@ function staleness(dir,m){
   }
   return "fresh";
 }
+function variantNames(dir){
+  if(!dir||!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir).filter(n=>n==="index"||/^index-[a-z0-9-]+$/.test(n)).sort();
+}
+function variants(dir){ return variantNames(dir).map(name=>{
+  const indexDir=path.join(dir,name), w=walk(indexDir), m=metaAt(indexDir);
+  const ct=Array.isArray(m&&m.content_type)?m.content_type.slice().sort():[];
+  return {name,indexDir,sizeBytes:w.size,entries:w.count,contentType:ct,
+    desired:name===wantLeaf,
+    legacyCombined:name==="index"&&wantLeaf!=="index"&&ct.join(",")===process.env.SC_WANT_CT,
+    state:name===wantLeaf?staleness(indexDir,m):(m?"present":"unknown")};
+}); }
 const repoDir=hash?path.join(code,hash):"";
-const present=repoDir?fs.existsSync(repoDir):false;
-const w=present?walk(repoDir):{size:0,count:0};
-const m=present?meta(repoDir):undefined;
+const repoPresent=repoDir?fs.existsSync(repoDir):false;
+const w=repoPresent?walk(repoDir):{size:0,count:0};
+const vs=repoPresent?variants(repoDir):[];
+const desired=vs.find(v=>v.desired), legacy=vs.find(v=>v.legacyCombined);
+const m=desired?metaAt(desired.indexDir):undefined;
 const others=[];
 if(fs.existsSync(code)){
   for(const n of fs.readdirSync(code).sort()){
     if(!HEX.test(n)||n===hash) continue;
-    const d=path.join(code,n); const ow=walk(d); const om=meta(d);
-    others.push({hash:n,sizeBytes:ow.size,rootPath:(om&&om.root_path)||""});
+    const d=path.join(code,n), ow=walk(d), ov=variants(d);
+    const primary=ov.find(v=>v.desired)||ov[0];
+    const om=primary?metaAt(primary.indexDir):undefined;
+    others.push({hash:n,sizeBytes:ow.size,rootPath:(om&&om.root_path)||"",
+      variants:ov.map(v=>v.name)});
   }
 }
-const marker=path.join(docs,"RESERVED-FOR-DOCS.txt");
 process.stdout.write(JSON.stringify({
-  codeRoot:code,docsRoot:docs,docsReserved:fs.existsSync(marker),
-  repoHash:hash||"",repoDir:repoDir,present:present,
+  codeRoot:code,
+  repoHash:hash||"",repoDir:repoDir,repoPresent:repoPresent,
+  indexLeaf:wantLeaf,indexDir:repoDir?path.join(repoDir,wantLeaf):"",
+  legacyIndexDir:repoDir?path.join(repoDir,"index"):"",
+  legacyPresent:!!legacy,present:!!desired,variants:vs,
   sizeBytes:w.size,entries:w.count,
   metadata:m===undefined?null:m,
-  staleness:staleness(repoDir,m),
+  staleness:desired?desired.state:(legacy?"legacy":"absent"),
   otherRepos:others}));'
 }
 
@@ -160,52 +183,21 @@ console.log((i.present?"✅ ":"⏭️ ")+"repo cache "+(i.present?"present":"abs
 console.log("hash: "+(i.repoHash||"(unresolved)"));
 console.log("size: "+i.sizeBytes+" bytes in "+i.entries+" files | staleness: "+i.staleness);
 console.log("code root: "+i.codeRoot);
-console.log("docs root: "+i.docsRoot+" (reserved="+i.docsReserved+")");
+console.log("variant: "+i.indexLeaf+" | discovered: "+i.variants.map(v=>v.name).join(", "));
 console.log("other repos in this root: "+i.otherRepos.length);'
     fi
     ;;
 
   resolve)
-    IDX=""
-    [ -n "$REPO_DIR" ] && IDX="$REPO_DIR/index"
     if [ "$JSON" = "1" ]; then
-      SC_R="$REPO_ABS" SC_H="$HASH" SC_C="$CODE_ROOT" SC_D="$REPO_DIR" SC_I="$IDX" node -e '
+      SC_R="$REPO_ABS" SC_H="$HASH" SC_C="$CODE_ROOT" SC_D="$REPO_DIR" \
+      SC_L="$INDEX_LEAF" SC_I="$INDEX_DIR" SC_OLD="$LEGACY_INDEX_DIR" node -e '
 process.stdout.write(JSON.stringify({schema:1,repo:process.env.SC_R,hash:process.env.SC_H,
-  codeRoot:process.env.SC_C,repoDir:process.env.SC_D,indexDir:process.env.SC_I}));'
+  codeRoot:process.env.SC_C,repoDir:process.env.SC_D,indexLeaf:process.env.SC_L,
+  indexDir:process.env.SC_I,legacyIndexDir:process.env.SC_OLD}));'
       printf '\n'
     else
       printf '%s\n%s\n' "${HASH:-(unresolved)}" "${REPO_DIR:-(unresolved)}"
-    fi
-    ;;
-
-  reserve-docs)
-    MARKER="$DOCS_ROOT/RESERVED-FOR-DOCS.txt"
-    CREATED=false
-    if [ "${SEMBLE_DRY_RUN:-}" = "1" ]; then
-      sc_dry "mkdir -p $DOCS_ROOT && write $MARKER"
-    elif [ ! -f "$MARKER" ]; then
-      mkdir -p "$DOCS_ROOT"
-      cat > "$MARKER" <<EOF
-Reserved by brewcode:semble-setup for a future docs corpus (--content docs).
-
-Nothing is registered against this root. It exists so a docs index can never
-share a directory with the code index: the per-repo directory name is
-sha256(resolved repo path) and does NOT include the content type, so one root
-holding both corpora would make each server invalidate the other's index on
-every call (metadata content_type set mismatch).
-
-Code root: $CODE_ROOT
-Docs root: $DOCS_ROOT
-EOF
-      CREATED=true
-    fi
-    if [ "$JSON" = "1" ]; then
-      SC_D="$DOCS_ROOT" SC_M="$MARKER" SC_C="$CREATED" node -e '
-process.stdout.write(JSON.stringify({schema:1,docsRoot:process.env.SC_D,marker:process.env.SC_M,
-  created:process.env.SC_C==="true",status:"ok"}));'
-      printf '\n'
-    else
-      sc_ok "docs root reserved: $DOCS_ROOT (created=$CREATED)"
     fi
     ;;
 
@@ -236,7 +228,7 @@ process.stdout.write(JSON.stringify({schema:1,repoDir:process.env.SC_D,hash:proc
     ;;
 
   purge-root)
-    if [ "$WHICH" = "code" ]; then ROOT="$CODE_ROOT"; LEAF=semble-code; else ROOT="$DOCS_ROOT"; LEAF=semble-docs; fi
+    ROOT="$CODE_ROOT"; LEAF=semble-code
     guard_root "$ROOT" "$LEAF"
     if [ "$YES" != "1" ] && [ "${SEMBLE_DRY_RUN:-}" != "1" ]; then
       sc_warn "purge-root requires --yes; nothing was deleted ($ROOT)"
@@ -263,9 +255,10 @@ process.stdout.write(JSON.stringify({schema:1,root:process.env.SC_R,which:proces
     ;;
 
   list)
-    SC_CODE="$CODE_ROOT" SC_JSON="$JSON" node -e '
+    SC_CODE="$CODE_ROOT" SC_JSON="$JSON" SC_WANT_LEAF="$INDEX_LEAF" \
+    SC_WANT_CT="$(sc_content_set_csv)" node -e '
 const fs=require("fs"),path=require("path");
-const code=process.env.SC_CODE, HEX=/^[0-9a-f]{64}$/;
+const code=process.env.SC_CODE, want=process.env.SC_WANT_LEAF, HEX=/^[0-9a-f]{64}$/;
 function walk(dir){ let size=0,count=0; let names=[];
   try{ names=fs.readdirSync(dir); }catch(e){ return {size:0,count:0}; }
   for(const n of names){ const p=path.join(dir,n); let s;
@@ -277,13 +270,20 @@ if(fs.existsSync(code)){
   for(const n of fs.readdirSync(code).sort()){
     if(!HEX.test(n)) continue;
     const d=path.join(code,n); const w=walk(d);
-    let m=null; try{ m=JSON.parse(fs.readFileSync(path.join(d,"index","metadata.json"),"utf8")); }catch(e){ m=null; }
-    entries.push({hash:n,sizeBytes:w.size,rootPath:(m&&m.root_path)||"",
-      time:(m&&m.time)||null,contentType:(m&&m.content_type)||[]}); } }
+    const variants=fs.readdirSync(d).filter(v=>v==="index"||/^index-[a-z0-9-]+$/.test(v)).sort().map(name=>{
+      const indexDir=path.join(d,name), vw=walk(indexDir); let m=null;
+      try{m=JSON.parse(fs.readFileSync(path.join(indexDir,"metadata.json"),"utf8"));}catch(e){m=null;}
+      const ct=Array.isArray(m&&m.content_type)?m.content_type.slice().sort():[];
+      return {name,indexDir,sizeBytes:vw.size,entries:vw.count,
+        desired:name===want,legacyCombined:name==="index"&&want!=="index"&&ct.join(",")===process.env.SC_WANT_CT,
+        rootPath:(m&&m.root_path)||"",time:(m&&m.time)||null,contentType:ct}; });
+    const primary=variants.find(v=>v.desired)||variants[0]||null;
+    entries.push({hash:n,sizeBytes:w.size,rootPath:primary?primary.rootPath:"",
+      time:primary?primary.time:null,contentType:primary?primary.contentType:[],variants}); } }
 const out={schema:1,codeRoot:code,count:entries.length,entries};
 if(process.env.SC_JSON==="1"){ process.stdout.write(JSON.stringify(out)+"\n"); }
 else { console.log("code root: "+code+" | "+entries.length+" indexed repo(s)");
-  for(const e of entries) console.log("  "+e.hash+"  "+e.sizeBytes+" bytes  "+(e.rootPath||"(unknown root)")); }'
+  for(const e of entries) console.log("  "+e.hash+"  "+e.sizeBytes+" bytes  "+(e.rootPath||"(unknown root)")+"  ["+e.variants.map(v=>v.name).join(", ")+"]"); }'
     ;;
 
   *) sc_err "unknown subcommand: $SUB"; usage; exit 2 ;;

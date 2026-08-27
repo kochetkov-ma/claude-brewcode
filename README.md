@@ -209,7 +209,7 @@ Every spawn prompt carries six fields:
 | `/brewcode:skills` | Prompt-driven skill management: status, create, improve, sync, review |
 | `/brewcode:agents` | Prompt-driven agent management: status, create, improve, sync, review |
 | `/brewcode:e2e` | E2E testing orchestration with BDD scenarios and quorum review |
-| `/brewcode:semble-setup` | Semantic code search setup: installs the pinned semble_code MCP, isolated cache, semble-first rule + hooks, agent migration |
+| `/brewcode:semble-setup` | Semantic code search setup: installs the pinned semble_code MCP, shared content-variant cache, semble-first rule + hooks, agent migration |
 
 ### Brewdoc (5 skills)
 

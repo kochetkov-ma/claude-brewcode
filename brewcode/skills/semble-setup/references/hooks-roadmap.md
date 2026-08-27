@@ -134,7 +134,26 @@ last_verified_at`) -> телеметрии
 | P10 | Каналы вывода хука (exit 0, stdout-JSON): `hookSpecificOutput.additionalContext`, `systemMessage`, `hookSpecificOutput.permissionDecision` = `allow`/`deny`/`ask`/`defer` (+`permissionDecisionReason`), `hookSpecificOutput.updatedInput` (PreToolUse/PermissionRequest), `hookSpecificOutput.updatedToolOutput` (PostToolUse), `decision: "block"` (+`reason`), `continue`/`stopReason`, `suppressOutput`, `terminalSequence`. Exit-коды: 0 - stdout парсится как JSON; 2 - блокирующая ошибка, JSON игнорируется, stderr идёт модели как причина; прочие - неблокирующая ошибка. Exit 1 неблокирующий | подтверждено, с уточнением: доступен ещё `ask`/`defer`, а не только `allow\|deny` | https://code.claude.com/docs/en/hooks |
 | P11 | `SubagentStart` существует, и его `additionalContext` попадает в транскрипт САБАГЕНТА: "For `SubagentStart`, the notice appears in the subagent's own transcript, not in the parent conversation." | подтверждено | https://code.claude.com/docs/en/hooks |
 
-### Факты semble (перепроверены по установленному пакету)
+### Semble package facts — 0.5.4 snapshot and 0.5.5 recheck
+
+> **Current recheck — 2026-08-27.** Exact package `semble[mcp]==0.5.5` preserves
+> the S1-S3 behavior recorded below; S4 is corrected by the current table. Source
+> line numbers moved, and 0.5.5 adds per-call content selection plus one cache
+> variant per exact content set. No new
+> telemetry sample was generated during this recheck; the on-disk JSONL record in
+> S3 remains evidence from 2026-08-08, not a synthetic 0.5.5 observation.
+
+| Current 0.5.5 check | Result | Source |
+|---------------------|--------|--------|
+| S1/S2 cooldown and in-call rebuild | `_MIN_REVALIDATE_FACTOR = 3`, `_build_tracked()` records the scaled cooldown, and `_evict_if_stale()` performs lazy validation. There is still no watcher or daemon. | `semble/mcp.py:29`, `:229-239`, `:247-267` |
+| S3 savings schema and commands | The record keys remain `ts`, `call`, `results`, `snippet_chars`, `file_chars`; `semble savings` and `semble clear savings` remain registered. | `semble/stats.py:64-102`; `semble/cli.py:163-170`, `:228-249`, `:277-278` |
+| S4 content classification | `.html`/`.htm` remain docs and are included by the registered corpus; `.json`/`.json5`/`.csv`/`.tsv`/`.psv` remain data and are outside every selectable content type. | `semble/index/files.py:363-459` |
+| New 0.5.5 selection/cache behavior | Both MCP tools accept optional `content=code|docs|config|all`. Each exact selection has a sibling index below the same repo hash; the registered `code docs config` corpus resolves to `index-code-config-docs`. | `semble/mcp.py:30`, `:70-130`; `semble/cache.py:37-41` |
+
+**Historical measurement — 2026-08-08.** The package command and S1-S4 table
+below are preserved as the original 0.5.4 evidence. The S4 `.html`/`.htm`
+outside-corpus clause is retained verbatim but withdrawn as a historical error;
+the current 0.5.5 S4 row above is authoritative:
 
 Пакет: `uvx --from semble[mcp]==0.5.4 semble --content code docs config`,
 `SEMBLE_CACHE_LOCATION=~/Library/Caches/semble-code`, `alwaysLoad: true`.

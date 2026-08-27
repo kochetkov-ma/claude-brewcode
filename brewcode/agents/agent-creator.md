@@ -385,9 +385,13 @@ description: |
 | 4 | `## Cmds` | Task -> Cmd reference | 2-col table |
 | 5 | `## Checklist` | DoD, placed at end of SP | `- [ ]` list |
 
-### 6. Guardrails (emit verbatim into every generated AG)
+### teams-setup compact exception
 
-`Return Contract` = UNCONDITIONAL, every AG. `Scope Fit` = ONLY when the AG's domain writes code/scripts/SQL/schemas/infra/config; drop it for pure-research/docs/review-only AGs.
+A brief citing `brewcode/skills/teams-setup/references/agent-template.md` overrides the generic SP structure and guardrails. Generate one domain profile <=3200 bytes (~800 est-tokens) with exactly these ordered body headings and no others: `## Mission`, `## Owned surfaces`, `## Exclusions`, `## Must-load references`, `## Unique invariants`, `## Unique verification`. Load `.claude/teams/{TEAM_NAME}/team.md` first. Keep acceptance, routing, tracing, return, colleague, scope-fit, and etalon rules only in that shared file; !=restore `Task Acceptance Protocol`, `Return Contract`, `Trace Instructions`, `Colleagues`, or `Scope Fit` sections. Preserve frontmatter metadata specified by the teams brief. `intent-guard` remains exempt and only its three emitted seeded blocks may be adapted.
+
+### 6. Guardrails (non-team AGs; emit verbatim)
+
+For AGs outside `teams-setup`, `Return Contract` = unconditional. `Scope Fit` = only when the domain writes code/scripts/SQL/schemas/infra/config; drop it for pure-research/docs/review-only AGs.
 
 ```markdown
 ## Scope Fit   <!-- code-writing AGs only -->
@@ -441,7 +445,7 @@ Calibrated on real SA transcripts in this repo (`.claude/projects/*/subagents/ag
 
 > `maxTurns` = emergency anti-loop stop, != budget. Tight values hurt: abort loses the AG's final report. Also != time limit: an AG stuck in one 25-min `Bash` is 1 turn, untouched by the cap -> use `BASH_MAX_TIMEOUT_MS` + `PreToolUse` soft-deadline hook.
 
-Body instruction to include, sized to the AG's own risk: an AG that runs long, writes files, or fans out gets the full checkpoint rule -- write incremental progress to a report file after each milestone; on resume, read it first and continue from the last checkpoint. A short read-only AG (explorer, reviewer, one-shot lookup) has nothing to lose on abort and needs only the Return Contract.
+For generic AGs, size checkpoint instructions to risk: long-running/writing/fan-out roles checkpoint after each milestone and resume from the last checkpoint; short read-only roles need only their Return Contract. teams-setup profiles keep shared checkpoint/return rules in `team.md` and add only domain-specific persistence requirements under `Unique invariants` or `Unique verification`.
 
 ## Color Semantics
 
@@ -491,9 +495,8 @@ No `Context:` line, no `assistant:` response -- `<commentary>` is the selection 
 - [ ] `model`: matches task complexity (fable=mythos/hardest, opus=complex, sonnet=standard, haiku=light)
 - [ ] SP: tables over prose, code over text
 - [ ] Project-specific knowledge included (stack, conventions, cmds)
-- [ ] Checklist (DoD) present at end of SP
-- [ ] `## Return Contract` block present (every AG)
-- [ ] `## Scope Fit` block present iff the AG writes code/scripts/SQL/schemas/infra — incl. its etalon-first line
+- [ ] SP contract: generic AG -> Checklist at end + one `## Return Contract`; teams-setup domain AG -> exact six ordered headings, <=3200 bytes (~800 est-tokens), shared `team.md` loaded first, no duplicated shared-contract section
+- [ ] Generic code-writing AG -> `## Scope Fit` incl. etalon-first; teams-setup keeps both only in `team.md`
 - [ ] READ-ONLY AGs have no Write/Edit TLs
 - [ ] No CD rules duplicated in AG body (already injected)
 - [ ] Unique name in scope (no conflict with existing AGs)

@@ -12,7 +12,7 @@ SP_SEARCH_TIMEOUT="${SP_SEARCH_TIMEOUT:-600}"
 # Never-walked directory names (semble/index/file_walker.py:14-33).
 SP_SKIP_DIRS=".git .hg .svn __pycache__ node_modules .venv venv .tox .mypy_cache .pytest_cache .ruff_cache .cache .semble .next dist build .eggs"
 
-# Suffix -> bucket tables, generated from semble 0.5.4
+# Suffix -> bucket tables, generated from semble 0.5.5
 # src/semble/index/files.py (_EXTENSION_TO_LANGUAGE minus _DOC/_CONFIG/_DATA_LANGUAGES).
 # Classification is by lowercased LAST suffix only; extensionless files never match.
 SP_EXT_CODE=".4th .ada .adb .ads .agda .al .as .asm .astro .awk .axi .axs .bash .bat .bb .bbappend .bbclass .bicep .blade .bq .brs .bsl .bzl .c .c3 .c3i .c3t .caddyfile .cairo .cbl .cc .cedar .cel .cfc .chatito .circom .cjs .ck .cl .clar .clj .cljc .cljs .cls .cmake .cmd .cob .cobol .conf .corn .cpp .cr .cs .cshtml .css .cst .cts .cu .cuda .cue .cxx .cylc .d .dart .dhall .dl .dockerfile .dot .dsp .eds .eex .el .elm .elv .enforce .eps .erb .erl .ex .exs .f .f03 .f08 .f90 .f95 .fc .fidl .filter .fir .fish .fnl .fs .fsd .fsi .fsx .fth .fun .g .gd .gdshader .gi .gleam .glsl .gn .gni .gnuplot .go .gotmpl .gp .gql .gradle .graphql .gren .groovy .gv .h .hack .hare .hbs .hcl .heex .hlsl .hoon .hpp .hrl .hs .http .hurl .hx .hxx .idr .inc .ino .ispc .j2 .jai .janet .java .jinja2 .jl .jq .js .jsonnet .jsx .just .k .kt .kts .lc .lds .lean .leex .less .libsonnet .liquid .lisp .ll .lua .luau .m .magik .makefile .matlab .meson .mjs .mk .ml .mli .mlir .mll .mojo .move .mts .nasm .ncl .nginx .nim .nims .ninja .nix .nqc .nu .nut .odin .p .pas .php .pkl .pl .plt .pm .pony .pp .prisma .pro .promql .prql .ps .ps1 .psd1 .psm1 .pug .purs .py .pyi .pyw .ql .qml .r .rasi .razor .rb .rbs .re .rego .res .resi .rkt .robot .roc .rs .s .scad .scala .scm .scss .sh .shtml .sig .slang .smali .smk .sml .sol .sp .sparql .sql .squirrel .st .stan .star .sv .svelte .svh .sw .swift .tact .tal .tape .tcl .td .templ .tera .tf .tfvars .tl .tla .trigger .ts .tsconfig .tsx .twig .typoscript .typst .v .vb .verilog .vhd .vhdl .vim .vrl .vue .w .wast .wat .wgsl .wl .yuck .zig .ziggy .zsh"
@@ -20,7 +20,7 @@ SP_EXT_CONFIG=".beancount .capnp .cedarschema .cfg .cook .cpon .desktop .diff .d
 SP_EXT_DOCS=".adoc .asciidoc .bib .dj .htm .html .markdown .md .mermaid .mmd .norg .org .po .pot .rst .rtf .tex"
 SP_EXT_EXCLUDED=".csv .json .json5 .psv .tsv"
 
-SP_DISCLOSURE="This corpus is code+docs+config, so .md/.markdown, .rst, .adoc and .html/.htm ARE indexed. Still unreachable at any content setting: .json/.json5/.csv/.tsv/.psv (semble's data bucket belongs to no content type) and any suffix absent from _EXTENSION_TO_LANGUAGE — notably .mdx and .txt. Use rg/Grep for those. Every consumer must pass the same --content set: the cache directory is keyed by project path alone, so a differing set silently invalidates the other consumer's index."
+SP_DISCLOSURE="This corpus is code+docs+config, so .md/.markdown, .rst, .adoc and .html/.htm ARE indexed. Still unreachable at any content setting: .json/.json5/.csv/.tsv/.psv (semble's data bucket belongs to no content type) and any suffix absent from _EXTENSION_TO_LANGUAGE — notably .mdx and .txt. Use rg/Grep for those. Every consumer must pass the same --content set so it selects the shared index-code-config-docs variant."
 
 sp_usage() {
   cat <<'EOF'
@@ -38,7 +38,7 @@ Exit codes: 0 ok | 1 hard failure (nothing written) | 2 bad usage
             3 precondition unmet (no state, no uvx, smoke empty/failed)
             4 confirmation required (--yes missing) — nothing written
 
-Env: SEMBLE_PROJECT_ROOT SEMBLE_TEST_HOME SEMBLE_CACHE_ROOT_CODE SEMBLE_CACHE_ROOT_DOCS
+Env: SEMBLE_PROJECT_ROOT SEMBLE_TEST_HOME SEMBLE_CACHE_ROOT_CODE
      SEMBLE_NO_NETWORK=1 (warm/smoke report "skipped") SEMBLE_DRY_RUN=1 (print, change nothing)
 EOF
 }
@@ -133,23 +133,37 @@ sp_cache_info_fallback() {
   hash="$(sc_repo_hash "$root" 2>/dev/null)" || hash=""
   dir=""
   [ -n "$hash" ] && dir="$(sc_cache_root_code)/$hash"
-  SP_CODEROOT="$(sc_cache_root_code)" SP_DOCSROOT="$(sc_cache_root_docs)" \
+  SP_CODEROOT="$(sc_cache_root_code)" \
   SP_HASH="$hash" SP_DIR="$dir" SP_WANT_CT="$(sc_content_set_csv)" \
+  SP_WANT_LEAF="$(sc_index_leaf)" \
   SP_NONET="${SEMBLE_NO_NETWORK:-}" node -e '
 const fs=require("fs"),path=require("path");
-const dir=process.env.SP_DIR,idx=dir?path.join(dir,"index"):"";
-const out={codeRoot:process.env.SP_CODEROOT,docsRoot:process.env.SP_DOCSROOT,
-  docsReserved:fs.existsSync(path.join(process.env.SP_DOCSROOT,"RESERVED-FOR-DOCS.txt")),
-  repoHash:process.env.SP_HASH||"",repoDir:dir||"",present:false,sizeBytes:0,entries:0,
-  metadata:null,staleness:"absent"};
+const dir=process.env.SP_DIR,want=process.env.SP_WANT_LEAF;
+const idx=dir?path.join(dir,want):"",legacy=dir?path.join(dir,"index"):"";
+const out={codeRoot:process.env.SP_CODEROOT,
+  repoHash:process.env.SP_HASH||"",repoDir:dir||"",repoPresent:false,
+  indexLeaf:want,indexDir:idx,legacyIndexDir:legacy,legacyPresent:false,
+  variants:[],present:false,sizeBytes:0,entries:0,metadata:null,staleness:"absent"};
 function du(p){
   let st;try{st=fs.lstatSync(p);}catch(e){return;}
   if(st.isSymbolicLink())return;
   if(st.isDirectory()){for(const n of fs.readdirSync(p))du(path.join(p,n));return;}
   out.sizeBytes+=st.size;out.entries++;
 }
-if(dir&&fs.existsSync(dir)){out.present=true;du(dir);}
-if(!out.present||!fs.existsSync(idx)){process.stdout.write(JSON.stringify(out));process.exit(0);}
+if(dir&&fs.existsSync(dir)){
+  out.repoPresent=true;du(dir);
+  out.variants=fs.readdirSync(dir).filter(n=>n==="index"||/^index-[a-z0-9-]+$/.test(n)).sort();
+}
+if(!fs.existsSync(idx)){
+  if(want!=="index"&&fs.existsSync(legacy)){
+    try{const lm=JSON.parse(fs.readFileSync(path.join(legacy,"metadata.json"),"utf8"));
+      const ct=Array.isArray(lm.content_type)?lm.content_type.slice().sort().join(","):"";
+      if(ct===process.env.SP_WANT_CT){out.legacyPresent=true;out.staleness="legacy";}}
+    catch(e){}
+  }
+  process.stdout.write(JSON.stringify(out));process.exit(0);
+}
+out.present=true;
 const need=["chunks.json","metadata.json","bm25_index","semantic_index"];
 if(need.some(n=>!fs.existsSync(path.join(idx,n)))){out.staleness="incomplete";process.stdout.write(JSON.stringify(out));process.exit(0);}
 let md=null;
@@ -213,10 +227,7 @@ sp_require_state() {
 
 # ── warm / smoke (§8.6) ─────────────────────────────────────────────────────
 # $SEMBLE_CONTENT_ARGS must be byte-identical to the MCP registration's
-# --content. semble's cache dir is keyed by project path alone, but a cached
-# index is only reused when its stored content_type set equals the requested
-# one — so a CLI run with a different set evicts the MCP's index (and vice
-# versa) and every alternation pays a full rebuild instead of a warm hit.
+# --content so both consumers select the same 0.5.5 index variant.
 sp_search_cmd_str() {
   printf "SEMBLE_CACHE_LOCATION=%s uvx --from '%s' semble search %s %s --content %s -k 5 --max-snippet-lines 10" \
     "$(sc_cache_root_code)" "$SEMBLE_PIN_SPEC" "\"$1\"" "\"$(sc_project_root)\"" "$SEMBLE_CONTENT_ARGS"
@@ -314,20 +325,38 @@ let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{
 # still report `ready`.
 sp_status_ready() { [ "$1" = "ok" ]; }
 
-# ── reindex guard (§6.6) ────────────────────────────────────────────────────
-# The only correct per-repo rebuild is `rm -rf <code root>/<64-hex>`.
-# `semble clear index` wipes EVERY index under the root and is never used here.
-sp_guarded_rm_repo_dir() {
-  local dir="$1" leaf root
+# ── reindex guards (§6.6) ───────────────────────────────────────────────────
+# Rebuild only the selected 0.5.5 variant. Deleting the hashed repo directory
+# would erase unrelated exact-content variants and is forbidden here.
+sp_guarded_rm_index_dir() {
+  local dir="$1" leaf repo repo_leaf root
   leaf="$(basename "$dir")"
-  root="$(dirname "$dir")"
+  repo="$(dirname "$dir")"
+  repo_leaf="$(basename "$repo")"
+  root="$(dirname "$repo")"
   case "$leaf" in
-    *[!0-9a-f]*) sc_die "refusing to delete $dir — leaf is not 64-hex" ;;
+    index) ;;
+    index-*) case "${leaf#index-}" in ""|*[!a-z0-9-]*) sc_die "refusing to delete $dir — leaf is not an index variant" ;; esac ;;
+    *) sc_die "refusing to delete $dir — leaf is not an index variant" ;;
   esac
-  [ ${#leaf} -eq 64 ] || sc_die "refusing to delete $dir — leaf is not exactly 64 chars"
+  case "$repo_leaf" in *[!0-9a-f]*|"") sc_die "refusing to delete $dir — repo leaf is not 64-hex" ;; esac
+  [ ${#repo_leaf} -eq 64 ] || sc_die "refusing to delete $dir — repo leaf is not exactly 64 chars"
   [ "$root" = "$(sc_cache_root_code)" ] || sc_die "refusing to delete $dir — not under $(sc_cache_root_code)"
   [ -d "$dir" ] || sc_die "refusing to delete $dir — not a directory"
   rm -rf "$dir"
+}
+
+# True only for the pre-0.5.5 combined corpus: bare `index` carrying the exact
+# current content set. A code-only 0.5.5 `index` is a valid sibling and survives.
+sp_is_legacy_combined_index() {
+  local dir="$1"
+  [ "$(sc_index_leaf)" != "index" ] || return 1
+  [ -f "$dir/metadata.json" ] || return 1
+  SP_MD="$dir/metadata.json" SP_WANT="$(sc_content_set_csv)" node -e '
+const fs=require("fs");let m;
+try{m=JSON.parse(fs.readFileSync(process.env.SP_MD,"utf8"));}catch(e){process.exit(1)}
+const ct=Array.isArray(m.content_type)?m.content_type.slice().sort().join(","):"";
+process.exit(ct===process.env.SP_WANT?0:1);'
 }
 
 # The reindex staging root: `<code root>/.staging.<pid>`, this run's own and
@@ -443,10 +472,10 @@ console.log(process.env.SP_DISC);'
 # Excluding something the user wanted indexed is the worse error - it fails
 # silently, and they would have no way to know the answer was never reachable.
 sp_mode_candidates() {
-  local json="$1" root cachedir out
+  local json="$1" root indexdir out
   root="$(sc_project_root)"
-  cachedir="$(sc_repo_cache_dir "$root" 2>/dev/null || true)"
-  out="$(SP_ROOT="$root" SP_CHUNKS="${cachedir:+$cachedir/index/chunks.json}" \
+  indexdir="$(sc_repo_index_dir "$root" 2>/dev/null || true)"
+  out="$(SP_ROOT="$root" SP_CHUNKS="${indexdir:+$indexdir/chunks.json}" \
     SP_C="$SP_EXT_CODE" SP_G="$SP_EXT_CONFIG" SP_D="$SP_EXT_DOCS" \
     SP_SKIPD="$SP_SKIP_DIRS" node -e '
 const fs=require("fs"),path=require("path"),crypto=require("crypto");
@@ -756,44 +785,53 @@ sp_mode_disable() {
   return 0
 }
 
-# §8.3 — resolve exactly one <code root>/<64-hex>, confirm, build the
-# replacement in a staging cache root, and delete the live index ONLY once the
-# staged one has answered a real query. A skipped or failed warm leaves the
-# index, the phase and the completed steps exactly as they were.
+# §8.3 — resolve one exact content variant, build its replacement in a staging
+# cache root, and replace only that variant after a real query succeeds. Other
+# variants survive. A bare pre-0.5.5 combined `index` is removed only after its
+# metadata proves it represents this exact corpus and the replacement is live.
 sp_mode_reindex() {
-  local json="$1" yes="$2" root hash dir size res status final stage staged stagecmd
+  local json="$1" yes="$2" root hash repo_dir live_index legacy_index legacy_present=0
+  local size res status final stage staged_repo staged_index backup stagecmd
   root="$(sc_project_root)"
   hash="$(sc_repo_hash "$root" 2>/dev/null)" || hash=""
   [ -n "$hash" ] || { sc_err "cannot resolve the repo hash for $root"; return 1; }
-  dir="$(sc_cache_root_code)/$hash"
-  size="$(sp_dir_size "$dir")"
+  repo_dir="$(sc_cache_root_code)/$hash"
+  live_index="$repo_dir/$(sc_index_leaf)"
+  legacy_index="$repo_dir/index"
+  size="$(sp_dir_size "$live_index")"
+  if sp_is_legacy_combined_index "$legacy_index"; then legacy_present=1; fi
 
   if [ "$yes" != "1" ]; then
     if [ "$json" = "1" ]; then
-      SP_DIR="$dir" SP_SIZE="$size" SP_WARMCMD="$(sp_search_cmd_str "$SP_WARM_QUERY_DEFAULT")" node -e '
+      SP_LIVE="$live_index" SP_LEGACY="$legacy_index" SP_HAS_LEGACY="$legacy_present" \
+      SP_SIZE="$size" SP_WARMCMD="$(sp_search_cmd_str "$SP_WARM_QUERY_DEFAULT")" node -e '
+const del=[process.env.SP_LIVE];if(process.env.SP_HAS_LEGACY==="1")del.push(process.env.SP_LEGACY);
 process.stdout.write(JSON.stringify({schema:1,mode:"reindex",status:"needs_confirmation",
- wouldDelete:[process.env.SP_DIR],sizeBytes:Number(process.env.SP_SIZE)||0,
- commands:[process.env.SP_WARMCMD,"rm -rf "+process.env.SP_DIR]},null,2)+"\n");'
+ indexDir:process.env.SP_LIVE,wouldDelete:del,
+ legacyCombined:process.env.SP_HAS_LEGACY==="1",sizeBytes:Number(process.env.SP_SIZE)||0,
+ commands:[process.env.SP_WARMCMD,"replace "+process.env.SP_LIVE]},null,2)+"\n");'
     else
       sc_warn "reindex needs --yes"
       printf 'would rebuild first: %s\n' "$(sp_search_cmd_str "$SP_WARM_QUERY_DEFAULT")"
-      printf 'then delete on success: %s (%s bytes)\n' "$dir" "$size"
+      printf 'then replace on success: %s (%s bytes)\n' "$live_index" "$size"
+      [ "$legacy_present" = "1" ] && printf 'then remove verified legacy combined index: %s\n' "$legacy_index"
     fi
     return 4
   fi
 
   if sp_dry; then
-    sp_dry_say "rm -rf $dir"
+    sp_dry_say "replace $live_index from staged $(sc_index_leaf)"
     sp_skipped "reindex: SEMBLE_DRY_RUN=1"
     if [ "$json" = "1" ]; then sp_emit_mode_json reindex skipped; else sp_emit_mode_human reindex skipped; fi
     return 0
   fi
 
-  # Stage: a private cache root, so the live index keeps serving until the
-  # replacement is proven. semble keys the repo directory on the project path
-  # alone, so the staged build lands at <stage>/<same 64-hex>.
+  # Stage under a private cache root so every live variant keeps serving until
+  # the replacement variant is proven.
   stage="$(sc_cache_root_code)/.staging.$$"
-  staged="$stage/$hash"
+  staged_repo="$stage/$hash"
+  staged_index="$staged_repo/$(sc_index_leaf)"
+  backup="$stage/.previous-$(sc_index_leaf)"
   sp_rm_staging "$stage"
   mkdir -p "$stage"
   stagecmd="$(SEMBLE_CACHE_ROOT_CODE="$stage" sp_search_cmd_str "$SP_WARM_QUERY_DEFAULT")"
@@ -811,16 +849,16 @@ process.stdout.write(JSON.stringify({schema:1,mode:"reindex",status:"needs_confi
       final=failed
       if sp_require_state; then sp_set_phase error || true; fi
     fi
-    sp_unchanged "cache: $dir kept ($size bytes) — the staged rebuild never answered, so nothing was deleted"
+    sp_unchanged "cache: $live_index kept ($size bytes) — the staged rebuild never answered, so nothing was replaced"
     sp_unchanged "state: phase and completed steps unchanged"
     if [ "$json" = "1" ]; then sp_emit_mode_json reindex "$final" "$res"; else sp_emit_mode_human reindex "$final"; fi
     return 3
   fi
 
-  if [ ! -d "$staged" ]; then
+  if [ ! -d "$staged_index" ]; then
     sp_rm_staging "$stage"
-    sp_failed "warm: the staged search answered but wrote no index at $staged"
-    sp_unchanged "cache: $dir kept ($size bytes) — nothing was deleted"
+    sp_failed "warm: the staged search answered but wrote no variant at $staged_index"
+    sp_unchanged "cache: $live_index kept ($size bytes) — nothing was replaced"
     if sp_require_state; then sp_set_phase error || true; fi
     if [ "$json" = "1" ]; then sp_emit_mode_json reindex failed "$res"; else sp_emit_mode_human reindex failed; fi
     return 3
@@ -828,31 +866,36 @@ process.stdout.write(JSON.stringify({schema:1,mode:"reindex",status:"needs_confi
 
   if sp_require_state; then sp_set_phase verifying || true; fi
 
-  if [ -d "$dir" ]; then
-    local sib; sib="$(sp_sibling semble-cache.sh)"
-    if [ -n "$sib" ]; then
-      sp_command "$sib purge-repo --repo $root --yes --json"
-      "$sib" purge-repo --repo "$root" --yes --json >/dev/null 2>&1 || sp_guarded_rm_repo_dir "$dir"
-    else
-      sp_command "rm -rf $dir"
-      sp_guarded_rm_repo_dir "$dir"
+  mkdir -p "$repo_dir"
+  if [ -d "$live_index" ]; then
+    sp_command "mv $live_index $backup"
+    if ! mv "$live_index" "$backup"; then
+      sp_rm_staging "$stage"
+      sc_err "failed to move the live variant $live_index aside; it was kept"
+      return 1
     fi
-    if [ -d "$dir" ]; then sp_rm_staging "$stage"; sc_err "failed to delete $dir"; return 1; fi
-    sp_changed "cache: deleted $dir ($size bytes)"
+    sp_changed "cache: previous variant staged for replacement ($size bytes)"
   else
-    sp_unchanged "cache: $dir did not exist"
+    sp_unchanged "cache: $live_index did not exist"
   fi
 
-  sp_command "mv $staged $dir"
-  # The live index is already gone at this point, so the staged copy is the ONLY
-  # surviving one - keep it and print where it is instead of deleting both.
-  if ! mv "$staged" "$dir"; then
-    sc_err "failed to move the staged index $staged into $dir"
-    sc_err "the staged index was KEPT at $staged - move it to $dir by hand to recover"
+  sp_command "mv $staged_index $live_index"
+  if ! mv "$staged_index" "$live_index"; then
+    if [ -d "$backup" ] && [ ! -e "$live_index" ]; then
+      mv "$backup" "$live_index" || true
+    fi
+    sc_err "failed to move the staged variant $staged_index into $live_index"
+    sc_err "the previous variant was restored when possible; staged evidence remains under $stage"
     return 1
   fi
+
+  if [ "$legacy_present" = "1" ] && [ -d "$legacy_index" ]; then
+    sp_command "rm -rf $legacy_index  # verified pre-0.5.5 combined index"
+    sp_guarded_rm_index_dir "$legacy_index"
+    sp_changed "cache: removed verified legacy combined index $legacy_index"
+  fi
   sp_rm_staging "$stage"
-  sp_changed "warm: index rebuilt — staged, verified, then swapped into $dir"
+  sp_changed "warm: $(sc_index_leaf) rebuilt, verified, and swapped into $live_index"
   sp_complete '{"completed":["warm"]}'
 
   final=ok

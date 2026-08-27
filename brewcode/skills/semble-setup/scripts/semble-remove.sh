@@ -4,7 +4,7 @@
 #   integration  guidance + agent entries + .claude/semble/   (MCP, cache, uv tool kept)
 #   mcp          claude mcp remove semble_code                (everything else kept)
 #   cli          uv tool uninstall semble                     (everything else kept)
-#   purge        all of the above + the cache roots           (typed confirmation required)
+#   purge        all of the above + the shared cache root     (typed confirmation required)
 set -euo pipefail
 SC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SC_DIR/lib/semble-common.sh"
@@ -27,8 +27,9 @@ Flavours (DESIGN §8.4):
                entries + .claude/semble/.  Keeps the MCP registration, the cache and uv.
   mcp          removes only the semble_code MCP registration.  Keeps everything else.
   cli          uv tool uninstall semble (only when a uv-tool install exists).
-  purge        integration + mcp + cli + the code cache root; the reserved docs root is
-               removed only when it is empty or holds nothing but the RESERVED marker.
+  purge        integration + mcp + cli + the shared semble-code cache root. A legacy
+               pre-0.5.5 semble-docs root is removed only when its RESERVED marker is
+               the sole entry; any other content is preserved.
 
 Exit codes: 0 ok | 1 hard failure (nothing written) | 2 bad usage
             3 precondition unmet | 4 confirmation required — nothing was deleted
@@ -119,15 +120,12 @@ sr_rm_file() {
   sr_changed "$label: deleted $f"
 }
 
-# A cache root: absolute, leaf must be exactly semble-code / semble-docs.
+# The current shared cache root: absolute, leaf must be exactly semble-code.
 sr_rm_cache_root() {
   local dir="$1" leaf
   leaf="$(basename "$dir")"
   case "$dir" in /*) : ;; *) sc_die "refusing to delete $dir — not absolute" ;; esac
-  case "$leaf" in
-    semble-code|semble-docs) : ;;
-    *) sc_die "refusing to delete $dir — leaf is not semble-code or semble-docs" ;;
-  esac
+  [ "$leaf" = "semble-code" ] || sc_die "refusing to delete $dir — leaf is not semble-code"
   [ "$dir" != "/" ] || sc_die "refusing to delete /"
   [ "$dir" != "$(sc_home)" ] || sc_die "refusing to delete the home directory"
   if [ ! -d "$dir" ]; then sr_unchanged "cache: $dir absent"; return 0; fi
@@ -276,12 +274,12 @@ sr_remove_cli() {
 }
 
 sr_purge_cache() {
-  local code docs sib
-  code="$(sc_cache_root_code)"; docs="$(sc_cache_root_docs)"
+  local code sib
+  code="$(sc_cache_root_code)"
   sib="$(sr_sibling semble-cache.sh)"
   if [ -n "$sib" ] && ! sr_dry; then
-    sr_command "$sib purge-root --which code --yes --json"
-    if "$sib" purge-root --which code --yes --json >/dev/null 2>&1; then
+    sr_command "$sib purge-root --yes --json"
+    if "$sib" purge-root --yes --json >/dev/null 2>&1; then
       sr_changed "cache: deleted $code"
     else
       sr_rm_cache_root "$code"
@@ -291,22 +289,52 @@ sr_purge_cache() {
     sr_rm_cache_root "$code"
   fi
 
-  # The reserved docs root is only removed when it holds nothing but the marker.
-  if [ ! -d "$docs" ]; then
-    sr_unchanged "cache: $docs absent"
+  sr_cleanup_legacy_docs_root
+}
+
+# Pre-0.5.5 installs created this unused marker-only root. It is not a current
+# cache surface. Purge may remove it only when the marker proves ownership and
+# no second entry exists; an empty or repurposed directory is never ours to infer.
+sr_cleanup_legacy_docs_root() {
+  local dir marker kind verdict
+  dir="$(sc_cache_base)/semble-docs"
+  marker="$dir/RESERVED-FOR-DOCS.txt"
+  case "$dir" in
+    /*) ;;
+    *) sr_skipped "legacy cache: $dir is not absolute — preserved"; return 0 ;;
+  esac
+  kind="$(SR_D="$dir" node -e '
+const fs=require("fs"),d=process.env.SR_D;
+try {
+  const s=fs.lstatSync(d);
+  process.stdout.write(s.isDirectory()&&!s.isSymbolicLink()?"directory":"other");
+} catch(e) {
+  process.stdout.write(e&&e.code==="ENOENT"?"absent":"other");
+}')"
+  case "$kind" in
+    absent) return 0 ;;
+    directory) ;;
+    *) sr_skipped "legacy cache: $dir is not a real directory — preserved"; return 0 ;;
+  esac
+  verdict="$(SR_D="$dir" SR_M="$marker" node -e '
+const fs=require("fs");
+const d=process.env.SR_D,m=process.env.SR_M;
+let names=[];try{names=fs.readdirSync(d)}catch(e){process.stdout.write("keep");process.exit(0)}
+let marker=false;try{marker=fs.lstatSync(m).isFile()}catch(e){}
+process.stdout.write(marker&&names.length===1&&names[0]==="RESERVED-FOR-DOCS.txt"?"owned":"keep");')"
+  if [ "$verdict" != "owned" ]; then
+    sr_skipped "legacy cache: $dir is not marker-only — preserved"
     return 0
   fi
-  local extra
-  extra="$(SR_D="$docs" node -e '
-const fs=require("fs");
-const e=fs.readdirSync(process.env.SR_D).filter(n=>n!=="RESERVED-FOR-DOCS.txt");
-process.stdout.write(String(e.length));')"
-  if [ "$extra" = "0" ]; then
-    sr_command "rm -rf $docs"
-    sr_rm_cache_root "$docs"
-  else
-    sr_skipped "cache: $docs holds $extra other entries — left in place, delete it by hand if you meant to"
-  fi
+  sr_command "rm -rf $dir  # legacy marker-only root"
+  if sr_dry; then sr_dry_say "rm -rf $dir"; return 0; fi
+  case "$dir" in
+    "$(sc_cache_base)"/semble-docs) ;;
+    *) sc_die "refusing to delete legacy cache $dir — unexpected path" ;;
+  esac
+  [ "$dir" != "/" ] && [ "$dir" != "$(sc_home)" ] || sc_die "refusing broad legacy cache deletion"
+  rm -rf "$dir"
+  sr_changed "legacy cache: deleted marker-only $dir"
 }
 
 # ── flavours ────────────────────────────────────────────────────────────────
@@ -370,8 +398,9 @@ sr_plan() {
       sr_would "$root/.claude/hooks/semble-explore.mjs   (retired, superseded by semble-subagent.mjs)"
       sr_would "$root/CLAUDE.md marker block $SR_CLAUDEMD_BEGIN .. $SR_CLAUDEMD_END"
       sr_would "$root/.claude/semble/"
-      sr_would "$(sc_cache_root_code)  (ENTIRE code cache root — every repo index under it)"
-      sr_would "$(sc_cache_root_docs)  (reserved docs root, only when it holds nothing but the marker)"
+      sr_would "$(sc_cache_root_code)  (ENTIRE shared cache root — every repo and content variant under it)"
+      [ -f "$(sc_cache_base)/semble-docs/RESERVED-FOR-DOCS.txt" ] && \
+        sr_would "$(sc_cache_base)/semble-docs  (legacy marker-only root, only when that marker is the sole entry)"
       sr_would "MCP server $SEMBLE_SERVER_NAME — $where"
       ;;
   esac

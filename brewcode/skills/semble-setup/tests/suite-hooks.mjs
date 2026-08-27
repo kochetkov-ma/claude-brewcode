@@ -41,15 +41,16 @@ const HOME = join(BASE, 'home');
 mkdirSync(join(HOME, '.claude'), { recursive: true });
 
 // The registered cache root every fixture state points at, and the four files
-// semble writes into `<root>/<repoHash>/index`. The prefetch hook refuses to
+// Semble 0.5.5 writes the combined corpus into the exact content variant below
+// `<root>/<repoHash>`. The prefetch hook refuses to
 // spawn a search when they are not all there — a cold index cannot be built
 // inside its 3 s cap, so trying is pure loss — which makes a warm index part of
 // the baseline fixture and `{ cold: true }` the explicit way to remove it.
 const CACHE = join(BASE, 'cache');
 const REPO_HASH = 'abcdef0123456789'.repeat(4);
 const INDEX_FILE_NAMES = ['chunks.json', 'metadata.json', 'bm25_index', 'semantic_index'];
-function warmIndex(root, hash, only) {
-  const dir = join(root, hash, 'index');
+function warmIndex(root, hash, only, leaf = 'index-code-config-docs') {
+  const dir = join(root, hash, leaf);
   mkdirSync(dir, { recursive: true });
   for (const n of (only || INDEX_FILE_NAMES)) writeFileSync(join(dir, n), '{}');
   return dir;
@@ -312,7 +313,7 @@ const READY_STATE = (extra) =>
     schema: 1,
     profile: 'code',
     projectRoot: '/x',
-    approvedVersion: '0.5.4',
+    approvedVersion: '0.5.5',
     phase: 'ready',
     enabled: true,
     scope: 'user',
@@ -671,7 +672,7 @@ const FOREIGN = {
 // ═══════════════════════════════════════════════════════════════════════════
 // J. .sembleignore — same managed-file policy as the rule, no frontmatter
 //
-// semble 0.5.4 (index/file_walker.py:_load_ignore_for_dir) reads exactly two
+// semble 0.5.5 (index/file_walker.py:_load_ignore_for_dir) reads exactly two
 // files per directory, ./.gitignore and ./.sembleignore, and nothing else — no
 // core.excludesFile, no ~/.gitignore_global, no call to git. A repo-root
 // .sembleignore is therefore the ONLY way to keep a globally-ignored tree such
@@ -852,7 +853,7 @@ const IGNORE_TPL_TEXT = readFileSync(join(ASSETS, 'sembleignore.template'), 'utf
 // file_walker.py:_is_ignored sets `found = not ignored and Path(pat).suffix`,
 // and _walk yields on `found or suffix in extensions`. So a `!` un-ignore whose
 // text ends in an extension SKIPS the extension filter, and a suffix that
-// belongs to no content type gets indexed anyway. Verified against semble 0.5.4:
+// belongs to no content type gets indexed anyway. Verified against semble 0.5.5:
 // with `.gitignore` = `package-lock.json / !sub/package-lock.json / *.png /
 // !keep.png`, walk_files(root, get_extensions([CODE])) returned
 // ['a.py', 'keep.png', 'sub/package-lock.json'] — .png and .json are in NO
@@ -1327,7 +1328,7 @@ const markerOf = (p) => {
 
 const {
   gateV3, distill, PIN_SPEC, CONTENT_ARGS, THROTTLE_MS, COOLDOWN_MS, TIMEOUT_COOLDOWN_MS,
-  INDEX_FILES, cacheRootOf, defaultCacheRoot, indexReady, repoHashOf,
+  INDEX_FILES, INDEX_LEAF, cacheRootOf, defaultCacheRoot, indexReady, repoHashOf,
 } = await import(pathToFileURL(PREFETCH_SRC).href);
 
 // P1 — the whole point of the release: a ranked list of paths, and nothing else.
@@ -1360,7 +1361,7 @@ const {
   const p = freshProject({ state: READY_STATE() });
   const r = prefetch(p, Q);
   check('P2.argv', r.argv, [
-    `--from semble[mcp]==0.5.4 semble search --content code docs config -k 3 --max-snippet-lines 0 -- ${Q_DISTILLED} ${p}`,
+    `--from semble[mcp]==0.5.5 semble search --content code docs config -k 3 --max-snippet-lines 0 -- ${Q_DISTILLED} ${p}`,
   ], 'the child is spawned exactly once, with the pinned spec, the frozen flags, then `--` and the'
     + ' distilled query — options before the separator, because argparse stops reading flags at it');
   const lib = readFileSync(REAL_LIB, 'utf8');
@@ -1380,7 +1381,7 @@ const {
 // text at the front of the query, so ``what does `-k` do…`` distils to exactly `-k`;
 // semble's argparse reads a lone leading-dash argv as an option, the child exits
 // non-zero, and a well-formed question buys a ten-minute cooldown. Verified against the
-// pinned 0.5.4 CLI: `-- <query> <path>` parses, `--` before the flags does not.
+// pinned 0.5.5 CLI: `-- <query> <path>` parses, `--` before the flags does not.
 {
   const DASH_PROMPT = 'what does `-k` do to all of it and why so then';
   check('P2c.distill', distill(DASH_PROMPT), '-k',
@@ -1390,7 +1391,7 @@ const {
   const p = freshProject({ state: READY_STATE() });
   const r = prefetch(p, DASH_PROMPT);
   check('P2c.argv', r.argv, [
-    `--from semble[mcp]==0.5.4 semble search --content code docs config -k 3 --max-snippet-lines 0 -- -k ${p}`,
+    `--from semble[mcp]==0.5.5 semble search --content code docs config -k 3 --max-snippet-lines 0 -- -k ${p}`,
   ], 'the `-k` query sits AFTER the `--` separator, the one position argparse can only read as a positional');
   check('P2c.fires', safeParse(r.stdout), PREFETCH_OK, 'the search runs and its hits are injected as normal');
   check('P2c.noCooldown', Object.prototype.hasOwnProperty.call(markerOf(p) || {}, 'cool'), false,
@@ -1432,6 +1433,8 @@ const {
   }
   check('P2b.indexFiles', INDEX_FILES, ['chunks.json', 'metadata.json', 'bm25_index', 'semantic_index'],
     'all four artefacts semble writes have to be there for the index to count as built');
+  check('P2b.indexLeaf', INDEX_LEAF, 'index-code-config-docs',
+    'prefetch probes the same combined content variant as the MCP and lifecycle scripts');
 }
 {
   const p = freshProject({ state: READY_STATE(), cold: true });
@@ -1463,6 +1466,21 @@ for (const missing of INDEX_FILES) {
     [indexReady(cacheOf(p), createHash('sha256').update(realpathSync(p)).digest('hex')),
       indexReady(cacheOf(p), 'deadbeef'), indexReady('', REPO_HASH)],
     [true, false, false], 'indexReady is total: an unknown hash or an empty root is "not ready", never a throw');
+}
+{
+  const p = freshProject({ state: READY_STATE(), cold: true });
+  const hash = createHash('sha256').update(realpathSync(p)).digest('hex');
+  warmIndex(cacheOf(p), hash, undefined, 'index');
+  const legacy = prefetch(p, Q);
+  check('P2b.legacyNotReady', [indexReady(cacheOf(p), hash), legacy.argv, tfield(p, 0, 'why')],
+    [false, [], 'cold-index'],
+    'a complete pre-0.5.5 bare combined index cannot satisfy current-variant readiness');
+  warmIndex(cacheOf(p), hash);
+  const current = prefetch(p, Q);
+  check('P2b.variantReady', [indexReady(cacheOf(p), hash), safeParse(current.stdout)], [true, PREFETCH_OK],
+    'the same shared cache becomes ready as soon as the exact combined variant is complete');
+  check('P2b.legacyPreserved', existsSync(join(cacheOf(p), hash, 'index', 'metadata.json')), true,
+    'readiness probes do not evict a distinct or legacy sibling variant');
 }
 
 // P3 — throttle: an anti-storm guard, not a rate limiter.

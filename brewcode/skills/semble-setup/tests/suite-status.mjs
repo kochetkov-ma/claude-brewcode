@@ -84,7 +84,6 @@ const BIN2 = join(BASE, 'bin2');
 const HOME_DIR = join(BASE, 'home');
 const PROJECT = join(BASE, 'project');
 const CACHE_CODE = join(BASE, 'cache', 'semble-code');
-const CACHE_DOCS = join(BASE, 'cache', 'semble-docs');
 const STAGE = join(BASE, 'scripts');
 const BIN3 = join(BASE, 'bin3');
 const CLAUDE_LOG = join(BIN, 'claude-calls.log');
@@ -94,7 +93,7 @@ const TIMEOUT_STUB = join(BIN3, 'timeout');
 const DETECT_FILE = join(BIN, 'detect.json');
 
 for (const d of [BIN, BIN2, BIN3, HOME_DIR, join(HOME_DIR, '.claude'), PROJECT,
-  join(PROJECT, '.claude'), CACHE_CODE, CACHE_DOCS, STAGE, join(STAGE, 'lib')]) {
+  join(PROJECT, '.claude'), CACHE_CODE, STAGE, join(STAGE, 'lib')]) {
   mkdirSync(d, { recursive: true });
 }
 
@@ -150,7 +149,6 @@ const ENV = {
   SEMBLE_TEST_HOME: HOME_DIR,
   SEMBLE_PROJECT_ROOT: PROJECT,
   SEMBLE_CACHE_ROOT_CODE: CACHE_CODE,
-  SEMBLE_CACHE_ROOT_DOCS: CACHE_DOCS,
   SEMBLE_CLAUDE_BIN: join(BIN, 'claude'),
   SEMBLE_NO_NETWORK: '1',
 };
@@ -326,7 +324,7 @@ function clearState() {
   check('10-platform', j.platform, process.platform === 'darwin' ? 'darwin' : 'linux',
     'platform must be the resolved uname family');
   check('10-projectRoot', j.projectRoot, PROJECT, 'projectRoot must be the injected SEMBLE_PROJECT_ROOT');
-  check('10-pin', j.pin, { approved: '0.5.4', spec: 'semble[mcp]==0.5.4' }, 'pin must be the approved 0.5.4 spec');
+  check('10-pin', j.pin, { approved: '0.5.5', spec: 'semble[mcp]==0.5.5' }, 'pin must be the approved 0.5.5 spec');
 
   for (const sec of ['mcp', 'cache', 'guidance', 'agents', 'coverage']) {
     check(`11-${sec}-error-type`, typeof (j[sec] || {}).error, 'string',
@@ -612,8 +610,11 @@ cat "\${${envVar}:?}"
     },
   };
   const HEALTHY_CACHE = {
-    schema: 1, codeRoot: CACHE_CODE, docsRoot: CACHE_DOCS, docsReserved: true,
-    repoHash: 'a'.repeat(64), repoDir: join(CACHE_CODE, 'a'.repeat(64)), present: true,
+    codeRoot: CACHE_CODE, repoHash: 'a'.repeat(64), repoDir: join(CACHE_CODE, 'a'.repeat(64)),
+    repoPresent: true, indexLeaf: 'index-code-config-docs',
+    indexDir: join(CACHE_CODE, 'a'.repeat(64), 'index-code-config-docs'),
+    legacyIndexDir: join(CACHE_CODE, 'a'.repeat(64), 'index'), legacyPresent: false,
+    present: true, variants: [{ name: 'index-code-config-docs', desired: true }],
     sizeBytes: 4096, entries: 3, metadata: null, staleness: 'fresh', otherRepos: [],
   };
   const HEALTHY_AGENTS = {
@@ -689,8 +690,9 @@ cat "\${${envVar}:?}"
   check('49-perms-reason', noPerms.__reason, 'MCP tool permissions not wired', 'one clause naming the permissions');
 
   const noIndex = run({ cache: { ...HEALTHY_CACHE, present: false } });
-  check('50-index-verdict', noIndex.verdict, 'partial', 'no index in the cache is not ready');
-  check('50-index-reason', noIndex.__reason, 'no index in the cache', 'one clause naming the cache');
+  check('50-index-verdict', noIndex.verdict, 'partial', 'no current content variant in the cache is not ready');
+  check('50-index-reason', noIndex.__reason, 'no current content variant in the shared cache',
+    'one clause names the missing exact variant without implying a second root');
 
   const needPatch = run({ agents: { ...HEALTHY_AGENTS, summary: { changed: 2, conflict: 0, skipped: 0 } } });
   check('51-agents-verdict', needPatch.verdict, 'partial', 'agents still needing the two tool names are not ready');
@@ -718,7 +720,7 @@ cat "\${${envVar}:?}"
     'semble-first rule absent; MCP tool permissions not wired; '
     + 'warm and smoke not recorded in state.completed; '
     + 'install steps not recorded: permissions, guidance, agents; '
-    + 'no index in the cache; 3 agents need patching',
+    + 'no current content variant in the shared cache; 3 agents need patching',
     'the six clauses, in the fixed display order');
   check('54-all-nextStep', everything.nextStep, 'Run /brewcode:semble-setup install',
     'more than the verification pair is missing, so install owns the repair');
@@ -939,8 +941,8 @@ writeFileSync(BREW_LOG, '');
   check('83-check-status', cj.status, 'precondition', 'the status field must be precondition');
   check('83-check-schema', cj.schema, 1, 'install schema is exactly 1');
   check('83-check-uvx', cj.uvx, { present: false, version: '' }, 'uvx must be reported absent');
-  check('83-check-spec', cj.semble.spec, 'semble[mcp]==0.5.4', 'the pinned spec is never floating');
-  check('83-check-pin', cj.semble.pin, '0.5.4', 'the approved pin');
+  check('83-check-spec', cj.semble.spec, 'semble[mcp]==0.5.5', 'the pinned spec is never floating');
+  check('83-check-pin', cj.semble.pin, '0.5.5', 'the approved pin');
   check('83-check-commands', cj.commands, [], 'check runs nothing, so it records no commands');
   check('83-check-brewlog', readFileSync(BREW_LOG, 'utf8'), '', 'check must not invoke brew');
 
@@ -965,15 +967,15 @@ writeFileSync(BREW_LOG, '');
   const sj = safeParse(semNoUvx.stdout);
   check('86-semble-nouvx-exit', semNoUvx.status, 3, '`semble` without uvx must exit 3');
   check('86-semble-nouvx-commands', sj.commands,
-    ["uvx --from 'semble[mcp]==0.5.4' semble --version"],
-    'the probe command is single-quoted (zsh globs the brackets) and uses --version (dispatch-set argv on the 0.5.4 pin), never bare semble');
+    ["uvx --from 'semble[mcp]==0.5.5' semble --version"],
+    'the probe command is single-quoted (zsh globs the brackets) and uses --version on the 0.5.5 pin, never bare semble');
   check('86-semble-resolvable', sj.semble.resolvable, false, 'nothing was resolved');
   check('86-semble-toolInstalled', sj.semble.toolInstalled, false, 'default mode is uvx-ephemeral');
 
   const semTool = runInstall(['semble', '--tool', '--json']);
   const stj = safeParse(semTool.stdout);
   check('87-tool-commands', stj.commands,
-    ["uvx --from 'semble[mcp]==0.5.4' semble --version", "uv tool install 'semble[mcp]==0.5.4'"],
+    ["uvx --from 'semble[mcp]==0.5.5' semble --version", "uv tool install 'semble[mcp]==0.5.5'"],
     '--tool adds exactly one extra command, still pinned and quoted');
 
   const all = runInstall(['all', '--json']);
@@ -1107,7 +1109,7 @@ writeFileSync(BREW_LOG, '');
   check('94f-all-dry-note', adj.note, 'uv/uvx not on PATH; uvx is not on PATH - install uv first',
     'the coreutils step adds nothing to the note when it is only skipped');
   check('94f-all-dry-order', adj.commands,
-    ['brew install uv', 'brew install coreutils', "uvx --from 'semble[mcp]==0.5.4' semble --version"],
+    ['brew install uv', 'brew install coreutils', "uvx --from 'semble[mcp]==0.5.5' semble --version"],
     'all runs check -> uv -> coreutils -> semble, in that order');
   check('94f-all-dry-step', adj.timeout.coreutils.status, 'skipped', 'the coreutils step is reported in `all`');
   check('94f-all-dry-brewlog', readFileSync(BREW_LOG, 'utf8'), '', 'a dry `all` installs nothing');
@@ -1155,7 +1157,7 @@ writeFileSync(BREW_LOG, '');
 
   const correctCfg = JSON.parse(fixtureText(join('claude-json', 'correct.json'))).mcpServers.semble_code;
   check('99-correct-args', correctCfg.args,
-    ['--from', 'semble[mcp]==0.5.4', 'semble', '--content', 'code', 'docs', 'config'],
+    ['--from', 'semble[mcp]==0.5.5', 'semble', '--content', 'code', 'docs', 'config'],
     'the correct fixture must carry the exact frozen argv');
   check('99-correct-env', correctCfg.env, { SEMBLE_CACHE_LOCATION: CACHE_CODE },
     'placeholder substitution must yield an absolute cache root');

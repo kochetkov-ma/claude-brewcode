@@ -389,16 +389,20 @@ prompt: **hit@3 11/16 vs 9/16, MRR 0.674 vs 0.398, paired 8 wins / 3 losses /
 #### The search, and why its flags are frozen
 
 ```
-uvx --from 'semble[mcp]==0.5.4' semble search <query> <cwd> \
-    --content code docs config -k 3 --max-snippet-lines 0
+uvx --from 'semble[mcp]==0.5.5' semble search \
+    --content code docs config -k 3 --max-snippet-lines 0 -- <query> <cwd>
 ```
 
 `PIN_SPEC` and `CONTENT_ARGS` MUST stay byte-identical to the MCP registration
 written by `semble-mcp.sh` (`SEMBLE_PIN_SPEC`, `SEMBLE_CONTENT_ARGS` in
-`scripts/lib/semble-common.sh`). semble keys its cache directory by project path
-ALONE but rejects a cached index whose content-type set differs, so a mismatched
-set here would make the hook and the server evict each other's index on every
-alternation. `tests/suite-hooks.mjs` asserts the two agree.
+`scripts/lib/semble-common.sh`). The MCP and hook use the same
+`SEMBLE_CACHE_LOCATION`: the one shared `semble-code` root. Since 0.5.5, each
+exact content selection has its own variant below the hashed repository
+directory. This combined command selects `index-code-config-docs`; other
+variants remain alongside it. Prefetch declares readiness only for a complete
+`index-code-config-docs` and deliberately ignores a bare pre-0.5.5 combined
+`index`. `tests/suite-hooks.mjs` asserts the pin, content set, cache environment
+and readiness leaf all agree.
 
 `null` from `search()` means "could not be trusted" and starts the cooldown;
 `[]` means the search ran and found nothing, which is **not** a failure and must

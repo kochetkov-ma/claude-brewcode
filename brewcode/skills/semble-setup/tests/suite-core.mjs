@@ -28,7 +28,7 @@ const MCP_SH = join(SCRIPTS, 'semble-mcp.sh');
 const CACHE_SH = join(SCRIPTS, 'semble-cache.sh');
 const STATE_SH = join(SCRIPTS, 'semble-state.sh');
 
-const PIN = 'semble[mcp]==0.5.4';
+const PIN = 'semble[mcp]==0.5.5';
 
 // ── isolated base ───────────────────────────────────────────────────────────
 const BASE = realpathSync(mkdtempSync(join(tmpdir(), 'semble-b-')));
@@ -38,7 +38,6 @@ const REPO_A = join(BASE, 'repo-a');
 const REPO_B = join(BASE, 'repo-b');
 const REPO_C = join(BASE, 'repo-c');
 const CODE_ROOT = join(BASE, 'cache', 'semble-code');
-const DOCS_ROOT = join(BASE, 'cache', 'semble-docs');
 const STUB = join(BASE, 'claude-stub');
 const LOG = join(BASE, 'claude-calls.log');
 for (const d of [HOME, PROJ, REPO_A, REPO_B, REPO_C, CODE_ROOT]) mkdirSync(d, { recursive: true });
@@ -65,7 +64,6 @@ function env(extra = {}) {
     SEMBLE_TEST_HOME: HOME,
     SEMBLE_PROJECT_ROOT: PROJ,
     SEMBLE_CACHE_ROOT_CODE: CODE_ROOT,
-    SEMBLE_CACHE_ROOT_DOCS: DOCS_ROOT,
     SEMBLE_CLAUDE_BIN: STUB,
     SEMBLE_STUB_LOG: LOG,
     SEMBLE_STATE_PROBE: STATE_FILE,
@@ -174,22 +172,28 @@ check('hash.symlink-resolved', sh(`sc_repo_hash "${join(BASE, 'repo-a', '.')}"`)
 check('hash.missing-path.exit', sh('sc_repo_hash /no/such/dir-xyz').status, 1, 'unresolvable path exits 1 instead of hashing a guess');
 
 // ── 2. index dir contract (deviation fix) ──────────────────────────────────
-check('indexdir.ok', sh(`sc_repo_index_dir "${REPO_A}"`).out, `${CODE_ROOT}/${hashA.out}/index`, 'index dir is <root>/<hash>/index');
-check('indexdir.missing.exit', sh('sc_repo_index_dir /no/such/dir-xyz').status, 1, 'unresolvable repo -> exit 1 (not a bare "/index")');
+check('indexdir.ok', sh(`sc_repo_index_dir "${REPO_A}"`).out, `${CODE_ROOT}/${hashA.out}/index-code-config-docs`,
+  'combined code/config/docs uses its exact content-variant leaf');
+check('indexdir.legacy', sh(`sc_repo_legacy_index_dir "${REPO_A}"`).out, `${CODE_ROOT}/${hashA.out}/index`,
+  'the pre-0.5.5 bare index remains separately addressable for migration');
+check('indexdir.code-only', sh(`SEMBLE_CONTENT_ARGS=code sc_repo_index_dir "${REPO_A}"`).out, `${CODE_ROOT}/${hashA.out}/index`,
+  'code-only remains the canonical bare index variant');
+check('indexdir.missing.exit', sh('sc_repo_index_dir /no/such/dir-xyz').status, 1,
+  'unresolvable repo -> exit 1 instead of returning a partial variant path');
 
 // ── 3. cache roots ─────────────────────────────────────────────────────────
-const defRoots = sh('printf "%s\\n%s\\n" "$(sc_cache_root_code)" "$(sc_cache_root_docs)"',
-  { SEMBLE_CACHE_ROOT_CODE: undefined, SEMBLE_CACHE_ROOT_DOCS: undefined, XDG_CACHE_HOME: undefined });
-const [defCode, defDocs] = defRoots.out.split('\n');
+const defCode = sh('sc_cache_root_code',
+  { SEMBLE_CACHE_ROOT_CODE: undefined, XDG_CACHE_HOME: undefined }).out;
 const expBase = process.platform === 'darwin' ? join(HOME, 'Library', 'Caches') : join(HOME, '.cache');
 check('roots.default.code', defCode, join(expBase, 'semble-code'), 'default code root sits under the platform cache base');
-check('roots.default.docs', defDocs, join(expBase, 'semble-docs'), 'default docs root sits under the platform cache base');
 check('roots.leaf.code', basename(defCode), 'semble-code', 'code root leaf is exactly semble-code');
-check('roots.leaf.docs', basename(defDocs), 'semble-docs', 'docs root leaf is exactly semble-docs');
-check('roots.distinct', defCode === defDocs, false, 'the two roots are different paths');
-check('roots.not-nested.a', defDocs.startsWith(`${defCode}/`), false, 'docs root is not inside the code root');
-check('roots.not-nested.b', defCode.startsWith(`${defDocs}/`), false, 'code root is not inside the docs root');
 check('roots.absolute', defCode.startsWith('/'), true, 'SEMBLE_CACHE_LOCATION must be absolute');
+check('scope.combined', sh('sc_content_scope').out, 'code-config-docs',
+  'the shared root is partitioned by a stable sorted content scope');
+check('leaf.combined', sh('sc_index_leaf').out, 'index-code-config-docs',
+  'the live combined corpus maps to its distinct 0.5.5 variant');
+check('leaf.code-only', sh('sc_index_leaf code').out, 'index',
+  'code-only retains the upstream bare-index compatibility leaf');
 
 // ── 4. sc_mcp_state over the 7 config fixtures ─────────────────────────────
 const CORRECT_CFG = {
@@ -398,7 +402,7 @@ check('state.unknownkey.exit', okPatch.status, 0, 'patch succeeds');
 check('state.unknownkey.preserved', afterPatch.customKey, { a: 1 }, 'unknown top-level keys survive verbatim');
 check('state.unknownkey.phase', afterPatch.phase, 'prereq_ready', 'the patched key is applied');
 check('state.unknownkey.projectRoot', afterPatch.projectRoot, PROJ, 'projectRoot is rewritten from sc_project_root');
-check('state.unknownkey.version', afterPatch.approvedVersion, '0.5.4', 'approvedVersion is the pin');
+check('state.unknownkey.version', afterPatch.approvedVersion, '0.5.5', 'approvedVersion is the pin');
 
 // `disabled` is not healable from absent: nothing was ever set up to disable.
 resetProject();
@@ -582,7 +586,7 @@ function seedPhase(phase, extra = {}) {
     enabled: true,
     scope: 'user',
     projectRoot: PROJ,
-    approvedVersion: '0.5.4',
+    approvedVersion: '0.5.5',
     cacheRoot: CODE_ROOT,
     repoHash: '',
     completed: [],
@@ -707,7 +711,7 @@ for (const [label, args] of [
   check(`refresh.${label}.prompt`, after.resumePrompt, LIVE_PROMPT, 'resumePrompt is rewritten from the constant');
   check(`refresh.${label}.cacheRoot`, after.cacheRoot, CODE_ROOT, 'cacheRoot is recomputed from the environment');
   check(`refresh.${label}.repoHash`, after.repoHash, PROJ_HASH, 'repoHash is recomputed from the project root');
-  check(`refresh.${label}.version`, after.approvedVersion, '0.5.4', 'approvedVersion stays the pin');
+  check(`refresh.${label}.version`, after.approvedVersion, '0.5.5', 'approvedVersion stays the pin');
   check(`refresh.${label}.enabled`, after.enabled, true, 'enabled is NOT reset as a side effect');
   check(`refresh.${label}.completed`, after.completed,
     label === 'complete' ? ['mcp', 'warm', 'smoke', 'guidance'] : ['mcp', 'warm', 'smoke'],
@@ -747,7 +751,7 @@ const SD_LINES = [...SKILL_MD.matchAll(
 // 20 since `upgrade` gained its second half (the Step 3.3b guidance+agents block): it is the only
 // writer of the rule file whose frontmatter carries this install's version stamp, so without it
 // `upgrade` could never clear a `stale` verdict.
-check('sd.count', SD_LINES.length, 19, 'every EXECUTE block re-resolves the skill dir');
+check('sd.count', SD_LINES.length, 18, 'every EXECUTE block re-resolves the skill dir');
 check('sd.identical', new Set(SD_LINES).size, 1, 'all of them are the same block, character for character');
 // Prose may NAME the broken spelling (Step 0 explains why it is broken); no
 // assignment may USE it.
@@ -804,16 +808,24 @@ resetProject();
 const res = json(run(CACHE_SH, ['resolve', '--repo', REPO_A, '--json']));
 check('cache.resolve.hash', res.hash, hashA.out, 'resolve prints the repo hash');
 check('cache.resolve.dir', res.repoDir, join(CODE_ROOT, hashA.out), 'repoDir is <code root>/<hash>');
-check('cache.resolve.index', res.indexDir, join(CODE_ROOT, hashA.out, 'index'), 'indexDir is <repo dir>/index');
+check('cache.resolve.leaf', res.indexLeaf, 'index-code-config-docs', 'resolve names the selected content variant');
+check('cache.resolve.index', res.indexDir, join(CODE_ROOT, hashA.out, 'index-code-config-docs'),
+  'indexDir is the combined variant below the shared repo cache');
+check('cache.resolve.legacy', res.legacyIndexDir, join(CODE_ROOT, hashA.out, 'index'),
+  'resolve also names the migration-only legacy location');
 
 // The set as semble persists it: sorted, comma-joined. Verified against a live
 // metadata.json, whose content_type is ["code","docs","config"] -> "code,config,docs".
 const CONTENT_CSV = 'code,config,docs';
 
-function makeIndex(repo, { contentType = ['code', 'docs', 'config'], version = 1, files = {}, complete = true } = {}) {
+function makeIndex(repo, {
+  contentType = ['code', 'docs', 'config'], version = 1, files = {}, complete = true,
+  leaf = 'index-code-config-docs', reset = true,
+} = {}) {
   const h = sh(`sc_repo_hash "${repo}"`).out;
-  const idx = join(CODE_ROOT, h, 'index');
-  rmSync(join(CODE_ROOT, h), { recursive: true, force: true });
+  const idx = join(CODE_ROOT, h, leaf);
+  if (reset) rmSync(join(CODE_ROOT, h), { recursive: true, force: true });
+  else rmSync(idx, { recursive: true, force: true });
   mkdirSync(join(idx, 'bm25_index'), { recursive: true });
   mkdirSync(join(idx, 'semantic_index'), { recursive: true });
   writeFileSync(join(idx, 'chunks.json'), '[]');
@@ -883,19 +895,27 @@ check('cache.info.other.count', infoA.otherRepos.length, 1, 'exactly one other i
 check('cache.info.other.hash', infoA.otherRepos[0].hash, hC, 'the other repo is identified by hash');
 check('cache.info.other.root', infoA.otherRepos[0].rootPath, REPO_C, 'root_path comes from that entry metadata');
 check('cache.info.entries', infoA.entries, 2, 'entries counts files only (chunks.json + metadata.json; the two empty index dirs hold none)');
-const listed = json(run(CACHE_SH, ['list', '--json']));
-check('cache.list.count', listed.count, 2, 'list reports both 64-hex entries');
-check('cache.list.hashes', listed.entries.map((e) => e.hash).sort(), [hA, hC].sort(), 'list reports exactly the two hashes');
+makeIndex(REPO_A, { contentType: ['code'], leaf: 'index', reset: false });
+const variantsA = json(run(CACHE_SH, ['info', '--repo', REPO_A, '--json']));
+check('cache.variants.names', variantsA.variants.map((v) => v.name), ['index', 'index-code-config-docs'],
+  'code-only and combined indexes coexist below one repo hash');
+check('cache.variants.desired', variantsA.variants.map((v) => [v.name, v.desired]),
+  [['index', false], ['index-code-config-docs', true]], 'only the exact combined variant is selected');
+check('cache.variants.no-eviction', existsSync(join(CODE_ROOT, hA, 'index', 'metadata.json')), true,
+  'creating or reading the combined variant never evicts the code-only sibling');
 
-// ── 12. reserve-docs ───────────────────────────────────────────────────────
-const marker = join(DOCS_ROOT, 'RESERVED-FOR-DOCS.txt');
-const rd1 = json(run(CACHE_SH, ['reserve-docs', '--json']));
-check('docs.reserve.created', rd1.created, true, 'the marker is created');
-check('docs.reserve.exists', existsSync(marker), true, 'RESERVED-FOR-DOCS.txt exists');
-const rd2 = json(run(CACHE_SH, ['reserve-docs', '--json']));
-check('docs.reserve.idempotent', rd2.created, false, 'a second run creates nothing');
-check('docs.reserve.info', json(run(CACHE_SH, ['info', '--repo', REPO_A, '--json'])).docsReserved, true, 'info reports docsReserved');
-check('docs.reserve.no-index', tree(DOCS_ROOT), ['RESERVED-FOR-DOCS.txt'], 'the docs root holds the marker and nothing else');
+const hB = makeIndex(REPO_B, { leaf: 'index' });
+const legacyB = json(run(CACHE_SH, ['info', '--repo', REPO_B, '--json'], { SEMBLE_NO_NETWORK: undefined }));
+check('cache.legacy.detected', [legacyB.present, legacyB.legacyPresent, legacyB.staleness], [false, true, 'legacy'],
+  'a bare index carrying the combined content set is classified for rebuild, not accepted as current');
+check('cache.legacy.variant', legacyB.variants.map((v) => [v.name, v.legacyCombined]), [['index', true]],
+  'legacy classification is attached to the discovered variant');
+const listed = json(run(CACHE_SH, ['list', '--json']));
+check('cache.list.count', listed.count, 3, 'list reports all 64-hex repo entries in the one shared root');
+check('cache.list.hashes', listed.entries.map((e) => e.hash).sort(), [hA, hB, hC].sort(),
+  'list reports exactly the three hashes');
+check('cache.list.variants', listed.entries.find((e) => e.hash === hA).variants.map((v) => v.name),
+  ['index', 'index-code-config-docs'], 'list exposes every content variant without collapsing siblings');
 
 // ── 13. purge guards ───────────────────────────────────────────────────────
 mkdirSync(join(CODE_ROOT, 'notahash'), { recursive: true });
@@ -924,9 +944,11 @@ check('purge.dry.msg', dryPurge.out.includes('DRY rm -rf'), true, 'dry run print
 const badRoot = run(CACHE_SH, ['purge-root', '--which', 'code', '--yes'], { SEMBLE_CACHE_ROOT_CODE: join(BASE, 'cache') });
 check('purge.root.guard', badRoot.status, 1, 'a root whose leaf is not semble-code is refused');
 check('purge.root.kept', existsSync(join(BASE, 'cache')), true, 'nothing was deleted');
-const okRoot = run(CACHE_SH, ['purge-root', '--which', 'docs', '--yes', '--json']);
-check('purge.root.docs', okRoot.status, 0, 'the docs root can be purged');
-check('purge.root.gone', existsSync(DOCS_ROOT), false, 'the docs root is gone');
+const oldDocsSelector = run(CACHE_SH, ['purge-root', '--which', 'docs', '--yes', '--json']);
+check('purge.root.docs-rejected', oldDocsSelector.status, 2,
+  'the removed reserved-docs bucket cannot be selected or deleted');
+check('purge.root.shared-kept', existsSync(CODE_ROOT), true,
+  'rejecting the obsolete selector leaves the shared root untouched');
 
 // ── 14. remove / repair ────────────────────────────────────────────────────
 writeClaudeJson(FIXTURES.absent);
@@ -1100,12 +1122,12 @@ check('timeout.path.stub', sh('sc_timeout_path', { SEMBLE_TIMEOUT_BIN: TIMEOUT_S
   'the backing binary is reported by absolute path');
 
 // Delegation to a real binary keeps every argument its own argv element.
-const delegated = sh(`sc_timeout 42 printf '%s|%s\\n' 'semble[mcp]==0.5.4' two`,
+const delegated = sh(`sc_timeout 42 printf '%s|%s\\n' 'semble[mcp]==0.5.5' two`,
   { SEMBLE_TIMEOUT_BIN: TIMEOUT_STUB });
-check('timeout.delegate.stdout', delegated.out, 'semble[mcp]==0.5.4|two',
+check('timeout.delegate.stdout', delegated.out, 'semble[mcp]==0.5.5|two',
   'the wrapped command runs with its argv intact');
 check('timeout.delegate.log', readFileSync(TIMEOUT_LOG, 'utf8'),
-  "42 printf %s|%s\\n semble[mcp]==0.5.4 two\n",
+  "42 printf %s|%s\\n semble[mcp]==0.5.5 two\n",
   'the binary was invoked with the seconds first and the pin as one word');
 
 // Elapsed IS the property under test here — "the watchdog waited out its bound"
@@ -1196,8 +1218,8 @@ check('timeout.watch.stderr',
 // picked from the pin up front. A hang cannot be undone by a fallback, only by
 // never issuing it. Exact strings on purpose: a wildcard here would accept the
 // hanging argv on an old pin, which is the whole failure this gate prevents.
-check('probearg.pin', sh('printf %s "$SEMBLE_PIN_VERSION"').out, '0.5.4',
-  'the shipped pin is 0.5.4');
+check('probearg.pin', sh('printf %s "$SEMBLE_PIN_VERSION"').out, '0.5.5',
+  'the shipped pin is 0.5.5');
 check('probearg.default', sh('sc_semble_probe_arg').out, '--version',
   'the shipped pin dispatches --version');
 for (const [v, want] of [

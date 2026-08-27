@@ -95,7 +95,7 @@ optimize | resume`; `/brewcode:teams-setup` keeps a `[name]` positional after th
 | [`/brewcode:setup-status`](skills/setup-status/README.md) | Read-only cross-plugin dashboard: which setup skills are installed, stale, partial or missing here, with the exact command to run for each. Runs no setup itself |
 | [`/brewcode:superreview-setup`](skills/superreview-setup/README.md) | Generate a project-tailored deep-review skill: `QUICK` (default, `intent-guard` + mechanical gates) or `EXTENDED` (adds domain-expert fan-out, scope discipline, adversarial validation) depth, read from your prompt |
 | [`/brewcode:teams-setup`](skills/teams-setup/README.md) | Dynamic agent team creation, management, and performance tracking -- every team also gets a fixed review-only `intent-guard` member (not counted in team size) |
-| [`/brewcode:semble-setup`](skills/semble-setup/README.md) | Semantic code search setup: installs the pinned semble_code MCP, isolated cache, semble-first rule + hooks, agent migration |
+| [`/brewcode:semble-setup`](skills/semble-setup/README.md) | Semantic code search setup: installs the pinned semble_code MCP, shared content-variant cache, semble-first rule + hooks, agent migration |
 | [`/brewcode:convention`](skills/convention/README.md) | Extract etalon classes, patterns, architecture into convention docs and rules |
 | [`/brewcode:rules`](skills/rules/README.md) | Prompt-driven rules management: status, create, improve, review |
 | [`/brewcode:skills`](skills/skills/README.md) | Prompt-driven skill management: status, create, improve, sync, review |

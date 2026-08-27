@@ -1,7 +1,12 @@
 # Language coverage — what `--content code docs config` actually indexes
 
-> Source of truth: semble 0.5.4, `src/semble/index/files.py` and `src/semble/index/file_walker.py`.
-> The tables below are generated from that source, not from the README.
+> Current authority, verified 2026-08-27: semble 0.5.5 tag sources
+> `src/semble/index/files.py`, `src/semble/index/file_walker.py`, and
+> `src/semble/cache.py`, plus `tests/test_files.py`, `tests/test_file_walker.py`,
+> and `tests/test_cache.py`. The installed 0.5.5 wheel copies match the tagged
+> runtime files byte-for-byte. The suffix tables below were regenerated from
+> those constants: 281 code + 44 config + 17 docs = 342 indexed suffixes; the
+> five data suffixes remain excluded.
 
 ## The one rule that explains everything
 
@@ -32,7 +37,9 @@ pattern text ends in a file extension, `found` is `True` and **the extension
 filter is skipped entirely**. The file is indexed no matter which bucket — if
 any — its suffix belongs to.
 
-Reproduced against semble 0.5.4 with `--content code` alone:
+Confirmed by the current 0.5.5 walker implementation and its explicit-negation
+test. The concrete output below is retained from the original 0.5.4 reproduction;
+it was not rerun for this documentation refresh:
 
 ```text
 .gitignore:  package-lock.json / !sub/package-lock.json / *.png / !keep.png
@@ -102,29 +109,35 @@ This corpus is code+docs+config, so .md/.markdown, .rst, .adoc and .html/.htm AR
 indexed. Still unreachable at any content setting: .json/.json5/.csv/.tsv/.psv
 (semble's data bucket belongs to no content type) and any suffix absent from
 _EXTENSION_TO_LANGUAGE — notably .mdx and .txt. Use rg/Grep for those. Every
-consumer must pass the same --content set: the cache directory is keyed by
-project path alone, so a differing set silently invalidates the other
-consumer's index.
+consumer must pass the same --content set so it selects the shared
+index-code-config-docs variant.
 ```
 
 That paragraph is printed verbatim by `semble-project.sh audit` and belongs in every
-status report. The last sentence is not negotiable: the per-repo cache directory is
-`sha256(resolved repo path)` and the **content type is not part of the hash**
-(`cache.py:27-36`), while `_metadata_matches` (`cache.py:111`) requires
-`set(content_type) == set(content)`. Two consumers passing different sets therefore share
-one directory and evict each other on every alternation. Measured on this repo, alternating
-`code config` with a bare `semble search` (default `code`) rebuilt every time —
-1.99s / 1.78s / 1.91s / 1.95s; with both pinned to `code docs config` it was 5.43s cold
-then 0.74s / 0.81s / 0.74s.
+status report. In 0.5.5, the per-repo directory remains
+`sha256(resolved repo path)`, but each exact sorted content selection has its own child:
+code-only is `index`; every other selection is `index-<sorted-content>`. The registered
+`code docs config` corpus therefore uses `index-code-config-docs`, while `index-docs`,
+`index-config`, `index-code-config`, and other exact variants may coexist without eviction.
+Metadata still has to match the requested content set inside the selected variant.
 
-Hence `SEMBLE_CONTENT_ARGS` in `lib/semble-common.sh` is the only place the set is spelled
-out, and the MCP registration, `warm`, `smoke` and `reindex` all interpolate it.
+`SEMBLE_CONTENT_ARGS` in `lib/semble-common.sh` remains the single source for the
+registered/default selection. MCP registration, `warm`, `smoke`, and `reindex` interpolate
+it so they select `index-code-config-docs`; an explicit per-call `content` override selects
+its own sibling variant.
+
+Historical pre-0.5.5 cache measurement, retained as migration evidence and not rerun:
+alternating `code config` with a bare `semble search` rebuilt every time —
+1.99s / 1.78s / 1.91s / 1.95s; with both pinned to `code docs config` it was 5.43s cold,
+then 0.74s / 0.81s / 0.74s. That eviction behavior describes 0.5.4's single index leaf,
+not the current 0.5.5 layout.
 
 `package.json`, `tsconfig.json`, `composer.json`, every `*.csv` fixture, every OpenAPI
 `*.json` spec and every `*.mdx` page are therefore invisible to semantic search. That is a
 semble limitation, not a configuration mistake. Use `rg`.
 
-Sizing, measured on `claude-brewcode` with an isolated cache:
+Historical sizing measured on `claude-brewcode` with an isolated pre-0.5.5 cache;
+the figures were not rerun for 0.5.5, while the suffix membership was reverified:
 
 | Corpus | Files indexed | `.md` | `.mdx` | Cache size |
 |--------|---------------|-------|--------|------------|
@@ -133,8 +146,9 @@ Sizing, measured on `claude-brewcode` with an isolated cache:
 
 ## Why `config` stays in the set
 
-`config` looks like the bucket to cut — it is 40 files and **53 of 9307 chunks,
-0.57%** of the corpus on this workspace. It stays, on two measurements:
+`config` looks like the bucket to cut. In the retained pre-0.5.5 workspace
+measurement it was 40 files and **53 of 9307 chunks, 0.57%** of the corpus; those
+counts were not rerun for 0.5.5. It stays for the measured retrieval value:
 
 | Question | Answer |
 |----------|--------|
@@ -142,9 +156,10 @@ Sizing, measured on `claude-brewcode` with an isolated cache:
 | What breaks without it? | Q12 "what does the docs deploy workflow do" and Q15 "how does the docs site get deployed" — both answered from `deploy-docs.yml`, which is `.yml`, which is `config`. Drop the bucket and both questions have no reachable answer at all |
 | Was it buying the lockfile? | **No.** That was the premise for cutting it and it is wrong: `package-lock.json` entered through the `.gitignore` negation bypass above, which runs *before* the extension filter. `--content code` alone indexes it just the same |
 
-0.57% of the index for the whole CI surface is the cheapest bucket in the set.
-The decision is: **keep `code docs config` unchanged.** `SEMBLE_CONTENT_ARGS` is
-not edited, so no cache anywhere is invalidated.
+At the measured 0.57%, the whole CI surface was the cheapest bucket in the set.
+The decision remains: **keep `code docs config` as the registered default.** In
+0.5.5 that choice addresses `index-code-config-docs` and does not invalidate sibling
+content variants.
 
 ## Known corpus limits, and what they cost
 

@@ -27,6 +27,11 @@ case "$PLUGIN_VERSION" in
   [0-9]*.[0-9]*.[0-9]*) : ;;
   *) printf 'ERROR:cannot resolve plugin version (X.Y.Z) from %s - refusing to stamp artifacts with a fake version\n' "$PLUGIN_JSON"; exit 1 ;;
 esac
+PLUGIN_VERSION=$(grep -aoE 'brewcode-meta: version=[0-9]+\.[0-9]+\.[0-9]+' "$SCRIPT_DIR/../SKILL.md" 2>/dev/null | head -1 | sed 's/.*version=//' || true)
+case "$PLUGIN_VERSION" in
+  [0-9]*.[0-9]*.[0-9]*) : ;;
+  *) printf 'ERROR:cannot resolve source plugin version (X.Y.Z) from %s\n' "$SCRIPT_DIR/../SKILL.md"; exit 1 ;;
+esac
 
 # content_version self-location: this skill's OWN marker in SKILL.md -- the artifact whose
 # stamp bump-version.sh moves via git-diff. NEVER copied from PLUGIN_VERSION, never invented.

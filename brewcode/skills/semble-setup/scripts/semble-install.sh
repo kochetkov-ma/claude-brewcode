@@ -12,8 +12,8 @@
 #             and never changes `all`'s exit code. Skipped when a timeout binary
 #             already exists. Needs --yes when invoked directly.
 #   semble    primes the pinned uvx environment with
-#             `uvx --from 'semble[mcp]==0.5.4' semble --version`.
-#             --tool additionally runs `uv tool install 'semble[mcp]==0.5.4'`.
+#             `uvx --from 'semble[mcp]==0.5.5' semble --version`.
+#             --tool additionally runs `uv tool install 'semble[mcp]==0.5.5'`.
 #   all       check -> uv -> coreutils -> semble.
 #
 # Default mode is uvx-ephemeral: no `uv tool install`, so no `semble` lands on
@@ -44,7 +44,7 @@ semble-install.sh <check|uv|coreutils|semble|all> [--yes] [--json] [--tool]
 
   --yes    confirm the mutating steps
   --json   emit a single JSON object (schema: DESIGN 9.2)
-  --tool   also `uv tool install 'semble[mcp]==0.5.4'` (requires --yes)
+  --tool   also `uv tool install 'semble[mcp]==0.5.5'` (requires --yes)
   -h/--help
 
 Honours SEMBLE_DRY_RUN=1 (print DRY <cmd>, change nothing) and
@@ -256,7 +256,7 @@ do_semble() {
       sc_warn "uvx resolved '$SEMBLE_PIN_SPEC' but semble reports '$got', not $SEMBLE_PIN_VERSION" >&2
     fi
   else
-    # semble 0.5.4 depends on semble-grammars, which ships WHEELS ONLY: macOS
+    # semble >=0.5.3 depends on semble-grammars, which ships WHEELS ONLY: macOS
     # x86_64/arm64, manylinux2014 x86_64/aarch64, win amd64/arm64. No sdist and
     # no musllinux wheel, so on Alpine there is nothing to install and nothing to
     # build. Naming it here saves the user a hunt through a pip resolver dump.

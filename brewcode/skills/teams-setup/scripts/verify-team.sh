@@ -78,6 +78,51 @@ check_agent_meta() {
   return "$_bad"
 }
 
+# Print only the body after the closing frontmatter fence. The 3200-byte contract excludes frontmatter:
+# a rich trigger description or extra generator metadata must not consume domain-instruction budget.
+profile_body() {
+  awk '
+    NR == 1 && $0 == "---" { in_fm = 1; next }
+    in_fm && $0 == "---" { in_fm = 0; body = 1; next }
+    body { print }
+  ' "$1"
+}
+
+# Current teams-setup domain profiles have one compact, machine-checkable body. A body with no
+# `## Mission` is legacy and stays runnable with an upgrade warning; a partial current profile is a
+# writer defect. intent-guard is exempt because superreview-setup owns its independent template.
+check_compact_profile() {
+  _f="$1"
+  profile_body "$_f" | grep -qF '## Mission' || return 2
+
+  _bad=0
+  _headings=$(profile_body "$_f" | grep -E '^#{1,6}[[:space:]]' || true)
+  _expected=$(printf '%s\n' \
+    '## Mission' \
+    '## Owned surfaces' \
+    '## Exclusions' \
+    '## Must-load references' \
+    '## Unique invariants' \
+    '## Unique verification')
+  [ "$_headings" = "$_expected" ] \
+    || { echo "  FAIL: body headings must be exactly the six ordered teams-setup headings"; _bad=1; }
+  _first_ref=$(profile_body "$_f" | awk '
+    /^## Must-load references$/ { refs = 1; next }
+    refs && /^## / { exit }
+    refs && /^-/ { print; exit }
+  ')
+  printf '%s\n' "$_first_ref" | grep -qF ".claude/teams/$TEAM_NAME/team.md" \
+    || { echo "  FAIL: Must-load references must name .claude/teams/$TEAM_NAME/team.md"; _bad=1; }
+  _bytes=$(profile_body "$_f" | wc -c | tr -d '[:space:]')
+  [ "$_bytes" -le 3200 ] \
+    || { echo "  FAIL: compact profile body is $_bytes bytes; ceiling is 3200 (~800 est-tokens), frontmatter excluded"; _bad=1; }
+  if profile_body "$_f" | grep -Eq '^## (Task Acceptance Protocol|Return Contract|Trace Instructions|Colleagues|Scope Fit|Domain Instructions|Immutable Traits|Update Protocol)$'; then
+    echo "  FAIL: shared acceptance/tracing/routing/return/colleague/scope-fit contract belongs only in team.md"
+    _bad=1
+  fi
+  return "$_bad"
+}
+
 # Roster values reach `-f` probes here and `mv`/`rm -f` in toggle-team.sh and cleanup-flow.md, so a row
 # like `| ../../../outside/README |` is a path, not a name. An agent id is a bare `^[a-z0-9][a-z0-9-]*$`,
 # which keeps every derived path canonically inside `.claude/agents/`. Byte-identical rule in
@@ -190,6 +235,48 @@ if [ -f "$TEAM_DIR/team.md" ]; then
       ;;
   esac
 
+  # New teams centralize the repeated member contract once. Absence remains safe only for a fully
+  # legacy roster; a compact profile with no destination contract is an interrupted-install defect.
+  shared_contract_present=0
+  if ! grep -qF '## Shared Agent Contract' "$TEAM_DIR/team.md"; then
+    echo "WARN: $TEAM_DIR/team.md has no Shared Agent Contract (legacy team). Fix: /brewcode:teams-setup upgrade"
+  else
+    shared_contract_present=1
+    shared_bad=0
+    shared_count=$(grep -cF '## Shared Agent Contract' "$TEAM_DIR/team.md" || true)
+    [ "$shared_count" -eq 1 ] \
+      || { echo "CHECK: Shared Agent Contract ... FAIL (must occur exactly once; found $shared_count)"; shared_bad=1; }
+    shared_contract=$(awk '
+      /^## Shared Agent Contract$/ { active = 1 }
+      /^## Agents$/ { active = 0 }
+      active { print }
+    ' "$TEAM_DIR/team.md")
+    for shared_literal in \
+      'Every domain agent loads this file before task acceptance. `intent-guard` is exempt: it keeps its review-only output contract and never implements.' \
+      'Before any task evaluate `Domain`, `Duplicate`, `Best candidate`.' \
+      'execute only owned surfaces' 'profile exclusions win on overlap' \
+      'Optional best effort, `1 attempt max`, no retry, Bash only.' \
+      ".claude/teams/$TEAM_NAME/trace-ops.sh" \
+      'no `*_PLUGIN_ROOT` env' 'plugin update/move/uninstall does not break it' \
+      'Track states: `took` / `refused` / `completed` / `failed`.' \
+      'Issue severity: `low` / `medium` / `high` / `critical`.' \
+      'Insight category (max 1-3): `pattern` / `architecture` / `performance` / `security` / `convention` / `debt`.' \
+      '`$SID` is 8 chars' \
+      'A task traced `took` ends with exactly one terminal track: `completed` or `failed`.' \
+      'Verdict first, <=30 lines, `path:line`. !=bodies/output/log/preamble.' \
+      'This holds with or without agent-return.' \
+      '.claude/reports/YYYYMMDD-HHMMSS_{AGENT_NAME}/' \
+      '>~1000 est-tokens (`chars/4`)' '>~2500' '<=3 lines' \
+      '!=imagined load/speculative abstraction' '!=replace them'
+    do
+      printf '%s\n' "$shared_contract" | grep -qF "$shared_literal" \
+        || { echo "CHECK: Shared Agent Contract ... FAIL (missing: $shared_literal)"; shared_bad=1; }
+    done
+    [ "$shared_bad" -eq 0 ] \
+      && echo "CHECK: Shared Agent Contract ... OK" \
+      || FAIL=1
+  fi
+
   in_agents=0
   past_header=0
   found_agents=0
@@ -239,13 +326,23 @@ if [ -f "$TEAM_DIR/team.md" ]; then
             2) echo "OK (no artifact metadata -- agent predates the standard; /brewcode:teams-setup upgrade restamps it)" ;;
             *) echo "FAIL"; printf '%s\n' "$meta_out"; FAIL=1 ;;
           esac
-          # Return Contract body gate: the section every generated domain agent is born with.
-          # Absent = the agent predates it -> WARN + the upgrade fix, never fail an old roster.
-          # intent-guard is exempt: one writer (superreview emit-agent), own verdict-first ## Output.
-          if [ "$agent" != "intent-guard" ] \
-             && ! grep -qF 'Verdict first, <=30 lines' ".claude/agents/${agent}.md"; then
-            echo "  WARN: no Return Contract section (agent predates it). Fix: /brewcode:teams-setup upgrade,"
-            echo "        which re-adds '## Return Contract' from references/agent-template.md"
+          if [ "$agent" != "intent-guard" ]; then
+            set +e
+            profile_out=$(check_compact_profile ".claude/agents/${agent}.md")
+            profile_rc=$?
+            set -e
+            case "$profile_rc" in
+              0)
+                if [ "$shared_contract_present" -eq 1 ]; then
+                  echo "  CHECK: compact six-heading profile ... OK"
+                else
+                  echo "  CHECK: compact six-heading profile ... FAIL (shared team contract missing; interrupted install/unsafe migration)"
+                  FAIL=1
+                fi
+                ;;
+              2) echo "  WARN: legacy repeated/unknown profile shape. Fix: /brewcode:teams-setup upgrade" ;;
+              *) printf '%s\n' "$profile_out"; FAIL=1 ;;
+            esac
           fi
         elif [ -f ".claude/agents/${agent}.md.disabled" ]; then
           # Parked by `disable`: the body is intact, only the .md extension that
@@ -274,6 +371,11 @@ if [ -f "$TEAM_DIR/team.md" ]; then
     echo "      then add this row to the ## Agents table (all 7 columns: Agent, Domain, Mission, Status,"
     echo "      Updated, Kind, Version):"
     echo "      | intent-guard | -- | Anti-drift check: what was ASKED vs what was DELIVERED | active | $TODAY | review-only | $PV |"
+  elif [ "$shared_contract_present" -eq 0 ]; then
+    echo "WARN: legacy intent-guard roster row predates the review-only scope contract. Fix: /brewcode:teams-setup upgrade"
+  elif ! grep -Eq '^\|[[:space:]]*intent-guard[[:space:]]*\|[[:space:]]*--[[:space:]]*\|[[:space:]]*Anti-drift check: what was ASKED vs what was DELIVERED[[:space:]]*\|[^|]*\|[^|]*\|[[:space:]]*review-only[[:space:]]*\|' "$TEAM_DIR/team.md"; then
+    echo "CHECK: intent-guard roster contract ... FAIL (domain '--', fixed anti-drift mission, and kind review-only are required)"
+    FAIL=1
   fi
 fi
 

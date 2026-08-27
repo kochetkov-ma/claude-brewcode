@@ -6,9 +6,15 @@ order: 1117
 
 import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
+# semble-setup — semantic search with isolated content variants
+
 <Badge text="opus" />
 <Badge text="mcp" />
 <Badge text="human-invoked" />
+
+<Callout type="tip">
+**One setup, one shared cache, no content-set eviction.** Semble 0.5.5 keeps code, docs, config, and combined searches as separate variants under the same repository cache. The registered default covers all three, while each tool call can narrow its own search without replacing sibling indexes.
+</Callout>
 
 ## Quick reference
 
@@ -19,7 +25,8 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | No-arg default | **always `status`** — see the exception note below |
 | Model | opus |
 | Tools | Read, Bash, AskUserQuestion |
-| MCP server | `semble_code`, registered at **user** scope, pin `semble[mcp]==0.5.4` |
+| MCP server | `semble_code`, registered at **user** scope, pin `semble[mcp]==0.5.5` |
+| Tool input | required `repo`; optional `content=code\|docs\|config\|all` |
 
 <Callout type="caution" title="The one skill that never defaults to install">
 Every other `-setup` skill treats a bare invocation as `status` when installed and `install` when not. `semble-setup` breaks that rule on purpose: `install` runs `brew install uv`, a **machine-level** mutation outside the project. A bare `/brewcode:semble-setup` must never be able to trigger it, so empty input always resolves to read-only `status`. To install, type the verb.
@@ -27,11 +34,11 @@ Every other `-setup` skill treats a bare invocation as `status` when installed a
 
 ## What it does
 
-`semble-setup` is the lifecycle router for `semble_code` — a semantic code-search MCP server that gives Claude two tools: `mcp__semble_code__search` (find code by intent) and `mcp__semble_code__find_related` (neighbors of a known location). The skill never edits code itself; it installs the prerequisite, registers the MCP server, wires a project rule and hooks, and migrates project agents so they can call the tools.
+`semble-setup` is the lifecycle router for `semble_code` — a semantic repository-search MCP server that gives Claude two tools: `mcp__semble_code__search` (find code by intent) and `mcp__semble_code__find_related` (neighbors of a known location). The skill never edits code itself; it installs the prerequisite, registers the MCP server, wires a project rule and hooks, and migrates project agents so they can call the tools.
 
 It always prints the current state before changing anything. Every mutation goes through a script under `scripts/` — the skill only decides which one to run and reports the result.
 
-Semble has no Homebrew formula of its own. The skill installs `uv` via `brew` (a machine-level step gated by an explicit confirmation) and then runs the pinned `uvx --from 'semble[mcp]==0.5.4' semble --content <SEMBLE_CONTENT_ARGS>` — never a floating version. See Corpus below for the actual token list.
+Semble has no Homebrew formula of its own. The skill installs `uv` via `brew` (a machine-level step gated by an explicit confirmation) and then runs the pinned `uvx --from 'semble[mcp]==0.5.5' semble --content <SEMBLE_CONTENT_ARGS>` — never a floating version. The registered/default selection is `code docs config`; a tool call may optionally choose `code`, `docs`, `config`, or `all` for that query. `docs` and `config` use narrower siblings, while `all` reuses the registered combined variant. See Corpus below for the coverage boundaries.
 
 ## When to use
 
@@ -44,7 +51,7 @@ Semble has no Homebrew formula of its own. The skill installs `uv` via `brew` (a
 | A newer `semble[mcp]` pin is approved | `/brewcode:semble-setup upgrade` |
 | Turn search off without deleting anything | `/brewcode:semble-setup disable` |
 | One repo's index looks stale | `/brewcode:semble-setup reindex` |
-| Free-text works too, RU or EN | `/brewcode:semble-setup переиндексируй` |
+| Free-text works too, in English or Russian | `/brewcode:semble-setup rebuild the index` |
 | Remove the wiring, keep or drop pieces | `/brewcode:semble-setup uninstall` |
 | Wipe everything, including the cache | `/brewcode:semble-setup purge` |
 
@@ -54,7 +61,7 @@ Semble has no Homebrew formula of its own. The skill installs `uv` via `brew` (a
 /brewcode:semble-setup install
 ```
 
-`install` probes `uv`, asks once before the machine-level `brew install uv`, registers the MCP server, then wires everything that does not need a live server — the rule, `.sembleignore`, the `CLAUDE.md` block, the five hooks, permissions and agent migration — before stopping at the reload checkpoint:
+`install` probes `uv`, asks once before the machine-level `brew install uv`, registers the MCP server, then wires the rule, `.sembleignore`, the `CLAUDE.md` block, the five hooks, permissions and agent migration before stopping at the reload checkpoint. Reload makes the registered MCP tools visible to Claude; the pinned CLI smoke does not require MCP connectivity, but the workflow defers it to `resume`:
 
 ```text
 # Semble install
@@ -66,27 +73,30 @@ mode: install  (reason: matched keyword "install")
 scope: user
 
 ## Before
-cli:      uv absent | uvx absent | semble pin 0.5.4 (uvx-ephemeral) | claude 2.1.226
+cli:      uv absent | uvx absent | semble pin 0.5.5 (uvx-ephemeral) | claude 2.1.226
 mcp:      absent @ user  [unknown]
-cache:    /Users/me/Library/Caches/semble-code | repo — | 0 B | absent | docs root reserved: no
+cache:    /Users/me/Library/Caches/semble-code | repo unknown | variant index-code-config-docs | 0 B | absent
 guidance: rule absent | CLAUDE.md absent | hooks 0/6 wired | permissions no
 agents:   4 total | 2 inherit | 0 patched | 2 need patch | 0 conflict | 0 skipped
 state:    phase=absent enabled=null completed=[]
 
 ## Actions
-changed:   brew install uv, semble_code registered @ user, docs cache root reserved, rule installed, .sembleignore installed, CLAUDE.md block installed, 5 hooks wired, permissions merged, 2 agents patched
+changed:   brew install uv, semble_code registered @ user, rule installed, .sembleignore installed, CLAUDE.md block installed, 5 hooks wired, permissions merged, 2 agents patched
 unchanged: none
 skipped:   none
 failed:    none
 
 ## Verification
-commands: bash scripts/semble-install.sh all --yes --json; bash scripts/semble-cache.sh reserve-docs --json; bash scripts/semble-mcp.sh add --scope user --yes --json; bash scripts/semble-guidance.sh install --part all --json; bash scripts/semble-agents.sh apply --scope project --yes --json
-smoke:    skipped (MCP not yet live in this session)
-corpus:   code docs config | repo <hash8> | unknown
+commands: bash scripts/semble-install.sh all --yes --json
+commands: bash scripts/semble-mcp.sh add --scope user --yes --json
+commands: bash scripts/semble-guidance.sh install --part all --json
+commands: bash scripts/semble-agents.sh apply --scope project --yes --json
+smoke:    skipped (install mode does not run smoke)
+corpus:   code docs config | repo unknown | unknown
 uncovered: .json/.json5/.csv/.tsv/.psv (no content type reaches them), .mdx/.txt (absent from _EXTENSION_TO_LANGUAGE) -> use rg
 
 ## Current Status
-reload required — semble_code registered, wiring complete, session has not restarted
+reload required — MCP registered, waiting for a new session
 
 ## Next Step
 Reload Claude Code (new session), then run: /brewcode:semble-setup resume
@@ -95,7 +105,7 @@ Checkpoint: /abs/project/root/.claude/semble/state.json
 
 The `/6` in `guidance:` counts settings registrations, not hook files - five files wire six rows, so `5 hooks wired` under Actions and `hooks 0/6 wired` under Before both describe the same install correctly.
 
-After a fresh session, `resume` re-checks status, runs the smoke query (the one step that actually needed a live server), and re-applies the same wiring idempotently so any drift self-repairs:
+After a fresh session exposes the MCP tools to Claude, `resume` re-checks status, runs the pinned CLI smoke against the same shared cache and combined variant, and re-applies the wiring idempotently so any drift self-repairs:
 
 ```
 /brewcode:semble-setup resume
@@ -109,7 +119,11 @@ skipped:   none
 failed:    none
 
 ## Verification
-commands: bash scripts/semble-state.sh phase verifying --json; bash scripts/semble-project.sh smoke --json; bash scripts/semble-guidance.sh install --part all --json; bash scripts/semble-agents.sh apply --scope project --yes --json; bash scripts/semble-state.sh phase ready --json
+commands: bash scripts/semble-state.sh phase verifying --json
+commands: bash scripts/semble-project.sh smoke --json
+commands: bash scripts/semble-guidance.sh install --part all --json
+commands: bash scripts/semble-agents.sh apply --scope project --yes --json
+commands: bash scripts/semble-state.sh phase ready --json
 smoke:    how sessions are persisted -> 5 results, top = src/store/session.ts:41-58 score 0.83
 corpus:   code docs config | repo <hash8> | unknown
 uncovered: .json/.json5/.csv/.tsv/.psv (no content type reaches them), .mdx/.txt (absent from _EXTENSION_TO_LANGUAGE) -> use rg
@@ -157,7 +171,7 @@ Subsequent searches are sub-second and require the absolute repo path:
   <li class="step step-primary">
     <div>
       <strong>Install — register and wire</strong>
-      <p>Reserves the separate docs cache root, registers <code>semble_code</code> at user scope, then wires everything that does not need a live MCP server — the <code>semble-first</code> rule, <code>.sembleignore</code>, the <code>CLAUDE.md</code> block, the five hooks, permissions and project agent migration — before writing a reload checkpoint and stopping. Only the smoke query and <code>phase -&gt; ready</code> wait for the new session.</p>
+      <p>Registers <code>semble_code</code> at user scope with the pinned combined corpus, wires the <code>semble-first</code> rule, <code>.sembleignore</code>, the <code>CLAUDE.md</code> block, the five hooks, permissions and project agent migration, then writes a reload checkpoint and stops. Reload makes the MCP tools visible to Claude; <code>resume</code> performs the deferred pinned CLI smoke and closes <code>phase -&gt; ready</code>.</p>
     </div>
   </li>
   <li class="step step-primary">
@@ -169,7 +183,7 @@ Subsequent searches are sub-second and require the absolute repo path:
   <li class="step step-primary">
     <div>
       <strong>Other modes — one delegation each</strong>
-      <p><code>enable</code>/<code>disable</code> flip a flag, deleting nothing. <code>reindex</code> and <code>purge</code> run dry first (exit 4), show the exact paths, then require one confirmation before the destructive pass. <code>optimize</code> only reads. <code>upgrade</code> compares the recorded pin against <code>0.5.4</code> and no-ops if identical.</p>
+      <p><code>enable</code>/<code>disable</code> flip a flag, deleting nothing. <code>reindex</code> and <code>purge</code> run dry first (exit 4), show the exact paths, then require one confirmation before the destructive pass. <code>reindex</code> stages and swaps only <code>index-code-config-docs</code>; sibling content variants survive. <code>optimize</code> only reads. <code>upgrade</code> compares the recorded pin against <code>0.5.5</code> and no-ops if identical.</p>
     </div>
   </li>
   <li class="step step-primary">
@@ -188,17 +202,16 @@ Subsequent searches are sub-second and require the absolute repo path:
 |------|--------|---------|
 | `status` | full report: prereqs, MCP, cache, guidance, agents, coverage, state — **the default on empty input** | no |
 | `install` | install `uv`, register `semble_code` at user scope, wire the rule, `.sembleignore`, `CLAUDE.md`, hooks, permissions and agent migration, checkpoint for reload | yes |
-| `upgrade` | compare the recorded pin against `0.5.4`, re-register if different, then unconditionally re-sync the rule, `.sembleignore`, hooks and permissions — the only path that moves the artifact version stamp | yes |
+| `upgrade` | compare the recorded pin against `0.5.5`, re-register if different, then unconditionally re-sync the rule, `.sembleignore`, hooks and permissions — the only path that moves the artifact version stamp | yes |
 | `enable` | turn back on: verify, warm, phase -> `ready` | yes |
 | `disable` | `enabled=false` — hooks go silent, nothing deleted | yes |
 | `uninstall` | four flavours: `integration` / `mcp` / `cli` / `purge` | yes |
-| `purge` | everything, including the code cache root — typed confirmation required | yes |
-| `reindex` | extra: stage a rebuild in a private cache root, verify it with a warm query, delete the live index only after the staged build proves itself, then swap the staged copy in | yes |
+| `purge` | everything, including the shared cache root and all repository/content variants under it — typed confirmation required | yes |
+| `reindex` | extra: stage and verify the combined variant, replace only `index-code-config-docs`, preserve sibling variants, then remove a legacy combined bare `index` only when its metadata matches | yes |
 | `optimize` | extra: read-only audit fan-out with concrete recommendations — reads current cache size, staleness and entry count via `semble-cache.sh info --json` (figures vary by machine/repo, no fixed number published) | no |
 | `resume` | extra: after reload — smoke query, then an idempotent self-repair re-run of the same wiring, `phase -> ready` | yes |
-| `warm` | free-text intent ("warm", "прогрей") — pre-builds the index, deletes nothing | yes (cache write only) |
 
-The first seven rows are the canonical vocabulary shared by every `-setup` skill. `reindex`, `optimize` and `resume` are semble-specific extras with no equivalent elsewhere. The retired verbs `setup`, `update` and `remove` are gone; free-text intent in RU or EN still routes to the right mode.
+The first seven rows are the canonical vocabulary shared by every `-setup` skill. `reindex`, `optimize` and `resume` are semble-specific extras with no equivalent elsewhere. `warm` is not a mode: free text such as `warm the cache` routes to `reindex` and takes its no-delete `semble-project.sh warm` branch. `setup`, `update` and `remove` remain accepted free-text synonyms for `install`, `upgrade` and `uninstall`; English and Russian input are both supported.
 
 ### Prerequisites
 
@@ -214,9 +227,9 @@ The first seven rows are the canonical vocabulary shared by every `-setup` skill
 | Surface | Location |
 |---------|----------|
 | MCP server | `~/.claude.json` `.mcpServers.semble_code`, user scope — `-s user` is mandatory, the CLI default is `local`. Every mutation is rollback-safe: a failed `add`/`repair` restores the file it was about to overwrite instead of leaving it half-written |
-| Command | `uvx --from 'semble[mcp]==0.5.4' semble --content <SEMBLE_CONTENT_ARGS>` (Corpus below has the actual token list) |
-| Code cache root | absolute `SEMBLE_CACHE_LOCATION`: macOS `~/Library/Caches/semble-code` / Linux `${XDG_CACHE_HOME:-~/.cache}/semble-code` |
-| Docs cache root | same path with a `semble-docs` leaf — created empty, **reserved, never registered** |
+| Command | `uvx --from 'semble[mcp]==0.5.5' semble --content <SEMBLE_CONTENT_ARGS>` (Corpus below has the actual token list) |
+| Shared cache root | absolute `SEMBLE_CACHE_LOCATION`: macOS `~/Library/Caches/semble-code` / Linux `${XDG_CACHE_HOME:-$HOME/.cache}/semble-code` |
+| Content variants | one hashed repository directory with `index` for code-only and `index-<sorted-content>` for every other exact selection; `docs` and `config` use narrower siblings, while the registered corpus and `all` both use `index-code-config-docs` |
 | State | `<repo>/.claude/semble/state.json` — project root resolved by the canonical recipe: `CLAUDE_PROJECT_DIR` -> `git rev-parse --show-toplevel` -> an upward walk for `.git`/`.claude` -> `PWD` |
 | Rule | `<repo>/.claude/rules/semble-first.md` |
 | Ignore file | `<repo>/.sembleignore` — keeps generated/vendored trees out of the corpus; managed like the rule (user edits reported, never clobbered) and gets an appended, **commented-out** block of measured candidates (duplicate trees, disproportionately heavy directories) — nothing is excluded until the user uncomments a line |
@@ -348,16 +361,16 @@ The stamp lives in the frontmatter of `.claude/rules/semble-first.md` (`version:
 
 ### Reload boundary
 
-A newly registered MCP server is not usable until a **new Claude Code session**. `install` writes the checkpoint and stops there — it never claims success it cannot verify. `/brewcode:semble-setup resume` continues at the smoke query in the new session.
+A newly registered MCP server is not usable by Claude until a **new Claude Code session** loads its tools. `install` writes the checkpoint and stops there. `/brewcode:semble-setup resume` then runs the pinned CLI smoke — which does not require MCP connectivity — and completes verification in the new session.
 
 ### Tool contract
 
-Both `mcp__semble_code__search` and `mcp__semble_code__find_related` require an absolute `repo` argument — it is never inferred. Results carry `file_path`, `start_line`, `end_line`, `score` and optional `content` — there is no `line` field. Defaults: `top_k=5`, `max_snippet_lines=10`.
+Both `mcp__semble_code__search` and `mcp__semble_code__find_related` require `repo` — an absolute project root or an explicit HTTP(S) Git URL. It is never inferred. Both accept optional `content=code|docs|config|all`; omitting it uses the registered `code docs config` selection. `docs` and `config` select narrower siblings, while `all` resolves to the same three types and `index-code-config-docs` variant as the registered selection. Results carry `file_path`, `start_line`, `end_line`, `score` and optional result `content` — there is no result `line` field. Defaults: `top_k=5`, `max_snippet_lines=10`.
 
 ### Corpus and coverage
 
 <Callout type="note">
-  Corpus is the `--content` set named by `SEMBLE_CONTENT_ARGS` (currently `code docs config`) — `docs` is mandatory: markdown lives in semble's doc-language bucket, so a `code config` corpus indexes zero `.md` files. `.html`/`.htm` **are** indexed, in the docs bucket. `.json`/`.json5`/`.csv`/`.tsv`/`.psv` are excluded from every content type, unreachable even with `--content all`; `.mdx`/`.txt` are absent from semble's extension table entirely. `rg` stays the tool for those, and for exact identifiers, regexes, and exhaustive enumeration.
+  The registered/default corpus is the `--content` set named by `SEMBLE_CONTENT_ARGS` (currently `code docs config`) and lives in `index-code-config-docs`. Per-call `code`, `docs`, or `config` chooses its exact narrower variant without replacing another selection; `all` resolves to the same three types and reuses `index-code-config-docs`. `docs` is what includes Markdown; a `code config` selection indexes zero `.md` files. `.html`/`.htm` are in the docs bucket. `.json`/`.json5`/`.csv`/`.tsv`/`.psv` are excluded from every content type, unreachable even with `content=all`; `.mdx`/`.txt` are absent from semble's extension table entirely. `rg` stays the tool for those, and for exact identifiers, regexes, and exhaustive enumeration.
 </Callout>
 
 ### Honest limits
@@ -367,8 +380,8 @@ Both `mcp__semble_code__search` and `mcp__semble_code__find_related` require an 
 | No watcher, no daemon | The index is built inside a tool call and cached; staleness is re-checked per call. Nothing runs in the background. |
 | Every shell-out is time-bounded, with or without `coreutils` | `sc_timeout` uses `timeout`/`gtimeout` when a binary is present and a pure-bash watchdog when none is — the report's `timeout.bounded` is always `true`. `coreutils` only upgrades which binary enforces the bound; it is never required and never a reason a run can fail. |
 | Cold cache = slow first query | The embedding model download can take up to 600s and fails offline with a cold HuggingFace cache. |
-| Docs corpus is reserved, not registered | The per-repo cache key does not encode content type — mixing code and docs in one cache dir would collide and invalidate on every call, so the docs root exists empty and untouched. |
-| `semble clear index` wipes everything under the cache root | There is no per-repo rebuild CLI; `reindex` rebuilds into a private staging root first and only deletes the live `<code root>/<64-hex>` directory once the staged build has answered a real query — a failed or skipped staged warm leaves the live index untouched. If the final swap (`mv staged -> live`) itself fails, the staged index is kept on disk and its path is printed for manual recovery, never silently discarded. |
+| Exact content selections share one root without sharing an index | Semble 0.5.5 stores exact selections below the repository hash: code-only is `index`; `docs` and `config` use narrower siblings; the registered combined corpus and `all` both use `index-code-config-docs`. |
+| `semble clear index` wipes every repository and variant under the shared root | There is no selective rebuild CLI, so `reindex` builds `index-code-config-docs` in a private staging root, proves a real query, and swaps only that live variant. A failed or skipped staged warm leaves every live variant untouched; a failed final swap keeps the staged path for recovery. A pre-0.5.5 combined bare `index` is removed only after its metadata identifies the same `code docs config` corpus and the replacement is live. |
 | Windows is unsupported | The skill refuses every mutation on a non-macOS/Linux platform. |
 
 ### Removal flavours
@@ -378,7 +391,7 @@ Both `mcp__semble_code__search` and `mcp__semble_code__find_related` require an 
 | `integration` | removed | kept | semble entries removed | kept | kept |
 | `mcp` | kept | removed | kept | kept | kept |
 | `cli` | kept | kept | kept | kept | uninstalled |
-| `purge` | removed | removed | removed | code root removed | typed confirmation |
+| `purge` | removed | removed | removed | shared cache root removed | typed confirmation |
 
 <CardGrid>
   <Card title="brewcode overview" icon="rocket" href="/brewcode/overview/">

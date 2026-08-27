@@ -782,7 +782,7 @@ if (verdict === "ready") {
   const missInstall = INSTALL_STEPS.filter(function (s) { return done.indexOf(s) < 0; });
   if (missInstall.length) { why.push("install steps not recorded: " + missInstall.join(", ")); }
   if (cacheSec && !isErr(cacheSec) && cacheSec.present === false) {
-    why.push("no index in the cache");
+    why.push("no current content variant in the shared cache");
   }
   if (agentsSec && !isErr(agentsSec) && typeof agentsSec.needsPatch === "number" && agentsSec.needsPatch > 0) {
     why.push(agentsSec.needsPatch + (agentsSec.needsPatch === 1 ? " agent needs" : " agents need") + " patching");
@@ -886,9 +886,9 @@ if (jsonMode) {
       const c = report.cache;
       L.push("cache:    " + (c.codeRoot || "unknown") +
         " | repo " + (c.repoHash ? String(c.repoHash).slice(0, 8) : "unknown") +
+        " | variant " + (c.indexLeaf || "unknown") +
         " | " + fmtBytes(c.sizeBytes) +
-        " | " + (c.staleness || "unknown") +
-        " | docs root reserved: " + (c.docsReserved === true ? "yes" : "no"));
+        " | " + (c.staleness || "unknown"));
     }
   }
   if (report.guidance) {

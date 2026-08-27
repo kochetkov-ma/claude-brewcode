@@ -1,226 +1,207 @@
 # MCP registration and cache layout
 
-> Ground truth for `semble_code`: what gets registered, how it is detected, where the index lives, and how a rebuild is guarded.
-> Verified against semble **0.5.4** (sdist) and Claude Code **2.1.223**. Owner: `scripts/semble-mcp.sh`, `scripts/semble-cache.sh`, `scripts/semble-state.sh`.
+Ground truth for `semble_code`: registration, detection, exact 0.5.5 cache variants, and guarded rebuild/removal. Owners: `scripts/semble-mcp.sh`, `scripts/semble-cache.sh`, `scripts/semble-project.sh`, `scripts/semble-remove.sh`, and `scripts/lib/semble-common.sh`.
 
-## Constants
+Verified against the `semble` 0.5.5 wheel. Claude Code `alwaysLoad` behavior and `add-json` limitation were verified on 2.1.226.
 
-| Item | Value |
-|------|-------|
-| Server name | `semble_code` |
-| Pin | `'semble[mcp]==0.5.4'` — always single-quoted (zsh globs `[ ]`), never floating |
-| Scope | `user` (CLI default is `local`, so `-s user` is mandatory) |
-| Content set | `--content code docs config` (three argv tokens, this order). `docs` is what makes `.md` searchable — `files.py` puts `markdown` in `_DOC_LANGUAGES`, so a `code config` corpus indexes **zero** markdown. Single source of truth: `SEMBLE_CONTENT_ARGS` in `lib/semble-common.sh`; the MCP registration and every CLI invocation must pass it verbatim |
-| `alwaysLoad` | `true` — **mandatory**. Top-level optional boolean on the stdio server object (Claude Code 2.1.226 zod schema; `isDeferredTool()` returns false when set). With `ENABLE_TOOL_SEARCH=true` the MCP tool schemas are deferred, so without this key the model must run `ToolSearch` before it can call `mcp__semble_code__search` — every nudge points at a tool it cannot see. There is **no `claude mcp add` flag** for it; only `add-json` can write it |
-| Cache env | `SEMBLE_CACHE_LOCATION` — **must be absolute**, a relative value is silently ignored (`cache.py:60-68`) |
-| Code root | macOS `$HOME/Library/Caches/semble-code` · Linux `${XDG_CACHE_HOME:-$HOME/.cache}/semble-code` |
-| Docs root | same base, `semble-docs` leaf — **reserved only**, never registered in this skill |
-| Tools | `mcp__semble_code__search`, `mcp__semble_code__find_related` — exact names, never a wildcard |
-| Tool params | `query` (or `file`+`line`) **and a required `repo`**: absolute local path or `http(s)` git URL |
-| Result fields | `file_path`, `start_line`, `end_line`, `score`, optional `content` — there is no `line` |
+## Approved registration
 
-The `[mcp]` extra is not optional: `cli.py:78-80` exits 1 without it.
+| Item | Contract |
+|---|---|
+| Server | `semble_code`, stdio |
+| Package | `'semble[mcp]==0.5.5'`; exact pin, single-quoted in shell because zsh globs brackets |
+| Scope | `user`; Claude CLI defaults to `local`, so `-s user` is mandatory |
+| Default corpus | `--content code docs config`, in that argv order; `docs` makes Markdown searchable |
+| Cache | one absolute `SEMBLE_CACHE_LOCATION`: macOS `$HOME/Library/Caches/semble-code`; Linux `${XDG_CACHE_HOME:-$HOME/.cache}/semble-code` |
+| Visibility | top-level `alwaysLoad: true`; only `add-json` can preserve it |
+| Tools | `mcp__semble_code__search`, `mcp__semble_code__find_related`; never wildcard permissions |
 
-## Exact commands
+The `[mcp]` package extra is required; the CLI exits non-zero without it.
 
-Primary — what `semble-mcp.sh add` and `repair` run. `add-json` is the **only**
-form that can carry `alwaysLoad`, so it goes first:
+Primary registration:
 
 ```bash
-claude mcp add-json semble_code -s user '{"type":"stdio","command":"uvx","args":["--from","semble[mcp]==0.5.4","semble","--content","code","docs","config"],"env":{"SEMBLE_CACHE_LOCATION":"<ABSOLUTE CODE ROOT>"},"alwaysLoad":true}'
+claude mcp add-json semble_code -s user '{"type":"stdio","command":"uvx","args":["--from","semble[mcp]==0.5.5","semble","--content","code","docs","config"],"env":{"SEMBLE_CACHE_LOCATION":"<ABSOLUTE SHARED ROOT>"},"alwaysLoad":true}'
 ```
 
-Degraded fallback, used only when `add-json` exits non-zero. It is what
-`sc_mcp_add_cmd` prints, and it writes an entry **without** `alwaysLoad`, which
-`detect` then reports as `stale_args`; follow it with `repair --yes`:
+Degraded fallback when `add-json` fails:
 
 ```bash
 claude mcp add semble_code -s user \
   -e SEMBLE_CACHE_LOCATION="$HOME/Library/Caches/semble-code" \
-  -- uvx --from 'semble[mcp]==0.5.4' semble --content code docs config
+  -- uvx --from 'semble[mcp]==0.5.5' semble --content code docs config
 ```
 
-`add-json` refuses to overwrite an existing entry ("MCP server semble_code
-already exists in user config"), which is why `repair` removes every scope
-first and only then re-adds.
+The fallback cannot set `alwaysLoad`; detection therefore returns `stale_args` and the next repair must use `add-json`. `add-json` does not overwrite an existing entry, so repair removes every `semble_code` scope before re-adding user scope. Removal is `claude mcp remove semble_code -s user`.
 
-Removal: `claude mcp remove semble_code -s user`.
+This is a local stdio child and has no server authentication secret. The registration stores only the absolute cache path. Never copy credentials, auth state, histories, or tokens into MCP config or setup state.
 
-Non-negotiable notes:
+## Tool schema
 
-- `claude mcp list` / `get` take **no flags and have no `--json`**. Configuration truth is read from `~/.claude.json` and `<root>/.mcp.json` by `sc_mcp_dump`; `get` contributes its **exit status only**, as the `connectivity` signal (`unknown | connected | failed`).
-- Direct `~/.claude.json` editing is a recovery-only path: only for `malformed`/`duplicate`, only after `sc_backup`, only via `node -e`, only with the user's confirmation. `~/.claude/*` is harness-protected — user-scope mutation is Bash-only.
-- Never run bare `semble` or `semble <unknown-arg>`: any unrecognised argv starts a **blocking** MCP stdio server (`cli.py:63-68`). Safe probes: `--help`, `search`, `find-related`, `clear`, `savings`.
-- Never run `semble install` / `semble uninstall` — it writes an unpinned server named `semble` into `~/.claude.json` (`installer/agents.py:28-32`). We only detect it.
-- **There is no watcher and no daemon** (README's claim is false; `mcp.py:29,220-240`). Staleness is re-checked inside each tool call behind a `3 x last-build-duration` cooldown. Nothing here starts, stops, or reports a background process.
-- The embedding model is pre-loaded at server startup and tool calls block on it. Offline with a cold HF cache = every call errors.
-- A newly registered MCP server is not available until a **new** Claude Code session.
+Both tools require `repo`: an absolute local root or explicit `http(s)` Git URL. It is never inferred.
 
-## Persistence locations
+| Parameter | Contract |
+|---|---|
+| `content` | Optional `code | docs | config | all`; omitted uses registered `code docs config`. `all` currently resolves to those same three types |
+| `top_k` | Default `5`, minimum `1` |
+| `max_snippet_lines` | Default `10`; `0` returns locations only; `None` returns the full chunk |
+| Results | `file_path`, `start_line`, `end_line`, `score`, optional result `content`; there is no result field named `line` |
 
-| Scope | File | Path inside it |
-|-------|------|----------------|
-| user | `~/.claude.json` | `.mcpServers.semble_code` |
-| local | `~/.claude.json` | `.projects["<abs root>"].mcpServers.semble_code` |
-| project | `<root>/.mcp.json` | `.mcpServers.semble_code`, gated by `enabledMcpjsonServers` / `disabledMcpjsonServers` in `.projects["<abs root>"]` |
+Each per-call content selection addresses its own on-disk and in-memory variant. A `docs` query does not evict `code`, and omitting `content` returns to the registered combined variant.
 
-## Detection matrix
+## Configuration authority and detection
 
-`sc_mcp_state` returns exactly one word. Precedence: `malformed` > `duplicate` > `wrong_scope` > `stale_args` > `upstream_unpinned` > `correct` > `absent`.
+| Scope | Storage |
+|---|---|
+| user | `~/.claude.json` → `.mcpServers.semble_code` |
+| local | `~/.claude.json` → `.projects["<absolute root>"].mcpServers.semble_code` |
+| project | `<root>/.mcp.json` → `.mcpServers.semble_code`, plus the project's enabled/disabled MCP lists |
 
-| State | Definition | Response |
-|-------|------------|----------|
-| `absent` | no `semble_code` in user/local/project | `install`: checkpoint -> `claude mcp add-json` -> `awaiting_reload`. `status`: "not registered", Next Step = install |
-| `correct` | user scope, `command=uvx`, args exactly `--from semble[mcp]==0.5.4 semble --content code docs config`, `env.SEMBLE_CACHE_LOCATION` == code root, `type` absent or `stdio`, **and `alwaysLoad === true`** | no MCP mutation; continue to verification |
-| `stale_args` | present in exactly one scope, but command/args/env/type/`alwaysLoad` differ (old pin, floating spec, wrong content set, relative or wrong cache root, **missing `alwaysLoad`**) | show the exact before/after diff, confirm once, then `remove` + `add-json`, checkpoint, reload |
-| `wrong_scope` | args correct but scope is `local` or `project` | report; ask whether to migrate to `user` or keep. Migrate = add at user, remove from the other scope, checkpoint, reload |
-| `duplicate` | `semble_code` in more than one scope | ALWAYS ask which to keep; remove the others; back up `~/.claude.json` and `.mcp.json` first |
-| `upstream_unpinned` | a server literally named `semble` exists (from `semble install`) — with or without a correct `semble_code` | never auto-remove. Report the conflict: unpinned floating spec, default single-corpus cache root, tools named `mcp__semble__*`. Offer removal as an explicit choice; default is keep-and-warn |
-| `malformed` | `~/.claude.json` or `<root>/.mcp.json` is unparseable | **STOP.** Never write. Report the file and the parser message. Next Step = fix it by hand |
+`sc_mcp_dump` reads those files; `claude mcp list/get` take no diagnostic flags, expose no JSON mode, and are not configuration authority. `get` contributes only a bounded connectivity exit status. Direct `~/.claude.json` editing is recovery-only: malformed/duplicate repair, explicit confirmation, backup first, Node JSON rewrite, then re-read verification.
 
-Extra signal: `sc_mcp_dump.projectEnabled === false` means the server sits in `disabledMcpjsonServers` — report "disabled at project scope" even when the config is otherwise correct.
+`sc_mcp_state` precedence:
 
-## `sc_mcp_dump` output
+`malformed > duplicate > wrong_scope > stale_args > upstream_unpinned > correct > absent`
 
-```json
-{"user":{"type":"stdio","command":"uvx","args":["..."],"env":{"SEMBLE_CACHE_LOCATION":"..."}},
- "local":null,"project":null,"upstreamUser":null,"upstreamLocal":null,
- "malformed":[],"projectEnabled":null}
-```
+| State | Meaning |
+|---|---|
+| `correct` | One user entry; no upstream `semble` conflict; `uvx`; exact 0.5.5 args/default corpus/shared root; `type` absent or `stdio`; `alwaysLoad === true` |
+| `stale_args` | Pin, command, env, type, content argv, or `alwaysLoad` differs |
+| `wrong_scope` | One local/project entry; scope precedence wins even if its args also drift |
+| `duplicate` | More than one `semble_code` scope; ask which to keep and back up affected config files |
+| `upstream_unpinned` | A server literally named `semble` exists, with or without `semble_code`; it uses a floating package, default code-only corpus, and `mcp__semble__*` names; report, never auto-remove |
+| `malformed` | A config file is unparseable; stop and write nothing |
+| `absent` | No `semble_code` entry |
 
-## Permissions
+`projectEnabled === false` is a separate disabled-at-project signal. A newly registered server needs a fresh Claude Code session.
 
-Exactly two entries, no wildcard, written into the **project** `.claude/settings.json` by `semble-guidance.sh`:
+Never run bare `semble`, an unknown argument, or `semble install/uninstall`: unrecognized argv starts the blocking MCP server, while upstream install writes a floating server named `semble`. Safe version probing uses `--version` only for pins `>=0.5.4`; older pins use `--help`. The server has no watcher/daemon; local staleness is checked during calls behind an upstream cooldown, and the embedding model is loaded at startup. Offline calls fail when that model is absent from the local Hugging Face cache.
+
+Project permissions contain exactly:
 
 ```json
 {"permissions":{"allow":["mcp__semble_code__search","mcp__semble_code__find_related"]}}
 ```
 
-## Cache layout
+## One shared cache, exact variants
 
-| Item | Value |
-|------|-------|
-| Per-repo dir | `<code root>/<sha256(str(Path(repo).expanduser().resolve()))>` — hex, 64 chars |
-| Index files | `<repo dir>/index/{chunks.json,metadata.json,bm25_index/,semantic_index/}` |
-| Root extra | `<code root>/savings.jsonl` |
-| `metadata.json` | `{root_path,time,model_path,content_type:["code","docs","config"],chunk_size,cache_version:1,files:{<rel>:{mtime_ns,start,count}}}` |
-| Reuse condition | `model_path` AND `set(content_type)` AND `chunk_size` AND `cache_version` all match, then every walked file must be present and not newer than `time` |
-
-The shell hash (`sc_repo_hash`) is `printf '%s' "$(cd REPO && pwd -P)" | shasum -a 256`. `cd`+`pwd -P` and `Path.resolve()` agree on symlink expansion, trailing slashes, `.`/`..` and `/`; they differ only for non-existent paths, where `sc_repo_hash` returns exit 1 and callers report `unknown` rather than a wrong hash.
-
-### Why every consumer must pass the same content set (the proof)
-
-The per-repo directory name is `sha256(resolved repo path)` and **the content type is not part of it** (`cache.py:27-36`). Two content sets over the same repo therefore land in the *same* directory, while `_metadata_matches` (`cache.py:111`) requires `set(content_type) == set(content)` — so each consumer judges the other's index invalid and rebuilds it, on every call.
-
-Measured on this repo (isolated `SEMBLE_CACHE_LOCATION`, sharing one directory): alternating `--content code config` with a bare `semble search` (whose default is `code`) cost 1.99s / 1.78s / 1.91s / 1.95s — a full rebuild every time, never a warm hit. With both consumers pinned to `code docs config`: 5.43s cold, then 0.74s / 0.81s / 0.74s.
-
-That is why `SEMBLE_CONTENT_ARGS` is a single constant and why `semble-project.sh` interpolates it into `warm`, `smoke` and the `reindex` re-warm rather than spelling the flag out. Grep for a literal `--content` before adding any new invocation.
-
-The `semble-docs` root is the same argument applied to a *separate* corpus, and it is now moot: docs are part of the one registered corpus. `semble-cache.sh reserve-docs` still creates the root with a `RESERVED-FOR-DOCS.txt` marker and nothing else; no command in this skill ever passes it to semble.
-
-### Staleness verdicts (`semble-cache.sh info`)
-
-| Verdict | Condition |
-|---------|-----------|
-| `absent` | repo dir or `index/` missing |
-| `incomplete` | any of the 4 persistence paths missing |
-| `unknown` | metadata unreadable, or `SEMBLE_NO_NETWORK=1` |
-| `mismatch` | `metadata.content_type` set != `{code,docs,config}`, or `cache_version != 1` |
-| `stale` | a file listed in `metadata.files` is missing or newer than `metadata.time` |
-| `fresh` | none of the above |
-
-Evaluated in that order. This approximates `get_validated_cache`; report `stale` as "likely stale" and offer a rebuild, never act on it automatically.
-
-## Per-repo rebuild
-
-There is **no CLI for it**: `semble clear index` wipes every index under the root (`_clear_indexes`, `cli.py:147-163`). `semble clear orphans` (new in 0.5.4, `_clear_orphans`, `cli.py:176-199`) is narrower but still not per-repo — it deletes only the indexes whose recorded `root_path` no longer exists. The only correct rebuild is to delete one directory and let the next query rebuild it:
-
-```bash
-rm -rf "<code root>/<repo hash>"
-```
-
-`semble-cache.sh purge-repo` performs it behind four guards, all mandatory:
-
-1. the hash resolves from the repo path (`sc_repo_hash`, exit 1 otherwise),
-2. the leaf matches `^[0-9a-f]{64}$`,
-3. the parent is exactly the code cache root,
-4. `--yes` was passed (otherwise exit 4, nothing deleted).
-
-`purge-root` additionally requires the root's leaf to be exactly `semble-code` or `semble-docs` and the path to be absolute.
-
-## Script contracts
-
-Common: `--json` prints a single JSON object and nothing else; `-h|--help` prints usage. Exit codes: `0` ok · `1` abort/failure (nothing written) · `2` usage · `3` precondition unmet · `4` confirmation required (`--yes` missing, nothing written). `SEMBLE_DRY_RUN=1` prints every mutating command prefixed `DRY ` and changes nothing.
-
-### `semble-mcp.sh`
+There is one current root and no reserved docs root.
 
 ```text
-semble-mcp.sh detect     [--json]
-semble-mcp.sh add        [--scope user|project|local] [--yes] [--json]
-semble-mcp.sh repair     [--yes] [--json]
-semble-mcp.sh remove     [--scope user|project|local] [--yes] [--json]
-semble-mcp.sh checkpoint [--json]
-semble-mcp.sh print-cmd  [--json]
+<shared root>/
+├── savings.jsonl
+└── <sha256(source key)>/
+    ├── index/                         # code only
+    ├── index-config/                  # per-call config
+    ├── index-docs/                    # per-call docs
+    └── index-code-config-docs/        # registered default and content=all
 ```
 
-- `detect --json` -> `{"schema":1,"state":"<matrix word>","dump":{...},"expected":{"command","args","env","alwaysLoad"},"diff":[{"field","actual","expected"}],"connectivity":"unknown|connected|failed"}`. A registration missing `alwaysLoad` yields a `{"field":"alwaysLoad","actual":"","expected":"true"}` diff row; the human output adds an explicit warning that the tool stays deferred behind `ToolSearch`.
-- `add` writes the checkpoint (`phase=awaiting_reload`) **before** the add, always; if the checkpoint fails, the add does not run. Already-correct -> `unchanged`, exit 0. Present but different -> exit 3 with "run repair". Missing `--yes` -> exit 4. `claude mcp add-json` failing is retried once with the degraded `claude mcp add` (which warns, since it cannot set `alwaysLoad`); a second failure reports `failed`, rolls the phase back to `prereq_ready` with a note, and exits 1.
-- `repair` backs up `~/.claude.json` (and `.mcp.json` at project scope), removes every scope holding the server, checkpoints, re-registers at user scope with `add-json`, then re-detects and asserts.
-- `remove` backs up first and re-detects afterwards to assert the scope is clear.
-- `--scope` defaults to `user`; anything else prints a warning that the main workflow expects user scope.
-- Mutating subcommands emit `{"schema":1,"status":"ok|unchanged|needs_confirmation|precondition|failed","state":"...","scope":"...","note":"..."}`.
+For local repos, the key is SHA-256 of `str(Path(repo).expanduser().resolve())`. `sc_repo_hash` matches it with `cd REPO && pwd -P`; a missing path returns failure instead of inventing a hash.
 
-### `semble-cache.sh`
+Semble 0.5.5 names an exact variant as follows:
+
+1. deduplicate and sort the selected content values;
+2. join them with `-`;
+3. use `index` only when the scope is exactly `code`; otherwise use `index-<scope>`.
+
+`SEMBLE_CONTENT_ARGS="code docs config"` is the default-corpus source of truth. `sc_content_scope`, `sc_index_leaf`, the MCP registration, CLI warm/smoke, prefetch hook, and staged reindex must agree. Do not hardcode a second default corpus.
+
+Every variant contains `chunks.json`, `metadata.json`, `bm25_index/`, and `semantic_index/`. Metadata includes `root_path`, `time`, `model_path`, `content_type`, `chunk_size`, `cache_version`, and the file manifest. Reuse requires matching model, content set, chunk size, cache version, and current walked files.
+
+### Historical layouts
+
+- Before 0.5.5, every content selection used bare `index`. Alternating content sets could invalidate and rebuild the same directory. The current reader never accepts a combined `code docs config` bare index as the 0.5.5 combined variant.
+- Older Brewcode installs also created an unused marker-only `<cache base>/semble-docs`. It is not a current cache surface. Full purge removes it only when the path is a real non-symlink directory whose sole entry is a regular `RESERVED-FOR-DOCS.txt`; empty, repurposed, unreadable, or symlink-shaped paths survive.
+
+Historical isolated measurement on the old single-index layout: alternating `code config` and default `code` rebuilt in 1.99/1.78/1.91/1.95 seconds; one shared `code docs config` corpus was 5.43 seconds cold and 0.74/0.81/0.74 seconds warm. These numbers explain the old failure mode; 0.5.5 variants remove that collision.
+
+## Cache commands
 
 ```text
-semble-cache.sh info         [--repo PATH] [--json]
-semble-cache.sh resolve      [--repo PATH] [--json]
-semble-cache.sh reserve-docs [--json]
-semble-cache.sh purge-repo   [--repo PATH] --yes [--json]
-semble-cache.sh purge-root   [--which code|docs] --yes [--json]
-semble-cache.sh list         [--json]
+semble-cache.sh info       [--repo PATH] [--json]
+semble-cache.sh resolve    [--repo PATH] [--json]
+semble-cache.sh list       [--json]
+semble-cache.sh purge-repo [--repo PATH] --yes [--json]
+semble-cache.sh purge-root --yes [--json]
 ```
 
-`--repo` defaults to the resolved project root. `info --json` is the `cache` object of the status report plus `otherRepos`:
+`reserve-docs` and `--which docs` no longer exist. `--repo` defaults to the resolved project root.
+
+### Read operations
+
+- `resolve` returns the shared root, repo hash/dir, selected `indexLeaf`/`indexDir`, and migration-only `legacyIndexDir`.
+- `info` inspects every `index`/`index-*` sibling and returns `repoPresent`, selected-variant `present`, `variants[]`, selected metadata, `legacyPresent`, whole-repo size/count, staleness, and variant names for `otherRepos`.
+- `list` returns every 64-hex repo entry and all variants beneath it; it never collapses or deletes siblings.
+
+Representative `info --json` shape:
 
 ```json
-{"codeRoot":"","docsRoot":"","docsReserved":false,"repoHash":"","repoDir":"","present":false,
- "sizeBytes":0,"entries":0,"metadata":null,"staleness":"absent",
- "otherRepos":[{"hash":"","sizeBytes":0,"rootPath":""}]}
+{
+  "codeRoot": "<shared root>",
+  "repoHash": "<64 hex>",
+  "repoDir": "<shared root>/<hash>",
+  "repoPresent": true,
+  "indexLeaf": "index-code-config-docs",
+  "indexDir": "<repo dir>/index-code-config-docs",
+  "legacyIndexDir": "<repo dir>/index",
+  "legacyPresent": false,
+  "present": true,
+  "variants": [{"name":"index-code-config-docs","desired":true,"legacyCombined":false,"state":"fresh"}],
+  "metadata": {},
+  "staleness": "fresh",
+  "otherRepos": []
+}
 ```
 
-`entries` counts files (recursively) inside the repo cache dir; `sizeBytes` is their exact total. `otherRepos` lists every other 64-hex entry under the code root with the `root_path` from its own `metadata.json`.
+Selected-variant staleness is evaluated in order:
 
-### `semble-state.sh`
+| Verdict | Condition |
+|---|---|
+| `absent` | selected variant missing and no verified legacy combined bare index |
+| `legacy` | selected variant missing; bare `index` metadata names exactly `code docs config` |
+| `incomplete` | any required persistence path missing |
+| `unknown` | metadata unreadable or `SEMBLE_NO_NETWORK=1` |
+| `mismatch` | selected metadata content set or cache version differs |
+| `stale` | recorded source missing or newer than metadata time |
+| `fresh` | none of the above |
+
+### Purge operations
+
+- `purge-repo` deletes the exact hashed repo directory and therefore all its variants. Guards require an absolute shared root ending in `semble-code`, a directly nested 64-hex repo leaf, a resolvable repo path, and `--yes`.
+- `purge-root` deletes the entire absolute shared root—every repo and variant—only when its leaf is exactly `semble-code` and `--yes` is present.
+- `semble clear index` is not a per-repo alternative: upstream scans every `*/index*` and removes their repo directories. `clear orphans`, introduced in 0.5.4, is also root-wide and only removes entries whose recorded local root no longer exists.
+
+Dry run prints `DRY <command>` and mutates nothing. Unknown `--which` values, including the removed `docs` selector, fail before deletion.
+
+## Selective staged reindex
+
+`semble-project.sh reindex` is the safe one-variant rebuild:
+
+1. Resolve `<shared root>/<hash>/<selected leaf>` and require `--yes`.
+2. Build the same content set under `<shared root>/.staging.<pid>/<hash>/<selected leaf>`.
+3. Require a real successful search and the staged selected-variant directory; skipped, empty, failed, or missing staging preserves live state.
+4. Move only the live selected variant aside inside staging, move the verified replacement into place, and restore the previous variant when the swap fails.
+5. Preserve every sibling variant, including a valid code-only bare `index`.
+6. Remove bare `index` only when its metadata proves it is the pre-0.5.5 combined `code docs config` cache and the new combined variant is already live.
+7. Remove staging, record `warm`, and advance state to ready.
+
+Never rebuild by deleting the hashed repo directory first. The preview names `indexDir`, `wouldDelete`, whether `legacyCombined` was verified, and the staged search command.
+
+## Script and state safety
+
+All JSON modes emit one JSON object. Common exits: `0` success, `1` guarded failure, `2` usage, `3` precondition, `4` confirmation required. Malformed JSON/state stops before writes; every configuration mutation is backed up and re-read.
+
+State lives at `<project>/.claude/semble/state.json` (schema 1). `sc_state_patch` preserves unknown keys, union-merges `completed`, refreshes plugin artifact metadata, and verifies the written keys. Store no credentials, session IDs, transcripts, or tool output there. Legal phase flow remains:
 
 ```text
-semble-state.sh init      [--json]
-semble-state.sh get <KEY>
-semble-state.sh show      [--json]
-semble-state.sh phase <PHASE>
-semble-state.sh complete <STEP>...
-semble-state.sh patch '<json object>'
-semble-state.sh clear --yes
+absent -> prereq_ready | error
+prereq_ready -> awaiting_reload | error
+awaiting_reload -> verifying | prereq_ready | error
+verifying -> ready | error
+ready -> verifying | disabled | awaiting_reload
+disabled -> verifying
+error -> verifying | prereq_ready
 ```
 
-State lives in `<projectRoot>/.claude/semble/state.json` (schema 1). Every write goes through `sc_state_patch`: unknown top-level keys are preserved verbatim, `completed` is union-merged, the installer-owned artifact metadata (`version` from `.claude-plugin/plugin.json`, `generated_by`, `last_updated` = `date +%F`) is refreshed, the file is re-read and every patched key asserted. Unparseable state or a `schema` other than `1` ABORTs with exit 1 and writes nothing.
-
-Legal phase transitions (`absent` is the no-file state; `clear` returns to it):
-
-| From | To |
-|------|-----|
-| `absent` | `prereq_ready`, `error` |
-| `prereq_ready` | `awaiting_reload`, `error` |
-| `awaiting_reload` | `verifying`, `prereq_ready` (add rolled back), `error` |
-| `verifying` | `ready`, `error` |
-| `ready` | `verifying`, `disabled`, `awaiting_reload` (re-registration) |
-| `disabled` | `verifying` |
-| `error` | `verifying`, `prereq_ready` |
-
-Identity transitions are legal (a re-run is idempotent). Anything else prints `⚠️ illegal phase transition <from> -> <to>; state left unchanged` and exits 1 without writing.
-
-**Self-heal from `absent`.** The state file is created only inside an MCP mutation. A project that inherits an already-correct **user-scope** registration takes no mutation, so `add` writes the checkpoint on that path explicitly (`unchanged` describes the registration, not the state file) — but the heal stays the safety net for every other way a project can reach a close-out with no state file. `phase awaiting_reload|verifying|ready` therefore initialises the file at `prereq_ready` and walks the forward chain `prereq_ready -> awaiting_reload -> verifying -> ready`, stopping at the requested phase; every hop is checked against the same table and written like any other patch. `--json` reports `"healed":true` with the `walked` array. `disabled` is **not** healable from `absent` (nothing was ever set up to disable) and `prereq_ready`/`error` need no heal — they are already legal from `absent`.
-
-`complete` takes one or more STEPs: separate arguments or a single whitespace-separated string. All tokens are validated first — an unknown one exits 2 naming that token and writes nothing — then the accepted set is union-merged in one patch.
-
-Never store credentials, session ids, transcripts or tool output in the state file; `notes` are authored by the skill, never copied from command output.
+Identity transitions are idempotent. Forward closeout phases can self-heal from absent by creating `prereq_ready` and walking the same graph; absent cannot self-heal to disabled. Illegal transitions write nothing.

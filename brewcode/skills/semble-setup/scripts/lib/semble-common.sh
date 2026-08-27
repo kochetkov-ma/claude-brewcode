@@ -3,18 +3,15 @@
 # Bash 3.2 compatible. No jq: all JSON goes through `node -e`.
 # Callers do:  . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/semble-common.sh"
 
-SEMBLE_PIN_VERSION="${SEMBLE_PIN_VERSION:-0.5.4}"
+SEMBLE_PIN_VERSION="${SEMBLE_PIN_VERSION:-0.5.5}"
 SEMBLE_PIN_SPEC="semble[mcp]==${SEMBLE_PIN_VERSION}"
 SEMBLE_SERVER_NAME="semble_code"
 SEMBLE_UPSTREAM_NAME="semble"
 # THE content set. Single source of truth — the MCP registration and EVERY CLI
-# invocation must pass exactly this, in this order. semble keys its cache
-# directory by project path ALONE (cache.py find_index_from_cache_folder), but
-# _metadata_matches rejects a cached index whose stored content_type set differs
-# from the requested one. Two consumers with different sets therefore share one
-# directory and evict each other on every alternation — a full rebuild each
-# time. `docs` is required for `.md`: files.py puts `markdown` in
-# _DOC_LANGUAGES, so `code config` indexes zero markdown.
+# invocation must pass exactly this, in this order. `docs` is required for `.md`:
+# files.py puts `markdown` in _DOC_LANGUAGES, so `code config` indexes zero
+# markdown. Since semble 0.5.5 each sorted content set has its own index variant
+# below the repo-key directory; this combined corpus is `index-code-config-docs`.
 SEMBLE_CONTENT_ARGS="code docs config"
 # All tools of this server are always in the prompt, never deferred behind
 # ToolSearch. Mandatory: with ENABLE_TOOL_SEARCH=true the model cannot call
@@ -23,15 +20,22 @@ SEMBLE_CONTENT_ARGS="code docs config"
 # top-level optional boolean on the stdio server object and isDeferredTool()
 # returns false for it. There is no `claude mcp add` flag — only add-json.
 SEMBLE_ALWAYS_LOAD=true
-# The same set in the shape semble persists it: metadata.content_type sorted and
-# comma-joined. Every staleness reader compares against THIS, never a literal —
-# the corpus grew from `code config` to `code docs config` and the two hardcoded
-# copies did not follow, so every cache reported `mismatch` and the freshness
-# loop behind it never ran.
+# The same set in the shapes semble persists and names it. Every cache reader
+# derives both forms from THIS value, never a second literal.
 sc_content_set_csv() {
   # Deliberate word split: one token per line.
   # shellcheck disable=SC2086
   printf '%s\n' $SEMBLE_CONTENT_ARGS | sort | paste -sd, -
+}
+sc_content_scope() {
+  local content="${1:-$SEMBLE_CONTENT_ARGS}"
+  # Deliberate word split: normalize like semble 0.5.5's sorted set.
+  # shellcheck disable=SC2086
+  printf '%s\n' $content | sort -u | paste -s -d '-' -
+}
+sc_index_leaf() {
+  local scope; scope="$(sc_content_scope "${1:-$SEMBLE_CONTENT_ARGS}")"
+  [ "$scope" = "code" ] && printf 'index\n' || printf 'index-%s\n' "$scope"
 }
 SEMBLE_TOOL_SEARCH="mcp__semble_code__search"
 SEMBLE_TOOL_RELATED="mcp__semble_code__find_related"
@@ -107,8 +111,9 @@ sc_cache_base() {
     *)      printf '%s\n' "${XDG_CACHE_HOME:-$h/.cache}" ;;
   esac
 }
+# Historical name retained for callers and user configuration. It is the one
+# shared cache root for every 0.5.5 content variant.
 sc_cache_root_code() { printf '%s\n' "${SEMBLE_CACHE_ROOT_CODE:-$(sc_cache_base)/semble-code}"; }
-sc_cache_root_docs() { printf '%s\n' "${SEMBLE_CACHE_ROOT_DOCS:-$(sc_cache_base)/semble-docs}"; }
 
 # ── repo hash — must byte-match semble/cache.py:27-36 ────────────────────────
 # find_index_from_cache_folder(): sha256(str(Path(p).expanduser().resolve()))
@@ -135,11 +140,19 @@ sc_repo_cache_dir() {
   h="$(sc_repo_hash "$p")" || return 1
   printf '%s\n' "$root/$h"
 }
-# NOTE (B, deviation from DESIGN §3.2): the shipped one-liner swallowed a failed
-# sc_repo_cache_dir (command substitution in an argument does not propagate) and
-# printed a bare "/index" with exit 0, contradicting the §3.1 contract "1 if PATH
-# missing". Same stdout for valid input; only the failure path changed.
-sc_repo_index_dir() { local d; d="$(sc_repo_cache_dir "$@")" || return 1; printf '%s\n' "$d/index"; }
+# 0.5.5 cache.py: code-only keeps `index`; every other exact content set uses
+# `index-<sorted-scope>`. A combined cache left at bare `index` is a legacy
+# pre-0.5.5 entry and must not be accepted as the current variant.
+sc_repo_index_dir() {
+  local d
+  d="$(sc_repo_cache_dir "$@")" || return 1
+  printf '%s/%s\n' "$d" "$(sc_index_leaf)"
+}
+sc_repo_legacy_index_dir() {
+  local d
+  d="$(sc_repo_cache_dir "$@")" || return 1
+  printf '%s/index\n' "$d"
+}
 
 # ── tool detection — NEVER invoke bare `semble` (it blocks as an MCP server) ──
 sc_brew_path()      { sc_bin brew; }

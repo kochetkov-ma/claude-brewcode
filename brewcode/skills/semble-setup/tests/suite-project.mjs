@@ -24,7 +24,7 @@ const MCP_SH = join(SCRIPTS, 'semble-mcp.sh');
 const GUIDANCE_SH = join(SCRIPTS, 'semble-guidance.sh');
 const STATUS_SH = join(SCRIPTS, 'semble-status.sh');
 
-const PIN_SPEC = 'semble[mcp]==0.5.4';
+const PIN_SPEC = 'semble[mcp]==0.5.5';
 const SERVER = 'semble_code';
 
 // GIVEN: a fresh isolated temp base. realpathSync mirrors the `cd && pwd -P`
@@ -33,7 +33,8 @@ const SERVER = 'semble_code';
 const BASE = realpathSync(mkdtempSync(join(tmpdir(), 'semble-c-')));
 const HOME = join(BASE, 'home');
 const CACHE_CODE = join(BASE, 'semble-code');
-const CACHE_DOCS = join(BASE, 'semble-docs');
+const CACHE_BASE = process.platform === 'darwin' ? join(HOME, 'Library', 'Caches') : join(HOME, '.cache');
+const LEGACY_DOCS_ROOT = join(CACHE_BASE, 'semble-docs');
 const BIN = join(BASE, 'bin');
 const CLAUDE_LOG = join(BASE, 'claude-calls.log');
 const CLAUDE_STUB = join(BIN, 'claude');
@@ -86,7 +87,6 @@ function baseEnv() {
   return {
     SEMBLE_TEST_HOME: HOME,
     SEMBLE_CACHE_ROOT_CODE: CACHE_CODE,
-    SEMBLE_CACHE_ROOT_DOCS: CACHE_DOCS,
     SEMBLE_CLAUDE_BIN: CLAUDE_STUB,
     SEMBLE_NO_NETWORK: '1',
     PATH: `${BIN}:${process.env.PATH}`,
@@ -455,10 +455,10 @@ const SIBLING_DIR = join(CACHE_CODE, SIBLING_HASH);
 const NOT_A_HASH_DIR = join(CACHE_CODE, 'not-a-hash');
 
 for (const d of [RIDX_DIR, SIBLING_DIR]) {
-  write(join(d, 'index/chunks.json'), '[]\n');
-  write(join(d, 'index/metadata.json'), JSON.stringify({ root_path: d, time: 1, content_type: ['code', 'config'], cache_version: 1, files: {} }));
-  write(join(d, 'index/bm25_index/data'), 'bm25\n');
-  write(join(d, 'index/semantic_index/data'), 'vec\n');
+  write(join(d, 'index-code-config-docs/chunks.json'), '[]\n');
+  write(join(d, 'index-code-config-docs/metadata.json'), JSON.stringify({ root_path: d, time: 1, content_type: ['code', 'docs', 'config'], cache_version: 1, files: {} }));
+  write(join(d, 'index-code-config-docs/bm25_index/data'), 'bm25\n');
+  write(join(d, 'index-code-config-docs/semantic_index/data'), 'vec\n');
 }
 write(NOT_A_HASH_DIR + '/keep.txt', 'not a repo dir\n');
 write(join(CACHE_CODE, 'savings.jsonl'), '{"tokens":1}\n');
@@ -467,14 +467,15 @@ const siblingBefore = snapshot(SIBLING_DIR);
 const noYes = run(PROJECT_SH, ['reindex', '--json'], { SEMBLE_PROJECT_ROOT: RIDX });
 check('reindex without --yes exit', noYes.status, 4, 'exit 4 = confirmation required');
 check('reindex without --yes keeps the dir', existsSync(RIDX_DIR), true, 'nothing was deleted');
-check('reindex without --yes plan', safeParse(noYes.stdout).wouldDelete, [RIDX_DIR],
-  'it names the single directory it would delete');
+const RIDX_INDEX = join(RIDX_DIR, 'index-code-config-docs');
+check('reindex without --yes plan', safeParse(noYes.stdout).wouldDelete, [RIDX_INDEX],
+  'it names only the selected content variant it would replace');
 
 check('reindex without --yes command order', safeParse(noYes.stdout).commands.length, 2,
   'the plan is two commands: the staged rebuild, then the delete');
 check('reindex without --yes rebuilds before deleting',
-  safeParse(noYes.stdout).commands[1], `rm -rf ${RIDX_DIR}`,
-  'the delete is the SECOND command — the rebuild runs first');
+  safeParse(noYes.stdout).commands[1], `replace ${RIDX_INDEX}`,
+  'the variant replacement is the SECOND command — the staged rebuild runs first');
 
 // SS03: the live index survives a reindex whose warm cannot run. Before the
 // fix this deleted the index, printed `ok`, and left phase=ready.
@@ -491,7 +492,7 @@ check('reindex --yes kept the repo dir', snapshot(RIDX_DIR), ridxBefore,
 check('reindex --yes changed nothing', yesJson.changed, [],
   'no change is claimed');
 check('reindex --yes says why the index was kept', yesJson.unchanged, [
-  `cache: ${RIDX_DIR} kept (${ridxBytes} bytes) — the staged rebuild never answered, so nothing was deleted`,
+  `cache: ${RIDX_INDEX} kept (${ridxBytes} bytes) — the staged rebuild never answered, so nothing was replaced`,
   'state: phase and completed steps unchanged',
 ], 'both the kept index and the untouched state are reported in words');
 check('reindex left the sibling repo dir', snapshot(SIBLING_DIR), siblingBefore,
@@ -512,7 +513,7 @@ const BUILD_BIN = join(BASE, 'buildbin');
 writeExec(join(BUILD_BIN, 'uvx'), `#!/usr/bin/env bash
 root="$6"
 h=$(printf '%s' "$root" | shasum -a 256 | cut -d' ' -f1)
-d="\${SEMBLE_CACHE_LOCATION}/$h/index"
+d="\${SEMBLE_CACHE_LOCATION}/$h/index-code-config-docs"
 mkdir -p "$d/bm25_index" "$d/semantic_index"
 printf '[]\\n' > "$d/chunks.json"
 printf '{"cache_version":1}\\n' > "$d/metadata.json"
@@ -524,8 +525,12 @@ printf '%s' '{"results":[{"file_path":"src/main.py","start_line":1,"end_line":2,
 const RIDX2 = join(BASE, 'repo-reindex-ok');
 write(join(RIDX2, 'src/main.py'), `def main():\n    return 1\n# ${PAD}\n`);
 const RIDX2_DIR = join(CACHE_CODE, repoHash(RIDX2));
+write(join(RIDX2_DIR, 'index-code-config-docs/chunks.json'), '[]\n');
+write(join(RIDX2_DIR, 'index-code-config-docs/stale-marker'), 'the variant that must be replaced\n');
 write(join(RIDX2_DIR, 'index/chunks.json'), '[]\n');
-write(join(RIDX2_DIR, 'index/stale-marker'), 'the index that must be replaced\n');
+write(join(RIDX2_DIR, 'index/metadata.json'), JSON.stringify({ content_type: ['code'] }));
+write(join(RIDX2_DIR, 'index/code-only-marker'), 'keep this sibling\n');
+const ridx2CodeBefore = snapshot(join(RIDX2_DIR, 'index'));
 const ridx2Env = { SEMBLE_PROJECT_ROOT: RIDX2 };
 seedState(ridx2Env);
 
@@ -541,11 +546,16 @@ check('reindex.built.exit', built.status, 0, 'a proven rebuild exits 0');
 check('reindex.built.status', builtJson.status, 'ok', 'and reports ok');
 check('reindex.built.warm', builtJson.warm.status, 'ok', 'because the staged warm answered');
 check('reindex.built.index', snapshot(RIDX2_DIR), {
-  'index/bm25_index/data': shaStr('rebuilt\n'),
+  'index-code-config-docs/bm25_index/data': shaStr('rebuilt\n'),
+  'index-code-config-docs/chunks.json': shaStr('[]\n'),
+  'index-code-config-docs/metadata.json': shaStr('{"cache_version":1}\n'),
+  'index-code-config-docs/semantic_index/data': shaStr('rebuilt\n'),
   'index/chunks.json': shaStr('[]\n'),
-  'index/metadata.json': shaStr('{"cache_version":1}\n'),
-  'index/semantic_index/data': shaStr('rebuilt\n'),
-}, 'the live dir now holds exactly the staged build — the stale-marker file is gone with the old index');
+  'index/code-only-marker': shaStr('keep this sibling\n'),
+  'index/metadata.json': shaStr(JSON.stringify({ content_type: ['code'] })),
+}, 'the current variant is swapped while the code-only sibling remains byte-identical');
+check('reindex.built.sibling-preserved', snapshot(join(RIDX2_DIR, 'index')), ridx2CodeBefore,
+  'reindex never evicts a distinct code-only variant');
 check('reindex.built.phase', [builtJson.phase, stateOf(RIDX2).phase], ['ready', 'ready'],
   'phase reaches ready only on a rebuild that happened');
 check('reindex.built.no staging residue',
@@ -554,12 +564,44 @@ check('reindex.built.no staging residue',
 check('reindex.built.completed', stateOf(RIDX2).completed, ['warm'],
   'only a real rebuild records the warm step');
 
+// A pre-0.5.5 combined corpus occupied bare `index`. Its metadata is the only
+// authority for migration: rebuild the exact 0.5.5 variant first, then remove
+// that verified legacy directory.
+const RIDX_LEGACY = join(BASE, 'repo-reindex-legacy');
+write(join(RIDX_LEGACY, 'src/main.py'), `def main():\n    return 1\n# ${PAD}\n`);
+const RIDX_LEGACY_DIR = join(CACHE_CODE, repoHash(RIDX_LEGACY));
+write(join(RIDX_LEGACY_DIR, 'index/chunks.json'), '[]\n');
+write(join(RIDX_LEGACY_DIR, 'index/metadata.json'), JSON.stringify({
+  content_type: ['code', 'docs', 'config'],
+}));
+write(join(RIDX_LEGACY_DIR, 'index/legacy-marker'), 'remove only after swap\n');
+const legacyEnv = { SEMBLE_PROJECT_ROOT: RIDX_LEGACY };
+seedState(legacyEnv);
+const legacyPlan = safeParse(run(PROJECT_SH, ['reindex', '--json'], legacyEnv).stdout);
+check('reindex.legacy.plan', [legacyPlan.indexDir, legacyPlan.wouldDelete, legacyPlan.legacyCombined], [
+  join(RIDX_LEGACY_DIR, 'index-code-config-docs'),
+  [join(RIDX_LEGACY_DIR, 'index-code-config-docs'), join(RIDX_LEGACY_DIR, 'index')], true,
+], 'the plan distinguishes the replacement variant from the verified legacy combined index');
+const legacyBuilt = run(PROJECT_SH, ['reindex', '--yes', '--json'], {
+  ...legacyEnv,
+  SEMBLE_NO_NETWORK: '',
+  SEMBLE_TIMEOUT_BIN: 'none',
+  SP_SEARCH_TIMEOUT: '30',
+  PATH: `${BUILD_BIN}:${BIN}:${process.env.PATH}`,
+});
+check('reindex.legacy.exit', legacyBuilt.status, 0,
+  'a verified staged rebuild can complete the legacy migration');
+check('reindex.legacy.removed', existsSync(join(RIDX_LEGACY_DIR, 'index')), false,
+  'the combined bare index is removed only after the replacement is live');
+check('reindex.legacy.current', existsSync(join(RIDX_LEGACY_DIR, 'index-code-config-docs', 'chunks.json')), true,
+  'the content-addressed 0.5.5 variant remains after migration');
+
 // WHEN: the search answers but writes no index (a stubbed/degraded semble) —
 // the live index is still not deleted.
 const RIDX3 = join(BASE, 'repo-reindex-noindex');
 write(join(RIDX3, 'src/main.py'), `def main():\n    return 1\n# ${PAD}\n`);
 const RIDX3_DIR = join(CACHE_CODE, repoHash(RIDX3));
-write(join(RIDX3_DIR, 'index/chunks.json'), '[]\n');
+write(join(RIDX3_DIR, 'index-code-config-docs/chunks.json'), '[]\n');
 const ridx3Before = snapshot(RIDX3_DIR);
 const noIdx = run(PROJECT_SH, ['reindex', '--yes', '--json'], {
   SEMBLE_PROJECT_ROOT: RIDX3,
@@ -586,7 +628,7 @@ const RULE = write(join(DIS, '.claude/rules/semble-first.md'), '# semble-first\n
 const HOOK = write(join(DIS, '.claude/hooks/semble-session.mjs'), 'process.stdout.write("{}");\n');
 const SETTINGS = write(join(DIS, '.claude/settings.json'), JSON.stringify({ permissions: { allow: ['mcp__semble_code__search'] } }, null, 2) + '\n');
 const DIS_CACHE = join(CACHE_CODE, repoHash(DIS));
-write(join(DIS_CACHE, 'index/chunks.json'), '[]\n');
+write(join(DIS_CACHE, 'index-code-config-docs/chunks.json'), '[]\n');
 
 const disEnv = { SEMBLE_PROJECT_ROOT: DIS };
 seedState(disEnv);
@@ -618,7 +660,7 @@ write(join(REM, 'CLAUDE.md'), '# CLAUDE.md\n\nproject notes\n\n<!-- BEGIN brewco
 const remEnv = { SEMBLE_PROJECT_ROOT: REM };
 seedState(remEnv, 'init');
 const REM_CACHE = join(CACHE_CODE, repoHash(REM));
-write(join(REM_CACHE, 'index/chunks.json'), '[]\n');
+write(join(REM_CACHE, 'index-code-config-docs/chunks.json'), '[]\n');
 
 // A registered MCP config that `remove integration` must not touch.
 write(join(HOME, '.claude.json'), JSON.stringify({
@@ -654,7 +696,7 @@ check('remove integration kept CLAUDE.md prose',
   'the rest of CLAUDE.md survives');
 check('remove integration kept the MCP config', sha(join(HOME, '.claude.json')), claudeJsonBefore,
   '~/.claude.json is byte-identical — integration never touches the registration');
-check('remove integration kept the cache', existsSync(join(REM_CACHE, 'index/chunks.json')), true,
+check('remove integration kept the cache', existsSync(join(REM_CACHE, 'index-code-config-docs/chunks.json')), true,
   'the index survives an integration removal');
 
 const cacheBeforePurge = snapshot(CACHE_CODE);
@@ -799,12 +841,13 @@ check('enable/disable wrote nothing', existsSync(join(BARE, '.claude')), false,
   'a precondition failure never creates state');
 
 const DRY = join(CACHE_CODE, repoHash(BARE));
-write(join(DRY, 'index/chunks.json'), '[]\n');
+write(join(DRY, 'index-code-config-docs/chunks.json'), '[]\n');
 const dryBefore = snapshot(DRY);
 const dryRun = run(PROJECT_SH, ['reindex', '--yes'], { ...bareEnv, SEMBLE_DRY_RUN: '1' });
 check('dry-run reindex exit', dryRun.status, 0, 'a dry run always succeeds');
-check('dry-run reindex prints the rm', dryRun.stdout.includes(`DRY rm -rf ${DRY}`), true,
-  'the exact command is printed, prefixed DRY');
+check('dry-run reindex prints the swap',
+  dryRun.stdout.includes(`DRY replace ${join(DRY, 'index-code-config-docs')} from staged index-code-config-docs`), true,
+  'the exact variant swap is printed, prefixed DRY');
 check('dry-run reindex changed nothing', snapshot(DRY), dryBefore, 'the index is byte-identical');
 
 const cli = run(REMOVE_SH, ['cli', '--yes', '--json'], bareEnv);
@@ -833,7 +876,7 @@ function forcePhase(root, phase) {
   if (phase === 'absent') return;
   write(join(dir, 'state.json'), `${JSON.stringify({
     schema: 1, profile: 'code', phase, enabled: true, scope: 'user',
-    projectRoot: root, approvedVersion: '0.5.4', completed: [],
+    projectRoot: root, approvedVersion: '0.5.5', completed: [],
   }, null, 2)}\n`);
 }
 
@@ -890,16 +933,56 @@ rmSync(join(PH_A, '.claude'), { recursive: true, force: true });
 rmSync(join(PH_B, '.claude'), { recursive: true, force: true });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 7. purge really deletes — last, it wipes the temp cache roots
+// 7. legacy docs cleanup negatives + final purge
 // ═══════════════════════════════════════════════════════════════════════════
-mkdirSync(CACHE_DOCS, { recursive: true });
-write(join(CACHE_DOCS, 'RESERVED-FOR-DOCS.txt'), 'reserved\n');
+function legacyRoot(testHome) {
+  return join(process.platform === 'darwin' ? join(testHome, 'Library', 'Caches') : join(testHome, '.cache'),
+    'semble-docs');
+}
+function runLegacyCleanup(testHome) {
+  return spawnSync('bash', ['-c', `. "${REMOVE_SH}" --help >/dev/null; sr_cleanup_legacy_docs_root`], {
+    encoding: 'utf8', timeout: 30000,
+    env: { ...process.env, ...baseEnv(), SEMBLE_TEST_HOME: testHome },
+  });
+}
+
+const EMPTY_HOME = join(BASE, 'legacy-empty-home');
+mkdirSync(legacyRoot(EMPTY_HOME), { recursive: true });
+check('legacy docs empty cleanup exit', runLegacyCleanup(EMPTY_HOME).status, 0,
+  'inspection of an empty legacy-shaped directory succeeds without claiming ownership');
+check('legacy docs empty preserved', existsSync(legacyRoot(EMPTY_HOME)), true,
+  'an empty directory is preserved because no marker proves it belongs to Semble');
+
+const REPURPOSED_HOME = join(BASE, 'legacy-repurposed-home');
+write(join(legacyRoot(REPURPOSED_HOME), 'RESERVED-FOR-DOCS.txt'), 'reserved\n');
+write(join(legacyRoot(REPURPOSED_HOME), 'user-content.txt'), 'keep\n');
+check('legacy docs repurposed cleanup exit', runLegacyCleanup(REPURPOSED_HOME).status, 0,
+  'inspection of a repurposed directory is a safe no-op');
+check('legacy docs repurposed preserved', snapshot(legacyRoot(REPURPOSED_HOME)), {
+  'RESERVED-FOR-DOCS.txt': shaStr('reserved\n'), 'user-content.txt': shaStr('keep\n'),
+}, 'the marker never authorizes deletion when any second entry exists');
+
+const LINK_HOME = join(BASE, 'legacy-symlink-home');
+const LINK_TARGET = join(BASE, 'legacy-symlink-target');
+write(join(LINK_TARGET, 'RESERVED-FOR-DOCS.txt'), 'reserved\n');
+mkdirSync(dirname(legacyRoot(LINK_HOME)), { recursive: true });
+symlinkSync(LINK_TARGET, legacyRoot(LINK_HOME));
+check('legacy docs symlink cleanup exit', runLegacyCleanup(LINK_HOME).status, 0,
+  'a symlink-shaped legacy path is inspected without following it for deletion');
+check('legacy docs symlink preserved', [existsSync(legacyRoot(LINK_HOME)), snapshot(LINK_TARGET)], [true, {
+  'RESERVED-FOR-DOCS.txt': shaStr('reserved\n'),
+}], 'both the symlink and marker-only target survive because the legacy root itself is not a directory owned by Semble');
+
+// Final marker-only positive: full purge removes the shared current cache and
+// the one legacy root whose marker is its sole entry.
+mkdirSync(LEGACY_DOCS_ROOT, { recursive: true });
+write(join(LEGACY_DOCS_ROOT, 'RESERVED-FOR-DOCS.txt'), 'reserved\n');
 const purge = run(REMOVE_SH,
   ['purge', '--yes', '--confirm-text', 'purge semble code cache', '--json'], remEnv);
 check('purge exit', purge.status, 0, 'purge succeeds with the exact typed confirmation');
 check('purge deleted the code root', existsSync(CACHE_CODE), false, 'the code cache root is gone');
-check('purge deleted the reserved docs root', existsSync(CACHE_DOCS), false,
-  'the docs root held nothing but the RESERVED marker');
+check('purge deleted the legacy marker-only root', existsSync(LEGACY_DOCS_ROOT), false,
+  'the pre-0.5.5 docs root was under the test home cache base and held only its ownership marker');
 check('purge removed the MCP registration',
   Object.keys(safeParse(readFileSync(join(HOME, '.claude.json'), 'utf8')).mcpServers), [],
   'purge does run `claude mcp remove`');

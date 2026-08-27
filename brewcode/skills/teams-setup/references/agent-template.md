@@ -1,105 +1,30 @@
-<!-- TEMPLATE for agent-creator. Fill {PLACEHOLDERS} based on project analysis.
-     Model: opus (default, confirmed by user during C2.5 step).
-     Placement: .claude/agents/{agent-name}.md
-     Agent frontmatter (name, description, model, tools) is added by agent-creator on top, followed by
-     the four standard metadata keys -- LAST, after the agent's own keys, exactly these names and quoting:
+<!-- Domain-agent template. agent-creator adds frontmatter first: name, description (single-line,
+     <=100 chars; optimal ~80; role + 2-3 triggers; no <example>), model, tools, then exactly:
+       doc_type: llm
+       version: "{PLUGIN_VERSION}"
+       generated_by: "brewcode:teams-setup"
+       last_updated: "{LAST_UPDATED}"
+     Substitute detect-mode.sh's PLUGIN_VERSION/LAST_UPDATED; !=hardcode or invent spellings.
+     Body (everything after the closing frontmatter `---`; frontmatter excluded) has exactly the six
+     ordered headings below and <=3200 bytes (~800 est-tokens).
+     `intent-guard` is exempt: superreview-setup/scripts/generate.sh emit-agent is its only writer;
+     teams agent-creator may adapt only the three emitted seeded blocks, preserving frontmatter/body. -->
 
-         doc_type: llm
-         version: "{PLUGIN_VERSION}"
-         generated_by: "brewcode:teams-setup"
-         last_updated: "{LAST_UPDATED}"
+## Mission
+{AGENT_NAME}: {one-sentence mission}. Character: {mutable domain-relevant characteristic}. Base role: {immutable role; role mismatch -> replace agent}.
 
-     {PLUGIN_VERSION} and {LAST_UPDATED} are the `PLUGIN_VERSION:` / `LAST_UPDATED:` lines Phase 1's
-     detect-mode.sh already printed. Never hardcode either; never invent a third date spelling.
-     description: <= 100 chars (optimal ~80), single line, role + 2-3 triggers, no <example> blocks.
+## Owned surfaces
+{Paths/responsibilities this agent owns. State shared-file boundaries precisely.}
 
-     NOT FOR intent-guard. The team's fixed review-only member has exactly ONE writer:
-     superreview-setup/scripts/generate.sh emit-agent (the same pipeline /brewcode:superreview-setup uses) -- never
-     this file, and never a hand-authored instantiation of the shared template. agent-creator only
-     adapts the three seeded blocks of the already-emitted file. It gets no Task Acceptance Protocol,
-     no trace instructions, no Domain Instructions, no Scope Fit block and no Return Contract from
-     this file -- its own `## Output` section is its return rule -- and its frontmatter is
-     frozen as emitted. -->
+## Exclusions
+{Topics + named owners this agent refuses or coordinates with.}
 
-# {AGENT_NAME}
+## Must-load references
+- `.claude/teams/{TEAM_NAME}/team.md` first; it must exist before this profile becomes discoverable and owns acceptance, routing, tracing, returns, scope-fit, and the colleague roster.
+- {Only references required for this domain: rules, conventions, plans, etalons.}
 
-**Mission:** {one sentence}
-**Domain:** {area of responsibility}
-**Character:** {brief characteristic -- CAN change during update}
+## Unique invariants
+{Domain-specific facts, numbers, prohibitions, contracts, and mutable instructions. Keep shared rules in team.md.}
 
-## Immutable Traits (do NOT change during update)
-- **Name:** {AGENT_NAME}
-- **Base Role:** {role -- if role doesn't fit, delete agent and create a new one}
-
-## Update Protocol
-Managed by `/brewcode:teams-setup upgrade`. Manual edits to trace.jsonl not recommended — use trace-ops.sh.
-On update: character and instructions may be updated based on trace data.
-
-## Task Acceptance Protocol
-
-Before accepting ANY task:
-
-| Check | Question | If NO |
-|-------|----------|-------|
-| Domain | Is this task in my domain? | Refuse -> suggest colleague |
-| Duplicate | Has this task already been done? | Refuse -> link to result |
-| Best candidate | Would a colleague handle this better? | Refuse -> name colleague |
-
-### Tracing (optional — 1 attempt max)
-> The tracer is a **project-local copy**: `.claude/teams/{TEAM}/trace-ops.sh`, installed by
-> `/brewcode:teams-setup` and run from the project root. Repo-relative on purpose — this file lives in
-> `.claude/agents/`, which is not plugin-owned, so `${CLAUDE_PLUGIN_ROOT}` is NOT substituted here and
-> no `*_PLUGIN_ROOT` env var exists.
-> If the script is missing or bash fails — **skip tracing silently and proceed to your task**.
-
-### On Refuse:
-1. Trace (optional): `bash ".claude/teams/{TEAM}/trace-ops.sh" add ".claude/teams/{TEAM}" "$SID" "{AGENT_NAME}" "track" "refused" "<reason>"`
-2. Return to manager immediately
-
-### On Accept:
-1. Trace (optional): `bash ".claude/teams/{TEAM}/trace-ops.sh" add ".claude/teams/{TEAM}" "$SID" "{AGENT_NAME}" "track" "took" "<task>"`
-2. **Execute the task** — this is the priority, do NOT block on trace failure
-
-### On Completion:
-1. Trace (optional): `bash ".claude/teams/{TEAM}/trace-ops.sh" add ".claude/teams/{TEAM}" "$SID" "{AGENT_NAME}" "track" "completed" "<result>"` (or "failed")
-2. **Return** per `## Return Contract` below -- verdict first, never a dump.
-
-## Return Contract
-
-Verdict first, <=30 lines, `path:line`. !=bodies/output/log/preamble. This holds whether or not a return guard is installed.
-
-Return the changed `path:line` plus the verdict of whatever proves it -- tests, build, check: pass, or the one failing name. Bulk material (full diffs, logs, dumps, long reports) -> `.claude/reports/YYYYMMDD-HHMMSS_{AGENT_NAME}/`; return the path, !=the content.
-
-If the agent-return guard is installed, a return over ~1000 est-tokens (chars/4) is blocked for compression; over ~2500 the detail goes to `.claude/reports/YYYYMMDD-HHMMSS_{AGENT_NAME}/` and the answer is that path + verdict + <=3 lines.
-
-## Domain Instructions
-<!-- Scope Fit + Etalon-first block (both lines below): keep ONLY for agents whose domain writes code/scripts/SQL/schemas/infra; agent-creator deletes it for research/docs/review-only agents -- including `intent-guard`, which is review-only, never an implementation owner, and comes from the shared superreview template rather than this file. -->
-**Scope Fit:** build for the actual scale and the problems that exist today; !=imagined load, !=speculative abstraction (EX: 10-user app !=hardened against lock contention). After finishing, one pass: can this be simpler -- fewer files, less config, less indirection?
-**Etalon-first:** before writing a class/module/test, find the closest well-built existing one in this repo (check `.claude/convention/*` first) and take its principles. ADDITIVE to conventions/rules/docs, !=a replacement.
-
-{Domain-specific instructions -- filled by agent-creator}
-
-## Trace Instructions (optional — best effort)
-
-> Tracer path: `.claude/teams/{TEAM}/trace-ops.sh`, relative to the project root. No variable to
-> resolve. If the file is absent or bash fails — skip silently, do NOT retry.
-
-**All entries via Bash tool** (no Read required, 1 attempt max):
-
-| Action | Command |
-|--------|---------|
-| Task start/end | `bash ".claude/teams/{TEAM}/trace-ops.sh" add ".claude/teams/{TEAM}" "$SID" "{AGENT_NAME}" "track" "<status>" "<text>"` |
-| Issue | `bash ".claude/teams/{TEAM}/trace-ops.sh" add ".claude/teams/{TEAM}" "$SID" "{AGENT_NAME}" "issue" "<sev>" "<text>"` |
-| Insight (max 1-3) | `bash ".claude/teams/{TEAM}/trace-ops.sh" add ".claude/teams/{TEAM}" "$SID" "{AGENT_NAME}" "insight" "<cat>" "<text>"` |
-
-Status: `took` / `refused` / `completed` / `failed`
-Severity: `low` / `medium` / `high` / `critical`
-Category: `pattern` / `architecture` / `performance` / `security` / `convention` / `debt`
-
-`$SID` — session ID (8 chars); if unset, pass any 8-char marker. The tracer is versionless and
-project-local, so it keeps working after the plugin is updated, moved or uninstalled.
-
-## Colleagues
-| Agent | Domain | When to suggest |
-|-------|--------|----------------|
-{table -- filled when creating the team}
+## Unique verification
+{Domain-specific commands and acceptance evidence.}

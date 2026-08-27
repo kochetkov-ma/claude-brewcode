@@ -1,0 +1,606 @@
+#!/usr/bin/env node
+/**
+ * Compact team-agent profile contract. Validates the Codex authority, native Codex projection,
+ * shared team contract, and the intent-guard/non-team exemptions without mutating the repository.
+ */
+import { spawnSync } from 'node:child_process';
+import {
+  chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync,
+} from 'node:fs';
+import { dirname, join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
+
+const EXPECTED_HEADINGS = [
+  'Mission',
+  'Owned surfaces',
+  'Exclusions',
+  'Must-load references',
+  'Unique invariants',
+  'Unique verification',
+];
+const LEGACY_HEADINGS = [
+  'Immutable Traits (do NOT change during update)',
+  'Update Protocol',
+  'sub-agent task Acceptance Protocol',
+  'Return Contract',
+  'Domain Instructions',
+  'Trace Instructions (optional — best effort)',
+  'Colleagues',
+];
+const SOURCE_CLIENT_DIR = ['.', 'claude'].join('');
+const SOURCE_TEAM_REF = `${SOURCE_CLIENT_DIR}/teams/{TEAM_NAME}/team.md`;
+const NATIVE_TEAM_REF = '.codex/teams/{TEAM_NAME}/team.md';
+
+let passed = 0;
+let failed = 0;
+const results = [];
+
+function check(name, actual, expected, description) {
+  if (actual === expected) {
+    passed += 1;
+    results.push(`  PASS  ${name}  (${description})`);
+  } else {
+    failed += 1;
+    results.push(
+      `  FAIL  ${name}  (${description} | actual=${JSON.stringify(actual)} expected=${JSON.stringify(expected)})`,
+    );
+  }
+}
+
+function findRepoRoot(start) {
+  let candidate = start;
+  while (dirname(candidate) !== candidate) {
+    if (existsSync(join(candidate, '.codex', 'scripts', 'generate-compat.mjs'))) return candidate;
+    candidate = dirname(candidate);
+  }
+  throw new Error('repository root with .codex/scripts/generate-compat.mjs not found');
+}
+
+function occurrences(text, literal) {
+  return text.split(literal).length - 1;
+}
+
+function headings(text) {
+  return [...text.matchAll(/^## (.+)$/gm)].map((match) => match[1]);
+}
+
+function fencedTeamTemplate(text) {
+  const headingAt = text.indexOf('## team.md');
+  const fenceAt = text.indexOf('```markdown\n', headingAt);
+  const contentAt = fenceAt + '```markdown\n'.length;
+  const endAt = text.indexOf('\n```', contentAt);
+  return text.slice(contentAt, endAt);
+}
+
+function representativeProfile(text) {
+  return text
+    .replaceAll('{AGENT_NAME}', 'build-eng')
+    .replaceAll('{TEAM_NAME}', 'dusk')
+    .replaceAll('{PLUGIN_VERSION}', '6.1.4')
+    .replaceAll('{LAST_UPDATED}', '2026-08-27')
+    .replace(/\{[^}\n]+\}/g, 'bounded role detail');
+}
+
+function profileBody(text) {
+  const bodyAt = text.indexOf('## Mission');
+  return bodyAt >= 0 ? text.slice(bodyAt) : text;
+}
+
+function section(text, start, end) {
+  const a = text.indexOf(start);
+  const b = text.indexOf(end, a + start.length);
+  return text.slice(a, b < 0 ? text.length : b);
+}
+
+const repo = findRepoRoot(dirname(fileURLToPath(import.meta.url)));
+const canonicalTemplatePath = join(repo, 'brewcode', 'skills', 'teams-setup', 'references', 'agent-template.md');
+const canonicalFrameworkPath = join(repo, 'brewcode', 'skills', 'teams-setup', 'references', 'framework-files.md');
+const canonicalSkillPath = join(repo, 'brewcode', '.codex', 'skills', 'teams-setup', 'SKILL.md');
+const verifierPath = join(repo, 'brewcode', '.codex', 'skills', 'teams-setup', 'scripts', 'verify-team.sh');
+const projectedTemplatePath = join(repo, 'brewcode', '.codex', 'skills', 'teams-setup', 'references', 'agent-template.md');
+const projectedFrameworkPath = join(repo, 'brewcode', '.codex', 'skills', 'teams-setup', 'references', 'framework-files.md');
+const distributedTemplatePath = join(repo, '.codex', 'plugins', 'brewcode', 'skills', 'teams-setup', 'references', 'agent-template.md');
+const distributedFrameworkPath = join(repo, '.codex', 'plugins', 'brewcode', 'skills', 'teams-setup', 'references', 'framework-files.md');
+const projectedCreatorPath = join(repo, 'brewcode', '.codex', 'agents', 'agent-creator.toml');
+
+for (const [name, path] of [
+  ['canonicalTemplate', canonicalTemplatePath],
+  ['canonicalFramework', canonicalFrameworkPath],
+  ['projectedTemplate', projectedTemplatePath],
+  ['projectedFramework', projectedFrameworkPath],
+  ['distributedTemplate', distributedTemplatePath],
+  ['distributedFramework', distributedFrameworkPath],
+  ['projectedCreator', projectedCreatorPath],
+]) {
+  check(`${name}.exists`, existsSync(path), true, `${name} artifact exists`);
+}
+
+const canonicalTemplate = readFileSync(canonicalTemplatePath, 'utf8');
+const canonicalFramework = readFileSync(canonicalFrameworkPath, 'utf8');
+const canonicalSkill = readFileSync(canonicalSkillPath, 'utf8');
+const projectedTemplate = readFileSync(projectedTemplatePath, 'utf8');
+const projectedFramework = readFileSync(projectedFrameworkPath, 'utf8');
+const distributedTemplate = readFileSync(distributedTemplatePath, 'utf8');
+const distributedFramework = readFileSync(distributedFrameworkPath, 'utf8');
+const projectedCreator = readFileSync(projectedCreatorPath, 'utf8');
+
+check(
+  'canonical.headings',
+  headings(canonicalTemplate).join('|'),
+  EXPECTED_HEADINGS.join('|'),
+  'canonical domain-agent body has exactly six ordered headings',
+);
+check(
+  'canonical.legacyHeadings',
+  LEGACY_HEADINGS.filter((heading) => headings(canonicalTemplate).includes(heading)).join('|'),
+  '',
+  'canonical profile carries no legacy shared-contract headings',
+);
+check(
+  'canonical.sharedReferenceCount',
+  occurrences(canonicalTemplate, SOURCE_TEAM_REF),
+  1,
+  'canonical profile loads the shared team contract exactly once',
+);
+check(
+  'canonical.intentGuardExemption',
+  canonicalTemplate.includes('superreview-setup/scripts/generate.sh emit-agent is its only writer'),
+  true,
+  'canonical template keeps the fixed intent-guard writer exemption',
+);
+
+const representative = representativeProfile(canonicalTemplate);
+const representativeBody = profileBody(representative);
+const runtimeRepresentativeBody = profileBody(representativeProfile(projectedTemplate));
+check(
+  'canonical.bodyBytesWithinCeiling',
+  Buffer.byteLength(representativeBody, 'utf8') <= 3200,
+  true,
+  'representative generated body is at most 3200 bytes with frontmatter excluded',
+);
+check(
+  'canonical.bodyTokensWithinCeiling',
+  Math.ceil(representativeBody.length / 4) <= 800,
+  true,
+  'representative generated body is at most 800 estimated tokens',
+);
+check(
+  'canonical.ceilingWording',
+  canonicalTemplate.includes('frontmatter `---`; frontmatter excluded'),
+  true,
+  'the canonical template defines the ceiling over the body only',
+);
+
+const canonicalTeam = fencedTeamTemplate(canonicalFramework);
+const projectedTeam = fencedTeamTemplate(projectedFramework);
+const sourceReportsPath = `${SOURCE_CLIENT_DIR}/reports/YYYYMMDD-HHMMSS_{AGENT_NAME}/`;
+const sourceTracePath = `${SOURCE_CLIENT_DIR}/teams/{TEAM_NAME}/trace-ops.sh`;
+const sharedSourceLiterals = [
+  '## Shared Agent Contract',
+  'Before any task evaluate `Domain`, `Duplicate`, `Best candidate`.',
+  '`1 attempt max`',
+  'no retry, Bash only',
+  'versionless project-local',
+  sourceTracePath,
+  'no `*_PLUGIN_ROOT` env',
+  'plugin update/move/uninstall does not break it',
+  '`took` / `refused` / `completed` / `failed`',
+  'A task traced `took` ends with exactly one terminal track: `completed` or `failed`.',
+  '`$SID` is 8 chars',
+  'Verdict first, <=30 lines, `path:line`. !=bodies/output/log/preamble.',
+  'This holds with or without agent-return.',
+  sourceReportsPath,
+  '>~1000 est-tokens (`chars/4`)',
+  '>~2500',
+  '<=3 lines',
+  '!=imagined load/speculative abstraction',
+  '!=replace them',
+  '## Agents',
+];
+for (const literal of sharedSourceLiterals) {
+  check(
+    `shared.literal.${sharedSourceLiterals.indexOf(literal) + 1}`,
+    canonicalTeam.includes(literal),
+    true,
+    `shared contract preserves exact literal ${JSON.stringify(literal)}`,
+  );
+}
+check(
+  'shared.templateCharsWithinCeiling',
+  canonicalTeam.length <= 2800,
+  true,
+  'generated team.md fenced template is at most 2800 characters',
+);
+check(
+  'shared.templateTokensWithinCeiling',
+  Math.ceil(canonicalTeam.length / 4) <= 700,
+  true,
+  'generated team.md fenced template is at most 700 estimated tokens',
+);
+
+check(
+  'codex.headings',
+  headings(projectedTemplate).join('|'),
+  EXPECTED_HEADINGS.join('|'),
+  'native Codex template has the same six ordered headings',
+);
+check(
+  'codex.legacyHeadings',
+  LEGACY_HEADINGS.filter((heading) => headings(projectedTemplate).includes(heading)).join('|'),
+  '',
+  'native Codex profile carries no legacy shared-contract headings',
+);
+check(
+  'codex.sharedReferenceCount',
+  occurrences(projectedTemplate, NATIVE_TEAM_REF),
+  1,
+  'native Codex profile loads its shared team contract exactly once',
+);
+check(
+  'codex.sourceReferenceAbsent',
+  occurrences(projectedTemplate, SOURCE_TEAM_REF),
+  0,
+  'native Codex profile carries no Codex project path',
+);
+check(
+  'codex.intentGuardExemption',
+  projectedTemplate.includes('This template never applies to `intent-guard`.'),
+  true,
+  'native Codex template preserves the intent-guard exemption',
+);
+check(
+  'codex.profileBytesWithinCeiling',
+  Buffer.byteLength(profileBody(projectedTemplate), 'utf8') <= 3200,
+  true,
+  'native Codex team body is at most 3200 bytes with frontmatter excluded',
+);
+check(
+  'codex.profileTokensWithinCeiling',
+  Math.ceil(profileBody(projectedTemplate).length / 4) <= 800,
+  true,
+  'native Codex team body is at most 800 estimated tokens',
+);
+
+for (const literal of sharedSourceLiterals) {
+  const nativeLiteral = literal
+    .replaceAll(SOURCE_CLIENT_DIR, '.codex');
+  check(
+    `codex.sharedLiteral.${sharedSourceLiterals.indexOf(literal) + 1}`,
+    projectedTeam.includes(nativeLiteral),
+    true,
+    `projected shared contract preserves ${JSON.stringify(nativeLiteral)}`,
+  );
+}
+check(
+  'codex.sharedContractCharsParity',
+  projectedTeam.length <= canonicalTeam.length,
+  true,
+  'Codex path projection does not grow the shared contract',
+);
+check(
+  'codex.distributedTemplateParity',
+  distributedTemplate,
+  projectedTemplate,
+  'distributed Codex team template equals the canonical projection byte-for-byte',
+);
+check(
+  'codex.distributedFrameworkParity',
+  distributedFramework,
+  projectedFramework,
+  'distributed Codex shared contract equals the canonical projection byte-for-byte',
+);
+
+const bootstrapAt = canonicalSkill.indexOf('### C2.6: Shared Contract Bootstrap');
+const createAt = canonicalSkill.indexOf('### C3: Agent Creation');
+const finalizeAt = canonicalSkill.indexOf('### C4: Roster Finalization');
+check(
+  'install.bootstrapBeforeAgents',
+  bootstrapAt >= 0 && bootstrapAt < createAt,
+  true,
+  'the shared team contract is written before any discoverable domain profile',
+);
+check(
+  'install.finalizeAfterAgents',
+  createAt >= 0 && createAt < finalizeAt,
+  true,
+  'the final roster is written only after agent creation settles',
+);
+const bootstrap = section(canonicalSkill, '### C2.6: Shared Contract Bootstrap', '### C3: Agent Creation');
+for (const literal of [
+  'before any team-owned `.codex/agents/{name}.toml` is written',
+  'write `team.md`',
+  'Do not add domain-agent rows yet',
+  '**STOP on any failure. Do not spawn or write an agent.**',
+]) {
+  check(
+    `install.bootstrap.${literal.slice(0, 16)}`,
+    bootstrap.includes(literal),
+    true,
+    `interrupted-install ordering preserves ${JSON.stringify(literal)}`,
+  );
+}
+
+const migrationAt = canonicalSkill.indexOf('### U1b: Shared Contract Migration Gate');
+const analyzeAt = canonicalSkill.indexOf('### U2: Analyze Performance');
+const applyAt = canonicalSkill.indexOf('### U4: Apply Changes');
+check(
+  'upgrade.contractBeforeAgentRewrite',
+  migrationAt >= 0 && migrationAt < analyzeAt && migrationAt < applyAt,
+  true,
+  'legacy team.md is migrated before any compact-agent rewrite can strip local rules',
+);
+const migration = section(canonicalSkill, '### U1b: Shared Contract Migration Gate', '### U2: Analyze Performance');
+for (const literal of [
+  'insert the canonical block before `## Agents`',
+  'Legacy agent bodies remain byte-identical during this gate.',
+  '**No agent may be tuned, regenerated, stripped,',
+  'until the shared contract passes.',
+]) {
+  check(
+    `upgrade.migration.${literal.slice(0, 16)}`,
+    migration.includes(literal),
+    true,
+    `legacy-upgrade ordering preserves ${JSON.stringify(literal)}`,
+  );
+}
+
+const c8 = section(canonicalSkill, '### C8: Fix', '### C9: Re-verify');
+check(
+  'repair.canonicalTemplate',
+  c8.includes('`<skill-directory>/references/agent-template.md`'),
+  true,
+  'every C8 repair brief cites the canonical domain-agent template',
+);
+const c9 = section(canonicalSkill, '### C9: Re-verify', '> To skip review pipeline');
+for (const literal of [
+  'body only (frontmatter excluded): <=3200 bytes',
+  '`Mission`, `Owned surfaces`, `Exclusions`, `Must-load references`, `Unique invariants`,',
+  '`Unique verification` in order with no other headings',
+  '`intent-guard` is exempt from this six-heading gate',
+]) {
+  check(
+    `reverify.guard.${literal.slice(0, 16)}`,
+    c9.includes(literal),
+    true,
+    `C9 hard-gates ${JSON.stringify(literal)}`,
+  );
+}
+
+for (const literal of [
+  'For a teams-setup domain agent',
+  'Under Must-load references include exactly one',
+  'keep shared task acceptance, routing, tracing, return, and colleague contracts only in that file',
+  'Never apply the team profile to intent-guard',
+  'For every non-team agent, retain the generic contract',
+  'output discipline',
+  'scope fit plus etalon-first',
+]) {
+  check(
+    `creator.behavior.${literal.slice(0, 12)}`,
+    projectedCreator.includes(literal),
+    true,
+    `native agent-creator preserves ${JSON.stringify(literal)}`,
+  );
+}
+check(
+  'creator.headingOrder',
+  EXPECTED_HEADINGS.map((heading) => projectedCreator.indexOf(`## ${heading}`)).every(
+    (position, index, positions) => position >= 0 && (index === 0 || position > positions[index - 1]),
+  ),
+  true,
+  'native agent-creator names all six team headings in order',
+);
+check(
+  'creator.sharedReferenceCount',
+  occurrences(projectedCreator, NATIVE_TEAM_REF),
+  1,
+  'native agent-creator names the shared team reference exactly once',
+);
+
+// Runtime verifier regressions use an isolated cwd. The shipped verifier self-locates its own
+// manifest/reference files, while every instantiated team/agent path stays below the temp root.
+const pluginVersion = (/brewcode-meta: version=([0-9]+\.[0-9]+\.[0-9]+)/.exec(canonicalSkill) || [])[1];
+const contentVersion = (/content_version=([0-9]+\.[0-9]+\.[0-9]+)/.exec(canonicalSkill) || [])[1];
+const today = '2026-08-27';
+
+function instantiateTeam(projectRoot) {
+  const intentRow = `| intent-guard | -- | Anti-drift check: what was ASKED vs what was DELIVERED | active | ${today} | review-only | ${pluginVersion} |`;
+  return `${projectedTeam
+    .replaceAll('{TEAM_NAME}', 'dusk')
+    .replaceAll('{DATE}', today)
+    .replaceAll('{LAST_UPDATED}', today)
+    .replaceAll('{PLUGIN_VERSION}', pluginVersion)
+    .replaceAll('{CONTENT_VERSION}', contentVersion)
+    .replaceAll('{N}', '1')
+    .replaceAll('{CWD}', projectRoot)
+    .replace(intentRow, `${intentRow}\n| build-eng | Build | Own deterministic build surfaces | active | ${today} | domain | ${pluginVersion} |`)}\n`;
+}
+
+function agentFile({ body = runtimeRepresentativeBody, frontmatterPadding = '' } = {}) {
+  return `---
+name: build-eng
+description: Build owner. Triggers: build, release, toolchain.
+${frontmatterPadding}doc_type: llm
+version: "${pluginVersion}"
+generated_by: "brewcode:teams-setup"
+last_updated: "${today}"
+---
+
+${body}`;
+}
+
+function intentGuardFile() {
+  return `---
+name: intent-guard
+description: Review-only anti-drift check.
+doc_type: llm
+version: "${pluginVersion}"
+generated_by: "brewcode:superreview-setup"
+last_updated: "${today}"
+---
+
+# Intent guard
+
+Review only.
+`;
+}
+
+function makeWorld({ teamText, agentText = agentFile(), intent = true } = {}) {
+  const world = mkdtempSync(join(tmpdir(), 'team-profile-contract-'));
+  const teamDir = join(world, '.codex', 'teams', 'dusk');
+  const agentsDir = join(world, '.codex', 'agents');
+  mkdirSync(teamDir, { recursive: true });
+  mkdirSync(agentsDir, { recursive: true });
+  writeFileSync(join(teamDir, 'team.md'), teamText ?? instantiateTeam(world));
+  writeFileSync(join(teamDir, 'trace.jsonl'), '');
+  writeFileSync(join(teamDir, 'trace-ops.sh'), '#!/bin/sh\nexit 0\n');
+  chmodSync(join(teamDir, 'trace-ops.sh'), 0o755);
+  writeFileSync(join(agentsDir, 'build-eng.toml'), agentText);
+  if (intent) writeFileSync(join(agentsDir, 'intent-guard.toml'), intentGuardFile());
+  return world;
+}
+
+function runVerifier(world) {
+  const result = spawnSync('bash', [verifierPath, 'dusk'], {
+    cwd: world,
+    encoding: 'utf8',
+    timeout: 30000,
+  });
+  return { status: result.status, output: `${result.stdout || ''}${result.stderr || ''}` };
+}
+
+function removeWorld(world) {
+  rmSync(world, { recursive: true, force: true });
+}
+
+{
+  const world = makeWorld();
+  const result = runVerifier(world);
+  check('verifier.current.exit', result.status, 0, 'a complete current team passes the hard verifier');
+  check('verifier.current.shared', result.output.includes('CHECK: Shared Agent Contract ... OK'), true,
+    'the instantiated shared contract is verified');
+  removeWorld(world);
+}
+
+{
+  const padding = `notes: "${'x'.repeat(5000)}"\n`;
+  const world = makeWorld({ agentText: agentFile({ frontmatterPadding: padding }) });
+  const result = runVerifier(world);
+  check('verifier.frontmatterExcluded', result.status, 0,
+    'large valid frontmatter does not consume the 3200-byte body budget');
+  check('verifier.frontmatterTotalOverCeiling',
+    Buffer.byteLength(readFileSync(join(world, '.codex', 'agents', 'build-eng.toml'))) > 3200,
+    true,
+    'the fixture proves the full file itself exceeds 3200 bytes');
+  removeWorld(world);
+}
+
+{
+  const oversized = `${runtimeRepresentativeBody}\n${'x'.repeat(3300)}\n`;
+  const world = makeWorld({ agentText: agentFile({ body: oversized }) });
+  const result = runVerifier(world);
+  check('verifier.bodyCeiling.exit', result.status, 1, 'an oversized body fails even with small frontmatter');
+  check('verifier.bodyCeiling.reason', result.output.includes('ceiling is 3200 (~800 est-tokens), frontmatter excluded'), true,
+    'the failure names the body-only contract');
+  removeWorld(world);
+}
+
+const instantiatedLosses = [
+  'Every domain agent loads this file before task acceptance. `intent-guard` is exempt: it keeps its review-only output contract and never implements.',
+  'execute only owned surfaces',
+  'Optional best effort, `1 attempt max`, no retry, Bash only.',
+  'Track states: `took` / `refused` / `completed` / `failed`.',
+  'Issue severity: `low` / `medium` / `high` / `critical`.',
+  'Insight category (max 1-3): `pattern` / `architecture` / `performance` / `security` / `convention` / `debt`.',
+  'A task traced `took` ends with exactly one terminal track: `completed` or `failed`.',
+  'Verdict first, <=30 lines, `path:line`. !=bodies/output/log/preamble.',
+  '>~1000 est-tokens (`chars/4`)',
+  '<=3 lines',
+];
+for (const [index, literal] of instantiatedLosses.entries()) {
+  const world = makeWorld();
+  const teamPath = join(world, '.codex', 'teams', 'dusk', 'team.md');
+  writeFileSync(teamPath, readFileSync(teamPath, 'utf8').replace(literal, '[removed contract literal]'));
+  const result = runVerifier(world);
+  check(`verifier.loss.${index + 1}.exit`, result.status, 1,
+    `removing critical shared literal ${JSON.stringify(literal)} fails`);
+  check(`verifier.loss.${index + 1}.reason`, result.output.includes(`missing: ${literal}`), true,
+    'the verifier identifies the exact lost contract');
+  removeWorld(world);
+}
+
+{
+  const legacyTeam = `# Team: dusk
+
+| Field | Value |
+|-------|-------|
+| Created | ${today} |
+| Version | ${pluginVersion} |
+| Content version | ${contentVersion} |
+| Generated by | brewcode:teams-setup |
+| Last update | ${today} |
+| Agents | 1 |
+| Project | /legacy |
+
+## Agents
+
+| Agent | Domain | Mission | Status | Updated | Kind | Version |
+|-------|--------|---------|--------|---------|------|---------|
+| build-eng | Build | Legacy owner | active | ${today} | domain | ${pluginVersion} |
+`;
+  const legacyBody = '## Domain Instructions\n\nLegacy acceptance and trace rules remain local until upgrade.\n';
+  const world = makeWorld({ teamText: legacyTeam, agentText: agentFile({ body: legacyBody }), intent: false });
+  const result = runVerifier(world);
+  check('verifier.legacyMigrationSafe.exit', result.status, 0,
+    'a fully legacy team remains runnable while upgrade is required');
+  check('verifier.legacyMigrationSafe.warning',
+    result.output.includes('has no Shared Agent Contract (legacy team)')
+      && result.output.includes('legacy repeated/unknown profile shape'),
+    true,
+    'legacy authority and legacy profile produce migration warnings without destructive failure');
+  removeWorld(world);
+
+  const interrupted = makeWorld({ teamText: legacyTeam, agentText: agentFile(), intent: false });
+  const interruptedResult = runVerifier(interrupted);
+  check('verifier.interruptedInstall.exit', interruptedResult.status, 1,
+    'a compact discoverable profile without the shared contract is an unsafe interrupted install');
+  check('verifier.interruptedInstall.reason', interruptedResult.output.includes('shared team contract missing; interrupted install/unsafe migration'), true,
+    'the verifier directs repair of the shared authority before profile stripping');
+  removeWorld(interrupted);
+}
+
+for (const [name, mutate, reason] of [
+  ['firstReference', (text) => text.replace('.codex/teams/dusk/team.md', '.codex/teams/other/team.md'),
+    'Must-load references must name .codex/teams/dusk/team.md'],
+  ['extraHeading', (text) => `${text}\n## Return Contract\n\nDuplicated.\n`,
+    'body headings must be exactly the six ordered teams-setup headings'],
+]) {
+  const world = makeWorld({ agentText: agentFile({ body: mutate(runtimeRepresentativeBody) }) });
+  const result = runVerifier(world);
+  check(`verifier.profileLoss.${name}.exit`, result.status, 1, `${name} profile loss fails`);
+  check(`verifier.profileLoss.${name}.reason`, result.output.includes(reason), true,
+    'the verifier names the compact-profile loss');
+  removeWorld(world);
+}
+
+{
+  const world = makeWorld();
+  const teamPath = join(world, '.codex', 'teams', 'dusk', 'team.md');
+  const team = readFileSync(teamPath, 'utf8');
+  writeFileSync(teamPath, team.replace(
+    `| intent-guard | -- | Anti-drift check: what was ASKED vs what was DELIVERED | active | ${today} | review-only | ${pluginVersion} |`,
+    `| intent-guard | code | Implementation owner | active | ${today} | domain | ${pluginVersion} |`,
+  ));
+  const result = runVerifier(world);
+  check('verifier.intentGuardScope.exit', result.status, 1,
+    'changing the fixed intent-guard scope/kind fails');
+  check('verifier.intentGuardScope.reason', result.output.includes('intent-guard roster contract ... FAIL'), true,
+    'the verifier protects the review-only exemption in the instantiated roster');
+  removeWorld(world);
+}
+
+console.log('suite-agent-profile-contract.mjs');
+for (const line of results) console.log(line);
+console.log(`  ${passed} passed, ${failed} failed`);
+process.exit(failed === 0 ? 0 : 1);

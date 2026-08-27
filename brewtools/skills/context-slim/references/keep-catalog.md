@@ -11,7 +11,7 @@ Sections: Invariant classes -> `crit_tokens()` evidence -> Coverage map -> Drop-
 | # | Class | Example from this repo | Loss mode if dropped |
 |---|-------|------------------------|----------------------|
 | 1 | Exact numbers / counts | `STAMPED_FILES` = **44**, `VERSIONED_DOCS` = **7** (`CLAUDE.md:65-66`) | Silent under-processing |
-| 2 | Versions, incl. suffixed | `4.0.6+codex.<cachebuster>`, `semble==0.5.4`, `CC >= 2.1.233` (`CLAUDE.md:75`) | Wrong pin, validation fails |
+| 2 | Versions, incl. suffixed | `4.0.6+codex.<cachebuster>`, `'semble[mcp]==0.5.5'` (`brewcode/skills/semble-setup/scripts/lib/semble-common.sh:6-7`), `CC >= 2.1.233` | Wrong pin, validation fails |
 | 3 | File paths + globs | `brew*/skills/*-setup/SKILL.md`, `.claude/settings.local.json` | Command edits the wrong tree |
 | 4 | Bare filenames (no slash) | `settings.json`, `hooks.json`, `marketplace.json` | Ambiguous target |
 | 5 | Env-var keys | `CLAUDE_CODE_ENABLE_TODO_TOOLS`, `CLAUDE_PLUGIN_ROOT`, `CLAUDE_PROJECT_DIR` | Feature silently off |

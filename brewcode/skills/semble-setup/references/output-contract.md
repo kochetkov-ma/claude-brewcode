@@ -13,11 +13,11 @@ mode: <mode>  (reason: <matched keyword | default | checkpoint resume>)
 scope: <user|project|local>
 
 ## Before
-cli:      uv <ver|absent> | uvx <ver|absent> | semble pin 0.5.4 (<uvx-ephemeral|uv-tool ver>) | claude <ver>
+cli:      uv <ver|absent> | uvx <ver|absent> | semble pin 0.5.5 (<uvx-ephemeral|uv-tool ver>) | claude <ver>
 mcp:      <state> @ <scope>  [<connectivity>]
-cache:    <code root> | repo <hash8> | <size> | <staleness> | docs root reserved: <yes|no>
+cache:    <shared root> | repo <hash8|unknown> | variant <index leaf> | <repo cache size> | <staleness>
 guidance: rule <state> | CLAUDE.md <state> | hooks <n>/6 wired | permissions <yes|no>
-agents:   <total> total | <inherit> inherit | <patched> patched | <conflict> conflict | <skipped> skipped
+agents:   <total> total | <inherit> inherit | <patched> patched | <needs patch> need patch | <conflict> conflict | <skipped> skipped
 state:    phase=<phase> enabled=<bool> completed=[...]
 
 ## Actions
@@ -29,7 +29,7 @@ failed:    <list or none>
 ## Verification
 commands: <each command actually run, one per line, verbatim>
 smoke:    <query> -> <n> results, top = <file_path>:<start_line>-<end_line> score <score>  | skipped (<reason>)
-corpus:   code docs config | repo <hash8> | <chunk/file counts or unknown>
+corpus:   code docs config | repo <hash8|unknown> | <chunk/file counts or unknown>
 uncovered: .json/.json5/.csv/.tsv/.psv (no content type reaches them), .mdx/.txt (absent from _EXTENSION_TO_LANGUAGE) -> use rg
 
 ## Current Status
@@ -39,9 +39,13 @@ uncovered: .json/.json5/.csv/.tsv/.psv (no content type reaches them), .mdx/.txt
 <one concrete action, or "none">
 ```
 
-When `phase == awaiting_reload`, the **Next Step** must be exactly:
+When `phase == awaiting_reload`, the post-mutation status tail must be exactly:
 
 ```text
+## Current Status
+reload required — MCP registered, waiting for a new session
+
+## Next Step
 Reload Claude Code (new session), then run: /brewcode:semble-setup resume
 Checkpoint: <abs>/.claude/semble/state.json
 ```
@@ -54,7 +58,7 @@ Checkpoint: <abs>/.claude/semble/state.json
 |---------|-------------|
 | Detection | `SKILL.md` routing (`references/intent-routing.md`) |
 | Before | `semble-status.sh --json` |
-| Actions | the mutating script's `--json` (`semble-mcp.sh`, `semble-guidance.sh`, `semble-agents.sh`, `semble-project.sh`, `semble-remove.sh`) |
+| Actions | the `changed`, `unchanged`, `skipped` and `failed` arrays from every mutating script's `--json`, concatenated in execution order (`semble-mcp.sh`, `semble-guidance.sh`, `semble-agents.sh`, `semble-project.sh`, `semble-remove.sh`) |
 | Verification | `semble-project.sh smoke --json` + `semble-cache.sh info --json` + `semble-project.sh audit --json` |
 | Current Status | `semble-status.sh --json` `.verdict` (re-run **after** the mutation) |
 | Next Step | `semble-status.sh --json` `.nextStep` |
@@ -69,11 +73,13 @@ Checkpoint: <abs>/.claude/semble/state.json
 | `Before` is the pre-mutation snapshot | Taken by the status run at Step 1, before anything is written. Do not refresh it after the mutation — that is what `Current Status` is for. |
 | `Current Status` is post-mutation | Re-run `semble-status.sh --json` after the last write and read `.verdict`. Never reuse the Step-1 verdict. |
 | `commands` is verbatim and complete | Every command actually executed, one per line, exactly as run — including the ones that failed. Never a paraphrase, never a plan. Nothing that was not run may appear here. |
+| Action buckets preserve script outcomes | Keep every returned array item in execution order. A non-empty bucket prints one item per line; an empty bucket prints `none`. Never collapse a skipped verification into `unchanged`, and never move the phase to `ready` when `warm` or `smoke` was skipped. |
 | `scope` | Where `semble_code` is (or would be) registered. Default and expected value is `user`. |
-| `<hash8>` | First 8 hex chars of the repo's sha256 cache-dir name. Empty when unresolvable. |
+| `<hash8>` | First 8 hex chars of the repo's sha256 cache-dir name. Rendered as `unknown` when unresolvable. |
+| `variant <index leaf>` | The exact selected content variant. The registered `code docs config` corpus is `index-code-config-docs`; code-only is `index`. Other variants may coexist below the same repo hash and are not folded into this field. |
 | `hooks <n>/6 wired` | 6 = SessionStart(`semble-session.mjs`) + UserPromptSubmit(`semble-prefetch.mjs`) + PostToolUse(`semble-stats.mjs`) + PostToolUseFailure(`semble-stats.mjs`) + PreToolUse(`semble-reminder.mjs`, matcher `Bash\|Grep`) + SubagentStart(`semble-subagent.mjs`, no matcher — matches every agent type). Anything below 6 is half-wired — say so, do not round up to "installed". |
-| `staleness` | One of `absent | incomplete | mismatch | stale | fresh | unknown`. `stale` is reported as **likely stale** — the check approximates semble's own validation. |
-| `smoke` | `skipped (<reason>)` when `SEMBLE_NO_NETWORK=1`, when the MCP is not yet live, or when the mode never warms. Reasons are concrete, never "n/a". |
+| `staleness` | One of `absent | incomplete | mismatch | stale | fresh | unknown | legacy`. `legacy` means the registered combined corpus exists only in a pre-0.5.5 bare `index`; it is not the selected current variant. `stale` is reported as **likely stale** — the check approximates semble's own validation. |
+| `smoke` | `skipped (<reason>)` when `SEMBLE_NO_NETWORK=1`, `SEMBLE_DRY_RUN=1`, `uvx` is absent, or the mode never runs it. The smoke uses the pinned CLI and shared root, so an MCP reload boundary alone does not skip it. Reasons are concrete, never "n/a". |
 | `uncovered` | Printed on every invocation, verbatim as in the template. It is a standing limit of the corpus, not a per-run finding. |
 | the `coreutils` step | `semble-install.sh`'s `.timeout.coreutils.status`: `installed` -> `Actions -> changed`, everything else (`present`, `skipped`, `failed`, declined) -> `Actions -> skipped` with its `.reason` verbatim. It never reaches `failed:` and never changes the verdict — it is an optional upgrade, not a prerequisite. |
 | CLAUDE.md doctrine reconcile | `install --part claudemd` also scans the **root** `CLAUDE.md`, outside the semble markers, for a competing search doctrine. A line that puts grep/Bash/rg **first** or **denies** semantic search is removed and lands in `Actions -> changed` — one summary line naming the count and the `.bak` path, then one `removed L<n>: <verbatim line>` per cut, plus any search-titled heading the cut left empty. A line that merely mentions a search tool is left alone and lands in `Actions -> skipped` with its line number. A line that scopes rg to exact identifiers / regexes / paths / exhaustive enumeration is complementary and is not reported at all. Nothing to reconcile prints `CLAUDE.md: no competing search directive` in `unchanged`. |
@@ -86,7 +92,7 @@ Checkpoint: <abs>/.claude/semble/state.json
 
 | Never write | Because |
 |-------------|---------|
-| anything about a watcher, daemon, background indexer, or service being "started"/"running"/"stopped" | semble 0.5.4 has none. Staleness is re-checked inside each tool call behind a `3x last-build-duration` cooldown. |
+| anything about a watcher, daemon, background indexer, or service being "started"/"running"/"stopped" | semble 0.5.5 has none. Staleness is re-checked inside each tool call behind a `3x last-build-duration` cooldown. |
 | `installed` when `hooks` < 6, or when the MCP is registered but never verified | Half-wired is a distinct state; report `partial`. |
 | `connected` from config alone | `connectivity` comes only from the exit status of `claude mcp get semble_code`; with no signal it stays `unknown`. |
 | `stale` as a certainty | The check approximates `get_validated_cache`; say `likely stale` and offer `reindex` rather than acting. |
@@ -108,11 +114,11 @@ mode: status  (reason: default)
 scope: user
 
 ## Before
-cli:      uv absent | uvx absent | semble pin 0.5.4 (uvx-ephemeral) | claude 2.1.223
+cli:      uv absent | uvx absent | semble pin 0.5.5 (uvx-ephemeral) | claude 2.1.223
 mcp:      absent @ user  [unknown]
-cache:    /Users/me/Library/Caches/semble-code | repo — | 0 B | absent | docs root reserved: no
+cache:    /Users/me/Library/Caches/semble-code | repo unknown | variant index-code-config-docs | 0 B | absent
 guidance: rule absent | CLAUDE.md absent | hooks 0/6 wired | permissions no
-agents:   7 total | 3 inherit | 0 patched | 4 conflict | 0 skipped
+agents:   7 total | 3 inherit | 0 patched | 0 need patch | 4 conflict | 0 skipped
 state:    phase=absent enabled=null completed=[]
 
 ## Actions
@@ -123,12 +129,12 @@ failed:    none
 
 ## Verification
 commands: bash scripts/semble-status.sh --section all --json
-smoke:    skipped (MCP not registered)
-corpus:   code docs config | repo — | unknown
+smoke:    skipped (status mode does not run smoke)
+corpus:   code docs config | repo unknown | unknown
 uncovered: .json/.json5/.csv/.tsv/.psv (no content type reaches them), .mdx/.txt (absent from _EXTENSION_TO_LANGUAGE) -> use rg
 
 ## Current Status
-not installed — uv/uvx missing and semble_code is not registered in any scope
+not installed — semble_code is not registered
 
 ## Next Step
 Run /brewcode:semble-setup install

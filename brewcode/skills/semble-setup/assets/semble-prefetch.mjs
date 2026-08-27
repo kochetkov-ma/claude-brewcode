@@ -136,13 +136,13 @@ const TOP_K = 3;
 /**
  * The searcher. MUST stay byte-identical to the MCP registration written by
  * semble-mcp.sh (`SEMBLE_PIN_SPEC` and `SEMBLE_CONTENT_ARGS` in
- * scripts/lib/semble-common.sh) — semble keys its cache directory by project
- * path ALONE but rejects a cached index whose content-type set differs, so a
- * mismatched set here would make the hook and the server evict each other's
- * index on every alternation. tests/suite-hooks.mjs asserts the two agree.
+ * scripts/lib/semble-common.sh). Since 0.5.5 the content set selects an exact
+ * cache variant, so this hook must probe the same variant it will search.
  */
-const PIN_SPEC = 'semble[mcp]==0.5.4';
+const PIN_SPEC = 'semble[mcp]==0.5.5';
 const CONTENT_ARGS = ['code', 'docs', 'config'];
+const CONTENT_SCOPE = [...new Set(CONTENT_ARGS)].sort().join('-');
+const INDEX_LEAF = CONTENT_SCOPE === 'code' ? 'index' : `index-${CONTENT_SCOPE}`;
 
 // ── gate v3 ────────────────────────────────────────────────────────────────
 // INTENT and (DOMAIN or repo-reference), minus four suppressors. Measured on 61
@@ -391,7 +391,9 @@ const INDEX_FILES = ['chunks.json', 'metadata.json', 'bm25_index', 'semantic_ind
 function indexReady(root, hash) {
   if (!root || !hash) return false;
   try {
-    const dir = join(root, hash, 'index');
+    // Bare `index` may contain a pre-0.5.5 combined corpus. Ignore it: 0.5.5
+    // owns the exact combined variant below INDEX_LEAF and rebuilds safely.
+    const dir = join(root, hash, INDEX_LEAF);
     return INDEX_FILES.every((n) => existsSync(join(dir, n)));
   } catch {
     return false;
@@ -632,6 +634,6 @@ async function main() {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
 
 export {
-  COOLDOWN_MS, CONTENT_ARGS, INDEX_FILES, PIN_SPEC, THROTTLE_MS, TIMEOUT_COOLDOWN_MS,
+  COOLDOWN_MS, CONTENT_ARGS, INDEX_FILES, INDEX_LEAF, PIN_SPEC, THROTTLE_MS, TIMEOUT_COOLDOWN_MS,
   cacheRootOf, defaultCacheRoot, distill, gateV3, indexReady, render, repoHashOf,
 };

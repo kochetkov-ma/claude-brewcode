@@ -40,16 +40,16 @@
 
 ### Тип
 
-Embedding-based семантический поиск по коду. MCP-сервер `semble_code`. Ставится как `semble[mcp]`, мы пиним `0.5.4`.
+Embedding-based семантический поиск по коду. MCP-сервер `semble_code`. The active installation is pinned to exact `semble[mcp]==0.5.5`.
 
 ### Что делает
 
 | Tool | Аргументы | Отдаёт |
 |------|-----------|--------|
-| `search` | `query`, `repo` (обязателен), `top_k`, `max_snippet_lines` | `file_path`, `start_line`, `end_line`, `score`, `content` |
-| `find_related` | `file_path`, `line`, `repo` (обязателен) | то же |
+| `search` | `query`, required `repo`, `top_k`, `max_snippet_lines`, optional `content=code\|docs\|config\|all` | `file_path`, `start_line`, `end_line`, `score`, `content` |
+| `find_related` | `file_path`, `line`, required `repo`, optional `content=code\|docs\|config\|all` | то же |
 
-`repo` — абсолютный корень проекта или https git URL. Угадывать URL нельзя.
+`repo` is an absolute project root or an explicit `http://`/`https://` git URL; it is never inferred. Omitting optional `content` uses the MCP server's configured corpus.
 
 ### Как работает
 
@@ -59,13 +59,11 @@ Embedding-based семантический поиск по коду. MCP-сер�
 | Индекс | чанки кода + конфигов, косинусная близость |
 | Когда строится | лениво, ВНУТРИ вызова тула. Нет демона, нет watcher, нет фонового треда |
 | Ревалидация | pull-based, `_MIN_REVALIDATE_FACTOR = 3` — перестройка рассматривается только после 3x времени предыдущей сборки |
-| Кэш | macOS `$HOME/Library/Caches/semble`; Linux `${XDG_CACHE_HOME:-$HOME/.cache}/semble`; переопределяется `SEMBLE_CACHE_LOCATION` (`src/semble/cache.py`, `name = "semble"`) |
+| Кэш | Upstream defaults to macOS `$HOME/Library/Caches/semble` or Linux `${XDG_CACHE_HOME:-$HOME/.cache}/semble`. This skill sets one shared `SEMBLE_CACHE_LOCATION`: macOS `$HOME/Library/Caches/semble-code`, Linux `${XDG_CACHE_HOME:-$HOME/.cache}/semble-code` |
 | Корпус | `--content code docs config` — три бакета, 342 суффикса. `docs` обязателен: `markdown` лежит в `_DOC_LANGUAGES` (`index/files.py`), поэтому корпус `code config` индексировал НОЛЬ `.md` |
 | НЕ индексируется | `.json`, `.json5`, `.csv`, `.tsv`, `.psv` (бакет data не принадлежит ни одному content type); `.mdx`, `.txt` и любой суффикс, отсутствующий в `_EXTENSION_TO_LANGUAGE`. `.html`/`.htm` теперь индексируются вместе с docs |
-| Один content set на всех | Директория кэша ключуется ТОЛЬКО путём проекта (`cache.py:27-36`), но `_metadata_matches` (`cache.py:111`) требует `set(content_type) == set(content)`. Разные наборы у MCP и CLI делят одну директорию и вытесняют друг друга — полная пересборка на каждом чередовании |
+| Exact content variants | Since 0.5.5, one hashed repository directory holds independent exact-selection leaves: code-only is `index`; every other sorted selection is `index-<scope>`. The registered `code docs config` corpus is `index-code-config-docs`; sibling variants coexist without cross-content eviction |
 | Телеметрия | пишет `savings.jsonl` (flock, drop-on-contention) — считает ТОЛЬКО собственные вызовы, сравнения grep-vs-semantic там нет |
-
-> **Важная поправка.** Upstream README НЕ заявляет ни watcher, ни демона (grep по README: 0 совпадений на `watch`/`daemon`/`background`). Наш `brewcode/skills/semble-setup/SKILL.md` говорит РОВНО ТО ЖЕ («There is no watcher and no daemon», строка 28) — расхождения нет. Неточна лишь ремарка в скобках там же: «Its own README claims otherwise» — README ничего такого не заявляет.
 
 ### Плюсы
 
@@ -83,7 +81,7 @@ Embedding-based семантический поиск по коду. MCP-сер�
 |---|-------|
 | 1 | Нет watcher — индекс освежается лениво, и `_MIN_REVALIDATE_FACTOR = 3` может держать устаревший индекс на большом репозитории |
 | 2 | Первый вызов после изменений платит стоимостью пересборки внутри тула (видимая задержка агенту) |
-| 3 | `.json`/`.csv`/`.html` вне корпуса — конфиги в JSON и HTML-шаблоны не находятся вообще |
+| 3 | `.json`/`.csv` and suffixes with no content bucket such as `.mdx`/`.txt` remain outside the corpus; `.html`/`.htm` are indexed in `docs` |
 | 4 | Нет структурного графа: нет call-path, нет referencing symbols, нет inheritance |
 | 5 | `savings.jsonl` не даёт сравнительной метрики — нельзя доказать выигрыш над grep из собственных данных |
 | 6 | Молодой проект (первый релиз 2026-04-26), самый низкий star-count в списке |
@@ -93,14 +91,18 @@ Embedding-based семантический поиск по коду. MCP-сер�
 | Метрика | Значение |
 |---------|----------|
 | Stars | 5,845 |
-| GitHub releases | 24 (`v0.1.0` 2026-04-26 ... `v0.5.3` 2026-08-03) |
-| Каденция | ~4.1 дня на релиз (99 дней / 24 релиза) |
-| Последний GitHub release | `v0.5.3`, 2026-08-03 |
-| Тег `v0.5.4` | существует в `git/refs/tags`, но GitHub Release для него НЕ опубликован |
-| PyPI latest | `0.5.4`, upload 2026-08-06T07:00:12Z |
-| Наш пин | `0.5.4` — дрейфа нет (поднят с `0.5.2` 2026-08-08) |
+| GitHub releases | 26 (`v0.1.0` 2026-04-26 ... `v0.5.5` 2026-08-12) |
+| Каденция | ~4.2 days per release (108 days / 26 releases) |
+| Последний GitHub release | `v0.5.5`, 2026-08-12 |
+| GitHub Release `v0.5.4` | now returned by the Releases API; the frozen 2026-08-08 observation is retained in the historical/superseded ledger below |
+| PyPI latest | `0.5.5`, upload 2026-08-12T05:40:19.935353Z |
+| Наш пин | exact `semble[mcp]==0.5.5` — no drift |
 
-> Поправка к исходной фактуре: `0.5.4` вышел на PyPI 2026-08-06, но GitHub Release на него отсутствует — тег есть, релиза нет. Формулировка «released 2026-08-06» верна только для PyPI.
+### Current addendum — Semble 0.5.5 (verified 2026-08-27)
+
+- [PyPI 0.5.5](https://pypi.org/project/semble/0.5.5/) records the 2026-08-12 release, sdist SHA-256 `72cab788f01316c6e4559ccb55a3268eb39d8fa17cb862cb5cc6fdd3ecd93f79`, and attested source commit `921849164e2632dd4f0e1c1370f82cfe15ed6d6c`.
+- The upstream [v0.5.5 release](https://github.com/MinishLab/semble/releases/tag/v0.5.5) adds the MCP content filter. At the attested commit, [`mcp.py`](https://github.com/MinishLab/semble/blob/921849164e2632dd4f0e1c1370f82cfe15ed6d6c/src/semble/mcp.py#L27-L47) defines optional `code|docs|config|all` selection and uses the configured server corpus when omitted.
+- At the same commit, [`cache.py`](https://github.com/MinishLab/semble/blob/921849164e2632dd4f0e1c1370f82cfe15ed6d6c/src/semble/cache.py#L33-L37) derives an exact leaf from the sorted content set. The active combined corpus therefore uses `index-code-config-docs`; a bare pre-0.5.5 combined `index` is historical, while a 0.5.5 code-only `index` is current for that distinct selection.
 
 ### Бенчмарки
 
@@ -637,7 +639,22 @@ Git-хуки (отдельно от CC): `graphify hook install|uninstall|status
 
 ---
 
-## Известные дефекты у нас
+## Historical/superseded ledger — recorded 2026-08-08
+
+> **Superseded state — verified 2026-08-27.** These retained observations are not
+> current known defects: the active pin is exact `semble[mcp]==0.5.5`, GitHub now
+> returns the `v0.5.4` Release, and the inaccurate SKILL parenthetical has been
+> removed. The current 0.5.5 addendum above is authoritative.
+
+Retained original evidence:
+
+> **Важная поправка.** Upstream README НЕ заявляет ни watcher, ни демона (grep по README: 0 совпадений на `watch`/`daemon`/`background`). Наш `brewcode/skills/semble-setup/SKILL.md` говорит РОВНО ТО ЖЕ («There is no watcher and no daemon», строка 28) — расхождения нет. Неточна лишь ремарка в скобках там же: «Its own README claims otherwise» — README ничего такого не заявляет.
+>
+> Поправка к исходной фактуре: `0.5.4` вышел на PyPI 2026-08-06, но GitHub Release на него отсутствует — тег есть, релиза нет. Формулировка «released 2026-08-06» верна только для PyPI.
+
+The tables below preserve the original dated evidence text, including the
+`0.5.2` -> `0.5.4` compatibility closure; their historical wording is not a
+statement of current package or repository state.
 
 | # | Дефект | Где | Что не так | Проверено |
 |---|--------|-----|-----------|-----------|

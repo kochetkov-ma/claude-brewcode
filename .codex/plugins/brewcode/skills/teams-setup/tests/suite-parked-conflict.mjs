@@ -122,18 +122,18 @@ function makeProject(label, rows) {
     ].join('\n'),
   );
   writeFileSync(join(teamDir, 'trace.jsonl'), '');
-  for (const a of rows) writeFileSync(join(root, '.codex', 'agents', `${a}.md`), AGENT_BODY(a));
+  for (const a of rows) writeFileSync(join(root, '.codex', 'agents', `${a}.toml`), AGENT_BODY(a));
   return root;
 }
 
 const ls = (dir) => readdirSync(dir).sort();
 const readOrGone = (p) => (existsSync(p) ? readFileSync(p, 'utf8') : '<file gone>');
 
-/** Park the team, then let a third party write a live `worker-one.md` into the shared namespace. */
+/** Park the team, then let a third party write a live `worker-one.toml` into the shared namespace. */
 function makeCollision(label) {
   const root = makeProject(label, ['worker-one', 'worker-two', 'intent-guard']);
   const off = run(TOGGLE, ['t1', 'disable'], root);
-  const live = join(root, '.codex', 'agents', 'worker-one.md');
+  const live = join(root, '.codex', 'agents', 'worker-one.toml');
   writeFileSync(live, FOREIGN_BODY);
   return { root, off, live, parked: `${live}.disabled` };
 }
@@ -166,7 +166,7 @@ function makeCollision(label) {
   check(
     'b1.agentsDir',
     ls(join(root, '.codex', 'agents')),
-    ['intent-guard.toml', 'worker-one.md', 'worker-one.md.disabled', 'worker-two.md.disabled'],
+    ['intent-guard.toml', 'worker-one.toml', 'worker-one.toml.disabled', 'worker-two.toml.disabled'],
     'no member was unparked: a collision on ANY row aborts before the first mv',
   );
   check('b1.noVerdict', has(r.stdout, '✅ enable'), false, 'no success verdict is printed');
@@ -230,10 +230,10 @@ function makeCollision(label) {
   check(
     'b4.agentsDir',
     ls(join(root, '.codex', 'agents')),
-    ['intent-guard.toml', 'worker-one.md', 'worker-two.md'],
+    ['intent-guard.toml', 'worker-one.toml', 'worker-two.toml'],
     'every member is live again and no .md.disabled is left behind',
   );
-  check('b4.bytes', readOrGone(join(root, '.codex', 'agents', 'worker-one.md')), AGENT_BODY('worker-one'), 'the round trip preserved every byte');
+  check('b4.bytes', readOrGone(join(root, '.codex', 'agents', 'worker-one.toml')), AGENT_BODY('worker-one'), 'the round trip preserved every byte');
   const v = run(VERIFY, ['t1'], root);
   check('b4.verify', v.status, 0, 'verify passes on the restored team');
   check(
@@ -272,7 +272,7 @@ function makeCollision(label) {
   check(
     'b5.agentsDir',
     ls(join(root, '.codex', 'agents')),
-    ['intent-guard.toml', 'worker-one.md', 'worker-one.md.disabled', 'worker-two.md.disabled'],
+    ['intent-guard.toml', 'worker-one.toml', 'worker-one.toml.disabled', 'worker-two.toml.disabled'],
     'nothing moved: a collision on ANY row aborts before the first mv',
   );
   check('b5.noVerdict', has(r.stdout, '✅ disable'), false, 'no success verdict is printed');
@@ -308,10 +308,10 @@ function makeCollision(label) {
   check(
     'b7.agentsDir',
     ls(join(root, '.codex', 'agents')),
-    ['intent-guard.toml', 'worker-one.md.disabled', 'worker-two.md.disabled'],
+    ['intent-guard.toml', 'worker-one.toml.disabled', 'worker-two.toml.disabled'],
     'every member is parked and no live .md is left behind',
   );
-  check('b7.bytes', readOrGone(join(root, '.codex', 'agents', 'worker-one.md.disabled')), AGENT_BODY('worker-one'), 'parking preserved every byte');
+  check('b7.bytes', readOrGone(join(root, '.codex', 'agents', 'worker-one.toml.disabled')), AGENT_BODY('worker-one'), 'parking preserved every byte');
   check('b7.verdict', has(r.stdout, '✅ disable'), true, 'the success verdict is printed');
   const v = run(VERIFY, ['t1'], root);
   check('b7.verifyStatus', v.status, 0, 'verify passes on a cleanly parked team');
