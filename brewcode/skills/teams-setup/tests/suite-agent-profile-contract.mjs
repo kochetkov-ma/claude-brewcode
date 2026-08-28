@@ -201,14 +201,14 @@ for (const [name, path] of [
 }
 
 const tokenizerUrl = 'https://openaipublic.blob.core.windows.net/encodings/o200k_base.tiktoken';
-const tokenizerSha = '446a9538cb6c348e3516120d7c08b09f57c36495e2acfffe59a5bf8b0cfb1a2d';
+const encodingDigest = '446a9538cb6c348e3516120d7c08b09f57c36495e2acfffe59a5bf8b0cfb1a2d';
 const preparerManifestResult = spawnSync('python3', ['-I', '-S', canonicalPreparerPath, 'manifest'], {
   encoding: 'utf8',
 });
 const preparerManifest = JSON.parse(preparerManifestResult.stdout);
 check('preparer.manifest.exit', preparerManifestResult.status, 0, 'the artifact manifest resolves');
 check('preparer.manifest.version', preparerManifest.tiktoken_version, '0.13.0', 'the package is exact');
-check('preparer.manifest.encodingHash', preparerManifest.encoding_sha256, tokenizerSha, 'the BPE hash is exact');
+check('preparer.manifest.encodingHash', preparerManifest.encoding_sha256, encodingDigest, 'the BPE hash is exact');
 check(
   'preparer.manifest.declaredDependencies',
   preparerManifest.declared_dependencies.join('|'),
@@ -716,7 +716,7 @@ check('counter.identity.exit', counterIdentity.status, 0, 'the pinned tokenizer 
 check(
   'counter.identity.output',
   counterIdentity.stdout,
-  `tiktoken=0.13.0 encoding=o200k_base bpe_sha256=${tokenizerSha} cache=verified-offline\n`,
+  `tiktoken=0.13.0 encoding=o200k_base bpe_sha256=${encodingDigest} cache=verified-offline\n`,
   'the counter reports package, encoding, cache hash, and offline verification',
 );
 
