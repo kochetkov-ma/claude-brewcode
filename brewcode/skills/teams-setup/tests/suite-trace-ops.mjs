@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
 import {
-  chmodSync, existsSync, lstatSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync,
+  chmodSync, copyFileSync, existsSync, lstatSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync,
   symlinkSync, writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
@@ -70,7 +70,7 @@ const c0WithoutNul = Array.from({ length: 31 }, (_, index) => String.fromCharCod
   // GIVEN: raw bytes for the complete C0 range; NUL cannot travel in a process argv,
   // but it can reach the exact stdin encoder used by every trace field.
   const script = readFileSync(TRACE_OPS, 'utf8');
-  const begin = `  printf '%s' "$1" | node -e '\n`;
+  const begin = `  printf '%s' "$1" | run_node -e '\n`;
   const end = `\n' "$_json_limit" || die "trace-ops: JSON encoding failed"`;
   const beginAt = script.indexOf(begin);
   const endAt = script.indexOf(end, beginAt + begin.length);
@@ -88,6 +88,57 @@ const c0WithoutNul = Array.from({ length: 31 }, (_, index) => String.fromCharCod
     JSON.stringify(Array.from({ length: 32 }, (_, index) => index)),
     'U+0000 through U+001F round-trip through JSON.parse',
   );
+}
+
+{
+  // GIVEN: a copied project helper, a bounded resolver, and hostile PATH/Node preload inputs.
+  const projectRoot = join(BASE, 'bounded-project');
+  const teamDir = join(projectRoot, '.claude', 'teams', 'unit');
+  const resolver = join(projectRoot, '.claude', 'scripts', 'toolchain_preflight.py');
+  const shadowDir = join(projectRoot, 'shadow-bin');
+  const boundedMarker = join(projectRoot, 'bounded-used');
+  const shadowMarker = join(projectRoot, 'shadow-used');
+  const preloadMarker = join(projectRoot, 'preload-used');
+  const preload = join(projectRoot, 'preload.cjs');
+  mkdirSync(teamDir, { recursive: true });
+  mkdirSync(join(projectRoot, '.claude', 'scripts'), { recursive: true });
+  mkdirSync(shadowDir, { recursive: true });
+  copyFileSync(TRACE_OPS, join(teamDir, 'trace-ops.sh'));
+  chmodSync(join(teamDir, 'trace-ops.sh'), 0o755);
+  writeFileSync(join(teamDir, 'trace.jsonl'), '');
+  writeFileSync(preload, `require('node:fs').writeFileSync(${JSON.stringify(preloadMarker)}, 'bad');\n`);
+  writeFileSync(
+    resolver,
+    `#!/bin/sh\nset -eu\n[ "$1" = exec ] && [ "$2" = node ] && [ "$3" = -- ]\nshift 3\nprintf used > ${JSON.stringify(boundedMarker)}\nexec ${JSON.stringify(process.execPath)} "$@"\n`,
+  );
+  chmodSync(resolver, 0o755);
+  writeFileSync(
+    join(shadowDir, 'node'),
+    `#!/bin/sh\nprintf used > ${JSON.stringify(shadowMarker)}\nexit 97\n`,
+  );
+  chmodSync(join(shadowDir, 'node'), 0o755);
+
+  // WHEN: trace append runs with only the shadow Node on PATH and a preload request.
+  const result = spawnSync(
+    'sh',
+    [join(teamDir, 'trace-ops.sh'), 'add', teamDir, 'sid00000', 'agent', 'track', 'completed', 'bounded'],
+    {
+      encoding: 'utf8',
+      timeout: 8000,
+      env: {
+        ...process.env,
+        PATH: `${shadowDir}:/usr/bin:/bin`,
+        NODE_OPTIONS: `--require=${preload}`,
+        NODE_PATH: projectRoot,
+      },
+    },
+  );
+
+  // THEN: every Node operation uses the project resolver with injection variables removed.
+  check('boundedNode.exit', result.status, 0, 'bounded trace append succeeds');
+  check('boundedNode.resolver', existsSync(boundedMarker), true, 'project resolver is used');
+  check('boundedNode.shadow', existsSync(shadowMarker), false, 'PATH Node is not used');
+  check('boundedNode.preload', existsSync(preloadMarker), false, 'NODE_OPTIONS preload is removed');
 }
 
 for (const [name, sid, agent, text, key, expected] of [
@@ -791,13 +842,16 @@ fs.renameSync = (from, to) => {
   return realRename(from, to);
 };
 `);
+  const injectedNodeDir = commandShim('cursor-target-substitution', 'node', `
+NODE_OPTIONS="--require=${preloadPath}" exec ${JSON.stringify(process.execPath)} "$@"
+`);
   // WHEN: publication reaches the old check-to-rename race window.
   const setResult = spawnSync('sh', [TRACE_OPS, 'cursor', teamDir, 'set', '2026-08-28T01:02:03Z'], {
     encoding: 'utf8',
     timeout: 8000,
     env: {
       ...process.env,
-      NODE_OPTIONS: `${process.env.NODE_OPTIONS || ''} --require=${preloadPath}`.trim(),
+      PATH: `${injectedNodeDir}:${process.env.PATH}`,
       TRACE_CURSOR_SAVED: savedPath,
       TRACE_CURSOR_FOREIGN: foreign,
     },

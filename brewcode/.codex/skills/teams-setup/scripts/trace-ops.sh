@@ -6,10 +6,35 @@ USAGE="Usage: trace-ops.sh <add|read|cursor|migrate> <team_dir> [args...]"
 
 die() { printf '%s\n' "$*" >&2; exit 1; }
 
+TRACE_SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)" \
+  || die "trace-ops: cannot resolve script directory"
+TRACE_NODE_RESOLVER=""
+case "$TRACE_SCRIPT_DIR" in
+  */.codex/teams/*)
+    TRACE_PROJECT_ROOT="$(CDPATH= cd -- "$TRACE_SCRIPT_DIR/../../.." && pwd -P)" \
+      || die "trace-ops: cannot resolve project root"
+    if [ -f "$TRACE_PROJECT_ROOT/.codex/scripts/toolchain_preflight.py" ] && \
+      [ -x "$TRACE_PROJECT_ROOT/.codex/scripts/toolchain_preflight.py" ]; then
+      TRACE_NODE_RESOLVER="$TRACE_PROJECT_ROOT/.codex/scripts/toolchain_preflight.py"
+    fi
+    ;;
+esac
+if [ -z "$TRACE_NODE_RESOLVER" ]; then
+  TRACE_NODE_PATH="$(command -v node 2>/dev/null || true)"
+  [ -n "$TRACE_NODE_PATH" ] || die "node is required for trace operations"
+fi
+
+run_node() (
+  unset NODE_OPTIONS NODE_PATH NPM_CONFIG_NODE_OPTIONS npm_config_node_options
+  if [ -n "$TRACE_NODE_RESOLVER" ]; then
+    exec "$TRACE_NODE_RESOLVER" exec node -- "$@"
+  fi
+  exec "$TRACE_NODE_PATH" "$@"
+)
+
 encode_json() {
   _json_limit="${2:-}"
-  command -v node >/dev/null 2>&1 || die "node is required for safe JSON encoding"
-  printf '%s' "$1" | node -e '
+  printf '%s' "$1" | run_node -e '
 const chunks = [];
 process.stdin.on("data", (chunk) => chunks.push(chunk));
 process.stdin.on("end", () => {
@@ -49,8 +74,7 @@ release_trace_lock() {
 }
 
 trace_target_identity() {
-  command -v node >/dev/null 2>&1 || die "node is required for safe trace publication"
-  node -e '
+  run_node -e '
 const fs = require("node:fs");
 const target = process.argv[1];
 try {
@@ -68,8 +92,7 @@ try {
 }
 
 same_regular_identity() {
-  command -v node >/dev/null 2>&1 || return 1
-  node -e '
+  run_node -e '
 const fs = require("node:fs");
 try {
   const left = fs.lstatSync(process.argv[1], { bigint: true });
@@ -86,8 +109,7 @@ append_trace_delta() {
   _append_target="$1"
   _append_delta="$2"
   _append_expected="$3"
-  command -v node >/dev/null 2>&1 || die "node is required for safe trace publication"
-  node - "$_append_target" "$_append_delta" "$_append_expected" <<'NODE'
+  run_node - "$_append_target" "$_append_delta" "$_append_expected" <<'NODE'
 const fs = require('node:fs');
 
 const [target, deltaPath, expected] = process.argv.slice(2);
@@ -166,8 +188,7 @@ NODE
 
 migration_timestamp() {
   _migration_date="${1:-1970-01-01}"
-  command -v node >/dev/null 2>&1 || die "node is required for migration date validation"
-  node -e '
+  run_node -e '
 const value = process.argv[1];
 if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value)) process.exit(1);
 const stamp = `${value}T00:00:00Z`;
@@ -181,8 +202,7 @@ process.stdout.write(stamp);
 }
 
 validate_trace_delta() {
-  command -v node >/dev/null 2>&1 || die "node is required for migration validation"
-  node -e '
+  run_node -e '
 const fs = require("node:fs");
 try {
   const text = new TextDecoder("utf-8", { fatal: true }).decode(fs.readFileSync(process.argv[1]));
@@ -202,8 +222,7 @@ snapshot_regular_file() {
   _snapshot_source="$1"
   _snapshot_target="$2"
   _snapshot_expected="$3"
-  command -v node >/dev/null 2>&1 || die "node is required for safe file reads"
-  node -e '
+  run_node -e '
 const fs = require("node:fs");
 const [source, target, expected] = process.argv.slice(1);
 const noFollow = fs.constants.O_NOFOLLOW;
@@ -341,8 +360,7 @@ atomic_write_text() {
   _atomic_target="$1"
   _atomic_value="$2"
   _atomic_expected="$3"
-  command -v node >/dev/null 2>&1 || die "node is required for atomic cursor publication"
-  node -e '
+  run_node -e '
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
