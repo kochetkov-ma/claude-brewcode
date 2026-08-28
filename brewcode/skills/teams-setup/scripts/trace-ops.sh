@@ -409,6 +409,16 @@ cmd_add() {
   _dir="$1"; _sid="$2"; _agent="$3"; _kind="$4"; _qual="$5"
   shift 5; _text="$*"
 
+  [ "${#_sid}" -eq 8 ] \
+    || die "Invalid sid: expected exactly 8 ASCII marker characters"
+  case "$_sid" in
+    *[!A-Za-z0-9._-]*) die "Invalid sid: expected exactly 8 ASCII marker characters" ;;
+  esac
+  case "$_agent" in
+    ''|*[!a-z0-9-]*|[!a-z0-9]*) \
+      die "Invalid agent: expected ^[a-z0-9][a-z0-9-]*$" ;;
+  esac
+
   case "$_kind" in
     track)
       case "$_qual" in

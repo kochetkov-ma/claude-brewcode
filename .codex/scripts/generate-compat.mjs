@@ -647,14 +647,15 @@ check_native_agent() {
   _f="$1"
   _expected_name="$2"
   _kind="$3"
-  python3 - "$_f" "$_expected_name" "$_kind" "$TEAM_NAME" <<'PY'
+  python3 -I -S - "$_f" "$_expected_name" "$_kind" "$TEAM_NAME" "$SCRIPT_DIR/count-tokens.py" "$SCRIPT_DIR/prepare-tokenizer.py" <<'PY'
 import pathlib
 import re
+import subprocess
 import sys
 import tomllib
 
 path = pathlib.Path(sys.argv[1])
-expected_name, kind, team = sys.argv[2:5]
+expected_name, kind, team, token_counter, token_preparer = sys.argv[2:7]
 try:
     data = tomllib.loads(path.read_text(encoding="utf-8"))
 except (OSError, UnicodeError, tomllib.TOMLDecodeError) as exc:
@@ -700,9 +701,16 @@ if not bullets or bullets[0] != "- " + chr(96) + reference + chr(96):
     print(f"  FAIL: {reference} must be the first Must-load references bullet")
     raise SystemExit(1)
 body_bytes = len(body.encode("utf-8"))
-body_tokens = (len(body) + 3) // 4
+counted = subprocess.run(
+    [sys.executable, "-I", "-S", token_preparer, "run", token_counter],
+    input=body, text=True, capture_output=True, check=False,
+)
+if counted.returncode != 0 or not counted.stdout.strip().isdigit():
+    print(f"  FAIL: exact token count unavailable: {(counted.stderr or counted.stdout).strip()}")
+    raise SystemExit(1)
+body_tokens = int(counted.stdout)
 if body_bytes > 3200 or body_tokens > 800:
-    print(f"  FAIL: developer_instructions is {body_bytes} bytes/{body_tokens} est-tokens; ceilings are 3200 bytes and 800 ceil(chars/4) tokens")
+    print(f"  FAIL: developer_instructions is {body_bytes} bytes/{body_tokens} exact o200k tokens; ceilings are 3200 bytes and 800 tokens")
     raise SystemExit(1)
 PY
 }
@@ -789,6 +797,39 @@ function nativeTeamSchemaFixtures() {
     "  check('verifier.exactTomlKeys.exit', result.status, 1, 'an unsupported fourth TOML key fails');",
     "  check('verifier.exactTomlKeys.reason', result.output.includes('TOML keys must be exactly name, description, developer_instructions'), true,",
     "    'the verifier enforces the exact native schema structurally');",
+    '  removeWorld(world);',
+    '}',
+    '',
+    '{',
+    '  const world = makeWorld();',
+    "  const poisonDir = join(world, 'poison-python-environment');",
+    "  const poisonSentinel = join(world, 'python-injection-sentinel');",
+    '  mkdirSync(poisonDir, { recursive: true });',
+    "  writeFileSync(join(poisonDir, 'sitecustomize.py'), [",
+    "    'import os',",
+    "    'from pathlib import Path',",
+    "    'Path(os.environ[\\\"TOKENIZER_POISON_SENTINEL\\\"]).write_text(\\\"executed\\\\n\\\", encoding=\\\"utf-8\\\")',",
+    "    'raise RuntimeError(\\\"malicious sitecustomize executed\\\")',",
+    "    '',",
+    "  ].join('\\n'));",
+    "  const missingHostCache = join(world, 'missing-host-tiktoken-cache');",
+    '  const result = runVerifier(world, {',
+    '    ...process.env,',
+    '    PYTHONPATH: poisonDir,',
+    '    PYTHONHOME: poisonDir,',
+    '    PYTHONUSERBASE: poisonDir,',
+    "    PYTHONSTARTUP: join(poisonDir, 'sitecustomize.py'),",
+    '    TIKTOKEN_CACHE_DIR: missingHostCache,',
+    '    TOKENIZER_POISON_SENTINEL: poisonSentinel,',
+    '  });',
+    "  check('verifier.preparedProfileCount.exit', result.status, 0,",
+    "    'native profile counts use the verified prepared runtime');",
+    "  check('verifier.preparedProfileCount.agent', result.output.includes('CHECK: agent build-eng ... OK'), true,",
+    "    'malicious Python environment cannot affect the native domain profile count');",
+    "  check('verifier.preparedProfileCount.hostCache', existsSync(missingHostCache), false,",
+    "    'native profile counting neither reads nor creates the missing host cache');",
+    "  check('verifier.preparedProfileCount.noInjection', existsSync(poisonSentinel), false,",
+    "    'neither outer preparer nor isolated runtime executes injected sitecustomize');",
     '  removeWorld(world);',
     '}',
     '',
@@ -881,7 +922,7 @@ function nativeLifecycleTeamHelper(teamTemplate) {
     "  const intent = rows.includes('intent-guard');",
     "  const domainRows = rows.filter((name) => name !== 'intent-guard');",
     "  const intentRow = intent ? '|intent-guard|--|Anti-drift check: what was ASKED vs what was DELIVERED|active|2026-08-27|review-only|6.1.4|' : '';",
-    "  const roster = rows.map((name) => name === 'intent-guard' ? intentRow : `|${name}|api|fixture mission|active|2026-08-27|domain|6.1.4|`).join('\\n');",
+    "  const roster = [intentRow, ...domainRows.map((name) => `|${name}|api|fixture mission|active|2026-08-27|domain|6.1.4|`)].filter(Boolean).join('\\n');",
     '  const rendered = `${NATIVE_TEAM_TEMPLATE',
     "    .replaceAll('{TEAM_NAME}', 't1')",
     "    .replaceAll('{DATE}', '2026-08-27')",
@@ -903,7 +944,9 @@ function nativeLifecycleTeamHelper(teamTemplate) {
 function rewriteNativeLifecycleSuite(value, teamTemplate) {
   const teamWriter = /writeFileSync\(\s*join\(teamDir, 'team\.md'\),[\s\S]*?\n  \);/;
   if (!teamWriter.test(value)) throw new Error('native lifecycle fixture team writer not found');
-  value = value.replace(/const AGENT_BODY = \(name\) => .*?;\n/, `${nativeLifecycleAgentFixture()}\n`);
+  const agentFixture = /const AGENT_BODY = \(name\) => `[\s\S]*?`;\n/;
+  if (!agentFixture.test(value)) throw new Error('native lifecycle agent fixture not found');
+  value = value.replace(agentFixture, `${nativeLifecycleAgentFixture()}\n`);
   value = value.replace('function makeProject(', `${nativeLifecycleTeamHelper(teamTemplate)}\n\nfunction makeProject(`);
   value = value.replace(teamWriter, "writeFileSync(join(teamDir, 'team.md'), nativeTeam(root, rows));");
   value = value.replace(
@@ -1180,6 +1223,10 @@ function nativeTeamsWorkflow(sourceBody) {
     '',
     'Run `scripts/detect-mode.sh`, inventory `.codex/teams/` and `.codex/agents/`, read an existing roster/trace, and run `scripts/verify-team.sh {TEAM_NAME}` when the team exists. A missing team stops every mode except `install`; an existing team stops `install` unless the user approves routing to `upgrade`.',
     '',
+    'An absent `trace.jsonl` is valid before the first event or after cleanup: status reports zero events, verification remains read-only, and `trace-ops.sh add` creates it safely on the first write. A present trace target must be a non-symlink regular file.',
+    '',
+    'Before any team mutation, run the read-only, offline preflight `python3 -I -S scripts/prepare-tokenizer.py check`. If the prerequisite is missing, retain and report its repair command; `status` does not run team verification, while a mutating mode waits for its explicit approval. Only after that approval, run `python3 -I -S scripts/prepare-tokenizer.py prepare && python3 -I -S scripts/prepare-tokenizer.py check`; this is the sole tokenizer network/install path, and failure stops the mode. `verify-team.sh` and token counts use isolated `prepare-tokenizer.py run count-tokens.py` without network, installation, fallback, host Python injection, or an unverified runtime.',
+    '',
     '## Mode: status',
     '',
     'Read `team.md` and `trace.jsonl` through `scripts/trace-ops.sh read`. Report domain-agent count, active/disabled/missing state, took/refused/completed/failed totals, success rate, issues by severity, insights, last activity, per-agent health, policy, verifier result, and actionable recommendations. Do not write, delegate, or request approval.',
@@ -1196,11 +1243,11 @@ function nativeTeamsWorkflow(sourceBody) {
     '',
     '### C3-C4: creation and roster finalization',
     '',
-    'Create one approved `.codex/agents/{name}.toml` per bounded owner from `references/agent-template.md`. Parse before and after writing. Enforce every live or parked domain member description as one nonempty line of at most 100 characters. `developer_instructions` has only the ordered headings `Mission`, `Owned surfaces`, `Exclusions`, `Must-load references`, `Unique invariants`, `Unique verification`; the first must-load item is `.codex/teams/{TEAM_NAME}/team.md`, occurring once. Enforce <=3200 UTF-8 bytes and `ceil(chars/4) <=800`.',
+    'Create one approved `.codex/agents/{name}.toml` per bounded owner from `references/agent-template.md`. Parse before and after writing. Enforce every live or parked domain member description as one nonempty line of at most 100 characters. `developer_instructions` has only the ordered headings `Mission`, `Owned surfaces`, `Exclusions`, `Must-load references`, `Unique invariants`, `Unique verification`; the first must-load item is `.codex/teams/{TEAM_NAME}/team.md`, occurring once. Enforce <=3200 UTF-8 bytes and <=800 exact `tiktoken==0.13.0` `o200k_base` tokens.',
     '',
     'For policy `required`, the bootstrap already called the create-only intent-guard emitter: an approved existing non-symlink regular file was reused byte-identically, or an absent target was published atomically without replacement. Invalid, symlink, nonregular, or lost concurrent-create paths fail closed without mutation. Never author or overwrite the guard here. `legacy-absent` exists only on upgrades and gets no guard.',
     '',
-    'Finalize only successfully parsed agents. Domain names are unique; `Agents` counts domain rows only. `required` has exactly one fixed review-only guard row and its exact shared guard sentence; `legacy-absent` has neither row nor any shared-contract mention of a phantom guard. The complete substituted `team.md` must stay <=2800 characters and `ceil(chars/4) <=700`.',
+    'Finalize only successfully parsed agents. Domain names are unique; `Agents` counts domain rows only. `required` has exactly one fixed review-only guard row and its exact shared guard sentence; `legacy-absent` has neither row nor any shared-contract mention of a phantom guard. The complete substituted `team.md` must stay <=2800 characters and <=700 exact `tiktoken==0.13.0` `o200k_base` tokens. `verify-team.sh` fails closed if that pinned tokenizer is unavailable or mismatched and never installs it.',
     '',
     '### C5-C7: independent review',
     '',
@@ -1251,11 +1298,19 @@ for (const mode of nativeModes) {
 const bootstrapAt = canonicalSkill.indexOf('### C2.6: shared-contract bootstrap');
 const createAt = canonicalSkill.indexOf('### C3-C4: creation and roster finalization');
 const reviewAt = canonicalSkill.indexOf('### C5-C7: independent review');
+const tokenizerCheckAt = canonicalSkill.indexOf('python3 -I -S scripts/prepare-tokenizer.py check');
+const tokenizerPrepareAt = canonicalSkill.indexOf('python3 -I -S scripts/prepare-tokenizer.py prepare');
 check(
   'install.nativeStageOrder',
   bootstrapAt >= 0 && bootstrapAt < createAt && createAt < reviewAt,
   true,
   'shared contract bootstrap precedes native TOML creation and independent review',
+);
+check(
+  'workflow.tokenizerApprovalOrder',
+  tokenizerCheckAt >= 0 && tokenizerCheckAt < tokenizerPrepareAt,
+  true,
+  'read-only tokenizer check precedes the explicitly approved prepare path',
 );
 for (const literal of [
   'Before any domain agent write',
@@ -1268,6 +1323,10 @@ for (const literal of [
   'obtain approval for roster actions',
   '\`status\` asks nothing',
   'Every mutating mode requires \`request_user_input\` approval',
+  'An absent \`trace.jsonl\` is valid before the first event or after cleanup',
+  'Before any team mutation, run the read-only, offline preflight \`python3 -I -S scripts/prepare-tokenizer.py check\`',
+  'Only after that approval, run \`python3 -I -S scripts/prepare-tokenizer.py prepare && python3 -I -S scripts/prepare-tokenizer.py check\`',
+  '\`verify-team.sh\` and token counts use isolated \`prepare-tokenizer.py run count-tokens.py\` without network, installation, fallback, host Python injection, or an unverified runtime',
   'resolve \`REPORT_ROOT\` from the narrowest applicable durable project guidance',
   'Every slash-separated segment must match \`^[A-Za-z0-9._-]+$\`',
   'Equal-specificity conflicting report-root directives -> STOP',
@@ -1285,7 +1344,7 @@ for (const literal of [
 }
 check(
   'workflow.compactSkillCeiling',
-  Math.ceil(canonicalSkill.length / 4) <= 3125,
+  canonicalSkill.length <= 12500,
   true,
   'complete native workflow stays within its 12,500-character compact ceiling',
 );
@@ -1692,11 +1751,11 @@ With no explicit mode, an existing team resolves to \`status\`; otherwise the wo
     intent-guard.toml
   teams/<name>/
     team.md
-    trace.jsonl
+    trace.jsonl  # optional until first trace event
     trace-ops.sh
 \`\`\`
 
-Domain TOML contains only \`name\`, \`description\`, and \`developer_instructions\`; every live or parked domain description is one nonempty line of at most 100 characters. The instructions use the six ordered headings documented in \`references/agent-template.md\`; shared acceptance, routing, tracing, return, and colleague rules live once in \`team.md\`. The report root comes from applicable project guidance (default \`.codex/reports\`), uses only \`[A-Za-z0-9._-]+\` non-dot segments, and fails closed on equal-specificity conflicts. Required policy names its shared review-only guard exactly once, including same-line occurrence counting; legacy-absent names no phantom guard. The full roster stays within 2800 characters / 700 estimated tokens, and each domain \`developer_instructions\` stays within 3200 UTF-8 bytes / 800 estimated tokens.
+Domain TOML contains only \`name\`, \`description\`, and \`developer_instructions\`; every live or parked domain description is one nonempty line of at most 100 characters. The instructions use the six ordered headings documented in \`references/agent-template.md\`; shared acceptance, routing, tracing, return, and colleague rules live once in \`team.md\`. An absent \`trace.jsonl\` is valid until the first event or after cleanup; \`trace-ops.sh add\` creates it safely, while a present target must be a non-symlink regular file. The report root comes from applicable project guidance (default \`.codex/reports\`), uses only \`[A-Za-z0-9._-]+\` non-dot segments, and fails closed on equal-specificity conflicts. Required policy names its shared review-only guard exactly once, including same-line occurrence counting; legacy-absent names no phantom guard. The full roster stays within 2800 characters / 700 exact \`tiktoken==0.13.0\` \`o200k_base\` tokens, and each domain \`developer_instructions\` stays within 3200 UTF-8 bytes / 800 exact tokens. Validation requires that already-installed pinned tokenizer and fails closed without installing anything.
 
 New teams use one review-only \`intent-guard\` outside the domain count. Its shared native emitter validates the template, reuses an approved existing non-symlink regular file byte-identically, or atomically publishes an absent target without replacement. Invalid regular files, symlinks, nonregular targets, and lost concurrent creates fail without mutation. It is never a domain owner, reviewer, parked member, or cleanup target.
 `);
@@ -1715,7 +1774,7 @@ New teams use one review-only \`intent-guard\` outside the domain count. Its sha
     // fixture writes `.md`, the script parks `.toml`, and it dies before its first assertion.
     // Inside these three files every `.md` IS an agent file except the two markdown artifacts the
     // fixture itself writes, so flip the extension file-wide and name those exceptions.
-    const KEEP_MD = /^(?:team|README)$/;
+    const KEEP_MD = /^(?:team|README|framework-files)$/;
     for (const name of ['suite-intent-guard.mjs', 'suite-lifecycle.mjs', 'suite-parked-conflict.mjs']) {
       const file = path.join(targetDir, 'tests', name);
       writeFile(file, fs.readFileSync(file, 'utf8').replace(
@@ -1901,8 +1960,8 @@ esac
       .replaceAll("'build-eng.md.disabled'", "'build-eng.toml.disabled'")
       .replaceAll("'build-eng.md'", "'build-eng.toml'")
       .replace(
-        "result.output.includes('ceiling is 3200 (~800 est-tokens), frontmatter excluded')",
-        "result.output.includes('ceilings are 3200 bytes and 800 ceil(chars/4) tokens')"
+        "result.output.includes('ceilings are 3200 bytes and 800 tokens, frontmatter excluded')",
+        "result.output.includes('ceilings are 3200 bytes and 800 tokens')"
       )
       .replace('an oversized body fails even with small frontmatter',
         'an oversized developer_instructions value fails')

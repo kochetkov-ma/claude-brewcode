@@ -39,13 +39,8 @@ valid_agent_id() {
 # Markdown separator row of the `## Agents` table -- byte-identical rule to its siblings. A padded
 # `| ------ |` is as valid a separator as `|---|`.
 is_separator_row() {
-  case "$1" in
-    *[![:space:]|:-]*) return 1 ;;
-  esac
-  case "$1" in
-    "|"*"---"*) return 0 ;;
-  esac
-  return 1
+  printf '%s\n' "$1" \
+    | grep -Eq '^[[:space:]]*\|[[:space:]]*:?-{3,}:?[[:space:]]*(\|[[:space:]]*:?-{3,}:?[[:space:]]*)+\|[[:space:]]*$'
 }
 
 if ! valid_agent_id "$AGENT"; then

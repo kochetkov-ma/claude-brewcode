@@ -16,6 +16,14 @@ DISABLED=0
 CONFLICT=0
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+TOKEN_COUNTER="$SCRIPT_DIR/count-tokens.py"
+TOKENIZER_PREPARER="$SCRIPT_DIR/prepare-tokenizer.py"
+if ! TOKENIZER_INFO=$(python3 -I -S "$TOKENIZER_PREPARER" run "$TOKEN_COUNTER" --check); then
+  echo "ERROR: pinned durable tokenizer unavailable; verifier fails closed"
+  echo "REPAIR: python3 -I -S \"$TOKENIZER_PREPARER\" prepare"
+  exit 1
+fi
+echo "CHECK: exact tokenizer ... OK ($TOKENIZER_INFO)"
 
 # Plugin version by self-location, used to print a COPY-PASTEABLE repair row.
 # `|| true` on both branches: under `set -e` a failing command substitution aborts the script.
@@ -191,6 +199,7 @@ valid_report_root() {
   case "$1" in
     ''|/*|*/|~*|*//*|*[!A-Za-z0-9._/-]*) return 1 ;;
   esac
+
   _old_ifs=$IFS
   IFS=/
   set -- $1
@@ -251,8 +260,11 @@ check_compact_profile() {
   printf '%s\n' "$_first_ref" | grep -qF ".claude/teams/$TEAM_NAME/team.md" \
     || { echo "  FAIL: Must-load references must name .claude/teams/$TEAM_NAME/team.md"; _bad=1; }
   _bytes=$(profile_body "$_f" | wc -c | tr -d '[:space:]')
-  [ "$_bytes" -le 3200 ] \
-    || { echo "  FAIL: compact profile body is $_bytes bytes; ceiling is 3200 (~800 est-tokens), frontmatter excluded"; _bad=1; }
+  _tokens=$(profile_body "$_f" | python3 -I -S "$TOKENIZER_PREPARER" run "$TOKEN_COUNTER")
+  if [ "$_bytes" -gt 3200 ] || [ "$_tokens" -gt 800 ]; then
+    echo "  FAIL: compact profile body is $_bytes bytes/$_tokens exact o200k tokens; ceilings are 3200 bytes and 800 tokens, frontmatter excluded"
+    _bad=1
+  fi
   if profile_body "$_f" | grep -Eq '^## (Task Acceptance Protocol|Return Contract|Trace Instructions|Colleagues|Scope Fit|Domain Instructions|Immutable Traits|Update Protocol)$'; then
     echo "  FAIL: shared acceptance/tracing/routing/return/colleague/scope-fit contract belongs only in team.md"
     _bad=1
@@ -276,13 +288,8 @@ valid_agent_id() {
 # `|`, `-`, `:` and spaces, with a run of dashes: a padded `| ------ |` is as valid a separator as
 # `|---|`, and matching only the unpadded spelling made the whole roster invisible to the parser.
 is_separator_row() {
-  case "$1" in
-    *[![:space:]|:-]*) return 1 ;;
-  esac
-  case "$1" in
-    "|"*"---"*) return 0 ;;
-  esac
-  return 1
+  printf '%s\n' "$1" \
+    | grep -Eq '^[[:space:]]*\|[[:space:]]*:?-{3,}:?[[:space:]]*(\|[[:space:]]*:?-{3,}:?[[:space:]]*)+\|[[:space:]]*$'
 }
 
 check_dir() {
@@ -305,9 +312,91 @@ check_file() {
   fi
 }
 
+check_optional_trace() {
+  _trace="$1"
+  printf "CHECK: trace.jsonl ... "
+  if [ -h "$_trace" ]; then
+    echo "UNSAFE (must be absent or a non-symlink regular file)"
+    FAIL=1
+  elif [ -e "$_trace" ]; then
+    if [ -f "$_trace" ]; then
+      if ! command -v node >/dev/null 2>&1; then
+        echo "INVALID (node is required for strict JSONL schema validation)"
+        FAIL=1
+      elif ! _trace_error=$(node - "$_trace" 2>&1 <<'NODE'
+const fs = require('node:fs');
+
+function fail(message) {
+  process.stderr.write(message);
+  process.exit(1);
+}
+
+let text;
+try {
+  text = new TextDecoder('utf-8', { fatal: true }).decode(fs.readFileSync(process.argv[2]));
+} catch {
+  fail('invalid UTF-8');
+}
+if (text === '') process.exit(0);
+if (!text.endsWith('\n')) fail('nonempty trace must end with newline');
+const qualifiers = {
+  track: ['s', new Set(['took', 'refused', 'completed', 'failed'])],
+  issue: ['sev', new Set(['low', 'medium', 'high', 'critical'])],
+  insight: ['cat', new Set(['pattern', 'architecture', 'performance', 'security', 'convention', 'debt'])],
+};
+for (const [index, line] of text.slice(0, -1).split('\n').entries()) {
+  let row;
+  try { row = JSON.parse(line); } catch { fail(`line ${index + 1}: invalid JSON`); }
+  if (row === null || Array.isArray(row) || typeof row !== 'object') {
+    fail(`line ${index + 1}: expected object`);
+  }
+  if (!Object.prototype.hasOwnProperty.call(qualifiers, row.k)) {
+    fail(`line ${index + 1}: invalid kind`);
+  }
+  const [qualifier, values] = qualifiers[row.k];
+  const expected = ['k', qualifier, 'sid', 'src', 'ts', 'txt'].sort();
+  const actual = Object.keys(row).sort();
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    fail(`line ${index + 1}: wrong fields`);
+  }
+  if (typeof row.ts !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(row.ts)) {
+    fail(`line ${index + 1}: invalid timestamp`);
+  }
+  const parsedTimestamp = new Date(row.ts);
+  if (Number.isNaN(parsedTimestamp.valueOf())
+      || parsedTimestamp.toISOString().replace('.000Z', 'Z') !== row.ts) {
+    fail(`line ${index + 1}: invalid timestamp`);
+  }
+  if (typeof row.sid !== 'string' || !/^[A-Za-z0-9._-]{8}$/.test(row.sid)) {
+    fail(`line ${index + 1}: sid must be exactly 8 safe ASCII characters`);
+  }
+  if (typeof row.src !== 'string' || !/^[a-z0-9][a-z0-9-]*$/.test(row.src)) {
+    fail(`line ${index + 1}: invalid source agent`);
+  }
+  if (!values.has(row[qualifier])) fail(`line ${index + 1}: invalid qualifier`);
+  if (typeof row.txt !== 'string' || Array.from(row.txt).length > 100) {
+    fail(`line ${index + 1}: invalid text`);
+  }
+}
+NODE
+      ); then
+        echo "INVALID ($_trace_error)"
+        FAIL=1
+      else
+        echo "OK"
+      fi
+    else
+      echo "UNSAFE (must be absent or a non-symlink regular file)"
+      FAIL=1
+    fi
+  else
+    echo "ABSENT (trace-ops.sh creates it on first write)"
+  fi
+}
+
 check_dir "teams dir" "$TEAM_DIR"
 check_file "team.md" "$TEAM_DIR/team.md"
-check_file "trace.jsonl" "$TEAM_DIR/trace.jsonl"
+check_optional_trace "$TEAM_DIR/trace.jsonl"
 
 # Project-local tracer: the only path a generated agent in .claude/agents/ can resolve
 # (no plugin-root substitution there). Teams created before it existed simply lack it.
@@ -327,11 +416,11 @@ fi
 
 if [ -f "$TEAM_DIR/team.md" ]; then
   team_chars=$(wc -m < "$TEAM_DIR/team.md" | tr -d '[:space:]')
-  team_tokens=$(( (team_chars + 3) / 4 ))
+  team_tokens=$(python3 -I -S "$TOKENIZER_PREPARER" run "$TOKEN_COUNTER" "$TEAM_DIR/team.md")
   if [ "$team_chars" -le 2800 ] && [ "$team_tokens" -le 700 ]; then
-    echo "CHECK: full team.md ceiling ... OK ($team_chars chars, $team_tokens est-tokens)"
+    echo "CHECK: full team.md ceiling ... OK ($team_chars chars, $team_tokens exact o200k tokens)"
   else
-    echo "CHECK: full team.md ceiling ... FAIL ($team_chars chars, $team_tokens est-tokens; maximum 2800 chars and 700 ceil(chars/4) tokens)"
+    echo "CHECK: full team.md ceiling ... FAIL ($team_chars chars, $team_tokens exact o200k tokens; maximum 2800 chars and 700 tiktoken 0.13.0/o200k_base tokens)"
     FAIL=1
   fi
 
@@ -392,6 +481,9 @@ if [ -f "$TEAM_DIR/team.md" ]; then
       ;;
   esac
 
+  team_version=$(sed -n 's/^|[[:space:]]*Version[[:space:]]*|[[:space:]]*\([^|]*[^|[:space:]]\)[[:space:]]*|.*/\1/p' "$TEAM_DIR/team.md")
+  team_last_update=$(sed -n 's/^|[[:space:]]*Last update[[:space:]]*|[[:space:]]*\([^|]*[^|[:space:]]\)[[:space:]]*|.*/\1/p' "$TEAM_DIR/team.md")
+
   # Current teams declare whether the shared review-only role is required or intentionally absent.
   # An old team without the field remains migratable; once the shared contract is present the policy
   # is mandatory and the roster must match it exactly.
@@ -421,27 +513,31 @@ if [ -f "$TEAM_DIR/team.md" ]; then
     shared_count=$(grep -cF '## Shared Agent Contract' "$TEAM_DIR/team.md" || true)
     [ "$shared_count" -eq 1 ] \
       || { echo "CHECK: Shared Agent Contract ... FAIL (must occur exactly once; found $shared_count)"; shared_bad=1; }
+    agent_defaults="|Agent defaults|active;$team_last_update;domain;$team_version|"
+    agent_defaults_count=$(grep -cF "$agent_defaults" "$TEAM_DIR/team.md" || true)
+    [ "$agent_defaults_count" -eq 1 ] \
+      || { echo "CHECK: Agent defaults ... FAIL (expected exactly: $agent_defaults)"; shared_bad=1; }
     shared_contract=$(awk '
       /^## Shared Agent Contract$/ { active = 1 }
       /^## Agents$/ { active = 0 }
       active { print }
     ' "$TEAM_DIR/team.md")
     for shared_literal in \
-      'Every domain agent loads this file before task acceptance.' \
-      'Before any task evaluate `Domain`, `Duplicate`, `Best candidate`.' \
-      'execute only owned surfaces' 'profile exclusions win on overlap' \
-      'Optional best effort, `1 attempt max`, no retry, Bash only.' \
+      'Load this before task acceptance.' 'Gate Domain/Duplicate/Best:' 'Mismatch/duplicate/better' \
+      'refuse+owner/link+return' 'accept -> trace took' 'execute only owned surfaces' 'exclusions win.' \
+      'versionless project-local' 'T/trace-ops.sh' 'optional Bash once' \
+      '`!=` retry/plugin root/env' 'Missing/fail' 'update/move/uninstall' \
       ".claude/teams/$TEAM_NAME/trace-ops.sh" \
-      'no `*_PLUGIN_ROOT` env' 'plugin update/move/uninstall does not break it' \
-      'Track states: `took` / `refused` / `completed` / `failed`.' \
-      'Issue severity: `low` / `medium` / `high` / `critical`.' \
-      'Insight category (max 1-3): `pattern` / `architecture` / `performance` / `security` / `convention` / `debt`.' \
-      '`$SID` is 8 chars' \
-      'A task traced `took` ends with exactly one terminal track: `completed` or `failed`.' \
-      'Verdict first, <=30 lines, `path:line`. !=bodies/output/log/preamble.' \
-      'This holds with or without agent-return.' \
-      '>~1000 est-tokens (`chars/4`)' '>~2500' '<=3 lines' \
-      '!=imagined load/speculative abstraction' '!=replace them'
+      'bash "' '"$SID"' '"{AGENT_NAME}"' '"<kind>"' '"<state>"' '"<text>"' \
+      'Track took/refused/completed/failed; took -> 1 terminal.' \
+      'Issue low/medium/high/critical' 'insight pattern/architecture/performance/security/convention/debt.' \
+      '`$SID`: 8 chars; if unset choose any 8-char marker.' \
+      'Marker chars `[A-Za-z0-9._-]`.' \
+      'Return with or without agent-return:' 'verdict/path/check' '`path:line`' \
+      'Return changed path/check only.' '!=bodies/output/log/preamble' \
+      '!=content' 'Approx chars/4:' '>1000' '>2500' '<=3 lines.' \
+      'Actual scale;' '!=imagined' 'load/speculative' '10-user' '!=lock-contention' \
+      'Class/module/test' '.claude/convention/' 'etalon' 'rules/conventions/docs' '!=replace'
     do
       printf '%s\n' "$shared_contract" | grep -qF "$shared_literal" \
         || { echo "CHECK: Shared Agent Contract ... FAIL (missing: $shared_literal)"; shared_bad=1; }
@@ -501,8 +597,6 @@ if [ -f "$TEAM_DIR/team.md" ]; then
   intent_guard_cells_ok=1
   unique_domain_rows=0
   seen_agent_ids="|"
-  team_version=$(sed -n 's/^|[[:space:]]*Version[[:space:]]*|[[:space:]]*\([^|]*[^|[:space:]]\)[[:space:]]*|.*/\1/p' "$TEAM_DIR/team.md")
-  team_last_update=$(sed -n 's/^|[[:space:]]*Last update[[:space:]]*|[[:space:]]*\([^|]*[^|[:space:]]\)[[:space:]]*|.*/\1/p' "$TEAM_DIR/team.md")
   while IFS= read -r line; do
     case "$line" in
       "## Agents"*) in_agents=1; past_header=0; continue ;;

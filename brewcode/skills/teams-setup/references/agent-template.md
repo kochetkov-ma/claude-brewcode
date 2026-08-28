@@ -6,7 +6,7 @@
        last_updated: "{LAST_UPDATED}"
      Substitute detect-mode.sh's PLUGIN_VERSION/LAST_UPDATED; !=hardcode or invent spellings.
      Body (everything after the closing frontmatter `---`; frontmatter excluded) has exactly the six
-     ordered headings below and <=3200 bytes (~800 est-tokens).
+     ordered headings below and <=3200 bytes / <=800 exact tiktoken 0.13.0 o200k_base tokens.
      `intent-guard` is exempt: superreview-setup/scripts/generate.sh emit-agent is its only writer;
      teams agent-creator may adapt only the three emitted seeded blocks, preserving frontmatter/body. -->
 

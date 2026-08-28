@@ -133,7 +133,17 @@ verb always comes first and the optional `[name]` positional after it.
 | If team.md exists | Read, show current roster |
 | If trace.jsonl exists | Show entry counts via `trace-ops.sh read` |
 
-3. If team exists, verify:
+An absent `trace.jsonl` is valid before the first event or after cleanup: status reports zero events,
+verification stays read-only, and `trace-ops.sh add` creates it safely on the first write. A present
+trace target must be a non-symlink regular file.
+
+3. Preflight the durable tokenizer without network or mutation:
+   ```bash
+   python3 -I -S "${CLAUDE_SKILL_DIR}/scripts/prepare-tokenizer.py" check
+   ```
+   If it is missing, retain the emitted `REPAIR: ... prepare` command. `status` reports the missing
+   prerequisite and does not run team verification. A mutating mode waits for step 5 approval before
+   preparation. If the preflight passes and the team exists, verify:
    ```bash
    bash "${CLAUDE_SKILL_DIR}/scripts/verify-team.sh" "TEAM_NAME_HERE" && echo "PASS" || echo "FAIL"
    ```
@@ -145,6 +155,17 @@ verb always comes first and the optional `[name]` positional after it.
    Options: "Yes, continue" | "No, I want changes" | "Cancel"
    - "changes" -> AskUserQuestion for details, revise the PLAN and reprint it
    - "Cancel" -> **STOP**
+
+6. After approval, prepare the isolated tokenizer when step 3 reported it missing, then preflight it
+   again. This explicit step is the only tokenizer install/network path; it downloads the exact
+   platform wheel and BPE into the user cache, verifies both SHA-256 values, creates a dedicated venv,
+   and installs the wheel with `--no-deps --no-index`:
+   ```bash
+   python3 -I -S "${CLAUDE_SKILL_DIR}/scripts/prepare-tokenizer.py" prepare \
+     && python3 -I -S "${CLAUDE_SKILL_DIR}/scripts/prepare-tokenizer.py" check
+   ```
+   **STOP on failure.** `verify-team.sh` and `count-tokens.py` never install, download, or use a
+   temporary runtime; they fail closed with the same repair command.
 
 ---
 
@@ -309,7 +330,7 @@ strip shared rules from a profile until its target `team.md` passes the gate.
    agent, and writing the live path recreates the dual-copy state both `enable` and `disable` refuse.
 2. For each agent, spawn `Task(subagent_type="brewcode:agent-creator")` — ONE agent file per spawn, never a whole team. Prompt carries GOAL (build this one `{TEAM_NAME}` roster member; siblings own other domains), ROLE (owns `.claude/agents/{name}.md` only), SCOPE (that file; other agents, `team.md`, project source out), CONTEXT (settled mission/domain/project analysis, selected model, 3-4 sibling names; no trigger/domain overlap; the gated shared contract already exists), CONSUMER (C4 adds the final roster row; C5 reviews; the roster routes work), DONE:
    - `description` <=100 chars (optimal ~80), single-line role + 2-3 triggers, no `<example>`;
-   - body <=3200 bytes (~800 est-tokens), with exactly these ordered headings and no others: `## Mission`, `## Owned surfaces`, `## Exclusions`, `## Must-load references`, `## Unique invariants`, `## Unique verification`;
+   - body <=3200 bytes and <=800 exact `tiktoken==0.13.0` `o200k_base` tokens, with exactly these ordered headings and no others: `## Mission`, `## Owned surfaces`, `## Exclusions`, `## Must-load references`, `## Unique invariants`, `## Unique verification`;
    - `## Must-load references` names `.claude/teams/{TEAM_NAME}/team.md` first;
    - profile contains only domain-unique facts. `Task Acceptance Protocol`, `Return Contract`, `Trace Instructions`, `Colleagues`, `Scope Fit`, shared routing, and shared output rules stay only in `team.md`;
    - placeholders substituted; return file path + description line.
@@ -499,9 +520,15 @@ C4. Either way a `required` team gets its `team.md` row. This phase is skipped f
    No placeholder token may survive into the written file — a literal `{PLUGIN_VERSION}` in `team.md`
    means substitution never happened.
 
+   Add `|Agent defaults|active;{LAST_UPDATED};domain;{PLUGIN_VERSION}|`. A domain row using all four
+   defaults keeps the seven-column shape but leaves those cells empty: `|name|domain|mission|||||`.
+   Write all four cells only for an override; the fixed review-only `intent-guard` row stays explicit.
+
    Keep roster `Domain`/`Mission` cells terse; agent profiles own detail. For up to 13 domain agents,
-   the complete written `team.md` (metadata + shared contract + every row) MUST be <=2800 characters,
-   i.e. `ceil(chars/4) <=700` estimated tokens. Measure the full substituted file, not the empty template;
+   the complete written `team.md` (metadata + shared contract + every row) MUST be <=2800 characters
+   and <=700 exact `tiktoken==0.13.0` `o200k_base` tokens. `verify-team.sh` fails closed when the
+   approved durable runtime or hash-verified cache is absent/mismatched; only Universal Prelude step 6
+   prepares it. Measure the full substituted file, not the empty template;
    if over, compress only roster wording without dropping members, columns, policy, or contract facts.
 
 3. Verify:
@@ -523,7 +550,7 @@ project's reviewer agent from `.claude/agents/`, else `general-purpose`.
 
 | # | Focus |
 |---|-------|
-| 1 | Profile contract: body only (frontmatter excluded) <=3200 bytes (~800 est-tokens); exactly six ordered body headings (`Mission`, `Owned surfaces`, `Exclusions`, `Must-load references`, `Unique invariants`, `Unique verification`); `.claude/teams/{TEAM_NAME}/team.md` loaded first; no repeated shared-contract heading/rule |
+| 1 | Profile contract: body only (frontmatter excluded) <=3200 bytes / <=800 exact `tiktoken==0.13.0` `o200k_base` tokens; exactly six ordered body headings (`Mission`, `Owned surfaces`, `Exclusions`, `Must-load references`, `Unique invariants`, `Unique verification`); `.claude/teams/{TEAM_NAME}/team.md` loaded first; no repeated shared-contract heading/rule |
 | 2 | Domain accuracy: correct scope, tool selection, model fit, description triggers |
 | 3 | Architecture: no domain overlaps; owned surfaces/exclusions/routing agree with the roster; acceptance/tracing/returns/colleagues/scope-fit exist once in `team.md` |
 
@@ -774,7 +801,7 @@ Each agent file you regenerate or tune gets its `version` / `last_updated` front
 to the same values; `generated_by` stays `brewcode:teams-setup`. `intent-guard.md` is byte-untouchable.
 
 Every domain agent touched here migrates to the current compact template: body only (frontmatter excluded)
-<=3200 bytes (~800 est-tokens),
+<=3200 bytes / <=800 exact `tiktoken==0.13.0` `o200k_base` tokens,
 exactly the six ordered headings, `.claude/teams/{TEAM_NAME}/team.md` first under `Must-load references`,
 and no repeated acceptance/tracing/routing/return/colleague/scope-fit contract. Preserve every unique
 fact while relocating shared rules to `team.md`. Untouched legacy agents keep their bodies; verifier

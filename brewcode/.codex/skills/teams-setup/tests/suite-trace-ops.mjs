@@ -91,9 +91,7 @@ const c0WithoutNul = Array.from({ length: 31 }, (_, index) => String.fromCharCod
 }
 
 for (const [name, sid, agent, text, key, expected] of [
-  ['sid-controls', c0WithoutNul, 'agent', 'text', 'sid', c0WithoutNul],
-  ['agent-controls', 'sid', c0WithoutNul, 'text', 'src', c0WithoutNul],
-  ['text-controls', 'sid', 'agent', c0WithoutNul, 'txt', c0WithoutNul],
+  ['text-controls', 'sid00000', 'agent', c0WithoutNul, 'txt', c0WithoutNul],
 ]) {
   // GIVEN: one trace field containing every C0 control representable in a process argument.
   const teamDir = newTeam(name);
@@ -107,12 +105,29 @@ for (const [name, sid, agent, text, key, expected] of [
   check(`${name}.stdoutRoundTrip`, JSON.parse(result.stdout)[key], expected, 'echoed JSON also parses');
 }
 
+for (const [name, sid, agent, reason] of [
+  ['sid-short', 'short', 'agent', 'expected exactly 8 ASCII marker characters'],
+  ['sid-long', 's'.repeat(9), 'agent', 'expected exactly 8 ASCII marker characters'],
+  ['sid-control', 'sid0000\n', 'agent', 'expected exactly 8 ASCII marker characters'],
+  ['agent-control', 'sid00000', c0WithoutNul, 'expected ^[a-z0-9][a-z0-9-]*$'],
+  ['agent-traversal', 'sid00000', '../agent', 'expected ^[a-z0-9][a-z0-9-]*$'],
+]) {
+  // GIVEN: an invalid schema identity and an empty trace.
+  const teamDir = newTeam(name);
+  // WHEN: add validates identity before staging or locking.
+  const result = add(teamDir, sid, agent, 'text');
+  // THEN: the operation fails with no trace mutation.
+  check(`${name}.exit`, result.status === 0, false, 'invalid trace identity is rejected');
+  check(`${name}.reason`, result.stderr.includes(reason), true, 'the exact identity rule is reported');
+  check(`${name}.trace`, readFileSync(join(teamDir, 'trace.jsonl'), 'utf8'), '', 'rejection appends no bytes');
+}
+
 {
   // GIVEN: the form-feed regression plus text beyond the established 100-code-point cap.
   const teamDir = newTeam('truncate-form-feed');
   const text = `before\fafter${'x'.repeat(120)}`;
   // WHEN: the record is appended.
-  const result = add(teamDir, 'sid', 'agent', text);
+  const result = add(teamDir, 'sid00000', 'agent', text);
   const parsed = parseSingleLine(teamDir);
   // THEN: form-feed stays valid JSON and truncation remains exactly 100 code points.
   check('truncateFormFeed.exit', result.status, 0, 'form-feed trace append succeeds');
@@ -125,14 +140,14 @@ for (const [name, sid, agent, text, key, expected] of [
   const teamDir = newTeam('unicode-truncate');
   const text = `${'a'.repeat(99)}😀b`;
   // WHEN: the record is appended through the central encoder's 100-code-point limit.
-  const result = add(teamDir, 's'.repeat(120), 'é'.repeat(120), text);
+  const result = add(teamDir, 'sid00000', 'agent-name', text);
   const parsed = parseSingleLine(teamDir);
-  // THEN: the emoji is preserved whole, while sid and agent remain untruncated.
+  // THEN: the emoji is preserved whole and valid identities remain exact.
   check('unicodeTruncate.exit', result.status, 0, 'Unicode trace append succeeds');
   check('unicodeTruncate.value', parsed.value.txt, `${'a'.repeat(99)}😀`, 'UTF-8 is never split');
   check('unicodeTruncate.points', Array.from(parsed.value.txt).length, 100, 'text is capped by code points');
-  check('unicodeTruncate.sid', parsed.value.sid, 's'.repeat(120), 'sid remains untruncated');
-  check('unicodeTruncate.agent', parsed.value.src, 'é'.repeat(120), 'agent remains untruncated');
+  check('unicodeTruncate.sid', parsed.value.sid, 'sid00000', 'the exact SID is preserved');
+  check('unicodeTruncate.agent', parsed.value.src, 'agent-name', 'the exact agent id is preserved');
 }
 
 {
@@ -141,7 +156,7 @@ for (const [name, sid, agent, text, key, expected] of [
   // WHEN: trace-ops attempts to encode the invalid agent value.
   const result = spawnSync(
     'sh',
-    ['-c', 'bad=$(printf "\\377"); exec sh "$1" add "$2" sid "$bad" track completed text', 'sh', TRACE_OPS, teamDir],
+    ['-c', 'bad=$(printf "\\377"); exec sh "$1" add "$2" sid00000 "$bad" track completed text', 'sh', TRACE_OPS, teamDir],
     { encoding: 'utf8', timeout: 8000, env: { ...process.env, LC_ALL: 'C' } },
   );
   // THEN: encoding fails closed and no partial JSONL record is appended.
@@ -600,7 +615,7 @@ exec "$TRACE_REAL_NODE" "$@"`);
   writeFileSync(join(teamDir, 'trace.jsonl'), trace);
   mkdirSync(join(teamDir, '.trace-ops.lock'));
   // WHEN: add attempts to publish a new row.
-  const result = add(teamDir, 'sid', 'agent', 'blocked add');
+  const result = add(teamDir, 'sid00000', 'agent', 'blocked add');
   // THEN: add fails closed without changing trace or taking over the foreign lock.
   check('addLock.exit', result.status === 0, false, 'add fails while the lock is held');
   check('addLock.reason', result.stderr.includes('Trace operation locked'), true, 'contention is explicit');
@@ -674,7 +689,7 @@ exec "$TRACE_REAL_NODE" "$@"`);
   const teamDir = newTeam('read-jq-injection');
   const secret = 'TRACE_READ_SECRET_DO_NOT_DISCLOSE';
   writeFileSync(join(teamDir, 'trace.jsonl'),
-    '{"ts":"2026-08-28T00:00:00Z","sid":"safe","src":"agent","k":"track","s":"completed","txt":"ok"}\n');
+    '{"ts":"2026-08-28T00:00:00Z","sid":"safe0000","src":"agent","k":"track","s":"completed","txt":"ok"}\n');
   for (const option of ['--sid', '--since', '--kind']) {
     const result = spawnSync('sh', [TRACE_OPS, 'read', teamDir, option, 'x") | env #'], {
       encoding: 'utf8', timeout: 8000, env: { ...process.env, TRACE_READ_SECRET: secret },
@@ -696,7 +711,7 @@ exec "$TRACE_REAL_NODE" "$@"`);
   writeFileSync(victim, victimBytes);
   rmSync(tracePath);
   symlinkSync(victim, tracePath);
-  const result = add(teamDir, 'sid', 'agent', 'must not reach victim');
+  const result = add(teamDir, 'sid00000', 'agent', 'must not reach victim');
   check('addSymlink.exit', result.status === 0, false, 'add rejects a symlinked trace target');
   check('addSymlink.victim', readFileSync(victim).equals(victimBytes), true, 'victim bytes remain unchanged');
   check('addSymlink.preserved', lstatSync(tracePath).isSymbolicLink(), true, 'foreign symlink remains untouched');
@@ -861,7 +876,7 @@ for (const name of ['add', 'migrate']) {
       '| 2026-08-28 | builder | boundary row | completed | |\n');
   }
   const result = name === 'add'
-    ? add(teamDir, 'sid', 'agent', 'new row')
+    ? add(teamDir, 'sid00000', 'agent', 'new row')
     : spawnSync('sh', [TRACE_OPS, 'migrate', teamDir], { encoding: 'utf8', timeout: 8000 });
   check(`newlineBoundary.${name}.exit`, result.status === 0, false, `${name} rejects a missing JSONL boundary`);
   check(`newlineBoundary.${name}.trace`, readFileSync(join(teamDir, 'trace.jsonl')).equals(trace), true,

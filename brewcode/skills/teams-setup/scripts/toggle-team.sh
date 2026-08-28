@@ -54,13 +54,8 @@ valid_agent_id() {
 # `|---|`, and matching only the unpadded spelling left past_header at 0, parsed zero rows, and
 # still printed `MOVED:0 ... ✅ disable` with every agent file live. Same rule in verify-team.sh.
 is_separator_row() {
-  case "$1" in
-    *[![:space:]|:-]*) return 1 ;;
-  esac
-  case "$1" in
-    "|"*"---"*) return 0 ;;
-  esac
-  return 1
+  printf '%s\n' "$1" \
+    | grep -Eq '^[[:space:]]*\|[[:space:]]*:?-{3,}:?[[:space:]]*(\|[[:space:]]*:?-{3,}:?[[:space:]]*)+\|[[:space:]]*$'
 }
 
 # Roster parse: identical shape to verify-team.sh -- `Agent` is field 2 of each row

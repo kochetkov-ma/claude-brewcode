@@ -23,6 +23,10 @@ Before any action, print one `PLAN — brewcode:teams-setup` block with `INPUT`,
 
 Run `scripts/detect-mode.sh`, inventory `.codex/teams/` and `.codex/agents/`, read an existing roster/trace, and run `scripts/verify-team.sh {TEAM_NAME}` when the team exists. A missing team stops every mode except `install`; an existing team stops `install` unless the user approves routing to `upgrade`.
 
+An absent `trace.jsonl` is valid before the first event or after cleanup: status reports zero events, verification remains read-only, and `trace-ops.sh add` creates it safely on the first write. A present trace target must be a non-symlink regular file.
+
+Before any team mutation, run the read-only, offline preflight `python3 -I -S scripts/prepare-tokenizer.py check`. If the prerequisite is missing, retain and report its repair command; `status` does not run team verification, while a mutating mode waits for its explicit approval. Only after that approval, run `python3 -I -S scripts/prepare-tokenizer.py prepare && python3 -I -S scripts/prepare-tokenizer.py check`; this is the sole tokenizer network/install path, and failure stops the mode. `verify-team.sh` and token counts use isolated `prepare-tokenizer.py run count-tokens.py` without network, installation, fallback, host Python injection, or an unverified runtime.
+
 ## Mode: status
 
 Read `team.md` and `trace.jsonl` through `scripts/trace-ops.sh read`. Report domain-agent count, active/disabled/missing state, took/refused/completed/failed totals, success rate, issues by severity, insights, last activity, per-agent health, policy, verifier result, and actionable recommendations. Do not write, delegate, or request approval.
@@ -39,11 +43,11 @@ Before any domain agent write, instantiate `references/framework-files.md` into 
 
 ### C3-C4: creation and roster finalization
 
-Create one approved `.codex/agents/{name}.toml` per bounded owner from `references/agent-template.md`. Parse before and after writing. Enforce every live or parked domain member description as one nonempty line of at most 100 characters. `developer_instructions` has only the ordered headings `Mission`, `Owned surfaces`, `Exclusions`, `Must-load references`, `Unique invariants`, `Unique verification`; the first must-load item is `.codex/teams/{TEAM_NAME}/team.md`, occurring once. Enforce <=3200 UTF-8 bytes and `ceil(chars/4) <=800`.
+Create one approved `.codex/agents/{name}.toml` per bounded owner from `references/agent-template.md`. Parse before and after writing. Enforce every live or parked domain member description as one nonempty line of at most 100 characters. `developer_instructions` has only the ordered headings `Mission`, `Owned surfaces`, `Exclusions`, `Must-load references`, `Unique invariants`, `Unique verification`; the first must-load item is `.codex/teams/{TEAM_NAME}/team.md`, occurring once. Enforce <=3200 UTF-8 bytes and <=800 exact `tiktoken==0.13.0` `o200k_base` tokens.
 
 For policy `required`, the bootstrap already called the create-only intent-guard emitter: an approved existing non-symlink regular file was reused byte-identically, or an absent target was published atomically without replacement. Invalid, symlink, nonregular, or lost concurrent-create paths fail closed without mutation. Never author or overwrite the guard here. `legacy-absent` exists only on upgrades and gets no guard.
 
-Finalize only successfully parsed agents. Domain names are unique; `Agents` counts domain rows only. `required` has exactly one fixed review-only guard row and its exact shared guard sentence; `legacy-absent` has neither row nor any shared-contract mention of a phantom guard. The complete substituted `team.md` must stay <=2800 characters and `ceil(chars/4) <=700`.
+Finalize only successfully parsed agents. Domain names are unique; `Agents` counts domain rows only. `required` has exactly one fixed review-only guard row and its exact shared guard sentence; `legacy-absent` has neither row nor any shared-contract mention of a phantom guard. The complete substituted `team.md` must stay <=2800 characters and <=700 exact `tiktoken==0.13.0` `o200k_base` tokens. `verify-team.sh` fails closed if that pinned tokenizer is unavailable or mismatched and never installs it.
 
 ### C5-C7: independent review
 
