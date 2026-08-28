@@ -15,6 +15,11 @@ const SHARED_GATES = [
   'Every mutating mode requires `request_user_input` approval',
   'The user must approve the final roster',
   'so the create-only emitter atomically creates the absent guard before the full `verify-team.sh` bootstrap check',
+  'resolve `REPORT_ROOT` from the narrowest applicable durable project guidance',
+  'Every slash-separated segment must match `^[A-Za-z0-9._-]+$`',
+  'Equal-specificity conflicting report-root directives -> STOP',
+  'Enforce every live or parked domain member description as one nonempty line of at most 100 characters',
+  'legacy-absent gets no guard mention',
   '### C5-C7: independent review',
 ];
 const base = mkdtempSync(join(tmpdir(), 'codex-teams-contract-'));

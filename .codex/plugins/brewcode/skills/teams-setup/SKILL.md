@@ -11,7 +11,9 @@ Use collaboration agents only when the user or project instructions explicitly r
 
 ## Native authority
 
-Manage persistent project teams under `.codex/teams/{TEAM_NAME}/` and agents under `.codex/agents/`. Domain agents are native TOML parsed with Python `tomllib`, never renamed Markdown. Each has exactly the three string keys `name`, `description`, and `developer_instructions`. Read applicable `AGENTS.md`, preserve unrelated files, use only adjacent scripts/references, and never edit installed caches.
+Manage persistent project teams under `.codex/teams/{TEAM_NAME}/` and agents under `.codex/agents/`. Domain agents are native TOML parsed with Python `tomllib`, never renamed Markdown. Each has exactly the three string keys `name`, `description`, and `developer_instructions`; `description` is one nonempty line of at most 100 characters. Read applicable `AGENTS.md`, preserve unrelated files, use only adjacent scripts/references, and never edit installed caches.
+
+Before every `team.md` write, resolve `REPORT_ROOT` from the narrowest applicable durable project guidance; an exact declared project-relative path wins, and guidance silence falls back to `.codex/reports`. Every slash-separated segment must match `^[A-Za-z0-9._-]+$` and must not equal `.` or `..`; reject absolute/home-relative paths, doubled slashes, unresolved tokens, control characters, and shell metacharacters including `$()`, backticks, `;`, `&`, and `|`. Equal-specificity conflicting report-root directives -> STOP instead of selecting either. Dusk guidance therefore resolves exactly `.codex/reports`, never a tool-default path.
 
 ## Invocation and approval
 
@@ -33,15 +35,15 @@ Analyze current architecture, domains, stack, tests/CI, existing Codex agents, p
 
 ### C2.6: shared-contract bootstrap
 
-Before any domain agent write, instantiate `references/framework-files.md` into `.codex/teams/{TEAM_NAME}/team.md` with metadata, `## Shared Agent Contract`, policy `required`, the fixed guard row, and zero domain rows. Initialize trace storage, copy the project-local tracer, and substitute every placeholder. Then call `<plugin-root>/skills/superreview-setup/scripts/emit-intent-guard.sh <project-root>` so the create-only emitter atomically creates the absent guard before the full `verify-team.sh` bootstrap check. A non-symlink regular file is reused only after exact normalized allowlist validation; invalid regular files, symlinks, and nonregular targets stop creation without mutation.
+Before any domain agent write, instantiate `references/framework-files.md` into `.codex/teams/{TEAM_NAME}/team.md` with metadata, validated `REPORT_ROOT`, policy `required`, the exact shared sentence "`intent-guard` is review-only, keeps its own output contract, and never implements.", the fixed guard row, and zero domain rows. Initialize trace storage, copy the project-local tracer, and substitute every placeholder. Then call `<plugin-root>/skills/superreview-setup/scripts/emit-intent-guard.sh <project-root>` so the create-only emitter atomically creates the absent guard before the full `verify-team.sh` bootstrap check. A non-symlink regular file is reused only after exact normalized allowlist validation; invalid regular files, symlinks, and nonregular targets stop creation without mutation.
 
 ### C3-C4: creation and roster finalization
 
-Create one approved `.codex/agents/{name}.toml` per bounded owner from `references/agent-template.md`. Parse before and after writing. `developer_instructions` has only the ordered headings `Mission`, `Owned surfaces`, `Exclusions`, `Must-load references`, `Unique invariants`, `Unique verification`; the first must-load item is `.codex/teams/{TEAM_NAME}/team.md`, occurring once. Enforce <=3200 UTF-8 bytes and `ceil(chars/4) <=800`.
+Create one approved `.codex/agents/{name}.toml` per bounded owner from `references/agent-template.md`. Parse before and after writing. Enforce every live or parked domain member description as one nonempty line of at most 100 characters. `developer_instructions` has only the ordered headings `Mission`, `Owned surfaces`, `Exclusions`, `Must-load references`, `Unique invariants`, `Unique verification`; the first must-load item is `.codex/teams/{TEAM_NAME}/team.md`, occurring once. Enforce <=3200 UTF-8 bytes and `ceil(chars/4) <=800`.
 
 For policy `required`, the bootstrap already called the create-only intent-guard emitter: an approved existing non-symlink regular file was reused byte-identically, or an absent target was published atomically without replacement. Invalid, symlink, nonregular, or lost concurrent-create paths fail closed without mutation. Never author or overwrite the guard here. `legacy-absent` exists only on upgrades and gets no guard.
 
-Finalize only successfully parsed agents. Domain names are unique; `Agents` counts domain rows only. `required` has exactly one fixed review-only guard row; `legacy-absent` has none. The complete substituted `team.md` must stay <=2800 characters and `ceil(chars/4) <=700`.
+Finalize only successfully parsed agents. Domain names are unique; `Agents` counts domain rows only. `required` has exactly one fixed review-only guard row and its exact shared guard sentence; `legacy-absent` has neither row nor any shared-contract mention of a phantom guard. The complete substituted `team.md` must stay <=2800 characters and `ceil(chars/4) <=700`.
 
 ### C5-C7: independent review
 
@@ -53,7 +55,7 @@ Repair one owned artifact per bounded task, preserve roster identity and foreign
 
 ## Mode: upgrade
 
-Reject parked or live-plus-parked members before writes. Migrate the shared contract first, recording an existing guard row as `required` and absence as `legacy-absent`; never synthesize the latter. Preserve legacy agent bytes until this gate passes. Analyze trace evidence, present per-agent keep/tune/replace/remove actions, and obtain approval for roster actions. Touch only approved domain agents, use atomic three-key TOML writes and the current six-heading contract, preserve untouched bytes, re-copy the tracer, update metadata/cursor, then run C5-C9 for touched artifacts.
+Reject parked or live-plus-parked members before writes. Capture an immutable UTC upgrade cutoff before the initial cursor and trace reads; after all work set the cursor to that captured cutoff, never to a new completion-time timestamp, so concurrent trace entries are not skipped. Migrate the shared contract first, re-resolving `REPORT_ROOT` from current project guidance, recording an existing guard row as `required` and absence as `legacy-absent`; required gets the exact shared guard sentence, while legacy-absent gets no guard mention and never synthesizes the role. Preserve legacy agent bytes until this gate passes. Analyze trace evidence, present per-agent keep/tune/replace/remove actions, and obtain approval for roster actions. Touch only approved domain agents, use atomic three-key TOML writes and the current six-heading contract, preserve untouched bytes, re-copy the tracer, update metadata/cursor, then run C5-C9 for touched artifacts.
 
 ## Mode: enable
 

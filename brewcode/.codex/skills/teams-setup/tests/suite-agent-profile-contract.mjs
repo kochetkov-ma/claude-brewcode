@@ -5,7 +5,7 @@
  */
 import { spawnSync } from 'node:child_process';
 import {
-  chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync,
+  chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync,
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -29,10 +29,12 @@ const LEGACY_HEADINGS = [
   'Colleagues',
 ];
 const SOURCE_CLIENT_DIR = ['.', 'claude'].join('');
+const FOREIGN_DEFAULT_REPORT_ROOT = ['.', 'claude', 'reports'].join('/');
 const SOURCE_TEAM_REF = `${SOURCE_CLIENT_DIR}/teams/{TEAM_NAME}/team.md`;
 const NATIVE_TEAM_REF = '.codex/teams/{TEAM_NAME}/team.md';
 const SOURCE_PLUGIN_ROOT = `${['CL', 'AUDE'].join('')}_PLUGIN_ROOT`;
 const SOURCE_PLUGIN_ROOT_NEGATION = `!=\`\${${SOURCE_PLUGIN_ROOT}}\` substitution`;
+const REQUIRED_GUARD_SENTENCE = '`intent-guard` is review-only, keeps its own output contract, and never implements.';
 const DUSK_ROSTER = [
   ['game-designer', 'design', 'pillars'],
   ['combat-dev', 'combat', 'loop'],
@@ -122,6 +124,7 @@ function instantiateTeamTemplate(template, {
   projectRoot,
   roster,
   policy,
+  reportRoot = `${SOURCE_CLIENT_DIR}/reports`,
   version = '6.1.4',
   contentVersion = '6.1.0',
 }) {
@@ -138,7 +141,9 @@ function instantiateTeamTemplate(template, {
     .replaceAll('{CONTENT_VERSION}', contentVersion)
     .replaceAll('{N}', String(roster.length))
     .replaceAll('{CWD}', projectRoot)
+    .replaceAll('{REPORT_ROOT}', reportRoot)
     .replaceAll('{INTENT_GUARD_POLICY}', policy)
+    .replaceAll('{INTENT_GUARD_SHARED_CONTRACT}', policy === 'required' ? REQUIRED_GUARD_SENTENCE : '')
     .replaceAll('{INTENT_GUARD_ROW}', [intentRow, domainRows].filter(Boolean).join('\n'))}\n`;
 }
 
@@ -147,6 +152,7 @@ const canonicalTemplatePath = join(repo, 'brewcode', 'skills', 'teams-setup', 'r
 const canonicalFrameworkPath = join(repo, 'brewcode', 'skills', 'teams-setup', 'references', 'framework-files.md');
 const canonicalSkillPath = join(repo, 'brewcode', '.codex', 'skills', 'teams-setup', 'SKILL.md');
 const verifierPath = join(repo, 'brewcode', '.codex', 'skills', 'teams-setup', 'scripts', 'verify-team.sh');
+const projectedSkillPath = join(repo, 'brewcode', '.codex', 'skills', 'teams-setup', 'SKILL.md');
 const projectedTemplatePath = join(repo, 'brewcode', '.codex', 'skills', 'teams-setup', 'references', 'agent-template.md');
 const projectedFrameworkPath = join(repo, 'brewcode', '.codex', 'skills', 'teams-setup', 'references', 'framework-files.md');
 const distributedTemplatePath = join(repo, '.codex', 'plugins', 'brewcode', 'skills', 'teams-setup', 'references', 'agent-template.md');
@@ -156,6 +162,7 @@ const projectedCreatorPath = join(repo, 'brewcode', '.codex', 'agents', 'agent-c
 for (const [name, path] of [
   ['canonicalTemplate', canonicalTemplatePath],
   ['canonicalFramework', canonicalFrameworkPath],
+  ['projectedSkill', projectedSkillPath],
   ['projectedTemplate', projectedTemplatePath],
   ['projectedFramework', projectedFrameworkPath],
   ['distributedTemplate', distributedTemplatePath],
@@ -168,6 +175,7 @@ for (const [name, path] of [
 const canonicalTemplate = readFileSync(canonicalTemplatePath, 'utf8');
 const canonicalFramework = readFileSync(canonicalFrameworkPath, 'utf8');
 const canonicalSkill = readFileSync(canonicalSkillPath, 'utf8');
+const projectedSkill = readFileSync(projectedSkillPath, 'utf8');
 const projectedTemplate = readFileSync(projectedTemplatePath, 'utf8');
 const projectedFramework = readFileSync(projectedFrameworkPath, 'utf8');
 const distributedTemplate = readFileSync(distributedTemplatePath, 'utf8');
@@ -223,10 +231,11 @@ check(
 
 const canonicalTeam = fencedTeamTemplate(canonicalFramework);
 const projectedTeam = fencedTeamTemplate(projectedFramework);
-const sourceReportsPath = `${SOURCE_CLIENT_DIR}/reports/YYYYMMDD-HHMMSS_{AGENT_NAME}/`;
+const reportPathPlaceholder = '{REPORT_ROOT}/YYYYMMDD-HHMMSS_{AGENT_NAME}/';
 const sourceTracePath = `${SOURCE_CLIENT_DIR}/teams/{TEAM_NAME}/trace-ops.sh`;
 const sharedSourceLiterals = [
   '## Shared Agent Contract',
+  'Every domain agent loads this file before task acceptance.',
   'Before any task evaluate `Domain`, `Duplicate`, `Best candidate`.',
   '`1 attempt max`',
   'no retry, Bash only',
@@ -240,7 +249,7 @@ const sharedSourceLiterals = [
   '`$SID` is 8 chars',
   'Verdict first, <=30 lines, `path:line`. !=bodies/output/log/preamble.',
   'This holds with or without agent-return.',
-  sourceReportsPath,
+  reportPathPlaceholder,
   '>~1000 est-tokens (`chars/4`)',
   '>~2500',
   '<=3 lines',
@@ -281,11 +290,30 @@ check(
   1,
   'team template carries exactly one policy-controlled intent-guard row slot',
 );
+check(
+  'shared.reportRootPlaceholder',
+  occurrences(canonicalTeam, '{REPORT_ROOT}'),
+  1,
+  'team template carries exactly one project-resolved report-root slot',
+);
+check(
+  'shared.intentContractPlaceholder',
+  occurrences(canonicalTeam, '{INTENT_GUARD_SHARED_CONTRACT}'),
+  1,
+  'team template carries exactly one policy-conditional shared guard slot',
+);
+check(
+  'shared.noHardcodedSourceReportRoot',
+  canonicalTeam.includes(`${SOURCE_CLIENT_DIR}/reports/YYYYMMDD-HHMMSS_{AGENT_NAME}/`),
+  false,
+  'canonical framework cannot regrow the plugin-default report root',
+);
 
 const fullDuskTeam = instantiateTeamTemplate(canonicalTeam, {
   projectRoot: '/Users/maximus/IdeaProjects/project-dusk',
   roster: DUSK_ROSTER,
   policy: 'legacy-absent',
+  reportRoot: '.codex/reports',
 });
 check(
   'shared.fullDuskRosterCount',
@@ -304,6 +332,33 @@ check(
   DUSK_NON_MEMBERS.filter((name) => rosterNames(fullDuskTeam).includes(name)).join('|'),
   '',
   'task-tracker and intent-guard stay outside the legacy-absent Dusk roster',
+);
+check(
+  'shared.fullDuskReportRoot',
+  fullDuskTeam.includes('Bulk -> `.codex/reports/YYYYMMDD-HHMMSS_{AGENT_NAME}/`'),
+  true,
+  'Dusk guidance resolves the exact project report root',
+);
+check(
+  'shared.fullDuskNoReportPlaceholderOrRegrowth',
+  fullDuskTeam.includes('{REPORT_ROOT}') || fullDuskTeam.includes(`Bulk -> \`${FOREIGN_DEFAULT_REPORT_ROOT}/`),
+  false,
+  'Dusk output has no unresolved report placeholder or Codex-default regrowth',
+);
+check(
+  'shared.fullDuskNoPhantomGuard',
+  section(fullDuskTeam, '## Shared Agent Contract', '## Agents').includes('intent-guard'),
+  false,
+  'legacy-absent shared wording does not assert a phantom role',
+);
+const requiredTeam = instantiateTeamTemplate(canonicalTeam, {
+  projectRoot: '/project', roster: [['build-eng', 'Build', 'deterministic builds']], policy: 'required',
+});
+check(
+  'shared.requiredGuardSentence',
+  occurrences(section(requiredTeam, '## Shared Agent Contract', '## Agents'), REQUIRED_GUARD_SENTENCE),
+  1,
+  'required policy includes the exact review-only guard sentence once',
 );
 check(
   'shared.fullDuskPolicy',
@@ -388,6 +443,7 @@ const fullNativeDuskTeam = instantiateTeamTemplate(projectedTeam, {
   projectRoot: '/Users/maximus/IdeaProjects/project-dusk',
   roster: DUSK_ROSTER,
   policy: 'legacy-absent',
+  reportRoot: '.codex/reports',
 });
 check(
   'codex.fullDuskRosterNames',
@@ -445,6 +501,13 @@ for (const literal of [
   'obtain approval for roster actions',
   '`status` asks nothing',
   'Every mutating mode requires `request_user_input` approval',
+  'resolve `REPORT_ROOT` from the narrowest applicable durable project guidance',
+  'Every slash-separated segment must match `^[A-Za-z0-9._-]+$`',
+  'Equal-specificity conflicting report-root directives -> STOP',
+  'Enforce every live or parked domain member description as one nonempty line of at most 100 characters',
+  'legacy-absent gets no guard mention',
+  'Capture an immutable UTC upgrade cutoff before the initial cursor and trace reads',
+  'set the cursor to that captured cutoff, never to a new completion-time timestamp',
 ]) {
   check(
     `workflow.control.${literal.slice(0, 18)}`,
@@ -499,19 +562,22 @@ const contentVersion = (/content_version=([0-9]+\.[0-9]+\.[0-9]+)/.exec(canonica
 const today = '2026-08-27';
 const BUILD_ROSTER = [['build-eng', 'Build', 'deterministic builds']];
 
-function instantiateTeam(projectRoot, { policy = 'required', roster = BUILD_ROSTER } = {}) {
+function instantiateTeam(projectRoot, {
+  policy = 'required', roster = BUILD_ROSTER, reportRoot = `${SOURCE_CLIENT_DIR}/reports`,
+} = {}) {
   return instantiateTeamTemplate(projectedTeam, {
-    projectRoot: '/Users/maximus/IdeaProjects/project-dusk', roster, policy, version: pluginVersion, contentVersion,
+    projectRoot: '/Users/maximus/IdeaProjects/project-dusk', roster, policy, reportRoot,
+    version: pluginVersion, contentVersion,
   });
 }
 
 // BEGIN RUNTIME AGENT FIXTURES
 function tomlString(value) {
-  return JSON.stringify(value);
+  return JSON.stringify(value).replaceAll('\u007f', '\\u007f');
 }
 
-function agentFile({ name = 'build-eng', body = runtimeRepresentativeBody, extraField = '' } = {}) {
-  return `name = ${tomlString(name)}\ndescription = "Domain owner. Triggers: domain, review, verification."\ndeveloper_instructions = ${tomlString(body)}\n${extraField}`;
+function agentFile({ name = 'build-eng', description = 'Domain owner. Triggers: domain, review, verification.', body = runtimeRepresentativeBody, extraField = '' } = {}) {
+  return `name = ${tomlString(name)}\ndescription = ${tomlString(description)}\ndeveloper_instructions = ${tomlString(body)}\n${extraField}`;
 }
 
 function intentGuardFile() {
@@ -524,6 +590,7 @@ function makeWorld({
   agentText,
   policy = 'required',
   roster = BUILD_ROSTER,
+  reportRoot = `${SOURCE_CLIENT_DIR}/reports`,
   intent = policy === 'required',
 } = {}) {
   const world = mkdtempSync(join(tmpdir(), 'team-profile-contract-'));
@@ -531,7 +598,7 @@ function makeWorld({
   const agentsDir = join(world, '.codex', 'agents');
   mkdirSync(teamDir, { recursive: true });
   mkdirSync(agentsDir, { recursive: true });
-  writeFileSync(join(teamDir, 'team.md'), teamText ?? instantiateTeam(world, { policy, roster }));
+  writeFileSync(join(teamDir, 'team.md'), teamText ?? instantiateTeam(world, { policy, roster, reportRoot }));
   writeFileSync(join(teamDir, 'trace.jsonl'), '');
   writeFileSync(join(teamDir, 'trace-ops.sh'), '#!/bin/sh\nexit 0\n');
   chmodSync(join(teamDir, 'trace-ops.sh'), 0o755);
@@ -566,7 +633,38 @@ function removeWorld(world) {
 }
 
 {
-  const world = makeWorld({ policy: 'legacy-absent', roster: DUSK_ROSTER });
+  const world = makeWorld();
+  const teamPath = join(world, '.codex', 'teams', 'dusk', 'team.md');
+  writeFileSync(teamPath, readFileSync(teamPath, 'utf8').replace(
+    REQUIRED_GUARD_SENTENCE,
+    `${REQUIRED_GUARD_SENTENCE} Contradiction: intent-guard implements every requested repair.`,
+  ));
+  const result = runVerifier(world);
+  check('verifier.requiredGuardExtraMention.exit', result.status, 1,
+    'required policy rejects a contradictory extra intent-guard mention');
+  check('verifier.requiredGuardExtraMention.reason',
+    result.output.includes('required permits exactly one total intent-guard mention; found 2'), true,
+    'the exact safe sentence must be the sole shared mention of the role');
+  removeWorld(world);
+}
+
+{
+  const world = makeWorld();
+  const teamPath = join(world, '.codex', 'teams', 'dusk', 'team.md');
+  writeFileSync(teamPath, readFileSync(teamPath, 'utf8').replace(
+    REQUIRED_GUARD_SENTENCE, `${REQUIRED_GUARD_SENTENCE} ${REQUIRED_GUARD_SENTENCE}`,
+  ));
+  const result = runVerifier(world);
+  check('verifier.requiredGuardSameLineDuplicate.exit', result.status, 1,
+    'required policy rejects two exact guard sentences on one line');
+  check('verifier.requiredGuardSameLineDuplicate.reason',
+    result.output.includes('required needs exact sentence once; found 2'), true,
+    'the verifier counts exact occurrences rather than matching lines');
+  removeWorld(world);
+}
+
+{
+  const world = makeWorld({ policy: 'legacy-absent', roster: DUSK_ROSTER, reportRoot: '.codex/reports' });
   const result = runVerifier(world);
   check('verifier.fullDuskLegacyAbsent.exit', result.status, 0,
     'the full 13-member Dusk roster passes without adding intent-guard');
@@ -576,6 +674,207 @@ function removeWorld(world) {
   check('verifier.fullDuskLegacyAbsent.memberChecks',
     DUSK_ROSTER.every(([name]) => result.output.includes(`CHECK: agent ${name} ... OK`)), true,
     'the verifier checks every exact Dusk member');
+  check('verifier.fullDuskLegacyAbsent.reportRoot',
+    result.output.includes('CHECK: Shared report root (.codex/reports) ... OK'), true,
+    'the verifier accepts the exact guidance-derived Dusk report root');
+  removeWorld(world);
+}
+
+{
+  const world = makeWorld();
+  const teamPath = join(world, '.codex', 'teams', 'dusk', 'team.md');
+  writeFileSync(teamPath, readFileSync(teamPath, 'utf8').replace(REQUIRED_GUARD_SENTENCE, ''));
+  const result = runVerifier(world);
+  check('verifier.requiredGuardSentence.exit', result.status, 1,
+    'required policy fails without its exact shared guard sentence');
+  check('verifier.requiredGuardSentence.reason',
+    result.output.includes('required needs exact sentence once; found 0'), true,
+    'the verifier identifies the missing required-policy sentence');
+  removeWorld(world);
+}
+
+{
+  const world = makeWorld({ policy: 'legacy-absent' });
+  const teamPath = join(world, '.codex', 'teams', 'dusk', 'team.md');
+  writeFileSync(teamPath, readFileSync(teamPath, 'utf8').replace(
+    'Every domain agent loads this file before task acceptance.',
+    `Every domain agent loads this file before task acceptance.\n${REQUIRED_GUARD_SENTENCE}`,
+  ));
+  const result = runVerifier(world);
+  check('verifier.legacyPhantomGuard.exit', result.status, 1,
+    'legacy-absent policy rejects shared wording that asserts a phantom guard');
+  check('verifier.legacyPhantomGuard.reason',
+    result.output.includes('legacy-absent must not name a phantom role'), true,
+    'the verifier identifies the phantom-role wording');
+  removeWorld(world);
+}
+
+{
+  const world = makeWorld({ policy: 'legacy-absent' });
+  const teamPath = join(world, '.codex', 'teams', 'dusk', 'team.md');
+  writeFileSync(teamPath, readFileSync(teamPath, 'utf8').replace(
+    'Every domain agent loads this file before task acceptance.',
+    'Every domain agent loads this file before task acceptance.\n{INTENT_GUARD_SHARED_CONTRACT}',
+  ));
+  const result = runVerifier(world);
+  check('verifier.unresolvedGuardContract.exit', result.status, 1,
+    'legacy-absent fails when its conditional shared placeholder survives');
+  check('verifier.unresolvedGuardContract.reason',
+    result.output.includes('unresolved policy-conditional placeholder'), true,
+    'the verifier identifies the unresolved conditional placeholder');
+  removeWorld(world);
+}
+
+{
+  const world = makeWorld({ reportRoot: '{REPORT_ROOT}' });
+  const result = runVerifier(world);
+  check('verifier.unresolvedReportRoot.exit', result.status, 1,
+    'an unresolved report-root placeholder fails');
+  check('verifier.unresolvedReportRoot.reason',
+    result.output.includes('unsafe or unresolved project-relative path'), true,
+    'the verifier identifies unresolved report-root output');
+  removeWorld(world);
+}
+
+{
+  const world = makeWorld({ reportRoot: '../outside' });
+  const result = runVerifier(world);
+  check('verifier.traversalReportRoot.exit', result.status, 1,
+    'a traversal report root fails');
+  check('verifier.traversalReportRoot.reason',
+    result.output.includes("unsafe or unresolved project-relative path: '../outside'"), true,
+    'the verifier identifies the unsafe report root');
+  removeWorld(world);
+}
+
+{
+  const world = makeWorld();
+  const teamPath = join(world, '.codex', 'teams', 'dusk', 'team.md');
+  const bulk = `Bulk -> \`${SOURCE_CLIENT_DIR}/reports/YYYYMMDD-HHMMSS_{AGENT_NAME}/\``;
+  writeFileSync(teamPath, readFileSync(teamPath, 'utf8').replace(bulk, `${bulk} ${bulk}`));
+  const result = runVerifier(world);
+  check('verifier.reportRootSameLineDuplicate.exit', result.status, 1,
+    'two Bulk report patterns on one line fail exact-once validation');
+  check('verifier.reportRootSameLineDuplicate.reason',
+    result.output.includes('expected exactly one Bulk directive, one report template, and one resolved path; found 2/2/2'), true,
+    'the verifier counts concrete report patterns rather than matching lines');
+  removeWorld(world);
+}
+
+{
+  const world = makeWorld();
+  const teamPath = join(world, '.codex', 'teams', 'dusk', 'team.md');
+  const bulk = `Bulk -> \`${SOURCE_CLIENT_DIR}/reports/YYYYMMDD-HHMMSS_{AGENT_NAME}/\``;
+  writeFileSync(teamPath, readFileSync(teamPath, 'utf8').replace(
+    bulk, `${bulk} Bulk -> $(touch-pwned)/YYYYMMDD-HHMMSS_{AGENT_NAME}/`,
+  ));
+  const result = runVerifier(world);
+  check('verifier.reportRootUnsafeSecondBulk.exit', result.status, 1,
+    'a canonical Bulk path plus an unsafe same-line Bulk directive fails');
+  check('verifier.reportRootUnsafeSecondBulk.reason',
+    result.output.includes('expected exactly one Bulk directive, one report template, and one resolved path; found 2/2/1'), true,
+    'the verifier counts all directives and templates, not only canonical path matches');
+  check('verifier.reportRootUnsafeSecondBulk.noExecution', existsSync(join(world, 'touch-pwned')), false,
+    'verification treats the unsafe second directive as data');
+  removeWorld(world);
+}
+
+{
+  const world = makeWorld();
+  const teamPath = join(world, '.codex', 'teams', 'dusk', 'team.md');
+  const bulk = `Bulk -> \`${SOURCE_CLIENT_DIR}/reports/YYYYMMDD-HHMMSS_{AGENT_NAME}/\``;
+  writeFileSync(teamPath, readFileSync(teamPath, 'utf8').replace(
+    bulk, `${bulk}/YYYYMMDD-HHMMSS_{AGENT_NAME}/`,
+  ));
+  const result = runVerifier(world);
+  check('verifier.reportTemplateAdjacentDuplicate.exit', result.status, 1,
+    'an adjacent extra report template fails exact-once validation');
+  check('verifier.reportTemplateAdjacentDuplicate.reason',
+    result.output.includes('expected exactly one Bulk directive, one report template, and one resolved path; found 1/2/1'), true,
+    'the verifier counts report-template occurrences independently of directives');
+  removeWorld(world);
+}
+
+for (const [name, reportRoot] of [
+  ['commandSubstitution', '.codex/$(touch-pwned)'],
+  ['backticks', '.codex/`touch-pwned`'],
+  ['semicolon', '.codex/reports;touch-pwned'],
+  ['ampersand', '.codex/reports&touch-pwned'],
+  ['pipe', '.codex/reports|touch-pwned'],
+  ['control', `.codex/${String.fromCharCode(1)}reports`],
+  ['dotSegment', '.codex/./reports'],
+  ['trailingSlash', '.codex/reports/'],
+]) {
+  const world = makeWorld({ reportRoot });
+  const result = runVerifier(world);
+  check(`verifier.hostileReportRoot.${name}.exit`, result.status, 1,
+    `${name} report root fails the conservative segment allowlist`);
+  check(`verifier.hostileReportRoot.${name}.reason`,
+    result.output.includes('CHECK: Shared report root ... FAIL'), true,
+    'the verifier rejects the hostile path as inert data');
+  check(`verifier.hostileReportRoot.${name}.noExecution`,
+    existsSync(join(world, 'touch-pwned')), false,
+    'verification never executes report-root text');
+  removeWorld(world);
+}
+
+for (const reportRoot of ['.codex/reports', 'reports/team-1', '.reports_2/a.b']) {
+  const world = makeWorld({ reportRoot });
+  const result = runVerifier(world);
+  check(`verifier.safeReportRoot.${reportRoot}.exit`, result.status, 0,
+    `${reportRoot} passes the conservative segment allowlist`);
+  removeWorld(world);
+}
+
+{
+  const world = makeWorld({ agentText: agentFile({ description: 'x'.repeat(100) }) });
+  const result = runVerifier(world);
+  check('verifier.description100.exit', result.status, 0,
+    'a domain description at exactly 100 characters passes');
+  removeWorld(world);
+}
+
+// BEGIN SOURCE YAML DESCRIPTION FIXTURES
+for (const [name, description] of [['empty', ''], ['multiline', 'first line\nsecond line'], ['c0Escaped', 'first\u0001second'], ['delEscaped', 'first\u007fsecond'], ['nel', 'first\u0085second'], ['c1Start', 'first\u0080second'], ['c1End', 'first\u009fsecond'], ['yamlNoncharacterFffe', 'first\ufffesecond'], ['yamlNoncharacterFfff', 'first\uffffsecond']]) {
+  for (const parked of [false, true]) {
+    const world = makeWorld({ agentText: agentFile({ description }) });
+    if (parked) {
+      const agentsDir = join(world, '.codex', 'agents');
+      renameSync(join(agentsDir, 'build-eng.toml'), join(agentsDir, 'build-eng.toml.disabled'));
+    }
+    const result = runVerifier(world);
+    const state = parked ? 'parked' : 'live';
+    check(`verifier.descriptionScalar.${name}.${state}.exit`, result.status, 1,
+      `${state} native domain member rejects ${name} description`);
+    check(`verifier.descriptionScalar.${name}.${state}.reason`,
+      result.output.includes('description must be one nonempty line'), true,
+      'the verifier identifies the strict native string defect');
+    removeWorld(world);
+  }
+}
+// END SOURCE YAML DESCRIPTION FIXTURES
+
+{
+  const world = makeWorld({ agentText: agentFile({ description: 'x'.repeat(101) }) });
+  const result = runVerifier(world);
+  check('verifier.description101.exit', result.status, 1,
+    'a domain description over 100 characters fails');
+  check('verifier.description101.reason',
+    result.output.includes('description is 101 characters; ceiling is 100'), true,
+    'the verifier names the exact description length and ceiling');
+  removeWorld(world);
+}
+
+{
+  const world = makeWorld({ agentText: agentFile({ description: 'x'.repeat(101) }) });
+  const agentsDir = join(world, '.codex', 'agents');
+  renameSync(join(agentsDir, 'build-eng.toml'), join(agentsDir, 'build-eng.toml.disabled'));
+  const result = runVerifier(world);
+  check('verifier.parkedDescription101.exit', result.status, 1,
+    'a parked domain member remains subject to the description ceiling');
+  check('verifier.parkedDescription101.reason',
+    result.output.includes('description is 101 characters; ceiling is 100'), true,
+    'the parked-member failure names the same exact ceiling');
   removeWorld(world);
 }
 
@@ -743,7 +1042,7 @@ for (const [name, instructions] of [
 }
 
 const instantiatedLosses = [
-  'Every domain agent loads this file before task acceptance. `intent-guard` is exempt: it keeps its review-only output contract and never implements.',
+  'Every domain agent loads this file before task acceptance.',
   'execute only owned surfaces',
   'Optional best effort, `1 attempt max`, no retry, Bash only.',
   'Track states: `took` / `refused` / `completed` / `failed`.',

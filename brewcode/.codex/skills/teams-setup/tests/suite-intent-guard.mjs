@@ -62,7 +62,9 @@ function makeBootstrap(root) {
     .replaceAll('{CONTENT_VERSION}', meta[2])
     .replaceAll('{N}', '0')
     .replaceAll('{CWD}', root)
+    .replaceAll('{REPORT_ROOT}', '.codex/reports')
     .replaceAll('{INTENT_GUARD_POLICY}', 'required')
+    .replaceAll('{INTENT_GUARD_SHARED_CONTRACT}', '`intent-guard` is review-only, keeps its own output contract, and never implements.')
     .replaceAll('{INTENT_GUARD_ROW}', guardRow) + '\n';
   writeFileSync(join(teamDir, 'team.md'), team);
   writeFileSync(join(teamDir, 'trace.jsonl'), '');

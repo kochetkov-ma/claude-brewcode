@@ -1,6 +1,6 @@
 # Native Codex team-agent template
 
-Create one TOML file under `.codex/agents/` with only the supported `name`, `description`, and `developer_instructions` keys. Keep `description` to one role-and-trigger line. Use the following body shape exactly; its six headings are ordered and exhaustive:
+Create one TOML file under `.codex/agents/` with only the supported `name`, `description`, and `developer_instructions` keys. Keep `description` to one nonempty role-and-trigger line of at most 100 characters. Use the following body shape exactly; its six headings are ordered and exhaustive:
 
 ```markdown
 ## Mission

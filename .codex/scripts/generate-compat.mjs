@@ -671,8 +671,11 @@ if any(type(data[key]) is not str for key in required):
 if data["name"] != expected_name:
     print(f"  FAIL: TOML name {data['name']!r} must equal roster/file name {expected_name!r}")
     raise SystemExit(1)
-if "\\n" in data["description"]:
-    print("  FAIL: description must be one line")
+if any(separator in data["description"] for separator in ("\\n", "\\r", "\\u0085", "\\u2028", "\\u2029")) or not data["description"] or any(ord(char) <= 0x08 or ord(char) in (0x0b, 0x0c) or 0x0e <= ord(char) <= 0x1f or 0x7f <= ord(char) <= 0x9f or ord(char) in (0xfffe, 0xffff) for char in data["description"]):
+    print("  FAIL: description must be one nonempty line")
+    raise SystemExit(1)
+if len(data["description"]) > 100:
+    print(f"  FAIL: description is {len(data['description'])} characters; ceiling is 100")
     raise SystemExit(1)
 body = data["developer_instructions"]
 if kind == "review-only":
@@ -703,6 +706,59 @@ if body_bytes > 3200 or body_tokens > 800:
     raise SystemExit(1)
 PY
 }
+
+# Parked domain members are not discoverable, but their TOML remains a roster artifact and keeps the
+# same description ceiling so enable cannot restore an invalid profile.
+check_agent_description() {
+  _f="$1"
+  python3 - "$_f" <<'PY'
+import pathlib
+import sys
+import tomllib
+
+path = pathlib.Path(sys.argv[1])
+try:
+    data = tomllib.loads(path.read_text(encoding="utf-8"))
+except (OSError, UnicodeError, tomllib.TOMLDecodeError) as exc:
+    print(f"  FAIL: invalid TOML: {exc}")
+    raise SystemExit(1)
+description = data.get("description")
+if type(description) is not str or any(separator in description for separator in ("\\n", "\\r", "\\u0085", "\\u2028", "\\u2029")) or not description or any(ord(char) <= 0x08 or ord(char) in (0x0b, 0x0c) or 0x0e <= ord(char) <= 0x1f or 0x7f <= ord(char) <= 0x9f or ord(char) in (0xfffe, 0xffff) for char in description):
+    print("  FAIL: description must be one nonempty line")
+    raise SystemExit(1)
+if len(description) > 100:
+    print(f"  FAIL: description is {len(description)} characters; ceiling is 100")
+    raise SystemExit(1)
+PY
+}
+
+valid_report_root() {
+  case "$1" in
+    ''|/*|*/|~*|*//*|*[!A-Za-z0-9._/-]*) return 1 ;;
+  esac
+  _old_ifs=$IFS
+  IFS=/
+  set -- $1
+  IFS=$_old_ifs
+  for _segment do
+    case "$_segment" in ''|.|..) return 1 ;; esac
+  done
+  return 0
+}
+
+count_literal_occurrences() {
+  _literal="$1"
+  awk -v needle="$_literal" '
+    {
+      rest = $0
+      while ((at = index(rest, needle)) > 0) {
+        count++
+        rest = substr(rest, at + length(needle))
+      }
+    }
+    END { print count + 0 }
+  '
+}
 # END CLIENT AGENT VALIDATION`;
 }
 
@@ -710,11 +766,11 @@ function nativeTeamFixtureBlock() {
   return [
     '// BEGIN RUNTIME AGENT FIXTURES',
     'function tomlString(value) {',
-    '  return JSON.stringify(value);',
+    "  return JSON.stringify(value).replaceAll('\\u007f', '\\\\u007f');",
     '}',
     '',
-    "function agentFile({ name = 'build-eng', body = runtimeRepresentativeBody, extraField = '' } = {}) {",
-    '  return `name = ${tomlString(name)}\\ndescription = "Domain owner. Triggers: domain, review, verification."\\ndeveloper_instructions = ${tomlString(body)}\\n${extraField}`;',
+    "function agentFile({ name = 'build-eng', description = 'Domain owner. Triggers: domain, review, verification.', body = runtimeRepresentativeBody, extraField = '' } = {}) {",
+    '  return `name = ${tomlString(name)}\\ndescription = ${tomlString(description)}\\ndeveloper_instructions = ${tomlString(body)}\\n${extraField}`;',
     '}',
     '',
     'function intentGuardFile() {',
@@ -785,6 +841,30 @@ function nativeTeamSchemaFixtures() {
   ].join('\n');
 }
 
+function nativeDescriptionFixtures() {
+  return [
+    '// BEGIN SOURCE YAML DESCRIPTION FIXTURES',
+    "for (const [name, description] of [['empty', ''], ['multiline', 'first line\\nsecond line'], ['c0Escaped', 'first\\u0001second'], ['delEscaped', 'first\\u007fsecond'], ['nel', 'first\\u0085second'], ['c1Start', 'first\\u0080second'], ['c1End', 'first\\u009fsecond'], ['yamlNoncharacterFffe', 'first\\ufffesecond'], ['yamlNoncharacterFfff', 'first\\uffffsecond']]) {",
+    '  for (const parked of [false, true]) {',
+    '    const world = makeWorld({ agentText: agentFile({ description }) });',
+    '    if (parked) {',
+    "      const agentsDir = join(world, '.codex', 'agents');",
+    "      renameSync(join(agentsDir, 'build-eng.toml'), join(agentsDir, 'build-eng.toml.disabled'));",
+    '    }',
+    '    const result = runVerifier(world);',
+    "    const state = parked ? 'parked' : 'live';",
+    "    check(`verifier.descriptionScalar.${name}.${state}.exit`, result.status, 1,",
+    '      `${state} native domain member rejects ${name} description`);',
+    "    check(`verifier.descriptionScalar.${name}.${state}.reason`,",
+    "      result.output.includes('description must be one nonempty line'), true,",
+    "      'the verifier identifies the strict native string defect');",
+    '    removeWorld(world);',
+    '  }',
+    '}',
+    '// END SOURCE YAML DESCRIPTION FIXTURES',
+  ].join('\n');
+}
+
 function nativeLifecycleAgentFixture() {
   return [
     "const DOMAIN_INSTRUCTIONS = '## Mission\\nOwn fixture behavior.\\n\\n## Owned surfaces\\nFixture files.\\n\\n## Exclusions\\nNo neighboring work.\\n\\n## Must-load references\\n- `.codex/teams/t1/team.md`\\n\\n## Unique invariants\\nPreserve bytes.\\n\\n## Unique verification\\nRun the fixture suite.\\n';",
@@ -810,7 +890,9 @@ function nativeLifecycleTeamHelper(teamTemplate) {
     "    .replaceAll('{CONTENT_VERSION}', '6.1.0')",
     "    .replaceAll('{N}', String(domainRows.length))",
     "    .replaceAll('{CWD}', root)",
+    "    .replaceAll('{REPORT_ROOT}', '.codex/reports')",
     "    .replaceAll('{INTENT_GUARD_POLICY}', intent ? 'required' : 'legacy-absent')",
+    "    .replaceAll('{INTENT_GUARD_SHARED_CONTRACT}', intent ? '`intent-guard` is review-only, keeps its own output contract, and never implements.' : '')",
     "    .replaceAll('{INTENT_GUARD_ROW}', roster)}\\n`;",
     "  const separators = { compact: '|---|---|---|---|---|---|---|', padded: '| --- | --- | --- | --- | --- | --- | --- |', none: '' };",
     "  return rendered.replace('|---|---|---|---|---|---|---|', separators[separator]);",
@@ -896,7 +978,9 @@ function makeBootstrap(root) {
     .replaceAll('{CONTENT_VERSION}', meta[2])
     .replaceAll('{N}', '0')
     .replaceAll('{CWD}', root)
+    .replaceAll('{REPORT_ROOT}', '.codex/reports')
     .replaceAll('{INTENT_GUARD_POLICY}', 'required')
+    .replaceAll('{INTENT_GUARD_SHARED_CONTRACT}', '\x60intent-guard\x60 is review-only, keeps its own output contract, and never implements.')
     .replaceAll('{INTENT_GUARD_ROW}', guardRow) + '\\n';
   writeFileSync(join(teamDir, 'team.md'), team);
   writeFileSync(join(teamDir, 'trace.jsonl'), '');
@@ -1084,7 +1168,9 @@ function nativeTeamsWorkflow(sourceBody) {
     '',
     '## Native authority',
     '',
-    'Manage persistent project teams under `.codex/teams/{TEAM_NAME}/` and agents under `.codex/agents/`. Domain agents are native TOML parsed with Python `tomllib`, never renamed Markdown. Each has exactly the three string keys `name`, `description`, and `developer_instructions`. Read applicable `AGENTS.md`, preserve unrelated files, use only adjacent scripts/references, and never edit installed caches.',
+    'Manage persistent project teams under `.codex/teams/{TEAM_NAME}/` and agents under `.codex/agents/`. Domain agents are native TOML parsed with Python `tomllib`, never renamed Markdown. Each has exactly the three string keys `name`, `description`, and `developer_instructions`; `description` is one nonempty line of at most 100 characters. Read applicable `AGENTS.md`, preserve unrelated files, use only adjacent scripts/references, and never edit installed caches.',
+    '',
+    'Before every `team.md` write, resolve `REPORT_ROOT` from the narrowest applicable durable project guidance; an exact declared project-relative path wins, and guidance silence falls back to `.codex/reports`. Every slash-separated segment must match `^[A-Za-z0-9._-]+$` and must not equal `.` or `..`; reject absolute/home-relative paths, doubled slashes, unresolved tokens, control characters, and shell metacharacters including `$()`, backticks, `;`, `&`, and `|`. Equal-specificity conflicting report-root directives -> STOP instead of selecting either. Dusk guidance therefore resolves exactly `.codex/reports`, never a tool-default path.',
     '',
     '## Invocation and approval',
     '',
@@ -1106,15 +1192,15 @@ function nativeTeamsWorkflow(sourceBody) {
     '',
     '### C2.6: shared-contract bootstrap',
     '',
-    'Before any domain agent write, instantiate `references/framework-files.md` into `.codex/teams/{TEAM_NAME}/team.md` with metadata, `## Shared Agent Contract`, policy `required`, the fixed guard row, and zero domain rows. Initialize trace storage, copy the project-local tracer, and substitute every placeholder. Then call `<plugin-root>/skills/superreview-setup/scripts/emit-intent-guard.sh <project-root>` so the create-only emitter atomically creates the absent guard before the full `verify-team.sh` bootstrap check. A non-symlink regular file is reused only after exact normalized allowlist validation; invalid regular files, symlinks, and nonregular targets stop creation without mutation.',
+    'Before any domain agent write, instantiate `references/framework-files.md` into `.codex/teams/{TEAM_NAME}/team.md` with metadata, validated `REPORT_ROOT`, policy `required`, the exact shared sentence "`intent-guard` is review-only, keeps its own output contract, and never implements.", the fixed guard row, and zero domain rows. Initialize trace storage, copy the project-local tracer, and substitute every placeholder. Then call `<plugin-root>/skills/superreview-setup/scripts/emit-intent-guard.sh <project-root>` so the create-only emitter atomically creates the absent guard before the full `verify-team.sh` bootstrap check. A non-symlink regular file is reused only after exact normalized allowlist validation; invalid regular files, symlinks, and nonregular targets stop creation without mutation.',
     '',
     '### C3-C4: creation and roster finalization',
     '',
-    'Create one approved `.codex/agents/{name}.toml` per bounded owner from `references/agent-template.md`. Parse before and after writing. `developer_instructions` has only the ordered headings `Mission`, `Owned surfaces`, `Exclusions`, `Must-load references`, `Unique invariants`, `Unique verification`; the first must-load item is `.codex/teams/{TEAM_NAME}/team.md`, occurring once. Enforce <=3200 UTF-8 bytes and `ceil(chars/4) <=800`.',
+    'Create one approved `.codex/agents/{name}.toml` per bounded owner from `references/agent-template.md`. Parse before and after writing. Enforce every live or parked domain member description as one nonempty line of at most 100 characters. `developer_instructions` has only the ordered headings `Mission`, `Owned surfaces`, `Exclusions`, `Must-load references`, `Unique invariants`, `Unique verification`; the first must-load item is `.codex/teams/{TEAM_NAME}/team.md`, occurring once. Enforce <=3200 UTF-8 bytes and `ceil(chars/4) <=800`.',
     '',
     'For policy `required`, the bootstrap already called the create-only intent-guard emitter: an approved existing non-symlink regular file was reused byte-identically, or an absent target was published atomically without replacement. Invalid, symlink, nonregular, or lost concurrent-create paths fail closed without mutation. Never author or overwrite the guard here. `legacy-absent` exists only on upgrades and gets no guard.',
     '',
-    'Finalize only successfully parsed agents. Domain names are unique; `Agents` counts domain rows only. `required` has exactly one fixed review-only guard row; `legacy-absent` has none. The complete substituted `team.md` must stay <=2800 characters and `ceil(chars/4) <=700`.',
+    'Finalize only successfully parsed agents. Domain names are unique; `Agents` counts domain rows only. `required` has exactly one fixed review-only guard row and its exact shared guard sentence; `legacy-absent` has neither row nor any shared-contract mention of a phantom guard. The complete substituted `team.md` must stay <=2800 characters and `ceil(chars/4) <=700`.',
     '',
     '### C5-C7: independent review',
     '',
@@ -1126,7 +1212,7 @@ function nativeTeamsWorkflow(sourceBody) {
     '',
     '## Mode: upgrade',
     '',
-    'Reject parked or live-plus-parked members before writes. Migrate the shared contract first, recording an existing guard row as `required` and absence as `legacy-absent`; never synthesize the latter. Preserve legacy agent bytes until this gate passes. Analyze trace evidence, present per-agent keep/tune/replace/remove actions, and obtain approval for roster actions. Touch only approved domain agents, use atomic three-key TOML writes and the current six-heading contract, preserve untouched bytes, re-copy the tracer, update metadata/cursor, then run C5-C9 for touched artifacts.',
+    'Reject parked or live-plus-parked members before writes. Capture an immutable UTC upgrade cutoff before the initial cursor and trace reads; after all work set the cursor to that captured cutoff, never to a new completion-time timestamp, so concurrent trace entries are not skipped. Migrate the shared contract first, re-resolving `REPORT_ROOT` from current project guidance, recording an existing guard row as `required` and absence as `legacy-absent`; required gets the exact shared guard sentence, while legacy-absent gets no guard mention and never synthesizes the role. Preserve legacy agent bytes until this gate passes. Analyze trace evidence, present per-agent keep/tune/replace/remove actions, and obtain approval for roster actions. Touch only approved domain agents, use atomic three-key TOML writes and the current six-heading contract, preserve untouched bytes, re-copy the tracer, update metadata/cursor, then run C5-C9 for touched artifacts.',
     '',
     '## Mode: enable',
     '',
@@ -1182,6 +1268,13 @@ for (const literal of [
   'obtain approval for roster actions',
   '\`status\` asks nothing',
   'Every mutating mode requires \`request_user_input\` approval',
+  'resolve \`REPORT_ROOT\` from the narrowest applicable durable project guidance',
+  'Every slash-separated segment must match \`^[A-Za-z0-9._-]+$\`',
+  'Equal-specificity conflicting report-root directives -> STOP',
+  'Enforce every live or parked domain member description as one nonempty line of at most 100 characters',
+  'legacy-absent gets no guard mention',
+  'Capture an immutable UTC upgrade cutoff before the initial cursor and trace reads',
+  'set the cursor to that captured cutoff, never to a new completion-time timestamp',
 ]) {
   check(
     \`workflow.control.\${literal.slice(0, 18)}\`,
@@ -1545,7 +1638,7 @@ Agents whose domain writes code, scripts, SQL, schemas, infrastructure, or confi
   if (plugin === 'brewcode' && skill === 'teams-setup') {
     writeFile(path.join(targetDir, 'references', 'agent-template.md'), `# Native Codex team-agent template
 
-Create one TOML file under \`.codex/agents/\` with only the supported \`name\`, \`description\`, and \`developer_instructions\` keys. Keep \`description\` to one role-and-trigger line. Use the following body shape exactly; its six headings are ordered and exhaustive:
+Create one TOML file under \`.codex/agents/\` with only the supported \`name\`, \`description\`, and \`developer_instructions\` keys. Keep \`description\` to one nonempty role-and-trigger line of at most 100 characters. Use the following body shape exactly; its six headings are ordered and exhaustive:
 
 \`\`\`markdown
 ## Mission
@@ -1603,7 +1696,7 @@ With no explicit mode, an existing team resolves to \`status\`; otherwise the wo
     trace-ops.sh
 \`\`\`
 
-Domain TOML contains only \`name\`, \`description\`, and \`developer_instructions\`. The instructions use the six ordered headings documented in \`references/agent-template.md\`; shared acceptance, routing, tracing, return, and colleague rules live once in \`team.md\`. The full roster stays within 2800 characters / 700 estimated tokens, and each domain \`developer_instructions\` stays within 3200 UTF-8 bytes / 800 estimated tokens.
+Domain TOML contains only \`name\`, \`description\`, and \`developer_instructions\`; every live or parked domain description is one nonempty line of at most 100 characters. The instructions use the six ordered headings documented in \`references/agent-template.md\`; shared acceptance, routing, tracing, return, and colleague rules live once in \`team.md\`. The report root comes from applicable project guidance (default \`.codex/reports\`), uses only \`[A-Za-z0-9._-]+\` non-dot segments, and fails closed on equal-specificity conflicts. Required policy names its shared review-only guard exactly once, including same-line occurrence counting; legacy-absent names no phantom guard. The full roster stays within 2800 characters / 700 estimated tokens, and each domain \`developer_instructions\` stays within 3200 UTF-8 bytes / 800 estimated tokens.
 
 New teams use one review-only \`intent-guard\` outside the domain count. Its shared native emitter validates the template, reuses an approved existing non-symlink regular file byte-identically, or atomically publishes an absent target without replacement. Invalid regular files, symlinks, nonregular targets, and lost concurrent creates fail without mutation. It is never a domain owner, reviewer, parked member, or cleanup target.
 `);
@@ -1805,6 +1898,7 @@ esac
       .replace('mutate(representativeBody)', 'mutate(runtimeRepresentativeBody)')
       .replaceAll('join(world, SOURCE_CLIENT_DIR', "join(world, '.codex'")
       .replaceAll('`${name}.md`', '`${name}.toml`')
+      .replaceAll("'build-eng.md.disabled'", "'build-eng.toml.disabled'")
       .replaceAll("'build-eng.md'", "'build-eng.toml'")
       .replace(
         "result.output.includes('ceiling is 3200 (~800 est-tokens), frontmatter excluded')",
@@ -1839,6 +1933,12 @@ esac
       '// BEGIN SOURCE FRONTMATTER BUDGET FIXTURE',
       '// END SOURCE FRONTMATTER BUDGET FIXTURE',
       nativeTeamSchemaFixtures()
+    );
+    profileText = replaceMarked(
+      profileText,
+      '// BEGIN SOURCE YAML DESCRIPTION FIXTURES',
+      '// END SOURCE YAML DESCRIPTION FIXTURES',
+      nativeDescriptionFixtures()
     );
     profileText = profileText.replace(
       "console.log('suite-agent-profile-contract.mjs');",

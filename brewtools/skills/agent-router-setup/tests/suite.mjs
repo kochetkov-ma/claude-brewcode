@@ -1521,9 +1521,9 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 51 - negation guard
-// GIVEN: text that talks ABOUT authoring instead of asking for it
+// GIVEN: text with one or more authoring matches, some or all negated
 // WHEN:  the hook runs against an empty roster
-// THEN:  silence - a strong match preceded by a negation is not a request
+// THEN:  every match is checked; only a later non-negated match may deny
 // ─────────────────────────────────────────────────────────────────────────────
 {
   const negations = [
@@ -1535,6 +1535,190 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
     const r = run(payload({ cwd: proj, description }), env);
     check(`51-negation-${name}`, r.stdout, '', 'talk about authoring is not an authoring request');
     check(`51-negation-${name}-exit`, r.status, 0, 'hook must exit 0');
+  }
+
+  {
+    const { proj, env } = newRoot('t51c');
+    const r = run(
+      payload({
+        cwd: proj,
+        description: 'Do not create a new skill. Refactor the skill instead.',
+      }),
+      env,
+    );
+    check(
+      '51-negated-then-positive-denies',
+      safeParse(r.stdout),
+      denyOut(intentPluginDeny('skill authoring', 'brewcode:skill-creator', 'general-purpose')),
+      'a later non-negated match remains a strong routing signal',
+    );
+    check('51-negated-then-positive-exit', r.status, 0, 'hook must exit 0');
+  }
+
+  {
+    const { proj, env } = newRoot('t51d');
+    const r = run(
+      payload({
+        cwd: proj,
+        description: 'Do not create a skill. Never refactor the skill.',
+      }),
+      env,
+    );
+    check('51-all-negated-silent', r.stdout, '', 'all negated matches remain non-effective');
+    check('51-all-negated-exit', r.status, 0, 'hook must exit 0');
+  }
+
+  {
+    const { proj, env } = newRoot('t51e');
+    writeConfig(proj, {
+      enabled: true,
+      intents: [{
+        match: '(?=(?:create|Refactor))', expert: 'proj:skill-expert', label: 'skill authoring',
+      }],
+    });
+    const r = run(
+      payload({ cwd: proj, description: 'Do not create a skill. Refactor the implementation.' }),
+      env,
+    );
+    check(
+      '51-zero-length-after-period-denies',
+      safeParse(r.stdout),
+      denyOut(intentPluginDeny('skill authoring', 'proj:skill-expert', 'general-purpose')),
+      'a zero-length positive match immediately after a sentence boundary is detected',
+    );
+    check('51-zero-length-after-period-exit', r.status, 0, 'hook terminates successfully');
+  }
+
+  {
+    const { proj, env } = newRoot('t51f');
+    writeConfig(proj, {
+      enabled: true,
+      intents: [{ match: '(?=skill)', expert: 'proj:skill-expert', label: 'skill authoring' }],
+    });
+    const r = run(
+      payload({ cwd: proj, description: 'Do not skill. Never skill.' }),
+      env,
+    );
+    check('51-zero-length-all-negated-silent', r.stdout, '', 'all zero-length matches advance safely');
+    check('51-zero-length-all-negated-exit', r.status, 0, 'hook terminates successfully');
+  }
+
+  {
+    const { proj, env } = newRoot('t51g');
+    const r = run(
+      payload({
+        cwd: proj,
+        description: 'Do not under any circumstances during this carefully reviewed migration create a skill.',
+      }),
+      env,
+    );
+    check('51-long-clause-negation-silent', r.stdout, '', 'negation spans the complete current clause');
+    check('51-long-clause-negation-exit', r.status, 0, 'hook must exit 0');
+  }
+
+  {
+    const { proj, env } = newRoot('t51h');
+    writeConfig(proj, {
+      enabled: true,
+      intents: [{ match: '^Refactor', expert: 'proj:skill-expert', label: 'skill authoring' }],
+    });
+    const r = run(
+      payload({ cwd: proj, description: 'Do not create a skill. Refactor the implementation.' }),
+      env,
+    );
+    check('51-full-text-anchor-silent', r.stdout, '', 'slice scanning never turns a mid-text anchor into a hit');
+    check('51-full-text-anchor-exit', r.status, 0, 'hook must exit 0');
+  }
+
+  for (const [tag, name, description] of [
+    ['t51i', 'without-delay', 'Without delay, create a skill.'],
+    ['t51j', 'avoid-other-object', 'Avoid mistakes and create a skill.'],
+    ['t51k', 'colon-reset', 'Do not create an agent: create a skill.'],
+    ['t51l', 'em-dash-reset', 'Do not create an agent — create a skill.'],
+  ]) {
+    const { proj, env } = newRoot(tag);
+    const r = run(payload({ cwd: proj, description }), env);
+    check(
+      `51-directional-${name}-denies`,
+      safeParse(r.stdout),
+      denyOut(intentPluginDeny('skill authoring', 'brewcode:skill-creator', 'general-purpose')),
+      'unrelated or completed negative scope does not suppress positive skill authoring',
+    );
+    check(`51-directional-${name}-exit`, r.status, 0, 'hook terminates successfully');
+  }
+
+  for (const [tag, name, description] of [
+    ['t51m', 'comma-predicate-reset', 'Do not create an agent, create a skill.'],
+    ['t51n', 'and-predicate-reset', 'Do not create an agent and create a skill.'],
+  ]) {
+    const { proj, env } = newRoot(tag);
+    const r = run(payload({ cwd: proj, description }), env);
+    check(
+      `51-coordinated-${name}-denies`,
+      safeParse(r.stdout),
+      denyOut(intentPluginDeny('skill authoring', 'brewcode:skill-creator', 'general-purpose')),
+      'a completed negative agent predicate does not suppress a coordinated positive skill predicate',
+    );
+    check(`51-coordinated-${name}-exit`, r.status, 0, 'hook terminates successfully');
+  }
+
+  {
+    const { proj, env } = newRoot('t51o');
+    const r = run(payload({ cwd: proj, description: 'Do not create an agent or create a skill.' }), env);
+    check('51-coordinated-or-stays-negated', r.stdout, '', 'or keeps both predicates inside negative scope');
+    check('51-coordinated-or-exit', r.status, 0, 'hook terminates successfully');
+  }
+
+  for (const [tag, name, description] of [
+    ['t51o1', 'same-skill', 'Do not create a skill and update the skill.'],
+    ['t51o2', 'same-agent', 'We must not create an agent and update the agent.'],
+    ['t51o3', 'same-hook', 'Never create a hook and debug the hook.'],
+  ]) {
+    const { proj, env } = newRoot(tag);
+    const r = run(payload({ cwd: proj, description }), env);
+    check(
+      `51-coordinated-${name}-stays-negated`,
+      r.stdout,
+      '',
+      'same-artifact coordinated authoring remains inside the directional negative scope',
+    );
+    check(`51-coordinated-${name}-exit`, r.status, 0, 'hook terminates successfully');
+  }
+
+  for (const [tag, name, description] of [
+    ['t51p', 'must-not', 'We must not create a skill; just summarize.'],
+    ['t51q', 'should-not', 'We should not create a skill; only review.'],
+    ['t51r', 'cannot', 'We cannot create a skill; this is read-only.'],
+    ['t51s', 'no-need', 'There is no need to create a skill; inspect existing.'],
+  ]) {
+    const { proj, env } = newRoot(tag);
+    const r = run(payload({ cwd: proj, description }), env);
+    check(`51-negative-predicate-${name}`, r.stdout, '', 'negative modal authoring intent stays non-effective');
+    check(`51-negative-predicate-${name}-exit`, r.status, 0, 'hook terminates successfully');
+  }
+
+  for (const [tag, name, description, shouldDeny] of [
+    ['t51t', 'custom-after-comma', 'Do not create a hook, rebuild widget.', true],
+    ['t51u', 'custom-after-and', 'Do not create a hook and rebuild widget.', true],
+    ['t51v', 'custom-direct-negation', 'Do not rebuild widget.', false],
+  ]) {
+    const { proj, env } = newRoot(tag);
+    writeConfig(proj, {
+      enabled: true,
+      intents: [{ match: '\\brebuild widget\\b', expert: 'proj:widget-expert', label: 'widget rebuild' }],
+    });
+    const r = run(payload({ cwd: proj, description }), env);
+    check(
+      `51-${name}`,
+      shouldDeny ? safeParse(r.stdout) : r.stdout,
+      shouldDeny
+        ? denyOut(intentPluginDeny('widget rebuild', 'proj:widget-expert', 'general-purpose'))
+        : '',
+      shouldDeny
+        ? 'an unrelated completed negative predicate does not suppress a custom positive match'
+        : 'a directly negated custom match remains non-effective',
+    );
+    check(`51-${name}-exit`, r.status, 0, 'hook terminates successfully');
   }
 }
 

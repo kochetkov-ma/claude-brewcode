@@ -91,6 +91,16 @@ predates this field, presence of an `intent-guard` roster member migrates to `re
 to `legacy-absent`. These are the only values. `required` requires the fixed review-only row;
 `legacy-absent` forbids that row and MUST NOT add the role during upgrade.
 
+Resolve `REPORT_ROOT` from the applicable project guidance before every `team.md` write. The narrowest
+durable project instruction wins (for example, Dusk's Codex guidance requires `.codex/reports` even when
+this Claude workflow performs the write); otherwise use `.claude/reports`. Store a normalized project-relative
+path with no trailing slash. Reject absolute paths, `~`, `..` segments, backslashes, whitespace, doubled
+slashes, unresolved `{...}` tokens, control characters, or shell metacharacters. Every slash-separated
+segment MUST match `^[A-Za-z0-9._-]+$` and MUST NOT equal `.` or `..`; this rejects `$()`, backticks,
+`;`, `&`, and `|` by construction. If equally specific applicable guidance declares two distinct report
+roots, **STOP on the conflict** instead of selecting either. Never infer the report root from this plugin's
+own defaults when project guidance declares one.
+
 `MODE` is one of the canonical seven, in this order: `status | install | upgrade | enable | disable |
 uninstall | purge`. On any `ERROR:` line: report it verbatim and **STOP**. Never guess a mode, and
 never treat a canonical verb as a team name — `install enable` creates a team NAMED `enable`, so the
@@ -193,6 +203,10 @@ as `none` / `not present in this project`, never invented:
 | 3-6 plausible drift instances in this repo's vocabulary | `{DRIFT_EXAMPLES_TABLE}` | derived from the invariants above |
 | Cheap evidence commands (diffstat, manifest diff, test-file count, new-file list) for this stack | `{EVIDENCE_COMMANDS_BASH}` | build/test tooling found by agent #3 and #4 |
 
+Also resolve and store `REPORT_ROOT` from applicable root/nested project guidance using the prelude rule.
+An exact durable project path wins; guidance silence falls back to `.claude/reports`. Equal-specificity
+conflicting report-root directives -> STOP. Validate the winning path before C2.6.
+
 ### C2: Team Proposal (interactive)
 
 Based on analysis + PROMPT (if provided), propose 3 variants via AskUserQuestion.
@@ -271,7 +285,9 @@ may leave a partial roster, but no discoverable compact profile may ever point a
 
 1. Create `.claude/teams/{TEAM_NAME}/`.
 2. Read `${CLAUDE_SKILL_DIR}/references/framework-files.md`; write `team.md` with substituted metadata,
-   `INTENT_GUARD_POLICY=required`, the byte-faithful `## Shared Agent Contract`, the `## Agents` header,
+   validated `REPORT_ROOT`, `INTENT_GUARD_POLICY=required`, the byte-faithful `## Shared Agent Contract`,
+   exact "`intent-guard` is review-only, keeps its own output contract, and never implements." substitution,
+   the `## Agents` header,
    and only the required fixed `intent-guard` row. Do not add domain-agent rows yet; C4 finalizes the
    successfully created roster.
 3. Create empty `trace.jsonl`; copy the project-local `trace-ops.sh` and make it executable.
@@ -445,7 +461,8 @@ C4. Either way a `required` team gets its `team.md` row. This phase is skipped f
 
 ### C4: Roster Finalization + Verification
 
-1. Re-check the C2.6 bootstrap before editing the roster. Missing/malformed shared contract -> **STOP**;
+1. Re-check the C2.6 bootstrap before editing the roster. Missing/malformed shared contract, unsafe or
+   unresolved report root, or wrong policy-conditional intent-guard sentence -> **STOP**;
    never finalize discoverable agents against an absent authority.
 
 2. Finalize `team.md` from `${CLAUDE_SKILL_DIR}/references/framework-files.md`: preserve the bootstrapped
@@ -590,7 +607,8 @@ Task(subagent_type=REVIEWER, prompt="
   1. Read the fixed agent file
   2. Check original issue is resolved
   3. Check no regression introduced
-  4. For every domain agent, hard-gate the body only (frontmatter excluded): <=3200 bytes; exactly
+  4. For every domain agent, hard-gate exactly one single-line description <=100 characters and the
+     body only (frontmatter excluded): <=3200 bytes; exactly
      `Mission`, `Owned surfaces`, `Exclusions`, `Must-load references`, `Unique invariants`,
      `Unique verification` in order with no other headings; team.md first; no shared rule duplicated.
      `intent-guard` is exempt from this six-heading gate and keeps its frozen review-only contract.
@@ -661,11 +679,14 @@ No AskUserQuestion -- purely informational.
 ### U1: Load & Parse
 
 ```bash
+UPGRADE_CUTOFF=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 CURSOR=$(bash "${CLAUDE_SKILL_DIR}/scripts/trace-ops.sh" cursor ".claude/teams/{TEAM_NAME}")
 bash "${CLAUDE_SKILL_DIR}/scripts/trace-ops.sh" read ".claude/teams/{TEAM_NAME}" --since "$CURSOR" && echo "OK" || echo "FAILED"
 ```
 
 If cursor empty: all entries returned. If team not found -> **STOP**. If cursor exists and <10 post-cursor entries: expand to last 30 days.
+Capture `UPGRADE_CUTOFF` before the initial cursor/trace read and keep it unchanged throughout U1-U4. Entries
+created after that cutoff may be analyzed twice, but must never be skipped by advancing the cursor past them.
 
 **Refuse to upgrade a PARKED member.** Every write in U4 targets `.claude/agents/{name}.md`; writing that
 path while the member sits at `{name}.md.disabled` creates a live+parked dual copy — the state
@@ -688,9 +709,13 @@ done; echo "OK"
 Before U2 analysis or any U4 agent write, read
 `${CLAUDE_SKILL_DIR}/references/framework-files.md` and upgrade `team.md` to the current shared contract.
 For a legacy file with no `## Shared Agent Contract`, insert the canonical block before `## Agents`,
-substituting `{TEAM_NAME}` only and preserving Created, roster rows, statuses, and history. Resolve and
+substituting `{TEAM_NAME}`, the current validated `REPORT_ROOT`, and policy-conditional guard wording while
+preserving Created, roster rows, statuses, and history. Re-resolve `REPORT_ROOT` from current applicable
+project guidance; do not preserve a stale plugin-default report path. Resolve and
 write the explicit `Intent guard` field first: an existing intent-guard roster row -> `required`; no row
--> `legacy-absent`. Never synthesize the row on the latter path. If a shared block exists but is
+-> `legacy-absent`. Substitute the exact review-only guard sentence only for `required`; for `legacy-absent`
+substitute an empty string so the shared contract never names a phantom role. Never synthesize the row on
+the latter path. If a shared block exists but is
 incomplete, replace that block from the canonical reference before proceeding. Re-copy `trace-ops.sh`,
 then run `verify-team.sh`.
 
@@ -757,7 +782,7 @@ warnings identify the next migration set. `intent-guard.md` remains byte-untouch
 
 Set cursor:
 ```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/trace-ops.sh" cursor ".claude/teams/{TEAM_NAME}" set "$(date -u +%Y-%m-%dT%H:%M:%SZ)" && echo "✅" || echo "❌ FAILED"
+bash "${CLAUDE_SKILL_DIR}/scripts/trace-ops.sh" cursor ".claude/teams/{TEAM_NAME}" set "$UPGRADE_CUTOFF" && echo "✅" || echo "❌ FAILED"
 ```
 
 ---

@@ -149,12 +149,17 @@ const DEFAULT_INTENTS = [
 /** Explicit user escape hatch, honored before any matching, on the UNTRUNCATED text. */
 const OVERRIDE = /\bagent-router\s*:\s*(?:override|allow|skip)\b/i;
 
-/**
- * A strong hit right after one of these is talk ABOUT the artifact, not a request to
- * author one ("do not create a new agent here", "explains how to create a skill").
- */
+/** Negation applies directionally to an authoring predicate in the current clause. */
 const NEGATION =
-  /\b(?:do(?:es)?\s+not|don.t|never|avoid|instead\s+of|rather\s+than|how\s+to|explains?\s+how|without)\b[^\n]{0,20}$/i;
+  /\b(?:do(?:es)?\s+not|don.t|must\s+not|should\s+not|cannot|can.t|(?:there\s+is\s+)?no\s+need\s+to|never|avoid|instead\s+of|rather\s+than|how\s+to|explains?\s+how|without)\b/gi;
+const CLAUSE_BOUNDARY = /(?:[.!?;:](?:\s+|$)|[ \t]+[—–][ \t]+|\n+|\b(?:but|however)\b[,:]?[ \t]+)/gi;
+const AUTHORING_PREDICATE =
+  /\b(?:creat|writ|author|scaffold|improv|refactor|fix|updat|debug|add|instal|regist|harden|port)\w*\b/i;
+const AUTHORING_ARTIFACT_PREDICATE_SOURCE =
+  '\\b(?:creat|writ|author|scaffold|improv|refactor|fix|updat|debug|add|instal|regist|harden|port)\\w*\\s+' +
+  '(?:(?:a|an|the|new|our|this)\\s+)?(?:[\\w:.-]+\\s+){0,2}' +
+  '((?:sub[- ]?)?agents?|skills?|hooks?|scripts?|commands?|definitions?|files?)\\b';
+const COMPLETED_AUTHORING_PREDICATE = new RegExp(AUTHORING_ARTIFACT_PREDICATE_SOURCE, 'i');
 
 const DEFAULTS = {
   enabled: true,
@@ -632,11 +637,81 @@ function compileIntent(source) {
   }
 }
 
-/** A strong match counts only when it is not negated by the words just before it. */
+function artifactDomain(raw) {
+  const artifact = raw.toLowerCase().replace(/[ -]/g, '');
+  if (artifact.startsWith('subagent') || artifact.startsWith('agent')) return 'agent';
+  if (artifact.startsWith('skill')) return 'skill';
+  if (artifact.startsWith('hook')) return 'hook';
+  if (artifact.startsWith('script')) return 'script';
+  if (artifact.startsWith('command')) return 'command';
+  if (artifact.startsWith('definition')) return 'definition';
+  return 'file';
+}
+
+function authoringArtifactAt(text, index) {
+  const match = new RegExp(`^(?:${AUTHORING_ARTIFACT_PREDICATE_SOURCE})`, 'i').exec(text.slice(index));
+  return match ? artifactDomain(match[1]) : null;
+}
+
+function lastAuthoringArtifact(text) {
+  let artifact = null;
+  for (const match of text.matchAll(new RegExp(AUTHORING_ARTIFACT_PREDICATE_SOURCE, 'gi'))) {
+    artifact = artifactDomain(match[1]);
+  }
+  return artifact;
+}
+
+function negatedAt(text, index) {
+  const prefix = text.slice(0, index);
+  let clauseStart = 0;
+  CLAUSE_BOUNDARY.lastIndex = 0;
+  for (let boundary = CLAUSE_BOUNDARY.exec(prefix); boundary; boundary = CLAUSE_BOUNDARY.exec(prefix)) {
+    clauseStart = boundary.index + boundary[0].length;
+  }
+  CLAUSE_BOUNDARY.lastIndex = 0;
+  const clause = prefix.slice(clauseStart);
+  let nearest = null;
+  NEGATION.lastIndex = 0;
+  for (let negation = NEGATION.exec(clause); negation; negation = NEGATION.exec(clause)) {
+    nearest = negation;
+  }
+  NEGATION.lastIndex = 0;
+  if (!nearest) return false;
+
+  const keyword = nearest[0].toLowerCase();
+  const scope = clause.slice(nearest.index + nearest[0].length);
+  if (keyword === 'without' && scope.includes(',')) return false;
+  if (keyword === 'avoid') {
+    if (scope.includes(',')) return false;
+    for (const conjunction of scope.matchAll(/\band\b/gi)) {
+      if (!AUTHORING_PREDICATE.test(scope.slice(0, conjunction.index))) return false;
+    }
+  }
+  const currentArtifact = authoringArtifactAt(text, index);
+  for (const separator of scope.matchAll(/,|\band(?:\s+(?:then|instead))?\b/gi)) {
+    const priorScope = scope.slice(0, separator.index);
+    if (!COMPLETED_AUTHORING_PREDICATE.test(priorScope)) continue;
+    if (/\band\s+(?:then|instead)\b/i.test(separator[0])) return false;
+    const priorArtifact = lastAuthoringArtifact(priorScope);
+    if (priorArtifact && priorArtifact !== currentArtifact) return false;
+  }
+  return true;
+}
+
+/** Scan non-overlapping matches against the full text; anchors retain their original semantics. */
 function strongHit(re, text) {
   if (!re) return false;
-  const m = re.exec(text);
-  return !!m && !NEGATION.test(text.slice(0, m.index));
+  const flags = `${re.flags.replace(/[gy]/g, '')}g`;
+  const scan = new RegExp(re.source, flags);
+  while (true) {
+    const m = scan.exec(text);
+    if (!m) return false;
+    if (!negatedAt(text, m.index)) return true;
+    if (m[0].length === 0) {
+      if (m.index >= text.length) return false;
+      scan.lastIndex = m.index + (text.codePointAt(m.index) > 0xffff ? 2 : 1);
+    }
+  }
 }
 
 /**

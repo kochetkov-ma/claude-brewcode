@@ -87,8 +87,11 @@ if any(type(data[key]) is not str for key in required):
 if data["name"] != expected_name:
     print(f"  FAIL: TOML name {data['name']!r} must equal roster/file name {expected_name!r}")
     raise SystemExit(1)
-if "\n" in data["description"]:
-    print("  FAIL: description must be one line")
+if any(separator in data["description"] for separator in ("\n", "\r", "\u0085", "\u2028", "\u2029")) or not data["description"] or any(ord(char) <= 0x08 or ord(char) in (0x0b, 0x0c) or 0x0e <= ord(char) <= 0x1f or 0x7f <= ord(char) <= 0x9f or ord(char) in (0xfffe, 0xffff) for char in data["description"]):
+    print("  FAIL: description must be one nonempty line")
+    raise SystemExit(1)
+if len(data["description"]) > 100:
+    print(f"  FAIL: description is {len(data['description'])} characters; ceiling is 100")
     raise SystemExit(1)
 body = data["developer_instructions"]
 if kind == "review-only":
@@ -127,6 +130,59 @@ if body_bytes > 3200 or body_tokens > 800:
     print(f"  FAIL: developer_instructions is {body_bytes} bytes/{body_tokens} est-tokens; ceilings are 3200 bytes and 800 ceil(chars/4) tokens")
     raise SystemExit(1)
 PY
+}
+
+# Parked domain members are not discoverable, but their TOML remains a roster artifact and keeps the
+# same description ceiling so enable cannot restore an invalid profile.
+check_agent_description() {
+  _f="$1"
+  python3 - "$_f" <<'PY'
+import pathlib
+import sys
+import tomllib
+
+path = pathlib.Path(sys.argv[1])
+try:
+    data = tomllib.loads(path.read_text(encoding="utf-8"))
+except (OSError, UnicodeError, tomllib.TOMLDecodeError) as exc:
+    print(f"  FAIL: invalid TOML: {exc}")
+    raise SystemExit(1)
+description = data.get("description")
+if type(description) is not str or any(separator in description for separator in ("\n", "\r", "\u0085", "\u2028", "\u2029")) or not description or any(ord(char) <= 0x08 or ord(char) in (0x0b, 0x0c) or 0x0e <= ord(char) <= 0x1f or 0x7f <= ord(char) <= 0x9f or ord(char) in (0xfffe, 0xffff) for char in description):
+    print("  FAIL: description must be one nonempty line")
+    raise SystemExit(1)
+if len(description) > 100:
+    print(f"  FAIL: description is {len(description)} characters; ceiling is 100")
+    raise SystemExit(1)
+PY
+}
+
+valid_report_root() {
+  case "$1" in
+    ''|/*|*/|~*|*//*|*[!A-Za-z0-9._/-]*) return 1 ;;
+  esac
+  _old_ifs=$IFS
+  IFS=/
+  set -- $1
+  IFS=$_old_ifs
+  for _segment do
+    case "$_segment" in ''|.|..) return 1 ;; esac
+  done
+  return 0
+}
+
+count_literal_occurrences() {
+  _literal="$1"
+  awk -v needle="$_literal" '
+    {
+      rest = $0
+      while ((at = index(rest, needle)) > 0) {
+        count++
+        rest = substr(rest, at + length(needle))
+      }
+    }
+    END { print count + 0 }
+  '
 }
 # END CLIENT AGENT VALIDATION
 
@@ -296,7 +352,7 @@ if [ -f "$TEAM_DIR/team.md" ]; then
       active { print }
     ' "$TEAM_DIR/team.md")
     for shared_literal in \
-      'Every domain agent loads this file before task acceptance. `intent-guard` is exempt: it keeps its review-only output contract and never implements.' \
+      'Every domain agent loads this file before task acceptance.' \
       'Before any task evaluate `Domain`, `Duplicate`, `Best candidate`.' \
       'execute only owned surfaces' 'profile exclusions win on overlap' \
       'Optional best effort, `1 attempt max`, no retry, Bash only.' \
@@ -309,13 +365,55 @@ if [ -f "$TEAM_DIR/team.md" ]; then
       'A task traced `took` ends with exactly one terminal track: `completed` or `failed`.' \
       'Verdict first, <=30 lines, `path:line`. !=bodies/output/log/preamble.' \
       'This holds with or without agent-return.' \
-      '.codex/reports/YYYYMMDD-HHMMSS_{AGENT_NAME}/' \
       '>~1000 est-tokens (`chars/4`)' '>~2500' '<=3 lines' \
       '!=imagined load/speculative abstraction' '!=replace them'
     do
       printf '%s\n' "$shared_contract" | grep -qF "$shared_literal" \
         || { echo "CHECK: Shared Agent Contract ... FAIL (missing: $shared_literal)"; shared_bad=1; }
     done
+    bulk_directive_count=$(printf '%s\n' "$shared_contract" | count_literal_occurrences 'Bulk ->')
+    report_template_count=$(printf '%s\n' "$shared_contract" \
+      | count_literal_occurrences '/YYYYMMDD-HHMMSS_{AGENT_NAME}/')
+    report_root_matches=$(printf '%s\n' "$shared_contract" \
+      | grep -oE 'Bulk -> `[^`]+/YYYYMMDD-HHMMSS_\{AGENT_NAME\}/`' || true)
+    report_root_count=$(printf '%s\n' "$report_root_matches" | awk 'NF { count++ } END { print count + 0 }')
+    report_root=$(printf '%s\n' "$report_root_matches" \
+      | sed -n 's/.*Bulk -> `\([^`]*\)\/YYYYMMDD-HHMMSS_{AGENT_NAME}\/`.*/\1/p')
+    if [ "$bulk_directive_count" -ne 1 ] || [ "$report_template_count" -ne 1 ] || [ "$report_root_count" -ne 1 ]; then
+      echo "CHECK: Shared report root ... FAIL (expected exactly one Bulk directive, one report template, and one resolved path; found $bulk_directive_count/$report_template_count/$report_root_count)"
+      shared_bad=1
+    else
+      if valid_report_root "$report_root"; then
+        echo "CHECK: Shared report root ($report_root) ... OK"
+      else
+        echo "CHECK: Shared report root ... FAIL (unsafe or unresolved project-relative path: '$report_root')"
+        shared_bad=1
+      fi
+    fi
+    guard_shared_literal='`intent-guard` is review-only, keeps its own output contract, and never implements.'
+    guard_shared_count=$(printf '%s\n' "$shared_contract" | count_literal_occurrences "$guard_shared_literal")
+    guard_mention_count=$(printf '%s\n' "$shared_contract" | count_literal_occurrences 'intent-guard')
+    if printf '%s\n' "$shared_contract" | grep -qF '{INTENT_GUARD_SHARED_CONTRACT}'; then
+      echo "CHECK: Shared intent-guard contract ... FAIL (unresolved policy-conditional placeholder)"
+      shared_bad=1
+    fi
+    case "$intent_guard_policy" in
+      required)
+        if [ "$guard_shared_count" -ne 1 ]; then
+          echo "CHECK: Shared intent-guard contract ... FAIL (required needs exact sentence once; found $guard_shared_count)"
+          shared_bad=1
+        elif [ "$guard_mention_count" -ne 1 ]; then
+          echo "CHECK: Shared intent-guard contract ... FAIL (required permits exactly one total intent-guard mention; found $guard_mention_count)"
+          shared_bad=1
+        fi
+        ;;
+      legacy-absent)
+        if [ "$guard_shared_count" -ne 0 ] || [ "$guard_mention_count" -ne 0 ]; then
+          echo "CHECK: Shared intent-guard contract ... FAIL (legacy-absent must not name a phantom role)"
+          shared_bad=1
+        fi
+        ;;
+    esac
     [ "$shared_bad" -eq 0 ] \
       && echo "CHECK: Shared Agent Contract ... OK" \
       || FAIL=1
@@ -421,6 +519,18 @@ if [ -f "$TEAM_DIR/team.md" ]; then
           # Parked by `disable`: the body is intact, only the .md extension that
           # Codex discovers on is withheld. A reversible state, not a defect.
           echo "DISABLED"
+          if [ "$agent" != "intent-guard" ]; then
+            set +e
+            description_out=$(check_agent_description ".codex/agents/${agent}.toml.disabled")
+            description_rc=$?
+            set -e
+            if [ "$description_rc" -eq 0 ]; then
+              echo "  CHECK: description <=100 characters ... OK"
+            else
+              printf '%s\n' "$description_out"
+              FAIL=1
+            fi
+          fi
           DISABLED=$((DISABLED + 1))
         else
           echo "MISSING"

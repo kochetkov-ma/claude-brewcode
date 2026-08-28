@@ -1,6 +1,10 @@
 # Framework files
 
-Instantiate `.claude/teams/{TEAM_NAME}/`. Replace `{TEAM_NAME}`, `{DATE}`, `{LAST_UPDATED}`, `{PLUGIN_VERSION}`, `{CONTENT_VERSION}`, `{N}`, `{CWD}`, `{INTENT_GUARD_POLICY}`, and `{INTENT_GUARD_ROW}`; scalar metadata comes from `detect-mode.sh`. `CONTENT_VERSION` self-locates from this skill's metadata, !=copied from `PLUGIN_VERSION`. `{DATE}` is creation date and upgrade never rewrites it. `team.md` uses Edit; `trace.jsonl` is append-only via `trace-ops.sh add`.
+Instantiate `.claude/teams/{TEAM_NAME}/`. Replace `{TEAM_NAME}`, `{DATE}`, `{LAST_UPDATED}`, `{PLUGIN_VERSION}`, `{CONTENT_VERSION}`, `{N}`, `{CWD}`, `{REPORT_ROOT}`, `{INTENT_GUARD_POLICY}`, `{INTENT_GUARD_SHARED_CONTRACT}`, and `{INTENT_GUARD_ROW}`; scalar metadata comes from `detect-mode.sh`. `CONTENT_VERSION` self-locates from this skill's metadata, !=copied from `PLUGIN_VERSION`. `{DATE}` is creation date and upgrade never rewrites it. `team.md` uses Edit; `trace.jsonl` is append-only via `trace-ops.sh add`.
+
+`{REPORT_ROOT}` is a normalized project-relative path whose slash-separated segments match
+`^[A-Za-z0-9._-]+$` and are neither `.` nor `..`. Equal-specificity conflicting project directives stop
+instantiation; no unresolved, shell-active, whitespace, control, absolute, or home-relative value is valid.
 
 ## team.md
 
@@ -18,13 +22,14 @@ Instantiate `.claude/teams/{TEAM_NAME}/`. Replace `{TEAM_NAME}`, `{DATE}`, `{LAS
 |Project|{CWD}|
 
 ## Shared Agent Contract
-Every domain agent loads this file before task acceptance. `intent-guard` is exempt: it keeps its review-only output contract and never implements.
+Every domain agent loads this file before task acceptance.
+{INTENT_GUARD_SHARED_CONTRACT}
 Before any task evaluate `Domain`, `Duplicate`, `Best candidate`. Mismatch/duplicate/better -> refuse+owner/link+return; accept -> trace `took`, execute only owned surfaces; profile exclusions win on overlap.
 Optional best effort, `1 attempt max`, no retry, Bash only. Use versionless project-local `.claude/teams/{TEAM_NAME}/trace-ops.sh`; project agents get !=`${CLAUDE_PLUGIN_ROOT}` substitution and no `*_PLUGIN_ROOT` env. Missing/fail -> skip; plugin update/move/uninstall does not break it.
 `T=".claude/teams/{TEAM_NAME}"; bash "$T/trace-ops.sh" add "$T" "$SID" "{AGENT_NAME}" "<kind>" "<state>" "<text>"`
 Track states: `took` / `refused` / `completed` / `failed`. Issue severity: `low` / `medium` / `high` / `critical`. Insight category (max 1-3): `pattern` / `architecture` / `performance` / `security` / `convention` / `debt`. `$SID` is 8 chars; else any 8-char marker.
 A task traced `took` ends with exactly one terminal track: `completed` or `failed`.
-Verdict first, <=30 lines, `path:line`. !=bodies/output/log/preamble. This holds with or without agent-return. Return changed path/check only. Bulk -> `.claude/reports/YYYYMMDD-HHMMSS_{AGENT_NAME}/`; return path, !=content. With agent-return: >~1000 est-tokens (`chars/4`) -> compress; >~2500 -> file detail, path + verdict + <=3 lines.
+Verdict first, <=30 lines, `path:line`. !=bodies/output/log/preamble. This holds with or without agent-return. Return changed path/check only. Bulk -> `{REPORT_ROOT}/YYYYMMDD-HHMMSS_{AGENT_NAME}/`; return path, !=content. With agent-return: >~1000 est-tokens (`chars/4`) -> compress; >~2500 -> file detail, path + verdict + <=3 lines.
 Actual scale; !=imagined load/speculative abstraction (EX: 10-user app !=lock-contention hardening). Simplify. Class/module/test -> nearest repo etalon (`.claude/convention/*` first), additive to rules/conventions/docs, !=replace them.
 
 ## Agents
@@ -39,8 +44,10 @@ Actual scale; !=imagined load/speculative abstraction (EX: 10-user app !=lock-co
 `|intent-guard|--|Anti-drift check: what was ASKED vs what was DELIVERED|active|{LAST_UPDATED}|review-only|{PLUGIN_VERSION}|`;
 `legacy-absent` means the placeholder is empty and the roster MUST NOT contain `intent-guard`. New teams
 default to `required`. Upgrade preserves an existing no-guard roster as `legacy-absent`; it never adds a
-role merely to modernize the shared contract. `intent-guard` remains shared with superreview, outside
-`{N}`, and never removed when policy is `required`.
+role merely to modernize the shared contract. `{INTENT_GUARD_SHARED_CONTRACT}` is exactly the sentence
+"`intent-guard` is review-only, keeps its own output contract, and never implements." for `required`
+and empty for `legacy-absent`. `intent-guard` remains shared with superreview, outside `{N}`, and never
+removed when policy is `required`.
 
 ## trace.jsonl
 

@@ -79,6 +79,142 @@ check_agent_meta() {
   return "$_bad"
 }
 
+# Every roster domain member has exactly one strict inline YAML STRING scalar description. Decode the
+# supported quoted forms before counting Unicode code points; reject YAML's implicit non-string types
+# and ambiguous node syntax instead of guessing how a downstream parser will resolve them.
+check_agent_description() {
+  _f="$1"
+  command -v node >/dev/null 2>&1 \
+    || { echo "  FAIL: node is required for strict YAML description validation"; return 1; }
+  node - "$_f" <<'NODE'
+const fs = require('node:fs');
+
+function fail(message) {
+  process.stdout.write(`  FAIL: ${message}\n`);
+  process.exit(1);
+}
+
+let text;
+try {
+  const bytes = fs.readFileSync(process.argv[2]);
+  text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+} catch {
+  fail('malformed YAML frontmatter');
+}
+
+const lines = text.split(/\r?\n/);
+if (lines[0] !== '---') fail('malformed YAML frontmatter');
+const close = lines.indexOf('---', 1);
+if (close < 0) fail('malformed YAML frontmatter');
+
+let raw = '';
+let count = 0;
+let active = false;
+let multiline = false;
+for (const line of lines.slice(1, close)) {
+  const match = /^description:(.*)$/.exec(line);
+  if (match) {
+    count += 1;
+    raw = match[1].trim();
+    active = true;
+    continue;
+  }
+  if (!active) continue;
+  if (/^[A-Za-z_][A-Za-z0-9_-]*:[ \t]*/.test(line)) active = false;
+  else if (line.trim() !== '') multiline = true;
+}
+
+if (count !== 1) fail(`frontmatter must contain exactly one description; found ${count}`);
+if (multiline) fail('description must be one inline scalar; multiline continuation is forbidden');
+if (raw === '' || raw.startsWith('|') || raw.startsWith('>')) {
+  fail('description must be one nonempty inline scalar; block/folded values are forbidden');
+}
+
+let value;
+if (raw.startsWith('"')) {
+  if (!raw.endsWith('"') || raw.length < 2) fail('description has malformed double-quoted scalar');
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    fail('description has malformed or unsupported double-quoted scalar');
+  }
+  if (typeof value !== 'string') fail('description must decode to a YAML string scalar');
+} else if (raw.startsWith("'")) {
+  if (!raw.endsWith("'") || raw.length < 2) fail('description has malformed single-quoted scalar');
+  const inner = raw.slice(1, -1);
+  value = '';
+  for (let index = 0; index < inner.length; index += 1) {
+    if (inner[index] !== "'") {
+      value += inner[index];
+      continue;
+    }
+    if (inner[index + 1] !== "'") fail('description has malformed single-quoted scalar');
+    value += "'";
+    index += 1;
+  }
+} else {
+  const first = raw[0];
+  if (',[]{}#&*!|>\'"%@`'.includes(first) ||
+      ((first === '-' || first === '?' || first === ':') && (raw.length === 1 || /\s/.test(raw[1]))) ||
+      /(^|[ \t])#/.test(raw) || /:(?:$|[ \t])/.test(raw)) {
+    fail('description must decode to an unambiguous YAML string scalar');
+  }
+  const lower = raw.toLowerCase();
+  const implicitNonString = /^(?:~|null|true|false|yes|no|on|off|y|n)$/i.test(raw) ||
+    /^[+-]?\.(?:inf|nan)$/i.test(raw) ||
+    /^[+-]?(?:0b[01_]+|0o[0-7_]+|0x[0-9a-f_]+|[0-9][0-9_]*|[0-9][0-9_]*\.[0-9_]*(?:e[+-]?[0-9]+)?|\.[0-9_]+(?:e[+-]?[0-9]+)?|[0-9][0-9_]*e[+-]?[0-9]+|[0-9][0-9_]*(?::[0-5]?[0-9])+(?:\.[0-9_]*)?)$/.test(lower) ||
+    /^[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}(?:$|[Tt \t][0-9]{1,2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]*)?(?:[ \t]*(?:Z|[-+][0-9]{1,2}(?::?[0-9]{2})?))?$)/.test(raw);
+  if (implicitNonString) fail('description must decode to a YAML string scalar, not an implicit typed value');
+  value = raw;
+}
+
+if (value.length === 0) fail('description must be nonempty');
+if (/[\n\r\u0085\u2028\u2029]/u.test(value)) fail('description decoded value must be one line');
+if (Array.from(value).some((char) => {
+  const point = char.codePointAt(0);
+  return point >= 0xd800 && point <= 0xdfff;
+})) fail('description decoded value must contain valid Unicode scalar values');
+if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/u.test(value)) {
+  fail('description decoded value contains a forbidden control character');
+}
+if (/[\ufffe\uffff]/u.test(value)) {
+  fail('description decoded value contains a forbidden YAML noncharacter');
+}
+const chars = Array.from(value).length;
+if (chars > 100) fail(`description is ${chars} characters; ceiling is 100`);
+NODE
+}
+
+# Report roots are data later embedded in shared commands. A narrow segment allowlist keeps every
+# accepted value inert without trying to enumerate shell metacharacters one by one.
+valid_report_root() {
+  case "$1" in
+    ''|/*|*/|~*|*//*|*[!A-Za-z0-9._/-]*) return 1 ;;
+  esac
+  _old_ifs=$IFS
+  IFS=/
+  set -- $1
+  IFS=$_old_ifs
+  for _segment do
+    case "$_segment" in ''|.|..) return 1 ;; esac
+  done
+  return 0
+}
+
+count_literal_occurrences() {
+  _literal="$1"
+  awk -v needle="$_literal" '
+    {
+      rest = $0
+      while ((at = index(rest, needle)) > 0) {
+        count++
+        rest = substr(rest, at + length(needle))
+      }
+    }
+    END { print count + 0 }
+  '
+}
+
 # Print only the body after the closing frontmatter fence. The 3200-byte contract excludes frontmatter:
 # a rich trigger description or extra generator metadata must not consume domain-instruction budget.
 profile_body() {
@@ -291,7 +427,7 @@ if [ -f "$TEAM_DIR/team.md" ]; then
       active { print }
     ' "$TEAM_DIR/team.md")
     for shared_literal in \
-      'Every domain agent loads this file before task acceptance. `intent-guard` is exempt: it keeps its review-only output contract and never implements.' \
+      'Every domain agent loads this file before task acceptance.' \
       'Before any task evaluate `Domain`, `Duplicate`, `Best candidate`.' \
       'execute only owned surfaces' 'profile exclusions win on overlap' \
       'Optional best effort, `1 attempt max`, no retry, Bash only.' \
@@ -304,13 +440,55 @@ if [ -f "$TEAM_DIR/team.md" ]; then
       'A task traced `took` ends with exactly one terminal track: `completed` or `failed`.' \
       'Verdict first, <=30 lines, `path:line`. !=bodies/output/log/preamble.' \
       'This holds with or without agent-return.' \
-      '.claude/reports/YYYYMMDD-HHMMSS_{AGENT_NAME}/' \
       '>~1000 est-tokens (`chars/4`)' '>~2500' '<=3 lines' \
       '!=imagined load/speculative abstraction' '!=replace them'
     do
       printf '%s\n' "$shared_contract" | grep -qF "$shared_literal" \
         || { echo "CHECK: Shared Agent Contract ... FAIL (missing: $shared_literal)"; shared_bad=1; }
     done
+    bulk_directive_count=$(printf '%s\n' "$shared_contract" | count_literal_occurrences 'Bulk ->')
+    report_template_count=$(printf '%s\n' "$shared_contract" \
+      | count_literal_occurrences '/YYYYMMDD-HHMMSS_{AGENT_NAME}/')
+    report_root_matches=$(printf '%s\n' "$shared_contract" \
+      | grep -oE 'Bulk -> `[^`]+/YYYYMMDD-HHMMSS_\{AGENT_NAME\}/`' || true)
+    report_root_count=$(printf '%s\n' "$report_root_matches" | awk 'NF { count++ } END { print count + 0 }')
+    report_root=$(printf '%s\n' "$report_root_matches" \
+      | sed -n 's/.*Bulk -> `\([^`]*\)\/YYYYMMDD-HHMMSS_{AGENT_NAME}\/`.*/\1/p')
+    if [ "$bulk_directive_count" -ne 1 ] || [ "$report_template_count" -ne 1 ] || [ "$report_root_count" -ne 1 ]; then
+      echo "CHECK: Shared report root ... FAIL (expected exactly one Bulk directive, one report template, and one resolved path; found $bulk_directive_count/$report_template_count/$report_root_count)"
+      shared_bad=1
+    else
+      if valid_report_root "$report_root"; then
+        echo "CHECK: Shared report root ($report_root) ... OK"
+      else
+        echo "CHECK: Shared report root ... FAIL (unsafe or unresolved project-relative path: '$report_root')"
+        shared_bad=1
+      fi
+    fi
+    guard_shared_literal='`intent-guard` is review-only, keeps its own output contract, and never implements.'
+    guard_shared_count=$(printf '%s\n' "$shared_contract" | count_literal_occurrences "$guard_shared_literal")
+    guard_mention_count=$(printf '%s\n' "$shared_contract" | count_literal_occurrences 'intent-guard')
+    if printf '%s\n' "$shared_contract" | grep -qF '{INTENT_GUARD_SHARED_CONTRACT}'; then
+      echo "CHECK: Shared intent-guard contract ... FAIL (unresolved policy-conditional placeholder)"
+      shared_bad=1
+    fi
+    case "$intent_guard_policy" in
+      required)
+        if [ "$guard_shared_count" -ne 1 ]; then
+          echo "CHECK: Shared intent-guard contract ... FAIL (required needs exact sentence once; found $guard_shared_count)"
+          shared_bad=1
+        elif [ "$guard_mention_count" -ne 1 ]; then
+          echo "CHECK: Shared intent-guard contract ... FAIL (required permits exactly one total intent-guard mention; found $guard_mention_count)"
+          shared_bad=1
+        fi
+        ;;
+      legacy-absent)
+        if [ "$guard_shared_count" -ne 0 ] || [ "$guard_mention_count" -ne 0 ]; then
+          echo "CHECK: Shared intent-guard contract ... FAIL (legacy-absent must not name a phantom role)"
+          shared_bad=1
+        fi
+        ;;
+    esac
     [ "$shared_bad" -eq 0 ] \
       && echo "CHECK: Shared Agent Contract ... OK" \
       || FAIL=1
@@ -405,6 +583,16 @@ if [ -f "$TEAM_DIR/team.md" ]; then
           esac
           if [ "$agent" != "intent-guard" ]; then
             set +e
+            description_out=$(check_agent_description ".claude/agents/${agent}.md")
+            description_rc=$?
+            set -e
+            if [ "$description_rc" -eq 0 ]; then
+              echo "  CHECK: description <=100 characters ... OK"
+            else
+              printf '%s\n' "$description_out"
+              FAIL=1
+            fi
+            set +e
             profile_out=$(check_compact_profile ".claude/agents/${agent}.md")
             profile_rc=$?
             set -e
@@ -426,6 +614,18 @@ if [ -f "$TEAM_DIR/team.md" ]; then
           # Parked by `disable`: the body is intact, only the .md extension that
           # Claude Code discovers on is withheld. A reversible state, not a defect.
           echo "DISABLED"
+          if [ "$agent" != "intent-guard" ]; then
+            set +e
+            description_out=$(check_agent_description ".claude/agents/${agent}.md.disabled")
+            description_rc=$?
+            set -e
+            if [ "$description_rc" -eq 0 ]; then
+              echo "  CHECK: description <=100 characters ... OK"
+            else
+              printf '%s\n' "$description_out"
+              FAIL=1
+            fi
+          fi
           DISABLED=$((DISABLED + 1))
         else
           echo "MISSING"
