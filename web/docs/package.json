@@ -23,5 +23,8 @@
   "devDependencies": {
     "@astrojs/check": "^0.9.7",
     "typescript": "^5.9.3"
+  },
+  "overrides": {
+    "defu": "6.1.5"
   }
 }
