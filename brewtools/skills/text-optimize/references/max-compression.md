@@ -22,6 +22,11 @@ Rules:
 > build runs unit tests after compile
 > test fail -> pipeline stops + artifact !=published
 
+**Measured** (`wc -w`): before 31 words, after 23 words = -25.8% by WORD count only — atomic-fact
+style forbids pronouns, so "build" repeats 3x. The paper's ~50% figure above is TOKEN reduction: a
+repeated short noun costs less than the pronoun+clause structure it replaces. Word count and token
+count diverge here — judge B1 by an actual token estimate, not `wc -w`, whenever a noun repeats.
+
 ## ASCII Operator Dialect (A1 — CRITICAL)
 
 Prefer ASCII digraphs over unicode glyphs. Measured token cost (tiktoken cl100k/o200k, live):
@@ -69,6 +74,9 @@ CONDITIONAL:
 > 1 ann admin
 > 2 bob user
 
+**Measured** (`wc -w`): before 26 words / 5 lines, after 12 words / 3 lines = -53.8% — a real win on
+both words and tokens (pipe alignment and separator rows carry no data).
+
 ## Chain-of-Density Final Pass (B4)
 
 Source: arXiv:2309.04269. After all compression passes, run 1-3 rewrite iterations at FIXED length: each pass fuses 1-3 missing entities from the original back in WITHOUT growing the text (~3 iterations reach human-preferred density). Use to repair entity loss found by verification instead of re-inflating.
@@ -86,16 +94,21 @@ These CAP the aggression. Sources: Anthropic context-engineering blog; Anthropic
 
 ## Iron Rules (inherited + max-specific)
 
-Inherits ALL `deep-compression.md` iron rules:
-- Preserve names, numbers, dates, URLs, file paths, versions, ports, sizes
-- DICT header @ document start (terms 3+ times)
-- >= 1 example per rule that originally had examples
-
-Max adds:
+Inherits ALL of `deep-compression.md` Iron Rules (the lossless guard) unchanged — do not restate the
+list here, re-read it there. Max adds:
 - Scope qualifiers preserved verbatim (C2)
 - 2 mandatory verification rounds, independent methods: claim inventory + self-QA probe (never optional)
 - Semantic match must be >= 95% -> else warn user with loss list
 - 100% sub-gate: numbers, names, negations, scope qualifiers
+
+## Stop Condition
+
+Stop pushing max-mode density the instant one of these trips — patch via Chain-of-Density (B4)
+instead of deleting further:
+- The 20% deletion ceiling (C3) would be crossed
+- A B1 atomic line would need a cross-line pronoun to stay readable (the decomposition is now lossy)
+- Round 2 self-QA misses a number, name, negation or scope qualifier (100% sub-gate)
+- The next fusion pass has no missing entity left to restore (B4 has converged) — ship, do not chase a fixed multiplier past this point
 
 ## Verification (2 rounds, mandatory, INDEPENDENT methods)
 

@@ -2,6 +2,55 @@
 
 ---
 
+## v6.2.0 (2026-09-12)
+
+> Docs: [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [bc-rules-organizer](https://doc-claude.brewcode.app/brewcode/agents/bc-rules-organizer/) | [bash-expert](https://doc-claude.brewcode.app/brewcode/agents/bash-expert/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [agents](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | [text-optimizer](https://doc-claude.brewcode.app/brewtools/agents/text-optimizer/) | [ssh-admin](https://doc-claude.brewcode.app/brewtools/agents/ssh-admin/) | [deploy-admin](https://doc-claude.brewcode.app/brewtools/agents/deploy-admin/) | [text-optimize](https://doc-claude.brewcode.app/brewtools/skills/text-optimize/) | [think-short-setup](https://doc-claude.brewcode.app/brewtools/skills/think-short-setup/) | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/)
+
+> All 8 plugin agents rewritten for Claude Code 2.1.269 and the Claude 5 family prompting guidance (role -> Return contract -> Scope/Never -> procedure; short bodies, reference catalogs on disk); creators teach the current formats (20 skill fields, 17 agent fields incl. `experimental.cacheTtl`, 33 hook events incl. `PreModelSwitch`/`PostModelSwitch`, corrected exit-code semantics); text-optimizer gained a prompt-quality (PQ) pass; memory-sync-setup ships `prompting-guide.md` (Claude + OpenAI/Codex rules) and a prompt-quality step; hook reminders trimmed and throttled.
+
+### brewcode
+
+#### Added
+
+- **`skills/agents/references/`** — 11 on-demand reference files backing `agent-creator`/`hook-creator` (context/execution, frontmatter fields, known issues, scope/tools, template, hooks changes/env/events/io-contract/templates/types-config)
+- **4 new `skills/skills/references/*.md`** — `activation-and-troubleshooting`, `design-patterns`, `execution-model`, `frontmatter-fields`
+- **`validate-skill.sh` checks 11-14** — unknown frontmatter key (warn), top-level `once:` (fail), non-builtin `agent:` (warn), UTF-8 BOM (fail)
+- **`hooks/tests/suite-forced-eval.mjs`** — new contract suite for the `forced-eval.mjs` hook
+
+#### Changed
+
+- **Agent bodies cut to the Claude 5 prompting shape**: `agent-creator` 633→128 lines, `hook-creator` 851→107, `skill-creator` 897→147, `bc-rules-organizer` 305→184 (all with Delegation/Scope Fit guardrails); `bash-expert` tightened to 188 lines
+- **`forced-eval.mjs`** now fires on the 1st prompt then every 10th (session-keyed counter, meta-replies skipped); `[ROLE]`/`[SPLIT]`/`[BRANCH]` text shrunk 636→472 chars
+
+#### Fixed
+
+- **`validate-skill.sh`** frontmatter extraction reopened on body `---` dividers
+- Agent contract suite now covers 44 checks
+
+### brewtools
+
+#### Changed
+
+- **`text-optimizer` + `text-optimize` references** gained a PQ.1-PQ.13 prompt-quality pass, sharpened lossless guard, per-mode stop condition, measured examples
+- **`ssh-admin`/`deploy-admin`/`text-optimizer`** prompts tightened (all safety rows kept; `deploy-admin`'s `HOST:` envelope field restored)
+- **`manager-setup`** codeword blocks (`full`/`architect`/`planmode`/`review-double`/`review-regression`) ~40% shorter; `planmode` now embeds the 6-step protocol
+- **`think-short-setup`** reminder now every 20th prompt (was 10th), shorter prompt text
+- **`task-board-setup`** Codex mirror: durable generator override for the AGENTS.md loading claim (`TEXT_OVERRIDES` in `.codex/scripts/generate-compat.mjs`)
+
+### brewdoc
+
+#### Added
+
+- **`memory-sync-setup/references/prompting-guide.md`** — 18 merged Claude 5 + OpenAI/Codex rules, lossless guard, verdict table; shipped into the generated `/memory-sync`
+
+#### Changed
+
+- **Generated skill runs a prompt-quality step** — NORMAL: fix only alongside fact/dedup edits; HARD: rewrite all — now 5 emitted files / 4 references
+
+> Local references refreshed (not tracked): `user/references/` gained `PROMPTING-REFERENCE.md` and `PROMPTING-REFERENCE-OPENAI.md`; SKILL/AGENT/HOOKS references moved to 2.1.269.
+
+---
+
 ## v6.1.4 (2026-08-16)
 
 > Docs: [agent-router-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-router-setup/)

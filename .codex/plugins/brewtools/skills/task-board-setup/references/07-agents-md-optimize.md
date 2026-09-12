@@ -6,7 +6,7 @@ OPTIONAL, opt-in phase. PROPOSE-ONLY: every change is gated behind request_user_
 
 > **Verified lazy-loading mechanic (source: developers.openai.com/codex/guides/agents-md, fetched 2026-06-14).** Bake this into every proposal rationale:
 > - Root CMD + all ancestor AGENTS.md/AGENTS.local.md: **loaded in full AT LAUNCH**, every session, regardless of length.
-> - Subdirectory (nested) AGENTS.md: **NOT loaded at launch -- loaded ON-DEMAND when Codex reads a file in that subtree.**
+> - Subdirectory (nested) AGENTS.md: **NOT on-demand -- concatenated ONCE at session start.** Codex walks git root -> CWD and concatenates every AGENTS.md it finds into one instruction chain, capped by `project_doc_max_bytes` (32 KiB default; later/nested files are dropped first over the cap); a nested AGENTS.md wins for its own subtree only because it sits later in that one concatenation (verified: https://developers.openai.com/codex/guides/agents-md, 2026-09-12).
 > - `@path` imports: **EAGER -- expanded into context at launch.** They help organization but do NOT reduce root context.
 > - `.codex/rules/*.md` with `paths:` FM: on-demand when matching files are touched; without `paths:`: at launch.
 > CONSEQUENCE: to shrink always-on context, push MOD detail into a NESTED MODCMD. NEVER use `@import` for that goal (eager = no savings). This is the justification stated to the user in the module-split proposal.
@@ -119,7 +119,7 @@ If NOT OVER: state it's within budget; offer optional tidy (markup pass 5g) but 
 If OVER: assemble a concrete decomposition PLAN combining 5d (module split), 5e (rules dedup), 5f (compress), then AskUser ONCE with the whole plan before applying any of it:
 
 > **AGENTS.md is <CMD_LINES> lines (over the <BUDGET_OVER> ceiling; optimal ~<BUDGET_OPTIMAL>).** Proposed decomposition to get back under budget:
-> 1. Move detail for modules `<M1, M2, ...>` into per-module AGENTS.md (loaded on-demand, shrinks always-on context). Root keeps a 2-line module index.  [est -X lines]
+> 1. Move detail for modules `<M1, M2, ...>` into per-module AGENTS.md (it overrides root for that subtree and keeps root short so `project_doc_max_bytes` never truncates it). Root keeps a 2-line module index.  [est -X lines]
 > 2. Move topic blocks `<...>` into path-scoped `.codex/rules/*.md` (load only when matching files are touched).  [est -Y lines]
 > 3. Dedup overlap with existing rules `<...>`; delete duplicated spans.  [est -Z lines]
 > 4. Deep-compress the remainder via brewtools:text-optimize.  [est -W lines]
@@ -136,17 +136,17 @@ Apply ONLY approved steps. Each sub-step (5d/5e/5f) below still narrates what it
 
 For each approved MOD in MODULES:
 1. Gather the CMD content that is module-specific (build/test cmds, layout, conventions for that subtree).
-2. Write/extend `<MOD.dir>/AGENTS.md` (a NESTED file -- this is what gives on-demand loading). If `has_own_cmd`, MERGE (Edit), do not clobber. Improve markup (headers, tables, bullets).
+2. Write/extend `<MOD.dir>/AGENTS.md` (a NESTED file -- this is what makes it override the root for that subtree). If `has_own_cmd`, MERGE (Edit), do not clobber. Improve markup (headers, tables, bullets).
 3. In the ROOT CMD, REPLACE the moved block with a MAX-COMPRESSED index: a couple of lines, e.g.:
    ```
-   ## Modules (each has its own AGENTS.md, loaded on-demand when you work in it)
+   ## Modules (each has its own AGENTS.md, which overrides this file for that subtree)
    | Module | Path | Owns |
    |--------|------|------|
    | api    | services/api/  | handlers, OpenAPI, db migrations |
    | web    | apps/web/      | UI, build, e2e |
    ```
    Keep ONLY the index in root; the detail lives in the MODCMD.
-> Rationale to state in the proposal: nested AGENTS.md loads ONLY when Codex touches that subtree, so module detail leaves the always-on root context. Do NOT use `@import` here -- imports are eager and would not save context.
+> Rationale to state in the proposal: a nested AGENTS.md overrides root for its own subtree (both are concatenated at session start, nested last, so nested wins) and keeps root short so `project_doc_max_bytes` never truncates it. Codex has no `@import`-style eager-include mechanism at all, so that concern does not apply here.
 > Do NOT move CROSS-cutting / repo-wide rules into a single module; those stay in root or go to a `.codex/rules/*.md`.
 
 ---

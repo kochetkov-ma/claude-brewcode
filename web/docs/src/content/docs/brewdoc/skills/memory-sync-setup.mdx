@@ -15,6 +15,10 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 **This skill does not sync memory — it writes the skill that does.** `/brewdoc:memory-sync-setup` analyzes the target repo once, then emits a self-contained `.claude/skills/memory-sync/` that already knows this repo's batches, invariants, fact-verification commands, agent roster and language policy. Replaces the old `brewdoc:memory`.
 </Callout>
 
+<Callout type="note" title="What's new in 6.2.0">
+Adds `references/prompting-guide.md` (18 merged rules) and a prompt-quality step — see [Prompt quality pass](#prompt-quality-pass).
+</Callout>
+
 <Callout type="note">
 **A remedy must be able to clear the verdict it follows.** Before this release the artifact was stamped once at install and the stamp could never change: `status` reported `stale`, prescribed `upgrade`, and `upgrade` had no way to clear it — the only documented escape (`MEMORY_SYNC_FORCE=1`) destroyed every hand-edit in the process. The loop now closes: install at version X, bump the plugin, `status` says `stale`, `upgrade` runs `generate.sh restamp` as its mandatory last step, and the verdict returns to `IN SYNC` with the body byte-identical — a second `upgrade` is a no-op.
 </Callout>
@@ -33,7 +37,7 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 
 ## What it does
 
-`/brewdoc:memory-sync-setup` is a **generator**, in the same family as `brewcode:superreview-setup` and `brewtools:task-board-setup`: it produces a working artifact instead of doing the work itself. It scans the target project — memory surface (root and every nested `CLAUDE.md`, rules, conventions, the `AGENTS.md` family, agents, skills, the memory dir), exclusions, default branch, git visibility, language policy, agent and skill rosters — then emits four files into `<target>/.claude/skills/memory-sync/`. `docs/**` stays explicitly out of scope, owned by a separate doc flow (`/docs`, `docsync-setup`) — this skill covers instruction memory, not prose documentation.
+`/brewdoc:memory-sync-setup` is a **generator**, in the same family as `brewcode:superreview-setup` and `brewtools:task-board-setup`: it produces a working artifact instead of doing the work itself. It scans the target project — memory surface (root and every nested `CLAUDE.md`, rules, conventions, the `AGENTS.md` family, agents, skills, the memory dir), exclusions, default branch, git visibility, language policy, agent and skill rosters — then emits five files into `<target>/.claude/skills/memory-sync/`. `docs/**` stays explicitly out of scope, owned by a separate doc flow (`/docs`, `docsync-setup`) — this skill covers instruction memory, not prose documentation.
 
 The emitted `/memory-sync` skill is a long-running multi-agent coordinator. It sweeps the whole memory surface every run, splits it into disjoint batches (one bounded agent per batch, all spawned in one message), verifies every change with an independent checker that never wrote it, and enforces non-growth — every file ends at or below its original line count. It re-checks and updates itself between runs.
 
@@ -82,7 +86,7 @@ Run it:  /memory-sync                       -> scope session (default), whole su
 
 <Steps>
   <li><div><strong>Mode gate</strong><p>First token of the argument, lowercased: <code>status</code>, <code>install</code>, <code>upgrade</code>, <code>enable</code>, <code>disable</code>, <code>uninstall</code> or <code>purge</code>. No token at all means <code>status</code> when the skill is already installed and <code>install</code> when it is not. The old aliases <code>init</code>/<code>setup</code> parse as <code>install</code>, <code>on</code>/<code>off</code> as <code>enable</code>/<code>disable</code>, and <code>remove</code>/<code>reset</code>/<code>cleanup</code> as <code>uninstall</code> or <code>purge</code> (asked which) — the skill echoes the canonical verb back. Everything else is fine-tune text for <code>{'{FOCUS_EMPHASIS}'}</code>.</p></div></li>
-  <li><div><strong>Phase 0 — read emit material</strong><p>Reads its own four reference files — <code>references/SKILL.md.template</code>, <code>memory-guide.md</code>, <code>agent-audit.md</code>, <code>hard-sync.md</code>. Missing material is a hard stop — never improvised.</p></div></li>
+  <li><div><strong>Phase 0 — read emit material</strong><p>Reads its own five emit-material files — <code>references/SKILL.md.template</code>, <code>memory-guide.md</code>, <code>agent-audit.md</code>, <code>hard-sync.md</code>, <code>prompting-guide.md</code>. Missing material is a hard stop — never improvised.</p></div></li>
   <li><div><strong>Phase 1 — analyze the target</strong><p>Runs <code>generate.sh scan</code>, then determines the memory surface (root + every nested <code>CLAUDE.md</code>, rules, conventions, <code>AGENTS.md</code> family, agents, skills, memory dir), VERIFY-ONLY files, exclusions, default branch (derived, never hardcoded), git visibility, language policy, and a checkable-fact catalogue — one real shell command per claim.</p></div></li>
   <li><div><strong>Phase 1.5 — clarify</strong><p><code>AskUserQuestion</code> only for what cannot be reliably inferred: which convention files count as memory, whether the memory dir is in scope, VERIFY-ONLY list, default branch, intentional non-English trigger aliases, batch splits.</p></div></li>
   <li><div><strong>Phase 2 — emit</strong><p>Exports scalar placeholders and runs <code>generate.sh emit</code>: awk-substitutes them into the template, copies the reference files, then stamps provenance into the emitted skill's YAML frontmatter — <code>doc_type</code>, <code>version</code> (the brewdoc plugin version, read from <code>plugin.json</code> by script self-location, never hardcoded), <code>generated_by</code>, <code>last_updated</code>, plus <code>surface_files</code> as the drift input, which is what <code>status</code>, <code>validate</code> and <code>upgrade</code> read back. Refuses to overwrite an existing installation — that is what <code>upgrade</code> is for.</p></div></li>
@@ -98,14 +102,14 @@ Run it:  /memory-sync                       -> scope session (default), whole su
 | Mode | Reads | Writes | Does |
 |------|-------|--------|------|
 | `status` (default when installed) | target + emitted skill | nothing | Runs `generate.sh status`, which prints a machine-greppable `KEY=value` block — `PLUGIN_VERSION`, `STAMP_FORMAT`, the `META_*` provenance rows, surface files stamped vs enumerated now, missing emitted files, unfilled placeholders — closed by a verdict: `IN SYNC` / `STALE (n drifts)` / `STALE-LEGACY (n drifts)` (a pre-5.0 install still carrying the old tail-comment stamp — run `upgrade` to migrate it) / `NOT INSTALLED`, each prefixed `PARKED - ` when disabled. The skill then enriches it with its own reads: dead batch paths, memory layers gained since install |
-| `install` (default when nothing is installed) | target | 4 emitted files | Full Phase 0-5 analysis and emit. Refuses if `.claude/skills/memory-sync/` already exists |
+| `install` (default when nothing is installed) | target | 5 emitted files | Full Phase 0-5 analysis and emit. Refuses if `.claude/skills/memory-sync/` already exists |
 | `upgrade` | target + emitted skill | edits the emitted skill | Reads the same `generate.sh status` drift list as its refresh worklist, then re-scans and refreshes surface/batch/fact/invariant tables, adds sections for new memory layers, preserves hand-edits — the emitted skill is expected to have self-modified via its own SELF-SYNC phase — and always finishes with `generate.sh restamp` — which also DELETES a `disable-model-invocation` key left by a pre-5.5.1 install, printing a `REMOVED:` line, so an old emit becomes model-invocable without a re-emit |
 | `enable` | target | one rename | `SKILL.md.disabled` -> `SKILL.md`, so `/memory-sync` is offered again next session. Regenerates nothing — no provenance stamp, no hand-edit change |
-| `disable` | target | one rename | `SKILL.md` -> `SKILL.md.disabled`. Claude Code discovers a project skill only through `SKILL.md`, so this withdraws `/memory-sync` from the roster while the 3 references and every SELF-SYNC hand-edit stay byte-identical on disk. Reversible by `enable`; deletes nothing |
-| `uninstall` | target | deletes the emit manifest | Removes exactly what `emit` wrote — `SKILL.md` (or its parked form) plus the 3 references — after confirmation. Files a user added to that dir are kept and listed. Nothing installed -> reports "nothing to uninstall" instead of deleting on a guess |
+| `disable` | target | one rename | `SKILL.md` -> `SKILL.md.disabled`. Claude Code discovers a project skill only through `SKILL.md`, so this withdraws `/memory-sync` from the roster while the 4 references and every SELF-SYNC hand-edit stay byte-identical on disk. Reversible by `enable`; deletes nothing |
+| `uninstall` | target | deletes the emit manifest | Removes exactly what `emit` wrote — `SKILL.md` (or its parked form) plus the 4 references — after confirmation. Files a user added to that dir are kept and listed. Nothing installed -> reports "nothing to uninstall" instead of deleting on a guess |
 | `purge` | target | deletes the whole dir | Removes `<target>/.claude/skills/memory-sync/` outright, user-added files included, plus any `.memory-sync-emit.*` staging a crashed emit left behind. Confirmation first |
 
-**What gets emitted** — `<target>/.claude/skills/memory-sync/`: `SKILL.md` (scalars substituted, blocks filled), `references/memory-guide.md`, `references/agent-audit.md`, `references/hard-sync.md`. Nothing else — no agent, no rule, no hook.
+**What gets emitted** — `<target>/.claude/skills/memory-sync/`: `SKILL.md` (scalars substituted, blocks filled), `references/memory-guide.md`, `references/agent-audit.md`, `references/hard-sync.md`, `references/prompting-guide.md`. Nothing else — no agent, no rule, no hook.
 
 **Enable/disable is entry-file parking, not a flag.** `status` reports a parked install as `INSTALLED=parked`, never collapsed into `NOT INSTALLED`.
 
@@ -122,6 +126,7 @@ Run it:  /memory-sync                       -> scope session (default), whole su
 | Phases | GATHER (parallel read-only) -> SYNC (one bounded agent per disjoint batch, one message) -> VERIFY (independent checker per batch, never the writer) -> SELF-SYNC (re-checks itself) -> PROPOSE (new agent/skill proposed, never auto-created) -> REPORT (chat only, no report file) |
 | Non-growth | Every file ends `<=` its original line count; total delta `<= 0` |
 | Agents | Re-audited against current best practice every sweep, not just fact-checked |
+| Prompt quality | `references/prompting-guide.md`'s 18-rule table applied to instruction files every sweep; `NORMAL` fixes only where it coincides with a fact/dedup edit, `HARD` rewrites every remaining violation |
 | Invocation | **model-invocable** — the emitted `/memory-sync` carries no `disable-model-invocation`, so Claude can fire it mid-plan and prose triggers ("sync memory", "обнови память") work. That flag belongs only to the distributed `-setup` skills; a generated artifact is meant to be reachable by the model |
 
 ### Depth: NORMAL vs HARD
@@ -143,6 +148,28 @@ A long-running repo accumulates dead weight across every auto-loaded file, not j
 /memory-sync all hard
 ```
 
+### Prompt quality pass
+
+Every sweep also runs a rule table against instruction files only — `CLAUDE.md` at any depth, `.claude/rules/*.md`, the `AGENTS.md` family, and agent/skill bodies. Code and docs are never touched; that stays owned by `/docs`. The table lives in `references/prompting-guide.md` — 18 rules merged from current Claude 5 prompting practice and OpenAI/Codex's `AGENTS.md` guidance, each with a grep-able or eyeballed `detect` signal and a bad → good `rewrite`.
+
+| | `NORMAL` (default) | `HARD` |
+|---|---|---|
+| Violation on a line a fact/dedup edit already touches | fixed | fixed |
+| Violation on an otherwise-untouched line | reported only | fixed |
+
+Sample rows from the table:
+
+| # | Rule | Applies | Detect |
+|---|------|---------|--------|
+| 5 | Drop scattered ALL-CAPS; at most one true hard-stop word per artifact | both | `grep -o` for MUST/NEVER/CRITICAL/ALWAYS returns more than one hit in a file |
+| 12 | File-size budgets for authored artifacts | both | SKILL.md over 500 lines / 2000 words, agent `.md` over 1500 words, hook `additionalContext` over 9000 chars |
+| 15 | AGENTS.md build/size-cap/nested-override mechanics | openai-only | a nested AGENTS.md restates a root rule instead of overriding it |
+| 18 | Explicit stop conditions and safe/unsafe action boundaries for agentic tasks | both | "keep working until done" with no named boundary around a risky action |
+
+`Applies` marks which side reads that copy: `claude` (Claude 5 reads the file directly), `openai-only` (only the AGENTS.md projection is read against it), or `both`. A lossless guard sits underneath every rewrite — paths, CLI flags, thresholds, versions, model ids, an incident-backed `!=`/`NEVER` row, and canonical mode/verb lists (`status | install | upgrade | ...`) are never rewrite targets, even when a rule technically matches.
+
+The Phase 6 report gains a `Prompt` column per file plus a summary line: `Prompt quality: {N} rewrites applied, {M} reported (references/prompting-guide.md)`.
+
 **Error handling highlights** — `install` on an existing installation stops and points to `upgrade`; `upgrade` with nothing installed stops and points to `install`; a fact with no runnable verification command is left out of the catalogue rather than invented; an `AGENTS.md` symlink or vendor-marked file becomes VERIFY-ONLY, never an edit target.
 
 **Frontmatter omissions** — no `cli` (the command already equals the skill name) and no `version` (behavior lives entirely in the skill dir, whose hash already changes with it).
@@ -151,8 +178,8 @@ A long-running repo accumulates dead weight across every auto-loaded file, not j
   <Card title="docsync-setup" icon="sync" href="/brewdoc/skills/docsync-setup/">
     The other brewdoc tracker: staleness of `docs/**` by date. memory-sync-setup covers instruction memory, which docsync-setup leaves alone.
   </Card>
-  <Card title="Setup Status" icon="clipboard" href="/brewcode/skills/setup-status/">
-    Read-only dashboard across every `-setup` skill -- installed, stale or missing, with the hand-run command for each.
+  <Card title="Text Optimize" icon="sparkle" href="/brewtools/skills/text-optimize/">
+    Shares `references/prompting-guide.md`'s sibling rule table -- its own PQ pass rewrites prompt-shaped files the same way this generator's emitted skill does.
   </Card>
   <Card title="Brewdoc overview" icon="rocket" href="/brewdoc/overview/">
     All brewdoc skills in one place.

@@ -12,7 +12,11 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 </Callout>
 
 <Callout type="tip">
-**Skill Creator encodes every best practice from Anthropic's official skill docs.** It picks the right context mode, writes an activation-optimized description, validates structure, and generates test prompts — so you don't have to read 1200 lines of agent instructions yourself.
+**Skill Creator encodes every best practice from Anthropic's official skill docs.** It picks the right context mode, writes an activation-optimized description, validates structure, and generates test prompts — so you don't have to read the agent's 147-line instructions and its four reference files yourself.
+</Callout>
+
+<Callout type="note" title="What's new in 6.2.0">
+The agent body dropped from 897 to 147 lines — most of it moved into four new `references/` files (`frontmatter-fields.md`, `design-patterns.md`, `execution-model.md`, `activation-and-troubleshooting.md`), read on demand instead of always loaded. 8 new frontmatter fields, 4 new `validate-skill.sh` checks — see the frontmatter table / Flow step 4 below. New `## Delegation` and `## Scope Fit` sections keep the agent from over-delegating small work and from over-engineering past what the task actually needs.
 </Callout>
 
 ## Quick reference
@@ -76,13 +80,13 @@ Skill Creator sizes the task before starting. One bounded unit = one deliverable
   <li>
     <div>
       <strong>Write SKILL.md with activation-optimized description</strong>
-      <p>Description follows the template: action verb sentence + explicit <code>Triggers: "phrase1", "phrase2"</code> on a single line under 250 chars. Third-person, no colons (YAML breaks silently). For user-only skills, a plain one-liner is enough — trigger keywords are wasted tokens when LLM never auto-invokes.</p>
+      <p>Description follows the template: action verb sentence + explicit <code>Triggers: "phrase1", "phrase2"</code> on a single line, brewcode target under ~400 chars (spec hard cap 1024). Third-person, no colons (YAML breaks silently). For user-only skills, a plain one-liner is enough — trigger keywords are wasted tokens when LLM never auto-invokes.</p>
     </div>
   </li>
   <li>
     <div>
       <strong>Validate structure and run tests</strong>
-      <p>Runs <code>validate-skill.sh</code> from the brewcode plugin. Checks: valid YAML frontmatter, <code>name</code> ≤ 64 chars, bare with no <code>plugin:</code> prefix and matching the directory name, <code>description</code> ≤ 250 chars single-line, body under 500 lines, bash blocks have <code>EXECUTE</code> keyword, no hardcoded secrets. Then spawns 3–5 realistic test prompts to verify activation and output quality.</p>
+      <p>Runs <code>validate-skill.sh</code> from the brewcode plugin. Checks: valid YAML frontmatter, <code>name</code> ≤ 64 chars, bare with no <code>plugin:</code> prefix and matching the directory name, <code>description</code> ≤ 1024 chars single-line (house target ≤ 400), body under 500 lines, bash blocks have <code>EXECUTE</code> keyword, no hardcoded secrets — plus four checks added in 6.2.0: an unknown frontmatter key (warning), a bare top-level <code>once:</code> (fail), an <code>agent:</code> value outside the three built-ins (warning), and a UTF-8 BOM at the file start (fail). Then spawns 3–5 realistic test prompts to verify activation and output quality.</p>
     </div>
   </li>
   <li>
@@ -145,21 +149,21 @@ skill-name/
 ### Description format
 
 ```yaml
-# LLM-invocable — action verb + Triggers on single line ≤250 chars
+# LLM-invocable — action verb + Triggers on single line, brewcode target ≤400 chars
 description: "Creates conventional git commits with proper format. Triggers: commit, git commit, save changes."
 
 # User-only — simple one-liner, no triggers needed
 description: "Deploy application to production environment."
 ```
 
-Common mistakes: multiline `|` (truncated at 250 chars since v2.1.84), missing `Triggers:` (stays at 20%), starts with "Use this skill when" (should start with action verb), colon in description (YAML parse failure), setting `permissionMode: bypassPermissions` on production skills — this is equivalent to `--dangerously-skip-permissions` and skips all safety prompts. Only appropriate in sandboxed CI; never the right default for local skills.
+Common mistakes: multiline `|` (truncated at the description cap), missing `Triggers:` (stays at 20%), starts with "Use this skill when" (should start with action verb), colon in description (YAML parse failure), setting `permissionMode: bypassPermissions` on production skills — this is equivalent to `--dangerously-skip-permissions` and skips all safety prompts. Only appropriate in sandboxed CI; never the right default for local skills.
 
 ### Frontmatter quick reference
 
 | Field | Limits | Notes |
 |---|---|---|
 | `name` | ≤64 chars, bare lowercase-hyphens, must equal directory name | No `plugin:` prefix — Claude Code adds the plugin name itself; a baked prefix renders `/brewcode:brewcode:e2e`. Directory name used if omitted |
-| `description` | ≤250 chars, single line, always quoted | ALWAYS in double quotes — em dashes, colons break YAML silently |
+| `description` | ≤1024 chars (spec cap), single line, always quoted; brewcode target ≤400 | ALWAYS in double quotes — em dashes, colons break YAML silently |
 | `disable-model-invocation` | true/false | `true` = 100% reliable, slash-only |
 | `user-invocable` | true/false | `false` = hide from menu, Claude-only |
 | `context` | `fork` | Isolated subagent, fresh context |
@@ -169,7 +173,33 @@ Common mistakes: multiline `|` (truncated at 250 chars since v2.1.84), missing `
 | `allowed-tools` | tool list | Minimal set |
 | `disallowed-tools` | tool list | Removes tools while the skill is active (CC 2.1.152) |
 | `argument-hint` | string | Autocomplete hint |
-| `once` | true/false | Fire once per session |
+| `when_to_use` | string | Extra activation guidance appended to `description`, counted toward the same 1536-char listing-display cap |
+| `arguments` | string/list | Declares named args — enables `$name` substitution in the body, alongside `$0`/`$1`/`$ARGUMENTS` |
+| `background` | true/false | Fork-only; `false` waits for the result in the invoking turn instead of backgrounding (default true since v2.1.218) |
+| `paths` | string/list | Glob(s) scoping where the skill is offered |
+| `shell` | bash/powershell | Shell used for `` !`command` `` dynamic-context blocks |
+| `metadata` | map | Free-form key/value block for registries/third-party tooling — CC itself ignores it |
+| `license` | string | SPDX identifier — Agent Skills spec field, CC ignores |
+| `compatibility` | string | Environment requirements, ≤500 chars — Agent Skills spec field, CC ignores |
+| `once` | true/false | **Not a top-level field** — a suboption of a hook entry (`hooks.<Event>[].hooks[].once`), never a sibling of `name`/`description`. A bare top-level `once:` now fails `validate-skill.sh` (check 12) |
+
+### Reference files (read on demand)
+
+The agent body dropped from 897 to 147 lines by moving detail out of the prompt and into `references/` — each file loads only when the step actually needs it, never all nine at once.
+
+| File | Read when |
+|---|---|
+| [`frontmatter-fields.md`](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/skills/references/frontmatter-fields.md) | Deciding or checking any frontmatter field; fixing a validator "unknown key" warning |
+| [`design-patterns.md`](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/skills/references/design-patterns.md) | Choosing a structure pattern, resource paths, executable bash, the unit-test skeleton |
+| [`execution-model.md`](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/skills/references/execution-model.md) | Configuring `context`/`agent`/`model`/tools, dynamic context injection, string substitutions |
+| [`activation-and-troubleshooting.md`](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/skills/references/activation-and-troubleshooting.md) | Writing or debugging description + triggers, activation not working, known bugs |
+| [`prompt-contract.md`](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/skills/references/prompt-contract.md) | Every skill created or improved — mandatory |
+| [`review-prompt.md`](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/skills/references/review-prompt.md) | Spawned to review, or applying confirmed review findings |
+| [`readme-template.md`](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/skills/references/readme-template.md) | Generating `README.md` |
+| [`summary-template.md`](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/skills/references/summary-template.md) | Populating the final report handed back to the caller |
+| [`e2e-template.md`](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/skills/references/e2e-template.md) | Deep testing depth E2E scenarios |
+
+The first four are new in 6.2.0 — they absorbed what used to be inline sections (frontmatter reference, design patterns, execution model, activation/troubleshooting).
 
 ### `$ARGUMENTS` in bash blocks
 

@@ -23,6 +23,7 @@ subagents get the repo-relative path, never pasted prose):
 | `references/memory-guide.md` | Phase 2 - where a fact BELONGS (layer decision tree), compression patterns, obvious-vs-domain gate |
 | `references/agent-audit.md` | Phase 2 agents + skills batches - the best-practice re-audit, run EVERY sweep |
 | `references/hard-sync.md` | Phases 2 and 3 at `{DEPTH}` = `HARD` only - `paths:` precision audit + obvious-knowledge purge, and the `hard` report contract Phase 3 checks |
+| `references/prompting-guide.md` | Phase 2 (every file) and Phase 3 - the merged prompting-quality rule table + lossless guard |
 
 ---
 
@@ -269,6 +270,7 @@ CONTEXT (already resolved - do NOT re-derive): the file list, its per-file line 
 READ FIRST (paths, not pasted prose):
   .claude/skills/memory-sync/references/memory-guide.md   - layer decision tree, compression patterns, obvious gate
   .claude/skills/memory-sync/references/agent-audit.md    - agents and skills batches ONLY: the standing re-audit
+  .claude/skills/memory-sync/references/prompting-guide.md - the merged rule table + lossless guard, step 3 below
   .claude/skills/memory-sync/SKILL.md                     - the checkable-fact catalogue (verification commands), the house invariants
 
 Per file, in THIS priority order:
@@ -281,6 +283,11 @@ Per file, in THIS priority order:
    - DEDUPLICATE: a fact repeated across files keeps ONE canonical home; copies become a pointer
      ("canonical: <file> section"). Canonical home in ANOTHER batch -> REPORT it, do not edit a foreign file.
    - COMPRESS verbose passages into this repo's dense table/pointer style; meaning intact, lines down.
+3. PROMPT QUALITY - instruction files only (CLAUDE.md/rules/AGENTS.md/agent/skill bodies, never code/docs):
+   - Apply `references/prompting-guide.md`'s rule table; rewrite ONLY where its lossless guard allows it -
+     never touch a path, version, flag, threshold, model id, incident-backed `!=`/NEVER row or canonical list.
+   - `{DEPTH}` = NORMAL: fix a violation ONLY where it coincides with a fact/dedup edit already touching that
+     line; otherwise REPORT it. `{DEPTH}` = HARD: rewrite every remaining violation.
 
 NON-GROWTH (hard): every file ends <= the baseline given beside its path in SCOPE; delete before you add. The ONE authorized growth is the PASS A frontmatter `paths:` repair at HARD depth on a MISSING or TOO_NARROW verdict; nothing else may grow.
 
@@ -303,7 +310,8 @@ HARD constraints:
 CONSUMER: an independent read-only checker re-verifies every claim you make, then the coordinator's report table.
 DONE - return JSON, one entry per file, empty lists if clean:
 {"<path>": {"added": [...], "removed": [...], "fixed": [...], "dedup": [...], "compressed": N,
-            "lines_before": N, "lines_after": N, "broken_refs": [...], "uncertain": [...]}}
+            "lines_before": N, "lines_after": N, "broken_refs": [...], "uncertain": [...],
+            "prompt_quality": [{"rule": N, "line": N, "before": "...", "after": "..."}]}}
 At {DEPTH} = HARD each entry ALSO carries a nested "hard": {...} object, shaped exactly as in references/hard-sync.md.
 ```
 
@@ -340,6 +348,7 @@ CONTEXT (already resolved - do NOT re-derive): the batch's returned JSON, the pe
 READ FIRST (paths, not pasted prose):
   .claude/skills/memory-sync/SKILL.md   - the checkable-fact catalogue (verification commands), the house invariants
   .claude/skills/memory-sync/references/hard-sync.md   - {DEPTH} = HARD only: the two passes and the `hard` report contract you check
+  .claude/skills/memory-sync/references/prompting-guide.md - the merged rule table and lossless guard you re-check in (h) below
 
 Checks - ALL of them, per file:
 a. Re-verify every ADDED and FIXED fact against the ACTUAL code (run the catalogue command, read the file).
@@ -353,6 +362,9 @@ f. Scan for language-policy violations per {LANGUAGE_POLICY} - intentional trigg
 g. `{DEPTH}` = HARD only: re-read every `hard.obvious_deleted` line and confirm it was GENERIC, not a domain fact;
    re-resolve every `hard.globs_declared` entry against the working tree (both probes, tracked and untracked);
    confirm every `hard.domain_kept` line still stands in the file and rule each `hard.discriminator_uncertain` line KEEP or DELETE.
+h. `prompt_quality` entries (if any): re-read each `before`/`after` pair against the cited rule number in
+   `references/prompting-guide.md` and confirm the lossless guard held - no path, version, flag, threshold,
+   model id, incident-backed row or canonical list moved.
 
 CONSUMER: the coordinator - a non-ok verdict routes a targeted fix back to the agent that wrote the file.
 DONE - return JSON per file, empty list when clean: {"ok": bool, "violations": [...]}
@@ -379,7 +391,7 @@ Violations -> the coordinator sends targeted fixes back to the responsible batch
 ## Phase 4 - SELF-SYNC (the skill syncs ITSELF)
 
 This skill is part of the surface it sweeps. Every run, after Phase 3 - and spawn ONE additional read-only checker
-over the self-synced files (this SKILL.md plus ALL THREE references), reported as its own row in the Phase-6 delta
+over the self-synced files (this SKILL.md plus ALL FOUR references), reported as its own row in the Phase-6 delta
 table:
 
 | Step | Action |
@@ -388,7 +400,7 @@ table:
 | Refresh | Update the batch rows, the counts, and every fact-catalogue command that no longer matches reality |
 | Grow a batch | The project gained a memory layer this skill does not cover (a new nested `CLAUDE.md` tree, a new convention dir, a new skills tree) -> ADD the batch or the section - report it; self-sync lines are delta-exempt |
 | Drop a batch | A batch whose files are all gone -> remove the row and say so in the report |
-| Sibling refs | ALL THREE references - `memory-guide.md`, `agent-audit.md`, `hard-sync.md` - are self-synced the SAME way: their rosters, patterns and checks go stale exactly like this file's tables |
+| Sibling refs | ALL FOUR references - `memory-guide.md`, `agent-audit.md`, `hard-sync.md`, `prompting-guide.md` - are self-synced the SAME way: their rosters, patterns and checks go stale exactly like this file's tables |
 
 > **CARVE-OUT - it binds BATCH AGENTS.** Facts inside this file may be CORRECTED. Its SCOPE DECISIONS may NOT be
 > rewritten without explicit user instruction: which surfaces are in scope, the EXCLUDED table, the docs
@@ -417,8 +429,8 @@ If yes, PROPOSE in the final report: the name, the description gist, the trigger
 ```
 memory-sync complete - scope {SCOPE}, depth {DEPTH}. {N} files scanned, {M} edited.
 
-| File | Added | Removed | Fixed | Dedup | Compressed | Verified |
-|------|-------|---------|-------|-------|------------|----------|
+| File | Added | Removed | Fixed | Dedup | Compressed | Prompt | Verified |
+|------|-------|---------|-------|-------|------------|--------|----------|
 
 | Layer | Lines before | Lines after | Delta |
 |-------|--------------|-------------|-------|
@@ -430,6 +442,7 @@ Broken refs:   {list | none}   (incl. unresolved docs refs - reported, never edi
 Uncertain (left in place, verify manually): {list | none}
 Self-sync:     {tables refreshed | batch added/dropped | no change}
 Agent audit:   {N} agents / {M} skills re-audited; {K} findings
+Prompt quality: {N} rewrites applied, {M} reported (references/prompting-guide.md)
 Proposal:      {new agent/skill + triggers + neighbours | none}
 ```
 

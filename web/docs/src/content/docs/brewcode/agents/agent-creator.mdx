@@ -15,6 +15,15 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 **Describe what you want — the agent handles the rest.** It runs parallel analysis of your codebase, drafts the frontmatter and system prompt, validates against Anthropic best practices, then optimizes with `brewtools:text-optimize`. Improvement and debugging of existing agents follow the same flow.
 </Callout>
 
+<Callout type="note" title="What's new in 6.2.0">
+The agent body was rewritten against Claude Code 2.1.269:
+- Body cut from 580 to 128 lines: inline sections were replaced with a `## Read on demand` table pointing at 5 new reference files
+- New frontmatter field `experimental.cacheTtl` — see below
+- `maxTurns` abort now returns a partial result (2.1.246) — see below
+- New `## Delegation` section names `brewtools:text-optimizer` as the only delegation target
+- `background: true` now hard-errors on a teammate-spawned agent since CC 2.1.269, instead of silently forcing foreground
+</Callout>
+
 ## Quick reference
 
 | Field | Value |
@@ -50,6 +59,10 @@ Two blocks land in the body of every agent Agent Creator writes. They are part o
 | **Scope Fit** | Only agents whose domain writes code, scripts, SQL, schemas, infra or config | Build for the actual scale and the problems that exist today, not imagined load or speculative abstraction — a 10-user app does not need hardening against DB lock contention. After finishing, one pass: can this be simpler — fewer files, less config, less indirection? |
 
 Scope Fit is dropped for research, docs, and review-only agents; Return Contract never is. Both are validation-checklist items, so an agent missing the Return Contract block does not pass. Agent Creator applies Return Contract to itself: its report is agent paths plus a frontmatter / validation verdict, never the full agent bodies.
+
+## Delegation
+
+Agent Creator delegates exactly two kinds of work: the parallel Explore fan-out for repo analysis, and the final optimize pass to `brewtools:text-optimizer`. Everything else that fits in a handful of tool calls happens inline — it never spawns a subagent just to verify its own output, and fans out once rather than nesting spawns.
 
 ## When to use
 
@@ -130,11 +143,12 @@ disallowedTools: Write, Edit  # OPT: explicit deny list
 skills: skill1, skill2        # OPT: full content injected into context at startup
 color: cyan                   # OPT: 8 valid values -- magenta is NOT one
 memory: project               # OPT: user|project|local -- auto-adds Read/Write/Edit
-background: true              # OPT: true keeps it backgrounded even when Claude wants the result (DEF unset, no `false` switch)
+background: true              # OPT: keeps it backgrounded even when Claude wants the result; hard-errors on a teammate-spawned agent since CC 2.1.269 -- drop it from a definition that may run as a teammate
 isolation: worktree           # OPT: FM accepts `worktree` only -- LOW PRIORITY, see below (`remote` is invocation-level, never FM)
 permissionMode: default       # OPT: LOCAL-ONLY -- ignored + warn in plugin agents
 mcpServers: [server1]         # OPT: LOCAL-ONLY -- ignored + warn in plugin agents
 initialPrompt: "..."          # OPT: LOCAL-ONLY -- first prompt sent on start
+experimental: {cacheTtl: "5m"} # OPT: LOCAL-ONLY -- per-agent prompt-cache TTL, "5m"|"1h" (CC 2.1.248+)
 observer: "reviewer"          # OPT: LOCAL-ONLY -- observing agent
 observerMessage: "watch for X"  # OPT: LOCAL-ONLY -- brief for observer
 observeSubagents: false       # OPT: LOCAL-ONLY -- `false` disables observation
@@ -146,7 +160,7 @@ observeSubagents: false       # OPT: LOCAL-ONLY -- `false` disables observation
 | Scope | Fields |
 |-------|--------|
 | Local + plugin — both parsers honor it | `model`, `effort`, `maxTurns`, `tools`, `disallowedTools`, `skills`, `color`, `memory`, `background`, `isolation: worktree`, `initialPrompt` |
-| Local only — ignored for plugin agents | `permissionMode`, `hooks`, `mcpServers` (exactly these three) |
+| Local only — ignored for plugin agents | `permissionMode`, `hooks`, `mcpServers`, `experimental.cacheTtl` (four keys total; `cacheTtl` since CC 2.1.248) |
 | Absent from the 2.1.233 field table — treat as internal/older, do not emit into a generated agent | `observer`, `observerMessage`, `observeSubagents` |
 
 `initialPrompt` auto-submits as the first user turn only when this exact definition runs as the MAIN session (`--agent <name>` or the `agent` setting) — irrelevant on an ordinary subagent spawn, but honored for plugin agents too since origin isn't the boundary, execution context is. Need `permissionMode`/`hooks`/`mcpServers`? Move the agent to `.claude/agents/` — plugin agents ignore these three no matter how the frontmatter is written. `isolation: remote` is never a valid FM value anywhere — it is invocation-level only, reachable from an `Agent(...)` tool call.
@@ -192,7 +206,7 @@ A **turn** = one model inference plus its tool calls; tool results return, then 
 
 Calibrated against real subagent transcripts (`.claude/projects/*/subagents/agent-*.jsonl`), not invented. At roughly 10-20 seconds per turn, 120 turns is a 20-30 minute ceiling. Rule of thumb: `maxTurns` ≈ 2-3x the role's typical run.
 
-`maxTurns` is an emergency anti-loop stop, not a budget. On exhaustion the binary emits `Reached max turns limit (N)` and the agent aborts — written files persist, but the final report is lost. That is why agent-creator also writes a **checkpointing instruction** into every generated agent body: record incremental progress to a report file after each milestone, and on resume read that file first and continue from the last checkpoint.
+`maxTurns` is an emergency anti-loop stop, not a budget. On exhaustion the run aborts; since **2.1.246** the caller sees a result marked **partial** with a `SendMessage` continuation hint instead of a silent finish — but that marker only prompts a resume, it does not restore unwritten analysis, so written files stay the one guaranteed survivor. That is why agent-creator also writes a **checkpointing instruction** into every generated agent body: record incremental progress to a report file after each milestone, and on resume read that file first and continue from the last checkpoint.
 
 **Relevant environment variables** (set under `env` in `settings.json`):
 
@@ -223,6 +237,18 @@ Calibrated against real subagent transcripts (`.claude/projects/*/subagents/agen
 | `SendMessage` | Resume a stopped subagent with context intact |
 
 </details>
+
+## Reference files (read on demand)
+
+Agent Creator keeps its full frontmatter catalog, scope/tool rules, execution model, templates, and known-issue log out of this page's body — same on-demand pattern the source file itself uses. Read the one that matches what you're doing; skip the rest.
+
+| File | What it holds |
+|------|---------------|
+| [`agent-frontmatter-fields.md`](https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/agents/references/agent-frontmatter-fields.md) | All 17 frontmatter fields (2 required, 15 optional) — including `experimental.cacheTtl` |
+| [`agent-scope-and-tools.md`](https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/agents/references/agent-scope-and-tools.md) | Deciding `tools:`, where a generated file should live, model precedence, delegation patterns |
+| [`agent-context-and-execution.md`](https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/agents/references/agent-context-and-execution.md) | What a subagent inherits from its parent, execution modes, turn/token/concurrency limits |
+| [`agent-template.md`](https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/agents/references/agent-template.md) | Description budget, system prompt structure, the Guardrails block, the Validation Checklist |
+| [`agent-known-issues.md`](https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/agents/references/agent-known-issues.md) | Known bugs, the 2.1.234-2.1.269 changelog |
 
 ## Return Contract
 

@@ -7,7 +7,7 @@ argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge]
 allowed-tools: [Read, Edit, Glob, Grep, Bash, Agent, AskUserQuestion]
 model: opus
 ---
-<!-- brewcode-meta: version=6.1.4 content_version=6.0.0 generated_by=brewdoc:memory-sync-setup -->
+<!-- brewcode-meta: version=6.2.0 content_version=6.2.0 generated_by=brewdoc:memory-sync-setup -->
 
 # Memory Sync Generator (brewdoc:memory-sync-setup)
 
@@ -21,8 +21,8 @@ a stale lint-rule claim from a correct one, and cannot prove a removed fact is g
 merely deleted from a doc.
 
 **OUTPUT:** `<target>/.claude/skills/memory-sync/` -- `SKILL.md` + `references/memory-guide.md` +
-`references/agent-audit.md` + `references/hard-sync.md`. Nothing else is written; no agent is created, no rule is
-installed, no hook is registered.
+`references/agent-audit.md` + `references/hard-sync.md` + `references/prompting-guide.md`. Nothing else is
+written; no agent is created, no rule is installed, no hook is registered.
 
 ## Prompt contract
 
@@ -113,14 +113,14 @@ Never print a removed alias as a command.
 | Mode | Reads | Writes | Does |
 |------|-------|--------|------|
 | `status` (**DEFAULT when installed**) | target + emitted skill | NOTHING | Report whether `<target>/.claude/skills/memory-sync/` exists, its provenance frontmatter (`doc_type` / `version` / `generated_by` / `last_updated` / `surface_files`), and how STALE its surface tables are vs the live repo: `surface_files` count baked in vs enumerated now, batches whose paths no longer exist, memory layers the project gained since. Ends with a verdict `IN SYNC` / `STALE (n drifts)` / `STALE-LEGACY (n drifts)` (pre-5.0 tail stamp) / `NOT INSTALLED`, each prefixed `PARKED - ` when the install is disabled (`INSTALLED=parked`) -- parked and absent are never collapsed |
-| `install` (**DEFAULT when not installed**) | target | emits the 4 files | Full Phase 0-5 analysis + emit. Refuses an existing installation (see Error Handling) |
+| `install` (**DEFAULT when not installed**) | target | emits the 5 files | Full Phase 0-5 analysis + emit. Refuses an existing installation (see Error Handling) |
 | `upgrade` | target + emitted skill | Edits the emitted skill | Re-scan, then REFRESH an existing installation: re-enumerate the surface, refresh the batch / fact / invariant tables, ADD sections for memory layers the project gained, and ALWAYS finish with `generate.sh restamp` (see Mode: upgrade). PRESERVE hand-edits -- the emitted skill is EXPECTED to have self-modified (SELF-SYNC phase). Never blind-overwrite |
 | `enable` | target | one rename | `generate.sh enable`: `SKILL.md.disabled` -> `SKILL.md`, so `/memory-sync` is offered again. Regenerates nothing, so no provenance stamp and no hand-edit changes |
-| `disable` | target | one rename | `generate.sh disable`: `SKILL.md` -> `SKILL.md.disabled`. Claude Code discovers a project skill ONLY through `SKILL.md`, so this withdraws `/memory-sync` from the roster while the 3 references and every SELF-SYNC hand-edit stay byte-identical on disk. Reversible by `enable`; deletes nothing |
-| `uninstall` | target | deletes the emit manifest | `generate.sh uninstall`: removes exactly what `emit` wrote -- `SKILL.md` (or its parked form) plus the 3 references -- and nothing it did not. Files a user added to that dir are KEPT and listed. Confirmation first |
+| `disable` | target | one rename | `generate.sh disable`: `SKILL.md` -> `SKILL.md.disabled`. Claude Code discovers a project skill ONLY through `SKILL.md`, so this withdraws `/memory-sync` from the roster while the 4 references and every SELF-SYNC hand-edit stay byte-identical on disk. Reversible by `enable`; deletes nothing |
+| `uninstall` | target | deletes the emit manifest | `generate.sh uninstall`: removes exactly what `emit` wrote -- `SKILL.md` (or its parked form) plus the 4 references -- and nothing it did not. Files a user added to that dir are KEPT and listed. Confirmation first |
 | `purge` | target | deletes the whole dir | `generate.sh purge`: removes `<target>/.claude/skills/memory-sync/` outright, user-added files included, plus any `.memory-sync-emit.*` staging a crashed emit left under `.claude/skills/`. Confirmation first |
 
-> **Why `uninstall` and `purge` differ here.** `emit` writes a fixed manifest (`SKILL.md` + the 3 references), and
+> **Why `uninstall` and `purge` differ here.** `emit` writes a fixed manifest (`SKILL.md` + the 4 references), and
 > that manifest is also the removal manifest: `uninstall` is scoped to it, so a note or an extra reference the user
 > dropped into the skill dir is never destroyed by a removal they asked for. `purge` is the "I am done with this
 > entirely" verb and takes the directory. The generator registers no hooks, writes no settings and no config, so
@@ -212,7 +212,7 @@ a `.memory-sync-emit.*` staging dir beside it) -- it registers no hooks, writes 
    find "$ROOT/.claude/skills/memory-sync" -type f | sort
    ```
 3. **ASK** via `AskUserQuestion`, ONCE, naming the real count:
-   - `uninstall`: "Delete the 4 emitted files under `<target>/.claude/skills/memory-sync/` (N files present)?
+   - `uninstall`: "Delete the 5 emitted files under `<target>/.claude/skills/memory-sync/` (N files present)?
      Hand-edits to them are lost; anything you added yourself is kept."
      Options: **Yes, uninstall** / **Purge instead (deletes the whole dir)** / **Cancel**.
    - `purge`: "Delete `<target>/.claude/skills/memory-sync/` entirely (N files)? Nothing is recoverable."
@@ -261,6 +261,8 @@ Read the emit material this generator ships, relative to `${CLAUDE_SKILL_DIR}`:
 - `references/agent-audit.md` -- the agent/skill re-audit procedure the emitted skill runs every sweep
 - `references/hard-sync.md` -- the two `HARD`-depth deletion passes (`paths:` precision audit + obvious-knowledge
   purge) and their reporting contract; it holds TWO of the twelve BLOCK placeholders
+- `references/prompting-guide.md` -- the merged Claude 5 + OpenAI/Codex prompting-quality rule table applied at
+  Phase 2/3; carries no BLOCK placeholders
 
 Confirm the TARGET project is the current working directory. All emitted paths are relative to that repo root.
 
@@ -341,9 +343,9 @@ bash "${CLAUDE_SKILL_DIR}/scripts/generate.sh" emit && echo "✅ emit" || echo "
 > **STOP if ❌** -- verify `${CLAUDE_SKILL_DIR}/references/SKILL.md.template` exists and the target `.claude/` is
 > writable. On an existing installation `emit` refuses by design: use `upgrade`.
 
-This writes the FOUR-file tree: `<target>/.claude/skills/memory-sync/SKILL.md` with scalars substituted, plus
-`references/memory-guide.md`, `references/agent-audit.md` and `references/hard-sync.md` copied into the emitted
-`references/`.
+This writes the FIVE-file tree: `<target>/.claude/skills/memory-sync/SKILL.md` with scalars substituted, plus
+`references/memory-guide.md`, `references/agent-audit.md`, `references/hard-sync.md` and
+`references/prompting-guide.md` copied into the emitted `references/`.
 
 > `disable-model-invocation` MUST NOT be set on the emitted skill: plain-prose invocation ("память устарела",
 > "sync memory") is a first-class path, alongside `/memory-sync [scope]`. Legacy installs that still carry the key
@@ -438,6 +440,7 @@ Files written:
 - .claude/skills/memory-sync/references/memory-guide.md
 - .claude/skills/memory-sync/references/agent-audit.md
 - .claude/skills/memory-sync/references/hard-sync.md
+- .claude/skills/memory-sync/references/prompting-guide.md
 
 Run it:  /memory-sync                       -> scope session (default), depth NORMAL, whole surface
          /memory-sync all "only rules"      -> re-verify every fact, emphasis on rules
@@ -490,7 +493,7 @@ the single list -- do not restate it here.
 | Setting | Default | Description |
 |---------|---------|-------------|
 | Emit target | `<cwd>/.claude/skills/memory-sync/` | Where the generated skill is written |
-| Emit material | `${CLAUDE_SKILL_DIR}/references/` | `SKILL.md.template`, `memory-guide.md`, `agent-audit.md`, `hard-sync.md` -- four files emitted |
+| Emit material | `${CLAUDE_SKILL_DIR}/references/` | `SKILL.md.template`, `memory-guide.md`, `agent-audit.md`, `hard-sync.md`, `prompting-guide.md` -- five files emitted |
 | Emitted default depth | `NORMAL` | `HARD` is per-run, from the emitted skill's own arguments; nothing is regenerated to switch |
 | Generation script | `${CLAUDE_SKILL_DIR}/scripts/generate.sh` | `scan` \| `emit` \| `validate` \| `restamp` \| `status` \| `enable` \| `disable` \| `uninstall` \| `purge` |
 | Provenance refresh | `generate.sh restamp` | Metadata-only, idempotent, mandatory tail of `upgrade`. Rewrites `version` / `last_updated` / `surface_files`, adds `doc_type` / `generated_by` when absent, deletes a pre-5.0 tail stamp and a legacy `disable-model-invocation`, re-copies a reference ONLY when its sole difference from the plugin source is the release stamp. Aborts rather than write if anything outside the metadata block would move |
@@ -548,6 +551,8 @@ the single list -- do not restate it here.
 - `references/hard-sync.md` -- the `HARD`-depth passes: `paths:` precision audit + obvious-knowledge purge, with
   their verdict vocabulary and reporting contract (emitted; holds `{PATHS_PRECISION_TABLE}` +
   `{OBVIOUS_VS_DOMAIN_TABLE}`).
+- `references/prompting-guide.md` -- the merged Claude 5 + OpenAI/Codex prompting-quality rule table applied in
+  Phase 2/3 (emitted; no BLOCK placeholders).
 - `scripts/generate.sh` -- `scan` / `emit` / `validate` / `restamp` / `status` / `enable` / `disable` /
   `uninstall` / `purge`.
 
@@ -556,7 +561,7 @@ SKILL METADATA -- brewdoc:memory-sync-setup (GENERATOR)
 
 Replaces the old brewdoc:memory (a generic in-plugin memory syncer). Analyzes a target project and emits a
 self-contained project-local .claude/skills/memory-sync/ (SKILL.md + memory-guide.md + agent-audit.md +
-hard-sync.md). The plugin never syncs memory itself.
+hard-sync.md + prompting-guide.md). The plugin never syncs memory itself.
 
 The emitted skill has TWO axes: {SCOPE} = which change facts drive the sweep (session default | branch | commit |
 recent[:N] | all), {DEPTH} = how hard the surface is cut (NORMAL default | HARD = + paths: precision audit +

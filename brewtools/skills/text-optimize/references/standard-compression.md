@@ -68,8 +68,8 @@ After compression, verify:
 - API signatures and parameters
 - Error messages (exact text matters)
 - Legal/compliance text
-- Version numbers, dates, URLs
-- Command-line examples
+- Version numbers, dates, URLs, model IDs (byte-exact)
+- Command-line examples, CLI flags/options, thresholds and gates (`>=98%`, `30-50%`) verbatim
 
 > **Note:** Never convert config blocks to TOML for "efficiency" — TOML is the most token-heavy structured format (more overhead than YAML/JSON). For uniform tabular data prefer markdown tables or TSV/CSV; for nested data prefer compact JSON.
 
@@ -77,11 +77,14 @@ After compression, verify:
 
 ### Example 1: README Intro
 
-**Before** (~80 words):
+**Before** (59 words):
 > This project is a command-line tool that is able to help developers in order to automate the process of deploying their applications. It is important to note that the tool supports a large number of cloud providers. Due to the fact that deployment can be complex, this tool simplifies it for the purpose of reducing errors and saving time.
 
-**After** (~35 words):
+**After** (19 words):
 > CLI tool that automates application deployment. Supports many cloud providers. Simplifies complex deployments to reduce errors and save time.
+
+Measured (`wc -w`): 59 -> 19 = -67.8%, above the 30-50% default target — short, filler-heavy prose
+can legitimately land higher. Treat 30-50% as the safe default for typical docs, not a ceiling.
 
 ### Example 2: Installation Instructions
 
@@ -107,3 +110,11 @@ After compression, verify:
 | Projects | 3 | Unlimited | Unlimited |
 | Storage | 1 GB | 50 GB | 500 GB |
 | Support | Community | Email | Dedicated |
+
+## 8. Stop Condition
+
+Stop compressing the moment: the next cut would touch a name/number/path/version/flag (lossless
+guard, `rules-review.md`); a paragraph-to-table conversion would need to invent a category the
+source never stated; or a further sentence merge would combine facts with different scope/numbers/
+conditions (D.6). The 30-50% target is done at that point even if the actual ratio lands outside it
+either way — report the real number, never force one to fit the range.

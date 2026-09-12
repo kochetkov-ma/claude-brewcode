@@ -1,9 +1,17 @@
-<!-- brewcode-meta: version=6.1.4 content_version=5.6.0 generated_by=brewdoc:memory-sync-setup -->
+<!-- brewcode-meta: version=6.2.0 content_version=6.2.0 generated_by=brewdoc:memory-sync-setup -->
 # Hard Sync
 
 The two aggressive DELETION passes of `/memory-sync`. Cited by the emitted skill's Phase 2 batch prompt at
 `{DEPTH}` = `HARD`, by its Phase 3 VERIFY checkers, by its References table and by its Phase 4 self-sync. Both passes may only SHRINK a file -
 the ONE exception is the PASS A frontmatter repair that adds or widens a `paths:` key.
+
+## Prompting-quality depth split
+
+`references/prompting-guide.md` runs at every scope AND depth (Phase 2, before any edit) - it is not a third
+PASS here. What changes with `{DEPTH}` is how much of what it finds gets REWRITTEN: at `NORMAL`, fix a violation
+ONLY where it coincides with a fact/dedup edit already touching that line, otherwise REPORT it; at `HARD`,
+rewrite every remaining violation. Both depths return the guide's `file :: rule# :: line :: before -> after`
+verdict rows - only the count acted on differs.
 
 ## The problem
 

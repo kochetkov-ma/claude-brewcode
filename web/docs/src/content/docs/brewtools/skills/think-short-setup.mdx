@@ -1,6 +1,6 @@
 ---
 title: "Think-Short Setup"
-description: "Install, upgrade or remove terse-mode hooks that inject brevity directives at session start, every 10th prompt, and into subagents - project or global scope."
+description: "Install, upgrade or remove terse-mode hooks that inject brevity directives at session start, every 20th prompt, and into subagents - project or global scope."
 order: 3127
 ---
 import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
@@ -8,6 +8,10 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 # Think-Short Setup — install terse-mode hooks
 
 <Badge variant="default" text="sonnet" /> <Badge variant="accent" text="status / install / upgrade / enable / disable / uninstall / purge" /> <Badge variant="secondary" text="project | global" /> <Badge variant="accent" text="user-invoked" />
+
+<Callout type="note" title="What's new in 6.2.0">
+The counter hook's cadence and the directive body were both tightened — see the directive text below and [How it works](#how-it-works) for the every-20th-prompt schedule.
+</Callout>
 
 ## What it does
 
@@ -20,20 +24,19 @@ There are no profiles and no config file. The only persisted state is the copied
 The same directive body is injected at every point:
 
 ```
-Be terse. Results first, no preamble/filler/sycophancy. ASCII only.
-Think short: minimal internal reasoning, no exploring aloud.
-Grep before Read. Edit over Write. Parallel calls in one message.
-Plan the full edit set, then execute.
+Be terse: results first, no preamble/filler/sycophancy, ASCII only. Think
+short - minimal internal reasoning, no exploring aloud. Grep before Read,
+Edit over Write, parallel calls in one message. Plan the full edit set, then
+execute.
 
-Keep code simple - do not over-engineer. Before writing anything new,
-check existing code and libraries for the needed functionality.
-Prefer extending or abstracting a similar class over adding a new one.
-After writing code, one pass: can this be simpler? If yes - simplify it.
+Keep code simple, no over-engineering: before writing anything new, find the
+closest well-built repo counterpart and extend it - additive to
+conventions/rules/docs, never instead. After writing code, one simplify pass.
 
-Comment like a human, not an AI. Write comments only where they earn it:
-non-obvious logic, public APIs, class/method docstrings (JavaDoc/PyDoc/etc).
-Do NOT narrate self-evident code or add line-by-line noise. Keep docstrings -
-just stop over-commenting. Each comment terse: ~1 line, 2 only if asked.
+Comment like a human, not an AI: only where it earns it (non-obvious logic,
+public APIs, class/method docstrings - JavaDoc/PyDoc/etc). No narrating
+self-evident code or line-by-line noise. Each comment ~1 line, 2 only if
+asked.
 ```
 
 Two of those lines are the simplicity discipline: the model thinks short instead of exploring aloud, and after the code is written it makes one explicit pass asking whether the same thing can be done simpler.
@@ -51,7 +54,7 @@ Two of those lines are the simplicity discipline: the model thinks short instead
 | Turn it back on | `/brewtools:think-short-setup enable` |
 | Unwire the hooks, keep the tmp markers | `/brewtools:think-short-setup uninstall` |
 | Delete every file and every marker this skill ever wrote | `/brewtools:think-short-setup purge` |
-| Output-heavy sessions where you want periodic reinforcement, not constant injection | Install project-scope — counter hook fires every 10 turns, not every turn |
+| Output-heavy sessions where you want periodic reinforcement, not constant injection | Install project-scope — counter hook fires every 20 turns, not every turn |
 
 ## Examples
 
@@ -153,10 +156,10 @@ Three hooks are installed, each targeting a different injection point:
 | Hook | Event | Behavior |
 |------|-------|----------|
 | `think-short-session.mjs` | SessionStart | Injects the full directive; resets the per-session prompt counter in `$TMPDIR`; prunes stale counters from prior sessions |
-| `think-short-prompt-counter.mjs` | UserPromptSubmit | Injects the directive on every 10th user prompt (turns 10, 20, 30 — never turn 1, which is covered by SessionStart) |
+| `think-short-prompt-counter.mjs` | UserPromptSubmit | Injects the directive on every 20th user prompt (turns 20, 40, 60 — never turn 1, which is covered by SessionStart) |
 | `think-short-subagent.mjs` | SubagentStart | Injects the full directive into every spawned subagent via `additionalContext` |
 
-The counter hook keeps injection periodic, not per-turn. Turns 2–9 run without re-injection; at turn 10 the hook fires again to reinforce brevity after context drift.
+The counter hook keeps injection periodic, not per-turn. Turns 2–19 run without re-injection; at turn 20 the hook fires again to reinforce brevity after context drift.
 
 ## Installation targets
 
@@ -184,7 +187,7 @@ This replaces an earlier `PreToolUse:Task|Agent` design that rewrote the spawn p
 | | `n/a` | no subagent hook installed in that scope |
 | | `unknown` | the installed copy predates the `--check` diagnostic — run `upgrade` on that scope |
 
-`injects` measures the subagent hook only. SessionStart and the every-10th-prompt injection are separate paths.
+`injects` measures the subagent hook only. SessionStart and the every-20th-prompt injection are separate paths.
 
 Example status output on a machine whose global install predates the diagnostic:
 

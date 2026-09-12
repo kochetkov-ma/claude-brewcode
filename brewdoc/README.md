@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 6.1.4 |
+| Version | 6.2.0 |
 | Skills | 5 |
 | Agents | 0 |
 | Hooks | 0 |
@@ -126,7 +126,7 @@ brewdoc/
 +-- skills/
     +-- docsync-setup/                # Doc-staleness tracker
     +-- my-claude/                    # Installation documentation
-    +-- memory-sync-setup/            # Memory-sync generator (references/: SKILL.md.template, memory-guide, agent-audit, hard-sync)
+    +-- memory-sync-setup/            # Memory-sync generator (references/: SKILL.md.template, memory-guide, agent-audit, hard-sync, prompting-guide)
     +-- md-to-pdf/                    # PDF conversion
     +-- publish/                      # brewpage.app publishing
 ```

@@ -116,6 +116,7 @@ When no flag provided AND input suggests compression (not just optimization):
 | Perception | P.1-P.6 | Examples near rules, hierarchy, bold keywords, standard symbols, instruction order, default over options |
 | LLM Comprehension | L.1-L.8 | Critical info position, documents-first, conciseness, quote-first, add WHY, reiterate constraint, prompt repetition, preserve scope qualifiers |
 | Aggressive lossy | A.1-A.4 | Line fusion, word drop, paraphrase, known-fact elision (deep/max) |
+| Prompt quality | PQ.1-PQ.13 | Role-first return contract, dedupe repeats, positive imperative (incident-tied `!=` kept), one hard-stop cap, drop step-by-step/verify filler, explicit scope, table-vs-procedure shape, example over adjective, DICT threshold gate — prompt-shaped content (system prompt/CLAUDE.md/agent def/skill doc), Medium+ only |
 
 > Full per-ID definitions live in `references/rules-review.md` (loaded at Step 0) — do not restate them here.
 
@@ -124,12 +125,13 @@ When no flag provided AND input suggests compression (not just optimization):
 | Mode | Applies | Notes |
 |------|---------|-------|
 | Light | C.1-C.8, T.6, D.1, R.1-R.3, P.1-P.4, L.1-L.8 | Text cleanup + exact-dup removal — no restructuring |
-| Medium | All rules (C + T + S + D + R + P + L) | Balanced transformations |
-| Standard | All rules (C + T + S + D + R + P + L) + `references/standard-compression.md` | 30-50% compression, human-readable, 1 verification round |
-| Deep | All rules (C + T + S + D + R + P + L) + A.1-A.4 + `references/deep-compression.md` | DICT header, symbol substitutions, aggressive lossy pass, 1-2 verification rounds (conditional) |
-| Max | All rules (C + T + S + D + R + P + L) + A.1-A.4 + `references/deep-compression.md` + `references/max-compression.md` | Atomic fact-lines, ASCII operators, format-aware tables, 4 mandatory guardrails, 2 verification rounds |
+| Medium | All rules (C + T + S + D + R + P + L) + PQ (prompt-shaped content) | Balanced transformations |
+| Standard | All rules (C + T + S + D + R + P + L) + PQ (prompt-shaped content) + `references/standard-compression.md` | 30-50% compression, human-readable, 1 verification round |
+| Deep | All rules (C + T + S + D + R + P + L) + PQ (prompt-shaped content) + A.1-A.4 + `references/deep-compression.md` | DICT header, symbol substitutions, aggressive lossy pass, 1-2 verification rounds (conditional) |
+| Max | All rules (C + T + S + D + R + P + L) + PQ (prompt-shaped content) + A.1-A.4 + `references/deep-compression.md` + `references/max-compression.md` | Atomic fact-lines, ASCII operators, format-aware tables, 4 mandatory guardrails, 2 verification rounds |
 
 > D.5 (cross-file dedup) applies in ANY mode when processing multiple files or a folder. D.6 wrong-merge guard is mandatory wherever D.2/D.3/D.5 run.
+> PQ (prompt-quality rewrite) applies at Medium mode and above, only when content type is a prompt-shaped target (system prompt/CLAUDE.md/agent def/skill doc) — never Light, never generic docs/README.
 
 ### D.5 is decided by the orchestrator, never by a per-file agent
 
@@ -420,6 +422,7 @@ the user can diff or delete it.
 | Snapshot first | No edit without a Phase 0 snapshot on disk and a clean tree over the targets. `!=` editing straight from the prompt |
 | Refuse, don't warn | A failed sub-gate restores the original bytes. A lossy file is never left in place with a warning attached |
 | Preserve | Names, numbers, dates, URLs, file paths, versions, ports, sizes |
+| Preserve | CLI flags/options verbatim; model IDs byte-exact; thresholds/gates/percentages exactly as stated |
 | Preserve | Negative rule semantics (`!=` notation in deep mode) |
 | Preserve | At least one example per rule with examples |
 | Preserve | Scope qualifiers ("every section, not just the first") — Opus 4.8 literalism (Max/Deep) |

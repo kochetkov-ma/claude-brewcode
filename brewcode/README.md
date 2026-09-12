@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 6.1.4 |
+| Version | 6.2.0 |
 | Skills | 9 |
 | Agents | 5 |
 | Hooks | 4 |
@@ -196,7 +196,7 @@ artifact running on an older version than the installed plugin.
 
 | Suite | Checks | Covers |
 |-------|--------|--------|
-| `agents/tests/suite-creator-contract.mjs` | 27 | Pins what `hook-creator`, `agent-creator` and `skill-creator` teach about the Claude Code hook/subagent API |
+| `agents/tests/suite-creator-contract.mjs` | 44 | Pins what `hook-creator`, `agent-creator` and `skill-creator` teach about the Claude Code hook/subagent API |
 | `hooks/tests/` | 68 | `session-start.mjs` |
 | `skills/teams-setup/tests/` | 65 | `toggle-team.sh` / `verify-team.sh` |
 | `skills/semble-setup/tests/` | 7 suites | core, agents, hooks, integration, project, status, telemetry |

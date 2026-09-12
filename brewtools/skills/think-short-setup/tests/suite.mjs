@@ -82,9 +82,9 @@ function subagentBody(promptFile) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Test 1: Counter — 21 sequential UserPromptSubmit calls
-// WHEN: calls 1-21 with same session_id
-// THEN: inject ONLY on 10 and 20; content == full prompt body
+// Test 1: Counter — 41 sequential UserPromptSubmit calls
+// WHEN: calls 1-41 with same session_id
+// THEN: inject ONLY on 20 and 40; content == full prompt body
 // ─────────────────────────────────────────────────────────────────────────────
 {
   const home  = join(BASE, 't1-home');
@@ -99,7 +99,7 @@ function subagentBody(promptFile) {
   const injectCounts = [];
   let t1ok = true;
 
-  for (let i = 1; i <= 21; i++) {
+  for (let i = 1; i <= 41; i++) {
     const stdin = JSON.stringify({ session_id: sid, prompt: `msg-${i}` });
     const r = run(COUNTER_MJS, stdin, env);
     if (r.status !== 0) { t1ok = false; break; }
@@ -113,10 +113,10 @@ function subagentBody(promptFile) {
     }
   }
 
-  if (t1ok && JSON.stringify(injectCounts) === JSON.stringify([10, 20])) {
-    pass('1-counter-inject-on-10-20', `injected at ${injectCounts}`);
+  if (t1ok && JSON.stringify(injectCounts) === JSON.stringify([20, 40])) {
+    pass('1-counter-inject-on-20-40', `injected at ${injectCounts}`);
   } else {
-    fail('1-counter-inject-on-10-20', `injected at ${injectCounts} ok=${t1ok}`);
+    fail('1-counter-inject-on-20-40', `injected at ${injectCounts} ok=${t1ok}`);
   }
 }
 
@@ -372,12 +372,12 @@ function subagentBody(promptFile) {
   writeFileSync(promptLive, readFileSync(PROMPT_PATH));
 
   const sid = 'session-disable-05';
-  // counter injects only every 10th prompt, so drive a FRESH session id to exactly 10
+  // counter injects only every 20th prompt, so drive a FRESH session id to exactly 20
   let driveNo = 0;
   const driveCounter = () => {
     driveNo++;
     let last = null;
-    for (let i = 1; i <= 10; i++) {
+    for (let i = 1; i <= 20; i++) {
       last = run(join(hooks, 'think-short-prompt-counter.mjs'),
         JSON.stringify({ session_id: `${sid}-drive-${driveNo}`, prompt: `m${i}` }), env);
     }
@@ -535,7 +535,7 @@ function subagentBody(promptFile) {
   const promptText = readFileSync(PROMPT_PATH, 'utf8').trimEnd();
   let ctx;
   const injectedAt = [];
-  for (let i = 1; i <= 10; i++) {
+  for (let i = 1; i <= 20; i++) {
     const r = run(COUNTER_MJS, JSON.stringify({ session_id: sid, prompt: `m${i}` }), env);
     const o = r.status === 0 ? JSON.parse(r.stdout) : {};
     if (o?.hookSpecificOutput?.additionalContext !== undefined) {
@@ -545,10 +545,10 @@ function subagentBody(promptFile) {
   }
   const mode = lstatSync(markerDir).mode & 0o777;
   const fileMode = lstatSync(join(markerDir, `${sid}.think-short-counter`)).mode & 0o777;
-  const ok = mode === 0o700 && fileMode === 0o600 && deepEqual(injectedAt, [10]) && ctx === promptText;
+  const ok = mode === 0o700 && fileMode === 0o600 && deepEqual(injectedAt, [20]) && ctx === promptText;
   const detail = `dir=0${mode.toString(8)} file=0${fileMode.toString(8)} injected=[${injectedAt}] ctx=${ctx === promptText}`;
   if (ok) pass('6d-counter-hardens-mode-and-counts', detail);
-  else     fail('6d-counter-hardens-mode-and-counts', `expected dir=0700 file=0600 injected=[10] ctx=true got ${detail}`);
+  else     fail('6d-counter-hardens-mode-and-counts', `expected dir=0700 file=0600 injected=[20] ctx=true got ${detail}`);
 }
 
 // 6e: concurrent bumps on one counter file leave it intact — a single integer,

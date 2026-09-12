@@ -108,6 +108,35 @@ Examples (before -> after):
 - A.3: "In the event that the build process does not complete successfully, notify the team" -> "build fails -> notify team"
 - A.4: "Write unit tests for new code, tests catch regressions. Coverage gate is 85% (jacoco); build fails below." -> "coverage gate 85% (jacoco), build fails below" (generic "write tests" elided -> ledger; project delta kept)
 
+**Lossless guard (any mode, A.2/A.4 never target these):** numbers, dates, versions, model IDs
+byte-exact (`claude-sonnet-5`, never "Sonnet 5"), CLI flags/options verbatim (`-x`, `--max`),
+thresholds/gates/percentages exactly as stated (`>=95%`, `~20%` ceiling), URLs, file paths, ports,
+sizes, named entities, negations (`!=`/NEVER/MUST NOT), scope qualifiers (L.8). A drop that touches
+any of these is not A.2/A.4 — it is a defect, caught by the 100% sub-gate.
+
+## PQ - Prompt-Quality Rewrite (digest of `.claude/reports/20260912-173000_agents-refresh/prompting-rules.md` R1-R16)
+
+Separate from the 52 numbered rules above (still 8 categories, unchanged count) — a rewrite pass for
+prompt-shaped targets (system prompt, agent `.md`, skill `SKILL.md`, hook prompt text, CLAUDE.md),
+applied Medium mode and above (never Light — Light stays wording-only, no restructuring). Stays
+lossless per the guard above: R1-R16 govern SHAPE and emphasis, never facts.
+
+| ID | Source | Transformation | Bad -> Good |
+|----|--------|-----------------|-------------|
+| PQ.1 | R1, R15 | Role in one sentence, Return contract next, Scope/Never after — before procedure detail | Role buried after 3 paragraphs of scope -> "You are a code reviewer. Return: findings list, `path:line`, verdict first." then Scope/Never as its own heading |
+| PQ.2 | R2 | Same instruction stated once; delete a cross-section repeat | "Never invent scope" stated, then restated 2 sentences later in other words -> keep the sharper phrasing once |
+| PQ.3 | R3 | Prohibition -> positive imperative, UNLESS the `!=`/NEVER guards a named, previously-observed failure | "Do not use markdown" -> "Write in flowing prose". Keep verbatim: `!=re-run text-guard.sh` (BT-F15 regression) |
+| PQ.4 | R4 | Drop scattered ALL-CAPS; keep exactly one true hard-stop (irreversible action) in caps, lower the rest | 4x MUST/CRITICAL in one file -> 1 STOP on the irreversible action (e.g. edit-without-snapshot), 3 become plain imperative |
+| PQ.5 | R5 | No "think step by step" or scripted step-lists for thinking-enabled models; no bare "verify"/"be careful" filler | "Think step by step and double-check" -> delete, or state the goal only |
+| PQ.6 | R6 (Opus-5-specific; apply cautiously to Sonnet/Fable) | Drop carried-over generic self-verification instructions; keep verification that is a specific, gated protocol with real thresholds | "Double-check your output before returning" (generic) -> delete. A named gate (`>=95% match, 100% sub-gate`) is not this pattern — keep it |
+| PQ.7 | R7 | An agent that itself delegates states an explicit delegate-only-when criterion, low spawn count | "delegate as needed" -> "delegate only for large independent parallelizable work; never to verify your own output" |
+| PQ.8 | R8 | State scope explicitly; never rely on the model generalizing a rule to similar items | "apply this rule" -> "apply this rule to every file matching X, not just the first" |
+| PQ.9 | R10 | Reference data (fields/flags/thresholds/model IDs) -> table. Real-dependency procedure -> numbered steps. Never mix the two shapes | A flag/target matrix written as prose -> table; a create-in-order procedure kept as numbered prose, not flattened into a table |
+| PQ.10 | R11 | A concrete example or named reference file beats an adjective ("clean", "thorough", "professional") | "write clean code" -> "follow the pattern in `skill-creator.md`" or a 2-line before/after |
+| PQ.11 | R13 | `[DICT: ...]` header only when it pays: >=5 distinct abbreviations, each reused >=3x, file itself hundreds of lines | A 150-line agent body with 3 abbreviations used twice each -> no DICT header, inline the 3 terms |
+| PQ.12 | R14 (recommendation, not a mandate — verify against the specific hook's own miss-rate first) | Recurring reminder text: once at session-start/compaction, throttle or drop the per-turn copy | A reminder injected on every `UserPromptSubmit` AND at session-start/after-compaction -> keep the structural-checkpoint copies, narrow the per-turn one |
+| PQ.13 | R16 | State "run independent tool calls in parallel" once per artifact, never per section | 3 sections each repeating the parallel-call instruction -> state it once, delete the other 2 |
+
 ## Rules NOT Recommended
 
 | Avoid | Reality |

@@ -15,6 +15,10 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 **Mention the target file and intent — the agent picks the right mode automatically.** LLM-only files (agents, rules, SKILL.md) default to `deep`; user-facing docs default to `standard`. Override with `-l`, `-s`, `-d`, or `-x` (opt-in) flags when needed. For skill-level access, see [`/brewtools:text-optimize`](/brewtools/skills/text-optimize/).
 </Callout>
 
+<Callout type="note" title="What's new in 6.2.0">
+Step 3b now runs a Prompt-quality rewrite (`PQ.1`-`PQ.13`) on prompt-shaped targets before the wording pass — see [Flow](#flow) for where it sits and [Return Contract](#return-contract) for the lossless guard it never crosses.
+</Callout>
+
 ## Quick reference
 
 | Field | Value |
@@ -24,6 +28,7 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 | Skills | [text-optimize](/brewtools/skills/text-optimize/) |
 | Triggers | "optimize prompt", "reduce tokens", "compress" |
 | Modes | `light`, `medium` (default), `standard` (30–50%, human-readable), `deep` (2–3×, LLM-only with DICT+symbols), `max` (opt-in, 3–4×, `-x`/`--max`) |
+| PQ pass | Medium+ only, prompt-shaped content only (system prompt / CLAUDE.md / agent def / skill `SKILL.md`) — 13 rules, `PQ.1`-`PQ.13`, never Light |
 | Scope | One bounded unit per run — one deliverable, ~5 files, ~10 steps |
 
 ## Scope guard
@@ -99,17 +104,23 @@ rewriting. Point it at one file or one tight group and it runs straight through.
   </li>
   <li>
     <div>
+      <strong>Prompt-quality pass — Step 3b (Medium+, prompt-shaped content only)</strong>
+      <p>For system prompt / CLAUDE.md / agent definition / skill <code>SKILL.md</code> targets, mode ≥ Medium (never Light): applies <code>rules-review.md</code>'s <code>## PQ</code> rules before Step 4's wording pass. Role in one sentence with the Return contract next (PQ.1); delete a same-instruction repeat (PQ.2); "don't do X" → "do Y", but an incident-tied <code>!=</code>/NEVER stays untouched (PQ.3); scattered ALL-CAPS collapse to one true hard-stop (PQ.4); delete "think step by step"/bare "verify" filler for a thinking-enabled target (PQ.5-PQ.6, PQ.6 is Opus-5-specific — apply cautiously to Sonnet/Fable); an agent that itself delegates states an explicit delegate-only-when criterion (PQ.7); table for reference data, numbered steps for a real-dependency procedure, never mixed (PQ.9); DICT only past the size/repetition threshold (PQ.11). Still lossless: PQ changes shape and emphasis, never a path, version, flag, threshold, or model ID.</p>
+    </div>
+  </li>
+  <li>
+    <div>
       <strong>Compress</strong>
       <p>Applies the ruleset for the chosen mode, escalating technique and target ratio:</p>
 
       | Mode | Adds | Target |
       |------|------|--------|
-      | Light/medium | Rule groups C → T → S → R → P (rules-review.md) | — |
+      | Light/Medium | Rule groups C → T → S → R → P (rules-review.md) — PQ already ran at Step 3b for Medium | — |
       | Standard | + filler removal, paragraph-to-bullet, prose-to-table | 30–50% |
-      | Deep | + DICT header (terms used 3+×), symbol substitutions, structural compression, aggressive lossy pass (A.1 fusion &rarr; A.3 paraphrase &rarr; A.2 word drop &rarr; A.4 known-fact elision) | 2–3× |
+      | Deep | + DICT header (terms used 3+×), symbol substitutions, structural compression, aggressive lossy pass (A.1 fusion &rarr; A.3 paraphrase &rarr; A.2 word drop &rarr; A.4 known-fact elision) | 2–3× (measured 2.2×–3.5× on worked examples, `wc -w`) |
       | Max (opt-in) | + atomic fact-lines, ASCII operator dialect, format-aware tables, Chain-of-Density pass, same aggressive lossy pass as deep | 3–4× |
 
-      Deep/max log every A.2 drop and A.4 elision to a loss ledger alongside the dedup ledger — A.1 fusions and A.3 paraphrases are not losses, they're recorded as merged/kept.
+      Deep/max log every A.2 drop and A.4 elision to a loss ledger alongside the dedup ledger — A.1 fusions and A.3 paraphrases are not losses, they're recorded as merged/kept. Each mode stops at a named condition, not a felt-right ratio — see Stop conditions on the [text-optimize skill page](/brewtools/skills/text-optimize/).
     </div>
   </li>
   <li>
@@ -139,14 +150,16 @@ rewriting. Point it at one file or one tight group and it runs straight through.
 
 | Content Type | Primary Rules | Default Mode |
 |--------------|---------------|--------------|
-| System prompt | C.1-C.8, T.1-T.8, T.10 | deep |
-| CLAUDE.md | S.1-S.8, T.1-T.8, T.10, D.1-D.6 | deep |
-| Agent definition | C.5, C.7, S.2, P.1 | deep |
-| Skill SKILL.md | S.6, P.1-P.6, R.1-R.3, L.1-L.8 | deep |
+| System prompt | C.1-C.8, T.1-T.8, T.10, PQ | deep |
+| CLAUDE.md | S.1-S.8, T.1-T.8, T.10, D.1-D.6, PQ | deep |
+| Agent definition | C.5, C.7, S.2, P.1, PQ | deep |
+| Skill SKILL.md | S.6, P.1-P.6, R.1-R.3, L.1-L.8, PQ | deep |
 | Documentation | T.1-T.8, T.10, S.1-S.8, D.1-D.6, L.1-L.8 | standard |
 | README | T.1-T.8, T.10, S.1-S.8, L.1-L.8 | standard |
 
-A.1-A.4 (aggressive lossy) apply whenever the resolved mode is deep or max, regardless of content type.
+A.1-A.4 (aggressive lossy) apply whenever the resolved mode is deep or max, regardless of content type. PQ applies at Medium mode and above, only for the four prompt-shaped rows above — never Light, never Documentation/README.
+
+**Lossless guard, unchanged by PQ:** numbers, dates, versions, model IDs byte-exact (`claude-sonnet-5`, never "Sonnet 5"), CLI flags/options verbatim (`-x`, `--max`), thresholds/gates/percentages exactly as stated (`>=95%`, `~20%`), URLs, file paths, ports, named entities, negations, scope qualifiers — never a valid A.2/A.4 drop or PQ edit target. Full rule table: [text-optimize skill page](/brewtools/skills/text-optimize/).
 
 **Verification thresholds:**
 - Light: no verification pass
@@ -161,7 +174,7 @@ A.1-A.4 (aggressive lossy) apply whenever the resolved mode is deep or max, rega
 
 ## Return Contract
 
-Verdict first, `<=30 lines`, `path:line` — never the optimized text, before/after excerpts, or the full ledgers pasted back into the reply. One line per file: sizes before → after, change %, semantic match %, rule IDs applied, verify pass/fail, dedup count. Ledgers and fact inventories go straight to `.claude/reports/YYYYMMDD-HHMMSS_text-optimize/report.md`; the reply returns that path plus the headline numbers.
+Verdict first, `<=30 lines`, `path:line` — never the optimized text, before/after excerpts, or the full ledgers pasted back into the reply. One line per file: `path` — words/chars/~tokens before → after, change %, ratio, semantic match % (the lossless check), rule IDs applied, verify pass/fail, dedup N merged / N emphasis capped. Ledgers and fact inventories go straight to `.claude/reports/YYYYMMDD-HHMMSS_text-optimize/report.md`; the reply returns that path plus the headline numbers.
 
 [`/brewtools:agent-return-setup`](/brewtools/skills/agent-return-setup/) enforces this at ~1000 / ~2500 est-tokens when installed; the contract itself ships unconditionally.
 

@@ -6,7 +6,7 @@ target hooks dir and wires `settings.json`. All 4 files travel together:
 | File | Event | Channel |
 |------|-------|---------|
 | `think-short-session.mjs` | SessionStart | `additionalContext` (full prompt) + resets per-session counter to 0 |
-| `think-short-prompt-counter.mjs` | UserPromptSubmit | `additionalContext` (full prompt) every 10th prompt (10,20,30,...) |
+| `think-short-prompt-counter.mjs` | UserPromptSubmit | `additionalContext` (full prompt) every 20th prompt (20,40,60,...) |
 | `think-short-subagent.mjs` | SubagentStart | `additionalContext` (FULL prompt body minus the `<!-- think-short -->` comment line) — SubagentStart contexts ACCUMULATE across hooks, so no coexistence/yield logic is needed |
 | `think-short-prompt.md` | (data) | prompt text, read by the 3 scripts from their OWN dir via `import.meta.url` |
 
@@ -417,7 +417,7 @@ echo "✅ removed files from $HOOKS_DIR" || echo "❌ FAILED"
 
 Run UNINSTALL above first, then delete the marker dir. Nothing of think-short's
 survives this; the markers are per-session counters, so losing them only resets the
-"every 10th prompt" count.
+"every 20th prompt" count.
 
 EXECUTE:
 ```

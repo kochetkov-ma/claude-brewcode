@@ -12,7 +12,11 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 </Callout>
 
 <Callout type="tip">
-**hook-creator knows all 31 events, 5 hook types, and the full routing matrix.** Describe what you want in plain language — it picks the right event, output channel, and schema, then delivers a working file with fail-safe error handling included.
+**hook-creator knows all 33 events, 5 hook types, and the full routing matrix.** Describe what you want in plain language — it picks the right event, output channel, and schema, then delivers a working file with fail-safe error handling included.
+</Callout>
+
+<Callout type="note" title="What's new in 6.2.0">
+Two new events: `PreModelSwitch` / `PostModelSwitch` (CC 2.1.251) — the only pair that gates something besides a tool call or a stop.
 </Callout>
 
 ## Quick reference
@@ -22,7 +26,7 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 | Trigger | "create hook", "PreToolUse hook", "debug hook" |
 | Model | `inherit` — runs on the session's model |
 | Tools | Read, Write, Edit, Glob, Grep, Bash, WebFetch, WebSearch |
-| Reference version | CC 2.1.233 — 31 events, 5 hook types |
+| Reference version | CC 2.1.269 — 33 events, 5 hook types |
 | Output | Hook file (`.sh` or `.mjs`) + config snippet + verification checklist |
 
 ## Scope guard
@@ -128,7 +132,7 @@ original input and the runner keeps only the last one's edit, so two hooks writi
 other. Prefer `additionalContext` for instruction injection; reserve `updatedInput` for a single
 owning hook.
 
-### All 31 events
+### All 33 events
 
 | Event | Blocking? | Key use |
 |-------|-----------|---------|
@@ -163,6 +167,8 @@ owning hook.
 | UserPromptExpansion | Yes | Blocks a `/command` from expanding — the path PreToolUse cannot reach when the user types `/skillname` directly |
 | PostToolBatch | Yes | Fires once per batch of tool calls, before the next model call; stops the agentic loop on block |
 | DirectoryAdded | No | Fires after `--add-dir` / `/add-dir` completes; `continue` is discarded, the directory is already added |
+| PreModelSwitch | Yes | Allow / deny / ask before a model switch (auto-routing, `/model`, cost-based downgrade); timeout blocks the switch — the only blocking event whose timeout blocks instead of failing open (CC 2.1.251) |
+| PostModelSwitch | No | Reacts after the switch already happened; same fields plus `source` also `auto`/`resume` (CC 2.1.251) |
 
 ### Hook types
 
@@ -199,6 +205,19 @@ For `agent`-type hooks: the spawned subagent inherits the session's `permissionM
 A **post-session lifecycle hook** runs after a session ends and before the workspace is deleted. This is **NOT a hooks.json event** — do not add it to `hooks.json`; it will be silently ignored. It is available only on **self-hosted runners** as a workspace lifecycle callback configured at the runner level. (CC 2.1.169)
 
 </details>
+
+## Reference files (read on demand)
+
+Hook Creator keeps the event catalog, routing matrix, type/config precedence, environment variables, templates, and changelog out of this page's body — same on-demand pattern the source file itself uses. Read the one that matches what you're doing; skip the rest.
+
+| File | What it holds |
+|------|---------------|
+| [`hooks-events.md`](https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/agents/references/hooks-events.md) | Full 33-event table, session lifecycle order, matcher syntax, sync/async behavior |
+| [`hooks-io-contract.md`](https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/agents/references/hooks-io-contract.md) | Routing matrix, exit-code tables, every output schema, the 10,000-char output cap |
+| [`hooks-types-config.md`](https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/agents/references/hooks-types-config.md) | Type/field catalog for `command`/`http`/`mcp_tool`/`prompt`/`agent`, config precedence |
+| [`hooks-env.md`](https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/agents/references/hooks-env.md) | Every environment variable a hook process sees, resolving the project root inside a hook |
+| [`hooks-templates.md`](https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/agents/references/hooks-templates.md) | Bash/JS skeletons, fail-safe design, the pre-ship validation checklist |
+| [`hooks-changes.md`](https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/agents/references/hooks-changes.md) | What changed 2.1.234 -> 2.1.269, full version history, known bugs |
 
 ## Return Contract
 

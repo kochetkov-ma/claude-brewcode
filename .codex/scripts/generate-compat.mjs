@@ -32,6 +32,15 @@ const MANUAL_NATIVE_SKILLS = new Set([
   'brewtools/think-short-setup'
 ]);
 
+// brewcode/agents references that are pure Claude Code runtime documentation (env vars, hook
+// event tables, version changelogs) with no Codex counterpart. Excluded from the mirror here;
+// validate-compat.mjs's resourceTarget carries the matching exclusion.
+const CLAUDE_ONLY_AGENT_REFERENCES = [
+  'references/agent-context-and-execution.md', 'references/agent-known-issues.md', 'references/agent-scope-and-tools.md',
+  'references/hooks-changes.md', 'references/hooks-env.md', 'references/hooks-events.md', 'references/hooks-templates.md',
+  'references/hooks-types-config.md'
+];
+
 // Etalon-first wording mirrored into the Codex variants. Sources of truth:
 // brewcode/skills/teams-setup/references/agent-template.md and
 // brewtools/skills/manager-setup/references/architect.md. Edit here only, never at the call sites.
@@ -278,6 +287,49 @@ function writeFile(file, content, mode) {
   if (mode !== undefined) fs.chmodSync(file, mode);
 }
 
+// Per-file, exact-text overrides applied AFTER the generic substitution chain. Reserved for the rare
+// passage where the corpus-wide word substitution turns a fact that is true for Claude Code into one
+// that is false for Codex, and no single global rule can fix it without also mangling unrelated text.
+// Keyed by the file's path relative to REPO_ROOT, taken BEFORE the claude-md -> agents-md rename.
+// Each `exactFrom` must still be present in the text nativeWorkflowText already produced; if a source
+// edit moves the passage, the mismatch throws immediately instead of silently shipping a stale claim.
+const TEXT_OVERRIDES = {
+  'brewtools/skills/task-board-setup/references/07-claude-md-optimize.md': [
+    [
+      '> - Subdirectory (nested) AGENTS.md: **NOT loaded at launch -- loaded ON-DEMAND when Codex reads a file in that subtree.**',
+      '> - Subdirectory (nested) AGENTS.md: **NOT on-demand -- concatenated ONCE at session start.** Codex walks git root -> CWD and concatenates every AGENTS.md it finds into one instruction chain, capped by `project_doc_max_bytes` (32 KiB default; later/nested files are dropped first over the cap); a nested AGENTS.md wins for its own subtree only because it sits later in that one concatenation (verified: https://developers.openai.com/codex/guides/agents-md, 2026-09-12).'
+    ],
+    [
+      '> 1. Move detail for modules `<M1, M2, ...>` into per-module AGENTS.md (loaded on-demand, shrinks always-on context). Root keeps a 2-line module index.  [est -X lines]',
+      '> 1. Move detail for modules `<M1, M2, ...>` into per-module AGENTS.md (it overrides root for that subtree and keeps root short so `project_doc_max_bytes` never truncates it). Root keeps a 2-line module index.  [est -X lines]'
+    ],
+    [
+      '2. Write/extend `<MOD.dir>/AGENTS.md` (a NESTED file -- this is what gives on-demand loading). If `has_own_cmd`, MERGE (Edit), do not clobber. Improve markup (headers, tables, bullets).',
+      '2. Write/extend `<MOD.dir>/AGENTS.md` (a NESTED file -- this is what makes it override the root for that subtree). If `has_own_cmd`, MERGE (Edit), do not clobber. Improve markup (headers, tables, bullets).'
+    ],
+    [
+      '   ## Modules (each has its own AGENTS.md, loaded on-demand when you work in it)',
+      '   ## Modules (each has its own AGENTS.md, which overrides this file for that subtree)'
+    ],
+    [
+      '> Rationale to state in the proposal: nested AGENTS.md loads ONLY when Codex touches that subtree, so module detail leaves the always-on root context. Do NOT use `@import` here -- imports are eager and would not save context.',
+      '> Rationale to state in the proposal: a nested AGENTS.md overrides root for its own subtree (both are concatenated at session start, nested last, so nested wins) and keeps root short so `project_doc_max_bytes` never truncates it. Codex has no `@import`-style eager-include mechanism at all, so that concern does not apply here.'
+    ]
+  ]
+};
+
+function applyTextOverrides(relativeSourcePath, text) {
+  const pairs = TEXT_OVERRIDES[relativeSourcePath];
+  if (!pairs) return text;
+  for (const [exactFrom, to] of pairs) {
+    if (!text.includes(exactFrom)) {
+      throw new Error(`TEXT_OVERRIDES entry for ${relativeSourcePath} no longer matches the generated text: ${JSON.stringify(exactFrom)}`);
+    }
+    text = text.split(exactFrom).join(to);
+  }
+  return text;
+}
+
 function copyTransformedTree(sourceDir, targetDir) {
   const entries = fs.readdirSync(sourceDir, { withFileTypes: true })
     .sort((left, right) => left.name.localeCompare(right.name));
@@ -296,7 +348,8 @@ function copyTransformedTree(sourceDir, targetDir) {
     if (data.includes(0)) {
       fs.writeFileSync(target, data);
     } else {
-      fs.writeFileSync(target, nativeWorkflowText(data.toString('utf8'), { shell: isShellAsset(target) }), 'utf8');
+      const transformed = nativeWorkflowText(data.toString('utf8'), { shell: isShellAsset(target) });
+      fs.writeFileSync(target, applyTextOverrides(path.relative(REPO_ROOT, source), transformed), 'utf8');
     }
     fs.chmodSync(target, fs.statSync(source).mode & 0o777);
   }
@@ -619,7 +672,10 @@ function copySelected(source, target) {
   const data = fs.readFileSync(source);
   fs.mkdirSync(path.dirname(target), { recursive: true });
   if (data.includes(0)) fs.writeFileSync(target, data);
-  else fs.writeFileSync(target, nativeWorkflowText(data.toString('utf8'), { shell: isShellAsset(target) }), 'utf8');
+  else {
+    const transformed = nativeWorkflowText(data.toString('utf8'), { shell: isShellAsset(target) });
+    fs.writeFileSync(target, applyTextOverrides(path.relative(REPO_ROOT, source), transformed), 'utf8');
+  }
   fs.chmodSync(target, fs.statSync(source).mode & 0o777);
 }
 
@@ -1485,6 +1541,14 @@ esac
       for (const [from, to] of replacements) value = value.replaceAll(from, to);
       fs.writeFileSync(file, value, 'utf8');
     }
+  }
+
+  if (plugin === 'brewcode' && skill === 'agents') {
+    // These document Claude Code's own env vars, hook event catalog, and SA runtime -- literal
+    // facts (`CLAUDE_CODE_*` names, version changelogs) with no Codex equivalent, since Codex's
+    // native agent/hook model is unrelated. Drop them rather than mistranslate; the
+    // frontmatter/template/io-contract references stay mirrored as genuinely portable guidance.
+    for (const name of CLAUDE_ONLY_AGENT_REFERENCES) fs.rmSync(path.join(targetDir, name), { force: true });
   }
 
   if (plugin === 'brewtools' && skill === 'manager-setup') {

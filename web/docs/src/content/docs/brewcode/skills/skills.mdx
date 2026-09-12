@@ -9,6 +9,10 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 
 <Callout type="tip" title="Prompt-driven">Give a free-form prompt; the skill auto-selects a mode and tells you why. Status is the default — a list only on explicit request.</Callout>
 
+<Callout type="note" title="What's new in 6.2.0">
+`validate-skill.sh` checks 11-14; 4 new references for `skill-creator` — see Validation.
+</Callout>
+
 ## Quick reference
 
 | Field | Value |
@@ -105,6 +109,24 @@ Reachable ONLY via create/improve modes.
 **Description budget:** `<= 120` chars, single line, trigger keywords included. One number, enforced in both places — the authoring rule in `SKILL.md` and the review checklist in `references/review-prompt.md` — so a skill written to spec passes its own review. The bound is empirical: 16 of the 27 shipped skills sit at or under 120 characters (95-118); the rest run long, up to 410.
 
 **Specialist:** `brewcode:skill-creator` agent.
+
+</details>
+
+<details>
+<summary>Validation — `validate-skill.sh`</summary>
+
+Every create/improve pass ends with `validate-skill.sh path/to/skill` (Step 6 of the `skill-creator` agent). Checks 1-10 cover structure: YAML delimiters, `name` casing/length/dir-match, `description` caps, body size, the `EXECUTE` keyword on bash blocks, Prompt Contract shape. Four additional checks, all additive — none can fail a previously-passing skill:
+
+| Check | Severity | What it catches |
+|-------|----------|------------------|
+| 11 | warning | Unknown top-level frontmatter key — not in the 20 native SKILL.md fields or the house custom keys |
+| 12 | fail | A bare top-level `once:` — it is a suboption of a hook entry (`hooks.<Event>[].hooks[].once`), never a sibling of `name`/`description` |
+| 13 | warning | `agent:` set to anything outside the three confirmed built-ins (`Explore`, `Plan`, `general-purpose`) — legitimate only if it names a real custom agent |
+| 14 | fail | A UTF-8 BOM at the start of `SKILL.md` — silently ignored by Claude Code before 2.1.239 |
+
+The summary line now reports three counts: `N passed, N failed, N warned`.
+
+`brewcode:skill-creator`'s knowledge base grew to four reference files it reads on demand instead of keeping inline: `references/frontmatter-fields.md` (full 20-field catalog), `references/design-patterns.md` (structure patterns, resource-path rules), `references/execution-model.md` (context modes, spawning, tool grants), `references/activation-and-troubleshooting.md` (description budget, `/skill-doctor`, known bugs).
 
 </details>
 

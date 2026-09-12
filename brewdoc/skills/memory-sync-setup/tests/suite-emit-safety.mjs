@@ -4,7 +4,7 @@
  *
  * Regression cover for the whole-directory replace on emit (`rm -rf $TARGET && mv`):
  * it deleted a PARKED SKILL.md.disabled and every file `uninstall` had just reported
- * as KEPT. Emit owns exactly 4 paths (SKILL.md + 3 references) and must place them
+ * as KEPT. Emit owns exactly 5 paths (SKILL.md + 4 references) and must place them
  * individually; anything else in the skill dir belongs to the user.
  *
  * Each case runs the real generator as a child process against its own mkdtemp root
@@ -60,7 +60,8 @@ const write = (p, body) => { mkdirSync(dirname(p), { recursive: true }); writeFi
     existsSync(join(root, SKILL, 'references/memory-guide.md')),
     existsSync(join(root, SKILL, 'references/agent-audit.md')),
     existsSync(join(root, SKILL, 'references/hard-sync.md')),
-  ], [true, true, true, true]);
+    existsSync(join(root, SKILL, 'references/prompting-guide.md')),
+  ], [true, true, true, true, true]);
 }
 
 // ── 2. uninstall KEEPS a user file, and the next emit must not undo that ───────
@@ -119,7 +120,7 @@ const write = (p, body) => { mkdirSync(dirname(p), { recursive: true }); writeFi
   check('FORCE emit overwrote the hand-edit', read(skill).includes('HAND EDIT'), false);
 }
 
-// ── 5. a FORCE emit still owns only its own 4 paths ────────────────────────────
+// ── 5. a FORCE emit still owns only its own 5 paths ────────────────────────────
 {
   const root = project('force-keeps-foreign');
   run(root, 'emit');

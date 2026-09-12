@@ -23,6 +23,7 @@ is_exempt_skill() {
 
 PASS=0
 FAIL=0
+WARN=0
 
 check() {
     if [ "$1" = "ok" ]; then
@@ -32,6 +33,13 @@ check() {
         FAIL=$((FAIL + 1))
         echo "❌ $2"
     fi
+}
+
+# Additive, non-fatal: a row here never fails the check — it flags something worth a human
+# glance without breaking any of the 28 skills shipping today.
+warn() {
+    WARN=$((WARN + 1))
+    echo "⚠️  $1"
 }
 
 # 1. No lowercase skill.md (ls -1 for exact case on case-insensitive FS)
@@ -60,8 +68,16 @@ else
     check fail "Frontmatter missing --- delimiters (found $FM_COUNT, need 2+)"
 fi
 
-# Extract frontmatter block (between first two --- lines)
-FRONTMATTER=$(sed -n '/^---$/,/^---$/{ /^---$/d; p; }' "$SKILL_FILE" 2>/dev/null || true)
+# Extract frontmatter block: strictly the lines between the FIRST two --- delimiters, by line
+# number. A naive sed range (`/^---$/,/^---$/`) restarts every time it closes, so a `---`
+# horizontal rule anywhere in the body reopens it and appends body text into $FRONTMATTER —
+# several skills use `---` as a divider, which silently poisoned frontmatter-keyed checks.
+FM_CLOSE=$(grep -n '^---$' "$SKILL_FILE" 2>/dev/null | sed -n '2s/:.*//p')
+if [ -n "${FM_CLOSE:-}" ] && [ "$FM_CLOSE" -gt 1 ] 2>/dev/null; then
+    FRONTMATTER=$(sed -n "2,$((FM_CLOSE - 1))p" "$SKILL_FILE" 2>/dev/null || true)
+else
+    FRONTMATTER=""
+fi
 
 # 4. name field: present, bare kebab-case, max 64 chars, equal to the directory name.
 # A `plugin:` prefix here is a defect: Claude Code prepends the plugin name itself, so
@@ -103,10 +119,7 @@ else
 fi
 
 # 6. Body (content after frontmatter) is non-empty.
-# Everything AFTER the frontmatter's closing `---`. A range-negation sed (`/^---$/,/^---$/!p`)
-# pairs later `---` lines with each other and silently drops whole body chunks — several skills
-# use `---` as a horizontal rule, and checks 8-10 then read a mutilated body.
-FM_CLOSE=$(grep -n '^---$' "$SKILL_FILE" 2>/dev/null | sed -n '2s/:.*//p')
+# Everything AFTER the frontmatter's closing `---` (FM_CLOSE, computed above).
 BODY=$(tail -n +"$((${FM_CLOSE:-0} + 1))" "$SKILL_FILE" 2>/dev/null | grep -v '^$' || true)
 if [ -z "$BODY" ]; then
     check fail "Body content after frontmatter is empty"
@@ -213,7 +226,59 @@ else
     fi
 fi
 
+# 11. Unknown top-level frontmatter key -> warning, never fail. Allow-list = the 20 native
+# SKILL.md fields (brewcode/skills/skills/references/frontmatter-fields.md) plus the house
+# custom keys actually in use or documented for future use (grepped across all 28 shipped
+# SKILL.md frontmatters, plus `cli`/`version` from skills/SKILL.md's own contract).
+ALLOWED_KEYS="name description when_to_use disable-model-invocation user-invocable arguments \
+argument-hint allowed-tools disallowed-tools model effort context background agent hooks paths \
+shell metadata license compatibility cli version content_version generated_by last_updated \
+doc_type surface_files"
+FM_KEYS=$(echo "$FRONTMATTER" | grep -E '^[a-zA-Z_-]+:' | sed -E 's/^([a-zA-Z_-]+):.*/\1/' | sort -u || true)
+UNKNOWN_KEYS=""
+for k in $FM_KEYS; do
+    case " $ALLOWED_KEYS " in
+        *" $k "*) ;;
+        *) UNKNOWN_KEYS="$UNKNOWN_KEYS $k" ;;
+    esac
+done
+if [ -n "$UNKNOWN_KEYS" ]; then
+    warn "Unknown frontmatter key(s):$UNKNOWN_KEYS -- not in the 20 native fields or house custom keys (see references/frontmatter-fields.md); verify before shipping, or use metadata: for free-form data"
+else
+    check ok "All frontmatter keys recognized"
+fi
+
+# 12. Bare top-level 'once:' — it is a suboption of a hook entry
+# (hooks.<Event>[].hooks[].once), never a sibling of name/description. Fatal: this shape
+# never worked, so flagging it can never break a previously-passing skill.
+if echo "$FRONTMATTER" | grep -qE '^once:'; then
+    check fail "'once' found as a top-level frontmatter field -- it is a suboption of a hook entry (hooks.<Event>[].hooks[].once), not a sibling of name/description"
+else
+    check ok "No top-level 'once' field"
+fi
+
+# 13. agent: value outside the confirmed built-in set -> warning, not fail. A real custom
+# agent under .claude/agents/ or ~/.claude/agents/ is legitimate; only devs naming a
+# nonexistent built-in (developer/tester/reviewer) are actually broken, and this script has
+# no way to tell the two apart from the frontmatter alone.
+AGENT_VAL=$(echo "$FRONTMATTER" | grep -E '^agent:' | head -1 | sed 's/^agent:[[:space:]]*//' | tr -d '"' | tr -d "'" || true)
+if [ -n "$AGENT_VAL" ]; then
+    case "$AGENT_VAL" in
+        Explore|Plan|general-purpose) check ok "agent: '$AGENT_VAL' is a built-in SA type" ;;
+        *) warn "agent: '$AGENT_VAL' is not one of the confirmed built-ins (Explore, Plan, general-purpose) -- fine only if '$AGENT_VAL' is a real custom agent under .claude/agents/ or ~/.claude/agents/" ;;
+    esac
+fi
+
+# 14. UTF-8 BOM at file start. Files starting with a BOM were silently ignored by CC before
+# 2.1.239; flag regardless of CC version so authoring stays clean.
+BOM=$(head -c 3 "$SKILL_FILE" 2>/dev/null | od -An -tx1 | tr -d ' \n' || true)
+if [ "$BOM" = "efbbbf" ]; then
+    check fail "UTF-8 BOM detected at file start -- strip it (files starting with a BOM were silently ignored by CC before 2.1.239; keep authoring clean regardless)"
+else
+    check ok "No UTF-8 BOM"
+fi
+
 # Summary
 echo ""
-echo "=== Result: $PASS passed, $FAIL failed ==="
+echo "=== Result: $PASS passed, $FAIL failed, $WARN warned ==="
 [ "$FAIL" -eq 0 ] && exit 0 || exit 1

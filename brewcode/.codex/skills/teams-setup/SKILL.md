@@ -7,7 +7,7 @@ description: "Creates and manages dynamic teams of domain agents. Triggers: crea
 
 Use collaboration agents only when the user or project instructions explicitly request a team. Split work into bounded independent tasks, keep one owner per file or surface, exchange evidence through collaboration messages, and synthesize results in the parent session. Do not invent unsupported agent parameters or create persistent team configuration unless requested.
 
-<!-- brewcode-meta: version=6.1.4 content_version=6.1.0 generated_by=brewcode:teams-setup -->
+<!-- brewcode-meta: version=6.2.0 content_version=6.2.0 generated_by=brewcode:teams-setup -->
 
 ## Native authority
 

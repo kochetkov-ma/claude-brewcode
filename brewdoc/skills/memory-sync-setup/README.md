@@ -81,11 +81,11 @@ generator calibrates them on real examples harvested from the target's own rules
 | Mode | Writes | What runs |
 |------|--------|-----------|
 | `status` (default when installed) | nothing | Is `memory-sync` installed, what does its provenance frontmatter say (`doc_type` / `version` / `generated_by` / `last_updated` / `surface_files`), and how stale are its surface tables vs the live repo (baked `surface_files` count vs enumerated now, dead paths, layers gained). Verdict: `IN SYNC` / `STALE (n drifts)` / `STALE-LEGACY (n drifts)` / `NOT INSTALLED`, prefixed `PARKED - ` when the install is disabled -- parked is never reported as missing |
-| `install` (default when not installed) | the 4 emitted files | Full analysis + emit. Refuses an existing installation |
+| `install` (default when not installed) | the 5 emitted files | Full analysis + emit. Refuses an existing installation |
 | `upgrade` | targeted edits | Re-scan and refresh an existing installation: re-enumerate the surface, refresh the batch / fact / invariant tables, add sections for new memory layers, then ALWAYS finish with `generate.sh restamp` so the provenance stamp reaches the current plugin version. **Hand-edits are preserved** -- the emitted skill is expected to have self-modified. Never blind-overwrite |
 | `enable` | renames one file | Restores a parked install: `SKILL.md.disabled` -> `SKILL.md`. Claude Code discovers a project skill only through an exact `SKILL.md`, so the rename is the whole switch |
 | `disable` | renames one file | Parks the install: `SKILL.md` -> `SKILL.md.disabled`. `/memory-sync` stops resolving in the NEXT session; the references, the provenance frontmatter and every hand-edit stay byte-identical, ready for `enable` |
-| `uninstall` | deletes the emitted files | Removes exactly what the generator emitted -- `SKILL.md` (or `SKILL.md.disabled`) plus the 3 files in `references/`. Anything you added to that dir yourself is KEPT and listed. The dir is removed only if it ends up empty |
+| `uninstall` | deletes the emitted files | Removes exactly what the generator emitted -- `SKILL.md` (or `SKILL.md.disabled`) plus the 4 files in `references/`. Anything you added to that dir yourself is KEPT and listed. The dir is removed only if it ends up empty |
 | `purge` | deletes `.claude/skills/memory-sync/` | The whole dir, hand-added files included, plus any `.memory-sync-emit.*` staging left by a crashed emit |
 
 Canonical order: `status | install | upgrade | enable | disable | uninstall | purge`. No argument = `status` when
@@ -150,6 +150,7 @@ Then run the emitted skill in that project:
 | `references/memory-guide.md` | Emitted: where-does-it-belong decision tree, compression patterns, obvious vs domain facts |
 | `references/agent-audit.md` | Emitted: the agent + skill re-audit procedure run on every sweep |
 | `references/hard-sync.md` | Emitted: the two `HARD`-depth deletion passes (`paths:` precision audit, obvious-knowledge purge) + their reporting contract |
+| `references/prompting-guide.md` | Emitted: merged Claude 5 + OpenAI/Codex prompting-quality rule table + lossless guard, applied in Phase 2/3 |
 
 ## Re-run triggers
 

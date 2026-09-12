@@ -9,6 +9,10 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 
 <Callout type="tip" title="Prompt-driven">Give a free-form prompt; the skill auto-selects a mode and tells you why. No keyword grammar.</Callout>
 
+<Callout type="note" title="What's new in 6.2.0">
+`references/` now ships 11 on-demand files for `agent-creator` (`agent-*.md`) and `hook-creator` (`hooks-*.md`) — see [Reference files](#reference-files).
+</Callout>
+
 ## Quick reference
 
 | Field | Value |
@@ -61,6 +65,26 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | review | "ревью" / "review" / "validate" / "проверь корректность" | Single reviewer — the project's agent from `.claude/agents/`, else `general-purpose` — two-phase: review, then double-check the findings |
 | sync | `sync`, `синк`, `memory sync`, `актуализируй`, `обнови знания`, `приведи в соответствие с кодом` | Memory sync: rewrites agent files against ground truth via the shared reference; non-growth guaranteed |
 | batch | auto-detected fan-out flag | Not a menu item — auto-detected from plural form, "все" / "all", or multiple names/paths; triggers parallel delegation when creating or improving multiple agents |
+
+## Reference files
+
+`agent-creator` and `hook-creator` used to carry all of this inline; it now lives in this skill's
+own `references/` directory and each agent reads only the file it needs, on demand. 11 files, each
+under 200 lines.
+
+| File | Used by | Holds |
+|------|---------|-------|
+| [agent-frontmatter-fields.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/agent-frontmatter-fields.md) | agent-creator | AG file format, frontmatter field reference (incl. `experimental.cacheTtl`) |
+| [agent-scope-and-tools.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/agent-scope-and-tools.md) | agent-creator | Available tools, model precedence, scope rules |
+| [agent-context-and-execution.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/agent-context-and-execution.md) | agent-creator | Subagent context inheritance, execution modes, resource limits |
+| [agent-template.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/agent-template.md) | agent-creator | Description budget, system-prompt structure, guardrails, validation checklist |
+| [agent-known-issues.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/agent-known-issues.md) | agent-creator | Known bugs, limitations, version history, debugging |
+| [hooks-events.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/hooks-events.md) | hook-creator | Session lifecycle order, 33-event table, matcher pattern syntax |
+| [hooks-io-contract.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/hooks-io-contract.md) | hook-creator | Stdin fields, message-routing matrix, exit codes, output schemas |
+| [hooks-types-config.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/hooks-types-config.md) | hook-creator | 5 hook types and their config fields, precedence |
+| [hooks-env.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/hooks-env.md) | hook-creator | Env vars, sensitive-path prompt, project-root resolution |
+| [hooks-templates.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/hooks-templates.md) | hook-creator | Bash/JS hook skeletons, fail-safe design rules, pre-ship checklist |
+| [hooks-changes.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/hooks-changes.md) | hook-creator | Version history 2.1.234 → 2.1.269, known bugs |
 
 ## Delegation
 

@@ -2,17 +2,17 @@
 
 ```
 [REVIEW DISCIPLINE: ANTI-REGRESSION]
-After every significant phase, run a review. ONE primary focus, three axes:
-  1. NO REGRESSION (primary) - new code must not break existing behavior.
+Every significant phase: one review, three axes (regression primary):
+  1. NO REGRESSION - new code must not break existing behavior.
   2. Project standard - follows existing conventions/patterns.
-  3. Functional correctness - the new functionality actually works.
-Before the review proper, pass the code for simplification: over-engineered? simpler?
-Review is two-phase, always:
+  3. Functional correctness - the new functionality works.
+Simplification pass first (over-engineered? simpler?), then always
+two-phase:
   a. Review - find issues.
   b. Double-check - re-verify each finding before acting (no blind fixes).
   c. Fix - confirmed findings only, then re-review the fix.
-At task end: mandatory FINAL cross-review across all phases (regression first).
-Use independent reviewers for significant changes: split a large review by area
-across several, never one long pass. Brief each with goal + its area + acceptance,
-what is already reviewed and must not be re-litigated, and who consumes the verdict.
+Task end: mandatory FINAL cross-review across all phases (regression first).
+Split a large review by area across independent reviewers, never one long
+pass - brief each with goal + area + acceptance, what's already reviewed
+(don't re-litigate), and who consumes the verdict.
 ```

@@ -15,6 +15,10 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 **52 validated rules, five modes, parallel processing.** The skill reads your files, applies the right rule set for the mode, verifies references, and reports exact before/after metrics. For humanizing AI-generated text, see [`/brewtools:text-human`](/brewtools/skills/text-human/).
 </Callout>
 
+<Callout type="note" title="What's new in 6.2.0">
+A Prompt-quality pass (PQ.1-PQ.13) now runs at Medium mode and above — see [Prompt-quality pass (PQ)](#prompt-quality-pass-pq) under Delegation. Every mode also stops at a named [stop condition](#stop-conditions) instead of a felt-right ratio.
+</Callout>
+
 ## Quick reference
 
 | Field | Value |
@@ -45,6 +49,18 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 **Auto-detection:** when no flag is given, the skill reads the file path and header. `CLAUDE.md`, `.claude/rules/*.md`, `KNOWLEDGE.*` → deep candidate. `README.md`, `docs/` → standard candidate. Ambiguous → asks via `AskUserQuestion`. **Max is never auto-selected** — requires an explicit `-x`/`--max` flag or an explicit max/extreme compress hint.
 
 **Every mode is guarded on disk.** Before any file is touched, the skill snapshots each target byte-for-byte into a private run directory under `.claude/reports/` — the git tree over the targets must be clean first, or the run refuses. After the optimization pass, a mechanical script diffs the snapshot against the result and checks that every number, version, file path, `!=` prohibition, and ALL-CAPS modal keyword (`NEVER`, `ALWAYS`, `MUST NOT`, `REQUIRED`, `MANDATORY`) is still present. A single miss restores the file to its pre-edit bytes and reports exactly what vanished — this applies to every mode, light included, not just standard/deep/max. Standard, deep, and max additionally run an independent semantic gate on top (see Verification in the flow below).
+
+**Measured, not assumed.** Deep mode's own worked examples land at 2.2x-3.5x compression (`wc -w`) — one 248-word block compresses to 94 words, -62.1%, 2.64x. Standard's filler-heavy example: 59 → 19 words, -67.8%. Max's table-to-TSV conversion: 26 → 12 words, -53.8%. The mode table's 30-50% / 2-3x / 3-4x targets are typical ranges, not a number to force — reaching the stop condition below is what ends the pass.
+
+### Stop conditions
+
+Standard, deep, and max each stop at a named trigger, never a felt-right ratio:
+
+| Mode | Stops the moment | Reference |
+|------|-------------------|-----------|
+| Standard | The next cut would touch a name/number/path/version/flag, or a merge would combine facts with different scope/numbers/conditions (D.6) | `standard-compression.md` § Stop Condition |
+| Deep | An A.2 drop would touch a noun/numeral/negation/entity, an A.4 candidate isn't clearly generic training-knowledge, the DICT header would exceed 20 entries, or a term used `<3x` would get a DICT entry | `deep-compression.md` § Stop Condition |
+| Max | The 20% deletion ceiling would be crossed, a B1 atomic line would need a cross-line pronoun to stay readable, or Round-2 self-QA misses a number/name/negation/scope qualifier | `max-compression.md` § Stop Condition |
 
 ## Examples
 
@@ -103,7 +119,7 @@ Natural language works **as arguments after the command** — the skill is user-
   <li>
     <div>
       <strong>Optimization phase</strong>
-      <p>Parallel <code>text-optimizer</code> agents apply the rule set for the selected mode. Deep mode builds a DICT header for repeated terms and runs an aggressive lossy pass (A.1-A.4) — merges related lines, drops low-value words, paraphrases shorter, and elides generic facts the model already knows; A.2 word drops are ledgered but gate-neutral, A.4 elisions are labeled <code>elided-known</code> and count against the &gt;=95% gate. Standard mode loads <code>standard-compression.md</code> reference. All modes verify file paths (R.1), URLs (R.2), and circular refs (R.3).</p>
+      <p>Parallel <code>text-optimizer</code> agents apply the rule set for the selected mode. Medium mode and above additionally run the Prompt-Quality pass (PQ.1-PQ.13, prompt-shaped content only) before the wording pass — see Prompt-quality pass (PQ) above. Deep mode builds a DICT header for repeated terms and runs an aggressive lossy pass (A.1-A.4) — merges related lines, drops low-value words, paraphrases shorter, and elides generic facts the model already knows; A.2 word drops are ledgered but gate-neutral, A.4 elisions are labeled <code>elided-known</code> and count against the &gt;=95% gate. Standard mode loads <code>standard-compression.md</code> reference. All modes verify file paths (R.1), URLs (R.2), and circular refs (R.3).</p>
     </div>
   </li>
   <li>
@@ -150,6 +166,23 @@ Every spawn prompt carries six fields. A bare one-line task is never enough:
 
 The CONSUMER field is what keeps a parallel run coherent: a heading renamed without care breaks a sibling agent's cross-reference in the same batch.
 
+### Prompt-quality pass (PQ)
+
+Medium mode and above run a second pass beyond wording cleanup: 13 rules (`PQ.1`-`PQ.13`, `references/rules-review.md` `## PQ`) that reshape prompt-shaped content only — system prompt, `CLAUDE.md`, agent definition, skill `SKILL.md` — the same four types Light mode explicitly skips. PQ changes structure and emphasis, never a fact.
+
+| Rule | Bad | Good |
+|------|-----|------|
+| PQ.1 | Role buried after 3 paragraphs of scope | Role in one sentence, Return contract next, Scope/Never as its own heading after |
+| PQ.3 | "Do not use markdown" | "Write in flowing prose" — an incident-tied `!=`/NEVER stays verbatim (e.g. `!=re-run text-guard.sh`) |
+| PQ.4 | 4x MUST/CRITICAL in one file | 1 STOP on the irreversible action, the other 3 become plain imperative |
+| PQ.6 | "Double-check your output before returning" (generic filler) | Deleted — a named gate like `>=95% match, 100% sub-gate` is a real protocol, not filler, and stays |
+| PQ.9 | A flag/target matrix written as prose | Table — a create-in-order procedure stays numbered prose, never flattened into a table |
+| PQ.11 | A 150-line agent body with 3 abbreviations used twice each | No DICT header — inline the 3 terms; DICT only past >=5 abbreviations each reused >=3x |
+
+**Runs at:** Medium, Standard, Deep, Max — never Light.
+
+**Lossless guard, unchanged by PQ:** numbers, dates, versions, model IDs byte-exact (`claude-sonnet-5`, never "Sonnet 5"), CLI flags/options verbatim (`-x`, `--max`), thresholds/gates/percentages exactly as stated (`>=95%`, `~20%`), URLs, file paths, ports, named entities, negations (`!=`/NEVER/MUST NOT), scope qualifiers. A drop touching any of these is a defect caught by the 100% sub-gate — never a valid PQ edit.
+
 <details>
 <summary>Rule categories (52 rules)</summary>
 
@@ -163,18 +196,19 @@ The CONSUMER field is what keeps a parallel run coherent: a heading renamed with
 | Perception | P.1-P.6 | Examples near rules, hierarchy, bold keywords, standard symbols, instruction order, default over options |
 | LLM Comprehension | L.1-L.8 | Critical info position, documents-first, conciseness, quote-first, add WHY, reiterate constraint, prompt repetition, preserve scope qualifiers |
 | Aggressive lossy | A.1-A.4 | Line fusion, low-value word drop, aggressive paraphrase, known-fact elision (deep/max only) |
+| Prompt quality | PQ.1-PQ.13 | Role-first return contract, dedupe repeats, positive imperative (incident-tied `!=` kept), one hard-stop cap, drop step-by-step/verify filler, explicit scope, table-vs-procedure shape, example over adjective, DICT threshold gate — prompt-shaped content only, Medium+ |
 
-A dedup pass runs in every mode during analysis, before compression. Dedup-merged facts count as preserved: match % = (kept + merged) / total.
+A dedup pass runs in every mode during analysis, before compression. Dedup-merged facts count as preserved: match % = (kept + merged) / total. PQ runs at Medium+ only, on prompt-shaped content only — never Light, never generic docs/README.
 
 **Mode-to-rules mapping:**
 
 | Mode | Applies | Notes |
 |------|---------|-------|
-| Light | C.1-C.8, T.6, D.1, R.1-R.3, P.1-P.4, L.1-L.8 | Text cleanup only — no restructuring |
-| Medium | All rules (C + T + S + D + R + P + L) | Balanced transformations |
-| Standard | All rules + `standard-compression.md` | 30-50% compression, 1 verification round |
-| Deep | All rules + A.1-A.4 + `deep-compression.md` | DICT header, symbol substitutions, aggressive lossy pass, 1-2 verification rounds |
-| Max | All rules + A.1-A.4 + `deep-compression.md` + `max-compression.md` (opt-in) | 3-4x compression, 2 mandatory verification rounds + 100% sub-gate |
+| Light | C.1-C.8, T.6, D.1, R.1-R.3, P.1-P.4, L.1-L.8 | Text cleanup only — no restructuring, no PQ |
+| Medium | All rules (C + T + S + D + R + P + L) + PQ (prompt-shaped content) | Balanced transformations |
+| Standard | All rules + PQ (prompt-shaped content) + `standard-compression.md` | 30-50% compression, 1 verification round |
+| Deep | All rules + PQ (prompt-shaped content) + A.1-A.4 + `deep-compression.md` | DICT header, symbol substitutions, aggressive lossy pass, 1-2 verification rounds |
+| Max | All rules + PQ (prompt-shaped content) + A.1-A.4 + `deep-compression.md` + `max-compression.md` (opt-in) | 3-4x compression, 2 mandatory verification rounds + 100% sub-gate |
 
 </details>
 

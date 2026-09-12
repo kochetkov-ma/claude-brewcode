@@ -65,7 +65,7 @@ guard and did not have one. Dedup and drop must agree on what is quoted text.
 | 4 | explain-your-reasoning | `explain your (reasoning\|thought process\|thinking)` | (synthetic) | OAI |
 | 5 | affect priming | `take a deep breath\|you (can\|will) do (this\|great)` | (synthetic) | OAI |
 | 6 | write-clean-code | `(clean\|readable\|maintainable\|elegant) code` | (synthetic) | SKB |
-| 7 | quality adjective on an artifact | `production[- ](quality\|ready\|grade)` | `brewcode/agents/bash-expert.md:17` | SKB |
+| 7 | quality adjective on an artifact | `production[- ](quality\|ready\|grade)` | (synthetic; `bash-expert.md:17` carried this until the 2026-09-12 rewrite dropped the adjective) | SKB |
 | 8 | meaningful names | `(meaningful\|descriptive\|sensible) (variable\|function\|class)? ?names?` | (synthetic) | MEM |
 | 9 | follow best practices | `follow (industry \|the )?best practices?` | (synthetic; repo hits are filenames, e.g. `brewtools/skills/ssh/references/ssh-best-practices.md:1` -- keep) | SKB |
 | 10 | handle errors appropriately | `handle errors? (appropriately\|properly\|gracefully)` | `.codex/reports/20260815-195724_claude-code-plugin-review/FINAL_BREWTOOLS_REVIEW.md:160` cites it as the defect | SKB |
@@ -178,8 +178,10 @@ what changes is that a generic clause no longer rides to safety on a specific ne
 ### Row 34 worked measurement (`JUDGE-ONLY` + qualified matcher)
 
 Over `brewcode/agents/*.md`, the published unqualified matcher hit **13 lines**. Three were the named
-false positives: `agent-creator.md:153` (the table header `| Event | Matcher | When | Note |`),
-`agent-creator.md:456` (`| red | Security, critical |`, a lookup value), `bc-rules-organizer.md:68`
+false positives: `agent-creator.md:153` (the table header `| Event | Matcher | When | Note |`,
+moved to `brewcode/skills/agents/references/agent-frontmatter-fields.md:89` after the agent-creator
+rewrite), `agent-creator.md:456` (`| red | Security, critical |`, a lookup value, moved to
+`brewcode/skills/agents/references/agent-template.md:130`), `bc-rules-organizer.md:151`
 (`critical > important > nice-to-have`, an ordering). Applying step 0 plus clause (b) of the row-34
 matcher leaves **3 lines**, and all three named false positives are gone. Those 3 are judge referrals,
 not drops -- the row is `JUDGE-ONLY`.

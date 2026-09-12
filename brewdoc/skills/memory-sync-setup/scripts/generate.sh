@@ -46,8 +46,8 @@ CONTENT_VERSION=$(resolve_content_version)
 # Target paths are relative to the resolved ROOT (see resolve_root - every mode cd's there first).
 TARGET=".claude/skills/memory-sync"
 TARGET_REFS="$TARGET/references"
-EMITTED_REFS="memory-guide.md agent-audit.md hard-sync.md"
-EMITTED_N=3
+EMITTED_REFS="memory-guide.md agent-audit.md hard-sync.md prompting-guide.md"
+EMITTED_N=4
 # The parked name of SKILL.md (see enable/disable). Declared here, next to the rest of the owned set,
 # because `emit`'s guard has to see it - a disabled install is still an install.
 DISABLED_MARK="$TARGET/SKILL.md.disabled"
@@ -96,7 +96,7 @@ _count() { _o=$(eval "$1" 2>/dev/null || true); if [ -z "$_o" ]; then echo 0; el
 _count_md() { { find "$1" -maxdepth "${2:-1}" -type f -name '*.md' 2>/dev/null || true; } | wc -l | tr -d ' '; }
 
 validate_templates() {
-  for t in "$REFS/SKILL.md.template" "$REFS/memory-guide.md" "$REFS/agent-audit.md" "$REFS/hard-sync.md"; do
+  for t in "$REFS/SKILL.md.template" "$REFS/memory-guide.md" "$REFS/agent-audit.md" "$REFS/hard-sync.md" "$REFS/prompting-guide.md"; do
     [ -f "$t" ] || { echo "❌ FAILED: emit template not found: $t - reinstall brewdoc"; exit 1; }
   done
   # A stamp is only worth writing if it names a real plugin version.
@@ -413,7 +413,7 @@ _subst() {
 
 # ── emit ────────────────────────────────────────────────────────────────────────
 # STAGED: the whole tree is built in a staging dir on the SAME filesystem, and only once every file is
-# generated does anything move into the target - as individual renames of the 4 OWNED paths. A failure
+# generated does anything move into the target - as individual renames of the 5 OWNED paths. A failure
 # half-way therefore leaves NO half-generated install, which matters because a stray one would push the
 # user to MEMORY_SYNC_FORCE=1 (the flag that destroys edits). What emit must NEVER do is replace the
 # directory wholesale: `uninstall` explicitly reports foreign files in it as KEPT, and a `rm -rf $TARGET`
@@ -485,7 +485,7 @@ emit_skill() {
   _stamp_frontmatter "$_stage/SKILL.md" || _emit_abort
   for r in $EMITTED_REFS; do cp "$REFS/$r" "$_stage/references/$r" || _emit_abort; done
 
-  # Selective placement: only the 4 paths this generator owns are removed and re-created. Anything else
+  # Selective placement: only the 5 paths this generator owns are removed and re-created. Anything else
   # in $TARGET (user notes, a foreign reference, an unrelated subdir) is never touched.
   mkdir -p "$TARGET_REFS" || _emit_abort
   rm -f "$TARGET/SKILL.md" || _emit_abort
@@ -607,7 +607,7 @@ restamp_skill() {
   echo "✅ restamp (metadata keys only - body and every hand-edit verified byte-identical)"
 }
 
-# The 3 references are mechanism-`a` byte copies: their version stamp is BAKED at release into the
+# The 4 references are mechanism-`a` byte copies: their version stamp is BAKED at release into the
 # plugin's own file, so an installed copy only becomes current by being copied again. `upgrade` never
 # re-copied them, which left `setup-status`'s `cmp` reporting DIFFERS forever with no mode that could
 # clear it. Re-copy only where that is PROVABLY lossless - the sole difference is the release stamp
@@ -735,7 +735,7 @@ status_report() {
   echo "PLUGIN_VERSION=$VERSION"
 
   # PARKED (SKILL.md renamed to SKILL.md.disabled by `disable`) is a THIRD state, never collapsed into
-  # absent: the body, the 3 references and every SELF-SYNC hand-edit are still on disk, so the stamp is
+  # absent: the body, the 4 references and every SELF-SYNC hand-edit are still on disk, so the stamp is
   # read out of the parked file and reported at its real version. Only `enable` brings it back.
   _skf="$TARGET/SKILL.md"; _parked=no
   if [ ! -f "$_skf" ] && [ -f "$DISABLED_MARK" ]; then _skf="$DISABLED_MARK"; _parked=yes; fi
@@ -934,7 +934,7 @@ case "$MODE" in
     echo "Usage: generate.sh <scan|emit|validate|restamp|status|enable|disable|uninstall|purge>   (default: emit)"
     echo "  scan      read-only surface report + derived DEFAULT_BRANCH= / GIT_VISIBILITY= / MEMORY_DIR= /"
     echo "            TRACKER_NOTE= / SURFACE_COUNTS= / PROJECT_NAME= for pass-back to emit"
-    echo "  emit      write the 4 owned paths under $TARGET, staged (other files in that dir survive);"
+    echo "  emit      write the 5 owned paths under $TARGET, staged (other files in that dir survive);"
     echo "            refuses over a live install (MEMORY_SYNC_FORCE=1 overrides) and over a PARKED one"
     echo "            (no override - run \`enable\`, \`uninstall\` or \`purge\` first)"
     echo "  validate  fail on unresolved {PLACEHOLDER}, missing file, broken reference, missing/stale provenance frontmatter"

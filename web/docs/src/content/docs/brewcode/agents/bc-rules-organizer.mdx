@@ -11,6 +11,15 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 **Internal agent — no direct or automatic use.** `bc-rules-organizer` is spawned only by [`/brewcode:rules`](/brewcode/skills/rules/), never by you directly and never auto-selected by Claude for an unrelated prompt. It exists as a page here because it ships as one of brewcode's 5 agents and deserves the same reference treatment as the other 4.
 </Callout>
 
+<Callout type="note" title="What's new in 6.2.0">
+The agent definition was restructured (role → return contract → scope → procedure → tables) and one long-standing loading claim got corrected:
+- `paths:`-scoped rules load lazily, not at session start — see Loading (verified 2.1.269) below.
+- New rule files scaffold via `rules.sh create`/`create-specialized` — see Workflow step 4 below.
+- The rule-file frontmatter contract is now explicit: beyond `paths:`, every file needs `description`, `doc_type`, `version`, `generated_by`, `last_updated`.
+- New **Scope Fit** guardrail — find the closest existing rule file before writing a new one; keep changes additive, never a wholesale replacement.
+- Sections renamed for density (Table Formats → Table formats, Frontmatter Reference → Frontmatter, Checkpointing + Return Contract → Return) — same content, tighter headings.
+</Callout>
+
 ## Quick reference
 
 | Field | Value |
@@ -31,6 +40,7 @@ Rules Organizer never sizes or splits a brief itself — `/brewcode:rules` alrea
 | Request reaches beyond rule organization | Reports it back instead of expanding scope |
 | Brief omits CONTEXT (what the skill already did) or CONSUMER (who reads the rules next) | States the assumption in the report, or asks once — never invents scope |
 | `maxTurns: 60` is hit mid-run | Run aborts; rules already written survive, next run resumes from the last file logged in the report |
+| Before writing a new rule file (Scope Fit) | Finds the closest well-built existing rule file in `.claude/rules/*.md` first and takes its principles — additive, never a wholesale replacement; after finishing, one pass to cut files/config/indirection if the result can be simpler |
 
 ## What it does
 
@@ -70,7 +80,15 @@ The skill reads the source, proposes rule candidates, asks you to accept/reject 
   <li>
     <div>
       <strong>File creation</strong>
-      <p>Writes or updates files under <code>.claude/rules/</code> — global <code>avoid.md</code>/<code>best-practice.md</code> with no <code>paths:</code>, or <code>{'{prefix}'}-avoid.md</code> style files scoped with quoted glob patterns. Max 20 rows per table; splits into a new specialized file once exceeded.</p>
+      <p>New files scaffold automatically; editing an existing file is manual. Behavior differs by action:</p>
+
+      | Action | Behavior |
+      |--------|----------|
+      | Scaffold | <code>rules.sh create</code> (global) or <code>rules.sh create-specialized {'<prefix>'} '{'<paths>'}'</code> (scoped) — stamps <code>doc_type</code>/<code>version</code>/<code>generated_by</code>/<code>last_updated</code> |
+      | Edit existing file | Only refreshes <code>last_updated</code> and <code>version</code> by hand |
+      | Naming | Global <code>avoid.md</code>/<code>best-practice.md</code> carry no <code>paths:</code>; every <code>{'{prefix}'}-avoid.md</code> style file needs one |
+      | Row cap | Max 20 rows per table; splits into a new specialized file once exceeded |
+      | Validate | <code>rules.sh validate</code> runs after every write and must pass before finishing |
     </div>
   </li>
   <li>
@@ -90,21 +108,39 @@ The skill reads the source, proposes rule candidates, asks you to accept/reject 
 <details>
 <summary>Technical details — frontmatter, dedup protocol, file naming</summary>
 
-### `paths:` frontmatter — the only supported field
+### Rule-file frontmatter contract
 
-Source: [code.claude.com/docs/en/memory](https://code.claude.com/docs/en/memory.md#path-specific-rules). Only `paths:` is a valid field — `globs`, `alwaysApply`, `description` are not.
+`paths:` is the only field Claude Code itself reads for scoping — source: [code.claude.com/docs/en/memory](https://code.claude.com/docs/en/memory.md#path-specific-rules) (`globs`, `alwaysApply`, `description`-as-scoping are not real fields). On top of that, `rules.sh validate` requires five more keys on every rule file the agent writes: `description`, `doc_type`, `version`, `generated_by`, `last_updated`.
 
 ```yaml
 ---
 paths:
   - "src/components/**/*.tsx"
   - "!src/components/**/*.test.tsx"
+description: "..."
+doc_type: llm
+version: "6.1.4"
+generated_by: "brewcode:rules"
+last_updated: "2026-09-12"
 ---
 ```
 
-Patterns must be quoted (`"**/*.tsx"`, not bare). Bug [#16299](https://github.com/anthropics/claude-code/issues/16299): all rules load at session start regardless of `paths:` — lazy loading is not actually working upstream, so the agent still scopes files correctly but the load-time benefit doesn't apply yet.
+Patterns must be quoted (`"**/*.tsx"`, not bare) and given as an array, never a bare string; `doc_type` is the one unquoted value (`doc_type: llm` exactly).
 
-Rules that fire before a file is in context — search policy, tool-choice policy, delegation policy — stay unscoped (no `paths:`), because `paths:` only matches files already in context.
+### Loading (verified 2.1.269)
+
+| Frontmatter | Behavior |
+|-------------|----------|
+| No `paths` | Loads at session start, same priority as project CLAUDE.md |
+| With `paths` | Loads lazily — only when Claude reads a file matching the glob, not on every tool use |
+
+This reverses bug [#16299](https://github.com/anthropics/claude-code/issues/16299)'s old claim that all rules load at session start regardless of `paths:` — no longer reproducible. Because scoping now genuinely delays loading, a rule that must fire before any file is in context stays unscoped:
+
+| Rule kind | `paths:`? |
+|-----------|-----------|
+| Language/dir conventions (naming, test layout, SQL style) | yes |
+| Tool-choice and search policy (lsp-first, semble-first) | no |
+| Global anti-patterns | no |
 
 ### 3-Check Dedup Protocol
 

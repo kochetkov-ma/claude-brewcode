@@ -1,4 +1,4 @@
-<!-- brewcode-meta: version=6.1.4 content_version=5.6.0 generated_by=brewdoc:memory-sync-setup -->
+<!-- brewcode-meta: version=6.2.0 content_version=6.2.0 generated_by=brewdoc:memory-sync-setup -->
 # Agent and Skill Re-Audit
 
 The standing best-practice audit `/memory-sync` runs on EVERY agent file and EVERY skill file, on EVERY run, at
@@ -7,6 +7,10 @@ fact-checked here - they are held to current best practice.
 
 **Project-specific checks live in the emitted SKILL.md's own check tables.** This file carries only what holds in
 any repo; do not restate the project tables here, and do not weaken them with a generic equivalent.
+
+Agent bodies are ALSO checked against `references/prompting-guide.md`'s rule table (role-first framing, duplicate
+reminders, scattered CAPS, vague adjectives, ...) - see AGENT check 13 below; the rule table itself is not
+restated here.
 
 ---
 
@@ -47,6 +51,7 @@ ls -d "<owned glob>" 2>/dev/null | head -3                    # ownership glob r
 | 10 | Scope fit | The body states what the agent does NOT own, and the boundary matches the neighbouring agents' claims | Add the exclusion; overlapping claims between two agents -> REPORT, do not arbitrate silently |
 | 11 | Output discipline | The body specifies the shape the agent returns to its caller | Add the return shape; an agent whose output shape is unstated produces unusable results |
 | 12 | No rule restatement | The body does not repeat what a rule or convention file already says | DEDUP finding: delete the copy, leave a pointer naming the canonical file and section |
+| 13 | Prompting quality | Body carries no open row from `references/prompting-guide.md`'s rule table, or the survivor is REPORTED as uncertain | Apply the rewrite the guide's row specifies; never restate the rule table here - cite the row number |
 
 ---
 
@@ -85,7 +90,7 @@ retired. Do not audit against a remembered key set.
 
 | Class | Handling |
 |-------|----------|
-| MECHANICAL - apply the fix | `name:` mismatch (agent-1, skill-1), role-first description with concrete triggers (agent-2, agent-3), unjustified `model:` override (agent-6), dead path or glob (agent-7, skill-5), a tool entry used NOWHERE in the body (agent-4), missing `Bash` on a searcher (agent-5), dead MCP server prefix (agent-8), broken reference citation and uncited orphan reference (skill-8, skill-9), restated rule replaced by a pointer (agent-12), date stamp, wording compressed |
+| MECHANICAL - apply the fix | `name:` mismatch (agent-1, skill-1), role-first description with concrete triggers (agent-2, agent-3), unjustified `model:` override (agent-6), dead path or glob (agent-7, skill-5), a tool entry used NOWHERE in the body (agent-4), missing `Bash` on a searcher (agent-5), dead MCP server prefix (agent-8), broken reference citation and uncited orphan reference (skill-8, skill-9), restated rule replaced by a pointer (agent-12), a prompting-guide rewrite where its lossless guard allows it (agent-13), date stamp, wording compressed |
 | RESPONSIBILITY - report only | Anything that changes WHAT an agent owns or does: widening or narrowing its scope, retargeting its ownership globs to a different subsystem, merging or splitting agents, deleting an agent whose surface is gone, resolving two agents that claim the same seam, ADDING a missing output shape (agent-11 - authoring, and it spends the non-growth budget), stripping a tool whose use is implied in prose but never named |
 
 A responsibility change is a design decision. State the finding, the evidence, and the proposed change in the

@@ -4,13 +4,19 @@ description: "Brewcode's four hooks: session start, prompt-submit delegation rem
 order: 13
 ---
 
-import { Card, CardGrid, Badge } from '../../../components/mdx';
+import { Card, CardGrid, Badge, Callout, UpdateNotice } from '../../../components/mdx';
 
 # Hooks
 
 Hooks are Node.js scripts attached to Claude Code lifecycle events.
 They inject context and manage session state. Brewcode registers 4 hooks in `hooks.json`,
 plus a shared `lib/` that holds the reminder text and I/O helpers they import.
+
+<Callout type="note" title="What's new in 6.2.0">
+`forced-eval.mjs` no longer fires on every prompt — it now fires on the 1st real prompt, then every
+10th, via a session-keyed counter (same pattern as `think-short-prompt-counter.mjs`). The injected
+`REMINDER_TEXT` also shrank 636 → 472 chars. See the [detailed description](#1-forced-evalmjs) below.
+</Callout>
 
 ## Summary table
 
@@ -73,8 +79,9 @@ All hooks follow a unified protocol:
 
 <Badge variant="primary" text="UserPromptSubmit" /> <Badge variant="secondary" text="additionalContext" />
 
-Keeps delegation discipline in front of the model. Intercepts every user prompt
-and appends three short lines: the Manager role rule, the split rule, and the branch-default rule.
+Keeps delegation discipline in front of the model without taxing every single turn. Fires on the
+1st real prompt of a session, then every 10th prompt after that (10, 20, 30, ...), and appends three
+short lines: the Manager role rule, the split rule, and the branch-default rule.
 There is no skill-activation nudge -- modern models pick skills on their own.
 
 | Parameter | Value |
@@ -82,23 +89,29 @@ There is no skill-activation nudge -- modern models pick skills on their own.
 | Event | UserPromptSubmit |
 | Channel | additionalContext |
 | Timeout | 2000 ms |
+| Cadence | 1st real prompt, then every 10th (`INTERVAL = 10`) |
 
-**Exact injected text** (`REMINDER_TEXT`, from `hooks/lib/reminder.mjs` -- the same text `role-recall.mjs` re-injects after a compaction):
+**Exact injected text** (`REMINDER_TEXT`, from `hooks/lib/reminder.mjs` -- the same text `role-recall.mjs` re-injects after a compaction; 472 chars):
 
 ```text
-[ROLE] Manager: scan agents (project .claude/agents/ first) - expert for this domain exists -> delegate regardless of size; no expert or trivial one-off -> self.
-[SPLIT] One agent for an hour = drift you cannot observe: split into bounded units (1 deliverable, ~5 files, ~20 min), fan out in ONE message; a dependency must be a REAL data handoff, else parallel; every spawn prompt carries goal + scope + what is already done + who consumes the result + acceptance.
-[BRANCH] Stay on the current branch; none chosen -> main. No explicit branch/PR instruction -> work on main and take over ALL workspace changes, incl. from other sessions.
+[ROLE] Manager: check .claude/agents/ (project first); domain expert -> delegate regardless of size, else self.
+[SPLIT] One agent for an hour = drift you cannot observe: bounded units (1 deliverable, ~5 files, ~20 min), fan out in ONE message; real data handoff = dependency, else parallel; spawn prompt: goal + scope + done-so-far + consumer + acceptance.
+[BRANCH] No branch/PR instruction -> stay current, else main; take over ALL workspace changes incl. other sessions.
 ```
 
 **What it does:**
 - Receives the user prompt
+- Skips meta-replies first (see below) -- they never touch the counter
+- Bumps a session-keyed counter (private 0700 tmp dir, atomic write, lstat-only -- same pattern as `think-short-prompt-counter.mjs`) and injects only when the new count is 1 or a multiple of 10
 - Injects `REMINDER_TEXT` via `additionalContext` -- UserPromptSubmit cannot rewrite the prompt (`updatedInput` is silently dropped in CC 2.1.x)
 - Output is capped at 9000 chars (10K disk-spill safety, CC 2.1.174+)
 
-**When it fires:** On every user input, including slash commands. Skipped only for
-a wrong `hook_event_name`, an empty prompt, and meta-replies that carry no task:
-`yes`/`no`/`ok`/`thanks`/`continue`/`confirm`-style answers, a bare number, or a single letter.
+**When it fires:** On the 1st real user prompt of a session, then every 10th one after that
+(prompts 10, 20, 30, ...) -- not every prompt. Meta-replies that carry no task
+(`yes`/`no`/`ok`/`thanks`/`continue`/`confirm`-style answers, a bare number, or a single letter) are
+skipped before the counter is touched, so they never consume or land on an inject slot. Coverage
+after a compaction is unaffected -- `role-recall.mjs` re-injects the same text unconditionally on
+every compaction, independent of this cadence.
 
 ---
 
@@ -212,4 +225,9 @@ never to silence, and it never names a plan from outside this session's own tran
   <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/hooks">
     Source code, README, and configuration files.
   </Card>
+  <Card title="Brewcode Overview" icon="rocket" href="/brewcode/overview/">
+    Plugin overview, skills, and agents.
+  </Card>
 </CardGrid>
+
+<UpdateNotice />

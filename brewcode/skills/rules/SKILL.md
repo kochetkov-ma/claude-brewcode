@@ -46,7 +46,7 @@ Labels are literal; values follow the conversation language.
 | Const | Value |
 |-------|-------|
 | ARTIFACT | `rules` |
-| SPECIALIST | `bc-rules-organizer` |
+| SPECIALIST | `brewcode:bc-rules-organizer` |
 | LIST_CMD | `bash "${CLAUDE_SKILL_DIR}/scripts/rules.sh" list` |
 
 ## Step 1 — Input gate
@@ -181,7 +181,7 @@ Note: rules has only an ORGANIZER (bc-rules-organizer), no separate creator — 
 organizer-driven. For `create`/`improve`: AskUserQuestion for the knowledge source —
 (a) KNOWLEDGE.jsonl path (parse t:"❌"->avoid, t:"✅"->practice), (b) inline prompt
 (<path> + text), (c) session learnings (extract 5 most impactful findings as ❌/✅).
-Spawn SPECIALIST (bc-rules-organizer) with the Delegation shape — GOAL: the project needs a
+Spawn SPECIALIST (brewcode:bc-rules-organizer) with the Delegation shape — GOAL: the project needs a
 deduplicated, machine-usable rule set in `.claude/rules/`; ROLE: this agent owns ONLY the target
 rule files, never CLAUDE.md and never global rules; CONTEXT: the knowledge source and its parsed
 entries are already chosen above (do NOT re-ask), the existing `.claude/rules/*.md` are the
@@ -197,7 +197,7 @@ report needs the per-file added/merged/skipped counts; SCOPE + DONE per the temp
   - DEDUP 3-Check: within-file (>70% skip, 40-70% merge); cross-file antonym
     (avoid<->best-practice keep avoid only); CLAUDE.md duplicate (skip; "CLAUDE.md"
     forbidden as Source).
-Fallback if agent unavailable: error "bc-rules-organizer not available — install brewcode plugin".
+Fallback if agent unavailable: error "brewcode:bc-rules-organizer not available — install brewcode plugin".
 
 ### Scope of a specialized rule file (ASK before creating one)
 

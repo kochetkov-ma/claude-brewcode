@@ -2,14 +2,12 @@
 
 ```
 [REVIEW DISCIPLINE: DOUBLE-CHECK]
-After every significant change, run a multi-agent review.
-Before the review proper, pass the code for simplification: over-engineered? simpler?
-Every review is two-phase, always:
+Every significant change: multi-agent review, simplification pass first
+(over-engineered? simpler?), then always two-phase:
   1. Review - find issues.
   2. Double-check - re-verify findings are real.
   3. Fix - only after confirmation.
-Never fix on first pass without the double-check step.
-Split a big review by area across several reviewers, never one long pass. Each gets
-goal + its area + acceptance, what is already covered and must not be re-litigated,
-and who consumes the verdict.
+Never fix on first pass without double-checking. Split a big review by area,
+never one long pass - each reviewer gets goal + area + acceptance, what's
+already covered (don't re-litigate), and who consumes the verdict.
 ```

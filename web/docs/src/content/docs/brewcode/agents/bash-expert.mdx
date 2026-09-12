@@ -15,6 +15,14 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 **Trigger by describing the script you need.** "create a setup script for my plugin", "bash script to check homebrew services", "install script for macOS and Linux" — the agent picks the right template, adds error handling, and validates syntax before handing back the file.
 </Callout>
 
+<Callout type="note" title="What's new in 6.2.0">
+Wording-only refresh — no new capability, no section added or removed:
+- Return Contract now leads the agent definition, ahead of Scope & Checkpoints — matches the current prompting order (role → return contract → scope → procedure → tables)
+- Role sentence reworded for density: "Writes bash/sh scripts for macOS/Linux..." replaces the older "Creates production-quality..." phrasing
+- All 10 numbered sections (Conventions through Deliverable), `tools`, and `maxTurns: 60` are unchanged
+- No Delegation or Scope Fit section was added here — bash-expert works solo end to end, writing and validating its own scripts
+</Callout>
+
 ## Quick reference
 
 | Field | Value |

@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.1.4 content_version=6.0.0 generated_by=brewtools:think-short-setup
+// brewcode-meta: version=6.2.0 content_version=6.2.0 generated_by=brewtools:think-short-setup
 /**
  * think-short — UserPromptSubmit hook (self-contained, no plugin-root deps).
  *
  * Maintains a per-session prompt counter (marker keyed by session_id, inside a
  * private 0700 tmp dir we own — a planted symlink is rejected, never followed).
  * Increments on every user prompt; re-injects the full think-short prompt
- * ONLY every 10th prompt (10, 20, 30, ...). Never on the 1st prompt
+ * ONLY every 20th prompt (20, 40, 60, ...). Never on the 1st prompt
  * (SessionStart already injected the prompt at session open).
  *
  * Inject channel: hookSpecificOutput.additionalContext (UserPromptSubmit).
@@ -24,7 +24,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PROMPT_PATH = path.join(HERE, 'think-short-prompt.md');
 const MARKER_DIR = path.join(os.tmpdir(), 'brewtools-think-short');
 const UID = typeof process.getuid === 'function' ? process.getuid() : null;
-const INTERVAL = 10;
+const INTERVAL = 20;
 
 let markerDirOk;
 

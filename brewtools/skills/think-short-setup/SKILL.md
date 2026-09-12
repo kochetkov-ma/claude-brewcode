@@ -17,7 +17,7 @@ model: sonnet
 | Hook | Behavior |
 |------|----------|
 | SessionStart | inject the full terse prompt + reset the per-session counter |
-| UserPromptSubmit | inject the full prompt every 10th user prompt (10/20/30…, not the 1st) |
+| UserPromptSubmit | inject the full prompt every 20th user prompt (20/40/60…, not the 1st) |
 | SubagentStart | inject the full terse prompt into spawned subagents (`additionalContext` accumulates across hooks — no coexistence/yield logic needed) |
 
 All three read `think-short-prompt.md` from their OWN directory and emit `{}` when it cannot be read. There is no `enabled` flag and no config file to add one to — so **`disable` renames the copied prompt to `think-short-prompt.md.disabled`**: the hooks stay wired, find no prompt, and every event becomes a genuine no-op. `enable` renames it back. This is the hooks' existing fail-open path, not new machinery.
@@ -173,7 +173,7 @@ Field meanings — do not paraphrase them into something stronger:
 
 `settings_refs` is a textual count, not a JSON validation — it does not prove the entries are well-formed or attached to the right events.
 
-`injects` covers ONLY `think-short-subagent.mjs` (the subagent injection). SessionStart and the every-10th-prompt injection are separate paths and are not measured by it — `injects=no` means subagents get nothing while the main session still gets the directive.
+`injects` covers ONLY `think-short-subagent.mjs` (the subagent injection). SessionStart and the every-20th-prompt injection are separate paths and are not measured by it — `injects=no` means subagents get nothing while the main session still gets the directive.
 
 Read the output into a state table. If MODE resolves to `status`, print the Prompt contract PLAN
 block now, right before this table. Then PRINT the table to the user:

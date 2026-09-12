@@ -1,6 +1,6 @@
 ---
 title: "SSH Admin"
-description: "Linux server administrator agent — SSH, Docker, firewalls, systemd, Caddy/Nginx, security hardening. Triggered by 'ssh admin', 'server management', 'deploy to server'."
+description: "Linux server admin agent — SSH, Docker, firewalls, systemd, Caddy/Nginx, security hardening. Triggers: ssh admin, server management, deploy to server."
 order: 3212
 ---
 import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
@@ -29,6 +29,13 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 | Inventory | Reads `CLAUDE.local.md` in project root |
 | Permission | `default` — destructive ops return as an `APPROVAL REQUIRED` envelope |
 | Scope | One bounded unit per run; one agent per host |
+
+<Callout type="note" title="What's new in 6.2.0">
+- Agent prompt tightened for density — shorter prose, more tables, no behavior change.
+- `Return Contract` now opens the agent definition instead of closing it — the model reads the output shape before anything else.
+- Every guardrail is unchanged: the six-level safety classification, the `## APPROVAL REQUIRED` envelope fields, and the approval-token rule read the same as before.
+- No new capability in this pass — wording and table conversion only.
+</Callout>
 
 ## Approval contract
 

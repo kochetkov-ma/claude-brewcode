@@ -65,48 +65,31 @@ Status emoji cost 2-4 tokens each (measured): `✅`/`❌` = 2-3 tok, `ℹ️` = 
 
 ## Dictionary Format
 
-Place DICT header at document start when terms appear 3+ times:
-
-```
-[DICT: CC=Claude Code, KB=knowledge base, SP=system prompt, ...]
-```
-
-Rules:
-- Terms appearing 3+ times → dictionary entry
-- Max 20 entries
-- Sort alphabetically
-- Place before first content line
-- Use abbreviation from DICT throughout document
+Place `[DICT: CC=Claude Code, KB=knowledge base, SP=system prompt, ...]` at document start when
+terms appear 3+ times. Rules: max 20 entries, sort alphabetically, place before the first content
+line, use the abbreviation from DICT throughout — a term used <3x stays inline (rules-review.md R13:
+DICT pays only on a long, repetition-heavy file, not a short one).
 
 ## Filler Words & Phrases to Remove
 
-Apply filler removal from `rules-review.md` rule T.6. Additional deep-mode removals:
-
-| Pattern | Action |
-|---------|--------|
-| Articles (the/a/an) | Remove when meaning clear without them |
-| Relative clauses ("which is", "that are") | Remove or restructure |
-| Hedging ("might", "possibly", "could potentially") | Remove — use direct statements |
+Beyond `rules-review.md` T.6: drop articles (the/a/an) when meaning survives without them, relative
+clauses ("which is", "that are"), and hedging ("might", "possibly", "could potentially") — state
+direct facts instead.
 
 ## Structural Compression Patterns
 
-- Conditionals: `if X → Y` or `X ? Y : Z`
-- Prohibitions: `!=X bc Y` (must not X because Y)
-- Lists: inline comma-separated when items are short
-- Tables: for multi-attribute data
-- Merge related one-liners into single line with `|` separator
+- Conditionals: `if X -> Y` or `X ? Y : Z` | prohibitions: `!=X bc Y` (must not X because Y)
+- Lists: inline comma-separated when items are short | tables: for multi-attribute data
+- Merge related one-liners into a single line with `|` separators
 - Remove markdown formatting that doesn't aid parsing (bold, italic in tables)
-- Headers: flatten to 2 levels max
-- Remove blank lines between items in lists/tables
+- Headers: flatten to 2 levels max | remove blank lines between list/table items
 
 ## Redundancy Factoring
 
 Run dedup pass (D.1-D.6, rules-review.md) BEFORE symbol substitution — merging first shrinks the text remaining passes must process and keeps verification cheap. Record merges in a dedup ledger (kept <- dropped).
 
-- Phrase-DICT: recurring phrase >= 3 words appearing 2+ times -> DICT entry (counts toward the 20-entry cap). Source: CompactPrompt arXiv:2510.18043
-- Path-prefix hoisting: repeated path/URL prefixes -> single DICT entry (e.g. `[DICT: SR=src/main/resources]`)
-- Header echo removal: subsection headers repeating parent header words -> drop the echo ("## Server Config / ### Server Config Ports" -> "### Ports")
-- Number/unit normalization: "approximately 30 percent" -> `~30%`; "greater than or equal to 21" -> `>=21`
+- Phrase-DICT (recurring phrase >=3 words, 2+ times -> DICT entry, counts toward the 20-cap; CompactPrompt arXiv:2510.18043) | path-prefix hoisting (repeated path/URL prefix -> one DICT entry, e.g. `[DICT: SR=src/main/resources]`)
+- Header-echo removal (drop repeated parent words: "## Server Config / ### Server Config Ports" -> "### Ports") | number/unit normalization ("approximately 30 percent" -> `~30%`, "greater than or equal to 21" -> `>=21`)
 
 ## Token-Class Keep/Drop Heuristics
 
@@ -120,58 +103,56 @@ Never drop negations or scope qualifiers (L.8; max-mode guardrail C2).
 
 ## Aggressive Lossy Techniques (A.1-A.4)
 
-Deep/max only. Rule definitions: rules-review.md category A. Application order:
-
-dedup (D.1-D.6) -> line fusion (A.1) -> paraphrase (A.3) -> word drop (A.2) -> knowledge elision (A.4) -> symbol substitution
-
-Loss ledger REQUIRED: every A.2/A.4 drop recorded as `dropped -> reason`, listed in the report. A.4 elisions count against the fact-level loss budget (deep gate >= 95%) as `elided-known`; A.2 is word-level and gate-neutral — ledgered for transparency, no direct gate impact, but if a drop degrades a fact's meaning the verifier labels that fact `distorted` (normal gate impact). A.1/A.3 results count as preserved (kept/merged), no ledger entry. Guards: never drop negations, numbers, named entities, scope qualifiers (L.8, C2); D.6 wrong-merge guard applies before A.1 fusion; unsure whether A.4 knowledge is generic -> keep.
+Deep/max only. Full rule + ledger semantics live in `rules-review.md` category A (Step 0, always
+loaded) — do not restate here. Application order: dedup (D.1-D.6) -> A.1 fusion -> A.3 paraphrase ->
+A.2 word drop -> A.4 elision -> symbol substitution.
 
 ### Example: A.1 fusion + A.3 paraphrase (loss-free)
-
-**Original**:
-> The deployment script should be executed from the project root directory. In the event that the script fails, you can check the log file which is located at `logs/deploy.log`.
-
-**Compressed**:
-> run deploy script from project root | fail -> check `logs/deploy.log`
+> "The deployment script should be executed from the project root directory. In the event that the script fails, you can check the log file which is located at `logs/deploy.log`." -> "run deploy script from project root | fail -> check `logs/deploy.log`"
 
 ### Example: A.4 elision, project delta kept
+> "Always write unit tests for new code, since testing catches regressions early. Keep functions small and readable. The project coverage gate is 85% (jacoco); builds fail below it." -> "coverage gate 85% (jacoco), build fails below"
 
-**Original**:
-> Always write unit tests for new code, since testing catches regressions early. Keep functions small and readable. The project coverage gate is 85% (jacoco); builds fail below it.
-
-**Compressed**:
-> coverage gate 85% (jacoco), build fails below
-
-Ledger: dropped "write unit tests / catches regressions" -> generic LLM knowledge; dropped "keep functions small" -> generic. Kept: 85%, jacoco, build-fail behavior (project-specific).
+Ledger: dropped "write unit tests / catches regressions" + "keep functions small" -> generic LLM knowledge. Kept: 85%, jacoco, build-fail behavior (project-specific).
 
 ## Iron Rules
 
-Preserve in ALL cases regardless of compression level:
+Preserve in ALL cases regardless of compression level — the lossless guard, never paraphrased,
+rounded, or dropped:
 - Names, numbers, dates, URLs, file paths, versions, ports, sizes
-- Negative rule semantics (use `!=` notation)
-- At least one example per rule that originally has examples
+- CLI flags/options verbatim (`-x`, `--max`); model IDs byte-exact (`claude-sonnet-5`, never "Sonnet 5")
+- Thresholds, gates, percentages exactly as stated (`>=95%`, `~20%` ceiling) — never rounded
+- Negative rule semantics (use `!=` notation) | >=1 example per rule that originally had examples
 - DICT header at document start
 - Dedup ledger: every merged pair recorded (kept <- dropped); merged facts count as preserved in verification
 - Loss ledger: every A.2/A.4 drop recorded (dropped -> reason); never elide project-specific facts (names, numbers, paths, versions, prohibitions)
+
+## Stop Condition
+
+Stop the A.1-A.4 pass the instant one of these trips — patch back, never push further:
+- A.2 would touch a noun, numeral, negation or named entity (Token-Class Heuristics above already forbid it — this is the enforcement trigger)
+- An A.4 candidate is not clearly generic training-knowledge (unsure -> keep, per the A.4 rule itself)
+- DICT header would exceed 20 entries, or would cover a term used <3x
+- The dedup/loss ledger can no longer account for every merge and drop 1:1
 
 ## Before/After Examples
 
 ### Example 1 — Prose Instruction
 
-**Original** (~60 words):
+**Original** (46 words):
 > Please note that when you are working with the database connection, it is important to make sure that you close the connection after you are done with it. Failure to do so can result in connection pool exhaustion, which may lead to the application becoming unresponsive.
 
-**Compressed** (~15 words):
+**Compressed** (13 words):
 > DB conn: close after use bc unclosed -> pool exhaustion -> app unresponsive
 
 ### Example 2 — Rule Block with DICT
 
-**Original** (~90 words):
+**Original** (82 words):
 > ## File Handling Rules
 >
 > When working with temporary files in the build directory, you should always use the project's file utility library. It is important to note that temporary files must be cleaned up after the build process completes. You must not write temporary files to the source directory because it can corrupt the version control state. The file utility library provides a `cleanup()` method that should be called in the finally block. All temporary files should use the `.tmp` extension.
 
-**Compressed** (~35 words):
+**Compressed** (35 words incl. DICT header, 27 body):
 > [DICT: TF=temporary files, FUL=file utility lib, BD=build dir]
 >
 > ## File Handling
@@ -180,12 +161,12 @@ Preserve in ALL cases regardless of compression level:
 
 ### Example 3 — Configuration Section
 
-**Original** (~70 words):
+**Original** (56 words):
 > ## Server Configuration
 >
 > The application server runs on port 8443 with TLS enabled. The configuration file is located at `/etc/myapp/server.yml`. The minimum required version is Java 21. The maximum heap size should be set to 4096MB for production environments. Health check endpoint is available at `https://localhost:8443/health`. The connection timeout is 30 seconds and the read timeout is 60 seconds.
 
-**Compressed** (~40 words):
+**Compressed** (25 words):
 > ## Server Config
 > Port: 8443 (TLS) | cfg: `/etc/myapp/server.yml` | Java >= 21
 > Heap max: 4096MB (prod) | health: `https://localhost:8443/health`
@@ -193,14 +174,27 @@ Preserve in ALL cases regardless of compression level:
 
 ### Example 4 — Negative Rules
 
-**Original** (~80 words):
+**Original** (64 words):
 > ## Security Rules
 >
 > You must never store passwords in plain text in the configuration files. API keys should not be committed to the repository under any circumstances. It is important to make sure that you do not log sensitive information such as tokens or credentials at any log level. You should not disable TLS certificate verification in production environments because it exposes the application to man-in-the-middle attacks.
 
-**Compressed** (~30 words):
+**Compressed** (29 words):
 > ## Security
 > !=plaintext passwords in cfg files
 > !=API keys in repo
 > !=log sensitive data (tokens, credentials) @ any log level
 > !=disable TLS cert verification in prod bc MITM exposure
+
+### Measured (this file's own examples, `wc -w`)
+
+| Example | Original | Compressed | Reduction | Ratio |
+|---------|----------|------------|-----------|-------|
+| 1 — Prose Instruction | 46 | 13 | -71.7% | 3.54x |
+| 2 — Rule Block + DICT | 82 | 27 (35 w/ DICT) | -67.1% | 3.04x |
+| 3 — Config Section | 56 | 25 | -55.4% | 2.24x |
+| 4 — Negative Rules | 64 | 29 | -54.7% | 2.21x |
+| Total | 248 | 94 | -62.1% | 2.64x |
+
+Deep mode's "2-3x" target above is this file's own measured spread (2.2x-3.5x, combined 2.64x) on
+dense rule prose, not an invented number — re-measure with `wc -w` before claiming a new ratio.

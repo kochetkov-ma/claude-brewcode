@@ -30,6 +30,13 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 | Safety gate | Returns MODIFY / SERVICE / DELETE / PRIVILEGE operations as an `APPROVAL REQUIRED` envelope instead of running them |
 | Scope | One bounded unit per run; one agent per repo / environment / service |
 
+<Callout type="note" title="What's new in 6.2.0">
+- Agent prompt tightened for density — shorter prose, `Return Contract` now opens the agent definition, worked example kept.
+- `## GitHub Config`, `## Workflow Inventory`, `## Server Targets`, and `## Secrets` merged into one `## Project Config` table — same facts, same probe/`NEEDS-INPUT` fallbacks, easier to scan.
+- The rule that a derived GitHub target still carries into every envelope's `HOST:` field, and is never self-approved for a MODIFY+ operation, is kept in the merged table.
+- Safety Rules, Compound Rules, the Release Flow, and the Approval Contract mechanics are all unchanged.
+</Callout>
+
 ## Where its facts come from
 
 The agent carries no baked-in inventory. On **every task start** it resolves four things by the same three-step chain — read `CLAUDE.local.md`, else probe, else ask. It never invents any of them.
@@ -158,12 +165,12 @@ not one. Send them separately, or send the broad request and approve the split p
 
 | Level | Gate | Examples |
 |-------|------|---------|
-| READ | free | `gh run list/view`, `gh workflow list`, `gh release view`, `gh secret list` |
-| CREATE | free | Create workflow YAML, `gh release create --draft` |
-| MODIFY | envelope | Edit workflow, `gh secret set`, `git commit`, `git tag` |
-| SERVICE | envelope | `gh workflow run`, `gh run rerun`, `git push origin HEAD`, `git push origin refs/tags/vX.Y.Z` |
-| DELETE | always envelope | `gh release delete`, `gh run cancel`, remove workflow file |
-| PRIVILEGE | always envelope | `gh secret delete`, branch protection changes, `gh workflow disable` |
+| READ | free | `gh run list/view`, `gh workflow list/view`, `gh release list/view`, `gh secret list`, `gh api` (GET) |
+| CREATE | free | Create workflow YAML, `gh release create --draft`, create branch |
+| MODIFY | envelope | Edit workflow YAML, `gh secret set`, update RELEASE-NOTES.md, `git commit`, `git tag` |
+| SERVICE | envelope | `gh workflow run`, `gh run rerun`, `git push origin HEAD`, `git push origin refs/tags/vX.Y.Z`, `gh api` (POST/PUT/PATCH) |
+| DELETE | always envelope | `gh release delete`, `gh run cancel`, remove workflow file, `git tag -d` |
+| PRIVILEGE | always envelope | `gh secret delete`, branch protection changes, `gh workflow disable`, `gh repo edit` |
 
 Compound rules:
 

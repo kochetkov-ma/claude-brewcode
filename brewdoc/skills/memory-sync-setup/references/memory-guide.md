@@ -1,8 +1,11 @@
-<!-- brewcode-meta: version=6.1.4 content_version=5.6.0 generated_by=brewdoc:memory-sync-setup -->
+<!-- brewcode-meta: version=6.2.0 content_version=6.2.0 generated_by=brewdoc:memory-sync-setup -->
 # Memory Guide
 
 Where a fact BELONGS, how to compress it, and what never gets written at all. Cited by every `/memory-sync`
 batch agent in Phase 2, before it edits anything.
+
+Prompting-quality problems (role framing, duplicate reminders, scattered CAPS, vague adjectives) are a separate
+axis, run in the same Phase 2 pass - see `references/prompting-guide.md`.
 
 ---
 
