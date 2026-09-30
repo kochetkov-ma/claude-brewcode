@@ -35,6 +35,18 @@ grep -oE 'mcp__[a-z0-9_]+__' "<file>" | sort -u               # MCP servers clai
 ls -d "<owned glob>" 2>/dev/null | head -3                    # ownership glob resolves (filesystem, not git)
 ```
 
+A **runtime seat** is an agent a PROGRAM spawns rather than a human invoking it: a workflow file, an
+orchestrator script, or a skill naming a `subagent_type`. Its instructions arrive from FOUR sources, and checks
+14-15 hold only once all four have been read: the agent body; the prompt text each call site passes; the
+constant blocks the caller splices into that prompt; every OTHER call site of the same seat. Find them first:
+
+```bash
+grep -rn "<seat-name>" --include='*.js' --include='*.mjs' --include='*.py' --include='*.md' . | grep -vF "<agent file>"
+grep -rnE 'subagent_type|agent\(' --include='*.js' --include='*.mjs' . | grep "<seat-name>"
+```
+
+Which seats THIS project has is not listed here - the emitted SKILL.md's runtime-seat roster table names them.
+
 ## AGENT files (`.claude/agents/*.md`)
 
 | # | Check | PASS criterion | FAIL action |
@@ -52,6 +64,8 @@ ls -d "<owned glob>" 2>/dev/null | head -3                    # ownership glob r
 | 11 | Output discipline | The body specifies the shape the agent returns to its caller | Add the return shape; an agent whose output shape is unstated produces unusable results |
 | 12 | No rule restatement | The body does not repeat what a rule or convention file already says | DEDUP finding: delete the copy, leave a pointer naming the canonical file and section |
 | 13 | Prompting quality | Body carries no open row from `references/prompting-guide.md`'s rule table, or the survivor is REPORTED as uncertain | Apply the rewrite the guide's row specifies; never restate the rule table here - cite the row number |
+| 14 | Runtime seat sources | For an agent a PROGRAM spawns (a workflow file, an orchestrator script, a skill naming a `subagent_type`) every instruction source was read before the edit: the agent body, the prompt text each call site passes, the constant blocks the caller splices in, and every OTHER call site of the same seat | Read the missing sources and redo the judgement. The edit stands only once all four agree |
+| 15 | Runtime seat contradiction | No instruction in the agent body contradicts what a call site passes it, and no contract line the caller depends on was compressed away - a return-schema field, a tool name, a command, an id, a threshold, a status string | Quote BOTH texts and REPORT. Reconcile silently only when one side names something that no longer exists, and then say which side you fixed |
 
 ---
 
@@ -91,10 +105,14 @@ retired. Do not audit against a remembered key set.
 | Class | Handling |
 |-------|----------|
 | MECHANICAL - apply the fix | `name:` mismatch (agent-1, skill-1), role-first description with concrete triggers (agent-2, agent-3), unjustified `model:` override (agent-6), dead path or glob (agent-7, skill-5), a tool entry used NOWHERE in the body (agent-4), missing `Bash` on a searcher (agent-5), dead MCP server prefix (agent-8), broken reference citation and uncited orphan reference (skill-8, skill-9), restated rule replaced by a pointer (agent-12), a prompting-guide rewrite where its lossless guard allows it (agent-13), date stamp, wording compressed |
-| RESPONSIBILITY - report only | Anything that changes WHAT an agent owns or does: widening or narrowing its scope, retargeting its ownership globs to a different subsystem, merging or splitting agents, deleting an agent whose surface is gone, resolving two agents that claim the same seam, ADDING a missing output shape (agent-11 - authoring, and it spends the non-growth budget), stripping a tool whose use is implied in prose but never named |
+| RESPONSIBILITY - report only | Anything that changes WHAT an agent owns or does: widening or narrowing its scope, retargeting its ownership globs to a different subsystem, merging or splitting agents, deleting an agent whose surface is gone, resolving two agents that claim the same seam, ADDING a missing output shape (agent-11 - authoring, and it spends the non-growth budget), stripping a tool whose use is implied in prose but never named, a contradiction between a runtime seat's body and one of its call sites (agent-15 - quote BOTH texts) |
 
 A responsibility change is a design decision. State the finding, the evidence, and the proposed change in the
 report, and let the user decide. Silently rewriting an agent's role removes a capability nobody knows is gone.
+
+Check 14 belongs to neither class: it is a PRECONDITION on any edit to a runtime-seat file, not a finding.
+The edit does not start until all four instruction sources have been read; an unread source is a reason to
+stop, not a row in the report.
 
 Every audit finding, fixed or reported, names the FILE and the CHECK number above, so a Phase 3 checker can
 re-run exactly that check without re-deriving the judgement.

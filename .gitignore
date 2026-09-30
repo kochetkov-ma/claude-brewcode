@@ -44,3 +44,44 @@ __pycache__/
 # brewcode:semble
 .claude/semble/
 .claude/reports/
+
+# Portable native instruction and skill discovery entry points.
+!/AGENTS.md
+!/.agents/skills/
+!/.agents/skills/**
+.codex/reports/
+/.codex/**/__pycache__/
+/.codex/**/*.pyc
+
+# Shared source closure only; Claude runtime files remain ignored.
+!/.claude/
+/.claude/*
+!/.claude/rules/
+/.claude/rules/*
+!/.claude/rules/astro-avoid.md
+!/.claude/rules/astro-best-practice.md
+!/.claude/rules/web-accessibility.md
+!/.claude/rules/docker-avoid.md
+!/.claude/scripts/
+/.claude/scripts/*
+!/.claude/scripts/clean-root-png.sh
+!/.claude/scripts/check-skill-fences.sh
+!/.claude/scripts/check-install-blocks.mjs
+!/.claude/scripts/bump-version.sh
+!/.claude/skills/
+/.claude/skills/*
+!/.claude/skills/docs/
+/.claude/skills/docs/*
+!/.claude/skills/docs/scripts/
+/.claude/skills/docs/scripts/*
+!/.claude/skills/docs/scripts/check-links.sh
+!/.claude/skills/docs/scripts/verify-deploy.sh
+!/.claude/skills/claude-plugin-guide/
+/.claude/skills/claude-plugin-guide/*
+!/.claude/skills/claude-plugin-guide/LICENSE
+!/.claude/skills/update-overview/
+/.claude/skills/update-overview/*
+!/.claude/skills/update-overview/LICENSE
+!/.claude/skills/eurodns/
+/.claude/skills/eurodns/*
+!/.claude/skills/eurodns/LICENSE

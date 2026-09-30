@@ -1,0 +1,1 @@
+../../../../.claude/skills/docs/scripts/check-links.sh

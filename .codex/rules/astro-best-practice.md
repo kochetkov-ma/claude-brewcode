@@ -1,0 +1,1 @@
+../../.claude/rules/astro-best-practice.md

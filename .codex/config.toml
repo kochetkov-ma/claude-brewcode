@@ -1,0 +1,10 @@
+model = "gpt-6.1-sol"
+review_model = "gpt-6.1-sol"
+
+[agents]
+enabled = true
+default_subagent_model = "gpt-6.1-sol"
+
+[features]
+plugins = false
+remote_plugin = false

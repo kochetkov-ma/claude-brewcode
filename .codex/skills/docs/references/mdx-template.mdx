@@ -1,0 +1,55 @@
+---
+title: "{Name}"
+description: "{Actual user-facing purpose, 50–160 characters}"
+order: {Existing section order}
+---
+
+import { Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+
+{User-facing purpose. Scaffold for plugin skills/agents pages; adapt imports for other depths.}
+
+## Quick reference
+
+| Field | Value |
+|---|---|
+| Command | `{Actual product invocation}` |
+| Arguments | `{Actual arguments}` |
+| Model / tools | {Only actual exposed product configuration, if relevant} |
+
+## What it does
+
+{Input, behavior, useful output.}
+
+## When to use
+
+| Situation | Command |
+|---|---|
+| {Concrete situation} | `{Actual invocation}` |
+
+## Example
+
+```text
+{Copy-pasteable actual product invocation}
+```
+
+{Expected result.}
+
+## Workflow
+
+<Steps>
+  <li><div><strong>{Actual step}</strong><p>{Actual product behavior.}</p></div></li>
+</Steps>
+
+## Technical details
+
+{Actual arguments, modes, output, constraints; do not invent runtime tools or workflows.}
+
+## Related
+
+<CardGrid>
+  <Card title="Plugin overview" icon="document" href="/{plugin}/overview/">{Overview context.}</Card>
+  <Card title="GitHub source" icon="link" href="{Actual source URL}">{Source context.}</Card>
+  <Card title="{Related entity}" icon="rocket" href="/{plugin}/{skills-or-agents}/{related}/">{Relationship.}</Card>
+</CardGrid>
+
+<UpdateNotice />

@@ -1,0 +1,1 @@
+../../.claude/scripts/clean-root-png.sh

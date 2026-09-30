@@ -1,0 +1,1 @@
+../../../../.claude/skills/docs/scripts/verify-deploy.sh

@@ -58,13 +58,15 @@ The emitted `/memory-sync` is a long-running multi-agent coordinator that diffs 
 code for a SCOPE and repairs it -- facts FIRST, dedup second, compression third -- under a NON-GROWTH prime
 directive (every file ends `<=` its original line count, total delta `<= 0`). It sweeps the WHOLE memory surface
 every run; free-form focus text steers EMPHASIS only and never narrows the sweep. Its batches are disjoint by
-construction, so parallel edits never collide. It carries TWO orthogonal axes: `{SCOPE}` selects WHICH change
-facts drive the sweep, `{DEPTH}` selects HOW HARD the surface itself is cut.
+construction, so parallel edits never collide. It carries THREE orthogonal axes: `{SCOPE}` selects WHICH change
+facts drive the sweep, `{DEPTH}` selects HOW HARD the surface itself is cut, `{REACH}` selects HOW WIDE the
+editable set is.
 
 | Axis | Emitted behaviour |
 |------|-------------------|
 | Scopes | `session` (DEFAULT -- facts from THIS conversation, no gather agent), `branch` (diff vs the derived default branch), `commit <sha>` / `commit <a>..<b>`, `recent[:N]` (default 10), `all` (no diff -- every checkable fact re-verified) |
 | Depth | `NORMAL` (DEFAULT -- fact sync + dedup + compression) or `HARD` (NORMAL plus the two passes in `references/hard-sync.md`), from the token `hard` or the same intent in prose ("too much context", "aggressive", "почисти жёстко") |
+| Reach | `MEMORY` (DEFAULT -- the instruction surface only) or `REFS` (MEMORY plus the git-TRACKED outside references always-loaded instruction files cite and tell their reader to open); `REFS` never overrides the docs/source/secrets exclusions |
 | HARD pass A | rules `paths:` PRECISION audit -- a broad or missing glob loads the rule into EVERY context and is paid for on every turn, so the glob must be the narrowest pattern still covering the rule's real subject. Verdicts `OK` / `TOO_BROAD` / `TOO_NARROW` / `DANGLING` / `MISSING` / `CORRECTLY_GLOBAL`; a genuinely repo-wide subject legitimately carries none and one is never invented |
 | HARD pass B | OBVIOUS-KNOWLEDGE PURGE -- anything a competent model already knows is DELETED, not compressed. Keeps only what the model cannot know: decisions that invert a default, domain invariants, environment quirks, explicit prohibitions |
 | Focus | free text after the scope token: emphasis ordering only. Never a filter, never a batch skip |
@@ -74,6 +76,7 @@ facts drive the sweep, `{DEPTH}` selects HOW HARD the surface itself is cut.
 | Phase SELF-SYNC | the emitted skill re-checks and updates ITSELF: re-enumerated counts, new batches, new sections for memory layers the project gained. Scope DECISIONS (batch table, exclusions) are never rewritten without explicit user instruction |
 | Phase PROPOSE | new agent / new skill assessed against `{PROPOSAL_PRECEDENTS}` and PROPOSED in the report -- never auto-created |
 | Agents | ALWAYS re-audited against current best practice (`references/agent-audit.md`), not merely fact-checked |
+| Memory itself | BOTH memory kinds are swept as their own disjoint batches - the memory dir and each per-agent store - under the five rules in the emitted `references/memory-guide.md`: a duplication DELETE carries its quoted proof or the row stays, an event is promoted into a fact or dropped, a store born in a subdirectory is classified LIVE/ORPHAN/UNDECIDED and an orphan is salvaged before removal, each store INDEX is rewritten LAST |
 | Report | chat only, no report file; a run that touched only the root CLAUDE.md is an INCOMPLETE run |
 
 **Arguments:** `$ARGUMENTS` -- an optional MODE token (`status` | `install` | `upgrade` | `enable` | `disable` |
@@ -260,7 +263,7 @@ Read the emit material this generator ships, relative to `${CLAUDE_SKILL_DIR}`:
 - `references/memory-guide.md` -- where-does-it-belong decision tree, compression patterns, obvious-vs-domain facts
 - `references/agent-audit.md` -- the agent/skill re-audit procedure the emitted skill runs every sweep
 - `references/hard-sync.md` -- the two `HARD`-depth deletion passes (`paths:` precision audit + obvious-knowledge
-  purge) and their reporting contract; it holds TWO of the twelve BLOCK placeholders
+  purge) and their reporting contract; it holds TWO of the thirteen BLOCK placeholders
 - `references/prompting-guide.md` -- the merged Claude 5 + OpenAI/Codex prompting-quality rule table applied at
   Phase 2/3; carries no BLOCK placeholders
 
@@ -281,10 +284,12 @@ scan plus your own reads, determine:
 
 | Aspect | How to detect | Drives placeholder |
 |--------|---------------|--------------------|
-| **Memory surface** | everything auto-loaded into an LLM context: root `CLAUDE.md`, EVERY nested `**/CLAUDE.md` at ANY depth, `CLAUDE.local.md`, `.claude/rules/*.md` (single level -- CC loads rules non-recursively), conventions (`.claude/convention/**`, `CONVENTIONS.md`, `CONTRIBUTING.md`), the `AGENTS.md` family, `.claude/agents/**`, `.claude/skills/**`, and the memory dir | `{BATCH_TABLE}`, `{SURFACE_COUNTS}`, `{ENUMERATION_BASH}` |
+| **Memory surface** | everything auto-loaded into an LLM context: root `CLAUDE.md`, EVERY nested `**/CLAUDE.md` at ANY depth, `CLAUDE.local.md`, `.claude/rules/*.md` (single level -- CC loads rules non-recursively), conventions (`.claude/convention/**`, `CONVENTIONS.md`, `CONTRIBUTING.md`), the `AGENTS.md` family, `.claude/agents/**`, `.claude/skills/**`, and BOTH memory kinds (next two rows) | `{BATCH_TABLE}`, `{SURFACE_COUNTS}`, `{ENUMERATION_BASH}` |
 | **VERIFY-ONLY surfaces** | `AGENTS.md` that is a SYMLINK into a projection dir (`.codex/**`) or whose body sits inside vendor markers (`<!-- BEGIN:... -->`); any file whose content another tool owns. Flag them: refs are checked for RESOLUTION, content is NEVER edited | `{BATCH_TABLE}` (VERIFY-ONLY column) |
 | **Memory dir** | `autoMemoryDirectory` in `.claude/settings*.json`, else `~/.claude/projects/<hash>/memory/`. In scope only if the user confirms (Phase 1.5) | `{MEMORY_DIR}` |
+| **Per-agent memory stores** | a tree holding one store per agent, each loading only while its agent runs. ENUMERATE it (`find` / `ls` over the memory root and any per-agent store dir the project configures), never a hardcoded roster, and note each store's INDEX file apart from its rows. A store is born wherever a SESSION ran - per-agent memory resolves against the session CWD, not the repo root - so RECORD WHICH DIRECTORIES ARE PLAUSIBLE SESSION ROOTS in this project (task workspaces, module roots, anything a session would `cd` into) against the runtime/archived trees of the EXCLUDED table: that record is what makes the emitted skill's live/orphan call possible at all (`references/memory-guide.md` rule 5). INDEPENDENT of the row above: stores can exist while `{MEMORY_DIR}` is `none`, so one never gates the other | `{BATCH_TABLE}`, `{ENUMERATION_BASH}` |
 | **Exclusions** | `docs/**` (owned by a separate doc flow -- refs INTO docs are resolution-checked, contents never edited), ALL source code (read-only evidence), secrets dirs, task-board / operational state (`.claude/features/**`), build output, git-ignored scratch | `{EXCLUDED_TABLE}` |
+| **Cited outside references** | paths an ALWAYS-LOADED instruction file (one with no `paths:` gate) names and tells its reader to open, that live OUTSIDE the instruction tree and are git-TRACKED. REACH-GATED, never excluded: editable only at `{REACH}` = `REFS`, resolution-checked at the `MEMORY` default. No placeholder holds the list -- the emitted skill re-enumerates it per run | `{ENUMERATION_BASH}`, `{VERIFY_EXTRA}` |
 | **Default branch** | DERIVE: `git symbolic-ref --short refs/remotes/origin/HEAD`, else the branch CI checks out. NEVER hardcode `main` -- a repo can promote from `staging`/`develop` | `{DEFAULT_BRANCH}` |
 | **Git visibility** | `git ls-files -- .claude '*CLAUDE.md' '*AGENTS.md'` compared against the same surface ON DISK, plus the `.gitignore` rules behind it. `git-ignored` OR `mixed` (some rows tracked, some not) -> `git status`/`git diff` can NEVER account for every memory edit, so VERIFY must re-read files directly instead of trusting the diff | `{GIT_VISIBILITY}`, `{VERIFY_EXTRA}` |
 | **Language policy** | which files legitimately carry non-English trigger aliases (agent/skill `description:`, mode-routing tables, `CLAUDE.local.md`), and which surface is English-only. An intentional alias stripped as a "violation" is a regression | `{LANGUAGE_POLICY}` |
@@ -295,6 +300,7 @@ scan plus your own reads, determine:
 | **Reacting hooks** | `docsync-*.mjs` (installed by `/brewdoc:docsync-setup`) or other hooks firing on memory edits (`.claude/settings.json`, `.claude/hooks/**`), their config and threshold. Edits WILL trigger them -- expected; hook files are never edited | `{INVARIANTS_TABLE}`, `{TRACKER_NOTE}` |
 | **Checkable-fact catalogue** | for THIS project, the CONCRETE claims memory makes and the EXACT shell command verifying each: layer paths, build-tool aliases, lint rule names, scripts, version pins, env-var NAMES (never values), routes/endpoints, migrations/tables, test tiers + gates, CI gates | `{FACT_CATALOGUE}` |
 | **Agent roster** | `.claude/agents/**/*.md` at ANY depth (CC scans subfolders such as `agents/review/`) -- name, description, tools, the path group each owns; read-only recon agents flagged as non-builders | `{EXPERT_ROSTER_TABLE}`, `{AGENT_CHECKS_TABLE}` |
+| **Runtime workflow seats** | agents a PROGRAM spawns rather than a human routing by keyword. Grep the callers (`.claude/workflows/*.js`, orchestrator scripts, skills) for `subagent_type`, `agent(` or an agent's own name, and note the constant blocks each caller interpolates into the prompt it passes. Record seat -> agent file -> call sites as `file:line` -> constant blocks | `{RUNTIME_SEAT_ROSTER}` |
 | **Skill roster** | `.claude/skills/**/*.md` -- SKILL.md + every `references/*.md`; which modes each body implements | `{SKILL_CHECKS_TABLE}` |
 | **Task tracker** | `.claude/features/**` board, an issue tracker, a task rule -- noted so the emitted skill EXCLUDES operational state and says who owns it | `{TRACKER_NOTE}` |
 | **Proposal precedents** | the agents and skills this repo already created and WHY -- the bar a new one must clear | `{PROPOSAL_PRECEDENTS}` |
@@ -309,8 +315,11 @@ Ask ONLY what you cannot reliably infer. Never auto-guess a non-obvious choice. 
 - **Which convention files count as memory** -- `CONTRIBUTING.md` and `CONVENTIONS.md` are human docs in some
   repos and LLM instructions in others.
 - **Is the memory dir in scope** -- syncing `~/.claude/projects/<hash>/memory/` is a legitimate choice and a
-  legitimate refusal; `{MEMORY_DIR}` gets the literal `none` when out of scope.
+  legitimate refusal; `{MEMORY_DIR}` gets the literal `none` when out of scope. The PER-AGENT stores are asked
+  SEPARATELY - `none` for the dir never drops them.
 - **Which surfaces are VERIFY-ONLY** -- confirm the symlinked / vendor-marked / doc-owned list.
+- **Which cited outside references count** -- confirm the list with the user; they are `REFS`-reach only, and
+  are resolution-checked at the default reach.
 - **The default branch**, whenever derivation is ambiguous or the repo promotes from a non-default branch.
 - **Are the non-English trigger aliases intentional** -- if yes they are NEVER stripped, and `{LANGUAGE_POLICY}`
   says so explicitly with the carriers named.
@@ -371,8 +380,8 @@ more, and no tail-line stamp -- a pre-5.0 install still carrying
 ### Phase 3 -- Fill the BLOCK placeholders (AI Edit)
 
 Multi-row tables and multi-line bash cannot go through sed. Using the **Edit** tool, replace every block
-placeholder in the EMITTED files with content built from Phase 1 analysis. TWELVE blocks: the first ten live in
-the emitted `SKILL.md`, the last two in the emitted `references/hard-sync.md`. `validate` fails on every one of
+placeholder in the EMITTED files with content built from Phase 1 analysis. THIRTEEN blocks: the first eleven live
+in the emitted `SKILL.md`, the last two in the emitted `references/hard-sync.md`. `validate` fails on every one of
 them, so a partial fill cannot pass. See the Placeholders section for the full contract; the substance rules:
 
 | Block | In | Must contain |
@@ -385,6 +394,7 @@ them, so a partial fill cannot pass. See the Placeholders section for the full c
 | `{AGENT_CHECKS_TABLE}` | SKILL.md | the agent-batch extra checks: `name:` vs filename, description + triggers, `tools:` minimality, ownership globs resolve, MCP prefixes name configured servers, handoff pointers name agents that EXIST |
 | `{SKILL_CHECKS_TABLE}` | SKILL.md | the skill-batch extra checks: `name:` vs directory, one-line action-first `description:`, `allowed-tools:` matches actual use, `argument-hint:` matches implemented modes, every cited reference exists AND every existing reference is cited |
 | `{EXPERT_ROSTER_TABLE}` | SKILL.md | the live roster: agent -> owned path group -> specialty, recon agents marked read-only. Drives batch ownership and the re-audit |
+| `{RUNTIME_SEAT_ROSTER}` | SKILL.md | one row per seat a PROGRAM spawns: agent file, every call site as `file:line`, and the constant blocks the caller splices into its prompt. No such caller in the repo -> the single literal row `none -- no program spawns an agent here` |
 | `{PROPOSAL_PRECEDENTS}` | SKILL.md | `\| propose \| bar \| precedents \|` -- the bar a new agent/skill must clear HERE, with this repo's own precedents named |
 | `{VERIFY_EXTRA}` | SKILL.md | the project-specific VERIFY assertions: the git-visibility assertion derived in Phase 1, the secret-value scan, the language scan with its allowed hits, the id-sequence diff |
 | `{PATHS_PRECISION_TABLE}` | hard-sync.md | ONE row per rule file: `\| rule file \| current paths: \| verdict \| narrowest correct glob \|`, from the Phase 1 precision judgement. Every derived glob must RESOLVE against the repo today; a repo-wide subject is `CORRECTLY_GLOBAL` with an empty glob cell, never an invented one |
@@ -428,8 +438,10 @@ Excluded:   {list + reason}
 Facts:      {N} checkable-fact rows, each with a runnable verification command
 Invariants: {N} enforced per batch
 Roster:     {N} agents / {N} skills re-audited every sweep
+Runtime seats: {N} seats / {M} call sites  (or "none")
 Branch:     {DEFAULT_BRANCH}   Git visibility: {GIT_VISIBILITY}
-Memory dir: {MEMORY_DIR}
+Memory dir: {MEMORY_DIR}   Per-agent stores: {N} stores / {M} rows (none -> "none")
+Reach:      MEMORY default; REFS opt-in per run
 Language:   {LANGUAGE_POLICY}
 Emphasis:   {FOCUS_EMPHASIS}
 HARD depth: {N} rules audited for paths: precision ({N} TOO_BROAD / {N} DANGLING / ...), {N} obvious-vs-domain
@@ -477,11 +489,11 @@ is a template token absent from this table.
 **BLOCKS** -- multi-row tables and multi-line bash, filled by the AI in Phase 3 via `Edit`. `generate.sh` never
 touches them.
 
-TWELVE blocks -- ten in the emitted `SKILL.md`, two in the emitted `references/hard-sync.md`. `validate` fails
-until every one is filled. The Phase 3 table above names all twelve with their file and substance contract; it is
+THIRTEEN blocks -- eleven in the emitted `SKILL.md`, two in the emitted `references/hard-sync.md`. `validate` fails
+until every one is filled. The Phase 3 table above names all thirteen with their file and substance contract; it is
 the single list -- do not restate it here.
 
-> The emitted skill also uses RUNTIME tokens -- `{SCOPE}`, `{FOCUS}`, `{DEPTH}`, `{BATCH}`, `{FILE_LIST}`,
+> The emitted skill also uses RUNTIME tokens -- `{SCOPE}`, `{FOCUS}`, `{DEPTH}`, `{REACH}`, `{BATCH}`, `{FILE_LIST}`,
 > `{FACTS}`, `{BROKEN_REFS}`, `{DATE}`, `{N}`, `{M}`, `{K}`. Those are resolved per RUN by the emitted skill, are
 > allow-listed by `validate` (`RUNTIME_ALLOW` in `generate.sh` -- the two lists must match exactly), and MUST
 > remain in the file.
@@ -495,6 +507,7 @@ the single list -- do not restate it here.
 | Emit target | `<cwd>/.claude/skills/memory-sync/` | Where the generated skill is written |
 | Emit material | `${CLAUDE_SKILL_DIR}/references/` | `SKILL.md.template`, `memory-guide.md`, `agent-audit.md`, `hard-sync.md`, `prompting-guide.md` -- five files emitted |
 | Emitted default depth | `NORMAL` | `HARD` is per-run, from the emitted skill's own arguments; nothing is regenerated to switch |
+| Emitted default reach | `MEMORY` | `REFS` is per-run, from the emitted skill's own arguments; it adds git-TRACKED outside references cited by always-loaded instruction files to the editable set, and never overrides the docs/source/secrets exclusions |
 | Generation script | `${CLAUDE_SKILL_DIR}/scripts/generate.sh` | `scan` \| `emit` \| `validate` \| `restamp` \| `status` \| `enable` \| `disable` \| `uninstall` \| `purge` |
 | Provenance refresh | `generate.sh restamp` | Metadata-only, idempotent, mandatory tail of `upgrade`. Rewrites `version` / `last_updated` / `surface_files`, adds `doc_type` / `generated_by` when absent, deletes a pre-5.0 tail stamp and a legacy `disable-model-invocation`, re-copies a reference ONLY when its sole difference from the plugin source is the release stamp. Aborts rather than write if anything outside the metadata block would move |
 | Mode | `status` when installed, else `install` | `status` (read-only) \| `install` \| `upgrade` \| `enable` \| `disable` \| `uninstall` \| `purge` |
@@ -528,12 +541,14 @@ the single list -- do not restate it here.
 | Installed skill carries the pre-5.0 TAIL stamp (`<!-- memory-sync template v… -->`) | `status` reports `STAMP_FORMAT=legacy`, `NOTE_LEGACY=…` and `VERDICT=STALE-LEGACY`; `validate` FAILS. `generate.sh restamp` migrates it in one call -- five frontmatter keys written, tail line deleted -- and it runs at the end of every `upgrade` anyway. Never crash on the old format, never treat it as in sync |
 | `validate` fails with `stamped version A != plugin version B` | The install is a plugin version behind. Run `generate.sh restamp` (metadata only, hand-edits untouched), then re-run `validate`. This is the failure the message names; `emit` / `MEMORY_SYNC_FORCE=1` are NOT the remedy and would destroy the SELF-SYNC edits |
 | `validate` reports a missing `references/*.md` while `SKILL.md` is present | `emit` cannot be the fix -- it refuses over a live install. Run `generate.sh restamp`: it re-copies a MISSING reference from the plugin (nothing local to lose) and reports `REF RESTORED:` |
-| `restamp` prints `REF DIFFERS:` for a reference | Not a failure. That file's content differs from the plugin source -- `hard-sync.md` ALWAYS does (Phase 3 filled its two BLOCKs), the other two only after a hand-edit or a plugin prose change. Nothing is overwritten: diff against `${CLAUDE_SKILL_DIR}/references/<name>` and port real changes by hand |
+| `restamp` prints `REF DIFFERS:` for a reference | Not a failure. That file's content differs from the plugin source -- `hard-sync.md` ALWAYS does (Phase 3 filled its two BLOCKs), the other three only after a hand-edit or a plugin prose change. Nothing is overwritten: diff against `${CLAUDE_SKILL_DIR}/references/<name>` and port real changes by hand |
 | Target has no `.claude/agents/` | Emit anyway; `{EXPERT_ROSTER_TABLE}` says `none -- batches owned by general-purpose`, the agent batch is dropped from `{BATCH_TABLE}`, and the re-audit reduces to the skill roster |
+| Target has no program that spawns agents | `{RUNTIME_SEAT_ROSTER}` gets the single `none` row and the emitted section STAYS -- it costs ~26 lines (the whole `Runtime workflow seats` section) and the repo may gain a workflow next month. Never delete the section from the emitted skill |
 | Target has no `.claude/rules/` or conventions | Emit with the batches that DO exist; never emit a batch pointing at a nonexistent dir |
 | Only a root CLAUDE.md exists | Emit a single-batch skill and say so -- a one-file surface is a legitimate result, an invented batch is not |
 | Default branch cannot be derived | ASK (Phase 1.5). Never fall back to `main` silently |
 | Memory dir not resolvable | `MEMORY_DIR="none"`; the emitted skill skips that batch and says why |
+| A per-agent store whose reachability cannot be decided | UNDECIDED is a legitimate verdict, not a gap to close: the emitted skill SWEEPS that store and REPORTS it, and NEVER removes it. Never widen the orphan test to cover it - an unswept store costs disk, a wrongly deleted one costs knowledge (`references/memory-guide.md` rule 5) |
 | `AGENTS.md` is a symlink or vendor-marked | VERIFY-ONLY row in `{BATCH_TABLE}` with the reason. Never an edit target |
 | A fact has no verification command | Leave it OUT of `{FACT_CATALOGUE}` and note it in the Phase 5 report as unverifiable -- an invented command reports `not run` forever |
 | Unresolved `{PLACEHOLDER}` after Phase 3 | `validate` fails listing them; fix via Edit, re-run |
@@ -563,9 +578,10 @@ Replaces the old brewdoc:memory (a generic in-plugin memory syncer). Analyzes a 
 self-contained project-local .claude/skills/memory-sync/ (SKILL.md + memory-guide.md + agent-audit.md +
 hard-sync.md + prompting-guide.md). The plugin never syncs memory itself.
 
-The emitted skill has TWO axes: {SCOPE} = which change facts drive the sweep (session default | branch | commit |
+The emitted skill has THREE axes: {SCOPE} = which change facts drive the sweep (session default | branch | commit |
 recent[:N] | all), {DEPTH} = how hard the surface is cut (NORMAL default | HARD = + paths: precision audit +
-obvious-knowledge purge, per references/hard-sync.md).
+obvious-knowledge purge, per references/hard-sync.md), {REACH} = how wide the editable set is (MEMORY default |
+REFS = + the git-tracked outside references always-loaded instruction files cite).
 
 Modes: status (read-only drift report, default when installed) | install (full analysis + emit, default when not
 installed) | upgrade (re-scan + refresh, hand-edits preserved -- the emitted skill is expected to have

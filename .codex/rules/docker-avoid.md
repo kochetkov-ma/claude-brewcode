@@ -1,0 +1,1 @@
+../../.claude/rules/docker-avoid.md

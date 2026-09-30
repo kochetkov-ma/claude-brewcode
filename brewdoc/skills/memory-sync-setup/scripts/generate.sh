@@ -1,7 +1,7 @@
 #!/bin/bash
 # brewdoc:memory-sync-setup generator script
 # Resolves the TARGET repo ROOT (never a subdirectory) and emits a self-contained project-local
-# .claude/skills/memory-sync/ into it, substituting the 8 SCALAR placeholders. The 12 multi-row BLOCK
+# .claude/skills/memory-sync/ into it, substituting the 8 SCALAR placeholders. The 13 multi-row BLOCK
 # placeholders are filled by the AI via Edit (SKILL.md Phase 3); `validate` FAILS while any of them remain.
 # Modes are documented in the usage block at the bottom of this file.
 #
@@ -77,7 +77,7 @@ META_KEYS="doc_type version content_version generated_by last_updated surface_fi
 # Pre-5.0 installs stamped a tail comment instead. Kept ONLY to recognise them and report stale-legacy.
 LEGACY_STAMP_PREFIX="<!-- memory-sync template v"
 # Runtime tokens the emitted skill resolves per RUN - allow-listed by validate, MUST survive emit.
-RUNTIME_ALLOW="SCOPE FOCUS DEPTH BATCH FILE_LIST FACTS BROKEN_REFS DATE N M K"
+RUNTIME_ALLOW="SCOPE FOCUS DEPTH REACH BATCH FILE_LIST FACTS BROKEN_REFS DATE N M K"
 # Every temp dir goes through $_bd; the trap makes leaks (and partial installs) impossible on any exit path.
 _bd=""
 trap '[ -n "$_bd" ] && rm -rf "$_bd" || true' EXIT
@@ -159,7 +159,10 @@ derive_git_visibility() {
   # SET DIFFERENCE on paths, never a count delta: the two enumerations differ (git pathspec vs a
   # FIND_EXCL-pruned find), so subtracting the totals cancels a tracked-but-pruned row against a
   # real untracked file and mislabels a mixed surface `git-tracked` - dropping the re-read guidance.
-  _disk=$(eval "find . \\( -type f -o -type l \\) \\( -path './.claude/*' -o -name '*CLAUDE.md' -o -name '*AGENTS.md' \\) $FIND_EXCL" 2>/dev/null || true)
+  # Same `-not -path '*/memory-sync/*'` exclusion count_skills uses, for the same reason: counting the
+  # manifest emit just wrote made a fresh install flip `git-tracked` -> `mixed (N tracked, 5 untracked)`,
+  # so the stamped {GIT_VISIBILITY} scalar permanently disagreed with live `status`.
+  _disk=$(eval "find . \\( -type f -o -type l \\) \\( -path './.claude/*' -o -name '*CLAUDE.md' -o -name '*AGENTS.md' \\) -not -path '*/memory-sync/*' $FIND_EXCL" 2>/dev/null || true)
   # `grep -c .` exits 1 on zero matches - a legitimate outcome that `pipefail` would turn into an abort.
   _untracked=$(printf '%s\n' "$_disk" | sed -e 's|^\./||' -e '/^$/d' | sort \
     | comm -23 - <( { git ls-files -- .claude '*CLAUDE.md' '*AGENTS.md' 2>/dev/null || true; } | sort) \

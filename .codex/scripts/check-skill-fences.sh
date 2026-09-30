@@ -1,0 +1,1 @@
+../../.claude/scripts/check-skill-fences.sh

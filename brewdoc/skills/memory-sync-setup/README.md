@@ -33,18 +33,20 @@ A project-tailored `memory-sync` skill:
 6. **GATHER -> SYNC -> VERIFY** -- parallel read-only gather, one bounded agent per batch (all spawned in ONE
    message), then independent read-only checkers, one per edited batch, **never the agent that wrote it**.
 7. **SELF-SYNC** -- the emitted skill re-checks and updates itself: re-enumerated counts, new batches, new sections
-   for memory layers the project gained. Its scope DECISIONS are never rewritten without explicit instruction.
+   for memory layers the project gained. Its surface DECISIONS (batch table, exclusions) are never rewritten without explicit instruction.
 8. **PROPOSE, never auto-create** -- a new agent or skill is assessed against the repo's own precedents and
    proposed in the report.
 9. **Agent re-audit** -- agents are checked against current best practice every sweep, not merely fact-checked.
 10. **Non-growth as the prime directive** -- facts first, then dedup, then compression; every file ends `<=` its
     original line count and the total delta is `<= 0`.
 11. **A `HARD` depth** -- two extra deletion passes for a surface that has grown dead weight. See below.
+12. **A `REFS` reach** -- opt-in per run, adding the git-tracked outside references that always-loaded instruction
+    files cite to the editable set. `MEMORY` is the default and the exclusions still hold.
 
 ## Depth: NORMAL vs HARD
 
-The emitted skill has two axes: **scope** picks which change facts drive the sweep, **depth** picks how hard the
-surface itself is cut. Depth is a property of the request -- the token `hard`, or the same intent in prose ("too
+The emitted skill has three axes: **scope** picks which change facts drive the sweep, **depth** picks how hard the
+surface itself is cut, **reach** picks how wide the editable set is. Depth is a property of the request -- the token `hard`, or the same intent in prose ("too
 much context", "aggressive", "почисти жёстко"). Nothing is regenerated to switch.
 
 | | `NORMAL` (default) | `HARD` |
@@ -53,7 +55,7 @@ much context", "aggressive", "почисти жёстко"). Nothing is regenera
 | Pass A: rules `paths:` precision audit | no | yes |
 | Pass B: obvious-knowledge purge | no | yes |
 
-Reach for `HARD` when the auto-loaded context has become expensive: a long-running project accumulates dead weight
+Ask for `HARD` when the auto-loaded context has become expensive: a long-running project accumulates dead weight
 across every rule and convention file, and neither kind of waste shows up in a diff.
 
 - **Pass A -- `paths:` precision.** `paths:` is a LIST -- each entry gets its OWN verdict, never one verdict per
@@ -62,7 +64,7 @@ across every rule and convention file, and neither kind of waste shows up in a d
   still covering the rule's real subject; a genuinely repo-wide subject legitimately carries none, one is never
   invented to look tidy, and an explicitly declared repo-wide glob is `CORRECTLY_GLOBAL` and never stripped.
   `DANGLING` drops only that ENTRY and REPORTS it -- the rule FILE itself is never deleted, since a batch agent
-  may only edit files in its own scope.
+  may only edit files in its own batch.
 - **Pass B -- obvious-knowledge purge.** Anything a competent model already knows -- code-quality exhortations,
   restated tool docs, textbook pattern definitions -- is deleted on sight, not compressed. What survives is what
   the model cannot know: decisions that invert a default ("no unit tests here, integration only"), domain
@@ -133,10 +135,10 @@ Then run the emitted skill in that project:
 | Phase | Action |
 |-------|--------|
 | 0 | Read the emit material this skill ships (`references/`) |
-| 1 | `generate.sh scan` + analysis: memory surface, VERIFY-ONLY files, exclusions, default branch, git visibility, language policy, frontmatter conventions, numbered ids, reacting hooks, the fact catalogue, the agent + skill rosters, each rule's `paths:` precision, real generic-vs-domain examples from the target's own rules |
+| 1 | `generate.sh scan` + analysis: memory surface, VERIFY-ONLY files, exclusions, default branch, git visibility, language policy, frontmatter conventions, numbered ids, reacting hooks, the fact catalogue, the agent + skill rosters, runtime workflow seats, cited outside references, each rule's `paths:` precision, real generic-vs-domain examples from the target's own rules |
 | 1.5 | AskUserQuestion for genuinely ambiguous params (which conventions count as memory, memory dir in scope, VERIFY-ONLY list, default branch, intentional non-English aliases, batch splits) |
 | 2 | Export scalar placeholders -> `generate.sh emit` (awk substitution + provenance frontmatter stamped into the emitted `SKILL.md`) |
-| 3 | AI fills the TWELVE BLOCK placeholders via Edit -- ten in the emitted `SKILL.md` (batch map, exclusions, invariants, fact catalogue, enumeration bash, agent + skill checks, roster, proposal precedents, verify extras) and two in the emitted `references/hard-sync.md` (paths-precision table, obvious-vs-domain table) |
+| 3 | AI fills the THIRTEEN BLOCK placeholders via Edit -- eleven in the emitted `SKILL.md` (batch map, exclusions, invariants, fact catalogue, enumeration bash, agent + skill checks, roster, runtime-seat roster, proposal precedents, verify extras) and two in the emitted `references/hard-sync.md` (paths-precision table, obvious-vs-domain table) |
 | 4 | `generate.sh validate` -- fails on any surviving `{PLACEHOLDER}`, a missing asset, a cited reference that does not exist, or provenance frontmatter that is missing or a version behind (remedy: `generate.sh restamp`); then every emitted agent name is asserted to resolve |
 | 5 | Report the surface, batches, exclusions and how to run it |
 

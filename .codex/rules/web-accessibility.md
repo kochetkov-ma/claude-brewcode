@@ -1,0 +1,1 @@
+../../.claude/rules/web-accessibility.md
